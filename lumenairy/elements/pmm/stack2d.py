@@ -30,6 +30,7 @@ from ..rcwa._core import (
     _modes_to_M,
     _propagation_smatrix_general,
     _require_propagating_incidence,
+    _symmetry_on,
 )
 from ._core import (
     _interface_smatrix,
@@ -78,7 +79,7 @@ class PMM2DStack:
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
                  n_substrate=1.0, degree=11, elements_per_strip=1,
                  grade=False, n_orders=11, formulation="li",
-                 symmetry=False, max_nodal_dof=_MAX_NODAL_DOF):
+                 symmetry="auto", max_nodal_dof=_MAX_NODAL_DOF):
         if formulation not in ("li", "laurent"):
             raise ValueError(
                 f"PMM2DStack: formulation must be 'li' or 'laurent', got "
@@ -96,12 +97,14 @@ class PMM2DStack:
         self.grade = bool(grade)
         self.n_orders = int(n_orders)
         self.formulation = formulation
-        # F2 (audit): opt-in even-parity fold for the cascade.  Default off ->
-        # byte-identical to the full solve; on + normal incidence + a
-        # centro-symmetric scalar stack -> the whole Redheffer recursion runs
-        # in the (Nf+1)-d EVEN sector (~2-8x on the O(Nf^3) eig/S-matrix steps),
-        # with a per-layer flip-invariance guard falling back to the full solve.
-        self.symmetry = bool(symmetry)
+        # F2 (audit): even-parity fold for the cascade.  'auto' (the default;
+        # True is equivalent) folds when the precondition holds -- normal
+        # incidence + a centro-symmetric scalar stack -> the whole Redheffer
+        # recursion runs in the (Nf+1)-d EVEN sector (~2-8x on the O(Nf^3)
+        # eig/S-matrix steps), with a per-layer flip-invariance guard falling
+        # back to the full solve.  symmetry=False forces the full solve (the
+        # even basis matches it to ~1e-12, not bit-for-bit).
+        self.symmetry = _symmetry_on(symmetry)
         self.max_nodal_dof = int(max_nodal_dof)
         self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
         self._src = None

@@ -797,6 +797,24 @@ def _layer_Q_matrix(Kx, Ky, EPS, EPS_normal):
 # identical, but not bit-for-bit with the default path.
 
 
+def _symmetry_on(symmetry):
+    """Resolve the ``symmetry`` argument to a bool.  ``"auto"`` (the default)
+    and ``True`` both REQUEST the even-parity fold, which auto-detects its
+    precondition -- a centro-symmetric cell at NORMAL incidence, laurent/li
+    factorization, NumPy backend -- and falls back to the full solve (via
+    :func:`_order_flip_perm` / the per-cell flip-invariance check) whenever it
+    does not hold.  ``False`` forces the full solve (bit-identical to the
+    pre-fold path).  So ``"auto"`` and ``True`` are numerically equivalent
+    today; ``"auto"`` is the self-documenting default (and leaves room for a
+    future size-threshold heuristic)."""
+    if isinstance(symmetry, str):
+        if symmetry.lower() == "auto":
+            return True
+        raise ValueError(
+            f"symmetry must be True, False, or 'auto', got {symmetry!r}")
+    return bool(symmetry)
+
+
 def _order_flip_perm(Kx, Ky):
     """Permutation ``p`` with ``p[i]`` = index of the order whose transverse
     wavevector is ``(-kx_i, -ky_i)``, or ``None`` if the order set is not

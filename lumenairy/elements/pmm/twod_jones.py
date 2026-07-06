@@ -61,6 +61,7 @@ from ..rcwa._core import (
     _modes_to_M,
     _propagation_smatrix_general,
     _require_propagating_incidence,
+    _symmetry_on,
 )
 from ._core import (
     _interface_smatrix,
@@ -336,7 +337,7 @@ def pmm_jones_2d(
     formulation: str = "laurent",
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
-    symmetry: bool = False,
+    symmetry="auto",
     region_layout=None,
 ):
     """Rigorous 2-D anisotropic grating via the hybrid PMM: a single layer whose
@@ -375,13 +376,16 @@ def pmm_jones_2d(
         Per-order + Jones degree-scan consensus (the 1-D guard against the
         measure-zero quasi-resonances), stepping through consecutive ODD
         degrees.  Expensive in 2-D -> default False.
-    symmetry : bool, optional
-        Opt-in even-parity fold (audit F2): a centro-symmetric IN-PLANE tensor
-        cell at NORMAL incidence excites only even modes, so the single-layer
-        solve runs in the ``(Nf+1)``-d even sector (rcwa's :func:`_tensor_PQ`
-        folded through :func:`_symmetric_cascade_rt`).  Default off ->
-        byte-identical; a per-cell flip-invariance guard falls back to the full
-        ``2Nf`` solve (out-of-plane / off-centre / oblique never fold).
+    symmetry : {'auto', True, False}, optional
+        Even-parity fold (audit F2): a centro-symmetric IN-PLANE tensor cell at
+        NORMAL incidence excites only even modes, so the single-layer solve runs
+        in the ``(Nf+1)``-d even sector (rcwa's :func:`_tensor_PQ` folded through
+        :func:`_symmetric_cascade_rt`).  ``'auto'`` (the DEFAULT; ``True`` is
+        equivalent) folds when the precondition holds; a per-cell
+        flip-invariance guard falls back to the full ``2Nf`` solve
+        (out-of-plane / off-centre / oblique never fold).  ``symmetry=False``
+        forces the full solve (the even basis matches it to ~1e-12, not
+        bit-for-bit).
     region_layout : (Sx, Sy) int array_like, optional
         JAX-only.  A traced ``eps_tensor_cell`` (under ``jax.grad`` /
         ``jax.jit``) cannot define the exact spectral-element walls (that is
@@ -574,7 +578,7 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     # cascade in the (Nf+1)-d even sector; None -> not applicable (out-of-plane,
     # off-centre or oblique) -> the full 2Nf solve below (byte-identical there).
     sym_pairs = None
-    if symmetry and kt < 1e-12:
+    if _symmetry_on(symmetry) and kt < 1e-12:
         ops = _tensor_layer_modes(
             ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
             formulation, return_ops=True)

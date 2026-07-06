@@ -158,8 +158,11 @@ def test_jones_2d_even_sector_matches_full():
     tc[m, 1, 1] = ne2 * s0 * s0 + no2 * c0 * c0
     tc[m, 0, 1] = tc[m, 1, 0] = (ne2 - no2) * c0 * s0
     tc[m, 2, 2] = no2
+    # explicit symmetry=False forces the full 2N solve (the even-parity fold is
+    # ON by default since the v5.20.5 "auto" default -- so the comparison must
+    # request the full path explicitly to stay a full-vs-even test).
     a = rcwa_jones_2d(_P, _P, tc, 1.5, 1.0, 0.2e-6, _WL, n_orders_x=5,
-                      n_orders_y=5)
+                      n_orders_y=5, symmetry=False)
     b = rcwa_jones_2d(_P, _P, tc, 1.5, 1.0, 0.2e-6, _WL, n_orders_x=5,
                       n_orders_y=5, symmetry=True)
     assert np.max(np.abs(a[1] - b[1])) < 1e-8
@@ -187,7 +190,7 @@ def test_stack_even_sector_matches_full():
     exactly P/2 is a GENUINE half-pixel centre mismatch and must fall back
     (tested below)."""
     cc = (31.5 / 64) * _P
-    rf = _mixed_stack(cc).set_source(_WL).solve()
+    rf = _mixed_stack(cc).set_source(_WL).solve(symmetry=False)   # explicit full
     rs = _mixed_stack(cc).set_source(_WL).solve(symmetry=True)
     of, Rf, Tf = rf.efficiencies()
     os_, Rs, Ts = rs.efficiencies()

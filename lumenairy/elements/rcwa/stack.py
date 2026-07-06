@@ -40,6 +40,7 @@ from ._core import (
     _sqrt_decay,
     _sqrt_forward,
     _symmetric_cascade_rt,
+    _symmetry_on,
     _tensor_offplane_present,
     _tensor_PQ,
     _validate_cell_sampling,
@@ -1634,7 +1635,7 @@ class RCWAStack:
 
     @_with_blas_limit
     def solve(self, *, retain_internal=False, stabilize=False,
-              symmetry=False) -> RCWAResult:
+              symmetry="auto") -> RCWAResult:
         """Solve the stack -> :class:`RCWAResult`.
 
         ``stabilize=True`` (opt-in; default ``False``) guards against the
@@ -1661,11 +1662,13 @@ class RCWAStack:
         matrices, so it is off by default for hot efficiency sweeps.  NumPy /
         CuPy only.
 
-        ``symmetry=True`` (opt-in) attempts the EVEN-PARITY fast path at NORMAL
-        incidence: when every layer is centro-symmetric about one common centre
-        (verified numerically per layer on the recentred operators), the whole
-        cascade is solved in the ``(N+1)``-dimensional even sector instead of
-        ``2N`` -- measured ~x4.5 on a 4-layer mixed stack.  Uniform, pixel-cell
+        ``symmetry='auto'`` (the DEFAULT; ``True`` is equivalent) attempts the
+        EVEN-PARITY fast path at NORMAL incidence: when every layer is
+        centro-symmetric about one common centre (verified numerically per layer
+        on the recentred operators), the whole cascade is solved in the
+        ``(N+1)``-dimensional even sector instead of ``2N`` -- measured ~x4.5 on
+        a 4-layer mixed stack.  Pass ``symmetry=False`` for the exact full-solve
+        bits (the even-adapted basis matches to ~1e-12, not bit-for-bit).  Uniform, pixel-cell
         (``'laurent'`` and ``'li'``), analytic-shapes and IN-PLANE tensor layers
         all fold; ANY failed precondition (oblique incidence, an out-of-plane
         tensor or dispersive layer, layers symmetric about DIFFERENT centres,
@@ -1738,7 +1741,7 @@ class RCWAStack:
             self.nox, self.noy = base_nox, base_noy
 
     def _solve_once(self, *, retain_internal=False,
-                    symmetry=False) -> RCWAResult:
+                    symmetry="auto") -> RCWAResult:
         """Inner single-``n_orders`` stack solve (the public :meth:`solve` body;
         ``stabilize`` scans a window of these).
 
@@ -1820,7 +1823,7 @@ class RCWAStack:
         # the (N+1)-d even sector (~x3-4); any failed precondition falls
         # through to the full solve bit-identically.
         sym_rt = None
-        if (symmetry and not retain_internal and bname != "jax"
+        if (_symmetry_on(symmetry) and not retain_internal and bname != "jax"
                 and abs(kx0) < 1e-12 and abs(ky0) < 1e-12):
             specs = [self._layer_even_spec(L, Kx, Ky, orders, xp)
                      for L in self._layers]

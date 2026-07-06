@@ -85,6 +85,7 @@ from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carr
 from ..rcwa._core import (
     _grazing_safe_wavelength,
     _require_propagating_incidence,
+    _symmetry_on,
 )
 from ._core import (
     _gll_nodes_weights,
@@ -797,7 +798,7 @@ def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
         # F2 (audit): even-parity fast path -- centro-symmetric cell + normal
         # incidence runs the eig + cascade in the (Nf+1)-d even sector (~3x).
         # Returns None (-> full solve below) unless the precondition holds.
-        if symmetry and kt < 1e-12:
+        if _symmetry_on(symmetry) and kt < 1e-12:
             _enx = lops["EpnxF"] if formulation == "li" else lops["EpsF"]
             _eny = lops["EpnyF"] if formulation == "li" else lops["EpsF"]
             rt = _symmetric_solve_2d(
@@ -871,7 +872,7 @@ def pmm_efficiency_2d(
     n_orders: int = 11,
     formulation: str = "li",
     truncation: str = "rectangular",
-    symmetry: bool = False,
+    symmetry="auto",
     stabilize: bool = False,
 ) -> Efficiency2D:
     r"""Diffraction efficiencies of a 2-D rectangular pillar via the hybrid PMM.
@@ -1065,7 +1066,7 @@ def pmm_efficiency_2d_cell(
     n_orders: int = 11,
     formulation: str = "li",
     truncation: str = "rectangular",
-    symmetry: bool = False,
+    symmetry="auto",
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
     region_layout=None,

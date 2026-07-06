@@ -4,6 +4,21 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Even-parity fold is now ON by default** (`symmetry='auto'`) across the 2-D
+  solvers (`rcwa_efficiency_2d`, `rcwa_jones_2d`, `RCWAStack`,
+  `pmm_efficiency_2d(_cell)`, `pmm_jones_2d`, `PMM2DStack`).  A centro-symmetric
+  cell at NORMAL incidence now automatically solves in the `(N+1)`-d even sector
+  (~2-8x, growing with `n_orders`) instead of the full `2N` -- previously this
+  was opt-in (`symmetry=True`) and users left the speed-up on the table.  The
+  precondition is auto-detected and every non-applicable case (oblique,
+  non-symmetric, out-of-plane, uniform, JAX) transparently falls back to the
+  full solve.  `'auto'` and `True` are equivalent; the even-adapted basis
+  matches the full solve to ~1e-12 (not bit-for-bit), so a centro-symmetric
+  normal-incidence result may differ from a pre-change baseline at ~1e-12 --
+  pass `symmetry=False` to force the exact prior bits.
+
 ### Added
 
 - **Maslov lens propagator — feature parity + speed (v5.21).**

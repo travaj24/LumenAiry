@@ -125,13 +125,24 @@ def test_uniform_layer_falls_back_bit_identical():
     assert np.array_equal(R0, R1) and np.array_equal(T0, T1)
 
 
-def test_default_is_full_solve_bit_identical():
+def test_default_is_auto_fold_matches_full_to_tolerance():
+    """v5.20.5: the even-parity fold is ON by default (``symmetry='auto'``).
+    The default now equals ``symmetry=True`` (both fold, byte-identical) and
+    matches the explicit full solve (``symmetry=False``) to the documented
+    ~1e-12 -- a physically equivalent even-adapted basis, not bit-for-bit.  Pass
+    ``symmetry=False`` for the exact pre-fold bits."""
     cell = _pillar(64, 0.0, 0.0)
-    o0, R0, T0 = _solve(cell, symmetry=False)
-    o1, R1, T1 = rcwa_efficiency_2d(PX, PY, cell, 1.5, 1.0, DEPTH, WL,
+    o0, R0, T0 = _solve(cell, symmetry=False)            # explicit full 2N
+    ot, Rt, Tt = _solve(cell, symmetry=True)             # explicit fold
+    # default (no symmetry arg) -> "auto" -> folds this centro-symmetric normal
+    # cell exactly like symmetry=True.
+    oa, Ra, Ta = rcwa_efficiency_2d(PX, PY, cell, 1.5, 1.0, DEPTH, WL,
                                     polarization="tm", n_orders_x=6,
                                     n_orders_y=6, formulation="li")
-    assert np.array_equal(R0, R1) and np.array_equal(T0, T1)
+    assert np.array_equal(Ra, Rt) and np.array_equal(Ta, Tt)    # default == fold
+    assert np.allclose(Ra, R0, atol=1e-11, rtol=0)              # matches full
+    assert np.allclose(Ta, T0, atol=1e-11, rtol=0)
+    assert not np.array_equal(Ra, R0)                          # genuinely folded
 
 
 # ---------------------------------------------------------------------------

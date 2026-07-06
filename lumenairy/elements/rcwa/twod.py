@@ -40,6 +40,7 @@ from ._core import (
     _stabilize_bumps,
     _symmetric_cascade_rt,
     _symmetric_solve_rt,
+    _symmetry_on,
     _tensor_offplane_present,
     _tensor_PQ,
     _validate_cell_sampling,
@@ -415,7 +416,7 @@ def rcwa_efficiency_2d(
     formulation: str = "laurent",
     truncation: str = "rectangular",
     stabilize: bool = False,
-    symmetry: bool = False,
+    symmetry="auto",
     use_gpu: bool = False,
     allow_nonseparable_nv: bool = False,
 ) -> Efficiency2D:
@@ -528,8 +529,8 @@ def rcwa_efficiency_2d(
         energy-conserving solve (its order count may then differ from the
         request).  Default ``False`` raises (bit-for-bit backward compatible).
         NumPy / CuPy only.
-    symmetry : bool, optional
-        When ``True`` AND the cell is centro-symmetric AND incidence is normal
+    symmetry : {'auto', True, False}, optional
+        When enabled AND the cell is centro-symmetric AND incidence is normal
         (``theta == 0``), run the WHOLE single-layer solve in the even-parity
         subspace: the ``(0, 0)`` source is even and no operator couples the
         parities, so the odd half is never excited and the eig, interface, and
@@ -539,9 +540,12 @@ def rcwa_efficiency_2d(
         precondition; if it does not hold (oblique, non-centro-symmetric, or a
         uniform layer) the solver transparently falls back to the full ``2N``
         solve, so the result is always correct.  The even-adapted basis differs
-        from the default by a mode-wise rescale/reorder, so efficiencies match
-        the ``symmetry=False`` path to ~1e-12 but NOT bit-for-bit.  Default
-        ``False``.  NumPy / CuPy only (no effect under JAX tracing).
+        from the full solve by a mode-wise rescale/reorder, so efficiencies
+        match the ``symmetry=False`` path to ~1e-12 but NOT bit-for-bit.
+        ``'auto'`` (the DEFAULT) enables the fold whenever the precondition
+        holds; ``False`` forces the full ``2N`` solve (the exact pre-fold bits);
+        ``True`` is equivalent to ``'auto'``.  NumPy / CuPy only (no effect
+        under JAX tracing).
 
     Returns
     -------
@@ -735,10 +739,11 @@ def rcwa_efficiency_2d(
     # generalized (P, Q) cascade fold (backlog A1, 2026-06-10); 'fff_nv'
     # stays gated off (its NV cross-terms are validated separable-only).
     rt = None
-    if symmetry and not is_jax and kt < 1e-12 and formulation == "laurent":
+    _sym = _symmetry_on(symmetry)
+    if _sym and not is_jax and kt < 1e-12 and formulation == "laurent":
         rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
                                  orders, k0, depth, cinc, xp)
-    elif symmetry and not is_jax and kt < 1e-12 and li_ops is not None:
+    elif _sym and not is_jax and kt < 1e-12 and li_ops is not None:
         Zli = xp.zeros_like(li_ops[0])
         P_li, Q_li = _tensor_PQ(Kx, Ky, li_ops[0], Zli, Zli, li_ops[1],
                                 li_ops[2], xp)
@@ -854,11 +859,12 @@ class PreparedRCWA2D:
         Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, self.eps_sub)
 
         rt = None
-        if self.symmetry and self.kt < 1e-12 and self.formulation == "laurent":
+        _sym = _symmetry_on(self.symmetry)
+        if _sym and self.kt < 1e-12 and self.formulation == "laurent":
             rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, self.EPS,
                                      self.EPS_normal, self.ez_inv, orders, k0,
                                      self.depth, self.cinc, xp)
-        elif (self.symmetry and self.kt < 1e-12
+        elif (_sym and self.kt < 1e-12
                 and self.formulation == "li" and self.fff is not None):
             P_li, Q_li = _tensor_PQ(Kx, Ky, *self.fff, xp)
             out = _symmetric_cascade_rt(
@@ -915,7 +921,7 @@ def prepare_rcwa_2d(
     n_orders_y: int = 5,
     formulation: str = "laurent",
     truncation: str = "rectangular",
-    symmetry: bool = False,
+    symmetry="auto",
     use_gpu: bool = False,
     allow_nonseparable_nv: bool = False,
 ) -> PreparedRCWA2D:
@@ -1021,7 +1027,7 @@ def rcwa_efficiency_2d_vs_wavelength(
     n_orders_y: int = 5,
     formulation: str = "laurent",
     truncation: str = "rectangular",
-    symmetry: bool = False,
+    symmetry="auto",
     use_gpu: bool = False,
     allow_nonseparable_nv: bool = False,
 ):
@@ -1101,7 +1107,7 @@ def rcwa_jones_2d(
     n_orders_x: int = 5,
     n_orders_y: int = 5,
     use_gpu: bool = False,
-    symmetry: bool = False,
+    symmetry="auto",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D (doubly periodic) anisotropic grating: a single layer
     whose permittivity is a full in-plane TENSOR FIELD (the z-decoupled LC
@@ -1124,13 +1130,14 @@ def rcwa_jones_2d(
     n_substrate, n_superstrate, depth, wavelength, theta, phi,
     n_orders_x, n_orders_y
         As in :func:`rcwa_efficiency_2d`.
-    symmetry : bool, optional
-        Opt-in EVEN-PARITY fast path (default ``False``).  At NORMAL incidence
-        with a centro-symmetric IN-PLANE tensor cell, both incident
-        polarizations are solved in the ``(N+1)``-dimensional even sector
-        (~x4); any failed precondition (oblique, out-of-plane components, a
-        non-symmetric cell, JAX backend) falls back to the full solve
-        bit-identically.
+    symmetry : {'auto', True, False}, optional
+        EVEN-PARITY fast path (``'auto'`` DEFAULT; ``True`` equivalent).  At
+        NORMAL incidence with a centro-symmetric IN-PLANE tensor cell, both
+        incident polarizations are solved in the ``(N+1)``-dimensional even
+        sector (~x4); any failed precondition (oblique, out-of-plane components,
+        a non-symmetric cell, JAX backend) falls back to the full solve
+        bit-identically.  ``symmetry=False`` forces the full solve (the even
+        basis matches it to ~1e-12, not bit-for-bit).
 
     Returns
     -------
@@ -1240,7 +1247,7 @@ def rcwa_jones_2d(
     # cell at normal incidence solves in the (N+1)-d even sector for BOTH
     # incident polarizations; transparent fallback otherwise.
     sym_rt = None
-    if (symmetry and not is_jax and not offplane
+    if (_symmetry_on(symmetry) and not is_jax and not offplane
             and abs(kx0) < 1e-12 and abs(ky0) < 1e-12):
         def _conv_sym(comp):
             return _eps_convolution_2d(comp, orders, n_orders_x, n_orders_y)
