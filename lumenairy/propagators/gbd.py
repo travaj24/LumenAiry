@@ -165,6 +165,52 @@ def _q_is_tensor(Q: Any) -> bool:
     return getattr(Q, 'ndim', 1) == 3
 
 
+def _inv2x2(M: np.ndarray, xp: Any) -> np.ndarray:
+    """Batched exact inverse of a stack of 2x2 matrices ``M`` (..., 2, 2).
+
+    Closed-form adjugate / determinant -- ``inv = [[d, -b], [-c, a]] / (ad-bc)``
+    -- instead of ``xp.linalg.inv``.  For 2x2 this is arithmetically exact (to
+    round-off) and avoids the per-matrix LAPACK ``getrf``/``getri`` dispatch,
+    which dominates when the batch is large and each matrix is tiny.  It is also
+    made of only ``+ - * /`` so it is JAX-``grad`` / CuPy differentiable, unlike
+    the general ``xp.linalg.inv`` VJP on a complex non-symmetric matrix.
+    """
+    a = M[..., 0, 0]
+    b = M[..., 0, 1]
+    c = M[..., 1, 0]
+    d = M[..., 1, 1]
+    det = a * d - b * c
+    inv = xp.stack([xp.stack([d, -b], axis=-1),
+                    xp.stack([-c, a], axis=-1)], axis=-2)
+    return inv / det[..., None, None]
+
+
+def _eigvals2x2(M: np.ndarray, xp: Any) -> np.ndarray:
+    """Batched eigenvalues of a stack of 2x2 matrices ``M`` (..., 2, 2).
+
+    Quadratic-formula roots of ``lam^2 - tr*lam + det`` -- ``lam = tr/2 +-
+    sqrt((tr/2)^2 - det)`` -- returning ``(..., 2)``.  Replaces
+    ``xp.linalg.eigvals`` (LAPACK ``geev`` per matrix, and no JAX VJP for a
+    complex non-symmetric 2x2).  ``xp.sqrt`` takes the complex principal root,
+    matching ``eigvals`` up to eigenvalue ORDER; every consumer here reduces the
+    pair with an order-independent ``prod`` so the order is immaterial.
+    """
+    a = M[..., 0, 0]
+    b = M[..., 0, 1]
+    c = M[..., 1, 0]
+    d = M[..., 1, 1]
+    half_tr = 0.5 * (a + d)
+    det = a * d - b * c
+    disc = xp.sqrt(half_tr * half_tr - det)
+    return xp.stack([half_tr + disc, half_tr - disc], axis=-1)
+
+
+def _det2x2(M: np.ndarray) -> np.ndarray:
+    """Batched determinant of a stack of 2x2 matrices -- ``ad - bc``, exact,
+    no LAPACK dispatch."""
+    return M[..., 0, 0] * M[..., 1, 1] - M[..., 0, 1] * M[..., 1, 0]
+
+
 # ============================================================================
 # Source-plane decomposition
 # ============================================================================
@@ -564,9 +610,9 @@ def propagate_beamlets_freespace(
         # physical beam, so each principal sqrt is continuous through a focus).
         I2 = xp.eye(2, dtype=Q_old.dtype)[None, :, :]
         tt = t[:, None, None].astype(Q_old.dtype)
-        Q_new = Q_old @ xp.linalg.inv(I2 + tt * Q_old)
+        Q_new = Q_old @ _inv2x2(I2 + tt * Q_old, xp)
         Q_new = 0.5 * (Q_new + xp.transpose(Q_new, (0, 2, 1)))
-        lam = xp.linalg.eigvals(Q_old)
+        lam = _eigvals2x2(Q_old, xp)
         qratio = xp.prod(
             1.0 / xp.sqrt(1.0 + t[:, None].astype(Q_old.dtype) * lam), axis=1)
     else:
@@ -989,11 +1035,21 @@ def _reconstruct_windowed(
 
     # Bucket beamlets by (Wx, Wy) quantized to a geometric ladder so a handful
     # of vectorized passes cover all support sizes.  Cap at the grid extent.
+    # v5.23: round each half-width UP a sqrt(2)-geometric ladder (ceil to
+    # 2^(k/2)) rather than the next power of two.  Power-of-two rounding
+    # inflated each axis by up to ~2x (box AREA up to ~4x the exact R_cut box);
+    # the finer sqrt(2) ladder caps per-axis inflation at ~1.41x (area ~2x),
+    # halving the evaluated cells (hence exp + bincount work) for the cost of a
+    # few more np.unique buckets -- each bucket is one vectorized pass, so the
+    # extra buckets are cheap.
     def _quantize(Wf, cap):
         W = np.ceil(Wf).astype(np.int64)
         W = np.clip(W, 1, cap)
-        # round up to next power of two for coarse bucketing
-        Wq = np.where(W <= 1, 1, (1 << np.ceil(np.log2(W)).astype(np.int64)))
+        # ceil to the next rung of the ladder {1,2,3,4,6,8,11,16,23,32,...}
+        # = ceil(2^(ceil(2*log2 W)/2)); exact-integer via the doubled exponent.
+        lg2 = np.ceil(2.0 * np.log2(np.maximum(W, 1))).astype(np.int64)
+        Wq = np.ceil(np.power(2.0, 0.5 * lg2)).astype(np.int64)
+        Wq = np.where(W <= 1, 1, Wq)
         return np.clip(Wq, 1, cap).astype(np.int64)
 
     Wx_q = _quantize(Wx_f, Nx)
@@ -1002,6 +1058,16 @@ def _reconstruct_windowed(
     # Centre pixel of each beamlet.
     ix0 = np.round((x_b - cx) / dx + Nx / 2.0).astype(np.int64)
     iy0 = np.round((y_b - cy) / dy + Ny / 2.0).astype(np.int64)
+
+    # v5.23: the beamlet Gaussian argument is axis-SEPARABLE unless the tensor Q
+    # has a non-zero off-diagonal (skew astigmatism): for scalar Q and diagonal
+    # tensor Q,  0.5 conj(Q):rho rho + L dX + M dY  =  [x-only](q) + [y-only](p),
+    # so exp(...) = exp(x-part) (x) exp(y-part) is an OUTER PRODUCT.  That cuts
+    # the complex-exp count per beamlet from ng*by*bx to ng*(bx+by) (and skips
+    # the (ng,by,bx) arg buffer) on the default scalar free-space / thin-lens
+    # path.  Only the true skew case (Qxy != 0, per-surface aberration) keeps
+    # the full 2-D form.  exp(a+b) == exp(a) exp(b) analytically (ULP-close).
+    skew = bool(is_tensor and np.any(Q_all[:, 0, 1] != 0.0))
 
     keys = Wy_q.astype(np.int64) * (Nx + 1) + Wx_q.astype(np.int64)
     for key in np.unique(keys):
@@ -1023,21 +1089,36 @@ def _reconstruct_windowed(
             Yloc = (iyg - Ny / 2.0) * dy + cy
             dX = Xloc - x_b[g][:, None]                   # (ng, bx)
             dY = Yloc - y_b[g][:, None]                   # (ng, by)
-            dX2 = dX[:, None, :] ** 2                     # (ng, 1, bx)
-            dY2 = dY[:, :, None] ** 2                     # (ng, by, 1)
-            rho2 = dY2 + dX2                              # (ng, by, bx)
-            if is_tensor:
+            if skew:
+                # Full 2-D form (non-separable cross term 2 Qxy dX dY).
+                dX2 = dX[:, None, :] ** 2                 # (ng, 1, bx)
+                dY2 = dY[:, :, None] ** 2                 # (ng, by, 1)
                 Qxx = np.conj(Q_all[g, 0, 0])[:, None, None]
                 Qyy = np.conj(Q_all[g, 1, 1])[:, None, None]
                 Qxy = np.conj(Q_all[g, 0, 1])[:, None, None]
                 arg = 0.5 * (Qxx * dX2 + Qyy * dY2
                              + 2.0 * Qxy * (dX[:, None, :] * dY[:, :, None]))
+                if has_dirs:
+                    arg = (arg + L_all[g][:, None, None] * dX[:, None, :]
+                           + M_all[g][:, None, None] * dY[:, :, None])
+                contrib = a_b[g][:, None, None] * np.exp(1j * k * arg)
             else:
-                arg = 0.5 * np.conj(Q_all[g])[:, None, None] * rho2
-            if has_dirs:
-                arg = (arg + L_all[g][:, None, None] * dX[:, None, :]
-                       + M_all[g][:, None, None] * dY[:, :, None])
-            contrib = a_b[g][:, None, None] * np.exp(1j * k * arg)   # (ng,by,bx)
+                # Separable: exp of an outer sum -> outer product of two exps.
+                if is_tensor:                            # diagonal tensor Q
+                    cqx = np.conj(Q_all[g, 0, 0])
+                    cqy = np.conj(Q_all[g, 1, 1])
+                else:                                    # scalar Q
+                    cqx = np.conj(Q_all[g])
+                    cqy = cqx
+                argx = 0.5 * cqx[:, None] * (dX * dX)     # (ng, bx)
+                argy = 0.5 * cqy[:, None] * (dY * dY)     # (ng, by)
+                if has_dirs:
+                    argx = argx + L_all[g][:, None] * dX
+                    argy = argy + M_all[g][:, None] * dY
+                gx = np.exp(1j * k * argx)                # (ng, bx)
+                gy = np.exp(1j * k * argy)                # (ng, by)
+                contrib = (a_b[g][:, None, None]
+                           * gy[:, :, None]) * gx[:, None, :]   # (ng,by,bx)
 
             idx = iyg[:, :, None] * Nx + ixg[:, None, :]            # (ng,by,bx)
             valid = ((iyg[:, :, None] >= 0) & (iyg[:, :, None] < Ny)
@@ -1843,7 +1924,7 @@ def apply_abcd_to_beamlets(
         # v5.21: tensor Q -- generalized (matrix) Collins with scalar blocks
         # A,B,C,D -> A I2 etc.
         _I2 = xp.eye(2, dtype=Q_old.dtype)[None, :, :]
-        Q_new = (C * _I2 + D * Q_old) @ xp.linalg.inv(A * _I2 + B * Q_old)
+        Q_new = (C * _I2 + D * Q_old) @ _inv2x2(A * _I2 + B * Q_old, xp)
         Q_new = 0.5 * (Q_new + xp.transpose(Q_new, (0, 2, 1)))
     else:
         Q_new = (C + D * Q_old) / (A + B * Q_old)
@@ -1893,7 +1974,7 @@ def apply_abcd_to_beamlets(
     # convention.
     if _q_is_tensor(Q_old):
         _I2 = xp.eye(2, dtype=Q_old.dtype)[None, :, :]
-        qratio = 1.0 / xp.sqrt(xp.linalg.det(A * _I2 + B * Q_old))
+        qratio = 1.0 / xp.sqrt(_det2x2(A * _I2 + B * Q_old))
     else:
         qratio = 1.0 / (A + B * Q_old)
     # 4.10.2: include the chief-ray axial OPL phase exp(+i*k*L_chief)
@@ -2096,8 +2177,8 @@ def apply_prescription_persurface_to_beamlets(
         C = J[:, 2:4, 0:2]
         D = J[:, 2:4, 2:4]
         ABQ = A + B @ Q
-        amp = amp / np.sqrt(np.linalg.det(ABQ))
-        Q = (C + D @ Q) @ np.linalg.inv(ABQ)
+        amp = amp / np.sqrt(_det2x2(ABQ))
+        Q = (C + D @ Q) @ _inv2x2(ABQ, np)
         Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
     # base-ray OPL piston (input plane -> last vertex): where the wavefront
     # aberration enters (different beamlets accumulate different OPL).
@@ -2125,10 +2206,10 @@ def apply_prescription_persurface_to_beamlets(
     My = dt.uy * inv
     Nz2 = inv
     t = z_image / Nz2
-    lam = np.linalg.eigvals(Q)
+    lam = _eigvals2x2(Q, np)
     amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
     amp = amp * np.exp(1j * k0 * t)
-    Q = Q @ np.linalg.inv(I2 + t[:, None, None] * Q)
+    Q = Q @ _inv2x2(I2 + t[:, None, None] * Q, np)
     Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
     new_pos = np.stack([dt.x + t * Lx, dt.y + t * My,
                         np.zeros_like(dt.x)], axis=-1)
@@ -2198,10 +2279,10 @@ def _reframe_beamlets_to_world_plane(beamlets, prescription, wavelength, Q, amp,
     R2 = R_out[:, 0:2].T @ last.world_R[:, 0:2]        # (2,2)
     Q = R2[None] @ Q @ R2.T[None]
     Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
-    lam = np.linalg.eigvals(Q)
+    lam = _eigvals2x2(Q, np)
     amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
     amp = amp * np.exp(1j * k0 * t)
-    Q = Q @ np.linalg.inv(I2 + t[:, None, None] * Q)
+    Q = Q @ _inv2x2(I2 + t[:, None, None] * Q, np)
     Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
 
     positions = np.stack([p_hit[:, 0], p_hit[:, 1],

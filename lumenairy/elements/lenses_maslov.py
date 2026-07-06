@@ -465,6 +465,51 @@ def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
     return u_v2x, u_v2y, converged
 
 
+def _solve_fit(A, RHS, gram_factor=None):
+    """Least-squares solve for the Maslov Chebyshev fit ``A @ coef ~= RHS``.
+
+    v5.23 (M-P5 follow-up): normal-equations Cholesky (``G = A^T A``; solve
+    ``G coef = A^T RHS``) instead of the ``gelsd`` full-SVD ``lstsq``.  ``A`` is
+    a normalized tensor-Chebyshev Vandermonde -- well-conditioned and ~1.5x
+    oversampled -- so squaring the condition number in ``G`` is safe, and
+    ``cho_factor(G)`` is O(M^3) with tiny ``M`` (70 at poly_order=4) vs the
+    O(n_rays M^2) SVD.  ``G`` (and its Cholesky factor) depend ONLY on the ray
+    node grid + poly_order, not the field/wavelength, so a caller sweeping the
+    SAME optic can precompute ``gram_factor`` once and pass it in (only the
+    cheap ``A^T RHS`` GEMM + back-substitution then re-run per field).  Falls
+    back to LU solve, then to ``lstsq`` (SVD), if ``G`` is not positive-definite
+    (a rank-deficient / ill-conditioned freeform).  Returns ``coef`` (M, k).
+    """
+    b = A.T @ RHS
+    if gram_factor is not None:
+        try:
+            from scipy.linalg import cho_solve
+            return cho_solve(gram_factor, b, check_finite=False)
+        except Exception:
+            pass
+    G = A.T @ A
+    try:
+        from scipy.linalg import cho_factor, cho_solve
+        return cho_solve(cho_factor(G, check_finite=False), b,
+                         check_finite=False)
+    except Exception:
+        try:
+            return np.linalg.solve(G, b)
+        except np.linalg.LinAlgError:
+            coef, *_ = np.linalg.lstsq(A, RHS, rcond=None)
+            return coef
+
+
+def _gram_cho_factor(A):
+    """Cholesky factor of ``A^T A`` for :func:`_solve_fit` reuse across a
+    same-optic sweep, or ``None`` if scipy is absent / ``G`` is not PD."""
+    try:
+        from scipy.linalg import cho_factor
+        return cho_factor(A.T @ A, check_finite=False)
+    except Exception:
+        return None
+
+
 def apply_real_lens_maslov(
     E_in: np.ndarray,
     *,
@@ -1062,23 +1107,27 @@ def apply_real_lens_maslov(
     # step).  LAPACK's multi-RHS gelsd path reorders slightly vs three
     # single-RHS solves, so the coefficients differ at ULP (~1e-15 relative,
     # far below complex64 output precision) -- not byte-identical.
-    _progress('fit', 0.35, 'solving lstsq for OPD + s1x + s1y (stacked RHS)')
-    _coef3, *_ = np.linalg.lstsq(
-        A, np.column_stack([opd_residual, s1x_live, s1y_live]), rcond=None)
+    _progress('fit', 0.35, 'solving normal equations for OPD + s1x + s1y (stacked RHS)')
+    _coef3 = _solve_fit(
+        A, np.column_stack([opd_residual, s1x_live, s1y_live]))
     coef_opd = _coef3[:, 0]
     coef_s1x = _coef3[:, 1]
     coef_s1y = _coef3[:, 2]
 
-    opd_pred = A @ coef_opd
-    s1x_pred = A @ coef_s1x
-    s1y_pred = A @ coef_s1y
-    res_opd = np.sqrt(np.mean((opd_residual - opd_pred)**2))
-    res_s1x = np.sqrt(np.mean((s1x_live - s1x_pred)**2)) * 1e6
-    res_s1y = np.sqrt(np.mean((s1y_live - s1y_pred)**2)) * 1e6
-
-    _progress('fit', 0.60,
-              f'RMS OPD residual = {res_opd:.2e} waves; '
-              f's1x RMS = {res_s1x:.2e} um, s1y RMS = {res_s1y:.2e} um')
+    # v5.23 (M-P follow-up): the fit-residual RMS diagnostics are only ever read
+    # into the progress/verbose string below -- three A@coef GEMVs + reductions
+    # of pure waste on a headless production sweep.  Compute them only when a
+    # consumer exists.
+    if progress is not None or verbose:
+        opd_pred = A @ coef_opd
+        s1x_pred = A @ coef_s1x
+        s1y_pred = A @ coef_s1y
+        res_opd = np.sqrt(np.mean((opd_residual - opd_pred)**2))
+        res_s1x = np.sqrt(np.mean((s1x_live - s1x_pred)**2)) * 1e6
+        res_s1y = np.sqrt(np.mean((s1y_live - s1y_pred)**2)) * 1e6
+        _progress('fit', 0.60,
+                  f'RMS OPD residual = {res_opd:.2e} waves; '
+                  f's1x RMS = {res_s1x:.2e} um, s1y RMS = {res_s1y:.2e} um')
 
     # -----------------------------------------------------------------
     # Step 3: Build output grids
@@ -1183,8 +1232,10 @@ def apply_real_lens_maslov(
         tmask = abs_u > taper_start
         w[tmask] = 0.5 * (1 + np.cos(np.pi * (abs_u[tmask] - taper_start) / alpha))
         return w
+    # v5.23: both axes use n_v2, so the two Tukey windows are identical --
+    # compute once.
     tuk_x = tukey(n_v2)
-    tuk_y = tukey(n_v2)
+    tuk_y = tuk_x
     tuk_2d = tuk_x[None, :] * tuk_y[:, None]
 
     # v5.2.1: ``v2x_samples`` / ``v2y_samples`` were computed but never
@@ -1192,11 +1243,15 @@ def apply_real_lens_maslov(
     # (the unitless Chebyshev-node coords) instead.  Removed dead assigns.
 
 
+    # v5.23: the sampler used only in_axis[0] = -(N/2)*pitch, but allocated two
+    # length-N arrays every chunk to read that one scalar.  Precompute the
+    # scalar origins (matching the GPU twin, which already does this).
+    _in0x = -(N / 2) * dx
+    _in0y = -(N / 2) * dy   # v5.20: anamorphic y pitch
+
     def sample_E_bilinear(s1x_q: np.ndarray, s1y_q: np.ndarray) -> np.ndarray:
-        in_axis_x = (np.arange(N) - N / 2) * dx
-        in_axis_y = (np.arange(N) - N / 2) * dy   # v5.20: anamorphic y pitch
-        fx = (s1x_q - in_axis_x[0]) / dx
-        fy = (s1y_q - in_axis_y[0]) / dy
+        fx = (s1x_q - _in0x) / dx
+        fy = (s1y_q - _in0y) / dy
         ix = np.floor(fx).astype(np.int64)
         iy = np.floor(fy).astype(np.int64)
         wx = fx - ix
