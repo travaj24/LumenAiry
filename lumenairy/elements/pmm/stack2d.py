@@ -22,6 +22,9 @@ Loss convention: PUBLIC ``Im(eps) > 0`` for loss throughout.
 """
 from __future__ import annotations
 
+import copy as _copy
+import os
+
 import numpy as np
 
 from ..rcwa._core import (
@@ -31,6 +34,7 @@ from ..rcwa._core import (
     _propagation_smatrix_general,
     _require_propagating_incidence,
     _symmetry_on,
+    rcwa_blas_threads,
 )
 from ._core import (
     _interface_smatrix,
@@ -1043,7 +1047,8 @@ class PMM2DStack:
         return out
 
     def solve_vs_wavelength(self, wavelengths, *, theta=None, phi=None,
-                            angle=None, jones=False):
+                            angle=None, jones=False, max_workers=None,
+                            blas_per_worker=1):
         """Solve the stack across a wavelength sweep, materialising any
         DISPERSIVE (``wl -> value``) layer callables per wavelength (item 5,
         device-geometry roadmap 2026-06-10).
@@ -1054,7 +1059,14 @@ class PMM2DStack:
         v5.20 (audit B3): when neither ``theta``/``angle`` nor ``phi`` is
         passed, the sweep REUSES a previously ``set_source()``-configured
         incidence instead of silently resetting to normal incidence.  Any
-        explicit ``theta``/``angle``/``phi`` still wins."""
+        explicit ``theta``/``angle``/``phi`` still wins.
+
+        The per-wavelength solves are INDEPENDENT (each on a private shallow
+        clone) and release the GIL inside LAPACK, so they run on a bounded thread
+        pool (``max_workers=None`` picks ``min(cpu, n_wl)``; each worker pins its
+        BLAS pool to ``blas_per_worker``).  Results stored BY INDEX ->
+        BYTE-IDENTICAL to serial for any worker count (``max_workers=1`` forces
+        serial).  Each per-wavelength ``solve()`` already dedups identical layers."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
         # audit B3: inherit the configured source angle/azimuth when the sweep
         # leaves them unset (theta/angle both None -> reuse _src['theta'];
@@ -1073,22 +1085,41 @@ class PMM2DStack:
             raise ValueError("PMM2DStack.solve_vs_wavelength: every "
                              "wavelength must be a finite value > 0 [m].")
         base = self._layers
-        orders = R = T = J = None
-        try:
+
+        def _solve_one(i, w):
+            # Independent solve on a PRIVATE shallow clone (own _layers/_src/
+            # _internal; the module-level geo-eig cache is lock-guarded, and
+            # solve() dedups identical layers), so no worker mutates shared self.
+            w = float(w)
+            sub = _copy.copy(self)
+            sub._internal = None
+            sub._layers = self._materialized_layers(w, base)
+            sub.set_source(w, theta=theta, phi=phi, angle=angle)
+            with rcwa_blas_threads(blas_per_worker):
+                o, R1, T1, j1 = sub.solve()
+            return i, o, R1, np.asarray(T1), np.asarray(j1)
+
+        results = [None] * wlv.size
+        # A traced (JAX) half-space forces serial (concurrent tracing is not
+        # thread-safe); a traced LAYER cell makes solve() return traced arrays
+        # that np.stack rejects cleanly below, exactly as the pre-thread loop did.
+        _jax_any = is_jax_array(self.n_sup) or is_jax_array(self.n_sub)
+        _mw = (1 if _jax_any else
+               (min(os.cpu_count() or 1, int(wlv.size)) if max_workers is None
+                else max(1, int(max_workers))))
+        if _mw == 1 or wlv.size == 1:
             for i, w in enumerate(wlv):
-                self._layers = self._materialized_layers(float(w), base)
-                self.set_source(float(w), theta=theta, phi=phi, angle=angle)
-                o, R1, T1, j1 = self.solve()
-                if orders is None:
-                    orders = o
-                    R = np.empty((wlv.size,) + R1.shape, dtype=float)
-                    T = np.empty((wlv.size,) + T1.shape, dtype=float)
-                    J = np.empty((wlv.size, 2, 2), dtype=complex)
-                R[i] = R1
-                T[i] = T1
-                J[i] = np.asarray(j1)
-        finally:
-            self._layers = base
+                results[i] = _solve_one(i, w)
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=_mw) as _ex:
+                for res in _ex.map(lambda p: _solve_one(*p),
+                                   list(enumerate(wlv))):
+                    results[res[0]] = res
+        orders = results[0][1]
+        R = np.stack([r[2] for r in results])
+        T = np.stack([r[3] for r in results])
+        J = np.stack([r[4] for r in results])
         if jones:
             return orders, R, T, J
         return orders, R, T

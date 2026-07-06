@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from lumenairy.elements.pmm import PMMStack
+from lumenairy.elements.pmm import PMM2DStack, PMMStack
 
 
 def _dbr(n_pairs=4):
@@ -62,3 +62,31 @@ def test_dedup_byte_identical_across_pair_count():
     r4 = _dbr(4).solve_vs_wavelength(WLS, angle=0.0, max_workers=2)[1]
     r4b = _dbr(4).solve_vs_wavelength(WLS, angle=0.0, max_workers=1)[1]
     assert np.array_equal(r4, r4b)              # deterministic, dedup-invariant
+
+
+def _stack2d():
+    cell = np.full((32, 32), 2.1)
+    cell[8:24, 8:24] = 6.0                      # crossed square pillar
+    st = PMM2DStack(0.7e-6, n_substrate=1.5, n_superstrate=1.0, degree=7,
+                    n_orders=3)
+    st.add_layer(0.20e-6, eps_cell=cell)
+    st.add_layer(0.15e-6, eps=2.25)
+    st.add_layer(0.20e-6, eps_cell=cell)        # repeated -> solve() dedups
+    return st
+
+
+def test_2d_threaded_sweep_byte_identical():
+    """PMM2DStack.solve_vs_wavelength threads on private clones -> byte-identical
+    to serial AND to a per-wavelength solve() loop (the 2-D solve dedups)."""
+    wls = np.linspace(0.9e-6, 1.2e-6, 6)
+    st = _stack2d()
+    o1, R1, T1, J1 = st.solve_vs_wavelength(wls, theta=0.1, phi=0.2,
+                                            max_workers=1, jones=True)
+    o4, R4, T4, J4 = st.solve_vs_wavelength(wls, theta=0.1, phi=0.2,
+                                            max_workers=4, jones=True)
+    assert np.array_equal(R1, R4) and np.array_equal(T1, T4)
+    assert np.array_equal(J1, J4)
+    for iw, w in enumerate(wls):
+        out = st.set_source(float(w), theta=0.1, phi=0.2).solve()
+        assert np.max(np.abs(np.asarray(out[1]) - R1[iw])) < 1e-12
+        assert np.max(np.abs(np.asarray(out[3]) - J1[iw])) < 1e-12
