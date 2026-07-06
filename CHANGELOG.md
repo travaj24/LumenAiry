@@ -6,6 +6,18 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Threaded `RCWAStack.solve_vs_wavelength`** (speed; byte-identical).  The
+  per-wavelength solves are independent and NumPy releases the GIL inside LAPACK,
+  so they now run on a bounded thread pool -- each on a private `copy.copy` clone
+  of the stack (safe: RCWAStack holds no instance cache, and the shared
+  `_HOMOG_CACHE` is lock-guarded with a byte-identical recompute), with a
+  per-worker thread-local BLAS pin so the pool does not oversubscribe.  New
+  `max_workers` (default `min(cpu_count, n_wl)` on NumPy, 1 on GPU/JAX) and
+  `blas_per_worker` kwargs.  Results are stored by index, so the output is
+  BYTE-IDENTICAL to a serial sweep regardless of worker count -- measured **~8x**
+  on a 24-core box for a 24-wavelength 3-layer sweep.  See
+  `tests/unit/test_v5_20_8_rcwa_threaded_sweep.py`.
+
 - **Berreman interface-S-matrix sweep cache** (speed; byte-identical).  On top
   of the per-layer eig cache, the native cascade's interface S-matrices are also
   wavelength-independent (built from the wl-independent field-mode matrices), so

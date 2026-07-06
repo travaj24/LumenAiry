@@ -2,6 +2,8 @@
 Jones bridge).  Handles both 1-D and 2-D layers."""
 from __future__ import annotations
 
+import copy as _copy
+import os
 import warnings
 from typing import List, Optional
 
@@ -47,6 +49,7 @@ from ._core import (
     _validate_geometry,
     _validate_shapes,
     _with_blas_limit,
+    rcwa_blas_threads,
 )
 from .oned import (
     _resolve_incidence,
@@ -1415,7 +1418,8 @@ class RCWAStack:
                 out.append(_RCWALayer(L.thickness, "tensor", tcell))
         return out
 
-    def solve_vs_wavelength(self, wavelengths, *, stabilize=False):
+    def solve_vs_wavelength(self, wavelengths, *, stabilize=False,
+                            max_workers=None, blas_per_worker=1):
         """Solve the stack across a wavelength sweep (audit GAP5, v5.14.1).
 
         Calls :meth:`set_source`'s stored ``(theta, phi)`` at each wavelength,
@@ -1423,6 +1427,15 @@ class RCWAStack:
         callables per wavelength.  An unstable wavelength (the loud
         ``_EnergyError`` guard) is returned as a NaN row and counted in a
         single summary warning -- one bad point must not abort the sweep.
+
+        The per-wavelength solves are INDEPENDENT (each on a private clone of
+        the stack) and NumPy releases the GIL inside LAPACK, so they run on a
+        bounded thread pool: ``max_workers=None`` (default) picks
+        ``min(cpu_count, n_wl)`` on the NumPy backend and 1 on GPU/JAX; each
+        worker pins its BLAS pool to ``blas_per_worker`` threads so the product
+        stays within the core count.  Results are stored by index, so the output
+        is BYTE-IDENTICAL to a serial sweep regardless of worker count.  Pass
+        ``max_workers=1`` to force the serial path.
 
         Returns
         -------
@@ -1459,34 +1472,61 @@ class RCWAStack:
         base_ns, base_nb = self.n_superstrate, self.n_substrate
         base_src = self._source
         n_unstable = 0
-        try:
+
+        def _solve_one(i, w):
+            # Independent solve on a PRIVATE shallow clone: shares read-only
+            # config but gets its own _layers/_source/half-space indices, so no
+            # worker mutates shared self.  RCWAStack holds no instance cache
+            # (the only shared cache, _HOMOG_CACHE, is lock-guarded and its
+            # recompute is byte-identical across any interleaving), so copy.copy
+            # is safe here.
+            w = float(w)
+            sub = _copy.copy(self)
+            sub._layers = self._materialized_layers(w, base_layers)
+            sub.n_superstrate = base_ns(w) if callable(base_ns) else base_ns
+            sub.n_substrate = base_nb(w) if callable(base_nb) else base_nb
+            sub._source = dict(base_src, wavelength=w)
+            try:
+                # the BLAS cap is THREAD-LOCAL, so each worker sets its own.
+                with rcwa_blas_threads(blas_per_worker):
+                    return i, sub.solve(stabilize=stabilize)
+            except _EnergyError:
+                return i, None
+
+        def _store(i, res):
+            nonlocal n_unstable
+            if res is None:
+                n_unstable += 1
+                return
+            o_i, R_i, T_i = res.efficiencies()
+            o_i = np.asarray(to_numpy(o_i))
+            R_i = np.asarray(to_numpy(R_i))
+            T_i = np.asarray(to_numpy(T_i))
+            cols = [key_to_col.get(_order_key(o)) for o in o_i]
+            for j_src, j_dst in enumerate(cols):
+                if j_dst is not None:
+                    R_out[i, :, j_dst] = R_i[:, j_src]
+                    T_out[i, :, j_dst] = T_i[:, j_src]
+            J_out[i] = np.asarray(to_numpy(res.jones_reflection()))
+
+        # completion order is irrelevant (results stored by index i in the main
+        # thread) -> byte-identical to serial.  GPU (shared CUDA stream) and JAX
+        # (tracing) stay serial.
+        _jax_any = any(is_jax_array(getattr(L, "data", None))
+                       for L in base_layers)
+        if max_workers is None:
+            max_workers = (1 if (self.use_gpu or _jax_any)
+                           else min(os.cpu_count() or 1, int(wl_arr.size)))
+        max_workers = max(1, int(max_workers))
+        if max_workers == 1 or wl_arr.size == 1:
             for i, w in enumerate(wl_arr):
-                w = float(w)
-                self._layers = self._materialized_layers(w, base_layers)
-                self.n_superstrate = (base_ns(w) if callable(base_ns)
-                                      else base_ns)
-                self.n_substrate = (base_nb(w) if callable(base_nb)
-                                    else base_nb)
-                self._source = dict(base_src, wavelength=w)
-                try:
-                    res = self.solve(stabilize=stabilize)
-                except _EnergyError:
-                    n_unstable += 1
-                    continue
-                o_i, R_i, T_i = res.efficiencies()
-                o_i = np.asarray(to_numpy(o_i))
-                R_i = np.asarray(to_numpy(R_i))
-                T_i = np.asarray(to_numpy(T_i))
-                cols = [key_to_col.get(_order_key(o)) for o in o_i]
-                for j_src, j_dst in enumerate(cols):
-                    if j_dst is not None:
-                        R_out[i, :, j_dst] = R_i[:, j_src]
-                        T_out[i, :, j_dst] = T_i[:, j_src]
-                J_out[i] = np.asarray(to_numpy(res.jones_reflection()))
-        finally:
-            self._layers = base_layers
-            self.n_superstrate, self.n_substrate = base_ns, base_nb
-            self._source = base_src
+                _store(*_solve_one(i, w))
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=max_workers) as _ex:
+                for i, res in _ex.map(lambda iw: _solve_one(*iw),
+                                      list(enumerate(wl_arr))):
+                    _store(i, res)
         if n_unstable:
             warnings.warn(
                 f"RCWAStack.solve_vs_wavelength: {n_unstable} of "
