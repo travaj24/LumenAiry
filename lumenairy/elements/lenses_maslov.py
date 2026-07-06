@@ -278,6 +278,122 @@ def _opd6(coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
     return _opd6_numpy(coef, K1, K2, K3, K4, u1, u2, u3, u4, P)
 
 
+def _opd_vd3_numpy(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """Value (+ v2 first-derivatives for s1x/s1y) of the SHARED 4-var Chebyshev
+    basis for the three coefficient sets at once.  Returns
+    ``(opd_v, s1x_v, ds1x3, ds1x4, s1y_v, ds1y3, ds1y4)``.  The local_quadrature
+    integrand loop needs opd VALUE and s1x/s1y value + first derivatives, never
+    second derivatives (those are the one-time per-pixel Hessian), and evaluates
+    all three at the SAME query points -- so this builds the basis once, skips
+    the T'' recurrence entirely, and shares it across opd/s1x/s1y (vs three
+    separate 6-output ``_opd6`` calls that rebuild the basis 3x)."""
+    T1 = _chebyshev_vandermonde(u1, P)
+    T2 = _chebyshev_vandermonde(u2, P)
+    T3 = _chebyshev_vandermonde(u3, P)
+    T4 = _chebyshev_vandermonde(u4, P)
+    dT3 = _chebyshev_derivative_vandermonde(u3, P)
+    dT4 = _chebyshev_derivative_vandermonde(u4, P)
+    T12 = T1[K1] * T2[K2]
+    T3b = T3[K3]
+    T4b = T4[K4]
+    val = T12 * T3b * T4b            # (M, n) -- shared value basis
+    d3 = T12 * dT3[K3] * T4b
+    d4 = T12 * T3b * dT4[K4]
+    return (np.sum(cop[:, None] * val, axis=0),
+            np.sum(csx[:, None] * val, axis=0),
+            np.sum(csx[:, None] * d3, axis=0),
+            np.sum(csx[:, None] * d4, axis=0),
+            np.sum(csy[:, None] * val, axis=0),
+            np.sum(csy[:, None] * d3, axis=0),
+            np.sum(csy[:, None] * d4, axis=0))
+
+
+def _get_cheb4d_vd3_numba():
+    """Numba twin of :func:`_opd_vd3_numpy` (value + 1st-deriv, three coef sets,
+    shared basis, no T'' recurrence), or None if numba is unavailable."""
+    if "cheb4d_vd3" in _MZ_KERNELS:
+        return _MZ_KERNELS["cheb4d_vd3"]
+    if not _mz_load_numba():
+        _MZ_KERNELS["cheb4d_vd3"] = None
+        return None
+
+    @_mz_njit(cache=True, parallel=True, fastmath=True)
+    def _cheb4d_vd3(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P):
+        n = u1.shape[0]
+        M = cop.shape[0]
+        opd_v = np.zeros(n)
+        s1x_v = np.zeros(n)
+        ds1x3 = np.zeros(n)
+        ds1x4 = np.zeros(n)
+        s1y_v = np.zeros(n)
+        ds1y3 = np.zeros(n)
+        ds1y4 = np.zeros(n)
+        for i in _mz_prange(n):
+            a1 = u1[i]; a2 = u2[i]; a3 = u3[i]; a4 = u4[i]
+            Tu1 = np.empty(P + 1); Tu2 = np.empty(P + 1)
+            Tu3 = np.empty(P + 1); Tu4 = np.empty(P + 1)
+            Tu1[0] = 1.0; Tu2[0] = 1.0; Tu3[0] = 1.0; Tu4[0] = 1.0
+            if P >= 1:
+                Tu1[1] = a1; Tu2[1] = a2; Tu3[1] = a3; Tu4[1] = a4
+            for m in range(2, P + 1):
+                Tu1[m] = 2.0 * a1 * Tu1[m - 1] - Tu1[m - 2]
+                Tu2[m] = 2.0 * a2 * Tu2[m - 1] - Tu2[m - 2]
+                Tu3[m] = 2.0 * a3 * Tu3[m - 1] - Tu3[m - 2]
+                Tu4[m] = 2.0 * a4 * Tu4[m - 1] - Tu4[m - 2]
+            Uu3 = np.empty(P + 1); Uu4 = np.empty(P + 1)
+            Uu3[0] = 1.0; Uu4[0] = 1.0
+            if P >= 1:
+                Uu3[1] = 2.0 * a3; Uu4[1] = 2.0 * a4
+            for m in range(2, P + 1):
+                Uu3[m] = 2.0 * a3 * Uu3[m - 1] - Uu3[m - 2]
+                Uu4[m] = 2.0 * a4 * Uu4[m - 1] - Uu4[m - 2]
+            dTu3 = np.zeros(P + 1); dTu4 = np.zeros(P + 1)
+            for m in range(1, P + 1):
+                dTu3[m] = float(m) * Uu3[m - 1]
+                dTu4[m] = float(m) * Uu4[m - 1]
+            sopd = 0.0; sxv = 0.0; sx3 = 0.0; sx4 = 0.0
+            syv = 0.0; sy3 = 0.0; sy4 = 0.0
+            for mm in range(M):
+                t12 = Tu1[K1[mm]] * Tu2[K2[mm]]
+                t3 = Tu3[K3[mm]]; t4 = Tu4[K4[mm]]
+                dt3 = dTu3[K3[mm]]; dt4 = dTu4[K4[mm]]
+                vv = t12 * t3 * t4
+                v3 = t12 * dt3 * t4
+                v4 = t12 * t3 * dt4
+                sopd += cop[mm] * vv
+                sxv += csx[mm] * vv; sx3 += csx[mm] * v3; sx4 += csx[mm] * v4
+                syv += csy[mm] * vv; sy3 += csy[mm] * v3; sy4 += csy[mm] * v4
+            opd_v[i] = sopd
+            s1x_v[i] = sxv; ds1x3[i] = sx3; ds1x4[i] = sx4
+            s1y_v[i] = syv; ds1y3[i] = sy3; ds1y4[i] = sy4
+        return opd_v, s1x_v, ds1x3, ds1x4, s1y_v, ds1y3, ds1y4
+
+    _MZ_KERNELS["cheb4d_vd3"] = _cheb4d_vd3
+    return _cheb4d_vd3
+
+
+def _opd_vd3(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """Dispatch the shared value+1st-deriv 3-coef kernel to Numba (default) or
+    the NumPy reference; ULP-equal, ~2x cheaper than three ``_opd6`` calls."""
+    if _MASLOV_USE_NUMBA:
+        kern = _get_cheb4d_vd3_numba()
+        if kern is not None:
+            return kern(
+                np.ascontiguousarray(cop, dtype=np.float64),
+                np.ascontiguousarray(csx, dtype=np.float64),
+                np.ascontiguousarray(csy, dtype=np.float64),
+                np.ascontiguousarray(K1, dtype=np.int64),
+                np.ascontiguousarray(K2, dtype=np.int64),
+                np.ascontiguousarray(K3, dtype=np.int64),
+                np.ascontiguousarray(K4, dtype=np.int64),
+                np.ascontiguousarray(u1, dtype=np.float64),
+                np.ascontiguousarray(u2, dtype=np.float64),
+                np.ascontiguousarray(u3, dtype=np.float64),
+                np.ascontiguousarray(u4, dtype=np.float64),
+                int(P))
+    return _opd_vd3_numpy(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P)
+
+
 # CuPy fused kernel for the 4-var Chebyshev value+derivs -- the device twin of
 # the Numba ``_cheb4d_opd_derivs``.  One thread per query point runs the O(P)
 # T/U/T'/T'' recurrences in local memory then loops over the M multi-indices,
@@ -2309,11 +2425,15 @@ def _integrate_local_quadrature(
         u4 = u_v2y_samp[p_start:p_end].ravel()
         u1 = u_s2x_tile[p_start:p_end].ravel()
         u2 = u_s2y_tile[p_start:p_end].ravel()
-        opd_v, _, _, _, _, _        = _opd_and_derivs(coef_opd, u1, u2, u3, u4)
+        # v5.23 (M-P8): one shared-basis value+1st-deriv kernel for the three
+        # coef sets (opd value only; s1x/s1y value + du3/du4), skipping the
+        # unused second derivatives and the 2x redundant basis rebuild.
+        (opd_v, s1x_v, ds1x_du3, ds1x_du4,
+         s1y_v, ds1y_du3, ds1y_du4) = _opd_vd3(
+            coef_opd, coef_s1x, coef_s1y, K1_arr, K2_arr, K3_arr, K4_arr,
+            u1, u2, u3, u4, poly_order)
         # N4: linear-in-v2 OPD contribution at each window sample.
         opd_v = opd_v + lin_v3 * u3 + lin_v4 * u4
-        s1x_v, ds1x_du3, ds1x_du4, *_ = _opd_and_derivs(coef_s1x, u1, u2, u3, u4)
-        s1y_v, ds1y_du3, ds1y_du4, *_ = _opd_and_derivs(coef_s1y, u1, u2, u3, u4)
         det_J = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
         abs_J = np.abs(det_J) / (v2x_h * v2y_h)
 

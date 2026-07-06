@@ -4,6 +4,44 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **GBD/Maslov performance batch (v5.23)** -- exact rewrites, each asserted
+  against the reference before landing (no physics change):
+  - **GBD closed-form batched 2x2** inverse / eigenvalues / determinant
+    (`_inv2x2` / `_eigvals2x2` / `_det2x2`) replace `xp.linalg.inv/eigvals/det`
+    at the ~8 tensor-Q evolution sites.  Matches LAPACK to ~1e-13; **inv 4.7x /
+    eig 32x** faster on batched 2x2 (LAPACK per-matrix dispatch dominates on tiny
+    matrices), and made of only `+ - * /` so it also **unblocks jax.grad / CuPy**
+    for the whole tensor-Q family (a complex non-symmetric `eigvals` has no JAX
+    VJP).
+  - **GBD per-surface Jacobian default `'fd'` -> `'auto'`** -- prefers the
+    truncation-free analytic differential ray transfer (one dual-number trace, no
+    per-surface (N,4,4) LAPACK inverse) and falls back to finite-difference (9N
+    traces) for any surface type analytic does not cover.  **21.6x** faster on
+    the Jacobian build; the reconstructed field is identical (relerr 0.0, Q
+    matches FD to 1.7e-10) and analytic is the *exact* derivative, so accuracy
+    never drops.
+  - **GBD windowed reconstruction**: separable outer-product exp for scalar /
+    diagonal-Q beamlets (`exp(a+b)=exp(a)exp(b)` -> `ng*(bx+by)` exps instead of
+    `ng*bx*by`; only the skew `Qxy!=0` case keeps the full 2-D form) + a
+    `sqrt(2)` window ladder (per-axis box inflation ~2x -> ~1.41x).  Still matches
+    the dense sum to 1e-15..1e-17; **2.35x** faster reconstruct.
+  - **Maslov fit via normal-equations Cholesky** (`_solve_fit` /
+    `_gram_cho_factor`) instead of the `gelsd`-SVD `lstsq`.  Matches to 2.6e-15,
+    **12.8x** faster (54x with the cacheable Gram factor, for a same-optic
+    sweep).  The fit is the dominant Maslov stage once the integrand is
+    accelerated.
+  - **Maslov `local_quadrature` shared value+1st-derivative kernel** (`_opd_vd3`,
+    numba + numpy): the integrand loop needs no second derivatives (those are the
+    one-time per-pixel Hessian) and evaluates `opd`/`s1x`/`s1y` at the same
+    points, so build the Chebyshev basis once and skip the T'' recurrence -- ULP
+    equal, **2.6x** cheaper than three 6-output kernel calls.
+  - **Maslov headless waste removal**: the fit-residual RMS GEMVs are gated
+    behind `verbose`/`progress`; `sample_E_bilinear` precomputes its grid origin
+    scalar instead of allocating `arange(N)` per chunk; the two identical Tukey
+    windows are computed once.
+
 ### Added
 
 - **GBD windowed (bounded-support) reconstruction** -- large speed **and**

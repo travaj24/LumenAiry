@@ -2082,7 +2082,7 @@ def apply_prescription_persurface_to_beamlets(
     *,
     z_image: Optional[float] = None,
     world_output_plane: Any = None,
-    jacobian: str = 'fd',
+    jacobian: str = 'auto',
 ) -> BeamletBundle:
     """Per-surface tensor-Q evolution of a beamlet bundle through a prescription.
 
@@ -2122,13 +2122,21 @@ def apply_prescription_persurface_to_beamlets(
         ray_transfer_jacobian_analytic,
     )
 
-    if jacobian == 'analytic':
-        _jac = ray_transfer_jacobian_analytic
+    # v5.23 (#3): 'auto' (the default) prefers the truncation-free analytic
+    # differential ray transfer (one dual-number trace, no per-surface (N,4,4)
+    # inverse) and transparently falls back to the finite-difference Jacobian
+    # (9N traces) for any surface type the analytic path does not yet cover
+    # (raising NotImplementedError).  The two agree to ~1e-8 where both apply;
+    # analytic is exact (no FD step), so 'auto' never lowers accuracy vs 'fd'.
+    if jacobian == 'auto':
+        _jac_candidates = [ray_transfer_jacobian_analytic, ray_transfer_jacobian]
+    elif jacobian == 'analytic':
+        _jac_candidates = [ray_transfer_jacobian_analytic]
     elif jacobian == 'fd':
-        _jac = ray_transfer_jacobian
+        _jac_candidates = [ray_transfer_jacobian]
     else:
         raise ValueError(
-            f"jacobian must be 'fd' or 'analytic', got {jacobian!r}.")
+            f"jacobian must be 'auto', 'fd' or 'analytic', got {jacobian!r}.")
 
     if world_output_plane is not None:
         # Evolve Q on the UNFOLDED-EQUIVALENT straight system: a fold mirror
@@ -2161,7 +2169,18 @@ def apply_prescription_persurface_to_beamlets(
     ux = (dr[:, 0] / Nz).astype(np.float64)
     uy = (dr[:, 1] / Nz).astype(np.float64)
 
-    dt = _jac(x, y, ux, uy, surfs, wavelength, per_surface=True)
+    dt = None
+    _jac_err = None
+    for _jac in _jac_candidates:
+        try:
+            dt = _jac(x, y, ux, uy, surfs, wavelength, per_surface=True)
+            break
+        except NotImplementedError as _e:
+            _jac_err = _e            # analytic unsupported here -> try next (FD)
+    if dt is None:
+        raise (_jac_err or RuntimeError(
+            'apply_prescription_persurface_to_beamlets: no ray-transfer '
+            'Jacobian backend succeeded.'))
     n = x.shape[0]
     I2 = np.eye(2)[None, :, :]
     Qsrc = np.asarray(beamlets.Q)
@@ -2311,7 +2330,7 @@ def propagate_gbd_through_prescription(
     per_surface: bool = False,
     z_image: Optional[float] = None,
     world_output_plane: Any = None,
-    jacobian: str = 'fd',
+    jacobian: str = 'auto',
     use_gpu: bool = False,
 ) -> np.ndarray:
     """End-to-end GBD through a sequential lumenairy prescription
