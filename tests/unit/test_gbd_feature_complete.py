@@ -703,6 +703,53 @@ def test_transmit_thin_film_ar_coating():
     assert np.allclose(Pd, Pa)
 
 
+def test_reflection_multilayer_hr_stack():
+    """A dielectric multilayer (quarter-wave Bragg) ``coating`` on a mirror
+    gives r_s / r_p from the thin-film characteristic matrix: reflectance climbs
+    toward 1 with more pairs (matching the analytic Bragg formula), is energy-
+    conserving, and leaves the single-metal-index and PEC paths unchanged."""
+    from lumenairy.propagators.gbd import (
+        _fresnel_jones_matrix_per_beamlet,
+        _thin_film_coefficients,
+    )
+    nH, nL, ns = 2.30, 1.46, 1.515
+    dH, dL = 0.633e-6 / (4 * nH), 0.633e-6 / (4 * nL)
+
+    def _hr(npairs):
+        return {'layers': [(nH, dH), (nL, dL)] * npairs, 'substrate': ns}
+
+    def _mirror(coat):
+        return {'name': 'm', 'aperture_diameter': 30e-3, 'surfaces': [
+            {'radius': float('inf'), 'conic': 0., 'glass_before': 'air',
+             'glass_after': 'air', 'is_mirror': True, 'coating': coat,
+             'semi_diameter': 14e-3}], 'thicknesses': [0.0]}
+    z = np.zeros(1)
+    Rs = []
+    for npairs in (2, 4, 8):
+        P, _ = _fresnel_jones_matrix_per_beamlet(
+            z, z, z, z, _mirror(_hr(npairs)), 0.633e-6)
+        Rs.append(abs(P[0, 0, 0]) ** 2)
+    assert Rs[0] < Rs[1] < Rs[2]              # reflectance climbs with pairs
+    assert Rs[2] > 0.99                        # 8-pair HR is a good mirror
+    N = 8
+    Rb = ((1.0 * nL ** (2 * N) - ns * nH ** (2 * N))
+          / (1.0 * nL ** (2 * N) + ns * nH ** (2 * N))) ** 2
+    assert abs(Rs[2] - Rb) < 1e-4              # matches analytic Bragg formula
+    # energy R + T = 1 (lossless) at oblique
+    rs, rp, ts, tp = _thin_film_coefficients(
+        [(nH, dH), (nL, dL)] * 6, 1.0, ns,
+        np.array([np.cos(np.radians(30))]), 0.633e-6)
+    cts = np.sqrt(1 - (np.sin(np.radians(30)) / ns) ** 2)
+    Ts = (ns * cts) / np.cos(np.radians(30)) * abs(ts[0]) ** 2
+    assert abs(abs(rs[0]) ** 2 + Ts - 1.0) < 1e-9
+    # metal single-index + PEC unchanged
+    Pm, _ = _fresnel_jones_matrix_per_beamlet(
+        z, z, z, z, _mirror(1.374 + 7.62j), 0.633e-6)
+    assert abs(abs(Pm[0, 0, 0]) ** 2 - 0.9137) < 1e-3
+    Pp, _ = _fresnel_jones_matrix_per_beamlet(z, z, z, z, _mirror(None), 0.633e-6)
+    assert abs(abs(Pp[0, 0, 0]) - 1.0) < 1e-9
+
+
 @pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
 def test_ray_transfer_jacobian_jax_matches_fd_and_differentiable():
     """The JAX differential-ray-transfer (jacfwd around trace_jax) matches the

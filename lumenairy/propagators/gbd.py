@@ -923,11 +923,16 @@ def _coating_stack_layers(coating: Any, wavelength: float):
 
     A stack is a **list/tuple of layers**, each ``(index, thickness_m)`` or
     ``{'index': ..., 'thickness': ...}`` (``index`` resolved by
-    :func:`_resolve_coating_index`).  Returns ``None`` when ``coating`` is not a
-    stack (e.g. a single metal index for a mirror, or ``None``)."""
+    :func:`_resolve_coating_index`), OR a ``{'layers': [...], 'substrate': ...}``
+    dict (the ``substrate`` -- read by :func:`_coating_substrate` -- backs the
+    stack for a **reflection** coating, e.g. a dielectric HR mirror).  Returns
+    ``None`` when ``coating`` is not a stack (a single metal index for a mirror,
+    a name/callable, or ``None``)."""
     if coating is None or isinstance(coating, (int, float, complex)) \
             or callable(coating) or isinstance(coating, str):
         return None
+    if isinstance(coating, dict) and 'layers' in coating:
+        coating = coating['layers']
     if not isinstance(coating, (list, tuple)) or len(coating) == 0:
         return None
     layers = []
@@ -938,6 +943,14 @@ def _coating_stack_layers(coating: Any, wavelength: float):
             idx, d = lay[0], lay[1]
         layers.append((_resolve_coating_index(idx, wavelength), float(d)))
     return layers
+
+
+def _coating_substrate(coating: Any, wavelength: float):
+    """The substrate index of a ``{'layers':..., 'substrate':...}`` reflection
+    coating, or ``None`` (caller supplies a default)."""
+    if isinstance(coating, dict) and coating.get('substrate') is not None:
+        return _resolve_coating_index(coating['substrate'], wavelength)
+    return None
 
 
 def _thin_film_coefficients(layers, n0, ns, cos0, wavelength):
@@ -1071,7 +1084,18 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
             if is_mirror:
                 _reflect(rb, s)
                 coating = getattr(s, 'coating', None)
-                if coating is None:
+                stack = _coating_stack_layers(coating, wavelength)
+                if stack is not None:
+                    # Dielectric multilayer (HR / Bragg) mirror: r_s / r_p from
+                    # the thin-film characteristic matrix, incident medium n1 ->
+                    # stack -> substrate (defaults to n1, a free-standing stack
+                    # reflecting back into the incident medium).
+                    subs = _coating_substrate(coating, wavelength)
+                    if subs is None:
+                        subs = complex(n1)
+                    cs, cp, _ts, _tp = _thin_film_coefficients(
+                        stack, n1, subs, cos_i, wavelength)
+                elif coating is None:
                     # Ideal reflector: |r_s| = |r_p| = 1 (energy-conserving, no
                     # diattenuation).  PEC convention r_s = -1, r_p = +1 carries
                     # the fold's relative s-p phase; the geometric s/p frame
