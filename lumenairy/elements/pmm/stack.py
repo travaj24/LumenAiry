@@ -2,6 +2,7 @@
 layers via the div-conforming covariant-metric generator)."""
 from __future__ import annotations
 
+import os
 import threading
 from collections import OrderedDict
 
@@ -16,6 +17,7 @@ import numpy as np
 # top-level import introduces no cycle.
 from ...backend import is_jax_array
 from ..rcwa import _interface_smatrix_general
+from ..rcwa._core import rcwa_blas_threads
 from ._core import (
     _C,
     _COV_MIN_SLANT_RAD,
@@ -1557,20 +1559,23 @@ class PMMStack:
         return A, out
 
     def solve_vs_wavelength(self, wavelengths, *, angle=0.0, theta=None,
-                            jones=False):
+                            jones=False, max_workers=None, blas_per_worker=1):
         """Diffraction efficiencies across a wavelength sweep on ONE call,
         reusing the geometry-only spectral-element assembly.
 
         The shared union grid and the per-layer SEM operators
         (``_build_sem_tensor_segments``) + the Fourier far-field projector are
         wavelength-INDEPENDENT and are assembled ONCE; only the per-wavelength
-        modal eigs + S-matrix cascade rerun.  HONEST PERF NOTE: the per-layer
-        generalized eig dominates the cost (the SEM assembly is a tiny fraction of
-        it), so this is essentially a CONVENIENCE + correctness wrapper returning a
-        dense ``(n_wl, 2, N)`` array, NOT a speedup -- it runs at roughly the same
-        wall-clock as a per-wavelength :meth:`solve` loop (the cost is eig-bound,
-        like the 1-D solvers).  Bit-identical to per-wavelength :meth:`solve` on
-        the propagating orders.
+        modal eigs + S-matrix cascade rerun.  The per-layer generalized eig
+        dominates the cost, and the per-wavelength solves are INDEPENDENT and
+        release the GIL inside LAPACK, so they run on a bounded THREAD POOL
+        (``max_workers=None`` picks ``min(cpu, n_wl)``; each worker pins its BLAS
+        pool to ``blas_per_worker`` so the product stays within the core count).
+        Results are stored BY INDEX -> BYTE-IDENTICAL to a serial sweep regardless
+        of worker count (``max_workers=1`` forces serial).  Within each wavelength
+        the per-layer eig is DEDUPED across identical layers (an ABAB Bragg stack
+        eigs each distinct layer once, mirroring :meth:`solve`).  Bit-identical to
+        per-wavelength :meth:`solve` on the propagating orders.
 
         ALL-VERTICAL IN-PLANE stacks only (the symmetric ``+/-q`` cascade -- which
         is what the tapered/vertical builders produce); for SLANTED or
@@ -1586,6 +1591,13 @@ class PMMStack:
         angle / theta : float, optional
             Incidence angle [rad] (``theta`` is the cross-suite alias, and wins
             when both are given) -- FIXED across the sweep.
+        max_workers : int, optional
+            Thread-pool size for the per-wavelength solves (default
+            ``min(cpu, n_wl)``; ``1`` = serial).  Output is byte-identical to
+            serial for any value.
+        blas_per_worker : int, optional
+            BLAS threads each worker pins (default 1, so ``max_workers *
+            blas_per_worker`` stays within the core count).
 
         DISPERSIVE materials (device-geometry roadmap item 5, 2026-06-10):
         any segment eps / region index added as a ``wl -> value`` callable is
@@ -1708,33 +1720,52 @@ class PMMStack:
         R_all = np.empty((wl.size, 2, N), dtype=float)
         T_all = np.empty((wl.size, 2, N), dtype=float)
         J_all = np.empty((wl.size, 2, 2), dtype=complex)
-        for iw, w in enumerate(wl):
+        depths = [float(self._layers[i][0]) for i in range(len(layer_mats))]
+
+        def _solve_one(iw, w):
+            # Independent per-wavelength solve (writes R_all[iw]... by index in
+            # the main thread -> byte-identical to serial).  DISPERSIVE
+            # half-spaces materialise their OWN mats locally (no shared-variable
+            # race); the union-grid projector Tp is geometry-only and stays
+            # hoisted.  The wl-independent geometric-eig cache is lock-guarded.
             w = float(w)
             k0 = 2.0 * np.pi / w
-            if disp_region and iw > 0:
-                n_sup_w, n_sub_w, mats_sup, mats_sub = _region_mats(w)
-            elif iw == 0 or not disp_region:
-                n_sup_w, n_sub_w = n_sup0, n_sub0
+            if disp_region:
+                n_sup_w, n_sub_w, msup, msub = _region_mats(w)
+            else:
+                n_sup_w, n_sub_w, msup, msub = n_sup0, n_sub0, mats_sup, mats_sub
             eps_sup, eps_sub = n_sup_w ** 2, n_sub_w ** 2
             kx0 = float(np.real(n_sup_w)) * np.sin(angle) * k0
-            mats_w = [
-                (m if m is not None else _build_sem_tensor_segments(
-                    self.period, uwidths,
-                    [_tensor3_dict(_tens(e, w)) for e in layer_eps_u[i]],
-                    self.degree, self.n_el, self.grade))
-                for i, m in enumerate(layer_mats)]
-            _geo = _uniform_geo_eig(mats_sup, k0, kx0)
-            Wsup, Vsup, _l, _g = _sem_modes_uniform(mats_sup, k0, kx0,
-                                                    eps_sup, _geo)
-            Wsub, Vsub, _l, _g = _sem_modes_uniform(mats_sub, k0, kx0,
-                                                    eps_sub, _geo)
-            lmodes = [_sem_modes_tensor(m, k0, kx0, True) for m in mats_w]
-            S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-            for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
-                S = _propagation_star(S, lam_l, k0 * self._layers[i][0])
-                nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
-                          else (lmodes[i + 1][0], lmodes[i + 1][1]))
-                S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
+            with rcwa_blas_threads(blas_per_worker):
+                _geo = _uniform_geo_eig(msup, k0, kx0)
+                Wsup, Vsup, _l, _g = _sem_modes_uniform(msup, k0, kx0,
+                                                        eps_sup, _geo)
+                Wsub, Vsub, _l2, _g2 = _sem_modes_uniform(msub, k0, kx0,
+                                                          eps_sub, _geo)
+                # DBR / identical-layer dedup: eig each DISTINCT layer once per
+                # wavelength (an ABAB Bragg stack recomputes the same eig P times
+                # otherwise -- solve() already dedups, the sweep did not).  Key
+                # on the materialised per-region eps bytes (mirrors solve():937).
+                _eig_memo = {}
+                lmodes = []
+                for i, m in enumerate(layer_mats):
+                    ck = tuple(np.asarray(_tens(e, w), dtype=_C).tobytes()
+                               for e in layer_eps_u[i])
+                    hit = _eig_memo.get(ck)
+                    if hit is None:
+                        mm = (m if m is not None else _build_sem_tensor_segments(
+                            self.period, uwidths,
+                            [_tensor3_dict(_tens(e, w)) for e in layer_eps_u[i]],
+                            self.degree, self.n_el, self.grade))
+                        hit = _sem_modes_tensor(mm, k0, kx0, True)
+                        _eig_memo[ck] = hit
+                    lmodes.append(hit)
+                S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
+                for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
+                    S = _propagation_star(S, lam_l, k0 * depths[i])
+                    nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
+                              else (lmodes[i + 1][0], lmodes[i + 1][1]))
+                    S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
             S11, _S12, S21, _S22 = S
             kx = (kx0 + orders * G) / k0
             Hsup, Hsub = _proj(Wsup), _proj(Wsub)
@@ -1744,10 +1775,26 @@ class PMMStack:
             R, T, jr = _assemble_jones_farfield(
                 Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
                 kx0 / k0, N)
+            return iw, R, T, np.asarray(jr)
+
+        def _store(iw, R, T, jr):
             _warn_stack_energy(R, T)
-            R_all[iw] = R
-            T_all[iw] = T
-            J_all[iw] = np.asarray(jr)
+            R_all[iw], T_all[iw], J_all[iw] = R, T, jr
+
+        _mw = (min(os.cpu_count() or 1, int(wl.size)) if max_workers is None
+               else max(1, int(max_workers)))
+        if _mw == 1 or wl.size == 1:
+            for iw, w in enumerate(wl):
+                _store(*_solve_one(iw, w))
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            # ThreadPoolExecutor.map yields IN INPUT ORDER, so _store runs in
+            # wavelength order (deterministic warnings) and the result is
+            # byte-identical to the serial path regardless of worker count.
+            with ThreadPoolExecutor(max_workers=_mw) as _ex:
+                for res in _ex.map(lambda p: _solve_one(*p),
+                                   list(enumerate(wl))):
+                    _store(*res)
         if jones:
             return orders, R_all, T_all, J_all
         return orders, R_all, T_all

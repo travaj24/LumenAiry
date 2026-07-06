@@ -22,6 +22,23 @@ All notable changes to the core library are documented here.
   (JAX / CuPy) for per-beamlet-`Q`, skew, off-grid or per-beamlet-tilted
   bundles.
 
+### Performance
+
+- **Threaded `PMMStack.solve_vs_wavelength` + per-wavelength eig dedup.**  The
+  per-wavelength PMM solves are independent and release the GIL inside LAPACK, so
+  the sweep now runs on a bounded thread pool (the `RCWAStack.solve_vs_wavelength`
+  pattern: `max_workers` / `blas_per_worker` kwargs, per-worker BLAS-thread cap,
+  results stored by index).  Additionally, within each wavelength the per-layer
+  generalized eig -- the dominant cost -- is now DEDUPED across identical layers
+  (an ABAB Bragg / DBR stack eigs each distinct layer once; `solve()` already did
+  this, the sweep did not, re-eig'ing every layer at every wavelength).  Both are
+  BYTE-IDENTICAL to the serial path and to a per-wavelength `solve()` loop
+  (measured 0.0 on R/T/Jones); the geometric-eig cache is lock-guarded so any
+  worker interleaving is deterministic.  Measured ~2x on an 8-core box for a
+  10-layer DBR sweep (more for distinct-layer stacks; the DBR dedup is itself a
+  large separate win).  Removes the old "NOT a speedup" caveat.  See
+  `tests/unit/test_v5_21_pmm_threaded_sweep.py`.
+
 ### Changed
 
 - **`apply_real_lens_maslov` focus-plane ROI** (`output_plane_distance`,
