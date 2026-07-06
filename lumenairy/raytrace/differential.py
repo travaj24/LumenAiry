@@ -491,13 +491,23 @@ def ray_transfer_jacobian_analytic(
     """
     from ..backend.array import is_jax_array
     for s in surfaces:
-        if getattr(s, 'aspheric_coeffs', None) or getattr(s, 'freeform', None) \
-                or getattr(s, 'is_coordbrk', False):
+        # _adrt_step reads only ``radius`` / ``conic`` (rotationally symmetric),
+        # so any surface that departs from that -- aspheres, freeforms, coord
+        # breaks, OR a biconic ``radius_y`` / ``conic_y`` / ``aspheric_coeffs_y``
+        # -- must be rejected (else a biconic would be silently traced as if it
+        # were rotationally symmetric, giving a wrong y-axis power).
+        if (getattr(s, 'aspheric_coeffs', None)
+                or getattr(s, 'freeform', None)
+                or getattr(s, 'is_coordbrk', False)
+                or getattr(s, 'radius_y', None) is not None
+                or getattr(s, 'conic_y', None) is not None
+                or getattr(s, 'aspheric_coeffs_y', None) is not None):
             raise NotImplementedError(
-                'ray_transfer_jacobian_analytic handles conic surfaces only; '
-                'aspheric-polynomial departures, freeforms and coordinate '
-                'breaks are not yet supported -- use ray_transfer_jacobian (FD) '
-                'for those.')
+                'ray_transfer_jacobian_analytic handles rotationally-symmetric '
+                'conic surfaces only; aspheric-polynomial departures, '
+                'freeforms, coordinate breaks and biconic (radius_y / conic_y) '
+                'surfaces are not yet supported -- use ray_transfer_jacobian '
+                '(FD) for those.')
     if is_jax_array(x) or is_jax_array(y) or is_jax_array(ux) \
             or is_jax_array(uy):
         return _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface)

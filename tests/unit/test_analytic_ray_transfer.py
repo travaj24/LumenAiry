@@ -148,6 +148,28 @@ def test_analytic_gives_the_same_gbd_field_as_fd():
     assert rel < 1e-6, rel
 
 
+def test_analytic_rejects_biconic_and_asphere():
+    """The analytic path reads only ``radius`` / ``conic`` (rotationally
+    symmetric), so it must REJECT biconic (``radius_y``), aspheric-polynomial
+    and coordinate-break surfaces rather than silently trace them
+    rotationally-symmetric with a wrong off-axis power."""
+    biconic = {'name': 'b', 'aperture_diameter': 16e-3, 'surfaces': [
+        {'radius': 50e-3, 'radius_y': 30e-3, 'conic': 0., 'conic_y': 0.,
+         'glass_before': 'air', 'glass_after': 'N-BK7', 'semi_diameter': 8e-3}],
+        'thicknesses': [0.0]}
+    surfs = surfaces_from_prescription(biconic)
+    z = np.zeros(1)
+    with pytest.raises(NotImplementedError):
+        ray_transfer_jacobian_analytic(z, z, z, z, surfs, LAM)
+    asph = {'name': 'a', 'aperture_diameter': 16e-3, 'surfaces': [
+        {'radius': 50e-3, 'conic': 0., 'aspheric_coeffs': {4: 1e3},
+         'glass_before': 'air', 'glass_after': 'N-BK7', 'semi_diameter': 8e-3}],
+        'thicknesses': [0.0]}
+    with pytest.raises(NotImplementedError):
+        ray_transfer_jacobian_analytic(
+            z, z, z, z, surfaces_from_prescription(asph), LAM)
+
+
 def test_analytic_dead_ray_is_finite_and_masked():
     """A base ray that TIRs / misses comes back alive=False with a FINITE
     (zeroed) Jacobian -- not a NaN that would contaminate array-wide ops -- and
