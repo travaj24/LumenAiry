@@ -36,6 +36,8 @@ physically-correct power split.)
 """
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -58,6 +60,34 @@ from .rcwa._core import (
 _C = np.complex128
 
 __all__ = ["berreman_jones_1d", "BerremanStack"]
+
+# --- per-layer modal eig cache ------------------------------------------------
+# The Berreman Delta -- and therefore the 4x4 layer eig -- depends ONLY on eps
+# and Kx/Ky (angle), NOT on wavelength (the wavelength enters solely through the
+# propagation phase k0*thickness).  So a fixed-angle wavelength sweep and a
+# periodic ABAB... (DBR / Bragg) stack recompute the SAME eig over and over.  A
+# module-level bounded LRU keyed on (eps bytes, Kx, Ky) returns byte-identical
+# modes -- the PMMStack._eig_cache / BORStack._modal_cache precedent.  The cached
+# mode arrays are treated read-only by every caller (only fresh matrices are
+# built from them).
+_MODE_CACHE: "OrderedDict[tuple, tuple]" = OrderedDict()
+_MODE_CACHE_SIZE = 256
+_MODE_CACHE_LOCK = threading.Lock()
+
+
+def _clear_berreman_mode_cache():
+    """Registry hook: drop the per-layer modal eig cache."""
+    with _MODE_CACHE_LOCK:
+        _MODE_CACHE.clear()
+
+
+try:
+    from .._cache_registry import (
+        register_cache_clearer as _register_cache_clearer,
+    )
+    _register_cache_clearer("berreman_layer_modes", _clear_berreman_mode_cache)
+except ImportError:  # pragma: no cover - registry always present in-tree
+    pass
 
 
 # =========================================================================== #
@@ -144,6 +174,25 @@ def _layer_modes(eps_tensor, Kx, Ky):
     return Wf, Vf, lamf, Wb, Vb, lamb
 
 
+def _layer_modes_cached(eps_tensor, Kx, Ky):
+    """:func:`_layer_modes` memoized on ``(eps, Kx, Ky)``.  The eig is
+    wavelength-independent, so a fixed-angle sweep or a periodic stack reuses it
+    byte-for-byte (the arrays are read-only downstream)."""
+    a = np.ascontiguousarray(np.asarray(eps_tensor, dtype=_C))
+    key = (a.tobytes(), a.shape, complex(Kx), complex(Ky))
+    with _MODE_CACHE_LOCK:
+        hit = _MODE_CACHE.get(key)
+        if hit is not None:
+            _MODE_CACHE.move_to_end(key)            # LRU: refresh recency
+            return hit
+    res = _layer_modes(eps_tensor, Kx, Ky)
+    with _MODE_CACHE_LOCK:
+        _MODE_CACHE[key] = res
+        while len(_MODE_CACHE) > _MODE_CACHE_SIZE:
+            _MODE_CACHE.popitem(last=False)
+    return res
+
+
 def _flux(Etan, Hmodal):
     """Time-averaged z-Poynting flux from tangential ``E`` and the MODAL ``H``
     (the Berreman state's lower block).  The modal H carries an extra ``-i``
@@ -170,14 +219,14 @@ def _solve_core(eps_layers, thicks, eps_sup, eps_sub, wavelength, Kx, Ky,
     + partial cascades for internal-field / absorption reconstruction."""
     k0 = 2.0 * np.pi / wavelength
 
-    Wf_s, Vf_s, lamf_s, Wb_s, Vb_s, lamb_s = _layer_modes(
+    Wf_s, Vf_s, lamf_s, Wb_s, Vb_s, lamb_s = _layer_modes_cached(
         eps_sup * np.eye(3, dtype=_C), Kx, Ky)
-    Wf_b, Vf_b, lamf_b, Wb_b, Vb_b, lamb_b = _layer_modes(
+    Wf_b, Vf_b, lamf_b, Wb_b, Vb_b, lamb_b = _layer_modes_cached(
         eps_sub * np.eye(3, dtype=_C), Kx, Ky)
     M_sup = _modes_to_M(Wf_s, Vf_s, Wb_s, Vb_s)
     M_sub = _modes_to_M(Wf_b, Vf_b, Wb_b, Vb_b)
 
-    modes = [_layer_modes(e, Kx, Ky) for e in eps_layers]
+    modes = [_layer_modes_cached(e, Kx, Ky) for e in eps_layers]
     Ms = [_modes_to_M(Wf, Vf, Wb, Vb) for (Wf, Vf, _lf, Wb, Vb, _lb) in modes]
     nlay = len(modes)
 

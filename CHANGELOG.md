@@ -6,6 +6,17 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Berreman per-layer modal eig cache** (speed; byte-identical).  The 4x4
+  layer eig depends only on `eps` and `Kx/Ky` (angle), NOT on wavelength (which
+  enters solely through the propagation phase), so a fixed-angle wavelength
+  sweep and a periodic ABAB... (DBR / Bragg) stack recomputed the SAME eig
+  repeatedly.  A module-level bounded LRU (`_layer_modes_cached`, keyed on the
+  eps bytes + Kx + Ky, cache-registry-clearable) now returns byte-identical
+  modes: a fixed-angle dispersion sweep reuses every layer eig (verified the
+  cache does not grow across a sweep), and a DBR dedups its repeated layers
+  within one solve -- the PMMStack / BORStack caching precedent, which Berreman
+  lacked.  See `tests/unit/test_v5_20_4_berreman_mode_cache.py`.
+
 - **Differentiable (JAX) 1-D OUT-OF-PLANE RCWA** (`rcwa_jones_1d`,
   `rcwa_jones_1d_segments`).  A full-3x3 tensor with out-of-plane coupling
   (`eps_xz/eps_yz/eps_zx/eps_zy != 0` -- a tilted-director LC) is now
