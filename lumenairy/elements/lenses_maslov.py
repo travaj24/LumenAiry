@@ -481,7 +481,7 @@ def apply_real_lens_maslov(
     extract_linear_phase: bool = True,
     chunk_v2: int = 64,
     use_numexpr: Optional[bool] = None,
-    integration_method: str = 'quadrature',
+    integration_method: str = 'auto',
     stationary_newton_iter: int = 12,
     stationary_newton_tol: float = 1e-10,
     local_n_samples: int = 8,
@@ -563,15 +563,22 @@ def apply_real_lens_maslov(
     per-pixel saddle rather than sample a uniform v2 grid); pass an
     explicit int to pin the sampling for reproducibility.
 
-    ``integration_method='auto'`` (v5.21) resolves to a concrete integrator
-    from the fitted chart's v2-oscillation count: **uniform 'quadrature'** when
-    it is well-resolved (``4 * v2_osc <= _N_V2_AUTO_MAX``) -- exact and
-    caustic-safe, and where low-oscillation / near-caustic charts fall -- and
-    the fast asymptotic **'local_quadrature'** only when uniform quadrature
-    would need more than the sample cap (the very oscillatory / high-NA regime
-    where quadrature is both slow and speckles).  Byte-identical to the method
-    it picks; measured **357x** faster than the default ``'quadrature'`` on a
-    high-NA singlet chart while staying on the safe quadrature elsewhere.
+    ``integration_method='auto'`` (v5.21; the **default** as of v5.22) resolves
+    to a concrete integrator from the fitted chart's v2-oscillation count:
+    **uniform 'quadrature'** when it is well-resolved
+    (``4 * v2_osc <= _N_V2_AUTO_MAX``) -- exact and caustic-safe, and where
+    low-oscillation / near-caustic charts fall -- and the fast asymptotic
+    **'local_quadrature'** only when uniform quadrature would need more than the
+    sample cap (the very oscillatory / high-NA regime where quadrature is both
+    slow and speckles).  Byte-identical to the method it picks in the
+    well-resolved regime (auto -> quadrature at the same auto-sized ``n_v2``);
+    it only diverges from the old ``'quadrature'`` default in the under-resolved
+    near-caustic regime, where that default clamped ``n_v2`` and emitted an
+    "under-resolved" warning anyway.  Measured **357x** faster (and no
+    multi-GB / minute-scale near-focus quadrature) than the old default on a
+    high-NA singlet chart while staying on the safe quadrature elsewhere.  Pass
+    ``integration_method='quadrature'`` explicitly to force the exact uniform
+    quadrature everywhere.
 
     ``fold_split=True`` (v5.21) auto-handles a **folded** prescription (one with
     fold mirrors) instead of raising: it splits at every fold

@@ -893,7 +893,9 @@ from .propagators.ensemble import propagate_ensemble
 from .propagators.gbd import (
     BeamletBundle,
     apply_abcd_to_beamlets,
+    apply_aperture_to_beamlets,
     apply_thin_lens_to_beamlets,
+    decompose_field_adaptive,
     decompose_field_to_beamlets,
     propagate_beamlets_freespace,
     propagate_gbd,  # canonical-order alias
@@ -1195,6 +1197,8 @@ __all__ = [
     # Gaussian Beamlet Decomposition
     'BeamletBundle',
     'decompose_field_to_beamlets',
+    'decompose_field_adaptive',
+    'apply_aperture_to_beamlets',
     'propagate_beamlets_freespace',
     'apply_thin_lens_to_beamlets',
     'apply_abcd_to_beamlets',

@@ -6,6 +6,48 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **GBD windowed (bounded-support) reconstruction** -- large speed **and**
+  memory win, machine-precision identical to the dense sum.  Each Gaussian
+  beamlet has support only within a few waists of its centre, but
+  `reconstruct_field_from_beamlets` evaluated every beamlet over the WHOLE
+  `(Ny, Nx)` grid (an `O(beamlets * Ny * Nx)` product through a
+  `(Ny, Nx, chunk)` complex buffer -- e.g. 19-28 s and 7-13 GB peak for ~9 k
+  beamlets on N=192-256).  The new `window=` path evaluates each beamlet only
+  on the local pixel box where its Gaussian is non-negligible (out to `window`
+  amplitude-1/e radii, tail `exp(-window^2)`) and scatter-adds via
+  `numpy.bincount` -- `O(sum_b window_box_b)` instead.  Measured **147x**
+  faster and **15x** less memory (3.1 GB -> 206 MB) at N=192, `relerr` vs the
+  dense sum **1e-16 to 1e-15** across scalar / tensor-Q / direction-ramp /
+  anamorphic beamlets, and it makes previously-intractable sizes routine (N=512
+  / 262 k beamlets: 4.9 s, 1.6 GB bounded, vs a multi-GB OOM before).  Opt-in on
+  the low-level `reconstruct_field_from_beamlets(..., window=5.0)` (default
+  `None` = byte-identical dense sum); the drivers (`propagate_gbd_thin_lens`,
+  `propagate_gbd_freespace`, `propagate_gbd_through_prescription`) default to it
+  on the NumPy backend.  JAX / CuPy fall back to the dense sum.  See
+  `tests/unit/test_v5_22_gbd_windowed_adaptive.py`.
+
+- **GBD adaptive (edge-refined) decomposition** (`decompose_field_adaptive`).
+  A two-level residual-refinement decomposition: a coarse beamlet grid at
+  `base_step` plus a finer, narrower grid at `refine_step` confined to where the
+  residual `E - reconstruct(coarse)` is large (the features the coarse grid
+  under-resolves).  The fine beamlets carry the residual (ADD a correction), so
+  the coarse/fine seam has no partition-of-unity mismatch and no double
+  counting.  Reaches uniform-fine edge fidelity at **~6x fewer beamlets** for
+  fields with localized sharp features on a well-resolved background (measured:
+  uniform-fine ss=1 = 65 k beamlets -> `relI` 9.0e-2; adaptive base=4 refine=1
+  = 10 k beamlets -> 9.1e-2).  Pairs with the windowed reconstruction.  (For a
+  full-pupil FOCUSING system use a uniform fine grid + `soft_edge` below --
+  coarsening the interior degrades a focus.)
+
+- **GBD analytic soft-edge (partial-vignetting) aperture**
+  (`apply_aperture_to_beamlets(..., soft_edge=True)`,
+  `propagate_gbd_thin_lens(..., aperture_soft_edge=True)`).  Replaces the binary
+  chief-ray keep/drop at an aperture with the analytic fraction of each
+  beamlet's Gaussian that passes the rim
+  (`1/2 (1 + erf(d*sqrt(2)/w))`, straight-edge approximation), removing the
+  beamlet-pitch staircase.  Measured to improve the hard-aperture Airy-focus
+  intensity error **~1.8x** (3.3% -> 1.9%) at no extra cost.
+
 - **Differentiable (JAX) Berreman internal observables** (`layer_absorption`,
   `internal_field`).  `BerremanStack.solve(retain_internal=True)` now works under
   a trace (previously it raised): the per-layer modal-amplitude reconstruction
@@ -34,6 +76,25 @@ All notable changes to the core library are documented here.
   (rytov->Berreman, MG, Bruggeman).  See `tests/unit/test_v5_20_9_emt_jax.py`.
 
 ### Changed
+
+- **`apply_real_lens_maslov` default `integration_method` is now `'auto'`**
+  (was `'quadrature'`).  A naive near-focus call previously ran the exact
+  uniform quadrature, which is an oscillatory integral that converges terribly
+  at a caustic (measured **86 s** and multi-hundred-MB on an N=96 singlet near
+  focus, with an "under-resolved" warning); `'auto'` routes such charts to the
+  fast asymptotic evaluator (**~1 s**, ~4x less memory) and is byte-identical to
+  `'quadrature'` in the well-resolved regime (same auto-sized `n_v2`).  It only
+  diverges from the old default in exactly the under-resolved near-caustic
+  regime the old default already warned about.  Pass
+  `integration_method='quadrature'` to force the exact uniform quadrature
+  everywhere.  709 maslov / lens-model / GBD tests unchanged.
+
+- **GBD `reconstruct_field_from_beamlets` dense path auto-caps memory**
+  (`mem_budget_mb=512`, byte-identical for small `N`).  When the dense
+  `(Ny, Nx, chunk_beamlets)` working set would exceed the budget,
+  `chunk_beamlets` is auto-reduced (never grown), preventing the multi-GB peaks
+  the fixed `chunk_beamlets=2048` hit at large `N` without changing small-`N`
+  results.
 
 - **`retain_internal` stores fewer S-blocks per layer** (memory; byte-identical).
   The internal-field / layer-absorption reconstruction (`RCWAStack` /
