@@ -329,43 +329,73 @@ def _get_cheb4d_vd3_numba():
         ds1y3 = np.zeros(n)
         ds1y4 = np.zeros(n)
         for i in _mz_prange(n):
-            a1 = u1[i]; a2 = u2[i]; a3 = u3[i]; a4 = u4[i]
-            Tu1 = np.empty(P + 1); Tu2 = np.empty(P + 1)
-            Tu3 = np.empty(P + 1); Tu4 = np.empty(P + 1)
-            Tu1[0] = 1.0; Tu2[0] = 1.0; Tu3[0] = 1.0; Tu4[0] = 1.0
+            a1 = u1[i]
+            a2 = u2[i]
+            a3 = u3[i]
+            a4 = u4[i]
+            Tu1 = np.empty(P + 1)
+            Tu2 = np.empty(P + 1)
+            Tu3 = np.empty(P + 1)
+            Tu4 = np.empty(P + 1)
+            Tu1[0] = 1.0
+            Tu2[0] = 1.0
+            Tu3[0] = 1.0
+            Tu4[0] = 1.0
             if P >= 1:
-                Tu1[1] = a1; Tu2[1] = a2; Tu3[1] = a3; Tu4[1] = a4
+                Tu1[1] = a1
+                Tu2[1] = a2
+                Tu3[1] = a3
+                Tu4[1] = a4
             for m in range(2, P + 1):
                 Tu1[m] = 2.0 * a1 * Tu1[m - 1] - Tu1[m - 2]
                 Tu2[m] = 2.0 * a2 * Tu2[m - 1] - Tu2[m - 2]
                 Tu3[m] = 2.0 * a3 * Tu3[m - 1] - Tu3[m - 2]
                 Tu4[m] = 2.0 * a4 * Tu4[m - 1] - Tu4[m - 2]
-            Uu3 = np.empty(P + 1); Uu4 = np.empty(P + 1)
-            Uu3[0] = 1.0; Uu4[0] = 1.0
+            Uu3 = np.empty(P + 1)
+            Uu4 = np.empty(P + 1)
+            Uu3[0] = 1.0
+            Uu4[0] = 1.0
             if P >= 1:
-                Uu3[1] = 2.0 * a3; Uu4[1] = 2.0 * a4
+                Uu3[1] = 2.0 * a3
+                Uu4[1] = 2.0 * a4
             for m in range(2, P + 1):
                 Uu3[m] = 2.0 * a3 * Uu3[m - 1] - Uu3[m - 2]
                 Uu4[m] = 2.0 * a4 * Uu4[m - 1] - Uu4[m - 2]
-            dTu3 = np.zeros(P + 1); dTu4 = np.zeros(P + 1)
+            dTu3 = np.zeros(P + 1)
+            dTu4 = np.zeros(P + 1)
             for m in range(1, P + 1):
                 dTu3[m] = float(m) * Uu3[m - 1]
                 dTu4[m] = float(m) * Uu4[m - 1]
-            sopd = 0.0; sxv = 0.0; sx3 = 0.0; sx4 = 0.0
-            syv = 0.0; sy3 = 0.0; sy4 = 0.0
+            sopd = 0.0
+            sxv = 0.0
+            sx3 = 0.0
+            sx4 = 0.0
+            syv = 0.0
+            sy3 = 0.0
+            sy4 = 0.0
             for mm in range(M):
                 t12 = Tu1[K1[mm]] * Tu2[K2[mm]]
-                t3 = Tu3[K3[mm]]; t4 = Tu4[K4[mm]]
-                dt3 = dTu3[K3[mm]]; dt4 = dTu4[K4[mm]]
+                t3 = Tu3[K3[mm]]
+                t4 = Tu4[K4[mm]]
+                dt3 = dTu3[K3[mm]]
+                dt4 = dTu4[K4[mm]]
                 vv = t12 * t3 * t4
                 v3 = t12 * dt3 * t4
                 v4 = t12 * t3 * dt4
                 sopd += cop[mm] * vv
-                sxv += csx[mm] * vv; sx3 += csx[mm] * v3; sx4 += csx[mm] * v4
-                syv += csy[mm] * vv; sy3 += csy[mm] * v3; sy4 += csy[mm] * v4
+                sxv += csx[mm] * vv
+                sx3 += csx[mm] * v3
+                sx4 += csx[mm] * v4
+                syv += csy[mm] * vv
+                sy3 += csy[mm] * v3
+                sy4 += csy[mm] * v4
             opd_v[i] = sopd
-            s1x_v[i] = sxv; ds1x3[i] = sx3; ds1x4[i] = sx4
-            s1y_v[i] = syv; ds1y3[i] = sy3; ds1y4[i] = sy4
+            s1x_v[i] = sxv
+            ds1x3[i] = sx3
+            ds1x4[i] = sx4
+            s1y_v[i] = syv
+            ds1y3[i] = sy3
+            ds1y4[i] = sy4
         return opd_v, s1x_v, ds1x3, ds1x4, s1y_v, ds1y3, ds1y4
 
     _MZ_KERNELS["cheb4d_vd3"] = _cheb4d_vd3

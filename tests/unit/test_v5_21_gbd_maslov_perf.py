@@ -72,3 +72,69 @@ def test_maslov_focus_roi_equals_full_grid_crop():
     crop = F_full[c - rn2 // 2:c - rn2 // 2 + rn2,
                   c + off - rn2 // 2:c + off - rn2 // 2 + rn2]
     assert _relerr(F_off, crop) < 1e-10
+
+
+# --------------------------------------------------------------------------
+# #9 GBD FFT-convolution reconstruction for uniform-Q bundles
+# --------------------------------------------------------------------------
+def test_fft_reconstruct_matches_dense_uniform_Q():
+    """FFT-convolution reconstruction is machine-precision identical to the
+    dense sum for a uniform-Q, uniform-direction, on-grid free-space bundle --
+    and correctly falls back to the windowed sum for a per-beamlet-Q (after a
+    lens) or skew bundle."""
+    from lumenairy.propagators.gbd import (
+        _fft_reconstruct_applicable,
+        apply_thin_lens_to_beamlets,
+        decompose_field_to_beamlets,
+        propagate_beamlets_freespace,
+        reconstruct_field_from_beamlets,
+    )
+    N, dx = 128, 5e-6
+    E0 = _gauss(N, dx, w0=0.15e-3)
+
+    # (a) free-space uniform-Q -> FFT applies, matches dense to ~1e-15
+    b = decompose_field_to_beamlets(E0, dx, wavelength=LAM, sample_step=1,
+                                    waist_factor=1.5)
+    b = propagate_beamlets_freespace(b, 10e-3, LAM)
+    assert _fft_reconstruct_applicable(b, N, N, dx, dx, (0.0, 0.0))
+    dense = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx,
+                                            wavelength=LAM, window=None)
+    fft = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx,
+                                          wavelength=LAM, window=5.0)
+    assert _relerr(fft, dense) < 1e-9
+
+    # (b) after a thin lens the per-beamlet direction kick breaks uniformity ->
+    #     the FFT path must NOT engage (windowed still matches dense)
+    b2 = decompose_field_to_beamlets(E0, dx, wavelength=LAM, sample_step=2,
+                                     waist_factor=1.5)
+    b2 = apply_thin_lens_to_beamlets(b2, 30e-3, LAM)
+    b2 = propagate_beamlets_freespace(b2, 5e-3, LAM)
+    assert not _fft_reconstruct_applicable(b2, N, N, dx, dx, (0.0, 0.0))
+    d2 = reconstruct_field_from_beamlets(b2, Ny=N, Nx=N, dx=dx,
+                                         wavelength=LAM, window=None)
+    w2 = reconstruct_field_from_beamlets(b2, Ny=N, Nx=N, dx=dx,
+                                         wavelength=LAM, window=5.0)
+    assert _relerr(w2, d2) < 1e-9
+
+
+def test_fft_reconstruct_anamorphic_diagonal_Q():
+    """Uniform DIAGONAL tensor Q (anamorphic dy != dx) also takes the FFT path
+    and matches the dense sum."""
+    from lumenairy.propagators.gbd import (
+        decompose_field_to_beamlets,
+        propagate_beamlets_freespace,
+        reconstruct_field_from_beamlets,
+    )
+    N, dx, dy = 128, 5e-6, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    ys = (np.arange(N) - N // 2) * dy
+    Xa, Ya = np.meshgrid(xs, ys)
+    E = np.exp(-(Xa ** 2 + Ya ** 2) / (0.15e-3) ** 2).astype(np.complex128)
+    b = decompose_field_to_beamlets(E, dx, wavelength=LAM, dy=dy, sample_step=1,
+                                    waist_factor=1.5)
+    b = propagate_beamlets_freespace(b, 8e-3, LAM)
+    dense = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx, dy=dy,
+                                            wavelength=LAM, window=None)
+    fft = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx, dy=dy,
+                                          wavelength=LAM, window=5.0)
+    assert _relerr(fft, dense) < 1e-9

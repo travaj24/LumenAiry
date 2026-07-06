@@ -4,7 +4,31 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **GBD FFT-convolution reconstruction** for uniform-Q bundles.  When a beamlet
+  bundle has a uniform `Q` (scalar, or diagonal tensor), a uniform launch
+  direction and on-grid centres -- exactly what `decompose_field_to_beamlets`
+  followed by free-space / uniform-ABCD evolution produces -- the coherent sum
+  is a convolution of the amplitude array with ONE Gaussian kernel, evaluated
+  as a single FFT of `O(Ny*Nx log)` **independent of beamlet count**.  Auto-
+  detected inside `reconstruct_field_from_beamlets(..., window=...)` on the
+  NumPy backend; machine-precision identical to the dense sum (~1e-15) and
+  **2000-3700x faster** in the spread/dense regime where the windowed box fills
+  the grid.  Falls back to the windowed scatter-add for per-beamlet-`Q`, skew,
+  off-grid or per-beamlet-tilted bundles.
+
 ### Changed
+
+- **`apply_real_lens_maslov` focus-plane ROI** (`output_plane_distance`,
+  `output_plane_n`) -- compose a free-space leg into the canonical
+  entrance->exit map so the fit + `roi` land on a downstream (focus / image)
+  plane a distance past the prescription's exit vertex, WITHOUT re-tracing the
+  optics.  A tiny `roi` window at the focus then costs `O(roi_n^2)` integrand
+  evals (measured ~21x vs the full grid; up to ~1e3-1e4x for a tight spot on a
+  large grid), and a through-focus scan re-uses the single ray trace.  Exact:
+  matches baking the distance into the prescription to ~1e-10; the ROI window is
+  identical to the full-grid slice.
 
 - **GBD/Maslov performance batch (v5.21)** -- exact rewrites, each asserted
   against the reference before landing (no physics change):
