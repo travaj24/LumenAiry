@@ -6,7 +6,7 @@ All notable changes to the core library are documented here.
 
 ### Changed
 
-- **GBD/Maslov performance batch (v5.23)** -- exact rewrites, each asserted
+- **GBD/Maslov performance batch (v5.21)** -- exact rewrites, each asserted
   against the reference before landing (no physics change):
   - **GBD closed-form batched 2x2** inverse / eigenvalues / determinant
     (`_inv2x2` / `_eigvals2x2` / `_det2x2`) replace `xp.linalg.inv/eigvals/det`

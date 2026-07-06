@@ -1,4 +1,4 @@
-"""v5.22 GBD speed/memory/accuracy features + Maslov default.
+"""v5.21 GBD speed/memory/accuracy features + Maslov default.
 
 Covers:
  * windowed (bounded-support) reconstruction == dense sum to machine precision,

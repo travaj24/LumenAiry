@@ -1,4 +1,4 @@
-"""v5.23 GBD/Maslov performance batch -- correctness gates.
+"""v5.21 GBD/Maslov performance batch -- correctness gates.
 
 Each item is a speedup that must not change the physics: validated against the
 trusted reference (full grid / baked prescription / LAPACK / dense sum).

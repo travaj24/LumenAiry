@@ -63,7 +63,7 @@ import numpy as np
 
 from ..backend import array_namespace, is_jax_array
 
-# v5.22: default amplitude-1/e-radius window for the windowed (bounded-support)
+# v5.21: default amplitude-1/e-radius window for the windowed (bounded-support)
 # reconstruction the drivers use on the NumPy backend.  5.0 -> Gaussian tail
 # exp(-25) ~ 1.4e-11 dropped (machine-precision identical to the dense sum, but
 # O(beamlets * window_box) instead of O(beamlets * Ny * Nx)).  Set to ``None``
@@ -707,7 +707,7 @@ def apply_aperture_to_beamlets(
     ``sqrt(x^2+y^2)``; ``shape='rectangular'`` clips on ``max(|x|,|y|)``
     (``semi_diameter`` is the half-width).
 
-    ``soft_edge=True`` (v5.22) replaces the binary chief-ray keep/drop with an
+    ``soft_edge=True`` (v5.21) replaces the binary chief-ray keep/drop with an
     **analytic partial-vignetting weight**: each beamlet is scaled by the
     fraction of its Gaussian that passes the aperture, using the local
     straight-edge approximation ``f = 1/2 (1 + erf(d * sqrt(2) / w))`` where
@@ -818,7 +818,7 @@ def reconstruct_field_from_beamlets(
     output grid.  ``dy`` (default ``dx``) sets the y-axis output pitch for an
     anamorphic grid.
 
-    ``window`` (v5.22, opt-in): if not ``None``, each beamlet is summed only
+    ``window`` (v5.21, opt-in): if not ``None``, each beamlet is summed only
     over the local pixel box where its Gaussian is non-negligible (out to
     ``window`` amplitude-1/e radii, tail ``exp(-window^2)``), via a
     ``bincount`` scatter-add instead of the dense ``(Ny, Nx, chunk)`` product.
@@ -842,14 +842,14 @@ def reconstruct_field_from_beamlets(
     if dy is None:
         dy = dx
 
-    # v5.22: windowed scatter-add reconstruction (NumPy fast path).
+    # v5.21: windowed scatter-add reconstruction (NumPy fast path).
     if window is not None and xp is np:
         return _reconstruct_windowed(
             beamlets, Ny=Ny, Nx=Nx, dx=dx, dy=dy, centre=centre,
             wavelength=wavelength, n_sigma=float(window),
             mem_budget_mb=mem_budget_mb)
 
-    # v5.22: auto-shrink chunk_beamlets to the memory budget.  bytes per
+    # v5.21: auto-shrink chunk_beamlets to the memory budget.  bytes per
     # beamlet-column of the dense working set ~ Ny*Nx*16 (the dX/dY/rho2/phase
     # buffers); keep chunk*Ny*Nx*16 under mem_budget.  Never grows the chunk
     # (so small-N default runs stay byte-identical); only shrinks when a chunk
@@ -1035,7 +1035,7 @@ def _reconstruct_windowed(
 
     # Bucket beamlets by (Wx, Wy) quantized to a geometric ladder so a handful
     # of vectorized passes cover all support sizes.  Cap at the grid extent.
-    # v5.23: round each half-width UP a sqrt(2)-geometric ladder (ceil to
+    # v5.21: round each half-width UP a sqrt(2)-geometric ladder (ceil to
     # 2^(k/2)) rather than the next power of two.  Power-of-two rounding
     # inflated each axis by up to ~2x (box AREA up to ~4x the exact R_cut box);
     # the finer sqrt(2) ladder caps per-axis inflation at ~1.41x (area ~2x),
@@ -1059,7 +1059,7 @@ def _reconstruct_windowed(
     ix0 = np.round((x_b - cx) / dx + Nx / 2.0).astype(np.int64)
     iy0 = np.round((y_b - cy) / dy + Ny / 2.0).astype(np.int64)
 
-    # v5.23: the beamlet Gaussian argument is axis-SEPARABLE unless the tensor Q
+    # v5.21: the beamlet Gaussian argument is axis-SEPARABLE unless the tensor Q
     # has a non-zero off-diagonal (skew astigmatism): for scalar Q and diagonal
     # tensor Q,  0.5 conj(Q):rho rho + L dX + M dY  =  [x-only](q) + [y-only](p),
     # so exp(...) = exp(x-part) (x) exp(y-part) is an OUTER PRODUCT.  That cuts
@@ -2122,7 +2122,7 @@ def apply_prescription_persurface_to_beamlets(
         ray_transfer_jacobian_analytic,
     )
 
-    # v5.23 (#3): 'auto' (the default) prefers the truncation-free analytic
+    # v5.21 (#3): 'auto' (the default) prefers the truncation-free analytic
     # differential ray transfer (one dual-number trace, no per-surface (N,4,4)
     # inverse) and transparently falls back to the finite-difference Jacobian
     # (9N traces) for any surface type the analytic path does not yet cover

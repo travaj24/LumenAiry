@@ -584,7 +584,7 @@ def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
 def _solve_fit(A, RHS, gram_factor=None):
     """Least-squares solve for the Maslov Chebyshev fit ``A @ coef ~= RHS``.
 
-    v5.23 (M-P5 follow-up): normal-equations Cholesky (``G = A^T A``; solve
+    v5.21 (M-P5 follow-up): normal-equations Cholesky (``G = A^T A``; solve
     ``G coef = A^T RHS``) instead of the ``gelsd`` full-SVD ``lstsq``.  ``A`` is
     a normalized tensor-Chebyshev Vandermonde -- well-conditioned and ~1.5x
     oversampled -- so squaring the condition number in ``G`` is safe, and
@@ -726,7 +726,7 @@ def apply_real_lens_maslov(
     per-pixel saddle rather than sample a uniform v2 grid); pass an
     explicit int to pin the sampling for reproducibility.
 
-    ``integration_method='auto'`` (v5.21; the **default** as of v5.22) resolves
+    ``integration_method='auto'`` (v5.21; the **default**) resolves
     to a concrete integrator from the fitted chart's v2-oscillation count:
     **uniform 'quadrature'** when it is well-resolved
     (``4 * v2_osc <= _N_V2_AUTO_MAX``) -- exact and caustic-safe, and where
@@ -751,7 +751,7 @@ def apply_real_lens_maslov(
     the documented per-segment pattern, in one call.  No fold -> the single-call
     path (byte-identical).
 
-    ``output_plane_distance`` (v5.23; M-P6 follow-up) composes a **free-space
+    ``output_plane_distance`` (v5.21; M-P6 follow-up) composes a **free-space
     leg** of that axial distance (in ``output_plane_n``, air = 1) into the
     canonical entrance->exit map, so the fit lands on a DOWNSTREAM plane (e.g.
     the focus / image plane a back-focal-distance past a prescription that ends
@@ -1266,7 +1266,7 @@ def apply_real_lens_maslov(
     coef_s1x = _coef3[:, 1]
     coef_s1y = _coef3[:, 2]
 
-    # v5.23 (M-P follow-up): the fit-residual RMS diagnostics are only ever read
+    # v5.21 (M-P follow-up): the fit-residual RMS diagnostics are only ever read
     # into the progress/verbose string below -- three A@coef GEMVs + reductions
     # of pure waste on a headless production sweep.  Compute them only when a
     # consumer exists.
@@ -1384,7 +1384,7 @@ def apply_real_lens_maslov(
         tmask = abs_u > taper_start
         w[tmask] = 0.5 * (1 + np.cos(np.pi * (abs_u[tmask] - taper_start) / alpha))
         return w
-    # v5.23: both axes use n_v2, so the two Tukey windows are identical --
+    # v5.21: both axes use n_v2, so the two Tukey windows are identical --
     # compute once.
     tuk_x = tukey(n_v2)
     tuk_y = tuk_x
@@ -1395,7 +1395,7 @@ def apply_real_lens_maslov(
     # (the unitless Chebyshev-node coords) instead.  Removed dead assigns.
 
 
-    # v5.23: the sampler used only in_axis[0] = -(N/2)*pitch, but allocated two
+    # v5.21: the sampler used only in_axis[0] = -(N/2)*pitch, but allocated two
     # length-N arrays every chunk to read that one scalar.  Precompute the
     # scalar origins (matching the GPU twin, which already does this).
     _in0x = -(N / 2) * dx
@@ -2461,7 +2461,7 @@ def _integrate_local_quadrature(
         u4 = u_v2y_samp[p_start:p_end].ravel()
         u1 = u_s2x_tile[p_start:p_end].ravel()
         u2 = u_s2y_tile[p_start:p_end].ravel()
-        # v5.23 (M-P8): one shared-basis value+1st-deriv kernel for the three
+        # v5.21 (M-P8): one shared-basis value+1st-deriv kernel for the three
         # coef sets (opd value only; s1x/s1y value + du3/du4), skipping the
         # unused second derivatives and the 2x redundant basis rebuild.
         (opd_v, s1x_v, ds1x_du3, ds1x_du4,
