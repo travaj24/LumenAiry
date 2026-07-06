@@ -223,6 +223,40 @@ def test_analytic_coddington_sagittal_tangential():
 
 
 @pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
+def test_analytic_jax_differentiates_mirror_system():
+    """Gradient-based design on a REFLECTIVE (is_mirror) system: the analytic
+    JAX path differentiates through the reflection (the shared _adrt_step
+    reflects on both backends), matching NumPy and giving finite jax.grad --
+    the capability the paraxial trace_jax path lacks (it rejects mirrors).
+    (Coord-break tilt folds remain a separate, world-frame extension.)"""
+    import jax
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    mir = {'name': 'm', 'aperture_diameter': 40e-3, 'surfaces': [
+        {'radius': -40e-3, 'conic': 0., 'glass_before': 'air',
+         'glass_after': 'air', 'is_mirror': True, 'semi_diameter': 18e-3},
+        {'radius': float('inf'), 'conic': 0., 'glass_before': 'air',
+         'glass_after': 'air', 'semi_diameter': 18e-3}],
+        'thicknesses': [-20e-3, 0.0]}
+    surfs = surfaces_from_prescription(mir)
+    x = np.array([0.0, 5e-3, 10e-3])
+    z = np.zeros(3)
+    Jn = ray_transfer_jacobian_analytic(x, z, z, z, surfs, LAM).jacobian
+    Jj = np.asarray(ray_transfer_jacobian_analytic(
+        jnp.asarray(x), jnp.zeros(3), jnp.zeros(3), jnp.zeros(3),
+        surfs, LAM).jacobian)
+    assert np.max(np.abs(Jn - Jj)) < 1e-9
+
+    def loss(xv):
+        J = ray_transfer_jacobian_analytic(
+            xv, jnp.zeros(3), jnp.zeros(3), jnp.zeros(3), surfs, LAM).jacobian
+        return jnp.sum(J[:, 0, 0] ** 2)
+
+    g = np.asarray(jax.grad(loss)(jnp.asarray(x)))
+    assert np.isfinite(g).all() and g.shape == (3,)
+
+
+@pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
 def test_analytic_jax_exact_and_differentiable():
     """On the JAX backend the analytic Jacobian equals the NumPy one (exact),
     and it is jax.grad / jit differentiable (a NumPy-native, truncation-free,
