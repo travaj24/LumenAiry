@@ -201,7 +201,20 @@ All notable changes to the core library are documented here.
     vmapped) — the gradient foundation for per-surface GBD lens design (matches
     the NumPy finite-difference primitive at low NA; the `_transfer_jax` high-NA
     `B`-block caveat is documented in `raytrace/differential.py`).
-  Tests: `tests/unit/test_gbd_feature_complete.py` (17 tests).
+  - **Multilayer thin-film transmission coatings** — a refracting surface may
+    carry a `coating` = list of `(index, thickness)` layers (AR / dichroic
+    stack); `t_s` / `t_p` then come from the thin-film characteristic-matrix
+    method (`_thin_film_coefficients`) instead of bare single-interface Fresnel
+    (a quarter-wave AR raises single-surface transmittance 0.958 → 0.9999;
+    reduces to bare Fresnel at zero layers; energy-conserving).  Complements the
+    single-metal-index **reflection** coating (diattenuation + retardance).
+  - **GPU reconstruction** — `propagate_gbd_through_prescription(...,
+    use_gpu=True)` moves the beamlet bundle to CuPy after the (NumPy) evolution
+    and runs the O(N_beamlets × N_pixels) coherent reconstruction on the device
+    (**~35× total** on an N=128 singlet, matching the CPU field to 8.5e-15).
+    Default `chunk_beamlets` lowered 4096 → 2048 (≈½ reconstruction peak RAM,
+    flat runtime; byte-identical chunking).
+  Tests: `tests/unit/test_gbd_feature_complete.py` (18 tests).
 
 ## [5.20.0] — 2026-07-04
 
