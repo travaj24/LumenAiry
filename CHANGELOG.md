@@ -161,31 +161,30 @@ All notable changes to the core library are documented here.
   other twins.  CPU-only (`jnp.linalg.eig`).  See
   `tests/unit/test_v5_20_11_bor_jax.py`.
 
-- **Full Popov-Neviere anisotropic OFF-DIAGONAL FFF** for `rcwa_jones_2d`
-  (`formulation='fff_nv'`).  The existing `'li'` inverse rule fixes only the
-  DIAGONAL tensor blocks; the off-diagonal `Cxy`/`Cyx` of a rotated in-plane
-  director (`exy, eyx != 0`) stayed Laurent-floored (~1e-3) at every order.  The
-  new path builds the COMPLETE tensor operator `Q = [[eps.C]] [[C]]^-1` (Popov &
-  Neviere 2001, JOSA A 18:2886, Eqs. 12-15) from a unit normal-vector field,
-  where the pointwise `C = A^-1` maps the discontinuous transverse `(Ex, Ey)` to
-  the continuous `(E_t, D_n)` -- so ALL FOUR in-plane blocks get the correct
-  inverse-rule treatment and the ONLY scalar inverted is the nonzero wall-normal
-  quadratic form `n^T eps n` (the `exy=0` singularity that blocks a naive
-  per-component off-diagonal inverse never arises).  Verified (independent
-  re-derivation + numerics): the operator reduces EXACTLY to the isotropic
-  Schuster form `E - Delta[[NN]]` for a scalar cell and to the rigorous Li-1996
-  1-D anisotropic factorization for a y-uniform stripe (both to machine
-  precision), and the solver reduces to the rigorous `rcwa_jones_1d_segments` on
-  a stripe while converging ~6x faster than `'laurent'` (measured: 2.4e-3 vs
-  1.6e-2 at n_orders=9 on a 40-deg-rotated no=1.6/ne=3.0 stripe).  The rigorous
-  `[[eps.C]][[C]]^-1` form is numerically robust only for a SMOOTH /
-  single-orientation wall normal (an anisotropic stripe: `cond([[C]]) ~ O(10)`,
-  order-independent); a crossed / corner geometry makes `[[C]]` ill-conditioned
-  (`cond ~ 1e7`, a silent lossless-trap hazard on lossy cells) and is REJECTED by
-  a `cond` gate pointing to `'li'`/`'laurent'` (expert bypass
-  `allow_nonseparable_nv=True`) -- the fully-crossed anisotropic case rides on the
-  open matched-coordinate FFF work.  In-plane, NumPy/CuPy only; new
-  `_nv_convolutions_2d_tensor` + `_nv_field_2d(..., unit=True)`.  See
+- **Full anisotropic OFF-DIAGONAL FFF** for `rcwa_jones_2d`
+  (`formulation='fff_nv'`), including CROSSED cells.  The existing `'li'` inverse
+  rule fixes only the DIAGONAL tensor blocks; the off-diagonal `Cxy`/`Cyx` of a
+  rotated in-plane director (`exy, eyx != 0`) stayed Laurent-floored (~1e-3) at
+  every order.  The new path builds the Li-2003 (J.Opt.A 5:345) successive
+  full-tensor factorization `ehat = L2 L1(eps)` -- the Smagin-Weiss-Dyakov 2026
+  `l+-_tau` operator, `L_tau = l+_tau F_tau l-_tau` applied along x then y -- so
+  ALL FOUR in-plane blocks get the correct inverse-rule treatment: the inverse
+  rule on the wall-normal diagonal (`exx` along x, `eyy` along y) and the
+  off-diagonal carried through the Schur reorganization.  The ONLY inversions are
+  of scalar wall-normal elements (plus one N x N block along the second axis), so
+  it is WELL-CONDITIONED even for a CROSSED (both-axis-patterned) pillar
+  (measured `cond ~ O(10)`), unlike the normal-vector projector form
+  `[[eps.C]][[C]]^-1` (`cond ~ 1e7` for a crossed pillar -- a silent lossless-trap
+  hazard, which is why that form was dropped in favour of Li-2003).  Verified
+  (five independent literature agents + primary-source Li-2003 + numerics): the
+  operator reduces EXACTLY (machine precision) to the rigorous Li-1996 1-D
+  factorization on a stripe; the solver reduces to `rcwa_jones_1d_segments` on a
+  stripe (~6x faster than `'laurent'`); and a high-contrast lossy CROSSED
+  rotated-director pillar now CONVERGES monotonically, ~10x faster than
+  `'laurent'` and reliably (the diagonal-only `'li'` is non-monotone there).
+  Rigorous for AXIS-ALIGNED (Manhattan) cells; the `L2 L1` vs `L1 L2` order
+  differs in the truncated space (Li 2003 Sec. 5.2, same limit).  In-plane,
+  NumPy/CuPy only; new `_li_convolutions_2d_tensor` + `_li_axis_tensor`.  See
   `tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py`.
 
 - **`formulation='fff_nv'` ported to the hybrid PMM** (`pmm_jones_2d`).  For a

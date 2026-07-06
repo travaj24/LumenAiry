@@ -1,23 +1,23 @@
-"""Full Popov-Neviere anisotropic off-diagonal FFF: rcwa_jones_2d(fff_nv).
+"""Full anisotropic off-diagonal FFF: rcwa_jones_2d(formulation='fff_nv').
 
-``formulation='fff_nv'`` builds the complete tensor operator ``Q = [[eps.C]]
-[[C]]^-1`` (Popov & Neviere 2001, JOSA A 18:2886) from a unit normal-vector
-field, so ALL FOUR in-plane blocks -- including the off-diagonal ``Cxy``/``Cyx``
-of a rotated in-plane director (``exy, eyx != 0``) -- get the correct inverse-
-rule treatment (the ``'li'`` diagonal rule leaves the off-diagonal Laurent-
-floored).  It reaches the same limit as ``'laurent'`` but converges markedly
-faster on sharp anisotropic walls.
+``formulation='fff_nv'`` builds the Li-2003 successive full-tensor factorization
+``ehat = L2 L1(eps)`` (J.Opt.A 5:345; the Smagin-Weiss-Dyakov 2026 ``l+-_tau``
+operator), so ALL FOUR in-plane blocks -- including the off-diagonal
+``Cxy``/``Cyx`` of a rotated in-plane director (``exy, eyx != 0``) -- get the
+correct inverse-rule treatment (the ``'li'`` diagonal rule leaves the
+off-diagonal Laurent-floored).  It reaches the same limit as ``'laurent'`` but
+converges markedly faster on sharp anisotropic walls.
 
-The rigorous form is well-conditioned only for a SMOOTH / single-orientation
-wall normal (an anisotropic stripe: ``cond([[C]]) ~ O(10)``, order-independent);
-a crossed / corner geometry makes ``[[C]]`` ill-conditioned and is REJECTED by a
-``cond`` gate (measured 8 vs 3.8e7) so a wrong number can never propagate
-silently -- the crossed anisotropic case rides on the (open) matched-coordinate
-FFF work.  These tests pin: the scalar operator reduction (== the isotropic
-Schuster form for constant N), the exact reduction to the rigorous 1-D
-full-tensor solver on a stripe, the faster-than-Laurent convergence, the lossy
-absorptance SPLIT (the lossless-trap guard), the cond gate + its expert bypass,
-the uniform-cell routing, and the JAX / out-of-plane guards.
+Unlike the normal-vector projector form ``[[eps.C]][[C]]^-1`` (which inverts an
+ill-conditioned 2N x 2N matrix, ``cond ~ 1e7`` for a crossed pillar), the Li-2003
+operator inverts ONLY scalar wall-normal elements (plus one N x N block), so it
+is well-conditioned even for a CROSSED (both-axis-patterned) cell -- so crossed
+anisotropic pillars now CONVERGE (rigorous for axis-aligned / Manhattan cells).
+These tests pin: the operator reduction to the rigorous Li-1996 1-D rule on a
+stripe, the exact reduction to the 1-D full-tensor solver + faster-than-Laurent
+convergence on a stripe, the lossy absorptance SPLIT (the lossless-trap guard),
+the crossed-cell convergence (monotone + beats laurent), the uniform-cell
+routing, and the JAX / out-of-plane guards.
 """
 from __future__ import annotations
 
@@ -50,21 +50,24 @@ WL = 1.0e-6
 DEPTH = 0.5e-6
 
 
-def test_fff_nv_scalar_operator_reduction():
-    """For eps = eps_scalar*I and a CONSTANT unit N (a y-uniform stripe), the
-    tensor operator Q = [[eps C]][[C]]^-1 equals the isotropic Schuster form
-    E - Delta[[NN]] (Popov-Neviere App. B) to machine precision."""
-    eps_s = np.where((np.arange(64) + 0.5)[:, None] / 64 < 0.5, 6.0, 2.1)
-    eps_s = np.broadcast_to(eps_s, (64, 8)).astype(complex)
+def test_fff_nv_operator_reduces_to_li1996_on_stripe():
+    """The Li-2003 successive operator L2 L1 reduces EXACTLY (machine precision)
+    to the rigorous Li-1996 1-D factorization on a y-uniform stripe: the
+    wall-normal diagonal Cxx == [[1/exx]]^-1."""
+    er = _rot(np.deg2rad(35.0), 1.5, 2.3)[:2, :2]
+    eg = np.diag([2.25, 2.25]).astype(complex)
+    Sx = 64
+    xm = (np.arange(Sx) + 0.5) / Sx < 0.5
+    cell = np.zeros((Sx, 8, 2, 2), complex)
+    for ix in range(Sx):
+        cell[ix, :] = er if xm[ix] else eg
     orders, _ = _twod._harmonic_orders_2d(9, 1)
-    Nx, Ny = _twod._nv_field_2d(eps_s, PX, PX, unit=True)
-    assert np.allclose(np.unique(np.round(Nx, 9)), [1.0])   # constant N=(1,0)
-    Z = np.zeros_like(eps_s)
-    tens = _twod._nv_convolutions_2d_tensor(
-        eps_s, Z, Z, eps_s, eps_s, Nx, Ny, orders, 9, 1, np)
-    scal = _twod._nv_convolutions_2d(eps_s, Nx, Ny, orders, 9, 1, np)
-    for a, b in zip(tens, scal):
-        assert np.max(np.abs(a - b)) < 1e-9
+    Cxx, Cxy, Cyx, Cyy = _twod._li_convolutions_2d_tensor(
+        cell[:, :, 0, 0], cell[:, :, 0, 1], cell[:, :, 1, 0],
+        cell[:, :, 1, 1], orders, 9, 1, np)
+    inv_exx = np.linalg.inv(
+        _twod._eps_convolution_2d(1.0 / cell[:, :, 0, 0], orders, 9, 1))
+    assert np.max(np.abs(Cxx - inv_exx)) < 1e-12       # rigorous inverse rule
 
 
 def test_fff_nv_stripe_reduces_to_rigorous_1d():
@@ -135,30 +138,38 @@ def test_fff_nv_lossy_stripe_absorptance_split():
     assert abs(Af - A1) < abs(Al - A1) + 1e-12
 
 
-def test_fff_nv_crossed_cell_raises_and_bypass():
-    """A crossed / corner (square pillar) anisotropic cell is REJECTED by the
-    cond gate; allow_nonseparable_nv=True downgrades it to proceed."""
-    er = _rot(np.deg2rad(40.0), 1.6, 3.0)
+def test_fff_nv_crossed_cell_converges_and_beats_laurent():
+    """A CROSSED (both-axis-patterned) rotated-director pillar now CONVERGES
+    under fff_nv (Li-2003 L2 L1, well-conditioned) -- monotone and markedly
+    faster than laurent on a high-contrast lossy cell, energy closed."""
+    th = np.deg2rad(45.0)                          # metal-like eps, rotated 45 deg
+    c, s = np.cos(th), np.sin(th)
+    R = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    er = R @ np.diag([-8.0 + 1.2j, -2.0 + 0.8j, -2.0 + 0.8j]).astype(complex) @ R.T
     eg = np.diag([1.0, 1.0, 1.0]).astype(complex)
-    sq = np.zeros((48, 48, 3, 3), complex)
-    m = np.zeros((48, 48), bool)
-    m[12:36, 12:36] = True
-    for i in range(48):
-        for j in range(48):
-            sq[i, j] = er if m[i, j] else eg
-    with pytest.raises(ValueError, match="ill-conditioned"):
-        rcwa_jones_2d(PX, PX, sq, 1.5, 1.0, DEPTH, WL, n_orders_x=9,
-                      n_orders_y=9, formulation="fff_nv", symmetry=False)
-    # expert bypass SKIPS the cond gate; a separate energy backstop may still
-    # fire on a wildly-unstable lossless solve -- but the cond-gate message must
-    # be gone (the gate was bypassed).
-    try:
-        out = rcwa_jones_2d(PX, PX, sq, 1.5, 1.0, DEPTH, WL, n_orders_x=9,
-                            n_orders_y=9, formulation="fff_nv", symmetry=False,
-                            allow_nonseparable_nv=True)
-        assert len(out) == 4
-    except Exception as e:                       # noqa: BLE001
-        assert "ill-conditioned" not in str(e)
+
+    def _sq(S):
+        m = np.zeros((S, S), bool)
+        m[S // 4:3 * S // 4, S // 4:3 * S // 4] = True
+        c = np.zeros((S, S, 3, 3), complex)
+        for i in range(S):
+            for j in range(S):
+                c[i, j] = er if m[i, j] else eg
+        return c
+
+    def sumR(No, form):
+        _o, R, _T, _J = rcwa_jones_2d(0.5e-6, 0.5e-6, _sq(max(40, 4 * No + 4)),
+                                      1.5, 1.0, 0.25e-6, WL, n_orders_x=No,
+                                      n_orders_y=No, formulation=form,
+                                      symmetry=False)
+        return np.sum(R)
+
+    ref = sumR(17, "fff_nv")                       # best-converging reference
+    ef = [abs(sumR(No, "fff_nv") - ref) for No in (5, 7, 9, 11)]
+    el = [abs(sumR(No, "laurent") - ref) for No in (5, 7, 9, 11)]
+    assert ef[-1] < ef[0]                          # fff_nv converging
+    assert ef[-1] < 0.3 * el[-1]                   # >~3x better than laurent
+    assert all(ef[i + 1] <= ef[i] + 1e-9 for i in range(len(ef) - 1))  # monotone
 
 
 def test_fff_nv_uniform_routes_to_laurent():

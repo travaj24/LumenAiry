@@ -222,7 +222,7 @@ def _li_convolutions_2d(eps_cell, orders, n_orders_x, n_orders_y, xp):
 
 
 def _nv_field_2d(eps_cell, period_x, period_y, *, method="smoothed_gradient",
-                 sigma_px=1.5, eps_reg_frac=1e-3, unit=False):
+                 sigma_px=1.5, eps_reg_frac=1e-3):
     """Real normal-vector field ``(Nx, Ny)`` over the unit cell for the
     normal-vector FFF (Schuster 2007).  ``Nx, Ny`` have the same ``(Sx, Sy)``
     shape as ``eps_cell`` and point ACROSS every material boundary, unit-norm
@@ -271,27 +271,6 @@ def _nv_field_2d(eps_cell, period_x, period_y, *, method="smoothed_gradient",
     dphidx = np.real(np.fft.ifft2(1j * GX * phi_hat))
     dphidy = np.real(np.fft.ifft2(1j * GY * phi_hat))
     mag = np.hypot(dphidx, dphidy)
-    if unit:
-        # UNIT-norm field everywhere (required by the ANISOTROPIC FFF, whose
-        # pointwise C = A^-1 divides by a = n^T eps n; a unit n keeps a != 0).
-        # True wall normal in the near-boundary band; a constant default (1, 0)
-        # in the homogeneous interior.  The +/- sign ambiguity is resolved with
-        # the Nx >= 0 (then Ny >= 0) convention so the field is MAXIMALLY
-        # CONTINUOUS -- a single-orientation grating (e.g. an x-stripe) becomes
-        # the CONSTANT (1, 0), whose Toeplitz [[C]] is well-conditioned.  A
-        # crossed / corner geometry still varies (x- vs y-normal) and its [[C]]
-        # is ill-conditioned -- policed by the caller's conditioning gate, since
-        # Q = [[eps C]][[C]]^-1 (unlike the isotropic E - Delta[[NN]]) is only
-        # numerically robust for a smooth / single-orientation normal field.
-        mmax = float(mag.max()) + 1e-300
-        strong = mag > 1e-6 * mmax
-        msafe = np.where(strong, mag, 1.0)
-        Nx = np.where(strong, dphidx / msafe, 1.0)
-        Ny = np.where(strong, dphidy / msafe, 0.0)
-        flip = (Nx < -1e-12) | ((np.abs(Nx) <= 1e-12) & (Ny < 0.0))
-        Nx = np.where(flip, -Nx, Nx)
-        Ny = np.where(flip, -Ny, Ny)
-        return Nx, Ny
     eps_reg = eps_reg_frac * (mag.max() + 1e-300)
     # Taper N -> 0 where the gradient is tiny (homogeneous interior); the
     # softened normalisation keeps |N| <= 1 everywhere.
@@ -356,100 +335,87 @@ def _nv_convolutions_2d(eps_cell, Nx, Ny, orders, n_orders_x, n_orders_y, xp):
     return Cxx, Cxy, Cyx, Cyy, EZZ
 
 
-# The anisotropic FFF operator Q = [[eps C]][[C]]^-1 (unlike the isotropic
-# E - Delta[[NN]]) is numerically robust only for a SMOOTH / single-orientation
-# wall normal, where [[C]] stays well-conditioned (a 1-D anisotropic stripe:
-# cond ~ O(10), order-independent).  A crossed / corner geometry (x- AND y-
-# normal walls) makes [[C]] ill-conditioned (cond ~ 1e7+) -> the truncated
-# inverse amplifies to a WRONG answer (a silent lossless-trap failure on lossy
-# cells).  This limit gates the two apart (measured 8 vs 3.8e7).
-_FFF_NV_TENSOR_COND_LIMIT = 1e6
+def _li_axis_tensor(blocks, axis, M_along, S_along, xp):
+    """One direction of Li's (2003) successive factorization L_tau = l+_tau
+    F_tau l-_tau applied to a 2x2 tensor-field block dict.
 
-
-def _nv_convolutions_2d_tensor(exx, exy, eyx, eyy, ezz, Nx, Ny,
-                               orders, n_orders_x, n_orders_y, xp,
-                               *, fn_name="rcwa_jones_2d",
-                               allow_illconditioned=False):
-    """Popov-Neviere (2001) ANISOTROPIC FFF: the FULL off-diagonal in-plane
-    tensor operators for a rotated-director (``exy, eyx != 0``) crossed grating
-    (JOSA A 18:2886, Eqs. 12-15).
-
-    Returns ``(Cxx, Cxy, Cyx, Cyy, EZZ)`` for :func:`_layer_eigenmodes_tensor` --
-    the four blocks of ``Q = [[eps.C]] [[C]]^-1`` plus the direct-rule ``EZZ``.
-    The pointwise ``C = A^-1`` maps the discontinuous transverse field
-    ``(Ex, Ey)`` to the CONTINUOUS pair ``(E_t, D_n) = (t.E, n.eps.E)`` with the
-    in-plane tangent ``t = (Ny, -Nx)``::
-
-        A = [[ Ny,          -Nx        ],       det A = a = n^T eps n
-             [ (n.eps)_x,    (n.eps)_y ]]       C = (1/a) [[ (n.eps)_y,  Nx ],
-                                                          [ -(n.eps)_x, Ny ]]
-
-    so ``[E] = [[C]][F]`` and ``[D] = [[eps.C]][F]`` (both Laurent -- ``F`` is
-    continuous), hence ``[D] = [[eps.C]][[C]]^-1 [E]``.  The ONLY scalar inverted
-    pointwise is the wall-normal quadratic form ``a = n^T eps n`` (``= det A``),
-    nonzero for any physical medium -- so the ``exy = 0`` singularity that blocks
-    a naive per-component off-diagonal inverse rule never arises.
-
-    Reduces EXACTLY (for any UNIT ``N``) to the scalar Schuster form
-    (:func:`_nv_convolutions_2d`) when ``eps = eps_scalar I`` and to the rigorous
-    Li-1996 1-D anisotropic factorization for a y-uniform stripe (``n = (1,0)``:
-    ``Qxx = [[1/exx]]^-1``, ``Qxy = [[1/exx]]^-1 [[exy/exx]]``,
-    ``Qyy = [[eyy - eyx exy/exx]] + [[eyx/exx]][[1/exx]]^-1 [[exy/exx]]``).
-
-    ``Nx, Ny`` MUST be a UNIT field (built with ``_nv_field_2d(..., unit=True)``);
-    the direction in a homogeneous interior is irrelevant (constant ``eps`` ->
-    ``Q = [[eps]]`` there, and ``Q`` is invariant under ``n -> -n``).  ``EZZ =
-    [[ezz]]`` is the direct rule (``E_z`` tangential to every vertical wall, Li
-    1997 Eq. 27).  ``eps_*`` are the INTERNAL (loss-bridge-conjugated) samples.
+    ``blocks[(a,b)]`` are ``(Sx, Sy)`` pointwise fields.  ``axis`` is 0 (x) or 1
+    (y); the wall-normal in-plane component is ``nn=axis``.  Returns 2x2 blocks
+    of shape ``(S_other, 2M+1, 2M+1)`` -- the ``axis``-factorized operators, one
+    per pixel of the OTHER axis (Fourier taken only along ``axis``).  The single
+    inverse is of the scalar wall-normal element (well-conditioned); this is the
+    building block whose stripe limit is the rigorous Li-1996 factorization.
     """
-    Mx, My = int(n_orders_x), int(n_orders_y)
+    nn, tt = axis, 1 - axis
+    e = blocks
+    inn = 1.0 / e[(nn, nn)]                        # l-_tau: pointwise 1/e_nn
+    g = {(nn, nn): inn,
+         (nn, tt): inn * e[(nn, tt)],
+         (tt, nn): e[(tt, nn)] * inn,
+         (tt, tt): e[(tt, tt)] - e[(tt, nn)] * inn * e[(nn, tt)]}
+    a = np.arange(-M_along, M_along + 1)
+    dk = (a[:, None] - a[None, :]) % S_along
+    T = {}
+    for k, v in g.items():                         # F_tau: 1-D Toeplitz per other pixel
+        cf = xp.fft.fft(v, axis=axis) / S_along
+        cf = xp.moveaxis(cf, axis, -1)             # coeffs on last axis
+        T[k] = cf[..., dk]                         # (S_other, 2M+1, 2M+1)
+    Inn = xp.linalg.inv(T[(nn, nn)])               # l+_tau: operator inverse
+    return {(nn, nn): Inn,
+            (nn, tt): Inn @ T[(nn, tt)],
+            (tt, nn): T[(tt, nn)] @ Inn,
+            (tt, tt): T[(tt, tt)] + T[(tt, nn)] @ Inn @ T[(nn, tt)]}
+
+
+def _li_convolutions_2d_tensor(exx, exy, eyx, eyy, orders, n_orders_x,
+                               n_orders_y, xp):
+    """Li-2003 successive full-tensor factorization `` ehat = L2 L1(eps) `` of the
+    in-plane 2x2 tensor (JOSA/J.Opt.A 5:345, Eqs. 13-20; the Smagin-Weiss-Dyakov
+    2026 ``l+-_tau`` operator).
+
+    Returns ``(Cxx, Cxy, Cyx, Cyy)`` -- the four in-plane permittivity-operator
+    blocks with the correct inverse-rule treatment along BOTH axes: the inverse
+    rule on the wall-normal diagonal ``exx`` along x and ``eyy`` along y, and the
+    off-diagonal ``exy``/``eyx`` of a rotated director carried correctly through
+    the Schur reorganization.  The ONLY inversions are of scalar wall-normal
+    elements (per axis, per pixel-line) plus one N x N block along the second
+    axis -- all well-conditioned (measured cond ~ O(10) for a crossed pillar vs
+    ~1e7 for the normal-vector projector form).
+
+    Reduces EXACTLY (machine precision) to the 1-D Li-1996 factorization
+    (:func:`_li_convolutions_2d`) for a y-uniform stripe, and to Laurent for a
+    uniform cell.  Rigorous for AXIS-ALIGNED (Manhattan) cells; the ``L2 L1`` vs
+    ``L1 L2`` order differs in the truncated space (Li 2003 Sec. 5.2, converging
+    to the same limit) -- this uses the fixed ``L2 L1`` order.  ``eps_*`` are the
+    INTERNAL (loss-bridge-conjugated) samples.
+    """
+    Mx = int(n_orders_x)
     exx = xp.asarray(exx).astype(_C)
     exy = xp.asarray(exy).astype(_C)
     eyx = xp.asarray(eyx).astype(_C)
     eyy = xp.asarray(eyy).astype(_C)
-    Nx = xp.asarray(np.asarray(Nx).astype(_C))
-    Ny = xp.asarray(np.asarray(Ny).astype(_C))
-    # pointwise wall-normal quadratic form a = n^T eps n and the row (n^T eps)
-    a = Nx * Nx * exx + Nx * Ny * (exy + eyx) + Ny * Ny * eyy
-    neps_x = Nx * exx + Ny * eyx
-    neps_y = Nx * exy + Ny * eyy
-    inv_a = 1.0 / a
-    # pointwise C = A^-1
-    C11, C12 = neps_y * inv_a, Nx * inv_a
-    C21, C22 = -neps_x * inv_a, Ny * inv_a
-    # pointwise eps . C
-    D11, D12 = exx * C11 + exy * C21, exx * C12 + exy * C22
-    D21, D22 = eyx * C11 + eyy * C21, eyx * C12 + eyy * C22
+    Sx, Sy = exx.shape[0], exx.shape[1]
+    blk = {(0, 0): exx, (0, 1): exy, (1, 0): eyx, (1, 1): eyy}
+    hA = _li_axis_tensor(blk, 0, Mx, Sx, xp)       # L1 (x): per-y x-operators
+    # L2 (y): l-_y on the x-operator-valued 2x2 (nn=1=y, tt=0=x)
+    inv11 = xp.linalg.inv(hA[(1, 1)])
+    g = {(1, 1): inv11,
+         (1, 0): inv11 @ hA[(1, 0)],
+         (0, 1): hA[(0, 1)] @ inv11,
+         (0, 0): hA[(0, 0)] - hA[(0, 1)] @ inv11 @ hA[(1, 0)]}
+    dn = (orders[:, 1][:, None] - orders[:, 1][None, :]) % Sy
+    mi = orders[:, 0] + Mx
 
-    def _T(f):
-        return _eps_convolution_2d(f, orders, Mx, My)
-
-    Cmat = xp.concatenate(
-        [xp.concatenate([_T(C11), _T(C12)], axis=1),
-         xp.concatenate([_T(C21), _T(C22)], axis=1)], axis=0)
-    cnd = float(np.linalg.cond(to_numpy(Cmat)))
-    if cnd > _FFF_NV_TENSOR_COND_LIMIT and not allow_illconditioned:
-        raise ValueError(
-            f"{fn_name}(formulation='fff_nv'): the normal-vector Toeplitz [[C]] "
-            f"is ill-conditioned (cond = {cnd:.1e} > "
-            f"{_FFF_NV_TENSOR_COND_LIMIT:.0e}) -- the anisotropic FFF operator "
-            f"Q = [[eps C]] [[C]]^-1 is numerically robust only for a smooth / "
-            f"single-orientation wall normal (e.g. a 1-D anisotropic stripe). "
-            f"This crossed / corner (x- AND y-wall) geometry needs the "
-            f"research-grade matched-coordinate FFF; use formulation='li' or "
-            f"'laurent' (both rigorous -- the off-diagonal stays Laurent-floored "
-            f"but the solve is stable), or pass allow_nonseparable_nv=True to "
-            f"proceed anyway (the per-order / absorptance split may be wrong).")
-    Dmat = xp.concatenate(
-        [xp.concatenate([_T(D11), _T(D12)], axis=1),
-         xp.concatenate([_T(D21), _T(D22)], axis=1)], axis=0)
-    Q = Dmat @ xp.linalg.inv(Cmat)
-    Nh = int(orders.shape[0])
-    Cxx, Cxy = Q[:Nh, :Nh], Q[:Nh, Nh:]
-    Cyx, Cyy = Q[Nh:, :Nh], Q[Nh:, Nh:]
-    EZZ = _T(ezz)
-    return Cxx, Cxy, Cyx, Cyy, EZZ
-
+    def _assemble(gab):                            # F_y + gather into the 2-D operator
+        gf = xp.fft.fft(gab, axis=0) / Sy
+        return gf[dn, mi[:, None], mi[None, :]]
+    G = {k: _assemble(v) for k, v in g.items()}
+    G11i = xp.linalg.inv(G[(1, 1)])                # l+_y
+    Cyy = G11i
+    Cyx = G11i @ G[(1, 0)]
+    Cxy = G[(0, 1)] @ G11i
+    Cxx = G[(0, 0)] + G[(0, 1)] @ G11i @ G[(1, 0)]
+    return Cxx, Cxy, Cyx, Cyy
 
 
 def _nv_curved_wall_fraction(eps_cell):
@@ -1225,7 +1191,6 @@ def rcwa_jones_2d(
     use_gpu: bool = False,
     symmetry="auto",
     formulation: str = "laurent",
-    allow_nonseparable_nv: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D (doubly periodic) anisotropic grating: a single layer
     whose permittivity is a full in-plane TENSOR FIELD (the z-decoupled LC
@@ -1267,32 +1232,30 @@ def rcwa_jones_2d(
         discontinuity), reaching the SAME limit as ``'laurent'``.  The Li
         off-diagonal ``C_xy``/``C_yx`` stays Laurent, so a strongly-rotated
         director sees only a partial gain there.
-        ``'fff_nv'`` is the FULL Popov-Neviere (2001, JOSA A 18:2886) anisotropic
-        fast factorization: the complete tensor operator ``Q = [[eps.C]]
-        [[C]]^-1`` with the wall-normal projector built from a normal-vector
-        field, so ALL FOUR in-plane blocks -- including the off-diagonal
-        ``C_xy``/``C_yx`` of a rotated in-plane director -- get the correct
-        inverse-rule treatment (the only pointwise inversion is by the nonzero
-        wall-normal quadratic form ``n^T eps n``).  It reaches the same limit as
-        ``'laurent'`` but converges markedly faster for a patterned rotated /
-        gyrotropic director on sharp axis-aligned walls (the regime where the
-        off-diagonal Laurent floor dominates).  ``'fff_nv'`` reduces EXACTLY to
-        the scalar ``rcwa_efficiency_2d(formulation='fff_nv')`` for an isotropic
-        cell and to the rigorous 1-D full-tensor solver for a y-uniform stripe;
-        it is validated for AXIS-ALIGNED features (curved / non-axis-aligned
-        walls raise, matching the scalar path -- pass ``allow_nonseparable_nv=
-        True`` to downgrade to a warning), is IN-PLANE and NumPy/CuPy only, and
-        takes the full 2N solve (no even-parity fold).
+        ``'fff_nv'`` is the FULL Li-2003 (J.Opt.A 5:345) successive tensor
+        factorization ``ehat = L2 L1(eps)`` (the Smagin-Weiss-Dyakov 2026
+        ``l+-_tau`` operator): ALL FOUR in-plane blocks -- including the
+        off-diagonal ``C_xy``/``C_yx`` of a rotated in-plane director -- get the
+        correct inverse-rule treatment, with the inverse rule on the wall-normal
+        diagonal along each axis (``exx`` along x, ``eyy`` along y) and the
+        off-diagonal carried through the Schur reorganization.  The ONLY
+        inversions are of scalar wall-normal elements (plus one N x N block along
+        the second axis), so it is WELL-CONDITIONED even for a CROSSED (both-axis
+        patterned) cell (measured cond ~ O(10)) -- unlike the normal-vector
+        projector form ``[[eps.C]][[C]]^-1`` (cond ~ 1e7 for a crossed pillar).
+        It reaches the same limit as ``'laurent'`` but converges markedly faster
+        for a patterned rotated / gyrotropic director on sharp axis-aligned walls
+        (~10x fewer orders on a high-contrast crossed pillar), and unlike the
+        diagonal-only ``'li'`` it stays MONOTONE there.  Rigorous for AXIS-ALIGNED
+        (Manhattan) cells; ``L2 L1`` vs ``L1 L2`` differ in the truncated space
+        (Li 2003 Sec. 5.2, same limit) -- the fixed ``L2 L1`` order is used.
+        Reduces EXACTLY to the rigorous 1-D full-tensor solver for a y-uniform
+        stripe.  IN-PLANE and NumPy/CuPy only; takes the full 2N solve (no
+        even-parity fold).
         A scalar cell reduces EXACTLY to ``rcwa_efficiency_2d(formulation='li')``
-        (``'li'``) / ``(formulation='fff_nv')`` (``'fff_nv'``).  ``'li'`` on an
-        out-of-plane cell always uses the direct rule (the ezz-Schur composite
-        has no validated inverse rule).  The even-parity fold runs on
-        ``'laurent'`` only.
-    allow_nonseparable_nv : bool, optional
-        ``formulation='fff_nv'`` only: downgrade the curved / non-axis-aligned
-        wall guard from a raise to a warning (see :func:`_nv_nonseparable_guard`;
-        the reflection channel still tracks, but the absorptance / per-order
-        split may be wrong on curved walls).
+        (``'li'``).  ``'li'`` on an out-of-plane cell always uses the direct rule
+        (the ezz-Schur composite has no validated inverse rule).  The even-parity
+        fold runs on ``'laurent'`` only.
 
     Returns
     -------
@@ -1491,20 +1454,16 @@ def rcwa_jones_2d(
     elif sym_rt is not None:
         S = None                              # even sector already solved
     elif formulation == "fff_nv":
-        # Full Popov-Neviere anisotropic FFF: a UNIT normal-vector field from the
-        # tensor's material indicator + the joint wall-normal projector rule.
-        # The cond([[C]]) gate inside the builder (NOT the scalar curved-wall
-        # fraction, which is axis-aligned-blind to a crossed square) is the
-        # discriminator between the robust single-orientation regime and the
-        # ill-conditioned crossed geometry.
-        ind = (eps_t[:, :, 0, 0] + eps_t[:, :, 1, 1]
-               + eps_t[:, :, 0, 1] + eps_t[:, :, 1, 0])
-        Nx_nv, Ny_nv = _nv_field_2d(ind, period_x, period_y, unit=True)
-        Cxx, Cxy, Cyx, Cyy, EZZ = _nv_convolutions_2d_tensor(
+        # Li-2003 successive full-tensor factorization ehat = L2 L1(eps) of the
+        # in-plane 2x2: the inverse rule on the wall-normal diagonal along each
+        # axis + the correct off-diagonal composite of a rotated director, with
+        # ONLY scalar wall-normal inversions (well-conditioned for crossed cells,
+        # cond ~ O(10); reduces to the rigorous Li-1996 for a stripe).  EZZ stays
+        # direct (E_z tangential to every vertical wall, Li 1997 Eq. 27).
+        Cxx, Cxy, Cyx, Cyy = _li_convolutions_2d_tensor(
             eps_t[:, :, 0, 0], eps_t[:, :, 0, 1], eps_t[:, :, 1, 0],
-            eps_t[:, :, 1, 1], eps_t[:, :, 2, 2], Nx_nv, Ny_nv,
-            orders, n_orders_x, n_orders_y, xp, fn_name="rcwa_jones_2d",
-            allow_illconditioned=allow_nonseparable_nv)
+            eps_t[:, :, 1, 1], orders, n_orders_x, n_orders_y, xp)
+        EZZ = _conv(eps_t[:, :, 2, 2])
         Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
