@@ -2024,6 +2024,37 @@ def _tensor_offplane_present(*tensors):
     return False
 
 
+def _tensor_offplane_or_traced(*tensors):
+    """True if any JAX tensor argument should route to the GENERAL full-3x3
+    (out-of-plane) path: a CONCRETE JAX array with out-of-plane coupling, or a
+    TRACER (``jax.grad`` / ``jax.jit``) that cannot be inspected.
+
+    The general path is EXACT for an in-plane tensor too (the off-plane blocks
+    vanish -> ``A = B = 0``), so routing a tracer there keeps the forward and
+    the gradient on the SAME branch -- the routing-bug fix from the 2-D twin: a
+    tracer's out-of-plane structure is invisible, so keying the branch on it
+    would otherwise silently drop the z-coupling under ``jax.grad``.  Non-JAX
+    inputs are skipped (handled by :func:`_tensor_offplane_present` /
+    :func:`_require_inplane_tensor`)."""
+    for t in tensors:
+        if t is None or not is_jax_array(t):
+            continue
+        try:                                  # concrete JAX array -> inspectable
+            a = np.asarray(to_numpy(t)).astype(_C)
+        except Exception:                     # tracer -> route to general
+            return True
+        if a.shape[-2:] != (3, 3):
+            continue
+        offz = np.maximum.reduce([np.abs(a[..., 0, 2]), np.abs(a[..., 1, 2]),
+                                  np.abs(a[..., 2, 0]), np.abs(a[..., 2, 1])])
+        diag = np.maximum.reduce([np.abs(a[..., 0, 0]), np.abs(a[..., 1, 1]),
+                                  np.abs(a[..., 2, 2])])
+        scale = max(float(np.max(diag)), 1.0)
+        if float(np.max(offz)) > 1e-9 * scale:
+            return True
+    return False
+
+
 
 def _reject_jax_offplane(fn_name, *tensors):
     """Raise ``NotImplementedError`` if any JAX tensor argument carries

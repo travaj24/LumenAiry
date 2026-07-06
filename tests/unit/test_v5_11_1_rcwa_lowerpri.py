@@ -2,11 +2,11 @@
 
 Five additive, bit-identical-to-existing-behaviour items:
 
-1. DIFFERENTIABILITY guard + pin -- the IN-PLANE ``rcwa_jones_1d_segments`` path
-   differentiates under ``jax.grad`` (matches finite difference); a JAX tensor
-   with OUT-OF-PLANE coupling raises ``NotImplementedError`` (its full-3x3 solver
-   uses a host ``np.where`` / ``argsort`` forward-mode split that breaks autodiff,
-   and the in-plane router would otherwise SILENTLY drop the z-coupling).
+1. DIFFERENTIABILITY pin -- both the IN-PLANE and (since the v5.20.3 unblock)
+   the OUT-OF-PLANE ``rcwa_jones_1d_segments`` paths differentiate under
+   ``jax.grad`` (match finite difference); the off-plane tensor routes through
+   the general full-3x3 solver whose forward-mode split is the trace-safe
+   ``_select_forward_flux_jax``.
 2. ``RCWAResult.layer_absorption`` for TENSOR layers -- the per-layer absorption
    of a lossy anisotropic stack sums to the total absorptance, and a lossless
    tensor stack deposits ~0 raw loss (the quadratic form ``Im(E* . eps . E)``
@@ -81,22 +81,30 @@ def test_inplane_segments_gradient_matches_finite_difference():
     assert np.isclose(g, fd, rtol=1e-4, atol=1e-9)
 
 
-def test_offplane_jax_tensor_raises_notimplemented():
-    """A JAX off-plane tensor (tilted director) has no differentiable path."""
-    _jax()
+def test_offplane_jax_tensor_now_differentiates():
+    """A JAX off-plane tensor (tilted director) NOW differentiates through the
+    general full-3x3 path (the trace-safe _select_forward_flux_jax unblock);
+    jax.grad matches finite difference.  (Superseded the old NotImplementedError
+    rejection -- see tests/unit/test_v5_20_3_rcwa_1d_oop_jax.py.)"""
+    jax = _jax()
     import jax.numpy as jnp
 
-    jr = jnp.asarray(RIDGE_OFFPLANE)
-    jg = jnp.asarray(GROOVE_ISO)
+    def fom(scale):
+        ridge = scale * jnp.asarray(RIDGE_OFFPLANE)      # traced off-plane tensor
+        groove = jnp.asarray(GROOVE_ISO)
+        _o, _R, T, _J = rcwa_jones_1d_segments(
+            PERIOD, [(0.4, ridge), (0.6, groove)], N_SUB, N_SUP, DEPTH, WL,
+            n_orders=4)
+        return jnp.real(jnp.sum(T))
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
-            rcwa_jones_1d_segments(PERIOD, [(0.4, jr), (0.6, jg)], N_SUB, N_SUP,
-                                   DEPTH, WL, n_orders=4)
-        # rcwa_jones_1d shares the guard.
-        with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
-            rcwa_jones_1d(PERIOD, jr, jg, N_SUB, N_SUP, DEPTH, 0.4, WL,
-                          n_orders=4)
+        g = float(jax.grad(fom)(jnp.asarray(1.0)))
+        h = 1e-6
+        fd = float((fom(jnp.asarray(1.0 + h)) - fom(jnp.asarray(1.0 - h)))
+                   / (2 * h))
+    assert np.isfinite(g)
+    assert np.isclose(g, fd, rtol=1e-4, atol=1e-9)
 
 
 def test_offplane_numpy_still_runs_rigorously():

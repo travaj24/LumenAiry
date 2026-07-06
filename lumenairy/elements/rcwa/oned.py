@@ -37,7 +37,6 @@ from ._core import (
     _propagation_star_general,
     _rcwa_xp,
     _redheffer_star,
-    _reject_jax_offplane,
     _require_inplane_tensor,
     _require_jax_x64,
     _require_propagating_incidence,
@@ -46,6 +45,7 @@ from ._core import (
     _stabilize_bumps,
     _tensor_convolutions,
     _tensor_convolutions_full,
+    _tensor_offplane_or_traced,
     _toeplitz_1d,
     _validate_geometry,
     _with_blas_limit,
@@ -236,8 +236,8 @@ def _resolve_incidence_checked(fn_name, angle, theta):
     energy-conserving answer for the WRONG geometry (``sin^2(100 deg) = 0.97``
     also slips the ``Re(eps_sup) <= kt0^2`` evanescent-incidence guard).
     Raises ``ValueError`` instead.  A TRACED JAX angle (under ``jit``/``grad``)
-    has no concrete value to range-check and SKIPS the guard (the
-    ``_reject_jax_offplane`` tracer carve-out); a CONCRETE JAX angle is
+    has no concrete value to range-check and SKIPS the guard (the same
+    materialise-or-skip tracer carve-out); a CONCRETE JAX angle is
     checked.  A non-numeric angle is passed through for the solver's own
     coercion to raise on."""
     angle = _resolve_incidence(angle, theta)
@@ -1115,9 +1115,14 @@ def rcwa_jones_1d(
     is_jax = backend_name(xp) == "jax"
     if is_jax:
         _require_jax_x64("rcwa_jones_1d")
-        # See _reject_jax_offplane: the full-3x3 path is non-differentiable and
-        # a JAX off-plane tensor would otherwise be silently treated as in-plane.
-        _reject_jax_offplane("rcwa_jones_1d", eps_ridge, eps_groove)
+        # Route a JAX out-of-plane (or traced) tensor to the general full-3x3
+        # path: it is now differentiable via the trace-safe _select_forward_flux_jax
+        # inside _layer_eigenmodes_tensor.  _require_inplane_tensor skips JAX
+        # arrays (returns offplane=False), so a CONCRETE off-plane jax tensor is
+        # detected here, and a TRACER routes to the general path (exact for
+        # in-plane too) so forward and gradient share one branch -- the routing
+        # fix from the 2-D twin.  Concrete in-plane jax keeps the fast 2N path.
+        offplane = offplane or _tensor_offplane_or_traced(eps_ridge, eps_groove)
     M = int(n_orders)
     N = 2 * M + 1
     orders = np.arange(-M, M + 1)
@@ -1209,12 +1214,12 @@ def rcwa_jones_1d_segments(
 
     Backend-dispatched (NumPy / CuPy via ``use_gpu`` / differentiable JAX when
     a segment tensor is a JAX array); see :func:`rcwa_efficiency_1d`.  The JAX
-    path differentiates the IN-PLANE tensor subset (``exx, exy, eyx, eyy,
-    ezz``); a JAX tensor with OUT-OF-PLANE coupling (``eps_xz / eps_yz /
-    eps_zx / eps_zy != 0`` -- a tilted-director LC) raises
-    :class:`NotImplementedError`, because the full-3x3 solver's forward-mode
-    flux selection is a host ``np.where`` / ``argsort`` that breaks the autodiff
-    graph (call on NumPy / CuPy for the rigorous off-plane solve).
+    path differentiates the FULL (3, 3) tensor including OUT-OF-PLANE coupling
+    (``eps_xz / eps_yz / eps_zx / eps_zy != 0`` -- a tilted-director LC): the
+    forward/backward modal split is the trace-safe ``_select_forward_flux_jax``,
+    and a traced tensor routes to the general full-3x3 path (exact for in-plane
+    too) so the forward and the gradient stay on one branch.  A concrete
+    in-plane tensor keeps the faster 2N path (bit-identical to NumPy).
 
     Parameters
     ----------
@@ -1298,10 +1303,13 @@ def rcwa_jones_1d_segments(
     is_jax = backend_name(xp) == "jax"
     if is_jax:
         _require_jax_x64("rcwa_jones_1d_segments")
-        # The full-3x3 (out-of-plane) solver is non-differentiable (its
-        # forward-mode flux split is a host np.where/argsort); the in-plane
-        # router silently skips JAX, so reject a JAX off-plane tensor here.
-        _reject_jax_offplane("rcwa_jones_1d_segments", *eps_tensors)
+        # Route a JAX out-of-plane (or traced) segment tensor to the general
+        # full-3x3 path (now differentiable via _select_forward_flux_jax in
+        # _layer_eigenmodes_tensor).  Concrete off-plane jax is detected here;
+        # a tracer routes to the general path (exact for in-plane too), so
+        # forward and gradient share one branch.  Concrete in-plane keeps the
+        # fast path.
+        offplane = offplane or _tensor_offplane_or_traced(*eps_tensors)
     M = int(n_orders)
     N = 2 * M + 1
     orders = np.arange(-M, M + 1)

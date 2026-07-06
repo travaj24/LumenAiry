@@ -6,6 +6,21 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Differentiable (JAX) 1-D OUT-OF-PLANE RCWA** (`rcwa_jones_1d`,
+  `rcwa_jones_1d_segments`).  A full-3x3 tensor with out-of-plane coupling
+  (`eps_xz/eps_yz/eps_zx/eps_zy != 0` -- a tilted-director LC) is now
+  `jax.grad` / `jit`-able (gradient matches central finite difference to
+  ~7e-10; forward matches NumPy to ~1e-15).  The 1-D path previously *rejected*
+  the JAX backend (`_reject_jax_offplane`) citing a non-differentiable host
+  `argsort` flux split -- but that split already has a trace-safe twin
+  (`_select_forward_flux_jax`, wired into the shared `_layer_eigenmodes_tensor`
+  for the 2-D OOP work), so the rejection was stale.  A concrete off-plane jax
+  tensor routes to the general full-3x3 solver, and a *traced* tensor routes
+  there too (exact for in-plane -- the off-plane blocks vanish) so the forward
+  and the gradient stay on one branch; a concrete in-plane tensor keeps the
+  faster 2N path (bit-identical to NumPy).  See
+  `tests/unit/test_v5_20_3_rcwa_1d_oop_jax.py`.
+
 - **Differentiable (JAX) 2-D anisotropic PMM Jones solver** (`pmm_jones_2d`).
   The full-tensor 2-D hybrid PMM is now `jax.grad` / `jit`-able: gradients flow
   through the per-region (3, 3) permittivity tensor values (real and imaginary
