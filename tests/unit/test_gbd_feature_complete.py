@@ -215,34 +215,56 @@ def test_persurface_reduces_isotropic_on_axis():
 
 
 def test_persurface_captures_off_axis_astigmatism():
-    """per_surface=True at an off-axis field produces a strongly astigmatic
-    (line-like) focus -- the tangential and sagittal foci separate -- which the
-    paraxial single-ABCD form cannot.  Measured as focal-spot ellipticity far
-    from 1 off-axis vs ~1 on-axis."""
-    from lumenairy.propagators.gbd import propagate_gbd_through_prescription
-    from lumenairy.raytrace import system_abcd_prescription
-    N, dx = 160, 18e-6
+    """per_surface=True at an off-axis field produces an ASTIGMATIC beam -- the
+    tensor Q's two principal 1/q curvatures separate (tangential vs sagittal),
+    which the paraxial single-ABCD (scalar, rotationally-symmetric Q) cannot
+    represent.  Measured directly on the reconstructed tensor Q's eigenvalue
+    split, so the check is fast and does not depend on resolving the astigmatic
+    line focus in a tiny reconstruction window.
+
+    NOTE the input grid MUST resolve the field tilt (Nyquist): a 6 deg tilt at
+    633 nm has ``sin(theta)*dx/lambda`` cycles/pixel, which must stay well below
+    0.5, i.e. ``dx << lambda/(2 sin theta) ~ 3 um``.  On a coarser grid the phase
+    ramp ALIASES -- ``np.gradient`` then recovers the aliased (near-zero) angle
+    and NO propagator can walk the beam off-axis.  (An earlier 18 um-grid form of
+    this test aliased the tilt; the code faithfully propagates the aliased input,
+    so that form was ill-posed.)  A single 6 deg chief ray traces to
+    ``efl*tan(6 deg)`` exactly, confirming the ray physics is correct.
+    """
+    from lumenairy.propagators.gbd import (
+        _eigvals2x2,
+        apply_prescription_persurface_to_beamlets,
+        decompose_field_to_beamlets,
+    )
+    N, dx = 160, 1.4e-6            # 6 deg -> 0.23 cyc/px, safely resolved
     xs = (np.arange(N) - N // 2) * dx
     X, Y = np.meshgrid(xs, xs)
-    efl = float(system_abcd_prescription(_singlet(), LAM)[1])
     th = np.radians(6.0)
-    E = (np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
-         * np.exp(1j * 2 * np.pi / LAM * np.sin(th) * X)).astype(np.complex128)
-    F = propagate_gbd_through_prescription(
-        E, dx, _singlet(), wavelength=LAM, per_surface=True,
-        output_dx=3e-6, output_shape=(96, 96), sample_step=2, waist_factor=2.0,
-        direction_sampling=True, output_centre=(efl * np.tan(th), 0.0))
-    assert np.isfinite(F).all()
-    xf = (np.arange(96) - 48) * 3e-6
-    Xf, Yf = np.meshgrid(xf, xf)
-    I = np.abs(F) ** 2
-    s = I.sum()
-    assert s > 0
-    sx = np.sqrt((I * (Xf - (I * Xf).sum() / s) ** 2).sum() / s)
-    sy = np.sqrt((I * (Yf - (I * Yf).sum() / s) ** 2).sum() / s)
-    ellip = sx / sy
-    # strongly astigmatic: one axis focuses much tighter than the other
-    assert (ellip < 0.5) or (ellip > 2.0), ellip
+
+    def astig_index(tilted):
+        ramp = (np.exp(1j * 2 * np.pi / LAM * np.sin(th) * X)
+                if tilted else np.ones_like(X))
+        E = (np.exp(-(X ** 2 + Y ** 2) / (0.07e-3) ** 2)
+             * ramp).astype(np.complex128)
+        b = decompose_field_to_beamlets(E, dx, wavelength=LAM, sample_step=3,
+                                        waist_factor=3.0,
+                                        direction_sampling=True)
+        bundle = apply_prescription_persurface_to_beamlets(b, _singlet(), LAM)
+        Q = np.asarray(bundle.Q)
+        assert np.isfinite(Q).all()
+        lam = _eigvals2x2(Q, np)         # (n, 2) principal 1/q eigenvalues
+        w = np.abs(bundle.amplitude) ** 2
+        idx = (np.abs(lam[:, 0] - lam[:, 1])
+               / (np.abs(lam[:, 0] + lam[:, 1]) + 1e-30))
+        return float(np.average(idx, weights=w))
+
+    a_on = astig_index(False)
+    a_off = astig_index(True)
+    # on-axis stays rotationally symmetric (Qxx==Qyy, Qxy==0 -> zero split);
+    # off-axis the tensor Q is astigmatic (a split the paraxial form can't hold).
+    assert a_on < 1e-6, a_on
+    assert a_off > 1e-5, a_off
+    assert a_off > 20.0 * (a_on + 1e-12)
 
 
 # --------------------------------------------------------------------------
