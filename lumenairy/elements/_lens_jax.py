@@ -647,36 +647,23 @@ def apply_real_lens_maslov_jax(
     axis to each exit pixel, a -pi/2 phase shift is accumulated per
     crossing.
 
-    .. warning::
-       Audit P2-03 (post-v5.17.0): despite the historical name, this
-       is **NOT** algorithmically equivalent to the NumPy
-       :func:`apply_real_lens_maslov`.  That function is a phase-space
-       quadrature / stationary-phase integral whose caustic phase
-       comes from the Hessian signature factor ``exp(i*pi*sig/4)`` (it
-       contains no radial sign-flip scan at all), and its amplitude is
-       the diffraction integral itself.  This JAX function is a phase
-       *screen* with a sign-flip-only counter.  Known limitations of
-       the counter, deliberately documented rather than fixed (an
-       even-multiplicity caustic classifier is research-grade):
-
-       * **Even-multiplicity caustics are missed.**  Through an axial
-         point focus BOTH eigenvalues of J flip sign, so det(J) does
-         not change sign, the count stays 0, and the true Maslov index
-         advance of 2 (the ``-pi`` Gouy shift) is dropped -- the
-         output phase is wrong by ``pi`` past an axial focus, exactly
-         the regime a "Maslov" propagator is usually reached for.
-         (Measured: an f~48 mm singlet evaluated ~52 mm past focus
-         shows magnification -1.06 on both axes -- every ray crossed
-         the focus -- yet the counter reports 0 flips and the output
-         is identical to the plain traced screen to ~3e-17 rad.)
-       * The radial scan uses 32 fixed steps, so closely spaced
-         odd-multiplicity flips can also be skipped.
-
-       For quantitatively correct focal-region / caustic phase and
-       amplitude, use the NumPy :func:`apply_real_lens_maslov`; use
-       this function when you need JAX autodiff and operate away from
-       even-multiplicity caustics (fold caustics from spherical
-       aberration ARE counted).
+    .. note::
+       Despite the historical name this is **not** the phase-space
+       *diffraction integral* of the NumPy :func:`apply_real_lens_maslov`
+       (whose amplitude is the integral itself); it is a thin-OPD geometric
+       phase *screen* plus a Maslov / Gouy phase term.  What it now gets right
+       (v5.21) is the **caustic phase**: the term is
+       ``-pi/2 * (number of negative eigenvalues of the forward ray-map
+       Jacobian J at the pixel)`` -- the Morse / Maslov index at the
+       observation point.  This counts **even-multiplicity caustics** an axial
+       point focus flips BOTH eigenvalues -> index 2 -> the ``-pi`` Gouy shift)
+       as well as off-axis fold caustics from spherical aberration (one
+       eigenvalue negative -> ``-pi/2``), superseding the old ``det(J)``
+       sign-flip radial scan that could not see an axial focus at all and
+       dropped the ``-pi`` past focus.  The **amplitude** is still the input /
+       traced screen, not the diffraction integral, so for quantitatively
+       correct focal-region *intensity* use the NumPy phase-space integrator;
+       this path is for JAX autodiff with the correct focal-region *phase*.
 
     Parameters and gradient flow are identical to
     :func:`apply_real_lens_traced_jax`.  Differentiable through
@@ -699,7 +686,6 @@ def apply_real_lens_maslov_jax(
     if not _jax_available():
         raise ImportError(
             "JAX is not installed; install with `pip install jax`")
-    import jax
     import jax.numpy as jnp
 
     from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
@@ -846,36 +832,32 @@ def apply_real_lens_maslov_jax(
     inside = (xe * xe + ye * ye) < (float(launch_radius) * 0.99) ** 2
     opl_map = jnp.where(inside, opl_map, jnp.nan)
 
-    # ---- Maslov index along radial path ----------------------------
-    # For each wave-grid pixel, walk a fixed number of steps from the
-    # origin to (xe, ye) sampling the Jacobian of the forward map; count
-    # sign changes of det(J).  Each sign change contributes -pi/2 to the
-    # phase.
-    n_steps = 32
-    s = jnp.linspace(0.0, 1.0, n_steps + 1)  # (n_steps+1,)
-
-    def _det_at(xe_pt, ye_pt):
-        _, jxx, jxy = _cheb_eval_value_grad_jax(
-            Sx_coeffs, K1, K2, xmin, xmax, ymin, ymax,
-            xe_pt, ye_pt, cheb_order)
-        _, jyx, jyy = _cheb_eval_value_grad_jax(
-            Sy_coeffs, K1, K2, xmin, xmax, ymin, ymax,
-            xe_pt, ye_pt, cheb_order)
-        return jxx * jyy - jxy * jyx
-
-    # Sample det along ray from origin to (xe, ye): xe(s) = s*xe.
-    def body(i, carry):
-        prev_sign, count = carry
-        s_i = s[i]
-        det_i = _det_at(s_i * xe, s_i * ye)
-        cur_sign = jnp.sign(det_i)
-        flipped = (prev_sign != 0) & (cur_sign != 0) & (cur_sign != prev_sign)
-        count = count + flipped.astype(count.dtype)
-        return cur_sign, count
-
-    init = (jnp.zeros_like(xe), jnp.zeros(xe.shape, dtype=jnp.int32))
-    _, maslov_count = jax.lax.fori_loop(0, n_steps + 1, body, init)
-    phase_maslov = -0.5 * jnp.pi * maslov_count.astype(opl_map.dtype)
+    # ---- Maslov index (Morse index) at each pixel ------------------
+    # v5.21: the caustic phase is -pi/2 * (number of negative eigenvalues of the
+    # forward ray-map Jacobian J at the pixel) -- the Morse / Maslov index at
+    # the OBSERVATION point.  This supersedes the previous det(J)-sign-flip
+    # radial scan, which (a) could not see an AXIAL focus at all (it is not a
+    # radial feature: every pixel is 'past' the on-axis caustic, so a scan from
+    # the axis crosses nothing) and (b) missed EVEN-multiplicity caustics (an
+    # axial point focus flips BOTH eigenvalues, so det(J) does not change sign
+    # -- the old counter stayed 0 and dropped the -pi Gouy shift).  Counting the
+    # negative real eigenvalues directly gives index 2 past an axial focus
+    # (-> -pi) and index 1 past an off-axis fold caustic (spherical aberration,
+    # one eigenvalue negative -> -pi/2), matching the NumPy phase-space Maslov.
+    _, jxx, jxy = _cheb_eval_value_grad_jax(
+        Sx_coeffs, K1, K2, xmin, xmax, ymin, ymax, xe, ye, cheb_order)
+    _, jyx, jyy = _cheb_eval_value_grad_jax(
+        Sy_coeffs, K1, K2, xmin, xmax, ymin, ymax, xe, ye, cheb_order)
+    _tr = jxx + jyy
+    _det = jxx * jyy - jxy * jyx
+    _disc = _tr * _tr - 4.0 * _det
+    _sq = jnp.sqrt(jnp.maximum(_disc, 0.0))
+    _lam1 = 0.5 * (_tr + _sq)
+    _lam2 = 0.5 * (_tr - _sq)
+    _real = _disc >= 0.0            # complex eigenvalues -> rotating, no caustic
+    n_neg = ((_real & (_lam1 < 0.0)).astype(opl_map.dtype)
+             + (_real & (_lam2 < 0.0)).astype(opl_map.dtype))
+    phase_maslov = -0.5 * jnp.pi * n_neg
 
     # ---- Combine OPL + Maslov phase with amplitude ------------------
     # v4.13.0 (audit L2): unify on the library-wide default dtype.
