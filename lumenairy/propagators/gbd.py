@@ -1474,6 +1474,39 @@ def asm_field_to_gbd(E: np.ndarray, *, z: float, wavelength: float, dx: float,
     return E * xp.exp(1j * gbd_asm_gouy_phase(z, wavelength, dx, waist_factor))
 
 
+def match_global_phase(E: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    """Reconcile the **global** (spatially-constant) phase of ``E`` to a
+    ``reference`` field of the same beam on the same grid: returns
+    ``E * exp(-i phi)`` with ``phi = arg <reference, E>`` so the two share the
+    same absolute phase (``<reference, E_out>`` is real, positive).
+
+    The general, propagator-agnostic interoperability primitive.  Every coherent
+    propagator in the library (ASM, GBD, Maslov, Fresnel, RS, HFPI) uses the same
+    physical convention -- same transverse coordinates, forward ``exp(+ikz)``,
+    NO complex conjugate and NO axis flip -- so two fields of the same beam on
+    the same plane differ, to leading order, by a global phase.  Reconcile it
+    only for ABSOLUTE-phase agreement (coherent superposition / phase-sensitive
+    comparison); intensity and further linear propagation are unaffected.
+
+    .. note::
+       This removes only the GLOBAL phase.  It is EXACT for the GBD-free-space
+       vs ASM difference (which is purely global -- and there the closed-form
+       :func:`gbd_asm_gouy_phase` needs no reference).  It does NOT reconcile the
+       higher-order (wavefront) difference between fields produced by
+       *different-order approximations* of the same beam -- e.g. the phase-space
+       ``apply_real_lens_maslov`` (default ``normalize_output='power'`` gives a
+       physical-amplitude field) and the paraxial-per-surface GBD agree in the
+       intensity envelope and convention family but differ at the ~10-25% level
+       in the complex field for the same lens (they are different approximations,
+       not the same field).  For a chief-relative vs absolute *wavefront*
+       convention difference use
+       :func:`lumenairy.propagators.asm.apply_fresnel_curvature`.
+    """
+    xp = array_namespace(E)
+    ip = xp.sum(xp.conj(reference) * E)
+    return E * (xp.conj(ip) / (xp.abs(ip) + 1e-300))
+
+
 def propagate_gbd_freespace_spectral(
     E_in: np.ndarray,
     dx: float,

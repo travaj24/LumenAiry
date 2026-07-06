@@ -900,6 +900,7 @@ from .propagators.gbd import (
     decompose_field_to_beamlets,
     gbd_asm_gouy_phase,
     gbd_field_to_asm,
+    match_global_phase,
     propagate_beamlets_freespace,
     propagate_gbd,  # canonical-order alias
     propagate_gbd_freespace,
@@ -1204,6 +1205,7 @@ __all__ = [
     'apply_aperture_to_beamlets',
     'gbd_asm_gouy_phase',
     'gbd_field_to_asm',
+    'match_global_phase',
     'asm_field_to_gbd',
     'propagate_beamlets_freespace',
     'apply_thin_lens_to_beamlets',

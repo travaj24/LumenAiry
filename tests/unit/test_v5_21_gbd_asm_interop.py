@@ -12,6 +12,7 @@ from lumenairy.propagators.gbd import (
     asm_field_to_gbd,
     gbd_asm_gouy_phase,
     gbd_field_to_asm,
+    match_global_phase,
     propagate_gbd_freespace,
 )
 
@@ -88,3 +89,24 @@ def test_gbd_to_asm_handoff_matches_pure_asm():
     # pure ASM reference (single step; ASM is exact per step)
     ref = angular_spectrum_propagate(E0, z1 + z2, LAM, dx)
     assert _relerr(hybrid, ref) < 5e-3
+
+
+def test_match_global_phase():
+    """match_global_phase reconciles a global phase EXACTLY (its whole job) and
+    equals the closed-form Gouy correction for the GBD-free-space vs ASM case."""
+    N, dx = 96, 4e-6
+    E = _gauss(N, dx, off=15e-6, tilt=0.002)
+    # a pure global phase rotation is removed exactly
+    rotated = E * np.exp(1j * 1.234)
+    aligned = match_global_phase(rotated, E)
+    assert _relerr(aligned, E) < 1e-13
+    # and it reproduces the closed-form GBD->ASM Gouy correction (uses the
+    # reference instead of z / waist_factor)
+    z, wf = 6e-3, 1.5
+    Gz = propagate_gbd_freespace(_gauss(N, dx), dx, z=z, wavelength=LAM,
+                                 waist_factor=wf)
+    Az = angular_spectrum_propagate(_gauss(N, dx), z, LAM, dx)
+    via_match = match_global_phase(Gz, Az)
+    via_closed = gbd_field_to_asm(Gz, z=z, wavelength=LAM, dx=dx,
+                                  waist_factor=wf)
+    assert _relerr(via_match, via_closed) < 5e-3
