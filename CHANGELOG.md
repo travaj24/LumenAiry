@@ -6,6 +6,36 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Maslov lens propagator — feature parity + speed (v5.21).**
+  - `integration_method='auto'` resolves the integrator from the fitted chart's
+    v2-oscillation count: exact/caustic-safe uniform `'quadrature'` when
+    well-resolved (also where near-caustic charts fall), the fast asymptotic
+    `'local_quadrature'` only when quadrature would over-run its sample cap.
+    Byte-identical to the method it picks; **357×** faster on a high-NA singlet.
+  - `apply_real_lens_maslov(..., fold_split=True)` auto-handles a folded
+    prescription (split at every fold + alternate the propagator per refractive
+    leg with `apply_mirror` per fold), the documented pattern in one call.
+  - `apply_real_lens_maslov_vector` — vector/Jones Maslov: applies the base-ray
+    Fresnel Jones (reusing the GBD polarization ray tracing) then propagates
+    each component caustic-safe (x-pol beam carries `T1·T2`; cross-pol at the
+    symmetry floor).  Closes "Maslov is scalar-only".
+- **GBD multilayer reflection coatings + ghost budget.**  A mirror `coating`
+  may be a dielectric stack (`{'layers': [(index, thickness), ...],
+  'substrate': index}`) -> `r_s`/`r_p` from the thin-film matrix (a quarter-wave
+  TiO2/SiO2 Bragg stack matches the analytic reflectance).  `gbd_ghost_analysis`
+  gives the first-order stray-light budget (per-surface Fresnel reflectance +
+  double-bounce `R_i·R_j` ghost intensities; AR coats suppress them >1e6×).
+
+### Fixed
+
+- **Differentiable Maslov caustic phase (`apply_real_lens_maslov_jax`).**  The
+  `det(J)` sign-flip radial scan could not see an axial focus and missed
+  even-multiplicity caustics (both eigenvalues flip -> `det` unchanged), so the
+  output phase was wrong by `pi` past an axial focus.  Now uses the Morse /
+  Maslov index at the pixel (negative-eigenvalue count of the forward ray-map
+  Jacobian): index 2 past an axial focus (the `-pi` Gouy shift), 1 past an
+  off-axis fold.  Validated: maslov/traced ratio exactly `-1` past focus.
+
 - **Berreman per-layer modal eig cache** (speed; byte-identical).  The 4x4
   layer eig depends only on `eps` and `Kx/Ky` (angle), NOT on wavelength (which
   enters solely through the propagation phase), so a fixed-angle wavelength
