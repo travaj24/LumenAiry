@@ -639,6 +639,8 @@ def apply_real_lens_maslov(
     n_v2: Optional[int] = None,
     output_subsample: int = 1,
     roi: Optional[Any] = None,
+    output_plane_distance: float = 0.0,
+    output_plane_n: float = 1.0,
     extract_linear_phase: bool = True,
     chunk_v2: int = 64,
     use_numexpr: Optional[bool] = None,
@@ -748,6 +750,20 @@ def apply_real_lens_maslov(
     (flat -> field-preserving; curved -> ``f = R/2`` focus) over each fold --
     the documented per-segment pattern, in one call.  No fold -> the single-call
     path (byte-identical).
+
+    ``output_plane_distance`` (v5.23; M-P6 follow-up) composes a **free-space
+    leg** of that axial distance (in ``output_plane_n``, air = 1) into the
+    canonical entrance->exit map, so the fit lands on a DOWNSTREAM plane (e.g.
+    the focus / image plane a back-focal-distance past a prescription that ends
+    at the last lens vertex) WITHOUT re-tracing the optics.  Combined with
+    ``roi=(cx, cy, half_width)`` this places the ROI directly on that plane --
+    an ``O(roi_n^2)`` integrand cost at the focus (measured ~21x vs the full
+    grid here, up to ~1e3-1e4x for a tight spot on a large grid) -- and a
+    through-focus scan (many ``output_plane_distance`` values) re-uses the single
+    ray trace, only re-propagating + refitting (cheap).  The composed field is
+    exact: it matches baking the same distance into the prescription's last
+    thickness to ~1e-10, and the ROI window is identical to the full-grid slice.
+    Not yet combined with ``fold_split``.
 
     ``use_gpu`` (opt-in) runs the per-pixel integrand on the GPU via
     CuPy -- the same ``use_gpu=True`` / cupy-array entry as
@@ -1151,11 +1167,31 @@ def apply_real_lens_maslov(
             f"Only {alive.sum()}/{n_rays} rays survived the trace; "
             f"likely aperture / TIR issue.  Check prescription.")
 
-    s2x = exit_rays.x[alive]
-    s2y = exit_rays.y[alive]
+    # #2 (M-P6 follow-up): compose a free-space leg into the canonical map so
+    # the fit maps entrance coords to a DOWNSTREAM (e.g. focus / image) plane a
+    # distance ``output_plane_distance`` past the prescription's exit vertex,
+    # WITHOUT re-tracing the optics.  Each exit ray advances by that axial gap
+    # (direction unchanged in free space; OPL += n * geometric-path); the fit +
+    # ROI machinery is then unchanged but lands on the requested plane -- so a
+    # tiny ``roi`` window at the focus costs O(roi_n^2) integrand evals, and a
+    # through-focus scan re-uses the single ray trace (only re-propagate + refit,
+    # which is cheap vs re-tracing).  ``output_plane_n`` is the index of that
+    # output space (air = 1).
+    ex_x = exit_rays.x
+    ex_y = exit_rays.y
+    ex_opd = exit_rays.opd
+    if output_plane_distance:
+        _Nz = exit_rays.N
+        _t = output_plane_distance / np.where(np.abs(_Nz) > 1e-30, _Nz, 1e-30)
+        ex_x = ex_x + _t * exit_rays.L
+        ex_y = ex_y + _t * exit_rays.M
+        ex_opd = ex_opd + float(output_plane_n) * _t
+
+    s2x = ex_x[alive]
+    s2y = ex_y[alive]
     v2x = exit_rays.L[alive]
     v2y = exit_rays.M[alive]
-    opd_m = exit_rays.opd[alive] - rays.opd[alive]
+    opd_m = ex_opd[alive] - rays.opd[alive]
     opd_w = opd_m / wavelength
     s1x_live = s1x[alive]
     s1y_live = s1y[alive]
