@@ -74,11 +74,22 @@ _MODE_CACHE: "OrderedDict[tuple, tuple]" = OrderedDict()
 _MODE_CACHE_SIZE = 256
 _MODE_CACHE_LOCK = threading.Lock()
 
+# The interface S-matrices are ALSO wavelength-independent (built from the
+# wl-independent field-mode matrices M; only the propagation phase carries k0),
+# so a fixed-angle sweep rebuilds the SAME _interface_smatrix_general every point.
+# A second bounded LRU keyed on the two M matrices' bytes returns the byte-
+# identical 4-tuple (read-only downstream) -- ~1.2-1.3x on top of the eig cache.
+_IFACE_CACHE: "OrderedDict[tuple, tuple]" = OrderedDict()
+_IFACE_CACHE_SIZE = 512
+_IFACE_CACHE_LOCK = threading.Lock()
+
 
 def _clear_berreman_mode_cache():
-    """Registry hook: drop the per-layer modal eig cache."""
+    """Registry hook: drop the per-layer modal eig + interface caches."""
     with _MODE_CACHE_LOCK:
         _MODE_CACHE.clear()
+    with _IFACE_CACHE_LOCK:
+        _IFACE_CACHE.clear()
 
 
 try:
@@ -193,6 +204,26 @@ def _layer_modes_cached(eps_tensor, Kx, Ky):
     return res
 
 
+def _interface_smatrix_cached(Ma, Mb):
+    """:func:`_interface_smatrix_general` memoized on the two field-mode matrices
+    ``(Ma, Mb)``.  Both are wavelength-independent (built from the cached modes),
+    so a fixed-angle sweep reuses the byte-identical 4-tuple (read-only
+    downstream)."""
+    key = (np.ascontiguousarray(Ma).tobytes(),
+           np.ascontiguousarray(Mb).tobytes())
+    with _IFACE_CACHE_LOCK:
+        hit = _IFACE_CACHE.get(key)
+        if hit is not None:
+            _IFACE_CACHE.move_to_end(key)              # LRU: refresh recency
+            return hit
+    res = _interface_smatrix_general(Ma, Mb)
+    with _IFACE_CACHE_LOCK:
+        _IFACE_CACHE[key] = res
+        while len(_IFACE_CACHE) > _IFACE_CACHE_SIZE:
+            _IFACE_CACHE.popitem(last=False)
+    return res
+
+
 def _flux(Etan, Hmodal):
     """Time-averaged z-Poynting flux from tangential ``E`` and the MODAL ``H``
     (the Berreman state's lower block).  The modal H carries an extra ``-i``
@@ -232,15 +263,15 @@ def _solve_core(eps_layers, thicks, eps_sup, eps_sub, wavelength, Kx, Ky,
 
     # full cascade sup -> [iface, prop]*layers -> sub
     if nlay == 0:
-        S = _interface_smatrix_general(M_sup, M_sub)
+        S = _interface_smatrix_cached(M_sup, M_sub)
     else:
-        S = _interface_smatrix_general(M_sup, Ms[0])
+        S = _interface_smatrix_cached(M_sup, Ms[0])
         for i in range(nlay):
             lamf, lamb = modes[i][2], modes[i][5]
             S = _redheffer_star(
                 S, _propagation_smatrix_general(lamf, lamb, k0 * thicks[i]))
             nxt = M_sub if i == nlay - 1 else Ms[i + 1]
-            S = _redheffer_star(S, _interface_smatrix_general(Ms[i], nxt))
+            S = _redheffer_star(S, _interface_smatrix_cached(Ms[i], nxt))
     S11, _S12, S21, _S22 = S
 
     out = dict(M_sup=M_sup, M_sub=M_sub, S11=S11, S21=S21,
@@ -255,10 +286,10 @@ def _solve_core(eps_layers, thicks, eps_sup, eps_sub, wavelength, Kx, Ky,
         #   S_below_bot[i] : BOTTOM of layer i -> sub (propagation removed)
         # The backward amplitude references the layer BOTTOM, so every modal
         # exponential decays (no overflow through a deep / lossy layer).
-        ifc = [_interface_smatrix_general(M_sup, Ms[0])]
+        ifc = [_interface_smatrix_cached(M_sup, Ms[0])]
         for i in range(1, nlay):
-            ifc.append(_interface_smatrix_general(Ms[i - 1], Ms[i]))
-        ifc.append(_interface_smatrix_general(Ms[-1], M_sub))
+            ifc.append(_interface_smatrix_cached(Ms[i - 1], Ms[i]))
+        ifc.append(_interface_smatrix_cached(Ms[-1], M_sub))
         prop = [_propagation_smatrix_general(modes[i][2], modes[i][5],
                                              k0 * thicks[i])
                 for i in range(nlay)]

@@ -6,6 +6,21 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Berreman interface-S-matrix sweep cache** (speed; byte-identical).  On top
+  of the per-layer eig cache, the native cascade's interface S-matrices are also
+  wavelength-independent (built from the wl-independent field-mode matrices), so
+  a fixed-angle sweep rebuilt the same `_interface_smatrix_general` at every
+  point.  A second bounded LRU (`_interface_smatrix_cached`) reuses them
+  byte-for-byte (~1.2-1.3x on top of the eig cache; interface entries stay stable
+  across a sweep).
+
+- **PMM 1-D stack per-layer eig dedup** (speed; byte-identical).
+  `PMMStack.solve` (all-vertical in-plane path) now content-keys the per-layer
+  modal eig on the layer's eps bytes, so a periodic / Bragg (ABAB...) stack
+  computes each distinct layer's eig ONCE instead of once per repetition
+  (up to ~Px on a P-period stack).  Deterministic eig -> the memo returns the
+  same arrays a plain loop would build (mirrors the RCWA stack).
+
 - **PMM 1-D geometric-eig sweep cache** (speed).  The eps-free geometric eig of a
   uniform half-space (`_uniform_geo_eig` / `_scalar_uniform_geo_eig`) depends only
   on the nodal geometry and `kx0` (angle), NOT on `k0` (wavelength -- which enters
