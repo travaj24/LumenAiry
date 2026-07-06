@@ -122,3 +122,79 @@ def test_maslov_integration_method_auto_matches_and_is_fast():
         # auto must be byte-identical to exactly one of the two concrete methods
         assert (np.max(np.abs(Fa - Fq)) < 1e-12) or \
                (np.max(np.abs(Fa - Fl)) < 1e-12)
+
+
+def _folded_rx(mirror_R):
+    d_in, d_out = 20e-3, 15e-3
+    elements = [
+        {'element_type': 'surface', 'radius': 50e-3, 'conic': 0.,
+         'glass_before': 'air', 'glass_after': 'N-BK7'},
+        {'element_type': 'surface', 'radius': float('inf'), 'conic': 0.,
+         'glass_before': 'N-BK7', 'glass_after': 'air'},
+        {'element_type': 'mirror', 'radius': mirror_R, 'conic': 0.},
+        {'element_type': 'surface', 'radius': float('inf'), 'conic': 0.,
+         'glass_before': 'air', 'glass_after': 'air'}]
+    return {'elements': elements,
+            'surfaces': [e for e in elements if e['element_type'] == 'surface'],
+            'thicknesses': [3e-3, d_in + d_out, 0.0],
+            'all_thicknesses': [3e-3, d_in, d_out],
+            'aperture_diameter': 8e-3, 'name': 'f'}
+
+
+def test_maslov_fold_split_matches_manual_chain():
+    """apply_real_lens_maslov(fold_split=True) on a folded prescription equals
+    the documented manual pattern (split_prescription_at_mirrors + alternate
+    Maslov per refractive leg with free-space + apply_mirror per fold), and a
+    curved fold applies the R/2 focus (differs from a flat fold)."""
+    from lumenairy.elements.elements import apply_mirror
+    from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
+    from lumenairy.io.prescriptions_transforms import (
+        split_prescription_at_mirrors,
+    )
+    from lumenairy.propagators.asm import angular_spectrum_propagate
+    lam = 0.633e-6
+    N, dx = 80, 5e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (2.0e-3) ** 2).astype(np.complex128)
+    kw = dict(wavelength=lam, dx=dx, integration_method='auto')
+
+    folded = _folded_rx(float('inf'))
+    Ff = apply_real_lens_maslov(E, prescription=folded, fold_split=True, **kw)
+    assert np.isfinite(Ff).all()
+    # manual documented chain, same method
+    Em = E
+    for lg in split_prescription_at_mirrors(folded):
+        if lg['kind'] == 'refractive':
+            Em = apply_real_lens_maslov(Em, prescription=lg['prescription'], **kw)
+        else:
+            m = lg['element']
+            Em = angular_spectrum_propagate(Em, lg['distance_in'], lam, dx)
+            Em = apply_mirror(Em, wavelength=lam, dx=dx, radius=m.get('radius'),
+                              conic=0., aperture_diameter=None)
+            Em = angular_spectrum_propagate(Em, lg['distance_out'], lam, dx)
+    assert np.max(np.abs(Ff - Em)) < 1e-12          # faithful to the pattern
+    # a curved fold (R=-100mm, f=50mm) applies the mirror focus
+    Fc = apply_real_lens_maslov(E, prescription=_folded_rx(-100e-3),
+                                fold_split=True, **kw)
+    assert np.isfinite(Fc).all()
+    assert np.max(np.abs(Fc - Ff)) > 1e-2           # focus phase changed it
+
+
+def test_maslov_fold_split_noop_on_unfolded():
+    """fold_split=True reduces to the single-call path on a prescription with
+    no fold (byte-identical to fold_split=False)."""
+    from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
+    presc = {'aperture_diameter': 8e-3, 'surfaces': [
+        {'radius': 50e-3, 'glass_before': 'air', 'glass_after': 'N-BK7'},
+        {'radius': float('inf'), 'glass_before': 'N-BK7', 'glass_after': 'air'}],
+        'thicknesses': [3e-3, 40e-3]}
+    N, dx = 64, 5e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (1.8e-3) ** 2).astype(np.complex128)
+    F0 = apply_real_lens_maslov(E, prescription=presc, wavelength=0.633e-6,
+                                dx=dx, fold_split=False)
+    F1 = apply_real_lens_maslov(E, prescription=presc, wavelength=0.633e-6,
+                                dx=dx, fold_split=True)
+    assert np.array_equal(F0, F1)

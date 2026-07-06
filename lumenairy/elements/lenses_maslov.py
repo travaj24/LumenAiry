@@ -492,6 +492,7 @@ def apply_real_lens_maslov(
     verbose: bool = False,
     progress: Optional[Any] = None,
     use_gpu: bool = False,
+    fold_split: bool = False,
 ) -> np.ndarray:
     """
     Phase-space / Maslov propagator through a thick-lens prescription.
@@ -572,6 +573,14 @@ def apply_real_lens_maslov(
     it picks; measured **357x** faster than the default ``'quadrature'`` on a
     high-NA singlet chart while staying on the safe quadrature elsewhere.
 
+    ``fold_split=True`` (v5.21) auto-handles a **folded** prescription (one with
+    fold mirrors) instead of raising: it splits at every fold
+    (:func:`lumenairy.io.split_prescription_at_mirrors`) and chains this Maslov
+    propagator over each refractive leg with a free-space + :func:`apply_mirror`
+    (flat -> field-preserving; curved -> ``f = R/2`` focus) over each fold --
+    the documented per-segment pattern, in one call.  No fold -> the single-call
+    path (byte-identical).
+
     ``use_gpu`` (opt-in) runs the per-pixel integrand on the GPU via
     CuPy -- the same ``use_gpu=True`` / cupy-array entry as
     ``apply_real_lens``.  The cheap ray trace + Chebyshev fit stay on the
@@ -600,6 +609,56 @@ def apply_real_lens_maslov(
     # would silently treat the mirror as a refractor with the wrong
     # sign.  Fail loudly with the same mirror-specific message as
     # ``apply_real_lens_traced``.
+    # v5.21: fold_split=True auto-handles a folded prescription instead of
+    # raising -- split at every fold and alternate this Maslov propagator (each
+    # refractive leg, mirror-free -> the normal path) with apply_mirror (each
+    # fold), chaining the field.  The apply_mirror focusing phase folds the
+    # frame; each leg is evaluated in its own local +z (see the split helper's
+    # frame note).  Reduces to the single-call path when the prescription has no
+    # fold.
+    if fold_split:
+        from ..io.prescriptions_transforms import split_prescription_at_mirrors
+        _legs = split_prescription_at_mirrors(prescription)
+        if len(_legs) > 1:
+            from .elements import apply_mirror
+            _leg_kw = dict(
+                wavelength=wavelength, dx=dx, dy=dy,
+                ray_field_samples=ray_field_samples,
+                ray_pupil_samples=ray_pupil_samples, poly_order=poly_order,
+                n_v2=n_v2, output_subsample=output_subsample,
+                extract_linear_phase=extract_linear_phase, chunk_v2=chunk_v2,
+                use_numexpr=use_numexpr, integration_method=integration_method,
+                stationary_newton_iter=stationary_newton_iter,
+                stationary_newton_tol=stationary_newton_tol,
+                local_n_samples=local_n_samples,
+                local_window_sigma=local_window_sigma,
+                collimated_input=collimated_input, input_na=input_na,
+                normalize_output=normalize_output, verbose=verbose,
+                use_gpu=use_gpu)
+            from ..propagators.asm import angular_spectrum_propagate
+            E = E_in
+            for _leg in _legs:
+                if _leg['kind'] == 'refractive':
+                    E = apply_real_lens_maslov(
+                        E, prescription=_leg['prescription'], **_leg_kw)
+                else:
+                    # free-space to the mirror, reflect (curved -> f = R/2 focus
+                    # phase; flat -> field unchanged), then free-space out.  The
+                    # split helper carries these gaps on the mirror leg (they are
+                    # NOT in the refractive segments).
+                    _m = _leg['element']
+                    _din = float(_leg.get('distance_in', 0.0) or 0.0)
+                    _dout = float(_leg.get('distance_out', 0.0) or 0.0)
+                    if abs(_din) > 0.0:
+                        E = angular_spectrum_propagate(E, _din, wavelength, dx)
+                    E = apply_mirror(
+                        E, wavelength=wavelength, dx=dx, dy=dy,
+                        radius=_m.get('radius'), conic=_m.get('conic', 0.0),
+                        aperture_diameter=_m.get('clear_aperture'))
+                    if abs(_dout) > 0.0:
+                        E = angular_spectrum_propagate(E, _dout, wavelength, dx)
+            return E
+
     _surfaces_list = prescription.get('surfaces') or []
     _mirror_surf_idx = []
     for _i, _s in enumerate(_surfaces_list):
