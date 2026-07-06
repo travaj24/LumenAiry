@@ -226,6 +226,45 @@ def test_fff_nv_out_of_plane_converges_fast():
     assert abs(f7 - conv) < 0.3 * abs(l7 - conv)    # fff_nv converges much faster
 
 
+def test_out_of_plane_matches_berreman_uniform():
+    """INDEPENDENT-METHOD check of the out-of-plane machinery: a UNIFORM tilted-
+    uniaxial (exz, ezx != 0) slab solved by rcwa_jones_2d must match the Berreman
+    4x4 method (an entirely different formalism) to machine precision, at normal
+    AND conical incidence.  Compares the Jones-reflection singular values
+    (basis-invariant), so it is convention-independent."""
+    from lumenairy.elements.berreman import berreman_jones_1d
+    th = np.deg2rad(35.0)
+    c, s = np.cos(th), np.sin(th)
+    Ry = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+    eps = Ry @ np.diag([1.5 ** 2, 1.5 ** 2, (2.4 + 0.05j) ** 2]) @ Ry.T
+    cell = np.broadcast_to(eps, (8, 8, 3, 3)).copy()
+    for ang in (0.0, 25.0, 45.0):
+        a = np.deg2rad(ang)
+        _o, _R, _T, Jr = rcwa_jones_2d(0.6e-6, 0.6e-6, cell, 1.5, 1.0, DEPTH, WL,
+                                       theta=a, phi=0.0, n_orders_x=3,
+                                       n_orders_y=3, formulation="laurent",
+                                       symmetry=False)
+        _Rb, _Tb, Jb, _Jt = berreman_jones_1d([(eps, DEPTH)], 1.5, 1.0, WL,
+                                              theta=a, phi=0.0)
+        sv_r = np.sort(np.linalg.svd(Jr, compute_uv=False))
+        sv_b = np.sort(np.linalg.svd(np.asarray(Jb), compute_uv=False))
+        assert np.max(np.abs(sv_r - sv_b)) < 1e-11, f"theta={ang}"
+
+
+def test_fff_nv_out_of_plane_same_limit_as_laurent():
+    """fff_nv and laurent converge to the SAME out-of-plane limit: their gap
+    shrinks monotonically with n_orders (fff_nv reaches it fast, laurent slowly).
+    Guards against the operator-Schur E_z fold converging to a WRONG limit."""
+    def sumR(No, form):
+        _o, R, _T, _J = rcwa_jones_2d(PX, PX, _oop_stripe(No), 1.5, 1.0, DEPTH,
+                                      WL, n_orders_x=No, n_orders_y=1,
+                                      formulation=form, symmetry=False)
+        return np.sum(R)
+    gaps = [abs(sumR(No, "fff_nv") - sumR(No, "laurent")) for No in (7, 15, 25)]
+    assert gaps[0] > gaps[1] > gaps[2]              # converging to the same limit
+    assert gaps[2] < 0.5 * gaps[0]                  # gap closing meaningfully
+
+
 def test_fff_nv_jax_raises():
     """fff_nv rejects a JAX-traced cell (host-side successive factorization)."""
     er = _rot(np.deg2rad(35.0), 1.5, 2.3)
