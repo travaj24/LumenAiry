@@ -261,6 +261,7 @@ from .driver import (
 from .jax_merits import (
     JaxMeritTerm,
     make_lg_aberration_merit_jax,
+    optimize_traced_geometry,
 )
 
 # ---------------------------------------------------------------------------

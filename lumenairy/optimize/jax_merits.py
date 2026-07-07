@@ -334,3 +334,152 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
         real_part=True,         # fn already returns real
         build_args=build_args,
     )
+
+
+def _asm_jax(E, z, wavelength, dx):
+    """Minimal JAX angular-spectrum free-space propagator (exact scalar
+    Helmholtz), for use inside a differentiable design merit."""
+    import jax.numpy as jnp
+    N = E.shape[-1]
+    fx = jnp.fft.fftfreq(N, dx)
+    FX, FY = jnp.meshgrid(fx, fx)
+    k = 2.0 * jnp.pi / wavelength
+    kz = jnp.sqrt((k * k - (2 * jnp.pi * FX) ** 2
+                   - (2 * jnp.pi * FY) ** 2).astype(jnp.complex128))
+    return jnp.fft.ifft2(jnp.fft.fft2(E) * jnp.exp(1j * kz * z))
+
+
+def optimize_traced_geometry(
+    E_in, prescription, *, wavelength, dx,
+    focal_distance=None,
+    optimize=('radii',),
+    merit=None,
+    n_steps=40, lr=None,
+    cheb_order=10, newton_iters=12, ray_subsample=8,
+    verbose=False,
+):
+    """Turnkey gradient-based lens-design optimisation of prescription GEOMETRY
+    (radii / conics / thicknesses) via the differentiable ray-traced OPD.
+
+    Wraps :func:`~lumenairy.elements._lens_jax.apply_real_lens_traced_jax`'s
+    differentiable-geometry path (``jax.grad`` w.r.t. ``radii`` / ``conics`` /
+    ``thicknesses``) in an Adam loop.  The **default merit sharpens the focus**:
+    propagate the lens output to ``focal_distance`` with an exact angular-
+    spectrum step and maximise the peak intensity there (a Strehl-like objective)
+    -- so it rewards the *correct* converging wavefront, not a flat one.  Pass a
+    custom ``merit(E_out_jax) -> real scalar to MINIMISE`` for any other goal.
+
+    Parameters
+    ----------
+    E_in : (N, N) complex -- input field at the lens plane (e.g. a collimated
+        aperture field to be focused).
+    prescription : dict -- lumenairy prescription; its ``surfaces`` radii /
+        conics and ``thicknesses`` are the geometry being optimised.
+    optimize : subset of ``('radii', 'conics', 'thicknesses')`` -- which
+        geometry to free.  Infinite (flat) radii are held fixed.
+    focal_distance : float -- required for the default focus merit (the plane,
+        past the lens output, where the focus forms).
+    merit : callable, optional -- ``E_out -> scalar``; overrides the default.
+    n_steps, lr : Adam iteration count and step (``lr`` auto-scales to the
+        parameter magnitude when ``None``).
+
+    Returns
+    -------
+    dict -- ``{'prescription': optimised dict, 'loss_history': [...],
+    'loss': final, 'params': ndarray}``.
+    """
+    from ..backend import JAX_AVAILABLE
+    if not JAX_AVAILABLE:
+        raise ImportError("optimize_traced_geometry requires JAX.")
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+
+    from ..elements._lens_jax import apply_real_lens_traced_jax
+    if merit is None and focal_distance is None:
+        raise ValueError(
+            "optimize_traced_geometry: pass focal_distance for the default "
+            "focus-sharpening merit, or supply a custom merit=.")
+
+    surfaces = prescription.get('surfaces', [])
+    radii0 = jnp.array([float(s.get('radius', np.inf)) for s in surfaces])
+    conics0 = jnp.array([float(s.get('conic', 0.0)) for s in surfaces])
+    thick0 = jnp.array([float(t) for t in prescription.get('thicknesses', [])])
+    E0 = jnp.asarray(E_in)
+
+    specs = []
+    if 'radii' in optimize:
+        specs.append(('radii', [i for i in range(len(surfaces))
+                                 if np.isfinite(float(radii0[i]))]))
+    if 'conics' in optimize:
+        specs.append(('conics', list(range(len(surfaces)))))
+    if 'thicknesses' in optimize:
+        specs.append(('thicknesses', list(range(int(thick0.shape[0])))))
+
+    base_of = {'radii': radii0, 'conics': conics0, 'thicknesses': thick0}
+    p0 = jnp.array([float(base_of[name][i]) for name, idx in specs for i in idx])
+
+    def unpack(p):
+        radii, conics, thick = radii0, conics0, thick0
+        off = 0
+        for name, idx in specs:
+            vals = p[off:off + len(idx)]
+            off += len(idx)
+            ia = jnp.array(idx)
+            if name == 'radii':
+                radii = radii.at[ia].set(vals)
+            elif name == 'conics':
+                conics = conics.at[ia].set(vals)
+            else:
+                thick = thick.at[ia].set(vals)
+        return radii, conics, thick
+
+    def _merit(E_out):
+        if merit is not None:
+            return merit(E_out)
+        Efoc = _asm_jax(E_out, focal_distance, wavelength, dx)
+        return -jnp.max(jnp.abs(Efoc) ** 2) / (jnp.sum(jnp.abs(E0) ** 2) + 1e-30)
+
+    def loss(p):
+        radii, conics, thick = unpack(p)
+        E_out = apply_real_lens_traced_jax(
+            E0, prescription=prescription, wavelength=wavelength, dx=dx,
+            radii=radii, conics=conics, thicknesses=thick,
+            cheb_order=cheb_order, newton_iters=newton_iters,
+            ray_subsample=ray_subsample)
+        return _merit(E_out)
+
+    grad_loss = jax.grad(loss)
+    if lr is None:
+        lr = 0.02 * float(jnp.mean(jnp.abs(p0)) + 1e-30)
+    m = jnp.zeros_like(p0)
+    v = jnp.zeros_like(p0)
+    b1, b2, eps = 0.9, 0.999, 1e-8
+    p = p0
+    hist = [float(loss(p))]
+    for step in range(n_steps):
+        g = grad_loss(p)
+        m = b1 * m + (1 - b1) * g
+        v = b2 * v + (1 - b2) * g ** 2
+        mhat = m / (1 - b1 ** (step + 1))
+        vhat = v / (1 - b2 ** (step + 1))
+        p = p - lr * mhat / (jnp.sqrt(vhat) + eps)
+        hist.append(float(loss(p)))
+        if verbose:
+            print(f"  step {step + 1}/{n_steps}: loss={hist[-1]:.6e}")
+
+    radii, conics, thick = unpack(p)
+    opt = dict(prescription)
+    opt_surfaces = []
+    for i, s in enumerate(surfaces):
+        s2 = dict(s)
+        if np.isfinite(float(radii0[i])) and 'radii' in optimize:
+            s2['radius'] = float(radii[i])
+        if 'conics' in optimize:
+            s2['conic'] = float(conics[i])
+        opt_surfaces.append(s2)
+    opt['surfaces'] = opt_surfaces
+    if 'thicknesses' in optimize:
+        opt['thicknesses'] = [float(t) for t in thick]
+    return {'prescription': opt, 'loss_history': hist, 'loss': hist[-1],
+            'params': np.asarray(p)}

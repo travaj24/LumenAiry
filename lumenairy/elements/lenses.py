@@ -951,13 +951,17 @@ from ._lens_thin import (  # noqa: E402, F401
 #   from lumenairy.elements.lenses import close_worker_pool
 # imports continue to work.
 # ---------------------------------------------------------------------------
-from ._lens_traced import (  # noqa: E402, F401
+from ._lens_traced import (  # noqa: E402, F401  # noqa: E402, F401
     PreparedTracedLens,
     apply_real_lens_traced,
     apply_real_lens_traced_multi,
+    apply_real_lens_traced_segmented,
     close_worker_pool,
     get_lens_parallel_amp,
     prepare_real_lens_traced,
     set_lens_parallel_amp,
+)
+from ._lens_traced_multibranch import (  # noqa: E402, F401
+    apply_real_lens_traced_multibranch,
 )
 from .lenses_maslov import apply_real_lens_maslov  # noqa: F401, E402

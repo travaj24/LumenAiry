@@ -415,6 +415,128 @@ def recommend_gbd_sampling(
     }
 
 
+def converge_gbd_sampling(
+    E_in: np.ndarray,
+    dx: float,
+    *,
+    wavelength: float,
+    test_distance: float,
+    dy: Optional[float] = None,
+    sample_step: Optional[int] = None,
+    overlaps: Any = (2.5, 2.0, 1.5, 1.2, 1.0, 0.8),
+    rtol: float = 1e-2,
+    reference: Optional[np.ndarray] = None,
+    window: float = 5.0,
+    direction_sampling: bool = False,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """Pick the beamlet width that makes a free-space GBD propagation most
+    accurate, validated against the EXACT angular-spectrum propagator.
+
+    GBD accuracy is a genuine beamlet-width trade-off, NOT "smaller is always
+    better": a **wider** beamlet (larger ``w0`` -> smaller divergence NA
+    ``lambda/(pi w0)``) stays more paraxial as it spreads, but its single
+    per-beamlet quadratic phase ``Q`` then follows a curved / high-NA total
+    wavefront worse; a **narrower** beamlet tracks the wavefront locally but
+    diverges faster than its paraxial ``Q`` describes.  The optimum is
+    field-dependent: a **broad, flat plateau** for smooth / low-NA fields (where
+    accuracy is set by the beamlet density and reconstruction window, not the
+    width), and a **genuine interior optimum** for high-NA or finely-structured
+    fields where the two errors above actually compete.  The default sweep stays
+    in the proper-frame range (overlap ``>= 0.8``); much narrower beamlets stop
+    forming a frame and only "work" by degenerating to near-delta samples of a
+    smooth field (a low-NA artefact, not real accuracy).
+
+    The width is swept as the **overlap** ``= w0 / spacing`` (the physically
+    meaningful knob: it is decimation-independent, whereas a raw ``waist_factor``
+    relative to ``dx`` under-overlaps a coarse ``sample_step`` grid and just
+    trades gaps).  The beamlet width used is ``waist_factor = overlap *
+    sample_step`` (so ``w0 = overlap * sample_step * dx``).  Each decomposition
+    is propagated ``test_distance`` in free space, reconstructed, and scored
+    against :func:`~lumenairy.propagators.asm.angular_spectrum_propagate` --
+    exact scalar Helmholtz, the trusted free-space oracle -- returning the
+    overlap with the smallest error plus the full error curve.
+
+    The score reconciles the known GBD<->ASM global beamlet-Gouy phase
+    convention first (via :func:`match_global_phase`), so it measures true
+    shape/decomposition accuracy, not the width-dependent global-phase offset.
+
+    Parameters
+    ----------
+    test_distance : float
+        Representative free-space distance (m) at which to score accuracy.
+    sample_step : int, optional
+        Beamlet grid stride; defaults to :func:`recommend_gbd_sampling`.
+    overlaps : sequence of float
+        Candidate beamlet overlaps ``w0 / spacing`` to score (``~1.5`` is a
+        typical smooth-field default; ``> 2`` over-smooths, ``< 1`` leaves gaps).
+    rtol : float
+        Target relative error; ``converged`` is True if the best overlap beats it.
+    reference : ndarray, optional
+        Override the ASM oracle with a supplied reference field at
+        ``test_distance`` (e.g. a higher-fidelity through-optics solver, to tune
+        the beamlet grid for a non-free-space problem).
+
+    Returns
+    -------
+    dict
+        ``{'overlap', 'waist_factor', 'sample_step', 'error', 'errors',
+        'converged', 'n_beamlets', 'reference'}``.  ``errors`` maps each
+        candidate overlap to its relative L2 error vs the oracle; splat
+        ``waist_factor`` / ``sample_step`` into ``decompose_field_to_beamlets`` /
+        ``propagate_gbd_*``.
+    """
+    from ..propagators.asm import angular_spectrum_propagate
+    xp = array_namespace(E_in)
+    Ny, Nx = E_in.shape[-2], E_in.shape[-1]
+    if dy is None:
+        dy = dx
+    if sample_step is None:
+        sample_step = int(recommend_gbd_sampling(
+            E_in, dx, wavelength=wavelength)['sample_step'])
+    used_asm = reference is None
+    if used_asm:
+        reference = angular_spectrum_propagate(E_in, test_distance,
+                                               wavelength, dx)
+    ref = xp.asarray(reference)
+    ref_norm = float(xp.sqrt(xp.sum(xp.abs(ref) ** 2))) + 1e-300
+
+    errors: Dict[float, float] = {}
+    best_ov, best_err = None, float('inf')
+    for ov in overlaps:
+        wf = float(ov) * sample_step   # w0 = overlap * spacing
+        b = decompose_field_to_beamlets(
+            E_in, dx, wavelength=wavelength, dy=dy, sample_step=sample_step,
+            waist_factor=wf, direction_sampling=direction_sampling)
+        b = propagate_beamlets_freespace(b, test_distance, wavelength)
+        F = reconstruct_field_from_beamlets(
+            b, Ny=Ny, Nx=Nx, dx=dx, dy=dy, wavelength=wavelength, window=window)
+        # GBD and ASM share coordinates/direction but differ by the global
+        # beamlet-Gouy phase convention (2*arctan(z/zR_b), zR_b depends on
+        # width) -- a convention, not a decomposition error.  Reconcile it so
+        # the score measures true SHAPE accuracy, not the global-phase offset.
+        F = match_global_phase(F, ref)
+        err = float(xp.sqrt(xp.sum(xp.abs(F - ref) ** 2)) / ref_norm)
+        errors[float(ov)] = err
+        if verbose:
+            print(f"  overlap={float(ov):.3f} (waist_factor={wf:.2f})  "
+                  f"err={err:.3e}")
+        if err < best_err:
+            best_err, best_ov = err, float(ov)
+    n_beam = (((Ny + sample_step - 1) // sample_step)
+              * ((Nx + sample_step - 1) // sample_step))
+    return {
+        'overlap': best_ov,
+        'waist_factor': float(best_ov) * int(sample_step),
+        'sample_step': int(sample_step),
+        'error': best_err,
+        'errors': errors,
+        'converged': bool(best_err < rtol),
+        'n_beamlets': int(n_beam),
+        'reference': 'asm' if used_asm else 'supplied',
+    }
+
+
 def _concat_bundles(a: BeamletBundle, b: BeamletBundle) -> BeamletBundle:
     """Concatenate two beamlet bundles (same backend, same Q rank)."""
     xp = array_namespace(a.positions)
@@ -1583,6 +1705,7 @@ def propagate_gbd_freespace_vector(
     *,
     z: float,
     wavelength: float,
+    return_longitudinal: bool = False,
     **freespace_kwargs: Any,
 ) -> np.ndarray:
     """Vector (polarized) free-space GBD.
@@ -1592,6 +1715,19 @@ def propagate_gbd_freespace_vector(
     polarization components ``E_x`` and ``E_y`` propagate independently (the
     paraxial beamlet geometry is polarization-agnostic), so each is decomposed
     and reconstructed on its own and the vector field is reassembled.
+
+    ``return_longitudinal=True`` (v5.21) additionally returns the LONGITUDINAL
+    ``E_z`` from transversality (``E . k = 0``): a beamlet travelling along unit
+    direction ``(L, M, N)`` carrying transverse ``(E_x, E_y)`` also carries
+    ``E_z = -(L*E_x + M*E_y)/N``.  This is negligible for a paraxial / near-axial
+    field (``L, M ~ 0`` -> ``E_z ~ 0``) but grows with tilt / NA -- the piece a
+    transverse-only (scalar-per-component) GBD misses at high NA.  It is
+    populated only when the beamlets actually carry transverse direction, so it
+    needs ``direction_sampling=True`` (a source already tilted / diverging at
+    the input plane); ``E_x`` and ``E_y`` are decomposed on a **common** beamlet
+    geometry (the ``E_x`` wavevector, valid for a common-wavefront beam) so the
+    per-beamlet longitudinal weight is well defined.  The returned grid is the
+    input grid (output-resampling kwargs are ignored on this path).
 
     .. note::
        This free-space helper models only polarization-**preserving**
@@ -1607,13 +1743,17 @@ def propagate_gbd_freespace_vector(
     E_vec : array ``(2, Ny, Nx)`` complex
         The ``(E_x, E_y)`` Jones components of the source field.
     dx, z, wavelength : see :func:`propagate_gbd_freespace`.
+    return_longitudinal : bool, default False
+        If True, return the full ``(3, Ny, Nx)`` ``(E_x, E_y, E_z)`` field.
     **freespace_kwargs
-        Forwarded to :func:`propagate_gbd_freespace` for each component.
+        Forwarded to :func:`propagate_gbd_freespace` for each component (and,
+        on the longitudinal path, to the decomposition: ``waist_factor``,
+        ``sample_step``, ``direction_sampling``, ``dy``, ``window``).
 
     Returns
     -------
-    array ``(2, Ny, Nx)`` complex
-        The propagated ``(E_x, E_y)`` Jones field.
+    array ``(2, Ny, Nx)`` complex, or ``(3, Ny, Nx)`` if
+    ``return_longitudinal`` -- the propagated Jones field ``(E_x, E_y[, E_z])``.
     """
     xp = array_namespace(E_vec)
     E_vec = xp.asarray(E_vec)
@@ -1621,12 +1761,261 @@ def propagate_gbd_freespace_vector(
         raise ValueError(
             "propagate_gbd_freespace_vector: E_vec must be (2, Ny, Nx) "
             f"(the E_x, E_y Jones components); got shape {E_vec.shape}.")
-    comps = [
-        propagate_gbd_freespace(E_vec[c], dx, z=z, wavelength=wavelength,
-                                **freespace_kwargs)
-        for c in range(2)
-    ]
-    return xp.stack(comps, axis=0)
+    if not return_longitudinal:
+        comps = [
+            propagate_gbd_freespace(E_vec[c], dx, z=z, wavelength=wavelength,
+                                    **freespace_kwargs)
+            for c in range(2)
+        ]
+        return xp.stack(comps, axis=0)
+
+    # Full-vector path: decompose E_x and E_y on a COMMON beamlet geometry (so a
+    # single beamlet carries both transverse components), propagate, and add the
+    # longitudinal E_z from transversality at reconstruction.
+    Ny, Nx = E_vec.shape[-2], E_vec.shape[-1]
+    dy = freespace_kwargs.get('dy', None)
+    waist_factor = freespace_kwargs.get('waist_factor', 1.0)
+    sample_step = freespace_kwargs.get('sample_step', 1)
+    direction_sampling = freespace_kwargs.get('direction_sampling', False)
+    window = freespace_kwargs.get('window', 5.0)
+    bx = decompose_field_to_beamlets(
+        E_vec[0], dx, wavelength=wavelength, dy=dy, waist_factor=waist_factor,
+        sample_step=sample_step, direction_sampling=direction_sampling)
+    by_raw = decompose_field_to_beamlets(
+        E_vec[1], dx, wavelength=wavelength, dy=dy, waist_factor=waist_factor,
+        sample_step=sample_step, direction_sampling=False)
+    # E_y on E_x's geometry + directions (co-located, common wavefront).
+    by = BeamletBundle(positions=bx.positions, directions=bx.directions,
+                       Q=bx.Q, amplitude=by_raw.amplitude, waist0=bx.waist0)
+    bx = propagate_beamlets_freespace(bx, z, wavelength)
+    by = propagate_beamlets_freespace(by, z, wavelength)
+    return reconstruct_vector_field_with_ez(
+        bx, by, Ny=Ny, Nx=Nx, dx=dx, wavelength=wavelength, dy=dy, window=window)
+
+
+def reconstruct_vector_field_with_ez(
+    bundle_x: BeamletBundle,
+    bundle_y: BeamletBundle,
+    *,
+    Ny: int,
+    Nx: int,
+    dx: float,
+    wavelength: float,
+    dy: Optional[float] = None,
+    window: Optional[float] = 5.0,
+) -> np.ndarray:
+    """Reconstruct the full 3-component ``(E_x, E_y, E_z)`` field from two
+    co-located Jones beamlet bundles, adding the LONGITUDINAL ``E_z``.
+
+    A propagating field is transverse to its local wavevector (``E . k = 0``),
+    so a beamlet along unit direction ``(L, M, N)`` carrying transverse
+    ``(E_x, E_y)`` also carries ``E_z = -(L*E_x + M*E_y)/N``.  Negligible for
+    paraxial / near-axial beamlets (``L, M ~ 0``), significant at high NA / large
+    tilt -- the piece a transverse-only GBD misses.  The two bundles MUST be
+    co-located (same beamlet centres AND directions -- e.g. the ``E_x``/``E_y``
+    Jones components of a common-wavefront beam); the per-beamlet longitudinal
+    weight is then ``-(L*ampx + M*ampy)/N``, which coherently sums the
+    angular-spectrum longitudinal field ``E_z(k) = -(kx*Ex + ky*Ey)/kz``.
+
+    Returns
+    -------
+    array ``(3, Ny, Nx)`` complex -- the ``(E_x, E_y, E_z)`` field.
+    """
+    xp = array_namespace(bundle_x.positions)
+    L = bundle_x.directions[..., 0]
+    M = bundle_x.directions[..., 1]
+    N = bundle_x.directions[..., 2]
+    N_safe = xp.where(xp.abs(N) > 1e-30, N, xp.full_like(N, 1e-30))
+    amp_ez = -(L * bundle_x.amplitude + M * bundle_y.amplitude) / N_safe
+    bundle_z = BeamletBundle(
+        positions=bundle_x.positions,
+        directions=bundle_x.directions,
+        Q=bundle_x.Q,
+        amplitude=amp_ez.astype(bundle_x.amplitude.dtype),
+        waist0=bundle_x.waist0,
+    )
+    Ex = reconstruct_field_from_beamlets(
+        bundle_x, Ny=Ny, Nx=Nx, dx=dx, dy=dy, wavelength=wavelength,
+        window=window)
+    Ey = reconstruct_field_from_beamlets(
+        bundle_y, Ny=Ny, Nx=Nx, dx=dx, dy=dy, wavelength=wavelength,
+        window=window)
+    Ez = reconstruct_field_from_beamlets(
+        bundle_z, Ny=Ny, Nx=Nx, dx=dx, dy=dy, wavelength=wavelength,
+        window=window)
+    return xp.stack([Ex, Ey, Ez], axis=0)
+
+
+def csp_beamlet_field(
+    Xf: np.ndarray,
+    Yf: np.ndarray,
+    Zf: Any,
+    positions: np.ndarray,
+    directions: np.ndarray,
+    waist0: np.ndarray,
+    wavelength: float,
+    amplitude: np.ndarray,
+    *,
+    chunk_beamlets: int = 256,
+) -> np.ndarray:
+    """Coherent sum of NON-PARAXIAL complex-source-point (CSP) beamlet fields.
+
+    Each beamlet is the EXACT scalar-Helmholtz field of a point source displaced
+    into a complex location -- Deschamps' "Gaussian beam as a bundle of complex
+    rays" -- so unlike the paraxial-Gaussian beamlet it stays accurate at high NA
+    (it matches the angular-spectrum method to grid precision at all NA; a
+    paraxial Gaussian is ~33% wrong by NA 0.45).  For a beamlet with waist at
+    ``r0``, unit axis ``s_hat``, waist radius ``w0`` and complex displacement
+    ``b = zR = pi w0^2 / lambda``::
+
+        r_s = r0 + i b s_hat
+        R   = sqrt((r - r_s).(r - r_s))          [complex-symmetric, branch Im R <= 0]
+        u   = A0 (-i zR) exp(i k R - k zR) / R
+
+    which reduces to the paraxial Gaussian for ``zR >> lambda`` and satisfies
+    ``(grad^2 + k^2) u = 0`` exactly at every real field point.  The propagation
+    is analytic in ``Zf`` (no beamlet marching), so this evaluates the field at
+    any output plane directly.  Convention: ``exp(-i w t)`` / forward
+    ``exp(+ikz)`` (matches the rest of the library), branch ``Im R <= 0``
+    (Salamin / Kaiser) for transverse decay.
+
+    Parameters
+    ----------
+    Xf, Yf : (P,) arrays -- flattened output transverse coordinates [m].
+    Zf : scalar or (P,) -- output axial coordinate(s) [m].
+    positions : (n, 3) beamlet waist centres.
+    directions : (n, 3) unit beamlet axes.
+    waist0 : (n,) beamlet waist radii [m].
+    amplitude : (n,) complex beamlet weights (``u(r0) = amplitude``).
+
+    Returns
+    -------
+    (P,) complex field = sum over beamlets.
+    """
+    xp = array_namespace(positions)
+    k = 2.0 * float(np.pi) / wavelength
+    P = Xf.shape[0]
+    out = xp.zeros((P,), dtype=xp.complex128)
+    Zf_arr = Zf if xp.ndim(Zf) else xp.full((P,), float(Zf))
+    n = positions.shape[0]
+    step = max(1, int(chunk_beamlets))
+    for c0 in range(0, n, step):
+        c1 = min(n, c0 + step)
+        w0 = waist0[c0:c1]
+        zR = float(np.pi) * w0 ** 2 / wavelength                 # (m,)
+        pos = positions[c0:c1]
+        dirs = directions[c0:c1]
+        rsx = pos[:, 0] + 1j * zR * dirs[:, 0]                   # (m,)
+        rsy = pos[:, 1] + 1j * zR * dirs[:, 1]
+        rsz = pos[:, 2] + 1j * zR * dirs[:, 2]
+        dX = Xf[None, :] - rsx[:, None]                          # (m, P)
+        dY = Yf[None, :] - rsy[:, None]
+        dZ = Zf_arr[None, :] - rsz[:, None]
+        R2 = dX * dX + dY * dY + dZ * dZ
+        r = xp.sqrt(R2)
+        R = xp.where(r.imag <= 0.0, r, -r)                       # branch Im R<=0
+        u = (amplitude[c0:c1][:, None] * (-1j * zR[:, None])
+             * xp.exp(1j * k * R - k * zR[:, None]) / R)
+        out = out + xp.sum(u, axis=0)
+    return out
+
+
+def _csp_field_windowed(positions, directions, waist0, wavelength, amplitude,
+                        Ny, Nx, dx, dy, z, window):
+    """Windowed CSP reconstruction: evaluate each beamlet only over the pixel
+    box where its (Gaussian-enveloped) CSP field is non-negligible -- out to
+    ``window`` beam radii at the output plane (tail ``exp(-window^2)``).  Cost is
+    ``O(n_beamlets * box)`` instead of ``O(n_beamlets * N^2)``; matches the dense
+    sum to the tail truncation.  NumPy-only (data-dependent boxes); callers on
+    other backends use the dense path."""
+    k = 2.0 * float(np.pi) / wavelength
+    out = np.zeros((Ny, Nx), dtype=np.complex128)
+    x0, y0, z0 = positions[:, 0], positions[:, 1], positions[:, 2]
+    L, M, N = directions[:, 0], directions[:, 1], directions[:, 2]
+    zR = float(np.pi) * waist0 ** 2 / wavelength
+    N_safe = np.where(np.abs(N) > 1e-30, N, 1e-30)
+    t = (z - z0) / N_safe                          # along-axis distance ~ zeta
+    cx = x0 + L * t                                # transverse beam centres
+    cy = y0 + M * t
+    wz = waist0 * np.sqrt(1.0 + (t / zR) ** 2)     # beam radius at the plane
+    hwx = window * wz
+    hwy = window * wz
+    for i in range(positions.shape[0]):
+        ix0 = max(0, int(np.floor((cx[i] - hwx[i]) / dx + Nx / 2)))
+        ix1 = min(Nx, int(np.ceil((cx[i] + hwx[i]) / dx + Nx / 2)) + 1)
+        iy0 = max(0, int(np.floor((cy[i] - hwy[i]) / dy + Ny / 2)))
+        iy1 = min(Ny, int(np.ceil((cy[i] + hwy[i]) / dy + Ny / 2)) + 1)
+        if ix1 <= ix0 or iy1 <= iy0:
+            continue
+        xs = (np.arange(ix0, ix1) - Nx / 2) * dx
+        ys = (np.arange(iy0, iy1) - Ny / 2) * dy
+        Xg, Yg = np.meshgrid(xs, ys)
+        dX = Xg - (x0[i] + 1j * zR[i] * L[i])
+        dY = Yg - (y0[i] + 1j * zR[i] * M[i])
+        dZ = z - (z0[i] + 1j * zR[i] * N[i])
+        R2 = dX * dX + dY * dY + dZ * dZ
+        r = np.sqrt(R2)
+        R = np.where(r.imag <= 0.0, r, -r)
+        out[iy0:iy1, ix0:ix1] += (amplitude[i] * (-1j * zR[i])
+                                  * np.exp(1j * k * R - k * zR[i]) / R)
+    return out
+
+
+def propagate_gbd_freespace_csp(
+    E_in: np.ndarray,
+    dx: float,
+    *,
+    z: float,
+    wavelength: float,
+    dy: Optional[float] = None,
+    waist_factor: float = 1.5,
+    sample_step: int = 1,
+    direction_sampling: bool = True,
+    chunk_beamlets: int = 256,
+    window: Optional[float] = None,
+) -> np.ndarray:
+    """Non-paraxial free-space GBD using complex-source-point beamlets.
+
+    Drop-in alternative to :func:`propagate_gbd_freespace` that rides the same
+    real-ray beamlet skeleton but propagates each beamlet as an EXACT-Helmholtz
+    :func:`csp_beamlet_field` instead of a paraxial Gaussian.  Each beamlet is
+    then exact at any NA (a single CSP beam matches the angular-spectrum method
+    to grid precision, vs ~33% error for a paraxial Gaussian at NA 0.45).
+
+    **Honest scope (measured).**  Per-beamlet exactness does NOT automatically
+    make the GBD *sum* dramatically better than the paraxial sum: the two knobs
+    are coupled -- narrowing beamlets raises each beamlet's NA (where CSP wins)
+    but simultaneously worsens neighbour overlap (raising the reconstruction
+    floor).  At moderate NA the reconstruction floor dominates and CSP-GBD and
+    paraxial-GBD are comparable (both ~4e-2 on a moderate test); the CSP sum only
+    pulls ahead when the FIELD is genuinely high-NA AND the decomposition is fine
+    enough that per-beamlet physics is the limiting term.  Use
+    :func:`csp_beamlet_field` directly for a sparse set of exact high-NA
+    beamlets (its clearest win).  Cost is ``O(n_beamlets * N^2)`` (no windowing
+    ``direction_sampling`` defaults to True (Husimi).  ``window`` (opt-in, NumPy
+    only) evaluates each beamlet over its local pixel box out to ``window`` beam
+    radii -- ``O(n_beamlets * box)`` instead of ``O(n_beamlets * N^2)`` -- and
+    matches the dense sum to the tail truncation (``window=6.0`` -> ~1e-16 tail).
+    """
+    xp = array_namespace(E_in)
+    if dy is None:
+        dy = dx
+    Ny, Nx = E_in.shape[-2], E_in.shape[-1]
+    b = decompose_field_to_beamlets(
+        E_in, dx, wavelength=wavelength, dy=dy, waist_factor=waist_factor,
+        sample_step=sample_step, direction_sampling=direction_sampling)
+    if window is not None and xp is np:
+        return _csp_field_windowed(
+            b.positions, b.directions, b.waist0, wavelength, b.amplitude,
+            Ny, Nx, dx, dy, float(z), float(window))
+    xs = (xp.arange(Nx) - Nx / 2) * dx
+    ys = (xp.arange(Ny) - Ny / 2) * dy
+    Xg, Yg = xp.meshgrid(xs, ys)
+    Ef = csp_beamlet_field(
+        Xg.reshape(-1), Yg.reshape(-1), float(z),
+        b.positions, b.directions, b.waist0, wavelength, b.amplitude,
+        chunk_beamlets=chunk_beamlets)
+    return Ef.reshape(Ny, Nx)
 
 
 def _resolve_coating_index(coating: Any, wavelength: float) -> complex:

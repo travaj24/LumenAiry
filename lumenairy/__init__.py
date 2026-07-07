@@ -140,6 +140,8 @@ from .elements.lenses import (
     apply_real_lens_traced,
     apply_real_lens_traced_jax,
     apply_real_lens_traced_multi,
+    apply_real_lens_traced_multibranch,
+    apply_real_lens_traced_segmented,
     apply_spherical_lens,
     apply_thin_lens,
     check_grid_vs_apertures,
@@ -458,8 +460,8 @@ from .elements.pmm import (
 )
 from .elements.pmm.stack2d import (
     PMM2DStack,
-    PMM2DStackHybrid,
     PMM2DStack_hybrid,
+    PMM2DStackHybrid,
 )
 from .elements.pmm.stack2d_pure import (
     PMM2DStackPure,
@@ -901,6 +903,8 @@ from .propagators.gbd import (
     apply_aperture_to_beamlets,
     apply_thin_lens_to_beamlets,
     asm_field_to_gbd,
+    converge_gbd_sampling,
+    csp_beamlet_field,
     decompose_field_adaptive,
     decompose_field_to_beamlets,
     gbd_asm_gouy_phase,
@@ -909,9 +913,11 @@ from .propagators.gbd import (
     propagate_beamlets_freespace,
     propagate_gbd,  # canonical-order alias
     propagate_gbd_freespace,
+    propagate_gbd_freespace_csp,
     propagate_gbd_thin_lens,
     propagate_gbd_through_prescription,
     reconstruct_field_from_beamlets,
+    reconstruct_vector_field_with_ez,
 )
 from .propagators.hf import (
     propagate_huygens_fresnel,  # canonical-order alias
@@ -1066,6 +1072,8 @@ __all__ = [
     'lens_sag_float32_opd_error',
     'apply_real_lens_traced',
     'apply_real_lens_traced_multi',
+    'apply_real_lens_traced_multibranch',
+    'apply_real_lens_traced_segmented',
     'prepare_real_lens_traced',
     'PreparedTracedLens',
     'prepare_real_lens',
@@ -1207,6 +1215,10 @@ __all__ = [
     'BeamletBundle',
     'decompose_field_to_beamlets',
     'decompose_field_adaptive',
+    'converge_gbd_sampling',
+    'csp_beamlet_field',
+    'propagate_gbd_freespace_csp',
+    'reconstruct_vector_field_with_ez',
     'apply_aperture_to_beamlets',
     'gbd_asm_gouy_phase',
     'gbd_field_to_asm',

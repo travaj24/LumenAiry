@@ -319,6 +319,9 @@ def apply_real_lens_traced_jax(
     newton_iters: int = 12,
     amplitude: str = 'input',
     bandlimit: bool = True,
+    radii: Any = None,
+    conics: Any = None,
+    thicknesses: Any = None,
 ) -> Any:
     """JAX-traceable per-pixel ray-traced apply_real_lens.
 
@@ -391,12 +394,24 @@ def apply_real_lens_traced_jax(
     -------
     E_out : (N, N) complex JAX array
 
+    ``radii`` / ``conics`` / ``thicknesses`` (v5.21, optional JAX arrays)
+    enable ``jax.grad`` w.r.t. the prescription's GEOMETRY -- the lever for
+    gradient-based lens *design* on the accurate ray-traced OPD (not just the
+    field).  When any is given the trace runs through
+    :func:`~lumenairy.raytrace.jax_trace.trace_jax_with_params` (which exposes
+    radius / conic / thickness as differentiable pytree leaves) and the
+    Newton-inversion initial guess is taken tracer-safe, so the OPD -- and hence
+    ``E_out`` -- is differentiable end-to-end in those parameters.  ``None``
+    (default) keeps the fully static, byte-identical trace.  Requires
+    ``amplitude='input'`` (the OPD-screen path); the analytic-amplitude callback
+    does not carry a prescription gradient.
+
     Notes
     -----
-    * The prescription dict is treated as a static argument by JAX --
-      gradients w.r.t. ``radius``, ``conic``, etc. are not currently
-      supported (same constraint as :func:`trace_jax`).  Differentiate
-      w.r.t. ``E_in`` to backprop into upstream computations.
+    * With ``radii`` / ``conics`` / ``thicknesses`` left ``None`` the
+      prescription dict is treated as a static argument by JAX (gradients w.r.t.
+      geometry are off) -- differentiate w.r.t. ``E_in``.  Pass those arrays to
+      turn on the geometry gradient (see above).
     * Multi-process Newton parallelism, GPU CuPy paths, and tilt-aware
       rays from the NumPy version are not replicated; JAX's vmap+JIT
       replaces the first, JAX's GPU backend the second, and the
@@ -511,7 +526,25 @@ def apply_real_lens_traced_jax(
         L=jnp.zeros_like(h_x), M=jnp.zeros_like(h_x),
         N=jnp.ones_like(h_x),
     )
-    final = trace_jax(state, pres_no_ap, wavelength)
+    # v5.21: differentiable-geometry path -- when radii/conics/thicknesses are
+    # supplied as JAX arrays, trace through trace_jax_with_params so jax.grad
+    # flows into the prescription's geometry (the OPD -> E_out gradient used for
+    # gradient-based lens design).  None -> the static, byte-identical trace.
+    _diff_geom = (radii is not None or conics is not None
+                  or thicknesses is not None)
+    if _diff_geom:
+        if amplitude != 'input':
+            raise ValueError(
+                "apply_real_lens_traced_jax: differentiable radii/conics/"
+                "thicknesses require amplitude='input' (the OPD-screen path); "
+                "the analytic-amplitude callback carries no prescription "
+                "gradient.")
+        from ..raytrace.jax_trace import trace_jax_with_params
+        final = trace_jax_with_params(
+            state, pres_no_ap, wavelength,
+            radii=radii, conics=conics, thicknesses=thicknesses)
+    else:
+        final = trace_jax(state, pres_no_ap, wavelength)
 
     # ---- Exit-vertex correction -------------------------------------
     surfaces_raw = pres_no_ap.get('surfaces', [])
@@ -561,12 +594,27 @@ def apply_real_lens_traced_jax(
     # difference slope of the forward map as in the NumPy version.
     di = max(1, n_launch // 8)
     dx_in = 2.0 * float(launch_radius) / (n_launch - 1)
-    dx_out_x = float(x_out_grid[i_axis + di, i_axis] -
-                      x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
-    dy_out_y = float(y_out_grid[i_axis, i_axis + di] -
-                      y_out_grid[i_axis, i_axis - di]) / (2.0 * di * dx_in)
-    inv_M_x = 1.0 / dx_out_x if abs(dx_out_x) > 1e-9 else 1.10
-    inv_M_y = 1.0 / dy_out_y if abs(dy_out_y) > 1e-9 else 1.10
+    if _diff_geom:
+        # tracer-safe: keep the initial guess as JAX scalars and stop_gradient
+        # (the Newton root is independent of the starting point, so the
+        # initial-guess magnification needs no gradient -- and x_out_grid is a
+        # tracer here, so float() would raise a ConcretizationError).
+        import jax as _jax
+        _dxox = (x_out_grid[i_axis + di, i_axis]
+                 - x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
+        _dyoy = (y_out_grid[i_axis, i_axis + di]
+                 - y_out_grid[i_axis, i_axis - di]) / (2.0 * di * dx_in)
+        inv_M_x = _jax.lax.stop_gradient(
+            jnp.where(jnp.abs(_dxox) > 1e-9, 1.0 / _dxox, 1.10))
+        inv_M_y = _jax.lax.stop_gradient(
+            jnp.where(jnp.abs(_dyoy) > 1e-9, 1.0 / _dyoy, 1.10))
+    else:
+        dx_out_x = float(x_out_grid[i_axis + di, i_axis] -
+                          x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
+        dy_out_y = float(y_out_grid[i_axis, i_axis + di] -
+                          y_out_grid[i_axis, i_axis - di]) / (2.0 * di * dx_in)
+        inv_M_x = 1.0 / dx_out_x if abs(dx_out_x) > 1e-9 else 1.10
+        inv_M_y = 1.0 / dy_out_y if abs(dy_out_y) > 1e-9 else 1.10
     bound = float(launch_radius) * 0.999
 
     xe, ye = _newton_invert_2d_jax(

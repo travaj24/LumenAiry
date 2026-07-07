@@ -12,6 +12,12 @@ isolation flake, the GBD `Q` comment, the F-12 pin, and the downstream
 46-script GBD/RS impact assessment -- nothing deferred).  There is no open
 ROADMAP code-work as of v5.4.7.
 
+Module-scoped forward roadmaps live under `docs/`:
+`docs/lens_propagators_roadmap.md` (traced / multibranch / GBD /
+Maslov-Levin — regime matrix, perf state, open accuracy regimes, cusp plan;
+added 2026-07-07), `docs/PMM_ROADMAP.md`, `docs/rcwa_roadmap_v5_14.md`,
+`docs/pmm_bor_axisymmetric_roadmap.md`.
+
 The earlier v5.0 / v5.1 / v5.2.x ROADMAP had already shipped:
 
 * **v5.0** -- coordinated breaking-change release (Python 3.10

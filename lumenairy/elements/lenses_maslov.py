@@ -20,7 +20,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 
@@ -80,6 +80,16 @@ _QUAD_FACTORIZE = True
 # evaluators, which are the correct choice at high production NA).
 _N_V2_AUTO_MIN = 32
 _N_V2_AUTO_MAX = 256
+
+# poly_order='auto' (v5.21): raise the tensor-Chebyshev OPD-fit order until the
+# held-out fit residual stops improving (plateau) or reaches a good-enough
+# target, so a smooth optic uses a cheap low order and a strongly-aberrated one
+# gets the order it needs -- no manual tuning, and no over-fit (order is scored
+# on a held-out ray split, not the training residual which only ever decreases).
+_MZ_POLY_AUTO_MIN = 3
+_MZ_POLY_AUTO_MAX = 8
+_MZ_POLY_AUTO_TARGET = 1e-4   # waves RMS -- below this, extra order is wasted
+_MZ_POLY_AUTO_RTOL = 0.10     # stop once an order step improves residual < 10%
 
 # Other shared helpers still live in lenses.py.
 from .lenses import (
@@ -424,6 +434,164 @@ def _opd_vd3(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P):
     return _opd_vd3_numpy(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P)
 
 
+def _opd_vd9_numpy(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """Value + v2 first-derivatives of the SHARED 4-var Chebyshev basis for
+    ALL THREE coefficient sets.  Returns
+    ``(opd_v, dopd3, dopd4, s1x_v, ds1x3, ds1x4, s1y_v, ds1y3, ds1y4)``.
+    The Levin integrator needs exactly this at every query set (phase
+    gradient from opd, Jacobian + landing point from s1x/s1y) and never the
+    second derivatives -- so one basis build replaces three ``_opd6`` calls
+    that each also run the T'' recurrence."""
+    T1 = _chebyshev_vandermonde(u1, P)
+    T2 = _chebyshev_vandermonde(u2, P)
+    T3 = _chebyshev_vandermonde(u3, P)
+    T4 = _chebyshev_vandermonde(u4, P)
+    dT3 = _chebyshev_derivative_vandermonde(u3, P)
+    dT4 = _chebyshev_derivative_vandermonde(u4, P)
+    T12 = T1[K1] * T2[K2]
+    T3b = T3[K3]
+    T4b = T4[K4]
+    val = T12 * T3b * T4b
+    d3 = T12 * dT3[K3] * T4b
+    d4 = T12 * T3b * dT4[K4]
+    return (np.sum(cop[:, None] * val, axis=0),
+            np.sum(cop[:, None] * d3, axis=0),
+            np.sum(cop[:, None] * d4, axis=0),
+            np.sum(csx[:, None] * val, axis=0),
+            np.sum(csx[:, None] * d3, axis=0),
+            np.sum(csx[:, None] * d4, axis=0),
+            np.sum(csy[:, None] * val, axis=0),
+            np.sum(csy[:, None] * d3, axis=0),
+            np.sum(csy[:, None] * d4, axis=0))
+
+
+def _get_cheb4d_vd9_numba():
+    """Numba twin of :func:`_opd_vd9_numpy` (value + 1st-deriv, three coef
+    sets, shared basis, no T'' recurrence), or None if numba is
+    unavailable."""
+    if "cheb4d_vd9" in _MZ_KERNELS:
+        return _MZ_KERNELS["cheb4d_vd9"]
+    if not _mz_load_numba():
+        _MZ_KERNELS["cheb4d_vd9"] = None
+        return None
+
+    @_mz_njit(cache=True, parallel=True, fastmath=True)
+    def _cheb4d_vd9(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P):
+        n = u1.shape[0]
+        M = cop.shape[0]
+        opd_v = np.zeros(n)
+        dopd3 = np.zeros(n)
+        dopd4 = np.zeros(n)
+        s1x_v = np.zeros(n)
+        ds1x3 = np.zeros(n)
+        ds1x4 = np.zeros(n)
+        s1y_v = np.zeros(n)
+        ds1y3 = np.zeros(n)
+        ds1y4 = np.zeros(n)
+        for i in _mz_prange(n):
+            a1 = u1[i]
+            a2 = u2[i]
+            a3 = u3[i]
+            a4 = u4[i]
+            Tu1 = np.empty(P + 1)
+            Tu2 = np.empty(P + 1)
+            Tu3 = np.empty(P + 1)
+            Tu4 = np.empty(P + 1)
+            Tu1[0] = 1.0
+            Tu2[0] = 1.0
+            Tu3[0] = 1.0
+            Tu4[0] = 1.0
+            if P >= 1:
+                Tu1[1] = a1
+                Tu2[1] = a2
+                Tu3[1] = a3
+                Tu4[1] = a4
+            for m in range(2, P + 1):
+                Tu1[m] = 2.0 * a1 * Tu1[m - 1] - Tu1[m - 2]
+                Tu2[m] = 2.0 * a2 * Tu2[m - 1] - Tu2[m - 2]
+                Tu3[m] = 2.0 * a3 * Tu3[m - 1] - Tu3[m - 2]
+                Tu4[m] = 2.0 * a4 * Tu4[m - 1] - Tu4[m - 2]
+            Uu3 = np.empty(P + 1)
+            Uu4 = np.empty(P + 1)
+            Uu3[0] = 1.0
+            Uu4[0] = 1.0
+            if P >= 1:
+                Uu3[1] = 2.0 * a3
+                Uu4[1] = 2.0 * a4
+            for m in range(2, P + 1):
+                Uu3[m] = 2.0 * a3 * Uu3[m - 1] - Uu3[m - 2]
+                Uu4[m] = 2.0 * a4 * Uu4[m - 1] - Uu4[m - 2]
+            dTu3 = np.zeros(P + 1)
+            dTu4 = np.zeros(P + 1)
+            for m in range(1, P + 1):
+                dTu3[m] = float(m) * Uu3[m - 1]
+                dTu4[m] = float(m) * Uu4[m - 1]
+            sov = 0.0
+            so3 = 0.0
+            so4 = 0.0
+            sxv = 0.0
+            sx3 = 0.0
+            sx4 = 0.0
+            syv = 0.0
+            sy3 = 0.0
+            sy4 = 0.0
+            for mm in range(M):
+                t12 = Tu1[K1[mm]] * Tu2[K2[mm]]
+                t3 = Tu3[K3[mm]]
+                t4 = Tu4[K4[mm]]
+                dt3 = dTu3[K3[mm]]
+                dt4 = dTu4[K4[mm]]
+                vv = t12 * t3 * t4
+                v3 = t12 * dt3 * t4
+                v4 = t12 * t3 * dt4
+                sov += cop[mm] * vv
+                so3 += cop[mm] * v3
+                so4 += cop[mm] * v4
+                sxv += csx[mm] * vv
+                sx3 += csx[mm] * v3
+                sx4 += csx[mm] * v4
+                syv += csy[mm] * vv
+                sy3 += csy[mm] * v3
+                sy4 += csy[mm] * v4
+            opd_v[i] = sov
+            dopd3[i] = so3
+            dopd4[i] = so4
+            s1x_v[i] = sxv
+            ds1x3[i] = sx3
+            ds1x4[i] = sx4
+            s1y_v[i] = syv
+            ds1y3[i] = sy3
+            ds1y4[i] = sy4
+        return (opd_v, dopd3, dopd4, s1x_v, ds1x3, ds1x4,
+                s1y_v, ds1y3, ds1y4)
+
+    _MZ_KERNELS["cheb4d_vd9"] = _cheb4d_vd9
+    return _cheb4d_vd9
+
+
+def _opd_vd9(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """Dispatch the shared value+1st-deriv 3-coef 9-output kernel to Numba
+    (default) or the NumPy reference; ULP-equal, ~2x cheaper than three
+    ``_opd6`` calls (one basis build, no T'' recurrence)."""
+    if _MASLOV_USE_NUMBA:
+        kern = _get_cheb4d_vd9_numba()
+        if kern is not None:
+            return kern(
+                np.ascontiguousarray(cop, dtype=np.float64),
+                np.ascontiguousarray(csx, dtype=np.float64),
+                np.ascontiguousarray(csy, dtype=np.float64),
+                np.ascontiguousarray(K1, dtype=np.int64),
+                np.ascontiguousarray(K2, dtype=np.int64),
+                np.ascontiguousarray(K3, dtype=np.int64),
+                np.ascontiguousarray(K4, dtype=np.int64),
+                np.ascontiguousarray(u1, dtype=np.float64),
+                np.ascontiguousarray(u2, dtype=np.float64),
+                np.ascontiguousarray(u3, dtype=np.float64),
+                np.ascontiguousarray(u4, dtype=np.float64),
+                int(P))
+    return _opd_vd9_numpy(cop, csx, csy, K1, K2, K3, K4, u1, u2, u3, u4, P)
+
+
 # CuPy fused kernel for the 4-var Chebyshev value+derivs -- the device twin of
 # the Numba ``_cheb4d_opd_derivs``.  One thread per query point runs the O(P)
 # T/U/T'/T'' recurrences in local memory then loops over the M multi-indices,
@@ -656,6 +824,162 @@ def _gram_cho_factor(A):
         return None
 
 
+def _select_poly_order_auto(u1, u2, u3, u4, opd, *, order_min, order_max,
+                            target_waves, rtol, holdout_stride=5):
+    """Pick the lowest tensor-Chebyshev total-degree that fits ``opd`` (waves)
+    for ``poly_order='auto'`` -- WITHOUT over-fitting.
+
+    The four ``u*`` are the [-1,1]-normalised ``(s2x, s2y, v2x, v2y)`` fit coords
+    (same coords the production fit uses); ``opd`` is the linear-detrended OPD
+    residual in waves.  Order is scored on a **held-out** strided ray subset
+    (not the training residual, which decreases monotonically with order and
+    would always pick ``order_max``), so an order that only fits ray-node noise
+    is rejected.  Ascends from ``order_min``; returns the first order whose
+    held-out RMS residual is below ``target_waves``, else the lowest order whose
+    residual is within ``(1+rtol)`` of the best seen up to ``order_max``.  The
+    tensor-Chebyshev total-degree sets nest (degree<=p columns are a subset of
+    degree<=p+1), so one ``order_max`` Vandermonde + column-subset per trial
+    order costs a single basis build.  Returns ``(order:int, residual:float)``.
+    """
+    n = int(u1.shape[0])
+    val_mask = np.zeros(n, dtype=bool)
+    val_mask[::holdout_stride] = True
+    fit_mask = ~val_mask
+    # A held-out split is only trustworthy if the training set still over-
+    # samples the largest candidate order; otherwise score in-sample (the
+    # plateau/target logic still gives a sensible diminishing-returns stop).
+    if (fit_mask.sum() < 1.5 * _count_multi_indices_4d(order_max)
+            or val_mask.sum() < 8):
+        fit_mask = np.ones(n, dtype=bool)
+        val_mask = np.ones(n, dtype=bool)
+    T1 = _chebyshev_vandermonde(u1, order_max)
+    T2 = _chebyshev_vandermonde(u2, order_max)
+    T3 = _chebyshev_vandermonde(u3, order_max)
+    T4 = _chebyshev_vandermonde(u4, order_max)
+    mi = _multi_indices_total_degree(4, order_max)
+    Afull = np.empty((n, len(mi)), dtype=np.float64)
+    deg = np.empty(len(mi), dtype=np.int64)
+    for j, (k1, k2, k3, k4) in enumerate(mi):
+        Afull[:, j] = T1[k1] * T2[k2] * T3[k3] * T4[k4]
+        deg[j] = k1 + k2 + k3 + k4
+    res_by_p = {}
+    for p in range(order_min, order_max + 1):
+        cols = deg <= p
+        A = Afull[:, cols]
+        coef, *_ = np.linalg.lstsq(A[fit_mask], opd[fit_mask], rcond=None)
+        res = float(np.sqrt(np.mean((opd[val_mask] - A[val_mask] @ coef) ** 2)))
+        res_by_p[p] = res
+        if res < target_waves:
+            return p, res
+    best = min(res_by_p.values())
+    for p in range(order_min, order_max + 1):
+        if res_by_p[p] <= best * (1.0 + rtol):
+            return p, res_by_p[p]
+    return order_max, res_by_p[order_max]
+
+
+def uniform_fold_airy(k, t1, t2, f1, f2, fpp1, fpp2, g1=1.0, g2=1.0):
+    """Uniform (Chester-Friedman-Ursell) value of the oscillatory integral
+    ``I(k) = int g(t) exp(i k f(t)) dt`` near a **FOLD** caustic -- where two
+    stationary points ``t1, t2`` of ``f`` coalesce and ordinary stationary phase
+    diverges (``f'' -> 0``).  This stays finite through the caustic and reduces
+    to the two-saddle stationary-phase sum away from it.
+
+    Given the two real stationary points with their phase ``f``, curvature
+    ``f''`` and amplitude ``g`` (need NOT be pre-sorted), maps ``f`` to the cubic
+    normal form and returns the Airy-uniform result::
+
+        f1<=f2 (sort),  A=(f1+f2)/2,  zeta=[3/4 (f2-f1)]^(2/3) >= 0
+        beta_j = g_j sqrt(2/|f''_j|) exp(i sgn(f''_j) pi/4)     (SPA amplitude+phase)
+        a0 =  [1/2(e^{ipi/4}beta2 + e^{-ipi/4}beta1)] zeta^{1/4}
+        a1 = -[1/2(e^{ipi/4}beta2 - e^{-ipi/4}beta1)] zeta^{-1/4}
+        I  = e^{ikA} 2pi [ a0 k^{-1/3} Ai(-k^{2/3}zeta) - i a1 k^{-2/3} Ai'(-k^{2/3}zeta) ]
+
+    The branch discipline (the crux of the method) is pinned by the
+    stationary-phase Maslov phase ``exp(i sgn(f'') pi/4)`` per saddle -- NOT by a
+    ``sqrt(f''/2u)`` root, whose sign is ambiguous.  Validated to machine
+    precision (~1e-14) against the exact cubic-phase integrals
+    ``int (1 + a t) exp(i k (t^3/3 - c t)) dt =
+    2pi k^{-1/3} Ai(-k^{2/3}c) - a 2pi i k^{-2/3} Ai'(-k^{2/3}c)`` for both
+    ``a1 = 0`` and ``a1 != 0``, and stays finite on the caustic (``zeta -> 0``).
+
+    This is the caustic-finite integrator underlying a uniform Maslov evaluator
+    and the Airy hand-off for a multi-branch geometric-optics field; a cusp
+    caustic needs the Pearcey generalisation (not implemented here).  Convention:
+    ``exp(-i w t)`` / ``exp(+i k f)`` (matches the rest of the library).
+
+    Parameters
+    ----------
+    k : float -- wavenumber (large-parameter of the asymptotics).
+    t1, t2, f1, f2, fpp1, fpp2 : the two stationary points and their ``f``,
+        ``f''`` values.
+    g1, g2 : amplitude ``g`` at each stationary point (default 1).
+
+    Returns
+    -------
+    complex -- the uniform integral value.
+    """
+    from scipy.special import airy
+    if f2 < f1:                        # sort so saddle 2 has the higher phase
+        t1, t2, f1, f2, fpp1, fpp2, g1, g2 = t2, t1, f2, f1, fpp2, fpp1, g2, g1
+    A = 0.5 * (f1 + f2)
+    zeta = (0.75 * (f2 - f1)) ** (2.0 / 3.0)
+    b1 = g1 * np.sqrt(2.0 / abs(fpp1)) * np.exp(1j * np.sign(fpp1) * np.pi / 4)
+    b2 = g2 * np.sqrt(2.0 / abs(fpp2)) * np.exp(1j * np.sign(fpp2) * np.pi / 4)
+    ep, em = np.exp(1j * np.pi / 4), np.exp(-1j * np.pi / 4)
+    a0 = 0.5 * (ep * b2 + em * b1) * zeta ** 0.25
+    a1 = -0.5 * (ep * b2 - em * b1) * zeta ** (-0.25)
+    ai, aip, _, _ = airy(-(k ** (2.0 / 3.0)) * zeta)
+    return np.exp(1j * k * A) * 2 * np.pi * (
+        a0 * k ** (-1.0 / 3.0) * ai - 1j * a1 * k ** (-2.0 / 3.0) * aip)
+
+
+def pearcey(x, y, *, mmax=60, pmax=60, tol=1e-16):
+    """Canonical Pearcey integral -- the CUSP-caustic diffraction special
+    function (the cusp analogue of the Airy function for folds)::
+
+        P(x, y) = int_{-inf}^{inf} exp(i (t^4 + x t^2 + y t)) dt      (DLMF Psi_2)
+
+    Evaluated by its everywhere-convergent double series (``P`` is even in ``y``,
+    so only even powers survive), using the quartic Gaussian moment
+    ``int t^{2k} exp(i t^4) dt = 1/2 Gamma((2k+1)/4) exp(i pi (2k+1)/8)``::
+
+        P(x,y) = sum_{m,p>=0} (i x)^m/m! * (-1)^p y^{2p}/(2p)!
+                             * 1/2 Gamma((2(m+p)+1)/4) exp(i pi (2(m+p)+1)/8)
+
+    Validated to machine precision against the exact cusp value
+    ``P(0,0) = 1/2 Gamma(1/4) exp(i pi/8)`` (``|P|=1.812804``, ``arg=22.5 deg``),
+    the even-in-``y`` symmetry, and a contour-rotated quadrature at ``y=0``.  The
+    series converges everywhere but slows for large ``|x|, |y|``; raise
+    ``mmax/pmax`` past the default (good to ``|x|,|y| ~ 15``).  Convention
+    ``exp(-i w t)`` / ``exp(+i phase)`` matches the rest of the library.
+
+    This is the caustic-finite kernel for a uniform cusp (astigmatic-focus)
+    evaluator -- the cusp peer of :func:`uniform_fold_airy` -- whose CFU quartic
+    mapping (3 coalescing saddles) is the integration step layered on top.
+    """
+    from math import factorial
+
+    from scipy.special import gamma
+    xj, yj = complex(x), complex(y)
+    total = 0j
+    for m in range(mmax + 1):
+        xm = (1j * xj) ** m / factorial(m)
+        row = 0j
+        for p in range(pmax + 1):
+            k = m + p
+            term = (xm * ((-1) ** p) * (yj ** (2 * p)) / factorial(2 * p)
+                    * 0.5 * gamma((2 * k + 1) / 4.0)
+                    * np.exp(1j * np.pi * (2 * k + 1) / 8.0))
+            row += term
+            if p > 3 and abs(term) < tol * (abs(total) + 1e-30):
+                break
+        total += row
+        if m > 3 and abs(row) < tol * (abs(total) + 1e-30):
+            break
+    return total
+
+
 def apply_real_lens_maslov(
     E_in: np.ndarray,
     *,
@@ -665,7 +989,7 @@ def apply_real_lens_maslov(
     dy: Optional[float] = None,
     ray_field_samples: int = 16,
     ray_pupil_samples: int = 16,
-    poly_order: int = 4,
+    poly_order: Union[int, str] = 4,
     n_v2: Optional[int] = None,
     output_subsample: int = 1,
     roi: Optional[Any] = None,
@@ -679,6 +1003,7 @@ def apply_real_lens_maslov(
     stationary_newton_tol: float = 1e-10,
     local_n_samples: int = 8,
     local_window_sigma: float = 3.0,
+    levin_tol: float = 1e-3,
     collimated_input: bool = False,
     input_na: Optional[float] = None,
     normalize_output: str = 'power',
@@ -773,6 +1098,29 @@ def apply_real_lens_maslov(
     ``integration_method='quadrature'`` explicitly to force the exact uniform
     quadrature everywhere.
 
+    ``integration_method='levin'`` (v5.21) evaluates the v2 integral by the
+    adaptive delaminating Levin method (:mod:`lumenairy._math.levin`, after
+    Chen-Serkh-Bremer-Aubry arXiv:2506.02424): caustic-UNIFORM with **no
+    saddle finding** (finite and accurate through folds where
+    'stationary_phase' / 'local_quadrature' diverge) at a per-pixel cost
+    INDEPENDENT of the v2 oscillation count (unlike 'quadrature', whose cost
+    grows as ``n_v2^2``).  ``levin_tol`` sets the absolute per-pixel tolerance
+    (a rigorous residual bound is refined until met).  Pure NumPy and adaptive
+    per pixel -- suited to caustic-band ROI studies and hard high-NA charts,
+    not (yet) to full-grid production sweeps.
+
+    ``poly_order`` (default ``4``) accepts ``'auto'`` (v5.21): the tensor-
+    Chebyshev fit order is raised from ``_MZ_POLY_AUTO_MIN`` until the OPD-fit
+    residual, scored on a **held-out** ray split (not the training residual,
+    which only ever decreases and would always pick the ceiling), stops
+    improving by more than ``_MZ_POLY_AUTO_RTOL`` or drops below
+    ``_MZ_POLY_AUTO_TARGET`` waves RMS -- capped at ``_MZ_POLY_AUTO_MAX``.  A
+    smooth optic then fits at a cheap low order and a strongly-aberrated / near-
+    caustic chart is given the order it needs, with no manual tuning and no
+    over-fit.  ``'auto'`` sizes the ray-count guards for its *maximum* candidate
+    order, so it wants the default (dense) ray sampling; pass an explicit int to
+    pin the order (and the runtime) for a production sweep.
+
     ``fold_split=True`` (v5.21) auto-handles a **folded** prescription (one with
     fold mirrors) instead of raising: it splits at every fold
     (:func:`lumenairy.io.split_prescription_at_mirrors`) and chains this Maslov
@@ -846,6 +1194,7 @@ def apply_real_lens_maslov(
                 stationary_newton_tol=stationary_newton_tol,
                 local_n_samples=local_n_samples,
                 local_window_sigma=local_window_sigma,
+                levin_tol=levin_tol,
                 collimated_input=collimated_input, input_na=input_na,
                 normalize_output=normalize_output, verbose=verbose,
                 use_gpu=use_gpu)
@@ -1042,6 +1391,21 @@ def apply_real_lens_maslov(
             # (min(dx, dy) == dx for the square-pixel case, so unchanged there).
             aperture_m = N * min(float(dx), float(dy)) * 0.5
     r_aperture = 0.5 * aperture_m
+
+    # v5.21: poly_order='auto' -- provisionally size the ray-count guards and
+    # arrays for the largest candidate order, then (once the trace + fit inputs
+    # exist) select the lowest order that fits the OPD on a held-out ray split.
+    # Resolved to a concrete int at the fit stage below.
+    if isinstance(poly_order, str):
+        if poly_order != 'auto':
+            raise ValueError(
+                f"apply_real_lens_maslov: poly_order must be an int or 'auto'; "
+                f"got {poly_order!r}.")
+        _poly_auto = True
+        poly_order = _MZ_POLY_AUTO_MAX
+    else:
+        _poly_auto = False
+        poly_order = int(poly_order)
 
     def cheb_nodes(n):
         i = np.arange(n)
@@ -1254,6 +1618,21 @@ def apply_real_lens_maslov(
     else:
         opd_residual = opd_w.copy()
 
+    # v5.21: resolve poly_order='auto' now that the fit inputs exist -- pick the
+    # lowest tensor-Chebyshev order that fits the (linear-detrended) OPD residual
+    # on a held-out ray split, so a smooth optic uses a cheap low order and a
+    # strongly-aberrated one is given the order it needs (no manual tuning, no
+    # over-fit).  The rest of the fit + integrate path below is unchanged and
+    # runs at the resolved int order.
+    if _poly_auto:
+        poly_order, _auto_res = _select_poly_order_auto(
+            u_s2x, u_s2y, u_v2x, u_v2y, opd_residual,
+            order_min=_MZ_POLY_AUTO_MIN, order_max=_MZ_POLY_AUTO_MAX,
+            target_waves=_MZ_POLY_AUTO_TARGET, rtol=_MZ_POLY_AUTO_RTOL)
+        _progress('fit', 0.22,
+                  f"poly_order='auto' -> {poly_order} "
+                  f"(held-out OPD fit RMS {_auto_res:.2e} waves)")
+
     # N4 (audit): the fitted linear OPD term was subtracted for fit
     # conditioning but never re-applied -- silently dropping output tilt
     # and shifting the stationary point for decentered / tilted / off-axis
@@ -1460,10 +1839,10 @@ def apply_real_lens_maslov(
     # Step 4: Integrate
     # -----------------------------------------------------------------
     if integration_method not in ('quadrature', 'stationary_phase',
-                                    'local_quadrature'):
+                                    'local_quadrature', 'levin'):
         raise ValueError(
             f"integration_method must be one of 'quadrature', "
-            f"'stationary_phase', 'local_quadrature', "
+            f"'stationary_phase', 'local_quadrature', 'levin', "
             f"got {integration_method!r}")
 
     _progress('integrate', 0.60,
@@ -1482,7 +1861,19 @@ def apply_real_lens_maslov(
     if _use_gpu:
         _E_in_gpu = _cp.asarray(E_in)
 
-    if integration_method == 'stationary_phase':
+    if integration_method == 'levin':
+        E_out_coarse = _integrate_levin(
+            coef_opd, coef_s1x, coef_s1y, mi,
+            K1_arr, K2_arr, K3_arr, K4_arr,
+            poly_order, N_out_coarse,
+            u_s2x_out, u_s2y_out, inbox_flat,
+            v2x_h, v2y_h,
+            sample_E_bilinear,
+            levin_tol, _progress, verbose,
+            out_dtype=E_in.dtype,
+            lin_v3=_lin_v3, lin_v4=_lin_v4,
+        )
+    elif integration_method == 'stationary_phase':
         if _use_gpu:
             E_out_coarse = _cp.asnumpy(_integrate_stationary_phase_cupy(
                 _cp, coef_opd, coef_s1x, coef_s1y,
@@ -2375,6 +2766,403 @@ def _integrate_stationary_phase(
     return E_flat.reshape(N_out_coarse, N_out_coarse)
 
 
+def _integrate_levin(
+    coef_opd, coef_s1x, coef_s1y, mi,
+    K1_arr, K2_arr, K3_arr, K4_arr,
+    poly_order, N_out_coarse,
+    u_s2x_out, u_s2y_out, inbox_flat,
+    v2x_h, v2y_h,
+    sample_E_bilinear,
+    levin_tol, _progress, verbose,
+    out_dtype=np.complex128,
+    lin_v3=0.0, lin_v4=0.0,
+):
+    """Adaptive delaminating Levin evaluation of the Maslov v2 integral --
+    caustic-UNIFORM (no saddle finding, finite and accurate through folds /
+    cusps) at a per-pixel cost independent of the oscillation count.
+
+    Evaluates, per output pixel, the same integrand as
+    :func:`_integrate_quadrature` (Tukey-windowed unit v2 box)::
+
+        E(s2) = int int  E_obj(s1(u)) |det ds1/du| tuk(u3) tuk(u4)
+                          exp(2 pi i OPD(u)) du3 du4
+
+    with the phase/amplitude and their derivatives supplied pointwise by
+    the Chebyshev fits (`_opd6`).  ``levin_tol`` is RELATIVE (scaled per
+    pixel by ``max|f| x domain area``); every accepted box carries a
+    rigorous residual bound ``|I_hat - I| <= int int |r|``.
+
+    Implementation: lockstep per-pixel quadtrees, wave-batched over
+    (pixel, box) pairs -- each refinement wave evaluates ALL pairs in a
+    handful of large vectorized ``_opd6`` / batched-solve calls
+    (regularized normal-equations collocation standing in for the
+    delaminating TSVD; the residual bound measures the actual solution, so
+    regularization can only cost refinement, never accuracy).  Leaves are
+    accepted by residual-bound equidistribution; pixels that fail at the
+    depth cap get a deeper batched re-pass, then a per-pixel adaptive
+    engine (:func:`lumenairy._math.levin.levin2d`) as the final safety
+    net.  Unlike 'stationary_phase' / 'local_quadrature' it does not
+    diverge at caustics, and unlike 'quadrature' its cost does not scale
+    with ``n_v2^2``; on a hard high-NA chart expect ~0.04 s/pixel at
+    ``levin_tol=1e-2`` and ~0.3 s/pixel at ``1e-3`` (~300-2000x the
+    per-pixel adaptive engine).  Peak memory is chunk-bounded
+    (~hundreds of MB of transients) independent of grid size.
+    """
+    from .._math.levin import _cheb_D as _cheb_D_phys
+    from .._math.levin import levin2d
+    t0 = time.perf_counter()
+    N_px = N_out_coarse * N_out_coarse
+    u1f = u_s2x_out.ravel()
+    u2f = u_s2y_out.ravel()
+    E_flat = np.zeros(N_px, dtype=out_dtype)
+
+    def _tuk(u, alpha=0.2):
+        au = np.abs(u)
+        w = np.ones_like(u)
+        m = au > 1.0 - alpha
+        w[m] = 0.5 * (1.0 + np.cos(np.pi * (au[m] - (1.0 - alpha)) / alpha))
+        return w
+
+    idx = np.where(inbox_flat)[0]
+    twopi = 2.0 * np.pi
+
+    # ---- per-pixel closures (probe + fallback path) ----------------------
+    def _pixel_funcs(p):
+        u1p = u1f[p]
+        u2p = u2f[p]
+
+        def _ev(coef, u3, u4):
+            sh = np.shape(u3)
+            u3f = np.asarray(u3, dtype=np.float64).ravel()
+            u4f = np.asarray(u4, dtype=np.float64).ravel()
+            o1 = np.full_like(u3f, u1p)
+            o2 = np.full_like(u3f, u2p)
+            out = _opd6(coef, K1_arr, K2_arr, K3_arr, K4_arr,
+                        o1, o2, u3f, u4f, poly_order)
+            return [o.reshape(sh) for o in out]
+
+        def g(u3, u4):
+            return twopi * (_ev(coef_opd, u3, u4)[0]
+                            + lin_v3 * u3 + lin_v4 * u4)
+
+        def gx(u3, u4):
+            return twopi * (_ev(coef_opd, u3, u4)[1] + lin_v3)
+
+        def gy(u3, u4):
+            return twopi * (_ev(coef_opd, u3, u4)[2] + lin_v4)
+
+        def f(u3, u4):
+            s1x, dx3, dx4 = _ev(coef_s1x, u3, u4)[:3]
+            s1y, dy3, dy4 = _ev(coef_s1y, u3, u4)[:3]
+            detJ = np.abs(dx3 * dy4 - dx4 * dy3)
+            Eo = sample_E_bilinear(
+                s1x.ravel(), s1y.ravel()).reshape(np.shape(u3))
+            return Eo * detJ * _tuk(np.asarray(u3)) * _tuk(np.asarray(u4))
+
+        return g, gx, gy, f
+
+    # levin_tol is RELATIVE; the engine's tolerance is absolute -- scale by
+    # the integrand magnitude x box area (the natural size of the
+    # non-oscillatory integral; the paper's eps is relative to ||f||_inf).
+    def _pixel_scale(f):
+        _up = np.linspace(-1.0, 1.0, 9)
+        _U3p, _U4p = np.meshgrid(_up, _up, indexing='ij')
+        return float(np.abs(f(_U3p, _U4p)).max()) * 4.0
+
+    def _pixel_adaptive(p, max_depth=6, tol_factor=1.0, want_leaves=False):
+        g, gx, gy, f = _pixel_funcs(p)
+        f_scale = _pixel_scale(f)
+        if f_scale <= 0.0:
+            return (0.0j, []) if want_leaves else 0.0j
+        out = levin2d(g, gx, gy, f, (-1.0, 1.0, -1.0, 1.0),
+                      tol=levin_tol * f_scale * tol_factor, k=7,
+                      max_depth=max_depth, return_leaves=want_leaves)
+        if want_leaves:
+            return out[0], [leaf[0] for leaf in out[3]]
+        return out[0]
+
+    if len(idx) == 0:
+        return E_flat.reshape(N_out_coarse, N_out_coarse)
+
+    # ---- batched machinery shared by all boxes ---------------------------
+    kk = 7
+    n_act = len(idx)
+    u1a = u1f[idx]
+    u2a = u2f[idx]
+    us = np.cos(np.pi * np.arange(kk) / (kk - 1))[::-1]      # std nodes
+    from numpy.polynomial import chebyshev as _Ch
+    Vs = _Ch.chebvander(us, kk - 1)                          # (k, k)
+    Vs_inv = np.linalg.inv(Vs)
+    nf = 2 * kk
+    uf = np.cos(np.pi * np.arange(nf) / (nf - 1))[::-1]
+    Ef_mat = _Ch.chebvander(uf, kk - 1)                      # (2k, k)
+    # derivative eval matrix on std interval (chain-ruled per box below)
+    Ed_mat = np.stack([_Ch.chebval(uf, _Ch.chebder(np.eye(kk)[j]))
+                       for j in range(kk)], axis=1)          # (2k, k)
+    k_b = 12
+    us_b = np.cos(np.pi * np.arange(k_b) / (k_b - 1))[::-1]
+
+    def _pair_ev9(o1, o2, u3v, u4v):
+        """ONE shared-basis kernel call for a batch of (pixel, box) pairs:
+        value + d3 + d4 for opd, s1x, s1y (everything the Levin integrand
+        needs, no wasted T'' work).  o1/o2: (m,) pixel coords; u3v/u4v:
+        (m, nn) chart points -> list of nine (m, nn) arrays."""
+        mm, nn = u3v.shape
+        out = _opd_vd9(coef_opd, coef_s1x, coef_s1y,
+                       K1_arr, K2_arr, K3_arr, K4_arr,
+                       np.repeat(o1, nn), np.repeat(o2, nn),
+                       np.ascontiguousarray(u3v, dtype=np.float64).ravel(),
+                       np.ascontiguousarray(u4v, dtype=np.float64).ravel(),
+                       poly_order)
+        return [o.reshape(mm, nn) for o in out]
+
+    def _pairs_f(u3v, u4v, sx, dx3, dx4, sy, dy3, dy4):
+        """Integrand amplitude f from the s1x/s1y outputs of _pair_ev9."""
+        detJ = np.abs(dx3 * dy4 - dx4 * dy3)
+        Eo = sample_E_bilinear(sx.ravel(), sy.ravel()).reshape(sx.shape)
+        return (Eo * detJ * _tuk(np.asarray(u3v, dtype=np.float64))
+                * _tuk(np.asarray(u4v, dtype=np.float64)))
+
+    def _pair_f(o1, o2, u3v, u4v):
+        out = _pair_ev9(o1, o2, u3v, u4v)
+        return _pairs_f(u3v, u4v, *out[3:9])
+
+    def _tik_batch(D, gdiag, rhs):
+        """Batched regularized solve of (D + i diag(g)) p = rhs.
+
+        D: (k, k) standard-interval differentiation matrix; gdiag/rhs:
+        (B, k).  Normal-equations Tikhonov at ~1e-8 relative approximates
+        the delaminating TSVD's minimal-norm behaviour at the level double
+        precision supports through A^H A; the rigorous residual bound
+        downstream measures the ACTUAL solution, so a poorly regularized
+        fiber can only cost refinement, never accuracy.
+        """
+        k = D.shape[0]
+        A = np.broadcast_to(D.astype(complex), (gdiag.shape[0], k, k)).copy()
+        ii = np.arange(k)
+        A[:, ii, ii] += 1j * gdiag
+        nrm = np.abs(A).sum(axis=2).max(axis=1)
+        lam2 = (1e-8 * nrm) ** 2
+        M = A.conj().transpose(0, 2, 1) @ A
+        M[:, ii, ii] += lam2[:, None]
+        y = np.einsum('bji,bj->bi', A.conj(), rhs)
+        return np.linalg.solve(M, y[..., None])[..., 0]
+
+    D_std_s = _cheb_D_phys(kk, -1.0, 1.0)
+    D_std_b = _cheb_D_phys(k_b, -1.0, 1.0)
+
+    def _eval_pairs_chunk(pp, bxa):
+        """Levin-evaluate a batch of (pixel, box) PAIRS in one shot.
+
+        pp: (m,) indices into the active-pixel arrays; bxa: (m, 4) boxes
+        (a, b, c, d).  Returns ``(val, est)``: per-pair box integrals
+        (complex) and rigorous residual bounds ``area * mean|r|``.
+        Collocation is standardized -- on a box of s-half-width hs,
+        ``A_phys = (1/hs)(D_std + i hs diag(g_s))`` -- so pairs with
+        different box sizes and delamination axes share one batch.
+        """
+        m = len(pp)
+        o1 = u1a[pp]
+        o2 = u2a[pp]
+        mid_x, hx = (0.5 * (bxa[:, 0] + bxa[:, 1]),
+                     0.5 * (bxa[:, 1] - bxa[:, 0]))
+        mid_y, hy = (0.5 * (bxa[:, 2] + bxa[:, 3]),
+                     0.5 * (bxa[:, 3] - bxa[:, 2]))
+        xn = mid_x[:, None] + hx[:, None] * us[None, :]      # (m, k)
+        yn = mid_y[:, None] + hy[:, None] * us[None, :]
+        U3 = np.broadcast_to(xn[:, :, None], (m, kk, kk)).reshape(m, -1)
+        U4 = np.broadcast_to(yn[:, None, :], (m, kk, kk)).reshape(m, -1)
+        ev = _pair_ev9(o1, o2, U3, U4)
+        g3 = (twopi * (ev[1] + lin_v3)).reshape(m, kk, kk)
+        g4 = (twopi * (ev[2] + lin_v4)).reshape(m, kk, kk)
+        fv = _pairs_f(U3, U4, *ev[3:9]).reshape(m, kk, kk)
+        # per-pair delamination axis; normalize arrays to (s, t) order
+        m3 = np.abs(g3).mean(axis=(1, 2)) >= np.abs(g4).mean(axis=(1, 2))
+        M3 = m3[:, None, None]
+        G_s = np.where(M3, g3, g4.transpose(0, 2, 1))
+        G_t = np.where(M3, g4, g3.transpose(0, 2, 1))
+        Fv = np.where(M3, fv, fv.transpose(0, 2, 1))
+        hs = np.where(m3, hx, hy)
+        ht = np.where(m3, hy, hx)
+        mid_s = np.where(m3, mid_x, mid_y)
+        mid_t = np.where(m3, mid_y, mid_x)
+        # interior fiber solves: per t-fiber j, (D_s + i diag(g_s)) p = f
+        gd = (G_s.transpose(0, 2, 1) * hs[:, None, None]).reshape(-1, kk)
+        rhs = (Fv.transpose(0, 2, 1)
+               * hs[:, None, None]).reshape(-1, kk).astype(complex)
+        P = _tik_batch(D_std_s, gd, rhs).reshape(m, kk, kk)  # [m, j_t, i_s]
+        p_hi = P[:, :, -1]
+        p_lo = P[:, :, 0]
+        # ---- boundary 1-D Levin along t at s = +/-1 (composite segs) -----
+        val = np.zeros(m, dtype=np.complex128)
+        for sign_, s_off, p_end in ((1.0, 1.0, p_hi), (-1.0, -1.0, p_lo)):
+            gt_edge = G_t[:, -1 if s_off > 0 else 0, :]      # (m, k)
+            span = np.abs(gt_edge).max(axis=1) * (2.0 * ht)
+            n_seg = np.clip(np.ceil(span / 8.0).astype(np.int64), 1, 48)
+            S = int(n_seg.sum())
+            par = np.repeat(np.arange(m), n_seg)
+            base = np.repeat(np.cumsum(n_seg) - n_seg, n_seg)
+            loc = np.arange(S) - base
+            w = (2.0 * ht / n_seg)[par]
+            h_seg = 0.5 * w
+            mid_seg = (mid_t - ht)[par] + (loc + 0.5) * w
+            tseg = mid_seg[:, None] + h_seg[:, None] * us_b[None, :]
+            s_fix = (mid_s + s_off * hs)[par]
+            m3s = m3[par]
+            u3s = np.where(m3s[:, None], s_fix[:, None], tseg)
+            u4s = np.where(m3s[:, None], tseg, s_fix[:, None])
+            oseg, e3, e4 = _pair_ev9(o1[par], o2[par], u3s, u4s)[:3]
+            gseg = twopi * (oseg + lin_v3 * u3s + lin_v4 * u4s)
+            gts = twopi * np.where(m3s[:, None], e4 + lin_v4, e3 + lin_v3)
+            useg = (tseg - mid_t[par][:, None]) / ht[par][:, None]
+            Mv = (_Ch.chebvander(useg.reshape(-1), kk - 1)
+                  .reshape(S, k_b, kk) @ Vs_inv)
+            amps = np.einsum('sik,sk->si', Mv, p_end[par]).astype(complex)
+            q = _tik_batch(D_std_b, gts * h_seg[:, None],
+                           amps * h_seg[:, None])
+            contrib = sign_ * (q[:, -1] * np.exp(1j * gseg[:, -1])
+                               - q[:, 0] * np.exp(1j * gseg[:, 0]))
+            np.add.at(val, par, contrib)
+        # ---- rigorous residual bound: |I_hat - I| <= int int |r| ---------
+        C = np.einsum('mi,pji,kj->pmk', Vs_inv, P, Vs_inv)   # [p, m_s, k_t]
+        Pf = np.einsum('am,pmk,bk->pab', Ef_mat, C, Ef_mat)
+        Pd = (np.einsum('am,pmk,bk->pab', Ed_mat, C, Ef_mat)
+              / hs[:, None, None])
+        sfn = mid_s[:, None] + hs[:, None] * uf[None, :]
+        tfn = mid_t[:, None] + ht[:, None] * uf[None, :]
+        SF = np.broadcast_to(sfn[:, :, None], (m, nf, nf))
+        TF = np.broadcast_to(tfn[:, None, :], (m, nf, nf))
+        M3f = m3[:, None, None]
+        u3r = np.where(M3f, SF, TF).reshape(m, -1)
+        u4r = np.where(M3f, TF, SF).reshape(m, -1)
+        evr = _pair_ev9(o1, o2, u3r, u4r)
+        gsr = twopi * np.where(m3[:, None], evr[1] + lin_v3,
+                               evr[2] + lin_v4)
+        fr = _pairs_f(u3r, u4r, *evr[3:9])
+        r = Pd.reshape(m, -1) + 1j * gsr * Pf.reshape(m, -1) - fr
+        est = np.abs(r).mean(axis=1) * (4.0 * hs * ht)
+        return val, est
+
+    def _eval_pairs(pp, bxa):
+        m = len(pp)
+        chunk = max(64, int(2.5e6 // (nf * nf)))
+        val = np.empty(m, dtype=np.complex128)
+        est = np.empty(m, dtype=np.float64)
+        for i0 in range(0, m, chunk):
+            sl = slice(i0, min(m, i0 + chunk))
+            val[sl], est[sl] = _eval_pairs_chunk(pp[sl], bxa[sl])
+        return val, est
+
+    # ---- tolerance scale: batched 9x9 probe (same semantics as the
+    # per-pixel path -- levin_tol is RELATIVE to max|f| x domain area) -----
+    _up = np.linspace(-1.0, 1.0, 9)
+    _U3p, _U4p = np.meshgrid(_up, _up, indexing='ij')
+    fmax_b = np.empty(n_act, dtype=np.float64)
+    _pc = 20000
+    for i0 in range(0, n_act, _pc):
+        sl = slice(i0, min(n_act, i0 + _pc))
+        nsl = sl.stop - sl.start
+        fmax_b[sl] = np.abs(_pair_f(
+            u1a[sl], u2a[sl],
+            np.broadcast_to(_U3p.ravel(), (nsl, 81)),
+            np.broadcast_to(_U4p.ravel(), (nsl, 81)))).max(axis=1)
+    tol_px = levin_tol * fmax_b * 4.0
+    live = fmax_b > 0.0
+    tol_safe = np.where(live, tol_px, np.inf)
+
+    # ---- lockstep per-pixel quadtrees, wave-batched over (pixel, box) ----
+    # The phase surface differs per pixel (u1/u2 enter the 4-D Chebyshev
+    # fit), so each active pixel refines its OWN quadtree; all (pixel, box)
+    # pairs of a refinement wave are evaluated together in a handful of
+    # large vectorized calls.  A leaf is accepted by residual-bound
+    # EQUIDISTRIBUTION -- est <= tol_px * (box area / domain area) -- which
+    # guarantees the per-pixel sum over leaves meets tol_px.
+    accum_val = np.zeros(n_act, dtype=np.complex128)
+    accum_est = np.zeros(n_act, dtype=np.float64)
+    n_pairs_tot = 0
+
+    def _run_waves(px, max_depth, max_pairs, tag):
+        nonlocal n_pairs_tot
+        pp = px.copy()
+        bxa = np.tile(np.array([[-1.0, 1.0, -1.0, 1.0]]), (len(pp), 1))
+        dep = np.zeros(len(pp), dtype=np.int64)
+        # ADAPTIVE budget: a leaf is accepted when its bound fits the
+        # pixel's REMAINING tolerance re-equidistributed over its remaining
+        # open area.  Accepted leaves consume tolerance and release area, so
+        # the budget density rem_tol/open_area is monotone non-decreasing
+        # (rigor preserved: per-pixel sum of accepted bounds <= tol_px) and
+        # slack from smooth regions flows to the hard caustic-band leaves --
+        # which fixed equidistribution starves into deep refinement.
+        rem_tol = tol_safe.copy()
+        open_area = np.zeros(n_act, dtype=np.float64)
+        open_area[pp] = 4.0
+        wave = 0
+        n_pairs = 0
+        while len(pp):
+            v_w, e_w = _eval_pairs(pp, bxa)
+            n_pairs += len(pp)
+            area = ((bxa[:, 1] - bxa[:, 0]) * (bxa[:, 3] - bxa[:, 2]))
+            need = ((e_w > rem_tol[pp] * area / open_area[pp])
+                    & (dep < max_depth) & (n_pairs < max_pairs))
+            keep = ~need
+            np.add.at(accum_val, pp[keep], v_w[keep])
+            np.add.at(accum_est, pp[keep], e_w[keep])
+            np.add.at(rem_tol, pp[keep], -e_w[keep])
+            np.add.at(open_area, pp[keep], -area[keep])
+            np.maximum(rem_tol, 0.0, out=rem_tol)
+            np.maximum(open_area, 1e-300, out=open_area)
+            pn = pp[need]
+            a_, b_, c_, d_ = bxa[need].T
+            mx, my = 0.5 * (a_ + b_), 0.5 * (c_ + d_)
+            bxa = np.concatenate([
+                np.stack([a_, mx, c_, my], axis=1),
+                np.stack([mx, b_, c_, my], axis=1),
+                np.stack([a_, mx, my, d_], axis=1),
+                np.stack([mx, b_, my, d_], axis=1)], axis=0)
+            pp = np.concatenate([pn, pn, pn, pn])
+            dep = np.tile(dep[need] + 1, 4)
+            wave += 1
+            if len(pp):
+                _progress('integrate', min(0.6 + 0.02 * wave, 0.78),
+                          f'levin: {tag} wave {wave}, {len(pp)} pair-boxes '
+                          f'queued ({n_pairs} evaluated, '
+                          f'{time.perf_counter() - t0:.1f}s)')
+        n_pairs_tot += n_pairs
+
+    _run_waves(np.where(live)[0], max_depth=8,
+               max_pairs=20000 * max(1, n_act), tag='main')
+
+    # ---- deep re-pass for pixels whose bound failed at the depth cap -----
+    bad = np.where((accum_est > tol_px) & live)[0]
+    if len(bad):
+        _progress('integrate', 0.79,
+                  f'levin: deep re-pass for {len(bad)} pixels '
+                  f'({time.perf_counter() - t0:.1f}s)')
+        accum_val[bad] = 0.0
+        accum_est[bad] = 0.0
+        _run_waves(bad, max_depth=12, max_pairs=200000 * len(bad),
+                   tag='deep')
+        bad = np.where((accum_est > tol_px) & live)[0]
+
+    E_flat[idx] = accum_val
+    # ---- per-pixel adaptive safety net (rarely reached) ------------------
+    _progress('integrate', 0.8,
+              f'levin: batched pass done ({n_pairs_tot} pair-boxes, '
+              f'{time.perf_counter() - t0:.1f}s), '
+              f'{len(bad)}/{len(idx)} pixels -> adaptive fallback')
+    for n_done, ib in enumerate(bad):
+        E_flat[idx[ib]] = _pixel_adaptive(idx[ib])
+        if verbose:
+            _progress('integrate', 0.8 + 0.15 * n_done / max(1, len(bad)),
+                      f'levin fallback: pixel {n_done + 1}/{len(bad)}')
+
+    _progress('integrate', 0.95,
+              f'levin: {len(idx)} pixels ({n_pairs_tot} pair-boxes, '
+              f'{len(bad)} adaptive fallbacks) in '
+              f'{time.perf_counter() - t0:.1f}s')
+    return E_flat.reshape(N_out_coarse, N_out_coarse)
+
+
 def _integrate_local_quadrature(
     coef_opd, coef_s1x, coef_s1y, mi,
     K1_arr, K2_arr, K3_arr, K4_arr,
@@ -2709,4 +3497,6 @@ def _integrate_local_quadrature_cupy(
 __all__ = [
     'apply_real_lens_maslov',
     'apply_real_lens_maslov_vector',
+    'uniform_fold_airy',
+    'pearcey',
 ]

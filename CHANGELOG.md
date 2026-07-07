@@ -6,6 +6,159 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Lens-propagator accuracy extensions (v5.21).**  A batch of per-propagator
+  accuracy features, each validated against an independent oracle (no unvalidated
+  physics).  Tests in `tests/unit/test_v5_21_lens_accuracy_extensions.py`.
+  - **Maslov `poly_order='auto'`** -- the tensor-Chebyshev fit order is raised
+    until the OPD-fit residual, scored on a **held-out** ray split (so a too-high
+    order that only fits ray-node noise is rejected), plateaus or hits a target.
+    A smooth optic fits at a cheap low order; a strongly-aberrated / near-caustic
+    chart gets the order it needs -- no manual tuning.  Auto tracks the order-8
+    field to ~2e-5 (≈100x better than a fixed order-4) on a singlet.
+  - **GBD `converge_gbd_sampling`** -- picks the beamlet width (swept as the
+    decimation-independent overlap `w0/spacing`) that makes a free-space GBD
+    propagation most accurate, scored against the **exact** angular-spectrum
+    oracle (reconciling the known GBD↔ASM beamlet-Gouy convention first).
+    Reports the full error curve + whether it met the tolerance.
+  - **GBD longitudinal `E_z`** -- `reconstruct_vector_field_with_ez` and
+    `propagate_gbd_freespace_vector(..., return_longitudinal=True)` add the
+    longitudinal field from transversality (`E·k=0`): `E_z=-(L·E_x+M·E_y)/N` per
+    beamlet, exact to machine precision (verified `E_z=-tanθ·E_x` up to NA 0.5).
+    The longitudinal energy fraction grows with NA -- the piece a transverse-only
+    GBD misses at high NA.
+  - **traced `apply_real_lens_traced_segmented`** -- applies the traced lens to a
+    single, possibly MULTI-congruence field by blindly splitting its angular
+    spectrum at the deep VALLEYS between beams (a `cos^2` partition of unity that
+    sums to the input exactly), so each segment is a single congruence and the
+    per-segment traced results sum coherently.  Recovers the exact per-emitter
+    reference to ~1.7e-4 on two crossing beams through an aberrated lens
+    (~8000x better than the single-congruence-violating `traced(sum)`); a
+    unimodal field is a single segment == plain traced.
+  - **traced jax twin differentiable w.r.t. prescription geometry** --
+    `apply_real_lens_traced_jax(..., radii=, conics=, thicknesses=)` routes the
+    trace through `trace_jax_with_params` and takes a tracer-safe Newton initial
+    guess, so `jax.grad` flows into the lens geometry (the lever for
+    gradient-based lens *design* on the accurate ray-traced OPD).  `grad` matches
+    finite-difference for radius (2e-8) and thickness (6e-9); the static path
+    (no arrays) is byte-identical.
+  - **GBD complex-source-point (non-paraxial) beamlets** -- `csp_beamlet_field`
+    evaluates the EXACT scalar-Helmholtz field of Deschamps complex-source-point
+    beams (branch `Im R ≤ 0`), matching the angular-spectrum method to grid
+    precision at all NA where a paraxial Gaussian is ~33% wrong (NA 0.45).
+    `propagate_gbd_freespace_csp` rides the same beamlet skeleton with the exact
+    field.  Honestly scoped: the per-beamlet exactness is the clear win; the
+    GBD-*sum* gain over paraxial is regime-dependent (co-limited by the shared
+    reconstruction/overlap floor at moderate NA).
+  - **Uniform fold-Airy caustic evaluator** (`uniform_fold_airy`) -- the
+    Chester-Friedman-Ursell caustic-FINITE value of `int g exp(ikf) dt` where two
+    stationary points coalesce (a fold), from the two saddles' `f`, `f''`, `g`.
+    Branch discipline pinned by the stationary-phase Maslov phase
+    `exp(i·sgn(f'')·π/4)` per saddle (not an ambiguous `sqrt` root); matches the
+    exact cubic-phase integrals to ~1e-14 for both symmetric and asymmetric
+    (`a1 != 0`) folds and stays finite through the caustic where ordinary
+    stationary phase diverges.  The caustic-safe integrator underlying a uniform
+    Maslov evaluator and the multi-branch Airy hand-off.
+  - **Pearcey (cusp-caustic) evaluator** (`pearcey`) -- the canonical cusp
+    diffraction special function `P(x,y)=int exp(i(t^4+x t^2+y t)) dt` (the cusp
+    peer of the Airy function), via its everywhere-convergent series.  Machine-
+    precision vs the exact cusp value `P(0,0)=1/2 Gamma(1/4) exp(i pi/8)`, the
+    even-in-y symmetry, and a contour-rotated quadrature.
+  - **Windowed CSP reconstruction** (`propagate_gbd_freespace_csp(..., window=)`)
+    -- evaluates each CSP beamlet only over its local pixel box, `O(n*box)`
+    instead of `O(n*N^2)`; matches the dense sum to the tail truncation.
+  - **Multi-branch traced lens field** (`apply_real_lens_traced_multibranch`)
+    -- the traced model extended THROUGH focus and caustics, where the
+    single-valued `apply_real_lens_traced` breaks down.  Implements the
+    seismology wavefront-construction method (Lambare 1996; Vinje 1993;
+    Chambers & Kendall 2008): triangulated launch-grid ray map with barycentric
+    multi-arrival branch finding, second-order "intrapolated" OPL
+    (`T = sum a_i [T_i + 1/2 (x-x_i).p_i]`, Kraaijpoel 2003 eq. 5.7),
+    signed-area-ratio `1/sqrt|J|` amplitudes, and the KMAH (Maslov/Gouy) phase
+    `exp(-i pi m/2)` per branch with fold crossings counted ANALYTICALLY on the
+    exit leg via the exact quadratic `det Q(z)` (Cerveny/Klimes dynamic ray
+    tracing) plus a parity closure.  Validated: energy conserved to 2.7%
+    (launch-rim tail), the Gouy `-pi` emerges from pure ray bookkeeping
+    (KMAH 0 -> 2 through focus), and the mid-annulus multipath intensity
+    matches an exact decouple-pipeline oracle (ray-traced exit-pupil field +
+    direct Rayleigh-Sommerfeld summation) to ~6% masked off the O(1-px)
+    caustic band, where ART is undefined by construction (literature-standard).
+    v1 scope: collimated / slowly-varying input congruence.
+    **Ludwig caustic-band swap** (`caustic_band='ludwig'`, default): per
+    pixel, the closest-eikonal branch pair inside the Kravtsov-Orlov band
+    `k|S+ - S-| <= pi` is replaced by the `ludwig_fold` uniform two-branch
+    field (Grillo & Cordes 2019 eq. 47 form), taming the `1/sqrt|J|`
+    divergence exactly on the fold while staying byte-identical to the plain
+    sum wherever fewer than two branches land (`caustic_band='plain'`
+    restores the raw sum).
+    **Vectorized triangle rasterization**: the per-launch-cell Python loop
+    (~70k triangles of small-array NumPy) is replaced by flat-array
+    per-triangle setup + power-of-2 bounding-box bucket rasterization --
+    identical math and contribution set (only the float summation order in
+    the scatter-add differs); ~6x end-to-end (20.3 s -> 3.5 s on the
+    192x192 through-focus benchmark).
+    **Tilted / carrier input** (`input_carrier=None|'auto'|(kx, ky)` in
+    rad/m): the launch congruence follows the input phase plane (direction
+    cosines `kx/k0`, `ky/k0`), the input eikonal `T_in = L0 x + M0 y` rides
+    the branch phases exactly, and the envelope is bilinearly sampled
+    CARRIER-STRIPPED (works for super-Nyquist carriers when `(kx, ky)` is
+    given explicitly; `'auto'` estimates the mean carrier by the lag-1
+    correlation phase, subpixel-exact for carrier x smooth envelope).
+    Validated: `(0, 0)` byte-identical to the default; `'auto'` recovers a
+    1-degree carrier to 1e-6; the near-focus pattern displaces by the traced
+    chief-ray transverse position to 1%; energy matches the untilted run to
+    0.1% at non-degenerate planes.  Small-tilt scope: the ART amplitude
+    keeps the transverse-area ratio (obliquity factors <0.1% below
+    ~2.5 deg).
+  - **Adaptive delaminating Levin engine** (`lumenairy._math.levin`) and
+    `apply_real_lens_maslov(integration_method='levin', levin_tol=...)` -- a
+    caustic-UNIFORM evaluator for the Maslov pupil integral with **no saddle
+    finding** (finite and accurate through folds where `stationary_phase` /
+    `local_quadrature` diverge) at a per-pixel cost independent of the v2
+    oscillation count.  After Chen-Serkh-Bremer-Aubry (arXiv:2506.02424) with
+    validated deviations: residual-bound acceptance (their eq. 152; the
+    parent-child value test false-accepts on under-resolved oscillatory
+    boxes), priority-queue refinement against a global bound budget,
+    machine-level TSVD truncation, and float-coerced box coordinates (an
+    int-dtype corner truncates the companion coordinate inside boundary-phase
+    closures -- a domain-edge-only phase error invisible to any value test).
+    Engine validated on canonical folds to 8.9e-10 THROUGH the caustic with
+    its rigorous returned bound honored.  `levin_tol` is RELATIVE (scaled per
+    pixel by the probed integrand magnitude).
+    **Wave-batched production integrator**: `integration_method='levin'` runs
+    lockstep per-pixel quadtrees batched over (pixel, box) pairs -- each
+    refinement wave evaluates ALL pairs in a handful of large vectorized
+    `_opd6` / batched normal-equations collocation calls (Tikhonov ~1e-8
+    standing in for the delaminating TSVD; the rigorous residual bound
+    measures the ACTUAL solution, so regularization can only cost refinement,
+    never accuracy).  Leaves accepted by an ADAPTIVE residual-bound budget
+    (accepted leaves consume tolerance and release area, so slack from
+    smooth regions flows to the hard caustic-band leaves); depth-capped
+    stragglers get a deeper batched re-pass, then the per-pixel engine as a
+    final safety net.  A dedicated shared-basis Numba kernel (`_opd_vd9`:
+    value + v2 first-derivatives for opd/s1x/s1y in ONE pass, no T''
+    recurrence) supplies all integrand pieces per query set.  On a hard
+    2-mm-aperture high-NA singlet chart (16x16 grid, ~16.5-wave p-v pupil
+    OPD) vs a dense n_v2=256 quadrature oracle (both reference-limited),
+    0 fallbacks: 1.4e-2 in 9.7 s at `levin_tol=1e-2` (~0.04 s/pixel) and
+    1.2e-2 in 75 s at `1e-3` (~0.3 s/pixel) -- roughly 300-2000x the
+    per-pixel adaptive engine (~83 s/pixel), making full-ROI caustic-band
+    maps practical.  Peak memory is chunk-bounded independent of grid size.
+  - **Ludwig uniform fold formula** (`ludwig_fold`) -- the ray-native
+    caustic-band primitive (Ludwig 1966 / Kravtsov 1964): the uniform field of
+    two coalescing ray branches from their eikonals and COMPLEX amplitudes
+    (each carrying its own Maslov phase).  Finite exactly where the branch
+    amplitudes diverge; reduces to the plain two-branch sum on the bright side.
+    Machine-precision (~3e-16) against the exact cubic-phase integral in both
+    regimes, including exactly on the caustic.  The drop-in pair-swap for a
+    multi-branch sum inside the Kravtsov-Orlov band `k|S+-S-| <~ pi`.
+  - **Turnkey lens-design optimiser** (`optimize_traced_geometry`) -- Adam over
+    the differentiable ray-traced OPD to optimise prescription radii / conics /
+    thicknesses (built on the new `apply_real_lens_traced_jax` geometry
+    gradient).  Default merit sharpens the focus (peak intensity at the focal
+    plane via an exact angular-spectrum step); custom merits supported.  This
+    supersedes the "geometry not differentiable" limitation noted in
+    `make_lg_aberration_merit_jax`.
+
 - **GBD FFT-convolution reconstruction** for uniform-Q bundles.  When a beamlet
   bundle has a uniform `Q` (scalar, or diagonal tensor), a uniform launch
   direction and on-grid centres -- exactly what `decompose_field_to_beamlets`
@@ -21,6 +174,23 @@ All notable changes to the core library are documented here.
   reconstruct.  Falls back to the windowed scatter-add (NumPy) or the dense sum
   (JAX / CuPy) for per-beamlet-`Q`, skew, off-grid or per-beamlet-tilted
   bundles.
+
+- **`PMM2DStackPure` — multilayer 2-D PURE (no-floor) PMM stack**
+  (`pmm/stack2d_pure.py`), the no-Fourier-floor sibling of the hybrid stack and
+  the 2-D analogue of the 1-D `PMMStack`: every region (half-spaces + layers)
+  is solved in one shared staggered modified-Legendre basis (Granet 2023),
+  interfaces are square modal matches cascaded by Redheffer, and the Rayleigh
+  projection is applied once, forward-only, at the half-spaces — so
+  patterned-layer accuracy is `n_orders`-independent and tracks only the modal
+  degree.  Supports any mix of uniform and patterned layers on one shared
+  square grid, **including direct patterned|patterned (A|B) interfaces**
+  (validated per-order ~2e-3 against the exact 1-D multilayer `PMMStack` at
+  oblique incidence, energy exact to 1e-6; uniform layers reuse one shared
+  eps-free geometric eig, and byte-identical patterned cells dedupe their
+  eig).  The existing hybrid stack class is renamed **`PMM2DStack` →
+  `PMM2DStackHybrid`** (aliases `PMM2DStack_hybrid` and transitional
+  `PMM2DStack` retained — no breakage); tapered-grating helpers remain
+  hybrid-only.
 
 ### Performance
 

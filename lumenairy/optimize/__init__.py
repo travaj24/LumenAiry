@@ -51,6 +51,7 @@ from .core import (
     ZernikeCoefficientMerit,
     design_optimize,
     make_lg_aberration_merit_jax,
+    optimize_traced_geometry,
     register_wave_propagator,
     unregister_wave_propagator,
 )
@@ -97,6 +98,7 @@ __all__ = [
     'ZernikeCoefficientMerit',
     'LGAberrationMerit',
     'make_lg_aberration_merit_jax',
+    'optimize_traced_geometry',
     'CompositeMerit',
     'CallableMerit',
     'JaxMeritTerm',

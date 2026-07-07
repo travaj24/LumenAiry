@@ -3257,6 +3257,226 @@ def apply_real_lens_traced_multi(
     return E_out
 
 
+def _flattop_partition_1d(u, cuts, halfwidth):
+    """Flat-top cos^2-edge partition of unity over axis ``u`` split at ``cuts``.
+
+    ``len(cuts)+1`` weight arrays (same shape as ``u``), each ~1 in its bin
+    interior with a ``cos^2``/``sin^2`` transition of half-width ``halfwidth``
+    centred on each cut, so adjacent bins hand off as ``cos^2 + sin^2 = 1`` and
+    the whole set **sums to 1**.  Unlike a uniform partition, the transitions
+    sit AT the cuts (spectral gaps between congruences), so each whole beam
+    lands in one bin instead of being fragmented across bins -- which is what
+    makes the per-segment traced pass valid (one congruence per segment).
+    Requires ``halfwidth`` below half the smallest cut spacing for exact unity.
+    """
+    cuts = sorted(float(c) for c in cuts)
+    K = len(cuts) + 1
+    if K == 1:
+        return [np.ones(np.shape(u), dtype=float)]
+    hw = max(float(halfwidth), 1e-30)
+    W = []
+    for k in range(K):
+        w = np.ones(np.shape(u), dtype=float)
+        if k > 0:                       # rising edge at cuts[k-1]
+            s = np.clip((u - (cuts[k - 1] - hw)) / (2.0 * hw), 0.0, 1.0)
+            w = w * np.sin(np.pi * s / 2.0) ** 2
+        if k < K - 1:                   # falling edge at cuts[k]
+            s = np.clip((u - (cuts[k] - hw)) / (2.0 * hw), 0.0, 1.0)
+            w = w * np.cos(np.pi * s / 2.0) ** 2
+        W.append(w)
+    return W
+
+
+def _occupied_freq_support(power_1d, freqs, frac):
+    """Frequency bounds ``(lo, hi)`` of the marginal-power support capturing
+    ``frac`` of the total (the highest-power bins)."""
+    total = float(power_1d.sum())
+    if total <= 0.0:
+        return float(freqs[0]), float(freqs[-1])
+    order = np.argsort(power_1d)[::-1]
+    cum = np.cumsum(power_1d[order]) / total
+    klast = int(np.searchsorted(cum, frac)) + 1
+    keep = order[:max(1, klast)]
+    return float(freqs[keep].min()), float(freqs[keep].max())
+
+
+def _spectral_gap_cuts(marginal, freqs, lo, hi, valley_frac, peak_frac):
+    """Cut frequencies at deep valleys of the 1-D marginal angular power --
+    the gaps that SEPARATE distinct beams (congruences).  A valley qualifies as
+    a cut only if its power is below ``valley_frac`` of the marginal peak AND it
+    is flanked (within the occupied ``[lo, hi]``) by peaks above ``peak_frac``,
+    so a single (unimodal) congruence yields NO cuts (one segment = plain
+    traced) and only genuinely separated beams are split."""
+    p = np.asarray(marginal, dtype=float)
+    pk = float(p.max())
+    if pk <= 0.0:
+        return []
+    p = p / pk
+    inband = (freqs >= lo) & (freqs <= hi)
+    idx = np.where(inband)[0]
+    cuts = []
+    for i in idx:
+        if i <= 0 or i >= len(p) - 1:
+            continue
+        if p[i] <= p[i - 1] and p[i] < p[i + 1] and p[i] < valley_frac:
+            if p[:i].max() > peak_frac and p[i + 1:].max() > peak_frac:
+                cuts.append(float(freqs[i]))
+    # merge cuts that are closer than a few samples (same valley)
+    if cuts:
+        merged = [cuts[0]]
+        df = float(abs(freqs[1] - freqs[0])) * 3.0
+        for c in cuts[1:]:
+            if c - merged[-1] > df:
+                merged.append(c)
+        cuts = merged
+    return cuts
+
+
+def _segment_field_by_angle(E, dx, dy, wavelength, segments_x, segments_y,
+                            power_frac, valley_frac, min_segment_power,
+                            max_segments):
+    """Partition ``E`` into angular sub-fields at the spectral GAPS between
+    beams, so each sub-field is a single congruence.  With
+    ``min_segment_power <= 0`` the segments sum to ``E`` EXACTLY.  Returns a
+    single segment (the input) when the spectrum is unimodal (nothing to
+    separate)."""
+    E = np.asarray(E)
+    Ny, Nx = E.shape[-2], E.shape[-1]
+    F = np.fft.fftshift(np.fft.fft2(E))
+    fx = np.fft.fftshift(np.fft.fftfreq(Nx, dx))
+    fy = np.fft.fftshift(np.fft.fftfreq(Ny, dy))
+    P = np.abs(F) ** 2
+    lox, hix = _occupied_freq_support(P.sum(axis=0), fx, power_frac)
+    loy, hiy = _occupied_freq_support(P.sum(axis=1), fy, power_frac)
+
+    if segments_x == 'auto':
+        cutx = _spectral_gap_cuts(P.sum(axis=0), fx, lox, hix, valley_frac, 0.25)
+    else:
+        nseg = max(1, int(segments_x))
+        cutx = ([] if nseg == 1
+                else list(np.linspace(lox, hix, nseg + 1)[1:-1]))
+    if segments_y == 'auto':
+        cuty = _spectral_gap_cuts(P.sum(axis=1), fy, loy, hiy, valley_frac, 0.25)
+    else:
+        nseg = max(1, int(segments_y))
+        cuty = ([] if nseg == 1
+                else list(np.linspace(loy, hiy, nseg + 1)[1:-1]))
+
+    # cap total segments (drop the shallowest cuts first if over budget)
+    while (len(cutx) + 1) * (len(cuty) + 1) > max_segments:
+        if len(cutx) >= len(cuty) and cutx:
+            cutx.pop()
+        elif cuty:
+            cuty.pop()
+        else:
+            break
+
+    def _hw(cuts, lo, hi):
+        # transition half-width: below half the smallest cut spacing (and to
+        # the band edges) so the partition stays a partition of unity.
+        edges = [lo] + sorted(cuts) + [hi]
+        gaps = [edges[i + 1] - edges[i] for i in range(len(edges) - 1)]
+        # narrow transition (sharp separation, since the cut sits in a near-
+        # zero-power gap so Gibbs ringing is negligible), but < half the
+        # smallest spacing so the partition stays a partition of unity.
+        return 0.2 * min(gaps) if gaps else (hi - lo)
+
+    hwx = _hw(cutx, lox, hix)
+    hwy = _hw(cuty, loy, hiy)
+    FX, FY = np.meshgrid(fx, fy)
+    Wx = _flattop_partition_1d(FX, cutx, hwx)
+    Wy = _flattop_partition_1d(FY, cuty, hwy)
+    tot_power = float(np.sum(np.abs(E) ** 2)) + 1e-300
+    segments = []
+    for wi in Wx:
+        for wj in Wy:
+            Ej = np.fft.ifft2(np.fft.ifftshift((wi * wj) * F)).astype(E.dtype)
+            if float(np.sum(np.abs(Ej) ** 2)) / tot_power > min_segment_power:
+                segments.append(Ej)
+    if not segments:
+        segments = [E.copy()]
+    return segments
+
+
+def apply_real_lens_traced_segmented(
+    E_in,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    n_segments: Any = 'auto',
+    valley_frac: float = 0.15,
+    power_frac: float = 0.995,
+    min_segment_power: float = 1e-3,
+    max_segments: int = 32,
+    carriers: Any = 'auto',
+    return_segments: bool = False,
+    **traced_kwargs,
+):
+    """Traced lens on a single, possibly MULTI-congruence field via blind
+    angular segmentation.
+
+    :func:`apply_real_lens_traced` assumes ONE ray congruence per output pixel,
+    so it is invalid for a field that superposes several beams / an extended
+    multi-angle source.  :func:`apply_real_lens_traced_multi` handles that when
+    the emitters are *already separated*; this handles the case where you only
+    have the **combined** field, by splitting its angular spectrum at the deep
+    VALLEYS between beams (the gaps that separate distinct congruences), so each
+    segment captures one whole beam -- single-congruence -> traced-valid.  The
+    segments sum to the input EXACTLY when ``min_segment_power=0``; the
+    per-segment traced results are coherently summed via
+    :func:`apply_real_lens_traced_multi`.
+
+    Splitting at the spectral GAP (not at uniform bin edges) is essential:
+    traced is non-linear, so fragmenting ONE beam across bins would *add* error;
+    splitting only at true gaps keeps each congruence intact.  A unimodal
+    spectrum (a single congruence) yields one segment == plain traced, so this
+    is safe to call unconditionally.
+
+    Parameters
+    ----------
+    n_segments : 'auto' | int | (int, int)
+        Segment count.  ``'auto'`` splits at detected spectral valleys (0 cuts
+        for a unimodal field); an int forces that many uniform bins-per-axis; a
+        pair is ``(n_x, n_y)``.  Total is capped at ``max_segments``.
+    valley_frac : float
+        A spectral valley counts as a beam-separating gap only if its marginal
+        power is below this fraction of the peak (with a real peak on each side).
+    min_segment_power : float
+        Drop segments carrying less than this fraction of the input power (saves
+        traced passes on empty bins); ``0`` keeps the exact partition.
+    return_segments : bool
+        If True, return the list of segment fields instead of applying the lens
+        (for inspection / the partition-sums-to-input check).
+
+    Returns
+    -------
+    complex ndarray, or list of complex ndarray if ``return_segments``.
+    """
+    if dy is None:
+        dy = dx
+    if isinstance(n_segments, (tuple, list)) and len(n_segments) == 2:
+        sx, sy = n_segments
+    elif n_segments == 'auto':
+        sx = sy = 'auto'
+    else:
+        sx = sy = int(n_segments)
+    segments = _segment_field_by_angle(
+        E_in, dx, dy, wavelength, sx, sy, power_frac, valley_frac,
+        min_segment_power, max_segments)
+    if return_segments:
+        return segments
+    if len(segments) == 1:
+        # single congruence -> the plain traced path (no per-segment overhead)
+        return apply_real_lens_traced(
+            segments[0], prescription=prescription, wavelength=wavelength,
+            dx=dx, carrier=carriers, **traced_kwargs)
+    return apply_real_lens_traced_multi(
+        segments, prescription=prescription, wavelength=wavelength, dx=dx,
+        carriers=carriers, **traced_kwargs)
+
+
 class PreparedTracedLens:
     """A traced lens with its input-independent phase ``screen`` precomputed.
 
