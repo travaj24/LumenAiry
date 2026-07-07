@@ -375,6 +375,8 @@ class Granet2DTransverseE:
     def __init__(self, px, py, Nx, Ny, M, eps_cell,
                  alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi):
         self.k0 = float(k0)
+        self.alpha0x = float(alpha0x)
+        self.alpha0y = float(alpha0y)
         taux = np.exp(-1j * alpha0x * px)
         tauy = np.exp(-1j * alpha0y * py)
         self.bx = Basis1D(px, Nx, M, taux)
@@ -616,7 +618,7 @@ def _kz_forward2(eps, kx, ky):
 # modified-Legendre function exactly by Gauss-Legendre quadrature on its segment.
 # This is the staggered-basis analogue of pmm._sem_fourier_projection.
 # =========================================================================== #
-def _stag_fourier_projection(basis: Basis1D, orders):
+def _stag_fourier_projection(basis: Basis1D, orders, alpha0=0.0):
     d, N, M = basis.d, basis.N, basis.M
     G = 2.0 * np.pi / d
     xb = basis.xb
@@ -624,14 +626,28 @@ def _stag_fourier_projection(basis: Basis1D, orders):
     xg, wg = leggauss(nq)                       # on [-1,1]
     Vref, _ = _modleg_value_deriv(M, xg)        # (M, nq) modified-Legendre values
     orders = np.asarray(orders)
-    # per-segment contribution of local function a to order m:
-    #   c[m, seg, a] = (1/d) INT_seg Ltilde_a(u(x)) e^{-imGx} dx
-    #               = (J/d) sum_q wg[q] Vref[a,q] e^{-imG x_seg(u_q)}
+    # per-segment contribution of local function a to Rayleigh order m.  The
+    # modal field is a BLOCH mode: the tau-glued basis carries the transverse
+    # momentum (tau = exp(-i alpha0 d)), so the physical field is
+    # ~ exp(-i alpha0 x) p(x), and the library's Rayleigh order m (far-field
+    # kxv = kx0 + m*wl/period) has transverse dependence e^{-i(alpha0 + mG)x}.
+    # Its amplitude is recovered by projecting on the CONJUGATE kernel
+    # e^{+i(mG + alpha0) x}.  Both pieces of the kernel matter and each failure
+    # is invisible in a subset of tests: omitting ``alpha0`` breaks the
+    # one-period orthogonality at oblique (energy loss even in the specular
+    # order); flipping the sign of ``m`` deposits physical order -m into slot m
+    # (a MIRROR) -- exact at normal incidence (kz even in kx) and for
+    # reflection-symmetric cells, but at oblique every |m|>0 order gets the
+    # WRONG kz flux factor (kz(+m) applied to order -m's amplitude), which
+    # leaked/gained several % energy for patterned cells (asymmetric-cell
+    # per-order oracle test vs pmm_efficiency_2d_cell pinned the form
+    # stag[m] = oracle[-m]*kz(m)/kz(-m) before this fix).
+    #   c[m, seg, a] = (1/d) INT_seg Ltilde_a(u(x)) e^{+i(mG + alpha0)x} dx
     T_local = np.zeros((len(orders), N, M), dtype=_C)
     J = basis.J
     for seg in range(N):
         xphys = 0.5 * (xb[seg] + xb[seg + 1]) + J * xg     # physical x at quad pts
-        phase = np.exp(-1j * np.outer(orders * G, xphys))  # (nO, nq)
+        phase = np.exp(1j * np.outer(orders * G + alpha0, xphys))   # (nO, nq)
         # contribution[m,a] = (J/d) sum_q phase[m,q] wg[q] Vref[a,q]
         T_local[:, seg, :] = (J / d) * (phase * wg) @ Vref.T
     # assemble onto the global dofs of a chosen set (list of (N,M) stencils)
@@ -642,7 +658,7 @@ def _stag_fourier_projection(basis: Basis1D, orders):
     return _assemble
 
 
-def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy):
+def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy, alpha0x=0.0, alpha0y=0.0):
     """Forward Fourier->Rayleigh projectors for the 2-D staggered field
     components.  Returns the per-component (E1,E2) projection operators that map
     a region's [E1;E2] modal coefficient vector onto the Rayleigh orders.
@@ -650,9 +666,15 @@ def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy):
     E1 = sum B(x1) Btilde(x2)  -> project x1 with B-set, x2 with Btilde-set.
     E2 = sum Btilde(x1) B(x2)  -> project x1 with Btilde-set, x2 with B-set.
     Tensor ordering matches the eigensolver's kron(y, x): index I = jx + qx*jy.
+
+    ``alpha0x``/``alpha0y`` are the per-axis Bloch wavenumbers (``kx0*k0`` /
+    ``ky0*k0``); the projection kernel carries them so the once-only far-field
+    Rayleigh projection stays ORTHOGONAL at oblique incidence (see
+    :func:`_stag_fourier_projection`).  Default 0 = normal incidence (byte-
+    identical to the un-shifted projection).
     """
-    asmx = _stag_fourier_projection(bx, ox)
-    asmy = _stag_fourier_projection(by, oy)
+    asmx = _stag_fourier_projection(bx, ox, alpha0x)
+    asmy = _stag_fourier_projection(by, oy, alpha0y)
     Tx_B = asmx(bx.B)            # (Mx, qx)
     Tx_til = asmx(bx.Btilde)    # (Mx, qx)
     Ty_B = asmy(by.B)            # (My, qy)
@@ -984,7 +1006,8 @@ def pmm_efficiency_2d_staggered(
     order_x = np.tile(ox, len(oy))
     order_y = np.repeat(oy, len(ox))
     Nfo = len(order_x)
-    P1, P2 = _far_projector_2d(sol_l.bx, sol_l.by, ox, oy)    # (Nfo, q^2) each
+    P1, P2 = _far_projector_2d(sol_l.bx, sol_l.by, ox, oy,
+                               alpha0x, alpha0y)             # (Nfo, q^2) each
     qq = sol_l.q * sol_l.q
     # H_E[m]-projector on a [E1;E2] modal matrix -> [Ex_orders; Ey_orders]:
     #   note: E1 = E_x component, E2 = E_y component (Granet transverse comps).

@@ -608,6 +608,43 @@ All notable changes to the core library are documented here.
     flat runtime; byte-identical chunking).
   Tests: `tests/unit/test_gbd_feature_complete.py` (18 tests).
 
+### Fixed
+
+- **Staggered 2-D PMM far field at oblique incidence — two projection-kernel
+  defects in `_stag_fourier_projection`** (`pmm/twod_staggered.py`), affecting
+  `pmm_efficiency_2d_staggered` (and `PMM2DStackPure`) for every patterned
+  cell at `theta != 0`:
+  1. the Rayleigh projection kernel omitted the Bloch `alpha0` shift carried
+     by the tau-glued modal basis, making the one-period projection
+     non-orthogonal at oblique (energy loss even in the specular order —
+     vacuum-oblique read 0.87); and
+  2. the kernel's order-index sign was MIRRORED: slot `m` received physical
+     order `-m`'s amplitude and then order `+m`'s `kz` flux factor.  Invisible
+     at normal incidence (`kz` even in `kx`), for uniform cells (specular is
+     self-mirrored) and for reflection-symmetric cells (mirror-identical
+     magnitudes) — which is why every prior gate passed — but at oblique every
+     |m|>0 order was mis-weighted: an asymmetric-cell per-order oracle test
+     measured `stag[m] = oracle[-m]*kz(m)/kz(-m)`, i.e. several-% energy
+     non-conservation with theta-dependent sign (converged stripe 0.878,
+     pillar 0.82-1.05, direct A|B cascades 1.2-3.4).
+  The fixed kernel is the conjugate of the order-m plane wave,
+  `e^{+i(mG + alpha0)x}`.  Post-fix: converged stripe/pillar/asymmetric cells
+  conserve to <=5e-5 at oblique; per-order matches the EXACT 1-D pure PMM to
+  ~2e-4 (degree 8) in the correct slots; normal-incidence symmetric-cell
+  results are bit-level unchanged; and the direct patterned|patterned (A|B)
+  staggered cascade — previously believed to need a first-order
+  Poynting-sorted mode rebuild (that theory is refuted: the up/down split of
+  real eigenvalues is non-critical for internal layers, Li 2003 J. Opt. A
+  5:345 / *Gratings* ch. 13 2014 §13.2.3.3) — is exact, so `PMM2DStackPure`
+  supports multiple patterned layers.  En route, `_far_projector_2d` /
+  `_stag_fourier_projection` gained the `alpha0x`/`alpha0y` arguments, and the
+  lossy-superstrate guard-test bound was recalibrated (the old `tot <= 1.0`
+  was only satisfied by the mirrored far field's downward bias).
+  Tests: `tests/unit/test_v5_21_pmm2d_staggered_oblique.py` (energy sweeps,
+  per-order orientation vs the exact 1-D `PMMStack` with an anti-mirror
+  tripwire at theta=0 and 0.2, vacuum-oblique exactness, A|B multilayer
+  vs the 1-D multilayer oracle).
+
 ## [5.20.0] — 2026-07-04
 
 Maslov propagator (`apply_real_lens_maslov`) brought in line with the rest of

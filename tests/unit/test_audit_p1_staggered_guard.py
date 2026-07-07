@@ -55,8 +55,16 @@ def test_lossless_baseline_unchanged():
 def test_lossy_superstrate_still_allowed():
     # Im(n_sup) > 0 (loss, public convention) remains supported -- the conj
     # into the guard's internal convention must NOT misread loss as gain.
+    # Bound recalibrated 2026-07-06 with the far-field projection-kernel
+    # mirror fix: at this OBLIQUE theta the old ``tot <= 1.0`` was only
+    # satisfied by the (wrong) mirrored per-order kz flux factors.  Post-fix
+    # the same-config LOSSLESS total is 1.0037 at the test's cheap degree=5
+    # (corner-capped convergence; 1.000000 by degree 8), and the lossy-
+    # superstrate Rayleigh bookkeeping is conventional (complex kz_inc), so
+    # tot may sit slightly above 1.  The guard's failure modes remain far
+    # outside the bound (gain flip: sum(T) = -144.6; metallic: tot = 41.2).
     o, R, T = pmm_efficiency_2d_staggered(
         eps_cell=_PILLAR, n_substrate=1.5, n_superstrate=1.0 + 0.01j,
         polarization="te", theta=np.deg2rad(10.0), **_G)
     tot = float(np.sum(R) + np.sum(T))
-    assert 0.0 < tot <= 1.0
+    assert 0.0 < tot < 1.02

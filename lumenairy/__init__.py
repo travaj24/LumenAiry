@@ -458,6 +458,11 @@ from .elements.pmm import (
 )
 from .elements.pmm.stack2d import (
     PMM2DStack,
+    PMM2DStackHybrid,
+    PMM2DStack_hybrid,
+)
+from .elements.pmm.stack2d_pure import (
+    PMM2DStackPure,
 )
 from .elements.pmm.twod import (
     PreparedPMM2D,
@@ -1612,6 +1617,9 @@ __all__ = [
     'pmm_efficiency_2d_cell_vs_wavelength',
     'pmm_jones_2d',
     'PMM2DStack',
+    'PMM2DStackHybrid',
+    'PMM2DStack_hybrid',
+    'PMM2DStackPure',
     'prepare_pmm_2d',
     'prepare_pmm_2d_cell',
     'PreparedPMM2D',

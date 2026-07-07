@@ -1,8 +1,8 @@
 """
-lumenairy.elements.pmm.stack2d -- multilayer 2-D hybrid PMM (PMM2DStack).
+lumenairy.elements.pmm.stack2d -- multilayer 2-D hybrid PMM (PMM2DStackHybrid).
 =========================================================================
 
-:class:`PMM2DStack` cascades MULTIPLE doubly-periodic layers -- uniform films,
+:class:`PMM2DStackHybrid` cascades MULTIPLE doubly-periodic layers -- uniform films,
 axis-aligned patterned cells (:func:`pmm_efficiency_2d_cell` geometry), and
 in-plane anisotropic tensor cells (:func:`pmm_jones_2d` geometry) -- through
 the Redheffer S-matrix in the shared Rayleigh (Fourier) order basis.  It is the
@@ -58,13 +58,13 @@ from .twod import (
 )
 from .twod_jones import _require_nonzero_ezz, _tensor_layer_modes
 
-__all__ = ["PMM2DStack"]
+__all__ = ["PMM2DStackHybrid", "PMM2DStack_hybrid", "PMM2DStack"]
 
 
 from ...backend import is_jax_array
 
 
-class PMM2DStack:
+class PMM2DStackHybrid:
     """Builder for a multilayer doubly-periodic stack solved by the hybrid
     2-D PMM (see the module docstring).
 
@@ -86,7 +86,7 @@ class PMM2DStack:
                  symmetry="auto", max_nodal_dof=_MAX_NODAL_DOF):
         if formulation not in ("li", "laurent"):
             raise ValueError(
-                f"PMM2DStack: formulation must be 'li' or 'laurent', got "
+                f"PMM2DStackHybrid: formulation must be 'li' or 'laurent', got "
                 f"{formulation!r}")
         self.period_x = float(period_x)
         self.period_y = float(period_x if period_y is None else period_y)
@@ -152,15 +152,15 @@ class PMM2DStack:
             except Exception:
                 t_c = None
             if t_c is not None and (t_c <= 0.0 or not np.isfinite(t_c)):
-                raise ValueError("PMM2DStack.add_layer: thickness must be > 0")
+                raise ValueError("PMM2DStackHybrid.add_layer: thickness must be > 0")
         else:
             if float(thickness) <= 0.0 or not np.isfinite(float(thickness)):
-                raise ValueError("PMM2DStack.add_layer: thickness must be > 0")
+                raise ValueError("PMM2DStackHybrid.add_layer: thickness must be > 0")
             t_store = float(thickness)
         given = [v is not None for v in (eps, eps_cell, eps_tensor_cell)]
         if sum(given) != 1:
             raise ValueError(
-                "PMM2DStack.add_layer: pass exactly ONE of eps (uniform), "
+                "PMM2DStackHybrid.add_layer: pass exactly ONE of eps (uniform), "
                 "eps_cell (scalar pixel grid) or eps_tensor_cell "
                 "((Sx, Sy, 3, 3) in-plane tensor grid).")
         for slot, v in (("eps", eps), ("eps_cell", eps_cell),
@@ -182,7 +182,7 @@ class PMM2DStack:
                 # cannot drive (the _pmm_efficiency_2d_cell_jax contract).
                 if region_layout is None:
                     raise ValueError(
-                        "PMM2DStack.add_layer: a JAX (traced) eps_cell needs "
+                        "PMM2DStackHybrid.add_layer: a JAX (traced) eps_cell needs "
                         "region_layout= (a CONCRETE int grid, same shape, "
                         "naming which pixels share a region); the walls come "
                         "from the layout, the traced cell provides each "
@@ -191,12 +191,12 @@ class PMM2DStack:
                                                       dtype=np.int64))
                 if lay.shape != tuple(eps_cell.shape):
                     raise ValueError(
-                        "PMM2DStack.add_layer: region_layout shape "
+                        "PMM2DStackHybrid.add_layer: region_layout shape "
                         f"{lay.shape} != eps_cell shape "
                         f"{tuple(eps_cell.shape)}.")
                 xw, yw, ltile = _cell_to_walls_tile(
                     lay.astype(complex), self.period_x, self.period_y,
-                    "PMM2DStack.add_layer")
+                    "PMM2DStackHybrid.add_layer")
                 first_idx = [tuple(int(v) for v in np.argwhere(lay == u)[0])
                              for u in np.unique(lay)]
                 self._append_patterned("scalar", t_store, xw, yw,
@@ -208,30 +208,30 @@ class PMM2DStack:
                 return self
             if region_layout is not None:
                 raise ValueError(
-                    "PMM2DStack.add_layer: region_layout is only meaningful "
+                    "PMM2DStackHybrid.add_layer: region_layout is only meaningful "
                     "for a JAX (traced) eps_cell.")
             xw, yw, tile = _cell_to_walls_tile(
                 eps_cell, self.period_x, self.period_y,
-                "PMM2DStack.add_layer")
+                "PMM2DStackHybrid.add_layer")
             if tile.ndim != 2:
                 raise ValueError(
-                    "PMM2DStack.add_layer: eps_cell must be a scalar (Sx, Sy) "
+                    "PMM2DStackHybrid.add_layer: eps_cell must be a scalar (Sx, Sy) "
                     "grid; pass tensor cells via eps_tensor_cell.")
             self._append_patterned("scalar", t_store, xw, yw, tile)
             return self
         if is_jax_array(eps_tensor_cell):
             raise NotImplementedError(
-                "PMM2DStack.add_layer: traced eps_tensor_cell is not "
+                "PMM2DStackHybrid.add_layer: traced eps_tensor_cell is not "
                 "differentiable (the 2-D JAX surface is scalar; tensor "
                 "cells are NumPy-only).")
         cell = np.asarray(eps_tensor_cell, dtype=_C)
         if cell.ndim != 4 or cell.shape[2:] != (3, 3):
             raise ValueError(
-                f"PMM2DStack.add_layer: eps_tensor_cell must be "
+                f"PMM2DStackHybrid.add_layer: eps_tensor_cell must be "
                 f"(Sx, Sy, 3, 3), got shape {cell.shape}.")
         xw, yw, tile = _cell_to_walls_tile(
-            cell, self.period_x, self.period_y, "PMM2DStack.add_layer")
-        _require_nonzero_ezz("PMM2DStack.add_layer", tile)
+            cell, self.period_x, self.period_y, "PMM2DStackHybrid.add_layer")
+        _require_nonzero_ezz("PMM2DStackHybrid.add_layer", tile)
         # OUT-OF-PLANE tensor layers are allowed (v5.14 roadmap item 3): any
         # such layer promotes the WHOLE cascade to the generalized S-matrix
         # in solve() (the 1-D PMMStack precedent).
@@ -240,12 +240,12 @@ class PMM2DStack:
 
     def _append_patterned(self, kind, t, xw, yw, tile):
         el_x = _axis_elem_counts(self.period_x, xw, self.degree, self.n_el,
-                                 "PMM2DStack.add_layer", "x")
+                                 "PMM2DStackHybrid.add_layer", "x")
         el_y = _axis_elem_counts(self.period_y, yw, self.degree, self.n_el,
-                                 "PMM2DStack.add_layer", "y")
-        _validate_cell_orders("PMM2DStack.add_layer", self.n_orders,
+                                 "PMM2DStackHybrid.add_layer", "y")
+        _validate_cell_orders("PMM2DStackHybrid.add_layer", self.n_orders,
                               self.degree, el_x, el_y)
-        _validate_cell_cost("PMM2DStack.add_layer", el_x, el_y, self.degree,
+        _validate_cell_cost("PMM2DStackHybrid.add_layer", el_x, el_y, self.degree,
                             self.max_nodal_dof)
         self._layers.append(dict(kind=kind, t=t, xw=list(xw), yw=list(yw),
                                  tile=tile, el_x=el_x, el_y=el_y))
@@ -327,12 +327,12 @@ class PMM2DStack:
         midpoints (O(1/n_slices^2)); ``'bottom'`` at the slice bottoms."""
         if rule not in ("midpoint", "bottom"):
             raise ValueError(
-                f"PMM2DStack.add_tapered_pillar: rule must be 'midpoint' or "
+                f"PMM2DStackHybrid.add_tapered_pillar: rule must be 'midpoint' or "
                 f"'bottom', got {rule!r}")
         n_slices = int(n_slices)
         if n_slices < 1:
             raise ValueError(
-                "PMM2DStack.add_tapered_pillar: n_slices must be >= 1")
+                "PMM2DStackHybrid.add_tapered_pillar: n_slices must be >= 1")
         xb0 = tuple(map(float, x_bounds_bottom))
         yb0 = tuple(map(float, y_bounds_bottom))
         xb1 = xb0 if x_bounds_top is None else tuple(map(float, x_bounds_top))
@@ -350,7 +350,7 @@ class PMM2DStack:
             if not (0.0 < xw[0] < xw[1] < self.period_x
                     and 0.0 < yw[0] < yw[1] < self.period_y):
                 raise ValueError(
-                    "PMM2DStack.add_tapered_pillar: interpolated pillar "
+                    "PMM2DStackHybrid.add_tapered_pillar: interpolated pillar "
                     f"bounds {xw} x {yw} must satisfy 0 < lo < hi < period "
                     "at every slice.")
             tile = np.full((3, 3), complex(eps_host), dtype=_C)
@@ -372,7 +372,7 @@ class PMM2DStack:
         from matplotlib.patches import Rectangle
         n = len(self._layers)
         if n == 0:
-            raise ValueError("PMM2DStack.plot_geometry: add layers first.")
+            raise ValueError("PMM2DStackHybrid.plot_geometry: add layers first.")
         if axes is None:
             _fig, axes = plt.subplots(1, n, figsize=(3.2 * n, 3.2),
                                       squeeze=False)
@@ -510,13 +510,13 @@ class PMM2DStack:
         self._epsF_cache = {}
         if any(L.get("kind") == "disp" for L in self._layers):
             raise ValueError(
-                "PMM2DStack.solve: the stack holds DISPERSIVE (wl -> value) "
+                "PMM2DStackHybrid.solve: the stack holds DISPERSIVE (wl -> value) "
                 "materials; use solve_vs_wavelength(wavelengths), which "
                 "materialises every callable per wavelength.")
         if self._src is None:
-            raise ValueError("PMM2DStack.solve: call set_source(...) first")
+            raise ValueError("PMM2DStackHybrid.solve: call set_source(...) first")
         if not self._layers:
-            raise ValueError("PMM2DStack.solve: add at least one layer")
+            raise ValueError("PMM2DStackHybrid.solve: add at least one layer")
         wavelength = self._src["wavelength"]
         theta, phi = self._src["theta"], self._src["phi"]
 
@@ -535,12 +535,12 @@ class PMM2DStack:
         if _jax_in:
             if retain_internal:
                 raise NotImplementedError(
-                    "PMM2DStack.solve(retain_internal=True): not available "
+                    "PMM2DStackHybrid.solve(retain_internal=True): not available "
                     "on the JAX (differentiable) path; use NumPy inputs for "
                     "layer_absorption.")
             if any(L["kind"] == "tensor" for L in self._layers):
                 raise NotImplementedError(
-                    "PMM2DStack: tensor layers are not differentiable (the "
+                    "PMM2DStackHybrid: tensor layers are not differentiable (the "
                     "2-D JAX surface is scalar in-plane); use NumPy inputs "
                     "for tensor stacks.")
             from ._jax_stack2d import _pmm_stack2d_solve_jax
@@ -551,7 +551,7 @@ class PMM2DStack:
         nre = float(np.real(np.sqrt(eps_sup)))
         kx0 = nre * np.sin(theta) * np.cos(phi)
         ky0 = nre * np.sin(theta) * np.sin(phi)
-        _require_propagating_incidence("PMM2DStack.solve", eps_sup,
+        _require_propagating_incidence("PMM2DStackHybrid.solve", eps_sup,
                                        kx0 ** 2 + ky0 ** 2)
 
         n_orders = self.n_orders
@@ -667,7 +667,7 @@ class PMM2DStack:
             any_oop = any(m[0] == "gen" for m in modes)
             if retain_internal and any_oop:
                 raise NotImplementedError(
-                    "PMM2DStack.solve(retain_internal=True): symmetric "
+                    "PMM2DStackHybrid.solve(retain_internal=True): symmetric "
                     "(in-plane, vertical) cascades only.")
             if not any_oop:
                 # Redheffer cascade: sup | L1 | L2 | ... | Ln | sub (symmetric)
@@ -863,18 +863,18 @@ class PMM2DStack:
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
-                "PMM2DStack.internal_field: no internal data retained; the "
+                "PMM2DStackHybrid.internal_field: no internal data retained; the "
                 "MOST RECENT solve must use solve(retain_internal=True) "
                 "(any re-solve invalidates previously retained internals).")
         names = {"E": ("Ex", "Ey", "Ez"), "H": ("Hx", "Hy", "Hz"),
                  "all": ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
         if component not in names:
             raise ValueError(
-                f"PMM2DStack.internal_field: component must be 'E', 'H' or "
+                f"PMM2DStackHybrid.internal_field: component must be 'E', 'H' or "
                 f"'all', got {component!r}.")
         if filter not in ("none", "lanczos"):
             raise ValueError(
-                f"PMM2DStack.internal_field: filter must be 'none' or "
+                f"PMM2DStackHybrid.internal_field: filter must be 'none' or "
                 f"'lanczos', got {filter!r}.")
         want = names[component]
         Nf = d["Nf"]
@@ -964,7 +964,7 @@ class PMM2DStack:
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
-                "PMM2DStack: no internal data retained; the MOST RECENT "
+                "PMM2DStackHybrid: no internal data retained; the MOST RECENT "
                 "solve must use solve(retain_internal=True) (any re-solve "
                 "invalidates previously retained internals).")
         out = []
@@ -1018,7 +1018,7 @@ class PMM2DStack:
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
-                "PMM2DStack.layer_absorption: no internal data retained; "
+                "PMM2DStackHybrid.layer_absorption: no internal data retained; "
                 "the MOST RECENT solve must use solve(retain_internal=True) "
                 "(any re-solve invalidates previously retained internals).")
         amps = self._internal_amplitudes()
@@ -1039,7 +1039,7 @@ class PMM2DStack:
             if L.get("kind") != "disp":
                 out.append(L)
                 continue
-            probe = PMM2DStack.__new__(PMM2DStack)
+            probe = PMM2DStackHybrid.__new__(PMM2DStackHybrid)
             probe.__dict__.update(self.__dict__)
             probe._layers = []
             probe.add_layer(L["t"], **{L["slot"]: L["fn"](float(w))})
@@ -1079,10 +1079,10 @@ class PMM2DStack:
             phi = src.get("phi", 0.0) if src is not None else 0.0
         wlv = np.atleast_1d(np.asarray(wavelengths, dtype=float))
         if wlv.size == 0:
-            raise ValueError("PMM2DStack.solve_vs_wavelength: wavelengths is "
+            raise ValueError("PMM2DStackHybrid.solve_vs_wavelength: wavelengths is "
                              "empty; pass at least one wavelength [m].")
         if not np.all(np.isfinite(wlv)) or np.any(wlv <= 0.0):
-            raise ValueError("PMM2DStack.solve_vs_wavelength: every "
+            raise ValueError("PMM2DStackHybrid.solve_vs_wavelength: every "
                              "wavelength must be a finite value > 0 [m].")
         base = self._layers
 
@@ -1123,3 +1123,18 @@ class PMM2DStack:
         if jones:
             return orders, R, T, J
         return orders, R, T
+
+
+# ============================ NAME MIGRATION ============================== #
+# The class was renamed PMM2DStack -> PMM2DStackHybrid to make the HYBRID
+# (Fourier-Galerkin projected -> FMM n_orders floor) approach explicit, freeing
+# the plain ``PMM2DStack`` name for the no-floor PURE staggered stack
+# (:class:`~lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure`).
+#
+# ``PMM2DStack_hybrid`` is a permanent explicit alias.  ``PMM2DStack`` is a
+# TRANSITIONAL alias that currently still resolves to the hybrid so existing
+# code keeps working; it will be repointed to the pure stack once that reaches
+# feature + validation parity (a deliberate, tested cutover).  Import
+# ``PMM2DStackHybrid`` (or ``PMM2DStackPure``) explicitly to pin the method.
+PMM2DStack_hybrid = PMM2DStackHybrid
+PMM2DStack = PMM2DStackHybrid

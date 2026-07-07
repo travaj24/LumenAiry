@@ -14,6 +14,7 @@ from .conical import pmm_jones_1d_conical, pmm_jones_1d_conical_tensor
 from .oned import *
 from .stack import *
 from .stack2d import *
+from .stack2d_pure import *
 from .twod import *
 from .twod_jones import *
 from .twod_staggered import *
@@ -30,7 +31,9 @@ __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
            "pmm_graded_segments",
            "grating_convergence_class", "classify_from_grating",
            "pmm_efficiency_2d", "pmm_efficiency_2d_cell", "pmm_jones_2d",
-           "pmm_efficiency_2d_staggered", "PMM2DStack",
+           "pmm_efficiency_2d_staggered",
+           "PMM2DStack", "PMM2DStackHybrid", "PMM2DStack_hybrid",
+           "PMM2DStackPure",
            "PreparedPMM2D", "prepare_pmm_2d", "prepare_pmm_2d_cell",
            "pmm_efficiency_2d_vs_wavelength",
            "pmm_efficiency_2d_cell_vs_wavelength"]
