@@ -52,7 +52,20 @@ LUMENAIRY_DIR = os.path.join(REPO_ROOT, 'lumenairy')
 # memory.py was NARROWED to the registry-walk tuple instead of counted.)
 # Slack of 2 retained.  If you add a non-tracer-guard site, NARROW it
 # instead of bumping.
-_NON_UI_EXCEPT_BUDGET = 39
+#
+# v5.21 re-triage (2026-07-07): +5 sites, ALL the sanctioned jax-tracer-
+# guard class (concretize-or-fallback where the tracer error is untypeable
+# without importing jax at module scope): propagators/gbd.py
+# `_fft_applicable` (tracer -> trace-safe dense-sum fallback),
+# elements/_berreman_jax.py internal_field traced-thickness probe (re-raises
+# as NotImplementedError) + `(3,3)`-tensor inspectability probe,
+# elements/rcwa/_core.py traced-tensor OOP routing probes, rcwa/stack.py +
+# rcwa/twod.py traced-tensor general-path routing.  The 3 NON-tracer sites
+# added by the v5.21 Maslov Cholesky fit (lenses_maslov.py `_solve_fit` x2 +
+# `_gram_cho_factor`) were NARROWED to
+# ``(ImportError, ValueError, np.linalg.LinAlgError)`` instead of counted.
+# Slack of 2 retained (count 43 at bump time).
+_NON_UI_EXCEPT_BUDGET = 45
 
 
 def _count_except_exception_in_non_ui() -> int:

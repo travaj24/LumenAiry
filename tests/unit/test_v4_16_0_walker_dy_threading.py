@@ -146,6 +146,8 @@ _KNOWN_DY_THREADING_EXEMPTIONS = frozenset({
     # pixel raster, so dx/dy do not apply.
     'apply_thin_lens_to_beamlets',
     'apply_abcd_to_beamlets',
+    'apply_aperture_to_beamlets',
+    'apply_prescription_persurface_to_beamlets',
     'apply_aperture_diffraction',
     'apply_vector_aperture_diffraction',
     'apply_doe_phase_traced',
@@ -168,6 +170,16 @@ _KNOWN_DY_THREADING_EXEMPTIONS = frozenset({
     # ``dy`` kwarg would only shadow the value the caller already threads
     # through the traced kwargs.
     'apply_real_lens_traced_multi',
+
+    # ---- isotropic-grid by construction (v5.21) ----------------------------
+    # ``apply_real_lens_traced_multibranch`` assembles its through-focus
+    # branch fields on an isotropic pixel raster by construction: the
+    # branch bounding boxes, launch grid, and the per-branch phase/KMAH
+    # accumulation all share the single ``dx`` (``PX``/``PY`` are both
+    # ``(idx - N/2) * dx``).  Anamorphic support requires reworking the
+    # branch-splitting geometry and is staged; anamorphic callers use
+    # ``apply_real_lens_traced`` (dy-threaded) instead.
+    'apply_real_lens_traced_multibranch',
 })
 
 

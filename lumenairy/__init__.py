@@ -158,6 +158,15 @@ from .elements.lenses import (
     surface_sag_general,
 )
 
+# v5.21 (__all__-symmetry): Maslov vector entry point + the caustic-uniform
+# special functions live in the lenses_maslov submodule __all__ but are not
+# re-exported by the elements.lenses aggregate.
+from .elements.lenses_maslov import (
+    apply_real_lens_maslov_vector,
+    pearcey,
+    uniform_fold_airy,
+)
+
 # â”€â”€ Glass catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .glass import (
     GLASS_REGISTRY,
@@ -673,6 +682,7 @@ from .optimize import (
     design_optimize,
     design_optimize_multi_objective,
     make_lg_aberration_merit_jax,
+    optimize_traced_geometry,
     register_wave_propagator,
     unregister_wave_propagator,
 )
@@ -748,6 +758,9 @@ from .raytrace import (
     RAY_NAN,
     RAY_OK,
     RAY_TIR,
+    # v5.21 (__all__-symmetry): differential ray transfer (GBD analytic
+    # Jacobian primitive) -- public per raytrace.differential.__all__.
+    DifferentialTransfer,
     FirstOrderData,
     LensInfo,
     PupilInfo,
@@ -778,6 +791,9 @@ from .raytrace import (
     ray_fan_data,
     ray_fan_plot,
     ray_fan_plot_prescription,
+    ray_transfer_jacobian,
+    ray_transfer_jacobian_analytic,
+    ray_transfer_jacobian_jax,
     # v4.15.1 (Cluster B Item 6): wave -> ray bridge.
     rays_from_field,
     raytrace_system,
@@ -901,6 +917,7 @@ from .propagators.gbd import (
     BeamletBundle,
     apply_abcd_to_beamlets,
     apply_aperture_to_beamlets,
+    apply_prescription_persurface_to_beamlets,
     apply_thin_lens_to_beamlets,
     asm_field_to_gbd,
     converge_gbd_sampling,
@@ -909,13 +926,18 @@ from .propagators.gbd import (
     decompose_field_to_beamlets,
     gbd_asm_gouy_phase,
     gbd_field_to_asm,
+    gbd_ghost_analysis,
     match_global_phase,
     propagate_beamlets_freespace,
     propagate_gbd,  # canonical-order alias
     propagate_gbd_freespace,
     propagate_gbd_freespace_csp,
+    propagate_gbd_freespace_spectral,
+    propagate_gbd_freespace_vector,
     propagate_gbd_thin_lens,
     propagate_gbd_through_prescription,
+    propagate_gbd_vector_through_prescription,
+    recommend_gbd_sampling,
     reconstruct_field_from_beamlets,
     reconstruct_vector_field_with_ez,
 )
@@ -1082,6 +1104,9 @@ __all__ = [
     'apply_real_lens_maslov',
     'apply_real_lens_traced_jax',
     'apply_real_lens_maslov_jax',
+    'apply_real_lens_maslov_vector',
+    'pearcey',
+    'uniform_fold_airy',
     'apply_cylindrical_lens',
     'apply_grin_lens',
     'apply_axicon',
@@ -1220,10 +1245,13 @@ __all__ = [
     'propagate_gbd_freespace_csp',
     'reconstruct_vector_field_with_ez',
     'apply_aperture_to_beamlets',
+    'apply_prescription_persurface_to_beamlets',
     'gbd_asm_gouy_phase',
     'gbd_field_to_asm',
+    'gbd_ghost_analysis',
     'match_global_phase',
     'asm_field_to_gbd',
+    'recommend_gbd_sampling',
     'propagate_beamlets_freespace',
     'apply_thin_lens_to_beamlets',
     'apply_abcd_to_beamlets',
@@ -1232,6 +1260,9 @@ __all__ = [
     'propagate_gbd',
     'propagate_gbd_thin_lens',
     'propagate_gbd_through_prescription',
+    'propagate_gbd_freespace_spectral',
+    'propagate_gbd_freespace_vector',
+    'propagate_gbd_vector_through_prescription',
 
     # Huygens-Fresnel Path Integration (Monte Carlo)
     'PathBundle',
@@ -1313,6 +1344,11 @@ __all__ = [
     'ray_fan_data',
     'ray_fan_plot',
     'ray_fan_plot_prescription',
+    # v5.21: differential ray transfer (GBD analytic-Jacobian primitive)
+    'DifferentialTransfer',
+    'ray_transfer_jacobian',
+    'ray_transfer_jacobian_analytic',
+    'ray_transfer_jacobian_jax',
     'opd_fan_data',
     'through_focus_rms',
     'refocus',
@@ -1485,6 +1521,8 @@ __all__ = [
     'DesignResult',
     'Constraint',
     'design_optimize',
+    # v5.21: traced-lens geometry optimizer (jax geometry-gradient loop)
+    'optimize_traced_geometry',
     # v4.16 (ROADMAP #11): multi-objective Pareto wrapper (pymoo-optional)
     'ParetoResult',
     'design_optimize_multi_objective',

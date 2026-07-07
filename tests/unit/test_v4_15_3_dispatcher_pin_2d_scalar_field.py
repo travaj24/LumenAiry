@@ -451,6 +451,26 @@ _GUARD_EXEMPTIONS = frozenset({
     # validates each emitter field's shape itself, and every per-emitter
     # ``apply_real_lens_traced`` call it makes runs the guard.
     ('lumenairy/elements/_lens_traced.py', 'apply_real_lens_traced_multi'),
+
+    # ---- v5.21 vector-field entry points ------------------------------------
+    # These take a VECTOR field ``E_vec`` of shape ``(2or3, Ny, Nx)``
+    # (Ex/Ey[/Ez] components), not a single 2-D scalar field, so the
+    # single-field guard does not fit; each validates its own component
+    # stack shape and the per-component kernels they delegate to are
+    # guarded.
+    ('lumenairy/propagators/gbd.py', 'propagate_gbd_freespace_vector'),
+    ('lumenairy/propagators/gbd.py',
+     'propagate_gbd_vector_through_prescription'),
+    ('lumenairy/elements/lenses_maslov.py', 'apply_real_lens_maslov_vector'),
+
+    # ---- v5.21 BeamletBundle consumers --------------------------------------
+    # First positional is a ``BeamletBundle`` (per-beamlet positions /
+    # directions / Q tensors), not a sampled 2-D field; there is no field
+    # array to guard.  Same class as the bundle consumers in the
+    # dy-threading walker's exemption list.
+    ('lumenairy/propagators/gbd.py', 'apply_aperture_to_beamlets'),
+    ('lumenairy/propagators/gbd.py',
+     'apply_prescription_persurface_to_beamlets'),
 })
 
 

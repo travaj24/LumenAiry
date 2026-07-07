@@ -3454,6 +3454,8 @@ def apply_real_lens_traced_segmented(
     -------
     complex ndarray, or list of complex ndarray if ``return_segments``.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_real_lens_traced_segmented')
     if dy is None:
         dy = dx
     if isinstance(n_segments, (tuple, list)) and len(n_segments) == 2:

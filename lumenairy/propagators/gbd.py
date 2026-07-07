@@ -379,6 +379,8 @@ def recommend_gbd_sampling(
         ``propagate_gbd_*`` (``**recommend_gbd_sampling(...)`` minus
         ``n_beamlets``).
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'recommend_gbd_sampling')
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
     gx = xp.gradient(E_in, dx, axis=-1)
@@ -486,6 +488,8 @@ def converge_gbd_sampling(
         ``waist_factor`` / ``sample_step`` into ``decompose_field_to_beamlets`` /
         ``propagate_gbd_*``.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'converge_gbd_sampling')
     from ..propagators.asm import angular_spectrum_propagate
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
@@ -621,6 +625,8 @@ def decompose_field_adaptive(
     NumPy backend (the boolean cell masking / concatenation is host-side); for
     JAX / CuPy use the uniform :func:`decompose_field_to_beamlets`.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'decompose_field_adaptive')
     xp = array_namespace(E_in)
     if xp is not np:
         raise NotImplementedError(
@@ -1578,6 +1584,8 @@ def gbd_field_to_asm(E: np.ndarray, *, z: float, wavelength: float, dx: float,
     two propagators are interchangeable (coherent combination, GBD->ASM
     handoff).  ``z`` / ``waist_factor`` must match the ``propagate_gbd_freespace``
     call that produced ``E``."""
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'gbd_field_to_asm')
     xp = array_namespace(E)
     return E * xp.exp(-1j * gbd_asm_gouy_phase(z, wavelength, dx, waist_factor))
 
@@ -1592,6 +1600,8 @@ def asm_field_to_gbd(E: np.ndarray, *, z: float, wavelength: float, dx: float,
     (:func:`decompose_field_to_beamlets`) and continuing with GBD does NOT need
     this (decomposition + reconstruction is self-consistent in GBD's
     convention)."""
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'asm_field_to_gbd')
     xp = array_namespace(E)
     return E * xp.exp(1j * gbd_asm_gouy_phase(z, wavelength, dx, waist_factor))
 
@@ -1624,6 +1634,8 @@ def match_global_phase(E: np.ndarray, reference: np.ndarray) -> np.ndarray:
        convention difference use
        :func:`lumenairy.propagators.asm.apply_fresnel_curvature`.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'match_global_phase')
     xp = array_namespace(E)
     ip = xp.sum(xp.conj(reference) * E)
     return E * (xp.conj(ip) / (xp.abs(ip) + 1e-300))
@@ -1669,6 +1681,8 @@ def propagate_gbd_freespace_spectral(
         ``(n_lambda, Ny, Nx)`` complex for ``combine='stack'`` or
         ``(Ny, Nx)`` real for ``combine='intensity'``.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'propagate_gbd_freespace_spectral')
     xp = array_namespace(E_in)
     lams = [float(_l) for _l in wavelengths]
     if not lams:
@@ -1997,6 +2011,8 @@ def propagate_gbd_freespace_csp(
     radii -- ``O(n_beamlets * box)`` instead of ``O(n_beamlets * N^2)`` -- and
     matches the dense sum to the tail truncation (``window=6.0`` -> ~1e-16 tail).
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'propagate_gbd_freespace_csp')
     xp = array_namespace(E_in)
     if dy is None:
         dy = dx

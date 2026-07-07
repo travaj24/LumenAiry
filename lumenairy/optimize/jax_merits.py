@@ -388,6 +388,8 @@ def optimize_traced_geometry(
     dict -- ``{'prescription': optimised dict, 'loss_history': [...],
     'loss': final, 'params': ndarray}``.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'optimize_traced_geometry')
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
         raise ImportError("optimize_traced_geometry requires JAX.")

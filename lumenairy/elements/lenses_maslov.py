@@ -799,14 +799,15 @@ def _solve_fit(A, RHS, gram_factor=None):
         try:
             from scipy.linalg import cho_solve
             return cho_solve(gram_factor, b, check_finite=False)
-        except Exception:
-            pass
+        except (ImportError, ValueError, np.linalg.LinAlgError):
+            pass                       # scipy absent / stale-shape factor
     G = A.T @ A
     try:
         from scipy.linalg import cho_factor, cho_solve
         return cho_solve(cho_factor(G, check_finite=False), b,
                          check_finite=False)
-    except Exception:
+    except (ImportError, ValueError, np.linalg.LinAlgError):
+        # scipy absent, or G not positive-definite (rank-deficient freeform)
         try:
             return np.linalg.solve(G, b)
         except np.linalg.LinAlgError:
@@ -820,7 +821,7 @@ def _gram_cho_factor(A):
     try:
         from scipy.linalg import cho_factor
         return cho_factor(A.T @ A, check_finite=False)
-    except Exception:
+    except (ImportError, ValueError, np.linalg.LinAlgError):
         return None
 
 

@@ -175,6 +175,19 @@ All notable changes to the core library are documented here.
   (JAX / CuPy) for per-beamlet-`Q`, skew, off-grid or per-beamlet-tilted
   bundles.
 
+- **v5.21 API-conformance sweep** (release-gate walkers): the new lens /
+  GBD / raytrace-differential names are re-exported at top level
+  (`apply_real_lens_maslov_vector`, `pearcey`, `uniform_fold_airy`,
+  `optimize_traced_geometry`, `recommend_gbd_sampling`,
+  `gbd_ghost_analysis`, `propagate_gbd_freespace_spectral` / `_vector`,
+  `propagate_gbd_vector_through_prescription`,
+  `apply_prescription_persurface_to_beamlets`, `DifferentialTransfer`,
+  `ray_transfer_jacobian` / `_analytic` / `_jax`), and every new
+  scalar-field entry point now runs the shared `_check_2d_scalar_field`
+  input guard first (canonical MCF / non-2-D error messages).  The three
+  Maslov Cholesky-fit broad-excepts were narrowed to
+  `(ImportError, ValueError, LinAlgError)`.
+
 - **`PMM2DStackPure` — multilayer 2-D PURE (no-floor) PMM stack**
   (`pmm/stack2d_pure.py`), the no-Fourier-floor sibling of the hybrid stack and
   the 2-D analogue of the 1-D `PMMStack`: every region (half-spaces + layers)
