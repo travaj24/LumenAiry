@@ -101,6 +101,8 @@ def test_staggered_vacuum_oblique_exact():
     assert abs(R.sum() + T.sum() - 1.0) < 1e-9
 
 
+@pytest.mark.slow      # two staggered modal eigs + a degree-14 1-D
+                       # multilayer oracle -- minutes-scale on CI
 def test_stack_pure_multilayer_ab_vs_1d():
     """DIRECT patterned<->patterned (A|B) staggered cascade against the exact
     1-D multilayer oracle at oblique.  This interface 'blew up energy

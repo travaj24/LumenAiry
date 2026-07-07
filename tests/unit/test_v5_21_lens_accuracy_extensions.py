@@ -792,6 +792,9 @@ def test_ludwig_fold_exact_and_finite_through_caustic():
 # ==========================================================================
 # Adaptive delaminating Levin engine (lumenairy._math.levin)
 # ==========================================================================
+@pytest.mark.slow      # ~6.5 min on CI (adaptive refinement to a rigorous
+                       # bound through mu -> 0); timed out the 33-min fast
+                       # gate at v5.21.0 release
 def test_levin2d_uniform_through_fold_with_rigorous_bound():
     """The 2-D Levin engine integrates a fold-caustic phase (two coalescing
     stationary points) uniformly through mu -> 0, honoring its returned
@@ -830,6 +833,8 @@ def test_levin2d_uniform_through_fold_with_rigorous_bound():
         assert abs(val - exact) <= bound * 1.01  # rigorous bound holds
 
 
+@pytest.mark.slow      # Levin ROI vs converged quadrature reference --
+                       # minutes-scale on CI; keep the fast gate lean
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_maslov_levin_matches_quadrature_roi():

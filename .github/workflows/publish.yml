@@ -43,7 +43,9 @@ jobs:
     # drifted to ~25 min -- the exact contradiction this comment warns about
     # happened: unit-tests.yml passed at the new cap but this verify gate, still
     # at 25, timed out the v5.20.0 publish.  Keep them equal.
-    timeout-minutes: 40
+    # v5.21.0: 40 -> 47 (step 33 -> 40), again in sync with unit-tests.yml after
+    # the v5.21 test batches pushed the fast gate past 33 min.
+    timeout-minutes: 47
     strategy:
       fail-fast: true
       matrix:
@@ -158,8 +160,9 @@ jobs:
         # v5.12.0: 15 -> 25 to match unit-tests.yml's proven step cap.  v5.20.0:
         # 25 -> 33 (again in sync with unit-tests.yml) -- the fast suite drifted
         # to ~25 min and 3.11-3.13 tripped the 25-min cap on the v5.20.0 publish
-        # while unit-tests.yml passed at 33.
-        timeout-minutes: 33
+        # while unit-tests.yml passed at 33.  v5.21.0: 33 -> 40 in sync with
+        # unit-tests.yml (v5.21 test batches; slow hogs moved to the slow job).
+        timeout-minutes: 40
 
   build:
     name: Build sdist + wheel

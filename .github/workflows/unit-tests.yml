@@ -34,9 +34,15 @@ jobs:
     # 25 min (Python 3.10 finished ~24:50 while 3.11-3.13 tripped the 25-min step
     # cap on slower runners -- pure CI-load variance at the boundary, NOT a hung
     # test; the eig-heavy v5.20.0 PMM/RCWA tests already run in the slow-tests
-    # job).  Bump to job 40 / step 33 for real headroom.  FOLLOW-UP: re-optimise
-    # the fast gate (pytest-xdist -n auto, or move more eig-heavy tests to slow).
-    timeout-minutes: 40
+    # job).  Bump to job 40 / step 33 for real headroom.  v5.21.0: the lens-
+    # propagator + PMM-oblique test batches pushed the fast gate past 33 min
+    # (timed out at 89%); the three minutes-scale hogs (Levin fold/ROI, pure
+    # A|B stack) moved to the slow job AND job 40 -> 47 / step 33 -> 40 for
+    # headroom.  KEEP publish.yml's verify job caps EQUAL to these (v5.20.0
+    # shipped with them out of sync and the publish gate timed out on the
+    # tag).  FOLLOW-UP: re-optimise the fast gate (pytest-xdist -n auto, or
+    # move more eig-heavy tests to slow).
+    timeout-minutes: 47
 
     steps:
       # v5.2.5 (AUDIT_V5_2_3 post-tag fix): fetch full history + tags
@@ -92,7 +98,7 @@ jobs:
             -p no:cacheprovider --maxfail=5 -v 2>&1 \
             | tee unit_test_output.txt
           exit ${PIPESTATUS[0]}
-        timeout-minutes: 33
+        timeout-minutes: 40
 
       - name: Upload unit-test log on failure
         if: failure()
