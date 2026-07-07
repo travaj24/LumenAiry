@@ -247,7 +247,10 @@ jobs:
     # gate (which hit 24:37 against its 25-min cap once EME landed) and run
     # here on a single Python -- the numerics are not version-sensitive -- with
     # a longer cap, so they still gate every push / PR.
-    timeout-minutes: 40
+    # v5.21.0: the three minutes-scale v5.21 tests (Levin fold/ROI, pure A|B
+    # stack) moved here from the fast gate and pushed this job past its
+    # 35-min step cap (13 min before the move); job 40 -> 50, step 35 -> 45.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -287,7 +290,7 @@ jobs:
             -p no:cacheprovider -v 2>&1 \
             | tee slow_test_output.txt
           exit ${PIPESTATUS[0]}
-        timeout-minutes: 35
+        timeout-minutes: 45
 
       - name: Upload slow-test log on failure
         if: failure()

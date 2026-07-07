@@ -189,6 +189,18 @@ _KNOWN_XP_DISPATCH_EXEMPTIONS = frozenset({
     ('lumenairy/propagators/fresnel.py', 'fraunhofer_propagate'),
     ('lumenairy/analysis/psf_mtf_otf.py', 'sparrow_resolution'),
 
+    # ---- propagators/gbd.py (v5.21) -----------------------------------------
+    # ``decompose_field_adaptive``: the flagged ``np.arange`` /
+    # ``np.meshgrid`` build HOST-SIDE integer pixel-index grids for the
+    # coarse/fine cell-selection masks (indices, not field data); the
+    # residual magnitudes feed a Python-side threshold decision.  The
+    # field-array operations (``np.abs`` on ``E_in`` / the residual)
+    # dispatch through the ``__array_ufunc__`` protocol on CuPy/JAX
+    # inputs, and the actual beamlet decomposition it delegates to
+    # (``decompose_field_to_beamlets``) is xp-dispatched.  v5.22+
+    # cleanup candidate (xp-ify the index grids), not a v5.21 blocker.
+    ('lumenairy/propagators/gbd.py', 'decompose_field_adaptive'),
+
     # ---- elements/elements.py ----------------------------------------------
     # ``apply_aperture``: the NumPy-side meshgrid IS dispatched
     # internally via ``xp.meshgrid`` (see line ~250); the ``np.inf``
