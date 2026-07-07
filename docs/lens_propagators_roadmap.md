@@ -110,6 +110,18 @@ is FFT-plan-dominated (session-cached).
 1. **Phase partitioning** (subtract a fitted quadratic reference from the v2
    chart before quadrature) — cuts `n_v2` for the plain quadrature/oracle
    path; orthogonal quick win, unimplemented.
+2. **Levin engine work-budget knob + platform-robust accept test**
+   (v5.21.0 release forensics): `levin2d`'s quadtree accepts a box on
+   parent-vs-4-child agreement to `tol`; on GitHub runners' libm that
+   comparison sits at the FP-agreement floor AREA-WIDE for the fold-test
+   phase, so the tree explodes toward `4^max_depth` boxes (>20–33 min,
+   never completed at any tolerance tried) while the same test runs in
+   seconds locally. The engine needs (a) a global `max_boxes` budget that
+   degrades to a returned (honest, larger) bound instead of unbounded
+   refinement, and (b) an accept test that is robust to libm rounding
+   (e.g. residual-based like `levin1d_adaptive`, not value-agreement).
+   Until then the two Levin CI tests are `integration`-marked (local /
+   full-suite only).
 
 ---
 
