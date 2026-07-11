@@ -143,7 +143,14 @@ class JaxMeritTerm(MeritTerm):
 
         # Use JAX's default float dtype -- requesting float64 raises
         # a UserWarning when jax_enable_x64 isn't set, which is the
-        # common case for a fresh ``import jax``.
+        # common case for a fresh ``import jax``.  OPT-nit
+        # (AUDIT_OPTIMIZE_MERITS): consequently, for a GENERIC JaxMeritTerm
+        # with x64 OFF the gradient is single precision while the forward
+        # ``evaluate`` bridges through ``float()`` (double) -- a precision
+        # mismatch inherent to JAX-without-x64.  ``make_lg_aberration_merit_jax``
+        # enables x64 process-wide, so ITS gradient is float64 here; callers
+        # wanting double-precision gradients from other JaxMeritTerms should
+        # enable x64 themselves (``jax.config.update('jax_enable_x64', True)``).
         x_jax = jnp.asarray(x)
         g = jax.grad(_scalar)(x_jax)
         return np.asarray(g)
@@ -200,7 +207,14 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
         ``build_args``.
     targets : dict[(int, int), float]
         LG channels to penalise; same format as
-        :class:`LGAberrationMerit`.
+        :class:`LGAberrationMerit`.  **The JAX path supports only the
+        ``(0, 0)`` channel** (``aberration_tensor_lg00_jax`` computes the
+        (0,0) Strehl amplitude only) -- a ``{(0, 0): w}`` target minimises
+        the Strehl DEFICIT ``w*(1 - |Strehl|^2)`` (i.e. maximises the on-axis
+        Strehl / sharpens focus).  For general aberration-channel control
+        (e.g. primary spherical ``(2, 0)``) use the NumPy sibling
+        :class:`LGAberrationMerit` (finite-difference path); a non-(0,0)
+        target raises ``NotImplementedError`` here.
     build_args : callable
         ``build_args(x: ndarray) -> tuple`` mapping the parameter
         vector to differentiable scalars passed positionally to
@@ -221,19 +235,29 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
 
     Examples
     --------
-    Optimise the source-Gaussian waist ``w_s`` to minimise primary
-    spherical aberration::
+    Optimise the source-Gaussian waist ``w_s`` to MAXIMISE the on-axis
+    Strehl (minimise the Strehl deficit ``1 - |Strehl|^2``)::
 
         def build_args(x):
             return (None, None, None, None, x[0], None)
 
         merit = make_lg_aberration_merit_jax(
             prescription, wavelength=1.31e-6,
-            targets={(2, 0): 1.0},
+            targets={(0, 0): 1.0},   # (0,0) is the only JAX-supported channel
             build_args=build_args,
             field_points=[(0.0, 0.0)],
         )
-        # x[0] = w_s, optimise via design_optimize.
+        # x[0] = w_s, optimise via design_optimize (which MINIMISES the
+        # merit sum -> drives |Strehl|^2 -> 1).  For general aberration
+        # channels (e.g. (2, 0) spherical) use the NumPy LGAberrationMerit.
+
+    Notes
+    -----
+    OPT-nit (AUDIT_OPTIMIZE_MERITS): constructing this merit enables JAX
+    double precision PROCESS-WIDE (``jax.config.update('jax_enable_x64',
+    True)``) -- the fit needs float64 for a meaningful gradient.  A caller
+    relying on JAX's default float32 elsewhere in the same process is
+    silently switched to float64 by this call.
     """
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
@@ -321,12 +345,17 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
                 source_point=tuple(src),
                 w_s=w_s_local, w_p=w_p_local,
                 v2_centre=(fit.v2x_centre, fit.v2y_centre))
-            # res is a complex scalar (the L_{(0,0),(0,0)} element);
-            # weight by the user-supplied piston weight so changing
-            # ``targets={(0, 0): w}`` actually scales the merit
-            # linearly in w (the pre-fix code ignored ``wgt`` and
-            # always returned the same |L|^2 sum).
-            total = total + piston_weight * (jnp.abs(res) ** 2)
+            # res is a complex scalar (the L_{(0,0),(0,0)} element) -- the
+            # leading STREHL AMPLITUDE: |res|^2 -> 1 for a perfect system and
+            # -> 0 as aberration grows.  OPT-1 (AUDIT_OPTIMIZE_MERITS): the
+            # merit must therefore be the Strehl DEFICIT ``1 - |res|^2`` (0
+            # for a perfect system, growing with aberration), NOT ``|res|^2``
+            # -- ``design_optimize`` MINIMISES the weighted merit sum, so the
+            # old ``|res|^2`` drove the design toward |Strehl|=0 (MAXIMUM
+            # aberration), the opposite of every other merit and of
+            # optimize_traced_geometry's peak-intensity objective.  Weighted
+            # by piston_weight so ``targets={(0, 0): w}`` scales it linearly.
+            total = total + piston_weight * (1.0 - jnp.abs(res) ** 2)
         return total
 
     return JaxMeritTerm(

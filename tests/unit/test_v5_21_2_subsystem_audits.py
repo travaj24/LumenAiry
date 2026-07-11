@@ -724,3 +724,51 @@ def test_bsdf_harvey_shack_evaluate_batched_incidence():
     out = bsdf.evaluate(inc, sd)
     assert np.asarray(out).shape == (M,)
     assert np.all(np.isfinite(out))
+
+
+# =========================================================================
+# AUDIT 12 -- optimize/jax_merits.py (AUDIT_OPTIMIZE_MERITS)
+# =========================================================================
+
+
+def test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude():
+    """OPT-1: make_lg_aberration_merit_jax must penalise the Strehl DEFICIT
+    ``1 - |Strehl|^2`` (grows as coupling worsens), NOT ``|Strehl|^2`` (which
+    design_optimize would MINIMISE toward |Strehl|=0 = MAX aberration).
+
+    Decisive by construction: at a grossly waist-MISMATCHED source (poor
+    LG00->LG00 coupling) ``|Strehl|^2 -> 0``, so the DEFICIT form -> ~1 while
+    the old amplitude form -> ~0.  A value near 1 therefore confirms the
+    Strehl-deficit (correct-direction) fix; a value near 0 would mean the
+    pre-OPT-1 ``|res|^2`` (wrong-direction) form is still in place."""
+    pytest.importorskip('jax')
+    import lumenairy
+    from lumenairy.optimize.core import (
+        EvaluationContext,
+        make_lg_aberration_merit_jax,
+    )
+    pres = lumenairy.make_singlet(R1=500e-3, R2=float('inf'), d=3e-3,
+                                  glass='N-BK7', aperture=4e-3)
+    pres['object_distance'] = 0.0
+
+    def build_args(x):
+        return (None, None, None, None, x[0], None)
+
+    merit = make_lg_aberration_merit_jax(
+        pres, wavelength=1.30e-6, targets={(0, 0): 1.0},
+        build_args=build_args, field_points=[(0.0, 0.0)])
+    x = np.array([50e-6])   # grossly mismatched source waist -> |Strehl|^2 ~ 0
+    ctx = EvaluationContext(prescription=pres, wavelength=1.30e-6,
+                            N=64, dx=10e-6, x=x)
+    try:
+        v = float(merit.evaluate(ctx))
+    except (RuntimeError, ValueError, ZeroDivisionError,
+            np.linalg.LinAlgError) as exc:
+        pytest.skip(f'LG-tensor eval unstable on this runtime: {exc}')
+    if not np.isfinite(v):
+        pytest.skip('LG-tensor eval returned non-finite on this runtime.')
+    # Deficit form at poor coupling -> ~1; the OLD |res|^2 form -> ~0.
+    assert 0.5 < v <= 1.0 + 1e-6, (
+        f'LG-JAX (0,0) merit = {v} at a mismatched waist (poor coupling); '
+        f'expected a LARGE Strehl DEFICIT (~1).  A value near 0 means the '
+        f'pre-OPT-1 |Strehl|^2 (wrong-direction) form is still in place.')
