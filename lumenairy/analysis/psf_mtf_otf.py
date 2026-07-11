@@ -691,6 +691,13 @@ def mtf_cutoff(
         raise ValueError(
             f"mtf_cutoff: threshold must be in (0, 1]; got "
             f"{threshold!r}.")
+    # The threshold-crossing interpolation below assumes freq is strictly
+    # increasing (the documented contract); a decreasing/unsorted axis would
+    # silently mis-interpolate, so validate it (P4 nit).
+    if not np.all(np.diff(f_arr) > 0):
+        raise ValueError(
+            "mtf_cutoff: freq must be strictly increasing (the "
+            "threshold-crossing interpolation assumes a monotone axis).")
 
     # If the MTF starts below the threshold (i.e. DC is already
     # below), interpret that as a zero-cutoff system rather than

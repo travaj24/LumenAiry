@@ -157,8 +157,8 @@ def apply_detector(
     # non-integer ratios first uniform-filter to anti-alias, then
     # sample at the new pixel centers, scaled by pixel_pitch^2 so the
     # integral over each detector pixel is correctly represented.
-    float(pixel_pitch / (Ny / n_pixels * dx_field)) if Ny > 0 else 0
-    # Simpler: per-detector-pixel area in field samples.
+    # (P4: removed a leftover compute-and-discard expression here.)
+    # Per-detector-pixel area in field samples.
     samples_per_pix_y = (Ny / n_pixels) if n_pixels > 0 else 1.0
     samples_per_pix_x = (Nx / n_pixels) if n_pixels > 0 else 1.0
     if (abs(samples_per_pix_y - round(samples_per_pix_y)) < 1e-9
@@ -431,8 +431,7 @@ def shack_hartmann(
         else:
             cx_ref = 0.0
             cy_ref = 0.0
-        np.where(valid_mask, cx_ref, 0.0)
-        np.where(valid_mask, cy_ref, 0.0)
+        # (P4: removed two leftover compute-and-discard np.where statements.)
 
         # ---- measurement pass: gather valid sub-apertures into one
         # (K, sa, sa) batch and propagate in a single shot.

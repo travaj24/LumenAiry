@@ -466,10 +466,8 @@ def zernike_modal_basis(
     for k, j in enumerate(mode_indices):
         n_idx, m_idx = zernike_index_to_nm(int(j))
         # Gradient via finite differences in (rho, theta) -> (x, y).
-        rho.copy()
-        rho.copy()
-        np.clip(rho + eps, 0, 1)
-        np.clip(rho - eps, 0, 1)
+        # (P4: removed four leftover compute-and-discard rho.copy()/np.clip
+        # statements; the actual FD uses the four-quadrant rim scheme below.)
         # d/d(rho_x): chain through (rho, theta) <- (x, y).
         # Use forward differences along x and y in normalised coords:
         x_norm = X[inside]

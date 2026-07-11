@@ -233,18 +233,25 @@ def ghost_analysis(
     n_rays: int = 21,
     verbose: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Trace all 2-bounce ghost paths and report their relative
-    intensities.
+    """Enumerate all 2-bounce ghost reflection paths and report their
+    relative-intensity UPPER BOUNDS.
+
+    This is a Fresnel-product POWER BUDGET over every (reflect_i,
+    reflect_j) surface pair -- it does NOT trace a ray fan (the focused
+    ghost irradiance is bounded above by this, per the caveats below).
 
     Parameters
     ----------
     prescription : dict
     wavelength : float
     semi_aperture : float, optional
-        Half-aperture [m] for the ray fan.  Defaults to
+        Half-aperture [m].  Defaults to
         ``prescription['aperture_diameter'] / 2``.
     n_rays : int, default 21
-        Number of rays per ghost-path fan.
+        RESERVED / currently unused -- kept for API compatibility and a
+        future ray-fan-traced ghost-spot estimate (route to
+        :func:`retrace_ghost_path`).  The power-budget result does not
+        depend on it.
     verbose : bool
 
     Returns
@@ -666,12 +673,12 @@ def retrace_ghost_path(
     * ``'peak_xy_mm'`` -- ``(cx, cy)`` of the centroid, in millimetres.
     * ``'rms_radius_mm'`` -- RMS spot radius
       ``sqrt(<(x - cx)^2 + (y - cy)^2>)`` in millimetres.
-    * ``'fwhm_mm'`` -- FWHM of the radial energy distribution,
-      estimated from the encircled-energy radii at 25% and 75% (a
-      Gaussian-equivalent FWHM = 2 * sqrt(2*ln(2)) * sigma; here
-      computed empirically as twice the radius enclosing 50% of the
-      energy times the Gaussian factor 1.1774).  Falls back to NaN if
-      fewer than 4 rays survive.
+    * ``'fwhm_mm'`` -- FWHM of the radial energy distribution, computed
+      as ``2 * r_50`` where ``r_50`` is the (median) radius enclosing 50 %
+      of the energy.  For a 2-D Gaussian ``r_50 = sqrt(2 ln 2) sigma =
+      1.1774 sigma`` and ``FWHM = 2.3548 sigma``, so ``FWHM = 2 * r_50``
+      exactly (see the inline derivation).  Falls back to NaN if fewer
+      than 4 rays survive.
     * ``'total_transmittance'`` -- product of per-surface Fresnel R
       (for ``'reflect'`` steps) and T = 1 - R (for ``'transmit'``
       steps) at normal incidence.  Dimensionless, in [0, 1].

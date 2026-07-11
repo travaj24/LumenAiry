@@ -590,7 +590,24 @@ def eval_image_plane_wfe(
                 A = np.column_stack([np.ones(mask.sum()), r2[mask]])
                 coefs, *_ = np.linalg.lstsq(A, rs_w[mask], rcond=None)
                 c1 = float(coefs[1])  # waves of defocus
-                r_pup = semi  # entrance-pupil semi-aperture [m]
+                # AN-5: the physical radius at which the normalised px=1 maps
+                # is the EXIT-beam (marginal-ray) height at the reference-sphere
+                # tangent plane, NOT the entrance-pupil semi-aperture -- they
+                # differ by the pupil magnification, so ``semi`` leaves residual
+                # defocus for strongly telephoto/retrofocus systems (exact only
+                # at mag ~ 1).  Recover it from the traced ray positions
+                # relative to the chief: r_phys = a_exit * sqrt(r2), so
+                # a_exit = median(r_phys / sqrt(r2)) over the rim rays.
+                r_pup = semi  # entrance-pupil semi-aperture [m] (fallback)
+                _cx0, _cy0 = float(s2x[chief]), float(s2y[chief])
+                _rphys = np.sqrt((s2x - _cx0) ** 2 + (s2y - _cy0) ** 2)
+                _rmax = float(np.nanmax(r2[mask])) if mask.any() else 0.0
+                _rim = mask & (r2 > 0.25 * _rmax) & (r2 > 1e-12)
+                if _rim.any():
+                    _scale = _rphys[_rim] / np.sqrt(r2[_rim])
+                    _a_exit = float(np.median(_scale[np.isfinite(_scale)]))
+                    if np.isfinite(_a_exit) and _a_exit > 0:
+                        r_pup = _a_exit
                 # 4.10: closed-form best-RMS uses the SPHERE radius
                 # (which depends on sphere_tangent), not img_d_m
                 # directly.  For 'exit_pupil' the sphere radius is

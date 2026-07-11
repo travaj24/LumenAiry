@@ -76,7 +76,10 @@ def _zernike_radial(n, m, rho):
     """Radial polynomial R_n^m(rho) for rho in [0, 1].
 
     Computed via the explicit closed-form sum; stable and fast for
-    ``n <= 20``.  Returns zero outside the unit disk.
+    ``n <= 20``.  NOTE: this evaluates the polynomial for ANY ``rho`` (it
+    does NOT zero outside the unit disk -- that masking lives in
+    :func:`zernike_polynomial`, the only caller); direct callers must mask
+    ``rho > 1`` themselves.
     """
     m = abs(m)
     if (n - m) % 2 != 0:
@@ -188,7 +191,7 @@ def _zernike_basis_cache_key(
     """Build a (cheap) cache key for ``zernike_basis_matrix``.
 
     Uses a small content fingerprint -- shape, dtype, and the first +
-    last entries of the grid -- as the cache key.  This intentionally
+    mid + last entries of the grid -- as the cache key.  This intentionally
     *omits* object identity so that two distinct arrays produced by
     independent ``np.meshgrid`` calls (the common case in
     ``zernike_decompose`` and ``EvaluationContext.rms_wavefront_waves``)
@@ -204,12 +207,17 @@ def _zernike_basis_cache_key(
     # Coerce to ndarray for shape/dtype/corner access without copying.
     Xa = np.asarray(X)
     Ya = np.asarray(Y)
+    # P4 nit: include a MID-POINT sample as well as the corners -- two grids
+    # with equal shape/dtype/corners but different interiors (e.g. a warped
+    # vs uniform grid passed via the public X, Y args) would otherwise share
+    # a basis.  The mid sample distinguishes them for free.
+    _mid = Xa.size // 2
     return (
         int(n_modes),
         Xa.shape, Xa.dtype.str,
         Ya.shape, Ya.dtype.str,
-        float(Xa.flat[0]), float(Xa.flat[-1]),
-        float(Ya.flat[0]), float(Ya.flat[-1]),
+        float(Xa.flat[0]), float(Xa.flat[_mid]), float(Xa.flat[-1]),
+        float(Ya.flat[0]), float(Ya.flat[_mid]), float(Ya.flat[-1]),
         float(pupil_radius),
     )
 
@@ -450,9 +458,10 @@ def zernike_decompose(
         Clear aperture diameter [m].  Defines the pupil radius as
         ``aperture / 2``.
     n_modes : int, default 21
-        Number of OSA-indexed Zernike modes to fit.  21 covers up
-        through 5th-order spherical.  Higher = finer detail at the
-        cost of ill-conditioning for sparsely-illuminated pupils.
+        Number of OSA-indexed Zernike modes to fit.  21 covers radial
+        order n <= 5 (through PRIMARY spherical, j = 12, n = 4; secondary
+        spherical (6, 0) is j = 24, outside the default).  Higher = finer
+        detail at the cost of ill-conditioning for sparse pupils.
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
     return_residual : bool, default False

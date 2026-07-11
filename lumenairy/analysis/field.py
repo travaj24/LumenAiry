@@ -612,11 +612,19 @@ def footprint_per_surface(
             fields=[],
         ))
 
+    # AN-4: aim the ring bundle through the entrance-pupil centre (sample at
+    # ep_r, shift the chief to cross (0, 0, ep_z)) -- else the per-surface
+    # footprints are mis-centred and vignette asymmetrically for mid-/rear-stop
+    # systems.  No-op stop-at-front (ep_z = 0, ep_r = semi_ap).
+    ep_z, ep_r = _entrance_pupil_aim(surfaces, wavelength, semi_ap)
+
     for fa_deg in fields_deg:
         fa_rad = float(np.radians(fa_deg))
         try:
-            rays = make_rings(semi_ap, num_rings, rays_per_ring,
+            rays = make_rings(ep_r, num_rings, rays_per_ring,
                                 fa_rad, wavelength)
+            if ep_z != 0.0:
+                rays.y = rays.y + _chief_y_offset(fa_rad, ep_z)
             result = _trace(rays, surfaces, wavelength)
         except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                 IndexError, AttributeError):
@@ -695,11 +703,19 @@ def spot_diagram_vs_field(
             image_distance = bfl
         surfaces = _append_image_plane(surfaces, image_distance)
 
+    # AN-4: aim the ring bundle through the entrance-pupil centre -- sample at
+    # ep_r and shift so the chief crosses (0, 0, ep_z).  A vertex-launched
+    # bundle is mis-centred and vignettes asymmetrically for mid-/rear-stop
+    # systems.  No-op stop-at-front (ep_z = 0, ep_r = semi_ap).
+    ep_z, ep_r = _entrance_pupil_aim(surfaces, wavelength, semi_ap)
+
     out = []
     for fa_deg in fields_deg:
         fa_rad = float(np.radians(fa_deg))
-        rays = make_rings(semi_ap, num_rings, rays_per_ring,
+        rays = make_rings(ep_r, num_rings, rays_per_ring,
                             fa_rad, wavelength)
+        if ep_z != 0.0:
+            rays.y = rays.y + _chief_y_offset(fa_rad, ep_z)
         result = _trace(rays, surfaces, wavelength)
         ir = result.image_rays
         alive = ir.alive
@@ -1276,10 +1292,11 @@ def sensitivity_ranking(
         except (TypeError, ValueError, RuntimeError, ZeroDivisionError,
                 ArithmeticError):
             # Merit-function failure at this perturbation pair --
-            # leave deriv[i] at 0 (sentinel) and skip to the next
-            # variable.  This routine is a sensitivity-screening
-            # heuristic so a missing entry is preferable to a
-            # blown-up exception.
+            # leave deriv[i] at NaN (the sentinel it was initialised to;
+            # NaN is the better sentinel than 0, which would read as a
+            # genuine zero-sensitivity knob) and skip to the next variable.
+            # This routine is a sensitivity-screening heuristic so a
+            # missing entry is preferable to a blown-up exception.
             continue
         if np.isfinite(fp) and np.isfinite(fm):
             deriv[i] = (fp - fm) / (2 * step)

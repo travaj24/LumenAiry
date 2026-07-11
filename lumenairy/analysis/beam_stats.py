@@ -333,6 +333,11 @@ def beam_diameter(
     computed from the supplied centroid (or the intensity centroid by
     default) and the first crossing is found by linear interpolation.
 
+    Note (P4): the threshold is taken against the 2-D ``peak`` but applied
+    to the RADIALLY-AVERAGED profile.  For an asymmetric beam the azimuthal
+    average is below the 2-D peak, so the reported diameter is biased
+    slightly LOW; use ``M2`` / second-moment widths for anisotropic beams.
+
     Parameters
     ----------
     E : ndarray, complex, shape (Ny, Nx)

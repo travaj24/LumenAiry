@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import copy
 import threading
+import warnings
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -1663,6 +1664,8 @@ def monte_carlo_tolerancing_linearized(
         print(f'  Linearised MC: probing {len(perturbation_spec)} '
               f'spec entries x 5 knobs each')
     sensitivities = []   # list of (spec_idx, knob_name, sigma, dStrehl/dknob)
+    failed_probes = []   # AN-3: knobs whose FD probe died (sensitivity forced
+                         # to 0 -- an OPTIMISTIC bias in the tolerance budget)
     for spec_idx, spec in enumerate(perturbation_spec):
         sigmas = {
             'decenter_x': spec.get('decenter_std', 0.0),
@@ -1707,12 +1710,25 @@ def monte_carlo_tolerancing_linearized(
                 _, S_p = find_best_focus(scan_p, 'strehl')
             except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                     np.linalg.LinAlgError, IndexError, AttributeError,
-                    TypeError):
+                    TypeError) as _exc:
                 # Perturbation trace can fail (tolerancing pushes the
                 # design into a degenerate corner); treat the
                 # perturbed Strehl as nominal so the local sensitivity
-                # is zero rather than NaN.
+                # is zero rather than NaN.  AN-3: this is an OPTIMISTIC
+                # bias (a knob that couldn't be probed looks tolerance-
+                # free), so WARN naming the knob and record it in
+                # ``failed_probes`` so the caller can see the gap.
                 S_p = S_nom   # sensitivity = 0 on failure
+                failed_probes.append(
+                    {'spec_idx': spec_idx, 'knob': knob, 'sigma': sigma,
+                     'error': f'{type(_exc).__name__}: {_exc}'})
+                warnings.warn(
+                    f"monte_carlo_tolerancing_linearized: the FD sensitivity "
+                    f"probe for spec {spec_idx} knob {knob!r} (sigma={sigma:g}) "
+                    f"failed ({type(_exc).__name__}); its sensitivity is "
+                    f"forced to 0, so the reported tolerance budget is "
+                    f"OPTIMISTIC for this knob.  See the 'failed_probes' entry "
+                    f"in the result.", stacklevel=2)
             # 4.10.2: Strehl is quadratic-around-nominal per the
             # Marechal approximation S ≈ exp(-sigma_phi^2), so the
             # linear coefficient is ~ 0 and the second-order
@@ -1772,5 +1788,10 @@ def monte_carlo_tolerancing_linearized(
         'method': 'linearized',
         'nominal_strehl': float(S_nom),
         'sensitivities': sensitivities,
+        # AN-3: knobs whose FD sensitivity probe failed (forced to zero
+        # sensitivity -> the budget is optimistic for these).  Empty when
+        # every probe succeeded.
+        'failed_probes': failed_probes,
+        'n_failed_probes': len(failed_probes),
     }
 

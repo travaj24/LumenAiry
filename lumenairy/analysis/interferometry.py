@@ -121,6 +121,14 @@ def phase_shift_extract(
         Fringe modulation (visibility proxy).
     """
     n = len(frames)
+    # The (a, A, B) LSQ fit below needs at least 3 frames; fewer leaves the
+    # 3-column design matrix rank-deficient and the pinv returns a silently
+    # wrong (minimum-norm) phase (P4 nit -- the docstring says "at least 3"
+    # but never enforced it).
+    if n < 3:
+        raise ValueError(
+            f"phase_shift_extract: need at least 3 phase-shifted frames for "
+            f"the (bias, A, B) least-squares fit; got {n}.")
     if shifts is None:
         shifts = [2 * np.pi * i / n for i in range(n)]
     frames = [np.asarray(f, dtype=np.float64) for f in frames]
