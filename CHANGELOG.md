@@ -2,6 +2,72 @@
 
 All notable changes to the core library are documented here.
 
+## [5.21.2] — 2026-07-11
+
+### Fixed
+
+- **Subsystem-audit remediation campaign** — 18 chronological, line-level
+  subsystem audits (`docs/audits/AUDIT_*_2026_07_07..09.md`) of the entire
+  library.  The physics kernels were essentially flawless; every actionable
+  defect lived at integration seams, unmirrored fixes, dead parameters, or
+  silent-degradation paths.  Each finding validated; tests in
+  `tests/unit/test_v5_21_2_subsystem_audits.py`.
+  - **analysis** (`AUDIT_ANALYSIS_METRIC_CORE_2026_07_07.md`): AN-1
+    `depth_of_focus` was 2x too large (one-sided Rayleigh DOF `= 2 f#^2 λ`);
+    AN-4 distortion/spot/footprint now aim the chief ray at the entrance
+    pupil; AN-3/AN-5 + validation/dead-code nits.
+  - **sources** (`AUDIT_SOURCES_CORE_2026_07_07.md`): SRC-1 dense
+    `PartialCoherenceMCF` was the CONJUGATE of `⟨E(r1)·conj(E(r2))⟩`
+    (flipped the coherence phase sign with grid size); SRC-2 scale guards;
+    SRC-3 empty-field-angles raise.
+  - **propagators** (`AUDIT_PROPAGATORS_KERNELS_2026_07_07.md`): DS-1
+    `Source.propagate` mishandled pitch-changing kernels (tuple-as-field +
+    stale pitch); HF-1 `beam_d4sigma` `float(tuple)` crash + corrected LG
+    waist to `D4σ/2`; VD-1 immersion-NA raise; SY-1/2, PK-1/2/3, MHS-1/2,
+    HFPI-1/2, VHFPI-1, dispatch/system nits.
+  - **raytrace** (`AUDIT_RAYTRACE_CORE_2026_07_08.md`): RT-4 world-frame
+    coord-break tilt sign (folded designs were mirror-imaged vs `trace()`);
+    RT-5 off-axis ray/OPD fans EP-centred; **RT-6 removed a spurious high-NA
+    RuntimeWarning** (the JAX transfer is exact to sub-ppm, proven invariant
+    across a 100x gap sweep); RT-1/2/3/8/9 + even-aspheric guard +
+    through-focus all-dead guard.
+  - **glass + polarization** (`AUDIT_GLASS_POLARIZATION_2026_07_08.md`):
+    GL-1 missing-κ message, GL-2 lockless glass-cache purge race, SILICA
+    Sellmeier row, array-safe validity check, JonesField/docstring nits.
+  - **io/zemax** (`AUDIT_IO_ZEMAX_2026_07_08.md`): ZX-1 COORDBRK DISZ folded
+    into the flat thicknesses; ZX-3 `is_stop`/`stop_index` preserved on
+    loaded files; ZX-4 `back_focal_length` honoured in the full writer;
+    Q-type/encoding nits.
+  - **doe/grating/freeform** (`AUDIT_DOE_GRATING_FREEFORM_2026_07_09.md`):
+    DOE-1 FITS default split-save now recovered by the default load (was
+    silent phase loss on round-trip); dammann/mask/collision nits.
+  - **coatings + elements** (`AUDIT_COATINGS_ELEMENTS_2026_07_09.md`): COAT-1
+    non-dispersive-sweep documentation; material-index warning gate;
+    gaussian/annular aperture guards; `quarter_wave_ar` / `n_cplx` nits.
+  - **maslov** (`AUDIT_MASLOV_2026_07_09.md`): MSL-1 sign-preserving
+    near-singular-Hessian floor (a tiny negative determinant produced a NaN
+    saddle step near fold caustics) at all three saddle integrators.
+  - **eme** (`AUDIT_EME_2026_07_09.md`): floored the complex-symmetric
+    bilinear mode norm against a defective matrix; documented the unsorted
+    `eig` branch.
+  - **bsdf + segment-geometry** (`AUDIT_BSDF_SEGMENT_GEOMETRY_2026_07_09.md`):
+    BSDF-1 `GaussianBSDF.sample` drew a half-normal, omitting the `sinθ`
+    solid-angle Jacobian (a ~35%-too-narrow stray-light cone) — now Rayleigh;
+    HarveyShack batch-safety + `to_rcwa_stack` NaN-tile guard.
+  - **optimize** (`AUDIT_OPTIMIZE_{MERITS,DRIVER,WRAPPERS,TAIL,SECOND_PASS}_2026_07_09.md`):
+    OPT-1 the JAX LG-aberration merit MINIMISED the Strehl (drove toward
+    max aberration) — now the Strehl deficit; OPT-2 `ToleranceAwareMerit`
+    now populates the OPD/spot sub-context (OPD merits no longer degenerate
+    to ∞); OPT-3 the `method='lm'` path now checkpoints/telemeters like every
+    other method; FD-floor classification, honest `converged`/`iterations`
+    result fields, and a retired 21-versions-stale DeprecationWarning.
+  - **io/prescriptions + storage/codegen**
+    (`AUDIT_IO_PRESCRIPTIONS_2026_07_09.md`,
+    `AUDIT_IO_STORAGE_CODEGEN_2026_07_09.md`): CV-1 CODE V loader warns on
+    dropped fold/aspheric directives (was a silent straight-axis import);
+    CG-1 codegen forwards Q-type freeform keys (+ warns on unrepresentable
+    mirror aspherics); H5 None-attr boundary guard.
+
 ## [5.21.1] — 2026-07-07
 
 ### Fixed
