@@ -39,9 +39,17 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
+
+# CG-1 (AUDIT_IO_STORAGE_CODEGEN): the Forbes Q-type freeform keys the Zemax
+# loader attaches to QBFS/QCON surfaces -- forwarded through codegen so a
+# Q-type surface is not silently degraded to its base conic in the generated
+# ``apply_real_lens`` script (which understands them via surface_sag_freeform).
+_CODEGEN_FREEFORM_KEYS = ('freeform_type', 'q_bfs_coeffs', 'q_con_coeffs',
+                          'r_max')
 
 from ..glass import GLASS_REGISTRY
 from .prescriptions import load_zemax_prescription_data_txt, load_zemax_zmx
@@ -356,6 +364,20 @@ def _decompose_prescription(prescription):
                     'surf_num': elem.get('surf_num', -1),
                     'comment': 'Aperture stop (from STOP marker)',
                 })
+            # CG-1: the generated ``apply_mirror`` call carries only
+            # radius/conic/aperture -- a mirror aspheric (or Q-type) surface
+            # cannot be represented and would silently flatten to base conic.
+            # Warn rather than drop it silently (matching the .zmx exporter's
+            # P2-20 aspherized-mirror warning).
+            if elem.get('aspheric_coeffs') or any(
+                    elem.get(_fk) is not None for _fk in _CODEGEN_FREEFORM_KEYS):
+                warnings.warn(
+                    f"codegen: mirror surface "
+                    f"{elem.get('surf_num', '?')} carries aspheric/freeform "
+                    f"terms that ``apply_mirror`` cannot represent; the "
+                    f"generated script flattens it to a conic mirror "
+                    f"(radius/conic only).",
+                    UserWarning, stacklevel=2)
             steps.append({
                 'type': 'mirror',
                 'radius': elem['radius'],
@@ -478,13 +500,19 @@ def _decompose_prescription(prescription):
             max_semi_dia = 0.0
 
             for k, surf in enumerate(group_surfaces):
-                surfaces_list.append({
+                _sd = {
                     'radius': surf['radius'],
                     'conic': surf.get('conic', 0.0),
                     'aspheric_coeffs': surf.get('aspheric_coeffs'),
                     'glass_before': surf.get('glass_before', 'air'),
                     'glass_after': surf.get('glass_after', 'air'),
-                })
+                }
+                # CG-1: forward the Q-type freeform keys (was dropped -> Q-type
+                # surface silently degraded to base conic in the script).
+                for _fk in _CODEGEN_FREEFORM_KEYS:
+                    if surf.get(_fk) is not None:
+                        _sd[_fk] = surf[_fk]
+                surfaces_list.append(_sd)
                 sd = surf.get('semi_diameter', 0)
                 if sd > max_semi_dia:
                     max_semi_dia = sd
@@ -691,6 +719,12 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
                 lines.append(f'        {{"radius": {r_str}, '
                              f'"conic": {surf["conic"]},')
                 lines.append(f'         "aspheric_coeffs": {asph_str},')
+                # CG-1: emit the forwarded Q-type freeform keys so the
+                # generated apply_real_lens reproduces the Forbes surface
+                # (surface_sag_freeform consumes them) instead of base conic.
+                for _fk in _CODEGEN_FREEFORM_KEYS:
+                    if surf.get(_fk) is not None:
+                        lines.append(f'         "{_fk}": {surf[_fk]!r},')
                 lines.append(f'         "glass_before": {surf["glass_before"]!r}, '
                              f'"glass_after": {surf["glass_after"]!r}}},')
             lines.append('    ],')

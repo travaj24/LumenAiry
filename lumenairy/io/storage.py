@@ -261,6 +261,12 @@ def save_field_h5(filepath: str, E: np.ndarray, dx: float,
             dset.attrs['label'] = str(label)
         if metadata:
             for key, value in metadata.items():
+                # storage-nit (AUDIT_IO_STORAGE_CODEGEN): h5py cannot store a
+                # ``None`` attr and raises deep in its C layer; skip it at this
+                # boundary (a ``None`` metadata value carries no information and
+                # reads back as simply absent).
+                if value is None:
+                    continue
                 dset.attrs[str(key)] = value
 
 
@@ -334,6 +340,8 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
             grp.attrs['wavelength'] = float(wavelength)
         if metadata:
             for k, v in metadata.items():
+                if v is None:   # storage-nit: h5py can't store None; skip
+                    continue
                 grp.attrs[str(k)] = v
         for i, plane in enumerate(planes):
             if 'field' not in plane or 'dx' not in plane:
@@ -352,6 +360,8 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
             )
             for key, value in plane.items():
                 if key == 'field':
+                    continue
+                if value is None:   # storage-nit: h5py can't store None; skip
                     continue
                 dset.attrs[str(key)] = value
             if 'dy' not in plane:

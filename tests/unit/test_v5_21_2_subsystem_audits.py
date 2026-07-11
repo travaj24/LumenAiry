@@ -897,3 +897,76 @@ def test_opt_tail_beam_expander_afocal_magnification():
     # A beam expander magnifies the BEAM by M, so by the afocal invariant the
     # ANGULAR magnification is 1/M (angles shrink as the beam expands).
     assert abs(abs(mag) - 1.0 / M) < 0.05
+
+
+# =========================================================================
+# AUDIT 17 -- io/codegen.py + io/storage.py (AUDIT_IO_STORAGE_CODEGEN)
+# =========================================================================
+
+
+def _q_type_elements_prescription():
+    return {
+        'name': 'qtest', 'aperture_diameter': 10e-3,
+        'elements': [
+            {'element_type': 'surface', 'radius': 0.05, 'conic': 0.0,
+             'aspheric_coeffs': None, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 5e-3, 'is_stop': True,
+             'freeform_type': 'q_bfs', 'q_bfs_coeffs': {0: 1e-6, 1: -2e-7},
+             'r_max': 5e-3},
+            {'element_type': 'surface', 'radius': -0.05, 'conic': 0.0,
+             'aspheric_coeffs': None, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 5e-3, 'is_stop': False},
+        ],
+        'all_thicknesses': [4e-3, 0.0], 'thicknesses': [4e-3],
+        'object_distance': 0.0,
+    }
+
+
+def test_cg1_codegen_forwards_qtype_freeform_keys():
+    """CG-1: generated scripts now forward the Forbes Q-type freeform keys
+    into the apply_real_lens prescription (was dropped -> Q-type surface
+    silently degraded to base conic)."""
+    from lumenairy.io.codegen import generate_simulation_script
+    s = generate_simulation_script(
+        _q_type_elements_prescription(), wavelength=633e-9, N=64, dx=8e-6,
+        include_plotting=False, include_analysis=False)
+    assert 'freeform_type' in s
+    assert 'q_bfs_coeffs' in s
+    assert 'r_max' in s
+
+
+def test_cg1_codegen_mirror_aspheric_warns():
+    """CG-1: an aspherized/Q-type mirror (which apply_mirror cannot represent)
+    now warns instead of silently flattening to base conic."""
+    from lumenairy.io.codegen import generate_simulation_script
+    pres = {
+        'name': 'mtest', 'aperture_diameter': 10e-3,
+        'elements': [
+            {'element_type': 'mirror', 'radius': -0.1, 'conic': 0.0,
+             'aspheric_coeffs': {4: 1e-3}, 'semi_diameter': 5e-3,
+             'is_stop': False, 'comment': 'M1'},
+        ],
+        'all_thicknesses': [0.0], 'thicknesses': [], 'object_distance': 0.0,
+    }
+    with pytest.warns(UserWarning, match="cannot represent"):
+        generate_simulation_script(
+            pres, wavelength=633e-9, N=64, dx=8e-6,
+            include_plotting=False, include_analysis=False)
+
+
+def test_storage_none_metadata_attr_skipped(tmp_path):
+    """storage-nit: a None metadata value is skipped at the boundary (h5py
+    cannot store None and would otherwise raise deep in its C layer)."""
+    pytest.importorskip('h5py')
+    from lumenairy.io.storage import load_planes_h5, save_planes_h5
+    E = np.ones((8, 8), dtype=np.complex128)
+    planes = [{'field': E, 'dx': 1e-6, 'z': 0.0, 'label': 'p0'}]
+    p = str(tmp_path / 'planes.h5')
+    # A None metadata value must not crash the save.
+    save_planes_h5(p, planes, wavelength=633e-9, metadata={'note': None,
+                                                           'run': 'A'})
+    loaded, meta = load_planes_h5(p)
+    assert len(loaded) == 1
+    # The None key is simply absent on read-back; the real one survives.
+    assert meta.get('run') == 'A'
+    assert 'note' not in meta
