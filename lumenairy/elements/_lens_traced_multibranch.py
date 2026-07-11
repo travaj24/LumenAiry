@@ -30,8 +30,14 @@ constructs the full MULTI-VALUED geometric field by the wavefront-construction
   eq. 23).  Each fold crossing multiplies the branch by ``exp(-i pi/2)``
   (time convention ``exp(-i w t)``, field ``exp(+i k OPL)`` -- Klimes 2010
   Sec. 1 verbatim; = the Gouy phase in optics, Visser & Wolf 2010).
-* Runtime parity assertion ``sgn det J = (-1)^m`` (Mitrofanov & Priimenko
-  2013 eq. 1) closes the in-glass caustic count.
+* In-glass caustics: each surface-to-surface leg is a homogeneous straight
+  segment, so its ``det Q(z)`` is the same exact quadratic the exit leg uses
+  -- the internal focal-line crossings are counted per leg and added to the
+  index (0 for an air-focus system).  A runtime parity assertion
+  ``sgn det J = (-1)^m`` (Mitrofanov & Priimenko 2013 eq. 1) then guarantees
+  the EXACT parity; if the direct in-glass count disagrees with it (an
+  internal focus the global-frame leg quadratic under-resolves), the parity
+  is still enforced and a warning is raised.
 * AT the caustic itself (degenerate mapped triangles) the ART amplitude is
   not evaluated -- the literature-standard choice (Vinje 1993 leaves it
   undefined; Lambare 1996 notes the singularity is inherent to ART); the
@@ -44,6 +50,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict
 
 import numpy as np
@@ -122,6 +129,21 @@ def _trace_launch_grid(prescription, wavelength, launch_radius, n_launch,
     tr = rt.trace(rays, surfaces, wavelength)
     ex = tr.image_rays
     alive = ex.alive.copy()
+    # Per-surface state (x, y, z, outgoing slopes) on the launch grid -- for the
+    # in-glass KMAH count (D3): each surface-to-surface leg is a homogeneous
+    # straight segment, so det Q(z) is the same exact quadratic the exit leg
+    # uses, and its roots are the in-glass focal-line crossings.
+    shape = (n_launch, n_launch)
+    history = []
+    for hb in (tr.ray_history or []):
+        hNz = np.where(np.abs(hb.N) > 1e-30, hb.N, 1e-30)
+        history.append({
+            'x': np.asarray(hb.x, float).reshape(shape),
+            'y': np.asarray(hb.y, float).reshape(shape),
+            'z': np.asarray(hb.z, float).reshape(shape),
+            'sx': (np.asarray(hb.L, float) / hNz).reshape(shape),
+            'sy': (np.asarray(hb.M, float) / hNz).reshape(shape),
+        })
     # advance the exit rays to the output plane a distance d past the exit
     # vertex (free space, index output_plane_n): path length t = d / N_z.
     Nz = np.where(np.abs(ex.N) > 1e-30, ex.N, 1e-30)
@@ -133,7 +155,6 @@ def _trace_launch_grid(prescription, wavelength, launch_radius, n_launch,
     bad = ~alive
     for arr in (x_out, y_out, opl):
         arr[bad] = np.nan
-    shape = (n_launch, n_launch)
     return {
         'xs_in': xs_in,
         'Xi': Xi, 'Yi': Yi,
@@ -143,7 +164,67 @@ def _trace_launch_grid(prescription, wavelength, launch_radius, n_launch,
         'N': ex.N.reshape(shape),
         'x_exit': ex.x.reshape(shape), 'y_exit': ex.y.reshape(shape),
         'alive': alive.reshape(shape),
+        'history': history,
     }
+
+
+def _count_fold_roots(detQ0, trK, detQd, zmax):
+    """Count the roots of the exact quadratic ``det Q(z) = detQ0 + z trK +
+    z^2 detQd`` in ``(0, zmax]`` (with multiplicity) per grid node -- the
+    astigmatic focal-line crossings on one homogeneous leg.  Shared by the
+    exit-leg and the in-glass-leg KMAH counts."""
+    A, B, C = detQd, trK, detQ0
+    m = np.zeros(np.shape(detQ0), dtype=np.int64)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        disc = B * B - 4.0 * A * C
+        sq = np.sqrt(np.maximum(disc, 0.0))
+        quad = np.abs(A) > 1e-300
+        for sgn in (-1.0, 1.0):
+            z = np.where(quad, (-B + sgn * sq) / (2.0 * A), np.nan)
+            m += ((disc >= 0.0) & quad & (z > 0.0)
+                  & (z <= zmax)).astype(int)
+        # linear degenerate case (det Qdot ~ 0): the single root -C/B
+        lin = (~quad) & (np.abs(B) > 1e-300)
+        zlin = np.where(lin, -C / np.where(lin, B, 1.0), np.nan)
+        m += (lin & (zlin > 0.0) & (zlin <= zmax)).astype(int)
+    return m
+
+
+def _kmah_in_glass(g):
+    """In-glass (surface-to-surface) fold-caustic count per launch node (D3).
+
+    The exit-leg count (:func:`_kmah_free_leg`) plus a mod-2 parity closure
+    left an EVEN number of internal caustic crossings invisible (a full focus
+    between two elements = 2 crossings => a pi Maslov-index error).  Each
+    surface-to-surface leg is a homogeneous straight segment, so its transverse
+    Jacobian is the same exact quadratic ``det Q(z)`` the exit leg uses; sum its
+    roots over every internal leg.  Returns the per-node in-glass count (0 when
+    no ray focuses inside the prescription -- so an air-focus system is
+    byte-identical to the prior release)."""
+    hist = g.get('history') or []
+    if len(hist) < 2:
+        return np.zeros_like(g['x_exit'], dtype=np.int64)
+    h = g['xs_in'][1] - g['xs_in'][0]
+
+    def _grad(F):
+        return np.gradient(F, h, h)          # d/d(x_in), d/d(y_in)
+
+    m_ig = np.zeros(g['x_exit'].shape, dtype=np.int64)
+    for k in range(len(hist) - 1):
+        s0, s1 = hist[k], hist[k + 1]
+        a11, a12 = _grad(s0['x'])
+        a21, a22 = _grad(s0['y'])
+        b11, b12 = _grad(s0['sx'])
+        b21, b22 = _grad(s0['sy'])
+        detQ0 = a11 * a22 - a12 * a21
+        detQd = b11 * b22 - b12 * b21
+        trK = a22 * b11 - a12 * b21 - a21 * b12 + a11 * b22
+        leg = np.sqrt((s1['x'] - s0['x']) ** 2 + (s1['y'] - s0['y']) ** 2
+                      + (s1['z'] - s0['z']) ** 2)
+        with np.errstate(invalid='ignore'):
+            m_ig += np.where(np.isfinite(leg),
+                             _count_fold_roots(detQ0, trK, detQd, leg), 0)
+    return m_ig
 
 
 def _kmah_free_leg(g, d_out):
@@ -175,28 +256,36 @@ def _kmah_free_leg(g, d_out):
     detQd = b11 * b22 - b12 * b21
     # tr(adj(Q0) Qdot) with adj([[a,b],[c,d]]) = [[d,-b],[-c,a]]
     trK = a22 * b11 - a12 * b21 - a21 * b12 + a11 * b22
-    # roots of detQ0 + z trK + z^2 detQd in (0, d_out]
-    m = np.zeros(detQ0.shape, dtype=np.int64)
-    A, B, C = detQd, trK, detQ0
-    disc = B * B - 4.0 * A * C
-    with np.errstate(invalid='ignore', divide='ignore'):
-        sq = np.sqrt(np.maximum(disc, 0.0))
-        quad = np.abs(A) > 1e-300
-        for sgn in (-1.0, 1.0):
-            z = np.where(quad, (-B + sgn * sq) / (2.0 * A), np.nan)
-            m += ((disc >= 0.0) & quad & (z > 0.0) & (z <= d_out)).astype(int)
-        # linear case (det Qdot ~ 0): single root -C/B
-        lin = (~quad) & (np.abs(B) > 1e-300)
-        zlin = np.where(lin, -C / np.where(lin, B, 1.0), np.nan)
-        m += (lin & (zlin > 0.0) & (zlin <= d_out)).astype(int)
-    # parity closure (Mitrofanov & Priimenko eq. 1): sgn det J(out) must be
-    # (-1)^m relative to the launch (det=+1); a mismatch means an odd number
-    # of in-glass crossings the free-leg count cannot see -- add one.
+    # exit-leg roots of detQ0 + z trK + z^2 detQd in (0, d_out]
+    m = _count_fold_roots(detQ0, trK, detQd, d_out)
+    # IN-GLASS legs (D3): the exit-leg count plus a mod-2 parity closure left an
+    # EVEN internal caustic count invisible (a focus between two elements = 2
+    # crossings => a pi error).  Add the per-leg quadratic count over every
+    # surface-to-surface leg; 0 for an air-focus system (byte-identical to the
+    # prior release), so existing validated charts are unchanged.
+    m_ig = _kmah_in_glass(g)
+    m = m + m_ig
+    # EXACT parity guarantee (Mitrofanov & Priimenko eq. 1), retained: sgn
+    # det J(out) must be (-1)^m relative to the launch (det=+1).  If the
+    # combined exit+in-glass count still has the wrong parity, the in-glass
+    # magnitude is off by an odd amount -> restore the exact parity by +1
+    # (what the old closure did).  Where that correction fires on a node the
+    # in-glass detector ALSO flagged (m_ig>0), the two disagree -> the
+    # global-frame in-glass approximation is unreliable there; warn once.
     c11, c12 = _grad(g['x_out'])
     c21, c22 = _grad(g['y_out'])
     detJ_out = c11 * c22 - c12 * c21
-    mismatch = (np.sign(detJ_out) != (-1.0) ** m) & np.isfinite(detJ_out)
-    m = m + mismatch.astype(int)
+    parity_bad = (np.sign(detJ_out) != (-1.0) ** m) & np.isfinite(detJ_out)
+    m = m + parity_bad.astype(int)
+    if bool(np.any(parity_bad & (m_ig > 0))):
+        warnings.warn(
+            "apply_real_lens_traced_multibranch: the in-glass KMAH count and "
+            "the exact parity closure disagree on some launch nodes (an "
+            "internal focus inside the prescription that the global-frame "
+            "leg quadratic under/over-resolves); the branch Maslov index may "
+            "carry a residual pi error there.  Validate against the GBD or "
+            "Maslov propagator for internal-focus prescriptions.",
+            stacklevel=2)
     # fill nodes whose FD Jacobian was NaN-contaminated by a dead neighbour
     # (their own ray may be alive and used by adjacent triangles): nearest
     # valid neighbour, iteratively (KMAH is piecewise constant per sheet).

@@ -30,9 +30,11 @@ from __future__ import annotations
 import numpy as np
 
 from ..rcwa._core import (
+    _grazing_safe_wavelength,
     _interface_smatrix_general,
     _modes_to_M,
     _propagation_smatrix_general,
+    _require_propagating_incidence,
 )
 from .twod import (
     _build_axis,
@@ -119,14 +121,28 @@ def pmm_jones_1d_conical(period, eps_ridge, eps_groove, n_substrate,
     nre = float(np.real(np.sqrt(eps_sup)))
     kx0 = nre * np.sin(theta) * np.cos(phi)
     ky0 = nre * np.sin(theta) * np.sin(phi)
+    # Suite-standard incidence guard (D1): reject a gain / evanescent
+    # superstrate before the kz_inc-normalised far field would silently
+    # negate or NaN the efficiencies -- the guard every other PMM/RCWA entry
+    # runs (2-D core twod.py:752).
+    _require_propagating_incidence("pmm_jones_1d_conical", eps_sup,
+                                   kx0 ** 2 + ky0 ** 2)
 
     ox = np.arange(-n_orders, n_orders + 1)
     oy = np.array([0])
     order_x = np.tile(ox, len(oy))
     order_y = np.repeat(oy, len(ox))
-    k0 = 2.0 * np.pi / wavelength
-    kxv = kx0 + order_x * (wavelength / period)
-    kyv = ky0 + order_y * (wavelength / period)          # == ky0 (constant)
+    # Nudge the wavelength off any EXACT Rayleigh cutoff -- of the half-spaces
+    # OR a grating constituent -- so kz_inc-normalisation and the interface
+    # S-matrix stay well-conditioned (a grazing layer mode otherwise crashes
+    # the interface solve); no-op away from a cutoff, +/-m symmetry preserved.
+    eps_reals = [eps_sup, eps_sub] + [complex(e) for e in
+                                      np.asarray(eps_tile).ravel()]
+    wl = _grazing_safe_wavelength(float(wavelength), kx0, ky0, order_x,
+                                  order_y, period, period, eps_reals)
+    k0 = 2.0 * np.pi / wl
+    kxv = kx0 + order_x * (wl / period)
+    kyv = ky0 + order_y * (wl / period)                  # == ky0 (constant)
 
     # ---- conical half-spaces (kz = sqrt(eps - kx^2 - ky^2)) ----
     Wsup, Vsup, _ls, _kzr = _homogeneous_modes(kxv, kyv, eps_sup)
@@ -223,14 +239,27 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
     nre = float(np.real(np.sqrt(eps_sup)))
     kx0 = nre * np.sin(theta) * np.cos(phi)
     ky0 = nre * np.sin(theta) * np.sin(phi)
+    # Suite-standard incidence guard (D1): reject a gain / evanescent
+    # superstrate (kz_inc-normalisation would silently negate/NaN the far
+    # field) -- mirrors every other PMM/RCWA entry.
+    _require_propagating_incidence("pmm_jones_1d_conical_tensor", eps_sup,
+                                   kx0 ** 2 + ky0 ** 2)
 
     ox = np.arange(-n_orders, n_orders + 1)
     oy = np.array([0])
     order_x = np.tile(ox, len(oy))
     order_y = np.repeat(oy, len(ox))
-    k0 = 2.0 * np.pi / wavelength
-    kxv = kx0 + order_x * (wavelength / period)
-    kyv = ky0 + order_y * (wavelength / period)          # == ky0 (constant)
+    # Grazing-safe wavelength (D1): include the tensor layer's DIAGONAL
+    # permittivities as constituent cutoff-setters alongside the half-spaces,
+    # so a grazing layer mode can't crash the generalized S-matrix.  Re() is
+    # conjugation-invariant, so the public ``tile`` values are fine here.
+    eps_reals = ([eps_sup, eps_sub]
+                 + [complex(e) for e in np.einsum("...ii->...i", tile).ravel()])
+    wl = _grazing_safe_wavelength(float(wavelength), kx0, ky0, order_x,
+                                  order_y, period, period, eps_reals)
+    k0 = 2.0 * np.pi / wl
+    kxv = kx0 + order_x * (wl / period)
+    kyv = ky0 + order_y * (wl / period)                  # == ky0 (constant)
 
     Wsup, Vsup, _ls, _kzr = _homogeneous_modes(kxv, kyv, eps_sup)
     Wsub, Vsub, _lb, _kzt = _homogeneous_modes(kxv, kyv, eps_sub)

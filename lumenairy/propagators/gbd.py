@@ -2894,7 +2894,13 @@ def apply_prescription_persurface_to_beamlets(
                         np.zeros_like(dt.x)], axis=-1)
     new_dir = np.stack([Lx, My, Nz2], axis=-1)
     new_amp = np.asarray(beamlets.amplitude) * amp
-    alive = np.asarray(dt.alive, dtype=bool)
+    # Scrub any non-finite row so no NaN enters the coherent sum -- the same
+    # mask the world branch applies (D2): defense-in-depth with the FD
+    # backend's companion-aliveness fix for FD-fallback surfaces (aspheres /
+    # freeforms) with rim-adjacent beamlets.
+    alive = (np.asarray(dt.alive, dtype=bool)
+             & np.isfinite(new_pos).all(axis=1) & np.isfinite(new_amp)
+             & np.isfinite(Q).all(axis=(1, 2)))
     w0 = np.asarray(beamlets.waist0)
     return BeamletBundle(
         positions=new_pos[alive], directions=new_dir[alive], Q=Q[alive],

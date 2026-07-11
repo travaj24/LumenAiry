@@ -151,13 +151,24 @@ def ray_transfer_jacobian(
                 J[:, outr, dim] = (gp[outr] - gm[outr]) / d
         return J
 
+    def _companion_alive(balive):
+        """A base ray is only usable if ALL its 9 finite-difference companions
+        survived: a +/-h companion that vignettes/TIRs at a rim yields NaN
+        Jacobian rows while the base ray's own ``alive`` is True (D2).  AND the
+        companion-aliveness into the returned mask so no NaN-Jacobian row
+        reaches a downstream coherent sum -- the analytic backend already
+        scrubs (nan_to_num); the FD backend must too."""
+        return np.asarray(balive, bool).reshape(9, n).all(axis=0)
+
     if not per_surface:
         img = res.image_rays
         Jc = _cum_jac(img)
         bx, by, bux, buy, bopd, balive = _state(img)
+        alive = np.asarray(balive[:n], bool) & _companion_alive(balive)
+        Jc = np.nan_to_num(Jc, nan=0.0, posinf=0.0, neginf=0.0)
         return DifferentialTransfer(
             jacobian=Jc, x=bx[:n], y=by[:n], ux=bux[:n], uy=buy[:n],
-            opd=bopd[:n], alive=np.asarray(balive[:n], bool))
+            opd=bopd[:n], alive=alive)
 
     # per-surface: cumulative J at each surface -> local transfers
     hist = res.ray_history
@@ -166,11 +177,13 @@ def ray_transfer_jacobian(
         cum.append(_cum_jac(hb))
     locals_ = np.stack([cum[k + 1] @ np.linalg.inv(cum[k])
                         for k in range(len(hist))], axis=0)  # (Nsurf,n,4,4)
+    locals_ = np.nan_to_num(locals_, nan=0.0, posinf=0.0, neginf=0.0)
     final = hist[-1]
     bx, by, bux, buy, bopd, balive = _state(final)
+    alive = np.asarray(balive[:n], bool) & _companion_alive(balive)
     return DifferentialTransfer(
         jacobian=locals_, x=bx[:n], y=by[:n], ux=bux[:n], uy=buy[:n],
-        opd=bopd[:n], alive=np.asarray(balive[:n], bool))
+        opd=bopd[:n], alive=alive)
 
 
 def ray_transfer_jacobian_jax(x, y, ux, uy, prescription, wavelength):

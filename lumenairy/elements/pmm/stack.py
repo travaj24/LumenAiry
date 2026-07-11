@@ -568,9 +568,11 @@ class PMMStack:
         conical far field.  Restricted to all-vertical NumPy stacks (the caller
         gates slant / JAX / stabilize / retain_internal)."""
         from ..rcwa._core import (
+            _grazing_safe_wavelength,
             _interface_smatrix_general,
             _modes_to_M,
             _propagation_smatrix_general,
+            _require_propagating_incidence,
         )
         from .conical import _conical_jones_farfield
         from .twod import (
@@ -631,11 +633,28 @@ class PMMStack:
         nre = float(np.real(np.sqrt(eps_sup)))
         kx0 = nre * np.sin(angle) * np.cos(phi)
         ky0 = nre * np.sin(angle) * np.sin(phi)
+        # Suite-standard incidence guard (D1): the phi != 0 dispatch returns
+        # before the classical solve body, so the guards there are bypassed --
+        # reject a gain / evanescent superstrate here too, matching every other
+        # PMM/RCWA entry.
+        _require_propagating_incidence("PMMStack.solve (conical)", eps_sup,
+                                       kx0 ** 2 + ky0 ** 2)
 
         ox = np.arange(-n_orders, n_orders + 1)
         oy = np.array([0])
         order_x = np.tile(ox, len(oy))
         order_y = np.repeat(oy, len(ox))
+        # Grazing-safe wavelength (D1): nudge off any exact Rayleigh cutoff of
+        # the half-spaces OR a layer constituent (diagonal permittivities) so a
+        # grazing order can't crash the interface / generalized S-matrix; the
+        # nudge is ~1e-7 relative, far below the resolvability check above.
+        eps_reals = [eps_sup, eps_sub]
+        for _t, _segs, _s in self._layers:
+            for _w, _e in _segs:
+                eps_reals.extend(complex(v) for v in
+                                 np.diag(np.asarray(_e, dtype=_C)))
+        wl = _grazing_safe_wavelength(float(wl), kx0, ky0, order_x, order_y,
+                                      P, P, eps_reals)
         k0 = 2.0 * np.pi / wl
         kxv = kx0 + order_x * (wl / P)
         kyv = ky0 + order_y * (wl / P)                 # == ky0 (constant)
