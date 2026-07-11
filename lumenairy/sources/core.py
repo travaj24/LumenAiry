@@ -442,6 +442,12 @@ def create_hermite_gauss(
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_hermite_gauss',
                           support_tuple_N=True)
+    # SRC-2: w0 was unvalidated -- w0 = 0/NaN silently yields a NaN-laced
+    # field and w0 < 0 a sign-flipped mode.
+    if not (np.isfinite(w0) and w0 > 0):
+        raise ValueError(
+            f"create_hermite_gauss: w0 must be a positive finite beam "
+            f"waist [m]; got {w0}.")
     if dy is None:
         dy = dx
     if isinstance(N, (tuple, list)):
@@ -590,6 +596,11 @@ def create_laguerre_gauss(
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_laguerre_gauss',
                           support_tuple_N=True)
+    # SRC-2: w0 was unvalidated (see create_hermite_gauss).
+    if not (np.isfinite(w0) and w0 > 0):
+        raise ValueError(
+            f"create_laguerre_gauss: w0 must be a positive finite beam "
+            f"waist [m]; got {w0}.")
     if dy is None:
         dy = dx
     if isinstance(N, (tuple, list)):
@@ -850,6 +861,12 @@ def create_multi_field_sources(
     # leaking an internal name in user-facing tracebacks.
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_multi_field_sources')
+    # SRC-3: an empty field_angles silently returned (sources=[], x=None,
+    # y=None) -- raise instead so callers do not propagate None axes.
+    if len(field_angles) == 0:
+        raise ValueError(
+            "create_multi_field_sources: field_angles is empty; provide at "
+            "least one field angle.")
     sources = []
     x = y = None
     for a in field_angles:
@@ -904,6 +921,13 @@ def create_top_hat_beam(
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_top_hat_beam')
+    # SRC-2: diameter was unvalidated -- diameter <= 0 yields an all-zero
+    # field, and the ``norm > 0`` guard then silently skips normalisation
+    # (a silent zero source downstream).
+    if not (np.isfinite(diameter) and diameter > 0):
+        raise ValueError(
+            f"create_top_hat_beam: diameter must be a positive finite "
+            f"value [m]; got {diameter}.")
     # 4.10: honour caller-supplied dy (anamorphic grid).  Pre-4.10
     # hard-coded dy = dx and used dx**2 for the area element, silently
     # ignoring caller-supplied dy on top-hat / annular / Bessel sources
@@ -955,6 +979,21 @@ def create_annular_beam(
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_annular_beam')
+    # SRC-2: neither diameter was validated and there was no inner < outer
+    # check -- an inverted annulus silently returned the all-zero field.
+    # Mirror the incoherent sibling create_annular_incoherent_source.
+    if not (np.isfinite(inner_diameter) and inner_diameter >= 0):
+        raise ValueError(
+            f"create_annular_beam: inner_diameter must be a non-negative "
+            f"finite value [m]; got {inner_diameter}.")
+    if not (np.isfinite(outer_diameter) and outer_diameter > 0):
+        raise ValueError(
+            f"create_annular_beam: outer_diameter must be a positive finite "
+            f"value [m]; got {outer_diameter}.")
+    if not (outer_diameter > inner_diameter):
+        raise ValueError(
+            f"create_annular_beam: outer_diameter ({outer_diameter}) must be "
+            f"strictly greater than inner_diameter ({inner_diameter}).")
     if dy is None:
         dy = dx
     x = (np.arange(N) - N / 2) * dx
@@ -1564,9 +1603,14 @@ class PartialCoherenceMCF:
         E_mat = ensemble.reshape(nr, N_pix).astype(np.complex128, copy=False)
 
         if N_pix <= int(max_full_N) ** 2:
-            # Dense MCF: J = (1/nr) * E_mat^H @ E_mat   (N_pix x N_pix)
-            # Hermitian, positive semi-definite.
-            J_full = (E_mat.conj().T @ E_mat) / float(nr)
+            # Dense MCF J(r1, r2) = <E(r1) conj(E(r2))> (the documented
+            # convention).  SRC-1: this is (1/nr) E_mat.T @ conj(E_mat) whose
+            # [i, j] = <E(r_i) conj(E(r_j))>; the prior
+            # ``E_mat.conj().T @ E_mat`` stored <conj(E(r_i)) E(r_j)> =
+            # conj(J_doc), i.e. the CONJUGATE -- which flipped the coherence
+            # phase for a complex-J (twisted/tilted) ensemble and disagreed
+            # with the modal branch.  Hermitian, positive semi-definite.
+            J_full = (E_mat.T @ E_mat.conj()) / float(nr)
             return cls(
                 shape=(int(Ny), int(Nx)),
                 dx=float(dx), dy=float(dy), wavelength=float(wavelength),
@@ -1577,8 +1621,10 @@ class PartialCoherenceMCF:
 
         # Modal storage via SVD of the ensemble matrix.
         # E_mat = U @ diag(s) @ Vh,  shape (nr, N_pix).
-        # The eigenmodes of J = (1/nr) * E_mat^H @ E_mat are Vh[k, :].conj()
-        # (the right-singular vectors of E_mat), with eigenvalues s_k^2 / nr.
+        # For J_doc(r1, r2) = <E(r1) conj(E(r2))> = (1/nr) E_mat.T @ conj(E_mat)
+        # the eigenmodes are the UNCONJUGATED rows Vh[k, :] (SRC-1: the prior
+        # comment said Vh[k, :].conj(), which matched the conjugated dense
+        # build, not the documented convention), with eigenvalues s_k^2 / nr.
         # SVD with full_matrices=False yields at most ``min(nr, N_pix)``
         # singular values -- exactly the non-zero spectrum of J.
         U, s, Vh = np.linalg.svd(E_mat, full_matrices=False)
