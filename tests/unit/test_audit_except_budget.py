@@ -65,7 +65,13 @@ LUMENAIRY_DIR = os.path.join(REPO_ROOT, 'lumenairy')
 # `_gram_cho_factor`) were NARROWED to
 # ``(ImportError, ValueError, np.linalg.LinAlgError)`` instead of counted.
 # Slack of 2 retained (count 43 at bump time).
-_NON_UI_EXCEPT_BUDGET = 45
+#
+# v5.21 delta-audit (2026-07-07, D11/D12): +2 sites, both the sanctioned
+# jax-tracer-guard class in elements/_berreman_jax.py -- `_layer_M_gen_jax`'s
+# trace-safe isotropy probe (D11a: concretize-or-fall-to-tensor-branch) and
+# `_tensor_is_traced_jax`'s concrete-inspectability probe (D12 tracer -> exact
+# general-path routing).  Slack of 2 retained (count 45 at bump time).
+_NON_UI_EXCEPT_BUDGET = 47
 
 
 def _count_except_exception_in_non_ui() -> int:

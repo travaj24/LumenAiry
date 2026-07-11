@@ -528,12 +528,18 @@ def apply_real_lens_traced_multibranch(
         T0 = _g(OPL[V0i, V0j])
         T1 = _g(OPL[V1i, V1j])
         T2 = _g(OPL[V2i, V2j])
-        L0 = _g(L[V0i, V0j])
-        L1 = _g(L[V1i, V1j])
-        L2 = _g(L[V2i, V2j])
-        M0 = _g(M[V0i, V0j])
-        M1 = _g(M[V1i, V1j])
-        M2 = _g(M[V2i, V2j])
+        # eikonal-gradient transverse components p = n*(L, M) for the
+        # intrapolation below.  In an index-n output space the phase slowness
+        # is n*(L, M), NOT the bare direction cosines (D4); pn = 1 for a
+        # vacuum output plane, so this is byte-identical there.  (The OPL
+        # advance already carries the n factor -- output_plane_n * t above.)
+        pn = float(output_plane_n)
+        L0 = pn * _g(L[V0i, V0j])
+        L1 = pn * _g(L[V1i, V1j])
+        L2 = pn * _g(L[V2i, V2j])
+        M0 = pn * _g(M[V0i, V0j])
+        M1 = pn * _g(M[V1i, V1j])
+        M2 = pn * _g(M[V2i, V2j])
         E0 = _g(E_launch[V0i, V0j])
         E1 = _g(E_launch[V1i, V1j])
         E2 = _g(E_launch[V2i, V2j])
@@ -570,7 +576,7 @@ def apply_real_lens_traced_multibranch(
             if not inside.any():
                 continue
             # second-order intrapolated OPL (Kraaijpoel eq. 5.7):
-            # T = sum_i a_i [T_i + 1/2 (x - x_i).p_i], p = (L, M) in air
+            # T = sum_i a_i [T_i + 1/2 (x - x_i).p_i], p = n*(L, M) (D4)
             T = (a0 * (T0[s, None, None]
                        + 0.5 * ((PX - X0) * L0[s, None, None]
                                 + (PY - Y0) * M0[s, None, None]))

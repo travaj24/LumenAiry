@@ -327,6 +327,24 @@ def _tensor_is_offplane_jax(e, jnp):
     return bool(off > 1e-12 * diag)
 
 
+def _tensor_is_traced_jax(e):
+    """True if ``e`` is a TRACED ``(3, 3)`` tensor -- a jit tracer whose values
+    cannot be concretely inspected (so :func:`_tensor_is_offplane_jax` cannot
+    see its off-plane coupling and would wrongly route it to the ~2%-off native
+    cascade).  Shape IS available on a tracer, so a traced ``(3, 3)`` layer is
+    detectable without concretizing (D12).  Routed to the generalized (Li-2003)
+    path, which is exact at all incidences for in-plane AND out-of-plane
+    tensors -- mirroring the rcwa tracer -> general-path fix so forward and
+    gradient share one branch."""
+    if getattr(e, "ndim", None) != 2 or tuple(getattr(e, "shape", ())) != (3, 3):
+        return False
+    try:
+        np.asarray(e, dtype=_C)
+        return False          # concrete -> _tensor_is_offplane_jax handles it
+    except Exception:
+        return True           # a (3, 3) tracer
+
+
 def _layer_M_gen_jax(e, kx0, ky0, jnp, eig):
     """Generalized (Li 2003) layer block ``(M, lam_f, lam_b)`` in jnp -- the
     out-of-plane-correct convention (flux-select forward + ``lam = +gam`` +
@@ -344,8 +362,17 @@ def _layer_M_gen_jax(e, kx0, ky0, jnp, eig):
     Kx1 = jnp.reshape(jnp.asarray(kx0, cj), (1, 1))
     Ky1 = jnp.reshape(jnp.asarray(ky0, cj), (1, 1))
     e = jnp.asarray(e, cj)
-    is_iso = jnp.max(jnp.abs(e - e[0, 0] * jnp.eye(3, dtype=cj))) < 1e-12
-    if bool(is_iso):
+    # D11(a): concretely inspect isotropy (like the router).  A TRACED spacer
+    # eps in an otherwise off-plane stack cannot be concretized -- ``bool(...)``
+    # would raise a ConcretizationTypeError under ``jit`` -- so fall through to
+    # the general (tensor) Berreman branch, which is correct for an isotropic
+    # layer too.
+    try:
+        _Mnp = np.asarray(e, dtype=_C)
+        is_iso = bool(np.max(np.abs(_Mnp - _Mnp[0, 0] * np.eye(3))) < 1e-12)
+    except Exception:
+        is_iso = False
+    if is_iso:
         W, V, kz = _homogeneous_eigenmodes(Kx1, Ky1, e[0, 0])
         kzc = kz.ravel()
         lam = _sqrt_decay(-jnp.concatenate([kzc, kzc]) ** 2)
@@ -403,6 +430,13 @@ def _offplane_solve_jax(eps_layers, thicks, eps_sup, eps_sub, wl, kx0, ky0, jnp)
                             jnp.reshape(ky0, (1,)))[0]
     kztf = _forward_flux_kz(eps_sub, jnp.reshape(kx0, (1,)),
                             jnp.reshape(ky0, (1,)))[0]
+    # D11(b): mirror the NumPy path's grazing guards -- avoid dividing the
+    # longitudinal rz/tz by a ~0 kz (NaN at exactly-grazing edges) and mask a
+    # non-propagating (Re(kz) <= 0) reflected/transmitted channel to zero.
+    safe_r = jnp.where(jnp.abs(kzrf) > 1e-12, kzrf, 1.0)
+    safe_t = jnp.where(jnp.abs(kztf) > 1e-12, kztf, 1.0)
+    prop_r = jnp.real(kzrf) > 0.0
+    prop_t = jnp.real(kztf) > 0.0
     Jr_cols, Jt_cols, Rs, Ts = [], [], [], []
     for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
         r = S11 @ jnp.array([ex0, ey0], cj)
@@ -410,14 +444,14 @@ def _offplane_solve_jax(eps_layers, thicks, eps_sup, eps_sub, wl, kx0, ky0, jnp)
         rx, ry, tx, ty = r[0], r[1], t[0], t[1]
         longi = kx0 * ex0 + ky0 * ey0
         einc_sq = 1.0 + (longi / kz_inc) ** 2
-        rz = -(kx0 * rx + ky0 * ry) / kzrf
-        tz = -(kx0 * tx + ky0 * ty) / kztf
-        Rs.append(jnp.real(kzrf / kz_inc)
+        rz = -(kx0 * rx + ky0 * ry) / safe_r
+        tz = -(kx0 * tx + ky0 * ty) / safe_t
+        Rs.append(jnp.where(prop_r, jnp.real(kzrf / kz_inc)
                   * (jnp.abs(rx) ** 2 + jnp.abs(ry) ** 2 + jnp.abs(rz) ** 2)
-                  / einc_sq)
-        Ts.append(jnp.real(kztf / kz_inc)
+                  / einc_sq, 0.0))
+        Ts.append(jnp.where(prop_t, jnp.real(kztf / kz_inc)
                   * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2 + jnp.abs(tz) ** 2)
-                  / einc_sq)
+                  / einc_sq, 0.0))
         Jr_cols.append(jnp.stack([jnp.conj(rx), jnp.conj(ry)]))
         Jt_cols.append(jnp.stack([jnp.conj(tx), jnp.conj(ty)]))
     return (jnp.stack(Rs), jnp.stack(Ts),
@@ -456,10 +490,14 @@ def _berreman_jones_1d_jax(layers, n_substrate, n_superstrate, wavelength,
     # (out-of-plane-correct) S-matrix -- the native cascade below is ~2% off in
     # that regime (see berreman._offplane_oblique_solve).  The generalized path
     # is correct at ALL incidences, so no obliqueness test is needed (which also
-    # sidesteps a traced angle).  Traced-eps / non-off-plane layers stay on the
-    # native path (unchanged); a traced-eps out-of-plane stack cannot be detected
-    # and falls through -- document via the NumPy entry's guard removal note.
-    if any(_tensor_is_offplane_jax(e, jnp) for e, _t in layers):
+    # sidesteps a traced angle).
+    # D12: a TRACED (3, 3) tensor cannot be inspected for off-plane coupling, so
+    # it also routes to the generalized path (detectable by shape) -- exact for
+    # in-plane AND out-of-plane, so forward and gradient share one branch,
+    # mirroring the rcwa tracer -> general-path fix (a traced OOP tensor no
+    # longer silently falls through to the ~2%-off native cascade).
+    if any(_tensor_is_offplane_jax(e, jnp) or _tensor_is_traced_jax(e)
+           for e, _t in layers):
         return _offplane_solve_jax(eps_layers, thicks, eps_sup, eps_sub,
                                    jnp.asarray(wl), Kx, Ky, jnp)
     R, T, Jr, Jt = _solve_jax(eps_layers, thicks, eps_sup, eps_sub,
@@ -472,13 +510,16 @@ def _berreman_stack_solve_jax(stack, retain_internal=False):
     layers = [(e, t) for t, e in stack._layers]
     if retain_internal:
         import jax.numpy as _jnp
-        if any(_tensor_is_offplane_jax(e, _jnp) for e, _t in layers):
+        if any(_tensor_is_offplane_jax(e, _jnp) or _tensor_is_traced_jax(e)
+               for e, _t in layers):
             raise NotImplementedError(
-                "BerremanStack.solve(retain_internal=True): internal fields "
-                "are not available for out-of-plane tensor layers at OBLIQUE "
-                "incidence (the generalized cascade's per-layer field "
-                "reconstruction is not implemented); far-field R/T/Jones ARE "
-                "exact.  Use a concrete NumPy solve for internal fields there.")
+                "BerremanStack.solve(retain_internal=True): differentiable "
+                "internal fields are not available for out-of-plane tensor "
+                "layers on the JAX path at ANY incidence (the generalized "
+                "cascade's per-layer field reconstruction is not implemented); "
+                "far-field R/T/Jones ARE exact.  For out-of-plane internal "
+                "fields use a concrete (NumPy) solve, which serves them at "
+                "normal AND oblique incidence.")
         jnp, eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky = _prep(
             layers, stack.n_sub, stack.n_sup, src["wl"], src["angle"],
             src["phi"], None)
