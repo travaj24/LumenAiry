@@ -103,7 +103,14 @@ def load_zemax_zmx(filepath: str,
         except (UnicodeDecodeError, UnicodeError):
             continue
     else:
-        raise IOError(f"Could not read {filepath} with any supported encoding")
+        # ZX-nit (AUDIT_IO_ZEMAX): latin-1 always decodes, so reaching here
+        # means the file WAS readable but carried no ``SURF`` record -- i.e.
+        # it is not a Zemax .zmx lens file.  The old "any supported encoding"
+        # message misattributed that to an encoding failure.
+        raise IOError(
+            f"{filepath} does not appear to be a Zemax .zmx lens file "
+            f"(no 'SURF' surface records found under any supported "
+            f"encoding: utf-16-le / utf-8 / latin-1).")
 
     # Remove BOM if present
     text = text.lstrip('﻿')
@@ -402,12 +409,19 @@ def load_zemax_zmx(filepath: str,
             elif semi_dia_m > 0 and np.isfinite(semi_dia_m):
                 q_r_max = float(semi_dia_m)
             else:
-                # Final fallback: half the prescription's aperture
-                # diameter -- only meaningful after the aperture-
-                # detection block below has run, so use a conservative
-                # 1.0 m placeholder here and let downstream callers
-                # validate (surface_sag_q_bfs / q_con raise on a
-                # non-positive r_max).
+                # ZX-nit (AUDIT_IO_ZEMAX): PARM 0 (Norm Radius) and DIAM are
+                # both absent/zero.  The 1.0 m placeholder is POSITIVE, so it
+                # sails through the downstream ``surface_sag_q_bfs`` /
+                # ``q_con`` positive-r_max validation -- a wrong Forbes-Q
+                # normalisation would go through silently.  Warn loudly so
+                # the user sets the surface's Norm Radius in the .zmx.
+                warnings.warn(
+                    f"load_zemax_zmx: Q-type surface "
+                    f"{s.get('surf_num', '?')} has no normalisation radius "
+                    f"(PARM 0) and no usable DIAM; falling back to a 1.0 m "
+                    f"placeholder r_max.  The Forbes Q coefficients will be "
+                    f"mis-normalised -- set the surface's Norm Radius.",
+                    UserWarning, stacklevel=2)
                 q_r_max = 1.0
         elif stype_u not in ('STANDARD', 'EVENASPH'):
             # v5.17.1 (audit P2-19): unknown SURFTYPE.  Pre-fix, every
@@ -515,11 +529,29 @@ def load_zemax_zmx(filepath: str,
     # ------------------------------------------------------------------
     # Thicknesses between consecutive lens surfaces (convert units)
     # ------------------------------------------------------------------
+    # ZX-1 (AUDIT_IO_ZEMAX): a COORDBRK sitting between two lens surfaces
+    # carries its axial gap in DISZ; ``lens_surfaces`` has the breaks
+    # filtered out, so that gap was silently dropped from the flat
+    # ``thicknesses`` / ``all_thicknesses`` (shifting every axial position
+    # after the break for apply_real_lens / surfaces_from_prescription /
+    # system_abcd / seidel).  Fold each intervening CB's DISZ into the
+    # preceding element's gap -- the geometrically-correct collapse for the
+    # unfolded (flat) approximation (the tilt/decenter is intentionally
+    # ignored here; the folded geometry lives in ``coord_breaks`` and drives
+    # ``world_surfaces_from_prescription``).
     thicknesses = []
     for i in range(len(lens_surfaces) - 1):
         t = lens_surfaces[i]['thickness']
         if np.isinf(t):
             t = 0.0
+        sn_i = lens_surfaces[i]['surf_num']
+        sn_next = lens_surfaces[i + 1]['surf_num']
+        for s in surfaces_raw:
+            if (s['is_coordbrk']
+                    and sn_i < s['surf_num'] < sn_next):
+                cb_t = s['thickness']
+                if not np.isinf(cb_t):
+                    t = t + cb_t
         thicknesses.append(t * unit_scale)
 
     # ------------------------------------------------------------------
@@ -546,6 +578,14 @@ def load_zemax_zmx(filepath: str,
             'aspheric_coeffs': e['aspheric_coeffs'],
             'glass_before': e['glass_before'],
             'glass_after': e['glass_after'],
+            # ZX-3 (AUDIT_IO_ZEMAX): carry is_stop + semi_diameter (already in
+            # metres, like radius) onto the lens-only surfaces.  Without them
+            # the F-29 stop-preserving export -- which reads
+            # ``prescription['surfaces'][i].get('is_stop')`` -- fell through to
+            # STOP=surface-0 on every LOADED file (relocating the declared
+            # stop on re-export), and the tracer lost the explicit stop.
+            'is_stop': bool(e.get('is_stop', False)),
+            'semi_diameter': e.get('semi_diameter'),
         }
         # v4.15.1 (P1-NEW-E): forward Forbes Q-type freeform keys so
         # the lens-only prescription consumed by apply_real_lens_traced
@@ -608,8 +648,11 @@ def load_zemax_zmx(filepath: str,
     #   PARM 6:  Order  (0 = decenter then tilt, 1 = tilt then decenter)
     #
     # Decenters are converted to meters (multiplied by ``unit_scale``);
-    # tilts remain in degrees.  The loader preserves COORDBRK DISZ
-    # thickness via the usual ``all_thicknesses`` path (unchanged here).
+    # tilts remain in degrees.  Each COORDBRK's own DISZ axial gap is kept
+    # here as ``thickness_m`` (it drives ``world_surfaces_from_prescription``)
+    # AND, as of ZX-1, folded into the preceding element's ``thicknesses`` /
+    # ``all_thicknesses`` entry above so the flat (unfolded) prescription's
+    # axial positions stay correct too.
     #
     # Downstream callers (wave-optics simulations) should iterate this
     # list and apply each break at its z-position in the propagation
@@ -634,12 +677,20 @@ def load_zemax_zmx(filepath: str,
         }
         coord_breaks.append(cb)
 
+    # ZX-3: expose the explicit stop index at the top level (index into the
+    # lens-only ``surfaces`` list) so consumers that key on 'stop_index'
+    # (exporters, tracer stop resolution) see the declared stop instead of
+    # defaulting to surface 0.
+    _stop_index = next((i for i, ps in enumerate(prescription_surfaces)
+                        if ps.get('is_stop')), None)
+
     return {
         'name': name,
         'aperture_diameter': aperture,
         # Lens-only prescription (for apply_real_lens)
         'surfaces': prescription_surfaces,
         'thicknesses': lens_thicknesses,
+        'stop_index': _stop_index,
         # Full element list including mirrors (for manual use)
         'elements': elements,
         'all_thicknesses': thicknesses,
@@ -1187,11 +1238,14 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
         (see :func:`make_singlet`).
     path : str
         Output file path (``.txt`` recommended).
-    wavelength : float, default 1.31e-6
-        Primary wavelength [m] to record in the file header.
-    stop_surface : int, default 0
+    wavelength : float
+        Primary wavelength [m] to record in the file header.  Keyword-
+        required (there is no default).
+    stop_surface : int, optional
         Zero-based index of the aperture stop within the refracting
-        surface list.
+        surface list.  Defaults to ``None`` -> resolved by the v5.4.6 F-29
+        rule (the surface flagged ``is_stop``, else the top-level
+        ``'stop_index'``, else 0).
     aperture_diameter : float, optional
         Clear aperture diameter [m].  Falls back to
         ``prescription.get('aperture_diameter')``.
@@ -1485,6 +1539,12 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     # all_thicknesses indexed by element index; cb's get thickness 0
     # (they don't advance, just transform the frame).
     elem_idx_in_full = 0
+    # ZX-4 (AUDIT_IO_ZEMAX): honour ``back_focal_length`` (was a dead
+    # parameter -- the last element's gap fell off ``all_thicknesses`` and
+    # defaulted to 0.0, giving image distance 0 for every mirror/CB-bearing
+    # export).  Apply it exactly once, to the FIRST element whose trailing
+    # gap runs past the thickness list (the last optical surface -> image).
+    _bfl_applied = False
     # Track the refracting-surface index separately so the STOP
     # marker lands on the requested refracting surface even when
     # coord-breaks and mirrors appear earlier in ``flat``.  The
@@ -1526,8 +1586,13 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         # Element: refractive or mirror.  Thickness AFTER this elem
         # comes from all_thicknesses[elem_idx_in_full].
         e = payload
-        t_after_m = (all_thicknesses[elem_idx_in_full]
-                      if elem_idx_in_full < len(all_thicknesses) else 0.0)
+        if elem_idx_in_full < len(all_thicknesses):
+            t_after_m = all_thicknesses[elem_idx_in_full]
+        elif not _bfl_applied and back_focal_length:
+            t_after_m = float(back_focal_length)   # ZX-4: trailing gap = BFL
+            _bfl_applied = True
+        else:
+            t_after_m = 0.0
         elem_idx_in_full += 1
         # v4.11.2: no mirror-parity flip.  Pre-fix code converted
         # "physical-positive" back to Zemax-signed by negating every

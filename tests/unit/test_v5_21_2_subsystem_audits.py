@@ -431,8 +431,8 @@ def test_gl2_reregister_fixed_index_clears_cache():
     """GL-2: re-registering a fixed index invalidates the value cache (now
     routed through the lock-correct _invalidate_glass_name), so the second
     resolution returns the NEW value rather than a stale cached one."""
-    from lumenairy.raytrace.trace import _register_fixed_index
     from lumenairy.glass import get_glass_index
+    from lumenairy.raytrace.trace import _register_fixed_index
     name = '__gl2_probe__'
     _register_fixed_index(name, 1.5, 587.6e-9)
     assert abs(get_glass_index(name, 587.6e-9) - 1.5) < 1e-12
@@ -450,3 +450,114 @@ def test_gl_jonesfield_apply_spherical_lens_missing_wavelength():
     jf = JonesField(Ex, Ey, dx)
     with pytest.raises(TypeError, match="wavelength"):
         jf.apply_spherical_lens(focal_length=0.1)
+
+
+# =========================================================================
+# AUDIT 6 -- io/prescriptions_zemax.py (AUDIT_IO_ZEMAX)
+# =========================================================================
+
+# Singlet with a COORDBRK (DISZ=3mm) between the two lens surfaces.
+_ZMX_CB_BETWEEN = """UNIT MM
+SURF 0
+  TYPE STANDARD
+  DISZ 10.0
+SURF 1
+  TYPE STANDARD
+  CURV 0.02
+  DISZ 5.0
+  GLAS N-BK7 0 0 1.5 50.0
+  DIAM 12.0 0 0 0 1 ""
+SURF 2
+  TYPE COORDBRK
+  DISZ 3.0
+  PARM 3 2.0
+SURF 3
+  TYPE STANDARD
+  CURV -0.02
+  DISZ 95.0
+  DIAM 12.0 0 0 0 1 ""
+SURF 4
+  TYPE STANDARD
+  DISZ 0.0
+  DIAM 1.0 0 0 0 1 ""
+"""
+
+# Singlet with the aperture STOP on the SECOND (back) lens surface.
+_ZMX_STOP_ON_BACK = """UNIT MM
+SURF 0
+  TYPE STANDARD
+  DISZ 10.0
+SURF 1
+  TYPE STANDARD
+  CURV 0.02
+  DISZ 5.0
+  GLAS N-BK7 0 0 1.5 50.0
+  DIAM 12.0 0 0 0 1 ""
+SURF 2
+  TYPE STANDARD
+  STOP
+  CURV -0.02
+  DISZ 95.0
+  DIAM 12.0 0 0 0 1 ""
+SURF 3
+  TYPE STANDARD
+  DISZ 0.0
+  DIAM 1.0 0 0 0 1 ""
+"""
+
+
+def test_zx1_coordbreak_disz_folded_into_flat_thicknesses(tmp_path):
+    """ZX-1: a COORDBRK's axial DISZ between two lens surfaces is folded into
+    the preceding element's gap in the flat thicknesses (was silently
+    dropped, shifting every downstream axial position)."""
+    from lumenairy.io.prescriptions_zemax import load_zemax_zmx
+    p = tmp_path / 'cb.zmx'
+    p.write_text(_ZMX_CB_BETWEEN, encoding='utf-8')
+    # Explicit range spans the front (1) and back (3) lens surfaces across
+    # the intervening COORDBRK (2).
+    presc = load_zemax_zmx(str(p), surface_range=(1, 3))
+    # Front->back gap = SURF1 DISZ (5mm) + CB DISZ (3mm) = 8mm.
+    assert abs(presc['thicknesses'][0] - 8e-3) < 1e-9
+    # The CB's own axial gap is still available for the world path.
+    assert abs(presc['coord_breaks'][0]['thickness_m'] - 3e-3) < 1e-9
+
+
+def test_zx3_loaded_stop_index_preserved(tmp_path):
+    """ZX-3: an explicit STOP on the back surface is preserved on the
+    lens-only surfaces and exposed as a top-level stop_index (was dropped,
+    so re-export/tracer defaulted STOP to surface 0)."""
+    from lumenairy.io.prescriptions_zemax import load_zemax_zmx
+    p = tmp_path / 'stop.zmx'
+    p.write_text(_ZMX_STOP_ON_BACK, encoding='utf-8')
+    presc = load_zemax_zmx(str(p))
+    assert presc['stop_index'] == 1
+    assert presc['surfaces'][1]['is_stop'] is True
+    assert presc['surfaces'][0]['is_stop'] is False
+
+
+def test_zx4_full_writer_honours_back_focal_length(tmp_path):
+    """ZX-4: _export_zemax_zmx_full now honours back_focal_length for the
+    trailing (last-surface -> image) gap instead of hardcoding DISZ 0.  Build
+    an element-list prescription whose last gap runs past all_thicknesses so
+    the BFL fallback is what fills it."""
+    from lumenairy.io.prescriptions_zemax import _export_zemax_zmx_full
+    presc = {
+        'elements': [
+            {'element_type': 'surface', 'radius': 0.05, 'conic': 0.0,
+             'aspheric_coeffs': {}, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 5e-3, 'is_stop': True},
+            {'element_type': 'surface', 'radius': -0.05, 'conic': 0.0,
+             'aspheric_coeffs': {}, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 5e-3, 'is_stop': False},
+        ],
+        # Only ONE inter-element gap recorded -> the 2nd element's trailing
+        # gap falls off the list and must be filled by the BFL.
+        'all_thicknesses': [4e-3],
+        'aperture_diameter': 10e-3,
+    }
+    out = tmp_path / 'bfl.zmx'
+    _export_zemax_zmx_full(presc, str(out), wavelength=587.6e-9,
+                           back_focal_length=0.042)
+    text = out.read_text(encoding='utf-8')
+    # The 42 mm BFL must appear as a DISZ (was hardcoded 0 before ZX-4).
+    assert 'DISZ 42.00000000' in text
