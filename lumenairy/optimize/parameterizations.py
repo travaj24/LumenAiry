@@ -12,6 +12,7 @@ historical import paths continue to work bit-for-bit.
 from __future__ import annotations
 
 import copy
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -85,11 +86,16 @@ def _classify_path_to_floor(path: Tuple[Any, ...]) -> float:
         # Conic constant.
         if key_lc == 'conic' or key_lc == 'k':
             return _DEFAULT_SCALE_FLOORS['conic']
-        # Aspheric / Forbes-Q polynomial coefficients.  Substring
-        # match catches ``alpha0`` / ``alpha_n`` / ``A4`` / ``a_8`` /
-        # ``aspheric_coeffs[3]`` etc.
-        if ('alpha' in key_lc or key_lc.startswith('a')
-                or 'aspheric' in key_lc or 'forbes' in key_lc):
+        # Aspheric / Forbes-Q polynomial coefficients: the ``alpha`` /
+        # ``aspheric`` / ``forbes`` substrings, or a single-letter-A
+        # coefficient name -- an 'a' followed by an optional '_' then digits
+        # (``A4`` / ``a_8`` / ``a12``).  Nit (AUDIT_OPTIMIZE_DRIVER): the old
+        # ``key_lc.startswith('a')`` matched ANY key beginning with 'a' (a
+        # future ``'axis'`` / ``'angle'`` surface field would silently pick up
+        # the dimensionless aspheric FD floor); ``re.fullmatch(r'a_?\d+')``
+        # keeps the intended A-coefficient names without the false positives.
+        if ('alpha' in key_lc or 'aspheric' in key_lc or 'forbes' in key_lc
+                or re.fullmatch(r'a_?\d+', key_lc)):
             return _DEFAULT_SCALE_FLOORS['aspheric']
         # Per-surface thickness override (rare; in some prescriptions
         # thickness is on the surface dict, not the top-level

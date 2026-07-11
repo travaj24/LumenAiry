@@ -772,3 +772,27 @@ def test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude():
         f'LG-JAX (0,0) merit = {v} at a mismatched waist (poor coupling); '
         f'expected a LARGE Strehl DEFICIT (~1).  A value near 0 means the '
         f'pre-OPT-1 |Strehl|^2 (wrong-direction) form is still in place.')
+
+
+# =========================================================================
+# AUDIT 13 -- optimize/parameterizations.py (AUDIT_OPTIMIZE_DRIVER)
+# =========================================================================
+
+
+def test_opt_driver_aspheric_floor_classification_not_overbroad():
+    """OPT-nit: the FD scale-floor classifier now matches actual aspheric
+    coefficient names (A4 / a_8 / alpha0) but NOT any key merely starting
+    with 'a' (e.g. a future 'axis' field), which the old
+    ``startswith('a')`` misrouted to the dimensionless aspheric floor."""
+    from lumenairy.optimize.parameterizations import (
+        _DEFAULT_SCALE_FLOORS,
+        _classify_path_to_floor,
+    )
+    asph = _DEFAULT_SCALE_FLOORS['aspheric']
+    default = _DEFAULT_SCALE_FLOORS['_default']
+    assert asph != default
+    for key in ('A4', 'a_8', 'a12', 'alpha0', 'aspheric_coeffs'):
+        assert _classify_path_to_floor(('surfaces', 0, key)) == asph
+    # A key that merely starts with 'a' is NOT aspheric anymore.
+    for key in ('axis', 'angle', 'anamorphic'):
+        assert _classify_path_to_floor(('surfaces', 0, key)) == default
