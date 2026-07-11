@@ -2,6 +2,64 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **v5.21 delta-audit remediation** (`docs/audits/AUDIT_V5_21_DELTA_2026_07_07.md`,
+  findings D1–D15).  Correctness/robustness gaps in the new v5.21 code, each
+  validated; tests in `tests/unit/test_v5_21_delta_audit.py`.
+  - **D1 (conical incidence guards).**  `pmm_jones_1d_conical`,
+    `pmm_jones_1d_conical_tensor` and `PMMStack`'s conical (`phi != 0`) solve
+    now run the suite-standard `_require_propagating_incidence` +
+    `_grazing_safe_wavelength` guards (every other PMM/RCWA entry has both).
+    A gain / metallic / grazing incidence medium now raises instead of
+    silently negating or NaN-ing the `kz_inc`-normalised far field; the
+    grazing nudge is a no-op away from a Rayleigh cutoff, so valid solves are
+    byte-identical.
+  - **D2 (differential-ray-transfer NaNs).**  The finite-difference
+    `ray_transfer_jacobian` now ANDs companion-aliveness into `alive` and
+    scrubs the Jacobian, so a rim-adjacent base ray whose ±h companion
+    vignettes/TIRs is masked out instead of leaking a NaN Jacobian into the
+    coherent GBD per-surface sum (reachable on aspheric/freeform surfaces).
+    The GBD local-frame branch also gains the `isfinite` mask the world
+    branch already had.
+  - **D3 (multibranch KMAH index).**  In-glass (surface-to-surface) fold
+    caustics are now counted per leg with the same exact-quadratic `det Q(z)`
+    method the exit leg uses, replacing a mod-2 parity closure that left an
+    EVEN internal-crossing count invisible (a focus between two elements = a
+    π Maslov-index error).  The exact parity guarantee is retained; 0 for an
+    air-focus system (byte-identical to v5.21).
+  - **D4 (multibranch immersed output plane).**  The Kraaijpoel OPL
+    intrapolation eikonal gradient is now `p = n·(L, M)` for
+    `output_plane_n != 1` (byte-identical for a vacuum output plane).
+  - **D7 (Levin engine).**  Dead `fmax` parameter removed; the rigorous
+    residual bound `∫|r|` is now a Clenshaw–Curtis quadrature (exact
+    integral) instead of the endpoint-over-weighted sample mean; stale
+    `levin2d` docstring corrected.
+  - **D11 / D12 (berreman JAX twin).**  A traced out-of-plane tensor now
+    routes to the generalized (exact) cascade instead of the ~2%-off native
+    path (mirroring the rcwa tracer→general fix; forward matches concrete to
+    ~6e-15, `jax.grad` flows); a concrete OOP layer beside a traced isotropic
+    spacer no longer raises under `jit`; `_offplane_solve_jax` gains the
+    NumPy path's grazing / `Re(kz)>0` guards; the `retain_internal` message
+    no longer misleadingly says "OBLIQUE".
+  - **D9 (`PMM2DStack` deprecation phase).**  The bare `PMM2DStack`
+    transitional alias now emits a `DeprecationWarning` on construction (it
+    is scheduled to be repointed from the hybrid to the no-floor pure stack —
+    a silent results change); pin `PMM2DStackHybrid` or `PMM2DStackPure`
+    explicitly.  Explicit names stay silent.
+  - **D13 (`fff_nv` cross-reference).**  `CONVENTIONS.md` §11 documents that
+    `formulation='fff_nv'` names three different algorithms across
+    `rcwa_efficiency_2d` / `rcwa_jones_2d` / `pmm_jones_2d`.
+  - **D14 / D15 + D5 / D10 (comments & scope notes).**  Corrected the
+    geo-eig cache comment (`k0`-independent only at fixed `kx0`); the
+    traced-segmentation cap drops the shallowest cuts first (matching its
+    comment) and drops a dead `wavelength` parameter; scope notes on the
+    Ludwig fold-vs-point band and the GBD vector sampling coupling.
+  - Verified already-fixed (no change): **D8** — both JAX 2-D cell branches
+    already honour `max_nodal_dof` at dispatch.
+
 ## [5.21.0] — 2026-07-07
 
 ### Added
