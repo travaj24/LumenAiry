@@ -20,6 +20,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -150,8 +151,13 @@ def create_periodic_phase_mask(
     # Map each sim coordinate into the unit cell (periodic tiling)
     in_cell = np.mod(coord, cell_extent)
 
-    # Nearest-neighbor pixel index within the cell
-    idx = np.clip((in_cell / cell_pixel_size).astype(int), 0, cell_N - 1)
+    # Nearest-neighbor pixel index within the cell.  DOE-nit
+    # (AUDIT_DOE_GRATING_FREEFORM): use ``round`` for a true nearest-
+    # neighbour sample -- ``.astype(int)`` TRUNCATES (a left-edge, half-pixel-
+    # biased sample), contradicting the documented "nearest-neighbor" resample
+    # (same half-pixel class as the HFPI-1 / from_field binning nits).
+    idx = np.clip(np.round(in_cell / cell_pixel_size).astype(int),
+                  0, cell_N - 1)
     ix = idx
     iy = idx
 
@@ -665,6 +671,20 @@ def makedammann2d(
             "valid; expected one of 'auto', 'um', 'SI'."
         )
 
+    # DOE-nit (AUDIT_DOE_GRATING_FREEFORM): validate the loop / sampling
+    # counts.  ``itr < 1`` makes the annealing schedule
+    # ``2**floor(phasesteps*(itr-it)/itr)`` a 0/0 -> ``int(nan)`` crash, and
+    # ``wavsamp <= 0`` blows up ``ndifordersx = ceil(.../wavsamp)``.  Give an
+    # actionable message instead of a deep-stack error.
+    if int(itr) < 1:
+        raise ValueError(
+            f"makedammann2d: itr must be >= 1 (got {itr!r}); it sets the "
+            "annealing iteration budget.")
+    if not (wavsamp > 0):
+        raise ValueError(
+            f"makedammann2d: wavsamp must be > 0 (got {wavsamp!r}); it sets "
+            "the wavelength/diffraction-order sampling density.")
+
     # v4.14.3 (P0-NEW-2 / Agent A A.2): unambiguous-nonsense upper
     # bound applies to ``'auto'`` and ``'SI'`` modes.  A meter-scale
     # grating period or design wavelength is wrong in any unit system
@@ -1050,13 +1070,39 @@ def load_fits_field(
         elif np.iscomplexobj(amp_data):
             E = amp_data.astype(complex)
         else:
-            # Amplitude only — assume zero phase
-            E = amp_data.astype(complex)
+            # DOE-1 (AUDIT_DOE_GRATING_FREEFORM): auto-detect the SPLIT
+            # amp/phase layout -- which is the DEFAULT of
+            # ``save_fits_field`` (2-D real amplitude primary + a second HDU
+            # tagged ``EXTNAME='PHASE'`` / ``BUNIT='radians'``).  Pre-fix the
+            # default save -> default load (``hdu_phase=None``) round-trip
+            # took this "amplitude only" branch and SILENTLY dropped all
+            # phase (mirroring the real/imag-stack auto-detection above).
+            _phase_hdu = None
+            for _h in hdul[1:]:
+                _hdr = _h.header
+                if (str(_hdr.get('EXTNAME', '')).upper() == 'PHASE'
+                        or str(_hdr.get('BUNIT', '')).lower() == 'radians'):
+                    _phase_hdu = _h
+                    break
+            if _phase_hdu is not None and _phase_hdu.data is not None:
+                phase_data = np.array(_phase_hdu.data)
+                E = amp_data * np.exp(1j * phase_data)
+            else:
+                # Genuinely amplitude-only -- assume zero phase.
+                E = amp_data.astype(complex)
 
+    # DOE-nit (AUDIT_DOE_GRATING_FREEFORM): fall back to PIXSCALE only when
+    # the specific key is ABSENT -- an explicit ``DX == 0.0`` (odd but
+    # possible) should be taken literally, not treated as falsy and
+    # overridden by PIXSCALE.
+    _dx = header.get('DX')
+    _dx = header.get('PIXSCALE') if _dx is None else _dx
+    _dy = header.get('DY')
+    _dy = header.get('PIXSCALE') if _dy is None else _dy
     metadata = {
         'wavelength': header.get('WAVELENG'),
-        'dx': header.get('DX') or header.get('PIXSCALE'),
-        'dy': header.get('DY') or header.get('PIXSCALE'),
+        'dx': _dx,
+        'dy': _dy,
     }
     return E, metadata
 
@@ -1107,8 +1153,22 @@ def save_fits_field(
     if dy is not None:
         header['DY'] = (dy, 'Grid spacing in y [m]')
     if metadata:
+        # DOE-nit (AUDIT_DOE_GRATING_FREEFORM): FITS keywords are capped at 8
+        # chars, so two metadata keys sharing an 8-char prefix would silently
+        # collapse into one card (the later value overwrites the earlier).
+        # Warn on collision rather than lose data silently.
+        _seen_cards: Dict[str, str] = {}
         for key, value in metadata.items():
-            header[key.upper()[:8]] = value
+            card = key.upper()[:8]
+            if card in _seen_cards and _seen_cards[card] != key:
+                warnings.warn(
+                    f"save_fits_field: metadata keys {_seen_cards[card]!r} "
+                    f"and {key!r} both truncate to the 8-char FITS card "
+                    f"{card!r}; the later value overwrites the earlier.  "
+                    f"Rename one to keep both.",
+                    UserWarning, stacklevel=2)
+            _seen_cards[card] = key
+            header[card] = value
 
     if split_amp_phase:
         amp = np.abs(E).astype(np.float32)

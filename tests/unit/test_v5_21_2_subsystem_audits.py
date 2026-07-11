@@ -561,3 +561,38 @@ def test_zx4_full_writer_honours_back_focal_length(tmp_path):
     text = out.read_text(encoding='utf-8')
     # The 42 mm BFL must appear as a DISZ (was hardcoded 0 before ZX-4).
     assert 'DISZ 42.00000000' in text
+
+
+# =========================================================================
+# AUDIT 7 -- elements/doe.py (AUDIT_DOE_GRATING_FREEFORM)
+# =========================================================================
+
+
+def test_doe1_fits_split_roundtrip_preserves_phase(tmp_path):
+    """DOE-1: save_fits_field's DEFAULT split (amp + PHASE extension) is now
+    auto-detected by load_fits_field's DEFAULT (hdu_phase=None), so the
+    round-trip preserves phase instead of silently dropping it."""
+    pytest.importorskip('astropy')
+    from lumenairy.elements.doe import load_fits_field, save_fits_field
+    N, dx, wl = 16, 1e-6, 633e-9
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E = (np.exp(-(X * X + Y * Y) / (4 * dx) ** 2)
+         * np.exp(1j * 2.0 * X / dx)).astype(np.complex128)
+    p = str(tmp_path / 'field.fits')
+    save_fits_field(p, E, wavelength=wl, dx=dx)   # split_amp_phase=True default
+    E2, meta = load_fits_field(p)                  # hdu_phase=None default
+    # Phase survives (float32 storage precision).
+    assert np.max(np.abs(np.angle(E2) - np.angle(E))) < 1e-4
+    assert np.max(np.abs(np.abs(E2) - np.abs(E))) < 1e-4
+    assert abs(meta['dx'] - dx) < 1e-12
+
+
+def test_doe_dammann_itr_wavsamp_guards():
+    """DOE-nit: makedammann2d validates itr / wavsamp up front (itr=0 was a
+    0/0 int(nan) crash; wavsamp=0 blew up the order count)."""
+    from lumenairy.elements.doe import makedammann2d
+    with pytest.raises(ValueError, match="itr must be"):
+        makedammann2d(itr=0, plot=False)
+    with pytest.raises(ValueError, match="wavsamp must be"):
+        makedammann2d(wavsamp=0.0, plot=False)
