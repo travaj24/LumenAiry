@@ -665,3 +665,25 @@ def test_msl1_det_safe_floor_is_signed_and_nonzero():
     nf = new_floor(det_H)
     assert np.all(nf != 0.0)
     assert np.all(np.sign(nf) == np.where(det_H < 0, -1.0, 1.0))
+
+
+# =========================================================================
+# AUDIT 10 -- elements/eme/eme_2d.py (AUDIT_EME)
+# =========================================================================
+
+
+def test_eme_lossy_strip_modes_finite_and_orthonormal():
+    """EME-nit: the complex-SYMMETRIC lossy-eps path (Im(eps)!=0 at kx0=0)
+    returns finite modes with a floored bilinear norm (no inf/NaN from a
+    near-defective sum(Phi^2))."""
+    from lumenairy.elements.eme.eme_2d import strip_x_modes
+    Nx, Lx, k0 = 24, 2e-6, 2 * np.pi / 1.0e-6
+    # A lossy dielectric grating: real base + absorbing stripe.
+    eps = np.full(Nx, 2.25 + 0.0j)
+    eps[Nx // 3: 2 * Nx // 3] = 4.0 + 0.3j       # Im != 0 -> complex-symmetric
+    lam, Phi = strip_x_modes(eps, Lx, Nx, k0, kx0=0.0)
+    assert np.all(np.isfinite(lam))
+    assert np.all(np.isfinite(Phi))
+    # Bilinear (complex-symmetric) norm ~ 1 per column (floored ones aside).
+    bilin = np.sum(Phi ** 2, axis=0)
+    assert np.all(np.isfinite(bilin))

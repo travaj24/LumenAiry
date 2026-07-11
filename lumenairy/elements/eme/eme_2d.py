@@ -67,8 +67,19 @@ def strip_x_modes(eps_x, Lx, Nx, k0, kx0=0.0):
         # imaginary diagonal), so route it to the general eig path (matching the
         # kx0 != 0 branch) and keep the complex spectrum.
         from scipy.linalg import eig
+        # EME-nit (AUDIT_EME): unlike the ``eigh`` branch (ascending ``lam``),
+        # ``eig`` returns the eigenpairs UNSORTED.  Downstream ``layer_modes``
+        # scans ``qz^2`` and does not rely on ordering, so this is safe here;
+        # a future consumer must NOT assume sorted ``lam`` from this branch.
         lam, Phi = eig(A)
-        Phi = Phi / np.sqrt(np.sum(Phi ** 2, axis=0))   # complex-orthonormal
+        # EME-nit: floor the complex-SYMMETRIC bilinear norm ``sum(Phi^2)``
+        # (the correct non-Hermitian normaliser here).  For a defective
+        # (non-diagonalisable) ``A`` -- a degenerate/lossy edge -- it can
+        # vanish, which would divide the eigenvector to inf/NaN; leave such a
+        # column un-normalised (divide by 1) instead.
+        _bilin = np.sum(Phi ** 2, axis=0)
+        _bilin = np.where(np.abs(_bilin) < 1e-30, 1.0, _bilin)
+        Phi = Phi / np.sqrt(_bilin)                     # complex-orthonormal
     return lam, Phi.astype(complex)
 
 
