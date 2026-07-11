@@ -796,3 +796,50 @@ def test_opt_driver_aspheric_floor_classification_not_overbroad():
     # A key that merely starts with 'a' is NOT aspheric anymore.
     for key in ('axis', 'angle', 'anamorphic'):
         assert _classify_path_to_floor(('surfaces', 0, key)) == default
+
+
+# =========================================================================
+# AUDIT 14 -- optimize/wrapper_merits.py (AUDIT_OPTIMIZE_WRAPPERS)
+# =========================================================================
+
+
+def test_opt2_tolerance_merit_populates_rms_and_opd_subcontext():
+    """OPT-2: ToleranceAwareMerit now populates rms_radius_best (nanargmax)
+    AND opd_map on the per-trial sub-context, mirroring the sibling
+    aggregators.  Pre-fix it set only strehl_best, so an OPD/spot sub-merit
+    saw the inf default / None and degenerated to inf / silently-inert."""
+    import lumenairy
+    from lumenairy.optimize.context import MeritTerm
+    from lumenairy.optimize.core import EvaluationContext
+    from lumenairy.optimize.wrapper_merits import ToleranceAwareMerit
+
+    seen = {}
+
+    class _Spy(MeritTerm):
+        name = 'spy'
+        needs_wave = True
+        weight = 1.0
+
+        def evaluate(self, ctx):
+            seen['rms'] = ctx.rms_radius_best
+            seen['opd'] = ctx.opd_map
+            return 0.0
+
+    pres = lumenairy.make_singlet(R1=60e-3, R2=float('inf'), d=4e-3,
+                                  glass='N-BK7', aperture=12e-3)
+    tol = ToleranceAwareMerit(
+        sub_merit=_Spy(),
+        perturbation_spec=[{'surface_index': 0, 'decenter_std': 0.0,
+                            'tilt_std': 0.0, 'form_error_rms': 0.0}],
+        n_trials=1, seed=0)
+    ctx = EvaluationContext(prescription=pres, wavelength=1.30e-6,
+                            N=64, dx=8e-6, efl=0.1, bfl=0.1)
+    tol.evaluate(ctx)
+    assert 'rms' in seen, 'sub-merit was never evaluated'
+    # Post-fix: a finite rms_radius_best (not the inf default) + a real opd_map.
+    assert np.isfinite(seen['rms']), (
+        f'rms_radius_best={seen["rms"]} -- inf means OPT-2 is unfixed '
+        f'(only strehl_best was populated).')
+    assert seen['opd'] is not None, (
+        'opd_map is None -- OPD-based sub-merits would be inert (OPT-2 '
+        'unfixed).')

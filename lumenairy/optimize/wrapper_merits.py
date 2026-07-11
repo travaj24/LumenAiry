@@ -978,6 +978,14 @@ class ToleranceAwareMerit(MeritTerm):
                         ideal_peak=ideal, verbose=False)
                     z_best, strehl_best = _core.find_best_focus(scan, 'strehl')
                     sub_ctx.strehl_best = float(strehl_best)
+                    # OPT-2 (AUDIT_OPTIMIZE_WRAPPERS): mirror the sibling
+                    # aggregators -- populate ``rms_radius_best`` (nanargmax)
+                    # too, so a SpotSizeMerit sub-merit sees the real value
+                    # instead of the ``EvaluationContext`` inf default.
+                    if np.any(np.isfinite(scan.strehl)):
+                        i_best = int(np.nanargmax(scan.strehl))
+                        sub_ctx.rms_radius_best = float(
+                            scan.rms_radius[i_best])
                 except (ValueError, RuntimeError, ZeroDivisionError,
                         KeyError, np.linalg.LinAlgError, IndexError,
                         AttributeError, TypeError):
@@ -988,5 +996,24 @@ class ToleranceAwareMerit(MeritTerm):
                     # Sibling branch to the MultiFieldMerit one above;
                     # same ``float()``-coercion contract at the consumer.
                     sub_ctx.strehl_best = _FAILED_SCAN_STREHL_SENTINEL_OBJ
+            # OPT-2: build the OPD map (from the PERTURBED bfl + aperture) so
+            # OPD-based sub-merits (RMSWavefrontMerit, MatchTargetOPD,
+            # ZernikeCoefficient) see real data instead of ``None`` -- pre-fix
+            # they degenerated to inf / silently-inert under this wrapper even
+            # though they optimise fine under MultiField / MultiWavelength.
+            ap = pres_pert.get('aperture_diameter')
+            if (ap and np.isfinite(bfl_p)
+                    and getattr(self.sub_merit, 'needs_wave', False)):
+                try:
+                    _, _, opd = _core.wave_opd_2d(
+                        E_exit, ctx.dx, ctx.wavelength,
+                        aperture=ap, focal_length=bfl_p, f_ref=bfl_p)
+                    sub_ctx.opd_map = opd
+                except (ValueError, RuntimeError, ZeroDivisionError,
+                        np.linalg.LinAlgError, IndexError, AttributeError,
+                        TypeError):
+                    # OPD-map extraction failed (aperture mismatch / singular
+                    # fit); leave None so Zernike merits return 0 contribution.
+                    sub_ctx.opd_map = None
             total = total + self.sub_merit.evaluate(sub_ctx)
         return self.weight * total / max(self.n_trials, 1)
