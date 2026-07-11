@@ -185,6 +185,68 @@ def test_d12_traced_oop_tensor_routes_to_exact_general_path():
     assert np.isfinite(float(grad))
 
 
+# ----------------------------------------------------------------- D7 ------
+def test_d7_clenshaw_curtis_weights_exact():
+    """The residual-bound quadrature weights integrate polynomials up to the
+    node degree exactly (the returned Levin bound is now an integral, not the
+    edge-over-weighted sample mean)."""
+    from lumenairy._math.levin import _cc_weights
+    for n in (8, 24, 48):
+        w = _cc_weights(n)
+        nodes = np.cos(np.pi * np.arange(n) / (n - 1))[::-1]
+        assert abs(w.sum() - 2.0) < 1e-13                 # int 1 = 2
+        assert abs((w * nodes ** 2).sum() - 2.0 / 3.0) < 1e-13   # int x^2
+        assert abs((w * nodes ** 4).sum() - 2.0 / 5.0) < 1e-13   # int x^4
+
+
+def test_d7_levin1d_no_fmax_kwarg():
+    """The dead fmax parameter is gone and the 1-D Levin still integrates a
+    plain oscillatory integral accurately."""
+    import inspect
+
+    from lumenairy._math.levin import levin1d_adaptive
+    assert "fmax" not in inspect.signature(levin1d_adaptive).parameters
+    # int_-1^1 exp(i*40*y) dy = 2 sin(40)/40
+    val = levin1d_adaptive(lambda y: 40.0 * y, lambda y: 40.0 * np.ones_like(y),
+                           lambda y: np.ones_like(y), -1.0, 1.0, tol=1e-10)
+    assert abs(val - 2.0 * np.sin(40.0) / 40.0) < 1e-8
+
+
+# ----------------------------------------------------------------- D9 ------
+def test_d9_bare_pmm2dstack_deprecation():
+    """The bare PMM2DStack name warns (transitional alias, scheduled repoint);
+    the explicit PMM2DStackHybrid / PMM2DStack_hybrid names do not."""
+    from lumenairy.elements.pmm import (
+        PMM2DStack,
+        PMM2DStack_hybrid,
+        PMM2DStackHybrid,
+    )
+    with pytest.warns(DeprecationWarning, match="TRANSITIONAL alias"):
+        s = PMM2DStack(1e-6)
+    assert isinstance(s, PMM2DStackHybrid)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")                 # explicit names silent
+        PMM2DStackHybrid(1e-6)
+        PMM2DStack_hybrid(1e-6)
+
+
+# ----------------------------------------------------------------- D15 -----
+def test_d15_segmentation_respects_max_segments():
+    """The traced-segmentation cap keeps the segment count within budget (the
+    shallowest cuts are dropped when over budget)."""
+    from lumenairy.elements._lens_traced import _segment_field_by_angle
+    # two well-separated beams in x AND y -> up to 4 segments; cap at 2
+    N, dx = 96, 20e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    k = 2 * np.pi / 0.633e-6
+    E = (np.exp(1j * k * 0.05 * X) + np.exp(-1j * k * 0.05 * X)).astype(
+        np.complex128) * np.exp(-(X ** 2 + Y ** 2) / (1.0e-3) ** 2)
+    segs = _segment_field_by_angle(E, dx, dx, "auto", "auto", 0.995, 0.15,
+                                   1e-3, 2)
+    assert 1 <= len(segs) <= 2
+
+
 @pytest.mark.skipif(not _jax_ok(), reason="jax not installed")
 def test_d11a_offplane_stack_with_traced_iso_spacer_jits():
     """D11(a): a concrete OOP layer beside a TRACED isotropic spacer no longer

@@ -93,8 +93,28 @@ def _levin1d_fixed(gy_vals, f_vals, a, b, k, eps0):
     return _tsvd_solve(A, f_vals.astype(complex), eps0)
 
 
+def _cc_weights(n):
+    """Clenshaw-Curtis quadrature weights for the ``n`` Chebyshev-Lobatto
+    nodes ``cos(pi j/(n-1))`` on ``[-1, 1]`` (``sum(w) == 2``).  Used to turn
+    the residual samples on the (endpoint-clustered) fine grid into an ACTUAL
+    integral ``int |r|`` -- the plain sample MEAN over Chebyshev nodes
+    over-weights the edges, so the returned error bound was only an estimate
+    (D7c); the CC weights make it the exact quadrature of the sampled |r|."""
+    N = n - 1
+    if N <= 0:
+        return np.array([2.0])
+    j = np.arange(n)[:, None]
+    ks = np.arange(1, N // 2 + 1)[None, :]
+    b = np.where(ks == N / 2.0, 1.0, 2.0)
+    s = np.sum(b / (4.0 * ks ** 2 - 1.0) * np.cos(2.0 * ks * j * np.pi / N),
+               axis=1)
+    cj = np.full(n, 2.0)
+    cj[0] = cj[-1] = 1.0
+    return cj / N * (1.0 - s)
+
+
 def levin1d_adaptive(g, gy, f, a, b, *, k=12, tol=1e-10, eps0=None,
-                     max_depth=30, fmax=None):
+                     max_depth=30):
     """Adaptive 1-D Levin integral int_a^b f(y) exp(i g(y)) dy.
 
     Accepts an interval on the RIGOROUS residual bound |I_hat - I| <=
@@ -102,18 +122,19 @@ def levin1d_adaptive(g, gy, f, a, b, *, k=12, tol=1e-10, eps0=None,
     2k fine grid -- NOT on parent-vs-halves value agreement, which
     FALSE-ACCEPTS on short under-resolved oscillatory intervals where whole
     and halves land on the same asymptotic endpoint solution (wrong by
-    ~1/g'^2) while agreeing to far below tol.  The residual is machine-small
-    once the interval is resolved, so the length-budgeted test terminates.
+    ~1/g'^2) while agreeing to far below tol.  The residual bound is the
+    Clenshaw-Curtis quadrature of |r| on the fine grid (D7c) -- an actual
+    integral, not the edge-over-weighted sample mean.  The residual is
+    machine-small once the interval is resolved, so the length-budgeted test
+    terminates.
     """
     from numpy.polynomial import chebyshev as Ch
-    if fmax is None:
-        ys = _cheb_nodes(33, a, b)
-        fmax = float(np.abs(f(ys)).max()) + 1e-300
     if eps0 is None:
         eps0 = 1e-13
     us = np.cos(np.pi * np.arange(k) / (k - 1))[::-1]
     nf = 2 * k
     uf = np.cos(np.pi * np.arange(nf) / (nf - 1))[::-1]
+    wf = _cc_weights(nf)                    # CC weights on [-1, 1], sum == 2
 
     def _val(aa, bb):
         y = _cheb_nodes(k, aa, bb)
@@ -125,7 +146,8 @@ def levin1d_adaptive(g, gy, f, a, b, *, k=12, tol=1e-10, eps0=None,
         yf = 0.5 * (aa + bb) + 0.5 * (bb - aa) * uf
         r = (Ch.chebval(uf, dcoef) + 1j * gy(yf) * Ch.chebval(uf, coef)
              - f(yf))
-        est = float(np.mean(np.abs(r))) * (bb - aa)
+        # int_aa^bb |r| dy = 0.5 (bb - aa) * sum_j w_j |r_j|  (CC quadrature)
+        est = 0.5 * (bb - aa) * float(np.dot(wf, np.abs(r)))
         return v, est
 
     def _rec(aa, bb, depth):
@@ -145,8 +167,13 @@ def levin2d(g, gx, gy, f, box, *, k=7, tol=1e-8, max_depth=12,
     Delaminates along x (fibers y=const): per fiber solve p_x + i gx p = f via
     k-point Chebyshev TSVD collocation; then the two boundary integrals in y at
     x=x1 / x=x0 (amplitudes = Chebyshev interpolation of the fiber solutions)
-    are evaluated by the adaptive 1-D Levin.  Quadtree: accept a box when the
-    parent value equals the 4-child sum to tol.
+    are evaluated by the adaptive 1-D Levin.  A box is ACCEPTED on its rigorous
+    residual bound ``int int |r|`` (Clenshaw-Curtis quadrature on the fine
+    grid), NOT the paper's parent-vs-4-child value agreement (which
+    false-accepts under-resolved oscillatory boxes -- see the module header);
+    refinement is a priority queue that greedily splits the largest-bound leaf
+    against a global sum-of-leaf-bounds budget, and the achieved bound is
+    returned.
     """
     # float-coerce the box: integer corner coordinates survive dyadic halving
     # (children reuse parent corners), and an int-dtype endpoint array makes
@@ -154,14 +181,11 @@ def levin2d(g, gx, gy, f, box, *, k=7, tol=1e-8, max_depth=12,
     # -2) inside the boundary-phase lambdas -- a 26-rad phase error confined
     # to domain-edge boxes (the hardest bug of this engine's bring-up).
     x0, x1, y0, y1 = (float(v) for v in box)
-    # global f scale for the TSVD threshold
-    xs = _cheb_nodes(17, x0, x1)
-    ys = _cheb_nodes(17, y0, y1)
-    XX, YY = np.meshgrid(xs, ys, indexing='ij')
-    fmax = float(np.abs(f(XX, YY)).max()) + 1e-300
     # TSVD truncation: NOT tied to tol -- a truncated near-null component
     # has tiny residual but O(1) endpoint (integral) contribution, so the
     # truncation level is a direct error floor (paper eq. 153).  Machine.
+    # (No global-f-scale factor: the level is absolute, and the old
+    # ``fmax`` was only threaded to the 1-D solver, which never used it -- D7a.)
     eps0 = 1e-13
 
     def _residual_est(Pmat, sn, tn, s0, s1, t0, t1, along_x):
@@ -191,7 +215,12 @@ def levin2d(g, gx, gy, f, box, *, k=7, tol=1e-8, max_depth=12,
             Xg, Yg = Tg, Sg
             gsv = gy(Xg, Yg)
         r = Pd + 1j * gsv * Pf - f(Xg, Yg)
-        return float(np.mean(np.abs(r))) * abs(s1 - s0) * abs(t1 - t0)
+        # int int |r| ds dt = 0.25 |s1-s0| |t1-t0| * w_t . |r| . w_s  (2-D
+        # Clenshaw-Curtis quadrature -- an actual integral, D7c) rather than
+        # the endpoint-over-weighted sample mean.
+        wf = _cc_weights(nf)
+        quad = float(wf @ np.abs(r) @ wf)          # r is (t_fine, s_fine)
+        return 0.25 * abs(s1 - s0) * abs(t1 - t0) * quad
 
     def _box_val(bx, k_over=0, want_residual=False, bnd_tol=None):
         if bnd_tol is None:
@@ -231,11 +260,11 @@ def levin2d(g, gx, gy, f, box, *, k=7, tol=1e-8, max_depth=12,
             vb = levin1d_adaptive(
                 lambda yy: g(np.full_like(yy, b), yy),
                 lambda yy: gy(np.full_like(yy, b), yy),
-                fb, c, d, k=k_boundary, tol=bnd_tol, eps0=eps0, fmax=fmax)
+                fb, c, d, k=k_boundary, tol=bnd_tol, eps0=eps0)
             va = levin1d_adaptive(
                 lambda yy: g(np.full_like(yy, a), yy),
                 lambda yy: gy(np.full_like(yy, a), yy),
-                fa, c, d, k=k_boundary, tol=bnd_tol, eps0=eps0, fmax=fmax)
+                fa, c, d, k=k_boundary, tol=bnd_tol, eps0=eps0)
             if want_residual:
                 est = _residual_est(P, xn, yn, a, b, c, d, along_x=True)
                 return vb - va, est
@@ -263,11 +292,11 @@ def levin2d(g, gx, gy, f, box, *, k=7, tol=1e-8, max_depth=12,
             vb = levin1d_adaptive(
                 lambda xx: g(xx, np.full_like(xx, d)),
                 lambda xx: gx(xx, np.full_like(xx, d)),
-                fb, a, b, k=k_boundary, tol=bnd_tol, eps0=eps0, fmax=fmax)
+                fb, a, b, k=k_boundary, tol=bnd_tol, eps0=eps0)
             va = levin1d_adaptive(
                 lambda xx: g(xx, np.full_like(xx, c)),
                 lambda xx: gx(xx, np.full_like(xx, c)),
-                fa, a, b, k=k_boundary, tol=bnd_tol, eps0=eps0, fmax=fmax)
+                fa, a, b, k=k_boundary, tol=bnd_tol, eps0=eps0)
             if want_residual:
                 est = _residual_est(P.T, yn, xn, c, d, a, b, along_x=False)
                 return vb - va, est

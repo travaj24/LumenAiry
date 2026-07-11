@@ -3332,7 +3332,7 @@ def _spectral_gap_cuts(marginal, freqs, lo, hi, valley_frac, peak_frac):
     return cuts
 
 
-def _segment_field_by_angle(E, dx, dy, wavelength, segments_x, segments_y,
+def _segment_field_by_angle(E, dx, dy, segments_x, segments_y,
                             power_frac, valley_frac, min_segment_power,
                             max_segments):
     """Partition ``E`` into angular sub-fields at the spectral GAPS between
@@ -3362,14 +3362,24 @@ def _segment_field_by_angle(E, dx, dy, wavelength, segments_x, segments_y,
         cuty = ([] if nseg == 1
                 else list(np.linspace(loy, hiy, nseg + 1)[1:-1]))
 
-    # cap total segments (drop the shallowest cuts first if over budget)
+    # cap total segments: drop the SHALLOWEST cuts first (D15) -- the valley
+    # with the highest marginal power is the weakest separation, so removing it
+    # keeps the deepest (best-separating) gaps.  (Previously popped the
+    # last-listed = highest-frequency cut, contradicting the comment.)
+    mx, my = P.sum(axis=0), P.sum(axis=1)
+
+    def _valley_power(cut, marg, freqs):
+        return float(marg[int(np.argmin(np.abs(freqs - cut)))])
+
     while (len(cutx) + 1) * (len(cuty) + 1) > max_segments:
-        if len(cutx) >= len(cuty) and cutx:
-            cutx.pop()
-        elif cuty:
-            cuty.pop()
-        else:
+        cand = ([("x", i, _valley_power(c, mx, fx))
+                 for i, c in enumerate(cutx)]
+                + [("y", i, _valley_power(c, my, fy))
+                   for i, c in enumerate(cuty)])
+        if not cand:
             break
+        ax, idx, _ = max(cand, key=lambda t: t[2])   # shallowest = most power
+        (cutx if ax == "x" else cuty).pop(idx)
 
     def _hw(cuts, lo, hi):
         # transition half-width: below half the smallest cut spacing (and to
@@ -3465,7 +3475,7 @@ def apply_real_lens_traced_segmented(
     else:
         sx = sy = int(n_segments)
     segments = _segment_field_by_angle(
-        E_in, dx, dy, wavelength, sx, sy, power_frac, valley_frac,
+        E_in, dx, dy, sx, sy, power_frac, valley_frac,
         min_segment_power, max_segments)
     if return_segments:
         return segments

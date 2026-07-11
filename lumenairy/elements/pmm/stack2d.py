@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import copy as _copy
 import os
+import warnings
 
 import numpy as np
 
@@ -1137,4 +1138,31 @@ class PMM2DStackHybrid:
 # feature + validation parity (a deliberate, tested cutover).  Import
 # ``PMM2DStackHybrid`` (or ``PMM2DStackPure``) explicitly to pin the method.
 PMM2DStack_hybrid = PMM2DStackHybrid
-PMM2DStack = PMM2DStackHybrid
+
+
+class PMM2DStack(PMM2DStackHybrid):
+    """TRANSITIONAL alias for :class:`PMM2DStackHybrid` -- emits a
+    ``DeprecationWarning`` on construction (D9).
+
+    The bare ``PMM2DStack`` name currently resolves to the HYBRID
+    (Fourier-projected, FMM ``n_orders``-floor) stack, but is scheduled to be
+    REPOINTED to the no-floor pure staggered stack
+    (:class:`~lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure`) once that
+    reaches feature + validation parity -- a SILENT results change for callers
+    of the bare name (Fourier floor -> no floor; different convergence knobs).
+    The deprecation phase warns now so code can pin the method BEFORE the
+    cutover.  Import :class:`PMM2DStackHybrid` to keep today's behaviour, or
+    :class:`PMM2DStackPure` for the pure method.  ``isinstance`` against
+    ``PMM2DStackHybrid`` still holds (this is a subclass, adding no behaviour).
+    """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is "
+            "scheduled to be repointed to the no-floor pure stack "
+            "(PMM2DStackPure) in a future release -- a silent results change "
+            "(Fourier floor -> no floor, different convergence knobs).  Import "
+            "PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure "
+            "for the pure method.",
+            DeprecationWarning, stacklevel=2)
+        super().__init__(*args, **kwargs)

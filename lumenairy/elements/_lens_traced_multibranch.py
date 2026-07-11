@@ -349,6 +349,14 @@ def apply_real_lens_traced_multibranch(
     branches at the pixel keep their plain contributions.
     ``caustic_band='plain'`` keeps the raw branch sum everywhere.
 
+    Scope note (D5): the band swaps the CLOSEST-EIKONAL branch pair, which is a
+    FOLD-uniform (Airy) replacement.  At an AXIAL point focus the symmetric
+    branch pairs have ``|S+ - S-| ~ 0`` without being fold-coalescent -- the
+    correct uniform function there is Bessel/Pearcey, not Airy.  The Ludwig
+    swap still REGULARIZES (finite where the plain sum diverges), so this is an
+    accuracy note, not a blow-up; a ``det Q-dot``-based fold-vs-point
+    discriminator is a possible future refinement.
+
     Parameters
     ----------
     E_in : (N, N) complex -- input field at the lens entrance plane.

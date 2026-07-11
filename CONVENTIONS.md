@@ -213,7 +213,29 @@ examples.
 
 ---
 
+## 11. ``formulation='fff_nv'`` is entry-point-specific (D13)
+
+The ``fff_nv`` (Fast Fourier Factorization with normal vectors) formulation
+token names a DIFFERENT algorithm on each 2-D entry point.  All three are the
+correct curved-wall factorization for their solver, but the shared token
+invites wrong cross-entry assumptions -- so pick the entry point by what the
+cell needs, not by the token:
+
+| Entry point | ``fff_nv`` means | Crossed (both-axes) cells |
+| --- | --- | --- |
+| ``rcwa_efficiency_2d`` | Popov--Neviere normal-vector FFF projector | supported |
+| ``rcwa_jones_2d`` | Li-2003 successive full-tensor ``L2 L1`` factorization | supported |
+| ``pmm_jones_2d`` | separable-only Popov--Neviere reduction | **raises** (separable cells only) |
+
+E.g. ``fff_nv`` on a crossed (x- AND y-patterned) cell works on
+``rcwa_jones_2d`` but RAISES on ``pmm_jones_2d``.  Each function's own
+docstring states its scope; this table is the cross-reference.
+
+---
+
 ## Changelog of this file
 
 * v4.16.1 (audit AUDIT_V4_16_0_DEEP item 23): initial draft.  Author:
   Andrew Traverso -- Agent D.
+* v5.21 delta-audit (D13): added section 11 (``fff_nv`` is
+  entry-point-specific).

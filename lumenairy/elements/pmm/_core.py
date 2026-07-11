@@ -562,12 +562,14 @@ def _scalar_uniform_geo_eig(mats, k0, kx0=0.0):
     if kx0:
         Cas = mats["C"] - mats["C"].T
         Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * mats["S0"]
-    # The generalized pencil (Lop, S0) is k0-INDEPENDENT (geometry + angle only);
+    # The generalized pencil (Lop, S0) is k0-INDEPENDENT at FIXED kx0 (D14):
     # k0 enters purely as the 1/k0^2 scale.  eig(Lop/k0^2, S0) has eigenvalues
     # eig(Lop, S0)/k0^2 with the SAME eigenvectors, so eig the pencil ONCE
-    # (cached) and scale -- removing the half-space eig from a fixed-angle
-    # wavelength sweep after the first point (matches the historical per-k0 eig
-    # to ~1e-14, the physically-equivalent gauge; see _uniform_geo_eig).
+    # (cached) and scale.  NB the cache key bakes in the ABSOLUTE
+    # kx0 = n*sin(angle)*k0, which scales with k0 -- so a fixed-ANGLE wavelength
+    # sweep re-eigs every point; cross-wavelength reuse applies only at NORMAL
+    # incidence (kx0 = 0).  Matches the historical per-k0 eig to ~1e-14 (the
+    # physically-equivalent gauge; see _uniform_geo_eig).
     S0 = mats["S0"]
     mu_geo, X = _cached_geo_eig(
         (b"scalar", Lop.shape, Lop.tobytes(), S0.tobytes()),
@@ -1162,7 +1164,13 @@ def _uniform_geo_eig(mats, k0, kx0=0.0):
     if kx0:
         Cw = mats["conv"]["one"]
         op = op - 1j * kx0 * (Cw - Cw.T) + (kx0 * kx0) * mats["mass"]["one"]
-    B = iS0 @ op                              # k0-INDEPENDENT (geometry + angle)
+    # B is independent of k0 ONLY at fixed kx0 (D14): the LRU key bakes in the
+    # ABSOLUTE kx0 = n*sin(theta)*k0 (via op above), which itself scales with
+    # k0, so a FIXED-ANGLE wavelength sweep changes kx0 every point and the
+    # cache re-eigs throughout -- cross-wavelength reuse exists only at NORMAL
+    # incidence (kx0 = 0).  Always correct; the eig cannot be angle-normalized
+    # without operator rescaling.  k0 then enters purely as the 1/k0^2 scale.
+    B = iS0 @ op
     mu_geo, w = _cached_geo_eig(
         (b"tensor", B.shape, B.tobytes()), lambda: np.linalg.eig(B))
     return mu_geo / k02, w, B / k02

@@ -2418,6 +2418,13 @@ def propagate_gbd_vector_through_prescription(
     Transmission only (no reflection / thin-film coatings -- those build on the
     same base-ray trace and are a documented extension).
 
+    Scope note (D10): the Jones-mixed samples are scattered onto zero-filled
+    full grids and rely on ``decompose_field_to_beamlets`` re-sampling the
+    IDENTICAL pixel set (same ``sample_step`` phase) -- correct today, but
+    coupled to that decomposition sampling convention.  Polarization itself is
+    evaluated for the AXIAL congruence only (``_fresnel_jones_matrix_per_beamlet``
+    is axial-launch by contract).
+
     Parameters
     ----------
     E_vec : array ``(2, Ny, Nx)`` complex -- the ``(E_x, E_y)`` Jones field.
