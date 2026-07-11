@@ -760,8 +760,14 @@ def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
         g3 = g3 + lin_v3
         g4 = g4 + lin_v4
         det_H = H33 * H44 - H34 * H34
+        # MSL-1 (AUDIT_MASLOV): sign-preserving floor that NEVER returns 0.
+        # The old ``sign(det_H)*1e-30 + 1e-30`` cancelled to exactly 0 for a
+        # tiny NEGATIVE determinant (det_H in (-1e-30, 0): -1e-30 + 1e-30 = 0)
+        # -> division by zero -> inf/NaN saddle step -> a NaN-poisoned pixel.
+        # A saddle's OPD-Hessian determinant crosses zero at a fold caustic,
+        # so near-caustic pixels are exactly where near-zero det_H arises.
         det_safe = xp.where(xp.abs(det_H) < 1e-30,
-                            xp.sign(det_H) * 1e-30 + 1e-30, det_H)
+                            xp.where(det_H < 0, -1e-30, 1e-30), det_H)
         dv3 = -(H44 * g3 - H34 * g4) / det_safe
         dv4 = -(-H34 * g3 + H33 * g4) / det_safe
         step_size = xp.sqrt(dv3 ** 2 + dv4 ** 2)
@@ -2685,8 +2691,11 @@ def _integrate_stationary_phase(
         g3 = g3 + lin_v3
         g4 = g4 + lin_v4
         det_H = H33 * H44 - H34 * H34
+        # MSL-1 (AUDIT_MASLOV): sign-preserving floor that never returns 0
+        # (the old ``sign(det_H)*1e-30 + 1e-30`` cancelled to 0 for a tiny
+        # negative det_H -> NaN saddle step near fold caustics).
         det_safe = np.where(np.abs(det_H) < 1e-30,
-                             np.sign(det_H) * 1e-30 + 1e-30, det_H)
+                             np.where(det_H < 0, -1e-30, 1e-30), det_H)
         dv3 = -(H44 * g3 - H34 * g4) / det_safe
         dv4 = -(-H34 * g3 + H33 * g4) / det_safe
         step_limit = 0.5
@@ -3214,8 +3223,11 @@ def _integrate_local_quadrature(
         g3 = g3 + lin_v3
         g4 = g4 + lin_v4
         det_H = H33 * H44 - H34 * H34
+        # MSL-1 (AUDIT_MASLOV): sign-preserving floor that never returns 0
+        # (the old ``sign(det_H)*1e-30 + 1e-30`` cancelled to 0 for a tiny
+        # negative det_H -> NaN saddle step near fold caustics).
         det_safe = np.where(np.abs(det_H) < 1e-30,
-                             np.sign(det_H) * 1e-30 + 1e-30, det_H)
+                             np.where(det_H < 0, -1e-30, 1e-30), det_H)
         dv3 = -(H44 * g3 - H34 * g4) / det_safe
         dv4 = -(-H34 * g3 + H33 * g4) / det_safe
         step_size = np.sqrt(dv3 ** 2 + dv4 ** 2)

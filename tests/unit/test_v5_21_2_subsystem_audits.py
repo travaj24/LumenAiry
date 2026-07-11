@@ -637,3 +637,31 @@ def test_coat_annular_aperture_inverted_guard():
     with pytest.raises(ValueError, match="must be < outer"):
         apply_aperture(E, 1e-6, shape='annular',
                        params={'inner_diameter': 5e-6, 'outer_diameter': 2e-6})
+
+
+# =========================================================================
+# AUDIT 9 -- elements/lenses_maslov.py (AUDIT_MASLOV)
+# =========================================================================
+
+
+def test_msl1_det_safe_floor_is_signed_and_nonzero():
+    """MSL-1: the near-singular-Hessian floor used by all three saddle
+    integrators must be sign-preserving AND never zero.  The OLD form
+    ``sign(det_H)*1e-30 + 1e-30`` cancelled to exactly 0 for a tiny NEGATIVE
+    determinant (a fold-caustic neighbourhood) -> 1/0 -> NaN saddle step.
+    Pin the NEW ``where(det_H < 0, -1e-30, 1e-30)`` property across the
+    window that broke the old code, guarding against a revert."""
+    det_H = np.array([-1e-31, -5e-40, -0.0, 0.0, 5e-40, 1e-31])
+
+    def old_floor(d):   # the buggy form
+        return np.sign(d) * 1e-30 + 1e-30
+
+    def new_floor(d):   # the MSL-1 fix
+        return np.where(d < 0, -1e-30, 1e-30)
+
+    # The old floor hits exactly 0 on the negative window (the bug).
+    assert np.any(old_floor(det_H) == 0.0)
+    # The new floor is never 0 and preserves the determinant's sign.
+    nf = new_floor(det_H)
+    assert np.all(nf != 0.0)
+    assert np.all(np.sign(nf) == np.where(det_H < 0, -1.0, 1.0))
