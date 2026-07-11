@@ -2211,11 +2211,13 @@ class TestAuditFixesV4_14_0_agent_5_DepthOfFocus:
     """Pin :func:`depth_of_focus`."""
 
     def test_rayleigh_f2_known_value(self):
-        """5D.1 (analytic): Rayleigh DOF for f/2 at 550 nm is
-        4 * 2^2 * 550e-9 = 8.8 um.  This is the canonical textbook
-        number used by every optical-design course."""
+        """5D.1 (analytic): the ONE-SIDED Rayleigh DOF for f/2 at 550 nm is
+        lambda/(2 NA^2) = 2 * 2^2 * 550e-9 = 4.4 um (v5.21.1 AN-1 fix: the
+        prior 8.8 um pinned the *total* range as if it were the half-range,
+        2x too large for the documented one-sided semantics).  The total
+        axial tolerance is 2x this = 8.8 um = lambda/NA^2."""
         dof = depth_of_focus(550e-9, 2.0, formula='rayleigh')
-        expected = 4.0 * 4.0 * 550e-9
+        expected = 2.0 * 4.0 * 550e-9
         assert abs(dof - expected) < 1e-15, (
             f"depth_of_focus(Rayleigh, f/2, 550nm) = {dof:.4e} m, "
             f"expected {expected:.4e}.")

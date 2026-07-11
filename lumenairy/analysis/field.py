@@ -220,6 +220,40 @@ class DistortionVsField:
     sign: str
 
 
+def _entrance_pupil_aim(surfaces, wavelength, semi_ap):
+    """Entrance-pupil aiming parameters ``(ep_z, ep_r)`` (AN-4).
+
+    The 4.11.2 H-AB-3 fix aims the chief ray through the entrance-pupil CENTRE
+    at ``ep_z`` (from ``first_order_data``) rather than launching it at the
+    first-surface vertex -- so for mid-/rear-stop systems the chief no longer
+    walks across the aperture as the field angle grows.  Returns ``ep_z = 0``
+    and ``ep_r = semi_ap`` for a stop-at-front / stop-less system (a no-op), so
+    applying this is regression-safe.  Hoisted here from ``relative_illumination``
+    / ``field_aberration_sweep`` and shared across all six field-swept entries."""
+    from ..raytrace import first_order_data
+    try:
+        fod = first_order_data(surfaces, wavelength)
+        ep_z = float(getattr(fod, 'ep_z', 0.0))
+        ep_r = float(getattr(fod, 'ep_radius', semi_ap))
+        if not np.isfinite(ep_r) or ep_r <= 0:
+            ep_r = semi_ap
+    except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+            np.linalg.LinAlgError, IndexError, AttributeError, TypeError):
+        ep_z, ep_r = 0.0, float(semi_ap)
+    if not np.isfinite(ep_z):
+        ep_z = 0.0
+    return ep_z, ep_r
+
+
+def _chief_y_offset(fa_rad, ep_z):
+    """The ``z = 0`` chief-aim y-offset so a bundle at field ``fa_rad`` crosses
+    the entrance-pupil centre ``(0, 0, ep_z)`` (AN-4).  Zero when ``ep_z == 0``
+    (stop-at-front), so it is a no-op there."""
+    if ep_z == 0.0:
+        return 0.0
+    return -float(np.sin(fa_rad)) * ep_z / max(float(np.cos(fa_rad)), 1e-12)
+
+
 def distortion_vs_field(
     system: Union[Dict[str, Any], List[Surface]],
     wavelength: float,
@@ -269,11 +303,18 @@ def distortion_vs_field(
     thetas_deg = np.linspace(0.0, float(max_field_deg), int(n_points))
     thetas_rad = np.radians(thetas_deg)
 
+    # AN-4: aim the chief through the entrance-pupil centre (distortion is
+    # DEFINED on the chief ray, so a vertex-launched chief carries a
+    # pupil-aberration bias for mid-/rear-stop systems).  No-op stop-at-front.
+    # Only ep_z matters for a single chief ray (no pupil radius needed).
+    ep_z, _ = _entrance_pupil_aim(surfaces, wavelength, 0.0)
+
     h_chief = np.full_like(thetas_rad, np.nan)
     for i, theta in enumerate(thetas_rad):
         try:
             rays = _make_bundle(
-                x=np.array([0.0]), y=np.array([0.0]),
+                x=np.array([0.0]),
+                y=np.array([_chief_y_offset(theta, ep_z)]),
                 L=np.array([0.0]), M=np.array([np.sin(theta)]),
                 wavelength=wavelength,
             )
@@ -439,15 +480,24 @@ def distortion_grid(
             f"below 45 deg or use a smaller n_grid that excludes "
             f"the diagonal corners.")
 
+    # AN-4: aim the chief through the entrance-pupil centre (0, 0, ep_z) rather
+    # than the first-surface vertex -- distortion is defined on the chief ray,
+    # so the vertex launch biases mid-/rear-stop systems.  No-op stop-at-front.
+    ep_z, _ = _entrance_pupil_aim(surfaces, wavelength, 0.0)
+
     actual_x = np.full((n_grid, n_grid), np.nan)
     actual_y = np.full((n_grid, n_grid), np.nan)
     for ix, tx in enumerate(ths_rad):
         for iy, ty in enumerate(ths_rad):
             try:
+                _L, _M = float(np.sin(tx)), float(np.sin(ty))
+                _N = float(np.sqrt(max(1.0 - _L * _L - _M * _M, 1e-24)))
+                _xo = -_L * ep_z / _N if ep_z != 0.0 else 0.0
+                _yo = -_M * ep_z / _N if ep_z != 0.0 else 0.0
                 rays = _make_bundle(
-                    x=np.array([0.0]), y=np.array([0.0]),
-                    L=np.array([np.sin(tx)]),
-                    M=np.array([np.sin(ty)]),
+                    x=np.array([_xo]), y=np.array([_yo]),
+                    L=np.array([_L]),
+                    M=np.array([_M]),
                     wavelength=wavelength,
                 )
                 r = _trace(rays, surfaces, wavelength)

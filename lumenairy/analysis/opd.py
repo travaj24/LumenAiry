@@ -151,18 +151,30 @@ def depth_of_focus(
 ) -> float:
     """One-sided depth of focus [m] for a diffraction-limited system.
 
-    Two standard formulas are supported:
+    Returns the ``+/-`` half-range: the axial shift from best focus at which
+    the marginal-ray defocus wavefront error reaches the criterion.  The
+    marginal-ray defocus OPD for a shift ``dz`` is ``W = dz * NA**2 / 2``, so
+    the ``lambda/4`` (Rayleigh) criterion gives the one-sided
+    ``dz = lambda / (2 * NA**2) = 2 * f_number**2 * wavelength`` (v5.21.1 AN-1
+    fix: the prior ``4 * f#**2 * wavelength`` was the *total* range mislabelled
+    as the half-range, i.e. 2x too large as a one-sided tolerance).
 
-    * ``'rayleigh'`` (default): ``+/- 4 * f_number**2 * wavelength``.
-      The classical Rayleigh quarter-wave (``lambda/4`` OPD) limit at
+    Two standard formulas are supported; with ``NA = 1 / (2 * f_number)`` they
+    evaluate to the SAME number, because the Marechal ``S > 0.8`` defocus
+    bound coincides with the Rayleigh ``lambda/4`` peak (the classic
+    ``lambda/4`` PV <-> ``lambda/14`` RMS coincidence):
+
+    * ``'rayleigh'`` (default): ``+/- 2 * f_number**2 * wavelength``
+      (``= lambda / (2 * NA**2)``), the classical quarter-wave OPD limit at
       the marginal ray.
-    * ``'marechal'``: ``+/- wavelength / NA**2`` with
-      ``NA = 1 / (2 * f_number)`` (the paraxial NA-from-f# conversion).
-      The Marechal-criterion DOF that keeps Strehl > 0.8 -- a tighter
-      bound than Rayleigh for high-quality imaging.
+    * ``'marechal'``: the Strehl ``> 0.8`` defocus bound, numerically equal
+      to the Rayleigh value here.
 
-    The full depth-of-focus range is ``+/-`` the returned value, so the
-    total axial tolerance is ``2 * depth_of_focus(...)``.
+    The two named entries are retained because optical-design practice
+    distinguishes them by *derivation* (Rayleigh: OPD margin; Marechal:
+    Strehl criterion), and downstream tools may want to annotate the choice.
+    The TOTAL axial tolerance (both sides of focus) is
+    ``2 * depth_of_focus(...) = 4 * f_number**2 * wavelength = lambda / NA**2``.
 
     Parameters
     ----------
@@ -176,26 +188,17 @@ def depth_of_focus(
     Returns
     -------
     dof : float
-        Half-range depth of focus [m].
-
-    Notes
-    -----
-    With ``NA = 1 / (2 * f#)`` both formulas evaluate to
-    ``4 * f#**2 * wavelength`` -- they are mathematically equivalent.
-    The two named entries are retained because optical-design
-    practice distinguishes them by *derivation* (Rayleigh: OPD margin;
-    Marechal: Strehl criterion), and downstream tools may want to
-    annotate the choice in reports.
+        One-sided (half-range) depth of focus [m].
 
     Examples
     --------
     >>> from lumenairy.analysis import depth_of_focus
-    >>> # f/2 at 550 nm, Rayleigh: 4 * 4 * 550e-9 = 8.8 um
+    >>> # f/2 at 550 nm, one-sided Rayleigh: 2 * 4 * 550e-9 = 4.4 um
     >>> float(depth_of_focus(550e-9, 2.0))
-    8.8e-06
-    >>> # Same system, Marechal: 550e-9 / (1/4)**2 = 8.8 um
+    4.4e-06
+    >>> # Same system, Marechal coincides with Rayleigh here
     >>> float(depth_of_focus(550e-9, 2.0, formula='marechal'))
-    8.8e-06
+    4.4e-06
     """
     if not np.isfinite(wavelength) or wavelength <= 0:
         raise ValueError(
@@ -208,16 +211,11 @@ def depth_of_focus(
 
     f = float(f_number)
     wl = float(wavelength)
-    if formula == 'rayleigh':
-        return 4.0 * f * f * wl
-    if formula == 'marechal':
-        # NA = 1 / (2 * f#) gives DOF = wavelength / NA**2 =
-        # 4 * f#**2 * wavelength.  This matches the Rayleigh
-        # expression with a factor of 1 instead of 4 because the
-        # Marechal criterion is tighter; the standard textbook form
-        # is wavelength / NA**2.
-        NA = 1.0 / (2.0 * f)
-        return wl / (NA * NA)
+    # One-sided (half-range) DOF = lambda/(2 NA**2) = 2 f#**2 lambda for BOTH
+    # criteria (the Marechal S>0.8 defocus bound coincides with Rayleigh
+    # lambda/4 here).  With NA = 1/(2 f#): lambda/(2 NA**2) = 2 f#**2 lambda.
+    if formula in ('rayleigh', 'marechal'):
+        return 2.0 * f * f * wl
     raise ValueError(
         f"depth_of_focus: formula must be 'rayleigh' or 'marechal'; "
         f"got {formula!r}.")
@@ -474,9 +472,13 @@ def wave_opd_1d(
         ``'y'`` takes the column ``x = 0``.
     aperture : float, optional
         Clear-aperture diameter [m].  If given, the returned profile is
-        cropped to |pupil coordinate| <= 0.5 * aperture and any
-        out-of-aperture zero-amplitude samples are excluded from
-        unwrapping.
+        cropped to |pupil coordinate| <= 0.5 * aperture.  Only the
+        out-of-aperture samples at the two ENDS of the cut are removed
+        before unwrapping (AN-2): INTERIOR zero-amplitude samples -- e.g.
+        an annular / centrally-obscured pupil -- are NOT excluded and stay
+        in the unwrap chain (with ``angle(0) = 0`` phase), which can inject
+        a 2*pi slip across the far side of the gap.  For obscured pupils
+        unwrap each connected region separately.
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
     focal_length : float, optional
