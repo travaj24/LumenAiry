@@ -461,7 +461,10 @@ def gbd_freespace_subdomain(
             E, in_s.dx,
             z=out_s.z - in_s.z,
             wavelength=kw['wavelength'],
-            output_grid=(out_s.Ny, out_s.Nx),
+            # MHS-1: v5.2 renamed the shape-only kwarg to ``output_shape``;
+            # ``output_grid`` is the deprecated shim (fires a warning every
+            # subdomain call and breaks when the shim is removed).
+            output_shape=(out_s.Ny, out_s.Nx),
             output_dx=out_s.dx,
             output_centre=out_s.centre,
             waist_factor=kw['waist_factor'],
@@ -612,13 +615,32 @@ def prescription_subdomain(
 
         # Non-maslov methods (gbd / hfpi / hf) honour ``output_grid`` /
         # ``output_dx`` natively in their underlying propagators.
+        #
+        # MHS-2: the dispatcher parses a *tuple* ``output_grid`` as
+        # ``(N_out, dx_out)`` -- passing ``(out_s.Ny, out_s.Nx)`` mis-reads
+        # ``out_s.Nx`` as a pitch (masked only because ``output_dx`` overrides
+        # it).  Use the explicit ``{'N': ..., 'dx': ...}`` dict form.  Note the
+        # dispatcher's ``_resolve_dispatcher_output_grid`` always resolves to a
+        # SQUARE ``(N_out, N_out)`` grid, so a genuinely non-square out-surface
+        # cannot be delivered through this path -- warn rather than silently
+        # square it (the maslov-guard advertises gbd/hfpi/hf as anamorphic).
+        if int(out_s.Ny) != int(out_s.Nx):
+            import warnings as _w
+            _w.warn(
+                f"prescription_subdomain: non-square out_surface "
+                f"({out_s.Ny}x{out_s.Nx}) requested for method "
+                f"{kw['method']!r}; the dispatcher output-grid path resolves "
+                f"to a square ({out_s.Ny}x{out_s.Ny}) grid.  Build the "
+                f"sub-propagator directly if a true anamorphic output is "
+                f"required.",
+                RuntimeWarning, stacklevel=2)
         return propagate(
             E,
             wavelength=kw['wavelength'],
             dx=in_s.dx,
             prescription=kw['prescription'],
             method=kw['method'],
-            output_grid=(out_s.Ny, out_s.Nx),
+            output_grid={'N': out_s.Ny, 'dx': out_s.dx},
             output_dx=out_s.dx,
             **{k: v for k, v in kw.items()
                if k not in ('wavelength', 'prescription', 'method')},

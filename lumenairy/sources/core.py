@@ -2444,30 +2444,47 @@ class Source:
         for trace-ability).
         """
         from ..propagators.dispatch import propagate
-        E_out = propagate(
+        # DS-1: route through ``return_result=True`` so pitch-CHANGING kernels
+        # (fresnel / fraunhofer / sas, including the method='auto' far-field
+        # selections at N_F < 0.1 / Q > 1) are handled correctly.  Their raw
+        # return is a ``(E, dx_out, dy_out)`` tuple with an output pitch of
+        # lambda*z/(N*dx); the previous code wrapped that tuple AS the field
+        # (``Source.shape`` then raised) and kept the STALE input pitch.  The
+        # PropagationResult carries the true field + output dx/dy (honouring an
+        # explicit output_dx/output_dy in kwargs, and dx-unchanged for ASM).
+        result = propagate(
             self.E,
             wavelength=self.wavelength,
             dx=self.dx,
             z=z,
             prescription=prescription,
             method=method,
+            return_result=True,
             **kwargs,
         )
-        out_dx = kwargs.get('output_dx', self.dx) or self.dx
-        # v4.13.0 audit P1-C: preserve the anamorphic y-pitch across
-        # ``Source.propagate``.  Pre-fix the wrapped result advertised
-        # ``dy == dx`` (via the ``Source.__post_init__`` default) even
-        # when the underlying field carried a distinct y-pitch -- the
-        # v4.13.0 L3 sweep added the ``dy`` field to ``Source`` but
-        # missed threading it through this dispatcher and the 5
-        # classmethod factories.  Use the caller's ``output_dy`` kwarg
-        # when given (matches ``output_dx`` precedence), else fall
-        # through to ``self.dy``.
-        out_dy = kwargs.get('output_dy', self.dy) or self.dy
-        new_name = (self.name or 'Source')
-        new_name = f'{new_name}->{method}'
+        out_dx = float(result.dx)
+        # v4.13.0 audit P1-C (re-threaded under DS-1): preserve the anamorphic
+        # y-pitch across ``Source.propagate``.  The dispatcher takes only a
+        # single ``dx``; pitch-preserving kernels (asm/rs/hf/...) therefore
+        # report ``result.dy == result.dx`` even when the input carried a
+        # distinct y-pitch.  Precedence: an explicit ``output_dy`` kwarg wins;
+        # otherwise a kernel that genuinely resampled y (``result.dy`` differs
+        # from ``result.dx``) is honoured verbatim; otherwise keep the input's
+        # (dy/dx) aspect by scaling ``self.dy`` by the same factor the x-pitch
+        # changed (== 1 for pitch-preserving kernels, so ``self.dy`` survives).
+        _out_dy_kw = kwargs.get('output_dy')
+        _kern_dy = float(result.dy)
+        if _out_dy_kw:
+            out_dy = float(_out_dy_kw)
+        elif _kern_dy != out_dx:
+            out_dy = _kern_dy
+        else:
+            _scale = out_dx / self.dx if self.dx else 1.0
+            out_dy = self.dy * _scale
+        new_name = f"{self.name or 'Source'}->{method}"
         return Source(
-            E=E_out, dx=out_dx, dy=out_dy, wavelength=self.wavelength,
+            E=result.field, dx=out_dx, dy=out_dy,
+            wavelength=self.wavelength,
             source_point=self.source_point, name=new_name,
         )
 

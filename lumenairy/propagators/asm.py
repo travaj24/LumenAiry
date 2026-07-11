@@ -703,7 +703,10 @@ def angular_spectrum_propagate_tilted(
         Input electric field.
 
     z : float
-        Propagation distance [m] along the tilted axis.
+        Axial separation [m] between the parallel input and output planes.
+        (This is NOT an arc length along the tilted beam axis: the
+        shifted-``kz`` construction transforms plane-to-plane at axial
+        distance ``z``, exactly like plain ASM.)
 
     wavelength : float
         Optical wavelength [m].
@@ -730,8 +733,11 @@ def angular_spectrum_propagate_tilted(
     Notes
     -----
     The method removes the carrier frequency (tilt) before propagation,
-    then restores it afterwards.  This keeps the field well-centred on
-    the grid even for large tilt angles, avoiding grid walk-off.
+    then restores it afterwards.  This avoids *spectral* aliasing of the
+    carrier (the tilted plane-wave spectrum staying on-grid), NOT physical
+    envelope walk-off: the linear term of ``kz(f + f0)`` is retained (as
+    it must be), so the envelope still translates by ``z * tan(theta)``
+    across the output grid.  Size the grid to contain that shift.
 
     The carrier spatial frequencies are::
 

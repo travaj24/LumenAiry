@@ -410,10 +410,25 @@ def propagate_subaperture_asymptotic(
     out_x = (_np.arange(Nx) - Nx / 2) * output_dx + cx
     out_y = (_np.arange(Ny) - Ny / 2) * output_dx + cy
 
-    # Estimate source waist for the asymptotic propagator.
+    # Estimate source waist for the asymptotic propagator.  HF-1: beam_d4sigma
+    # returns a (d4x, d4y) TUPLE, so the prior ``float(d4)`` raised TypeError on
+    # EVERY call -- and here the except fallback (source_box_half / 2) is a
+    # pure geometry guess NOT equal to the data-driven estimate, so the
+    # per-patch LG bases used a waist unrelated to the actual beam.  Unpack.
+    #
+    # NOTE (deviation from the audit's ``0.25 * d4x`` prescription): the audit
+    # preserved the pre-existing ``/ 4.0`` factor verbatim as "correct by
+    # accident", but that value was never actually reached (the TypeError
+    # always fired), so there is no behaviour to preserve.  ``decompose_lg`` /
+    # ``propagate_modal_asymptotic`` take ``w_s`` as the LG-basis 1/e^2 radius
+    # (envelope ``exp(-r^2/w_s^2)``), and for a Gaussian the D4sigma diameter
+    # equals ``2 * w`` (1/e^2 radius), so the matching waist is ``d4x / 2``.
+    # ``d4x / 4`` is the second-moment sigma == w/2 -- half the true waist --
+    # which under-fills the fundamental LG mode and pushes energy into higher
+    # orders, shifting the recombined centroid off-axis.
     try:
-        d4 = beam_d4sigma(E_in, dx=dx)
-        w_s = float(d4) / 4.0
+        d4x, _d4y = beam_d4sigma(E_in, dx=dx)
+        w_s = float(d4x) / 2.0
     except (TypeError, ValueError, RuntimeError, ZeroDivisionError):
         # beam_d4sigma rejects non-array / empty E_in or diverging
         # moments; fall back to a half-box estimate.

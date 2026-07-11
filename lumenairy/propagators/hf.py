@@ -458,18 +458,32 @@ def propagate_huygens_fresnel_through_prescription(
         out_y = (_np.arange(Ny) - Ny / 2) * output_dx + cy
         OX, OY = _np.meshgrid(out_x, out_y, indexing='xy')
 
-        # Estimate source waist from input field.
+        # Estimate source waist from input field.  HF-1: beam_d4sigma returns
+        # a (d4x, d4y) TUPLE, so the prior float(d4) raised TypeError on EVERY
+        # call and control always fell into the except-branch fallback -- the
+        # data-driven estimate never ran.  Unpack the x-width.
+        #
+        # ``decompose_lg`` / ``propagate_modal_asymptotic`` take ``w_s`` as the
+        # LG-basis 1/e^2 radius (envelope ``exp(-r^2/w_s^2)``).  For a Gaussian
+        # the D4sigma diameter equals ``2 * w`` (1/e^2 radius), so the matching
+        # waist is ``d4x / 2`` -- NOT the audit's ``0.25 * d4x`` (which is the
+        # second-moment sigma == w/2, half the true waist: it under-fills the
+        # fundamental LG mode and pushes energy into higher orders).  Since the
+        # ``/ 4`` value was never actually reached (the TypeError always fired)
+        # there is no behaviour to preserve.  The fallback is likewise promoted
+        # from the raw second-moment sigma to ``2 * sigma`` so it, too, is the
+        # 1/e^2 radius and stays consistent with the primary estimate.
         try:
-            d4 = beam_d4sigma(E_in, dx=dx)
-            w_s = float(d4) / 4.0
+            d4x, _d4y = beam_d4sigma(E_in, dx=dx)
+            w_s = float(d4x) / 2.0
         except (TypeError, ValueError, RuntimeError, ZeroDivisionError):
             # beam_d4sigma can raise: TypeError on non-array E_in,
             # ValueError on empty / wrong-rank inputs, RuntimeError
             # when the moments diverge, ZeroDivisionError on a zero
-            # total-power normalisation.  Fall back to the explicit
-            # second-moment estimate (which is numerically stable for
-            # any finite |E|^2 distribution).
-            w_s = float(_np.sqrt(_np.sum(_np.abs(E_in) ** 2 *
+            # total-power normalisation.  Fall back to twice the explicit
+            # second-moment sigma (== the 1/e^2 radius for a Gaussian),
+            # which is numerically stable for any finite |E|^2 distribution.
+            w_s = 2.0 * float(_np.sqrt(_np.sum(_np.abs(E_in) ** 2 *
                                           (_np.arange(Nx) - Nx / 2) ** 2 * dx ** 2)
                                   / max(_np.sum(_np.abs(E_in) ** 2), 1e-30)))
         if w_s <= 0 or not _np.isfinite(w_s):

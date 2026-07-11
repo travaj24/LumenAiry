@@ -683,8 +683,10 @@ def fraunhofer_propagate_mft(
     k = 2.0 * np.pi / wavelength
     xc, yc = float(centre_out[0]), float(centre_out[1])
 
-    np.arange(Nx_in, dtype=np.float64)
-    np.arange(Ny_in, dtype=np.float64)
+    # PK-3: the input-plane index grids were removed with the Fraunhofer
+    # (no input quadratic phase) simplification; only the OUTPUT index grids
+    # below are used.  The two bare ``np.arange(N*_in)`` statements that
+    # remained were computed-and-discarded refactor residue.
     k_x = np.arange(Nx_out, dtype=np.float64)
     k_y = np.arange(Ny_out, dtype=np.float64)
     x_out = (k_x - Nx_out / 2.0) * dx_out + xc

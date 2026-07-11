@@ -88,7 +88,16 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     pupil = np.asarray(pupil, dtype=_gdct())
     Np = pupil.shape[0]
     k = 2 * np.pi / wavelength
-    theta_max = np.arcsin(min(NA, 0.9999))
+    # VD-1: an immersion NA (>= 1, e.g. oil 1.4) was silently clamped to the
+    # 89.2 deg air cone, computing wrong physics with no diagnostic.  Reject
+    # it -- immersion focusing needs an n_immersion parameter (not yet
+    # supported): theta_max = arcsin(NA / n_immersion).
+    if not (np.isfinite(NA) and 0.0 < NA < 1.0):
+        raise ValueError(
+            f"richards_wolf_focus: NA must be in (0, 1) for an air objective; "
+            f"got {NA}.  Immersion NA (>= 1) is not yet supported (needs an "
+            f"n_immersion parameter for theta_max = arcsin(NA / n_immersion)).")
+    theta_max = np.arcsin(NA)
 
     if N_focal is None:
         N_focal = Np

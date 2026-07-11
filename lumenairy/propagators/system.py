@@ -153,6 +153,31 @@ def _apply_coating_element(E, elem, system_wavelength=None):
     return E * complex(amp)
 
 
+def _require_square_pitch(current_dx: float, current_dy: float,
+                          branch: str) -> None:
+    """SY-2 guard for the pitch-CHANGING chain branches.
+
+    ``fresnel_propagate`` returns distinct ``dx_new``/``dy_new``
+    (``lambda z/(N dx)`` vs ``lambda z/(N dy)``) but the chain resamples
+    both axes with the x-ratio; ``scalable_angular_spectrum_propagate``
+    and ``generate_turbulence_screen`` take a single pitch and assume a
+    square grid.  For an anamorphic working pitch (``current_dy !=
+    current_dx``) these branches would silently produce wrong physics on
+    the y-axis, so we refuse rather than mislead.  Square-pitch chains
+    (the common case) pass through untouched.  ASM / GBD / HF / mask /
+    lens / aperture elements all thread ``current_dy`` correctly and are
+    unaffected.
+    """
+    if abs(float(current_dy) - float(current_dx)) > abs(float(current_dx)) * 1e-9:
+        raise ValueError(
+            f"propagate_through_system: the {branch!r} step assumes a square "
+            f"grid pitch, but the working pitch is anamorphic "
+            f"(dx={current_dx:.6g} m, dy={current_dy:.6g} m).  Use a "
+            f"'propagate' (ASM) / 'gbd' / 'hf' step -- which thread the "
+            f"y-pitch correctly -- or resample to an isotropic grid before "
+            f"this element.")
+
+
 def propagate_through_system(E_in: np.ndarray,
                              elements: Sequence[Dict[str, Any]],
                              wavelength: float,
@@ -450,6 +475,7 @@ def propagate_through_system(E_in: np.ndarray,
             has_tilt = (tilt_x != 0.0) or (tilt_y != 0.0)
 
             if prop_method == 'fresnel' and not has_tilt:
+                _require_square_pitch(current_dx, current_dy, 'fresnel')
                 E, dx_new, _dy_new = fresnel_propagate(
                     E, z, wavelength, current_dx, current_dy)
                 # Resample back to the original grid spacing so
@@ -465,6 +491,7 @@ def propagate_through_system(E_in: np.ndarray,
                     E, _ = resample_field(E, dx_new, current_dx,
                                           N_out=E_in.shape[-1])
             elif prop_method == 'sas' and not has_tilt:
+                _require_square_pitch(current_dx, current_dy, 'sas')
                 from .propagation import scalable_angular_spectrum_propagate
                 pad = elem.get('pad', 2)
                 skip_final_phase = elem.get('skip_final_phase', False)
@@ -604,6 +631,7 @@ def propagate_through_system(E_in: np.ndarray,
                 bandlimit=elem.get('bandlimit', True))
 
         elif elem['type'] == 'turbulence':
+            _require_square_pitch(current_dx, current_dy, 'turbulence')
             screen = generate_turbulence_screen(
                 E.shape[0], current_dx,
                 r0=elem['r0'],
@@ -877,8 +905,19 @@ def _prescription_to_elements(
                 })
             elif stype == 'doe_placeholder':
                 # Air-to-air aspheric / DOE surfaces -- no element-handler
-                # currently exists for raw DOE phase, so skip silently.
-                # Future versions can plug a DOE handler here.
+                # currently exists for raw DOE phase.  SY-1: WARN instead of
+                # dropping the phase silently (a physically wrong result with
+                # no diagnostic); a future DOE handler plugs in here.  For an
+                # exact treatment use propagate_through_system with a
+                # hand-built 'mask' element carrying the DOE phase.
+                _doe_lbl = step.get('label') or step.get('surface') or '?'
+                warnings.warn(
+                    f"lumenairy.propagators.system.evaluate: DOE / air-to-air "
+                    f"aspheric surface ({_doe_lbl}) has no element handler and "
+                    f"its phase is DROPPED -- the result omits this element.  "
+                    f"Use propagate_through_system with a 'mask' element "
+                    f"carrying the DOE phase for an exact result.",
+                    stacklevel=2)
                 continue
             else:
                 raise ValueError(
@@ -1119,8 +1158,6 @@ def _make_system_jax_kernel(elem_sigs, wavelength, dx, dy):
     import jax
     import jax.numpy as jnp
 
-    [i for i, sig in enumerate(elem_sigs) if sig[0] == 'mask']
-
     def _kernel(E, *mask_arrays):
         Ny, Nx = E.shape[-2:]
         x = (jnp.arange(Nx) - Nx / 2) * dx
@@ -1183,8 +1220,9 @@ def propagate_through_system_jax(E_in: np.ndarray,
       * ``'aperture'``   -> hard boolean mask multiplication (circular /
         rectangular / annular).  Uses the same canonical NumPy schema
         as :func:`apply_aperture` (``params={'diameter': ...}`` etc.);
-        the pre-v4.12 JAX-only schema (``params={'radius': ...}``) is
-        still accepted with a one-shot ``DeprecationWarning``.  See
+        the pre-v4.12 JAX-only schema (``params={'radius': ...}``) was
+        deprecated in v4.12 and **removed in v5.0** -- it now raises
+        ``ValueError`` with the migration recipe.  See
         :func:`_resolve_aperture_params`.
       * ``'mask'``       -> phase / amplitude mask multiplication
 

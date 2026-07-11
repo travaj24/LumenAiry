@@ -520,7 +520,11 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
     if method == 'asm':
         from .propagation import angular_spectrum_propagate
         if z is None:
-            return E_in
+            # Dispatch nit: return a copy, not the input array itself -- a
+            # caller mutating the "propagated" z=None output otherwise mutates
+            # the source field in place (every other method returns a fresh
+            # array).  ``.copy()`` is backend-generic (numpy / cupy / jax).
+            return E_in.copy()
         return angular_spectrum_propagate(E_in, z, wavelength, dx, **kwargs)
 
     if method == 'sas':
@@ -714,10 +718,15 @@ def _select_asm_variant(
     2. Significant tilt (> 1e-6 rad) -> ``asm_tilted``.
     3. ``z >> L^2 / (N * lambda)`` (small Fresnel number) -> ``sas``
        for a scalable output pitch, else ``fraunhofer`` if extreme.
-    4. ``z`` and aperture given, intermediate Fresnel number:
-       still use plain ``asm`` (band-limited transfer function handles
-       both near- and intermediate-field).
-    5. Otherwise -> ``asm``.
+    4. Intermediate Fresnel number -> plain ``asm`` (the band-limited
+       transfer function handles both near- and intermediate-field).
+
+    The regime threshold uses the full grid extent ``L = N * dx`` as the
+    transverse scale.  ``aperture_radius`` is accepted for signature
+    parity with :func:`which_propagator` (which uses it for the *reported*
+    Fresnel number) but is **not** consulted by the branch logic here --
+    the selector deliberately keys on the grid extent so the choice is
+    reproducible from the field shape alone.
     """
     has_tilt = (abs(float(tilt_x)) > 1e-6) or (abs(float(tilt_y)) > 1e-6)
     if output_dx is not None and abs(float(output_dx) - float(dx)) > 0:

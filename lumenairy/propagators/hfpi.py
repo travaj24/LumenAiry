@@ -394,8 +394,12 @@ def accumulate_to_grid(
 
     x = paths.positions[..., 0] - cx
     y = paths.positions[..., 1] - cy
-    ix = xp.floor(x / dx + Nx / 2).astype(xp.int64)
-    iy = xp.floor(y / dx + Ny / 2).astype(xp.int64)
+    # HFPI-1: CELL-CENTRED binning (+0.5) so pixel i collects
+    # [x_i - dx/2, x_i + dx/2), matching every other grid consumer -- the
+    # prior floor(x/dx + N/2) used [x_i, x_i + dx), a systematic half-pixel
+    # image shift vs ASM/Fresnel on the same geometry.
+    ix = xp.floor(x / dx + Nx / 2 + 0.5).astype(xp.int64)
+    iy = xp.floor(y / dx + Ny / 2 + 0.5).astype(xp.int64)
     inside = (ix >= 0) & (ix < Nx) & (iy >= 0) & (iy < Ny) & paths.alive
 
     w_masked = xp.where(inside, paths.weights, 0)
@@ -826,11 +830,17 @@ def propagate_hfpi_through_prescription(
     is reset (the new secondary source's accumulated phase is folded
     into the path's complex weight).
     """
+    # HFPI-2: validate the sampling selector up front (before the expensive
+    # prescription parse / trace) -- it was previously documented but never
+    # dispatched, so a typo silently ran uniform sampling.
+    if sampling not in ('uniform', 'stratified'):
+        raise ValueError(
+            f"sampling must be 'uniform' or 'stratified'; got {sampling!r}.")
+
     from ..raytrace import (
         surfaces_from_prescription,
     )
 
-    array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
     # v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): see module helper;
     # ``output_grid`` is now the deprecated spelling of ``output_shape``.
@@ -864,14 +874,29 @@ def propagate_hfpi_through_prescription(
     # events).  We allocate stream 0 to the source init and the
     # remaining streams sequentially to each diffractor.
     rng_source = _spawn_rng(rng, 0)
-    paths = init_paths_from_field(
-        E_in, dx,
-        n_paths=n_paths,
-        wavelength=wavelength,
-        rng=rng_source,
-        cone_half_angle=cone_half_angle,
-        z_input_plane=-object_distance,
-    )
+    # HFPI-2: honour the ``sampling`` selector (validated up front).  Pre-fix
+    # the parameter was documented (default ``'stratified'``) but never
+    # dispatched -- every call used plain uniform ``init_paths_from_field``
+    # regardless, so the variance-reduction path
+    # (:func:`init_paths_stratified`) was dead.
+    if sampling == 'stratified':
+        paths = init_paths_stratified(
+            E_in, dx,
+            n_paths=n_paths,
+            wavelength=wavelength,
+            rng=rng_source,
+            cone_half_angle=cone_half_angle,
+            z_input_plane=-object_distance,
+        )
+    else:
+        paths = init_paths_from_field(
+            E_in, dx,
+            n_paths=n_paths,
+            wavelength=wavelength,
+            rng=rng_source,
+            cone_half_angle=cone_half_angle,
+            z_input_plane=-object_distance,
+        )
 
     if diffracting_surfaces is None:
         diffracting_surfaces = []
@@ -886,7 +911,6 @@ def propagate_hfpi_through_prescription(
     # trace() machinery, then re-sample at the diffractor.
     # Hand off to trace for the whole stack at once if there are no
     # interior diffractors; otherwise per-segment.
-    list(range(len(surfaces)))
     if not diffracting_surfaces:
         # Single trace through the full stack.
         paths = _hfpi_segment_trace(
@@ -974,7 +998,6 @@ def _hfpi_segment_trace(paths: PathBundle,
     xp = array_namespace(paths.positions)
 
     # Build a RayBundle from the PathBundle's geometric state.
-    int(paths.positions.shape[0])
     pos_h = np.asarray(paths.positions if not is_jax_array(paths.positions)
                        else to_numpy(paths.positions))
     dir_h = np.asarray(paths.directions if not is_jax_array(paths.directions)

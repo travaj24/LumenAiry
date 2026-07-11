@@ -193,9 +193,22 @@ def scalable_angular_spectrum_propagate(
         z_limit = float(
             -4.0 * L * np.sqrt(8.0 * L ** 2 / N ** 2 + lam ** 2)
             * np.sqrt(s) / denom)
-    if z > z_limit > 0 and verbose:
-        print(f"  SAS: z = {z*1e3:.2f} mm exceeds z_limit = "
-              f"{z_limit*1e3:.2f} mm; accuracy may degrade.")
+    if z > z_limit > 0:
+        # PK-1: surface the validity-envelope breach as a RuntimeWarning
+        # (regardless of verbose) -- every other accuracy guard in the library
+        # (check_opd_sampling, traced on_noncollimated, the fiber-NA warning)
+        # does; a silent print left a user past the SAS envelope with silently
+        # degraded phase.
+        import warnings
+        warnings.warn(
+            f"scalable_angular_spectrum_propagate: z = {z*1e3:.2f} mm exceeds "
+            f"the SAS validity bound z_limit = {z_limit*1e3:.2f} mm; the "
+            f"band-limit filter degrades the transferred phase.  Use a smaller "
+            f"z, a larger grid, or another propagator (asm / fresnel).",
+            RuntimeWarning, stacklevel=2)
+        if verbose:
+            print(f"  SAS: z = {z*1e3:.2f} mm exceeds z_limit = "
+                  f"{z_limit*1e3:.2f} mm; accuracy may degrade.")
 
     # -- padded grid ---------------------------------------------------------
     L_new = pad * L

@@ -34,7 +34,7 @@ from ..backend import (
     is_jax_array,
     to_numpy,
 )
-from .hfpi import _spawn_rng
+from .hfpi import _complex_output_dtype, _spawn_rng
 
 
 @dataclass
@@ -356,8 +356,9 @@ def accumulate_vector_to_grid(
     cx, cy = centre
     x = paths.positions[..., 0] - cx
     y = paths.positions[..., 1] - cy
-    ix = xp.floor(x / dx + Nx / 2).astype(xp.int64)
-    iy = xp.floor(y / dx + Ny / 2).astype(xp.int64)
+    # HFPI-1: cell-centred binning (+0.5), matching the scalar accumulator.
+    ix = xp.floor(x / dx + Nx / 2 + 0.5).astype(xp.int64)
+    iy = xp.floor(y / dx + Ny / 2 + 0.5).astype(xp.int64)
     inside = ((ix >= 0) & (ix < Nx) & (iy >= 0) & (iy < Ny)
               & paths.alive)
     flat_idx = xp.where(inside, iy * Nx + ix, 0)
@@ -444,7 +445,11 @@ def propagate_vector_hfpi_freespace_aperture(
         output_dx = dx
     return accumulate_vector_to_grid(
         paths, Ny=Ny, Nx=Nx, dx=output_dx, centre=output_centre,
-        output_dtype=Ex_in.dtype,
+        # VHFPI-1: promote to a COMPLEX accumulator (the v5.17 P2-32 scalar
+        # fix, unmirrored here) -- a real-dtype (Ex_in, Ey_in) otherwise
+        # allocates a real accumulator and np.add.at silently drops the
+        # imaginary half of every path weight (~40% intensity loss).
+        output_dtype=_complex_output_dtype(Ex_in.dtype),
     )
 
 
