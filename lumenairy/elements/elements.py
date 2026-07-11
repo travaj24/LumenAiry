@@ -268,6 +268,13 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
     elif shape == 'annular':
         Di = params.get('inner_diameter', 0)
         Do = params.get('outer_diameter', np.inf)
+        # COAT-nit (AUDIT_COATINGS_ELEMENTS): an inverted annulus
+        # (inner >= outer) otherwise silently returns an all-zero field
+        # (same class as SRC-2's create_annular_beam).  Raise instead.
+        if not (Di < Do):
+            raise ValueError(
+                f"apply_aperture(shape='annular'): inner_diameter ({Di}) "
+                f"must be < outer_diameter ({Do}).")
         h_sq = (X - xc)**2 + (Y - yc)**2
         mask = (h_sq >= (Di / 2)**2) & (h_sq <= (Do / 2)**2)
 
@@ -320,6 +327,12 @@ def apply_gaussian_aperture(E_in, dx, sigma, xc=0, yc=0, dy=None):
     -------
     E_out : ndarray (complex, Ny x Nx)
     """
+    # COAT-nit (AUDIT_COATINGS_ELEMENTS): guard sigma > 0 -- ``sigma=0``
+    # otherwise divides by zero and returns an all-NaN field silently.
+    if not (sigma > 0) or not np.isfinite(sigma):
+        raise ValueError(
+            f"apply_gaussian_aperture: sigma must be positive and finite "
+            f"(got {sigma!r}).")
     if dy is None:
         dy = dx
     xp = _xp_of(E_in)

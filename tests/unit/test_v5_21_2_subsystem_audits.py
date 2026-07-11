@@ -596,3 +596,44 @@ def test_doe_dammann_itr_wavsamp_guards():
         makedammann2d(itr=0, plot=False)
     with pytest.raises(ValueError, match="wavsamp must be"):
         makedammann2d(wavsamp=0.0, plot=False)
+
+
+# =========================================================================
+# AUDIT 8 -- elements/coatings.py + elements/elements.py (AUDIT_COATINGS_ELEMENTS)
+# =========================================================================
+
+
+def test_coat_material_index_warning_gated_on_dispersion():
+    """COAT-nit: the 'extrapolated value may not be physical' warning fires
+    only for dispersive (Sellmeier) materials, not for constant-n materials
+    (where the value is flat and nothing is extrapolated)."""
+    import warnings
+
+    from lumenairy.elements.coatings import get_coating_material_index
+    # Constant-n MgO (range up to 6 um): OUT of range -> NO warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        n = get_coating_material_index('MgO', 6.5e-6)   # > 6 um upper bound
+    assert abs(n - 1.74) < 1e-9
+    # Sellmeier MgF2 (range up to 7 um): OUT of range -> DOES warn.
+    with pytest.warns(UserWarning, match="validity"):
+        get_coating_material_index('MgF2', 8.0e-6)
+
+
+def test_coat_gaussian_aperture_sigma_guard():
+    """COAT-nit: apply_gaussian_aperture rejects sigma<=0 (was a
+    divide-by-zero -> all-NaN field)."""
+    from lumenairy.elements.elements import apply_gaussian_aperture
+    E = np.ones((16, 16), dtype=np.complex128)
+    with pytest.raises(ValueError, match="sigma must be"):
+        apply_gaussian_aperture(E, 1e-6, 0.0)
+
+
+def test_coat_annular_aperture_inverted_guard():
+    """COAT-nit: apply_aperture(shape='annular') rejects inner>=outer (was a
+    silent all-zero field)."""
+    from lumenairy.elements.elements import apply_aperture
+    E = np.ones((16, 16), dtype=np.complex128)
+    with pytest.raises(ValueError, match="must be < outer"):
+        apply_aperture(E, 1e-6, shape='annular',
+                       params={'inner_diameter': 5e-6, 'outer_diameter': 2e-6})

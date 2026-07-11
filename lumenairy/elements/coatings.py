@@ -82,6 +82,24 @@ def coating_reflectance(
     For a fully REAL-index, sub-critical stack (the common transparent
     AR / HR case) ``cos(theta)`` is real and the result is **bit-identical**
     to the pre-v5.6 real-Snell path.
+
+    **Dispersion (COAT-1, IMPORTANT).**  Each layer carries a SINGLE scalar
+    index ``n_j``; across a wavelength ARRAY only the phase thickness
+    ``delta = 2*pi*n_j*d_j*cos(theta_j)/lambda`` varies (through ``1/lambda``).
+    The layer indices are held FIXED, so an ``R(lambda)`` sweep computed in
+    one call is **non-dispersive** -- the layer ``n`` at 400 nm and 1600 nm
+    are identical.  For weakly-dispersive dielectrics over a modest AR/HR
+    band this is negligible; over a wide band or for high-index/dispersive
+    layers it is material.  To include true dispersion, evaluate per
+    wavelength, feeding each layer's ``n(lambda)`` from
+    :func:`get_coating_material_index`::
+
+        R = np.array([
+            coating_reflectance(
+                [(get_coating_material_index(mat_j, wl), d_j)
+                 for mat_j, d_j in stack],
+                wl, angle=..., n_substrate=..., n_ambient=...)[0]
+            for wl in wavelengths])
     """
     # 4.14.0 (Tier-2 perf, audit group): track scalar-input back-compat
     # before the np.atleast_1d promotion.  When a scalar wavelength is
@@ -353,11 +371,14 @@ def coating_reflectance_jax(
             ct = 1e-12 + 0j
         return ct
 
-    cos_t, n_re = [], []
+    # COAT-nit (AUDIT_COATINGS_ELEMENTS): this list holds the FULL COMPLEX
+    # layer index (not the real part -- the old name ``n_re`` read as a bug on
+    # skim although the value was correct).
+    cos_t, n_cplx = [], []
     for n_layer, _d in layers:
         n_layer = complex(n_layer)
         cos_t.append(_cos_theta(n_layer))
-        n_re.append(n_layer)
+        n_cplx.append(n_layer)
     cos_sub = _cos_theta(complex(n_substrate))
     cos_angle = _cos_theta(complex(n_ambient))    # == cos(angle) for real amb
 
@@ -365,17 +386,17 @@ def coating_reflectance_jax(
     R_terms = []
     for pol in pols:
         if pol == 's':
-            eta = [n_re[j] * cos_t[j] for j in range(len(layers))]
+            eta = [n_cplx[j] * cos_t[j] for j in range(len(layers))]
             eta_sub = complex(n_substrate) * cos_sub
             eta_amb = complex(n_ambient) * cos_angle
         else:
-            eta = [n_re[j] / cos_t[j] for j in range(len(layers))]
+            eta = [n_cplx[j] / cos_t[j] for j in range(len(layers))]
             eta_sub = complex(n_substrate) / cos_sub
             eta_amb = complex(n_ambient) / cos_angle
         # --- characteristic-matrix product (JAX; delta carries the thickness)
         M = jnp.eye(2, dtype=jnp.complex128)
         for j, (n_layer, d) in enumerate(layers):
-            delta = (2.0 * jnp.pi * complex(n_re[j]) * cos_t[j]
+            delta = (2.0 * jnp.pi * complex(n_cplx[j]) * cos_t[j]
                      * jnp.asarray(d) / wavelength)
             cd, sd = jnp.cos(delta), jnp.sin(delta)
             ej = complex(eta[j])
@@ -402,8 +423,16 @@ def quarter_wave_ar(
     single-layer design the order is unobservable, but the convention is
     stated here so multi-layer designs (see ``broadband_ar_v_coat``) and
     callers agree.
+
+    COAT-nit (AUDIT_COATINGS_ELEMENTS): the ``n = sqrt(n_substrate)`` layer
+    is the zero-reflectance ideal only for an **air** ambient
+    (``n_ambient = 1``).  The general single-layer AR ideal is
+    ``sqrt(n_substrate * n_ambient)``; for a non-air ambient (e.g. an
+    immersed or cemented interface) this layer is mistuned -- design the
+    layer with the general form and use ``coating_reflectance(...,
+    n_ambient=...)`` to verify.
     """
-    n_layer = np.sqrt(n_substrate)  # ideal
+    n_layer = np.sqrt(n_substrate)  # ideal for an AIR ambient (see docstring)
     d = wavelength_center / (4 * n_layer)
     return [(n_layer, d)]
 
@@ -701,7 +730,13 @@ def get_coating_material_index(
     # falls outside the documented band.  v5.4.5 (audit P2-3): `>=` so
     # a wavelength exactly at lmax also triggers (covers the "n<1 at
     # the exact registry boundary" case).
-    if np.any(wl_arr < lmin) or np.any(wl_arr >= lmax):
+    # COAT-nit (AUDIT_COATINGS_ELEMENTS): gate on ``'sellmeier' in entry`` --
+    # a CONSTANT-n material (MgO, ZnS, ...) returns a flat value with NO
+    # extrapolation, so the "extrapolated value may not be physical" warning
+    # is misleading there.  Only dispersive (Sellmeier) materials actually
+    # extrapolate outside their fitted band.
+    if 'sellmeier' in entry and (np.any(wl_arr < lmin)
+                                 or np.any(wl_arr >= lmax)):
         warnings.warn(
             f"get_coating_material_index: {material} validity is "
             f"[{lmin:.3e}, {lmax:.3e}] m; got wavelength "
