@@ -30,6 +30,11 @@ from lumenairy.elements.rcwa import rcwa_jones_2d
 from lumenairy.elements.rcwa import twod as _twod
 from lumenairy.elements.rcwa.oned import rcwa_jones_1d_segments
 
+# eig-heavy 2-D fff_nv (Li-2003 successive full-tensor); version-insensitive
+# numerics -> run in the slow-tests job to keep the fast 4-Python gate under
+# its cap (v5.21.1 fast-gate trim).
+pytestmark = pytest.mark.slow
+
 
 def _rot(phi, no, ne):
     """In-plane rotated uniaxial 3x3 (optic axis at angle phi in the x-y plane)."""

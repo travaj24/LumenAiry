@@ -160,6 +160,7 @@ def _jax_ok():
         return False
 
 
+@pytest.mark.slow      # jax value_and_grad -> XLA compile; keep off the fast gate
 @pytest.mark.skipif(not _jax_ok(), reason="jax not installed")
 def test_d12_traced_oop_tensor_routes_to_exact_general_path():
     """A TRACED out-of-plane tensor now routes to the generalized (exact) berreman
@@ -247,6 +248,7 @@ def test_d15_segmentation_respects_max_segments():
     assert 1 <= len(segs) <= 2
 
 
+@pytest.mark.slow      # jax jit -> XLA compile; keep off the fast gate
 @pytest.mark.skipif(not _jax_ok(), reason="jax not installed")
 def test_d11a_offplane_stack_with_traced_iso_spacer_jits():
     """D11(a): a concrete OOP layer beside a TRACED isotropic spacer no longer
