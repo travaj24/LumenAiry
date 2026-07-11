@@ -378,3 +378,75 @@ def test_rt_nit_odd_aspheric_power_rejected():
     good['surfaces'] = [dict(bad['surfaces'][0], aspheric_coeffs={4: 1e-3}),
                         bad['surfaces'][1]]
     validate_prescription(good)  # must not raise
+
+
+# =========================================================================
+# AUDIT 5 -- glass.py + elements/polarization.py (AUDIT_GLASS_POLARIZATION)
+# =========================================================================
+
+
+def test_gl1_missing_kappa_message_points_at_working_remediation():
+    """GL-1: the missing-kappa warning must point at the WORKING remediation
+    (a complex-returning callable in GLASS_REGISTRY), not the dead-end
+    register_fixed_glass (which stores a real-only shim)."""
+    import lumenairy.glass as g
+    g._kappa_warned.clear()
+    with pytest.warns(RuntimeWarning) as rec:
+        g._warn_missing_kappa_once('N-BK7', 587.6e-9)
+    msg = str(rec[0].message)
+    assert 'GLASS_REGISTRY' in msg
+    assert '1j' in msg  # shows the complex-callable form
+
+
+def test_gl_silica_resolves_like_its_siblings():
+    """GL-nit: 'SILICA' now has its own bundled Sellmeier row, so it
+    resolves (== SiO2 / FUSED_SILICA) instead of ImportError-ing on a
+    minimal install."""
+    from lumenairy.glass import get_glass_index
+    wl = 587.6e-9
+    n_silica = get_glass_index('SILICA', wl)
+    n_sio2 = get_glass_index('SiO2', wl)
+    assert abs(n_silica - n_sio2) < 1e-12
+    assert 1.4 < n_silica < 1.5   # fused silica ~1.458 at d-line
+
+
+def test_gl_validity_warning_array_safe():
+    """GL-nit: _maybe_warn_outside_validity no longer crashes on an array
+    wavelength (was float(array))."""
+    import lumenairy.glass as g
+    g._validity_warned.clear()
+    # SiO2 validity is [0.21, 3.7] um; include an out-of-band element.
+    wl = np.array([0.5e-6, 5.0e-6])   # 5 um > 3.7 um upper bound
+    with pytest.warns(UserWarning, match="validity"):
+        g._maybe_warn_outside_validity('SiO2', wl)
+    # A fully in-band array must NOT warn.
+    g._validity_warned.clear()
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        g._maybe_warn_outside_validity('SiO2', np.array([0.5e-6, 1.0e-6]))
+
+
+def test_gl2_reregister_fixed_index_clears_cache():
+    """GL-2: re-registering a fixed index invalidates the value cache (now
+    routed through the lock-correct _invalidate_glass_name), so the second
+    resolution returns the NEW value rather than a stale cached one."""
+    from lumenairy.raytrace.trace import _register_fixed_index
+    from lumenairy.glass import get_glass_index
+    name = '__gl2_probe__'
+    _register_fixed_index(name, 1.5, 587.6e-9)
+    assert abs(get_glass_index(name, 587.6e-9) - 1.5) < 1e-12
+    _register_fixed_index(name, 1.7, 587.6e-9)   # overwrite
+    assert abs(get_glass_index(name, 587.6e-9) - 1.7) < 1e-12
+
+
+def test_gl_jonesfield_apply_spherical_lens_missing_wavelength():
+    """GL-nit: JonesField.apply_spherical_lens() without wavelength raises a
+    TypeError naming the argument, not a bare KeyError."""
+    from lumenairy.elements.polarization import JonesField
+    N, dx = 16, 2e-6
+    Ex = np.ones((N, N), dtype=np.complex128)
+    Ey = np.zeros((N, N), dtype=np.complex128)
+    jf = JonesField(Ex, Ey, dx)
+    with pytest.raises(TypeError, match="wavelength"):
+        jf.apply_spherical_lens(focal_length=0.1)

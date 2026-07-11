@@ -348,10 +348,19 @@ class JonesField:
         return self
 
     def apply_spherical_lens(self, **kwargs: Any) -> 'JonesField':
-        self.Ex = apply_spherical_lens(self.Ex, wavelength=kwargs['wavelength'],
-                                        dx=self.dx, dy=self.dy, **{k: v for k, v in kwargs.items() if k != 'wavelength'})
-        self.Ey = apply_spherical_lens(self.Ey, wavelength=kwargs['wavelength'],
-                                        dx=self.dx, dy=self.dy, **{k: v for k, v in kwargs.items() if k != 'wavelength'})
+        # GL-nit (AUDIT_GLASS_POLARIZATION): a missing ``wavelength`` raised a
+        # bare ``KeyError('wavelength')``; raise a TypeError naming the missing
+        # argument (matching how the sibling methods take it positionally).
+        if 'wavelength' not in kwargs:
+            raise TypeError(
+                "JonesField.apply_spherical_lens() missing required keyword "
+                "argument 'wavelength'.")
+        wl = kwargs['wavelength']
+        rest = {k: v for k, v in kwargs.items() if k != 'wavelength'}
+        self.Ex = apply_spherical_lens(self.Ex, wavelength=wl,
+                                        dx=self.dx, dy=self.dy, **rest)
+        self.Ey = apply_spherical_lens(self.Ey, wavelength=wl,
+                                        dx=self.dx, dy=self.dy, **rest)
         return self
 
     def apply_real_lens(
@@ -592,9 +601,10 @@ def apply_polarizer(
     angle : float, default 0
         Transmission axis angle [radians], measured from +x axis.
     angle_deg : float, optional
-        Transmission axis angle in degrees; when supplied, takes
-        precedence over the radian ``angle``.  4.7+: ``_deg`` is the
-        canonical user-facing angle unit.
+        Transmission axis angle in degrees.  When supplied it is used
+        in place of the radian ``angle``; if BOTH are given and disagree
+        (``angle != radians(angle_deg)``) a ``ValueError`` is raised (see
+        Raises).  4.7+: ``_deg`` is the canonical user-facing angle unit.
 
     Returns
     -------
@@ -639,8 +649,9 @@ def apply_waveplate(
     angle : float, default 0
         Fast-axis angle [radians], measured from +x axis.
     angle_deg : float, optional
-        Fast-axis angle in degrees; takes precedence over ``angle``
-        when supplied.
+        Fast-axis angle in degrees.  When supplied it is used in place
+        of ``angle``; if both are given and disagree a ``ValueError`` is
+        raised (see Raises).
 
     Returns
     -------
@@ -777,9 +788,10 @@ def apply_rotator(
     angle : float, default 0
         Rotation angle [radians].
     angle_deg : float, optional
-        Rotation angle in degrees; when supplied, takes precedence
-        over the radian ``angle``.  4.7+ convention: ``_deg`` is the
-        canonical user-facing angle unit.  Matches the
+        Rotation angle in degrees.  When supplied it is used in place of
+        the radian ``angle``; if both are given and disagree a
+        ``ValueError`` is raised (see Raises).  4.7+ convention: ``_deg``
+        is the canonical user-facing angle unit.  Matches the
         ``apply_polarizer`` / ``apply_waveplate`` /
         ``apply_half_wave_plate`` / ``apply_quarter_wave_plate``
         signatures; pre-v4.14.2 ``apply_rotator`` was the only
@@ -841,9 +853,10 @@ def apply_polarizing_beam_splitter(
     angle : float, default 0
         Transmission-axis angle [radians] from +x (the p-axis).
     angle_deg : float, optional
-        Transmission-axis angle in degrees; when supplied, takes
-        precedence over the radian ``angle`` (the canonical ``_deg``
-        convention used by the other polarization helpers).
+        Transmission-axis angle in degrees.  When supplied it is used in
+        place of the radian ``angle``; if both are given and disagree a
+        ``ValueError`` is raised (see Raises).  (The canonical ``_deg``
+        convention used by the other polarization helpers.)
     extinction_ratio : float, optional
         Finite polarization extinction ratio (the wanted:unwanted POWER
         ratio in each port), modelling a real PBS's leakage.  ``None``

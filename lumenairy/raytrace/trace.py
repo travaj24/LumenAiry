@@ -1351,7 +1351,7 @@ def surfaces_from_elements(
 # Thin-lens helper: register a fixed-index "glass" for spherical/aspheric lenses
 def _register_fixed_index(name, n, wavelength):
     """Register a fixed refractive index as a temporary glass entry."""
-    from ..glass import GLASS_REGISTRY, _glass_cache, _glass_value_cache
+    from ..glass import GLASS_REGISTRY, _glass_cache, _invalidate_glass_name
 
     class _FixedIndex:
         def __init__(self, n_val):
@@ -1359,6 +1359,15 @@ def _register_fixed_index(name, n, wavelength):
         def get_refractive_index(self, wv_nm, unit='nm'):
             return self._n
 
+    # GL-2 (AUDIT_GLASS_POLARIZATION): purge any stale cached resolution for
+    # this name through the lock-correct glass.py helper FIRST.  The previous
+    # inline ``for k in _glass_value_cache: del`` iterate-and-delete ran
+    # WITHOUT ``_GLASS_CACHE_LOCK`` -- a concurrent ``get_glass_index`` LRU
+    # ``move_to_end`` could raise "OrderedDict mutated during iteration", and
+    # the torn read-modify-write is exactly what the P3-40 lock serialises.
+    # ``_invalidate_glass_name`` also pops ``_glass_cache[name]``, which the
+    # overwrite below immediately restores (harmless).
+    _invalidate_glass_name(name)
     # v5.17.1 (audit P2-36): the '__user__' sentinel is what
     # get_glass_index's user-fixed branch matches (glass.py), so the
     # lookup resolves from _glass_cache without the optional
@@ -1368,12 +1377,6 @@ def _register_fixed_index(name, n, wavelength):
     # minimal installs.
     GLASS_REGISTRY[name] = ('__user__', '__fixed__', '__fixed__')
     _glass_cache[name] = _FixedIndex(n)
-    # v5.17.1 (audit P3-61): an overwrite must not leave stale
-    # immutable-branch value-cache entries for this name (targeted
-    # removal, cheaper than register_fixed_glass's full clear because
-    # this runs on every spherical/aspheric element conversion).
-    for _key in [k for k in _glass_value_cache if k[0] == name]:
-        del _glass_value_cache[_key]
 
 # Also register the thin-lens pseudo-glass
 _register_fixed_index('__thin_lens__', 1.5, 550e-9)

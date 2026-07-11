@@ -239,6 +239,12 @@ SELLMEIER_COEFFICIENTS = {
                      (0.0684043**2, 0.1162414**2, 9.896161**2)),
     'FUSED_SILICA': ((0.6961663, 0.4079426, 0.8974794),
                      (0.0684043**2, 0.1162414**2, 9.896161**2)),
+    # GL-nit (AUDIT_GLASS_POLARIZATION): 'SILICA' is registry-aliased to
+    # Malitson fused silica (like SiO2 / F_SILICA / FUSED_SILICA) but was
+    # missing its bundled Sellmeier row, so on a minimal install it raised
+    # ImportError while the three siblings resolved.  Copy the row.
+    'SILICA':       ((0.6961663, 0.4079426, 0.8974794),
+                     (0.0684043**2, 0.1162414**2, 9.896161**2)),
 
     # ============================================================
     # v4.16.0 (ROADMAP #13) -- CDGM Sellmeier bundled fallback
@@ -949,9 +955,16 @@ def _maybe_warn_outside_validity(glass_name, wavelength_m):
     parameter sweeps that scan a few discrete wavelengths.
     """
     lmin, lmax = GLASS_VALIDITY.get(glass_name, _DEFAULT_VALIDITY)
-    if lmin <= float(wavelength_m) <= lmax:
+    # GL-nit (AUDIT_GLASS_POLARIZATION): the evaluators and value cache both
+    # handle array wavelengths, but this validity check used ``float(...)``
+    # which raised on an array.  Be array-safe: warn if ANY element is
+    # outside the band, and report the first offending wavelength.
+    wl = np.asarray(wavelength_m, dtype=float).reshape(-1)
+    inside = (wl >= lmin) & (wl <= lmax)
+    if inside.all():
         return
-    key = (str(glass_name), round(float(wavelength_m) * 1e9, 1))
+    wl_report = float(wl[~inside][0])
+    key = (str(glass_name), round(wl_report * 1e9, 1))
     if key in _validity_warned:
         return
     _validity_warned.add(key)
@@ -959,7 +972,7 @@ def _maybe_warn_outside_validity(glass_name, wavelength_m):
     warnings.warn(
         f"get_glass_index: {glass_name} Sellmeier validity is "
         f"[{lmin:.3e}, {lmax:.3e}] m; got wavelength "
-        f"{wavelength_m:.3e} m.  Extrapolated value may not be "
+        f"{wl_report:.3e} m.  Extrapolated value may not be "
         f"physical.",
         UserWarning, stacklevel=3,
     )
@@ -1609,11 +1622,16 @@ def _warn_missing_kappa_once(glass_name, wavelength):
     _kappa_warned.add(key)
     import warnings
     warnings.warn(
+        # GL-1 (AUDIT_GLASS_POLARIZATION): the working remediation is a
+        # COMPLEX-returning callable (honoured by get_glass_index_complex);
+        # register_fixed_glass(name, n) stores a real-index-only _FixedIndex
+        # shim with no extinction, so it would land the user right back here.
         f"glass {glass_name!r}: no extinction coefficient available at "
         f"{wavelength * 1e9:.1f} nm; treating as lossless (kappa = 0). "
         f"For absorbing-glass simulations use a catalogue entry with "
-        f"complex-n data, or supply kappa explicitly via "
-        f"register_fixed_glass.",
+        f"complex-n data, or register a complex-returning callable, e.g. "
+        f"``GLASS_REGISTRY[{glass_name!r}] = lambda wl_m: n + 1j*kappa`` "
+        f"(get_glass_index_complex reads the imaginary part).",
         RuntimeWarning, stacklevel=3,
     )
 
