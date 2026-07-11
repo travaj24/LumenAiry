@@ -843,3 +843,34 @@ def test_opt2_tolerance_merit_populates_rms_and_opd_subcontext():
     assert seen['opd'] is not None, (
         'opd_map is None -- OPD-based sub-merits would be inert (OPT-2 '
         'unfixed).')
+
+
+# =========================================================================
+# AUDIT 15 -- io/prescriptions_code_v.py (AUDIT_IO_PRESCRIPTIONS)
+# =========================================================================
+
+
+def test_cv1_codev_dropped_fold_directive_warns(tmp_path):
+    """CV-1: load_codev_seq now warns (once) when it drops unparsed
+    coordinate decenter/tilt (fold) directives, instead of silently
+    importing a folded .seq as a straight-axis system."""
+    import lumenairy as la
+    rx = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=10e-3)
+    p = tmp_path / 'folded.seq'
+    la.export_codev_seq(rx, str(p), wavelength=1.31e-6,
+                        aperture_diameter=10e-3)
+    # Inject fold directives (a decenter + a tilt) into surface 1's block.
+    text = p.read_text(encoding='utf-8')
+    text = text.replace('GLA N-BK7',
+                        'GLA N-BK7\n  XDE 0.002000\n  ADE 3.000000', 1)
+    p.write_text(text, encoding='utf-8')
+    with pytest.warns(UserWarning, match="fold"):
+        la.load_codev_seq(str(p))
+    # A plain (unfolded) .seq must NOT warn.
+    q = tmp_path / 'plain.seq'
+    la.export_codev_seq(rx, str(q), wavelength=1.31e-6,
+                        aperture_diameter=10e-3)
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.simplefilter('error')
+        la.load_codev_seq(str(q))

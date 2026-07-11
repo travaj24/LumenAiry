@@ -17,6 +17,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import os
+import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -210,6 +211,14 @@ def load_codev_seq(filepath: str,
     # standard CODE V convention of encoding the back-focal length on
     # the image-plane THI.
     image_plane_thi = None
+    # CV-1 (AUDIT_IO_PRESCRIPTIONS): track dropped shape/fold directives so a
+    # folded / aspheric ``.seq`` doesn't import as a silently straight-axis /
+    # base-conic system.  CODE V encodes folds as XDE/YDE/ZDE (decenters) and
+    # ADE/BDE/CDE (tilts), and aspheres via ASP/SDG -- none are parsed here,
+    # so we warn once (rather than silently) that they were ignored.
+    _dropped_geometry_cmds: set = set()
+    _CV_FOLD_CMDS = frozenset({'XDE', 'YDE', 'ZDE', 'ADE', 'BDE', 'CDE'})
+    _CV_ASPHERE_CMDS = frozenset({'ASP', 'SDG'})
 
     def _unit_to_meters(v):
         if v is None:
@@ -299,7 +308,8 @@ def load_codev_seq(filepath: str,
         if cmd == 'STO':
             if current.get('kind') == 'refracting':
                 current['is_stop'] = True
-                current['index']
+                # CV-nit (AUDIT_IO_PRESCRIPTIONS): dropped the dead
+                # ``current['index']`` read-and-discard (refactor residue).
             i += 1
             continue
 
@@ -359,8 +369,33 @@ def load_codev_seq(filepath: str,
             i += 1
             continue
 
+        # CV-1: record dropped fold / aspheric directives so they can be
+        # surfaced once (below) rather than silently swallowed by the
+        # unknown-directive fallthrough -- a folded / aspheric .seq otherwise
+        # imports as a straight-axis / base-conic system with no signal.
+        if cmd in _CV_FOLD_CMDS or cmd in _CV_ASPHERE_CMDS:
+            _dropped_geometry_cmds.add(cmd)
         # Unknown directive — ignore
         i += 1
+
+    if _dropped_geometry_cmds:
+        _fold = sorted(_dropped_geometry_cmds & _CV_FOLD_CMDS)
+        _asph = sorted(_dropped_geometry_cmds & _CV_ASPHERE_CMDS)
+        _parts = []
+        if _fold:
+            _parts.append(
+                f"coordinate decenter/tilt (fold) directives {_fold} -- the "
+                f"design imports as STRAIGHT-AXIS with the fold geometry gone")
+        if _asph:
+            _parts.append(
+                f"aspheric directives {_asph} -- aspheric surfaces degrade to "
+                f"base conic")
+        warnings.warn(
+            f"load_codev_seq({os.path.basename(filepath)!r}): dropped "
+            f"unparsed shape/geometry directives -- "
+            f"{'; '.join(_parts)}.  This loader does not yet parse them; the "
+            f"loaded prescription is missing that geometry.",
+            UserWarning, stacklevel=2)
 
     _flush()
 
