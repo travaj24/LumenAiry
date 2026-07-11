@@ -515,12 +515,30 @@ class SegmentStackGeometry:
                 for lo, hi, v in vals:
                     M3 = v if v.ndim == 2 else complex(v) * eye3
                     cell[(xs >= lo) & (xs < hi), 0] = M3
+                # BSDF-nit (AUDIT_BSDF_SEGMENT_GEOMETRY): fail loud if the
+                # intervals didn't tile [0, period) -- a residual NaN eps
+                # (from the NaN seed) would otherwise flow silently into the
+                # RCWA layer.
+                if np.any(np.isnan(cell)):
+                    _ng = int(np.isnan(cell[:, 0, 0, 0]).sum())
+                    raise ValueError(
+                        f"to_rcwa_stack: interval set does not tile "
+                        f"[0, period); {_ng} pixel column(s) left unassigned "
+                        f"(NaN eps).  Ensure the layer's intervals cover the "
+                        f"full period without gaps.")
                 st.add_layer(t, eps_tensor_cell=cell)
             else:
                 col = np.empty(nx, dtype=complex)
                 col[:] = np.nan
                 for lo, hi, v in vals:
                     col[(xs >= lo) & (xs < hi)] = complex(v)
+                if np.any(np.isnan(col)):
+                    _ng = int(np.isnan(col).sum())
+                    raise ValueError(
+                        f"to_rcwa_stack: interval set does not tile "
+                        f"[0, period); {_ng} pixel(s) left unassigned (NaN "
+                        f"eps).  Ensure the layer's intervals cover the full "
+                        f"period without gaps.")
                 st.add_layer(t, eps_cell=col[:, None])
         return st
 

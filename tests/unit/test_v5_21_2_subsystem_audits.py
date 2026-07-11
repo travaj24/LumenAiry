@@ -687,3 +687,40 @@ def test_eme_lossy_strip_modes_finite_and_orthonormal():
     # Bilinear (complex-symmetric) norm ~ 1 per column (floored ones aside).
     bilin = np.sum(Phi ** 2, axis=0)
     assert np.all(np.isfinite(bilin))
+
+
+# =========================================================================
+# AUDIT 11 -- elements/bsdf.py + elements/segment_geometry.py
+#             (AUDIT_BSDF_SEGMENT_GEOMETRY)
+# =========================================================================
+
+
+def test_bsdf1_gaussian_sample_reproduces_rayleigh_lobe():
+    """BSDF-1: GaussianBSDF.sample now draws the offset angle from a Rayleigh
+    law (mean = sigma*sqrt(pi/2) ~ 1.25 sigma), reproducing the lobe -- not
+    the old half-normal (mean = sigma*sqrt(2/pi) ~ 0.80 sigma, ~35% too close
+    to specular)."""
+    from lumenairy.elements.bsdf import GaussianBSDF
+    sigma = 0.05
+    bsdf = GaussianBSDF(sigma_rad=sigma)
+    # Normal incidence -> specular is +z, so the offset angle = arccos(dir_z).
+    dirs = bsdf.sample(np.array([0.0, 0.0, -1.0]), 40000, rng=0)
+    theta = np.arccos(np.clip(dirs[:, 2], -1.0, 1.0))
+    mean = float(theta.mean())
+    rayleigh_mean = sigma * np.sqrt(np.pi / 2)     # ~0.0627
+    halfnormal_mean = sigma * np.sqrt(2 / np.pi)   # ~0.0399 (the OLD bug)
+    assert abs(mean - rayleigh_mean) < 0.03 * rayleigh_mean
+    assert mean > 0.5 * (rayleigh_mean + halfnormal_mean)  # clearly NOT the old
+
+
+def test_bsdf_harvey_shack_evaluate_batched_incidence():
+    """BSDF-nit: HarveyShackBSDF.evaluate is now batch-safe over incidence
+    (mirrors GaussianBSDF's F-22 fix) instead of crashing on inc[0]."""
+    from lumenairy.elements.bsdf import HarveyShackBSDF
+    bsdf = HarveyShackBSDF(b0=0.1, l=0.05, s=2.0)
+    M = 5
+    inc = np.tile(np.array([0.0, 0.0, -1.0]), (M, 1))       # (M, 3)
+    sd = np.tile(np.array([0.1, 0.0, 0.9949874]), (M, 1))   # (M, 3), |.|~1
+    out = bsdf.evaluate(inc, sd)
+    assert np.asarray(out).shape == (M,)
+    assert np.all(np.isfinite(out))

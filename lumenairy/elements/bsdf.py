@@ -326,9 +326,21 @@ class GaussianBSDF(BSDFModel):
         rng: Optional[Union[int, np.random.Generator]] = None,
     ) -> np.ndarray:
         rng = _get_rng(rng)
-        # Sample offset angle theta ~ Gaussian truncated to [0, pi/2]
-        # in the specular-frame, azimuth uniform.
-        theta = np.abs(rng.normal(0, self.sigma_rad, n_samples))
+        # BSDF-1 (AUDIT_BSDF_SEGMENT_GEOMETRY): draw the offset angle from a
+        # RAYLEIGH law, not a half-normal.  To reproduce the Gaussian lobe as a
+        # Monte-Carlo DIRECTION distribution the per-theta density must carry
+        # the solid-angle + projected-power weight
+        # ``BSDF(theta)*cos*sin ~ theta*exp(-theta^2/2 sigma^2)`` (small angle)
+        # -- exactly Rayleigh(sigma), via inverse-CDF ``theta =
+        # sigma*sqrt(-2 ln(1-xi))``.  The old half-normal ``|N(0,sigma)|``
+        # dropped the ``sin(theta)~theta`` factor, over-concentrating samples
+        # toward specular (drawn mean 0.80*sigma vs the true lobe's
+        # 1.25*sigma) -> a ~35%-too-narrow stray-light cone.  ``evaluate`` /
+        # ``total_integrated_scatter`` (closed-form) were unaffected; this is
+        # isolated to the MC draw, and matches the HarveyShack/Lambertian
+        # ``~ BSDF*cos`` sampling convention the Gaussian path alone violated.
+        xi = rng.random(n_samples)
+        theta = self.sigma_rad * np.sqrt(-2.0 * np.log1p(-xi))
         theta = np.minimum(theta, np.pi / 2 - 1e-6)
         phi = 2 * np.pi * rng.random(n_samples)
         # Local frame: specular = +z
@@ -415,14 +427,14 @@ class HarveyShackBSDF(BSDFModel):
     def evaluate(self, incident_dir: np.ndarray, scattered_dir: np.ndarray) -> np.ndarray:
         inc = np.asarray(incident_dir, dtype=float)
         sd = np.asarray(scattered_dir, dtype=float)
-        specular = np.array([inc[0], inc[1], -inc[2]])
-        specular = specular / np.linalg.norm(specular)
-        if sd.ndim == 1:
-            cos_theta = np.clip(float(np.dot(sd, specular)), -1.0, 1.0)
-            in_hemi = sd[2] > 0
-        else:
-            cos_theta = np.clip(np.sum(sd * specular, axis=-1), -1.0, 1.0)
-            in_hemi = sd[..., 2] > 0
+        # BSDF-nit (AUDIT_BSDF_SEGMENT_GEOMETRY): mirror GaussianBSDF's F-22
+        # batch-safe form -- stack the specular along the LAST axis and reduce
+        # with axis=-1 so a batched-incidence ``(..., 3)`` call broadcasts
+        # instead of crashing on the single-incidence ``inc[0]`` indexing.
+        specular = np.stack([inc[..., 0], inc[..., 1], -inc[..., 2]], axis=-1)
+        specular = specular / np.linalg.norm(specular, axis=-1, keepdims=True)
+        cos_theta = np.clip(np.sum(sd * specular, axis=-1), -1.0, 1.0)
+        in_hemi = sd[..., 2] > 0
         sin_theta = np.sqrt(np.maximum(1 - cos_theta ** 2, 0.0))
         amp = self._amplitude()
         return amp / (1 + (sin_theta / self.l) ** 2) ** (self.s / 2) * in_hemi
