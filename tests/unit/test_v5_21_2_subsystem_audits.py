@@ -223,3 +223,158 @@ def test_dispatch_asm_znone_returns_copy():
     assert out is not E
     out[0, 0] = 999.0
     assert E[0, 0] == 1.0
+
+
+# =========================================================================
+# AUDIT 4 -- raytrace/*.py (AUDIT_RAYTRACE_CORE_2026_07_08)
+# =========================================================================
+
+_SINGLET_RX = {
+    'surfaces': [
+        {'radius': 0.05, 'glass_before': 'air', 'glass_after': 'N-BK7'},
+        {'radius': -0.05, 'glass_before': 'N-BK7', 'glass_after': 'air'},
+    ],
+    'thicknesses': [0.006, 0.095],
+    'aperture_diameter': 20e-3,
+}
+
+
+def test_rt3_dead_paraxial_trio_removed():
+    """RT-3: the dead+wrong ``_paraxial_trace`` trio (its refraction update
+    omitted the n1/n2 rescaling) was removed from seidel.py."""
+    import lumenairy.raytrace.seidel as s
+    assert not hasattr(s, '_paraxial_trace')
+    assert not hasattr(s, '_paraxial_refract')
+    assert not hasattr(s, '_paraxial_transfer')
+
+
+def test_rt4_world_coord_break_tilt_sign():
+    """RT-4: world._apply_coord_break now uses the legacy optical (3.7.1)
+    sign -- a +tilt_x break yields a new frame whose local-to-world rotation
+    is Rx(-tx) (the transpose-negation of the ray-coordinate transform), so
+    trace() and trace_world() fold in the SAME angular direction."""
+    from lumenairy.raytrace.world import _apply_coord_break, _rot_x
+    tx_deg = 30.0
+    origin = np.zeros(3)
+    R = np.eye(3)
+    _, new_R = _apply_coord_break(origin, R, {'tilt_x_deg': tx_deg})
+    expected = _rot_x(-np.radians(tx_deg))  # RT-4 fixed convention
+    np.testing.assert_allclose(new_R, expected, atol=1e-12)
+
+
+def test_rt5_offaxis_fan_passes_through_zero():
+    """RT-5: for off-axis fields both the tangential and sagittal fans now
+    pass through zero at the chief (py=0) -- the fan is EP-centred on the
+    chief, not decentred by ep_z*tan(field)."""
+    from lumenairy.raytrace.ray_fan import ray_fan_data
+    from lumenairy.raytrace.trace import surfaces_from_prescription
+    surfs = surfaces_from_prescription(_SINGLET_RX)
+    for fa_deg in (0.0, 5.0):
+        py, ey, px, ex = ray_fan_data(surfs, 587.6e-9, 8e-3,
+                                      field_angle=np.radians(fa_deg),
+                                      n_rays=41)
+        c = len(py) // 2
+        assert abs(py[c]) < 1e-12
+        assert abs(ey[c]) < 1e-10, f"ey(0)={ey[c]} at fa={fa_deg}"
+        assert abs(ex[c]) < 1e-10, f"ex(0)={ex[c]} at fa={fa_deg}"
+
+
+def test_rt6_high_na_trace_jax_matches_numpy_and_no_warning():
+    """RT-6: the JAX paraxial transfer is EXACT -- a high-NA trace_jax
+    matches the NumPy trace to sub-ppm and emits NO spurious high-NA
+    RuntimeWarning (the warning machinery was removed)."""
+    import warnings
+    pytest.importorskip('jax')
+    from lumenairy.raytrace.core import RayBundle
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
+    from lumenairy.raytrace.trace import surfaces_from_prescription, trace
+    wl = 587.6e-9
+    n = 7
+    th = np.radians(np.linspace(-40.0, 40.0, n))  # min|N|~0.77, NA~0.64
+    L = np.sin(th)
+    N = np.cos(th)
+    z0 = np.zeros(n)
+    rays = RayBundle(x=z0.copy(), y=z0.copy(), z=z0.copy(),
+                     L=L.copy(), M=z0.copy(), N=N.copy(),
+                     opd=z0.copy(), alive=np.ones(n, bool), wavelength=wl)
+    surfs = surfaces_from_prescription(_SINGLET_RX)
+    img = trace(rays, surfs, wl).image_rays
+    state = make_jax_ray_state(z0, z0, z0, L, z0, N)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        outj = trace_jax(state, _SINGLET_RX, wl)
+    # No spurious high-NA / paraxial-transfer warning.
+    assert not any('transfer' in str(w.message).lower()
+                   or 'paraxial' in str(w.message).lower()
+                   or 'high-NA' in str(w.message) for w in caught)
+    both = np.asarray(img.alive) & np.asarray(outj.alive)
+    dx = np.abs(np.asarray(outj.x)[both] - np.asarray(img.x)[both]).max()
+    assert dx < 1e-8, f"trace_jax vs NumPy trace x-disagreement {dx:.2e} m"
+
+
+def test_rt8_prebuilt_jaxprescription_rejects_surface_diffraction():
+    """RT-8: passing surface_diffraction alongside a pre-built
+    JaxPrescription raises instead of silently dropping the DOE kick."""
+    pytest.importorskip('jax')
+    from lumenairy.raytrace.jax_trace import (
+        _build_jax_prescription,
+        make_jax_ray_state,
+        trace_jax,
+    )
+    jp = _build_jax_prescription(_SINGLET_RX, 587.6e-9, None)
+    state = make_jax_ray_state(*(np.zeros(3) for _ in range(3)),
+                               np.zeros(3), np.zeros(3), np.ones(3))
+    with pytest.raises(ValueError, match="silently ignored|baked into"):
+        trace_jax(state, jp, 587.6e-9,
+                  surface_diffraction={0: (1, 0, 1e-6, 0.0)})
+
+
+def test_rt9_seidel_field_sweep_drives_wfe_corrected_path():
+    """RT-9: seidel_field_sweep now carries per-field 'lagrange_invariant'
+    and 'abcd', so seidel_wfe(sweep, field_index=k) reaches the corrected
+    H^2 Petzval path instead of the bare-sigma^2 fallback warning."""
+    import warnings
+
+    import lumenairy as la
+    from lumenairy.raytrace.seidel_analysis import (
+        seidel_field_sweep,
+        seidel_wfe,
+    )
+    presc = la.make_singlet(R1=50e-3, R2=-50e-3, d=4e-3,
+                            glass='N-BK7', aperture=10e-3)
+    surfs = la.surfaces_from_prescription(presc)
+    heights = np.linspace(0.0, 0.05, 6)
+    result, _abcd = seidel_field_sweep(surfs, 1.31e-6, heights)
+    assert 'lagrange_invariant' in result
+    assert 'abcd' in result
+    assert np.asarray(result['lagrange_invariant']).shape == heights.shape
+    rho = np.linspace(0, 1, 8)
+    theta = np.zeros_like(rho)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        seidel_wfe(result, rho, theta, field_index=3)
+    assert not any('bare-sigma' in str(w.message) or 'sigma²' in
+                   str(w.message) for w in caught), (
+        "seidel_wfe still hit the bare-sigma^2 fallback")
+
+
+def test_rt_nit_odd_aspheric_power_rejected():
+    """RT-nit: only EVEN aspheric powers are supported; an odd power is now
+    rejected at validation (sag uses h**(p//2) but the normal uses
+    p*h**(p-1), so odd powers are sag/normal-inconsistent)."""
+    from lumenairy.raytrace.trace import validate_prescription
+    bad = {
+        'surfaces': [
+            {'radius': 0.05, 'glass_before': 'air', 'glass_after': 'N-BK7',
+             'aspheric_coeffs': {3: 1e-3}},  # ODD power
+            {'radius': -0.05, 'glass_before': 'N-BK7', 'glass_after': 'air'},
+        ],
+        'thicknesses': [0.006, 0.095],
+    }
+    with pytest.raises(ValueError, match="ODD aspheric"):
+        validate_prescription(bad)
+    # An even-power asphere still validates.
+    good = dict(bad)
+    good['surfaces'] = [dict(bad['surfaces'][0], aspheric_coeffs={4: 1e-3}),
+                        bad['surfaces'][1]]
+    validate_prescription(good)  # must not raise

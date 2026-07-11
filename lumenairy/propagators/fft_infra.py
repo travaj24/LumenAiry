@@ -267,8 +267,7 @@ def get_default_complex_dtype() -> Any:
 # 2. **One-shot latch fork-safety**: the
 #    ``_DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED`` and
 #    ``_DEFAULT_DY_NO_CONSUMER_WARNED`` latches (and the sibling
-#    ``_MULTIWL_AVG_WARNED`` in ``optimize.core``,
-#    ``_TRANSFER_JAX_WARNING_EMITTED`` in ``raytrace.jax_trace``) reset
+#    ``_MULTIWL_AVG_WARNED`` in ``optimize.core``) reset
 #    to ``False`` per worker on spawn.  An optimisation loop running
 #    ``differential_evolution(workers=8)`` will see each worker re-emit
 #    the one-shot warning the first time it triggers the underlying

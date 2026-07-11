@@ -45,75 +45,6 @@ from .trace import find_stop, surfaces_from_prescription
 # Paraxial ray trace and ABCD matrix
 # ============================================================================
 
-def _paraxial_trace(surfaces, wavelength, y_in=0.0, u_in=0.0):
-    """Trace a single paraxial ray (y, u) through the system.
-
-    Uses the exact paraxial recursion:
-        y' = y + u * t          (transfer)
-        u' = u - y * phi / n'   (refraction, phi = (n'-n)/R)
-
-    Returns lists of (y, u) at each surface (after refraction).
-    """
-    y_hist = []
-    u_hist = []
-
-    y = float(y_in)
-    u = float(u_in)
-
-    for i, surf in enumerate(surfaces):
-        # 3.7.0: Coord-breaks have no power; just apply their
-        # transfer thickness and record the unchanged state.
-        if surf.is_coordbrk:
-            y_hist.append(y)
-            u_hist.append(u)
-            if i < len(surfaces) - 1:
-                y = y + u * surf.thickness
-            continue
-
-        n1 = get_glass_index(surf.glass_before, wavelength)
-        n2 = get_glass_index(surf.glass_after, wavelength)
-        R = surf.radius
-
-        # Refraction (power).  Paraxial refraction equation:
-        #    n2 * u2  =  n1 * u1  -  y * (n2 - n1) / R
-        # So the correct update for u ( = u' in the new medium) is:
-        #    u  <-  (n1 * u_prev - y * phi) / n2
-        # Historical equivalent form below (u prior to update is still
-        # n1-normalised):  u <- u - y * phi / n2 .  Both agree because
-        # u_prev on the right-hand side already satisfies u_prev = u
-        # at this point in the loop (no intervening rewrite).
-        if surf.is_mirror:
-            phi = 2.0 * n1 / R if np.isfinite(R) else 0.0
-            u = u - y * phi / n1
-            n2 = n1  # medium doesn't change for mirrors
-        else:
-            phi = (n2 - n1) / R if np.isfinite(R) else 0.0
-            u = u - y * phi / n2
-
-        y_hist.append(y)
-        u_hist.append(u)
-
-        # Transfer to next surface
-        if i < len(surfaces) - 1:
-            t = surf.thickness
-            y = y + u * t
-
-    return y_hist, u_hist
-
-
-def _paraxial_refract(y, n1_u, R, n1, n2):
-    """Paraxial refraction: returns n2*u2 given n1*u1."""
-    if np.isinf(R):
-        return n1_u  # flat surface, no power
-    return n1_u - y * (n2 - n1) / R
-
-
-def _paraxial_transfer(y, n_u, t, n):
-    """Paraxial transfer: y2 = y1 + u1 * t, n*u unchanged."""
-    u = n_u / n
-    return y + u * t, n_u
-
-
 def system_abcd(
     surfaces: List['Surface'],
     wavelength: float,
@@ -1079,7 +1010,6 @@ def seidel_coefficients(
             nu_c_after = nu_val_c - y_val_c * (n2 - n1) * c
 
             u_m_after = nu_m_after / n2
-            nu_c_after / n2
 
             # Abbe invariant
             A_m = n1 * i_m  # = n2 * i_m_after (Snell)
@@ -1137,7 +1067,6 @@ def seidel_coefficients(
             nu_c_after = nu_val_c - y_val_c * (n2 - n1) * c
 
             u_m_after = nu_m_after / n2
-            nu_c_after / n2
 
             A_m = n1 * i_m   # = n2 * i_after (Snell)
             A_c = n1 * i_c
@@ -1179,7 +1108,6 @@ def seidel_coefficients(
             nu_m_after = nu_val_m
             nu_c_after = nu_val_c
             u_m_after = nu_m_after / n2
-            nu_c_after / n2
 
             A_m = n1 * i_m
             A_c = n1 * i_c
@@ -1278,11 +1206,14 @@ def find_paraxial_focus(
 
 
 __all__ = [
-    # Private paraxial helpers (kept underscore-private to signal
-    # the API contract: callers should not rely on the exact form
-    # of the paraxial recursion -- ``system_abcd`` is the supported
-    # entry point).
-    '_paraxial_trace', '_paraxial_refract', '_paraxial_transfer',
+    # RT-3 (AUDIT_RAYTRACE_CORE): the dead ``_paraxial_trace`` /
+    # ``_paraxial_refract`` / ``_paraxial_transfer`` trio was removed --
+    # ``_paraxial_trace``'s refraction update ``u -= y*phi/n2`` omitted the
+    # ``n1/n2`` rescaling of the incident angle (correct: ``u = (n1*u -
+    # y*phi)/n2``) and its "both agree" comment was false.  None of the
+    # three was ever called; ``system_abcd`` (pure matrix composition) and
+    # ``seidel_coefficients`` (its own verified reduced-coordinate trace)
+    # are the supported first-order paths.
     # ABCD
     'system_abcd', 'system_abcd_prescription',
     # Per-lens characterisation

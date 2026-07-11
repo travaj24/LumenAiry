@@ -373,6 +373,31 @@ def validate_prescription(
                             _fail(f'surfaces[{i}].{gk}',
                                   "is an empty string; use None or "
                                   "'air' for the ambient medium")
+                    # RT-nit (AUDIT_RAYTRACE_CORE): only EVEN aspheric powers
+                    # are supported.  The sag uses ``coeff * h**2 ** (p//2)``
+                    # (== h**p for even p) but the NumPy normal uses
+                    # ``p*h**(p-1)`` and the JAX normal ``p*h**(p-2)*x``; an
+                    # ODD power therefore yields a sag/normal-INCONSISTENT
+                    # surface (differently inconsistent per backend).  Reject
+                    # it at validation instead of silently flooring ``p//2``.
+                    for ak in ('aspheric_coeffs', 'aspheric_coeffs_y'):
+                        ac = ps.get(ak)
+                        if isinstance(ac, dict) and ac:
+                            odd = []
+                            for p in ac:
+                                try:
+                                    if int(p) % 2 != 0:
+                                        odd.append(p)
+                                except (TypeError, ValueError):
+                                    _fail(f'surfaces[{i}].{ak}',
+                                          f'has non-integer power key {p!r}')
+                            if odd:
+                                _fail(f'surfaces[{i}].{ak}',
+                                      f'contains ODD aspheric power(s) '
+                                      f'{sorted(odd)}; only EVEN powers are '
+                                      f'supported (sag uses h**(p//2) while '
+                                      f'the normal uses p*h**(p-1), so an odd '
+                                      f'power is sag/normal-inconsistent).')
 
     if isinstance(prescription, dict) and 'aperture_diameter' in prescription:
         ad = prescription['aperture_diameter']

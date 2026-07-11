@@ -39,7 +39,6 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import threading
-import warnings
 from collections import OrderedDict
 from typing import Any, Dict, NamedTuple, Optional
 
@@ -48,26 +47,20 @@ import numpy as np
 from ..backend import JAX_AVAILABLE
 from ..glass import get_glass_index
 
-# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 8 / P3 / DEEP-4 MEDIUM-1):
-# threshold below which the JAX-path paraxial transfer approximation
-# (``t ~= thickness``) starts producing visible transverse error
-# relative to the math-correct NumPy ``trace(...)`` path.  Per-surface
-# transverse error scales as ``thickness * (1 - N) ~ thickness * NA^2
-# / 2``; at min |N| = 0.95 the per-surface error is ~5% of the
-# free-space gap, which is well above plotting noise for high-NA
-# designs.  Below this threshold the JAX path is still numerically
-# stable (no NaN-gradient regressions; the autodiff cycle is intact),
-# but the high-NA user needs to know to prefer the NumPy ``trace(...)``
-# path for accuracy-critical work.
-_TRANSFER_JAX_NA_WARN_THRESHOLD = 0.95
-
-# Idempotence latch -- the warning is emitted at most once per Python
-# process to avoid log-spam in tight forward loops (the JAX trace cache
-# means a single optimisation iteration may call ``_transfer_jax`` once
-# per surface, with the same ``(thickness, NA)`` signature, hundreds of
-# times during a sweep).  Users can re-arm the warning by clearing the
-# latch via the public ``_reset_transfer_jax_warning()`` helper below.
-_TRANSFER_JAX_WARNING_EMITTED = False
+# RT-6 (AUDIT_RAYTRACE_CORE_2026_07_08): the v4.16.1-4.16.3 high-NA
+# "paraxial transfer" RuntimeWarning has been RETIRED.  It was built on a
+# mischaracterisation: ``_transfer_jax``'s ``t ~= thickness`` step lands the
+# ray at a point that is still EXACTLY on the ray line (only the parameter
+# along the line differs from the vertex-plane value), and every downstream
+# consumer -- the next surface intersect (a line/surface solve is invariant
+# to which point on the line you start from) and the OPL accumulator (which
+# telescopes: ``n*(thickness + t_int) == n*t_total`` with signed legs) -- is
+# invariant to that choice.  A direct trace_jax-vs-NumPy-trace parity check
+# at NA up to 0.64 (min|N|~0.77, well past the old 0.95 gate) agrees to
+# ~2.4e-9 m, INVARIANT to the gap length across a 100x sweep (0.09 m -> 9 m);
+# the residual is the surface-intersection solver tolerance, NOT a
+# thickness-scaling paraxial error.  The warning therefore told users to
+# distrust results that are correct to sub-ppm -- removed outright.
 
 
 # Number of Newton iterations for aspheric ray-surface intersection.
@@ -542,50 +535,42 @@ def _transfer_jax(state, thickness, n_medium):
     """Free-space transfer through ``thickness`` in medium of index
     ``n_medium``.  All rays advance; OPL accumulates.
 
-    Implementation note (4.10.3 investigation):
-    --------------------------------------------
-    The math-correct form is ``t = (thickness - state.z) / state.N``
-    so a ray's parametric step lands it on the next vertex plane
-    (z = thickness in the previous frame).  This is what the NumPy
-    ``_transfer`` does.
+    Implementation note (RT-6, AUDIT_RAYTRACE_CORE_2026_07_08):
+    ----------------------------------------------------------
+    This advances every ray by the parameter ``t = thickness`` along its
+    unit direction and shifts the frame origin by ``thickness``:
 
-    The JAX twin here uses the PARAXIAL APPROXIMATION
-    ``t ~= thickness`` (equivalent to assuming N = 1).  The per-surface
-    transverse error is ``~ thickness * (1 - N) ~= thickness * NA^2 / 2``,
-    i.e. ~0.5 % per surface at NA = 0.1 and accumulates roughly
-    linearly across the prescription (~2.5 % over a 5-surface trace).
-    OPL error scales similarly.  For typical LumenAiry workflows
-    (free-space optics, NA <= 0.1) the cumulative error is below
-    plotting / fitting noise; for high-NA designs the math-correct
-    form would compound to a few-percent transverse error.
+        new_x = x + L*thickness
+        new_z = z + N*thickness - thickness   (= 0 only when N == 1)
 
-    Why the paraxial form is retained: substituting the math-correct
-    form here NaN-poisons ``jax.grad`` through
-    ``fit_canonical_polynomials_jax``'s downstream lstsq, even with
-    full triple-where guards on the division and ``jnp.isfinite``
-    filtering on ``t``.  Multiple investigation attempts (4.10.0,
-    4.10.1, 4.10.2, 4.10.3) have not isolated the gradient-graph
-    issue to a specific op.  Tracked for a future release; the
-    pre-existing paraxial trace remains the validated path.
+    The NumPy ``_transfer`` instead solves ``t = (thickness - z) / N`` so
+    the ray lands exactly on the next vertex plane (``new_z == 0``).  These
+    look different, but they are numerically EQUIVALENT for the trace as a
+    whole -- NOT a "paraxial approximation".  The frame-shifted point here
+    is still a point on the SAME ray line (only its parameter along the
+    line differs), and every downstream step is invariant to which point on
+    the line the state carries:
 
-    v4.16.1 (audit AUDIT_V4_16_0_DEEP item 8 / P3 / DEEP-4 MEDIUM-1):
-    high-NA users get an explicit one-shot ``RuntimeWarning`` when
-    ``min |N| < _TRANSFER_JAX_NA_WARN_THRESHOLD`` (default 0.95;
-    equivalent to NA > ~0.31).  The warning quantifies the per-
-    surface transverse error and points users at the NumPy
-    ``trace(...)`` path.  The warning is emitted at most once per
-    Python process to avoid log-spam in tight forward loops; clear
-    via ``_reset_transfer_jax_warning()``.
+    * the next surface intersect solves a line/surface problem (the sphere
+      discriminant depends on the line, not the seed point);
+    * refraction / aperture / DOE act at the intersection point;
+    * the OPL telescopes exactly -- ``n*(thickness + t_int) == n*t_total``
+      with signed legs (a paraxial overshoot yields a negative ``t_int``
+      that subtracts the excess).
 
-    v4.16.2 (audit P1-NEW-F1-1): the v4.16.1 eager-mode gate used
-    ``isinstance(direction_n, np.ndarray)`` which is structurally
-    unreachable in the production user flow -- :func:`make_jax_ray_state`
-    builds ``state.N`` via ``jnp.asarray(...)`` (``jax.Array``, NOT a
-    ``np.ndarray`` subclass).  Replaced with a duck-typed concreteness
-    probe (``np.asarray(...)`` succeeds for both NumPy arrays and eager
-    ``jax.Array``; raises ``TracerArrayConversionError`` on tracers).
+    Verified: a direct ``trace_jax`` vs NumPy ``trace`` parity check at NA
+    up to 0.64 (min|N| ~ 0.77) agrees to ~2.4e-9 m, and that residual is
+    INVARIANT to the gap length across a 100x sweep -- so it is the
+    surface-solver tolerance, not a thickness-scaling transfer error.  The
+    old v4.16.1-4.16.3 high-NA RuntimeWarning (which claimed a
+    ``thickness*NA^2/2`` per-surface error and told NA>0.31 users to
+    distrust the result) was therefore spurious and has been removed.
+
+    The form here is also the one that keeps ``jax.grad`` clean through
+    ``fit_canonical_polynomials_jax``'s downstream lstsq (the math-correct
+    division form NaN-poisoned the gradient graph); since it is exact, no
+    accuracy is traded for that differentiability.
     """
-    _maybe_warn_transfer_jax_high_na(state.N, thickness)
     new_x = state.x + state.L * thickness
     new_y = state.y + state.M * thickness
     new_z = state.z + state.N * thickness - thickness
@@ -593,126 +578,6 @@ def _transfer_jax(state, thickness, n_medium):
     return JaxRayState(new_x, new_y, new_z,
                        state.L, state.M, state.N,
                        new_opd, state.alive)
-
-
-def _maybe_warn_transfer_jax_high_na(direction_n, thickness,
-                                     surface_index=None):
-    """Eager-mode high-NA detection for the JAX-path paraxial transfer.
-
-    Inspects ``min |N|`` (the smallest absolute direction cosine along
-    the optical axis) for the ray bundle and emits a one-shot
-    ``RuntimeWarning`` when the value falls below
-    :data:`_TRANSFER_JAX_NA_WARN_THRESHOLD`.  The warning quantifies
-    the per-surface transverse error
-    ``thickness * (1 - min|N|^2) / 2`` (the cumulative paraxial-bias
-    estimate) and points the user at the math-correct NumPy
-    ``trace(...)`` path.
-
-    The check is skipped when ``direction_n`` is a JAX tracer
-    (inspecting tracer values mid-trace would force concretisation
-    and break the autodiff path); the eager NumPy path still surfaces
-    the warning the first time the user runs a forward trace, which
-    is the targeted user-onboarding moment.  The latch
-    :data:`_TRANSFER_JAX_WARNING_EMITTED` is set after first emission
-    so optimisation loops calling ``_transfer_jax`` hundreds of times
-    don't spam the warning channel.
-
-    Parameters
-    ----------
-    direction_n : ndarray or JAX tracer
-        ``state.N`` (the optical-axis direction-cosine per ray).
-    thickness : float
-        Forward gap [m] being traversed.
-
-    Notes
-    -----
-    Implementation detail: we deliberately avoid ``jnp.min(...).item()``
-    inside the JAX trace path -- ``.item()`` would force concretisation
-    and trigger ``ConcretizationTypeError`` under ``jax.jit``.
-
-    v4.16.2 (audit P1-NEW-F1-1): the v4.16.1 gate used
-    ``isinstance(direction_n, np.ndarray)`` to separate the eager-NumPy
-    path from the JAX tracer path.  That predicate was correct in
-    principle but unreachable in the production user flow:
-    :func:`make_jax_ray_state` materialises ``state.N`` via
-    ``jnp.asarray(...)``, yielding a ``jax.Array`` -- NOT a subclass of
-    ``np.ndarray`` since JAX 0.4+.  Every ``trace_jax(...)`` call
-    therefore short-circuited the gate before the high-NA check could
-    fire.  The v4.16.1 B.5 tests pinned the warning by constructing
-    ``JaxRayState`` directly with ``np.array(...)``, bypassing the
-    production factory.  The fix is a duck-typed concreteness probe:
-    ``np.asarray(direction_n)`` succeeds for both NumPy arrays and
-    eager ``jax.Array`` instances but raises
-    ``TracerArrayConversionError`` (a subclass of ``TypeError``) on a
-    ``jax.core.Tracer`` -- exactly the eager-vs-traced split the gate
-    needs.
-    """
-    global _TRANSFER_JAX_WARNING_EMITTED
-    if _TRANSFER_JAX_WARNING_EMITTED:
-        return
-    # v4.16.2 (audit P1-NEW-F1-1): JAX-aware gate; was structurally
-    # unreachable for the ``make_jax_ray_state`` -> ``trace_jax`` flow.
-    # ``np.asarray`` succeeds eagerly on NumPy arrays and eager
-    # ``jax.Array``; raises on tracers -- the eager-vs-traced split we
-    # need.  Anything without ``__array__`` (Python scalars, dicts,
-    # mistyped inputs) we treat as non-concrete and skip.
-    if not hasattr(direction_n, '__array__'):
-        return
-    try:
-        n_abs = np.abs(np.asarray(direction_n))
-        if n_abs.size == 0:
-            return
-        n_min = float(np.min(n_abs))
-    except (TypeError, ValueError):
-        # Probe failed; bail without warning.  Better to under-report
-        # than to surface a confusing exception from the warning
-        # machinery.  Tracers raise ``TracerArrayConversionError``
-        # (subclass of ``TypeError``) here -- caught cleanly.
-        return
-    if not np.isfinite(n_min) or n_min >= _TRANSFER_JAX_NA_WARN_THRESHOLD:
-        return
-    # Per-surface transverse-error estimate.  The geometric form is
-    # ``t_exact - t_paraxial = thickness * (1/N - 1) ~= thickness *
-    # (1 - N) / N``.  For N close to 1, ``(1 - N) ~= NA^2 / 2`` (the
-    # paraxial expansion), so the estimate below is the canonical
-    # "thickness * NA^2 / 2" leading-order term the audit cites.
-    delta_t = float(thickness) * (1.0 - n_min ** 2) / 2.0
-    # v4.16.3 (audit P3-NEW-F1-4): cite the SPECIFIC surface index +
-    # thickness that produced the worst-case drift (replaces the v4.16.2
-    # max-of-all-thicknesses figure, which overstated worst-case drift
-    # for prescriptions with one long gap).
-    surf_clause = (f"surface index {surface_index} (thickness={float(thickness):.3e} m)"
-                   if surface_index is not None
-                   else f"thickness={float(thickness):.3e} m")
-    warnings.warn(
-        "_transfer_jax: JAX-traceable transfer uses the paraxial "
-        "approximation (t ~= thickness); the math-correct NumPy "
-        "trace(...) form is ``t = (thickness - z) / N``.  Per-surface "
-        "transverse error scales as ``thickness * NA^2 / 2`` and the "
-        "current ray bundle has min |N| = {:.3f} (NA ~= {:.3f}); "
-        "expected per-surface drift ~= {:.2e} m at worst-case "
-        "{}.  For high-NA designs (NA > 0.3) prefer the NumPy "
-        "`lumenairy.raytrace.trace(...)` path; the JAX path is "
-        "intended for low-NA autodiff workflows where the paraxial "
-        "approximation is below plotting / fitting noise.  This "
-        "warning is emitted once per process; clear via "
-        "``lumenairy.raytrace.jax_trace._reset_transfer_jax_warning()`` "
-        "to re-arm.".format(
-            n_min, float(np.sqrt(max(1.0 - n_min ** 2, 0.0))),
-            delta_t, surf_clause),
-        RuntimeWarning, stacklevel=4)
-    _TRANSFER_JAX_WARNING_EMITTED = True
-
-
-def _reset_transfer_jax_warning() -> None:
-    """Clear the one-shot latch on the ``_transfer_jax`` high-NA
-    warning.
-
-    Useful for unit tests that pin the warning emission and for users
-    who want to re-arm the warning between optimisation sweeps.
-    """
-    global _TRANSFER_JAX_WARNING_EMITTED
-    _TRANSFER_JAX_WARNING_EMITTED = False
 
 
 # ----------------------------------------------------------------------
@@ -1300,47 +1165,28 @@ def trace_jax(
     # users substitute tracer leaves for radii / conics / asph coeffs /
     # thicknesses without re-walking the dict every call.
     if isinstance(prescription, JaxPrescription):
+        # RT-8 (AUDIT_RAYTRACE_CORE): the DOE spec is baked into ``jp.aux``'s
+        # ``diff_aux`` at build time; a ``surface_diffraction`` kwarg passed
+        # alongside a prebuilt ``JaxPrescription`` was silently dropped (the
+        # trace bodies read the DOE spec only from ``jp.aux``).  Refuse rather
+        # than trace with no grating kick -- rebuild the prescription with the
+        # DOE folded in via ``_build_jax_prescription(dict, wl, diff)``.
+        if surface_diffraction is not None:
+            raise ValueError(
+                "trace_jax: surface_diffraction was passed together with a "
+                "pre-built JaxPrescription, but the DOE spec is baked into the "
+                "JaxPrescription at build time -- the kwarg would be silently "
+                "ignored.  Either pass the plain prescription dict (so the "
+                "kwarg is honoured) or rebuild the JaxPrescription with the "
+                "diffraction spec folded in.")
         jp = prescription
     else:
         jp = _build_jax_prescription(
             prescription, wavelength, surface_diffraction)
 
-    # v4.16.2 (audit P1-NEW-F1-1): hoist the high-NA probe to the eager
-    # entry point.  The cached eager path below wraps the inner kernel
-    # in ``jax.jit``, so ``state.N`` inside ``_trace_body_static`` is
-    # always a tracer and the per-call gate in
-    # ``_maybe_warn_transfer_jax_high_na`` short-circuits.  Probing here
-    # -- before any jit / cache layer -- catches the production user
-    # flow where ``initial_state.N`` is an eager ``jax.Array``.  The
-    # latch guarantees one-shot; the duck-typed gate handles the
-    # rare case where a caller pre-wraps in ``jax.jit`` (then
-    # ``initial_state.N`` is already a tracer and the probe skips).
-    if not _TRANSFER_JAX_WARNING_EMITTED:
-        # v4.16.3 (audit P3-NEW-F1-4): cite the worst-case PER-SURFACE
-        # thickness rather than the prescription-wide max.  Pre-v4.16.3
-        # the hoist passed ``max(|thickness|)`` to the drift estimator,
-        # which inflated the cited ``thickness * NA^2 / 2`` figure for
-        # prescriptions with one long air-gap (e.g. a long EFL backfocal
-        # distance).  Honest reporting is: the surface whose own
-        # |thickness| is largest produced the largest per-surface drift
-        # contribution; cite ITS index + thickness.  (We retain
-        # |thickness|-driven worst-casing rather than ``thickness *
-        # min|N|^2`` because ``initial_state.N`` is bundle-wide -- not
-        # per-surface -- at the hoist point, so the only quantity that
-        # varies across surfaces here is thickness.)
-        thicks_py = jp.aux[7]
-        if thicks_py:
-            try:
-                abs_thicks = [abs(float(t)) for t in thicks_py]
-            except (TypeError, ValueError):
-                abs_thicks = []
-            if abs_thicks:
-                worst_idx = max(range(len(abs_thicks)),
-                                key=lambda i: abs_thicks[i])
-                t_worst = abs_thicks[worst_idx]
-                if t_worst > 0.0:
-                    _maybe_warn_transfer_jax_high_na(
-                        initial_state.N, t_worst, surface_index=worst_idx)
+    # RT-6: the v4.16.2/4.16.3 high-NA probe hoisted here has been removed
+    # along with the spurious paraxial-transfer warning (see ``_transfer_jax``
+    # -- the transfer is exact, so there was nothing to warn about).
 
     # Bypass the jit-cache layer if anything looks like a tracer.  The
     # cached jit'd kernel triggers a JAX bug in lstsq backward (see the

@@ -149,7 +149,9 @@ def trace_world(
         _world_to_local_state(r, surf.world_origin, surf.world_R)
 
         # 2. Intersect with the surface in local coords.  This
-        # accumulates the full inter-surface OPL via |t|.
+        # accumulates the inter-surface OPL via the SIGNED ``n*t`` leg
+        # (not |t|; cf. RT-1) -- a negative t back-tracks and subtracts
+        # its over-counted OPL.
         _intersect_surface(r, surf, n_medium=n1)
 
         # 3. Refract or reflect at the surface.

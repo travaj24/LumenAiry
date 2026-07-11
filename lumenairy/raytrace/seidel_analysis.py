@@ -162,6 +162,13 @@ def seidel_field_sweep(
         'S3': S3_arr,
         'S4': S4_arr,
         'S5': S5_arr,
+        # RT-9 (AUDIT_RAYTRACE_CORE): carry the per-field Lagrange invariant
+        # (H propto field_angle, so H_field = H_unit * sigma) AND the system
+        # ABCD so ``seidel_wfe(sweep_result, field_index=k)`` -- the pairing
+        # the docstrings advertise -- reaches the corrected H^2 Petzval path
+        # instead of always landing in the bare-sigma^2 fallback.
+        'lagrange_invariant': float(ref['lagrange_invariant']) * sigma,
+        'abcd': abcd,
     }
     # Totals follow the same field-angle scaling as the per-surface
     # arrays since np.sum commutes with the broadcast multiplication.
@@ -304,7 +311,10 @@ def seidel_wfe(
     # a one-time warning so users notice the magnitude shift.
     H_sq = None
     if 'lagrange_invariant' in seidel_or_totals:
-        H_sq = float(seidel_or_totals['lagrange_invariant']) ** 2
+        # RT-9: index by field_index too -- ``seidel_field_sweep`` stores a
+        # per-field ``(N_fields,)`` invariant array, so a bare ``float(...)``
+        # would raise; ``_pick`` selects the scalar for the chosen field.
+        H_sq = _pick(seidel_or_totals['lagrange_invariant']) ** 2
     elif 'abcd' in seidel_or_totals:
         # Recover effective focal length from the embedded ABCD.
         # H ≈ f · sigma for object at infinity, n_obj = 1.

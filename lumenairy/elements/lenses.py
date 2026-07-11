@@ -281,13 +281,27 @@ def surface_sag_biconic(
     Generalises :func:`surface_sag_general` to surfaces that have
     different curvatures and conics along the x and y axes.  Covers:
 
-    * **Biconic** (Zemax "Biconic"): independent R_x, R_y, K_x, K_y.
-      Each axis contributes its own conic sag:
+    * **Biconic** (SEPARABLE per-axis form): independent R_x, R_y, K_x,
+      K_y, where each axis contributes its own conic sag INDEPENDENTLY:
 
           z(x,y) = C_x*x² / (1 + sqrt(1 - (1+K_x)*C_x²*x²))
                  + C_y*y² / (1 + sqrt(1 - (1+K_y)*C_y²*y²))
 
       where C_x = 1/R_x, C_y = 1/R_y.
+
+      RT-2 (AUDIT_RAYTRACE_CORE) -- deviation from Zemax "Biconic": this
+      is the ``z = z_x(x) + z_y(y)`` SEPARABLE sum, NOT Zemax's biconic,
+      which shares a SINGLE square root across both axes:
+
+          z = (C_x*x² + C_y*y²)
+              / (1 + sqrt(1 - (1+K_x)*C_x²*x² - (1+K_y)*C_y²*y²))
+
+      The two agree paraxially (and exactly on either axis, y=0 or x=0)
+      but diverge in the fourth-order cross-term, so an imported Zemax
+      BICONIC surface is approximated at large aperture / off both axes.
+      (``_surface_sag_derivatives_xy`` is exactly consistent with the
+      SEPARABLE form used here, so the sag and its normals still agree
+      internally.)
     * **Cylindrical**: pass ``R_y = inf`` (focusing in x only) or
       ``R_x = inf`` (focusing in y only).
     * **Toroidal** (approx., Zemax "Toroidal"): pass R_x (rotation-axis

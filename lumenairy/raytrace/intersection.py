@@ -409,9 +409,16 @@ def _transfer(rays, thickness, n_medium):
         t = np.where(rays.alive & (np.abs(rays.N) > 1e-30),
                      (thickness - rays.z) / rays.N, 0.0)
 
-    # Accumulate OPD: geometric path * refractive index
-    path = np.abs(t)
-    rays.opd = rays.opd + n_medium * path
+    # Accumulate OPD: geometric path * refractive index.
+    # RT-1: use the SIGNED path (n*t), matching ``_intersect_surface``'s
+    # vertex->sag leg convention -- a negative t means the ray already
+    # crossed the next vertex plane (overlapping-sag geometry), and the
+    # over-counted OPL must be SUBTRACTED, not added via ``abs``.  Byte-
+    # identical for well-formed prescriptions (forward legs have t > 0;
+    # post-mirror back-propagation uses negative thicknesses that still
+    # yield t > 0), but the two primitives now implement the same
+    # convention for the telescoping-OPL model to hold.
+    rays.opd = rays.opd + n_medium * t
 
     rays.x = rays.x + rays.L * t
     rays.y = rays.y + rays.M * t

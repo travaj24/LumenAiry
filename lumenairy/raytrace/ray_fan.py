@@ -223,11 +223,6 @@ def ray_fan_data(
     ex : ndarray
         Transverse ray error in X [m] (sagittal).
     """
-    # Tangential fan (Y)
-    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
-    res_y = trace(fan_y, surfaces, wavelength)
-    img_y = res_y.image_rays
-
     # Reference: chief ray.  4.11.2 (audit H-AB-3 sibling): for off-
     # axis fields the chief is launched at angle from the EP centre,
     # not from (0,0,0).  Pre-4.11.2 the chief started at z=0 from the
@@ -236,38 +231,53 @@ def ray_fan_data(
     # offset by O(field_angle * z_EP).  Mirrors the v4.10 fix in
     # ``eval_image_plane_wfe`` and v4.11.2-Track-F in
     # ``relative_illumination`` / ``field_aberration_sweep``.
+    # RT-5 (AUDIT_RAYTRACE_CORE): EP-centre the FANS too, not just the
+    # chief.  ``make_fan`` launches each fan at z=0 with a field tilt along
+    # its OWN axis (y-fan: M=sin(fa); x-fan: L=sin(fa)), so for an off-axis
+    # field every fan ray crosses the entrance pupil displaced by
+    # ``ep_z*tan(fa)``.  The 4.11.2 fix moved only the reference chief to the
+    # EP centre, so chief and fan then sampled DIFFERENT pupil zones and the
+    # fan no longer passed through zero at py=0 (``ey(0)`` read the launch-
+    # convention offset instead of 0).  We shift each fan's LAUNCH heights
+    # by the same ``ep_off = -ep_z*tan(fa)`` used for the chief (so the fan
+    # is centred on the chief's pupil crossing), and reference each fan
+    # against a chief of the SAME orientation so ``ey(0) == ex(0) == 0``.
     try:
         fod = first_order_data(surfaces, wavelength)
-        ep_y = -fod.ep_z * np.tan(field_angle)
-        # v5.4.6 (audit F-8): make_ray(x, y, L, M, *, wavelength) has NO z
-        # argument; the old call passed fod.ep_z as L (the x-direction
-        # cosine).  The chief launches at z=0 with the ep_y offset
-        # (-ep_z*tan(field)) already chosen so it crosses the EP centre at
-        # z=ep_z; the direction is L=0, M=sin(field_angle).
-        chief = make_ray(0, ep_y, 0.0,
-                         np.sin(field_angle),
-                         wavelength=wavelength)
+        ep_off = -fod.ep_z * np.tan(field_angle)
+        # make_ray(x, y, L, M, *, wavelength): tangential chief tilts in M,
+        # sagittal chief tilts in L; each launches at z=0 with the ep_off
+        # offset along its axis so it crosses the EP centre at z=ep_z.
+        chief_y = make_ray(0.0, ep_off, 0.0, np.sin(field_angle),
+                           wavelength=wavelength)
+        chief_x = make_ray(ep_off, 0.0, np.sin(field_angle), 0.0,
+                           wavelength=wavelength)
     except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,
             np.linalg.LinAlgError, IndexError):
         # No first-order pupil available (e.g. mirror-only stop-less
         # system) -- first_order_data raises ValueError on missing
         # stop, AttributeError on a stripped Surface dataclass,
         # ZeroDivisionError / LinAlgError on ill-conditioned ABCD.
-        # Fall back to legacy origin-launched chief.
-        chief = make_ray(0, 0, 0, np.sin(field_angle),
-                         wavelength=wavelength)
-    res_chief = trace(chief, surfaces, wavelength)
-    y_ref = res_chief.image_rays.y[0]
-    x_ref = res_chief.image_rays.x[0]
+        # Fall back to legacy origin-launched chiefs (ep_off = 0).
+        ep_off = 0.0
+        chief_y = make_ray(0, 0, 0, np.sin(field_angle),
+                           wavelength=wavelength)
+        chief_x = make_ray(0, 0, np.sin(field_angle), 0,
+                           wavelength=wavelength)
+    y_ref = trace(chief_y, surfaces, wavelength).image_rays.y[0]
+    x_ref = trace(chief_x, surfaces, wavelength).image_rays.x[0]
 
+    # Tangential fan (Y) -- launch EP-centred on the chief (RT-5).
+    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
+    fan_y.y = fan_y.y + ep_off
+    img_y = trace(fan_y, surfaces, wavelength).image_rays
     py = np.linspace(-1, 1, n_rays)
     ey = np.where(img_y.alive, img_y.y - y_ref, np.nan)
 
-    # Sagittal fan (X)
+    # Sagittal fan (X) -- launch EP-centred on the chief (RT-5).
     fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
-    res_x = trace(fan_x, surfaces, wavelength)
-    img_x = res_x.image_rays
-
+    fan_x.x = fan_x.x + ep_off
+    img_x = trace(fan_x, surfaces, wavelength).image_rays
     px = np.linspace(-1, 1, n_rays)
     ex = np.where(img_x.alive, img_x.x - x_ref, np.nan)
 
@@ -290,22 +300,40 @@ def ray_fan_data_world(
     designs (the chief-ray and per-pupil-coord ray traces all
     land at the correct world image-plane position).
     """
+    # RT-5 (AUDIT_RAYTRACE_CORE): the world twin never received the 4.11.2
+    # EP-centred chief fix (it launched from (0,0,0)) nor the fan-centring
+    # + per-orientation-chief fix now in ``ray_fan_data``.  Apply both here.
+    # The paraxial ``ep_z`` from the ABCD is an axial distance (frame-
+    # independent); the ``ep_off`` launch shift is exact for a straight-axis
+    # world trace and an approximation for a strongly-folded design (there
+    # the EP offset direction rotates with the fold).  The fallback
+    # ``ep_off = 0`` reproduces the previous origin-launched behaviour.
+    try:
+        fod = first_order_data(surfaces, wavelength)
+        ep_off = -fod.ep_z * np.tan(field_angle)
+        chief_y = make_ray(0.0, ep_off, 0.0, np.sin(field_angle),
+                           wavelength=wavelength)
+        chief_x = make_ray(ep_off, 0.0, np.sin(field_angle), 0.0,
+                           wavelength=wavelength)
+    except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,
+            np.linalg.LinAlgError, IndexError):
+        ep_off = 0.0
+        chief_y = make_ray(0, 0, 0, np.sin(field_angle),
+                           wavelength=wavelength)
+        chief_x = make_ray(0, 0, np.sin(field_angle), 0,
+                           wavelength=wavelength)
+    y_ref = trace_world(chief_y, surfaces, wavelength).image_rays.y[0]
+    x_ref = trace_world(chief_x, surfaces, wavelength).image_rays.x[0]
+
     fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
-    res_y = trace_world(fan_y, surfaces, wavelength)
-    img_y = res_y.image_rays
-
-    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength=wavelength)
-    res_chief = trace_world(chief, surfaces, wavelength)
-    y_ref = res_chief.image_rays.y[0]
-    x_ref = res_chief.image_rays.x[0]
-
+    fan_y.y = fan_y.y + ep_off
+    img_y = trace_world(fan_y, surfaces, wavelength).image_rays
     py = np.linspace(-1, 1, n_rays)
     ey = np.where(img_y.alive, img_y.y - y_ref, np.nan)
 
     fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
-    res_x = trace_world(fan_x, surfaces, wavelength)
-    img_x = res_x.image_rays
-
+    fan_x.x = fan_x.x + ep_off
+    img_x = trace_world(fan_x, surfaces, wavelength).image_rays
     px = np.linspace(-1, 1, n_rays)
     ex = np.where(img_x.alive, img_x.x - x_ref, np.nan)
 
@@ -420,43 +448,43 @@ def opd_fan_data(
     py, opd_y, px, opd_x : ndarray
         Normalised pupil and OPD [waves] for each fan.
     """
-    # Tangential fan
-    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
-    res_y = trace(fan_y, surfaces, wavelength)
-    img_y = res_y.image_rays
-
     # Chief ray reference OPD.  4.11.2 (audit H-AB-3 sibling): chief
     # is launched at the EP centre for off-axis fields, not (0,0,0).
-    # See ``ray_fan_data`` for the matching rationale.
+    # RT-5 (AUDIT_RAYTRACE_CORE): EP-centre the FANS too (see
+    # ``ray_fan_data``), and reference each fan's OPD against a chief of the
+    # SAME orientation (tangential tilts in M, sagittal in L) so the on-axis
+    # ray of each fan reads exactly 0 waves.
     try:
         fod = first_order_data(surfaces, wavelength)
-        ep_y = -fod.ep_z * np.tan(field_angle)
-        # v5.4.6 (audit F-8): make_ray(x, y, L, M, *, wavelength) has NO z
-        # argument; the old call passed fod.ep_z as L (the x-direction
-        # cosine).  The chief launches at z=0 with the ep_y offset
-        # (-ep_z*tan(field)) already chosen so it crosses the EP centre at
-        # z=ep_z; the direction is L=0, M=sin(field_angle).
-        chief = make_ray(0, ep_y, 0.0,
-                         np.sin(field_angle),
-                         wavelength=wavelength)
+        ep_off = -fod.ep_z * np.tan(field_angle)
+        chief_y = make_ray(0.0, ep_off, 0.0, np.sin(field_angle),
+                           wavelength=wavelength)
+        chief_x = make_ray(ep_off, 0.0, np.sin(field_angle), 0.0,
+                           wavelength=wavelength)
     except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,
             np.linalg.LinAlgError, IndexError):
         # See ``ray_fan_data`` for the same fallback rationale.
-        chief = make_ray(0, 0, 0, np.sin(field_angle),
-                         wavelength=wavelength)
-    res_chief = trace(chief, surfaces, wavelength)
-    opd_ref = res_chief.image_rays.opd[0]
+        ep_off = 0.0
+        chief_y = make_ray(0, 0, 0, np.sin(field_angle),
+                           wavelength=wavelength)
+        chief_x = make_ray(0, 0, np.sin(field_angle), 0,
+                           wavelength=wavelength)
+    opd_ref_y = trace(chief_y, surfaces, wavelength).image_rays.opd[0]
+    opd_ref_x = trace(chief_x, surfaces, wavelength).image_rays.opd[0]
 
+    # Tangential fan -- launch EP-centred on the chief (RT-5).
+    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
+    fan_y.y = fan_y.y + ep_off
+    img_y = trace(fan_y, surfaces, wavelength).image_rays
     py = np.linspace(-1, 1, n_rays)
-    opd_y = np.where(img_y.alive, (img_y.opd - opd_ref) / wavelength, np.nan)
+    opd_y = np.where(img_y.alive, (img_y.opd - opd_ref_y) / wavelength, np.nan)
 
-    # Sagittal fan
+    # Sagittal fan -- launch EP-centred on the chief (RT-5).
     fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
-    res_x = trace(fan_x, surfaces, wavelength)
-    img_x = res_x.image_rays
-
+    fan_x.x = fan_x.x + ep_off
+    img_x = trace(fan_x, surfaces, wavelength).image_rays
     px = np.linspace(-1, 1, n_rays)
-    opd_x = np.where(img_x.alive, (img_x.opd - opd_ref) / wavelength, np.nan)
+    opd_x = np.where(img_x.alive, (img_x.opd - opd_ref_x) / wavelength, np.nan)
 
     return py, opd_y, px, opd_x
 
@@ -473,25 +501,38 @@ def opd_fan_data_world(
     Identical signature and return shape; routes through
     :func:`trace_world` for fold-accurate OPD residuals.
     """
+    # RT-5: EP-centre the fans + reference each against a same-orientation
+    # chief (see ``ray_fan_data_world`` for the straight-axis/folded caveat).
+    try:
+        fod = first_order_data(surfaces, wavelength)
+        ep_off = -fod.ep_z * np.tan(field_angle)
+        chief_y = make_ray(0.0, ep_off, 0.0, np.sin(field_angle),
+                           wavelength=wavelength)
+        chief_x = make_ray(ep_off, 0.0, np.sin(field_angle), 0.0,
+                           wavelength=wavelength)
+    except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,
+            np.linalg.LinAlgError, IndexError):
+        ep_off = 0.0
+        chief_y = make_ray(0, 0, 0, np.sin(field_angle),
+                           wavelength=wavelength)
+        chief_x = make_ray(0, 0, np.sin(field_angle), 0,
+                           wavelength=wavelength)
+    opd_ref_y = trace_world(chief_y, surfaces, wavelength).image_rays.opd[0]
+    opd_ref_x = trace_world(chief_x, surfaces, wavelength).image_rays.opd[0]
+
     fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
-    res_y = trace_world(fan_y, surfaces, wavelength)
-    img_y = res_y.image_rays
-
-    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength=wavelength)
-    res_chief = trace_world(chief, surfaces, wavelength)
-    opd_ref = res_chief.image_rays.opd[0]
-
+    fan_y.y = fan_y.y + ep_off
+    img_y = trace_world(fan_y, surfaces, wavelength).image_rays
     py = np.linspace(-1, 1, n_rays)
     opd_y = np.where(img_y.alive,
-                     (img_y.opd - opd_ref) / wavelength, np.nan)
+                     (img_y.opd - opd_ref_y) / wavelength, np.nan)
 
     fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
-    res_x = trace_world(fan_x, surfaces, wavelength)
-    img_x = res_x.image_rays
-
+    fan_x.x = fan_x.x + ep_off
+    img_x = trace_world(fan_x, surfaces, wavelength).image_rays
     px = np.linspace(-1, 1, n_rays)
     opd_x = np.where(img_x.alive,
-                     (img_x.opd - opd_ref) / wavelength, np.nan)
+                     (img_x.opd - opd_ref_x) / wavelength, np.nan)
 
     return py, opd_y, px, opd_x
 
@@ -663,7 +704,23 @@ def through_focus_rms(
         shifted = refocus(base, float(img_dist), wavelength=wavelength)
         rms_values[j], _ = spot_rms(shifted)
 
-    best_idx = np.argmin(rms_values)
+    # RT-nit (AUDIT_RAYTRACE_CORE): guard the all-dead / non-finite case.
+    # A fully-vignetted or TIR'd ring bundle makes ``spot_rms`` non-finite
+    # (inf/NaN) at every shift; a bare ``np.argmin`` then silently returns
+    # ``focus_shifts[0]`` as "best focus".  Mask non-finite shifts before
+    # picking, and warn if NONE are usable.
+    finite = np.isfinite(rms_values)
+    if not np.any(finite):
+        import warnings
+        warnings.warn(
+            "through_focus_rms: every focus position produced a non-finite "
+            "RMS (the ring bundle fully vignettes / TIRs at field_angle="
+            f"{field_angle}); best_shift is meaningless (returning "
+            "focus_shifts[0]).",
+            RuntimeWarning, stacklevel=2)
+        best_idx = 0
+    else:
+        best_idx = int(np.argmin(np.where(finite, rms_values, np.inf)))
     return focus_shifts, rms_values, focus_shifts[best_idx]
 
 
