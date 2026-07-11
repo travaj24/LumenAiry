@@ -967,11 +967,15 @@ def design_optimize(parameterization: Any,
         else (_merit_jac_auto if use_analytic_jac else None)
     )
 
-    def merit_fn(x):
-        call_count[0] += 1
-        value, ctx = evaluate(x)
-        last_value[0] = float(value)
-        last_efl[0] = float(ctx.efl) if np.isfinite(ctx.efl) else 0.0
+    def _post_eval_bookkeeping(x, value, ctx):
+        """OPT-3 (AUDIT_OPTIMIZE_SECOND_PASS): the shared per-eval bookkeeping
+        -- plane_logger telemetry, best-merit tracking, the history rows, and
+        the rolling ``_state_save()`` checkpoint.  Factored out so the
+        ``method='lm'`` ``residuals`` path gets ALL of it too: pre-fix that
+        path re-implemented only the eval counter + progress, so a multi-hour
+        LM run with ``state_file=`` set wrote no checkpoint until the final
+        force-save (a mid-run crash lost everything) and per-eval telemetry
+        consumers silently received nothing."""
         if plane_logger is not None:
             try:
                 plane_logger(call_count[0], ctx)
@@ -1005,6 +1009,14 @@ def design_optimize(parameterization: Any,
             })
             if len(history) > 1000:
                 del history[: len(history) - 1000]
+        _state_save()
+
+    def merit_fn(x):
+        call_count[0] += 1
+        value, ctx = evaluate(x)
+        last_value[0] = float(value)
+        last_efl[0] = float(ctx.efl) if np.isfinite(ctx.efl) else 0.0
+        _post_eval_bookkeeping(x, value, ctx)
         # Constraint diagnostics for progress callback (v4.16 #9): show
         # the first constraint's label + current value in the eval msg
         # when constraints are active.  scipy enforces them via its own
@@ -1019,7 +1031,7 @@ def design_optimize(parameterization: Any,
             except (TypeError, ValueError, RuntimeError,
                     ZeroDivisionError, OverflowError):
                 _con_tag = '  [constraint=err]'
-        _state_save()
+        # (_state_save now runs inside _post_eval_bookkeeping above.)
         # Fallback eval-counter progress for methods without a per-
         # iteration callback hook (Powell, DE, dual_annealing, basin-
         # hopping).  For methods with a scipy callback we also emit
@@ -1095,6 +1107,9 @@ def design_optimize(parameterization: Any,
                 value, ctx = evaluate(x)
                 last_value[0] = float(value)
                 last_efl[0] = float(ctx.efl) if np.isfinite(ctx.efl) else 0.0
+                # OPT-3: same plane_logger / best-merit / history / checkpoint
+                # bookkeeping every other method's merit_fn gets.
+                _post_eval_bookkeeping(x, value, ctx)
                 frac = call_count[0] / max(max_iter * 5, 1)
                 _emit_progress(
                     frac,
@@ -1405,8 +1420,14 @@ def design_optimize(parameterization: Any,
         x=x_opt,
         prescription=final_ctx.prescription,
         merit=float(final_value),
-        converged=getattr(res, 'success', True),
-        iterations=call_count[0],
+        # OPT-nit (AUDIT_OPTIMIZE_SECOND_PASS): default converged to FALSE
+        # when the scipy result lacks ``success`` (e.g. basin-hopping) --
+        # reporting convergence we can't confirm is optimistic.
+        converged=getattr(res, 'success', False),
+        # OPT-nit: report the true ITERATION count (scipy's ``nit``, else our
+        # per-iteration counter) -- ``call_count`` is the merit-EVAL count, a
+        # mislabel for this field.
+        iterations=int(getattr(res, 'nit', iter_count[0])),
         time_sec=dt,
         context_final=final_ctx,
         scipy_result=res,

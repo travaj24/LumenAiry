@@ -3,6 +3,8 @@
 One growing file, sectioned per audit, pinning the findings fixed in the
 chronological subsystem sweep that follows the v5.21 delta audit.
 """
+import os
+
 import numpy as np
 import pytest
 
@@ -970,3 +972,70 @@ def test_storage_none_metadata_attr_skipped(tmp_path):
     # The None key is simply absent on read-back; the real one survives.
     assert meta.get('run') == 'A'
     assert 'note' not in meta
+
+
+# =========================================================================
+# AUDIT 18 -- optimize/{driver,context}.py (AUDIT_OPTIMIZE_SECOND_PASS)
+# =========================================================================
+
+
+def _opt3_quadratic_merit(ctx):
+    x = np.asarray(ctx.x, dtype=np.float64)
+    return float(np.sum(x * x))
+
+
+def _pickle_safe_zero(x):   # module-level -> picklable (no pickle-probe warn)
+    return 0.0
+
+
+def test_opt3_lm_path_writes_checkpoint_history(tmp_path):
+    """OPT-3: the method='lm' path now routes through the shared per-eval
+    bookkeeping, so a run with state_file= writes rolling checkpoints (a
+    non-empty history) instead of nothing-until-the-final-force-save."""
+    import json
+
+    from lumenairy.optimize import (
+        CallableMerit,
+        DesignParameterization,
+        design_optimize,
+    )
+    template = {
+        'params': [1.0, 1.0, 1.0],
+        'surfaces': [{'radius': np.inf, 'aperture': 5e-3,
+                      'glass_before': 'air', 'glass_after': 'air'}],
+        'thicknesses': [], 'aperture_diameter': 5e-3,
+    }
+    param = DesignParameterization(
+        template=template,
+        free_vars=[('params', 0), ('params', 1), ('params', 2)],
+        bounds=[(-5.0, 5.0)] * 3)
+    merit = CallableMerit(_opt3_quadratic_merit, weight=1.0, name='sq')
+    state_file = str(tmp_path / 'lm_state.json')
+    import warnings
+    with warnings.catch_warnings():
+        # method='lm' + bounds emits a loud lm->trf override UserWarning; both
+        # route through the same least_squares ``residuals`` closure (the OPT-3
+        # code path), so silence it here to isolate the checkpoint behaviour.
+        warnings.simplefilter('ignore')
+        design_optimize(param, [merit], wavelength=1.31e-6, method='lm',
+                        max_iter=6, state_file=state_file,
+                        state_save_every=1, verbose=False)
+    assert os.path.isfile(state_file)
+    with open(state_file, encoding='utf-8') as fh:
+        payload = json.load(fh)
+    # The LM residuals path recorded eval history (pre-OPT-3 it was empty).
+    assert len(payload.get('history', [])) > 0
+    assert payload.get('merit_best') is not None
+
+
+def test_opt_second_pass_constraint_no_stale_deprecation():
+    """OPT-nit: constructing a Constraint no longer emits the stale
+    'auto-probe removal' DeprecationWarning (21 minor versions past its
+    scheduled v5.0 removal)."""
+    import warnings
+
+    from lumenairy.optimize import Constraint
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        Constraint(fun=_pickle_safe_zero, lb=0.0, ub=None)
+    assert not any(issubclass(w.category, DeprecationWarning) for w in rec)

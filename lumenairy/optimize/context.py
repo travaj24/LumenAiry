@@ -485,50 +485,6 @@ class Constraint:
         # who want the shape check can call ``self.validate()``
         # explicitly after construction; see :meth:`validate` for
         # the same scalar-only contract.
-        #
-        # v4.16.3 (audit P2-NEW-F1-1): one-cycle DeprecationWarning
-        # latched at module level, pattern parity with v4.16.2
-        # MultiWavelengthMerit.  Callers that came to rely on the
-        # v4.16.1 auto-probe (1 release of exposure) now silently push
-        # vector-returning ``fun``s through the optimiser and hit the
-        # old runtime ``TypeError``.  Scheduled for removal in v5.0.
-        #
-        # v5.1.0 split (Agent E): the canonical latch flag lives on
-        # this module (``context``), but historical reset-fixtures
-        # toggle ``lumenairy.optimize.core._CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED``
-        # at the re-exported alias.  Honour both bindings -- read the
-        # alias first (so a test reset on ``core`` actually re-fires
-        # the warning) and write back to both on emission.
-        global _CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED
-        import sys as _sys
-        _core_mod = _sys.modules.get('lumenairy.optimize.core')
-        if _core_mod is not None:
-            _latched = _core_mod.__dict__.get(
-                '_CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED', None)
-        else:
-            _latched = None
-        if _latched is None:
-            _latched = _CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED
-        if not _latched:
-            _CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED = True
-            if _core_mod is not None:
-                _core_mod.__dict__['_CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED'] = True
-            warnings.warn(
-                "Constraint.__post_init__ no longer auto-probes "
-                "``fun(np.zeros(1))`` since v4.16.2: the probe was "
-                "expensive for BFL-style callables that internally "
-                "run a full ray-trace, and caught exceptions were "
-                "swallowed silently.  Callers that relied on the "
-                "v4.16.1 auto-probe behaviour should now call "
-                "``Constraint.validate()`` explicitly after "
-                "construction for the same best-effort scalar-shape "
-                "check.  This transitional DeprecationWarning is "
-                "scheduled for removal in v5.0.  Silence via "
-                "``warnings.filterwarnings('ignore', "
-                "category=DeprecationWarning, "
-                "module='lumenairy.optimize.core')``.",
-                DeprecationWarning, stacklevel=2,
-            )
 
     def validate(self) -> None:
         """Best-effort scalar-shape check by probing ``fun(np.zeros(1))``.
