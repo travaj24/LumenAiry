@@ -874,3 +874,26 @@ def test_cv1_codev_dropped_fold_directive_warns(tmp_path):
     with _w.catch_warnings():
         _w.simplefilter('error')
         la.load_codev_seq(str(q))
+
+
+# =========================================================================
+# AUDIT 16 -- optimize/{multiconfig,multi_objective,_merit_jit}.py
+#             (AUDIT_OPTIMIZE_TAIL -- clean, no findings; regression pin)
+# =========================================================================
+
+
+def test_opt_tail_beam_expander_afocal_magnification():
+    """AUDIT_OPTIMIZE_TAIL had no findings; pin one verified-correct
+    behaviour: the beam-expander builder solves the C=0 afocal air-gap so the
+    system is afocal with |angular magnification| == M."""
+    from lumenairy.optimize.multiconfig import (
+        afocal_angular_magnification,
+        beam_expander_prescription,
+    )
+    M, wl = 3.0, 633e-9
+    rx = beam_expander_prescription(M=M, f_objective=50e-3, wavelength=wl)
+    mag, is_afocal = afocal_angular_magnification(rx, wavelength=wl)
+    assert is_afocal
+    # A beam expander magnifies the BEAM by M, so by the afocal invariant the
+    # ANGULAR magnification is 1/M (angles shrink as the beam expands).
+    assert abs(abs(mag) - 1.0 / M) < 0.05
