@@ -1024,7 +1024,7 @@ def _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
 
 
 
-def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
+def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
     """Coupled ``(E_x, E_y)`` anisotropic SE modal eigenproblem.
 
     Returns ``(W2, V2, lam, q)``: ``W2[:, n]`` = the 2-vector field of mode
@@ -1040,6 +1040,28 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
     ``Im(q) >= 0`` branch).  At ``kx0 != 0`` the coupled modes are genuinely
     non-Hermitian so the forward set is chosen by the z-POYNTING FLUX sign (the
     Im(q) split forms an inconsistent, non-passive basis there).
+
+    ``ky0`` (DIMENSIONAL, rad/m -- same units as ``kx0``) generalizes the
+    eigenproblem to CONICAL incidence
+    (``AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12``): the structure is
+    uniform along y, so ``Ky = (ky0/k0) I`` is a SCALAR in the nodal basis and
+    the full dimension-agnostic tensor blocks (the validated
+    ``rcwa._layer_eigenmodes_tensor`` P/Q form) assemble from the SAME weak
+    operators::
+
+        P = [[Ky Kx(1/ezz),   I - Kx(1/ezz)Kx],     Q = [[Cyx + Ky Kx,   Cyy - Kx^2],
+             [Ky^2 (1/ezz) - I,  -Ky (1/ezz)Kx]]         [Ky^2 - Cxx,  -(Cxy + Ky Kx)]]
+
+        M = -(P @ Q),   M v = q^2 v,   V = Q W diag(1/lam).
+
+    The single-``Kx`` cross terms are elementwise-EXACT weak first-derivative
+    forms (``conv`` operators; the integrand is polynomial within every
+    element, so wall kinks cost nothing).  Every added term carries a ``ky0``
+    factor, so at ``ky0 == 0`` this is BIT-IDENTICAL to the classical solve --
+    the degenerate-limit reduction the conical path requires.  This is the
+    no-projection-floor (pure nodal) conical layer build; the previous
+    Fourier-projected route carried a resolution-independent ~3e-3 systematic
+    error for patterned cells.
     """
     n = mats["n_glob"]
     k02 = k0 * k0
@@ -1070,12 +1092,40 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
     Kx2 = _kxop("one", "one", "one")
     G = np.eye(n, dtype=_C) - KxEzziKx
 
-    Mbig = np.block([[G @ Cxx, G @ Cxy],
-                     [Cyx,     Cyy - Kx2]])
+    if ky0 == 0.0:
+        Mbig = np.block([[G @ Cxx, G @ Cxy],
+                         [Cyx,     Cyy - Kx2]])
+        # modal magnetic partner: V = Q @ W @ diag(1/lam), (Ky=0) Q block
+        Q = np.block([[Cyx, Cyy - Kx2], [-Cxx, -Cxy]])
+    else:
+        # ---- CONICAL (ky0 != 0) generalization: assemble the full P/Q of the
+        # dimension-agnostic tensor form with Ky = (ky0/k0) I scalar and the
+        # weak-form nodal Kx pieces (see docstring).  kyn is dimensionless.
+        kyn = ky0 / k0
+        I_n = np.eye(n, dtype=_C)
+        EZI = iS0 @ mass["inv_ezz"]                     # multiply by 1/ezz
+        # normalized weak first-derivative operators (elementwise-exact):
+        #   Kx        = (-i/k0) d/dx + kxn            (Bloch-shifted)
+        #   Kx(1/ezz) = d/dx o (1/ezz .)  (by parts: +conv_w^T) + kxn (1/ezz)
+        #   (1/ezz)Kx = (1/ezz .) o d/dx  (direct conv_w)       + kxn (1/ezz)
+        kxn = kx0 / k0
+        Dx1 = iS0 @ conv["one"]
+        Dxz = iS0 @ conv["inv_ezz"]
+        DxzT = iS0 @ conv["inv_ezz"].T
+        Kx1 = (-1j / k0) * Dx1 + kxn * I_n
+        KxEZI = (1j / k0) * DxzT + kxn * EZI
+        EZIKx = (-1j / k0) * Dxz + kxn * EZI
+        P = np.block([
+            [kyn * KxEZI,              G],
+            [(kyn * kyn) * EZI - I_n,  -kyn * EZIKx],
+        ])
+        Q = np.block([
+            [Cyx + kyn * Kx1,          Cyy - Kx2],
+            [(kyn * kyn) * I_n - Cxx,  -(Cxy + kyn * Kx1)],
+        ])
+        Mbig = -(P @ Q)
     q2, W2 = np.linalg.eig(Mbig)
     q = np.sqrt(q2)
-    # modal magnetic partner: V = Q @ W @ diag(1/lam) with the (Ky=0) Q block
-    Q = np.block([[Cyx, Cyy - Kx2], [-Cxx, -Cxy]])
 
     # POYNTING-FLUX forward selector (unconditional since v5.14, robustness
     # audit P1 -- the legacy normal-incidence ``Im(q) >= 0`` branch flipped

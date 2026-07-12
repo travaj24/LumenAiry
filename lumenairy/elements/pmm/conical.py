@@ -90,6 +90,198 @@ def _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv, kx0, ky0,
     return orders, np.stack(R_rows), np.stack(T_rows), np.stack(j_cols, axis=1)
 
 
+def _tile_has_offplane_public(tensors):
+    """True if any (3, 3) tensor in ``tensors`` carries out-of-plane coupling
+    (``xz/yz/zx/zy``) -- conjugation-invariant, so PUBLIC-gauge safe."""
+    for M in tensors:
+        M = np.asarray(M, dtype=_C)
+        scale = max(float(np.max(np.abs(M))), 1.0)
+        off = max(abs(M[0, 2]), abs(M[1, 2]), abs(M[2, 0]), abs(M[2, 1]))
+        if off > 1e-12 * scale:
+            return True
+    return False
+
+
+def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
+                         theta, phi, degree, n_el, grade, n_orders,
+                         min_feature=0.0, label="pmm conical (nodal)"):
+    """PURE-NODAL (no projection floor) conical multilayer cascade for
+    PATTERNED in-plane stacks -- the fix for
+    ``AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12``.
+
+    The previous conical route built PATTERNED layer modes by projecting the
+    spectral-element operators onto a truncated Fourier basis
+    (:func:`~lumenairy.elements.pmm.twod_jones._tensor_layer_modes` /
+    ``_layer_modes_projected``).  That operator-level compression carries a
+    RESOLUTION-INDEPENDENT systematic error (~3e-3 Jones for a mild dielectric
+    grating; the gap saturates in ``far_field_orders`` and GROWS with
+    ``degree``), so the ``ky0 = 0`` degenerate limit never reduced to the
+    converged classical solve -- for SCALAR gratings as well as tensors.
+
+    This path instead runs the CLASSICAL (validated, spectrally-convergent)
+    nodal machinery end-to-end, generalized to conical incidence:
+
+    * per-layer modes from :func:`~lumenairy.elements.pmm._core._sem_modes_tensor`
+      with the DIMENSIONAL ``ky0`` (uniform layers/half-spaces use the same
+      eigensolver on uniform operators -- exact for constants);
+    * the same union-grid + interface/propagation Redheffer cascade as
+      :meth:`PMMStack._solve`;
+    * far field by projecting the nodal solution onto Rayleigh orders
+      (:func:`~lumenairy.elements.pmm._core._sem_fourier_projection`) and
+      applying the conical vector far-field math in the PUBLIC ``exp(-i w t)``
+      gauge (no conjugations -- the classical machinery is public end-to-end).
+
+    At ``ky0 == 0`` every added operator term vanishes, so this reduces
+    BIT-IDENTICALLY (modal content) to the classical solve -- the audit's
+    degenerate-limit gate.  ``layer_specs`` is a list of
+    ``(depth_m, widths, tensors)`` with ``widths`` the segment width fractions
+    and ``tensors`` the PUBLIC ``(3, 3)`` permittivities.  IN-PLANE tensors
+    only (callers reject out-of-plane patterned cells loudly).
+    """
+    from ._core import (
+        _build_sem_tensor_segments,
+        _n_propagating_orders,
+        _pmm_union_grid,
+        _sem_fourier_projection,
+        _sem_modes_tensor,
+        _tensor3_dict,
+    )
+    from ._core import (
+        _interface_smatrix as _ifc_n,
+    )
+    from ._core import (
+        _propagation_star as _prop_star_n,
+    )
+    from ._core import (
+        _redheffer_star as _star_n,
+    )
+
+    eps_sup = _C(eps_sup)
+    eps_sub = _C(eps_sub)
+    nre = float(np.real(np.sqrt(eps_sup)))
+    kx0 = nre * np.sin(theta) * np.cos(phi)            # normalized (n_eff)
+    ky0 = nre * np.sin(theta) * np.sin(phi)
+    _require_propagating_incidence(label, np.conj(eps_sup),
+                                   kx0 ** 2 + ky0 ** 2)
+
+    # ---- union nodal grid across layers (interface matching needs ONE grid) --
+    segs_layers = [
+        [(float(w), np.asarray(e, dtype=_C)) for w, e in zip(widths, tensors)]
+        for (_d, widths, tensors) in layer_specs
+    ]
+    uwidths, layer_eps_u = _pmm_union_grid(
+        segs_layers, (min_feature / period) if min_feature else None)
+    nU = len(uwidths)
+
+    # far-field order budget: capped by the union grid's nodal capacity, and
+    # the grid must resolve every propagating order (classical-path parity).
+    cap = (nU * n_el * degree - 1) // 2
+    n_orders = max(1, min(int(n_orders), cap))
+    _idx = [float(np.real(np.sqrt(eps_sup))), float(np.real(np.sqrt(eps_sub)))]
+    for eps_u in layer_eps_u:
+        for e in eps_u:
+            _idx.append(float(np.real(np.sqrt(np.max(np.abs(np.diag(e)))))))
+    m_prop = _n_propagating_orders(period, wavelength, max(_idx))
+    if m_prop > cap:
+        raise ValueError(
+            f"{label}: the spectral-element grid resolves only {2 * cap + 1} "
+            f"orders but {2 * m_prop + 1} propagate; raise degree / "
+            f"elements_per_region.")
+
+    ox = np.arange(-n_orders, n_orders + 1)
+    order_x = ox
+    order_y = np.zeros_like(ox)
+    # grazing-safe wavelength (Re(eps) drives the cutoffs -- gauge-immaterial)
+    eps_reals = [eps_sup, eps_sub]
+    for eps_u in layer_eps_u:
+        eps_reals.extend(complex(v) for e in eps_u
+                         for v in np.diag(np.asarray(e, dtype=_C)))
+    wl = _grazing_safe_wavelength(float(wavelength), kx0, ky0, order_x,
+                                  order_y, period, period, eps_reals)
+    k0 = 2.0 * np.pi / wl
+    kxv = kx0 + order_x * (wl / period)
+    kyv = ky0 + 0.0 * order_x                          # constant ky0
+
+    # ---- nodal operators + modes (PUBLIC gauge; DIMENSIONAL kx0/ky0) --------
+    kx0_dim = kx0 * k0
+    ky0_dim = ky0 * k0
+    layer_mats = [
+        _build_sem_tensor_segments(period, uwidths,
+                                   [_tensor3_dict(e) for e in eps_u],
+                                   degree, n_el, grade)
+        for eps_u in layer_eps_u]
+    t_sup = _tensor3_dict(eps_sup * np.eye(3))
+    t_sub = _tensor3_dict(eps_sub * np.eye(3))
+    mats_sup = _build_sem_tensor_segments(period, uwidths, [t_sup] * nU,
+                                          degree, n_el, grade)
+    mats_sub = _build_sem_tensor_segments(period, uwidths, [t_sub] * nU,
+                                          degree, n_el, grade)
+    n_glob = mats_sup["n_glob"]
+
+    Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0_dim,
+                                             ky0=ky0_dim)
+    Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0_dim,
+                                             ky0=ky0_dim)
+    lmodes = []
+    _eig_memo = {}
+    for eps_u, m in zip(layer_eps_u, layer_mats):
+        ck = tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_u)
+        hit = _eig_memo.get(ck)
+        if hit is None:
+            hit = _sem_modes_tensor(m, k0, kx0_dim, ky0=ky0_dim)
+            _eig_memo[ck] = hit
+        lmodes.append(hit)
+
+    # ---- symmetric Redheffer cascade (in-plane tensors keep +/-q symmetry) --
+    nlay = len(lmodes)
+    ifc = [_ifc_n(Wsup, Vsup, lmodes[0][0], lmodes[0][1])]
+    for i in range(1, nlay):
+        ifc.append(_ifc_n(lmodes[i - 1][0], lmodes[i - 1][1],
+                          lmodes[i][0], lmodes[i][1]))
+    ifc.append(_ifc_n(lmodes[-1][0], lmodes[-1][1], Wsub, Vsub))
+    S = ifc[0]
+    for i in range(nlay):
+        S = _prop_star_n(S, lmodes[i][2], k0 * layer_specs[i][0])
+        S = _star_n(S, ifc[i + 1])
+    S11, _S12, S21, _S22 = S
+
+    # ---- conical vector far field (PUBLIC gauge: no conjugations) ----------
+    Tp = _sem_fourier_projection(ox, period, mats_sup)
+    Hsup = np.vstack([Tp @ Wsup[:n_glob, :], Tp @ Wsup[n_glob:, :]])
+    Hsub = np.vstack([Tp @ Wsub[:n_glob, :], Tp @ Wsub[n_glob:, :]])
+    Nf = len(ox)
+    p0 = int(np.where(ox == 0)[0][0])
+    delta = (ox == 0).astype(_C)
+    # public-gauge forward kz = conj of the internal-gauge forward branch of
+    # the conjugated eps (exact gauge map; equal branches for lossless media).
+    kz_inc = float(np.real(np.conj(_kz_forward2(np.conj(eps_sup), kx0, ky0))))
+    kz_ref_f = np.conj(_kz_forward2(np.conj(eps_sup), kxv, kyv))
+    kz_trn_f = np.conj(_kz_forward2(np.conj(eps_sub), kxv, kyv))
+    safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+    safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
+    R_rows, T_rows, j_cols = [], [], []
+    for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
+        long_inc = (kx0 * ex0 + ky0 * ey0)
+        einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
+        rhs = np.concatenate([ex0 * delta, ey0 * delta])
+        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+        r = Hsup @ (S11 @ cinc)
+        t = Hsub @ (S21 @ cinc)
+        rx, ry = r[:Nf], r[Nf:]
+        tx, ty = t[:Nf], t[Nf:]
+        rz = -(kxv * rx + kyv * ry) / safe_r
+        tz = -(kxv * tx + kyv * ty) / safe_t
+        Re = np.real(kz_ref_f / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                           + np.abs(rz) ** 2) / einc_sq
+        Te = np.real(kz_trn_f / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                           + np.abs(tz) ** 2) / einc_sq
+        R_rows.append(np.where(np.real(kz_ref_f) > 0, np.real(Re), 0.0))
+        T_rows.append(np.where(np.real(kz_trn_f) > 0, np.real(Te), 0.0))
+        j_cols.append(np.stack([rx[p0], ry[p0]]))
+    orders = np.stack([order_x, order_y], axis=1)
+    return orders, np.stack(R_rows), np.stack(T_rows), np.stack(j_cols, axis=1)
+
+
 def pmm_jones_1d_conical(period, eps_ridge, eps_groove, n_substrate,
                          n_superstrate, depth, duty_cycle, wavelength, *,
                          theta, phi, degree=16, elements_per_region=1,
@@ -109,6 +301,23 @@ def pmm_jones_1d_conical(period, eps_ridge, eps_groove, n_substrate,
     """
     if n_orders is None:
         n_orders = max(8, degree // 2)
+    # PATTERNED grating -> the pure-nodal conical cascade
+    # (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12): the Fourier-
+    # projected route below carries a RESOLUTION-INDEPENDENT systematic error
+    # for any patterned cell (scalar included -- the bug is in the operator
+    # projection, not the tensor factorization), so its ky0=0 degenerate limit
+    # never reduces to the classical solve.  ``formulation`` is inert on this
+    # path (the nodal build resolves walls geometrically -- no factorization
+    # rule).  A UNIFORM cell keeps the exact analytic Fourier path below.
+    duty = float(duty_cycle)
+    if 0.0 < duty < 1.0 and _C(eps_ridge) != _C(eps_groove):
+        I3 = np.eye(3, dtype=_C)
+        return _conical_nodal_solve(
+            period, [(depth, [duty, 1.0 - duty],
+                      [_C(eps_ridge) * I3, _C(eps_groove) * I3])],
+            _C(n_superstrate) ** 2, _C(n_substrate) ** 2, wavelength,
+            theta, phi, degree, elements_per_region, grade, n_orders,
+            label="pmm_jones_1d_conical")
     # ridge occupies [0, duty*period); one wall at duty*period -> 2 x-strips
     x_walls = [float(duty_cycle) * period]
     ax = _build_axis(period, x_walls, degree, elements_per_region, grade)
@@ -229,6 +438,36 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
     x_walls, y_walls, tile = _cell_to_walls_tile(
         cell, period, period, "pmm_jones_1d_conical_tensor")
     _require_nonzero_ezz("pmm_jones_1d_conical_tensor", tile)
+    # PATTERNED tensor cell -> the pure-nodal conical cascade
+    # (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12): the projected route
+    # below produced a resolution-independent ~3.5 deg retardance error for a
+    # patterned anisotropic layer (its ky0=0 limit never reduced to the
+    # converged classical tensor solve).  IN-PLANE tensors only -- a PATTERNED
+    # out-of-plane cell is rejected loudly (the old path returned silently
+    # wrong numbers for it); a UNIFORM cell of any tensor keeps the exact
+    # Fourier path below (Berreman-validated, incl. out-of-plane).
+    if len(x_walls) > 0:
+        tens = [np.asarray(tile[s, 0], dtype=_C)
+                for s in range(tile.shape[0])]
+        if _tile_has_offplane_public(tens):
+            raise NotImplementedError(
+                "pmm_jones_1d_conical_tensor: a PATTERNED cell whose tensor "
+                "carries out-of-plane coupling (eps_xz/yz/zx/zy) is not "
+                "supported at conical incidence -- the previous projected "
+                "route returned silently-wrong retardance for patterned "
+                "cells (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12) "
+                "and the nodal conical cascade is in-plane only.  Use the "
+                "classical mount (phi=0, full out-of-plane support), a "
+                "UNIFORM out-of-plane layer (Berreman-exact here), or "
+                "PMM2DStackPure.")
+        walls = np.concatenate([[0.0], np.asarray(x_walls, dtype=float),
+                                [period]])
+        widths = list(np.diff(walls) / period)
+        return _conical_nodal_solve(
+            period, [(depth, widths, tens)],
+            _C(n_superstrate) ** 2, _C(n_substrate) ** 2, wavelength,
+            theta, phi, degree, elements_per_region, grade, n_orders,
+            label="pmm_jones_1d_conical_tensor")
     tile_i = np.conj(tile)                          # INTERNAL exp(+iwt) gauge
 
     eps_sup = np.conj(_C(n_superstrate) ** 2)

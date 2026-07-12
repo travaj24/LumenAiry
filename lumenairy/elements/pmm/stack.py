@@ -586,6 +586,47 @@ class PMMStack:
         )
         from .twod_jones import _tensor_layer_modes
 
+        # ---- PATTERNED layers -> the pure-nodal conical cascade -------------
+        # (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12): the Fourier-
+        # projected layer-mode route below carries a RESOLUTION-INDEPENDENT
+        # systematic error for ANY patterned layer (scalar or tensor -- the
+        # defect is in the operator projection, not the factorization rule),
+        # so its ky0=0 degenerate limit never reduced to the classical solve
+        # (~3e-3 Jones / ~3.5 deg retardance, flat under refinement).  Route
+        # every stack containing a patterned layer through the classical
+        # nodal machinery generalized to ky0 (exact reduction at ky0=0).
+        # IN-PLANE tensors only: a patterned stack carrying ANY out-of-plane
+        # tensor is rejected loudly (the old path was silently wrong for it);
+        # all-UNIFORM stacks (incl. out-of-plane tensors) keep the exact
+        # Fourier path below (Berreman-validated).
+        if any(len(segs) > 1 for (_t, segs, _sl) in self._layers):
+            if any(self._is_oop(e) for (_t, segs, _sl) in self._layers
+                   for (_w, e) in segs):
+                raise NotImplementedError(
+                    "PMMStack.solve (conical, phi != 0): a stack containing "
+                    "a PATTERNED layer together with an out-of-plane tensor "
+                    "(eps_xz/yz/zx/zy) is not supported -- the previous "
+                    "projected route returned silently-wrong retardance for "
+                    "patterned cells (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_"
+                    "BUG_2026_07_12) and the nodal conical cascade is "
+                    "in-plane only.  Use the classical mount (phi=0) or "
+                    "PMM2DStackPure.")
+            from .conical import _conical_nodal_solve
+            layer_specs = [
+                (float(thk), [float(w) for w, _ in segs],
+                 [np.asarray(e, dtype=_C) for _w, e in segs])
+                for (thk, segs, _sl) in self._layers]
+            o2, R_eff, T_eff, jones = _conical_nodal_solve(
+                self.period, layer_specs, _C(self.n_sup) ** 2,
+                _C(self.n_sub) ** 2, wl, angle, phi, self.degree, self.n_el,
+                self.grade, max(3, (self.ffo - 1) // 2),
+                min_feature=self.min_feature,
+                label="PMMStack.solve (conical)")
+            _warn_stack_energy(R_eff, T_eff)
+            # stack contract: the 1-D (m,) order array (pmm_jones_1d_segments
+            # parity; y is degenerate so n_y == 0 for every order).
+            return o2[:, 0], R_eff, T_eff, jones
+
         def _scalar_eps(M):
             """The scalar eps of an isotropic-diagonal (3, 3) tile entry, else
             None (a genuine tensor -> the tensor path)."""

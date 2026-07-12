@@ -143,3 +143,173 @@ def test_conical_uniform_slab_energy_closes():
     T = np.asarray(T)
     for p in range(R.shape[0]):
         assert abs(float(R[p].sum() + T[p].sum()) - 1.0) < 5e-3
+
+
+# ===========================================================================
+# AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12 regression gates: the
+# PATTERNED degenerate-limit reduction the v5.20.0 suite was missing (its
+# reduction test used a uniform-tensor / scalar cell, so the projected-path
+# systematic error shipped).  Fixed by the pure-nodal conical cascade
+# (_conical_nodal_solve): classical machinery generalized to ky0.
+# ===========================================================================
+
+def _lc_tensor(angle_deg, no=1.5, ne=1.7):
+    c, s = np.cos(np.radians(angle_deg)), np.sin(np.radians(angle_deg))
+    no2, ne2 = no * no, ne * ne
+    T = np.diag([no2, no2, no2]).astype(complex)
+    T[0, 0] = ne2 * c * c + no2 * s * s
+    T[1, 1] = ne2 * s * s + no2 * c * c
+    T[0, 1] = T[1, 0] = (ne2 - no2) * c * s
+    return T
+
+
+def _stack_jones(theta, phi, segments, degree=8, ffo=15):
+    st = la.PMMStack(700e-9, n_substrate=1.5, n_superstrate=1.0,
+                     degree=degree, grade=True, far_field_orders=ffo)
+    st.add_layer(300e-9, segments=segments)
+    return np.asarray(
+        st.set_source(1310e-9, theta=theta, phi=phi).solve()[3])
+
+
+def test_conical_patterned_tensor_reduces_to_classical_at_ky0():
+    """THE missing gate: a PATTERNED anisotropic layer at theta=0, phi=90
+    (ky0 == 0) must equal the classical phi=0 solve to machine precision.
+    Pre-fix the projected route left a ~3.2e-3 resolution-INDEPENDENT gap
+    (~3.5 deg retardance error)."""
+    segs = [(0.5, _lc_tensor(30.0)), (0.5, 1.0 + 0j)]
+    Jcl = _stack_jones(0.0, 0.0, segs)
+    Jco = _stack_jones(0.0, np.deg2rad(90.0), segs)
+    assert np.linalg.norm(Jco - Jcl) < 1e-10
+
+
+def test_conical_patterned_scalar_reduces_to_classical_at_ky0():
+    """The SCALAR patterned degenerate limit (the audit under-scoped this:
+    the projected-path defect hit scalar gratings too -- the old suite's 5e-3
+    'slow-TM-channel' tolerance masked it)."""
+    segs = [(0.5, 2.89 + 0j), (0.5, 1.0 + 0j)]
+    Jcl = _stack_jones(0.0, 0.0, segs)
+    Jco = _stack_jones(0.0, np.deg2rad(90.0), segs)
+    assert np.linalg.norm(Jco - Jcl) < 1e-10
+
+
+def test_conical_patterned_tensor_retardance_tracks_director():
+    """Retardance gate: sweep the LC director; the conical (ky0=0) reflection
+    retardance arg(J00) - arg(J11) must track the classical value to well
+    under 0.1 deg (pre-fix: a fixed ~3.5 deg offset)."""
+    for ang in (15.0, 30.0, 60.0):
+        segs = [(0.5, _lc_tensor(ang)), (0.5, 1.0 + 0j)]
+        Jcl = _stack_jones(0.0, 0.0, segs)
+        Jco = _stack_jones(0.0, np.deg2rad(90.0), segs)
+        ret_cl = np.degrees(np.angle(Jcl[0, 0]) - np.angle(Jcl[1, 1]))
+        ret_co = np.degrees(np.angle(Jco[0, 0]) - np.angle(Jco[1, 1]))
+        assert abs(ret_co - ret_cl) < 0.01, (
+            f"director {ang} deg: retardance classical {ret_cl:.3f} vs "
+            f"conical {ret_co:.3f}")
+
+
+def test_conical_patterned_single_layer_entries_reduce_at_ky0():
+    """The single-layer public entries take the same nodal route: scalar
+    (pmm_jones_1d_conical) and tensor (pmm_jones_1d_conical_tensor) patterned
+    cells at theta=0 must agree with the PMMStack classical solve."""
+    P, WL, DEP = 700e-9, 1310e-9, 300e-9
+    # scalar
+    Jcl = _stack_jones(0.0, 0.0, [(0.5, 2.89 + 0j), (0.5, 1.0 + 0j)])
+    _o, _R, _T, Js = la.pmm_jones_1d_conical(
+        P, 2.89, 1.0, 1.5, 1.0, DEP, 0.5, WL, theta=0.0,
+        phi=np.deg2rad(90.0), degree=8, grade=True, n_orders=7)
+    assert np.linalg.norm(np.asarray(Js) - Jcl) < 1e-10
+    # tensor
+    Jcl_t = _stack_jones(0.0, 0.0, [(0.5, _lc_tensor(30.0)), (0.5, 1.0 + 0j)])
+    S = 64
+    cell = np.zeros((S, 3, 3), complex)
+    cell[:] = np.eye(3)
+    cell[:S // 2] = _lc_tensor(30.0)
+    _o, _R, _T, Jt = la.pmm_jones_1d_conical_tensor(
+        P, cell, 1.5, 1.0, DEP, WL, theta=0.0, phi=np.deg2rad(90.0),
+        degree=8, grade=True, n_orders=7)
+    assert np.linalg.norm(np.asarray(Jt) - Jcl_t) < 1e-10
+
+
+def test_conical_patterned_energy_and_theta_continuity():
+    """Physics gates at GENUINE conical: lossless energy closure to 1e-8 per
+    incident polarization, and the theta -> 0 limit approaches the classical
+    solve quadratically (no jump at the dispatch boundary)."""
+    segs = [(0.5, _lc_tensor(30.0)), (0.5, 1.0 + 0j)]
+    st = la.PMMStack(700e-9, n_substrate=1.5, n_superstrate=1.0, degree=10,
+                     grade=True, far_field_orders=21)
+    st.add_layer(300e-9, segments=segs)
+    _o, R, T, _J = st.set_source(
+        1310e-9, theta=np.deg2rad(25.0), phi=np.deg2rad(35.0)).solve()
+    R, T = np.asarray(R), np.asarray(T)
+    for p in range(2):
+        assert abs(float(R[p].sum() + T[p].sum()) - 1.0) < 1e-8
+    Jcl = _stack_jones(0.0, 0.0, segs, degree=10, ffo=21)
+    Jsm = _stack_jones(1e-3, np.deg2rad(90.0), segs, degree=10, ffo=21)
+    assert np.linalg.norm(Jsm - Jcl) < 1e-5      # ~theta^2 continuity
+
+
+def test_conical_patterned_offplane_tensor_raises():
+    """A PATTERNED cell with out-of-plane tensor coupling at conical incidence
+    now fails LOUD (the old projected route returned silently-wrong
+    retardance for it)."""
+    tilt = _lc_tensor(30.0)
+    tilt[0, 2] = tilt[2, 0] = 0.05          # xz coupling (tilted director)
+    st = la.PMMStack(700e-9, n_substrate=1.5, n_superstrate=1.0, degree=8,
+                     far_field_orders=15)
+    st.add_layer(300e-9, segments=[(0.5, tilt), (0.5, 1.0 + 0j)])
+    with pytest.raises(NotImplementedError, match="out-of-plane"):
+        st.set_source(1310e-9, theta=np.deg2rad(10.0),
+                      phi=np.deg2rad(45.0)).solve()
+
+
+def test_conical_patterned_cross_oracle_rcwa_at_phi():
+    """Converged cross-oracle at GENUINE conical (theta=25, phi=35): the
+    independent rcwa_jones_2d (y-invariant cell) must CONVERGE TOWARD the
+    nodal PMM answer as its order count rises (the residual is RCWA's own
+    truncation, shrinking with n_orders -- pre-fix the PMM answer itself was
+    off and the trend stalled)."""
+    from lumenairy.elements.rcwa.twod import rcwa_jones_2d
+    P, WL, DEP = 700e-9, 1310e-9, 300e-9
+    th, ph = np.deg2rad(25.0), np.deg2rad(35.0)
+    segs = [(0.5, _lc_tensor(30.0)), (0.5, 1.0 + 0j)]
+    st = la.PMMStack(P, n_substrate=1.5, n_superstrate=1.0, degree=14,
+                     grade=True, far_field_orders=25)
+    st.add_layer(DEP, segments=segs)
+    Jp = np.asarray(st.set_source(WL, theta=th, phi=ph).solve()[3])
+    S, SY = 64, 8
+    cell = np.zeros((S, SY, 3, 3), complex)
+    cell[:, :] = np.eye(3)
+    cell[:S // 2, :] = _lc_tensor(30.0)
+    dif = []
+    for no in (7, 11):
+        _o, _R, _T, Jr = rcwa_jones_2d(P, P, cell, 1.5, 1.0, DEP, WL,
+                                       theta=th, phi=ph, n_orders_x=no,
+                                       n_orders_y=1)
+        sp = np.sort(np.linalg.svd(Jp, compute_uv=False))
+        sr = np.sort(np.linalg.svd(np.asarray(Jr), compute_uv=False))
+        dif.append(float(np.max(np.abs(sp - sr))))
+    assert dif[1] < dif[0], "rcwa must converge toward the nodal PMM answer"
+    assert dif[1] < 8e-3
+
+
+def test_conical_mixed_multilayer_reduces_at_ky0():
+    """MIXED uniform + patterned multilayer (the exp11-like shape) through the
+    nodal conical cascade: the ky0=0 degenerate limit must match the classical
+    solve across R, T, and Jones (uniform layers ride the same union nodal
+    grid -- exact for constants)."""
+    def _solve(theta, phi):
+        st = la.PMMStack(700e-9, n_substrate=1.5, n_superstrate=1.0,
+                         degree=10, grade=True, far_field_orders=21)
+        st.add_layer(120e-9, eps=2.25 + 0j)
+        st.add_layer(300e-9, segments=[(0.5, _lc_tensor(30.0)),
+                                       (0.5, 1.0 + 0j)])
+        st.add_layer(80e-9, segments=[(0.3, 4.0 + 0j), (0.7, 1.0 + 0j)])
+        st.add_layer(150e-9, eps=1.9 + 0j)
+        _o, R, T, J = st.set_source(1310e-9, theta=theta, phi=phi).solve()
+        return np.asarray(R), np.asarray(T), np.asarray(J)
+
+    Rcl, Tcl, Jcl = _solve(0.0, 0.0)
+    Rco, Tco, Jco = _solve(0.0, np.deg2rad(90.0))
+    assert np.linalg.norm(Jco - Jcl) < 1e-10
+    assert np.max(np.abs(Rco - Rcl)) < 1e-10
+    assert np.max(np.abs(Tco - Tcl)) < 1e-10

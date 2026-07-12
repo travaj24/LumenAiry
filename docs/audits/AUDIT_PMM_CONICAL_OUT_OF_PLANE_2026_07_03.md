@@ -1,5 +1,16 @@
 # PMM Conical / Out-of-Plane Incidence — Implementation Audit — 2026-07-03
 
+> **STATUS — IMPLEMENTED (design-of-record).** Path B (the native `O(N)` 1-D conical
+> solve) described in this audit was built from this design and is shipped + verified:
+> `lumenairy/elements/pmm/conical.py` (`pmm_jones_1d_conical` / `pmm_jones_1d_conical_tensor`),
+> and `PMMStack.set_source(phi=…)` → `PMMStack._solve_conical` for multilayer stacks. The
+> `conical.py` module header cites this audit ("AUDIT_PMM_CONICAL_OUT_OF_PLANE, Path B").
+> Verified by `tests/unit/test_v5_20_0_pmm_conical.py` + `test_v5_20_0_pmm_stack_conical.py`
+> (13 passing) against the **Berreman 4x4** analytic oracle and the **PMM2DStack Path-A**
+> bridge — the exact validation ladder of Section 7. This document is retained as the design
+> rationale that drove that implementation; the "not yet implemented" framing below is the
+> pre-implementation state.
+
 **Scope.** How to add **conical (out-of-plane) incidence** — a nonzero azimuth `phi`, i.e.
 `ky0 = Re(n_sup)*sin(theta)*sin(phi)*k0 != 0` — to the **1-D** PMM solve
 (`pmm_efficiency_1d` / `pmm_jones_1d` / `PMMStack`), so that a 1-D grating (period in x,
@@ -47,13 +58,13 @@ The codebase uses "out-of-plane" in **two unrelated senses**. Conflating them wi
   is about the **material**, and it is **already shipped** in native 1-D (v5.11.0; slant added
   2026-06-07): `oned.py:113-119, 189-197, 274-294`, generator at `_core.py:3392-3520, 3765-3972`.
 - **OOP / conical *incidence*** = the incident wavevector has a y-component (`ky0 != 0`, `phi != 0`).
-  This is about the **illumination**, and it is **NOT implemented** in native 1-D (PMM *or* RCWA).
-  This audit is exclusively about this second sense.
+  This is about the **illumination**, and (at the time of this audit) was **NOT implemented** in
+  native 1-D (PMM *or* RCWA). This audit is exclusively about this second sense.
 
-Almost every "out-of-plane" string in `pmm/` is the *tensor* sense. There is **no prior native
-conical-incidence 1-D attempt to revive** — the 1-D angle is hard-wired to a single in-plane Bloch
-shift with `ky == 0` (`oned.py:127` "classical mount, `ky=0`"; RCWA twin `rcwa/oned.py:223-225`,
-which literally sets `Ky = zeros` at `rcwa/oned.py:519, 1152, 1337`). Conical 1-D is **new work**.
+Almost every "out-of-plane" string in `pmm/` is the *tensor* sense. The 1-D angle was hard-wired to a
+single in-plane Bloch shift with `ky == 0` (`oned.py:127` "classical mount, `ky=0`"; RCWA twin
+`rcwa/oned.py:223-225`, which sets `Ky = zeros` at `rcwa/oned.py:519, 1152, 1337`). Conical 1-D was
+**new work** (now realized as Path B — see the status banner).
 
 The one roadmap "open gate" that looks adjacent — `docs/PMM_ROADMAP.md:111-113`, "1-D oblique +
 slant ... Bloch<->slant convection cross-term ... guarded with NotImplementedError" — is about
@@ -90,9 +101,9 @@ from `ky0`. That geometric cross-polarization is the physics exp12 is trying to 
 ## 3. Current 1-D architecture and every `phi=0` assumption to break
 
 Files: `pmm/oned.py` (entry points), `pmm/stack.py` (`PMMStack`), `pmm/_core.py` (numerics). The
-scalar and Jones solves share the `_pmm_solve_core` / `_pmm_jones_solve_core` skeleton. Confirmed:
-**no `ky0`/`k_y`/azimuth anywhere in the 1-D path** (every `ky0` hit is in `twod*.py`/`stack2d.py`;
-every 1-D `phi` is the Lagrange basis `phi_i`, the *slant*-frame angle, or a doc note that the mount
+scalar and Jones solves share the `_pmm_solve_core` / `_pmm_jones_solve_core` skeleton. Confirmed at
+audit time: **no `ky0`/`k_y`/azimuth in the 1-D path** (every `ky0` hit was in `twod*.py`/`stack2d.py`;
+every 1-D `phi` was the Lagrange basis `phi_i`, the *slant*-frame angle, or a doc note that the mount
 fixes azimuth 0).
 
 Stage-by-stage, with the assumption that breaks:
@@ -307,4 +318,5 @@ against Berreman/RCWA, gives trustworthy out-of-plane numbers without waiting on
 
 *Prepared 2026-07-03. Source-verified against the current tree by a 3-agent read-only sweep
 (current-PMM internals, RCWA conical reference, prior-OOP/oracles). No code modified. Companion
-consumer: the exp12 oblique-angle study of the exp10/exp11 LC-QWP out-couplers.*
+consumer: the exp12 oblique-angle study of the exp10/exp11 LC-QWP out-couplers. Path B was
+subsequently implemented from this design — see the status banner at the top.*
