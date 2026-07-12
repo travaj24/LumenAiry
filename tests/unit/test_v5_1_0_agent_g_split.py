@@ -422,9 +422,12 @@ def test_opd_smoke() -> None:
     resid, coeffs = remove_wavefront_modes(x, opd_1d, modes='defocus')
     # Residual is much smaller than input PV.
     assert np.nanmax(np.abs(resid)) < 1e-3 * np.nanmax(np.abs(opd_1d)) + 1e-18
-    # depth_of_focus: f/2 at 550 nm -> 8.8 um.
+    # depth_of_focus (AN-1 fix): the ONE-SIDED (half-range) Rayleigh DOF is
+    # dz = lambda/(2*NA**2) = 2*f#**2*lambda; for f/2 at 550 nm that is
+    # 2*4*550e-9 = 4.4 um (the prior 8.8 um was the TOTAL +/- range mislabelled
+    # as the one-sided half-range).
     dof = depth_of_focus(550e-9, 2.0)
-    assert abs(dof - 8.8e-6) / 8.8e-6 < 1e-3
+    assert abs(dof - 4.4e-6) / 4.4e-6 < 1e-3
 
 
 def test_polychromatic_radial_power_bands_smoke() -> None:
