@@ -772,9 +772,12 @@ def t_lambertian_bsdf_sample_distribution_matches_cos_law():
 
 
 def t_gaussian_bsdf_concentrates_within_sigma():
-    """Most Gaussian-BSDF samples should land within ~3 sigma of the
-    specular direction.  Catches sigma-units-bug or wrong sampling
-    width.
+    """The Gaussian-BSDF offset angle follows a RAYLEIGH(sigma) law (BSDF-1,
+    AUDIT_BSDF_SEGMENT_GEOMETRY): the MC direction density carries the
+    ``sin(theta)`` solid-angle Jacobian, so ``theta ~ Rayleigh(sigma)`` --
+    mean ``sigma*sqrt(pi/2)`` and 3-sigma containment ``1-exp(-4.5)~=0.989``.
+    (The OLD half-normal sampling omitted the Jacobian: mean ``sigma*sqrt(2/pi)``
+    and ~0.997 within 3 sigma -- this test was calibrated for that bug.)
     """
     sigma = 0.01  # rad
     rng = np.random.default_rng(7)
@@ -782,20 +785,23 @@ def t_gaussian_bsdf_concentrates_within_sigma():
     inc = np.array([0.0, 0.0, -1.0])  # specular -> +z
     n = 20000
     dirs = np.asarray(bsdf.sample(inc, n_samples=n, rng=rng))
-    # Angle between each sample and the specular direction (+z):
-    cos_theta = dirs[:, 2]
-    cos_theta = np.clip(cos_theta, -1.0, 1.0)
-    theta = np.arccos(cos_theta)
+    theta = np.arccos(np.clip(dirs[:, 2], -1.0, 1.0))
+    mean_angle = float(np.mean(theta))
     frac_within_3sigma = float(np.mean(theta < 3 * sigma))
-    return frac_within_3sigma > 0.99, (
-        f'fraction of samples within 3*sigma = {frac_within_3sigma:.4f}')
+    rayleigh_mean = sigma * np.sqrt(np.pi / 2)            # ~1.2533 sigma
+    rayleigh_3sig = 1.0 - np.exp(-4.5)                    # ~0.9889
+    ok = (abs(mean_angle - rayleigh_mean) < 0.03 * rayleigh_mean
+          and abs(frac_within_3sigma - rayleigh_3sig) < 0.01)
+    return ok, (
+        f'mean={mean_angle/sigma:.3f} sigma (Rayleigh {np.sqrt(np.pi/2):.3f}); '
+        f'within-3-sigma={frac_within_3sigma:.4f} (Rayleigh {rayleigh_3sig:.4f})')
 
 
 H.run('Lambertian BSDF.evaluate is constant rho/pi',
       t_lambertian_bsdf_evaluates_to_constant_rho_over_pi)
 H.run('Lambertian BSDF.sample: <cos(theta)> = 2/3 (cosine law)',
       t_lambertian_bsdf_sample_distribution_matches_cos_law)
-H.run('Gaussian BSDF.sample: > 99 percent within 3-sigma',
+H.run('Gaussian BSDF.sample: offset angle follows Rayleigh(sigma)',
       t_gaussian_bsdf_concentrates_within_sigma)
 
 

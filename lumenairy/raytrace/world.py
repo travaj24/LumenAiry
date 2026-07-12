@@ -69,16 +69,14 @@ def _apply_coord_break(origin: np.ndarray, R: np.ndarray,
     ty = np.radians(float(cb.get('tilt_y_deg', 0.0)))
     tz = np.radians(float(cb.get('tilt_z_deg', 0.0)))
     order = int(cb.get('order', 0) or 0)
-    # RT-4: match the legacy ``intersection._apply_coord_break`` optical
-    # (3.7.1) sign convention.  That path expresses a ray in the new frame by
-    # applying Rz(+tz)@Ry(+ty)@Rx(+tx) to the ray coordinates (a PASSIVE frame
-    # rotation), so the new frame's local-to-world rotation is the transpose,
-    # Rx(-tx)@Ry(-ty)@Rz(-tz).  This 4.4.0 world path never absorbed the 3.7.1
-    # fix and used +tx/+ty/+tz, folding every tilt in the OPPOSITE angular
-    # direction from ``trace()`` -- tilt-only systems came out mirror-imaged
-    # and decenter+tilt breaks were genuinely inconsistent (the decenter half
-    # did not flip).  The intrinsic X->Y->Z order is unchanged.
-    tilt_R = _rot_x(-tx) @ _rot_y(-ty) @ _rot_z(-tz)
+    # RT-4 was REVERTED (AUDIT_RAYTRACE_CORE finding proven a PHANTOM):
+    # ``world_R``'s new-frame local-to-world rotation ``_rot_x(+tx)`` already
+    # AGREES with the legacy ``trace()`` path -- both send a +z ray to world
+    # -y after a +90 deg tilt_x (verified empirically, and pinned by the
+    # ``periscope`` folded-design + ``test_world_surfaces`` validation
+    # oracles).  The audit's "world folds opposite to trace()" claim was
+    # wrong; flipping to ``-tx`` INTRODUCED the disagreement.  Keep +tx/+ty/+tz.
+    tilt_R = _rot_x(tx) @ _rot_y(ty) @ _rot_z(tz)
     if order == 0:
         # Decenter first (in current frame), then tilt.
         new_origin = origin + R @ np.array([dx, dy, 0.0])

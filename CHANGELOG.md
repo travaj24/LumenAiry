@@ -25,12 +25,14 @@ All notable changes to the core library are documented here.
     stale pitch); HF-1 `beam_d4sigma` `float(tuple)` crash + corrected LG
     waist to `D4σ/2`; VD-1 immersion-NA raise; SY-1/2, PK-1/2/3, MHS-1/2,
     HFPI-1/2, VHFPI-1, dispatch/system nits.
-  - **raytrace** (`AUDIT_RAYTRACE_CORE_2026_07_08.md`): RT-4 world-frame
-    coord-break tilt sign (folded designs were mirror-imaged vs `trace()`);
-    RT-5 off-axis ray/OPD fans EP-centred; **RT-6 removed a spurious high-NA
-    RuntimeWarning** (the JAX transfer is exact to sub-ppm, proven invariant
-    across a 100x gap sweep); RT-1/2/3/8/9 + even-aspheric guard +
-    through-focus all-dead guard.
+  - **raytrace** (`AUDIT_RAYTRACE_CORE_2026_07_08.md`): RT-5 off-axis ray/OPD
+    fans EP-centred; **RT-6 removed a spurious high-NA RuntimeWarning** (the
+    JAX transfer is exact to sub-ppm, proven invariant across a 100x gap
+    sweep); RT-1/2/3/8/9 + even-aspheric guard + through-focus all-dead guard.
+    (RT-4, the audited "world coord-break tilt sign" finding, was verified to
+    be a PHANTOM and reverted: `world_R`'s `_rot_x(+tx)` already agrees with
+    `trace()` — both fold a +z ray to world -y — as the periscope
+    folded-design + `test_world_surfaces` validation oracles confirm.)
   - **glass + polarization** (`AUDIT_GLASS_POLARIZATION_2026_07_08.md`):
     GL-1 missing-κ message, GL-2 lockless glass-cache purge race, SILICA
     Sellmeier row, array-safe validity check, JonesField/docstring nits.

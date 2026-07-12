@@ -174,6 +174,20 @@ Full reads of the remaining nine modules — `core.py` (re-export shell),
   exactly.
 
 ### RT-4 (P3) — `world.py` tilts use the opposite sign convention from the legacy coord-break path
+
+> **REMEDIATION NOTE (2026-07-11): this finding is a PHANTOM and was NOT
+> applied (an attempted fix was reverted).**  The claim that
+> `world._apply_coord_break`'s `Rx_math(+θ)` disagrees with the legacy
+> `trace()` path is **false**.  Verified empirically: a +90° tilt_x sends a
+> `+z` ray to world `-y` in BOTH paths — `trace()`'s ray direction becomes
+> `[0,-1,0]`, and the original `world_R[:,2]` (`_rot_x(+tx)` col 2) is
+> `[0,-1,0]` too.  The `periscope` folded-design and `test_world_surfaces`
+> validation oracles both pin `-y` as correct.  Flipping to `_rot_x(-tx)`
+> INTRODUCED the disagreement (world → `+y`) and broke those oracles, so the
+> change was reverted; `world.py` keeps `_rot_x(+tx)`.  (The audit's
+> derivation confused the passive ray-coordinate transform with the
+> `world_R` column direction.)
+
 `intersection._apply_coord_break` (the 3.7.1 "optical convention"
 fix, validated against the 2D layout) transforms ray coordinates by
 `Rx_math(+θ)` for a `tilt_x = +θ` break — i.e. the new frame's

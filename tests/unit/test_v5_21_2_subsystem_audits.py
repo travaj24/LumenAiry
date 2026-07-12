@@ -250,18 +250,35 @@ def test_rt3_dead_paraxial_trio_removed():
     assert not hasattr(s, '_paraxial_transfer')
 
 
-def test_rt4_world_coord_break_tilt_sign():
-    """RT-4: world._apply_coord_break now uses the legacy optical (3.7.1)
-    sign -- a +tilt_x break yields a new frame whose local-to-world rotation
-    is Rx(-tx) (the transpose-negation of the ray-coordinate transform), so
-    trace() and trace_world() fold in the SAME angular direction."""
-    from lumenairy.raytrace.world import _apply_coord_break, _rot_x
-    tx_deg = 30.0
-    origin = np.zeros(3)
-    R = np.eye(3)
-    _, new_R = _apply_coord_break(origin, R, {'tilt_x_deg': tx_deg})
-    expected = _rot_x(-np.radians(tx_deg))  # RT-4 fixed convention
-    np.testing.assert_allclose(new_R, expected, atol=1e-12)
+def test_rt4_world_coord_break_matches_legacy_trace_fold():
+    """RT-4 was a PHANTOM (reverted): world._apply_coord_break's ``_rot_x(+tx)``
+    already agrees with the legacy ``trace()`` fold -- both send a +z ray to
+    world -y after a +90 deg tilt_x.  Pin that agreement (a regression guard
+    against re-flipping the sign): the world frame's new local-to-world +z
+    column equals the direction ``trace()`` gives a +z ray through the same
+    coord break."""
+    import numpy as np
+
+    from lumenairy.raytrace import RayBundle
+    from lumenairy.raytrace.intersection import _apply_coord_break as _local_cb
+    from lumenairy.raytrace.surface import Surface
+    from lumenairy.raytrace.world import _apply_coord_break as _world_cb
+
+    tx_deg = 90.0
+    # World: new-frame +z axis expressed in world.
+    _, new_R = _world_cb(np.zeros(3), np.eye(3), {'tilt_x_deg': tx_deg})
+    world_new_z = new_R[:, 2]
+    # Legacy trace(): a +z-going ray's direction after the same coord break.
+    r = RayBundle(x=np.array([0.0]), y=np.array([0.0]), z=np.array([0.0]),
+                  L=np.array([0.0]), M=np.array([0.0]), N=np.array([1.0]),
+                  opd=np.array([0.0]), alive=np.array([True]),
+                  wavelength=633e-9)
+    _local_cb(r, Surface(radius=np.inf, is_coordbrk=True, tilt_x_deg=tx_deg))
+    local_dir = np.array([np.ravel(r.L)[0], np.ravel(r.M)[0],
+                          np.ravel(r.N)[0]])
+    # Both must send +z -> world -y; they must AGREE.
+    np.testing.assert_allclose(world_new_z, [0.0, -1.0, 0.0], atol=1e-9)
+    np.testing.assert_allclose(local_dir, world_new_z, atol=1e-9)
 
 
 def test_rt5_offaxis_fan_passes_through_zero():
