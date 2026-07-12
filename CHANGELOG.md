@@ -2,6 +2,55 @@
 
 All notable changes to the core library are documented here.
 
+## [5.21.3] — 2026-07-12
+
+### Fixed
+
+- **Conical (`phi != 0`) PMM: pure-nodal cascade for PATTERNED layers**
+  (`docs/audits/AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12.md`).  The
+  v5.20.0 native conical 1-D path produced a systematic,
+  resolution-INDEPENDENT error for patterned layers: at the `ky0 = 0`
+  degenerate limit (`theta = 0`) it never reduced to the converged classical
+  solve (`||J_conical - J_classical|| ~ 3.3e-3`, a ~3.8 deg
+  reflection-retardance offset that destroyed a multilayer LC out-coupler's
+  51:1 switching extinction).  Root cause (the audit's localization,
+  verified and expanded): the defect hits SCALAR patterned gratings too (the
+  old scalar reduction test's 5e-3 tolerance masked it), and it is NOT the
+  tensor factorization rule — it is the Fourier-PROJECTED operator build
+  itself (`T @ op @ pinv(T)` compression in `_tensor_layer_modes` /
+  `_layer_modes_projected`): the gap saturates in `far_field_orders`
+  (identical 2.822e-3 at ffo 41 and 81) and GROWS with `degree` (1.7e-3 ->
+  4.3e-3 over degree 6 -> 18).
+  - `_sem_modes_tensor` gains a dimensional `ky0`: the full
+    dimension-agnostic P/Q tensor blocks assemble from the same weak-form
+    mass/stiffness/convection operators (single-`Kx` cross terms as
+    elementwise-exact weak first derivatives).  Every added term carries a
+    `ky0` factor, so at `ky0 = 0` the build is BIT-IDENTICAL to the
+    classical solve.
+  - New `_conical_nodal_solve` (pmm/conical.py): the classical union-grid
+    Redheffer cascade run end-to-end in the NODAL basis (public gauge, no
+    projection floor), closed with the conical vector far field via the
+    nodal->Rayleigh projection.
+  - `PMMStack.solve(phi != 0)`, `pmm_jones_1d_conical`, and
+    `pmm_jones_1d_conical_tensor` route every PATTERNED in-plane cell
+    through the nodal cascade; a patterned OUT-OF-PLANE tensor cell now
+    raises `NotImplementedError` (the old path returned silently-wrong
+    retardance for it); all-UNIFORM cells keep the exact Fourier path
+    (Berreman-validated, including out-of-plane tensors).
+  - Validated: reproducer gap 3.29e-3 -> 1.4e-14 (machine precision),
+    retardance offset 3.83 deg -> 0.00 deg; scalar + mixed
+    uniform/patterned multilayer stacks likewise; lossless energy at
+    genuine conical closes to 1e-10; `theta -> 0` continuity is quadratic;
+    degree-CONVERGENT off-normal; the independent `rcwa_jones_2d`
+    cross-oracle converges toward the nodal answer.  8 new regression gates
+    in `tests/unit/test_v5_20_0_pmm_conical.py` (patterned tensor + scalar
+    degenerate-limit reductions at 1e-10, director retardance sweep,
+    single-layer entry reductions, energy + continuity, OOP-patterned
+    raises, rcwa cross-oracle, mixed multilayer).
+  - Note: `PMM2DStack` (hybrid) still uses the projected machinery and
+    remains Fourier-floored for patterned cells under conical incidence —
+    use `PMM2DStackPure` for a no-floor 2-D answer.
+
 ## [5.21.2] — 2026-07-11
 
 ### Fixed
