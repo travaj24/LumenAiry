@@ -1,10 +1,38 @@
 # BOR-PMM — Propagating-Mode Cutoff Drops Near-Grazing Orders (Energy Leak) — 2026-07-13
 
-> **STATUS — OPEN.** Root cause localized to a single classifier constant (this audit);
-> no library code modified. Fix direction + regression gates in §5. A DynaMeta-side
-> hand-off task exists with the same repro (the finding surfaced through DynaMeta's
-> `validation/lumenairy_bor_bridge.py` GATE C, which stays honestly red until this is
-> fixed).
+> **STATUS — FIXED (2026-07-13).** Remediation on branch `fix/bor-grazing-cutoff`;
+> gates in `tests/unit/test_audit_bor_grazing_cutoff.py`. The real-axis cutoff was
+> floored at the `q ~ 0` degenerate point only (`q/k0 > 1e-6`) in all THREE classifier
+> twins (`bor_stack.solve`'s `prop()`, `bor_solve._physical_propagating`,
+> `_jax_bor._mask`); imag and index-ceiling legs unchanged.
+>
+> - §5 caution 2 (the flux-normalizer seam) was probed and is **unreachable**: the
+>   modal flux ratio scales as `P/fnrm = q/k0` exactly for the limiting polarization
+>   family (every kept mode on the reproducer basis has `|P| = 1.000000`), so a mode
+>   at the 1e-6 floor sits 4 decades above the `1e-10 * fnrm` field-norm fallback —
+>   kept implies flux-normalized; the one-predicate redesign was not needed.
+> - §5 caution 1 honoured: no bit-identity constant-halving; the k0=2.0 gates pass
+>   because that scale has no near-cutoff modes (verified by running the suites),
+>   not by construction.
+> - Reproducer restored to the pre-`fca4665` values to ALL DIGITS: 319 incident
+>   modes, `max|R+T-1| = 1.2216561096067835e-11` (at m, um, AND nm scales);
+>   fundamental-mode `R = 0.146135` (gate 3's lossless-trap guard) with per-mode
+>   closure 1e-13.  JAX-twin parity + the `_physical_propagating` classifier
+>   unit gate + the DynaMeta `lumenairy_bor_bridge` consumer gate (all four
+>   legs, incl. the previously-red GATE C) pass; the 21 pre-existing BOR tests
+>   pass unchanged (the k0=2.0 scale has no near-cutoff modes — verified by
+>   running, per caution 1).
+>
+> **NEW FOLLOW-UP FINDING (out of this audit's scope, discovered by gate 5):**
+> the legacy NODAL `build_layer`/`solve` cascade (`bor_solve.py`) has a separate,
+> PRE-EXISTING energy blow-up on large cells — `max|R+T-1| ~ 1e25..1e32` for
+> `Rbig >= ~12 lambda` (worst columns are near-AXIS modes with low reldiv), and
+> ~1.2 even at `Rbig = 6 lambda`.  A/B monkeypatch shows the result is IDENTICAL
+> under the old and new classifier constants, so it is unrelated to this fix and
+> predates it.  The production staggered path (`BORStack`) is unaffected (this
+> reproducer closes at 1.2e-11 end-to-end).  The cascade-level gate-5 check was
+> therefore replaced by a direct `_physical_propagating` classifier unit test;
+> the nodal-path blow-up is left as a documented open item for a future audit.
 
 **Severity: correctness (silent wrong numbers).** Commit `fca4665` ("fix(bor):
 unit-invariant flux normalization + propagating-mode classifiers — audit P1-01, P2-06",

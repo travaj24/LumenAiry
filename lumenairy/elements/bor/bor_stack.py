@@ -243,11 +243,25 @@ class BORStack:
         def prop(L, eps):
             # Classify in the DIMENSIONLESS axial index q/k0 (audit P2-06):
             # absolute thresholds on q (units 1/length) silently returned
-            # empty R/T for small-k0 unit systems (e.g. nm-scale).  The
-            # constants are the validated k0=2.0 thresholds divided by 2,
-            # so behavior at the validated scale is bit-identical.
+            # empty R/T for small-k0 unit systems (e.g. nm-scale).
+            #
+            # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13: the original
+            # P2-06 constant (0.05, chosen to keep k0=2.0 bit-identity with
+            # the pre-fix absolute threshold) was an ANGULAR cutoff -- it
+            # dropped genuinely propagating near-grazing orders (theta up to
+            # 88 deg in n=1.41), silently biasing per-order R/T low and
+            # leaking energy (2.28e-2 on the ring-grating reproducer).  A
+            # propagating mode is real-q up to the q ~ 0 degenerate point,
+            # so the real-axis floor guards ONLY that point (1e-6).  This
+            # floor is compatible with the flux normalizer's fallback branch
+            # (zcascade: field-norm when |P| <= 1e-10 * fnrm): the modal
+            # flux ratio scales as P/fnrm = qn for the limiting polarization
+            # family (verified empirically), so every kept mode sits >= 4
+            # decades above the fallback -- kept implies flux-normalized,
+            # and |S|^2 stays a true power fraction.  Twins:
+            # bor_solve._physical_propagating and _jax_bor._mask.
             qn = L["q"] / k0
-            return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 0.05)
+            return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
                             & (np.sqrt(eps).real - qn.real > -5e-10))[0]
         inc = prop(sup, self.eps_sup)
         out = prop(sub, self.eps_sub)

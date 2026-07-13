@@ -62,10 +62,18 @@ def build_layer(m, Rbig, N, eps_profile, k0, *, wall="pec", thickness=None):
 def _physical_propagating(L, k0, reldiv_tol=0.5):
     # Dimensionless q/k0 classifier (audit P2-06): absolute thresholds on q
     # (units 1/length) silently emptied the propagating set for small-k0 unit
-    # systems.  Constants = the validated k0=2.0 thresholds / 2 (bit-identical
-    # at the validated scale).
+    # systems.
+    #
+    # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13: the P2-06 constant
+    # (0.05) was an ANGULAR cutoff that dropped genuinely propagating
+    # near-grazing orders (energy leak 2.28e-2 on the ring-grating
+    # reproducer).  The real-axis floor guards ONLY the q ~ 0 degenerate
+    # point (1e-6); kept modes sit >= 4 decades above the flux normalizer's
+    # field-norm fallback (P/fnrm = qn for the limiting family), so kept
+    # implies flux-normalized.  Twins: bor_stack.solve's prop() and
+    # _jax_bor._mask -- keep all three in lockstep.
     qn = L["q"] / k0
-    return (np.abs(qn.imag) < 5e-5) & (qn.real > 0.05) & \
+    return (np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6) & \
            (L["reldiv"] < reldiv_tol)
 
 
