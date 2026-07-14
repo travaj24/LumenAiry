@@ -160,16 +160,24 @@ def test_oop_at_normal_incidence_matches_rcwastack():
 
 
 # --------------------------------------------------------------------------- #
-# internal-field retention is unavailable for the generalized path
+# internal-field retention on the generalized path (C2: previously raised)
 # --------------------------------------------------------------------------- #
 
-def test_retain_internal_raises_for_oop_oblique():
+def test_retain_internal_works_for_oop_oblique():
+    """AUDIT_DYNAMETA_CONSUMER_API_GAPS C2 (2026-07-14): the generalized
+    OOP-oblique cascade now RETAINS internals (this gate previously pinned
+    the NotImplementedError).  The retained core must close the absorption
+    budget at machine precision on the lossy tensor; the full C2 gate set
+    (conical, lossless-zero, theta -> 0 continuity vs the native path)
+    lives in ``test_audit_dynameta_consumer_api_2.py``."""
     th, ph = np.deg2rad(20.0), np.deg2rad(25.0)
     st = BerremanStack(n_substrate=1.5, n_superstrate=1.0)
-    st.add_layer(0.4e-6, eps=_OOP)
+    st.add_layer(0.4e-6, eps=_OOP_LOSSY)
     st.set_source(WL, theta=th, phi=ph)
-    with pytest.raises(NotImplementedError):
-        st.solve(retain_internal=True)
+    R, T, _Jr = st.solve(retain_internal=True)
+    A = st.layer_absorption()
+    assert A.min() > 0.0
+    assert np.abs(A.sum(axis=0) + R + T - 1.0).max() < 1e-12
 
 
 # --------------------------------------------------------------------------- #

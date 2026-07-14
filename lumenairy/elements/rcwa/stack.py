@@ -1010,6 +1010,12 @@ class RCWAStack:
             if callable(eps):
                 self._layers.append(_RCWALayer(thickness, "uniform", eps,
                                                dispersive=True))
+            elif is_jax_array(eps):
+                # D1 (AUDIT_DYNAMETA_CONSUMER_API_GAPS): a traced uniform eps
+                # stays RAW so its gradient flows (complex() severed it,
+                # forcing consumers to lift a physically-uniform slab into a
+                # constant patterned cell and pay a full eigensolve).
+                self._layers.append(_RCWALayer(thickness, "uniform", eps))
             else:
                 self._layers.append(_RCWALayer(thickness, "uniform", _C(eps)))
         elif eps_cell is not None:
@@ -1363,10 +1369,18 @@ class RCWAStack:
         The stack solver always returns the full zeroth-order Jones response
         (the reaction to both incident ``E_x`` and ``E_y``), so no incident
         polarization is selected here."""
-        _validate_geometry("RCWAStack.set_source", wavelength=wavelength)
         theta = _resolve_incidence(angle, theta)      # theta wins; falls back to angle
         if theta is None:
             theta = 0.0
+        if any(is_jax_array(v) for v in (wavelength, theta, phi)):
+            # D1 (AUDIT_DYNAMETA_CONSUMER_API_GAPS): traced source parameters
+            # stay RAW so wavelength / angle gradients flow through the stack
+            # twin (float() severed them; dispersion-engineering objectives
+            # had to route to the PMM twin).  Validation needs concrete
+            # values -- the traced solve documents its skipped guards.
+            self._source = dict(wavelength=wavelength, theta=theta, phi=phi)
+            return self
+        _validate_geometry("RCWAStack.set_source", wavelength=wavelength)
         self._source = dict(wavelength=float(wavelength), theta=float(theta),
                             phi=float(phi))
         return self
@@ -1610,9 +1624,14 @@ class RCWAStack:
         reconstruction; ignored on the (default) far-field path."""
         xp = array_namespace(Kx)
         if layer.kind == "uniform":
-            W, V, kz = _homogeneous_eigenmodes(Kx, Ky, complex(np.conj(layer.data)))
+            # D1: a TRACED uniform eps stays raw (complex() would sever the
+            # gradient); _homogeneous_eigenmodes is backend-generic, so the
+            # analytic uniform modes trace -- no lifted-cell eigensolve.
+            eps_u = (xp.conj(layer.data) if is_jax_array(layer.data)
+                     else complex(np.conj(layer.data)))
+            W, V, kz = _homogeneous_eigenmodes(Kx, Ky, eps_u)
             lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
-            EPS = complex(np.conj(layer.data)) * xp.eye(Kx.shape[0], dtype=_C)
+            EPS = eps_u * xp.eye(Kx.shape[0], dtype=_C)
             return W, V, lam, EPS
         if layer.kind == "iso":
             cell_c = xp.conj(xp.asarray(layer.data))
@@ -1684,6 +1703,8 @@ class RCWAStack:
         kind = layer.kind
         data = layer.data
         if kind == "uniform":
+            if is_jax_array(data):
+                return None                    # traced uniform eps: no dedup
             return ("uniform", complex(data))
         if kind == "shapes":
             eps_bg, shapes = data
@@ -1829,12 +1850,16 @@ class RCWAStack:
                 "(it materialises every callable per wavelength).")
         src = self._source
         wl, theta, phi = src["wavelength"], src["theta"], src["phi"]
-        # Dispatch the backend off the patterned-layer arrays so a JAX cell
-        # makes the whole stack solve differentiable (the source geometry --
-        # wavelength/angle -- is always concrete here, so only the layer
-        # permittivities are traced).
+        # Dispatch the backend off the patterned-layer arrays, the traced
+        # UNIFORM eps slots, and the (possibly traced) source geometry (D1:
+        # a traced wavelength / angle / uniform eps makes the whole stack
+        # solve differentiable, not just the patterned-cell values).
         layer_arrays = [L.data for L in self._layers if L.kind in ("iso",
                                                                     "tensor")]
+        layer_arrays += [L.data for L in self._layers
+                         if L.kind == "uniform" and is_jax_array(L.data)]
+        layer_arrays += [v for v in (wl, theta, phi) if is_jax_array(v)]
+        src_traced = any(is_jax_array(v) for v in (wl, theta, phi))
         xp = _rcwa_xp("RCWAStack.solve", self.use_gpu, *layer_arrays)
         bname = backend_name(xp)
         is_jax = bname == "jax"
@@ -1844,25 +1869,42 @@ class RCWAStack:
         eps_sup = complex(np.conj(_C(self.n_superstrate) ** 2))
         eps_sub = complex(np.conj(_C(self.n_substrate) ** 2))
         nre = float(np.real(np.sqrt(eps_sup)))
-        kx0 = nre * np.sin(theta) * np.cos(phi)
-        ky0 = nre * np.sin(theta) * np.sin(phi)
-        _require_propagating_incidence("RCWAStack.solve", eps_sup,
-                                       kx0 ** 2 + ky0 ** 2)
-        # The traced (JAX) layer permittivities cannot feed the concrete grazing
-        # nudge, so on the differentiable path the nudge sees only the region
-        # indices (the dominant region Rayleigh anomaly is still caught).
-        eps_reals = ([eps_sup, eps_sub] if is_jax
-                     else [eps_sup, eps_sub] + self._layer_eps_reals())
-        wl = _grazing_safe_wavelength(
-            wl, kx0, ky0, orders[:, 0], orders[:, 1], self.period_x,
-            self.period_y, eps_reals)
+        if src_traced:
+            # np.sin materialises a tracer; xp == jnp here by dispatch (D1)
+            kx0 = nre * xp.sin(theta) * xp.cos(phi)
+            ky0 = nre * xp.sin(theta) * xp.sin(phi)
+        else:
+            kx0 = nre * np.sin(theta) * np.cos(phi)
+            ky0 = nre * np.sin(theta) * np.sin(phi)
+        if not src_traced:
+            # (a traced theta/phi cannot feed the concrete guard; the traced
+            # solve documents its skipped guards -- D1)
+            _require_propagating_incidence("RCWAStack.solve", eps_sup,
+                                           kx0 ** 2 + ky0 ** 2)
+            # The traced (JAX) layer permittivities cannot feed the concrete
+            # grazing nudge, so on the differentiable path the nudge sees only
+            # the region indices (the dominant region Rayleigh anomaly is
+            # still caught).  A traced WAVELENGTH skips the nudge entirely
+            # (data-dependent control flow; keep the sweep off exact Rayleigh
+            # cutoffs yourself when differentiating through wl).
+            eps_reals = ([eps_sup, eps_sub] if is_jax
+                         else [eps_sup, eps_sub] + self._layer_eps_reals())
+            wl = _grazing_safe_wavelength(
+                wl, kx0, ky0, orders[:, 0], orders[:, 1], self.period_x,
+                self.period_y, eps_reals)
         k0 = 2.0 * np.pi / wl
         kx = kx0 + orders[:, 0] * (wl / self.period_x)
         ky = ky0 + orders[:, 1] * (wl / self.period_y)
-        Kx = xp.asarray(np.diag(kx.astype(_C)))
-        Ky = xp.asarray(np.diag(ky.astype(_C)))
-        kxv = xp.asarray(kx.astype(_C))
-        kyv = xp.asarray(ky.astype(_C))
+        if src_traced:
+            kxv = xp.asarray(kx).astype(_C)
+            kyv = xp.asarray(ky).astype(_C)
+            Kx = xp.diag(kxv)
+            Ky = xp.diag(kyv)
+        else:
+            Kx = xp.asarray(np.diag(kx.astype(_C)))
+            Ky = xp.asarray(np.diag(ky.astype(_C)))
+            kxv = xp.asarray(kx.astype(_C))
+            kyv = xp.asarray(ky.astype(_C))
         # n_superstrate MUST be part of the key for BOTH region caches: the
         # substrate modes depend on Kx/Ky whose kx0 = Re(sqrt(eps_sup))*... ,
         # so two stacks with the same n_substrate but different n_superstrate
@@ -1870,12 +1912,17 @@ class RCWAStack:
         # collision (33-40% spurious energy gain on oblique sweeps).  The
         # backend name is in the key too so a NumPy and a CuPy solve of the
         # same geometry never alias to each other's (wrong-device) modes.
-        geom = (self.nox, self.noy, wl, theta, phi, self.period_x,
-                self.period_y, self.n_superstrate, bname)
-        Wref, Vref, kz_ref = _cached_homogeneous_eigenmodes(
-            eps_sup, Kx, Ky, ("sup", self.n_superstrate) + geom)
-        Wtrn, Vtrn, kz_trn = _cached_homogeneous_eigenmodes(
-            eps_sub, Kx, Ky, ("sub", self.n_substrate) + geom)
+        # A TRACED source has no hashable key -> compute uncached (D1).
+        if src_traced:
+            Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
+            Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
+        else:
+            geom = (self.nox, self.noy, wl, theta, phi, self.period_x,
+                    self.period_y, self.n_superstrate, bname)
+            Wref, Vref, kz_ref = _cached_homogeneous_eigenmodes(
+                eps_sup, Kx, Ky, ("sup", self.n_superstrate) + geom)
+            Wtrn, Vtrn, kz_trn = _cached_homogeneous_eigenmodes(
+                eps_sub, Kx, Ky, ("sub", self.n_substrate) + geom)
 
         # Eig reuse (v5.6): the per-layer modal eig is the dominant cost and is
         # THICKNESS-INDEPENDENT, so two layers with identical permittivity (a
@@ -1977,7 +2024,10 @@ class RCWAStack:
 
         p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
         delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
-        kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
+        kz_inc = (xp.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2))
+                  if src_traced else
+                  float(np.real(_sqrt_forward(np.conj(eps_sup)
+                                              - kx0 ** 2 - ky0 ** 2))))
         # PUBLIC-convention forward kz for the z-flux + mask + Ez (see
         # rcwa._core._forward_flux_kz): a lossy exit substrate would otherwise
         # have its transmittance silently zeroed by the Re(kz) > 0 mask.
@@ -1991,7 +2041,12 @@ class RCWAStack:
         rx_rows, ry_rows, tx_rows, ty_rows = [], [], [], []
         for _col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
             long_inc = kx0 * ex0 + ky0 * ey0
-            einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
+            # traced source: kz_inc is a tracer (no Python truth-value) -- the
+            # kz_inc == 0 degenerate point is excluded by the concrete-path
+            # guard and unreachable for a physically-propagating source.
+            einc_sq = (1.0 + (long_inc / kz_inc) ** 2 if src_traced
+                       else (1.0 + (long_inc / kz_inc) ** 2
+                             if kz_inc != 0 else 1.0))
             if sym_rt is not None:
                 r, t = sym_rt[_col]
             else:
@@ -2024,15 +2079,19 @@ class RCWAStack:
         # wavevectors normalised by k0 (kxv = kx/k0), and the per-order kz/k0
         # in each region (for propagation + the propagating-order mask).
         modal = dict(
-            orders2d=orders, p0=p0, wavelength=float(wl),
+            orders2d=orders, p0=p0,
+            wavelength=(wl if src_traced else float(wl)),
             rx=xp.stack(rx_rows), ry=xp.stack(ry_rows),
             tx=xp.stack(tx_rows), ty=xp.stack(ty_rows),
             kx=kxv, ky=kyv, kz_ref=kz_ref, kz_trn=kz_trn,
             period_x=self.period_x, period_y=self.period_y,
             # incidence k-vectors (normalised by k0) for the per-order flux
             # weight Re(kz_m/kz_inc) and the incident |E|^2 (einc_sq) that the
-            # power-calibrated field reconstruction needs.
-            kx0=float(kx0), ky0=float(ky0), kz_inc=float(kz_inc))
+            # power-calibrated field reconstruction needs.  Traced-source
+            # values stay raw (D1).
+            kx0=(kx0 if src_traced else float(kx0)),
+            ky0=(ky0 if src_traced else float(ky0)),
+            kz_inc=(kz_inc if src_traced else float(kz_inc)))
         if retain_internal and bname == "jax":
             warnings.warn(
                 "RCWAStack.solve: retain_internal=True is unavailable on the "

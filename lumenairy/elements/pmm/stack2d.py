@@ -38,6 +38,7 @@ from ..rcwa._core import (
     rcwa_blas_threads,
 )
 from ._core import (
+    PerOrderAmplitudesMixin,
     _interface_smatrix,
     _propagation_smatrix,
     _redheffer_star,
@@ -65,7 +66,7 @@ __all__ = ["PMM2DStackHybrid", "PMM2DStack_hybrid", "PMM2DStack"]
 from ...backend import is_jax_array
 
 
-class PMM2DStackHybrid:
+class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     """Builder for a multilayer doubly-periodic stack solved by the hybrid
     2-D PMM (see the module docstring).
 
@@ -145,6 +146,7 @@ class PMM2DStackHybrid:
         read at the region's first pixel.  Traced ``eps_tensor_cell``
         raises (the 2-D JAX surface is scalar)."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
+        self._modal = None      # ... and retained per-order amplitudes (B)
         self._geom_cache = {}   # F4 part 2: geometry changed -> drop the cache
         if is_jax_array(thickness):
             t_store = thickness            # traced: validated only if concrete
@@ -419,6 +421,7 @@ class PMM2DStackHybrid:
         ``theta`` / azimuth ``phi`` [rad]).  ``angle`` is the cross-suite alias
         for ``theta`` (theta wins when both are given, as everywhere else)."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
+        self._modal = None      # ... and retained per-order amplitudes (B)
         theta = _resolve_incidence(angle, theta)
         self._src = dict(
             wavelength=(wavelength if is_jax_array(wavelength)
@@ -501,8 +504,10 @@ class PMM2DStackHybrid:
         # (audit P1-04): every solve() supersedes the retained state, so
         # internal_field/layer_absorption can only serve the LAST solve --
         # a retain_internal=True one.  Stale fields from a previous
-        # source/geometry must never be served silently.
+        # source/geometry must never be served silently.  Same contract for
+        # the retained per-order amplitudes.
         self._internal = None
+        self._modal = None
         # audit B5: the layer-index-keyed Ez-reconstruction cache is tied to the
         # solved state -- clear it here (the single choke point every solve path,
         # incl. the per-wavelength dispersive solve_vs_wavelength loop, passes
@@ -748,6 +753,8 @@ class PMM2DStackHybrid:
         safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
         safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
         R_rows, T_rows, j_cols = [], [], []
+        amp = {k: np.zeros((2, Nf), dtype=_C)
+               for k in ("rx", "ry", "tx", "ty")}
         for ip, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
             long_inc = (kx0 * ex0 + ky0 * ey0)
             einc_sq = (1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0
@@ -769,9 +776,22 @@ class PMM2DStackHybrid:
             R_rows.append(np.where(np.real(kz_ref_f) > 0, np.real(Re), 0.0))
             T_rows.append(np.where(np.real(kz_trn_f) > 0, np.real(Te), 0.0))
             j_cols.append(np.stack([np.conj(rx[p0]), np.conj(ry[p0])]))
+            # PUBLIC exp(-iwt) amplitudes = conj of this INTERNAL-gauge
+            # cascade (the same map the Jones takes above).
+            amp["rx"][ip], amp["ry"][ip] = np.conj(rx), np.conj(ry)
+            amp["tx"][ip], amp["ty"][ip] = np.conj(tx), np.conj(ty)
         R_eff = np.stack(R_rows)
         T_eff = np.stack(T_rows)
         jones = np.stack(j_cols, axis=1)
+        # AUDIT_DYNAMETA_CONSUMER_API_GAPS B: retained per-order amplitudes
+        # (PerOrderAmplitudesMixin contract).  kz_ref_f/kz_trn_f are computed
+        # on conj(eps_internal) = the PUBLIC eps -> public decaying branch.
+        self._modal = dict(
+            orders=orders2d.copy(), p0=p0,
+            kx=kxv.copy(), ky=kyv.copy(),
+            kz_ref=kz_ref_f.copy(), kz_trn=kz_trn_f.copy(),
+            kz_inc=kz_inc, kx0=float(kx0), ky0=float(ky0),
+            wavelength=float(wl), **amp)
         if retain_internal and getattr(self, "_internal", None) is not None:
             cinc_cols = [np.concatenate([1.0 * delta, 0.0 * delta]),
                          np.concatenate([0.0 * delta, 1.0 * delta])]
@@ -1069,6 +1089,7 @@ class PMM2DStackHybrid:
         BYTE-IDENTICAL to serial for any worker count (``max_workers=1`` forces
         serial).  Each per-wavelength ``solve()`` already dedups identical layers."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
+        self._modal = None      # ... and retained per-order amplitudes (B)
         # audit B3: inherit the configured source angle/azimuth when the sweep
         # leaves them unset (theta/angle both None -> reuse _src['theta'];
         # phi None -> reuse _src['phi']).  Falls back to normal incidence when

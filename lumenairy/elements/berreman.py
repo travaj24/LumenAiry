@@ -414,11 +414,25 @@ def _offplane_condensed_M(eps_internal, Kx1, Ky1):
     return _modes_to_M(W, V, W, -V), lam, -lam
 
 
-def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky):
+def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
+                            retain=False):
     """``(R, T, Jr, Jt)`` for a stack with out-of-plane tensor layer(s) at oblique
     incidence, via the generalized (Li 2003) single-order S-matrix cascade.
     ``eps_*`` are PUBLIC (``Im > 0``); returns PUBLIC-convention Jones + per-lab-
-    polarization power ``R, T``.  Validated to ``rcwa_jones_1d`` / ``RCWAStack``."""
+    polarization power ``R, T``.  Validated to ``rcwa_jones_1d`` / ``RCWAStack``.
+
+    ``retain=True`` (AUDIT_DYNAMETA_CONSUMER_API_GAPS C2) additionally returns
+    a retained-internals ``core`` dict in the SAME shape ``_solve_core(retain=
+    True)`` produces -- per-layer asymmetric modes ``(Wf, Vf, lamf, Wb, Vb,
+    lamb)`` sliced from the generalized ``M`` blocks, plus the bracketing
+    partial cascades built with the SAME generalized interface / propagation
+    convention (backward propagator ``exp(+lamb k0 L)``, ``Re(lamb) <= 0``).
+    The native internal observables (``_amplitudes`` / ``internal_field`` /
+    ``layer_absorption``) are mode-shape agnostic S-matrix algebra + the
+    full-tensor ``E_z`` recovery, so they serve this core unchanged -- the
+    'asymmetric-mode recovery in the generalized convention' the old raise
+    said was missing, with the flux taken from the tangential fields
+    (Rayleigh-consistent by construction for the single planar order)."""
     kx0, ky0 = float(np.real(Kx)), float(np.real(Ky))
     o = lambda v: np.array([[v]], dtype=_C)     # noqa: E731 (1x1 Fourier op)
     Kx1, Ky1 = o(kx0), o(ky0)
@@ -427,6 +441,7 @@ def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky):
     Wt, Vt, _kzt = _homogeneous_eigenmodes(Kx1, Ky1, np.conj(_C(eps_sub)))
     M_prev = _modes_to_M(Wr, Vr, Wr, -Vr)
     S = None
+    modes6, ifc, prop = [], [], []
     for eps, thk in zip(eps_layers, thicks):
         Ml, lf, lb = _offplane_condensed_M(
             np.conj(np.asarray(eps, dtype=_C)), Kx1, Ky1)
@@ -434,9 +449,61 @@ def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky):
         S = Si if S is None else _redheffer_star(S, Si)
         S = _propagation_star_general(S, lf, lb, k0 * float(thk))
         M_prev = Ml
-    S = _redheffer_star(
-        S, _interface_smatrix_general(M_prev, _modes_to_M(Wt, Vt, Wt, -Vt)))
+        if retain:
+            # slice the asymmetric mode blocks back out of M = [[Wf, Wb],
+            # [Vf, Vb]] (an in-plane layer's condensed M carries Wb = W,
+            # Vb = -V, lamb = -lam -- the degenerate symmetric case).
+            n = Ml.shape[0] // 2
+            modes6.append((Ml[:n, :n], Ml[n:, :n], lf,
+                           Ml[:n, n:], Ml[n:, n:], lb))
+            ifc.append(Si)
+            prop.append(_propagation_smatrix_general(lf, lb, k0 * float(thk)))
+    ifc_sub = _interface_smatrix_general(M_prev, _modes_to_M(Wt, Vt, Wt, -Vt))
+    S = _redheffer_star(S, ifc_sub)
     S11, _S12, S21, _S22 = S
+    core = None
+    if retain:
+        ifc.append(ifc_sub)
+        nlay = len(modes6)
+        # bracketing partial cascades -- the _solve_core(retain=True) pattern:
+        # S_above[i] = sup -> TOP of layer i (through the interface INTO it);
+        # S_below_bot[i] = BOTTOM of layer i -> sub (no own propagation);
+        # S_below[i] = prop(i) * S_below_bot[i].
+        S_above = [None] * nlay
+        S_above[0] = ifc[0]
+        for i in range(1, nlay):
+            S_above[i] = _redheffer_star(
+                _redheffer_star(S_above[i - 1], prop[i - 1]), ifc[i])
+        S_below = [None] * nlay
+        S_below_bot = [None] * nlay
+        for i in range(nlay - 1, -1, -1):
+            S_below_bot[i] = (ifc[nlay] if i == nlay - 1
+                              else _redheffer_star(ifc[i + 1], S_below[i + 1]))
+            S_below[i] = _redheffer_star(prop[i], S_below_bot[i])
+        # GAUGE: this cascade runs on the CONJUGATED permittivities (the
+        # internal exp(+iwt) gauge), while the native core -- and therefore
+        # the retained-internals consumers (internal_field's -i modal-H and
+        # tensor E_z recovery on the PUBLIC eps) -- are public-gauge
+        # end-to-end.  The internal problem is the complex conjugate of the
+        # public one, so the conj of every retained operator IS the public
+        # core (probe-verified: pre-conj fields came out as the exact conj
+        # of the native path's).  The MODAL-H blocks additionally NEGATE:
+        # the -i modal-H convention is not conj-invariant
+        # (H_phys_pub = conj(-i H_int) = +i conj(H_int), so the public modal
+        # H in the same -i convention is -conj(V_int); probe: without the
+        # sign, H came out as exactly -H_native while E matched).  Absorption
+        # is invariant (numerator and incident flux flip together).  Decay is
+        # preserved (Re(lam) unchanged under conj).
+        cj = np.conj
+        modes6 = [(cj(Wf), -cj(Vf), cj(lf), cj(Wb), -cj(Vb), cj(lb))
+                  for (Wf, Vf, lf, Wb, Vb, lb) in modes6]
+        S_above = [tuple(cj(b) for b in s) for s in S_above]
+        S_below = [tuple(cj(b) for b in s) for s in S_below]
+        S_below_bot = [tuple(cj(b) for b in s) for s in S_below_bot]
+        core = dict(modes=modes6, thicks=[float(t) for t in thicks],
+                    S_above=S_above, S_below=S_below,
+                    S_below_bot=S_below_bot, eps_layers=list(eps_layers),
+                    k0=k0, Wf_s=cj(Wr), Vf_s=-cj(Vr))
     kz_inc = float(np.real(_sqrt_forward(_C(eps_sup) - kx0 ** 2 - ky0 ** 2)))
     kzrf = _forward_flux_kz(_C(eps_sup), np.array([kx0]), np.array([ky0]))[0]
     kztf = _forward_flux_kz(_C(eps_sub), np.array([kx0]), np.array([ky0]))[0]
@@ -462,6 +529,8 @@ def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky):
                   if np.real(kztf) > 0 else 0.0)
         Jr[:, col] = [np.conj(rx), np.conj(ry)]
         Jt[:, col] = [np.conj(tx), np.conj(ty)]
+    if retain:
+        return R, T, Jr, Jt, core
     return R, T, Jr, Jt
 
 
@@ -681,18 +750,25 @@ class BerremanStack:
         if _offplane_oblique(eps_layers, Kx, Ky):
             # out-of-plane tensor at oblique incidence -> generalized S-matrix.
             if retain_internal:
-                raise NotImplementedError(
-                    "BerremanStack.solve(retain_internal=True): the internal-"
-                    "field / absorption observables are not available for "
-                    "out-of-plane tensor layers at OBLIQUE incidence.  That "
-                    "regime uses the generalized (RCWA-convention) S-matrix "
-                    "cascade, whose per-layer field reconstruction would need "
-                    "asymmetric-mode recovery in the generalized convention with "
-                    "a Rayleigh-consistent flux -- machinery neither this solver "
-                    "nor rcwa.RCWAStack currently has (RCWAStack raises the same "
-                    "for out-of-plane stacks).  Far-field R / T / Jones ARE "
-                    "exact here; internal fields are available at NORMAL "
-                    "incidence (native path) or for iso / in-plane stacks.")
+                # AUDIT_DYNAMETA_CONSUMER_API_GAPS C2: the generalized cascade
+                # now retains the same internals shape the native core does
+                # (asymmetric modes sliced from the M blocks + generalized-
+                # convention partial cascades), so internal_field /
+                # layer_absorption serve OOP-tensor-at-oblique stacks --
+                # the flagship tilted-director regime.
+                R, T, Jr, Jt, core = _offplane_oblique_solve(
+                    eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
+                    retain=True)
+                cinc = np.zeros((2, 2), dtype=_C)
+                for col, Einc in enumerate((np.array([1.0, 0.0], _C),
+                                            np.array([0.0, 1.0], _C))):
+                    cinc[:, col] = np.linalg.solve(core["Wf_s"], Einc)
+                core["cinc"] = cinc
+                core["Kx"], core["Ky"] = Kx, Ky
+                core["R"], core["T"] = R, T
+                self._internal = core
+                self._jones_t = Jt                    # A1
+                return R, T, Jr
             R, T, Jr, Jt = _offplane_oblique_solve(
                 eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky)
             # AUDIT_DYNAMETA_CONSUMER_API_GAPS A1: retain the transmission

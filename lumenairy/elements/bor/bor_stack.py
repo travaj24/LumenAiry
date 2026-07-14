@@ -33,6 +33,29 @@ from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redhe
 _MODAL_CACHE_SIZE = 16
 
 
+def _column_phases(W):
+    """Deterministic per-column phase of a modal basis: the phase of each
+    column's largest-magnitude entry.  Dividing a column by its phase pins
+    the LAPACK-arbitrary eigenvector gauge (AUDIT_DYNAMETA_CONSUMER_API_GAPS
+    C1a): the pinned convention is 'the dominant field sample of every mode
+    profile is real-positive'."""
+    idx = np.argmax(np.abs(W), axis=0)
+    piv = W[idx, np.arange(W.shape[1])]
+    mag = np.abs(piv)
+    return np.where(mag > 0, piv / np.where(mag > 0, mag, 1.0), 1.0)
+
+
+def _stag_flux(W_E, V_H, wq_face, wq_node):
+    """Total z-Poynting flux of a staggered-basis field, one value per
+    column: ``Re(sum Er conj(hphi) wq_face - sum Ephi conj(hr) wq_node)``
+    (the two-grid quadrature -- Er/hphi live on FACES, Ephi/hr on NODES;
+    audit P3-14)."""
+    N = len(wq_face)
+    return np.real(
+        np.sum(W_E[:N] * np.conj(V_H[N:]) * wq_face[:, None], axis=0)
+        - np.sum(W_E[N:] * np.conj(V_H[:N]) * wq_node[:, None], axis=0))
+
+
 class BORStack:
     def __init__(self, Rbig, m, *, n_substrate=1.0, n_superstrate=1.0, N=300):
         # Input validation (audit P3-10) -- mirror the PMMStack/PMM2DStack
@@ -60,6 +83,12 @@ class BORStack:
         # active namespace from the RAW (possibly-traced) ring index / eps.
         self._jax_layers = []
         self.k0 = None
+        # retained state of the last NumPy solve (AUDIT_DYNAMETA_CONSUMER_API_
+        # GAPS C1): _last feeds per_mode_amplitudes (always retained -- cheap
+        # references into the modal LRU); _internal holds the partial cascades
+        # for layer_absorption (retain_internal=True only).
+        self._last = None
+        self._internal = None
         # v5.17.1 (audit P3-12): per-instance modal-basis LRU keyed on
         # (profile fingerprint, k0).  Dedups identical layers WITHIN a solve
         # (an ABAB... periodic stack pays one eig per DISTINCT profile, not
@@ -147,6 +176,8 @@ class BORStack:
             thk_store = thickness
         self._layers.append((thk_store, fn, key))
         self._jax_layers.append((thk_store, jbuild, raw))
+        self._last = None       # geometry change supersedes retained state
+        self._internal = None
         return self
 
     def _is_jax(self):
@@ -175,6 +206,8 @@ class BORStack:
                 raise ValueError(
                     f"BORStack.set_source: k0 must be > 0, got {k0}.")
             self.k0 = k0
+        self._last = None       # source change supersedes retained state
+        self._internal = None
         return self
 
     # ---- solve ---------------------------------------------------------- #
@@ -196,7 +229,7 @@ class BORStack:
             self._modal_cache.popitem(last=False)
         return L
 
-    def solve(self):
+    def solve(self, *, retain_internal=False):
         """Cascade the stack and return per-propagating-order R/T efficiencies.
 
         Returns a dict: ``q`` (incident propagating axial wavenumbers),
@@ -208,6 +241,20 @@ class BORStack:
         over propagating orders), ``energy`` (R+T per incident order), ``S``
         (the global S-matrix).
 
+        MODAL GAUGE of ``S`` (AUDIT_DYNAMETA_CONSUMER_API_GAPS C1a): the
+        columns are FLUX-normalized (every propagating mode carries unit
+        z-flux, forward-oriented), so ``|S11[jp, j]|^2`` is a true power
+        fraction -- but each mode profile carries the LAPACK-arbitrary
+        eigenvector PHASE.  DIAGONAL entries ``S11[j, j]`` are
+        gauge-INVARIANT (incident and reflected mode share one column:
+        backward = ``[W; -V]``), so the fundamental-mode reflection PHASE may
+        be read off directly; off-diagonal phases are basis-relative.  Use
+        :meth:`per_mode_amplitudes` for amplitudes in a PINNED deterministic
+        gauge.
+
+        ``retain_internal=True`` additionally retains the per-layer partial
+        cascades for :meth:`layer_absorption` (NumPy path only).
+
         The staggered basis is spurious-free, so NO reldiv filter is needed (the
         propagating criterion alone is exact) -- which lets us skip the two
         extra half-space eigensolves the reldiv tags would have cost.  Layers
@@ -215,7 +262,15 @@ class BORStack:
         eig via the modal LRU (audit P3-12)."""
         if self.k0 is None:
             raise RuntimeError("call set_source(...) before solve()")
+        # every solve supersedes the retained state (audit-P1-04 contract)
+        self._last = None
+        self._internal = None
         if self._is_jax():
+            if retain_internal:
+                raise NotImplementedError(
+                    "BORStack.solve(retain_internal=True): not available on "
+                    "the JAX (differentiable) path; use NumPy inputs for "
+                    "layer_absorption.")
             # Differentiable twin: gradients flow through the traced layer eps /
             # ring index / thickness (half-spaces concrete).  Returns R/T as
             # full-2N masked arrays -- sum(R)/sum(T) match this NumPy path.
@@ -229,14 +284,46 @@ class BORStack:
                                 lambda r: np.full_like(r, self.eps_sub,
                                                        dtype=complex)))
         mids = [(thk, self._build(key, fn)) for thk, fn, key in self._layers]
-        # cascade: sup -> [mid prop mid] ... -> sub
-        S = interface_smatrix(sup["W"], sup["V"], mids[0][1]["W"], mids[0][1]["V"]) \
-            if mids else interface_smatrix(sup["W"], sup["V"], sub["W"], sub["V"])
-        for i, (thk, L) in enumerate(mids):
-            S = redheffer_star(S, propagation_smatrix(L["q"], thk))
-            nxt = mids[i + 1][1] if i + 1 < len(mids) else sub
-            S = redheffer_star(S, interface_smatrix(L["W"], L["V"],
-                                                    nxt["W"], nxt["V"]))
+        # cascade: sup -> [mid prop mid] ... -> sub.  The interface list is
+        # precomputed (same matrices the inline build produced -- bit-identical
+        # cascade) so retain_internal can reuse it for the partial cascades.
+        nlay = len(mids)
+        if mids:
+            ifc = [interface_smatrix(sup["W"], sup["V"],
+                                     mids[0][1]["W"], mids[0][1]["V"])]
+            for i in range(1, nlay):
+                ifc.append(interface_smatrix(
+                    mids[i - 1][1]["W"], mids[i - 1][1]["V"],
+                    mids[i][1]["W"], mids[i][1]["V"]))
+            ifc.append(interface_smatrix(mids[-1][1]["W"], mids[-1][1]["V"],
+                                         sub["W"], sub["V"]))
+            S = ifc[0]
+            for i, (thk, L) in enumerate(mids):
+                S = redheffer_star(S, propagation_smatrix(L["q"], thk))
+                S = redheffer_star(S, ifc[i + 1])
+        else:
+            S = interface_smatrix(sup["W"], sup["V"], sub["W"], sub["V"])
+        if retain_internal and mids:
+            # Partial cascades bracketing each layer (the RCWAStack /
+            # PMMStack _internal_partials pattern): S_above[i] = sup -> TOP
+            # of layer i (through the interface INTO it, before its own
+            # propagation); S_below_bot[i] = BOTTOM of layer i -> sub
+            # (without its propagation), so backward amplitudes reference
+            # the layer BOTTOM and both exponentials DECAY.
+            S_above = [None] * nlay
+            S_above[0] = ifc[0]
+            for i in range(1, nlay):
+                S_above[i] = redheffer_star(
+                    redheffer_star(S_above[i - 1], propagation_smatrix(
+                        mids[i - 1][1]["q"], mids[i - 1][0])), ifc[i])
+            S_below_bot = [None] * nlay
+            S_below_bot[nlay - 1] = ifc[nlay]
+            for i in range(nlay - 2, -1, -1):
+                S_below_bot[i] = redheffer_star(
+                    redheffer_star(ifc[i + 1], propagation_smatrix(
+                        mids[i + 1][1]["q"], mids[i + 1][0])),
+                    S_below_bot[i + 1])
+            self._internal = dict(S_above=S_above, S_below_bot=S_below_bot)
         S11, S12, S21, S22 = S
         q = sup["q"]
 
@@ -271,5 +358,106 @@ class BORStack:
         gamma = np.sqrt(np.maximum(self.eps_sup.real * k0 ** 2 - qi ** 2, 0.0))
         angles = np.arcsin(np.clip(gamma / (np.sqrt(self.eps_sup.real) * k0),
                                    0, 1))
+        # retained state for per_mode_amplitudes / layer_absorption (cheap:
+        # references into the modal LRU + the S-matrix already returned)
+        self._last = dict(S=S, sup=sup, sub=sub, mids=mids, inc=inc, out=out,
+                          k0=k0, R=R, T=T)
         return dict(q=qi, gamma=gamma, angles=angles, R=R, T=T, energy=R + T,
                     inc=inc, out=out, S=S)
+
+    # ---- retained-state observables (AUDIT_DYNAMETA_CONSUMER_API_GAPS C1) -- #
+
+    def per_mode_amplitudes(self, port="reflection"):
+        """Complex modal scattering amplitudes of the last :meth:`solve` in a
+        PINNED deterministic gauge, restricted to the propagating channels.
+
+        Returns a dict: ``amplitude`` -- ``(n_out, n_inc)`` complex matrix
+        (column j = response to unit-flux incident propagating superstrate
+        mode ``q_inc[j]``; row p = outgoing propagating mode ``q_out[p]``,
+        reflected into the superstrate or transmitted into the substrate per
+        ``port``); ``q_inc`` / ``q_out`` -- the axial wavenumbers of those
+        channels; ``k0``.  ``abs(amplitude)**2`` sums to the solve's ``R``/
+        ``T`` per incident mode (flux-normalized modes).
+
+        GAUGE: raw eigenvector columns carry a LAPACK-arbitrary phase, so raw
+        ``S11[jp, j]`` off-diagonal phases are basis-relative (the DIAGONAL is
+        gauge-invariant -- incident and reflected share one column).  Here
+        every mode column is pinned to the deterministic convention 'the
+        dominant field sample of the mode profile is real-positive'
+        (``A = ph_out * S * conj(ph_in)``), making all entries reproducible,
+        physically-phased amplitudes; the diagonal is unchanged by
+        construction."""
+        if port not in ("reflection", "transmission"):
+            raise ValueError(
+                f"BORStack.per_mode_amplitudes: port must be 'reflection' or "
+                f"'transmission', got {port!r}.")
+        d = self._last
+        if d is None:
+            raise ValueError(
+                "BORStack.per_mode_amplitudes: no retained solve -- run a "
+                "NumPy solve() first (any add_layer / set_source / re-solve "
+                "supersedes it; the JAX path retains nothing).")
+        S11, _S12, S21, _S22 = d["S"]
+        inc, out = d["inc"], d["out"]
+        ph_in = _column_phases(d["sup"]["W"])[inc]
+        if port == "reflection":
+            Sblk, ph_out = S11, ph_in
+            q_out = d["sup"]["q"][inc]
+        else:
+            Sblk = S21
+            ph_out = _column_phases(d["sub"]["W"])[out]
+            q_out = d["sub"]["q"][out]
+        rows = inc if port == "reflection" else out
+        A = (ph_out[:, None] * Sblk[np.ix_(rows, inc)]) * np.conj(ph_in)[None, :]
+        return dict(amplitude=A, q_inc=d["sup"]["q"][inc].copy(),
+                    q_out=np.asarray(q_out).copy(), k0=d["k0"])
+
+    def layer_absorption(self):
+        """Per-layer absorbed power fraction of the last
+        ``solve(retain_internal=True)`` -- ``(n_layers, n_inc)`` (one column
+        per incident propagating superstrate mode, unit incident flux), via
+        the z-flux DIFFERENCE across each layer: the total staggered-basis
+        Poynting flux (two-grid quadrature, audit P3-14) evaluated at the
+        layer's top and bottom planes from the recovered forward/backward
+        modal amplitudes.  ``R + T + sum_i A_i = 1`` per incident mode
+        (machine precision; identically 0 per layer for lossless stacks) --
+        the ``PMMStack.layer_absorption`` recipe in cylindrical coordinates
+        (AUDIT_DYNAMETA_CONSUMER_API_GAPS C1b)."""
+        d = self._last
+        if d is None or self._internal is None:
+            raise ValueError(
+                "BORStack.layer_absorption: the MOST RECENT solve must be "
+                "solve(retain_internal=True) on NumPy inputs (any re-solve / "
+                "add_layer / set_source supersedes the retained state).")
+        mids = d["mids"]
+        inc = d["inc"]
+        sup = d["sup"]
+        S_above = self._internal["S_above"]
+        S_below_bot = self._internal["S_below_bot"]
+        n2 = sup["W"].shape[0]          # 2N
+        # unit-flux incident columns: identity restricted to the inc set
+        cinc = np.zeros((n2, len(inc)), dtype=complex)
+        cinc[inc, np.arange(len(inc))] = 1.0
+        wq_f = np.real(sup["wq_face"])
+        wq_n = np.real(sup["wq_node"])
+        A = np.zeros((len(mids), len(inc)))
+        eye = np.eye(n2, dtype=complex)
+        for i, (thk, L) in enumerate(mids):
+            Sa = S_above[i]
+            Sb_bot = S_below_bot[i]
+            # S_below[i] = prop(i) * S_below_bot[i]; only its 11 block enters
+            Xf = np.exp(1j * L["q"] * thk)
+            Sb11 = Xf[:, None] * Sb_bot[0] * Xf[None, :]
+            c_fwd = np.linalg.solve(eye - Sa[3] @ Sb11, Sa[2] @ cinc)
+            c_bwd = Sb_bot[0] @ (Xf[:, None] * c_fwd)     # at layer BOTTOM
+            W, V, qL = L["W"], L["V"], L["q"]
+            Xd = np.exp(1j * qL * thk)
+            # top (z = 0): fwd referenced here; bwd decays up from the bottom
+            E_top = W @ c_fwd + W @ (Xd[:, None] * c_bwd)
+            H_top = V @ c_fwd - V @ (Xd[:, None] * c_bwd)
+            # bottom (z = thk)
+            E_bot = W @ (Xd[:, None] * c_fwd) + W @ c_bwd
+            H_bot = V @ (Xd[:, None] * c_fwd) - V @ c_bwd
+            A[i] = (_stag_flux(E_top, H_top, wq_f, wq_n)
+                    - _stag_flux(E_bot, H_bot, wq_f, wq_n))
+        return A

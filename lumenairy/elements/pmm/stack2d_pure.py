@@ -76,7 +76,12 @@ import warnings
 
 import numpy as np
 
-from ._core import _interface_smatrix, _propagation_smatrix, _redheffer_star
+from ._core import (
+    PerOrderAmplitudesMixin,
+    _interface_smatrix,
+    _propagation_smatrix,
+    _redheffer_star,
+)
 from .twod_staggered import (
     _C,
     Granet2DTransverseE,
@@ -90,7 +95,7 @@ from .twod_staggered import (
 __all__ = ["PMM2DStackPure"]
 
 
-class PMM2DStackPure:
+class PMM2DStackPure(PerOrderAmplitudesMixin):
     """Builder for a multilayer doubly-periodic stack solved by the PURE
     (no-floor) staggered 2-D PMM.  See the module docstring for the method,
     the union-grid constraint, and the scope/caveats.
@@ -128,6 +133,8 @@ class PMM2DStackPure:
         self._layers = []          # dicts: kind, thickness, eps | eps_cell
         self._grid = None          # common (Nx, Ny) set by the first patterned layer
         self._src = None
+        self._modal = None         # per-order amplitudes of the last solve (B)
+        self._internal = None      # partial cascades for layer_absorption (C3)
 
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None):
@@ -135,6 +142,8 @@ class PMM2DStackPure:
         ``eps_cell`` (a SQUARE ``(Nx, Ny)`` scalar permittivity grid, walls on
         the segment boundaries).  All patterned layers must share one common
         ``(Nx, Ny)`` grid (union-grid constraint)."""
+        self._modal = None      # geometry change supersedes retained amplitudes
+        self._internal = None
         if (eps is None) == (eps_cell is None):
             raise ValueError(
                 "PMM2DStackPure.add_layer: pass exactly ONE of eps (uniform) or "
@@ -172,18 +181,29 @@ class PMM2DStackPure:
     def set_source(self, wavelength, *, theta=0.0, phi=0.0):
         """Set the incident plane wave: vacuum ``wavelength`` (m), polar
         ``theta`` and azimuth ``phi`` (radians)."""
+        self._modal = None      # source change supersedes retained amplitudes
+        self._internal = None
         self._src = dict(wl=float(wavelength), theta=float(theta),
                          phi=float(phi))
         return self
 
     # ------------------------------------------------------------------ solve
-    def solve(self, *, jones=True):
+    def solve(self, *, jones=True, retain_internal=False):
         """Cascade the stack and return the diffraction efficiencies.
 
         Returns ``(orders, R, T, jones)`` (default) or ``(orders, R, T)`` when
         ``jones=False``.  ``orders`` is ``(Nfo, 2)`` ``(m, n)`` pairs; ``R``/``T``
         are ``(2, Nfo)`` real efficiencies (row 0 = incident ``Ex``, row 1 =
-        incident ``Ey``); ``jones`` is the ``(2, 2)`` order-0 reflection Jones."""
+        incident ``Ey``); ``jones`` is the ``(2, 2)`` order-0 reflection Jones.
+
+        ``retain_internal=True`` (AUDIT_DYNAMETA_CONSUMER_API_GAPS C3)
+        additionally retains the per-layer partial cascades + the staggered
+        block field Gram for :meth:`layer_absorption` -- absorption budgets
+        for the engine of record on lossy-metal cells."""
+        # every solve supersedes the retained per-order amplitudes AND the
+        # retained internals (the audit-P1-04 invalidation contract)
+        self._modal = None
+        self._internal = None
         if self._src is None:
             raise ValueError("PMM2DStackPure.solve: call set_source(...) first.")
         if not self._layers:
@@ -239,6 +259,10 @@ class PMM2DStackPure:
                                     alpha0x=a0x, alpha0y=a0y, k0=k0)
         geom = _homog_geom_cache(sol_h)
         bx, by = sol_h.bx, sol_h.by
+        # C3: the block field Gram (geometry-only -- eps-free, shared by every
+        # region on the union grid) is the flux bilinear form layer_absorption
+        # integrates with; retain it before dropping the assembly.
+        G_gram = (-sol_h.Rmat).copy() if retain_internal else None
         del sol_h
         Wsup, Vsup, _ls = _homog_region_modes(geom, eps_sup)
         Wsub, Vsub, _lb = _homog_region_modes(geom, eps_sub)
@@ -263,17 +287,38 @@ class PMM2DStackPure:
                 W, V, lam = cached
             modes.append((W, V, lam, L["thickness"]))
 
-        # SQUARE Redheffer cascade: sup | (interface, propagate)* | sub.
-        S = _interface_smatrix(Wsup, Vsup, modes[0][0], modes[0][1])
+        # SQUARE Redheffer cascade: sup | (interface, propagate)* | sub.  The
+        # interface list is precomputed (same matrices, same star sequence --
+        # bit-identical to the inline build) so retain_internal can reuse it
+        # for the bracketing partial cascades.
         nlay = len(modes)
+        ifc = [_interface_smatrix(Wsup, Vsup, modes[0][0], modes[0][1])]
+        for i in range(1, nlay):
+            ifc.append(_interface_smatrix(modes[i - 1][0], modes[i - 1][1],
+                                          modes[i][0], modes[i][1]))
+        ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wsub, Vsub))
+        S = ifc[0]
         for i, (W, V, lam, t) in enumerate(modes):
             S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
-            if i < nlay - 1:
-                S = _redheffer_star(
-                    S, _interface_smatrix(W, V, modes[i + 1][0], modes[i + 1][1]))
-        S = _redheffer_star(
-            S, _interface_smatrix(modes[-1][0], modes[-1][1], Wsub, Vsub))
+            S = _redheffer_star(S, ifc[i + 1])
         S11, _S12, S21, _S22 = S
+        if retain_internal:
+            # partial cascades (the RCWAStack / PMMStack / Hybrid pattern):
+            # S_above[i] = sup -> TOP of layer i; S_below_bot[i] = BOTTOM of
+            # layer i -> sub (no own propagation -> both exponentials decay).
+            S_above = [None] * nlay
+            S_above[0] = ifc[0]
+            for i in range(1, nlay):
+                S_above[i] = _redheffer_star(
+                    _redheffer_star(S_above[i - 1], _propagation_smatrix(
+                        modes[i - 1][2], k0 * modes[i - 1][3])), ifc[i])
+            S_below_bot = [None] * nlay
+            S_below_bot[nlay - 1] = ifc[nlay]
+            for i in range(nlay - 2, -1, -1):
+                S_below_bot[i] = _redheffer_star(
+                    _redheffer_star(ifc[i + 1], _propagation_smatrix(
+                        modes[i + 1][2], k0 * modes[i + 1][3])),
+                    S_below_bot[i + 1])
 
         # FORWARD-only far-field Fourier->Rayleigh projection (once).
         ox = np.arange(-n_orders, n_orders + 1)
@@ -300,12 +345,15 @@ class PMM2DStackPure:
         delta = ((order_x == 0) & (order_y == 0)).astype(_C)
         p0 = int(np.where((order_x == 0) & (order_y == 0))[0][0])
 
-        R_rows, T_rows, j_cols = [], [], []
-        for (ex0, ey0) in ((1.0, 0.0), (0.0, 1.0)):
+        R_rows, T_rows, j_cols, cinc_cols = [], [], [], []
+        amp = {k: np.zeros((2, Nfo), dtype=_C)
+               for k in ("rx", "ry", "tx", "ty")}
+        for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
             long_inc = kx0 * ex0 + ky0 * ey0
             einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
             rhs = np.concatenate([ex0 * delta, ey0 * delta])
             cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+            cinc_cols.append(cinc)
             r_ord = Hsup @ (S11 @ cinc)
             t_ord = Hsub @ (S21 @ cinc)
             rx, ry = r_ord[:Nfo], r_ord[Nfo:]
@@ -319,10 +367,107 @@ class PMM2DStackPure:
             R_rows.append(np.where(np.real(kz_ref) > 0, np.real(Re), 0.0))
             T_rows.append(np.where(np.real(kz_trn) > 0, np.real(Te), 0.0))
             j_cols.append(np.stack([rx[p0], ry[p0]]))
+            # this cascade is PUBLIC gauge end-to-end -> no conj
+            amp["rx"][col], amp["ry"][col] = rx, ry
+            amp["tx"][col], amp["ty"][col] = tx, ty
         R_eff = np.stack(R_rows)
         T_eff = np.stack(T_rows)
         jmat = np.stack(j_cols, axis=1)           # jmat[out_comp, in_pol]
         orders2d = np.stack([order_x, order_y], axis=1)
+        # AUDIT_DYNAMETA_CONSUMER_API_GAPS B (PerOrderAmplitudesMixin):
+        # kz_ref/kz_trn are evaluated on the PUBLIC eps -> decaying branch.
+        self._modal = dict(
+            orders=orders2d.copy(), p0=p0,
+            kx=kxv.copy(), ky=kyv.copy(),
+            kz_ref=kz_ref.copy(), kz_trn=kz_trn.copy(),
+            kz_inc=kz_inc, kx0=float(kx0), ky0=float(ky0),
+            wavelength=float(wl), **amp)
+        if retain_internal:
+            self._internal = dict(
+                modes=modes, S_above=S_above, S_below_bot=S_below_bot,
+                G=G_gram, qq=qq, k0=k0,
+                cinc=np.stack(cinc_cols, axis=1),
+                R_tot=R_eff.sum(axis=1), T_tot=T_eff.sum(axis=1))
         if not jones:
             return orders2d, R_eff, T_eff
         return orders2d, R_eff, T_eff, jmat
+
+    # -------------------------------------------------- internal observables
+    def _internal_amplitudes(self):
+        """Per-layer ``(c_fwd_top, c_bwd_bot)`` modal amplitudes from the
+        retained partial cascades (both incident polarizations) -- the
+        Hybrid/PMMStack recovery on the pure staggered cascade."""
+        d = self._internal
+        out = []
+        k0 = d["k0"]
+        for i, (_W, _V, lam, t) in enumerate(d["modes"]):
+            Sa = d["S_above"][i]
+            Sb = d["S_below_bot"][i]
+            X = np.exp(-lam * k0 * t)
+            n = lam.shape[0]
+            A22, A21 = Sa[3], Sa[2]
+            B11 = Sb[0]
+            M = np.eye(n, dtype=_C) - (A22 * X[None, :]) @ (B11 * X[None, :])
+            c_fwd = np.linalg.solve(M, A21 @ d["cinc"])
+            c_bwd = B11 @ (X[:, None] * c_fwd)
+            out.append((c_fwd, c_bwd))
+        return out
+
+    def _flux_at(self, i, z_frac, amps):
+        """z-Poynting flux through a plane inside layer ``i``, integrated
+        over the cell via the staggered block field Gram: with the modal
+        coefficients ``E = [e1; e2]``, ``H = [h1; h2]`` (the Eq.25 dual
+        pairing puts ``H2`` in the ``E1`` placement and ``H1`` in the ``E2``
+        placement),
+
+            P(z) ~ Re( h2^H G1 e1  -  h1^H G2 e2 )
+
+        (probe-verified on the homogeneous-region modes: this form is equal
+        for both propagating polarizations and ~1e-29 for evanescent modes,
+        i.e. the physical z-flux up to a positive scale -- unlike the
+        Hybrid's Rayleigh-basis convention, the Eq.25 dual carries no extra
+        ``-i``).  Only ratios enter :meth:`layer_absorption`, so the overall
+        scale cancels."""
+        d = self._internal
+        _W, _V, lam, t = d["modes"][i]
+        W, V = _W, _V
+        c_fwd, c_bwd = amps[i]
+        k0, qq = d["k0"], d["qq"]
+        P = np.exp(-lam * k0 * (z_frac * t))[:, None]
+        Q = np.exp(-lam * k0 * ((1.0 - z_frac) * t))[:, None]
+        E = W @ (P * c_fwd) + W @ (Q * c_bwd)
+        H = V @ (P * c_fwd) - V @ (Q * c_bwd)
+        G = d["G"]
+        G1, G2 = G[:qq, :qq], G[qq:, qq:]
+        val = (np.sum(np.conj(H[qq:]) * (G1 @ E[:qq]), axis=0)
+               - np.sum(np.conj(H[:qq]) * (G2 @ E[qq:]), axis=0))
+        return np.real(val)
+
+    def layer_absorption(self):
+        """Per-layer absorbed power fraction ``(n_layers, 2)`` (one column
+        per incident lab polarization ``E_x``/``E_y``) -- the
+        :meth:`PMM2DStackHybrid.layer_absorption` contract on the PURE
+        (no-floor) engine (AUDIT_DYNAMETA_CONSUMER_API_GAPS C3), from the
+        z-flux difference across each layer in the staggered modal basis
+        (block-field-Gram quadrature).  Requires that the MOST RECENT
+        :meth:`solve` used ``retain_internal=True``.  The cross-machinery
+        closure ``sum_i A_i == 1 - sum R - sum T`` is the honest check
+        (internal Gram flux vs the Rayleigh far field)."""
+        d = self._internal
+        if d is None:
+            raise ValueError(
+                "PMM2DStackPure.layer_absorption: no internal data retained; "
+                "the MOST RECENT solve must use solve(retain_internal=True) "
+                "(any re-solve invalidates previously retained internals).")
+        amps = self._internal_amplitudes()
+        nlay = len(d["modes"])
+        F_top = np.array([self._flux_at(i, 0.0, amps) for i in range(nlay)])
+        F_bot = np.array([self._flux_at(i, 1.0, amps) for i in range(nlay)])
+        # normalize by the incident flux WITHOUT an absolute flux gauge: the
+        # net downward flux at the top of layer 0 is (1 - R) * F_inc (the
+        # Hybrid's calibration -- exact by flux conservation in the lossless
+        # superstrate half-space).
+        one_minus_R = 1.0 - d["R_tot"]
+        F_inc = np.where(np.abs(one_minus_R) > 1e-15,
+                         F_top[0] / one_minus_R, np.inf)
+        return (F_top - F_bot) / F_inc[None, :]

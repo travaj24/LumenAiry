@@ -1,9 +1,56 @@
 # DynaMeta Consumer — Lumenairy API Gaps & Feature Requests — 2026-07-13
 
-> **STATUS — A1 / A2 / B(PMMStack) SHIPPED (2026-07-13, branch
-> `fix/bor-grazing-cutoff`); C1–C3 / D1 and the PMM2D leg of B remain OPEN
-> (roadmap-class, per this audit's own priority framing).** Gates in
-> `tests/unit/test_audit_dynameta_consumer_api.py` (15, incl. a JAX-twin leg).
+> **STATUS — FULLY SHIPPED (2026-07-14).** A1 / A2 / B(PMMStack) shipped
+> 2026-07-13 (v5.21.4); the ENTIRE remainder — B(PMM2D leg), C1, C2, C3, D1 —
+> shipped 2026-07-14 on branch `feat/consumer-api-remainder`. Remainder gates
+> in `tests/unit/test_audit_dynameta_consumer_api_2.py`; A1/A2/B-PMMStack
+> gates in `tests/unit/test_audit_dynameta_consumer_api.py`.
+>
+> **Remainder ship notes (2026-07-14):**
+>
+> - **B (PMM2D leg):** `per_order_amplitudes(port)` + `jones_transmission()`
+>   on `PMM2DStackHybrid` (and the `PMM2DStack` alias) and `PMM2DStackPure`
+>   via a shared `PerOrderAmplitudesMixin` (pmm/_core.py) — the exact
+>   `RCWAResult` contract with 2-D `(N, 2)` orders. Hybrid captures the
+>   conj-gauge amplitudes in both the full and even-parity-fold branches;
+>   Pure is public-gauge end-to-end. Validated vs RCWA complex amplitudes on
+>   an identical crossed-pillar cell at normal + conical (Pure ~3e-4, Hybrid
+>   ~3e-3 vs a converged reference); flux-recipe closure exact (0.0).
+> - **C1:** `BORStack.per_mode_amplitudes(port)` — deterministic PINNED
+>   eigenvector gauge (dominant field sample real-positive; the raw `res["S"]`
+>   gauge is now documented on `solve`, whose DIAGONAL was always
+>   gauge-invariant) — and `BORStack.layer_absorption()` via
+>   `solve(retain_internal=True)` partial cascades + the staggered two-grid
+>   flux. Oracles: budget `R+T+sum A = 1` at 1e-12 (lossless A ~ 6e-14);
+>   split-layer consistency 7e-16; the pinned fundamental-mode COMPLEX
+>   reflection matches analytic Fresnel (5e-16) and Fabry–Perot (2e-14) at
+>   the mode's own local angle — machine-precision PHASE, directly unblocking
+>   `BorResult.fundamental_result`'s `phase_deg = 0`.
+> - **C2 (the flagship):** Berreman OOP-tensor-at-OBLIQUE
+>   `retain_internal=True` — the generalized (Li 2003) cascade now retains
+>   the SAME internals shape as the native core: asymmetric modes sliced from
+>   the `M` blocks + generalized-convention partial cascades, mapped to the
+>   public gauge by conjugation with a modal-H NEGATION (`-i` H convention is
+>   not conj-invariant; both probe-pinned). `internal_field` /
+>   `layer_absorption` — already mode-shape-agnostic + full-tensor `E_z`
+>   recovery — serve it unchanged. Gates: closed absorption budget on the
+>   lossy tilted-director stack at oblique AND conical (9e-16!); lossless
+>   zero (1.6e-15); theta->0 continuity vs the native path for absorption
+>   (1.8e-7) and all six field components (4.9e-5 at theta=1e-4).
+> - **C3:** `PMM2DStackPure.solve(retain_internal=True)` +
+>   `layer_absorption()` — Hybrid-pattern partial cascades on the pure
+>   staggered cascade; flux via the eps-free block field Gram
+>   (`Re(h2^H G1 e1 - h1^H G2 e2)`, the Eq.25 dual pairing, probe-pinned
+>   `Re` on the homogeneous-mode oracle). Budget 8e-14 (lossless 2e-13);
+>   Pure-vs-Hybrid per-layer cross-gate 6.7e-3.
+> - **D1:** RCWAStack traces uniform `eps=` scalars AND `set_source`
+>   wavelength/theta/phi (kept raw when traced; backend dispatch includes
+>   them; grazing nudge + propagating-incidence guard documented as skipped
+>   under trace; homogeneous-mode cache bypassed). Forward parity 4e-15;
+>   AD-vs-FD: eps 6e-9, wavelength 1.1e-7, theta 1.7e-8 — the
+>   dispersion-engineering `d/d(wavelength)` leg on the stack twin is live,
+>   so the consumer's lifted-cell workaround can be dropped behind a version
+>   check.
 >
 > - **A1 shipped:** `BerremanStack.jones_transmission()` — `Jt` retained on all
 >   four solve paths (NumPy main + OOP-oblique, JAX plain + retain; the JAX

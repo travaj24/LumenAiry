@@ -762,6 +762,67 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     return R_eff, T_eff, jones
 
 
+class PerOrderAmplitudesMixin:
+    """Public per-order modal accessors over a ``self._modal`` slot
+    (AUDIT_DYNAMETA_CONSUMER_API_GAPS B) -- the
+    :meth:`~lumenairy.elements.rcwa.RCWAResult.per_order_amplitudes` contract
+    mirrored for PMM-family builder classes.
+
+    A solve path that closes through a Rayleigh far field stores the dict
+    ``self._modal`` (keys ``orders``/``p0``/``rx ry tx ty`` each ``(2, N)``
+    PUBLIC ``exp(-iwt)`` rows keyed to incident lab pol/``kx ky kz_ref
+    kz_trn`` normalized by ``k0``/``kz_inc kx0 ky0``/``wavelength``); paths
+    that keep no amplitudes (JAX twins, gauge-incompatible cascades) leave it
+    ``None`` and the accessors raise.  Invalidate ``self._modal`` wherever
+    the audit-P1-04 ``_internal`` contract invalidates."""
+
+    _modal = None
+
+    def per_order_amplitudes(self, port="reflection"):
+        """Per-order complex tangential field amplitudes (PUBLIC
+        ``exp(-iwt)`` convention) and transverse k-vectors of the LAST
+        ``solve`` -- ``Ex``/``Ey`` each ``(2, N)`` (row 0 = response to
+        incident lab ``E_x``, row 1 to ``E_y``), ``kx``/``ky``/``kz``
+        normalized by ``k0``, the ``orders`` array (1-D ``(m,)`` or 2-D
+        ``(N, 2)`` per the class's orders contract), and the
+        ``wavelength``.  Raw TANGENTIAL amplitudes: an order's efficiency
+        needs the flux weight ``Re(kz_m/kz_inc)``, the longitudinal
+        ``Ez = -(kx Ex + ky Ey)/kz``, and the incident ``|E|^2`` (the recipe
+        documented on ``RCWAResult.per_order_amplitudes``)."""
+        if port not in ("reflection", "transmission"):
+            raise ValueError(
+                f"{type(self).__name__}.per_order_amplitudes: port must be "
+                f"'reflection' or 'transmission', got {port!r}.")
+        m = self._modal
+        if m is None:
+            raise ValueError(
+                f"{type(self).__name__}.per_order_amplitudes: no per-order "
+                f"amplitudes retained -- run a NumPy solve() first (any "
+                f"add_layer / set_source / re-solve supersedes them; JAX "
+                f"solves do not retain amplitudes).")
+        ex, ey = ("rx", "ry") if port == "reflection" else ("tx", "ty")
+        kz = m["kz_ref"] if port == "reflection" else m["kz_trn"]
+        return dict(orders=np.asarray(m["orders"]).copy(),
+                    Ex=m[ex].copy(), Ey=m[ey].copy(),
+                    kx=np.asarray(m["kx"]).copy(),
+                    ky=np.asarray(m["ky"]).copy(),
+                    kz=np.asarray(kz).copy(), wavelength=m["wavelength"])
+
+    def jones_transmission(self):
+        """The ``(2, 2)`` zeroth-order TRANSMISSION Jones of the last
+        ``solve`` (columns = incident lab ``E_x``/``E_y``, rows =
+        ``[E_x; E_y]``, PUBLIC ``exp(-iwt)`` convention) -- the
+        phase-bearing modulator observable.  Same availability as
+        :meth:`per_order_amplitudes`."""
+        m = self._modal
+        if m is None:
+            raise ValueError(
+                f"{type(self).__name__}.jones_transmission: no per-order "
+                f"amplitudes retained -- run a NumPy solve() first (JAX "
+                f"solves do not retain amplitudes).")
+        p0 = int(m["p0"])
+        return np.stack([m["tx"][:, p0], m["ty"][:, p0]], axis=0)
+
 
 def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
                         polarization, label="pmm"):
