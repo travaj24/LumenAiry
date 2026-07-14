@@ -90,13 +90,20 @@ def test_lc_cell_vs_rcwa_jones_2d_and_energy():
     # lossless tensor -> energy conserved per incident polarization
     for row in (0, 1):
         assert abs(float(R1[row].sum() + T1[row].sum()) - 1.0) < 2e-2
-    # rcwa oracle on an exact 2x upsampling of the same geometry
+    # rcwa oracle on an exact 2x upsampling of the same geometry.
+    # n_orders=5, NOT 4: this cell has an ISOLATED unstable truncation at
+    # exactly n_orders=4 (the documented resonance pathology -- the solver's
+    # own _EnergyWarning fires there; energy 0.9948/1.0052 and T0 6e-3 off
+    # the settled value on one BLAS, 8e-2 off on the CI py3.10 runner's
+    # kernels, while n_orders=3 AND 5 both close energy to ~1e-4 and agree
+    # on T0 to 1e-4).  Gating a 2e-2 comparison on that point made the test
+    # flip with the runner's CPU/BLAS build (deterministic per machine).
     up = np.zeros((2 * _S, 2 * _S, 3, 3), complex)
     for a in range(3):
         for b in range(3):
             up[:, :, a, b] = np.kron(tc[:, :, a, b], np.ones((2, 2)))
     o2, R2, T2, J2 = rcwa_jones_2d(_P, _P, up, 1.5, 1.0, _DEP, _WL,
-                                   n_orders_x=4, n_orders_y=4)
+                                   n_orders_x=5, n_orders_y=5)
     m1, m2 = _o0(o1), _o0(o2)
     for row in (0, 1):
         assert abs(float(T1[row][m1][0]) - float(T2[row][m2][0])) < 2e-2
