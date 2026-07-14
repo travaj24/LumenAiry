@@ -1,8 +1,13 @@
 """Validate the BOR-PMM M5 high-level solver (bor_solve) + the achievable GATE 4.
 
-- ENERGY monitor: a structured (ring-grating) stack conserves R+T to the FD
-  spurious-mode floor (~1-4%; does NOT improve with N -> the div-conforming SEM
-  is the high-accuracy path, also the gate for the production library port).
+- ENERGY monitor, staggered default: ``build_layer`` now defaults to the Yee
+  div-conforming basis (the production ``BORStack`` discretization), so the
+  structured (ring-grating) stack conserves R+T to machine precision.  The
+  legacy NODAL basis (``basis='nodal'``) is only floor-accurate (~1-4%; does
+  NOT improve with N) at SMALL cells and blows up entirely at large ones (its
+  zero-flux spurious modes orient by the sign of noise, making the interface
+  transmission block singular -- see the bor_solve module docstring); its gate
+  here pins the documented small-cell floor.
 - GATE 4a (the Cartesian-limit intermediate): a uniform interface at m!=0
   reflects each radial mode with the planar Fresnel coefficient OF ITS OWN
   POLARIZATION at that mode's local oblique angle
@@ -43,12 +48,27 @@ def _ring(period, e_lo, e_hi, duty=0.5):
     return f
 
 
-def test_structured_stack_energy_floor():
-    """A ring-grating stack conserves R+T to the FD spurious-mode floor."""
+def test_structured_stack_energy_staggered_default():
+    """The staggered default: a ring-grating stack conserves R+T to machine
+    precision (the same div-conforming basis production ``BORStack`` uses)."""
     m, R, N, k0 = 1, 4.0, 200, 2.0
     layers = [build_layer(m, R, N, _uni(2.0), k0),
               build_layer(m, R, N, _ring(0.8, 2.0, 6.0), k0, thickness=0.5),
               build_layer(m, R, N, _uni(2.0), k0)]
+    res = solve(layers, k0)
+    assert len(res["inc"]) >= 4                       # multiple physical channels
+    assert np.max(np.abs(res["energy"] - 1.0)) < 1e-9
+
+
+def test_structured_stack_energy_floor_nodal():
+    """The legacy nodal basis conserves R+T only to the FD spurious-mode floor
+    (~1-4%) -- and ONLY at small cells (it blows up beyond Rbig ~ several
+    lambda; the staggered default is the fix)."""
+    m, R, N, k0 = 1, 4.0, 200, 2.0
+    layers = [build_layer(m, R, N, _uni(2.0), k0, basis="nodal"),
+              build_layer(m, R, N, _ring(0.8, 2.0, 6.0), k0, thickness=0.5,
+                          basis="nodal"),
+              build_layer(m, R, N, _uni(2.0), k0, basis="nodal")]
     res = solve(layers, k0)
     assert len(res["inc"]) >= 4                       # multiple physical channels
     assert np.max(np.abs(res["energy"] - 1.0)) < 0.05  # within the ~4% floor
@@ -89,8 +109,11 @@ def test_gate4a_planar_fresnel_correspondence():
     (|rTE-rTM| is 0.003..0.23 here, up to 230x the tolerance)."""
     m, R, N, k0 = 1, 5.0, 300, 2.0
     e1, e2 = 4.0, 2.25
-    La = build_layer(m, R, N, _uni(e1), k0)
-    Lb = build_layer(m, R, N, _uni(e2), k0)
+    # the NODAL basis explicitly: _pol_fraction_nodal rebuilds that basis's
+    # E_z-elimination operators (single cell-centered grid), and this gate's
+    # documented TE-anchor scope is a nodal-basis property.
+    La = build_layer(m, R, N, _uni(e1), k0, basis="nodal")
+    Lb = build_layer(m, R, N, _uni(e2), k0, basis="nodal")
     S11 = interface_smatrix(La["W"], La["V"], Lb["W"], Lb["V"])[0]
     qa = La["q"]
     Pte = _pol_fraction_nodal(m, R, N, k0, e1, La)
@@ -126,7 +149,7 @@ def test_gate4a_oblique_angles_span():
     so GATE 4a genuinely exercises the cylindrical-metric curvature."""
     m, R, N, k0 = 1, 5.0, 300, 2.0
     e1 = 4.0
-    La = build_layer(m, R, N, _uni(e1), k0)
+    La = build_layer(m, R, N, _uni(e1), k0, basis="nodal")
     qa = La["q"]
     angles = []
     for j in np.where(_physical_propagating(La, k0))[0]:

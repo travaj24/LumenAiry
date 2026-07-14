@@ -1,17 +1,24 @@
 """BOR-PMM Milestone 5: the high-level axisymmetric stack solver (the prototype
 of the eventual ``BORStack`` public API).
 
-Pipeline: per-layer M2 radial vector modes (PEC-wall clean half-spaces, M5a) ->
+Pipeline: per-layer radial vector modes (closed-wall clean half-spaces, M5a) ->
 flux-normalized basis -> M4 z-cascade S-matrix -> physical-mode R/T efficiencies
 + cylindrical far-field orders (M5b Fourier-Bessel / vortex Hankel).
 
-ACCURACY (honest): the FD vector discretization emits spurious divergence-
-violating modes whose real-q members leak ~1-2% (max ~4%) of the energy into
-unphysical channels -- a floor that does NOT decrease with N (measured 3.8e-2 at
-N=200 AND N=400).  So this prototype is correct to ~1-2%, not to machine
-precision.  The clean fix (no spurious modes) is the div-conforming SEM
-re-discretization -- which is also the gate for the production library port and
-the full multi-order GATE 4 (the Cartesian-limit diffraction test).
+BASIS (follow-up to AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13):
+``build_layer`` now defaults to the Yee div-conforming STAGGERED basis -- the
+same spurious-free discretization production ``BORStack`` uses -- so the
+cascade conserves energy to machine precision.  The historical NODAL FD basis
+(``basis='nodal'``) is retained for its legacy gates but is catastrophically
+unreliable on large cells: its spurious divergence-violating mode sea (~40-50%
+of the basis at Rbig ~ 12 lambda) carries zero z-flux, so each spurious mode's
+forward/backward orientation is decided by the SIGN OF NOISE.  When adjacent
+layers share most of their cross-section, near-identical spurious modes can
+orient OPPOSITELY, making a layer-a "forward" combination equal a layer-b
+"backward" combination -- which renders the interface transmission block
+``a + b`` numerically singular (measured cond ~ 2.6e15 at Rbig = 12 lambda)
+and blows the cascade energy up to ~1e29 (small cells only leak the documented
+~1-4% floor, which does NOT decrease with N).
 """
 from __future__ import annotations
 
@@ -49,12 +56,41 @@ def _flux_normalize(L):
     return L
 
 
-def build_layer(m, Rbig, N, eps_profile, k0, *, wall="pec", thickness=None):
-    """A flux-normalized layer with its physical-mode flag (reldiv-tagged)."""
-    L = _flux_normalize(layer_modes(m, Rbig, N, eps_profile, k0, wall=wall))
-    L["reldiv"] = np.array([md["reldiv"] for md in
-                            radial_coupled_modes(m, Rbig, N, eps_profile, k0,
-                                                 wall=wall)])
+def build_layer(m, Rbig, N, eps_profile, k0, *, wall="pec", thickness=None,
+                basis="staggered"):
+    """A flux-normalized layer with its physical-mode flag (reldiv-tagged).
+
+    ``basis='staggered'`` (default) uses the Yee div-conforming discretization
+    (spurious-free; the production ``BORStack`` basis) -- the cascade then
+    conserves energy to machine precision at any cell size.  ``basis='nodal'``
+    keeps the historical FD basis (see the module docstring for why it blows
+    up on large cells); its spurious modes are tagged by ``reldiv`` for the
+    ``_physical_propagating`` filter.  The staggered wall is the closed
+    Dirichlet wall, so ``wall`` must stay ``'pec'`` there.
+    """
+    if basis == "staggered":
+        if wall != "pec":
+            raise ValueError("basis='staggered' builds in the closed Dirichlet "
+                             "wall; wall must be 'pec' (got %r)" % (wall,))
+        # already flux-normalized per column inside _layer_modes_staggered;
+        # re-running _flux_normalize here would apply the single-grid ``wq``
+        # measure to the two-grid basis (the audit-P3-14 half-cell error).
+        L = dict(layer_modes(m, Rbig, N, eps_profile, k0, staggered=True))
+        W, V = L["W"], L["V"]
+        wq_f, wq_n = L["wq_face"], L["wq_node"]
+        L["flux"] = np.real(
+            np.sum(W[:N] * np.conj(V[N:]) * wq_f[:, None], axis=0)
+            - np.sum(W[N:] * np.conj(V[:N]) * wq_n[:, None], axis=0))
+        # div-conforming by construction: no spurious sea to tag.
+        L["reldiv"] = np.zeros(W.shape[1])
+    elif basis == "nodal":
+        L = _flux_normalize(layer_modes(m, Rbig, N, eps_profile, k0, wall=wall))
+        L["reldiv"] = np.array([md["reldiv"] for md in
+                                radial_coupled_modes(m, Rbig, N, eps_profile,
+                                                     k0, wall=wall)])
+    else:
+        raise ValueError("basis must be 'staggered' or 'nodal' (got %r)"
+                         % (basis,))
     L["thickness"] = thickness
     return L
 

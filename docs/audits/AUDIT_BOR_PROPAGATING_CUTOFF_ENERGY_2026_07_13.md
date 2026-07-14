@@ -23,16 +23,43 @@
 >   pass unchanged (the k0=2.0 scale has no near-cutoff modes — verified by
 >   running, per caution 1).
 >
-> **NEW FOLLOW-UP FINDING (out of this audit's scope, discovered by gate 5):**
-> the legacy NODAL `build_layer`/`solve` cascade (`bor_solve.py`) has a separate,
-> PRE-EXISTING energy blow-up on large cells — `max|R+T-1| ~ 1e25..1e32` for
-> `Rbig >= ~12 lambda` (worst columns are near-AXIS modes with low reldiv), and
-> ~1.2 even at `Rbig = 6 lambda`.  A/B monkeypatch shows the result is IDENTICAL
-> under the old and new classifier constants, so it is unrelated to this fix and
-> predates it.  The production staggered path (`BORStack`) is unaffected (this
-> reproducer closes at 1.2e-11 end-to-end).  The cascade-level gate-5 check was
-> therefore replaced by a direct `_physical_propagating` classifier unit test;
-> the nodal-path blow-up is left as a documented open item for a future audit.
+> **FOLLOW-UP FINDING (out of this audit's scope, discovered by gate 5) — FIXED
+> (2026-07-13, same branch):** the legacy NODAL `build_layer`/`solve` cascade
+> (`bor_solve.py`) had a separate, PRE-EXISTING energy blow-up on large cells —
+> `max|R+T-1| ~ 1e25..1e32` for `Rbig >= ~12 lambda` (worst columns are near-AXIS
+> modes with low reldiv), and ~1.2 even at `Rbig = 6 lambda`.  A/B monkeypatch
+> showed the result IDENTICAL under the old and new classifier constants, so it
+> was unrelated to this fix and predates it (the production staggered `BORStack`
+> was never affected).
+>
+> **Root cause (probe-diagnosed):** NOT conditioning of `W`/`V` themselves
+> (cond ~ 1e3, no near-zero columns, no `q ~ 0` modes).  The nodal FD basis's
+> spurious divergence-violating mode sea (105/256 and 135/256 columns at
+> `Rbig = 12 lambda`, including complex `q` in a LOSSLESS layer) carries zero
+> z-flux, so each spurious mode's forward/backward orientation is decided by
+> the SIGN OF NOISE.  Adjacent layers sharing most of their cross-section (the
+> ring occupies `r < Rbig/16`) have near-identical spurious modes that can
+> orient OPPOSITELY — a layer-a "forward" combination then equals a layer-b
+> "backward" combination, which is exactly a null vector of the interface
+> transmission block `a + b` (measured `cond(a+b) = 2.6e15` while
+> `cond(W), cond(V) ~ 1e3`), and `inv(a+b)` injects ~1e13 entries that square
+> to ~1e29 energies.  Unfixable by conditioning tricks; the module docstring's
+> own stated cure applies — the spurious-free div-conforming basis.
+>
+> **Fix:** `build_layer` now defaults to the staggered (Yee div-conforming)
+> basis — the SAME discretization production `BORStack` uses — with
+> `basis="nodal"` retained as the legacy escape hatch for its historical
+> small-cell gates (`test_bor_solve.py` GATE 4a & the documented ~1-4% nodal
+> floor).  Staggered layers skip `_flux_normalize` (they are already unit-flux
+> per column; re-normalizing with the single-grid `wq` would re-introduce the
+> audit-P3-14 half-cell error) and tag `reldiv = 0` (div-conforming by
+> construction).  Verified: the blow-up config (`Rbig = 12 lambda`, N=128)
+> goes `9.7e29 -> 3.9e-13`; this audit's reproducer through `build_layer`/
+> `solve` returns 319 modes, `max|R+T-1| = 9.7e-12`, fundamental
+> `R = 0.146135`, and per-mode R parity with `BORStack` of **0.0** (same
+> basis, same cascade, agreeing classifier sets).  Cascade-level twin gate
+> restored as gate 6 (`test_bor_solve_twin_cascade_closes_on_reproducer`);
+> gate 5 remains the classifier unit test.
 
 **Severity: correctness (silent wrong numbers).** Commit `fca4665` ("fix(bor):
 unit-invariant flux normalization + propagating-mode classifiers — audit P1-01, P2-06",

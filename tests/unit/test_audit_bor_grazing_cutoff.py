@@ -108,13 +108,14 @@ def test_bor_solve_twin_classifier_keeps_grazing_band():
     low reldiv) must be KEPT; the q ~ 0 degenerate point, lossy modes, and
     high-reldiv (spurious) modes must still be rejected.
 
-    NOTE the cascade-level twin check is deliberately NOT run through
-    ``build_layer``/``solve`` on the near-grazing reproducer: that legacy
-    NODAL path has a separate, PRE-EXISTING blow-up on large cells
-    (max|R+T-1| ~ 1e25..1e32 for Rbig >= ~12 lambda, IDENTICAL under the
-    old and new classifier constants -- verified by A/B monkeypatch), so it
-    cannot discriminate this fix.  The production staggered path
-    (``BORStack``) is exercised end-to-end by gates 1-4."""
+    (Historical note: this gate was originally classifier-only because the
+    then-NODAL ``build_layer`` basis had a separate, PRE-EXISTING blow-up on
+    large cells -- max|R+T-1| ~ 1e25..1e32 for Rbig >= ~12 lambda, IDENTICAL
+    under the old and new classifier constants (A/B monkeypatch), traced to
+    zero-flux spurious modes orienting by the sign of noise and making the
+    interface transmission block singular.  ``build_layer`` now defaults to
+    the spurious-free staggered basis, and gate 6 runs the cascade-level twin
+    end-to-end.)"""
     from lumenairy.elements.bor.bor_solve import _physical_propagating
 
     k0 = 7.3            # arbitrary scale; classifier is dimensionless in q/k0
@@ -130,3 +131,37 @@ def test_bor_solve_twin_classifier_keeps_grazing_band():
     L = {"q": qn * k0, "reldiv": reldiv}
     keep = _physical_propagating(L, k0)
     assert list(keep) == [True, True, False, False, True, False]
+
+
+def test_bor_solve_twin_cascade_closes_on_reproducer():
+    """Gate 6: the ``build_layer``/``solve`` cascade twin end-to-end on the
+    audit reproducer (um scale).  On the staggered default basis this must
+    reproduce the production ``BORStack`` numbers exactly: 319 incident
+    modes, machine-precision closure, and the gate-3 fundamental-mode R pin
+    (probe-verified per-mode R parity with ``BORStack`` is 0.0 -- same basis,
+    same cascade, agreeing classifier sets).  Pre-fix (nodal basis) this
+    configuration returned max|R+T-1| ~ 4e32."""
+    from lumenairy.elements.bor.bor_solve import build_layer, solve
+
+    scale = 1e6
+    k0 = 2.0 * np.pi / (_LAM * scale)
+    Rbig, N = 48e-6 * scale, 256
+    period, duty = 3.0e-6 * scale, 0.5
+    n_hi, n_lo = 2.45 + 0j, 1.41 + 0j
+
+    def eps_bg(r):
+        return np.full_like(r, n_lo ** 2, dtype=complex)
+
+    def eps_rings(r):
+        e = np.full_like(r, n_lo ** 2, dtype=complex)
+        e[(r % period) < duty * period] = n_hi ** 2
+        return e
+
+    Lh = build_layer(1, Rbig, N, eps_bg, k0)
+    Lg = build_layer(1, Rbig, N, eps_rings, k0, thickness=0.5e-6 * scale)
+    res = solve([Lh, Lg, Lh], k0)
+    e = np.asarray(res["energy"], float)
+    assert e.size == 319, f"incident-mode count {e.size} != 319"
+    assert float(np.max(np.abs(e - 1.0))) < 1e-9
+    jf = int(np.argmax(np.real(res["q_inc"])))     # near-axis fundamental
+    assert abs(res["R"][jf] - 0.146135) < 1e-4, f"fundamental R = {res['R'][jf]:.6f}"
