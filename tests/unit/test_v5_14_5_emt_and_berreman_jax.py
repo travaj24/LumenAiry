@@ -224,6 +224,15 @@ def test_jax_vmap_and_jit():
 
 
 def test_jax_stack_dispatch_and_guard():
+    """Traced-stack dispatch parity + the retain_internal contract on the
+    JAX path.  STALE-GATE FIX (loose-ends round 2026-07-14): this gate
+    originally pinned ``retain_internal=True`` raising for ANY traced stack;
+    the v5.21 line SHIPPED differentiable retain_internal for in-plane
+    stacks (``_solve_jax_retain``), so the in-plane leg now pins the
+    SUPPORTED behavior (internals served, absorption budget closed) and the
+    raise-leg moved to the still-unsupported OUT-OF-PLANE tensor.  (This
+    gate never ran on CI -- the CI unit jobs have no jax -- so the stale
+    pin only failed locally.)"""
     from lumenairy.elements.berreman import BerremanStack
     base = _lc(loss=(0.05, 0.03))
     st = BerremanStack(n_substrate=jnp.asarray(1.5 + 0j), n_superstrate=1.0)
@@ -235,5 +244,18 @@ def test_jax_stack_dispatch_and_guard():
                   .add_layer(180e-9, eps=base).add_layer(100e-9, eps=2.1)
                   .set_source(WL, theta=0.2).solve())
     assert np.max(np.abs(np.asarray(J) - Jn)) < 1e-12
+    # in-plane traced stack: retain_internal is SUPPORTED (v5.21) -- the
+    # retained internals must close the lossy absorption budget.
+    R2, T2, _J2 = st.solve(retain_internal=True)
+    A = st.layer_absorption()
+    budget = np.abs(np.asarray(A).sum(axis=0) + np.asarray(R2)
+                    + np.asarray(T2) - 1.0)
+    assert float(np.max(budget)) < 1e-10
+    # OUT-OF-PLANE tensor on the JAX path: still guarded (any incidence).
+    oop = _lc(loss=(0.05, 0.03))
+    oop[0, 2] = oop[2, 0] = 0.3
+    st_oop = BerremanStack(n_substrate=1.5, n_superstrate=1.0)
+    st_oop.add_layer(jnp.asarray(180e-9), eps=jnp.asarray(oop))
+    st_oop.set_source(WL, theta=0.2)
     with pytest.raises(NotImplementedError, match="retain_internal"):
-        st.solve(retain_internal=True)
+        st_oop.solve(retain_internal=True)

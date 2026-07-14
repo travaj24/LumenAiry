@@ -129,22 +129,33 @@ def _berreman_delta(eps, Kx, Ky):
     ezx, ezy, ezz = eps[2, 0], eps[2, 1], eps[2, 2]
     d = 1.0 / ezz
     D = np.zeros((4, 4), dtype=_C)
-    D[0, 0] = -Kx * ezx * d
-    D[0, 1] = -Kx * ezy * d
+    # FACTOR-i FIX (loose-ends audit 2026-07-14, lockstep with
+    # rcwa._core._layer_eigenmodes_tensor / _berreman_jax._delta_jax /
+    # tests _berreman4x4): the off-plane cross entries (E <- E block
+    # [0:2, 0:2], H <- H block [2:4, 2:4]) carry relative -/+i factors in
+    # the modal-u state the in-plane entries are written in; the legacy
+    # real coefficients gave a wrong +/- symmetric extraordinary dispersion
+    # for out-of-plane tensors at oblique incidence (exact-dispersion gate:
+    # tests/unit/test_audit_oop_dispersion.py).  Note this native path only
+    # exercises these entries for OOP-at-NORMAL (where they vanish) -- the
+    # OOP-oblique route uses the rcwa generator -- but the copies stay in
+    # lockstep.
+    D[0, 0] = -1j * Kx * ezx * d
+    D[0, 1] = -1j * Kx * ezy * d
     D[0, 2] = Kx * Ky * d
     D[0, 3] = 1.0 - Kx * Kx * d
-    D[1, 0] = -Ky * ezx * d
-    D[1, 1] = -Ky * ezy * d
+    D[1, 0] = -1j * Ky * ezx * d
+    D[1, 1] = -1j * Ky * ezy * d
     D[1, 2] = Ky * Ky * d - 1.0
     D[1, 3] = -Ky * Kx * d
     D[2, 0] = eyx - eyz * ezx * d + Kx * Ky
     D[2, 1] = eyy - eyz * ezy * d - Kx * Kx
-    D[2, 2] = eyz * Ky * d
-    D[2, 3] = -eyz * Kx * d
+    D[2, 2] = -1j * eyz * Ky * d
+    D[2, 3] = 1j * eyz * Kx * d
     D[3, 0] = exz * ezx * d - exx + Ky * Ky
     D[3, 1] = exz * ezy * d - exy - Kx * Ky
-    D[3, 2] = -exz * Ky * d
-    D[3, 3] = exz * Kx * d
+    D[3, 2] = 1j * exz * Ky * d
+    D[3, 3] = -1j * exz * Kx * d
     return D
 
 

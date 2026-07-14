@@ -104,12 +104,23 @@ def _berreman_delta(eps, Kx, Ky):
     ezx, ezy, ezz = eps[2, 0], eps[2, 1], eps[2, 2]
     d = 1.0 / ezz
     D = np.zeros((4, 4), dtype=_C)
-    D[0, 0] = -Kx * ezx * d
-    D[0, 1] = -Kx * ezy * d
+    # FACTOR-i FIX (loose-ends audit 2026-07-14): the off-plane cross entries
+    # (E <- E block [0:2, 0:2] and H <- H block [2:4, 2:4]) carry relative
+    # -/+i factors in the modal-u state the in-plane entries are written in.
+    # This oracle's legacy real coefficients shared the defect with the
+    # solver (common prototype ancestry -> the 1e-10 agreements were
+    # CIRCULAR): both produced an artificially +/- symmetric extraordinary
+    # dispersion in out-of-plane layers at oblique incidence (kz_e +/-1.5646
+    # vs the exact det-condition roots {-1.5214, +1.6090} on the tilted-35deg
+    # uniaxial probe).  With the i's, eig(Delta) reproduces the exact
+    # det(k x k x . + eps) = 0 roots to machine precision (the new
+    # INDEPENDENT anchor: tests/unit/test_audit_oop_dispersion.py).
+    D[0, 0] = -1j * Kx * ezx * d
+    D[0, 1] = -1j * Kx * ezy * d
     D[0, 2] = Kx * Ky * d
     D[0, 3] = 1.0 - Kx * Kx * d
-    D[1, 0] = -Ky * ezx * d
-    D[1, 1] = -Ky * ezy * d
+    D[1, 0] = -1j * Ky * ezx * d
+    D[1, 1] = -1j * Ky * ezy * d
     D[1, 2] = Ky * Ky * d - 1.0
     D[1, 3] = -Ky * Kx * d
     # Conical (Kx*Ky != 0) entries fixed 2026-06-10 (audit F1-berreman):
@@ -120,12 +131,12 @@ def _berreman_delta(eps, Kx, Ky):
     # phi = 0 / 90 where Kx*Ky = 0 (so every planar test passed).
     D[2, 0] = eyx - eyz * ezx * d + Kx * Ky
     D[2, 1] = eyy - eyz * ezy * d - Kx * Kx
-    D[2, 2] = eyz * Ky * d
-    D[2, 3] = -eyz * Kx * d
+    D[2, 2] = -1j * eyz * Ky * d
+    D[2, 3] = 1j * eyz * Kx * d
     D[3, 0] = exz * ezx * d - exx + Ky * Ky
     D[3, 1] = exz * ezy * d - exy - Kx * Ky
-    D[3, 2] = -exz * Ky * d
-    D[3, 3] = exz * Kx * d
+    D[3, 2] = 1j * exz * Ky * d
+    D[3, 3] = -1j * exz * Kx * d
     return D
 
 

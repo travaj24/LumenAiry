@@ -29,7 +29,16 @@ _C = np.complex128
 
 
 def _delta_jax(eps, Kx, Ky, jnp):
-    """Berreman 4x4 ``Delta`` built functionally in jnp (no in-place)."""
+    """Berreman 4x4 ``Delta`` built functionally in jnp (no in-place).
+
+    FACTOR-i FIX (loose-ends audit 2026-07-14, in lockstep with
+    ``rcwa._core._layer_eigenmodes_tensor``): the off-plane cross entries
+    (the ``E <- E`` block ``[0:2, 0:2]`` and the ``H <- H`` block
+    ``[2:4, 2:4]``) carry relative factors of ``-/+i`` in the modal-u state
+    convention the in-plane blocks are written in; the legacy real
+    coefficients gave a wrong +/- symmetric extraordinary dispersion inside
+    out-of-plane layers at oblique incidence (exact-dispersion gate:
+    tests/unit/test_audit_oop_dispersion.py)."""
     cj = jnp.complex128
     exx, exy, exz = eps[0, 0], eps[0, 1], eps[0, 2]
     eyx, eyy, eyz = eps[1, 0], eps[1, 1], eps[1, 2]
@@ -39,12 +48,14 @@ def _delta_jax(eps, Kx, Ky, jnp):
     d = 1.0 / ezz
     Z = jnp.asarray(0.0, cj)
     rows = [
-        [-Kx * ezx * d, -Kx * ezy * d, Kx * Ky * d, 1.0 - Kx * Kx * d],
-        [-Ky * ezx * d, -Ky * ezy * d, Ky * Ky * d - 1.0, -Ky * Kx * d],
+        [-1j * Kx * ezx * d, -1j * Kx * ezy * d,
+         Kx * Ky * d, 1.0 - Kx * Kx * d],
+        [-1j * Ky * ezx * d, -1j * Ky * ezy * d,
+         Ky * Ky * d - 1.0, -Ky * Kx * d],
         [eyx - eyz * ezx * d + Kx * Ky, eyy - eyz * ezy * d - Kx * Kx,
-         eyz * Ky * d, -eyz * Kx * d],
+         -1j * eyz * Ky * d, 1j * eyz * Kx * d],
         [exz * ezx * d - exx + Ky * Ky, exz * ezy * d - exy - Kx * Ky,
-         -exz * Ky * d, exz * Kx * d],
+         1j * exz * Ky * d, -1j * exz * Kx * d],
     ]
     return jnp.stack([jnp.stack([jnp.asarray(c, cj) + Z for c in r])
                       for r in rows])

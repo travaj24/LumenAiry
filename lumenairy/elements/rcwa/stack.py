@@ -31,6 +31,7 @@ from ._core import (
     _modes_to_M,
     _order_key,
     _propagation_star,
+    _propagation_smatrix_general,
     _propagation_star_general,
     _rcwa_convergence_stack,
     _rcwa_xp,
@@ -533,8 +534,11 @@ class RCWAResult:
         cplus = denom @ (Sa21 @ cinc)              # forward amp at TOP of layer i
         # backward amp at the BOTTOM = (reflection below the bottom) @ (forward
         # propagated to the bottom).  X = exp(-lam k0 L) decays (Re(lam) >= 0
-        # forward branch), so every exponential here is bounded.
-        lam = np.asarray(to_numpy(info["lam"][i]))
+        # forward branch), so every exponential here is bounded.  On the
+        # GENERALIZED retention (info['general']) the forward eigenvalues are
+        # the explicit lamf set (same decay convention).
+        lam = np.asarray(to_numpy(info["lamf"][i] if info.get("general")
+                                  else info["lam"][i]))
         X = np.exp(-lam * info["k0"] * float(info["thick"][i]))
         Sbb11 = np.asarray(to_numpy(info["S_below_bot"][i][0]))
         cminus_bot = Sbb11 @ (X * cplus)
@@ -633,22 +637,44 @@ class RCWAResult:
             if i not in cpm:
                 cpm[i] = self._internal_cpm(info, i, cinc)
             cplus, cminus_bot = cpm[i]
-            W = np.asarray(to_numpy(info["W"][i]))
-            V = np.asarray(to_numpy(info["V"][i]))
-            lam = np.asarray(to_numpy(info["lam"][i]))
             EPS = np.asarray(to_numpy(info["EPS"][i]))
             # forward referenced to the layer TOP (depth z), backward to the
             # BOTTOM (L - z): BOTH exponents are <= 0 (Re(lam) >= 0 on the forward
             # branch), so a deep/lossy layer never overflows.  Same field as the
             # old c- exp(+lam k0 z), evaluated in the numerically-stable order.
             Lz = float(thick[i]) - zloc
-            fwd = cplus * np.exp(-lam * k0 * zloc)
-            bwd = cminus_bot * np.exp(-lam * k0 * Lz)
-            s = W @ (fwd + bwd)                              # E tangential
-            u = V @ (fwd - bwd)                              # H partner
+            if info.get("general"):
+                # GENERALIZED retention: explicit asymmetric mode sets; the
+                # backward branch has Re(lamb) <= 0, so exp(+lamb k0 (L-z))
+                # decays referenced from the layer BOTTOM.
+                Wf = np.asarray(to_numpy(info["Wf"][i]))
+                Vf = np.asarray(to_numpy(info["Vf"][i]))
+                Wb = np.asarray(to_numpy(info["Wb"][i]))
+                Vb = np.asarray(to_numpy(info["Vb"][i]))
+                lamf = np.asarray(to_numpy(info["lamf"][i]))
+                lamb = np.asarray(to_numpy(info["lamb"][i]))
+                fwd = cplus * np.exp(-lamf * k0 * zloc)
+                bwd = cminus_bot * np.exp(lamb * k0 * Lz)
+                s = Wf @ fwd + Wb @ bwd                      # E tangential
+                u = Vf @ fwd + Vb @ bwd                      # H partner
+            else:
+                W = np.asarray(to_numpy(info["W"][i]))
+                V = np.asarray(to_numpy(info["V"][i]))
+                lam = np.asarray(to_numpy(info["lam"][i]))
+                fwd = cplus * np.exp(-lam * k0 * zloc)
+                bwd = cminus_bot * np.exp(-lam * k0 * Lz)
+                s = W @ (fwd + bwd)                          # E tangential
+                u = V @ (fwd - bwd)                          # H partner
             Sx, Sy = s[:N], s[N:]
             Hx, Hy = -1j * u[:N], -1j * u[N:]                # -i*eta0 scale
-            Sz = np.linalg.solve(EPS, -(Kx @ Hy - Ky @ Hx))  # curl-H z-comp
+            rhs = -(Kx @ Hy - Ky @ Hx)
+            if info.get("general") and info["EZX"][i] is not None:
+                # OOP tensor: D_z = EZX Ex + EZY Ey + EZZ Ez (internal-gauge
+                # convolutions, same as the mode build) -> solve for Ez.
+                EZX = np.asarray(to_numpy(info["EZX"][i]))
+                EZY = np.asarray(to_numpy(info["EZY"][i]))
+                rhs = rhs - EZX @ Sx - EZY @ Sy
+            Sz = np.linalg.solve(EPS, rhs)                   # curl-H z-comp
             Hz = Kx @ Sy - Ky @ Sx                           # curl-E z-comp
             return dict(Ex=Sx, Ey=Sy, Ez=Sz, Hx=Hx, Hy=Hy, Hz=Hz)
 
@@ -1994,13 +2020,12 @@ class RCWAStack:
             # [W, W; V, -V] blocks with (lam, -lam), the generator layers
             # with their explicit forward/backward sets (the PMM2DStack
             # any_oop pattern; the single-layer machinery is rcwa_jones_2d's
-            # GAP2 path).
-            if retain_internal:
-                raise NotImplementedError(
-                    "RCWAStack.solve(retain_internal=True): internal-field "
-                    "retention is not available for stacks with "
-                    "out-of-plane tensor layers (the partial-S recovery is "
-                    "symmetric-mode based).")
+            # GAP2 path).  retain_internal=True (loose-ends round 2026-07-14,
+            # the Berreman-C2 port): the bracketing partial cascades are
+            # built with the SAME generalized interface/propagation
+            # convention and the per-layer ASYMMETRIC mode sets are retained
+            # explicitly -- RCWAResult's recovery/field/absorption consumers
+            # branch on info['general'].
 
             def _gblocks(m):
                 if isinstance(m, tuple) and len(m) == 8 and m[0] == "gen":
@@ -2010,6 +2035,7 @@ class RCWAStack:
                 return _modes_to_M(W, V, W, -V), lam, -lam
             M_prev = _modes_to_M(Wref, Vref, Wref, -Vref)
             S = None
+            gen_ifc, gen_prop = [], []
             for i, m in enumerate(modes):
                 Ml, lf, lb = _gblocks(m)
                 Si = _interface_smatrix_general(M_prev, Ml)
@@ -2017,8 +2043,15 @@ class RCWAStack:
                 S = _propagation_star_general(
                     S, lf, lb, k0 * self._layers[i].thickness)
                 M_prev = Ml
+                if retain_internal:
+                    gen_ifc.append(Si)
+                    gen_prop.append(_propagation_smatrix_general(
+                        lf, lb, k0 * self._layers[i].thickness))
             Msub = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
-            S = _redheffer_star(S, _interface_smatrix_general(M_prev, Msub))
+            ifc_sub = _interface_smatrix_general(M_prev, Msub)
+            S = _redheffer_star(S, ifc_sub)
+            if retain_internal:
+                gen_ifc.append(ifc_sub)
         if S is not None:
             S11, S12, S21, S22 = S
 
@@ -2098,7 +2131,7 @@ class RCWAStack:
                 "JAX path (the per-layer modal retention is host-side); the "
                 "efficiencies are returned WITHOUT internal-field data -- "
                 "re-solve with NumPy inputs for field maps.", stacklevel=2)
-        if retain_internal and bname != "jax":
+        if retain_internal and bname != "jax" and not any_oop:
             # Per-layer cumulative partial S-matrices that bracket the TOP plane
             # of each layer -> the c+/c- modal amplitudes for the in-structure
             # field (see RCWAResult.internal_field).  Same gap-free
@@ -2111,6 +2144,62 @@ class RCWAStack:
                 lam=[m[2] for m in modes], EPS=[m[3] for m in modes],
                 thick=[float(L.thickness) for L in self._layers],
                 S_above=S_above, S_below=S_below, S_below_bot=S_below_bot,
+                Kx=Kx, Ky=Ky, k0=float(k0),
+                N=N, delta=delta, layers=list(self._layers),
+                period_x=self.period_x, period_y=self.period_y,
+                is_1d=self.is_1d, nox=self.nox, noy=self.noy)
+        elif retain_internal and bname != "jax":
+            # GENERALIZED retention (loose-ends 2026-07-14, the Berreman-C2
+            # port): explicit asymmetric mode sets + partial cascades built
+            # from the SAME generalized interface/propagation matrices the
+            # global solve used (gen_ifc/gen_prop collected above).
+            nlay = len(modes)
+            S_above = [None] * nlay
+            S_above[0] = gen_ifc[0]
+            for i in range(1, nlay):
+                S_above[i] = _redheffer_star(
+                    _redheffer_star(S_above[i - 1], gen_prop[i - 1]),
+                    gen_ifc[i])
+            S_below = [None] * nlay
+            S_below_bot = [None] * nlay
+            for i in range(nlay - 1, -1, -1):
+                S_below_bot[i] = (gen_ifc[nlay] if i == nlay - 1
+                                  else _redheffer_star(gen_ifc[i + 1],
+                                                       S_below[i + 1]))
+                S_below[i] = _redheffer_star(gen_prop[i], S_below_bot[i])
+            # explicit (Wf, Vf, lamf, Wb, Vb, lamb) per layer; a symmetric
+            # layer degenerates to (W, V, lam, W, -V, -lam).  E_z recovery
+            # for an OOP layer needs the EZX/EZY convolutions (same internal
+            # conj gauge as _layer_modes builds them); None for the rest.
+            Wf_l, Vf_l, lf_l, Wb_l, Vb_l, lb_l = [], [], [], [], [], []
+            EPS_l, EZX_l, EZY_l = [], [], []
+            for m, L in zip(modes, self._layers):
+                if isinstance(m, tuple) and len(m) == 8 and m[0] == "gen":
+                    _k, Wf, Vf, lf, Wb, Vb, lb, EZZ = m
+                    Wf_l.append(Wf), Vf_l.append(Vf), lf_l.append(lf)
+                    Wb_l.append(Wb), Vb_l.append(Vb), lb_l.append(lb)
+                    EPS_l.append(EZZ)
+                    et = xp.conj(xp.asarray(L.data))
+                    EZX_l.append(_eps_convolution_2d(
+                        et[:, :, 2, 0], orders, self.nox, self.noy))
+                    EZY_l.append(_eps_convolution_2d(
+                        et[:, :, 2, 1], orders, self.nox, self.noy))
+                else:
+                    W, V, lam, EPS = m
+                    Wf_l.append(W), Vf_l.append(V), lf_l.append(lam)
+                    Wb_l.append(W), Vb_l.append(-V), lb_l.append(-lam)
+                    EPS_l.append(EPS)
+                    EZX_l.append(None)
+                    EZY_l.append(None)
+            modal["internal"] = dict(
+                general=True,
+                Wf=Wf_l, Vf=Vf_l, lamf=lf_l, Wb=Wb_l, Vb=Vb_l, lamb=lb_l,
+                EPS=EPS_l, EZX=EZX_l, EZY=EZY_l,
+                thick=[float(L.thickness) for L in self._layers],
+                S_above=[(None, None, Sa[2], Sa[3]) for Sa in S_above],
+                S_below=[(Sb[0], None, None, None) for Sb in S_below],
+                S_below_bot=[(Sbb[0], None, None, None)
+                             for Sbb in S_below_bot],
                 Kx=Kx, Ky=Ky, k0=float(k0),
                 N=N, delta=delta, layers=list(self._layers),
                 period_x=self.period_x, period_y=self.period_y,

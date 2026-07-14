@@ -1960,6 +1960,23 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
         [Cyx + Kx @ Ky,        Cyy - Kx @ Kx],
         [Ky @ Ky - Cxx,        -(Cxy + Ky @ Kx)],
     ])
+    # An IN-PLANE cell passed through an off-plane-capable assembly (e.g. the
+    # fff_nv tensor factorization) hands EXACTLY-ZERO cross-blocks instead of
+    # None.  Route those to the symmetric path below: A = B = 0 makes the
+    # [W; -V] <-> -lam symmetry exact, the 2N eig is 4x cheaper than the 4N
+    # generator, and the symmetric path is the numerically stable one at
+    # marginal truncations (loose-ends audit 2026-07-14; a concrete-only
+    # check -- traced blocks keep the generator, which is exact for in-plane
+    # too).
+    if any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
+        try:
+            _all_zero = all(
+                t is None or float(np.max(np.abs(to_numpy(t)))) == 0.0
+                for t in (EZX, EZY, EXZ, EYZ))
+        except Exception:
+            _all_zero = False              # traced -> keep the generator
+        if _all_zero:
+            EZX = EZY = EXZ = EYZ = None
     if any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
         # ---- full-3x3 (out-of-plane) generator path (Li 2003) ---------------
         Z = xp.zeros((N, N), dtype=_C)
@@ -1967,16 +1984,32 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
         EZY = Z if EZY is None else xp.asarray(EZY).astype(_C)
         EXZ = Z if EXZ is None else xp.asarray(EXZ).astype(_C)
         EYZ = Z if EYZ is None else xp.asarray(EYZ).astype(_C)
-        # A block: Ez = inv(EZZ)(Dz - EZX Ex - EZY Ey) feeds -Kx inv(EZZ) EZX etc.
+        # A block: Ez = inv(EZZ)(Dz - EZX Ex - EZY Ey) feeds -i Kx inv(EZZ) EZX
+        # etc.  FACTOR-i FIX (loose-ends audit 2026-07-14): in the modal-u
+        # state the P/Q blocks are written in (H_phys = -i u -- the convention
+        # every consumer shares: interface matching, flux, internal fields),
+        # the off-plane cross-blocks carry RELATIVE factors of -/+i: deriving
+        # d[E; u]/dz' row by row gives A' = i * A_legacy, B' = -i * B_legacy.
+        # The legacy REAL-coefficient blocks (mirrored from the _berreman4x4
+        # test oracle, which shared the same prototype ancestry -- a CIRCULAR
+        # validation) produced a wrong, artificially +/- SYMMETRIC
+        # extraordinary-wave dispersion inside out-of-plane layers at oblique
+        # incidence (kz_e = +/-1.5646 vs the exact det(k x k x . + eps) = 0
+        # roots {-1.5214, +1.6090} on a 35deg-tilted uniaxial probe -- a 3-5%
+        # propagation-constant error), while the ordinary pair and every
+        # in-plane / normal-incidence case stayed exact (A = B = 0 there).
+        # With the i's, eig(G) reproduces the exact dispersion roots to
+        # machine precision in BOTH gauges and every mode satisfies all six
+        # Maxwell rows (Poynting-consistent internal fields).  Gate:
+        # tests/unit/test_audit_oop_dispersion.py.
         A = _block(xp, [
-            [-Kx @ Ez_inv @ EZX,   -Kx @ Ez_inv @ EZY],
-            [-Ky @ Ez_inv @ EZX,   -Ky @ Ez_inv @ EZY],
+            [-1j * (Kx @ Ez_inv @ EZX),   -1j * (Kx @ Ez_inv @ EZY)],
+            [-1j * (Ky @ Ez_inv @ EZX),   -1j * (Ky @ Ez_inv @ EZY)],
         ])
-        # B block: the exz/eyz feedback into the modal-H rows (CORRECTED block,
-        # validated against the Berreman 4x4 Delta).
+        # B block: the exz/eyz feedback into the modal-H rows (-i, see above).
         B = _block(xp, [
-            [EYZ @ Ez_inv @ Ky,    -EYZ @ Ez_inv @ Kx],
-            [-EXZ @ Ez_inv @ Ky,   EXZ @ Ez_inv @ Kx],
+            [-1j * (EYZ @ Ez_inv @ Ky),    1j * (EYZ @ Ez_inv @ Kx)],
+            [1j * (EXZ @ Ez_inv @ Ky),    -1j * (EXZ @ Ez_inv @ Kx)],
         ])
         G = _block(xp, [[A, P], [Q, B]])
         gam, Vfull = _eig_for(xp)(G)

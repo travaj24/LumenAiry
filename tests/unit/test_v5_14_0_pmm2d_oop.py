@@ -90,13 +90,36 @@ def _y_uniform_cells(exz=0.3, ezx=None):
 
 def test_y_uniform_oop_grating_matches_1d():
     """The wall-normal x longitudinal (exz/ezx) channel -- the hard one -- on a
-    y-uniform grating vs the VALIDATED 1-D full-3x3 solver."""
+    y-uniform grating.
+
+    ORACLE REPOINTED (AUDIT_OOP_GENERATOR_FACTOR_I_2026_07_14): the primary
+    reference is now ``rcwa_jones_1d_segments`` -- dispersion-anchored by
+    ``test_audit_oop_dispersion.py`` -- at a stable truncation (n_orders=9;
+    the old n_orders=8 landed on an unstable truncation post-fix, energy
+    +4e-3 with the solver's own warning).  ``pmm_jones_1d``'s independent
+    metric-generator OOP path is kept as a LOOSE cross-check only: post-fix
+    it sits ~4.5e-2 from BOTH dispersion-anchored engines at m = +/-1 in the
+    OOP-coupled polarization (energy exactly 1 -- energy-blind), a known
+    open item recorded in the audit doc; its historical '~1e-3 algebraic
+    floor' was measured against the pre-fix (wrong) reference."""
+    from lumenairy.elements.rcwa import rcwa_jones_1d_segments
     tc, ridge, groove = _y_uniform_cells()
     o2, R2, T2, J2 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
-                                  degree=13, n_orders=8)
+                                  degree=13, n_orders=9)
     # y-momentum conservation is exact on the separable path
     side = o2[:, 1] != 0
     assert float(R2[:, side].sum() + T2[:, side].sum()) < 1e-12
+    oR, RR, TR, JR = rcwa_jones_1d_segments(
+        _P, [(0.5, ridge), (0.5, groove)], 1.5, 1.0, _DEP, _WL, theta=0.0,
+        n_orders=41)
+    for m in (-1, 0, 1):
+        i2 = (o2[:, 0] == m) & (o2[:, 1] == 0)
+        iR = oR == m
+        for row in (0, 1):
+            assert abs(float(T2[row][i2][0]) - float(TR[row][iR][0])) < 5e-3
+            assert abs(float(R2[row][i2][0]) - float(RR[row][iR][0])) < 5e-3
+    assert np.max(np.abs(J2 - JR)) < 5e-3
+    # loose cross-check vs the (independent, unfixed) 1-D metric OOP path
     o1, R1, T1, J1 = pmm_jones_1d(_P, ridge, groove, 1.5, 1.0, _DEP, 0.5,
                                   _WL, degree=16, stabilize=False)
     for m in (-1, 0, 1):
@@ -105,10 +128,8 @@ def test_y_uniform_oop_grating_matches_1d():
         if i1.any() and i2.any():
             for row in (0, 1):
                 assert abs(float(T2[row][i2][0])
-                           - float(T1[row][i1][0])) < 2e-2
-                assert abs(float(R2[row][i2][0])
-                           - float(R1[row][i1][0])) < 2e-2
-    assert np.max(np.abs(J2 - J1)) < 2e-2
+                           - float(T1[row][i1][0])) < 6e-2
+    assert np.max(np.abs(J2 - J1)) < 6e-2
 
 
 def test_nonreciprocal_total_power_matches_1d_not_unity():
