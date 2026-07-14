@@ -991,7 +991,9 @@ def field_aberration_sweep(
     dz_search : float, optional
         Half-width of axial search [m].  Defaults to ``|BFL| / 20``.
     n_z : int, default 51
-        Axial samples per focus search.
+        Axial samples per focus search.  Recovered focus shifts are
+        quantised to ``2*dz_search/(n_z-1)`` (grid argmin, no
+        parabolic refinement).
     n_fan : int, default 15
         Rays per fan (odd preferred so the chief ray is included).
 

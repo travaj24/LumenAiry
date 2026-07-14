@@ -73,6 +73,9 @@ class ImagePlaneWFE:
         Index of the chief ray (px ~ 0, py ~ 0) in the arrays.
     img_d_m : float
         Chief-ray image distance from the last lens vertex [m].
+        Measured as the axial offset from the chief ray's last-surface
+        intersection; off-axis this differs from the vertex by the
+        last-surface sag at the chief height.
         For ``image_plane='best_rms'``/``'best_pv'`` this is the
         SHIFTED value, not the paraxial value.
     wavelength_m : float

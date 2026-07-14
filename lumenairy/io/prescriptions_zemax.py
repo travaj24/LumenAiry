@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -26,6 +26,34 @@ from ..glass import GLASS_REGISTRY
 # ============================================================================
 # Zemax .zmx file parser
 # ============================================================================
+
+def _reassign_stop_off_coordbrk(surfaces_raw, filepath):
+    """ZX-5 (AUDIT_IO_ZEMAX residual): Zemax permits the STOP flag on a
+    COORDBRK row, but coordinate breaks are filtered out of the optical
+    surface list, so the stop silently vanished and the aperture fell
+    back to max-DIAM.  Zemax's physical intent is the next optical
+    surface; reassign the flag there and warn.  Mutates in place."""
+    for i, s in enumerate(surfaces_raw):
+        if not (s['is_stop'] and s['is_coordbrk']):
+            continue
+        s['is_stop'] = False
+        nxt = next((t for t in surfaces_raw[i + 1:]
+                    if not t['is_coordbrk']), None)
+        if nxt is None:
+            warnings.warn(
+                f"{filepath}: STOP declared on trailing COORDBRK surface "
+                f"{s['surf_num']} with no optical surface after it; the "
+                f"stop flag is dropped (aperture falls back to max DIAM).",
+                UserWarning, stacklevel=3)
+        else:
+            nxt['is_stop'] = True
+            warnings.warn(
+                f"{filepath}: STOP declared on COORDBRK surface "
+                f"{s['surf_num']}; reassigned to the next optical surface "
+                f"{nxt['surf_num']} (Zemax physical intent -- coordinate "
+                f"breaks carry no aperture).",
+                UserWarning, stacklevel=3)
+
 
 def load_zemax_zmx(filepath: str,
                    surface_range: Optional[Tuple[int, int]] = None,
@@ -242,6 +270,7 @@ def load_zemax_zmx(filepath: str,
     # ------------------------------------------------------------------
     # Filter out coordinate breaks (non-optical surfaces)
     # ------------------------------------------------------------------
+    _reassign_stop_off_coordbrk(surfaces_raw, filepath)
     optical_surfaces = [s for s in surfaces_raw if not s['is_coordbrk']]
 
     # ------------------------------------------------------------------
@@ -962,6 +991,7 @@ def load_zemax_prescription_data_txt(filepath: str,
     # ---------------------------------------------------------------
     # Filter out coordinate breaks (non-optical) and pick lens surfaces
     # ---------------------------------------------------------------
+    _reassign_stop_off_coordbrk(surfaces_raw, filepath)
     optical_surfaces = [s for s in surfaces_raw if not s['is_coordbrk']]
 
     if surface_range is not None:
@@ -1411,7 +1441,8 @@ def _warn_dropped_qtype(surf_dict, surf_label):
 
 def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
                             stop_surface=None, aperture_diameter=None,
-                            back_focal_length=None, name=None):
+                            back_focal_length=None, name=None,
+                            glass_catalogs=('SCHOTT', 'MISC')):
     """3.7.0: cb/mirror-aware .zmx writer.
 
     Walks ``prescription['elements']`` (full chronological list with
@@ -1478,7 +1509,7 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     lines.append(f'ENPD {epd_mm:.8f}')
     lines.append('ENVD 2.0e+01 1 0')
     lines.append('GFAC 0 0')
-    lines.append('GCAT SCHOTT MISC')
+    lines.append('GCAT ' + ' '.join(glass_catalogs))
     lines.append('RAIM 0 0 1 1 0 0 0 0 0')
     lines.append('PUSH 0 0 0 0 0 0')
     lines.append('SDMA 0 1 0')
@@ -1700,7 +1731,8 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
                      stop_surface: Optional[int] = None,
                      aperture_diameter: Optional[float] = None,
                      back_focal_length: Optional[float] = None,
-                     name: Optional[str] = None) -> None:
+                     name: Optional[str] = None,
+                     glass_catalogs: Optional[Sequence[str]] = None) -> None:
     """Write a minimal Zemax OpticStudio ``.zmx`` sequential file for a
     prescription.
 
@@ -1734,6 +1766,10 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
         Defaults to zero (user must adjust).
     name : str, optional
         Lens name recorded in the file header.
+    glass_catalogs : sequence of str, optional
+        Catalog names emitted on the ``GCAT`` header row (v5.21.5;
+        was hardcoded ``SCHOTT MISC``).  Defaults to
+        ``('SCHOTT', 'MISC')``.
 
     Notes
     -----
@@ -1754,6 +1790,8 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
                 (i for i, s in enumerate(prescription.get('surfaces', []))
                  if s.get('is_stop')), 0)
     stop_surface = int(stop_surface)
+    if glass_catalogs is None:
+        glass_catalogs = ('SCHOTT', 'MISC')
     # 3.7.0: prefer the full chronological list when present (it
     # carries mirrors and is aligned with all_thicknesses + the
     # coord_breaks list).  Fall back to the lens-only path otherwise.
@@ -1766,7 +1804,8 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
             prescription, path, wavelength=wavelength,
             stop_surface=stop_surface,
             aperture_diameter=aperture_diameter,
-            back_focal_length=back_focal_length, name=name)
+            back_focal_length=back_focal_length, name=name,
+            glass_catalogs=glass_catalogs)
 
     surfaces = prescription['surfaces']
     thicknesses = prescription['thicknesses']
@@ -1788,7 +1827,7 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
     lines.append(f'ENPD {epd_mm:.8f}')
     lines.append('ENVD 2.0e+01 1 0')
     lines.append('GFAC 0 0')
-    lines.append('GCAT SCHOTT MISC')
+    lines.append('GCAT ' + ' '.join(glass_catalogs))
     lines.append('RAIM 0 0 1 1 0 0 0 0 0')
     lines.append('PUSH 0 0 0 0 0 0')
     lines.append('SDMA 0 1 0')

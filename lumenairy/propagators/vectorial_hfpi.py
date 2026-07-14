@@ -34,7 +34,7 @@ from ..backend import (
     is_jax_array,
     to_numpy,
 )
-from .hfpi import _complex_output_dtype, _spawn_rng
+from .hfpi import _complex_output_dtype, _resolve_output_shape, _spawn_rng
 
 
 @dataclass
@@ -401,6 +401,7 @@ def propagate_vector_hfpi_freespace_aperture(
     wavelength: float,
     n_paths: int,
     rng: Optional[Union[int, object]] = None,
+    output_shape: Optional[Tuple[int, int]] = None,
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
@@ -413,6 +414,13 @@ def propagate_vector_hfpi_freespace_aperture(
     Returns
     -------
     Ex_out, Ey_out : tuple of arrays (Ny, Nx) complex
+
+    Notes
+    -----
+    ``output_shape=(Ny, Nx)`` is the v5.21.5 spelling of the output
+    grid shape; the legacy ``output_grid`` kwarg keeps working but
+    emits a ``DeprecationWarning`` (mirrors the scalar
+    :func:`hfpi.propagate_hfpi_freespace_aperture` v5.2 rename).
     """
     # 4.13.2 (P1-NEW-A): spawn a distinct child RNG for the aperture
     # re-emission so source-plane init and aperture re-sample are
@@ -440,7 +448,10 @@ def propagate_vector_hfpi_freespace_aperture(
         paths, z_target=z_to_aperture + z_aperture_to_output,
         wavelength=wavelength,
     )
-    Ny, Nx = (Ex_in.shape[-2], Ex_in.shape[-1]) if output_grid is None else output_grid
+    Ny, Nx = _resolve_output_shape(
+        output_shape, output_grid,
+        fn_name='propagate_vector_hfpi_freespace_aperture',
+        default_shape=(Ex_in.shape[-2], Ex_in.shape[-1]))
     if output_dx is None:
         output_dx = dx
     return accumulate_vector_to_grid(

@@ -98,10 +98,15 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
             f_eff = float('nan')
         if np.isfinite(f_eff):
             airy = 1.22 * result.wavelength * abs(f_eff) / (2.0 * sd)
+            print(f"  Airy radius:  {airy * scale:.4f} {label}")
+            print(f"  Spot/Airy:    {rms / airy:.2f}")
         else:
-            airy = 1.22 * result.wavelength / (2.0 * sd)
-        print(f"  Airy radius:  {airy * scale:.4f} {label}")
-        print(f"  Spot/Airy:    {rms / airy:.2f}")
+            # Afocal/degenerate: no f_eff, so no image-plane Airy radius.
+            # The diffraction limit is a half-ANGLE; comparing it against
+            # the RMS spot (metres) would be meaningless.
+            airy_half_angle = 1.22 * result.wavelength / (2.0 * sd)
+            print(f"  Airy half-angle: {airy_half_angle * 1e6:.4f} urad "
+                  f"(afocal/degenerate - f_eff unavailable)")
 
 
 def prescription_summary(

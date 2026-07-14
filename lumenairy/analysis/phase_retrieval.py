@@ -671,18 +671,20 @@ def _make_gs_kernel(n_iter_int: int):
 
     @jax.jit
     def _run(E0_, src_, tgt_):
-        def body(i, state):
-            E_in, _ = state
+        def body(i, E_in):
             F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(E_in)))
             E_target = tgt_ * jnp.exp(1j * jnp.angle(F))
             E_back = jnp.fft.fftshift(
                 jnp.fft.ifft2(jnp.fft.ifftshift(E_target)))
-            E_next = src_ * jnp.exp(1j * jnp.angle(E_back))
-            return (E_next, F)
+            return src_ * jnp.exp(1j * jnp.angle(E_back))
 
-        E_final_, F_final_ = jax.lax.fori_loop(
-            0, n_iter_int, body, (E0_, E0_))
+        E_final_ = jax.lax.fori_loop(0, n_iter_int, body, E0_)
         phase_ = jnp.angle(E_final_)
+        # Final error from the far field of the FINAL iterate, matching
+        # the NumPy path's post-loop re-transform (pre-fix the metric
+        # used the far field carried out of the loop = previous iterate).
+        F_final_ = jnp.fft.fftshift(
+            jnp.fft.fft2(jnp.fft.ifftshift(E_final_)))
         err_ = jnp.mean((jnp.abs(F_final_) - tgt_) ** 2)
         return phase_, err_
 

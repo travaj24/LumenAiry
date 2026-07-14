@@ -194,7 +194,7 @@ def paraxial_focus_world(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Paraxial focus position and propagation direction in world coords.
 
-    Traces a chief ray and a paraxial marginal ray through the world
+    Traces an axial ray and a paraxial marginal ray through the world
     surfaces with :func:`trace_world` and finds their convergence
     point.  This approach is robust to folded prescriptions, mirror
     reflections, and Zemax-signed post-mirror thicknesses -- because
@@ -220,7 +220,7 @@ def paraxial_focus_world(
     focus_origin : ndarray (shape ``(3,)``)
         Paraxial image-plane vertex in world coordinates [m].
     focus_normal : ndarray (shape ``(3,)``)
-        Unit vector along the chief ray at focus (the image-plane
+        Unit vector along the axial ray at focus (the image-plane
         normal).  ``(0, 0, 1)`` for un-folded systems, ``(0, +1, 0)``
         for a 90-deg fold to +y, etc.
 
@@ -264,9 +264,9 @@ def paraxial_focus_world(
     from .core import _make_bundle, trace_world
 
     # Both rays travel parallel to world +z at z = 0 (paraxial /
-    # infinite-object setup).  Chief at (0, 0); marginal at
+    # infinite-object setup).  Axial at (0, 0); marginal at
     # (0, aperture_radius).
-    chief = _make_bundle(
+    axial = _make_bundle(
         x=np.array([0.0]), y=np.array([0.0]),
         L=np.array([0.0]), M=np.array([0.0]),
         wavelength=float(wavelength),
@@ -276,8 +276,18 @@ def paraxial_focus_world(
         L=np.array([0.0]), M=np.array([0.0]),
         wavelength=float(wavelength),
     )
-    res_chief = trace_world(chief, world_surfaces, wavelength)
+    res_axial = trace_world(axial, world_surfaces, wavelength)
     res_marg = trace_world(marginal, world_surfaces, wavelength)
+    if not (bool(res_axial.image_rays.alive[0])
+            and bool(res_marg.image_rays.alive[0])):
+        dead = [name for name, res in (('axial', res_axial),
+                                       ('marginal', res_marg))
+                if not bool(res.image_rays.alive[0])]
+        raise ValueError(
+            f"paraxial_focus_world: {' and '.join(dead)} ray(s) did not "
+            f"survive the trace (vignetted / TIR / missed surface); the "
+            f"focus cannot be located.  Check apertures or pass a "
+            f"smaller aperture_radius.")
 
     def _world_state(result):
         rb = result.image_rays
@@ -288,8 +298,18 @@ def paraxial_focus_world(
         world_dir = last.world_R @ local_dir
         return world_pos, world_dir
 
-    p1, d1 = _world_state(res_chief)
+    p1, d1 = _world_state(res_axial)
     p2, d2 = _world_state(res_marg)
+
+    # Near-parallel guard: np.linalg.solve rarely raises on a merely
+    # ill-conditioned 2x2, so a nominally-afocal system would otherwise
+    # return a garbage far intersection instead of the ValueError below.
+    parallel_tol = 1e-12 * float(np.linalg.norm(d1) * np.linalg.norm(d2))
+    if float(np.linalg.norm(np.cross(d1, d2))) <= parallel_tol:
+        raise ValueError(
+            "paraxial_focus_world: axial and marginal rays do not "
+            "converge (parallel post-system).  System may be afocal "
+            "or aperture_radius too small.")
 
     # Closest-approach point between two lines in 3D.  Solve the
     # 2x2 normal-equation system for (t1, t2).
@@ -301,14 +321,14 @@ def paraxial_focus_world(
     except np.linalg.LinAlgError:
         # Parallel rays (e.g. infinite focal length): no finite focus.
         raise ValueError(
-            "paraxial_focus_world: chief and marginal rays do not "
+            "paraxial_focus_world: axial and marginal rays do not "
             "converge (parallel post-system).  System may be afocal "
             "or aperture_radius too small.")
     pt1 = p1 + t1 * d1
     pt2 = p2 + t2 * d2
     focus_origin = 0.5 * (pt1 + pt2)
-    chief_norm = float(np.linalg.norm(d1))
-    focus_normal = d1 / chief_norm if chief_norm > 0 else d1
+    axial_norm = float(np.linalg.norm(d1))
+    focus_normal = d1 / axial_norm if axial_norm > 0 else d1
     return focus_origin, focus_normal
 
 

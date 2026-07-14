@@ -582,6 +582,248 @@ def test_zx4_full_writer_honours_back_focal_length(tmp_path):
     assert 'DISZ 42.00000000' in text
 
 
+# --- AUDIT 6 residuals (loose-ends 2026-07) ------------------------------
+
+# Same singlet as _ZMX_CB_BETWEEN but with the STOP flag on the COORDBRK
+# row (legal in Zemax; the aperture physically lands on the next surface).
+_ZMX_STOP_ON_CB = """UNIT MM
+SURF 0
+  TYPE STANDARD
+  DISZ 10.0
+SURF 1
+  TYPE STANDARD
+  CURV 0.02
+  DISZ 5.0
+  GLAS N-BK7 0 0 1.5 50.0
+  DIAM 12.0 0 0 0 1 ""
+SURF 2
+  TYPE COORDBRK
+  STOP
+  DISZ 3.0
+  PARM 3 2.0
+SURF 3
+  TYPE STANDARD
+  CURV -0.02
+  DISZ 95.0
+  DIAM 9.0 0 0 0 1 ""
+SURF 4
+  TYPE STANDARD
+  DISZ 0.0
+  DIAM 1.0 0 0 0 1 ""
+"""
+
+
+def test_zx5_stop_on_coordbrk_reassigned_to_next_surface(tmp_path):
+    """ZX-5: a STOP declared on a COORDBRK row used to vanish silently
+    (CB rows are filtered out of the lens surfaces, so the stop search
+    fell back to max-DIAM).  It now lands on the NEXT optical surface
+    (Zemax physical intent) with a warning."""
+    from lumenairy.io.prescriptions_zemax import load_zemax_zmx
+    p = tmp_path / 'stopcb.zmx'
+    p.write_text(_ZMX_STOP_ON_CB, encoding='utf-8')
+    with pytest.warns(UserWarning, match='STOP declared on COORDBRK'):
+        presc = load_zemax_zmx(str(p), surface_range=(1, 3))
+    assert presc['stop_index'] == 1
+    assert presc['surfaces'][1]['is_stop'] is True
+    assert presc['surfaces'][0]['is_stop'] is False
+    # Aperture from the reassigned stop's DIAM (9 mm semi-dia), not the
+    # max-DIAM fallback (12 mm semi-dia).
+    assert abs(presc['aperture_diameter'] - 18e-3) < 1e-9
+
+
+def test_zx5_stop_on_coordbrk_reassigned_txt_loader(tmp_path):
+    """ZX-5: same reassignment on the prescription-data .txt loader
+    (STO label on a COORDBRK row)."""
+    from lumenairy.io.prescriptions_zemax import (
+        load_zemax_prescription_data_txt,
+    )
+    rows = [
+        'SURFACE DATA SUMMARY:',
+        '',
+        'Surf\tType\tRadius\tThickness\tGlass\tClear Diam\tChip Zone'
+        '\tMech Diam\tConic\tComment',
+        'OBJ\tSTANDARD\tInfinity\t100\t\t10\t0\t10\t0\t',
+        '1\tSTANDARD\t50\t5\tN-BK7\t24\t0\t24\t0\tfront',
+        'STO\tCOORDBRK\tInfinity\t3\t\t0\t0\t0\t0\t',
+        '3\tSTANDARD\t-50\t95\t\t18\t0\t18\t0\tback',
+        'IMA\tSTANDARD\tInfinity\t0\t\t2\t0\t2\t0\t',
+    ]
+    p = tmp_path / 'stopcb.txt'
+    p.write_text('\n'.join(rows) + '\n', encoding='utf-8')
+    with pytest.warns(UserWarning, match='STOP declared on COORDBRK'):
+        presc = load_zemax_prescription_data_txt(
+            str(p), surface_range=(1, 3))
+    # Aperture from the reassigned stop's 18 mm clear diameter, not the
+    # 24 mm max-DIAM fallback; the elements list carries the flag.
+    assert abs(presc['aperture_diameter'] - 18e-3) < 1e-9
+    stops = [e.get('is_stop', False) for e in presc['elements']]
+    assert stops == [False, True]
+
+
+def test_zx_gcat_glass_catalogs_kwarg(tmp_path):
+    """ZX residual: the .zmx writers' GCAT row is now configurable via
+    glass_catalogs= (was hardcoded 'GCAT SCHOTT MISC')."""
+    from lumenairy.io.prescriptions_zemax import export_zemax_zmx
+    presc = {
+        'surfaces': [
+            {'radius': 0.05, 'conic': 0.0, 'aspheric_coeffs': {},
+             'glass_before': 'air', 'glass_after': 'N-BK7'},
+            {'radius': -0.05, 'conic': 0.0, 'aspheric_coeffs': {},
+             'glass_before': 'N-BK7', 'glass_after': 'air'},
+        ],
+        'thicknesses': [4e-3],
+        'aperture_diameter': 10e-3,
+    }
+    p_default = tmp_path / 'default.zmx'
+    p_cdgm = tmp_path / 'cdgm.zmx'
+    export_zemax_zmx(presc, str(p_default), wavelength=1.31e-6)
+    export_zemax_zmx(presc, str(p_cdgm), wavelength=1.31e-6,
+                     glass_catalogs=('SCHOTT', 'CDGM'))
+    # Default line unchanged (behaviour-preserving).
+    assert 'GCAT SCHOTT MISC' in p_default.read_text(encoding='utf-8')
+    text_cdgm = p_cdgm.read_text(encoding='utf-8')
+    assert 'GCAT SCHOTT CDGM' in text_cdgm
+    assert 'MISC' not in text_cdgm
+
+
+def test_zx_gcat_glass_catalogs_full_writer(tmp_path):
+    """ZX residual: glass_catalogs= is forwarded through the cb/mirror-
+    aware full writer path too."""
+    from lumenairy.io.prescriptions_zemax import export_zemax_zmx
+    presc = {
+        'surfaces': [
+            {'radius': 0.05, 'conic': 0.0, 'aspheric_coeffs': {},
+             'glass_before': 'air', 'glass_after': 'N-BK7',
+             'is_stop': True},
+            {'radius': -0.05, 'conic': 0.0, 'aspheric_coeffs': {},
+             'glass_before': 'N-BK7', 'glass_after': 'air',
+             'is_stop': False},
+        ],
+        'elements': [
+            {'element_type': 'surface', 'radius': 0.05, 'conic': 0.0,
+             'aspheric_coeffs': {}, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 5e-3,
+             'is_stop': True, 'surf_num': 1},
+            {'element_type': 'surface', 'radius': -0.05, 'conic': 0.0,
+             'aspheric_coeffs': {}, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 5e-3,
+             'is_stop': False, 'surf_num': 3},
+        ],
+        'thicknesses': [4e-3],
+        'all_thicknesses': [4e-3],
+        'aperture_diameter': 10e-3,
+        'coord_breaks': [
+            {'surf_num': 2, 'decenter_x_m': 0.0, 'decenter_y_m': 0.0,
+             'tilt_x_deg': 1.0, 'tilt_y_deg': 0.0, 'tilt_z_deg': 0.0,
+             'order': 0, 'thickness_m': 0.0},
+        ],
+    }
+    out = tmp_path / 'full.zmx'
+    export_zemax_zmx(presc, str(out), wavelength=1.31e-6,
+                     glass_catalogs=('SCHOTT', 'CDGM'))
+    text = out.read_text(encoding='utf-8')
+    assert 'TYPE COORDBRK' in text          # took the full-writer path
+    assert 'GCAT SCHOTT CDGM' in text
+
+
+# --- coord_breaks -> surfaces_from_prescription LOCAL bridge (opt-in) ----
+
+def _periscope_prescription(loader_convention):
+    """Plano-convex singlet + 45-deg fold mirror + detector 50mm
+    post-fold (the validation periscope).  ``loader_convention=True``
+    emits the .zmx-loader (ZX-1) thickness convention -- each coord
+    break's own DISZ folded into the preceding gap; False emits the
+    hand-built world convention (gaps exclude CB thickness) consumed by
+    world_surfaces_from_prescription."""
+    return {
+        'surfaces': [
+            {'radius': 50e-3, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'surf_num': 1},
+            {'radius': float('inf'), 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'surf_num': 2},
+            {'radius': float('inf'), 'glass_before': 'air',
+             'glass_after': 'MIRROR', 'surf_num': 15},
+            {'radius': float('inf'), 'glass_before': 'air',
+             'glass_after': 'air', 'surf_num': 25},
+        ],
+        # Mirror -> detector leg: -50mm (Zemax-signed) carried by the
+        # post-fold coord break; folded into the mirror's gap on the
+        # loader convention.
+        'thicknesses': [3e-3, 0.05,
+                        -0.05 if loader_convention else 0.0, 0.0],
+        'aperture_diameter': 0.010,
+        'coord_breaks': [
+            {'surf_num': 10, 'tilt_x_deg': 45.0, 'order': 0,
+             'thickness_m': 0.0},
+            {'surf_num': 20, 'tilt_x_deg': 45.0, 'order': 0,
+             'thickness_m': -0.05},
+        ],
+    }
+
+
+def test_zx6_include_coord_breaks_reverses_zx1_fold(tmp_path):
+    """RT/ZX residual: bridging a loaded .zmx's coord breaks into the
+    local surface list must subtract each break's DISZ back out of the
+    preceding (ZX-1-folded) gap, or the leg double-counts."""
+    from lumenairy.io.prescriptions_zemax import load_zemax_zmx
+    from lumenairy.raytrace.trace import surfaces_from_prescription
+    p = tmp_path / 'cb.zmx'
+    p.write_text(_ZMX_CB_BETWEEN, encoding='utf-8')
+    presc = load_zemax_zmx(str(p), surface_range=(1, 3))
+    sl = surfaces_from_prescription(presc, include_coord_breaks=True)
+    assert [s.is_coordbrk for s in sl] == [False, True, False]
+    # Preceding gap restored to the raw SURF1 DISZ (5mm; the ZX-1 fold
+    # had made it 8mm) and the break carries its own 3mm.
+    assert abs(sl[0].thickness - 5e-3) < 1e-12
+    assert abs(sl[1].thickness - 3e-3) < 1e-12
+    assert sl[1].tilt_x_deg == 2.0
+    assert sl[1].surf_num == 2
+
+
+def test_zx7_coord_break_bridge_matches_trace_world_oracle():
+    """RT/ZX residual: single-fold periscope -- the plain local trace()
+    over surfaces_from_prescription(include_coord_breaks=True) (loader
+    thickness convention) must reproduce the trace_world() oracle
+    (world convention) at the detector plane."""
+    import lumenairy as la
+    from lumenairy.raytrace.core import trace_world
+    from lumenairy.raytrace.trace import surfaces_from_prescription, trace
+    from lumenairy.raytrace.world import world_surfaces_from_prescription
+    rays = la.make_rings(3e-3, 3, 8, 0.0, 1.31e-6)
+    sl = surfaces_from_prescription(
+        _periscope_prescription(loader_convention=True),
+        include_coord_breaks=True)
+    r_local = trace(rays, sl, 1.31e-6)
+    wsurfs = world_surfaces_from_prescription(
+        _periscope_prescription(loader_convention=False))
+    r_world = trace_world(rays, wsurfs, 1.31e-6)
+    lo, wo = r_local.image_rays, r_world.image_rays
+    assert bool(np.all(lo.alive)) and bool(np.all(wo.alive))
+    # Both paths report the detector-plane state in the detector's
+    # local frame; positions to 1e-9 m, direction cosines to 1e-9.
+    for field in ('x', 'y', 'z', 'L', 'M', 'N'):
+        assert np.max(np.abs(getattr(lo, field) - getattr(wo, field))) \
+            < 1e-9, field
+
+
+def test_zx8_include_coord_breaks_default_off_unchanged():
+    """RT/ZX residual: the default (include_coord_breaks=False) ignores
+    coord_breaks entirely -- array-identical trace to the same
+    prescription with the key stripped."""
+    import lumenairy as la
+    from lumenairy.raytrace.trace import surfaces_from_prescription, trace
+    presc = _periscope_prescription(loader_convention=True)
+    stripped = {k: v for k, v in presc.items() if k != 'coord_breaks'}
+    sl_default = surfaces_from_prescription(presc)
+    sl_stripped = surfaces_from_prescription(stripped)
+    assert not any(s.is_coordbrk for s in sl_default)
+    rays = la.make_rings(3e-3, 3, 8, 0.0, 1.31e-6)
+    a = trace(rays, sl_default, 1.31e-6).image_rays
+    b = trace(rays, sl_stripped, 1.31e-6).image_rays
+    for field in ('x', 'y', 'z', 'L', 'M', 'N', 'opd'):
+        assert np.array_equal(getattr(a, field), getattr(b, field)), field
+
+
 # =========================================================================
 # AUDIT 7 -- elements/doe.py (AUDIT_DOE_GRATING_FREEFORM)
 # =========================================================================
@@ -1056,3 +1298,189 @@ def test_opt_second_pass_constraint_no_stale_deprecation():
         warnings.simplefilter('always')
         Constraint(fun=_pickle_safe_zero, lb=0.0, ub=None)
     assert not any(issubclass(w.category, DeprecationWarning) for w in rec)
+
+
+# =========================================================================
+# LOOSE ENDS 2026-07 -- verified-open residuals from the audit campaign
+# =========================================================================
+
+# --- AUDIT 1 residual: gerchberg_saxton_jax metric off-by-one ------------
+
+def test_pr_gs_jax_final_error_matches_numpy():
+    """The JAX GS kernel's error metric now re-transforms the FINAL
+    iterate (mirroring the NumPy path's post-loop FFT); pre-fix it used
+    the far field carried out of the fori_loop = the PREVIOUS iterate's.
+    Full-band random fixture keeps every angle()/|z| well-conditioned so
+    the two backends agree to machine precision."""
+    jax = pytest.importorskip('jax')
+    from lumenairy.analysis.phase_retrieval import (
+        gerchberg_saxton,
+        gerchberg_saxton_jax,
+    )
+    # x64 for float64 parity; restore afterwards so the test doesn't
+    # perturb order-dependent jax state in the rest of the session.
+    prev_x64 = bool(jax.config.jax_enable_x64)
+    jax.config.update('jax_enable_x64', True)
+    try:
+        N = 32
+        rng = np.random.default_rng(42)
+        source = rng.uniform(0.5, 1.5, (N, N))
+        target = rng.uniform(0.5, 1.5, (N, N))
+        # Match total powers so the NumPy path's target normalisation
+        # is a no-op (the JAX kernel consumes the raw target).
+        target *= np.sqrt(np.sum(source**2) / np.sum(target**2))
+        phase0 = np.zeros((N, N))
+        _, err_np = gerchberg_saxton(source, target, n_iter=25,
+                                     initial_phase=phase0,
+                                     backend='numpy')
+        _, err_jx = gerchberg_saxton_jax(source, target, n_iter=25,
+                                         initial_phase=phase0,
+                                         dtype=np.float64)
+    finally:
+        jax.config.update('jax_enable_x64', prev_x64)
+    # Per-iteration error deltas are ~1e-3 relative, so the pre-fix
+    # previous-iterate metric fails this by ~7 orders of magnitude.
+    assert err_jx == pytest.approx(err_np, rel=1e-10)
+
+
+# --- AUDIT 3 residual: vectorial_hfpi output_grid -> output_shape --------
+
+def _vhfpi_fixture():
+    N = 16
+    x = np.linspace(-1.0, 1.0, N)
+    X, Y = np.meshgrid(x, x)
+    Ex = np.exp(-(X**2 + Y**2)).astype(np.complex128)
+    Ey = 0.3 * Ex
+    kw = dict(dx=2e-6, z_to_aperture=1e-3, aperture_radius=8e-6,
+              z_aperture_to_output=1e-3, wavelength=1.31e-6,
+              n_paths=200, rng=7)
+    return Ex, Ey, kw
+
+
+def test_vhfpi_output_shape_rename_legacy_alias_warns():
+    """propagate_vector_hfpi_freespace_aperture now takes output_shape=
+    (the v5.2 hfpi spelling); the legacy output_grid= keeps working but
+    warns, and produces the identical (same-seed) field."""
+    from lumenairy.propagators.vectorial_hfpi import (
+        propagate_vector_hfpi_freespace_aperture,
+    )
+    Ex, Ey, kw = _vhfpi_fixture()
+    ex_new, ey_new = propagate_vector_hfpi_freespace_aperture(
+        Ex, Ey, output_shape=(12, 10), **kw)
+    with pytest.warns(DeprecationWarning):
+        ex_old, ey_old = propagate_vector_hfpi_freespace_aperture(
+            Ex, Ey, output_grid=(12, 10), **kw)
+    assert ex_new.shape == (12, 10) and ey_new.shape == (12, 10)
+    assert np.array_equal(ex_new, ex_old)
+    assert np.array_equal(ey_new, ey_old)
+
+
+def test_vhfpi_output_shape_and_grid_both_given_raises():
+    from lumenairy.propagators.vectorial_hfpi import (
+        propagate_vector_hfpi_freespace_aperture,
+    )
+    Ex, Ey, kw = _vhfpi_fixture()
+    with pytest.raises(ValueError, match='both'):
+        propagate_vector_hfpi_freespace_aperture(
+            Ex, Ey, output_shape=(12, 10), output_grid=(12, 10), **kw)
+
+
+# --- AUDIT 4 residuals: afocal f_eff display + paraxial_focus_world ------
+
+def _flat_window_prescription():
+    """Flat N-BK7 window: exactly afocal (f_eff non-finite, traced rays
+    stay parallel)."""
+    return {
+        'surfaces': [
+            {'radius': float('inf'), 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 5e-3},
+            {'radius': float('inf'), 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 5e-3},
+        ],
+        'thicknesses': [2e-3, 0.0],
+        'aperture_diameter': 10e-3,
+    }
+
+
+def test_rt_trace_summary_afocal_prints_half_angle(capsys):
+    """RT residual: for an afocal system trace_summary no longer prints
+    a radians half-angle with a length unit label (nor the meaningless
+    Spot/Airy ratio) -- it reports an explicit urad half-angle."""
+    import lumenairy as la
+    from lumenairy.raytrace.layout import trace_summary
+    surfs = la.surfaces_from_prescription(_flat_window_prescription())
+    rays = la.make_rings(3e-3, 2, 6, 0.0, 1.31e-6)
+    res = la.trace(rays, surfs, 1.31e-6)
+    trace_summary(res)
+    out = capsys.readouterr().out
+    assert 'Airy half-angle' in out
+    assert 'urad' in out
+    assert 'Spot/Airy' not in out
+    assert 'Airy radius' not in out
+
+
+def test_rt_paraxial_focus_world_afocal_raises():
+    """RT residual: paraxial_focus_world on an afocal system raises the
+    documented ValueError instead of returning a garbage far
+    intersection."""
+    import lumenairy as la
+    with pytest.raises(ValueError, match='afocal'):
+        la.paraxial_focus_world(
+            la.world_surfaces_from_prescription(
+                _flat_window_prescription()),
+            1.31e-6)
+
+
+def test_rt_paraxial_focus_world_dead_rays_raise():
+    """RT residual: if the probe rays are vignetted the failure is a
+    clear ValueError, not a NaN focus."""
+    import lumenairy as la
+    presc = la.make_singlet(R1=50e-3, R2=np.inf, d=3e-3,
+                            glass='N-BK7', aperture=10e-3)
+    wsurfs = la.world_surfaces_from_prescription(presc)
+    for s in wsurfs:
+        s.semi_diameter = 1e-9          # vignette everything
+    with pytest.raises(ValueError, match='did not survive'):
+        la.paraxial_focus_world(wsurfs, 1.31e-6, aperture_radius=1e-3)
+
+
+# --- AUDIT 3 residual: _bluestein_2d chirp H-FFT cache -------------------
+
+def test_prop_bluestein_h_fft_cache_bitexact_and_hit():
+    """The chirp-kernel FFT is cached (numpy default-fft path only) and
+    a cache hit returns a bit-exact copy of the uncached result."""
+    from lumenairy.propagators import _bluestein as bl
+    from lumenairy.propagators.fft_infra import _fft2, _ifft2
+    rng = np.random.default_rng(3)
+    E = (rng.standard_normal((24, 20))
+         + 1j * rng.standard_normal((24, 20)))
+    kw = dict(alpha_x=1.7e-3, alpha_y=2.3e-3, N_out_y=18, N_out_x=22,
+              sign=-1, xp=np, fft2=_fft2, ifft2=_ifft2)
+    bl._clear_h_fft_cache()
+    F1 = bl._bluestein_2d(E, **kw)
+    assert len(bl._H_FFT_CACHE) == 1
+    assert bl._H_FFT_CACHE_HITS == 0
+    F2 = bl._bluestein_2d(E, **kw)
+    assert bl._H_FFT_CACHE_HITS == 1        # served from cache
+    assert np.array_equal(F1, F2)           # bit-exact
+    bl._clear_h_fft_cache()
+
+
+def test_prop_bluestein_h_fft_cache_skips_custom_fft():
+    """Caller-supplied fft2 callables (CuPy / JAX / custom) must bypass
+    the cache -- only the module's default numpy path is keyed."""
+    from lumenairy.propagators import _bluestein as bl
+    from lumenairy.propagators.fft_infra import _fft2, _ifft2
+    rng = np.random.default_rng(3)
+    E = (rng.standard_normal((24, 20))
+         + 1j * rng.standard_normal((24, 20)))
+    bl._clear_h_fft_cache()
+    F_ref = bl._bluestein_2d(E, 1.7e-3, 2.3e-3, 18, 22, sign=-1,
+                             xp=np, fft2=_fft2, ifft2=_ifft2)
+    bl._clear_h_fft_cache()
+    F_custom = bl._bluestein_2d(E, 1.7e-3, 2.3e-3, 18, 22, sign=-1,
+                                xp=np, fft2=np.fft.fft2,
+                                ifft2=np.fft.ifft2)
+    assert len(bl._H_FFT_CACHE) == 0        # nothing cached
+    assert np.allclose(F_ref, F_custom, rtol=1e-12, atol=1e-12)
+    bl._clear_h_fft_cache()

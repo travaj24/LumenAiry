@@ -176,8 +176,10 @@ def spot_diagram(
         if np.isfinite(_f_eff):
             airy_r = 1.22 * result.wavelength * abs(_f_eff) / (2.0 * sd0)
         else:
-            # Fall back to the half-angle form (legacy behaviour).
-            airy_r = 1.22 * result.wavelength / (2.0 * sd0)
+            # Afocal/degenerate: the diffraction limit is a half-ANGLE
+            # (radians); drawing it on a metre-scaled spot axis would be
+            # meaningless, so skip the Airy circle entirely.
+            airy_r = None
     else:
         airy_r = None
     if airy_r is not None and airy_r * scale < ax.get_xlim()[1] * 5:

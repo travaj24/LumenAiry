@@ -55,8 +55,39 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
+
 import numpy as np
 from scipy.fft import next_fast_len
+
+# Chirp-kernel FFT cache: H_FFT = fft2(h_2d) depends only on
+# (alpha_x, alpha_y, Nx_in, Ny_in, N_out_x, N_out_y, sign, dtype) -- not
+# on the input field -- and costs one of the three FFTs per call.
+# NumPy-default-backend entries only (see guard in :func:`_bluestein_2d`).
+# Entries are np.copy'd on store AND on hit: the pyFFTW double-buffer
+# hands out its internal output buffer, which the very next fft2/ifft2
+# call overwrites -- there is zero buffer-ownership slack between the
+# G_FFT / H_FFT pair.
+_H_FFT_CACHE: 'OrderedDict[tuple, np.ndarray]' = OrderedDict()
+_H_FFT_CACHE_MAXSIZE = 16
+_H_FFT_CACHE_LOCK = threading.Lock()
+_H_FFT_CACHE_HITS = 0
+
+
+def _clear_h_fft_cache() -> None:
+    """Drop every cached Bluestein chirp-kernel FFT."""
+    global _H_FFT_CACHE_HITS
+    with _H_FFT_CACHE_LOCK:
+        _H_FFT_CACHE.clear()
+        _H_FFT_CACHE_HITS = 0
+
+
+try:
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _register_cache_clearer('bluestein_h_fft', _clear_h_fft_cache)
+except ImportError:
+    pass
 
 
 def _bluestein_2d(
@@ -225,9 +256,33 @@ def _bluestein_2d(
 
     # ----- 5) FFT-based circular convolution with the chirp kernel -----
     # The 2-D kernel is separable: h[my, mx] = h_y[my] * h_x[mx].
-    h_2d = h_y[:, None] * h_x[None, :]
     G_FFT = fft2(g_pad)
-    H_FFT = fft2(h_2d)
+    # Serve H_FFT from the module cache when possible.  NumPy default
+    # path ONLY: the fft2 callable is caller-supplied (CuPy / JAX /
+    # custom), and keying on anything else would pin device arrays in a
+    # module-global or return results from a different transform.
+    global _H_FFT_CACHE_HITS
+    H_FFT = None
+    cache_key = None
+    if xp is np:
+        from .fft_infra import _fft2 as _default_np_fft2
+        if fft2 is _default_np_fft2:
+            cache_key = (float(alpha_x), float(alpha_y), Nx_in, Ny_in,
+                         N_out_x, N_out_y, sign, str(target_cdtype))
+            with _H_FFT_CACHE_LOCK:
+                cached = _H_FFT_CACHE.get(cache_key)
+                if cached is not None:
+                    _H_FFT_CACHE.move_to_end(cache_key)
+                    _H_FFT_CACHE_HITS += 1
+                    H_FFT = np.copy(cached)
+    if H_FFT is None:
+        h_2d = h_y[:, None] * h_x[None, :]
+        H_FFT = fft2(h_2d)
+        if cache_key is not None:
+            with _H_FFT_CACHE_LOCK:
+                _H_FFT_CACHE[cache_key] = np.copy(H_FFT)
+                while len(_H_FFT_CACHE) > _H_FFT_CACHE_MAXSIZE:
+                    _H_FFT_CACHE.popitem(last=False)
     CONV  = ifft2(G_FFT * H_FFT)
 
     # ----- 6) Extract the first (N_out_y, N_out_x) block and apply post-chirp -----

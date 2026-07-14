@@ -420,7 +420,10 @@ def validate_prescription(
         return issues
 
 
-def surfaces_from_prescription(prescription: Dict[str, Any]) -> List['Surface']:
+def surfaces_from_prescription(
+    prescription: Dict[str, Any],
+    include_coord_breaks: bool = False,
+) -> List['Surface']:
     """Convert a lens prescription dict to a list of Surface objects.
 
     Accepts the same prescription format returned by
@@ -433,6 +436,16 @@ def surfaces_from_prescription(prescription: Dict[str, Any]) -> List['Surface']:
     prescription : dict
         Must contain ``'surfaces'`` and ``'thicknesses'`` keys.
         Optionally ``'aperture_diameter'``.
+    include_coord_breaks : bool, default False
+        v5.21.5 (AUDIT_RAYTRACE_CORE residual): when True, interleave
+        ``prescription['coord_breaks']`` into the returned list as
+        ``is_coordbrk`` Surfaces (positioned by ``surf_num``) so the
+        plain local-frame :func:`trace` handles folded prescriptions.
+        Expects the LOADER thickness convention (see
+        :func:`_insert_coord_break_surfaces`).  Default False is the
+        historical behaviour: coord breaks are ignored entirely
+        (use :func:`world_surfaces_from_prescription` +
+        :func:`trace_world` instead).
 
     Returns
     -------
@@ -554,7 +567,101 @@ def surfaces_from_prescription(prescription: Dict[str, Any]) -> List['Surface']:
             coating=ps.get('coating'),
         ))
 
+    if include_coord_breaks:
+        cbs = prescription.get('coord_breaks') or []
+        if cbs:
+            surface_list = _insert_coord_break_surfaces(
+                surface_list, cbs, prescription)
+
     return surface_list
+
+
+def _coord_break_surface(cb: Dict[str, Any], medium: str) -> 'Surface':
+    """Build an ``is_coordbrk`` Surface from a loader coord-break dict.
+
+    ``medium`` is the glass the break sits inside (the preceding
+    optical surface's ``glass_after``); the trace loop transfers the
+    break's own ``thickness`` in that medium, so ``glass_before`` /
+    ``glass_after`` must both carry it for correct OPL bookkeeping.
+    """
+    sn = int(cb.get('surf_num', -1) or -1)
+    return Surface(
+        radius=np.inf,
+        semi_diameter=np.inf,
+        glass_before=medium,
+        glass_after=medium,
+        is_coordbrk=True,
+        decenter_x_m=float(cb.get('decenter_x_m', 0.0) or 0.0),
+        decenter_y_m=float(cb.get('decenter_y_m', 0.0) or 0.0),
+        tilt_x_deg=float(cb.get('tilt_x_deg', 0.0) or 0.0),
+        tilt_y_deg=float(cb.get('tilt_y_deg', 0.0) or 0.0),
+        tilt_z_deg=float(cb.get('tilt_z_deg', 0.0) or 0.0),
+        coordbrk_order=int(cb.get('order', 0) or 0),
+        thickness=float(cb.get('thickness_m', 0.0) or 0.0),
+        label=f'CB{sn}',
+        surf_num=sn,
+    )
+
+
+def _insert_coord_break_surfaces(
+    surface_list: List['Surface'],
+    cbs: List[Dict[str, Any]],
+    prescription: Dict[str, Any],
+) -> List['Surface']:
+    """Interleave coord-break Surfaces into a lens-only surface list.
+
+    Positioning uses the Zemax ``surf_num`` carried by
+    ``prescription['elements']`` (the lens-only ``surfaces`` dicts from
+    the .zmx loader do not carry one; the Surface's own ``surf_num``
+    falls back to the list position).  A break sharing a ``surf_num``
+    with a surface goes BEFORE it, matching
+    :func:`world_surfaces_from_prescription`'s tie rule.
+
+    Thickness convention (LOADER dicts): the ZX-1 fix folds each
+    strictly-between coord break's own DISZ into the preceding optical
+    surface's flat gap, so inserting the break with its own
+    ``thickness`` must subtract that thickness back out of the
+    preceding gap or the leg is double-counted.  The subtraction
+    mirrors ZX-1's fold condition exactly (breaks strictly between two
+    consecutive optical surfaces); leading / trailing breaks were never
+    folded and keep the preceding gap untouched.
+    """
+    elements = prescription.get('elements') or []
+    refr_elems = [e for e in elements
+                  if e.get('element_type') == 'surface']
+
+    sns: List[int] = []
+    for i, s in enumerate(surface_list):
+        sn = None
+        if i < len(refr_elems):
+            sn = refr_elems[i].get('surf_num')
+        if sn is None:
+            sn = s.surf_num
+        sns.append(int(sn))
+
+    cbs_sorted = sorted(cbs, key=lambda cb: int(cb.get('surf_num', 0) or 0))
+    out: List['Surface'] = []
+    ci = 0
+    for i, s in enumerate(surface_list):
+        while ci < len(cbs_sorted):
+            cb = cbs_sorted[ci]
+            cb_sn = int(cb.get('surf_num', 0) or 0)
+            if cb_sn > sns[i]:
+                break
+            if i > 0 and sns[i - 1] < cb_sn < sns[i]:
+                # Reverse the ZX-1 fold: this break's DISZ already
+                # lives inside the preceding surface's gap.
+                surface_list[i - 1].thickness = (
+                    float(surface_list[i - 1].thickness)
+                    - float(cb.get('thickness_m', 0.0) or 0.0))
+            out.append(_coord_break_surface(cb, s.glass_before))
+            ci += 1
+        out.append(s)
+    tail_medium = surface_list[-1].glass_after if surface_list else 'air'
+    while ci < len(cbs_sorted):
+        out.append(_coord_break_surface(cbs_sorted[ci], tail_medium))
+        ci += 1
+    return out
 
 
 def find_stop(surfaces: List['Surface']) -> int:
