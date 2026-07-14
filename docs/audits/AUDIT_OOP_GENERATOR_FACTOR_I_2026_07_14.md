@@ -1,11 +1,14 @@
 # Out-of-Plane Generator — Missing Factor-i on the Off-Plane Blocks — 2026-07-14
 
-> **STATUS — FIXED (2026-07-14, branch `fix/loose-ends-2026-07`).** All four
-> `Delta`/generator copies corrected in lockstep
+> **STATUS — FIXED (2026-07-14, branch `fix/loose-ends-2026-07`).** All SIX
+> generator copies corrected in lockstep
 > (`rcwa/_core._layer_eigenmodes_tensor` A/B blocks,
 > `_berreman_jax._delta_jax`, `berreman._berreman_delta`,
-> `tests/unit/_berreman4x4._berreman_delta`); independent anchor gates in
-> `tests/unit/test_audit_oop_dispersion.py` (8).
+> `tests/unit/_berreman4x4._berreman_delta`, and — §6 — PMM's
+> `_build_generator_metric` + `_cov_generator_4n` cross blocks); independent
+> anchor gates in `tests/unit/test_audit_oop_dispersion.py` (11).  One
+> documented residual limitation: the covariant layout's discontinuous
+> off-plane TM channel (§6; `'auto'` reroutes it to convection).
 
 **Severity: correctness (silent wrong numbers), multi-release.** Since the
 full-3x3 generator shipped (v5.11.0 GAP7 for `rcwa_jones_1d`, extended through
@@ -104,21 +107,65 @@ PMM side). Existing tests that PINNED pre-fix OOP-oblique values are updated
 alongside this fix with the exact-dispersion + Poynting + cross-attribution
 anchors as the new ground truth.
 
-## 6. Post-fix sweep + NEW OPEN ITEM
+## 6. Post-fix sweep + the PMM generators (RESOLVED 2026-07-14)
 
 Post-fix suite sweep: 136/137 across all OOP-affected suites (the fixed
 solver and fixed oracle move consistently, so the singular-value / R/T pins
-survive).  The one failure exposed a **new open finding**: on the y-uniform
-patterned OOP grating (`test_v5_14_0_pmm2d_oop.py`), the fixed
-`pmm_jones_2d` converges to the dispersion-anchored `rcwa_jones_1d_segments`
-(worst per-order dT 9e-4 at n_orders=9), but **`pmm_jones_1d`'s independent
-metric-generator OOP path now sits ~4.5e-2 from both anchored engines at
-`m = +/-1` in the OOP-coupled polarization** (energy exactly 1 —
-energy-blind).  Its historical "~1e-3 algebraic floor" was measured against
-the pre-fix (wrong) shared-generator reference, so the metric generator's
-OOP channel needs its own audit — OPEN, PMM-side.  The test's oracle is
-repointed to the anchored rcwa solver; the pmm-1D leg is kept as a loose
-documented cross-check.
+survive).  The one failure exposed the same defect in PMM's own generators:
+on the y-uniform patterned OOP grating (`test_v5_14_0_pmm2d_oop.py`), the
+fixed `pmm_jones_2d` converges to the dispersion-anchored
+`rcwa_jones_1d_segments` (worst per-order dT 9e-4 at n_orders=9), but
+`pmm_jones_1d`'s independent metric-generator OOP path sat ~4.5e-2 from both
+anchored engines at `m = +/-1` in the OOP-coupled polarization (energy
+exactly 1 — energy-blind); its historical "~1e-3 algebraic floor" had been
+measured against the pre-fix (wrong) shared-generator reference.
+
+**RESOLUTION — both PMM 1-D generators carried the same missing-factor-i
+defect in their off-plane cross blocks; both are now fixed and
+dispersion-pinned** (`test_audit_oop_dispersion.py::test_pmm_*`).  The
+anchor exploits the fact that for a UNIFORM medium every Galerkin
+coefficient mass is exactly a scalar multiple of the unit mass, so each
+generator is an exact matrix polynomial in `Dop` and `eig(L)` must land on
+the exact det-condition roots at every alpha in the operator's own spectrum
+`{kx0 - i*d : d in eig(Dop)}`:
+
+- **metric generator** (`_build_generator_metric`, the `pmm_jones_1d`
+  vertical-OOP production path): cross-block signs `(+i, +i, -i, +i)` on the
+  legacy terms — the UNIQUE combo of all 256 per-block `{+-1, +-i}` choices
+  that closes (1.9e-10 at `kx0 = 0.5 k0`; next-best 1.2e-2; at normal
+  incidence it ties only with its exact global mirror, an actual spectral
+  degeneracy that oblique breaks).  The y-uniform three-engine cross-check
+  drops 4.5e-2 -> 8.7e-4 (test bar re-tightened 6e-2 -> 3e-3).
+- **covariant generator** (`_cov_generator_4n`, the spectral slant path):
+  cross-block signs `(+i, -i, +i, -i)` — again the UNIQUE combo of 256
+  (full-spectrum 4e-12 with the modal Ez closure at slant 0/30/45 on generic
+  AND symmetric tensors; 2e-10 on resolved alphas with the production
+  div-conforming closure; next-best 1.6e-2).  The oblique-frame eigenvalue
+  map is `beta = kz*k0*cos(phi) + alpha*sin(phi)` (calibrated on the
+  validated in-plane path).  The cross blocks now also use the POINTWISE
+  `[[exz/ezz]]`-style ratio composites (Li Eq.12 discipline) instead of the
+  spectral product `[[exz]] @ inv([[ezz]])`.
+
+**NEW DOCUMENTED LIMITATION (research item, not shipped-blocking): the
+covariant LAYOUT's discontinuous off-plane TM channel.**  With the corrected
+physics, a 3-way referee on the slanted binary OOP grating (slant 30/45 deg)
+gives: convection-vs-RCWA-staircase **3.8e-3/3.9e-3** (two independent
+corrected engines at the staircase-truncation floor; the staircase moves
+1.9e-3 from n_orders 15->25 and 7e-6 from n_slabs 200->800), while the
+covariant path is the outlier at **~0.10-0.12 in TM only** (TE is clean to
+~1e-6-1e-3; battery: dTM 0.074-0.16 across exz/full/lossy/asym cells).
+This matches the 2026-06-08 six-avenue study's unresolved "bare exz/ezx
+sub-channel ~5e-2 floor" — now fully expressed because the everyone-wrong
+world had all three engines agreeing on the same symmetrized wrong answer at
+3e-3 (the old test bars were calibrated there).  The pointwise-composite
+refinement did NOT close it (0.1018 vs 0.1019) — the defect is structural to
+the covariant factorization at off-plane material discontinuities.
+**Response: `'auto'` now routes slanted OOP cells/stacks to `'convection'`**
+(`pmm_jones_1d_slanted`, `pmm_jones_1d_slanted_segments`, `PMMStack`);
+explicit `'covariant'` still solves OOP with the limitation documented in
+its docstrings, and the covariant OOP tests are regression-trackers (TE
+clean / TM within the documented floor / energy) rather than convergence
+claims.
 
 *Found by the 2026-07-14 loose-ends sweep (bidirectional-adversarial follow-up
 to the consumer-API C2/A3 ports). The C2 flux-based `layer_absorption` shipped

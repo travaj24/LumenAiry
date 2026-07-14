@@ -1965,16 +1965,21 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
     # None.  Route those to the symmetric path below: A = B = 0 makes the
     # [W; -V] <-> -lam symmetry exact, the 2N eig is 4x cheaper than the 4N
     # generator, and the symmetric path is the numerically stable one at
-    # marginal truncations (loose-ends audit 2026-07-14; a concrete-only
-    # check -- traced blocks keep the generator, which is exact for in-plane
-    # too).
-    if any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
+    # marginal truncations (loose-ends audit 2026-07-14).  NUMPY-ONLY: on the
+    # jax backend the check would be value-dependent -- EAGER calls see
+    # concrete zeros (symmetric path) while grad/jit TRACING cannot
+    # (generator path), so finite-difference and autodiff would silently walk
+    # two different exact algorithms (measured: an in-plane FD-vs-AD gradient
+    # mismatch of O(1)).  Jax keeps the generator unconditionally -- exact for
+    # in-plane too, and path-consistent under tracing.
+    if (any(t is not None for t in (EZX, EZY, EXZ, EYZ))
+            and backend_name(xp) != "jax"):
         try:
             _all_zero = all(
                 t is None or float(np.max(np.abs(to_numpy(t)))) == 0.0
                 for t in (EZX, EZY, EXZ, EYZ))
         except Exception:
-            _all_zero = False              # traced -> keep the generator
+            _all_zero = False
         if _all_zero:
             EZX = EZY = EXZ = EYZ = None
     if any(t is not None for t in (EZX, EZY, EXZ, EYZ)):

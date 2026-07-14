@@ -3810,10 +3810,22 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
         EXZ_L = iS0 @ _coeff_mass_metric(mats, lambda t_: t_["exz"])
         EYZ_L = iS0 @ _coeff_mass_metric(mats, lambda t_: t_["eyz"])
         Kx = Dopx / (1j * k0)
-        L[0:n, 0:n] += k0 * (-Kx @ EZZi @ EZX_L)
-        L[0:n, n:2 * n] += k0 * (-Kx @ EZZi @ EZY_L)
-        L[2 * n:3 * n, 3 * n:4 * n] += k0 * (-EYZ_L @ EZZi @ Kx)
-        L[3 * n:4 * n, 3 * n:4 * n] += k0 * (EXZ_L @ EZZi @ Kx)
+        # FACTOR-i FIX (AUDIT_OOP_GENERATOR_FACTOR_I_2026_07_14, lockstep
+        # with rcwa._core._layer_eigenmodes_tensor): the off-plane cross
+        # blocks carry relative +/-i factors in the [E; iZH] metric state
+        # (here A_new = -i * A_legacy on the E-rows, B_new = +i * B_legacy
+        # on the iZH-rows -- the mirror of the rcwa assignment, matching
+        # this generator's state/eigen conventions; pinned empirically
+        # against the dispersion-anchored rcwa OOP solver, agreement
+        # restored to the historical 1.5e-3 bar).  The legacy real
+        # coefficients shared the rcwa generator's defect -- they agreed
+        # with the PRE-fix rcwa OOP results for the same reason the
+        # circular oracle did -- and gave the same artificially
+        # +/- symmetric extraordinary dispersion.
+        L[0:n, 0:n] += k0 * (1j * (Kx @ EZZi @ EZX_L))
+        L[0:n, n:2 * n] += k0 * (1j * (Kx @ EZZi @ EZY_L))
+        L[2 * n:3 * n, 3 * n:4 * n] += k0 * (-1j * (EYZ_L @ EZZi @ Kx))
+        L[3 * n:4 * n, 3 * n:4 * n] += k0 * (1j * (EXZ_L @ EZZi @ Kx))
 
     # ===== SLANT as exact first-order convection (see top-of-function note) =====
     # `tan * d/dx` (= tan_conv * Dopx) on each of the four field-component diagonal
@@ -4170,21 +4182,40 @@ def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
 
         def Op(fn):
             return iS0 @ _coeff_mass_metric(mats, fn)
-        EZZi = _safe_inv(Op(lambda t: t["ezz"]))          # (eps^33)^-1
-        EXZ = Op(lambda t: t["exz"])
-        EZX = Op(lambda t: t["ezx"])
-        EYZ = Op(lambda t: t["eyz"])
-        EZY = Op(lambda t: t["ezy"])
+        # POINTWISE ezz-ratio composites (Li Eq.12 discipline, same as
+        # _cov_blocks: form the ratio in x BEFORE bracketing).  The spectral
+        # product [[exz]] @ inv([[ezz]]) of two DISCONTINUOUS factors is the
+        # wrong factorization order at material walls (the bare exz/ezx
+        # sub-channel's historical ~5e-2..1e-1 TM floor); the single
+        # pointwise mass [[exz/ezz]] is the correct composite.  For uniform
+        # media the two are identical, so the exact-dispersion anchor below
+        # is unchanged.
+        XZZ = Op(lambda t: t["exz"] / t["ezz"])
+        ZZX = Op(lambda t: t["ezx"] / t["ezz"])
+        YZZ = Op(lambda t: t["eyz"] / t["ezz"])
+        ZZY = Op(lambda t: t["ezy"] / t["ezz"])
         # conical-projected single x-derivative.  OBLIQUE incidence: the transverse
         # derivative on the periodic envelope is d/dx + i*kx0 (field ~ e^{i kx0 x}
         # u(x), Granet Eq.17), the SAME Bloch shift the convection generator injects
         # via Dopx (_build_generator_metric).  At kx0=0 this is bare Dop, so normal
         # incidence stays byte-identical.
         cD = cos * (Dop + 1j * kx0 * I)
-        M[n:2 * n, n:2 * n] += (EXZ @ EZZi) @ cD          # Hy<-Hy (exz)
-        M[3 * n:4 * n, 3 * n:4 * n] += -cD @ (EZZi @ EZX)  # Ex<-Ex (ezx)
-        M[2 * n:3 * n, n:2 * n] += -(EYZ @ EZZi) @ cD     # Hx<-Hy (eyz); minus
-        M[3 * n:4 * n, 0:n] += -cD @ (EZZi @ EZY)         # Ex<-Ey (ezy)
+        # FACTOR-i FIX (AUDIT_OOP_GENERATOR_FACTOR_I_2026_07_14, lockstep
+        # with the metric generator above and rcwa's
+        # _layer_eigenmodes_tensor): the off-plane cross blocks carry
+        # relative +/-i factors (H-rows x +i, E-rows x -i on the legacy
+        # terms).  Pinned by EXACT DISPERSION on uniform OOP slabs: for a
+        # uniform medium this generator is a polynomial in Dop, so eig(M)
+        # must equal the union over the alpha spectrum of the exact
+        # det(kk^T - |k|^2 I + eps) = 0 roots mapped through
+        # beta = kz*k0*cos(phi) + alpha*sin(phi).  This assignment is the
+        # UNIQUE one of all 256 per-block {+-1, +-i} combos that closes
+        # (4e-12 full-spectrum at slant 0/30/45, generic AND symmetric
+        # tensors, BOTH Ez closures; next-best combo 1.6e-2).
+        M[n:2 * n, n:2 * n] += 1j * (XZZ @ cD)                    # Hy<-Hy (exz)
+        M[3 * n:4 * n, 3 * n:4 * n] += -1j * (-cD @ ZZX)          # Ex<-Ex (ezx)
+        M[2 * n:3 * n, n:2 * n] += 1j * (-YZZ @ cD)               # Hx<-Hy (eyz)
+        M[3 * n:4 * n, 0:n] += -1j * (-cD @ ZZY)                  # Ex<-Ey (ezy)
     return M, n
 
 

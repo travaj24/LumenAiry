@@ -100,14 +100,17 @@ class PMMStack:
         :func:`pmm_jones_1d_segments`.
     factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment (as in :func:`pmm_jones_1d_slanted`).  ``'auto'``
-        (default) uses the SPECTRAL covariant oblique-coordinate generator for a
-        stack whose layers share a single non-zero slant -- IN-PLANE OR
-        OUT-OF-PLANE (the full-3x3 coupling enters via the Li Eq.12 ezz-Schur
-        composites + cos*Dop cross blocks) -- and the (algebraic-but-fully-
-        general) convection generator otherwise -- vertical or MIXED-slant stacks
-        (the covariant oblique frame is per-slant, so a mixed-slant cascade falls
-        back to convection).  ``'covariant'`` forces the spectral path (raises on
-        mixed/zero slant); ``'convection'`` forces the general path.
+        (default) uses the SPECTRAL covariant oblique-coordinate generator for
+        an IN-PLANE stack whose layers share a single non-zero slant, and the
+        (algebraic-but-fully-general) convection generator otherwise --
+        vertical, MIXED-slant, or slanted OUT-OF-PLANE stacks (the covariant
+        oblique frame is per-slant, so a mixed-slant cascade falls back to
+        convection; a slanted out-of-plane stack falls back because the
+        covariant layout's DISCONTINUOUS off-plane TM channel carries a known
+        ~0.1 per-order factorization defect -- see the limitation note on
+        :func:`pmm_jones_1d_slanted`).  ``'covariant'`` forces the spectral
+        path (raises on mixed/zero slant; carries out-of-plane with that
+        documented limitation); ``'convection'`` forces the general path.
 
     Notes
     -----
@@ -923,13 +926,13 @@ class PMMStack:
         eps_sup, eps_sub = self.n_sup ** 2, self.n_sub ** 2
 
         # ---- factorization dispatch: covariant (SPECTRAL slant) vs convection --
-        # 'auto' uses the covariant oblique-coordinate generator (spectral TM) for
-        # ANY slanted stack -- in-plane OR out-of-plane (the full-3x3 coupling
-        # enters via the Li Eq.12 ezz-Schur composites + cos*Dop cross blocks) --
-        # and the convection metric generator otherwise (all-vertical).  The
-        # covariant cascade still requires a UNIFORM slant.  'covariant' forces it
-        # (raises on
-        # out-of-plane); 'convection' forces the algebraic-but-fully-general path.
+        # 'auto' uses the covariant oblique-coordinate generator (spectral TM)
+        # for an IN-PLANE uniform-slant stack, and the convection metric
+        # generator otherwise (all-vertical, mixed-slant, or slanted
+        # OUT-OF-PLANE -- see the routing note below).  'covariant' forces the
+        # spectral path (raises on mixed/zero slant; carries out-of-plane with
+        # the documented discontinuous-cell TM limitation); 'convection' forces
+        # the algebraic-but-fully-general path.
         _oop = any(self._is_oop(M) for L in self._layers for _w, M in L[1])
         _slants = [abs(L[2]) for L in self._layers]
         _signed = [L[2] for L in self._layers]
@@ -947,7 +950,16 @@ class PMMStack:
                           and (max(_signed) - min(_signed)) <= 1e-12)
         _fac = self.factorization
         if _fac == "auto":
-            _fac = "covariant" if _uniform_slant else "convection"
+            # OUT-OF-PLANE slanted stacks route to CONVECTION (2026-07-14):
+            # the covariant layout's discontinuous off-plane TM channel has a
+            # ~0.1 per-order factorization defect under the corrected
+            # factor-i physics (the pre-fix covariant-for-OOP routing was
+            # validated against engines sharing the same defect; convection
+            # and the RCWA tensor staircase now agree at ~4e-3 while
+            # covariant is the outlier).  Explicit 'covariant' still solves
+            # OOP (documented limitation; AUDIT_OOP_GENERATOR_FACTOR_I).
+            _fac = ("covariant" if (_uniform_slant and not _oop)
+                    else "convection")
         if _fac == "covariant":
             if not _uniform_slant:
                 raise NotImplementedError(

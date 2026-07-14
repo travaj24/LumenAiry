@@ -164,7 +164,9 @@ def _pmm_jones_2d_cell_jax(period_x, period_y, eps_tensor_cell, region_layout,
     GxF = Gx0F / k0 + kx0 * IprojF
     GyF = Gy0F / k0 + ky0 * IprojF
 
-    # ---- layer modes: ALWAYS the full-3x3 generator (see module docstring) --
+    # ---- layer modes: ALWAYS the full-3x3 generator (see module docstring;
+    # the numpy-side zero-block routing is gated off the jax backend so the
+    # 6-tuple contract holds for eager AND traced calls alike) --------------
     Wf, Vf, lam_f, Wb, Vb, lam_b = _layer_eigenmodes_tensor(
         GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ,
         EZX=EZX, EZY=EZY, EXZ=EXZ, EYZ=EYZ)

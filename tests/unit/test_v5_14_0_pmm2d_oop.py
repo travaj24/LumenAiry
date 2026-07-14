@@ -97,11 +97,13 @@ def test_y_uniform_oop_grating_matches_1d():
     ``test_audit_oop_dispersion.py`` -- at a stable truncation (n_orders=9;
     the old n_orders=8 landed on an unstable truncation post-fix, energy
     +4e-3 with the solver's own warning).  ``pmm_jones_1d``'s independent
-    metric-generator OOP path is kept as a LOOSE cross-check only: post-fix
-    it sits ~4.5e-2 from BOTH dispersion-anchored engines at m = +/-1 in the
-    OOP-coupled polarization (energy exactly 1 -- energy-blind), a known
-    open item recorded in the audit doc; its historical '~1e-3 algebraic
-    floor' was measured against the pre-fix (wrong) reference."""
+    metric-generator OOP path carried the SAME factor-i defect (it sat
+    ~4.5e-2 from both anchored engines while all the pre-fix engines agreed
+    with each other, energy exactly 1 -- energy-blind); with its cross-block
+    signs fixed and dispersion-pinned
+    (test_pmm_metric_generator_matches_exact_dispersion, the unique combo of
+    256 at 1.9e-10) the three engines agree again -- this cross-check
+    measured 8.7e-4 on 2026-07-14 (bar 3e-3)."""
     from lumenairy.elements.rcwa import rcwa_jones_1d_segments
     tc, ridge, groove = _y_uniform_cells()
     o2, R2, T2, J2 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
@@ -119,7 +121,9 @@ def test_y_uniform_oop_grating_matches_1d():
             assert abs(float(T2[row][i2][0]) - float(TR[row][iR][0])) < 5e-3
             assert abs(float(R2[row][i2][0]) - float(RR[row][iR][0])) < 5e-3
     assert np.max(np.abs(J2 - JR)) < 5e-3
-    # loose cross-check vs the (independent, unfixed) 1-D metric OOP path
+    # cross-check vs the independent (FIXED, dispersion-pinned) 1-D metric
+    # OOP path -- re-tightened 6e-2 -> 3e-3 with the metric-generator fix
+    # (measured 8.7e-4)
     o1, R1, T1, J1 = pmm_jones_1d(_P, ridge, groove, 1.5, 1.0, _DEP, 0.5,
                                   _WL, degree=16, stabilize=False)
     for m in (-1, 0, 1):
@@ -128,8 +132,8 @@ def test_y_uniform_oop_grating_matches_1d():
         if i1.any() and i2.any():
             for row in (0, 1):
                 assert abs(float(T2[row][i2][0])
-                           - float(T1[row][i1][0])) < 6e-2
-    assert np.max(np.abs(J2 - J1)) < 6e-2
+                           - float(T1[row][i1][0])) < 3e-3
+    assert np.max(np.abs(J2 - J1)) < 3e-3
 
 
 def test_nonreciprocal_total_power_matches_1d_not_unity():

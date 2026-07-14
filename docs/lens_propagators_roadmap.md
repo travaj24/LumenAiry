@@ -57,6 +57,16 @@ entries. GBD is considered **perf-tapped-out** on CPU.
 Each item was assessed and *not* taken, with the reason. Revisit only if the
 listed trigger occurs.
 
+> **Queued next dedicated pass (deferred from the v5.22.0 round, 2026-07-14,
+> by owner decision — "not rushed" disposition):** (C1) the GPU CuPy
+> `_opd_vd9` twin + device batched solves row below — environment confirmed
+> ready this round (cupy 14.0.1 installed, RTX 4070 Ti present; the 6-output
+> RawKernel template is `lenses_maslov.py` `_opd6_cupy` near the `_opd_vd9` /
+> `_get_cheb4d_vd9_numba` kernels, wire into the `_run_waves` batched solves);
+> (C2) Maslov phase partitioning (§4 Maslov item 1); (C3) the Maslov portable
+> trace+fit cache (#4) + composite-map assessment (#11) rows below.  Run on a
+> dedicated branch with benchmarks + the full Maslov/GBD regression.
+
 | Item | Est. gain | Why deferred | Trigger to revisit |
 |---|---|---|---|
 | GPU (CuPy) `_opd_vd9` twin + device batched solves for the Levin integrator | ~5–20× | Real engineering; the 6-output CuPy RawKernel template exists (`lenses_maslov.py` `_opd6_cupy`) | Levin becomes a hot production path (full-grid sweeps, not ROI) |

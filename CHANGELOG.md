@@ -32,16 +32,41 @@ All notable changes to the core library are documented here.
   and cross-machinery attribution agreement (1e-4).  Affected results
   (`rcwa_jones_1d/2d` full-tensor at oblique, `RCWAStack` OOP layers,
   Berreman OOP-oblique incl. the jax twin, `pmm_jones_1d_conical_tensor`,
-  PMM hybrid tensor paths) move to the corrected values.  NEW OPEN item
-  recorded: the PMM 1-D metric-generator OOP channel sits ~4.5e-2 from the
-  dispersion-anchored engines on a patterned probe (its historical "~1e-3
-  floor" was measured against the pre-fix reference).
-- **Exactly-zero off-plane blocks route to the symmetric path**: an in-plane
-  cell passed through an off-plane-capable assembly (e.g. the `fff_nv`
-  tensor factorization) hands zero cross-block MATRICES rather than `None`;
-  those now take the symmetric `eig(P Q)` path — mathematically identical,
-  4x cheaper, and numerically stable at marginal truncations (resolves the
-  order-dependent `fff_nv` cross-solver flake).
+  PMM hybrid tensor paths) move to the corrected values.
+- **The PMM 1-D generators carried the same missing factor-i in their
+  off-plane cross blocks — both fixed and dispersion-pinned** (audit doc
+  §6).  For a UNIFORM medium each spectral-element generator is an exact
+  matrix polynomial in `Dop`, so `eig(L)` must land on the exact
+  det-condition roots at every alpha in the operator's own spectrum — a
+  closed-form anchor sharing zero code with the solvers.  The METRIC
+  generator (`_build_generator_metric`, the `pmm_jones_1d` vertical-OOP
+  path): the corrected cross-block signs are the UNIQUE combo of all 256
+  per-block `{+-1, +-i}` choices that closes (1.9e-10; next-best 1.2e-2);
+  the y-uniform three-engine cross-check (`test_v5_14_0_pmm2d_oop`) drops
+  4.5e-2 -> 8.7e-4 and its bar re-tightens 6e-2 -> 3e-3 — this CLOSES the
+  "metric-generator OOP channel" open item recorded above.  The COVARIANT
+  generator (`_cov_generator_4n`, the spectral slant path): again the unique
+  combo of 256 (4e-12 full-spectrum with the modal Ez closure at slant
+  0/30/45, generic AND symmetric tensors; 2e-10 on resolved alphas with the
+  production div-conforming closure), and its cross blocks now use the
+  pointwise `[[exz/ezz]]`-style ratio composites (Li Eq.12 discipline)
+  instead of spectral products of discontinuous factors.  New gates:
+  `test_audit_oop_dispersion.py::test_pmm_metric_generator_matches_exact_dispersion`
+  and `test_pmm_covariant_generator_matches_exact_dispersion[30/45]`.
+
+- **Exactly-zero off-plane blocks route to the symmetric path (numpy
+  backend)**: an in-plane cell passed through an off-plane-capable assembly
+  (e.g. the `fff_nv` tensor factorization) hands zero cross-block MATRICES
+  rather than `None`; those now take the symmetric `eig(P Q)` path —
+  mathematically identical, 4x cheaper, and numerically stable at marginal
+  truncations (resolves the order-dependent `fff_nv` cross-solver flake).
+  The routing is gated OFF the jax backend: there the check would be
+  value-dependent (eager calls see concrete zeros, grad/jit tracing cannot),
+  so finite-difference and autodiff would silently walk two different exact
+  algorithms — measured as an O(1) in-plane FD-vs-AD gradient mismatch in
+  the `pmm_jones_2d` jax twin before the gate.  (Also recalibrates the
+  long-standing marginal 1e-9 jax-vs-numpy parity bar to 5e-9 — two exact
+  algorithms agreeing at the eig bit-noise floor.)
 - **`RCWAStack.solve(retain_internal=True)` for out-of-plane tensor stacks**
   (previously raised): the Berreman-C2 generalized retention ported —
   generalized partial cascades, explicit asymmetric mode sets, and the
@@ -75,6 +100,25 @@ All notable changes to the core library are documented here.
   Recorded follow-up: `world_surfaces_from_prescription` double-counts
   ZX-1-folded coord-break DISZ on loader-produced folded prescriptions
   (pre-existing; validation oracles use hand-built world dicts).
+
+### Changed
+
+- **`'auto'` now routes slanted OUT-OF-PLANE cells/stacks to `'convection'`**
+  (`pmm_jones_1d_slanted`, `pmm_jones_1d_slanted_segments`, `PMMStack`;
+  in-plane slanted cells keep the spectral covariant route).  With the
+  corrected physics, a 3-way referee on the slanted binary OOP grating shows
+  convection agreeing with the independent RCWA tensor staircase at
+  3.8e-3/3.9e-3 (slant 30/45 deg — the mutual truncation floor), while the
+  covariant layout's DISCONTINUOUS off-plane TM channel is the outlier at
+  ~0.10-0.12 (TE clean) — the 2026-06-08 six-avenue study's unresolved
+  "bare exz/ezx sub-channel" floor, previously masked because all pre-fix
+  engines agreed on the same symmetrized wrong answer (the old 3e-3
+  staircase bars were calibrated in that world).  Explicit
+  `factorization='covariant'` still solves OOP with the limitation
+  documented in its docstrings; the covariant OOP tests are now
+  regression-trackers (TE clean / TM within the documented floor / energy
+  conserving), and the staircase gate runs the production route at its
+  measured ~4e-3 floor (bar 6e-3).
 
 ## [5.21.5] — 2026-07-14
 

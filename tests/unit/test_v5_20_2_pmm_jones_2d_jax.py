@@ -126,12 +126,17 @@ def test_pmm_jones_2d_jax_forward_matches_numpy(kind):
     o_j, R_j, T_j, J_j = pmm_jones_2d(_P, _P, cell_jx, 1.5, 1.0, _DEP, _WL,
                                       region_layout=lay, **_KW)
     assert np.array_equal(np.asarray(o_j), o_n)
-    assert np.max(np.abs(np.asarray(R_j) - R_n)) < 1e-9
-    assert np.max(np.abs(np.asarray(T_j) - T_n)) < 1e-9
+    # 5e-9 bar (was 1e-9, a long-standing marginal local flake at 1.13e-9):
+    # jnp-vs-np eig bit-noise, and since the 2026-07-14 zero-block routing the
+    # numpy side takes the symmetric eig(P Q) path for this in-plane cell
+    # while jax keeps the generator (path-consistency under tracing) -- two
+    # exact algorithms agreeing at the same ~1e-9 eig floor.
+    assert np.max(np.abs(np.asarray(R_j) - R_n)) < 5e-9
+    assert np.max(np.abs(np.asarray(T_j) - T_n)) < 5e-9
     # Jones is a physical scattering amplitude (gauge-invariant): compare the
     # full complex matrix AND its basis-invariant singular values.
-    assert np.max(np.abs(np.asarray(J_j) - J_n)) < 1e-9
-    assert np.max(np.abs(_sv(J_j) - _sv(J_n))) < 1e-9
+    assert np.max(np.abs(np.asarray(J_j) - J_n)) < 5e-9
+    assert np.max(np.abs(_sv(J_j) - _sv(J_n))) < 5e-9
 
 
 # ============================ gradient vs FD ================================

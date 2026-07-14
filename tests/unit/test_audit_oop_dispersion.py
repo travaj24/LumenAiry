@@ -192,3 +192,106 @@ def test_attribution_methods_agree_oop_oblique():
     bs.solve(retain_internal=True)
     A_b = bs.layer_absorption()
     assert np.abs(A_r - A_b.T).max() < 1e-4
+
+
+# ===================================================================
+# PMM 1-D generator dispersion gates (metric + covariant) -- the same
+# closed-form anchor applied to the spectral-element generators.  For a
+# UNIFORM medium every Galerkin coefficient mass is exactly a scalar multiple
+# of the unit mass S0, so each generator is (up to the un-gated
+# div-conforming Ez closure, which only touches unresolved modes) an exact
+# matrix polynomial in the derivative operator Dop -- eig(L) must land on the
+# exact det-condition kz roots at every alpha in the operator's OWN alpha
+# spectrum {kx0 - i*d : d in eig(Dop)}.  These pin the off-plane cross-block
+# factor-i signs of BOTH PMM generators: each in-file assignment is the
+# UNIQUE combo of the 256 per-block {+-1, +-i} choices that closes
+# (metric 1.9e-10 vs next-best 1.2e-2; covariant 4e-12 vs next-best 1.6e-2;
+# a regressed sign lands >=1e-2 here and fails hard).  The tensors are fed
+# to the internal builders directly and compared against the SAME tensor, so
+# the public/internal conjugation convention cancels.
+# ===================================================================
+_T_GEN = np.array([                     # generic non-symmetric complex tensor:
+    [4.0 + 0.05j, 0.30 + 0.02j, 0.70 - 0.10j],   # all four off-plane channels
+    [0.20 - 0.03j, 5.0 + 0.02j, -0.55 + 0.08j],  # distinct + breaks the
+    [0.45 + 0.06j, 0.65 - 0.04j, 6.0 + 0.03j]],  # normal-incidence mirror tie
+    dtype=complex)
+
+
+def _exact_kz_roots_scaled(eps, Kx):
+    """Four exact kz/k0 roots at (possibly complex, possibly LARGE) Kx --
+    sampling scaled to the root magnitude so the high-|alpha| spectral-element
+    modes stay well-conditioned (the fixed-point sampler above is only for
+    |Kx| ~ 1)."""
+    e = np.asarray(eps, dtype=complex)
+    s = 2.0 * max(1.0, abs(Kx), float(np.sqrt(np.max(np.abs(e)))))
+
+    def detM(kz):
+        k = np.array([Kx, 0.0, kz], dtype=complex)
+        return np.linalg.det(np.outer(k, k) - (k @ k) * np.eye(3) + e)
+
+    ws = np.array([0.0, 0.35, -0.45, 0.65, -0.8, 1.05, -1.2, 1.4, -1.6])
+    coeffs = np.polyfit(s * ws, np.array([detM(z) for z in s * ws]), 4)
+    return np.roots(coeffs)
+
+
+def _pmm_uniform_mats(T, degree=12, nel=3):
+    from lumenairy.elements.pmm import _core as pc
+    t = pc._t3_slant(np.asarray(T, dtype=complex))
+    return pc._build_nodal_metric(1.0e-6, 0.5e-6, t, t, degree, nel, nel, 1.0)
+
+
+def _resolved_expected(pc, mats, T, k0, kx0, slant, sigma, cap=3.0):
+    """Expected generator eigenvalues over RESOLVED alphas (|alpha|/k0 <= cap;
+    the div-conforming Ez closure differs from the modal one only on
+    unresolved modes): beta = kz*k0*cos(slant) + sigma*alpha*sin(slant)."""
+    dj = np.linalg.eigvals(pc._safe_solve(mats["S0"], mats["C"]))
+    cos, sin = np.cos(slant), np.sin(slant)
+    out = []
+    for d in dj:
+        alpha = kx0 - 1j * d
+        if abs(alpha) / k0 > cap:
+            continue
+        for kz in _exact_kz_roots_scaled(T, alpha / k0):
+            out.append(kz * k0 * cos + sigma * alpha * sin)
+    return np.array(out)
+
+
+def _one_sided(eigs, expected, k0):
+    a = np.asarray(eigs) / k0
+    return max(np.min(np.abs(a - y)) for y in np.asarray(expected) / k0)
+
+
+def test_pmm_metric_generator_matches_exact_dispersion():
+    """eig(L) of the METRIC generator (the pmm_jones_1d vertical OOP path) on
+    a uniform full-3x3 slab reproduces the exact det-condition roots at
+    oblique incidence: expected mu = -i*k0*kz (L psi = mu psi, q = i mu/k0).
+    Measured 1.9e-10; ANY single cross-block sign regression >= 1.2e-2."""
+    from lumenairy.elements.pmm import _core as pc
+    k0 = 2.0 * np.pi / 0.633e-6
+    kx0 = 0.5 * k0
+    mats = _pmm_uniform_mats(_T_GEN)
+    L, _n = pc._build_generator_metric(mats, k0, 0.0, kx0)
+    exp_mu = -1j * _resolved_expected(pc, mats, _T_GEN, k0, kx0, 0.0, 0.0)
+    assert _one_sided(np.linalg.eigvals(L), exp_mu, k0) < 1e-8
+
+
+@pytest.mark.parametrize("slant_deg", [30.0, 45.0])
+def test_pmm_covariant_generator_matches_exact_dispersion(slant_deg):
+    """eig(M) of the COVARIANT generator on a uniform full-3x3 slab
+    reproduces the exact roots through the oblique-frame eigenvalue map
+    beta = kz*k0*cos(phi) + alpha*sin(phi) (calibrated on the validated
+    in-plane path; the docstring's `beta*sec(phi)` read-out is the internal
+    frame-phase device, not the lab kz).  Both Ez closures: the modal
+    (divconf=False) generator is an exact Dop-polynomial (full-spectrum
+    4e-12); the production div-conforming closure matches on resolved alphas
+    (2e-10).  ANY single cross-block sign regression >= 1.6e-2."""
+    from lumenairy.elements.pmm import _core as pc
+    k0 = 2.0 * np.pi / 0.633e-6
+    kx0 = 0.5 * k0
+    phi = np.deg2rad(slant_deg)
+    mats = _pmm_uniform_mats(_T_GEN)
+    exp_b = _resolved_expected(pc, mats, _T_GEN, k0, kx0, phi, 1.0)
+    for divconf in (False, True):
+        M, _n = pc._cov_generator_4n(mats, k0, phi, kx0, divconf=divconf)
+        assert _one_sided(np.linalg.eigvals(M), exp_b, k0) < 1e-8, (
+            f"divconf={divconf}")

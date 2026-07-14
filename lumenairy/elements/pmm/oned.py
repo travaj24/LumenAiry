@@ -959,8 +959,8 @@ def pmm_jones_1d_slanted(
         :func:`pmm_jones_1d`.
     factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment.  ``'auto'`` (default) picks the best path per cell:
-        ``'covariant'`` for ANY slanted cell -- in-plane OR out-of-plane (the
-        spectral win) -- and ``'convection'`` otherwise (vertical).
+        ``'covariant'`` for an IN-PLANE slanted cell (the spectral win) and
+        ``'convection'`` otherwise (vertical, or slanted OUT-OF-PLANE).
         ``'convection'`` carries the tilt as an exact first-order convection on
         the lab-Cartesian metric generator -- robust at all slants and tensors,
         but the TM/p-pol per-order accuracy converges ALGEBRAICALLY (~1e-4 at
@@ -969,15 +969,19 @@ def pmm_jones_1d_slanted(
         surface, so the wall-normal discontinuity is handled algebraically and the
         TM channel converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) --
         the SAME physical answer as ``'convection'`` but ~100-2400x fewer degrees
-        for matched accuracy.  ``'covariant'`` handles diagonal, coupled
-        (``exy``/``eyx``), AND OUT-OF-PLANE (full 3x3 ``eps_xz/yz/zx/zy``)
-        tensors, normal + oblique, lossless + lossy -- the out-of-plane coupling
-        enters via the pointwise ezz-Schur composites (Li Eq.12) + the ``cos*Dop``
-        single-derivative cross blocks (Li Eq.18/19), spectral at slant, so
-        ``'auto'`` routes out-of-plane slanted cells to it too (~15x fewer degrees
-        than convection).  Pass ``'convection'`` explicitly to force the fully-
-        general
-        algebraic path (e.g. for byte-stable cross-checks).
+        for matched accuracy, for diagonal and coupled (``exy``/``eyx``)
+        IN-PLANE tensors, normal + oblique, lossless + lossy.
+        OUT-OF-PLANE LIMITATION (2026-07-14 factor-i audit): ``'covariant'``
+        still SOLVES full 3x3 ``eps_xz/yz/zx/zy`` cells (the coupling enters
+        via the pointwise ezz-Schur composites, Li Eq.12, + the ``cos*Dop``
+        cross blocks, Li Eq.18/19, dispersion-exact on uniform media), but for
+        cells whose OFF-PLANE entries are DISCONTINUOUS across the wall the
+        covariant TM channel carries a known ~0.1 per-order factorization
+        defect (the corrected convection path and an independent RCWA tensor
+        staircase agree at ~4e-3 while covariant is the outlier), so ``'auto'``
+        routes slanted out-of-plane cells to ``'convection'``.  Pass
+        ``'convection'`` explicitly to force the fully-general algebraic path
+        (e.g. for byte-stable cross-checks).
 
     Returns
     -------
@@ -1065,20 +1069,32 @@ def pmm_jones_1d_slanted(
     # converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) instead of the
     # convection path's ALGEBRAIC ~1e-4 floor -- same physical answer, ~100-2400x
     # fewer degrees.  Handles diagonal AND coupled (exy/eyx) IN-PLANE tensors,
-    # normal + oblique, lossless + lossy, IN-PLANE OR OUT-OF-PLANE.  The full-3x3
-    # out-of-plane coupling (eps_xz/yz/zx/zy) enters the covariant generator via
-    # the pointwise ezz-Schur composites (Li Eq.12) + the cos*Dop single-x-
-    # derivative cross blocks (see _cov_blocks / _cov_generator_4n) -- SPECTRAL at
-    # slant, same as the in-plane covariant.  The DEFAULT 'auto' picks covariant
-    # for ANY slanted cell (the spectral win, now including out-of-plane) and
-    # convection otherwise (vertical, where the vertical solver is already exact).
+    # normal + oblique, lossless + lossy.  The full-3x3 out-of-plane coupling
+    # (eps_xz/yz/zx/zy) enters the covariant generator via the pointwise
+    # ezz-Schur composites (Li Eq.12) + the cos*Dop single-x-derivative cross
+    # blocks (see _cov_blocks / _cov_generator_4n) and is dispersion-exact on
+    # uniform media, but the DISCONTINUOUS off-plane TM channel carries a known
+    # ~0.1 per-order factorization defect (factor-i audit 2026-07-14), so the
+    # DEFAULT 'auto' picks covariant only for IN-PLANE slanted cells and
+    # convection otherwise (vertical or slanted out-of-plane).
     if factorization not in ("auto", "convection", "covariant"):
         raise ValueError(
             "pmm_jones_1d_slanted: factorization must be 'auto', 'convection' "
             f"or 'covariant', got {factorization!r}.")
     if factorization == "auto":
+        # OUT-OF-PLANE slanted cells route to CONVECTION (2026-07-14, the
+        # factor-i audit): with the corrected off-plane physics the covariant
+        # layout's DISCONTINUOUS exz/ezx/eyz/ezy TM channel shows a ~0.1
+        # per-order factorization defect vs two independent corrected engines
+        # (convection and an RCWA tensor staircase agree at ~4e-3), while the
+        # covariant GENERATOR itself is exact (uniform-slab dispersion gates).
+        # The pre-fix 'covariant-for-OOP-too' routing was validated in a world
+        # where all three engines shared the factor-i defect and agreed on the
+        # same symmetrized wrong answer.  Explicit 'covariant' still solves
+        # OOP (documented limitation; see AUDIT_OOP_GENERATOR_FACTOR_I).
         factorization = ("covariant"
-                         if abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
+                         if (abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
+                             and off <= 1e-9 * scale)
                          else "convection")
     if (factorization == "covariant"
             and abs(float(slant_angle)) < _COV_MIN_SLANT_RAD):
@@ -1197,10 +1213,11 @@ def pmm_jones_1d_slanted_segments(
     (IN-PLANE OR OUT-OF-PLANE) -- the multi-region generalization of
     :func:`pmm_jones_1d_slanted` and the slanted counterpart of
     :func:`pmm_jones_1d_segments`.  The default ``factorization='auto'`` picks the
-    spectral covariant path for ANY slanted cell -- in-plane OR out-of-plane (the
-    full-3x3 coupling enters via the Li Eq.12 ezz-Schur composites + cos*Dop cross
-    blocks) -- and the convection path otherwise (vertical).
-    ``factorization='covariant'`` carries out-of-plane too; pass ``'convection'``
+    spectral covariant path for an IN-PLANE slanted cell and the convection path
+    otherwise (vertical, or slanted OUT-OF-PLANE -- see the covariant
+    out-of-plane limitation on :func:`pmm_jones_1d_slanted`).
+    ``factorization='covariant'`` still carries out-of-plane (with that
+    documented discontinuous-cell TM limitation); pass ``'convection'``
     to force the fully-general algebraic path.
 
     Each region carries its own (possibly anisotropic) tensor, and the straight
@@ -1227,7 +1244,8 @@ def pmm_jones_1d_slanted_segments(
     angle, degree, elements_per_region, grade, far_field_orders, stabilize,
     factorization : as in :func:`pmm_jones_1d_slanted`.  ``factorization=
         'covariant'`` gives SPECTRAL TM convergence for the multi-region cell too
-        (in-plane OR out-of-plane); it pre-reverses the region order so the
+        (in-plane; out-of-plane carries the documented discontinuous-cell TM
+        limitation); it pre-reverses the region order so the
         covariant far field lands in the user's input frame.
 
     Returns
@@ -1274,8 +1292,16 @@ def pmm_jones_1d_slanted_segments(
             "pmm_jones_1d_slanted_segments: factorization must be 'auto', "
             f"'convection' or 'covariant', got {factorization!r}.")
     if factorization == "auto":
+        # OUT-OF-PLANE slanted cells route to CONVECTION (2026-07-14): the
+        # covariant layout's discontinuous off-plane TM channel has a ~0.1
+        # per-order factorization defect under the corrected factor-i physics
+        # (see the binary path's routing note + AUDIT_OOP_GENERATOR_FACTOR_I).
+        _scale = max([1.0] + [float(np.max(np.abs(M))) for M in tensors])
+        _off = max(float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
+                   for M in tensors)
         factorization = ("covariant"
-                         if abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
+                         if (abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
+                             and _off <= 1e-9 * _scale)
                          else "convection")
     if (factorization == "covariant"
             and abs(float(slant_angle)) < _COV_MIN_SLANT_RAD):
