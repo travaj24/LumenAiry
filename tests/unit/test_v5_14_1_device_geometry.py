@@ -461,15 +461,29 @@ def test_rcwa_stack_oop_split_identity_and_mixed_energy():
                          + np.asarray(T)[r].sum()) - 1.0) < 1e-9
 
 
-def test_rcwa_stack_oop_retain_internal_raises():
+def test_rcwa_stack_oop_retain_internal_and_absorption_budget():
+    """v5.22.0: ``RCWAStack.solve(retain_internal=True)`` now SOLVES
+    out-of-plane tensor stacks (previously ``NotImplementedError``) via the
+    Berreman-C2 generalized retention (explicit asymmetric mode sets + the
+    full-tensor ``E_z`` recovery).  The per-layer absorption recovered from
+    the retained internal fields closes the energy budget ``R + T + A = 1``
+    per incident polarization, and the lossy OOP layers actually absorb."""
     S = 8
-    cell = np.broadcast_to(_OOP, (S, S, 3, 3)).copy()
+    lossy = uniaxial_tensor(1.5 + 0.02j, 1.7 + 0.03j, np.deg2rad(30.0),
+                            phi=np.deg2rad(20.0))
+    cell = np.broadcast_to(lossy, (S, S, 3, 3)).copy()
     st = RCWAStack(0.4e-6, period_y=0.4e-6, n_superstrate=1.0,
                    n_substrate=1.5, n_orders=2, n_orders_y=2)
     st.add_layer(0.2e-6, eps_tensor_cell=cell)
-    st.set_source(_WL)
-    with pytest.raises(NotImplementedError, match="retain_internal"):
-        st.solve(retain_internal=True)
+    st.add_layer(0.15e-6, eps_tensor_cell=cell)
+    res = st.set_source(_WL, theta=np.deg2rad(20),
+                        phi=np.deg2rad(25)).solve(retain_internal=True)
+    _o, R, T = res.efficiencies()
+    R, T = np.asarray(R), np.asarray(T)
+    A = np.asarray(res.layer_absorption(nx=S))          # (2, n_layers)
+    for r in (0, 1):
+        assert abs(R[r].sum() + T[r].sum() + A[r].sum() - 1.0) < 1e-6
+    assert A.sum() > 1e-3                                # the OOP layers absorb
 
 
 # =========================================================================== #
