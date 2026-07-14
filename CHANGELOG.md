@@ -2,6 +2,80 @@
 
 All notable changes to the core library are documented here.
 
+## [5.22.0] — 2026-07-14
+
+### Fixed
+
+- **Out-of-plane generator factor-i — wrong extraordinary-wave dispersion
+  for OOP tensors at oblique incidence, multi-release**
+  (`docs/audits/AUDIT_OOP_GENERATOR_FACTOR_I_2026_07_14.md`).  The full-3x3
+  layer generator's off-plane cross-blocks (`A` from `ezx/ezy`, `B` from
+  `exz/eyz`) were written with real coefficients in a modal-u state whose
+  in-plane `P`/`Q` blocks demand relative `-/+i` factors there.  Since
+  `A = B = 0` for in-plane tensors and at normal incidence, ONLY
+  out-of-plane tensors at oblique incidence were affected — there the
+  extraordinary propagation constants came out artificially `+/-` symmetric
+  (`kz_e/k0 = +/-1.5646` vs the exact `det(k x (k x .) + eps) = 0` roots
+  `{-1.5214, +1.6090}` on a tilted-35-degree uniaxial probe: a 3-5% error),
+  the mode fields violated Maxwell under every constant re-scaling, internal
+  fields broke the local Poynting theorem by ~7%, and the density- vs
+  flux-based per-layer absorption attributions disagreed at 3e-3 while every
+  energy budget still closed (budgets telescope — the lossless-trap rule).
+  Five releases of gates missed it because the `_berreman4x4` TEST ORACLE
+  shared the same prototype ancestry and carried the same blocks — every
+  1e-10 solver-vs-oracle agreement was circular.  Fixed in all four Delta
+  copies in lockstep (the rcwa generator, its jax twin, the native Berreman
+  Delta (latent), and the test oracle); new INDEPENDENT anchors in
+  `tests/unit/test_audit_oop_dispersion.py`: exact-dispersion roots (1e-14,
+  both gauges, asymmetric-e-pair count), per-mode Maxwell residuals (1e-12,
+  all six curl rows), local Poynting inside OOP layers (`C/k0 = 1 +- 2e-3`),
+  and cross-machinery attribution agreement (1e-4).  Affected results
+  (`rcwa_jones_1d/2d` full-tensor at oblique, `RCWAStack` OOP layers,
+  Berreman OOP-oblique incl. the jax twin, `pmm_jones_1d_conical_tensor`,
+  PMM hybrid tensor paths) move to the corrected values.  NEW OPEN item
+  recorded: the PMM 1-D metric-generator OOP channel sits ~4.5e-2 from the
+  dispersion-anchored engines on a patterned probe (its historical "~1e-3
+  floor" was measured against the pre-fix reference).
+- **Exactly-zero off-plane blocks route to the symmetric path**: an in-plane
+  cell passed through an off-plane-capable assembly (e.g. the `fff_nv`
+  tensor factorization) hands zero cross-block MATRICES rather than `None`;
+  those now take the symmetric `eig(P Q)` path — mathematically identical,
+  4x cheaper, and numerically stable at marginal truncations (resolves the
+  order-dependent `fff_nv` cross-solver flake).
+- **`RCWAStack.solve(retain_internal=True)` for out-of-plane tensor stacks**
+  (previously raised): the Berreman-C2 generalized retention ported —
+  generalized partial cascades, explicit asymmetric mode sets, and the
+  full-tensor `E_z` recovery (`EZX`/`EZY`).  Validated against the
+  independent Berreman machinery on identical physics: internal fields agree
+  at 1e-15 on all six components, per-layer absorption splits at 2.6e-6.
+- **Stale gates repaired**: the jax `retain_internal` guard test pinned a
+  pre-v5.21 restriction (in-plane traced retention is supported — the gate
+  now pins the closed absorption budget; note the CI unit jobs install no
+  jax, so this gate only ever ran locally); `test_v5_14_0_pmm2d_oop`'s
+  y-uniform OOP grating oracle repointed to the dispersion-anchored rcwa
+  solver; the `fff_nv` convergence-margin recalibrated (0.3 -> 0.5, measured
+  0.32 post-fix); `lc_cell`'s rcwa oracle moved off an isolated unstable
+  truncation (shipped in the v5.21.5 line, recorded here for completeness).
+- **Subsystem-audit residuals cleared (audits 1/3/4/6 deferrals, 9 items)**:
+  `gerchberg_saxton_jax` error metric no longer reports the PREVIOUS
+  iterate's far-field error (parity with NumPy 2e-16); `vectorial_hfpi`
+  `output_grid -> output_shape` rename with deprecation shim; afocal
+  `trace_summary`/`spot_diagram` no longer print a radians half-angle with
+  a length label or a meaningless Airy overlay; `paraxial_focus_world`
+  gains near-parallel + dead-ray guards (chief -> axial rename); Zemax
+  writers expose `glass_catalogs=` (GCAT no longer hardcoded); Zemax
+  loaders reassign a STOP set on a COORDBRK row to the next optical
+  surface with a warning; `_bluestein_2d` caches the chirp-kernel FFT
+  (numpy default backend, buffer-ownership-safe copies);
+  `surfaces_from_prescription(include_coord_breaks=True)` (opt-in,
+  default byte-identical) interleaves loader coord breaks so the plain
+  local-frame `trace()` handles folded prescriptions — matches the
+  `trace_world` oracle to ~1e-17 on a folded periscope, with the ZX-1
+  DISZ fold reversed for strictly-between breaks.  15 new tests.
+  Recorded follow-up: `world_surfaces_from_prescription` double-counts
+  ZX-1-folded coord-break DISZ on loader-produced folded prescriptions
+  (pre-existing; validation oracles use hand-built world dicts).
+
 ## [5.21.5] — 2026-07-14
 
 ### Added
