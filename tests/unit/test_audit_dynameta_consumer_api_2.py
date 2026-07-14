@@ -119,6 +119,7 @@ def _assert_flux_closure_2d(sp, R_eff, T_eff, tol=1e-12):
         assert np.max(np.abs(out - np.asarray(eff))) < tol
 
 
+@pytest.mark.slow      # 2-D eig-heavy (CI fast-gate budget)
 def test_b2_hybrid_amplitudes_vs_rcwa_conical():
     th, ph = np.deg2rad(20.0), np.deg2rad(30.0)
     sh = PMM2DStackHybrid(_P2, n_substrate=_NSUB2, degree=9, n_orders=7)
@@ -133,6 +134,7 @@ def test_b2_hybrid_amplitudes_vs_rcwa_conical():
                          - rr.jones_transmission())) < 2e-2
 
 
+@pytest.mark.slow      # 2-D eig-heavy (CI fast-gate budget)
 def test_b2_pure_amplitudes_vs_rcwa_conical():
     th, ph = np.deg2rad(20.0), np.deg2rad(30.0)
     sp = PMM2DStackPure(_P2, n_substrate=_NSUB2, n_modes=9, n_orders=5)
@@ -140,17 +142,21 @@ def test_b2_pure_amplitudes_vs_rcwa_conical():
     sp.set_source(_WL, theta=th, phi=ph)
     _o, R, T, _j = sp.solve()
     rr = _rcwa2d(th, ph)
-    # 5e-2 bar: cross-engine CONVERGENCE gap in the weak higher orders
-    # (measured 1.9e-2 at M=9 -- the documented corner-capped algebraic
-    # floor of the staggered basis on right-angle pillars); a gauge/sign/
-    # contract error is O(0.1-1) and still fails loudly.  The order-0 Jones
-    # (below, 3e-4 measured) and the EXACT flux closure pin the rest.
+    # 5e-2 bar: cross-engine CONVERGENCE gap in the weak higher orders,
+    # dominated by the RCWA REFERENCE (probe: the gap is flat in Pure's M
+    # from 8 -> 13 at 1.91e-2..1.92e-2 but shrinks with the reference's
+    # n_orders, 11 -> 15 gives 1.5e-2 -- RCWA converging toward the
+    # no-floor answer, the established pattern on patterned cells); a
+    # gauge/sign/contract error is O(0.1-1) and still fails loudly.  The
+    # order-0 Jones (below, 3e-4 measured) and the EXACT flux closure pin
+    # the rest.
     _assert_amp_parity_2d(sp, rr, tol=5e-2)
     _assert_flux_closure_2d(sp, R, T)
     assert np.max(np.abs(sp.jones_transmission()
                          - rr.jones_transmission())) < 1e-2
 
 
+@pytest.mark.slow      # 2-D eig-heavy (CI fast-gate budget)
 def test_b2_evanescent_kz_public_branch_and_contract():
     sp = PMM2DStackPure(_P2, n_substrate=_NSUB2, n_modes=8, n_orders=5)
     sp.add_layer(_DEPTH2, eps_cell=_cell4())
@@ -266,6 +272,7 @@ def test_c1_bor_pinned_gauge_fabry_perot_phase():
 # C3: PMM2DStackPure layer_absorption                                      #
 # ======================================================================== #
 
+@pytest.mark.slow      # 2-D eig-heavy (CI fast-gate budget)
 def test_c3_pure_absorption_budget_and_hybrid_crossgate():
     eps_lossy = 6.0 + 0.8j
     sp = PMM2DStackPure(_P2, n_substrate=_NSUB2, n_modes=8, n_orders=5)
@@ -285,6 +292,7 @@ def test_c3_pure_absorption_budget_and_hybrid_crossgate():
     assert np.abs(A - Ah).max() < 5e-2          # cross-engine (probe 6.7e-3)
 
 
+@pytest.mark.slow      # 2-D eig-heavy (CI fast-gate budget)
 def test_c3_pure_lossless_zero_and_contract():
     sp = PMM2DStackPure(_P2, n_substrate=_NSUB2, n_modes=8, n_orders=5)
     sp.add_layer(_DEPTH2, eps_cell=_cell4(6.0 + 0j))
