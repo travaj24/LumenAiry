@@ -935,6 +935,30 @@ class RCWAStack:
         of the internal ``noy`` field."""
         return self.noy
 
+    @property
+    def layers(self) -> tuple:
+        """Read-only view (tuple) of the per-layer records, in stack order
+        (top / superstrate side first) -- the PUBLIC accessor for what
+        :meth:`add_layer` stored (AUDIT_DYNAMETA_CONSUMER_API_GAPS A2;
+        reverse translators previously had to read the private ``_layers``
+        slot under a version ceiling).
+
+        Each record carries the PUBLIC fields
+
+        * ``thickness`` -- layer depth [m] (a raw JAX scalar if traced);
+        * ``kind`` -- ``'uniform' | 'iso' | 'shapes' | 'tensor'``;
+        * ``data`` -- the layer specification exactly as ``add_layer``
+          normalized it (``kind``-dependent: the scalar eps, the
+          ``(Sx, Sy)`` cell, the ``(shapes, eps_background)`` pair, or the
+          ``(Sx, Sy, 3, 3)`` tensor cell; wl-callables when dispersive);
+        * ``formulation`` -- ``'laurent' | 'li'`` (iso layers);
+        * ``dispersive`` -- True when ``data`` holds ``wl ->`` callables
+          (solve via :meth:`solve_vs_wavelength`).
+
+        The tuple is a snapshot; mutating the stack requires the builder
+        methods."""
+        return tuple(self._layers)
+
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
                   eps_tensor_cell=None, shapes=None, eps_background=None,
                   formulation="laurent"):

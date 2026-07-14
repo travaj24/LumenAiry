@@ -165,6 +165,7 @@ class PMMStack:
         self._layers = []                          # (thickness, segments)
         self._taper_recipes = []                   # (i0, count, method, kwargs)
         self._src = None
+        self._modal = None      # per-order amplitudes of the last solve (B)
 
     def _as_tensor(self, eps):
         if is_jax_array(eps):
@@ -203,6 +204,7 @@ class PMMStack:
         metric generator and cascaded via the general fwd/back S-matrix, so a
         stack may MIX vertical and slanted layers.  Returns ``self``."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
+        self._modal = None      # ... and retained per-order amplitudes (B)
         if (segments is None) == (eps is None):
             raise ValueError(
                 "PMMStack.add_layer: give exactly one of `segments` or `eps`.")
@@ -505,6 +507,7 @@ class PMMStack:
         raise under ``phi != 0`` -- use ``PMM2DStack`` with y-invariant cells for
         those).  Returns ``self``."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
+        self._modal = None      # ... and retained per-order amplitudes (B)
         angle = _resolve_incidence(angle, theta)
         self._src = dict(
             wl=wavelength if is_jax_array(wavelength) else float(wavelength),
@@ -616,12 +619,13 @@ class PMMStack:
                 (float(thk), [float(w) for w, _ in segs],
                  [np.asarray(e, dtype=_C) for _w, e in segs])
                 for (thk, segs, _sl) in self._layers]
-            o2, R_eff, T_eff, jones = _conical_nodal_solve(
+            o2, R_eff, T_eff, jones, modal = _conical_nodal_solve(
                 self.period, layer_specs, _C(self.n_sup) ** 2,
                 _C(self.n_sub) ** 2, wl, angle, phi, self.degree, self.n_el,
                 self.grade, max(3, (self.ffo - 1) // 2),
                 min_feature=self.min_feature,
-                label="PMMStack.solve (conical)")
+                label="PMMStack.solve (conical)", return_modal=True)
+            self._modal = modal          # AUDIT_DYNAMETA_CONSUMER_API_GAPS B
             _warn_stack_energy(R_eff, T_eff)
             # stack contract: the 1-D (m,) order array (pmm_jones_1d_segments
             # parity; y is degenerate so n_y == 0 for every order).
@@ -777,8 +781,11 @@ class PMMStack:
             S = _redheffer_star(S, _interface_smatrix_general(M_prev, Msub))
         S11, _S12, S21, _S22 = S
 
-        _o2d, R_eff, T_eff, jones = _conical_jones_farfield(
-            S11, S21, order_x, order_y, kxv, kyv, kx0, ky0, eps_sup, eps_sub)
+        _o2d, R_eff, T_eff, jones, modal = _conical_jones_farfield(
+            S11, S21, order_x, order_y, kxv, kyv, kx0, ky0, eps_sup, eps_sub,
+            return_modal=True)
+        modal["wavelength"] = float(wl)          # the grazing-safe-nudged wl
+        self._modal = modal                      # B: public-gauge amplitudes
         # Energy tripwire (audit review): the conical path must warn on R+T > 1
         # like every classical PMMStack return, so an under-resolved solve is not
         # silently trusted.  Orders are the 1-D (m,) array (the classical /
@@ -816,8 +823,11 @@ class PMMStack:
         # (audit P1-04): every solve() supersedes the retained state, so
         # internal_field/layer_absorption can only serve the LAST solve --
         # a retain_internal=True one.  Stale fields from a previous
-        # source/geometry must never be served silently.
+        # source/geometry must never be served silently.  Same contract for
+        # the retained per-order amplitudes (per_order_amplitudes /
+        # jones_transmission serve the LAST solve only).
         self._internal = None
+        self._modal = None
         if self._src is None:
             raise ValueError("PMMStack.solve: call set_source(...) first.")
         if not self._layers:
@@ -1152,8 +1162,11 @@ class PMMStack:
         kz_sub = _kz_forward(eps_sub, kx)
         kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
         kx0n = kx0 / k0
-        R_eff, T_eff, jones = _assemble_jones_farfield(
-            Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc, kx0n, N)
+        R_eff, T_eff, jones, modal = _assemble_jones_farfield(
+            Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc, kx0n, N,
+            return_modal=True)
+        modal["wavelength"] = float(wl)
+        self._modal = modal          # AUDIT_DYNAMETA_CONSUMER_API_GAPS B
         if retain_internal and getattr(self, "_internal", None) is not None:
             m0 = np.where(orders == 0)[0][0]
             cinc_cols = []
@@ -1173,6 +1186,67 @@ class PMMStack:
                 f"PMMStack.solve: stabilize must be None or 'slices', got "
                 f"{stabilize!r}.")
         return orders, R_eff, T_eff, jones
+
+    def per_order_amplitudes(self, port="reflection"):
+        """Per-order complex tangential field amplitudes (PUBLIC ``exp(-iwt)``
+        convention) and transverse k-vectors of the LAST :meth:`solve` -- the
+        exact :meth:`~lumenairy.elements.rcwa.RCWAResult.per_order_amplitudes`
+        contract, mirrored for the PMM family
+        (AUDIT_DYNAMETA_CONSUMER_API_GAPS B).
+
+        Returns a dict with ``Ex`` / ``Ey`` each ``(2, N)`` (row 0 = response
+        to incident lab ``E_x``, row 1 to incident ``E_y``), the per-order
+        ``kx`` / ``ky`` / ``kz`` normalised by ``k0``, the 1-D ``orders``
+        array, and the ``wavelength``.  ``port`` selects the reflection or
+        transmission side.
+
+        These are raw TANGENTIAL amplitudes: recovering an order's efficiency
+        needs the flux weight ``Re(kz_m / kz_inc)``, the longitudinal
+        ``|Ez|^2`` with ``Ez = -(kx Ex + ky Ey)/kz``, and the incident
+        ``|E|^2`` -- the recipe documented on the RCWA twin.  With them, the
+        response to any incident SUPERPOSITION (e.g. the rotated conical
+        s-hat) is the same linear combination of the two rows PER ORDER --
+        the cross terms that per-order POWERS cannot provide.
+
+        Retained by NumPy solves that close through the shared Rayleigh far
+        field: the classical mount (all-vertical in-plane, convection-slant
+        and generalized out-of-plane cascades) and the native conical path
+        (patterned nodal + uniform Fourier).  The covariant (uniform-slant)
+        cascade and the JAX twin do not retain amplitudes."""
+        if port not in ("reflection", "transmission"):
+            raise ValueError(
+                f"PMMStack.per_order_amplitudes: port must be 'reflection' "
+                f"or 'transmission', got {port!r}.")
+        m = self._modal
+        if m is None:
+            raise ValueError(
+                "PMMStack.per_order_amplitudes: no per-order amplitudes "
+                "retained -- run a NumPy solve() first (any add_layer / "
+                "set_source / re-solve supersedes them; the covariant "
+                "uniform-slant cascade and the JAX path do not retain "
+                "amplitudes).")
+        ex, ey = ("rx", "ry") if port == "reflection" else ("tx", "ty")
+        kz = m["kz_ref"] if port == "reflection" else m["kz_trn"]
+        return dict(orders=m["orders"].copy(), Ex=m[ex].copy(),
+                    Ey=m[ey].copy(), kx=m["kx"].copy(), ky=m["ky"].copy(),
+                    kz=np.asarray(kz).copy(), wavelength=m["wavelength"])
+
+    def jones_transmission(self):
+        """The ``(2, 2)`` zeroth-order TRANSMISSION Jones of the last
+        :meth:`solve` (columns = incident lab ``E_x`` / ``E_y``, rows =
+        ``[E_x; E_y]``, PUBLIC ``exp(-iwt)`` convention) -- the phase-bearing
+        modulator observable, previously unavailable from any PMM-family
+        solve (AUDIT_DYNAMETA_CONSUMER_API_GAPS B minimal cut).  Same
+        availability as :meth:`per_order_amplitudes`."""
+        m = self._modal
+        if m is None:
+            raise ValueError(
+                "PMMStack.jones_transmission: no per-order amplitudes "
+                "retained -- run a NumPy solve() first (the covariant "
+                "uniform-slant cascade and the JAX path do not retain "
+                "amplitudes).")
+        p0 = int(m["p0"])
+        return np.stack([m["tx"][:, p0], m["ty"][:, p0]], axis=0)
 
     def _slices_consensus_check(self, jones, tol=0.02):
         """Re-solve the recorded taper builders at n_slices +/- 1 and warn if
@@ -1677,6 +1751,7 @@ class PMMStack:
             the released 3-tuple).
         """
         self._internal = None   # supersedes any retained internals (audit P1-04)
+        self._modal = None      # ... and retained per-order amplitudes (B)
         if self._holds_traced():
             raise NotImplementedError(
                 "PMMStack.solve_vs_wavelength: the assemble-once sweep "

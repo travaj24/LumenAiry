@@ -583,6 +583,7 @@ class BerremanStack:
         self._layers = []                     # (thickness, eps_tensor_public)
         self._src = None
         self._internal = None
+        self._jones_t = None                  # transmission Jones of last solve
 
     def add_layer(self, thickness, *, eps):
         """Append a planar layer of thickness ``t`` [m] and permittivity
@@ -692,12 +693,17 @@ class BerremanStack:
                     "for out-of-plane stacks).  Far-field R / T / Jones ARE "
                     "exact here; internal fields are available at NORMAL "
                     "incidence (native path) or for iso / in-plane stacks.")
-            R, T, Jr, _Jt = _offplane_oblique_solve(
+            R, T, Jr, Jt = _offplane_oblique_solve(
                 eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky)
+            # AUDIT_DYNAMETA_CONSUMER_API_GAPS A1: retain the transmission
+            # Jones the far-field close-out already computed (consumers
+            # previously re-solved via the functional entry just for t).
+            self._jones_t = Jt
             return R, T, Jr
         core = _solve_core(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
                            retain=retain_internal)
         Jr, Jt, R, T = _farfield(core, eps_sup, eps_sub, Kx, Ky)
+        self._jones_t = Jt                    # A1: zero extra compute
         if retain_internal:
             # incident modal amplitudes per lab polarization, for the field /
             # absorption reconstruction.
@@ -710,6 +716,20 @@ class BerremanStack:
             core["R"], core["T"] = R, T
             self._internal = core
         return R, T, Jr
+
+    def jones_transmission(self):
+        """The ``2x2`` TRANSMISSION Jones of the last :meth:`solve` --
+        columns keyed to incident lab ``E_x`` / ``E_y``, PUBLIC
+        ``exp(-i w t)`` convention: the same contract as the functional
+        :func:`berreman_jones_1d`'s ``jones_t`` return (bit-identical to it;
+        the class solve computes it on every path and previously discarded
+        it, forcing a second functional solve on consumers that need the
+        transmitted phase alongside the internal observables --
+        AUDIT_DYNAMETA_CONSUMER_API_GAPS A1)."""
+        if self._jones_t is None:
+            raise ValueError(
+                "BerremanStack.jones_transmission: call solve() first.")
+        return self._jones_t
 
     # -- internal observables ------------------------------------------- #
 

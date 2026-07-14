@@ -55,11 +55,18 @@ __all__ = ["pmm_jones_1d_conical", "pmm_jones_1d_conical_tensor"]
 
 
 def _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv, kx0, ky0,
-                            eps_sup, eps_sub):
+                            eps_sup, eps_sub, return_modal=False):
     """The shared conical far-field tail (drive unit ``Ex``/``Ey``; build
     ``R``/``T`` per incident polarization + the ``(2, 2)`` zeroth-order
     reflection Jones) -- the :func:`pmm_jones_2d` convention verbatim, reused by
-    the isotropic and tensor native-conical entry points."""
+    the isotropic and tensor native-conical entry points.
+
+    Inputs are INTERNAL (``exp(+i w t)``) gauge; the returned Jones is PUBLIC
+    (conjugated here).  ``return_modal=True`` (AUDIT_DYNAMETA_CONSUMER_API_GAPS
+    B) additionally returns the per-order amplitude dict in the PUBLIC gauge
+    (``rx``/``ry``/``tx``/``ty`` each ``(2, N)``, rows keyed to incident lab
+    ``E_x``/``E_y``; the ``kz`` entries below are public-gauge already --
+    ``conj(eps_internal)`` IS the public permittivity)."""
     Nf = len(order_x)
     p0 = int(np.where((order_x == 0) & (order_y == 0))[0][0])
     delta = ((order_x == 0) & (order_y == 0)).astype(_C)
@@ -69,7 +76,8 @@ def _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv, kx0, ky0,
     safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
     safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     R_rows, T_rows, j_cols = [], [], []
-    for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
+    amp = {k: np.zeros((2, Nf), dtype=_C) for k in ("rx", "ry", "tx", "ty")}
+    for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
         long_inc = (kx0 * ex0 + ky0 * ey0)
         einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
         cinc = np.concatenate([ex0 * delta, ey0 * delta])
@@ -86,8 +94,19 @@ def _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv, kx0, ky0,
         R_rows.append(np.where(np.real(kz_ref_f) > 0, np.real(Re), 0.0))
         T_rows.append(np.where(np.real(kz_trn_f) > 0, np.real(Te), 0.0))
         j_cols.append(np.stack([np.conj(rx[p0]), np.conj(ry[p0])]))
+        amp["rx"][col], amp["ry"][col] = np.conj(rx), np.conj(ry)
+        amp["tx"][col], amp["ty"][col] = np.conj(tx), np.conj(ty)
     orders = np.stack([order_x, order_y], axis=1)
-    return orders, np.stack(R_rows), np.stack(T_rows), np.stack(j_cols, axis=1)
+    out = (orders, np.stack(R_rows), np.stack(T_rows),
+           np.stack(j_cols, axis=1))
+    if return_modal:
+        modal = dict(orders=np.asarray(order_x).copy(), p0=p0,
+                     kx=np.asarray(kxv).copy(), ky=np.asarray(kyv).copy(),
+                     kz_ref=np.asarray(kz_ref_f).copy(),
+                     kz_trn=np.asarray(kz_trn_f).copy(),
+                     kz_inc=kz_inc, kx0=float(kx0), ky0=float(ky0), **amp)
+        return out + (modal,)
+    return out
 
 
 def _tile_has_offplane_public(tensors):
@@ -104,7 +123,8 @@ def _tile_has_offplane_public(tensors):
 
 def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
                          theta, phi, degree, n_el, grade, n_orders,
-                         min_feature=0.0, label="pmm conical (nodal)"):
+                         min_feature=0.0, label="pmm conical (nodal)",
+                         return_modal=False):
     """PURE-NODAL (no projection floor) conical multilayer cascade for
     PATTERNED in-plane stacks -- the fix for
     ``AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12``.
@@ -252,15 +272,22 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
     Nf = len(ox)
     p0 = int(np.where(ox == 0)[0][0])
     delta = (ox == 0).astype(_C)
-    # public-gauge forward kz = conj of the internal-gauge forward branch of
-    # the conjugated eps (exact gauge map; equal branches for lossless media).
-    kz_inc = float(np.real(np.conj(_kz_forward2(np.conj(eps_sup), kx0, ky0))))
-    kz_ref_f = np.conj(_kz_forward2(np.conj(eps_sup), kxv, kyv))
-    kz_trn_f = np.conj(_kz_forward2(np.conj(eps_sub), kxv, kyv))
+    # PUBLIC-gauge forward kz, evaluated directly on the PUBLIC eps (the
+    # branch with Im(kz) >= 0 = forward decay, matching the classical path's
+    # _kz_forward(eps_public) and RCWA's modal kz_ref).  The earlier
+    # conj(_kz_forward2(conj(eps))) "gauge map" flipped the EVANESCENT branch
+    # to Im < 0 for lossless media (conj of +i|kz|); the flux math below uses
+    # Re() and the Re > 0 masks only, so R/T/jones are bit-identical either
+    # way -- but the per_order_amplitudes modal export (B) reports these kz
+    # and must carry the public decaying branch.
+    kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
+    kz_ref_f = _kz_forward2(eps_sup, kxv, kyv)
+    kz_trn_f = _kz_forward2(eps_sub, kxv, kyv)
     safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
     safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     R_rows, T_rows, j_cols = [], [], []
-    for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
+    amp = {k: np.zeros((2, Nf), dtype=_C) for k in ("rx", "ry", "tx", "ty")}
+    for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
         long_inc = (kx0 * ex0 + ky0 * ey0)
         einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
         rhs = np.concatenate([ex0 * delta, ey0 * delta])
@@ -278,8 +305,23 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         R_rows.append(np.where(np.real(kz_ref_f) > 0, np.real(Re), 0.0))
         T_rows.append(np.where(np.real(kz_trn_f) > 0, np.real(Te), 0.0))
         j_cols.append(np.stack([rx[p0], ry[p0]]))
+        # this cascade is PUBLIC gauge end-to-end -> amplitudes need no conj
+        amp["rx"][col], amp["ry"][col] = rx, ry
+        amp["tx"][col], amp["ty"][col] = tx, ty
     orders = np.stack([order_x, order_y], axis=1)
-    return orders, np.stack(R_rows), np.stack(T_rows), np.stack(j_cols, axis=1)
+    out = (orders, np.stack(R_rows), np.stack(T_rows),
+           np.stack(j_cols, axis=1))
+    if return_modal:
+        # AUDIT_DYNAMETA_CONSUMER_API_GAPS B: per-order complex tangential
+        # amplitudes (PUBLIC exp(-iwt) gauge), the RCWAResult modal contract.
+        modal = dict(orders=np.asarray(order_x).copy(), p0=p0,
+                     kx=np.asarray(kxv).copy(), ky=np.asarray(kyv).copy(),
+                     kz_ref=np.asarray(kz_ref_f).copy(),
+                     kz_trn=np.asarray(kz_trn_f).copy(),
+                     kz_inc=kz_inc, kx0=float(kx0), ky0=float(ky0),
+                     wavelength=float(wl), **amp)
+        return out + (modal,)
+    return out
 
 
 def pmm_jones_1d_conical(period, eps_ridge, eps_groove, n_substrate,

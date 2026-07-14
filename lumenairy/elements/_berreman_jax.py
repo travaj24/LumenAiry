@@ -134,7 +134,7 @@ def _solve_jax_retain(eps_layers, thicks, eps_sup, eps_sub, wavelength,
     """Differentiable native Berreman solve that ALSO retains the bracketing
     partial cascades for the internal-field / layer-absorption reconstruction --
     the jnp twin of ``berreman._solve_core(retain=True)`` + far-field.  Returns
-    ``(R, T, Jr, core)`` (in-plane / iso / OOP-at-normal only -- the caller
+    ``(R, T, Jr, Jt, core)`` (in-plane / iso / OOP-at-normal only -- the caller
     rejects OOP-oblique)."""
     from .rcwa import _jax_eig_stable
     from .rcwa._core import (
@@ -186,7 +186,7 @@ def _solve_jax_retain(eps_layers, thicks, eps_sup, eps_sub, wavelength,
         S_below[i] = _redheffer_star(prop[i], S_below_bot[i])
 
     # far field + incident modal amplitudes
-    Jr_cols, Rs, Ts, cinc_cols = [], [], [], []
+    Jr_cols, Jt_cols, Rs, Ts, cinc_cols = [], [], [], [], []
     for Einc in (jnp.array([1.0, 0.0], cj), jnp.array([0.0, 1.0], cj)):
         c_inc = jnp.linalg.solve(Wf_s, Einc)
         cinc_cols.append(c_inc)
@@ -196,6 +196,7 @@ def _solve_jax_retain(eps_layers, thicks, eps_sup, eps_sub, wavelength,
         E_ref, H_ref = Wb_s @ c_ref, Vb_s @ c_ref
         E_trn, H_trn = Wf_b @ c_trn, Vf_b @ c_trn
         Jr_cols.append(E_ref)
+        Jt_cols.append(E_trn)                  # A1: transmission Jones column
         F_inc = _flux_jax(E_inc, H_inc, jnp)
         Rs.append(-_flux_jax(E_ref, H_ref, jnp) / F_inc)
         Ts.append(_flux_jax(E_trn, H_trn, jnp) / F_inc)
@@ -203,7 +204,8 @@ def _solve_jax_retain(eps_layers, thicks, eps_sup, eps_sub, wavelength,
                 S_above=S_above, S_below=S_below, S_below_bot=S_below_bot,
                 Wf_s=Wf_s, Vf_s=Vf_s, k0=k0, Kx=Kx, Ky=Ky,
                 cinc=jnp.stack(cinc_cols, axis=1))
-    return jnp.stack(Rs), jnp.stack(Ts), jnp.stack(Jr_cols, axis=1), core
+    return (jnp.stack(Rs), jnp.stack(Ts), jnp.stack(Jr_cols, axis=1),
+            jnp.stack(Jt_cols, axis=1), core)
 
 
 def _amplitudes_jax(d, jnp):
@@ -523,11 +525,13 @@ def _berreman_stack_solve_jax(stack, retain_internal=False):
         jnp, eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky = _prep(
             layers, stack.n_sub, stack.n_sup, src["wl"], src["angle"],
             src["phi"], None)
-        R, T, Jr, core = _solve_jax_retain(
+        R, T, Jr, Jt, core = _solve_jax_retain(
             eps_layers, thicks, eps_sup, eps_sub, jnp.asarray(wl), Kx, Ky, jnp)
         stack._internal = core
+        stack._jones_t = Jt                    # A1: mirror the NumPy path
         return R, T, Jr
     R, T, Jr, Jt = _berreman_jones_1d_jax(
         layers, stack.n_sub, stack.n_sup, src["wl"],
         angle=src["angle"], phi=src["phi"])
+    stack._jones_t = Jt                        # A1: mirror the NumPy path
     return R, T, Jr

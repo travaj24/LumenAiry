@@ -685,7 +685,8 @@ def _kz_forward(eps, kx):
 
 
 def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
-                             kz_sup, kz_sub, kz_inc, kx0n, N):
+                             kz_sup, kz_sub, kz_inc, kx0n, N,
+                             return_modal=False):
     """Rayleigh far-field bookkeeping for a 2x2 Jones grating solve.
 
     Given the Rayleigh-projection operators ``Hsup``/``Hsub`` (each a
@@ -711,6 +712,12 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     the covariant single-layer core) so the flux bookkeeping lives in one place.
     ``kx0n = kx0 / k0`` is the (dimensionless) Bloch shift; callers compute
     ``kz_sup``/``kz_sub``/``kz_inc`` however their gauge requires and pass them in.
+
+    ``return_modal=True`` (AUDIT_DYNAMETA_CONSUMER_API_GAPS B) additionally
+    returns the per-order complex tangential amplitude dict (``rx``/``ry``/
+    ``tx``/``ty`` each ``(2, N)``, rows keyed to incident lab ``E_x``/``E_y``,
+    in the CALLER's gauge -- public for the classical ``PMMStack`` caller) --
+    the data this helper already computes and squares into the efficiencies.
     """
     safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
     safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
@@ -723,6 +730,7 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     jones = np.zeros((2, 2), dtype=_C)
     R_eff = np.zeros((2, N))
     T_eff = np.zeros((2, N))
+    amp = {k: np.zeros((2, N), dtype=_C) for k in ("rx", "ry", "tx", "ty")}
     for col in range(2):                        # 0 = incident Ex, 1 = incident Ey
         rhs = np.zeros(2 * N, dtype=_C)
         rhs[(col * N) + m0] = 1.0               # order-0 unit Ex (col 0) / Ey (col 1)
@@ -742,6 +750,15 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
         T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
         jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
         jones[1, col] = ry[m0]
+        amp["rx"][col], amp["ry"][col] = rx, ry
+        amp["tx"][col], amp["ty"][col] = tx, ty
+    if return_modal:
+        modal = dict(orders=np.asarray(orders).copy(), p0=int(m0),
+                     kx=np.asarray(kx).copy(), ky=np.zeros(N),
+                     kz_ref=np.asarray(kz_sup).copy(),
+                     kz_trn=np.asarray(kz_sub).copy(),
+                     kz_inc=float(kz_inc), kx0=float(kx0n), ky0=0.0, **amp)
+        return R_eff, T_eff, jones, modal
     return R_eff, T_eff, jones
 
 
