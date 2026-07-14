@@ -2,6 +2,82 @@
 
 All notable changes to the core library are documented here.
 
+## [5.21.4] — 2026-07-13
+
+### Fixed
+
+- **BOR propagating-mode classifier: near-grazing orders no longer dropped**
+  (`docs/audits/AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13.md`).  The
+  v5.18.0 dimensionless classifier (`q/k0 > 0.05`, audit P2-06) was an
+  ANGULAR cutoff (`theta < 88 deg` in n=1.41) that silently excluded
+  genuinely propagating near-grazing orders from the incident/outgoing
+  sets — per-order `R`/`T` biased low, lossless energy closure degraded
+  from 1.2e-11 to 2.28e-2 on a 48 um ring-grating reproducer (319 -> 318
+  modes; surfaced by DynaMeta's `lumenairy_bor_bridge` GATE C).  The
+  real-axis leg is now floored at the `q ~ 0` degenerate point only
+  (`q/k0 > 1e-6`), applied in lockstep to all THREE classifier twins
+  (`bor_stack.solve`'s `prop()`, `bor_solve._physical_propagating`,
+  `_jax_bor._mask`); imag + index-ceiling legs unchanged.  Reproducer
+  restored to the pre-regression values to all digits (319 modes,
+  1.22e-11) at m/um/nm scales; fundamental-mode `R = 0.146135` pinned
+  (lossless-trap guard); flux-normalizer seam probed unreachable
+  (`P/fnrm = q/k0` — kept implies flux-normalized).  6 gates in
+  `tests/unit/test_audit_bor_grazing_cutoff.py`; the k0=2.0 suites have no
+  near-cutoff modes (verified by running, not assumed).
+- **BOR legacy nodal cascade: catastrophic large-cell energy blow-up**
+  (same audit, follow-up finding).  `bor_solve.build_layer`/`solve` (the
+  M5 prototype of `BORStack`) returned `max|R+T-1| ~ 1e29..1e32` for
+  `Rbig >= ~12 lambda`.  Root cause: the nodal FD basis's zero-flux
+  spurious mode sea orients forward/backward by the SIGN OF NOISE, so
+  adjacent layers sharing most of their cross-section carry near-identical
+  spurious modes oriented oppositely — a null vector of the interface
+  transmission block `a + b` (`cond ~ 2.6e15` while `cond(W), cond(V) ~
+  1e3`).  `build_layer` now defaults to the spurious-free staggered
+  (Yee div-conforming) basis — the production `BORStack` discretization —
+  with `basis="nodal"` retained as the legacy escape hatch.  Blow-up
+  config: 9.7e29 -> 3.9e-13; the audit reproducer through
+  `build_layer`/`solve` now matches `BORStack` per-mode EXACTLY (diff 0.0).
+- **Conical PMM per-order `kz` export branch**: the nodal-conical far
+  field's `conj(kz_forward(conj(eps)))` gauge map flipped the EVANESCENT
+  `kz` to the growing branch (`Im < 0`) for lossless media.  `R`/`T`/Jones
+  were unaffected (the flux math is `Re()`-only); the branch now evaluates
+  directly on the PUBLIC eps (`Im >= 0` decay), as the new
+  `per_order_amplitudes` surface reports these values.
+
+### Added
+
+- **Consumer API surface** (`docs/audits/AUDIT_DYNAMETA_CONSUMER_API_GAPS_
+  2026_07_13.md`, items A1/A2/B; driven by the DynaMeta bridge campaign):
+  - `BerremanStack.jones_transmission()` (A1) — the transmission Jones the
+    class solve computed and DISCARDED on every path, forcing consumers to
+    run a second functional solve just for `t`.  Retained on all four solve
+    paths (NumPy main + OOP-oblique, JAX plain + retain); bit-identical to
+    `berreman_jones_1d`'s `jones_t`; one `retain_internal=True` solve now
+    serves the far field (incl. `t`) AND `layer_absorption` (absorption
+    budget closes at 1e-10).
+  - `RCWAStack.layers` (A2) — public read-only tuple view of the per-layer
+    records (`thickness`/`kind`/`data`/`formulation`/`dispersive` documented
+    as public); reverse translators no longer read the private `_layers`
+    slot under a version ceiling.
+  - `PMMStack.per_order_amplitudes(port)` + `PMMStack.jones_transmission()`
+    (B) — per-order complex tangential amplitudes with a pinned PUBLIC
+    `exp(-iwt)` gauge, mirroring the `RCWAResult.per_order_amplitudes`
+    contract exactly (same keys; `kx`/`ky`/`kz` normalized by `k0`).
+    Retained by the classical mount (incl. convection-slant and
+    generalized-OOP close-outs) and both native-conical paths (patterned
+    nodal + uniform Fourier); the covariant uniform-slant cascade and the
+    JAX twin raise with the surface documented.  This unlocks exact conical
+    s/p synthesis for patterned PMM cells (per-order cross terms that
+    per-order POWERS cannot provide) and the transmitted PHASE for the PMM
+    referee engine.  Validated against RCWA per-order COMPLEX amplitudes on
+    identical physics (classical oblique ~1e-4, conical theta=30/phi=25
+    ~3e-4, uniform conical exact); the documented flux recipe rebuilds the
+    returned efficiencies to 1e-16; the rotated conical s-hat total
+    synthesized from the amplitudes matches the RCWA-amplitude oracle at
+    9e-6 while the naive power sum misses 1.25e-2 of cross terms.  15 gates
+    in `tests/unit/test_audit_dynameta_consumer_api.py`.  (The PMM2D leg of
+    B and items C1–C3/D1 remain open — roadmap-class per the audit.)
+
 ## [5.21.3] — 2026-07-12
 
 ### Fixed
