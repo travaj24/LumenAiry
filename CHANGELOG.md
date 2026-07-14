@@ -2,6 +2,62 @@
 
 All notable changes to the core library are documented here.
 
+## [5.21.5] — 2026-07-14
+
+### Added
+
+- **Consumer API — the full remainder of
+  `docs/audits/AUDIT_DYNAMETA_CONSUMER_API_GAPS_2026_07_13.md`** (items
+  B-PMM2D / C1 / C2 / C3 / D1; the audit is now FULLY shipped).  Gates in
+  `tests/unit/test_audit_dynameta_consumer_api_2.py`:
+  - **Per-order amplitudes for the 2-D PMM engines (B, PMM2D leg)**:
+    `per_order_amplitudes(port)` + `jones_transmission()` on
+    `PMM2DStackHybrid` (and the `PMM2DStack` alias) and `PMM2DStackPure`
+    via a shared `PerOrderAmplitudesMixin` — the exact
+    `RCWAResult.per_order_amplitudes` contract with 2-D `(N, 2)` orders,
+    PUBLIC `exp(-iwt)` gauge, public decaying-branch `kz`.  Validated
+    against RCWA per-order COMPLEX amplitudes on an identical crossed-pillar
+    cell at normal + conical incidence (Pure ~3e-4, Hybrid ~3e-3 vs a
+    converged reference); the documented flux recipe rebuilds the returned
+    efficiencies exactly.
+  - **BOR modal amplitudes + absorption (C1)**:
+    `BORStack.per_mode_amplitudes(port)` — complex modal scattering
+    amplitudes in a PINNED deterministic eigenvector gauge (the raw
+    `res["S"]` column gauge is now documented on `solve`; its diagonal was
+    always gauge-invariant) — and `BORStack.layer_absorption()` via
+    `solve(retain_internal=True)` partial cascades + the staggered two-grid
+    flux.  Budget `R + T + sum A = 1` closes at 1e-12; the pinned
+    fundamental-mode COMPLEX reflection matches analytic Fresnel (5e-16)
+    and Fabry–Perot (2e-14) oracles at the mode's own local angle — the
+    transmitted/reflected PHASE is now a first-class BOR observable.
+  - **Berreman internals for OUT-OF-PLANE tensors at OBLIQUE incidence
+    (C2)** — the audit's flagship: `solve(retain_internal=True)` no longer
+    raises for the tilted-director regime.  The generalized (Li 2003)
+    cascade retains the same internals shape as the native core (asymmetric
+    modes sliced from its `M` blocks + generalized-convention partial
+    cascades, mapped to the public gauge by conjugation with a modal-H
+    negation), so `internal_field` and `layer_absorption` serve it
+    unchanged.  Absorption budget closes at machine precision (9e-16) at
+    oblique AND conical on a lossy tilted-director stack; theta -> 0
+    continuity against the native path holds for the absorption (1.8e-7)
+    and all six field components (4.9e-5 at theta = 1e-4).
+  - **Pure-engine absorption (C3)**:
+    `PMM2DStackPure.solve(retain_internal=True)` + `layer_absorption()` —
+    z-flux differences in the staggered modal basis via the eps-free block
+    field Gram (the Eq.25 dual pairing; `Re` form pinned on the
+    homogeneous-mode oracle).  Budget 8e-14; Pure-vs-Hybrid per-layer
+    cross-gate 6.7e-3.
+  - **RCWAStack JAX ergonomics (D1)**: a traced uniform `eps=` scalar and
+    traced `set_source` wavelength / theta / phi now flow gradients through
+    the stack twin (previously complex()/float()-severed, forcing a
+    lifted-cell eigensolve workaround and making wavelength/angle gradients
+    impossible).  Kept raw when traced; backend dispatch includes them; the
+    grazing nudge + propagating-incidence guard are documented as skipped
+    under trace; the homogeneous-mode cache is bypassed (unhashable traced
+    keys).  Forward parity with the concrete solve 4e-15; AD-vs-FD: eps
+    6e-9, wavelength 1.1e-7, theta 1.7e-8.  Concrete solves are
+    byte-identical (every change branches on tracedness).
+
 ## [5.21.4] — 2026-07-13
 
 ### Fixed
