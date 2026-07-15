@@ -27,6 +27,17 @@ All notable changes to the core library are documented here.
   five-agent literature round establishing that GBD's caustic error is a
   phase/interference problem, not an amplitude singularity, and ranking the fix
   routes).
+- **`apply_real_lens_auto` — GBD/FGA auto-dispatching lens propagator.**
+  ``method='auto'`` detects the field's geometric caustic zone (a meridional ray
+  fan whose launch directions follow the input wavefront -> where the exit rays
+  cross the axis, spherical-aberration-broadened) and routes the output plane to
+  the fast thawed-beamlet `apply_real_lens_gbd` in smooth regions or the
+  caustic-accurate frozen-beamlet `apply_real_lens_fga` near a focus / fold /
+  cusp (widened by a diffraction depth-of-focus pad).  Both are ray-based (no
+  thin-screen obliquity ceiling), so the dispatched result is accurate at high
+  NA as well as at caustics; the dispatch is biased toward FGA when uncertain
+  (FGA matches GBD in smooth regions, so this only costs speed, never accuracy).
+  ``method='gbd'``/``'fga'`` force the choice; ``return_method=True`` reports it.
 
 ## [5.22.0] — 2026-07-14
 

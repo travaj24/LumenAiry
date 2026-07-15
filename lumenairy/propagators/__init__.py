@@ -47,7 +47,7 @@ from .dispatch import (
 from .ensemble import propagate_ensemble
 
 # New propagators (no cycles).
-from .fga import apply_real_lens_fga
+from .fga import apply_real_lens_auto, apply_real_lens_fga
 from .gbd import (
     BeamletBundle,
     apply_abcd_to_beamlets,
@@ -119,6 +119,7 @@ __all__ = [
     'PropagationResult',
     'BeamletBundle',
     'apply_real_lens_fga',
+    'apply_real_lens_auto',
     'decompose_field_to_beamlets',
     'decompose_field_adaptive',
     'converge_gbd_sampling',

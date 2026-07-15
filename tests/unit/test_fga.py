@@ -107,6 +107,37 @@ def test_fga_beats_gbd_at_spherical_aberration_caustic():
         assert ef < 0.15                     # and to the documented ~few-% floor
 
 
+def test_auto_dispatcher_routes_and_matches():
+    """apply_real_lens_auto detects the caustic zone, routes far planes to GBD
+    and near-focus planes to FGA, and its output equals the chosen propagator's
+    (a true dispatch, not a re-implementation)."""
+    from lumenairy.propagators.fga import _caustic_zone, apply_real_lens_auto
+    presc = _singlet()                       # f ~ 38.8 mm
+    u0, dx = _collimated_gaussian()
+    zone = _caustic_zone(u0, dx, presc, _WL)
+    assert zone is not None and 30e-3 < zone[0] < 45e-3   # focus detected
+    # far from focus -> GBD; near focus -> FGA
+    _o1, m_far = apply_real_lens_auto(
+        u0, prescription=presc, wavelength=_WL, dx=dx,
+        output_plane_distance=15e-3, return_method=True,
+        gbd_kwargs={'beamlets_per_aperture': 40})
+    _o2, m_near = apply_real_lens_auto(
+        u0, prescription=presc, wavelength=_WL, dx=dx,
+        output_plane_distance=38e-3, return_method=True,
+        gbd_kwargs={'beamlets_per_aperture': 40})
+    assert m_far == "gbd"
+    assert m_near == "fga"
+    # forced method matches the standalone propagator
+    from lumenairy.elements import apply_real_lens_gbd
+    auto_g = apply_real_lens_auto(u0, prescription=presc, wavelength=_WL, dx=dx,
+                                  output_plane_distance=15e-3, method="gbd",
+                                  gbd_kwargs={'beamlets_per_aperture': 40})
+    ref_g = apply_real_lens_gbd(u0, prescription=presc, wavelength=_WL, dx=dx,
+                                output_plane_distance=15e-3,
+                                beamlets_per_aperture=40)
+    assert np.array_equal(auto_g, ref_g)
+
+
 def test_fga_power_normalization_and_guards():
     presc = _singlet()
     u0, dx = _collimated_gaussian(N=128)
