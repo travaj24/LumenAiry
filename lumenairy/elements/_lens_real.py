@@ -1164,40 +1164,127 @@ def apply_real_lens(
         if form_err is not None:
             sag = sag + form_err
 
-        # ---- Local surface normal -> angles of incidence/refraction ---
-        # Needed only for fresnel and/or slant_correction.  When on,
-        # the legacy code keeps cos_ti / cos_tt / sin2_tt / etc. all
-        # alive simultaneously (~6 N x N float64 arrays), which dwarfs
-        # the field memory at N >= 4096.  3.2.14: drop intermediates
-        # immediately and free the grad components after grad_sq is
-        # built.  At N=8192 this cuts peak refraction-step memory
-        # from ~5 GB to ~1.5 GB without changing the math.
-        if fresnel or slant_correction:
-            # 4.10: pass dy for the y-axis spacing -- pre-4.10 used dx
-            # for both, which gave the wrong surface-normal direction on
-            # anamorphic grids (dx != dy).  np.gradient takes the spacing
-            # in the same order as the array axes (y, x).
-            dsag_dy, dsag_dx = xp.gradient(sag, dy, dx)
-            grad_sq = dsag_dx ** 2 + dsag_dy ** 2
-            # Free the gradient components -- only grad_sq is needed
-            # for the rest of the refraction pipeline.
-            del dsag_dx, dsag_dy
-            # cos_ti / sin2_ti share `grad_sq + 1.0`; build the safe
-            # versions directly to avoid two extra full-grid arrays.
-            one_plus_g = 1.0 + grad_sq
-            cos_ti = 1.0 / xp.sqrt(one_plus_g)
-            sin2_ti = grad_sq / one_plus_g
-            del one_plus_g
-            del grad_sq
-            sin2_tt = (n1r / n2r) ** 2 * sin2_ti
-            cos_tt = xp.sqrt(xp.maximum(1.0 - sin2_tt, 0.0))
-            # 4.10: warn the FIRST time per call we clamp a real ray's
-            # cosine.  The 1e-3 floor (≈89.94°) was previously silent;
-            # for steep aspheres or strongly tilted bundles it acts on
-            # physical (non-TIR) rays before the TIR mask fires, and
-            # the resulting OPL = n * sag / cos_tt_safe blows up by
-            # ~1000× per clamped pixel.  See round-2 audit M-LR.
-            if bool(xp.any(cos_ti < 1e-3)) or bool(xp.any(cos_tt < 1e-3)):
+        # ---- Row-band (chunked) slant/fresnel refraction -------------
+        # v5.17.x: evaluate the ENTIRE refraction pipeline (local normal
+        # -> cos_ti/cos_tt -> refraction OPD -> phase screen -> fresnel
+        # amplitude -> TIR mask) in row-bands when slant_correction /
+        # fresnel is on AND row-banding is requested, so only a
+        # (chunk_rows x Nx) float64 slice is live at once instead of the
+        # ~6 full-grid transients the whole-grid block below builds at
+        # once (~51 GB at N=32768, which blocks 32k multi-emitter runs).
+        # The y-gradient is taken on a 1-row-halo band so np.gradient's
+        # central differences match the whole-grid result bit-for-bit,
+        # and the numexpr phase-screen decision reuses the SAME whole-
+        # E.size gate as the whole-grid path (line ~1250) so the numexpr-
+        # vs-numpy choice -- and hence the last-bit result -- is identical
+        # on both paths.  The fresnel amplitude multiply promotes E's
+        # dtype exactly as the whole-grid ``E = E * sqrt(T_eff)`` rebinding
+        # does (a float64-geometry T_eff turns a complex64 field into
+        # complex128); we reproduce that by routing the fresnel/TIR band
+        # writes into a promoted-dtype output array and rebinding E to it
+        # after the loop.  Byte-identical to the whole-grid block below
+        # (test_slant_chunk_byte_identical).
+        _slant_banded = ((slant_correction or fresnel)
+                         and sag_chunk_rows is not None
+                         and int(sag_chunk_rows) > 0 and xp is np)
+        _refr_clamped = [False]
+
+        def _refract_band(r0, r1, e_out):
+            if fresnel or slant_correction:
+                # 1-row halo so central-difference gradients on the band
+                # match the whole-grid np.gradient result exactly; the
+                # true array edges (rows 0 and Ny-1) keep their one-sided
+                # stencil in the first / last band.
+                _h0 = max(0, r0 - 1)
+                _h1 = min(Ny, r1 + 1)
+                _dsag_dy_h, _dsag_dx_h = xp.gradient(sag[_h0:_h1], dy, dx)
+                _lo = r0 - _h0
+                _hi = _lo + (r1 - r0)
+                dsag_dx = _dsag_dx_h[_lo:_hi]
+                dsag_dy = _dsag_dy_h[_lo:_hi]
+                grad_sq = dsag_dx ** 2 + dsag_dy ** 2
+                one_plus_g = 1.0 + grad_sq
+                cos_ti = 1.0 / xp.sqrt(one_plus_g)
+                sin2_ti = grad_sq / one_plus_g
+                sin2_tt = (n1r / n2r) ** 2 * sin2_ti
+                cos_tt = xp.sqrt(xp.maximum(1.0 - sin2_tt, 0.0))
+                if (bool(xp.any(cos_ti < 1e-3))
+                        or bool(xp.any(cos_tt < 1e-3))):
+                    _refr_clamped[0] = True
+                cos_ti_safe = xp.maximum(cos_ti, 1e-3)
+                cos_tt_safe = xp.maximum(cos_tt, 1e-3)
+            sag_b = sag[r0:r1]
+            if slant_correction:
+                opd = n2r * sag_b / cos_tt_safe - n1r * sag_b / cos_ti_safe
+            else:
+                opd = (n2r - n1r) * sag_b
+            if bool(xp.any(xp.isnan(opd))):
+                opd = xp.where(xp.isnan(opd), 0.0, opd)
+            if (xp is np and NUMEXPR_AVAILABLE
+                    and E.size >= _NUMEXPR_MIN_SIZE
+                    and _ensure_numexpr_loaded()):
+                # Same whole-E.size numexpr gate as the whole-grid path so
+                # both paths make the identical numexpr-vs-numpy choice
+                # (numexpr differs from numpy exp in the last bit, so a
+                # per-band size gate would break byte-identity at the
+                # threshold).  numexpr is element-wise, so evaluating the
+                # band slice equals evaluating the whole grid bit-for-bit.
+                # Writes the phase screen IN PLACE at E's dtype (complex64
+                # store / complex128 internal), matching the whole grid.
+                _Eb = E[r0:r1]
+                _ne.evaluate(
+                    '_Eb * exp(-1j * k0 * _opd)',
+                    local_dict={'_Eb': _Eb, 'k0': k0, '_opd': opd},
+                    out=_Eb,
+                )
+            else:
+                ph = xp.exp(-1j * k0 * opd)
+                if ph.dtype != E.dtype:
+                    ph = ph.astype(E.dtype)
+                E[r0:r1] = E[r0:r1] * ph
+            # Fresnel amplitude transmission.  ``E[r0:r1] * sqrt(T_eff)``
+            # promotes the band to result_type(E.dtype, geometry-real)
+            # (complex64 -> complex128 for the default float64 geometry),
+            # matching the whole-grid ``E = E * sqrt(T_eff)`` rebinding;
+            # the promoted band is stored into ``e_out`` (allocated at that
+            # dtype by the caller).
+            if fresnel:
+                denom_s = n1c * cos_ti_safe + n2c * cos_tt_safe
+                denom_p = n2c * cos_ti_safe + n1c * cos_tt_safe
+                t_s = 2.0 * n1c * cos_ti_safe / denom_s
+                t_p = 2.0 * n1c * cos_ti_safe / denom_p
+                T_eff = 0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
+                _band = E[r0:r1] * xp.sqrt(T_eff)
+            else:
+                _band = E[r0:r1]
+            # TIR mask (dtype-aware zero at the band's post-fresnel dtype,
+            # mirroring the whole grid's ``xp.zeros((), dtype=E.dtype)``).
+            if fresnel or slant_correction:
+                _band = xp.where(sin2_tt < 1.0, _band,
+                                 xp.zeros((), dtype=_band.dtype))
+            e_out[r0:r1] = _band
+
+        if _slant_banded:
+            cr = int(sag_chunk_rows)
+            # The whole-grid fresnel amplitude REBINDS E to
+            # result_type(E.dtype, geometry-real) (complex64 -> complex128
+            # for the default float64 geometry).  Reproduce that promotion
+            # by routing the fresnel/TIR band writes into a promoted output
+            # array and rebinding E to it after the loop.  With no fresnel
+            # (or when E is already wide enough) the output IS E and the
+            # writes land in place.  The phase screen always writes the
+            # pre-fresnel dtype into E first, so the promotion happens at
+            # exactly the same pipeline step as the whole grid.
+            if fresnel:
+                _out_dtype = xp.result_type(E.dtype, _sag_real)
+                E_out = (E if _out_dtype == E.dtype
+                         else xp.empty(E.shape, dtype=_out_dtype))
+            else:
+                E_out = E
+            for r0 in range(0, Ny, cr):
+                _refract_band(r0, min(Ny, r0 + cr), E_out)
+            E = E_out
+            if _refr_clamped[0]:
                 import warnings
                 warnings.warn(
                     "apply_real_lens: clamping near-grazing-incidence "
@@ -1209,99 +1296,146 @@ def apply_real_lens(
                     "surface profile.",
                     RuntimeWarning, stacklevel=2,
                 )
-            cos_ti_safe = xp.maximum(cos_ti, 1e-3)
-            cos_tt_safe = xp.maximum(cos_tt, 1e-3)
-            # cos_ti / cos_tt are no longer needed -- only the _safe
-            # versions and sin2_tt (for TIR mask) survive.
-            del cos_ti, cos_tt
 
-        # ---- Refraction OPD (thin-element phase screen) ---------------
-        # Note: a BPM-style "interface sub-slicing" mode was
-        # prototyped (see git history) but does not deliver the
-        # accuracy improvement it promises on sharp air-glass
-        # interfaces: simple single-reference-medium BPM requires
-        # sub-wavelength axial slabs, which for realistic
-        # interface thicknesses (~100 um) means 1000s of slabs --
-        # too slow.  Sub-wavelength slabs are needed because the
-        # BPM approximation (reference-medium Fresnel kernel + local
-        # phase correction) breaks down for step-discontinuous
-        # media.  Users needing better than thin-element accuracy
-        # should use ``apply_real_lens_traced`` which bypasses this
-        # limitation entirely by ray-tracing each pixel.
-        if slant_correction:
-            opd = n2r * sag / cos_tt_safe - n1r * sag / cos_ti_safe
-        else:
-            opd = (n2r - n1r) * sag
-        # 4.11.2: mask the NaN sentinel returned by surface_sag_general
-        # for points outside the conic domain (norm >= 0.9999, i.e. where
-        # the surface is not defined for hyperbolic / oblate conics) and
-        # propagated through the slant/fresnel gradient pipeline.  Without
-        # this, ``exp(-i k0 NaN) = NaN`` poisons the entire downstream
-        # ASM step; the NaN >= comparisons used by the near-grazing TIR
-        # guard return False, so the warning never fires for those
-        # pixels.  We zero the OPD on undefined-surface pixels here; the
-        # caller's clear_aperture / aperture mask should already be zeroing
-        # the field on the same pixels, so a 0-OPD phase screen is a safe
-        # neutral.  Tracks both slant-corrected and paraxial OPD branches.
-        if bool(xp.any(xp.isnan(opd))):
-            opd = xp.where(xp.isnan(opd), 0.0, opd)
-        if (xp is np and NUMEXPR_AVAILABLE
-                and E.size >= _NUMEXPR_MIN_SIZE
-                and _ensure_numexpr_loaded()):
-            # Fused multiply + complex exp in one threaded, chunked pass
-            # -- avoids the three complex128 N x N temporaries that
-            # ``E * np.exp(-1j * k0 * opd)`` otherwise materialises.
-            # With ``out=E``, numexpr evaluates the expression at
-            # complex128 internal precision and casts only at the
-            # final store, so complex64 E gets a double-precision
-            # phase accumulation + single-precision storage.
-            # CPU only -- numexpr has no GPU backend.
-            _ne.evaluate(
-                'E * exp(-1j * k0 * opd)',
-                local_dict={'E': E, 'k0': k0, 'opd': opd},
-                out=E,
-            )
-        else:
-            # Fallback for GPU (xp is cp) or small CPU arrays: compute
-            # exp() in the array backend's precision, then cast back
-            # to E's dtype so we don't silently upcast a complex64
-            # field to complex128.  CuPy's exp is fused at kernel
-            # level so the "three temporaries" concern doesn't apply
-            # the same way on device.
-            phase_exp = xp.exp(-1j * k0 * opd)
-            if phase_exp.dtype != E.dtype:
-                phase_exp = phase_exp.astype(E.dtype)
-            E = E * phase_exp
+        if not _slant_banded:
+            # ---- Local surface normal -> angles of incidence/refraction ---
+            # Needed only for fresnel and/or slant_correction.  When on,
+            # the legacy code keeps cos_ti / cos_tt / sin2_tt / etc. all
+            # alive simultaneously (~6 N x N float64 arrays), which dwarfs
+            # the field memory at N >= 4096.  3.2.14: drop intermediates
+            # immediately and free the grad components after grad_sq is
+            # built.  At N=8192 this cuts peak refraction-step memory
+            # from ~5 GB to ~1.5 GB without changing the math.
+            if fresnel or slant_correction:
+                # 4.10: pass dy for the y-axis spacing -- pre-4.10 used dx
+                # for both, which gave the wrong surface-normal direction on
+                # anamorphic grids (dx != dy).  np.gradient takes the spacing
+                # in the same order as the array axes (y, x).
+                dsag_dy, dsag_dx = xp.gradient(sag, dy, dx)
+                grad_sq = dsag_dx ** 2 + dsag_dy ** 2
+                # Free the gradient components -- only grad_sq is needed
+                # for the rest of the refraction pipeline.
+                del dsag_dx, dsag_dy
+                # cos_ti / sin2_ti share `grad_sq + 1.0`; build the safe
+                # versions directly to avoid two extra full-grid arrays.
+                one_plus_g = 1.0 + grad_sq
+                cos_ti = 1.0 / xp.sqrt(one_plus_g)
+                sin2_ti = grad_sq / one_plus_g
+                del one_plus_g
+                del grad_sq
+                sin2_tt = (n1r / n2r) ** 2 * sin2_ti
+                cos_tt = xp.sqrt(xp.maximum(1.0 - sin2_tt, 0.0))
+                # 4.10: warn the FIRST time per call we clamp a real ray's
+                # cosine.  The 1e-3 floor (≈89.94°) was previously silent;
+                # for steep aspheres or strongly tilted bundles it acts on
+                # physical (non-TIR) rays before the TIR mask fires, and
+                # the resulting OPL = n * sag / cos_tt_safe blows up by
+                # ~1000× per clamped pixel.  See round-2 audit M-LR.
+                if bool(xp.any(cos_ti < 1e-3)) or bool(xp.any(cos_tt < 1e-3)):
+                    import warnings
+                    warnings.warn(
+                        "apply_real_lens: clamping near-grazing-incidence "
+                        "rays at cos(theta) < 1e-3 floor.  Steep asphere or "
+                        "tilted bundle exceeds the surface's physical AOI "
+                        "limit; OPD on clamped pixels is artificially "
+                        "capped and may differ from the true ray path by "
+                        "kilo-radians.  Reduce input tilt or check the "
+                        "surface profile.",
+                        RuntimeWarning, stacklevel=2,
+                    )
+                cos_ti_safe = xp.maximum(cos_ti, 1e-3)
+                cos_tt_safe = xp.maximum(cos_tt, 1e-3)
+                # cos_ti / cos_tt are no longer needed -- only the _safe
+                # versions and sin2_tt (for TIR mask) survive.
+                del cos_ti, cos_tt
 
-        # ---- Fresnel amplitude transmission ---------------------------
-        if fresnel:
-            # 4.10: average the INTENSITY coefficients for unpolarised
-            # scalar throughput, not the amplitude coefficients.  At
-            # Brewster's angle (or any high AOI), t_s and t_p have
-            # different phases; their amplitude sum can cancel where
-            # sqrt(0.5*(|t_s|^2+|t_p|^2)) correctly captures the
-            # incoherent average power.  Pre-4.10 used 0.5*(t_s+t_p)
-            # which only matches 45-deg linear polarisation at low AOI.
-            # For polarised inputs route through the Jones pipeline.
-            denom_s = n1c * cos_ti_safe + n2c * cos_tt_safe
-            denom_p = n2c * cos_ti_safe + n1c * cos_tt_safe
-            t_s = 2.0 * n1c * cos_ti_safe / denom_s
-            t_p = 2.0 * n1c * cos_ti_safe / denom_p
-            T_eff = 0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
-            E = E * xp.sqrt(T_eff)
+            # ---- Refraction OPD (thin-element phase screen) ---------------
+            # Note: a BPM-style "interface sub-slicing" mode was
+            # prototyped (see git history) but does not deliver the
+            # accuracy improvement it promises on sharp air-glass
+            # interfaces: simple single-reference-medium BPM requires
+            # sub-wavelength axial slabs, which for realistic
+            # interface thicknesses (~100 um) means 1000s of slabs --
+            # too slow.  Sub-wavelength slabs are needed because the
+            # BPM approximation (reference-medium Fresnel kernel + local
+            # phase correction) breaks down for step-discontinuous
+            # media.  Users needing better than thin-element accuracy
+            # should use ``apply_real_lens_traced`` which bypasses this
+            # limitation entirely by ray-tracing each pixel.
+            if slant_correction:
+                opd = n2r * sag / cos_tt_safe - n1r * sag / cos_ti_safe
+            else:
+                opd = (n2r - n1r) * sag
+            # 4.11.2: mask the NaN sentinel returned by surface_sag_general
+            # for points outside the conic domain (norm >= 0.9999, i.e. where
+            # the surface is not defined for hyperbolic / oblate conics) and
+            # propagated through the slant/fresnel gradient pipeline.  Without
+            # this, ``exp(-i k0 NaN) = NaN`` poisons the entire downstream
+            # ASM step; the NaN >= comparisons used by the near-grazing TIR
+            # guard return False, so the warning never fires for those
+            # pixels.  We zero the OPD on undefined-surface pixels here; the
+            # caller's clear_aperture / aperture mask should already be zeroing
+            # the field on the same pixels, so a 0-OPD phase screen is a safe
+            # neutral.  Tracks both slant-corrected and paraxial OPD branches.
+            if bool(xp.any(xp.isnan(opd))):
+                opd = xp.where(xp.isnan(opd), 0.0, opd)
+            if (xp is np and NUMEXPR_AVAILABLE
+                    and E.size >= _NUMEXPR_MIN_SIZE
+                    and _ensure_numexpr_loaded()):
+                # Fused multiply + complex exp in one threaded, chunked pass
+                # -- avoids the three complex128 N x N temporaries that
+                # ``E * np.exp(-1j * k0 * opd)`` otherwise materialises.
+                # With ``out=E``, numexpr evaluates the expression at
+                # complex128 internal precision and casts only at the
+                # final store, so complex64 E gets a double-precision
+                # phase accumulation + single-precision storage.
+                # CPU only -- numexpr has no GPU backend.
+                _ne.evaluate(
+                    'E * exp(-1j * k0 * opd)',
+                    local_dict={'E': E, 'k0': k0, 'opd': opd},
+                    out=E,
+                )
+            else:
+                # Fallback for GPU (xp is cp) or small CPU arrays: compute
+                # exp() in the array backend's precision, then cast back
+                # to E's dtype so we don't silently upcast a complex64
+                # field to complex128.  CuPy's exp is fused at kernel
+                # level so the "three temporaries" concern doesn't apply
+                # the same way on device.
+                phase_exp = xp.exp(-1j * k0 * opd)
+                if phase_exp.dtype != E.dtype:
+                    phase_exp = phase_exp.astype(E.dtype)
+                E = E * phase_exp
 
-        # ---- TIR mask (audit #3.5: was inside `if fresnel:` pre-4.9) --
-        # Suppress regions that went into total internal reflection.
-        # This must fire whenever ``sin2_tt`` was computed -- i.e. for
-        # both ``fresnel=True`` and ``slant_correction=True`` paths,
-        # since the slant OPD divides by ``cos_tt_safe`` which is
-        # ill-defined where ``sin2_tt > 1``.  Pre-4.9 only ran this
-        # inside the Fresnel block, leaving slant_correction=True +
-        # fresnel=False users with unphysical residual field amplitude
-        # in TIR regions.
-        if fresnel or slant_correction:
-            # v4.13.2 (audit C-P1-4): dtype-aware zero.
-            E = xp.where(sin2_tt < 1.0, E, xp.zeros((), dtype=E.dtype))
+            # ---- Fresnel amplitude transmission ---------------------------
+            if fresnel:
+                # 4.10: average the INTENSITY coefficients for unpolarised
+                # scalar throughput, not the amplitude coefficients.  At
+                # Brewster's angle (or any high AOI), t_s and t_p have
+                # different phases; their amplitude sum can cancel where
+                # sqrt(0.5*(|t_s|^2+|t_p|^2)) correctly captures the
+                # incoherent average power.  Pre-4.10 used 0.5*(t_s+t_p)
+                # which only matches 45-deg linear polarisation at low AOI.
+                # For polarised inputs route through the Jones pipeline.
+                denom_s = n1c * cos_ti_safe + n2c * cos_tt_safe
+                denom_p = n2c * cos_ti_safe + n1c * cos_tt_safe
+                t_s = 2.0 * n1c * cos_ti_safe / denom_s
+                t_p = 2.0 * n1c * cos_ti_safe / denom_p
+                T_eff = 0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
+                E = E * xp.sqrt(T_eff)
+
+            # ---- TIR mask (audit #3.5: was inside `if fresnel:` pre-4.9) --
+            # Suppress regions that went into total internal reflection.
+            # This must fire whenever ``sin2_tt`` was computed -- i.e. for
+            # both ``fresnel=True`` and ``slant_correction=True`` paths,
+            # since the slant OPD divides by ``cos_tt_safe`` which is
+            # ill-defined where ``sin2_tt > 1``.  Pre-4.9 only ran this
+            # inside the Fresnel block, leaving slant_correction=True +
+            # fresnel=False users with unphysical residual field amplitude
+            # in TIR regions.
+            if fresnel or slant_correction:
+                # v4.13.2 (audit C-P1-4): dtype-aware zero.
+                E = xp.where(sin2_tt < 1.0, E, xp.zeros((), dtype=E.dtype))
 
         # ---- Per-surface clear aperture (vignetting) ------------------
         clear_ap = surf.get('clear_aperture')
