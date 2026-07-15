@@ -38,6 +38,33 @@ All notable changes to the core library are documented here.
   NA as well as at caustics; the dispatch is biased toward FGA when uncertain
   (FGA matches GBD in smooth regions, so this only costs speed, never accuracy).
   ``method='gbd'``/``'fga'`` force the choice; ``return_method=True`` reports it.
+- **`apply_real_lens_fga_vector` — vector (Jones) caustic-accurate propagator.**
+  Propagates a ``(2, Ny, Nx)`` transverse Jones field ``(E_x, E_y)``: each frozen
+  beamlet carries the per-surface Fresnel s/p Jones matrix (polarization ray
+  tracing -- diattenuation, retardance, and the geometric s/p frame rotation,
+  which supplies the semiclassical Berry phase), and the longitudinal ``E_z``
+  (``E . k = 0``, the high-NA piece) is added from the exit-ray directions.
+  Returns ``(2, ...)`` or ``(3, ...)`` with ``return_longitudinal=True``.
+  Validated: with a null (air) prescription the Jones is the identity and the
+  vector ``E_x`` reproduces the scalar propagator to fidelity 1.0 with no
+  spurious cross-polarization.
+
+### Fixed
+
+- **FGA normalization -- the ``t=0`` resolution of identity is now exact.** The
+  leading Herman-Kluk identity factor ``a(0) = 2^{d/2}`` (``d=2`` transverse) was
+  double-counted, so the ``t=0`` reconstruction over-counted by ``2^d = 4`` in
+  power and free-space propagation carried a ~2x energy excess.  Dividing the
+  reconstruction by ``2^{d/2}`` restores the resolution of identity (``t=0``
+  power ratio ``4.0 -> 1.000``) and makes free-space propagation energy-conserving
+  (``eta 2.0 -> 1.000``, fidelity 1.0) -- confirming (per the higher-order-FGA
+  analysis, Lu & Yang 2012) that the energy defect was a normalization factor,
+  NOT the O(eps) transport error, so no higher-order correction is needed.  The
+  field SHAPE was already correct (the fix is scale-only); ``normalize_output``
+  and fidelity results are unchanged.  A documented residual: near-collimated
+  inputs through strong focusing (FBI spectrum concentrating near ``p=0``) can
+  still over-amplify the absolute scale -- a representation regime, handled by
+  ``normalize_output='power'`` and by not over-widening ``p_max``.
 
 ## [5.22.0] — 2026-07-14
 

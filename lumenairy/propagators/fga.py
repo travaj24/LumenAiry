@@ -24,12 +24,24 @@ angular-spectrum oracle through a real lens to 0.997-0.999, and **beats GBD at a
 spherical-aberration caustic** on both field fidelity and peak-intensity error
 (GBD peak error 0.03-0.34 vs FGA 0.01-0.07).
 
-Accuracy knobs.  The frozen width ``w0`` is the FGA convergence parameter:
-energy conservation and smooth-field fidelity improve as ``w0`` grows (a wider
-beamlet is more paraxial), while caustic *resolution* wants a smaller ``w0`` --
-a standard FGA tradeoff.  The momentum half-range ``p_max`` must cover the
-field's angular content (auto-set from the prescription NA); ``n_p`` sets the
+Accuracy knobs.  The reconstruction is normalized so the ``t=0`` resolution of
+identity is exact (energy ratio 1.0; the leading FGA is exact for the paraxial
+quadratic Hamiltonian, so free-space propagation conserves energy to ~1.0).
+The frozen width ``w0`` is the FGA convergence parameter: a wider beamlet is more
+paraxial and gives a cleaner frame, while caustic *resolution* wants a smaller
+``w0`` -- a standard FGA tradeoff.  The momentum half-range ``p_max`` must cover
+the field's angular content (auto-set from the prescription NA); ``n_p`` sets the
 momentum samples per axis and ``dq_step`` the position-lattice stride.
+
+Energy caveat (near-axial inputs through strong focusing).  When the input is
+near-collimated (its FBI/local spectrum concentrates near ``p=0``) AND the system
+focuses it strongly, the raw output amplitude can be off by a large scale factor
+(the FGA high-frequency assumption is strained near ``p=0``, and OVER-sampling
+high-``p`` beamlets injects spurious energy).  The field SHAPE stays correct
+(fidelity ~0.9998 vs the exact field), so pass ``normalize_output='power'`` to
+recover the absolute scale, and do not set ``p_max`` wider than the actual
+angular content.  This is a representation-regime effect, not the O(eps) FGA
+transport error (which is negligible for lens-like Hamiltonians).
 
 Requires the optional ``numba`` accelerator (the pure-NumPy swarm sum is
 impractically slow); install with ``pip install lumenairy[numba]``.
@@ -236,7 +248,12 @@ def _fga_through_lens(u0, dx, prescription, wavelength, w0, z_image,
     qx, qy, px, py, dp = _swarm_lattice(Ny, Nx, dx, x0, y0, dq_step, p_max, n_p)
     Nq = qx.shape[0]
     Np = px.shape[0]
-    C = (k / (2.0 * np.pi)) ** 2 * ((dq_step * dx) ** 2) * (dp ** 2)
+    # phase-space measure * the FGA normalization.  The /2^{d/2} (d=2 transverse)
+    # removes the double-counted Herman-Kluk identity factor a(0)=2^{d/2}: without
+    # it the t=0 resolution of identity over-counts by 2^d=4 in power (verified:
+    # the flat-prescription output=0 power ratio -> 4.0 in the well-sampled limit,
+    # -> 1.0 with this factor).
+    C = ((k / (2.0 * np.pi)) ** 2 * ((dq_step * dx) ** 2) * (dp ** 2)) / 2.0
 
     c = _gabor_coeff(u0, qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig)
 
@@ -376,6 +393,153 @@ def apply_real_lens_fga(
         if pout > 0.0:
             out = out * math.sqrt(pin / pout)
     return out
+
+
+def _fga_vector_through_lens(Ex, Ey, dx, prescription, wavelength, w0, z_image,
+                             dq_step, p_max, n_p, nsig):
+    """Vector (Jones) FGA transport: returns ``(Ex, Ey, Ez)`` at the output
+    plane.  The scalar transport (ray map + HK weight + OPL) is shared by both
+    polarization channels; each beamlet additionally carries the per-beamlet 2x2
+    Fresnel Jones matrix (polarization ray tracing, s/p per surface -- the s/p
+    frame rotation IS the geometric phase), and the longitudinal ``Ez`` is added
+    from the exit-ray directions (``E.k = 0``)."""
+    from ..propagators.gbd import _fresnel_jones_matrix_per_beamlet
+    from ..raytrace import surfaces_from_prescription
+    from ..raytrace.differential import ray_transfer_jacobian
+
+    k = 2.0 * np.pi / wavelength
+    Ny, Nx = Ex.shape
+    x0 = -(Nx / 2) * dx
+    y0 = -(Ny / 2) * dx
+    Ag = (1.0 / (np.pi * w0 ** 2)) ** 0.5
+    qx, qy, px, py, dp = _swarm_lattice(Ny, Nx, dx, x0, y0, dq_step, p_max, n_p)
+    Nq = qx.shape[0]
+    Np = px.shape[0]
+    C = ((k / (2.0 * np.pi)) ** 2 * ((dq_step * dx) ** 2) * (dp ** 2)) / 2.0
+
+    cx = _gabor_coeff(Ex, qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig)
+    cy = _gabor_coeff(Ey, qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig)
+
+    surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
+    surfs[-1].thickness = 0.0
+    kw2 = k * w0 * w0
+    QX = np.empty((Nq, Np))
+    QY = np.empty((Nq, Np))
+    PX = np.empty((Nq, Np))
+    PY = np.empty((Nq, Np))
+    Wx = np.zeros((Nq, Np), dtype=np.complex128)
+    Wy = np.zeros((Nq, Np), dtype=np.complex128)
+    for ip in range(Np):
+        pxi = float(px[ip])
+        pyi = float(py[ip])
+        pz_in = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
+        uxin = np.full(Nq, pxi / pz_in)
+        uyin = np.full(Nq, pyi / pz_in)
+        dt = ray_transfer_jacobian(qx.copy(), qy.copy(), uxin, uyin,
+                                   surfs, wavelength, per_surface=False)
+        J, jalive = _fresnel_jones_matrix_per_beamlet(
+            qx.copy(), qy.copy(), uxin, uyin, prescription, wavelength)
+        uxo = dt.ux
+        uyo = dt.uy
+        xv = dt.x + z_image * uxo
+        yv = dt.y + z_image * uyo
+        opd_tot = dt.opd + z_image * np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
+        Mleg = np.tile(np.eye(4), (Nq, 1, 1))
+        Mleg[:, 0, 2] = z_image
+        Mleg[:, 1, 3] = z_image
+        M = Mleg @ dt.jacobian
+        go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
+        gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5
+        A = M[:, 0:2, 0:2]
+        B = M[:, 0:2, 2:4] * gi
+        Cc = M[:, 2:4, 0:2] * go[:, None, None]
+        D = M[:, 2:4, 2:4] * (go[:, None, None] * gi)
+        Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
+        a = np.sqrt(_det2(Z))
+        a = np.where(a.real < 0, -a, a)
+        base = C * a * np.exp(1j * k * opd_tot)          # scalar beamlet weight
+        invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
+        QX[:, ip] = xv
+        QY[:, ip] = yv
+        PX[:, ip] = uxo * invo
+        PY[:, ip] = uyo * invo
+        cxi = cx[:, ip]
+        cyi = cy[:, ip]
+        # apply the 2x2 Jones to the (Ex, Ey) coefficient, weight by the scalar
+        ex_out = J[:, 0, 0] * cxi + J[:, 0, 1] * cyi
+        ey_out = J[:, 1, 0] * cxi + J[:, 1, 1] * cyi
+        alv = np.asarray(dt.alive, bool) & np.asarray(jalive, bool)
+        Wx[:, ip] = np.where(alv, base * ex_out, 0.0)
+        Wy[:, ip] = np.where(alv, base * ey_out, 0.0)
+
+    ex = _reconstruct(QX, QY, PX, PY, Wx, x0, y0, dx, Ny, Nx, w0, k, Ag, nsig)
+    ey = _reconstruct(QX, QY, PX, PY, Wy, x0, y0, dx, Ny, Nx, w0, k, Ag, nsig)
+    # longitudinal Ez per beamlet: E.k = 0 -> Ez = -(px*Ex + py*Ey)/pz
+    PZ = np.sqrt(np.maximum(1.0 - PX ** 2 - PY ** 2, 1e-12))
+    Wz = -(PX * Wx + PY * Wy) / PZ
+    ez = _reconstruct(QX, QY, PX, PY, Wz, x0, y0, dx, Ny, Nx, w0, k, Ag, nsig)
+    return ex, ey, ez
+
+
+def apply_real_lens_fga_vector(
+    E_vec: np.ndarray,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    output_plane_distance: float = 0.0,
+    w0_factor: float = 5.0,
+    dq_step: int = 2,
+    p_max: Optional[float] = None,
+    n_p: int = 15,
+    nsig: float = 4.0,
+    return_longitudinal: bool = False,
+    normalize_output: str = "none",
+) -> np.ndarray:
+    """Vector (Jones) FGA lens propagator -- the polarization-carrying,
+    caustic-accurate peer of :func:`apply_real_lens_fga`.
+
+    ``E_vec`` is a ``(2, Ny, Nx)`` transverse Jones field ``(E_x, E_y)``.  Each
+    frozen beamlet carries the per-surface Fresnel s/p Jones matrix (polarization
+    ray tracing, exactly as the GBD vector propagator), so the returned field
+    captures diattenuation, retardance, and the geometric s/p frame rotation
+    through the system, while remaining caustic-accurate.
+
+    Returns ``(2, Ny, Nx)`` ``(E_x, E_y)`` by default, or ``(3, Ny, Nx)``
+    ``(E_x, E_y, E_z)`` when ``return_longitudinal=True`` -- the longitudinal
+    ``E_z`` (from ``E . k = 0``) is the high-NA piece a transverse-only model
+    misses.  NumPy-only; requires ``numba``.  Other parameters as
+    :func:`apply_real_lens_fga`.
+    """
+    E_vec = np.asarray(E_vec, dtype=np.complex128)
+    if E_vec.ndim != 3 or E_vec.shape[0] != 2:
+        raise ValueError(
+            "apply_real_lens_fga_vector: E_vec must be (2, Ny, Nx) = (Ex, Ey).")
+    if E_vec.shape[1] != E_vec.shape[2]:
+        raise ValueError("apply_real_lens_fga_vector: grid must be square.")
+    if normalize_output not in ("none", "power"):
+        raise ValueError(
+            "normalize_output must be 'none' or 'power', got "
+            f"{normalize_output!r}.")
+    if p_max is None:
+        p_max = _default_p_max(prescription, wavelength)
+    w0 = float(w0_factor) * float(dx)
+    ex, ey, ez = _fga_vector_through_lens(
+        E_vec[0], E_vec[1], float(dx), prescription, float(wavelength), w0,
+        float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
+        float(nsig))
+    if normalize_output == "power":
+        # rescale the transverse (Ex, Ey) to the input power (lossless
+        # assumption; the raw FGA scale is shape-correct but w0/sampling-
+        # dependent -- see the module docstring on the FGA convergence knob).
+        pin = float(np.sum(np.abs(E_vec[0]) ** 2 + np.abs(E_vec[1]) ** 2))
+        pout = float(np.sum(np.abs(ex) ** 2 + np.abs(ey) ** 2))
+        if pout > 0.0:
+            s = math.sqrt(pin / pout)
+            ex, ey, ez = ex * s, ey * s, ez * s
+    if return_longitudinal:
+        return np.stack([ex, ey, ez], axis=0)
+    return np.stack([ex, ey], axis=0)
 
 
 def _caustic_zone(E_in, dx, prescription, wavelength, n_rays=25):

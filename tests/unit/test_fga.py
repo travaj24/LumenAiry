@@ -138,6 +138,64 @@ def test_auto_dispatcher_routes_and_matches():
     assert np.array_equal(auto_g, ref_g)
 
 
+def test_fga_normalization_identity_and_energy():
+    """The corrected FGA normalization makes the t=0 resolution of identity exact
+    (power ratio ~1, not the pre-fix 2^d=4) and free-space propagation energy-
+    conserving to ~1.0 -- confirming the energy error was a normalization factor,
+    not the O(eps) transport defect."""
+    N, dx = 128, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (18e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+
+    def pr(a, b):
+        return float(np.sum(np.abs(a) ** 2) / np.sum(np.abs(b) ** 2))
+    ident = apply_real_lens_fga(u0, prescription=flat, wavelength=_WL, dx=dx,
+                                output_plane_distance=0.0, w0_factor=8.0,
+                                p_max=0.06, n_p=15)
+    assert abs(pr(ident, u0) - 1.0) < 0.02        # resolution of identity
+    prop = apply_real_lens_fga(u0, prescription=flat, wavelength=_WL, dx=dx,
+                               output_plane_distance=300e-6, w0_factor=8.0,
+                               p_max=0.06, n_p=15)
+    ref = angular_spectrum_propagate(u0, 300e-6, _WL, dx)
+    assert abs(pr(prop, u0) - 1.0) < 0.03         # free-space energy conserved
+    assert _fid(prop, ref) > 0.999                # ... and shape-exact
+
+
+def test_fga_vector_polarization():
+    """Vector (Jones) FGA: free-space parity (Jones=identity in air -> Ex matches
+    the scalar propagator, no spurious cross-pol), a physical longitudinal Ez,
+    and correct return shapes."""
+    from lumenairy.propagators.fga import apply_real_lens_fga_vector
+    N, dx = 128, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (18e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    KW = dict(w0_factor=5.0, p_max=0.06, n_p=13)
+    z = 300e-6
+    sc = apply_real_lens_fga(u0, prescription=flat, wavelength=_WL, dx=dx,
+                             output_plane_distance=z, **KW)
+    vec = apply_real_lens_fga_vector(
+        np.stack([u0, np.zeros_like(u0)]), prescription=flat, wavelength=_WL,
+        dx=dx, output_plane_distance=z, return_longitudinal=True, **KW)
+    assert vec.shape == (3, N, N)
+    assert _fid(vec[0], sc) > 0.999                       # Ex == scalar
+    assert np.linalg.norm(vec[1]) < 1e-3 * np.linalg.norm(vec[0])   # Ey ~ 0
+    assert np.linalg.norm(vec[2]) < 0.05 * np.linalg.norm(vec[0])   # Ez small
+    two = apply_real_lens_fga_vector(
+        np.stack([u0, np.zeros_like(u0)]), prescription=flat, wavelength=_WL,
+        dx=dx, output_plane_distance=z, **KW)
+    assert two.shape == (2, N, N)                          # (Ex, Ey) by default
+
+
 def test_fga_power_normalization_and_guards():
     presc = _singlet()
     u0, dx = _collimated_gaussian(N=128)

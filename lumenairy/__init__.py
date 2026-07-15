@@ -915,7 +915,11 @@ from .propagators.dispatch import (
 # iterates each realisation through a coherent propagator and
 # returns the partial-coherence intensity ``< |E_k|^2 >_k``.
 from .propagators.ensemble import propagate_ensemble
-from .propagators.fga import apply_real_lens_auto, apply_real_lens_fga
+from .propagators.fga import (
+    apply_real_lens_auto,
+    apply_real_lens_fga,
+    apply_real_lens_fga_vector,
+)
 from .propagators.gbd import (
     BeamletBundle,
     apply_abcd_to_beamlets,
@@ -1107,6 +1111,7 @@ __all__ = [
     'close_worker_pool',
     'apply_real_lens_gbd',
     'apply_real_lens_fga',
+    'apply_real_lens_fga_vector',
     'apply_real_lens_auto',
     'apply_real_lens_maslov',
     'apply_real_lens_traced_jax',
