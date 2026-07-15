@@ -91,6 +91,7 @@ from .lenses import (
     apply_cylindrical_lens,
     apply_grin_lens,
     apply_real_lens,
+    apply_real_lens_gbd,
     apply_real_lens_maslov,
     apply_real_lens_traced,
     apply_real_lens_traced_multi,
@@ -178,7 +179,8 @@ from .thin_grating import (
 __all__ = [
     # lenses
     'apply_thin_lens', 'apply_spherical_lens', 'apply_aspheric_lens',
-    'apply_real_lens', 'apply_real_lens_traced', 'apply_real_lens_maslov',
+    'apply_real_lens', 'apply_real_lens_gbd', 'apply_real_lens_traced',
+    'apply_real_lens_maslov',
     'apply_real_lens_traced_multi', 'apply_real_lens_traced_segmented',
     'apply_real_lens_traced_multibranch',
     'prepare_real_lens_traced', 'PreparedTracedLens',

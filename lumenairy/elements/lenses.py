@@ -978,4 +978,5 @@ from ._lens_traced import (  # noqa: E402, F401  # noqa: E402, F401
 from ._lens_traced_multibranch import (  # noqa: E402, F401
     apply_real_lens_traced_multibranch,
 )
+from .lenses_gbd import apply_real_lens_gbd  # noqa: F401, E402
 from .lenses_maslov import apply_real_lens_maslov  # noqa: F401, E402
