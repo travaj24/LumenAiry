@@ -17,7 +17,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -439,3 +439,119 @@ def has_mirrors(prescription: Dict[str, Any]) -> bool:
     if elements is None:
         return False
     return any(el.get('element_type') == 'mirror' for el in elements)
+
+
+# ============================================================================
+# Combine multiple elements into one whole-group prescription
+# ============================================================================
+
+
+def combine_prescriptions(
+    prescriptions: List[Dict[str, Any]],
+    gaps: Any,
+    *,
+    aperture: Optional[float] = None,
+    name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Concatenate several lens prescriptions separated by air gaps into ONE
+    multi-element prescription, so an entire lens group can be propagated in a
+    **single pass** by any real-lens propagator (:func:`apply_real_lens`,
+    :func:`apply_real_lens_traced`, :func:`apply_real_lens_traced_multibranch`,
+    :func:`apply_real_lens_gbd`, :func:`apply_real_lens_maslov`).
+
+    This is the inverse of :func:`split_prescription_at_mirrors` for the
+    all-refractive case, and the direct way to feed a stack of catalog elements
+    (``make_singlet`` / ``make_doublet`` / ``thorlabs_lens`` / a Zemax lens
+    group) to a whole-system propagator.  A single-pass trace avoids the
+    per-element field reconstruction that accumulates error when a diverging
+    beam is relayed through many elements -- and, with the multibranch
+    propagator, stays caustic-safe through the focus.  (The output plane past
+    the last vertex is set on the propagator via its ``output_plane_distance``,
+    not here.)
+
+    Parameters
+    ----------
+    prescriptions : sequence of prescription dicts
+        Each a self-contained element that exits into the same medium its
+        downstream neighbour enters from (normally ``air -> ... -> air``).
+        Any builder / loader schema is accepted (run through
+        :func:`normalize_prescription` internally).
+    gaps : float or sequence of ``len(prescriptions) - 1`` floats
+        Axial gap [m] between consecutive elements (last vertex of element *i*
+        to first vertex of element *i+1*), in the medium element *i* exits into.
+        A scalar is broadcast to every gap.
+    aperture : float, optional
+        Combined clear-aperture diameter [m].  Default: the max of the input
+        elements' ``aperture_diameter``.
+    name : str, optional
+        Label for the combined prescription.
+
+    Returns
+    -------
+    dict
+        ``{name, aperture_diameter, surfaces, thicknesses}`` with the
+        concatenated surfaces and the interleaved internal + gap thicknesses
+        (``len(thicknesses) == len(surfaces) - 1``).
+
+    Raises
+    ------
+    ValueError
+        If no prescriptions are given, ``gaps`` has the wrong length, an element
+        has no surfaces, or a junction is a glass discontinuity (element *i*'s
+        exit medium != element *i+1*'s entry medium -- unphysical across a gap).
+
+    Examples
+    --------
+    >>> import lumenairy as la
+    >>> a = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=25e-3)
+    >>> b = la.make_singlet(40e-3, -40e-3, 4e-3, 'N-BK7', aperture=25e-3)
+    >>> group = la.combine_prescriptions([a, b], gaps=20e-3)   # 20 mm air gap
+    >>> len(group['surfaces']), len(group['thicknesses'])
+    (4, 3)
+    """
+    if not prescriptions:
+        raise ValueError("combine_prescriptions: need at least one prescription.")
+    n = len(prescriptions)
+    if np.isscalar(gaps):
+        gaps = [float(gaps)] * (n - 1)
+    else:
+        gaps = [float(g) for g in gaps]
+    if len(gaps) != n - 1:
+        raise ValueError(
+            f"combine_prescriptions: {n} prescriptions but {len(gaps)} gaps "
+            f"(expected {n - 1}).")
+
+    surfaces: List[Dict[str, Any]] = []
+    thicknesses: List[float] = []
+    apertures: List[float] = []
+    for i, rx in enumerate(prescriptions):
+        rxn = normalize_prescription(rx)
+        surfs = rxn.get('surfaces') or []
+        if not surfs:
+            raise ValueError(
+                f"combine_prescriptions: prescription {i} has no surfaces.")
+        if i > 0:
+            prev_exit = surfaces[-1].get('glass_after') or 'air'
+            this_entry = surfs[0].get('glass_before') or 'air'
+            if prev_exit != this_entry:
+                raise ValueError(
+                    f"combine_prescriptions: glass discontinuity at junction "
+                    f"{i} -- element {i - 1} exits into {prev_exit!r} but "
+                    f"element {i} enters from {this_entry!r}.  A gap sits in a "
+                    f"single medium; make glass_after/glass_before match.")
+            thicknesses.append(gaps[i - 1])                 # the inter-element gap
+        surfaces.extend(copy.deepcopy(s) for s in surfs)
+        thicknesses.extend(float(t) for t in (rxn.get('thicknesses') or []))
+        ap = rxn.get('aperture_diameter')
+        if ap:
+            apertures.append(float(ap))
+
+    return {
+        'name': name or ' + '.join(
+            str(p.get('name') or f'element{i}')
+            for i, p in enumerate(prescriptions)),
+        'aperture_diameter': aperture if aperture is not None
+        else (max(apertures) if apertures else None),
+        'surfaces': surfaces,
+        'thicknesses': thicknesses,
+    }

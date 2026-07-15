@@ -62,6 +62,7 @@ from .prescriptions_quadoa import (
     load_quadoa_qos,
 )
 from .prescriptions_transforms import (
+    combine_prescriptions,
     has_mirrors,
     normalize_prescription,
     scale_prescription,
@@ -100,5 +101,6 @@ __all__ = [
     'scale_prescription',
     'normalize_prescription',
     'split_prescription_at_mirrors',
+    'combine_prescriptions',
     'has_mirrors',
 ]

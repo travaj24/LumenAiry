@@ -565,6 +565,7 @@ from .io.codegen import (
 from .io.prescriptions import (
     QUADOA_SCHEMA_VERSION,
     THORLABS_CATALOG,
+    combine_prescriptions,
     export_codev_seq,
     export_quadoa_qos,
     export_zemax_lens_data,
@@ -1081,6 +1082,7 @@ __all__ = [
     'scale_prescription',
     'normalize_prescription',
     'split_prescription_at_mirrors',
+    'combine_prescriptions',
     'has_mirrors',
 
     # Lens / element models (apply on a field)
