@@ -155,3 +155,156 @@ def test_banded_path_invokes_per_band_gradient(monkeypatch):
     assert band_calls == whole_calls * n_bands, (
         f"banded gradient count {band_calls} != {whole_calls} * {n_bands}; "
         "the per-band refraction path may not have executed")
+
+
+# ---------------------------------------------------------------------------
+# v5.17.x: the _slant_narrow_chunk path builds ``sag`` PER BAND (not from a
+# full-grid sag) so the ~26 GB X/Y/h_sq meshgrids AND the ~43 GB full-grid sag
+# transient never allocate for a plain slant/fresnel surface.  It also handles
+# the aperture STOP and per-surface clear_aperture per band.  These must stay
+# BYTE-IDENTICAL to the whole-grid path and must never call _ensure_full_grids.
+# ---------------------------------------------------------------------------
+
+
+def _presc_stop():
+    """Two-element singlet with the aperture STOP applied at surface 1
+    (stop_index=1) so the per-band stop-aperture masking path is exercised.
+    The 2.0 mm stop clips inside the 1.2 mm-waist beam (~0.5 amplitude at
+    the semi-aperture) so the mask is a genuine, not no-op, operation."""
+    return {
+        'name': 't_stop', 'aperture_diameter': 2.0e-3, 'stop_index': 1,
+        'surfaces': [
+            {'radius': 12e-3, 'conic': -0.4,
+             'aspheric_coeffs': {4: 2e4, 6: 5e6},
+             'glass_before': 'air', 'glass_after': 'N-BK7'},
+            {'radius': -15e-3, 'conic': 0.0, 'aspheric_coeffs': {4: -1e4},
+             'glass_before': 'N-BK7', 'glass_after': 'air'},
+        ],
+        'thicknesses': [2.5e-3],
+    }
+
+
+def _presc_clearap():
+    """Two-element singlet with a per-surface clear_aperture (1.8 mm) on
+    surface 0 so the per-band clear-aperture (vignetting) masking path is
+    exercised."""
+    return {
+        'name': 't_ca', 'aperture_diameter': 3e-3,
+        'surfaces': [
+            {'radius': 12e-3, 'conic': -0.4,
+             'aspheric_coeffs': {4: 2e4, 6: 5e6},
+             'glass_before': 'air', 'glass_after': 'N-BK7',
+             'clear_aperture': 1.8e-3},
+            {'radius': -15e-3, 'conic': 0.0, 'aspheric_coeffs': {4: -1e4},
+             'glass_before': 'N-BK7', 'glass_after': 'air'},
+        ],
+        'thicknesses': [2.5e-3],
+    }
+
+
+@pytest.mark.parametrize("dtype", [np.complex64, np.complex128])
+@pytest.mark.parametrize("N,dx", [(512, 6e-6), (1024, 3e-6)])
+@pytest.mark.parametrize("slant,fres", [(True, False),
+                                        (False, True),
+                                        (True, True)])
+@pytest.mark.parametrize("presc_fn,label", [(_presc_stop, 'stop'),
+                                            (_presc_clearap, 'clearap')])
+def test_slant_stop_clearap_band_byte_identical(N, dx, slant, fres, dtype,
+                                                presc_fn, label):
+    """A prescription WITH an aperture-stop surface (stop_index) and one WITH
+    a per-surface clear_aperture: the banded _slant_narrow_chunk path applies
+    those masks PER BAND and must be byte-identical to the whole-grid path
+    (which applies them via the full-grid h_sq / h_sq_axis)."""
+    E = _tilted_field(N, dx, dtype=dtype)
+    kw = dict(prescription=presc_fn(), wavelength=LAM, dx=dx,
+              slant_correction=slant, fresnel=fres)
+    E_whole = apply_real_lens(E.copy(), sag_chunk_rows=0, **kw)   # whole-grid
+    E_band = apply_real_lens(E.copy(), sag_chunk_rows=64, **kw)   # row-banded
+    assert E_whole.dtype == E_band.dtype, (
+        f"{label} N={N} slant={slant} fresnel={fres}: dtype "
+        f"{E_whole.dtype} (whole) != {E_band.dtype} (band)")
+    assert np.array_equal(E_whole, E_band), (
+        f"{label} N={N} slant={slant} fresnel={fres}: band64 != whole-grid")
+
+
+@pytest.mark.parametrize("presc_fn,label", [(_presc_stop, 'stop'),
+                                            (_presc_clearap, 'clearap')])
+@pytest.mark.parametrize("slant,fres", [(True, False),
+                                        (False, True),
+                                        (True, True)])
+def test_stop_clearap_ragged_band_byte_identical(slant, fres, presc_fn, label):
+    """Ragged final band (70 into 512) with the stop / clear_aperture masks."""
+    N, dx = 512, 6e-6
+    E = _tilted_field(N, dx)
+    kw = dict(prescription=presc_fn(), wavelength=LAM, dx=dx,
+              slant_correction=slant, fresnel=fres)
+    E_whole = apply_real_lens(E.copy(), sag_chunk_rows=0, **kw)
+    E_band = apply_real_lens(E.copy(), sag_chunk_rows=70, **kw)
+    assert E_whole.dtype == E_band.dtype
+    assert np.array_equal(E_whole, E_band), (
+        f"{label} slant={slant} fresnel={fres}: ragged band70 != whole-grid")
+
+
+def _presc_single_slant(**extra_surf):
+    """A SINGLE refracting surface (air -> N-BK7), no exit surface -> no glass
+    propagation, hence no ASM meshgrid.  Any np.meshgrid call during such a
+    run therefore comes from _ensure_full_grids (the full X/Y/h_sq build)."""
+    surf = {'radius': 12e-3, 'conic': -0.4,
+            'aspheric_coeffs': {4: 2e4, 6: 5e6},
+            'glass_before': 'air', 'glass_after': 'N-BK7'}
+    surf.update(extra_surf)
+    return {'name': 'one', 'aperture_diameter': 3e-3,
+            'surfaces': [surf], 'thicknesses': []}
+
+
+def test_plain_slant_never_allocates_full_grids(monkeypatch):
+    """The banded _slant_narrow_chunk path for a PLAIN slant/fresnel surface
+    must NEVER build the full X/Y/h_sq meshgrids (the ~26 GB N=32768 wall) --
+    i.e. _ensure_full_grids is called ZERO times.  Spy on np.meshgrid; with a
+    single-surface prescription there is no glass propagation (so no ASM
+    meshgrid), so every meshgrid call would come from _ensure_full_grids.
+    Plain slant / fresnel / stop / clear_aperture banded => 0; a decentered
+    surface (falls to the whole-grid path) => >= 1 (sanity)."""
+    N, dx = 512, 6e-6
+    E = _tilted_field(N, dx)
+
+    counts = {'n': 0}
+    real_mesh = np.meshgrid
+
+    def counting_mesh(*a, **k):
+        counts['n'] += 1
+        return real_mesh(*a, **k)
+
+    monkeypatch.setattr(np, 'meshgrid', counting_mesh)
+
+    def _run(presc, **kw):
+        counts['n'] = 0
+        apply_real_lens(E.copy(), prescription=presc, wavelength=LAM, dx=dx,
+                        sag_chunk_rows=64, **kw)
+        return counts['n']
+
+    # Plain slant: handled per-band, no full grids.
+    assert _run(_presc_single_slant(), slant_correction=True) == 0, \
+        "plain slant banded built full grids"
+    # Plain slant + fresnel: still no full grids.
+    assert _run(_presc_single_slant(), slant_correction=True,
+                fresnel=True) == 0, "plain slant+fresnel banded built full grids"
+    # Fresnel only (no slant): still no full grids.
+    assert _run(_presc_single_slant(), fresnel=True) == 0, \
+        "plain fresnel banded built full grids"
+    # A plain surface that IS the stop AND carries a clear_aperture: the
+    # per-band path handles both masks -> still zero full grids.
+    stop_ca = {'name': 'one_sc', 'aperture_diameter': 2.0e-3, 'stop_index': 0,
+               'surfaces': [{'radius': 12e-3, 'conic': -0.4,
+                             'aspheric_coeffs': {4: 2e4, 6: 5e6},
+                             'glass_before': 'air', 'glass_after': 'N-BK7',
+                             'clear_aperture': 1.8e-3}],
+               'thicknesses': []}
+    assert _run(stop_ca, slant_correction=True) == 0, \
+        "plain slant stop+clear_aperture banded built full grids"
+
+    # Sanity: a DECENTERED surface is excluded from the per-band path and
+    # falls to the whole-grid path, which MUST build the full grids.
+    assert _run(_presc_single_slant(decenter=(5e-6, 0.0)),
+                slant_correction=True) >= 1, \
+        "decentered surface should have built full grids (>=1 meshgrid)"
