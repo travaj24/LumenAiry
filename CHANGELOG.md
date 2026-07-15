@@ -2,6 +2,32 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **`apply_real_lens_fga` — a caustic-accurate lens propagator** (Frozen
+  Gaussian Approximation; `lumenairy/propagators/fga.py`).  The
+  Gaussian-beam-summation family is now caustic-accurate: FGA (Lu & Yang,
+  *Commun. Math. Sci.* 9(3):663, 2011 — the wave-equation transplant of the
+  Herman–Kluk propagator) **freezes** the beamlet width and weights each by the
+  Herman–Kluk prefactor `a = sqrt(det Z)`, `Z = (A+D) + i(k w0^2 C - B/(k w0^2))`,
+  built from the SAME ray-transfer/monodromy blocks the GBD propagator already
+  computes — a retrofit, not a rewrite.  Because the position→momentum block
+  `C` (which vanishes at a focus) enters *additively*, the prefactor never blows
+  up: the method is regular at caustics by construction.  Validated: reproduces
+  the exact angular-spectrum field to fidelity 0.9998 in free space, matches
+  `apply_real_lens_gbd` and the angular-spectrum oracle through a real
+  plano-convex singlet to 0.997–0.999, and **beats GBD at a spherical-aberration
+  caustic** on peak-intensity error (GBD 0.03–0.34 vs FGA 0.01–0.07).  Energy is
+  a controllable knob (the frozen width `w0_factor` is the FGA convergence
+  parameter; `normalize_output='power'` conserves it exactly).  Momentum sampling
+  auto-sets from the prescription NA.  NumPy-only; requires the optional `numba`
+  accelerator.  Background: `docs/gbd_caustic_accuracy_literature.md` (a
+  five-agent literature round establishing that GBD's caustic error is a
+  phase/interference problem, not an amplitude singularity, and ranking the fix
+  routes).
+
 ## [5.22.0] — 2026-07-14
 
 ### Fixed

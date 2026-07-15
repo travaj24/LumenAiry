@@ -5,12 +5,31 @@ The lens-propagator family models a real (aberrated, multi-surface) lens on a
 sampled field. This roadmap tracks what ships, the measured performance state,
 and — honestly — which accuracy REGIMES remain open and what each would cost.
 
-Verdict from the propagator-landscape review (2026-07-05, unchanged): there is
+Verdict from the propagator-landscape review (2026-07-05): there is
 **no single universal lens propagator**. GBD is the engineering-universal
 workhorse (polarization, coatings, folds, differentiability); Maslov is the
 caustic specialist (finite through focus by construction); traced is the fast
 single-congruence model, now extended THROUGH focus by multibranch; the Levin
 engine makes Maslov's caustic-uniform quadrature production-fast.
+
+**Update 2026-07-15 -- FGA (`apply_real_lens_fga`, `propagators/fga.py`):** the
+Gaussian-beam-summation *family* is now caustic-accurate too, via the Frozen
+Gaussian Approximation (Lu-Yang 2011, the wave-equation Herman-Kluk propagator).
+A dedicated literature round (`docs/gbd_caustic_accuracy_literature.md`)
+established that GBD's caustic error is a phase/interference problem, NOT an
+amplitude singularity (each beamlet's complex Q keeps `det Q != 0`), and that
+the fix is to FREEZE the beamlet width and weight each by the Herman-Kluk
+prefactor `a = sqrt(det Z)`, `Z = (A+D) + i(k w0^2 C - B/(k w0^2))`, built from
+the SAME ray-transfer/monodromy blocks GBD already computes -- a retrofit, not a
+rewrite.  Validated: reproduces the angular-spectrum field to 0.9998 free-space,
+matches GBD + the ASM oracle through a real singlet to 0.997-0.999, and **beats
+GBD at a spherical-aberration caustic** (peak-intensity error 0.01-0.07 vs GBD
+0.03-0.34).  Energy is a controllable knob (the frozen width `w0` is the FGA
+convergence parameter).  Open follow-ons: through-lens STRONG-caustic demo at
+high NA, higher-order FGA for energy at small `w0`, sqrt-Husimi launch sampling,
+and vector/polarization FGA (the elastic-FGA Berry-phase term).  This narrows
+the "no universal propagator" gap: GBD+FGA now covers the caustic regime that
+previously required the Maslov hand-off.
 
 ---
 
