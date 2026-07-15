@@ -212,6 +212,71 @@ class TestP2_07_DammannPhaseProjectorVersionIndependent:
 
 
 # ==========================================================================
+# cell_pixels -- grid-native Dammann generation (lossless DOE tiling)
+# ==========================================================================
+
+class TestDammannCellPixelsGridNative:
+    """``cell_pixels`` pins the unit-cell pixel count so the returned
+    cell_pixel_size equals the propagation grid dx exactly and
+    :func:`create_periodic_phase_mask` maps one cell pixel to one grid
+    pixel -- no nearest-neighbour resample, no power scattered out of the
+    design orders by sampling jitter."""
+
+    _KW = dict(waveln=1.31e-6, itr=20, seed=7, plot=False)
+
+    def test_int_sets_both_axes_and_exact_pixel_size(self):
+        period = 61e-6
+        nf, _ff, sz = _doe.makedammann2d(
+            periodx=period, periody=period, diforders=np.ones((4, 4)),
+            cell_pixels=40, **self._KW)
+        assert nf.shape == (40, 40)
+        # cell_pixel_size == period / cell_pixels EXACTLY (drives the 1:1 map)
+        assert sz[0] == period / 40
+        assert sz[1] == period / 40
+
+    def test_tuple_sets_axes_independently(self):
+        nf, _ff, sz = _doe.makedammann2d(
+            periodx=61e-6, periody=80e-6, diforders=np.ones((4, 4)),
+            cell_pixels=(40, 50), **self._KW)
+        assert nf.shape == (40, 50)
+        assert sz[0] == 61e-6 / 40
+        assert sz[1] == 80e-6 / 50
+
+    def test_grid_native_tiling_is_lossless(self):
+        """With cell_pixels = round(period/dx) the tiled mask is an exact
+        integer tiling of the cell (each cell pixel reproduced verbatim),
+        so no interpolation error / order scatter is introduced."""
+        period = 61e-6
+        n_per = 40
+        dx = period / n_per                      # grid dx
+        nf, _ff, sz = _doe.makedammann2d(
+            periodx=period, periody=period, diforders=np.ones((4, 4)),
+            cell_pixels=n_per, **self._KW)
+        assert sz[0] == dx                        # exact -> 1:1 mapping
+        phase_cell = np.angle(nf)
+        N = 3 * n_per                             # 3 full periods
+        mask = _doe.create_periodic_phase_mask(N, dx, phase_cell, sz[0])
+        # Reconstruct the exact expected tiling and compare bit-for-bit.
+        idx = np.mod(np.arange(N) - N // 2, n_per)
+        expected = np.exp(1j * phase_cell[np.ix_(idx, idx)])
+        assert np.array_equal(mask, expected), (
+            "grid-native tiling is not an exact 1:1 map -- "
+            "create_periodic_phase_mask introduced a resample.")
+        # Phase-only: unit amplitude everywhere (no absorption).
+        assert np.allclose(np.abs(mask), 1.0)
+
+    def test_odd_cell_pixels_rejected(self):
+        with pytest.raises(ValueError, match="even integer"):
+            _doe.makedammann2d(diforders=np.ones((4, 4)),
+                               cell_pixels=41, **self._KW)
+
+    def test_cell_smaller_than_orders_rejected(self):
+        with pytest.raises(ValueError, match="smaller than the target"):
+            _doe.makedammann2d(diforders=np.ones((8, 8)),
+                               cell_pixels=6, **self._KW)
+
+
+# ==========================================================================
 # P2-08 -- surface_sag_zernike_freeform norm_radius validation
 # ==========================================================================
 
