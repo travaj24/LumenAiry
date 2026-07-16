@@ -919,6 +919,7 @@ from .propagators.fga import (
     apply_real_lens_auto,
     apply_real_lens_fga,
     apply_real_lens_fga_vector,
+    apply_real_lens_universal,
 )
 from .propagators.gbd import (
     BeamletBundle,
@@ -1015,7 +1016,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.22.0"
+__version__ = "5.23.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1113,6 +1114,7 @@ __all__ = [
     'apply_real_lens_fga',
     'apply_real_lens_fga_vector',
     'apply_real_lens_auto',
+    'apply_real_lens_universal',
     'apply_real_lens_maslov',
     'apply_real_lens_traced_jax',
     'apply_real_lens_maslov_jax',

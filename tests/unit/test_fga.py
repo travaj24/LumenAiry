@@ -138,6 +138,31 @@ def test_auto_dispatcher_routes_and_matches():
     assert np.array_equal(auto_g, ref_g)
 
 
+def test_universal_dispatcher_4way_routing():
+    """apply_real_lens_universal (4-way) routes by regime.  For the LOW-NA singlet
+    'auto' picks 'phase_screen', and that route reproduces the angular-spectrum
+    oracle EXACTLY (apply_real_lens at the exit vertex + exact ASM output leg) --
+    i.e. it is a true dispatch, not a re-implementation.  Also guards the method
+    name.  (The high-NA traced/fga routing is covered by test_auto_dispatcher and
+    the caustic-zone detector below.)"""
+    from lumenairy.elements import apply_real_lens
+    from lumenairy.propagators.fga import _system_na, apply_real_lens_universal
+    presc = _singlet()                          # NA ~0.036 (low)
+    u0, dx = _collimated_gaussian()
+    assert _system_na(presc, _WL) < 0.12        # low-NA -> phase_screen branch
+    out, m = apply_real_lens_universal(
+        u0, prescription=presc, wavelength=_WL, dx=dx,
+        output_plane_distance=15e-3, return_method=True)
+    assert m == "phase_screen"
+    ref = angular_spectrum_propagate(
+        apply_real_lens(u0, prescription=presc, wavelength=_WL, dx=dx),
+        15e-3, _WL, dx)
+    assert np.allclose(out, ref)                 # exact-oracle dispatch
+    with pytest.raises(ValueError, match="method must be"):
+        apply_real_lens_universal(u0, prescription=presc, wavelength=_WL,
+                                  dx=dx, method="bogus")
+
+
 def test_fga_normalization_identity_and_energy():
     """The corrected FGA normalization makes the t=0 resolution of identity exact
     (power ratio ~1, not the pre-fix 2^d=4) and free-space propagation energy-

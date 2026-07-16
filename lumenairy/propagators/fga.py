@@ -659,3 +659,90 @@ def apply_real_lens_auto(
             E_in, prescription=prescription, wavelength=wavelength, dx=dx,
             output_plane_distance=output_plane_distance, **gbd_kwargs)
     return (out, chosen) if return_method else out
+
+
+def _system_na(prescription, wavelength):
+    """Marginal-ray NA estimate ~ aperture-radius / effective-focal-length."""
+    return max(_default_p_max(prescription, wavelength) / 1.6, 1e-3)
+
+
+def apply_real_lens_universal(
+    E_in: np.ndarray,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    output_plane_distance: float = 0.0,
+    method: str = "auto",
+    na_threshold: float = 0.12,
+    caustic_pad_dof: float = 3.0,
+    return_method: bool = False,
+    method_kwargs: Optional[Dict[str, Any]] = None,
+):
+    """Universal (4-way) auto-dispatching lens propagator -- routes each output
+    plane to the MOST ACCURATE propagator for its regime.
+
+    ``method='auto'`` (default) picks:
+
+    * ``'phase_screen'`` (:func:`lumenairy.elements.apply_real_lens`) -- LOW NA
+      (``< na_threshold``): the thin-element phase-screen model is accurate there
+      and the exact angular-spectrum propagation handles focus/caustics, so it is
+      wave-exact and fast, with no beamlet-discretization or ray-model cost;
+    * ``'fga'`` (:func:`apply_real_lens_fga`) -- HIGH NA **and** near a caustic:
+      the only caustic-accurate *and* ray-based (no thin-screen obliquity) option;
+    * ``'traced'`` (:func:`lumenairy.elements.apply_real_lens_traced`) -- HIGH NA,
+      smooth (single-valued, guaranteed by the no-caustic branch): per-pixel
+      ray-traced OPL, sub-nm, no thin-screen ceiling.
+
+    The two ray/wave-exact-surface members that are NOT caustic-native
+    (``phase_screen``, ``traced``) return the field at the exit vertex, so the
+    output-plane leg is finished with an exact angular-spectrum propagation.
+    Force any member with ``method='phase_screen'|'gbd'|'traced'|'fga'``
+    (``'gbd'`` -- the fast, differentiable, polarization-capable thawed beamlet --
+    is not auto-selected because ``traced``/``fga`` dominate it on accuracy, but
+    is available for those other strengths).  ``return_method=True`` also returns
+    the chosen name; ``method_kwargs={'traced': {...}, 'fga': {...}, ...}``
+    forwards per-method extra arguments.
+    """
+    valid = ("auto", "phase_screen", "gbd", "traced", "fga")
+    if method not in valid:
+        raise ValueError(f"method must be one of {valid}, got {method!r}.")
+    mkw = dict(method_kwargs or {})
+    E_in = np.asarray(E_in)
+    opd = float(output_plane_distance)
+
+    chosen = method
+    if method == "auto":
+        if _system_na(prescription, wavelength) < float(na_threshold):
+            chosen = "phase_screen"
+        else:
+            zone = _caustic_zone(E_in, float(dx), prescription, float(wavelength))
+            near = False
+            if zone is not None:
+                na = _system_na(prescription, wavelength)
+                pad = caustic_pad_dof * float(wavelength) / (na * na)
+                near = (zone[0] - pad) <= opd <= (zone[1] + pad)
+            chosen = "fga" if near else "traced"
+
+    if chosen == "fga":
+        out = apply_real_lens_fga(
+            E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+            output_plane_distance=opd, **mkw.get("fga", {}))
+    elif chosen == "gbd":
+        from ..elements import apply_real_lens_gbd
+        out = apply_real_lens_gbd(
+            E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+            output_plane_distance=opd, **mkw.get("gbd", {}))
+    else:
+        # phase_screen / traced return at the exit vertex -> finish the output
+        # leg with an exact angular-spectrum propagation (the field is smooth
+        # here, so ASM is wave-exact even through an intervening focus).
+        from ..elements import apply_real_lens, apply_real_lens_traced
+        fn = apply_real_lens if chosen == "phase_screen" else apply_real_lens_traced
+        exitf = fn(E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+                   **mkw.get(chosen, {}))
+        if opd != 0.0:
+            from .asm import angular_spectrum_propagate
+            exitf = angular_spectrum_propagate(exitf, opd, wavelength, dx)
+        out = exitf
+    return (out, chosen) if return_method else out

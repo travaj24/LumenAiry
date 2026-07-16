@@ -51,6 +51,7 @@ from .fga import (
     apply_real_lens_auto,
     apply_real_lens_fga,
     apply_real_lens_fga_vector,
+    apply_real_lens_universal,
 )
 from .gbd import (
     BeamletBundle,
@@ -125,6 +126,7 @@ __all__ = [
     'apply_real_lens_fga',
     'apply_real_lens_fga_vector',
     'apply_real_lens_auto',
+    'apply_real_lens_universal',
     'decompose_field_to_beamlets',
     'decompose_field_adaptive',
     'converge_gbd_sampling',

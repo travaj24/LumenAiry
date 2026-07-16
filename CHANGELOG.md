@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.23.0] — 2026-07-15
+
 ### Added
 
 - **`apply_real_lens_fga` — a caustic-accurate lens propagator** (Frozen
@@ -38,6 +40,20 @@ All notable changes to the core library are documented here.
   NA as well as at caustics; the dispatch is biased toward FGA when uncertain
   (FGA matches GBD in smooth regions, so this only costs speed, never accuracy).
   ``method='gbd'``/``'fga'`` force the choice; ``return_method=True`` reports it.
+- **`apply_real_lens_universal` — the universal (4-way) auto-dispatching lens
+  propagator.**  Routes each output plane to the MOST ACCURATE propagator for its
+  regime: low NA (< ``na_threshold``) → the wave-exact thin-element phase screen
+  (`apply_real_lens` at the exit vertex + an exact angular-spectrum output leg,
+  which handles focus/caustics with no beamlet-discretization cost); high NA and
+  near a caustic → the caustic-accurate, ray-based `apply_real_lens_fga`; high NA
+  and smooth → the per-pixel ray-traced `apply_real_lens_traced` (sub-nm OPL, no
+  thin-screen obliquity ceiling).  ``method='phase_screen'|'gbd'|'traced'|'fga'``
+  forces the choice (`'gbd'` — the fast, differentiable, polarization-capable
+  thawed beamlet — is available but not auto-selected, since `traced`/`fga`
+  dominate it on accuracy); ``return_method=True`` reports the routed name and
+  ``method_kwargs`` forwards per-method arguments.  This makes the beamlet /
+  ray / wave-exact-surface family a single "incredibly accurate everywhere"
+  entry point.  Demo: `examples/14_fga_caustic_propagator.py`.
 - **`apply_real_lens_fga_vector` — vector (Jones) caustic-accurate propagator.**
   Propagates a ``(2, Ny, Nx)`` transverse Jones field ``(E_x, E_y)``: each frozen
   beamlet carries the per-surface Fresnel s/p Jones matrix (polarization ray
