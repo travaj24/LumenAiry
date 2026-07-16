@@ -32,6 +32,26 @@ All notable changes to the core library are documented here.
 
 ### Changed
 
+- **`apply_real_lens_universal` no longer routes MULTI-VALUED fields to
+  `traced`.**  `traced` launches one ray per pixel along the local phase
+  gradient, which is undefined where several wave components cross the same
+  region — a **multi-emitter, post-DOE, or speckle** field — so it silently
+  collapses them to their amplitude-weighted *mean* direction and applies the
+  wrong angle-dependent OPD (`apply_real_lens_traced`'s own guard already flags
+  such inputs "INCOHERENT — per-pixel single-direction estimation fails").  The
+  high-NA `'auto'` branch now measures the field's multi-valuedness (the
+  NA-normalized spread of the local wavevector about its per-region mean) and
+  routes multi-valued fields to `'fga'`, whose phase-space swarm transports every
+  direction independently (verified FGA-exact vs the angular-spectrum oracle,
+  fidelity `1.0`, on a two-emitter field).  The detector is single-valued-safe:
+  a plane wave, Gaussian, single diverging/converging source, MLA-tilted beamlet,
+  or any smooth aberrated single beam scores `<0.006` while genuine multi-valued
+  fields score `>0.08` (a >10× separation), so a single beam still gets the
+  sub-nm traced OPL.  New `multivalued` (`None` auto-detect / `True` force FGA /
+  `False` trust single-valued) and `multivalued_threshold` (default `0.06`)
+  overrides.  A false positive only costs speed (FGA is never *wrong*), so the
+  cut is biased to prefer FGA when uncertain.
+
 - **FGA `nsig` default 4.0 → 3.0** (~1.8x faster).  The per-beamlet window cost
   scales as `nsig**2`; the `>3-sigma` tail (`exp(-4.5)`) is filled by overlapping
   beamlets, so the reconstruction is unchanged.  Verified: free-space fidelity

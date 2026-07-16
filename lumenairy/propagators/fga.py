@@ -840,6 +840,67 @@ def _system_na(prescription, wavelength):
     return max(_default_p_max(prescription, wavelength) / 1.6, 1e-3)
 
 
+def _tilt_dispersion(E_in, dx, dyg, wavelength, na):
+    """Multi-valuedness score: the amplitude-weighted RMS spread of the LOCAL
+    wavevector about its per-region mean, normalized by the system NA.
+
+    A *single-valued* field has ONE well-defined ray direction at every pixel
+    (plane wave, Gaussian, a single diverging/converging point source, an
+    MLA-tilted beamlet, ANY smooth aberrated single beam): its local wavevector
+    ``k_local = grad(arg E)/k0`` is a smooth function of position, so it equals
+    its own local (few-pixel) mean and the score is ~0 (empirically <0.006 even
+    for strong spherical/coma/astigmatism, strong divergence, and 6x6-MLA fields).
+    A *multi-valued* field -- several wave components crossing the same region
+    (multi-emitter, post-DOE diffraction orders, speckle) -- has NO single local
+    direction: ``grad(arg E)`` swings pixel-to-pixel across the interference
+    fringes while the mean sits near the (amplitude-weighted) average, so the
+    residual is a real fraction of NA and the score is ~0.09-0.4 (a >10x
+    separation from the single-valued ceiling).
+
+    Note this is a LOCAL residual about the LOCAL mean, NOT the global
+    ``|mean tilt|/rms tilt`` "coherence" -- a radially symmetric single
+    diverging/converging beam has +/- local tilts that cancel in the global mean
+    (coherence ~0) yet is perfectly single-valued (local residual ~0), so the
+    global coherence would misclassify it; this local measure does not.
+
+    It is exactly the quantity :func:`apply_real_lens_traced`'s input-aware ray
+    launch smooths away -- i.e. it directly measures how far traced's
+    single-direction-per-pixel model is from valid.  When it is large, traced
+    silently collapses the crossing components to their mean direction and
+    applies the wrong angle-dependent OPD; the dispatcher then prefers FGA, whose
+    phase-space swarm transports every direction independently.
+
+    Returns 0.0 for an empty/zero field.  The local mean uses an
+    amplitude-weighted Gaussian (sigma ~2 px) so low-amplitude pixels (fringe
+    nulls, gaps between orders) can't drag the reading toward their noisy phase.
+    """
+    from scipy.ndimage import gaussian_filter
+    E = np.asarray(E_in)
+    a2 = np.abs(E) ** 2
+    tot = float(a2.sum())
+    if not np.isfinite(tot) or tot <= 0.0:
+        return 0.0
+    k0 = 2.0 * np.pi / float(wavelength)
+    # per-pixel local wavevector via the conjugate-product trick (wraps once to
+    # (-pi, pi] without a global unwrap); direction cosine p = d(arg E)/(k0*d).
+    px = np.zeros_like(a2)
+    py = np.zeros_like(a2)
+    px[:, :-1] = np.angle(E[:, 1:] * np.conj(E[:, :-1])) / (k0 * float(dx))
+    py[:-1, :] = np.angle(E[1:, :] * np.conj(E[:-1, :])) / (k0 * float(dyg))
+    sig = 2.0
+
+    def _wmean(f):                      # amplitude-weighted local Gaussian mean
+        num = gaussian_filter(a2 * f, sig, mode='nearest')
+        den = gaussian_filter(a2, sig, mode='nearest')
+        return num / np.maximum(den, 1e-300)
+
+    dpx = px - _wmean(px)
+    dpy = py - _wmean(py)
+    var = float(np.sum(a2 * (dpx * dpx + dpy * dpy)) / tot)
+    rms = np.sqrt(max(var, 0.0))
+    return rms / max(float(na), 1e-6)
+
+
 def apply_real_lens_universal(
     E_in: np.ndarray,
     *,
@@ -851,6 +912,8 @@ def apply_real_lens_universal(
     method: str = "auto",
     na_threshold: float = 0.12,
     caustic_pad_dof: float = 3.0,
+    multivalued: Optional[bool] = None,
+    multivalued_threshold: float = 0.06,
     return_method: bool = False,
     method_kwargs: Optional[Dict[str, Any]] = None,
 ):
@@ -866,8 +929,27 @@ def apply_real_lens_universal(
     * ``'fga'`` (:func:`apply_real_lens_fga`) -- HIGH NA **and** near a caustic:
       the only caustic-accurate *and* ray-based (no thin-screen obliquity) option;
     * ``'traced'`` (:func:`lumenairy.elements.apply_real_lens_traced`) -- HIGH NA,
-      smooth (single-valued, guaranteed by the no-caustic branch): per-pixel
-      ray-traced OPL, sub-nm, no thin-screen ceiling.
+      smooth AND **single-valued**: per-pixel ray-traced OPL, sub-nm, no
+      thin-screen ceiling.
+
+    Multi-valued fields never route to ``traced``
+    ---------------------------------------------
+    ``traced`` launches one ray per pixel along the LOCAL phase gradient, so it is
+    only valid where the field has a single well-defined direction at each pixel.
+    A **multi-emitter / post-DOE / speckle** field is *multi-valued* -- several
+    wave components cross the same region, so there is no single local direction,
+    and traced silently collapses them to their amplitude-weighted MEAN direction
+    (applying the wrong angle-dependent OPD to every component).  ``'auto'``
+    therefore measures the field's multi-valuedness (:func:`_tilt_dispersion`, the
+    NA-normalized spread of the local wavevector about its per-region mean) and
+    routes multi-valued high-NA fields to ``'fga'``, whose phase-space swarm
+    transports every direction independently.  ``multivalued`` overrides the
+    detector: ``True`` forces the multi-valued path (never ``traced``), ``False``
+    trusts the field as single-valued (allows ``traced``), ``None`` (default)
+    auto-detects with cutoff ``multivalued_threshold`` (score above it => FGA).
+    A false positive only costs speed (FGA is never *wrong*, just slower than
+    traced on a truly single-valued field), so the detector is biased to prefer
+    FGA when uncertain.
 
     The two ray/wave-exact-surface members that are NOT caustic-native
     (``phase_screen``, ``traced``) return the field at the exit vertex, so the
@@ -892,16 +974,37 @@ def apply_real_lens_universal(
 
     chosen = method
     if method == "auto":
-        if _system_na(prescription, wavelength) < float(na_threshold):
+        na = _system_na(prescription, wavelength)
+        dyg = float(dx) if dy is None else float(dy)
+        if na < float(na_threshold):
+            # low NA: the thin-element phase screen is angle-independent (a linear
+            # operator on the field) + exact ASM, so it is wave-exact for ANY
+            # field, single- or multi-valued.
             chosen = "phase_screen"
         else:
-            zone = _caustic_zone(E_in, float(dx), prescription, float(wavelength))
-            near = False
-            if zone is not None:
-                na = _system_na(prescription, wavelength)
-                pad = caustic_pad_dof * float(wavelength) / (na * na)
-                near = (zone[0] - pad) <= opd <= (zone[1] + pad)
-            chosen = "fga" if near else "traced"
+            # high NA: traced is only valid for a SINGLE-VALUED wavefront.  Decide
+            # multi-valuedness first (explicit override, else auto-detect); a
+            # multi-valued field can never use traced -> FGA transports every
+            # crossing direction independently.
+            if multivalued is None:
+                mv = _tilt_dispersion(E_in, float(dx), dyg, float(wavelength),
+                                      na) > float(multivalued_threshold)
+            else:
+                mv = bool(multivalued)
+            if mv:
+                chosen = "fga"
+            else:
+                # single-valued: FGA only near the caustic (fold/cusp), else the
+                # sub-nm traced OPL.  (_caustic_zone's single-row slope model is
+                # itself valid only for single-valued fields, so it is reached
+                # only on this branch.)
+                zone = _caustic_zone(E_in, float(dx), prescription,
+                                     float(wavelength))
+                near = False
+                if zone is not None:
+                    pad = caustic_pad_dof * float(wavelength) / (na * na)
+                    near = (zone[0] - pad) <= opd <= (zone[1] + pad)
+                chosen = "fga" if near else "traced"
 
     if chosen == "fga":
         out = apply_real_lens_fga(

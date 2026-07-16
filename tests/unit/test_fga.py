@@ -49,6 +49,18 @@ def _collimated_gaussian(N=256, dx=10e-6, w=0.9e-3):
     return np.exp(-(Xg ** 2 + Yg ** 2) / w ** 2).astype(np.complex128), dx
 
 
+def _hi_na_singlet():
+    """Short-focus plano-convex singlet, NA ~0.19 (> the 0.12 dispatcher gate),
+    so 'auto' reaches the high-NA traced/fga/multi-valued branch."""
+    return {'name': 'hi', 'aperture_diameter': 6e-3,
+            'surfaces': [
+                {'radius': 8e-3, 'conic': 0.0, 'glass_before': 'air',
+                 'glass_after': 'N-BK7', 'semi_diameter': 3e-3},
+                {'radius': np.inf, 'conic': 0.0, 'glass_before': 'N-BK7',
+                 'glass_after': 'air', 'semi_diameter': 3e-3}],
+            'thicknesses': [2.5e-3]}
+
+
 def test_fga_through_singlet_matches_gbd_and_asm():
     """Through a real singlet, FGA matches GBD AND the ASM oracle in the smooth
     converging region -- the through-surface transport (trace + monodromy +
@@ -171,6 +183,82 @@ def test_universal_dispatcher_4way_routing():
     with pytest.raises(ValueError, match="method must be"):
         apply_real_lens_universal(u0, prescription=presc, wavelength=_WL,
                                   dx=dx, method="bogus")
+
+
+def test_universal_dispatcher_multivalued_avoids_traced():
+    """'auto' must NOT route a MULTI-EMITTER / multi-valued field to 'traced':
+    traced launches one ray per pixel along the local phase gradient, which is
+    undefined where several wave components cross (it silently collapses them to
+    their mean direction and applies the wrong angle-dependent OPD).  The
+    dispatcher detects multi-valuedness (:func:`_tilt_dispersion`) and routes to
+    'fga' instead, whose phase-space swarm transports every direction
+    independently.  A SINGLE-valued beam (even strongly aberrated/divergent) is
+    still eligible for the sub-nm traced OPL."""
+    from lumenairy.propagators.fga import _system_na, _tilt_dispersion, apply_real_lens_universal
+    presc = _hi_na_singlet()
+    na = _system_na(presc, _WL)
+    assert na > 0.12                                   # reaches the high-NA branch
+    N, dx = 160, 1.0e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    k = 2 * np.pi / _WL
+    r2 = Xg ** 2 + Yg ** 2
+    gauss = np.exp(-r2 / (40e-6) ** 2)
+
+    # --- the detector separates single- from multi-valued by >10x ---
+    single = {
+        'gauss': gauss,
+        'diverging': gauss * np.exp(1j * k * r2 / (2 * 4e-3)),        # single src
+        'spherical-ab': gauss * np.exp(1j * k * 3e-6 * (r2 / (90e-6) ** 2) ** 2),
+    }
+    for E in single.values():
+        assert _tilt_dispersion(E.astype(np.complex128), dx, dx, _WL, na) < 0.02
+    # two emitters crossing at +/-0.10 rad -> genuinely multi-valued
+    gL = np.exp(-((Xg + 45e-6) ** 2 + Yg ** 2) / (55e-6) ** 2) * np.exp(1j * k * 0.10 * Xg)
+    gR = np.exp(-((Xg - 45e-6) ** 2 + Yg ** 2) / (55e-6) ** 2) * np.exp(-1j * k * 0.10 * Xg)
+    two = (gL + gR).astype(np.complex128)
+    doe = (sum(np.exp(1j * k * 0.05 * m * Xg) for m in range(-2, 3))
+           * gauss).astype(np.complex128)
+    assert _tilt_dispersion(two, dx, dx, _WL, na) > 0.06
+    assert _tilt_dispersion(doe, dx, dx, _WL, na) > 0.06
+
+    fkw = {'fga': {'n_p': 7, 'w0_factor': 4.0}}
+    far = 2e-3                             # a smooth plane, well before any focus
+
+    def route(E, **kw):
+        return apply_real_lens_universal(
+            E, prescription=presc, wavelength=_WL, dx=dx,
+            output_plane_distance=far, return_method=True,
+            method_kwargs=fkw, **kw)[1]
+
+    # single-valued high-NA smooth far plane -> traced ; multi-valued -> fga
+    assert route(gauss.astype(np.complex128)) == "traced"
+    assert route(two) == "fga"            # <-- the bug: was 'traced'
+    assert route(doe) == "fga"
+    # explicit override in BOTH directions
+    assert route(two, multivalued=False) == "traced"      # trust single-valued
+    assert route(gauss.astype(np.complex128), multivalued=True) == "fga"
+
+    # ... and the method it routes multi-valued fields TO is exact for them:
+    # FGA reproduces the exact free-space angular-spectrum field for a two-emitter
+    # (multi-valued) input -- two co-located beams with OPPOSITE tilts, so every
+    # pixel carries two directions at once, which a single-direction ray launch
+    # cannot represent.  (Co-located + small waist keeps it clear of the grid
+    # edge; the separated ``two`` above is for the routing decision.)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    gc = np.exp(-r2 / (12e-6) ** 2)
+    twoc = (gc * np.exp(1j * k * 0.10 * Xg)
+            + gc * np.exp(-1j * k * 0.10 * Xg)).astype(np.complex128)
+    assert _tilt_dispersion(twoc, dx, dx, _WL, na) > 0.06      # genuinely multi-valued
+    z = 120e-6
+    fga_two = apply_real_lens_fga(twoc, prescription=flat, wavelength=_WL, dx=dx,
+                                  output_plane_distance=z, w0_factor=4.0,
+                                  p_max=0.16, n_p=17)
+    asm_two = angular_spectrum_propagate(twoc, z, _WL, dx)
+    assert _fid(fga_two, asm_two) > 0.999     # FGA is exact on the multi-valued field
 
 
 def test_fga_normalization_identity_and_energy():
