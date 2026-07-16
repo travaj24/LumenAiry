@@ -201,6 +201,34 @@ def test_fga_normalization_identity_and_energy():
     assert _fid(prop, ref) > 0.999                # ... and shape-exact
 
 
+def test_fga_memory_chunking_numerically_identical():
+    """The momentum-swarm chunking (``chunk`` / ``mem_budget_mb``) bounds peak
+    beamlet memory to O(Nq*chunk) and returns the SAME field as the full swarm --
+    it only reorders an additive sum, so the result matches to float round-off,
+    for both the scalar and vector propagators."""
+    from lumenairy.propagators.fga import apply_real_lens_fga_vector
+    N, dx = 128, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (18e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx,
+              output_plane_distance=300e-6, w0_factor=8.0, p_max=0.06, n_p=13)
+    full = apply_real_lens_fga(u0, **kw)
+    for c in (apply_real_lens_fga(u0, chunk=1, **kw),
+              apply_real_lens_fga(u0, chunk=5, **kw),
+              apply_real_lens_fga(u0, mem_budget_mb=2, **kw)):
+        assert np.max(np.abs(c - full)) < 1e-9     # identical to round-off
+    vfull = apply_real_lens_fga_vector(np.stack([u0, np.zeros_like(u0)]),
+                                       return_longitudinal=True, **kw)
+    vchunk = apply_real_lens_fga_vector(np.stack([u0, np.zeros_like(u0)]),
+                                        chunk=3, return_longitudinal=True, **kw)
+    assert np.max(np.abs(vchunk - vfull)) < 1e-9
+
+
 def test_fga_vector_polarization():
     """Vector (Jones) FGA: free-space parity (Jones=identity in air -> Ex matches
     the scalar propagator, no spurious cross-pol), a physical longitudinal Ez,

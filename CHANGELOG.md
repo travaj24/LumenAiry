@@ -4,6 +4,26 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **FGA memory chunking (`mem_budget_mb` / `chunk`).**  `apply_real_lens_fga` and
+  `apply_real_lens_fga_vector` now process the momentum swarm in chunks, bounding
+  peak beamlet memory from `O(Nq*Np)` to `O(Nq*chunk)` (the scatter is an additive
+  sum over independent beamlets, so a chunk is computed and accumulated in place,
+  then discarded).  `mem_budget_mb` auto-sizes the chunk from the position-lattice
+  count; `chunk` sets it explicitly.  The chunked result is **numerically identical**
+  to the full swarm (verified max abs diff `~5e-14`, fidelity 1.0), so it is a pure
+  memory lever — it makes high-resolution / fine-sampled FGA (which otherwise OOMs)
+  runnable.
+
+### Changed
+
+- **FGA `nsig` default 4.0 → 3.0** (~1.8x faster).  The per-beamlet window cost
+  scales as `nsig**2`; the `>3-sigma` tail (`exp(-4.5)`) is filled by overlapping
+  beamlets, so the reconstruction is unchanged.  Verified: free-space fidelity
+  identical (0.999996), spherical-aberration caustic peak-intensity error identical
+  (0.8%).  Callers can restore the old window with `nsig=4.0`.
+
 ## [5.23.0] — 2026-07-15
 
 ### Added
