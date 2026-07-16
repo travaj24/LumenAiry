@@ -78,7 +78,8 @@ def _build_kernels():
     from numba import njit, prange
 
     @njit(cache=True, parallel=True, fastmath=True)
-    def _coeff(u0r, u0i, qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig, cr, ci):
+    def _coeff(u0r, u0i, qx, qy, px, py, x0, y0, dx, dyg, w0, k, Ag, nsig,
+               cr, ci):
         Ny, Nx = u0r.shape
         Nq = qx.shape[0]
         Np = px.shape[0]
@@ -89,8 +90,8 @@ def _build_kernels():
             cyq = qy[iq]
             j0 = int((cxq - R - x0) / dx)
             j1 = int((cxq + R - x0) / dx) + 1
-            i0 = int((cyq - R - y0) / dx)
-            i1 = int((cyq + R - y0) / dx) + 1
+            i0 = int((cyq - R - y0) / dyg)
+            i1 = int((cyq + R - y0) / dyg) + 1
             if j0 < 0:
                 j0 = 0
             if i0 < 0:
@@ -105,7 +106,7 @@ def _build_kernels():
                 sr = 0.0
                 si = 0.0
                 for i in range(i0, i1):
-                    dy = (y0 + i * dx) - cyq
+                    dy = (y0 + i * dyg) - cyq
                     for j in range(j0, j1):
                         dxr = (x0 + j * dx) - cxq
                         r2 = dxr * dxr + dy * dy
@@ -119,17 +120,17 @@ def _build_kernels():
                         ui = u0i[i, j]
                         sr += mag * (cph * ur + sph * ui)
                         si += mag * (cph * ui - sph * ur)
-                cr[iq, ip] = sr * dx * dx
-                ci[iq, ip] = si * dx * dx
+                cr[iq, ip] = sr * dx * dyg
+                ci[iq, ip] = si * dx * dyg
 
     @njit(cache=True, parallel=True, fastmath=True)
-    def _scatter(Qx, Qy, Px, Py, Wr, Wi, x0, y0, dx, Ny, Nx,
+    def _scatter(Qx, Qy, Px, Py, Wr, Wi, x0, y0, dx, dyg, Ny, Nx,
                  w0, k, Ag, nsig, outr, outi):
         Nb = Qx.shape[0]
         R = nsig * w0
         inv2w2 = 1.0 / (2.0 * w0 * w0)
         for i in prange(Ny):        # rows: each written once -> no scatter race
-            yy = y0 + i * dx
+            yy = y0 + i * dyg
             for b in range(Nb):
                 wr = Wr[b]
                 wi = Wi[b]
@@ -180,12 +181,15 @@ def _det2(M: np.ndarray) -> np.ndarray:
     return M[..., 0, 0] * M[..., 1, 1] - M[..., 0, 1] * M[..., 1, 0]
 
 
-def _swarm_lattice(Ny, Nx, dx, x0, y0, dq_step, p_max, n_p):
+def _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step, p_max, n_p):
     qi = np.arange(0, Nx, dq_step)
     qj = np.arange(0, Ny, dq_step)
-    qxg, qyg = np.meshgrid(x0 + qi * dx, y0 + qj * dx)
+    qxg, qyg = np.meshgrid(x0 + qi * dx, y0 + qj * dyg)
     qx = qxg.ravel().astype(np.float64)
     qy = qyg.ravel().astype(np.float64)
+    # momentum (direction-cosine) grid is ISOTROPIC: p is the physical transverse
+    # direction cosine, bounded by the system NA, not by the (possibly
+    # anamorphic) pixel pitch.
     pv = np.linspace(-p_max, p_max, n_p)
     pxg, pyg = np.meshgrid(pv, pv)
     px = pxg.ravel().astype(np.float64)
@@ -194,23 +198,23 @@ def _swarm_lattice(Ny, Nx, dx, x0, y0, dq_step, p_max, n_p):
     return qx, qy, px, py, dp
 
 
-def _gabor_coeff(u0, qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig):
+def _gabor_coeff(u0, qx, qy, px, py, x0, y0, dx, dyg, w0, k, Ag, nsig):
     coeff, _ = _kernels()
     cr = np.zeros((qx.shape[0], px.shape[0]))
     ci = np.zeros((qx.shape[0], px.shape[0]))
     coeff(np.ascontiguousarray(u0.real), np.ascontiguousarray(u0.imag),
-          qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig, cr, ci)
+          qx, qy, px, py, x0, y0, dx, dyg, w0, k, Ag, nsig, cr, ci)
     return cr + 1j * ci
 
 
-def _reconstruct(Qx, Qy, Px, Py, W, x0, y0, dx, Ny, Nx, w0, k, Ag, nsig):
+def _reconstruct(Qx, Qy, Px, Py, W, x0, y0, dx, dyg, Ny, Nx, w0, k, Ag, nsig):
     _, scatter = _kernels()
     outr = np.zeros((Ny, Nx))
     outi = np.zeros((Ny, Nx))
     scatter(Qx.ravel(), Qy.ravel(), Px.ravel(), Py.ravel(),
             np.ascontiguousarray(W.real).ravel(),
             np.ascontiguousarray(W.imag).ravel(),
-            x0, y0, dx, Ny, Nx, w0, k, Ag, nsig, outr, outi)
+            x0, y0, dx, dyg, Ny, Nx, w0, k, Ag, nsig, outr, outi)
     return outr + 1j * outi
 
 
@@ -233,29 +237,33 @@ def _default_p_max(prescription, wavelength):
         return 0.15
 
 
-def _fga_through_lens(u0, dx, prescription, wavelength, w0, z_image,
+def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                       dq_step, p_max, n_p, nsig):
-    """Core FGA transport through a prescription to (last vertex + z_image)."""
+    """Core FGA transport through a prescription to (last vertex + z_image).
+
+    ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches."""
     from ..raytrace import surfaces_from_prescription
     from ..raytrace.differential import ray_transfer_jacobian
 
     k = 2.0 * np.pi / wavelength
     Ny, Nx = u0.shape
     x0 = -(Nx / 2) * dx
-    y0 = -(Ny / 2) * dx
+    y0 = -(Ny / 2) * dyg
     Ag = (1.0 / (np.pi * w0 ** 2)) ** 0.5
 
-    qx, qy, px, py, dp = _swarm_lattice(Ny, Nx, dx, x0, y0, dq_step, p_max, n_p)
+    qx, qy, px, py, dp = _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step,
+                                        p_max, n_p)
     Nq = qx.shape[0]
     Np = px.shape[0]
-    # phase-space measure * the FGA normalization.  The /2^{d/2} (d=2 transverse)
-    # removes the double-counted Herman-Kluk identity factor a(0)=2^{d/2}: without
-    # it the t=0 resolution of identity over-counts by 2^d=4 in power (verified:
-    # the flat-prescription output=0 power ratio -> 4.0 in the well-sampled limit,
-    # -> 1.0 with this factor).
-    C = ((k / (2.0 * np.pi)) ** 2 * ((dq_step * dx) ** 2) * (dp ** 2)) / 2.0
+    # phase-space measure * the FGA normalization.  The position measure is the
+    # anamorphic lattice cell (dq_step*dx)(dq_step*dyg).  The /2^{d/2} (d=2
+    # transverse) removes the double-counted Herman-Kluk identity factor
+    # a(0)=2^{d/2}: without it the t=0 resolution of identity over-counts by
+    # 2^d=4 in power (verified: the flat-prescription output=0 power ratio -> 4.0
+    # in the well-sampled limit, -> 1.0 with this factor).
+    C = ((k / (2.0 * np.pi)) ** 2 * (dq_step ** 2 * dx * dyg) * (dp ** 2)) / 2.0
 
-    c = _gabor_coeff(u0, qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig)
+    c = _gabor_coeff(u0, qx, qy, px, py, x0, y0, dx, dyg, w0, k, Ag, nsig)
 
     # trace to the LAST SURFACE VERTEX; the image-side leg is added manually.
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
@@ -306,7 +314,8 @@ def _fga_through_lens(u0, dx, prescription, wavelength, w0, z_image,
 
     W = c * AW
     W[~ALV] = 0.0
-    return _reconstruct(QX, QY, PX, PY, W, x0, y0, dx, Ny, Nx, w0, k, Ag, nsig)
+    return _reconstruct(QX, QY, PX, PY, W, x0, y0, dx, dyg, Ny, Nx, w0, k, Ag,
+                        nsig)
 
 
 def apply_real_lens_fga(
@@ -315,6 +324,7 @@ def apply_real_lens_fga(
     prescription: Dict[str, Any],
     wavelength: float,
     dx: float,
+    dy: Optional[float] = None,
     output_plane_distance: float = 0.0,
     w0_factor: float = 5.0,
     dq_step: int = 2,
@@ -335,18 +345,27 @@ def apply_real_lens_fga(
     Parameters
     ----------
     E_in : (Ny, Nx) complex ndarray
-        Input field on a square grid of pitch ``dx``.
+        Input field.  Rectangular grids and anamorphic (``dx != dy``) pixel
+        pitch are supported.
     prescription : dict
         Surface prescription (as consumed by
         :func:`lumenairy.raytrace.surfaces_from_prescription`).
     wavelength, dx : float
-        Vacuum wavelength and grid pitch [m].
+        Vacuum wavelength and x grid pitch [m].
+    dy : float, optional
+        y grid pitch [m] for anamorphic grids; ``None`` (default) uses ``dx``
+        (square pixels).  The frozen beamlet stays isotropic with width
+        ``w0 = w0_factor * sqrt(dx*dy)``; strong anisotropy (``>~ 3:1``) may need
+        a larger ``w0_factor`` to keep the coarse-axis frame well sampled.  The
+        momentum swarm is unchanged (``p`` is a physical direction cosine bounded
+        by the NA, not by the pixel pitch).
     output_plane_distance : float
         Axial distance past the last surface vertex to evaluate [m].
     w0_factor : float
-        Frozen beamlet width in units of ``dx`` (``w0 = w0_factor * dx``).  The
-        FGA convergence parameter: larger conserves energy / smooth-field
-        accuracy better, smaller resolves finer caustic structure.
+        Frozen beamlet width in units of the pixel pitch
+        (``w0 = w0_factor * sqrt(dx*dy)``).  The FGA convergence parameter:
+        larger conserves energy / smooth-field accuracy better, smaller resolves
+        finer caustic structure.
     dq_step : int
         Position-lattice stride (beamlet spacing in pixels).
     p_max : float, optional
@@ -374,17 +393,18 @@ def apply_real_lens_fga(
             "apply_real_lens_fga is NumPy-only (the ray trace + numba swarm "
             "sum). Pass a NumPy array.")
     E_in = np.asarray(E_in, dtype=np.complex128)
-    if E_in.ndim != 2 or E_in.shape[0] != E_in.shape[1]:
-        raise ValueError("apply_real_lens_fga: E_in must be a square 2-D grid.")
+    if E_in.ndim != 2:
+        raise ValueError("apply_real_lens_fga: E_in must be a 2-D grid.")
     if normalize_output not in ("none", "power"):
         raise ValueError(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
+    dyg = float(dx) if dy is None else float(dy)
     if p_max is None:
         p_max = _default_p_max(prescription, wavelength)
-    w0 = float(w0_factor) * float(dx)
+    w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
     out = _fga_through_lens(
-        E_in, float(dx), prescription, float(wavelength), w0,
+        E_in, float(dx), dyg, prescription, float(wavelength), w0,
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
         float(nsig))
     if normalize_output == "power":
@@ -395,14 +415,15 @@ def apply_real_lens_fga(
     return out
 
 
-def _fga_vector_through_lens(Ex, Ey, dx, prescription, wavelength, w0, z_image,
-                             dq_step, p_max, n_p, nsig):
+def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
+                             z_image, dq_step, p_max, n_p, nsig):
     """Vector (Jones) FGA transport: returns ``(Ex, Ey, Ez)`` at the output
     plane.  The scalar transport (ray map + HK weight + OPL) is shared by both
     polarization channels; each beamlet additionally carries the per-beamlet 2x2
     Fresnel Jones matrix (polarization ray tracing, s/p per surface -- the s/p
     frame rotation IS the geometric phase), and the longitudinal ``Ez`` is added
-    from the exit-ray directions (``E.k = 0``)."""
+    from the exit-ray directions (``E.k = 0``).  ``dx`` / ``dyg`` are the
+    (possibly anamorphic) x / y pixel pitches."""
     from ..propagators.gbd import _fresnel_jones_matrix_per_beamlet
     from ..raytrace import surfaces_from_prescription
     from ..raytrace.differential import ray_transfer_jacobian
@@ -410,15 +431,16 @@ def _fga_vector_through_lens(Ex, Ey, dx, prescription, wavelength, w0, z_image,
     k = 2.0 * np.pi / wavelength
     Ny, Nx = Ex.shape
     x0 = -(Nx / 2) * dx
-    y0 = -(Ny / 2) * dx
+    y0 = -(Ny / 2) * dyg
     Ag = (1.0 / (np.pi * w0 ** 2)) ** 0.5
-    qx, qy, px, py, dp = _swarm_lattice(Ny, Nx, dx, x0, y0, dq_step, p_max, n_p)
+    qx, qy, px, py, dp = _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step,
+                                        p_max, n_p)
     Nq = qx.shape[0]
     Np = px.shape[0]
-    C = ((k / (2.0 * np.pi)) ** 2 * ((dq_step * dx) ** 2) * (dp ** 2)) / 2.0
+    C = ((k / (2.0 * np.pi)) ** 2 * (dq_step ** 2 * dx * dyg) * (dp ** 2)) / 2.0
 
-    cx = _gabor_coeff(Ex, qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig)
-    cy = _gabor_coeff(Ey, qx, qy, px, py, x0, y0, dx, w0, k, Ag, nsig)
+    cx = _gabor_coeff(Ex, qx, qy, px, py, x0, y0, dx, dyg, w0, k, Ag, nsig)
+    cy = _gabor_coeff(Ey, qx, qy, px, py, x0, y0, dx, dyg, w0, k, Ag, nsig)
 
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
@@ -472,12 +494,15 @@ def _fga_vector_through_lens(Ex, Ey, dx, prescription, wavelength, w0, z_image,
         Wx[:, ip] = np.where(alv, base * ex_out, 0.0)
         Wy[:, ip] = np.where(alv, base * ey_out, 0.0)
 
-    ex = _reconstruct(QX, QY, PX, PY, Wx, x0, y0, dx, Ny, Nx, w0, k, Ag, nsig)
-    ey = _reconstruct(QX, QY, PX, PY, Wy, x0, y0, dx, Ny, Nx, w0, k, Ag, nsig)
+    ex = _reconstruct(QX, QY, PX, PY, Wx, x0, y0, dx, dyg, Ny, Nx, w0, k, Ag,
+                      nsig)
+    ey = _reconstruct(QX, QY, PX, PY, Wy, x0, y0, dx, dyg, Ny, Nx, w0, k, Ag,
+                      nsig)
     # longitudinal Ez per beamlet: E.k = 0 -> Ez = -(px*Ex + py*Ey)/pz
     PZ = np.sqrt(np.maximum(1.0 - PX ** 2 - PY ** 2, 1e-12))
     Wz = -(PX * Wx + PY * Wy) / PZ
-    ez = _reconstruct(QX, QY, PX, PY, Wz, x0, y0, dx, Ny, Nx, w0, k, Ag, nsig)
+    ez = _reconstruct(QX, QY, PX, PY, Wz, x0, y0, dx, dyg, Ny, Nx, w0, k, Ag,
+                      nsig)
     return ex, ey, ez
 
 
@@ -487,6 +512,7 @@ def apply_real_lens_fga_vector(
     prescription: Dict[str, Any],
     wavelength: float,
     dx: float,
+    dy: Optional[float] = None,
     output_plane_distance: float = 0.0,
     w0_factor: float = 5.0,
     dq_step: int = 2,
@@ -515,17 +541,16 @@ def apply_real_lens_fga_vector(
     if E_vec.ndim != 3 or E_vec.shape[0] != 2:
         raise ValueError(
             "apply_real_lens_fga_vector: E_vec must be (2, Ny, Nx) = (Ex, Ey).")
-    if E_vec.shape[1] != E_vec.shape[2]:
-        raise ValueError("apply_real_lens_fga_vector: grid must be square.")
     if normalize_output not in ("none", "power"):
         raise ValueError(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
+    dyg = float(dx) if dy is None else float(dy)
     if p_max is None:
         p_max = _default_p_max(prescription, wavelength)
-    w0 = float(w0_factor) * float(dx)
+    w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
     ex, ey, ez = _fga_vector_through_lens(
-        E_vec[0], E_vec[1], float(dx), prescription, float(wavelength), w0,
+        E_vec[0], E_vec[1], float(dx), dyg, prescription, float(wavelength), w0,
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
         float(nsig))
     if normalize_output == "power":
@@ -597,6 +622,7 @@ def apply_real_lens_auto(
     prescription: Dict[str, Any],
     wavelength: float,
     dx: float,
+    dy: Optional[float] = None,
     output_plane_distance: float = 0.0,
     method: str = "auto",
     return_method: bool = False,
@@ -620,7 +646,8 @@ def apply_real_lens_auto(
     ``method='gbd'`` / ``'fga'`` force the choice.  ``return_method=True`` also
     returns the ``'gbd'``/``'fga'`` string actually used.  ``fga_kwargs`` /
     ``gbd_kwargs`` forward extra arguments to the chosen propagator (e.g.
-    ``fga_kwargs={'w0_factor': 4.0, 'n_p': 21}``).
+    ``fga_kwargs={'w0_factor': 4.0, 'n_p': 21}``).  ``dy`` (anamorphic y pitch)
+    is forwarded to whichever propagator is chosen.
 
     Notes
     -----
@@ -651,12 +678,12 @@ def apply_real_lens_auto(
 
     if chosen == "fga":
         out = apply_real_lens_fga(
-            E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+            E_in, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
             output_plane_distance=output_plane_distance, **fga_kwargs)
     else:
         from ..elements import apply_real_lens_gbd  # lazy: avoid import cycle
         out = apply_real_lens_gbd(
-            E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+            E_in, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
             output_plane_distance=output_plane_distance, **gbd_kwargs)
     return (out, chosen) if return_method else out
 
@@ -672,6 +699,7 @@ def apply_real_lens_universal(
     prescription: Dict[str, Any],
     wavelength: float,
     dx: float,
+    dy: Optional[float] = None,
     output_plane_distance: float = 0.0,
     method: str = "auto",
     na_threshold: float = 0.12,
@@ -702,7 +730,9 @@ def apply_real_lens_universal(
     is not auto-selected because ``traced``/``fga`` dominate it on accuracy, but
     is available for those other strengths).  ``return_method=True`` also returns
     the chosen name; ``method_kwargs={'traced': {...}, 'fga': {...}, ...}``
-    forwards per-method extra arguments.
+    forwards per-method extra arguments.  ``dy`` (anamorphic y pitch) is
+    forwarded to whichever member runs, including the exact angular-spectrum
+    output leg.
     """
     valid = ("auto", "phase_screen", "gbd", "traced", "fga")
     if method not in valid:
@@ -726,12 +756,12 @@ def apply_real_lens_universal(
 
     if chosen == "fga":
         out = apply_real_lens_fga(
-            E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+            E_in, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
             output_plane_distance=opd, **mkw.get("fga", {}))
     elif chosen == "gbd":
         from ..elements import apply_real_lens_gbd
         out = apply_real_lens_gbd(
-            E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+            E_in, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
             output_plane_distance=opd, **mkw.get("gbd", {}))
     else:
         # phase_screen / traced return at the exit vertex -> finish the output
@@ -740,9 +770,9 @@ def apply_real_lens_universal(
         from ..elements import apply_real_lens, apply_real_lens_traced
         fn = apply_real_lens if chosen == "phase_screen" else apply_real_lens_traced
         exitf = fn(E_in, prescription=prescription, wavelength=wavelength, dx=dx,
-                   **mkw.get(chosen, {}))
+                   dy=dy, **mkw.get(chosen, {}))
         if opd != 0.0:
             from .asm import angular_spectrum_propagate
-            exitf = angular_spectrum_propagate(exitf, opd, wavelength, dx)
+            exitf = angular_spectrum_propagate(exitf, opd, wavelength, dx, dy)
         out = exitf
     return (out, chosen) if return_method else out

@@ -64,6 +64,20 @@ All notable changes to the core library are documented here.
   Validated: with a null (air) prescription the Jones is the identity and the
   vector ``E_x`` reproduces the scalar propagator to fidelity 1.0 with no
   spurious cross-polarization.
+- **Anamorphic grids for the whole FGA family.**  All four FGA entry points
+  (`apply_real_lens_fga` / `_fga_vector` / `_auto` / `_universal`) now accept a
+  ``dy`` (y pixel pitch) argument and support rectangular arrays, joining the
+  canonical anamorphic ``apply_*`` contract.  The FGA physics is grid-agnostic
+  (ray transport, Herman–Kluk monodromy, and OPL are in physical units), so
+  ``dy`` enters only the sampling: the Gabor analysis lattice, the frozen-beamlet
+  scatter, and the phase-space measure (the anamorphic cell ``dx*dy``); the
+  frozen beamlet stays isotropic with width ``w0 = w0_factor*sqrt(dx*dy)`` and
+  the momentum swarm is unchanged (``p`` is a physical direction cosine bounded
+  by the NA, not the pixel pitch).  ``dy=None`` is byte-identical to the prior
+  square path.  Validated vs the exact angular-spectrum oracle at ``dy=1.5*dx``
+  and ``2*dx`` (fidelity 1.0, energy 1.0) and on a non-square array.  Strong
+  anisotropy (``>~ 3:1``) may want a larger ``w0_factor`` to keep the coarse
+  axis well sampled.
 
 ### Fixed
 

@@ -228,9 +228,62 @@ def test_fga_power_normalization_and_guards():
                               output_plane_distance=20e-3,
                               normalize_output="power")
     assert abs(np.sum(np.abs(out) ** 2) / np.sum(np.abs(u0) ** 2) - 1.0) < 1e-6
-    with pytest.raises(ValueError, match="square"):
-        apply_real_lens_fga(u0[:, :64], prescription=presc, wavelength=_WL,
-                            dx=dx)
+    with pytest.raises(ValueError, match="2-D"):
+        apply_real_lens_fga(u0[0], prescription=presc, wavelength=_WL, dx=dx)
     with pytest.raises(ValueError, match="normalize_output"):
         apply_real_lens_fga(u0, prescription=presc, wavelength=_WL, dx=dx,
                             normalize_output="bogus")
+
+
+def test_fga_anamorphic_grid_matches_asm():
+    """Anamorphic (dx != dy) pixel pitch and rectangular arrays.  On a
+    rectangular-pixel grid (dy = 1.5 dx) FGA reproduces the EXACT angular-
+    spectrum field (the frozen beamlet tracks the geomean pitch, the phase-space
+    measure is the anamorphic cell dx*dy, and the momentum swarm is unchanged);
+    a non-square array (Ny != Nx) also propagates and keeps its shape."""
+    dx = 0.7e-6
+    dy = 1.5 * dx
+    flat = {'name': 'flat', 'aperture_diameter': 1.0,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': 0.5}],
+            'thicknesses': []}
+    # (a) anamorphic pitch, square array, vs the exact ASM(dy) oracle
+    N = 128
+    xs = (np.arange(N) - N / 2) * dx
+    ys = (np.arange(N) - N / 2) * dy
+    Xg, Yg = np.meshgrid(xs, ys)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (16e-6) ** 2).astype(np.complex128)
+    z = 250e-6
+    fga = apply_real_lens_fga(u0, prescription=flat, wavelength=_WL, dx=dx,
+                              dy=dy, output_plane_distance=z, w0_factor=8.0,
+                              p_max=0.06, n_p=15)
+    ref = angular_spectrum_propagate(u0, z, _WL, dx, dy)
+    assert _fid(fga, ref) > 0.99
+    # dy=None must still equal dy=dx exactly (backward-compatible default)
+    sq = apply_real_lens_fga(u0, prescription=flat, wavelength=_WL, dx=dx,
+                             output_plane_distance=z, w0_factor=8.0,
+                             p_max=0.06, n_p=15)
+    sq2 = apply_real_lens_fga(u0, prescription=flat, wavelength=_WL, dx=dx,
+                              dy=dx, output_plane_distance=z, w0_factor=8.0,
+                              p_max=0.06, n_p=15)
+    assert np.array_equal(sq, sq2)
+    # (b) rectangular array (Ny != Nx), square pixels -> correct shape + matches
+    Ny, Nx = 96, 128
+    xr = (np.arange(Nx) - Nx / 2) * dx
+    yr = (np.arange(Ny) - Ny / 2) * dx
+    Xr, Yr = np.meshgrid(xr, yr)
+    ur = np.exp(-(Xr ** 2 + Yr ** 2) / (16e-6) ** 2).astype(np.complex128)
+    rect = apply_real_lens_fga(ur, prescription=flat, wavelength=_WL, dx=dx,
+                               output_plane_distance=z, w0_factor=8.0,
+                               p_max=0.06, n_p=15)
+    assert rect.shape == (Ny, Nx)
+    assert _fid(rect, angular_spectrum_propagate(ur, z, _WL, dx)) > 0.99
+    # (c) the vector propagator threads dy too: its Ex channel reproduces the
+    # scalar anamorphic FGA (Jones = identity in air)
+    from lumenairy.propagators.fga import apply_real_lens_fga_vector
+    vec = apply_real_lens_fga_vector(
+        np.stack([u0, np.zeros_like(u0)]), prescription=flat, wavelength=_WL,
+        dx=dx, dy=dy, output_plane_distance=z, w0_factor=8.0, p_max=0.06,
+        n_p=15)
+    assert vec.shape == (2, N, N)
+    assert _fid(vec[0], fga) > 0.999
