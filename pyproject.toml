@@ -156,6 +156,8 @@ dev = [
     "pytest>=7.0",
     "pytest-cov",
     "pytest-benchmark>=4.0",
+    "pytest-xdist>=3.0",
+    "pytest-split>=0.8",
 ]
 
 [project.urls]
