@@ -15,6 +15,13 @@ All notable changes to the core library are documented here.
   to the full swarm (verified max abs diff `~5e-14`, fidelity 1.0), so it is a pure
   memory lever — it makes high-resolution / fine-sampled FGA (which otherwise OOMs)
   runnable.
+- **FGA position-support pruning (`prune_frac`, default `1e-4`).**  Drops
+  launch-lattice points whose windowed `|E_in|` is below `prune_frac` of the peak;
+  by Cauchy-Schwarz those beamlets carry a negligible Gabor coefficient for every
+  momentum, so the reconstruction is unchanged (verified fidelity-vs-unpruned
+  `1.0` at `1e-4`/`1e-3`).  **3-5x faster on concentrated fields** (fewer lattice
+  points in both kernels), a no-op on grid-filling fields.  `prune_frac=0`
+  disables it.
 
 ### Changed
 

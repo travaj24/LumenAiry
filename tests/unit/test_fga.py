@@ -229,6 +229,30 @@ def test_fga_memory_chunking_numerically_identical():
     assert np.max(np.abs(vchunk - vfull)) < 1e-9
 
 
+def test_fga_position_pruning_no_loss():
+    """Position-support pruning (``prune_frac``) drops launch-lattice points where
+    the windowed input is negligible.  On a concentrated field it changes the
+    result by nothing (Cauchy-Schwarz bounds the dropped Gabor coefficients) while
+    cutting the beamlet count; a grid-filling field prunes ~nothing."""
+    N, dx = 160, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    conc = np.exp(-(Xg ** 2 + Yg ** 2) / (9e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx,
+              output_plane_distance=250e-6, w0_factor=6.0, p_max=0.06, n_p=13)
+    unpruned = apply_real_lens_fga(conc, prune_frac=0.0, **kw)
+    pruned = apply_real_lens_fga(conc, prune_frac=1e-3, **kw)   # default-scale
+    assert _fid(pruned, unpruned) > 0.99999                    # no-loss
+    # the pruned run keeps far fewer lattice points (concentrated field)
+    from lumenairy.propagators.fga import _lattice_support_mask
+    keep = _lattice_support_mask(conc, dx, dx, 2, 6.0 * dx, 3.0, 1e-3)
+    assert keep.sum() < 0.6 * keep.size                        # meaningfully pruned
+
+
 def test_fga_vector_polarization():
     """Vector (Jones) FGA: free-space parity (Jones=identity in air -> Ex matches
     the scalar propagator, no spurious cross-pol), a physical longitudinal Ez,
