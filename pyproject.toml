@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "5.22.0"
+version = "5.23.0"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -156,6 +156,8 @@ dev = [
     "pytest>=7.0",
     "pytest-cov",
     "pytest-benchmark>=4.0",
+    "pytest-xdist>=3.0",
+    "pytest-split>=0.8",
 ]
 
 [project.urls]

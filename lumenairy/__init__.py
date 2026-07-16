@@ -135,6 +135,7 @@ from .elements.lenses import (
     apply_cylindrical_lens,
     apply_grin_lens,
     apply_real_lens,
+    apply_real_lens_gbd,
     apply_real_lens_maslov,
     apply_real_lens_maslov_jax,
     apply_real_lens_traced,
@@ -564,6 +565,7 @@ from .io.codegen import (
 from .io.prescriptions import (
     QUADOA_SCHEMA_VERSION,
     THORLABS_CATALOG,
+    combine_prescriptions,
     export_codev_seq,
     export_quadoa_qos,
     export_zemax_lens_data,
@@ -913,6 +915,12 @@ from .propagators.dispatch import (
 # iterates each realisation through a coherent propagator and
 # returns the partial-coherence intensity ``< |E_k|^2 >_k``.
 from .propagators.ensemble import propagate_ensemble
+from .propagators.fga import (
+    apply_real_lens_auto,
+    apply_real_lens_fga,
+    apply_real_lens_fga_vector,
+    apply_real_lens_universal,
+)
 from .propagators.gbd import (
     BeamletBundle,
     apply_abcd_to_beamlets,
@@ -1008,7 +1016,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.22.0"
+__version__ = "5.23.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1080,6 +1088,7 @@ __all__ = [
     'scale_prescription',
     'normalize_prescription',
     'split_prescription_at_mirrors',
+    'combine_prescriptions',
     'has_mirrors',
 
     # Lens / element models (apply on a field)
@@ -1101,6 +1110,11 @@ __all__ = [
     'prepare_real_lens',
     'PreparedAnalyticLens',
     'close_worker_pool',
+    'apply_real_lens_gbd',
+    'apply_real_lens_fga',
+    'apply_real_lens_fga_vector',
+    'apply_real_lens_auto',
+    'apply_real_lens_universal',
     'apply_real_lens_maslov',
     'apply_real_lens_traced_jax',
     'apply_real_lens_maslov_jax',

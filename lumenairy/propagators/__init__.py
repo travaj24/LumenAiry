@@ -47,6 +47,12 @@ from .dispatch import (
 from .ensemble import propagate_ensemble
 
 # New propagators (no cycles).
+from .fga import (
+    apply_real_lens_auto,
+    apply_real_lens_fga,
+    apply_real_lens_fga_vector,
+    apply_real_lens_universal,
+)
 from .gbd import (
     BeamletBundle,
     apply_abcd_to_beamlets,
@@ -117,6 +123,10 @@ from .vectorial_hfpi import (
 __all__ = [
     'PropagationResult',
     'BeamletBundle',
+    'apply_real_lens_fga',
+    'apply_real_lens_fga_vector',
+    'apply_real_lens_auto',
+    'apply_real_lens_universal',
     'decompose_field_to_beamlets',
     'decompose_field_adaptive',
     'converge_gbd_sampling',

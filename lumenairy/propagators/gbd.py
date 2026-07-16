@@ -2891,7 +2891,27 @@ def apply_prescription_persurface_to_beamlets(
     Lx = dt.ux * inv
     My = dt.uy * inv
     Nz2 = inv
-    t = z_image / Nz2
+    # v5.22 FIX (per-surface GBD OPL piston): the differential trace leaves the
+    # bundle at the last-surface INTERSECTION (z = sag(r)), not the vertex plane
+    # -- dt.opd / dt.x / dt.y are all referenced there.  The image-side leg below
+    # assumes the vertex plane (z = 0), so a POWERED last surface injects a
+    # spurious sag(r) of defocus into the OPL piston (measured as ~2x the exit
+    # wavefront curvature for a curved exit surface; the error vanishes only when
+    # the last surface happens to be planar).  Every OTHER consumer of the
+    # ray-transfer OPL applies the same SIGNED (not abs) `-sag/N` vertex
+    # correction -- see _lens_traced.py (`-final.z / final.N`) and _lens_jax.py;
+    # this path was the sole omission.  Fold -sag(r) into the leg length so the
+    # piston, transverse position and Q are all referenced to the vertex plane.
+    _Rl = float(getattr(surfs[-1], 'radius', np.inf))
+    _kl = float(getattr(surfs[-1], 'conic', 0.0) or 0.0)
+    if np.isfinite(_Rl) and _Rl != 0.0:
+        _cl = 1.0 / _Rl
+        _r2 = dt.x ** 2 + dt.y ** 2
+        _sag = _cl * _r2 / (1.0 + np.sqrt(np.maximum(
+            1.0 - (1.0 + _kl) * _cl * _cl * _r2, 0.0)))
+    else:
+        _sag = np.zeros_like(dt.x)
+    t = (z_image - _sag) / Nz2
     lam = _eigvals2x2(Q, np)
     amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
     amp = amp * np.exp(1j * k0 * t)

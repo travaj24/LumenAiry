@@ -1009,6 +1009,165 @@ def apply_real_lens(
                     dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
             continue
 
+        # ---- Opt-in row-band (chunked) slant/fresnel phase screen -----
+        # v5.17.x: the ``_narrow_chunk`` sibling for the PLAIN conic+aspheric
+        # surface WITH slant_correction and/or fresnel on (and, optionally,
+        # a per-surface clear_aperture and/or the aperture stop).  Evaluates
+        # the ENTIRE refraction pipeline (per-band sag -> local normal ->
+        # cos_ti / cos_tt -> refraction OPD -> phase screen -> fresnel
+        # amplitude -> TIR mask -> clear_aperture / stop mask) in row-bands,
+        # building ``sag`` PER BAND from the axis vectors so the full-grid
+        # meshgrids (``_ensure_full_grids``, ~26 GB at N=32768) AND the
+        # full-grid ``sag`` (~43 GB float64 transient) NEVER materialise --
+        # only a (chunk_rows x Nx) band is live at once.  ``_ensure_full_grids``
+        # is never reached on this path (we ``continue`` before it, exactly as
+        # ``_narrow_chunk`` does).  The y-sag gradient is taken on a 1-row halo
+        # so np.gradient's central differences match the whole-grid result
+        # bit-for-bit, and the numexpr phase-screen decision reuses the SAME
+        # whole-E.size gate as the whole-grid path, so the banded output is
+        # BYTE-IDENTICAL to the whole-grid refraction block below
+        # (test_slant_chunk_byte_identical).  Only plain surfaces qualify;
+        # decenter / tilt / form-error / biconic / freeform / surface-frame
+        # slant/fresnel surfaces fall through to the whole-grid path (their
+        # full grids are unavoidable anyway).
+        _slant_narrow_chunk = (
+            sag_chunk_rows is not None and int(sag_chunk_rows) > 0
+            and xp is np and (slant_correction or fresnel)
+            and not surface_frame
+            and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
+            and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
+            and surf.get('form_error') is None
+            and surf.get('radius_y') is None
+            and surf.get('freeform_type') is None
+        )
+        if _slant_narrow_chunk:
+            cr = int(sag_chunk_rows)
+            clear_ap = surf.get('clear_aperture')
+            _is_stop = (stop_index is not None and i == stop_index
+                        and aperture is not None)
+            # The whole-grid fresnel amplitude REBINDS E to
+            # result_type(E.dtype, geometry-real) (complex64 -> complex128
+            # for the default float64 geometry).  Reproduce that promotion by
+            # routing the fresnel / TIR / aperture band writes into a promoted
+            # output array and rebinding E to it after the loop; with no
+            # fresnel (or E already wide enough) the output IS E and the writes
+            # land in place.  The phase screen always writes the pre-fresnel
+            # dtype into E first, so the promotion happens at exactly the same
+            # pipeline step as the whole grid.
+            if fresnel:
+                _out_dtype = xp.result_type(E.dtype, _sag_real)
+                E_out = (E if _out_dtype == E.dtype
+                         else xp.empty(E.shape, dtype=_out_dtype))
+            else:
+                E_out = E
+            _refr_clamped = False
+            for r0 in range(0, Ny, cr):
+                r1 = min(Ny, r0 + cr)
+                # 1-row halo so central-difference gradients on the band match
+                # the whole-grid np.gradient result exactly; the true array
+                # edges (rows 0 and Ny-1) keep their one-sided stencil in the
+                # first / last band.  ``sag_halo`` built from the axis vectors
+                # is byte-identical to slicing the full-grid sag
+                # (_surface_sag_general is pointwise in h_sq).
+                _h0 = max(0, r0 - 1)
+                _h1 = min(Ny, r1 + 1)
+                h_sq_halo = _x_sq[None, :] + _y_sq[_h0:_h1, None]
+                sag_halo = _surface_sag_general(h_sq_halo, R, kc, asph)
+                _lo = r0 - _h0
+                _hi = _lo + (r1 - r0)
+                _dsag_dy_h, _dsag_dx_h = xp.gradient(sag_halo, dy, dx)
+                dsag_dy_b = _dsag_dy_h[_lo:_hi]
+                dsag_dx_b = _dsag_dx_h[_lo:_hi]
+                grad_sq = dsag_dx_b ** 2 + dsag_dy_b ** 2
+                one_plus_g = 1.0 + grad_sq
+                cos_ti = 1.0 / xp.sqrt(one_plus_g)
+                sin2_ti = grad_sq / one_plus_g
+                sin2_tt = (n1r / n2r) ** 2 * sin2_ti
+                cos_tt = xp.sqrt(xp.maximum(1.0 - sin2_tt, 0.0))
+                if (bool(xp.any(cos_ti < 1e-3))
+                        or bool(xp.any(cos_tt < 1e-3))):
+                    _refr_clamped = True
+                cos_ti_safe = xp.maximum(cos_ti, 1e-3)
+                cos_tt_safe = xp.maximum(cos_tt, 1e-3)
+                sag_b = sag_halo[_lo:_hi]
+                if slant_correction:
+                    opd = (n2r * sag_b / cos_tt_safe
+                           - n1r * sag_b / cos_ti_safe)
+                else:
+                    opd = (n2r - n1r) * sag_b
+                if bool(xp.any(xp.isnan(opd))):
+                    opd = xp.where(xp.isnan(opd), 0.0, opd)
+                if (xp is np and NUMEXPR_AVAILABLE
+                        and E.size >= _NUMEXPR_MIN_SIZE
+                        and _ensure_numexpr_loaded()):
+                    # Same whole-E.size numexpr gate as the whole-grid path so
+                    # both paths make the identical numexpr-vs-numpy choice
+                    # (numexpr differs from numpy exp in the last bit, so a
+                    # per-band size gate would break byte-identity at the
+                    # threshold).  numexpr is element-wise, so evaluating the
+                    # band slice equals evaluating the whole grid bit-for-bit.
+                    _Eb = E[r0:r1]
+                    _ne.evaluate(
+                        '_Eb * exp(-1j * k0 * _opd)',
+                        local_dict={'_Eb': _Eb, 'k0': k0, '_opd': opd},
+                        out=_Eb,
+                    )
+                else:
+                    ph = xp.exp(-1j * k0 * opd)
+                    if ph.dtype != E.dtype:
+                        ph = ph.astype(E.dtype)
+                    E[r0:r1] = E[r0:r1] * ph
+                # Fresnel amplitude transmission.  ``E[r0:r1] * sqrt(T_eff)``
+                # promotes the band to result_type(E.dtype, geometry-real)
+                # (complex64 -> complex128 for the default float64 geometry),
+                # matching the whole-grid ``E = E * sqrt(T_eff)`` rebinding.
+                if fresnel:
+                    denom_s = n1c * cos_ti_safe + n2c * cos_tt_safe
+                    denom_p = n2c * cos_ti_safe + n1c * cos_tt_safe
+                    t_s = 2.0 * n1c * cos_ti_safe / denom_s
+                    t_p = 2.0 * n1c * cos_ti_safe / denom_p
+                    T_eff = 0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
+                    _band = E[r0:r1] * xp.sqrt(T_eff)
+                else:
+                    _band = E[r0:r1]
+                # TIR mask (dtype-aware zero at the band's post-fresnel dtype,
+                # mirroring the whole grid's ``xp.zeros((), dtype=E.dtype)``).
+                # This path always has slant or fresnel on, so it always runs.
+                _band = xp.where(sin2_tt < 1.0, _band,
+                                 xp.zeros((), dtype=_band.dtype))
+                # Per-surface clear aperture (vignetting) and aperture stop,
+                # applied PER BAND (the whole-grid path applies these after
+                # refraction via full-grid h_sq / h_sq_axis; decenter is
+                # excluded from this path so both use the centred per-band
+                # h_sq = x2 + y2, byte-identical to h_sq_axis[r0:r1]).
+                if clear_ap is not None or _is_stop:
+                    _h_b = _x_sq[None, :] + _y_sq[r0:r1, None]
+                    if clear_ap is not None:
+                        _band = xp.where(_h_b <= (clear_ap / 2) ** 2, _band,
+                                         xp.zeros((), dtype=_band.dtype))
+                    if _is_stop:
+                        _band = xp.where(_h_b <= (aperture / 2) ** 2, _band,
+                                         xp.zeros((), dtype=_band.dtype))
+                E_out[r0:r1] = _band
+            E = E_out
+            if _refr_clamped:
+                import warnings
+                warnings.warn(
+                    "apply_real_lens: clamping near-grazing-incidence "
+                    "rays at cos(theta) < 1e-3 floor.  Steep asphere or "
+                    "tilted bundle exceeds the surface's physical AOI "
+                    "limit; OPD on clamped pixels is artificially "
+                    "capped and may differ from the true ray path by "
+                    "kilo-radians.  Reduce input tilt or check the "
+                    "surface profile.",
+                    RuntimeWarning, stacklevel=2,
+                )
+            if i < len(surfaces) - 1:
+                E = _propagate_through_glass(
+                    E, thicknesses[i], wavelength, n2r, n2c.imag,
+                    dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
+            continue
+
         # Whole-grid path from here on -- build the deferred meshgrids on
         # first use (no-op when they already exist).
         X, Y, h_sq_axis = _ensure_full_grids()

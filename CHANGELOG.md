@@ -2,6 +2,100 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+## [5.23.0] — 2026-07-15
+
+### Added
+
+- **`apply_real_lens_fga` — a caustic-accurate lens propagator** (Frozen
+  Gaussian Approximation; `lumenairy/propagators/fga.py`).  The
+  Gaussian-beam-summation family is now caustic-accurate: FGA (Lu & Yang,
+  *Commun. Math. Sci.* 9(3):663, 2011 — the wave-equation transplant of the
+  Herman–Kluk propagator) **freezes** the beamlet width and weights each by the
+  Herman–Kluk prefactor `a = sqrt(det Z)`, `Z = (A+D) + i(k w0^2 C - B/(k w0^2))`,
+  built from the SAME ray-transfer/monodromy blocks the GBD propagator already
+  computes — a retrofit, not a rewrite.  Because the position→momentum block
+  `C` (which vanishes at a focus) enters *additively*, the prefactor never blows
+  up: the method is regular at caustics by construction.  Validated: reproduces
+  the exact angular-spectrum field to fidelity 0.9998 in free space, matches
+  `apply_real_lens_gbd` and the angular-spectrum oracle through a real
+  plano-convex singlet to 0.997–0.999, and **beats GBD at a spherical-aberration
+  caustic** on peak-intensity error (GBD 0.03–0.34 vs FGA 0.01–0.07).  Energy is
+  a controllable knob (the frozen width `w0_factor` is the FGA convergence
+  parameter; `normalize_output='power'` conserves it exactly).  Momentum sampling
+  auto-sets from the prescription NA.  NumPy-only; requires the optional `numba`
+  accelerator.  Background: `docs/gbd_caustic_accuracy_literature.md` (a
+  five-agent literature round establishing that GBD's caustic error is a
+  phase/interference problem, not an amplitude singularity, and ranking the fix
+  routes).
+- **`apply_real_lens_auto` — GBD/FGA auto-dispatching lens propagator.**
+  ``method='auto'`` detects the field's geometric caustic zone (a meridional ray
+  fan whose launch directions follow the input wavefront -> where the exit rays
+  cross the axis, spherical-aberration-broadened) and routes the output plane to
+  the fast thawed-beamlet `apply_real_lens_gbd` in smooth regions or the
+  caustic-accurate frozen-beamlet `apply_real_lens_fga` near a focus / fold /
+  cusp (widened by a diffraction depth-of-focus pad).  Both are ray-based (no
+  thin-screen obliquity ceiling), so the dispatched result is accurate at high
+  NA as well as at caustics; the dispatch is biased toward FGA when uncertain
+  (FGA matches GBD in smooth regions, so this only costs speed, never accuracy).
+  ``method='gbd'``/``'fga'`` force the choice; ``return_method=True`` reports it.
+- **`apply_real_lens_universal` — the universal (4-way) auto-dispatching lens
+  propagator.**  Routes each output plane to the MOST ACCURATE propagator for its
+  regime: low NA (< ``na_threshold``) → the wave-exact thin-element phase screen
+  (`apply_real_lens` at the exit vertex + an exact angular-spectrum output leg,
+  which handles focus/caustics with no beamlet-discretization cost); high NA and
+  near a caustic → the caustic-accurate, ray-based `apply_real_lens_fga`; high NA
+  and smooth → the per-pixel ray-traced `apply_real_lens_traced` (sub-nm OPL, no
+  thin-screen obliquity ceiling).  ``method='phase_screen'|'gbd'|'traced'|'fga'``
+  forces the choice (`'gbd'` — the fast, differentiable, polarization-capable
+  thawed beamlet — is available but not auto-selected, since `traced`/`fga`
+  dominate it on accuracy); ``return_method=True`` reports the routed name and
+  ``method_kwargs`` forwards per-method arguments.  This makes the beamlet /
+  ray / wave-exact-surface family a single "incredibly accurate everywhere"
+  entry point.  Demo: `examples/14_fga_caustic_propagator.py`.
+- **`apply_real_lens_fga_vector` — vector (Jones) caustic-accurate propagator.**
+  Propagates a ``(2, Ny, Nx)`` transverse Jones field ``(E_x, E_y)``: each frozen
+  beamlet carries the per-surface Fresnel s/p Jones matrix (polarization ray
+  tracing -- diattenuation, retardance, and the geometric s/p frame rotation,
+  which supplies the semiclassical Berry phase), and the longitudinal ``E_z``
+  (``E . k = 0``, the high-NA piece) is added from the exit-ray directions.
+  Returns ``(2, ...)`` or ``(3, ...)`` with ``return_longitudinal=True``.
+  Validated: with a null (air) prescription the Jones is the identity and the
+  vector ``E_x`` reproduces the scalar propagator to fidelity 1.0 with no
+  spurious cross-polarization.
+- **Anamorphic grids for the whole FGA family.**  All four FGA entry points
+  (`apply_real_lens_fga` / `_fga_vector` / `_auto` / `_universal`) now accept a
+  ``dy`` (y pixel pitch) argument and support rectangular arrays, joining the
+  canonical anamorphic ``apply_*`` contract.  The FGA physics is grid-agnostic
+  (ray transport, Herman–Kluk monodromy, and OPL are in physical units), so
+  ``dy`` enters only the sampling: the Gabor analysis lattice, the frozen-beamlet
+  scatter, and the phase-space measure (the anamorphic cell ``dx*dy``); the
+  frozen beamlet stays isotropic with width ``w0 = w0_factor*sqrt(dx*dy)`` and
+  the momentum swarm is unchanged (``p`` is a physical direction cosine bounded
+  by the NA, not the pixel pitch).  ``dy=None`` is byte-identical to the prior
+  square path.  Validated vs the exact angular-spectrum oracle at ``dy=1.5*dx``
+  and ``2*dx`` (fidelity 1.0, energy 1.0) and on a non-square array.  Strong
+  anisotropy (``>~ 3:1``) may want a larger ``w0_factor`` to keep the coarse
+  axis well sampled.
+
+### Fixed
+
+- **FGA normalization -- the ``t=0`` resolution of identity is now exact.** The
+  leading Herman-Kluk identity factor ``a(0) = 2^{d/2}`` (``d=2`` transverse) was
+  double-counted, so the ``t=0`` reconstruction over-counted by ``2^d = 4`` in
+  power and free-space propagation carried a ~2x energy excess.  Dividing the
+  reconstruction by ``2^{d/2}`` restores the resolution of identity (``t=0``
+  power ratio ``4.0 -> 1.000``) and makes free-space propagation energy-conserving
+  (``eta 2.0 -> 1.000``, fidelity 1.0) -- confirming (per the higher-order-FGA
+  analysis, Lu & Yang 2012) that the energy defect was a normalization factor,
+  NOT the O(eps) transport error, so no higher-order correction is needed.  The
+  field SHAPE was already correct (the fix is scale-only); ``normalize_output``
+  and fidelity results are unchanged.  A documented residual: near-collimated
+  inputs through strong focusing (FBI spectrum concentrating near ``p=0``) can
+  still over-amplify the absolute scale -- a representation regime, handled by
+  ``normalize_output='power'`` and by not over-widening ``p_max``.
+
 ## [5.22.0] — 2026-07-14
 
 ### Fixed

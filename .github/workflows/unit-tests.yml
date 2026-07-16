@@ -88,17 +88,39 @@ jobs:
         # to a file so the artifact upload (next step) has something
         # concrete to surface on failure.
         shell: bash
+        # v5.23.0: parallelise the fast gate with pytest-xdist (~40 min -> ~20).
+        # ``--dist loadfile`` keeps each test FILE on one worker, preserving the
+        # per-file process-global state the suite relies on (glass registry, FFT
+        # plan cache, context globals) -- the safe parallel mode.  BLAS is pinned
+        # to one thread per worker so the N workers don't oversubscribe the
+        # runner's cores (and eig reductions stay deterministic).
+        env:
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+          NUMEXPR_NUM_THREADS: '1'
+          VECLIB_MAXIMUM_THREADS: '1'
         run: |
-          # v5.15.0: exclude ``slow`` from the FAST gate.  The graduated EME
-          # eig-heavy convergence tests (tests/unit/test_eme_*.py, ~10 min on
-          # the runner) pushed this step to 24:37 against the 25-min cap; they
-          # (and the rcwa FFF-NV slow test) now run in the dedicated
-          # ``slow-tests`` job below, keeping this gate fast (~15 min).
+          # ``set +e``: GitHub's ``shell: bash`` defaults to ``-eo pipefail``;
+          # errexit would abort after the bulk pytest returns non-zero, skipping
+          # the serial timing step and the combined-exit check below.  Disable it
+          # and combine the two return codes explicitly.
+          set +e
+          # v5.15.0: ``slow`` (eig-heavy convergence) runs in the sharded
+          # slow-tests job below, not here.
+          # The ~6 timing/speedup pins (assert speedup >= X) are unreliable
+          # under xdist CPU contention, so run the bulk suite in PARALLEL and
+          # those pins SERIALLY (second invocation).
+          TIMING="test_decompose_lg_cache_speedup or test_doublet_trace_at_least_1_3x_faster or test_warm_call_at_least_200x_faster_than_first or test_warm_call_at_least_10x_faster_than_first or test_modal_asymptotic_perf_win or test_numba_jit_speedup_on_large_grid"
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
-            -p no:cacheprovider --maxfail=5 -v 2>&1 \
-            | tee unit_test_output.txt
-          exit ${PIPESTATUS[0]}
-        timeout-minutes: 40
+            -p no:cacheprovider -n auto --dist loadfile --maxfail=8 -v \
+            -k "not ($TIMING)" 2>&1 | tee unit_test_output.txt
+          rc_bulk=${PIPESTATUS[0]}
+          python -m pytest tests/unit -m "not integration and not slow" --tb=short \
+            -p no:cacheprovider -v -k "$TIMING" 2>&1 | tee -a unit_test_output.txt
+          rc_timing=${PIPESTATUS[0]}
+          [ "$rc_bulk" -eq 0 ] && [ "$rc_timing" -eq 0 ]
+        timeout-minutes: 35
 
       - name: Upload unit-test log on failure
         if: failure()
@@ -239,18 +261,23 @@ jobs:
         run: python -m pytest tests/unit/test_public_api.py -v
 
   slow-tests:
-    name: Slow tests (eig-heavy convergence)
+    name: Slow tests shard ${{ matrix.shard }}/3 (eig-heavy)
     runs-on: ubuntu-latest
     # v5.15.0: the graduated EME mode-solver convergence tests
     # (tests/unit/test_eme_*.py) and the RCWA FFF-NV slow test are eig-heavy
     # (~10-12 min on the runner).  They were excluded from the fast ``unit``
-    # gate (which hit 24:37 against its 25-min cap once EME landed) and run
-    # here on a single Python -- the numerics are not version-sensitive -- with
-    # a longer cap, so they still gate every push / PR.
-    # v5.21.0: the three minutes-scale v5.21 tests (Levin fold/ROI, pure A|B
-    # stack) moved here from the fast gate and pushed this job past its
-    # 35-min step cap (13 min before the move); job 40 -> 50, step 35 -> 45.
-    timeout-minutes: 50
+    # gate and run here on a single Python -- the numerics are not
+    # version-sensitive.
+    # v5.23.0: SHARD across 3 parallel jobs via pytest-split (balanced by the
+    # committed .test_durations).  In-process xdist is UNSAFE here -- it would
+    # scatter the BLAS-order-sensitive eig convergence tests across workers and
+    # reintroduce the flake the single-thread pin suppresses -- so each shard
+    # runs SERIALLY; only the file set differs.  ~45 min single job -> ~15 each.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -268,7 +295,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
 
-      - name: Run slow tests
+      - name: Run slow tests (shard ${{ matrix.shard }}/3)
         shell: bash
         # v5.18.1: pin BLAS to a single thread.  The eig-heavy EME vector
         # convergence tests (test_eme_2d_vector) resolve near-threshold modes
@@ -286,17 +313,23 @@ jobs:
           NUMEXPR_NUM_THREADS: '1'
           VECLIB_MAXIMUM_THREADS: '1'
         run: |
+          # pytest-split --splits/--group distributes the slow tests across the
+          # 3 shard jobs, balanced by the committed .test_durations; each shard
+          # runs its subset serially.
           python -m pytest tests/unit -m "slow and not integration" --tb=short \
-            -p no:cacheprovider -v 2>&1 \
+            -p no:cacheprovider -v \
+            --splits 3 --group ${{ matrix.shard }} \
+            --splitting-algorithm least_duration \
+            --durations-path .test_durations 2>&1 \
             | tee slow_test_output.txt
           exit ${PIPESTATUS[0]}
-        timeout-minutes: 45
+        timeout-minutes: 20
 
       - name: Upload slow-test log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: slow-test-output
+          name: slow-test-output-shard${{ matrix.shard }}
           path: slow_test_output.txt
           if-no-files-found: warn
           retention-days: 7

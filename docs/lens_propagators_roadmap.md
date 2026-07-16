@@ -5,12 +5,31 @@ The lens-propagator family models a real (aberrated, multi-surface) lens on a
 sampled field. This roadmap tracks what ships, the measured performance state,
 and — honestly — which accuracy REGIMES remain open and what each would cost.
 
-Verdict from the propagator-landscape review (2026-07-05, unchanged): there is
+Verdict from the propagator-landscape review (2026-07-05): there is
 **no single universal lens propagator**. GBD is the engineering-universal
 workhorse (polarization, coatings, folds, differentiability); Maslov is the
 caustic specialist (finite through focus by construction); traced is the fast
 single-congruence model, now extended THROUGH focus by multibranch; the Levin
 engine makes Maslov's caustic-uniform quadrature production-fast.
+
+**Update 2026-07-15 -- FGA (`apply_real_lens_fga`, `propagators/fga.py`):** the
+Gaussian-beam-summation *family* is now caustic-accurate too, via the Frozen
+Gaussian Approximation (Lu-Yang 2011, the wave-equation Herman-Kluk propagator).
+A dedicated literature round (`docs/gbd_caustic_accuracy_literature.md`)
+established that GBD's caustic error is a phase/interference problem, NOT an
+amplitude singularity (each beamlet's complex Q keeps `det Q != 0`), and that
+the fix is to FREEZE the beamlet width and weight each by the Herman-Kluk
+prefactor `a = sqrt(det Z)`, `Z = (A+D) + i(k w0^2 C - B/(k w0^2))`, built from
+the SAME ray-transfer/monodromy blocks GBD already computes -- a retrofit, not a
+rewrite.  Validated: reproduces the angular-spectrum field to 0.9998 free-space,
+matches GBD + the ASM oracle through a real singlet to 0.997-0.999, and **beats
+GBD at a spherical-aberration caustic** (peak-intensity error 0.01-0.07 vs GBD
+0.03-0.34).  Energy is a controllable knob (the frozen width `w0` is the FGA
+convergence parameter).  Open follow-ons: through-lens STRONG-caustic demo at
+high NA, higher-order FGA for energy at small `w0`, sqrt-Husimi launch sampling,
+and vector/polarization FGA (the elastic-FGA Berry-phase term).  This narrows
+the "no universal propagator" gap: GBD+FGA now covers the caustic regime that
+previously required the Maslov hand-off.
 
 ---
 
@@ -78,6 +97,30 @@ listed trigger occurs.
 | GBD tensor-Q full GPU port | marginal | Superseded by GPU reconstruct | — |
 | GBD FFT-ASM hybrid (#14) | — | **Don't revive**: known GBD/ASM convention handoff bug (7% phase residual); FFT-conv (#9) covers the same regime convention-safely | — |
 | Multibranch `_kmah_free_leg` (1.5 s) / trace (0.5 s) | <2× residual | Already vectorized; not worth churn | — |
+
+**FGA (Frozen Gaussian) performance — v5.24.0 non-GPU pass + GPU on the roadmap.**
+The FGA cost is `N_q · N_p · W` (position-lattice points × momentum samples ×
+window area) for EACH of the analysis (`_coeff`) and reconstruction (`_scatter`)
+kernels. The v5.24.0 pass implements the no-accuracy-loss levers — each gated on
+a fidelity check vs the current output (ship only if fidelity/energy are
+preserved to the FGA error floor):
+
+- **position-support pruning** — skip lattice points where the windowed `|u0|`
+  is negligible; provably no-loss, the biggest win for concentrated fields
+  (reduces `N_q` for BOTH kernels);
+- **coefficient pruning in the scatter** — drop below-floor beamlets from the
+  reconstruction; provably no-loss for a threshold under the error floor;
+- **`nsig` 4→3 default** — window is `(nsig·w0)²`; the >3σ tail is `exp(−4.5)≈1%`
+  and largely filled by overlapping beamlets — validate, then adopt;
+- **FFT-based Gabor analysis** — the coefficient is an exact STFT, so
+  mathematically no-loss; ~1.5–2× on the analysis half only (Amdahl-bounded
+  because the equal-cost scatter remains).
+
+GPU is deferred to a dedicated pass:
+
+| Item | Est. gain | Why deferred | Trigger to revisit |
+|---|---|---|---|
+| **FGA GPU port** (CuPy / `numba.cuda` `_coeff` + `_scatter`) | ~10–100× | Both kernels are embarrassingly parallel per-beamlet — the same path as the traced GPU-reconstruct (measured 35× there); real engineering + a device-memory budget for the swarm | A dedicated GPU pass, alongside the Maslov/Levin CuPy work in the queued note above |
 
 Memory is production-safe everywhere: Levin peak is chunk-bounded (~hundreds
 of MB independent of grid size), GBD reconstruct is windowed/budgeted, traced

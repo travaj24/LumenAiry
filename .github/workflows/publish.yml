@@ -150,19 +150,31 @@ jobs:
         run: python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
 
       - name: Run unit tests (release tag verification)
+        # v5.23.0: mirror unit-tests.yml -- xdist parallel bulk + serial timing
+        # pins, BLAS pinned to one thread per worker.
+        env:
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+          NUMEXPR_NUM_THREADS: '1'
+          VECLIB_MAXIMUM_THREADS: '1'
+        shell: bash
         run: |
-          # v5.15.0: exclude ``slow`` (the eig-heavy EME convergence tests run
-          # in the unit-tests ``slow-tests`` job on every push to main, so the
-          # release branch is already slow-verified; excluding them here keeps
-          # the release verify within the step cap).
+          # ``set +e``: disable errexit so both pytest invocations run and their
+          # return codes are combined (see unit-tests.yml for the rationale).
+          set +e
+          # v5.15.0: ``slow`` runs in the unit-tests sharded slow job; excluded
+          # here.  Timing/speedup pins run serially (xdist contention skews them).
+          TIMING="test_decompose_lg_cache_speedup or test_doublet_trace_at_least_1_3x_faster or test_warm_call_at_least_200x_faster_than_first or test_warm_call_at_least_10x_faster_than_first or test_modal_asymptotic_perf_win or test_numba_jit_speedup_on_large_grid"
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
-            -p no:cacheprovider --maxfail=5
-        # v5.12.0: 15 -> 25 to match unit-tests.yml's proven step cap.  v5.20.0:
-        # 25 -> 33 (again in sync with unit-tests.yml) -- the fast suite drifted
-        # to ~25 min and 3.11-3.13 tripped the 25-min cap on the v5.20.0 publish
-        # while unit-tests.yml passed at 33.  v5.21.0: 33 -> 40 in sync with
-        # unit-tests.yml (v5.21 test batches; slow hogs moved to the slow job).
-        timeout-minutes: 40
+            -p no:cacheprovider -n auto --dist loadfile --maxfail=8 -k "not ($TIMING)"
+          rc_bulk=$?
+          python -m pytest tests/unit -m "not integration and not slow" --tb=short \
+            -p no:cacheprovider -k "$TIMING"
+          rc_timing=$?
+          [ "$rc_bulk" -eq 0 ] && [ "$rc_timing" -eq 0 ]
+        # v5.23.0: 40 -> 35 (xdist parallelises the fast gate; was ~40 min serial).
+        timeout-minutes: 35
 
   build:
     name: Build sdist + wheel

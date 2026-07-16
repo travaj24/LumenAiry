@@ -21,7 +21,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -530,6 +530,7 @@ def makedammann2d(
     plot_every: int = 50,
     seed: Optional[int] = None,
     save_path: Optional[str] = None,
+    cell_pixels: Optional[Union[int, Tuple[int, int]]] = None,
     _legacy_units: str = 'auto',
 ) -> Tuple[np.ndarray, np.ndarray, Tuple[float, float]]:
     """
@@ -604,6 +605,25 @@ def makedammann2d(
     save_path : str or None
         If provided, save the final quantized phase (radians) to this file
         in CSV format compatible with :func:`load_phase_file`.
+    cell_pixels : int, (int, int), or None, default ``None``
+        Force the unit-cell pixel count directly, overriding the
+        ``wavsamp``-derived grid size.  ``None`` (default) keeps the
+        historical behaviour: the cell is
+        ``ndifordersx = ceil(periodx / (wavsamp * waveln) * 0.5) * 2``
+        pixels wide (and similarly in y).  An ``int`` sets both axes to
+        that many pixels; a ``(nx, ny)`` tuple sets them independently.
+
+        The primary use is **grid-native DOE design**: choose
+        ``cell_pixels = round(period / dx_grid)`` so the returned
+        ``cell_pixel_size`` equals your propagation grid spacing
+        ``dx_grid`` *exactly* and the cell tiles an integer number of
+        grid pixels.  :func:`create_periodic_phase_mask` then maps one
+        cell pixel to one grid pixel (no nearest-neighbour resample), so
+        the phase transitions land on grid lines and no power is
+        scattered out of the design orders by sampling jitter.  Each
+        count must be even (the annealing / order-embedding logic uses
+        ``n // 2``) and at least as large as the corresponding
+        ``diforders`` dimension.
     _legacy_units : {'auto', 'um', 'SI'}, default ``'auto'``
         Controls the legacy-micrometre heuristic introduced in
         v4.14.2 and refined in v4.14.3.
@@ -812,6 +832,30 @@ def makedammann2d(
     # -- Grid sizing -------------------------------------------------------
     ndifordersx = int(np.ceil(periodx / (wavsamp * waveln) * 0.5)) * 2
     ndifordersy = int(np.ceil(periody / (wavsamp * waveln) * 0.5)) * 2
+
+    # Grid-native override: pin the cell pixel count directly so the
+    # returned cell_pixel_size == the caller's propagation grid dx and the
+    # cell tiles an integer number of grid pixels (lossless 1:1 mapping in
+    # create_periodic_phase_mask).  See the ``cell_pixels`` docstring.
+    if cell_pixels is not None:
+        if np.isscalar(cell_pixels):
+            _cpx = _cpy = int(cell_pixels)
+        else:
+            _cpx, _cpy = (int(v) for v in cell_pixels)
+        for _lbl, _cp, _nord in (('x', _cpx, diforders.shape[0]),
+                                 ('y', _cpy, diforders.shape[1])):
+            if _cp < 2 or _cp % 2 != 0:
+                raise ValueError(
+                    f"makedammann2d: cell_pixels[{_lbl}]={_cp} must be an "
+                    "even integer >= 2 (the annealing / order-embedding "
+                    "logic indexes with n // 2).")
+            if _cp < _nord:
+                raise ValueError(
+                    f"makedammann2d: cell_pixels[{_lbl}]={_cp} is smaller "
+                    f"than the target order count ({_nord}); the cell cannot "
+                    "hold the requested diffraction orders.")
+        ndifordersx = _cpx
+        ndifordersy = _cpy
 
     samplingx = periodx / ndifordersx
     samplingy = periody / ndifordersy
