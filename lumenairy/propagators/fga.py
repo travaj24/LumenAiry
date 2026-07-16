@@ -287,7 +287,8 @@ def _chunk_from_budget(shape, dq_step, chunk, mem_budget_mb):
 
 
 def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
-                      dq_step, p_max, n_p, nsig, chunk=None, prune_frac=0.0):
+                      dq_step, p_max, n_p, nsig, chunk=None, prune_frac=0.0,
+                      coeff_frac=0.0):
     """Core FGA transport through a prescription to (last vertex + z_image).
 
     ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches.  ``chunk``
@@ -329,6 +330,7 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
     outr = np.zeros((Ny, Nx))
     outi = np.zeros((Ny, Nx))
+    gmax_c = 0.0                                    # running global max |c|
     for cs in range(0, Np, cw):
         ce = min(cs + cw, Np)
         m = ce - cs
@@ -338,6 +340,13 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
         # ~free: the (q, p, window) iteration count is identical -- only the
         # per-q window bounds recompute per chunk.
         c = _gabor_coeff(u0, qx, qy, pxc, pyc, x0, y0, dx, dyg, w0, k, Ag, nsig)
+        # coefficient pruning: per-momentum peak |c(.,p)|; skip a whole momentum
+        # (no ray trace, no scatter) when its peak is negligible vs the running
+        # global max -- the field carries ~no energy at that direction.
+        cmax_p = np.max(np.abs(c), axis=0) if coeff_frac > 0.0 \
+            else np.empty(0)
+        if coeff_frac > 0.0:
+            gmax_c = max(gmax_c, float(cmax_p.max()))
         QX = np.empty((Nq, m))
         QY = np.empty((Nq, m))
         PX = np.empty((Nq, m))
@@ -345,6 +354,8 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
         AW = np.zeros((Nq, m), dtype=np.complex128)
         ALV = np.zeros((Nq, m), dtype=bool)
         for j in range(m):
+            if coeff_frac > 0.0 and cmax_p[j] < coeff_frac * gmax_c:
+                continue                            # negligible momentum: skip
             pxi = float(pxc[j])
             pyi = float(pyc[j])
             pz_in = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
@@ -402,6 +413,7 @@ def apply_real_lens_fga(
     mem_budget_mb: Optional[float] = None,
     chunk: Optional[int] = None,
     prune_frac: float = 1e-4,
+    coeff_frac: float = 1e-4,
     normalize_output: str = "none",
 ) -> np.ndarray:
     """Propagate ``E_in`` through a real lens ``prescription`` by the
@@ -464,6 +476,13 @@ def apply_real_lens_fga(
         unchanged.  Default ``1e-4`` (a dropped beamlet contributes ``< 1e-4`` in
         amplitude / ``1e-8`` in energy): 3-5x faster on concentrated fields, a
         no-op on grid-filling ones.  ``0`` disables it.
+    coeff_frac : float
+        Skip whole momenta whose peak Gabor coefficient ``max_q |c(q, p)|`` is
+        below this fraction of the running global peak -- the field carries ~no
+        energy at that direction, so its beamlets (the whole ray trace + scatter)
+        are dropped.  Default ``1e-4``: faster for spectrally-concentrated
+        (smooth) fields, a no-op for broadband ones.  Conservative/no-loss (the
+        running global peak only grows, so it never over-prunes).  ``0`` disables.
     normalize_output : {'none', 'power'}
         ``'none'`` returns the raw FGA field
         ``'power'`` rescales it so the
@@ -495,7 +514,8 @@ def apply_real_lens_fga(
     out = _fga_through_lens(
         E_in, float(dx), dyg, prescription, float(wavelength), w0,
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
-        float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac))
+        float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
+        coeff_frac=float(coeff_frac))
     if normalize_output == "power":
         pin = float(np.sum(np.abs(E_in) ** 2))
         pout = float(np.sum(np.abs(out) ** 2))
@@ -506,7 +526,7 @@ def apply_real_lens_fga(
 
 def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                              z_image, dq_step, p_max, n_p, nsig, chunk=None,
-                             prune_frac=0.0):
+                             prune_frac=0.0, coeff_frac=0.0):
     """Vector (Jones) FGA transport: returns ``(Ex, Ey, Ez)`` at the output
     plane.  The scalar transport (ray map + HK weight + OPL) is shared by both
     polarization channels; each beamlet additionally carries the per-beamlet 2x2
@@ -546,6 +566,7 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
     eyi = np.zeros((Ny, Nx))
     ezr = np.zeros((Ny, Nx))
     ezi = np.zeros((Ny, Nx))
+    gmax_c = 0.0
     for cs in range(0, Np, cw):
         ce = min(cs + cw, Np)
         m = ce - cs
@@ -553,13 +574,23 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
         pyc = py[cs:ce]
         cx = _gabor_coeff(Ex, qx, qy, pxc, pyc, x0, y0, dx, dyg, w0, k, Ag, nsig)
         cy = _gabor_coeff(Ey, qx, qy, pxc, pyc, x0, y0, dx, dyg, w0, k, Ag, nsig)
+        # coefficient pruning on the combined per-momentum peak
+        cmax_p = np.max(np.sqrt(np.abs(cx) ** 2 + np.abs(cy) ** 2), axis=0) \
+            if coeff_frac > 0.0 else np.empty(0)
+        if coeff_frac > 0.0:
+            gmax_c = max(gmax_c, float(cmax_p.max()))
         QX = np.empty((Nq, m))
         QY = np.empty((Nq, m))
-        PX = np.empty((Nq, m))
-        PY = np.empty((Nq, m))
+        # PX/PY zero-init: coeff-pruned (skipped) columns must stay FINITE so the
+        # vector Wz = -(PX*Wx + PY*Wy)/PZ below is 0 (Wx=Wy=0 there) and not NaN
+        # from inf*0.
+        PX = np.zeros((Nq, m))
+        PY = np.zeros((Nq, m))
         Wx = np.zeros((Nq, m), dtype=np.complex128)
         Wy = np.zeros((Nq, m), dtype=np.complex128)
         for j in range(m):
+            if coeff_frac > 0.0 and cmax_p[j] < coeff_frac * gmax_c:
+                continue                            # negligible momentum: skip
             pxi = float(pxc[j])
             pyi = float(pyc[j])
             pz_in = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
@@ -629,6 +660,7 @@ def apply_real_lens_fga_vector(
     mem_budget_mb: Optional[float] = None,
     chunk: Optional[int] = None,
     prune_frac: float = 1e-4,
+    coeff_frac: float = 1e-4,
     return_longitudinal: bool = False,
     normalize_output: str = "none",
 ) -> np.ndarray:
@@ -664,7 +696,8 @@ def apply_real_lens_fga_vector(
     ex, ey, ez = _fga_vector_through_lens(
         E_vec[0], E_vec[1], float(dx), dyg, prescription, float(wavelength), w0,
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
-        float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac))
+        float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
+        coeff_frac=float(coeff_frac))
     if normalize_output == "power":
         # rescale the transverse (Ex, Ey) to the input power (lossless
         # assumption; the raw FGA scale is shape-correct but w0/sampling-

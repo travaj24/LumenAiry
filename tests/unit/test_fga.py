@@ -253,6 +253,32 @@ def test_fga_position_pruning_no_loss():
     assert keep.sum() < 0.6 * keep.size                        # meaningfully pruned
 
 
+def test_fga_coefficient_pruning_no_loss():
+    """Coefficient pruning (``coeff_frac``) skips whole momenta whose peak Gabor
+    coefficient is negligible -- no-loss (the field carries ~no energy there) and
+    NaN-free (the vector Ez path stays finite for skipped momenta)."""
+    from lumenairy.propagators.fga import apply_real_lens_fga_vector
+    N, dx = 160, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (30e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx,
+              output_plane_distance=250e-6, w0_factor=6.0, p_max=0.15, n_p=17,
+              prune_frac=0.0)
+    base = apply_real_lens_fga(u0, coeff_frac=0.0, **kw)
+    pruned = apply_real_lens_fga(u0, coeff_frac=1e-3, **kw)
+    assert not np.isnan(pruned).any()
+    assert _fid(pruned, base) > 0.99999                        # no-loss
+    vec = apply_real_lens_fga_vector(np.stack([u0, np.zeros_like(u0)]),
+                                     coeff_frac=1e-3, return_longitudinal=True,
+                                     **kw)
+    assert not np.isnan(vec).any()                             # NaN-safe Ez
+
+
 def test_fga_vector_polarization():
     """Vector (Jones) FGA: free-space parity (Jones=identity in air -> Ex matches
     the scalar propagator, no spurious cross-pol), a physical longitudinal Ez,

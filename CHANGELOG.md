@@ -22,6 +22,13 @@ All notable changes to the core library are documented here.
   `1.0` at `1e-4`/`1e-3`).  **3-5x faster on concentrated fields** (fewer lattice
   points in both kernels), a no-op on grid-filling fields.  `prune_frac=0`
   disables it.
+- **FGA coefficient pruning (`coeff_frac`, default `1e-4`).**  Skips whole
+  momenta whose peak Gabor coefficient `max_q |c(q,p)|` is below `coeff_frac` of
+  the running global peak -- the field carries ~no energy at that direction, so
+  the entire ray trace + scatter for that momentum is dropped.  Conservative /
+  no-loss (the running peak only grows, so it never over-prunes; verified
+  fidelity-vs-unpruned `1.0` at `1e-4`/`1e-3`).  **Faster for
+  spectrally-concentrated (smooth) fields**, a no-op for broadband ones.
 
 ### Changed
 
