@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.24.0] — 2026-07-16
+
 ### Added
 
 - **FGA memory chunking (`mem_budget_mb` / `chunk`).**  `apply_real_lens_fga` and
