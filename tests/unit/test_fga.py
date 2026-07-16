@@ -49,6 +49,18 @@ def _collimated_gaussian(N=256, dx=10e-6, w=0.9e-3):
     return np.exp(-(Xg ** 2 + Yg ** 2) / w ** 2).astype(np.complex128), dx
 
 
+def _hi_na_singlet():
+    """Short-focus plano-convex singlet, NA ~0.19 (> the 0.12 dispatcher gate),
+    so 'auto' reaches the high-NA traced/fga/multi-valued branch."""
+    return {'name': 'hi', 'aperture_diameter': 6e-3,
+            'surfaces': [
+                {'radius': 8e-3, 'conic': 0.0, 'glass_before': 'air',
+                 'glass_after': 'N-BK7', 'semi_diameter': 3e-3},
+                {'radius': np.inf, 'conic': 0.0, 'glass_before': 'N-BK7',
+                 'glass_after': 'air', 'semi_diameter': 3e-3}],
+            'thicknesses': [2.5e-3]}
+
+
 def test_fga_through_singlet_matches_gbd_and_asm():
     """Through a real singlet, FGA matches GBD AND the ASM oracle in the smooth
     converging region -- the through-surface transport (trace + monodromy +
@@ -173,6 +185,82 @@ def test_universal_dispatcher_4way_routing():
                                   dx=dx, method="bogus")
 
 
+def test_universal_dispatcher_multivalued_avoids_traced():
+    """'auto' must NOT route a MULTI-EMITTER / multi-valued field to 'traced':
+    traced launches one ray per pixel along the local phase gradient, which is
+    undefined where several wave components cross (it silently collapses them to
+    their mean direction and applies the wrong angle-dependent OPD).  The
+    dispatcher detects multi-valuedness (:func:`_tilt_dispersion`) and routes to
+    'fga' instead, whose phase-space swarm transports every direction
+    independently.  A SINGLE-valued beam (even strongly aberrated/divergent) is
+    still eligible for the sub-nm traced OPL."""
+    from lumenairy.propagators.fga import _system_na, _tilt_dispersion, apply_real_lens_universal
+    presc = _hi_na_singlet()
+    na = _system_na(presc, _WL)
+    assert na > 0.12                                   # reaches the high-NA branch
+    N, dx = 160, 1.0e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    k = 2 * np.pi / _WL
+    r2 = Xg ** 2 + Yg ** 2
+    gauss = np.exp(-r2 / (40e-6) ** 2)
+
+    # --- the detector separates single- from multi-valued by >10x ---
+    single = {
+        'gauss': gauss,
+        'diverging': gauss * np.exp(1j * k * r2 / (2 * 4e-3)),        # single src
+        'spherical-ab': gauss * np.exp(1j * k * 3e-6 * (r2 / (90e-6) ** 2) ** 2),
+    }
+    for E in single.values():
+        assert _tilt_dispersion(E.astype(np.complex128), dx, dx, _WL, na) < 0.02
+    # two emitters crossing at +/-0.10 rad -> genuinely multi-valued
+    gL = np.exp(-((Xg + 45e-6) ** 2 + Yg ** 2) / (55e-6) ** 2) * np.exp(1j * k * 0.10 * Xg)
+    gR = np.exp(-((Xg - 45e-6) ** 2 + Yg ** 2) / (55e-6) ** 2) * np.exp(-1j * k * 0.10 * Xg)
+    two = (gL + gR).astype(np.complex128)
+    doe = (sum(np.exp(1j * k * 0.05 * m * Xg) for m in range(-2, 3))
+           * gauss).astype(np.complex128)
+    assert _tilt_dispersion(two, dx, dx, _WL, na) > 0.06
+    assert _tilt_dispersion(doe, dx, dx, _WL, na) > 0.06
+
+    fkw = {'fga': {'n_p': 7, 'w0_factor': 4.0}}
+    far = 2e-3                             # a smooth plane, well before any focus
+
+    def route(E, **kw):
+        return apply_real_lens_universal(
+            E, prescription=presc, wavelength=_WL, dx=dx,
+            output_plane_distance=far, return_method=True,
+            method_kwargs=fkw, **kw)[1]
+
+    # single-valued high-NA smooth far plane -> traced ; multi-valued -> fga
+    assert route(gauss.astype(np.complex128)) == "traced"
+    assert route(two) == "fga"            # <-- the bug: was 'traced'
+    assert route(doe) == "fga"
+    # explicit override in BOTH directions
+    assert route(two, multivalued=False) == "traced"      # trust single-valued
+    assert route(gauss.astype(np.complex128), multivalued=True) == "fga"
+
+    # ... and the method it routes multi-valued fields TO is exact for them:
+    # FGA reproduces the exact free-space angular-spectrum field for a two-emitter
+    # (multi-valued) input -- two co-located beams with OPPOSITE tilts, so every
+    # pixel carries two directions at once, which a single-direction ray launch
+    # cannot represent.  (Co-located + small waist keeps it clear of the grid
+    # edge; the separated ``two`` above is for the routing decision.)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    gc = np.exp(-r2 / (12e-6) ** 2)
+    twoc = (gc * np.exp(1j * k * 0.10 * Xg)
+            + gc * np.exp(-1j * k * 0.10 * Xg)).astype(np.complex128)
+    assert _tilt_dispersion(twoc, dx, dx, _WL, na) > 0.06      # genuinely multi-valued
+    z = 120e-6
+    fga_two = apply_real_lens_fga(twoc, prescription=flat, wavelength=_WL, dx=dx,
+                                  output_plane_distance=z, w0_factor=4.0,
+                                  p_max=0.16, n_p=17)
+    asm_two = angular_spectrum_propagate(twoc, z, _WL, dx)
+    assert _fid(fga_two, asm_two) > 0.999     # FGA is exact on the multi-valued field
+
+
 def test_fga_normalization_identity_and_energy():
     """The corrected FGA normalization makes the t=0 resolution of identity exact
     (power ratio ~1, not the pre-fix 2^d=4) and free-space propagation energy-
@@ -199,6 +287,119 @@ def test_fga_normalization_identity_and_energy():
     ref = angular_spectrum_propagate(u0, 300e-6, _WL, dx)
     assert abs(pr(prop, u0) - 1.0) < 0.03         # free-space energy conserved
     assert _fid(prop, ref) > 0.999                # ... and shape-exact
+
+
+def test_fga_memory_chunking_numerically_identical():
+    """The momentum-swarm chunking (``chunk`` / ``mem_budget_mb``) bounds peak
+    beamlet memory to O(Nq*chunk) and returns the SAME field as the full swarm --
+    it only reorders an additive sum, so the result matches to float round-off,
+    for both the scalar and vector propagators."""
+    from lumenairy.propagators.fga import apply_real_lens_fga_vector
+    N, dx = 128, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (18e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx,
+              output_plane_distance=300e-6, w0_factor=8.0, p_max=0.06, n_p=13)
+    full = apply_real_lens_fga(u0, **kw)
+    for c in (apply_real_lens_fga(u0, chunk=1, **kw),
+              apply_real_lens_fga(u0, chunk=5, **kw),
+              apply_real_lens_fga(u0, mem_budget_mb=2, **kw)):
+        assert np.max(np.abs(c - full)) < 1e-9     # identical to round-off
+    vfull = apply_real_lens_fga_vector(np.stack([u0, np.zeros_like(u0)]),
+                                       return_longitudinal=True, **kw)
+    vchunk = apply_real_lens_fga_vector(np.stack([u0, np.zeros_like(u0)]),
+                                        chunk=3, return_longitudinal=True, **kw)
+    assert np.max(np.abs(vchunk - vfull)) < 1e-9
+
+
+def test_fga_position_pruning_no_loss():
+    """Position-support pruning (``prune_frac``) drops launch-lattice points where
+    the windowed input is negligible.  On a concentrated field it changes the
+    result by nothing (Cauchy-Schwarz bounds the dropped Gabor coefficients) while
+    cutting the beamlet count; a grid-filling field prunes ~nothing."""
+    N, dx = 160, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    conc = np.exp(-(Xg ** 2 + Yg ** 2) / (9e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx,
+              output_plane_distance=250e-6, w0_factor=6.0, p_max=0.06, n_p=13)
+    unpruned = apply_real_lens_fga(conc, prune_frac=0.0, **kw)
+    pruned = apply_real_lens_fga(conc, prune_frac=1e-3, **kw)   # default-scale
+    assert _fid(pruned, unpruned) > 0.99999                    # no-loss
+    # the pruned run keeps far fewer lattice points (concentrated field)
+    from lumenairy.propagators.fga import _lattice_support_mask
+    keep = _lattice_support_mask(conc, dx, dx, 2, 6.0 * dx, 3.0, 1e-3)
+    assert keep.sum() < 0.6 * keep.size                        # meaningfully pruned
+
+
+def test_fga_coefficient_pruning_no_loss():
+    """Coefficient pruning (``coeff_frac``) skips whole momenta whose peak Gabor
+    coefficient is negligible -- no-loss (the field carries ~no energy there) and
+    NaN-free (the vector Ez path stays finite for skipped momenta)."""
+    from lumenairy.propagators.fga import apply_real_lens_fga_vector
+    N, dx = 160, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (30e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx,
+              output_plane_distance=250e-6, w0_factor=6.0, p_max=0.15, n_p=17,
+              prune_frac=0.0)
+    base = apply_real_lens_fga(u0, coeff_frac=0.0, **kw)
+    pruned = apply_real_lens_fga(u0, coeff_frac=1e-3, **kw)
+    assert not np.isnan(pruned).any()
+    assert _fid(pruned, base) > 0.99999                        # no-loss
+    vec = apply_real_lens_fga_vector(np.stack([u0, np.zeros_like(u0)]),
+                                     coeff_frac=1e-3, return_longitudinal=True,
+                                     **kw)
+    assert not np.isnan(vec).any()                             # NaN-safe Ez
+
+
+def test_fga_separable_kernels_match_direct_and_oracle():
+    """The separable analysis + recurrence scatter kernels (``separable='auto'``,
+    the v5.24.0 default) are numerically equivalent to the direct kernels and
+    EQUALLY accurate vs the truth: separable/direct agree to fidelity ~1, and each
+    matches the exact free-space angular-spectrum oracle to the SAME fidelity (the
+    kernel-vs-kernel difference is cancellation-amplified round-off far below the
+    FGA error floor, not an accuracy loss).  Covers scalar + vector + NaN-safety."""
+    from lumenairy.propagators.fga import apply_real_lens_fga_vector
+    N, dx = 128, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (16e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    z = 200e-6
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx, output_plane_distance=z,
+              w0_factor=5.0, p_max=0.12, n_p=13, prune_frac=0.0, coeff_frac=0.0)
+    direct = apply_real_lens_fga(u0, separable=False, **kw)
+    sep = apply_real_lens_fga(u0, separable=True, **kw)
+    assert _fid(direct, sep) > 0.99999                  # numerically equivalent
+    # ... and equally accurate vs the exact oracle (the real no-loss criterion)
+    oracle = angular_spectrum_propagate(u0, z, _WL, dx)
+    assert abs(_fid(sep, oracle) - _fid(direct, oracle)) < 1e-5
+    # vector path: equivalent + NaN-safe
+    Ev = np.stack([u0, 0.4 * u0])
+    vd = apply_real_lens_fga_vector(Ev, separable=False, return_longitudinal=True,
+                                    **kw)
+    vs = apply_real_lens_fga_vector(Ev, separable=True, return_longitudinal=True,
+                                    **kw)
+    assert not np.isnan(vs).any()
+    assert _fid(vd, vs) > 0.99999
 
 
 def test_fga_vector_polarization():

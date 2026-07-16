@@ -4,6 +4,79 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.24.0] — 2026-07-16
+
+### Added
+
+- **FGA memory chunking (`mem_budget_mb` / `chunk`).**  `apply_real_lens_fga` and
+  `apply_real_lens_fga_vector` now process the momentum swarm in chunks, bounding
+  peak beamlet memory from `O(Nq*Np)` to `O(Nq*chunk)` (the scatter is an additive
+  sum over independent beamlets, so a chunk is computed and accumulated in place,
+  then discarded).  `mem_budget_mb` auto-sizes the chunk from the position-lattice
+  count; `chunk` sets it explicitly.  The chunked result is **numerically identical**
+  to the full swarm (verified max abs diff `~5e-14`, fidelity 1.0), so it is a pure
+  memory lever — it makes high-resolution / fine-sampled FGA (which otherwise OOMs)
+  runnable.
+- **FGA position-support pruning (`prune_frac`, default `1e-4`).**  Drops
+  launch-lattice points whose windowed `|E_in|` is below `prune_frac` of the peak;
+  by Cauchy-Schwarz those beamlets carry a negligible Gabor coefficient for every
+  momentum, so the reconstruction is unchanged (verified fidelity-vs-unpruned
+  `1.0` at `1e-4`/`1e-3`).  **3-5x faster on concentrated fields** (fewer lattice
+  points in both kernels), a no-op on grid-filling fields.  `prune_frac=0`
+  disables it.
+- **FGA coefficient pruning (`coeff_frac`, default `1e-4`).**  Skips whole
+  momenta whose peak Gabor coefficient `max_q |c(q,p)|` is below `coeff_frac` of
+  the running global peak -- the field carries ~no energy at that direction, so
+  the entire ray trace + scatter for that momentum is dropped.  Conservative /
+  no-loss (the running peak only grows, so it never over-prunes; verified
+  fidelity-vs-unpruned `1.0` at `1e-4`/`1e-3`).  **Faster for
+  spectrally-concentrated (smooth) fields**, a no-op for broadband ones.
+- **FGA separable analysis + recurrence scatter (`separable`, default
+  `'auto'`).**  Two faster kernels that replace the direct Gabor-analysis and
+  frozen-Gaussian-scatter inner loops with no accuracy loss: (1) the momentum
+  grid is the tensor product `pv (x) pv`, and both the Gaussian window and the
+  `exp(-i k (px dxr + py dy))` phase are separable, so the 2-D windowed analysis
+  factors into an x-transform reused across every `py` -- ~`n_p` x less work
+  (shared precomputed phase/Gaussian tables; the circular truncation is preserved
+  exactly); (2) post-transport the scatter beamlets have no shared grid, so the
+  scatter instead advances the window phase (constant per-beamlet rotation) and
+  the Gaussian (two-term recurrence) along each row, hoisting the cos/sin/exp out
+  of the inner loop.  Both are numerically equivalent to the direct kernels to
+  ULP in isolation, and equally accurate vs the exact angular-spectrum oracle
+  (the reconstruction's beamlet cancellation amplifies the round-off to ~`1e-4`
+  peak, well below the FGA ~`1e-3` error floor -- verified the spherical-aberration
+  caustic peak error and free-space fidelity are unchanged).  **~1.5-1.8x combined**
+  (scalar and vector).  `'auto'` enables it for `n_p >= 5`; `separable=False`
+  restores the direct kernels.
+
+### Changed
+
+- **`apply_real_lens_universal` no longer routes MULTI-VALUED fields to
+  `traced`.**  `traced` launches one ray per pixel along the local phase
+  gradient, which is undefined where several wave components cross the same
+  region — a **multi-emitter, post-DOE, or speckle** field — so it silently
+  collapses them to their amplitude-weighted *mean* direction and applies the
+  wrong angle-dependent OPD (`apply_real_lens_traced`'s own guard already flags
+  such inputs "INCOHERENT — per-pixel single-direction estimation fails").  The
+  high-NA `'auto'` branch now measures the field's multi-valuedness (the
+  NA-normalized spread of the local wavevector about its per-region mean) and
+  routes multi-valued fields to `'fga'`, whose phase-space swarm transports every
+  direction independently (verified FGA-exact vs the angular-spectrum oracle,
+  fidelity `1.0`, on a two-emitter field).  The detector is single-valued-safe:
+  a plane wave, Gaussian, single diverging/converging source, MLA-tilted beamlet,
+  or any smooth aberrated single beam scores `<0.006` while genuine multi-valued
+  fields score `>0.08` (a >10× separation), so a single beam still gets the
+  sub-nm traced OPL.  New `multivalued` (`None` auto-detect / `True` force FGA /
+  `False` trust single-valued) and `multivalued_threshold` (default `0.06`)
+  overrides.  A false positive only costs speed (FGA is never *wrong*), so the
+  cut is biased to prefer FGA when uncertain.
+
+- **FGA `nsig` default 4.0 → 3.0** (~1.8x faster).  The per-beamlet window cost
+  scales as `nsig**2`; the `>3-sigma` tail (`exp(-4.5)`) is filled by overlapping
+  beamlets, so the reconstruction is unchanged.  Verified: free-space fidelity
+  identical (0.999996), spherical-aberration caustic peak-intensity error identical
+  (0.8%).  Callers can restore the old window with `nsig=4.0`.
+
 ## [5.23.0] — 2026-07-15
 
 ### Added
