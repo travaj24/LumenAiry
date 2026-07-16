@@ -98,7 +98,12 @@ jobs:
             -p no:cacheprovider --maxfail=5 -v 2>&1 \
             | tee unit_test_output.txt
           exit ${PIPESTATUS[0]}
-        timeout-minutes: 40
+        # v5.23.0: 40 -> 45.  The eig-FREE FGA propagator tests (~6 min, numba)
+        # live here in the fast gate rather than the serial eig-heavy slow job
+        # (which was at its cap); the extra headroom covers them.  (Real
+        # wall-clock is bounded by the slow job, which runs in parallel -- see
+        # its note; sharding that job across parallel runners is the follow-up.)
+        timeout-minutes: 45
 
       - name: Upload unit-test log on failure
         if: failure()

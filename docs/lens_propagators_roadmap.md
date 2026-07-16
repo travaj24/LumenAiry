@@ -98,6 +98,30 @@ listed trigger occurs.
 | GBD FFT-ASM hybrid (#14) | — | **Don't revive**: known GBD/ASM convention handoff bug (7% phase residual); FFT-conv (#9) covers the same regime convention-safely | — |
 | Multibranch `_kmah_free_leg` (1.5 s) / trace (0.5 s) | <2× residual | Already vectorized; not worth churn | — |
 
+**FGA (Frozen Gaussian) performance — v5.24.0 non-GPU pass + GPU on the roadmap.**
+The FGA cost is `N_q · N_p · W` (position-lattice points × momentum samples ×
+window area) for EACH of the analysis (`_coeff`) and reconstruction (`_scatter`)
+kernels. The v5.24.0 pass implements the no-accuracy-loss levers — each gated on
+a fidelity check vs the current output (ship only if fidelity/energy are
+preserved to the FGA error floor):
+
+- **position-support pruning** — skip lattice points where the windowed `|u0|`
+  is negligible; provably no-loss, the biggest win for concentrated fields
+  (reduces `N_q` for BOTH kernels);
+- **coefficient pruning in the scatter** — drop below-floor beamlets from the
+  reconstruction; provably no-loss for a threshold under the error floor;
+- **`nsig` 4→3 default** — window is `(nsig·w0)²`; the >3σ tail is `exp(−4.5)≈1%`
+  and largely filled by overlapping beamlets — validate, then adopt;
+- **FFT-based Gabor analysis** — the coefficient is an exact STFT, so
+  mathematically no-loss; ~1.5–2× on the analysis half only (Amdahl-bounded
+  because the equal-cost scatter remains).
+
+GPU is deferred to a dedicated pass:
+
+| Item | Est. gain | Why deferred | Trigger to revisit |
+|---|---|---|---|
+| **FGA GPU port** (CuPy / `numba.cuda` `_coeff` + `_scatter`) | ~10–100× | Both kernels are embarrassingly parallel per-beamlet — the same path as the traced GPU-reconstruct (measured 35× there); real engineering + a device-memory budget for the swarm | A dedicated GPU pass, alongside the Maslov/Levin CuPy work in the queued note above |
+
 Memory is production-safe everywhere: Levin peak is chunk-bounded (~hundreds
 of MB independent of grid size), GBD reconstruct is windowed/budgeted, traced
 is FFT-plan-dominated (session-cached).

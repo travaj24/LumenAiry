@@ -162,7 +162,9 @@ jobs:
         # to ~25 min and 3.11-3.13 tripped the 25-min cap on the v5.20.0 publish
         # while unit-tests.yml passed at 33.  v5.21.0: 33 -> 40 in sync with
         # unit-tests.yml (v5.21 test batches; slow hogs moved to the slow job).
-        timeout-minutes: 40
+        # v5.23.0: 40 -> 45 in sync with unit-tests.yml (the eig-free FGA tests
+        # now run in the fast gate, not the eig slow job).
+        timeout-minutes: 45
 
   build:
     name: Build sdist + wheel
