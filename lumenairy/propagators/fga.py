@@ -222,9 +222,14 @@ def _default_p_max(prescription, wavelength):
     """Momentum half-range from the system NA (falls back to a moderate cone)."""
     try:
         from ..raytrace import system_abcd_prescription  # noqa: F401
-    except Exception:
+    except ImportError:
         return 0.15
     # aperture radius / effective focal length ~ marginal-ray NA; pad x1.6.
+    # Narrow catch (not bare Exception): a malformed prescription surfaces as a
+    # LookupError (missing key/index), a TypeError/ValueError (bad numeric), an
+    # AttributeError (wrong object), or an ArithmeticError (degenerate efl) -- any
+    # of which falls back to the moderate cone; anything else is a real bug and
+    # propagates.
     try:
         semis = [float(s.get('semi_diameter', 0.0))
                  for s in prescription.get('surfaces', [])]
@@ -233,7 +238,8 @@ def _default_p_max(prescription, wavelength):
         efl = abs(float(system_abcd_prescription(prescription, wavelength)[3]))
         na = (r / efl) if (r > 0 and efl > 0) else 0.1
         return float(min(0.6, max(0.05, 1.6 * na)))
-    except Exception:
+    except (LookupError, TypeError, ValueError, AttributeError,
+            ArithmeticError):
         return 0.15
 
 
@@ -387,14 +393,14 @@ def apply_real_lens_fga(
     (Ny, Nx) complex ndarray
         The field at the output plane.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_real_lens_fga')
     xp = array_namespace(E_in)
     if xp.__name__ != "numpy":
         raise NotImplementedError(
             "apply_real_lens_fga is NumPy-only (the ray trace + numba swarm "
             "sum). Pass a NumPy array.")
     E_in = np.asarray(E_in, dtype=np.complex128)
-    if E_in.ndim != 2:
-        raise ValueError("apply_real_lens_fga: E_in must be a 2-D grid.")
     if normalize_output not in ("none", "power"):
         raise ValueError(
             "normalize_output must be 'none' or 'power', got "
@@ -656,6 +662,8 @@ def apply_real_lens_auto(
     many diffraction depth-of-focus units ``lambda / NA^2`` so the frozen method
     also covers the wave boundary layer around the geometric caustic.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_real_lens_auto')
     if method not in ("auto", "gbd", "fga"):
         raise ValueError(f"method must be 'auto', 'gbd' or 'fga', got {method!r}.")
     fga_kwargs = dict(fga_kwargs or {})
@@ -734,6 +742,8 @@ def apply_real_lens_universal(
     forwarded to whichever member runs, including the exact angular-spectrum
     output leg.
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_real_lens_universal')
     valid = ("auto", "phase_screen", "gbd", "traced", "fga")
     if method not in valid:
         raise ValueError(f"method must be one of {valid}, got {method!r}.")

@@ -202,6 +202,15 @@ _GUARD_EXEMPTIONS = frozenset({
     ('lumenairy/propagators/hfpi.py', 'propagate_hfpi_freespace_aperture'),
     ('lumenairy/propagators/hfpi.py', 'propagate_hfpi_through_prescription'),
 
+    # ---- propagators/fga.py ------------------------------------------------
+    # ``apply_real_lens_fga_vector`` takes a (2, Ny, Nx) transverse Jones field
+    # (Ex, Ey) -- a VECTOR field, not a 2-D scalar field -- so the
+    # ``_check_2d_scalar_field`` (ndim==2) guard would reject its only valid
+    # input shape.  It has its own dedicated ``ndim == 3 and shape[0] == 2``
+    # check at the entry point; the scalar members apply_real_lens_fga /
+    # _auto / _universal DO carry the guard.
+    ('lumenairy/propagators/fga.py', 'apply_real_lens_fga_vector'),
+
     # ---- propagators/vectorial_hfpi.py -------------------------------------
     # Vectorial-HFPI propagators operate on VectorPathBundle objects,
     # not 2-D scalar fields.

@@ -186,6 +186,8 @@ def apply_real_lens_gbd(
         (rescale so the output power equals the aperture-transmitted input
         power -- for like-for-like profile comparison with the other models).
     """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_real_lens_gbd')
     if roi is not None:
         raise NotImplementedError(
             "apply_real_lens_gbd: roi windowing is not yet supported; "
