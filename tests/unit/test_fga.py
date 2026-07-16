@@ -367,6 +367,41 @@ def test_fga_coefficient_pruning_no_loss():
     assert not np.isnan(vec).any()                             # NaN-safe Ez
 
 
+def test_fga_separable_kernels_match_direct_and_oracle():
+    """The separable analysis + recurrence scatter kernels (``separable='auto'``,
+    the v5.24.0 default) are numerically equivalent to the direct kernels and
+    EQUALLY accurate vs the truth: separable/direct agree to fidelity ~1, and each
+    matches the exact free-space angular-spectrum oracle to the SAME fidelity (the
+    kernel-vs-kernel difference is cancellation-amplified round-off far below the
+    FGA error floor, not an accuracy loss).  Covers scalar + vector + NaN-safety."""
+    from lumenairy.propagators.fga import apply_real_lens_fga_vector
+    N, dx = 128, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (16e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    z = 200e-6
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx, output_plane_distance=z,
+              w0_factor=5.0, p_max=0.12, n_p=13, prune_frac=0.0, coeff_frac=0.0)
+    direct = apply_real_lens_fga(u0, separable=False, **kw)
+    sep = apply_real_lens_fga(u0, separable=True, **kw)
+    assert _fid(direct, sep) > 0.99999                  # numerically equivalent
+    # ... and equally accurate vs the exact oracle (the real no-loss criterion)
+    oracle = angular_spectrum_propagate(u0, z, _WL, dx)
+    assert abs(_fid(sep, oracle) - _fid(direct, oracle)) < 1e-5
+    # vector path: equivalent + NaN-safe
+    Ev = np.stack([u0, 0.4 * u0])
+    vd = apply_real_lens_fga_vector(Ev, separable=False, return_longitudinal=True,
+                                    **kw)
+    vs = apply_real_lens_fga_vector(Ev, separable=True, return_longitudinal=True,
+                                    **kw)
+    assert not np.isnan(vs).any()
+    assert _fid(vd, vs) > 0.99999
+
+
 def test_fga_vector_polarization():
     """Vector (Jones) FGA: free-space parity (Jones=identity in air -> Ex matches
     the scalar propagator, no spurious cross-pol), a physical longitudinal Ez,

@@ -3,7 +3,7 @@ Lumenairy example 15 -- FGA performance levers (v5.24.0).
 
 The Frozen Gaussian Approximation (``apply_real_lens_fga``) is a phase-space
 beamlet sum: cost ~ ``N_q * N_p * window``, memory ~ ``N_q * N_p``.  v5.24.0 adds
-four **no-accuracy-loss** levers, each of which leaves the output field unchanged
+five **no-accuracy-loss** levers, each of which leaves the output field unchanged
 (fidelity 1.0) while cutting time or memory:
 
 * ``nsig`` 4 -> 3 (default): the frozen-beamlet window is ``(nsig*w0)^2``; the
@@ -15,6 +15,12 @@ four **no-accuracy-loss** levers, each of which leaves the output field unchange
 * ``coeff_frac`` (default 1e-4): skip whole momenta whose peak coefficient is
   negligible -- the field carries ~no energy at that direction.  Faster for
   smooth (spectrally concentrated) fields.
+* ``separable`` (default ``'auto'``): the tensor-``pv (x) pv`` momentum grid
+  factorizes the 2-D Gabor analysis into an x-transform reused across every
+  ``py`` (~``n_p`` x on analysis), and the scatter advances its window phase /
+  Gaussian by recurrences that hoist the cos/sin/exp out of the inner loop.  Both
+  kernels are numerically equivalent to the direct ones to well within the FGA
+  error floor.  ~1.5-1.8x combined.
 * ``mem_budget_mb`` / ``chunk``: process the momentum swarm in batches, bounding
   peak beamlet memory from ``O(N_q*N_p)`` to ``O(N_q*chunk)`` -- makes
   high-resolution / fine-sampled FGA runnable instead of OOM.  Bit-for-bit the
@@ -59,12 +65,17 @@ def main():
     print("=" * 62)
     # everything OFF = the pre-v5.24.0 behaviour
     base_label, base, base_t = run(
-        "all levers OFF (nsig=4)", nsig=4.0, prune_frac=0.0, coeff_frac=0.0)
+        "all levers OFF (nsig=4)", nsig=4.0, prune_frac=0.0, coeff_frac=0.0,
+        separable=False)
     rows = [(base_label, base_t, 1.0)]
     for label, kw in [
-        ("nsig=3 only", dict(nsig=3.0, prune_frac=0.0, coeff_frac=0.0)),
-        ("+ position pruning", dict(nsig=3.0, prune_frac=1e-4, coeff_frac=0.0)),
-        ("+ coefficient pruning (all defaults)", dict()),  # v5.24.0 defaults
+        ("nsig=3 only", dict(nsig=3.0, prune_frac=0.0, coeff_frac=0.0,
+                             separable=False)),
+        ("+ position pruning", dict(nsig=3.0, prune_frac=1e-4, coeff_frac=0.0,
+                                    separable=False)),
+        ("+ coefficient pruning", dict(nsig=3.0, prune_frac=1e-4,
+                                       coeff_frac=1e-4, separable=False)),
+        ("+ separable (all v5.24.0 defaults)", dict()),  # separable='auto'
     ]:
         _lbl, out, t = run(label, **kw)
         rows.append((label, t, _fid(out, base)))

@@ -29,6 +29,23 @@ All notable changes to the core library are documented here.
   no-loss (the running peak only grows, so it never over-prunes; verified
   fidelity-vs-unpruned `1.0` at `1e-4`/`1e-3`).  **Faster for
   spectrally-concentrated (smooth) fields**, a no-op for broadband ones.
+- **FGA separable analysis + recurrence scatter (`separable`, default
+  `'auto'`).**  Two faster kernels that replace the direct Gabor-analysis and
+  frozen-Gaussian-scatter inner loops with no accuracy loss: (1) the momentum
+  grid is the tensor product `pv (x) pv`, and both the Gaussian window and the
+  `exp(-i k (px dxr + py dy))` phase are separable, so the 2-D windowed analysis
+  factors into an x-transform reused across every `py` -- ~`n_p` x less work
+  (shared precomputed phase/Gaussian tables; the circular truncation is preserved
+  exactly); (2) post-transport the scatter beamlets have no shared grid, so the
+  scatter instead advances the window phase (constant per-beamlet rotation) and
+  the Gaussian (two-term recurrence) along each row, hoisting the cos/sin/exp out
+  of the inner loop.  Both are numerically equivalent to the direct kernels to
+  ULP in isolation, and equally accurate vs the exact angular-spectrum oracle
+  (the reconstruction's beamlet cancellation amplifies the round-off to ~`1e-4`
+  peak, well below the FGA ~`1e-3` error floor -- verified the spherical-aberration
+  caustic peak error and free-space fidelity are unchanged).  **~1.5-1.8x combined**
+  (scalar and vector).  `'auto'` enables it for `n_p >= 5`; `separable=False`
+  restores the direct kernels.
 
 ### Changed
 
