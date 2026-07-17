@@ -43,6 +43,19 @@ recover the absolute scale, and do not set ``p_max`` wider than the actual
 angular content.  This is a representation-regime effect, not the O(eps) FGA
 transport error (which is negligible for lens-like Hamiltonians).
 
+Diverging / expanding inputs (evaluated far from a focus).  The frozen beamlet
+width does NOT spread with propagation, so a strongly-EXPANDING wavefront -- a
+bare diverging point-source relay evaluated well past any focus -- is only
+weakly reconstructed by the (non-spreading) swarm.  At practical sampling the
+fidelity caps around ~0.93 for a beam diverging at ~0.1 rad, essentially
+INDEPENDENT of grid size (verified edge-free at 2x the grid: this is the
+frozen-approximation limit, not an aperture/edge effect).  FGA is at its best AT
+caustics (where it beats GBD) and for compact fields; :func:`apply_real_lens_universal`
+therefore routes a single-valued diverging beam to the wave-exact phase-screen,
+NOT to FGA.  If you force ``method='fga'`` (or call this directly) on such a
+beam, expect reduced fidelity -- prefer ``apply_real_lens`` (phase-screen) or a
+carrier-referenced ``apply_real_lens_traced``.
+
 Requires the optional ``numba`` accelerator (the pure-NumPy swarm sum is
 impractically slow); install with ``pip install lumenairy[numba]``.
 """
@@ -478,40 +491,32 @@ def _chunk_from_budget(shape, dq_step, chunk, mem_budget_mb):
     return max(1, int(float(mem_budget_mb) * 1e6 / (nq * 100.0)))
 
 
-def _fga_mem_guard(Nq, Np, use_sep, mem_budget_mb, fn, cfull_mult=1.0):
-    """F2/F3 memory guard.  ``mem_budget_mb`` bounds the MOMENTUM-chunk memory
-    only (via ``chunk``); the position lattice ``Nq`` is NOT chunked, and the
-    separable analysis holds the whole ``(Nq x Np)`` coefficient array
-    (``cfull_mult`` copies -- 1 scalar, 2 for the vector Ex/Ey).  Returns the
-    (possibly downgraded) ``use_sep``:
+def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0):
+    """POSITION-lattice (``Nq``) chunk size from ``mem_budget_mb``, or ``None`` if
+    the whole lattice fits / no budget.  ``mem_budget_mb`` now bounds BOTH
+    dimensions: momenta via ``cw`` and the position lattice via this chunk, so a
+    large aperture runs within the budget (additive over lattice chunks) instead
+    of OOMing.  Peak per lattice-chunk of size ``nqc``:
 
-    * if the separable ``c_full`` (``cfull_mult*Nq*Np*16`` B) alone exceeds the
-      budget, fall back to the per-momentum-chunk direct analysis (F2: else it
-      OOMs up front regardless of ``mem_budget_mb``);
-    * if even the cw=1 ray-trace + scatter floor (~600 B / lattice point) exceeds
-      the budget, raise a CLEAR error naming ``Nq`` and the levers, instead of a
-      confusing multi-hundred-GB ``MemoryError`` deep in the swarm (F3)."""
+    * separable coeff array ``c_full`` -- ``cfull_mult*nqc*Np*16`` B (whole
+      momentum grid; ``cfull_mult`` = 1 scalar, 2 for the vector ``Ex``/``Ey``);
+    * beamlet transport arrays ``QX/QY/PX/PY + AW + coeff (+ Jones)`` --
+      ``nqc*cw*~100`` B;
+    * the per-momentum ``ray_transfer_jacobian`` temporaries -- ``nqc*~500`` B.
+
+    Only raises if even a SINGLE lattice point exceeds the budget (absurdly tiny
+    budget / huge ``n_p``) -- otherwise it always finds a workable chunk."""
     if mem_budget_mb is None:
-        return use_sep
+        return None
     budget = float(mem_budget_mb) * 1e6
-    cfull = cfull_mult * Nq * Np * 16.0
-    if use_sep and cfull > budget:
-        use_sep = False                       # whole-grid coeff array won't fit
-    # ``mem_budget_mb`` is a SOFT cw-sizing target, not a hard cap -- small
-    # overshoots just run.  Hard-fail only on a genuinely large minimum (cw=1
-    # ray-trace + scatter floor, ~600 B/point) that a budget cannot bound because
-    # the position lattice Nq is not chunked -- a real multi-GB OOM risk (F3).
-    floor = Nq * 600.0 + (cfull if use_sep else 0.0)
-    if floor > budget and floor > 4e9:
+    per = (cfull_mult * Np * 16.0 if use_sep else 0.0) + cw * 100.0 + 500.0
+    nqc = int(budget / per)
+    if nqc < 1:
         raise MemoryError(
-            f"{fn}: the position lattice Nq={Nq} (aperture-support / dq_step^2) "
-            f"needs ~{floor / 1e9:.1f} GB at minimum, exceeding mem_budget_mb="
-            f"{mem_budget_mb} MB.  mem_budget_mb bounds the MOMENTUM-chunk memory "
-            f"only -- the per-momentum ray trace + scatter over all {Nq} lattice "
-            f"points is NOT position-lattice-chunked.  Shrink Nq with a larger "
-            f"dq_step or prune_frac, lower n_p, or use a lighter propagator "
-            f"(apply_real_lens / apply_real_lens_traced) for this aperture.")
-    return use_sep
+            f"{fn}: a single position-lattice point needs ~{per / 1e6:.2f} MB "
+            f"(Np={Np}, chunk={cw}), exceeding mem_budget_mb={mem_budget_mb} MB.  "
+            f"Raise the budget, lower n_p, or use a smaller momentum chunk.")
+    return None if nqc >= Nq else nqc
 
 
 def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
@@ -520,11 +525,14 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     """Core FGA transport through a prescription to (last vertex + z_image).
 
     ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches.  ``chunk``
-    (momenta per batch, ``None`` = all at once) bounds peak beamlet memory to
-    ``O(Nq * chunk)`` instead of ``O(Nq * Np)`` -- the reconstruction is an
-    additive sum over independent beamlets, so the chunked result matches the
-    full-swarm result to float round-off.  ``prune_frac`` drops lattice points
-    with negligible windowed ``|u0|`` (below the FGA floor -> ~no-loss).
+    (momenta per batch, ``None`` = all at once) bounds the MOMENTUM dimension;
+    ``mem_budget_mb`` additionally chunks the POSITION lattice (``nq_chunk``) so
+    peak memory is ``O(nq_chunk * (Np + chunk))`` -- a large aperture runs within
+    the budget as an additive sum over lattice chunks instead of OOMing.  The
+    reconstruction is an additive sum over independent beamlets, so both chunked
+    results match the full swarm to float round-off (coeff pruning stays matched
+    via a global-per-momentum-peak pre-pass when the lattice is chunked).
+    ``prune_frac`` drops lattice points with negligible windowed ``|u0|``.
     ``separable`` (True / False / 'auto') uses the tensor-momentum analysis kernel
     + recurrence scatter kernel -- both ULP-identical to the direct kernels but
     faster; 'auto' enables them when ``n_p >= 5`` (below that the ~``n_p`` x
@@ -561,89 +569,105 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
 
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
     use_sep = bool(separable) if separable != "auto" else (n_p >= 5)
-    # F2/F3: the separable c_full is Nq*Np (allocated whole) and the ray trace is
-    # over all Nq -- neither is bounded by mem_budget_mb (which chunks momenta
-    # only).  Downgrade separable / fail fast with guidance if they can't fit.
-    use_sep = _fga_mem_guard(Nq, Np, use_sep, mem_budget_mb,
-                             "apply_real_lens_fga")
-    # separable analysis needs the FULL tensor momentum grid, so compute all
-    # coefficients ONCE up front and slice per chunk (the analysis array is
-    # Nq*Np complex; the memory lever still chunks the far larger beamlet
-    # transport arrays).  ULP-identical to the per-chunk direct analysis.
-    c_full = None
-    if use_sep:
-        c_full = _gabor_coeff_sep(u0, qx, qy, px[:n_p], x0, y0, dx, dyg, w0, k,
-                                  Ag, nsig)
+    # mem_budget_mb now bounds BOTH dimensions: momenta via cw AND the POSITION
+    # lattice via nq_chunk, so a large aperture runs within the budget as an
+    # additive sum over lattice chunks instead of OOMing (audit F3).  The
+    # separable c_full is then per-lattice-chunk (nqc*Np), not the whole Nq*Np.
+    nq_chunk = _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb,
+                                 "apply_real_lens_fga")
+    qbounds = ([(0, Nq)] if nq_chunk is None
+               else [(s, min(s + nq_chunk, Nq)) for s in range(0, Nq, nq_chunk)])
+
+    # Coefficient pruning under Nq-chunking needs the GLOBAL per-momentum peak
+    # (over ALL q): a per-lattice-chunk peak under-counts and would prune real
+    # momenta.  With >1 lattice chunk, a light analysis-only PRE-PASS accumulates
+    # that global peak so the prune decision (and the field) matches the
+    # un-chunked result to round-off.  Single chunk keeps the running-max path.
+    keep_mom = None
+    if coeff_frac > 0.0 and len(qbounds) > 1:
+        gpeak = np.zeros(Np)
+        for qs, qe in qbounds:
+            cc = (_gabor_coeff_sep(u0, qx[qs:qe], qy[qs:qe], px[:n_p], x0, y0,
+                                   dx, dyg, w0, k, Ag, nsig) if use_sep else
+                  _gabor_coeff(u0, qx[qs:qe], qy[qs:qe], px, py, x0, y0, dx, dyg,
+                               w0, k, Ag, nsig))
+            gpeak = np.maximum(gpeak, np.max(np.abs(cc), axis=0))
+        keep_mom = gpeak >= coeff_frac * float(gpeak.max() + 1e-300)
+
     outr = np.zeros((Ny, Nx))
     outi = np.zeros((Ny, Nx))
-    gmax_c = 0.0                                    # running global max |c|
-    for cs in range(0, Np, cw):
-        ce = min(cs + cw, Np)
-        m = ce - cs
-        pxc = px[cs:ce]
-        pyc = py[cs:ce]
-        # Gabor coefficients for THIS momentum chunk.  Chunking the direct
-        # analysis is ~free (identical (q, p, window) iteration count); the
-        # separable path slices the pre-computed full-grid coefficients.
-        if use_sep:
-            c = c_full[:, cs:ce]
-        else:
-            c = _gabor_coeff(u0, qx, qy, pxc, pyc, x0, y0, dx, dyg, w0, k, Ag,
-                             nsig)
-        # coefficient pruning: per-momentum peak |c(.,p)|; skip a whole momentum
-        # (no ray trace, no scatter) when its peak is negligible vs the running
-        # global max -- the field carries ~no energy at that direction.
-        cmax_p = np.max(np.abs(c), axis=0) if coeff_frac > 0.0 \
-            else np.empty(0)
-        if coeff_frac > 0.0:
-            gmax_c = max(gmax_c, float(cmax_p.max()))
-        QX = np.empty((Nq, m))
-        QY = np.empty((Nq, m))
-        PX = np.empty((Nq, m))
-        PY = np.empty((Nq, m))
-        AW = np.zeros((Nq, m), dtype=np.complex128)
-        ALV = np.zeros((Nq, m), dtype=bool)
-        for j in range(m):
-            if coeff_frac > 0.0 and cmax_p[j] < coeff_frac * gmax_c:
-                continue                            # negligible momentum: skip
-            pxi = float(pxc[j])
-            pyi = float(pyc[j])
-            pz_in = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
-            uxin = np.full(Nq, pxi / pz_in)
-            uyin = np.full(Nq, pyi / pz_in)
-            dt = ray_transfer_jacobian(qx.copy(), qy.copy(), uxin, uyin,
-                                       surfs, wavelength, per_surface=False)
-            uxo = dt.ux
-            uyo = dt.uy
-            # manual image-side free-space leg z_image (slope coordinates)
-            xv = dt.x + z_image * uxo
-            yv = dt.y + z_image * uyo
-            opd_tot = dt.opd + z_image * np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
-            Mleg = np.tile(np.eye(4), (Nq, 1, 1))
-            Mleg[:, 0, 2] = z_image
-            Mleg[:, 1, 3] = z_image
-            M = Mleg @ dt.jacobian
-            # slope -> direction-cosine conjugation for the canonical monodromy
-            go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5      # dp/du at output
-            gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5  # du/dp
-            A = M[:, 0:2, 0:2]
-            B = M[:, 0:2, 2:4] * gi
-            Cc = M[:, 2:4, 0:2] * go[:, None, None]
-            D = M[:, 2:4, 2:4] * (go[:, None, None] * gi)
-            Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
-            a = np.sqrt(_det2(Z))
-            a = np.where(a.real < 0, -a, a)                # continuous branch
-            invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
-            QX[:, j] = xv
-            QY[:, j] = yv
-            PX[:, j] = uxo * invo
-            PY[:, j] = uyo * invo
-            AW[:, j] = C * a * np.exp(1j * k * opd_tot)
-            ALV[:, j] = np.asarray(dt.alive, bool)
-        W = c * AW
-        W[~ALV] = 0.0
-        _reconstruct_into(outr, outi, QX, QY, PX, PY, W, x0, y0, dx, dyg,
-                          Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
+    for qs, qe in qbounds:                              # POSITION-lattice chunk
+        qxc = qx[qs:qe]
+        qyc = qy[qs:qe]
+        nqc = qe - qs
+        c_full_c = (_gabor_coeff_sep(u0, qxc, qyc, px[:n_p], x0, y0, dx, dyg, w0,
+                                     k, Ag, nsig) if use_sep else None)
+        gmax_c = 0.0                                    # running max (single-chunk)
+        for cs in range(0, Np, cw):                     # momentum chunk
+            ce = min(cs + cw, Np)
+            m = ce - cs
+            pxc = px[cs:ce]
+            pyc = py[cs:ce]
+            if use_sep:
+                c = c_full_c[:, cs:ce]
+            else:
+                c = _gabor_coeff(u0, qxc, qyc, pxc, pyc, x0, y0, dx, dyg, w0, k,
+                                 Ag, nsig)
+            cmax_p = None
+            if coeff_frac > 0.0 and keep_mom is None:
+                cmax_p = np.max(np.abs(c), axis=0)
+                gmax_c = max(gmax_c, float(cmax_p.max()))
+            QX = np.empty((nqc, m))
+            QY = np.empty((nqc, m))
+            PX = np.empty((nqc, m))
+            PY = np.empty((nqc, m))
+            AW = np.zeros((nqc, m), dtype=np.complex128)
+            ALV = np.zeros((nqc, m), dtype=bool)
+            for j in range(m):
+                if coeff_frac > 0.0:
+                    if keep_mom is not None:
+                        if not keep_mom[cs + j]:
+                            continue
+                    elif cmax_p[j] < coeff_frac * gmax_c:
+                        continue                        # negligible momentum
+                pxi = float(pxc[j])
+                pyi = float(pyc[j])
+                pz_in = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
+                uxin = np.full(nqc, pxi / pz_in)
+                uyin = np.full(nqc, pyi / pz_in)
+                dt = ray_transfer_jacobian(qxc.copy(), qyc.copy(), uxin, uyin,
+                                           surfs, wavelength, per_surface=False)
+                uxo = dt.ux
+                uyo = dt.uy
+                # manual image-side free-space leg z_image (slope coordinates)
+                xv = dt.x + z_image * uxo
+                yv = dt.y + z_image * uyo
+                opd_tot = dt.opd + z_image * np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
+                Mleg = np.tile(np.eye(4), (nqc, 1, 1))
+                Mleg[:, 0, 2] = z_image
+                Mleg[:, 1, 3] = z_image
+                M = Mleg @ dt.jacobian
+                # slope -> direction-cosine conjugation (canonical monodromy)
+                go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5     # dp/du at output
+                gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5  # du/dp
+                A = M[:, 0:2, 0:2]
+                B = M[:, 0:2, 2:4] * gi
+                Cc = M[:, 2:4, 0:2] * go[:, None, None]
+                D = M[:, 2:4, 2:4] * (go[:, None, None] * gi)
+                Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
+                a = np.sqrt(_det2(Z))
+                a = np.where(a.real < 0, -a, a)               # continuous branch
+                invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
+                QX[:, j] = xv
+                QY[:, j] = yv
+                PX[:, j] = uxo * invo
+                PY[:, j] = uyo * invo
+                AW[:, j] = C * a * np.exp(1j * k * opd_tot)
+                ALV[:, j] = np.asarray(dt.alive, bool)
+            W = c * AW
+            W[~ALV] = 0.0
+            _reconstruct_into(outr, outi, QX, QY, PX, PY, W, x0, y0, dx, dyg,
+                              Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
     return outr + 1j * outi
 
 
@@ -714,20 +738,19 @@ def apply_real_lens_fga(
         ``4.0`` while ~1.8x faster (verified: fidelity and caustic peak-intensity
         error identical).
     mem_budget_mb : float, optional
-        Cap peak beamlet memory (~MB) by processing the MOMENTUM swarm in chunks.
-        Peak drops from ``O(Nq*Np)`` to ``O(Nq*chunk)``; the chunked result is
-        identical to the full swarm (it only reorders an additive sum), so this
-        is a pure memory lever.  ``None`` processes the whole swarm at once.
-        **Scope:** it bounds the momentum dimension only.  The POSITION lattice
-        ``Nq`` (aperture-support / ``dq_step^2``) is NOT chunked -- the
-        per-momentum ray trace + scatter run over all ``Nq`` points -- and the
-        separable analysis holds the whole ``(Nq*Np)`` coefficient array.  So on a
-        LARGE aperture (large ``Nq``): the separable path auto-falls-back to the
-        per-chunk direct analysis if its ``c_full`` would exceed the budget, and a
-        genuinely oversized ``Nq`` raises a clear error (naming the levers) rather
-        than a confusing multi-GB ``MemoryError``.  Control ``Nq`` with ``dq_step``
-        / ``prune_frac`` / ``n_p``; for very large apertures prefer a lighter
-        propagator (``apply_real_lens`` / ``apply_real_lens_traced``).
+        Cap peak memory (~MB) by processing the swarm in chunks.  It bounds BOTH
+        dimensions: the MOMENTUM swarm (``chunk`` momenta per batch) AND the
+        POSITION lattice (``Nq`` = aperture-support / ``dq_step^2``, chunked into
+        ``nq_chunk`` blocks).  So a LARGE aperture runs within the budget as an
+        additive sum over lattice chunks instead of OOMing -- the separable
+        ``(nq_chunk*Np)`` coefficient array, the per-momentum ray trace, and the
+        scatter are all bounded by ``nq_chunk``.  The chunked result is identical
+        to the full swarm to float round-off (it only reorders an additive sum),
+        so this is a pure memory lever.  ``None`` processes the whole swarm at
+        once.  Only an absurd budget (a single lattice point can't fit) raises.
+        (A 24 mm-aperture FGA is still impractically slow -- the ray trace scales
+        with ``Nq`` -- so control ``Nq`` with ``dq_step`` / ``prune_frac`` / ``n_p``
+        and prefer a lighter propagator there, but it no longer OOMs.)
     chunk : int, optional
         Explicit momenta-per-batch (overrides ``mem_budget_mb``).
     prune_frac : float
@@ -834,103 +857,131 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
 
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
     use_sep = bool(separable) if separable != "auto" else (n_p >= 5)
-    # F2/F3 guard (vector holds TWO whole-grid coeff arrays cx_full + cy_full).
-    use_sep = _fga_mem_guard(Nq, Np, use_sep, mem_budget_mb,
-                             "apply_real_lens_fga_vector", cfull_mult=2.0)
-    cx_full = cy_full = None
-    if use_sep:
-        pv = px[:n_p]
-        cx_full = _gabor_coeff_sep(Ex, qx, qy, pv, x0, y0, dx, dyg, w0, k, Ag,
-                                   nsig)
-        cy_full = _gabor_coeff_sep(Ey, qx, qy, pv, x0, y0, dx, dyg, w0, k, Ag,
-                                   nsig)
+    # Nq-chunking bounds mem_budget_mb (vector holds TWO whole-grid coeff arrays
+    # cx + cy -> cfull_mult=2); additive over lattice chunks (audit F3).
+    nq_chunk = _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb,
+                                 "apply_real_lens_fga_vector", cfull_mult=2.0)
+    qbounds = ([(0, Nq)] if nq_chunk is None
+               else [(s, min(s + nq_chunk, Nq)) for s in range(0, Nq, nq_chunk)])
+
+    def _cxy(qxc, qyc, pxc, pyc, full):
+        # separable ALWAYS computes the whole tensor grid (pv = px[:n_p]); direct
+        # takes the full 2-D grid (px, py) for the pre-pass or the chunk otherwise.
+        if use_sep:
+            return (_gabor_coeff_sep(Ex, qxc, qyc, px[:n_p], x0, y0, dx, dyg, w0,
+                                     k, Ag, nsig),
+                    _gabor_coeff_sep(Ey, qxc, qyc, px[:n_p], x0, y0, dx, dyg, w0,
+                                     k, Ag, nsig))
+        pa, pb = (px, py) if full else (pxc, pyc)
+        return (_gabor_coeff(Ex, qxc, qyc, pa, pb, x0, y0, dx, dyg, w0, k, Ag,
+                             nsig),
+                _gabor_coeff(Ey, qxc, qyc, pa, pb, x0, y0, dx, dyg, w0, k, Ag,
+                             nsig))
+
+    # combined-|cx,cy| global per-momentum peak pre-pass (see the scalar path)
+    keep_mom = None
+    if coeff_frac > 0.0 and len(qbounds) > 1:
+        gpeak = np.zeros(Np)
+        for qs, qe in qbounds:
+            cxc, cyc = _cxy(qx[qs:qe], qy[qs:qe], px, py, True)
+            gpeak = np.maximum(gpeak, np.max(
+                np.sqrt(np.abs(cxc) ** 2 + np.abs(cyc) ** 2), axis=0))
+        keep_mom = gpeak >= coeff_frac * float(gpeak.max() + 1e-300)
+
     exr = np.zeros((Ny, Nx))
     exi = np.zeros((Ny, Nx))
     eyr = np.zeros((Ny, Nx))
     eyi = np.zeros((Ny, Nx))
     ezr = np.zeros((Ny, Nx))
     ezi = np.zeros((Ny, Nx))
-    gmax_c = 0.0
-    for cs in range(0, Np, cw):
-        ce = min(cs + cw, Np)
-        m = ce - cs
-        pxc = px[cs:ce]
-        pyc = py[cs:ce]
-        if use_sep:
-            cx = cx_full[:, cs:ce]
-            cy = cy_full[:, cs:ce]
-        else:
-            cx = _gabor_coeff(Ex, qx, qy, pxc, pyc, x0, y0, dx, dyg, w0, k, Ag,
-                              nsig)
-            cy = _gabor_coeff(Ey, qx, qy, pxc, pyc, x0, y0, dx, dyg, w0, k, Ag,
-                              nsig)
-        # coefficient pruning on the combined per-momentum peak
-        cmax_p = np.max(np.sqrt(np.abs(cx) ** 2 + np.abs(cy) ** 2), axis=0) \
-            if coeff_frac > 0.0 else np.empty(0)
-        if coeff_frac > 0.0:
-            gmax_c = max(gmax_c, float(cmax_p.max()))
-        QX = np.empty((Nq, m))
-        QY = np.empty((Nq, m))
-        # PX/PY zero-init: coeff-pruned (skipped) columns must stay FINITE so the
-        # vector Wz = -(PX*Wx + PY*Wy)/PZ below is 0 (Wx=Wy=0 there) and not NaN
-        # from inf*0.
-        PX = np.zeros((Nq, m))
-        PY = np.zeros((Nq, m))
-        Wx = np.zeros((Nq, m), dtype=np.complex128)
-        Wy = np.zeros((Nq, m), dtype=np.complex128)
-        for j in range(m):
-            if coeff_frac > 0.0 and cmax_p[j] < coeff_frac * gmax_c:
-                continue                            # negligible momentum: skip
-            pxi = float(pxc[j])
-            pyi = float(pyc[j])
-            pz_in = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
-            uxin = np.full(Nq, pxi / pz_in)
-            uyin = np.full(Nq, pyi / pz_in)
-            dt = ray_transfer_jacobian(qx.copy(), qy.copy(), uxin, uyin,
-                                       surfs, wavelength, per_surface=False)
-            J, jalive = _fresnel_jones_matrix_per_beamlet(
-                qx.copy(), qy.copy(), uxin, uyin, prescription, wavelength)
-            uxo = dt.ux
-            uyo = dt.uy
-            xv = dt.x + z_image * uxo
-            yv = dt.y + z_image * uyo
-            opd_tot = dt.opd + z_image * np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
-            Mleg = np.tile(np.eye(4), (Nq, 1, 1))
-            Mleg[:, 0, 2] = z_image
-            Mleg[:, 1, 3] = z_image
-            M = Mleg @ dt.jacobian
-            go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
-            gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5
-            A = M[:, 0:2, 0:2]
-            B = M[:, 0:2, 2:4] * gi
-            Cc = M[:, 2:4, 0:2] * go[:, None, None]
-            D = M[:, 2:4, 2:4] * (go[:, None, None] * gi)
-            Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
-            a = np.sqrt(_det2(Z))
-            a = np.where(a.real < 0, -a, a)
-            base = C * a * np.exp(1j * k * opd_tot)      # scalar beamlet weight
-            invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
-            QX[:, j] = xv
-            QY[:, j] = yv
-            PX[:, j] = uxo * invo
-            PY[:, j] = uyo * invo
-            cxi = cx[:, j]
-            cyi = cy[:, j]
-            # apply the 2x2 Jones to the (Ex, Ey) coefficient, weight by scalar
-            ex_out = J[:, 0, 0] * cxi + J[:, 0, 1] * cyi
-            ey_out = J[:, 1, 0] * cxi + J[:, 1, 1] * cyi
-            alv = np.asarray(dt.alive, bool) & np.asarray(jalive, bool)
-            Wx[:, j] = np.where(alv, base * ex_out, 0.0)
-            Wy[:, j] = np.where(alv, base * ey_out, 0.0)
-        # longitudinal Ez per beamlet: E.k = 0 -> Ez = -(px*Ex + py*Ey)/pz
-        PZ = np.sqrt(np.maximum(1.0 - PX ** 2 - PY ** 2, 1e-12))
-        Wz = -(PX * Wx + PY * Wy) / PZ
-        _reconstruct_into(exr, exi, QX, QY, PX, PY, Wx, x0, y0, dx, dyg,
-                          Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
-        _reconstruct_into(eyr, eyi, QX, QY, PX, PY, Wy, x0, y0, dx, dyg,
-                          Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
-        _reconstruct_into(ezr, ezi, QX, QY, PX, PY, Wz, x0, y0, dx, dyg,
-                          Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
+    for qs, qe in qbounds:                              # POSITION-lattice chunk
+        qxc0 = qx[qs:qe]
+        qyc0 = qy[qs:qe]
+        nqc = qe - qs
+        cx_full_c, cy_full_c = _cxy(qxc0, qyc0, px, py, True) if use_sep \
+            else (None, None)
+        gmax_c = 0.0
+        for cs in range(0, Np, cw):                     # momentum chunk
+            ce = min(cs + cw, Np)
+            m = ce - cs
+            pxc = px[cs:ce]
+            pyc = py[cs:ce]
+            if use_sep:
+                cx = cx_full_c[:, cs:ce]
+                cy = cy_full_c[:, cs:ce]
+            else:
+                cx, cy = _cxy(qxc0, qyc0, pxc, pyc, False)
+            cmax_p = None
+            if coeff_frac > 0.0 and keep_mom is None:
+                cmax_p = np.max(np.sqrt(np.abs(cx) ** 2 + np.abs(cy) ** 2),
+                                axis=0)
+                gmax_c = max(gmax_c, float(cmax_p.max()))
+            QX = np.empty((nqc, m))
+            QY = np.empty((nqc, m))
+            # PX/PY zero-init: coeff-pruned (skipped) columns must stay FINITE so
+            # Wz = -(PX*Wx + PY*Wy)/PZ is 0 (Wx=Wy=0 there) not NaN from inf*0.
+            PX = np.zeros((nqc, m))
+            PY = np.zeros((nqc, m))
+            Wx = np.zeros((nqc, m), dtype=np.complex128)
+            Wy = np.zeros((nqc, m), dtype=np.complex128)
+            for j in range(m):
+                if coeff_frac > 0.0:
+                    if keep_mom is not None:
+                        if not keep_mom[cs + j]:
+                            continue
+                    elif cmax_p[j] < coeff_frac * gmax_c:
+                        continue
+                pxi = float(pxc[j])
+                pyi = float(pyc[j])
+                pz_in = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
+                uxin = np.full(nqc, pxi / pz_in)
+                uyin = np.full(nqc, pyi / pz_in)
+                dt = ray_transfer_jacobian(qxc0.copy(), qyc0.copy(), uxin, uyin,
+                                           surfs, wavelength, per_surface=False)
+                J, jalive = _fresnel_jones_matrix_per_beamlet(
+                    qxc0.copy(), qyc0.copy(), uxin, uyin, prescription,
+                    wavelength)
+                uxo = dt.ux
+                uyo = dt.uy
+                xv = dt.x + z_image * uxo
+                yv = dt.y + z_image * uyo
+                opd_tot = dt.opd + z_image * np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
+                Mleg = np.tile(np.eye(4), (nqc, 1, 1))
+                Mleg[:, 0, 2] = z_image
+                Mleg[:, 1, 3] = z_image
+                M = Mleg @ dt.jacobian
+                go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
+                gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5
+                A = M[:, 0:2, 0:2]
+                B = M[:, 0:2, 2:4] * gi
+                Cc = M[:, 2:4, 0:2] * go[:, None, None]
+                D = M[:, 2:4, 2:4] * (go[:, None, None] * gi)
+                Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
+                a = np.sqrt(_det2(Z))
+                a = np.where(a.real < 0, -a, a)
+                base = C * a * np.exp(1j * k * opd_tot)  # scalar beamlet weight
+                invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
+                QX[:, j] = xv
+                QY[:, j] = yv
+                PX[:, j] = uxo * invo
+                PY[:, j] = uyo * invo
+                cxi = cx[:, j]
+                cyi = cy[:, j]
+                # apply the 2x2 Jones to (Ex, Ey), weight by the scalar amplitude
+                ex_out = J[:, 0, 0] * cxi + J[:, 0, 1] * cyi
+                ey_out = J[:, 1, 0] * cxi + J[:, 1, 1] * cyi
+                alv = np.asarray(dt.alive, bool) & np.asarray(jalive, bool)
+                Wx[:, j] = np.where(alv, base * ex_out, 0.0)
+                Wy[:, j] = np.where(alv, base * ey_out, 0.0)
+            # longitudinal Ez per beamlet: E.k = 0 -> Ez = -(px*Ex + py*Ey)/pz
+            PZ = np.sqrt(np.maximum(1.0 - PX ** 2 - PY ** 2, 1e-12))
+            Wz = -(PX * Wx + PY * Wy) / PZ
+            _reconstruct_into(exr, exi, QX, QY, PX, PY, Wx, x0, y0, dx, dyg,
+                              Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
+            _reconstruct_into(eyr, eyi, QX, QY, PX, PY, Wy, x0, y0, dx, dyg,
+                              Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
+            _reconstruct_into(ezr, ezi, QX, QY, PX, PY, Wz, x0, y0, dx, dyg,
+                              Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
     return exr + 1j * exi, eyr + 1j * eyi, ezr + 1j * ezi
 
 
@@ -1079,6 +1130,16 @@ def apply_real_lens_auto(
     dispatched result is high-NA-accurate as well as caustic-accurate.  Because
     FGA matches GBD in smooth regions, the dispatch is a SPEED choice biased
     toward accuracy: when the caustic detector is uncertain it prefers FGA.
+
+    .. note::
+       :func:`apply_real_lens_universal` is the **canonical** dispatcher -- a
+       superset that also routes low-NA planes to the wave-exact phase-screen and
+       high-NA collimated planes to the sub-nm ``traced`` OPL.  This 2-way GBD/FGA
+       router is the beamlet-only subset (both members launch beamlets along the
+       local phase gradient, so BOTH already handle a single-valued diverging beam
+       -- unlike bare ``traced``, which is why ``universal`` needs its collimation
+       split but this router does not).  Prefer ``universal`` unless you
+       specifically want the GBD-vs-FGA choice.
 
     ``method='gbd'`` / ``'fga'`` force the choice.  ``return_method=True`` also
     returns the ``'gbd'``/``'fga'`` string actually used.  ``fga_kwargs`` /
@@ -1259,6 +1320,21 @@ def apply_real_lens_universal(
     forwards per-method extra arguments.  ``dy`` (anamorphic y pitch) is
     forwarded to whichever member runs, including the exact angular-spectrum
     output leg.
+
+    This is the **canonical** auto-dispatcher (:func:`apply_real_lens_auto` is the
+    older GBD/FGA-only 2-way subset).
+
+    .. note::
+       **Split-step callers.**  The near-caustic -> ``'fga'`` decision keys on
+       ``output_plane_distance`` (the geometric caustic lies DOWNSTREAM of the
+       exit vertex).  A caller that applies the lens at ``output_plane_distance=0``
+       and does its OWN downstream free-space propagation (a split-step BPM /
+       manual ASM) therefore never triggers the ``'fga'`` branch -- at the vertex a
+       single-valued field routes only to ``'phase_screen'`` / ``'traced'``
+       (or ``'fga'`` if it is itself multi-valued).  If you split the lens and the
+       propagation and want caustic-accurate rendering, pass the full
+       ``output_plane_distance`` here (let the dispatcher finish the leg) or force
+       ``method='fga'``.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_universal')

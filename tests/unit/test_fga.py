@@ -350,11 +350,11 @@ def test_fga_memory_chunking_numerically_identical():
             'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
                           'glass_after': 'air', 'semi_diameter': N * dx / 2}],
             'thicknesses': []}
-    # separable=False pins ONE analysis method so this tests the chunking
-    # (additive reorder) in isolation: 'auto' would let mem_budget_mb trip the F2
-    # guard's fallback (separable c_full doesn't fit 2 MB -> direct), and the
-    # separable-vs-direct round-off (~1e-4, below the FGA floor) is covered by
-    # test_fga_separable_kernels_match_direct_and_oracle instead.
+    # separable=False pins ONE analysis method so this tests the momentum-chunk
+    # additive reorder in isolation (the separable-vs-direct round-off is covered
+    # by test_fga_separable_kernels_match_direct_and_oracle; the position-lattice
+    # Nq-chunk by test_fga_nq_chunk_bounds_memory).  Here mem_budget_mb=2 exercises
+    # BOTH the momentum chunk and Nq-chunking on the same direct path.
     kw = dict(prescription=flat, wavelength=_WL, dx=dx,
               output_plane_distance=300e-6, w0_factor=8.0, p_max=0.06, n_p=13,
               separable=False)
@@ -370,24 +370,22 @@ def test_fga_memory_chunking_numerically_identical():
     assert np.max(np.abs(vchunk - vfull)) < 1e-9
 
 
-def test_fga_mem_guard_large_aperture():
-    """F2/F3: mem_budget_mb bounds MOMENTUM-chunk memory but NOT the position
-    lattice Nq.  The separable c_full (Nq*Np, allocated whole) auto-falls-back to
-    the per-chunk direct analysis when it would exceed the budget (no up-front
-    OOM), and a genuinely oversized Nq raises a CLEAR error instead of a raw
-    multi-GB MemoryError."""
-    from lumenairy.propagators.fga import _fga_mem_guard
-    assert _fga_mem_guard(10_000, 225, True, None, "t") is True     # no budget
-    # F2 fallback: separable c_full (Nq*Np*16 = 720 MB) exceeds a 1 MB budget
-    assert _fga_mem_guard(200_000, 225, True, 1, "t") is False
-    # small overshoot of a soft budget still runs (no error)
-    assert _fga_mem_guard(50_000, 225, False, 1, "t") is False
-    # F3 clear-error: a genuinely oversized Nq (floor > budget AND > 4 GB) raises
-    with pytest.raises(MemoryError, match="position lattice"):
-        _fga_mem_guard(20_000_000, 225, True, 100, "apply_real_lens_fga")
-    # integration: a budget below the separable c_full forces the fallback to the
-    # direct analysis, and the field is unchanged (fallback IS the exact direct
-    # path -- ~FGA floor, cross-checked in the separable no-loss test)
+def test_fga_nq_chunk_bounds_memory():
+    """F3: mem_budget_mb now bounds BOTH dimensions -- momenta (cw) AND the
+    POSITION lattice (nq_chunk) -- so a large aperture runs within the budget as
+    an additive sum over lattice chunks (no OOM), giving the SAME field as the
+    un-chunked full swarm to round-off, for separable + direct + coeff-pruning +
+    vector.  Only an absurd budget (a single lattice point can't fit) raises."""
+    from lumenairy.propagators.fga import _resolve_nq_chunk, apply_real_lens_fga_vector
+    # sizer: None when it fits / no budget; chunks when it doesn't; raises only if
+    # even one lattice point can't fit
+    assert _resolve_nq_chunk(4096, 169, True, 169, None, "t") is None    # no budget
+    assert _resolve_nq_chunk(4096, 169, True, 169, 10_000, "t") is None  # fits whole
+    nqc = _resolve_nq_chunk(4096, 169, True, 169, 3, "t")               # must chunk
+    assert nqc is not None and 1 <= nqc < 4096
+    with pytest.raises(MemoryError, match="single position-lattice point"):
+        _resolve_nq_chunk(10_000, 225, True, 225, 0.0001, "apply_real_lens_fga")
+    # integration: a budget forcing MANY lattice chunks reproduces the full swarm
     N, dx = 96, 0.7e-6
     xs = (np.arange(N) - N / 2) * dx
     Xg, Yg = np.meshgrid(xs, xs)
@@ -398,10 +396,20 @@ def test_fga_mem_guard_large_aperture():
             'thicknesses': []}
     kw = dict(prescription=flat, wavelength=_WL, dx=dx,
               output_plane_distance=200e-6, w0_factor=6.0, p_max=0.1, n_p=13)
-    sep = apply_real_lens_fga(u0, separable=True, **kw)
-    fell_back = apply_real_lens_fga(u0, mem_budget_mb=1, **kw)   # c_full>1MB -> direct
-    assert not np.isnan(fell_back).any()
-    assert _fid(fell_back, sep) > 0.9999      # fallback is no-loss vs separable
+    # Nq = (96/2)^2 = 2304; mem_budget_mb=2 chunks it into many lattice pieces
+    for sep, cf in ((True, 1e-3), (False, 0.0)):
+        full = apply_real_lens_fga(u0, separable=sep, coeff_frac=cf, **kw)
+        chunked = apply_real_lens_fga(u0, separable=sep, coeff_frac=cf,
+                                      mem_budget_mb=2, **kw)
+        assert not np.isnan(chunked).any()
+        assert np.max(np.abs(chunked - full)) < 1e-9   # bit-close to full swarm
+    # vector too (NaN-safe Ez under Nq-chunking)
+    vfull = apply_real_lens_fga_vector(np.stack([u0, 0.3 * u0]),
+                                       return_longitudinal=True, **kw)
+    vchunk = apply_real_lens_fga_vector(np.stack([u0, 0.3 * u0]), mem_budget_mb=2,
+                                        return_longitudinal=True, **kw)
+    assert not np.isnan(vchunk).any()
+    assert np.max(np.abs(vchunk - vfull)) < 1e-9
 
 
 def test_fga_position_pruning_no_loss():
