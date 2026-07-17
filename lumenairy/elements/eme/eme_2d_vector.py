@@ -603,11 +603,15 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
 
     found = []                                        # (qz2, multiplicity)
 
-    def _refine_accept(bracket):
-        """Brent-refine a candidate within ``bracket`` and, iff it is a true
-        (rank-drop) mode, append ``(qz2, multiplicity)`` to ``found``."""
-        r = minimize_scalar(f, bracket=bracket, method="brent",
-                            options={"xtol": 1e-7})
+    def _refine_accept(lo_b, hi_b):
+        """Refine a candidate within ``[lo_b, hi_b]`` and, iff it is a true
+        (rank-drop) mode, append ``(qz2, multiplicity)`` to ``found``.  Uses
+        BOUNDED Brent (not a 3-point bracket): ``find_peaks`` can return a dip on
+        a ``sigma_min`` plateau where the bracketed-Brent precondition
+        ``f(mid) < f(ends)`` fails and raises -- a bounded solve on the same
+        interval finds the interior minimum without that requirement."""
+        r = minimize_scalar(f, bounds=(lo_b, hi_b), method="bounded",
+                            options={"xatol": 1e-7})
         s = _block_singvals(strips, Lx, Nx, k0, kx0, r.x, ky0, Ly)
         # clean rank-drop test, degeneracy-agnostic: a genuine k-fold mode has a
         # sharp GAP s_k << s_{k+1} somewhere in the smallest few singular values
@@ -638,7 +642,7 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     d = np.array([f(q) for q in grid])
     peaks, _ = find_peaks(-d, height=-tol)
     for i in peaks:
-        _refine_accept((grid[i - 1], grid[i], grid[i + 1]))
+        _refine_accept(grid[i - 1], grid[i + 1])
     found.sort(key=lambda t: -t[0])
     out = []
     for q, m in found:
