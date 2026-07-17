@@ -4,6 +4,47 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.24.3] — 2026-07-17
+
+### Fixed
+
+- **The vector-EME 2-D Bloch mode-finder (`layer_vector_modes`) no longer
+  flakily under-recovers the mode band across LAPACK backends.**  It detected
+  modes as strict 3-point grid local minima of `sigma_min(qz^2)`
+  (`d[i]<d[i-1] and d[i]<d[i+1] and d[i]<tol`); in the closely-packed structured
+  band whether a dip registered depended on the scan-grid alignment and on the
+  per-point `sigma_min` values, which wobble across BLAS/LAPACK backends -- so
+  the recovered mode count varied run-to-run on different CI runners (recall
+  swung 9..16/16, tripping the completeness assertion).  Detection now samples
+  on a grid dense enough to resolve the packed band (`>= _DETECT_PPU` points per
+  unit `qz^2`, independent of `n_scan`) and picks dips with
+  `scipy.signal.find_peaks` (plateau/tie-robust), and the rank-drop `ratio_tol`
+  default is tightened `1e-2 -> 1e-3` (real modes rank-drop `~1e-6` while a
+  spurious `det(G)` ghost-zero only `~5e-3`, a 2-3 decade margin) so the denser
+  detection does not admit spurious.  Recall is now backend-stable at the full
+  band with spurious `<= 1`.
+- **FGA's strongly-diverging-beam fidelity cap is RESOLVED via adaptive
+  phase-space sampling -- it was a quadrature-resolution artifact, NOT a
+  frozen-approximation limit.**  v5.24.2 documented a ~`0.93` fidelity ceiling
+  for a beam diverging at ~`0.1` rad and ascribed it to the fixed (frozen)
+  beamlet width.  That diagnosis was wrong.  Leading-order Herman-Kluk / frozen-
+  Gaussian propagation is *identically exact* for a quadratic Hamiltonian --
+  and free-space propagation is quadratic (Lasser & Lubich, *Acta Numerica* 29,
+  229 (2020); Kröninger, Lasser & Vaníček, *Front. Phys.* 11:1106324 (2023):
+  "exact for harmonic motion... error only due to Monte-Carlo integration").
+  The residual is therefore entirely the **phase-space quadrature**, and the cap
+  was simply a too-coarse momentum spacing `dp = 2*p_max/(n_p-1)`: a diverging
+  beam's broad angular footprint was under-sampled at the old fixed `n_p`.
+  `apply_real_lens_fga` / `_vector` now auto-size the swarm when `p_max` / `n_p`
+  are left `None` (the new default): `p_max` is set from the field's own angular
+  content (FFT power spectrum, capped by the system NA) and `n_p` is chosen so
+  `dp <= ~0.008`.  A beam diverging at ~`0.09` rad now reconstructs to
+  fidelity `> 0.998` (from `~0.93`) with the same small swarm sizes for compact
+  fields; the fix is field-size-independent (a large collimated beam still gets
+  a small `n_p`, no over-refinement).  An explicit `p_max` / `n_p` is always
+  honoured.  Supersedes the "Documented FGA's diverging-beam limitation" note
+  in 5.24.2.
+
 ## [5.24.2] — 2026-07-17
 
 ### Added

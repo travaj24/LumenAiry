@@ -129,6 +129,43 @@ def test_fga_beats_gbd_at_spherical_aberration_caustic():
         assert ef < 0.15                     # and to the documented ~few-% floor
 
 
+def test_fga_diverging_beam_auto_sampling():
+    """A strongly-DIVERGING beam free-space-propagated by FGA reconstructs to
+    HIGH fidelity under the DEFAULT (auto) phase-space sampling.
+
+    Leading-order FGA/Herman-Kluk is EXACT for a quadratic Hamiltonian (free
+    space is one; Lasser & Lubich, Acta Numerica 29 (2020)), so the historical
+    ~0.93 fidelity cap was NOT a frozen-approximation error but a too-coarse
+    momentum spacing ``dp`` -- a diverging beam's broad phase-space footprint was
+    under-sampled at the old fixed ``n_p``.  Auto-sizing ``n_p`` (so ``dp`` is
+    fine) and ``p_max`` (to the field's angular content) restores fidelity to
+    ~1.  A deliberately coarse fixed ``n_p`` reproduces the old cap, proving the
+    sampling -- not the approximation order -- is the lever."""
+    N, dx = 256, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    k = 2 * np.pi / _WL
+    r2 = Xg ** 2 + Yg ** 2
+    div = (np.exp(-r2 / (28e-6) ** 2)
+           * np.exp(1j * k * r2 / (2 * 0.6e-3))).astype(np.complex128)  # ~0.09 rad
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    z = 0.5e-3
+    ref = angular_spectrum_propagate(div, z, _WL, dx)
+    # DEFAULT (auto) sampling -> high fidelity (the fix; was ~0.93)
+    auto = apply_real_lens_fga(div, prescription=flat, wavelength=_WL, dx=dx,
+                               output_plane_distance=z, w0_factor=5.0)
+    fa = _fid(auto, ref)
+    assert fa > 0.99
+    # a deliberately COARSE fixed sampling reproduces the old under-resolved cap
+    coarse = apply_real_lens_fga(div, prescription=flat, wavelength=_WL, dx=dx,
+                                 output_plane_distance=z, w0_factor=5.0,
+                                 p_max=0.14, n_p=13)   # dp ~ 0.023, too coarse
+    assert _fid(coarse, ref) < fa                      # sampling IS the lever
+
+
 def test_auto_dispatcher_routes_and_matches():
     """apply_real_lens_auto detects the caustic zone, routes far planes to GBD
     and near-focus planes to FGA, and its output equals the chosen propagator's

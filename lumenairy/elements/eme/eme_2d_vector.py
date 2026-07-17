@@ -425,6 +425,17 @@ def _global_block_G(wvk, t):
 _NULL_KMAX = 6      # max null-space dimension the rank-drop test scans for (a
 #                     uniform layer's +-ky x 2-pol gives 4; >6 is rare)
 
+# Robust mode detection (backend-invariant).  The structured band is DENSE --
+# sigma_min stays low across the whole qz^2 range, so modes are closely packed --
+# and a mode is a DIP of sigma_min toward its floor.  Detect on a grid of at
+# least _DETECT_PPU points per unit qz^2 (resolves the close dips regardless of
+# the caller's n_scan) and pick dips with scipy ``find_peaks`` (proper plateau /
+# tie handling).  This replaces the strict 3-point grid local-minimum test, whose
+# registration flipped with grid alignment and the per-point sigma_min wobble
+# that varies across BLAS backends -- so real modes flickered in/out of the set
+# (flaky recall 9..16/16 across CI runners).
+_DETECT_PPU = 8     # detection-scan points per unit qz^2 (dense-band resolution)
+
 
 def _sigma_min_invpow(Geq, iters=60, tol=1e-14):
     """``sigma_min(Geq)`` by inverse-power iteration on a SPARSE LU.
@@ -527,7 +538,7 @@ def _fd_eig_dist(strips, Lx, Nx, Ly, k0, kx0, ky0, qz2, ny):
 
 
 def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
-                       n_scan=400, tol=5e-2, ratio_tol=1e-2, merge_rtol=3e-3,
+                       n_scan=400, tol=5e-2, ratio_tol=1e-3, merge_rtol=3e-3,
                        return_multiplicity=False, verify=False, verify_ny=None,
                        verify_tol=1.0, solver="dense"):
     """Full-vector 2-D Bloch modes ``qz^2`` of a y-strip-sectioned layer (the
@@ -541,9 +552,16 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     (so a depth threshold alone cannot separate real modes from spurious dips),
     acceptance uses a degeneracy-agnostic RANK-DROP / GAP test: a genuine k-fold
     mode has a sharp jump ``s_k << s_{k+1}`` among the smallest singular values,
-    while a spurious dip decays smoothly.  Candidate minima of ``sigma_min`` below
-    ``tol`` are Brent-refined and kept iff the smallest gap among the bottom
-    ``_NULL_KMAX`` values is ``< ratio_tol``; deduped within ``merge_rtol``.
+    while a spurious dip decays smoothly.  Detection: ``sigma_min(qz^2)`` is
+    sampled on a grid dense enough to resolve the closely-packed structured band
+    (at least ``_DETECT_PPU`` points per unit ``qz^2``, independent of ``n_scan``)
+    and dips are picked with ``scipy.signal.find_peaks`` (plateau/tie-robust --
+    the earlier strict 3-point grid-local-minimum test flickered with grid
+    alignment and the per-point ``sigma_min`` wobble that varies across LAPACK
+    backends, giving flaky mode counts).  Each dip is Brent-refined and kept iff
+    the smallest gap among the bottom ``_NULL_KMAX`` singular values is
+    ``< ratio_tol``; deduped within ``merge_rtol``.  (``n_scan`` is retained for
+    API compatibility and as a floor on the detection density.)
 
     ``return_multiplicity`` : also return the per-mode degeneracy ``k`` (the
     rank-drop location -- 1 non-degenerate, 2 a TE/TM pair, ...).
@@ -578,30 +596,53 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
             "the cell physics uses sum(h) while the Bloch wrap phase uses Ly, so "
             "they must agree (documented contract: heights sum to Ly).")
     lo, hi = qz2_range
-    grid = np.linspace(lo, hi, n_scan)
     vny = verify_ny if verify_ny is not None else max(48, 6 * len(strips))
 
     def f(q):
         return dispersion_vec(strips, Lx, Nx, k0, kx0, q, ky0, Ly, solver)
 
-    d = np.array([f(q) for q in grid])
     found = []                                        # (qz2, multiplicity)
-    for i in range(1, len(grid) - 1):
-        if d[i] < d[i - 1] and d[i] < d[i + 1] and d[i] < tol:
-            r = minimize_scalar(f, bracket=(grid[i - 1], grid[i], grid[i + 1]),
-                                method="brent", options={"xtol": 1e-7})
-            s = _block_singvals(strips, Lx, Nx, k0, kx0, r.x, ky0, Ly)
-            # clean rank-drop test, degeneracy-agnostic: a genuine k-fold mode has
-            # a sharp GAP s_k << s_{k+1} somewhere in the smallest few singular
-            # values (k=1 non-degenerate; k=2 TE/TM pair; k=4 a uniform layer's
-            # +-ky x 2-pol; ...), while a spurious dip decays SMOOTHLY (no gap).
-            sa = s[::-1]                                  # ascending
-            gaps = sa[:_NULL_KMAX] / sa[1:_NULL_KMAX + 1]
-            if s[-1] < tol and float(gaps.min()) < ratio_tol:
-                if verify and _fd_eig_dist(
-                        strips, Lx, Nx, Ly, k0, kx0, ky0, r.x, vny) > verify_tol:
-                    continue                              # no FD mode nearby -> spurious
-                found.append((r.x, int(np.argmin(gaps)) + 1))
+
+    def _refine_accept(lo_b, hi_b):
+        """Refine a candidate within ``[lo_b, hi_b]`` and, iff it is a true
+        (rank-drop) mode, append ``(qz2, multiplicity)`` to ``found``.  Uses
+        BOUNDED Brent (not a 3-point bracket): ``find_peaks`` can return a dip on
+        a ``sigma_min`` plateau where the bracketed-Brent precondition
+        ``f(mid) < f(ends)`` fails and raises -- a bounded solve on the same
+        interval finds the interior minimum without that requirement."""
+        r = minimize_scalar(f, bounds=(lo_b, hi_b), method="bounded",
+                            options={"xatol": 1e-7})
+        s = _block_singvals(strips, Lx, Nx, k0, kx0, r.x, ky0, Ly)
+        # clean rank-drop test, degeneracy-agnostic: a genuine k-fold mode has a
+        # sharp GAP s_k << s_{k+1} somewhere in the smallest few singular values
+        # (k=1 non-degenerate; k=2 TE/TM pair; k=4 a uniform layer's +-ky x 2-pol;
+        # ...), while a spurious dip decays SMOOTHLY (no gap).
+        sa = s[::-1]                                  # ascending
+        gaps = sa[:_NULL_KMAX] / sa[1:_NULL_KMAX + 1]
+        if s[-1] < tol and float(gaps.min()) < ratio_tol:
+            if verify and _fd_eig_dist(
+                    strips, Lx, Nx, Ly, k0, kx0, ky0, r.x, vny) > verify_tol:
+                return                                # no FD mode nearby -> spurious
+            found.append((r.x, int(np.argmin(gaps)) + 1))
+
+    # Backend-invariant candidate detection.  The old strict 3-point grid
+    # local-minimum test (d[i]<d[i-1] and d[i]<d[i+1] and d[i]<tol) flakily missed
+    # a mode whenever its dip fell near-symmetrically between two grid points, or
+    # two close dips in this DENSE band merged at the coarse resolution -- and
+    # WHICH dips registered depended on per-point sigma_min values that wobble
+    # across LAPACK backends (recall swung 9..16/16 across CI runners).  Fix:
+    # detect on a grid dense enough to resolve the packed band (>= _DETECT_PPU
+    # points per unit qz^2), and pick dips with find_peaks (plateau/tie-robust)
+    # rather than the strict test.  The rank-drop acceptance (with the tightened
+    # ratio_tol -- real modes rank-drop ~1e-6 while a spurious det(G) ghost-zero
+    # only ~5e-3, a 2-3 decade margin) filters spurious; dedup is unchanged.
+    from scipy.signal import find_peaks
+    dscan = max(n_scan, int(_DETECT_PPU * (hi - lo)) + 1)
+    grid = np.linspace(lo, hi, dscan)
+    d = np.array([f(q) for q in grid])
+    peaks, _ = find_peaks(-d, height=-tol)
+    for i in peaks:
+        _refine_accept(grid[i - 1], grid[i + 1])
     found.sort(key=lambda t: -t[0])
     out = []
     for q, m in found:
