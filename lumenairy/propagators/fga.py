@@ -478,9 +478,45 @@ def _chunk_from_budget(shape, dq_step, chunk, mem_budget_mb):
     return max(1, int(float(mem_budget_mb) * 1e6 / (nq * 100.0)))
 
 
+def _fga_mem_guard(Nq, Np, use_sep, mem_budget_mb, fn, cfull_mult=1.0):
+    """F2/F3 memory guard.  ``mem_budget_mb`` bounds the MOMENTUM-chunk memory
+    only (via ``chunk``); the position lattice ``Nq`` is NOT chunked, and the
+    separable analysis holds the whole ``(Nq x Np)`` coefficient array
+    (``cfull_mult`` copies -- 1 scalar, 2 for the vector Ex/Ey).  Returns the
+    (possibly downgraded) ``use_sep``:
+
+    * if the separable ``c_full`` (``cfull_mult*Nq*Np*16`` B) alone exceeds the
+      budget, fall back to the per-momentum-chunk direct analysis (F2: else it
+      OOMs up front regardless of ``mem_budget_mb``);
+    * if even the cw=1 ray-trace + scatter floor (~600 B / lattice point) exceeds
+      the budget, raise a CLEAR error naming ``Nq`` and the levers, instead of a
+      confusing multi-hundred-GB ``MemoryError`` deep in the swarm (F3)."""
+    if mem_budget_mb is None:
+        return use_sep
+    budget = float(mem_budget_mb) * 1e6
+    cfull = cfull_mult * Nq * Np * 16.0
+    if use_sep and cfull > budget:
+        use_sep = False                       # whole-grid coeff array won't fit
+    # ``mem_budget_mb`` is a SOFT cw-sizing target, not a hard cap -- small
+    # overshoots just run.  Hard-fail only on a genuinely large minimum (cw=1
+    # ray-trace + scatter floor, ~600 B/point) that a budget cannot bound because
+    # the position lattice Nq is not chunked -- a real multi-GB OOM risk (F3).
+    floor = Nq * 600.0 + (cfull if use_sep else 0.0)
+    if floor > budget and floor > 4e9:
+        raise MemoryError(
+            f"{fn}: the position lattice Nq={Nq} (aperture-support / dq_step^2) "
+            f"needs ~{floor / 1e9:.1f} GB at minimum, exceeding mem_budget_mb="
+            f"{mem_budget_mb} MB.  mem_budget_mb bounds the MOMENTUM-chunk memory "
+            f"only -- the per-momentum ray trace + scatter over all {Nq} lattice "
+            f"points is NOT position-lattice-chunked.  Shrink Nq with a larger "
+            f"dq_step or prune_frac, lower n_p, or use a lighter propagator "
+            f"(apply_real_lens / apply_real_lens_traced) for this aperture.")
+    return use_sep
+
+
 def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                       dq_step, p_max, n_p, nsig, chunk=None, prune_frac=0.0,
-                      coeff_frac=0.0, separable="auto"):
+                      coeff_frac=0.0, separable="auto", mem_budget_mb=None):
     """Core FGA transport through a prescription to (last vertex + z_image).
 
     ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches.  ``chunk``
@@ -525,6 +561,11 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
 
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
     use_sep = bool(separable) if separable != "auto" else (n_p >= 5)
+    # F2/F3: the separable c_full is Nq*Np (allocated whole) and the ray trace is
+    # over all Nq -- neither is bounded by mem_budget_mb (which chunks momenta
+    # only).  Downgrade separable / fail fast with guidance if they can't fit.
+    use_sep = _fga_mem_guard(Nq, Np, use_sep, mem_budget_mb,
+                             "apply_real_lens_fga")
     # separable analysis needs the FULL tensor momentum grid, so compute all
     # coefficients ONCE up front and slice per chunk (the analysis array is
     # Nq*Np complex; the memory lever still chunks the far larger beamlet
@@ -673,10 +714,20 @@ def apply_real_lens_fga(
         ``4.0`` while ~1.8x faster (verified: fidelity and caustic peak-intensity
         error identical).
     mem_budget_mb : float, optional
-        Cap peak beamlet memory (~MB) by processing the momentum swarm in chunks.
+        Cap peak beamlet memory (~MB) by processing the MOMENTUM swarm in chunks.
         Peak drops from ``O(Nq*Np)`` to ``O(Nq*chunk)``; the chunked result is
         identical to the full swarm (it only reorders an additive sum), so this
         is a pure memory lever.  ``None`` processes the whole swarm at once.
+        **Scope:** it bounds the momentum dimension only.  The POSITION lattice
+        ``Nq`` (aperture-support / ``dq_step^2``) is NOT chunked -- the
+        per-momentum ray trace + scatter run over all ``Nq`` points -- and the
+        separable analysis holds the whole ``(Nq*Np)`` coefficient array.  So on a
+        LARGE aperture (large ``Nq``): the separable path auto-falls-back to the
+        per-chunk direct analysis if its ``c_full`` would exceed the budget, and a
+        genuinely oversized ``Nq`` raises a clear error (naming the levers) rather
+        than a confusing multi-GB ``MemoryError``.  Control ``Nq`` with ``dq_step``
+        / ``prune_frac`` / ``n_p``; for very large apertures prefer a lighter
+        propagator (``apply_real_lens`` / ``apply_real_lens_traced``).
     chunk : int, optional
         Explicit momenta-per-batch (overrides ``mem_budget_mb``).
     prune_frac : float
@@ -734,7 +785,8 @@ def apply_real_lens_fga(
         E_in, float(dx), dyg, prescription, float(wavelength), w0,
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
-        coeff_frac=float(coeff_frac), separable=separable)
+        coeff_frac=float(coeff_frac), separable=separable,
+        mem_budget_mb=mem_budget_mb)
     if normalize_output == "power":
         pin = float(np.sum(np.abs(E_in) ** 2))
         pout = float(np.sum(np.abs(out) ** 2))
@@ -745,7 +797,8 @@ def apply_real_lens_fga(
 
 def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                              z_image, dq_step, p_max, n_p, nsig, chunk=None,
-                             prune_frac=0.0, coeff_frac=0.0, separable="auto"):
+                             prune_frac=0.0, coeff_frac=0.0, separable="auto",
+                             mem_budget_mb=None):
     """Vector (Jones) FGA transport: returns ``(Ex, Ey, Ez)`` at the output
     plane.  The scalar transport (ray map + HK weight + OPL) is shared by both
     polarization channels; each beamlet additionally carries the per-beamlet 2x2
@@ -781,6 +834,9 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
 
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
     use_sep = bool(separable) if separable != "auto" else (n_p >= 5)
+    # F2/F3 guard (vector holds TWO whole-grid coeff arrays cx_full + cy_full).
+    use_sep = _fga_mem_guard(Nq, Np, use_sep, mem_budget_mb,
+                             "apply_real_lens_fga_vector", cfull_mult=2.0)
     cx_full = cy_full = None
     if use_sep:
         pv = px[:n_p]
@@ -932,7 +988,8 @@ def apply_real_lens_fga_vector(
         E_vec[0], E_vec[1], float(dx), dyg, prescription, float(wavelength), w0,
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
-        coeff_frac=float(coeff_frac), separable=separable)
+        coeff_frac=float(coeff_frac), separable=separable,
+        mem_budget_mb=mem_budget_mb)
     if normalize_output == "power":
         # rescale the transverse (Ex, Ey) to the input power (lossless
         # assumption; the raw FGA scale is shape-correct but w0/sampling-
