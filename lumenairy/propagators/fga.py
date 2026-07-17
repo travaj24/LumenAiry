@@ -1146,10 +1146,13 @@ def apply_real_lens_fga(
     cache_trace : bool
         Opt-in (default ``False``), effective only with ``coarse_stride > 1``.
         The coarse pre-trace (per-momentum coarse ray-data grids + alive masks)
-        is FIELD-INDEPENDENT -- a pure function of the geometry -- so caching it
-        lets a repeated propagation through the SAME optics (a design /
-        optimization loop that varies only the input field) skip the trace on
-        subsequent calls (lever #2).  Bounded, FIFO-evicted cache; each entry is
+        is FIELD-INDEPENDENT given the geometry AND the momentum lattice, so
+        caching it lets a repeated propagation through the SAME optics skip the
+        trace on subsequent calls (lever #2).  Reuse requires the SAME momentum
+        lattice: pass EXPLICIT ``p_max`` / ``n_p`` (or vary only the field PHASE),
+        since the default auto sampler sizes ``p_max`` from each field's angular
+        content -- differing-content fields then get differing swarms and MISS
+        the cache.  Bounded, FIFO-evicted cache; each entry is
         the coarse swarm (~ full swarm / ``coarse_stride^2``), so it trades memory
         for the trace time -- worthwhile for repeated same-optics propagations,
         pointless for a one-shot call.  The field-dependent rim is recomputed each

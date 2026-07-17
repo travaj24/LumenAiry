@@ -242,9 +242,12 @@ def test_fga_cache_trace_reuses_and_is_identical():
     Xg, Yg = np.meshgrid(xs, xs)
     b1 = np.exp(-(Xg ** 2 + Yg ** 2) / (0.6e-3) ** 2).astype(np.complex128)
     b2 = (b1 * np.exp(1j * 0.3 * Xg / dx)).astype(np.complex128)   # diff field
+    # EXPLICIT p_max/n_p so both fields share the SAME momentum lattice (the reuse
+    # condition -- with the default AUTO sampler each field's angular content sets
+    # its own p_max, so differing fields make differing swarms and MISS the cache).
     kw = dict(prescription=_singlet(), wavelength=_WL, dx=dx, w0_factor=5.0,
-              output_plane_distance=30e-3, n_p=11, dq_step=2, prune_frac=0.0,
-              coeff_frac=0.0, coarse_stride=4)
+              output_plane_distance=30e-3, p_max=0.08, n_p=11, dq_step=2,
+              prune_frac=0.0, coeff_frac=0.0, coarse_stride=4)
     ref1 = apply_real_lens_fga(b1, cache_trace=False, **kw)
     ref2 = apply_real_lens_fga(b2, cache_trace=False, **kw)
     _F._COARSE_CACHE.clear()
