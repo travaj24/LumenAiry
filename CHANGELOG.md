@@ -4,6 +4,41 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.24.2] — 2026-07-17
+
+### Added
+
+- **FGA position-lattice (`Nq`) chunking -- `mem_budget_mb` now genuinely bounds
+  memory on large apertures (audit F3, full fix).**  v5.24.1's guard only
+  fell-back/failed-fast; `mem_budget_mb` now chunks BOTH dimensions -- the
+  momentum swarm (`chunk`) AND the position lattice (`nq_chunk`) -- so a large
+  aperture runs within the budget as an additive sum over lattice chunks instead
+  of OOMing.  The separable `(nq_chunk*Np)` coefficient array, the per-momentum
+  ray trace, and the scatter are all bounded by `nq_chunk`.  The chunked result
+  is identical to the un-chunked full swarm to float round-off (verified `~2e-14`
+  across separable/direct/coefficient-pruning/vector); coefficient pruning stays
+  matched via a global-per-momentum-peak pre-pass when the lattice is chunked.
+  Only an absurd budget (a single lattice point can't fit) now raises.
+
+### Changed
+
+- **`apply_real_lens_universal` documented as the canonical dispatcher;
+  `apply_real_lens_auto` as the GBD/FGA-only 2-way subset** (audit secondary
+  note).  Both `auto` members launch beamlets along the local phase gradient, so
+  both already handle a single-valued diverging beam -- `auto` never routes to
+  bare `traced` and so needs no collimation split.
+- **Documented that the near-caustic -> `fga` decision keys on
+  `output_plane_distance`** (audit secondary note): a split-step caller that
+  applies the lens at `output_plane_distance=0` and does its own downstream ASM
+  never triggers the `fga` branch; pass the full distance or force `method='fga'`
+  for caustic-accurate rendering.
+- **Documented FGA's diverging-beam limitation.**  The frozen beamlet width does
+  not spread, so a strongly-EXPANDING wavefront far from a focus is only weakly
+  reconstructed -- fidelity caps ~`0.93` for a beam diverging at ~`0.1` rad,
+  confirmed independent of grid size (a frozen-approximation limit, not an edge
+  effect).  FGA excels AT caustics and for compact fields; the dispatcher already
+  routes diverging single-valued beams to the wave-exact phase-screen.
+
 ## [5.24.1] — 2026-07-16
 
 ### Fixed
