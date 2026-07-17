@@ -8,6 +8,21 @@ All notable changes to the core library are documented here.
 
 ### Fixed
 
+- **The vector-EME 2-D Bloch mode-finder (`layer_vector_modes`) no longer
+  flakily under-recovers the mode band across LAPACK backends.**  It detected
+  modes as strict 3-point grid local minima of `sigma_min(qz^2)`
+  (`d[i]<d[i-1] and d[i]<d[i+1] and d[i]<tol`); in the closely-packed structured
+  band whether a dip registered depended on the scan-grid alignment and on the
+  per-point `sigma_min` values, which wobble across BLAS/LAPACK backends -- so
+  the recovered mode count varied run-to-run on different CI runners (recall
+  swung 9..16/16, tripping the completeness assertion).  Detection now samples
+  on a grid dense enough to resolve the packed band (`>= _DETECT_PPU` points per
+  unit `qz^2`, independent of `n_scan`) and picks dips with
+  `scipy.signal.find_peaks` (plateau/tie-robust), and the rank-drop `ratio_tol`
+  default is tightened `1e-2 -> 1e-3` (real modes rank-drop `~1e-6` while a
+  spurious `det(G)` ghost-zero only `~5e-3`, a 2-3 decade margin) so the denser
+  detection does not admit spurious.  Recall is now backend-stable at the full
+  band with spurious `<= 1`.
 - **FGA's strongly-diverging-beam fidelity cap is RESOLVED via adaptive
   phase-space sampling -- it was a quadrature-resolution artifact, NOT a
   frozen-approximation limit.**  v5.24.2 documented a ~`0.93` fidelity ceiling
