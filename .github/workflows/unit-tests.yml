@@ -29,7 +29,16 @@ jobs:
         # slow gate 35 -> 14 min.  Each shard runs SERIALLY, so the timing/speedup
         # pins need no special handling.
         shard: [1, 2, 3]
-    timeout-minutes: 25
+    # v5.24.3: 25 -> 35.  The fast gate is now duration-BALANCED (complete
+    # .test_durations regenerated to cover ALL fast files incl. test_fga's ~7min
+    # -- previously the file only held the slow/eig timings, so the fast tests
+    # split by COUNT and the heavy uncovered files piled onto one shard, tipping
+    # it over the 20min step cap stochastically (v5.24.2's own merge timed out on
+    # shard 3/3 x2 pythons; a later run on shard 1/3).  Balanced shards run
+    # ~15min; the job cap gives headroom above the raised 30min step cap for
+    # runner-speed variance and the occasional infra stall (a real hang still
+    # exceeds it).
+    timeout-minutes: 35
 
     steps:
       # v5.2.5 (AUDIT_V5_2_3 post-tag fix): fetch full history + tags
@@ -81,10 +90,13 @@ jobs:
         run: |
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=5 -v \
-            --splits 3 --group ${{ matrix.shard }} 2>&1 \
+            --splits 3 --group ${{ matrix.shard }} \
+            --splitting-algorithm least_duration \
+            --durations-path .test_durations 2>&1 \
             | tee unit_test_output.txt
           exit ${PIPESTATUS[0]}
-        timeout-minutes: 20
+        # v5.24.3: 20 -> 30 (balanced ~15min shards + headroom for infra stalls).
+        timeout-minutes: 30
 
       - name: Upload unit-test log on failure
         if: failure()
@@ -241,7 +253,8 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3]
-    timeout-minutes: 25
+    # v5.24.3: 25 -> 35 (matches the raised 30min slow step cap + buffer).
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -287,7 +300,8 @@ jobs:
             --durations-path .test_durations 2>&1 \
             | tee slow_test_output.txt
           exit ${PIPESTATUS[0]}
-        timeout-minutes: 20
+        # v5.24.3: 20 -> 30 (headroom for the eig-heavy shards + infra stalls).
+        timeout-minutes: 30
 
       - name: Upload slow-test log on failure
         if: failure()

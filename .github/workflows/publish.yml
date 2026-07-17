@@ -45,7 +45,9 @@ jobs:
     # at 25, timed out the v5.20.0 publish.  Keep them equal.
     # v5.21.0: 40 -> 47 (step 33 -> 40), again in sync with unit-tests.yml after
     # the v5.21 test batches pushed the fast gate past 33 min.
-    timeout-minutes: 25
+    # v5.24.3: 25 -> 35, in sync with unit-tests.yml (complete .test_durations +
+    # raised step cap; keep the tag-verify gate's headroom equal to the fast gate).
+    timeout-minutes: 35
     strategy:
       fail-fast: true
       matrix:
@@ -152,9 +154,12 @@ jobs:
           # v5.15.0: ``slow`` runs in the unit-tests sharded slow job; excluded here.
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=5 \
-            --splits 3 --group ${{ matrix.shard }}
+            --splits 3 --group ${{ matrix.shard }} \
+            --splitting-algorithm least_duration \
+            --durations-path .test_durations
         # v5.23.0: 40 -> 20 (fast gate now sharded 3 ways across parallel jobs).
-        timeout-minutes: 20
+        # v5.24.3: 20 -> 30 (balanced shards + infra-stall headroom; mirror fast gate).
+        timeout-minutes: 30
 
   build:
     name: Build sdist + wheel
