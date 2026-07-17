@@ -86,10 +86,13 @@ def main():
         print(f"  {label:<38} {t:>8.1f} {base_t/t:>7.1f}x {fdel:>9.6f}")
     print("\n  -> the field is unchanged (fidelity 1.0) at every step: pure speed.")
 
-    # memory lever: chunking is bit-for-bit identical
+    # memory lever: chunking is bit-for-bit identical (separable=False pins one
+    # analysis method so this shows the pure additive-reorder of chunking; with
+    # 'auto', a 2 MB budget trips the F2 fallback to the direct path and the
+    # separable-vs-direct round-off would mask the point).
     print("\n  memory lever (mem_budget_mb bounds peak beamlet memory):")
-    full = la.apply_real_lens_fga(u0, **common)
-    budg = la.apply_real_lens_fga(u0, **common, mem_budget_mb=2)
+    full = la.apply_real_lens_fga(u0, **common, separable=False)
+    budg = la.apply_real_lens_fga(u0, **common, separable=False, mem_budget_mb=2)
     print(f"    mem_budget_mb=2 vs full: max|diff|={np.max(np.abs(full-budg)):.1e}"
           f"  (bit-for-bit identical)")
 

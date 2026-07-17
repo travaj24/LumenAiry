@@ -4,6 +4,45 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.24.1] — 2026-07-16
+
+### Fixed
+
+- **`apply_real_lens_universal` no longer silently blurs a diverging beam
+  (dispatcher audit F1).**  The single-valued high-NA branch routed a
+  single-valued but strongly **diverging** beam (a bare point-source relay) to
+  `traced`, which launches one ray per pixel along the local phase gradient and
+  is only valid for a ~collimated beam -- so the beam was silently blurred
+  (`traced` warns to stderr but still returns the blurred field; the v5.24.0
+  multi-valued guard only covers multi-valued fields).  The smooth-plane case now
+  splits on the beam's residual angular spread using traced's OWN discriminator
+  and threshold (`_carrier_residual_rms` vs `0.02` rad): collimated -> `traced`
+  (unchanged, sub-nm), diverging -> `'phase_screen'` (`apply_real_lens` + exact
+  ASM -- wave-exact in propagation, bounded thin-screen OPD, never a blur, honest
+  `return_method`).  Near-caustic still -> `fga`.
+- **`apply_real_lens_fga` / `_fga_vector` respect `mem_budget_mb` on large
+  apertures instead of OOMing (dispatcher audit F2/F3).**  `mem_budget_mb` bounds
+  the momentum chunk only; the separable analysis allocated the whole `(Nq*Np)`
+  coefficient array up front (hundreds of GB on a 24 mm aperture) regardless of
+  the budget, and the per-momentum ray trace runs over all `Nq` position-lattice
+  points.  A new guard now (1) auto-falls-back the separable path to the
+  per-momentum-chunk direct analysis when its `c_full` would exceed the budget
+  (no accuracy loss -- the direct path is exact), and (2) raises a CLEAR error
+  naming `Nq` and the levers (`dq_step`/`prune_frac`/`n_p`/a lighter propagator)
+  when even the minimum ray-trace floor is a genuinely large overshoot, instead
+  of a confusing multi-GB `MemoryError`.  `mem_budget_mb`'s momentum-only scope is
+  now documented.  (Full position-lattice chunking is deferred -- a 24 mm-aperture
+  FGA is outside the method's practical envelope at any accuracy-preserving
+  `dq_step` regardless.)
+- **De-flaked the vector-EME verify oracle (unrelated eig-heavy CI flake).**
+  `test_eme_2d_vector::test_vector_verify_removes_spurious` flaked on CI (recall
+  9/16, passed on re-run): `_fd_eig_dist` placed the shift-invert `sigma` exactly
+  at the candidate eigenvalue (`i*sqrt(qz2)`), making `(Gc - sigma)` singular so
+  ARPACK's Ritz values were BLAS/backend-sensitive (fine on local MKL, diverged
+  on CI OpenBLAS).  Offset `sigma` off the eigenvalue (`+1e-3` along the imaginary
+  axis, `k=4->6`) to condition the solve deterministically, and pinned the file's
+  eig-heavy tests to one BLAS thread via a `threadpoolctl` fixture.
+
 ## [5.24.0] — 2026-07-16
 
 ### Added

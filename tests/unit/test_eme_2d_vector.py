@@ -16,8 +16,31 @@ import os
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "2")
 
+import contextlib
+
 import numpy as np
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _deterministic_blas():
+    """Pin BLAS to ONE thread for the whole file.  These vector-EME solves are
+    eig-heavy (dense ``eig``/``svd`` in the finder + ARPACK shift-invert in the
+    FD oracle); multi-threaded LAPACK reduces in a non-deterministic order, so
+    the mode set varies run-to-run and the tight recall pins flake.  Single-
+    threaded LAPACK is bit-reproducible within a backend; combined with the
+    well-conditioned (offset-sigma) verify oracle -- which removes the
+    cross-BLAS-backend sensitivity -- the eig tests become reliably pass/fail
+    rather than flaky.  The ``os.environ`` set above is unreliable under pytest
+    (another module may init BLAS first), so pin at RUNTIME via threadpoolctl
+    (the same lever ``rcwa/_core.py`` uses)."""
+    try:
+        from threadpoolctl import threadpool_limits
+        cm = threadpool_limits(limits=1, user_api="blas")
+    except ImportError:                        # threadpoolctl ships with numpy
+        cm = contextlib.nullcontext()
+    with cm:
+        yield
 
 from lumenairy.elements.eme import (
     eps_xy_to_strips,

@@ -235,8 +235,11 @@ def test_universal_dispatcher_multivalued_avoids_traced():
     assert route(gauss.astype(np.complex128)) == "traced"
     assert route(two) == "fga"            # <-- the bug: was 'traced'
     assert route(doe) == "fga"
-    # explicit override in BOTH directions
-    assert route(two, multivalued=False) == "traced"      # trust single-valued
+    # explicit override in BOTH directions.  multivalued=False forces the
+    # single-valued path (NOT fga); the two-emitter field is still non-collimated
+    # there (large residual angular spread), so the F1 collimation split sends it
+    # to phase_screen rather than blurring it via traced.
+    assert route(two, multivalued=False) == "phase_screen"
     assert route(gauss.astype(np.complex128), multivalued=True) == "fga"
 
     # ... and the method it routes multi-valued fields TO is exact for them:
@@ -259,6 +262,50 @@ def test_universal_dispatcher_multivalued_avoids_traced():
                                   p_max=0.16, n_p=17)
     asm_two = angular_spectrum_propagate(twoc, z, _WL, dx)
     assert _fid(fga_two, asm_two) > 0.999     # FGA is exact on the multi-valued field
+
+
+def test_universal_dispatcher_diverging_beam_not_blurred_via_traced():
+    """A single-valued but DIVERGING beam must NOT route to 'traced': traced
+    launches rays along the local phase gradient and is only valid for a
+    ~collimated beam, so a diverging (large residual angular spread) beam would be
+    silently blurred.  'auto' routes it to the wave-exact 'phase_screen' instead
+    (bounded thin-screen OPD, never a blur), using traced's OWN collimation
+    threshold -- while a collimated single-valued beam still gets the sub-nm
+    traced OPL, and neither emits a collimation-blur warning."""
+    import warnings
+
+    from lumenairy.elements import apply_real_lens
+    from lumenairy.propagators.fga import apply_real_lens_universal
+    presc = _hi_na_singlet()
+    N, dx = 192, 0.8e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    k = 2 * np.pi / _WL
+    r2 = Xg ** 2 + Yg ** 2
+    gauss = np.exp(-r2 / (30e-6) ** 2).astype(np.complex128)
+    diverging = (gauss * np.exp(1j * k * r2 / (2 * 0.6e-3))).astype(np.complex128)
+    far = 0.6e-3                           # smooth plane, well before the focus
+
+    def route(E):
+        with warnings.catch_warnings(record=True) as wl:
+            warnings.simplefilter("always")
+            out, m = apply_real_lens_universal(
+                E, prescription=presc, wavelength=_WL, dx=dx,
+                output_plane_distance=far, return_method=True)
+        blur = sum(("collimated-reference" in str(x.message)
+                    or "no single direction" in str(x.message)) for x in wl)
+        return out, m, blur
+
+    _o_c, m_coll, blur_c = route(gauss)
+    out_d, m_div, blur_d = route(diverging)
+    assert m_coll == "traced"                     # collimated single-valued -> traced
+    assert m_div == "phase_screen"                # diverging -> phase_screen (the fix)
+    assert blur_c == 0 and blur_d == 0            # neither is silently blurred
+    # the phase_screen route is a TRUE dispatch: exit-vertex apply_real_lens + ASM
+    ref = angular_spectrum_propagate(
+        apply_real_lens(diverging, prescription=presc, wavelength=_WL, dx=dx),
+        far, _WL, dx)
+    assert np.allclose(out_d, ref)                 # exact-oracle dispatch, no blur
 
 
 def test_fga_normalization_identity_and_energy():
@@ -303,8 +350,14 @@ def test_fga_memory_chunking_numerically_identical():
             'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
                           'glass_after': 'air', 'semi_diameter': N * dx / 2}],
             'thicknesses': []}
+    # separable=False pins ONE analysis method so this tests the chunking
+    # (additive reorder) in isolation: 'auto' would let mem_budget_mb trip the F2
+    # guard's fallback (separable c_full doesn't fit 2 MB -> direct), and the
+    # separable-vs-direct round-off (~1e-4, below the FGA floor) is covered by
+    # test_fga_separable_kernels_match_direct_and_oracle instead.
     kw = dict(prescription=flat, wavelength=_WL, dx=dx,
-              output_plane_distance=300e-6, w0_factor=8.0, p_max=0.06, n_p=13)
+              output_plane_distance=300e-6, w0_factor=8.0, p_max=0.06, n_p=13,
+              separable=False)
     full = apply_real_lens_fga(u0, **kw)
     for c in (apply_real_lens_fga(u0, chunk=1, **kw),
               apply_real_lens_fga(u0, chunk=5, **kw),
@@ -315,6 +368,40 @@ def test_fga_memory_chunking_numerically_identical():
     vchunk = apply_real_lens_fga_vector(np.stack([u0, np.zeros_like(u0)]),
                                         chunk=3, return_longitudinal=True, **kw)
     assert np.max(np.abs(vchunk - vfull)) < 1e-9
+
+
+def test_fga_mem_guard_large_aperture():
+    """F2/F3: mem_budget_mb bounds MOMENTUM-chunk memory but NOT the position
+    lattice Nq.  The separable c_full (Nq*Np, allocated whole) auto-falls-back to
+    the per-chunk direct analysis when it would exceed the budget (no up-front
+    OOM), and a genuinely oversized Nq raises a CLEAR error instead of a raw
+    multi-GB MemoryError."""
+    from lumenairy.propagators.fga import _fga_mem_guard
+    assert _fga_mem_guard(10_000, 225, True, None, "t") is True     # no budget
+    # F2 fallback: separable c_full (Nq*Np*16 = 720 MB) exceeds a 1 MB budget
+    assert _fga_mem_guard(200_000, 225, True, 1, "t") is False
+    # small overshoot of a soft budget still runs (no error)
+    assert _fga_mem_guard(50_000, 225, False, 1, "t") is False
+    # F3 clear-error: a genuinely oversized Nq (floor > budget AND > 4 GB) raises
+    with pytest.raises(MemoryError, match="position lattice"):
+        _fga_mem_guard(20_000_000, 225, True, 100, "apply_real_lens_fga")
+    # integration: a budget below the separable c_full forces the fallback to the
+    # direct analysis, and the field is unchanged (fallback IS the exact direct
+    # path -- ~FGA floor, cross-checked in the separable no-loss test)
+    N, dx = 96, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (14e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx,
+              output_plane_distance=200e-6, w0_factor=6.0, p_max=0.1, n_p=13)
+    sep = apply_real_lens_fga(u0, separable=True, **kw)
+    fell_back = apply_real_lens_fga(u0, mem_budget_mb=1, **kw)   # c_full>1MB -> direct
+    assert not np.isnan(fell_back).any()
+    assert _fid(fell_back, sep) > 0.9999      # fallback is no-loss vs separable
 
 
 def test_fga_position_pruning_no_loss():
