@@ -261,6 +261,50 @@ def test_universal_dispatcher_multivalued_avoids_traced():
     assert _fid(fga_two, asm_two) > 0.999     # FGA is exact on the multi-valued field
 
 
+def test_universal_dispatcher_diverging_beam_not_blurred_via_traced():
+    """A single-valued but DIVERGING beam must NOT route to 'traced': traced
+    launches rays along the local phase gradient and is only valid for a
+    ~collimated beam, so a diverging (large residual angular spread) beam would be
+    silently blurred.  'auto' routes it to the wave-exact 'phase_screen' instead
+    (bounded thin-screen OPD, never a blur), using traced's OWN collimation
+    threshold -- while a collimated single-valued beam still gets the sub-nm
+    traced OPL, and neither emits a collimation-blur warning."""
+    import warnings
+
+    from lumenairy.elements import apply_real_lens
+    from lumenairy.propagators.fga import apply_real_lens_universal
+    presc = _hi_na_singlet()
+    N, dx = 192, 0.8e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    k = 2 * np.pi / _WL
+    r2 = Xg ** 2 + Yg ** 2
+    gauss = np.exp(-r2 / (30e-6) ** 2).astype(np.complex128)
+    diverging = (gauss * np.exp(1j * k * r2 / (2 * 0.6e-3))).astype(np.complex128)
+    far = 0.6e-3                           # smooth plane, well before the focus
+
+    def route(E):
+        with warnings.catch_warnings(record=True) as wl:
+            warnings.simplefilter("always")
+            out, m = apply_real_lens_universal(
+                E, prescription=presc, wavelength=_WL, dx=dx,
+                output_plane_distance=far, return_method=True)
+        blur = sum(("collimated-reference" in str(x.message)
+                    or "no single direction" in str(x.message)) for x in wl)
+        return out, m, blur
+
+    _o_c, m_coll, blur_c = route(gauss)
+    out_d, m_div, blur_d = route(diverging)
+    assert m_coll == "traced"                     # collimated single-valued -> traced
+    assert m_div == "phase_screen"                # diverging -> phase_screen (the fix)
+    assert blur_c == 0 and blur_d == 0            # neither is silently blurred
+    # the phase_screen route is a TRUE dispatch: exit-vertex apply_real_lens + ASM
+    ref = angular_spectrum_propagate(
+        apply_real_lens(diverging, prescription=presc, wavelength=_WL, dx=dx),
+        far, _WL, dx)
+    assert np.allclose(out_d, ref)                 # exact-oracle dispatch, no blur
+
+
 def test_fga_normalization_identity_and_energy():
     """The corrected FGA normalization makes the t=0 resolution of identity exact
     (power ratio ~1, not the pre-fix 2^d=4) and free-space propagation energy-

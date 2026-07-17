@@ -1164,8 +1164,13 @@ def apply_real_lens_universal(
     * ``'fga'`` (:func:`apply_real_lens_fga`) -- HIGH NA **and** near a caustic:
       the only caustic-accurate *and* ray-based (no thin-screen obliquity) option;
     * ``'traced'`` (:func:`lumenairy.elements.apply_real_lens_traced`) -- HIGH NA,
-      smooth AND **single-valued**: per-pixel ray-traced OPL, sub-nm, no
-      thin-screen ceiling.
+      smooth, single-valued AND **~collimated**: per-pixel ray-traced OPL, sub-nm,
+      no thin-screen ceiling.  A single-valued but **diverging** beam (large
+      residual angular spread -- not multi-valued, but not collimated either) is
+      routed to ``'phase_screen'`` instead: traced launches rays along the local
+      phase gradient and would silently blur it, whereas the phase-screen +
+      exact-ASM path is wave-exact in propagation (bounded thin-screen OPD error,
+      never a blur).  The split uses traced's own collimation threshold.
 
     Multi-valued fields never route to ``traced``
     ---------------------------------------------
@@ -1229,17 +1234,37 @@ def apply_real_lens_universal(
             if mv:
                 chosen = "fga"
             else:
-                # single-valued: FGA only near the caustic (fold/cusp), else the
-                # sub-nm traced OPL.  (_caustic_zone's single-row slope model is
-                # itself valid only for single-valued fields, so it is reached
-                # only on this branch.)
+                # single-valued.  Near the caustic (fold/cusp) -> FGA (ray-based,
+                # handles both the divergence and the caustic).  (_caustic_zone's
+                # single-row slope model is itself valid only for single-valued
+                # fields, so it is reached only on this branch.)
                 zone = _caustic_zone(E_in, float(dx), prescription,
                                      float(wavelength))
                 near = False
                 if zone is not None:
                     pad = caustic_pad_dof * float(wavelength) / (na * na)
                     near = (zone[0] - pad) <= opd <= (zone[1] + pad)
-                chosen = "fga" if near else "traced"
+                if near:
+                    chosen = "fga"
+                else:
+                    # smooth plane: the sub-nm traced OPL, BUT traced launches
+                    # rays along the local phase gradient and is only valid for a
+                    # ~collimated beam -- a single-valued but DIVERGING beam (large
+                    # residual angular spread, e.g. a bare point-source relay)
+                    # would be silently blurred.  Route those to the wave-exact
+                    # phase_screen (apply_real_lens + exact ASM) instead -- bounded
+                    # thin-screen OPD error, never a blur.  Uses traced's own
+                    # collimation discriminator + threshold so the split matches
+                    # exactly where traced stops being valid.
+                    from ..elements._lens_traced import (
+                        _NONCOLLIMATED_RESID_THRESH,
+                        _carrier_residual_rms,
+                    )
+                    spread = _carrier_residual_rms(E_in, None, float(wavelength),
+                                                   float(dx))
+                    chosen = ("phase_screen"
+                              if spread > _NONCOLLIMATED_RESID_THRESH
+                              else "traced")
 
     if chosen == "fga":
         out = apply_real_lens_fga(
