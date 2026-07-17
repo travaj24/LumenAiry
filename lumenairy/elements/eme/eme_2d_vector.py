@@ -507,12 +507,22 @@ def _fd_eig_dist(strips, Lx, Nx, Ly, k0, kx0, ky0, qz2, ny):
     mu_xy = _strips_to_mu_xy(strips, Nx, Ly, ny)   # magnetic -> mu-consistent oracle
     G, _, _ = _build_generator(eps_xy, Lx, Ly, Nx, ny, k0, kx0, ky0, mu_xy)
     Gc = G.tocsc()
-    # v5.18.1: fixed ARPACK start vector -> deterministic verify oracle (matches
-    # ref_2d_modes_vector's seeded eigs).  Without it the random start made
-    # layer_vector_modes(verify=True) non-deterministic run-to-run (the
-    # eigenvalues are v0-independent; this removes only the random-start jitter).
-    v0 = np.random.default_rng(0).standard_normal(Gc.shape[0])
-    gam, _ = eigs(Gc, k=4, sigma=1j * np.sqrt(complex(qz2)), v0=v0)
+    # Shift-invert at a small OFFSET from the candidate, never AT it.  A real
+    # mode's FD eigenvalue sits at ``gam = i*sqrt(qz2)``, so a sigma placed
+    # exactly there makes ``(Gc - sigma)`` singular -> the shift-invert LU is
+    # ill-conditioned and ARPACK's Ritz values become BLAS/backend-sensitive
+    # (this, not the start vector, was the cross-environment flake: v5.18.1's
+    # fixed ``v0`` removed only the random-start jitter within one BLAS; the
+    # near-singular solve still diverged MKL-vs-OpenBLAS, dropping real modes).
+    # Offsetting sigma along the imaginary axis by ``1e-3 * sqrt(qz2)`` (<< the
+    # mode spacing, so the target stays the nearest eigenvalue) conditions the
+    # solve deterministically; ``k=6`` gives ARPACK margin to converge the
+    # target.  The test's own oracle (_oracle_band) already uses a band-CENTRE
+    # sigma for the same reason.
+    root = np.sqrt(complex(qz2))
+    sigma = 1j * root * (1.0 + 1e-3)
+    v0 = np.random.default_rng(0).standard_normal(Gc.shape[0]).astype(complex)
+    gam, _ = eigs(Gc, k=6, sigma=sigma, v0=v0)
     return float(np.min(np.abs((-(gam ** 2)).real - qz2)))
 
 
