@@ -166,6 +166,30 @@ def test_fga_diverging_beam_auto_sampling():
     assert _fid(coarse, ref) < fa                      # sampling IS the lever
 
 
+def test_fga_coarse_stride_matches_full():
+    """The opt-in coarse-lattice trace (``coarse_stride>1``) reconstructs the
+    SAME field as the full per-beamlet trace to the FGA floor.
+
+    It traces only a stride-M position sub-lattice per momentum and cubic
+    ``map_coordinates``-interpolates the smooth ray quantities (opd, exit
+    position/direction, prefactor ``a``) to the full lattice -- reconstructing
+    ``AW = C*a*exp(ik*opd)`` at full resolution (the oscillating ``AW`` is never
+    interpolated) -- with a direct-trace RIM fallback where the aperture
+    vignettes the beam.  Opt-in speedup for large / expensive-trace prescriptions;
+    no accuracy loss (default ``coarse_stride=1`` is the exact full trace)."""
+    N, dx = 128, 12e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    coll = np.exp(-(Xg ** 2 + Yg ** 2) / (0.6e-3) ** 2).astype(np.complex128)
+    kw = dict(prescription=_singlet(), wavelength=_WL, dx=dx, w0_factor=5.0,
+              output_plane_distance=30e-3, n_p=11, dq_step=2, prune_frac=0.0,
+              coeff_frac=0.0)
+    full = apply_real_lens_fga(coll, coarse_stride=1, **kw)           # exact
+    for M in (4, 6):
+        coarse = apply_real_lens_fga(coll, coarse_stride=M, **kw)
+        assert _fid(coarse, full) > 0.999      # coarse trace + interp is no-loss
+
+
 def test_auto_dispatcher_routes_and_matches():
     """apply_real_lens_auto detects the caustic zone, routes far planes to GBD
     and near-focus planes to FGA, and its output equals the chosen propagator's
