@@ -235,8 +235,11 @@ def test_universal_dispatcher_multivalued_avoids_traced():
     assert route(gauss.astype(np.complex128)) == "traced"
     assert route(two) == "fga"            # <-- the bug: was 'traced'
     assert route(doe) == "fga"
-    # explicit override in BOTH directions
-    assert route(two, multivalued=False) == "traced"      # trust single-valued
+    # explicit override in BOTH directions.  multivalued=False forces the
+    # single-valued path (NOT fga); the two-emitter field is still non-collimated
+    # there (large residual angular spread), so the F1 collimation split sends it
+    # to phase_screen rather than blurring it via traced.
+    assert route(two, multivalued=False) == "phase_screen"
     assert route(gauss.astype(np.complex128), multivalued=True) == "fga"
 
     # ... and the method it routes multi-valued fields TO is exact for them:
