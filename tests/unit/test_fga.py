@@ -166,6 +166,30 @@ def test_fga_diverging_beam_auto_sampling():
     assert _fid(coarse, ref) < fa                      # sampling IS the lever
 
 
+def test_fga_auto_sampling_conserves_identity_power():
+    """The auto sampler's p_max COMPLETENESS floor (~2/(k*w0), the beamlet
+    momentum width) keeps the t=0 resolution of identity energy-conserving for a
+    COLLIMATED Gaussian.
+
+    Audit S2-2 regression: the field's narrow angular CONTENT alone under-sized
+    ``p_max`` below the frozen beamlet's own momentum width, so the swarm did not
+    resolve the identity -> up to 34% power deficit -- while field FIDELITY stayed
+    ~1 (a pure under-normalization), which a fidelity-only test cannot catch."""
+    N, dx = 256, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    for w in (12e-6, 18e-6, 30e-6):
+        u0 = np.exp(-(Xg ** 2 + Yg ** 2) / w ** 2).astype(np.complex128)
+        out = apply_real_lens_fga(u0, prescription=flat, wavelength=_WL, dx=dx,
+                                  output_plane_distance=0.0)     # DEFAULT (auto)
+        pratio = float(np.sum(np.abs(out) ** 2) / np.sum(np.abs(u0) ** 2))
+        assert pratio > 0.99         # completeness floor conserves power (was ~0.66)
+
+
 def test_fga_coarse_stride_matches_full():
     """The opt-in coarse-lattice trace (``coarse_stride>1``) reconstructs the
     SAME field as the full per-beamlet trace to the FGA floor.

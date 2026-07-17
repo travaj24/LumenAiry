@@ -25,8 +25,13 @@ spherical-aberration caustic** on both field fidelity and peak-intensity error
 (GBD peak error 0.03-0.34 vs FGA 0.01-0.07).
 
 Accuracy knobs.  The reconstruction is normalized so the ``t=0`` resolution of
-identity is exact (energy ratio 1.0; the leading FGA is exact for the paraxial
-quadratic Hamiltonian, so free-space propagation conserves energy to ~1.0).
+identity conserves energy (ratio ~1.0) PROVIDED the momentum swarm covers each
+beamlet's own momentum width ~``2/(k*w0)`` -- the auto sampler enforces this
+completeness floor (an explicit ``p_max`` below it under-normalizes: a narrow
+``p_max`` reproduces the field SHAPE, fidelity ~1, but at reduced power, so use
+``normalize_output='power'`` if you must under-sample).  The leading FGA is exact
+for the paraxial quadratic Hamiltonian, so free-space propagation conserves
+energy to ~1.0.
 The frozen width ``w0`` is the FGA convergence parameter: a wider beamlet is more
 paraxial and gives a cleaner frame, while caustic *resolution* wants a smaller
 ``w0`` -- a standard FGA tradeoff.  The momentum half-range ``p_max`` must cover
@@ -476,6 +481,8 @@ def _default_p_max(prescription, wavelength):
 
 
 _DP_TARGET = 0.008          # auto momentum spacing (direction cosine); see below
+_PMAX_BEAMLET_C = 3.0       # p_max completeness floor = C/(k*w0) (beamlet momentum
+#                             width); C~2-3 keeps the t=0 identity power >0.99
 
 # Lever #3 (coarse-lattice trace + interpolation) tunables.
 _COARSE_INTERP_ORDER = 3    # cubic map_coordinates upsample (opd ~2e-5 waves, well
@@ -561,23 +568,30 @@ def _field_angular_content(E_in, dx, dyg, wavelength, frac=0.999):
     return float(pr[order][min(int(np.searchsorted(cum, frac)), pr.size - 1)])
 
 
-def _resolve_sampling(E_in, dx, dyg, wavelength, prescription, p_max, n_p):
+def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
     """Resolve ``(p_max, n_p)``, auto-sizing either when ``None`` so the
     phase-space swarm is MATCHED to the field: ``p_max`` covers the field's
-    angular content (capped by the system NA), and ``n_p`` makes the momentum
-    spacing ``dp = 2*p_max/(n_p-1)`` fine enough (``~<= _DP_TARGET``) to resolve
-    the phase-space quadrature -- which is what makes FGA accurate on diverging
-    beams (whose broad phase-space footprint the fixed old default under-sampled;
+    angular content AND each beamlet's own momentum width (for completeness),
+    capped by the system NA, and ``n_p`` makes the momentum spacing
+    ``dp = 2*p_max/(n_p-1)`` fine enough (``~<= _DP_TARGET``) to resolve the
+    phase-space quadrature -- which is what makes FGA accurate on diverging beams
+    (whose broad phase-space footprint the fixed old default under-sampled;
     leading FGA is EXACT for free space, so with dp matched a diverging beam
     reconstructs to ~round-off).  An explicit ``p_max`` / ``n_p`` is honoured."""
     if p_max is None:
         na_cap = _default_p_max(prescription, wavelength)
         content = _field_angular_content(E_in, dx, dyg, wavelength)
-        # cover the field's content generously (x1.5 for the spectral tail --
-        # over-wide p_max is harmless at fine dp, only truncation hurts), but
-        # never wider than the system NA cone (x1.5): content beyond the NA is
-        # clipped by the optic anyway, and a wider p_max just inflates n_p.
-        p_max = float(min(1.5 * na_cap, max(0.03, 1.5 * content)))
+        # COMPLETENESS FLOOR (audit S2-2): the swarm must cover each beamlet's OWN
+        # momentum width ~2/(k*w0), else the t=0 resolution of identity loses
+        # power -- a collimated Gaussian has narrow angular CONTENT but the frozen
+        # beamlet still spans +-~2/(k*w0), so the old 0.03 floor gave up to 34%
+        # power deficit (while fidelity stayed ~1, a pure under-normalization).
+        # Floor at _PMAX_BEAMLET_C/(k*w0) (power >0.99).  Cover the field's content
+        # generously (x1.5 spectral tail; over-wide p_max is harmless at fine dp),
+        # never wider than the system NA cone (x1.5; content beyond it is clipped).
+        k = 2.0 * np.pi / wavelength
+        beamlet_floor = _PMAX_BEAMLET_C / (k * w0)
+        p_max = float(min(1.5 * na_cap, max(beamlet_floor, 1.5 * content)))
     if n_p is None:
         # momentum SPACING (direction cosine) fine enough to converge the
         # phase-space quadrature.  Empirically ~0.008 works across beam sizes
@@ -1164,9 +1178,9 @@ def apply_real_lens_fga(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
     dyg = float(dx) if dy is None else float(dy)
-    p_max, n_p = _resolve_sampling(E_in, float(dx), dyg, float(wavelength),
-                                   prescription, p_max, n_p)
     w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
+    p_max, n_p = _resolve_sampling(E_in, float(dx), dyg, float(wavelength), w0,
+                                   prescription, p_max, n_p)
     chunk_eff = _chunk_from_budget(E_in.shape, int(dq_step), chunk, mem_budget_mb)
     out = _fga_through_lens(
         E_in, float(dx), dyg, prescription, float(wavelength), w0,
@@ -1399,9 +1413,9 @@ def apply_real_lens_fga_vector(
     # beam geometry, so its extent/angular-content set the sampling for both)
     _rep = E_vec[0] if (np.sum(np.abs(E_vec[0]) ** 2)
                         >= np.sum(np.abs(E_vec[1]) ** 2)) else E_vec[1]
-    p_max, n_p = _resolve_sampling(_rep, float(dx), dyg, float(wavelength),
-                                   prescription, p_max, n_p)
     w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
+    p_max, n_p = _resolve_sampling(_rep, float(dx), dyg, float(wavelength), w0,
+                                   prescription, p_max, n_p)
     chunk_eff = _chunk_from_budget(E_vec[0].shape, int(dq_step), chunk,
                                    mem_budget_mb)
     ex, ey, ez = _fga_vector_through_lens(
