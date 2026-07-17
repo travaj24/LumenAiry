@@ -43,18 +43,17 @@ recover the absolute scale, and do not set ``p_max`` wider than the actual
 angular content.  This is a representation-regime effect, not the O(eps) FGA
 transport error (which is negligible for lens-like Hamiltonians).
 
-Diverging / expanding inputs (evaluated far from a focus).  The frozen beamlet
-width does NOT spread with propagation, so a strongly-EXPANDING wavefront -- a
-bare diverging point-source relay evaluated well past any focus -- is only
-weakly reconstructed by the (non-spreading) swarm.  At practical sampling the
-fidelity caps around ~0.93 for a beam diverging at ~0.1 rad, essentially
-INDEPENDENT of grid size (verified edge-free at 2x the grid: this is the
-frozen-approximation limit, not an aperture/edge effect).  FGA is at its best AT
-caustics (where it beats GBD) and for compact fields; :func:`apply_real_lens_universal`
-therefore routes a single-valued diverging beam to the wave-exact phase-screen,
-NOT to FGA.  If you force ``method='fga'`` (or call this directly) on such a
-beam, expect reduced fidelity -- prefer ``apply_real_lens`` (phase-screen) or a
-carrier-referenced ``apply_real_lens_traced``.
+Diverging / expanding inputs.  Leading-order FGA/Herman-Kluk is EXACT for the
+(quadratic) free-space Hamiltonian, so a diverging beam's only error is the
+phase-space QUADRATURE -- and the historical ~0.93 fidelity cap was a
+too-coarse MOMENTUM spacing ``dp`` (the diverging beam's broad phase-space
+footprint needs ``dp <~ lambda / beam-extent``), NOT a frozen-approximation
+wall (Lasser & Lubich, *Acta Numerica* 29, 2020; Kroninger, Lasser & Vanicek,
+*Front. Phys.* 11, 2023).  ``p_max=None`` / ``n_p=None`` (the defaults) now
+AUTO-SIZE the swarm to the field -- ``p_max`` to the field's angular content and
+``n_p`` to make ``dp`` fine enough -- so a diverging beam reconstructs to
+fidelity ~1 (e.g. 0.9995 for a beam diverging at ~0.1 rad, up from ~0.93) at a
+modest ``n_p``.  Pass explicit ``p_max``/``n_p`` to override.
 
 Requires the optional ``numba`` accelerator (the pure-NumPy swarm sum is
 impractically slow); install with ``pip install lumenairy[numba]``.
@@ -476,6 +475,64 @@ def _default_p_max(prescription, wavelength):
         return 0.15
 
 
+_DP_TARGET = 0.008          # auto momentum spacing (direction cosine); see below
+
+
+def _field_angular_content(E_in, dx, dyg, wavelength, frac=0.999):
+    """Half-range (direction cosine) of the field's angular spectrum holding
+    ``frac`` of the energy.  ``p_max`` must COVER the field's real angular
+    content -- a diverging / structured field carries content well beyond
+    ``p=0`` (~ its divergence half-angle), a collimated beam ~0.  Momenta the
+    field does NOT contain get a ~zero Gabor coefficient, so sizing ``p_max`` to
+    the field (not to an over-wide fixed cone) keeps the momentum quadrature
+    matched to the field."""
+    E = np.asarray(E_in)
+    ny, nx = E.shape
+    P = np.abs(np.fft.fft2(E)) ** 2
+    px = np.fft.fftfreq(nx, dx) * wavelength                # p_x direction cosine
+    py = np.fft.fftfreq(ny, dyg) * wavelength
+    PX, PY = np.meshgrid(px, py)
+    pr = np.sqrt(PX ** 2 + PY ** 2).ravel()
+    Pf = P.ravel()
+    tot = float(Pf.sum())
+    if not np.isfinite(tot) or tot <= 0.0:
+        return 0.0
+    order = np.argsort(pr)
+    cum = np.cumsum(Pf[order]) / tot
+    return float(pr[order][min(int(np.searchsorted(cum, frac)), pr.size - 1)])
+
+
+def _resolve_sampling(E_in, dx, dyg, wavelength, prescription, p_max, n_p):
+    """Resolve ``(p_max, n_p)``, auto-sizing either when ``None`` so the
+    phase-space swarm is MATCHED to the field: ``p_max`` covers the field's
+    angular content (capped by the system NA), and ``n_p`` makes the momentum
+    spacing ``dp = 2*p_max/(n_p-1)`` fine enough (``~<= _DP_TARGET``) to resolve
+    the phase-space quadrature -- which is what makes FGA accurate on diverging
+    beams (whose broad phase-space footprint the fixed old default under-sampled;
+    leading FGA is EXACT for free space, so with dp matched a diverging beam
+    reconstructs to ~round-off).  An explicit ``p_max`` / ``n_p`` is honoured."""
+    if p_max is None:
+        na_cap = _default_p_max(prescription, wavelength)
+        content = _field_angular_content(E_in, dx, dyg, wavelength)
+        # cover the field's content generously (x1.5 for the spectral tail --
+        # over-wide p_max is harmless at fine dp, only truncation hurts), but
+        # never wider than the system NA cone (x1.5): content beyond the NA is
+        # clipped by the optic anyway, and a wider p_max just inflates n_p.
+        p_max = float(min(1.5 * na_cap, max(0.03, 1.5 * content)))
+    if n_p is None:
+        # momentum SPACING (direction cosine) fine enough to converge the
+        # phase-space quadrature.  Empirically ~0.008 works across beam sizes
+        # (the historical diverging-beam cap was dp ~0.02-0.03, too coarse); it
+        # is roughly field-independent for smooth beams -- a wide collimated beam
+        # has a narrow p_max (few samples) and a small diverging beam a wider
+        # p_max (more), both converging at this spacing -- so n_p scales with
+        # p_max, not with the beam size.  The frame stays hugely over-complete
+        # (Nyquist allows dp up to ~lambda/dq >> this).
+        n_p = int(np.ceil(2.0 * p_max / _DP_TARGET)) | 1
+        n_p = int(min(61, max(7, n_p)))       # clamp: >=7 samples, <=61 (cost)
+    return float(p_max), int(n_p)
+
+
 def _chunk_from_budget(shape, dq_step, chunk, mem_budget_mb):
     """Resolve the momentum-chunk size.  An explicit ``chunk`` wins; otherwise a
     ``mem_budget_mb`` caps peak beamlet memory by sizing the chunk from the
@@ -682,7 +739,7 @@ def apply_real_lens_fga(
     w0_factor: float = 5.0,
     dq_step: int = 2,
     p_max: Optional[float] = None,
-    n_p: int = 15,
+    n_p: Optional[int] = None,
     nsig: float = 3.0,
     mem_budget_mb: Optional[float] = None,
     chunk: Optional[int] = None,
@@ -727,10 +784,16 @@ def apply_real_lens_fga(
     dq_step : int
         Position-lattice stride (beamlet spacing in pixels).
     p_max : float, optional
-        Momentum (direction-cosine) half-range of the swarm.  ``None`` auto-sets
-        it from the prescription NA.
-    n_p : int
+        Momentum (direction-cosine) half-range of the swarm.  ``None`` (default)
+        auto-sizes it to the FIELD's angular content (capped by the system NA) --
+        a diverging beam needs its real content covered, a collimated beam ~0.
+    n_p : int, optional
         Momentum samples per transverse axis (swarm has ``n_p**2`` directions).
+        ``None`` (default) auto-sizes it so the momentum spacing
+        ``dp = 2*p_max/(n_p-1)`` is fine enough (``<~ lambda / field-extent``) to
+        resolve the phase-space quadrature -- the lever that makes FGA accurate on
+        diverging beams (their broad phase-space footprint under-samples at a
+        fixed small ``n_p``).  Clamped to ``[7, 61]`` when auto.
     nsig : float
         Frozen-beamlet window radius in sigmas (per-beamlet cost scales as
         ``nsig**2``).  Default ``3.0``: overlapping beamlets fill the >3-sigma
@@ -800,8 +863,8 @@ def apply_real_lens_fga(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
     dyg = float(dx) if dy is None else float(dy)
-    if p_max is None:
-        p_max = _default_p_max(prescription, wavelength)
+    p_max, n_p = _resolve_sampling(E_in, float(dx), dyg, float(wavelength),
+                                   prescription, p_max, n_p)
     w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
     chunk_eff = _chunk_from_budget(E_in.shape, int(dq_step), chunk, mem_budget_mb)
     out = _fga_through_lens(
@@ -996,7 +1059,7 @@ def apply_real_lens_fga_vector(
     w0_factor: float = 5.0,
     dq_step: int = 2,
     p_max: Optional[float] = None,
-    n_p: int = 15,
+    n_p: Optional[int] = None,
     nsig: float = 3.0,
     mem_budget_mb: Optional[float] = None,
     chunk: Optional[int] = None,
@@ -1030,8 +1093,12 @@ def apply_real_lens_fga_vector(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
     dyg = float(dx) if dy is None else float(dy)
-    if p_max is None:
-        p_max = _default_p_max(prescription, wavelength)
+    # auto-size the swarm from the higher-energy Jones component (both share the
+    # beam geometry, so its extent/angular-content set the sampling for both)
+    _rep = E_vec[0] if (np.sum(np.abs(E_vec[0]) ** 2)
+                        >= np.sum(np.abs(E_vec[1]) ** 2)) else E_vec[1]
+    p_max, n_p = _resolve_sampling(_rep, float(dx), dyg, float(wavelength),
+                                   prescription, p_max, n_p)
     w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
     chunk_eff = _chunk_from_budget(E_vec[0].shape, int(dq_step), chunk,
                                    mem_budget_mb)
