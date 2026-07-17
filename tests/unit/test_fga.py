@@ -207,6 +207,31 @@ def test_fga_exact_jacobian_matches_fd():
     assert _fid(an, fd) > 0.9999           # analytic == FD to the truncation floor
 
 
+def test_fga_cache_trace_reuses_and_is_identical():
+    """``cache_trace`` memoizes the FIELD-INDEPENDENT coarse pre-trace, so a
+    second propagation through the SAME optics with a DIFFERENT field reuses it
+    (cache stays size 1) and every cached result is identical to the uncached one
+    (only the field-dependent rim is recomputed)."""
+    import lumenairy.propagators.fga as _F
+    N, dx = 128, 12e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    b1 = np.exp(-(Xg ** 2 + Yg ** 2) / (0.6e-3) ** 2).astype(np.complex128)
+    b2 = (b1 * np.exp(1j * 0.3 * Xg / dx)).astype(np.complex128)   # diff field
+    kw = dict(prescription=_singlet(), wavelength=_WL, dx=dx, w0_factor=5.0,
+              output_plane_distance=30e-3, n_p=11, dq_step=2, prune_frac=0.0,
+              coeff_frac=0.0, coarse_stride=4)
+    ref1 = apply_real_lens_fga(b1, cache_trace=False, **kw)
+    ref2 = apply_real_lens_fga(b2, cache_trace=False, **kw)
+    _F._COARSE_CACHE.clear()
+    c1 = apply_real_lens_fga(b1, cache_trace=True, **kw)      # populates cache
+    assert len(_F._COARSE_CACHE) == 1
+    c2 = apply_real_lens_fga(b2, cache_trace=True, **kw)      # CACHE HIT (same optics)
+    assert len(_F._COARSE_CACHE) == 1                          # reused, not re-added
+    assert np.allclose(c1, ref1) and np.allclose(c2, ref2)    # cache is result-identical
+    _F._COARSE_CACHE.clear()
+
+
 def test_auto_dispatcher_routes_and_matches():
     """apply_real_lens_auto detects the caustic zone, routes far planes to GBD
     and near-focus planes to FGA, and its output equals the chosen propagator's

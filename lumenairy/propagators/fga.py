@@ -504,6 +504,39 @@ def _pick_ray_transfer(surfaces, exact):
     return ray_transfer_jacobian_analytic
 
 
+# Lever #2: cross-call cache of the FIELD-INDEPENDENT coarse pre-trace (the
+# per-momentum coarse ray-data grids + coarse alive masks depend only on the
+# geometry, not on the input field), so a repeated propagation through the SAME
+# optics -- e.g. a design / optimization loop that varies only the field -- reuses
+# it.  Opt-in (``cache_trace``); bounded, FIFO-evicted; each entry is the coarse
+# swarm (~ full swarm / coarse_stride^2), so keep the bound small.
+_COARSE_CACHE: Dict[Any, Any] = {}
+_COARSE_CACHE_MAX = 2
+
+
+def _coarse_geom_key(surfs, wavelength, Nx, Ny, dx, dyg, dq_step, coarse_stride,
+                     px, w0, z_image):
+    """Hashable identity of the FIELD-INDEPENDENT coarse pre-trace (surfaces +
+    grid + momentum lattice + frozen width + image leg).  Two calls with equal
+    keys produce identical coarse grids/alive, so the trace is reusable."""
+    surf_key = tuple((float(getattr(s, 'radius', np.inf)),
+                      float(getattr(s, 'conic', 0.0)),
+                      float(getattr(s, 'thickness', 0.0)),
+                      str(getattr(s, 'glass', getattr(s, 'material', ''))),
+                      str(getattr(s, 'aspheric_coeffs', None)),
+                      float(getattr(s, 'semi_diameter', 0.0) or 0.0))
+                     for s in surfs)
+    return (surf_key, float(wavelength), int(Nx), int(Ny), float(dx), float(dyg),
+            int(dq_step), int(coarse_stride), int(px.size), float(px[0]),
+            float(px[-1]), float(w0), float(z_image))
+
+
+def _coarse_cache_put(key, val):
+    if len(_COARSE_CACHE) >= _COARSE_CACHE_MAX:
+        _COARSE_CACHE.pop(next(iter(_COARSE_CACHE)))       # FIFO evict oldest
+    _COARSE_CACHE[key] = val
+
+
 def _field_angular_content(E_in, dx, dyg, wavelength, frac=0.999):
     """Half-range (direction cosine) of the field's angular spectrum holding
     ``frac`` of the energy.  ``p_max`` must COVER the field's real angular
@@ -604,7 +637,7 @@ def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0):
 
 def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
                 wavelength, z_image, dq_step, px, py, n_p, Np, coeff_frac,
-                use_sep, cw, nq_chunk, coarse_stride):
+                use_sep, cw, nq_chunk, coarse_stride, cache_trace=False):
     """Lever #3: coarse-lattice trace + quintic ``map_coordinates`` interpolation.
 
     The ray trace is ~80% of FGA cost, and the exit-vertex map
@@ -689,33 +722,52 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
         a = np.where(a.real < 0, -a, a)
         return xv, yv, uxo, uyo, opd, a, np.asarray(dt.alive, bool)
 
-    # ---- pre-trace the coarse sub-lattice at EVERY momentum (field-independent)
-    # store per-momentum coarse 2-D grids + the rim direct-trace (as sparse
-    # full-lattice indices + values, so no Nq-sized per-momentum mask is held).
-    grids = [None] * Np                    # (7, nyc, nxc) per momentum
-    rim = [None] * Np                      # (idx, xv,yv,ux,uy,opd,a,alive) or None
+    # ---- FIELD-INDEPENDENT coarse pre-trace (per-momentum coarse ray-data grids
+    # + coarse alive masks): a pure function of the geometry, so cacheable across
+    # calls (lever #2).  Grids are dead-node-filled (nearest-alive) so the interp
+    # stays stable; the rim (which depends on the FIELD's support) overrides them.
+    ckey = (_coarse_geom_key(surfs, wavelength, Nx, Ny, dx, dyg, dq_step,
+                             coarse_stride, px, w0, z_image)
+            if cache_trace else None)
+    cached = _COARSE_CACHE.get(ckey) if ckey is not None else None
+    if cached is not None:
+        grids, alv_list = cached
+    else:
+        grids = [None] * Np                # (7, nyc, nxc) per momentum
+        alv_list = [None] * Np             # coarse alive (nyc, nxc) per momentum
+        for jm in range(Np):
+            pxi, pyi = float(px[jm]), float(py[jm])
+            pz = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
+            xvc, yvc, uxc, uyc, opdc, ac, alvc = _trace(qxc, qyc, pxi, pyi, pz)
+            alv2 = alvc.reshape(nyc, nxc)
+            stack = np.stack([xvc, yvc, uxc, uyc, opdc, ac.real, ac.imag]
+                             ).reshape(7, nyc, nxc)
+            if not alv2.all():
+                idx = distance_transform_edt(~alv2, return_distances=False,
+                                             return_indices=True)
+                stack = stack[:, idx[0], idx[1]]
+            grids[jm] = stack
+            alv_list[jm] = alv2
+        if ckey is not None:
+            _coarse_cache_put(ckey, (grids, alv_list))
+
+    # ---- FIELD-DEPENDENT rim: support-selected direct traces at the vignetting
+    # boundary (cheap, O(boundary); recomputed per call from the coarse alive) ----
+    rim = [None] * Np                      # (ridx, deadns, traced-values) or None
     for jm in range(Np):
+        alv2 = alv_list[jm]
+        if alv2.all():
+            continue
         pxi, pyi = float(px[jm]), float(py[jm])
         pz = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
-        xvc, yvc, uxc, uyc, opdc, ac, alvc = _trace(qxc, qyc, pxi, pyi, pz)
-        alv2 = alvc.reshape(nyc, nxc)
-        stack = np.stack([xvc, yvc, uxc, uyc, opdc, ac.real, ac.imag]
-                         ).reshape(7, nyc, nxc)
-        if not alv2.all():                 # fill dead nodes (nearest-alive) so the
-            idx = distance_transform_edt(  # spline stays stable; rim overrides them
-                ~alv2, return_distances=False, return_indices=True)
-            stack = stack[:, idx[0], idx[1]]
-            direct_c = binary_dilation(~alv2, iterations=_RIM_CELLS)
-            direct2d = direct_c[np.ix_(cyi, cxi)] & supp2d
-            ridx = np.flatnonzero(direct2d.ravel())
-            deadns = np.flatnonzero((direct_c[np.ix_(cyi, cxi)]).ravel()
-                                    & ~supp2d.ravel())
-            if ridx.size:
-                rv = _trace(qxf[ridx], qyf[ridx], pxi, pyi, pz)
-                rim[jm] = (ridx, deadns, rv)
-            elif deadns.size:
-                rim[jm] = (np.empty(0, int), deadns, None)
-        grids[jm] = stack
+        dfull = binary_dilation(~alv2, iterations=_RIM_CELLS)[np.ix_(cyi, cxi)]
+        ridx = np.flatnonzero(dfull.ravel() & supp2d.ravel())
+        deadns = np.flatnonzero(dfull.ravel() & ~supp2d.ravel())
+        if ridx.size:
+            rv = _trace(qxf[ridx], qyf[ridx], pxi, pyi, pz)
+            rim[jm] = (ridx, deadns, rv)
+        elif deadns.size:
+            rim[jm] = (np.empty(0, int), deadns, None)
 
     # ---- reconstruct: lattice-chunk (memory) x momentum-batch (batched scatter)
     outr = np.zeros((Ny, Nx))
@@ -782,7 +834,7 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
 def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                       dq_step, p_max, n_p, nsig, chunk=None, prune_frac=0.0,
                       coeff_frac=0.0, separable="auto", mem_budget_mb=None,
-                      coarse_stride=1, exact_jacobian=False):
+                      coarse_stride=1, exact_jacobian=False, cache_trace=False):
     """Core FGA transport through a prescription to (last vertex + z_image).
 
     ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches.  ``chunk``
@@ -839,7 +891,8 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     if coarse_stride and int(coarse_stride) > 1:
         return _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2,
                            surfs, wavelength, z_image, dq_step, px, py, n_p, Np,
-                           coeff_frac, use_sep, cw, nq_chunk, int(coarse_stride))
+                           coeff_frac, use_sep, cw, nq_chunk, int(coarse_stride),
+                           cache_trace=bool(cache_trace))
     qbounds = ([(0, Nq)] if nq_chunk is None
                else [(s, min(s + nq_chunk, Nq)) for s in range(0, Nq, nq_chunk)])
 
@@ -956,6 +1009,7 @@ def apply_real_lens_fga(
     separable: Any = "auto",
     coarse_stride: int = 1,
     exact_jacobian: bool = False,
+    cache_trace: bool = False,
     normalize_output: str = "none",
 ) -> np.ndarray:
     """Propagate ``E_in`` through a real lens ``prescription`` by the
@@ -1075,6 +1129,17 @@ def apply_real_lens_fga(
         (unsupported by the analytic form) and applies to the full-trace path
         (``coarse_stride=1``; the coarse path uses FD, where the interpolation
         dominates the accuracy budget anyway).
+    cache_trace : bool
+        Opt-in (default ``False``), effective only with ``coarse_stride > 1``.
+        The coarse pre-trace (per-momentum coarse ray-data grids + alive masks)
+        is FIELD-INDEPENDENT -- a pure function of the geometry -- so caching it
+        lets a repeated propagation through the SAME optics (a design /
+        optimization loop that varies only the input field) skip the trace on
+        subsequent calls (lever #2).  Bounded, FIFO-evicted cache; each entry is
+        the coarse swarm (~ full swarm / ``coarse_stride^2``), so it trades memory
+        for the trace time -- worthwhile for repeated same-optics propagations,
+        pointless for a one-shot call.  The field-dependent rim is recomputed each
+        call, so the result is identical whether cached or not.
     normalize_output : {'none', 'power'}
         ``'none'`` returns the raw FGA field
         ``'power'`` rescales it so the
@@ -1109,7 +1174,7 @@ def apply_real_lens_fga(
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
         coeff_frac=float(coeff_frac), separable=separable,
         mem_budget_mb=mem_budget_mb, coarse_stride=int(coarse_stride),
-        exact_jacobian=bool(exact_jacobian))
+        exact_jacobian=bool(exact_jacobian), cache_trace=bool(cache_trace))
     if normalize_output == "power":
         pin = float(np.sum(np.abs(E_in) ** 2))
         pout = float(np.sum(np.abs(out) ** 2))
