@@ -484,6 +484,26 @@ _RIM_CELLS = 3              # dilation (coarse cells) of the vignetting boundary
 _COARSE_SUPP_FRAC = 1e-3    # rim direct-trace only where windowed |u0| is >= this
 
 
+def _pick_ray_transfer(surfaces, exact):
+    """Differential ray-transfer Jacobian primitive (lever #1).  ``exact=True``
+    uses the truncation-free analytic (forward-mode-AD) Jacobian when EVERY
+    surface is a rotationally-symmetric conic -- exact vs the finite-difference
+    ~1e-8, pure NumPy, and ~1.2x faster on a large aperture (one traced ray vs
+    the FD 9-ray bundle).  Falls back to the FD primitive for aspheric /
+    freeform / biconic surfaces (which the analytic form does not handle) and
+    when ``exact=False`` (the default -- byte-identical legacy path)."""
+    from ..raytrace.differential import ray_transfer_jacobian, ray_transfer_jacobian_analytic
+    if not exact:
+        return ray_transfer_jacobian
+    for s in surfaces:
+        if (getattr(s, 'aspheric_coeffs', None) or getattr(s, 'freeform', None)
+                or getattr(s, 'radius_y', None) is not None
+                or getattr(s, 'conic_y', None) is not None
+                or getattr(s, 'aspheric_coeffs_y', None) is not None):
+            return ray_transfer_jacobian
+    return ray_transfer_jacobian_analytic
+
+
 def _field_angular_content(E_in, dx, dyg, wavelength, frac=0.999):
     """Half-range (direction cosine) of the field's angular spectrum holding
     ``frac`` of the energy.  ``p_max`` must COVER the field's real angular
@@ -762,7 +782,7 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
 def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                       dq_step, p_max, n_p, nsig, chunk=None, prune_frac=0.0,
                       coeff_frac=0.0, separable="auto", mem_budget_mb=None,
-                      coarse_stride=1):
+                      coarse_stride=1, exact_jacobian=False):
     """Core FGA transport through a prescription to (last vertex + z_image).
 
     ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches.  ``chunk``
@@ -779,7 +799,6 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     faster; 'auto' enables them when ``n_p >= 5`` (below that the ~``n_p`` x
     analysis win is negligible)."""
     from ..raytrace import surfaces_from_prescription
-    from ..raytrace.differential import ray_transfer_jacobian
 
     k = 2.0 * np.pi / wavelength
     Ny, Nx = u0.shape
@@ -807,6 +826,7 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
     kw2 = k * w0 * w0
+    ray_transfer_jacobian = _pick_ray_transfer(surfs, exact_jacobian)  # lever #1
 
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
     use_sep = bool(separable) if separable != "auto" else (n_p >= 5)
@@ -935,6 +955,7 @@ def apply_real_lens_fga(
     coeff_frac: float = 1e-4,
     separable: Any = "auto",
     coarse_stride: int = 1,
+    exact_jacobian: bool = False,
     normalize_output: str = "none",
 ) -> np.ndarray:
     """Propagate ``E_in`` through a real lens ``prescription`` by the
@@ -1044,6 +1065,16 @@ def apply_real_lens_fga(
         marginal or negative for small grids or cheap (near-free-space) traces,
         where the default ``1`` is best.  Position pruning is not applied on this
         path (``M`` already thins the trace).  Use ``M`` ~ ``4-8``.
+    exact_jacobian : bool
+        Opt-in (default ``False``).  Use the truncation-free analytic
+        (forward-mode-AD) differential ray-transfer Jacobian instead of the
+        finite-difference default when every surface is a rotationally-symmetric
+        conic -- exact vs the FD ``~1e-8`` truncation, and ~``1.2x`` faster on a
+        large aperture (one traced ray vs the FD 9-ray bundle).  Silently falls
+        back to the FD Jacobian for aspheric / freeform / biconic prescriptions
+        (unsupported by the analytic form) and applies to the full-trace path
+        (``coarse_stride=1``; the coarse path uses FD, where the interpolation
+        dominates the accuracy budget anyway).
     normalize_output : {'none', 'power'}
         ``'none'`` returns the raw FGA field
         ``'power'`` rescales it so the
@@ -1077,7 +1108,8 @@ def apply_real_lens_fga(
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
         coeff_frac=float(coeff_frac), separable=separable,
-        mem_budget_mb=mem_budget_mb, coarse_stride=int(coarse_stride))
+        mem_budget_mb=mem_budget_mb, coarse_stride=int(coarse_stride),
+        exact_jacobian=bool(exact_jacobian))
     if normalize_output == "power":
         pin = float(np.sum(np.abs(E_in) ** 2))
         pout = float(np.sum(np.abs(out) ** 2))

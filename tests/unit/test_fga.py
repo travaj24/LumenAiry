@@ -190,6 +190,23 @@ def test_fga_coarse_stride_matches_full():
         assert _fid(coarse, full) > 0.999      # coarse trace + interp is no-loss
 
 
+def test_fga_exact_jacobian_matches_fd():
+    """``exact_jacobian=True`` (the truncation-free analytic differential
+    ray-transfer Jacobian, used for the all-conic singlet) reconstructs the SAME
+    field as the finite-difference default to the FD truncation floor -- it is the
+    exact ``h -> 0`` limit of the FD monodromy, not a re-derivation."""
+    N, dx = 128, 12e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    coll = np.exp(-(Xg ** 2 + Yg ** 2) / (0.6e-3) ** 2).astype(np.complex128)
+    kw = dict(prescription=_singlet(), wavelength=_WL, dx=dx, w0_factor=5.0,
+              output_plane_distance=30e-3, n_p=11, dq_step=2, prune_frac=0.0,
+              coeff_frac=0.0)
+    fd = apply_real_lens_fga(coll, exact_jacobian=False, **kw)        # FD default
+    an = apply_real_lens_fga(coll, exact_jacobian=True, **kw)         # analytic
+    assert _fid(an, fd) > 0.9999           # analytic == FD to the truncation floor
+
+
 def test_auto_dispatcher_routes_and_matches():
     """apply_real_lens_auto detects the caustic zone, routes far planes to GBD
     and near-focus planes to FGA, and its output equals the chosen propagator's
