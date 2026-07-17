@@ -920,7 +920,6 @@ class OptimizerDock(QWidget):
 
             free_vars = []
             bounds_list = []
-            values = self.sm.get_variable_values()
             for i, (elem_idx, surf_idx, field) in enumerate(self.sm.opt_variables):
                 if field == 'distance':
                     tk_idx = thickness_map.get(elem_idx)
@@ -936,7 +935,18 @@ class OptimizerDock(QWidget):
                         continue
                     path = ('surfaces', fs, field)
                 free_vars.append(path)
-                val = values[i] if i < len(values) else 0.0
+                # v5.24.3 (audit S4-2): the bounds' centre must be in the
+                # SAME units as x0.  DesignParameterization.initial_values()
+                # reads x0 from ``pres`` (to_prescription converts mm -> m),
+                # so read the centre from the metre-unit template at the same
+                # ``path`` -- NOT from get_variable_values() (millimetres),
+                # which put x0 outside every box and made scipy clip the
+                # start to a garbage (e.g. 25-metre-radius) design.
+                if path[0] == 'thicknesses':
+                    val = float(pres['thicknesses'][path[1]])
+                else:  # ('surfaces', fs, field)
+                    val = float(
+                        pres['surfaces'][path[1]].get(path[2], 0.0) or 0.0)
                 # Sensible bounds: conic is absolute; others fractional.
                 if field == 'conic':
                     bounds_list.append((val - 2.0, val + 2.0))

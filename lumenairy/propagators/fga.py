@@ -1456,9 +1456,11 @@ def _caustic_zone(E_in, dx, prescription, wavelength, n_rays=25):
 
     N = E_in.shape[-1]
     k = 2.0 * np.pi / wavelength
-    cx = N // 2
+    cx = N // 2                       # column (x) centre -- for the x grid
+    cy = E_in.shape[0] // 2           # row (y) centre -- THE meridional row
     xgrid = (np.arange(N) - cx) * dx
-    row = E_in[cx, :]
+    row = E_in[cy, :]                 # audit S2-21: was E_in[cx,:] (wrong row / an
+    #                                   IndexError when Nx//2 >= Ny for a tall field)
     amp = np.abs(row)
     if amp.max() <= 0.0:
         return None

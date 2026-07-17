@@ -185,62 +185,45 @@ def angular_spectrum_propagate_mft(
     # plain ASM.  4.12.0: both backends now use ``fx < fx_max`` (open
     # interval, matching the Matsushima-Shimobaba paper and plain ASM);
     # pre-4.12 the NumPy branch used `<=` (one-bin off from JAX).
-    if is_jax:
-        # JAX path: build under the tracer (no host-side cache).
-        fx = (xp.arange(Nx_in, dtype=xp.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
-        fy = (xp.arange(Ny_in, dtype=xp.float64) - Ny_in / 2.0) / (Ny_in * dy_in)
-        kx_sq = (2.0 * float(np.pi) * fx) ** 2
-        ky_sq = (2.0 * float(np.pi) * fy) ** 2
+    # v5.24.4 (audit S2-3): H is FIELD-INDEPENDENT (input geometry,
+    # wavelength and z only), so build it on the HOST in float64 and
+    # cache it, then move it onto the active backend.  Building it under
+    # the JAX tracer instead silently evaluated the kernel argument
+    # ``kz * z`` (up to ~1e6 rad) in float32 whenever ``jax_enable_x64``
+    # is off (the JAX default) -- ``jnp.arange(dtype=float64)`` truncates
+    # to float32 there -- losing ~26 dB of phase accuracy vs the NumPy
+    # contract.  Host-building keeps the field gradient intact (H does
+    # not depend on the field); only concrete-float geometry gradients
+    # are foregone.  NumPy / CuPy paths are byte-identical to before,
+    # and JAX now shares the same cached, f64-built H.  4.12.0: strict
+    # `<` band-limit (Matsushima-Shimobaba open interval; matches plain
+    # ASM).
+    h_key = (int(Ny_in), int(Nx_in), float(dy_in), float(dx_in),
+             float(wavelength), float(z),
+             bool(bandlimit),
+             np.dtype(target_cdtype).str, 'ASM_MFT')
+    H_np = _h_cache_lookup(h_key)
+    if H_np is None:
+        fx = (np.arange(Nx_in, dtype=np.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
+        fy = (np.arange(Ny_in, dtype=np.float64) - Ny_in / 2.0) / (Ny_in * dy_in)
+        kx_sq = (2.0 * np.pi * fx) ** 2
+        ky_sq = (2.0 * np.pi * fy) ** 2
         kz_sq = k * k - kx_sq[None, :] - ky_sq[:, None]
         prop_mask = kz_sq > 0
-        kz = xp.where(prop_mask, xp.sqrt(xp.where(prop_mask, kz_sq, 0.0)),
-                      0.0)
-        H = xp.where(prop_mask, xp.exp(1j * kz * z), 0.0).astype(target_cdtype)
+        kz = np.where(prop_mask,
+                      np.sqrt(np.where(prop_mask, kz_sq, 0.0)), 0.0)
+        H_np = np.where(prop_mask, np.exp(1j * kz * z), 0.0).astype(
+            target_cdtype)
         if bandlimit and z != 0:
             Lx_phys = Nx_in * dx_in
             Ly_phys = Ny_in * dy_in
             fx_max = Lx_phys / (2.0 * wavelength * abs(z))
             fy_max = Ly_phys / (2.0 * wavelength * abs(z))
-            # 4.10: use strict less-than (matches plain ASM at line
-            # 1200 and the Matsushima-Shimobaba paper, which uses an
-            # open-interval cutoff).  Pre-4.10 ASM-MFT used <= here,
-            # one-bin off from the ASM reference.
-            bl_mask = ((xp.abs(fx)[None, :] < fx_max)
-                       & (xp.abs(fy)[:, None] < fy_max))
-            H = xp.where(bl_mask, H, 0.0).astype(target_cdtype)
-    else:
-        # NumPy / CuPy paths share a NumPy-host H cache; CuPy uploads
-        # via xp.asarray on demand.
-        h_key = (int(Ny_in), int(Nx_in), float(dy_in), float(dx_in),
-                 float(wavelength), float(z),
-                 bool(bandlimit),
-                 np.dtype(target_cdtype).str, 'ASM_MFT')
-        H_np = _h_cache_lookup(h_key)
-        if H_np is None:
-            fx = (np.arange(Nx_in, dtype=np.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
-            fy = (np.arange(Ny_in, dtype=np.float64) - Ny_in / 2.0) / (Ny_in * dy_in)
-            kx_sq = (2.0 * np.pi * fx) ** 2
-            ky_sq = (2.0 * np.pi * fy) ** 2
-            kz_sq = k * k - kx_sq[None, :] - ky_sq[:, None]
-            prop_mask = kz_sq > 0
-            kz = np.where(prop_mask,
-                          np.sqrt(np.where(prop_mask, kz_sq, 0.0)), 0.0)
-            H_np = np.where(prop_mask, np.exp(1j * kz * z), 0.0).astype(
-                target_cdtype)
-            if bandlimit and z != 0:
-                Lx_phys = Nx_in * dx_in
-                Ly_phys = Ny_in * dy_in
-                fx_max = Lx_phys / (2.0 * wavelength * abs(z))
-                fy_max = Ly_phys / (2.0 * wavelength * abs(z))
-                # 4.12.0 (audit round-4 B1-4): use strict `<` to match
-                # the JAX branch above (and plain ASM at line ~1200).
-                # Pre-4.12 NumPy used `<=` -- one-bin disagreement
-                # between backends at the band-limit boundary.
-                bl_mask = ((np.abs(fx)[None, :] < fx_max)
-                           & (np.abs(fy)[:, None] < fy_max))
-                H_np = np.where(bl_mask, H_np, 0.0).astype(target_cdtype)
-            _h_cache_store(h_key, H_np)
-        H = H_np if xp is np else xp.asarray(H_np)
+            bl_mask = ((np.abs(fx)[None, :] < fx_max)
+                       & (np.abs(fy)[:, None] < fy_max))
+            H_np = np.where(bl_mask, H_np, 0.0).astype(target_cdtype)
+        _h_cache_store(h_key, H_np)
+    H = H_np if xp is np else xp.asarray(H_np)
 
     # ----- 2) FFT input to angular spectrum (centred convention) ------------
     # Match the existing angular_spectrum_propagate's fftshift/ifftshift

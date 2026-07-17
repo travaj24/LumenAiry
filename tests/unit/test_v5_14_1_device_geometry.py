@@ -388,6 +388,41 @@ def test_pmm_prepare_material_swap_matches_rebuild():
         st.set_source(_WL).solve()
 
 
+def test_pmm_prepare_rejects_out_of_plane_tensors():
+    """Audit S1-1 [P1]: the prepared path assembles the in-plane 2n eig
+    (_build_sem_tensor_segments reads only exx/exy/eyx/eyy/ezz) and used to
+    SILENTLY drop eps_xz/yz/zx/zy -- both energy-conserving, so no tripwire
+    fired.  Both entry points must now raise: a CONCRETE OOP layer at
+    prepare(), and a material KEY that resolves to an OOP tensor at solve().
+    Independent oracle: a tilted-uniaxial optic axis (theta=30, phi=20 deg)
+    which really has out-of-plane coupling, cross-checked against
+    PMMStack._is_oop; an in-plane (eps_xy-only) tensor must still solve so the
+    guard does not over-reject."""
+    assert PMMStack._is_oop(np.asarray(_OOP))       # sanity: really OOP
+
+    # (A) concrete OOP tensor layer -> rejected at prepare()
+    sa = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=12)
+    sa.add_layer(0.10e-6, eps=2.25)
+    sa.add_layer(0.15e-6, eps=_OOP)
+    with pytest.raises(NotImplementedError, match="out-of-plane"):
+        sa.prepare()
+
+    # (B) material key that resolves to an OOP tensor -> rejected at solve()
+    sb = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=12)
+    sb.add_layer(0.10e-6, eps=2.25)
+    sb.add_layer(0.15e-6, segments=[(0.4, 2.25), (0.6, "X")])
+    prep = sb.prepare()                             # keyed value unknown yet
+    with pytest.raises(NotImplementedError, match="out-of-plane"):
+        prep.solve(wavelength=_WL, materials={"X": _OOP})
+
+    # positive control: an in-plane (eps_xy-only) key still resolves + solves
+    ip = np.diag([1.5 ** 2, 1.7 ** 2, 1.6 ** 2]).astype(complex)
+    ip[0, 1] = ip[1, 0] = 0.3
+    assert not PMMStack._is_oop(ip)
+    _op, Rp, _Tp, _Jp = prep.solve(wavelength=_WL, materials={"X": ip})
+    assert np.isfinite(np.asarray(Rp)).all()
+
+
 # =========================================================================== #
 # item 7 -- viewers (Agg smoke)
 # =========================================================================== #

@@ -517,7 +517,7 @@ class WaveOpticsWorker(QThread):
             apply_fresnel_curvature,
             resample_field, PYFFTW_AVAILABLE, CUPY_AVAILABLE,
         )
-        from ..elements.lenses import surface_sag_general
+        from ..elements.lenses import surface_sag_biconic
         from ..glass import get_glass_index
         from ..analysis import beam_d4sigma, beam_power
 
@@ -860,9 +860,26 @@ class WaveOpticsWorker(QThread):
                 n1 = get_glass_index(ts.glass_before, wv)
                 n2 = get_glass_index(ts.glass_after, wv)
 
-                if abs(n2 - n1) > 1e-10 and np.isfinite(ts.radius):
-                    h_sq = X ** 2 + Y ** 2
-                    sag = surface_sag_general(h_sq, ts.radius, ts.conic)
+                # v5.24.4 audit S4-3: route the phase screen through the
+                # full biconic sag so anamorphic (cylindrical/toroidal)
+                # curvature and per-axis aspheres are honoured -- and so
+                # the physics matches what layout_2d.py:429 already draws.
+                # surface_sag_biconic reduces to surface_sag_general when
+                # radius_y is None, so rotationally-symmetric surfaces are
+                # byte-identical.  Widen the guard so a y-only cylinder
+                # (radius=inf, radius_y finite) still gets power.
+                ry = getattr(ts, 'radius_y', None)
+                has_power = (np.isfinite(ts.radius)
+                             or (ry is not None and np.isfinite(ry)))
+                if abs(n2 - n1) > 1e-10 and has_power:
+                    sag = surface_sag_biconic(
+                        X, Y, R_x=ts.radius, R_y=ry,
+                        conic_x=ts.conic,
+                        conic_y=getattr(ts, 'conic_y', None),
+                        aspheric_coeffs=getattr(ts, 'aspheric_coeffs',
+                                                None),
+                        aspheric_coeffs_y=getattr(ts, 'aspheric_coeffs_y',
+                                                  None))
                     k = 2 * np.pi / wv
                     phase = -k * (n2 - n1) * sag
                     E = E * np.exp(1j * phase)

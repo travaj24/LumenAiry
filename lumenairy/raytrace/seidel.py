@@ -1033,10 +1033,18 @@ def seidel_coefficients(
             S1[i] = -(A_m ** 2) * h * delta_un
             S2[i] = -(A_m * A_c) * h * delta_un
             S3[i] = -(A_c ** 2) * h * delta_un
-            S4[i] = -(1.0 / (n2 * n1)) * c * (n2 - n1)
-            # S_V Schwarzschild: S_V_k = -(A_c/A) · (S_III_k + H²·S_IV_k).
+            # S3-1 fix: the Petzval sum S_IV must carry the SAME sign
+            # convention as S1..S3 above (code = -S_Welford).  The prior
+            # form kept an extra minus, leaving S4 at +S_IV_Welford -- the
+            # opposite convention -- which then corrupted the Schwarzschild
+            # S5 (distortion) and the seidel_wfe field-curvature term.
+            S4[i] = (1.0 / (n2 * n1)) * c * (n2 - n1)
+            # S_V Schwarzschild: S_V_k = +(A_c/A) · (S_III_k + H²·S_IV_k).
             # Pre-4.9 omitted H² on S4, mixing m and 1/m dimensions.
-            S5[i] = -(A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
+            # S3-1 fix: the prefactor is +(A_c/A) so that -- with S4 now on
+            # the same -S_Welford convention as S1..S3 -- S5 reproduces the
+            # independent Welford S_V (stop-at-thin-lens distortion -> 0).
+            S5[i] = (A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
 
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
@@ -1077,8 +1085,13 @@ def seidel_coefficients(
             S1[i] = -(A_m ** 2) * h * delta_un
             S2[i] = -(A_m * A_c) * h * delta_un
             S3[i] = -(A_c ** 2) * h * delta_un
-            S4[i] = -(1.0 / (n2 * n1)) * c * (n2 - n1)
-            S5[i] = -(A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
+            # S3-1 fix: the Petzval sum S_IV must carry the SAME sign
+            # convention as S1..S3 above (code = -S_Welford).  The prior
+            # form kept an extra minus, leaving S4 at +S_IV_Welford -- the
+            # opposite convention -- which then corrupted the Schwarzschild
+            # S5 (distortion) and the seidel_wfe field-curvature term.
+            S4[i] = (1.0 / (n2 * n1)) * c * (n2 - n1)
+            S5[i] = (A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
 
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
@@ -1118,9 +1131,12 @@ def seidel_coefficients(
             S2[i] = -(A_m * A_c) * h * delta_un
             S3[i] = -(A_c ** 2) * h * delta_un
             S4[i] = 0.0           # flat: Petzval contribution exactly zero (c=0)
-            # S_V Schwarzschild: S_V_k = -(A_c/A) · (S_III_k + H²·S_IV_k).
+            # S_V Schwarzschild: S_V_k = +(A_c/A) · (S_III_k + H²·S_IV_k).
             # Pre-4.9 omitted H² on S4, mixing m and 1/m dimensions.
-            S5[i] = -(A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
+            # S3-1 fix: the prefactor is +(A_c/A) so that -- with S4 now on
+            # the same -S_Welford convention as S1..S3 -- S5 reproduces the
+            # independent Welford S_V (stop-at-thin-lens distortion -> 0).
+            S5[i] = (A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
 
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after

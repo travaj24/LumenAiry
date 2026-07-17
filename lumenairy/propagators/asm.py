@@ -179,28 +179,56 @@ def _get_asm_H_natural(
         H = _h_cache_lookup(h_key)
 
     if H is None and is_jax:
-        # JAX path: build H in one shot (no chunking, no in-place
-        # writes; jax.numpy is functional / immutable).
-        fx = (xp.arange(Nx, dtype=xp.float64) - Nx / 2) / (Nx * dx)
-        fy = (xp.arange(Ny, dtype=xp.float64) - Ny / 2) / (Ny * dy)
-        kx_sq = (2 * float(np.pi) * fx) ** 2
-        ky_sq = (2 * float(np.pi) * fy) ** 2
+        # JAX path.  The transfer function H is FIELD-INDEPENDENT (it
+        # depends only on the grid geometry, wavelength and z), so we
+        # build it on the HOST in float64 -- with the SAME mod-2pi fold
+        # the chunked NumPy branch below uses -- and only then move it
+        # onto the JAX device, casting to the target complex dtype.
+        #
+        # v5.24.4 (audit S2-3): building H directly with jax.numpy
+        # silently evaluated the huge kernel argument ``kz * z`` (up to
+        # ~1e6 rad) in float32 whenever ``jax_enable_x64`` is off -- the
+        # JAX default -- because ``jnp.arange(dtype=float64)`` truncates
+        # to float32 there, and no mod-2pi fold was applied.  That cost
+        # ~26 dB of phase accuracy vs the documented "float32 noise
+        # floor, does not degrade with phase magnitude" contract (rel
+        # err ~2e-3 at z=8 mm, N=256; ~13,000x worse than NumPy c64).
+        # Host-building in float64 restores the NumPy contract and is
+        # trace-safe: H does not depend on the field, so the field
+        # gradient survives (only gradients w.r.t. the concrete-float
+        # geometry z/dx/wavelength are foregone).
+        fx = (np.arange(Nx, dtype=np.float64) - Nx / 2) / (Nx * dx)
+        fy = (np.arange(Ny, dtype=np.float64) - Ny / 2) / (Ny * dy)
+        kx_sq = (2 * np.pi * fx) ** 2
+        ky_sq = (2 * np.pi * fy) ** 2
         kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
         prop = kz_sq > 0
-        kz = xp.where(prop, xp.sqrt(xp.where(prop, kz_sq, 0.0)), 0.0)
-        H = xp.where(prop, xp.exp(1j * kz * z), 0.0).astype(target_cdtype)
+        kz = np.where(prop, np.sqrt(np.where(prop, kz_sq, 0.0)), 0.0)
+        if target_cdtype == np.complex128:
+            H_np = np.where(prop, np.exp(1j * kz * z), 0).astype(target_cdtype)
+        else:
+            # complex64: fold phase mod 2*pi in float64 BEFORE casting to
+            # float32 so the float32 floor doesn't inject speckle-like
+            # noise (mirrors the chunked NumPy branch below exactly).
+            phase = np.mod(kz * z, 2.0 * np.pi)
+            c = np.cos(phase).astype(target_fdtype)
+            s = np.sin(phase).astype(target_fdtype)
+            H_np = np.empty((Ny, Nx), dtype=target_cdtype)
+            H_np.real[:] = np.where(prop, c, target_fdtype(0))
+            H_np.imag[:] = np.where(prop, s, target_fdtype(0))
         if bandlimit and z != 0:
             Lx = Nx * dx
             Ly = Ny * dy
             fx_max = Lx / (2 * wavelength * abs(z))
             fy_max = Ly / (2 * wavelength * abs(z))
-            bl_x = xp.abs(fx) < fx_max
-            bl_y = xp.abs(fy) < fy_max
+            bl_x = np.abs(fx) < fx_max
+            bl_y = np.abs(fy) < fy_max
             mask = bl_x[None, :] & bl_y[:, None]
-            H = H * mask.astype(target_cdtype)
+            H_np = H_np * mask.astype(target_cdtype)
         # v5.5.3: store H in NATURAL (un-shifted) FFT layout so the per-call
         # propagation folds away the two spectrum-domain shifts (4 -> 2 shifts).
-        H = xp.fft.ifftshift(H)
+        H_np = np.fft.ifftshift(H_np)
+        H = xp.asarray(H_np)
 
     if H is None:
         # Spatial-frequency squared vectors (cached on numpy path).

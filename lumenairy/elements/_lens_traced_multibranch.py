@@ -59,6 +59,22 @@ from .. import raytrace as rt
 
 __all__ = ['apply_real_lens_traced_multibranch', 'ludwig_fold']
 
+# Half-open (top-left) rasterization tie-break tolerance, in BARYCENTRIC units.
+# A pixel with |a_i| <= _EDGE_TOL is treated as lying ON mapped edge_i (see the
+# rasterizer coverage test).  It sits far above the ~1e-14 boundary noise of an
+# exactly-commensurate map (pixel centres land ~1 ULP off the mapped nodes) and
+# far below the O(0.1..1) barycentric coordinates of genuine interior pixels.
+_EDGE_TOL = 1e-9
+
+
+def _top_left(ex, ey):
+    """Top-left rule: an on-edge pixel is owned by the triangle whose mapped
+    edge vector ``(ex, ey)`` points up (``ey > 0``) or is horizontal pointing
+    right (``ey == 0 and ex > 0``).  Two triangles sharing a physical edge see
+    it with opposite direction vectors, so exactly one of them owns the pixel.
+    """
+    return (ey > 0.0) | ((ey == 0.0) & (ex > 0.0))
+
 
 def ludwig_fold(k, S_plus, S_minus, A_plus, A_minus):
     """Uniform (Ludwig 1966 / Kravtsov 1964) FOLD-caustic field from the two
@@ -555,6 +571,13 @@ def apply_real_lens_traced_multibranch(
         pymin, pymax = pymin[keep], pymax[keep]
         nb_flat = n_branch.reshape(-1)
 
+        # mapped output-plane edge vectors (edge_i opposite vertex_i, on which
+        # the barycentric a_i == 0) -- for the half-open top-left tie-break
+        # below.  e0 = V2 - V1, e1 = V0 - V2, e2 = V1 - V0.
+        e0x, e0y = x2k - x1k, y2k - y1k
+        e1x, e1y = x0k - x2k, y0k - y2k
+        e2x, e2y = x1k - x0k, y1k - y0k
+
         wmax = np.maximum(pxmax - pxmin, pymax - pymin) + 1
         cls = np.ceil(np.log2(wmax)).astype(np.int64)
         for c in np.unique(cls):
@@ -580,7 +603,35 @@ def apply_real_lens_traced_multibranch(
             a1 = (wx * d01y - wy * d01x) / dn
             a2 = (d00x * wy - d00y * wx) / dn
             a0 = 1.0 - a1 - a2
-            inside = (a0 >= 0.0) & (a1 >= 0.0) & (a2 >= 0.0) & vmask
+            # HALF-OPEN (top-left rule): a pixel strictly inside a triangle has
+            # all a_i > 0; a pixel ON edge_i has a_i == 0.  A closed test
+            # (a_i >= 0) hands every shared mesh edge (cell diagonals) and
+            # shared vertex (up to 6 triangles) to ALL its neighbours, so the
+            # coherent np.add.at below double- (or 6x-) counts them -- spurious
+            # +50%..+400% energy and 2x-amplitude hot pixels.  Instead award an
+            # on-edge pixel to the single triangle whose mapped edge points up
+            # (or is horizontal pointing right): two triangles sharing a
+            # physical edge see it with opposite direction vectors, so exactly
+            # one claims it -- regardless of fold orientation.  At a shared
+            # vertex two coords are ~0 at once, so BOTH incident edges must
+            # win, which resolves the up-to-6 triangle fan to one owner too.
+            # The band |a_i| <= _EDGE_TOL (not exact == 0) is essential: even a
+            # bit-exact identity map lands pixel centres ~1 ULP off the mapped
+            # nodes, so on-edge a_i evaluate to ~1e-14, never exactly 0.  The
+            # band is applied symmetrically (barely-inside +eps and
+            # barely-outside -eps neighbours both enter the tie-break), so the
+            # single-owner property holds with no gaps.  Interior a_i are
+            # O(0.1..1) >> _EDGE_TOL >> the ~1e-14 boundary noise, so genuine
+            # multi-branch overlaps (distinct sheets from non-adjacent
+            # triangles, a_i strictly interior in both) are untouched.
+            e0i = (e0x[s, None, None], e0y[s, None, None])
+            e1i = (e1x[s, None, None], e1y[s, None, None])
+            e2i = (e2x[s, None, None], e2y[s, None, None])
+            inside = (
+                ((a0 > _EDGE_TOL) | ((np.abs(a0) <= _EDGE_TOL) & _top_left(*e0i)))
+                & ((a1 > _EDGE_TOL) | ((np.abs(a1) <= _EDGE_TOL) & _top_left(*e1i)))
+                & ((a2 > _EDGE_TOL) | ((np.abs(a2) <= _EDGE_TOL) & _top_left(*e2i)))
+                & vmask)
             if not inside.any():
                 continue
             # second-order intrapolated OPL (Kraaijpoel eq. 5.7):

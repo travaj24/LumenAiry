@@ -634,6 +634,50 @@ def test_traced_multibranch_energy_and_gouy_through_focus():
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_traced_multibranch_no_shared_edge_double_count():
+    """Regression (audit S2-1): the barycentric rasterizer must NOT double-
+    count pixels on shared triangle edges/vertices.
+
+    Independent oracle -- ENERGY CONSERVATION on a lossless identity map: a
+    flat N-BK7 plate maps every ray straight through (x_out == x_in, single
+    branch, m=0), so the output field must equal the input up to a piston phase
+    and conserve power exactly.  With NO ``aperture_diameter`` the launch grid
+    is COMMENSURATE with the pixel grid (h == dx), so every mapped node lands
+    on a pixel centre and every cell diagonal passes through pixel centres --
+    precisely the shared-edge/vertex pixels a closed coverage test hands to all
+    neighbouring triangles.  The pre-fix closed test ``a_i >= 0`` gives
+    power/Pin ~= 5.1 with pixels claimed by up to 6 triangles (2x..6x hot
+    pixels); the half-open top-left rule awards each shared pixel to exactly one
+    triangle, restoring power/Pin == 1 with n_branch == 1 everywhere."""
+    from lumenairy.elements._lens_traced_multibranch import (
+        apply_real_lens_traced_multibranch,
+    )
+    flat_plate = {'surfaces': [
+        {'radius': float('inf'), 'glass_before': 'air', 'glass_after': 'N-BK7'},
+        {'radius': float('inf'), 'glass_before': 'N-BK7', 'glass_after': 'air'},
+        {'radius': float('inf'), 'glass_before': 'air', 'glass_after': 'air'}],
+        'thicknesses': [1.0e-3, 0.0]}
+    N, dx = 128, 8e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E_in = np.exp(-(X ** 2 + Y ** 2) / (0.15e-3) ** 2).astype(np.complex128)
+    P_in = float(np.sum(np.abs(E_in) ** 2))
+    E, diag = apply_real_lens_traced_multibranch(
+        E_in, prescription=flat_plate, wavelength=LAM, dx=dx,
+        output_plane_distance=2.0e-3, ray_subsample=1,
+        return_diagnostics=True)
+    # single-valued map: any excess energy can ONLY be shared-pixel over-count
+    assert diag['n_branch'].max() == 1
+    assert set(diag['kmah'].ravel().tolist()) == {0}
+    # energy conserved (identity map) -- the independent oracle; pre-fix ~5.1
+    assert abs(float(np.sum(np.abs(E) ** 2)) / P_in - 1.0) < 5e-3
+    # and the field itself equals the input up to a global piston phase
+    fid = float(np.abs(np.vdot(E_in, E))
+                / (np.linalg.norm(E_in) * np.linalg.norm(E)))
+    assert fid > 0.999
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_traced_multibranch_matches_exact_diffraction_oracle():
     """Mid-annulus intensity profile matches the EXACT decouple-pipeline
     oracle (ray-traced exit-pupil field + direct Rayleigh-Sommerfeld sum --

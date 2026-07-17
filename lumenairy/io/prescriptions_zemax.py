@@ -1113,11 +1113,27 @@ def load_zemax_prescription_data_txt(filepath: str,
             })
 
     # All-element thicknesses (one fewer than elements)
+    # S4-1 (AUDIT_V5_24_2): mirror the .zmx twin's COORDBRK-gap folding
+    # (see lines 571-584).  A COORDBRK sitting between two lens surfaces
+    # carries its axial gap in ``thickness``; ``lens_surfaces`` has the
+    # breaks filtered out, so that gap was silently dropped -- shifting
+    # every axial position after the break.  Fold each intervening CB's gap
+    # into the preceding element's thickness.  Unlike the .zmx twin, .txt
+    # thicknesses are ALREADY in metres (converted at parse time, line 972),
+    # so add ``cb_t`` directly without a ``unit_scale`` multiply.
     thicknesses = []
     for i in range(len(lens_surfaces) - 1):
         t = lens_surfaces[i]['thickness']
         if np.isinf(t):
             t = 0.0
+        sn_i = lens_surfaces[i]['surf_num']
+        sn_next = lens_surfaces[i + 1]['surf_num']
+        for s in surfaces_raw:
+            if (s['is_coordbrk']
+                    and sn_i < s['surf_num'] < sn_next):
+                cb_t = s['thickness']
+                if not np.isinf(cb_t):
+                    t = t + cb_t
         thicknesses.append(t)
 
     # Aperture from the stop surface or largest semi-diameter

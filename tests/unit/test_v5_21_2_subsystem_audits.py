@@ -541,6 +541,52 @@ def test_zx1_coordbreak_disz_folded_into_flat_thicknesses(tmp_path):
     assert abs(presc['coord_breaks'][0]['thickness_m'] - 3e-3) < 1e-9
 
 
+def test_s4_1_coordbreak_disz_folded_into_flat_thicknesses_txt(tmp_path):
+    """S4-1 (AUDIT_V5_24_2): the prescription-data .txt loader must fold a
+    COORDBRK's axial gap into the preceding element's thickness, exactly as
+    the .zmx twin (ZX-1) does.  Before the fix the .txt loop dropped the gap
+    silently, shifting every downstream axial position.
+
+    Independent oracle: the front->back gap is the geometric sum of the front
+    element's Thickness (5 mm) and the intervening COORDBRK's Thickness
+    (3 mm) = 8 mm; and the .txt result must agree with the .zmx twin loaded
+    from the equivalent _ZMX_CB_BETWEEN prescription."""
+    from lumenairy.io.prescriptions_zemax import (
+        load_zemax_prescription_data_txt,
+        load_zemax_zmx,
+    )
+    # Same geometry as _ZMX_CB_BETWEEN: front DISZ 5 mm, COORDBRK DISZ 3 mm,
+    # back DISZ 95 mm.  Thicknesses report in millimetres (default units).
+    rows = [
+        'SURFACE DATA SUMMARY:',
+        '',
+        'Surf\tType\tRadius\tThickness\tGlass\tClear Diam\tChip Zone'
+        '\tMech Diam\tConic\tComment',
+        'OBJ\tSTANDARD\tInfinity\t10\t\t10\t0\t10\t0\t',
+        '1\tSTANDARD\t50\t5\tN-BK7\t24\t0\t24\t0\tfront',
+        '2\tCOORDBRK\tInfinity\t3\t\t0\t0\t0\t0\t',
+        '3\tSTANDARD\t-50\t95\t\t24\t0\t24\t0\tback',
+        'IMA\tSTANDARD\tInfinity\t0\t\t2\t0\t2\t0\t',
+    ]
+    p = tmp_path / 'cb.txt'
+    p.write_text('\n'.join(rows) + '\n', encoding='utf-8')
+    # Explicit range spans the front (1) and back (3) lens surfaces across
+    # the intervening COORDBRK (2).
+    presc = load_zemax_prescription_data_txt(str(p), surface_range=(1, 3))
+    # Front->back gap = SURF1 Thickness (5 mm) + CB Thickness (3 mm) = 8 mm.
+    # all_thicknesses is the flat all-element list touched by the fix; the
+    # lens-only thicknesses derive from it and must fold too.
+    assert abs(presc['all_thicknesses'][0] - 8e-3) < 1e-9
+    assert abs(presc['thicknesses'][0] - 8e-3) < 1e-9
+
+    # Parity: the .zmx twin folds the same gap to the same value (the two
+    # near-duplicate loaders must not diverge again -- S4-8).
+    q = tmp_path / 'cb.zmx'
+    q.write_text(_ZMX_CB_BETWEEN, encoding='utf-8')
+    presc_zmx = load_zemax_zmx(str(q), surface_range=(1, 3))
+    assert abs(presc['thicknesses'][0] - presc_zmx['thicknesses'][0]) < 1e-9
+
+
 def test_zx3_loaded_stop_index_preserved(tmp_path):
     """ZX-3: an explicit STOP on the back surface is preserved on the
     lens-only surfaces and exposed as a top-level stop_index (was dropped,

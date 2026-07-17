@@ -190,6 +190,24 @@ def test_fga_auto_sampling_conserves_identity_power():
         assert pratio > 0.99         # completeness floor conserves power (was ~0.66)
 
 
+def test_caustic_zone_uses_meridional_row_not_column_index():
+    """`_caustic_zone` must read the centre-ROW meridional line ``E_in[Ny//2, :]``,
+    not ``E_in[Nx//2, :]`` (audit S2-21).  On a NON-SQUARE (tall) field where
+    ``Nx//2 >= Ny`` the old column-as-row index raised IndexError; even when in
+    range it read the wrong row, corrupting the caustic-zone / dispatcher decision."""
+    from lumenairy.propagators.fga import _caustic_zone
+    k = 2 * np.pi / _WL
+    Ny, Nx, dx = 64, 192, 8e-6            # tall: Nx//2 = 96 >= Ny = 64
+    xs = (np.arange(Nx) - Nx / 2) * dx
+    ys = (np.arange(Ny) - Ny / 2) * dx
+    Xg, Yg = np.meshgrid(xs, ys)
+    r2 = Xg ** 2 + Yg ** 2
+    conv = (np.exp(-r2 / (0.4e-3) ** 2)
+            * np.exp(-1j * k * r2 / (2 * 38e-3))).astype(np.complex128)  # converging
+    zone = _caustic_zone(conv, dx, _singlet(), _WL)   # old code: IndexError here
+    assert zone is not None and zone[0] < zone[1]     # a real caustic zone found
+
+
 def test_fga_coarse_stride_matches_full():
     """The opt-in coarse-lattice trace (``coarse_stride>1``) reconstructs the
     SAME field as the full per-beamlet trace to the FGA floor.

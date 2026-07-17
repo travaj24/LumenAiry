@@ -64,38 +64,39 @@ from lumenairy.raytrace import (
 class TestAuditFixesV4_11_2_raytrace_ChainedMirrorSeidelParity:
     """Two-mirror Cassegrain-style geometry: the second mirror must
     see the post-first-mirror index (n = -1, not n = +1).  Without
-    the v4.11.2 parity tracking, Welford's ``S4_i = -(n2-n1) c /
-    (n1 n2)`` flips sign on the secondary because n1 is still +1
-    instead of -1, doubling the absolute |S4_total| in the wrong
-    direction.
+    the v4.11.2 parity tracking, Welford's Petzval term flips sign on
+    the secondary because n1 is still +1 instead of -1, doubling the
+    absolute |S4_total| in the wrong direction.
+
+    S3-1 (v5.24.2 audit): the per-surface Petzval sum carries the
+    SAME ``-S_Welford`` sign convention as S1-S3, i.e.
+    ``S4_i = +(1/(n1 n2)) c (n2 - n1)`` (the prior code kept an extra
+    minus, leaving S4 on the opposite convention and corrupting S5).
+    Every S4 term below is therefore the negative of the pre-S3-1
+    value; the parity FINGERPRINT (secondary sign differs from the
+    primary via n1 = -1) is unchanged.
 
     Hand calculation for the two-mirror geometry below (both
     mirrors, n=1 input, in vacuum):
 
         Primary:  n1=+1, n2=-1, c1=1/R1 = 1/-0.5 = -2 m^-1
-            S4_1 = -(1/(n2 n1)) * c1 * (n2 - n1)
-                 = -(1/(-1))    * (-2) * (-2)
-                 = -(+4)
-                 = -4
-            ... wait -- let me re-do carefully.
             (1/(n2 n1)) = 1/((-1)(+1)) = -1
             (n2 - n1)   = -1 - 1 = -2
             c1          = -2
-            S4_1 = -( -1 * -2 * -2 ) = -( -4 ) = +4
+            S4_1 = +( -1 * -2 * -2 ) = +( -4 ) = -4
 
         Secondary: n1=-1, n2=+1, c2=1/R2 = 1/-0.1 = -10 m^-1
             (1/(n2 n1)) = 1/((+1)(-1)) = -1
             (n2 - n1)   = +1 - (-1) = +2
             c2          = -10
-            S4_2 = -( -1 * -10 * 2 ) = -( 20 ) = -20
+            S4_2 = +( -1 * -10 * 2 ) = +( 20 ) = +20
 
-    Total (with parity fix):  S4 = +4 + (-20) = -16
-    Total (without parity, pre-fix): the secondary would compute
-    with n1=+1 instead of -1, giving
+    Total (parity + S3-1 sign):  S4 = -4 + 20 = +16
+    Without parity tracking the secondary would use n1=+1, giving
             (1/(n2 n1)) = 1/((-1)(+1)) = -1
             (n2 - n1)   = -1 - 1 = -2
-            S4_2_bug    = -( -1 * -10 * -2 ) = -( -20 ) = +20
-        Total = +4 + 20 = +24.
+            S4_2_bug    = +( -1 * -10 * -2 ) = +( -20 ) = -20
+        Total = -4 + (-20) = -24.
 
     A factor-of-1.5 magnitude AND a sign flip -- a strong fingerprint.
     """
@@ -121,9 +122,11 @@ class TestAuditFixesV4_11_2_raytrace_ChainedMirrorSeidelParity:
 
     def test_two_mirror_S4_matches_welford_handcalc(self):
         """The hand-computed Welford S4 sum with parity tracking is
-        -16 (for R1=-0.5m, R2=-0.1m).  Without parity tracking the
-        pre-4.11.2 code returned +24 (factor 1.5 AND a sign flip).
-        Tolerance 1e-9 -- the formula is exact to roundoff."""
+        +16 (for R1=-0.5m, R2=-0.1m) under the S3-1 sign convention
+        (S_IV shares the -S_Welford sign of S1-S3).  Without parity
+        tracking the secondary would flip, giving -24 (factor 1.5 AND
+        a sign flip).  Tolerance 1e-9 -- the formula is exact to
+        roundoff."""
         surfaces, R1, R2 = self._make_two_mirror_system()
         wavelength = 0.55e-6
         result, _ = seidel_coefficients(
@@ -133,27 +136,28 @@ class TestAuditFixesV4_11_2_raytrace_ChainedMirrorSeidelParity:
         S4_total = float(result['total']['S4'])
         S4_per_surf = np.asarray(result['S4'])
 
-        # Hand-calculated S4 contributions:
-        # primary (parity 0 -> 1):   +4
-        # secondary (parity 1 -> 0): -20
-        expected_S4_primary = +4.0
-        expected_S4_secondary = -20.0
+        # Hand-calculated S4 contributions (S3-1 sign convention:
+        # S_IV shares the -S_Welford sign of S1-S3):
+        # primary (parity 0 -> 1):   -4
+        # secondary (parity 1 -> 0): +20
+        expected_S4_primary = -4.0
+        expected_S4_secondary = +20.0
         expected_total = expected_S4_primary + expected_S4_secondary
 
         assert abs(float(S4_per_surf[0]) - expected_S4_primary) < 1e-9, (
             f"Primary mirror S4 = {S4_per_surf[0]!r}; expected "
-            f"{expected_S4_primary} (Welford with n2=-n1)."
+            f"{expected_S4_primary} (Welford with n2=-n1, S3-1 sign)."
         )
         assert abs(float(S4_per_surf[1]) - expected_S4_secondary) < 1e-9, (
             f"Secondary mirror S4 = {S4_per_surf[1]!r}; expected "
             f"{expected_S4_secondary} (Welford parity-tracked: n1=-1 "
-            f"at the second mirror).  Pre-4.11.2 the secondary saw "
-            f"n1=+1 and gave +20 with the WRONG sign."
+            f"at the second mirror, S3-1 sign).  Without parity "
+            f"tracking the secondary would be -20 (opposite sign)."
         )
         assert abs(S4_total - expected_total) < 1e-9, (
             f"Two-mirror total S4 = {S4_total!r}; expected "
             f"{expected_total} (sum of Welford per-surface S4 with "
-            f"mirror_parity tracking).  Pre-4.11.2: total ~ +24."
+            f"mirror_parity tracking, S3-1 sign).  Without parity: -24."
         )
 
     def test_two_mirror_round_trip_returns_to_positive_index(self):

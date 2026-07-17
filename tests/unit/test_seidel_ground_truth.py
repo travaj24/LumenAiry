@@ -16,10 +16,13 @@ spherical wavefront error.
 
 from __future__ import annotations
 
+import copy
+
 import numpy as np
 import pytest
 
 import lumenairy as lm
+from lumenairy.raytrace import Surface, first_order_data, make_fan, trace
 
 # Test geometry: plano-convex BK7 singlet matched to the audit's hand
 # calc so the numerical comparison is one-to-one with the audit report.
@@ -37,6 +40,58 @@ PRESCRIPTION = {
     'thicknesses': [1.0e-3],
     'stop_index': 0,
 }
+
+
+def _traced_third_order_S1(surfaces, wavelength, r_stop, n_rays=201):
+    """Independent, ray-traced estimate of the total third-order
+    spherical Seidel sum ``S1`` -- the absolute-magnitude oracle the
+    S5-1 audit finding said the flagship test was missing.
+
+    Third-order theory gives, at the paraxial image plane, a purely odd
+    transverse ray aberration for the tangential (y) fan::
+
+        dy(rho) = -(S1 / (2 n' u'_k)) * rho^3   (+ higher-order rho^5, ...)
+
+    with ``rho = y_launch / r_stop`` the fractional pupil coordinate and
+    ``n' u'_k = -r_stop / efl`` the image-space reduced marginal-ray
+    angle for an object at infinity with the stop at surface 0.  The
+    transverse ray aberration is just the local slope of the wavefront
+    OPD (``dW/d rho``), so this is the audit's promised "ray-trace OPD"
+    check -- measured as ray displacement rather than a raw OPD-to-plane
+    rho^4 fit, which is corrupted at f/4 by the plane-vs-reference-sphere
+    quartic (~3 um, comparable to the ~7 um of spherical itself).
+
+    Reading the ``rho^3`` coefficient of the traced ``dy`` therefore
+    recovers ``S1`` *without* touching the paraxial Buchdahl-Hopkins code
+    in :func:`seidel_coefficients`: it is a full geometric trace (exact
+    Snell refraction + propagation), a genuinely independent oracle.
+    Only the sign convention differs from the library's ``S1`` (the two
+    use opposite transverse-aberration / ray-angle conventions); the
+    magnitude is the cross-check.  Returns the signed traced value.
+    """
+    fod = first_order_data(surfaces, wavelength)
+    efl, bfl = fod.efl, fod.bfl
+    # Evaluate at the paraxial focus.  The tracer applies transfers only
+    # BETWEEN surfaces, so the last surface's own thickness is never
+    # propagated -- append an explicit flat image surface ``bfl`` away.
+    surf = [copy.copy(s) for s in surfaces]
+    surf[-1].thickness = bfl
+    surf.append(Surface(radius=np.inf, thickness=0.0,
+                        glass_before='air', glass_after='air'))
+    for s in surf:
+        s.semi_diameter = np.inf  # never clip the marginal ray at the edge
+    fan = make_fan('y', r_stop, n_rays, field_angle=0.0, wavelength=wavelength)
+    img = trace(fan, surf, wavelength).image_rays
+    rho = np.linspace(-1.0, 1.0, n_rays)
+    dy = np.asarray(img.y)
+    good = np.asarray(img.alive) & np.isfinite(dy)
+    rho, dy = rho[good], dy[good]
+    # Odd-power fit; the rho^3 term is the third-order transverse
+    # spherical (rho^5/rho^7 absorb higher-order spherical at f/4).
+    basis = np.vstack([rho ** 3, rho ** 5, rho ** 7]).T
+    c3 = np.linalg.lstsq(basis, dy, rcond=None)[0][0]
+    nu_prime = -r_stop / efl  # image-space reduced marginal-ray angle
+    return -2.0 * nu_prime * c3
 
 
 @pytest.fixture
@@ -87,13 +142,21 @@ class TestSeidelGroundTruth:
 
     def test_S1_matches_ray_trace_OPD_fit(self):
         """The headline ground-truth test the audit recommended:
-        ray-trace a marginal-ray bundle through the singlet, fit the
-        on-axis paraxial-focus OPD as a + b·ρ⁴, and assert 8·b ≈ S1
-        (the standard Welford relation W_SA = (1/8)·S1·ρ⁴).
+        ray-trace a marginal-ray bundle through the singlet, extract the
+        on-axis paraxial-focus wavefront, and assert the analytic Seidel
+        S1 matches an INDEPENDENT ray-traced value.
 
-        Uses :func:`apply_real_lens_traced` (the gold-standard
-        ray-traced wave-optics path) on a small grid to extract
-        the OPD profile.
+        S5-1 fix: the pre-4.9 assertion was only the range window
+        ``1e-5 < |S1| < 5e-4``, which admitted BOTH the correct ~5.8e-5
+        AND the pre-4.9 buggy ~2.6e-4 -- a tautology that caught nothing.
+        It is replaced here by a genuine cross-check against a full
+        geometric ray trace via :func:`_traced_third_order_S1`.  That
+        oracle reads the ``rho^3`` transverse-ray-aberration coefficient
+        at the paraxial focus (the local slope ``dW/d rho`` of the
+        wavefront OPD), which recovers ``S1`` while sharing no code with
+        the paraxial Buchdahl-Hopkins formula -- and, unlike a raw
+        OPD-to-plane ``rho^4`` fit, is free of the plane-vs-sphere
+        quartic that contaminates the OPD at f/4.
         """
         # On-axis Seidel run -- pure spherical, no other aberrations.
         surfaces = lm.surfaces_from_prescription(PRESCRIPTION)
@@ -103,22 +166,55 @@ class TestSeidelGroundTruth:
         )
         S1_total = float(seidel['total']['S1'])
 
-        # Skip if the ray trace doesn't have an applicable
-        # ground-truth comparator -- the audit's recommendation was
-        # "fit OPD = a·ρ² + b·ρ⁴ at paraxial focus and assert
-        # 8·b ≈ S1".  Order-of-magnitude check (since the
-        # ray-traced OPD picks up additional higher-order aberrations
-        # that don't separate cleanly from b·ρ⁴ at f/4):  S1 in the
-        # right ballpark for a BK7 PCV singlet at f/4 is ~5e-5 m.
-        # The pre-4.9 buggy value was ~2.6e-4 m -- 5× too large.
-        # Welford's analytical S_I for this geometry is +5.8e-5 m
-        # (matches sign + magnitude under the standard convention).
-        assert 1e-5 < abs(S1_total) < 5e-4, (
-            f"S1 = {S1_total:.3e}; expected magnitude in [1e-5, 5e-4] "
-            f"for a 100 mm PCV BK7 singlet at f/4.  Pre-4.9 produced "
-            f"~2.6e-4 (too large by ~5× per audit hand-calc); the "
-            f"correct value is ~5.8e-5."
+        r_stop = PRESCRIPTION['aperture_diameter'] / 2.0
+        S1_traced = _traced_third_order_S1(
+            surfaces, PRESCRIPTION['wavelength'], r_stop)
+
+        # Independent-oracle magnitude match.  Empirically the traced
+        # value is 5.755e-5 vs the analytic 5.7545e-5 (|ratio| = 1.0000,
+        # stable across 81-401 rays); the pre-4.9 bug produced ~2.6e-4
+        # (|ratio| ~4.5), comfortably rejected by this +-15% band.
+        ratio = abs(S1_total) / abs(S1_traced)
+        assert 0.85 < ratio < 1.15, (
+            f"Analytic Seidel S1 = {S1_total:.4e} disagrees with the "
+            f"independent ray-traced transverse-aberration oracle "
+            f"{S1_traced:.4e} (|ratio| = {ratio:.4f}).  Expected |ratio| "
+            f"~1.0; the pre-4.9 bug (~2.6e-4) gives |ratio| ~4.5."
         )
+
+    def test_S1_traced_oracle_rejects_5x_inflated_value(self):
+        """S5-1 regression: prove the traced oracle actually
+        DISCRIMINATES -- it must accept the correct S1 *and* reject the
+        documented pre-4.9 buggy value.  The old range-window assertion
+        (``1e-5 < |S1| < 5e-4``) passed on BOTH, so it caught nothing;
+        this guards against silently re-introducing such a slack gate.
+
+        The oracle (:func:`_traced_third_order_S1`) shares no code with
+        the Seidel formula -- it is a full geometric ray trace.
+        """
+        surfaces = lm.surfaces_from_prescription(PRESCRIPTION)
+        seidel, _ = lm.seidel_coefficients(
+            surfaces, wavelength=PRESCRIPTION['wavelength'],
+            field_angle=0.0)
+        S1_total = float(seidel['total']['S1'])
+        r_stop = PRESCRIPTION['aperture_diameter'] / 2.0
+        S1_traced = _traced_third_order_S1(
+            surfaces, PRESCRIPTION['wavelength'], r_stop)
+
+        band = 0.15  # the +-15% band used by the flagship test
+        # (a) the CORRECT analytic value is accepted ...
+        assert abs(abs(S1_total) / abs(S1_traced) - 1.0) < band, (
+            f"correct S1 = {S1_total:.4e} rejected by the traced oracle "
+            f"{S1_traced:.4e}")
+        # (b) ... while the documented pre-4.9 buggy magnitude (~2.6e-4,
+        # ~4.5x too large) is REJECTED by that very same band.  If this
+        # ever stops holding, the magnitude gate has gone slack and the
+        # tautology the audit flagged (S5-1) has crept back in.
+        S1_buggy = 2.6e-4
+        assert abs(S1_buggy / abs(S1_traced) - 1.0) >= band, (
+            f"the traced oracle FAILED to reject the pre-4.9 buggy "
+            f"S1 = {S1_buggy:.3e} (traced = {S1_traced:.4e}); the "
+            f"magnitude gate is too loose to be a real regression guard.")
 
     def test_seidel_wfe_petzval_uses_H_squared(self, seidel_result):
         """4.9 fix #4.6: seidel_wfe scales S4 by |H|² (the Lagrange
@@ -150,6 +246,71 @@ class TestSeidelGroundTruth:
             arr = np.asarray(result[key])
             assert np.all(np.isfinite(arr)), (
                 f"{key} contains NaN or Inf: {arr!r}")
+
+    def test_stop_at_thin_lens_distortion_vanishes(self):
+        """S3-1 INDEPENDENT gate: third-order distortion (S5) must
+        vanish for a thin lens with the aperture stop in its plane
+        (Welford / Kingslake: a stop AT a thin lens gives zero
+        distortion).  For a biconvex singlet with the stop at the
+        front surface, ``|S5|`` must therefore scale *linearly toward
+        zero* as the centre thickness ``t -> 0`` (the stop approaches
+        the lens plane).
+
+        This oracle does NOT come from the library's own Seidel
+        formula -- it is the physical invariant the S3-1 sign bug
+        violated.  Pre-fix the Petzval sum S4 sat on the OPPOSITE sign
+        convention to S1-S3, so the ``S3`` and ``H^2 S4`` terms in the
+        Schwarzschild ``S5 = (A_c/A_m)(S3 + H^2 S4)`` added instead of
+        cancelling: ``|S5|`` PLATEAUED (~1.2e-5 relative) and actually
+        grew as the lens thinned, instead of vanishing.
+        """
+        wl = 0.55e-6
+
+        def biconvex_stop_at_lens(t):
+            # Stop AT the front surface; as t -> 0 the two surfaces
+            # merge into a thin lens in the stop plane.
+            return [
+                Surface(radius=50e-3, thickness=t, glass_before='air',
+                        glass_after='N-BK7', is_stop=True,
+                        semi_diameter=10e-3),
+                Surface(radius=-50e-3, thickness=0.0,
+                        glass_before='N-BK7', glass_after='air',
+                        semi_diameter=10e-3),
+            ]
+
+        thicknesses = [4e-3, 2e-3, 1e-3, 0.5e-3]
+        S5s, S1s = [], []
+        for t in thicknesses:
+            r, _ = lm.seidel_coefficients(
+                biconvex_stop_at_lens(t), wavelength=wl, field_angle=0.01)
+            S5s.append(abs(float(r['total']['S5'])))
+            S1s.append(abs(float(r['total']['S1'])))
+
+        # (1) |S5| shrinks monotonically toward 0 as the lens thins.
+        # The bug made distortion grow/plateau instead.
+        for a, b in zip(S5s[:-1], S5s[1:]):
+            assert b < a, (
+                f"|S5| must shrink as the stop approaches the lens "
+                f"plane; got {S5s} for t={thicknesses}.  The S3-1 bug "
+                f"made distortion plateau/grow as the lens thinned.")
+
+        # (2) Linear-in-thickness scaling: halving t halves |S5|, so
+        # |S5(thinnest)| / |S5(thickest)| ~ t_thin / t_thick = 0.125.
+        ratio = S5s[-1] / S5s[0]
+        t_ratio = thicknesses[-1] / thicknesses[0]
+        assert 0.6 * t_ratio < ratio < 1.6 * t_ratio, (
+            f"|S5| must scale ~linearly toward 0 with thickness: |S5| "
+            f"ratio {ratio:.3f} vs thickness ratio {t_ratio:.3f}.  "
+            f"Pre-S3-1 this ratio was ~1 (plateau).")
+
+        # (3) At the near-thin limit the relative distortion is tiny.
+        # Pre-fix |S5/S1| floored near ~1.2e-5; the fix drives it to
+        # ~5e-7 and continues toward 0.
+        rel = S5s[-1] / S1s[-1]
+        assert rel < 2e-6, (
+            f"|S5/S1| at the near-thin stop-at-lens limit = {rel:.2e}; "
+            f"expected << 1e-6 (distortion -> 0).  The S3-1 bug left "
+            f"this at ~1.2e-5.")
 
     def test_seidel_scaling_with_field_angle(self):
         """Cross-check: S1 is independent of field angle, S2 ∝ field,

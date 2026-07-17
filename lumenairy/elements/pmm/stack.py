@@ -2117,6 +2117,19 @@ class _PreparedPMMStack:
             raise NotImplementedError(
                 "PMMStack.prepare: dispersive (wl -> value) materials are the "
                 "solve_vs_wavelength path; prepare() swaps material KEYS.")
+        # OOP guard (audit S1-1): the prepared eig is the in-plane 2n solver
+        # (_build_sem_tensor_segments reads only exx/exy/eyx/eyy/ezz), so it
+        # silently drops eps_xz/yz/zx/zy.  Reject CONCRETE out-of-plane tensor
+        # layers here (mirrors the solve_vs_wavelength guard); a material KEY
+        # that resolves to an OOP tensor is unknown until solve() and is
+        # caught there.
+        if any(not isinstance(e, str) and stack._is_oop(e)
+               for L in stack._layers for _w, e in L[1]):
+            raise NotImplementedError(
+                "PMMStack.prepare: out-of-plane tensor layers "
+                "(eps_xz/yz/zx/zy) are not supported on the prepared path "
+                "(the assemble-once eig is the in-plane 2n solver); call "
+                "PMMStack.solve() per point.")
         self._st = stack
         self._uwidths, self._layer_eps_u = _pmm_union_grid(
             [L[1] for L in stack._layers], stack.min_feature / stack.period)
@@ -2193,6 +2206,18 @@ class _PreparedPMMStack:
         materials = dict(materials or {})
         angle = _resolve_incidence(angle, theta)
         wl = float(wavelength)
+        # OOP guard (audit S1-1): a material key may resolve to an out-of-plane
+        # tensor, which the in-plane prepared eig would silently drop (concrete
+        # OOP layers were already rejected in __init__).  Only KEYED layers can
+        # newly resolve to OOP, so check just those.
+        for i, keys in enumerate(self._layer_keys):
+            if keys and any(st._is_oop(st._as_tensor(e)) for e in
+                            self._resolve(self._layer_eps_u[i], materials, wl)):
+                raise NotImplementedError(
+                    "PMMStack.prepare/solve: a material key resolved to an "
+                    "out-of-plane tensor (eps_xz/yz/zx/zy); the prepared path "
+                    "is in-plane only -- call PMMStack.solve() per material "
+                    "point.")
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(st.n_sup)) * np.sin(angle) * k0
         eps_sup, eps_sub = st.n_sup ** 2, st.n_sub ** 2

@@ -1155,7 +1155,26 @@ def through_focus_scan_jax(
     # are baked into the cached jit kernel -- see
     # `_build_through_focus_scan_jax_kernel`.  Only the input FFT and
     # the z-array are runtime arguments.
-    E_jax = jnp.asarray(E_exit)
+    #
+    # v5.24.4 (AUDIT_V5_24_2 S3-2): guard the silent complex128 ->
+    # complex64 truncation.  When ``E_exit`` is double precision but
+    # ``jax_enable_x64`` is off (JAX's default, which lumenairy never
+    # flips), ``jnp.asarray`` downcasts to complex64 and the ASM kernel
+    # phase ``kz * z`` (~1e5 rad here) loses all sub-radian accuracy in
+    # float32 -- peak intensity drifts ~1-15% and best-focus Strehl can
+    # exceed 1, silently mis-ranking designs.  Resolve the target dtype
+    # through the shared helper, which auto-enables x64 (with a one-shot
+    # RuntimeWarning) when double precision is requested but disabled --
+    # the same contract fft_infra._resolve_jax_complex_dtype gives every
+    # other JAX entry point.  A caller that explicitly wants single
+    # precision passes a complex64 field and is respected silently.
+    from ..propagators.fft_infra import _resolve_jax_complex_dtype
+    _in_dtype = (np.dtype(E_exit.dtype) if hasattr(E_exit, 'dtype')
+                 else np.asarray(E_exit).dtype)
+    _cdtype = _resolve_jax_complex_dtype(
+        np.complex64 if _in_dtype == np.dtype(np.complex64)
+        else np.complex128)
+    E_jax = jnp.asarray(E_exit).astype(_cdtype)
     Ny, Nx = E_jax.shape[-2:]
     E_fft_shifted = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(E_jax)))
 
@@ -1326,6 +1345,20 @@ def monte_carlo_tolerancing_jax(
         raise ImportError(
             'JAX is not installed; install with `pip install jax` or '
             'use monte_carlo_tolerancing() (NumPy).')
+    # v5.24.4 (AUDIT_V5_24_2 S3-2): same silent-truncation guard as
+    # through_focus_scan_jax, applied up front so BOTH the JAX wave leg
+    # (apply_real_lens_traced_jax below) and the fused through-focus
+    # scan run in the requested precision instead of a silent float32
+    # downcast that corrupts the per-trial Strehl statistics.  Auto-
+    # enables x64 with a one-shot RuntimeWarning when ``E_source`` is
+    # double precision but jax_enable_x64 is off; a complex64 source is
+    # respected silently.
+    from ..propagators.fft_infra import _resolve_jax_complex_dtype
+    _mc_in_dtype = (np.dtype(E_source.dtype) if hasattr(E_source, 'dtype')
+                    else np.asarray(E_source).dtype)
+    _resolve_jax_complex_dtype(
+        np.complex64 if _mc_in_dtype == np.dtype(np.complex64)
+        else np.complex128)
     from ..elements.lenses import (
         apply_real_lens,
         apply_real_lens_traced_jax,
