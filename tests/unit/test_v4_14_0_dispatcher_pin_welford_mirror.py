@@ -128,12 +128,13 @@ def _invoke_seidel_coefficients():
         surfaces, wavelength=0.55e-6, field_angle=0.001)
     # Total Petzval (S4) for our test Cassegrain (R1=-1.0, R2=-0.3,
     # d12=0.4, stop at primary) using the Welford parity-tracked
-    # n2 = -n1 convention.  Per-surface contributions:
+    # n2 = -n1 convention.  Per-surface (audit S3-1: S4 uses the
+    # -S_Welford sign of S1..S3, i.e. S4 = +(1/(n2 n1)) c (n2-n1)):
     #   Primary  (n1=+1, n2=-1, c1=-1/1.0=-1):
-    #     S4_1 = -(1/(n2 n1)) c (n2-n1) = -(1/-1) (-1) (-2) = +2
+    #     S4_1 = +(1/(n2 n1)) c (n2-n1) = +(1/-1) (-1) (-2) = -2
     #   Secondary (parity flipped, n1=-1, n2=+1, c2=-1/0.3=-3.333):
-    #     S4_2 = -(1/(1 -1)) (-3.333) (2) = -6.667
-    #   Total: S4 = +2 - 6.667 = -4.667
+    #     S4_2 = +(1/(1 -1)) (-3.333) (2) = +6.667
+    #   Total: S4 = -2 + 6.667 = +4.667
     # If the parity-tracking regresses, S4_2 would be computed with
     # n1=+1 -> wrong sign / magnitude; a regression value would be
     # 0 (mirror branch missing entirely) or non-finite.
@@ -224,11 +225,12 @@ _ANALYSIS_FUNCS_TO_PIN = [
     pytest.param(
         'seidel_coefficients', _invoke_seidel_coefficients,
         # S4 hand calc for the Cassegrain (R1=-1.0, R2=-0.3): see
-        # _invoke_seidel_coefficients docstring.  Expected -4.6667
-        # (parity-tracked Welford); pre-v4.11.2 the mirror branch
-        # was either zero (no S4 contribution) or had wrong sign
-        # on the secondary.
-        'analytical', -14.0 / 3.0, 1e-9,
+        # _invoke_seidel_coefficients docstring.  Expected +4.6667: the audit
+        # S3-1 fix puts the Petzval S4 on the SAME -S_Welford sign convention
+        # as S1..S3 (was -4.6667 -- one convention off, which also corrupted
+        # S5 / seidel_wfe); the mirror-parity magnitude 14/3 is unchanged.
+        # (Parity still guards the secondary: a regression gives 0 or non-finite.)
+        'analytical', 14.0 / 3.0, 1e-9,
         id='seidel_coefficients'),
     pytest.param(
         'petzval_radius_single_mirror',
