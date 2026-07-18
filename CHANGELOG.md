@@ -9104,9 +9104,10 @@ routes through `_deprecation.warn_deprecated_signature` with explicit
   (was a literal `1e9` fallback for failed ABCD), `_FailedScanStrehlSentinel`
   (was `0.0`), `_PerturbedABCDFallbackSentinel` (was a `(efl, bfl)`
   tuple fallback).  v5.1.0 (Wave-4 integration / Agent E 6-file
-  split): class definitions moved to `optimize/context.py:112-139`
+  split): class definitions moved to `optimize/context.py:151-178`
   (the 2 remaining sentinels post-v4.15.4
-  `_PerturbedABCDFallbackSentinel` deletion); was at
+  `_PerturbedABCDFallbackSentinel` deletion; v5.24.4 audit S4-18
+  optimizer hygiene shifted them from `:112-139`); was at
   `optimize/core.py:2069`, `:2096`, `:2122` (singletons at `:2093`,
   `:2119`, `:2144`) within the `:2044-2144` documentation block
   pre-v5.1.0.

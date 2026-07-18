@@ -365,6 +365,7 @@ from .analysis.ghost import (
 from .analysis.interferometry import (
     fringe_spacing,
     phase_shift_extract,
+    phase_step_roundtrip,
     simulate_interferogram,
 )
 
@@ -1517,6 +1518,7 @@ __all__ = [
     # Interferometry
     'simulate_interferogram',
     'phase_shift_extract',
+    'phase_step_roundtrip',
     'fringe_spacing',
 
     # Phase retrieval

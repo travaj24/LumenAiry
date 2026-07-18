@@ -111,22 +111,34 @@ class TestS1_13BerremanSplitAligned:
 
 
 # ============================================================================
-# S1-16 -- BOR mode classifiers share the index-ceiling leg
+# S1-16 -- BOR mode classifiers are INTENTIONALLY basis-specific
 # ============================================================================
 
-def _bor_core_oracle(qn, eps, reldiv, reldiv_tol=0.5):
-    """Independent full physical criterion: propagating (imag small), above
-    the q~0 floor, axial index <= medium index, and (nodal only) div-clean."""
+def _bor_nodal_core_oracle(qn, reldiv, reldiv_tol=0.5):
+    """Independent physical criterion for the NODAL classifier: propagating
+    (imag small), above the q~0 floor, and div-clean (reldiv).  The
+    index-ceiling leg the staggered twins carry is DELIBERATELY absent --
+    applying it to the nodal FD basis over-filters the reldiv-screened set and
+    degrades the documented ~4% nodal energy floor (regression guarded by
+    test_bor_solve::test_structured_stack_energy_floor_nodal, which the forced
+    index-ceiling drove to ~10.7%)."""
     return ((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
-            & (reldiv < reldiv_tol)
-            & (np.sqrt(eps).real - qn.real > -5e-10))
+            & (reldiv < reldiv_tol))
 
 
-class TestS1_16BorClassifierLockstep:
-    def test_index_ceiling_rejects_super_index_mode(self):
-        """A mode with q/k0 above the medium index sqrt(eps) is unphysical and
-        must be rejected -- the leg the staggered twins already had but
-        _physical_propagating lacked."""
+class TestS1_16BorClassifierBasisSpecific:
+    """S1-16 resolution: the three BOR classifiers share the {imag, real-floor}
+    core and each carries ONE basis-specific leg -- the NODAL classifier's is
+    reldiv (screens the FD spurious sea); the staggered twins' is the index
+    ceiling (they are div-conforming, spurious-free, so carry no reldiv).  The
+    finding was that the 'keep all three in lockstep' comment was FALSE; the fix
+    is to make the comment accurate, NOT to force the index ceiling onto the
+    nodal path (which over-filters and breaks its energy floor)."""
+
+    def test_nodal_classifier_does_not_apply_index_ceiling(self):
+        """The nodal ``_physical_propagating`` must NOT reject a mode purely
+        because q/k0 exceeds sqrt(eps): a propagating, div-clean 'super-index'
+        mode is KEPT (the index-ceiling leg belongs to the staggered twins)."""
         from lumenairy.elements.bor.bor_solve import _physical_propagating
 
         k0 = 3.0
@@ -135,32 +147,34 @@ class TestS1_16BorClassifierLockstep:
         reldiv = np.array([0.0, 0.0, 0.0, 0.0, 0.9])
         L = {"q": qn * k0, "reldiv": reldiv, "eps_ceiling": eps}
         keep = np.asarray(_physical_propagating(L, k0))
-        oracle = _bor_core_oracle(qn, eps, reldiv)
+        oracle = _bor_nodal_core_oracle(qn, reldiv)
         assert list(keep) == list(oracle)
-        # the super-index mode (qn=1.7 > 1.5) is now rejected
-        assert keep[1] == False   # noqa: E712  (numpy bool identity)
+        # the super-index mode (qn=1.7 > 1.5) is div-clean + propagating and is
+        # KEPT (NOT rejected by an index ceiling the nodal basis must not apply)
+        assert keep[1] == True    # noqa: E712  (numpy bool identity)
 
-    def test_lockstep_with_staggered_twin_expression(self):
-        """With reldiv == 0 (staggered / spurious-free regime) the classifier
-        must reduce EXACTLY to the bor_stack.prop / _jax_bor._mask boolean
-        expression -- demonstrating the three now share one core."""
+    def test_nodal_unique_leg_is_reldiv_not_index_ceiling(self):
+        """The nodal classifier reduces EXACTLY to {imag, real-floor, reldiv}:
+        a reldiv-dirty mode is dropped (the nodal-unique leg), while a
+        super-index reldiv-clean mode is kept (no ceiling applied)."""
         from lumenairy.elements.bor.bor_solve import _physical_propagating
 
         k0 = 5.0
         eps = (1.41 ** 2) + 0j
         qn = np.array([1.40, 1.42, 0.7, 1e-3, 5e-7, 1.0], dtype=complex)
-        reldiv = np.zeros(qn.size)
+        reldiv = np.array([0.0, 0.0, 0.9, 0.0, 0.0, 0.0])
         L = {"q": qn * k0, "reldiv": reldiv, "eps_ceiling": eps}
         keep = np.asarray(_physical_propagating(L, k0))
-        # the staggered-twin expression (no reldiv leg; reldiv==0 here)
-        twin = ((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
-                & (np.sqrt(eps).real - qn.real > -5e-10))
-        assert list(keep) == list(twin)
+        assert list(keep) == list(_bor_nodal_core_oracle(qn, reldiv))
+        # qn=1.42 > sqrt(eps)=1.41 but reldiv-clean + propagating -> KEPT
+        assert keep[1] == True    # noqa: E712
+        # the reldiv-dirty mode (index 2) IS dropped by the nodal-unique leg
+        assert keep[2] == False   # noqa: E712
 
-    def test_build_layer_stores_index_ceiling_and_drops_nothing_physical(self):
-        """build_layer records the medium eps ceiling, and adding the ceiling
-        leg drops NO physical mode of a homogeneous half-space (q <= sqrt(eps)
-        by construction) -- so no existing result changes."""
+    def test_build_layer_stores_index_ceiling_reference(self):
+        """build_layer records the medium eps ceiling as a per-layer REFERENCE
+        (the staggered twins' leg value), but the nodal ``_physical_propagating``
+        does not apply it -- so no existing nodal result changes."""
         from lumenairy.elements.bor.bor_solve import (
             _physical_propagating,
             build_layer,
@@ -172,13 +186,12 @@ class TestS1_16BorClassifierLockstep:
                                                             dtype=complex), k0)
         assert "eps_ceiling" in L
         assert abs(np.sqrt(L["eps_ceiling"]).real - n_med) < 1e-9
-        # pre-fix criterion (imag, real-floor, reldiv only)
+        # nodal criterion (imag, real-floor, reldiv only) -- ceiling NOT applied
         qn = L["q"] / k0
-        pre = ((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
-               & (L["reldiv"] < 0.5))
+        crit = ((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
+                & (L["reldiv"] < 0.5))
         post = np.asarray(_physical_propagating(L, k0))
-        # the ceiling only ever removes modes; here it must remove NONE
-        assert np.array_equal(pre, post)
+        assert np.array_equal(crit, post)
 
 
 # ============================================================================

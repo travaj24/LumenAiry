@@ -17,7 +17,9 @@ The entire discrepancy — the 9 um nominal-plane spot, the 3.6 um "core", and t
 | lumenairy Fresnel-TF + `paraxial` | matched paraxial | 2.746 | 90.9% | 100.0% | correct |
 | lumenairy exact ASM + `nonparaxial` | matched (infinite conjugates) | 2.784 | 90.7% | 100.0% | correct |
 | lumenairy exact ASM + `paraxial` (= exp18 config) | MISMATCHED | 9.13 nominal / 5.03 best focus (dz=-200um) | 7.8% / 24.8% | 23% / 46% | reproduces exp18's 9 um signature |
-| LightPipes (independent) | Fresnel+Lens vs Forvard+Lens | «LP_PENDING» | | | |
+| LightPipes 2.1.5 `Fresnel`+`Lens` | matched paraxial | (1.8um px) | 80.6% (pixelated) | 99.84% | clean, confirms |
+| LightPipes 2.1.5 `Forvard`+`Lens` | ALSO matched paraxial | (1.8um px) | 93.5% (pixelated) | 100.0% | clean; NB source inspection: Forvard's kernel is exp(-i pi lam z f^2) — PARAXIAL TF despite the "spectral method" name; LightPipes has NO exact-ASM propagator, so it cannot exhibit the mismatch |
+| hand-written textbook exact ASM (earlier audit) | paraxial x exact ASM | == lumenairy to 4 digits | | | independent confirmation of the MISMATCHED side |
 | poppy | (dropped) | 5.0 | — | — | poppy applies the lens quadratic on-grid at far-field pixel scale (73 rad/px aliased); not a valid oracle for this system |
 
 All grids N=16384, dx=1.8 um unless noted; EE denominators are TOTAL launched power reaching the image plane.
@@ -26,9 +28,9 @@ All grids N=16384, dx=1.8 um unless noted; EE denominators are TOTAL launched po
 
 | lens model x propagator | nominal-plane w (um) | best focus | EE3 / EE6 at best | pedestal? |
 |---|---|---|---|---|
-| `paraxial` x exact ASM (= exp18) | «121_PAR» | «121_PAR_BF» | «121_PAR_EE» | huge halo |
-| `nonparaxial` x exact ASM (= exp19) | «121_NP» | «121_NP_BF» | «121_NP_EE» | huge halo (over-corrected) |
-| `paraxial` x Fresnel-TF (matched) | «121_FRE» | «121_FRE_BF» | «121_FRE_EE» | none |
+| `paraxial` x exact ASM (= exp18) | 7.84 (exp18 @ full N: 9.0) | dz=-150um: 4.63 | 31.8% / 53.3% | huge halo |
+| `nonparaxial` x exact ASM (= exp19) | 13.83 (exp19 @ full N: 12.6) | dz=-250um: 4.79 | 32.4% / 56.7% | huge halo (over-corrected) |
+| `paraxial` x Fresnel-TF (matched) | 3.077 | dz=0: 3.077 | 84.8% / 99.9% | none (transmission 99.99%) |
 | **conjugate-matched stigmatic x exact ASM** | **3.091** | dz=0: 3.091 | **84.4% / 99.9%** | **NONE (transmission 99.98%)** |
 
 Analytic prediction at the nominal plane: w=3.080 um (the paraxial waist 2.737 um sits 9.3 um behind the logged plane, ~0.5 z_R). The stigmatic run confirms the chain's grid (N=16384 here; 28672/0.9 um in production), the Matsushima band-limit, the group apertures (2.1-3.4x the beam radius, 0.02% loss), and 20 ASM legs including negative reference-plane shifts are ALL fine.
