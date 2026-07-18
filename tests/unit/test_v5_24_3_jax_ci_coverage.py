@@ -154,6 +154,41 @@ def test_s4_4_dedicated_jax_ci_job_installs_and_runs_jax() -> None:
     )
 
 
+def test_s4_4_jax_job_pins_blas_threads_to_avoid_openblas_deadlock() -> None:
+    """The dedicated jax job MUST pin the numpy / OpenBLAS thread count
+    (``OMP_NUM_THREADS`` / ``OPENBLAS_NUM_THREADS``) so the numpy-side
+    linear algebra runs single-threaded.
+
+    v5.24.4: JAX and OpenBLAS coexisting in ONE process deadlock on the
+    first large *multi-threaded* ``numpy.linalg`` BLAS call -- concretely
+    the traced-lens Chebyshev-fit ``lstsq`` in ``apply_real_lens_traced``
+    (``_lens_traced.py:558``), reached by the non-jax cookbook tests that
+    share a file with a jax-guarded test.  JAX's runtime and OpenBLAS both
+    spin up OpenMP pools; the nested OpenMP hangs the worker, which is
+    SIGTERM-killed (exit 143) mid-``lstsq`` -- silently failing the whole
+    job with no ``FAILED`` line.  Pinning BLAS to one thread makes the
+    numpy side deadlock-free (JAX/XLA parallelism is governed by XLA, not
+    ``OMP_NUM_THREADS``, so the paths under test are not slowed).  A
+    regression that drops the env re-introduces the hang, so pin it here.
+    """
+    text = _read_workflow()
+    blocks = _job_blocks(text)
+    qualifying = [
+        body
+        for name, body in blocks.items()
+        if _installs_jax_extra(body) and _runs_jax_guarded_selection(body)
+    ]
+    assert qualifying, (
+        "no qualifying jax job found (see the S4-4 install/run pin above)")
+    for body in qualifying:
+        assert 'OMP_NUM_THREADS' in body and 'OPENBLAS_NUM_THREADS' in body, (
+            "v5.24.4 regression: the dedicated jax CI job no longer pins "
+            "OMP_NUM_THREADS / OPENBLAS_NUM_THREADS.  JAX + multi-threaded "
+            "OpenBLAS deadlock on the first large lstsq (the traced-lens "
+            "Chebyshev fit in apply_real_lens_traced), SIGTERM-killing the "
+            "job.  Restore the thread-limit ``env:`` on the run step.")
+
+
 # ---------------------------------------------------------------------------
 # S4-4.2 -- the selection actually covers the guarded files (independent oracle)
 # ---------------------------------------------------------------------------

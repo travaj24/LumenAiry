@@ -289,6 +289,20 @@ jobs:
 
       - name: Run jax-guarded unit tests
         shell: bash
+        env:
+          # v5.24.4 (S4-4 completion): JAX and OpenBLAS in ONE process
+          # deadlock on the first large *multi-threaded* ``numpy.linalg``
+          # BLAS call -- e.g. the traced-lens Chebyshev-fit ``lstsq`` inside
+          # ``apply_real_lens_traced`` (_lens_traced.py:558), reached by the
+          # non-jax cookbook tests that share a file with a jax-guarded test.
+          # JAX's runtime and OpenBLAS both spin up OpenMP pools; nested OpenMP
+          # hangs the worker (SIGTERM 143), which is what killed this job.
+          # Pinning BLAS to a single thread makes the numpy-side linear algebra
+          # deadlock-free.  This does NOT slow the jax paths under test: JAX/XLA
+          # parallelism is governed by XLA, not OMP_NUM_THREADS.
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
         # Select every fast unit-test file that guards a jax path via
         # ``importorskip('jax')`` (module- or function-level).  Selecting by
         # the GUARD -- not by a ``-k jax`` name filter -- is name-independent,
