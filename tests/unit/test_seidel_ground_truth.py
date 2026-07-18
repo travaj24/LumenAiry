@@ -312,6 +312,107 @@ class TestSeidelGroundTruth:
             f"expected << 1e-6 (distortion -> 0).  The S3-1 bug left "
             f"this at ~1.2e-5.")
 
+    def test_petzval_sum_matches_independent_analytic_formula(self):
+        """S3-1 INDEPENDENT magnitude gate (shares NO code with the
+        library's Seidel formula): the stored Petzval sum ``S4`` is the
+        RAW Petzval sum ``P = sum_k c_k (n'_k - n_k)/(n'_k n_k)`` (surface
+        curvature ``c`` and the indices before/after each surface), a
+        closed form from the Petzval theorem itself.  Matching it pins
+        BOTH the sign AND the magnitude of S4 against an oracle the
+        original self-referential S3-1 test never had -- and it is the
+        gate that would have caught the shipped ``-P`` sign directly.
+
+        Ground truth (by-hand + rayoptics cross-checked): a biconvex
+        N-BK7 (R = +/-50 mm) singlet has P = +13.6287 /m,
+        |r_petzval| = 73.4 mm.
+        """
+        from lumenairy.glass import get_glass_index
+        wl = 587.5618e-9
+        n = get_glass_index('N-BK7', wl)
+        R1, R2 = 50e-3, -50e-3
+        surfs = [
+            Surface(radius=R1, thickness=5e-3, glass_before='air',
+                    glass_after='N-BK7', is_stop=True, semi_diameter=5e-3),
+            Surface(radius=R2, thickness=47.6e-3, glass_before='N-BK7',
+                    glass_after='air', semi_diameter=5e-3),
+        ]
+        r, _ = lm.seidel_coefficients(surfs, wavelength=wl,
+                                      object_distance=np.inf, stop_index=0,
+                                      field_angle_deg=1.0)
+        S4 = float(r['total']['S4'])
+        # Independent closed form (Petzval theorem) -- not the library's.
+        P = ((1.0 / R1) * (n - 1.0) / (n * 1.0)
+             + (1.0 / R2) * (1.0 - n) / (1.0 * n))
+        assert abs(S4 - P) <= 1e-6 * abs(P), (
+            f"library S4 (raw Petzval sum) = {S4:+.6e} /m must equal the "
+            f"independent analytic Petzval theorem P = {P:+.6e} /m "
+            f"(diff {abs(S4 - P):.2e}).  The S3-1 sign bug put S4 at -P.")
+        # The pre-fix opposite convention (-P) must be firmly REJECTED.
+        assert abs(S4 - (-P)) > 0.5 * abs(P), (
+            "S4 must NOT sit on the -P convention (the S3-1 bug).")
+
+    def test_seidel_signs_match_independent_rayoptics(self):
+        """S3-1 fully-independent cross-LIBRARY gate: every third-order
+        Seidel sum must share a SINGLE global sign convention with
+        rayoptics (an independent optical-design package).  The S3-1 bug
+        was a RELATIVE sign error -- S4 on the opposite convention to
+        S1-S3 -- which surfaces here as S4's sign disagreeing with
+        rayoptics once the (S1-anchored) global convention factor is
+        removed.  rayoptics is optional; skip cleanly where absent so the
+        gate never blocks a minimal-deps CI leg, but locks the convention
+        wherever the external oracle is installed.
+        """
+        pytest.importorskip('rayoptics')
+        import rayoptics.parax.thirdorder as _to
+        from rayoptics.environment import (
+            FieldSpec,
+            OpticalModel,
+            PupilSpec,
+            WvlSpec,
+        )
+
+        opm = OpticalModel()
+        sm = opm['seq_model']
+        osp = opm['optical_spec']
+        osp['pupil'] = PupilSpec(osp, key=['object', 'epd'], value=10.0)
+        osp['fov'] = FieldSpec(osp, key=['object', 'angle'], value=[1.0],
+                               is_relative=False)
+        osp['wvls'] = WvlSpec([(587.5618, 1.0)], ref_wl=0)
+        opm.radius_mode = True
+        sm.gaps[0].thi = 1e10
+        sm.add_surface([50.0, 5.0, 'N-BK7', 'Schott'])
+        sm.add_surface([-50.0, 100.0])
+        sm.stop_surface = 1
+        opm.update_model()
+        fod = opm['analysis_results']['parax_data'].fod
+        sm.gaps[-1].thi = fod.bfl
+        opm.update_model()
+        df = _to.compute_third_order(opm)
+        ray = {k: float(df[c].sum())
+               for k, c in zip(('S1', 'S2', 'S3', 'S4', 'S5'), df.columns)}
+
+        surfs = [
+            Surface(radius=50e-3, thickness=5e-3, glass_before='air',
+                    glass_after='N-BK7', is_stop=True, semi_diameter=5e-3),
+            Surface(radius=-50e-3, thickness=fod.bfl * 1e-3,
+                    glass_before='N-BK7', glass_after='air',
+                    semi_diameter=5e-3),
+        ]
+        r, _ = lm.seidel_coefficients(surfs, wavelength=587.5618e-9,
+                                      object_distance=np.inf, stop_index=0,
+                                      field_angle_deg=1.0)
+        lum = {k: float(r['total'][k]) for k in ('S1', 'S2', 'S3', 'S4', 'S5')}
+
+        # Global convention factor from S1 (spherical -- sign unambiguous).
+        g = np.sign(lum['S1'] / ray['S1'])
+        for k in ('S1', 'S2', 'S3', 'S4', 'S5'):
+            assert np.sign(lum[k]) == g * np.sign(ray[k]), (
+                f"Seidel {k} sign {np.sign(lum[k]):+.0f} disagrees with "
+                f"the independent rayoptics oracle {g * np.sign(ray[k]):+.0f} "
+                f"(global convention factor g={g:+.0f}).  The S3-1 bug put "
+                f"S4 on the opposite convention; a regression re-introduces "
+                f"it.")
+
     def test_seidel_scaling_with_field_angle(self):
         """Cross-check: S1 is independent of field angle, S2 ∝ field,
         S3 ∝ field², S5 ∝ field³.  The audit pointed out these
