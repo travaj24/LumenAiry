@@ -298,13 +298,32 @@ class TestThroughFocusScanDispatch:
             'E_exit', 'dx', 'wavelength', 'z_values',
             'bucket_radius', 'ideal_peak', 'bandlimit',
             'verbose', 'progress', 'backend',
+            # v5.24.4 (audit S3-5): ``background`` / ``aperture`` are
+            # ANALYSIS knobs (ISO-11146 background subtraction + aperture
+            # bound for the per-plane second-moment widths), NOT propagation
+            # sub-path dispatch keywords -- they leave the ASM FFT-hoist
+            # path untouched, so they satisfy this test's actual contract
+            # (no silent SAS / Fresnel / RS / wave_propagator branch).
+            'background', 'aperture',
         }
+        # The contract this test guards is specifically that no PROPAGATION
+        # dispatch keyword crept in; assert those named knobs stay absent
+        # even as benign analysis kwargs are added above.
+        forbidden = {'wave_propagator', 'sas', 'fresnel', 'rs', 'method',
+                     'propagator'}
         params = set(sig.parameters)
+        assert not (params & forbidden), (
+            f'through_focus_scan grew a PROPAGATION dispatch kwarg '
+            f'{params & forbidden}; the v4.12 FFT-hoist optimisation covers '
+            f'only the ASM path. Audit the new dispatch before assuming the '
+            f'speedup carries.')
         unexpected = params - allowed
         assert not unexpected, (
             f'through_focus_scan grew unexpected kwarg(s) {unexpected}; '
-            f'the v4.12 FFT-hoist optimisation covers only the ASM path. '
-            f'Audit the new dispatch before assuming the speedup carries.')
+            f'if these are benign analysis knobs add them to ``allowed`` '
+            f'(and confirm they do not add a propagation sub-path); if a '
+            f'propagation branch, the FFT-hoist optimisation must be '
+            f'extended to cover it first.')
 
     def test_backend_jax_dispatches_to_jax_twin(self):
         """The ``backend='jax'`` route still hands off to the JAX

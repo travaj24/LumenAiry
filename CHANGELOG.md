@@ -7288,8 +7288,9 @@ Cross-agent test breakage closed:
 * CHANGELOG line-citation refresh:
   `optimize/core.py:3032` -> `optimize/wrapper_merits.py:955`
   (`_ZERO_APERTURE_MASK` branch); `optimize/core.py:987` ->
-  `optimize/merit_terms.py:524` (`MatchIdealSystem._make_source`
-  `ap>0` branch); `optimize/core.py:2044-2054` ->
+  `optimize/merit_terms.py:536` (`MatchIdealSystem._make_source`
+  `ap>0` branch; v5.24.4: the S4-5 failure-direction fix shifted it
+  from :524); `optimize/core.py:2044-2054` ->
   `optimize/context.py:74-84` (sentinel class block).
 * `lumenairy_context` redundant-call elimination tests updated to
   patch at the canonical submodule location (`zernike_mod`,
