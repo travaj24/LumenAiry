@@ -753,6 +753,30 @@ def solve_envelope_stationary_jax_ift(
     return solver(s2_j, src_j, ws_j, wp_j, vc_j, int(n_iter), fit)
 
 
+def _differentiable_lstsq(A, b):
+    """Least-squares solve with a finite VJP for ``jax.grad``.
+
+    ``jnp.linalg.lstsq`` carries an SVD-based gradient whose formula has a
+    ``1/(s_i^2 - s_j^2)`` term that returns NaN when any two singular
+    values are (near-)degenerate -- which the canonical 4-D Chebyshev fit
+    below trips under jax>=0.11 (v5.24.4: JAX now runs in CI on the S4-4
+    leg, so this previously-invisible NaN-gradient regression is caught).
+
+    The normal-equations solve ``(A^H A) x = A^H b`` has a finite VJP for
+    the full-rank, well-conditioned Chebyshev design matrix and reproduces
+    the SAME least-squares solution as ``lstsq`` for full rank; a tiny
+    Tikhonov floor (relative to the matrix scale) keeps both the solve and
+    its gradient finite in the degenerate limit without shifting the
+    well-conditioned solution beyond ~1e-10 relative.
+    """
+    import jax.numpy as jnp
+    Ah = jnp.conj(A.T)
+    AtA = Ah @ A
+    n = AtA.shape[0]
+    floor = 1e-12 * (jnp.trace(AtA).real / n + 1.0)
+    return jnp.linalg.solve(AtA + floor * jnp.eye(n, dtype=AtA.dtype), Ah @ b)
+
+
 def fit_canonical_polynomials_jax(
     prescription: Dict[str, Any],
     wavelength: float,
@@ -922,7 +946,7 @@ def fit_canonical_polynomials_jax(
         # Apply mask via row weighting.
         Xw = X5 * w[:, None]
         bw = phi_obs * w
-        linear_coeffs, *_ = jnp.linalg.lstsq(Xw, bw, rcond=None)
+        linear_coeffs = _differentiable_lstsq(Xw, bw)
         opd_residual = phi_obs - X5 @ linear_coeffs
     else:
         linear_coeffs = None
@@ -955,9 +979,9 @@ def fit_canonical_polynomials_jax(
     # least-squares normal equations.
     A_w = A * w[:, None]
 
-    coef_phi, *_ = jnp.linalg.lstsq(A_w, opd_residual * w, rcond=None)
-    coef_s1x, *_ = jnp.linalg.lstsq(A_w, s1x_in * w, rcond=None)
-    coef_s1y, *_ = jnp.linalg.lstsq(A_w, s1y_in * w, rcond=None)
+    coef_phi = _differentiable_lstsq(A_w, opd_residual * w)
+    coef_s1x = _differentiable_lstsq(A_w, s1x_in * w)
+    coef_s1y = _differentiable_lstsq(A_w, s1y_in * w)
 
     res_phi_rms = jnp.sqrt(jnp.sum(w * (opd_residual - A @ coef_phi) ** 2)
                             / jnp.maximum(jnp.sum(w), 1.0))
