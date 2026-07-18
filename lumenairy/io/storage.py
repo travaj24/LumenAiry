@@ -61,10 +61,14 @@ implementation combines two cooperating mechanisms:
    concurrent-reader guarantee.
 
 The lock file is automatically created in the same directory as the
-data file and persists between calls (it is essentially empty -- the
-lock state lives in the file-system's advisory-lock layer).  Cleanup
-is a no-op: deleting the data file leaves the ``.lock`` file behind,
-which is harmless and can be removed manually if desired.
+data file (it is essentially empty -- the lock state lives in the
+file-system's advisory-lock layer).  v5.24.x (audit S4-19): whether
+the ``.lock`` file remains on disk after the lock is released is
+filelock-version- and platform-dependent (some ``filelock`` releases
+unlink it on POSIX release; on Windows it is typically left behind),
+so callers must not rely on either outcome.  Either way it is
+harmless: a stray ``.lock`` sibling carries no state and can be
+removed manually, and library cleanup never depends on its presence.
 
 Requirements: ``filelock>=3.0`` (declared in the ``hdf5`` and
 ``zarr`` optional-dependency groups in ``pyproject.toml``).  HDF5
@@ -1569,8 +1573,15 @@ def replay_run(filepath: str, *,
         are included (e.g. ``label_prefix='mhs'`` to filter MHS-only
         planes from a mixed run).
     wavelength : float, optional
-        Forwarded onto the result's ``wavelength`` field.  Default 0
-        (storage doesn't carry wavelength as a per-plane attribute).
+        Forwarded onto the result's ``wavelength`` field.  v5.24.x
+        (audit S4-19): when omitted (``None``), the STORED wavelength is
+        used -- the per-plane ``wavelength`` attribute of the last plane
+        (preferred), then any per-plane value, then the file-level
+        ``wavelength`` metadata -- falling back to ``0.0`` only when the
+        store carries none.  ``append_plane`` has persisted per-plane
+        wavelength since v4.0; pre-fix ``replay_run`` ignored it and the
+        replayed result always reported ``0.0`` unless the caller
+        re-supplied the wavelength by hand.
     method : str, optional
         Free-form method tag for the result (e.g. ``'mhs'``,
         ``'system'``).  Defaults to ``'replay'``.
@@ -1587,6 +1598,14 @@ def replay_run(filepath: str, *,
 
     planes_info, _file_meta = list_planes(filepath)
 
+    def _file_meta_wavelength():
+        """File-level (run) wavelength, if the store carries one."""
+        if isinstance(_file_meta, dict):
+            wl = _file_meta.get('wavelength')
+            if wl is not None:
+                return float(wl)
+        return None
+
     # Filter + sort by stored index.
     selected = []
     for info in planes_info:
@@ -1597,9 +1616,14 @@ def replay_run(filepath: str, *,
     selected.sort(key=lambda d: d.get('index', 0))
 
     if not selected:
+        # v5.24.x (audit S4-19): even the empty-selection path honours a
+        # stored file-level wavelength when the caller did not supply one.
+        resolved_wl = wavelength
+        if resolved_wl is None:
+            resolved_wl = _file_meta_wavelength()
         return PropagationResult(
             field=np.zeros((0, 0), dtype=np.complex128),
-            dx=0.0, wavelength=float(wavelength or 0.0),
+            dx=0.0, wavelength=float(resolved_wl or 0.0),
             method=method or 'replay',
             history=[],
         )
@@ -1616,10 +1640,26 @@ def replay_run(filepath: str, *,
             float(plane.get('dx', info.get('dx', 0.0)) or 0.0),
         ))
 
+    # v5.24.x (audit S4-19): resolve the reported wavelength from the
+    # STORED per-plane attribute when the caller omitted it.  Prefer the
+    # last plane (the exit-plane by convention), then any per-plane
+    # value, then the file-level metadata; 0.0 only if the store carries
+    # none.  ``append_plane`` has persisted per-plane wavelength since
+    # v4.0, but pre-fix replay_run ignored it entirely.
+    resolved_wl = wavelength
+    if resolved_wl is None:
+        for plane, info in zip(reversed(full_planes), reversed(selected)):
+            wl = plane.get('wavelength', info.get('wavelength'))
+            if wl is not None:
+                resolved_wl = float(wl)
+                break
+    if resolved_wl is None:
+        resolved_wl = _file_meta_wavelength()
+
     last_label, last_field, last_dx = history[-1]
     return PropagationResult(
         field=last_field, dx=last_dx,
-        wavelength=float(wavelength or 0.0),
+        wavelength=float(resolved_wl or 0.0),
         method=method or 'replay',
         history=history,
         metadata={'source': str(filepath)},

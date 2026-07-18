@@ -22,9 +22,10 @@ and blows the cascade energy up to ~1e29 (small cells only leak the documented
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
-from .coupled_radial_eigensolver import radial_coupled_modes
 from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 
@@ -65,8 +66,10 @@ def build_layer(m, Rbig, N, eps_profile, k0, *, wall="pec", thickness=None,
     conserves energy to machine precision at any cell size.  ``basis='nodal'``
     keeps the historical FD basis (see the module docstring for why it blows
     up on large cells); its spurious modes are tagged by ``reldiv`` for the
-    ``_physical_propagating`` filter.  The staggered wall is the closed
-    Dirichlet wall, so ``wall`` must stay ``'pec'`` there.
+    ``_physical_propagating`` filter.  It now WARNS (audit S1-15) when the cell
+    radius exceeds a few vacuum wavelengths -- the regime where the spurious-mode
+    sea silently drives the cascade energy up to ~1e29.  The staggered wall is
+    the closed Dirichlet wall, so ``wall`` must stay ``'pec'`` there.
     """
     if basis == "staggered":
         if wall != "pec":
@@ -84,14 +87,47 @@ def build_layer(m, Rbig, N, eps_profile, k0, *, wall="pec", thickness=None,
         # div-conforming by construction: no spurious sea to tag.
         L["reldiv"] = np.zeros(W.shape[1])
     elif basis == "nodal":
-        L = _flux_normalize(layer_modes(m, Rbig, N, eps_profile, k0, wall=wall))
-        L["reldiv"] = np.array([md["reldiv"] for md in
-                                radial_coupled_modes(m, Rbig, N, eps_profile,
-                                                     k0, wall=wall)])
+        # Large-cell blow-up guard (audit S1-15): the nodal FD basis grows a
+        # divergence-violating spurious-mode sea (~40-50% of the basis at
+        # Rbig ~ 12 vacuum wavelengths) whose zero-z-flux modes are oriented by
+        # the sign of noise, driving the interface transmission block singular
+        # (cond ~ 2.6e15) and blowing the cascade energy up to ~1e29 -- silently.
+        # Warn past a few vacuum wavelengths (small cells only leak the
+        # documented ~1-4% floor); the staggered default has no such sea.
+        rbig_lambda = float(np.real(Rbig)) * float(np.real(k0)) / (2.0 * np.pi)
+        if rbig_lambda > 4.0:
+            warnings.warn(
+                "build_layer(basis='nodal'): the cell radius Rbig is "
+                f"{rbig_lambda:.1f} vacuum wavelengths; the nodal FD basis "
+                "develops a spurious divergence-violating mode sea on large "
+                "cells that can render the interface transmission block singular "
+                "and blow the cascade energy up to ~1e29.  Use the default "
+                "basis='staggered' (div-conforming Yee), which conserves energy "
+                "to machine precision at any cell size.",
+                stacklevel=2)
+        # S1-18: harvest the divergence tag from the SAME dense eig
+        # ``layer_modes`` already runs (``with_reldiv=True``) instead of a
+        # second byte-identical ``radial_coupled_modes`` eigensolve.  The two
+        # nodal paths assemble byte-identical K/B, so ``reldiv`` is unchanged.
+        _Lm = layer_modes(m, Rbig, N, eps_profile, k0, wall=wall,
+                          with_reldiv=True)
+        _reldiv = _Lm["reldiv"]
+        L = _flux_normalize(_Lm)
+        L["reldiv"] = _reldiv
     else:
         raise ValueError("basis must be 'staggered' or 'nodal' (got %r)"
                          % (basis,))
     L["thickness"] = thickness
+    # S1-16: store the layer's index ceiling (the eps of maximum real part
+    # over the radial profile) so _physical_propagating can apply the SAME
+    # axial-index bound q/k0 <= sqrt(eps) the staggered twins
+    # (bor_stack.solve's prop() and _jax_bor._mask) already enforce -- the
+    # missing leg that forked the three BOR mode classifiers.  For the
+    # homogeneous super/substrate (the only layers _physical_propagating
+    # ever classifies) this is exactly that medium's eps.
+    _eps_arr = np.asarray(eps_profile(L["r"]) if callable(eps_profile)
+                          else eps_profile, dtype=complex).ravel()
+    L["eps_ceiling"] = complex(_eps_arr[int(np.argmax(_eps_arr.real))])
     return L
 
 
@@ -106,11 +142,30 @@ def _physical_propagating(L, k0, reldiv_tol=0.5):
     # reproducer).  The real-axis floor guards ONLY the q ~ 0 degenerate
     # point (1e-6); kept modes sit >= 4 decades above the flux normalizer's
     # field-norm fallback (P/fnrm = qn for the limiting family), so kept
-    # implies flux-normalized.  Twins: bor_stack.solve's prop() and
-    # _jax_bor._mask -- keep all three in lockstep.
+    # implies flux-normalized.
+    #
+    # S1-16 (audit AUDIT_V5_24_2): the three BOR mode classifiers share a
+    # {imag, real-floor, index-ceiling} CORE.  This one previously carried
+    # the reldiv leg but NOT the index ceiling, while the staggered twins
+    # (bor_stack.solve's prop() and _jax_bor._mask) carried the ceiling but
+    # NOT reldiv -- so the "keep all three in lockstep" comment was false.
+    # The reldiv leg is UNIQUE to this classifier on purpose: it filters the
+    # divergence-violating spurious sea of the optional NODAL basis (staggered
+    # sets reldiv == 0, so the leg is a no-op there); the twins are
+    # staggered-only (div-conforming, spurious-free) and deliberately skip
+    # the reldiv eigensolve.  The index ceiling (q/k0 <= sqrt(eps): a
+    # propagating mode's axial index cannot exceed the medium index) was the
+    # genuinely-missing shared leg -- add it here.  It is a no-op for physical
+    # homogeneous super/substrate modes (q^2 = eps k0^2 - kt^2 with kt real
+    # gives qn <= sqrt(eps) by construction), only rejecting numerically
+    # spurious super-index modes, so no physical result changes.
     qn = L["q"] / k0
-    return (np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6) & \
-           (L["reldiv"] < reldiv_tol)
+    keep = ((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
+            & (L["reldiv"] < reldiv_tol))
+    eps_ceil = L.get("eps_ceiling")
+    if eps_ceil is not None:
+        keep = keep & (np.sqrt(eps_ceil).real - qn.real > -5e-10)
+    return keep
 
 
 def solve(layers, k0):

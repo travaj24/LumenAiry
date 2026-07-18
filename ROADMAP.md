@@ -772,6 +772,30 @@ Post-v5.0 sequencing:
 
 ---
 
+## Open / tracked gaps (post-v5.24.2 exhaustive audit)
+
+Items surfaced by `docs/audits/AUDIT_V5_24_2_2026_07_17_EXHAUSTIVE.md`
+that are DEFERRED by design (documented + tracked rather than built in
+a hygiene pass, per the audit-remediation scope rules).  Each keeps its
+audit finding id so it stays greppable.
+
+- **S5-9 -- shared `LayerSpec` across stack engines**: today the RCWA
+  stack (`lumenairy.elements.rcwa`) samples permittivity onto Fourier-
+  order cells while the PMM stack (`lumenairy.elements.pmm`) carries
+  spectral-element segments, and the Berreman / EME / BOR stacks each
+  have their own layer representation.  There is no single geometry
+  object that all engines can consume, so one physical stack cannot be
+  replayed across engines for cross-validation without hand-rebuilding
+  it per engine.  A future `LayerSpec` (a neutral geometry description
+  + per-engine adapters) would let a single prescription drive rcwa vs
+  pmm vs berreman for apples-to-apples cross-checks.  Deferred: this is
+  a cross-engine architectural feature, not a bug, and a half-built
+  shared spec that silently drifts from any one engine's convention is
+  worse than the current explicit per-engine construction.  Tracked
+  here; the per-engine builders and their cross-engine SIGN/basis
+  agreement are already pinned (see "Stage 5 verified consistent" in
+  the audit doc).
+
 ## How to update this file
 
 When an item ships, move it from its release section to the

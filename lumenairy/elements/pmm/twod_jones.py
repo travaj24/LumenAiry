@@ -88,65 +88,29 @@ from .twod import (
 __all__ = ["pmm_jones_2d"]
 
 
-def _require_inplane_tile(fn_name, tile33):
-    """In-plane (z-decoupled) tensor guard for callers that do NOT support the
-    generator path (the stack): xz/yz/zx/zy must vanish.  ``pmm_jones_2d``
-    itself supports full out-of-plane tensors and uses only
-    :func:`_require_nonzero_ezz`."""
-    off = np.abs(tile33[..., [0, 1, 2, 2], [2, 2, 0, 1]])
-    if float(np.max(off)) > 0.0:
-        raise NotImplementedError(
-            f"{fn_name}: out-of-plane tensor entries (xz/yz/zx/zy) are not "
-            f"supported here -- in-plane (xx, xy, yx, yy, zz) only.  For a "
-            f"SINGLE out-of-plane layer use pmm_jones_2d (the full-3x3 "
-            f"generator path).")
-    _require_nonzero_ezz(fn_name, tile33)
-
-
 def _require_nonzero_ezz(fn_name, tile33):
     if float(np.min(np.abs(tile33[..., 2, 2]))) < 1e-300:
         raise ValueError(f"{fn_name}: e_zz must be nonzero in every region "
                          f"(the E_z elimination divides by it).")
 
 
-_COMP_IDX = {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0), "yy": (1, 1),
-             "zz": (2, 2), "xz": (0, 2), "yz": (1, 2), "zx": (2, 0),
-             "zy": (2, 1)}
-
-
 def _tile_is_offplane(tile33):
-    """True if any region carries out-of-plane coupling (xz/yz/zx/zy)."""
+    """True if any region carries out-of-plane coupling (xz/yz/zx/zy).
+
+    S1-12 (audit AUDIT_V5_24_2): the test is RELATIVE to the tensor scale,
+    not a strict ``> 0.0``.  A cell that is physically in-plane but built
+    by rotating a diagonal tensor (or assembled through any float path)
+    can carry ~1e-16..1e-17 rounding noise in the xz/yz/zx/zy slots; a
+    strict ``> 0`` then mis-routes it to the ~8x-slower 4Nf generalized
+    generator and disables the even-parity fold.  A genuine out-of-plane
+    coupling is O(tensor scale) (a birefringent tensor tilted by even a
+    nano-radian gives off-diagonals many decades above float roundoff),
+    so a ``1e-12 * scale`` floor cleanly separates real coupling from
+    noise.  ``scale`` is the largest-magnitude tensor component (>= 1 so a
+    near-vacuum cell still gets an absolute 1e-12 guard)."""
     off = np.abs(tile33[..., [0, 1, 2, 2], [2, 2, 0, 1]])
-    return float(np.max(off)) > 0.0
-
-
-def _assemble_2d_tensor(ax, ay, tile33):
-    """Nodal tensor-component operators (k0-free): the multiply-by-component
-    Galerkin masses ``C_ab = M^-1 P_ab`` for all NINE components plus the unit
-    derivative operators ``Gx0/Gy0 = -i M^-1 D`` (caller divides by ``k0``).
-    ``izz`` is the multiply-by-``1/e_zz`` operator (the 'li' E_z
-    elimination)."""
-    Mx, Dx = ax["M"], ax["D"]
-    My, Dy = ay["M"], ay["D"]
-    N = ax["n"] * ay["n"]
-    M = np.kron(My, Mx)
-    DX = np.kron(My, Dx)
-    DY = np.kron(Dy, Mx)
-    Minv = np.linalg.inv(M)
-    Gx0 = -1j * (Minv @ DX)
-    Gy0 = -1j * (Minv @ DY)
-    P = {k: np.zeros((N, N), dtype=_C) for k in
-         tuple(_COMP_IDX) + ("izz",)}
-    nsx, nsy = len(ax["Mtile"]), len(ay["Mtile"])
-    for sx in range(nsx):
-        for sy in range(nsy):
-            ker = np.kron(ay["Mtile"][sy], ax["Mtile"][sx])
-            t = tile33[sx, sy]
-            for k, (a, b) in _COMP_IDX.items():
-                P[k] += t[a, b] * ker
-            P["izz"] += (1.0 / t[2, 2]) * ker
-    ops = {k: Minv @ v for k, v in P.items()}
-    return Gx0, Gy0, ops
+    scale = max(float(np.max(np.abs(tile33))), 1.0)
+    return float(np.max(off)) > 1e-12 * scale
 
 
 def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
@@ -461,7 +425,19 @@ def pmm_jones_2d(
         ``E_y``.
     jones_reflection : (2, 2) complex ndarray
         Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis
-        (PUBLIC ``exp(-i w t)`` convention).
+        (PUBLIC ``exp(-i w t)`` convention; columns = response to incident
+        ``E_x`` / ``E_y``).  This is the CARTESIAN basis; the 1-D solvers
+        return ``te``/``tm`` (``s``/``p``), which coincides with ``(x, y)``
+        (``tm`` <-> ``x``, ``te`` <-> ``y``) only at ``phi = 0``.  For
+        conical incidence (``phi != 0``) the two differ by the rotation
+        into the plane of incidence.  See CONVENTIONS.md sec 7.1.
+
+    Notes
+    -----
+    Incidence is set by the conical pair ``theta`` (polar) / ``phi``
+    (azimuth), both radians.  There is NO ``angle`` keyword on this 2-D
+    entry (the 1-D solvers' ``angle``/``theta`` alias does not apply here)
+    -- passing ``angle=`` raises ``TypeError``.  Use ``theta``.
     """
     if formulation not in ("laurent", "li", "fff_nv"):
         raise ValueError(

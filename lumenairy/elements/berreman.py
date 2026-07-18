@@ -162,22 +162,26 @@ def _berreman_delta(eps, Kx, Ky):
 def _split_fwd_bwd(gam):
     """Indices of the 2 forward (+z) and 2 backward modes.  ``gam = kz/k0`` in
     the ``exp(gam k0 z)`` convention, so forward is ``Re(gam) < 0`` (decays as
-    ``z -> +inf``) or, for a propagating mode, ``Im(gam) > 0``."""
+    ``z -> +inf``) or, for a propagating mode, ``Im(gam) > 0``.
+
+    S1-13 (audit AUDIT_V5_24_2): the partition is a STABLE argsort on the
+    per-mode forward flag -- byte-for-byte the rule the JAX twin
+    ``_berreman_jax._layer_modes_jax`` uses -- so numpy and JAX agree in
+    EVERY case, not just the physical one.  For a physical (non-bianiso-
+    tropic) stack exactly two modes flag forward, and the stable sort
+    keeps them in ascending index order; that reproduces the pre-fix
+    physical partition exactly.  The two implementations previously forked
+    ONLY in the degenerate (not-exactly-two-forward) fallback -- numpy
+    ranked by decay (``argsort(Re gam)``) while JAX kept the flag-then-
+    index order -- a divergence unreachable for the physical media tested
+    but latent for degenerate bianisotropic inputs.  Aligning on the JAX
+    rule removes the fork."""
     g = np.asarray(gam)
     tol = 1e-9 * max(1.0, float(np.max(np.abs(g))))
-    fwd, bwd = [], []
-    for i, v in enumerate(g):
-        if v.real < -tol:
-            is_fwd = True
-        elif v.real > tol:
-            is_fwd = False
-        else:
-            is_fwd = v.imag > 0
-        (fwd if is_fwd else bwd).append(i)
-    if len(fwd) != 2:
-        order = np.argsort(g.real)
-        fwd, bwd = list(order[:2]), list(order[2:])
-    return np.array(fwd), np.array(bwd)
+    is_fwd = np.where(g.real < -tol, True,
+                      np.where(g.real > tol, False, g.imag > 0.0))
+    order = np.argsort(np.where(is_fwd, 0, 1), kind='stable')
+    return order[:2], order[2:]
 
 
 def _layer_modes(eps_tensor, Kx, Ky):
@@ -253,12 +257,18 @@ def _flux(Etan, Hmodal):
 
 def _solve_core(eps_layers, thicks, eps_sup, eps_sub, wavelength, Kx, Ky,
                 retain=False):
-    """S-matrix cascade for a planar Berreman stack (INTERNAL convention).
+    """S-matrix cascade for a planar Berreman stack (PUBLIC convention).
 
-    ``eps_layers`` are already-conjugated ``(3,3)`` tensors; ``eps_sup/eps_sub``
-    already-conjugated scalars.  Returns a dict with the half-space forward /
-    backward mode blocks, ``S11/S21``, and (when ``retain``) the per-layer modes
-    + partial cascades for internal-field / absorption reconstruction."""
+    ``eps_layers`` are RAW public ``(3,3)`` tensors and ``eps_sup/eps_sub`` raw
+    public scalars (``exp(-i w t)`` / ``Im(eps) > 0`` for loss -- NO conjugation,
+    the module-level convention).  Both callers (``berreman_jones_1d`` and
+    ``BerremanStack.solve``) pass the public eps straight in (verified
+    numerically).  CAUTION: the sibling ``_offplane_oblique_solve`` uses the
+    OPPOSITE (conjugated-internal) gauge -- the two internal paths do NOT share a
+    convention, so do not assume conjugation state when refactoring across them.
+    Returns a dict with the half-space forward / backward mode blocks,
+    ``S11/S21``, and (when ``retain``) the per-layer modes + partial cascades for
+    internal-field / absorption reconstruction."""
     k0 = 2.0 * np.pi / wavelength
 
     Wf_s, Vf_s, lamf_s, Wb_s, Vb_s, lamb_s = _layer_modes_cached(
@@ -425,6 +435,35 @@ def _offplane_condensed_M(eps_internal, Kx1, Ky1):
     return _modes_to_M(W, V, W, -V), lam, -lam
 
 
+def _offplane_condensed_M_cached(eps_internal, Kx1, Ky1):
+    """:func:`_offplane_condensed_M` memoized on ``(eps_internal, Kx1, Ky1)`` in
+    the shared ``_MODE_CACHE`` (tagged-key namespace).
+
+    S1-11 (audit AUDIT_V5_24_2): the generalized OOP-oblique path is eig-heavy
+    (a dense ``_layer_eigenmodes_tensor`` per layer) and, exactly like the native
+    Berreman cascade, its eig is WAVELENGTH-INDEPENDENT -- it depends only on
+    ``eps`` and the normalized ``Kx/Ky`` (angle), never on ``k0`` (which enters
+    solely through the propagation phase ``k0*thickness``).  So a fixed-angle
+    wavelength sweep of a tilted-director stack recomputed every eig; caching
+    returns the ``(M, lam_f, lam_b)`` triple byte-for-byte (arrays read-only
+    downstream, mirroring ``_layer_modes_cached``).  The tagged key keeps this
+    disjoint from ``_layer_modes_cached``'s native 6-tuple entries."""
+    a = np.ascontiguousarray(np.asarray(eps_internal, dtype=_C))
+    key = ("offplane_condensed_M", a.tobytes(), a.shape,
+           complex(Kx1[0, 0]), complex(Ky1[0, 0]))
+    with _MODE_CACHE_LOCK:
+        hit = _MODE_CACHE.get(key)
+        if hit is not None:
+            _MODE_CACHE.move_to_end(key)            # LRU: refresh recency
+            return hit
+    res = _offplane_condensed_M(eps_internal, Kx1, Ky1)
+    with _MODE_CACHE_LOCK:
+        _MODE_CACHE[key] = res
+        while len(_MODE_CACHE) > _MODE_CACHE_SIZE:
+            _MODE_CACHE.popitem(last=False)
+    return res
+
+
 def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
                             retain=False):
     """``(R, T, Jr, Jt)`` for a stack with out-of-plane tensor layer(s) at oblique
@@ -454,9 +493,11 @@ def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
     S = None
     modes6, ifc, prop = [], [], []
     for eps, thk in zip(eps_layers, thicks):
-        Ml, lf, lb = _offplane_condensed_M(
+        # S1-11: cached (wl-independent) eig + interface, so a fixed-angle
+        # wavelength sweep reuses them byte-for-byte instead of recomputing.
+        Ml, lf, lb = _offplane_condensed_M_cached(
             np.conj(np.asarray(eps, dtype=_C)), Kx1, Ky1)
-        Si = _interface_smatrix_general(M_prev, Ml)
+        Si = _interface_smatrix_cached(M_prev, Ml)
         S = Si if S is None else _redheffer_star(S, Si)
         S = _propagation_star_general(S, lf, lb, k0 * float(thk))
         M_prev = Ml
@@ -469,7 +510,7 @@ def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
                            Ml[:n, n:], Ml[n:, n:], lb))
             ifc.append(Si)
             prop.append(_propagation_smatrix_general(lf, lb, k0 * float(thk)))
-    ifc_sub = _interface_smatrix_general(M_prev, _modes_to_M(Wt, Vt, Wt, -Vt))
+    ifc_sub = _interface_smatrix_cached(M_prev, _modes_to_M(Wt, Vt, Wt, -Vt))
     S = _redheffer_star(S, ifc_sub)
     S11, _S12, S21, _S22 = S
     core = None

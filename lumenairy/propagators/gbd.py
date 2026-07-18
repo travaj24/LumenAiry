@@ -70,6 +70,74 @@ from ..backend import array_namespace, is_jax_array
 # for the historical dense sum.  JAX / CuPy always take the dense path.
 _GBD_RECONSTRUCT_WINDOW: Optional[float] = 5.0
 
+# audit S2-20: the public ``reconstruct_field_from_beamlets`` default
+# ``window=None`` takes the dense O(beamlets * Ny * Nx) path (every INTERNAL
+# caller passes ``_GBD_RECONSTRUCT_WINDOW`` = 5.0).  Warn when that dense path
+# would run at a genuinely large workload so an external caller is not silently
+# stuck on the slow / memory-hungry branch.  The threshold is a work estimate
+# (beamlets * output pixels): 256^2 * 2048 ~ 1.3e8 (the 13 GB N=256 case).
+_GBD_DENSE_WARN_WORK = 1.0e8
+
+# audit S2-20: with ``direction_sampling=False`` (the default) an INPUT field
+# that is already tilted / diverging at the source plane is not walked off
+# correctly (its intensity envelope stays put, losing energy on propagation).
+# Warn at the propagate entry points when the intensity-weighted MEAN input
+# tilt (direction cosine) exceeds this heuristic bound.  Below it the frozen
+# axial beamlets + amplitude-carried tilt reproduce a near-paraxial source
+# well; above it the position-only decomposition increasingly mis-walks the
+# envelope.  Conservative: it does not fire on a flat / near-collimated field
+# (mean tilt ~ 0) and, being the MEAN, not the spread, does not fire on a
+# symmetric diverging beam -- that subtler case is surfaced only in the docs.
+_GBD_TILT_WARN_COS = 0.02
+
+
+def _mean_input_tilt(E_in, dx, dy, wavelength) -> float:
+    """Intensity-weighted mean transverse direction cosine (tilt magnitude) of
+    a 2-D input field.  Uses the stable local-momentum expectation
+    ``<k_x> = sum Im(conj(E) dE/dx) / (k sum|E|^2)`` (no division by ``E``), so
+    it is robust where ``|E|`` is small.  Returns ``0.0`` for a dark field."""
+    E = np.asarray(E_in)
+    inten = np.abs(E) ** 2
+    tot = float(inten.sum())
+    if not np.isfinite(tot) or tot <= 0.0:
+        return 0.0
+    gx = np.gradient(E, dx, axis=-1)
+    gy = np.gradient(E, dy, axis=-2)
+    kmag = 2.0 * np.pi / wavelength
+    lbar = float(np.imag(np.sum(np.conj(E) * gx))) / (kmag * tot)
+    mbar = float(np.imag(np.sum(np.conj(E) * gy))) / (kmag * tot)
+    return float(np.hypot(lbar, mbar))
+
+
+def _warn_if_tilted_no_dirsample(E_in, dx, dy, wavelength,
+                                 direction_sampling) -> None:
+    """Surface the ``direction_sampling`` energy-loss caveat (audit S2-20) at a
+    propagate entry point.  When direction sampling is off and the input field
+    carries a significant coherent tilt, position-only beamlets do not walk the
+    envelope off correctly and ~tens-of-percent of energy can be lost.  NumPy
+    backend only (the tilt probe is a cheap eager reduction)."""
+    if direction_sampling:
+        return
+    xp = array_namespace(E_in)
+    if xp is not np:
+        return
+    dyv = dx if dy is None else dy
+    try:
+        tilt = _mean_input_tilt(E_in, float(dx), float(dyv), float(wavelength))
+    except (ValueError, TypeError, ZeroDivisionError, FloatingPointError):
+        return
+    if tilt > _GBD_TILT_WARN_COS:
+        warnings.warn(
+            "GBD: the input field carries a mean transverse tilt of "
+            f"~{tilt:.3g} (direction cosine) but direction_sampling=False "
+            "(the default). Position-only beamlets carry that tilt in the "
+            "amplitude, not the launch direction, so an already-tilted / "
+            "diverging source does not walk off correctly and can lose "
+            "significant energy on propagation. Pass direction_sampling=True "
+            "(Husimi) for a source that is already tilted or diverging at the "
+            "input plane.",
+            RuntimeWarning, stacklevel=3)
+
 
 # v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): output-grid kwarg semantics
 # disambiguation.  Pre-v5.2 the sub-propagators below interpreted
@@ -209,6 +277,69 @@ def _det2x2(M: np.ndarray) -> np.ndarray:
     """Batched determinant of a stack of 2x2 matrices -- ``ad - bc``, exact,
     no LAPACK dispatch."""
     return M[..., 0, 0] * M[..., 1, 1] - M[..., 0, 1] * M[..., 1, 0]
+
+
+def _guard_tensor_freespace_branch(lam, t, xp) -> None:
+    """Guard the per-eigenvalue principal-sqrt amplitude branch of the tensor
+    (astigmatic / anamorphic) free-space Mobius step (audit S2-17).
+
+    That step evaluates ``prod_i 1/sqrt(1 + t*lambda_i)`` on the PRINCIPAL
+    branch of the square root.  The branch is focus-continuous as long as the
+    argument ``w_i = 1 + t*lambda_i`` never sits on the principal-sqrt branch
+    cut (the negative real axis).  A physical beamlet has ``Im(lambda_i) < 0``
+    (``1/q`` carries ``-i*lambda/(pi w^2)``), so ``Im(w_i) = t*Im(lambda_i))``
+    stays strictly off the axis and the sqrt is unambiguous through a focus.
+    The audit framed the assumption as ``Im(lambda_i) < 0``; the SHARP failure
+    condition, though, is ``w_i`` landing ON the cut -- ``Re(w_i) < 0`` with
+    ``Im(w_i) ~ 0`` -- which needs a NEAR-REAL curvature eigenvalue driven past
+    its focus (extreme aberration).  There the principal sqrt can SILENTLY FLIP
+    that beamlet's amplitude sign.  Emit a warning so a caller can distrust the
+    affected beamlets; the numeric result is unchanged (detection only).
+
+    Testing the argument (not merely the sign of ``Im(lambda)``) avoids a false
+    positive on a fold / periscope reframe, where a reflection legitimately
+    flips ``Im(lambda)`` positive while ``w_i`` stays well off the cut.
+
+    Only the NumPy backend is checked eagerly: a JAX / CuPy tracer cannot be
+    reduced to a Python bool here without breaking ``jit`` / ``grad``.
+    """
+    if xp is not np:
+        return
+    la = np.asarray(lam)                       # (n, 2) curvature eigenvalues
+    if la.size == 0:
+        return
+    tt = np.asarray(t, dtype=la.real.dtype).reshape(-1)[:, None]
+    w = 1.0 + tt * la                          # per-eigenvalue sqrt argument
+    on_cut = (w.real < 0.0) & (np.abs(w.imag) <= 1e-6 * (1.0 + np.abs(w)))
+    if np.any(on_cut):
+        warnings.warn(
+            "GBD tensor free-space: a beamlet curvature eigenvalue is nearly "
+            "real and driven past its focus (1 + t*lambda on the negative real "
+            "axis). The per-eigenvalue principal-sqrt amplitude branch is "
+            "ambiguous there, so the affected beamlet amplitude sign may be "
+            "unreliable (extreme aberration).",
+            RuntimeWarning, stacklevel=3)
+
+
+def _freespace_tensor_moebius_np(Q, amp, t, k0):
+    """Branch-safe free-space Mobius update of a tensor beamlet ``Q`` and its
+    amplitude, shared by the NumPy image-plane reframers (audit S2-14: this
+    block was written out identically at two lens-image sites).
+
+    Applies the matrix Mobius ``Q_new = Q (I + t Q)^{-1}`` (re-symmetrized), the
+    per-eigenvalue amplitude ``prod_i 1/sqrt(1 + t lambda_i)`` (each principal
+    sqrt continuous through a focus, guarded by
+    :func:`_guard_tensor_freespace_branch`), and the axial phase
+    ``exp(i k0 t)``.  Returns ``(Q, amp)``.  Reproduces the former inline block
+    operation-for-operation, so both routed sites are bit-identical."""
+    I2 = np.eye(2)[None, :, :]
+    lam = _eigvals2x2(Q, np)
+    _guard_tensor_freespace_branch(lam, t, np)
+    amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
+    amp = amp * np.exp(1j * k0 * t)
+    Q = Q @ _inv2x2(I2 + t[:, None, None] * Q, np)
+    Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
+    return Q, amp
 
 
 # ============================================================================
@@ -582,9 +713,11 @@ def decompose_field_adaptive(
     where a local sharpness indicator exceeds ``refine_ratio`` of its maximum.
     The refined beamlets have waist ``target_overlap * refine_step * dx`` (vs
     ``target_overlap * base_step * dx`` for the coarse ones), so they resolve
-    the edge at the fine scale.  Coarse cells that are flagged for refinement
-    are **dropped** and replaced by the fine beamlets, so the transverse plane
-    is tiled exactly once (no double counting).
+    the edge at the fine scale.  ALL coarse cells are **kept**; the fine
+    beamlets are decomposed from the RESIDUAL ``E - reconstruct(coarse)`` and
+    **add** a correction on top (a clean partition of unity -- no coarse/fine
+    seam, no double counting), rather than being dropped and replaced by a
+    mismatched-waist fine beamlet.
 
     Because the fine grid is confined to the (typically thin) feature set, the
     beamlet count is far below a uniform ``refine_step`` grid while the edge is
@@ -741,6 +874,7 @@ def propagate_beamlets_freespace(
         Q_new = Q_old @ _inv2x2(I2 + tt * Q_old, xp)
         Q_new = 0.5 * (Q_new + xp.transpose(Q_new, (0, 2, 1)))
         lam = _eigvals2x2(Q_old, xp)
+        _guard_tensor_freespace_branch(lam, t, xp)
         qratio = xp.prod(
             1.0 / xp.sqrt(1.0 + t[:, None].astype(Q_old.dtype) * lam), axis=1)
     else:
@@ -1033,6 +1167,20 @@ def reconstruct_field_from_beamlets(
                 beamlets, Ny=Ny, Nx=Nx, dx=dx, dy=dy, centre=centre,
                 wavelength=wavelength, n_sigma=float(window),
                 mem_budget_mb=mem_budget_mb)
+
+    # audit S2-20: warn when the dense O(beamlets * Ny * Nx) path (window=None)
+    # is about to run at a large workload -- the perf / memory footgun every
+    # INTERNAL caller avoids by passing window=5.0.
+    if window is None:
+        _n_beamlets = int(np.asarray(beamlets.positions).shape[0])
+        if float(Ny) * float(Nx) * float(_n_beamlets) > _GBD_DENSE_WARN_WORK:
+            warnings.warn(
+                "reconstruct_field_from_beamlets is using the dense "
+                f"O(beamlets * Ny * Nx) path (window=None) with {_n_beamlets} "
+                f"beamlets on a {Ny}x{Nx} grid. Pass window=5.0 for the "
+                "bounded-support scatter-add (accuracy-preserving, tail "
+                "~1e-11) to avoid the N^2 speed / memory footgun.",
+                RuntimeWarning, stacklevel=2)
 
     # v5.21: auto-shrink chunk_beamlets to the memory budget.  bytes per
     # beamlet-column of the dense working set ~ Ny*Nx*16 (the dX/dY/rho2/phase
@@ -1555,6 +1703,7 @@ def propagate_gbd_freespace(
     if output_dy is None:
         output_dy = dy if dy is not None else output_dx
 
+    _warn_if_tilted_no_dirsample(E_in, dx, dy, wavelength, direction_sampling)
     bundle = decompose_field_to_beamlets(
         E_in, dx, wavelength=wavelength, dy=dy,
         waist_factor=waist_factor,
@@ -1834,6 +1983,7 @@ def propagate_gbd_freespace_vector(
     sample_step = freespace_kwargs.get('sample_step', 1)
     direction_sampling = freespace_kwargs.get('direction_sampling', False)
     window = freespace_kwargs.get('window', 5.0)
+    _warn_if_tilted_no_dirsample(E_vec, dx, dy, wavelength, direction_sampling)
     bx = decompose_field_to_beamlets(
         E_vec[0], dx, wavelength=wavelength, dy=dy, waist_factor=waist_factor,
         sample_step=sample_step, direction_sampling=direction_sampling)
@@ -2564,6 +2714,7 @@ def propagate_gbd_thin_lens(
     if output_dx is None:
         output_dx = dx
 
+    _warn_if_tilted_no_dirsample(E_in, dx, None, wavelength, direction_sampling)
     bundle = decompose_field_to_beamlets(
         E_in, dx, wavelength=wavelength,
         waist_factor=waist_factor,
@@ -2955,11 +3106,7 @@ def apply_prescription_persurface_to_beamlets(
     else:
         _sag = np.zeros_like(dt.x)
     t = (z_image - _sag) / Nz2
-    lam = _eigvals2x2(Q, np)
-    amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
-    amp = amp * np.exp(1j * k0 * t)
-    Q = Q @ _inv2x2(I2 + t[:, None, None] * Q, np)
-    Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
+    Q, amp = _freespace_tensor_moebius_np(Q, amp, t, k0)   # shared (S2-14)
     new_pos = np.stack([dt.x + t * Lx, dt.y + t * My,
                         np.zeros_like(dt.x)], axis=-1)
     new_dir = np.stack([Lx, My, Nz2], axis=-1)
@@ -3030,15 +3177,10 @@ def _reframe_beamlets_to_world_plane(beamlets, prescription, wavelength, Q, amp,
 
     # rotate Q into the plane's transverse frame (isotropic Q -> no-op) then
     # branch-safe free-space by t.
-    I2 = np.eye(2)[None, :, :]
     R2 = R_out[:, 0:2].T @ last.world_R[:, 0:2]        # (2,2)
     Q = R2[None] @ Q @ R2.T[None]
     Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
-    lam = _eigvals2x2(Q, np)
-    amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
-    amp = amp * np.exp(1j * k0 * t)
-    Q = Q @ _inv2x2(I2 + t[:, None, None] * Q, np)
-    Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
+    Q, amp = _freespace_tensor_moebius_np(Q, amp, t, k0)   # shared (S2-14)
 
     positions = np.stack([p_hit[:, 0], p_hit[:, 1],
                           np.zeros_like(p_hit[:, 0])], axis=-1)
@@ -3143,6 +3285,7 @@ def propagate_gbd_through_prescription(
     if output_dx is None:
         output_dx = dx
 
+    _warn_if_tilted_no_dirsample(E_in, dx, None, wavelength, direction_sampling)
     bundle = decompose_field_to_beamlets(
         E_in, dx, wavelength=wavelength,
         waist_factor=waist_factor,
@@ -3202,8 +3345,11 @@ def propagate_gbd_through_prescription(
     D = float(M[1, 1])
 
     # 4.11.1 (H-AS-1): compute the axial OPL = sum_k n_k * t_k across
-    # every glass/air segment plus the BFL gap to the image plane.
-    # Pre-4.11.1 ``axial_opl=`` was never populated so the per-beamlet
+    # every glass/air segment of the prescription, out to the EXIT VERTEX
+    # (this whole-system-ABCD path reconstructs THERE -- it does NOT add a
+    # BFL / image-plane leg; that leg belongs to the per_surface=True
+    # z_image path).  Pre-4.11.1 ``axial_opl=`` was never populated so the
+    # per-beamlet
     # complex envelope lacked the system's axial phase reference and
     # multi-prescription reconstructions had the wrong piston relative
     # to ASM / Fresnel cross-checks.

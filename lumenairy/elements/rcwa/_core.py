@@ -491,6 +491,32 @@ def _forward_flux_kz(eps_region, kx, ky):
                          - kx ** 2 - ky ** 2)
 
 
+def _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
+                        rx, ry, rz, tx, ty, tz, einc_sq):
+    """Poynting-flux diffraction-efficiency projection shared by every RCWA
+    entry point (audit S1-9: this block was copy-pasted at ~7 sites across
+    ``oned.py``/``twod.py``/``stack.py``; all agreed).
+
+    The per-order reflected / transmitted efficiency is the z-flux weight
+    ``Re(kz_out / kz_inc)`` times the full field power
+    ``|Ex|^2 + |Ey|^2 + |Ez|^2`` (tangential + longitudinal), normalised by the
+    incident ``|E|^2`` (``einc_sq`` = ``sec^2(theta)`` for oblique TM, 1
+    otherwise), with evanescent output orders (``Re(kz_out) <= 0``) zeroed.
+    ``kz_ref_f``/``kz_trn_f`` are the PUBLIC-convention forward flux ``kz``
+    (:func:`_forward_flux_kz`); ``rz``/``tz`` are the longitudinal amplitudes
+    ``-(kx Ex + ky Ey)/kz``.  Returns ``(R, T)``.
+
+    This reproduces the former inline block operation-for-operation, so every
+    routed call site is bit-identical."""
+    R = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                      + xp.abs(rz) ** 2) / einc_sq
+    T = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                      + xp.abs(tz) ** 2) / einc_sq
+    R = xp.where(xp.real(kz_ref_f) > 0, xp.real(R), 0.0)
+    T = xp.where(xp.real(kz_trn_f) > 0, xp.real(T), 0.0)
+    return R, T
+
+
 def _inv_lam(lam: np.ndarray) -> np.ndarray:
     """``1/lam`` with a floor on ``|lam|`` so a grazing mode (``kz -> 0`` so
     the modal eigenvalue ``lam -> 0``) does not produce ``inf``/``NaN`` in
@@ -1777,8 +1803,11 @@ def _tensor_convolutions(profiles, n_orders):
     ``xx, xy, yx, yy, zz``.  Returns ``(Cxx, Cxy, Cyx, Cyy, EZZ)`` where
     ``[Dx; Dy] = [[Cxx, Cxy], [Cyx, Cyy]] [Ex; Ey]`` and ``EZZ = [[ezz]]``
     (the wall-tangential ``E_z`` uses the direct rule, inverted later in the
-    ``P`` block).  Reduces to ``Cxx = Cyy = [[eps]]``, ``Cxy = Cyx = 0`` for
-    a scalar (isotropic) tensor.
+    ``P`` block).  For a scalar (isotropic) tensor ``Cxy = Cyx = 0`` and the
+    Li-1996 wall-normal/tangential split survives: ``Cxx = [[1/eps]]^{-1}``
+    (INVERSE rule along wall-normal x) and ``Cyy = [[eps]]`` (DIRECT rule
+    along tangential y).  These coincide only for a UNIFORM cell (where
+    ``[[1/eps]]^{-1} = [[eps]]``); for a PATTERNED scalar cell ``Cxx != Cyy``.
     """
     xp = array_namespace(profiles["xx"])
     a = xp.asarray(profiles["xx"]).astype(_C)
@@ -2439,6 +2468,7 @@ __all__ = [
     "_normalize_pol",
     "_sqrt_forward",
     "_forward_flux_kz",
+    "_project_efficiency",
     "_inv_lam",
     "_sqrt_decay",
     "_require_propagating_incidence",

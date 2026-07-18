@@ -2260,48 +2260,52 @@ def _install_counting_replacements(monkeypatch):
 
 
 class TestAuditFixesV4_13_1_context_guards_ClearCachesOnExitImportGuard:
-    """The 6 subsequent cache-clear blocks fire even if the first
-    (``clear_asm_caches``) import fails."""
+    """The registry-walk fallback drains caches even if the canonical
+    ``clear_asm_caches`` import fails.
 
-    def test_import_failure_does_not_bypass_later_blocks(self, monkeypatch):
+    v5.24.x (audit S4-15): the defence-in-depth fallback no longer
+    hand-lists a subset of clearers -- it walks the central registry via
+    ``clear_all_registered_caches``, which drains EVERY registered
+    clearer (strictly more than the old 7-block fan-out).  The v4.13.0
+    P1-E invariant is preserved: an ImportError on the canonical chain
+    must not bypass the fallback drain.
+    """
+
+    def test_import_failure_does_not_bypass_registry_fallback(self, monkeypatch):
         """Inject ImportError on ``clear_asm_caches``; verify the
-        other 6 cache-clear functions still execute.
+        registry-walk fallback still drains a registered clearer.
 
-        Pre-fix: the import was outside the try/except, so an
-        ImportError on the FIRST block bypassed all 6 subsequent
-        ones.  Post-fix: each block has its own try/except with
-        ImportError included.
+        Pre-v4.13.0: the import sat outside the try/except, so an
+        ImportError on the canonical chain bypassed all cache
+        clearing.  Post-fix: the fallback is guarded and walks the
+        central registry -- so a registered clearer (here a synthetic
+        one, immune to environment-specific module availability) fires.
         """
-        import lumenairy as la  # noqa: F401 -- ensure submodule init
+        import lumenairy as la
+        from lumenairy import _cache_registry
 
-        # Set up the synthetic failure on clear_asm_caches.
         _install_failing_clear_asm_caches(monkeypatch)
-        # Replace the other 6 with counters.
-        counters = _install_counting_replacements(monkeypatch)
 
-        # Enter and exit the context with clear_caches_on_exit=True.
-        # The pre-fix code would raise ImportError out of the
-        # finally block (or, worse, swallow it but never fire the
-        # downstream blocks).  Post-fix: no exception, all
-        # downstream blocks fire.
-        with la.lumenairy_context(clear_caches_on_exit=True):
-            pass
+        # A synthetic clearer proves the registry walk ran without
+        # depending on which optional-dep clearers are importable here.
+        calls = [0]
+        name = '_v4_13_1_pin_synthetic_clearer'
+        la.register_cache_clearer(name, lambda: calls.__setitem__(0, calls[0] + 1))
+        try:
+            # No exception must escape the context exit, and the fallback
+            # must have drained the registry.
+            with la.lumenairy_context(clear_caches_on_exit=True):
+                pass
+        finally:
+            _cache_registry._unregister_for_test(name)
 
-        # The downstream blocks should each have been called once.
-        # We tolerate count == -1 for blocks whose module isn't
-        # importable in this environment (e.g. no JAX, no raytrace).
-        for name, c in counters.items():
-            assert c['count'] in (1, -1), (
-                f'Cache-clear block {name!r} was not called after '
-                f'the first block raised ImportError -- regression '
-                f'of v4.13.0 audit P1-E.  counter={c}')
+        assert calls[0] >= 1, (
+            'After ImportError on clear_asm_caches, the registry-walk '
+            'fallback did not drain a registered clearer -- regression '
+            f'of v4.13.0 audit P1-E / v5.24.x S4-15.  calls={calls[0]}')
 
-        # At least one downstream block should have actually fired
-        # (otherwise the test is vacuous).
-        fired = sum(1 for c in counters.values() if c['count'] == 1)
-        assert fired >= 3, (
-            f'Expected at least 3 of the 6 downstream blocks to '
-            f'have fired; only {fired} did.  counters={counters}')
+        # Sanity: the registry is non-trivial (the walk had real work).
+        assert len(la.list_registered_cache_clearers()) >= 5
 
 
 class TestAuditFixesV4_13_1_context_guards_ContextGuardSourceShape:
@@ -2365,38 +2369,33 @@ class TestAuditFixesV4_13_1_context_guards_ContextGuardSourceShape:
         run the fallback chain, the counter assertion below would
         fail.  Either failure mode points at the right regression.
         """
-        import lumenairy as la  # noqa: F401
+        import lumenairy as la
+        from lumenairy import _cache_registry
 
         _install_failing_clear_asm_caches(monkeypatch)
-        counters = _install_counting_replacements(monkeypatch)
 
-        # Exit the context with ImportError on clear_asm_caches.
-        # The narrowed except tuple MUST contain ImportError or this
-        # would raise out (caught here only by the test runner).
-        with la.lumenairy_context(clear_caches_on_exit=True):
-            pass
+        # v5.24.x (audit S4-15): the fallback walks the registry, so a
+        # synthetic registered clearer is the environment-independent
+        # probe.  If ImportError were removed from the typed except-tuple
+        # the ``with`` exit would raise (caught by the runner as a
+        # failure); if the fallback were bypassed the clearer would not
+        # fire.  Either regression trips this test.
+        calls = [0]
+        name = '_v4_13_1_typed_tuple_synthetic_clearer'
+        la.register_cache_clearer(name, lambda: calls.__setitem__(0, calls[0] + 1))
+        try:
+            with la.lumenairy_context(clear_caches_on_exit=True):
+                pass
+        finally:
+            _cache_registry._unregister_for_test(name)
 
-        # Defence-in-depth: the fallback chain must have run at least
-        # one downstream clearer.  The Zernike clearer is always
-        # available (no optional dep), so it must show count==1.
-        # ``-1`` is reserved for modules not importable in this env.
-        zernike_count = counters['zernike']['count']
-        assert zernike_count == 1, (
-            f'After ImportError on clear_asm_caches, the fallback '
-            f'Zernike clearer should have been called exactly once; '
-            f'got count={zernike_count}.  This means either '
-            f'ImportError is missing from the typed except-tuple '
-            f'(in which case the test would have raised above) OR '
-            f'the fallback chain was bypassed -- a regression of '
-            f'v4.13.0 audit P1-E.')
-        # At least one further block should also have fired to make
-        # the test non-vacuous (matches the sibling
-        # test_import_failure_does_not_bypass_later_blocks threshold).
-        fired = sum(1 for c in counters.values() if c['count'] == 1)
-        assert fired >= 1, (
-            f'Expected at least one fallback cache clearer to fire '
-            f'after the ImportError on clear_asm_caches; counters='
-            f'{counters}')
+        assert calls[0] == 1, (
+            f'After ImportError on clear_asm_caches, the registry-walk '
+            f'fallback should have called the registered clearer exactly '
+            f'once; got calls={calls[0]}.  This means either ImportError '
+            f'is missing from the typed except-tuple (the ``with`` would '
+            f'have raised above) OR the fallback was bypassed -- a '
+            f'regression of v4.13.0 audit P1-E / v5.24.x S4-15.')
 
 
 # ============================================================================

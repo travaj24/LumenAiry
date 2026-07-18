@@ -36,7 +36,7 @@ from ._core import (
     _propagation_star,
     _propagation_star_general,
     _redheffer_star,
-    _resolve_incidence,
+    _resolve_incidence_checked,
     _resolve_order_count,
     _sem_fourier_projection,
     _sem_modes_tensor,
@@ -511,7 +511,11 @@ class PMMStack:
         those).  Returns ``self``."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
         self._modal = None      # ... and retained per-order amplitudes (B)
-        angle = _resolve_incidence(angle, theta)
+        # Route through the CHECKED resolver (audit S1-7): a back-side angle
+        # (|angle| >= pi/2, e.g. 2.5 rad) would otherwise be stored verbatim and
+        # silently solve the supplementary front-side geometry (byte-identical
+        # to pi - angle) -- the 1-D entry points already reject it, so match them.
+        angle = _resolve_incidence_checked("PMMStack.set_source", angle, theta)
         self._src = dict(
             wl=wavelength if is_jax_array(wavelength) else float(wavelength),
             angle=angle if is_jax_array(angle) else float(angle),
@@ -1773,7 +1777,8 @@ class PMMStack:
                 "is NumPy-only; for traced (JAX) inputs call solve() "
                 "per wavelength (it dispatches to the differentiable "
                 "twin) or vmap over wavelength.")
-        angle = _resolve_incidence(angle, theta)
+        angle = _resolve_incidence_checked(
+            "PMMStack.solve_vs_wavelength", angle, theta)   # reject back-side (S1-7)
         if not self._layers:
             raise ValueError("PMMStack.solve_vs_wavelength: add at least one "
                              "layer.")
@@ -2207,7 +2212,8 @@ class _PreparedPMMStack:
         st = self._st
         st._internal = None  # prepared solve supersedes retained internals (audit P1-04)
         materials = dict(materials or {})
-        angle = _resolve_incidence(angle, theta)
+        angle = _resolve_incidence_checked(
+            "PMMStack.solve", angle, theta)                 # reject back-side (S1-7)
         wl = float(wavelength)
         # OOP guard (audit S1-1): a material key may resolve to an out-of-plane
         # tensor, which the in-plane prepared eig would silently drop (concrete

@@ -15,6 +15,7 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
+import importlib.util as _importlib_util_for_ne
 from typing import Optional, Tuple, Union
 
 import numpy as np
@@ -33,6 +34,33 @@ from .fft_infra import (
     _is_cupy_array,
     _validate_propagator_inputs,
 )
+
+# ---------------------------------------------------------------------------
+# Optional numexpr fused-expression backend (lazy) -- S5-8b (perf, no-loss).
+# ---------------------------------------------------------------------------
+# The ASM transfer-function build is dominated by the elementwise complex
+# ``exp(1j * kz * z)`` over the full (Ny, Nx) grid.  numexpr's fused,
+# multi-threaded kernel evaluates it ~1.6x faster and BYTE-IDENTICALLY to
+# ``np.exp`` (audit AUDIT_V5_24_2 S5-8: measured max |diff| = 0.0; re-verified
+# on numexpr 2.14).  Gated on availability + a grid-size floor + the numpy
+# backend (numexpr does not operate on CuPy / JAX arrays), mirroring the
+# phase-screen path in ``elements/_lens_real.py``.
+NUMEXPR_AVAILABLE = _importlib_util_for_ne.find_spec('numexpr') is not None
+_ne = None
+
+
+def _ensure_numexpr_loaded():
+    global _ne
+    if _ne is None and NUMEXPR_AVAILABLE:
+        import numexpr as _n
+        _ne = _n
+    return _ne is not None
+
+
+# Grid-size floor below which numexpr setup / thread dispatch outweighs the
+# fused-kernel win; below it the plain ``np.exp`` path is used.  1<<18
+# (262144) ~ a 512x512 grid; the measured 1.6x win is at 2048^2+.
+_NE_MIN_SIZE = 1 << 18
 
 __all__ = [
     'angular_spectrum_propagate',
@@ -76,12 +104,14 @@ def _build_asm_H_square(
     * Frequency grid is ``(arange(N) - N/2) / (N * dx)``, i.e. the
       same centered convention as :func:`_get_or_make_freq_grids`
       with square ``dy == dx``.
-    * Evanescent modes (``kz_sq <= 0``) are zeroed.
+    * Evanescent modes (``kz_sq <= 0``) are zeroed for ``z != 0``.
     * When ``bandlimit`` is True and ``z != 0`` the
       Matsushima 1-D mask (``|f| < L / (2*lambda*|z|)``) is applied
       as the outer product of the per-axis masks.
-    * ``z == 0`` short-circuits to ``H = 1`` (with bandlimit ignored,
-      matching the canonical propagator).
+    * ``z == 0`` short-circuits to ``H = 1`` for EVERY bin (evanescent
+      bins included) -- i.e. the exact identity; both the bandlimit and
+      the evanescent mask are bypassed so ASM(z=0) reproduces the input
+      for any grid, sub-wavelength grids included.  (audit S2-11)
 
     Parameters
     ----------
@@ -113,6 +143,18 @@ def _build_asm_H_square(
     if dtype is None or not np.issubdtype(dtype, np.complexfloating):
         dtype = np.complex128
     N = int(N)
+    if z == 0:
+        # (audit S2-11) z == 0 is the EXACT identity.  The transfer
+        # function exp(1j*kz*z) equals 1 for every bin at z == 0 --
+        # including evanescent bins, whose decay factor exp(-kappa*|z|)
+        # -> 1 as z -> 0.  Returning all-ones here keeps ASM(z=0) equal
+        # to the input for ANY grid, including sub-wavelength grids
+        # (dx < lambda/2) whose spectrum contains evanescent bins.  The
+        # general ``kz_sq > 0`` mask below would instead zero those bins
+        # and make z == 0 differ from the input by rel err ~1,
+        # contradicting the documented "returns the input unchanged"
+        # contract and the dispatcher's z=None copy.
+        return np.ones((N, N), dtype=dtype)
     k = 2.0 * np.pi / wavelength
     fx = (np.arange(N, dtype=np.float64) - N / 2) / (N * dx)
     fy = fx  # square sub-aperture (dy == dx)
@@ -121,7 +163,12 @@ def _build_asm_H_square(
     kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
     prop = kz_sq > 0
     kz = np.where(prop, np.sqrt(np.where(prop, kz_sq, 0.0)), 0.0)
-    H = np.where(prop, np.exp(1j * kz * z), 0.0).astype(dtype)
+    if (NUMEXPR_AVAILABLE and kz.size >= _NE_MIN_SIZE
+            and _ensure_numexpr_loaded()):
+        # S5-8b: byte-identical fused complex-exp (see module header).
+        H = _ne.evaluate('where(prop, exp(1j * kz * z), 0j)').astype(dtype)
+    else:
+        H = np.where(prop, np.exp(1j * kz * z), 0.0).astype(dtype)
     if bandlimit and z != 0:
         L = N * dx
         f_max = L / (2 * wavelength * abs(z))
@@ -159,6 +206,21 @@ def _get_asm_H_natural(
     """
     target_fdtype = np.float32 if target_cdtype == np.complex64 else np.float64
     k = 2 * np.pi / wavelength
+
+    if z == 0:
+        # (audit S2-11) z == 0 is the EXACT identity: exp(1j*kz*z) == 1 for
+        # every bin, evanescent bins included (their decay exp(-kappa*|z|)
+        # -> 1 as z -> 0).  Returning all-ones H makes
+        # angular_spectrum_propagate reproduce the input to FFT round-trip
+        # precision for ANY grid -- including sub-wavelength grids
+        # (dx < lambda/2) whose spectrum contains evanescent bins -- and
+        # makes the z=0 propagator path agree with the dispatcher's
+        # ``propagate(method='asm', z=None)`` copy.  The ``kz_sq > 0`` mask
+        # below would instead zero the evanescent bins and break the
+        # documented "returns the input unchanged" contract.  All-ones is
+        # identical in natural and centred FFT layout, so no ifftshift is
+        # needed; it is trivially cheap to rebuild, so it is not cached.
+        return xp.ones((Ny, Nx), dtype=target_cdtype)
 
     # 3.2.14 H cache
     # Geometry signature.  Hits return the previously-built H without
@@ -205,7 +267,14 @@ def _get_asm_H_natural(
         prop = kz_sq > 0
         kz = np.where(prop, np.sqrt(np.where(prop, kz_sq, 0.0)), 0.0)
         if target_cdtype == np.complex128:
-            H_np = np.where(prop, np.exp(1j * kz * z), 0).astype(target_cdtype)
+            if (NUMEXPR_AVAILABLE and kz.size >= _NE_MIN_SIZE
+                    and _ensure_numexpr_loaded()):
+                # S5-8b: byte-identical fused complex-exp (see module header).
+                H_np = _ne.evaluate(
+                    'where(prop, exp(1j * kz * z), 0j)').astype(target_cdtype)
+            else:
+                H_np = np.where(
+                    prop, np.exp(1j * kz * z), 0).astype(target_cdtype)
         else:
             # complex64: fold phase mod 2*pi in float64 BEFORE casting to
             # float32 so the float32 floor doesn't inject speckle-like
@@ -239,6 +308,20 @@ def _get_asm_H_natural(
         else:
             bl_x = bl_y = None
 
+        # S5-8g (perf, no-loss): build H DIRECTLY in the natural (un-shifted)
+        # FFT layout by ``ifftshift``-ing the four 1-D input vectors ONCE
+        # (cheap, length-N each) instead of ``ifftshift``-ing the assembled
+        # (Ny, Nx) H at the end (a full-grid roll, ~28 ms/cold build at 2k^2).
+        # ``ifftshift`` returns a fresh array, so the shared cached
+        # freq-grid / band-limit vectors are NOT mutated.  Byte-identical: the
+        # elementwise kernel commutes with the index permutation, so
+        # build-then-shift == shift-then-build.
+        kx_sq = xp.fft.ifftshift(kx_sq)
+        ky_sq = xp.fft.ifftshift(ky_sq)
+        if bl_x is not None:
+            bl_x = xp.fft.ifftshift(bl_x)
+            bl_y = xp.fft.ifftshift(bl_y)
+
         # Chunked H construction, sized to fit a small slice of RAM.
         from ..memory import get_ram_budget
         ram = get_ram_budget()
@@ -248,6 +331,14 @@ def _get_asm_H_natural(
         else:
             max_chunk = Ny
         chunk = min(Ny, max_chunk)
+
+        # S5-8b (perf, no-loss): fuse the elementwise complex exp through
+        # numexpr when available (numpy backend, complex128, large grid) --
+        # byte-identical to ``np.exp`` (verified max |diff| = 0.0), ~1.6x.
+        _use_ne = (NUMEXPR_AVAILABLE and xp is np
+                   and target_cdtype == np.complex128
+                   and (Ny * Nx) >= _NE_MIN_SIZE
+                   and _ensure_numexpr_loaded())
 
         H = xp.empty((Ny, Nx), dtype=target_cdtype)
         kept_count = 0
@@ -259,7 +350,11 @@ def _get_asm_H_natural(
             prop = kz_sq_c > 0
             kz_c = xp.where(prop, xp.sqrt(xp.maximum(kz_sq_c, 0)), 0)
             if target_cdtype == np.complex128:
-                H_c = xp.where(prop, xp.exp(1j * kz_c * z), 0)
+                if _use_ne:
+                    # S5-8b: byte-identical fused complex-exp.
+                    H_c = _ne.evaluate('where(prop, exp(1j * kz_c * z), 0j)')
+                else:
+                    H_c = xp.where(prop, xp.exp(1j * kz_c * z), 0)
             else:
                 # complex64 path: fold phase mod 2*pi in float64
                 # BEFORE casting to float32 so the float32 precision
@@ -285,8 +380,11 @@ def _get_asm_H_natural(
                   f"(H cache miss, built in {chunk}-row chunks)")
             print(f"  Grid: {Ny}x{Nx}, dx={dx*1e6:.3f} um, dy={dy*1e6:.3f} um")
             print(f"  Wavelength: {wavelength*1e9:.1f} nm")
-        # v5.5.3: cache H in NATURAL (un-shifted) FFT layout (see below).
-        H = xp.fft.ifftshift(H)
+        # v5.5.3: H is cached in NATURAL (un-shifted) FFT layout so the per-call
+        # propagation folds away the two spectrum-domain shifts.  S5-8g: it is
+        # already built in natural order (the input freq/band-limit vectors were
+        # ``ifftshift``-ed above), so the former full-grid ``H = ifftshift(H)``
+        # is dropped -- byte-identical, one fewer (Ny, Nx) roll per cold build.
         # Store under the numpy key only.  The cached H is read-only
         # in normal use; we don't deep-copy on lookup, so callers must
         # not mutate it in place.

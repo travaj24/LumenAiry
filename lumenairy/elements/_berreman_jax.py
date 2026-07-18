@@ -64,7 +64,12 @@ def _delta_jax(eps, Kx, Ky, jnp):
 def _layer_modes_jax(eps_tensor, Kx, Ky, jnp, eig):
     """Forward / backward modal blocks (jnp).  Returns ``(Wf, Vf, lamf, Wb,
     Vb, lamb)`` with the trace-safe argsort partition (forward = decaying /
-    ``Im>0`` propagating; ``lam = -gam``)."""
+    ``Im>0`` propagating; ``lam = -gam``).
+
+    S1-13 (audit AUDIT_V5_24_2): the numpy twin ``berreman._split_fwd_bwd``
+    now uses this identical stable flag-argsort, so the two paths partition
+    modes byte-for-byte in every case (including degenerate bianisotropic
+    inputs, where they previously forked -- numpy ranked by decay)."""
     D = _delta_jax(eps_tensor, Kx, Ky, jnp)
     gam, Psi = eig(D)
     re, im = jnp.real(gam), jnp.imag(gam)

@@ -41,29 +41,44 @@ def _quadoa_serialize_radius(R, scale):
     return float(R) * scale
 
 
-def _quadoa_serialize_aspheric(coeffs):
+def _quadoa_serialize_aspheric(coeffs, scale=1.0):
     """Serialise a library aspheric_coeffs dict ``{4: a4, 6: a6, ...}``
     as a JSON-friendly dict with string keys (JSON requires string
     keys).  ``None`` -> ``None``.  Pre-v4.11.2 this iterated dict keys
     as if they were values, writing the powers [4.0, 6.0, ...] instead
     of the coefficients.
+
+    v5.24.x (audit S4-19): unit-rescale each coefficient.  The library
+    stores coefficients in meters (an even-asphere term ``A_p * r**p``
+    is a sag length, so ``A_p`` has units ``length**(1 - p)``).  When
+    the file body is written in ``units != M`` (``scale`` is the
+    length-scale factor: 1e3 for MM, 1/0.0254 for IN), a coefficient of
+    power ``p`` must scale by ``scale**(1 - p)`` so the written asphere
+    is physically consistent with the (already scaled) radius / sag.
+    Pre-fix the coefficients were written unscaled, so a MM file carried
+    radii in mm but aspheres in per-meter -- an internally inconsistent
+    prescription for any external Quadoa reader.  ``scale=1.0`` (the
+    default, and the ``units='M'`` path) is a no-op, preserving byte-
+    identical output for meter-unit exports.
     """
     if coeffs is None:
         return None
     if isinstance(coeffs, dict):
-        return {str(int(p)): float(v) for p, v in coeffs.items()}
+        return {str(int(p)): float(v) * (scale ** (1 - int(p)))
+                for p, v in coeffs.items()}
     # Defensive: accept a list of (power, value) tuples or a sequence
     # of values (legacy callers).  A bare sequence of numbers cannot
     # be round-tripped without a power convention, so we refuse it.
     try:
-        return {str(int(p)): float(v) for p, v in coeffs}
+        return {str(int(p)): float(v) * (scale ** (1 - int(p)))
+                for p, v in coeffs}
     except (TypeError, ValueError):
         raise TypeError(
             "aspheric_coeffs must be a dict {power: value, ...}; got "
             f"{type(coeffs).__name__}.")
 
 
-def _quadoa_deserialize_aspheric(obj):
+def _quadoa_deserialize_aspheric(obj, inv_scale=1.0):
     """Inverse of :func:`_quadoa_serialize_aspheric`.
 
     Accepts:
@@ -74,13 +89,22 @@ def _quadoa_deserialize_aspheric(obj):
       (the pre-v4.11.2 serializer wrote ``[4.0, 6.0, ...]`` -- those
       values are uninterpretable, so a legacy list is read at face
       value as coefficients starting from power=4).
+
+    v5.24.x (audit S4-19): ``inv_scale`` (the length-scale factor that
+    converts file units back to meters -- 1e-3 for MM, 0.0254 for IN)
+    is applied per-coefficient as ``inv_scale**(1 - p)``, inverting the
+    export-side ``scale**(1 - p)``.  With ``inv_scale == 1/scale`` the
+    round-trip is exact for every power (``(scale * inv_scale)**(1-p) ==
+    1``).  Default 1.0 preserves the meter-unit path byte-for-byte.
     """
     if obj is None:
         return None
     if isinstance(obj, dict):
-        return {int(k): float(v) for k, v in obj.items()}
+        return {int(k): float(v) * (inv_scale ** (1 - int(k)))
+                for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
-        return {4 + 2 * i: float(v) for i, v in enumerate(obj)}
+        return {4 + 2 * i: float(v) * (inv_scale ** (1 - (4 + 2 * i)))
+                for i, v in enumerate(obj)}
     raise TypeError(
         "aspheric_coeffs in Quadoa JSON must be dict, list, or null; "
         f"got {type(obj).__name__}.")
@@ -178,9 +202,9 @@ def export_quadoa_qos(prescription: Dict[str, Any], path: str, *,
             'conic_y': (None if surf.get('conic_y') is None
                         else float(surf['conic_y'])),
             'aspheric_coeffs': _quadoa_serialize_aspheric(
-                surf.get('aspheric_coeffs')),
+                surf.get('aspheric_coeffs'), scale),
             'aspheric_coeffs_y': _quadoa_serialize_aspheric(
-                surf.get('aspheric_coeffs_y')),
+                surf.get('aspheric_coeffs_y'), scale),
             'glass_before': surf.get('glass_before', 'air'),
             'glass_after': surf.get('glass_after', 'air'),
             'thickness': float(t_m) * scale,
@@ -291,13 +315,13 @@ def load_quadoa_qos(filepath: str,
             'radius': _radius_in(s.get('radius')),
             'conic': float(s.get('conic', 0.0) or 0.0),
             'aspheric_coeffs': _quadoa_deserialize_aspheric(
-                s.get('aspheric_coeffs')),
+                s.get('aspheric_coeffs'), inv_scale),
             'radius_y': (None if s.get('radius_y') is None
                          else _radius_in(s['radius_y'])),
             'conic_y': (None if s.get('conic_y') is None
                         else float(s['conic_y'])),
             'aspheric_coeffs_y': _quadoa_deserialize_aspheric(
-                s.get('aspheric_coeffs_y')),
+                s.get('aspheric_coeffs_y'), inv_scale),
             'glass_before': s.get('glass_before', 'air'),
             'glass_after': s.get('glass_after', 'air'),
         }

@@ -224,6 +224,30 @@ def _pml_stretch(r, h, R_pml, Rbig, sigma_max, p):
     return 1.0 / s, rt
 
 
+def _mode_reldiv(Er, Ephi, qj, D, mr, Lei, A, eps, eps_n, rg, k0):
+    """Longitudinal field ``Ez`` and the relative-divergence diagnostic for ONE
+    nodal radial vector mode (E_z-eliminated form).
+
+    THE single source of the nodal ``reldiv`` formula: used both here (the
+    eigensolver's mode harvest) and by ``zcascade.layer_modes(with_reldiv=True)``
+    so that ``bor_solve.build_layer(basis='nodal')`` derives the divergence tag
+    from the SAME dense eig it already ran for the modal basis, instead of a
+    second byte-identical ``eig(K, B)`` (audit AUDIT_V5_24_2 S1-18).
+
+    ``reldiv`` is invariant under ``qj -> -qj`` (the forward-orientation flip):
+    ``Ez`` scales with ``qj`` and enters the divergence only as ``qj*Ez`` (i.e.
+    ``qj**2``) while ``|Ez|`` enters the norm, so the caller may pass either the
+    raw ``sqrt(q2)`` root or the forward-oriented root and get the byte-identical
+    value.  Returns ``(Ez, reldiv)`` -- ``Ez`` is handed back so the eigensolver
+    does not recompute it for the mode dict."""
+    Ez = qj * (Lei @ (1j * A @ Er - mr @ Ephi))
+    Dr = eps_n * Er
+    div = (1.0 / rg) * (D @ (rg * Dr)) + 1j * mr @ (eps * Ephi) + 1j * qj * (eps * Ez)
+    En = np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2 + np.abs(Ez) ** 2))
+    reldiv = np.sqrt(np.sum(np.abs(div) ** 2)) / (k0 * max(En, 1e-300))
+    return Ez, float(reldiv.real)
+
+
 def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
                          R_pml=None, sigma_max=5.0, pml_p=2, wall="natural",
                          staggered=False):
@@ -271,16 +295,14 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
     for j in range(len(q)):
         Er = Vm[:N, j]
         Ephi = Vm[N:, j]
-        Ez = q[j] * (Lei @ (1j * A @ Er - mr @ Ephi))
-        # div(eps E) using the CONSISTENT normal flux D_r = eps_n E_r (the same
-        # inverse-rule eps the operator uses); pointwise eps on the tangential
-        # components.  Using pointwise eps for D_r instead inflates the physical
-        # modes' divergence ~100x and breaks the spurious/physical separation.
-        Dr = eps_n * Er
-        div = (1.0 / rg) * (D @ (rg * Dr)) + 1j * mr @ (eps * Ephi) + 1j * q[j] * (eps * Ez)
-        En = np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2 + np.abs(Ez) ** 2))
-        reldiv = np.sqrt(np.sum(np.abs(div) ** 2)) / (k0 * max(En, 1e-300))
-        modes.append(dict(q=q[j], reldiv=float(reldiv.real),
+        # div(eps E) via the shared ``_mode_reldiv`` helper, using the CONSISTENT
+        # normal flux D_r = eps_n E_r (the same inverse-rule eps the operator
+        # uses) and pointwise eps on the tangential components.  (Using pointwise
+        # eps for D_r instead inflates the physical modes' divergence ~100x and
+        # breaks the spurious/physical separation.)
+        Ez, reldiv = _mode_reldiv(Er, Ephi, q[j], D, mr, Lei, A, eps, eps_n,
+                                  rg, k0)
+        modes.append(dict(q=q[j], reldiv=reldiv,
                           Er=Er, Ephi=Ephi, Ez=Ez, r=r))
     return modes
 

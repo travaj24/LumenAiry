@@ -34,6 +34,7 @@ from ._core import (
     _layer_eigenmodes_tensor,
     _modes_to_M,
     _normalize_pol,
+    _project_efficiency,
     _propagation_star,
     _propagation_star_general,
     _rcwa_xp,
@@ -679,12 +680,8 @@ def rcwa_efficiency_1d(
         einc_sq = 1.0
     else:
         einc_sq = 1.0 + (kx0 / kz_inc) ** 2
-    R_eff = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                          + xp.abs(rz) ** 2) / einc_sq
-    T_eff = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                          + xp.abs(tz) ** 2) / einc_sq
-    R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
-    T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
+    R_eff, T_eff = _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
+                                       rx, ry, rz, tx, ty, tz, einc_sq)
     if not is_jax:
         # Provably lossless (every permittivity exactly real) => the closure
         # R+T = 1 is exact; _check_energy then warns in the silent window
@@ -1033,12 +1030,10 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
         rz = -(kxv * rx) / safe_r
         tz = -(kxv * tx) / safe_t
-        Re = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                           + xp.abs(rz) ** 2) / einc_sq
-        Te = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                           + xp.abs(tz) ** 2) / einc_sq
-        R_rows.append(xp.where(xp.real(kz_ref_f) > 0, xp.real(Re), 0.0))
-        T_rows.append(xp.where(xp.real(kz_trn_f) > 0, xp.real(Te), 0.0))
+        Re, Te = _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
+                                     rx, ry, rz, tx, ty, tz, einc_sq)
+        R_rows.append(Re)
+        T_rows.append(Te)
         # Zeroth-order Jones columns (conjugate back to public exp(-i w t)):
         # reflection AND transmission -- the transmitted amplitudes tx/ty are
         # already solved (and squared into T_eff above), so exposing the
@@ -1160,6 +1155,18 @@ def rcwa_jones_1d(
         # in-plane too) so forward and gradient share one branch -- the routing
         # fix from the 2-D twin.  Concrete in-plane jax keeps the fast 2N path.
         offplane = offplane or _tensor_offplane_or_traced(eps_ridge, eps_groove)
+    # Uniform ISOTROPIC entry (audit S1-14): a SCALAR permittivity is promoted
+    # to the isotropic tensor ``eps * I3`` so a uniform region needs no
+    # hand-written ``eps * np.eye(3)`` (a scalar formerly raised IndexError on
+    # the ``eps[0, 0]`` component reads below).  A (3, 3) tensor passes through
+    # unchanged; promotion stays in the active namespace so a JAX scalar keeps
+    # its differentiable path.
+    _ra = xp.asarray(eps_ridge)
+    if _ra.ndim == 0:
+        eps_ridge = _ra * xp.asarray(np.eye(3))
+    _ga = xp.asarray(eps_groove)
+    if _ga.ndim == 0:
+        eps_groove = _ga * xp.asarray(np.eye(3))
     M = int(n_orders)
     N = 2 * M + 1
     orders = np.arange(-M, M + 1)

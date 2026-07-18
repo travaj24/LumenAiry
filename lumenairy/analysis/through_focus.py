@@ -1246,6 +1246,20 @@ def through_focus_scan_jax(
     # Per-plane metrics.  Bring back to NumPy at the metric boundary
     # since the metrics package isn't JAX-vmapped.
     #
+    # NOTE (AUDIT_V5_24_2 S3-19): the peak / strehl / d4sigma / bucket /
+    # rms block below is a hand-inlined twin of ``single_plane_metrics``
+    # (this module).  It is NOT byte-identical and deliberately not merged:
+    #   * power_in_bucket here masks with a STRICT ``r < bucket_radius``,
+    #     while ``single_plane_metrics`` -> ``radial_power_bands`` uses
+    #     ``R2 <= r*r`` (differs only for a pixel exactly on the boundary);
+    #   * rms_radius here is an INDEPENDENT second moment, whereas the
+    #     NumPy twin derives it from ``beam_d4sigma`` (agree analytically,
+    #     ~1e-15 in summation order).
+    # Consolidating would change results at those edges, so parity is
+    # instead pinned by a smooth-field regression test
+    # (tests/unit/test_through_focus_metric_parity.py).  This inline path
+    # has no background/aperture pedestal controls (always whole-grid).
+    #
     # v5.17 audit (P3-03): stream the host copy ONE plane at a time
     # (np.asarray(fields[i]) inside the loop) instead of materialising
     # a second full (n_z, Ny, Nx) host copy alongside the device stack.

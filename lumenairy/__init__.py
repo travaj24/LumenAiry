@@ -1004,17 +1004,24 @@ from .raytrace.jax_trace import (
 )
 
 # C.2 (v4.7): Zemax-loader renames.
+# S4-17 (AUDIT_V5_24_2): these two aliases were originally announced for
+# removal in v5.0, but v5.0's back-compat-shim purge (see Migration-Guide
+# "5.0.0 -- Back-compat shim removal") did NOT include them and they have
+# shipped as convenience re-exports ever since.  The removal target is
+# realigned to v6.0 so the emitted warning ("will be removed in v6.0")
+# stays self-consistent with the current version instead of naming a
+# release that already passed.
 load_zmx_prescription = _deprecated_alias(
     load_zemax_zmx,
     old_name='load_zmx_prescription',
     version_added='4.7',
-    version_removed='5.0',
+    version_removed='6.0',
 )
 load_zemax_prescription_txt = _deprecated_alias(
     load_zemax_prescription_data_txt,
     old_name='load_zemax_prescription_txt',
     version_added='4.7',
-    version_removed='5.0',
+    version_removed='6.0',
 )
 
 __version__ = "5.24.3"

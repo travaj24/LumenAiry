@@ -48,9 +48,42 @@ to this scalar model for a genuine 2-D crossed grating.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from .eme_2d import layer_modes, mode_field, ref_2d_modes, strip_x_modes
+
+
+def _warn_structured_nonconvergence(fn_name):
+    """Warn that mode-matched diffraction does NOT converge for a STRUCTURED
+    layer (audit S1-17): the efficiencies wander and energy strays from 1 as the
+    order/mode count grows, because the EME / FD modes are real-space, not the
+    truncated-order basis a convergent modal grating method needs (see the module
+    docstring).  A uniform layer is EXACT and does not warn."""
+    warnings.warn(
+        f"{fn_name}: the layer is STRUCTURED (spatially non-uniform); "
+        "mode-matched diffraction does NOT converge for structured layers -- the "
+        "efficiencies wander and R+T strays from 1 as the order/mode count grows "
+        "(the real-space modes are not an order-space basis; see the "
+        "eme_diffraction module docstring).  These efficiencies are UNRELIABLE; "
+        "use lumenairy.rcwa_efficiency_2d or pmm_efficiency_2d instead.",
+        stacklevel=3)
+
+
+def _eme_layer_is_structured(*eps_arrays):
+    """True if the pooled permittivity samples are not all identical (a
+    spatially-STRUCTURED layer).  A uniform layer has zero spread in both the
+    real and imaginary parts."""
+    pool = []
+    for e in eps_arrays:
+        a = np.asarray(e, dtype=complex).ravel()
+        if a.size:
+            pool.append(a)
+    if not pool:
+        return False
+    allv = np.concatenate(pool)
+    return bool(np.ptp(allv.real) > 0.0 or np.ptp(allv.imag) > 0.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -152,7 +185,13 @@ def diffraction_fd(eps_xy, Lx, Ly, Nx, Ny, k0, eps_sup, eps_sub, depth,
     kept to demonstrate that the failure is independent of the EME mode-finding.
 
     Square method: keep ``K = N_pw`` modes for ``N_pw`` retained orders (highest
-    ``qz^2`` by default; ``n_modes`` overrides ``K``)."""
+    ``qz^2`` by default; ``n_modes`` overrides ``K``).
+
+    WARNS (audit S1-17) for a STRUCTURED layer: the result is non-convergent
+    there (use ``rcwa_efficiency_2d`` / ``pmm_efficiency_2d``).  A UNIFORM layer
+    is exact and does not warn."""
+    if _eme_layer_is_structured(eps_xy):
+        _warn_structured_nonconvergence("diffraction_fd")
     w, V = ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=kx0, ky0=ky0,
                         return_vecs=True)
     K = (2 * Mx + 1) * (2 * My + 1) if n_modes is None else n_modes
@@ -178,7 +217,12 @@ def diffraction_eme(strips, Lx, Nx, Ly, k0, eps_sup, eps_sub, depth, Mx, My, *,
 
     Returns the ``mode_match`` dict (same shape as ``diffraction_fd``) with the
     retained layer eigenvalues attached as ``res["qz2"]``.
+
+    WARNS (audit S1-17) for a STRUCTURED layer (the non-convergent regime); a
+    single uniform strip is exact and does not warn.
     """
+    if _eme_layer_is_structured(*[e for e, _h in strips]):
+        _warn_structured_nonconvergence("diffraction_eme")
     Npw = (2 * Mx + 1) * (2 * My + 1)
     if qz2_window is None:
         hi = max(np.max(np.real(e)) for e, _ in strips) * k0 ** 2

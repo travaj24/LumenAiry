@@ -258,13 +258,21 @@ class PSFMTFDock(QWidget):
         opd_grid[valid] = sum_grid[valid] / cnt_grid[valid]
         k0 = 2 * np.pi / (self.sm.wavelength_nm * 1e-9)
         phase = k0 * opd_grid
+        # v5.24.x (audit S4-20): use the CONJUGATE phase convention
+        # ``exp(-i k0 OPD)`` to match the wave-optics lens phase-screens
+        # (``elements/lenses.py``: ``E * exp(-1j*k0*opd)``).  Pre-fix the
+        # ray-traced pupil used ``exp(+i k0 OPD)`` -- the opposite sign
+        # -- so the PSF computed from a ray-traced pupil came out
+        # MIRROR-FLIPPED relative to the PSF from a wave-optics field,
+        # for the same physical system.  Aligning the sign makes the two
+        # pupil sources interchangeable in the downstream FFT-based PSF.
         # v4.15: dtype-aware sentinel migration.  Pre-4.15 the
         # ``0.0 + 0.0j`` literal forced a complex128 upcast via numpy's
         # mixed-dtype rules (P3-rated in AUDIT_V4_14_1_2026_05_17.md
         # P1-NEW-4); explicit ``.astype(complex_t)`` recovery makes the
         # pupil dtype deterministic regardless of which numpy version
         # the user is running.
-        _pupil_full = np.exp(1j * phase)
+        _pupil_full = np.exp(-1j * phase)
         self._pupil = np.where(valid, _pupil_full,
                                 np.zeros((), dtype=_pupil_full.dtype))
         self._dx = dx

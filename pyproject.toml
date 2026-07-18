@@ -212,6 +212,34 @@ markers = [
     "slow: long-running physics simulations",
     "bench: pytest-benchmark micro-perf tests (run with --benchmark-only)",
 ]
+# v5.24.x (audit S5-12): explicit warnings policy.  Previously there was
+# NO ``filterwarnings`` config, so a warning emitted mid-test could pass
+# silently.  A blanket ``error`` is deliberately NOT used: several physics
+# diagnostics legitimately fire in the green suite (e.g. the PMM
+# near-singular ``energy not conserved`` UserWarning), and erroring on
+# every UserWarning would convert genuine diagnostics into false failures.
+# Instead we surface everything (``default``) and promote the
+# always-a-bug, DETERMINISTIC categories to errors:
+#   * PytestReturnNotNoneWarning -- a test that ``return``s instead of
+#     ``assert``ing silently "passes"; that footgun is exactly what the
+#     S5-12 finding flags.  (validation ``t_*`` functions are exempt --
+#     ``validation/conftest.py`` consumes their return value in a
+#     ``pytest_pyfunc_call`` hook that returns True.)
+#   * SyntaxWarning -- always a real source defect.
+filterwarnings = [
+    "default",
+    "error::pytest.PytestReturnNotNoneWarning",
+    "error::SyntaxWarning",
+]
+# v5.24.x (audit S5-12): make ``xfail`` strict by default so a test
+# marked xfail that starts PASSING (a closed sibling-gap / dead xfail
+# scaffolding) FAILS loudly -- forcing removal of the stale marker --
+# instead of silently reporting XPASS.  Audited safe: every applied
+# xfail marker in the suite is already ``strict=True`` or is an
+# imperative ``pytest.xfail()`` (unaffected by this default), and the
+# one conditional ``pytest.mark.xfail`` site currently applies zero
+# markers (all parametrize variants are ``pinned``).
+xfail_strict = true
 addopts = [
     "-ra",
     "--strict-markers",
@@ -293,6 +321,10 @@ files = [
     "lumenairy/backend",
     "lumenairy/_deprecation.py",
     "lumenairy/_context.py",
+    # v5.24.x (audit S4-20): `_validation.py` is a small, fully-annotated
+    # boundary-guard module (sibling of `_deprecation` / `_context`); it
+    # belongs in the strict whitelist alongside them.
+    "lumenairy/_validation.py",
     "lumenairy/progress.py",
     "lumenairy/memory.py",
 ]

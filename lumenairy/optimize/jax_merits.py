@@ -15,11 +15,57 @@ difference gradients for the remaining non-JAX merit terms.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Callable, Dict, Optional, Sequence
 
 import numpy as np
 
 from .context import MeritTerm
+
+
+def _ensure_jax_x64(fn_name: str, enable_x64: bool) -> None:
+    """Resolve the JAX float64 requirement for a merit that needs it.
+
+    S3-14 (audit AUDIT_V5_24_2): :func:`make_lg_aberration_merit_jax` and
+    :func:`optimize_traced_geometry` used to call
+    ``jax.config.update('jax_enable_x64', True)`` unconditionally as a
+    CONSTRUCTOR SIDE EFFECT -- silently flipping a PROCESS-WIDE global.  A
+    caller depending on JAX's default float32 elsewhere in the same
+    process was switched to float64 with no signal, and (worse) the flip
+    is undefined behaviour if it happens mid-trace under an outer
+    ``jax.jit``.  This helper makes the requirement explicit:
+
+    * ``enable_x64=True`` (default, back-compatible): if x64 is already
+      on, do nothing; if it is off, enable it once BUT emit a
+      ``RuntimeWarning`` so the global mutation is no longer silent.
+    * ``enable_x64=False``: require x64 to be set already and RAISE with
+      an actionable message otherwise (the require-and-raise idiom the
+      RCWA / asymptotic JAX paths use) -- no global mutation at all.
+    """
+    import jax
+    try:
+        enabled = bool(jax.config.read("jax_enable_x64"))
+    except Exception:                       # pragma: no cover - JAX layout
+        enabled = bool(getattr(jax.config, "jax_enable_x64", False))
+    if enabled:
+        return
+    if not enable_x64:
+        raise RuntimeError(
+            f"{fn_name}: this merit needs JAX double precision for a "
+            f"meaningful gradient, but jax_enable_x64 is disabled and "
+            f"enable_x64=False was passed -- JAX would silently truncate "
+            f"float64 to single precision.  Enable it once at import: "
+            f"jax.config.update('jax_enable_x64', True) (or set the env "
+            f"var JAX_ENABLE_X64=1), or pass enable_x64=True to let this "
+            f"call flip it process-wide.")
+    warnings.warn(
+        f"{fn_name}: enabling JAX double precision (jax_enable_x64) "
+        f"PROCESS-WIDE -- this changes global JAX float precision for the "
+        f"rest of the process.  Enable it yourself before any JAX work to "
+        f"silence this, or pass enable_x64=False to require-and-raise "
+        f"instead of auto-enabling.",
+        RuntimeWarning, stacklevel=3)
+    jax.config.update('jax_enable_x64', True)
 
 
 class JaxMeritTerm(MeritTerm):
@@ -185,6 +231,7 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
                                  poly_order: int = 4,
                                  n_field: int = 8, n_pupil: int = 8,
                                  weight: float = 1.0,
+                                 enable_x64: bool = True,
                                  name: str = 'LGAberrationJax') -> "JaxMeritTerm":
     """Build a JAX-grad-compatible LG-aberration merit term.
 
@@ -286,19 +333,20 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
 
     Notes
     -----
-    OPT-nit (AUDIT_OPTIMIZE_MERITS): constructing this merit enables JAX
-    double precision PROCESS-WIDE (``jax.config.update('jax_enable_x64',
-    True)``) -- the fit needs float64 for a meaningful gradient.  A caller
-    relying on JAX's default float32 elsewhere in the same process is
-    silently switched to float64 by this call.
+    This merit needs JAX double precision (float64) for a meaningful
+    gradient.  ``enable_x64`` (default ``True``) controls how that
+    requirement is met (S3-14): the default enables x64 process-wide if
+    it is off, now with a ``RuntimeWarning`` (previously a SILENT global
+    side effect); pass ``enable_x64=False`` to instead REQUIRE x64 be set
+    already and raise a clear ``RuntimeError`` otherwise, mutating no
+    global state.
     """
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
         raise ImportError(
             "make_lg_aberration_merit_jax requires JAX.  "
             "Install with `pip install jax`.")
-    import jax
-    jax.config.update('jax_enable_x64', True)
+    _ensure_jax_x64('make_lg_aberration_merit_jax', enable_x64)
     import jax.numpy as jnp
 
     from ..propagators.asymptotic import (
@@ -450,6 +498,7 @@ def optimize_traced_geometry(
     merit=None,
     n_steps=40, lr=None,
     cheb_order=10, newton_iters=12, ray_subsample=8,
+    enable_x64=True,
     verbose=False,
 ):
     """Turnkey gradient-based lens-design optimisation of prescription GEOMETRY
@@ -476,6 +525,11 @@ def optimize_traced_geometry(
     merit : callable, optional -- ``E_out -> scalar``; overrides the default.
     n_steps, lr : Adam iteration count and step (``lr`` auto-scales to the
         parameter magnitude when ``None``).
+    enable_x64 : bool, default True -- how the required JAX float64 is met
+        (S3-14).  ``True`` enables ``jax_enable_x64`` process-wide if off
+        (now with a ``RuntimeWarning`` rather than silently); ``False``
+        requires it be set already and raises otherwise, mutating no
+        global state.
 
     Returns
     -------
@@ -487,8 +541,11 @@ def optimize_traced_geometry(
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
         raise ImportError("optimize_traced_geometry requires JAX.")
+    # S3-14: resolve the float64 requirement explicitly (warn-and-enable
+    # by default, or require-and-raise with enable_x64=False) instead of
+    # a silent process-wide config flip.
+    _ensure_jax_x64('optimize_traced_geometry', enable_x64)
     import jax
-    jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
 
     from ..elements._lens_jax import apply_real_lens_traced_jax

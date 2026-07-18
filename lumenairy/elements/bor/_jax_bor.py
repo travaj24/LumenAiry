@@ -183,8 +183,14 @@ def _jax_bor_stack_solve(stack):
         # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13: real-axis floor at
         # 1e-6 (guards only the q ~ 0 degenerate point).  The old 0.05 was an
         # angular cutoff that dropped genuinely propagating near-grazing
-        # orders.  MUST stay in lockstep with bor_stack.solve's prop() and
-        # bor_solve._physical_propagating (twin-parity gates fork otherwise).
+        # orders.
+        #
+        # S1-16 (audit AUDIT_V5_24_2): shares the {imag, real-floor,
+        # index-ceiling} core with bor_stack.solve's prop() and
+        # bor_solve._physical_propagating.  Like the bor_stack twin it carries
+        # NO reldiv leg BY DESIGN -- the JAX BOR path is staggered-only
+        # (div-conforming, spurious-free), so reldiv is structurally 0; only
+        # bor_solve's optional NODAL basis needs it.
         qn = q / k0
         return ((jnp.abs(jnp.imag(qn)) < 5e-5) & (jnp.real(qn) > 1e-6)
                 & (jnp.real(jnp.sqrt(eps)) - jnp.real(qn) > -5e-10))

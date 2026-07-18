@@ -76,6 +76,7 @@ import warnings
 
 import numpy as np
 
+from ..rcwa._core import _project_efficiency  # shared flux-projection (S1-9/S1-10)
 from ._core import (
     PerOrderAmplitudesMixin,
     _interface_smatrix,
@@ -88,7 +89,8 @@ from .twod_staggered import (
     _far_projector_2d,
     _homog_geom_cache,
     _homog_region_modes,
-    _kz_forward2,
+    _pmm2d_order_kz,
+    _pmm2d_project_orders,
     _region_modes,
 )
 
@@ -329,19 +331,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         P1, P2 = _far_projector_2d(bx, by, ox, oy, a0x, a0y)
         qq = (Nx * (M - 1)) * (Ny * (M - 1))
 
-        def _proj(Wmodes):
-            top = P1 @ Wmodes[:qq, :]
-            bot = P2 @ Wmodes[qq:, :]
-            return np.concatenate([top, bot], axis=0)
-
-        Hsup, Hsub = _proj(Wsup), _proj(Wsub)
+        Hsup = _pmm2d_project_orders(P1, P2, Wsup, qq)
+        Hsub = _pmm2d_project_orders(P1, P2, Wsub, qq)
         kxv = kx0 + order_x * (wl / px)
         kyv = ky0 + order_y * (wl / py)
-        kz_ref = _kz_forward2(eps_sup, kxv, kyv)
-        kz_trn = _kz_forward2(eps_sub, kxv, kyv)
-        kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
-        safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-        safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        kz_ref, kz_trn, kz_inc, safe_r, safe_t = _pmm2d_order_kz(
+            eps_sup, eps_sub, kxv, kyv, kx0, ky0)
         delta = ((order_x == 0) & (order_y == 0)).astype(_C)
         p0 = int(np.where((order_x == 0) & (order_y == 0))[0][0])
 
@@ -360,12 +355,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             tx, ty = t_ord[:Nfo], t_ord[Nfo:]
             rz = -(kxv * rx + kyv * ry) / safe_r
             tz = -(kxv * tx + kyv * ty) / safe_t
-            Re = np.real(kz_ref / kz_inc) * (
-                np.abs(rx) ** 2 + np.abs(ry) ** 2 + np.abs(rz) ** 2) / einc_sq
-            Te = np.real(kz_trn / kz_inc) * (
-                np.abs(tx) ** 2 + np.abs(ty) ** 2 + np.abs(tz) ** 2) / einc_sq
-            R_rows.append(np.where(np.real(kz_ref) > 0, np.real(Re), 0.0))
-            T_rows.append(np.where(np.real(kz_trn) > 0, np.real(Te), 0.0))
+            Re, Te = _project_efficiency(np, kz_ref, kz_trn, kz_inc,
+                                         rx, ry, rz, tx, ty, tz, einc_sq)
+            R_rows.append(Re)
+            T_rows.append(Te)
             j_cols.append(np.stack([rx[p0], ry[p0]]))
             # this cascade is PUBLIC gauge end-to-end -> no conj
             amp["rx"][col], amp["ry"][col] = rx, ry

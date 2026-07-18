@@ -32,6 +32,7 @@ from .coupled_radial_eigensolver import (
     _assemble_staggered,
     _fast_geig,
     _fd_grid,
+    _mode_reldiv,
     _normal_eps,
     _pec_wall_ops,
     _pml_stretch,
@@ -105,7 +106,7 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
 
 
 def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
-                pml_p=2, wall="natural", staggered=False):
+                pml_p=2, wall="natural", staggered=False, with_reldiv=False):
     """Return the forward modal basis of a layer: ``W`` (2N x 2N tangential E),
     ``V`` (2N x 2N tangential H), ``q`` (2N axial wavenumbers, forward-oriented),
     plus the shared grid ``r`` and ``r*dr`` weights ``wq``.
@@ -116,6 +117,17 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     to an open PML boundary.  ``staggered=True`` uses the Yee div-conforming
     discretization (the spurious-mode CURE -> machine-precision cascade energy);
     the closed Dirichlet wall is built into its node->face stencil.
+
+    ``with_reldiv=True`` (nodal / non-staggered only) additionally returns a
+    ``reldiv`` array -- the per-mode relative-divergence tag -- computed from
+    the SAME ``eig(K, B)`` this call already runs, via the shared
+    ``coupled_radial_eigensolver._mode_reldiv`` helper.  Audit AUDIT_V5_24_2
+    S1-18: ``bor_solve.build_layer(basis='nodal')`` used to get this tag from a
+    SECOND, byte-identical ``radial_coupled_modes`` eigensolve; harvesting it
+    here dedupes that ~2x cost with NO change to the tag (the two nodal paths
+    assemble byte-identical ``K``/``B`` and ``reldiv`` is q-orientation
+    invariant).  Ignored (no-op) on the staggered path, which is div-conforming
+    and tags ``reldiv == 0`` at the ``build_layer`` level.
 
     .. note:: (audit P3-14) With ``staggered=True`` the basis is TWO-grid:
        rows ``[:N]`` of ``W``/``V`` (``E_r``, ``h_phi``) live on the FACE grid
@@ -160,6 +172,7 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     W = np.zeros((2 * N, nm), dtype=complex)
     V = np.zeros((2 * N, nm), dtype=complex)
     qf = np.zeros(nm, dtype=complex)
+    reldiv = np.zeros(nm) if with_reldiv else None
     for j in range(nm):
         Er = Vm[:N, j]
         Ephi = Vm[N:, j]
@@ -172,7 +185,17 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
         V[:N, j] = hr
         V[N:, j] = hphi
         qf[j] = qj
-    return dict(W=W, V=V, q=qf, r=r, wq=wq, N=N)
+        if with_reldiv:
+            # S1-18: harvest the divergence tag from THIS eig (no 2nd solve).
+            # Pass the UN-oriented root ``q[j]`` to match the standalone
+            # ``radial_coupled_modes`` byte-for-byte (reldiv is q-sign invariant,
+            # so the oriented ``qj`` would give the same value).
+            _ez, reldiv[j] = _mode_reldiv(Er, Ephi, q[j], D, mr, Lei, A,
+                                          eps, eps_n, rg, k0)
+    out = dict(W=W, V=V, q=qf, r=r, wq=wq, N=N)
+    if with_reldiv:
+        out["reldiv"] = reldiv
+    return out
 
 
 def _orient_forward(q, Er, Ephi, D, mr, Lei, A, k0, wq):
@@ -222,21 +245,3 @@ def redheffer_star(SA, SB):
             A12 @ D @ B12,
             B21 @ F @ A21,
             B22 + B21 @ F @ A22 @ B12)
-
-
-def cascade(layers, k0):
-    """Cascade a list of layers.  Each layer is a dict with its modal basis
-    (from ``layer_modes``) and a ``thickness`` (None / inf for semi-infinite
-    end half-spaces).  Returns the global S-matrix (S11,S12,S21,S22).
-
-    Build: interface(L0,L1) * prop(L1) * interface(L1,L2) * prop(L2) * ...
-    The two end layers are semi-infinite (no propagation S-matrix)."""
-    S = interface_smatrix(layers[0]["W"], layers[0]["V"],
-                          layers[1]["W"], layers[1]["V"])
-    for i in range(1, len(layers) - 1):
-        Li = layers[i]
-        S = redheffer_star(S, propagation_smatrix(Li["q"], Li["thickness"]))
-        S = redheffer_star(S, interface_smatrix(Li["W"], Li["V"],
-                                                layers[i + 1]["W"],
-                                                layers[i + 1]["V"]))
-    return S

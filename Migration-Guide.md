@@ -290,6 +290,17 @@ deprecation shims):
   `_lens_real.py` / `_lens_traced.py` is an internal
   organisational choice, not a user-facing API surface change.
 
+**Deprecated Zemax-loader aliases NOT removed in v5.0** (removal
+realigned to v6.0; AUDIT_V5_24_2 S4-17): the v4.7 aliases
+`load_zmx_prescription` (-> `load_zemax_zmx`) and
+`load_zemax_prescription_txt` (-> `load_zemax_prescription_data_txt`)
+were tagged `version_removed='5.0'` but were omitted from the v5.0
+shim purge above and have shipped ever since.  Rather than break
+callers 24 releases late, the removal target is moved to **v6.0** and
+the emitted `DeprecationWarning` now reads "will be removed in v6.0".
+Migrate at your convenience: call the canonical
+`load_zemax_zmx(...)` / `load_zemax_prescription_data_txt(...)`.
+
 ---
 
 ## Items deferred from v5.0.0 to v5.1+

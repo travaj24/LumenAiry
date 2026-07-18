@@ -68,6 +68,7 @@ from __future__ import annotations
 import copy as _copy
 import math
 import threading
+import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -461,14 +462,6 @@ def _reconstruct_into(outr, outi, Qx, Qy, Px, Py, W, x0, y0, dx, dyg, Ny, Nx,
             x0, y0, dx, dyg, Ny, Nx, w0, k, Ag, nsig, outr, outi)
 
 
-def _reconstruct(Qx, Qy, Px, Py, W, x0, y0, dx, dyg, Ny, Nx, w0, k, Ag, nsig):
-    outr = np.zeros((Ny, Nx))
-    outi = np.zeros((Ny, Nx))
-    _reconstruct_into(outr, outi, Qx, Qy, Px, Py, W, x0, y0, dx, dyg, Ny, Nx,
-                      w0, k, Ag, nsig)
-    return outr + 1j * outi
-
-
 def _default_p_max(prescription, wavelength, powerless_uncapped=False):
     """Momentum half-range from the system NA (falls back to a moderate cone).
 
@@ -669,8 +662,27 @@ def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
         # p_max (more), both converging at this spacing -- so n_p scales with
         # p_max, not with the beam size.  The frame stays hugely over-complete
         # (Nyquist allows dp up to ~lambda/dq >> this).
-        n_p = int(np.ceil(2.0 * p_max / _DP_TARGET)) | 1
-        n_p = int(min(61, max(7, n_p)))       # clamp: >=7 samples, <=61 (cost)
+        n_p_want = int(np.ceil(2.0 * p_max / _DP_TARGET)) | 1
+        n_p = int(min(61, max(7, n_p_want)))  # clamp: >=7 samples, <=61 (cost)
+        # audit S2-15: the <=61 cap silently re-enters the under-sampled dp
+        # regime for a wide p_max (p_max > ~0.24 at _DP_TARGET=0.008): after the
+        # cap the ACHIEVED spacing dp = 2*p_max/(n_p-1) can exceed the target,
+        # degrading the phase-space quadrature that makes FGA accurate on
+        # diverging / high-NA fields (probe: fid 0.917 clamped vs 1.0000
+        # unclamped).  Warn so the caller can restore dp <= target by passing an
+        # explicit larger n_p (cost) or a smaller p_max, rather than trust a
+        # quietly down-sampled result.
+        if n_p < n_p_want:
+            dp_ach = 2.0 * p_max / (n_p - 1)
+            if dp_ach > _DP_TARGET * (1.0 + 1e-9):
+                warnings.warn(
+                    "FGA auto momentum sampling: n_p clamped to the cost cap "
+                    f"({n_p}) yields dp={dp_ach:.4g} > target {_DP_TARGET:.4g} "
+                    f"for p_max={p_max:.4g}; the phase-space quadrature is "
+                    "under-sampled and a diverging / high-NA field may lose "
+                    "fidelity. Pass an explicit larger n_p, or a smaller "
+                    "p_max, to restore dp <= target.",
+                    RuntimeWarning, stacklevel=2)
     return float(p_max), int(n_p)
 
 
@@ -793,6 +805,25 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
         Ml[:, 0, 2] = z_image
         Ml[:, 1, 3] = z_image
         Mm = Ml @ dt.jacobian
+        # ------------------------------------------------------------------
+        # slope -> direction-cosine monodromy conversion (audit S2-16).
+        # ------------------------------------------------------------------
+        # The Herman-Kluk prefactor a = sqrt(det Z) needs the ray-transfer
+        # Jacobian Mm (in SLOPE state [x, y, u, v]) expressed in DIRECTION-
+        # COSINE momentum p = u / sqrt(1 + u^2 + v^2).  The exact output
+        # conversion is the FULL 2x2 Jacobian
+        #     d(p_x, p_y)/d(u_x, u_y)
+        #       = (1 + u^2 + v^2)^-1.5 * [[1 + v^2, -u v], [-u v, 1 + u^2]],
+        # and the input the analogous 2x2 d(u)/d(p).  Here we apply only its
+        # ISOTROPIC (trace/2-like) part as a SCALAR -- ``go`` on the output
+        # block, ``gi`` on the input block -- dropping the off-diagonal
+        # ``-u v`` skew term and the diagonal ``u^2`` vs ``v^2`` anisotropy.
+        # That approximation is exact on-axis and O(u^2) in the prefactor
+        # otherwise, growing with NA and skew.  It is BELOW the noise of the
+        # moderate-NA regime the library validates (measured FGA fidelity
+        # 0.997-0.999 there); the full 2x2 upgrade would change the validated
+        # high-NA prefactor and is deferred (see audit AUDIT_V5_24_2 S2-16 and
+        # tests/unit/test_audit_g06_perf.py::test_s2_16_*).
         go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
         gi = (1.0 + (pxi / pz) ** 2 + (pyi / pz) ** 2) ** 1.5
         A = Mm[:, 0:2, 0:2]
@@ -1051,7 +1082,10 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                 Mleg[:, 0, 2] = z_image
                 Mleg[:, 1, 3] = z_image
                 M = Mleg @ dt.jacobian
-                # slope -> direction-cosine conjugation (canonical monodromy)
+                # slope -> direction-cosine monodromy: SCALAR isotropic part of
+                # the true 2x2 d(p)/d(u) Jacobian (O(u^2), NA/skew-limited --
+                # see the full note at the ``_fga_coarse._trace`` site, audit
+                # S2-16).
                 go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5     # dp/du at output
                 gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5  # du/dp
                 A = M[:, 0:2, 0:2]
@@ -1404,6 +1438,10 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                 Mleg[:, 0, 2] = z_image
                 Mleg[:, 1, 3] = z_image
                 M = Mleg @ dt.jacobian
+                # slope -> direction-cosine monodromy: SCALAR isotropic part of
+                # the true 2x2 d(p)/d(u) Jacobian (O(u^2), NA/skew-limited --
+                # see the full note at the ``_fga_coarse._trace`` site, audit
+                # S2-16).
                 go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
                 gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5
                 A = M[:, 0:2, 0:2]

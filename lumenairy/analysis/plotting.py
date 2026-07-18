@@ -571,7 +571,11 @@ def plot_psf(
     Parameters
     ----------
     psf : ndarray (real, N×N)
-        Peak-normalized intensity PSF (from compute_psf).
+        Intensity PSF (real, non-negative), e.g. from ``compute_psf``
+        (which defaults to ``normalize='power'``, NOT peak).  The input
+        normalization is cosmetic here: the log display re-clips relative
+        to ``psf.max()``, so power- / peak- / un-normalized inputs render
+        the same.
     dx_psf : float, optional
         PSF-plane grid spacing [m]. Used for axis labels in micrometers.
     log : bool, default True

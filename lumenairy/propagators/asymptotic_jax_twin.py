@@ -583,6 +583,28 @@ def _build_jax_ift_solver():
         return _JAX_IFT_SOLVER_CACHE
 
 
+def clear_jax_ift_solver_cache() -> None:
+    """Drop the cached JAX custom_vjp-decorated Newton-IFT solver.
+
+    v5.24.x (audit S4-15): the ``_JAX_IFT_SOLVER_CACHE`` singleton pins
+    the compiled XLA executable for the decorated solver for the life of
+    the process.  Pre-fix it was NOT registered with the central
+    cache-clearer registry, so ``clear_asm_caches`` /
+    ``clear_all_registered_caches`` left the compiled solver (and its
+    XLA device memory) resident even when the caller explicitly asked to
+    drain every cache.  Registering this clearer lets a
+    ``lumenairy_context(clear_caches_on_exit=True)`` or an explicit
+    ``clear_asm_caches()`` reclaim it.
+
+    Safe to call at any time: the next
+    :func:`solve_envelope_stationary_jax_ift` invocation transparently
+    rebuilds and re-caches the solver via :func:`_build_jax_ift_solver`.
+    """
+    global _JAX_IFT_SOLVER_CACHE
+    with _JAX_IFT_SOLVER_CACHE_LOCK:
+        _JAX_IFT_SOLVER_CACHE = None
+
+
 def _build_jax_ift_solver_impl():
     """Worker for :func:`_build_jax_ift_solver` -- runs the actual JAX
     ``custom_vjp`` decoration.  Called under
@@ -1010,3 +1032,24 @@ def fit_canonical_polynomials_jax(
         linear_coeffs_phi=linear_coeffs,
         extract_linear_phase=extract_linear_phase,
     )
+
+
+# v5.24.x (audit S4-15): enrol the JAX Newton-IFT solver singleton with
+# the central cache-clearer registry so ``clear_asm_caches`` /
+# ``clear_all_registered_caches`` (and ``lumenairy_context(
+# clear_caches_on_exit=True)``) reclaim its pinned XLA executable.
+# Late-binding lambda mirrors the canonical pattern used by the other
+# cache-owning modules so ``mock.patch.object`` on the clear-function
+# stays observable.  Guarded so a partial install (registry module
+# unavailable) degrades gracefully.
+try:
+    import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'jax_ift_solver',
+        lambda: getattr(_this_mod, 'clear_jax_ift_solver_cache')(),
+    )
+except ImportError:
+    pass

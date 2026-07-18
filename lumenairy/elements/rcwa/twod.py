@@ -31,6 +31,7 @@ from ._core import (
     _layer_eigenmodes_tensor,
     _modes_to_M,
     _normalize_pol,
+    _project_efficiency,
     _propagation_star,
     _propagation_star_general,
     _rcwa_xp,
@@ -930,12 +931,8 @@ def rcwa_efficiency_2d(
     safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     rz = -(kxv * rx + kyv * ry) / safe_r
     tz = -(kxv * tx + kyv * ty) / safe_t
-    R_eff = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                          + xp.abs(rz) ** 2) / einc_sq
-    T_eff = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                          + xp.abs(tz) ** 2) / einc_sq
-    R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
-    T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
+    R_eff, T_eff = _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
+                                       rx, ry, rz, tx, ty, tz, einc_sq)
     if not is_jax:
         _check_energy("rcwa_efficiency_2d", R_eff, T_eff,
                       lossless=_cell_lossless(eps_sup, eps_sub, eps_cell))
@@ -1043,12 +1040,8 @@ class PreparedRCWA2D:
         safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
         rz = -(kxv * rx + kyv * ry) / safe_r
         tz = -(kxv * tx + kyv * ty) / safe_t
-        R_eff = xp.real(kz_ref_f / self.kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                                   + xp.abs(rz) ** 2) / self.einc_sq
-        T_eff = xp.real(kz_trn_f / self.kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                                   + xp.abs(tz) ** 2) / self.einc_sq
-        R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
-        T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
+        R_eff, T_eff = _project_efficiency(xp, kz_ref_f, kz_trn_f, self.kz_inc,
+                                           rx, ry, rz, tx, ty, tz, self.einc_sq)
         _check_energy("rcwa_efficiency_2d", R_eff, T_eff,
                       lossless=getattr(self, "lossless", False))
         return Efficiency2D(orders, R_eff, T_eff, 2 * N)
@@ -1258,6 +1251,7 @@ def rcwa_jones_2d(
     use_gpu: bool = False,
     symmetry="auto",
     formulation: str = "laurent",
+    truncation: str = "rectangular",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D (doubly periodic) anisotropic grating: a single layer
     whose permittivity is a full in-plane TENSOR FIELD (the z-decoupled LC
@@ -1273,8 +1267,11 @@ def rcwa_jones_2d(
         Lattice periods (metres).
     eps_tensor_cell : (Sx, Sy, 3, 3) array_like of complex
         Per-pixel permittivity tensor over one unit cell (PUBLIC convention
-        ``Im(eps) > 0`` for loss).  Only the in-plane block ``[[xx, xy],
-        [yx, yy]]`` and ``zz`` are used.  ``Sx``/``Sy`` must exceed
+        ``Im(eps) > 0`` for loss).  The FULL ``3x3`` is used: the in-plane
+        block ``[[xx, xy], [yx, yy]]`` and ``zz`` always, plus the
+        OUT-OF-PLANE couplings ``xz, yz, zx, zy`` when present (supported
+        since v5.14.1 -- see Notes; ``e_xz = e_yz = 0`` recovers the
+        z-decoupled in-plane subset).  ``Sx``/``Sy`` must exceed
         ``4*n_orders_{x,y}``.
     n_substrate, n_superstrate, depth, wavelength, theta, phi,
     n_orders_x, n_orders_y
@@ -1327,6 +1324,14 @@ def rcwa_jones_2d(
         (``'li'``).  ``'li'`` on an out-of-plane cell always uses the direct rule
         (the ezz-Schur composite has no validated inverse rule).  The even-parity
         fold runs on ``'laurent'`` only.
+    truncation : {'rectangular', 'circular'}, optional
+        Reciprocal-lattice order set (audit S1-20 -- now exposed here to match
+        :func:`rcwa_efficiency_2d`).  ``'rectangular'`` (default) keeps the full
+        ``(2 Mx + 1)(2 My + 1)`` Cartesian box (bit-for-bit the historical set);
+        ``'circular'`` (Lalanne 1997) keeps only the orders inside the largest
+        reciprocal-space circle inscribed in that box, giving isotropic
+        resolution at fewer harmonics (the ``O(N^3)`` eig is cheaper).  The kept
+        set is period-dependent and always retains the ``(0, 0)`` order.
 
     Returns
     -------
@@ -1337,10 +1342,19 @@ def rcwa_jones_2d(
         incident ``E_x`` plane wave, row 1 to incident ``E_y``.
     jones_reflection : (2, 2) complex ndarray
         Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis
-        (columns = response to incident ``E_x`` / ``E_y``).
+        (columns = response to incident ``E_x`` / ``E_y``).  This is the
+        CARTESIAN basis; the 1-D solvers return ``te``/``tm`` (``s``/``p``).
+        The two coincide only at ``phi = 0`` (``tm`` <-> ``x``, ``te`` <->
+        ``y``); at conical incidence (``phi != 0``) they differ by the
+        rotation into the plane of incidence.  See CONVENTIONS.md sec 7.1.
 
     Notes
     -----
+    Incidence is set by the conical pair ``theta`` (polar) / ``phi``
+    (azimuth), both radians.  There is NO ``angle`` keyword on the 2-D
+    entries (the 1-D solvers' ``angle``/``theta`` alias does not apply
+    here) -- passing ``angle=`` raises ``TypeError``.  Use ``theta``.
+
     The default direct (Laurent) tensor factorization is exactly
     energy-conserving for a lossless tensor and reduces to
     :func:`rcwa_efficiency_2d` for a scalar cell; it converges fastest for
@@ -1362,6 +1376,10 @@ def rcwa_jones_2d(
         raise ValueError(
             f"rcwa_jones_2d: formulation must be 'laurent', 'li' or 'fff_nv', "
             f"got {formulation!r}")
+    if truncation not in ("rectangular", "circular"):
+        raise ValueError(
+            f"rcwa_jones_2d: truncation must be 'rectangular' or 'circular', "
+            f"got {truncation!r}")
     _validate_geometry("rcwa_jones_2d",
                        **_concrete(period=period_x, period_y=period_y,
                                    depth=depth, wavelength=wavelength),
@@ -1418,7 +1436,9 @@ def rcwa_jones_2d(
         if float(np.max(np.abs(e_np - e_np[0, 0]))) < 1e-12 * scale:
             formulation = "laurent"       # uniform cell: no walls, Laurent exact
 
-    orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y)
+    orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y,
+                                    truncation=truncation,
+                                    period_x=period_x, period_y=period_y)
     nre = float(np.real(np.sqrt(eps_sup)))
     kx0 = nre * np.sin(theta) * np.cos(phi)
     ky0 = nre * np.sin(theta) * np.sin(phi)
@@ -1587,12 +1607,10 @@ def rcwa_jones_2d(
         tx, ty = t[:N], t[N:]
         rz = -(kxv * rx + kyv * ry) / safe_r
         tz = -(kxv * tx + kyv * ty) / safe_t
-        Re = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                           + xp.abs(rz) ** 2) / einc_sq
-        Te = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                           + xp.abs(tz) ** 2) / einc_sq
-        R_rows.append(xp.where(xp.real(kz_ref_f) > 0, xp.real(Re), 0.0))
-        T_rows.append(xp.where(xp.real(kz_trn_f) > 0, xp.real(Te), 0.0))
+        Re, Te = _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
+                                     rx, ry, rz, tx, ty, tz, einc_sq)
+        R_rows.append(Re)
+        T_rows.append(Te)
         j_cols.append(xp.stack([xp.conj(rx[p0]), xp.conj(ry[p0])]))
     R_eff = xp.stack(R_rows)
     T_eff = xp.stack(T_rows)
@@ -1828,12 +1846,8 @@ def rcwa_efficiency_2d_shapes(
     safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     rz = -(kxv * rx + kyv * ry) / safe_r
     tz = -(kxv * tx + kyv * ty) / safe_t
-    R_eff = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                          + xp.abs(rz) ** 2) / einc_sq
-    T_eff = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                          + xp.abs(tz) ** 2) / einc_sq
-    R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
-    T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
+    R_eff, T_eff = _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
+                                       rx, ry, rz, tx, ty, tz, einc_sq)
     _check_energy("rcwa_efficiency_2d_shapes", R_eff, T_eff,
                   lossless=_cell_lossless(
                       eps_sup, eps_sub,

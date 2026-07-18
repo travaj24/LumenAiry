@@ -21,6 +21,19 @@ Submodules:
   polarization, Jones-field operations.
 * :mod:`lumenairy.elements.bsdf` -- BSDF surface scatter for
   stray-light analysis.
+
+Known cross-engine gaps (tracked, not yet built)
+------------------------------------------------
+* **S5-9 (AUDIT_V5_24_2) -- no shared ``LayerSpec`` across stacks.**
+  The RCWA stack samples permittivity onto Fourier-order cells, the
+  PMM stack carries spectral-element segments, and the Berreman / EME
+  / BOR stacks each use their own layer representation.  There is no
+  neutral geometry object that every engine can consume, so a single
+  physical stack cannot be replayed across engines for cross-
+  validation without hand-rebuilding it per engine.  Deferred by
+  design (a half-built shared spec that silently drifts from any one
+  engine's convention is worse than the current explicit per-engine
+  construction).  Tracked in ``ROADMAP.md`` -> "Open / tracked gaps".
 """
 
 from .berreman import (

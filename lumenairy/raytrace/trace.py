@@ -923,6 +923,22 @@ def make_rings(
     Returns
     -------
     RayBundle
+
+    Notes
+    -----
+    The rings are EQUALLY SPACED in radius (``r = semi_aperture * ring /
+    num_rings``) and each carries the SAME ``rays_per_ring``.  The pupil
+    AREAL sampling density therefore falls off as ``~1/r`` -- rays are
+    packed more densely near the axis than at the rim.  Consequences:
+
+    * The best-focus LOCATION found by scanning ``spot_rms`` vs. focus is
+      robust to this weighting (the minimum is insensitive to a monotone
+      radial reweight).
+    * An UNWEIGHTED ``spot_rms`` over these rays is center-biased SMALL --
+      it is not an area-representative RMS.  For an area-true wavefront /
+      spot statistic weight each ray by its annulus area (``propto r``) or
+      use an area-uniform pupil sampling (e.g. a Fibonacci / sunflower
+      disk) instead of concentric equal-count rings.
     """
     all_x = []
     all_y = []

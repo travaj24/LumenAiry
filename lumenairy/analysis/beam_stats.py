@@ -46,6 +46,77 @@ from ..backend import array_namespace as _xp_of  # noqa: E402
 _ISO_APERTURE_WIDTHS = 3.0
 
 
+# ---------------------------------------------------------------------------
+# S5-8e (perf, no-loss): centred coordinate-grid cache.
+# ---------------------------------------------------------------------------
+# ``beam_centroid`` / ``beam_d4sigma`` / ``beam_power`` each rebuild the same
+# ``meshgrid((arange(Nx)-Nx/2)*dx, (arange(Ny)-Ny/2)*dy)``.  A through-focus
+# scan (``analysis.through_focus.through_focus_scan``) calls the first two per
+# plane -- 42 identical rebuilds for a 21-plane scan.  A small bounded LRU keyed
+# on ``(Ny, Nx, dx, dy)`` returns the byte-identical grid so every plane reuses
+# one build (the grids are treated read-only by all callers -- only fresh arrays
+# are formed from them).  Only the numpy backend is memoized; CuPy / JAX arrays
+# are device / traced and must not be retained in a host dict.
+import threading  # noqa: E402
+from collections import OrderedDict  # noqa: E402
+
+_MESHGRID_CACHE: "OrderedDict[tuple, tuple]" = OrderedDict()
+_MESHGRID_CACHE_SIZE = 8
+_MESHGRID_LOCK = threading.Lock()
+
+
+def clear_meshgrid_cache() -> None:
+    """Drop every cached centred coordinate grid (S5-8e)."""
+    with _MESHGRID_LOCK:
+        _MESHGRID_CACHE.clear()
+
+
+# Enroll with the central cache-clearer registry (late-binding lambda, mirroring
+# ``analysis/zernike.py``) so ``clear_asm_caches`` / ``clear_all_registered_caches``
+# drain this cache too.
+try:
+    import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'beam_stats_meshgrid',
+        lambda: getattr(_this_mod, 'clear_meshgrid_cache')(),
+    )
+except ImportError:  # pragma: no cover - registry always present in-tree
+    pass
+
+
+def _centered_meshgrid(xp, Ny, Nx, dx, dy):
+    """Return centred ``(X, Y)`` grids for an ``(Ny, Nx)`` intensity map.
+
+    Byte-identical to
+    ``xp.meshgrid((arange(Nx)-Nx/2)*dx, (arange(Ny)-Ny/2)*dy)``.  Memoized on
+    the numpy backend (see the ``_MESHGRID_CACHE`` header); CuPy / JAX arrays
+    always build fresh.  The returned arrays MUST be treated read-only by
+    callers (they are shared across calls at the same geometry).
+    """
+    if xp is np:
+        key = (int(Ny), int(Nx), float(dx), float(dy))
+        with _MESHGRID_LOCK:
+            hit = _MESHGRID_CACHE.get(key)
+            if hit is not None:
+                _MESHGRID_CACHE.move_to_end(key)   # LRU: refresh recency
+                return hit
+        x = (np.arange(Nx) - Nx / 2) * dx
+        y = (np.arange(Ny) - Ny / 2) * dy
+        grid = tuple(np.meshgrid(x, y))
+        with _MESHGRID_LOCK:
+            _MESHGRID_CACHE[key] = grid
+            _MESHGRID_CACHE.move_to_end(key)
+            while len(_MESHGRID_CACHE) > _MESHGRID_CACHE_SIZE:
+                _MESHGRID_CACHE.popitem(last=False)
+        return grid
+    x = (xp.arange(Nx) - Nx / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
+    return xp.meshgrid(x, y)
+
+
 def _subtract_background(xp, I, background):
     """ISO 11146 sec. 3.4 pedestal subtraction on an intensity map.
 
@@ -101,9 +172,7 @@ def beam_centroid(
         dy = dx
     xp = _xp_of(E)
     Ny, Nx = E.shape
-    x = (xp.arange(Nx) - Nx / 2) * dx
-    y = (xp.arange(Ny) - Ny / 2) * dy
-    X, Y = xp.meshgrid(x, y)
+    X, Y = _centered_meshgrid(xp, Ny, Nx, dx, dy)   # S5-8e: cached (numpy)
 
     I = xp.abs(E) ** 2
     total = xp.sum(I)
@@ -206,9 +275,7 @@ def beam_d4sigma(
         dy = dx
     xp = _xp_of(E)
     Ny, Nx = E.shape
-    x = (xp.arange(Nx) - Nx / 2) * dx
-    y = (xp.arange(Ny) - Ny / 2) * dy
-    X, Y = xp.meshgrid(x, y)
+    X, Y = _centered_meshgrid(xp, Ny, Nx, dx, dy)   # S5-8e: cached (numpy)
 
     I = xp.abs(E) ** 2
     # S3-5: opt-in ISO 11146 sec. 3.4 pedestal subtraction (no-op by
@@ -305,9 +372,7 @@ def beam_power(
         return float(xp.sum(I) * dx * dy)
 
     Ny, Nx = E.shape
-    x = (xp.arange(Nx) - Nx / 2) * dx
-    y = (xp.arange(Ny) - Ny / 2) * dy
-    X, Y = xp.meshgrid(x, y)
+    X, Y = _centered_meshgrid(xp, Ny, Nx, dx, dy)   # S5-8e: cached (numpy)
 
     shape = region.get('shape', 'circular')
     xc = region.get('xc', 0)

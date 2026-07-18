@@ -273,16 +273,6 @@ class TraceResult:
 # Surface sag and normal computation
 # ============================================================================
 
-def _surface_sag_scalar(h_sq, R, conic=0.0, aspheric_coeffs=None):
-    """Sag for scalar or array h_sq, thin wrapper around surface_sag_general.
-
-    Note: this function assumes rotational symmetry (sag is a function
-    of h² only).  For biconic surfaces use :func:`_surface_sag_xy`.
-    """
-    h_sq = np.asarray(h_sq, dtype=np.float64)
-    return surface_sag_general(h_sq, R, conic, aspheric_coeffs)
-
-
 def _surface_sag_xy(x, y, surface):
     """Sag z = f(x, y) for an arbitrary (possibly biconic / freeform)
     surface.
@@ -518,7 +508,7 @@ __all__ = [
     # Sag / normal helpers (private but exported for cross-submodule
     # use; the underscore prefix preserves the original "private"
     # signalling -- callers should not rely on these from user code).
-    '_surface_sag_scalar', '_surface_sag_xy',
+    '_surface_sag_xy',
     '_surface_sag_derivatives_xy', '_surface_sag_derivative',
     '_surface_normal',
     # Surface utility

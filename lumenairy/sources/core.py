@@ -1944,7 +1944,6 @@ def _warn_schell_return_kind_default(fn_name: str) -> None:
 
 def _schell_phase_realizations(
     *,
-    N: int,
     Ny: int,
     Nx: int,
     dx: float,
@@ -1955,6 +1954,12 @@ def _schell_phase_realizations(
 ) -> np.ndarray:
     """Generate ``n_realizations`` band-limited complex random fields
     with the Gaussian Schell kernel as their two-point correlation.
+
+    v5.24.x (audit S3-16): the vestigial ``N`` keyword was removed.  The
+    grid is fully specified by ``Ny`` / ``Nx``; the old ``N`` argument
+    duplicated ``Nx`` (callers passed ``N=Ny=Nx`` for the square-grid
+    case) and was never read in the body -- a dead parameter that only
+    invited an inconsistent (``N`` != ``Nx``) call.
 
     The recipe (Goodman, _Statistical Optics_, Sec 5.5):
 
@@ -2154,7 +2159,7 @@ def create_gaussian_schell_source(
 
     rng = np.random.default_rng(seed)
     phi = _schell_phase_realizations(
-        N=int(N), Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
+        Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
         coherence_length=float(sigma_g),
         n_realizations=int(n_realizations), rng=rng)
     # E_k(r) = sqrt(I(r)) * phi_k(r).
@@ -2267,7 +2272,7 @@ def create_schell_model_source(
 
     rng = np.random.default_rng(seed)
     phi = _schell_phase_realizations(
-        N=int(N), Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
+        Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
         coherence_length=float(coherence_length),
         n_realizations=int(n_realizations), rng=rng)
     E_ensemble = (amp[None, :, :] * phi).astype(target_dtype)
@@ -2453,6 +2458,22 @@ class Source:
         propagators.  Ignored by ASM / GBD / HFPI / HF.
     name : str, optional
         Human-readable label, propagated to descendants for tracing.
+    jones : object, optional
+        v5.24.x (audit S3-17): OPTIONAL polarization / Jones channel.
+        Defaults to ``None`` (scalar field -- the historical
+        behaviour).  When set, it carries the vectorial polarization
+        state alongside the scalar ``E`` so vectorial pipelines no
+        longer have to bypass the ``Source`` container entirely.  This
+        is a *minimal metadata channel*: the scalar propagators
+        (:meth:`propagate`) do NOT act on it -- they transport ``E``
+        and pass ``jones`` through UNCHANGED to the descendant Source
+        so a downstream Jones-aware stage can pick it up.  Suggested
+        conventions (not enforced, to avoid over-constraining callers):
+        a length-2 complex vector ``[a_x, a_y]`` for a spatially
+        uniform polarization, or a full vectorial field of shape
+        ``(2, Ny, Nx)`` / ``(Ny, Nx, 2)``.  A future release may add a
+        vectorial ``propagate`` that transforms this channel; until
+        then it is pure carried metadata.
     """
     E: 'object'  # numpy or cupy or jax ndarray
     dx: float
@@ -2464,6 +2485,11 @@ class Source:
     # callers using positional args (``Source(E, dx, wavelength)``)
     # remain compatible.
     dy: _Optional[float] = None
+    # v5.24.x (audit S3-17): optional Jones/polarization channel.
+    # Appended AFTER ``dy`` so every existing positional caller
+    # (``Source(E, dx, wavelength[, source_point, name, dy])``) is
+    # unaffected.  ``None`` == scalar field (the default).
+    jones: 'object' = None
 
     def __post_init__(self) -> None:
         # v4.13.0 (audit L3): default ``dy`` to ``dx`` so the
@@ -2543,6 +2569,10 @@ class Source:
             E=result.field, dx=out_dx, dy=out_dy,
             wavelength=self.wavelength,
             source_point=self.source_point, name=new_name,
+            # v5.24.x (audit S3-17): the scalar propagators do not act
+            # on the polarization channel; carry it through UNCHANGED
+            # so a downstream Jones-aware stage still sees it.
+            jones=self.jones,
         )
 
     # -- Factories that wrap the existing create_X functions ----------

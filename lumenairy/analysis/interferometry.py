@@ -15,6 +15,7 @@ import numpy as np
 __all__ = [
     'simulate_interferogram',
     'phase_shift_extract',
+    'phase_step_roundtrip',
     'fringe_spacing',
 ]
 
@@ -160,6 +161,62 @@ def phase_shift_extract(
         phase = np.arctan2(-B, A)
     modulation = np.sqrt(A ** 2 + B ** 2)
     return phase, modulation
+
+
+def phase_step_roundtrip(
+    opd_map: np.ndarray,
+    wavelength: float,
+    steps: int = 4,
+    convention: str = 'hardware',
+    dx: Optional[float] = None,
+    tilt_x: float = 0.0,
+    tilt_y: float = 0.0,
+    visibility: float = 1.0,
+    background: float = 0.5,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Simulate a temporal phase-shift sequence from an OPD map and extract the
+    phase back -- the phase-shifting-interferometry (PSI) round-trip.
+
+    Frame ``k`` (of ``steps``) carries a uniform REFERENCE phase shift
+    ``s_k = 2*pi*k/steps``.  Because :func:`simulate_interferogram` has no
+    phase-shift argument, the shift is injected as an OPD offset
+    ``delta = sign * s_k * wavelength / (2*pi)`` with ``sign`` chosen so the
+    generated frames follow the SAME sign convention the extractor assumes:
+
+    * ``'library'`` -> ``I = a + b cos(phi + s)`` (simulate_interferogram's
+      native ``+`` sign), so ``sign = +1``;
+    * ``'hardware'`` -> ``I = a + b cos(phi - s)``, so ``sign = -1``.
+
+    With the matched sign the extraction recovers the input fringe phase to the
+    wrapping / sampling floor for EITHER convention.  (This is the logic the
+    interferometry GUI's "Extract" button runs; factored here so the round-trip
+    is unit-testable without Qt -- a previous GUI copy never applied the shifts
+    and never unpacked the ``(phase, modulation)`` tuple, so it reported a
+    meaningless residual.)
+
+    Returns ``(phase, modulation, shifts)``: the wrapped extracted phase [rad]
+    (range ``(-pi, pi]``), the fringe modulation, and the applied ``shifts``.
+    """
+    steps = int(steps)
+    if steps < 3:
+        raise ValueError(
+            f"phase_step_roundtrip: need at least 3 phase steps for the "
+            f"(bias, A, B) least-squares fit; got {steps}.")
+    if convention not in ('hardware', 'library'):
+        raise ValueError(
+            f"convention must be 'hardware' or 'library', got {convention!r}")
+    opd = np.asarray(opd_map, dtype=np.float64)
+    shifts = 2.0 * np.pi * np.arange(steps) / steps
+    sign = -1.0 if convention == 'hardware' else 1.0
+    frames = []
+    for s in shifts:
+        opd_shifted = opd + sign * s * wavelength / (2.0 * np.pi)
+        frames.append(simulate_interferogram(
+            opd_shifted, wavelength, tilt_x=tilt_x, tilt_y=tilt_y,
+            visibility=visibility, background=background, dx=dx))
+    phase, modulation = phase_shift_extract(
+        np.asarray(frames), shifts=shifts, convention=convention)
+    return phase, modulation, shifts
 
 
 def fringe_spacing(wavelength: float, tilt_angle: float) -> float:

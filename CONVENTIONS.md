@@ -154,7 +154,7 @@ at every dispatcher.
 | Decenter axis convention              | ``decenter=(dx, dy)`` moves the SURFACE | (v5.2: ``frame='surface'`` opt-in; default = field-frame, v5.1 behavior) |
 | Tilt axis convention                  | ``tilt=(theta_x, theta_y, theta_z)`` radians, right-hand rotation around +x, +y, +z respectively | (v5.2 surface-frame branch) |
 | Polarization convention               | Jones / Stokes follow the Born-Wolf right-handed circular convention | ``polarization.py``                                   |
-| Waveplate slow-axis phase             | ``exp(-i * retardance)`` (slow axis delayed under ``exp(-i omega t)``); DECOUPLED from the propagator ``exp(+i k OPL)``. Intentional, regression-pinned: this sign and ``S3 = -2 Im(Ex conj Ey)`` are mutually consistent so closed Jones pipelines give correct intensities | ``polarization.py::apply_waveplate`` (v5.4.6 audit P3-22) |
+| Waveplate slow-axis phase             | ``exp(+i * retardance)`` (slow axis picks up POSITIVE relative phase under ``exp(-i omega t)`` / ``exp(+i k n z)``); matches the rigorous solver family (``berreman_jones_1d`` / ``rcwa_jones_1d`` transmission Jones) so solver-derived Jones drop into ``JonesField`` pipelines WITHOUT conjugation. A QWP with fast axis at +45 deg on x-pol yields ``S3 = -1`` ('left'). The v5.4.6 P3-22 ``exp(-i * retardance)`` "DECOUPLED" note predates the Berreman/RCWA retarder Jones and is SUPERSEDED by this cross-family alignment. | ``polarization.py::apply_waveplate`` (v5.17.0 audit P2-15) |
 | Refractive index                      | ``n_complex = n + 1j * kappa`` with ``kappa > 0`` for ABSORPTION (passive media) | ``glass.py`` registry                                 |
 | Grating/coating polarization aliases  | ``s`` == ``te`` (E perpendicular to the plane of incidence); ``p`` == ``tm`` (E in the plane). The grating solvers (``rcwa_*``, ``thin_grating``) speak ``te``/``tm`` and the ``coatings`` TMM speaks ``s``/``p``; both aliases are accepted everywhere (case-insensitive) | ``rcwa.py::_normalize_pol``, ``coatings.py`` |
 
@@ -170,6 +170,36 @@ A future audit that finds a per-call-site contradiction with this
 table should treat the table as the source-of-truth and fix the
 call site (or, if the call-site is correct, refresh the table with
 the citation of the corrected call-site).
+
+### 7.1 Grating-solver incidence angle and Jones basis
+
+The rigorous grating family (``rcwa_*``, ``pmm_*``, Berreman) does NOT
+share a single incidence-angle keyword.  The conventions, and the
+reasons they differ, are:
+
+* **1-D entries** (``rcwa_jones_1d`` / ``rcwa_efficiency_1d`` /
+  ``berreman_jones_1d`` and their ``*_vs_wavelength`` / ``*_segments``
+  siblings) take ``angle`` (the classical mount, radians) and ALSO
+  accept ``theta`` as an ALIAS.  ``theta`` IS ``angle`` -- the same
+  number in the plane of periodicity (azimuth ``phi = 0``, planar
+  mount).  When BOTH are supplied ``theta`` takes precedence (the
+  RCWA family routes every entry through ``_resolve_incidence`` so
+  this is uniform and intentional; it is NOT the ``angle`` /
+  ``angle_deg`` case of section 6, which stays mutually exclusive).
+  The 1-D Jones entries have no conical ``phi`` (Berreman does).
+* **2-D entries** (``rcwa_jones_2d`` / ``rcwa_efficiency_2d`` /
+  ``pmm_jones_2d`` / ``pmm_efficiency_2d*``) take the conical pair
+  ``theta`` (polar) and ``phi`` (azimuth).  They do NOT accept
+  ``angle`` -- passing ``angle=`` raises ``TypeError`` (unexpected
+  keyword).  Use ``theta`` for the polar angle.
+* **Jones basis.** The 2-D solvers return the zeroth-order Jones
+  matrix in the lab ``(x, y)`` CARTESIAN basis (columns = response to
+  incident ``E_x`` / ``E_y``).  The 1-D solvers return ``te``/``tm``
+  (``s``/``p``).  The two bases coincide -- up to the ``tm`` <-> ``x``,
+  ``te`` <-> ``y`` identification -- ONLY at ``phi = 0``.  For conical
+  incidence (``phi != 0``) the plane of incidence is rotated, so
+  ``te``/``tm`` no longer align with ``x``/``y`` and the matrices are
+  related by that rotation.
 
 ## 8. Top-level re-exports
 

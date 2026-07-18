@@ -1422,12 +1422,14 @@ def apply_real_lens_traced(
     bandlimit : bool, default True
         Passed to the (single) ASM propagation used for amplitude
         evolution.
-    ray_subsample : int, default 1
+    ray_subsample : int, default 8
         Compute the ray-trace OPL on every ``ray_subsample``-th pixel
         and bilinearly interpolate to the full grid.  OPL is a very
-        smooth function of pupil position, so ``ray_subsample=4``
-        typically loses < 1 nm of fidelity while cutting cost ~16x.
-        Recommended for production use on large grids.
+        smooth function of pupil position, so the default ``8`` (and
+        ``ray_subsample=4``) typically loses < 1 nm of fidelity while
+        cutting cost by ``ray_subsample**2``.  Set ``1`` to trace every
+        pixel (no subsampling).  Recommended for production use on large
+        grids.
     min_coarse_samples_per_aperture : int, default 32
         Guardrail against undersampled Newton inversion.  After
         ``ray_subsample`` is applied, the coarse output grid must have

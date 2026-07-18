@@ -178,9 +178,16 @@ def test_sweep_matches_per_wavelength():
     o_sw, R_sw, T_sw = st.solve_vs_wavelength(wls)
     for i, w in enumerate(wls):
         o1, R1, T1, _ = st.set_source(float(w)).solve()
+        # Diffraction-order labels are integers -> exact equality is right.
         assert np.array_equal(o_sw, o1)
-        assert np.allclose(R_sw[i], R1, rtol=0, atol=0)
-        assert np.allclose(T_sw[i], T1, rtol=0, atol=0)
+        # S5-12 (AUDIT_V5_24_2): sweep-vs-single is numerically identical
+        # by construction, but a batched BLAS path can differ from the
+        # per-call path in reduction order across platforms.  Use a tight
+        # rtol floor + a small atol floor -- individual R/T orders can be
+        # exactly 0 (dark / evanescent orders), where an rtol-only bound
+        # gives zero tolerance -- instead of bit-exact rtol=0/atol=0.
+        assert np.allclose(R_sw[i], R1, rtol=1e-12, atol=1e-12)
+        assert np.allclose(T_sw[i], T1, rtol=1e-12, atol=1e-12)
 
 
 def test_builder_validation():

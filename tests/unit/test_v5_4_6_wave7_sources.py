@@ -40,7 +40,7 @@ def test_tilted_plane_wave_rejects_evanescent():
 def test_schell_realizations_deterministic_mean_intensity():
     from lumenairy.sources.core import _schell_phase_realizations
     phi = _schell_phase_realizations(
-        N=64, Ny=64, Nx=64, dx=2e-6, dy=2e-6,
+        Ny=64, Nx=64, dx=2e-6, dy=2e-6,
         coherence_length=15e-6, n_realizations=96,
         rng=np.random.default_rng(0))
     ens_mean = float(np.mean(np.abs(phi) ** 2))

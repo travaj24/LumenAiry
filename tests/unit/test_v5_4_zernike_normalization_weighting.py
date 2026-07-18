@@ -260,7 +260,11 @@ def test_weighting_uniform_ones_matches_unweighted(grid):
         opd, grid['dx'], grid['aperture'], weighting=w)
     # Allow tiny float-arithmetic drift from the sqrt(1.0) * row
     # rescale, but coefficients should agree to many digits.
-    np.testing.assert_allclose(c_uniform, c_default, atol=0, rtol=1e-12)
+    # S5-12 (AUDIT_V5_24_2): coefficients for modes ABSENT from the OPD
+    # are (near-)exactly zero, where an ``atol=0`` rtol-only bound gives
+    # them zero tolerance and flakes cross-platform.  Add a small atol
+    # floor well below the ~1e-7 m coefficient magnitudes.
+    np.testing.assert_allclose(c_uniform, c_default, atol=1e-18, rtol=1e-12)
 
 
 # ----------------------------------------------------------------------

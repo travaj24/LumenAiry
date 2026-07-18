@@ -975,7 +975,7 @@ def load_zemax_prescription_data_txt(filepath: str,
         last_surf_num = max(last_surf_num, surf_num)
 
         # Parse numeric fields (handle "Infinity" and "-" placeholders)
-        def _parse_float(s, default=0.0):
+        def _parse_float(s, default=0.0, field_name='value'):
             s = s.strip()
             if not s or s == '-':
                 return default
@@ -984,16 +984,31 @@ def load_zemax_prescription_data_txt(filepath: str,
             try:
                 return float(s)
             except ValueError:
+                # v5.24.x (audit S4-19): warn on a GENUINELY malformed
+                # numeric (a non-empty, non-placeholder token that fails
+                # float parse) instead of silently substituting the
+                # default.  Empty / "-" placeholders and "Infinity" are
+                # handled above and stay silent; only a real parse
+                # failure -- a corrupt or unexpected-locale prescription
+                # report -- reaches here, and swallowing it silently
+                # shifted every downstream surface with no diagnostic.
+                warnings.warn(
+                    f"load_zemax_prescription_data_txt: could not parse "
+                    f"{field_name} {s!r} as a number on surface "
+                    f"{surf_label!r}; substituting default {default!r}. "
+                    f"The .txt prescription report may be malformed or "
+                    f"use an unexpected locale / number format.",
+                    RuntimeWarning, stacklevel=2)
                 return default
 
-        radius = _parse_float(radius_str, float('inf'))
-        thickness = _parse_float(thickness_str, 0.0)
+        radius = _parse_float(radius_str, float('inf'), 'radius')
+        thickness = _parse_float(thickness_str, 0.0, 'thickness')
         # The "Clear Diam" column in the prescription text report is the
         # full diameter, not semi-diameter.  Divide by 2 so the internal
         # representation matches the .zmx parser (which reads DIAM as
         # semi-diameter directly).
-        semi_diameter = _parse_float(clear_diam_str, 0.0) / 2.0
-        conic = _parse_float(conic_str, 0.0)
+        semi_diameter = _parse_float(clear_diam_str, 0.0, 'clear diameter') / 2.0
+        conic = _parse_float(conic_str, 0.0, 'conic')
 
         glass = glass_str if glass_str else None
         is_mirror = glass is not None and glass.upper() == 'MIRROR'

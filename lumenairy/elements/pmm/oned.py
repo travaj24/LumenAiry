@@ -33,43 +33,17 @@ from ._core import (
     _pmm_solve,
     _pmm_solve_segments,
     _promote_eps_tensor,
-    _resolve_incidence,
+    _resolve_incidence_checked,
     _resolve_order_count,
     _stabilize_jones,
     _stabilize_scalar,
 )
 
-
-def _resolve_incidence_checked(fn_name, angle, theta):
-    """Resolve the ``angle``/``theta`` alias, then REJECT back-side incidence
-    (audit P3-29): the angle enters the 1-D solve only as ``kx0 ~ sin(angle)``,
-    so ``|angle| >= pi/2`` would otherwise alias BYTE-IDENTICALLY to the
-    supplementary front-side angle ``pi - angle`` -- a plausible,
-    energy-conserving answer for the WRONG geometry.  Raises ``ValueError``
-    instead.  Composes with (does not duplicate) the grazing guard, which
-    catches ``kz_inc ~ 0`` just BELOW ``pi/2``.  A TRACED JAX angle (under
-    ``jit``/``grad``) has no concrete value to range-check and SKIPS the guard
-    (the rcwa ``_reject_jax_offplane`` tracer carve-out); a CONCRETE JAX angle
-    is checked.  A non-numeric angle is passed through for the solver's own
-    coercion to raise on."""
-    angle = _resolve_incidence(angle, theta)
-    if is_jax_array(angle):
-        try:                                 # concrete JAX array -> inspectable
-            a_c = float(np.asarray(angle))
-        except Exception:                    # tracer -> not materialisable
-            return angle
-    else:
-        try:
-            a_c = float(angle)
-        except (TypeError, ValueError):      # non-numeric: solver coercion raises
-            return angle
-    if not abs(a_c) < 0.5 * np.pi:           # NaN also fails this comparison
-        raise ValueError(
-            f"{fn_name}: incidence angle must satisfy |angle| < pi/2 "
-            f"(front-side illumination, measured from the +z surface normal); "
-            f"got {a_c} rad.  A past-grazing angle would silently alias to "
-            f"the supplementary front-side angle (pi - angle).")
-    return angle
+# ``_resolve_incidence_checked`` is the ONE shared back-side-incidence guard
+# for the whole PMM suite; it now lives in ``._core`` so the ``PMMStack``
+# source setters route through the SAME resolver the 1-D entry points use
+# (audit S1-7 -- ``set_source`` previously bypassed it).  Re-exported here for
+# the historical ``from ...pmm.oned import _resolve_incidence_checked`` import.
 
 
 def pmm_jones_1d(

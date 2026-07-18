@@ -1111,6 +1111,18 @@ def make_shack_hartmann_wfs(
     # any real SH-WFS hardware would need on a known reference beam.
     _calib_cache: Dict[str, Any] = {}
 
+    # S3-18 (audit AUDIT_V5_24_2, perf no-loss): the slope-to-modal Zernike
+    # RECONSTRUCTOR (``zernike_modal_basis`` -- a finite-difference influence
+    # matrix over ``_n_modes`` modes followed by a regularized ``pinv``) and the
+    # full-pupil Zernike reprojection matrix (``zernike_basis_matrix``) depend
+    # ONLY on the grid geometry ``(N, dx)`` and the fixed factory parameters
+    # ``(_n_modes, _subap)`` -- never on the per-frame residual.  They were
+    # rebuilt on EVERY ``_wfs`` call (i.e. every closed-loop AO frame); cache
+    # them per geometry exactly like ``_calib_cache``.  Byte-identical: both
+    # builds are deterministic in their (cached) inputs and the results are used
+    # read-only (matrix-vector products only).
+    _recon_cache: Dict[str, Any] = {}
+
     def _wfs(residual: np.ndarray) -> np.ndarray:
         r = np.asarray(residual, dtype=np.float64)
         if r.ndim != 2:
@@ -1217,14 +1229,25 @@ def make_shack_hartmann_wfs(
             slopes_x = slopes_x + rng.standard_normal(slopes_x.shape) * sigma_slope
             slopes_y = slopes_y + rng.standard_normal(slopes_y.shape) * sigma_slope
 
-        # 4. Build the matching slope-to-modal reconstructor and pick
-        # out the in-disk lenslets in the same row-major order
-        # zernike_modal_basis uses internally.
-        basis = zernike_modal_basis(
-            n_modes=_n_modes,
-            n_lenslets=_subap,
-            semi_aperture=semi_aperture,
-        )
+        # 4. Build (or fetch the cached) slope-to-modal reconstructor + the
+        # full-pupil reprojection matrix, and pick out the in-disk lenslets in
+        # the same row-major order zernike_modal_basis uses internally.
+        # S3-18: cache both per geometry (they are residual-independent).
+        recon_key = f'{N}_{dx:.12e}'
+        if recon_key not in _recon_cache:
+            _basis = zernike_modal_basis(
+                n_modes=_n_modes,
+                n_lenslets=_subap,
+                semi_aperture=semi_aperture,
+            )
+            # Full-pupil Zernike matrix for the reprojection (step 5).  Built
+            # with n_modes+1 (OSA [0..n_modes]) and the piston column sliced off
+            # so it aligns mode-for-mode with the first_mode=1 reconstructor.
+            _xg = (np.arange(N) - N / 2) * dx
+            _Xg, _Yg = np.meshgrid(_xg, _xg)
+            _Zfull, _pmask = _zbasis(_n_modes + 1, _Xg, _Yg, semi_aperture)
+            _recon_cache[recon_key] = (_basis, _Zfull[:, 1:], _pmask)
+        basis, _Zmat, _pupil_mask = _recon_cache[recon_key]
         p = (np.arange(_subap) - (_subap - 1) / 2) / max((_subap - 1) / 2, 1e-12)
         XL, YL = np.meshgrid(p, p)
         inside = (XL ** 2 + YL ** 2) <= 1.0
@@ -1244,16 +1267,12 @@ def make_shack_hartmann_wfs(
         #
         # ``zernike_modal_basis(first_mode=1)`` uses OSA indices
         # [1..n_modes] (skip piston).  ``zernike_basis_matrix(n_modes)``
-        # uses OSA indices [0..n_modes-1] (include piston).  Build with
-        # n_modes+1 and slice off the piston column so the two stay
-        # aligned mode-for-mode.
-        x = (np.arange(N) - N / 2) * dx
-        X, Y = np.meshgrid(x, x)
-        Zmat_full, pupil_mask = _zbasis(_n_modes + 1, X, Y, semi_aperture)
-        Zmat = Zmat_full[:, 1:]  # drop piston to match first_mode=1
+        # uses OSA indices [0..n_modes-1] (include piston).  ``_Zmat`` /
+        # ``_pupil_mask`` (cached above, S3-18) already carry the
+        # n_modes+1-built-then-piston-sliced matrix aligned mode-for-mode.
         measured = np.zeros((N, N), dtype=np.float64)
         # zernike_basis_matrix returns rows for in-pupil pixels only.
-        measured[pupil_mask] = Zmat @ coeffs
+        measured[_pupil_mask] = _Zmat @ coeffs
         return measured
 
     return _wfs

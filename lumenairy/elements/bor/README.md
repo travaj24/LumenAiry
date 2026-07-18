@@ -1,12 +1,17 @@
 # BOR-PMM (axisymmetric / Body-of-Revolution PMM) — Phase 0 prototype
 
-Standalone de-risking prototype for the cylindrical-coordinate PMM solver
-(`docs/pmm_bor_axisymmetric_roadmap.md`, see the **ASSESSMENT + GROUNDED
-FORMULATION + VALIDATED PHASE 0** section). Outside the package by design (the
-roadmap's Phase-0 gate), validated against exact analytic oracles before any
-library integration.
+Originally a standalone de-risking prototype for the cylindrical-coordinate PMM
+solver (`docs/pmm_bor_axisymmetric_roadmap.md`, see the **ASSESSMENT + GROUNDED
+FORMULATION + VALIDATED PHASE 0** section), validated against exact analytic
+oracles before any library integration.
 
-## Status (2026-06-19)
+> **GRADUATED (v5.16.0).** This is now a first-class library module: `BORStack`
+> and `solve_bor` live here (`bor_stack.py`, `__init__.py`, JAX twin
+> `_jax_bor.py`) and are re-exported from `lumenairy`. The M5 "library port"
+> milestone below is DONE; the M1-M5 oracle table is retained as the validation
+> record for the axisymmetric core.
+
+## Status (2026-06-19; graduation note added v5.16.0)
 
 | milestone | what | oracle | status |
 |---|---|---|---|
@@ -18,7 +23,7 @@ library integration.
 | **M5a** | clean half-spaces — PEC/Dirichlet wall (`wall='pec'`): antisymmetric ghost → real-q box modes (`farfield.py` + `zcascade.py`) | same-medium identity, multi-mode Fresnel | **DONE** — identity `3e-12`, ≥8 (vs 1) propagating modes mean `2e-3` |
 | **M5b far-field core** | Fourier-Bessel / Hankel decomposition → cylindrical orders + Parseval power (`farfield.py`) | round-trip, Parseval, kt→θ | **DONE** — Parseval `1.8e-10`; 3 tests |
 | **CURE** | **Yee div-conforming grid** (`staggered=True`): E_r on faces, E_phi/E_z on nodes → de Rham `curl·grad=0` kills the spurious sea | spurious 365→0; structured cascade energy machine-precision, N-stable | **DONE** — `4e-13`@N=150…`2e-12`@N=450 (nodal floor was `3.8e-2`); 4 tests |
-| M5 (rest) | structured-layer efficiencies (±1 vortex Hankel); full multi-order GATE 4 vs `pmm_efficiency_1d`; `BORStack` library port | per-order η vs planar; reciprocity | UNBLOCKED by the cure (machine-precision basis); pending |
+| M5 (rest) | structured-layer efficiencies (±1 vortex Hankel); full multi-order GATE 4 vs `pmm_efficiency_1d`; `BORStack` library port | per-order η vs planar; reciprocity | **DONE (v5.16.0)** — `BORStack`/`solve_bor` ported to `lumenairy.elements.bor` and re-exported from `lumenairy` |
 
 M1 closes the roadmap's stated #2 risk (the axis singularity) to machine
 precision. M2's analytic oracle is ready as the gate for the coupled operator —

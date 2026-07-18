@@ -117,15 +117,16 @@ _CACHE_REGISTRY_EXEMPTIONS = frozenset({
 
     # ---- propagators/asymptotic_jax_twin.py ------------------------------
     # ``_JAX_IFT_SOLVER_CACHE`` is a SINGLETON (built once per process,
-    # never grows -- key is implicit "the solver").  It legitimately
-    # doesn't need clearing via the registry; clearing it would mean
-    # rebuilding the JAX custom_vjp decoration on next call, which the
-    # library never does.  It pairs with ``_JAX_IFT_SOLVER_CACHE_LOCK``
-    # for the build-and-publish race only.  v5.17.1 (audit P2-42): path
-    # refreshed from the pre-v5.x ``propagators/asymptotic.py`` monolith;
-    # the declaration is now ``= None`` (RHS-shape-filtered by
-    # ``_is_cache_rhs``), so this entry is documentation-only, like the
-    # analysis/ao.py entry above.
+    # never grows -- key is implicit "the solver").  v5.24.x (audit
+    # S4-15): it IS now enrolled via ``register_cache_clearer(
+    # 'jax_ift_solver', ...)`` + a ``clear_jax_ift_solver_cache`` helper,
+    # because the singleton pins the compiled XLA executable's device
+    # memory across ``clear_asm_caches`` -- draining it on an explicit
+    # cache clear now reclaims that memory (the next solve rebuilds and
+    # re-caches transparently).  This entry remains documentation-only:
+    # the declaration is ``= None`` (RHS-shape-filtered by
+    # ``_is_cache_rhs``) so the walker never discovers it, and the
+    # module now carries a ``register_cache_clearer`` call regardless.
     ('lumenairy/propagators/asymptotic_jax_twin.py', '_JAX_IFT_SOLVER_CACHE'),
     # ``_HG_MODE_STACK_CACHE`` is cleared transitively by
     # ``clear_lg_mode_stack_cache`` (the LG/HG mode stack clearer drains

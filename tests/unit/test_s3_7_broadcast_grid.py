@@ -167,7 +167,7 @@ def test_schell_phase_realizations_kxky_bit_identical():
     # Rectangular grid + dx != dy: the KX/KY orientation is load-bearing.
     Ny, Nx, sigma_g, nr, seed = 6, 10, 20.0e-6, 3, 12345
     phi = _schell_phase_realizations(
-        N=Nx, Ny=Ny, Nx=Nx, dx=_DX, dy=_DY,
+        Ny=Ny, Nx=Nx, dx=_DX, dy=_DY,
         coherence_length=sigma_g, n_realizations=nr,
         rng=np.random.default_rng(seed))
     ref = _schell_phi_meshgrid_ref(
@@ -185,7 +185,7 @@ def test_gaussian_schell_source_amp_bit_identical():
     X, Y = np.meshgrid(x, y)
     amp = np.exp(-(X * X + Y * Y) / (w0 ** 2))
     phi = _schell_phase_realizations(
-        N=_N, Ny=_N, Nx=_N, dx=_DX, dy=_DY,
+        Ny=_N, Nx=_N, dx=_DX, dy=_DY,
         coherence_length=sigma_g, n_realizations=nr,
         rng=np.random.default_rng(seed))
     ref = (amp[None, :, :] * phi).astype(_resolve_complex_dtype(None))

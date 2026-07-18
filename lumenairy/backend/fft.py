@@ -183,7 +183,15 @@ def fftfreq(n: int, d: float = 1.0,
 def fft_backend_for(x: Any) -> str:
     """Report which backend a call to :func:`fft2` would use for the
     given input.  Returns: ``'jax'`` / ``'cupy'`` / ``'pyfftw'`` /
-    ``'scipy.fft'`` / ``'numpy.fft'``."""
+    ``'scipy.fft'`` / ``'numpy.fft'``.
+
+    S2-12 (audit AUDIT_V5_24_2): this diagnostic must mirror the ACTUAL
+    :func:`fft_infra._fft2` dispatch.  ``_fft2`` gates the pyFFTW path on
+    ``np.iscomplexobj(x)`` (the pyFFTW plan cache is complex-to-complex
+    only -- a real-dtype array falls through to scipy/numpy), so a
+    real-dtype input reported here as ``'pyfftw'`` was a lie.  Replicate
+    the ``iscomplexobj`` gate so the report matches where the data really
+    routes."""
     if is_jax_array(x):
         return 'jax'
     if is_cupy_array(x):
@@ -191,6 +199,7 @@ def fft_backend_for(x: Any) -> str:
     from ..propagators import fft_infra as _prop
     shape = tuple(x.shape) if hasattr(x, 'shape') else ()
     if (_prop.USE_PYFFTW and _prop.PYFFTW_AVAILABLE
+            and np.iscomplexobj(x)
             and len(shape) >= 2
             and shape[0] >= _prop.FFTW_MIN_SIZE
             and shape not in _prop._PYFFTW_BAD_SHAPES):

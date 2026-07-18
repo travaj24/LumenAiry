@@ -123,6 +123,7 @@ from .image_plane_wfe import (
 from .interferometry import (
     fringe_spacing,
     phase_shift_extract,
+    phase_step_roundtrip,
     simulate_interferogram,
 )
 from .phase_retrieval import (
@@ -200,7 +201,8 @@ __all__ = [
     'enumerate_ghost_paths', 'ghost_analysis', 'non_sequential_stray_light',
     'retrace_ghost_path',
     # interferometry
-    'simulate_interferogram', 'phase_shift_extract', 'fringe_spacing',
+    'simulate_interferogram', 'phase_shift_extract', 'phase_step_roundtrip',
+    'fringe_spacing',
     # phase retrieval
     'gerchberg_saxton', 'error_reduction', 'hybrid_input_output',
     'gerchberg_saxton_jax', 'error_reduction_jax', 'hybrid_input_output_jax',
