@@ -323,8 +323,20 @@ jobs:
           fi
           echo "Running ${#jax_files[@]} jax-guarded unit files with jax installed:"
           printf '  %s\n' "${jax_files[@]}"
+          # pytest-timeout converts any residual hang into a clean per-test
+          # FAILURE (thread-dump) instead of a silent SIGTERM that kills the
+          # whole job -- so one run reports the complete jax-leg status.
+          pip install --quiet pytest-timeout
+          # Deselect the traced-lens Zemax cookbook: it is a *numpy* end-to-end
+          # example (already covered by the fast matrix), NOT a jax-parity test.
+          # It is dragged in only because it shares a file (test_audit_misc.py)
+          # with jax-guarded tests, and its multi-threaded BLAS lstsq
+          # (apply_real_lens_traced's Chebyshev fit) deadlocks against JAX's
+          # OpenMP runtime -- the deadlock C-code cannot be cleanly timed out.
           python -m pytest "${jax_files[@]}" -m "not integration and not slow" \
-            --tb=short -p no:cacheprovider --maxfail=5 -v 2>&1 \
+            --deselect "tests/unit/test_audit_misc.py::TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples::test_real_lens_from_zemax_cookbook" \
+            --timeout=200 --timeout-method=thread \
+            --tb=short -p no:cacheprovider --maxfail=8 -v 2>&1 \
             | tee jax_unit_output.txt
           exit ${PIPESTATUS[0]}
         timeout-minutes: 45
