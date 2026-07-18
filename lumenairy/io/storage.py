@@ -462,6 +462,12 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
             grp.attrs['label'] = str(label)
         if metadata:
             for k, v in metadata.items():
+                # storage-nit (AUDIT S4-9): h5py cannot store a ``None``
+                # attr and raises deep in its C layer; skip it at this
+                # boundary so the HDF5 backend matches zarr (which stores
+                # ``None`` fine) instead of crashing.  Mirrors save_field_h5.
+                if v is None:
+                    continue
                 grp.attrs[str(k)] = v
         dset_ex = grp.create_dataset(
             'Ex', data=Ex,
@@ -684,6 +690,12 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
                     dset.attrs['label'] = str(label)
                 if metadata:
                     for k, v in metadata.items():
+                        # storage-nit (AUDIT S4-9): skip ``None`` attrs so
+                        # the HDF5 backend matches zarr (which stores ``None``
+                        # fine) instead of raising deep in h5py's C layer.
+                        # Mirrors save_field_h5.
+                        if v is None:
+                            continue
                         dset.attrs[str(k)] = v
                 # v4.16.0 SWMR: enable single-writer-multiple-reader
                 # mode AFTER the new dataset + attributes are in

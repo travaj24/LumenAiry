@@ -588,6 +588,18 @@ def berreman_jones_1d(
         Reflection / transmission Jones; columns = incident lab ``[Ex; Ey]``,
         rows = reflected / transmitted lab ``[Ex; Ey]``.  PUBLIC ``exp(-i w t)``.
 
+    Notes
+    -----
+    CROSS-ENGINE SEAM (audit S5-4): this planar-stack function returns
+    ``(R, T, jones_r, jones_t)`` -- so ``result[2]`` is the REFLECTION Jones
+    MATRIX and ``result[3]`` is the TRANSMISSION Jones.  The grating engines
+    :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` /
+    :func:`~lumenairy.elements.pmm.pmm_jones_1d` return
+    ``(orders, R_eff, T_eff, jones_reflection)`` instead, so THEIR ``result[2]``
+    is the ``T_eff`` efficiency ARRAY and ``result[3]`` is the REFLECTION Jones
+    -- ``result[3]`` therefore means TRANSMISSION here but REFLECTION there.
+    Mind the position when writing engine-agnostic post-processing.
+
     Accuracy
     --------
     Exact (machine precision) for isotropic, in-plane-anisotropic and

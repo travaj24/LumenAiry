@@ -157,6 +157,18 @@ def load_zemax_zmx(filepath: str,
                 'MM': 1e-3, 'CM': 1e-2, 'M': 1.0,
                 'IN': 25.4e-3, 'INCH': 25.4e-3, 'INCHES': 25.4e-3,
             }
+            # v5.24.x (audit S4-9): an unrecognised UNIT token silently
+            # defaulted to mm -- a potential order-of-magnitude mis-scale
+            # with no diagnostic.  Warn before falling back.
+            if unit_str not in unit_map:
+                warnings.warn(
+                    f"Unrecognised UNIT token {unit_str!r} in {filepath}; "
+                    f"defaulting to millimeters.  Known tokens: "
+                    f"{sorted(unit_map)}.  Verify the export or set the "
+                    f"scale manually if this is wrong.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             unit_scale = unit_map.get(unit_str, 1e-3)
             break
 
@@ -591,6 +603,17 @@ def load_zemax_zmx(filepath: str,
         aperture = stop_surfaces[0]['semi_diameter'] * 2 * unit_scale
     else:
         aperture = max(s['semi_diameter'] for s in lens_surfaces) * 2 * unit_scale
+    # v5.24.x (audit S4-9): a prescription with no STOP and no semi-diameter
+    # data yields aperture == 0.0, which silently fully-clips the downstream
+    # field with no diagnostic.  Warn so the caller can supply an aperture.
+    if aperture == 0.0:
+        warnings.warn(
+            f"Computed aperture_diameter is 0.0 for {filepath} (no STOP "
+            f"surface and no semi-diameter data found); the downstream "
+            f"field will be fully clipped.  Set the aperture explicitly.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     if name is None:
         name = os.path.splitext(os.path.basename(filepath))[0]
@@ -866,6 +889,17 @@ def load_zemax_prescription_data_txt(filepath: str,
                     'Meters': 1.0,
                     'Inches': 25.4e-3,
                 }
+                # v5.24.x (audit S4-9): warn before the silent mm fallback
+                # so an unrecognised unit name is not a silent order-of-
+                # magnitude mis-scale.
+                if unit_name not in unit_map:
+                    warnings.warn(
+                        f"Unrecognised 'Lens Units' value {unit_name!r} in "
+                        f"{filepath}; defaulting to millimeters.  Known "
+                        f"values: {sorted(unit_map)}.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                 unit_scale = unit_map.get(unit_name, 1e-3)
             except (ValueError, IndexError):
                 pass
@@ -1142,6 +1176,16 @@ def load_zemax_prescription_data_txt(filepath: str,
         aperture = stop_surfaces[0]['semi_diameter'] * 2
     else:
         aperture = max(s['semi_diameter'] for s in lens_surfaces) * 2
+    # v5.24.x (audit S4-9): warn on a silent 0.0 aperture (no STOP + no
+    # semi-diameter data) so the downstream full-clip is not silent.
+    if aperture == 0.0:
+        warnings.warn(
+            f"Computed aperture_diameter is 0.0 for {filepath} (no STOP "
+            f"surface and no semi-diameter data found); the downstream "
+            f"field will be fully clipped.  Set the aperture explicitly.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     if name is None:
         name = os.path.splitext(os.path.basename(filepath))[0]
@@ -1155,6 +1199,14 @@ def load_zemax_prescription_data_txt(filepath: str,
             'aspheric_coeffs': e['aspheric_coeffs'],
             'glass_before': e['glass_before'],
             'glass_after': e['glass_after'],
+            # v5.24.x (audit S4-9): mirror the .zmx twin (ZX-3) and carry
+            # is_stop + semi_diameter onto the lens-only surfaces.  Without
+            # them the stop-preserving export -- which reads
+            # ``surfaces[i].get('is_stop')`` -- fell through to STOP=surface-0
+            # on every .txt-LOADED file, relocating the declared stop on
+            # re-export.
+            'is_stop': bool(e.get('is_stop', False)),
+            'semi_diameter': e.get('semi_diameter'),
         }
         for e in refr_surfaces
     ]
@@ -1189,12 +1241,20 @@ def load_zemax_prescription_data_txt(filepath: str,
             stacklevel=2,
         )
 
+    # v5.24.x (audit S4-9): expose the explicit stop index at the top level
+    # (index into the lens-only ``surfaces`` list), mirroring the .zmx twin
+    # (ZX-3).  Consumers that key on 'stop_index' (exporters, tracer stop
+    # resolution) now see the declared stop instead of defaulting to 0.
+    _stop_index = next((i for i, ps in enumerate(prescription_surfaces)
+                        if ps.get('is_stop')), None)
+
     return {
         'name': name,
         'aperture_diameter': aperture,
         # Lens-only prescription (for apply_real_lens)
         'surfaces': prescription_surfaces,
         'thicknesses': lens_thicknesses,
+        'stop_index': _stop_index,
         # Full element list including mirrors (for manual use)
         'elements': elements,
         'all_thicknesses': thicknesses,

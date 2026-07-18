@@ -16,6 +16,7 @@ from ...backend import (
 from ._core import (
     _C,
     _block,
+    _cell_lossless,
     _check_energy,
     _concrete,
     _eig_for,
@@ -955,7 +956,7 @@ def rcwa_jones_vs_wavelength_segments(
 
 def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
                             eps_sup, eps_sub, kz_inc, depth, kx0, xp, is_jax,
-                            fn_name):
+                            fn_name, lossless=False):
     """Shared 1-D anisotropic Jones solve core (binary or multi-segment).
 
     Given the per-component one-period ``profiles`` (5 keys for the in-plane
@@ -963,7 +964,13 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
     (``Kx, Ky, kxv, k0`` and the half-space ``eps_sup / eps_sub / kz_inc``),
     build the convolutions, layer eigenmodes, region/layer S-matrix (the
     general full-tensor branch or the in-plane branch), then the R/T/Jones
-    efficiency tail.  Returns ``(orders, R_eff, T_eff, jones_reflection)``.
+    efficiency tail.  Returns
+    ``(orders, R_eff, T_eff, jones_reflection, jones_transmission)``.  The
+    zeroth-order TRANSMISSION Jones is always assembled here (near-zero cost --
+    the transmitted amplitudes ``tx``/``ty`` are already solved and were
+    previously squared into ``T_eff`` then discarded); the public wrappers drop
+    it unless ``return_jones_transmission=True`` so the default tuple arity is
+    unchanged.
 
     Factored out of :func:`rcwa_jones_1d` so that
     :func:`rcwa_jones_1d_segments` reuses the EXACT same core; the binary and
@@ -1005,7 +1012,7 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
     zeros_N = xp.zeros(N, dtype=_C)
     # Build the two incident-polarization responses then STACK (no item
     # assignment, so the path is JAX-differentiable as well as GPU-ready).
-    R_rows, T_rows, j_cols = [], [], []
+    R_rows, T_rows, j_cols, jt_cols = [], [], [], []
     for pol in ("x", "y"):
         if pol == "x":
             cinc = xp.concatenate([delta, zeros_N])
@@ -1032,14 +1039,20 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
                                            + xp.abs(tz) ** 2) / einc_sq
         R_rows.append(xp.where(xp.real(kz_ref_f) > 0, xp.real(Re), 0.0))
         T_rows.append(xp.where(xp.real(kz_trn_f) > 0, xp.real(Te), 0.0))
-        # Zeroth-order Jones column (conjugate back to public exp(-i w t)).
+        # Zeroth-order Jones columns (conjugate back to public exp(-i w t)):
+        # reflection AND transmission -- the transmitted amplitudes tx/ty are
+        # already solved (and squared into T_eff above), so exposing the
+        # transmission Jones is free (audit S5-4: the transmitted observable
+        # was previously unavailable from the standalone rcwa jones functions).
         j_cols.append(xp.stack([xp.conj(rx[M]), xp.conj(ry[M])]))
+        jt_cols.append(xp.stack([xp.conj(tx[M]), xp.conj(ty[M])]))
     R_eff = xp.stack(R_rows)                       # (2, N)
     T_eff = xp.stack(T_rows)
     jones_reflection = xp.stack(j_cols, axis=1)    # (2, 2): columns = pol
+    jones_transmission = xp.stack(jt_cols, axis=1)  # (2, 2): columns = pol
     if not is_jax:
-        _check_energy(fn_name, R_eff, T_eff)
-    return orders, R_eff, T_eff, jones_reflection
+        _check_energy(fn_name, R_eff, T_eff, lossless=lossless)
+    return orders, R_eff, T_eff, jones_reflection, jones_transmission
 
 
 
@@ -1058,7 +1071,8 @@ def rcwa_jones_1d(
     theta: float | None = None,
     n_orders: int = 11,
     use_gpu: bool = False,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    return_jones_transmission: bool = False,
+) -> Tuple[np.ndarray, ...]:
     """Rigorous 1-D anisotropic grating: a binary grating whose ridge and
     groove are full ``(3, 3)`` permittivity tensors (the liquid-crystal /
     birefringent case).  Because the in-plane tensor couples TE and TM, the
@@ -1084,6 +1098,11 @@ def rcwa_jones_1d(
     depth, duty_cycle, wavelength, angle, n_orders
         As in :func:`rcwa_efficiency_1d` (ridge occupies ``duty_cycle`` of
         the period; planar incidence at ``angle``).
+    return_jones_transmission : bool, optional
+        When ``True`` append the zeroth-order TRANSMISSION Jones as a fifth
+        return value (see Returns).  Default ``False`` keeps the historical
+        4-tuple arity (no tuple-unpacking break).  The transmitted amplitudes
+        are already solved, so this is a near-zero-cost opt-in.
 
     Returns
     -------
@@ -1097,6 +1116,24 @@ def rcwa_jones_1d(
         Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis
         (PUBLIC ``exp(-i w t)`` convention); columns are the responses to
         incident ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
+    jones_transmission : (2, 2) complex ndarray, optional
+        Present only when ``return_jones_transmission=True``: the zeroth-order
+        Jones TRANSMISSION matrix, same basis / convention / column layout as
+        ``jones_reflection`` -- the observable for a transmissive metasurface
+        (audit S5-4; previously reachable only via ``RCWAStack``).
+
+    Notes
+    -----
+    CROSS-ENGINE SEAM (audit S5-4): the standalone Jones return tuples differ
+    in POSITION across engines.  Here (and in :func:`rcwa_jones_1d_segments`
+    and :func:`~lumenairy.elements.pmm.pmm_jones_1d`) ``result[0]`` is the
+    order array, ``result[2]`` is the ``T_eff`` efficiency ARRAY, and
+    ``result[3]`` is the REFLECTION Jones; whereas
+    :func:`~lumenairy.elements.berreman_jones_1d` returns
+    ``(R, T, jones_r, jones_t)`` so its ``result[2]`` is a Jones MATRIX and its
+    ``result[3]`` is the TRANSMISSION Jones.  For the transmitted observable
+    pass ``return_jones_transmission=True`` here, use ``result[3]`` from
+    berreman, or ``RCWAStack``/``Stack.jones_transmission``.
     """
     angle = _resolve_incidence_checked("rcwa_jones_1d", angle, theta)
     _validate_geometry("rcwa_jones_1d",
@@ -1178,10 +1215,17 @@ def rcwa_jones_1d(
                                      eps_groove[ii, jj]).astype(_C)
 
     kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2)))
-    return _jones_1d_from_profiles(
+    # Lossless-closure tripwire (audit S1-2): route the provable-losslessness
+    # of the regions + tensors into _check_energy so a lossless solve that
+    # violates R+T = 1 in the silent 1e-6..0.05 window WARNS (conjugation of
+    # the loss-convention bridge above leaves Im == 0 invariant).
+    lossless = (_cell_lossless(eps_sup, eps_sub, eps_ridge, eps_groove)
+                if not is_jax else False)
+    res = _jones_1d_from_profiles(
         profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
         eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
-        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d")
+        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d", lossless=lossless)
+    return res if return_jones_transmission else res[:4]
 
 
 
@@ -1198,7 +1242,8 @@ def rcwa_jones_1d_segments(
     theta: float | None = None,
     n_orders: int = 11,
     use_gpu: bool = False,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    return_jones_transmission: bool = False,
+) -> Tuple[np.ndarray, ...]:
     """Rigorous 1-D anisotropic grating with an ARBITRARY piecewise-constant
     profile -- the multi-region / multi-level generalisation of
     :func:`rcwa_jones_1d` (which is the 2-segment ridge/groove special case).
@@ -1236,6 +1281,10 @@ def rcwa_jones_1d_segments(
         Transmission / incidence half-space (isotropic) indices.
     depth, wavelength, angle, n_orders
         As in :func:`rcwa_jones_1d` (planar incidence at ``angle``).
+    return_jones_transmission : bool, optional
+        When ``True`` append the zeroth-order TRANSMISSION Jones as a fifth
+        return value (see :func:`rcwa_jones_1d`).  Default ``False`` keeps the
+        historical 4-tuple arity.
 
     Returns
     -------
@@ -1248,6 +1297,11 @@ def rcwa_jones_1d_segments(
         Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis
         (PUBLIC ``exp(-i w t)`` convention); columns are the responses to
         incident ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
+    jones_transmission : (2, 2) complex ndarray, optional
+        Present only when ``return_jones_transmission=True``: the zeroth-order
+        Jones TRANSMISSION matrix (same basis / convention / column layout as
+        ``jones_reflection``).  See the CROSS-ENGINE SEAM note on
+        :func:`rcwa_jones_1d` (audit S5-4).
     """
     angle = _resolve_incidence_checked("rcwa_jones_1d_segments", angle, theta)
     _validate_geometry("rcwa_jones_1d_segments",
@@ -1374,10 +1428,17 @@ def rcwa_jones_1d_segments(
         profiles[key] = prof.astype(_C)
 
     kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2)))
-    return _jones_1d_from_profiles(
+    # Lossless-closure tripwire (audit S1-2): forward the provable-losslessness
+    # of the regions + every segment tensor so a lossless solve violating
+    # R+T = 1 in the silent 1e-6..0.05 window WARNS (the loss-convention
+    # conjugation above leaves Im == 0 invariant).
+    lossless = (_cell_lossless(eps_sup, eps_sub, *eps_tensors)
+                if not is_jax else False)
+    res = _jones_1d_from_profiles(
         profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
         eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
-        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d_segments")
+        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d_segments", lossless=lossless)
+    return res if return_jones_transmission else res[:4]
 
 
 

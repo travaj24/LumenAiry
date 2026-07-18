@@ -144,6 +144,7 @@ from .polarization import (
     create_elliptical_polarized,
     create_linear_polarized,
     degree_of_polarization,
+    jones_field_from_orders,
     polarization_ellipse,
     stokes_parameters,
 )
@@ -267,6 +268,7 @@ __all__ = [
     'create_linear_polarized', 'create_circular_polarized',
     'create_elliptical_polarized', 'stokes_parameters',
     'degree_of_polarization', 'polarization_ellipse',
+    'jones_field_from_orders',
     # bsdf
     'BSDFModel', 'LambertianBSDF', 'GaussianBSDF', 'HarveyShackBSDF',
     'make_bsdf', 'sample_scatter_rays',

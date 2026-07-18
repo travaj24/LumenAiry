@@ -839,7 +839,17 @@ def design_optimize(parameterization: Any,
                 ideal_peak=ideal, verbose=False)
             z_best_v, strehl_best_v = _core.find_best_focus(scan, 'strehl')
             ctx.z_best = float(z_best_v)
-            ctx.strehl_best = float(strehl_best_v)
+            # S4-5 (AUDIT_V5_24_2): ``find_best_focus`` returns ``nan``
+            # when every through-focus slice is NaN (a fully-vignetted /
+            # dark exit field).  A raw ``float(nan)`` then leaks into
+            # ``StrehlMerit``, where ``max(0.0, min_strehl - nan) == 0.0``
+            # REWARDS the failed design with a perfect score (the main
+            # wave leg disagreed in the SIGN of its failure handling with
+            # the wrapper merits, which write the 0.0 failed-scan
+            # sentinel).  Coerce a non-finite best Strehl to 0.0 so a
+            # degenerate wave leg is penalised, matching the wrapper.
+            ctx.strehl_best = (float(strehl_best_v)
+                               if np.isfinite(strehl_best_v) else 0.0)
             # v5.4.6 (audit F-5): NaN-safe argmax -- a single NaN
             # through-focus slice must not steal the argmax (np.argmax
             # treats NaN as the maximum).  Mirrors the wrapper-merit guard.
@@ -1102,6 +1112,10 @@ def design_optimize(parameterization: Any,
             # Gauss-Newton / Levenberg-Marquardt via least_squares.  No
             # per-iteration callback is available, so emit progress from
             # inside residuals() using the eval counter.
+            # S4-5 (AUDIT_V5_24_2): one-shot flag so the negative-term
+            # warning below fires at most once per design_optimize run.
+            _lm_neg_warned = [False]
+
             def residuals(x):
                 call_count[0] += 1
                 value, ctx = evaluate(x)
@@ -1123,9 +1137,30 @@ def design_optimize(parameterization: Any,
                 # typical merit-term magnitudes so it doesn't affect the
                 # converged solution.
                 _LM_FLOOR = 1e-30
+                # S4-5 (AUDIT_V5_24_2): the ``max(m, 0.0)`` clamp below
+                # silently zeroes any NEGATIVE merit-term contribution --
+                # so a reward-style ``CallableMerit`` that legitimately
+                # returns a negative value is invisible to Levenberg-
+                # Marquardt (it optimises a different objective than every
+                # non-'lm' method, which sums the raw values).  Evaluate
+                # each term ONCE, warn (at most once) when any term is
+                # negative, then build the clamped residual from the same
+                # values -- no extra merit evaluations, numerics unchanged.
+                term_vals = [m.evaluate(ctx) for m in merit_terms]
+                if not _lm_neg_warned[0] and any(v < 0.0 for v in term_vals):
+                    _lm_neg_warned[0] = True
+                    warnings.warn(
+                        "design_optimize(method='lm'): a merit term "
+                        "returned a NEGATIVE contribution, which the "
+                        "least-squares residual sqrt(max(m, 0)) silently "
+                        "clamps to 0 -- reward-style (negative) terms are "
+                        "ignored under 'lm' only.  Use a non-'lm' method "
+                        "(e.g. 'L-BFGS-B', 'Nelder-Mead') for reward-style "
+                        "merits, or reformulate the term as a "
+                        "non-negative penalty.",
+                        RuntimeWarning, stacklevel=2)
                 return np.array(
-                    [np.sqrt(max(m.evaluate(ctx), 0.0) + _LM_FLOOR)
-                     for m in merit_terms],
+                    [np.sqrt(max(v, 0.0) + _LM_FLOOR) for v in term_vals],
                     dtype=np.float64)
             # v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-1-2): explicit
             # ``None``-aware unpacking.  Pre-v4.16.1 used

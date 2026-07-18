@@ -156,6 +156,23 @@ class JaxMeritTerm(MeritTerm):
         return np.asarray(g)
 
 
+def _is_jax_tracer(a: Any) -> bool:
+    """True iff ``a`` is a *live* JAX tracer (a ``jax.grad`` / ``jax.jit``
+    ``Tracer`` -- a differentiable value flowing through a trace).
+
+    Concrete values (Python / NumPy scalars, materialised ``jax.Array``)
+    return ``False``: they can be safely ``float()``-ed by the static
+    downstream code.  Used by :func:`make_lg_aberration_merit_jax` to
+    reject differentiable ``build_args`` inputs that are consumed as
+    static Python floats (see S3-6).
+    """
+    try:
+        import jax
+        return isinstance(a, jax.core.Tracer)
+    except (ImportError, AttributeError):     # no JAX / old JAX layout
+        return False
+
+
 def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
                                  wavelength: float,
                                  targets: Dict[Any, float],
@@ -178,24 +195,40 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
     weighted sum of ``|L_{(p, ell), (0,0)}|^2`` across all targets
     and field points, just like :class:`LGAberrationMerit`.
 
-    *Currently supported as differentiable inputs* (anything you map
-    into via ``build_args``):
+    *Currently supported as differentiable inputs* (map into these via
+    ``build_args``):
 
-    * ``wavelength`` (chromatic optimisation)
-    * ``source_box_half``, ``pupil_box_half`` (fit-domain knobs;
-      useful for fit-quality optimisation but rarely a design free
-      var)
+    * ``w_s``, ``w_p`` (source / pupil Gaussian waists) -- the only two
+      ``build_args`` slots that carry a ``jax.grad`` tracer end to end
+      (both FD-verified to ~1e-6).
+
+    *Accepted only as STATIC overrides* -- pass a plain Python / NumPy
+    float, or ``None`` for the nominal.  S3-6 (AUDIT_V5_24_2): routing a
+    *differentiable* ``x`` into any of the four slots below raises
+    :class:`NotImplementedError` at trace time.  They are consumed as
+    static Python floats deep in :func:`fit_canonical_polynomials_jax`
+    (``float(pupil_box_half)``, ``-float(object_distance)``,
+    ``opd / float(wavelength)``) and in :func:`trace_jax`'s glass
+    dispersion, so a tracer there would otherwise crash ``jax.grad``
+    with an opaque ``TracerArrayConversionError`` /
+    ``ConcretizationTypeError``:
+
+    * ``wavelength`` (chromatic optimisation -- needs a JAX-traceable
+      glass dispersion; roadmap)
+    * ``source_box_half``, ``pupil_box_half`` (fit-domain knobs)
     * ``object_distance`` (source-plane positioning)
-    * ``w_s``, ``w_p`` (source / pupil Gaussian waists)
 
-    *NOT currently supported as differentiable inputs:* radii,
-    thicknesses, conics, aspheric coefficients.  These are read by
-    :func:`trace_jax` as static Python floats; making the trace
-    differentiable in prescription parameters is on the roadmap (a
-    "trace_jax with JAX-array surfaces" extension) but not in this
-    release.  Until then, design-parameter optimisation uses the
-    existing FD path, which is still adequate for systems with
-    O(30-50) free vars.
+    To optimise wavelength / box-size / object-distance, use the
+    finite-difference path (``design_optimize(..., jac='fd')`` or a
+    non-JAX merit term).
+
+    *NOT supported as inputs at all:* radii, thicknesses, conics,
+    aspheric coefficients.  These are read by :func:`trace_jax` as
+    static Python floats; making the trace differentiable in
+    prescription parameters is on the roadmap (a "trace_jax with
+    JAX-array surfaces" extension) but not in this release.  Until
+    then, design-parameter optimisation uses the existing FD path,
+    which is still adequate for systems with O(30-50) free vars.
 
     Parameters
     ----------
@@ -320,6 +353,38 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
         wl, sbh, pbh, obj_d, w_s_local, w_p_local = (
             (a if a is not None else default)
             for a, default in zip(args, nominal))
+        # S3-6 (AUDIT_V5_24_2): only w_s (slot 4) / w_p (slot 5) are
+        # differentiable.  The wavelength / source_box_half /
+        # pupil_box_half / object_distance slots are consumed as static
+        # Python floats deep in the trace (fit_canonical_polynomials_jax:
+        # float(pupil_box_half), -float(object_distance),
+        # opd/float(wavelength); trace_jax glass dispersion), so a
+        # build_args that routes a *differentiable* x into any of them
+        # crashes jax.grad with an opaque TracerArrayConversionError /
+        # ConcretizationTypeError.  Detect the live tracer at trace time
+        # and raise ONE actionable error pointing at the FD path, instead
+        # of four confusing deep failures.  A *static* float override in
+        # these slots is fine and passes through untouched -- only a
+        # differentiable tracer is rejected.
+        _live = [nm for nm, v in (('wavelength', wl),
+                                  ('source_box_half', sbh),
+                                  ('pupil_box_half', pbh),
+                                  ('object_distance', obj_d))
+                 if _is_jax_tracer(v)]
+        if _live:
+            raise NotImplementedError(
+                f"make_lg_aberration_merit_jax: build_args routes a "
+                f"differentiable x into {_live}, but only ``w_s`` "
+                f"(slot 4) and ``w_p`` (slot 5) are differentiable in "
+                f"this release.  {_live} are read as static Python "
+                f"floats by fit_canonical_polynomials_jax / trace_jax "
+                f"and cannot carry a jax.grad tracer (that is the deep "
+                f"TracerArrayConversionError / ConcretizationTypeError "
+                f"you would otherwise hit).  Either pass these as static "
+                f"values (a Python/NumPy float, or None for the nominal) "
+                f"in build_args, or optimise them via the "
+                f"finite-difference path (design_optimize(..., "
+                f"jac='fd'), or a non-JAX merit term).")
         fit = fit_canonical_polynomials_jax(
             prescription, float(wl) if not hasattr(wl, 'shape') else wl,
             source_box_half=sbh, pupil_box_half=pbh,

@@ -67,6 +67,7 @@ from __future__ import annotations
 
 import copy as _copy
 import math
+import threading
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -107,10 +108,17 @@ def _build_kernels():
         for iq in prange(Nq):
             cxq = qx[iq]
             cyq = qy[iq]
-            j0 = int((cxq - R - x0) / dx)
-            j1 = int((cxq + R - x0) / dx) + 1
-            i0 = int((cyq - R - y0) / dyg)
-            i1 = int((cyq + R - y0) / dyg) + 1
+            # Pad the box by one pixel each side so the circular gate
+            # (``r2 > R*R``) is the SOLE selector -- a guaranteed superset
+            # matching ``_coeff_sep``'s ``jx +- int(R/dx) +- 1`` box.  The clamps
+            # and gate discard the padding, so the output is byte-identical for
+            # non-integer R/dx and picks up the legitimately-in-window boundary
+            # pixel at integer R/dx (the default nsig*w0_factor=15), where int()
+            # rounding of the tight bound would otherwise drop it (seam S2-7).
+            j0 = int((cxq - R - x0) / dx) - 1
+            j1 = int((cxq + R - x0) / dx) + 2
+            i0 = int((cyq - R - y0) / dyg) - 1
+            i1 = int((cyq + R - y0) / dyg) + 2
             if j0 < 0:
                 j0 = 0
             if i0 < 0:
@@ -320,12 +328,18 @@ def _build_kernels():
                 gxj = math.exp(-dxr * dxr * inv2w2)          # Gaussian at j0
                 ratio = math.exp(-(2.0 * dxr * dx + dx * dx) * inv2w2)
                 for j in range(j0, j1):
-                    if dxr * dxr + dy2 <= R2:
+                    # Gate on a FRESH dxr (bit-identical to _scatter's gate) so
+                    # the two kernels select the SAME pixel set even at the
+                    # integer-R/dx boundary tie (the default nsig*w0_factor=15);
+                    # the recurrence dxr drifts by ~ULP and must not decide the
+                    # discrete window membership (seam S2-7, scatter half).
+                    dxrf = (x0 + j * dx) - qxb
+                    if dxrf * dxrf + dy2 <= R2:
                         mag = agy * gxj
                         outr[i, j] += mag * (wr * cph - wi * sph)
                         outi[i, j] += mag * (wr * sph + wi * cph)
-                    # advance recurrences (every step, to stay phase-locked)
-                    dxr += dx
+                    # advance the Gaussian + phase recurrences (every step, to
+                    # stay phase-locked)
                     gxj *= ratio
                     ratio *= cc
                     ncph = cph * cstep - sph * sstep
@@ -455,8 +469,12 @@ def _reconstruct(Qx, Qy, Px, Py, W, x0, y0, dx, dyg, Ny, Nx, w0, k, Ag, nsig):
     return outr + 1j * outi
 
 
-def _default_p_max(prescription, wavelength):
-    """Momentum half-range from the system NA (falls back to a moderate cone)."""
+def _default_p_max(prescription, wavelength, powerless_uncapped=False):
+    """Momentum half-range from the system NA (falls back to a moderate cone).
+
+    ``powerless_uncapped=True`` (the momentum-sizing caller) returns ``np.inf``
+    for a power-less prescription so no NA cap is imposed; the NA-*estimate*
+    callers leave it False and keep the small-NA floor (see below)."""
     try:
         from ..raytrace import system_abcd_prescription  # noqa: F401
     except ImportError:
@@ -473,6 +491,13 @@ def _default_p_max(prescription, wavelength):
         ap = prescription.get('aperture_diameter', 0.0)
         r = max([ap / 2.0] + semis) if (semis or ap) else 0.0
         efl = abs(float(system_abcd_prescription(prescription, wavelength)[3]))
+        if not np.isfinite(efl):
+            # Power-less prescription (flat plate / free space): the marginal-ray
+            # NA is 0, so a physical NA cap is meaningless and truncates a
+            # wide-angle free-space beam (audit S2-6).  The momentum-sizing caller
+            # asks for NO cap (np.inf) so p_max follows the field's own angular
+            # content; the NA-estimate callers keep the small-NA floor (0.05).
+            return np.inf if powerless_uncapped else 0.05
         na = (r / efl) if (r > 0 and efl > 0) else 0.1
         return float(min(0.6, max(0.05, 1.6 * na)))
     except (LookupError, TypeError, ValueError, AttributeError,
@@ -519,6 +544,45 @@ def _pick_ray_transfer(surfaces, exact):
 # swarm (~ full swarm / coarse_stride^2), so keep the bound small.
 _COARSE_CACHE: Dict[Any, Any] = {}
 _COARSE_CACHE_MAX = 2
+# v5.24.4 (audit hygiene): thread-safety lock for ``_COARSE_CACHE``.  The
+# read (``get``) -> ``_coarse_cache_put`` (len-check -> pop -> __setitem__)
+# sequence is a read-modify-write two threads propagating through the SAME
+# optics could tear.  Follows the ``_THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK``
+# precedent in :mod:`analysis.through_focus`.  Lock-scope discipline: the
+# expensive per-momentum coarse trace runs OUTSIDE the lock so a concurrent
+# cache hit on a different key isn't blocked on it (mirrors the jit-compile
+# discipline of the through-focus lock).
+_COARSE_CACHE_LOCK = threading.Lock()
+
+
+def clear_coarse_trace_cache() -> None:
+    """Drop every cached FGA coarse pre-trace (lever #2).
+
+    Forces the next ``cache_trace=True`` propagation to recompute the
+    field-independent coarse ray-data grids from scratch.  Use in unit
+    tests that pin cache mechanics or in long-running pipelines that want
+    to release the retained coarse swarms.
+    """
+    with _COARSE_CACHE_LOCK:
+        _COARSE_CACHE.clear()
+
+
+# v5.24.4 (audit hygiene): enroll the coarse-trace clearer with the central
+# registry at import time so ``clear_all_registered_caches`` drains it (the
+# v4.16.1 enrollment meta-pin requires every module-level ``_*_CACHE`` to be
+# registered).  Late-binding closure preserves ``mock.patch.object`` test
+# semantics (mirrors the through_focus / propagation enrollment pattern).
+try:
+    import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'fga_coarse_trace',
+        lambda: getattr(_this_mod, 'clear_coarse_trace_cache')(),
+    )
+except ImportError:
+    pass
 
 
 def _coarse_geom_key(surfs, wavelength, Nx, Ny, dx, dyg, dq_step, coarse_stride,
@@ -539,9 +603,10 @@ def _coarse_geom_key(surfs, wavelength, Nx, Ny, dx, dyg, dq_step, coarse_stride,
 
 
 def _coarse_cache_put(key, val):
-    if len(_COARSE_CACHE) >= _COARSE_CACHE_MAX:
-        _COARSE_CACHE.pop(next(iter(_COARSE_CACHE)))       # FIFO evict oldest
-    _COARSE_CACHE[key] = val
+    with _COARSE_CACHE_LOCK:
+        if len(_COARSE_CACHE) >= _COARSE_CACHE_MAX:
+            _COARSE_CACHE.pop(next(iter(_COARSE_CACHE)))    # FIFO evict oldest
+        _COARSE_CACHE[key] = val
 
 
 def _field_angular_content(E_in, dx, dyg, wavelength, frac=0.999):
@@ -579,7 +644,7 @@ def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
     leading FGA is EXACT for free space, so with dp matched a diverging beam
     reconstructs to ~round-off).  An explicit ``p_max`` / ``n_p`` is honoured."""
     if p_max is None:
-        na_cap = _default_p_max(prescription, wavelength)
+        na_cap = _default_p_max(prescription, wavelength, powerless_uncapped=True)
         content = _field_angular_content(E_in, dx, dyg, wavelength)
         # COMPLETENESS FLOOR (audit S2-2): the swarm must cover each beamlet's OWN
         # momentum width ~2/(k*w0), else the t=0 resolution of identity loses
@@ -588,7 +653,10 @@ def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
         # power deficit (while fidelity stayed ~1, a pure under-normalization).
         # Floor at _PMAX_BEAMLET_C/(k*w0) (power >0.99).  Cover the field's content
         # generously (x1.5 spectral tail; over-wide p_max is harmless at fine dp),
-        # never wider than the system NA cone (x1.5; content beyond it is clipped).
+        # never wider than the system NA cone (x1.5; content beyond it is clipped)
+        # -- but a power-less prescription (flat plate / free space) has na_cap=inf
+        # so p_max follows the field's own content uncapped (audit S2-6: the NA cap
+        # is physically meaningless for free space and truncated wide-angle beams).
         k = 2.0 * np.pi / wavelength
         beamlet_floor = _PMAX_BEAMLET_C / (k * w0)
         p_max = float(min(1.5 * na_cap, max(beamlet_floor, 1.5 * content)))
@@ -743,7 +811,11 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
     ckey = (_coarse_geom_key(surfs, wavelength, Nx, Ny, dx, dyg, dq_step,
                              coarse_stride, px, w0, z_image)
             if cache_trace else None)
-    cached = _COARSE_CACHE.get(ckey) if ckey is not None else None
+    if ckey is not None:
+        with _COARSE_CACHE_LOCK:
+            cached = _COARSE_CACHE.get(ckey)
+    else:
+        cached = None
     if cached is not None:
         grids, alv_list = cached
     else:

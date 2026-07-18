@@ -861,6 +861,252 @@ class TestAuditFixesV4_14_3_agent_b_B4FiberModeMfdConstraint:
 
 
 # ============================================================================
+# S3-4 (AUDIT_V5_24_2) -- create_fiber_mode ``na`` is advisory only
+# ============================================================================
+
+class TestAuditFixesV5_24_2_S3_4FiberModeNaInert:
+    """Pin the documented contract that ``create_fiber_mode``'s ``na``
+    argument does NOT influence the returned field: the Gaussian
+    near-field (and hence the far-field divergence) is set entirely by
+    ``mode_field_diameter`` and ``wavelength``.
+
+    S3-4 flagged that the docstring claimed "NA-defined divergence"
+    while the implementation is MFD-only -- fields for na=0.05 vs 0.15
+    are bit-identical.  These tests lock that behaviour with an
+    independent analytic Gaussian oracle so the corrected docstring can
+    never silently drift back to the false claim.
+    """
+
+    def test_na_does_not_change_field_bit_identical(self):
+        """Fields for several sub-warning-threshold ``na`` values are
+        bit-identical -- ``na`` is inert (reproduces the audit probe)."""
+        N, dx, wl, mfd = 64, 1e-6, 1.31e-6, 10e-6
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')  # any NA warning would fail here
+            E_lo, _, _ = create_fiber_mode(
+                N, dx, wl, mode_field_diameter=mfd, na=0.05)
+            E_mid, _, _ = create_fiber_mode(
+                N, dx, wl, mode_field_diameter=mfd, na=0.12)
+            E_hi, _, _ = create_fiber_mode(
+                N, dx, wl, mode_field_diameter=mfd, na=0.15)
+        assert np.array_equal(E_lo, E_mid), (
+            'na=0.05 vs 0.12 must give a bit-identical field (na is '
+            'advisory only).')
+        assert np.array_equal(E_lo, E_hi), (
+            'na=0.05 vs 0.15 must give a bit-identical field (na is '
+            'advisory only).')
+
+    def test_field_matches_independent_mfd_gaussian_oracle(self):
+        """Independent oracle: the near-field equals an analytic
+        peak-normalised Gaussian built solely from MFD (waist
+        ``w0 = MFD/2``, ``sigma = w0/sqrt(2)``) on the same grid --
+        proving the field is MFD-determined, not NA-determined."""
+        N, dx, wl, mfd = 64, 1e-6, 1.31e-6, 10e-6
+        E, x, y = create_fiber_mode(
+            N, dx, wl, mode_field_diameter=mfd, na=0.14)
+        w0 = mfd / 2.0
+        sigma = w0 / np.sqrt(2.0)
+        X, Y = np.meshgrid(x, y)
+        E_expected = np.exp(-(X ** 2 + Y ** 2) / (2.0 * sigma ** 2))
+        # Default normalize='peak' -> unit-peak amplitude, flat phase.
+        assert np.allclose(E, E_expected, rtol=0, atol=1e-12), (
+            'create_fiber_mode field must match the analytic MFD-set '
+            'Gaussian.')
+
+    def test_second_moment_width_equals_mfd_independent_of_na(self):
+        """Physics oracle: the measured D4-sigma second-moment intensity
+        width equals the MFD (a Gaussian has D4sigma == 1/e^2 diameter)
+        and is unchanged by ``na`` -- so ``na`` cannot set divergence."""
+        N, dx, wl, mfd = 128, 0.5e-6, 1.31e-6, 10e-6
+
+        def d4sigma(E, x, y):
+            Xg, Yg = np.meshgrid(x, y)
+            I = np.abs(E) ** 2
+            tot = I.sum()
+            cx = (Xg * I).sum() / tot
+            varx = ((Xg - cx) ** 2 * I).sum() / tot
+            return 4.0 * np.sqrt(varx)
+
+        w_lo = d4sigma(*create_fiber_mode(
+            N, dx, wl, mode_field_diameter=mfd, na=0.05))
+        w_hi = d4sigma(*create_fiber_mode(
+            N, dx, wl, mode_field_diameter=mfd, na=0.15))
+        assert np.isclose(w_lo, mfd, rtol=2e-3), (
+            f'D4sigma width {w_lo:.3e} should equal MFD {mfd:.3e} '
+            f'(Gaussian near-field set by MFD).')
+        assert w_lo == w_hi, (
+            'D4sigma width must not depend on na (na does not set '
+            'divergence).')
+
+
+# ============================================================================
+# S3-3 (AUDIT_V5_24_2) -- point-source / tilted-plane-wave chirp Nyquist guard
+# ============================================================================
+
+class TestAuditFixesV5_24_2_S3_3ChirpNyquistGuard:
+    """S3-3: ``create_tilted_plane_wave`` and ``create_point_source`` built
+    a ramp/chirp whose local transverse spatial frequency could exceed the
+    grid Nyquist limit ``lambda/(2*dx)`` with NO warning -- the phase then
+    aliases (folds) to a spurious SMALLER effective angle.  The only prior
+    guards were evanescence (``sin^2 > 1``) and ``|z0| < dx``.
+
+    The fix adds a transverse-Nyquist (edge-NA) ``RuntimeWarning``.  These
+    tests pin it against an INDEPENDENT aliasing oracle rather than a
+    tautology: they recover the per-pixel phase step the *sampled* field
+    actually carries and show it folds INTO the +/-Nyquist band while the
+    requested/analytic angle lies OUTSIDE it -- the physical consequence the
+    warning flags -- and separately assert the warning fires.
+
+    The tilt ramp aliases GLOBALLY the instant sin(angle) crosses Nyquist,
+    so its guard is exact.  The spherical chirp aliases only the pixels
+    beyond the aliasing radius (a graded edge effect), so its guard adds a
+    1.5x safety margin -- a hairline corner-only crossing is benign and must
+    not alarm (last test).
+    """
+
+    @staticmethod
+    def _recovered_sin(E, row, col, k0, dx):
+        """Effective sin(angle) carried between adjacent columns ``col`` ->
+        ``col+1`` of ``E`` on ``row``: the WRAPPED per-pixel phase step
+        divided by ``k0*dx``.  This is what the sampled field actually
+        represents -- it folds into (-Nyquist, Nyquist] under aliasing."""
+        step = float(np.angle(E[row, col + 1] * np.conj(E[row, col])))
+        return step / (k0 * dx)
+
+    # -- tilted plane wave -------------------------------------------------
+
+    def test_tilt_undersampled_aliases_and_warns(self):
+        """sin(angle)=0.5 with Nyquist lambda/(2dx)=0.316: undersampled.
+        Independent oracle -- the ramp folds to
+        ``sin_eff = sin(angle) - lambda/dx = -0.133`` (inside the band),
+        and a Nyquist RuntimeWarning fires."""
+        N, dx, wl = 64, 1e-6, 633e-9
+        k0 = 2 * np.pi / wl
+        nyq = wl / (2 * dx)                 # 0.3165
+        angle_x = float(np.arcsin(0.5))     # sin = 0.5 > nyq
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            E, x, y = create_tilted_plane_wave(N, dx, wl, angle_x=angle_x)
+        sin_eff = self._recovered_sin(E, N // 2, N // 2, k0, dx)
+        expected_fold = float(np.sin(angle_x)) - wl / dx   # 0.5 - 0.633
+        assert np.isclose(sin_eff, expected_fold, atol=1e-6), (
+            f"undersampled ramp must alias to sin_eff={expected_fold:.4f}; "
+            f"the sampled field recovered {sin_eff:.4f}.")
+        assert abs(sin_eff) < nyq, (
+            "the aliased effective sin must fold inside the +/-Nyquist band.")
+        assert abs(np.sin(angle_x)) > nyq, "probe must be undersampled."
+        nyq_warns = [w for w in caught
+                     if issubclass(w.category, RuntimeWarning)
+                     and 'Nyquist' in str(w.message)]
+        assert len(nyq_warns) >= 1, (
+            f"undersampled tilt must emit a Nyquist RuntimeWarning; got "
+            f"{[str(w.message) for w in caught]}.")
+
+    def test_tilt_well_sampled_no_warning_and_no_alias(self):
+        """sin(angle)=0.2 < 0.316: well sampled.  The field carries the
+        requested angle UNfolded and no Nyquist warning fires."""
+        N, dx, wl = 64, 1e-6, 633e-9
+        k0 = 2 * np.pi / wl
+        angle_x = float(np.arcsin(0.2))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            E, x, y = create_tilted_plane_wave(N, dx, wl, angle_x=angle_x)
+        sin_eff = self._recovered_sin(E, N // 2, N // 2, k0, dx)
+        assert np.isclose(sin_eff, 0.2, atol=1e-6), (
+            f"well-sampled ramp must carry the requested angle unfolded; "
+            f"got sin_eff={sin_eff:.4f}.")
+        nyq_warns = [w for w in caught
+                     if issubclass(w.category, RuntimeWarning)
+                     and 'Nyquist' in str(w.message)]
+        assert not nyq_warns, (
+            f"well-sampled tilt must NOT warn; got "
+            f"{[str(w.message) for w in nyq_warns]}.")
+
+    # -- point source ------------------------------------------------------
+
+    def test_point_source_undersampled_aliases_and_warns(self):
+        """Reproduce the audit probe (N=512, dx=1um, z0=200um): edge
+        local-NA ~0.79 >> Nyquist 0.316.  Independent oracle -- the edge
+        phase step folds to an effective NA well inside the band, far below
+        the analytic value, and a Nyquist RuntimeWarning fires."""
+        N, dx, wl, z0 = 512, 1e-6, 633e-9, 200e-6
+        k0 = 2 * np.pi / wl
+        nyq = wl / (2 * dx)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            E, x, y = create_point_source(N, dx, wl, z0=z0)
+        # Analytic local-NA between the two outermost columns of the centre
+        # row (y ~ y0 = 0), and the NA the sampled field actually carries.
+        xmid = 0.5 * (float(x[-1]) + float(x[-2]))
+        na_analytic = abs(xmid) / np.sqrt(xmid ** 2 + z0 ** 2)
+        na_recovered = abs(self._recovered_sin(E, N // 2, N - 2, k0, dx))
+        assert na_analytic > nyq, (
+            f"probe edge NA {na_analytic:.3f} must exceed Nyquist "
+            f"{nyq:.3f}.")
+        assert na_recovered < nyq, (
+            f"the sampled edge NA {na_recovered:.3f} must fold inside the "
+            f"band (< {nyq:.3f}).")
+        assert na_recovered < 0.5 * na_analytic, (
+            f"sampled edge NA {na_recovered:.3f} must be far below the "
+            f"analytic {na_analytic:.3f} (aliased/folded).")
+        nyq_warns = [w for w in caught
+                     if issubclass(w.category, RuntimeWarning)
+                     and 'Nyquist' in str(w.message)]
+        assert len(nyq_warns) >= 1, (
+            f"undersampled point source must emit a Nyquist RuntimeWarning; "
+            f"got {[str(w.message) for w in caught]}.")
+
+    def test_point_source_well_sampled_no_warning(self):
+        """A distant focus (z0=5mm) keeps edge NA << Nyquist: no aliasing,
+        no warning, and the edge phase step carries the true NA unfolded."""
+        N, dx, wl, z0 = 256, 1e-6, 633e-9, 5e-3
+        k0 = 2 * np.pi / wl
+        nyq = wl / (2 * dx)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            E, x, y = create_point_source(N, dx, wl, z0=z0)
+        xmid = 0.5 * (float(x[-1]) + float(x[-2]))
+        na_analytic = abs(xmid) / np.sqrt(xmid ** 2 + z0 ** 2)
+        na_recovered = abs(self._recovered_sin(E, N // 2, N - 2, k0, dx))
+        assert na_analytic < nyq, "probe must be well sampled."
+        assert np.isclose(na_recovered, na_analytic, rtol=1e-2), (
+            f"well-sampled edge must carry the true NA unfolded; recovered "
+            f"{na_recovered:.5f} vs analytic {na_analytic:.5f}.")
+        nyq_warns = [w for w in caught
+                     if issubclass(w.category, RuntimeWarning)
+                     and 'Nyquist' in str(w.message)]
+        assert not nyq_warns, (
+            f"well-sampled point source must NOT warn; got "
+            f"{[str(w.message) for w in nyq_warns]}.")
+
+    def test_point_source_marginal_corner_does_not_alarm(self):
+        """Policy pin: a hairline crossing (edge NA ~1.26x Nyquist -- only
+        the extreme-corner ring aliasing) must NOT warn.  The point-source
+        guard fires only on CLEAR undersampling (> 1.5x Nyquist).  Uses the
+        exact params of test_v4_15_agent_b's canonical point-source
+        construction, so this guard can never regress that clean call under
+        its ``simplefilter('error')``."""
+        N, dx, wl, z0 = 32, 5e-6, 633e-9, -1e-3
+        nyq = wl / (2 * dx)                              # 0.0633
+        x = (np.arange(N) - N / 2) * dx
+        x_off = max(abs(float(x[0])), abs(float(x[-1])))
+        na_edge = x_off / np.sqrt(x_off ** 2 + z0 ** 2)  # ~0.0797
+        assert nyq < na_edge < 1.5 * nyq, (
+            f"probe calibration: edge NA {na_edge:.4f} must sit in the "
+            f"(Nyquist, 1.5*Nyquist) marginal band ({nyq:.4f}, "
+            f"{1.5 * nyq:.4f}).")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            create_point_source(N, dx, wl, z0=z0)
+        nyq_warns = [w for w in caught
+                     if issubclass(w.category, RuntimeWarning)
+                     and 'Nyquist' in str(w.message)]
+        assert not nyq_warns, (
+            f"marginal corner-only aliasing must NOT alarm; got "
+            f"{[str(w.message) for w in nyq_warns]}.")
+
+
+# ============================================================================
 # B.5 -- P1-MC: multiconfig.py hardcoded n=1.5 in lensmaker formula
 # ============================================================================
 

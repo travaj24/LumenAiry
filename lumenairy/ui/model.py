@@ -2567,18 +2567,47 @@ class SystemModel(QObject):
         return np.sqrt(total / max(n, 1))
 
     def run_optimization(self, max_iter=200, callback=None,
-                         method='Nelder-Mead'):
+                         method='Nelder-Mead', apply_result=True):
         # v5.4 (audit P1-D): ``method`` kwarg surfaces the optimizer-
         # dock dropdown choice through to scipy.minimize.  Pre-v5.4
         # the call was hardcoded to Nelder-Mead; we keep that as the
         # default so callers that don't pass ``method=`` see byte-
-        # identical behaviour.  Methods accepting bounds use the
-        # variable-bound list when available; gradient-method
-        # 'Nelder-Mead' / 'Powell' ignore the kwarg entirely.
+        # identical behaviour.
+        #
+        # v5.24.4 (audit S4-7, part 2): the geometric model stores NO
+        # per-variable bounds, yet the bounded methods a user can pick in
+        # the dock (L-BFGS-B / TNC / SLSQP / trust-constr) silently ran
+        # UNBOUNDED because no ``bounds=`` was ever passed -- so a
+        # thickness / air-gap variable could be driven negative with no
+        # complaint.  We now build a lightweight physical default box for
+        # those bounded methods ONLY: ``distance`` / ``thickness``
+        # variables are constrained non-negative, every other field
+        # (radius, conic, ...) stays free.  The default Nelder-Mead path
+        # (and Powell / CG / BFGS ...) is LEFT UNBOUNDED so the pre-v5.4
+        # default remains byte-identical.
+        #
+        # v5.24.4 (audit S4-7, part 1): ``apply_result`` gates the
+        # write-back.  The background :class:`OptimizeWorker` calls with
+        # ``apply_result=False`` so this method, running OFF the GUI
+        # thread, does NOT mutate ``self.elements`` or emit
+        # ``system_changed`` (the flagged data race).  It instead restores
+        # the live model to x0 and stashes the solution in
+        # ``self._last_optimization_x`` for the dock's finished-handler to
+        # apply on the MAIN thread.  Synchronous callers keep the default
+        # ``apply_result=True`` and see the pre-v5.24.4 write-back.
         from scipy.optimize import minimize
         if not self.opt_variables:
             return False, 'No variables defined.'
         x0 = self.get_variable_values()
+
+        bounds = None
+        if method.lower() in ('l-bfgs-b', 'tnc', 'slsqp', 'trust-constr'):
+            bounds = [
+                (0.0, None) if field in ('distance', 'thickness')
+                else (None, None)
+                for (_ei, _si, field) in self.opt_variables
+            ]
+
         iteration = [0]
         def _cb(xk):
             iteration[0] += 1
@@ -2594,10 +2623,21 @@ class SystemModel(QObject):
             opts = {'maxiter': max_iter}
         try:
             result = minimize(self.merit_function, x0, method=method,
-                              options=opts, callback=_cb)
-            self.set_variable_values(result.x)
-            self._invalidate()
-            self.system_changed.emit()
+                              bounds=bounds, options=opts, callback=_cb)
+            # v5.24.4 (audit S4-7): ``merit_function`` mutated the live
+            # model on every scipy probe, so the model is currently at
+            # scipy's LAST-probed point (not necessarily the optimum).
+            # Record the solution, then either apply it (synchronous
+            # caller) or restore x0 (background-worker path -- the dock
+            # re-applies on the GUI thread).  Never leave the live model
+            # sitting at the arbitrary last-probed intermediate design.
+            self._last_optimization_x = list(result.x)
+            if apply_result:
+                self.set_variable_values(result.x)
+                self._invalidate()
+                self.system_changed.emit()
+            else:
+                self.set_variable_values(x0)   # restore; no emit off-thread
             msg = (f'Merit: {result.fun*1e6:.3f} um after {result.nit} '
                    f'iterations [{method}]')
             self.optimization_finished.emit(result.success, msg)

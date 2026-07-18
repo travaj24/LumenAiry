@@ -66,6 +66,15 @@ __all__ = ['apply_real_lens_traced_multibranch', 'ludwig_fold']
 # far below the O(0.1..1) barycentric coordinates of genuine interior pixels.
 _EDGE_TOL = 1e-9
 
+# Energy-conservation tripwire (Scope note D5): at a rotationally-symmetric
+# AXIAL point focus a whole RING of branches coalesces, but the fold-uniform
+# 'ludwig' swap regularizes only the CLOSEST PAIR -- the residual ring branches
+# keep their divergent ``1/sqrt|J|`` ART amplitudes, blowing the reconstructed
+# grid power up ~1e5..1e6x (probe: ~1e6x at the BFL plane).  A well-behaved
+# through-focus field stays within ~1.2x of the input aperture power, so a warn
+# above this multiple flags the catastrophe with no false positives.
+_ENERGY_BLOWUP_FACTOR = 10.0
+
 
 def _top_left(ex, ey):
     """Top-left rule: an on-edge pixel is owned by the triangle whose mapped
@@ -366,12 +375,17 @@ def apply_real_lens_traced_multibranch(
     ``caustic_band='plain'`` keeps the raw branch sum everywhere.
 
     Scope note (D5): the band swaps the CLOSEST-EIKONAL branch pair, which is a
-    FOLD-uniform (Airy) replacement.  At an AXIAL point focus the symmetric
-    branch pairs have ``|S+ - S-| ~ 0`` without being fold-coalescent -- the
-    correct uniform function there is Bessel/Pearcey, not Airy.  The Ludwig
-    swap still REGULARIZES (finite where the plain sum diverges), so this is an
-    accuracy note, not a blow-up; a ``det Q-dot``-based fold-vs-point
-    discriminator is a possible future refinement.
+    FOLD-uniform (Airy) replacement.  At an AXIAL point focus a whole RING of
+    branches coalesces with ``|S+ - S-| ~ 0`` (the correct uniform function
+    there is Bessel/Pearcey, not Airy); the Ludwig swap regularizes only the
+    closest PAIR, so the remaining ring branches keep their divergent
+    ``1/sqrt|J|`` ART amplitudes and the reconstructed field DOES blow up at a
+    perfect on-axis focus -- geometric optics diverges there (probe: ~1e6x the
+    input power at the BFL plane).  A warning-only energy tripwire fires when
+    the reconstructed grid power grossly exceeds the input aperture power; route
+    those pixels to the Maslov (``'levin'``) or GBD propagator.  A
+    ``det Q-dot``-based fold-vs-point discriminator is a possible future
+    refinement.
 
     Parameters
     ----------
@@ -706,6 +720,35 @@ def apply_real_lens_traced_multibranch(
     # E[y, x] -- transpose on return.
     E_out = E_out.T
     n_branch = n_branch.T
+
+    # ---- axial point-focus catastrophe tripwire (warning-only, D5) ------
+    # Independent energy oracle: at a rotationally-symmetric on-axis focus a
+    # RING of branches coalesces where the fold-uniform 'ludwig' swap
+    # regularizes only the closest PAIR, so the residual branch amplitudes
+    # diverge and the reconstructed grid power blows up ~1e5..1e6x (a
+    # well-behaved through-focus field stays within ~1.2x of the input aperture
+    # power).  Compare reconstructed power to the power that entered the launch
+    # aperture and warn on a gross excess -- no number change, non-JAX-only.
+    if aperture is not None:
+        ap_r = 0.5 * float(aperture)
+    else:
+        ap_r = 0.5 * N * dx
+    xg = (np.arange(N) - N / 2.0) * dx
+    r2 = xg[None, :] ** 2 + xg[:, None] ** 2
+    p_in = float(np.sum(np.abs(E_in[r2 <= ap_r * ap_r]) ** 2))
+    p_out = float(np.sum(np.abs(E_out) ** 2))
+    if p_in > 0.0 and p_out > _ENERGY_BLOWUP_FACTOR * p_in:
+        warnings.warn(
+            "apply_real_lens_traced_multibranch: reconstructed grid power is "
+            f"{p_out / p_in:.3g}x the input aperture power (up to "
+            f"{int(n_branch.max())} branches coalesce on one pixel).  This is "
+            "the axial point-focus catastrophe (Scope note D5): a RING of "
+            "branches coalesces where the fold-uniform 'ludwig' swap "
+            "regularizes only the closest PAIR, so the residual ART amplitudes "
+            "diverge.  The near-focus field is unphysical here -- use the "
+            "Maslov ('levin') or GBD propagator at an on-axis point focus.",
+            RuntimeWarning, stacklevel=2)
+
     if return_diagnostics:
         return E_out, {'kmah': m_grid, 'detJ': detJ, 'n_branch': n_branch,
                        'input_carrier': (kcx, kcy)}

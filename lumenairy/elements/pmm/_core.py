@@ -806,7 +806,10 @@ class PerOrderAmplitudesMixin:
                     Ex=m[ex].copy(), Ey=m[ey].copy(),
                     kx=np.asarray(m["kx"]).copy(),
                     ky=np.asarray(m["ky"]).copy(),
-                    kz=np.asarray(kz).copy(), wavelength=m["wavelength"])
+                    kz=np.asarray(kz).copy(), wavelength=m["wavelength"],
+                    # incidence terms for the jones_field_from_orders bridge
+                    # (the transmission-port kz is the substrate kz) -- S5-5.
+                    kz_inc=m["kz_inc"], kx0=m["kx0"], ky0=m["ky0"])
 
     def jones_transmission(self):
         """The ``(2, 2)`` zeroth-order TRANSMISSION Jones of the last

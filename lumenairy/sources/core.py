@@ -456,7 +456,7 @@ def create_hermite_gauss(
         Ny = Nx = int(N)
     x = (np.arange(Nx) - Nx / 2) * dx
     y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
 
     u = np.sqrt(2) * (X - x0) / w0
     v = np.sqrt(2) * (Y - y0) / w0
@@ -609,7 +609,7 @@ def create_laguerre_gauss(
         Ny = Nx = int(N)
     x = (np.arange(Nx) - Nx / 2) * dx
     y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
 
     r = np.sqrt((X - x0)**2 + (Y - y0)**2)
     theta = np.arctan2(Y - y0, X - x0)
@@ -720,9 +720,28 @@ def create_tilted_plane_wave(
             f"create_tilted_plane_wave: sin^2(angle_x) + sin^2(angle_y) = "
             f"{_kt2:.4f} > 1 -- the transverse wavevector exceeds k0 and the "
             f"wave would be evanescent.  Reduce the tilt angle(s).")
+    # v5.24.4 (audit S3-3): transverse-Nyquist (edge-NA) guard.  The
+    # linear phase ramp advances by k0*sin(angle)*dx per pixel; once
+    # |sin(angle)| exceeds lambda/(2*dx) that step passes pi/px, the
+    # ramp is undersampled, and it aliases (folds) to a SMALLER
+    # effective angle with no error raised.  Checked per-axis (x uses
+    # dx, y uses dy) -- warning-only, no numerics change.
+    _nyq_x = wavelength / (2.0 * dx)
+    _nyq_y = wavelength / (2.0 * dy)
+    _sx, _sy = abs(float(np.sin(angle_x))), abs(float(np.sin(angle_y)))
+    if _sx > _nyq_x or _sy > _nyq_y:
+        import warnings
+        warnings.warn(
+            f"create_tilted_plane_wave: |sin(angle)| exceeds the spatial "
+            f"Nyquist limit lambda/(2*dx) (x: {_sx:.3f} vs {_nyq_x:.3f}; "
+            f"y: {_sy:.3f} vs {_nyq_y:.3f}) -- the linear phase ramp is "
+            f"undersampled and aliases to a smaller effective angle.  "
+            f"Reduce the tilt angle or the grid spacing.",
+            RuntimeWarning, stacklevel=2,
+        )
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
     k0 = 2 * np.pi / wavelength
     phase = k0 * (np.sin(angle_x) * X + np.sin(angle_y) * Y)
     E = (amplitude * np.exp(1j * phase)).astype(_resolve_complex_dtype(dtype))
@@ -784,7 +803,7 @@ def create_point_source(
         dy = dx
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
     k0 = 2 * np.pi / wavelength
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2 + z0 ** 2)
     # 4.10: warn when |z0| < dx -- the central pixel sits at the
@@ -799,6 +818,38 @@ def create_point_source(
             f"to dx = {dx:.3e} m; the central pixel will dominate the "
             f"integrated power.  Use |z0| >> dx (typical: 10*dx or "
             f"more) for a meaningful Fresnel-curvature representation.",
+            RuntimeWarning, stacklevel=2,
+        )
+    # v5.24.4 (audit S3-3): transverse-Nyquist (edge-NA) guard.  The
+    # spherical-wave chirp's local transverse frequency at radius rho is
+    # k0*(rho/r); the per-pixel phase step k0*(rho/r)*dx passes pi
+    # (undersampled -> aliases) once the local-NA rho/sqrt(rho^2+z0^2)
+    # exceeds the Nyquist limit lambda/(2*dx).  Unlike the tilted-plane-
+    # wave ramp -- which aliases GLOBALLY the instant sin(angle) crosses
+    # Nyquist (guarded exactly above) -- the spherical chirp aliases only
+    # the pixels OUTSIDE the aliasing radius, a graded edge effect: at a
+    # hairline crossing just the extreme-corner ring folds, which is
+    # benign.  So warn only on CLEAR undersampling: edge local-NA past
+    # _NYQ_MARGIN * Nyquist (the audit's flagged case is ~2.5x over;
+    # a corner ring at ~1.3x is not worth an alarm).  Evaluated per-axis
+    # at the transverse extreme (y-term dropped -> tightest per-axis
+    # test; reproduces the audit edge-NA probe).  Warning-only, no
+    # numerics change.
+    _NYQ_MARGIN = 1.5
+    _x_off = max(abs(float(x[0]) - x0), abs(float(x[-1]) - x0))
+    _y_off = max(abs(float(y[0]) - y0), abs(float(y[-1]) - y0))
+    _na_x = _x_off / np.sqrt(_x_off ** 2 + z0 ** 2) if (_x_off or z0) else 0.0
+    _na_y = _y_off / np.sqrt(_y_off ** 2 + z0 ** 2) if (_y_off or z0) else 0.0
+    _nyq_x = wavelength / (2.0 * dx)
+    _nyq_y = wavelength / (2.0 * dy)
+    if _na_x > _NYQ_MARGIN * _nyq_x or _na_y > _NYQ_MARGIN * _nyq_y:
+        import warnings
+        warnings.warn(
+            f"create_point_source: spherical-wave edge local-NA clearly "
+            f"exceeds the spatial Nyquist limit lambda/(2*dx) (x: "
+            f"{_na_x:.3f} vs {_nyq_x:.3f}; y: {_na_y:.3f} vs {_nyq_y:.3f}) "
+            f"-- the outer field aliases to a spurious smaller angle.  "
+            f"Increase |z0| or dx, or reduce N.",
             RuntimeWarning, stacklevel=2,
         )
     # 4.11.1 (H-PR-4): floor ``r`` at the local pixel half-diagonal
@@ -936,7 +987,7 @@ def create_top_hat_beam(
         dy = dx
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     E = np.where(r <= diameter / 2, 1.0, 0.0).astype(
         _resolve_complex_dtype(dtype))
@@ -998,7 +1049,7 @@ def create_annular_beam(
         dy = dx
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     E = np.where((r <= outer_diameter / 2) & (r >= inner_diameter / 2),
                   1.0, 0.0).astype(_resolve_complex_dtype(dtype))
@@ -1020,11 +1071,17 @@ def create_fiber_mode(
     dy: Optional[float] = None,
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Single-mode fiber output (Gaussian with NA-defined divergence).
+    """Single-mode fiber output (Gaussian near-field set by the
+    mode-field diameter).
 
     The mode-field diameter (MFD) is the 1/e^2 intensity diameter.
-    The field is a Gaussian with w0 = MFD/2, and the NA is encoded
-    in the far-field divergence angle.
+    The near-field is a Gaussian with waist ``w0 = MFD/2``; its
+    far-field divergence half-angle follows from ``w0`` and
+    ``wavelength`` alone (``theta = wavelength/(pi*w0)``).  The ``na``
+    argument does NOT set the divergence and does NOT affect the
+    returned field -- it is advisory only and merely triggers the
+    >0.2 Gaussian-approximation warning (see the ``na`` parameter
+    note below).
 
     Parameters
     ----------
@@ -1431,7 +1488,7 @@ def create_bessel_beam(
         dy = dx
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     k_r = 2 * np.pi / wavelength * np.sin(cone_angle)
     E = j0(k_r * r).astype(_resolve_complex_dtype(dtype))
@@ -1923,7 +1980,7 @@ def _schell_phase_realizations(
     """
     kx = 2.0 * np.pi * np.fft.fftfreq(Nx, d=dx)
     ky = 2.0 * np.pi * np.fft.fftfreq(Ny, d=dy)
-    KX, KY = np.meshgrid(kx, ky)
+    KX, KY = kx[None, :], ky[:, None]  # S3-7: broadcast views, not a dense grid
     # Fourier-space Gaussian filter.  Variance of |phi(r)|^2 in real
     # space scales as integral of |H(k)|^2 dk; we re-normalise to
     # unit mean intensity per realisation below, so the absolute
@@ -2087,7 +2144,7 @@ def create_gaussian_schell_source(
         dy = dx
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
     target_dtype = _resolve_complex_dtype(dtype)
 
     # Gaussian intensity envelope.  amp = sqrt(I_target).  The 1/e^2
@@ -2325,7 +2382,7 @@ def create_annular_incoherent_source(
         dy = dx
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    X, Y = x[None, :], y[:, None]  # S3-7: broadcast views, not a dense N x N grid
     target_dtype = _resolve_complex_dtype(dtype)
     r = np.sqrt(X * X + Y * Y)
     mask = (r >= inner_radius) & (r <= outer_radius)

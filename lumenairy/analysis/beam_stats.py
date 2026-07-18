@@ -40,6 +40,38 @@ __all__ = [
 # in-module references without touching call sites.
 from ..backend import array_namespace as _xp_of  # noqa: E402
 
+# ISO 11146-1:2005 clause 9 recommends the second-moment integration
+# aperture be about three times the beam width (D4sigma).  Exposed as the
+# default multiple used by ``beam_d4sigma(..., aperture=True)``.
+_ISO_APERTURE_WIDTHS = 3.0
+
+
+def _subtract_background(xp, I, background):
+    """ISO 11146 sec. 3.4 pedestal subtraction on an intensity map.
+
+    ``background`` is either a float (subtract that constant level),
+    the string ``'corner'`` (estimate the pedestal as the mean of the
+    outer one-pixel border ring, assumed beam-free), or ``None``
+    (no-op -- returned unchanged).  Negative residuals are clipped to
+    zero so leftover noise cannot bias the moments downward.
+    """
+    if background is None:
+        return I
+    if isinstance(background, str):
+        if background == 'corner':
+            border = xp.concatenate([
+                I[0, :], I[-1, :], I[1:-1, 0], I[1:-1, -1],
+            ])
+            level = xp.mean(border)
+        else:
+            raise ValueError(
+                "background must be a float, 'corner', or None; got "
+                f"{background!r}.")
+    else:
+        level = float(background)
+    I = I - level
+    return xp.where(I > 0, I, xp.zeros_like(I))
+
 
 def beam_centroid(
     E: np.ndarray,
@@ -84,6 +116,11 @@ def beam_d4sigma(
     E: np.ndarray,
     dx: float,
     dy: Optional[float] = None,
+    *,
+    background: Optional[Union[float, str]] = None,
+    aperture: Optional[Union[bool, float]] = None,
+    max_iter: int = 5,
+    tol: float = 1e-3,
 ) -> Tuple[float, float]:
     """
     Compute the D4sigma (second-moment) beam diameter in x and y.
@@ -99,6 +136,31 @@ def beam_d4sigma(
         Grid spacing in x [m].
     dy : float, optional
         Grid spacing in y [m].  Defaults to *dx*.
+    background : float or {'corner'}, optional
+        ISO 11146 sec. 3.4 pedestal subtraction (opt-in).  A float
+        subtracts that constant intensity level; ``'corner'`` estimates
+        the pedestal from the outer one-pixel border ring (assumed
+        beam-free).  Negative residuals are clipped to zero.  Default
+        ``None`` leaves the intensity untouched (historical behaviour).
+    aperture : bool or float, optional
+        ISO 11146 clause 9 iterative integration aperture (opt-in).
+        ``True`` restricts the moment integral to a rectangle of full
+        width ``3 * D4sigma`` centred on the running centroid; a float
+        overrides the multiple (aperture full width = ``aperture *
+        D4sigma``).  The centroid and widths are recomputed inside the
+        aperture and the aperture re-sized until ``D4sigma`` converges
+        (relative change < *tol*) or *max_iter* passes elapse.  Default
+        ``None`` integrates over the whole grid (historical behaviour).
+        The iteration is seeded from the whole-grid width, so on a
+        *heavily* pedestal-inflated field the first aperture can already
+        exceed the grid and fail to engage -- combine ``aperture`` with
+        ``background`` (the ISO-recommended order) for such inputs.
+    max_iter : int, default 5
+        Maximum aperture-refinement passes (only used when
+        ``aperture`` is set).
+    tol : float, default 1e-3
+        Relative-convergence tolerance on ``D4sigma`` for the aperture
+        iteration.
 
     Returns
     -------
@@ -106,6 +168,28 @@ def beam_d4sigma(
         D4sigma beam diameter in x [m].
     d4s_y : float
         D4sigma beam diameter in y [m].
+
+    Notes
+    -----
+    **Pedestal sensitivity.**  With no background subtraction and no
+    integration aperture (the defaults), a uniform intensity pedestal
+    biases the second moment *strongly*.  A flat pedestal of fractional
+    peak level :math:`b` over an :math:`L \\times L` grid contributes a
+    variance :math:`\\approx L^2 / 12` weighted by its total power, so
+    the reported D4sigma inflates roughly as
+
+    .. math::
+        \\left(\\frac{D_{4\\sigma}^{\\text{meas}}}{D_{4\\sigma}^{\\text{true}}}
+        \\right)^2 \\sim 1 + f_{\\text{ped}}
+        \\left(\\frac{L}{D_{4\\sigma}^{\\text{true}}}\\right)^2 ,
+
+    where :math:`f_{\\text{ped}}` is the pedestal's power fraction.  The
+    inflation is *unbounded in the grid size* -- a 1e-4-of-peak floor on
+    a grid many beam-widths wide can multiply D4sigma several-fold.
+    ``single_plane_metrics`` and ``find_best_focus(metric='spot'|'rms')``
+    inherit this, so a noisy field can report a wrong best-focus plane.
+    Enable ``background`` and/or ``aperture`` to suppress it.  Defaults
+    are byte-identical to the historical whole-grid moment.
     """
     # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper.  Previously a
@@ -127,6 +211,10 @@ def beam_d4sigma(
     X, Y = xp.meshgrid(x, y)
 
     I = xp.abs(E) ** 2
+    # S3-5: opt-in ISO 11146 sec. 3.4 pedestal subtraction (no-op by
+    # default, so clean fields are byte-identical to prior releases).
+    I = _subtract_background(xp, I, background)
+
     total = xp.sum(I)
     if float(total) == 0:
         return 0.0, 0.0
@@ -135,8 +223,44 @@ def beam_d4sigma(
     cy = xp.sum(Y * I) / total
     var_x = xp.sum((X - cx) ** 2 * I) / total
     var_y = xp.sum((Y - cy) ** 2 * I) / total
+    d4x = 4 * xp.sqrt(var_x)
+    d4y = 4 * xp.sqrt(var_y)
 
-    return float(4 * xp.sqrt(var_x)), float(4 * xp.sqrt(var_y))
+    # S3-5: opt-in ISO 11146 clause 9 iterative integration aperture.
+    # The default (aperture is None) integrates over the whole grid and
+    # never enters this loop, so it is byte-identical to prior releases.
+    if aperture is not None:
+        widths = (_ISO_APERTURE_WIDTHS if aperture is True
+                  else float(aperture))
+        half_w = 0.5 * widths
+        for _ in range(int(max_iter)):
+            ax = half_w * float(d4x)
+            ay = half_w * float(d4y)
+            # A degenerate zero-width beam collapses the aperture to a
+            # point; stop before the mask empties the integral.
+            if ax <= 0.0 or ay <= 0.0:
+                break
+            mask = (xp.abs(X - cx) <= ax) & (xp.abs(Y - cy) <= ay)
+            Im = xp.where(mask, I, xp.zeros_like(I))
+            tot = xp.sum(Im)
+            if float(tot) == 0:
+                break
+            cx = xp.sum(X * Im) / tot
+            cy = xp.sum(Y * Im) / tot
+            var_x = xp.sum((X - cx) ** 2 * Im) / tot
+            var_y = xp.sum((Y - cy) ** 2 * Im) / tot
+            new_d4x = 4 * xp.sqrt(var_x)
+            new_d4y = 4 * xp.sqrt(var_y)
+            fx, fy = float(new_d4x), float(new_d4y)
+            converged = (
+                fx > 0.0 and fy > 0.0
+                and abs(fx - float(d4x)) <= tol * fx
+                and abs(fy - float(d4y)) <= tol * fy)
+            d4x, d4y = new_d4x, new_d4y
+            if converged:
+                break
+
+    return float(d4x), float(d4y)
 
 
 def beam_power(
@@ -255,6 +379,17 @@ def M2(
     For a fundamental Gaussian, the function returns 1.0 to within
     discrete-grid sampling error (a few times 1e-3 at N=128, scaling
     as ~ 1/N for fine grids).
+
+    Like :func:`beam_d4sigma`, the spatial and angular second moments
+    integrate over the whole grid, so an intensity pedestal inflates
+    both variances (see the pedestal-sensitivity note there).  ``M2``
+    does *not* expose ``background`` / ``aperture`` opt-ins: the
+    angular moment is taken from the field's FFT, so an ISO integration
+    aperture would have to window the complex field (injecting edge
+    diffraction into the angular spectrum) rather than mask an
+    intensity map, and near-/far-field pedestals are independent.
+    Clean a noisy input before calling ``M2``; use ``beam_d4sigma`` with
+    ``background``/``aperture`` when a plain second-moment width suffices.
     """
     # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper.  Previously an MCF / 3-D

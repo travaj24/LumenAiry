@@ -506,6 +506,7 @@ from .elements.polarization import (
     create_elliptical_polarized,
     create_linear_polarized,
     degree_of_polarization,
+    jones_field_from_orders,
     polarization_ellipse,
     stokes_parameters,
 )
@@ -1158,6 +1159,7 @@ __all__ = [
     'stokes_parameters',
     'degree_of_polarization',
     'polarization_ellipse',
+    'jones_field_from_orders',
 
     # Glass
     'get_glass_index',

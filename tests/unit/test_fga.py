@@ -166,6 +166,55 @@ def test_fga_diverging_beam_auto_sampling():
     assert _fid(coarse, ref) < fa                      # sampling IS the lever
 
 
+def test_fga_flat_prescription_no_na_cap_on_wide_angle():
+    """A flat (power-less) prescription must NOT impose a physical NA cap on the
+    auto momentum swarm (audit S2-6).
+
+    ``_default_p_max`` returns its 0.05 floor for a flat plate (marginal-ray
+    NA -> 0), which under the old code clamped auto ``p_max`` at ``1.5*0.05=0.075``
+    regardless of the field's angular content -- truncating a wide-angle free-space
+    beam (content ~0.15 -> fidelity ~0.96 instead of ~1).  The fix skips the NA cap
+    when the prescription carries no real power, so ``p_max`` follows the field's
+    own content and the diverging beam reconstructs to ~1 vs the ASM oracle -- while
+    the NA-*estimate* callers keep the unchanged small-NA floor."""
+    from lumenairy.propagators.fga import _default_p_max, _field_angular_content, _resolve_sampling
+    N, dx = 256, 0.7e-6
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    k = 2 * np.pi / _WL
+    r2 = Xg ** 2 + Yg ** 2
+    # a strongly diverging beam: angular content ~0.15 (>> the old 0.075 cap)
+    div = (np.exp(-r2 / (20e-6) ** 2)
+           * np.exp(1j * k * r2 / (2 * 0.25e-3))).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    content = _field_angular_content(div, dx, dx, _WL)
+    assert content > 0.12                        # genuinely wide-angle
+
+    # seam: the power-less flat plate signals "no NA cap" (inf) to the momentum
+    # sizer, while the NA-ESTIMATE path keeps the unchanged small-NA floor.
+    assert not np.isfinite(_default_p_max(flat, _WL, powerless_uncapped=True))
+    assert _default_p_max(flat, _WL) == 0.05     # NA-estimate path byte-unchanged
+    p_max, _n_p = _resolve_sampling(div, dx, dx, _WL, 5.0 * dx, flat, None, None)
+    assert p_max > 1.4 * content                 # swarm covers the content ...
+    assert p_max > 0.075                         # ... beyond the old NA-cap clamp
+
+    # end-to-end: auto now reconstructs the wide-angle diverging beam to ~1,
+    # while forcing the OLD 0.075 cap (independent ASM oracle) is measurably worse.
+    z = 0.3e-3
+    ref = angular_spectrum_propagate(div, z, _WL, dx)
+    auto = apply_real_lens_fga(div, prescription=flat, wavelength=_WL, dx=dx,
+                               output_plane_distance=z, w0_factor=5.0)
+    capped = apply_real_lens_fga(div, prescription=flat, wavelength=_WL, dx=dx,
+                                 output_plane_distance=z, w0_factor=5.0,
+                                 p_max=0.075)      # reproduces the old NA clamp
+    fa = _fid(auto, ref)
+    assert fa > 0.99                              # the fix (was ~0.96)
+    assert fa > _fid(capped, ref) + 0.02          # the NA cap WAS the lever
+
+
 def test_fga_auto_sampling_conserves_identity_power():
     """The auto sampler's p_max COMPLETENESS floor (~2/(k*w0), the beamlet
     momentum width) keeps the t=0 resolution of identity energy-conserving for a
@@ -643,6 +692,95 @@ def test_fga_separable_kernels_match_direct_and_oracle():
                                     **kw)
     assert not np.isnan(vs).any()
     assert _fid(vd, vs) > 0.99999
+
+
+def test_fga_kernels_bit_identical_at_integer_R_over_dx():
+    """Seam S2-7: the separable analysis + recurrence scatter kernels must agree
+    with their direct counterparts to ULP even at INTEGER ``R/dx`` -- which is
+    the DEFAULT (``R/dx = nsig * w0_factor = 3 * 5 = 15`` on a square grid),
+    exactly where the boundary pixel sits at ``r == R`` and float rounding of the
+    window bound can flip its membership.
+
+    Before the fix the direct box was tighter than the separable superset (worst
+    analysis-coefficient rel-diff ~7e-5) and the separable scatter gated on the
+    drifting recurrence ``dxr`` instead of a fresh one (~2.6e-3), so the two
+    kernels dropped/kept different boundary pixels and the end-to-end field
+    diverged by ~1.3e-4 -- while the docstrings/CHANGELOG asserted "numerically
+    identical (ULP-level)".  ``fidelity`` (a normalised inner product) is blind
+    to a 1e-4 max-abs difference, so this pins the strong max-abs metric AND
+    checks BOTH kernels against the exact free-space oracle (so the agreement
+    is genuine, not a shared error).  Off-tie configs (``w0_factor`` 5.001) were
+    always ULP-close; the fix leaves them byte-identical and only repairs the tie.
+    """
+    import math
+
+    from lumenairy.propagators.fga import _gabor_coeff, _gabor_coeff_sep, _reconstruct_into
+
+    N, dx = 128, 0.7e-6
+    dyg = dx
+    nsig, w0_factor = 3.0, 5.0                       # -> R/dx = 15 exactly
+    assert abs(nsig * w0_factor - round(nsig * w0_factor)) < 1e-12
+    xs = (np.arange(N) - N / 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    u0 = np.exp(-(Xg ** 2 + Yg ** 2) / (16e-6) ** 2).astype(np.complex128)
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    z = 200e-6
+    kw = dict(prescription=flat, wavelength=_WL, dx=dx, output_plane_distance=z,
+              w0_factor=w0_factor, p_max=0.12, n_p=13, prune_frac=0.0,
+              coeff_frac=0.0)
+
+    # (1) end-to-end: the two kernels now agree to machine precision, not 1.3e-4.
+    direct = apply_real_lens_fga(u0, separable=False, **kw)
+    sep = apply_real_lens_fga(u0, separable=True, **kw)
+    rel_field = np.max(np.abs(direct - sep)) / (np.max(np.abs(direct)) + 1e-300)
+    assert rel_field < 1e-10, rel_field           # was ~1.3e-4 at this default
+
+    # (2) independent oracle: BOTH match the exact angular-spectrum truth to the
+    #     same fidelity -> the ULP agreement is real, not a shared blunder.
+    oracle = angular_spectrum_propagate(u0, z, _WL, dx)
+    assert _fid(direct, oracle) > 0.999
+    assert abs(_fid(sep, oracle) - _fid(direct, oracle)) < 1e-6
+
+    # driver-consistent beamlet constants for the kernel-level probes.
+    x0 = -(N / 2) * dx
+    y0 = -(N / 2) * dyg
+    w0 = w0_factor * math.sqrt(dx * dyg)
+    k = 2.0 * np.pi / _WL
+    Ag = (1.0 / (np.pi * w0 ** 2)) ** 0.5
+    # full on-grid launch/beamlet lattice (dq_step=1), as the driver builds it.
+    qi, qj = np.meshgrid(np.arange(N), np.arange(N))
+    qx = (x0 + qi.ravel() * dx).astype(np.float64)
+    qy = (y0 + qj.ravel() * dyg).astype(np.float64)
+    n_p = 13
+    pv = np.linspace(-0.12, 0.12, n_p)
+    pxg, pyg = np.meshgrid(pv, pv)               # ip = a*n_p + b : px=pv[b], py=pv[a]
+    px, py = pxg.ravel().astype(np.float64), pyg.ravel().astype(np.float64)
+
+    # (3) analysis half: direct vs separable Gabor coefficients agree to ULP.
+    cd = _gabor_coeff(u0, qx, qy, px, py, x0, y0, dx, dyg, w0, k, Ag, nsig)
+    cs = _gabor_coeff_sep(u0, qx, qy, pv, x0, y0, dx, dyg, w0, k, Ag, nsig)
+    rel_coeff = np.max(np.abs(cd - cs)) / (np.max(np.abs(cd)) + 1e-300)
+    assert rel_coeff < 1e-11, rel_coeff           # was ~7e-5 at integer R/dx
+
+    # (4) scatter half: direct vs recurrence scatter agree to ULP.  Synthesise a
+    #     random on-grid beamlet field so the boundary pixel carries weight.
+    rng = np.random.default_rng(0)
+    nb = qx.shape[0]
+    Px = (rng.standard_normal(nb) * 0.05).astype(np.float64)
+    Py = (rng.standard_normal(nb) * 0.05).astype(np.float64)
+    W = rng.standard_normal(nb) + 1j * rng.standard_normal(nb)
+    od_r, od_i = np.zeros((N, N)), np.zeros((N, N))
+    _reconstruct_into(od_r, od_i, qx, qy, Px, Py, W, x0, y0, dx, dyg, N, N,
+                      w0, k, Ag, nsig, sep=False)
+    os_r, os_i = np.zeros((N, N)), np.zeros((N, N))
+    _reconstruct_into(os_r, os_i, qx, qy, Px, Py, W, x0, y0, dx, dyg, N, N,
+                      w0, k, Ag, nsig, sep=True)
+    od, os = od_r + 1j * od_i, os_r + 1j * os_i
+    rel_scat = np.max(np.abs(od - os)) / (np.max(np.abs(od)) + 1e-300)
+    assert rel_scat < 1e-11, rel_scat             # was ~2.6e-3 at integer R/dx
 
 
 def test_fga_vector_polarization():

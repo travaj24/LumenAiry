@@ -4,6 +4,8 @@ Accuracy features added to the real-lens propagators (Maslov / GBD / traced /
 analytic).  Each gate proves the feature is a real accuracy improvement that
 does NOT change the converged physics (validated against a trusted reference).
 """
+import warnings
+
 import numpy as np
 import pytest
 
@@ -831,6 +833,56 @@ def test_ludwig_fold_exact_and_finite_through_caustic():
                             A * np.exp(+1j * np.pi / 4))
             assert _relerr(u, exact) < 1e-11
             assert np.isfinite(u)
+
+
+def test_multibranch_axial_focus_catastrophe_warns():
+    """Regression (audit S2-8): at a rotationally-symmetric ON-AXIS point focus
+    a whole RING of branches coalesces, but the fold-uniform 'ludwig' swap
+    regularizes only the closest PAIR -- the residual ring branches keep their
+    divergent 1/sqrt|J| ART amplitudes and the reconstructed grid power blows up
+    ~1e5..1e6x.  The docstring formerly claimed this was 'not a blow-up'.
+
+    Independent energy oracle (not a tautology): reconstructed grid power vs the
+    input power that entered the launch aperture.  AT the BFL focus that ratio
+    is enormous (with a large branch ring in n_branch) and the propagator must
+    now emit the RuntimeWarning; a PRE-FOCUS plane conserves energy (~1x) with a
+    single branch and must stay SILENT.
+    """
+    from lumenairy.elements._lens_traced_multibranch import (
+        apply_real_lens_traced_multibranch,
+    )
+    presc = _mini_fast_singlet()           # BFL ~3.2 mm, f/2.4 strong-SA
+    N, dx = 192, 10e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E_in = np.exp(-(X ** 2 + Y ** 2) / (0.6e-3) ** 2).astype(np.complex128)
+    ap_r = 0.5 * 1.6e-3
+    P_ap = float(np.sum(np.abs(E_in[X ** 2 + Y ** 2 <= ap_r ** 2]) ** 2))
+    kw = dict(prescription=presc, wavelength=LAM, dx=dx, ray_subsample=1,
+              return_diagnostics=True)
+
+    def _run(d):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            E, diag = apply_real_lens_traced_multibranch(
+                E_in, output_plane_distance=d, **kw)
+        fired = any('point-focus catastrophe' in str(x.message)
+                    and issubclass(x.category, RuntimeWarning) for x in rec)
+        return E, diag, fired
+
+    # ON-AXIS focus (d = BFL): the catastrophe -- warns, and the oracle agrees
+    Ef, df, fired_f = _run(3.2e-3)
+    p_out_f = float(np.sum(np.abs(Ef) ** 2))
+    assert p_out_f / P_ap > 100.0            # oracle: gross energy blow-up
+    assert df['n_branch'].max() > 3          # a coalescing RING, not a fold
+    assert fired_f                           # and the propagator warned
+
+    # PRE-FOCUS plane: energy conserved, single branch -> must stay SILENT
+    Ep, dp, fired_p = _run(2.4e-3)
+    p_out_p = float(np.sum(np.abs(Ep) ** 2))
+    assert abs(p_out_p / P_ap - 1.0) < 0.1   # oracle: energy conserved
+    assert dp['n_branch'].max() == 1
+    assert not fired_p                        # no false positive off-focus
 
 
 # ==========================================================================

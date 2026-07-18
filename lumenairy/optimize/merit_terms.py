@@ -201,6 +201,18 @@ class SpotSizeMerit(MeritTerm):
 
     def evaluate(self, ctx: Any) -> float:
         r = ctx.rms_radius_best
+        # S4-5 (AUDIT_V5_24_2): ``rms_radius_best`` defaults to
+        # ``np.inf`` and STAYS inf when the through-focus scan is
+        # skipped (|BFL| out of range early-return in the driver) or
+        # produced no finite slice.  A raw ``inf`` excess injects
+        # ``inf`` into the scipy merit sum and stalls the L-BFGS-B
+        # line search.  Coerce a non-finite radius to a large-but-
+        # FINITE quadratic penalty (``excess = 10 * max_rms_radius``)
+        # so a failed wave leg reads as a very-bad-but-usable design
+        # rather than crashing the optimiser.
+        if not np.isfinite(r):
+            excess = 10.0 * self.max_rms_radius
+            return self.weight * excess * excess
         excess = max(0.0, r - self.max_rms_radius)
         return self.weight * excess * excess
 

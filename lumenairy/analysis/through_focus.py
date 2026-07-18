@@ -149,6 +149,9 @@ def single_plane_metrics(
     dy: Optional[float] = None,
     bucket_radius: Optional[float] = None,
     ideal_peak: Optional[float] = None,
+    *,
+    background: Optional[Union[float, str]] = None,
+    aperture: Optional[Union[bool, float]] = None,
 ) -> Dict[str, float]:
     """Compute diagnostic metrics for a beam at a single z plane.
 
@@ -168,6 +171,13 @@ def single_plane_metrics(
     ideal_peak : float, optional
         Peak of the diffraction-limited reference |E|^2 at the same
         plane.  If supplied, the returned dict includes ``strehl``.
+    background, aperture : optional
+        ISO 11146 pedestal subtraction / iterative integration aperture,
+        forwarded to :func:`~lumenairy.analysis.beam_stats.beam_d4sigma`
+        (which computes ``d4sigma_x/y`` and hence ``rms_radius``).
+        Defaults ``None`` reproduce the historical whole-grid moment.
+        Use these on noisy fields so ``find_best_focus(metric='spot'
+        |'rms')`` does not lock onto a pedestal-inflated plane.
 
     Returns
     -------
@@ -184,7 +194,8 @@ def single_plane_metrics(
     peak = float(I.max())
     total = float(I.sum() * dx * dy)
     cx, cy = beam_centroid(E, dx, dy)
-    d4x, d4y = beam_d4sigma(E, dx, dy)
+    d4x, d4y = beam_d4sigma(
+        E, dx, dy, background=background, aperture=aperture)
     # 1-sigma radius from D4sigma (full = 4*sigma by definition)
     sigma_x = d4x / 4.0
     sigma_y = d4y / 4.0
@@ -301,6 +312,8 @@ def through_focus_scan(
     progress: Optional[Callable[..., Any]] = None,
     *,
     backend: str = 'numpy',
+    background: Optional[Union[float, str]] = None,
+    aperture: Optional[Union[bool, float]] = None,
 ) -> 'ThroughFocusResult':
     """Propagate an exit-pupil field to each z and collect metrics.
 
@@ -328,6 +341,13 @@ def through_focus_scan(
         Passed to :func:`angular_spectrum_propagate`.
     verbose : bool, default False
         Print progress as the scan runs.
+    background, aperture : optional
+        ISO 11146 second-moment conditioning forwarded per-plane to
+        :func:`single_plane_metrics` -> ``beam_d4sigma`` so that
+        ``rms_radius`` / ``d4sigma_*`` (and hence a subsequent
+        :func:`find_best_focus`) are not skewed by an intensity
+        pedestal.  Defaults ``None`` reproduce the historical whole-grid
+        moment.  ``numpy`` backend only (raises on ``backend='jax'``).
 
     Returns
     -------
@@ -352,6 +372,11 @@ def through_focus_scan(
     one-shot ASM step, just with the FFT and K-grids reused.
     """
     if backend == 'jax':
+        if background is not None or aperture is not None:
+            raise NotImplementedError(
+                "through_focus_scan: background / aperture (ISO 11146 "
+                "second-moment conditioning) are only implemented on the "
+                "numpy backend; got backend='jax'.")
         return through_focus_scan_jax(
             E_exit, dx, wavelength, z_values,
             bucket_radius=bucket_radius, ideal_peak=ideal_peak,
@@ -437,6 +462,8 @@ def through_focus_scan(
             E_z, dx, wavelength,
             bucket_radius=bucket_radius,
             ideal_peak=ideal_peak,
+            background=background,
+            aperture=aperture,
         )
         peak_I[i] = m['peak_I']
         d4x[i] = m['d4sigma_x']
@@ -1278,7 +1305,14 @@ def through_focus_scan_jax(
             rms_r[i] = float(np.sqrt(sigma_sq))
 
     best_strehl = float(np.nanmax(strehl)) if ideal_peak else float('nan')
-    best_spot = float(np.nanmin(rms_r))
+    # v5.24.5 (AUDIT_V5_24_2 S3-8): mirror the NumPy twin's all-NaN guard
+    # (through_focus_scan lines 461-462).  On an all-zero scan every plane
+    # leaves rms_r at its NaN default, and an unguarded np.nanmin over an
+    # all-NaN slice warns ("All-NaN slice encountered") and raises under
+    # warnings-as-errors -- diverging from the NumPy backend, which returns
+    # NaN cleanly.  Guarding restores best_focus_spot backend parity.
+    best_spot = (float(np.nanmin(rms_r))
+                 if np.any(np.isfinite(rms_r)) else float('nan'))
     return ThroughFocusResult(
         z=z_arr, peak_I=peak_I, strehl=strehl,
         d4sigma_x=d4x, d4sigma_y=d4y, rms_radius=rms_r,

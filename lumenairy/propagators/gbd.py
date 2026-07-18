@@ -819,6 +819,7 @@ def apply_aperture_to_beamlets(
     centre: Tuple[float, float] = (0.0, 0.0),
     shape: str = 'circular',
     soft_edge: bool = False,
+    wavelength: Optional[float] = None,
 ) -> BeamletBundle:
     """Vignette a beamlet bundle at an aperture stop of half-size
     ``semi_diameter``.
@@ -841,11 +842,23 @@ def apply_aperture_to_beamlets(
     straight-edge approximation ``f = 1/2 (1 + erf(d * sqrt(2) / w))`` where
     ``d = semi_diameter - r_edge`` is the signed distance from the beamlet
     centre to the rim (``> 0`` inside) and ``w`` is the beamlet amplitude-1/e
-    waist (``beamlets.waist0``).  A beamlet straddling the rim then contributes
+    radius *at the aperture plane*.  A beamlet straddling the rim then contributes
     partially instead of all-or-nothing, which removes the beamlet-pitch
     staircase at the edge and improves the hard-aperture / Airy-focus accuracy
     (valid when ``w`` is small vs the aperture radius, i.e. the rim is locally
     straight).  ``soft_edge=False`` (default) keeps the exact binary behaviour.
+
+    .. versionchanged:: 5.24.4
+        The soft-edge width ``w`` is now the *propagated* amplitude-1/e radius
+        derived from ``Im(Q)`` (identically to :func:`reconstruct_field_from_
+        beamlets`) when ``wavelength`` is supplied, rather than the launch-time
+        ``waist0``.  Because the stop is applied *after* the source->lens
+        free-space leg, a beamlet that has diffracted to many Rayleigh ranges
+        has a true width far larger than ``waist0`` (audit S2-5); using the
+        stale ``waist0`` silently collapses the soft edge back to a near-hard
+        cut whenever ``z_to_lens > 0``.  ``wavelength=None`` (the default when
+        the routine is called standalone) preserves the old ``waist0`` fallback
+        for backward compatibility.
 
     Parameters
     ----------
@@ -857,6 +870,10 @@ def apply_aperture_to_beamlets(
     shape : {'circular', 'rectangular'}
     soft_edge : bool, default False
         Use the analytic partial-vignetting weight instead of a binary cut.
+    wavelength : float, optional
+        Free-space wavelength (m).  When given (and ``soft_edge=True``), the
+        soft-edge width is the propagated amplitude-1/e radius from ``Im(Q)``;
+        when ``None`` it falls back to the launch-time ``beamlets.waist0``.
     """
     xp = array_namespace(beamlets.positions)
     cx, cy = centre
@@ -869,7 +886,32 @@ def apply_aperture_to_beamlets(
 
     if soft_edge:
         # Signed distance d from beamlet centre to the nearest rim (>0 inside).
-        w = beamlets.waist0
+        # Beamlet amplitude-1/e radius w AT THE APERTURE PLANE.  With a
+        # wavelength, derive the *propagated* width from Im(Q) (identically to
+        # _reconstruct_windowed's R_cut block): the amplitude ~ exp(-alpha rho^2)
+        # with alpha = 0.5 k lam_min, lam_min = -Im(Q) (scalar) or the smallest
+        # eigenvalue of -Im(Q) (tensor, the widest axis), so w = 1/sqrt(alpha).
+        # This equals waist0 at the launch waist (Q = -i/z_R) and grows as the
+        # beamlet diffracts, fixing the stale-waist0 collapse (audit S2-5).
+        # wavelength=None keeps the legacy waist0 for backward compatibility.
+        if wavelength is not None:
+            Q = beamlets.Q
+            if _q_is_tensor(Q):
+                D = -xp.imag(Q)                       # (n,2,2) real symmetric >0
+                a11 = D[..., 0, 0]
+                a22 = D[..., 1, 1]
+                a12 = D[..., 0, 1]
+                disc = xp.sqrt(xp.maximum((a11 - a22) ** 2 + 4.0 * a12 * a12,
+                                          xp.zeros_like(a11)))
+                lam_min = 0.5 * (a11 + a22 - disc)   # smallest eig of -Im(Q)
+            else:
+                lam_min = -xp.imag(Q)                 # scalar D
+            k_wid = 2.0 * float(np.pi) / wavelength
+            alpha_min = xp.maximum(0.5 * k_wid * lam_min,
+                                   xp.full_like(lam_min, 1e-30))
+            w = 1.0 / xp.sqrt(alpha_min)              # amplitude 1/e radius (m)
+        else:
+            w = beamlets.waist0
         eps = 1e-30
         w_safe = xp.where(xp.abs(w) > eps, w, xp.full_like(w, eps))
         if shape == 'circular':
@@ -2533,7 +2575,8 @@ def propagate_gbd_thin_lens(
     if aperture_semi_diameter is not None:
         bundle = apply_aperture_to_beamlets(
             bundle, aperture_semi_diameter, centre=lens_centre,
-            shape=aperture_shape, soft_edge=aperture_soft_edge)
+            shape=aperture_shape, soft_edge=aperture_soft_edge,
+            wavelength=wavelength)
     bundle = apply_thin_lens_to_beamlets(bundle, focal_length=focal_length,
                                          wavelength=wavelength,
                                          centre=lens_centre)
@@ -3046,6 +3089,9 @@ def propagate_gbd_through_prescription(
     * ``per_surface=False`` (default) -- the **paraxial** form: a single
       whole-system ABCD applied beamlet-by-beamlet (the Collins integral).
       Exact for well-corrected / paraxial systems; carries no aberration.
+      The ABCD is air-to-air (front vertex -> back vertex), so the field is
+      reconstructed at the **exit vertex**; ``z_image`` is *not* consumed on
+      this path (passing it warns).
     * ``per_surface=True`` -- the **per-element** form: each beamlet's
       complex parameter is evolved surface-by-surface via the real per-ray
       differential ray transfer, promoting ``Q`` to a ``(N, 2, 2)`` tensor
@@ -3069,11 +3115,19 @@ def propagate_gbd_through_prescription(
     wavelength : float
     output_grid, output_dx, output_centre : grid geometry
     waist_factor, sample_step, chunk_beamlets : decomposition tuning
+    z_image : float, optional
+        Last-vertex -> output-plane distance (m).  Honored **only** when
+        ``per_surface=True`` (defaults there to the system BFL, i.e. the
+        focus).  Ignored on the default ``per_surface=False`` path, which
+        always lands at the exit vertex; passing it there emits a
+        ``RuntimeWarning``.
 
     Returns
     -------
     array (Ny, Nx) complex
-        Output-plane reconstructed field.
+        Output-plane reconstructed field.  ``per_surface=False`` reconstructs
+        at the **exit vertex**; ``per_surface=True`` at ``z_image`` (default
+        BFL / focus).
 
     .. versionchanged:: 5.2
         ``output_grid`` -> ``output_shape`` rename (AUDIT_V4_13_1 Part 2
@@ -3100,6 +3154,20 @@ def propagate_gbd_through_prescription(
         # The whole-system-ABCD path drops coord-breaks (is fold-blind), so a
         # world output plane requires the per-surface (world-traced) evolver.
         per_surface = True
+
+    if z_image is not None and not per_surface:
+        # S2-4: ``z_image`` is only consumed on the per_surface=True path
+        # (last-vertex -> output leg, default = BFL).  The whole-system-ABCD
+        # path below reconstructs at the exit vertex and never propagates the
+        # image leg, so a passed ``z_image`` would be silently dropped -- the
+        # output plane is the exit vertex regardless.  Warn rather than raise
+        # to preserve back-compat (the returned field is unchanged).
+        warnings.warn(
+            "propagate_gbd_through_prescription: z_image is only honored on "
+            "the per_surface=True path (last-vertex -> output leg, default = "
+            "BFL); with per_surface=False the field is reconstructed at the "
+            "exit vertex and z_image is ignored.  Pass per_surface=True to "
+            "land at z_image.", RuntimeWarning, stacklevel=2)
 
     if per_surface:
         # Per-element form: evolve each beamlet's tensor Q surface-by-surface

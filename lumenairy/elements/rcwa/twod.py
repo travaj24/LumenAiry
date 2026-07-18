@@ -16,6 +16,7 @@ from ...backend import (
 from ._core import (
     _C,
     Efficiency2D,
+    _cell_lossless,
     _check_energy,
     _concrete,
     _EnergyError,
@@ -155,23 +156,6 @@ def _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y):
     dm = orders[:, 0][:, None] - orders[:, 0][None, :]   # (N, N)
     dn = orders[:, 1][:, None] - orders[:, 1][None, :]
     return table[dm + 2 * Mx, dn + 2 * My]
-
-
-def _cell_lossless(eps_sup, eps_sub, *eps_arrays):
-    """True when every region scalar and structure permittivity is exactly
-    real (provably lossless -> the closure ``R+T = 1`` is exact and
-    :func:`_check_energy` can police the silent 1e-6..0.05 window)."""
-    try:
-        if float(np.imag(complex(eps_sup))) != 0.0:
-            return False
-        if float(np.imag(complex(eps_sub))) != 0.0:
-            return False
-        for a in eps_arrays:
-            if float(np.max(np.abs(np.imag(to_numpy(a))))) != 0.0:
-                return False
-    except TypeError:                      # traced / non-concrete inputs
-        return False
-    return True
 
 
 def _li_convolutions_2d(eps_cell, orders, n_orders_x, n_orders_y, xp):
@@ -594,7 +578,12 @@ def rcwa_efficiency_2d(
     eps_cell : (Sx, Sy) array_like of complex
         Permittivity sampled over one unit cell (PUBLIC convention
         ``Im(eps) > 0`` for loss).  ``Sx``/``Sy`` must comfortably exceed
-        ``4*n_orders_{x,y}`` to avoid Fourier aliasing.
+        ``4*n_orders_{x,y}`` to avoid Fourier aliasing.  CONVENTION WARNING:
+        ``eps_cell`` is PERMITTIVITY ``eps = n**2`` while ``n_substrate`` /
+        ``n_superstrate`` below are refractive INDEX ``n`` -- one call mixes both
+        conventions and a wrong-convention value is silently accepted (pass
+        ``n**2`` for the cell, ``n`` for the half-spaces; the scalar
+        :func:`rcwa_efficiency_1d` takes INDEX throughout).
     n_substrate, n_superstrate : complex
         Transmission and incidence half-space indices.
     depth : float

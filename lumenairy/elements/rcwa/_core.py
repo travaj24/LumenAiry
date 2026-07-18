@@ -80,12 +80,53 @@ def rcwa_blas_threads(n: Optional[int]):
 
 
 
+# S5-8 (perf, no-loss): ``threadpool_limits(...)`` rebuilds a fresh
+# ``ThreadpoolController`` -- and RE-ENUMERATES every loaded BLAS/OpenMP DLL
+# (~9 ms on Windows) -- on EVERY call, so an N-wavelength sweep paid that DLL
+# scan once per solve (a 20-wavelength RCWA sweep measured 283 -> 105 ms once
+# cached).  The set of loaded BLAS libraries is fixed after import, so enumerate
+# ONCE into a process-wide controller and reuse its ``.limit(...)`` (which
+# applies the cap without re-scanning).  BIT-IDENTICAL: the same limiter
+# save/restore runs, only the library discovery is amortised.
+_BLAS_CONTROLLER = None
+_BLAS_CONTROLLER_UNAVAILABLE = False
+_BLAS_CONTROLLER_LOCK = threading.Lock()
+
+
+def _get_blas_controller():
+    """Return the process-wide cached ``ThreadpoolController`` (enumerated
+    once), or ``None`` when ``threadpoolctl`` predates ``ThreadpoolController``
+    (< 3.0) or is absent entirely.  The lazy first build is lock-guarded; the
+    controller object is read-only shared state thereafter."""
+    global _BLAS_CONTROLLER, _BLAS_CONTROLLER_UNAVAILABLE
+    if _BLAS_CONTROLLER is not None:
+        return _BLAS_CONTROLLER
+    if _BLAS_CONTROLLER_UNAVAILABLE:
+        return None
+    with _BLAS_CONTROLLER_LOCK:
+        if _BLAS_CONTROLLER is None and not _BLAS_CONTROLLER_UNAVAILABLE:
+            try:
+                from threadpoolctl import ThreadpoolController
+            except ImportError:  # pragma: no cover - threadpoolctl ships with numpy
+                _BLAS_CONTROLLER_UNAVAILABLE = True
+                return None
+            _BLAS_CONTROLLER = ThreadpoolController()
+    return _BLAS_CONTROLLER
+
+
 def _blas_limit():
     """Apply this thread's BLAS cap if one is set, else a zero-overhead no-op
     context (so the default path is untouched)."""
     n = _get_blas_threads()
     if n is None:
         return contextlib.nullcontext()
+    controller = _get_blas_controller()
+    if controller is not None:
+        # Reuse the cached enumeration -- no per-solve DLL re-scan.
+        return controller.limit(limits=n, user_api="blas")
+    # threadpoolctl too old to expose ThreadpoolController: preserve the
+    # legacy per-call path (re-enumerates, but keeps the cap) so the opt-in
+    # behaviour is unchanged; a no-op if threadpoolctl is missing entirely.
     try:
         from threadpoolctl import threadpool_limits
     except ImportError:  # pragma: no cover - threadpoolctl ships with numpy
@@ -312,6 +353,40 @@ def _check_energy(fn_name, R, T, lossless=False):
             f"the PER-ORDER efficiencies are suspect.  Pass stabilize=True "
             f"(retries nearby truncations) or change n_orders."),
             stacklevel=3)
+
+
+
+def _cell_lossless(eps_sup, eps_sub, *eps_arrays):
+    """True when the structure is PROVABLY lossless: every region scalar and
+    structure permittivity is exactly real AND every full ``(.., 3, 3)``
+    permittivity tensor is symmetric (a real Hermitian eps).  Under that proof
+    the closure ``R+T = 1`` is exact and :func:`_check_energy` can police the
+    silent 1e-6..0.05 window.
+
+    The symmetry clause matters: a REAL but ASYMMETRIC tensor (e.g.
+    ``eps_xz != eps_zx``) is non-reciprocal / non-Hermitian and can legitimately
+    exchange energy (``R+T != 1`` grows with obliquity), so it must NOT be
+    called lossless -- otherwise the tripwire false-fires on correct physics.
+    The clause keys on a ``(3, 3)`` trailing shape (always a tensor here: a
+    scalar patterned cell is sized ``>= 4*n_orders+1`` per axis), so a scalar
+    grid is never mistaken for a tensor."""
+    try:
+        if float(np.imag(complex(eps_sup))) != 0.0:
+            return False
+        if float(np.imag(complex(eps_sub))) != 0.0:
+            return False
+        for a in eps_arrays:
+            arr = to_numpy(a)
+            if float(np.max(np.abs(np.imag(arr)))) != 0.0:
+                return False
+            if np.ndim(arr) >= 2 and arr.shape[-2:] == (3, 3):
+                # real Hermitian == real symmetric (imag already 0 above)
+                asym = np.max(np.abs(arr - np.swapaxes(arr, -1, -2)))
+                if float(asym) != 0.0:
+                    return False
+    except TypeError:                      # traced / non-concrete inputs
+        return False
+    return True
 
 
 
@@ -2359,6 +2434,7 @@ __all__ = [
     "_EnergyError",
     "_EnergyWarning",
     "_check_energy",
+    "_cell_lossless",
     "_require_jax_x64",
     "_normalize_pol",
     "_sqrt_forward",
