@@ -4,6 +4,50 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`propagate_carrier_referenced` — carrier-referenced ("pilot-beam") free-space
+  propagation (Phase E prototype).**  Transports a strongly diverging / converging
+  beam's slowly-varying ENVELOPE on a modest grid while the spherical carrier
+  radius `R` and the co-moving grid pitch evolve ANALYTICALLY (`R -> R + z`,
+  `dx' = dx*(R+z)/R`) — the Sziklas & Siegman (1975) scaled-coordinate Fresnel
+  transform, the mechanism Zemax POP calls pilot-beam re-referencing.  This
+  sidesteps the audit-H8 memory wall: a diverging input's own fringe pitch
+  `lambda*R/r` forces production grids to N=28672 *propagator-independently*, but
+  the envelope carries no such fringe.  Headline (w0=4 um diverging Gaussian,
+  R=+55 mm, +50 mm): the N=2048 carrier result matches the N=16384 exact-ASM
+  ground truth to **0.05–0.08 % in windowed r2m / EE50 / EE80** at **64x less
+  array memory** (67 MB vs 4.29 GB/array; 32x lower tracemalloc peak; 86x faster).
+  Exact for the quadratic (carrier) part under Fresnel; the only approximation is
+  paraxial propagation of the near-collimated envelope.  Ships with
+  `carrier_referenced_reconstruct` / `carrier_referenced_envelope` (rebuild /
+  extract the full field for element hand-offs — e.g. reconstruct at a lens plane
+  and pass the carrier `R` to `apply_real_lens_traced(carrier=R)`, exact per H6)
+  and the `CarrierReferencedField` result tuple `(env, R, dx)`.  Independent
+  oracles: analytic Gaussian ABCD q-trace (grid-free) and exact band-limited ASM
+  on a fine grid.  PROTOTYPE — isotropic (single-`R`) carriers only; astigmatic
+  carriers, element-plane aperture handling in the envelope frame, and stepping
+  across the carrier focus are documented follow-ups.  Tests:
+  `test_carrier_referenced.py`.
+
+### Fixed
+
+- **Hammer audit H7 — `apply_real_lens_gbd` diverging-input energy collapse.**
+  The position-only (axial) beamlet decomposition carried a strongly-diverging /
+  converging input's wavefront curvature in the beamlet **amplitude only, not the
+  launch direction**, so the axial base rays refracted as if collimated (focused
+  at `f`) and the beamlet frame shed the beam's angular content — power conserved
+  collapsed to ~0.2–0.7 on the dual-oracle singlet (worse: ~1e-4 + NaN warnings
+  at the production 121's NA~0.23 beam) and the true finite-conjugate image
+  smeared.  Fix: `direction_sampling='auto'` is now the default — it launches
+  each beamlet along the input's local wavevector (Husimi / carrier normals) when
+  the wavefront is curved/tilted and along the axis otherwise.  A flat-wavefront
+  (collimated) input measures **exactly 0** angular spread and takes the
+  byte-identical axial path (the validated 98.4% collimated baseline is preserved
+  to the bit).  Result: power **0.997–0.998** and focus at the ABCD image plane
+  (< 5%) across the R_in = 300/150/100 mm scan, NaN warnings gone.  Independent
+  oracle: ABCD Gaussian q-trace.  Tests: `test_hammer_h7_gbd_diverging.py`.
+
 ## [5.25.0] — 2026-07-19
 
 The **real-lens hammer campaign** release (`docs/audit_real_lens_hammer_2026_07_19.md`):

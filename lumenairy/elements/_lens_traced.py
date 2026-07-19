@@ -810,6 +810,44 @@ def _carrier_residual_rms(E_in, W_full, wavelength, dx):
     return float(np.sqrt(np.mean(lx ** 2) + np.mean(my ** 2)))
 
 
+def _input_tilt_stats(E_in, wavelength, dx):
+    """Wrapping-safe transverse tilt statistics of ``E_in`` over its bright
+    support: ``(tilt_rms, coherence_ratio)`` (radians / dimensionless), or
+    ``None`` when they cannot be formed (empty / degenerate field).
+
+    ``tilt_rms`` is the SAME quantity two collimated-input diagnostics need and
+    used to compute independently -- the ``carrier=None`` residual angular
+    spread (``_carrier_residual_rms(E_in, None, ...)``) AND the
+    ``tilt_aware_rays=False`` launch-warning discriminator -- so this single
+    pass replaces the duplicate full-grid ``angle(E[i+1]*conj(E[i]))`` +
+    ``np.angle`` computation that ran twice per call (~9.5% of the runtime at
+    N=4096).  The arithmetic is byte-identical to both original sites (same
+    ``0.05*max`` bright mask, same nearest-neighbour phase increments, same
+    ``sqrt(mean(lx^2)+mean(my^2))`` / ``hypot(mean(lx),mean(my))/tilt_rms``)."""
+    k0 = 2.0 * np.pi / wavelength
+    E = np.asarray(E_in)
+    mag = np.abs(E)
+    mx = mag.max()
+    if not np.isfinite(mx) or mx <= 0:
+        return None
+    mask = mag > 0.05 * mx
+    del mag
+    if not mask.any():
+        return None
+    gx = E[:, 1:] * np.conj(E[:, :-1])
+    lx = (np.angle(gx) / (k0 * dx))[mask[:, 1:] & mask[:, :-1]]
+    del gx
+    gy = E[1:, :] * np.conj(E[:-1, :])
+    my = (np.angle(gy) / (k0 * dx))[mask[1:, :] & mask[:-1, :]]
+    del gy
+    if lx.size == 0 or my.size == 0:
+        return None
+    tilt_rms = float(np.sqrt(np.mean(lx ** 2) + np.mean(my ** 2)))
+    coherent = float(np.hypot(np.mean(lx), np.mean(my)))
+    coherence_ratio = coherent / tilt_rms if tilt_rms > 0 else 1.0
+    return (tilt_rms, coherence_ratio)
+
+
 def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
     """Build the carrier reference wavefront ``W(x, y)`` (length units;
     reference phase = ``k0 * W``) and a callable giving its transverse
@@ -1881,9 +1919,19 @@ def apply_real_lens_traced(
     # accurate.  With a carrier supplied the residual is small (the carrier
     # absorbs the divergence), so this only fires for an UNREFERENCED
     # non-collimated input -- exactly the silent-blur regression class.
+    # C4 (perf): the carrier=None residual IS the raw input tilt RMS -- the SAME
+    # quantity the tilt_aware_rays=False launch-warning block below computes.
+    # Compute the wrapping-safe tilt stats ONCE here and reuse them there (saves
+    # one full-grid phase-increment + np.angle pass, ~9.5% of runtime at N=4k).
+    # None until computed; the launch-warning block computes it if we skipped.
+    _input_tilt = None
     if on_noncollimated != 'off':
         try:
-            _resid = _carrier_residual_rms(E_in, _carrier_W, wavelength, dx)
+            if _carrier_W is None:
+                _input_tilt = _input_tilt_stats(E_in, wavelength, dx)
+                _resid = _input_tilt[0] if _input_tilt is not None else 0.0
+            else:
+                _resid = _carrier_residual_rms(E_in, _carrier_W, wavelength, dx)
         except (ValueError, RuntimeError, FloatingPointError):
             _resid = 0.0
         if _resid > _NONCOLLIMATED_RESID_THRESH:
@@ -2244,52 +2292,24 @@ def apply_real_lens_traced(
         # transverse tilt as the RMS of grad(phase) / k0 over the
         # support of |E_in|; cap the check via a try-except so degenerate
         # input fields don't crash apply_real_lens_traced.
+        # 4.10: emit a one-time warning when the input field has a measurable
+        # transverse tilt and tilt_aware_rays=False -- the plane-wave reference
+        # OPD becomes inaccurate when the input tilt is comparable to
+        # lambda / aperture.  The tilt statistics (wrapping-safe nearest-
+        # neighbour phase increments over the bright support; see
+        # :func:`_input_tilt_stats`) are the SAME the noncollimated guard used
+        # above, so we REUSE its result here (C4 perf) -- only computing them
+        # when that guard was skipped (on_noncollimated='off').  The
+        # coherence_ratio distinguishes a genuine single-beam tilt (~1, where
+        # tilt_aware_rays=True would help) from a multi-beam / post-DOE
+        # interference field (<<1, where it cannot -- F4 audit), so the two
+        # branches point the user at the right fix.  Best-effort: a degenerate
+        # field yields None / an exception, both silently skipping the warning.
         try:
-            E_arr = np.asarray(E_in)
-            mag = np.abs(E_arr)
-            mask = mag > 0.05 * mag.max()
-            del mag
-            if mask.any():
-                k0 = 2.0 * np.pi / wavelength
-                # Local transverse tilt (direction cosines) via NEAREST-
-                # NEIGHBOUR phase increments -- angle(E[i+1]*conj(E[i])) --
-                # which is WRAPPING-SAFE: for an adequately-sampled field
-                # each increment is in (-pi, pi], so a strongly-tilted beam
-                # (many 2*pi wraps across the aperture) does NOT produce the
-                # gradient spikes that np.gradient(np.angle(E)) does.  Those
-                # spikes previously corrupted both the RMS and the mean and
-                # mis-classified strong single tilts as incoherent.
-                _gx = E_arr[:, 1:] * np.conj(E_arr[:, :-1])
-                _Lx = (np.angle(_gx) / (k0 * dx))[mask[:, 1:] & mask[:, :-1]]
-                del _gx
-                _gy = E_arr[1:, :] * np.conj(E_arr[:-1, :])
-                _My = (np.angle(_gy) / (k0 * dx))[mask[1:, :] & mask[:-1, :]]
-                del _gy
-                # v5.16.2 (memory root-cause): keep only the masked 1-D
-                # samples; the full-grid increment/angle arrays are freed
-                # here so nothing rides through the ray trace / Newton /
-                # assembly (~18 GB at N=32768 in the pre-fix code).
-                if _Lx.size and _My.size:
-                    tilt_rms = float(np.sqrt(np.mean(_Lx ** 2)
-                                             + np.mean(_My ** 2)))
-                    # F4 (audit): a genuine SINGLE-beam tilt has a spatially
-                    # COHERENT direction field, so |mean(L,M)| ~ rms(L,M)
-                    # (coherence_ratio ~ 1) and tilt_aware_rays=True recovers
-                    # the per-ray direction.  A MULTI-source / post-DOE
-                    # interference field has sign-varying local directions
-                    # whose vector mean ~ 0 while the RMS is large
-                    # (coherence_ratio << 1); there tilt_aware_rays cannot
-                    # recover a per-ray direction (_sample_local_tilts
-                    # degenerates it toward the collimated launch, or worse),
-                    # so recommending it is actively misleading -- point at
-                    # apply_real_lens / carrier= instead.
-                    coherent = float(np.hypot(np.mean(_Lx), np.mean(_My)))
-                    coherence_ratio = (coherent / tilt_rms
-                                       if tilt_rms > 0 else 1.0)
-                else:
-                    tilt_rms = 0.0
-                    coherence_ratio = 1.0
-                del _Lx, _My
+            if _input_tilt is None:
+                _input_tilt = _input_tilt_stats(E_in, wavelength, dx)
+            if _input_tilt is not None:
+                tilt_rms, coherence_ratio = _input_tilt
                 if tilt_rms > 1e-4:
                     import warnings
                     if coherence_ratio >= 0.5:
@@ -2316,7 +2336,6 @@ def apply_real_lens_traced(
                             "congruence, or use apply_real_lens.",
                             RuntimeWarning, stacklevel=3,
                         )
-            del E_arr, mask
         except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
                 AttributeError, TypeError):
             # tilt-RMS estimation is best-effort; suppressing the
@@ -3651,12 +3670,28 @@ def prepare_real_lens_traced(
     The screen is exactly input-independent only for
     ``carrier in {None, <explicit wavefront / conjugate distance>}`` (NOT
     ``'auto'``, which fits the carrier from the field), so ``'auto'`` is
-    rejected.  ``tilt_aware_rays`` is forced False and the amplitude Newton
-    mask is disabled (full coarse grid) so the cached ``valid`` region does
-    not depend on any particular input; this makes the first (prepare) call a
-    touch more expensive, amortized on the first reuse.  The screen is stored
-    at float64 complex precision; per-call output is cast back to the input
-    dtype.
+    rejected.  With H6 (v5.25.1) the carrier's entrance eikonal ``k0*W`` is
+    baked into the cached ``opl`` map, so an explicit scalar-conjugate /
+    ndarray carrier's screen focuses a diverging (or converging) input at the
+    correct conjugate -- the 121-class per-group workflow, where every group
+    has a KNOWN conjugate shared across many emitter fields, pays the
+    trace/fit/Newton cost once and reuses the screen per field.
+    ``tilt_aware_rays`` is forced False and the amplitude Newton mask is
+    disabled (full coarse grid) so the cached ``valid`` region does not depend
+    on any particular input; this makes the first (prepare) call a touch more
+    expensive, amortized on the first reuse.  The screen is stored at float64
+    complex precision; per-call output is cast back to the input dtype.
+
+    ``on_noncollimated`` is honoured only for ``carrier=None`` (the plane-wave
+    reference, where the ``ones`` placeholder the screen is built on is
+    genuinely collimated).  For an explicit carrier the guard is forced
+    ``'off'`` internally: the placeholder is a flat ``ones`` field, not the
+    beam, so a scalar/ndarray carrier makes it LOOK strongly non-collimated
+    (its residual is the whole carrier tilt) even though the actual reuse
+    fields carry exactly that congruence -- the guard would either warn
+    spuriously or, under ``'delegate'``, silently hand off to
+    ``apply_real_lens`` (which ignores ``return_screen``) and cache a garbage
+    screen.  The residual guard is the per-field caller's responsibility.
     """
     if isinstance(carrier, str) and carrier == 'auto':
         raise ValueError(
@@ -3664,6 +3699,12 @@ def prepare_real_lens_traced(
             "carrier is fit from the field -> input-dependent).  Pass an "
             "explicit carrier (conjugate distance or wavefront ndarray) or "
             "None (plane-wave reference).")
+    # The screen is built on a ``ones`` PLACEHOLDER (return_screen=True makes
+    # it input-independent), so the collimation guard cannot judge it against a
+    # carrier: force it off whenever a carrier is set.  For carrier=None the
+    # placeholder IS the plane-wave reference, so the caller's value applies
+    # (a correct, silent no-op there).
+    _screen_noncol = 'off' if carrier is not None else on_noncollimated
     ones = np.ones((int(N), int(N)), dtype=np.complex128)
     screen = apply_real_lens_traced(
         ones, prescription=prescription, wavelength=wavelength, dx=dx,
@@ -3671,7 +3712,7 @@ def prepare_real_lens_traced(
         min_coarse_samples_per_aperture=min_coarse_samples_per_aperture,
         on_undersample=on_undersample, preserve_input_phase=True,
         tilt_aware_rays=False, carrier=carrier,
-        on_noncollimated=on_noncollimated, parallel_amp=False,
+        on_noncollimated=_screen_noncol, parallel_amp=False,
         newton_amp_mask_rel=0.0, inversion_method=inversion_method,
         fast_analytic_phase=False, newton_fit=newton_fit,
         newton_poly_order=newton_poly_order, newton_max_iters=newton_max_iters,

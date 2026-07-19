@@ -108,6 +108,12 @@ from .asm import (
     angular_spectrum_propagate_tilted,
     apply_fresnel_curvature,
 )
+from .carrier import (
+    CarrierReferencedField,
+    carrier_referenced_envelope,
+    carrier_referenced_reconstruct,
+    propagate_carrier_referenced,
+)
 
 # ---------------------------------------------------------------------------
 # Re-exports from the v5.1.0 infrastructure / kernel submodules.
@@ -307,6 +313,11 @@ __all__ = [
     'fresnel_propagate_mft',
     'fraunhofer_propagate',
     'fraunhofer_propagate_mft',
+    # Carrier-referenced (Sziklas-Siegman) free-space step
+    'CarrierReferencedField',
+    'propagate_carrier_referenced',
+    'carrier_referenced_reconstruct',
+    'carrier_referenced_envelope',
     # Rayleigh-Sommerfeld
     'rayleigh_sommerfeld_propagate',
     # SAS

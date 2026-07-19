@@ -867,6 +867,158 @@ def test_tp1_shape_mismatch_raises():
 
 
 # --------------------------------------------------------------------------
+# C1 (Phase-C perf): prepared traced screen + EXPLICIT carrier.
+#   The screen is built on a flat ``ones`` placeholder, so the F1
+#   collimation guard must not judge it against a carrier (a scalar/ndarray
+#   carrier makes ``ones`` look strongly non-collimated even though the real
+#   reuse fields carry exactly that congruence).  Two failure modes fixed:
+#   (1) a spurious noncollimated warning at the default ``'warn'``; and
+#   (2) the latent ``'delegate'`` bug -- the guard would hand off to
+#   apply_real_lens (which ignores return_screen) and cache a GARBAGE screen.
+# --------------------------------------------------------------------------
+def _c1_carrier_lens():
+    # small-aperture biconvex whose ``ones``-placeholder carrier residual
+    # exceeds the F1 threshold at this grid (so the guard WOULD fire pre-fix).
+    return {
+        'name': 'c1', 'aperture_diameter': 3e-3,
+        'surfaces': [
+            {'radius': 40e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 1.5e-3},
+            {'radius': -40e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 1.5e-3},
+        ],
+        'thicknesses': [3e-3],
+    }
+
+
+def test_c1_prepared_scalar_carrier_no_spurious_warning():
+    """Preparing with an explicit scalar conjugate must NOT emit the F1
+    noncollimated warning: the ``ones`` placeholder is not the beam, so the
+    guard cannot judge it against the carrier (the real reuse fields carry
+    that divergence).  Pre-fix this warned ('residual angular spread ...
+    exceeds the collimated-reference validity threshold')."""
+    N, dx, s = 512, 6e-6, 25e-3
+    with warnings.catch_warnings(record=True) as wlist:
+        warnings.simplefilter('always')
+        prepare_real_lens_traced(prescription=_c1_carrier_lens(),
+                                 wavelength=LAM, dx=dx, N=N, carrier=s,
+                                 ray_subsample=8)
+    spurious = [str(w.message) for w in wlist
+                if 'collimated-reference' in str(w.message)]
+    assert not spurious, f"spurious F1 warning(s) during prepare: {spurious}"
+
+
+def test_c1_prepared_scalar_carrier_delegate_screen_not_garbage():
+    """With an explicit carrier the internal guard is forced 'off', so even
+    ``on_noncollimated='delegate'`` caches a valid UNIT-MODULUS traced screen
+    -- not the delegated ``apply_real_lens(ones)`` field (|.| up to ~1.4),
+    which ignores return_screen.  Byte-identical to the default-guard prepare."""
+    N, dx, s = 512, 6e-6, 25e-3
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        prep_default = prepare_real_lens_traced(
+            prescription=_c1_carrier_lens(), wavelength=LAM, dx=dx, N=N,
+            carrier=s, ray_subsample=8)
+        prep_delegate = prepare_real_lens_traced(
+            prescription=_c1_carrier_lens(), wavelength=LAM, dx=dx, N=N,
+            carrier=s, ray_subsample=8, on_noncollimated='delegate')
+    # a genuine traced screen is a pure phase (|screen| == 1 in-domain, 0
+    # outside); the garbage delegated screen has |.| ~ 1.4 somewhere.
+    assert float(np.abs(prep_delegate.screen).max()) < 1.0 + 1e-9
+    # both now force the guard 'off' internally, so the screens match to the
+    # traced path's own ~1e-14 FFT-threading nondeterminism (not garbage).
+    rel = float(np.abs(prep_default.screen - prep_delegate.screen).max())
+    assert rel < 1e-10, f"delegate screen != default-guard screen: {rel:.2e}"
+
+
+# Constant-index glass for the C1 diverging-input ABCD oracle (independent
+# of the traced implementation; same singlet as the H6 hammer test).
+from lumenairy.glass import GLASS_REGISTRY as _C1_GLASS_REG  # noqa: E402
+
+_C1_N_GLASS = 1.5168
+_C1_R1, _C1_R2, _C1_TC = 51.68e-3, -51.68e-3, 5e-3
+_C1_GLASS_REG.setdefault('_C1_ABCD_GLASS', lambda wl: _C1_N_GLASS)
+
+
+def _c1_singlet():
+    return {
+        'wavelength': LAM, 'aperture_diameter': 20e-3,
+        'surfaces': [
+            {'radius': _C1_R1, 'thickness': _C1_TC, 'glass_before': 'air',
+             'glass_after': '_C1_ABCD_GLASS', 'semi_diameter': 10e-3},
+            {'radius': _C1_R2, 'thickness': 0.0,
+             'glass_before': '_C1_ABCD_GLASS', 'glass_after': 'air',
+             'semi_diameter': 10e-3},
+        ],
+        'thicknesses': [_C1_TC], 'stop_index': 0,
+    }
+
+
+def _c1_q_trace_image(R_in, w_L):
+    """ABCD Gaussian q-trace: entry vertex -> waist location past the exit
+    vertex.  Fully independent of the traced implementation."""
+    def refr(R, n1, n2):
+        return np.array([[1.0, 0.0], [-(n2 - n1) / (R * n2), n1 / n2]])
+
+    def trans(d):
+        return np.array([[1.0, d], [0.0, 1.0]])
+    M = (refr(_C1_R2, _C1_N_GLASS, 1.0) @ trans(_C1_TC)
+         @ refr(_C1_R1, 1.0, _C1_N_GLASS))
+    q_inv = 1.0 / R_in - 1j * LAM / (np.pi * w_L ** 2)
+    q0 = 1.0 / q_inv
+    q1 = (M[0, 0] * q0 + M[0, 1]) / (M[1, 0] * q0 + M[1, 1])
+    return float(-q1.real)
+
+
+def _c1_ee100(E_exit, dx, z):
+    E = la.angular_spectrum_propagate(E_exit, z, LAM, dx)
+    I = np.abs(E) ** 2
+    N = I.shape[0]
+    x = (np.arange(N) - N / 2) * dx
+    j, i = np.unravel_index(np.argmax(I), I.shape)
+    X, Y = np.meshgrid(x - x[i], x - x[j])
+    r = np.sqrt(X ** 2 + Y ** 2)
+    return float(I[r <= 100e-6].sum() / I.sum())
+
+
+def test_c1_prepared_scalar_carrier_focuses_diverging_input():
+    """The prepared screen for an EXPLICIT scalar conjugate carries the H6
+    entrance eikonal, so it focuses a diverging Gaussian AT the ABCD image
+    plane (EE(100um) > 0.9), NOT at the collimated f (~0.02) -- and is
+    byte-close to the direct carrier-referenced traced call.  This is the
+    121-class per-group reuse (one KNOWN conjugate, many fields)."""
+    N, dx, w_L, R_in = 2048, 5e-6, 3e-3, 150e-3
+    z_img = _c1_q_trace_image(R_in, w_L)
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    r_sq = X ** 2 + Y ** 2
+    k = 2 * np.pi / LAM
+    E0 = (np.exp(-r_sq / w_L ** 2)
+          * np.exp(1j * k * r_sq / (2.0 * R_in))).astype(np.complex128)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')      # H3 guard may advise finer dx
+        prep = prepare_real_lens_traced(
+            prescription=_c1_singlet(), wavelength=LAM, dx=dx, N=N,
+            carrier=R_in)
+        E_prep = prep(E0)
+        E_direct = apply_real_lens_traced(
+            E0, prescription=_c1_singlet(), wavelength=LAM, dx=dx,
+            carrier=R_in, newton_amp_mask_rel=0.0, tilt_aware_rays=False,
+            preserve_input_phase=True, parallel_amp=False)
+    ee_img = _c1_ee100(E_prep, dx, z_img)
+    ee_f = _c1_ee100(E_prep, dx, 49.163e-3)      # collimated BFL
+    assert ee_img > 0.9, (
+        f"prepared+carrier EE(100um)@z_img={z_img*1e3:.2f}mm is {ee_img:.3f} "
+        f"-- the H6 entrance eikonal must flow through the prepared screen")
+    assert ee_img > ee_f, (
+        f"focus must sit at z_img ({ee_img:.3f}) not the collimated f "
+        f"({ee_f:.3f})")
+    rel = float(np.linalg.norm(E_prep - E_direct)) / (
+        float(np.linalg.norm(E_direct)) + 1e-30)
+    assert rel < 1e-12, f"prepared vs direct (carrier): {rel:.2e}"
+
+
+# --------------------------------------------------------------------------
 # S5.1 carrier-referenced traced + F1 collimation guard
 # --------------------------------------------------------------------------
 from lumenairy.elements._lens_real import apply_real_lens  # noqa: E402
@@ -941,6 +1093,47 @@ def test_f1_guard_silent_when_carrier_matches():
                                wavelength=LAM, dx=dx, ray_subsample=2,
                                parallel_amp=False, carrier=s)
     assert not any('collimated-reference' in str(x.message) for x in w)
+
+
+def test_c4_input_tilt_stats_matches_both_former_sites():
+    """C4 perf dedup: the single shared _input_tilt_stats pass reproduces BOTH
+    former duplicate computations byte-for-byte -- its tilt_rms equals the
+    carrier=None noncollimated-guard residual (_carrier_residual_rms(E, None)),
+    and its coherence_ratio is the F4 single-beam-vs-incoherent discriminator.
+    This is what makes removing the second full-grid phase-gradient pass
+    (~8-9% of the traced runtime at N=4k) byte-identical."""
+    from lumenairy.elements._lens_traced import (
+        _carrier_residual_rms,
+        _input_tilt_stats,
+    )
+    N, dx = 384, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    k0 = 2 * np.pi / LAM
+    g = np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
+    cases = {
+        'collimated': g,
+        'coherent': g * np.exp(1j * k0 * np.sin(0.01) * X),
+        'incoherent': (g * np.exp(1j * k0 * np.sin(0.02) * X)
+                       + g * np.exp(-1j * k0 * np.sin(0.02) * X)),
+        'diverging': g * np.exp(1j * k0 * (X ** 2 + Y ** 2) / (2 * 20e-3)),
+    }
+    for name, E in cases.items():
+        E = E.astype(np.complex128)
+        st = _input_tilt_stats(E, LAM, dx)
+        resid = _carrier_residual_rms(E, None, LAM, dx)
+        assert st is not None, name
+        # BYTE-identical to the value the noncollimated guard used to compute
+        # separately (both are pure -- no FFT nondeterminism).
+        assert st[0] == resid, f"{name}: tilt_rms {st[0]!r} != residual {resid!r}"
+        assert 0.0 <= st[1] <= 1.0 + 1e-12, name
+    # coherence discriminates a single-beam tilt (~1) from an opposed-tilt
+    # (multi-beam) field (<<1) -- the F4 branch selector the tilt warning uses.
+    coh = _input_tilt_stats(cases['coherent'].astype(np.complex128), LAM, dx)[1]
+    inc = _input_tilt_stats(cases['incoherent'].astype(np.complex128), LAM, dx)[1]
+    assert coh >= 0.5 > inc, (coh, inc)
+    # degenerate fields yield None (silently skip the warning, as before)
+    assert _input_tilt_stats(np.zeros((8, 8), np.complex128), LAM, dx) is None
 
 
 def test_f1_delegate_returns_analytic():

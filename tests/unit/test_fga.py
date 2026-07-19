@@ -879,3 +879,163 @@ def test_fga_anamorphic_grid_matches_asm():
         n_p=15)
     assert vec.shape == (2, N, N)
     assert _fid(vec[0], fga) > 0.999
+
+
+# ---------------------------------------------------------------------------
+# Hammer audit H2: dispatcher sag-screen aberration gate
+# ---------------------------------------------------------------------------
+# The analytic phase-screen model cannot represent high-order / orientation-
+# dependent aberration (H2, dual-oracle-quantified); apply_real_lens_universal
+# now estimates that error cheaply at routing time and steers a heavily-aberrated
+# prescription AWAY from 'phase_screen' even at low NA (and warns when forced).
+_WL_H2 = 1.31e-6           # dual-oracle wavelength (docs/audit_real_lens_hammer)
+
+from lumenairy.glass import GLASS_REGISTRY  # noqa: E402
+
+# dispersionless model glass n=1.5168 (matches the dual-oracle build convention)
+GLASS_REGISTRY.setdefault('_GATE_N1p5168', lambda wl: 1.5168)
+
+
+def _biconvex(R, semi, t=5e-3, glass='_GATE_N1p5168'):
+    """Symmetric biconvex singlet R = +/-R, aperture matched to ``semi``."""
+    return {'wavelength': _WL_H2, 'aperture_diameter': 2 * semi,
+            'surfaces': [
+                {'radius': R, 'thickness': t, 'glass_before': 'air',
+                 'glass_after': glass, 'semi_diameter': semi},
+                {'radius': -R, 'thickness': 0.0, 'glass_before': glass,
+                 'glass_after': 'air', 'semi_diameter': semi}],
+            'thicknesses': [t], 'stop_index': 0}
+
+
+def _gauss2d(N, dx, w0):
+    xs = (np.arange(N) - N // 2) * dx
+    Xg, Yg = np.meshgrid(xs, xs)
+    return np.exp(-(Xg ** 2 + Yg ** 2) / w0 ** 2).astype(np.complex128)
+
+
+def test_gate_h2_aberration_estimate_calibration():
+    """Calibrate the sag-screen aberration estimate against the dual-oracle f/5
+    biconvex (docs/audit_real_lens_hammer_2026_07_19.md: R = +/-51.68 mm, t = 5 mm,
+    n = 1.5168, lambda = 1.31 um, w0 = 5 mm; image at 49.163 mm; dual-oracle
+    EE50/EE80/r2m = 15.17/55.22/64.98 um, where the analytic model converged to a
+    WRONG 40.5 um -- H2).  The estimate must be well above the ~2 rad budget for
+    the f/5 case (which is genuinely LOW NA, so it reaches the phase-screen
+    shortcut the gate must override) and far below it for the benign small-beam
+    regime (byte-identical low-NA dispatch)."""
+    from lumenairy.propagators.fga import (
+        _ABERRATION_MAX_RAD,
+        _sag_screen_aberration_rad,
+        _system_na,
+        _universal_route,
+    )
+    presc = _biconvex(51.68e-3, 5e-3)
+    # f/5 IS low-NA by the marginal-ray metric (na ~ 0.10 < the 0.12 gate) -- the
+    # exact regime that WOULD route to the analytic sag-screen without this gate.
+    assert _system_na(presc, _WL_H2) < 0.12
+    ext = 12.8e-3
+    dx = 2 * ext / 256
+    E5 = _gauss2d(256, dx, 5e-3)                            # w0 = 5 mm, fully covered
+    est5 = _sag_screen_aberration_rad(E5, dx, dx, presc, _WL_H2)
+    assert 15.0 < est5 < 30.0, est5                          # ~21.7 rad
+    assert est5 > _ABERRATION_MAX_RAD                        # trips the gate
+    # the EXACT dual-oracle f/5 prescription routes AWAY from analytic at every
+    # plane (pre-gate it hit the low-NA phase_screen shortcut): traced at the
+    # vertex / pre-focus, fga at the 49.163 mm image (the caustic).
+    for opd in (0.0, 5e-3, 49.163e-3):
+        r = _universal_route(E5, presc, _WL_H2, dx, dx, opd, 0.12, 3.0,
+                             None, 0.06, _ABERRATION_MAX_RAD)
+        assert r != "phase_screen", (opd, r)
+        assert r in ("traced", "fga"), (opd, r)
+    # benign: same lens, w0 = 0.5 mm (10x smaller) -> r^4 down 1e4 -> << budget
+    Eb = _gauss2d(256, 2 * 1.28e-3 / 256, 0.5e-3)
+    estb = _sag_screen_aberration_rad(Eb, 2 * 1.28e-3 / 256, 2 * 1.28e-3 / 256,
+                                      presc, _WL_H2)
+    assert estb < 0.1, estb                                  # ~0.002 rad
+    assert estb < _ABERRATION_MAX_RAD                        # does NOT trip
+    # defensive: empty / malformed inputs never trip the gate
+    assert _sag_screen_aberration_rad(np.zeros((8, 8), complex), 1e-6, 1e-6,
+                                      presc, _WL_H2) == 0.0
+    assert _sag_screen_aberration_rad(E5, 2 * ext / 256, 2 * ext / 256,
+                                      {'surfaces': 'bogus'}, _WL_H2) == 0.0
+
+
+def test_gate_h2_reroutes_low_na_aberrated_away_from_phase_screen():
+    """The routing regression (H2 gate).  Two fields through the SAME low-NA lens
+    (na ~ 0.11 < 0.12, so both would hit the phase-screen shortcut) differ ONLY in
+    beam radius, hence only in the sag-screen aberration estimate:
+
+      * benign small beam (estimate << budget) -> 'phase_screen' (unchanged);
+      * beam-filling aberrated (estimate > budget) -> routed AWAY to a ray-based
+        member ('traced' on a smooth plane, 'fga' near the caustic).
+
+    Uses the pure routing decision (no propagation) so the choice is exact and
+    cheap.  Pre-gate BOTH returned 'phase_screen'."""
+    from lumenairy.propagators.fga import (
+        _ABERRATION_MAX_RAD,
+        _sag_screen_aberration_rad,
+        _system_na,
+        _universal_route,
+    )
+    presc = _biconvex(11.9e-3, 1.15e-3)                      # efl ~ 10.6 mm
+    na = _system_na(presc, _WL_H2)
+    assert na < 0.12                                         # low-NA shortcut regime
+    dx = 2 * 3.0e-3 / 128
+    E_ab = _gauss2d(128, dx, 1.15e-3)                        # beam-filling -> aberrated
+    E_bn = _gauss2d(128, dx, 0.20e-3)                        # tiny beam -> benign
+    assert _sag_screen_aberration_rad(E_ab, dx, dx, presc, _WL_H2) > _ABERRATION_MAX_RAD
+    assert _sag_screen_aberration_rad(E_bn, dx, dx, presc, _WL_H2) < _ABERRATION_MAX_RAD
+
+    def route(E, opd):
+        return _universal_route(E, presc, _WL_H2, dx, dx, opd, 0.12, 3.0,
+                                None, 0.06, _ABERRATION_MAX_RAD)
+
+    # benign low-NA -> phase_screen (byte-identical dispatch, both planes)
+    assert route(E_bn, 0.5e-3) == "phase_screen"
+    assert route(E_bn, 10.6e-3) == "phase_screen"
+    # aberrated low-NA -> NEVER phase_screen; ray-based member instead
+    assert route(E_ab, 0.5e-3) == "traced"                  # smooth pre-focus plane
+    assert route(E_ab, 10.6e-3) == "fga"                    # near the caustic
+    assert route(E_ab, 0.5e-3) != "phase_screen"
+
+
+def test_gate_h2_benign_low_na_dispatch_byte_identical():
+    """The benign low-NA path is a pure pass-through: apply_real_lens_universal
+    still routes to 'phase_screen' and returns EXACTLY apply_real_lens (exit
+    vertex) + exact-ASM output leg -- the gate adds only a read-only estimate, so
+    the benign output is byte-identical to the pre-gate dispatch."""
+    from lumenairy.elements import apply_real_lens
+    from lumenairy.propagators.fga import apply_real_lens_universal
+    presc = _biconvex(11.9e-3, 1.15e-3)
+    dx = 2 * 1.6e-3 / 128                                    # grid covers the 1.15 mm aperture
+    E = _gauss2d(128, dx, 0.20e-3)                           # benign (estimate << budget)
+    opd = 4e-3
+    out, m = apply_real_lens_universal(
+        E, prescription=presc, wavelength=_WL_H2, dx=dx,
+        output_plane_distance=opd, return_method=True)
+    assert m == "phase_screen"
+    ref = angular_spectrum_propagate(
+        apply_real_lens(E, prescription=presc, wavelength=_WL_H2, dx=dx),
+        opd, _WL_H2, dx)
+    assert np.array_equal(out, ref)                          # byte-identical
+
+
+def test_gate_h2_warns_when_phase_screen_forced_out_of_envelope():
+    """Forcing method='phase_screen' on a heavily-aberrated prescription still runs
+    (honours the explicit choice) but emits a RuntimeWarning citing the validity
+    budget -- an unreliable spot is never returned silently.  A benign forced
+    phase-screen call stays quiet."""
+    import warnings
+
+    from lumenairy.propagators.fga import apply_real_lens_universal
+    presc = _biconvex(11.9e-3, 1.15e-3)
+    dx = 2 * 3.0e-3 / 128
+    E_ab = _gauss2d(128, dx, 1.15e-3)                        # aberrated
+    E_bn = _gauss2d(128, dx, 0.20e-3)                        # benign
+    with pytest.warns(RuntimeWarning, match="validity budget"):
+        apply_real_lens_universal(E_ab, prescription=presc, wavelength=_WL_H2,
+                                  dx=dx, method="phase_screen")
+    with warnings.catch_warnings(record=True) as wl:
+        warnings.simplefilter("always")
+        apply_real_lens_universal(E_bn, prescription=presc, wavelength=_WL_H2,
+                                  dx=dx, method="phase_screen")
+    assert not any("validity budget" in str(w.message) for w in wl)
