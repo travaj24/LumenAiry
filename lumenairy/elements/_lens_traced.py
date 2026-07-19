@@ -828,8 +828,13 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
       Curl-free by construction (a scalar potential is fit, not L/M
       separately).
 
-    Returns ``(W_full, grad_fn)`` where ``W_full`` is an ``(N, N)`` array
-    and ``grad_fn(xq, yq)`` returns ``(L, M)`` at the query positions.
+    Returns ``(W_full, grad_fn, w_fn)`` where ``W_full`` is an ``(N, N)``
+    array, ``grad_fn(xq, yq)`` returns ``(L, M)`` at the query positions,
+    and ``w_fn(xq, yq)`` evaluates the carrier eikonal ``W`` (metres) at
+    the query positions -- v5.25.1 (hammer H6): the per-ray OPL must be
+    referenced to the carrier congruence by ADDING ``W(x_in)`` at the
+    entrance plane; omitting it collapsed every diverging-input trace to
+    the collimated focal plane.
     """
     N = X.shape[0]
     if isinstance(carrier, np.ndarray):
@@ -845,7 +850,12 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
             fy = np.clip(yq / dx + N / 2.0, 0, N - 1).astype(np.int64)
             return gWx[fy, fx], gWy[fy, fx]
 
-        return W_full, grad_fn
+        def w_fn(xq, yq):
+            fx = np.clip(xq / dx + N / 2.0, 0, N - 1).astype(np.int64)
+            fy = np.clip(yq / dx + N / 2.0, 0, N - 1).astype(np.int64)
+            return W_full[fy, fx]
+
+        return W_full, grad_fn, w_fn
 
     if isinstance(carrier, str):
         if carrier != 'auto':
@@ -916,7 +926,11 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
             _, Lq, Mq = _poly_and_grad(xq, yq)
             return Lq, Mq
 
-        return W_full, grad_fn
+        def w_fn(xq, yq):
+            Wq, _, _ = _poly_and_grad(xq, yq)
+            return Wq
+
+        return W_full, grad_fn, w_fn
 
     # scalar conjugate distance
     s = float(carrier)
@@ -927,7 +941,10 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
     def grad_fn(xq, yq):
         return xq / s, yq / s
 
-    return W_full, grad_fn
+    def w_fn(xq, yq):
+        return (xq ** 2 + yq ** 2) / (2.0 * s)
+
+    return W_full, grad_fn, w_fn
 
 
 def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
@@ -1842,13 +1859,14 @@ def apply_real_lens_traced(
     _k0 = 2.0 * np.pi / wavelength
     _carrier_W = None
     _carrier_grad = None
+    _carrier_W_fn = None
     if carrier is not None:
         if X is None:
             _cx = (np.arange(E_in.shape[0]) - E_in.shape[0] / 2) * dx
             _CX, _CY = np.meshgrid(_cx, _cx)
         else:
             _CX, _CY = X, Y
-        _carrier_W, _carrier_grad = _compute_carrier(
+        _carrier_W, _carrier_grad, _carrier_W_fn = _compute_carrier(
             carrier, E_in, wavelength, dx, _CX, _CY)
         del _CX, _CY
         # The fast_analytic_phase reference is the lens's on-axis geometric
@@ -2351,6 +2369,23 @@ def apply_real_lens_traced(
     final.x = final.x + final.L * t_to_vertex
     final.y = final.y + final.M * t_to_vertex
     final.z = np.zeros_like(final.z)
+
+    # ---- v5.25.1 (hammer audit H6): carrier entrance eikonal -----------
+    # The ray tracer accumulates OPL only from the ENTRANCE plane forward.
+    # When a carrier congruence is set, each ray belongs to a wavefront
+    # whose phase AT the entrance plane is k0*W(x_in) -- that eikonal must
+    # be added so the traced exit wavefront is referenced to the beam's
+    # own diverging/converging sphere, CONSISTENT with the
+    # exp(i*k0*W) reference leg used by preserve_input_phase.  Omitting it
+    # imprinted a spurious -k0*W on the field, cancelling the input
+    # divergence the wave model correctly carried: every diverging-input
+    # trace collapsed to the COLLIMATED focal plane f and the true image
+    # at z_img smeared by NA_exit*(z_img - f) (production exp22: energy
+    # over +/-1.8 mm, EE(100um) = 0.9% -- reproduced to the digit; with
+    # this term EE(100um) = 0.999 across the R_in = 300/150/100 mm scan
+    # and per-group relay chains, no change for collimated input).
+    if _carrier_W_fn is not None:
+        final.opd = final.opd + _carrier_W_fn(h_x, h_y)
 
     # ---- v5.25.0 (hammer audit H3): exit-NA Nyquist guard --------------
     # The docstring's critical-sampling rule (dx <= lambda*f/aperture) was
