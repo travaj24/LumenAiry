@@ -77,6 +77,7 @@ def apply_thin_lens(
     yc: float = 0,
     use_gpu: bool = False,
     lens_model: str = 'paraxial',
+    conjugates: Optional[object] = None,
 ) -> np.ndarray:
     """
     Apply a thin-lens phase to an optical field.
@@ -104,17 +105,52 @@ def apply_thin_lens(
             Quadratic approximation: phi = -k/(2f) * r**2.
             Valid for r/f < ~0.1 (half-angle < ~6 deg).
         ``'nonparaxial'``
-            Exact spherical wavefront: phi = k * (f - sqrt(f**2 + r**2)).
-            Accurate up to r/f ~ 0.5 (half-angle ~30 deg).
+            Exact stigmatic spherical wavefront for INFINITE conjugates:
+            phi = -sign(f) * k * (sqrt(f**2 + r**2) - |f|).
+            For f > 0 this equals the historical k*(f - sqrt(f**2+r**2))
+            byte-for-byte; for f < 0 the historical form had the WRONG
+            SIGN (it converged exactly like its +|f| twin -- thin-lens
+            audit 2026-07-18, bug 1).  Exact for collimated->focus or
+            focus->collimated; at FINITE conjugates it over-corrects
+            (use ``'stigmatic'``).
         ``'aplanatic'``
-            Satisfies the Abbe sine condition (sin(theta) = r/f).
-            phi = -k * f * (1 - sqrt(1 - r**2/f**2)) for r < |f|.
-            Ideal for imaging systems; eliminates coma.
+            Stigmatic spherical phase restricted to the Abbe sine-
+            condition domain r < |f| (unit phase outside).  The
+            historical profile -k*f*(1 - sqrt(1 - r**2/f**2)) had the
+            WRONG quartic sign (-k r**4/8f**3 where a converging sphere
+            needs +k r**4/8f**3), so it DOUBLED paraxial's spherical
+            aberration instead of removing it (thin-lens audit
+            2026-07-18, bug 2; measured 9.1 um focus vs paraxial 7.7 um
+            vs correct 4.27 um at NA~0.1).  Its ray mapping was
+            sin(theta) = tan(asin(r/f)) -- neither the sine condition
+            (whose pure-phase-screen profile is the PARAXIAL quadratic)
+            nor the tangent/stigmatic condition (the spherical phase).
+            NOTE: the Abbe part of a real aplanat is the sqrt(cos theta)
+            PUPIL APODIZATION -- an amplitude factor a pure phase mask
+            must not apply; enforce apertures/apodization separately.
+        ``'stigmatic'``
+            Conjugate-matched EXACT ideal element (thin-lens audit
+            2026-07-18, change 1): phi = k * (S(R_out) - S(R_in)) with
+            S(R) = sign(R) * (sqrt(r**2 + R**2) - |R|) the exact
+            spherical-wave phase (R > 0 diverging) and, by default,
+            1/R_out = 1/R_in - 1/f.  This is aberration-free under the
+            EXACT (ASM) propagator at ANY conjugates -- pass the
+            incoming wavefront radius via ``conjugates``.  With
+            R_in = inf (collimated input, the default) it reduces
+            exactly to ``'nonparaxial'``.
         ``'local_only'``
             Quadratic focusing about the decentered point *without* the
             linear tilt that a decentered paraxial lens would produce.
             Useful for micro-lens arrays where each lenslet should focus
             locally without steering the beam.
+    conjugates : float or (float, float), optional
+        Only used by ``lens_model='stigmatic'``.  Either the incoming
+        wavefront radius of curvature ``R_in`` alone (signed, metres,
+        R > 0 diverging, ``np.inf`` = collimated; ``R_out`` is then
+        derived from the lens equation 1/R_out = 1/R_in - 1/f) or an
+        explicit ``(R_in, R_out)`` pair (which overrides ``f`` for the
+        phase -- useful for pure curvature converters).  Defaults to
+        ``R_in = inf``.
 
     Returns
     -------
@@ -164,7 +200,17 @@ def apply_thin_lens(
         lens_phase = xp.exp(-1j * k / (2 * f) * r_sq)
 
     elif lens_model == 'nonparaxial':
-        lens_phase = xp.exp(1j * k * (f - xp.sqrt(f ** 2 + r_sq)))
+        # v5.25.0 (thin-lens audit 2026-07-18, bug 1): the historical
+        # ``exp(1j*k*(f - sqrt(f**2 + r_sq)))`` expands, for f < 0, to a
+        # CONVERGING quadratic -k r**2/(2|f|) -- a diverging lens that
+        # focused identically to its +|f| twin (measured: f = -30 mm
+        # produced the same z = +30 mm focus and peak as f = +30 mm).
+        # The sign-safe stigmatic sphere is
+        # ``phi = -sign(f) * k * (sqrt(r**2 + f**2) - |f|)``, which is
+        # byte-identical to the historical form for f > 0 (IEEE negation
+        # of an exact subtraction) and correctly DIVERGES for f < 0.
+        lens_phase = xp.exp(
+            -1j * np.sign(f) * k * (xp.sqrt(f ** 2 + r_sq) - abs(f)))
 
     elif lens_model == 'aplanatic':
         # 4.10: replacing the outside-aperture region with 0+0j inside
@@ -173,10 +219,24 @@ def apply_thin_lens(
         # multiplier leaves the field unchanged in the rim annulus;
         # the lens aperture itself should be enforced via a separate
         # aperture mask, not via the phase mask.
+        #
+        # v5.25.0 (thin-lens audit 2026-07-18, bug 2): the historical
+        # profile ``-k*f*(1 - sqrt(1 - r**2/f**2))`` expands to
+        # ``-k r**2/2f - k r**4/8f**3`` -- the WRONG quartic sign (a
+        # converging sphere needs ``+k r**4/8f**3``), so it carried 2x
+        # paraxial's spherical-aberration error in the SAME direction
+        # and focused WORSE than paraxial (9.1 um vs 7.7 um vs correct
+        # 4.27 um at NA~0.1).  Its implied ray mapping,
+        # sin(theta) = tan(asin(r/f)), is neither the Abbe sine
+        # condition (whose pure-phase-screen profile is the PARAXIAL
+        # quadratic) nor the stigmatic tangent condition.  The corrected
+        # phase is the exact stigmatic sphere restricted to the
+        # sine-condition domain r < |f|; the sqrt(cos theta) pupil
+        # APODIZATION that distinguishes a true aplanat is an AMPLITUDE
+        # factor a pure phase mask must not apply (see docstring).
         r_over_f_sq = r_sq / f ** 2
         valid = r_over_f_sq < 1.0
-        sqrt_term = xp.sqrt(xp.maximum(1.0 - r_over_f_sq, 0.0))
-        phase = k * f * (1.0 - sqrt_term)
+        phase = np.sign(f) * k * (xp.sqrt(f ** 2 + r_sq) - abs(f))
         # v4.14.1 (audit P2-6): dtype-aware unit-phase sentinel so the
         # ``xp.where`` doesn't pin lens_phase to complex128 via the
         # ``1.0 + 0.0j`` complex128 literal (matches v4.13.2 canonical
@@ -186,6 +246,65 @@ def apply_thin_lens(
             valid, lens_phase_valid,
             xp.ones((), dtype=lens_phase_valid.dtype)
         )
+
+    elif lens_model == 'stigmatic':
+        # v5.25.0 (thin-lens audit 2026-07-18, change 1): the
+        # conjugate-matched EXACT ideal element.  A stigmatic element
+        # mapping incoming curvature R_in to outgoing R_out applies
+        # ``phi = k * (S(R_out) - S(R_in))`` with the exact signed
+        # spherical-wave phase ``S(R) = sign(R)*(sqrt(r**2+R**2)-|R|)``
+        # (R > 0 diverging; S(inf) = 0).  Quadratic part = the lens
+        # equation -k r**2/2f; quartic part = -k r**4/8 *
+        # (1/R_out**3 - 1/R_in**3) -- the term the 'paraxial' model
+        # omits entirely and 'nonparaxial' only gets right at infinite
+        # conjugates.  Proven on the 121 six-group chain: exact-ASM +
+        # stigmatic images at the analytic waist with EE(6um) = 99.9%
+        # and no pedestal, where paraxial x exact-ASM left +11.9 rad of
+        # fictitious spherical aberration.
+        if conjugates is None:
+            R_in = np.inf
+            R_out_given = None
+        elif np.isscalar(conjugates):
+            R_in = float(conjugates)
+            R_out_given = None
+        else:
+            _pair = tuple(conjugates)
+            if len(_pair) == 1:
+                R_in, R_out_given = float(_pair[0]), None
+            elif len(_pair) == 2:
+                R_in, R_out_given = float(_pair[0]), float(_pair[1])
+            else:
+                raise ValueError(
+                    "conjugates must be R_in or (R_in, R_out); got "
+                    f"{conjugates!r}")
+        if R_in == 0 or (R_out_given is not None and R_out_given == 0):
+            raise ValueError(
+                "stigmatic conjugates must be nonzero (R = 0 is a point "
+                "ON the element); got "
+                f"R_in={R_in!r}, R_out={R_out_given!r}")
+        if R_out_given is not None:
+            R_out = R_out_given
+        else:
+            # Lens equation on signed curvatures: 1/R_out = 1/R_in - 1/f.
+            inv_out = (0.0 if np.isinf(R_in) else 1.0 / R_in) - 1.0 / f
+            R_out = np.inf if inv_out == 0.0 else 1.0 / inv_out
+
+        def _sphere_phase(R):
+            # Exact signed spherical-wave phase S(R); 0 for R = +/-inf.
+            if np.isinf(R):
+                return None                      # contributes nothing
+            return np.sign(R) * k * (xp.sqrt(r_sq + R ** 2) - abs(R))
+
+        S_out = _sphere_phase(R_out)
+        S_in = _sphere_phase(R_in)
+        if S_out is None and S_in is None:
+            lens_phase = xp.ones_like(E_in)
+        elif S_in is None:
+            lens_phase = xp.exp(1j * S_out)
+        elif S_out is None:
+            lens_phase = xp.exp(-1j * S_in)
+        else:
+            lens_phase = xp.exp(1j * (S_out - S_in))
 
     elif lens_model == 'local_only':
         # Pure local focusing: the standard decentered quadratic minus the
@@ -197,8 +316,15 @@ def apply_thin_lens(
     else:
         raise ValueError(
             f"Unknown lens_model: {lens_model!r}. "
-            f"Choose from 'paraxial', 'nonparaxial', 'aplanatic', 'local_only'."
+            f"Choose from 'paraxial', 'nonparaxial', 'aplanatic', "
+            f"'stigmatic', 'local_only'."
         )
+
+    if conjugates is not None and lens_model != 'stigmatic':
+        raise ValueError(
+            f"conjugates= is only meaningful for lens_model='stigmatic' "
+            f"(got lens_model={lens_model!r}); a silently-ignored "
+            f"conjugates would look like a working stigmatic element.")
 
     # v4.13.2 (audit C-P1-5): coerce the phase mask to E_in's dtype so
     # a complex64 input stays complex64.  ``xp.exp(1j * <float64
