@@ -2352,6 +2352,51 @@ def apply_real_lens_traced(
     final.y = final.y + final.M * t_to_vertex
     final.z = np.zeros_like(final.z)
 
+    # ---- v5.25.0 (hammer audit H3): exit-NA Nyquist guard --------------
+    # The docstring's critical-sampling rule (dx <= lambda*f/aperture) was
+    # documented but never ENFORCED, and violating it is silent: the exit
+    # converging wavefront exceeds grid Nyquist (|sin theta| > lambda/2dx)
+    # beyond some radius, the aliased annulus folds to WRONG positions,
+    # and r^2-weighted far-halo metrics (r2m) read low while EE50/EE80
+    # stay plausible -- measured on the dual-oracle f/5 singlet: r2m 40.9
+    # vs 65.0 um at dx = 2.24x the limit, fully recovered (64.77, 99.7%)
+    # at dx inside the limit.  Guard: the exact per-ray exit direction
+    # cosines are already in hand; compare the beam's exit NA against the
+    # grid Nyquist angle.  Amplitude-aware: only rays carrying input
+    # amplitude >= e^-4 of peak count (a Gaussian's 99.97%-energy disc),
+    # so zero-energy aperture-edge rays cannot over-fire the guard.
+    # Policy: warn (RuntimeWarning) unless on_undersample == 'silent'.
+    # Deliberately NOT an error even under on_undersample='error': the
+    # returned field's core metrics remain valid; only far-halo moments
+    # degrade -- erroring would break legitimate coarse-dx workflows.
+    _ray_ix = np.clip(np.rint(xs_in / dx + E_in.shape[1] / 2).astype(int),
+                      0, E_in.shape[1] - 1)
+    _dy_eff = dy if dy is not None else dx
+    _ray_iy = np.clip(np.rint(xs_in / _dy_eff + E_in.shape[0] / 2).astype(int),
+                      0, E_in.shape[0] - 1)
+    _amp = np.abs(E_in)[np.ix_(_ray_iy, _ray_ix)]      # (n_launch, n_launch)
+    _sig = (_amp >= np.exp(-4.0) * _amp.max()).ravel() & final.alive
+    if _sig.any():
+        _na_exit = float(np.sqrt(final.L[_sig] ** 2
+                                 + final.M[_sig] ** 2).max())
+        _dx_eff = max(dx, _dy_eff)
+        if _na_exit > 0 and _dx_eff > wavelength / (2.0 * _na_exit):
+            _dx_need = wavelength / (2.0 * _na_exit)
+            if on_undersample != 'silent':
+                import warnings
+                warnings.warn(
+                    f'apply_real_lens_traced: the exit beam converges at '
+                    f'NA_exit={_na_exit:.4f}, so the exit wavefront needs '
+                    f'dx <= lambda/(2*NA_exit) = {_dx_need*1e6:.2f} um but '
+                    f'the grid has dx = {_dx_eff*1e6:.2f} um.  The '
+                    f'beyond-Nyquist annulus of the exit phase ALIASES: '
+                    f'far-halo energy lands at wrong radii, so r^2-weighted '
+                    f'spot metrics (r2m / second moments) read low while '
+                    f'EE50/EE80 stay plausible.  Use a finer grid (dx <= '
+                    f'{_dx_need*1e6:.2f} um) for halo-faithful results, or '
+                    f'pass on_undersample="silent" to suppress.',
+                    RuntimeWarning, stacklevel=2)
+
     # Reshape final.x, final.y, final.opd onto the regular ENTRANCE
     # grid.  Dead rays would break RectBivariateSpline (which requires
     # strictly regular data); vignetting is rare for normal lenses but
