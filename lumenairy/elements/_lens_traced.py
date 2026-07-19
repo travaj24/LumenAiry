@@ -3605,6 +3605,18 @@ class PreparedTracedLens:
     which drops the trace/fit/Newton stages from optimizer / tolerancing /
     multi-field loops entirely (>=2x per call).  Mirrors the library's
     ``PreparedRCWA2D`` / ``PreparedPMM2D`` precedent.
+
+    Memory footprint
+    ----------------
+    The retained payload is the ``screen`` -- a single ``(N, N)`` complex128
+    array of ``N*N*16`` bytes (**64 MB at N=2048, 256 MB at N=4096**); the
+    other slots are tiny scalars / the prescription dict.  A prepared lens is
+    a user-held object (not a module cache), so it is freed by normal garbage
+    collection when it goes out of scope.  In a long-running optimizer /
+    tolerancing loop that builds many prepared screens, call
+    :meth:`release` to drop the screen deterministically (or reuse one prepared
+    object).  There is no library-wide registry entry for these -- their
+    lifetime is the caller's to manage.
     """
 
     __slots__ = ('screen', 'prescription', 'wavelength', 'dx', 'bandlimit',
@@ -3615,8 +3627,25 @@ class PreparedTracedLens:
         for k, v in kw.items():
             setattr(self, k, v)
 
+    def release(self) -> None:
+        """Free the precomputed ``screen`` (the ``N*N*16``-byte complex128
+        array: 64 MB at N=2048, 256 MB at N=4096).
+
+        After release the prepared lens can no longer be called (a subsequent
+        ``prepared(E_in)`` raises).  Use in long-running optimizer / tolerancing
+        loops to drop a prepared screen you are finished with, without waiting
+        for garbage collection.  Idempotent.  ``clear`` is an alias.
+        """
+        self.screen = None
+
+    clear = release
+
     def __call__(self, E_in: np.ndarray) -> np.ndarray:
         """Apply the prepared traced lens to ``E_in`` (shape must match N)."""
+        if self.screen is None:
+            raise RuntimeError(
+                "PreparedTracedLens: the screen has been released (.release()/"
+                ".clear() was called); rebuild it with prepare_real_lens_traced.")
         E_in = np.asarray(E_in)
         if E_in.shape != self.screen.shape:
             raise ValueError(

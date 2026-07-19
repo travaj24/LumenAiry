@@ -632,7 +632,12 @@ def _pick_ray_transfer(surfaces, exact):
 # geometry, not on the input field), so a repeated propagation through the SAME
 # optics -- e.g. a design / optimization loop that varies only the field -- reuses
 # it.  Opt-in (``cache_trace``); bounded, FIFO-evicted; each entry is the coarse
-# swarm (~ full swarm / coarse_stride^2), so keep the bound small.
+# swarm (~ full swarm / coarse_stride^2), so keep the bound small.  MEASURED
+# footprint (G1 cache audit, 2026-07-19; per-momentum grids (7, N//stride,
+# N//stride) float64 + bool alive, Np momenta): at coarse_stride=3, Np=49 the
+# entry is ~311 MB at N=2048 and ~1.25 GB at N=4096, so the FIFO bound of 2 caps
+# the retained coarse cache at ~0.6 GB / ~2.5 GB respectively.  Drain any time
+# with clear_coarse_trace_cache() / clear_asm_caches() (registered below).
 _COARSE_CACHE: Dict[Any, Any] = {}
 _COARSE_CACHE_MAX = 2
 # v5.24.4 (audit hygiene): thread-safety lock for ``_COARSE_CACHE``.  The
@@ -2164,6 +2169,43 @@ def _tilt_dispersion(E_in, dx, dyg, wavelength, na):
 _ABERRATION_MAX_RAD = 2.0   # sag-screen wavefront-error budget (rad); see below
 
 
+def _input_marginal_slope(E, a2, X, Y, dx, dyg, wavelength, r_beam):
+    """Signed paraxial marginal-ray slope ``u_in`` (rad) of the input carrier at
+    the first surface, from a least-squares fit of the field's local radial
+    wavevector ``u_r(rho) = (1/R) * rho``::
+
+        1/R  = sum(a2 * (px*X + py*Y)) / sum(a2 * (X^2 + Y^2)),   u_in = r_beam / R
+
+    with ``px, py`` the wrapping-safe per-pixel direction cosines
+    (``angle(E_i * conj(E_{i-1})) / (k*d)``).  Returns ``0.0`` **exactly** for a
+    real / globally-phased (flat-wavefront / collimated) field, so a collimated
+    input leaves the paraxial height trace at ``h = r_beam`` -- byte-identical to
+    the historical "input beam radius at every surface" for a single powered
+    surface.  Handles a converging (``u_in < 0``) or diverging (``u_in > 0``)
+    input so the marginal heights inside the lens are correct (G1 item 1c).
+
+    The wrapping-safe per-pixel increments require the input carrier fringe to be
+    RESOLVED by the grid (``dx < lambda*R/r`` at the beam edge); on a grid too
+    coarse to sample a strongly curved carrier the increments alias and ``u_in``
+    collapses toward 0 -- i.e. it falls back to the collimated (``h = r_beam``)
+    trace, the CONSERVATIVE (never-under-trips) behaviour, so an under-sampled
+    curved input is safe (routed to a ray member on the r_beam estimate), just not
+    refined.
+    """
+    if not np.iscomplexobj(E):
+        return 0.0
+    k = 2.0 * np.pi / float(wavelength)
+    px = np.zeros_like(a2)
+    py = np.zeros_like(a2)
+    px[:, :-1] = np.angle(E[:, 1:] * np.conj(E[:, :-1])) / (k * float(dx))
+    py[:-1, :] = np.angle(E[1:, :] * np.conj(E[:-1, :])) / (k * float(dyg))
+    den = float(np.sum(a2 * (X * X + Y * Y)))
+    if den <= 0.0:
+        return 0.0
+    inv_R = float(np.sum(a2 * (px * X + py * Y))) / den
+    return float(r_beam * inv_R)
+
+
 def _sag_screen_aberration_rad(E_in, dx, dyg, prescription, wavelength):
     """Cheap estimate (radians of wavefront) of the analytic sag-screen model's
     leading spherical-aberration error over the whole prescription.
@@ -2171,24 +2213,49 @@ def _sag_screen_aberration_rad(E_in, dx, dyg, prescription, wavelength):
     Uses the audit's own error scaling -- the per-surface marginal-ray obliquity
     term ``k * |sag(r)| * theta^2`` with ``sag(r) = r^2/(2R)`` and ``theta = r/R``
     the local surface-normal tilt at the beam marginal radius ``r`` -- i.e.
-    ``k * r^4 / (2 |R|^3)`` per powered surface (the leading ``r^4`` wavefront term
-    the plane-projection phase screen gets wrong; H2).  ``r`` is the input field's
-    1/e^2 radius (``sqrt(2 * <r^2>)`` of the intensity), constant across a thin
-    element and a conservative marginal proxy for a relay.  Magnitudes are summed
-    over surfaces (a symmetric biconvex's two surfaces contribute the SAME sign of
-    physical spherical aberration; signed cancellation of the |sag|*theta^2
-    obliquity magnitude would falsely exonerate it -- the H1 sign trap).
+    ``k * r^4 / (2 |R|^3)`` per powered *spherical* surface (the leading ``r^4``
+    wavefront term the plane-projection phase screen gets wrong; H2).  Magnitudes
+    are summed over surfaces (a symmetric biconvex's two surfaces contribute the
+    SAME sign of physical spherical aberration; signed cancellation of the
+    ``|sag|*theta^2`` obliquity magnitude would falsely exonerate it -- the H1
+    sign trap).
+
+    G1 generality extensions (docs/audit_real_lens_hammer_2026_07_19.md follow-up):
+
+    * **Conic / aspheric surfaces (item 1a).**  The spherical ``r^4`` SAG
+      coefficient ``1/(8R^3)`` in the obliquity term is generalized to the TRUE
+      even-conic + aspheric coefficient ``c4 = (1+k)/(8R^3) + A4`` (A4 = the ``r^4``
+      aspheric term).  ``k * r^4 / (2|R|^3) == k * r^4 * 4 * |1/(8R^3)|``, so a
+      plain sphere (``k == 0``, no ``A4``) is byte-identical; a conic / asphere
+      shifts the estimate to match its actual leading ``r^4`` sag.
+
+    * **Multi-element per-surface height (item 1b).**  ``r`` is no longer the
+      INPUT beam radius at every surface; a cheap paraxial marginal-ray y-nu trace
+      (refraction + transfer) gives the marginal height ``h`` AT each surface, so a
+      doublet / relay uses the converging beam's true per-surface radius.  For a
+      single powered surface ``h == r_beam`` (unchanged).
+
+    * **Converging / diverging input (item 1c).**  The marginal ray starts at the
+      measured signed input slope ``u_in`` (:func:`_input_marginal_slope`), 0 for
+      a collimated field, so the height trace is correct for a curved-wavefront
+      input.
+
+    ``r_beam`` is the input field's 1/e^2 radius (``sqrt(2 * <r^2>)``).  NOTE this
+    remains a CONSERVATIVE per-surface curvature x beam-size bound on the
+    sag-screen MODEL error (an obliquity upper bound), not a faithful system-SA
+    estimate: it over-trips (routes to the accurate ray members, never wrong) on a
+    well-corrected fast element -- see the G1 audit doc.
 
     Calibrated against the dual-oracle f/5 biconvex (R = +/-51.68 mm, w0 = 5 mm,
-    lambda = 1.31 um): the sum is ~21.7 rad -- far above the ~2 rad budget, so the
+    lambda = 1.31 um): the sum is ~20 rad -- far above the ~2 rad budget, so the
     router steers it off 'phase_screen' -- while the benign small-beam regime
-    (w0 = 0.5 mm) sums ~0.002 rad and a low-NA well-corrected singlet ~0.1 rad,
-    both well under budget (so the low-NA phase-screen dispatch stays unchanged).
+    (w0 = 0.5 mm) sums ~0.002 rad, well under budget.
 
     Returns 0.0 (never trips the gate) on an empty/zero field or a malformed
     prescription -- the same defensive fallback as :func:`_default_p_max`.
     """
     try:
+        from ..glass import get_glass_index
         from ..raytrace import surfaces_from_prescription
         E = np.asarray(E_in)
         a2 = np.abs(E) ** 2
@@ -2202,12 +2269,41 @@ def _sag_screen_aberration_rad(E_in, dx, dyg, prescription, wavelength):
         r_rms2 = float(np.sum(a2 * (X ** 2 + Y ** 2)) / tot)
         r_beam = math.sqrt(max(2.0 * r_rms2, 0.0))      # 1/e^2 radius (Gaussian)
         k = 2.0 * np.pi / float(wavelength)
+        wl = float(wavelength)
+        # Paraxial marginal-ray y-nu trace: start at the measured input slope.
+        u_in = _input_marginal_slope(E, a2, X, Y, dx, dyg, wl, r_beam)
+        surfs = list(surfaces_from_prescription(prescription))
+        h = r_beam
+        u = u_in
         total = 0.0
-        for s in surfaces_from_prescription(prescription):
+        n_last = len(surfs) - 1
+        for i, s in enumerate(surfs):
             R = float(getattr(s, 'radius', np.inf))
-            if not np.isfinite(R) or R == 0.0:
-                continue
-            total += k * r_beam ** 4 / (2.0 * abs(R) ** 3)
+            kc = float(getattr(s, 'conic', 0.0) or 0.0)
+            asph = getattr(s, 'aspheric_coeffs', None) or {}
+            A4 = float(asph.get(4, asph.get('4', 0.0)) or 0.0) if asph else 0.0
+            try:
+                n1 = float(get_glass_index(getattr(s, 'glass_before', 'air'), wl))
+                n2 = float(get_glass_index(getattr(s, 'glass_after', 'air'), wl))
+            except (ValueError, KeyError, LookupError, TypeError):
+                n1 = n2 = 1.0       # unknown glass: no paraxial bend (heights hold)
+            finite = np.isfinite(R) and R != 0.0
+            # Per-surface leading r^4 sag-screen error at the marginal height h.
+            # Spherical (k==0, no A4) uses the byte-identical historical form;
+            # a conic / asphere uses the true r^4 sag coefficient c4.
+            if finite and kc == 0.0 and A4 == 0.0:
+                total += k * h ** 4 / (2.0 * abs(R) ** 3)
+            elif finite:
+                c4 = (1.0 + kc) / (8.0 * R ** 3) + A4
+                total += k * h ** 4 * 4.0 * abs(c4)
+            elif A4 != 0.0:
+                total += k * h ** 4 * 4.0 * abs(A4)          # flat + r^4 asphere
+            # Paraxial refraction (n2 u2 = n1 u1 - h phi) + transfer to next surf.
+            phi = ((n2 - n1) / R) if finite else 0.0
+            if n2 != 0.0:
+                u = (n1 * u - h * phi) / n2
+            if i < n_last:
+                h = h + u * float(getattr(s, 'thickness', 0.0) or 0.0)
         return float(total)
     except (LookupError, TypeError, ValueError, AttributeError,
             ArithmeticError):

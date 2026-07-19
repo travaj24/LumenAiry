@@ -257,19 +257,20 @@ def test_zero_distance_identity():
     assert R_out == 30e-3 and dx_out == dx
 
 
-def test_focus_crossing_and_zero_carrier_raise():
+def test_zero_carrier_raises_but_focus_crossing_is_handled():
+    """R_carrier == 0 (the carrier's own focus) still raises; a focus CROSSING
+    is now auto-split (Task 2), not an error -- it returns a finite field with
+    a flipped diverging carrier."""
     N = 128
     dx = 5e-6
     env = _gauss_env(N, dx, 40e-6)
-    with pytest.raises(ValueError, match='focus'):
-        # converging R=-20mm stepped +25mm lands past the focus (R_out=+5mm,
-        # m<0): the scaled frame is singular
-        propagate_carrier_referenced(env, -20e-3, 25e-3, WL, dx)
-    with pytest.raises(ValueError, match='focus'):
-        # step exactly to the focus: R_out == 0
-        propagate_carrier_referenced(env, -20e-3, 20e-3, WL, dx)
     with pytest.raises(ValueError):
         propagate_carrier_referenced(env, 0.0, 5e-3, WL, dx)
+    # converging R=-20mm stepped +25mm crosses the focus (R_out=+5mm): handled.
+    out = propagate_carrier_referenced(env, -20e-3, 25e-3, WL, dx)
+    assert np.all(np.isfinite(np.asarray(out.env)))
+    assert out.R == pytest.approx(5e-3, rel=1e-12)      # flipped, diverging
+    assert out.dx > 0
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +401,120 @@ def test_traced_handoff_focuses_at_abcd_image():
     # best focus at the ABCD image (not the collimated focal plane), < 6%
     assert abs(z_bf - z_img) / z_img < 0.06
     assert ee_at(z_img) > ee_at(49.163e-3)        # beats the collimated BFL
+
+
+# ---------------------------------------------------------------------------
+# 8. focus crossing (Task 2): auto-split carrier -> waist ASM bridge -> carrier
+# ---------------------------------------------------------------------------
+def _analytic_windowed(w_true, window_r):
+    """Exact windowed r2m/EE80 of a Gaussian |E|^2 = exp(-2 r^2/w^2)."""
+    rr = np.linspace(0, window_r, 20001)
+    I = np.exp(-2 * rr ** 2 / w_true ** 2)
+    tot = np.trapezoid(I * rr, rr)
+    r2m = np.sqrt(np.trapezoid(I * rr ** 3, rr) / tot)
+    cum = np.array([np.trapezoid((I * rr)[:j + 1], rr[:j + 1])
+                    for j in range(0, rr.size, 40)]) / tot
+    rq = rr[::40]
+    return r2m, float(np.interp(0.8, cum, rq))
+
+
+def _radial_metrics(I, dx, window_r):
+    N = I.shape[0]
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    r = np.sqrt(X ** 2 + Y ** 2)
+    Iw = np.where(r <= window_r, I, 0.0)
+    tot = Iw.sum()
+    r2m = np.sqrt((Iw * r ** 2).sum() / tot)
+    order = np.argsort(r.ravel())
+    cs = np.cumsum(Iw.ravel()[order]) / tot
+    rs = r.ravel()[order]
+    ee80 = rs[min(int(np.searchsorted(cs, 0.8)), r.size - 1)]
+    return r2m, ee80
+
+
+# converging beam that focuses to a w0=4 um waist 30 mm downstream
+_W0_X = 4e-6
+_ZR_X = np.pi * _W0_X ** 2 / WL
+_ZF_X = 30e-3
+_RIN_X = -(_ZF_X + _ZR_X ** 2 / _ZF_X)             # ~ -30 mm, converging
+_WIN_X = _W0_X * np.sqrt(1 + (_ZF_X / _ZR_X) ** 2)  # input beam radius (~3.1 mm)
+
+
+@pytest.mark.parametrize('z_mm,label', [
+    (30.0, 'waist'), (35.0, 'just past'), (45.0, 'past'), (60.0, 'far past')])
+def test_focus_crossing_matches_analytic_gaussian(z_mm, label):
+    """A converging Gaussian (w0=4 um, R=-30 mm) propagated THROUGH its waist on
+    a MODEST N=2048 grid must match the exact analytic Gaussian (ABCD) width to
+    <1% windowed r2m/EE -- at the waist AND on both sides.  The single fine grid
+    that would be needed to sample both the 3 mm input beam and the 4 um waist
+    is why the carrier auto-split is required."""
+    N = 2048
+    dx = (8.0 * _WIN_X) / N                        # hold the beam to ~3 sigma
+    z = z_mm * 1e-3
+    env, R_out, dx_out = propagate_carrier_referenced(
+        _gauss_env(N, dx, _WIN_X), _RIN_X, z, WL, dx)
+    I = np.abs(np.asarray(env)) ** 2               # |full| == |env|
+    dz = z - _ZF_X
+    w_true = _W0_X * np.sqrt(1 + (dz / _ZR_X) ** 2)
+    window = 3.0 * w_true
+    r2m_c, ee80_c = _radial_metrics(I, dx_out, window)
+    r2m_a, ee80_a = _analytic_windowed(w_true, window)
+    assert abs(r2m_c - r2m_a) / r2m_a < 0.01, (
+        f"{label}: r2m {r2m_c*1e6:.3f} vs analytic {r2m_a*1e6:.3f}")
+    assert abs(ee80_c - ee80_a) / ee80_a < 0.01, (
+        f"{label}: EE80 {ee80_c*1e6:.3f} vs analytic {ee80_a*1e6:.3f}")
+    # past-focus carrier is DIVERGING (flipped through the waist)
+    if z > _ZF_X:
+        assert R_out > 0
+
+
+def test_focus_crossing_conserves_power():
+    """Total power (|env|^2 over the co-moving area element) is conserved across
+    the auto-split focus crossing."""
+    N = 2048
+    dx = (8.0 * _WIN_X) / N
+    env0 = _gauss_env(N, dx, _WIN_X)
+    p_in = (np.abs(env0) ** 2).sum() * dx ** 2
+    env, R_out, dx_out = propagate_carrier_referenced(env0, _RIN_X, 60e-3, WL, dx)
+    p_out = (np.abs(np.asarray(env)) ** 2).sum() * dx_out ** 2
+    assert abs(p_out - p_in) / p_in < 2e-3
+
+
+def test_focus_crossing_composition():
+    """A crossing leg composes: (carrier leg, no crossing) -> (leg that crosses
+    the focus) -> (carrier leg) equals a single crossing leg to the same plane
+    (the auto-split re-references a faithful diverging carrier)."""
+    N = 2048
+    dx = (8.0 * _WIN_X) / N
+    env0 = _gauss_env(N, dx, _WIN_X)
+    # 10 (no cross) -> 40 (crosses) -> 15 == single 65 mm crossing leg
+    e1, R1, d1 = propagate_carrier_referenced(env0, _RIN_X, 10e-3, WL, dx)
+    e2, R2, d2 = propagate_carrier_referenced(e1, R1, 40e-3, WL, d1)
+    e3, R3, d3 = propagate_carrier_referenced(e2, R2, 15e-3, WL, d2)
+    es, Rs, ds = propagate_carrier_referenced(env0, _RIN_X, 65e-3, WL, dx)
+    assert R3 == pytest.approx(Rs, rel=1e-9)
+    assert d3 == pytest.approx(ds, rel=1e-6)
+    win = 6.0 * (Rs * WL / (np.pi * _W0_X))         # generous window
+    r_comp, _ = _radial_metrics(np.abs(np.asarray(e3)) ** 2, d3, win)
+    r_sing, _ = _radial_metrics(np.abs(np.asarray(es)) ** 2, ds, win)
+    assert abs(r_comp - r_sing) / r_sing < 1e-3
+
+
+def test_near_focus_landing_fast_path_unchanged():
+    """A step landing comfortably away from focus (same sign, |m| ~ O(1)) takes
+    the byte-identical fast path -- the near-focus guard does NOT reroute it to
+    the bridge, so the result is the exact fast-step output.  Pins the
+    no-crossing contract."""
+    from lumenairy.propagators.carrier import _carrier_step_fast
+    N = 512
+    dx = 5e-6
+    env = _gauss_env(N, dx, 40e-6)
+    out = propagate_carrier_referenced(env, 30e-3, 40e-3, WL, dx)
+    ref = _carrier_step_fast(env, 30e-3, 40e-3, WL, dx, dx)
+    # byte-identical to the extracted fast step (i.e. no rerouting to bridge)
+    assert np.array_equal(np.asarray(out.env), np.asarray(ref.env))
+    assert out.R == ref.R and out.dx == ref.dx
 
 
 if __name__ == '__main__':

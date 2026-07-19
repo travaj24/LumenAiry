@@ -168,7 +168,22 @@ diverging-input real-surface class — see below):
   multi-emitter interference field (noisy per-pixel tilt) — decompose those
   per source.  At extreme finite conjugate (R_in → f, e.g. 60 mm) the frame
   completeness costs a few tenths of a % of power at a coarse `bpa`; it
-  recovers with a finer beamlet frame.  The world-frame machinery
+  recovers with a finer beamlet frame.  **G1 CORRECTION (2026-07-19):** that
+  "recovers with a finer frame" claim holds for a POSITIVE element only.  A
+  converging input RECONVERGED by a NEGATIVE element to a *near* real focus
+  (G1 M5: biconcave, R_in = -35 mm → real image ~108 mm) sheds ~6 % of power
+  that a finer frame does NOT recover -- power saturates at ~0.94 at the MAX
+  frame density (0.88 at bpa 128 → 0.94 at bpa ≥ 256 = step 1) and is
+  non-monotonic in `waist_factor` (overshoots to 1.16 at wf 2), i.e. a
+  frame-completeness/normalization floor for the negative-lens reconvergence
+  geometry, NOT a density knob.  The LAUNCH is still correct (focuses at the
+  ABCD image, EE ~ 0.999) and `normalize_output='power'` restores absolute
+  power exactly.  Power stays > 0.99 when the negative element's output is
+  gently diverging / virtual (M5 at the task's literal R_in = -60 mm: 0.9956)
+  and for a converging input through a POSITIVE element (0.998).  The doublet
+  M1 with a diverging input (R_in = +150 mm) conserves 0.998 and focuses at the
+  ABCD image.  A genuine frame-completeness fix for the negative-reconvergence
+  geometry is a G2 item.  The world-frame machinery
   (`world_output_plane`) was checked and is **orthogonal** — it re-references
   the OUTPUT plane for FOLDED systems and its focus finder itself assumes a
   collimated input, so it does not address the INPUT-carrier class.

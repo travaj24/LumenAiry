@@ -112,3 +112,138 @@ rotationally-symmetric envelope, use `apply_real_lens_traced` (validated to
 - **slow** (N=8192/dx=3 um): converged f/5 r2m in [58,72] with EE50/EE80
   matched, and the plano-convex split (42/127, ratio ~0.33) -- both against the
   stored dual-oracle numbers with provenance.
+
+## G1 NO-121 matrix measurement (2026-07-19, phase G1 item 3)
+
+`surface_model='displaced'` vs the extended Debye/Huygens oracle (`debye_oracle2.py`,
+conic + even-aspheric sag; self-checks to the spherical oracle at 0.000%),
+**COLLIMATED** input (displaced requires it), lambda = 1.31 um, converged /
+Nyquist-approached sampling.  This calibrates the G2 targets and proves/disproves
+**multi-element compounding** (M1).  r2m at the paraxial image (windowed).
+
+| case | geometry | w0 | N/dx | thin um | **displaced um** | Debye um | disp/Debye | thin/Debye |
+|---|---|---|---|---|---|---|---|---|
+| **M1** | **cemented doublet** (3 surf, BK7/F2-class) | 5 mm | 4096/5 um | 14.40 | **9.03** | 9.09 | **0.993** | 1.584 |
+| M2 | plano-convex asphere (k=-0.6, A4) | 4 mm | 4096/4 um | 46.97 | **20.80** | 21.06 | **0.987** | 2.230 |
+| M3 | steep meniscus n=1.7 | 3 mm | 4096/4 um | 66.80 | 26.95 | 39.18 | 0.688* | 1.705 |
+| M4 | fast biconvex (reduced w0) | 2 mm | 4096/3 um | 15.05 | **23.42** | 22.79 | **1.027** | 0.660 |
+| M5 | negative biconcave, COLLIMATED | 4 mm | 4096/5 um | n/a | n/a | n/a | n/a | n/a |
+
+KEY RESULTS:
+
+* **Multi-element compounding WORKS.** The cemented doublet M1 (3 surfaces, one
+  glass-glass interface) lands `disp/Debye = 0.993` -- the per-surface obliquity
+  fan compounds correctly across elements, where the thin screen is 58% high.
+  The aspheric M2 lands `0.987` (thin 2.23x high).  Displaced generalizes cleanly
+  to multi-element and conic/aspheric surfaces.
+* **M3 (\*) is a SAMPLING floor, not a model gap** -- the same exit-NA Nyquist
+  effect as hammer H3.  The steep meniscus has a higher exit NA than the paraxial
+  estimate; at the shown dx=4 um the r2m aliases LOW (26.95), and it climbs
+  monotonically to 34.04 (dx=3 um) and 36.30 (dx=2.2 um, `disp/Debye = 0.927` and
+  still rising) as dx tightens -- converging toward the Debye 39.18.  Displaced is
+  correct; the grid must satisfy `dx <= lambda/(2 NA_exit)`.
+* **M5 (negative lens) has a VIRTUAL image for a collimated input** (paraxial
+  image at -50.5 mm, upstream) -- no real downstream focus, so the r2m spot
+  comparison is inapplicable; and displaced *requires* a collimated input, so it
+  cannot be run on M5's own converging design input either.  Negative-lens /
+  finite-conjugate coverage is a G2 item (use `apply_real_lens_traced` /
+  `apply_real_lens_gbd` there).
+
+G2 target from this table: match the displaced `disp/Debye ~ 0.99` on the doublet
+and asphere at converged sampling, and extend coverage to the meniscus (tighter
+default sampling) and the negative-lens / finite-conjugate class the collimated
+obliquity fan cannot reach.
+
+## G2 Task 1 -- congruence-aware fan for NON-collimated illumination (2026-07-19)
+
+The pre-G2 displaced screen launched its per-surface obliquity fan **collimated**
+regardless of the input, so it was exact only for a collimated beam.  G2
+generalises the launch: the meridional fan now rides the **input congruence**,
+selected by a new `conjugate=` argument that mirrors `apply_real_lens_traced`'s
+`carrier` vocabulary.
+
+**API.** `apply_real_lens(..., surface_model='displaced', conjugate=<...>)`:
+
+* `None` (default) -- COLLIMATED.  Axial fan; **byte-identical** to the pre-G2
+  displaced screen (pinned: `test_conjugate_none_is_byte_identical_to_default_displaced`)
+  and to the whole G1 collimated matrix (M1 r2m 9.027, M2 20.797, ... reproduce
+  bit-for-bit -- `conjugate=None -> carrier_slope=None -> identical LUT`).
+* `float` R_in -- signed scalar conjugate (m); the ray at height `h` launches
+  with marginal slope `g=h/R_in`, unit direction `(1,g)/sqrt(1+g^2)` (the eikonal
+  ray normal to the paraxial spherical carrier).
+* `'auto'` -- fit a low-order polynomial carrier from `E_in` (reuses
+  `_compute_carrier`) and launch along its meridional slope.
+* `ndarray` -- an explicit input wavefront.
+
+The wave field `E_in` already carries the input curvature in its own phase;
+`conjugate` **only** sets the per-surface obliquity incidence (it adds no
+reference phase and does not touch `E_in`).  The screen is field-independent
+given the conjugate, so the `None`/scalar LUTs are cached (bounded FIFO, max 8,
+registered as `displaced_cos_luts` with the central registry -- G1 cache
+conventions; `'auto'`/ndarray rebuild).  `conjugate` with `surface_model='thin'`
+raises (it is meaningless there).
+
+**Oracle.** For an aberrated finite-conjugate spot the exact **geometric
+transverse-ray-aberration spot** (a meridional ray fan launched along the same
+congruence, binned by image-plane height, Gaussian-apodized -- `debye_oracle3.py`,
+lumenairy-free) is the robust ground truth.  IMPORTANT NEGATIVE RESULT: the v2
+**ring-Huygens diffraction sum is BROKEN for a non-collimated congruence** -- it
+mis-weights the exit-pupil ring measure (`h*dh` entrance vs `ys*dys` exit; equal
+only when `ys~h`, i.e. collimated), reading ~230 um even at w0=0.5 mm where the
+true spot is the ~56 um diffraction limit (the congruence and traced models both
+nail ~57/66 um).  The geometric spot and the Gaussian diffraction limit (ABCD)
+together set the truth; where aberration dominates (large beam) the geometric
+spot governs.
+
+**Measured envelope (geometric-oracle EE80, `apply_real_lens` at the paraxial
+image, dx Nyquist-approached):**
+
+| case | element | R_in | w0 | thin | disp collim | **disp congr** | geo oracle | congr/geo | collim/geo |
+|---|---|---|---|---|---|---|---|---|---|
+| M1 | **cemented doublet** | +150 mm | 8 mm | 60.0 | 15.8 | **120.1** | 145.5 | **0.825** | 0.109 |
+| M6 | f/5 singlet | +150 mm | 5 mm | 30.3 | 61.3 | **54.3** | 61.2 | **0.888** | 1.001 |
+| M6 | f/5 singlet | +150 mm | 3 mm | 12.4 | 16.6 | **15.5** | 13.1 | **1.18** | 1.27 |
+| M5 | negative, REAL focus | -35 mm | 4 mm | 18.5 | 39.2 | **61.1** | 121.6 | **0.502** | 0.322 |
+| M5 | negative, VIRTUAL (v) | -60 mm | 4 mm | -- | 105.1 | **103.0** | 177.6 | **0.580** | 0.592 |
+
+((v) M5 R_in=-60 mm: the negative lens over-diverges the converging input to a
+VIRTUAL image ~-308 mm upstream -- no real downstream focus; measured by ASM
+back-propagation of the exit field vs the geometric oracle back-extended to the
+same virtual plane, `r2m` not EE80.  Numbers in um.)
+
+KEY RESULTS:
+
+* **The congruence fan is DECISIVE on the compounding doublet (M1).**  With a
+  diverging input the COLLIMATED fan applies the wrong second/third-surface
+  obliquity, which spuriously "corrects" the spot to `0.109` of the true
+  geometric caustic (8x too small); the CONGRUENCE fan tracks it to `0.825`.
+  This is the fail-before/pass-after headline
+  (`test_congruence_beats_collimated_on_doublet`).
+* **Material improvement on the negative-lens real focus (M5, R_in=-35):**
+  `0.502` vs collimated `0.322` -- the congruence fan reaches the finite-conjugate
+  class the collimated fan structurally could not (closes the G1 M5 gap).
+* **On SINGLE-surface-pair elements (M6 singlet, M5 virtual) the collimated vs
+  congruence obliquity difference is small** (one air-glass-air pair, little to
+  compound), so the two are comparable; the congruence fan is the principled
+  choice and lands within ~11% of the oracle on the moderate M6 case
+  (EE80 0.888).
+* **Residual floor.**  At EXTREME finite-conjugate aberration (M5 real, and the
+  large-beam tails) the phase-screen family retains a walk-off floor -- it
+  captures ~50-90% of the pure-geometric caustic RMS -- because the screen
+  imprints OPD at the straight-through grid position (no transverse ray
+  displacement).  This is the SAME structural H2 ceiling the collimated case has,
+  NOT introduced by the congruence generalisation; for absolute fidelity on a
+  strongly-aberrated finite-conjugate beam use `apply_real_lens_traced` (per-pixel
+  OPL) -- though note that traced itself over-blurs a strongly-diverging *large*
+  beam (w0=5 mm, R_in=+150 mm: 336 um vs geometric 61 um), so the congruence
+  displaced screen is the better model in exactly that regime.
+
+**Sampling** is unchanged from the collimated case: the exit converging wavefront
+must satisfy `dx <= lambda/(2 NA_exit)` (H3) or the windowed r2m aliases low; and
+the r2m of a heavily-aberrated spot is r^2-tail-dominated (EE curves are the
+robust cross-tool metric -- hammer method lesson).
+
+**Tests:** `tests/unit/test_g2_displaced_congruence.py` (byte-identical collimated
+pin; thin+conjugate raises; scalar changes the screen; auto reproduces the scalar
+screen for a matched diverging Gaussian; LUT cache bounded+registered; the doublet
+headline; and a slow singlet within-envelope check).

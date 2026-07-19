@@ -238,6 +238,18 @@ def apply_real_lens_gbd(
         conjugate) image rather than collapsing to the collimated focal plane
         and shedding frame energy.  ``True`` / ``False`` force the Husimi /
         axial launch explicitly.
+
+        Envelope (G1, 2026-07-19): power conservation > 0.99 for a diverging
+        input (any lens), a converging input through a POSITIVE lens, and a
+        multi-element diverging chain (doublet).  A converging input
+        RECONVERGED by a NEGATIVE lens to a *near* real focus is a
+        frame-completeness EDGE: the launch is still correct (focuses at the
+        ABCD image) but the beamlet frame sheds a few percent of power that a
+        finer frame does NOT recover (it saturates at the maximum density, ~0.94
+        for the G1 M5 biconcave at R_in=-35mm).  A negative element also needs a
+        finer ``beamlets_per_aperture`` than a positive one to tile its
+        diverging exit.  For absolute power in that regime pass
+        ``normalize_output='power'`` (restores it exactly).
     normalize_output :
         ``'none'`` (default, raw energy-conserving field) or ``'power'``
         (rescale so the output power equals the aperture-transmitted input
