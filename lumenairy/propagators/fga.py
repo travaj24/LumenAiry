@@ -369,6 +369,48 @@ def _det2(M: np.ndarray) -> np.ndarray:
     return M[..., 0, 0] * M[..., 1, 1] - M[..., 0, 1] * M[..., 1, 0]
 
 
+def _hk_prefactor(M, go, gi, kw2):
+    """Herman-Kluk prefactor ``a = sqrt(det Z)`` (continuous branch) for one
+    momentum column -- shared by the scalar, vector, and coarse FGA paths.
+
+    ``M`` is the (Nq, 4, 4) ray-transfer monodromy in SLOPE state
+    ``[x, y, u, v]``; ``go`` (Nq,) and ``gi`` (scalar) are the output / input
+    slope -> direction-cosine Jacobian factors the CALLER computes.  The
+    scalar-vs-2x2 Jacobian choice (audit S2-16) stays in the caller: this helper
+    only assembles the complex Herman-Kluk matrix
+    ``Z = (A + D) + i (kw2 * C - B / kw2)`` from the go/gi-scaled monodromy blocks
+    (``kw2 = k * w0**2``) and returns ``a = sqrt(det Z)`` on the branch that is
+    continuous through the identity (``Re a >= 0``)."""
+    A = M[:, 0:2, 0:2]
+    B = M[:, 0:2, 2:4] * gi
+    Cc = M[:, 2:4, 0:2] * go[:, None, None]
+    D = M[:, 2:4, 2:4] * (go[:, None, None] * gi)
+    Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
+    a = np.sqrt(_det2(Z))
+    a = np.where(a.real < 0, -a, a)
+    return a
+
+
+def _coeff_keep_mask(qbounds, Np, coeff_frac, chunk_peak):
+    """Global per-momentum-peak coeff-prune PRE-PASS (multi-lattice-chunk).
+
+    Under Nq (position-lattice) chunking the coefficient-prune decision needs the
+    GLOBAL per-momentum peak over ALL q -- a per-chunk peak under-counts and would
+    drop real momenta -- so a light analysis-only pre-pass accumulates it.
+    Returns the boolean keep-mask over the ``Np`` momenta, or ``None`` when
+    pruning is off (``coeff_frac <= 0``) or the lattice is a single chunk (the
+    caller then uses the cheaper running-max path).  ``chunk_peak(qs, qe)``
+    returns the (Np,) max coefficient magnitude over the q-chunk ``[qs, qe)``;
+    the scalar and vector paths differ only in that magnitude (single-channel
+    ``|c|`` vs combined ``sqrt(|cx|**2 + |cy|**2)``), which stays in the caller."""
+    if not (coeff_frac > 0.0 and len(qbounds) > 1):
+        return None
+    gpeak = np.zeros(Np)
+    for qs, qe in qbounds:
+        gpeak = np.maximum(gpeak, chunk_peak(qs, qe))
+    return gpeak >= coeff_frac * float(gpeak.max() + 1e-300)
+
+
 def _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step, p_max, n_p):
     qi = np.arange(0, Nx, dq_step)
     qj = np.arange(0, Ny, dq_step)
@@ -826,13 +868,7 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
         # tests/unit/test_audit_g06_perf.py::test_s2_16_*).
         go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
         gi = (1.0 + (pxi / pz) ** 2 + (pyi / pz) ** 2) ** 1.5
-        A = Mm[:, 0:2, 0:2]
-        B = Mm[:, 0:2, 2:4] * gi
-        Cc = Mm[:, 2:4, 0:2] * go[:, None, None]
-        D = Mm[:, 2:4, 2:4] * (go[:, None, None] * gi)
-        Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
-        a = np.sqrt(_det2(Z))
-        a = np.where(a.real < 0, -a, a)
+        a = _hk_prefactor(Mm, go, gi, kw2)
         return xv, yv, uxo, uyo, opd, a, np.asarray(dt.alive, bool)
 
     # ---- FIELD-INDEPENDENT coarse pre-trace (per-momentum coarse ray-data grids
@@ -1018,16 +1054,13 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     # momenta.  With >1 lattice chunk, a light analysis-only PRE-PASS accumulates
     # that global peak so the prune decision (and the field) matches the
     # un-chunked result to round-off.  Single chunk keeps the running-max path.
-    keep_mom = None
-    if coeff_frac > 0.0 and len(qbounds) > 1:
-        gpeak = np.zeros(Np)
-        for qs, qe in qbounds:
-            cc = (_gabor_coeff_sep(u0, qx[qs:qe], qy[qs:qe], px[:n_p], x0, y0,
-                                   dx, dyg, w0, k, Ag, nsig) if use_sep else
-                  _gabor_coeff(u0, qx[qs:qe], qy[qs:qe], px, py, x0, y0, dx, dyg,
-                               w0, k, Ag, nsig))
-            gpeak = np.maximum(gpeak, np.max(np.abs(cc), axis=0))
-        keep_mom = gpeak >= coeff_frac * float(gpeak.max() + 1e-300)
+    def _chunk_peak(qs, qe):
+        cc = (_gabor_coeff_sep(u0, qx[qs:qe], qy[qs:qe], px[:n_p], x0, y0,
+                               dx, dyg, w0, k, Ag, nsig) if use_sep else
+              _gabor_coeff(u0, qx[qs:qe], qy[qs:qe], px, py, x0, y0, dx, dyg,
+                           w0, k, Ag, nsig))
+        return np.max(np.abs(cc), axis=0)
+    keep_mom = _coeff_keep_mask(qbounds, Np, coeff_frac, _chunk_peak)
 
     outr = np.zeros((Ny, Nx))
     outi = np.zeros((Ny, Nx))
@@ -1088,13 +1121,7 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                 # S2-16).
                 go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5     # dp/du at output
                 gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5  # du/dp
-                A = M[:, 0:2, 0:2]
-                B = M[:, 0:2, 2:4] * gi
-                Cc = M[:, 2:4, 0:2] * go[:, None, None]
-                D = M[:, 2:4, 2:4] * (go[:, None, None] * gi)
-                Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
-                a = np.sqrt(_det2(Z))
-                a = np.where(a.real < 0, -a, a)               # continuous branch
+                a = _hk_prefactor(M, go, gi, kw2)             # continuous branch
                 invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
                 QX[:, j] = xv
                 QY[:, j] = yv
@@ -1367,14 +1394,10 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                              nsig))
 
     # combined-|cx,cy| global per-momentum peak pre-pass (see the scalar path)
-    keep_mom = None
-    if coeff_frac > 0.0 and len(qbounds) > 1:
-        gpeak = np.zeros(Np)
-        for qs, qe in qbounds:
-            cxc, cyc = _cxy(qx[qs:qe], qy[qs:qe], px, py, True)
-            gpeak = np.maximum(gpeak, np.max(
-                np.sqrt(np.abs(cxc) ** 2 + np.abs(cyc) ** 2), axis=0))
-        keep_mom = gpeak >= coeff_frac * float(gpeak.max() + 1e-300)
+    def _chunk_peak(qs, qe):
+        cxc, cyc = _cxy(qx[qs:qe], qy[qs:qe], px, py, True)
+        return np.max(np.sqrt(np.abs(cxc) ** 2 + np.abs(cyc) ** 2), axis=0)
+    keep_mom = _coeff_keep_mask(qbounds, Np, coeff_frac, _chunk_peak)
 
     exr = np.zeros((Ny, Nx))
     exi = np.zeros((Ny, Nx))
@@ -1444,13 +1467,7 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                 # S2-16).
                 go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
                 gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5
-                A = M[:, 0:2, 0:2]
-                B = M[:, 0:2, 2:4] * gi
-                Cc = M[:, 2:4, 0:2] * go[:, None, None]
-                D = M[:, 2:4, 2:4] * (go[:, None, None] * gi)
-                Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
-                a = np.sqrt(_det2(Z))
-                a = np.where(a.real < 0, -a, a)
+                a = _hk_prefactor(M, go, gi, kw2)
                 base = C * a * np.exp(1j * k * opd_tot)  # scalar beamlet weight
                 invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
                 QX[:, j] = xv

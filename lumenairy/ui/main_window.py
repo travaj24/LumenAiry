@@ -2285,6 +2285,10 @@ class MainWindow(QMainWindow):
         if not ok: return
         f, d = p['f'], p['dist']
         n = p.get('n', 1.517)
+        # Thick-lens-EXACT (audit S4-20): with the plano face R2=inf the
+        # thick-lens term (n-1)*t/(n*R1*R2) vanishes, so 1/f=(n-1)/R holds
+        # for ANY t -- this is a target radius, not a thin-lens seed to "fix"
+        # (contrast the biconvex R below, which IS a thin-lens approximation).
         R = f * (n - 1)
         t = p.get('t') or max(f * 0.04, 2)
         sd = p.get('sd') or f * 0.12

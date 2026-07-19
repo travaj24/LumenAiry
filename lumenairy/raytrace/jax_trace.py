@@ -46,6 +46,7 @@ import numpy as np
 
 from ..backend import JAX_AVAILABLE
 from ..glass import get_glass_index
+from ._conic_core import conic_sag, conic_sag_derivs, refract_snell
 
 # RT-6 (AUDIT_RAYTRACE_CORE_2026_07_08): the v4.16.1-4.16.3 high-NA
 # "paraxial transfer" RuntimeWarning has been RETIRED.  It was built on a
@@ -170,24 +171,17 @@ def _sag_value_jax(x, y, R_is_inf, R_safe, conic, asph_items):
         Conic constant.
     asph_items : tuple of (int, float)
         ``(power, coefficient)`` pairs for even aspheric terms.
+
+    S3-10: delegates to the backend-agnostic
+    :func:`raytrace._conic_core.conic_sag`.  The static ``R_is_inf`` /
+    ``R_safe`` inputs are folded back into the true radius (``inf`` when
+    flat) that the where-based shared core consumes -- byte-identical to
+    the former inline form for finite, infinite, and huge ``R`` (see
+    tests/unit/test_s3_10_conic_core_shared.py).
     """
     import jax.numpy as jnp
-    h_sq = x * x + y * y
-    if R_is_inf:
-        sag = jnp.zeros_like(h_sq)
-    else:
-        norm = (1.0 + conic) * h_sq / (R_safe * R_safe)
-        valid = norm < 0.9999
-        denom_arg = jnp.where(valid, 1.0 - norm, 0.01)
-        sag = jnp.where(
-            valid,
-            h_sq / (R_safe * (1.0 + jnp.sqrt(denom_arg))),
-            0.0,
-        )
-    for power, coeff in asph_items:
-        # Even powers only (h^4, h^6, ...).  h_sq^(power//2) == h^power.
-        sag = sag + coeff * h_sq ** (power // 2)
-    return sag
+    R = float('inf') if R_is_inf else R_safe
+    return conic_sag(x, y, R, conic, asph_items, xp=jnp)
 
 
 def _sag_derivatives_jax(x, y, R_is_inf, R_safe, conic, asph_items):
@@ -201,35 +195,14 @@ def _sag_derivatives_jax(x, y, R_is_inf, R_safe, conic, asph_items):
     ``zx = x / sqrt(R^2 - (1+k) h^2)`` (always positive), so refracted
     rays at concave conic/aspheric surfaces got the wrong transverse
     direction sign.  Mirror the NumPy form here.
+
+    S3-10: delegates to the backend-agnostic
+    :func:`raytrace._conic_core.conic_sag_derivs` (byte-identical to the
+    former inline form, verified in the shared-core test).
     """
     import jax.numpy as jnp
-    h_sq = x * x + y * y
-    if R_is_inf:
-        zx = jnp.zeros_like(h_sq)
-        zy = jnp.zeros_like(h_sq)
-    else:
-        denom = R_safe * R_safe - (1.0 + conic) * h_sq
-        denom_safe = jnp.where(denom > 1e-30, denom, 1e-30)
-        sd = jnp.sqrt(denom_safe)
-        # 4.10: NumPy reference uses dz/dh = h / (R · sqrt(1 - (1+k)h²/R²)),
-        # whose sign follows sign(R) -- positive for convex (R>0), negative
-        # for concave (R<0).  Pre-4.10 JAX form returned magnitude only,
-        # so concave conic/aspheric refraction gave the wrong transverse
-        # sign.  R_safe is a Python float (static for the trace), so
-        # R_sign is a build-time constant -- no gradient impact.
-        R_sign = 1.0 if R_safe >= 0 else -1.0
-        zx = R_sign * x / sd
-        zy = R_sign * y / sd
-    for power, coeff in asph_items:
-        # d/dx [a_n * h^n] = a_n * n * h^(n-2) * x
-        if power == 2:
-            zx = zx + 2.0 * coeff * x
-            zy = zy + 2.0 * coeff * y
-        else:
-            scale = coeff * power * h_sq ** ((power - 2) // 2)
-            zx = zx + scale * x
-            zy = zy + scale * y
-    return zx, zy
+    R = float('inf') if R_is_inf else R_safe
+    return conic_sag_derivs(x, y, R, conic, asph_items, xp=jnp)
 
 
 # ----------------------------------------------------------------------
@@ -403,26 +376,19 @@ def _refract_jax(state, R, conic, asph_items, n1, n2):
         ny = ny / nrm
         nz = nz / nrm
 
-    # Make normal point opposite to ray direction.
-    dot = state.L * nx + state.M * ny + state.N * nz
-    flip = dot > 0
-    nx = jnp.where(flip, -nx, nx)
-    ny = jnp.where(flip, -ny, ny)
-    nz = jnp.where(flip, -nz, nz)
-
+    # S3-10: orient the normal + apply vector Snell via the backend-
+    # agnostic shared core (raytrace._conic_core.refract_snell).  The
+    # injected ``tir_guard`` reproduces the gradient-safe double-where
+    # (set the radicand to 1 for TIR rays BEFORE the sqrt so jax.grad
+    # doesn't NaN-poison at the boundary), and ``eta_sq = eta ** 2``
+    # keeps this site's scalar-power form.  Forward values AND jax.grad
+    # are bit-identical to the former inline block (shared-core test).
     eta = n1 / n2
-    cos_i = -(state.L * nx + state.M * ny + state.N * nz)
-    sin2_t = eta ** 2 * (1.0 - cos_i ** 2)
-    tir = sin2_t > 1.0
-    # 4.10: double-where so jax.grad doesn't trip on sqrt(0) at the TIR
-    # boundary.  TIR rays are also masked to keep their incoming direction
-    # so the math-direction substitution doesn't bleed into the output.
-    sin2_t_safe = jnp.where(tir, 0.0, sin2_t)
-    cos_t = jnp.sqrt(jnp.maximum(1.0 - sin2_t_safe, 0.0))
-
-    Lt_r = eta * state.L + (eta * cos_i - cos_t) * nx
-    Mt_r = eta * state.M + (eta * cos_i - cos_t) * ny
-    Nt_r = eta * state.N + (eta * cos_i - cos_t) * nz
+    Lt_r, Mt_r, Nt_r, nx, ny, nz, _cos_i, _disc_r, tir = refract_snell(
+        state.L, state.M, state.N, nx, ny, nz, eta, eta ** 2,
+        sqrt=lambda z: jnp.sqrt(jnp.maximum(z, 0.0)),
+        where=jnp.where,
+        tir_guard=lambda t, d: jnp.where(t, 1.0, d))
 
     Lt = jnp.where(tir, state.L, Lt_r)
     Mt = jnp.where(tir, state.M, Mt_r)
@@ -1334,59 +1300,32 @@ def _sag_value_param(x, y, R, conic, asph_powers, asph_coeffs):
     Handles ``R = inf`` cleanly via the small-norm branch in
     ``jnp.where``: when |R| is very large (or +inf), the conic
     contribution collapses to ~0.
+
+    S3-10: delegates to the backend-agnostic
+    :func:`raytrace._conic_core.conic_sag`.  The differentiable
+    coefficient array is zipped with the static integer powers into the
+    ``(power, coeff)`` pairs the shared core consumes, so ``jax.grad``
+    still flows through the coefficients.  Byte-identical to the former
+    inline form (shared-core test).
     """
     import jax.numpy as jnp
-    h_sq = x * x + y * y
-    # Prevent NaN at R=inf: clip to a finite huge value, but the
-    # branch below collapses the sag toward 0 in that limit.
-    R_finite = jnp.where(jnp.isinf(R), 1e30, R)
-    R_finite = jnp.where(jnp.abs(R_finite) < 1e-30, 1e-30, R_finite)
-    norm = (1.0 + conic) * h_sq / (R_finite * R_finite)
-    valid = norm < 0.9999
-    denom_arg = jnp.where(valid, 1.0 - norm, 0.01)
-    conic_sag = jnp.where(
-        valid,
-        h_sq / (R_finite * (1.0 + jnp.sqrt(denom_arg))),
-        0.0,
-    )
-    # When R is inf or abs(R) > 1e15, treat as flat -> 0 conic sag.
-    is_flat = jnp.isinf(R) | (jnp.abs(R) > 1e15)
-    sag = jnp.where(is_flat, jnp.zeros_like(h_sq), conic_sag)
-    # Aspheric terms (even powers); coefficients may be JAX arrays.
-    for i, power in enumerate(asph_powers):
-        sag = sag + asph_coeffs[i] * h_sq ** (power // 2)
-    return sag
+    asph_items = tuple(
+        (int(power), asph_coeffs[i]) for i, power in enumerate(asph_powers))
+    return conic_sag(x, y, R, conic, asph_items, xp=jnp)
 
 
 def _sag_derivatives_param(x, y, R, conic, asph_powers, asph_coeffs):
-    """JAX-array-aware sag derivatives dz/dx, dz/dy."""
+    """JAX-array-aware sag derivatives dz/dx, dz/dy.
+
+    S3-10: delegates to the backend-agnostic
+    :func:`raytrace._conic_core.conic_sag_derivs` (byte-identical to the
+    former inline form; the ``sign(R)`` C-RT-3 fix and the differentiable
+    aspheric coefficients are preserved -- shared-core test).
+    """
     import jax.numpy as jnp
-    h_sq = x * x + y * y
-    R_finite = jnp.where(jnp.isinf(R), 1e30, R)
-    R_finite = jnp.where(jnp.abs(R_finite) < 1e-30, 1e-30, R_finite)
-    denom = R_finite * R_finite - (1.0 + conic) * h_sq
-    denom_safe = jnp.where(denom > 1e-30, denom, 1e-30)
-    sd = jnp.sqrt(denom_safe)
-    # 4.11.1: mirror the C-RT-3 fix in the static `_sag_derivatives_jax`
-    # twin -- sign(R) is required so concave (R<0) conic / aspheric
-    # surfaces get the correct transverse-normal direction.  Without
-    # this, ``trace_jax_with_params`` and ``fit_canonical_polynomials
-    # _jax`` refracted off concave surfaces in the wrong direction.
-    R_sign = jnp.where(R >= 0.0, 1.0, -1.0)
-    zx_conic = R_sign * x / sd
-    zy_conic = R_sign * y / sd
-    is_flat = jnp.isinf(R) | (jnp.abs(R) > 1e15)
-    zx = jnp.where(is_flat, jnp.zeros_like(x), zx_conic)
-    zy = jnp.where(is_flat, jnp.zeros_like(y), zy_conic)
-    for i, power in enumerate(asph_powers):
-        if power == 2:
-            zx = zx + 2.0 * asph_coeffs[i] * x
-            zy = zy + 2.0 * asph_coeffs[i] * y
-        else:
-            scale = asph_coeffs[i] * power * h_sq ** ((power - 2) // 2)
-            zx = zx + scale * x
-            zy = zy + scale * y
-    return zx, zy
+    asph_items = tuple(
+        (int(power), asph_coeffs[i]) for i, power in enumerate(asph_powers))
+    return conic_sag_derivs(x, y, R, conic, asph_items, xp=jnp)
 
 
 def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
@@ -1503,26 +1442,15 @@ def _refract_jax_param(state, R, conic, asph_powers, asph_coeffs, n1, n2):
     ny = ny / nrm
     nz = nz / nrm
 
-    # Make normal point opposite to ray direction.
-    dot = state.L * nx + state.M * ny + state.N * nz
-    flip = dot > 0
-    nx = jnp.where(flip, -nx, nx)
-    ny = jnp.where(flip, -ny, ny)
-    nz = jnp.where(flip, -nz, nz)
-
+    # S3-10: orient the normal + apply vector Snell via the backend-
+    # agnostic shared core (see the _refract_jax twin above for the
+    # tir_guard / eta_sq rationale).  Bit-identical forward + jax.grad.
     eta = n1 / n2
-    cos_i = -(state.L * nx + state.M * ny + state.N * nz)
-    sin2_t = eta ** 2 * (1.0 - cos_i ** 2)
-    tir = sin2_t > 1.0
-    # 4.10: double-where so jax.grad doesn't trip on sqrt(0) at the TIR
-    # boundary.  TIR rays are also masked to keep their incoming direction
-    # so the math-direction substitution doesn't bleed into the output.
-    sin2_t_safe = jnp.where(tir, 0.0, sin2_t)
-    cos_t = jnp.sqrt(jnp.maximum(1.0 - sin2_t_safe, 0.0))
-
-    Lt_r = eta * state.L + (eta * cos_i - cos_t) * nx
-    Mt_r = eta * state.M + (eta * cos_i - cos_t) * ny
-    Nt_r = eta * state.N + (eta * cos_i - cos_t) * nz
+    Lt_r, Mt_r, Nt_r, nx, ny, nz, _cos_i, _disc_r, tir = refract_snell(
+        state.L, state.M, state.N, nx, ny, nz, eta, eta ** 2,
+        sqrt=lambda z: jnp.sqrt(jnp.maximum(z, 0.0)),
+        where=jnp.where,
+        tir_guard=lambda t, d: jnp.where(t, 1.0, d))
 
     Lt = jnp.where(tir, state.L, Lt_r)
     Mt = jnp.where(tir, state.M, Mt_r)

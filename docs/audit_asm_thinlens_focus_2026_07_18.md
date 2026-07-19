@@ -81,6 +81,21 @@ Marechal criterion ~0.5 rad: both exp18 and exp19 ran with ~20x that. At 2w the 
 4. **No change to `angular_spectrum_propagate`** — again exonerated, now including 20-leg chains with negative legs.
 5. **Audit `apply_real_lens` separately**: the analytic (real-surface phase-screen) 8x8 runs show 6.3 um FWHM vs Zemax real-prescription POP 3.22 um — same 2x smell. Real surfaces + exact ASM SHOULD be near-ideal (the real design is corrected for real propagation), so the suspect is the per-surface thin-screen/sag-projection approximation (and/or vertex-plane conventions), NOT an "FFT pedestal". Until audited, treat analytic-chain absolute spot sizes/EE as suspect; crosstalk ratios are pessimistic (spots 2x too wide overlap neighbors 2x more).
 
+## The real-lens (analytic) sag-screen model: error quantified (follow-up, same day)
+
+The analytic model (`apply_real_lens`: per-surface phase screens + ASM) shows the same 2x smell on the 121 (6.3 um FWHM vs Zemax 3.22; best focus displaced +170-200 um; E<12 ~0.67 vs 0.99). A per-surface exact-refraction-vs-screen eikonal probe (meridional raytrace at each surface's ACTUAL beam w and conjugates from a q-trace through the real prescription, `sag_screen_probe.py`) gives, summed over the chain at the 1/e^2 ray:
+
+| screen model | sum a2*w^2 (defocus-like) | sum a4*w^4 (spherical) | at 2w |
+|---|---|---|---|
+| naive `-(n2-n1)*sag` projection | +0.20 rad | **+27.4 rad** | +438 rad |
+| `slant_correction=True` (BEST case: true local ray angles) | +1.80 rad | **+24.9 rad** | +398 rad |
+
+Dominant contributors: S4 (+13.5 rad), S25 (+8.7 rad), partially cancelled by S6/S24. The slant obliquity factor shuffles per-surface terms but cannot fix the underlying **transverse ray-displacement / plane-projection error** (the refracted ray exits at a different transverse position than the straight-through screen mapping assumes). ~25 rad of model spherochromatism fully explains the analytic chain's 2x broadening, its pedestal, AND its +170-200 um aberration-induced best-focus shift — the same *class* of artifact as the thin-lens mismatch, at a slightly larger magnitude, and again NOT a propagator/high-NA/FFT limitation.
+
+**Empirically CONFIRMED (exp21, analytic 1x1 no-DOE, production N=28672/dx0.9, conservation 0.9991):** at the nominal MSoP w=8.37 um with EE(3/6um)=10.2%/28.6%; at its best focus **+175 um** (matching the historical "+170-200 um focus misplacement" exactly): w=4.61 um, FWHM 5.75 um, EE3=29.0%, EE6=48.6% — versus the conjugate-stigmatic thin chain's 2.97-3.09 um / EE6~100% at dz=0 on the same production pipeline, and Zemax's 2.74 um. The real-lens sag-screen chain is aberrated by the *model*, exactly as the probe predicts.
+
+**Implication for the model hierarchy:** for the 121-class relay (beam NA <= 0.15, many corrected surfaces), per-surface *phase screens* — naive or slant-corrected — are structurally unable to reproduce a corrected design. Models that transport the exact ray congruence (traced per-pixel OPL with carrier, GBD/FGA beamlets) or a conjugate-matched ideal element (thin 'stigmatic') are required for absolute spot fidelity.
+
 ## Repro
 
 Scratchpad (session 2026-07-18): `phase0_abcd_na.py` (q-trace + residual table), `wave_matrix.py` (4f + 121 chain x 3 models), `wave_stigmatic.py` (the proof), `lens_model_minitest.py` (the two bugs), `zos_4f_v2.py` (ZOS-API POP 2.7360 um), `lp_oracle.py` / `poppy_oracle2.py`. Earlier single-lens isolation: `asm_headtohead.out`, `fresnel2.out`, `exactlens_fix.out`, `inputdx_scan.out`, `extent_scan.out`, `mft_fix.out`.

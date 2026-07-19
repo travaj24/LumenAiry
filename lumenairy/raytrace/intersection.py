@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ._conic_core import reflect_mirror, refract_snell
 from .surface import (
     RAY_APERTURE,
     RAY_MISSED_SURFACE,
@@ -298,34 +299,32 @@ def _refract(rays, surface, n1, n2):
     """
     nx, ny, nz = _surface_normal(rays.x, rays.y, surface)
 
-    # Ensure normal points into the incident medium (against the ray)
-    cos_i = rays.L * nx + rays.M * ny + rays.N * nz
-    flip = cos_i > 0
-    nx = np.where(flip, -nx, nx)
-    ny = np.where(flip, -ny, ny)
-    nz = np.where(flip, -nz, nz)
-    # cos_i = -(d · n̂) = |d · n_original|  (always positive)
-    cos_i = np.abs(cos_i)
-
-    # Snell's law: n1 * sin(theta_i) = n2 * sin(theta_t)
+    # S3-10: vector Snell law via the backend-agnostic shared core
+    # (raytrace._conic_core.refract_snell).  The core orients the normal
+    # against the ray and applies Snell's law; ``eta_sq = mu ** 2``
+    # preserves this site's scalar-power form (see the shared-core
+    # docstring), and the default (no-op) TIR guard + a clamping ``sqrt``
+    # reproduce the former ``cos_t = sqrt(max(1 - sin2_t, 0))`` exactly.
+    # The TIR mask ``disc_r < 0`` is bit-identical to the former
+    # ``sin2_t > 1`` (``disc_r = 1 - sin2_t`` is exact by Sterbenz near
+    # the boundary).  This helper never mutates ``rays``; the in-place
+    # alive / error-code / renormalise policy below is unchanged.
     mu = n1 / n2
-    sin2_t = mu ** 2 * (1.0 - cos_i ** 2)
+    Lp, Mp, Np, nx, ny, nz, _cos_i, _disc_r, tir = refract_snell(
+        rays.L, rays.M, rays.N, nx, ny, nz, mu, mu ** 2,
+        sqrt=lambda a: np.sqrt(np.maximum(a, 0.0)), where=np.where)
 
     # Total internal reflection check
-    tir = sin2_t > 1.0
     newly_tir = tir & rays.alive
     rays.alive = rays.alive & ~tir
     if newly_tir.any() and rays.error_code is not None:
         # First-failure-wins: RAY_TIR overwrites only RAY_OK entries.
         rays.error_code = np.where(newly_tir, RAY_TIR, rays.error_code)
 
-    cos_t = np.sqrt(np.maximum(1.0 - sin2_t, 0.0))
-
     # Refracted direction: d_t = mu * d_i + (mu * cos_i - cos_t) * n̂
-    factor = mu * cos_i - cos_t
-    rays.L = np.where(rays.alive, mu * rays.L + factor * nx, rays.L)
-    rays.M = np.where(rays.alive, mu * rays.M + factor * ny, rays.M)
-    rays.N = np.where(rays.alive, mu * rays.N + factor * nz, rays.N)
+    rays.L = np.where(rays.alive, Lp, rays.L)
+    rays.M = np.where(rays.alive, Mp, rays.M)
+    rays.N = np.where(rays.alive, Np, rays.N)
 
     # Renormalise.  If the direction vector magnitude collapsed to
     # zero (arithmetic fault: NaN-propagating refraction, degenerate
@@ -365,18 +364,16 @@ def _reflect(rays, surface):
     """
     nx, ny, nz = _surface_normal(rays.x, rays.y, surface)
 
-    # Ensure normal points into the incident medium (against the ray)
-    cos_i = rays.L * nx + rays.M * ny + rays.N * nz
-    flip = cos_i > 0
-    nx = np.where(flip, -nx, nx)
-    ny = np.where(flip, -ny, ny)
-    nz = np.where(flip, -nz, nz)
-    cos_i = np.abs(cos_i)
-
-    # Reflected direction: d_r = d_i + 2 * cos_i * n̂
-    rays.L = rays.L + 2.0 * cos_i * nx
-    rays.M = rays.M + 2.0 * cos_i * ny
-    rays.N = rays.N + 2.0 * cos_i * nz
+    # S3-10: vector reflection via the backend-agnostic shared core
+    # (raytrace._conic_core.reflect_mirror).  The core orients the
+    # normal against the ray and applies ``d_r = d_i + 2 cos_i n``; it
+    # never mutates ``rays``, so the in-place renormalise / degenerate
+    # policy below is unchanged.
+    Lp, Mp, Np, nx, ny, nz, _cos_i = reflect_mirror(
+        rays.L, rays.M, rays.N, nx, ny, nz, where=np.where)
+    rays.L = Lp
+    rays.M = Mp
+    rays.N = Np
 
     # Renormalise.  Flag degenerate rays as RAY_NAN rather than
     # silently promoting (0, 0, 0) to a unit vector.

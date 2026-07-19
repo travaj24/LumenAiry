@@ -44,6 +44,12 @@ class FocalLengthMerit(MeritTerm):
     for an afocal / collimator target.  There is no use case for
     ``target < 0`` (a virtual-image lens) -- pass the positive EFL
     instead and rely on ABCD sign conventions in the prescription.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): ``1.0`` for
+    ``target > 0`` (the contribution is already a dimensionless fractional
+    EFL error squared); ``dioptre^2`` (m^-2) for ``target == 0`` (the
+    afocal ``(1/efl)^2`` penalty) -- reference-less, so wrap with an
+    explicit ``NormalizedMerit(..., scale=)`` in the afocal case.
     """
 
     needs_wave = False
@@ -52,6 +58,9 @@ class FocalLengthMerit(MeritTerm):
     def __init__(self, target: float, weight: float = 1.0) -> None:
         self.target = float(target)
         self.weight = float(weight)
+        # S4-18/B3: dimensionless for a finite target; the afocal
+        # (1/efl)^2 penalty is dioptre^2 with no natural reference scale.
+        self.native_scale = 1.0 if self.target != 0.0 else None
 
     def evaluate(self, ctx: Any) -> float:
         efl = getattr(ctx, 'efl', float('nan'))
@@ -74,6 +83,10 @@ class BackFocalLengthMerit(MeritTerm):
 
     Same zero-target behaviour as :class:`FocalLengthMerit`: BFL ->
     infinity drives the merit toward zero, BFL -> 0 explodes it.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): as
+    :class:`FocalLengthMerit` -- ``1.0`` for ``target > 0``, ``dioptre^2``
+    (reference-less) for ``target == 0``.
     """
 
     needs_wave = False
@@ -82,6 +95,7 @@ class BackFocalLengthMerit(MeritTerm):
     def __init__(self, target: float, weight: float = 1.0) -> None:
         self.target = float(target)
         self.weight = float(weight)
+        self.native_scale = 1.0 if self.target != 0.0 else None
 
     def evaluate(self, ctx: Any) -> float:
         bfl = getattr(ctx, 'bfl', float('nan'))
@@ -99,6 +113,10 @@ class SphericalSeidelMerit(MeritTerm):
     """Minimise Seidel spherical aberration coefficient S_I.
 
     Fast, geometric-only term.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): ``S_I^2`` in the
+    units ``aberration_summary`` reports -- reference-less, so wrap with an
+    explicit ``NormalizedMerit(..., scale=)``.
     """
 
     needs_wave = False
@@ -125,10 +143,14 @@ class StrehlMerit(MeritTerm):
     """Penalise Strehl ratio below ``min_strehl``.
 
     ``contribution = weight * max(0, min_strehl - best_strehl)^2``
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): ``1.0`` --
+    the Strehl deficit is already dimensionless and O(1).
     """
 
     needs_wave = True
     name = 'Strehl'
+    native_scale = 1.0
 
     def __init__(self, min_strehl: float = 0.8, weight: float = 1.0) -> None:
         self.min_strehl = float(min_strehl)
@@ -167,10 +189,14 @@ class RMSWavefrontMerit(MeritTerm):
     slice; that is the real defocus-insensitive fix.  ``exclude_low_order``
     is documented here as a leading-OSA-index count, not a
     'piston/tilt/defocus' selector.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): ``1.0`` --
+    the RMS excess is in waves (dimensionless), O(1).
     """
 
     needs_wave = True
     name = 'RMSWavefront'
+    native_scale = 1.0
 
     def __init__(self, max_rms_waves: float = 0.07,
                  n_modes: int = 21,
@@ -190,7 +216,14 @@ class RMSWavefrontMerit(MeritTerm):
 
 
 class SpotSizeMerit(MeritTerm):
-    """Penalise RMS spot radius at best focus above a target."""
+    """Penalise RMS spot radius at best focus above a target.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): absolute
+    ``max_rms_radius^2`` [m^2] -- tiny (~1e-10 for a micron target), which
+    is exactly the family the audit flags as swamped in a mixed merit sum.
+    :class:`NormalizedMerit` auto-resolves this scale from the configured
+    ``max_rms_radius`` (so a spot at 2x the target contributes O(weight)).
+    """
 
     needs_wave = True
     name = 'SpotSize'
@@ -198,6 +231,9 @@ class SpotSizeMerit(MeritTerm):
     def __init__(self, max_rms_radius: float, weight: float = 1.0) -> None:
         self.max_rms_radius = float(max_rms_radius)
         self.weight = float(weight)
+        # S4-18/B3: the target radius squared is the natural scale.
+        self.native_scale = (self.max_rms_radius ** 2
+                             if self.max_rms_radius > 0.0 else None)
 
     def evaluate(self, ctx: Any) -> float:
         r = ctx.rms_radius_best
@@ -259,6 +295,8 @@ class MatchIdealThinLensMerit(MeritTerm):
 
     needs_wave = True
     name = 'MatchIdealThinLens'
+    # S4-18/B3 native scale: 1.0 (contribution is waves^2, dimensionless).
+    native_scale = 1.0
 
     def __init__(self, target_focal_length: float, weight: float = 1.0,
                  exclude_low_order: int = 1, n_modes: int = 21) -> None:
@@ -310,6 +348,11 @@ class MatchIdealThinLensMerit(MeritTerm):
 class MatchIdealSystemMerit(MeritTerm):
     """Match the real system's output field to that of an idealised
     thin-lens reference system.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): a field-match
+    residual whose magnitude depends on the chosen field metric and
+    normalization -- treated as reference-less, so wrap with an explicit
+    ``NormalizedMerit(..., scale=)``.
 
     Unlike :class:`MatchIdealThinLensMerit` -- which operates on the
     exit-pupil OPD of a single lens and compares it to a bare
@@ -819,6 +862,8 @@ class MatchTargetOPDMerit(MeritTerm):
 
     needs_wave = True
     name = 'MatchTargetOPD'
+    # S4-18/B3 native scale: 1.0 (contribution is waves^2, dimensionless).
+    native_scale = 1.0
 
     def __init__(self, target_opd: Union[np.ndarray, Callable],
                  weight: float = 1.0,
@@ -884,6 +929,9 @@ class ZernikeCoefficientMerit(MeritTerm):
 
     needs_wave = True
     name = 'ZernikeCoefficient'
+    # S4-18/B3 native scale: 1.0 (sum of (coeff_err/wavelength)^2 in
+    # waves^2, dimensionless).
+    native_scale = 1.0
 
     def __init__(self, targets: Dict[int, float],
                  weight: float = 1.0, n_modes: int = 21) -> None:
@@ -917,6 +965,11 @@ class LGAberrationMerit(MeritTerm):
     """Penalise specified Laguerre-Gaussian aberration-tensor channels
     via the closed-form modal asymptotic propagator (
     Section 7).
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): the summed
+    squared LG aberration-channel magnitude ``|L|^2`` (channel-native
+    units) -- reference-less, so wrap with an explicit
+    ``NormalizedMerit(..., scale=)``.
 
     Each entry ``L_{(p, ell), n}(s_2^img)`` of the LG aberration tensor
     is the projection of the system's leading-order asymptotic
@@ -1167,8 +1220,114 @@ class CallableMerit(MeritTerm):
         return self.weight * float(self.fn(ctx))
 
 
+class NormalizedMerit(MeritTerm):
+    """Opt-in scale-aware wrapper that rescales a merit term to a common
+    dimensionless scale.
+
+    v5.25 (audit S4-18 / B3): the built-in merit families evaluate on
+    WILDLY different native scales -- a focal-length penalty is
+    dimensionless (or dioptre^2 in the afocal case), a spot-size penalty
+    is absolute m^2 (~1e-10 for a micron spot), a thickness constraint is
+    m^2 (~1e-6 for a mm gap).  Summing them in one merit forces the user
+    to pre-compensate ~1e12 in the weights.  This wrapper divides a term's
+    contribution by a characteristic ``scale`` so every wrapped family
+    lands near ``O(weight)`` at its reference deviation::
+
+        contribution = inner.evaluate(ctx) / scale
+
+    **This is strictly OPT-IN.**  Unwrapped merit terms are byte-identical
+    to their historical behaviour (the ``design_optimize`` default path is
+    unchanged); wrapping is a deliberate choice that re-bases the weight
+    calibration onto the common dimensionless scale, so re-tune weights
+    when you adopt it.
+
+    Parameters
+    ----------
+    inner : MeritTerm
+        The merit term to rescale.
+    scale : float, optional
+        Positive divisor in the inner family's native squared units.  When
+        ``None`` (default) the wrapper reads ``inner.native_scale`` -- set
+        for the config-derived families (spot / thickness / BFL: the
+        target value squared) and the dimensionless families (== 1.0).
+        Families whose native scale is genuinely reference-less leave
+        ``native_scale = None`` and REQUIRE an explicit ``scale=``.
+
+    Native scales of the built-in families (the value to divide by):
+
+    ==============================  =========================================
+    family                          native scale
+    ==============================  =========================================
+    FocalLengthMerit(target>0)      1.0  (dimensionless fractional-EFL err^2)
+    FocalLengthMerit(target==0)     dioptre^2 -- reference-less, pass scale=
+    BackFocalLengthMerit            as FocalLengthMerit
+    StrehlMerit                     1.0  (dimensionless Strehl-deficit^2)
+    RMSWavefrontMerit               1.0  (waves^2)
+    MatchIdealThinLensMerit         1.0  (waves^2)
+    MatchTargetOPDMerit             1.0  (waves^2)
+    ZernikeCoefficientMerit         1.0  (waves^2, summed over targets)
+    MaxFNumberMerit                 1.0  (dimensionless f/# excess^2)
+    SpotSizeMerit                   max_rms_radius^2  [m^2]
+    MinThicknessMerit               min_thickness^2   [m^2]
+    MaxThicknessMerit               max_thickness^2   [m^2]
+    MinBackFocalLengthMerit         min_bfl^2         [m^2]
+    SphericalSeidelMerit            S_I^2 -- reference-less, pass scale=
+    ChromaticFocalShiftMerit        (delta EFL)^2 [m^2] -- pass scale=
+    LGAberrationMerit               |L|^2 -- reference-less, pass scale=
+    MatchIdealSystemMerit           field-residual -- reference-less, scale=
+    ==============================  =========================================
+
+    Notes
+    -----
+    ``needs_wave`` / ``needs_ray`` / ``weight`` are forwarded from
+    ``inner`` so the driver's wave/ray-leg gating is unchanged.  The
+    wrapper is a plain ``MeritTerm``: an ``isinstance``-based special-case
+    in the driver (the JAX-gradient routing, the ``MultiWavelengthMerit`` /
+    ``MultiFieldMerit`` / ``ToleranceAwareMerit`` propagator warning) does
+    NOT see through it, so wrap the leaf scalar merits rather than those
+    wrapper merits.
+    """
+
+    name = 'Normalized'
+
+    def __init__(self, inner: MeritTerm,
+                 scale: Optional[float] = None) -> None:
+        if not isinstance(inner, MeritTerm):
+            raise TypeError(
+                f"NormalizedMerit: inner must be a MeritTerm, got "
+                f"{type(inner).__name__}.")
+        self.inner = inner
+        if scale is None:
+            scale = getattr(inner, 'native_scale', None)
+            if scale is None:
+                raise ValueError(
+                    f"NormalizedMerit: {type(inner).__name__} has no auto "
+                    f"native scale (it is reference-less); pass an explicit "
+                    f"scale= (see the NormalizedMerit native-scale table).")
+        scale = float(scale)
+        if not np.isfinite(scale) or scale <= 0.0:
+            raise ValueError(
+                f"NormalizedMerit: scale must be a positive finite float, "
+                f"got {scale}.")
+        self.scale = scale
+        # Forward scheduling flags + weight so the driver behaves as if the
+        # inner term were used directly (only the magnitude is rescaled).
+        self.weight = float(getattr(inner, 'weight', 1.0))
+        self.needs_wave = bool(getattr(inner, 'needs_wave', False))
+        self.needs_ray = bool(getattr(inner, 'needs_ray', True))
+        self.name = f'Normalized({getattr(inner, "name", "Merit")})'
+
+    def evaluate(self, ctx: Any) -> float:
+        return self.inner.evaluate(ctx) / self.scale
+
+
 class ChromaticFocalShiftMerit(MeritTerm):
     """Penalise focal-length variation across wavelengths.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): the squared
+    EFL peak-to-valley spread, absolute ``m^2`` -- reference-less (depends
+    on the EFL magnitude), so wrap with an explicit
+    ``NormalizedMerit(..., scale=)``.
 
     4.10.2: this term is now self-contained.  Pass the wavelengths
     explicitly at construction.  Pre-4.10.2 it depended on
@@ -1273,6 +1432,10 @@ class MinThicknessMerit(MeritTerm):
     include_air : bool, optional
         Set True to restore the pre-4.10 behaviour and also penalise
         small air gaps.  Default False.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): absolute
+    ``min_thickness^2`` [m^2]; :class:`NormalizedMerit` auto-resolves it
+    from the configured ``min_thickness``.
     """
 
     needs_wave = False
@@ -1284,6 +1447,9 @@ class MinThicknessMerit(MeritTerm):
         self.min_thickness = float(min_thickness)
         self.weight = float(weight)
         self.include_air = bool(include_air)
+        # S4-18/B3: the min-thickness target squared is the natural scale.
+        self.native_scale = (self.min_thickness ** 2
+                             if self.min_thickness > 0.0 else None)
 
     def evaluate(self, ctx: Any) -> float:
         thicknesses = ctx.prescription.get('thicknesses', [])
@@ -1317,6 +1483,10 @@ class MaxThicknessMerit(MeritTerm):
     include_air : bool, optional
         Set True to restore the pre-fix behaviour and also penalise
         large air gaps.  Default False.
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): absolute
+    ``max_thickness^2`` [m^2]; :class:`NormalizedMerit` auto-resolves it
+    from the configured ``max_thickness``.
     """
 
     needs_wave = False
@@ -1328,6 +1498,8 @@ class MaxThicknessMerit(MeritTerm):
         self.max_thickness = float(max_thickness)
         self.weight = float(weight)
         self.include_air = bool(include_air)
+        self.native_scale = (self.max_thickness ** 2
+                             if self.max_thickness > 0.0 else None)
 
     def evaluate(self, ctx: Any) -> float:
         thicknesses = ctx.prescription.get('thicknesses', [])
@@ -1343,7 +1515,11 @@ class MaxThicknessMerit(MeritTerm):
 
 class MinBackFocalLengthMerit(MeritTerm):
     """Penalise BFL below a minimum (e.g. to keep clearance for
-    a sensor package)."""
+    a sensor package).
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): absolute
+    ``min_bfl^2`` [m^2]; auto-resolved from the configured ``min_bfl``.
+    """
 
     needs_wave = False
     name = 'MinBFL'
@@ -1352,6 +1528,8 @@ class MinBackFocalLengthMerit(MeritTerm):
                  weight: float = 1.0) -> None:
         self.min_bfl = float(min_bfl)
         self.weight = float(weight)
+        self.native_scale = (self.min_bfl ** 2
+                             if self.min_bfl > 0.0 else None)
 
     def evaluate(self, ctx: Any) -> float:
         # 4.10: ctx.bfl is set to the sentinel 1e9 when the ray leg
@@ -1365,10 +1543,15 @@ class MinBackFocalLengthMerit(MeritTerm):
 
 
 class MaxFNumberMerit(MeritTerm):
-    """Penalise an f/# above a maximum (force faster lens)."""
+    """Penalise an f/# above a maximum (force faster lens).
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): ``1.0`` --
+    the f/# excess is dimensionless and O(1).
+    """
 
     needs_wave = False
     name = 'MaxFNumber'
+    native_scale = 1.0
 
     def __init__(self, max_f_number: float = 8.0,
                  weight: float = 1.0) -> None:

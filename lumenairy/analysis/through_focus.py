@@ -1168,8 +1168,6 @@ def through_focus_scan_jax(
             'use through_focus_scan() (NumPy).')
     import jax.numpy as jnp
 
-    from .core import beam_d4sigma
-
     z_arr = np.asarray(z_values, dtype=np.float64)
     n_z = z_arr.size
 
@@ -1243,31 +1241,44 @@ def through_focus_scan_jax(
         def _plane(i):
             return np.asarray(fields[i])
 
-    # Per-plane metrics.  Bring back to NumPy at the metric boundary
-    # since the metrics package isn't JAX-vmapped.
+    # Per-plane metrics.  Each propagated plane is already brought back to
+    # the host by ``_plane(i)`` (``np.asarray(...)``), so the metric
+    # computation runs in plain NumPy -- there is NO jax-tracing constraint
+    # on it.  Route every plane through the SAME ``single_plane_metrics``
+    # the NumPy backend (``through_focus_scan``) uses, so both backends
+    # share ONE metric implementation (single source of truth).
     #
-    # NOTE (AUDIT_V5_24_2 S3-19): the peak / strehl / d4sigma / bucket /
-    # rms block below is a hand-inlined twin of ``single_plane_metrics``
-    # (this module).  It is NOT byte-identical and deliberately not merged:
-    #   * power_in_bucket here masks with a STRICT ``r < bucket_radius``,
-    #     while ``single_plane_metrics`` -> ``radial_power_bands`` uses
-    #     ``R2 <= r*r`` (differs only for a pixel exactly on the boundary);
-    #   * rms_radius here is an INDEPENDENT second moment, whereas the
-    #     NumPy twin derives it from ``beam_d4sigma`` (agree analytically,
-    #     ~1e-15 in summation order).
-    # Consolidating would change results at those edges, so parity is
-    # instead pinned by a smooth-field regression test
-    # (tests/unit/test_through_focus_metric_parity.py).  This inline path
-    # has no background/aperture pedestal controls (always whole-grid).
+    # RECONCILED (AUDIT_V5_24_2 S3-19): this path was formerly a
+    # hand-inlined twin of ``single_plane_metrics`` that diverged in two
+    # documented, band-edge ways.  Both are now resolved by adopting the
+    # shared function's canonical conventions:
+    #   * power_in_bucket -- the inline twin masked with a STRICT
+    #     ``r < bucket_radius``; ``single_plane_metrics`` ->
+    #     ``radial_power_bands`` uses the canonical ``R2 <= r*r`` (``<=``).
+    #     A pixel sitting EXACTLY on the bucket radius is now INCLUDED on
+    #     the JAX backend too (previously dropped) -- so a bucket that
+    #     lands on the on-radius ring gains that ring's energy.  Both
+    #     forms compute the SAME centroid-relative distance
+    #     ``(pix - centroid)*dx``, so this is the only bucket change.
+    #   * rms_radius -- the inline twin computed an independent second
+    #     moment guarded by ``I_sum > 0`` (leaving NaN on an all-zero
+    #     plane); the shared path derives it from ``beam_d4sigma``
+    #     (rms = sqrt(var_x + var_y)), which is the SAME second moment
+    #     analytically (agree ~1e-15 in summation order) but returns 0 on
+    #     a zero field.  A zero plane now reports rms 0 on BOTH backends
+    #     (was NaN on JAX), which also removes the zero-field
+    #     best_focus_spot divergence the S3-8 guard papered over.
+    # Parity is pinned by tests/unit/test_through_focus_metric_parity.py
+    # (smooth field) plus tests/unit/test_through_focus_bucket_boundary.py
+    # (on-radius pixel + zero-field convention).  This entry point still
+    # exposes no background/aperture pedestal controls (always whole-grid);
+    # pass those via ``through_focus_scan(backend='numpy')``.
     #
-    # v5.17 audit (P3-03): stream the host copy ONE plane at a time
-    # (np.asarray(fields[i]) inside the loop) instead of materialising
-    # a second full (n_z, Ny, Nx) host copy alongside the device stack.
-    # The vmapped kernel still holds all n_z planes on the device --
-    # that is the fused-vmap contract -- but the host side is now O(N^2)
-    # rather than O(n_z * N^2), halving the peak footprint.  Use
-    # backend='numpy' (through_focus_scan) for a fully-streamed
-    # O(N^2) memory contract on dense large-grid scans.
+    # v5.17 audit (P3-03): the host copy is still streamed ONE plane at a
+    # time (``_plane(i)`` inside the loop), so host memory stays O(N^2)
+    # even though the fused vmap kernel holds all n_z planes on the device.
+    # Use backend='numpy' (through_focus_scan) for a fully-streamed O(N^2)
+    # memory contract on dense large-grid scans.
     peak_I = np.full(n_z, np.nan)
     strehl = np.full(n_z, np.nan)
     d4x = np.full(n_z, np.nan)
@@ -1276,55 +1287,30 @@ def through_focus_scan_jax(
     p_bucket = np.full(n_z, np.nan)
     for i in range(n_z):
         E_z = _plane(i)
-        I_z = np.abs(E_z) ** 2
-        peak_I[i] = float(np.max(I_z))
-        if ideal_peak is not None and ideal_peak > 0:
-            strehl[i] = peak_I[i] / float(ideal_peak)
-        try:
-            d4 = beam_d4sigma(E_z, dx=dx)
-            if hasattr(d4, '__len__'):
-                d4x[i], d4y[i] = float(d4[0]), float(d4[1])
-            else:
-                d4x[i] = d4y[i] = float(d4)
-        except (TypeError, ValueError, RuntimeError, ZeroDivisionError,
-                IndexError):
-            # beam_d4sigma can fail on near-zero intensity (divide by
-            # zero on the normalisation) or on a propagated field
-            # that's just numerical noise; leave d4x/d4y at NaN for
-            # this z and let downstream filtering mask it.
-            pass
-        # 4.10: match NumPy semantics for parity.
-        # power_in_bucket: ABSOLUTE integrated intensity (J in arbitrary
-        # units of |E|^2 * area) about the intensity centroid, NOT a
-        # fraction.  Pre-4.10 the JAX twin returned fraction; calling
-        # find_best_focus(scan, 'bucket') gave different z best
-        # depending on backend.
-        I_sum = float(np.sum(I_z))
-        if I_sum > 0:
-            yy, xx = np.indices(I_z.shape)
-            cx_pix = float(np.sum(xx * I_z) / I_sum)
-            cy_pix = float(np.sum(yy * I_z) / I_sum)
-        else:
-            cy_pix, cx_pix = I_z.shape[0] / 2, I_z.shape[1] / 2
-        if bucket_radius is not None and bucket_radius > 0:
-            yy, xx = np.indices(I_z.shape)
-            r = np.hypot((xx - cx_pix) * dx, (yy - cy_pix) * dx)
-            mask = r < bucket_radius
-            p_bucket[i] = float(np.sum(I_z[mask]) * dx * dx)
-        # rms radius: D4sigma/4 about centroid (matches NumPy path).
-        if I_sum > 0:
-            yy, xx = np.indices(I_z.shape)
-            r2 = ((xx - cx_pix) * dx) ** 2 + ((yy - cy_pix) * dx) ** 2
-            sigma_sq = float(np.sum(r2 * I_z) / I_sum)
-            rms_r[i] = float(np.sqrt(sigma_sq))
+        m = single_plane_metrics(
+            E_z, dx, wavelength,
+            bucket_radius=bucket_radius,
+            ideal_peak=ideal_peak,
+        )
+        peak_I[i] = m['peak_I']
+        d4x[i] = m['d4sigma_x']
+        d4y[i] = m['d4sigma_y']
+        rms_r[i] = m['rms_radius']
+        if 'power_in_bucket' in m:
+            p_bucket[i] = m['power_in_bucket']
+        if 'strehl' in m:
+            strehl[i] = m['strehl']
 
     best_strehl = float(np.nanmax(strehl)) if ideal_peak else float('nan')
-    # v5.24.5 (AUDIT_V5_24_2 S3-8): mirror the NumPy twin's all-NaN guard
-    # (through_focus_scan lines 461-462).  On an all-zero scan every plane
-    # leaves rms_r at its NaN default, and an unguarded np.nanmin over an
-    # all-NaN slice warns ("All-NaN slice encountered") and raises under
-    # warnings-as-errors -- diverging from the NumPy backend, which returns
-    # NaN cleanly.  Guarding restores best_focus_spot backend parity.
+    # v5.24.5 (AUDIT_V5_24_2 S3-8): all-NaN guard mirroring the NumPy twin
+    # (through_focus_scan).  Since the S3-19 reconciliation routes this
+    # backend through ``single_plane_metrics`` too, an all-zero scan now
+    # fills rms_r with 0 (beam_d4sigma returns 0 on a zero field) on BOTH
+    # backends, so best_focus_spot is 0.0 either way -- the former
+    # NaN-vs-0.0 divergence is gone.  The guard is retained as defence
+    # against a genuinely all-NaN rms_r (e.g. a degenerate empty scan):
+    # an unguarded np.nanmin over an all-NaN slice warns ("All-NaN slice
+    # encountered") and raises under warnings-as-errors.
     best_spot = (float(np.nanmin(rms_r))
                  if np.any(np.isfinite(rms_r)) else float('nan'))
     return ThroughFocusResult(

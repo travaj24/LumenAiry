@@ -57,6 +57,46 @@ def _stag_flux(W_E, V_H, wq_face, wq_node):
 
 
 class BORStack:
+    """Axisymmetric (body-of-revolution) modal stack solver.
+
+    The cylindrical-coordinate peer of :class:`~lumenairy.RCWAStack` /
+    :class:`~lumenairy.PMMStack` / :class:`~lumenairy.BerremanStack`;
+    top-level exported as ``lumenairy.BORStack`` since v5.25 (audit
+    S5-10 / B2).
+
+    Terminology (mode vs order)
+    ---------------------------
+    These two words are used deliberately and consistently across the BOR
+    API (audit S5-10 / B2 -- previously mixed):
+
+    * **azimuthal order** ``m`` -- the integer harmonic index of the
+      ``exp(i m phi)`` azimuthal dependence fixed at construction.  The
+      whole stack is solved at one ``m``.  (This is the cylindrical analog
+      of a Cartesian Fourier-harmonic index, NOT a diffraction channel.)
+    * **order** -- a propagating diffraction channel of the cascade: an
+      entry of the ``q`` / ``gamma`` / ``angles`` / ``R`` / ``T`` /
+      ``energy`` arrays returned by :meth:`solve`.  Orders are the
+      cylindrical peer of the RCWA/PMM planar diffraction orders and index
+      the *observable* per-channel efficiencies.
+    * **mode** -- a column of the radial modal basis (an eigenvector
+      ``(W, V)`` of the staggered radial operator), i.e. the basis in
+      which the S-matrix ``S`` is expressed.  Every propagating order maps
+      to one propagating mode; :meth:`per_mode_amplitudes` reports modal
+      amplitudes in a pinned deterministic gauge.
+
+    Result container (S5-6 forward-compat)
+    --------------------------------------
+    :meth:`solve` currently returns a plain ``dict`` (keys ``q``,
+    ``gamma``, ``angles``, ``R``, ``T``, ``energy``, ``S``).  The still-open
+    S5-6 work item unifies BOR / RCWA / PMM / Berreman onto ONE structured
+    solve-result container.  That migration is intentionally NOT taken here
+    (it is a breaking return-shape change and must land together with the
+    other engines, not churn BOR alone -- see audit S5-10 / B2).  When it
+    lands, the structured container will remain **mapping-compatible**
+    (``res['R']`` / ``res['T']`` keep working) so this dict contract is a
+    forward-compatible alias, not a hard break.
+    """
+
     def __init__(self, Rbig, m, *, n_substrate=1.0, n_superstrate=1.0, N=300):
         # Input validation (audit P3-10) -- mirror the PMMStack/PMM2DStack
         # builder guards: a bad domain/grid propagates to plausible-looking
@@ -232,14 +272,20 @@ class BORStack:
     def solve(self, *, retain_internal=False):
         """Cascade the stack and return per-propagating-order R/T efficiencies.
 
-        Returns a dict: ``q`` (incident propagating axial wavenumbers),
-        ``gamma`` (their transverse wavenumbers), ``angles`` (incident-mode
-        polar angle in the SUPERSTRATE, rad -- computed from ``eps_sup`` and
-        the superstrate modal ``q``; for ``n_substrate != n_superstrate`` the
-        transmitted orders' substrate-side angles differ by Snell refraction,
-        audit P3-11), ``R``/``T`` (reflected/transmitted power fraction summed
-        over propagating orders), ``energy`` (R+T per incident order), ``S``
-        (the global S-matrix).
+        See the class docstring's "Terminology (mode vs order)" note for the
+        precise ``m`` (azimuthal order) / order (diffraction channel) / mode
+        (modal-basis column) distinction used below.
+
+        Returns a dict (the current pre-S5-6 result container -- see the class
+        docstring's "Result container" note): ``q`` (incident propagating
+        axial wavenumbers, one per order), ``gamma`` (their transverse
+        wavenumbers), ``angles`` (incident-order polar angle in the
+        SUPERSTRATE, rad -- computed from ``eps_sup`` and the superstrate
+        order ``q``; for ``n_substrate != n_superstrate`` the transmitted
+        orders' substrate-side angles differ by Snell refraction, audit
+        P3-11), ``R``/``T`` (reflected/transmitted power fraction summed over
+        propagating orders), ``energy`` (R+T per incident order), ``S`` (the
+        global S-matrix in the modal basis).
 
         MODAL GAUGE of ``S`` (AUDIT_DYNAMETA_CONSUMER_API_GAPS C1a): the
         columns are FLUX-normalized (every propagating mode carries unit

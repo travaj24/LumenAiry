@@ -26,6 +26,7 @@ from typing import Optional, Tuple
 import numpy as np
 
 from . import fft_infra as _state
+from .asm import _asm_H_from_kz
 from .fft_infra import (
     CUPY_AVAILABLE,
     _ensure_cupy_loaded,
@@ -212,8 +213,11 @@ def angular_spectrum_propagate_mft(
         prop_mask = kz_sq > 0
         kz = np.where(prop_mask,
                       np.sqrt(np.where(prop_mask, kz_sq, 0.0)), 0.0)
-        H_np = np.where(prop_mask, np.exp(1j * kz * z), 0.0).astype(
-            target_cdtype)
+        # S2-10: shared kernel.  complex128 is byte-identical to the former
+        # ``np.where(prop, np.exp(1j*kz*z), 0).astype(...)``; complex64 now
+        # folds the phase mod 2*pi in float64 before the float32 cast
+        # (S2-3 mitigation), matching every other ASM H builder.
+        H_np = _asm_H_from_kz(kz, prop_mask, z, target_cdtype, np)
         if bandlimit and z != 0:
             Lx_phys = Nx_in * dx_in
             Ly_phys = Ny_in * dy_in

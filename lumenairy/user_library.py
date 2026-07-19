@@ -32,7 +32,10 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import ast
 import json
+import operator
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -72,8 +75,254 @@ def set_library_path(path: str) -> None:
 
 
 def _safe_name(name):
-    """Sanitise a name for use as a filename."""
-    return name.replace('/', '_').replace('\\', '_').replace(' ', '_')
+    """Sanitise a name for use as a filename.
+
+    Path-hostile characters (``/``, ``\\``, spaces) are replaced with
+    ``_``.  This mapping is many-to-one, so two *distinct* library names
+    can sanitise to the SAME on-disk filename and silently clobber one
+    another on save (audit S4-19).  When sanitisation actually changes
+    the name we emit a ``UserWarning`` naming both forms so the
+    collision risk is surfaced rather than silent.  (Python's default
+    warning filter de-duplicates identical messages, so a repeated
+    save/load of the same name warns only once.)
+    """
+    safe = name.replace('/', '_').replace('\\', '_').replace(' ', '_')
+    if safe != name:
+        warnings.warn(
+            f"user_library: name {name!r} sanitised to {safe!r} for "
+            f"on-disk storage; distinct names that sanitise to the same "
+            f"filename collide and overwrite one another. Use a name "
+            f"without '/', '\\', or spaces to avoid this.",
+            UserWarning,
+            stacklevel=2,
+        )
+    return safe
+
+
+# =========================================================================
+# Safe expression evaluator for phase-mask formulas (S4-19)
+# =========================================================================
+#
+# Phase-mask "expression" masks let a user store an arbitrary formula
+# (e.g. ``atan2(Y, X) * 3``) evaluated on the (X, Y) grid.  This used to
+# be dispatched through the built-in ``eval()`` with the whole ``np``
+# module exposed -- a code-execution risk if anyone can write to the
+# library JSON (``eval("__import__('os').system(...)")`` etc.).  The
+# ``__``/leading-underscore string screen in front of it was a leaky
+# blocklist.
+#
+# ``_safe_eval_expression`` replaces that with a small ALLOWLIST AST
+# interpreter: it parses the source in ``eval`` mode and evaluates the
+# tree node-by-node, permitting ONLY arithmetic / comparison / boolean /
+# bitwise operators, subscripts, whitelisted names, attribute access on
+# a curated ``np`` math namespace, and calls to whitelisted callables.
+# Anything else -- imports, lambdas, comprehensions, dunder / private
+# attribute access, calls to non-whitelisted objects -- raises a clear
+# ``ValueError``.  ``eval`` / ``exec`` / ``compile``-to-code are NEVER
+# run on the parsed tree.
+
+# Curated whitelist of PURE-MATH numpy attributes reachable as
+# ``np.<name>`` from a phase-mask expression.  No I/O, no introspection,
+# no object construction beyond elementwise math / small array helpers.
+_NP_SAFE_ATTRS = frozenset({
+    # constants
+    'pi', 'e', 'euler_gamma', 'inf', 'nan', 'newaxis',
+    # trigonometry
+    'sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan', 'arctan2',
+    'sinh', 'cosh', 'tanh', 'arcsinh', 'arccosh', 'arctanh',
+    'hypot', 'deg2rad', 'rad2deg', 'degrees', 'radians', 'unwrap',
+    # exponentials / logs / powers
+    'exp', 'exp2', 'expm1', 'log', 'log2', 'log10', 'log1p',
+    'sqrt', 'cbrt', 'square', 'power', 'float_power', 'reciprocal',
+    # rounding / sign / magnitude
+    'abs', 'absolute', 'fabs', 'sign', 'floor', 'ceil', 'round',
+    'rint', 'trunc', 'fix', 'mod', 'fmod', 'remainder',
+    # clipping / extrema
+    'clip', 'minimum', 'maximum', 'fmin', 'fmax',
+    # complex
+    'real', 'imag', 'conj', 'conjugate', 'angle',
+    # elementwise selection / misc
+    'where', 'heaviside', 'sinc', 'nan_to_num',
+    # small array constructors sometimes used in masks
+    'zeros_like', 'ones_like', 'full_like',
+})
+
+# Safe *data* attributes reachable on an array / scalar value.  All are
+# non-callable, so ``.real``/``.imag``/``.T`` cannot reach the
+# filesystem or introspection surface.
+_ARRAY_SAFE_ATTRS = frozenset({'real', 'imag', 'T'})
+
+_BIN_OPS = {
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+    ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod, ast.Pow: operator.pow,
+    ast.BitAnd: operator.and_, ast.BitOr: operator.or_,
+    ast.BitXor: operator.xor, ast.LShift: operator.lshift,
+    ast.RShift: operator.rshift,
+}
+_UNARY_OPS = {
+    ast.UAdd: operator.pos, ast.USub: operator.neg,
+    ast.Invert: operator.invert, ast.Not: operator.not_,
+}
+_CMP_OPS = {
+    ast.Eq: operator.eq, ast.NotEq: operator.ne,
+    ast.Lt: operator.lt, ast.LtE: operator.le,
+    ast.Gt: operator.gt, ast.GtE: operator.ge,
+}
+
+
+def _safe_eval_expression(expr: str, variables: Dict[str, Any]) -> Any:
+    """Safely evaluate a phase-mask expression via a restricted AST walk.
+
+    Parameters
+    ----------
+    expr : str
+        The expression source (``eval``-mode).
+    variables : dict
+        The only permitted free names -- the mask grids (``X``, ``Y``,
+        ``R``, ``THETA``, ``k``, ``pi``), the ``np`` module (attribute
+        access restricted to :data:`_NP_SAFE_ATTRS`), and the curated
+        math shortcuts (``sin``, ``cos``, ...).
+
+    Raises
+    ------
+    ValueError
+        If the expression fails to parse or contains any construct
+        outside the allowlist (a name/attribute/call/operator/node type
+        that is not permitted).
+    """
+    try:
+        tree = ast.parse(expr, mode='eval')
+    except SyntaxError as exc:
+        raise ValueError(
+            f"load_phase_mask: could not parse expression {expr!r}: {exc}"
+        ) from exc
+
+    def _ev(node):
+        if isinstance(node, ast.Expression):
+            return _ev(node.body)
+
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (bool, int, float, complex)):
+                return node.value
+            raise ValueError(
+                "load_phase_mask: a constant of type "
+                f"{type(node.value).__name__!r} is not allowed in a "
+                "phase-mask expression (only numeric literals).")
+
+        if isinstance(node, ast.Name):
+            if node.id in variables:
+                return variables[node.id]
+            raise ValueError(
+                f"load_phase_mask: name {node.id!r} is not a permitted "
+                "phase-mask variable. Allowed names: "
+                f"{', '.join(sorted(variables))}.")
+
+        if isinstance(node, ast.BinOp):
+            op = _BIN_OPS.get(type(node.op))
+            if op is None:
+                raise ValueError(
+                    "load_phase_mask: operator "
+                    f"{type(node.op).__name__} is not allowed.")
+            return op(_ev(node.left), _ev(node.right))
+
+        if isinstance(node, ast.UnaryOp):
+            op = _UNARY_OPS.get(type(node.op))
+            if op is None:
+                raise ValueError(
+                    "load_phase_mask: unary operator "
+                    f"{type(node.op).__name__} is not allowed.")
+            return op(_ev(node.operand))
+
+        if isinstance(node, ast.BoolOp):
+            # Short-circuit like Python; on array operands numpy raises
+            # the usual ambiguous-truth-value error (expected).
+            if isinstance(node.op, ast.And):
+                result = True
+                for value in node.values:
+                    result = _ev(value)
+                    if not result:
+                        return result
+                return result
+            result = False
+            for value in node.values:
+                result = _ev(value)
+                if result:
+                    return result
+            return result
+
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1:
+                raise ValueError(
+                    "load_phase_mask: chained comparisons are not "
+                    "supported; combine single comparisons with '&' / "
+                    "'|' instead.")
+            op = _CMP_OPS.get(type(node.ops[0]))
+            if op is None:
+                raise ValueError(
+                    "load_phase_mask: comparison operator "
+                    f"{type(node.ops[0]).__name__} is not allowed.")
+            return op(_ev(node.left), _ev(node.comparators[0]))
+
+        if isinstance(node, ast.Attribute):
+            attr = node.attr
+            if attr.startswith('_'):
+                raise ValueError(
+                    f"load_phase_mask: attribute access to {attr!r} is "
+                    "not allowed (underscore / dunder access is blocked).")
+            value = _ev(node.value)
+            if value is np:
+                if attr not in _NP_SAFE_ATTRS:
+                    raise ValueError(
+                        f"load_phase_mask: 'np.{attr}' is not in the "
+                        "whitelisted numpy math namespace.")
+                return getattr(np, attr)
+            if attr in _ARRAY_SAFE_ATTRS:
+                return getattr(value, attr)
+            raise ValueError(
+                f"load_phase_mask: attribute access '.{attr}' is not "
+                "allowed.")
+
+        if isinstance(node, ast.Call):
+            if any(isinstance(a, ast.Starred) for a in node.args):
+                raise ValueError(
+                    "load_phase_mask: '*args' unpacking is not allowed.")
+            func = _ev(node.func)
+            if not callable(func):
+                raise ValueError(
+                    "load_phase_mask: attempted to call a non-callable "
+                    "value.")
+            args = [_ev(a) for a in node.args]
+            kwargs = {}
+            for kw in node.keywords:
+                if kw.arg is None:
+                    raise ValueError(
+                        "load_phase_mask: '**kwargs' unpacking is not "
+                        "allowed.")
+                kwargs[kw.arg] = _ev(kw.value)
+            return func(*args, **kwargs)
+
+        if isinstance(node, ast.Subscript):
+            return _ev(node.value)[_ev(node.slice)]
+
+        if isinstance(node, ast.Slice):
+            lower = _ev(node.lower) if node.lower is not None else None
+            upper = _ev(node.upper) if node.upper is not None else None
+            step = _ev(node.step) if node.step is not None else None
+            return slice(lower, upper, step)
+
+        if isinstance(node, ast.Tuple):
+            return tuple(_ev(e) for e in node.elts)
+
+        if isinstance(node, ast.List):
+            return [_ev(e) for e in node.elts]
+
+        raise ValueError(
+            "load_phase_mask: expression element "
+            f"{type(node).__name__} is not allowed in a phase-mask "
+            "formula.")
+
+    return _ev(tree)
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -444,7 +693,13 @@ def save_phase_mask(name: str,
     1. **Expression** — a mathematical formula evaluated on (X, Y) grids.
        Example: ``expression='atan2(Y, X) * 3'`` for a spiral phase plate.
        Available variables: X, Y (metres), R (radius), THETA (angle),
-       k (wavenumber), pi. All numpy functions available.
+       k (wavenumber), pi.  The formula is evaluated by a restricted
+       allowlist AST interpreter (S4-19), not Python ``eval``: pure-math
+       numpy functions are available via ``np.<func>`` or the shortcut
+       names (``sin``, ``cos``, ``tan``, ``sqrt``, ``abs``, ``exp``,
+       ``log``, ``atan2``, ``mod``, ``floor``, ``ceil``); imports,
+       lambdas, comprehensions, and attribute/introspection escapes are
+       rejected.
 
     2. **Array** — a pre-computed 2-D phase array (radians).  Saved as
        a ``.npy`` sidecar file alongside the JSON.
@@ -558,21 +813,15 @@ def load_phase_mask(name: str,
         k = 2 * np.pi / wavelength
         pi = np.pi
 
-        # 4.10: eval() is a code-execution risk if anyone can write to
-        # ~/.lumenairy/library/phase_masks/*.json.  Restrict the
-        # globals to "no builtins" and use a whitelisted namespace of
-        # numpy primitives; reject any expression that contains
-        # underscore-prefixed names (typical attack surface) or
-        # uses dunder access.  This is a defence-in-depth measure;
-        # the real fix is to convert the expression DSL to a small
-        # symbolic-AST evaluator, tracked separately.
+        # S4-19: the phase-mask expression is a code-execution risk if
+        # anyone can write to ~/.lumenairy/library/phase_masks/*.json.
+        # Evaluate it through the restricted allowlist AST interpreter
+        # (:func:`_safe_eval_expression`) -- NOT the built-in ``eval`` --
+        # so only arithmetic / comparison / boolean / bitwise ops,
+        # subscripts, whitelisted names, and calls to the curated numpy
+        # math namespace are permitted; imports, lambdas, comprehensions,
+        # and dunder / private attribute access all raise ``ValueError``.
         expr = str(data['expression'])
-        if ('__' in expr) or expr.startswith('_') or ('._' in expr):
-            raise ValueError(
-                "load_phase_mask: expression contains forbidden tokens "
-                "('__' / leading underscore / '._').  Phase-mask "
-                "expressions must use only the documented X, Y, R, THETA, "
-                "k, pi, np, sin, cos, ... whitelisted names.")
         ns = {
             'X': X, 'Y': Y, 'R': R, 'THETA': THETA,
             'k': k, 'pi': pi, 'np': np,
@@ -582,7 +831,7 @@ def load_phase_mask(name: str,
             'atan2': np.arctan2, 'arctan2': np.arctan2,
             'mod': np.mod, 'floor': np.floor, 'ceil': np.ceil,
         }
-        phase = eval(expr, {"__builtins__": {}}, ns)
+        phase = _safe_eval_expression(expr, ns)
         return np.exp(1j * phase)
 
     elif mask_type == 'array':

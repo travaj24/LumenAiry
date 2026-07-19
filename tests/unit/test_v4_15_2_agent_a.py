@@ -50,7 +50,7 @@ from lumenairy.sources.core import (
 _GAUSSIAN_SCHELL_KW = dict(
     N=16, dx=2e-6, wavelength=633e-9,
     w0=20e-6, sigma_g=8e-6,
-    n_realizations=4, seed=0,
+    n_realizations=4, rng=0,
 )
 
 _SCHELL_MODEL_KW = dict(
@@ -59,13 +59,13 @@ _SCHELL_MODEL_KW = dict(
         -((np.linspace(-1, 1, 16)[:, None]) ** 2
           + (np.linspace(-1, 1, 16)[None, :]) ** 2) / 0.25),
     coherence_length=8e-6,
-    n_realizations=4, seed=0,
+    n_realizations=4, rng=0,
 )
 
 _ANNULAR_KW = dict(
     N=16, dx=2e-6, wavelength=633e-9,
     inner_radius=4e-6, outer_radius=12e-6,
-    n_realizations=4, seed=0,
+    n_realizations=4, rng=0,
 )
 
 

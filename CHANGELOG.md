@@ -4,6 +4,22 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Through-focus single-plane metrics unified across backends (deferred audit
+  S3-19).**  `through_focus_scan_jax` no longer hand-inlines a twin of
+  `single_plane_metrics`; both backends now route every plane through that one
+  function.  Two documented band-edge divergences on the JAX backend are
+  reconciled to the canonical NumPy conventions: (1) `power_in_bucket` now uses
+  the inclusive `R**2 <= r*r` boundary (was a strict `r < R`), so a pixel lying
+  **exactly** on the bucket radius is counted on the JAX path too; (2)
+  `rms_radius` is now the `beam_d4sigma`-derived second moment, which is 0 (not
+  NaN) on an all-zero plane — so a dark scan's `best_focus_spot` is `0.0` on
+  both backends (the JAX path formerly returned NaN).  Smooth fields are
+  unaffected beyond ~1e-15 summation-order noise.  Pinned by
+  `tests/unit/test_through_focus_bucket_boundary.py` and
+  `tests/unit/test_through_focus_metric_parity.py`.
+
 ## [5.24.4] — 2026-07-18
 
 Exhaustive whole-library audit (`docs/audits/AUDIT_V5_24_2_2026_07_17_EXHAUSTIVE.md`)

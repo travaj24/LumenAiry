@@ -401,6 +401,18 @@ from .elements.berreman import (
     berreman_jones_1d,
 )
 
+# -- BOR-PMM (body-of-revolution / axisymmetric cylindrical stack) --------
+# v5.25 (audit S5-10 / B2): BORStack is the headline axisymmetric stack
+# solver -- the cylindrical-coordinate peer of RCWAStack / PMMStack /
+# BerremanStack, which are all top-level exported.  It graduates to the
+# top level here for signature symmetry with those engines.  The
+# lower-level BOR building blocks and analytic oracles (radial_spectrum,
+# fiber_modes, layer_modes, fourier_bessel, ...) stay namespaced under
+# ``la.elements.bor.*`` by design -- several carry generic or
+# cylindrical-jargon names (``layer_modes`` also names an EME export) that
+# would crowd or collide on the top-level surface.
+from .elements.bor import BORStack
+
 # â”€â”€ BSDF surface scatter (stray-light analysis) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.bsdf import (
     BSDFModel,
@@ -675,6 +687,7 @@ from .optimize import (
     MultiFieldMerit,
     MultiPrescriptionParameterization,
     MultiWavelengthMerit,
+    NormalizedMerit,
     # v4.16 (ROADMAP #11): multi-objective Pareto wrapper (pymoo-optional)
     ParetoResult,
     RawParameterization,
@@ -1575,6 +1588,7 @@ __all__ = [
     'make_lg_aberration_merit_jax',
     'CompositeMerit',
     'CallableMerit',
+    'NormalizedMerit',
     'JaxMeritTerm',
     'MultiWavelengthMerit',
     'MultiFieldMerit',
@@ -1722,6 +1736,10 @@ __all__ = [
     # Berreman 4x4 (anisotropic planar multilayer)
     'berreman_jones_1d',
     'BerremanStack',
+
+    # BOR-PMM axisymmetric cylindrical stack (peer of RCWA/PMM/Berreman
+    # stacks).  Lower-level BOR helpers stay under ``la.elements.bor.*``.
+    'BORStack',
 
     # Effective-medium (EMT) homogenization bridge
     'rytov_tensor',
