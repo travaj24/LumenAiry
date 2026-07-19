@@ -4,8 +4,88 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.25.0] — 2026-07-19
+
+The **real-lens hammer campaign** release (`docs/audit_real_lens_hammer_2026_07_19.md`):
+adversarial validation of the real-lens propagator family against two fully
+independent oracles — Zemax OpticStudio POP via ZOS-API (dispersionless model
+glass, per-surface indices cross-checked) and a self-contained exact-raytrace
+Debye/Huygens integral (oracle cross-agreement 0.5–8% on every case).
+Verdicts: **`traced` 99.7%** and **`gbd` 98.4%** of dual-oracle truth on a
+heavily aberrated f/5 singlet; benign regime exact to 4 digits; the
+`analytic` model's validity envelope honestly quantified.  Also implements
+the 2026-07-18 thin-lens audit and **all 10 deferred v5.24.2-audit items**.
+
+### Added
+
+- **`lens_model='stigmatic'`** on `apply_thin_lens` (+ `conjugates=` kwarg):
+  the conjugate-matched EXACT ideal element `phi = k*(S(R_out) - S(R_in))` —
+  aberration-free under the exact ASM propagator at ANY conjugates (the fix
+  for the fictitious-spherical mechanism that broke ideal-lens relay chains).
+  Reduces exactly to `'nonparaxial'` for collimated input.
+- **`fresnel_tf_propagate`**: same-grid Fresnel transfer-function step
+  (`z < 0` allowed, `z == 0` exact identity).  The matched pair
+  (paraxial lens x this step) is self-consistent by construction — the
+  Zemax-POP-equivalent ideal reference mode for relay studies (matched 1:1
+  imaging lands on the ABCD waist to 0.25%).
+- **`rng=` alongside `seed=`** on the stochastic source factories
+  (`seed=` deprecated, removal v5.27), explicit **`normalize=`** kwargs
+  (defaults preserve each factory's current behavior), and **`w0=`** alias
+  where `sigma=` was the Gaussian-width misnomer.
+- **Opt-in `NormalizedMerit`** scale wrapper for the optimizer (defaults
+  byte-identical); BOR top-level exports; type-tagged **metadata
+  serialization contract** honored identically by the h5 and zarr storage
+  backends (round-trip fidelity + legacy-load compatibility).
+- Runtime **exit-NA Nyquist guard** on `apply_real_lens_traced` (hammer H3):
+  warns when the exit beam's convergence exceeds the grid Nyquist
+  (`dx > lambda/(2*NA_exit)`) — previously this aliased silently, reading
+  r^2-weighted spot metrics ~37% low while EE50/EE80 stayed plausible.
+
+### Fixed
+
+- **`slant_correction` had inverted cosines (hammer H1)** — it computed the
+  slab ray path-length `n*sag/cos` where the wavefront OPD of a tilted
+  refracting facet is `(n2*cos_tt - n1*cos_ti)*sag`.  The inversion
+  sign-flipped the obliquity/spherical term and, on symmetric lenses,
+  CANCELLED the pupil aberration (an impossible 3.6 um "perfect" spot vs
+  the 65 um dual-oracle truth).  The corrected slant screen moves the
+  analytic model toward the oracle (50.3 um).  Note: `through_focus`'s
+  internal "ideal pupil" reference used this flag — derived goldens shift.
+- **`apply_thin_lens` sign bugs** (thin-lens audit 2026-07-18):
+  `'nonparaxial'` with `f < 0` focused like its converging twin (byte-
+  identical for `f > 0`); `'aplanatic'` carried the WRONG quartic sign
+  (2x paraxial's spherical error, focusing WORSE than paraxial — now the
+  exact stigmatic sphere on the sine-condition domain).
+- **FGA auto path memory + sampling (hammer H4/H5)**: the byte-identical
+  position-lattice chunk loop now engages by default (RAM-fraction budget);
+  the memory model counts the 9-ray FD Jacobian bundle; all-conic
+  prescriptions default to the analytic `exact_jacobian`; and the auto
+  sampler no longer floors `p_max` at the beamlet-completeness width for
+  near-collimated inputs (32–130x the field's angular content — the
+  excess-momentum halo that produced 5x-wrong spots through strong lenses).
+  `coarse_stride` itself was verified byte-faithful.  The v5.24.3 S2-2
+  identity-power contracts are preserved.
+- ASM transfer-function construction consolidated into one shared kernel
+  with the complex64 mod-2pi mitigation applied to ALL builders (previously
+  only one copy; the mitigation's contract is a platform-independent
+  half-to-one float32-ULP bound vs an 80-bit oracle).
+- `user_library` expression masks: `eval()` replaced by a restricted
+  AST evaluator (whitelisted operations/names; hostile expressions raise).
+
 ### Changed
 
+- `analytic` (`apply_real_lens`) accuracy envelope documented: per-surface
+  phase screens cannot represent orientation-dependent aberration
+  (dual-oracle: 60/61 um for both plano-convex orientations where the truth
+  is 43/128 um).  Use `traced`/`gbd` for absolute spot fidelity on
+  aberrated systems.
+- **Known limitations (production-scale, strongly-DIVERGING input; see the
+  hammer doc's 121-scoreboard addendum):** `traced` with `carrier='auto'`
+  fails to form a focus on a strongly diverging input (H6, open); GBD's
+  paraxial frame collapses energy on the same class (H7, known); FGA at
+  production scale should be RE-TESTED against this release's H4 chunking
+  fix (H8).  Until then the conjugate-matched `stigmatic` thin chain is the
+  recommended production surrogate for corrected relays.
 - **Through-focus single-plane metrics unified across backends (deferred audit
   S3-19).**  `through_focus_scan_jax` no longer hand-inlines a twin of
   `single_plane_metrics`; both backends now route every plane through that one

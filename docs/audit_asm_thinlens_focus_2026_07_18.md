@@ -94,7 +94,20 @@ Dominant contributors: S4 (+13.5 rad), S25 (+8.7 rad), partially cancelled by S6
 
 **Empirically CONFIRMED (exp21, analytic 1x1 no-DOE, production N=28672/dx0.9, conservation 0.9991):** at the nominal MSoP w=8.37 um with EE(3/6um)=10.2%/28.6%; at its best focus **+175 um** (matching the historical "+170-200 um focus misplacement" exactly): w=4.61 um, FWHM 5.75 um, EE3=29.0%, EE6=48.6% — versus the conjugate-stigmatic thin chain's 2.97-3.09 um / EE6~100% at dz=0 on the same production pipeline, and Zemax's 2.74 um. The real-lens sag-screen chain is aberrated by the *model*, exactly as the probe predicts.
 
-**Implication for the model hierarchy:** for the 121-class relay (beam NA <= 0.15, many corrected surfaces), per-surface *phase screens* — naive or slant-corrected — are structurally unable to reproduce a corrected design. Models that transport the exact ray congruence (traced per-pixel OPL with carrier, GBD/FGA beamlets) or a conjugate-matched ideal element (thin 'stigmatic') are required for absolute spot fidelity.
+**Implication for the model hierarchy:** for the 121-class relay (beam NA <= 0.15, many corrected surfaces), per-surface *phase screens* — naive or slant-corrected — are structurally unable to reproduce a corrected design. Models that transport the exact ray congruence or a conjugate-matched ideal element (thin 'stigmatic') are required for absolute spot fidelity.
+
+**Full model scoreboard (2026-07-19, 1x1 no-DOE production control, Zemax reference 2.74 um):**
+
+| model | result | verdict |
+|---|---|---|
+| thin `stigmatic` (exp20) | 2.97 um, EE6=100%, conservation 0.9999, focus at plane | **VALID == Zemax** |
+| thin `paraxial`/`nonparaxial` (exp18/19) | 8-14 um nominal, halo | invalid (lens-phase mismatch, +11.9/-9.4 rad) |
+| analytic `apply_real_lens` (exp21) | best focus +175 um: 4.61 um, EE6=48.6% | invalid (~25 rad sag-screen aberration) |
+| traced `carrier='auto'` (exp22) | conservation 0.9999 but NO focus: energy smeared over +-1.8 mm (EE(100um)=0.9%) | invalid as wired (per-group, opd=0 vertex) on the diverging no-MLA beam; no carrier engagement visible in logs |
+| GBD (16k assessment) | power conservation 0.0001 + NaN warnings (gbd.py:272) | invalid (paraxial-frame energy collapse on diverging beam) |
+| FGA | not runnable | 345 GB `_gabor_coeff` allocation wall at the beam-filling aperture |
+
+**Bottom line: NO current lumenairy model is valid for the 121's REAL surfaces.** The stigmatic thin chain gives the (aberration-free) design intent. To model real-surface residual aberrations, the library needs one of: (a) a higher-order sag-screen projection correction in `apply_real_lens` (fix the +25 rad, dominated by S4/S25), (b) a traced configuration that genuinely carrier-references a strongly diverging input for per-group application, or (c) the FGA chunked-accumulation fix. Given the real design's Zemax residual WFE is only ~26-35 mLambda, the stigmatic thin chain is an excellent production surrogate until then (the real lenses are corrected to near-ideal anyway).
 
 ## Repro
 

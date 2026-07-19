@@ -108,8 +108,38 @@ unchanged and re-verified. Tests: `test_fga_h4_h5.py`.
   pitfalls); Linux glibc's complex exp can beat an f64 mod-2π fold —
   assert platform-independent *bounds*, not per-platform orderings.
 
+## Production-scale addendum (user's 121 scoreboard, 2026-07-19)
+
+The thin-lens audit doc's model scoreboard (production 1x1 no-DOE
+control, Zemax reference 2.74 µm, **strongly DIVERGING input**) extends
+this campaign's singlet-class coverage and surfaces three findings the
+near-collimated hammer cases could not reach — **"NO current lumenairy
+model is valid for the 121's REAL surfaces"**:
+
+- **H6 (open) — traced on strongly-diverging input**: exp22
+  (`carrier='auto'`, per-group) conserves power (0.9999) but forms NO
+  focus — energy smeared over ±1.8 mm, no carrier engagement visible in
+  the logs.  H3's 99.7% vindication covered collimated→converging; the
+  diverging-input carrier-referencing path needs its own root-cause.
+- **H7 (open, known class) — GBD diverging-beam energy collapse**:
+  power conservation 1e-4 + NaN warnings (gbd.py:272) — the documented
+  paraxial-frame limitation on strongly-diverging relays biting the 121.
+- **H8 (retest with H4 fix) — FGA at production scale**: the 345 GB
+  `_gabor_coeff` wall was measured BEFORE the H4 fix landed; the
+  default chunk-budget + exact-Jacobian path is precisely option (c)
+  from the scoreboard's bottom line — re-run exp-121-class FGA against
+  v5.25.0.
+
+Until one of (a) higher-order sag-screen projection correction,
+(b) diverging-input traced carrier fix, or (c) H8-retest succeeds, the
+**conjugate-matched `stigmatic` thin chain is the production surrogate**
+(2.97 µm / EE6 = 100% vs Zemax 2.74 µm; the real design's residual WFE
+is only ~26–35 mλ).
+
 ## Follow-ups (tracked, not blocking)
 
+- **H6 root-cause** (traced diverging-input carrier) and **H8 retest**
+  (FGA on the 121 with the H4 chunking fix) — top of the list.
 - Extended oracle matrix: 4f relay at finite conjugates (121-chain
   class), cemented doublet, point-source (ZOS Huygens PSF oracle),
   FGA's true multi-valued-caustic specialty, universal-dispatcher
