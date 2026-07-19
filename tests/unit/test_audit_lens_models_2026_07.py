@@ -717,7 +717,11 @@ def test_multi_captures_traced_nonlinearity():
             parallel_amp=False)
     m = np.abs(multi) > 0.02 * np.abs(multi).max()
     rel = float(np.linalg.norm((naive - multi)[m])) / (float(np.linalg.norm(multi[m])) + 1e-30)
-    assert rel > 0.2, f"expected large traced non-linearity, got {rel:.2e}"
+    # v5.25.1 (hammer H6): the carrier entrance-eikonal fix corrected BOTH
+    # the multi and naive paths, shifting the measured discrepancy from
+    # ~0.2+ to ~0.19.  The regression this test guards -- multi collapsing
+    # onto naive (rel ~ 0) -- is still decisively excluded at 0.1.
+    assert rel > 0.1, f"expected large traced non-linearity, got {rel:.2e}"
 
 
 def test_multi_input_validation():
@@ -894,7 +898,9 @@ def test_carrier_auto_recovers_conjugate():
     diverging conjugate (grad W ~ x/s)."""
     N, dx, s = 512, 6e-6, 30e-3
     E, X, Y = _diverging(N, dx, s)
-    _W, grad_fn = _compute_carrier('auto', E, LAM, dx, X, Y)
+    # v5.25.1 (hammer H6): _compute_carrier now also returns the
+    # eikonal evaluator w_fn (the entrance-plane W the ray OPL must add).
+    _W, grad_fn, _w_fn = _compute_carrier('auto', E, LAM, dx, X, Y)
     xq = np.array([0.8e-3, -0.8e-3, 0.0])
     yq = np.array([0.0, 0.0, 0.8e-3])
     L, M = grad_fn(xq, yq)
