@@ -149,6 +149,9 @@ def single_plane_metrics(
     dy: Optional[float] = None,
     bucket_radius: Optional[float] = None,
     ideal_peak: Optional[float] = None,
+    *,
+    background: Optional[Union[float, str]] = None,
+    aperture: Optional[Union[bool, float]] = None,
 ) -> Dict[str, float]:
     """Compute diagnostic metrics for a beam at a single z plane.
 
@@ -168,6 +171,13 @@ def single_plane_metrics(
     ideal_peak : float, optional
         Peak of the diffraction-limited reference |E|^2 at the same
         plane.  If supplied, the returned dict includes ``strehl``.
+    background, aperture : optional
+        ISO 11146 pedestal subtraction / iterative integration aperture,
+        forwarded to :func:`~lumenairy.analysis.beam_stats.beam_d4sigma`
+        (which computes ``d4sigma_x/y`` and hence ``rms_radius``).
+        Defaults ``None`` reproduce the historical whole-grid moment.
+        Use these on noisy fields so ``find_best_focus(metric='spot'
+        |'rms')`` does not lock onto a pedestal-inflated plane.
 
     Returns
     -------
@@ -184,7 +194,8 @@ def single_plane_metrics(
     peak = float(I.max())
     total = float(I.sum() * dx * dy)
     cx, cy = beam_centroid(E, dx, dy)
-    d4x, d4y = beam_d4sigma(E, dx, dy)
+    d4x, d4y = beam_d4sigma(
+        E, dx, dy, background=background, aperture=aperture)
     # 1-sigma radius from D4sigma (full = 4*sigma by definition)
     sigma_x = d4x / 4.0
     sigma_y = d4y / 4.0
@@ -301,6 +312,8 @@ def through_focus_scan(
     progress: Optional[Callable[..., Any]] = None,
     *,
     backend: str = 'numpy',
+    background: Optional[Union[float, str]] = None,
+    aperture: Optional[Union[bool, float]] = None,
 ) -> 'ThroughFocusResult':
     """Propagate an exit-pupil field to each z and collect metrics.
 
@@ -328,6 +341,13 @@ def through_focus_scan(
         Passed to :func:`angular_spectrum_propagate`.
     verbose : bool, default False
         Print progress as the scan runs.
+    background, aperture : optional
+        ISO 11146 second-moment conditioning forwarded per-plane to
+        :func:`single_plane_metrics` -> ``beam_d4sigma`` so that
+        ``rms_radius`` / ``d4sigma_*`` (and hence a subsequent
+        :func:`find_best_focus`) are not skewed by an intensity
+        pedestal.  Defaults ``None`` reproduce the historical whole-grid
+        moment.  ``numpy`` backend only (raises on ``backend='jax'``).
 
     Returns
     -------
@@ -352,6 +372,11 @@ def through_focus_scan(
     one-shot ASM step, just with the FFT and K-grids reused.
     """
     if backend == 'jax':
+        if background is not None or aperture is not None:
+            raise NotImplementedError(
+                "through_focus_scan: background / aperture (ISO 11146 "
+                "second-moment conditioning) are only implemented on the "
+                "numpy backend; got backend='jax'.")
         return through_focus_scan_jax(
             E_exit, dx, wavelength, z_values,
             bucket_radius=bucket_radius, ideal_peak=ideal_peak,
@@ -437,6 +462,8 @@ def through_focus_scan(
             E_z, dx, wavelength,
             bucket_radius=bucket_radius,
             ideal_peak=ideal_peak,
+            background=background,
+            aperture=aperture,
         )
         peak_I[i] = m['peak_I']
         d4x[i] = m['d4sigma_x']
@@ -1155,7 +1182,26 @@ def through_focus_scan_jax(
     # are baked into the cached jit kernel -- see
     # `_build_through_focus_scan_jax_kernel`.  Only the input FFT and
     # the z-array are runtime arguments.
-    E_jax = jnp.asarray(E_exit)
+    #
+    # v5.24.4 (AUDIT_V5_24_2 S3-2): guard the silent complex128 ->
+    # complex64 truncation.  When ``E_exit`` is double precision but
+    # ``jax_enable_x64`` is off (JAX's default, which lumenairy never
+    # flips), ``jnp.asarray`` downcasts to complex64 and the ASM kernel
+    # phase ``kz * z`` (~1e5 rad here) loses all sub-radian accuracy in
+    # float32 -- peak intensity drifts ~1-15% and best-focus Strehl can
+    # exceed 1, silently mis-ranking designs.  Resolve the target dtype
+    # through the shared helper, which auto-enables x64 (with a one-shot
+    # RuntimeWarning) when double precision is requested but disabled --
+    # the same contract fft_infra._resolve_jax_complex_dtype gives every
+    # other JAX entry point.  A caller that explicitly wants single
+    # precision passes a complex64 field and is respected silently.
+    from ..propagators.fft_infra import _resolve_jax_complex_dtype
+    _in_dtype = (np.dtype(E_exit.dtype) if hasattr(E_exit, 'dtype')
+                 else np.asarray(E_exit).dtype)
+    _cdtype = _resolve_jax_complex_dtype(
+        np.complex64 if _in_dtype == np.dtype(np.complex64)
+        else np.complex128)
+    E_jax = jnp.asarray(E_exit).astype(_cdtype)
     Ny, Nx = E_jax.shape[-2:]
     E_fft_shifted = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(E_jax)))
 
@@ -1199,6 +1245,20 @@ def through_focus_scan_jax(
 
     # Per-plane metrics.  Bring back to NumPy at the metric boundary
     # since the metrics package isn't JAX-vmapped.
+    #
+    # NOTE (AUDIT_V5_24_2 S3-19): the peak / strehl / d4sigma / bucket /
+    # rms block below is a hand-inlined twin of ``single_plane_metrics``
+    # (this module).  It is NOT byte-identical and deliberately not merged:
+    #   * power_in_bucket here masks with a STRICT ``r < bucket_radius``,
+    #     while ``single_plane_metrics`` -> ``radial_power_bands`` uses
+    #     ``R2 <= r*r`` (differs only for a pixel exactly on the boundary);
+    #   * rms_radius here is an INDEPENDENT second moment, whereas the
+    #     NumPy twin derives it from ``beam_d4sigma`` (agree analytically,
+    #     ~1e-15 in summation order).
+    # Consolidating would change results at those edges, so parity is
+    # instead pinned by a smooth-field regression test
+    # (tests/unit/test_through_focus_metric_parity.py).  This inline path
+    # has no background/aperture pedestal controls (always whole-grid).
     #
     # v5.17 audit (P3-03): stream the host copy ONE plane at a time
     # (np.asarray(fields[i]) inside the loop) instead of materialising
@@ -1259,7 +1319,14 @@ def through_focus_scan_jax(
             rms_r[i] = float(np.sqrt(sigma_sq))
 
     best_strehl = float(np.nanmax(strehl)) if ideal_peak else float('nan')
-    best_spot = float(np.nanmin(rms_r))
+    # v5.24.5 (AUDIT_V5_24_2 S3-8): mirror the NumPy twin's all-NaN guard
+    # (through_focus_scan lines 461-462).  On an all-zero scan every plane
+    # leaves rms_r at its NaN default, and an unguarded np.nanmin over an
+    # all-NaN slice warns ("All-NaN slice encountered") and raises under
+    # warnings-as-errors -- diverging from the NumPy backend, which returns
+    # NaN cleanly.  Guarding restores best_focus_spot backend parity.
+    best_spot = (float(np.nanmin(rms_r))
+                 if np.any(np.isfinite(rms_r)) else float('nan'))
     return ThroughFocusResult(
         z=z_arr, peak_I=peak_I, strehl=strehl,
         d4sigma_x=d4x, d4sigma_y=d4y, rms_radius=rms_r,
@@ -1326,6 +1393,20 @@ def monte_carlo_tolerancing_jax(
         raise ImportError(
             'JAX is not installed; install with `pip install jax` or '
             'use monte_carlo_tolerancing() (NumPy).')
+    # v5.24.4 (AUDIT_V5_24_2 S3-2): same silent-truncation guard as
+    # through_focus_scan_jax, applied up front so BOTH the JAX wave leg
+    # (apply_real_lens_traced_jax below) and the fused through-focus
+    # scan run in the requested precision instead of a silent float32
+    # downcast that corrupts the per-trial Strehl statistics.  Auto-
+    # enables x64 with a one-shot RuntimeWarning when ``E_source`` is
+    # double precision but jax_enable_x64 is off; a complex64 source is
+    # respected silently.
+    from ..propagators.fft_infra import _resolve_jax_complex_dtype
+    _mc_in_dtype = (np.dtype(E_source.dtype) if hasattr(E_source, 'dtype')
+                    else np.asarray(E_source).dtype)
+    _resolve_jax_complex_dtype(
+        np.complex64 if _mc_in_dtype == np.dtype(np.complex64)
+        else np.complex128)
     from ..elements.lenses import (
         apply_real_lens,
         apply_real_lens_traced_jax,

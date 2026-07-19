@@ -216,24 +216,18 @@ class InterferometryDock(QWidget):
             self.summary.append('Load OPD first.')
             return
         try:
-            from lumenairy.analysis.interferometry import (
-                simulate_interferogram, phase_shift_extract)
+            from lumenairy.analysis.interferometry import phase_step_roundtrip
             steps = self.spin_steps.value()
-            shifts = 2 * np.pi * np.arange(steps) / steps
-            frames = []
-            for s in shifts:
-                fr = simulate_interferogram(
-                    self._opd, self._wavelength,
-                    tilt_x=self.spin_tx.value(),
-                    tilt_y=self.spin_ty.value(),
-                    visibility=self.spin_vis.value(),
-                    dx=self._dx)
-                # Apply the reference shift by adding a uniform phase
-                # to the reference arm (intensity pattern adjusts).
-                frames.append(fr)  # simulate already returns intensity
-            phi = phase_shift_extract(
-                np.asarray(frames), shifts=shifts,
-                convention=self.combo_convention.currentText())
+            conv = self.combo_convention.currentText()
+            # Temporal phase stepping needs no spatial carrier: run the PSI
+            # round-trip at ZERO reference tilt so the extracted phase is
+            # directly comparable to the truth OPD.  phase_step_roundtrip
+            # actually applies each reference shift (convention-matched sign)
+            # and unpacks the (phase, modulation) tuple -- the previous inline
+            # copy did neither, so its residual was meaningless.
+            phi, _mod, _shifts = phase_step_roundtrip(
+                self._opd, self._wavelength, steps=steps, convention=conv,
+                dx=self._dx, visibility=self.spin_vis.value())
             # Compare to truth (wrapped for fair comparison)
             true_wrapped = np.angle(np.exp(1j * 2 * np.pi *
                                             self._opd / self._wavelength))

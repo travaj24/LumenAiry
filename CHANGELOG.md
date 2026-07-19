@@ -4,7 +4,57 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
-## [5.24.3] — 2026-07-17
+## [5.24.4] — 2026-07-18
+
+Exhaustive whole-library audit (`docs/audits/AUDIT_V5_24_2_2026_07_17_EXHAUSTIVE.md`)
+remediation: **88 findings fixed** across P1 (11), P2 (23), P3 (54) plus the
+follow-ups the new JAX-CI leg surfaced.  10 P3 items are documented-deferred
+(genuinely not byte-identical-consolidatable, or public-API changes that need a
+deprecation cycle) — see the commit history for each rationale.
+
+### Added
+
+- **JAX now runs in CI.** A dedicated non-matrix `jax-unit` job installs the
+  `jax` extra and runs the jax-guarded suite on jax 0.11 (audit S4-4) — the
+  previously-invisible JAX paths are now gated.  BLAS threads are pinned in that
+  job to avoid a JAX×OpenBLAS OpenMP deadlock in numpy's `lstsq`.
+- **FGA opt-in performance levers** (`coarse_stride`, `exact_jacobian`,
+  `cache_trace`) — no-accuracy-loss speedups for repeated propagations through
+  fixed optics; each is off by default.
+- Optional `jones` field on the `Source` dataclass (audit S3-17): carried
+  metadata for vectorial pipelines; scalar propagators are unaffected.
+- A validation smoke leg for the newest propagators
+  (fga / multibranch / levin / chebyshev / mft, audit S5-13).
+
+### Fixed
+
+- **Seidel Petzval sign (audit S3-1).**  `S4` (Petzval) sat on the OPPOSITE
+  sign convention to `S1`–`S3`, corrupting `S5` (distortion) and `seidel_wfe`
+  field curvature.  Corrected and **verified against three independent oracles
+  external to the library** — rayoptics 0.9.8, the analytic Petzval theorem
+  (`P = Σ c(n'-n)/(n'n)`), and the stop-at-thin-lens distortion-vanishing
+  theorem (`|S5/S1|` now `4e-8`).  Permanent cross-oracle gates added.
+- **FGA t=0 identity power (audit S2-2, a v5.24.3 regression).**  The auto
+  momentum sampler could drop `p_max` below the beamlet momentum width, hiding
+  a 30–35 % power deficit behind `fidelity ~ 1`; a completeness floor restores it.
+- **Multibranch rasterizer double-counting (audit S2-1)** — shared triangle-edge
+  pixels no longer add spurious energy (up to +53 %).
+- **JAX complex64 phase loss (audit S2-3)** in ASM / MFT / Fresnel; and the
+  canonical-poly fit's differentiable solve now has a finite VJP under jax≥0.11
+  (`jnp.linalg.lstsq`'s SVD gradient NaN'd on near-degenerate singular values;
+  replaced with a normal-equations solve — same forward, finite gradient).
+- The full P1/P2/P3 remediation across the EM engines (RCWA/PMM/Berreman/EME/BOR),
+  wave propagators (ASM/GBD/FGA/Maslov/Levin), ray tracing, sources, analysis,
+  IO, and the optimizer — silent-fallback guards, energy/convergence tripwires,
+  dead-code removal, byte-identical de-duplication of 4 genuine copy clusters,
+  measured no-loss perf wins, and ~30 convention/docstring corrections
+  (including the actively-dangerous `CONVENTIONS.md` waveplate slow-axis row).
+
+### Changed
+
+- **`jax` dependency floor raised `>=0.4.20` → `>=0.11.0`** — the supported
+  baseline going forward (the audit fixes and jnp/np parity bars are validated
+  against it).
 
 ### Fixed
 
@@ -7288,8 +7338,9 @@ Cross-agent test breakage closed:
 * CHANGELOG line-citation refresh:
   `optimize/core.py:3032` -> `optimize/wrapper_merits.py:955`
   (`_ZERO_APERTURE_MASK` branch); `optimize/core.py:987` ->
-  `optimize/merit_terms.py:524` (`MatchIdealSystem._make_source`
-  `ap>0` branch); `optimize/core.py:2044-2054` ->
+  `optimize/merit_terms.py:536` (`MatchIdealSystem._make_source`
+  `ap>0` branch; v5.24.4: the S4-5 failure-direction fix shifted it
+  from :524); `optimize/core.py:2044-2054` ->
   `optimize/context.py:74-84` (sentinel class block).
 * `lumenairy_context` redundant-call elimination tests updated to
   patch at the canonical submodule location (`zernike_mod`,
@@ -9103,9 +9154,10 @@ routes through `_deprecation.warn_deprecated_signature` with explicit
   (was a literal `1e9` fallback for failed ABCD), `_FailedScanStrehlSentinel`
   (was `0.0`), `_PerturbedABCDFallbackSentinel` (was a `(efl, bfl)`
   tuple fallback).  v5.1.0 (Wave-4 integration / Agent E 6-file
-  split): class definitions moved to `optimize/context.py:112-139`
+  split): class definitions moved to `optimize/context.py:151-178`
   (the 2 remaining sentinels post-v4.15.4
-  `_PerturbedABCDFallbackSentinel` deletion); was at
+  `_PerturbedABCDFallbackSentinel` deletion; v5.24.4 audit S4-18
+  optimizer hygiene shifted them from `:112-139`); was at
   `optimize/core.py:2069`, `:2096`, `:2122` (singletons at `:2093`,
   `:2119`, `:2144`) within the `:2044-2144` documentation block
   pre-v5.1.0.

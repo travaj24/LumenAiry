@@ -257,24 +257,28 @@ def lumenairy_context(
             if clear_caches_on_exit:
                 # v4.15.0 (P2-CTX-1): a single call to
                 # ``clear_asm_caches`` is now the canonical drain
-                # entry point.  v4.14.3 finished wiring all 8
-                # sibling caches into the chain (LG/HG mode-stack,
-                # LG polynomial coefficients, wrapper-merit meshgrid,
-                # Zernike basis, through-focus JAX scan, propagate-
-                # through-system JAX, phase-retrieval kernels,
-                # raytrace JAX), so on a healthy install the chain
-                # walks all 7 sibling clearers internally.  Pre-v4.15
-                # this block also OPEN-CODED ``clear_asm_caches`` +
-                # 7 sibling fan-out calls; each sibling re-acquired
-                # its own cache lock, costing 6+ redundant lock
-                # acquisitions per context-manager exit.  v4.15
-                # routes the happy path through a single call to
-                # ``clear_asm_caches`` and falls back to the per-
-                # sibling fan-out **only if the canonical chain
-                # path failed** (preserving the v4.13.1 P1-E
-                # defence-in-depth guarantee that an ImportError
-                # in ``propagation`` does not silently strand the
-                # other 7 cache clearers).
+                # entry point.  It routes through the central
+                # cache-clearer registry (:mod:`lumenairy._cache_registry`),
+                # so every cache-owning module that registered a
+                # clearer at import time is drained -- ASM local
+                # caches, LG/HG mode-stack, LG polynomial, Zernike
+                # basis, through-focus / propagate-system / raytrace
+                # JAX, phase-retrieval kernels, berreman / pmm / rcwa
+                # / glass / wrapper-merit / eme_jax / bluestein, etc.
+                #
+                # v5.24.x (audit S4-15): the fallback below no longer
+                # hand-lists a subset of clearers.  Pre-fix it enumerated
+                # only 7 siblings and OMITTED berreman/pmm/rcwa/glass/
+                # wrapper_merit/eme_jax/bluestein -- the exact "fix N,
+                # miss N+1" drift the registry was built to retire.  If
+                # the ``propagation`` re-export is unavailable (partial
+                # install / rename / circular import) we now walk the
+                # registry directly via ``clear_all_registered_caches``,
+                # which drains EVERY registered clearer rather than a
+                # frozen hand-list.  This preserves the v4.13.1 P1-E
+                # defence-in-depth guarantee (a broken ``propagation``
+                # link does not strand the rest of the cache hygiene)
+                # without the maintenance hazard of a divergent subset.
                 _chain_called = False
                 try:
                     from .propagators.propagation import clear_asm_caches
@@ -283,55 +287,18 @@ def lumenairy_context(
                 except (ImportError, RuntimeError, AttributeError):
                     pass
                 if not _chain_called:
-                    # v4.13.1 (P1-E) defence-in-depth fallback:
-                    # canonical chain path unavailable (partial
-                    # install / rename / circular import).  Fire
-                    # each sibling clearer independently so a single
-                    # rotten link in the propagation chain does not
-                    # take down the rest of the cache hygiene.
-                    # Each block guarded with the same narrowed-
-                    # except tuple as v4.13.0 Phase-2.
+                    # v5.24.x (audit S4-15) defence-in-depth fallback:
+                    # canonical chain path unavailable.  Walk the
+                    # central registry directly -- it drains every
+                    # registered clearer, so no cache is silently
+                    # skipped.  The registry lives in the package root
+                    # with no propagation-layer dependency, so it is
+                    # importable even when ``propagation`` is not.
                     try:
-                        from .analysis.core import clear_zernike_basis_cache
-                        clear_zernike_basis_cache()
-                    except (ImportError, RuntimeError, AttributeError):
-                        pass
-                    try:
-                        from .propagators.asymptotic import (
-                            clear_lg_polynomial_cache,
+                        from ._cache_registry import (
+                            clear_all_registered_caches,
                         )
-                        clear_lg_polynomial_cache()
-                    except (ImportError, RuntimeError, AttributeError):
-                        pass
-                    try:
-                        from .raytrace.jax_trace import clear_trace_jax_cache
-                        clear_trace_jax_cache()
-                    except (ImportError, RuntimeError, AttributeError):
-                        pass
-                    try:
-                        from .propagators.system import clear_propagate_system_jax_cache
-                        clear_propagate_system_jax_cache()
-                    except (ImportError, RuntimeError, AttributeError):
-                        pass
-                    try:
-                        from .analysis.phase_retrieval import (
-                            clear_phase_retrieval_caches,
-                        )
-                        clear_phase_retrieval_caches()
-                    except (ImportError, RuntimeError, AttributeError):
-                        pass
-                    try:
-                        from .analysis.through_focus import (
-                            clear_through_focus_scan_jax_cache,
-                        )
-                        clear_through_focus_scan_jax_cache()
-                    except (ImportError, RuntimeError, AttributeError):
-                        pass
-                    try:
-                        from .propagators.asymptotic import (
-                            clear_lg_mode_stack_cache,
-                        )
-                        clear_lg_mode_stack_cache()
+                        clear_all_registered_caches()
                     except (ImportError, RuntimeError, AttributeError):
                         pass
 

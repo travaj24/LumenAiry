@@ -88,6 +88,14 @@ _LOCK_WITHOUT_CACHE_EXEMPTIONS = frozenset({
     # state it guards is the registry membership itself; documenting
     # here that the pair is intentional.
     '_REGISTRY_LOCK',
+    # v5.24.4 (audit S5-8, perf no-loss): ``_BLAS_CONTROLLER_LOCK`` in
+    # ``lumenairy.elements.rcwa._core`` guards the LAZY BUILD-ONCE of a
+    # process-wide ``threadpoolctl.ThreadpoolController`` singleton
+    # (``_BLAS_CONTROLLER``), which amortises the ~9 ms BLAS-DLL enumeration
+    # across an N-wavelength sweep.  It guards a build-once operation on a
+    # read-only singleton, NOT a growable keyed cache -- so it legitimately
+    # has no companion ``_CACHE`` (same rationale as ``_ZARR_MKDIR_LOCK``).
+    '_BLAS_CONTROLLER_LOCK',
 })
 
 # Pattern-based exemption: ``_<X>_PATCH_LOCK`` guards an in-place

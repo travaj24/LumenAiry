@@ -38,6 +38,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
@@ -1201,3 +1202,203 @@ def stokes_to_dop(stokes: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
     dolp = np.where(mask, np.sqrt(S1 ** 2 + S2 ** 2) / safe, 0.0)
     docp = np.where(mask, np.abs(S3) / safe, 0.0)
     return {'DOP': dop, 'DOLP': dolp, 'DOCP': docp}
+
+
+# ===========================================================================
+# Engine -> propagator bridge: build a JonesField from per-order plane-wave
+# amplitudes (AUDIT_V5_24_2 S5-5).  The carrier / power-normalization math was
+# verified convention-correct on ``RCWAResult`` (v5.5.3, audit P1); it lived
+# only there, so PMM / Berreman consumers had to hand-assemble it.  Factored
+# here as the SINGLE source of truth, keyed on the shared
+# ``per_order_amplitudes`` dict contract, and delegated to by
+# ``RCWAResult.to_multiorder_field`` (byte-identical).
+# ===========================================================================
+
+def _order_power_scale(ax, ay, kz_m, kx_m, ky_m, kz_inc, kx0, ky0, incident):
+    """Scale ``s`` so the deposited tangential power ``|s ax|^2 + |s ay|^2``
+    equals one diffraction order's TRUE efficiency.
+
+    A diffracted order carries power ``flux*(|ax|^2+|ay|^2+|az|^2)/einc_sq``
+    with the Poynting flux weight ``flux = Re(kz_m/kz_inc)``, the longitudinal
+    field ``az = -(kx ax + ky ay)/kz`` (large for steep orders), and the
+    incident ``|E|^2 = einc_sq``.  Depositing the raw tangential
+    ``|ax|^2+|ay|^2`` drops all three, so the reconstructed field violates
+    energy conservation and can show the wrong dominant order.  Returns ``0``
+    for an evanescent order (no propagating power).  All ``k`` are normalised
+    by ``k0``; ``incident`` is the ``(2,)`` Jones drive."""
+    tang = float(abs(ax) ** 2 + abs(ay) ** 2)
+    flux = float(np.real(kz_m / kz_inc)) if kz_inc != 0 else 0.0
+    if tang < 1e-300 or flux <= 0.0:      # evanescent / no tangential power
+        return 0.0
+    az = -(kx_m * ax + ky_m * ay) / (kz_m if abs(kz_m) > 1e-12 else 1.0)
+    inc = np.asarray(incident, dtype=np.complex128).reshape(2)
+    ez_inc = (-(kx0 * inc[0] + ky0 * inc[1]) / kz_inc) if kz_inc != 0 else 0.0
+    einc_sq = float(abs(inc[0]) ** 2 + abs(inc[1]) ** 2 + abs(ez_inc) ** 2)
+    eff = flux * (tang + float(abs(az) ** 2)) / (einc_sq if einc_sq else 1.0)
+    return float(np.sqrt(eff / tang)) if eff > 0.0 else 0.0
+
+
+def _plane_wave_carrier(kx_m, ky_m, wavelength, nx, ny, dx, dy):
+    """Unit plane-wave carrier ``exp(i (kx_m x + ky_m y))`` of one order on a
+    centred ``(ny, nx)`` grid.  ``kx_m`` / ``ky_m`` are stored normalised by
+    ``k0 = 2*pi/wavelength``."""
+    k0 = 2.0 * np.pi / wavelength
+    kx = k0 * float(np.real(kx_m))                     # physical [1/m]
+    ky = k0 * float(np.real(ky_m))
+    xg = (np.arange(nx) - nx // 2) * dx
+    yg = (np.arange(ny) - ny // 2) * dy
+    X, Y = np.meshgrid(xg, yg)                         # (ny, nx)
+    return np.exp(1j * (kx * X + ky * Y)).astype(np.complex128)
+
+
+def _order_lanczos_sigma(orders):
+    """Per-order Lanczos sigma factors ``sinc(m/(Mx+1)) sinc(n/(My+1))`` (1-D:
+    the y-factor is 1), indexed by flat order index -- damps the high orders
+    smoothly to suppress Gibbs ringing in the reconstructed real-space
+    field."""
+    o = np.asarray(orders)
+    if o.ndim == 2:
+        mx = max(1, int(np.abs(o[:, 0]).max()))
+        my = max(1, int(np.abs(o[:, 1]).max()))
+        return (np.sinc(o[:, 0] / (mx + 1.0))
+                * np.sinc(o[:, 1] / (my + 1.0)))
+    mx = max(1, int(np.abs(o).max()))
+    return np.sinc(o / (mx + 1.0))
+
+
+def _order_flat_index(orders, order):
+    """Flat index of a diffraction order in an ``orders`` array (1-D ``(N,)``
+    of ``m`` or 2-D ``(N, 2)`` of ``(m, n)``); ``order`` may be an ``int``
+    (``n`` defaults to 0) or an ``(m, n)`` pair."""
+    o = np.asarray(orders)
+    if o.ndim == 2:
+        if np.ndim(order) == 0:
+            hit = np.where((o[:, 0] == int(order)) & (o[:, 1] == 0))[0]
+        else:
+            m, n = order
+            hit = np.where((o[:, 0] == int(m)) & (o[:, 1] == int(n)))[0]
+    else:
+        if np.ndim(order) == 0:
+            hit = np.where(o == int(order))[0]
+        else:
+            m, n = order
+            hit = (np.where(o == int(m))[0] if int(n) == 0
+                   else np.asarray([], dtype=int))
+    if hit.size == 0:
+        raise ValueError(
+            f"jones_field_from_orders: order {order!r} is outside the "
+            f"retained range; increase n_orders on the solve.")
+    return int(hit[0])
+
+
+def jones_field_from_orders(amps, nx, ny, dx, *, incident=(1.0, 0.0),
+                            normalize="power", orders=None, filter="none",
+                            dy=None):
+    """Reconstruct a diffracted field as a :class:`JonesField` from an engine's
+    per-order plane-wave amplitudes -- the engine->propagator bridge for ANY
+    solver exposing the ``per_order_amplitudes`` dict contract (RCWA, PMM,
+    2-D PMM), not just :class:`RCWAResult` (AUDIT_V5_24_2 S5-5).
+
+    ``E(x, y) = sum_m A_m exp(i (kx_m x + ky_m y))`` over the requested
+    ``orders`` (default: every PROPAGATING order, ``Re(kz) > 0``), on a centred
+    ``(ny, nx)`` grid of pitch ``dx`` (``dy`` defaults to ``dx``).
+
+    Parameters
+    ----------
+    amps : dict
+        A ``per_order_amplitudes(port)`` dict: ``orders`` (``(N,)`` or
+        ``(N, 2)``), ``Ex`` / ``Ey`` each ``(2, N)`` (row 0 = response to
+        incident lab ``E_x``, row 1 to ``E_y``), ``kx`` / ``ky`` / ``kz``
+        normalised by ``k0``, ``wavelength``, and the incidence terms
+        ``kz_inc`` / ``kx0`` / ``ky0`` (the incident-medium specular ``kz`` and
+        transverse wavevectors the ``normalize='power'`` flux weight needs --
+        the transmission-port ``kz`` is the SUBSTRATE ``kz``, not the incident
+        one).  The dict already selects the reflection or transmission port.
+    nx, ny : int
+        Output grid shape ``(ny, nx)``.
+    dx : float
+        Grid pitch [m] (``dy`` defaults to ``dx``).
+    incident : (2,) complex, optional
+        Incident Jones vector ``(E_x, E_y)``.  Default ``(1, 0)``.
+    normalize : {'power', 'field'}, optional
+        ``'power'`` (default) scales each order so ``sum |A_m|^2`` equals the
+        sum of the propagating-order diffraction EFFICIENCIES (energy-correct,
+        right dominant order); ``'field'`` deposits the raw tangential boundary
+        amplitudes (whose ``|.|^2`` is NOT power -- it drops the Poynting flux
+        weight and the longitudinal component).
+    orders : sequence, optional
+        Explicit orders to superpose (each an ``int`` or ``(m, n)``); default
+        is every propagating order.  Evanescent explicit orders are skipped
+        with a warning.
+    filter : {'none', 'lanczos'}, optional
+        ``'lanczos'`` damps the high orders (Gibbs suppression at sharp
+        permittivity steps) -- a visualisation aid, not energy-exact.
+    dy : float, optional
+        Grid pitch in y [m] (default ``dx``).
+
+    Returns
+    -------
+    JonesField
+        The reconstructed field on a centred ``(ny, nx)`` grid.  The
+        reconstruction is exact only over one unit cell (the field is
+        quasi-periodic); evanescent orders are excluded.
+    """
+    if normalize not in ("power", "field"):
+        raise ValueError(
+            f"jones_field_from_orders: normalize must be 'power' or 'field', "
+            f"got {normalize!r}.")
+    if filter not in ("none", "lanczos"):
+        raise ValueError(
+            f"jones_field_from_orders: filter must be 'none' or 'lanczos', "
+            f"got {filter!r}.")
+    for key in ("orders", "Ex", "Ey", "kx", "ky", "kz", "wavelength",
+                "kz_inc", "kx0", "ky0"):
+        if key not in amps:
+            raise ValueError(
+                f"jones_field_from_orders: the amplitude dict is missing "
+                f"{key!r}; pass a per_order_amplitudes(port) dict from a "
+                f"NumPy solve (kz_inc/kx0/ky0 are required for the power "
+                f"normalization).")
+    oarr = np.asarray(amps["orders"])
+    Ex = np.asarray(amps["Ex"])
+    Ey = np.asarray(amps["Ey"])
+    kx = np.asarray(amps["kx"])
+    ky = np.asarray(amps["ky"])
+    kz = np.asarray(amps["kz"])
+    wavelength = amps["wavelength"]
+    kz_inc, kx0, ky0 = amps["kz_inc"], amps["kx0"], amps["ky0"]
+    inc = np.asarray(incident, dtype=np.complex128).reshape(2)
+    sigma = _order_lanczos_sigma(oarr) if filter == "lanczos" else None
+    if orders is None:
+        idxs = [i for i in range(kz.shape[0]) if np.real(kz[i]) > 1e-12]
+    else:
+        idxs = []
+        for o in orders:
+            i = _order_flat_index(oarr, o)
+            if np.real(kz[i]) <= 1e-12:
+                warnings.warn(
+                    f"jones_field_from_orders: order {o!r} is evanescent "
+                    f"(Re(kz) <= 0) and is skipped; it carries no propagating "
+                    f"power.", stacklevel=2)
+                continue
+            idxs.append(i)
+    ny_i, nx_i = int(ny), int(nx)
+    dx_f = float(dx)
+    dy_f = float(dx if dy is None else dy)
+    ex = np.zeros((ny_i, nx_i), dtype=np.complex128)
+    ey = np.zeros((ny_i, nx_i), dtype=np.complex128)
+    for idx in idxs:
+        ax = complex(inc @ Ex[:, idx])
+        ay = complex(inc @ Ey[:, idx])
+        if normalize == "power":
+            s = _order_power_scale(ax, ay, complex(kz[idx]), complex(kx[idx]),
+                                   complex(ky[idx]), kz_inc, kx0, ky0, inc)
+            ax, ay = s * ax, s * ay
+        if sigma is not None:
+            w = sigma[idx]
+            ax, ay = w * ax, w * ay
+        carrier = _plane_wave_carrier(kx[idx], ky[idx], wavelength,
+                                      nx_i, ny_i, dx_f, dy_f)
+        ex += ax * carrier
+        ey += ay * carrier
+    return JonesField(ex, ey, dx=dx, dy=dy)

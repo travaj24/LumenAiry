@@ -33,43 +33,17 @@ from ._core import (
     _pmm_solve,
     _pmm_solve_segments,
     _promote_eps_tensor,
-    _resolve_incidence,
+    _resolve_incidence_checked,
     _resolve_order_count,
     _stabilize_jones,
     _stabilize_scalar,
 )
 
-
-def _resolve_incidence_checked(fn_name, angle, theta):
-    """Resolve the ``angle``/``theta`` alias, then REJECT back-side incidence
-    (audit P3-29): the angle enters the 1-D solve only as ``kx0 ~ sin(angle)``,
-    so ``|angle| >= pi/2`` would otherwise alias BYTE-IDENTICALLY to the
-    supplementary front-side angle ``pi - angle`` -- a plausible,
-    energy-conserving answer for the WRONG geometry.  Raises ``ValueError``
-    instead.  Composes with (does not duplicate) the grazing guard, which
-    catches ``kz_inc ~ 0`` just BELOW ``pi/2``.  A TRACED JAX angle (under
-    ``jit``/``grad``) has no concrete value to range-check and SKIPS the guard
-    (the rcwa ``_reject_jax_offplane`` tracer carve-out); a CONCRETE JAX angle
-    is checked.  A non-numeric angle is passed through for the solver's own
-    coercion to raise on."""
-    angle = _resolve_incidence(angle, theta)
-    if is_jax_array(angle):
-        try:                                 # concrete JAX array -> inspectable
-            a_c = float(np.asarray(angle))
-        except Exception:                    # tracer -> not materialisable
-            return angle
-    else:
-        try:
-            a_c = float(angle)
-        except (TypeError, ValueError):      # non-numeric: solver coercion raises
-            return angle
-    if not abs(a_c) < 0.5 * np.pi:           # NaN also fails this comparison
-        raise ValueError(
-            f"{fn_name}: incidence angle must satisfy |angle| < pi/2 "
-            f"(front-side illumination, measured from the +z surface normal); "
-            f"got {a_c} rad.  A past-grazing angle would silently alias to "
-            f"the supplementary front-side angle (pi - angle).")
-    return angle
+# ``_resolve_incidence_checked`` is the ONE shared back-side-incidence guard
+# for the whole PMM suite; it now lives in ``._core`` so the ``PMMStack``
+# source setters route through the SAME resolver the 1-D entry points use
+# (audit S1-7 -- ``set_source`` previously bypassed it).  Re-exported here for
+# the historical ``from ...pmm.oned import _resolve_incidence_checked`` import.
 
 
 def pmm_jones_1d(
@@ -111,7 +85,12 @@ def pmm_jones_1d(
         FULL ``(3, 3)`` permittivity tensors of the ridge / groove (PUBLIC
         convention ``Im(eps) > 0`` for loss).  Pass ``scalar * np.eye(3)`` for an
         isotropic region; build LC tensors with
-        :func:`~lumenairy.elements.rcwa.uniaxial_tensor`.  OUT-OF-PLANE coupling
+        :func:`~lumenairy.elements.rcwa.uniaxial_tensor`.  CONVENTION WARNING:
+        these are PERMITTIVITY ``eps = n**2`` (isotropic: ``n**2 * np.eye(3)``),
+        whereas the scalar :func:`pmm_efficiency_1d` takes the refractive INDEX
+        ``n``; ``n_substrate`` / ``n_superstrate`` below remain INDEX in this same
+        call, so one signature mixes both conventions and a wrong-convention value
+        is silently accepted.  OUT-OF-PLANE coupling
         (``eps_xz / eps_yz / eps_zx / eps_zy != 0``, e.g. a tilted-director LC or
         a magneto-optic medium) is supported via the native full-3x3 metric
         generator (the ``eps_zz``-Schur of ``E_z`` is folded pointwise, Li 1999
@@ -170,6 +149,17 @@ def pmm_jones_1d(
 
     Notes
     -----
+    CROSS-ENGINE SEAM (audit S5-4): this standalone function returns the
+    REFLECTION Jones at ``result[3]`` (and the ``T_eff`` efficiency ARRAY at
+    ``result[2]``), matching :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` but
+    DIFFERING from :func:`~lumenairy.elements.berreman_jones_1d`, whose
+    ``(R, T, jones_r, jones_t)`` puts a Jones MATRIX at ``result[2]`` and the
+    TRANSMISSION Jones at ``result[3]``.  The transmitted Jones -- the
+    observable for a transmissive metasurface -- is NOT returned here; use
+    ``PMMStack`` (:meth:`~lumenairy.elements.pmm.PMMStack.jones_transmission`),
+    the RCWA sibling's ``return_jones_transmission=True``, or berreman's
+    ``result[3]``.
+
     NumPy / SciPy (dense generalized eig) by default.  **JAX-differentiable** for an
     IN-PLANE tensor (``exz = eyz = ezx = ezy = 0``) on a VERTICAL grating when any
     index / geometry / tensor argument is a JAX array: it routes to a self-contained
@@ -344,7 +334,15 @@ def pmm_efficiency_1d(
     period, n_ridge, n_groove, n_substrate, n_superstrate, depth, duty_cycle,
     wavelength : as in :func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d`
         (metres / PUBLIC ``n = n + i kappa``).  The ridge occupies the fraction
-        ``duty_cycle`` of the period.
+        ``duty_cycle`` of the period.  CONVENTION WARNING: like its RCWA sibling
+        this scalar entry point takes the refractive INDEX ``n`` for the
+        patterned regions, whereas the Jones family (:func:`pmm_jones_1d`,
+        :func:`~lumenairy.elements.rcwa.rcwa_jones_1d`) and every 2-D entry
+        (:func:`~lumenairy.elements.rcwa.rcwa_efficiency_2d`,
+        :func:`~lumenairy.elements.pmm.pmm_efficiency_2d`) take the PERMITTIVITY
+        ``eps = n**2`` -- a wrong-convention value is silently accepted (e.g.
+        ``n=2.1`` read as ``eps=2.1`` -> ``n_eff 1.45``), so pass ``n`` here and
+        ``n**2`` to the Jones / 2-D functions.
     angle : float, optional
         Incidence angle (radians).  Accepts ``theta`` as a cross-dimension alias
         (the 2-D / conical polar-angle spelling); overrides ``angle`` when given.

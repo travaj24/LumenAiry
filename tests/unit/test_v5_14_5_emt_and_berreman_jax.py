@@ -66,8 +66,16 @@ def test_rytov_matches_pmm_oracle_subwavelength():
     # rigorous PMM to that level.
     ea, eb, f, depth = 6.25, 1.0, 0.5, 0.25e-6
     period = 0.01 * WL
+    # v5.24.4 (audit S5-12 / S4-4): use a WELL-CONDITIONED order for the
+    # rigorous oracle.  At period = lambda/100 only the 0th order
+    # propagates; degree=20 over-resolves the cell into ~20 nearly-
+    # degenerate EVANESCENT modes, so the PMM eigensolve is ill-conditioned
+    # and BLAS-kernel-sensitive -- max|EMT-rigorous| is a stable ~8.6e-4 for
+    # degree 4..14 but jumps to ~1e-1 at degree=20 (nondeterministic across
+    # CI's heterogeneous OpenBLAS CPUs; that instability, not the EMT error,
+    # was the flake).  degree=8 resolves the physics with a stable oracle.
     o, R, T, Jr_rig = la.pmm_jones_1d(period, ea * _I3, eb * _I3, 1.5, 1.0,
-                                      depth, f, WL, degree=20)
+                                      depth, f, WL, degree=8)
     eps = rytov_tensor(ea, eb, f, order=0)
     _R, _T, Jr, _Jt = berreman_jones_1d([(eps, depth)], 1.5, 1.0, WL)
     assert np.max(np.abs(Jr - np.asarray(Jr_rig))) < 5e-3

@@ -85,8 +85,13 @@ def _ensure_pyfftw_loaded():
         return False
     if pyfftw is None:
         import pyfftw as _p
-        _p.interfaces.cache.enable()
-        _p.interfaces.cache.set_keepalive_time(30.0)
+        # S5-8 (perf, no-loss): deliberately DO NOT call
+        # ``pyfftw.interfaces.cache.enable()``.  lumenairy drives every FFT
+        # through raw ``pyfftw.FFTW`` plans held in ``_PYFFTW_PLAN_CACHE`` (see
+        # ``_get_or_make_plan``), never through the ``pyfftw.interfaces.*``
+        # wrapper API, so the interfaces cache never stores a plan for us --
+        # enabling it only spins up an idle ``PyFFTWCacheThread`` keep-alive
+        # daemon that pollutes every profile with no benefit.
         pyfftw = _p
     return True
 
@@ -106,10 +111,31 @@ from ..memory import available_cpus as _available_cpus
 # ============================================================================
 
 # Number of threads for pyFFTW.  Initialised once at import time from
-# :func:`lumenairy._backends.available_cpus`; pass a positive
-# int to override.  ``0`` falls back to pyFFTW's own default (all cores
-# as seen by libfftw3 regardless of affinity).
-FFTW_THREADS = _available_cpus()
+# :func:`lumenairy._backends.available_cpus`, capped at the oversubscription
+# knee (see below); pass a positive int to :func:`set_fft_threads` to override.
+#
+# S5-8c (perf, audit AUDIT_V5_24_2): on a many-core box (> 8 physical cores)
+# libfftw3 OVERSUBSCRIBES a single 2-D transform -- a 1024^2..2048^2 complex128
+# FFT is measured 11-18% FASTER at 8 threads than at all 24, because the
+# transform is memory-bandwidth bound past ~8 threads and the extra threads
+# only add butterfly / barrier contention.  So the DEFAULT thread count is
+# capped at ``_FFTW_DEFAULT_THREAD_CAP``.  This is NOT bit-identical to the
+# all-core count (a different thread count changes the FFT reduction order at
+# the LSB, ~1e-15 relative -- the same order-of-magnitude perturbation the
+# ESTIMATE->MEASURE auto-promote already introduces), so it is applied only to
+# the DEFAULT; pass an explicit ``set_fft_threads(n)`` to pin ANY count,
+# including all cores via ``set_fft_threads(<available_cpus()>)``.
+_FFTW_DEFAULT_THREAD_CAP = 8
+
+
+def _default_fftw_threads() -> int:
+    """Affinity-aware CPU count, capped at the oversubscription knee
+    (:data:`_FFTW_DEFAULT_THREAD_CAP`).  Used for the import-time default and
+    the ``set_fft_threads(None)`` / ``set_fft_threads(0)`` reset."""
+    return max(1, min(int(_available_cpus()), _FFTW_DEFAULT_THREAD_CAP))
+
+
+FFTW_THREADS = _default_fftw_threads()
 
 # Master switch -- route CPU FFTs through pyFFTW when the library is
 # installed.  On a 4096x4096 complex128 FFT, pyFFTW + 24 threads is
@@ -658,21 +684,11 @@ def reset_fft_backend() -> None:
     # for "what was just being computed" so dropping them on backend
     # reset matches the user's mental model.
     clear_asm_caches()
-    if PYFFTW_AVAILABLE and _ensure_pyfftw_loaded():
-        try:
-            pyfftw.interfaces.cache.disable()
-            pyfftw.interfaces.cache.enable()
-            pyfftw.interfaces.cache.set_keepalive_time(30.0)
-        except (RuntimeError, ValueError, AttributeError, MemoryError) as _exc:
-            # pyfftw can fail to reset its cache on bad PyFFTW
-            # internal state; surface the failure as a warning instead
-            # of swallowing it silently (audit feedback 3.5.4).
-            import warnings as _warnings
-            _warnings.warn(
-                f"pyfftw cache reset in reset_fft_backend failed: "
-                f"{type(_exc).__name__}: {_exc}.  pyFFTW will "
-                f"continue using the existing cache.",
-                RuntimeWarning, stacklevel=2)
+    # S5-8 (perf, no-loss): the real plan buffers live in
+    # ``_PYFFTW_PLAN_CACHE`` (cleared above under the lock); the
+    # ``pyfftw.interfaces.cache`` we used to disable/enable here is never
+    # populated by lumenairy (raw ``pyfftw.FFTW`` plans only), so toggling it
+    # freed nothing and only reset the idle keep-alive daemon.  Dropped.
 
 
 def set_fft_plan_cache_size(n: int) -> None:
@@ -1494,12 +1510,15 @@ def set_fft_threads(n: Optional[int]) -> None:
     process pool where you don't want each worker to spin up its own
     thread farm -- ``set_fft_threads(1)`` gives each worker a
     single-threaded FFT and avoids oversubscription).  Pass ``0`` or
-    ``None`` to restore the affinity-aware default from
-    :func:`lumenairy._backends.available_cpus`.
+    ``None`` to restore the affinity-aware default -- the
+    :func:`lumenairy._backends.available_cpus` count capped at the
+    S5-8c oversubscription knee (:data:`_FFTW_DEFAULT_THREAD_CAP`).  To
+    force all cores regardless of the cap, pass the count explicitly,
+    e.g. ``set_fft_threads(os.cpu_count())``.
     """
     global FFTW_THREADS, SCIPY_FFT_WORKERS
     if n is None or n == 0:
-        FFTW_THREADS = _available_cpus()
+        FFTW_THREADS = _default_fftw_threads()
         SCIPY_FFT_WORKERS = -1
     else:
         FFTW_THREADS = max(1, int(n))
@@ -1632,20 +1651,15 @@ def _handle_pyfftw_failure(x, op_name, exc):
         _PYFFTW_BAD_SHAPES.add(shape)
     if was_new:
         import warnings
-        # Flush pyFFTW's plan cache so the failed buffers are freed
-        # and subsequent SMALLER calls have room.  We keep caching
-        # enabled so that unaffected shapes still get plan reuse.
-        try:
-            pyfftw.interfaces.cache.disable()
-            pyfftw.interfaces.cache.enable()
-            pyfftw.interfaces.cache.set_keepalive_time(30.0)
-        except (RuntimeError, ValueError, AttributeError, MemoryError) as _cache_exc:
-            warnings.warn(
-                f"pyfftw cache reset after FFT failure threw "
-                f"{type(_cache_exc).__name__}: {_cache_exc}.  Continuing "
-                f"with the existing cache; if subsequent shapes also "
-                f"fail consider calling reset_fft_backend() explicitly.",
-                RuntimeWarning, stacklevel=2)
+        # S5-8 (perf, no-loss): we no longer toggle
+        # ``pyfftw.interfaces.cache`` here.  That cache belongs to the
+        # ``pyfftw.interfaces.*`` wrapper API, which lumenairy never uses (raw
+        # ``pyfftw.FFTW`` plans only), so it was always empty for us -- the
+        # disable/enable freed no failed buffers despite the old comment's
+        # claim.  This shape is recorded in ``_PYFFTW_BAD_SHAPES`` above, so
+        # subsequent calls at this shape route straight to scipy/numpy; call
+        # ``reset_fft_backend()`` to drop the resident aligned plan buffers
+        # in ``_PYFFTW_PLAN_CACHE`` once the memory pressure has passed.
         warnings.warn(
             f'pyFFTW {op_name} failed on shape {shape}: '
             f'{type(exc).__name__}: {exc}.  Falling back to '
@@ -1885,7 +1899,9 @@ def _validate_propagator_inputs(E_in, z, wavelength, dx, dy=None, *,
       ``Nx >= 4`` -- below that the band-limit and Nyquist
       diagnostics are meaningless).
     * ``z`` is a real, finite scalar (any sign; ``z = 0`` is allowed
-      and returns the input unchanged via the propagator path).
+      and returns the input unchanged via the propagator path -- the
+      z=0 transfer function is the exact identity for every grid,
+      sub-wavelength grids included; audit S2-11).
     * ``wavelength`` is a real, finite, **positive** scalar with a
       magnitude that *looks* like metres (i.e. < 1 mm).  Values
       above 1 mm raise -- almost always the caller forgot the

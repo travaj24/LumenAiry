@@ -6,6 +6,16 @@ geometric OPL accumulated by the sequential ray tracer in
 vector Snell's law at each surface, so its OPL is the physically
 correct reference for any thin-element phase-screen model.
 
+Reference oracle
+----------------
+The ONLY oracle here is lumenairy's own geometric ray tracer
+(``raytrace.trace`` OPL).  The ``.txt`` / ``.zmx`` files written into
+``zemax_prescriptions/`` are *lumenairy exports of these same test
+lenses* -- provided purely as an OPTIONAL convenience for an external
+OpticStudio cross-check.  They are NOT read back and are NOT the
+reference; nothing in this script (or in the CI gate
+``test_real_lens_opd.py``) depends on OpticStudio.
+
 For each lens case we run:
   * ``apply_real_lens(..., slant_correction=True)``   -- new default
   * ``apply_real_lens(..., slant_correction=False)``  -- old paraxial
@@ -674,9 +684,12 @@ def main():
         except Exception as e:
             print(f"    OPD CSV failed: {type(e).__name__}: {e}")
 
-        # Emit matching Zemax prescriptions so the same test can be
-        # cross-checked in OpticStudio.  One human-readable LDE table
-        # plus one best-effort .zmx per case.
+        # Emit matching prescriptions as lumenairy exports so the same
+        # test lens can OPTIONALLY be cross-checked in an external tool
+        # (e.g. OpticStudio).  These are convenience exports, NOT the
+        # validation reference -- the oracle is the geometric ray trace
+        # above.  One human-readable LDE table plus one best-effort .zmx
+        # per case.
         try:
             pres_for_export = dict(case['prescription'])
             pres_for_export['aperture_diameter'] = case['aperture']

@@ -65,12 +65,20 @@ def test_stack_jax_grazing_guard_raises(angle):
         _grazing_guard_concrete(1.0, angle)
 
 
-def test_stack_jax_grazing_guard_message_matches_numpy_stack():
-    with pytest.raises(ValueError) as exc_np:
+def test_stack_grazing_and_frontside_guards_both_reject():
+    # v5.24.4 (audit S1-7): the numpy stack's set_source now applies the
+    # front-side GEOMETRY guard (|angle| < pi/2) BEFORE .solve() -- so a pi/2
+    # grazing angle is rejected there (previously it silently aliased to the
+    # supplementary front-side angle).  The solve-level grazing/evanescent
+    # PHYSICS guard (_grazing_guard_concrete) is a SEPARATE sibling that the jax
+    # twin's concrete path uses.  Both correctly reject a grazing pi/2
+    # incidence, each with its own layer-appropriate message.
+    with pytest.raises(ValueError, match="front-side illumination") as exc_np:
         _tiny_stack().set_source(1.55e-6, angle=np.pi / 2).solve()
-    with pytest.raises(ValueError) as exc_tw:
+    with pytest.raises(ValueError, match="grazing/evanescent incidence") as exc_tw:
         _grazing_guard_concrete(1.0, np.pi / 2)
-    assert str(exc_tw.value) == str(exc_np.value)
+    assert isinstance(exc_np.value, ValueError)
+    assert isinstance(exc_tw.value, ValueError)
 
 
 def test_stack_jax_grazing_guard_valid_and_tracer_skip():
@@ -242,7 +250,12 @@ def test_jax_stack_grazing_raises():
     st.add_layer(0.2e-6, eps=2.1)
     st.add_layer(0.3e-6, segments=[(0.5, jnp.asarray(4.0 + 0j)),
                                    (0.5, 1.0 + 0j)])
-    with pytest.raises(ValueError, match="grazing/evanescent incidence"):
+    # v5.24.4 (audit S1-7): set_source now applies the front-side geometry
+    # guard (|angle| < pi/2) FIRST, so a pi/2 grazing angle is rejected there
+    # (front-side message) before it can reach the solve's grazing/evanescent
+    # physics guard.  Both are valid rejections of grazing incidence.
+    with pytest.raises(ValueError,
+                       match="grazing/evanescent incidence|front-side illumination"):
         st.set_source(1.55e-6, angle=np.pi / 2).solve()
 
 

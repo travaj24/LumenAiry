@@ -223,7 +223,10 @@ def generate_simulation_script(
     # Optionally write to file
     # ------------------------------------------------------------------
     if output_path is not None:
-        with open(output_path, 'w') as f:
+        # Pin UTF-8 so non-latin glass / system names in the generated script
+        # do not raise a cp1252 UnicodeEncodeError under the Windows locale
+        # (and so output is byte-identical across platforms).
+        with open(output_path, 'w', encoding='utf-8') as f:
             f.write(script)
 
     return script

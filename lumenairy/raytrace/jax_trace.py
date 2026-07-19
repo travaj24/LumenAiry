@@ -64,10 +64,21 @@ from ..glass import get_glass_index
 
 
 # Number of Newton iterations for aspheric ray-surface intersection.
-# 8 is plenty for typical optical aspheres at micron-grade ray
-# spacings; the sag solver in core.py uses up to 10 with an early-
-# exit, but we use a fixed count here so JIT/grad can trace once.
-_ASPHERIC_NEWTON_ITERS = 8
+# S3-13 (audit AUDIT_V5_24_2): ALIGNED to the NumPy reference's max
+# iteration count.  The sag solver in ``intersection.py`` runs
+# ``for _ in range(10)`` with an early-exit once every ray converges
+# (``|dt| < 1e-15`` and residual ``|F| < 1e-12``); this JAX kernel runs
+# a FIXED count (no data-dependent early exit -- required so jit/grad
+# trace once).  Pre-fix it stopped at 8, so a marginal asphere whose
+# Newton refinement needed the 9th/10th NumPy iteration could land at a
+# slightly different ``t`` (and, in float32, alive-mask-diverge from the
+# NumPy trace).  Matching the count (10) makes the two paths agree in the
+# fully-converged regime; the quadratic tail costs ~2 extra evals but is
+# a no-op once converged.  The post-loop residual kill
+# (``_ASPHERIC_NEWTON_RESIDUAL_TOL`` / :func:`_newton_residual_tol`)
+# mirrors the NumPy ``|F| < 1e-12`` acceptance for the genuinely
+# non-convergent rays the fixed count can't early-exit on.
+_ASPHERIC_NEWTON_ITERS = 10
 
 # v5.17.1 (audit P3-59): post-Newton residual acceptance tolerance [m].
 # The NumPy reference (intersection.py) tracks per-ray convergence and
@@ -571,10 +582,19 @@ def _transfer_jax(state, thickness, n_medium):
     division form NaN-poisoned the gradient graph); since it is exact, no
     accuracy is traded for that differentiability.
     """
-    new_x = state.x + state.L * thickness
-    new_y = state.y + state.M * thickness
-    new_z = state.z + state.N * thickness - thickness
-    new_opd = state.opd + n_medium * thickness
+    # S3-12 (AUDIT_V5_24_2 robustness): freeze DEAD rays.  The NumPy
+    # ``_transfer`` applies ``t = np.where(alive & ..., (thickness - z)/N, 0.0)``
+    # -- a ray already marked ``alive == False`` keeps its (x, y, opd) exactly.
+    # This path used to advance EVERY ray's position and OPL unconditionally,
+    # which is harmless for in-tree consumers (they all mask by ``alive``) but
+    # leaves an unmasked ``jax_state_to_raybundle`` reader seeing
+    # backend-dependent drift on the dead rows.  Scale the transfer leg by the
+    # alive mask so a dead ray matches the NumPy backend (position + OPL frozen).
+    leg = thickness * state.alive.astype(state.x.dtype)
+    new_x = state.x + state.L * leg
+    new_y = state.y + state.M * leg
+    new_z = state.z + state.N * leg - leg
+    new_opd = state.opd + n_medium * leg
     return JaxRayState(new_x, new_y, new_z,
                        state.L, state.M, state.N,
                        new_opd, state.alive)
@@ -1132,6 +1152,21 @@ def trace_jax(
     grad / jit / vmap users get correctness with the same per-call cost
     as v4.11.2.
 
+    .. warning:: **Sweep / finite-difference re-JIT thrash (S3-15).**
+       The eager cache key embeds EVERY numeric prescription value (radii,
+       conics, aspheric coeffs, thicknesses -- all of ``jp.aux``).  A loop
+       that perturbs any prescription number -- a parameter sweep, a
+       finite-difference gradient, a tolerance study -- therefore produces
+       a NEW cache key on every iteration, forcing a fresh XLA compile and
+       evicting the 32-entry LRU (so even the unperturbed baseline kernel
+       is lost).  The compile dominates the trace time and defeats the
+       cache entirely.  For those loops use :func:`trace_jax_with_params`,
+       which takes the swept radii / conics / aspheric coeffs / thicknesses
+       as JAX-array leaves through ONE compiled kernel (and is
+       ``jax.grad``-differentiable in them) -- so the geometry varies
+       without re-JIT.  ``trace_jax``'s cache is meant for repeated calls
+       at a FIXED prescription (e.g. re-tracing many ray bundles).
+
     Parameters
     ----------
     initial_state : JaxRayState
@@ -1205,6 +1240,11 @@ def trace_jax(
     # ``wavelength`` calls (glass indices in aux already depend on it,
     # but DOE-kick wavelength would still be different).
     diff_aux = jp.aux[-1]
+    # S3-15: jp.aux embeds every numeric prescription value, so a
+    # sweep/FD loop over perturbed geometry re-keys (and re-JITs) here on
+    # every iteration -- use trace_jax_with_params for that (see the
+    # docstring warning).  This key is right for repeated FIXED-geometry
+    # traces.
     cache_key = (jp.aux, float(wavelength), diff_aux)
     with _TRACE_JAX_CACHE_LOCK:
         kernel = _TRACE_JAX_CACHE.get(cache_key)

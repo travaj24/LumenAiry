@@ -2654,10 +2654,10 @@ class TestAuditFixesV4_12_1_coverage_CassegrainSeidelHandDerivation:
         S1_1 = -A_m^2 * h * delta_un = -(0.01)*0.05*(-0.2) = +1e-4
         S2_1 = -A_m*A_c * h * delta_un = -(-1e-4)*0.05*(-0.2) = -1e-6
         S3_1 = -A_c^2 * h * delta_un = -(1e-6)*0.05*(-0.2) = +1e-8
-        S4_1 = -(1/(n2*n1)) * c1 * (n2-n1) = -(1/-1)*(-2)*(-2) = +4
-        S5_1 = -(A_c/A_m) * (S3_1 + H^2*S4_1)
-             = -(0.001/-0.1) * (1e-8 + 1e-8)
-             = +2e-10
+        S4_1 = +(1/(n2*n1)) * c1 * (n2-n1) = +(1/-1)*(-2)*(-2) = -4
+        S5_1 = +(A_c/A_m) * (S3_1 + H^2*S4_1)
+             = +(0.001/-0.1) * (1e-8 - 1e-8)
+             = 0   (stop at the primary -> distortion vanishes)
 
     Transfer to secondary at d=0.4 m, n_after=-1 (parity flipped):
         u_m = -0.2/-1 = 0.2;  u_c = 0.001/-1 = -0.001
@@ -2679,14 +2679,23 @@ class TestAuditFixesV4_12_1_coverage_CassegrainSeidelHandDerivation:
         S1_2 = -(1.21)*0.13*2.6 = -0.40898
         S2_2 = -(1.1*-0.003)*0.13*2.6 = +0.0011154
         S3_2 = -(9e-6)*0.13*2.6 = -3.042e-6
-        S4_2 = -(1/(1*-1)) * (-10) * (1 - (-1)) = -(-1)*(-10)*2 = -20
-        S5_2 = -(-0.003/1.1) * (-3.042e-6 + 2.5e-9*-20)
-             = (0.003/1.1) * (-3.042e-6 - 5e-8)
-             = -8.432727e-9
+        S4_2 = +(1/(1*-1)) * (-10) * (1 - (-1)) = +(-1)*(-10)*2 = +20
+        S5_2 = +(-0.003/1.1) * (-3.042e-6 + 2.5e-9*+20)
+             = -(0.003/1.1) * (-3.042e-6 + 5e-8)
+             = +8.16e-9
 
     Totals:
         S1 = -0.40888,  S2 = +0.0011144,  S3 = -3.032e-6,
-        S4 = -16,        S5 = -8.232727e-9
+        S4 = +16,        S5 = +8.16e-9
+
+    S3-1 fix (v5.24.2 audit): the per-surface Petzval sum S_IV now
+    carries the SAME ``-S_Welford`` sign convention as S1-S3, i.e.
+    ``S4 = +(1/(n1 n2)) c (n2-n1)``, and the Schwarzschild prefactor
+    is ``+(A_c/A_m)``.  Every S4/S5 value below is therefore the
+    negative of the pre-fix pin.  These remain a self-referential
+    behaviour-freeze (they read back the library's own formula); the
+    INDEPENDENT distortion oracle is
+    ``test_seidel_ground_truth.test_stop_at_thin_lens_distortion_vanishes``.
     """
 
     @staticmethod
@@ -2755,16 +2764,18 @@ class TestAuditFixesV4_12_1_coverage_CassegrainSeidelHandDerivation:
         result, _ = seidel_coefficients(
             surfaces, wavelength=0.55e-6, field_angle=0.001)
         S5 = np.asarray(result['S5'])
-        # S5_1 = 2e-10 (handcalc); the library computes it via the
-        # Schwarzschild equation, so the hand value is exact.
-        assert abs(float(S5[0]) - 2e-10) < 1e-15, (
-            f"Primary S5 = {S5[0]!r}; expected +2e-10.")
-        assert abs(float(S5[1]) - (-8.432727272727272e-9)) < 1e-13, (
-            f"Secondary S5 = {S5[1]!r}; expected -8.432727e-9.")
+        # S3-1 fix: with S4 on the same -S_Welford convention as
+        # S1-S3 and the Schwarzschild prefactor +(A_c/A_m), the stop
+        # sits at the primary so its distortion vanishes (S5_1 -> 0)
+        # and the secondary sets the total (behaviour-freeze pin; the
+        # independent oracle is test_stop_at_thin_lens_distortion_*).
+        assert abs(float(S5[0])) < 1e-13, (
+            f"Primary S5 = {S5[0]!r}; expected ~0 (stop at primary).")
+        assert abs(float(S5[1]) - 8.16e-9) < 1e-13, (
+            f"Secondary S5 = {S5[1]!r}; expected +8.16e-9.")
         S5_total = float(result['total']['S5'])
-        assert abs(S5_total - (-8.232727272727272e-9)) < 1e-13, (
-            f"Cassegrain S5 total = {S5_total!r}; expected "
-            f"-8.232727e-9.")
+        assert abs(S5_total - 8.16e-9) < 1e-13, (
+            f"Cassegrain S5 total = {S5_total!r}; expected +8.16e-9.")
 
 
 # ============================================================================

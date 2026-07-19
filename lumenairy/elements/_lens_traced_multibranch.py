@@ -59,6 +59,31 @@ from .. import raytrace as rt
 
 __all__ = ['apply_real_lens_traced_multibranch', 'ludwig_fold']
 
+# Half-open (top-left) rasterization tie-break tolerance, in BARYCENTRIC units.
+# A pixel with |a_i| <= _EDGE_TOL is treated as lying ON mapped edge_i (see the
+# rasterizer coverage test).  It sits far above the ~1e-14 boundary noise of an
+# exactly-commensurate map (pixel centres land ~1 ULP off the mapped nodes) and
+# far below the O(0.1..1) barycentric coordinates of genuine interior pixels.
+_EDGE_TOL = 1e-9
+
+# Energy-conservation tripwire (Scope note D5): at a rotationally-symmetric
+# AXIAL point focus a whole RING of branches coalesces, but the fold-uniform
+# 'ludwig' swap regularizes only the CLOSEST PAIR -- the residual ring branches
+# keep their divergent ``1/sqrt|J|`` ART amplitudes, blowing the reconstructed
+# grid power up ~1e5..1e6x (probe: ~1e6x at the BFL plane).  A well-behaved
+# through-focus field stays within ~1.2x of the input aperture power, so a warn
+# above this multiple flags the catastrophe with no false positives.
+_ENERGY_BLOWUP_FACTOR = 10.0
+
+
+def _top_left(ex, ey):
+    """Top-left rule: an on-edge pixel is owned by the triangle whose mapped
+    edge vector ``(ex, ey)`` points up (``ey > 0``) or is horizontal pointing
+    right (``ey == 0 and ex > 0``).  Two triangles sharing a physical edge see
+    it with opposite direction vectors, so exactly one of them owns the pixel.
+    """
+    return (ey > 0.0) | ((ey == 0.0) & (ex > 0.0))
+
 
 def ludwig_fold(k, S_plus, S_minus, A_plus, A_minus):
     """Uniform (Ludwig 1966 / Kravtsov 1964) FOLD-caustic field from the two
@@ -350,12 +375,17 @@ def apply_real_lens_traced_multibranch(
     ``caustic_band='plain'`` keeps the raw branch sum everywhere.
 
     Scope note (D5): the band swaps the CLOSEST-EIKONAL branch pair, which is a
-    FOLD-uniform (Airy) replacement.  At an AXIAL point focus the symmetric
-    branch pairs have ``|S+ - S-| ~ 0`` without being fold-coalescent -- the
-    correct uniform function there is Bessel/Pearcey, not Airy.  The Ludwig
-    swap still REGULARIZES (finite where the plain sum diverges), so this is an
-    accuracy note, not a blow-up; a ``det Q-dot``-based fold-vs-point
-    discriminator is a possible future refinement.
+    FOLD-uniform (Airy) replacement.  At an AXIAL point focus a whole RING of
+    branches coalesces with ``|S+ - S-| ~ 0`` (the correct uniform function
+    there is Bessel/Pearcey, not Airy); the Ludwig swap regularizes only the
+    closest PAIR, so the remaining ring branches keep their divergent
+    ``1/sqrt|J|`` ART amplitudes and the reconstructed field DOES blow up at a
+    perfect on-axis focus -- geometric optics diverges there (probe: ~1e6x the
+    input power at the BFL plane).  A warning-only energy tripwire fires when
+    the reconstructed grid power grossly exceeds the input aperture power; route
+    those pixels to the Maslov (``'levin'``) or GBD propagator.  A
+    ``det Q-dot``-based fold-vs-point discriminator is a possible future
+    refinement.
 
     Parameters
     ----------
@@ -555,6 +585,13 @@ def apply_real_lens_traced_multibranch(
         pymin, pymax = pymin[keep], pymax[keep]
         nb_flat = n_branch.reshape(-1)
 
+        # mapped output-plane edge vectors (edge_i opposite vertex_i, on which
+        # the barycentric a_i == 0) -- for the half-open top-left tie-break
+        # below.  e0 = V2 - V1, e1 = V0 - V2, e2 = V1 - V0.
+        e0x, e0y = x2k - x1k, y2k - y1k
+        e1x, e1y = x0k - x2k, y0k - y2k
+        e2x, e2y = x1k - x0k, y1k - y0k
+
         wmax = np.maximum(pxmax - pxmin, pymax - pymin) + 1
         cls = np.ceil(np.log2(wmax)).astype(np.int64)
         for c in np.unique(cls):
@@ -580,7 +617,35 @@ def apply_real_lens_traced_multibranch(
             a1 = (wx * d01y - wy * d01x) / dn
             a2 = (d00x * wy - d00y * wx) / dn
             a0 = 1.0 - a1 - a2
-            inside = (a0 >= 0.0) & (a1 >= 0.0) & (a2 >= 0.0) & vmask
+            # HALF-OPEN (top-left rule): a pixel strictly inside a triangle has
+            # all a_i > 0; a pixel ON edge_i has a_i == 0.  A closed test
+            # (a_i >= 0) hands every shared mesh edge (cell diagonals) and
+            # shared vertex (up to 6 triangles) to ALL its neighbours, so the
+            # coherent np.add.at below double- (or 6x-) counts them -- spurious
+            # +50%..+400% energy and 2x-amplitude hot pixels.  Instead award an
+            # on-edge pixel to the single triangle whose mapped edge points up
+            # (or is horizontal pointing right): two triangles sharing a
+            # physical edge see it with opposite direction vectors, so exactly
+            # one claims it -- regardless of fold orientation.  At a shared
+            # vertex two coords are ~0 at once, so BOTH incident edges must
+            # win, which resolves the up-to-6 triangle fan to one owner too.
+            # The band |a_i| <= _EDGE_TOL (not exact == 0) is essential: even a
+            # bit-exact identity map lands pixel centres ~1 ULP off the mapped
+            # nodes, so on-edge a_i evaluate to ~1e-14, never exactly 0.  The
+            # band is applied symmetrically (barely-inside +eps and
+            # barely-outside -eps neighbours both enter the tie-break), so the
+            # single-owner property holds with no gaps.  Interior a_i are
+            # O(0.1..1) >> _EDGE_TOL >> the ~1e-14 boundary noise, so genuine
+            # multi-branch overlaps (distinct sheets from non-adjacent
+            # triangles, a_i strictly interior in both) are untouched.
+            e0i = (e0x[s, None, None], e0y[s, None, None])
+            e1i = (e1x[s, None, None], e1y[s, None, None])
+            e2i = (e2x[s, None, None], e2y[s, None, None])
+            inside = (
+                ((a0 > _EDGE_TOL) | ((np.abs(a0) <= _EDGE_TOL) & _top_left(*e0i)))
+                & ((a1 > _EDGE_TOL) | ((np.abs(a1) <= _EDGE_TOL) & _top_left(*e1i)))
+                & ((a2 > _EDGE_TOL) | ((np.abs(a2) <= _EDGE_TOL) & _top_left(*e2i)))
+                & vmask)
             if not inside.any():
                 continue
             # second-order intrapolated OPL (Kraaijpoel eq. 5.7):
@@ -655,6 +720,35 @@ def apply_real_lens_traced_multibranch(
     # E[y, x] -- transpose on return.
     E_out = E_out.T
     n_branch = n_branch.T
+
+    # ---- axial point-focus catastrophe tripwire (warning-only, D5) ------
+    # Independent energy oracle: at a rotationally-symmetric on-axis focus a
+    # RING of branches coalesces where the fold-uniform 'ludwig' swap
+    # regularizes only the closest PAIR, so the residual branch amplitudes
+    # diverge and the reconstructed grid power blows up ~1e5..1e6x (a
+    # well-behaved through-focus field stays within ~1.2x of the input aperture
+    # power).  Compare reconstructed power to the power that entered the launch
+    # aperture and warn on a gross excess -- no number change, non-JAX-only.
+    if aperture is not None:
+        ap_r = 0.5 * float(aperture)
+    else:
+        ap_r = 0.5 * N * dx
+    xg = (np.arange(N) - N / 2.0) * dx
+    r2 = xg[None, :] ** 2 + xg[:, None] ** 2
+    p_in = float(np.sum(np.abs(E_in[r2 <= ap_r * ap_r]) ** 2))
+    p_out = float(np.sum(np.abs(E_out) ** 2))
+    if p_in > 0.0 and p_out > _ENERGY_BLOWUP_FACTOR * p_in:
+        warnings.warn(
+            "apply_real_lens_traced_multibranch: reconstructed grid power is "
+            f"{p_out / p_in:.3g}x the input aperture power (up to "
+            f"{int(n_branch.max())} branches coalesce on one pixel).  This is "
+            "the axial point-focus catastrophe (Scope note D5): a RING of "
+            "branches coalesces where the fold-uniform 'ludwig' swap "
+            "regularizes only the closest PAIR, so the residual ART amplitudes "
+            "diverge.  The near-focus field is unphysical here -- use the "
+            "Maslov ('levin') or GBD propagator at an on-axis point focus.",
+            RuntimeWarning, stacklevel=2)
+
     if return_diagnostics:
         return E_out, {'kmah': m_grid, 'detJ': detJ, 'n_branch': n_branch,
                        'input_carrier': (kcx, kcy)}

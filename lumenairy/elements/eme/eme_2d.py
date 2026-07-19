@@ -362,7 +362,17 @@ def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False
     else:
         from scipy.sparse.linalg import eigs
         if sigma is None:
-            sigma = float(np.max(eps_xy.real)) * k0 ** 2
+            # Offset sigma just ABOVE the band top so it never coincides with a
+            # Bloch mode.  All ``qz^2 <= max(eps) k0^2`` (the Bloch Laplacian is
+            # negative semidefinite), and a full-extent max-eps region has a mode
+            # EXACTLY at the top -- so ``sigma = max(eps) k0^2`` makes
+            # ``(A - sigma I)`` singular and ARPACK's shift-invert LU becomes
+            # BLAS/backend-sensitive (the cross-BLAS flake commit 9759796 fixed in
+            # ``_fd_eig_dist``; the vector sibling avoids it with a band-centre
+            # sigma).  Placing sigma above the whole band keeps the top mode the
+            # nearest, preserving the 'nearest sigma' semantics; the 1e-3 relative
+            # offset mirrors ``_fd_eig_dist``'s accepted offset.
+            sigma = float(np.max(eps_xy.real)) * k0 ** 2 * (1.0 + 1e-3)
         w, Vv = eigs(A, k=min(k, N - 2), sigma=sigma)
         if not return_vecs:
             if not return_complex:

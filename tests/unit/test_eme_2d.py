@@ -108,3 +108,28 @@ def test_mode_field_matches_2dfd_eigenvector():
             np.linalg.norm(vfd) * np.linalg.norm(psi))
         assert sig < 1e-2                        # confirmed a true mode (null of G)
         assert ov > 0.999                        # reconstructed field matches the FD
+
+
+def test_ref_2d_modes_default_sigma_off_band_top():
+    """S1-4: the sparse shift-invert default sigma must sit ABOVE the band top, not
+    ON a Bloch mode.  A uniform (full-extent max-eps) cell at kx0=ky0=0 has the
+    constant Bloch mode EXACTLY at max(eps)*k0^2, so a sigma placed there makes
+    (A - sigma I) singular and ARPACK's Ritz values become BLAS-sensitive (the
+    cross-BLAS flake commit 9759796 fixed in _fd_eig_dist).  Independent oracle:
+    the DENSE eig path (no shift-invert) confirms a mode sits ON the band top and
+    gives the reference top-k that the SPARSE shift-invert must reproduce."""
+    Nx = Ny = 16
+    eps_val, kk = 4.0, 6.0
+    eps_xy = np.full((Nx, Ny), eps_val)          # uniform -> constant mode at top
+    band_top = eps_val * kk ** 2
+
+    # dense oracle (k=None -> scipy.linalg.eig, no sigma / no shift-invert)
+    dense = ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, kk)
+    assert abs(dense[0] - band_top) < 1e-6       # a mode sits EXACTLY on the band top
+    #                                              -> the OLD sigma=band_top is singular
+
+    # sparse shift-invert at the (now offset) default sigma must recover the SAME
+    # top-k modes as the dense oracle, degeneracies and all
+    sparse = np.sort(ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, kk, k=6))[::-1]
+    assert np.max(np.abs(sparse - dense[:6])) < 1e-6
+    assert abs(sparse[0] - band_top) < 1e-6      # 'nearest sigma' still targets the top

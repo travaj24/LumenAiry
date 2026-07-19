@@ -73,11 +73,17 @@ import scipy.linalg as sla
 from numpy.polynomial.legendre import leggauss
 
 from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
+from ..rcwa._core import _project_efficiency  # shared flux-projection (S1-9/S1-10)
 
 # UNCHANGED S-matrix algebra from the shipped 1-D PMM -- every region's modal
 # matrix W is square (same staggered dimension), so these are plain square
 # solves (no pseudo-inverse, no weighting).
-from ._core import _interface_smatrix, _propagation_smatrix, _redheffer_star
+from ._core import (
+    _forward_branch_flip,
+    _interface_smatrix,
+    _propagation_smatrix,
+    _redheffer_star,
+)
 
 __all__ = ["pmm_efficiency_2d_staggered"]
 
@@ -324,19 +330,6 @@ class Basis1D:
 # eps[sx,sy] * (x-seg-mass kron y-seg-mass).  For a rectangular pillar this is
 # exact (walls on element boundaries, Eq.26).
 # =========================================================================== #
-
-
-def _axis_pair(d, N, M, tau):
-    return Basis1D(d, N, M, tau)
-
-
-def _seg_outer_eps(bx: Basis1D, by: Basis1D, eps_xy):
-    """eps_xy[sx,sy] = constant eps on segment-cell (sx,sy).  Returns a function
-    that, given a per-axis reference elementary matrix pair (refx, refy) and the
-    set tensors, assembles the eps-weighted 2-D Galerkin matrix as a sum of
-    Kronecker products over segment-cells.  We instead expose the building block
-    directly in the assembler below."""
-    return np.asarray(eps_xy, dtype=_C)
 
 
 def _global_pair_segmat(basis: Basis1D, ref, setL, setR):
@@ -686,6 +679,33 @@ def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy, alpha0x=0.0, alpha0y=0.0
     return P1, P2
 
 
+def _pmm2d_project_orders(P1, P2, Wmodes, qq):
+    """Project a PMM-2D ``[E1; E2]`` modal matrix onto the Rayleigh orders --
+    the ``_proj`` closure formerly duplicated in :mod:`.stack2d_pure` and this
+    module (audit S1-10).  ``P1``/``P2`` map the E1 (Ex) / E2 (Ey) nodal blocks
+    (``qq`` rows each) onto the orders; returns the stacked
+    ``[Ex_orders; Ey_orders]``.  Reproduces the former closure operation-for-
+    operation."""
+    top = P1 @ Wmodes[:qq, :]
+    bot = P2 @ Wmodes[qq:, :]
+    return np.concatenate([top, bot], axis=0)
+
+
+def _pmm2d_order_kz(eps_sup, eps_sub, kxv, kyv, kx0, ky0):
+    """Per-order forward ``kz`` for the two half-spaces, the incident ``kz``, and
+    the safe-divide ``kz`` used by the longitudinal-field reconstruction -- the
+    ``kz_ref``/``kz_trn``/``kz_inc``/``safe_r``/``safe_t`` block formerly
+    duplicated in :mod:`.stack2d_pure` and this module (audit S1-10).  Returns
+    ``(kz_ref, kz_trn, kz_inc, safe_r, safe_t)``, reproducing the former inline
+    block byte-for-byte."""
+    kz_ref = _kz_forward2(eps_sup, kxv, kyv)
+    kz_trn = _kz_forward2(eps_sub, kxv, kyv)
+    kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
+    safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+    safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    return kz_ref, kz_trn, kz_inc, safe_r, safe_t
+
+
 # =========================================================================== #
 # Region modes from the staggered eigensolver, with the Eq.25 H-partner.
 # =========================================================================== #
@@ -705,9 +725,7 @@ def _region_modes(solver: Granet2DTransverseE):
     # pick Im(q) >= 0 (evanescent decay) with a noise tolerance, and for the
     # (near-)real propagating modes Re(q) > 0 (outgoing).  lam = -i q forward.
     q = np.sqrt(np.asarray(g2, dtype=_C))
-    tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
-    flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
-    q = np.where(flip, -q, q)
+    q = _forward_branch_flip(q)       # shared scalar-vertical selector (S1-8)
     lam = -1j * q                     # forward propagator exp(-lam k0 z) decays
     gamma_over_k0 = q
 
@@ -778,9 +796,7 @@ def _homog_region_modes(geom, eps):
     W0, g2_geo, GW0, SttW0, Ginv, qq = geom
     g2 = g2_geo + eps
     q = np.sqrt(np.asarray(g2, dtype=_C))
-    tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
-    flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
-    q = np.where(flip, -q, q)
+    q = _forward_branch_flip(q)            # shared scalar-vertical selector (S1-8)
     lam = -1j * q                          # forward propagator exp(-lam k0 z) decays
     # H recovery (Eq.25) with Lhh = eps*G + Stt (homogeneous -> no Schur term):
     Dual = Ginv @ (eps * GW0 + SttW0)      # G^{-1} Lhh W0  (back to coefficients)
@@ -1011,13 +1027,8 @@ def pmm_efficiency_2d_staggered(
     qq = sol_l.q * sol_l.q
     # H_E[m]-projector on a [E1;E2] modal matrix -> [Ex_orders; Ey_orders]:
     #   note: E1 = E_x component, E2 = E_y component (Granet transverse comps).
-    def _proj(Wmodes):
-        top = P1 @ Wmodes[:qq, :]       # E1 (Ex) onto orders
-        bot = P2 @ Wmodes[qq:, :]       # E2 (Ey) onto orders
-        return np.concatenate([top, bot], axis=0)     # (2 Nfo, 2 q^2)
-
-    Hsup = _proj(Wsup)
-    Hsub = _proj(Wsub)
+    Hsup = _pmm2d_project_orders(P1, P2, Wsup, qq)     # (2 Nfo, 2 q^2)
+    Hsub = _pmm2d_project_orders(P1, P2, Wsub, qq)
 
     kxv = kx0 + order_x * (wl / period_x)
     kyv = ky0 + order_y * (wl / period_y)
@@ -1045,19 +1056,12 @@ def pmm_efficiency_2d_staggered(
     rx, ry = r_ord[:Nfo], r_ord[Nfo:]
     tx, ty = t_ord[:Nfo], t_ord[Nfo:]
 
-    kz_ref = _kz_forward2(eps_sup, kxv, kyv)
-    kz_trn = _kz_forward2(eps_sub, kxv, kyv)
-    kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
-    safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    kz_ref, kz_trn, kz_inc, safe_r, safe_t = _pmm2d_order_kz(
+        eps_sup, eps_sub, kxv, kyv, kx0, ky0)
     rz = -(kxv * rx + kyv * ry) / safe_r
     tz = -(kxv * tx + kyv * ty) / safe_t
-    R = np.real(kz_ref / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                    + np.abs(rz) ** 2) / einc_sq
-    T = np.real(kz_trn / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                    + np.abs(tz) ** 2) / einc_sq
-    R = np.where(np.real(kz_ref) > 0, np.real(R), 0.0)
-    T = np.where(np.real(kz_trn) > 0, np.real(T), 0.0)
+    R, T = _project_efficiency(np, kz_ref, kz_trn, kz_inc,
+                               rx, ry, rz, tx, ty, tz, einc_sq)
     orders2d = np.stack([order_x, order_y], axis=1)
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2*q^2 (the modal
     # eigenproblem dimension).  Was a bare 4-tuple (orders, R, T, dof) pre-v5.12.

@@ -236,6 +236,120 @@ jobs:
       - name: Run public-API smoke
         run: python -m pytest tests/unit/test_public_api.py -v
 
+  jax-unit:
+    name: JAX unit tests (Python 3.12)
+    runs-on: ubuntu-latest
+    # v5.24.4 (AUDIT_V5_24_2 S4-4): the 4x3 fast ``unit`` matrix and every
+    # other leg install WITHOUT jax (see the install-line note at line ~63 --
+    # jax was deliberately dropped at v5.0.1 to keep the fast matrix light).
+    # Consequently ALL jax-guarded unit files (module- or function-level
+    # ``pytest.importorskip('jax')``) SKIP everywhere in CI -- including every
+    # numpy<->jax parity gate and the P1 regression files -- so every JAX-side
+    # finding is invisible to the gate.  This one dedicated, NON-matrix job
+    # installs the ``jax`` extra and runs exactly the jax-guarded files so they
+    # actually execute, WITHOUT re-bloating the 4x3 fast matrix (the documented
+    # v5.0.1 reason jax was dropped there).  Regression-pinned by
+    # tests/unit/test_v5_24_3_jax_ci_coverage.py.
+    #
+    # Cap is more generous than the 4x3 fast ``unit`` job (35) because this
+    # is a SINGLE unsharded runner carrying the jax-guarded subset WITH jax
+    # actually executing: jax's first-call XLA compilation is slow to warm
+    # up (e.g. test_v5_10_3_rcwa_2d_autodiff.py alone ~3.5 min), and a lone
+    # job can afford the headroom without bloating anything.  If CI shows
+    # this approaching the cap, shard THIS job (mirror the unit/slow
+    # ``pytest-split`` pattern) rather than adding jax back to the matrix.
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Match the ``unit`` job: some audit files walk git history, and
+          # full history + tags is cheap insurance against a walker in the
+          # jax-guarded set.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies (with jax)
+        # Same canonical install line as the ``unit`` job PLUS the ``jax``
+        # extra (pyproject ``[project.optional-dependencies] jax``), so the
+        # ``importorskip('jax')`` guards resolve and the tests run.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[fft,perf,numba,hdf5,zarr,dev,jax]"
+
+      - name: Library import sanity (jax present)
+        run: |
+          python -c "import jax; print('jax', jax.__version__)"
+          python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
+
+      - name: Run jax-guarded unit tests
+        shell: bash
+        env:
+          # v5.24.4 (S4-4 completion): JAX and OpenBLAS in ONE process
+          # deadlock on the first large *multi-threaded* ``numpy.linalg``
+          # BLAS call -- e.g. the traced-lens Chebyshev-fit ``lstsq`` inside
+          # ``apply_real_lens_traced`` (_lens_traced.py:558), reached by the
+          # non-jax cookbook tests that share a file with a jax-guarded test.
+          # JAX's runtime and OpenBLAS both spin up OpenMP pools; nested OpenMP
+          # hangs the worker (SIGTERM 143), which is what killed this job.
+          # Pinning BLAS to a single thread makes the numpy-side linear algebra
+          # deadlock-free.  This does NOT slow the jax paths under test: JAX/XLA
+          # parallelism is governed by XLA, not OMP_NUM_THREADS.
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+        # Select every fast unit-test file that guards a jax path via
+        # ``importorskip('jax')`` (module- or function-level).  Selecting by
+        # the GUARD -- not by a ``-k jax`` name filter -- is name-independent,
+        # so it also covers the module-level-jax files whose file/test names
+        # lack "jax" (e.g. test_v5_10_3_rcwa_2d_autodiff.py) and the
+        # numpy<->jax parity gate
+        # test_v5_18_1_residuals.py::test_through_focus_stream_matches_fused,
+        # both of which a ``-k jax`` selection silently drops.  ``-m "not
+        # integration and not slow"`` keeps this single unsharded runner within
+        # the step cap (the jax-guarded files are a subset of the fast gate).
+        run: |
+          mapfile -t jax_files < <(
+            grep -rlE --include='*.py' "importorskip.{0,4}jax" tests/unit | sort
+          )
+          if [ "${#jax_files[@]}" -eq 0 ]; then
+            echo "::error::No jax-guarded unit files found -- the S4-4 CI job has nothing to run; the selection grep or the test layout changed."
+            exit 1
+          fi
+          echo "Running ${#jax_files[@]} jax-guarded unit files with jax installed:"
+          printf '  %s\n' "${jax_files[@]}"
+          # pytest-timeout converts any residual hang into a clean per-test
+          # FAILURE (thread-dump) instead of a silent SIGTERM that kills the
+          # whole job -- so one run reports the complete jax-leg status.
+          pip install --quiet pytest-timeout
+          # Deselect the traced-lens Zemax cookbook: it is a *numpy* end-to-end
+          # example (already covered by the fast matrix), NOT a jax-parity test.
+          # It is dragged in only because it shares a file (test_audit_misc.py)
+          # with jax-guarded tests, and its multi-threaded BLAS lstsq
+          # (apply_real_lens_traced's Chebyshev fit) deadlocks against JAX's
+          # OpenMP runtime -- the deadlock C-code cannot be cleanly timed out.
+          python -m pytest "${jax_files[@]}" -m "not integration and not slow" \
+            --deselect "tests/unit/test_audit_misc.py::TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples::test_real_lens_from_zemax_cookbook" \
+            --timeout=200 --timeout-method=thread \
+            --tb=short -p no:cacheprovider --maxfail=8 -v 2>&1 \
+            | tee jax_unit_output.txt
+          exit ${PIPESTATUS[0]}
+        timeout-minutes: 45
+
+      - name: Upload jax-unit log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jax-unit-output
+          path: jax_unit_output.txt
+          if-no-files-found: warn
+          retention-days: 7
+
   slow-tests:
     name: Slow tests shard ${{ matrix.shard }}/3 (eig-heavy)
     runs-on: ubuntu-latest

@@ -130,6 +130,48 @@ __all__ = ["pmm_efficiency_2d", "pmm_efficiency_2d_cell", "PreparedPMM2D",
 _C = np.complex128
 
 
+def _warn_lossless_energy_2d(result, eps_values, fn_name):
+    """Lossless per-order closure tripwire for the ``stabilize=False`` fast path
+    of the scalar 2-D efficiency entries -- the 2-D sibling of the RCWA
+    ``_check_energy(..., lossless=)`` guard (audit S1-2), of the two-sided
+    passive gate in :func:`_stabilize_scalar` (audit P2-09), and of
+    ``PMMStack._warn_stack_energy`` in the 1-D stack.
+
+    When EVERY permittivity (cell / pillar + host, superstrate, substrate) is
+    exactly real the structure is provably lossless, so ``sum(R)+sum(T) = 1`` is
+    exact.  The hybrid's Fourier-truncation floor holds a CLEAN solve to ~1e-2,
+    but at an ill-conditioned order-representability coincidence (``2*n_orders+1``
+    approaching the per-axis node count, where the Fourier-projection pinv is
+    near-singular) the closure blows past that with the PER-ORDER efficiencies
+    wrong by a few percent and no signal (probe: cell path, degree=11, nodes=33,
+    n_orders=15 -> E=1.30, n_orders=16 -> E=3.88, both returned silently; 17
+    raises on representability).  With the default ``stabilize=False`` the
+    degree-scan passive gate never runs, so WARN here (never raise -- a working
+    solve is byte-unchanged); pass ``stabilize=True`` (auto-retries nearby
+    degrees) or lower ``n_orders`` / raise ``degree``.  A lossy input (any
+    complex eps) legitimately gives ``R+T < 1`` and is skipped."""
+    for e in eps_values:
+        if np.any(np.imag(np.asarray(e, dtype=_C)) != 0.0):
+            return                             # not provably lossless -- skip
+    _, R, T = result
+    tot = float(np.real(np.sum(R)) + np.real(np.sum(T)))
+    # Two-sided passive gate + per-order non-negativity, identical to the
+    # _stabilize_scalar consensus gate (both keyed on _PASSIVE_TOL_2D).
+    eff_min = min(float(np.min(np.real(R))) if np.size(R) else 0.0,
+                  float(np.min(np.real(T))) if np.size(T) else 0.0)
+    if (not (-_PASSIVE_TOL_2D <= tot <= 1.0 + _PASSIVE_TOL_2D)
+            or eff_min < -_PASSIVE_TOL_2D):
+        import warnings
+        warnings.warn(
+            f"{fn_name}: lossless energy closure violated (sum R+T = {tot:.3g}, "
+            f"min per-order efficiency = {eff_min:.3g}; the structure is "
+            f"provably lossless so R+T=1 is exact).  The Fourier projection is "
+            f"ill-conditioned at this (n_orders, degree) coincidence and the "
+            f"PER-ORDER efficiencies are unreliable -- pass stabilize=True "
+            f"(retries nearby degrees) or lower n_orders / raise degree.",
+            stacklevel=3)
+
+
 # =========================================================================== #
 # 1-D per-axis GLL spectral-element assembly (periodic C0, 3 strips: the pillar
 # sits in the middle strip [wall0, wall1]; the two outer strips are host).
@@ -891,6 +933,12 @@ def pmm_efficiency_2d(
         Lattice periods (metres).
     eps_pillar, eps_host : complex
         Relative permittivities of the pillar and the surrounding host.
+        CONVENTION WARNING: ``eps_pillar`` / ``eps_host`` are PERMITTIVITY
+        ``eps = n**2`` while ``n_substrate`` / ``n_superstrate`` below are
+        refractive INDEX ``n`` (internally squared) -- one call mixes both
+        conventions and a wrong-convention value is silently accepted (pass
+        ``n**2`` for the pillar / host, ``n`` for the half-spaces; the scalar
+        :func:`~lumenairy.elements.pmm.pmm_efficiency_1d` takes INDEX throughout).
     x_bounds, y_bounds : (float, float)
         ``(x0, x1)`` and ``(y0, y1)`` rectangle edges (metres), ``0 < x0 <
         x1 < period_x`` (and likewise in y) -- strictly interior,
@@ -1022,7 +1070,10 @@ def pmm_efficiency_2d(
             formulation, truncation=truncation, symmetry=symmetry)
 
     if not stabilize:
-        return _solve_at(degree)
+        res = _solve_at(degree)
+        _warn_lossless_energy_2d(res, (eps_p, eps_h, eps_sup, eps_sub),
+                                 "pmm_efficiency_2d")
+        return res
     o, R, T = _stabilize_scalar(_scan_solver(_solve_at, degree), degree,
                                 "pmm_efficiency_2d",
                                 passive_tol=_PASSIVE_TOL_2D,
@@ -1174,7 +1225,10 @@ def pmm_efficiency_2d_cell(
             symmetry=symmetry, fn_name="pmm_efficiency_2d_cell")
 
     if not stabilize:
-        return _solve_at(degree)
+        res = _solve_at(degree)
+        _warn_lossless_energy_2d(res, (eps_tile, eps_sup, eps_sub),
+                                 "pmm_efficiency_2d_cell")
+        return res
     # degree-scan consensus on consecutive ODD degrees (the scan index d is
     # mapped 1:1 onto degree, degree+2, ...; an unaffordable higher degree
     # ends the scan gracefully)

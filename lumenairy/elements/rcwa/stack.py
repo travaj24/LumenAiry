@@ -18,6 +18,7 @@ from ...backend import (
 from ._core import (
     _C,
     _cached_homogeneous_eigenmodes,
+    _cell_lossless,
     _check_energy,
     _EnergyError,
     _forward_flux_kz,
@@ -30,6 +31,7 @@ from ._core import (
     _max_aligned_delta,
     _modes_to_M,
     _order_key,
+    _project_efficiency,
     _propagation_smatrix_general,
     _propagation_star,
     _propagation_star_general,
@@ -266,7 +268,12 @@ class RCWAResult:
         kz = m["kz_ref"] if port == "reflection" else m["kz_trn"]
         return dict(orders=self.orders, Ex=to_numpy(m[ex]), Ey=to_numpy(m[ey]),
                     kx=to_numpy(m["kx"]), ky=to_numpy(m["ky"]),
-                    kz=to_numpy(kz), wavelength=m["wavelength"])
+                    kz=to_numpy(kz), wavelength=m["wavelength"],
+                    # incidence terms for the power-normalized field bridge
+                    # (jones_field_from_orders): the transmission-port kz is the
+                    # SUBSTRATE kz, so the flux weight Re(kz_m/kz_inc) needs the
+                    # INCIDENT-medium specular kz carried separately (S5-5).
+                    kz_inc=m["kz_inc"], kx0=m["kx0"], ky0=m["ky0"])
 
     def absorptance(self):
         return 1.0 - self._R.sum(axis=1) - self._T.sum(axis=1)
@@ -283,8 +290,26 @@ class RCWAResult:
         # only the zeroth-order (specular) 2x2 Jones -- for a strongly
         # diffracting cell most power is in non-zero orders, so the returned
         # field is the specular component only (a single plane wave).
+        #
+        # This is the REFLECTION-side convenience; a TRANSMISSIVE metasurface
+        # (the majority use) wants :meth:`apply_transmission` instead (audit
+        # S5-11 -- the reflection port is the wrong observable for a transmit
+        # element).
         from ..polarization import apply_jones_matrix
         return apply_jones_matrix(jones_field.copy(), self._Jr)
+
+    def apply_transmission(self, jones_field):
+        """Apply the zeroth-order (specular) TRANSMISSION Jones to an incident
+        :class:`~lumenairy.elements.polarization.JonesField` -- the transmissive
+        counterpart of :meth:`apply_reflection` (audit S5-11: a transmissive
+        metasurface's observable is the transmitted field, but the RCWAResult
+        field helpers historically defaulted to / only exposed the reflection
+        port).  Operates on a COPY so the caller's incident field is preserved.
+        Carries only the specular 2x2 Jones -- for a strongly diffracting cell
+        most power is in non-zero orders, so use :meth:`to_multiorder_field`
+        (``port='transmission'``) to superpose them."""
+        from ..polarization import apply_jones_matrix
+        return apply_jones_matrix(jones_field.copy(), self._Jt)
 
     def _order_amplitude(self, idx, incident, port):
         """Incident-weighted PUBLIC [Ex, Ey] tangential amplitude of one order
@@ -308,24 +333,22 @@ class RCWAResult:
         tangential ``|ax|^2+|ay|^2`` drops all three -> the reconstructed field
         violates energy conservation and can show the wrong dominant order.
         Scaling each carrier by ``s = sqrt(efficiency / (|ax|^2+|ay|^2))``
-        restores per-order power (and the right dominant order)."""
+        restores per-order power (and the right dominant order).
+
+        The scale math itself lives in
+        :func:`lumenairy.elements.polarization._order_power_scale` (the single
+        source shared with the engine-agnostic :func:`jones_field_from_orders`
+        bridge, S5-5); this wrapper only pulls the per-order k-vectors out of
+        the modal dict."""
         from ...backend import to_numpy
+        from ..polarization import _order_power_scale
         m = self._require_modal()
         kz = complex(to_numpy(m["kz_ref"] if port == "reflection"
                               else m["kz_trn"])[idx])
         kx = complex(to_numpy(m["kx"])[idx])
         ky = complex(to_numpy(m["ky"])[idx])
-        kz_inc, kx0, ky0 = m["kz_inc"], m["kx0"], m["ky0"]
-        tang = float(abs(ax) ** 2 + abs(ay) ** 2)
-        flux = float(np.real(kz / kz_inc)) if kz_inc != 0 else 0.0
-        if tang < 1e-300 or flux <= 0.0:     # evanescent / no tangential power
-            return 0.0
-        az = -(kx * ax + ky * ay) / (kz if abs(kz) > 1e-12 else 1.0)
-        inc = np.asarray(incident, dtype=_C).reshape(2)
-        ez_inc = (-(kx0 * inc[0] + ky0 * inc[1]) / kz_inc) if kz_inc != 0 else 0.0
-        einc_sq = float(abs(inc[0]) ** 2 + abs(inc[1]) ** 2 + abs(ez_inc) ** 2)
-        eff = flux * (tang + float(abs(az) ** 2)) / (einc_sq if einc_sq else 1.0)
-        return float(np.sqrt(eff / tang)) if eff > 0.0 else 0.0
+        return _order_power_scale(ax, ay, kz, kx, ky,
+                                  m["kz_inc"], m["kx0"], m["ky0"], incident)
 
     def to_jones_field(self, nx, ny, dx, *, incident=(1.0, 0.0),
                        port="reflection", order=None, normalize="power",
@@ -343,7 +366,10 @@ class RCWAResult:
         incident : (2,) complex, optional
             Incident Jones vector ``(E_x, E_y)``.  Default ``(1, 0)``.
         port : {'reflection', 'transmission'}, optional
-            Reflection or transmission side.  Default reflection.
+            Reflection or transmission side.  Default ``'reflection'`` (kept for
+            back-compatibility); pass ``port='transmission'`` for a TRANSMISSIVE
+            metasurface -- the default is the wrong observable there (audit
+            S5-11).
         order : int | (int, int) | None, optional
             Which diffraction order to reconstruct: ``None`` (default) is the
             specular ``(0, 0)`` order, returned as a UNIFORM field (the literal
@@ -403,16 +429,15 @@ class RCWAResult:
 
     def _order_carrier(self, idx, nx, ny, dx, dy):
         """Unit plane-wave carrier ``exp(i (kx_m x + ky_m y))`` of one order on
-        a centred ``(ny, nx)`` grid (k-vectors are stored normalised by k0)."""
+        a centred ``(ny, nx)`` grid (k-vectors are stored normalised by k0).
+        Delegates to the shared :func:`lumenairy.elements.polarization.
+        _plane_wave_carrier` kernel (S5-5)."""
         from ...backend import to_numpy
+        from ..polarization import _plane_wave_carrier
         m = self._require_modal()
-        k0 = 2.0 * np.pi / m["wavelength"]
-        kx = k0 * float(np.real(to_numpy(m["kx"])[idx]))   # physical [1/m]
-        ky = k0 * float(np.real(to_numpy(m["ky"])[idx]))
-        xg = (np.arange(nx) - nx // 2) * dx
-        yg = (np.arange(ny) - ny // 2) * dy
-        X, Y = np.meshgrid(xg, yg)                         # (ny, nx)
-        return np.exp(1j * (kx * X + ky * Y)).astype(_C)
+        return _plane_wave_carrier(to_numpy(m["kx"])[idx],
+                                   to_numpy(m["ky"])[idx],
+                                   m["wavelength"], nx, ny, dx, dy)
 
     def to_multiorder_field(self, nx, ny, dx, *, incident=(1.0, 0.0),
                             port="reflection", orders=None, normalize="power",
@@ -449,66 +474,24 @@ class RCWAResult:
             raise ValueError(
                 f"RCWAResult.to_multiorder_field: port must be 'reflection' "
                 f"or 'transmission', got {port!r}.")
-        if normalize not in ("power", "field"):
-            raise ValueError(
-                f"RCWAResult.to_multiorder_field: normalize must be 'power' "
-                f"or 'field', got {normalize!r}.")
-        if filter not in ("none", "lanczos"):
-            raise ValueError(
-                f"RCWAResult.to_multiorder_field: filter must be 'none' or "
-                f"'lanczos', got {filter!r}.")
-        sigma = self._lanczos_sigma() if filter == "lanczos" else None
-        from ...backend import to_numpy
-        from ..polarization import JonesField
-        m = self._require_modal()
-        kz = to_numpy(m["kz_ref"] if port == "reflection" else m["kz_trn"])
-        if orders is None:
-            idxs = [i for i in range(kz.shape[0]) if np.real(kz[i]) > 1e-12]
-        else:
-            # explicit orders: skip evanescent ones (their carrier would be a
-            # bogus fast-oscillating plane wave) with a warning rather than
-            # silently depositing garbage.
-            idxs = []
-            for o in orders:
-                i = self._order_index(o)
-                if np.real(kz[i]) <= 1e-12:
-                    import warnings
-                    warnings.warn(
-                        f"RCWAResult.to_multiorder_field: order {o!r} is "
-                        f"evanescent (Re(kz) <= 0) and is skipped; it carries "
-                        f"no propagating power.", stacklevel=2)
-                    continue
-                idxs.append(i)
-        ny_i, nx_i = int(ny), int(nx)
-        dy_f = float(dx if dy is None else dy)
-        ex = np.zeros((ny_i, nx_i), dtype=_C)
-        ey = np.zeros((ny_i, nx_i), dtype=_C)
-        for idx in idxs:
-            ax, ay = self._order_amplitude(idx, incident, port)
-            if normalize == "power":
-                s = self._order_power_scale(idx, ax, ay, incident, port)
-                ax, ay = s * ax, s * ay
-            if sigma is not None:
-                w = sigma[idx]
-                ax, ay = w * ax, w * ay
-            carrier = self._order_carrier(idx, nx_i, ny_i, float(dx), dy_f)
-            ex += ax * carrier
-            ey += ay * carrier
-        return JonesField(ex, ey, dx=dx, dy=dy)
+        # The superposition + power normalization is the engine-agnostic
+        # bridge shared with PMM / 2-D PMM (S5-5): delegate to it on the
+        # public per_order_amplitudes(port) dict so the carrier / flux math
+        # lives in exactly one place.
+        from ..polarization import jones_field_from_orders
+        return jones_field_from_orders(
+            self.per_order_amplitudes(port), nx, ny, dx, incident=incident,
+            normalize=normalize, orders=orders, filter=filter, dy=dy)
 
     def _lanczos_sigma(self):
         """Per-order Lanczos sigma factors ``sinc(m/(Mx+1)) sinc(n/(My+1))``
         (1-D: the y-factor is 1), indexed by flat order index.  Damps the
         high orders smoothly to suppress Gibbs ringing in the reconstructed
-        real-space field."""
-        o = np.asarray(self.orders)
-        if o.ndim == 2:
-            mx = max(1, int(np.abs(o[:, 0]).max()))
-            my = max(1, int(np.abs(o[:, 1]).max()))
-            return (np.sinc(o[:, 0] / (mx + 1.0))
-                    * np.sinc(o[:, 1] / (my + 1.0)))
-        mx = max(1, int(np.abs(o).max()))
-        return np.sinc(o / (mx + 1.0))
+        real-space field.  Delegates to the shared
+        :func:`lumenairy.elements.polarization._order_lanczos_sigma` kernel
+        (S5-5)."""
+        from ..polarization import _order_lanczos_sigma
+        return _order_lanczos_sigma(self.orders)
 
     # -- in-structure (internal) E/H field reconstruction -----------------
 
@@ -932,17 +915,37 @@ class RCWAStack:
     """
 
     def __init__(self, period, *, period_y=None, n_superstrate=1.0,
-                 n_substrate=1.0, n_orders=11, n_orders_y=None, use_gpu=False):
+                 n_substrate=1.0, n_orders=11, n_orders_y=None, use_gpu=False,
+                 truncation="rectangular"):
         _validate_geometry("RCWAStack", period=period, period_y=period_y,
                            n_orders=n_orders, n_orders_y=n_orders_y)
+        if truncation not in ("rectangular", "circular"):
+            raise ValueError(
+                f"RCWAStack: truncation must be 'rectangular' or 'circular', "
+                f"got {truncation!r}")
         self.period_x = float(period)
         self.is_1d = period_y is None and n_orders_y is None
+        if truncation == "circular" and self.is_1d:
+            # The inscribed-circle radius is min(Mx/px, My/py); with My = 0 (a
+            # 1-D stack) it collapses to 0 and keeps ONLY the (0, 0) order.
+            # Circular truncation is a 2-D concept -- reject it rather than
+            # silently drop every diffracted order.
+            raise ValueError(
+                "RCWAStack: truncation='circular' applies to 2-D (crossed) "
+                "stacks only; a 1-D stack (period_y / n_orders_y unset) keeps "
+                "its full 1-D order range -- use truncation='rectangular'.")
         self.period_y = float(period if period_y is None else period_y)
         self.n_superstrate = n_superstrate
         self.n_substrate = n_substrate
         self.nox = int(n_orders)
         self.noy = 0 if self.is_1d else int(
             n_orders if n_orders_y is None else n_orders_y)
+        # Reciprocal-lattice order set (audit S1-20 -- exposed here to match the
+        # scalar 2-D entries): 'rectangular' (default) keeps the full Cartesian
+        # box; 'circular' (Lalanne 1997) keeps the inscribed reciprocal circle
+        # (isotropic resolution, fewer harmonics).  2-D stacks only (rejected
+        # above for 1-D, where the circle radius would collapse to (0, 0)).
+        self.truncation = truncation
         self.use_gpu = bool(use_gpu)
         self._layers: List[_RCWALayer] = []
         self._source: Optional[dict] = None
@@ -985,12 +988,48 @@ class RCWAStack:
         methods."""
         return tuple(self._layers)
 
+    def _uniform_tensor_cell(self, fn_name, tensor):
+        """Expand a uniform ``(3, 3)`` permittivity tensor to a validated
+        uniform tensor CELL (audit S1-14 / S5-11): every pixel carries the same
+        tensor, so its only Fourier harmonic is DC (a spatially-uniform
+        anisotropic slab), but as a proper ``(Sx, Sy, 3, 3)`` cell it routes
+        through the tested tensor eigenmode path instead of the scalar
+        ``"uniform"`` slot (which stored a ``(3, 3)`` and crashed opaquely at
+        solve).  Sampled at ``4*n_orders + 1`` per axis so it clears the strict
+        patterned Fourier-aliasing bound even on the JAX backend (where the
+        cell's uniformity is not inspectable); cell size drives only the FFT, not
+        the ``O(N^3)`` eigensolve, so the oversampling is free."""
+        need_x = max(1, 4 * self.nox + 1)
+        need_y = max(1, 4 * self.noy + 1)
+        if is_jax_array(tensor):
+            import jax.numpy as jnp
+            t = jnp.asarray(tensor)
+            if tuple(t.shape) != (3, 3):
+                raise ValueError(
+                    f"{fn_name}: eps as an array must be a single (3, 3) "
+                    f"permittivity tensor (a spatially-uniform anisotropic "
+                    f"layer); got shape {tuple(t.shape)}.  For a PATTERNED layer "
+                    f"use eps_cell / eps_tensor_cell.")
+            return jnp.broadcast_to(t.astype(_C), (need_x, need_y, 3, 3))
+        t = np.asarray(tensor, dtype=_C)
+        if t.shape != (3, 3):
+            raise ValueError(
+                f"{fn_name}: eps as an array must be a single (3, 3) "
+                f"permittivity tensor (a spatially-uniform anisotropic layer); "
+                f"got shape {t.shape}.  For a PATTERNED layer use eps_cell / "
+                f"eps_tensor_cell, and for an isotropic region pass a scalar "
+                f"eps.")
+        return np.array(np.broadcast_to(t, (need_x, need_y, 3, 3)))
+
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
                   eps_tensor_cell=None, shapes=None, eps_background=None,
                   formulation="laurent"):
         """Append a layer.  Provide exactly one layer specification:
 
-        * ``eps`` (scalar) -- uniform spacer;
+        * ``eps`` (scalar) -- uniform isotropic spacer; a ``(3, 3)`` array is a
+          spatially-uniform ANISOTROPIC slab (audit S1-14 / S5-11: expanded to a
+          uniform tensor cell and solved on the tensor path -- the clean
+          uniform-tensor entry; a bare ``(3, 3)`` formerly crashed at solve);
         * ``eps_cell`` (``(Sx, Sy)``) -- isotropic patterned, FFT-sampled;
         * ``eps_tensor_cell`` (``(Sx, Sy, 3, 3)``) -- anisotropic patterned;
         * ``shapes`` (with ``eps_background``) -- isotropic patterned using
@@ -1013,6 +1052,19 @@ class RCWAStack:
         For 1-D stacks it reduces to the rigorous 1-D ``'li'`` placement.
         Uniform / shapes / tensor layers accept only the default.
         """
+        # Uniform ANISOTROPIC entry (audit S1-14 / S5-11): a (3, 3) permittivity
+        # tensor passed as ``eps`` is a spatially-uniform tensor layer.  A bare
+        # (3, 3) was formerly accepted into the scalar "uniform" slot and then
+        # crashed OPAQUELY at solve (``complex()`` of a (3, 3) array).  Expand it
+        # to a minimally-sampled uniform tensor CELL and route it through the
+        # validated tensor eigenmode path (its only Fourier harmonic is DC, so it
+        # is exactly a homogeneous anisotropic slab).  Kept BEFORE the one-of
+        # count so the layer registers as an ``eps_tensor_cell``.
+        if eps is not None and not callable(eps):
+            _ea = eps if is_jax_array(eps) else np.asarray(eps)
+            if getattr(_ea, "ndim", 0) >= 2:
+                eps_tensor_cell = self._uniform_tensor_cell("add_layer", eps)
+                eps = None
         n = sum(x is not None for x in (eps, eps_cell, eps_tensor_cell, shapes))
         if n != 1:
             raise ValueError(
@@ -1430,6 +1482,27 @@ class RCWAStack:
                 vals += [float(d.min()), float(d.max())]
         return vals
 
+    def _stack_lossless(self):
+        """True when every region index and layer permittivity is exactly real
+        (provably lossless -> the closure ``sum(R)+sum(T) = 1`` is exact here,
+        so :func:`_check_energy` can police the silent 1e-6..0.05 window).
+        Mirrors :meth:`_layer_eps_reals`' per-kind layer enumeration but tests
+        losslessness (``Im == 0``) rather than keeping the real parts, then
+        delegates to the shared :func:`_cell_lossless` predicate.  Only reached
+        on the concrete (non-JAX) solve path, after the dispersive-callable
+        guard, so ``n_superstrate / n_substrate`` are concrete here."""
+        eps_sup = complex(np.conj(_C(self.n_superstrate) ** 2))
+        eps_sub = complex(np.conj(_C(self.n_substrate) ** 2))
+        arrs = []
+        for L in self._layers:
+            if L.kind == "shapes":
+                bg, shapes = L.data
+                arrs.append(bg)
+                arrs += [s["eps"] for s in shapes]
+            else:  # uniform / iso / tensor: L.data is the eps scalar / array
+                arrs.append(L.data)
+        return _cell_lossless(eps_sup, eps_sub, *arrs)
+
     def _materialized_layers(self, wl, layers=None):
         """Concrete layer list at one wavelength: every DISPERSIVE
         (``wl -> value``) layer spec is resolved and validated; non-dispersive
@@ -1523,7 +1596,9 @@ class RCWAStack:
             raise ValueError(
                 "RCWAStack.solve_vs_wavelength: add at least one layer.")
         wl_arr = np.atleast_1d(np.asarray(wavelengths, dtype=float))
-        orders_ref, N = _harmonic_orders_2d(self.nox, self.noy)
+        orders_ref, N = _harmonic_orders_2d(
+            self.nox, self.noy, truncation=self.truncation,
+            period_x=self.period_x, period_y=self.period_y)
         # key in the SAME form the per-wavelength results report their orders
         # (1-D stacks return a flat (N,) order vector)
         ret_orders = (orders_ref[:, 0] if self.is_1d else orders_ref)
@@ -1891,7 +1966,9 @@ class RCWAStack:
         is_jax = bname == "jax"
         if is_jax:
             _require_jax_x64("RCWAStack.solve")
-        orders, N = _harmonic_orders_2d(self.nox, self.noy)
+        orders, N = _harmonic_orders_2d(
+            self.nox, self.noy, truncation=self.truncation,
+            period_x=self.period_x, period_y=self.period_y)
         eps_sup = complex(np.conj(_C(self.n_superstrate) ** 2))
         eps_sub = complex(np.conj(_C(self.n_substrate) ** 2))
         nre = float(np.real(np.sqrt(eps_sup)))
@@ -1943,8 +2020,12 @@ class RCWAStack:
             Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
             Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
         else:
+            # truncation is in the key (audit S1-20): a 'rectangular' and a
+            # 'circular' stack with the same nox/noy have DIFFERENT order sets
+            # (hence different Kx/Ky and homogeneous modes) -- omitting it would
+            # collide them in the module-level mode cache.
             geom = (self.nox, self.noy, wl, theta, phi, self.period_x,
-                    self.period_y, self.n_superstrate, bname)
+                    self.period_y, self.n_superstrate, bname, self.truncation)
             Wref, Vref, kz_ref = _cached_homogeneous_eigenmodes(
                 eps_sup, Kx, Ky, ("sup", self.n_superstrate) + geom)
             Wtrn, Vtrn, kz_trn = _cached_homogeneous_eigenmodes(
@@ -2090,12 +2171,10 @@ class RCWAStack:
             tx, ty = t[:N], t[N:]
             rz = -(kxv * rx + kyv * ry) / safe_r
             tz = -(kxv * tx + kyv * ty) / safe_t
-            Re = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                               + xp.abs(rz) ** 2) / einc_sq
-            Te = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                               + xp.abs(tz) ** 2) / einc_sq
-            R_rows.append(xp.where(xp.real(kz_ref_f) > 0, xp.real(Re), 0.0))
-            T_rows.append(xp.where(xp.real(kz_trn_f) > 0, xp.real(Te), 0.0))
+            Re, Te = _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
+                                         rx, ry, rz, tx, ty, tz, einc_sq)
+            R_rows.append(Re)
+            T_rows.append(Te)
             rx_rows.append(xp.conj(rx))
             ry_rows.append(xp.conj(ry))
             tx_rows.append(xp.conj(tx))
@@ -2205,7 +2284,8 @@ class RCWAStack:
                 period_x=self.period_x, period_y=self.period_y,
                 is_1d=self.is_1d, nox=self.nox, noy=self.noy)
         if not is_jax:                       # the guard needs concrete R/T
-            _check_energy("RCWAStack.solve", R, T)
+            _check_energy("RCWAStack.solve", R, T,
+                          lossless=self._stack_lossless())
         return RCWAResult(out_orders, R, T, Jr, Jt, modal=modal)
 
     def _internal_partials(self, modes, Wref, Vref, Wtrn, Vtrn, k0):

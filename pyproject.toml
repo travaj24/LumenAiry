@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "5.24.3"
+version = "5.24.4"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -103,10 +103,14 @@ zarr = ['zarr>=3.0; python_version >= "3.11"', "filelock>=3.0"]
 # against the array-namespace dispatch (lumenairy.backend), JIT
 # compilation via XLA, and free GPU/TPU acceleration if the user
 # installs jax[cuda] / jax[tpu] separately.
-jax = ["jax>=0.4.20"]
+# v5.24.4: floor raised to jax>=0.11 -- the supported baseline going
+# forward (the S4-4 CI leg runs the jax-guarded suite on 0.11; the
+# canonical-poly fit's differentiable solve and the pmm-2d jnp/np parity
+# bars are validated against it).
+jax = ["jax>=0.11.0"]
 # JAX with CUDA wheels.  User is responsible for ensuring a compatible
 # CUDA / cuDNN install is on the system.
-jax-gpu = ["jax[cuda12]>=0.4.20"]
+jax-gpu = ["jax[cuda12]>=0.11.0"]
 # numexpr fuses the ``E * exp(-1j*k0*opd)`` phase-screen multiply in
 # ``apply_real_lens``, ~1.7x faster at large N and substantially
 # lower peak memory (no complex128 NxN intermediates).  Optional --
@@ -145,7 +149,7 @@ all = [
     # v5.2.2: zarr v3 requires Python 3.11+; env marker skips it on
     # 3.10 (storage-zarr tests skip on 3.10 in that case).
     'zarr>=3.0; python_version >= "3.11"',
-    "jax>=0.4.20",
+    "jax>=0.11.0",
     "filelock>=3.0",
     # v4.16.1 (audit M-1): refractiveindex bundled into ``all`` so the
     # one-shot ``pip install lumenairy[all]`` continues to pull it
@@ -208,6 +212,34 @@ markers = [
     "slow: long-running physics simulations",
     "bench: pytest-benchmark micro-perf tests (run with --benchmark-only)",
 ]
+# v5.24.x (audit S5-12): explicit warnings policy.  Previously there was
+# NO ``filterwarnings`` config, so a warning emitted mid-test could pass
+# silently.  A blanket ``error`` is deliberately NOT used: several physics
+# diagnostics legitimately fire in the green suite (e.g. the PMM
+# near-singular ``energy not conserved`` UserWarning), and erroring on
+# every UserWarning would convert genuine diagnostics into false failures.
+# Instead we surface everything (``default``) and promote the
+# always-a-bug, DETERMINISTIC categories to errors:
+#   * PytestReturnNotNoneWarning -- a test that ``return``s instead of
+#     ``assert``ing silently "passes"; that footgun is exactly what the
+#     S5-12 finding flags.  (validation ``t_*`` functions are exempt --
+#     ``validation/conftest.py`` consumes their return value in a
+#     ``pytest_pyfunc_call`` hook that returns True.)
+#   * SyntaxWarning -- always a real source defect.
+filterwarnings = [
+    "default",
+    "error::pytest.PytestReturnNotNoneWarning",
+    "error::SyntaxWarning",
+]
+# v5.24.x (audit S5-12): make ``xfail`` strict by default so a test
+# marked xfail that starts PASSING (a closed sibling-gap / dead xfail
+# scaffolding) FAILS loudly -- forcing removal of the stale marker --
+# instead of silently reporting XPASS.  Audited safe: every applied
+# xfail marker in the suite is already ``strict=True`` or is an
+# imperative ``pytest.xfail()`` (unaffected by this default), and the
+# one conditional ``pytest.mark.xfail`` site currently applies zero
+# markers (all parametrize variants are ``pinned``).
+xfail_strict = true
 addopts = [
     "-ra",
     "--strict-markers",
@@ -289,6 +321,10 @@ files = [
     "lumenairy/backend",
     "lumenairy/_deprecation.py",
     "lumenairy/_context.py",
+    # v5.24.x (audit S4-20): `_validation.py` is a small, fully-annotated
+    # boundary-guard module (sibling of `_deprecation` / `_context`); it
+    # belongs in the strict whitelist alongside them.
+    "lumenairy/_validation.py",
     "lumenairy/progress.py",
     "lumenairy/memory.py",
 ]

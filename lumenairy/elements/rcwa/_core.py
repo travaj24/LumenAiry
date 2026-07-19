@@ -80,12 +80,53 @@ def rcwa_blas_threads(n: Optional[int]):
 
 
 
+# S5-8 (perf, no-loss): ``threadpool_limits(...)`` rebuilds a fresh
+# ``ThreadpoolController`` -- and RE-ENUMERATES every loaded BLAS/OpenMP DLL
+# (~9 ms on Windows) -- on EVERY call, so an N-wavelength sweep paid that DLL
+# scan once per solve (a 20-wavelength RCWA sweep measured 283 -> 105 ms once
+# cached).  The set of loaded BLAS libraries is fixed after import, so enumerate
+# ONCE into a process-wide controller and reuse its ``.limit(...)`` (which
+# applies the cap without re-scanning).  BIT-IDENTICAL: the same limiter
+# save/restore runs, only the library discovery is amortised.
+_BLAS_CONTROLLER = None
+_BLAS_CONTROLLER_UNAVAILABLE = False
+_BLAS_CONTROLLER_LOCK = threading.Lock()
+
+
+def _get_blas_controller():
+    """Return the process-wide cached ``ThreadpoolController`` (enumerated
+    once), or ``None`` when ``threadpoolctl`` predates ``ThreadpoolController``
+    (< 3.0) or is absent entirely.  The lazy first build is lock-guarded; the
+    controller object is read-only shared state thereafter."""
+    global _BLAS_CONTROLLER, _BLAS_CONTROLLER_UNAVAILABLE
+    if _BLAS_CONTROLLER is not None:
+        return _BLAS_CONTROLLER
+    if _BLAS_CONTROLLER_UNAVAILABLE:
+        return None
+    with _BLAS_CONTROLLER_LOCK:
+        if _BLAS_CONTROLLER is None and not _BLAS_CONTROLLER_UNAVAILABLE:
+            try:
+                from threadpoolctl import ThreadpoolController
+            except ImportError:  # pragma: no cover - threadpoolctl ships with numpy
+                _BLAS_CONTROLLER_UNAVAILABLE = True
+                return None
+            _BLAS_CONTROLLER = ThreadpoolController()
+    return _BLAS_CONTROLLER
+
+
 def _blas_limit():
     """Apply this thread's BLAS cap if one is set, else a zero-overhead no-op
     context (so the default path is untouched)."""
     n = _get_blas_threads()
     if n is None:
         return contextlib.nullcontext()
+    controller = _get_blas_controller()
+    if controller is not None:
+        # Reuse the cached enumeration -- no per-solve DLL re-scan.
+        return controller.limit(limits=n, user_api="blas")
+    # threadpoolctl too old to expose ThreadpoolController: preserve the
+    # legacy per-call path (re-enumerates, but keeps the cap) so the opt-in
+    # behaviour is unchanged; a no-op if threadpoolctl is missing entirely.
     try:
         from threadpoolctl import threadpool_limits
     except ImportError:  # pragma: no cover - threadpoolctl ships with numpy
@@ -315,6 +356,40 @@ def _check_energy(fn_name, R, T, lossless=False):
 
 
 
+def _cell_lossless(eps_sup, eps_sub, *eps_arrays):
+    """True when the structure is PROVABLY lossless: every region scalar and
+    structure permittivity is exactly real AND every full ``(.., 3, 3)``
+    permittivity tensor is symmetric (a real Hermitian eps).  Under that proof
+    the closure ``R+T = 1`` is exact and :func:`_check_energy` can police the
+    silent 1e-6..0.05 window.
+
+    The symmetry clause matters: a REAL but ASYMMETRIC tensor (e.g.
+    ``eps_xz != eps_zx``) is non-reciprocal / non-Hermitian and can legitimately
+    exchange energy (``R+T != 1`` grows with obliquity), so it must NOT be
+    called lossless -- otherwise the tripwire false-fires on correct physics.
+    The clause keys on a ``(3, 3)`` trailing shape (always a tensor here: a
+    scalar patterned cell is sized ``>= 4*n_orders+1`` per axis), so a scalar
+    grid is never mistaken for a tensor."""
+    try:
+        if float(np.imag(complex(eps_sup))) != 0.0:
+            return False
+        if float(np.imag(complex(eps_sub))) != 0.0:
+            return False
+        for a in eps_arrays:
+            arr = to_numpy(a)
+            if float(np.max(np.abs(np.imag(arr)))) != 0.0:
+                return False
+            if np.ndim(arr) >= 2 and arr.shape[-2:] == (3, 3):
+                # real Hermitian == real symmetric (imag already 0 above)
+                asym = np.max(np.abs(arr - np.swapaxes(arr, -1, -2)))
+                if float(asym) != 0.0:
+                    return False
+    except TypeError:                      # traced / non-concrete inputs
+        return False
+    return True
+
+
+
 def _require_jax_x64(fn_name):
     """Require JAX double precision on the JAX (differentiable) path.  RCWA/PMM's
     eigenproblem is ill-conditioned in single precision (cond ~1e13), and JAX
@@ -414,6 +489,32 @@ def _forward_flux_kz(eps_region, kx, ky):
     xp = array_namespace(kx)
     return _sqrt_forward(xp.conj(xp.asarray(eps_region).astype(_C))
                          - kx ** 2 - ky ** 2)
+
+
+def _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
+                        rx, ry, rz, tx, ty, tz, einc_sq):
+    """Poynting-flux diffraction-efficiency projection shared by every RCWA
+    entry point (audit S1-9: this block was copy-pasted at ~7 sites across
+    ``oned.py``/``twod.py``/``stack.py``; all agreed).
+
+    The per-order reflected / transmitted efficiency is the z-flux weight
+    ``Re(kz_out / kz_inc)`` times the full field power
+    ``|Ex|^2 + |Ey|^2 + |Ez|^2`` (tangential + longitudinal), normalised by the
+    incident ``|E|^2`` (``einc_sq`` = ``sec^2(theta)`` for oblique TM, 1
+    otherwise), with evanescent output orders (``Re(kz_out) <= 0``) zeroed.
+    ``kz_ref_f``/``kz_trn_f`` are the PUBLIC-convention forward flux ``kz``
+    (:func:`_forward_flux_kz`); ``rz``/``tz`` are the longitudinal amplitudes
+    ``-(kx Ex + ky Ey)/kz``.  Returns ``(R, T)``.
+
+    This reproduces the former inline block operation-for-operation, so every
+    routed call site is bit-identical."""
+    R = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                      + xp.abs(rz) ** 2) / einc_sq
+    T = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                      + xp.abs(tz) ** 2) / einc_sq
+    R = xp.where(xp.real(kz_ref_f) > 0, xp.real(R), 0.0)
+    T = xp.where(xp.real(kz_trn_f) > 0, xp.real(T), 0.0)
+    return R, T
 
 
 def _inv_lam(lam: np.ndarray) -> np.ndarray:
@@ -1702,8 +1803,11 @@ def _tensor_convolutions(profiles, n_orders):
     ``xx, xy, yx, yy, zz``.  Returns ``(Cxx, Cxy, Cyx, Cyy, EZZ)`` where
     ``[Dx; Dy] = [[Cxx, Cxy], [Cyx, Cyy]] [Ex; Ey]`` and ``EZZ = [[ezz]]``
     (the wall-tangential ``E_z`` uses the direct rule, inverted later in the
-    ``P`` block).  Reduces to ``Cxx = Cyy = [[eps]]``, ``Cxy = Cyx = 0`` for
-    a scalar (isotropic) tensor.
+    ``P`` block).  For a scalar (isotropic) tensor ``Cxy = Cyx = 0`` and the
+    Li-1996 wall-normal/tangential split survives: ``Cxx = [[1/eps]]^{-1}``
+    (INVERSE rule along wall-normal x) and ``Cyy = [[eps]]`` (DIRECT rule
+    along tangential y).  These coincide only for a UNIFORM cell (where
+    ``[[1/eps]]^{-1} = [[eps]]``); for a PATTERNED scalar cell ``Cxx != Cyy``.
     """
     xp = array_namespace(profiles["xx"])
     a = xp.asarray(profiles["xx"]).astype(_C)
@@ -2359,10 +2463,12 @@ __all__ = [
     "_EnergyError",
     "_EnergyWarning",
     "_check_energy",
+    "_cell_lossless",
     "_require_jax_x64",
     "_normalize_pol",
     "_sqrt_forward",
     "_forward_flux_kz",
+    "_project_efficiency",
     "_inv_lam",
     "_sqrt_decay",
     "_require_propagating_incidence",

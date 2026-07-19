@@ -36,7 +36,7 @@ from ._core import (
     _propagation_star,
     _propagation_star_general,
     _redheffer_star,
-    _resolve_incidence,
+    _resolve_incidence_checked,
     _resolve_order_count,
     _sem_fourier_projection,
     _sem_modes_tensor,
@@ -511,7 +511,11 @@ class PMMStack:
         those).  Returns ``self``."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
         self._modal = None      # ... and retained per-order amplitudes (B)
-        angle = _resolve_incidence(angle, theta)
+        # Route through the CHECKED resolver (audit S1-7): a back-side angle
+        # (|angle| >= pi/2, e.g. 2.5 rad) would otherwise be stored verbatim and
+        # silently solve the supplementary front-side geometry (byte-identical
+        # to pi - angle) -- the 1-D entry points already reject it, so match them.
+        angle = _resolve_incidence_checked("PMMStack.set_source", angle, theta)
         self._src = dict(
             wl=wavelength if is_jax_array(wavelength) else float(wavelength),
             angle=angle if is_jax_array(angle) else float(angle),
@@ -1241,7 +1245,10 @@ class PMMStack:
         kz = m["kz_ref"] if port == "reflection" else m["kz_trn"]
         return dict(orders=m["orders"].copy(), Ex=m[ex].copy(),
                     Ey=m[ey].copy(), kx=m["kx"].copy(), ky=m["ky"].copy(),
-                    kz=np.asarray(kz).copy(), wavelength=m["wavelength"])
+                    kz=np.asarray(kz).copy(), wavelength=m["wavelength"],
+                    # incidence terms for the jones_field_from_orders bridge
+                    # (the transmission-port kz is the substrate kz) -- S5-5.
+                    kz_inc=m["kz_inc"], kx0=m["kx0"], ky0=m["ky0"])
 
     def jones_transmission(self):
         """The ``(2, 2)`` zeroth-order TRANSMISSION Jones of the last
@@ -1770,7 +1777,8 @@ class PMMStack:
                 "is NumPy-only; for traced (JAX) inputs call solve() "
                 "per wavelength (it dispatches to the differentiable "
                 "twin) or vmap over wavelength.")
-        angle = _resolve_incidence(angle, theta)
+        angle = _resolve_incidence_checked(
+            "PMMStack.solve_vs_wavelength", angle, theta)   # reject back-side (S1-7)
         if not self._layers:
             raise ValueError("PMMStack.solve_vs_wavelength: add at least one "
                              "layer.")
@@ -2117,6 +2125,19 @@ class _PreparedPMMStack:
             raise NotImplementedError(
                 "PMMStack.prepare: dispersive (wl -> value) materials are the "
                 "solve_vs_wavelength path; prepare() swaps material KEYS.")
+        # OOP guard (audit S1-1): the prepared eig is the in-plane 2n solver
+        # (_build_sem_tensor_segments reads only exx/exy/eyx/eyy/ezz), so it
+        # silently drops eps_xz/yz/zx/zy.  Reject CONCRETE out-of-plane tensor
+        # layers here (mirrors the solve_vs_wavelength guard); a material KEY
+        # that resolves to an OOP tensor is unknown until solve() and is
+        # caught there.
+        if any(not isinstance(e, str) and stack._is_oop(e)
+               for L in stack._layers for _w, e in L[1]):
+            raise NotImplementedError(
+                "PMMStack.prepare: out-of-plane tensor layers "
+                "(eps_xz/yz/zx/zy) are not supported on the prepared path "
+                "(the assemble-once eig is the in-plane 2n solver); call "
+                "PMMStack.solve() per point.")
         self._st = stack
         self._uwidths, self._layer_eps_u = _pmm_union_grid(
             [L[1] for L in stack._layers], stack.min_feature / stack.period)
@@ -2191,8 +2212,21 @@ class _PreparedPMMStack:
         st = self._st
         st._internal = None  # prepared solve supersedes retained internals (audit P1-04)
         materials = dict(materials or {})
-        angle = _resolve_incidence(angle, theta)
+        angle = _resolve_incidence_checked(
+            "PMMStack.solve", angle, theta)                 # reject back-side (S1-7)
         wl = float(wavelength)
+        # OOP guard (audit S1-1): a material key may resolve to an out-of-plane
+        # tensor, which the in-plane prepared eig would silently drop (concrete
+        # OOP layers were already rejected in __init__).  Only KEYED layers can
+        # newly resolve to OOP, so check just those.
+        for i, keys in enumerate(self._layer_keys):
+            if keys and any(st._is_oop(st._as_tensor(e)) for e in
+                            self._resolve(self._layer_eps_u[i], materials, wl)):
+                raise NotImplementedError(
+                    "PMMStack.prepare/solve: a material key resolved to an "
+                    "out-of-plane tensor (eps_xz/yz/zx/zy); the prepared path "
+                    "is in-plane only -- call PMMStack.solve() per material "
+                    "point.")
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(st.n_sup)) * np.sin(angle) * k0
         eps_sup, eps_sub = st.n_sup ** 2, st.n_sub ** 2

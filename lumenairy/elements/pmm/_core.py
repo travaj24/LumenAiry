@@ -109,6 +109,44 @@ def _resolve_incidence(angle, theta):
     return angle if theta is None else theta
 
 
+def _resolve_incidence_checked(fn_name, angle, theta):
+    """Resolve the ``angle``/``theta`` alias, then REJECT back-side incidence
+    (audit P3-29): the angle enters the 1-D solve only as ``kx0 ~ sin(angle)``,
+    so ``|angle| >= pi/2`` would otherwise alias BYTE-IDENTICALLY to the
+    supplementary front-side angle ``pi - angle`` -- a plausible,
+    energy-conserving answer for the WRONG geometry.  Raises ``ValueError``
+    instead.  Composes with (does not duplicate) the grazing guard, which
+    catches ``kz_inc ~ 0`` just BELOW ``pi/2``.  A TRACED JAX angle (under
+    ``jit``/``grad``) has no concrete value to range-check and SKIPS the guard
+    (the rcwa ``_reject_jax_offplane`` tracer carve-out); a CONCRETE JAX angle
+    is checked.  A non-numeric angle is passed through for the solver's own
+    coercion to raise on.
+
+    This is the ONE shared checked resolver for the whole PMM suite: the 1-D
+    entry points in :mod:`.oned` and the ``PMMStack`` source setters
+    (:meth:`PMMStack.set_source` etc.) route through it, so a back-side angle
+    is rejected identically everywhere (audit S1-7: ``set_source`` formerly
+    bypassed this and silently solved the supplementary front-side geometry)."""
+    angle = _resolve_incidence(angle, theta)
+    if is_jax_array(angle):
+        try:                                 # concrete JAX array -> inspectable
+            a_c = float(np.asarray(angle))
+        except Exception:                    # tracer -> not materialisable
+            return angle
+    else:
+        try:
+            a_c = float(angle)
+        except (TypeError, ValueError):      # non-numeric: solver coercion raises
+            return angle
+    if not abs(a_c) < 0.5 * np.pi:           # NaN also fails this comparison
+        raise ValueError(
+            f"{fn_name}: incidence angle must satisfy |angle| < pi/2 "
+            f"(front-side illumination, measured from the +z surface normal); "
+            f"got {a_c} rad.  A past-grazing angle would silently alias to "
+            f"the supplementary front-side angle (pi - angle).")
+    return angle
+
+
 
 # ``stabilize`` robust-selection parameters.  PMM has two distinct off-curve
 # failure modes vs polynomial degree: (1) discrete RESONANCES at isolated degrees
@@ -491,6 +529,34 @@ def _fast_geig(A, B):
     return (q2, z) if di is None else (q2, di[:, None] * z)
 
 
+def _forward_branch_flip(q, xp=np):
+    """Sign-select each modal ``q`` onto the FORWARD (forward-decaying / +z)
+    branch -- the noise-robust selector formerly COPY-PASTED verbatim across the
+    five scalar-vertical PMM generator sites (audit S1-8: the exact multi-copy
+    pattern that bred the six-copy factor-i defect).
+
+    For lossless media the eigen-operator is (near-)Hermitian, so the QZ eig
+    leaks ~1e-15 imaginary noise; a naive ``q.imag < 0`` sign test would flip
+    near-real (propagating) modes on that noise and spawn dense spurious
+    resonances (the v5.14 robustness-audit P1).  Flip ONLY when clearly
+    backward: ``Im(q) < -tol`` (evanescent, backward-growing) or, inside the
+    near-real band ``|Im(q)| <= tol``, ``Re(q) < 0``.  ``tol`` is relative to the
+    largest ``|q|`` (floored at 1.0), so the guard scales with the mode spectrum.
+
+    ``xp`` selects the array module: NumPy (default) materialises ``tol`` as a
+    concrete Python float via ``max(float(...), 1.0)``, exactly as the historical
+    NumPy copies did; passing ``jax.numpy`` keeps ``tol`` traced through
+    ``jnp.maximum`` so the derivative w.r.t. the incidence angle still flows --
+    reproducing the former JAX copy byte-for-byte.  This is a pure consolidation:
+    every routed call site produces bit-identical output."""
+    if xp is np:
+        tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
+    else:
+        tol = 1e-8 * xp.maximum(xp.max(xp.abs(q)), 1.0)
+    flip = (q.imag < -tol) | ((xp.abs(q.imag) <= tol) & (q.real < 0.0))
+    return xp.where(flip, -q, q)
+
+
 
 def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     """Periodic generalized eigenproblem on the nodal basis.
@@ -540,9 +606,7 @@ def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     # CLEARLY backward and restores tot = 1.0 at every probed degree, matching
     # the RCWA oracle per-order to ~6e-6; oblique/segmented paths always used
     # it.  (``robust`` is retained in the signature for call compatibility.)
-    tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
-    flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
-    q = np.where(flip, -q, q)
+    q = _forward_branch_flip(q)                   # shared selector (S1-8)
     lam = -1j * q
     return Acoef, lam, q, invop
 
@@ -588,9 +652,7 @@ def _sem_modes_uniform_scalar(mats, k0, polarization, eps, kx0=0.0, geo=None):
         geo = _scalar_uniform_geo_eig(mats, k0, kx0)
     mu, X = geo
     q = np.sqrt(_C(eps) - mu)
-    tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
-    flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
-    q = np.where(flip, -q, q)
+    q = _forward_branch_flip(q)                   # shared selector (S1-8)
     lam = -1j * q
     invop = (None if polarization == "te"
              else _safe_solve(mats["S0"], mats["Pinv"]))
@@ -806,7 +868,10 @@ class PerOrderAmplitudesMixin:
                     Ex=m[ex].copy(), Ey=m[ey].copy(),
                     kx=np.asarray(m["kx"]).copy(),
                     ky=np.asarray(m["ky"]).copy(),
-                    kz=np.asarray(kz).copy(), wavelength=m["wavelength"])
+                    kz=np.asarray(kz).copy(), wavelength=m["wavelength"],
+                    # incidence terms for the jones_field_from_orders bridge
+                    # (the transmission-port kz is the substrate kz) -- S5-5.
+                    kz_inc=m["kz_inc"], kx0=m["kx0"], ky0=m["ky0"])
 
     def jones_transmission(self):
         """The ``(2, 2)`` zeroth-order TRANSMISSION Jones of the last
@@ -2193,9 +2258,7 @@ def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
     # Noise-robust forward branch (the _sem_modes robust=True rule): flip only
     # when CLEARLY backward -- a degenerate half-space q^2 carries ~1e-15 imag
     # noise whose sign differs between scipy-QZ and the jnp folded eig.
-    tol = 1e-8 * jnp.maximum(jnp.max(jnp.abs(q)), 1.0)
-    flip = (q.imag < -tol) | ((jnp.abs(q.imag) <= tol) & (q.real < 0.0))
-    q = jnp.where(flip, -q, q)
+    q = _forward_branch_flip(q, jnp)              # shared selector (S1-8)
     lam = -1j * q
     return Acoef, lam, q, invop
 
@@ -3213,9 +3276,7 @@ def _sem_modes_slant(mats, k0, polarization, slant_angle, kx0=0.0):
         # modes on ~1e-15 QZ noise at normal incidence -- BLAS-build-dependent,
         # which broke the slant-zero == vertical reduction on CI builds where
         # the noise signs differ from the dev box).
-        tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
-        flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
-        q = np.where(flip, -q, q)
+        q = _forward_branch_flip(q)               # shared selector (S1-8)
         lam = -1j * q
         return dict(symmetric=True, W=Acoef, q=q, lam=lam, invop=invop,
                     Dop=Dop, t=t, k0=k0, polarization=polarization)
@@ -3300,9 +3361,7 @@ def _sem_modes_slant_uniform(mats, k0, polarization, eps, kx0=0.0, geo=None,
         geo = _scalar_uniform_geo_eig(mats, k0, kx0)
     mu, X = geo
     q = np.sqrt(_C(eps) - mu)
-    tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
-    flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
-    q = np.where(flip, -q, q)
+    q = _forward_branch_flip(q)                   # shared selector (S1-8)
     lam = -1j * q
     n = mats["S0"].shape[0]
     invop = None if polarization == "te" else np.eye(n, dtype=_C) / _C(eps)
@@ -4625,6 +4684,8 @@ __all__ = [
     "_resolve_order_count",
     "_promote_eps_tensor",
     "_resolve_incidence",
+    "_resolve_incidence_checked",
+    "_forward_branch_flip",
     "_STABILIZE_MAX_SCAN",
     "_MIN_PLATEAU",
     "_PASSIVE_TOL",

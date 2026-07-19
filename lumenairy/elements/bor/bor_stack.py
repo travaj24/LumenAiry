@@ -345,8 +345,15 @@ class BORStack:
             # flux ratio scales as P/fnrm = qn for the limiting polarization
             # family (verified empirically), so every kept mode sits >= 4
             # decades above the fallback -- kept implies flux-normalized,
-            # and |S|^2 stays a true power fraction.  Twins:
-            # bor_solve._physical_propagating and _jax_bor._mask.
+            # and |S|^2 stays a true power fraction.
+            #
+            # S1-16 (audit AUDIT_V5_24_2): this shares the {imag, real-floor,
+            # index-ceiling} core with the twins bor_solve._physical_propagating
+            # and _jax_bor._mask.  It carries NO reldiv leg BY DESIGN: BORStack
+            # is staggered-only (div-conforming, spurious-free), so reldiv is
+            # structurally 0 and the reldiv eigensolve is deliberately skipped
+            # (see the solve() docstring).  Only bor_solve's optional NODAL
+            # basis needs the reldiv leg to reject its spurious sea.
             qn = L["q"] / k0
             return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
                             & (np.sqrt(eps).real - qn.real > -5e-10))[0]

@@ -6,6 +6,17 @@
 > in `tests/unit/test_audit_dynameta_consumer_api_2.py`; A1/A2/B-PMMStack
 > gates in `tests/unit/test_audit_dynameta_consumer_api.py`.
 >
+> **CONSUMER-CONFIRMED (2026-07-14, lumenairy 5.22).** The DynaMeta bridge now
+> CONSUMES the entire surface (branch `fix/deep-audit-2026-07-05`,
+> `docs/audit/2026-07-05-deep-audit.md` section 8): A1 Berreman single-solve +
+> A2 public-layers + D1 JAX uniform-eps/wavelength (floor bumped to 5.22); B PMM
+> `t` + conical s/p synthesis (rotated-s-hat, cross-term physics — GATE F: uniform
+> vs analytic oblique Airy 3.3e-16, phi->0 reduction 2.9e-12); C1 BOR complex
+> phase (122.9deg gauge-stable) + `layer_absorption` (B4b); C2 OOP-oblique
+> absorption first-class (budget 1.7e-16); C3 PMM2D-Pure absorption (3.7e-15).
+> Every DynaMeta bridge validation PASSES against 5.22. This supersedes the stale
+> "B open remainder" / "C1-C3, D1: OPEN" lines lower in this block.
+>
 > **Remainder ship notes (2026-07-14):**
 >
 > - **B (PMM2D leg):** `per_order_amplitudes(port)` + `jones_transmission()`

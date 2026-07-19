@@ -82,6 +82,11 @@ class OptimizeWorker(QThread):
         # CancellableProgress so we sentinel via StopIteration in the
         # callback and catch it in run().
         self._cancel_progress = CancellableProgress()
+        # v5.24.4 (audit S4-7): the worker runs the optimization with
+        # ``apply_result=False`` so it never mutates the shared live model
+        # off the GUI thread; it hands the solution vector back here for
+        # the dock's finished-handler to apply on the MAIN thread.
+        self.result_x = None
 
     def run(self):
         # v5.4 (audit P1-D): validate dock kwarg combinations BEFORE
@@ -120,12 +125,19 @@ class OptimizeWorker(QThread):
                 # via OptimizeResult or raises into the caller.
                 raise StopIteration('cancelled by user')
         try:
+            # v5.24.4 (audit S4-7): apply_result=False -- the model runs
+            # the solve without writing back into the shared live model
+            # from this worker thread; it restores itself to x0 and
+            # exposes the solution via ``model._last_optimization_x``.
             success, msg = self.model.run_optimization(
-                self.max_iter, cb, method=method)
+                self.max_iter, cb, method=method, apply_result=False)
         except StopIteration:
             self.cancelled.emit()
             self.finished.emit(False, 'Cancelled by user')
             return
+        # Carry the solution to the MAIN-thread finished handler.
+        self.result_x = list(getattr(self.model, '_last_optimization_x', None)
+                             or [])
         self.finished.emit(success, msg)
 
     @Slot()
@@ -835,6 +847,19 @@ class OptimizerDock(QWidget):
                 pass
 
     def _on_finished(self, success, msg):
+        # v5.24.4 (audit S4-7): the background OptimizeWorker no longer
+        # writes its solution into the live model off-thread -- it restored
+        # the model to its pre-run state and exposed the solution vector on
+        # ``worker.result_x``.  Apply it HERE, on the GUI thread, so
+        # self.elements is mutated and the rebuild signal is emitted from
+        # the main thread only.  Workers without a ``result_x`` (the global
+        # search, cancel/failure paths) leave the model untouched.
+        worker = self._worker
+        if success and worker is not None:
+            result_x = getattr(worker, 'result_x', None)
+            if result_x:
+                self.sm.set_variable_values(result_x)
+                self.sm.system_changed.emit()
         self.btn_optimize.setEnabled(True)
         self.btn_global.setEnabled(True)
         self.btn_stop.setEnabled(False)
@@ -900,6 +925,13 @@ class OptimizerDock(QWidget):
             # list.
             flat_surf_map = {}   # (elem_idx, surf_idx) -> flat index
             thickness_map = {}   # elem_idx -> air-gap thickness index
+            # v5.24.x (audit S4-6): (elem_idx, surf_idx) -> internal-gap
+            # thickness index.  The flattened ``surfaces`` dict emitted by
+            # ``to_prescription`` has NO ``thickness`` key, so a surface
+            # thickness variable must be routed to the top-level
+            # ``thicknesses`` slot; a ('surfaces', fs, 'thickness') path
+            # otherwise KeyErrors when DesignParameterization reads x0.
+            surf_thk_map = {}
             flat_surf = 0
             flat_thk = 0
             for ei, elem in enumerate(self.sm.elements):
@@ -916,11 +948,33 @@ class OptimizerDock(QWidget):
                     flat_surf += 1
                     # Internal thicknesses on all-but-last surface.
                     if si < len(elem.surfaces) - 1:
+                        surf_thk_map[(ei, si)] = flat_thk
                         flat_thk += 1
+
+            # v5.24.x (audit S4-6): a LAST-surface ``thickness`` is the air
+            # gap to the FOLLOWING lens element -- the same slot that
+            # element's ``distance`` occupies.  Return its thickness index,
+            # or None at the tail (the gap to the detector is not a legacy
+            # ``thicknesses`` slot).
+            def _next_air_gap_idx(from_elem):
+                for ej in range(from_elem + 1, len(self.sm.elements)):
+                    if self.sm.elements[ej].elem_type in (
+                            'Source', 'Detector'):
+                        continue
+                    return thickness_map.get(ej)
+                return None
+
+            # Surface-dict fields the legacy wave-leg prescription carries
+            # (see ModelState.to_prescription -- radius/conic and their
+            # anamorphic partners).  ``thickness`` routes to ``thicknesses``
+            # below; anything else (``glass``, ``semi_diameter``) has no
+            # home there and is skipped rather than emitting a path that
+            # KeyErrors when DesignParameterization reads x0.
+            wave_surf_fields = ('radius', 'conic', 'radius_y', 'conic_y')
 
             free_vars = []
             bounds_list = []
-            values = self.sm.get_variable_values()
+            seen_paths = set()   # S4-6: de-dup thickness/distance clashes
             for i, (elem_idx, surf_idx, field) in enumerate(self.sm.opt_variables):
                 if field == 'distance':
                     tk_idx = thickness_map.get(elem_idx)
@@ -930,13 +984,55 @@ class OptimizerDock(QWidget):
                             f'first/source element has no preceding gap)')
                         continue
                     path = ('thicknesses', tk_idx)
-                else:
+                elif field == 'thickness':
+                    # v5.24.x (audit S4-6): route a surface thickness to its
+                    # top-level ``thicknesses`` slot -- the internal gap for
+                    # a non-last surface, else the air gap to the next
+                    # element.  The surface dict has no ``thickness`` key.
+                    tk_idx = surf_thk_map.get((elem_idx, surf_idx))
+                    if tk_idx is None:
+                        tk_idx = _next_air_gap_idx(elem_idx)
+                    if tk_idx is None:
+                        self.log.append(
+                            f'  (skipped thickness for element {elem_idx} '
+                            f'surface {surf_idx}: last surface, no '
+                            f'following gap in the wave prescription)')
+                        continue
+                    path = ('thicknesses', tk_idx)
+                elif field in wave_surf_fields:
                     fs = flat_surf_map.get((elem_idx, surf_idx))
                     if fs is None:
                         continue
                     path = ('surfaces', fs, field)
+                else:
+                    # v5.24.x (audit S4-6): glass / semi_diameter etc. have
+                    # no numeric slot in the legacy wave prescription.
+                    self.log.append(
+                        f'  (skipped {field} for element {elem_idx} '
+                        f'surface {surf_idx}: not a wave-optimizable field)')
+                    continue
+                # v5.24.x (audit S4-6): a last-surface thickness and the
+                # next element's distance address the SAME gap; emitting
+                # both trips DesignParameterization's duplicate-path guard.
+                if path in seen_paths:
+                    self.log.append(
+                        f'  (skipped duplicate {field} for element '
+                        f'{elem_idx}: gap already mapped to {path})')
+                    continue
+                seen_paths.add(path)
                 free_vars.append(path)
-                val = values[i] if i < len(values) else 0.0
+                # v5.24.3 (audit S4-2): the bounds' centre must be in the
+                # SAME units as x0.  DesignParameterization.initial_values()
+                # reads x0 from ``pres`` (to_prescription converts mm -> m),
+                # so read the centre from the metre-unit template at the same
+                # ``path`` -- NOT from get_variable_values() (millimetres),
+                # which put x0 outside every box and made scipy clip the
+                # start to a garbage (e.g. 25-metre-radius) design.
+                if path[0] == 'thicknesses':
+                    val = float(pres['thicknesses'][path[1]])
+                else:  # ('surfaces', fs, field)
+                    val = float(
+                        pres['surfaces'][path[1]].get(path[2], 0.0) or 0.0)
                 # Sensible bounds: conic is absolute; others fractional.
                 if field == 'conic':
                     bounds_list.append((val - 2.0, val + 2.0))

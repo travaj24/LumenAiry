@@ -411,6 +411,40 @@ def _sum_merits(ctx, merit_terms):
     return total
 
 
+def _clip_x0_to_bounds(x0: np.ndarray,
+                       bounds: Optional[Sequence[Any]]) -> np.ndarray:
+    """Clip a starting vector into the ``[lo, hi]`` bounds box.
+
+    v5.24.x (audit S4-18): scipy's handling of an out-of-bounds ``x0``
+    is method-dependent AND mostly silent -- ``TNC`` raises, ``L-BFGS-B``
+    / ``Powell`` clip internally, but ``Nelder-Mead`` / ``CG`` / ``BFGS``
+    happily start OUTSIDE the declared box (and the unconstrained methods
+    ignore bounds entirely).  A resumed state-file ``x_best`` or a
+    template whose values sit outside the user-declared bounds would
+    otherwise seed the search at an infeasible point without any
+    diagnostic.  Clipping once at the driver harmonises the start across
+    every method.
+
+    ``None`` bounds (no box at all) or ``None`` endpoints (the
+    "unbounded on this side" idiom) leave the corresponding component
+    untouched.  Returns a fresh ``float64`` array; when ``x0`` already
+    lies inside the box the result is an exact copy (no numerical
+    change on the feasible-start path).
+    """
+    x = np.array(x0, dtype=np.float64, copy=True)
+    if bounds is None:
+        return x
+    for i, b in enumerate(bounds):
+        if b is None or i >= x.size:
+            continue
+        lo, hi = b[0], b[1]
+        if lo is not None and x[i] < lo:
+            x[i] = float(lo)
+        if hi is not None and x[i] > hi:
+            x[i] = float(hi)
+    return x
+
+
 # =========================================================================
 # Main entry point
 # =========================================================================
@@ -437,12 +471,20 @@ def design_optimize(parameterization: Any,
                     progress: Optional[Callable] = None,
                     constraints: Optional[Sequence['Constraint']] = None,
                     state_file: Optional[str] = None,
-                    state_save_every: int = 1) -> DesignResult:
+                    state_save_every: int = 1,
+                    seed: Optional[int] = 42) -> DesignResult:
     """Optimize a lens prescription against a set of merit terms.
 
     See ``lumenairy.optimize.core.design_optimize`` for the canonical
     docstring; the body lives here post-v5.1.0 split.  Parameter and
     behaviour contracts are unchanged.
+
+    v5.24.x (audit S4-18): ``seed`` controls the RNG of the stochastic
+    global methods (``differential_evolution`` / ``basin_hopping`` /
+    ``dual_annealing``).  Defaults to ``42`` -- the historical hard-coded
+    value -- so existing callers see byte-identical behaviour; pass a
+    different int for an independent stochastic restart, or ``None`` to
+    let scipy draw from the unseeded global RNG.
     """
     import scipy.optimize as so
 
@@ -839,7 +881,17 @@ def design_optimize(parameterization: Any,
                 ideal_peak=ideal, verbose=False)
             z_best_v, strehl_best_v = _core.find_best_focus(scan, 'strehl')
             ctx.z_best = float(z_best_v)
-            ctx.strehl_best = float(strehl_best_v)
+            # S4-5 (AUDIT_V5_24_2): ``find_best_focus`` returns ``nan``
+            # when every through-focus slice is NaN (a fully-vignetted /
+            # dark exit field).  A raw ``float(nan)`` then leaks into
+            # ``StrehlMerit``, where ``max(0.0, min_strehl - nan) == 0.0``
+            # REWARDS the failed design with a perfect score (the main
+            # wave leg disagreed in the SIGN of its failure handling with
+            # the wrapper merits, which write the 0.0 failed-scan
+            # sentinel).  Coerce a non-finite best Strehl to 0.0 so a
+            # degenerate wave leg is penalised, matching the wrapper.
+            ctx.strehl_best = (float(strehl_best_v)
+                               if np.isfinite(strehl_best_v) else 0.0)
             # v5.4.6 (audit F-5): NaN-safe argmax -- a single NaN
             # through-focus slice must not steal the argmax (np.argmax
             # treats NaN as the maximum).  Mirrors the wrapper-merit guard.
@@ -1092,6 +1144,14 @@ def design_optimize(parameterization: Any,
             return True
         return None
 
+    # v5.24.x (audit S4-18): clip the starting vector into the bounds
+    # box before dispatch.  Harmonises the (method-dependent, mostly
+    # silent) scipy handling of an out-of-bounds ``x0`` -- e.g. a
+    # resumed state-file ``x_best`` or a template outside its declared
+    # bounds -- so every method starts feasible.  No-op (exact copy)
+    # when ``x0`` already satisfies the bounds.
+    x0 = _clip_x0_to_bounds(np.asarray(x0, dtype=np.float64), bounds)
+
     # v4.14 (audit P2 #10): wrap the dispatch + final evaluation in
     # try/finally so the complex-dtype restore is deterministic even
     # under KeyboardInterrupt / scipy raise.  The ``_dtype_restore_guard``
@@ -1102,6 +1162,10 @@ def design_optimize(parameterization: Any,
             # Gauss-Newton / Levenberg-Marquardt via least_squares.  No
             # per-iteration callback is available, so emit progress from
             # inside residuals() using the eval counter.
+            # S4-5 (AUDIT_V5_24_2): one-shot flag so the negative-term
+            # warning below fires at most once per design_optimize run.
+            _lm_neg_warned = [False]
+
             def residuals(x):
                 call_count[0] += 1
                 value, ctx = evaluate(x)
@@ -1123,9 +1187,30 @@ def design_optimize(parameterization: Any,
                 # typical merit-term magnitudes so it doesn't affect the
                 # converged solution.
                 _LM_FLOOR = 1e-30
+                # S4-5 (AUDIT_V5_24_2): the ``max(m, 0.0)`` clamp below
+                # silently zeroes any NEGATIVE merit-term contribution --
+                # so a reward-style ``CallableMerit`` that legitimately
+                # returns a negative value is invisible to Levenberg-
+                # Marquardt (it optimises a different objective than every
+                # non-'lm' method, which sums the raw values).  Evaluate
+                # each term ONCE, warn (at most once) when any term is
+                # negative, then build the clamped residual from the same
+                # values -- no extra merit evaluations, numerics unchanged.
+                term_vals = [m.evaluate(ctx) for m in merit_terms]
+                if not _lm_neg_warned[0] and any(v < 0.0 for v in term_vals):
+                    _lm_neg_warned[0] = True
+                    warnings.warn(
+                        "design_optimize(method='lm'): a merit term "
+                        "returned a NEGATIVE contribution, which the "
+                        "least-squares residual sqrt(max(m, 0)) silently "
+                        "clamps to 0 -- reward-style (negative) terms are "
+                        "ignored under 'lm' only.  Use a non-'lm' method "
+                        "(e.g. 'L-BFGS-B', 'Nelder-Mead') for reward-style "
+                        "merits, or reformulate the term as a "
+                        "non-negative penalty.",
+                        RuntimeWarning, stacklevel=2)
                 return np.array(
-                    [np.sqrt(max(m.evaluate(ctx), 0.0) + _LM_FLOOR)
-                     for m in merit_terms],
+                    [np.sqrt(max(v, 0.0) + _LM_FLOOR) for v in term_vals],
                     dtype=np.float64)
             # v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-1-2): explicit
             # ``None``-aware unpacking.  Pre-v4.16.1 used
@@ -1198,8 +1283,13 @@ def design_optimize(parameterization: Any,
             if bounds is None:
                 raise ValueError(
                     'differential_evolution requires bounds for all variables.')
+            # S4-18: ``seed`` is user-controllable (default 42 preserves
+            # the historical hard-coded value).  scipy's DE has no
+            # gradient hook -- its optional ``polish`` step runs L-BFGS-B
+            # with a NUMERICAL jacobian regardless -- so an analytic
+            # ``final_jac`` cannot be threaded here.
             res = so.differential_evolution(
-                merit_fn, bounds, maxiter=max_iter, seed=42,
+                merit_fn, bounds, maxiter=max_iter, seed=seed,
                 tol=1e-8, disp=verbose, polish=True,
                 callback=_scipy_cb_de)
             x_opt = res.x
@@ -1210,18 +1300,42 @@ def design_optimize(parameterization: Any,
                 'bounds': bounds,
                 'options': {'maxiter': 50},
             }
+            # S4-18: forward the analytic jacobian to the L-BFGS-B local
+            # search when one is available (a JaxMeritTerm gradient or a
+            # user-supplied ``jac`` callable).  Pre-fix the local search
+            # always finite-differenced even when an exact gradient was
+            # in hand.
+            if final_jac is not None:
+                minimizer_kwargs['jac'] = final_jac
             res = so.basinhopping(
                 merit_fn, x0, niter=max_iter,
-                minimizer_kwargs=minimizer_kwargs, seed=42,
+                minimizer_kwargs=minimizer_kwargs, seed=seed,
                 disp=verbose, callback=_scipy_cb_basin)
             x_opt = res.x
         elif method == 'dual_annealing':
             if bounds is None:
                 raise ValueError(
                     'dual_annealing requires bounds for all variables.')
-            res = so.dual_annealing(
-                merit_fn, bounds, maxiter=max_iter, seed=42,
-                callback=_scipy_cb_da)
+            # S4-18: ``seed`` user-controllable; forward the analytic
+            # jacobian to the L-BFGS-B local polish via
+            # ``minimizer_kwargs`` when available (scipy >= 1.8 spelling).
+            if final_jac is not None:
+                try:
+                    res = so.dual_annealing(
+                        merit_fn, bounds, maxiter=max_iter, seed=seed,
+                        callback=_scipy_cb_da,
+                        minimizer_kwargs={'jac': final_jac})
+                except TypeError:
+                    # Older scipy spelled the local-search override
+                    # differently (``local_search_options``); fall back
+                    # to the no-jac call rather than fail.
+                    res = so.dual_annealing(
+                        merit_fn, bounds, maxiter=max_iter, seed=seed,
+                        callback=_scipy_cb_da)
+            else:
+                res = so.dual_annealing(
+                    merit_fn, bounds, maxiter=max_iter, seed=seed,
+                    callback=_scipy_cb_da)
             x_opt = res.x
         elif method == 'newton':
             # v4.16 (ROADMAP #12): Hessian / Newton-step.  For small

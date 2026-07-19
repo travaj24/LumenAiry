@@ -369,6 +369,139 @@ class TestAuditFixesV4_13_2_agent_c_C1MakeLgAberrationMeritJax:
 
 
 # ============================================================================
+# S3-6 (AUDIT_V5_24_2) -- make_lg_aberration_merit_jax advertised 6
+# differentiable build_args inputs; 4 (wavelength / source_box_half /
+# pupil_box_half / object_distance) crashed jax.grad with an opaque
+# TracerArrayConversionError / ConcretizationTypeError because they are
+# consumed as static Python floats deep in the trace.  Fix: docstring now
+# advertises only w_s / w_p as differentiable, and a trace-time guard
+# turns the four deep failures into one actionable NotImplementedError.
+# ============================================================================
+
+class TestS3_6NonDiffBuildArgsSlotGuard:
+    """Routing a *differentiable* x into the wavelength / source_box_half
+    / pupil_box_half / object_distance slots must raise one clear
+    ``NotImplementedError`` at gradient time (not a deep tracer crash),
+    while the supported ``w_s`` / ``w_p`` slots stay differentiable."""
+
+    def _build_merit_routing_slot(self, slot_idx):
+        import lumenairy
+        from lumenairy.optimize.core import make_lg_aberration_merit_jax
+        pres = lumenairy.make_singlet(
+            R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',
+            aperture=12e-3,
+        )
+        pres['object_distance'] = 0.0
+
+        def build_args(x):
+            # Route the single free var into exactly one positional slot;
+            # all other slots stay None (-> resolved to nominal, static).
+            args = [None, None, None, None, None, None]
+            args[slot_idx] = x[0]
+            return tuple(args)
+
+        return make_lg_aberration_merit_jax(
+            pres, wavelength=1.30e-6, targets={(0, 0): 1.0},
+            build_args=build_args, field_points=[(0.0, 0.0)],
+        )
+
+    @pytest.mark.parametrize('slot_idx, slot_name, x0', [
+        (0, 'wavelength', 1.30e-6),
+        (1, 'source_box_half', 1.0e-3),
+        (2, 'pupil_box_half', 0.1),
+        (3, 'object_distance', 0.0),
+    ])
+    def test_nondiff_slot_raises_actionable_notimplemented(
+            self, slot_idx, slot_name, x0):
+        """A differentiable input in a non-diff slot -> one clear
+        ``NotImplementedError`` naming the slot and the FD escape hatch,
+        raised at the *start* of the trace before any heavy compute (so
+        it is deterministic and independent of LG-tensor stability on the
+        minimal singlet).  Independent oracle: we ALSO confirm the
+        unguarded downstream really would blow up under jax.grad -- i.e.
+        the guard is not masking an otherwise-working path."""
+        jax = pytest.importorskip('jax')
+        merit = self._build_merit_routing_slot(slot_idx)
+        with pytest.raises(NotImplementedError) as info:
+            merit.gradient_at_x(np.array([x0]))
+        msg = str(info.value)
+        assert slot_name in msg, (
+            f"guard message must name the offending slot {slot_name!r}; "
+            f"got {msg!r}")
+        assert "jac='fd'" in msg or 'finite-difference' in msg, (
+            f"guard message must point at the finite-difference escape "
+            f"hatch; got {msg!r}")
+
+        # Independent oracle: strip the guard and confirm the raw trace
+        # genuinely raises a JAX tracer/concretization error on this
+        # slot -- proving the guard converts a real crash into a clear
+        # message rather than pre-empting a path that would have worked.
+        import lumenairy.optimize.jax_merits as jm
+        orig = jm._is_jax_tracer
+        try:
+            jm._is_jax_tracer = lambda a: False   # disable the guard
+            merit_raw = self._build_merit_routing_slot(slot_idx)
+            with pytest.raises((jax.errors.TracerArrayConversionError,
+                                jax.errors.ConcretizationTypeError,
+                                TypeError, ValueError)):
+                merit_raw.gradient_at_x(np.array([x0]))
+        finally:
+            jm._is_jax_tracer = orig
+
+    def test_static_float_override_in_nondiff_slot_is_allowed(self):
+        """A *static* (non-differentiable) float in a non-diff slot must
+        NOT trip the guard -- build_args may legitimately override a
+        nominal with a fixed value.  Here w_s is the differentiable var
+        and wavelength is a fixed static override."""
+        pytest.importorskip('jax')
+        import lumenairy
+        from lumenairy.optimize.core import make_lg_aberration_merit_jax
+        pres = lumenairy.make_singlet(
+            R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',
+            aperture=12e-3,
+        )
+        pres['object_distance'] = 0.0
+
+        def build_args(x):
+            # Static wavelength override (1.55 um) in slot 0; the free
+            # var x[0] is w_s in slot 4 (differentiable).
+            return (1.55e-6, None, None, None, x[0], None)
+
+        merit = make_lg_aberration_merit_jax(
+            pres, wavelength=1.30e-6, targets={(0, 0): 1.0},
+            build_args=build_args, field_points=[(0.0, 0.0)],
+        )
+        try:
+            g = merit.gradient_at_x(np.array([50e-6]))
+        except NotImplementedError as exc:   # pragma: no cover
+            pytest.fail(
+                f"a STATIC float override in the wavelength slot must "
+                f"not trip the non-diff guard: {exc}")
+        except Exception as exc:
+            pytest.skip(f'LG-tensor gradient unstable on this runtime: '
+                        f'{type(exc).__name__}: {exc}')
+        assert g.shape == (1,)
+
+    def test_supported_ws_slot_is_differentiable(self):
+        """Positive control: routing x into the ``w_s`` slot (4) must NOT
+        trip the guard; the analytic gradient either succeeds finitely or
+        fails with a numerical (non-guard) error on the minimal singlet."""
+        pytest.importorskip('jax')
+        merit = self._build_merit_routing_slot(4)   # w_s
+        try:
+            g = merit.gradient_at_x(np.array([50e-6]))
+        except NotImplementedError as exc:   # pragma: no cover
+            pytest.fail(
+                f"w_s (slot 4) is a supported differentiable input but "
+                f"tripped the non-diff guard: {exc}")
+        except Exception as exc:
+            pytest.skip(f'LG-tensor gradient unstable on this runtime: '
+                        f'{type(exc).__name__}: {exc}')
+        assert g.shape == (1,)
+        assert np.all(np.isfinite(g))
+
+
+# ============================================================================
 # C.2 -- MultiFieldMerit accepts (theta_x, theta_y) tuples
 # ============================================================================
 

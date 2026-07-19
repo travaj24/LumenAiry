@@ -378,7 +378,10 @@ def _adrt_coordbreak(x, y, ux, uy, surf, wavelength, apply_transfer,
         tau = (t - pz) / Nn
         px = px + L * tau
         py = py + M * tau
-        opd = n2 * abs(val(tau))
+        # SIGNED transfer leg (RT-1), matching raytrace._transfer's n*t used by
+        # the main-trace coord-break path (trace._apply_coord_break -> _transfer):
+        # a negative gap tau must SUBTRACT its OPL, not add via abs (S3-9).
+        opd = n2 * val(tau)
     ux_out = L / Nn
     uy_out = M / Nn
     dead = None
@@ -459,8 +462,12 @@ def _adrt_step(x, y, ux, uy, surf, wavelength, apply_transfer, O,
         y_out = yi + tau2 * Mp
         # OPL: SIGNED intersection leg (a backtrack on a concave surface
         # subtracts over-counted OPL, matching raytrace._intersect_surface) plus
-        # the |transfer| leg (matching raytrace._transfer).
-        opd = n1 * val(tau) + n2 * abs(val(tau2))
+        # the SIGNED transfer leg (matching raytrace._transfer's RT-1 signed
+        # n*t: a negative tau2 -- overlapping sag / post-mirror fold -- means the
+        # ray already crossed the next vertex plane, so the over-counted OPL must
+        # be SUBTRACTED, not added via abs; abs here diverged from the base-ray
+        # OPL the FD/main trace produces whenever tau2 < 0, S3-9).
+        opd = n1 * val(tau) + n2 * val(tau2)
     else:
         x_out = xi
         y_out = yi

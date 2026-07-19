@@ -25,8 +25,13 @@ spherical-aberration caustic** on both field fidelity and peak-intensity error
 (GBD peak error 0.03-0.34 vs FGA 0.01-0.07).
 
 Accuracy knobs.  The reconstruction is normalized so the ``t=0`` resolution of
-identity is exact (energy ratio 1.0; the leading FGA is exact for the paraxial
-quadratic Hamiltonian, so free-space propagation conserves energy to ~1.0).
+identity conserves energy (ratio ~1.0) PROVIDED the momentum swarm covers each
+beamlet's own momentum width ~``2/(k*w0)`` -- the auto sampler enforces this
+completeness floor (an explicit ``p_max`` below it under-normalizes: a narrow
+``p_max`` reproduces the field SHAPE, fidelity ~1, but at reduced power, so use
+``normalize_output='power'`` if you must under-sample).  The leading FGA is exact
+for the paraxial quadratic Hamiltonian, so free-space propagation conserves
+energy to ~1.0.
 The frozen width ``w0`` is the FGA convergence parameter: a wider beamlet is more
 paraxial and gives a cleaner frame, while caustic *resolution* wants a smaller
 ``w0`` -- a standard FGA tradeoff.  The momentum half-range ``p_max`` must cover
@@ -62,6 +67,8 @@ from __future__ import annotations
 
 import copy as _copy
 import math
+import threading
+import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -102,10 +109,17 @@ def _build_kernels():
         for iq in prange(Nq):
             cxq = qx[iq]
             cyq = qy[iq]
-            j0 = int((cxq - R - x0) / dx)
-            j1 = int((cxq + R - x0) / dx) + 1
-            i0 = int((cyq - R - y0) / dyg)
-            i1 = int((cyq + R - y0) / dyg) + 1
+            # Pad the box by one pixel each side so the circular gate
+            # (``r2 > R*R``) is the SOLE selector -- a guaranteed superset
+            # matching ``_coeff_sep``'s ``jx +- int(R/dx) +- 1`` box.  The clamps
+            # and gate discard the padding, so the output is byte-identical for
+            # non-integer R/dx and picks up the legitimately-in-window boundary
+            # pixel at integer R/dx (the default nsig*w0_factor=15), where int()
+            # rounding of the tight bound would otherwise drop it (seam S2-7).
+            j0 = int((cxq - R - x0) / dx) - 1
+            j1 = int((cxq + R - x0) / dx) + 2
+            i0 = int((cyq - R - y0) / dyg) - 1
+            i1 = int((cyq + R - y0) / dyg) + 2
             if j0 < 0:
                 j0 = 0
             if i0 < 0:
@@ -315,12 +329,18 @@ def _build_kernels():
                 gxj = math.exp(-dxr * dxr * inv2w2)          # Gaussian at j0
                 ratio = math.exp(-(2.0 * dxr * dx + dx * dx) * inv2w2)
                 for j in range(j0, j1):
-                    if dxr * dxr + dy2 <= R2:
+                    # Gate on a FRESH dxr (bit-identical to _scatter's gate) so
+                    # the two kernels select the SAME pixel set even at the
+                    # integer-R/dx boundary tie (the default nsig*w0_factor=15);
+                    # the recurrence dxr drifts by ~ULP and must not decide the
+                    # discrete window membership (seam S2-7, scatter half).
+                    dxrf = (x0 + j * dx) - qxb
+                    if dxrf * dxrf + dy2 <= R2:
                         mag = agy * gxj
                         outr[i, j] += mag * (wr * cph - wi * sph)
                         outi[i, j] += mag * (wr * sph + wi * cph)
-                    # advance recurrences (every step, to stay phase-locked)
-                    dxr += dx
+                    # advance the Gaussian + phase recurrences (every step, to
+                    # stay phase-locked)
                     gxj *= ratio
                     ratio *= cc
                     ncph = cph * cstep - sph * sstep
@@ -442,16 +462,12 @@ def _reconstruct_into(outr, outi, Qx, Qy, Px, Py, W, x0, y0, dx, dyg, Ny, Nx,
             x0, y0, dx, dyg, Ny, Nx, w0, k, Ag, nsig, outr, outi)
 
 
-def _reconstruct(Qx, Qy, Px, Py, W, x0, y0, dx, dyg, Ny, Nx, w0, k, Ag, nsig):
-    outr = np.zeros((Ny, Nx))
-    outi = np.zeros((Ny, Nx))
-    _reconstruct_into(outr, outi, Qx, Qy, Px, Py, W, x0, y0, dx, dyg, Ny, Nx,
-                      w0, k, Ag, nsig)
-    return outr + 1j * outi
+def _default_p_max(prescription, wavelength, powerless_uncapped=False):
+    """Momentum half-range from the system NA (falls back to a moderate cone).
 
-
-def _default_p_max(prescription, wavelength):
-    """Momentum half-range from the system NA (falls back to a moderate cone)."""
+    ``powerless_uncapped=True`` (the momentum-sizing caller) returns ``np.inf``
+    for a power-less prescription so no NA cap is imposed; the NA-*estimate*
+    callers leave it False and keep the small-NA floor (see below)."""
     try:
         from ..raytrace import system_abcd_prescription  # noqa: F401
     except ImportError:
@@ -468,6 +484,13 @@ def _default_p_max(prescription, wavelength):
         ap = prescription.get('aperture_diameter', 0.0)
         r = max([ap / 2.0] + semis) if (semis or ap) else 0.0
         efl = abs(float(system_abcd_prescription(prescription, wavelength)[3]))
+        if not np.isfinite(efl):
+            # Power-less prescription (flat plate / free space): the marginal-ray
+            # NA is 0, so a physical NA cap is meaningless and truncates a
+            # wide-angle free-space beam (audit S2-6).  The momentum-sizing caller
+            # asks for NO cap (np.inf) so p_max follows the field's own angular
+            # content; the NA-estimate callers keep the small-NA floor (0.05).
+            return np.inf if powerless_uncapped else 0.05
         na = (r / efl) if (r > 0 and efl > 0) else 0.1
         return float(min(0.6, max(0.05, 1.6 * na)))
     except (LookupError, TypeError, ValueError, AttributeError,
@@ -476,6 +499,107 @@ def _default_p_max(prescription, wavelength):
 
 
 _DP_TARGET = 0.008          # auto momentum spacing (direction cosine); see below
+_PMAX_BEAMLET_C = 3.0       # p_max completeness floor = C/(k*w0) (beamlet momentum
+#                             width); C~2-3 keeps the t=0 identity power >0.99
+
+# Lever #3 (coarse-lattice trace + interpolation) tunables.
+_COARSE_INTERP_ORDER = 3    # cubic map_coordinates upsample (opd ~2e-5 waves, well
+#                             under the ~1e-3 FGA floor; ~2x faster than quintic)
+_RIM_CELLS = 3              # dilation (coarse cells) of the vignetting boundary
+_COARSE_SUPP_FRAC = 1e-3    # rim direct-trace only where windowed |u0| is >= this
+
+
+def _pick_ray_transfer(surfaces, exact):
+    """Differential ray-transfer Jacobian primitive (lever #1).  ``exact=True``
+    uses the truncation-free analytic (forward-mode-AD) Jacobian when EVERY
+    surface is a rotationally-symmetric conic -- exact vs the finite-difference
+    ~1e-8, pure NumPy, and ~1.2x faster on a large aperture (one traced ray vs
+    the FD 9-ray bundle).  Falls back to the FD primitive for aspheric /
+    freeform / biconic surfaces (which the analytic form does not handle) and
+    when ``exact=False`` (the default -- byte-identical legacy path)."""
+    from ..raytrace.differential import ray_transfer_jacobian, ray_transfer_jacobian_analytic
+    if not exact:
+        return ray_transfer_jacobian
+    for s in surfaces:
+        if (getattr(s, 'aspheric_coeffs', None) or getattr(s, 'freeform', None)
+                or getattr(s, 'radius_y', None) is not None
+                or getattr(s, 'conic_y', None) is not None
+                or getattr(s, 'aspheric_coeffs_y', None) is not None):
+            return ray_transfer_jacobian
+    return ray_transfer_jacobian_analytic
+
+
+# Lever #2: cross-call cache of the FIELD-INDEPENDENT coarse pre-trace (the
+# per-momentum coarse ray-data grids + coarse alive masks depend only on the
+# geometry, not on the input field), so a repeated propagation through the SAME
+# optics -- e.g. a design / optimization loop that varies only the field -- reuses
+# it.  Opt-in (``cache_trace``); bounded, FIFO-evicted; each entry is the coarse
+# swarm (~ full swarm / coarse_stride^2), so keep the bound small.
+_COARSE_CACHE: Dict[Any, Any] = {}
+_COARSE_CACHE_MAX = 2
+# v5.24.4 (audit hygiene): thread-safety lock for ``_COARSE_CACHE``.  The
+# read (``get``) -> ``_coarse_cache_put`` (len-check -> pop -> __setitem__)
+# sequence is a read-modify-write two threads propagating through the SAME
+# optics could tear.  Follows the ``_THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK``
+# precedent in :mod:`analysis.through_focus`.  Lock-scope discipline: the
+# expensive per-momentum coarse trace runs OUTSIDE the lock so a concurrent
+# cache hit on a different key isn't blocked on it (mirrors the jit-compile
+# discipline of the through-focus lock).
+_COARSE_CACHE_LOCK = threading.Lock()
+
+
+def clear_coarse_trace_cache() -> None:
+    """Drop every cached FGA coarse pre-trace (lever #2).
+
+    Forces the next ``cache_trace=True`` propagation to recompute the
+    field-independent coarse ray-data grids from scratch.  Use in unit
+    tests that pin cache mechanics or in long-running pipelines that want
+    to release the retained coarse swarms.
+    """
+    with _COARSE_CACHE_LOCK:
+        _COARSE_CACHE.clear()
+
+
+# v5.24.4 (audit hygiene): enroll the coarse-trace clearer with the central
+# registry at import time so ``clear_all_registered_caches`` drains it (the
+# v4.16.1 enrollment meta-pin requires every module-level ``_*_CACHE`` to be
+# registered).  Late-binding closure preserves ``mock.patch.object`` test
+# semantics (mirrors the through_focus / propagation enrollment pattern).
+try:
+    import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'fga_coarse_trace',
+        lambda: getattr(_this_mod, 'clear_coarse_trace_cache')(),
+    )
+except ImportError:
+    pass
+
+
+def _coarse_geom_key(surfs, wavelength, Nx, Ny, dx, dyg, dq_step, coarse_stride,
+                     px, w0, z_image):
+    """Hashable identity of the FIELD-INDEPENDENT coarse pre-trace (surfaces +
+    grid + momentum lattice + frozen width + image leg).  Two calls with equal
+    keys produce identical coarse grids/alive, so the trace is reusable."""
+    surf_key = tuple((float(getattr(s, 'radius', np.inf)),
+                      float(getattr(s, 'conic', 0.0)),
+                      float(getattr(s, 'thickness', 0.0)),
+                      str(getattr(s, 'glass', getattr(s, 'material', ''))),
+                      str(getattr(s, 'aspheric_coeffs', None)),
+                      float(getattr(s, 'semi_diameter', 0.0) or 0.0))
+                     for s in surfs)
+    return (surf_key, float(wavelength), int(Nx), int(Ny), float(dx), float(dyg),
+            int(dq_step), int(coarse_stride), int(px.size), float(px[0]),
+            float(px[-1]), float(w0), float(z_image))
+
+
+def _coarse_cache_put(key, val):
+    with _COARSE_CACHE_LOCK:
+        if len(_COARSE_CACHE) >= _COARSE_CACHE_MAX:
+            _COARSE_CACHE.pop(next(iter(_COARSE_CACHE)))    # FIFO evict oldest
+        _COARSE_CACHE[key] = val
 
 
 def _field_angular_content(E_in, dx, dyg, wavelength, frac=0.999):
@@ -502,23 +626,33 @@ def _field_angular_content(E_in, dx, dyg, wavelength, frac=0.999):
     return float(pr[order][min(int(np.searchsorted(cum, frac)), pr.size - 1)])
 
 
-def _resolve_sampling(E_in, dx, dyg, wavelength, prescription, p_max, n_p):
+def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
     """Resolve ``(p_max, n_p)``, auto-sizing either when ``None`` so the
     phase-space swarm is MATCHED to the field: ``p_max`` covers the field's
-    angular content (capped by the system NA), and ``n_p`` makes the momentum
-    spacing ``dp = 2*p_max/(n_p-1)`` fine enough (``~<= _DP_TARGET``) to resolve
-    the phase-space quadrature -- which is what makes FGA accurate on diverging
-    beams (whose broad phase-space footprint the fixed old default under-sampled;
+    angular content AND each beamlet's own momentum width (for completeness),
+    capped by the system NA, and ``n_p`` makes the momentum spacing
+    ``dp = 2*p_max/(n_p-1)`` fine enough (``~<= _DP_TARGET``) to resolve the
+    phase-space quadrature -- which is what makes FGA accurate on diverging beams
+    (whose broad phase-space footprint the fixed old default under-sampled;
     leading FGA is EXACT for free space, so with dp matched a diverging beam
     reconstructs to ~round-off).  An explicit ``p_max`` / ``n_p`` is honoured."""
     if p_max is None:
-        na_cap = _default_p_max(prescription, wavelength)
+        na_cap = _default_p_max(prescription, wavelength, powerless_uncapped=True)
         content = _field_angular_content(E_in, dx, dyg, wavelength)
-        # cover the field's content generously (x1.5 for the spectral tail --
-        # over-wide p_max is harmless at fine dp, only truncation hurts), but
-        # never wider than the system NA cone (x1.5): content beyond the NA is
-        # clipped by the optic anyway, and a wider p_max just inflates n_p.
-        p_max = float(min(1.5 * na_cap, max(0.03, 1.5 * content)))
+        # COMPLETENESS FLOOR (audit S2-2): the swarm must cover each beamlet's OWN
+        # momentum width ~2/(k*w0), else the t=0 resolution of identity loses
+        # power -- a collimated Gaussian has narrow angular CONTENT but the frozen
+        # beamlet still spans +-~2/(k*w0), so the old 0.03 floor gave up to 34%
+        # power deficit (while fidelity stayed ~1, a pure under-normalization).
+        # Floor at _PMAX_BEAMLET_C/(k*w0) (power >0.99).  Cover the field's content
+        # generously (x1.5 spectral tail; over-wide p_max is harmless at fine dp),
+        # never wider than the system NA cone (x1.5; content beyond it is clipped)
+        # -- but a power-less prescription (flat plate / free space) has na_cap=inf
+        # so p_max follows the field's own content uncapped (audit S2-6: the NA cap
+        # is physically meaningless for free space and truncated wide-angle beams).
+        k = 2.0 * np.pi / wavelength
+        beamlet_floor = _PMAX_BEAMLET_C / (k * w0)
+        p_max = float(min(1.5 * na_cap, max(beamlet_floor, 1.5 * content)))
     if n_p is None:
         # momentum SPACING (direction cosine) fine enough to converge the
         # phase-space quadrature.  Empirically ~0.008 works across beam sizes
@@ -528,8 +662,27 @@ def _resolve_sampling(E_in, dx, dyg, wavelength, prescription, p_max, n_p):
         # p_max (more), both converging at this spacing -- so n_p scales with
         # p_max, not with the beam size.  The frame stays hugely over-complete
         # (Nyquist allows dp up to ~lambda/dq >> this).
-        n_p = int(np.ceil(2.0 * p_max / _DP_TARGET)) | 1
-        n_p = int(min(61, max(7, n_p)))       # clamp: >=7 samples, <=61 (cost)
+        n_p_want = int(np.ceil(2.0 * p_max / _DP_TARGET)) | 1
+        n_p = int(min(61, max(7, n_p_want)))  # clamp: >=7 samples, <=61 (cost)
+        # audit S2-15: the <=61 cap silently re-enters the under-sampled dp
+        # regime for a wide p_max (p_max > ~0.24 at _DP_TARGET=0.008): after the
+        # cap the ACHIEVED spacing dp = 2*p_max/(n_p-1) can exceed the target,
+        # degrading the phase-space quadrature that makes FGA accurate on
+        # diverging / high-NA fields (probe: fid 0.917 clamped vs 1.0000
+        # unclamped).  Warn so the caller can restore dp <= target by passing an
+        # explicit larger n_p (cost) or a smaller p_max, rather than trust a
+        # quietly down-sampled result.
+        if n_p < n_p_want:
+            dp_ach = 2.0 * p_max / (n_p - 1)
+            if dp_ach > _DP_TARGET * (1.0 + 1e-9):
+                warnings.warn(
+                    "FGA auto momentum sampling: n_p clamped to the cost cap "
+                    f"({n_p}) yields dp={dp_ach:.4g} > target {_DP_TARGET:.4g} "
+                    f"for p_max={p_max:.4g}; the phase-space quadrature is "
+                    "under-sampled and a diverging / high-NA field may lose "
+                    "fidelity. Pass an explicit larger n_p, or a smaller "
+                    "p_max, to restore dp <= target.",
+                    RuntimeWarning, stacklevel=2)
     return float(p_max), int(n_p)
 
 
@@ -576,9 +729,229 @@ def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0):
     return None if nqc >= Nq else nqc
 
 
+def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
+                wavelength, z_image, dq_step, px, py, n_p, Np, coeff_frac,
+                use_sep, cw, nq_chunk, coarse_stride, cache_trace=False):
+    """Lever #3: coarse-lattice trace + quintic ``map_coordinates`` interpolation.
+
+    The ray trace is ~80% of FGA cost, and the exit-vertex map
+    ``(q, p) -> (xv, yv, ux, uy, opd, a)`` is smooth and single-valued at the
+    launch plane (the caustic fold is DOWNSTREAM), so trace only a
+    stride-``coarse_stride`` position sub-lattice per momentum and interpolate the
+    smooth ray quantities to the full lattice with an order-5 (quintic)
+    ``scipy.ndimage.map_coordinates`` -- C-backed and grid-regular, ~3.6-5.5x
+    faster than the full trace (scaling up with N).  ``AW = C*a*exp(i k opd)`` is
+    reconstructed at full resolution; the oscillating ``AW`` is NEVER
+    interpolated.  Validated no-loss (fid 1.0; opd ~1e-8 waves, position ~1e-9 m,
+    prefactor ~1e-12 rel).  RIM: where the aperture vignettes the beam,
+    interpolation across the alive/dead edge is invalid, so beamlets within a
+    ``_RIM_CELLS``-cell band of a dead coarse node that ALSO carry beam support
+    are traced DIRECTLY (dark exterior points interp-marked alive are harmless --
+    their Gabor coefficient is ~0, so weight ~0).  Keeps the separable analysis
+    and the batched numba scatter; position pruning is not applied (the coarse
+    trace already visits only ``O(Nq / coarse_stride^2)`` points)."""
+    from scipy.ndimage import (
+        binary_dilation,
+        distance_transform_edt,
+        map_coordinates,
+        uniform_filter,
+    )
+
+    from ..raytrace.differential import ray_transfer_jacobian
+    M = int(coarse_stride)
+    ii = np.arange(0, Nx, dq_step)
+    jj = np.arange(0, Ny, dq_step)
+    xs_f = x0 + ii * dx
+    ys_f = y0 + jj * dyg
+    nxf, nyf = xs_f.size, ys_f.size
+    # coarse sub-lattice indices into the full axes (include the last so the
+    # interpolation never extrapolates past the traced support)
+    cix = np.unique(np.r_[np.arange(0, nxf, M), nxf - 1])
+    ciy = np.unique(np.r_[np.arange(0, nyf, M), nyf - 1])
+    xs_c, ys_c = xs_f[cix], ys_f[ciy]
+    nxc, nyc = xs_c.size, ys_c.size
+    QXc, QYc = np.meshgrid(xs_c, ys_c)
+    qxc = QXc.ravel().astype(np.float64)
+    qyc = QYc.ravel().astype(np.float64)
+    QXf, QYf = np.meshgrid(xs_f, ys_f)         # full lattice (C-order: y outer)
+    qxf = QXf.ravel().astype(np.float64)
+    qyf = QYf.ravel().astype(np.float64)
+    Nq = qxf.size
+    # fractional coarse-index coordinate of every full grid LINE (map_coordinates)
+    fx = np.interp(xs_f, xs_c, np.arange(nxc, dtype=np.float64))
+    fy = np.interp(ys_f, ys_c, np.arange(nyc, dtype=np.float64))
+    cxi = np.clip(np.round(fx).astype(int), 0, nxc - 1)   # nearest coarse cell
+    cyi = np.clip(np.round(fy).astype(int), 0, nyc - 1)
+    # beam-support mask over the full lattice (rim direct-trace only where the
+    # beam lives, so the dark exterior aperture edge is never traced)
+    a2 = np.abs(u0) ** 2
+    wwx = max(1, int(round(2.0 * nsig * w0 / dx)))
+    wwy = max(1, int(round(2.0 * nsig * w0 / dyg)))
+    amp = np.sqrt(np.maximum(uniform_filter(a2, size=(wwy, wwx),
+                                            mode='constant'), 0.0))
+    supp2d = amp[np.ix_(jj, ii)] > _COARSE_SUPP_FRAC * float(amp.max() + 1e-300)
+    pv = px[:n_p]
+
+    def _trace(qxp, qyp, pxi, pyi, pz):
+        uxin = np.full(qxp.shape, pxi / pz)
+        uyin = np.full(qxp.shape, pyi / pz)
+        dt = ray_transfer_jacobian(qxp.copy(), qyp.copy(), uxin, uyin, surfs,
+                                   wavelength, per_surface=False)
+        uxo, uyo = dt.ux, dt.uy
+        xv = dt.x + z_image * uxo
+        yv = dt.y + z_image * uyo
+        opd = dt.opd + z_image * np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
+        Ml = np.tile(np.eye(4), (qxp.shape[0], 1, 1))
+        Ml[:, 0, 2] = z_image
+        Ml[:, 1, 3] = z_image
+        Mm = Ml @ dt.jacobian
+        # ------------------------------------------------------------------
+        # slope -> direction-cosine monodromy conversion (audit S2-16).
+        # ------------------------------------------------------------------
+        # The Herman-Kluk prefactor a = sqrt(det Z) needs the ray-transfer
+        # Jacobian Mm (in SLOPE state [x, y, u, v]) expressed in DIRECTION-
+        # COSINE momentum p = u / sqrt(1 + u^2 + v^2).  The exact output
+        # conversion is the FULL 2x2 Jacobian
+        #     d(p_x, p_y)/d(u_x, u_y)
+        #       = (1 + u^2 + v^2)^-1.5 * [[1 + v^2, -u v], [-u v, 1 + u^2]],
+        # and the input the analogous 2x2 d(u)/d(p).  Here we apply only its
+        # ISOTROPIC (trace/2-like) part as a SCALAR -- ``go`` on the output
+        # block, ``gi`` on the input block -- dropping the off-diagonal
+        # ``-u v`` skew term and the diagonal ``u^2`` vs ``v^2`` anisotropy.
+        # That approximation is exact on-axis and O(u^2) in the prefactor
+        # otherwise, growing with NA and skew.  It is BELOW the noise of the
+        # moderate-NA regime the library validates (measured FGA fidelity
+        # 0.997-0.999 there); the full 2x2 upgrade would change the validated
+        # high-NA prefactor and is deferred (see audit AUDIT_V5_24_2 S2-16 and
+        # tests/unit/test_audit_g06_perf.py::test_s2_16_*).
+        go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
+        gi = (1.0 + (pxi / pz) ** 2 + (pyi / pz) ** 2) ** 1.5
+        A = Mm[:, 0:2, 0:2]
+        B = Mm[:, 0:2, 2:4] * gi
+        Cc = Mm[:, 2:4, 0:2] * go[:, None, None]
+        D = Mm[:, 2:4, 2:4] * (go[:, None, None] * gi)
+        Z = (A + D) + 1j * (kw2 * Cc - B / kw2)
+        a = np.sqrt(_det2(Z))
+        a = np.where(a.real < 0, -a, a)
+        return xv, yv, uxo, uyo, opd, a, np.asarray(dt.alive, bool)
+
+    # ---- FIELD-INDEPENDENT coarse pre-trace (per-momentum coarse ray-data grids
+    # + coarse alive masks): a pure function of the geometry, so cacheable across
+    # calls (lever #2).  Grids are dead-node-filled (nearest-alive) so the interp
+    # stays stable; the rim (which depends on the FIELD's support) overrides them.
+    ckey = (_coarse_geom_key(surfs, wavelength, Nx, Ny, dx, dyg, dq_step,
+                             coarse_stride, px, w0, z_image)
+            if cache_trace else None)
+    if ckey is not None:
+        with _COARSE_CACHE_LOCK:
+            cached = _COARSE_CACHE.get(ckey)
+    else:
+        cached = None
+    if cached is not None:
+        grids, alv_list = cached
+    else:
+        grids = [None] * Np                # (7, nyc, nxc) per momentum
+        alv_list = [None] * Np             # coarse alive (nyc, nxc) per momentum
+        for jm in range(Np):
+            pxi, pyi = float(px[jm]), float(py[jm])
+            pz = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
+            xvc, yvc, uxc, uyc, opdc, ac, alvc = _trace(qxc, qyc, pxi, pyi, pz)
+            alv2 = alvc.reshape(nyc, nxc)
+            stack = np.stack([xvc, yvc, uxc, uyc, opdc, ac.real, ac.imag]
+                             ).reshape(7, nyc, nxc)
+            if not alv2.all():
+                idx = distance_transform_edt(~alv2, return_distances=False,
+                                             return_indices=True)
+                stack = stack[:, idx[0], idx[1]]
+            grids[jm] = stack
+            alv_list[jm] = alv2
+        if ckey is not None:
+            _coarse_cache_put(ckey, (grids, alv_list))
+
+    # ---- FIELD-DEPENDENT rim: support-selected direct traces at the vignetting
+    # boundary (cheap, O(boundary); recomputed per call from the coarse alive) ----
+    rim = [None] * Np                      # (ridx, deadns, traced-values) or None
+    for jm in range(Np):
+        alv2 = alv_list[jm]
+        if alv2.all():
+            continue
+        pxi, pyi = float(px[jm]), float(py[jm])
+        pz = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
+        dfull = binary_dilation(~alv2, iterations=_RIM_CELLS)[np.ix_(cyi, cxi)]
+        ridx = np.flatnonzero(dfull.ravel() & supp2d.ravel())
+        deadns = np.flatnonzero(dfull.ravel() & ~supp2d.ravel())
+        if ridx.size:
+            rv = _trace(qxf[ridx], qyf[ridx], pxi, pyi, pz)
+            rim[jm] = (ridx, deadns, rv)
+        elif deadns.size:
+            rim[jm] = (np.empty(0, int), deadns, None)
+
+    # ---- reconstruct: lattice-chunk (memory) x momentum-batch (batched scatter)
+    outr = np.zeros((Ny, Nx))
+    outi = np.zeros((Ny, Nx))
+    qbounds = ([(0, Nq)] if nq_chunk is None
+               else [(s, min(s + nq_chunk, Nq)) for s in range(0, Nq, nq_chunk)])
+    for qs, qe in qbounds:
+        nqc = qe - qs
+        # fractional coarse coords of this chunk's full-lattice points
+        pidx = np.arange(qs, qe)
+        iy = pidx // nxf
+        ix = pidx - iy * nxf
+        coords = np.vstack([fy[iy], fx[ix]])            # (2, nqc)
+        c_full = (_gabor_coeff_sep(u0, qxf[qs:qe], qyf[qs:qe], pv, x0, y0, dx,
+                                   dyg, w0, k, Ag, nsig) if use_sep else None)
+        for cs in range(0, Np, cw):
+            ce = min(cs + cw, Np)
+            mm = ce - cs
+            if use_sep:
+                cco = c_full[:, cs:ce]
+            else:
+                cco = _gabor_coeff(u0, qxf[qs:qe], qyf[qs:qe], px[cs:ce],
+                                   py[cs:ce], x0, y0, dx, dyg, w0, k, Ag, nsig)
+            QX = np.empty((nqc, mm))
+            QY = np.empty((nqc, mm))
+            PX = np.empty((nqc, mm))
+            PY = np.empty((nqc, mm))
+            AW = np.zeros((nqc, mm), dtype=np.complex128)
+            ALV = np.ones((nqc, mm), dtype=bool)
+            for j in range(mm):
+                jm = cs + j
+                g = grids[jm]
+                vals = [map_coordinates(g[t], coords, order=_COARSE_INTERP_ORDER,
+                                        mode='nearest') for t in range(7)]
+                xv, yv, uxo, uyo, opd = vals[0], vals[1], vals[2], vals[3], vals[4]
+                a = vals[5] + 1j * vals[6]
+                if rim[jm] is not None:                 # rim direct-trace overwrite
+                    ridx, deadns, rv = rim[jm]
+                    sel = (ridx >= qs) & (ridx < qe)
+                    if sel.any():
+                        loc = ridx[sel] - qs
+                        rvs = tuple(v[sel] for v in rv[:6])
+                        xv[loc], yv[loc] = rvs[0], rvs[1]
+                        uxo[loc], uyo[loc] = rvs[2], rvs[3]
+                        opd[loc] = rvs[4]
+                        a[loc] = rvs[5]
+                        ALV[loc, j] = rv[6][sel]
+                    dsel = (deadns >= qs) & (deadns < qe)
+                    if dsel.any():
+                        ALV[deadns[dsel] - qs, j] = False
+                invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
+                QX[:, j] = xv
+                QY[:, j] = yv
+                PX[:, j] = uxo * invo
+                PY[:, j] = uyo * invo
+                AW[:, j] = C * a * np.exp(1j * k * opd)
+            W = cco * AW
+            W[~ALV] = 0.0
+            _reconstruct_into(outr, outi, QX, QY, PX, PY, W, x0, y0, dx, dyg,
+                              Ny, Nx, w0, k, Ag, nsig, sep=use_sep)
+    return outr + 1j * outi
+
+
 def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                       dq_step, p_max, n_p, nsig, chunk=None, prune_frac=0.0,
-                      coeff_frac=0.0, separable="auto", mem_budget_mb=None):
+                      coeff_frac=0.0, separable="auto", mem_budget_mb=None,
+                      coarse_stride=1, exact_jacobian=False, cache_trace=False):
     """Core FGA transport through a prescription to (last vertex + z_image).
 
     ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches.  ``chunk``
@@ -595,7 +968,6 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     faster; 'auto' enables them when ``n_p >= 5`` (below that the ~``n_p`` x
     analysis win is negligible)."""
     from ..raytrace import surfaces_from_prescription
-    from ..raytrace.differential import ray_transfer_jacobian
 
     k = 2.0 * np.pi / wavelength
     Ny, Nx = u0.shape
@@ -623,6 +995,7 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
     kw2 = k * w0 * w0
+    ray_transfer_jacobian = _pick_ray_transfer(surfs, exact_jacobian)  # lever #1
 
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
     use_sep = bool(separable) if separable != "auto" else (n_p >= 5)
@@ -632,6 +1005,11 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     # separable c_full is then per-lattice-chunk (nqc*Np), not the whole Nq*Np.
     nq_chunk = _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb,
                                  "apply_real_lens_fga")
+    if coarse_stride and int(coarse_stride) > 1:
+        return _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2,
+                           surfs, wavelength, z_image, dq_step, px, py, n_p, Np,
+                           coeff_frac, use_sep, cw, nq_chunk, int(coarse_stride),
+                           cache_trace=bool(cache_trace))
     qbounds = ([(0, Nq)] if nq_chunk is None
                else [(s, min(s + nq_chunk, Nq)) for s in range(0, Nq, nq_chunk)])
 
@@ -704,7 +1082,10 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                 Mleg[:, 0, 2] = z_image
                 Mleg[:, 1, 3] = z_image
                 M = Mleg @ dt.jacobian
-                # slope -> direction-cosine conjugation (canonical monodromy)
+                # slope -> direction-cosine monodromy: SCALAR isotropic part of
+                # the true 2x2 d(p)/d(u) Jacobian (O(u^2), NA/skew-limited --
+                # see the full note at the ``_fga_coarse._trace`` site, audit
+                # S2-16).
                 go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5     # dp/du at output
                 gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5  # du/dp
                 A = M[:, 0:2, 0:2]
@@ -746,6 +1127,9 @@ def apply_real_lens_fga(
     prune_frac: float = 1e-4,
     coeff_frac: float = 1e-4,
     separable: Any = "auto",
+    coarse_stride: int = 1,
+    exact_jacobian: bool = False,
+    cache_trace: bool = False,
     normalize_output: str = "none",
 ) -> np.ndarray:
     """Propagate ``E_in`` through a real lens ``prescription`` by the
@@ -839,6 +1223,46 @@ def apply_real_lens_fga(
         kernels to well within the FGA error floor (each matches the exact oracle
         to the same fidelity), for a ~1.5-1.8x combined speedup.  ``'auto'``
         (default) enables them when ``n_p >= 5``.
+    coarse_stride : int
+        Opt-in (default ``1`` = off, exact) coarse-lattice trace.  The ray trace
+        is the dominant FGA cost and the exit-vertex map ``(q,p) -> (xv,yv,ux,uy,
+        opd,a)`` is smooth and single-valued at the launch plane (the caustic
+        fold is DOWNSTREAM), so with ``coarse_stride=M`` only a stride-``M``
+        position sub-lattice is traced per momentum and the smooth ray quantities
+        are cubic-``map_coordinates``-interpolated to the full lattice (``AW`` is
+        reconstructed, never interpolated).  No-loss (fidelity ~``1`` vs the full
+        trace; validated), with a direct-trace RIM fallback at the vignetting
+        boundary.  The interpolation has a fixed per-point overhead, so the NET
+        speedup depends on the trace cost: it grows with the aperture (N) and the
+        prescription complexity -- worthwhile for LARGE apertures / multi-surface
+        / aspheric lenses (measured ~1.2-1.6x at N=256-384, growing with N), and
+        marginal or negative for small grids or cheap (near-free-space) traces,
+        where the default ``1`` is best.  Position pruning is not applied on this
+        path (``M`` already thins the trace).  Use ``M`` ~ ``4-8``.
+    exact_jacobian : bool
+        Opt-in (default ``False``).  Use the truncation-free analytic
+        (forward-mode-AD) differential ray-transfer Jacobian instead of the
+        finite-difference default when every surface is a rotationally-symmetric
+        conic -- exact vs the FD ``~1e-8`` truncation, and ~``1.2x`` faster on a
+        large aperture (one traced ray vs the FD 9-ray bundle).  Silently falls
+        back to the FD Jacobian for aspheric / freeform / biconic prescriptions
+        (unsupported by the analytic form) and applies to the full-trace path
+        (``coarse_stride=1``; the coarse path uses FD, where the interpolation
+        dominates the accuracy budget anyway).
+    cache_trace : bool
+        Opt-in (default ``False``), effective only with ``coarse_stride > 1``.
+        The coarse pre-trace (per-momentum coarse ray-data grids + alive masks)
+        is FIELD-INDEPENDENT given the geometry AND the momentum lattice, so
+        caching it lets a repeated propagation through the SAME optics skip the
+        trace on subsequent calls (lever #2).  Reuse requires the SAME momentum
+        lattice: pass EXPLICIT ``p_max`` / ``n_p`` (or vary only the field PHASE),
+        since the default auto sampler sizes ``p_max`` from each field's angular
+        content -- differing-content fields then get differing swarms and MISS
+        the cache.  Bounded, FIFO-evicted cache; each entry is
+        the coarse swarm (~ full swarm / ``coarse_stride^2``), so it trades memory
+        for the trace time -- worthwhile for repeated same-optics propagations,
+        pointless for a one-shot call.  The field-dependent rim is recomputed each
+        call, so the result is identical whether cached or not.
     normalize_output : {'none', 'power'}
         ``'none'`` returns the raw FGA field
         ``'power'`` rescales it so the
@@ -863,16 +1287,17 @@ def apply_real_lens_fga(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
     dyg = float(dx) if dy is None else float(dy)
-    p_max, n_p = _resolve_sampling(E_in, float(dx), dyg, float(wavelength),
-                                   prescription, p_max, n_p)
     w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
+    p_max, n_p = _resolve_sampling(E_in, float(dx), dyg, float(wavelength), w0,
+                                   prescription, p_max, n_p)
     chunk_eff = _chunk_from_budget(E_in.shape, int(dq_step), chunk, mem_budget_mb)
     out = _fga_through_lens(
         E_in, float(dx), dyg, prescription, float(wavelength), w0,
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
         coeff_frac=float(coeff_frac), separable=separable,
-        mem_budget_mb=mem_budget_mb)
+        mem_budget_mb=mem_budget_mb, coarse_stride=int(coarse_stride),
+        exact_jacobian=bool(exact_jacobian), cache_trace=bool(cache_trace))
     if normalize_output == "power":
         pin = float(np.sum(np.abs(E_in) ** 2))
         pout = float(np.sum(np.abs(out) ** 2))
@@ -1013,6 +1438,10 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                 Mleg[:, 0, 2] = z_image
                 Mleg[:, 1, 3] = z_image
                 M = Mleg @ dt.jacobian
+                # slope -> direction-cosine monodromy: SCALAR isotropic part of
+                # the true 2x2 d(p)/d(u) Jacobian (O(u^2), NA/skew-limited --
+                # see the full note at the ``_fga_coarse._trace`` site, audit
+                # S2-16).
                 go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
                 gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5
                 A = M[:, 0:2, 0:2]
@@ -1097,9 +1526,9 @@ def apply_real_lens_fga_vector(
     # beam geometry, so its extent/angular-content set the sampling for both)
     _rep = E_vec[0] if (np.sum(np.abs(E_vec[0]) ** 2)
                         >= np.sum(np.abs(E_vec[1]) ** 2)) else E_vec[1]
-    p_max, n_p = _resolve_sampling(_rep, float(dx), dyg, float(wavelength),
-                                   prescription, p_max, n_p)
     w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
+    p_max, n_p = _resolve_sampling(_rep, float(dx), dyg, float(wavelength), w0,
+                                   prescription, p_max, n_p)
     chunk_eff = _chunk_from_budget(E_vec[0].shape, int(dq_step), chunk,
                                    mem_budget_mb)
     ex, ey, ez = _fga_vector_through_lens(
@@ -1137,9 +1566,11 @@ def _caustic_zone(E_in, dx, prescription, wavelength, n_rays=25):
 
     N = E_in.shape[-1]
     k = 2.0 * np.pi / wavelength
-    cx = N // 2
+    cx = N // 2                       # column (x) centre -- for the x grid
+    cy = E_in.shape[0] // 2           # row (y) centre -- THE meridional row
     xgrid = (np.arange(N) - cx) * dx
-    row = E_in[cx, :]
+    row = E_in[cy, :]                 # audit S2-21: was E_in[cx,:] (wrong row / an
+    #                                   IndexError when Nx//2 >= Ny for a tall field)
     amp = np.abs(row)
     if amp.max() <= 0.0:
         return None

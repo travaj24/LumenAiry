@@ -203,6 +203,95 @@ def test_soft_edge_improves_hard_aperture_focus():
     assert e_soft < 0.03            # and lands well under the binary ~3.3%
 
 
+def _single_beamlet(Q, w0, lam):
+    """One on-axis beamlet launched at its waist (Q, waist0=w0)."""
+    return BeamletBundle(
+        positions=np.zeros((1, 3), dtype=np.float64),
+        directions=np.array([[0.0, 0.0, 1.0]], dtype=np.float64),
+        Q=Q,
+        amplitude=np.ones((1,), dtype=np.complex128),
+        waist0=np.asarray(w0, dtype=np.float64).reshape(-1),
+    )
+
+
+def test_soft_edge_uses_propagated_width_not_launch_waist0():
+    """Audit S2-5: after a free-space leg the soft-edge aperture must vignette
+    on the beamlet's *propagated* 1/e amplitude radius (derived from Im(Q)),
+    not the stale launch-time ``waist0``.
+
+    Independent oracle: reconstruct the single propagated beamlet on a fine
+    grid and read the 1/e amplitude radius directly off ``|E|`` (this path
+    never touches the alpha = 0.5 k lam_min formula the aperture uses); the
+    analytic ABCD width ``w0*sqrt(1+(z/zR)^2)`` must match it, and the
+    soft-edge vignetting fraction with ``wavelength`` supplied must equal
+    ``0.5(1+erf(d*sqrt2/w_true))`` using THAT propagated width -- while the
+    legacy ``wavelength=None`` path (waist0) collapses to a near-hard cut.
+    """
+    from lumenairy.propagators.gbd import _erf_xp
+    lam = LAM
+    w0 = 8e-6
+    zR = np.pi * w0 ** 2 / lam
+    z = 10.0 * zR                                 # 10 Rayleigh ranges
+    w_true = w0 * np.sqrt(1.0 + (z / zR) ** 2)     # ~80 um analytic ABCD width
+
+    b0 = _single_beamlet(np.array([-1j / zR], dtype=np.complex128), w0, lam)
+    b = propagate_beamlets_freespace(b0, z_distance=z, wavelength=lam)
+
+    # Independent grid oracle: 1/e amplitude radius of the rendered beamlet.
+    Ng, dxg = 401, 2e-6
+    field = reconstruct_field_from_beamlets(b, Ny=Ng, Nx=Ng, dx=dxg,
+                                            wavelength=lam)
+    prof = np.abs(field)[Ng // 2, Ng // 2:]        # x >= 0 half of central row
+    xr = np.arange(Ng - Ng // 2) * dxg
+    w_grid = xr[int(np.argmin(np.abs(prof - prof[0] / np.e)))]
+    assert abs(w_grid - w_true) / w_true < 0.02    # analytic width is physical
+    assert w_true > 8.0 * w0                        # genuinely widened (~10x)
+
+    # On-axis beamlet, circular stop with d = semi_diameter = 0.3*w_true.
+    d = 0.3 * w_true
+    expected = 0.5 * (1.0 + float(
+        _erf_xp(np, np.array([d * np.sqrt(2.0) / w_true]))[0]))
+
+    out_fix = apply_aperture_to_beamlets(b, d, shape='circular',
+                                         soft_edge=True, wavelength=lam)
+    frac_fix = abs(out_fix.amplitude[0] / b.amplitude[0])
+    assert abs(frac_fix - expected) < 2e-3          # uses the propagated width
+
+    out_stale = apply_aperture_to_beamlets(b, d, shape='circular',
+                                           soft_edge=True)   # wavelength=None
+    frac_stale = abs(out_stale.amplitude[0] / b.amplitude[0])
+    assert frac_stale > 0.999                        # stale waist0 -> hard cut
+    assert frac_fix < 0.80                           # fix is a real partial
+    assert (frac_stale - frac_fix) > 0.15            # materially different
+
+
+def test_soft_edge_tensor_width_tracks_wider_axis():
+    """Tensor-Q branch of the S2-5 fix: the propagated soft-edge width is the
+    widest principal axis (smallest eigenvalue of -Im(Q)); the aperture
+    fraction matches an erf built from that independently-computed width."""
+    from lumenairy.propagators.gbd import _erf_xp
+    lam = LAM
+    wx, wy = 8e-6, 16e-6
+    zRx = np.pi * wx ** 2 / lam
+    zRy = np.pi * wy ** 2 / lam
+    Q = np.array([[[-1j / zRx, 0.0], [0.0, -1j / zRy]]], dtype=np.complex128)
+    b0 = _single_beamlet(Q, np.sqrt(wx * wy), lam)
+    z = 8.0 * zRx
+    b = propagate_beamlets_freespace(b0, z_distance=z, wavelength=lam)
+
+    wx_z = wx * np.sqrt(1.0 + (z / zRx) ** 2)
+    wy_z = wy * np.sqrt(1.0 + (z / zRy) ** 2)
+    w_wide = max(wx_z, wy_z)                          # min-eigenvalue width
+
+    d = 0.4 * w_wide
+    expected = 0.5 * (1.0 + float(
+        _erf_xp(np, np.array([d * np.sqrt(2.0) / w_wide]))[0]))
+    out = apply_aperture_to_beamlets(b, d, shape='circular',
+                                     soft_edge=True, wavelength=lam)
+    frac = abs(out.amplitude[0] / b.amplitude[0])
+    assert abs(frac - expected) < 2e-3
+
+
 # --------------------------------------------------------------------------
 # Maslov default
 # --------------------------------------------------------------------------

@@ -214,6 +214,59 @@ def test_persurface_reduces_isotropic_on_axis():
     assert abs(sx / sy - 1.0) < 0.05, (sx, sy)
 
 
+def test_z_image_ignored_on_paraxial_path_warns():
+    """S2-4: ``z_image`` is consumed only on the per_surface=True path
+    (last-vertex -> output leg, default BFL).  On the default per_surface=False
+    (whole-system-ABCD) path the field is reconstructed at the exit vertex and
+    a passed ``z_image`` is silently dropped -- so it must (a) emit a
+    RuntimeWarning and (b) leave the output BYTE-IDENTICAL to not passing it.
+
+    The byte-identity is the independent probe (the accepted-but-dropped-kwarg
+    mechanism), not a tautology on the warning.  The default-``z_image`` False
+    call must NOT warn (no false positive), and the per_surface=True call must
+    consume ``z_image`` silently and land on a genuinely different plane.
+    """
+    import warnings
+
+    from lumenairy.propagators.gbd import propagate_gbd_through_prescription
+
+    N, dx = 96, 18e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2).astype(np.complex128)
+    kw = dict(wavelength=LAM, output_dx=6e-6, output_shape=(64, 64),
+              sample_step=2, waist_factor=2.0)
+
+    # Baseline paraxial-path field (no z_image) -- the exit-vertex plane.
+    F_no_zimage = np.asarray(propagate_gbd_through_prescription(
+        E, dx, _singlet(), per_surface=False, **kw))
+
+    # Passing z_image on the False path warns AND is dropped (byte-identical).
+    with pytest.warns(RuntimeWarning, match="z_image is only honored"):
+        F_zimage = np.asarray(propagate_gbd_through_prescription(
+            E, dx, _singlet(), per_surface=False, z_image=45e-3, **kw))
+    assert np.array_equal(F_no_zimage, F_zimage), \
+        "z_image changed the per_surface=False output despite being dropped"
+
+    # Default (no z_image) on the False path must NOT raise the S2-4 warning.
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        propagate_gbd_through_prescription(
+            E, dx, _singlet(), per_surface=False, **kw)
+    assert not any('z_image is only honored' in str(w.message) for w in rec), \
+        "S2-4 warning fired on the default (no z_image) path"
+
+    # per_surface=True consumes z_image silently and lands on a different plane.
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        F_true = np.asarray(propagate_gbd_through_prescription(
+            E, dx, _singlet(), per_surface=True, z_image=45e-3, **kw))
+    assert not any('z_image is only honored' in str(w.message) for w in rec), \
+        "S2-4 warning fired on the per_surface=True path that honors z_image"
+    assert not np.array_equal(F_true, F_no_zimage), \
+        "per_surface=True with z_image should not match the exit-vertex field"
+
+
 def test_persurface_captures_off_axis_astigmatism():
     """per_surface=True at an off-axis field produces an ASTIGMATIC beam -- the
     tensor Q's two principal 1/q curvatures separate (tangential vs sagittal),

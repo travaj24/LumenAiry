@@ -146,7 +146,13 @@ def strehl_marechal(rms_waves: Union[float, np.ndarray]) -> Union[float, np.ndar
     0.8175...
     """
     sigma = 2.0 * np.pi * np.asarray(rms_waves, dtype=float)
-    return np.exp(-(sigma ** 2))
+    strehl = np.exp(-(sigma ** 2))
+    # Honor the documented 'float or ndarray' contract: a bare ``np.exp``
+    # on the ``np.asarray`` of a Python scalar returns a 0-d ndarray, not a
+    # float, so a scalar caller leaks a 0-d array (surprises isinstance /
+    # JSON / f-string ``:.3f`` checks).  Collapse the 0-d case to float;
+    # genuine array inputs pass through byte-identically.
+    return float(strehl) if strehl.ndim == 0 else strehl
 
 
 def strehl_phase_integral(pupil: np.ndarray) -> float:

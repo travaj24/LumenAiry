@@ -1170,8 +1170,14 @@ def _make_system_jax_kernel(elem_sigs, wavelength, dx, dy):
             if tag == 'propagate':
                 _, z, bandlimit = sig
                 from .propagation import angular_spectrum_propagate
+                # S2-13 (audit AUDIT_V5_24_2): thread ``dy`` so an
+                # anamorphic grid (dy != dx) propagates the y axis at its
+                # own pitch on the JAX path, matching the NumPy
+                # ``propagate_through_system`` which passes ``current_dy``.
+                # Pre-fix the JAX kernel dropped ``dy`` and ASM defaulted
+                # ``dy = dx`` -- a silent wrong-pitch y propagation.
                 E = angular_spectrum_propagate(
-                    E, z, wavelength, dx, bandlimit=bandlimit)
+                    E, z, wavelength, dx, dy=dy, bandlimit=bandlimit)
             elif tag == 'lens':
                 _, f, xc, yc = sig
                 r2 = (X - xc) ** 2 + (Y - yc) ** 2
@@ -1403,8 +1409,10 @@ def propagate_through_system_jax(E_in: np.ndarray,
         if etype == 'propagate':
             z = elem['z']
             bandlimit = elem.get('bandlimit', True)
+            # S2-13 (audit AUDIT_V5_24_2): thread ``dy`` (anamorphic-grid
+            # parity with the NumPy path; see the fast-path kernel above).
             E = angular_spectrum_propagate(
-                E, float(z), wavelength, dx, bandlimit=bandlimit)
+                E, float(z), wavelength, dx, dy=dy, bandlimit=bandlimit)
 
         elif etype == 'lens':
             f = elem['f']

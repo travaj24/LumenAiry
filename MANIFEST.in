@@ -16,6 +16,17 @@ include CHANGELOG.md
 include LICENSE
 include pyproject.toml
 
+# v5.24.x (audit S4-20): ship the top-level reference docs in the sdist
+# so a PyPI tarball is a complete reproduction of the repository (the
+# stated intent below).  Pre-fix these vanished from the sdist even
+# though they are the canonical convention / migration / roadmap refs
+# that the code + docstrings point users at.
+include CONVENTIONS.md
+include Migration-Guide.md
+include ROADMAP.md
+include CONTRIBUTING.md
+recursive-include docs *.md *.txt
+
 # Validation suite -- 31 files with ~370 physics-fidelity tests.
 # Run with `python validation/run_all.py` after extracting the sdist.
 recursive-include validation *.py *.md *.txt

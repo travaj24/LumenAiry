@@ -21,7 +21,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from .context import MeritTerm, ctx_is_valid
+from .context import MeritTerm, ctx_is_valid, zernike_higher_order_rms_waves
 
 # =========================================================================
 # Geometric merits (fast, no wave leg)
@@ -201,6 +201,18 @@ class SpotSizeMerit(MeritTerm):
 
     def evaluate(self, ctx: Any) -> float:
         r = ctx.rms_radius_best
+        # S4-5 (AUDIT_V5_24_2): ``rms_radius_best`` defaults to
+        # ``np.inf`` and STAYS inf when the through-focus scan is
+        # skipped (|BFL| out of range early-return in the driver) or
+        # produced no finite slice.  A raw ``inf`` excess injects
+        # ``inf`` into the scipy merit sum and stalls the L-BFGS-B
+        # line search.  Coerce a non-finite radius to a large-but-
+        # FINITE quadratic penalty (``excess = 10 * max_rms_radius``)
+        # so a failed wave leg reads as a very-bad-but-usable design
+        # rather than crashing the optimiser.
+        if not np.isfinite(r):
+            excess = 10.0 * self.max_rms_radius
+            return self.weight * excess * excess
         excess = max(0.0, r - self.max_rms_radius)
         return self.weight * excess * excess
 
@@ -285,9 +297,9 @@ class MatchIdealThinLensMerit(MeritTerm):
             # convention is to return a 0 merit so the optimizer
             # doesn't get derailed.
             return 0.0
-        higher = coeffs[self.exclude_low_order:]
-        rms_m = float(np.sqrt(np.sum(higher ** 2)))
-        rms_waves = rms_m / ctx.wavelength
+        # v5.24.x (audit S4-18): shared higher-order-RMS quadrature.
+        rms_waves = zernike_higher_order_rms_waves(
+            coeffs, self.exclude_low_order, ctx.wavelength)
         return self.weight * rms_waves * rms_waves
 
 
@@ -844,9 +856,9 @@ class MatchTargetOPDMerit(MeritTerm):
         except (ValueError, RuntimeError, np.linalg.LinAlgError,
                 ZeroDivisionError):
             return 0.0
-        higher = coeffs[self.exclude_low_order:]
-        rms_m = float(np.sqrt(np.sum(higher ** 2)))
-        rms_waves = rms_m / ctx.wavelength
+        # v5.24.x (audit S4-18): shared higher-order-RMS quadrature.
+        rms_waves = zernike_higher_order_rms_waves(
+            coeffs, self.exclude_low_order, ctx.wavelength)
         return self.weight * rms_waves * rms_waves
 
 
@@ -1219,6 +1231,29 @@ class ChromaticFocalShiftMerit(MeritTerm):
 # Constraint-style merits (geometric, fast)
 # =========================================================================
 
+def _thickness_slot_is_air(surfaces: Any, i: int) -> bool:
+    """True iff the ``i``-th thickness gap sits in air / vacuum.
+
+    v5.24.x (audit S4-18 dedup): the single implementation of the
+    glass-vs-air classification shared by :class:`MinThicknessMerit` and
+    :class:`MaxThicknessMerit`.  The gap's medium is the ``glass_after``
+    of the ``i``-th surface (the material the ``i``-th thickness sits in);
+    a missing surface, or a ``glass_after`` in {air, vacuum, empty},
+    counts as air.  The classification is byte-identical to the pre-dedup
+    inline logic in ``MinThicknessMerit`` (the ``None`` sentinel in the
+    membership tuple is retained verbatim; it is unreachable given the
+    ``isinstance(glass, str)`` guard but kept for exact parity).
+    """
+    glass = 'air'
+    if i < len(surfaces):
+        surf = surfaces[i]
+        glass = (surf.get('glass_after', 'air')
+                  if isinstance(surf, dict)
+                  else getattr(surf, 'glass_after', 'air'))
+    return isinstance(glass, str) and glass.lower() in (
+        'air', 'vacuum', '', None)
+
+
 class MinThicknessMerit(MeritTerm):
     """Penalise any GLASS thickness below a minimum.
 
@@ -1255,39 +1290,52 @@ class MinThicknessMerit(MeritTerm):
         surfaces = ctx.prescription.get('surfaces', [])
         total = 0.0
         for i, t in enumerate(thicknesses):
-            if not self.include_air:
-                # Determine if this thickness sits between two glass
-                # interfaces: use the glass_after of the i-th surface
-                # (which is the material the i-th thickness sits in).
-                glass = 'air'
-                if i < len(surfaces):
-                    surf = surfaces[i]
-                    glass = (surf.get('glass_after', 'air')
-                              if isinstance(surf, dict)
-                              else getattr(surf, 'glass_after', 'air'))
-                if isinstance(glass, str) and glass.lower() in (
-                        'air', 'vacuum', '', None):
-                    continue
+            if not self.include_air and _thickness_slot_is_air(surfaces, i):
+                # v5.24.x (audit S4-18): shared glass/air classification;
+                # behaviour byte-identical to the pre-dedup inline loop.
+                continue
             deficit = max(0.0, self.min_thickness - float(t))
             total = total + deficit * deficit
         return self.weight * total
 
 
 class MaxThicknessMerit(MeritTerm):
-    """Penalise any glass thickness above a maximum."""
+    """Penalise any GLASS thickness above a maximum.
+
+    v5.24.x (audit S4-18): only glass thicknesses count; air gaps are
+    skipped, matching the documented intent ("glass thickness") and the
+    :class:`MinThicknessMerit` sibling.  Pre-fix this iterated EVERY
+    entry in ``prescription['thicknesses']`` including air gaps -- so a
+    large object/image-space air gap (which is not a manufacturability
+    constraint on the glass) was penalised contra the docstring.
+
+    Parameters
+    ----------
+    max_thickness : float
+        Maximum acceptable GLASS thickness [m].
+    weight : float
+    include_air : bool, optional
+        Set True to restore the pre-fix behaviour and also penalise
+        large air gaps.  Default False.
+    """
 
     needs_wave = False
     name = 'MaxThickness'
 
     def __init__(self, max_thickness: float = 20e-3,
-                 weight: float = 1.0) -> None:
+                 weight: float = 1.0,
+                 include_air: bool = False) -> None:
         self.max_thickness = float(max_thickness)
         self.weight = float(weight)
+        self.include_air = bool(include_air)
 
     def evaluate(self, ctx: Any) -> float:
         thicknesses = ctx.prescription.get('thicknesses', [])
+        surfaces = ctx.prescription.get('surfaces', [])
         total = 0.0
-        for t in thicknesses:
+        for i, t in enumerate(thicknesses):
+            if not self.include_air and _thickness_slot_is_air(surfaces, i):
+                continue
             excess = max(0.0, float(t) - self.max_thickness)
             total = total + excess * excess
         return self.weight * total

@@ -142,14 +142,23 @@ def fresnel_propagate(
     # wholly in f32: measured max carrier error 7.7e-4 rad-equivalent
     # vs 4.1e-8 with the f64 carrier (N=2048, dx=2 um, z=5 mm).
     # complex128 inputs are byte-identical to pre-fix.
-    x1 = (xp.arange(Nx, dtype=np.float64) - Nx / 2) * dx
-    y1 = (xp.arange(Ny, dtype=np.float64) - Ny / 2) * dy
-    X1, Y1 = xp.meshgrid(x1, y1, indexing='xy')
+    #
+    # v5.24.4 (audit S2-3): on the JAX backend the ``dtype=float64``
+    # request is silently truncated to float32 whenever ``jax_enable_x64``
+    # is off (the JAX default), so the carrier argument was again built
+    # wholly in f32.  Build the FIELD-INDEPENDENT grids + phase screens
+    # on the HOST (``np``) in float64 and only then move the finished
+    # (bounded) carriers onto the JAX device -- trace-safe (the screens
+    # do not depend on the field, so the field gradient survives).
+    _bld = np if is_jax else xp
+    x1 = (_bld.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y1 = (_bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    X1, Y1 = _bld.meshgrid(x1, y1, indexing='xy')
     dx_out = wavelength * z / (Nx * dx)
     dy_out = wavelength * z / (Ny * dy)
-    x2 = (xp.arange(Nx, dtype=np.float64) - Nx / 2) * dx_out
-    y2 = (xp.arange(Ny, dtype=np.float64) - Ny / 2) * dy_out
-    X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
+    x2 = (_bld.arange(Nx, dtype=np.float64) - Nx / 2) * dx_out
+    y2 = (_bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy_out
+    X2, Y2 = _bld.meshgrid(x2, y2, indexing='xy')
 
     # -- quadratic phase in input plane --------------------------------------
     # v5.17.x (audit P3-56): astype(copy=False) throughout -- the phase
@@ -159,8 +168,10 @@ def fresnel_propagate(
     # passes (~4 GB transient each at 16384^2 complex128), partially
     # undoing the v5.17.0 lifetime hygiene in this function.
     # Byte-identical output.
-    phase_in = xp.exp(1j * k / (2 * z) * (X1**2 + Y1**2)).astype(
+    phase_in = _bld.exp(1j * k / (2 * z) * (X1**2 + Y1**2)).astype(
         target_cdtype, copy=False)
+    if is_jax:
+        phase_in = xp.asarray(phase_in)
     E_mod = E_in.astype(target_cdtype, copy=False) * phase_in
     # v5.17.0 lifetime hygiene (byte-identical): the input-plane grids and
     # phase screen are consumed -- free before the FFT so they don't ride
@@ -176,11 +187,13 @@ def fresnel_propagate(
     del E_mod
 
     # -- quadratic phase in output plane + prefactor -------------------------
-    prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
-                 * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
+    prefactor = (_bld.exp(1j * k * z) / (1j * wavelength * z)
+                 * _bld.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
     # v5.17.x (audit P3-56): copy=False -- prefactor is freshly built above.
     prefactor = prefactor.astype(target_cdtype, copy=False)
+    if is_jax:
+        prefactor = xp.asarray(prefactor)
     del X2, Y2
 
     E_out = prefactor * E_fft
@@ -293,9 +306,14 @@ def fraunhofer_propagate(
     # v5.17.x (P2-29): always float64 -- the quadratic-phase carrier
     # argument is accumulated at f64 and cast to the target dtype only
     # after ``exp`` (see the matching comment in ``fresnel_propagate``).
-    x2 = (xp.arange(Nx, dtype=np.float64) - Nx / 2) * dx_out
-    y2 = (xp.arange(Ny, dtype=np.float64) - Ny / 2) * dy_out
-    X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
+    # v5.24.4 (audit S2-3): on JAX with ``jax_enable_x64`` off the
+    # ``dtype=float64`` request truncates to float32, so build the
+    # FIELD-INDEPENDENT output grid + carrier on the HOST in f64 and
+    # then move the finished (bounded) prefactor onto the device.
+    _bld = np if is_jax else xp
+    x2 = (_bld.arange(Nx, dtype=np.float64) - Nx / 2) * dx_out
+    y2 = (_bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy_out
+    X2, Y2 = _bld.meshgrid(x2, y2, indexing='xy')
 
     # Single FFT of the input field
     E_cast = E_in.astype(target_cdtype) if E_in.dtype != target_cdtype else E_in
@@ -305,11 +323,13 @@ def fraunhofer_propagate(
         E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_cast)))
 
     # Output quadratic phase + prefactor
-    prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
-                 * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
+    prefactor = (_bld.exp(1j * k * z) / (1j * wavelength * z)
+                 * _bld.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
     # v5.17.x (audit P3-56): copy=False -- prefactor is freshly built above.
     prefactor = prefactor.astype(target_cdtype, copy=False)
+    if is_jax:
+        prefactor = xp.asarray(prefactor)
 
     E_out = prefactor * E_fft
 

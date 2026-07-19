@@ -44,6 +44,46 @@ import numpy as np
 from .._deprecation import _Sentinel as _Sentinel
 
 # =========================================================================
+# Shared Zernike-RMS quadrature (v5.24.x, audit S4-18 dedup)
+# =========================================================================
+
+
+def zernike_higher_order_rms_waves(coeffs, exclude_low_order, wavelength):
+    """RMS (in waves) of the Zernike coefficients above the first
+    ``exclude_low_order`` modes.
+
+    Extracted (v5.24.x, audit S4-18) as the single implementation of the
+    higher-order-RMS quadrature that was copy/pasted byte-for-byte at
+    three sites: :meth:`EvaluationContext.rms_wavefront_waves` and the
+    two OPD-matching merits (:class:`MatchIdealThinLensMerit`,
+    :class:`MatchTargetOPDMerit`) in ``merit_terms.py``.  The formula is
+    unchanged -- ``sqrt(sum(coeffs[k:] ** 2)) / wavelength`` -- so every
+    former call site's numerical output is preserved to machine
+    precision.
+
+    Parameters
+    ----------
+    coeffs : ndarray
+        Zernike coefficient vector (metres), OSA/ANSI-ordered, as
+        returned by :func:`lumenairy.analysis.zernike_decompose`.
+    exclude_low_order : int
+        Number of leading modes to drop before taking the quadrature
+        (e.g. piston / tilt / defocus).
+    wavelength : float
+        Vacuum wavelength [m]; the RMS is divided by it to convert
+        metres -> waves.
+
+    Returns
+    -------
+    float
+        Higher-order wavefront RMS in waves.
+    """
+    higher = coeffs[exclude_low_order:]
+    rms_m = float(np.sqrt(np.sum(higher ** 2)))
+    return rms_m / wavelength
+
+
+# =========================================================================
 # Sentinels
 # =========================================================================
 
@@ -286,10 +326,9 @@ class EvaluationContext:
         from ..analysis import zernike_decompose
         coeffs, _ = zernike_decompose(
             self.opd_map, self.dx, ap, n_modes=n_modes)
-        # rms of higher-order modes, in meters
-        higher = coeffs[exclude_low_order:]
-        rms_m = float(np.sqrt(np.sum(higher ** 2)))
-        return rms_m / self.wavelength  # waves
+        # rms of higher-order modes, in waves (v5.24.x: shared helper).
+        return zernike_higher_order_rms_waves(
+            coeffs, exclude_low_order, self.wavelength)
 
 
 @dataclass

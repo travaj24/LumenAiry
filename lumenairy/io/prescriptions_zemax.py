@@ -157,6 +157,18 @@ def load_zemax_zmx(filepath: str,
                 'MM': 1e-3, 'CM': 1e-2, 'M': 1.0,
                 'IN': 25.4e-3, 'INCH': 25.4e-3, 'INCHES': 25.4e-3,
             }
+            # v5.24.x (audit S4-9): an unrecognised UNIT token silently
+            # defaulted to mm -- a potential order-of-magnitude mis-scale
+            # with no diagnostic.  Warn before falling back.
+            if unit_str not in unit_map:
+                warnings.warn(
+                    f"Unrecognised UNIT token {unit_str!r} in {filepath}; "
+                    f"defaulting to millimeters.  Known tokens: "
+                    f"{sorted(unit_map)}.  Verify the export or set the "
+                    f"scale manually if this is wrong.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             unit_scale = unit_map.get(unit_str, 1e-3)
             break
 
@@ -591,6 +603,17 @@ def load_zemax_zmx(filepath: str,
         aperture = stop_surfaces[0]['semi_diameter'] * 2 * unit_scale
     else:
         aperture = max(s['semi_diameter'] for s in lens_surfaces) * 2 * unit_scale
+    # v5.24.x (audit S4-9): a prescription with no STOP and no semi-diameter
+    # data yields aperture == 0.0, which silently fully-clips the downstream
+    # field with no diagnostic.  Warn so the caller can supply an aperture.
+    if aperture == 0.0:
+        warnings.warn(
+            f"Computed aperture_diameter is 0.0 for {filepath} (no STOP "
+            f"surface and no semi-diameter data found); the downstream "
+            f"field will be fully clipped.  Set the aperture explicitly.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     if name is None:
         name = os.path.splitext(os.path.basename(filepath))[0]
@@ -866,6 +889,17 @@ def load_zemax_prescription_data_txt(filepath: str,
                     'Meters': 1.0,
                     'Inches': 25.4e-3,
                 }
+                # v5.24.x (audit S4-9): warn before the silent mm fallback
+                # so an unrecognised unit name is not a silent order-of-
+                # magnitude mis-scale.
+                if unit_name not in unit_map:
+                    warnings.warn(
+                        f"Unrecognised 'Lens Units' value {unit_name!r} in "
+                        f"{filepath}; defaulting to millimeters.  Known "
+                        f"values: {sorted(unit_map)}.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                 unit_scale = unit_map.get(unit_name, 1e-3)
             except (ValueError, IndexError):
                 pass
@@ -941,7 +975,7 @@ def load_zemax_prescription_data_txt(filepath: str,
         last_surf_num = max(last_surf_num, surf_num)
 
         # Parse numeric fields (handle "Infinity" and "-" placeholders)
-        def _parse_float(s, default=0.0):
+        def _parse_float(s, default=0.0, field_name='value'):
             s = s.strip()
             if not s or s == '-':
                 return default
@@ -950,16 +984,31 @@ def load_zemax_prescription_data_txt(filepath: str,
             try:
                 return float(s)
             except ValueError:
+                # v5.24.x (audit S4-19): warn on a GENUINELY malformed
+                # numeric (a non-empty, non-placeholder token that fails
+                # float parse) instead of silently substituting the
+                # default.  Empty / "-" placeholders and "Infinity" are
+                # handled above and stay silent; only a real parse
+                # failure -- a corrupt or unexpected-locale prescription
+                # report -- reaches here, and swallowing it silently
+                # shifted every downstream surface with no diagnostic.
+                warnings.warn(
+                    f"load_zemax_prescription_data_txt: could not parse "
+                    f"{field_name} {s!r} as a number on surface "
+                    f"{surf_label!r}; substituting default {default!r}. "
+                    f"The .txt prescription report may be malformed or "
+                    f"use an unexpected locale / number format.",
+                    RuntimeWarning, stacklevel=2)
                 return default
 
-        radius = _parse_float(radius_str, float('inf'))
-        thickness = _parse_float(thickness_str, 0.0)
+        radius = _parse_float(radius_str, float('inf'), 'radius')
+        thickness = _parse_float(thickness_str, 0.0, 'thickness')
         # The "Clear Diam" column in the prescription text report is the
         # full diameter, not semi-diameter.  Divide by 2 so the internal
         # representation matches the .zmx parser (which reads DIAM as
         # semi-diameter directly).
-        semi_diameter = _parse_float(clear_diam_str, 0.0) / 2.0
-        conic = _parse_float(conic_str, 0.0)
+        semi_diameter = _parse_float(clear_diam_str, 0.0, 'clear diameter') / 2.0
+        conic = _parse_float(conic_str, 0.0, 'conic')
 
         glass = glass_str if glass_str else None
         is_mirror = glass is not None and glass.upper() == 'MIRROR'
@@ -1113,11 +1162,27 @@ def load_zemax_prescription_data_txt(filepath: str,
             })
 
     # All-element thicknesses (one fewer than elements)
+    # S4-1 (AUDIT_V5_24_2): mirror the .zmx twin's COORDBRK-gap folding
+    # (see lines 571-584).  A COORDBRK sitting between two lens surfaces
+    # carries its axial gap in ``thickness``; ``lens_surfaces`` has the
+    # breaks filtered out, so that gap was silently dropped -- shifting
+    # every axial position after the break.  Fold each intervening CB's gap
+    # into the preceding element's thickness.  Unlike the .zmx twin, .txt
+    # thicknesses are ALREADY in metres (converted at parse time, line 972),
+    # so add ``cb_t`` directly without a ``unit_scale`` multiply.
     thicknesses = []
     for i in range(len(lens_surfaces) - 1):
         t = lens_surfaces[i]['thickness']
         if np.isinf(t):
             t = 0.0
+        sn_i = lens_surfaces[i]['surf_num']
+        sn_next = lens_surfaces[i + 1]['surf_num']
+        for s in surfaces_raw:
+            if (s['is_coordbrk']
+                    and sn_i < s['surf_num'] < sn_next):
+                cb_t = s['thickness']
+                if not np.isinf(cb_t):
+                    t = t + cb_t
         thicknesses.append(t)
 
     # Aperture from the stop surface or largest semi-diameter
@@ -1126,6 +1191,16 @@ def load_zemax_prescription_data_txt(filepath: str,
         aperture = stop_surfaces[0]['semi_diameter'] * 2
     else:
         aperture = max(s['semi_diameter'] for s in lens_surfaces) * 2
+    # v5.24.x (audit S4-9): warn on a silent 0.0 aperture (no STOP + no
+    # semi-diameter data) so the downstream full-clip is not silent.
+    if aperture == 0.0:
+        warnings.warn(
+            f"Computed aperture_diameter is 0.0 for {filepath} (no STOP "
+            f"surface and no semi-diameter data found); the downstream "
+            f"field will be fully clipped.  Set the aperture explicitly.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     if name is None:
         name = os.path.splitext(os.path.basename(filepath))[0]
@@ -1139,6 +1214,14 @@ def load_zemax_prescription_data_txt(filepath: str,
             'aspheric_coeffs': e['aspheric_coeffs'],
             'glass_before': e['glass_before'],
             'glass_after': e['glass_after'],
+            # v5.24.x (audit S4-9): mirror the .zmx twin (ZX-3) and carry
+            # is_stop + semi_diameter onto the lens-only surfaces.  Without
+            # them the stop-preserving export -- which reads
+            # ``surfaces[i].get('is_stop')`` -- fell through to STOP=surface-0
+            # on every .txt-LOADED file, relocating the declared stop on
+            # re-export.
+            'is_stop': bool(e.get('is_stop', False)),
+            'semi_diameter': e.get('semi_diameter'),
         }
         for e in refr_surfaces
     ]
@@ -1173,12 +1256,20 @@ def load_zemax_prescription_data_txt(filepath: str,
             stacklevel=2,
         )
 
+    # v5.24.x (audit S4-9): expose the explicit stop index at the top level
+    # (index into the lens-only ``surfaces`` list), mirroring the .zmx twin
+    # (ZX-3).  Consumers that key on 'stop_index' (exporters, tracer stop
+    # resolution) now see the declared stop instead of defaulting to 0.
+    _stop_index = next((i for i, ps in enumerate(prescription_surfaces)
+                        if ps.get('is_stop')), None)
+
     return {
         'name': name,
         'aperture_diameter': aperture,
         # Lens-only prescription (for apply_real_lens)
         'surfaces': prescription_surfaces,
         'thicknesses': lens_thicknesses,
+        'stop_index': _stop_index,
         # Full element list including mirrors (for manual use)
         'elements': elements,
         'all_thicknesses': thicknesses,

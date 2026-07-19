@@ -20,6 +20,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import time
+import warnings
 from typing import Any, Dict, Optional, Union
 
 import numpy as np
@@ -785,6 +786,86 @@ def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
     return u_v2x, u_v2y, converged
 
 
+def _maslov_newton_saddle_cpu(opd_eval, coef_opd, u_s2x_flat, u_s2y_flat,
+                              inbox_flat, newton_iter, newton_tol,
+                              lin_v3, lin_v4, progress=None):
+    """CPU active-subset Newton solve for the per-pixel v2 stationary point --
+    the shared engine of the stationary-phase and local-quadrature CPU
+    integrators (audit S2-14: the loop was written out identically at both
+    sites).  Each iteration shrinks the ``active`` (not-yet-converged) subset and
+    evaluates the OPD only there (the CPU-optimal form -- vs the SIMD freeze-all
+    GPU twin :func:`_maslov_newton_saddle_xp`, which is numerically equivalent
+    but processes every pixel each step).
+
+    ``opd_eval(coef, u1, u2, u3, u4)`` returns the OPD 6-tuple
+    ``(f, g3, g4, H33, H34, H44)`` (the caller binds its banded/plain kernel).
+    ``progress(it, converged, grad_mag)`` is invoked once per iteration when not
+    ``None`` (the stationary-phase caller uses it for its verbose banner).
+    ``u_v2x``/``u_v2y`` start at 0; out-of-box pixels start converged (frozen at
+    0).  Returns ``(u_v2x, u_v2y, converged)``.  Reproduces the former inline
+    loops operation-for-operation, so both routed sites are bit-identical."""
+    N_px = u_s2x_flat.shape[0]
+    u_v2x = np.zeros(N_px, dtype=np.float64)
+    u_v2y = np.zeros(N_px, dtype=np.float64)
+    converged = np.zeros(N_px, dtype=bool)
+    converged[~inbox_flat] = True
+    for it in range(newton_iter):
+        if converged.all():
+            break
+        active = ~converged
+        u1 = u_s2x_flat[active]
+        u2 = u_s2y_flat[active]
+        u3 = u_v2x[active]
+        u4 = u_v2y[active]
+        _, g3, g4, H33, H34, H44 = opd_eval(coef_opd, u1, u2, u3, u4)
+        # N4: the linear-in-v2 OPD term (c3*u_v2x + c4*u_v2y) has constant
+        # v2-gradient (c3, c4) and zero Hessian, so it shifts the saddle
+        # point but not its curvature.  Add it to the gradient here.
+        g3 = g3 + lin_v3
+        g4 = g4 + lin_v4
+        det_H = H33 * H44 - H34 * H34
+        # MSL-1 (AUDIT_MASLOV): sign-preserving floor that never returns 0
+        # (the old ``sign(det_H)*1e-30 + 1e-30`` cancelled to 0 for a tiny
+        # negative det_H -> NaN saddle step near fold caustics).
+        det_safe = np.where(np.abs(det_H) < 1e-30,
+                            np.where(det_H < 0, -1e-30, 1e-30), det_H)
+        dv3 = -(H44 * g3 - H34 * g4) / det_safe
+        dv4 = -(-H34 * g3 + H33 * g4) / det_safe
+        step_size = np.sqrt(dv3 ** 2 + dv4 ** 2)
+        damp = np.where(step_size > 0.5,
+                        0.5 / np.maximum(step_size, 1e-30), 1.0)
+        dv3 = dv3 * damp
+        dv4 = dv4 * damp
+        u_v2x[active] = np.clip(u_v2x[active] + dv3, -1.0, 1.0)
+        u_v2y[active] = np.clip(u_v2y[active] + dv4, -1.0, 1.0)
+        grad_mag = np.sqrt(g3 ** 2 + g4 ** 2)
+        newly = np.zeros(N_px, dtype=bool)
+        newly[active] = grad_mag < newton_tol
+        converged |= newly
+        if progress is not None:
+            progress(it, converged, grad_mag)
+    return u_v2x, u_v2y, converged
+
+
+def _tukey_taper(u, alpha=0.2):
+    """Symmetric Tukey (cosine-tapered) window evaluated at normalized coords
+    ``u`` on [-1, 1] (audit S2-14).  Unity in the interior ``|u| <= 1 - alpha``
+    with a raised-cosine roll-off to 0 at ``|u| = 1``.
+
+    This is the ONE definition of the Maslov quadrature window, which was
+    formerly written out THREE times -- the ``tukey(n)`` helper in
+    :func:`_integrate_quadrature` (which built its own ``linspace(-1, 1, n)``)
+    and the ``_tuk(u)`` closure in :func:`_integrate_levin`.  It reproduces both
+    former formulas operation-for-operation (``1.0 - alpha`` taper start, the
+    ``0.5*(1 + cos(pi*(|u| - (1 - alpha))/alpha))`` roll-off), so every routed
+    call is bit-identical."""
+    au = np.abs(u)
+    w = np.ones_like(u)
+    m = au > 1.0 - alpha
+    w[m] = 0.5 * (1.0 + np.cos(np.pi * (au[m] - (1.0 - alpha)) / alpha))
+    return w
+
+
 def _solve_fit(A, RHS, gram_factor=None):
     """Least-squares solve for the Maslov Chebyshev fit ``A @ coef ~= RHS``.
 
@@ -819,16 +900,6 @@ def _solve_fit(A, RHS, gram_factor=None):
         except np.linalg.LinAlgError:
             coef, *_ = np.linalg.lstsq(A, RHS, rcond=None)
             return coef
-
-
-def _gram_cho_factor(A):
-    """Cholesky factor of ``A^T A`` for :func:`_solve_fit` reuse across a
-    same-optic sweep, or ``None`` if scipy is absent / ``G`` is not PD."""
-    try:
-        from scipy.linalg import cho_factor
-        return cho_factor(A.T @ A, check_finite=False)
-    except (ImportError, ValueError, np.linalg.LinAlgError):
-        return None
 
 
 def _select_poly_order_auto(u1, u2, u3, u4, opd, *, order_min, order_max,
@@ -1792,14 +1863,8 @@ def apply_real_lens_maslov(
     u_v2y_samples = np.linspace(-1.0, 1.0, n_v2)
     du = u_v2x_samples[1] - u_v2x_samples[0]
 
-    def tukey(n, alpha=0.2):
-        u = np.linspace(-1, 1, n)
-        abs_u = np.abs(u)
-        w = np.ones_like(u)
-        taper_start = 1.0 - alpha
-        tmask = abs_u > taper_start
-        w[tmask] = 0.5 * (1 + np.cos(np.pi * (abs_u[tmask] - taper_start) / alpha))
-        return w
+    def tukey(n, alpha=0.2):                 # shared window (S2-14)
+        return _tukey_taper(np.linspace(-1, 1, n), alpha)
     # v5.21: both axes use n_v2, so the two Tukey windows are identical --
     # compute once.
     tuk_x = tukey(n_v2)
@@ -2639,9 +2704,6 @@ def _integrate_stationary_phase(
     u_s2x_flat = u_s2x_out.ravel()
     u_s2y_flat = u_s2y_out.ravel()
 
-    u_v2x = np.zeros(N_px, dtype=np.float64)
-    u_v2y = np.zeros(N_px, dtype=np.float64)
-
     def _opd_and_derivs(coef, u1, u2, u3, u4):
         # M-P4: dispatch to the Numba kernel (default, ULP-equal) or the
         # NumPy reference; returns (f, df_du3, df_du4, d2f_33, d2f_34, d2f_44).
@@ -2672,56 +2734,19 @@ def _integrate_stationary_phase(
                 outs[k][s:e] = res[k]
         return outs
 
-    converged_mask = np.zeros(N_px, dtype=bool)
-    converged_mask[~inbox_flat] = True
-
-    for it in range(newton_iter):
-        if converged_mask.all():
-            break
-        active = ~converged_mask
-        u1 = u_s2x_flat[active]
-        u2 = u_s2y_flat[active]
-        u3 = u_v2x[active]
-        u4 = u_v2y[active]
-        _, g3, g4, H33, H34, H44 = _opd_and_derivs_banded(
-            coef_opd, u1, u2, u3, u4)
-        # N4: the linear-in-v2 OPD term (c3*u_v2x + c4*u_v2y) has constant
-        # v2-gradient (c3, c4) and zero Hessian, so it shifts the saddle
-        # point but not its curvature.  Add it to the gradient here.
-        g3 = g3 + lin_v3
-        g4 = g4 + lin_v4
-        det_H = H33 * H44 - H34 * H34
-        # MSL-1 (AUDIT_MASLOV): sign-preserving floor that never returns 0
-        # (the old ``sign(det_H)*1e-30 + 1e-30`` cancelled to 0 for a tiny
-        # negative det_H -> NaN saddle step near fold caustics).
-        det_safe = np.where(np.abs(det_H) < 1e-30,
-                             np.where(det_H < 0, -1e-30, 1e-30), det_H)
-        dv3 = -(H44 * g3 - H34 * g4) / det_safe
-        dv4 = -(-H34 * g3 + H33 * g4) / det_safe
-        step_limit = 0.5
-        step_size = np.sqrt(dv3**2 + dv4**2)
-        damp = np.where(step_size > step_limit,
-                         step_limit / np.maximum(step_size, 1e-30),
-                         1.0)
-        dv3 *= damp
-        dv4 *= damp
-        u_v2x_new = u_v2x[active] + dv3
-        u_v2y_new = u_v2y[active] + dv4
-        u_v2x_new = np.clip(u_v2x_new, -1.0, 1.0)
-        u_v2y_new = np.clip(u_v2y_new, -1.0, 1.0)
-        u_v2x[active] = u_v2x_new
-        u_v2y[active] = u_v2y_new
-        grad_mag = np.sqrt(g3**2 + g4**2)
-        newly = np.zeros(N_px, dtype=bool)
-        newly[active] = grad_mag < newton_tol
-        converged_mask |= newly
+    def _sp_progress(it, converged, grad_mag):    # verbose banner (S2-14)
         if verbose and (it == 0 or it == newton_iter - 1 or
-                         it % max(1, newton_iter // 4) == 0):
-            n_conv = converged_mask.sum()
+                        it % max(1, newton_iter // 4) == 0):
+            n_conv = converged.sum()
             _progress('integrate', 0.65 + 0.15 * it / newton_iter,
                       f'Newton iter {it+1}/{newton_iter}, '
                       f'{n_conv}/{N_px} pixels converged '
                       f'(max grad {grad_mag.max():.2e})')
+
+    # Shared CPU active-subset Newton (S2-14); banded OPD eval caps peak memory.
+    u_v2x, u_v2y, converged_mask = _maslov_newton_saddle_cpu(
+        _opd_and_derivs_banded, coef_opd, u_s2x_flat, u_s2y_flat, inbox_flat,
+        newton_iter, newton_tol, lin_v3, lin_v4, progress=_sp_progress)
 
     _progress('integrate', 0.85, 'evaluating saddle-point formula')
 
@@ -2776,6 +2801,39 @@ def _integrate_stationary_phase(
     return E_flat.reshape(N_out_coarse, N_out_coarse)
 
 
+def _warn_levin_over_tolerance(achieved_bounds, tolerances, n_total,
+                               levin_tol) -> int:
+    """Audit S2-18: warn when Levin per-pixel fallback pixels still miss their
+    residual tolerance.
+
+    The delaminating Levin evaluator accepts each leaf on a rigorous residual
+    bound; pixels that fail at the batched depth caps get a depth-6 per-pixel
+    re-pass as the final safety net.  When even that cannot meet the bound the
+    depth-12 deep pass already failed, the pixel value carries a
+    larger-than-requested error -- which the old code returned SILENTLY (only a
+    progress string mentioned the count).  Emit a ``RuntimeWarning`` so a
+    caller can distrust those pixels.  Returns the number of over-tolerance
+    pixels.  ``tolerances <= 0`` (dark pixels, ``f_scale == 0``) are ignored.
+    """
+    ab = np.asarray(achieved_bounds, dtype=float)
+    tl = np.asarray(tolerances, dtype=float)
+    valid = tl > 0.0
+    over = valid & (ab > tl)
+    n_over = int(np.count_nonzero(over))
+    if n_over:
+        worst = float(np.max(ab[over] / tl[over]))
+        warnings.warn(
+            f"Maslov Levin integrator: {n_over}/{int(n_total)} output "
+            f"pixel(s) did not meet the residual tolerance "
+            f"(levin_tol={levin_tol:g}) even after the depth-6 per-pixel "
+            f"adaptive fallback (worst achieved bound ~{worst:.2g}x the "
+            "target). These pixels carry a larger-than-requested error; treat "
+            "their values as approximate. Consider a coarser levin_tol, or "
+            "integration_method='traced_multibranch' for this chart.",
+            RuntimeWarning, stacklevel=2)
+    return n_over
+
+
 def _integrate_levin(
     coef_opd, coef_s1x, coef_s1y, mi,
     K1_arr, K2_arr, K3_arr, K4_arr,
@@ -2826,12 +2884,8 @@ def _integrate_levin(
     u2f = u_s2y_out.ravel()
     E_flat = np.zeros(N_px, dtype=out_dtype)
 
-    def _tuk(u, alpha=0.2):
-        au = np.abs(u)
-        w = np.ones_like(u)
-        m = au > 1.0 - alpha
-        w[m] = 0.5 * (1.0 + np.cos(np.pi * (au[m] - (1.0 - alpha)) / alpha))
-        return w
+    def _tuk(u, alpha=0.2):                   # shared window (S2-14)
+        return _tukey_taper(u, alpha)
 
     idx = np.where(inbox_flat)[0]
     twopi = 2.0 * np.pi
@@ -2879,16 +2933,25 @@ def _integrate_levin(
         _U3p, _U4p = np.meshgrid(_up, _up, indexing='ij')
         return float(np.abs(f(_U3p, _U4p)).max()) * 4.0
 
-    def _pixel_adaptive(p, max_depth=6, tol_factor=1.0, want_leaves=False):
+    def _pixel_adaptive(p, max_depth=6, tol_factor=1.0, want_leaves=False,
+                        return_est=False):
         g, gx, gy, f = _pixel_funcs(p)
         f_scale = _pixel_scale(f)
+        tol_used = levin_tol * f_scale * tol_factor
         if f_scale <= 0.0:
+            if return_est:
+                return 0.0j, 0.0, 0.0
             return (0.0j, []) if want_leaves else 0.0j
         out = levin2d(g, gx, gy, f, (-1.0, 1.0, -1.0, 1.0),
-                      tol=levin_tol * f_scale * tol_factor, k=7,
+                      tol=tol_used, k=7,
                       max_depth=max_depth, return_leaves=want_leaves)
         if want_leaves:
             return out[0], [leaf[0] for leaf in out[3]]
+        if return_est:
+            # levin2d returns (val, n_leaves, achieved_residual_bound); the
+            # bound lets the caller see when even this per-pixel fallback could
+            # not meet ``tol_used`` (audit S2-18).
+            return out[0], float(out[2]), float(tol_used)
         return out[0]
 
     if len(idx) == 0:
@@ -3160,15 +3223,26 @@ def _integrate_levin(
               f'levin: batched pass done ({n_pairs_tot} pair-boxes, '
               f'{time.perf_counter() - t0:.1f}s), '
               f'{len(bad)}/{len(idx)} pixels -> adaptive fallback')
+    # audit S2-18: track pixels whose residual bound STILL exceeds tolerance
+    # after the depth-6 per-pixel fallback (the depth-12 deep re-pass already
+    # failed them).  Those pixels carry a larger-than-requested error; the old
+    # code returned them silently (only a progress string mentioned the count).
+    fb_est = np.empty(len(bad), dtype=np.float64)
+    fb_tol = np.empty(len(bad), dtype=np.float64)
     for n_done, ib in enumerate(bad):
-        E_flat[idx[ib]] = _pixel_adaptive(idx[ib])
+        val, est, tol_used = _pixel_adaptive(idx[ib], return_est=True)
+        E_flat[idx[ib]] = val
+        fb_est[n_done] = est
+        fb_tol[n_done] = tol_used
         if verbose:
             _progress('integrate', 0.8 + 0.15 * n_done / max(1, len(bad)),
                       f'levin fallback: pixel {n_done + 1}/{len(bad)}')
 
+    n_over = _warn_levin_over_tolerance(fb_est, fb_tol, len(idx), levin_tol)
+
     _progress('integrate', 0.95,
               f'levin: {len(idx)} pixels ({n_pairs_tot} pair-boxes, '
-              f'{len(bad)} adaptive fallbacks) in '
+              f'{len(bad)} adaptive fallbacks, {n_over} over-tolerance) in '
               f'{time.perf_counter() - t0:.1f}s')
     return E_flat.reshape(N_out_coarse, N_out_coarse)
 
@@ -3199,48 +3273,15 @@ def _integrate_local_quadrature(
     u_s2x_flat = u_s2x_out.ravel()
     u_s2y_flat = u_s2y_out.ravel()
 
-    u_v2x = np.zeros(N_px, dtype=np.float64)
-    u_v2y = np.zeros(N_px, dtype=np.float64)
-
     def _opd_and_derivs(coef, u1, u2, u3, u4):
         # M-P4: dispatch to the Numba kernel (default, ULP-equal) or the
         # NumPy reference; returns (f, df_du3, df_du4, d2f_33, d2f_34, d2f_44).
         return _opd6(coef, K1_arr, K2_arr, K3_arr, K4_arr,
                      u1, u2, u3, u4, poly_order)
 
-    converged = np.zeros(N_px, dtype=bool)
-    converged[~inbox_flat] = True
-    for it in range(newton_iter):
-        if converged.all():
-            break
-        active = ~converged
-        u1 = u_s2x_flat[active]
-        u2 = u_s2y_flat[active]
-        u3 = u_v2x[active]
-        u4 = u_v2y[active]
-        _, g3, g4, H33, H34, H44 = _opd_and_derivs(coef_opd, u1, u2, u3, u4)
-        # N4: linear-in-v2 OPD term shifts the saddle gradient (c3, c4).
-        g3 = g3 + lin_v3
-        g4 = g4 + lin_v4
-        det_H = H33 * H44 - H34 * H34
-        # MSL-1 (AUDIT_MASLOV): sign-preserving floor that never returns 0
-        # (the old ``sign(det_H)*1e-30 + 1e-30`` cancelled to 0 for a tiny
-        # negative det_H -> NaN saddle step near fold caustics).
-        det_safe = np.where(np.abs(det_H) < 1e-30,
-                             np.where(det_H < 0, -1e-30, 1e-30), det_H)
-        dv3 = -(H44 * g3 - H34 * g4) / det_safe
-        dv4 = -(-H34 * g3 + H33 * g4) / det_safe
-        step_size = np.sqrt(dv3 ** 2 + dv4 ** 2)
-        damp = np.where(step_size > 0.5,
-                         0.5 / np.maximum(step_size, 1e-30), 1.0)
-        dv3 *= damp
-        dv4 *= damp
-        u_v2x[active] = np.clip(u_v2x[active] + dv3, -1.0, 1.0)
-        u_v2y[active] = np.clip(u_v2y[active] + dv4, -1.0, 1.0)
-        grad_mag = np.sqrt(g3 ** 2 + g4 ** 2)
-        newly = np.zeros(N_px, dtype=bool)
-        newly[active] = grad_mag < newton_tol
-        converged |= newly
+    u_v2x, u_v2y, converged = _maslov_newton_saddle_cpu(   # shared CPU (S2-14)
+        _opd_and_derivs, coef_opd, u_s2x_flat, u_s2y_flat, inbox_flat,
+        newton_iter, newton_tol, lin_v3, lin_v4)
 
     _progress('integrate', 0.72, 'computing Hessian eigen-scales')
     _, _, _, H33, H34, H44 = _opd_and_derivs(
