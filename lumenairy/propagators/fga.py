@@ -40,13 +40,19 @@ momentum samples per axis and ``dq_step`` the position-lattice stride.
 
 Energy caveat (near-axial inputs through strong focusing).  When the input is
 near-collimated (its FBI/local spectrum concentrates near ``p=0``) AND the system
-focuses it strongly, the raw output amplitude can be off by a large scale factor
-(the FGA high-frequency assumption is strained near ``p=0``, and OVER-sampling
-high-``p`` beamlets injects spurious energy).  The field SHAPE stays correct
-(fidelity ~0.9998 vs the exact field), so pass ``normalize_output='power'`` to
-recover the absolute scale, and do not set ``p_max`` wider than the actual
-angular content.  This is a representation-regime effect, not the O(eps) FGA
-transport error (which is negligible for lens-like Hamiltonians).
+focuses it strongly, flooring ``p_max`` at the beamlet completeness width
+``~3/(k*w0)`` -- far above the field's real angular content -- launches
+excess-momentum beamlets that the strong lens sprays into a halo of radius
+``~efl*p_max``, corrupting the SHAPE (not just the scale).  The auto sampler now
+DETECTS this (angular content far below the completeness floor) and instead sizes
+``p_max`` to the field content, restoring the beamlet-completeness energy by
+power-normalizing the output automatically (a ``RuntimeWarning`` reports the
+choice; H5).  Passing an explicit ``p_max`` (~ the angular content) with
+``normalize_output='power'`` reproduces this manually.  This is a
+representation-regime effect, not the O(eps) FGA transport error (which is
+negligible for lens-like Hamiltonians).  Note ``gbd``/``traced`` remain faster
+and equally accurate for a smooth single-valued focusing caustic; reach for FGA
+where the interference structure (fold/cusp) actually needs it.
 
 Diverging / expanding inputs.  Leading-order FGA/Herman-Kluk is EXACT for the
 (quadratic) free-space Hamiltonian, so a diverging beam's only error is the
@@ -544,6 +550,36 @@ _DP_TARGET = 0.008          # auto momentum spacing (direction cosine); see belo
 _PMAX_BEAMLET_C = 3.0       # p_max completeness floor = C/(k*w0) (beamlet momentum
 #                             width); C~2-3 keeps the t=0 identity power >0.99
 
+# H5 (near-collimated input through strong focusing): when the beamlet
+# completeness floor is far ABOVE the field's real angular content, flooring
+# p_max at it launches excess-momentum beamlets that a strong lens sprays into a
+# halo of radius ~efl*p_max, corrupting the SHAPE (not just the scale).  Above
+# this floor/content ratio, size p_max to the field content (x the tail factor)
+# instead, and recover the beamlet-completeness energy by output power
+# normalization (auto-enabled on that path).
+_PMAX_CONTENT_OVERRIDE_RATIO = 10.0   # floor/content above this -> content-size p_max
+_PMAX_CONTENT_TAIL = 3.0              # spectral tail factor on the content-sized p_max
+
+# Default FGA memory budget (H4a): when the caller leaves ``mem_budget_mb``
+# unset, default it to this fraction of the available RAM budget (floored) so
+# the byte-identical position-lattice chunk loop engages for a large aperture
+# instead of a single huge (Nq, Np) allocation that OOMs.
+_DEFAULT_MEM_BUDGET_FRAC = 0.25
+_DEFAULT_MEM_BUDGET_FLOOR_MB = 1000.0
+
+# Per-lattice-point transient ray-trace memory (H4b).  The finite-difference
+# ``ray_transfer_jacobian`` threads a bundle of ``_FD_BUNDLE_RAYS`` rays (base +
+# +/-h in x, y, ux, uy) through the whole system and assembles the 4x4 Jacobian,
+# peaking at ~3.2 kB per base lattice point (measured, few-surface conic lens) --
+# the old flat 500 B trace term under-counted this ~6x, so a ``mem_budget_mb``
+# did NOT bound the FD peak (measured 6000 MB budget -> ~60 GB).  The analytic
+# (single forward-AD dual ray) Jacobian threads ``_ADRT_DUAL_SLOTS`` value/deriv
+# slots, ~1.8 kB/point.  Sizing the chunk with the ACTUAL per-point trace cost
+# makes the budget honored on both paths.
+_FD_BUNDLE_RAYS = 9         # base + +/-h in x, y, ux, uy (finite-difference bundle)
+_ADRT_DUAL_SLOTS = 5        # analytic forward-AD ray: value + d/d(x, y, ux, uy)
+_TRACE_STATE_BYTES = 360.0  # per-point ray state threaded through the system (measured)
+
 # Lever #3 (coarse-lattice trace + interpolation) tunables.
 _COARSE_INTERP_ORDER = 3    # cubic map_coordinates upsample (opd ~2e-5 waves, well
 #                             under the ~1e-3 FGA floor; ~2x faster than quintic)
@@ -551,23 +587,35 @@ _RIM_CELLS = 3              # dilation (coarse cells) of the vignetting boundary
 _COARSE_SUPP_FRAC = 1e-3    # rim direct-trace only where windowed |u0| is >= this
 
 
-def _pick_ray_transfer(surfaces, exact):
-    """Differential ray-transfer Jacobian primitive (lever #1).  ``exact=True``
-    uses the truncation-free analytic (forward-mode-AD) Jacobian when EVERY
-    surface is a rotationally-symmetric conic -- exact vs the finite-difference
-    ~1e-8, pure NumPy, and ~1.2x faster on a large aperture (one traced ray vs
-    the FD 9-ray bundle).  Falls back to the FD primitive for aspheric /
-    freeform / biconic surfaces (which the analytic form does not handle) and
-    when ``exact=False`` (the default -- byte-identical legacy path)."""
-    from ..raytrace.differential import ray_transfer_jacobian, ray_transfer_jacobian_analytic
-    if not exact:
-        return ray_transfer_jacobian
+def _is_all_conic(surfaces):
+    """True when EVERY surface is a rotationally-symmetric conic (sphere / conic,
+    no aspheric-polynomial / freeform / biconic terms) -- the class the analytic
+    (forward-mode-AD) differential Jacobian handles exactly."""
     for s in surfaces:
         if (getattr(s, 'aspheric_coeffs', None) or getattr(s, 'freeform', None)
                 or getattr(s, 'radius_y', None) is not None
                 or getattr(s, 'conic_y', None) is not None
                 or getattr(s, 'aspheric_coeffs_y', None) is not None):
-            return ray_transfer_jacobian
+            return False
+    return True
+
+
+def _pick_ray_transfer(surfaces, exact):
+    """Differential ray-transfer Jacobian primitive (lever #1).  ``exact=True``
+    uses the truncation-free analytic (forward-mode-AD) Jacobian when EVERY
+    surface is a rotationally-symmetric conic -- exact vs the finite-difference
+    ~1e-8, pure NumPy, ~1.2x faster on a large aperture AND ~5x lighter (one
+    traced ray vs the FD 9-ray bundle, so a large-N full trace fits a memory
+    budget the FD path OOMs -- H4c).  Falls back to the FD primitive for aspheric
+    / freeform / biconic surfaces (which the analytic form does not handle) and
+    when ``exact=False``.  ``exact=None`` (the default) AUTO-selects: analytic for
+    an all-conic prescription, FD otherwise."""
+    from ..raytrace.differential import ray_transfer_jacobian, ray_transfer_jacobian_analytic
+    all_conic = _is_all_conic(surfaces)
+    if exact is None:
+        exact = all_conic       # H4c: default to the analytic Jacobian when it applies
+    if not exact or not all_conic:
+        return ray_transfer_jacobian
     return ray_transfer_jacobian_analytic
 
 
@@ -668,7 +716,8 @@ def _field_angular_content(E_in, dx, dyg, wavelength, frac=0.999):
     return float(pr[order][min(int(np.searchsorted(cum, frac)), pr.size - 1)])
 
 
-def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
+def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p,
+                      info=None):
     """Resolve ``(p_max, n_p)``, auto-sizing either when ``None`` so the
     phase-space swarm is MATCHED to the field: ``p_max`` covers the field's
     angular content AND each beamlet's own momentum width (for completeness),
@@ -677,7 +726,12 @@ def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
     phase-space quadrature -- which is what makes FGA accurate on diverging beams
     (whose broad phase-space footprint the fixed old default under-sampled;
     leading FGA is EXACT for free space, so with dp matched a diverging beam
-    reconstructs to ~round-off).  An explicit ``p_max`` / ``n_p`` is honoured."""
+    reconstructs to ~round-off).  An explicit ``p_max`` / ``n_p`` is honoured.
+
+    When a mutable ``info`` dict is passed, ``info['content_override']`` reports
+    whether the H5 near-collimated content-sizing path was taken (the caller then
+    power-normalizes the output to restore the beamlet-completeness energy)."""
+    content_override = False
     if p_max is None:
         na_cap = _default_p_max(prescription, wavelength, powerless_uncapped=True)
         content = _field_angular_content(E_in, dx, dyg, wavelength)
@@ -694,7 +748,31 @@ def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
         # is physically meaningless for free space and truncated wide-angle beams).
         k = 2.0 * np.pi / wavelength
         beamlet_floor = _PMAX_BEAMLET_C / (k * w0)
-        p_max = float(min(1.5 * na_cap, max(beamlet_floor, 1.5 * content)))
+        # H5: for a NEAR-COLLIMATED input the field's angular CONTENT is far below
+        # the completeness floor; flooring p_max there launches excess-momentum
+        # beamlets that a strong-focusing system sprays into a halo of radius
+        # ~efl*p_max, corrupting the SHAPE (measured: f/5 r2m 187/304 um vs oracle
+        # 65).  When floor/content exceeds _PMAX_CONTENT_OVERRIDE_RATIO, size
+        # p_max to the field's own content (x tail) instead of the floor, and
+        # signal the caller to power-normalize (recovering the beamlet-
+        # completeness energy the floor would have supplied).  The identity /
+        # diverging cases (ratio ~1-7) keep the floor path unchanged.
+        if content > 0.0 and beamlet_floor > _PMAX_CONTENT_OVERRIDE_RATIO * content:
+            content_override = True
+            p_max = float(min(1.5 * na_cap, _PMAX_CONTENT_TAIL * content))
+            warnings.warn(
+                "FGA auto momentum sampling: the input is near-collimated (its "
+                f"angular content {content:.3g} is <{1.0 / _PMAX_CONTENT_OVERRIDE_RATIO:.2g} "
+                f"of the beamlet completeness floor {beamlet_floor:.3g}). Sizing "
+                f"p_max to the field content ({p_max:.3g}) instead of the floor "
+                "to avoid a spurious focused-halo artifact, and power-normalizing "
+                "the output to restore the completeness energy. Pass an explicit "
+                "p_max / normalize_output to override.",
+                RuntimeWarning, stacklevel=2)
+        else:
+            p_max = float(min(1.5 * na_cap, max(beamlet_floor, 1.5 * content)))
+    if info is not None:
+        info['content_override'] = content_override
     if n_p is None:
         # momentum SPACING (direction cosine) fine enough to converge the
         # phase-space quadrature.  Empirically ~0.008 works across beam sizes
@@ -728,6 +806,17 @@ def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p):
     return float(p_max), int(n_p)
 
 
+def _default_mem_budget_mb():
+    """Default FGA memory budget (MB) when the caller leaves ``mem_budget_mb``
+    unset (H4a): a fraction (``_DEFAULT_MEM_BUDGET_FRAC``) of the available RAM
+    budget, floored at ``_DEFAULT_MEM_BUDGET_FLOOR_MB``.  A concrete budget lets
+    the (byte-identical, max|diff|=0.0) position-lattice chunk loop engage for a
+    large aperture instead of a single huge (Nq, Np) allocation that OOMs."""
+    from ..memory import get_ram_budget
+    mb = _DEFAULT_MEM_BUDGET_FRAC * float(get_ram_budget()) / 1e6
+    return max(_DEFAULT_MEM_BUDGET_FLOOR_MB, mb)
+
+
 def _chunk_from_budget(shape, dq_step, chunk, mem_budget_mb):
     """Resolve the momentum-chunk size.  An explicit ``chunk`` wins; otherwise a
     ``mem_budget_mb`` caps peak beamlet memory by sizing the chunk from the
@@ -743,7 +832,8 @@ def _chunk_from_budget(shape, dq_step, chunk, mem_budget_mb):
     return max(1, int(float(mem_budget_mb) * 1e6 / (nq * 100.0)))
 
 
-def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0):
+def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0,
+                      fd_bundle=True):
     """POSITION-lattice (``Nq``) chunk size from ``mem_budget_mb``, or ``None`` if
     the whole lattice fits / no budget.  ``mem_budget_mb`` now bounds BOTH
     dimensions: momenta via ``cw`` and the position lattice via this chunk, so a
@@ -754,14 +844,21 @@ def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0):
       momentum grid; ``cfull_mult`` = 1 scalar, 2 for the vector ``Ex``/``Ey``);
     * beamlet transport arrays ``QX/QY/PX/PY + AW + coeff (+ Jones)`` --
       ``nqc*cw*~100`` B;
-    * the per-momentum ``ray_transfer_jacobian`` temporaries -- ``nqc*~500`` B.
+    * the per-momentum differential ray-trace temporaries.  ``fd_bundle=True``
+      (the finite-difference Jacobian) threads a ``_FD_BUNDLE_RAYS``-ray bundle
+      through the system (~``_FD_BUNDLE_RAYS*_TRACE_STATE_BYTES`` ~3.2 kB/point);
+      ``fd_bundle=False`` (the analytic single-ray Jacobian) is
+      ``_ADRT_DUAL_SLOTS*_TRACE_STATE_BYTES`` ~1.8 kB/point.  Counting the ACTUAL
+      trace cost (not the old flat 500 B, which under-counted the FD bundle ~6x)
+      is what makes ``mem_budget_mb`` HONORED on the FD path (H4b).
 
     Only raises if even a SINGLE lattice point exceeds the budget (absurdly tiny
     budget / huge ``n_p``) -- otherwise it always finds a workable chunk."""
     if mem_budget_mb is None:
         return None
     budget = float(mem_budget_mb) * 1e6
-    per = (cfull_mult * Np * 16.0 if use_sep else 0.0) + cw * 100.0 + 500.0
+    trace_bytes = (_FD_BUNDLE_RAYS if fd_bundle else _ADRT_DUAL_SLOTS) * _TRACE_STATE_BYTES
+    per = (cfull_mult * Np * 16.0 if use_sep else 0.0) + cw * 100.0 + trace_bytes
     nqc = int(budget / per)
     if nqc < 1:
         raise MemoryError(
@@ -987,7 +1084,7 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
 def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                       dq_step, p_max, n_p, nsig, chunk=None, prune_frac=0.0,
                       coeff_frac=0.0, separable="auto", mem_budget_mb=None,
-                      coarse_stride=1, exact_jacobian=False, cache_trace=False):
+                      coarse_stride=1, exact_jacobian=None, cache_trace=False):
     """Core FGA transport through a prescription to (last vertex + z_image).
 
     ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches.  ``chunk``
@@ -1032,6 +1129,13 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     surfs[-1].thickness = 0.0
     kw2 = k * w0 * w0
     ray_transfer_jacobian = _pick_ray_transfer(surfs, exact_jacobian)  # lever #1
+    from ..raytrace.differential import (
+        ray_transfer_jacobian_analytic as _rtja,
+    )
+    # the FULL-trace path uses the resolved Jacobian (FD 9-ray bundle vs analytic
+    # single ray); the coarse path always traces a thinned coarse lattice via FD,
+    # bounded separately -- so its per-chunk reconstruction carries no live trace.
+    uses_fd = (ray_transfer_jacobian is not _rtja) and int(coarse_stride) == 1
 
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
     use_sep = bool(separable) if separable != "auto" else (n_p >= 5)
@@ -1039,8 +1143,10 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     # lattice via nq_chunk, so a large aperture runs within the budget as an
     # additive sum over lattice chunks instead of OOMing (audit F3).  The
     # separable c_full is then per-lattice-chunk (nqc*Np), not the whole Nq*Np.
+    # fd_bundle sizes the trace term to the ACTUAL Jacobian bundle so the FD path
+    # is bounded, not ~10x over budget (H4b).
     nq_chunk = _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb,
-                                 "apply_real_lens_fga")
+                                 "apply_real_lens_fga", fd_bundle=uses_fd)
     if coarse_stride and int(coarse_stride) > 1:
         return _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2,
                            surfs, wavelength, z_image, dq_step, px, py, n_p, Np,
@@ -1155,7 +1261,7 @@ def apply_real_lens_fga(
     coeff_frac: float = 1e-4,
     separable: Any = "auto",
     coarse_stride: int = 1,
-    exact_jacobian: bool = False,
+    exact_jacobian: Optional[bool] = None,
     cache_trace: bool = False,
     normalize_output: str = "none",
 ) -> np.ndarray:
@@ -1217,14 +1323,19 @@ def apply_real_lens_fga(
         POSITION lattice (``Nq`` = aperture-support / ``dq_step^2``, chunked into
         ``nq_chunk`` blocks).  So a LARGE aperture runs within the budget as an
         additive sum over lattice chunks instead of OOMing -- the separable
-        ``(nq_chunk*Np)`` coefficient array, the per-momentum ray trace, and the
+        ``(nq_chunk*Np)`` coefficient array, the per-momentum ray trace (sized to
+        the actual FD 9-ray / analytic single-ray Jacobian bundle), and the
         scatter are all bounded by ``nq_chunk``.  The chunked result is identical
         to the full swarm to float round-off (it only reorders an additive sum),
-        so this is a pure memory lever.  ``None`` processes the whole swarm at
-        once.  Only an absurd budget (a single lattice point can't fit) raises.
-        (A 24 mm-aperture FGA is still impractically slow -- the ray trace scales
-        with ``Nq`` -- so control ``Nq`` with ``dq_step`` / ``prune_frac`` / ``n_p``
-        and prefer a lighter propagator there, but it no longer OOMs.)
+        so this is a pure memory lever.  ``None`` (the default) does NOT process
+        the whole swarm unbounded: it defaults to ~25% of the available RAM
+        (floored at 1000 MB) so the chunk loop engages and a large-N run does not
+        OOM; pass an explicit value to pin a tighter budget, or a large one to
+        effectively disable chunking.  Only an absurd budget (a single lattice
+        point can't fit) raises.  (A 24 mm-aperture FGA is still impractically
+        slow -- the ray trace scales with ``Nq`` -- so control ``Nq`` with
+        ``dq_step`` / ``prune_frac`` / ``n_p`` and prefer a lighter propagator
+        there, but it no longer OOMs.)
     chunk : int, optional
         Explicit momenta-per-batch (overrides ``mem_budget_mb``).
     prune_frac : float
@@ -1266,16 +1377,19 @@ def apply_real_lens_fga(
         marginal or negative for small grids or cheap (near-free-space) traces,
         where the default ``1`` is best.  Position pruning is not applied on this
         path (``M`` already thins the trace).  Use ``M`` ~ ``4-8``.
-    exact_jacobian : bool
-        Opt-in (default ``False``).  Use the truncation-free analytic
-        (forward-mode-AD) differential ray-transfer Jacobian instead of the
-        finite-difference default when every surface is a rotationally-symmetric
-        conic -- exact vs the FD ``~1e-8`` truncation, and ~``1.2x`` faster on a
-        large aperture (one traced ray vs the FD 9-ray bundle).  Silently falls
-        back to the FD Jacobian for aspheric / freeform / biconic prescriptions
-        (unsupported by the analytic form) and applies to the full-trace path
-        (``coarse_stride=1``; the coarse path uses FD, where the interpolation
-        dominates the accuracy budget anyway).
+    exact_jacobian : bool, optional
+        ``None`` (the default) AUTO-selects: the truncation-free analytic
+        (forward-mode-AD) differential ray-transfer Jacobian for an ALL-CONIC
+        prescription (every surface a rotationally-symmetric sphere / conic), the
+        finite-difference Jacobian otherwise.  The analytic form is exact vs the
+        FD ``~1e-8`` truncation, ~``1.2x`` faster on a large aperture, AND ~``5x``
+        lighter (one traced ray vs the FD 9-ray bundle), so an all-conic large-N
+        full trace fits a memory budget that the FD path OOMs (H4c).  Pass
+        ``True`` to force it (still falls back to FD for aspheric / freeform /
+        biconic, which the analytic form does not handle) or ``False`` to force
+        the FD Jacobian.  Applies to the full-trace path (``coarse_stride=1``; the
+        coarse path uses FD, where the interpolation dominates the accuracy
+        budget anyway).
     cache_trace : bool
         Opt-in (default ``False``), effective only with ``coarse_stride > 1``.
         The coarse pre-trace (per-momentum coarse ray-data grids + alive masks)
@@ -1294,7 +1408,11 @@ def apply_real_lens_fga(
         ``'none'`` returns the raw FGA field
         ``'power'`` rescales it so the
         output power equals the input power (energy conservation improves with
-        ``w0_factor`` -- see the module docstring).
+        ``w0_factor`` -- see the module docstring).  When the auto sampler takes
+        the H5 near-collimated content-sizing path (see ``p_max``), power
+        normalization is applied AUTOMATICALLY even under ``'none'`` (the
+        content-sized swarm is under-complete, so the raw scale is wrong); a
+        ``RuntimeWarning`` reports it.
 
     Returns
     -------
@@ -1313,10 +1431,13 @@ def apply_real_lens_fga(
         raise ValueError(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
+    if mem_budget_mb is None:                       # H4a: engage the chunk loop
+        mem_budget_mb = _default_mem_budget_mb()
     dyg = float(dx) if dy is None else float(dy)
     w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
+    _samp = {}
     p_max, n_p = _resolve_sampling(E_in, float(dx), dyg, float(wavelength), w0,
-                                   prescription, p_max, n_p)
+                                   prescription, p_max, n_p, info=_samp)
     chunk_eff = _chunk_from_budget(E_in.shape, int(dq_step), chunk, mem_budget_mb)
     out = _fga_through_lens(
         E_in, float(dx), dyg, prescription, float(wavelength), w0,
@@ -1324,8 +1445,11 @@ def apply_real_lens_fga(
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
         coeff_frac=float(coeff_frac), separable=separable,
         mem_budget_mb=mem_budget_mb, coarse_stride=int(coarse_stride),
-        exact_jacobian=bool(exact_jacobian), cache_trace=bool(cache_trace))
-    if normalize_output == "power":
+        exact_jacobian=exact_jacobian, cache_trace=bool(cache_trace))
+    # H5: the content-sized swarm is intentionally under-complete, so restore the
+    # absolute scale by power normalization even under the 'none' default.
+    do_norm = normalize_output == "power" or _samp.get('content_override', False)
+    if do_norm:
         pin = float(np.sum(np.abs(E_in) ** 2))
         pout = float(np.sum(np.abs(out) ** 2))
         if pout > 0.0:
@@ -1538,14 +1662,17 @@ def apply_real_lens_fga_vector(
         raise ValueError(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
+    if mem_budget_mb is None:                       # H4a: engage the chunk loop
+        mem_budget_mb = _default_mem_budget_mb()
     dyg = float(dx) if dy is None else float(dy)
     # auto-size the swarm from the higher-energy Jones component (both share the
     # beam geometry, so its extent/angular-content set the sampling for both)
     _rep = E_vec[0] if (np.sum(np.abs(E_vec[0]) ** 2)
                         >= np.sum(np.abs(E_vec[1]) ** 2)) else E_vec[1]
     w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
+    _samp = {}
     p_max, n_p = _resolve_sampling(_rep, float(dx), dyg, float(wavelength), w0,
-                                   prescription, p_max, n_p)
+                                   prescription, p_max, n_p, info=_samp)
     chunk_eff = _chunk_from_budget(E_vec[0].shape, int(dq_step), chunk,
                                    mem_budget_mb)
     ex, ey, ez = _fga_vector_through_lens(
@@ -1554,7 +1681,10 @@ def apply_real_lens_fga_vector(
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
         coeff_frac=float(coeff_frac), separable=separable,
         mem_budget_mb=mem_budget_mb)
-    if normalize_output == "power":
+    # H5: the content-sized swarm (near-collimated auto path) is under-complete,
+    # so restore the absolute scale by power normalization even under 'none'.
+    do_norm = normalize_output == "power" or _samp.get('content_override', False)
+    if do_norm:
         # rescale the transverse (Ex, Ey) to the input power (lossless
         # assumption; the raw FGA scale is shape-correct but w0/sampling-
         # dependent -- see the module docstring on the FGA convergence knob).
