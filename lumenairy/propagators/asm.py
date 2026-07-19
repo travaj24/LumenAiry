@@ -73,7 +73,82 @@ __all__ = [
     # symmetry violation.  Module-attribute-accessible.
     'apply_fresnel_curvature',
     '_build_asm_H_square',
+    '_asm_H_from_kz',
 ]
+
+
+def _asm_H_from_kz(kz, prop, z, target_cdtype, xp=np, use_numexpr=False):
+    """Assemble the ASM transfer function ``exp(1j * kz * z)`` on the
+    propagating set, zeroed on the evanescent set (``~prop``), at
+    ``target_cdtype``.
+
+    This is the single shared complex-exponential kernel for EVERY ASM /
+    ASM-MFT transfer-function builder -- :func:`_build_asm_H_square`,
+    :func:`_get_asm_H_natural` (host-JAX and chunked NumPy/CuPy branches),
+    :func:`angular_spectrum_propagate_tilted`, and
+    :func:`angular_spectrum_propagate_mft` (audit S2-10 consolidation).
+    It carries the S2-3 complex64 mitigation **uniformly**:
+
+    * ``complex128`` -- the direct complex exponential
+      ``where(prop, exp(1j*kz*z), 0)``, numexpr-fused when
+      ``use_numexpr`` is True (byte-identical to ``np.exp``; audit S5-8b).
+    * ``complex64`` -- the phase ``kz*z`` is folded ``mod 2*pi`` in
+      float64 and ``cos`` / ``sin`` are evaluated in float64 **before**
+      the float32 cast, so a large ``kz*z`` (up to ~1e6 rad) does not
+      hit the float32 precision floor and inject speckle-like noise.
+      This is the mitigation the natural-layout builder
+      (:func:`_get_asm_H_natural`) has always used; before v5.24.5 the
+      square / tilted / MFT builders cast the complex128 ``exp`` result
+      straight to complex64 and carried ~1 float32-ULP of avoidable phase
+      error per bin vs the correctly-rounded value (audit S2-10 / S2-3).
+      ``use_numexpr`` is ignored on this path (the mitigation is
+      trigonometric, not a complex ``exp``).
+
+    Parameters
+    ----------
+    kz : ndarray, float64
+        Axial wavenumber ``sqrt(k^2 - kx^2 - ky^2)``; 0 on the evanescent
+        set.  May be the full grid or a row-chunk of it.
+    prop : ndarray of bool, same shape as ``kz``
+        Propagating-mode mask (``kz_sq > 0``).
+    z : float
+        Propagation distance (m).  May be negative.
+    target_cdtype : complex dtype
+        ``complex64`` or ``complex128``.
+    xp : module, default :mod:`numpy`
+        Array backend (numpy / cupy).  For the host-JAX path this is
+        NumPy (H is built on the host in float64, then moved to device).
+    use_numexpr : bool, default False
+        For the complex128 path only, fuse ``where(prop, exp(...), 0)``
+        through numexpr.  The caller decides eligibility (numexpr
+        available, numpy backend, grid-size floor).
+
+    Returns
+    -------
+    H : ndarray, dtype ``target_cdtype``, same shape as ``kz``.
+        Band-limit masking and FFT-layout shifting stay in the caller.
+    """
+    if np.dtype(target_cdtype) == np.complex64:
+        # complex64: fold phase mod 2*pi in float64 BEFORE casting to
+        # float32 so the float32 floor doesn't inject speckle-like noise.
+        fdt = np.float32
+        phase = xp.mod(kz * z, 2.0 * np.pi)
+        c = xp.cos(phase).astype(fdt)
+        s = xp.sin(phase).astype(fdt)
+        H = xp.empty(kz.shape, dtype=target_cdtype)
+        H.real[:] = xp.where(prop, c, fdt(0))
+        H.imag[:] = xp.where(prop, s, fdt(0))
+        return H
+    # complex128 (the huge kernel argument stays in float64 either way).
+    if use_numexpr and _ensure_numexpr_loaded():
+        # S5-8b: byte-identical fused complex-exp (numexpr resolves the
+        # ``kz`` / ``prop`` / ``z`` names from this frame's locals).
+        H = _ne.evaluate('where(prop, exp(1j * kz * z), 0j)')
+    else:
+        H = xp.where(prop, xp.exp(1j * kz * z), 0)
+    if H.dtype != np.dtype(target_cdtype):
+        H = H.astype(target_cdtype)
+    return H
 
 
 def _build_asm_H_square(
@@ -163,12 +238,13 @@ def _build_asm_H_square(
     kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
     prop = kz_sq > 0
     kz = np.where(prop, np.sqrt(np.where(prop, kz_sq, 0.0)), 0.0)
-    if (NUMEXPR_AVAILABLE and kz.size >= _NE_MIN_SIZE
-            and _ensure_numexpr_loaded()):
-        # S5-8b: byte-identical fused complex-exp (see module header).
-        H = _ne.evaluate('where(prop, exp(1j * kz * z), 0j)').astype(dtype)
-    else:
-        H = np.where(prop, np.exp(1j * kz * z), 0.0).astype(dtype)
+    # S2-10: single shared kernel.  complex128 uses the direct
+    # (numexpr-fused, S5-8b) complex exp; complex64 folds the phase mod
+    # 2*pi in float64 before the float32 cast (S2-3 mitigation, now
+    # applied to EVERY H builder, not just _get_asm_H_natural).
+    _use_ne = (NUMEXPR_AVAILABLE and kz.size >= _NE_MIN_SIZE
+               and _ensure_numexpr_loaded())
+    H = _asm_H_from_kz(kz, prop, z, dtype, np, use_numexpr=_use_ne)
     if bandlimit and z != 0:
         L = N * dx
         f_max = L / (2 * wavelength * abs(z))
@@ -204,7 +280,6 @@ def _get_asm_H_natural(
     Returns ``H`` in the natural (un-``fftshift``-ed) spectrum layout,
     which is how the v5.5.3 2-shift propagation fold consumes it.
     """
-    target_fdtype = np.float32 if target_cdtype == np.complex64 else np.float64
     k = 2 * np.pi / wavelength
 
     if z == 0:
@@ -266,25 +341,12 @@ def _get_asm_H_natural(
         kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
         prop = kz_sq > 0
         kz = np.where(prop, np.sqrt(np.where(prop, kz_sq, 0.0)), 0.0)
-        if target_cdtype == np.complex128:
-            if (NUMEXPR_AVAILABLE and kz.size >= _NE_MIN_SIZE
-                    and _ensure_numexpr_loaded()):
-                # S5-8b: byte-identical fused complex-exp (see module header).
-                H_np = _ne.evaluate(
-                    'where(prop, exp(1j * kz * z), 0j)').astype(target_cdtype)
-            else:
-                H_np = np.where(
-                    prop, np.exp(1j * kz * z), 0).astype(target_cdtype)
-        else:
-            # complex64: fold phase mod 2*pi in float64 BEFORE casting to
-            # float32 so the float32 floor doesn't inject speckle-like
-            # noise (mirrors the chunked NumPy branch below exactly).
-            phase = np.mod(kz * z, 2.0 * np.pi)
-            c = np.cos(phase).astype(target_fdtype)
-            s = np.sin(phase).astype(target_fdtype)
-            H_np = np.empty((Ny, Nx), dtype=target_cdtype)
-            H_np.real[:] = np.where(prop, c, target_fdtype(0))
-            H_np.imag[:] = np.where(prop, s, target_fdtype(0))
+        # S2-10: shared kernel (numexpr-fused complex128; mod-2*pi float64
+        # fold before the float32 cast for complex64 -- the S2-3 mitigation).
+        _use_ne = (NUMEXPR_AVAILABLE and kz.size >= _NE_MIN_SIZE
+                   and _ensure_numexpr_loaded())
+        H_np = _asm_H_from_kz(kz, prop, z, target_cdtype, np,
+                              use_numexpr=_use_ne)
         if bandlimit and z != 0:
             Lx = Nx * dx
             Ly = Ny * dy
@@ -349,22 +411,10 @@ def _get_asm_H_natural(
             kz_sq_c = k**2 - kx_sq[None, :] - ky_sq[j0:j1, None]
             prop = kz_sq_c > 0
             kz_c = xp.where(prop, xp.sqrt(xp.maximum(kz_sq_c, 0)), 0)
-            if target_cdtype == np.complex128:
-                if _use_ne:
-                    # S5-8b: byte-identical fused complex-exp.
-                    H_c = _ne.evaluate('where(prop, exp(1j * kz_c * z), 0j)')
-                else:
-                    H_c = xp.where(prop, xp.exp(1j * kz_c * z), 0)
-            else:
-                # complex64 path: fold phase mod 2*pi in float64
-                # BEFORE casting to float32 so the float32 precision
-                # floor doesn't inject speckle-like noise.
-                phase = xp.mod(kz_c * z, 2.0 * np.pi)
-                c = xp.cos(phase).astype(target_fdtype)
-                s = xp.sin(phase).astype(target_fdtype)
-                H_c = xp.empty((j1 - j0, Nx), dtype=target_cdtype)
-                H_c.real[:] = xp.where(prop, c, target_fdtype(0))
-                H_c.imag[:] = xp.where(prop, s, target_fdtype(0))
+            # S2-10: shared kernel -- numexpr-fused complex128; complex64
+            # folds phase mod 2*pi in float64 before the float32 cast.
+            H_c = _asm_H_from_kz(kz_c, prop, z, target_cdtype, xp,
+                                 use_numexpr=_use_ne)
             if bl_x is not None:
                 bl_mask = bl_x[None, :] & bl_y[j0:j1, None]
                 H_c *= bl_mask
@@ -978,9 +1028,13 @@ def angular_spectrum_propagate_tilted(
         ky = 2 * np.pi * FY_shifted
 
         kz_sq = k**2 - kx**2 - ky**2
-        kz = np.where(kz_sq > 0, np.sqrt(np.maximum(kz_sq, 0)), 0)
-        H = np.exp(1j * kz * z)
-        H = np.where(kz_sq > 0, H, 0)
+        prop = kz_sq > 0
+        kz = np.where(prop, np.sqrt(np.maximum(kz_sq, 0)), 0)
+        # S2-10: shared kernel.  complex128 is byte-identical to the former
+        # ``np.where(kz_sq > 0, np.exp(1j*kz*z), 0)``; complex64 now folds
+        # the phase mod 2*pi in float64 before the float32 cast (S2-3
+        # mitigation) instead of casting the complex128 exp straight down.
+        H = _asm_H_from_kz(kz, prop, z, target_cdtype, np)
 
         # -- band-limiting on the ORIGINAL-FRAME spectrum ----------------
         # Matsushima bounds the FREQUENCY OF THE CHIRP in the angular-

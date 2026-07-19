@@ -22,13 +22,87 @@ import numpy as np
 from . import fft_infra as _state
 from .fft_infra import (
     _fft2,
+    _ifft2,
     _validate_propagator_inputs,
 )
 
 __all__ = [
     'fresnel_propagate',
+    'fresnel_tf_propagate',
     'fraunhofer_propagate',
 ]
+
+
+def fresnel_tf_propagate(
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+) -> np.ndarray:
+    """Same-grid Fresnel TRANSFER-FUNCTION step (matched-paraxial ASM).
+
+    Applies the paraxial (Fresnel) transfer function
+    ``H = exp(+i k z) * exp(-i pi lambda z (fx**2 + fy**2))`` -- i.e. the
+    exact-ASM kernel ``exp(i z sqrt(k**2 - kr**2))`` truncated at the SAME
+    quadratic order at which the ``'paraxial'`` thin-lens phase truncates
+    the spherical wavefront.  The pair (paraxial lens x this propagator)
+    is therefore self-consistent -- aberration-free BY CONSTRUCTION for
+    ideal-lens chains, exactly like Zemax POP's pilot-beam re-referencing
+    (thin-lens audit 2026-07-18, change 3).  Use it as the matched "ideal
+    reference" mode for paraxial-thin-lens relay studies; use exact ASM +
+    ``lens_model='stigmatic'`` when you want the exact propagator instead.
+
+    Unlike :func:`fresnel_propagate` (single-FFT, grid-CHANGING, forward
+    only), this is a two-FFT SAME-GRID step that composes into chains and
+    accepts ``z < 0`` (back-propagation) -- the two properties chains
+    need.  Unlike ASM it applies no band-limit and keeps every frequency
+    bin (the paraxial kernel has no evanescent cone).
+
+    Parameters
+    ----------
+    E_in : ndarray (complex, Ny x Nx)
+        Input field.
+    z : float
+        Propagation distance [m]; may be negative.  ``z == 0`` returns
+        the input unchanged (exact identity).
+    wavelength : float
+        Wavelength [m].
+    dx : float
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+
+    Returns
+    -------
+    E_out : ndarray (complex, Ny x Nx)
+        Output field on the SAME grid.
+    """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'fresnel_tf_propagate')
+    _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
+                                fn_name='fresnel_tf_propagate')
+    if dy is None:
+        dy = dx
+    if z == 0:
+        # Exact identity (mirrors ASM's S2-11 z == 0 contract).
+        return E_in.copy()
+
+    Ny, Nx = E_in.shape
+    k = 2.0 * np.pi / wavelength
+    # Cached centred (2*pi*f)^2 vectors; ifftshift the 1-D vectors so H
+    # is built directly in natural FFT layout (the S5-8g ASM pattern).
+    kx_sq, ky_sq = _state._get_or_make_freq_grids(Ny, Nx, dy, dx, True)
+    kx_sq = np.fft.ifftshift(kx_sq)
+    ky_sq = np.fft.ifftshift(ky_sq)
+    # Paraxial kernel: exp(i k z) * exp(-i z kr^2 / 2k); note
+    # pi*lambda*z*f^2 == z * (2 pi f)^2 / (2 k).
+    phase = (k * z) - (z / (2.0 * k)) * (ky_sq[:, None] + kx_sq[None, :])
+    H = np.exp(1j * phase)
+    out = _ifft2(_fft2(np.ascontiguousarray(E_in, dtype=np.complex128)) * H)
+    if np.iscomplexobj(E_in) and E_in.dtype != np.complex128:
+        out = out.astype(E_in.dtype)
+    return out
 
 
 def fresnel_propagate(

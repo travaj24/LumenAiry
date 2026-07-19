@@ -29,6 +29,7 @@ from typing import List
 
 import numpy as np
 
+from ._conic_core import reflect_mirror, refract_snell
 from .trace import _make_bundle, trace
 
 
@@ -435,26 +436,26 @@ def _adrt_step(x, y, ux, uy, surf, wavelength, apply_transfer, O,
     nx = gx / gn
     ny = gy / gn
     nz = gz / gn
-    dn = L * nx + M * ny + Nn * nz
-    fl = pwhere(val(dn) > 0.0, -1.0, 1.0)
-    nx = nx * fl
-    ny = ny * fl
-    nz = nz * fl
-    cos_i = 0.0 - (L * nx + M * ny + Nn * nz)
+    # S3-10: vector Snell / reflection via the backend-agnostic shared
+    # core (raytrace._conic_core).  The core orients the (un-oriented)
+    # grad-F normal against the ray and applies the same law this site
+    # used; ``eta_sq = eta * eta`` preserves this site's PRODUCT form
+    # (NOT the scalar-power ``mu**2`` the NumPy / JAX sites use -- IEEE
+    # gives ``x**2 != x*x`` for ~0.05% of ratios; see the shared-core
+    # docstring), and the injected ADRT ``sqrt`` (``O['sqrt']`` --
+    # ``_dual_sqrt`` on the dual backend, a clamping jnp sqrt on the JAX
+    # backend) clamps the radicand so the default no-op TIR guard
+    # reproduces the former ``root = sqrt(disc_r)`` exactly.  Pure /
+    # dual-aware: no in-place writes.
     if is_mir:
-        two_ci = 2.0 * cos_i
-        Lp = L + two_ci * nx
-        Mp = M + two_ci * ny
-        Np = Nn + two_ci * nz
+        Lp, Mp, Np, nx, ny, nz, _cos_i = reflect_mirror(
+            L, M, Nn, nx, ny, nz, where=pwhere, val=val)
         disc_r = None
     else:
         eta = n1 / n2
-        disc_r = 1.0 - (eta * eta) * (1.0 - cos_i * cos_i)
-        root = sqrt(disc_r)
-        coef = eta * cos_i - root
-        Lp = eta * L + coef * nx
-        Mp = eta * M + coef * ny
-        Np = eta * Nn + coef * nz
+        Lp, Mp, Np, nx, ny, nz, _cos_i, disc_r, _tir = refract_snell(
+            L, M, Nn, nx, ny, nz, eta, eta * eta,
+            sqrt=sqrt, where=pwhere, val=val)
     if apply_transfer:
         t = float(getattr(surf, 'thickness', 0.0) or 0.0)
         tau2 = (t - zi) / Np

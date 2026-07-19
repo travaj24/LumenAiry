@@ -192,6 +192,7 @@ from .merit_terms import (
     MaxThicknessMerit,
     MinBackFocalLengthMerit,
     MinThicknessMerit,
+    NormalizedMerit,
     RMSWavefrontMerit,
     SphericalSeidelMerit,
     SpotSizeMerit,

@@ -226,13 +226,21 @@ _KNOWN_ALL_SYMMETRY_EXEMPTIONS = frozenset({
     # ---- elements.bor (body-of-revolution / axisymmetric PMM) -------------
     # v5.16.0: the BOR-PMM cylindrical-coordinate mode/grating solver is a
     # specialized subpackage reached via ``la.elements.bor.*`` (the cylindrical
-    # peer of ``pmm`` / ``rcwa``).  Its public names are either generic
-    # (``layer_modes``, ``radial_spectrum``, ``guided_modes``) or domain-specific
-    # cylindrical jargon (``fourier_bessel``, ``radial_coupled_modes``,
-    # ``fiber_modes``) that would crowd / confuse the ~450-name top-level surface.
-    # Stay namespaced by design -- same rationale as the ``raytrace.bundles`` /
-    # ``backend.scipy`` clusters above and the ``elements.eme`` cluster.
-    ('lumenairy.elements.bor', 'BORStack'),
+    # peer of ``pmm`` / ``rcwa``).
+    #
+    # v5.25 (audit S5-10 / B2): the HEADLINE ``BORStack`` graduated to a
+    # top-level re-export (it is the cylindrical peer of the top-level
+    # ``RCWAStack`` / ``PMMStack`` / ``BerremanStack`` engines), so it is NO
+    # longer exempted here -- it now satisfies the walker via
+    # ``lumenairy.__all__``.  The lower-level building blocks and analytic
+    # oracles below stay namespaced by design: their names are either generic
+    # (``layer_modes``, ``radial_spectrum``, ``guided_modes``) or
+    # domain-specific cylindrical jargon (``fourier_bessel``,
+    # ``radial_coupled_modes``, ``fiber_modes``) that would crowd the
+    # ~450-name top-level surface -- and ``layer_modes`` additionally
+    # collides with the ``elements.eme`` export of the same name.  Same
+    # rationale as the ``raytrace.bundles`` / ``backend.scipy`` / ``eme``
+    # clusters above.
     ('lumenairy.elements.bor', 'radial_spectrum'),
     ('lumenairy.elements.bor', 'radial_coupled_modes'),
     ('lumenairy.elements.bor', 'guided_modes'),

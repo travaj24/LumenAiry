@@ -213,6 +213,7 @@ from .fft_infra import (
 from .fresnel import (
     fraunhofer_propagate,
     fresnel_propagate,
+    fresnel_tf_propagate,
 )
 from .mft import (
     angular_spectrum_propagate_mft,
@@ -302,6 +303,7 @@ __all__ = [
     'apply_fresnel_curvature',
     # Fresnel / Fraunhofer
     'fresnel_propagate',
+    'fresnel_tf_propagate',
     'fresnel_propagate_mft',
     'fraunhofer_propagate',
     'fraunhofer_propagate_mft',

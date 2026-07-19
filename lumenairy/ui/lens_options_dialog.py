@@ -72,7 +72,7 @@ LENS_KWARG_REGISTRY = {
                      'the IR or for very long path lengths.'}),
         ('slant_correction', 'bool', False,
          {'label': 'Slant-correction OPD',
-          'tooltip': 'Use the generalised n2·sag/cos(θ_t) - n1·sag/cos(θ_i) '
+          'tooltip': 'Use the generalised (n2·cos(θ_t) - n1·cos(θ_i))·sag '
                      'OPD formula instead of the paraxial (n2-n1)·sag.  '
                      'Useful for strongly off-axis sims; the default '
                      'paraxial form is empirically equal-or-better for '

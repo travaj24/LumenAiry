@@ -33,6 +33,146 @@ def _ensure_cupy_loaded():
     return cp is not None
 
 
+# ---------------------------------------------------------------------------
+# RNG convention (CONVENTIONS.md section 3): new source APIs accept ``rng=``
+# (None / int / numpy.random.Generator / lumenairy RandomState).  The legacy
+# ``seed=`` kwarg on the Schell-family factories is deprecated in favour of
+# ``rng=`` (S3-16 / B1).
+# ---------------------------------------------------------------------------
+
+# v5.25 (audit S3-16 / B1): deprecation-cycle bookkeeping.  ``seed=`` (and the
+# ``create_gaussian_beam`` ``sigma=`` misnomer, below) are accepted for two
+# releases with a DeprecationWarning; removal is scheduled for v5.27.
+_DEPRECATION_VERSION_ADDED = '5.25'
+_DEPRECATION_VERSION_REMOVED = '5.27'
+
+
+def _coerce_source_rng(*, rng: Any, seed: Optional[int],
+                       fn_name: str) -> np.random.Generator:
+    """Resolve the ``rng`` / (deprecated) ``seed`` kwargs to a NumPy
+    :class:`numpy.random.Generator`.
+
+    CONVENTIONS.md section 3 canonical ``rng`` handling:
+
+    * ``None`` -> a fresh :func:`numpy.random.default_rng`.
+    * ``int`` -> ``numpy.random.default_rng(int)`` (seeded).
+    * :class:`numpy.random.Generator` -> used directly.
+    * :class:`lumenairy.backend.RandomState` (NumPy backend) -> its
+      underlying Generator is used directly; a CuPy/JAX-backed
+      RandomState raises (these factories run the band-limited-noise
+      recipe on the host NumPy FFT).
+
+    ``seed=`` is the deprecated legacy spelling.  When it is supplied a
+    :class:`DeprecationWarning` naming ``rng`` and the v5.27 removal is
+    emitted; ``seed`` and ``rng`` are mutually exclusive.
+
+    The default path (neither ``rng`` nor ``seed`` given) is
+    byte-identical to the historical ``numpy.random.default_rng(None)``;
+    the ``seed=<int>`` path is byte-identical to the historical
+    ``numpy.random.default_rng(seed)``.
+    """
+    if seed is not None:
+        if rng is not None:
+            raise TypeError(
+                f"{fn_name}: pass either 'rng' (preferred) or the "
+                f"deprecated 'seed', not both.")
+        from .._deprecation import warn_deprecated_kwarg
+        warn_deprecated_kwarg(
+            'seed', 'rng', function=fn_name,
+            version_added=_DEPRECATION_VERSION_ADDED,
+            version_removed=_DEPRECATION_VERSION_REMOVED,
+            stacklevel=3)
+        rng = seed
+    if rng is None:
+        return np.random.default_rng()
+    if isinstance(rng, (int, np.integer)):
+        return np.random.default_rng(int(rng))
+    if isinstance(rng, np.random.Generator):
+        return rng
+    # lumenairy cross-backend RandomState wrapper: unwrap the NumPy
+    # generator; reject non-NumPy backends (this recipe is host-NumPy).
+    from ..backend.random import RandomState
+    if isinstance(rng, RandomState):
+        if rng.backend != 'numpy':
+            raise TypeError(
+                f"{fn_name}: a {rng.backend!r}-backed RandomState cannot "
+                f"drive this NumPy band-limited-noise recipe; pass a NumPy "
+                f"RandomState, a numpy.random.Generator, or an int seed.")
+        return rng._rng
+    raise TypeError(
+        f"{fn_name}: 'rng' must be None, an int, a numpy.random.Generator, "
+        f"or a lumenairy RandomState; got {type(rng).__name__}.")
+
+
+def _resolve_gaussian_width(*, sigma: Optional[float], w0: Optional[float],
+                            fn_name: str) -> float:
+    """Resolve the Gaussian-width argument to the internal field
+    standard deviation ``sigma`` used by ``exp(-r^2 / (2 sigma^2))``.
+
+    v5.25 (audit S3-16 / B1): ``w0`` is the canonical width parameter --
+    the **1/e^2 intensity radius** (the beam waist), matching every other
+    lumenairy source factory (``create_gaussian_schell_source``,
+    ``create_fiber_mode``, ``Source.gaussian`` ...).  The legacy
+    ``sigma`` is the field *standard deviation*; the two relate as
+    ``w0 = sigma * sqrt(2)`` (equivalently ``sigma = w0 / sqrt(2)``).
+
+    Exactly one of ``w0`` / ``sigma`` must be supplied.  ``sigma`` is
+    DEPRECATED (removal v5.27) and emits a :class:`DeprecationWarning`.
+    Passing ``w0`` reproduces the field of ``sigma = w0 / sqrt(2)``
+    bit-for-bit.
+    """
+    if w0 is not None and sigma is not None:
+        raise ValueError(
+            f"{fn_name}: pass either 'w0' (the 1/e^2 intensity radius, "
+            f"preferred) or the deprecated 'sigma' (field std-dev), not "
+            f"both.  They relate as w0 = sigma * sqrt(2).")
+    if w0 is not None:
+        return float(w0) / np.sqrt(2.0)
+    if sigma is not None:
+        from .._deprecation import warn_deprecated_kwarg
+        warn_deprecated_kwarg(
+            'sigma', 'w0', function=fn_name,
+            version_added=_DEPRECATION_VERSION_ADDED,
+            version_removed=_DEPRECATION_VERSION_REMOVED,
+            stacklevel=4)
+        return float(sigma)
+    raise TypeError(
+        f"{fn_name}: missing required Gaussian-width argument; pass 'w0' "
+        f"(the 1/e^2 intensity radius in metres).")
+
+
+def _apply_field_normalization(E: np.ndarray, mode: str, dx: float,
+                               dy: float, fn_name: str) -> np.ndarray:
+    """Scale a NumPy field array in place per ``mode`` and return it.
+
+    Shared by the aperture-style factories (top-hat / annular / Bessel)
+    that grew an explicit ``normalize=`` kwarg in v5.25 (audit S3-16).
+    The division is **in place** so the array's complex dtype is
+    preserved (a plain ``E / scalar`` would upcast complex64 -> complex128
+    against a float64 norm); this reproduces the historical hard-coded
+    normalization bit-for-bit.
+
+    * ``'power'`` -- unit integrated power: ``E /= sqrt(sum|E|^2 dx dy)``.
+    * ``'peak'``  -- unit peak amplitude: ``E /= max|E|``.
+    * ``'none'``  -- returned unscaled (raw).
+    """
+    if mode == 'power':
+        norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx * dy)
+        if norm > 0:
+            E /= norm
+    elif mode == 'peak':
+        mx = float(np.abs(E).max())
+        if mx > 0:
+            E /= mx
+    elif mode == 'none':
+        pass
+    else:
+        raise ValueError(
+            f"{fn_name}: normalize must be one of 'peak', 'power', "
+            f"'none'; got {mode!r}.")
+    return E
+
+
 def _validate_grid_params(
     N: Union[int, Tuple[int, int]],
     dx: float,
@@ -215,7 +355,8 @@ def create_gaussian_beam(
     dx: float,
     wavelength: float,
     *,
-    sigma: float,
+    w0: Optional[float] = None,
+    sigma: Optional[float] = None,
     x0: float = 0,
     y0: float = 0,
     use_gpu: bool = False,
@@ -233,10 +374,21 @@ def create_gaussian_beam(
         (Ny, Nx).
     dx : float
         Grid spacing in x [m].
+    w0 : float
+        Beam waist -- the **1/e^2 intensity radius** [m] (canonical since
+        v5.25).  This is the same width convention used by every other
+        source factory (``create_gaussian_schell_source``,
+        ``create_fiber_mode``, ``Source.gaussian`` ...).  Exactly one of
+        ``w0`` / ``sigma`` must be supplied.
     sigma : float
-        Gaussian width parameter (field standard deviation) [m].
-        The 1/e field amplitude radius is sigma * sqrt(2).
-        The 1/e^2 intensity radius (beam waist w0) is also sigma * sqrt(2).
+        DEPRECATED since v5.25 (removal v5.27): the Gaussian *field
+        standard deviation* [m] -- a width misnomer relative to the
+        library-wide ``w0`` waist convention (audit S3-16).  Passing
+        ``sigma`` emits a :class:`DeprecationWarning`; it is mutually
+        exclusive with ``w0`` and relates to it by ``w0 = sigma *
+        sqrt(2)`` (so ``sigma=s`` and ``w0=s*sqrt(2)`` yield a
+        bit-identical field).  The kernel is
+        ``exp(-r^2 / (2 sigma^2)) == exp(-r^2 / w0^2)``.
     wavelength : float, optional
         Reserved for future use (e.g. adding a spherical phase for a
         focused beam). Currently unused -- the returned field has flat phase.
@@ -247,10 +399,11 @@ def create_gaussian_beam(
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
     normalize : ``'peak'`` (default) / ``'power'`` / ``'none'``
-        Output scaling.  ``'peak'`` (the historical default) returns
-        a unit-peak amplitude field.  ``'power'`` returns a
-        unit-integrated-power field (matching :func:`create_hermite_gauss`
-        and :func:`create_laguerre_gauss` -- pass ``normalize='power'``
+        Output scaling.  **Native convention: ``'peak'``** -- a unit-peak
+        amplitude field (the historical default for this factory, kept for
+        back-compat).  ``'power'`` returns a unit-integrated-power field
+        (matching :func:`create_hermite_gauss` and
+        :func:`create_laguerre_gauss` -- pass ``normalize='power'``
         whenever you want to chain or compare across the mode-family
         helpers).  ``'none'`` returns the raw ``exp(-r^2/(2 sigma^2))``
         without scaling.
@@ -266,16 +419,26 @@ def create_gaussian_beam(
 
     Notes
     -----
-    Signature is ``(N, dx, wavelength, *, sigma, ...)`` since 4.7.
-    Prior to 4.7 the ordering was
+    Signature is ``(N, dx, wavelength, *, w0, ...)`` since 4.7 (the width
+    argument is keyword-only).  Prior to 4.7 the ordering was
     ``(N, dx, sigma, wavelength=None, ...)`` with positional ``sigma``;
-    the new style places ``wavelength`` at the third positional
-    slot (matching every other source factory) and makes
-    ``sigma`` keyword-only.
+    the new style places ``wavelength`` at the third positional slot
+    (matching every other source factory).
+
+    v5.25 (audit S3-16): the width argument migrated from ``sigma`` (the
+    field standard deviation -- a misnomer relative to the library-wide
+    waist convention) to the canonical ``w0`` (the 1/e^2 intensity
+    radius).  Both are accepted; ``sigma`` is deprecated (removal v5.27)
+    and relates to ``w0`` by ``w0 = sigma * sqrt(2)``.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_gaussian_beam',
                           support_tuple_N=True)
+    # v5.25 (audit S3-16 / B1): resolve the canonical ``w0`` waist (1/e^2
+    # intensity radius) or the deprecated ``sigma`` (field std-dev) to the
+    # internal ``sigma`` used by exp(-r^2/(2 sigma^2)).  w0 = sigma*sqrt(2).
+    sigma = _resolve_gaussian_width(sigma=sigma, w0=w0,
+                                    fn_name='create_gaussian_beam')
     if CUPY_AVAILABLE and use_gpu:
         # 4.10: pre-4.10 reached for module-level ``cp`` without first
         # calling _ensure_cupy_loaded(), so ``cp`` was still None and
@@ -407,6 +570,11 @@ def create_hermite_gauss(
         Grid spacing in y [m].  Defaults to ``dx`` (square pitch).
         Provide explicitly for rectangular-pitch grids so the
         Gaussian envelope isn't silently stretched along y.
+    normalize : ``'power'`` (default) / ``'peak'`` / ``'none'``
+        Output scaling.  **Native convention: ``'power'``** --
+        unit-integrated-power over the grid (``sum|E|^2 dx dy = 1``); see
+        the Normalisation note below.  ``'peak'`` gives unit peak
+        amplitude; ``'none'`` returns the raw HG field.
 
     Returns
     -------
@@ -565,6 +733,11 @@ def create_laguerre_gauss(
         Beam center [m].
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
+    normalize : ``'power'`` (default) / ``'peak'`` / ``'none'``
+        Output scaling.  **Native convention: ``'power'``** --
+        unit-integrated-power over the grid (``sum|E|^2 dx dy = 1``); see
+        the Normalisation note below.  ``'peak'`` gives unit peak
+        amplitude; ``'none'`` returns the raw LG field.
 
     Returns
     -------
@@ -945,6 +1118,7 @@ def create_top_hat_beam(
     x0: float = 0,
     y0: float = 0,
     dy: Optional[float] = None,
+    normalize: str = 'power',
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Uniform-intensity circular beam (top-hat / flat-top).
@@ -959,6 +1133,13 @@ def create_top_hat_beam(
         Beam diameter [m].
     x0, y0 : float
         Center [m].
+    normalize : ``'power'`` (default) / ``'peak'`` / ``'none'``
+        Output scaling.  **Native convention: ``'power'``** -- a
+        unit-integrated-power field (``E /= sqrt(sum|E|^2 dx dy)``), the
+        historical hard-coded behaviour, preserved as the default.  Made
+        explicit in v5.25 (audit S3-16) so the source-factory zoo exposes
+        one consistent ``normalize`` knob.  ``'peak'`` gives unit peak
+        amplitude; ``'none'`` returns the raw 0/1 indicator field.
 
     Returns
     -------
@@ -991,9 +1172,8 @@ def create_top_hat_beam(
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     E = np.where(r <= diameter / 2, 1.0, 0.0).astype(
         _resolve_complex_dtype(dtype))
-    norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx * dy)
-    if norm > 0:
-        E /= norm
+    E = _apply_field_normalization(E, normalize, dx, dy,
+                                   'create_top_hat_beam')
     return E, x, y
 
 
@@ -1007,6 +1187,7 @@ def create_annular_beam(
     x0: float = 0,
     y0: float = 0,
     dy: Optional[float] = None,
+    normalize: str = 'power',
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Annular (donut) beam.
@@ -1017,6 +1198,12 @@ def create_annular_beam(
     wavelength : float
         Reserved for future use.
     outer_diameter, inner_diameter : float [m]
+    normalize : ``'power'`` (default) / ``'peak'`` / ``'none'``
+        Output scaling.  **Native convention: ``'power'``** -- a
+        unit-integrated-power field (``E /= sqrt(sum|E|^2 dx dy)``), the
+        historical hard-coded behaviour, preserved as the default and
+        made explicit in v5.25 (audit S3-16).  ``'peak'`` gives unit peak
+        amplitude; ``'none'`` returns the raw 0/1 indicator field.
 
     Returns
     -------
@@ -1053,9 +1240,8 @@ def create_annular_beam(
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     E = np.where((r <= outer_diameter / 2) & (r >= inner_diameter / 2),
                   1.0, 0.0).astype(_resolve_complex_dtype(dtype))
-    norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx * dy)
-    if norm > 0:
-        E /= norm
+    E = _apply_field_normalization(E, normalize, dx, dy,
+                                   'create_annular_beam')
     return E, x, y
 
 
@@ -1141,9 +1327,12 @@ def create_fiber_mode(
             "full LP01 solver.",
             RuntimeWarning, stacklevel=2,
         )
+    # MFD is the 1/e^2 intensity diameter, so the waist (1/e^2 intensity
+    # radius) is w0 = MFD/2 -- forward it directly via the canonical ``w0``
+    # kwarg (v5.25; create_gaussian_beam maps sigma = w0/sqrt(2) internally,
+    # bit-identical to the pre-v5.25 sigma= call).
     w0 = mode_field_diameter / 2.0
-    sigma = w0 / np.sqrt(2)
-    return create_gaussian_beam(N, dx, wavelength, sigma=sigma,
+    return create_gaussian_beam(N, dx, wavelength, w0=w0,
                                  x0=x0, y0=y0, dy=dy, dtype=dtype)
 
 
@@ -1438,6 +1627,7 @@ def create_bessel_beam(
     x0: float = 0,
     y0: float = 0,
     dy: Optional[float] = None,
+    normalize: str = 'none',
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Ideal Bessel beam (J_0 profile).
@@ -1452,6 +1642,14 @@ def create_bessel_beam(
     wavelength : float [m]
     cone_angle : float [rad]
         Half-angle of the Bessel cone.
+    normalize : ``'none'`` (default) / ``'power'`` / ``'peak'``
+        Output scaling.  **Native convention: ``'none'``** -- the raw
+        ``J_0(k_r r)`` amplitude (peak ``J_0(0) = 1`` at the axis), the
+        historical behaviour, preserved as the default.  Made explicit in
+        v5.25 (audit S3-16); note the ideal Bessel field is not
+        square-integrable, so ``'power'`` normalises only over the finite
+        sampled window (window-dependent) -- ``'none'`` is the physically
+        meaningful choice.  ``'peak'`` gives unit peak amplitude.
 
     Returns
     -------
@@ -1492,6 +1690,8 @@ def create_bessel_beam(
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     k_r = 2 * np.pi / wavelength * np.sin(cone_angle)
     E = j0(k_r * r).astype(_resolve_complex_dtype(dtype))
+    E = _apply_field_normalization(E, normalize, dx, dy,
+                                   'create_bessel_beam')
     return E, x, y
 
 
@@ -2025,6 +2225,7 @@ def create_gaussian_schell_source(
     sigma_g: float,
     n_realizations: int = 16,
     dy: Optional[float] = None,
+    rng: Any = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
     return_kind: Any = 'ensemble',
@@ -2066,8 +2267,17 @@ def create_gaussian_schell_source(
         Number of independent ensemble draws.  Must be >= 1.
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
+    rng : None | int | numpy.random.Generator | RandomState, optional
+        Randomness source (CONVENTIONS.md section 3).  ``None`` (default)
+        draws a fresh generator; an ``int`` seeds one; a
+        :class:`numpy.random.Generator` (or NumPy-backed lumenairy
+        ``RandomState``) is used directly.
     seed : int, optional
-        RNG seed for reproducibility.
+        DEPRECATED since v5.25 (removal v5.27): legacy spelling of
+        ``rng``.  Passing ``seed`` emits a :class:`DeprecationWarning`;
+        it is mutually exclusive with ``rng`` and is forwarded verbatim
+        (``seed=<int>`` reproduces the historical
+        ``numpy.random.default_rng(seed)`` stream bit-for-bit).
     dtype : optional
         Complex dtype for the returned ensemble (default: library
         default).  Ignored when ``return_kind='mcf'`` -- the MCF
@@ -2157,7 +2367,8 @@ def create_gaussian_schell_source(
     # amp = exp(-r^2 / w0^2).
     amp = np.exp(-(X * X + Y * Y) / (w0 ** 2))
 
-    rng = np.random.default_rng(seed)
+    rng = _coerce_source_rng(rng=rng, seed=seed,
+                             fn_name='create_gaussian_schell_source')
     phi = _schell_phase_realizations(
         Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
         coherence_length=float(sigma_g),
@@ -2187,6 +2398,7 @@ def create_schell_model_source(
     coherence_length: float,
     n_realizations: int = 16,
     dy: Optional[float] = None,
+    rng: Any = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
     return_kind: Any = 'ensemble',
@@ -2218,8 +2430,14 @@ def create_schell_model_source(
         Number of independent ensemble draws.
     dy : float, optional
         Grid spacing in y [m].
+    rng : None | int | numpy.random.Generator | RandomState, optional
+        Randomness source (CONVENTIONS.md section 3); see
+        :func:`create_gaussian_schell_source`.
     seed : int, optional
-        RNG seed.
+        DEPRECATED since v5.25 (removal v5.27): legacy spelling of
+        ``rng`` (emits a :class:`DeprecationWarning`; mutually exclusive
+        with ``rng``; ``seed=<int>`` reproduces the historical stream
+        bit-for-bit).
     dtype : optional
         Complex dtype for the ensemble form; ignored for ``'mcf'``.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
@@ -2270,7 +2488,8 @@ def create_schell_model_source(
     target_dtype = _resolve_complex_dtype(dtype)
     amp = np.sqrt(I)
 
-    rng = np.random.default_rng(seed)
+    rng = _coerce_source_rng(rng=rng, seed=seed,
+                             fn_name='create_schell_model_source')
     phi = _schell_phase_realizations(
         Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
         coherence_length=float(coherence_length),
@@ -2297,6 +2516,7 @@ def create_annular_incoherent_source(
     outer_radius: float,
     n_realizations: int = 16,
     dy: Optional[float] = None,
+    rng: Any = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
     return_kind: Any = 'ensemble',
@@ -2336,8 +2556,14 @@ def create_annular_incoherent_source(
         Number of independent ensemble draws.
     dy : float, optional
         Grid spacing in y [m].
+    rng : None | int | numpy.random.Generator | RandomState, optional
+        Randomness source (CONVENTIONS.md section 3); see
+        :func:`create_gaussian_schell_source`.
     seed : int, optional
-        RNG seed.
+        DEPRECATED since v5.25 (removal v5.27): legacy spelling of
+        ``rng`` (emits a :class:`DeprecationWarning`; mutually exclusive
+        with ``rng``; ``seed=<int>`` reproduces the historical stream
+        bit-for-bit).
     dtype : optional
         Complex dtype.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
@@ -2397,7 +2623,8 @@ def create_annular_incoherent_source(
     if norm > 0:
         amp = amp / norm
 
-    rng = np.random.default_rng(seed)
+    rng = _coerce_source_rng(rng=rng, seed=seed,
+                             fn_name='create_annular_incoherent_source')
     nr = int(n_realizations)
     E_ensemble = np.empty((nr, int(N), int(N)), dtype=target_dtype)
     for k in range(nr):
@@ -2693,9 +2920,10 @@ class Source:
             raise TypeError(
                 "Source.gaussian: missing required keyword argument "
                 "'wavelength'.")
-        sigma = w0 / np.sqrt(2)
+        # v5.25: forward the waist via the canonical ``w0`` kwarg
+        # (create_gaussian_beam maps sigma = w0/sqrt(2) internally).
         E, _, _ = create_gaussian_beam(
-            N, dx, wavelength, sigma=sigma, x0=x0, y0=y0,
+            N, dx, wavelength, w0=w0, x0=x0, y0=y0,
             use_gpu=use_gpu, **factory_kwargs)
         # v4.13.0 audit P1-C: preserve anamorphic ``dy`` on the
         # returned Source.
@@ -3040,12 +3268,17 @@ class Source:
                          n_realizations: int = 16,
                          source_point: _Tuple[float, float] = (0.0, 0.0),
                          name: _Optional[str] = None,
+                         rng: Any = None,
                          seed: _Optional[int] = None,
                          return_kind: Any = 'ensemble',
                          **factory_kwargs) -> Any:
         """Gaussian-Schell partial-coherence source.
 
-        Wraps :func:`create_gaussian_schell_source`.
+        Wraps :func:`create_gaussian_schell_source`.  Accepts the
+        canonical ``rng=`` randomness kwarg (None / int /
+        ``numpy.random.Generator`` / ``RandomState``); the legacy
+        ``seed=`` is DEPRECATED since v5.25 (removal v5.27) and forwarded
+        with a :class:`DeprecationWarning`.
 
         v4.15.2 (Agent E, AUDIT_V4_15_1 P2): the return type now
         matches the top-level factory's return-type convention
@@ -3118,7 +3351,7 @@ class Source:
             return_kind = 'ensemble'
         result = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=wavelength, w0=w0, sigma_g=sigma_g,
-            n_realizations=n_realizations, seed=seed,
+            n_realizations=n_realizations, rng=rng, seed=seed,
             return_kind=return_kind, **factory_kwargs)
         # v4.15.2 (Agent E): pass the factory's return value through
         # verbatim -- either the (ensemble, dx, dy, wavelength) tuple
@@ -3144,6 +3377,7 @@ class Source:
                       n_realizations: int = 16,
                       source_point: _Tuple[float, float] = (0.0, 0.0),
                       name: _Optional[str] = None,
+                      rng: Any = None,
                       seed: _Optional[int] = None,
                       return_kind: Any = 'ensemble',
                       **factory_kwargs) -> Any:
@@ -3153,7 +3387,8 @@ class Source:
         :meth:`Source.gaussian_schell` for the v4.15.2 return-type
         convention (ensemble tuple by default, MCF object on
         ``return_kind='mcf'``; NOT a :class:`Source`-wrapped 3-D
-        ensemble).
+        ensemble) and for the ``rng=`` / deprecated ``seed=`` randomness
+        contract.
 
         v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
         ``DeprecationWarning`` is retired in line with
@@ -3179,7 +3414,7 @@ class Source:
             N=N, dx=dx, wavelength=wavelength,
             intensity_profile=intensity_profile,
             coherence_length=coherence_length,
-            n_realizations=n_realizations, seed=seed,
+            n_realizations=n_realizations, rng=rng, seed=seed,
             return_kind=return_kind, **factory_kwargs)
         # v4.15.2 (Agent E): same return-type contract as
         # ``Source.gaussian_schell`` -- pass the factory return through

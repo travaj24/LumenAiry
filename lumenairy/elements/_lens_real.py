@@ -476,7 +476,7 @@ def apply_real_lens(
     trace as the slant-corrected formula, because the angular-spectrum
     propagation between surfaces already encodes most of the obliquity
     physics.  Pass ``slant_correction=True`` to use the generalised
-    ``n2*sag/cos(theta_t) - n1*sag/cos(theta_i)`` formula -- helpful in
+    ``(n2*cos(theta_t) - n1*cos(theta_i))*sag`` formula -- helpful in
     a few specific geometries (asymmetric meniscus, very steep
     asphere) but not a universal improvement.
 
@@ -509,7 +509,7 @@ def apply_real_lens(
       naturally with complex refractive indices.
     * ``slant_correction=True`` -- replace the paraxial OPD
       ``(n2-n1)*sag`` with the generalized thin-element OPD
-      ``n2*sag/cos(theta_t) - n1*sag/cos(theta_i)``, which is accurate at
+      ``(n2*cos(theta_t) - n1*cos(theta_i))*sag``, which is accurate at
       larger angles of incidence (faster lenses, off-axis input).
     * ``absorption=True`` -- apply bulk attenuation
       ``exp(-2*pi*kappa*thickness/wavelength)`` between surfaces using the
@@ -606,7 +606,7 @@ def apply_real_lens(
         Apply Fresnel amplitude transmission at each surface.
     slant_correction : bool, default False
         Use the generalised thin-element OPD with local angle of
-        incidence: ``n2*sag/cos(theta_t) - n1*sag/cos(theta_i)``.  Off
+        incidence: ``(n2*cos(theta_t) - n1*cos(theta_i))*sag``.  Off
         by default because the simple paraxial formula
         ``(n2-n1)*sag`` typically gives equal or better agreement
         with geometric ray-traced OPD (see
@@ -1091,8 +1091,20 @@ def apply_real_lens(
                 cos_tt_safe = xp.maximum(cos_tt, 1e-3)
                 sag_b = sag_halo[_lo:_hi]
                 if slant_correction:
-                    opd = (n2r * sag_b / cos_tt_safe
-                           - n1r * sag_b / cos_ti_safe)
+                    # v5.25.0 (hammer audit H1): the wavefront OPD of a
+                    # locally-tilted refracting facet is
+                    # (n2*cos_tt - n1*cos_ti) * sag -- COSINES IN THE
+                    # NUMERATOR (the plane-parallel-plate result).  The
+                    # historical ``n*sag/cos`` form is the geometric ray
+                    # path-length through a slab, NOT the wavefront OPD;
+                    # it sign-flips the leading obliquity (spherical-
+                    # aberration) term, and on a symmetric biconvex the
+                    # wrong-signed corrections cancelled the pupil SA
+                    # entirely (dual-oracle f/5 case: 3.6 um "perfect"
+                    # spot vs the true 65 um).  Keep byte-identical to
+                    # the whole-grid copy below.
+                    opd = (n2r * cos_tt_safe
+                           - n1r * cos_ti_safe) * sag_b
                 else:
                     opd = (n2r - n1r) * sag_b
                 if bool(xp.any(xp.isnan(opd))):
@@ -1354,8 +1366,11 @@ def apply_real_lens(
             # cosine.  The 1e-3 floor (≈89.94°) was previously silent;
             # for steep aspheres or strongly tilted bundles it acts on
             # physical (non-TIR) rays before the TIR mask fires, and
-            # the resulting OPL = n * sag / cos_tt_safe blows up by
-            # ~1000× per clamped pixel.  See round-2 audit M-LR.
+            # the historical /cos slant OPD blew up ~1000x per
+            # clamped pixel (round-2 audit M-LR).  v5.25.0 (H1): the
+            # corrected *cos form cannot diverge, so the clamp is now
+            # harmless for the OPD -- the warning is kept for the
+            # Fresnel-coefficient legs, which still divide by cos.
             if bool(xp.any(cos_ti < 1e-3)) or bool(xp.any(cos_tt < 1e-3)):
                 import warnings
                 warnings.warn(
@@ -1388,7 +1403,11 @@ def apply_real_lens(
         # should use ``apply_real_lens_traced`` which bypasses this
         # limitation entirely by ray-tracing each pixel.
         if slant_correction:
-            opd = n2r * sag / cos_tt_safe - n1r * sag / cos_ti_safe
+            # v5.25.0 (hammer audit H1): cosines in the NUMERATOR -- the
+            # wavefront OPD of a tilted refracting facet, not the ray
+            # slab path-length.  See the banded-copy comment above for
+            # the full derivation + oracle evidence; keep byte-identical.
+            opd = (n2r * cos_tt_safe - n1r * cos_ti_safe) * sag
         else:
             opd = (n2r - n1r) * sag
         # 4.11.2: mask the NaN sentinel returned by surface_sag_general

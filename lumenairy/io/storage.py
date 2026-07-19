@@ -80,6 +80,8 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 import threading
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -195,6 +197,154 @@ def _decode_attr(val):
                     for v in val]
         return val
     return val
+
+
+# =========================================================================
+# Canonical nested-metadata serialization contract (S4-19, v5.24.x)
+# =========================================================================
+#
+# ``write_sim_metadata`` / ``read_sim_metadata`` used to lower each
+# metadata value directly into a native h5py / zarr attribute.  Two
+# fidelity bugs followed from that (audit S4-19):
+#
+#   * **list -> ndarray coercion** -- a native attribute cannot tell a
+#     Python ``list`` from a NumPy ``ndarray``; both round-tripped to the
+#     same type, so the ``list`` vs ``ndarray`` distinction was lost.
+#   * **un-reversed dict flattening** -- nested dicts were flattened to
+#     ``"parent.child"`` keys on write but never re-nested on read, so a
+#     round-trip returned a *flat* dict, not the caller's structure.
+#
+# The fix is one canonical, backend-agnostic serialization: the whole
+# metadata mapping is encoded to a single JSON string with explicit
+# type tags (``_meta_dumps``) and stored under ONE reserved attribute
+# (``_META_BLOB_KEY``), byte-for-byte identical in both backends.  On
+# read the blob is decoded back to the exact Python structure
+# (``_meta_loads``).  A best-effort *flattened* copy of the scalars is
+# still written alongside the blob so external tools (HDFView, ``zarr``
+# inspectors) and older library versions can still see readable keys --
+# but the blob is authoritative for the faithful round-trip.
+#
+# BACK-COMPAT: a file with no blob (written by the pre-contract scheme)
+# still loads -- the reader detects the missing blob and falls back to
+# reconstructing the mapping from the individual native attributes,
+# reproducing the historical (flat) behavior exactly.
+
+_META_BLOB_KEY = '__lumenairy_meta_json__'
+_META_TAG = '__lumen_t__'
+
+
+def _meta_encode(obj):
+    """Lower a metadata value to a JSON-serializable, type-tagged form.
+
+    Native JSON scalars (``None``/``bool``/``int``/``float``/``str``)
+    and ``list`` pass through as themselves (a ``list`` therefore stays
+    a JSON array and decodes back to a ``list``).  Every other type
+    carries an explicit ``_META_TAG`` so the decoder can restore it
+    exactly -- crucially distinguishing ``ndarray`` (tagged) from
+    ``list`` (untagged array).
+    """
+    # bool is a subclass of int; both are native JSON and need no tag.
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, complex):
+        return {_META_TAG: 'complex', 're': obj.real, 'im': obj.imag}
+    if isinstance(obj, bytes):
+        return {_META_TAG: 'bytes',
+                'b64': base64.b64encode(obj).decode('ascii')}
+    if isinstance(obj, np.generic):
+        # NumPy scalar -> Python scalar, then re-encode (a complex
+        # numpy scalar becomes a Python complex and picks up the tag).
+        return _meta_encode(obj.item())
+    if isinstance(obj, np.ndarray):
+        if np.iscomplexobj(obj):
+            data = {'re': np.real(obj).tolist(), 'im': np.imag(obj).tolist()}
+        else:
+            data = obj.tolist()
+        return {_META_TAG: 'ndarray', 'dtype': str(obj.dtype),
+                'shape': list(obj.shape), 'data': data}
+    if isinstance(obj, tuple):
+        return {_META_TAG: 'tuple', 'items': [_meta_encode(v) for v in obj]}
+    if isinstance(obj, list):
+        return [_meta_encode(v) for v in obj]
+    if isinstance(obj, dict):
+        enc = {k: _meta_encode(v) for k, v in obj.items()}
+        # A user dict that literally contains the tag key would be
+        # mis-read as a tagged wrapper; wrap it explicitly so the
+        # decoder restores it as a plain dict.
+        if _META_TAG in enc:
+            return {_META_TAG: 'dict',
+                    'items': [[k, _meta_encode(v)] for k, v in obj.items()]}
+        return enc
+    # Unknown / non-serializable type: preserve its ``str()`` form,
+    # mirroring the historical ``except TypeError: str(v)`` fallback.
+    return {_META_TAG: 'repr', 'value': str(obj)}
+
+
+def _meta_decode(obj):
+    """Inverse of :func:`_meta_encode`."""
+    if isinstance(obj, list):
+        return [_meta_decode(v) for v in obj]
+    if isinstance(obj, dict):
+        kind = obj.get(_META_TAG)
+        if kind is not None:
+            if kind == 'complex':
+                return complex(obj['re'], obj['im'])
+            if kind == 'bytes':
+                return base64.b64decode(obj['b64'])
+            if kind == 'tuple':
+                return tuple(_meta_decode(v) for v in obj['items'])
+            if kind == 'dict':
+                return {k: _meta_decode(v) for k, v in obj['items']}
+            if kind == 'ndarray':
+                dtype = np.dtype(obj['dtype'])
+                shape = tuple(obj['shape'])
+                data = obj['data']
+                if isinstance(data, dict) and 're' in data:  # complex
+                    arr = (np.asarray(data['re'], dtype=np.float64)
+                           + 1j * np.asarray(data['im'], dtype=np.float64))
+                    arr = arr.astype(dtype)
+                else:
+                    arr = np.asarray(data, dtype=dtype)
+                return arr.reshape(shape)
+            if kind == 'repr':
+                return obj['value']
+            # Unknown tag (written by a newer library): fall through and
+            # return it as a plain dict so nothing is silently dropped.
+        return {k: _meta_decode(v) for k, v in obj.items()}
+    return obj
+
+
+def _meta_dumps(metadata: Dict[str, Any]) -> str:
+    """Serialize a nested metadata mapping to the canonical JSON string.
+
+    ``sort_keys`` is deliberately OFF so insertion order (dict ordering)
+    survives the round-trip.
+    """
+    return json.dumps(_meta_encode(dict(metadata)), sort_keys=False)
+
+
+def _meta_loads(blob) -> Dict[str, Any]:
+    """Parse a canonical metadata blob back to its Python structure."""
+    if isinstance(blob, bytes):
+        blob = blob.decode('utf-8')
+    return _meta_decode(json.loads(blob))
+
+
+def _flatten_metadata(d, prefix=''):
+    """Flatten a nested mapping to dotted keys (best-effort native attrs).
+
+    Shared by both backends' sim-metadata writers.  This is the *lossy*
+    external-inspection view (it cannot re-nest and coerces list vs
+    ndarray); the authoritative round-trip is the JSON blob.
+    """
+    items = {}
+    for k, v in d.items():
+        key = f'{prefix}{k}' if not prefix else f'{prefix}.{k}'
+        if isinstance(v, dict):
+            items.update(_flatten_metadata(v, key))
+        else:
+            items[key] = v
+    return items
 
 
 # ── Single field I/O (HDF5-specific) ────────────────────────────────────
@@ -831,32 +981,46 @@ def _h5_load_plane_slice(filepath, plane_index, y_slice, x_slice):
 
 
 def _h5_write_sim_metadata(filepath, metadata):
-    """Write simulation metadata to HDF5 root attributes."""
+    """Write simulation metadata to HDF5 root attributes.
+
+    Stores the canonical, type-tagged JSON blob under ``_META_BLOB_KEY``
+    (authoritative for the faithful round-trip) plus a best-effort
+    flattened copy of the scalars as native attributes (for external
+    tools / older readers).  See the codec block above.
+    """
     _require_h5py()
-
-    def _flatten(d, prefix=''):
-        items = {}
-        for k, v in d.items():
-            key = f'{prefix}{k}' if not prefix else f'{prefix}.{k}'
-            if isinstance(v, dict):
-                items.update(_flatten(v, key))
-            else:
-                items[key] = v
-        return items
-
-    flat = _flatten(metadata)
+    blob = _meta_dumps(metadata)
+    flat = _flatten_metadata(metadata)
     with h5py.File(filepath, 'a') as f:
+        f.attrs[_META_BLOB_KEY] = blob
         for k, v in flat.items():
+            if v is None:   # h5py cannot store a None attr; skip it
+                continue
+            # Best-effort external-inspection view only -- the blob is
+            # authoritative, so a value h5py cannot store (e.g. bytes
+            # with embedded NULLs raise ValueError, not TypeError) is
+            # stringified or, failing that, skipped.  It never aborts.
             try:
                 f.attrs[str(k)] = v
-            except TypeError:
-                f.attrs[str(k)] = str(v)
+            except (TypeError, ValueError):
+                try:
+                    f.attrs[str(k)] = str(v)
+                except (TypeError, ValueError):
+                    pass
 
 
 def _h5_read_sim_metadata(filepath):
-    """Read simulation metadata from HDF5 root attributes."""
+    """Read simulation metadata from HDF5 root attributes.
+
+    Prefers the canonical JSON blob (faithful round-trip).  Falls back
+    to reconstructing a flat mapping from the individual native
+    attributes when the blob is absent -- i.e. for files written by the
+    pre-contract scheme (back-compat).
+    """
     _require_h5py()
     with h5py.File(filepath, 'r') as f:
+        if _META_BLOB_KEY in f.attrs:
+            return _meta_loads(f.attrs[_META_BLOB_KEY])
         meta = {}
         for k in f.attrs:
             v = f.attrs[k]
@@ -1276,30 +1440,38 @@ def _zarr_load_plane_slice(filepath, plane_index, y_slice, x_slice):
 
 
 def _zarr_write_sim_metadata(filepath, metadata):
+    """Write simulation metadata to Zarr group attributes.
+
+    Uses the same canonical contract as the HDF5 path: the type-tagged
+    JSON blob under ``_META_BLOB_KEY`` (authoritative) plus a
+    best-effort flattened copy for external inspection.  The blob is
+    byte-for-byte identical to the HDF5 blob for the same input.
+    """
     zarr = _require_zarr()
     store = _open_zarr_group_safe(zarr, filepath, writable=True)
-
-    def _flatten(d, prefix=''):
-        items = {}
-        for k, v in d.items():
-            key = f'{prefix}{k}' if not prefix else f'{prefix}.{k}'
-            if isinstance(v, dict):
-                items.update(_flatten(v, key))
-            else:
-                items[key] = v
-        return items
-
-    flat = _flatten(metadata)
+    store.attrs[_META_BLOB_KEY] = _meta_dumps(metadata)
+    flat = _flatten_metadata(metadata)
     for k, v in flat.items():
+        # Best-effort external-inspection view (blob is authoritative).
         try:
             store.attrs[str(k)] = v
-        except TypeError:
-            store.attrs[str(k)] = str(v)
+        except (TypeError, ValueError):
+            try:
+                store.attrs[str(k)] = str(v)
+            except (TypeError, ValueError):
+                pass
 
 
 def _zarr_read_sim_metadata(filepath):
+    """Read simulation metadata from Zarr group attributes.
+
+    Prefers the canonical JSON blob; falls back to the flat native
+    attributes for pre-contract stores (back-compat).
+    """
     zarr = _require_zarr()
     store = zarr.open_group(filepath, mode='r')
+    if _META_BLOB_KEY in store.attrs:
+        return _meta_loads(store.attrs[_META_BLOB_KEY])
     meta = {}
     for k in store.attrs:
         v = store.attrs[k]

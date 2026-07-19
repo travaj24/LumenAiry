@@ -675,7 +675,11 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
     lines.append(f'WAVELENGTH = {wavelength:.17e}  # [m]')
     lines.append(f'N = {N}')
     lines.append(f'dx = {dx:.17e}  # [m]')
-    lines.append(f'SOURCE_SIGMA = {source_sigma:.17e}  # 1/e field radius [m]')
+    # v5.25 (audit S3-16): emit the canonical ``w0`` waist (1/e^2 intensity
+    # radius = source_sigma * sqrt(2)) so generated scripts use the
+    # non-deprecated create_gaussian_beam signature.
+    lines.append(f'SOURCE_W0 = {source_sigma * 2 ** 0.5:.17e}  '
+                 f'# beam waist (1/e^2 intensity radius) [m]')
     lines.append('')
 
     # --- Glass registry additions ---
@@ -750,7 +754,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
 
     # Source
     lines.append('    # --- Source ---')
-    lines.append('    E, x, y = la.create_gaussian_beam(N, dx, WAVELENGTH, sigma=SOURCE_SIGMA)')
+    lines.append('    E, x, y = la.create_gaussian_beam(N, dx, WAVELENGTH, w0=SOURCE_W0)')
     lines.append("    planes.append({'field': E.copy(), 'dx': dx, 'z': 0.0, "
                  "'label': 'Source'})")
     if include_analysis:
@@ -1031,9 +1035,10 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
     lines.append(']')
     lines.append('')
 
-    # Source and run
-    lines.append('E, x, y = la.create_gaussian_beam(N, dx, WAVELENGTH, sigma='
-                 f'{source_sigma:.17e})')
+    # Source and run.  v5.25 (audit S3-16): emit the canonical ``w0`` waist
+    # (1/e^2 intensity radius = source_sigma * sqrt(2)).
+    lines.append('E, x, y = la.create_gaussian_beam(N, dx, WAVELENGTH, w0='
+                 f'{source_sigma * 2 ** 0.5:.17e})')
     lines.append('E_out, intermediates = la.propagate_through_system(')
     lines.append('    E, elements, WAVELENGTH, dx, verbose=True)')
     lines.append('')

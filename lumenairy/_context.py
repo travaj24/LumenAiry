@@ -196,7 +196,7 @@ def lumenairy_context(
             fft_threads=8,
         ):
             E = la.create_gaussian_beam(
-                N=4096, dx=2e-6, wavelength=1.55e-6, sigma=1e-3,
+                N=4096, dx=2e-6, wavelength=1.55e-6, w0=1e-3,
                 dtype=np.complex64,
             )
             E_out = la.apply_real_lens(
