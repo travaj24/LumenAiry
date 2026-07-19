@@ -541,11 +541,19 @@ def test_f4_two_beam_fringe_does_not_recommend_tilt_aware():
 
 
 def test_f4_collimated_no_warning():
+    """Collimated input must trigger NO F4-class (tilt-discriminator)
+    warning.  v5.25.0: assert the F4 phrases are absent rather than that
+    the text is EMPTY -- the hammer-audit H3 exit-NA Nyquist guard now
+    legitimately fires on this configuration (NA_exit = 0.126 needs
+    dx <= 5.2 um; this grid is 6 um), and pinning "no warnings at all"
+    would wrongly forbid unrelated future guards."""
     N, dx = 256, 6e-6
     xs = (np.arange(N) - N // 2) * dx
     X, Y = np.meshgrid(xs, xs)
     E = np.exp(-(X ** 2 + Y ** 2) / (0.4e-3) ** 2).astype(np.complex64)
-    assert _f4_warn_text(E).strip() == ''
+    txt = _f4_warn_text(E)
+    assert 'for tilt-sensitive analyses' not in txt
+    assert 'INCOHERENT' not in txt
 
 
 # --------------------------------------------------------------------------

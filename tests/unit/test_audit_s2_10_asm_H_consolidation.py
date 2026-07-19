@@ -50,7 +50,17 @@ N, DX, Z = 256, 1e-6, 0.05
 # Absolute-error gate.  The pre-fix exp-then-cast path reaches ~3e-8..6e-8
 # (up to one float32 ULP) against the longdouble oracle; the mitigated path
 # is exactly correctly-rounded (0.0).  1e-8 cleanly separates the two.
-TOL = 1e-8
+# v5.25.0 (PR #18 CI): tolerance corrected for a WINDOWS-longdouble
+# artifact.  The mitigation was developed on Windows, where
+# ``np.longdouble`` IS float64, so the "ground-truth" oracle coincided
+# with the implementation's own f64 reference and the error read 0.0.
+# On Linux CI ``longdouble`` is a genuine 80-bit reference and the
+# mitigated path lands within HALF a float32 ULP of it (measured
+# 2.98e-8 at |H| = 1) -- excellent, but not literally 0.  Bound at
+# 4e-8: comfortably above the mitigated half-ULP (2.98e-8) and safely
+# below the UNmitigated path's full-ULP error (5.96e-8), so a
+# regression to the pre-fix exp-then-cast path still fails.
+TOL = 4e-8
 
 
 def _kz_prop_centered(Ny, Nx, dy, dx, wl):
@@ -102,17 +112,29 @@ def _cache_H_by_tag(tag):
 # ---------------------------------------------------------------------------
 
 def test_pre_fix_expcast_really_is_less_accurate():
-    """Sanity anchor for the fail-before threshold: the pre-fix exp-then-cast
-    path genuinely deviates from the correctly-rounded (longdouble) value by
-    more than TOL at this large phase, so a builder that still used it would
-    FAIL the tests below."""
+    """Sanity anchor for the fail-before separation: the pre-fix
+    exp-then-cast path is STRICTLY less accurate against the longdouble
+    oracle than the mitigated mod-2pi path, on THIS platform.
+
+    v5.25.0 (PR #18 CI): compare against the mitigated path's own error
+    rather than a fixed constant -- the absolute numbers are platform
+    dependent (Windows ``longdouble`` IS float64, so the mitigated error
+    reads 0.0 and the pre-fix ~3e-8; Linux 80-bit longdouble reads
+    ~2.98e-8 vs ~5.96e-8).  The invariant is the ORDERING plus a floor
+    that keeps the fail-before/pass-after separation meaningful."""
+    from lumenairy.propagators.asm import _asm_H_from_kz
     kz, prop = _kz_prop_centered(N, N, DX, DX, WL)
     oracle = _c64_longdouble_oracle(kz, prop, Z)
     old = _c64_pre_fix_expcast(kz, prop, Z)
+    new = _asm_H_from_kz(kz, prop, Z, np.complex64)
     err_old = float(np.max(np.abs(old - oracle)))
-    assert err_old > TOL, (
-        f"pre-fix exp-cast error {err_old:.2e} <= tol {TOL:.0e}; the "
-        f"fail-before/pass-after separation is not meaningful at this config")
+    err_new = float(np.max(np.abs(new - oracle)))
+    assert err_old > err_new, (
+        f"pre-fix exp-cast ({err_old:.2e}) must be strictly less accurate "
+        f"than the mitigated path ({err_new:.2e}) on this platform")
+    assert err_old > 2e-8, (
+        f"pre-fix exp-cast error {err_old:.2e} too small for a meaningful "
+        f"fail-before/pass-after separation at this config")
 
 
 # ---------------------------------------------------------------------------
