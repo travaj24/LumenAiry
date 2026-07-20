@@ -958,6 +958,64 @@ def _displaced_eikonal_fn(conjugate, E_in, wavelength, dx, dy, Nx, Ny):
     return _carrier_eik
 
 
+def _displaced_carrier_dir_eik_fn(conjugate, E_in, wavelength, dx, dy, Nx, Ny):
+    """Return ``(dir_fn, eik_fn)`` for the P10 (niche N11) 2-D transverse-walk
+    remap: ``dir_fn(x0, y0) -> (gx, gy)`` the 2-D launch slopes (transverse
+    gradient of the carrier eikonal ``W``) and ``eik_fn(x0, y0) -> W_in`` the
+    entrance-plane carrier eikonal [m] (referenced into the ray OPL, cf. hammer
+    H6 -- omitting it collapses a diverging-input trace onto the collimated focal
+    plane).  The 2-D off-axis analogue of the meridional
+    :func:`_displaced_carrier_slope_fn` (dir) + :func:`_displaced_eikonal_fn`
+    (eik), built together so the ``'auto'``/ndarray carrier is fit only once.
+    Mirrors the ``conjugate`` vocabulary:
+
+    * ``None`` / ``+-inf`` -> collimated: ``(None, None)`` (axial launch, W=0);
+    * ``float`` signed conjugate ``s`` -> ``gx = x0/s, gy = y0/s`` and
+      ``W_in = (x0^2 + y0^2) / (2 s)`` (paraxial spherical carrier);
+    * ``'auto'`` / ndarray -> the carrier gradient + eikonal from
+      ``_compute_carrier``.
+    """
+    if conjugate is None:
+        return None, None
+    if isinstance(conjugate, (int, float)) and not isinstance(conjugate, bool):
+        s = float(conjugate)
+        if not np.isfinite(s):
+            return None, None
+        if s == 0.0:
+            raise ValueError(
+                "apply_real_lens: surface_model='displaced' conjugate distance "
+                "must be non-zero (0 is the source's own focus).")
+
+        def _dir(x0, y0):
+            return (np.asarray(x0, dtype=np.float64) / s,
+                    np.asarray(y0, dtype=np.float64) / s)
+
+        def _eik(x0, y0):
+            x0 = np.asarray(x0, dtype=np.float64)
+            y0 = np.asarray(y0, dtype=np.float64)
+            return (x0 * x0 + y0 * y0) / (2.0 * s)
+
+        return _dir, _eik
+
+    from ._lens_traced import _compute_carrier
+    xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Xg, Yg = np.meshgrid(xax, yax)
+    _, grad_fn, w_fn = _compute_carrier(conjugate, E_in, wavelength, dx, Xg, Yg)
+
+    def _dir(x0, y0):
+        L, M = grad_fn(np.asarray(x0, dtype=np.float64),
+                       np.asarray(y0, dtype=np.float64))
+        return np.asarray(L, dtype=np.float64), np.asarray(M, dtype=np.float64)
+
+    def _eik(x0, y0):
+        return np.asarray(w_fn(np.asarray(x0, dtype=np.float64),
+                               np.asarray(y0, dtype=np.float64)),
+                          dtype=np.float64)
+
+    return _dir, _eik
+
+
 def _build_displaced_ray_map(surfaces, thicknesses, wavelength, r_max,
                              n_fan=1025, carrier_slope=None, eikonal_fn=None):
     """Trace a meridional fan along the input congruence through the element and
@@ -1111,6 +1169,239 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl):
     E_out = np.where(r_out <= ho[-1], E_out, 0.0)
     out_dtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
     return E_out.astype(out_dtype)
+
+
+# ---------------------------------------------------------------------------
+# P10 (niche N11) -- 2-D transverse-walk remap for decentered / tilted /
+# freeform elements.
+#
+# The P3 pointwise obliquity SCREEN imprints the refraction OPD
+# ``(n2 cos_out - n1 cos_in) * sag(x-dx, y-dy)`` at the STRAIGHT-THROUGH grid
+# position, so it captures the coma flare DIRECTION (centroid + skewness) but
+# CANNOT represent the TRANSVERSE ray walk between a thick element's two surfaces
+# -- the induced-coma spot therefore NARROWED ~0.91x where the geometric-spot
+# oracle and ZOS both BROADEN ~1.02-1.03x (the plan N2 open finding).  N11
+# generalises the P2 rotationally-symmetric exit-plane remap
+# (:func:`_apply_displaced_remap`) to the full OFF-AXIS 2-D case: launch a 2-D
+# (non-meridional) congruence fan against the decentered/tilted/freeform surface,
+# build the exit ray map ``(x_out, y_out)(x_in, y_in)`` carrying the transverse
+# walk, and remap the input amplitude envelope to the exit pupil with the
+# energy-conserving 2-D Jacobian ``1/sqrt(|det d(x_out,y_out)/d(x_in,y_in)|)``
+# plus the exit-pupil-referenced eikonal OPD.  This restores the walk-off the
+# single-plane screen drops, so the analytic decentered spot BROADENS correctly.
+# Honest metric = the RMS second-moment radius + common-mode-subtracted coma RMS
+# (the decentered EE80 is diffraction-diluted, as P9 found for GBD): the on-axis
+# RMS ~21 um MATCHES the GBD reference, the RMS broadens ~1.02 @1 mm (grid-robust),
+# and the coma RMS matches the geom oracle within ~10% -- while the single-plane
+# screen SHRINKS.  It is the DEFAULT for asymmetric elements (auto obliquity)
+# and is also selectable via ``displaced_mode='remap'``; explicit
+# ``displaced_obliquity='pointwise'`` keeps the single-plane screen (the
+# documented walk-off-limited peer).  See docs/audit_real_lens_displaced_
+# 2026_07_19.md (P10 / N11).
+# ---------------------------------------------------------------------------
+
+def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
+                                n_side=181, dir_fn=None, eik_fn=None,
+                                r_fan_factor=1.03):
+    """Pointwise 2-D generalisation of :func:`_build_displaced_ray_map` (the P2
+    remap) for decentered / tilted / freeform elements (niche N11 / P10).
+
+    Launch a REGULAR square ray grid (side ``n_side``, spanning
+    ``+-r_fan_factor*r_max`` so the illuminated aperture disk has interior
+    neighbours for the finite-difference Jacobian) along the input congruence
+    ``dir_fn`` and trace it through the actual (possibly asymmetric) surfaces --
+    honouring per-surface decenter / tilt / freeform ``sag_callable`` via the
+    SHARED :func:`_disp_surface_z_grad` geometry (identical convention to the
+    pointwise screen, the traced / GBD ray models, and the lumenairy-free
+    ``geom_spot_decenter_oracle``).  Accumulates the total optical path
+    ``opl = eik_fn(x0, y0) + sum n_segment * path`` (entrance eikonal + per-
+    segment geometric path length, exactly as the 1-D remap does), so the exit
+    phase is ``k0 * opl``.
+
+    Returns ``(X0, Y0, XO, YO, OPL, ALIVE, dstep)`` -- the regular launch grid,
+    the scattered exit map, the OPL, the alive mask (all shape
+    ``(n_side, n_side)``) and the scalar launch step -- so the caller can take
+    the forward Jacobian ``det d(x_out,y_out)/d(x_in,y_in)`` by finite difference
+    on the regular launch grid.  Pure geometric trace; wave-model-independent.
+    """
+    r_fan = float(r_max) * float(r_fan_factor)
+    ax = np.linspace(-r_fan, r_fan, int(n_side))
+    dstep = float(ax[1] - ax[0])
+    LX, LY = np.meshgrid(ax, ax)
+    x0 = LX.ravel().astype(np.float64)
+    y0 = LY.ravel().astype(np.float64)
+    n = x0.size
+    idx = [(float(get_glass_index(s['glass_before'], wavelength)),
+            float(get_glass_index(s['glass_after'], wavelength)))
+           for s in surfaces]
+    if dir_fn is None:
+        gx = np.zeros(n)
+        gy = np.zeros(n)
+    else:
+        gx, gy = dir_fn(x0, y0)
+        gx = np.where(np.isfinite(gx), gx, 0.0).astype(np.float64).reshape(n)
+        gy = np.where(np.isfinite(gy), gy, 0.0).astype(np.float64).reshape(n)
+    nrm = np.sqrt(1.0 + gx * gx + gy * gy)
+    dxr = gx / nrm
+    dyr = gy / nrm
+    dzr = 1.0 / nrm
+    px = x0.copy()
+    py = y0.copy()
+    pz = np.zeros(n)
+    if eik_fn is None:
+        opl = np.zeros(n)
+    else:
+        opl = np.asarray(eik_fn(x0, y0), dtype=np.float64).reshape(n).copy()
+        opl = np.where(np.isfinite(opl), opl, 0.0)
+    alive = np.ones(n, dtype=bool)
+    z_v = 0.0
+    n_surf = len(surfaces)
+    for i, s in enumerate(surfaces):
+        n1, n2 = idx[i]
+        R = s['radius']
+        flat = ((R == 0) or (not np.isfinite(R))) and (
+            s.get('sag_callable') is None
+            and (s.get('tilt') or (0.0, 0.0)) == (0.0, 0.0))
+        with np.errstate(divide='ignore', invalid='ignore'):
+            t = (z_v - pz) / dzr
+        if flat:
+            px = px + t * dxr
+            py = py + t * dyr
+            pz = pz + t * dzr
+            nxc = np.zeros(n)
+            nyc = np.zeros(n)
+            nzc = np.ones(n)
+        else:
+            for _ in range(24):
+                xq = px + t * dxr
+                yq = py + t * dyr
+                f, dfdx, dfdy = _disp_surface_z_grad(s, xq, yq)
+                f = np.where(np.isnan(f), 0.0, f)
+                dfdx = np.where(np.isnan(dfdx), 0.0, dfdx)
+                dfdy = np.where(np.isnan(dfdy), 0.0, dfdy)
+                g = pz + t * dzr - z_v - f
+                dgdt = dzr - (dfdx * dxr + dfdy * dyr)
+                dgdt = np.where(np.abs(dgdt) < 1e-30, 1e-30, dgdt)
+                t = t - g / dgdt
+            px = px + t * dxr
+            py = py + t * dyr
+            pz = pz + t * dzr
+            f, dfdx, dfdy = _disp_surface_z_grad(s, px, py)
+            nzc = np.ones(n)
+            nxc = -dfdx
+            nyc = -dfdy
+            nn = np.sqrt(nxc * nxc + nyc * nyc + nzc * nzc)
+            nxc = nxc / nn
+            nyc = nyc / nn
+            nzc = nzc / nn
+            alive = alive & np.isfinite(f)
+        # OPL segment: the unit-direction parametric step ``t`` is the geometric
+        # path length in the medium BEFORE this surface (n1).
+        opl = opl + n1 * t
+        cos_i = dxr * nxc + dyr * nyc + dzr * nzc
+        eta = n1 / n2
+        sin2t = eta * eta * (1.0 - cos_i * cos_i)
+        alive = (alive & np.isfinite(px) & np.isfinite(py)
+                 & np.isfinite(cos_i) & (sin2t <= 1.0))
+        cos_t = np.sqrt(np.maximum(1.0 - sin2t, 0.0))
+        ndx = eta * dxr + (cos_t - eta * cos_i) * nxc
+        ndy = eta * dyr + (cos_t - eta * cos_i) * nyc
+        ndz = eta * dzr + (cos_t - eta * cos_i) * nzc
+        nn2 = np.sqrt(ndx * ndx + ndy * ndy + ndz * ndz)
+        nn2 = np.where(nn2 == 0.0, 1.0, nn2)
+        dxr = ndx / nn2
+        dyr = ndy / nn2
+        dzr = ndz / nn2
+        if i < n_surf - 1:
+            z_v += thicknesses[i]
+    z_exit = float(sum(thicknesses))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        t_f = (z_exit - pz) / dzr
+    opl = opl + 1.0 * t_f                       # exit gap is air (n = 1)
+    x_out = px + t_f * dxr
+    y_out = py + t_f * dyr
+    alive = alive & np.isfinite(x_out) & np.isfinite(y_out) & np.isfinite(opl)
+    shp = (int(n_side), int(n_side))
+    # ``r_ap`` = the true aperture radius: the fan was launched 3% wider so the
+    # aperture-edge rays have interior Jacobian neighbours, but rays whose
+    # ENTRANCE height exceeds r_ap are outside the pupil and must not contribute
+    # amplitude (the exit-plane remap bypasses the per-surface stop mask, so the
+    # aperture is enforced here on the entrance footprint -- mirroring the 1-D
+    # remap fan, which stops exactly at r_max).
+    return (x0.reshape(shp), y0.reshape(shp), x_out.reshape(shp),
+            y_out.reshape(shp), opl.reshape(shp), alive.reshape(shp), dstep,
+            float(r_max))
+
+
+def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy):
+    """P10 / niche N11 -- energy-conserving 2-D transverse-walk remap for a
+    decentered / tilted / freeform element.
+
+    Generalises the P2 rotationally-symmetric exit-plane remap
+    (:func:`_apply_displaced_remap`) to the full OFF-AXIS 2-D case: the element
+    becomes a geometric transfer ``(x_in, y_in) -> (x_out, y_out)`` carrying the
+    TRANSVERSE ray walk between the thick element's surfaces (the walk-off the
+    single-plane pointwise screen drops, which made the induced-coma spot narrow
+    where it must broaden).  The input amplitude envelope ``|E_in|`` sampled at
+    each launched ray's ENTRANCE position is transported to its EXIT position
+    with the energy-conserving 2-D Jacobian factor
+    ``1/sqrt(|det d(x_out,y_out)/d(x_in,y_in)|)`` (so
+    ``|E_out|^2 dA_out = |E_in|^2 dA_in``), and the exit phase is the ray eikonal
+    ``k0 * OPL`` (which carries the entrance-plane carrier eikonal).  Amplitude
+    and OPL are interpolated SEPARATELY from the scattered exit points onto the
+    field grid (phase-safe: the eikonal is smooth even where the amplitude is
+    warped), then combined.  Returns the exit-vertex-plane field (same reference
+    plane as the default screen path)."""
+    from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
+    from scipy.ndimage import map_coordinates
+    X0, Y0, XO, YO, OPL, ALIVE, dstep, r_ap = ray_map_2d
+    Ny, Nx = E_in.shape
+    k0 = 2.0 * np.pi / wavelength
+    # Input amplitude envelope at each ray's entrance position (bilinear).
+    cx = X0.ravel() / dx + Nx / 2.0
+    cy = Y0.ravel() / dy + Ny / 2.0
+    amp_in = map_coordinates(np.abs(E_in), [cy, cx], order=1,
+                             mode='constant', cval=0.0).reshape(X0.shape)
+    # Forward Jacobian det d(x_out,y_out)/d(x_in,y_in) on the regular launch grid
+    # (physical spacing).  Fill any dead-ray (TIR / miss) exit position by
+    # nearest-alive FIRST so a dead ray does not poison a live neighbour's
+    # central-difference derivative.
+    XOf = XO.copy()
+    YOf = YO.copy()
+    dead = ~ALIVE
+    if bool(dead.any()) and bool(ALIVE.any()):
+        pa = np.column_stack([X0[ALIVE], Y0[ALIVE]])
+        XOf[dead] = NearestNDInterpolator(pa, XO[ALIVE])(X0[dead], Y0[dead])
+        YOf[dead] = NearestNDInterpolator(pa, YO[ALIVE])(X0[dead], Y0[dead])
+    dXO_dy, dXO_dx = np.gradient(XOf, dstep, dstep)   # axis0=y_in, axis1=x_in
+    dYO_dy, dYO_dx = np.gradient(YOf, dstep, dstep)
+    det = dXO_dx * dYO_dy - dXO_dy * dYO_dx
+    jac_amp = 1.0 / np.sqrt(np.maximum(np.abs(det), 1e-30))
+    amp_out = amp_in * jac_amp
+    # Enforce the aperture on the ENTRANCE footprint: the 3%-wider fan only
+    # supplies Jacobian neighbours; rays launched outside r_ap carry no pupil
+    # amplitude (else a ``stop_index`` prescription -- whose field is not
+    # pre-apertured -- would leak the beyond-aperture ring).
+    in_ap = (X0 * X0 + Y0 * Y0) <= (r_ap * (1.0 + 1e-9)) ** 2
+    m = ALIVE & in_ap & np.isfinite(amp_out) & (amp_in > 0.0)
+    if int(m.sum()) < 4:
+        return np.zeros_like(E_in, dtype=np.complex128)
+    pts = np.column_stack([XO[m].ravel(), YO[m].ravel()])
+    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Xg, Yg = np.meshgrid(x, y)
+    amp_grid = LinearNDInterpolator(pts, amp_out[m].ravel(),
+                                    fill_value=0.0)(Xg, Yg)
+    opl_grid = LinearNDInterpolator(pts, OPL[m].ravel())(Xg, Yg)
+    nan = np.isnan(opl_grid)
+    if bool(nan.any()):
+        opl_grid[nan] = NearestNDInterpolator(pts, OPL[m].ravel())(
+            Xg[nan], Yg[nan])
+        amp_grid[nan] = 0.0
+    opl_ref = float(np.median(OPL[m]))
+    E_out = amp_grid * np.exp(1j * k0 * (opl_grid - opl_ref))
+    out_dtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
+    return np.asarray(E_out, dtype=out_dtype)
 
 
 def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
@@ -1371,14 +1662,20 @@ def _check_displaced_support(*, surface_model, slant_correction, fresnel,
     # conic / aspheric refracting surfaces; the pointwise 2-D path (P3 / N2)
     # additionally supports per-surface decenter / tilt / freeform sag_callable.
     _pointwise = (_obliq == 'pointwise')
-    if _pointwise and displaced_mode != 'screen':
-        raise ValueError(
-            f"apply_real_lens: displaced_mode={displaced_mode!r} "
-            f"(remap/split) is a rotationally-symmetric extreme-conjugate "
-            f"sub-model and is incompatible with the pointwise 2-D obliquity "
-            f"path (auto-selected for decentered / tilted / freeform "
-            f"elements).  Use displaced_mode='screen'.")
     surfaces = prescription.get('surfaces') or []
+    _asym = _element_is_asymmetric(surfaces)
+    # P10 (N11): decentered / tilted / freeform elements get the 2-D
+    # transverse-walk remap -- the DEFAULT (auto obliquity) and also selectable
+    # via displaced_mode='remap'.  ``'split'`` (candidate b) has no 2-D
+    # generalisation, so it is rejected for an asymmetric element.
+    if _asym and displaced_mode == 'split':
+        raise ValueError(
+            "apply_real_lens: displaced_mode='split' is a rotationally-"
+            "symmetric extreme-conjugate sub-model with no 2-D transverse-walk "
+            "generalisation; it is incompatible with a decentered / tilted / "
+            "freeform element.  Use displaced_mode='remap' (the 2-D walk-off "
+            "remap), 'screen' (the pointwise obliquity screen), or "
+            "apply_real_lens_traced / apply_real_lens_gbd.")
     for i, s in enumerate(surfaces):
         if not isinstance(s, dict):
             continue
@@ -1719,8 +2016,9 @@ def apply_real_lens(
         and 64.8 um at dx<=3 um), not a model floor.  The default meridional
         obliquity path supports rotationally-symmetric plain conic / aspheric
         surfaces; per-surface decenter / tilt / freeform (``sag_callable``) are
-        supported via the pointwise 2-D obliquity path (see
-        ``displaced_obliquity``).  Biconic ``radius_y`` / analytic
+        supported via the 2-D transverse-walk remap (P10 / N11, the DEFAULT for
+        such elements) or the pointwise 2-D obliquity screen (see
+        ``displaced_obliquity`` / ``displaced_mode``).  Biconic ``radius_y`` / analytic
         ``freeform_type`` / ``form_error`` / mirror / GPU / non-ASM / fresnel /
         slant / seidel / absorption still raise; use ``apply_real_lens_traced``
         outside that envelope.
@@ -1757,44 +2055,58 @@ def apply_real_lens(
         ``ValueError`` is raised).
 
         * ``'screen'`` (default) -- the per-surface obliquity screen + in-glass
-          ASM (the G1/G2 displaced model).  BYTE-IDENTICAL to prior releases.
-        * ``'remap'`` -- candidate (a): the element becomes a geometric transfer
-          ``h_in -> h_out`` (the traced ray map) with an energy-conserving
+          ASM (the G1/G2 displaced model).  BYTE-IDENTICAL to prior releases for
+          a SYMMETRIC element.  For a decentered / tilted / freeform element the
+          default routes to the 2-D transverse-walk remap (see below /
+          ``displaced_obliquity``).
+        * ``'remap'`` -- the exit-plane geometric-transfer remap: the element
+          becomes a coordinate map (the traced ray map) with an energy-conserving
           amplitude Jacobian plus the exit-pupil-referenced eikonal OPD, so the
-          transverse ray walk THROUGH the element is captured explicitly.
-        * ``'split'`` -- candidate (b): entrance/exit obliquity screens with the
-          internal gap propagated as the REDUCED distance ``t / n`` in air.
+          transverse ray walk THROUGH the element is captured explicitly.  P2
+          (N1) rotationally-symmetric 1-D form for symmetric elements; P10 (N11)
+          full 2-D form for decentered / tilted / freeform elements (which the
+          DEFAULT ``'screen'`` also selects for such elements).
+        * ``'split'`` -- entrance/exit obliquity screens with the internal gap
+          propagated as the REDUCED distance ``t / n`` in air (P2 candidate b);
+          rotationally-symmetric only -- rejected for an asymmetric element.
 
         **Measured (P2, congruence-fixed diffraction oracle
-        ``validation/oracles/debye_oracle_v3.py`` + ZOS POP):** against the
-        DIFFRACTION-FAITHFUL oracle the DEFAULT ``'screen'`` is already within
-        ~4-8% on every extreme case (M5 negative-lens real focus 0.96x, virtual
-        image 1.00x, M1 doublet 0.92x, M6 singlet 0.98x); ``'remap'`` and
-        ``'split'`` MATCH it to within a few percent.  The prior "~0.50x floor"
-        was an artefact of comparing to the GEOMETRIC ray-density spot (which
-        over-estimates the true wave spot ~2x near the reconvergence caustic)
-        compounded by grid truncation -- NOT a walk-off model floor.  Keep the
-        default ``'screen'`` (accurate + fastest); ``'remap'`` / ``'split'`` are
-        exposed as documented experimental peers.  See
-        ``docs/audit_real_lens_displaced_2026_07_19.md`` (P2 section) for the
-        full measured table + routing story.
+        ``validation/oracles/debye_oracle_v3.py`` + ZOS POP):** for the extreme
+        CONJUGATE (symmetric) cases the DEFAULT ``'screen'`` is already within
+        ~4-8% of the diffraction-faithful oracle (M5 real 0.96x, virtual 1.00x,
+        M1 doublet 0.92x, M6 0.98x) and ``'remap'`` / ``'split'`` match it to a
+        few percent (the prior "~0.50x floor" was a geometric-spot artefact, not
+        a model floor).  **For a DECENTERED element (P10 / N11)** the 2-D
+        ``'remap'`` restores the transverse walk-off the single-plane screen
+        drops, so the induced-coma spot BROADENS correctly instead of narrowing:
+        measured by the RMS second-moment radius + common-mode coma RMS (the
+        honest metric -- the EE80 is diffraction-diluted, as for GBD), the on-axis
+        RMS ~21 um matches the GBD reference, the RMS broadens ~1.02 @1 mm
+        (grid-robust, sign-mirror exact), and the coma RMS matches the geom oracle
+        within ~10% -- where the single-plane screen SHRINKS (RMS 0.956).  It is
+        the DEFAULT for asymmetric elements.  See
+        ``docs/audit_real_lens_displaced_2026_07_19.md`` (P2 + P10 sections) for
+        the full measured tables + routing story.
     displaced_obliquity : {'auto', 'meridional', 'pointwise'}, default 'auto'
         P3 (niche N2) selector for the ``surface_model='displaced'`` obliquity
         path.  Only meaningful when ``surface_model='displaced'`` (else it must
         be ``'auto'`` or a ``ValueError`` is raised).
 
         * ``'auto'`` (default) -- the fast MERIDIONAL cosine LUT for
-          rotationally-symmetric elements (byte-identical to prior releases),
-          switching to POINTWISE only when a surface carries a non-zero
-          ``decenter`` / ``tilt`` or a ``sag_callable`` freeform hook.
+          rotationally-symmetric elements (byte-identical to prior releases); for
+          a decentered / tilted / freeform element it routes to the 2-D
+          TRANSVERSE-WALK REMAP (P10 / N11), which carries the walk-off the
+          single-plane screen drops so the induced-coma spot broadens correctly.
         * ``'meridional'`` -- force the 1-D radial LUT (raises on an asymmetric
           element it cannot represent).
-        * ``'pointwise'`` -- force the 2-D obliquity path: a 2-D ray grid
+        * ``'pointwise'`` -- force the 2-D obliquity SCREEN: a 2-D ray grid
           launched along the input congruence is traced through the actual
           (possibly decentered / tilted / freeform) surfaces and its per-surface
-          z-axis cosines are imprinted on the field grid.  On a symmetric
-          element it reproduces the meridional LUT to <0.1% (the convention-bug
-          killer).
+          z-axis cosines are imprinted on the field grid.  On a symmetric element
+          it reproduces the meridional LUT to <0.1% (the convention-bug killer).
+          This is a single-plane phase SCREEN -- it captures the coma DIRECTION
+          but NOT the walk-off spot growth (see the note below); it is retained
+          as a documented peer, and the DEFAULT ('auto') routes to the remap.
 
         Per-surface asymmetry is set in the surface dict: ``decenter=(dx, dy)``
         [m] evaluates the sag at ``(x-dx, y-dy)``; ``tilt=(tx, ty)`` [rad] adds
@@ -1802,21 +2114,21 @@ def apply_real_lens(
         correspondingly tilted normal (the deflection magnitude matches an
         independent rigid-rotation ray trace to <0.5%; opposite sign is the
         differing 'positive tilt' definition); ``sag_callable(xs, ys) -> sag``
-        [m] supplies a freeform surface departure (used in BOTH the ray trace
-        and the OPD imprint).  Validated (P3): decenter centroid shift within
-        ~2.5% of ZOS (0.1% of an independent geometric spot oracle), tilt within
-        0.3%, the coma flare DIRECTION (skewness sign), and +d/-d PSF mirror all
-        exact.  KNOWN MODEL LIMIT (open finding, plan N2 gate (b) EE criterion):
-        the pointwise path imprints the OPD at the straight-through grid position
-        and CANNOT represent the transverse ray walk between a thick element's
-        surfaces, so it does NOT reproduce the coma-induced EE GROWTH -- the
-        decentered EE80 shrinks ~0.91x where both an independent geometric spot
-        oracle (~1.02x) and ZOS POP (~1.03x) broaden, and the absolute decentered
-        coma-spot EE runs ~19% below ZOS.  This is the same single-plane
-        phase-screen walk-off ceiling as finding H2; traced/gbd do not take
-        decenter, so for absolute decentered-spot EE fidelity ZOS is the
-        reference.  See ``docs/audit_real_lens_displaced_2026_07_19.md``
-        (P3 section, "OPEN FINDING").
+        [m] supplies a freeform surface departure (used in BOTH the ray trace and
+        the OPD imprint).  Validated (P3): decenter centroid shift within ~2.5% of
+        ZOS, tilt within 0.3%, the coma flare DIRECTION (skewness sign), and
+        +d/-d PSF mirror all exact.  COMA SPOT GROWTH (P10 / N11): the DEFAULT
+        2-D remap BROADENS the decentered spot with the correct MAGNITUDE -- by the
+        RMS + common-mode coma-RMS metric (the honest gate; the EE80 is
+        diffraction-diluted, as for GBD) the coma RMS matches the geometric oracle
+        within ~10% (RMS ratio ~1.02 @1 mm, on-axis RMS 21 um = the GBD reference,
+        grid-robust) -- this closes the P3 open finding.  The single-plane
+        ``'pointwise'`` SCREEN, by contrast, imprints the OPD at the
+        straight-through position and CANNOT represent the transverse ray walk, so
+        it NARROWS (RMS 0.956) where truth broadens -- it is
+        the documented walk-off-limited peer.  See
+        ``docs/audit_real_lens_displaced_2026_07_19.md`` (P3 screen limit + P10
+        remap fix).
 
     Returns
     -------
@@ -1996,16 +2308,30 @@ def apply_real_lens(
     # Bounded by the clear aperture (or the widest per-surface semi-diameter,
     # or the grid half-width), so the fan spans the illuminated pupil.
     _displaced = (surface_model == 'displaced')
-    _remap_mode = _displaced and displaced_mode == 'remap'
+    # P10 (N11): decentered / tilted / freeform (asymmetric) elements route to
+    # the 2-D transverse-walk remap -- the DEFAULT (auto obliquity) and also
+    # selectable via displaced_mode='remap'; an explicit
+    # displaced_obliquity='pointwise' keeps the P3 single-plane obliquity SCREEN
+    # (the documented walk-off-limited peer).
+    _disp_asym = _displaced and _element_is_asymmetric(surfaces)
+    _disp_2d_remap = _disp_asym and (
+        displaced_mode == 'remap'
+        or (displaced_mode == 'screen' and displaced_obliquity == 'auto'))
+    _remap_mode = (_displaced and displaced_mode == 'remap'
+                   and not _disp_asym)             # 1-D symmetric remap (P2)
     _split_mode = _displaced and displaced_mode == 'split'
     _disp_luts = None
     _disp_ray_map = None
+    _disp_ray_map_2d = None
     _disp_cos_grid = None
     _disp_pointwise = False
     if _displaced:
+        # The pointwise obliquity SCREEN fires only for an EXPLICIT
+        # displaced_obliquity='pointwise' (or the symmetric convention gate); the
+        # asymmetric DEFAULT ('auto') routes to the 2-D remap below instead.
         _disp_pointwise = (
-            _resolve_displaced_obliquity(displaced_obliquity, surfaces)
-            == 'pointwise')
+            (_resolve_displaced_obliquity(displaced_obliquity, surfaces)
+             == 'pointwise') and not _disp_2d_remap)
         _r_max = None
         if aperture is not None:
             _r_max = float(aperture) / 2.0
@@ -2020,12 +2346,24 @@ def apply_real_lens(
         # reflect the true converging/diverging incidence.
         _disp_slope = _displaced_carrier_slope_fn(
             conjugate, E_in, wavelength, dx, dy, Nx, Ny)
-        if _disp_pointwise:
-            # P3 (N2): 2-D pointwise obliquity for decenter / tilt / freeform.
-            # Trace a 2-D ray grid along the input congruence and imprint the
-            # per-surface z-axis cosines on the field grid.  remap/split are the
-            # rotationally-symmetric extreme-conjugate sub-models and do not
-            # apply here.
+        if _disp_2d_remap:
+            # P10 (N11): 2-D transverse-walk remap for the asymmetric element.
+            # Launch a full 2-D congruence fan against the decentered / tilted /
+            # freeform surfaces and build the entrance->exit ray map + OPL; the
+            # energy-conserving 2-D-Jacobian amplitude warp (applied after the
+            # entrance aperture) restores the coma-broadening walk-off the
+            # single-plane screen drops.
+            _dir2, _eik2 = _displaced_carrier_dir_eik_fn(
+                conjugate, E_in, wavelength, dx, dy, Nx, Ny)
+            _disp_ray_map_2d = _build_displaced_ray_map_2d(
+                surfaces, thicknesses, wavelength, _r_max,
+                dir_fn=_dir2, eik_fn=_eik2)
+        elif _disp_pointwise:
+            # P3 (N2): 2-D pointwise obliquity SCREEN for decenter / tilt /
+            # freeform (explicit displaced_obliquity='pointwise', or the
+            # symmetric convention gate).  Trace a 2-D ray grid along the input
+            # congruence and imprint the per-surface z-axis cosines on the field
+            # grid.
             _disp_dir = _displaced_carrier_dir_fn(
                 conjugate, E_in, wavelength, dx, dy, Nx, Ny)
             _disp_cos_grid = _build_displaced_cos_grid(
@@ -2130,6 +2468,19 @@ def apply_real_lens(
         _h_in_map, _h_out_map, _opl_map = _disp_ray_map
         E = _apply_displaced_remap(
             E, _h_in_map, _h_out_map, wavelength, dx, dy, _opl_map)
+        call_progress(progress, 'apply_real_lens', 1.0, 'done')
+        return E
+
+    # P10 (N11): 2-D transverse-walk remap for a decentered / tilted / freeform
+    # element.  Same early-return structure as the 1-D remap -- warp the
+    # (apertured) input envelope through the full 2-D exit ray map with the
+    # energy-conserving 2-D Jacobian + exit-pupil-referenced eikonal OPD, then
+    # return the exit-vertex-plane field.  This carries the transverse ray walk
+    # the single-plane pointwise screen drops, so the induced-coma spot broadens
+    # correctly.
+    if _disp_2d_remap:
+        E = _apply_displaced_remap_2d(
+            E, _disp_ray_map_2d, wavelength, dx, dy)
         call_progress(progress, 'apply_real_lens', 1.0, 'done')
         return E
 

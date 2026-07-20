@@ -544,6 +544,25 @@ def surfaces_from_prescription(
             is_mirror_flag = True
             glass_after = glass_before
 
+        # N10a (2026-07-20): per-surface FIELD-FRAME decenter / tilt / freeform
+        # sag_callable (the ``apply_real_lens`` displaced-pointwise / P3
+        # convention -- sag(x-dx, y-dy) + small-angle tilt ramp + tilted
+        # normal).  These carry the transverse ray walk-off (true induced coma)
+        # into the ray-based models (``apply_real_lens_traced`` /
+        # ``apply_real_lens_gbd``) via the shared ``_surface_sag_xy`` /
+        # ``_surface_normal`` helpers.  Absent / (0, 0) -> byte-identical to the
+        # pre-N10a Surface (the zero-decenter regression pin).  Distinct from
+        # the rigid-body coordinate-break fields (``decenter_x_m`` /
+        # ``tilt_x_deg``), which are threaded from ``prescription['coord_breaks']``.
+        _field_dec = ps.get('decenter')
+        _field_tilt = ps.get('tilt')
+        _field_sag_cb = ps.get('sag_callable')
+        if _field_sag_cb is not None and not callable(_field_sag_cb):
+            raise ValueError(
+                f"surfaces_from_prescription: surfaces[{i}].sag_callable must "
+                f"be callable (xs, ys) -> sag [m], got "
+                f"{type(_field_sag_cb).__name__}.")
+
         surface_list.append(Surface(
             radius=ps['radius'],
             conic=ps.get('conic', 0.0),
@@ -565,6 +584,10 @@ def surfaces_from_prescription(
             # Reflective-coating material for a mirror (complex-index metal ->
             # Fresnel r_s / r_p with diattenuation + retardance).
             coating=ps.get('coating'),
+            # Field-frame decenter / tilt / freeform (N10a).
+            field_decenter=_field_dec,
+            field_tilt=_field_tilt,
+            field_sag_callable=_field_sag_cb,
         ))
 
     if include_coord_breaks:

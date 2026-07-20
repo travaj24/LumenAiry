@@ -147,6 +147,39 @@ logger = get_logger(__name__)
 from ._lens_real import apply_real_lens
 
 
+def _prescription_has_field_frame(prescription) -> bool:
+    """True when any surface carries a P3-style FIELD-FRAME decenter / tilt /
+    freeform ``sag_callable`` (the ``apply_real_lens`` displaced-pointwise
+    convention).  For such elements the ray trace (``trace`` ->
+    ``_intersect_surface`` / ``_refract`` via the shared field-frame
+    ``_surface_sag_xy``) carries the transverse ray WALK-OFF -- the true induced
+    coma -- into the geometry and OPL, so the traced centroid / sign-mirror /
+    tilt are oracle-matched.
+
+    Detection helper only (used by the tests and available for dispatcher
+    routing).  It does NOT gate any amplitude change: the P9 field-frame
+    amplitude override was REMOVED (2026-07-20) after the adversarial verifier
+    proved it was a model-mixing artefact.  The traced hybrid's grid-indexed
+    amplitude leg cannot carry the decentered walk-off (an asymmetric ray-
+    density redistribution), so its decentered-spot EE is amplitude-limited -- a
+    genuine model limit of the P3 single-plane class.  Route decentered-coma EE
+    to ``apply_real_lens_gbd`` (N10b), whose beamlets carry the walk-off
+    amplitude and BROADEN matching ZOS (1.035 @1.31um) + the geom-spot oracle.
+    See docs/audit_real_lens_displaced_2026_07_19.md (P9 / N10a)."""
+    for s in (prescription.get('surfaces') or []):
+        if not isinstance(s, dict):
+            continue
+        if s.get('sag_callable') is not None:
+            return True
+        dec = s.get('decenter') or (0.0, 0.0)
+        if float(dec[0]) != 0.0 or float(dec[1]) != 0.0:
+            return True
+        tl = s.get('tilt') or (0.0, 0.0)
+        if float(tl[0]) != 0.0 or float(tl[1]) != 0.0:
+            return True
+    return False
+
+
 def _newton_invert_chunk(args):
     """Module-level worker for ``apply_real_lens_traced`` Newton inversion.
 
@@ -2198,6 +2231,35 @@ def apply_real_lens_traced(
         amp = cp.asnumpy(amp)
     if phase_analytic_lens is not None and _is_cupy_array(phase_analytic_lens):
         phase_analytic_lens = cp.asnumpy(phase_analytic_lens)
+
+    # ---- N10a: NO field-frame amplitude override (removed 2026-07-20) -----
+    # The P9 build swapped the amplitude leg to the bare input envelope
+    # (``E_out = E_in * exp(i k0 opl)``) for field-frame (decenter/tilt)
+    # prescriptions, on the theory that coma is a pure exit-pupil PHASE
+    # aberration.  The adversarial verifier REFUTED this: forcing the input-
+    # envelope amplitude on CENTERED geometry (a 1e-7 decenter, or an exact-
+    # conic ``sag_callable``) already widened the on-axis EE80 by ~8% with ZERO
+    # decenter (grid-robust), so the reported "1.097 broadening / within 1.6% of
+    # ZOS" was an amplitude-MODEL artefact (decentered override-amp compared to
+    # centered analytic-amp), not induced coma.  Held to ONE amplitude model the
+    # traced EE80 under decenter is unstable and wavelength/plane-dependent
+    # (|E_analytic|: 0.88x @1.31 / 1.09x @0.633 at the paraxial image; |E_in|:
+    # 0.99x @1.31 / 0.95x @0.633) -- because the traced hybrid's GRID-INDEXED
+    # amplitude cannot carry the transverse walk-off (the coma flare is an
+    # asymmetric ray-DENSITY redistribution the Newton-inverted OPL alone does
+    # not put into |E|), and the singlet's paraxial plane is strongly defocused.
+    # This is a genuine traced-model limit of the same class as the P3 single-
+    # plane analytic limit.  The decenter GEOMETRY + OPL the traced model now
+    # carries are correct (centroid / sign-mirror / tilt all oracle-matched),
+    # but its decentered-spot EE is amplitude-limited, so the amplitude leg is
+    # left as the standard self-consistent reconstruction here (no swap).  The
+    # accurate decentered-coma EE reference is ``apply_real_lens_gbd`` (N10b):
+    # its beamlets carry the walk-off amplitude, so it BROADENS matching ZOS
+    # (ratio 1.035 @1.31um) and the geom-spot oracle (~1% on the ratio).  See
+    # docs/audit_real_lens_displaced_2026_07_19.md (P9 / N10a) for the full
+    # envelope + the routing to GBD.  ``_prescription_has_field_frame`` is kept
+    # as the field-frame detector (used by the tests and available for routing).
+
     call_progress(progress, 'real_lens_traced', 0.40,
                   'ray-tracing exit pupil')
 

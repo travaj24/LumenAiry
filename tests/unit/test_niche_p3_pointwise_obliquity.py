@@ -151,16 +151,22 @@ def test_default_is_meridional_byte_identical_on_symmetric():
     assert np.array_equal(np.asarray(a), np.asarray(b))
 
 
-def test_auto_routes_decentered_to_pointwise():
-    """A decentered element under ``'auto'`` is byte-identical to explicit
-    ``'pointwise'`` (auto-detection of the asymmetry)."""
+def test_auto_routes_decentered_to_remap():
+    """A decentered element under the default ``displaced_obliquity='auto'`` now
+    routes to the 2-D transverse-walk REMAP (P10 / N11), NOT the pointwise
+    obliquity SCREEN: the default is byte-identical to explicit
+    ``displaced_mode='remap'`` and DIFFERS from the ``'pointwise'`` screen (which
+    is retained as the documented walk-off-limited peer)."""
     N, dx = 384, 10e-6
     p = _singlet(dec=(0.4e-3, 0.0))
     E0 = _gauss(N, dx, 3e-3)
     a = la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx,
-                           surface_model='displaced')
-    b = _disp(E0, p, dx, obliq='pointwise')
-    assert np.array_equal(np.asarray(a), np.asarray(b))
+                           surface_model='displaced')            # default 'auto'
+    b = la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx,
+                           surface_model='displaced', displaced_mode='remap')
+    assert np.array_equal(np.asarray(a), np.asarray(b))          # auto == remap
+    c = _disp(E0, p, dx, obliq='pointwise')                      # the screen peer
+    assert not np.array_equal(np.asarray(a), np.asarray(c))      # remap != screen
 
 
 # ===========================================================================
@@ -179,10 +185,11 @@ def test_validation_errors():
     with pytest.raises(ValueError, match='displaced_obliquity='):
         la.apply_real_lens(E0, prescription=_singlet(), wavelength=_WL, dx=dx,
                            displaced_obliquity='pointwise')
-    # remap/split are rotationally-symmetric sub-models -> incompatible pointwise
-    with pytest.raises(ValueError, match='pointwise'):
-        _disp(E0, _singlet(dec=(0.4e-3, 0.0)), dx, obliq='pointwise',
-              displaced_mode='remap')
+    # displaced_mode='remap' + decenter is now VALID (the P10 2-D walk-off
+    # remap); only 'split' has no 2-D generalisation and still raises.
+    _disp(E0, _singlet(dec=(0.4e-3, 0.0)), dx, displaced_mode='remap')
+    with pytest.raises(ValueError, match='split'):
+        _disp(E0, _singlet(dec=(0.4e-3, 0.0)), dx, displaced_mode='split')
     # sag_callable must be callable
     p = _singlet()
     p['surfaces'][0]['sag_callable'] = 3.0
@@ -198,10 +205,12 @@ def test_validation_errors():
 # (b) DECENTER -- centroid shift vs the independent geometric oracle
 # ===========================================================================
 def test_decenter_centroid_matches_geometric_oracle():
-    """A 0.5 mm front-surface decenter shifts the PSF centroid; the shift
-    matches the lumenairy-free geometric spot oracle within 5% (measured ~0.1%),
-    and the on-axis case is centered.  Full-aperture grid (half-width 5.12 mm >=
-    the 5 mm aperture)."""
+    """A 0.5 mm front-surface decenter shifts the PSF centroid; the shift matches
+    the lumenairy-free geometric spot oracle within 5%, and the on-axis case is
+    centered.  (The default decentered path is now the P10 2-D remap: its
+    coma-weighted wave-intensity centroid is ~2.7% vs the geom ray-density
+    oracle; the pointwise screen alone is ~0.1%.)  Full-aperture grid (half-width
+    5.12 mm >= the 5 mm aperture)."""
     N, dx = 1280, 8e-6
     E0 = _gauss(N, dx, 3e-3)
     # on-axis is centered
@@ -233,37 +242,47 @@ def test_decenter_induces_signed_coma_flare():
 
 
 @pytest.mark.slow
-def test_coma_ee_growth_is_a_documented_model_limit():
-    """OPEN FINDING (plan N2 gate (b), EE-radii criterion NOT met) -- PINNED.
+def test_coma_ee_growth_screen_limit_pinned_remap_fixes_it():
+    """The single-plane pointwise SCREEN's documented walk-off limit -- PINNED --
+    AND the P10 default remap that FIXES it.
 
-    The single-plane displaced screen imprints the obliquity OPD at the
-    STRAIGHT-THROUGH grid position and cannot represent the transverse ray WALK
-    between a thick element's two surfaces, so it captures the coma flare
-    DIRECTION (centroid + skewness, validated above) but NOT the coma spot
-    GROWTH -- the same H2 walk-off ceiling.  At the coma-dominated w0=4mm /
-    1mm-decenter config the model EE80 SHRINKS (~0.91x) whereas the INDEPENDENT
-    lumenairy-free geometric spot oracle BROADENS (~1.02x); ZOS POP (recorded in
-    the audit doc, not run here -- Zemax-dependent) also broadens 26.9->27.6um
-    (1.03x) and the model's decentered EE80 (~22.4um) is -19% vs ZOS 27.6um,
-    outside the plan's 10% gate.
+    The pointwise obliquity SCREEN (``displaced_obliquity='pointwise'``) imprints
+    the OPD at the STRAIGHT-THROUGH grid position and cannot represent the
+    transverse ray WALK between a thick element's two surfaces, so it captures the
+    coma flare DIRECTION (centroid + skewness, validated above) but NOT the coma
+    spot GROWTH -- the same H2 walk-off ceiling.  At the coma-dominated w0=4mm /
+    1mm-decenter config the SCREEN EE80 SHRINKS (~0.91x) whereas the INDEPENDENT
+    geometric spot oracle BROADENS (~1.02x).  This is retained as a documented
+    peer, PINNED so it stays visible.
 
-    This test makes the limit ENFORCED/VISIBLE in the suite (rather than silently
-    claimed as passing) and will trip if a future model begins to reproduce the
-    coma EE growth -- prompting a revision of the audit doc's 'OPEN FINDING'
-    section.  See docs/audit_real_lens_displaced_2026_07_19.md (P3).
+    P10 (N11) added the 2-D transverse-walk REMAP, now the DEFAULT for a decentered
+    element (``displaced_obliquity='auto'``); it FIXES the shrink.  NOTE: the coma
+    is diffraction-diluted in the EE80 metric (the honest broadening is the RMS /
+    coma-RMS gate in test_niche_p10_*, matching GBD), so here the robust EE80 claim
+    is DIRECTIONAL: the SCREEN COLLAPSES (ratio ~0.91) while the default remap does
+    NOT (ratio ~1.00, well above the screen's shrink).  See
+    docs/audit_real_lens_displaced_2026_07_19.md (P3 screen limit + P10 fix).
     """
     N, dx, w0 = 2048, 6e-6, 4e-3
     E0 = _gauss(N, dx, w0)
-    m_on = _ee80_about_centroid(_disp(E0, _singlet(), dx), dx)
-    m_dec = _ee80_about_centroid(_disp(E0, _singlet(dec=(1e-3, 0.0)), dx), dx)
+    # the retained pointwise SCREEN still SHRINKS (documented single-plane limit)
+    m_on = _ee80_about_centroid(_disp(E0, _singlet(), dx, obliq='pointwise'), dx)
+    m_dec = _ee80_about_centroid(
+        _disp(E0, _singlet(dec=(1e-3, 0.0)), dx, obliq='pointwise'), dx)
+    # the P10 DEFAULT (auto -> 2-D remap).  Baseline via a NEGLIGIBLE decenter so
+    # both are the SAME (remap) model -- honest like-for-like.
+    r_on = _ee80_about_centroid(_disp(E0, _singlet(dec=(1e-9, 0.0)), dx), dx)
+    r_dec = _ee80_about_centroid(_disp(E0, _singlet(dec=(1e-3, 0.0)), dx), dx)
     g_on = _oracle.geom_spot(_gjob(dec_mm=(0.0, 0.0), w0_mm=4.0))['EE80_um']
     g_dec = _oracle.geom_spot(_gjob(dec_mm=(1.0, 0.0), w0_mm=4.0))['EE80_um']
     # The independent geometric oracle broadens under coma (correct physics).
     assert g_dec / g_on > 1.005, (g_on, g_dec)
-    # The model does NOT reproduce that growth -- it narrows (the walk-off limit).
+    # The SCREEN does NOT reproduce that growth -- it collapses (the walk-off limit).
     assert m_dec < m_on, (m_on, m_dec)
-    # Documented magnitude is stable (~0.906); pin a band so a real fix trips it.
     assert 0.86 < m_dec / m_on < 0.95, (m_on, m_dec, m_dec / m_on)
+    # The P10 remap FIXES the direction: its EE80 ratio is well above the SCREEN's
+    # collapse (the true magnitude is in the RMS gate -- test_niche_p10_*).
+    assert r_dec / r_on > m_dec / m_on + 0.05, (r_dec / r_on, m_dec / m_on)
     # On-axis absolute EE80 is within the H2 envelope of ZOS 26.9um (sanity).
     assert 20.0 < m_on < 30.0, m_on
 

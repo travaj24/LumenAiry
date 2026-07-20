@@ -592,17 +592,28 @@ def ray_transfer_jacobian_analytic(
         # ``aspheric_coeffs_y``, an asphere, or a freeform must be rejected
         # (else a biconic would be silently traced as if it were rotationally
         # symmetric, giving a wrong y-axis power).
+        # N10a: a FIELD-FRAME decenter / tilt / freeform sag_callable breaks the
+        # rotational symmetry the analytic conic ``_adrt_step`` assumes -- reject
+        # so ``jacobian='auto'`` falls back to the finite-difference primitive
+        # (which traces through the shared field-frame ``_surface_sag_xy`` and
+        # therefore carries the decenter / tilt walk-off correctly).
+        _ff = (getattr(s, 'field_sag_callable', None) is not None
+               or (getattr(s, 'field_decenter', None) is not None
+                   and tuple(float(v) for v in s.field_decenter) != (0.0, 0.0))
+               or (getattr(s, 'field_tilt', None) is not None
+                   and tuple(float(v) for v in s.field_tilt) != (0.0, 0.0)))
         if (getattr(s, 'aspheric_coeffs', None)
                 or getattr(s, 'freeform', None)
                 or getattr(s, 'radius_y', None) is not None
                 or getattr(s, 'conic_y', None) is not None
-                or getattr(s, 'aspheric_coeffs_y', None) is not None):
+                or getattr(s, 'aspheric_coeffs_y', None) is not None
+                or _ff):
             raise NotImplementedError(
                 'ray_transfer_jacobian_analytic handles rotationally-symmetric '
                 'conic surfaces (plus coordinate breaks) only; aspheric-'
-                'polynomial departures, freeforms and biconic (radius_y / '
-                'conic_y) surfaces are not yet supported -- use '
-                'ray_transfer_jacobian (FD) for those.')
+                'polynomial departures, freeforms, biconic (radius_y / '
+                'conic_y) and field-frame decenter / tilt surfaces are not yet '
+                'supported -- use ray_transfer_jacobian (FD) for those.')
     if is_jax_array(x) or is_jax_array(y) or is_jax_array(ux) \
             or is_jax_array(uy):
         return _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface)

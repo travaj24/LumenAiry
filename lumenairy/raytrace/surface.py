@@ -222,6 +222,24 @@ class Surface:
     # trace (reflection is pure geometry).
     coating: Optional[object] = None
 
+    # N10a (2026-07-20): per-surface FIELD-FRAME decenter / tilt / freeform,
+    # the ``apply_real_lens`` displaced-pointwise (P3) convention -- DISTINCT
+    # from the rigid-body coordinate-break block (``decenter_x_m`` /
+    # ``tilt_x_deg``), which transforms the whole ray frame.  Field-frame means
+    # the sag is evaluated at the shifted coordinate ``sag(x - dx, y - dy)``,
+    # small-angle tilt adds the linear ramp ``tx*(x-dx) + ty*(y-dy)`` plus the
+    # correspondingly tilted normal, and ``field_sag_callable(xs, ys)`` REPLACES
+    # the base sag (matching ``_disp_surface_z_grad`` /
+    # ``geom_spot_decenter_oracle`` exactly).  These are honoured by the shared
+    # ``_surface_sag_xy`` / ``_surface_sag_derivatives_xy`` / ``_surface_normal``
+    # helpers, so BOTH the traced (``trace``) and GBD
+    # (``ray_transfer_jacobian``) ray models pick up the transverse ray
+    # walk-off -- hence the true induced coma -- naturally.  All default None /
+    # (0, 0), so a surface without them is byte-identical to pre-N10a.
+    field_decenter: Optional[Any] = None       # (dx, dy) [m]
+    field_tilt: Optional[Any] = None           # (tx, ty) [rad], small-angle
+    field_sag_callable: Optional[Any] = None   # (xs, ys) -> sag [m]
+
     # 3.7.5: World-frame trace support.  When ``world_origin`` and
     # ``world_R`` are both populated, :func:`trace_world` propagates
     # rays in world coordinates between surfaces and transforms them
@@ -273,11 +291,84 @@ class TraceResult:
 # Surface sag and normal computation
 # ============================================================================
 
-def _surface_sag_xy(x, y, surface):
-    """Sag z = f(x, y) for an arbitrary (possibly biconic / freeform)
-    surface.
+def _field_frame_active(surface) -> bool:
+    """True when this surface carries a P3-style FIELD-FRAME decenter / tilt /
+    freeform ``field_sag_callable`` (the ``apply_real_lens`` displaced-pointwise
+    convention).  DISTINCT from the rigid-body coordinate-break fields
+    (``decenter_x_m`` / ``tilt_x_deg``), which transform the whole ray frame.
 
-    Dispatch order:
+    When this returns False every geometry helper takes its pre-N10a code path
+    byte-for-byte -- the zero-decenter regression pin."""
+    if getattr(surface, 'field_sag_callable', None) is not None:
+        return True
+    fd = getattr(surface, 'field_decenter', None)
+    if fd is not None and (float(fd[0]) != 0.0 or float(fd[1]) != 0.0):
+        return True
+    ft = getattr(surface, 'field_tilt', None)
+    if ft is not None and (float(ft[0]) != 0.0 or float(ft[1]) != 0.0):
+        return True
+    return False
+
+
+def _field_frame_sag_and_grad(x, y, surface):
+    """SINGLE shared field-frame transformed-sag + gradient helper (N10a/N10b).
+
+    Returns ``(f, dfdx, dfdy)`` -- the surface z-departure and its transverse
+    gradient at FIELD coordinates ``(x, y)`` [m] -- honouring the per-surface
+    ``field_decenter=(dx, dy)`` (sag evaluated at ``x - dx, y - dy``),
+    small-angle ``field_tilt=(tx, ty)`` (linear ramp ``tx*(x-dx) + ty*(y-dy)``
+    plus the correspondingly tilted normal ``dfdx += tx``), and a freeform
+    ``field_sag_callable(xs, ys)`` (which REPLACES the base sag).  This is the
+    SAME field-frame convention as the analytic ``_disp_surface_z_grad`` and the
+    lumenairy-free ``geom_spot_decenter_oracle``, so the traced
+    (``trace`` -> ``_intersect_surface`` / ``_refract``) and GBD
+    (``ray_transfer_jacobian`` finite-difference) ray models agree with the
+    analytic model on what a decenter MEANS (cross-model agreement pinned by
+    ``tests/unit/test_niche_p9_decenter_tilt.py``).  Both ray models share this
+    ONE definition -- there is no divergent second copy of the geometry.
+
+    The surface normal follows from the caller: ``_surface_normal`` returns
+    ``(-dfdx, -dfdy, 1) / |.|``, so the transverse walk-off between a thick
+    element's surfaces (the true induced coma) emerges naturally once each ray
+    is carried through the glass gaps."""
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    fd = getattr(surface, 'field_decenter', None) or (0.0, 0.0)
+    ft = getattr(surface, 'field_tilt', None) or (0.0, 0.0)
+    fc = getattr(surface, 'field_sag_callable', None)
+    dcx, dcy = float(fd[0]), float(fd[1])
+    tx, ty = float(ft[0]), float(ft[1])
+    xs = x - dcx
+    ys = y - dcy
+    if fc is not None:
+        # Freeform hook (REPLACES the base sag): FD gradient at a fixed
+        # sub-micron step (matches ``_disp_surface_z_grad``).
+        step = 1.0e-7
+        f = np.asarray(fc(xs, ys), dtype=np.float64)
+        dfdx = (np.asarray(fc(xs + step, ys), dtype=np.float64)
+                - np.asarray(fc(xs - step, ys), dtype=np.float64)) / (2.0 * step)
+        dfdy = (np.asarray(fc(xs, ys + step), dtype=np.float64)
+                - np.asarray(fc(xs, ys - step), dtype=np.float64)) / (2.0 * step)
+    else:
+        # Base conic / aspheric / biconic / freeform sag + analytic gradient,
+        # evaluated at the decentered coordinates (d/dx of sag(x-dx) =
+        # sag'(x-dx), so the base helpers at (xs, ys) give the shifted gradient).
+        f = _base_surface_sag_xy(xs, ys, surface)
+        dfdx, dfdy = _base_surface_sag_derivatives_xy(xs, ys, surface)
+    if tx != 0.0 or ty != 0.0:
+        f = f + tx * xs + ty * ys
+        dfdx = dfdx + tx
+        dfdy = dfdy + ty
+    return f, dfdx, dfdy
+
+
+def _surface_sag_xy(x, y, surface):
+    """Sag z = f(x, y) for an arbitrary (possibly biconic / freeform /
+    field-frame decentered / tilted) surface.
+
+    When the surface carries a FIELD-FRAME decenter / tilt / ``field_sag_callable``
+    (N10a) the shared :func:`_field_frame_sag_and_grad` helper is used; otherwise
+    the byte-identical base dispatch:
 
     1. ``surface.freeform`` set       -> :func:`freeform.surface_sag_freeform`
        (uses the surface's own ``radius`` + ``conic`` as the base
@@ -285,6 +376,14 @@ def _surface_sag_xy(x, y, surface):
     2. ``surface.radius_y`` set       -> :func:`surface_sag_biconic`.
     3. otherwise                      -> :func:`surface_sag_general`.
     """
+    if _field_frame_active(surface):
+        f, _, _ = _field_frame_sag_and_grad(x, y, surface)
+        return f
+    return _base_surface_sag_xy(x, y, surface)
+
+
+def _base_surface_sag_xy(x, y, surface):
+    """Base (non-field-frame) sag dispatch -- see :func:`_surface_sag_xy`."""
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
 
@@ -327,11 +426,21 @@ def _surface_sag_derivatives_xy(x, y, surface):
     """Partial derivatives (dz/dx, dz/dy) at (x, y) on the given surface.
 
     Used for the surface normal in refraction / reflection and for the
-    slant-correction formula.  Handles biconic surfaces by summing the
-    per-axis derivatives.  Freeform surfaces use a centred finite
-    difference because the freeform sag basis functions don't expose
-    analytic gradients.
+    slant-correction formula.  Honours a FIELD-FRAME decenter / tilt /
+    ``field_sag_callable`` (N10a) via the shared
+    :func:`_field_frame_sag_and_grad` helper; otherwise the byte-identical base
+    dispatch (biconic surfaces sum per-axis derivatives; freeform surfaces use a
+    centred finite difference).
     """
+    if _field_frame_active(surface):
+        _, dfdx, dfdy = _field_frame_sag_and_grad(x, y, surface)
+        return dfdx, dfdy
+    return _base_surface_sag_derivatives_xy(x, y, surface)
+
+
+def _base_surface_sag_derivatives_xy(x, y, surface):
+    """Base (non-field-frame) sag derivatives -- see
+    :func:`_surface_sag_derivatives_xy`."""
     # Freeform path: centred FD with h scaled to local feature size.
     if getattr(surface, 'freeform', None):
         # Step size: small fraction of typical aperture (use R or 1 mm).
@@ -493,6 +602,12 @@ def _surface_copy_with(surf, **overrides):
                                  getattr(surf, 'freeform', None)),
         bsdf=overrides.get('bsdf', getattr(surf, 'bsdf', None)),
         coating=overrides.get('coating', getattr(surf, 'coating', None)),
+        field_decenter=overrides.get(
+            'field_decenter', getattr(surf, 'field_decenter', None)),
+        field_tilt=overrides.get(
+            'field_tilt', getattr(surf, 'field_tilt', None)),
+        field_sag_callable=overrides.get(
+            'field_sag_callable', getattr(surf, 'field_sag_callable', None)),
         world_origin=overrides.get(
             'world_origin', getattr(surf, 'world_origin', None)),
         world_R=overrides.get('world_R', getattr(surf, 'world_R', None)),
@@ -511,6 +626,8 @@ __all__ = [
     '_surface_sag_xy',
     '_surface_sag_derivatives_xy', '_surface_sag_derivative',
     '_surface_normal',
+    # N10a field-frame decenter / tilt geometry (shared by traced + GBD)
+    '_field_frame_active', '_field_frame_sag_and_grad',
     # Surface utility
     '_surface_copy_with',
 ]

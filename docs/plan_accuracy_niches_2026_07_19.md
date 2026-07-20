@@ -298,6 +298,23 @@ accurate reference, THEN N11 attempts to lift the analytic screen to match.
 
 ### N11 Analytic 2-D transverse-walk remap (fix the shrink)
 
+- **STATUS (P10, 2026-07-20): SHIPPED -- the remap CLOSED it (the pre-registered
+  routing fallback was NOT needed).** The 2-D transverse-walk remap is the DEFAULT
+  analytic path for a decentered/tilted/freeform element (`displaced_obliquity=
+  'auto'`), also selectable via `displaced_mode='remap'`. The honest metric is the
+  RMS second-moment radius + common-mode-subtracted coma RMS (the decentered EE80
+  is diffraction-diluted -- exactly as P9 found for GBD; an early "EE80 1.030"
+  draft was a beyond-aperture leak, caught + fixed, energy now 0.9995). Measured
+  (f/5 singlet, w0=4 mm, 1.31 um): on-axis RMS 21.09 um (= the GBD reference),
+  decentered RMS **broadens 1.023 @1 mm / 1.091 @2 mm** (grid-robust to 4 sig figs),
+  monotonic, sign-mirror exact, phase-continuous, and the common-mode coma RMS
+  matches the geom oracle within ~10% (the same gate the P9 GBD reference passed)
+  -- where the retained single-plane pointwise SCREEN SHRINKS (RMS 0.956).
+  Symmetric `displaced_mode='remap'` reproduces the P2 1-D remap BYTE-IDENTICAL;
+  zero-decenter default byte-identical. Tests
+  `tests/unit/test_niche_p10_transverse_walk_remap.py`. Full table + envelope:
+  `docs/audit_real_lens_displaced_2026_07_19.md` (P10 section).
+
 - **Approach:** generalize P2's exit-plane remap to the full 2-D off-axis case
   -- launch a 2-D (non-meridional) congruence fan against the decentered
   surface, build the 2-D exit map (x_out,y_out)(x_in,y_in) carrying the
@@ -347,7 +364,7 @@ only on explicit user approval.
 
 Final per-niche status after the P8 capstone (the last gate before PR for
 Runs 1-2).  Every measured envelope below is oracle-backed and pinned by a test.
-N10/N11 are Run 3 (not started here).
+N10/N11 (Run 3) are appended at the bottom of the table.
 
 ### Per-niche status + measured envelope
 
@@ -357,7 +374,7 @@ N10/N11 are Run 3 (not started here).
 | N0.2 | P8 | SHIPPED | ZOS `huygens_psf` oracle mode: unaberrated f/25 first-zero 40.32 vs Airy 40.15 um (**0.4%**), Strehl 1.000; aberrated f/4 uniform pupil vs `debye_oracle_v3` at a matched 110-um window **EE50 1.9% / EE80 0.72% / EE95 0.17%**. |
 | N0.3 | P5 | SHIPPED | `caustic_fold_truth.py` fold ground truth: grid convergence 1.3e-5, energy closure 0.999, 2-branch fold; r2m 11.22 / EE50 10.05 / EE80 13.50 um. |
 | N1 | P2 | SHIPPED (premise refuted) | The "0.50x floor" was an ORACLE artefact (geometric ray-density spot over-estimates the wave spot ~2x near reconvergence). Default `displaced_mode='screen'` is within **4-8%** of the diffraction-faithful oracle across M5-real / M5-virtual / M1 / M6 (0.916-0.998); `remap`/`split` are documented experimental peers. Defaults byte-identical. |
-| N2 | P3 | SHIPPED + 1 OPEN FINDING | Pointwise 2-D obliquity: symmetric limit rel L2 6.8e-6; decenter CENTROID 2.5% vs ZOS / 0.1% vs geom; tilt deflection 0.2% vs rigid-rotation; coma flare DIRECTION mirror-exact. OPEN: induced-coma **EE growth** is directionally wrong (model narrows 0.906x where ZOS/geom broaden ~1.02-1.03x; decentered EE80 -19% vs ZOS) -- a genuine single-plane walk-off limit, PINNED by a regression test; ZOS is the reference for decentered-spot EE. (N10/N11, Run 3, address this.) |
+| N2 | P3 | SHIPPED + 1 OPEN FINDING | Pointwise 2-D obliquity: symmetric limit rel L2 6.8e-6; decenter CENTROID 2.5% vs ZOS / 0.1% vs geom; tilt deflection 0.2% vs rigid-rotation; coma flare DIRECTION mirror-exact. OPEN (single-plane SCREEN): induced-coma spot growth was directionally wrong (screen narrows where geom/ZOS broaden) -- a genuine single-plane walk-off limit. **CLOSED by N11 (P10):** the DEFAULT analytic path now uses the 2-D transverse-walk remap; measured by the honest RMS/coma-RMS metric (the EE80 is diffraction-diluted, as for GBD) it BROADENS with coma RMS within ~10% of geom (same gate GBD passed); the pointwise SCREEN is retained as a documented peer, limit still pinned. |
 | N3 | P4 | SHIPPED (opt-in) | `apply_real_lens_gbd(reexpand='auto')` closes the ~0.94 strong-reconvergence power cap to **>0.99 power + windowed r2m within 0.3% of traced**; collimated/well-conditioned inputs are not re-expanded (byte-identical to `'off'`); overhead ~1.5-1.9x when it fires. |
 | N4 | P1 | SHIPPED | Carrier decomposition ported to `propagate_gbd_through_prescription`: chain == back-to-back `apply_real_lens_gbd` to precision on a two-group system; diverging-input power >0.99; fail-before pins the old path's loss. |
 | N5 | P1 | SHIPPED | `apply_real_lens_traced(tilt_aware_rays=True)` entrance-eikonal restored: tilt-aware and carrier paths agree on the H6 R_in scan (EE100 >0.99 at the ABCD focus); collimated byte-identical; no double-count of W when both are set. |
@@ -366,6 +383,9 @@ N10/N11 are Run 3 (not started here).
 | N7 | P6 | SHIPPED | Astigmatic `carrier=(R_x,R_y)` separable Sziklas-Siegman: per-axis focus-crossing matches fine-grid ASM **<1%** at both line foci + the mid-astigmatic plane; isotropic `(R,R)` byte-identical to the scalar path; `carrier_referenced_aperture` removes clipped power with exact accounting (no renormalization). |
 | N8 | P7 | SHIPPED | `_seidel_sa_wfe_rad` system-S1 gate: an SA-nulled conic now routes to the fast displaced screen (the c4 bound false-positived it); genuinely-aberrated M1-M6 route to a ray member; SAFETY checked against oracle errors, not internal estimates. |
 | N9 | P8 | SHIPPED | Capstone composition (STEP A/B/C below). |
+| N10a | P9 | SHIPPED (Run 3) | `apply_real_lens_traced` honours decenter/tilt via the shared field-frame raytrace geometry: decenter GEOMETRY correct (centroid ~0.4% vs geom, sign-mirror <1%, tilt <0.3% vs rigid rotation); decentered-spot EE is amplitude-limited (grid-indexed amplitude cannot carry the walk-off) -- route EE to GBD. Zero-decenter byte-identical. |
+| N10b | P9 | SHIPPED (Run 3) | `apply_real_lens_gbd` honours decenter/tilt (beamlets carry the walk-off amplitude): the decentered spot BROADENS grid-robustly (RMS ratio 1.024 @1 mm / 1.093 @2 mm, pitch-invariant, both wavelengths); common-mode coma RMS within ~15% of the geom oracle; centroid ~0.1% vs geom. The decentered-coma ray reference. |
+| N11 | P10 | SHIPPED (Run 3) -- **remap CLOSED it** | Analytic 2-D transverse-walk remap is the DEFAULT for decentered/tilted/freeform elements. Honest metric = RMS/coma-RMS (decentered EE80 is diffraction-diluted, as for GBD; an early "EE80 1.030" was a beyond-aperture leak, caught + fixed, energy now 0.9995): on-axis RMS 21.09 um (= GBD ref), RMS **broadens 1.023 @1 mm / 1.091 @2 mm** (grid-robust to 4 sig figs), monotonic, sign-mirror exact, phase-continuous, and common-mode coma RMS within ~10% of geom (the same gate GBD passed) -- where the retained pointwise SCREEN shrinks (RMS 0.956). Symmetric `displaced_mode='remap'` == the P2 1-D remap byte-identical; zero-decenter byte-identical. The pre-registered routing fallback was not needed. |
 
 ### STEP A -- ZOS Huygens-PSF oracle mode (N0.2 prerequisite)
 
