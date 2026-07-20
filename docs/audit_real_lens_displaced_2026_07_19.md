@@ -915,3 +915,99 @@ screen's collapse (the true broadening magnitude lives in the P10 RMS gate).  Th
 verifier repro of the caught EE80 leak is `scratchpad/p10_final.py` /
 `p10_proto.py`; the ZOS numbers are the fresh P9 POP run; the unit tests do not
 require Zemax.
+
+## P11 -- traced ray-density (Jacobian) amplitude mode (niche N12, 2026-07-20)
+
+P9 (N10a) documented that `apply_real_lens_traced`'s exit AMPLITUDE is the
+single-plane analytic-screen leg `|E_analytic|`, so the traced decentered-spot EE
+is amplitude-limited (route EE to GBD).  N12 adds an **opt-in**
+`apply_real_lens_traced(amplitude_model='ray_density')` (default `'screen'` =
+current, byte-identical): the exit magnitude becomes the geometric ray-tube
+energy-conserving amplitude `|E_in(x_in)| / sqrt(|det J|)`,
+`J = d(x_out,y_out)/d(x_in,y_in)` the exit ray-map Jacobian (analytic gradient of
+the entrance->exit fit), placed at the exit ray position with the traced OPL
+phase.  The complex dtype is preserved; the assembly keeps the screen-mode phase
+(its unit phasor) and swaps only the magnitude.
+
+### Mechanism + caustic handling
+
+`_ray_density_amp_grid` reuses the SAME entrance->exit fits + Newton inverse the
+OPL phase uses (so amplitude and phase share exit positions): for each exit pixel
+Newton returns the entrance `(xe, ye)`, `det J` is the analytic gradient of the
+forward-map fit there, and `|E_in|` is bilinearly sampled at the entrance.  The
+aperture stop is enforced at the ENTRANCE (a ray blocked by the stop carries no
+energy), which makes the ray-density power exactly the aperture-transmitted input
+power.  **Caustic handling (mandatory):** `det J -> 0` at a fold, so the amplitude
+is DETECTED near-caustic (an absolute floor `1e-3 * median(|det J|)`, a `|det J|`
+dynamic-range `> 30x`, OR a det J sign change between adjacent ray cells), CAPPED
+(never inf/nan), and a one-time `RuntimeWarning` steers to
+`apply_real_lens_gbd` / `apply_real_lens_fga`.  **This phase does NOT implement
+the multi-branch KMAH/Maslov sum** -- GBD/FGA remain the caustic reference; the
+single-branch mode's job is an honest, finite, flagged envelope at a fold.
+
+### What was validated (measured, adversarial)
+
+| gate | result |
+|---|---|
+| DEFAULT byte-identical | `amplitude_model='screen'` (default) == prior releases, `np.array_equal` pinned |
+| ENERGY closure (< 0.5%, away from folds) | ray-density power / aperture-transmitted input = **0.999** at the exit vertex, and **decenter-STABLE** (0.999 at 0 / 1 / 2 mm) where the screen `apply_real_lens` amplitude LEAKS ~9% at a 2 mm decenter -- no silent renormalisation |
+| CAUSTIC (`caustic_fold_ref`, fold DOWNSTREAM of the exit vertex) | exit-vertex ray-density field is FINITE + no fold warning (the vertex is single-valued); ASM to the fold plane (a wave method that handles the multi-valued caustic) matches the dense direct-RS reference: **r2m 0.1% / EE50 0.9% / EE80 3.0%** -- NO blow-up |
+| CAUSTIC-AT-OUTPUT (traced output placed AT the focus) | `det J -> 0` DETECTED (warns, steers to GBD/FGA), output FINITE (never inf/nan); single-branch energy is NOT conserved there (expected, flagged) |
+| SIGN-MIRROR | +d/-d ray-density PSFs mirror: centroid < 0.2%, intensity mirror-L2 **1.1%** |
+| COLLIMATED unaberrated (slow lens) | det J ~ const -> ray-density reduces to a scaled input envelope, reproducing the screen (Airy-limited) field to < 10% over the bright support |
+| ON-AXIS aberrated vs Debye | ray-density is oracle-CONSISTENT: EE tracks the validated screen leg to < 5% and, like screen, trends toward the `debye_oracle_v3` diffraction EE as the exit-NA-Nyquist sampling tightens (H3-limited at coarse dx) |
+
+### The decenter premise -- REFUTED for the traced output plane (honest limit)
+
+N12's premise was that `det J` (of traced's ray map) IS the coma redistribution
+the screen leg lacks.  **Measured, this is false at the traced OUTPUT plane (the
+exit VERTEX).**  The exit-vertex ray map is nearly the identity: `det J` median
+**0.933**, spread only **0.007** (centered) -> **0.011** (2 mm decenter), i.e. an
+amplitude modulation of ~0.3%.  So `ray_density` ~ `screen` there, and BOTH
+broaden the decentered image-plane spot (RMS ratio **~1.06 @1 mm / ~1.10 @2 mm**,
+grid-robust, monotonic -- never a shrink; comparable to the geometric oracle's
+1.038/1.151 and the P9 GBD reference), tracking each other to within ~3%
+(RMS-ratio).  (Note: the EE80 ratio is grid-fragile and is deliberately NOT the
+gated metric -- the P9/P10 lesson -- so the earlier "traced shrinks" reading was
+substantially an EE80 quantization artifact on an undersampled spot; with the
+grid-robust RMS second-moment, traced broadens.)  The coma redistribution is a
+DOWNSTREAM effect: at the IMAGE plane `det J` spans orders of magnitude and hits
+~0 (min ~3e-15 -- a caustic at focus), so it is carried by the PHASE + propagation,
+and single-branch ray density AT the image is a caustic (flagged, unreliable).
+
+**Conclusion:** an exit-plane amplitude model cannot carry an aberration that
+develops in propagation to the image.  `ray_density` makes the traced decentered
+spot BROADEN (killing any shrink) and is energy-/caustic-correct, but it does NOT
+make the focal-plane decentered PSF match the geometric oracle / GBD to 15% --
+**`apply_real_lens_gbd` (N10b), whose beamlets carry the IMAGE-plane ray density,
+remains the decentered-coma reference (unchanged from P9).**  (The raw coma-RMS /
+geom ratio is window-fragile -- the P9/P10 lesson -- so it is NOT gated; the robust
+pinned statement is that `ray_density` TRACKS `screen` at the exit vertex.)
+
+### Where ray_density genuinely helps
+
+`ray_density` is the physically-principled, ENERGY-CONSERVING geometric ray-tube
+amplitude -- a decenter-STABLE alternative to the screen `apply_real_lens`
+amplitude (which leaks energy under decenter), a smooth geometric envelope free of
+the screen's exit-aperture Fresnel edge-ripple, and CAUSTIC-SAFE (detect + cap +
+warn).  It differs materially from screen only where the traced OUTPUT-plane
+Jacobian carries real ray-density structure; when the user traces to a plane AT a
+focus that structure is a caustic (flagged), and at the exit vertex it is
+near-trivial.
+
+### Tests + provenance
+
+`tests/unit/test_niche_p11_ray_density_amplitude.py` (runs WITHOUT Zemax, using
+the lumenairy-free Debye oracle + the `caustic_fold_ref.npz` ground truth):
+default byte-identical; finite + complex64-preserving; the validation-error
+surface (bad model / `return_screen` / non-Newton inversion raise); energy
+closure + decenter stability; collimated slow-lens Airy limit; sign-mirror;
+on-axis aberrated vs Debye; the SLOW `test_caustic_fold_no_blowup_matches_reference`
+(exit-vertex ray-density + ASM within ~8% of the fold ground truth, no inf/nan,
+no false vertex warning); `test_caustic_at_output_plane_detected_and_finite` (the
+focus caustic warns + stays finite); and the SLOW
+`test_decenter_broadens_grid_robust_but_tracks_screen` (ray-density RMS broadens
+grid-robustly + monotonically but TRACKS the screen within 3% -- the honest
+exit-vertex limit).  Verifier repros: `scratchpad/rd_detj.py` (det J ~const at the
+exit vertex, -> 0 at the image), `scratchpad/rd_energy_caustic.py` (energy +
+caustic fold), `scratchpad/rd_focusprobe.py` (the focus caustic).

@@ -335,6 +335,26 @@ accurate reference, THEN N11 attempts to lift the analytic screen to match.
 
 ## N12. Traced ray-density (Jacobian) amplitude mode (Run 4)
 
+- **STATUS (P11, 2026-07-20): SHIPPED as an opt-in, honest-envelope mode; the
+  decenter premise was REFUTED for the traced output plane.**
+  `apply_real_lens_traced(amplitude_model='ray_density')` (default `'screen'` =
+  byte-identical) is the geometric ray-tube energy-conserving amplitude
+  `|E_in|/sqrt(|det J|)` at the exit vertex with the traced OPL phase.  It is
+  energy-conserving (0.999, decenter-STABLE where the screen amplitude leaks
+  ~9%), CAUSTIC-SAFE (detect + floor/cap + one-time warn -> GBD/FGA; NO
+  multi-branch KMAH sum), matches the `caustic_fold` ground truth within ~3%
+  (exit-vertex field + ASM to the fold plane), and sign-mirrors.  **But the
+  N12 premise -- that traced's `det J` carries the coma the screen leg lacks --
+  is FALSE at the traced OUTPUT plane:** the exit-vertex map is ~identity
+  (`det J` median 0.93, spread 0.007-0.011 -> ~0.3% amp modulation), so
+  `ray_density` TRACKS `screen` (both broaden the decentered spot only
+  marginally, RMS ~1.02-1.05, never a shrink).  The coma is a DOWNSTREAM effect
+  (at the image plane `det J -> 0`, a caustic); an exit-plane amplitude cannot
+  carry it.  **`apply_real_lens_gbd` (N10b) remains the decentered-coma
+  reference (unchanged from P9).**  Tests
+  `tests/unit/test_niche_p11_ray_density_amplitude.py`; full envelope
+  `docs/audit_real_lens_displaced_2026_07_19.md` (P11 section).
+
 Added at user request after Run 3. P9 established that traced GEOMETRY is exact
 under decenter/tilt but its exit AMPLITUDE is the single-plane analytic-screen
 leg ``|E_analytic|``, which carries no asymmetric ray-density redistribution --
@@ -417,6 +437,7 @@ N10/N11 (Run 3) are appended at the bottom of the table.
 | N10a | P9 | SHIPPED (Run 3) | `apply_real_lens_traced` honours decenter/tilt via the shared field-frame raytrace geometry: decenter GEOMETRY correct (centroid ~0.4% vs geom, sign-mirror <1%, tilt <0.3% vs rigid rotation); decentered-spot EE is amplitude-limited (grid-indexed amplitude cannot carry the walk-off) -- route EE to GBD. Zero-decenter byte-identical. |
 | N10b | P9 | SHIPPED (Run 3) | `apply_real_lens_gbd` honours decenter/tilt (beamlets carry the walk-off amplitude): the decentered spot BROADENS grid-robustly (RMS ratio 1.024 @1 mm / 1.093 @2 mm, pitch-invariant, both wavelengths); common-mode coma RMS within ~15% of the geom oracle; centroid ~0.1% vs geom. The decentered-coma ray reference. |
 | N11 | P10 | SHIPPED (Run 3) -- **remap CLOSED it** | Analytic 2-D transverse-walk remap is the DEFAULT for decentered/tilted/freeform elements. Honest metric = RMS/coma-RMS (decentered EE80 is diffraction-diluted, as for GBD; an early "EE80 1.030" was a beyond-aperture leak, caught + fixed, energy now 0.9995): on-axis RMS 21.09 um (= GBD ref), RMS **broadens 1.023 @1 mm / 1.091 @2 mm** (grid-robust to 4 sig figs), monotonic, sign-mirror exact, phase-continuous, and common-mode coma RMS within ~10% of geom (the same gate GBD passed) -- where the retained pointwise SCREEN shrinks (RMS 0.956). Symmetric `displaced_mode='remap'` == the P2 1-D remap byte-identical; zero-decenter byte-identical. The pre-registered routing fallback was not needed. |
+| N12 | P11 | SHIPPED (Run 4, opt-in) -- **decenter premise REFUTED at the exit plane; honest envelope** | `apply_real_lens_traced(amplitude_model='ray_density')` (default `'screen'` byte-identical) = geometric ray-tube `\|E_in\|/sqrt(\|det J\|)` at the exit vertex + traced OPL phase. Energy-conserving **0.999** and decenter-STABLE (screen amp leaks ~9% @2 mm); CAUSTIC-SAFE (detect + floor/cap + one-time warn -> GBD/FGA; no KMAH sum); matches `caustic_fold_ref` within ~3% (exit field + ASM to fold); sign-mirror 1.1%. **The N12 premise is FALSE at the traced OUTPUT plane:** the exit-vertex map is ~identity (det J median 0.93, spread 0.007-0.011 -> ~0.3% amp mod), so `ray_density` TRACKS `screen` (both broaden RMS ~1.02-1.05, never a shrink) -- the coma is DOWNSTREAM (at the image det J -> 0, a caustic). **GBD (N10b) remains the decentered-coma reference.** ray_density's win: energy-/caustic-correct, decenter-stable, smooth geometric amplitude. |
 
 ### STEP A -- ZOS Huygens-PSF oracle mode (N0.2 prerequisite)
 
