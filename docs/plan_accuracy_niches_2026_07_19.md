@@ -333,6 +333,36 @@ accurate reference, THEN N11 attempts to lift the analytic screen to match.
   (N10a) -- which is why N10 lands first and gives routing a correct target
   either way.
 
+## N12. Traced ray-density (Jacobian) amplitude mode (Run 4)
+
+Added at user request after Run 3. P9 established that traced GEOMETRY is exact
+under decenter/tilt but its exit AMPLITUDE is the single-plane analytic-screen
+leg ``|E_analytic|``, which carries no asymmetric ray-density redistribution --
+so the decentered SPOT shrinks (traced is usable for wavefront/pointing but not
+PSF/EE). N12 makes traced usable for decentered PSF/spot metrics too.
+
+- **Approach:** add an OPT-IN ``amplitude_model='ray_density'`` to
+  ``apply_real_lens_traced`` (default ``'screen'`` = current, byte-identical).
+  Geometric energy conservation in a ray tube gives
+  ``|E_out| = |E_in(x_in)| / sqrt(|det J|)``, ``J = d(x_out,y_out)/d(x_in,y_in)``
+  the ray-map Jacobian (traced already carries the full 2-D ray map, so det J is
+  a finite-difference/analytic byproduct).  This Jacobian IS the coma
+  redistribution the screen leg lacks.
+- **Caustic hazard (mandatory):** det J -> 0 at a fold, so the amplitude
+  diverges.  Detect it and either sum the real branches via the existing
+  ``traced_multibranch`` / det-Q KMAH machinery, or floor + warn and steer to
+  GBD/FGA -- NEVER return inf/nan.
+- **Adversarial validation:** decentered EE80 broadens grid-robustly (heed the
+  P9 lesson: converged grid + a decenter large enough that the coma clears the
+  diffraction-measurement floor) within ~15% of the geometric oracle, the P9
+  GBD reference, and ZOS; default ``'screen'`` byte-identical; on-axis aberrated
+  intensity oracle-consistent vs the Debye oracle; caustic case vs
+  ``caustic_fold_ref.npz`` with no blow-up; energy closure < 0.5% away from
+  folds; sign-mirror.
+- **Why opt-in + after GBD:** P9 already made GBD the decenter-EE reference;
+  N12 makes traced independently capable (the user's accurate reference
+  everywhere else), so decenter PSF is not solely on GBD.
+
 ---
 
 ## Execution
@@ -350,11 +380,12 @@ accurate reference, THEN N11 attempts to lift the analytic screen to match.
 | P8 | N9 capstone E2E + adversarial regression | all |
 | P9 | N10a/N10b traced + GBD decenter/tilt (Run 3) | P3, P8 (ZOS Huygens PSF) |
 | P10 | N11 analytic 2-D transverse-walk remap (Run 3) | P9 |
+| P11 | N12 traced ray-density (Jacobian) amplitude mode (Run 4) | P9 |
 
 Sequential single-writer Opus agents; each phase = implementer -> adversarial
 verifier -> (on kills) fixer -> re-verify, max two rounds; unresolved kills are
 documented open findings, never silently accepted. Checkpoint commits after
-P0-P4, P5-P8, and P9-P10. Run 3 (P9-P10) launches ONLY after Run 2 (P5-P8) has
+P0-P4, P5-P8, P9-P10, and P11. Each run launches ONLY after the prior run has
 landed + committed -- never two repo-writing workflows concurrently. Release
 only on explicit user approval.
 
