@@ -32,6 +32,13 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+# New propagators (no cycles).
+from .carrier import (
+    CarrierReferencedField,
+    carrier_referenced_envelope,
+    carrier_referenced_reconstruct,
+    propagate_carrier_referenced,
+)
 from .dispatch import (
     ASM_FAMILY,
     VALID_METHODS,
@@ -45,13 +52,12 @@ from .dispatch import (
 # workflow by giving callers a one-line "propagate this ensemble and
 # give me the partial-coherence intensity" entry point.
 from .ensemble import propagate_ensemble
-
-# New propagators (no cycles).
 from .fga import (
     apply_real_lens_auto,
     apply_real_lens_fga,
     apply_real_lens_fga_vector,
     apply_real_lens_universal,
+    fga_memory_estimate,
 )
 from .gbd import (
     BeamletBundle,
@@ -122,11 +128,16 @@ from .vectorial_hfpi import (
 
 __all__ = [
     'PropagationResult',
+    'CarrierReferencedField',
+    'propagate_carrier_referenced',
+    'carrier_referenced_reconstruct',
+    'carrier_referenced_envelope',
     'BeamletBundle',
     'apply_real_lens_fga',
     'apply_real_lens_fga_vector',
     'apply_real_lens_auto',
     'apply_real_lens_universal',
+    'fga_memory_estimate',
     'decompose_field_to_beamlets',
     'decompose_field_adaptive',
     'converge_gbd_sampling',

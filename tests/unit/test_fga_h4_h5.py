@@ -31,12 +31,14 @@ Measured (f/5 biconvex singlet, lambda 1.31um, w0=5mm collimated input, image
   FGA auto (PRE-FIX) @N2048/dx12:  171.5 / 231.4 / 187.5   (3x wrong halo)
   FGA auto (FIXED)  @N2048/dx12:   r2m within ~1.5x of the oracle
 """
+import math
+
 import numpy as np
 import pytest
 
 from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.propagators import fga
-from lumenairy.propagators.fga import apply_real_lens_fga
+from lumenairy.propagators.fga import apply_real_lens_fga, fga_memory_estimate
 
 WL = 1.31e-6
 
@@ -272,3 +274,124 @@ def test_h4_mem_budget_chunk_lossless(presc):
         # position-lattice chunking is a strict reorder of the outer additive
         # sum (row-parallel scatter preserves per-pixel order) -> lossless.
         assert np.max(np.abs(chunked - full)) <= 1e-9 * scale
+
+
+# ==========================================================================
+# C2 (Phase-C): FGA budget ergonomics -- env override, S2-15 warning detail,
+# and the public fga_memory_estimate sizing helper.
+# ==========================================================================
+def test_c2_env_budget_override(monkeypatch):
+    """LUMENAIRY_MEM_BUDGET_MB pins the default FGA budget (the shared-box
+    escape hatch); a positive value wins over the 25%-of-RAM auto-default, an
+    unparseable / non-positive one is ignored with a warning (never silently
+    disables the guard)."""
+    monkeypatch.delenv('LUMENAIRY_MEM_BUDGET_MB', raising=False)
+    auto = fga._default_mem_budget_mb()
+    assert auto >= fga._DEFAULT_MEM_BUDGET_FLOOR_MB
+    monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', '4096')
+    assert fga._default_mem_budget_mb() == pytest.approx(4096.0)
+    # invalid -> ignored (warn) + auto fallback, NOT the env value
+    monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', 'not-a-number')
+    with pytest.warns(RuntimeWarning, match='not a number'):
+        assert fga._default_mem_budget_mb() == pytest.approx(auto)
+    monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', '-5')
+    with pytest.warns(RuntimeWarning, match='not positive'):
+        assert fga._default_mem_budget_mb() == pytest.approx(auto)
+
+
+def test_c2_s2_15_warning_reports_target_np_and_memory():
+    """When the auto n_p cost-cap clamps below the dp target, the warning must
+    now name the EXPLICIT n_p that meets the target and the momentum-swarm
+    memory growth factor (n_p_target/n_p)**2, and point at fga_memory_estimate
+    -- so the user can weigh fidelity vs cost instead of guessing."""
+    N, dx = 256, 3e-6
+    E0, _, _, _ = _gauss(N, dx, w0m=0.4e-3)
+    w0 = 5.0 * dx
+    flat = {'name': 'flat', 'aperture_diameter': N * dx,
+            'surfaces': [{'radius': np.inf, 'conic': 0.0, 'glass_before': 'air',
+                          'glass_after': 'air', 'semi_diameter': N * dx / 2}],
+            'thicknesses': []}
+    info = {}
+    # explicit wide p_max forces n_p_want > 61 (the cost cap) -> clamp + warn.
+    p_max = 0.3
+    with pytest.warns(RuntimeWarning, match='clamped to the cost cap') as rec:
+        _pm, n_p = fga._resolve_sampling(E0, dx, dx, WL, w0, flat, p_max, None,
+                                         info=info)
+    n_p_want = int(np.ceil(2.0 * p_max / fga._DP_TARGET)) | 1
+    msg = str(rec[0].message)
+    assert f'pass n_p={n_p_want}' in msg          # explicit target n_p
+    assert 'fga_memory_estimate' in msg           # pointer to the sizing helper
+    factor = (n_p_want / n_p) ** 2
+    assert f'~{factor:.1f}x' in msg               # memory growth factor
+    assert info['n_p_target'] == n_p_want and info['n_p_clamped'] == n_p
+
+
+def test_c2_memory_estimate_matches_resolvers(presc):
+    """fga_memory_estimate reproduces the model the run itself uses: the
+    E_in-based (p_max, n_p) equal _resolve_sampling; Nq_full equals the lattice
+    count; the per-lattice bytes / nq_chunk equal the shared primitives; and the
+    grid floor is 48 B/px (the H8 '~40 GB at N=28672' figure)."""
+    N, dx = 512, 3e-6
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    E = (np.exp(-(X ** 2 + Y ** 2) / (1.5e-3) ** 2)
+         * np.exp(1j * 2 * np.pi / WL * (X ** 2 + Y ** 2) / (2 * 100e-3))
+         ).astype(np.complex128)
+    w0 = 5.0 * dx
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.simplefilter('ignore')
+        pm, npv = fga._resolve_sampling(E, dx, dx, WL, w0, presc, None, None)
+    est = fga_memory_estimate(N, dx, presc, WL, E_in=E, dq_step=2)
+    assert est['p_max'] == pytest.approx(pm, rel=1e-12)
+    assert est['n_p'] == npv and est['Np'] == npv * npv
+    assert est['sampling_basis'] == 'field_content'
+    assert est['Nq_full'] == len(range(0, N, 2)) ** 2
+    # per-lattice-point bytes = the shared primitive (analytic conic -> no FD)
+    assert est['exact_jacobian'] is True
+    per = fga._fga_lattice_point_bytes(est['Np'], est['Np'],
+                                       est['use_separable'], 1.0, False)
+    assert est['bytes_per_lattice_point'] == pytest.approx(per)
+    # grid floor: 48 B/px scalar
+    assert est['grid_arrays_mb'] == pytest.approx(48.0 * N * N / 1e6, rel=1e-9)
+    # nq_chunk matches _resolve_nq_chunk under the same budget
+    exp_chunk = fga._resolve_nq_chunk(
+        est['Nq_full'], est['Np'], est['use_separable'], est['Np'],
+        est['budget_mb'], 'x', cfull_mult=1.0, fd_bundle=False)
+    assert est['nq_chunk'] == exp_chunk
+    # self-consistency
+    assert est['peak_chunked_mb'] <= est['peak_unchunked_mb'] + 1e-9
+    if not est['swarm_fits_budget']:
+        assert est['chunked_swarm_peak_mb'] <= est['budget_mb'] * (1 + 1e-9)
+
+
+def test_c2_memory_estimate_production_and_vector(presc):
+    """The helper sizes a hypothetical production run (no field -> NA-cap upper
+    bound, reports the clamped n_p and its unclamped target) and the vector path
+    (two input fields -> 2x grid floor, cfull_mult=2)."""
+    est = fga_memory_estimate(28672, 0.9e-6, presc, WL, dq_step=2)
+    assert est['sampling_basis'] == 'na_cap_upper_bound'
+    assert est['Nq_full'] == len(range(0, 28672, 2)) ** 2
+    # H8: raw grid arrays ~40 GB at this N
+    assert 38_000 < est['grid_arrays_mb'] < 42_000
+    # clamped to the n_p cost cap (fast lens) -> an unclamped target is reported
+    assert est['n_p'] == 61 and est['n_p_target'] is not None
+    assert est['n_p_target'] > 61
+    # production swarm is far beyond any sane budget -> chunking mandatory
+    assert est['swarm_fits_budget'] is False
+    # vector: 2x grid floor, cfull_mult=2 in the per-point bytes
+    ev = fga_memory_estimate(1024, 3e-6, presc, WL, vector=True, dq_step=2)
+    es = fga_memory_estimate(1024, 3e-6, presc, WL, vector=False, dq_step=2)
+    assert ev['grid_arrays_mb'] == pytest.approx(
+        2.0 * es['grid_arrays_mb'], rel=1e-9)
+    per_v = fga._fga_lattice_point_bytes(ev['Np'], ev['Np'],
+                                         ev['use_separable'], 2.0,
+                                         not ev['exact_jacobian'])
+    assert ev['bytes_per_lattice_point'] == pytest.approx(per_v)
+
+
+def test_c2_memory_estimate_exported():
+    """fga_memory_estimate is public at the package top level (sizing is a
+    user-facing pre-launch tool)."""
+    import lumenairy as la
+    assert la.fga_memory_estimate is fga_memory_estimate

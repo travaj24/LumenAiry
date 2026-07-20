@@ -19,6 +19,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
+import threading as _threading
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -259,6 +260,322 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
     }
 
 
+# ---------------------------------------------------------------------------
+# Opt-in ``surface_model='displaced'`` -- ray-angle-aware refraction OPD.
+# ---------------------------------------------------------------------------
+# The default per-surface phase screen imprints the paraxial thin-element OPD
+# ``(n2 - n1) * sag(r)`` at the transverse coordinate ``r``.  That form is
+# blind to the INCOMING RAY ANGLE: it assumes every ray strikes each surface
+# travelling parallel to the axis.  For the SECOND (and later) surface of a
+# real lens the beam is already converging, so the ray hits obliquely -- and
+# the paraxial OPD is orientation-INVARIANT (on a plano-convex singlet the
+# curved-first and flat-first prescriptions imprint the identical
+# ``(n_glass - 1) * |sag(r)|`` map, which is why the analytic model cannot
+# distinguish the textbook 4x spherical-aberration penalty between the two
+# orientations -- dual-oracle 43 vs 128 um, analytic 60.4/60.9).
+#
+# The eikonal-correct piston OPD of a locally-planar refracting facet crossed
+# by a ray at angle ``alpha_in`` (to the z-axis) that refracts to ``alpha_out``
+# is, back-projecting the transmitted local plane wave to the vertex plane,
+#
+#     OPD_i(r) = (n2 * cos(alpha_out) - n1 * cos(alpha_in)) * sag_i(r)         (1)
+#
+# (screen convention ``exp(-i k0 OPD)``; at normal incidence
+# ``alpha_in = alpha_out = 0`` this reduces to the paraxial ``(n2 - n1) sag``).
+# The cosines carry the incoming-ray-angle physics the paraxial screen drops,
+# and they BREAK the plano-convex orientation symmetry (the air-side and
+# glass-side ray bends differ), so the model splits the two orientations.
+#
+# ``alpha_in`` / ``alpha_out`` are sourced from a self-contained meridional ray
+# fan traced through the actual conic/aspheric prescription (geometric optics,
+# wave-model-independent), tabulated vs the ray's crossing height at each
+# surface, and interpolated onto the grid radius.  Validated against BOTH
+# campaign oracles (Zemax POP and the grid-free Debye/Huygens integral) at
+# Nyquist-compliant sampling: f/5 biconvex r2m 64.5 vs 64.98 (0.7%),
+# plano-convex 42.2/127.0 vs 43.2/127.6 (split ratio 0.333 vs 0.339), with the
+# EE50/EE80 profiles matched too.  See ``docs/audit_real_lens_
+# displaced_2026_07_19.md`` (H2(a) + G2).
+#
+# INPUT CONGRUENCE (G2 Task 1): the fan is launched along the input congruence
+# selected by the ``conjugate`` argument -- COLLIMATED by default (axial fan,
+# exact for a collimated input and byte-identical to the pre-G2 fan), or along
+# a scalar conjugate ``R_in`` (marginal slope ``h/R_in``), an 'auto' carrier
+# fit of ``E_in``, or an explicit wavefront.  The wave field carries the input
+# curvature in its own phase; ``conjugate`` only sets the per-surface obliquity
+# incidence.  This lifts the pre-G2 "collimated only" restriction -- a
+# diverging/converging source now sees the true second-surface incidence.
+#
+# SAMPLING: like ``apply_real_lens_traced`` (hammer finding H3), the exit
+# converging wavefront must be Nyquist-sampled -- ``dx <= lambda / (2 NA_exit)``
+# -- or the r2m ALIASES low (the ~40 um "plateau" the 2026-07-18 audit reported
+# for this class was a dx=6 um undersampling artefact, not a model floor;
+# traced itself reads 40.9 um at dx=6 um and 64.8 um at dx<=3 um).
+
+
+def _build_displaced_cos_luts(surfaces, thicknesses, wavelength, r_max,
+                              n_fan=257, carrier_slope=None):
+    """Trace a meridional ray fan through the rotationally-symmetric
+    conic/aspheric ``surfaces`` and return, per surface, the LUT
+    ``(crossing_height, cos_alpha_in, cos_alpha_out)`` used by the
+    ``surface_model='displaced'`` refraction OPD (equation (1) above).
+
+    Pure geometric ray trace (vectorised Newton surface intersection + vector
+    Snell); independent of the wave model.  ``cos_alpha_*`` are cosines of the
+    ray angle to the z-axis (unit-direction z-component) just before / after
+    each surface.  Rays that miss or TIR are dropped from that surface's LUT.
+
+    ``carrier_slope`` (G2 Task 1) generalises the launch congruence.  When
+    ``None`` the fan is launched COLLIMATED (axial, ``dz=1, dy=0``) --
+    byte-identical to the pre-G2 collimated fan and exact for a collimated
+    input.  When a callable ``heights -> g``, each entrance ray at height ``h``
+    is launched along the input congruence with marginal slope
+    ``g = dW/dy(0, h)`` (the carrier wavefront gradient): the unit launch
+    direction is ``(dz, dy) = (1, g)/sqrt(1+g^2)`` -- the eikonal ray normal
+    to the input wavefront.  For a scalar conjugate ``s`` this is ``g = h/s``
+    (``sin(alpha_in) ~ h/s`` paraxially), so the SECOND (and later) surfaces
+    see the true converging/diverging incidence and the obliquity OPD (1)
+    reflects the actual illumination, not an assumed collimated pupil.
+    """
+    n_surf = len(surfaces)
+    heights = np.linspace(r_max / n_fan, r_max, int(n_fan))
+    idx = []
+    for s in surfaces:
+        n1 = float(get_glass_index(s['glass_before'], wavelength))
+        n2 = float(get_glass_index(s['glass_after'], wavelength))
+        idx.append((n1, n2))
+
+    # Ray state: position (pz, py), unit dir (dz, dy).  Collimated by default;
+    # otherwise launched along the input congruence (carrier normal).
+    nf = heights.size
+    pz = np.zeros(nf)
+    py = heights.astype(np.float64).copy()
+    if carrier_slope is None:
+        dz = np.ones(nf)
+        dy = np.zeros(nf)
+    else:
+        g = np.asarray(carrier_slope(heights), dtype=np.float64).reshape(nf)
+        g = np.where(np.isfinite(g), g, 0.0)
+        nrm = np.sqrt(1.0 + g * g)
+        dz = 1.0 / nrm
+        dy = g / nrm
+    alive = np.ones(nf, dtype=bool)
+    z_v = 0.0
+    luts = []
+    for i, s in enumerate(surfaces):
+        R = s['radius']
+        kc = s.get('conic', 0.0) or 0.0
+        asph = s.get('aspheric_coeffs')
+        n1, n2 = idx[i]
+        flat = (R == 0) or (not np.isfinite(R))
+
+        # ---- intersect ray with z = z_v + sag(|y|) -------------------------
+        with np.errstate(divide='ignore', invalid='ignore'):
+            t = (z_v - pz) / dz                     # vertex-plane start
+        if flat:
+            pz = pz + t * dz
+            py = py + t * dy
+            nrm_z = np.ones(nf)
+            nrm_y = np.zeros(nf)
+        else:
+            # Newton on g(t) = pz + t dz - z_v - sag(|py + t dy|).
+            for _ in range(24):
+                y = py + t * dy
+                r = np.abs(y)
+                sag = _surface_sag_general(r * r, R, kc, asph)
+                sag = np.where(np.isnan(sag), 0.0, sag)
+                e = np.maximum(1e-9, 1e-6 * r)
+                sp = _surface_sag_general((r + e) ** 2, R, kc, asph)
+                sm = _surface_sag_general((r - e) ** 2, R, kc, asph)
+                sp = np.where(np.isnan(sp), 0.0, sp)
+                sm = np.where(np.isnan(sm), 0.0, sm)
+                sagp = (sp - sm) / (2.0 * e)         # dsag/dr
+                g = pz + t * dz - z_v - sag
+                dgdt = dz - sagp * np.sign(y) * dy
+                dgdt = np.where(np.abs(dgdt) < 1e-30, 1e-30, dgdt)
+                t = t - g / dgdt
+            pz = pz + t * dz
+            py = py + t * dy
+            y = py
+            r = np.abs(y)
+            e = np.maximum(1e-9, 1e-6 * r)
+            sp = _surface_sag_general((r + e) ** 2, R, kc, asph)
+            sm = _surface_sag_general((r - e) ** 2, R, kc, asph)
+            sp = np.where(np.isnan(sp), 0.0, sp)
+            sm = np.where(np.isnan(sm), 0.0, sm)
+            sagp = (sp - sm) / (2.0 * e)
+            # Surface normal of z = z_v + sag(|y|): grad(z - sag) = (1, -sagp).
+            nz = np.ones(nf)
+            ny = -sagp * np.sign(y)
+            nn = np.hypot(nz, ny)
+            nrm_z = nz / nn
+            nrm_y = ny / nn
+
+        cos_in_z = dz.copy()                         # ray angle to z (incoming)
+        cos_i = dz * nrm_z + dy * nrm_y              # AOI cosine (to normal)
+        eta = n1 / n2
+        sin2t = eta * eta * (1.0 - cos_i * cos_i)
+        alive = alive & np.isfinite(py) & (sin2t <= 1.0)
+        cos_t = np.sqrt(np.maximum(1.0 - sin2t, 0.0))
+        ndz = eta * dz + (cos_t - eta * cos_i) * nrm_z
+        ndy = eta * dy + (cos_t - eta * cos_i) * nrm_y
+        nn2 = np.hypot(ndz, ndy)
+        nn2 = np.where(nn2 == 0.0, 1.0, nn2)
+        dz = ndz / nn2
+        dy = ndy / nn2
+        cos_out_z = dz.copy()                        # ray angle to z (outgoing)
+
+        h_cross = np.abs(py)
+        m = alive & np.isfinite(cos_in_z) & np.isfinite(cos_out_z)
+        hh = h_cross[m]
+        ci = cos_in_z[m]
+        co = cos_out_z[m]
+        order = np.argsort(hh)
+        luts.append((hh[order], ci[order], co[order]))
+
+        if i < n_surf - 1:
+            z_v += thicknesses[i]
+    return luts
+
+
+def _displaced_opd(sag, r, lut, n1r, n2r):
+    """Ray-angle-aware refraction OPD (equation (1)): interpolate the fan
+    cosines onto grid radius ``r`` and return
+    ``(n2 cos_alpha_out - n1 cos_alpha_in) * sag``.  ``lut`` is one
+    ``(h, cos_in, cos_out)`` tuple from :func:`_build_displaced_cos_luts`."""
+    h_lut, cin_lut, cout_lut = lut
+    if h_lut.size == 0:
+        # No rays survived (fully vignetted / TIR); fall back to paraxial.
+        return (n2r - n1r) * sag
+    cos_in = np.interp(r, h_lut, cin_lut, left=cin_lut[0], right=cin_lut[-1])
+    cos_out = np.interp(r, h_lut, cout_lut, left=cout_lut[0], right=cout_lut[-1])
+    return (n2r * cos_out - n1r * cos_in) * sag
+
+
+def _displaced_carrier_slope_fn(conjugate, E_in, wavelength, dx, dy, Nx, Ny):
+    """Return a callable ``heights -> g`` giving the meridional launch slope
+    ``g = dW/dy`` at ``(x=0, y=height)`` for the input CONGRUENCE described by
+    ``conjugate`` (G2 Task 1), mirroring ``apply_real_lens_traced``'s
+    ``_compute_carrier`` vocabulary:
+
+    * ``None`` / ``+-inf`` -> collimated: returns ``None`` (the fan launches
+      axially -- byte-identical to the pre-G2 collimated fan).
+    * ``float`` signed conjugate ``s`` (m) -> ``g(h) = h / s``
+      (``s > 0`` diverging source in front of the lens, ``s < 0`` converging).
+    * ``'auto'`` -> a low-order polynomial carrier fit of ``E_in`` (reuses
+      ``_compute_carrier``); the meridional slope is ``dW/dy(0, h)``.
+    * ``ndarray`` -> an explicit wavefront ``W`` (m, field-shaped); the slope
+      is the interpolated ``dW/dy`` along the central column.
+
+    The screen is input-independent GIVEN the conjugate, so the ``None`` /
+    scalar paths are cached (see :func:`_get_displaced_cos_luts`); the
+    ``'auto'`` / ``ndarray`` paths depend on ``E_in`` and are not cached.
+    """
+    if conjugate is None:
+        return None
+    if isinstance(conjugate, (int, float)) and not isinstance(conjugate, bool):
+        s = float(conjugate)
+        if not np.isfinite(s):
+            return None                     # +-inf == collimated
+        if s == 0.0:
+            raise ValueError(
+                "apply_real_lens: surface_model='displaced' conjugate distance "
+                "must be non-zero (0 is the source's own focus).")
+
+        def _scalar_slope(h):
+            return np.asarray(h, dtype=np.float64) / s
+
+        return _scalar_slope
+
+    # 'auto' / ndarray: reuse the traced carrier machinery along the meridian.
+    from ._lens_traced import _compute_carrier
+    xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Xg, Yg = np.meshgrid(xax, yax)
+    _, grad_fn, _ = _compute_carrier(conjugate, E_in, wavelength, dx, Xg, Yg)
+
+    def _carrier_slope(h):
+        h = np.asarray(h, dtype=np.float64)
+        _, Mv = grad_fn(np.zeros_like(h), h)
+        return np.asarray(Mv, dtype=np.float64)
+
+    return _carrier_slope
+
+
+# ---------------------------------------------------------------------------
+# Displaced cosine-LUT cache (G2 Task 1) -- the screen is field-independent
+# GIVEN the (prescription, conjugate), so a design/optimisation loop varying
+# only the field reuses the meridional-fan trace.  Bounded (FIFO-evicted) +
+# registered with the central cache registry (G1 cache-audit conventions);
+# only the field-INDEPENDENT congruences (collimated / scalar conjugate) are
+# cached -- 'auto'/ndarray carriers depend on E_in and always rebuild.
+# ---------------------------------------------------------------------------
+_DISPLACED_LUT_CACHE: Dict[Any, Any] = {}
+_DISPLACED_LUT_CACHE_MAX = 8
+_DISPLACED_LUT_CACHE_LOCK = _threading.Lock()
+
+
+def clear_displaced_lut_cache() -> None:
+    """Drop every cached ``surface_model='displaced'`` cosine LUT.
+
+    Forces the next displaced call to re-trace the meridional fan.  Registered
+    with the central cache registry, so :func:`lumenairy.clear_asm_caches`
+    drains it too."""
+    with _DISPLACED_LUT_CACHE_LOCK:
+        _DISPLACED_LUT_CACHE.clear()
+
+
+try:
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _register_cache_clearer('displaced_cos_luts', clear_displaced_lut_cache)
+except ImportError:
+    pass
+
+
+def _displaced_geom_key(surfaces, thicknesses, wavelength, r_max, conjugate):
+    """Hashable identity of the FIELD-INDEPENDENT displaced fan (surfaces +
+    thicknesses + wavelength + fan extent + scalar conjugate).  Only the
+    collimated (``conjugate is None``) and scalar-conjugate congruences are
+    cacheable; returns ``None`` for the field-dependent 'auto'/ndarray cases."""
+    if not (conjugate is None
+            or (isinstance(conjugate, (int, float))
+                and not isinstance(conjugate, bool))):
+        return None
+    surf_key = tuple((
+        float(s.get('radius', np.inf))
+        if np.isfinite(s.get('radius', np.inf)) else np.inf,
+        float(s.get('conic', 0.0) or 0.0),
+        (tuple(sorted((int(p), float(a))
+                      for p, a in s['aspheric_coeffs'].items()))
+         if s.get('aspheric_coeffs') else None),
+        str(s.get('glass_before')), str(s.get('glass_after')))
+        for s in surfaces)
+    conj_key = None if conjugate is None else float(conjugate)
+    return (surf_key, tuple(float(t) for t in thicknesses),
+            float(wavelength), float(r_max), conj_key)
+
+
+def _get_displaced_cos_luts(surfaces, thicknesses, wavelength, r_max,
+                            conjugate, carrier_slope):
+    """Build (or fetch from the bounded cache) the per-surface displaced cosine
+    LUTs for the given congruence.  Field-independent congruences are cached;
+    'auto'/ndarray always rebuild."""
+    key = _displaced_geom_key(surfaces, thicknesses, wavelength, r_max,
+                              conjugate)
+    if key is not None:
+        with _DISPLACED_LUT_CACHE_LOCK:
+            hit = _DISPLACED_LUT_CACHE.get(key)
+        if hit is not None:
+            return hit
+    luts = _build_displaced_cos_luts(
+        surfaces, thicknesses, wavelength, r_max, carrier_slope=carrier_slope)
+    if key is not None:
+        with _DISPLACED_LUT_CACHE_LOCK:
+            if len(_DISPLACED_LUT_CACHE) >= _DISPLACED_LUT_CACHE_MAX:
+                _DISPLACED_LUT_CACHE.pop(next(iter(_DISPLACED_LUT_CACHE)))
+            _DISPLACED_LUT_CACHE[key] = luts
+    return luts
+
+
 def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
                              n_medium_r: float, n_medium_kappa: float,
                              dx: float, dy: float, bandlimit: bool,
@@ -418,6 +735,102 @@ def _check_no_silent_fold_drop(prescription: dict,
         f"fold'.")
 
 
+_VALID_SURFACE_MODELS = ('thin', 'displaced')
+
+
+def _check_displaced_support(*, surface_model, slant_correction, fresnel,
+                             seidel_correction, absorption, surface_frame,
+                             use_gpu, wave_propagator, prescription,
+                             conjugate=None, E_shape=None):
+    """Validate ``surface_model`` and, for ``'displaced'``, that the requested
+    feature set + prescription are within the ray-angle-aware refraction OPD's
+    supported envelope.  Raises ``ValueError`` / ``NotImplementedError`` with a
+    precise message instead of silently producing a wrong field."""
+    if surface_model not in _VALID_SURFACE_MODELS:
+        raise ValueError(
+            f"apply_real_lens: unknown surface_model {surface_model!r}.  "
+            f"Valid choices: {sorted(_VALID_SURFACE_MODELS)}.")
+    if surface_model == 'thin':
+        if conjugate is not None:
+            raise ValueError(
+                "apply_real_lens: conjugate= is only meaningful with "
+                "surface_model='displaced' (it sets the input congruence for "
+                "the obliquity fan).  The default 'thin' screen has no "
+                "ray-angle fan; drop conjugate= or pass "
+                "surface_model='displaced'.")
+        return
+    # ``displaced`` conjugate vocabulary: None (collimated), a signed scalar
+    # conjugate distance (m), 'auto', or an explicit wavefront ndarray.
+    if conjugate is not None:
+        if isinstance(conjugate, str):
+            if conjugate != 'auto':
+                raise ValueError(
+                    f"apply_real_lens: surface_model='displaced' conjugate "
+                    f"string must be 'auto', got {conjugate!r}.")
+        elif isinstance(conjugate, np.ndarray):
+            if E_shape is not None and conjugate.shape != E_shape:
+                raise ValueError(
+                    f"apply_real_lens: conjugate wavefront ndarray shape "
+                    f"{conjugate.shape} != field shape {E_shape}.")
+        elif isinstance(conjugate, (int, float)) and not isinstance(
+                conjugate, bool):
+            if float(conjugate) == 0.0:
+                raise ValueError(
+                    "apply_real_lens: surface_model='displaced' conjugate "
+                    "distance must be non-zero.")
+        else:
+            raise ValueError(
+                f"apply_real_lens: surface_model='displaced' conjugate must be "
+                f"None, a signed scalar distance, 'auto', or a wavefront "
+                f"ndarray, got {type(conjugate).__name__}.")
+    # ``displaced`` is a self-contained ray-angle-aware OPD; it is mutually
+    # exclusive with the other per-surface OPD / amplitude modifiers (they
+    # would double-count or contradict the traced-fan incidence angles).
+    _incompat = [name for name, on in (
+        ('slant_correction', slant_correction),
+        ('fresnel', fresnel),
+        ('seidel_correction', seidel_correction),
+        ('absorption', absorption),
+        ('surface_frame', surface_frame),
+        ('use_gpu', use_gpu),
+    ) if on]
+    if _incompat:
+        raise ValueError(
+            f"apply_real_lens: surface_model='displaced' is incompatible with "
+            f"{_incompat}.  The displaced model supplies its own ray-angle "
+            f"refraction OPD; drop those flags or use surface_model='thin'.")
+    if wave_propagator not in ('asm', None):
+        raise ValueError(
+            f"apply_real_lens: surface_model='displaced' requires the ASM "
+            f"in-glass propagator (got wave_propagator={wave_propagator!r}).")
+    # The collimated meridional fan supports only rotationally-symmetric plain
+    # conic / aspheric refracting surfaces.
+    surfaces = prescription.get('surfaces') or []
+    for i, s in enumerate(surfaces):
+        if not isinstance(s, dict):
+            continue
+        if bool(s.get('is_mirror', False)) or (
+                isinstance(s.get('glass_after'), str)
+                and s['glass_after'].upper() == 'MIRROR'):
+            raise NotImplementedError(
+                f"apply_real_lens: surface_model='displaced' does not support "
+                f"mirror surface {i}; use the per-segment folded pattern.")
+        for _k in ('radius_y', 'freeform_type', 'form_error'):
+            if s.get(_k) is not None:
+                raise NotImplementedError(
+                    f"apply_real_lens: surface_model='displaced' does not "
+                    f"support surfaces[{i}].{_k} (rotationally-symmetric conic "
+                    f"/ aspheric only); use surface_model='thin' or "
+                    f"apply_real_lens_traced.")
+        for _k in ('decenter', 'tilt'):
+            _v = s.get(_k)
+            if _v is not None and tuple(_v) != (0.0, 0.0):
+                raise NotImplementedError(
+                    f"apply_real_lens: surface_model='displaced' does not "
+                    f"support surfaces[{i}].{_k}={_v} (on-axis only); use "
+                    f"surface_model='thin' or apply_real_lens_traced.")
+
+
 def apply_real_lens(
     E_in: np.ndarray,
     *,
@@ -437,6 +850,8 @@ def apply_real_lens(
     surface_frame: bool = False,
     sag_dtype: Optional[Any] = None,
     sag_chunk_rows: Optional[int] = None,
+    surface_model: str = 'thin',
+    conjugate: Any = None,
 ) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
@@ -684,6 +1099,62 @@ def apply_real_lens(
         freeform / clear_aperture / stop surface / fresnel / slant /
         surface-frame, or a non-NumPy backend) fall through to the
         whole-grid path per surface.
+    surface_model : {'thin', 'displaced'}, default 'thin'
+        v5.25.1 opt-in refraction-OPD model (hammer audit H2(a)).
+
+        ``'thin'`` (default): the paraxial thin-element screen
+        ``(n2 - n1) * sag(r)`` (optionally slant-corrected), byte-identical
+        to prior releases.
+
+        ``'displaced'``: the ray-angle-aware refraction OPD
+        ``(n2 cos(alpha_out) - n1 cos(alpha_in)) * sag(r)``, where
+        ``alpha_in`` / ``alpha_out`` are the TRUE ray angles to the z-axis
+        (before / after each surface) sourced from a meridional ray fan
+        traced through the actual conic/aspheric prescription along the input
+        congruence (see ``conjugate``).  This restores the incoming-ray-angle
+        obliquity the paraxial screen drops -- most importantly it is NO
+        LONGER orientation-invariant on a plano-convex singlet (the paraxial
+        screen imprints the identical map for both orientations), so it
+        reproduces the textbook ~4x spherical-aberration split between the
+        curved-first and flat-first orientations.  Validated against both
+        hammer-campaign oracles at Nyquist-compliant sampling (f/5 biconvex
+        r2m 64.5 vs 64.98 um, 0.7%; plano-convex 42/127 vs 43/128 um;
+        EE50/EE80 matched).  NB: the exit converging wavefront must be
+        Nyquist-sampled (``dx <= lambda / (2 NA_exit)``, cf. finding H3 for
+        ``apply_real_lens_traced``) or the windowed r2m aliases LOW -- the
+        ~40 um analytic "plateau" the 2026-07-18 audit reported was a
+        dx=6 um undersampling artefact (traced reads the same 40.9 um there
+        and 64.8 um at dx<=3 um), not a model floor.  Supports only
+        rotationally-symmetric plain conic / aspheric surfaces (no biconic /
+        freeform / decenter / tilt / form_error / mirror / GPU / non-ASM /
+        fresnel / slant / seidel / absorption -- those raise); use
+        ``apply_real_lens_traced`` outside that envelope.
+    conjugate : {None, float, 'auto', ndarray}, default None
+        G2 Task 1 -- the INPUT CONGRUENCE for the ``surface_model='displaced'``
+        obliquity fan (same vocabulary as ``apply_real_lens_traced``'s
+        ``carrier``).  Only used when ``surface_model='displaced'`` (else it
+        must be ``None`` or a ``ValueError`` is raised).
+
+        * ``None`` (default) -- COLLIMATED input.  The fan launches axially;
+          byte-identical to the pre-G2 collimated fan and exact for a
+          collimated beam.
+        * ``float`` -- a signed on-axis conjugate distance ``R_in`` (m):
+          ``R_in > 0`` a diverging source in front of the lens, ``R_in < 0``
+          converging.  The fan is launched with marginal slope ``h / R_in`` so
+          the second (and later) surfaces see the true incidence; the OPD (1)
+          then reflects the actual converging/diverging illumination.
+        * ``'auto'`` -- fit a low-order polynomial carrier from ``E_in``
+          (reuses ``_compute_carrier``) and launch the fan along its meridional
+          slope.  For a single divergent source of unknown conjugate.
+        * ``ndarray`` -- an explicit input wavefront ``W`` (m, field-shaped).
+
+        The wave field itself (``E_in``) already carries the input curvature in
+        its phase -- ``conjugate`` ONLY informs the per-surface obliquity
+        cosines; it adds no reference phase and does not modify ``E_in``.  The
+        screen is field-independent given the conjugate, so the ``None`` /
+        scalar paths are cached (bounded + registered; ``'auto'`` / ndarray
+        rebuild).  Envelope + measured accuracy: see
+        ``docs/audit_real_lens_displaced_2026_07_19.md`` (G2 section).
 
     Returns
     -------
@@ -751,6 +1222,19 @@ def apply_real_lens(
         seidel_correction=seidel_correction,
         seidel_poly_order=seidel_poly_order,
         prescription=prescription,
+    )
+    _check_displaced_support(
+        surface_model=surface_model,
+        slant_correction=slant_correction,
+        fresnel=fresnel,
+        seidel_correction=seidel_correction,
+        absorption=absorption,
+        surface_frame=surface_frame,
+        use_gpu=use_gpu,
+        wave_propagator=wave_propagator,
+        prescription=prescription,
+        conjugate=conjugate,
+        E_shape=np.shape(E_in),
     )
 
     # v4.13.0 audit P1-A: explicit mirror-in-surfaces guard.  The
@@ -842,6 +1326,30 @@ def apply_real_lens(
 
     Ny, Nx = E_in.shape
     k0 = 2 * np.pi / wavelength
+
+    # surface_model='displaced': precompute the per-surface ray-angle cosine
+    # LUTs from a collimated meridional fan (see the module-level derivation).
+    # Bounded by the clear aperture (or the widest per-surface semi-diameter,
+    # or the grid half-width), so the fan spans the illuminated pupil.
+    _displaced = (surface_model == 'displaced')
+    _disp_luts = None
+    if _displaced:
+        _r_max = None
+        if aperture is not None:
+            _r_max = float(aperture) / 2.0
+        else:
+            _semis = [s.get('semi_diameter') for s in surfaces
+                      if s.get('semi_diameter')]
+            _r_max = (max(float(v) for v in _semis) if _semis
+                      else 0.5 * max(Nx * dx, Ny * dy))
+        # G2 Task 1: launch the meridional fan along the INPUT CONGRUENCE
+        # (conjugate=None collimated -> byte-identical; scalar R_in; 'auto';
+        # explicit wavefront ndarray) so the per-surface obliquity cosines
+        # reflect the true converging/diverging incidence.
+        _disp_slope = _displaced_carrier_slope_fn(
+            conjugate, E_in, wavelength, dx, dy, Nx, Ny)
+        _disp_luts = _get_displaced_cos_luts(
+            surfaces, thicknesses, wavelength, _r_max, conjugate, _disp_slope)
 
     # Geometry dtype: float64 (default, byte-identical) or float32 (opt-in via
     # sag_dtype= / set_lens_sag_dtype), which halves the coordinate/sag/opd
@@ -962,7 +1470,7 @@ def apply_real_lens(
         _narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and not slant_correction and not fresnel
-            and not surface_frame
+            and not surface_frame and not _displaced
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -1402,7 +1910,17 @@ def apply_real_lens(
         # media.  Users needing better than thin-element accuracy
         # should use ``apply_real_lens_traced`` which bypasses this
         # limitation entirely by ray-tracing each pixel.
-        if slant_correction:
+        if _displaced:
+            # v5.25.1 (hammer H2(a)): ray-angle-aware refraction OPD
+            # (n2 cos_alpha_out - n1 cos_alpha_in) * sag, cosines of the
+            # TRUE ray angle to the z-axis from the collimated meridional
+            # fan (interpolated onto the grid radius r).  Carries the
+            # incoming-ray-angle physics the paraxial/slant screens drop and
+            # splits plano-convex orientation.  See the module-level
+            # derivation + oracle evidence.
+            r_grid = xp.sqrt(h_sq)
+            opd = _displaced_opd(sag, r_grid, _disp_luts[i], n1r, n2r)
+        elif slant_correction:
             # v5.25.0 (hammer audit H1): cosines in the NUMERATOR -- the
             # wavefront OPD of a tilted refracting facet, not the ray
             # slab path-length.  See the banded-copy comment above for

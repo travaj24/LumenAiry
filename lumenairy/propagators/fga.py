@@ -580,6 +580,14 @@ _FD_BUNDLE_RAYS = 9         # base + +/-h in x, y, ux, uy (finite-difference bun
 _ADRT_DUAL_SLOTS = 5        # analytic forward-AD ray: value + d/d(x, y, ux, uy)
 _TRACE_STATE_BYTES = 360.0  # per-point ray state threaded through the system (measured)
 
+# Fixed full-grid array floor for the memory estimate (C2): the per-pixel
+# bytes of the persistent + peak-transient grid arrays that do NOT shrink with
+# the swarm chunking -- input field (complex128, 16 B) + outr/outi accumulators
+# (2x float64, 16 B) + the returned complex output (16 B).  ~48 B/px reproduces
+# the H8 empirical "~40 GB raw grid arrays at N=28672" (822 Mpx x 48 B ~ 39 GB);
+# the vector path carries two input fields, hence x2.
+_FGA_GRID_BYTES_PER_PX_SCALAR = 48.0
+
 # Lever #3 (coarse-lattice trace + interpolation) tunables.
 _COARSE_INTERP_ORDER = 3    # cubic map_coordinates upsample (opd ~2e-5 waves, well
 #                             under the ~1e-3 FGA floor; ~2x faster than quintic)
@@ -624,7 +632,12 @@ def _pick_ray_transfer(surfaces, exact):
 # geometry, not on the input field), so a repeated propagation through the SAME
 # optics -- e.g. a design / optimization loop that varies only the field -- reuses
 # it.  Opt-in (``cache_trace``); bounded, FIFO-evicted; each entry is the coarse
-# swarm (~ full swarm / coarse_stride^2), so keep the bound small.
+# swarm (~ full swarm / coarse_stride^2), so keep the bound small.  MEASURED
+# footprint (G1 cache audit, 2026-07-19; per-momentum grids (7, N//stride,
+# N//stride) float64 + bool alive, Np momenta): at coarse_stride=3, Np=49 the
+# entry is ~311 MB at N=2048 and ~1.25 GB at N=4096, so the FIFO bound of 2 caps
+# the retained coarse cache at ~0.6 GB / ~2.5 GB respectively.  Drain any time
+# with clear_coarse_trace_cache() / clear_asm_caches() (registered below).
 _COARSE_CACHE: Dict[Any, Any] = {}
 _COARSE_CACHE_MAX = 2
 # v5.24.4 (audit hygiene): thread-safety lock for ``_COARSE_CACHE``.  The
@@ -794,27 +807,90 @@ def _resolve_sampling(E_in, dx, dyg, wavelength, w0, prescription, p_max, n_p,
         # quietly down-sampled result.
         if n_p < n_p_want:
             dp_ach = 2.0 * p_max / (n_p - 1)
+            if info is not None:
+                # expose the target-meeting n_p so callers / fga_memory_estimate
+                # can size the exact run the clamp declined.
+                info['n_p_target'] = int(n_p_want)
+                info['n_p_clamped'] = int(n_p)
             if dp_ach > _DP_TARGET * (1.0 + 1e-9):
+                # the momentum-swarm memory scales with Np = n_p**2, so meeting
+                # the target costs (n_p_want / n_p)**2 x the swarm arrays.  Give
+                # the caller the explicit n_p AND that factor so they can weigh
+                # the fidelity vs cost; fga_memory_estimate turns it into an
+                # absolute MB figure for their grid.
+                mem_factor = (float(n_p_want) / float(n_p)) ** 2
                 warnings.warn(
                     "FGA auto momentum sampling: n_p clamped to the cost cap "
                     f"({n_p}) yields dp={dp_ach:.4g} > target {_DP_TARGET:.4g} "
                     f"for p_max={p_max:.4g}; the phase-space quadrature is "
                     "under-sampled and a diverging / high-NA field may lose "
-                    "fidelity. Pass an explicit larger n_p, or a smaller "
-                    "p_max, to restore dp <= target.",
+                    f"fidelity. To restore dp <= target pass n_p={n_p_want} "
+                    f"(grows the momentum swarm ~{mem_factor:.1f}x in memory -- "
+                    "call fga_memory_estimate(...) for the absolute MB on your "
+                    "grid), or lower p_max.",
                     RuntimeWarning, stacklevel=2)
     return float(p_max), int(n_p)
 
 
+def _env_mem_budget_mb():
+    """Read the ``LUMENAIRY_MEM_BUDGET_MB`` environment override (C2), or
+    ``None`` when unset / invalid.  A positive number pins the FGA default
+    memory budget (MB) directly -- the escape hatch for a SHARED box where the
+    25%-of-RAM auto-default (which sees the whole machine, not this process's
+    share) is too generous.  A non-positive / unparseable value is ignored with
+    a one-line warning so a typo does not silently disable the guard."""
+    import os
+    raw = os.environ.get('LUMENAIRY_MEM_BUDGET_MB')
+    if raw is None or str(raw).strip() == '':
+        return None
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        warnings.warn(
+            f"LUMENAIRY_MEM_BUDGET_MB={raw!r} is not a number; ignoring it and "
+            "falling back to the 25%-of-RAM FGA default.",
+            RuntimeWarning, stacklevel=2)
+        return None
+    if not (val > 0.0):
+        warnings.warn(
+            f"LUMENAIRY_MEM_BUDGET_MB={raw!r} is not positive; ignoring it.",
+            RuntimeWarning, stacklevel=2)
+        return None
+    return val
+
+
 def _default_mem_budget_mb():
     """Default FGA memory budget (MB) when the caller leaves ``mem_budget_mb``
-    unset (H4a): a fraction (``_DEFAULT_MEM_BUDGET_FRAC``) of the available RAM
+    unset (H4a): the ``LUMENAIRY_MEM_BUDGET_MB`` environment override when set
+    (C2), else a fraction (``_DEFAULT_MEM_BUDGET_FRAC``) of the available RAM
     budget, floored at ``_DEFAULT_MEM_BUDGET_FLOOR_MB``.  A concrete budget lets
     the (byte-identical, max|diff|=0.0) position-lattice chunk loop engage for a
     large aperture instead of a single huge (Nq, Np) allocation that OOMs."""
+    env = _env_mem_budget_mb()
+    if env is not None:
+        return env
     from ..memory import get_ram_budget
     mb = _DEFAULT_MEM_BUDGET_FRAC * float(get_ram_budget()) / 1e6
     return max(_DEFAULT_MEM_BUDGET_FLOOR_MB, mb)
+
+
+def _fga_lattice_point_bytes(Np, cw, use_sep, cfull_mult, fd_bundle):
+    """Peak transient bytes per POSITION-lattice point of the FGA swarm (H4
+    memory model) -- the single source of truth shared by the chunk sizer
+    (:func:`_resolve_nq_chunk`) and the public sizing helper
+    (:func:`fga_memory_estimate`) so they can never drift.
+
+    * separable coefficient array ``c_full`` -- ``cfull_mult*Np*16`` B (whole
+      momentum grid for this lattice point; ``cfull_mult`` = 1 scalar, 2 for the
+      vector ``Ex``/``Ey`` path);
+    * beamlet transport arrays ``QX/QY/PX/PY + AW + coeff (+ Jones)`` --
+      ``cw*~100`` B over the ``cw`` momenta in flight;
+    * the differential ray-trace bundle: the FD Jacobian threads a
+      ``_FD_BUNDLE_RAYS``-ray bundle (~3.2 kB/pt), the analytic single-ray
+      Jacobian ``_ADRT_DUAL_SLOTS`` slots (~1.8 kB/pt)."""
+    trace_bytes = ((_FD_BUNDLE_RAYS if fd_bundle else _ADRT_DUAL_SLOTS)
+                   * _TRACE_STATE_BYTES)
+    return (cfull_mult * Np * 16.0 if use_sep else 0.0) + cw * 100.0 + trace_bytes
 
 
 def _chunk_from_budget(shape, dq_step, chunk, mem_budget_mb):
@@ -857,8 +933,7 @@ def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0,
     if mem_budget_mb is None:
         return None
     budget = float(mem_budget_mb) * 1e6
-    trace_bytes = (_FD_BUNDLE_RAYS if fd_bundle else _ADRT_DUAL_SLOTS) * _TRACE_STATE_BYTES
-    per = (cfull_mult * Np * 16.0 if use_sep else 0.0) + cw * 100.0 + trace_bytes
+    per = _fga_lattice_point_bytes(Np, cw, use_sep, cfull_mult, fd_bundle)
     nqc = int(budget / per)
     if nqc < 1:
         raise MemoryError(
@@ -1336,6 +1411,13 @@ def apply_real_lens_fga(
         slow -- the ray trace scales with ``Nq`` -- so control ``Nq`` with
         ``dq_step`` / ``prune_frac`` / ``n_p`` and prefer a lighter propagator
         there, but it no longer OOMs.)
+
+        On a SHARED box the 25%-of-RAM default is measured against the WHOLE
+        machine, not this process's share, so it can over-commit.  Set the
+        ``LUMENAIRY_MEM_BUDGET_MB`` environment variable to pin the default
+        budget (MB) process-wide without threading ``mem_budget_mb`` through
+        every call site, and call :func:`fga_memory_estimate` to size a run
+        (grid floor + swarm peak, chunked and unchunked) before launching it.
     chunk : int, optional
         Explicit momenta-per-batch (overrides ``mem_budget_mb``).
     prune_frac : float
@@ -1455,6 +1537,176 @@ def apply_real_lens_fga(
         if pout > 0.0:
             out = out * math.sqrt(pin / pout)
     return out
+
+
+def fga_memory_estimate(
+    N: Any,
+    dx: float,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    *,
+    dy: Optional[float] = None,
+    E_in: Optional[np.ndarray] = None,
+    p_max: Optional[float] = None,
+    n_p: Optional[int] = None,
+    dq_step: int = 2,
+    w0_factor: float = 5.0,
+    nsig: float = 3.0,
+    vector: bool = False,
+    exact_jacobian: Optional[bool] = None,
+    mem_budget_mb: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Predict FGA peak memory for a run BEFORE launching it (C2 / H4 model).
+
+    Exposes the same memory model the chunk sizer uses (via the shared
+    :func:`_fga_lattice_point_bytes`), so a caller can size a large-aperture
+    :func:`apply_real_lens_fga` / :func:`apply_real_lens_fga_vector` on a shared
+    box -- pick ``dq_step`` / ``n_p`` / an explicit ``mem_budget_mb`` (or the
+    ``LUMENAIRY_MEM_BUDGET_MB`` env override) -- instead of discovering an OOM at
+    runtime (the H8 agent had to reverse-engineer these numbers).
+
+    Two memory pools:
+
+    * a FIXED full-grid floor (``grid_arrays_mb``) -- the input field, the
+      ``outr``/``outi`` accumulators and the complex output; it does NOT shrink
+      with the swarm chunking and is not bounded by ``mem_budget_mb``;
+    * the beamlet SWARM (``swarm_peak_mb``) -- ``Nq`` position-lattice points x
+      ``Np = n_p**2`` momenta; THIS is what ``mem_budget_mb`` bounds by chunking
+      the ``Nq`` lattice into ``nq_chunk`` blocks, giving ``chunked_swarm_peak_mb``.
+
+    Parameters
+    ----------
+    N : int or (Ny, Nx)
+        Grid size (square when an int).  Ignored (and overridden) when ``E_in``
+        is given.
+    dx, wavelength : float
+        Grid pitch and vacuum wavelength [m].
+    prescription : dict
+        Same surface prescription ``apply_real_lens_fga`` consumes (used for the
+        NA cap and the analytic-vs-FD Jacobian selection).
+    dy : float, optional
+        y pitch for anamorphic grids; ``None`` -> ``dx``.
+    E_in : ndarray, optional
+        The actual input field.  When given, ``p_max`` / ``n_p`` are auto-sized
+        from its true angular content (the accurate estimate); its shape sets
+        ``N``.  When omitted, the auto momentum sizing uses the system-NA cone as
+        an UPPER BOUND (``sampling_basis='na_cap_upper_bound'``) -- a diverging
+        field's real ``p_max`` never exceeds it, so the estimate is conservative.
+    p_max, n_p : optional
+        Explicit swarm sampling (bypasses auto-sizing), matching the same kwargs
+        on ``apply_real_lens_fga``.
+    dq_step, w0_factor, nsig, exact_jacobian, mem_budget_mb :
+        As on :func:`apply_real_lens_fga`.  ``mem_budget_mb=None`` uses the
+        library default (env override or 25%-of-RAM).
+    vector : bool, default False
+        Size the vector (``apply_real_lens_fga_vector``) path: two input fields
+        and a ``cfull_mult=2`` coefficient array.
+
+    Returns
+    -------
+    dict
+        ``Ny, Nx, dx, dy, p_max, n_p, Np, dq_step, Nq_full, use_separable,
+        exact_jacobian, bytes_per_lattice_point, swarm_peak_mb,
+        chunked_swarm_peak_mb, grid_arrays_mb, peak_unchunked_mb,
+        peak_chunked_mb, budget_mb, nq_chunk, swarm_fits_budget,
+        sampling_basis, n_p_target``.  ``Nq_full`` is the UN-pruned lattice
+        (upper bound; ``prune_frac`` reduces it for a concentrated field), and
+        ``n_p_target`` (when set) is the un-clamped ``n_p`` that would meet the
+        ``dp`` target -- the memory of that finer swarm scales by
+        ``(n_p_target / n_p)**2``.
+    """
+    from ..raytrace import surfaces_from_prescription
+
+    if E_in is not None:
+        Ny, Nx = int(np.shape(E_in)[0]), int(np.shape(E_in)[1])
+    elif isinstance(N, (tuple, list)) and len(N) == 2:
+        Ny, Nx = int(N[0]), int(N[1])
+    else:
+        Ny = Nx = int(N)
+    dyg = float(dx) if dy is None else float(dy)
+    w0 = float(w0_factor) * math.sqrt(float(dx) * dyg)
+    k = 2.0 * np.pi / float(wavelength)
+
+    # ---- resolve the momentum swarm (p_max, n_p) -----------------------
+    n_p_target = None
+    if p_max is not None and n_p is not None:
+        p_max_r, n_p_r = float(p_max), int(n_p)
+        sampling_basis = 'explicit'
+    elif E_in is not None:
+        _info: Dict[str, Any] = {}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')      # sizing call: no side warnings
+            p_max_r, n_p_r = _resolve_sampling(
+                np.asarray(E_in, dtype=np.complex128), float(dx), dyg,
+                float(wavelength), w0, prescription, p_max, n_p, info=_info)
+        n_p_target = _info.get('n_p_target')
+        sampling_basis = 'field_content'
+    else:
+        # No field: size p_max from the system-NA cone (x1.5 tail) as an upper
+        # bound, floored at the beamlet-completeness width, then n_p to the dp
+        # target -- the same arithmetic _resolve_sampling uses, minus the
+        # (field-dependent) content term.
+        na_cap = _default_p_max(prescription, float(wavelength),
+                                powerless_uncapped=True)
+        beamlet_floor = _PMAX_BEAMLET_C / (k * w0)
+        if p_max is not None:
+            p_max_r = float(p_max)
+        elif np.isfinite(na_cap):
+            p_max_r = float(max(beamlet_floor, 1.5 * na_cap))
+        else:
+            p_max_r = float(beamlet_floor)
+        if n_p is not None:
+            n_p_r = int(n_p)
+        else:
+            n_p_want = int(np.ceil(2.0 * p_max_r / _DP_TARGET)) | 1
+            n_p_r = int(min(61, max(7, n_p_want)))
+            if n_p_r < n_p_want:
+                n_p_target = int(n_p_want)
+        sampling_basis = 'na_cap_upper_bound'
+
+    Np = int(n_p_r) * int(n_p_r)
+    use_sep = n_p_r >= 5
+    cfull_mult = 2.0 if vector else 1.0
+
+    # ---- analytic (single-ray) vs FD (9-ray bundle) Jacobian -----------
+    surfs = surfaces_from_prescription(prescription)
+    all_conic = _is_all_conic(surfs)
+    exact = all_conic if exact_jacobian is None else bool(exact_jacobian)
+    fd_bundle = not (exact and all_conic)
+
+    # ---- lattice + per-point memory ------------------------------------
+    Nq_full = (len(range(0, Nx, int(dq_step)))
+               * len(range(0, Ny, int(dq_step))))
+    per = _fga_lattice_point_bytes(Np, Np, use_sep, cfull_mult, fd_bundle)
+    swarm_peak_mb = Nq_full * per / 1e6
+    grid_bytes = _FGA_GRID_BYTES_PER_PX_SCALAR * (2.0 if vector else 1.0)
+    grid_arrays_mb = grid_bytes * float(Ny) * float(Nx) / 1e6
+
+    budget = (float(mem_budget_mb) if mem_budget_mb is not None
+              else _default_mem_budget_mb())
+    nq_chunk = _resolve_nq_chunk(Nq_full, Np, use_sep, Np, budget,
+                                 'fga_memory_estimate', cfull_mult=cfull_mult,
+                                 fd_bundle=fd_bundle)
+    chunk_nq = Nq_full if nq_chunk is None else int(nq_chunk)
+    chunked_swarm_peak_mb = chunk_nq * per / 1e6
+
+    return {
+        'Ny': Ny, 'Nx': Nx, 'dx': float(dx), 'dy': dyg,
+        'p_max': float(p_max_r), 'n_p': int(n_p_r), 'Np': int(Np),
+        'dq_step': int(dq_step), 'Nq_full': int(Nq_full),
+        'use_separable': bool(use_sep), 'exact_jacobian': bool(exact),
+        'bytes_per_lattice_point': float(per),
+        'swarm_peak_mb': float(swarm_peak_mb),
+        'chunked_swarm_peak_mb': float(chunked_swarm_peak_mb),
+        'grid_arrays_mb': float(grid_arrays_mb),
+        'peak_unchunked_mb': float(grid_arrays_mb + swarm_peak_mb),
+        'peak_chunked_mb': float(grid_arrays_mb + chunked_swarm_peak_mb),
+        'budget_mb': float(budget),
+        'nq_chunk': (None if nq_chunk is None else int(nq_chunk)),
+        'swarm_fits_budget': bool(nq_chunk is None),
+        'sampling_basis': sampling_basis,
+        'n_p_target': (None if n_p_target is None else int(n_p_target)),
+    }
 
 
 def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
@@ -1786,6 +2038,11 @@ def apply_real_lens_auto(
        split but this router does not).  Prefer ``universal`` unless you
        specifically want the GBD-vs-FGA choice.
 
+       This 2-way router never selects the analytic phase-screen model (only
+       ``gbd`` / ``fga``, both ray-based with no thin-screen obliquity ceiling), so
+       ``universal``'s H2 sag-screen aberration gate does not apply here -- there
+       is no analytic route to steer away from.
+
     ``method='gbd'`` / ``'fga'`` force the choice.  ``return_method=True`` also
     returns the ``'gbd'``/``'fga'`` string actually used.  ``fga_kwargs`` /
     ``gbd_kwargs`` forward extra arguments to the chosen propagator (e.g.
@@ -1899,6 +2156,210 @@ def _tilt_dispersion(E_in, dx, dyg, wavelength, na):
     return rms / max(float(na), 1e-6)
 
 
+# H2 aberration gate (hammer audit, docs/audit_real_lens_hammer_2026_07_19.md).
+# The analytic sag-screen model ('phase_screen') is a per-surface plane-projection
+# phase mask; it structurally cannot represent the transverse ray-displacement of
+# high-order / orientation-dependent aberration, so its absolute spot size / EE
+# drift once the per-surface spherical term grows (H2: the f/5 dual-oracle singlet
+# converged to 40.5 um vs the 65 um truth; PCX orientation errs in BOTH directions,
+# 60.4/60.9 um where truth is 43/128).  The dispatcher estimates that error cheaply
+# at routing time and steers a heavily-aberrated prescription AWAY from
+# 'phase_screen' (to the ray-based traced / fga members) even at low NA, and warns
+# when 'phase_screen' is explicitly forced outside its envelope.
+_ABERRATION_MAX_RAD = 2.0   # sag-screen wavefront-error budget (rad); see below
+
+
+def _input_marginal_slope(E, a2, X, Y, dx, dyg, wavelength, r_beam):
+    """Signed paraxial marginal-ray slope ``u_in`` (rad) of the input carrier at
+    the first surface, from a least-squares fit of the field's local radial
+    wavevector ``u_r(rho) = (1/R) * rho``::
+
+        1/R  = sum(a2 * (px*X + py*Y)) / sum(a2 * (X^2 + Y^2)),   u_in = r_beam / R
+
+    with ``px, py`` the wrapping-safe per-pixel direction cosines
+    (``angle(E_i * conj(E_{i-1})) / (k*d)``).  Returns ``0.0`` **exactly** for a
+    real / globally-phased (flat-wavefront / collimated) field, so a collimated
+    input leaves the paraxial height trace at ``h = r_beam`` -- byte-identical to
+    the historical "input beam radius at every surface" for a single powered
+    surface.  Handles a converging (``u_in < 0``) or diverging (``u_in > 0``)
+    input so the marginal heights inside the lens are correct (G1 item 1c).
+
+    The wrapping-safe per-pixel increments require the input carrier fringe to be
+    RESOLVED by the grid (``dx < lambda*R/r`` at the beam edge); on a grid too
+    coarse to sample a strongly curved carrier the increments alias and ``u_in``
+    collapses toward 0 -- i.e. it falls back to the collimated (``h = r_beam``)
+    trace, the CONSERVATIVE (never-under-trips) behaviour, so an under-sampled
+    curved input is safe (routed to a ray member on the r_beam estimate), just not
+    refined.
+    """
+    if not np.iscomplexobj(E):
+        return 0.0
+    k = 2.0 * np.pi / float(wavelength)
+    px = np.zeros_like(a2)
+    py = np.zeros_like(a2)
+    px[:, :-1] = np.angle(E[:, 1:] * np.conj(E[:, :-1])) / (k * float(dx))
+    py[:-1, :] = np.angle(E[1:, :] * np.conj(E[:-1, :])) / (k * float(dyg))
+    den = float(np.sum(a2 * (X * X + Y * Y)))
+    if den <= 0.0:
+        return 0.0
+    inv_R = float(np.sum(a2 * (px * X + py * Y))) / den
+    return float(r_beam * inv_R)
+
+
+def _sag_screen_aberration_rad(E_in, dx, dyg, prescription, wavelength):
+    """Cheap estimate (radians of wavefront) of the analytic sag-screen model's
+    leading spherical-aberration error over the whole prescription.
+
+    Uses the audit's own error scaling -- the per-surface marginal-ray obliquity
+    term ``k * |sag(r)| * theta^2`` with ``sag(r) = r^2/(2R)`` and ``theta = r/R``
+    the local surface-normal tilt at the beam marginal radius ``r`` -- i.e.
+    ``k * r^4 / (2 |R|^3)`` per powered *spherical* surface (the leading ``r^4``
+    wavefront term the plane-projection phase screen gets wrong; H2).  Magnitudes
+    are summed over surfaces (a symmetric biconvex's two surfaces contribute the
+    SAME sign of physical spherical aberration; signed cancellation of the
+    ``|sag|*theta^2`` obliquity magnitude would falsely exonerate it -- the H1
+    sign trap).
+
+    G1 generality extensions (docs/audit_real_lens_hammer_2026_07_19.md follow-up):
+
+    * **Conic / aspheric surfaces (item 1a).**  The spherical ``r^4`` SAG
+      coefficient ``1/(8R^3)`` in the obliquity term is generalized to the TRUE
+      even-conic + aspheric coefficient ``c4 = (1+k)/(8R^3) + A4`` (A4 = the ``r^4``
+      aspheric term).  ``k * r^4 / (2|R|^3) == k * r^4 * 4 * |1/(8R^3)|``, so a
+      plain sphere (``k == 0``, no ``A4``) is byte-identical; a conic / asphere
+      shifts the estimate to match its actual leading ``r^4`` sag.
+
+    * **Multi-element per-surface height (item 1b).**  ``r`` is no longer the
+      INPUT beam radius at every surface; a cheap paraxial marginal-ray y-nu trace
+      (refraction + transfer) gives the marginal height ``h`` AT each surface, so a
+      doublet / relay uses the converging beam's true per-surface radius.  For a
+      single powered surface ``h == r_beam`` (unchanged).
+
+    * **Converging / diverging input (item 1c).**  The marginal ray starts at the
+      measured signed input slope ``u_in`` (:func:`_input_marginal_slope`), 0 for
+      a collimated field, so the height trace is correct for a curved-wavefront
+      input.
+
+    ``r_beam`` is the input field's 1/e^2 radius (``sqrt(2 * <r^2>)``).  NOTE this
+    remains a CONSERVATIVE per-surface curvature x beam-size bound on the
+    sag-screen MODEL error (an obliquity upper bound), not a faithful system-SA
+    estimate: it over-trips (routes to the accurate ray members, never wrong) on a
+    well-corrected fast element -- see the G1 audit doc.
+
+    Calibrated against the dual-oracle f/5 biconvex (R = +/-51.68 mm, w0 = 5 mm,
+    lambda = 1.31 um): the sum is ~20 rad -- far above the ~2 rad budget, so the
+    router steers it off 'phase_screen' -- while the benign small-beam regime
+    (w0 = 0.5 mm) sums ~0.002 rad, well under budget.
+
+    Returns 0.0 (never trips the gate) on an empty/zero field or a malformed
+    prescription -- the same defensive fallback as :func:`_default_p_max`.
+    """
+    try:
+        from ..glass import get_glass_index
+        from ..raytrace import surfaces_from_prescription
+        E = np.asarray(E_in)
+        a2 = np.abs(E) ** 2
+        tot = float(a2.sum())
+        if not np.isfinite(tot) or tot <= 0.0:
+            return 0.0
+        ny, nx = E.shape
+        xs = (np.arange(nx) - nx // 2) * float(dx)
+        ys = (np.arange(ny) - ny // 2) * float(dyg)
+        X, Y = np.meshgrid(xs, ys)
+        r_rms2 = float(np.sum(a2 * (X ** 2 + Y ** 2)) / tot)
+        r_beam = math.sqrt(max(2.0 * r_rms2, 0.0))      # 1/e^2 radius (Gaussian)
+        k = 2.0 * np.pi / float(wavelength)
+        wl = float(wavelength)
+        # Paraxial marginal-ray y-nu trace: start at the measured input slope.
+        u_in = _input_marginal_slope(E, a2, X, Y, dx, dyg, wl, r_beam)
+        surfs = list(surfaces_from_prescription(prescription))
+        h = r_beam
+        u = u_in
+        total = 0.0
+        n_last = len(surfs) - 1
+        for i, s in enumerate(surfs):
+            R = float(getattr(s, 'radius', np.inf))
+            kc = float(getattr(s, 'conic', 0.0) or 0.0)
+            asph = getattr(s, 'aspheric_coeffs', None) or {}
+            A4 = float(asph.get(4, asph.get('4', 0.0)) or 0.0) if asph else 0.0
+            try:
+                n1 = float(get_glass_index(getattr(s, 'glass_before', 'air'), wl))
+                n2 = float(get_glass_index(getattr(s, 'glass_after', 'air'), wl))
+            except (ValueError, KeyError, LookupError, TypeError):
+                n1 = n2 = 1.0       # unknown glass: no paraxial bend (heights hold)
+            finite = np.isfinite(R) and R != 0.0
+            # Per-surface leading r^4 sag-screen error at the marginal height h.
+            # Spherical (k==0, no A4) uses the byte-identical historical form;
+            # a conic / asphere uses the true r^4 sag coefficient c4.
+            if finite and kc == 0.0 and A4 == 0.0:
+                total += k * h ** 4 / (2.0 * abs(R) ** 3)
+            elif finite:
+                c4 = (1.0 + kc) / (8.0 * R ** 3) + A4
+                total += k * h ** 4 * 4.0 * abs(c4)
+            elif A4 != 0.0:
+                total += k * h ** 4 * 4.0 * abs(A4)          # flat + r^4 asphere
+            # Paraxial refraction (n2 u2 = n1 u1 - h phi) + transfer to next surf.
+            phi = ((n2 - n1) / R) if finite else 0.0
+            if n2 != 0.0:
+                u = (n1 * u - h * phi) / n2
+            if i < n_last:
+                h = h + u * float(getattr(s, 'thickness', 0.0) or 0.0)
+        return float(total)
+    except (LookupError, TypeError, ValueError, AttributeError,
+            ArithmeticError):
+        return 0.0
+
+
+def _universal_route(E_in, prescription, wavelength, dx, dyg, opd, na_threshold,
+                     caustic_pad_dof, multivalued, multivalued_threshold,
+                     aberration_threshold):
+    """Pure routing decision for :func:`apply_real_lens_universal` (no
+    propagation, so the choice is cheaply unit-testable).  Returns the member name
+    ('phase_screen' / 'fga' / 'traced').  See the dispatcher docstring for the full
+    regime map; the H2 aberration gate (:func:`_sag_screen_aberration_rad`) keeps a
+    heavily-aberrated prescription off 'phase_screen' even at low NA."""
+    na = _system_na(prescription, wavelength)
+    aberrated = (_sag_screen_aberration_rad(E_in, dx, dyg, prescription,
+                                            wavelength)
+                 > float(aberration_threshold))
+    if na < float(na_threshold) and not aberrated:
+        # low NA + benign: the thin-element phase screen is angle-independent (a
+        # linear operator on the field) + exact ASM, so it is wave-exact for ANY
+        # (single- or multi-valued) field, and the fastest option.  H2 gate: a
+        # low-NA-but-heavily-aberrated prescription (below na_threshold yet with a
+        # large per-surface r^4 term) falls through to the ray-based members
+        # instead of this sag-screen.
+        return "phase_screen"
+    # high NA, OR low-NA-but-aberrated: use a ray/beamlet member (no thin-screen
+    # obliquity ceiling).  Multi-valued fields never route to traced.
+    if multivalued is None:
+        mv = (_tilt_dispersion(E_in, dx, dyg, wavelength, na)
+              > float(multivalued_threshold))
+    else:
+        mv = bool(multivalued)
+    if mv:
+        return "fga"
+    zone = _caustic_zone(E_in, dx, prescription, wavelength)
+    if zone is not None:
+        pad = caustic_pad_dof * float(wavelength) / (na * na)
+        if (zone[0] - pad) <= opd <= (zone[1] + pad):
+            return "fga"
+    # smooth plane: the sub-nm traced OPL, but traced launches rays along the local
+    # phase gradient and is valid only for a ~collimated beam.  A single-valued but
+    # DIVERGING beam would be blurred -> route a BENIGN diverging beam to the
+    # wave-exact phase_screen (bounded thin-screen OPD, never a blur); an ABERRATED
+    # beam must avoid the sag-screen -> traced, the H6-fixed reference for the
+    # diverging real-surface class.  Uses traced's own collimation discriminator.
+    from ..elements._lens_traced import (
+        _NONCOLLIMATED_RESID_THRESH,
+        _carrier_residual_rms,
+    )
+    spread = _carrier_residual_rms(E_in, None, wavelength, dx)
+    if spread > _NONCOLLIMATED_RESID_THRESH and not aberrated:
+        return "phase_screen"
+    return "traced"
+
+
 def apply_real_lens_universal(
     E_in: np.ndarray,
     *,
@@ -1912,6 +2373,7 @@ def apply_real_lens_universal(
     caustic_pad_dof: float = 3.0,
     multivalued: Optional[bool] = None,
     multivalued_threshold: float = 0.06,
+    aberration_threshold: float = _ABERRATION_MAX_RAD,
     return_method: bool = False,
     method_kwargs: Optional[Dict[str, Any]] = None,
 ):
@@ -1921,9 +2383,10 @@ def apply_real_lens_universal(
     ``method='auto'`` (default) picks:
 
     * ``'phase_screen'`` (:func:`lumenairy.elements.apply_real_lens`) -- LOW NA
-      (``< na_threshold``): the thin-element phase-screen model is accurate there
-      and the exact angular-spectrum propagation handles focus/caustics, so it is
-      wave-exact and fast, with no beamlet-discretization or ray-model cost;
+      (``< na_threshold``) **and within the sag-screen aberration envelope**: the
+      thin-element phase-screen model is accurate there and the exact
+      angular-spectrum propagation handles focus/caustics, so it is wave-exact and
+      fast, with no beamlet-discretization or ray-model cost;
     * ``'fga'`` (:func:`apply_real_lens_fga`) -- HIGH NA **and** near a caustic:
       the only caustic-accurate *and* ray-based (no thin-screen obliquity) option;
     * ``'traced'`` (:func:`lumenairy.elements.apply_real_lens_traced`) -- HIGH NA,
@@ -1953,6 +2416,32 @@ def apply_real_lens_universal(
     A false positive only costs speed (FGA is never *wrong*, just slower than
     traced on a truly single-valued field), so the detector is biased to prefer
     FGA when uncertain.
+
+    Aberration gate: never route a heavily-aberrated prescription to the sag-screen
+    -------------------------------------------------------------------------------
+    The analytic ``'phase_screen'`` model is a per-surface plane-projection phase
+    mask, which structurally cannot represent the transverse ray-displacement of
+    high-order / orientation-dependent aberration (hammer audit H2, now
+    dual-oracle-quantified: the f/5 biconvex converged to 40.5 um vs the 65 um
+    truth; a plano-convex errs in BOTH orientations, 60.4/60.9 um where the truth is
+    43/128 um).  ``'auto'`` therefore estimates that error cheaply at routing time
+    (:func:`_sag_screen_aberration_rad`: the per-surface marginal-ray obliquity sum
+    ``k * r^4 / (2|R|^3)``, the audit's own error scaling) and, when it exceeds
+    ``aberration_threshold`` radians, routes AWAY from ``'phase_screen'`` even at
+    low NA -- into the ray-based members via the same regime logic (near a caustic
+    -> ``'fga'``; a smooth plane -> ``'traced'``, the H6-fixed reference for the
+    diverging real-surface class).  The benign small-beam / low-NA well-corrected
+    regime (estimate << the budget) keeps the fast wave-exact phase-screen dispatch
+    unchanged.  When ``method='phase_screen'`` is explicitly FORCED outside the
+    envelope, the call still runs but emits a ``RuntimeWarning`` citing the budget
+    (the absolute spot size / EE are unreliable there).
+
+    Exit-NA Nyquist guard (H3): orthogonal to this router.  When ``'auto'`` selects
+    ``'traced'``, that member carries its OWN amplitude-aware exit-NA Nyquist guard
+    (warns when the grid ``dx`` cannot resolve the converging exit wavefront; H3),
+    which fires unchanged however traced is invoked -- the dispatcher neither
+    suppresses nor duplicates it.  Pass ``method_kwargs={'traced':
+    {'on_undersample': 'silent'}}`` to quiet it for a deliberately coarse grid.
 
     The two ray/wave-exact-surface members that are NOT caustic-native
     (``phase_screen``, ``traced``) return the field at the exit vertex, so the
@@ -1989,60 +2478,35 @@ def apply_real_lens_universal(
     mkw = dict(method_kwargs or {})
     E_in = np.asarray(E_in)
     opd = float(output_plane_distance)
+    dyg = float(dx) if dy is None else float(dy)
 
     chosen = method
     if method == "auto":
-        na = _system_na(prescription, wavelength)
-        dyg = float(dx) if dy is None else float(dy)
-        if na < float(na_threshold):
-            # low NA: the thin-element phase screen is angle-independent (a linear
-            # operator on the field) + exact ASM, so it is wave-exact for ANY
-            # field, single- or multi-valued.
-            chosen = "phase_screen"
-        else:
-            # high NA: traced is only valid for a SINGLE-VALUED wavefront.  Decide
-            # multi-valuedness first (explicit override, else auto-detect); a
-            # multi-valued field can never use traced -> FGA transports every
-            # crossing direction independently.
-            if multivalued is None:
-                mv = _tilt_dispersion(E_in, float(dx), dyg, float(wavelength),
-                                      na) > float(multivalued_threshold)
-            else:
-                mv = bool(multivalued)
-            if mv:
-                chosen = "fga"
-            else:
-                # single-valued.  Near the caustic (fold/cusp) -> FGA (ray-based,
-                # handles both the divergence and the caustic).  (_caustic_zone's
-                # single-row slope model is itself valid only for single-valued
-                # fields, so it is reached only on this branch.)
-                zone = _caustic_zone(E_in, float(dx), prescription,
-                                     float(wavelength))
-                near = False
-                if zone is not None:
-                    pad = caustic_pad_dof * float(wavelength) / (na * na)
-                    near = (zone[0] - pad) <= opd <= (zone[1] + pad)
-                if near:
-                    chosen = "fga"
-                else:
-                    # smooth plane: the sub-nm traced OPL, BUT traced launches
-                    # rays along the local phase gradient and is only valid for a
-                    # ~collimated beam -- a single-valued but DIVERGING beam (large
-                    # residual angular spread, e.g. a bare point-source relay)
-                    # would be silently blurred.  Route those to the wave-exact
-                    # phase_screen (apply_real_lens + exact ASM) instead -- bounded
-                    # thin-screen OPD error, never a blur.  Uses traced's own
-                    # collimation discriminator + threshold so the split matches
-                    # exactly where traced stops being valid.
-                    from ..elements._lens_traced import (
-                        _NONCOLLIMATED_RESID_THRESH,
-                        _carrier_residual_rms,
-                    )
-                    spread = _carrier_residual_rms(E_in, None, float(wavelength),
-                                                   float(dx))
-                    chosen = ("phase_screen"
-                              if spread > _NONCOLLIMATED_RESID_THRESH
-                              else "traced")
+        chosen = _universal_route(
+            E_in, prescription, float(wavelength), float(dx), dyg, opd,
+            na_threshold, caustic_pad_dof, multivalued, multivalued_threshold,
+            aberration_threshold)
+    elif method == "phase_screen":
+        # H2 gate: 'phase_screen' (analytic sag-screen) FORCED.  'auto' would have
+        # re-routed a heavily-aberrated prescription away; when the user forces it,
+        # honour the choice but warn if the estimated per-surface spherical-
+        # aberration wavefront error is outside the sag-screen validity envelope,
+        # so an unreliable absolute spot / EE is never returned silently.
+        aberr = _sag_screen_aberration_rad(E_in, float(dx), dyg, prescription,
+                                           float(wavelength))
+        if aberr > float(aberration_threshold):
+            warnings.warn(
+                "apply_real_lens_universal: method='phase_screen' (analytic "
+                "sag-screen) forced, but the estimated per-surface spherical-"
+                f"aberration wavefront error is {aberr:.1f} rad, above the "
+                f"{float(aberration_threshold):.1f} rad validity budget.  The "
+                "plane-projection phase screen cannot represent this high-order / "
+                "orientation-dependent aberration (audit H2: the f/5 singlet "
+                "converged to 40.5 um vs the 65 um dual-oracle truth), so the "
+                "absolute spot size / encircled energy will be unreliable.  Use "
+                "method='traced' or 'fga' for absolute fidelity, or method='auto' "
+                "to route automatically.",
+                RuntimeWarning, stacklevel=2)
 
     if chosen == "fga":
         out = apply_real_lens_fga(

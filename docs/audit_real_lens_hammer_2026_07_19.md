@@ -28,8 +28,8 @@ penalty reproduced: oracle 43/128 µm); through-focus scans.
 
 | model | verdict |
 |---|---|
-| `traced` | **Validated: 99.7 %** of dual-oracle r2m (64.77 vs 64.98 µm) at rule-compliant sampling; exact ray OPL to λ/44 |
-| `gbd` | **Validated: 98.4 %**, grid-insensitive (63.96/63.97 µm at dx = 3/6 µm) |
+| `traced` | **Validated: 99.7 %** of dual-oracle r2m (64.77 vs 64.98 µm) at rule-compliant sampling; exact ray OPL to λ/44.  Diverging-input carrier path fixed (H6, PR #19): focuses the diverging singlet at the ABCD image, EE(100µm) = 0.999 |
+| `gbd` | **Validated: 98.4 %**, grid-insensitive (63.96/63.97 µm at dx = 3/6 µm).  Diverging-input carrier launch fixed (H7): `direction_sampling='auto'` default focuses the diverging singlet at the ABCD image, power 0.997–0.998 across the R_in = 300/150/100 mm scan, NaN warnings gone |
 | `fga` | Feasible + sane by default after H4/H5; r2m within ~2 % with matched sampling; GBD/traced remain preferable for smooth single-valued caustics (cost) |
 | `analytic` | Honest model plateau: converged 40.5 µm vs oracle 65 (H2); ~50 µm with the H1-fixed slant screen. Cannot represent orientation-dependent aberration (60.4/60.9 µm where truth is 43/128) |
 | benign regime | all models exact to 4 digits vs Zemax (29.981 vs 29.979 µm) |
@@ -112,38 +112,126 @@ unchanged and re-verified. Tests: `test_fga_h4_h5.py`.
 
 The thin-lens audit doc's model scoreboard (production 1x1 no-DOE
 control, Zemax reference 2.74 µm, **strongly DIVERGING input**) extends
-this campaign's singlet-class coverage and surfaces three findings the
-near-collimated hammer cases could not reach — **"NO current lumenairy
-model is valid for the 121's REAL surfaces"**:
+this campaign's singlet-class coverage and surfaced three findings the
+near-collimated hammer cases could not reach — the original
+**"NO current lumenairy model is valid for the 121's REAL surfaces"**
+verdict, **since superseded by the H6 fix** (traced is now valid for the
+diverging-input real-surface class — see below):
 
-- **H6 (open) — traced on strongly-diverging input**: exp22
-  (`carrier='auto'`, per-group) conserves power (0.9999) but forms NO
-  focus — energy smeared over ±1.8 mm, no carrier engagement visible in
-  the logs.  H3's 99.7% vindication covered collimated→converging; the
-  diverging-input carrier-referencing path needs its own root-cause.
-- **H7 (open, known class) — GBD diverging-beam energy collapse**:
-  power conservation 1e-4 + NaN warnings (gbd.py:272) — the documented
-  paraxial-frame limitation on strongly-diverging relays biting the 121.
-- **H8 (retest with H4 fix) — FGA at production scale**: the 345 GB
-  `_gabor_coeff` wall was measured BEFORE the H4 fix landed; the
-  default chunk-budget + exact-Jacobian path is precisely option (c)
-  from the scoreboard's bottom line — re-run exp-121-class FGA against
-  v5.25.0.
+- **H6 — RESOLVED (v5.25.0, PR #19) — traced on strongly-diverging input**:
+  root cause found — the carrier path (`carrier='auto'` / scalar conjugate /
+  ndarray) omitted the carrier's ENTRANCE-plane eikonal `k0·W(x_in)` from the
+  per-ray OPL, while the `preserve_input_phase` reference leg (`exp(i·k0·W)`
+  through `apply_real_lens`) included it.  The mismatched `−k0·W` imprinted on
+  the field cancelled the input divergence the wave model correctly carried, so
+  EVERY diverging-input trace collapsed to the COLLIMATED focal plane `f` and the
+  true image at `z_img` smeared by `NA_exit·(z_img − f)` (exp22: energy over
+  ±1.8 mm, EE(100µm) = 0.9% — reproduced to the digit).  Cruel twist: the
+  `on_noncollimated` guard measures the POST-carrier residual (~0), so the broken
+  path was SILENT while `carrier=None` warned users into it.  **Fix:** add the
+  entrance eikonal to `final.opd`.  Result: EE(100µm) **0.009 → 0.999** across the
+  R_in = 300/150/100 mm scan AND per-group relay chains (every intermediate field
+  carries finite curvature, so the omission bit at every hand-off — exp22's
+  6-group smear).  Collimated input unchanged (W ~ 0, a no-op).  Independent
+  oracle: ABCD Gaussian q-trace through the dual-oracle singlet — fully
+  independent of the traced implementation.  Tests:
+  `test_hammer_h6_traced_carrier_eikonal.py`.
+- **H7 — RESOLVED — GBD diverging-beam energy collapse**:
+  root cause found — `apply_real_lens_gbd`'s position-only (axial) beamlet
+  decomposition carried the input's wavefront **curvature in the beamlet
+  AMPLITUDE only, not the LAUNCH DIRECTION**, so the axial base rays refracted
+  as if collimated (focused at `f`) and the diverging beam's angular content
+  had nowhere to live — the beamlet frame shed it.  Reproduced on the
+  dual-oracle singlet (w_L = 1 mm diverging Gaussian, R_in = 300/150/100 mm):
+  **power collapsed to 0.55/0.36/0.19** (worse — down to 1e-4 + NaN warnings —
+  at the 121's NA~0.23), best focus pinned near `f` not `z_img`.  This is the
+  GBD twin of H6 (traced): the input carrier must ride the beamlet launch
+  directions.  GBD already had the machinery — the Husimi
+  (`direction_sampling=True`) decomposition launches each beamlet along the
+  field's local wavevector (`k_local = Im(grad E / E)` = the carrier normal),
+  and `apply_prescription_persurface_to_beamlets` already threads those launch
+  slopes through the differential trace; the beamlet AMPLITUDE already carries
+  `E_in` including `exp(i·k0·W)`, so GBD needs **no separate entrance-eikonal
+  term** (unlike traced's H6 fix — the reference is intrinsic to the amplitude
+  here).  **Fix:** `direction_sampling='auto'` is now the `apply_real_lens_gbd`
+  default — it measures the input's RMS local-tilt spread and launches Husimi
+  when the wavefront is curved/tilted, axial otherwise.  A flat-wavefront
+  (collimated) input measures spread **exactly 0** (real / globally-phased
+  field), so it takes the byte-identical axial path — the 98.4 % collimated
+  baseline is preserved to the bit.  Result: **power 0.997–0.998** across the
+  R_in = 300/150/100 mm scan, best focus at the ABCD `z_img` to within the
+  scan resolution (< 5 %, and beating `f`), **NaN warnings gone**.  Independent
+  oracle: ABCD Gaussian q-trace through the dual-oracle singlet.  Tests:
+  `test_hammer_h7_gbd_diverging.py`.  *Envelope:* validated for a
+  single-congruence (single-beam) diverging/converging or tilted input; the
+  per-pixel Husimi launch, like traced's `tilt_aware_rays`, is not for a
+  multi-emitter interference field (noisy per-pixel tilt) — decompose those
+  per source.  At extreme finite conjugate (R_in → f, e.g. 60 mm) the frame
+  completeness costs a few tenths of a % of power at a coarse `bpa`; it
+  recovers with a finer beamlet frame.  **G1 CORRECTION (2026-07-19):** that
+  "recovers with a finer frame" claim holds for a POSITIVE element only.  A
+  converging input RECONVERGED by a NEGATIVE element to a *near* real focus
+  (G1 M5: biconcave, R_in = -35 mm → real image ~108 mm) sheds ~6 % of power
+  that a finer frame does NOT recover -- power saturates at ~0.94 at the MAX
+  frame density (0.88 at bpa 128 → 0.94 at bpa ≥ 256 = step 1) and is
+  non-monotonic in `waist_factor` (overshoots to 1.16 at wf 2), i.e. a
+  frame-completeness/normalization floor for the negative-lens reconvergence
+  geometry, NOT a density knob.  The LAUNCH is still correct (focuses at the
+  ABCD image, EE ~ 0.999) and `normalize_output='power'` restores absolute
+  power exactly.  Power stays > 0.99 when the negative element's output is
+  gently diverging / virtual (M5 at the task's literal R_in = -60 mm: 0.9956)
+  and for a converging input through a POSITIVE element (0.998).  The doublet
+  M1 with a diverging input (R_in = +150 mm) conserves 0.998 and focuses at the
+  ABCD image.  A genuine frame-completeness fix for the negative-reconvergence
+  geometry is a G2 item.  The world-frame machinery
+  (`world_output_plane`) was checked and is **orthogonal** — it re-references
+  the OUTPUT plane for FOLDED systems and its focus finder itself assumes a
+  collimated input, so it does not address the INPUT-carrier class.
+- **H8 — RE-TESTED (v5.25.0, H4/H5 fixes landed) — FGA at production scale**:
+  the 345 GB `_gabor_coeff` wall is **GONE** — H4-FIXED, no OOM.  The default
+  RAM-fraction chunk budget + FD-bundle-aware cost model bound the chunked peak
+  (**16 GB observed at an 18 GB budget, N = 4096**), and the auto sampler is
+  correct for the diverging input: content-sized `p_max`, the H5 near-collimated
+  override correctly **NOT** triggered, analytic Jacobian auto-selected (conic
+  prescription).  FGA itself is **validated correct** — 0.2% vs the ASM focusing
+  control, 0.97 field fidelity at 0.23-NA diverging transport (n_p cost-cap
+  limited).  BUT it is now **grid-floor-bound, not coefficient-bound**: the raw
+  grid arrays are ~40 GB (~63 GB total) at production N = 28672, so it needs a
+  ≥ 64 GB box + an explicit `mem_budget_mb` on shared machines; and it is
+  **compute-infeasible** at the production swarm size (Nq ~ 161 M).  **KEY
+  INSIGHT:** the diverging input's OWN phase fringes set the grid — the fringe
+  pitch `λ·R/r ~ 12.6 µm` at the beam edge mandates the production N
+  **propagator-independently** (no model can render this field on a coarser grid).
 
-Until one of (a) higher-order sag-screen projection correction,
-(b) diverging-input traced carrier fix, or (c) H8-retest succeeds, the
-**conjugate-matched `stigmatic` thin chain is the production surrogate**
-(2.97 µm / EE6 = 100% vs Zemax 2.74 µm; the real design's residual WFE
-is only ~26–35 mλ).
+With the H6 fix, **`traced` (carrier-referenced) is now the reference model for
+the diverging-input real-surface class** — it focuses the diverging singlet at the
+ABCD image (EE(100µm) = 0.999) and threads per-group relay chains, so it is the
+practical stack choice for real-surface residual aberration on this beam.  With
+the H7 fix **`gbd` (carrier-normal launch, `direction_sampling='auto'`) is now
+valid for the same diverging-input class** — power 0.997–0.998 and focus at the
+ABCD image — so the beamlet model is again a peer choice (its per-surface tensor-Q
+carries astigmatism the traced per-pixel OPL renders differently).  The
+conjugate-matched `stigmatic` thin chain remains the fast aberration-free
+design-intent surrogate (2.97 µm / EE6 = 100% vs Zemax 2.74 µm; the real design's
+residual WFE is only ~26–35 mλ), a higher-order sag-screen projection correction
+in the analytic model is still open, and H8 (FGA at production scale) is
+memory/compute-bound rather than incorrect.
 
 ## Follow-ups (tracked, not blocking)
 
-- **H6 root-cause** (traced diverging-input carrier) and **H8 retest**
-  (FGA on the 121 with the H4 chunking fix) — top of the list.
+- **H6 — DONE** (traced diverging-input carrier entrance eikonal, PR #19) and
+  **H8 — RE-TESTED** (FGA on the 121 is now H4-bounded, but grid-floor- and
+  compute-bound at production N, not incorrect) — both closed above.
+- **Dispatcher aberration gate — DONE**: `apply_real_lens_universal` now estimates
+  the sag-screen spherical-aberration error at routing time
+  (`_sag_screen_aberration_rad`: per-surface `k·r⁴/(2|R|³)`) and steers a
+  heavily-aberrated prescription AWAY from the analytic `phase_screen` even at low
+  NA (calibrated: the f/5 case ~21.7 rad trips, the benign small-beam ~0.002 rad
+  does not), warning when `phase_screen` is explicitly forced out of envelope.
+  Tests: `test_gate_h2_*` in `tests/unit/test_fga.py`.
 - Extended oracle matrix: 4f relay at finite conjugates (121-chain
   class), cemented doublet, point-source (ZOS Huygens PSF oracle),
-  FGA's true multi-valued-caustic specialty, universal-dispatcher
-  routing (must not route heavily-aberrated prescriptions to analytic).
+  FGA's true multi-valued-caustic specialty.
 - Re-baseline any goldens derived from `through_focus`'s internal
   slant-corrected reference fields (H1 blast radius).
 - The traced JAX×OpenBLAS lstsq deadlock library-side mitigation

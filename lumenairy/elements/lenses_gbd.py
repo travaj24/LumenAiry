@@ -93,6 +93,52 @@ def _fft_upsample(Ec: np.ndarray, ky: int, kx: int) -> np.ndarray:
 # (halving the spacing does not move the focus); see the module test.
 _GBD_BEAMLETS_PER_APERTURE = 256
 
+# H7 (2026-07-19): ``direction_sampling='auto'`` engages the Husimi (carrier-
+# normal) launch when the input carries transverse angular content -- a curved
+# (diverging / converging) or tilted wavefront -- above this RMS local-tilt
+# threshold (radians).  Below it the flat-wavefront (collimated) field takes the
+# axial position-only decomposition, byte-identical to the historical default.
+# A real / globally-phased collimated field measures exactly 0 (see
+# ``_input_angular_spread``), so the threshold only guards against numerical
+# phase noise: 5e-4 rad (~0.03 deg) sits far below any divergence that shifts
+# the focus measurably yet far above float round-off.
+_GBD_AUTO_HUSIMI_THRESH = 5e-4
+
+
+def _input_angular_spread(E_in: np.ndarray, dx: float, dy: float,
+                          wavelength: float) -> float:
+    """RMS transverse direction cosine (local wavevector magnitude / k) of the
+    input field over its bright support -- the SPREAD (not the mean) of the
+    launch angles the beamlets would carry.
+
+    Unlike the intensity-weighted MEAN tilt (which is ~0 for a symmetric
+    diverging beam), this fires on a diverging / converging source: a curved
+    wavefront's local normals fan out, so their RMS magnitude ~ the beam NA.
+    Uses wrapping-safe nearest-neighbour phase increments
+    (``angle(E_i * conj(E_{i-1}))``) so it is robust to fringes up to the grid
+    Nyquist, and restricts to the bright support (``|E| > 0.05 max``) so
+    dark-region phase noise does not inflate it.  Returns ``0.0`` exactly for a
+    real / globally-phased (flat-wavefront) field, so the ``'auto'`` launch is a
+    strict no-op there.  NumPy host-side (a cheap eager reduction).
+    """
+    E = np.asarray(E_in)
+    mag = np.abs(E)
+    peak = float(mag.max()) if mag.size else 0.0
+    if peak <= 0.0:
+        return 0.0
+    k = 2.0 * np.pi / wavelength
+    mask = mag > 0.05 * peak
+    gx = E[:, 1:] * np.conj(E[:, :-1])
+    gy = E[1:, :] * np.conj(E[:-1, :])
+    mxx = mask[:, 1:] & mask[:, :-1]
+    myy = mask[1:, :] & mask[:-1, :]
+    lx = np.angle(gx[mxx]) / (k * dx)
+    my = np.angle(gy[myy]) / (k * dy)
+    vals = np.concatenate([lx, my])
+    if vals.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(vals ** 2)))
+
 
 def _auto_sample_step(E_in: np.ndarray, dx: float,
                       prescription: Dict[str, Any],
@@ -148,7 +194,7 @@ def apply_real_lens_gbd(
     sample_step: Optional[int] = None,
     beamlets_per_aperture: int = _GBD_BEAMLETS_PER_APERTURE,
     waist_factor: Optional[float] = None,
-    direction_sampling: bool = False,
+    direction_sampling: Any = 'auto',
     per_surface: bool = True,
     jacobian: str = 'auto',
     window: Optional[float] = 5.0,
@@ -181,6 +227,29 @@ def apply_real_lens_gbd(
     clip_aperture :
         Clip ``E_in`` at the circular entrance aperture before decomposition
         (matches where the analytic / traced / thin models clip).
+    direction_sampling :
+        Beamlet LAUNCH-direction policy (H7).  ``'auto'`` (default) launches
+        each beamlet along the input field's local wavevector (Husimi /
+        carrier-normal launch) when the input carries transverse angular
+        content -- a strongly diverging / converging or tilted wavefront --
+        and along the axis otherwise.  A flat-wavefront (collimated) field
+        takes the axial path, byte-identical to the historical default; a
+        diverging / converging source then focuses at its true (finite-
+        conjugate) image rather than collapsing to the collimated focal plane
+        and shedding frame energy.  ``True`` / ``False`` force the Husimi /
+        axial launch explicitly.
+
+        Envelope (G1, 2026-07-19): power conservation > 0.99 for a diverging
+        input (any lens), a converging input through a POSITIVE lens, and a
+        multi-element diverging chain (doublet).  A converging input
+        RECONVERGED by a NEGATIVE lens to a *near* real focus is a
+        frame-completeness EDGE: the launch is still correct (focuses at the
+        ABCD image) but the beamlet frame sheds a few percent of power that a
+        finer frame does NOT recover (it saturates at the maximum density, ~0.94
+        for the G1 M5 biconcave at R_in=-35mm).  A negative element also needs a
+        finer ``beamlets_per_aperture`` than a positive one to tile its
+        diverging exit.  For absolute power in that regime pass
+        ``normalize_output='power'`` (restores it exactly).
     normalize_output :
         ``'none'`` (default, raw energy-conserving field) or ``'power'``
         (rescale so the output power equals the aperture-transmitted input
@@ -221,17 +290,37 @@ def apply_real_lens_gbd(
         # sample_step>1 would leave gaps -- the sparse-frame footgun.)
         waist_factor = float(sample_step)
 
+    # H7: resolve the beamlet launch-direction policy.  A strongly-diverging /
+    # converging input's wavefront curvature must ride the beamlet LAUNCH
+    # DIRECTIONS (Husimi / carrier normals), not just their amplitude --
+    # otherwise the axial base rays focus at the COLLIMATED plane and the frame
+    # sheds energy (power collapses to ~0.2-0.5 on the dual-oracle singlet, EE
+    # at the true image ~0.09).  'auto' engages Husimi only when the input
+    # carries measurable transverse angular content; a flat-wavefront
+    # (collimated) field measures ~0 and takes the byte-identical axial path.
+    if direction_sampling == 'auto':
+        _spread = _input_angular_spread(E_dec, dx, dy, wavelength)
+        use_direction_sampling = _spread > _GBD_AUTO_HUSIMI_THRESH
+    elif direction_sampling in (True, False):
+        use_direction_sampling = bool(direction_sampling)
+    else:
+        raise ValueError(
+            "apply_real_lens_gbd: direction_sampling must be 'auto', True or "
+            f"False, got {direction_sampling!r}.")
+
     if verbose:
         nb = ((Ny + sample_step - 1) // sample_step) * \
              ((Nx + sample_step - 1) // sample_step)
         print(f"  [gbd] sample_step={sample_step} waist_factor={waist_factor} "
               f"(~{nb} beamlets), window={window}, "
-              f"per_surface={per_surface}", flush=True)
+              f"per_surface={per_surface}, "
+              f"direction_sampling={use_direction_sampling}"
+              f"{' (auto)' if direction_sampling == 'auto' else ''}", flush=True)
 
     bundle = decompose_field_to_beamlets(
         E_dec, dx, wavelength=wavelength, dy=dy,
         waist_factor=float(waist_factor), sample_step=int(sample_step),
-        direction_sampling=direction_sampling)
+        direction_sampling=use_direction_sampling)
 
     # decompose places a beamlet on EVERY sample_step cell of the full grid;
     # for a clipped/finite field most carry ~zero amplitude and only inflate the
@@ -257,6 +346,7 @@ def apply_real_lens_gbd(
         return propagate_gbd_through_prescription(
             E_dec, dx, prescription, wavelength=wavelength,
             output_shape=(Ny, Nx), output_dx=dx,
+            direction_sampling=use_direction_sampling,
             per_surface=False, z_image=float(output_plane_distance))
 
     if progress is not None:
