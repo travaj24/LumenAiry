@@ -247,3 +247,302 @@ robust cross-tool metric -- hammer method lesson).
 pin; thin+conjugate raises; scalar changes the screen; auto reproduces the scalar
 screen for a matched diverging Gaussian; LUT cache bounded+registered; the doublet
 headline; and a slow singlet within-envelope check).
+
+## P2 -- extreme finite-conjugate accuracy: the "0.50x floor" was an ORACLE artefact (2026-07-19)
+
+**Task premise (from the plan N1):** the congruence displaced screen reaches only
+`~0.50x` oracle r2m on the negative-lens real focus (M5) and `~0.58x` on
+virtual-image back-prop; root cause proposed = "single-plane screen cannot
+represent transverse ray walk THROUGH the element."  Two candidates were to be
+built and measured, winner shipped: (a) an exit-plane geometric-transfer remap,
+(b) a reduced-distance split screen.
+
+**Both candidates were built** (behind `apply_real_lens(..., displaced_mode=)`:
+`'screen'` default / `'remap'` = candidate a / `'split'` = candidate b; defaults
+byte-identical).  **But the decisive P2 finding is that the premise is wrong: the
+shipped `'screen'` model was already accurate.**  The `0.50x`/`0.58x` ratios were
+measured against the GEOMETRIC ray-density spot (`debye_oracle3.py`), which is NOT
+the diffraction-faithful wave answer -- near a strong reconvergence caustic it
+over-estimates the true wave spot by up to ~2x -- and were compounded by GRID
+TRUNCATION (the G2 measurements at `N=4096` ran the large beams at only
+`~1.2-2.0 w0` half-width, violating the `>2.4 w0` grid-coverage rule).
+
+### The P0-fixed congruence diffraction oracle (N0.1)
+
+`validation/oracles/debye_oracle_v3.py` (lumenairy-free) fixes the two bugs that
+made `debye_oracle2.py`'s ring-Huygens unusable for a non-collimated congruence:
+(1) the **entrance eikonal** `W_in = h^2/(2 R_in)` is restored in the phase (the
+hammer-H6 class omission -- omitting it blows EE80 up to ~700 um where the truth
+is ~72 um), and (2) the exit ring is weighted by the **energy-conserving exit
+measure** `A_env(h)*sqrt(h * y_exit * dy_exit/dh)` instead of the entrance measure
+`h dh` (equal only in the collimated limit `y_exit ~ h`).  It also emits the
+geometric transverse-aberration spot for comparison.
+
+**Virtual (upstream) images.**  The forward ring-Huygens (+R0) kernel only
+radiates diverging waves and therefore CANNOT reach an upstream image (a negative
+lens over-diverging a converging input focuses to a virtual point behind the
+element).  Run naively it reads hundreds of um with most of the energy outside
+the metric window.  So `debye_oracle_v3` auto-detects `zrel < 0` and computes the
+diffraction spot by building the exact ray-traced exit field on an FFT grid and
+ANGULAR-SPECTRUM BACK-propagating it by the signed (negative) distance
+(`huy_method='asm_backprop'`; grid via optional `asm_N`/`asm_dx_um` job fields).
+This is a different diffraction method than the j0 ring sum but reuses only the
+lumenairy-free raytrace, so it remains an independent oracle.
+
+**Oracle validated (independently):** collimated f/5 EE80 55.4 vs the known
+dual-oracle 55.2 um (0.4%); small-beam (diffraction-limited) EE80 reproduces the
+ABCD Gaussian image size to 0.4-1% (M6 w0=0.8mm 35.36 vs 35.2; M5 w0=0.8mm 56.5
+vs 57.2); grid-converged in fan/rho; weight-variant-insensitive.
+
+### Corrected measurement matrix (properly-sized grids, `hw >= 2.5 w0`)
+
+EE80 [um] at the paraxial image except **M5virt, which is r2m at the upstream
+VIRTUAL plane**.  `screen`/`remap`/`split` = `displaced_mode`; **oracle(huy) =
+the diffraction spot from `debye_oracle_v3.py`**; **geo** = geometric ray-density
+spot.  For the three REAL-image rows `oracle(huy)` is the forward ring-Huygens
+integral (`huy_method='ring_huygens'`); for the M5virt row it is the diffraction
+BACK-propagation (`huy_method='asm_backprop'`) -- see the note below (the forward
+ring-Huygens is INVALID for an upstream image and must not be used there).
+
+| case | R_in | w0 | oracle(huy) | geo | huy/geo | screen | screen/huy | remap | remap/huy | split | split/huy |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| M6 f/5 singlet | +150 | 5 | 60.50 | 61.24 | 0.988 | 59.44 | **0.982** | 59.46 | 0.983 | 59.44 | 0.982 |
+| M1 cemented doublet | +150 | 8 | 127.12 | 145.47 | 0.874 | 116.39 | **0.916** | 116.88 | 0.919 | 116.39 | 0.916 |
+| M5 negative REAL focus | -35 | 4 | 72.11 | 136.13 | **0.530** | 69.21 | **0.960** | 70.55 | 0.978 | 68.95 | 0.956 |
+| M5 negative VIRTUAL (r2m) [dagger] | -60 | 4 | **97.26** | 163.30 | 0.596 | 97.03 | **0.998** | 97.26 | **1.000** | 97.03 | 0.998 |
+
+[dagger] **M5virt oracle correction (verifier kill, fixed).**  The prior draft of
+this row listed `oracle(huy) = 97.28` and implied it came from `debye_oracle_v3`'s
+`huy` diffraction number.  It did NOT: the FORWARD ring-Huygens (+R0) kernel
+cannot reach an UPSTREAM virtual image and reads **715 um with only ~25% of the
+energy in-window** on this case -- a ~7x outlier, not a valid oracle.  The 97.28
+was actually a hand-rolled ASM back-prop mislabeled as `huy`.  `debye_oracle_v3`
+now auto-detects the virtual case (`zrel < 0`) and computes the diffraction spot
+by ANGULAR-SPECTRUM BACK-propagating the **exact ray-traced exit field** (energy-
+conserving amplitude + eikonal phase) to the virtual plane -- a genuinely
+independent, lumenairy-free diffraction method (`huy_method='asm_backprop'`,
+`huy_r2m = 97.26 um`).  On the same 4096/5-um grid the model uses, `screen`
+r2m = 97.03 um agrees to **0.2%**; `remap`/`split` likewise (see the note below).
+So the SHIPPED `screen` model is validated for the virtual case against an
+independent oracle -- the earlier "4 agreeing wave methods (huy Hankel + 3 ASM)"
+attribution for this row was wrong (the huy Hankel sum does NOT agree here); the
+correct statement is `screen`/`remap`/`split` all within 15% (in fact <0.3%) of
+the diffraction back-prop oracle.
+
+**Every extreme case is within 15% of the diffraction-faithful oracle for the
+DEFAULT `'screen'` model** (0.916-0.998), and `remap`/`split` match it to within a
+few percent.  The `huy/geo` column shows the geometric spot over-estimating the
+true wave spot the most exactly where the old floor was worst (M5 real 0.530).
+On M5-**real** four independent wave computations (forward-Huygens Hankel sum, and
+`'screen'`/`'split'`/`'remap'` ASM) cluster within a few percent (69-72 um) against
+the lone geometric outlier (136 um); on M5-**virtual** the Hankel sum is invalid
+(upstream), so the reference is the diffraction back-prop oracle above and the
+three ASM models cluster on it (97.0-97.3 um) against the geometric 163 um.
+
+### ZOS POP cross-check
+
+POP is finicky for these heavily-aberrated finite-conjugate beams (its Gaussian
+pilot beam under-samples the aberrated halo).  Set up as a point source at the
+conjugate (a `12.5`/`7.8 um` waist on a dummy object surface `R_in` in front):
+
+| case | POP 4096 | POP 8192 | oracle(huy) | screen | note |
+|---|---|---|---|---|---|
+| M6 f/5 singlet | EE80 38.7 (dx 12.3, aliased LOW) | **EE80 64.2** (dx 6.15) | 60.5 | 59.4 | POP CONFIRMS ~60 um once resolved |
+| M1 doublet | dx 38.7 -> spot under 1 px (unusable) | EE80 156 (dx 19.3, halo aliased HIGH) | 127 | 116 | POP cannot resolve; brackets from above |
+
+M6 is POP's clean confirmation (64.2 vs the oracle 60.5, `screen` 59.4, geo 61.2).
+M1 never resolves: even at 8192 samples the pilot grid is dx=19 um so the ~120 um
+spot's halo aliases and inflates EE80 to 156 um -- above even the geometric spot.
+The M5 cases (a CONVERGING input `R_in < 0`) are not cleanly settable in POP's
+Gaussian-waist beam model at all.  This POP-limitation on aberrated finite
+conjugates is precisely the N0.1 motivation for the diffraction-faithful Debye
+oracle, which IS the reference here; POP corroborates it exactly where POP can
+resolve (M6).
+
+### Routing story (which model users get, and why)
+
+* **Default `displaced_mode='screen'` is the model for extreme conjugates** -- it
+  is already within 4-8% of the diffraction-faithful oracle across the M5 real /
+  M5 virtual / M1 / M6 matrix, byte-identical to prior releases, and the fastest.
+  No default change is warranted; the winner IS the incumbent, once measured
+  against the correct oracle.
+* `displaced_mode='remap'` (candidate a) and `'split'` (candidate b) are exposed
+  as **documented experimental peers**.  `'remap'` is marginally closest on the
+  M5 real focus (0.978) but not decisively; `'split'` tracks `'screen'`.  They add
+  no accuracy over the default and cost more (remap: a scipy `map_coordinates`
+  warp; split: an extra reduced-distance ASM per gap), so they are opt-in only.
+* **Do NOT judge these conjugates against the geometric ray-density spot**
+  (`debye_oracle3.py`) -- near a reconvergence caustic it over-estimates the wave
+  spot by up to ~2x.  Use `validation/oracles/debye_oracle_v3.py` (diffraction).
+* **Grid-coverage rule is load-bearing here:** size the grid to `hw >= 2.4 w0`
+  (and `dx <= lambda/(2 NA_exit)`, H3) or the large-beam wave spot truncates/aliases
+  and the model reads spuriously low -- the second half of the old "0.50x" artefact.
+
+**Tests:** `tests/unit/test_niche_p2_displaced_extreme.py` -- defaults byte-identical
+(`screen` == default, both congruences); `displaced_mode` validation; remap/split
+energy conservation; the diffraction oracle reproduces the ABCD Gaussian limit
+(independent trust check); and the slow fail-before/pass-after headlines.  The
+M5-real / M1 headline compares to the forward ring-Huygens; the **M5-virtual
+headline** (`test_M5_virtual_image_backprop_within_15pct`) asserts the oracle ran
+its `asm_backprop` path (`huy_method`), then that `screen`/`remap`/`split` are
+each within 15% of that independent diffraction back-prop r2m (fail-before anchor:
+vs the geometric spot the screen reads ~0.6x).  All three cases: vs the geometric
+spot the models read <0.85x; vs the diffraction oracle they are within 15%.
+
+## P3 -- pointwise 2-D obliquity: decenter / tilt / freeform (niche N2, 2026-07-20)
+
+The pre-P3 displaced screen derived its obliquity cosines from a MERIDIONAL fan,
+assuming rotational symmetry; decentered / tilted / freeform elements raised
+`NotImplementedError`.  P3 adds a **pointwise 2-D obliquity** path: a 2-D ray
+grid launched along the input congruence is traced through the actual (possibly
+asymmetric) surfaces, and the per-surface z-axis ray cosines
+`(cos_alpha_in, cos_alpha_out)` are interpolated onto the field grid at each
+ray's crossing position.  The OPD is the SAME equation (1)
+`(n2 cos_out - n1 cos_in) * sag`, so on a rotationally-symmetric element the 2-D
+path reproduces the meridional LUT.
+
+**API.** `apply_real_lens(..., surface_model='displaced', displaced_obliquity=)`:
+
+* `'auto'` (default) -- the fast meridional LUT for symmetric elements
+  (BYTE-IDENTICAL to prior releases), auto-switching to pointwise only when a
+  surface carries a non-zero `decenter` / `tilt` or a freeform `sag_callable`.
+* `'meridional'` -- force the 1-D radial LUT (raises on an asymmetric element).
+* `'pointwise'` -- force the 2-D path (used for the symmetric-limit gate).
+
+Per-surface asymmetry lives in the surface dict: `decenter=(dx, dy)` [m] ->
+`sag(x-dx, y-dy)`; `tilt=(tx, ty)` [rad] -> the small-angle field-frame linear
+ramp `tx*x + ty*y` + the correspondingly tilted normal; `sag_callable(xs, ys) ->
+sag` [m] -> a freeform departure used in BOTH the ray trace and the OPD imprint.
+Defaults byte-identical (all three asymmetry inputs are new opt-in parameters;
+`displaced_obliquity` defaults to `'auto'` which is meridional for the existing
+symmetric prescriptions).
+
+### Oracles (independent of the code under test)
+
+* **`validation/oracles/geom_spot_decenter_oracle.py`** (lumenairy-free) -- a 3-D
+  geometric spot-diagram oracle for decentered / tilted conic + aspheric
+  elements: `geom_spot(job)` returns the centroid / RMS / EE about-centroid with
+  the field-frame linear-ramp tilt convention; `rigid_tilt_centroid(job)` is an
+  INDEPENDENT rigid-body full-rotation (`R = Rx(tx) @ Ry(ty)`) tilt reference.
+* **ZOS-API** (`scratchpad/zos_oracle_p3.py`) -- two independent Zemax analyses on
+  the SAME decentered prescription: the `CENX`/`CENY` ray-trace spot centroid,
+  and POP (physical-optics) for the coma-broadened wave spot.  Model glass
+  (vd=0), per-surface decenter via `TiltDecenterData` before + after-return.
+
+### Validation (all four plan gates)
+
+**(a) Symmetric limit reproduces the LUT -- the convention-bug killer.**  Forcing
+`displaced_obliquity='pointwise'` on the f/5 biconvex singlet reproduces the
+meridional-LUT field to **rel L2 = 6.8e-6** (collimated) and 1.7e-5 (R_in =
+300 mm) -- three orders under the 0.1% gate.  `'auto'` on a symmetric element is
+byte-identical to `'meridional'`.
+
+**(b) Decentered singlet vs ZOS + geometric oracle -- CENTROID SHIFT.**  A 0.5 mm
+front-surface decenter (f/5 singlet, aperture 10 mm):
+
+| decenter | model centroid | geom oracle | ZOS CENX | model vs ZOS |
+|---|---|---|---|---|
+| 0.5 mm | 254.8 um | 254.8 um | 248.5 um | **2.5%** |
+| 1.0 mm | 508.6 um | 510.3 um | 496.8 um | **2.4%** |
+
+The centroid shift matches ZOS to ~2.5% and the geometric oracle to ~0.1%.
+`+d`/`-d` centroids are equal and opposite.  **Induced coma:** the intensity
+x-skewness jumps from ~0 (on-axis) to **+-12** (0.8 mm decenter, mirror-exact
+under sign flip) -- the comatic flare is physically present and correctly signed,
+not just a centroid translation.  NOTE: this is the coma flare **DIRECTION**
+only.  The SECOND half of plan gate (b) -- the induced-coma **EE ratios** within
+10% of ZOS -- is **NOT met**; it is an OPEN FINDING (the single-plane walk-off
+limit), quantified and pinned below (see "Coma spot (EE) envelope -- OPEN
+FINDING").
+
+**(c) Tilted element -- DEFLECTION.**  A 0.2 deg (3.491 mrad) front-surface tilt:
+the model (field-frame linear ramp) deflects the PSF centroid by **91.8 um**,
+matching an INDEPENDENT rigid-body full-rotation ray trace (**91.99 um**, 0.2%)
+and the linear-ramp geometric oracle (91.77 um); the |linear-ramp / rigid| ratio
+stays 0.995-0.998 across R and tilt magnitude, so the linear ramp is a validated
+tilt model for the centroid (opposite sign is the differing 'positive tilt'
+definition).  Deflection is linear in tilt and mirror-symmetric.  **ZOS caveat:**
+`TiltDecenterData` with a naive after-negate does NOT restore the coordinate
+frame for a rotation (rotations do not commute), leaking the tilt downstream and
+reading a spurious 271 um -- so the rigid-rotation trace (a clean, independent,
+lumenairy-free geometric ground truth) is the tilt oracle here; decenter (a pure
+translation, which DOES commute) matched ZOS cleanly above.
+
+**(d) Sign-mirror probe.**  `+d` vs `-d` x-decenters: the PSF centroid mirrors to
+<0.05% and the intensity mirror-L2 is **0.17%** (even-grid flip+roll) -- exact to
+numerical precision.
+
+### Coma spot (EE) envelope -- OPEN FINDING (plan N2 gate (b) EE criterion NOT met)
+
+Plan gate (b) has two parts: "centroid shift AND induced-coma EE ratios", with
+acceptance "decenter/tilt cases within 10% of ZOS EE radii".  The **centroid**
+part passes (2.5% vs ZOS, above).  The **induced-coma EE** part does **NOT** meet
+the gate, and the earlier draft of this section (which framed it as merely
+"inheriting the on-axis SA-plateau") was incomplete -- an adversarial verifier
+correctly killed that framing.  The honest statement:
+
+At a coma-dominated config (w0 = 4 mm filling the aperture, 1 mm decenter of the
+front surface) the model's induced-coma EE change is **directionally wrong** and
+its absolute decentered EE is **outside the 10% gate**:
+
+| metric | on-axis | decenter 1 mm | dec/on-axis ratio |
+|---|---|---|---|
+| **model EE80** | 24.74 um | 22.42 um | **0.906 (NARROWS)** |
+| geom spot oracle EE80 (lumenairy-free) | 16.76 um | 17.15 um | 1.023 (broadens) |
+| ZOS POP EE80 | 26.9 um | 27.6 um | 1.026 (broadens) |
+
+So the model SHRINKS the spot under coma (ratio 0.906) where BOTH independent
+references BROADEN it (~1.02-1.03), and the decentered EE80 22.4 um is **-19% vs
+ZOS 27.6 um** -- outside the plan's 10% gate.  The narrowing is grid-robust
+(ratio 0.906/0.911/0.924 at N = 2048/3072/4096), i.e. a genuine model behaviour,
+not a sampling or cos-interpolation artefact.  (On-axis the model 24.7 um sits
+between geom 16.8 and ZOS 26.9, within -8% of ZOS -- close there; it is the
+*change under decenter* that is wrong.)
+
+**Root cause (genuine model limit, same class as finding H2).**  The pointwise
+path imprints the obliquity OPD `(n2 cos_out - n1 cos_in) * sag(x-dx, y-dy)` at
+the STRAIGHT-THROUGH grid position and cannot represent the transverse ray WALK
+between the thick element's two surfaces (5 mm / n apart).  It therefore captures
+the coma flare **DIRECTION** -- the centroid shift (2.5% vs ZOS) and the intensity
+skewness sign (validated, mirror-exact) -- but not the coma spot **GROWTH**.  The
+same single-plane phase-screen walk-off ceiling that finding H2 documents for
+on-axis orientation-dependent aberration bites the decentered case here, and in
+fact reverses the sign of the EE change.  (The independent geometric spot oracle,
+which traces rays through the decentered surface with the walk included, is the
+witness: it broadens; the wavefront-at-straight-through model does not.)
+
+**Resolution: recorded as an OPEN finding, not a passing gate.**  This is a
+genuine single-element analytic-model limit; per the plan's N2 Risk clause the
+`traced` / `gbd` models do not take decenter, so there is **no alternative model
+to route to** -- the honest deliverable is the measured envelope above, not a
+silent wrong answer.  For absolute decentered-spot EE fidelity **ZOS is the
+reference**.  The genuinely NEW, VALIDATED N2 capabilities remain: the symmetric
+limit (rel L2 = 6.8e-6), the decenter/tilt CENTROID (2.5% / 0.2% vs the external
+oracles), the coma flare DIRECTION (skewness sign, mirror-exact), and the +d/-d
+sign-mirror (0.17%).  The absolute-EE limit is now **pinned by a regression test**
+(`test_coma_ee_growth_is_a_documented_model_limit`) so any future model that
+begins to reproduce the coma EE growth will trip it and prompt this section's
+revision.
+
+### Performance
+
+The per-surface obliquity cosines vary smoothly across the aperture, so the
+scattered->grid interpolation runs on a bounded COARSE grid (`n_coarse=384`,
+one shared Delaunay for both cosines, nearest-fill only the out-of-hull points)
+and is bilinearly upsampled to the full field grid -- decoupling the cost from
+`N` and giving a **5.8x** speedup (35.8 s -> 6.2 s at N=1280) with byte-level
+identical output (symmetric rel L2 and coma skew unchanged).  No new cache is
+added; the pointwise trace re-runs per call (opt-in accuracy path).
+
+**Tests:** `tests/unit/test_niche_p3_pointwise_obliquity.py` (symmetric-limit
+<0.1%; byte-identical default + auto-routing; the validation-error surface;
+decenter centroid vs the geometric oracle; signed coma flare; tilt vs the
+rigid-rotation oracle; linear+mirror tilt; sign-mirror; the freeform
+`sag_callable` hook reproducing an equivalent conic and running a genuinely
+freeform departure; and `test_coma_ee_growth_is_a_documented_model_limit`, which
+PINS the open finding above -- the model EE80 shrinks under decenter while the
+independent geometric oracle broadens, so the walk-off limit is enforced/visible
+in the suite rather than silently claimed as passing).  ZOS-dependent comparisons
+stay in
+`scratchpad/zos_oracle_p3.py` with the numbers recorded above; the unit tests run
+without Zemax.

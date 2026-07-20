@@ -227,17 +227,24 @@ def test_displaced_rejects_unsupported_combinations():
     with pytest.raises(ValueError):
         la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx,
                            surface_model='not_a_model')
-    # biconic / decenter -> NotImplementedError
+    # biconic radius_y -> NotImplementedError (unsupported on both paths)
     p_bic = _biconvex_f5()
     p_bic['surfaces'][0]['radius_y'] = 60e-3
     with pytest.raises(NotImplementedError):
         la.apply_real_lens(E0, prescription=p_bic, wavelength=_WL, dx=dx,
                            surface_model='displaced')
+    # decenter: the MERIDIONAL (rotationally-symmetric) fan cannot represent it
+    # and raises; the default 'auto' now routes it to the P3 pointwise 2-D
+    # obliquity path (test_niche_p3_*), so it must NOT raise there.
     p_dec = _biconvex_f5()
     p_dec['surfaces'][0]['decenter'] = (1e-3, 0.0)
     with pytest.raises(NotImplementedError):
         la.apply_real_lens(E0, prescription=p_dec, wavelength=_WL, dx=dx,
-                           surface_model='displaced')
+                           surface_model='displaced',
+                           displaced_obliquity='meridional')
+    out = la.apply_real_lens(E0, prescription=p_dec, wavelength=_WL, dx=dx,
+                             surface_model='displaced')      # 'auto' -> pointwise
+    assert np.all(np.isfinite(out))
 
 
 # ===========================================================================

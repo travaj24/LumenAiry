@@ -775,6 +775,18 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
 # on_noncollimated policy.
 _NONCOLLIMATED_RESID_THRESH = 0.02
 
+# N5 (2026-07-19): when ``tilt_aware_rays=True`` and no explicit ``carrier`` is
+# given, an auto-fit carrier eikonal is threaded through the carrier plumbing so
+# the exit wavefront carries the input congruence (matching the carrier path's
+# H6 entrance-eikonal fix).  It engages only when the fitted eikonal's peak phase
+# over the bright support exceeds this floor, so a (near-)collimated tilt_aware
+# input -- which fits ``W == 0`` exactly for a real / globally-phased field --
+# keeps the byte-identical plane-wave-reference path.  1e-2 rad (~lambda/628 of
+# OPD across the beam) sits far below any divergence that shifts the focus (a
+# gently diverging R=10 m beam already fits tens of radians) yet safely above
+# float round-off.
+_TILT_EIKONAL_MIN_RAD = 1e-2
+
 
 def _carrier_residual_rms(E_in, W_full, wavelength, dx):
     """RMS transverse angular spread (radians) of ``E_in`` AFTER removing
@@ -1898,20 +1910,57 @@ def apply_real_lens_traced(
     _carrier_W = None
     _carrier_grad = None
     _carrier_W_fn = None
-    if carrier is not None:
+    # N5 (2026-07-19): tilt_aware_rays with NO explicit carrier still needs an
+    # entrance-eikonal REFERENCE so the exit wavefront carries the input
+    # congruence -- the same physics the carrier path's H6 fix restored.  On the
+    # DEFAULT preserve_input_phase=True the plane-wave reference already works (a
+    # diverging/tilted tilt_aware input focuses at its true image: E_analytic
+    # carries the input eikonal and the plane-wave reference leg does not
+    # subtract it, unlike the carrier path's exp(i*k0*W) leg that made the H6
+    # collapse surface on the default path).  But preserve_input_phase=False
+    # builds the exit phase from opl_traced ALONE, which the ray tracer
+    # accumulates only from the entrance plane forward -- dropping k0*W(x_in) and
+    # collapsing a diverging/tilted input to the collimated focal plane (the H6
+    # class, here confined to the non-default mode).  Fix: auto-fit the input's
+    # smooth carrier and thread it through the SAME carrier plumbing (reference
+    # leg exp(i*k0*W) + the H6 entrance-eikonal OPL term); the per-pixel tilt
+    # LAUNCH below is retained (the tilt_aware branch wins).  A (near-)collimated
+    # input fits W == 0 exactly (real / globally-phased field -> zero tilt
+    # samples), so it keeps the byte-identical plane-wave path.
+    _carrier_src = carrier
+    if _carrier_src is None and tilt_aware_rays:
+        _carrier_src = 'auto'
+    if _carrier_src is not None:
         if X is None:
             _cx = (np.arange(E_in.shape[0]) - E_in.shape[0] / 2) * dx
             _CX, _CY = np.meshgrid(_cx, _cx)
         else:
             _CX, _CY = X, Y
-        _carrier_W, _carrier_grad, _carrier_W_fn = _compute_carrier(
-            carrier, E_in, wavelength, dx, _CX, _CY)
+        _cW, _cGrad, _cWfn = _compute_carrier(
+            _carrier_src, E_in, wavelength, dx, _CX, _CY)
         del _CX, _CY
-        # The fast_analytic_phase reference is the lens's on-axis geometric
-        # phase (input-independent), which cannot carry the carrier
-        # congruence; force the full wave reference when a carrier is set.
-        if fast_analytic_phase:
-            fast_analytic_phase = False
+        # Explicit carrier always engages.  The IMPLICIT tilt_aware auto-carrier
+        # engages only when the fitted eikonal is non-trivial, so a flat-wavefront
+        # input (fits W == 0) keeps the byte-identical plane-wave reference (pin:
+        # collimated tilt_aware unchanged in both preserve_input_phase modes).
+        _engage = True
+        if carrier is None:
+            _mag0 = np.abs(E_in)
+            _pk0 = float(_mag0.max()) if _mag0.size else 0.0
+            if _pk0 > 0:
+                _bright0 = _mag0 > 0.05 * _pk0
+                _peakW = (float(np.nanmax(np.abs(_cW[_bright0])))
+                          if _bright0.any() else 0.0)
+            else:
+                _peakW = 0.0
+            _engage = (_peakW * _k0) > _TILT_EIKONAL_MIN_RAD
+        if _engage:
+            _carrier_W, _carrier_grad, _carrier_W_fn = _cW, _cGrad, _cWfn
+            # The fast_analytic_phase reference is the lens's on-axis geometric
+            # phase (input-independent), which cannot carry the carrier
+            # congruence; force the full wave reference when a carrier is set.
+            if fast_analytic_phase:
+                fast_analytic_phase = False
 
     # F1 (audit) collimation guard: measure the residual angular spread
     # (after removing any carrier) and warn / delegate when the input is

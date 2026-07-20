@@ -109,6 +109,55 @@ def _mean_input_tilt(E_in, dx, dy, wavelength) -> float:
     return float(np.hypot(lbar, mbar))
 
 
+# H7 (2026-07-19): ``direction_sampling='auto'`` engages the Husimi (carrier-
+# normal) launch when the input carries transverse angular content -- a curved
+# (diverging / converging) or tilted wavefront -- above this RMS local-tilt
+# threshold (radians).  Below it the flat-wavefront (collimated) field takes the
+# axial position-only decomposition, byte-identical to the historical default.
+# A real / globally-phased collimated field measures exactly 0 (see
+# ``_input_angular_spread``), so the threshold only guards against numerical
+# phase noise: 5e-4 rad (~0.03 deg) sits far below any divergence that shifts
+# the focus measurably yet far above float round-off.  Defined here (the beamlet
+# layer) and re-exported from ``elements.lenses_gbd`` for backward-compatible
+# imports; ``apply_real_lens_gbd`` and ``propagate_gbd_through_prescription``
+# both resolve their ``'auto'`` policy through it.
+_GBD_AUTO_HUSIMI_THRESH = 5e-4
+
+
+def _input_angular_spread(E_in: np.ndarray, dx: float, dy: float,
+                          wavelength: float) -> float:
+    """RMS transverse direction cosine (local wavevector magnitude / k) of the
+    input field over its bright support -- the SPREAD (not the mean) of the
+    launch angles the beamlets would carry.
+
+    Unlike the intensity-weighted MEAN tilt (:func:`_mean_input_tilt`, ~0 for a
+    symmetric diverging beam), this fires on a diverging / converging source: a
+    curved wavefront's local normals fan out, so their RMS magnitude ~ the beam
+    NA.  Uses wrapping-safe nearest-neighbour phase increments
+    (``angle(E_i * conj(E_{i-1}))``) so it is robust to fringes up to the grid
+    Nyquist, and restricts to the bright support (``|E| > 0.05 max``) so
+    dark-region phase noise does not inflate it.  Returns ``0.0`` exactly for a
+    real / globally-phased (flat-wavefront) field, so the ``'auto'`` launch is a
+    strict no-op there.  NumPy host-side (a cheap eager reduction)."""
+    E = np.asarray(E_in)
+    mag = np.abs(E)
+    peak = float(mag.max()) if mag.size else 0.0
+    if peak <= 0.0:
+        return 0.0
+    k = 2.0 * np.pi / wavelength
+    mask = mag > 0.05 * peak
+    gx = E[:, 1:] * np.conj(E[:, :-1])
+    gy = E[1:, :] * np.conj(E[:-1, :])
+    mxx = mask[:, 1:] & mask[:, :-1]
+    myy = mask[1:, :] & mask[:-1, :]
+    lx = np.angle(gx[mxx]) / (k * dx)
+    my = np.angle(gy[myy]) / (k * dy)
+    vals = np.concatenate([lx, my])
+    if vals.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(vals ** 2)))
+
+
 def _warn_if_tilted_no_dirsample(E_in, dx, dy, wavelength,
                                  direction_sampling) -> None:
     """Surface the ``direction_sampling`` energy-loss caveat (audit S2-20) at a
@@ -1104,6 +1153,44 @@ def _erf_xp(xp: Any, z: np.ndarray) -> np.ndarray:
 # ============================================================================
 # Reconstruction
 # ============================================================================
+
+def frame_completeness(
+    bundle: 'BeamletBundle',
+    E_ref: np.ndarray,
+    dx: float,
+    *,
+    wavelength: float,
+    dy: Optional[float] = None,
+    centre: Tuple[float, float] = (0.0, 0.0),
+    window: Optional[float] = 5.0,
+    mem_budget_mb: float = 512.0,
+) -> float:
+    """Fraction of a reference field's power captured by a beamlet frame.
+
+    Reconstructs ``bundle`` on ``E_ref``'s grid and returns
+    ``sum|reconstruct|^2 / sum|E_ref|^2`` -- the P4 (N3) **frame-completeness
+    metric**.  A value near 1 means the frame reproduces the field (a proper
+    partition of unity); ``<< 1`` means the frame UNDER-spans the field (frame
+    incompleteness -- the flat-waist beamlets cannot represent the field's local
+    wavefront curvature, so their coherent sum sheds power); ``> 1`` means the
+    frame OVER-counts (too much overlap).
+
+    This isolates frame quality from downstream grid truncation when evaluated at
+    the decomposition plane against the (aperture-clipped) input field.  NumPy
+    host-side reduction; the reconstruction backend follows ``bundle``.
+    """
+    E_ref = np.asarray(E_ref)
+    Ny, Nx = E_ref.shape[-2], E_ref.shape[-1]
+    E_rec = reconstruct_field_from_beamlets(
+        bundle, Ny=Ny, Nx=Nx, dx=dx, dy=(dx if dy is None else dy),
+        wavelength=wavelength, centre=centre, window=window,
+        mem_budget_mb=mem_budget_mb)
+    p_ref = float(np.sum(np.abs(E_ref) ** 2))
+    if p_ref <= 0.0:
+        return 0.0
+    p_rec = float(np.sum(np.abs(np.asarray(E_rec)) ** 2))
+    return p_rec / p_ref
+
 
 def reconstruct_field_from_beamlets(
     beamlets: BeamletBundle,
@@ -3204,7 +3291,7 @@ def propagate_gbd_through_prescription(
     waist_factor: float = 1.0,
     sample_step: int = 1,
     chunk_beamlets: int = 2048,
-    direction_sampling: bool = False,
+    direction_sampling: Any = 'auto',
     per_surface: bool = False,
     z_image: Optional[float] = None,
     world_output_plane: Any = None,
@@ -3243,9 +3330,16 @@ def propagate_gbd_through_prescription(
       :func:`lumenairy.raytrace.ray_transfer_jacobian`.  ``z_image`` sets the
       last-vertex-to-output distance (defaults to the system BFL).
 
-    ``direction_sampling=True`` selects the Husimi (position + direction)
-    decomposition so a source already tilted / diverging at the input
-    plane walks off correctly; see :func:`decompose_field_to_beamlets`.
+    ``direction_sampling`` (N4, 2026-07-19) defaults to ``'auto'``: the
+    beamlet launch direction rides the input field's local wavevector (the
+    Husimi / carrier-normal decomposition) when the input carries transverse
+    angular content -- a curved (diverging / converging) or tilted wavefront --
+    and along the axis otherwise, so a diverging / converging source focuses at
+    its true finite-conjugate image and conserves power instead of collapsing to
+    the collimated focal plane and shedding frame energy.  A flat-wavefront
+    (collimated) input measures ~0 spread and takes the byte-identical axial
+    path.  ``True`` / ``False`` force Husimi / axial explicitly; see
+    :func:`decompose_field_to_beamlets`.
 
     Parameters
     ----------
@@ -3284,6 +3378,26 @@ def propagate_gbd_through_prescription(
     )
     if output_dx is None:
         output_dx = dx
+
+    # N4 (2026-07-19): resolve the H7 carrier-normal ('auto') launch policy here
+    # too, so the prescription-chain entry conserves power on a diverging /
+    # converging / tilted input exactly as ``apply_real_lens_gbd`` does -- the
+    # position-only (axial) decomposition carries the input's wavefront curvature
+    # in the beamlet AMPLITUDE only, so the axial base rays focus at the
+    # COLLIMATED plane and the frame sheds the diverging beam's energy (power
+    # collapses to ~0.2-0.7 on the dual-oracle singlet).  'auto' (the default)
+    # measures the input's RMS local-tilt spread and launches Husimi
+    # (carrier-normal) beamlets when the wavefront is curved/tilted, axial
+    # otherwise; a flat-wavefront (collimated) field measures exactly 0 and takes
+    # the byte-identical axial path (pin: the whole existing collimated GBD
+    # matrix reproduces bit-for-bit).  ``True`` / ``False`` force Husimi / axial.
+    if direction_sampling == 'auto':
+        _spread = _input_angular_spread(E_in, dx, dx, wavelength)
+        direction_sampling = _spread > _GBD_AUTO_HUSIMI_THRESH
+    elif direction_sampling not in (True, False):
+        raise ValueError(
+            "propagate_gbd_through_prescription: direction_sampling must be "
+            f"'auto', True or False, got {direction_sampling!r}.")
 
     _warn_if_tilted_no_dirsample(E_in, dx, None, wavelength, direction_sampling)
     bundle = decompose_field_to_beamlets(
@@ -3425,6 +3539,7 @@ __all__ = [
     'apply_abcd_to_beamlets',
     'apply_prescription_persurface_to_beamlets',
     'reconstruct_field_from_beamlets',
+    'frame_completeness',
     'gbd_ghost_analysis',
     'propagate_gbd_freespace',
     'propagate_gbd_freespace_spectral',

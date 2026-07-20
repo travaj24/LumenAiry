@@ -6,6 +6,33 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **`apply_real_lens_gbd(reexpand='auto')` — GBD strong-reconvergence frame
+  re-expansion (accuracy niche N3 / P4).**  A converging input reconverged by a
+  NEGATIVE element to a near real focus sheds ~6–12 % of its power at the INPUT
+  decomposition: a flat-waist Gaussian beamlet frame cannot carry the input
+  wavefront curvature, so its coherent sum is incomplete (measured at the
+  decomposition plane, BEFORE any propagation — the loss is baked into the frame
+  and is unrecoverable downstream; the documented ~0.94 G1 edge).  `reexpand`
+  (default `'off'`, **byte-identical** to prior releases) adds an `'auto'` policy
+  that, when the naive frame's input-plane completeness falls below
+  `reexpand_threshold` (0.98), re-decomposes with a **carrier reference**: remove
+  the smooth congruence `W` (fit via `reexpand_carrier='auto'`, or a signed
+  scalar conjugate / explicit wavefront), decompose the compact near-flat
+  residual (a near-complete frame), and seed each beamlet's launch **direction**
+  (`grad W` -- the H7 carrier-normal machinery), **curvature** (`Q += Hessian W`,
+  the seed plain Husimi omits) and **piston** from the carrier.  Headline (G1 M5
+  biconcave, converging `R_in = -35 mm` -> real image ~108 mm): power conserved
+  **0.94 -> >0.99** with windowed r2m within **0.3 %** of the carrier-referenced
+  `apply_real_lens_traced`; grid-converged (dx halving unchanged); the
+  re-decomposition Parseval-audits clean (completeness 0.999, no double-count);
+  runtime ~1.2–1.9x when it fires (measured 1.16x).  Surgical: a collimated
+  input (already complete) and a diverging input through a positive element or a
+  doublet (completeness 0.996–0.998) are NOT re-expanded, so `'auto'` returns
+  output byte-identical to `'off'` there.  Also publishes the **frame-completeness
+  metric** (`frame_completeness` in `lumenairy.propagators.gbd`; reconstructed
+  output power / aperture-transmitted input power) via the new opt-in
+  `diagnostics=` dict.  Independent oracles: ABCD Gaussian q-trace and
+  `apply_real_lens_traced` (H6-fixed).  Tests: `test_niche_p4_gbd_reexpand.py`.
 - **`propagate_carrier_referenced` — carrier-referenced ("pilot-beam") free-space
   propagation (Phase E prototype).**  Transports a strongly diverging / converging
   beam's slowly-varying ENVELOPE on a modest grid while the spherical carrier
