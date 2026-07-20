@@ -340,3 +340,93 @@ documented open findings, never silently accepted. Checkpoint commits after
 P0-P4, P5-P8, and P9-P10. Run 3 (P9-P10) launches ONLY after Run 2 (P5-P8) has
 landed + committed -- never two repo-writing workflows concurrently. Release
 only on explicit user approval.
+
+---
+
+## RESULTS (Runs 1-2, N0-N9; 2026-07-20)
+
+Final per-niche status after the P8 capstone (the last gate before PR for
+Runs 1-2).  Every measured envelope below is oracle-backed and pinned by a test.
+N10/N11 are Run 3 (not started here).
+
+### Per-niche status + measured envelope
+
+| N | phase | status | measured envelope (oracle) |
+|---|---|---|---|
+| N0.1 | P0 | SHIPPED | `debye_oracle_v3` congruence diffraction oracle: collimated f/5 EE80 55.4 vs dual-oracle 55.2 um (0.4%); ABCD Gaussian small-beam limit 0.4-1%; virtual-image `asm_backprop` auto-route. Geometric-spot fallback retired for congruence cases. |
+| N0.2 | P8 | SHIPPED | ZOS `huygens_psf` oracle mode: unaberrated f/25 first-zero 40.32 vs Airy 40.15 um (**0.4%**), Strehl 1.000; aberrated f/4 uniform pupil vs `debye_oracle_v3` at a matched 110-um window **EE50 1.9% / EE80 0.72% / EE95 0.17%**. |
+| N0.3 | P5 | SHIPPED | `caustic_fold_truth.py` fold ground truth: grid convergence 1.3e-5, energy closure 0.999, 2-branch fold; r2m 11.22 / EE50 10.05 / EE80 13.50 um. |
+| N1 | P2 | SHIPPED (premise refuted) | The "0.50x floor" was an ORACLE artefact (geometric ray-density spot over-estimates the wave spot ~2x near reconvergence). Default `displaced_mode='screen'` is within **4-8%** of the diffraction-faithful oracle across M5-real / M5-virtual / M1 / M6 (0.916-0.998); `remap`/`split` are documented experimental peers. Defaults byte-identical. |
+| N2 | P3 | SHIPPED + 1 OPEN FINDING | Pointwise 2-D obliquity: symmetric limit rel L2 6.8e-6; decenter CENTROID 2.5% vs ZOS / 0.1% vs geom; tilt deflection 0.2% vs rigid-rotation; coma flare DIRECTION mirror-exact. OPEN: induced-coma **EE growth** is directionally wrong (model narrows 0.906x where ZOS/geom broaden ~1.02-1.03x; decentered EE80 -19% vs ZOS) -- a genuine single-plane walk-off limit, PINNED by a regression test; ZOS is the reference for decentered-spot EE. (N10/N11, Run 3, address this.) |
+| N3 | P4 | SHIPPED (opt-in) | `apply_real_lens_gbd(reexpand='auto')` closes the ~0.94 strong-reconvergence power cap to **>0.99 power + windowed r2m within 0.3% of traced**; collimated/well-conditioned inputs are not re-expanded (byte-identical to `'off'`); overhead ~1.5-1.9x when it fires. |
+| N4 | P1 | SHIPPED | Carrier decomposition ported to `propagate_gbd_through_prescription`: chain == back-to-back `apply_real_lens_gbd` to precision on a two-group system; diverging-input power >0.99; fail-before pins the old path's loss. |
+| N5 | P1 | SHIPPED | `apply_real_lens_traced(tilt_aware_rays=True)` entrance-eikonal restored: tilt-aware and carrier paths agree on the H6 R_in scan (EE100 >0.99 at the ABCD focus); collimated byte-identical; no double-count of W when both are set. |
+| N6a | P5 | SHIPPED (claim corrected) | FGA at a genuine single fold: r2m 1.5% / EE80 4.9% / fidelity 0.9956 (PASSES the 10% gate) -- but GBD (0.3% / 3.0% / 0.9997) and traced+ASM (0.8% / 0.0% / 0.9991) do NOT degrade there, so the "FGA is uniquely needed at a fold" claim is refuted; only `traced_multibranch` (geometric) degrades (14.2% / 9.9%). |
+| N6b | P5 | SHIPPED (opt-in, measured non-improvement) | `momentum_sampling='adaptive'` is a valid non-uniform quadrature (unit-tested; naive uniform weights over-count >200% on concentrated nodes) but a MEASURED non-improvement -- the FGA integrand is beamlet-broadened, so uniform already reaches fidelity 1.000 at n_p=21. Documented fidelity-vs-cost curve; default `'uniform'` byte-identical. |
+| N7 | P6 | SHIPPED | Astigmatic `carrier=(R_x,R_y)` separable Sziklas-Siegman: per-axis focus-crossing matches fine-grid ASM **<1%** at both line foci + the mid-astigmatic plane; isotropic `(R,R)` byte-identical to the scalar path; `carrier_referenced_aperture` removes clipped power with exact accounting (no renormalization). |
+| N8 | P7 | SHIPPED | `_seidel_sa_wfe_rad` system-S1 gate: an SA-nulled conic now routes to the fast displaced screen (the c4 bound false-positived it); genuinely-aberrated M1-M6 route to a ray member; SAFETY checked against oracle errors, not internal estimates. |
+| N9 | P8 | SHIPPED | Capstone composition (STEP A/B/C below). |
+
+### STEP A -- ZOS Huygens-PSF oracle mode (N0.2 prerequisite)
+
+Added a `huygens_psf` job type to `zos_oracle.py` (point source, finite/infinite
+conjugate, pupil-limited) returning the PSF grid + Strehl + centroid/EE/first-zero,
+alongside POP.  Invocation + full caveats: `validation/oracles/README.md`.
+
+- **Airy (unaberrated).**  Slow equiconvex singlet (f~100 mm, EPD 4 mm, f/25),
+  infinite conjugate: Strehl **1.000**, first-dark-ring **40.32 um** vs the analytic
+  Airy `1.22*lambda*F/# = 40.15 um` (**0.4%**).
+- **Aberrated vs `debye_oracle_v3`.**  Two independent Huygens integrals.  The f/2
+  equiconvex singlet stopped to f/4 (aperture 12 mm), UNIFORM pupil, same
+  paraxial-focus plane, MATCHED 110-um metric window: **EE50 1.9% / EE80 0.72% /
+  EE95 0.17%**.  Two hard-won lessons (both measured): (1) the EE-about-centroid
+  metric renormalizes to captured energy, so the metric window MUST match between
+  tools -- an un-matched window spuriously halves the Zemax EE (the "0.6x" red
+  herring); (2) a heavily-aberrated PSF needs BOTH an adequate image window (>= EE95
+  radius) AND high ZOS pupil sampling (full f/2 aperture-24 mm is still
+  pupil-sampling-limited at 512x512: EE80 203->306->376 um across 256/512/1024 pupil
+  samples, and the Debye ring-Huygens J0 kernel itself carries ~0.7-rad edge phase
+  at f/2 -- so f/4 is the clean cross-check regime).
+
+### STEP B -- composed doublet + relay end-to-end (N9)
+
+Generic (not design-tuned) weak cemented doublet (f1~173 mm) + relay singlet
+(f2~40 mm), collimated Gaussian w0=1.5 mm, aperture 6 mm.  Propagated end-to-end
+through the NEW stack: **per-group `traced`** (H6/N5) for the doublet -> a
+**carrier-referenced gap leg** (N7) -> the **`apply_real_lens_universal`-gated
+relay** (routes to the displaced phase-screen -- the N8 gate selects it at the
+low relay NA) -> a **carrier-referenced FINAL-FOCUS leg** landing at the paraxial
+image.  Compared to `debye_oracle_v3` (independent, lumenairy-free) over the whole
+5-surface chain at two wavelengths:
+
+| wl | composed EE50/EE80 um | Debye EE50/EE80 um | EE80 ratio | EE50 ratio |
+|---|---|---|---|---|
+| 1.31 um | 7.286 / 11.014 | 7.354 / 11.110 | **0.991** | 0.991 |
+| 0.633 um | 3.523 / 5.338 | 3.642 / 5.495 | **0.972** | 0.967 |
+
+The composition matches the independent oracle to **<1% (1.31 um) / <3% (0.633
+um)** -- the integration nobody had demonstrated.  LESSON: the comparison plane is
+load-bearing -- landing at the fitted best-focus rather than the oracle's paraxial
+image inflates the discrepancy to ~14%; both must measure at the SAME plane.
+ZOS POP corroboration recorded in the report (the debye oracle is primary; POP's
+Gaussian pilot is the secondary cross-check).
+
+### STEP C -- full-aperture f/2 M4 fast case (N9)
+
+The f/2 M4 biconvex (R=+-51.68 mm, aperture 22 mm, f/2.31) at collimated Gaussian
+w0=9 mm ("full aperture" = truncated at the f/2 stop), reconstructed AT FOCUS via
+the GBD pilot beam on a MODEST N=3072 grid (dx=8 um), 4.3 s, 3217 beamlets, frame
+completeness **0.979**:
+
+| model | EE50/EE80/EE95 um | EE80 vs Debye |
+|---|---|---|
+| GBD pilot beam @ focus | 60.71 / 182.78 / 322.09 | **0.974** |
+| `debye_oracle_v3` (Gaussian w0=9 mm) | 63.13 / 187.63 / 325.40 | 1.000 |
+| fixed-grid thin+ASM (same N) | 7.92 / 22.40 / 39.74 | **0.12 (aliased)** |
+
+The exit NA is ~0.64, so a fixed grid holding the full aperture at the exit
+Nyquist would need **N ~ 21500** (budget-infeasible for the per-pixel exact
+route); the pilot beam propagates each beamlet analytically and needs no fine grid
+to sample the exit fringe.  A fixed-grid ASM at the same modest N reads 0.12x
+(aliased garbage) -- the fail-before anchor that shows why the pilot beam is
+required.  GBD lands within **2.6%** of the diffraction oracle.

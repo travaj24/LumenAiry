@@ -65,6 +65,16 @@ AUTO-SIZE the swarm to the field -- ``p_max`` to the field's angular content and
 ``n_p`` to make ``dp`` fine enough -- so a diverging beam reconstructs to
 fidelity ~1 (e.g. 0.9995 for a beam diverging at ~0.1 rad, up from ~0.93) at a
 modest ``n_p``.  Pass explicit ``p_max``/``n_p`` to override.
+``momentum_sampling='adaptive'`` (opt-in; default ``'uniform'`` is byte-identical)
+concentrates the ``n_p`` nodes where the field's angular spectrum lives (importance
+sampling from the marginal Wigner / local-frequency estimate, with the matching
+per-node quadrature weights + auto power-normalization).  NOTE (measured, N6b): it
+is a NON-improvement in practice -- the reconstruction integrand is the spectrum
+convolved with the beamlet momentum width ``~1/(k w0)``, so it is too broad for
+importance sampling to beat uniform (which already converges: e.g. fidelity 1.000
+at ``n_p=21`` on a smooth 0.23-NA diverging transport).  It is provided per the
+accuracy-niche plan with a documented fidelity-vs-cost curve; reach for it only for
+a genuinely SPARSE / multi-peak spectrum.
 
 Requires the optional ``numba`` accelerator (the pure-NumPy swarm sum is
 impractically slow); install with ``pip install lumenairy[numba]``.
@@ -417,7 +427,17 @@ def _coeff_keep_mask(qbounds, Np, coeff_frac, chunk_peak):
     return gpeak >= coeff_frac * float(gpeak.max() + 1e-300)
 
 
-def _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step, p_max, n_p):
+def _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step, p_max, n_p, nodes=None):
+    """Build the phase-space launch swarm.  ``nodes=None`` (default) is the
+    UNIFORM momentum grid ``pv = linspace(-p_max, p_max, n_p)`` with the constant
+    cell spacing ``dp`` and ``wp=None`` (the caller uses the scalar ``dp**2``
+    quadrature measure -- byte-identical to prior releases).  ``nodes=(pv, wv)``
+    is a NON-uniform (content-adaptive) 1-D momentum node set with per-node
+    trapezoidal quadrature weights ``wv``; the returned ``wp = outer(wv, wv)`` is
+    the per-momentum 2-D quadrature cell area the caller MUST fold into the
+    beamlet weight in place of the uniform ``dp**2`` (adversarial: a non-uniform
+    p-measure requires the matching per-momentum weights or the reconstruction
+    mis-normalizes)."""
     qi = np.arange(0, Nx, dq_step)
     qj = np.arange(0, Ny, dq_step)
     qxg, qyg = np.meshgrid(x0 + qi * dx, y0 + qj * dyg)
@@ -425,13 +445,94 @@ def _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step, p_max, n_p):
     qy = qyg.ravel().astype(np.float64)
     # momentum (direction-cosine) grid is ISOTROPIC: p is the physical transverse
     # direction cosine, bounded by the system NA, not by the (possibly
-    # anamorphic) pixel pitch.
-    pv = np.linspace(-p_max, p_max, n_p)
+    # anamorphic) pixel pitch.  The separable analysis / recurrence-scatter
+    # kernels are spacing-AGNOSTIC (they read pv via precomputed phase tables), so
+    # a non-uniform pv drops in with no kernel change.
+    if nodes is None:
+        pv = np.linspace(-p_max, p_max, n_p)
+        wp = None
+    else:
+        pv, wv = nodes
+        pv = np.asarray(pv, dtype=np.float64)
+        wp = np.outer(wv, wv).ravel().astype(np.float64)   # per-momentum cell area
     pxg, pyg = np.meshgrid(pv, pv)
     px = pxg.ravel().astype(np.float64)
     py = pyg.ravel().astype(np.float64)
-    dp = (pv[1] - pv[0]) if n_p > 1 else 2.0 * p_max
-    return qx, qy, px, py, dp
+    dp = (pv[1] - pv[0]) if (nodes is None and n_p > 1) else 2.0 * p_max
+    return qx, qy, px, py, dp, wp
+
+
+def _adaptive_momentum_nodes(E_in, dx, dyg, wavelength, w0, p_max, n_p,
+                             beta=0.7):
+    """Content-adaptive (importance-sampled) 1-D momentum nodes on
+    ``[-p_max, p_max]`` for a SEPARABLE ``pv (x) pv`` swarm, concentrated where the
+    input field's angular spectrum lives, with midpoint-cell quadrature weights.
+
+    The reconstruction integrates the Gabor coefficient ``c(q, p)`` -- the field's
+    LOCAL spectrum BROADENED by each frozen beamlet's own momentum resolution
+    ``sigma_p ~ 1/(k w0)`` -- against the beamlet kernel over momentum.  The
+    importance density is therefore the (symmetrized) marginal angular power
+    CONVOLVED with that beamlet momentum Gaussian (so the beamlet-completeness
+    skirt is not starved), and nodes are placed by its inverse-CDF -- putting
+    samples where the integrand has mass, improving the phase-space quadrature at
+    fixed ``n_p`` (the ``n_p``-capped fidelity lever, S2-15).  ``beta`` blends the
+    importance CDF with the uniform CDF (``beta=1`` pure importance, ``0``
+    uniform) so the node map is STRICTLY monotone (no duplicate nodes) and always
+    spans the full ``[-p_max, p_max]`` (the completeness-floor coverage is
+    preserved; only the density is redistributed).  Isotropic: x / y marginals are
+    averaged so a single ``pv`` serves both tensor axes (the separable kernel
+    needs one pv)."""
+    from scipy.ndimage import gaussian_filter1d
+    E = np.asarray(E_in)
+    ny, nx = E.shape
+    P = np.abs(np.fft.fft2(E)) ** 2
+    fxp = np.fft.fftfreq(nx, dx) * wavelength          # p_x direction cosine
+    fyp = np.fft.fftfreq(ny, dyg) * wavelength
+    pg = np.linspace(-p_max, p_max, 4096)
+    ox = np.argsort(fxp)
+    oy = np.argsort(fyp)
+    Sx = np.interp(pg, fxp[ox], P.sum(axis=0)[ox], left=0.0, right=0.0)
+    Sy = np.interp(pg, fyp[oy], P.sum(axis=1)[oy], left=0.0, right=0.0)
+    dens = 0.5 * (Sx + Sy)                             # isotropic marginal density
+    # broaden by the beamlet momentum resolution sigma_p ~ 1/(k w0) so the
+    # importance density matches the actual reconstruction integrand |c(q, p)|
+    # (field content convolved with the frozen beamlet), keeping the completeness
+    # skirt sampled rather than starved.
+    k = 2.0 * np.pi / wavelength
+    sig_samp = (1.0 / (k * w0)) / ((pg[-1] - pg[0]) / (pg.size - 1))
+    if sig_samp >= 0.5:
+        dens = gaussian_filter1d(dens, sig_samp, mode="constant")
+    tot = float(dens.sum())
+    if not np.isfinite(tot) or tot <= 0.0:
+        pv = np.linspace(-p_max, p_max, n_p)           # no content -> uniform
+    else:
+        cdf_imp = np.cumsum(dens)
+        cdf_imp /= cdf_imp[-1]
+        cdf_uni = (pg - pg[0]) / (pg[-1] - pg[0])
+        cdf = beta * cdf_imp + (1.0 - beta) * cdf_uni  # strictly monotone
+        cdf = (cdf - cdf[0]) / (cdf[-1] - cdf[0])
+        pv = np.interp(np.linspace(0.0, 1.0, n_p), cdf, pg)
+        pv[0], pv[-1] = -p_max, p_max                  # pin endpoints (coverage)
+    return pv, _midpoint_cell_weights(pv)
+
+
+def _midpoint_cell_weights(pv):
+    """MIDPOINT-cell quadrature weights for 1-D nodes ``pv``: each node owns the
+    interval to its neighbours' midpoints, the two endpoint cells extending half
+    a spacing beyond.  For a UNIFORM grid this returns the constant spacing ``dp``
+    for EVERY node (endpoints included) -- exactly the rectangle-rule ``dp`` the
+    scalar-``C`` uniform path uses -- so ``outer(wv, wv) == dp**2`` and the
+    adaptive plumbing reduces to the byte-identical uniform normalization; for a
+    non-uniform grid it is the consistent generalization."""
+    pv = np.asarray(pv, dtype=np.float64)
+    n = pv.size
+    if n == 1:
+        return np.array([1.0])
+    mids = 0.5 * (pv[:-1] + pv[1:])                    # n-1 interior boundaries
+    left = pv[0] - 0.5 * (pv[1] - pv[0])
+    right = pv[-1] + 0.5 * (pv[-1] - pv[-2])
+    bounds = np.concatenate(([left], mids, [right]))
+    return np.diff(bounds)
 
 
 def _lattice_support_mask(u0, dx, dyg, dq_step, w0, nsig, frac):
@@ -945,7 +1046,7 @@ def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0,
 
 def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
                 wavelength, z_image, dq_step, px, py, n_p, Np, coeff_frac,
-                use_sep, cw, nq_chunk, coarse_stride, cache_trace=False):
+                use_sep, cw, nq_chunk, coarse_stride, cache_trace=False, Cp=None):
     """Lever #3: coarse-lattice trace + quintic ``map_coordinates`` interpolation.
 
     The ray trace is ~80% of FGA cost, and the exit-vertex map
@@ -1148,7 +1249,8 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
                 QY[:, j] = yv
                 PX[:, j] = uxo * invo
                 PY[:, j] = uyo * invo
-                AW[:, j] = C * a * np.exp(1j * k * opd)
+                cj = C if Cp is None else Cp[jm]        # per-momentum quad weight
+                AW[:, j] = cj * a * np.exp(1j * k * opd)
             W = cco * AW
             W[~ALV] = 0.0
             _reconstruct_into(outr, outi, QX, QY, PX, PY, W, x0, y0, dx, dyg,
@@ -1159,7 +1261,8 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
 def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                       dq_step, p_max, n_p, nsig, chunk=None, prune_frac=0.0,
                       coeff_frac=0.0, separable="auto", mem_budget_mb=None,
-                      coarse_stride=1, exact_jacobian=None, cache_trace=False):
+                      coarse_stride=1, exact_jacobian=None, cache_trace=False,
+                      momentum_nodes=None):
     """Core FGA transport through a prescription to (last vertex + z_image).
 
     ``dx`` / ``dyg`` are the (possibly anamorphic) x / y pixel pitches.  ``chunk``
@@ -1183,8 +1286,8 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     y0 = -(Ny / 2) * dyg
     Ag = (1.0 / (np.pi * w0 ** 2)) ** 0.5
 
-    qx, qy, px, py, dp = _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step,
-                                        p_max, n_p)
+    qx, qy, px, py, dp, wp = _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step,
+                                            p_max, n_p, nodes=momentum_nodes)
     if prune_frac > 0.0:
         keep = _lattice_support_mask(u0, dx, dyg, dq_step, w0, nsig, prune_frac)
         qx = qx[keep]
@@ -1196,8 +1299,13 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     # transverse) removes the double-counted Herman-Kluk identity factor
     # a(0)=2^{d/2}: without it the t=0 resolution of identity over-counts by
     # 2^d=4 in power (verified: the flat-prescription output=0 power ratio -> 4.0
-    # in the well-sampled limit, -> 1.0 with this factor).
+    # in the well-sampled limit, -> 1.0 with this factor).  UNIFORM swarm: the
+    # scalar ``dp**2`` momentum cell (byte-identical to prior releases).  ADAPTIVE
+    # swarm: ``Cp`` carries the PER-MOMENTUM cell area ``wp`` (outer(wv, wv)) so a
+    # non-uniform p-measure is quadrature-correct (else the power mis-normalizes).
     C = ((k / (2.0 * np.pi)) ** 2 * (dq_step ** 2 * dx * dyg) * (dp ** 2)) / 2.0
+    Cp = (None if wp is None else
+          ((k / (2.0 * np.pi)) ** 2 * (dq_step ** 2 * dx * dyg)) / 2.0 * wp)
 
     # trace to the LAST SURFACE VERTEX; the image-side leg is added manually.
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
@@ -1226,7 +1334,7 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
         return _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2,
                            surfs, wavelength, z_image, dq_step, px, py, n_p, Np,
                            coeff_frac, use_sep, cw, nq_chunk, int(coarse_stride),
-                           cache_trace=bool(cache_trace))
+                           cache_trace=bool(cache_trace), Cp=Cp)
     qbounds = ([(0, Nq)] if nq_chunk is None
                else [(s, min(s + nq_chunk, Nq)) for s in range(0, Nq, nq_chunk)])
 
@@ -1308,7 +1416,8 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                 QY[:, j] = yv
                 PX[:, j] = uxo * invo
                 PY[:, j] = uyo * invo
-                AW[:, j] = C * a * np.exp(1j * k * opd_tot)
+                cj = C if Cp is None else Cp[cs + j]   # per-momentum quad weight
+                AW[:, j] = cj * a * np.exp(1j * k * opd_tot)
                 ALV[:, j] = np.asarray(dt.alive, bool)
             W = c * AW
             W[~ALV] = 0.0
@@ -1339,6 +1448,7 @@ def apply_real_lens_fga(
     exact_jacobian: Optional[bool] = None,
     cache_trace: bool = False,
     normalize_output: str = "none",
+    momentum_sampling: str = "uniform",
 ) -> np.ndarray:
     """Propagate ``E_in`` through a real lens ``prescription`` by the
     **Frozen Gaussian Approximation** and return the field at
@@ -1495,6 +1605,24 @@ def apply_real_lens_fga(
         normalization is applied AUTOMATICALLY even under ``'none'`` (the
         content-sized swarm is under-complete, so the raw scale is wrong); a
         ``RuntimeWarning`` reports it.
+    momentum_sampling : {'uniform', 'adaptive'}
+        Momentum-swarm node placement.  ``'uniform'`` (default) is the equally
+        spaced ``pv = linspace(-p_max, p_max, n_p)`` grid -- byte-identical to
+        prior releases.  ``'adaptive'`` is CONTENT-adaptive: the ``n_p`` momentum
+        nodes are IMPORTANCE-sampled by the inverse-CDF of the input field's
+        (symmetrized) marginal angular power, concentrating samples where the
+        field's spectrum -- hence the reconstruction integrand -- has mass, with
+        the matching per-node trapezoidal quadrature weights folded into the
+        beamlet normalization.  MEASURED (N6b): a NON-improvement -- uniform
+        already converges (the reconstruction integrand is the spectrum broadened
+        by the beamlet momentum width, so it is not concentrated enough for
+        importance sampling to win), so this is opt-in for a genuinely SPARSE /
+        multi-peak spectrum, NOT a general fidelity lever.  The nodes still span
+        the full ``[-p_max, p_max]`` (beamlet-completeness coverage preserved).
+        Because the non-uniform quadrature carries the correct RELATIVE per-node
+        weights (the SHAPE) but not the calibrated uniform absolute scale, the
+        adaptive output is AUTO power-normalized to the input power (as the H5 path
+        is).
 
     Returns
     -------
@@ -1513,6 +1641,10 @@ def apply_real_lens_fga(
         raise ValueError(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
+    if momentum_sampling not in ("uniform", "adaptive"):
+        raise ValueError(
+            "momentum_sampling must be 'uniform' or 'adaptive', got "
+            f"{momentum_sampling!r}.")
     if mem_budget_mb is None:                       # H4a: engage the chunk loop
         mem_budget_mb = _default_mem_budget_mb()
     dyg = float(dx) if dy is None else float(dy)
@@ -1520,6 +1652,9 @@ def apply_real_lens_fga(
     _samp = {}
     p_max, n_p = _resolve_sampling(E_in, float(dx), dyg, float(wavelength), w0,
                                    prescription, p_max, n_p, info=_samp)
+    nodes = (None if momentum_sampling == "uniform" else
+             _adaptive_momentum_nodes(E_in, float(dx), dyg, float(wavelength),
+                                      w0, float(p_max), int(n_p)))
     chunk_eff = _chunk_from_budget(E_in.shape, int(dq_step), chunk, mem_budget_mb)
     out = _fga_through_lens(
         E_in, float(dx), dyg, prescription, float(wavelength), w0,
@@ -1527,10 +1662,17 @@ def apply_real_lens_fga(
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
         coeff_frac=float(coeff_frac), separable=separable,
         mem_budget_mb=mem_budget_mb, coarse_stride=int(coarse_stride),
-        exact_jacobian=exact_jacobian, cache_trace=bool(cache_trace))
+        exact_jacobian=exact_jacobian, cache_trace=bool(cache_trace),
+        momentum_nodes=nodes)
     # H5: the content-sized swarm is intentionally under-complete, so restore the
-    # absolute scale by power normalization even under the 'none' default.
-    do_norm = normalize_output == "power" or _samp.get('content_override', False)
+    # absolute scale by power normalization even under the 'none' default.  The
+    # ADAPTIVE swarm likewise does not preserve the calibrated uniform absolute
+    # scale (its non-uniform quadrature carries the correct RELATIVE weights for
+    # the shape, but the overall FGA power scale is convention-set for the uniform
+    # rectangle rule), so it too auto-normalizes -- the reconstruction SHAPE is
+    # what the adaptive nodes improve.
+    do_norm = (normalize_output == "power" or _samp.get('content_override', False)
+               or momentum_sampling == "adaptive")
     if do_norm:
         pin = float(np.sum(np.abs(E_in) ** 2))
         pout = float(np.sum(np.abs(out) ** 2))
@@ -1712,7 +1854,7 @@ def fga_memory_estimate(
 def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                              z_image, dq_step, p_max, n_p, nsig, chunk=None,
                              prune_frac=0.0, coeff_frac=0.0, separable="auto",
-                             mem_budget_mb=None):
+                             mem_budget_mb=None, momentum_nodes=None):
     """Vector (Jones) FGA transport: returns ``(Ex, Ey, Ez)`` at the output
     plane.  The scalar transport (ray map + HK weight + OPL) is shared by both
     polarization channels; each beamlet additionally carries the per-beamlet 2x2
@@ -1730,8 +1872,8 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
     x0 = -(Nx / 2) * dx
     y0 = -(Ny / 2) * dyg
     Ag = (1.0 / (np.pi * w0 ** 2)) ** 0.5
-    qx, qy, px, py, dp = _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step,
-                                        p_max, n_p)
+    qx, qy, px, py, dp, wp = _swarm_lattice(Ny, Nx, dx, dyg, x0, y0, dq_step,
+                                            p_max, n_p, nodes=momentum_nodes)
     if prune_frac > 0.0:
         supp = np.sqrt(np.abs(Ex) ** 2 + np.abs(Ey) ** 2)
         keep = _lattice_support_mask(supp, dx, dyg, dq_step, w0, nsig,
@@ -1741,6 +1883,8 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
     Nq = qx.shape[0]
     Np = px.shape[0]
     C = ((k / (2.0 * np.pi)) ** 2 * (dq_step ** 2 * dx * dyg) * (dp ** 2)) / 2.0
+    Cp = (None if wp is None else
+          ((k / (2.0 * np.pi)) ** 2 * (dq_step ** 2 * dx * dyg)) / 2.0 * wp)
 
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
@@ -1844,7 +1988,8 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                 go = 1.0 / (1.0 + uxo ** 2 + uyo ** 2) ** 1.5
                 gi = (1.0 + (pxi / pz_in) ** 2 + (pyi / pz_in) ** 2) ** 1.5
                 a = _hk_prefactor(M, go, gi, kw2)
-                base = C * a * np.exp(1j * k * opd_tot)  # scalar beamlet weight
+                cj = C if Cp is None else Cp[cs + j]     # per-momentum quad weight
+                base = cj * a * np.exp(1j * k * opd_tot)  # scalar beamlet weight
                 invo = 1.0 / np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
                 QX[:, j] = xv
                 QY[:, j] = yv
@@ -1890,6 +2035,7 @@ def apply_real_lens_fga_vector(
     separable: Any = "auto",
     return_longitudinal: bool = False,
     normalize_output: str = "none",
+    momentum_sampling: str = "uniform",
 ) -> np.ndarray:
     """Vector (Jones) FGA lens propagator -- the polarization-carrying,
     caustic-accurate peer of :func:`apply_real_lens_fga`.
@@ -1914,6 +2060,10 @@ def apply_real_lens_fga_vector(
         raise ValueError(
             "normalize_output must be 'none' or 'power', got "
             f"{normalize_output!r}.")
+    if momentum_sampling not in ("uniform", "adaptive"):
+        raise ValueError(
+            "momentum_sampling must be 'uniform' or 'adaptive', got "
+            f"{momentum_sampling!r}.")
     if mem_budget_mb is None:                       # H4a: engage the chunk loop
         mem_budget_mb = _default_mem_budget_mb()
     dyg = float(dx) if dy is None else float(dy)
@@ -1925,6 +2075,9 @@ def apply_real_lens_fga_vector(
     _samp = {}
     p_max, n_p = _resolve_sampling(_rep, float(dx), dyg, float(wavelength), w0,
                                    prescription, p_max, n_p, info=_samp)
+    nodes = (None if momentum_sampling == "uniform" else
+             _adaptive_momentum_nodes(_rep, float(dx), dyg, float(wavelength),
+                                      w0, float(p_max), int(n_p)))
     chunk_eff = _chunk_from_budget(E_vec[0].shape, int(dq_step), chunk,
                                    mem_budget_mb)
     ex, ey, ez = _fga_vector_through_lens(
@@ -1932,10 +2085,14 @@ def apply_real_lens_fga_vector(
         float(output_plane_distance), int(dq_step), float(p_max), int(n_p),
         float(nsig), chunk=chunk_eff, prune_frac=float(prune_frac),
         coeff_frac=float(coeff_frac), separable=separable,
-        mem_budget_mb=mem_budget_mb)
+        mem_budget_mb=mem_budget_mb, momentum_nodes=nodes)
     # H5: the content-sized swarm (near-collimated auto path) is under-complete,
-    # so restore the absolute scale by power normalization even under 'none'.
-    do_norm = normalize_output == "power" or _samp.get('content_override', False)
+    # so restore the absolute scale by power normalization even under 'none'.  The
+    # adaptive swarm's non-uniform quadrature likewise does not preserve the
+    # calibrated uniform absolute scale (correct RELATIVE weights = shape), so it
+    # too auto-normalizes.
+    do_norm = (normalize_output == "power" or _samp.get('content_override', False)
+               or momentum_sampling == "adaptive")
     if do_norm:
         # rescale the transverse (Ex, Ey) to the input power (lossless
         # assumption; the raw FGA scale is shape-correct but w0/sampling-
@@ -2310,14 +2467,170 @@ def _sag_screen_aberration_rad(E_in, dx, dyg, prescription, wavelength):
         return 0.0
 
 
+# P7 Seidel true-SA gate (docs/plan_accuracy_niches_2026_07_19.md N8).
+# ``_sag_screen_aberration_rad`` above is a per-surface |c4|*h^4 MAGNITUDE bound on
+# the THIN sag-screen's obliquity error -- it cannot see cancellation, so a
+# well-corrected (aplanatic / balanced-asphere) element trips it even though its
+# SYSTEM spherical aberration is nulled (a false positive: safe, but routes to the
+# slow ray members).  ``_seidel_sa_wfe_rad`` below is the SIGNED system Seidel S1
+# (spherical) sum along the SAME paraxial marginal-ray trace, so a nulled system
+# reads ~0.  When it is within the near-diffraction-limited budget the analytic
+# member is accurate and the router steers the plane to the fast (obliquity-correct
+# ``displaced``) analytic model instead of rays.  The Seidel machinery's S4/S5
+# sign convention (v5.24.4) is trustworthy AND the S1 prediction is INDEPENDENTLY
+# re-checked against a Debye-oracle W(h) r^4 fit (tests/unit/test_niche_p7_*.py):
+# base-sphere S1 reproduces lumenairy.seidel_coefficients to machine precision and
+# the base+conic/aspheric total matches the oracle r^4 coefficient to <1% on the
+# near-paraxial designs (16-20% on an f/0.85 extreme where 3rd-order theory itself
+# breaks down -- that regime is high-NA and never reaches this low-NA gate).
+# Conservative "comfortably diffraction-limited" W_rms budget for reclaiming a
+# plane onto the analytic model: lambda/20 RMS (Strehl ~ 0.91), a bar TIGHTER than
+# the Marechal lambda/14 (Strehl 0.8) diffraction limit -- so only a clearly
+# well-corrected (nulled-SA) element earns the fast analytic route; a borderline
+# design stays on the exact ray members (safe, only slower).
+_SEIDEL_SA_MAX_RAD = 2.0 * np.pi / 20.0     # lambda/20 W_rms budget (rad)
+# W_rms of a pure 3rd-order spherical W = (1/8) S1 rho^4 at the paraxial focus is
+# |S1|/(12 sqrt(5)); k * that is the wavefront RMS in radians.
+_SEIDEL_RMS_C = 1.0 / (12.0 * math.sqrt(5.0))
+
+
+def _seidel_sa_wfe_rad(E_in, dx, dyg, prescription, wavelength):
+    """Signed system Seidel S1 (third-order spherical) wavefront RMS [rad] along
+    the gate's paraxial marginal-ray trace, at the field's measured input
+    congruence.  Returns ``(wfe_rad, all_classified)``.
+
+    Per surface the marginal-ray refraction invariant ``A = n1 * (c*h + u)`` and
+    ``Delta(u/n)`` give the base-sphere sum ``S1_base = -A^2 * h * Delta(u/n)``
+    (byte-identical to :func:`lumenairy.seidel_coefficients` for a plain sphere),
+    plus the conic / aspheric r^4 departure ``S1_asph = 8*(n2-n1)*G*h^4`` with
+    ``G = k_conic/(8 R^3) + A4`` (the departure of the surface figure from its
+    vertex sphere; ``G == 0`` for a plain sphere).  The signed contributions are
+    summed -- so a system whose surfaces' spherical aberration CANCELS (an
+    aplanatic conic, a balanced doublet) reads ~0, where the |c4| magnitude bound
+    of :func:`_sag_screen_aberration_rad` cannot.
+
+    The marginal ray starts at ``h = r_beam`` (the field 1/e^2 radius) with slope
+    ``u_in`` (:func:`_input_marginal_slope`, 0 for a collimated field), matching
+    the sag-screen gate's trace exactly, so the conjugate rides through.
+
+    ``all_classified`` is False (and the c4 MAGNITUDE term is added as a fallback
+    for that surface) when a surface cannot be Seidel-classified -- a mirror, a
+    biconic / freeform / form-error surface, or an unresolvable glass -- so the
+    caller can refuse the analytic route when the walk is incomplete (the c4 bound
+    is retained as the conservative fallback the plan requires).
+
+    Returns ``(0.0, False)`` on an empty / zero field or malformed prescription
+    (never trips a rescue).
+    """
+    try:
+        from ..glass import get_glass_index
+        from ..raytrace import surfaces_from_prescription
+        E = np.asarray(E_in)
+        a2 = np.abs(E) ** 2
+        tot = float(a2.sum())
+        if not np.isfinite(tot) or tot <= 0.0:
+            return 0.0, False
+        ny, nx = E.shape
+        xs = (np.arange(nx) - nx // 2) * float(dx)
+        ys = (np.arange(ny) - ny // 2) * float(dyg)
+        X, Y = np.meshgrid(xs, ys)
+        r_rms2 = float(np.sum(a2 * (X ** 2 + Y ** 2)) / tot)
+        r_beam = math.sqrt(max(2.0 * r_rms2, 0.0))
+        k = 2.0 * np.pi / float(wavelength)
+        wl = float(wavelength)
+        u_in = _input_marginal_slope(E, a2, X, Y, dx, dyg, wl, r_beam)
+        surfs = list(surfaces_from_prescription(prescription))
+        h = r_beam
+        u = u_in
+        s1_signed = 0.0
+        fallback_rad = 0.0
+        all_classified = True
+        n_last = len(surfs) - 1
+        for i, s in enumerate(surfs):
+            R = float(getattr(s, 'radius', np.inf))
+            kc = float(getattr(s, 'conic', 0.0) or 0.0)
+            asph = getattr(s, 'aspheric_coeffs', None) or {}
+            A4 = float(asph.get(4, asph.get('4', 0.0)) or 0.0) if asph else 0.0
+            finite = np.isfinite(R) and R != 0.0
+            c = (1.0 / R) if finite else 0.0
+            classifiable = not bool(getattr(s, 'is_mirror', False))
+            try:
+                n1 = float(get_glass_index(getattr(s, 'glass_before', 'air'), wl))
+                n2 = float(get_glass_index(getattr(s, 'glass_after', 'air'), wl))
+            except (ValueError, KeyError, LookupError, TypeError):
+                n1 = n2 = 1.0
+                classifiable = False
+            if classifiable and n2 != 0.0:
+                i_ang = c * h + u
+                A = n1 * i_ang
+                u_after = (n1 * u - h * (n2 - n1) * c) / n2
+                delta_un = u_after / n2 - u / n1
+                s1_base = -(A ** 2) * h * delta_un
+                G = (kc / (8.0 * R ** 3) + A4) if finite else A4
+                s1_asph = 8.0 * (n2 - n1) * G * h ** 4
+                s1_signed += s1_base + s1_asph
+                u = u_after
+            else:
+                # Unclassifiable surface: keep the conservative c4 MAGNITUDE bound
+                # (the plan's fallback) and flag the walk incomplete.
+                all_classified = False
+                if finite:
+                    c4 = (1.0 + kc) / (8.0 * R ** 3) + A4
+                    fallback_rad += k * h ** 4 * 4.0 * abs(c4)
+                elif A4 != 0.0:
+                    fallback_rad += k * h ** 4 * 4.0 * abs(A4)
+                # no reliable paraxial bend for this surface: heights hold (u kept)
+            if i < n_last:
+                h = h + u * float(getattr(s, 'thickness', 0.0) or 0.0)
+        wfe_rad = k * abs(s1_signed) * _SEIDEL_RMS_C + fallback_rad
+        return float(wfe_rad), bool(all_classified)
+    except (LookupError, TypeError, ValueError, AttributeError,
+            ArithmeticError):
+        return 0.0, False
+
+
+def _displaced_compatible(prescription):
+    """True when ``prescription`` is within ``surface_model='displaced'``'s
+    rotationally-symmetric conic / aspheric envelope, so the dispatcher may route
+    a Seidel-rescued plane to the obliquity-correct displaced analytic model
+    instead of the ray members.  Mirrors, biconic (``radius_y``), analytic
+    ``freeform_type``, ``form_error`` maps, and per-surface ``decenter`` / ``tilt``
+    fall OUTSIDE the fast meridional path, so those refuse the rescue (-> rays)."""
+    try:
+        surfaces = prescription.get('surfaces') or []
+    except AttributeError:
+        return False
+    if not surfaces:
+        return False
+    for s in surfaces:
+        if not isinstance(s, dict):
+            return False
+        if bool(s.get('is_mirror', False)) or (
+                isinstance(s.get('glass_after'), str)
+                and s['glass_after'].upper() == 'MIRROR'):
+            return False
+        for _k in ('radius_y', 'freeform_type', 'form_error', 'sag_callable'):
+            if s.get(_k) is not None:
+                return False
+        for _k in ('decenter', 'tilt'):
+            _v = s.get(_k)
+            if _v is not None and tuple(_v) != (0.0, 0.0):
+                return False
+    return True
+
+
 def _universal_route(E_in, prescription, wavelength, dx, dyg, opd, na_threshold,
                      caustic_pad_dof, multivalued, multivalued_threshold,
-                     aberration_threshold):
+                     aberration_threshold,
+                     seidel_sa_threshold=_SEIDEL_SA_MAX_RAD):
     """Pure routing decision for :func:`apply_real_lens_universal` (no
     propagation, so the choice is cheaply unit-testable).  Returns the member name
-    ('phase_screen' / 'fga' / 'traced').  See the dispatcher docstring for the full
-    regime map; the H2 aberration gate (:func:`_sag_screen_aberration_rad`) keeps a
-    heavily-aberrated prescription off 'phase_screen' even at low NA."""
+    ('phase_screen' / 'displaced' / 'fga' / 'traced').  See the dispatcher docstring
+    for the full regime map; the H2 aberration gate
+    (:func:`_sag_screen_aberration_rad`) keeps a heavily-aberrated prescription off
+    'phase_screen' even at low NA, and the P7 Seidel gate
+    (:func:`_seidel_sa_wfe_rad`) reclaims a well-corrected (nulled-SA) element from
+    the ray members onto the fast obliquity-correct 'displaced' analytic model."""
     na = _system_na(prescription, wavelength)
     aberrated = (_sag_screen_aberration_rad(E_in, dx, dyg, prescription,
                                             wavelength)
@@ -2330,6 +2643,27 @@ def _universal_route(E_in, prescription, wavelength, dx, dyg, opd, na_threshold,
         # large per-surface r^4 term) falls through to the ray-based members
         # instead of this sag-screen.
         return "phase_screen"
+    if na < float(na_threshold) and aberrated:
+        # P7 Seidel refinement.  The c4 obliquity bound above is a per-surface
+        # MAGNITUDE sum, so it FALSE-POSITIVES on an element whose SYSTEM spherical
+        # aberration is nulled across surfaces (an aplanatic conic / balanced
+        # asphere) even though each |c4| is large.  The signed Seidel S1 sum sees
+        # that cancellation; when the implied W_rms is within the near-diffraction-
+        # limited budget AND every surface was Seidel-classifiable, the analytic
+        # model IS accurate -- so route to the obliquity-correct 'displaced' model
+        # (the thin sag-screen mis-renders the strong sag departure, but displaced
+        # carries the true per-surface incidence cosines: measured ~2% vs the
+        # diffraction oracle where thin reads ~40%).  Restricted to LOW NA, where
+        # the 3rd-order term dominates and 5th-order (~NA^6) is negligible, and to
+        # the displaced envelope (rotationally-symmetric conic / aspheric).  A
+        # false negative here only costs speed (falls through to the exact ray
+        # members); a false positive is prevented by requiring BOTH the classified
+        # walk and the tight W_rms budget.
+        seidel_rad, classified = _seidel_sa_wfe_rad(E_in, dx, dyg, prescription,
+                                                    wavelength)
+        if (classified and seidel_rad < float(seidel_sa_threshold)
+                and _displaced_compatible(prescription)):
+            return "displaced"
     # high NA, OR low-NA-but-aberrated: use a ray/beamlet member (no thin-screen
     # obliquity ceiling).  Multi-valued fields never route to traced.
     if multivalued is None:
@@ -2374,10 +2708,11 @@ def apply_real_lens_universal(
     multivalued: Optional[bool] = None,
     multivalued_threshold: float = 0.06,
     aberration_threshold: float = _ABERRATION_MAX_RAD,
+    seidel_sa_threshold: float = _SEIDEL_SA_MAX_RAD,
     return_method: bool = False,
     method_kwargs: Optional[Dict[str, Any]] = None,
 ):
-    """Universal (4-way) auto-dispatching lens propagator -- routes each output
+    """Universal (5-way) auto-dispatching lens propagator -- routes each output
     plane to the MOST ACCURATE propagator for its regime.
 
     ``method='auto'`` (default) picks:
@@ -2436,6 +2771,24 @@ def apply_real_lens_universal(
     envelope, the call still runs but emits a ``RuntimeWarning`` citing the budget
     (the absolute spot size / EE are unreliable there).
 
+    Seidel true-SA gate: reclaim a nulled-SA element from the ray members (P7)
+    -------------------------------------------------------------------------
+    The ``_sag_screen_aberration_rad`` bound above sums per-surface |c4| MAGNITUDES,
+    so it cannot see cancellation: an aplanatic conic / balanced asphere whose
+    SYSTEM spherical aberration is nulled still trips it (a false positive -- safe,
+    but it pays for the slow ray members).  ``'auto'`` therefore also computes the
+    SIGNED system Seidel S1 (:func:`_seidel_sa_wfe_rad`) along the same paraxial
+    marginal-ray trace; a nulled system reads ~0.  When -- at LOW NA, where the
+    3rd-order term dominates -- that trip is paired with a Seidel W_rms inside the
+    near-diffraction-limited budget ``seidel_sa_threshold`` (lambda/20, Strehl ~0.91)
+    AND every surface was classifiable AND the prescription is within the displaced
+    envelope, the plane routes to ``'displaced'`` (:func:`lumenairy.apply_real_lens`
+    ``surface_model='displaced'``, ``conjugate='auto'``) -- the obliquity-correct
+    analytic model, which renders the strong corrected sag departure the thin screen
+    cannot (measured ~2% vs the diffraction oracle where the thin screen reads
+    ~40%).  A ``'displaced'`` plane, like ``'phase_screen'`` / ``'traced'``, returns
+    at the exit vertex and finishes the leg with an exact angular-spectrum step.
+
     Exit-NA Nyquist guard (H3): orthogonal to this router.  When ``'auto'`` selects
     ``'traced'``, that member carries its OWN amplitude-aware exit-NA Nyquist guard
     (warns when the grid ``dx`` cannot resolve the converging exit wavefront; H3),
@@ -2472,7 +2825,7 @@ def apply_real_lens_universal(
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_universal')
-    valid = ("auto", "phase_screen", "gbd", "traced", "fga")
+    valid = ("auto", "phase_screen", "displaced", "gbd", "traced", "fga")
     if method not in valid:
         raise ValueError(f"method must be one of {valid}, got {method!r}.")
     mkw = dict(method_kwargs or {})
@@ -2485,7 +2838,7 @@ def apply_real_lens_universal(
         chosen = _universal_route(
             E_in, prescription, float(wavelength), float(dx), dyg, opd,
             na_threshold, caustic_pad_dof, multivalued, multivalued_threshold,
-            aberration_threshold)
+            aberration_threshold, seidel_sa_threshold)
     elif method == "phase_screen":
         # H2 gate: 'phase_screen' (analytic sag-screen) FORCED.  'auto' would have
         # re-routed a heavily-aberrated prescription away; when the user forces it,
@@ -2518,13 +2871,28 @@ def apply_real_lens_universal(
             E_in, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
             output_plane_distance=opd, **mkw.get("gbd", {}))
     else:
-        # phase_screen / traced return at the exit vertex -> finish the output
-        # leg with an exact angular-spectrum propagation (the field is smooth
-        # here, so ASM is wave-exact even through an intervening focus).
+        # phase_screen / displaced / traced all return at the exit vertex -> finish
+        # the output leg with an exact angular-spectrum propagation (the field is
+        # smooth here, so ASM is wave-exact even through an intervening focus).
         from ..elements import apply_real_lens, apply_real_lens_traced
-        fn = apply_real_lens if chosen == "phase_screen" else apply_real_lens_traced
-        exitf = fn(E_in, prescription=prescription, wavelength=wavelength, dx=dx,
-                   dy=dy, **mkw.get(chosen, {}))
+        extra = dict(mkw.get(chosen, {}))
+        if chosen == "traced":
+            exitf = apply_real_lens_traced(
+                E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+                dy=dy, **extra)
+        elif chosen == "displaced":
+            # P7 Seidel-rescued analytic member: the obliquity-correct sag screen.
+            # 'auto' fits the input congruence from E_in (collimated -> flat), so a
+            # curved-wavefront input gets the correct per-surface incidence fan.
+            extra.setdefault("surface_model", "displaced")
+            extra.setdefault("conjugate", "auto")
+            exitf = apply_real_lens(
+                E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+                dy=dy, **extra)
+        else:   # phase_screen (thin sag-screen)
+            exitf = apply_real_lens(
+                E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+                dy=dy, **extra)
         if opd != 0.0:
             from .asm import angular_spectrum_propagate
             exitf = angular_spectrum_propagate(exitf, opd, wavelength, dx, dy)

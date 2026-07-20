@@ -343,6 +343,83 @@ def evaluate(job, dz_off_mm=0.0):
     }
 
 
+def _paraxial_image_dist(surfaces, R_in):
+    """Paraxial image distance from the LAST surface vertex [m] for a marginal ray
+    launched at unit height with the input congruence slope (``1/R_in``, 0 for a
+    collimated input).  A y-nu trace (refraction + transfer) through the surface
+    list; ``surfaces`` are the ``_prep_surfaces`` dicts (``R``, ``n`` = index AFTER
+    the surface, ``t``)."""
+    h, u = 1.0, (0.0 if R_in is None else 1.0 / R_in)
+    n_before = 1.0
+    ns = len(surfaces)
+    for i, s in enumerate(surfaces):
+        R, n2 = s["R"], s["n"]
+        phi = 0.0 if (not np.isfinite(R) or R == 0.0) else (n2 - n_before) / R
+        u = (n_before * u - h * phi) / n2 if n2 != 0.0 else u
+        if i < ns - 1:
+            h = h + u * s["t"]
+        n_before = n2
+    return (-h / u) if u != 0.0 else np.inf
+
+
+def wavefront_r4(job):
+    """Independent (lumenairy-free) fit of the exact ray-traced exit wavefront's
+    ``r^4`` (third-order spherical) coefficient -- the ground truth for the P7
+    Seidel-S1 dispatcher gate (docs/plan_accuracy_niches_2026_07_19.md N8).
+
+    Traces a meridional fan at entrance heights ``h`` in ``(0, r_beam]`` along the
+    input congruence, refers each ray to a reference sphere centred on the PARAXIAL
+    image (so defocus / reference-plane choice cannot leak into ``a4``), and
+    least-squares fits ``W(h) = a2 h^2 + a4 h^4 + a6 h^6 + a8 h^8``.  Returns the
+    physical wavefront ``a4`` [1/m^3] (the coefficient a third-order Seidel S1
+    prediction must reproduce), plus the fan size and the (real-image) validity
+    flag.  ``r_beam`` defaults to the Gaussian 1/e^2 radius ``w0`` (``sqrt(2<r^2>)``
+    of the input intensity), matching the gate's marginal-ray height.
+
+    Only valid for a REAL (downstream) image; a virtual (upstream) image returns
+    ``real_image=False`` and ``a4=nan`` (the forward reference-sphere construction
+    does not apply there).  Purely geometric -- wavelength-independent."""
+    surfaces = _prep_surfaces(job["surfaces"])
+    w0 = job["pop"]["w0_mm"] * 1e-3
+    r_beam = float(job.get("r_beam_mm", w0 * 1e3)) * 1e-3
+    R_in = job.get("R_in_mm")
+    R_in = None if R_in in (None, 0) else float(R_in) * 1e-3
+    z_exit = sum(s["t"] for s in surfaces[:-1])
+    img = _paraxial_image_dist(surfaces, R_in)
+    z_img = z_exit + img
+    L = z_img - z_exit
+    if not (np.isfinite(L) and L > 0.0):
+        return {"a4": float("nan"), "r_beam_mm": r_beam * 1e3,
+                "z_img_mm": z_img * 1e3, "n_rays": 0, "real_image": False}
+    hs = np.linspace(r_beam * 0.04, r_beam, 48)
+    Wl, hg = [], []
+    for h in hs:
+        res = trace_ray(h, surfaces, R_in, None)
+        if res is None:
+            continue
+        p, d, opl = res
+        te = (z_exit - p[0]) / d[0]
+        pe = p + te * d
+        ople = opl + 1.0 * te
+        a = pe[0] - z_img
+        b = a * d[0] + pe[1] * d[1]
+        disc = b * b - (a * a + pe[1] ** 2 - L * L)
+        if disc < 0.0:
+            continue
+        s_ray = -b - np.sign(L) * np.sqrt(disc)
+        Wl.append(ople + s_ray)
+        hg.append(h)
+    if len(hg) < 6:
+        return {"a4": float("nan"), "r_beam_mm": r_beam * 1e3,
+                "z_img_mm": z_img * 1e3, "n_rays": len(hg), "real_image": True}
+    hg = np.asarray(hg)
+    W = np.asarray(Wl) - Wl[0]
+    A = np.vstack([hg ** 2, hg ** 4, hg ** 6, hg ** 8]).T
+    coef, *_ = np.linalg.lstsq(A, W, rcond=None)
+    return {"a4": float(coef[1]), "r_beam_mm": r_beam * 1e3,
+            "z_img_mm": z_img * 1e3, "n_rays": int(hg.size), "real_image": True}
+
+
 def main(argv):
     job = json.load(open(argv[1]))
     dz = float(argv[2]) if len(argv) > 2 else 0.0

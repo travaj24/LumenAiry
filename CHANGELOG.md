@@ -6,6 +6,56 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Accuracy-niches capstone — composed end-to-end + full-aperture fast case
+  (niche N9 / P8).**  No new library API; the deliverable is the DEMONSTRATED
+  COMPOSITION of the campaign's individually-validated pieces, pinned by
+  `tests/unit/test_niche_p8_capstone.py` (runs without Zemax):
+  - **Composed chain (STEP B):** a generic weak-doublet (f1~173 mm) + relay
+    (f2~40 mm) propagated end-to-end through the NEW stack — per-group `traced`
+    (H6/N5) for the doublet, a carrier-referenced gap leg (N7), the
+    `apply_real_lens_universal`-gated relay (routes to the displaced phase-screen),
+    and a carrier-referenced FINAL-FOCUS leg — reproduces the independent
+    `debye_oracle_v3` diffraction oracle at the paraxial image to **EE80 0.9%
+    (1.31 um) / 2.9% (0.633 um)** (EE50 0.9% / 3.3%).
+  - **Full-aperture f/2 (STEP C):** the M4 biconvex at w0=9 mm reconstructed AT
+    FOCUS via the GBD pilot beam on a MODEST N=3072 grid (4.3 s, frame
+    completeness 0.98) matches `debye_oracle_v3` **EE80 to 2.6%**, where the
+    ~0.64-NA exit makes a fixed grid need N~21000 (a fixed-grid ASM at the same N
+    reads 0.12x — aliased) — the pilot beam is what makes it feasible.
+  - **ZOS Huygens-PSF oracle mode (STEP A / N0.2):** `scratchpad/zos_oracle.py`
+    gained a `huygens_psf` job type (point source, finite/infinite conjugate,
+    pupil-limited) alongside POP — Strehl + PSF grid + centroid/EE/first-zero.
+    Validated: unaberrated f/25 lens first-zero **40.32 vs Airy 40.15 um (0.4%),
+    Strehl 1.000**; aberrated f/4 uniform pupil vs `debye_oracle_v3` at a matched
+    metric window **EE80 0.72% / EE95 0.17%**.  Invocation + caveats in
+    `validation/oracles/README.md`.
+- **`apply_real_lens_fga(momentum_sampling='adaptive')` — content-adaptive FGA
+  momentum sampling (accuracy niche N6b / P5).**  Opt-in (default `'uniform'`,
+  **byte-identical** to prior releases — the scalar `dp**2` measure via the
+  unchanged `nodes=None` path).  `'adaptive'` IMPORTANCE-samples the `n_p` momentum
+  nodes by the inverse-CDF of the input field's (beamlet-broadened, symmetrized)
+  marginal angular power, with the MATCHING per-node midpoint-cell quadrature
+  weights (which reduce exactly to the uniform `dp` cell on a uniform grid) and
+  auto power-normalization (the non-uniform quadrature carries the correct RELATIVE
+  weights for the SHAPE but not the calibrated uniform absolute scale).  Also on
+  `apply_real_lens_fga_vector`.  **Honest measured result (N6b):** this is a
+  NON-improvement — the FGA reconstruction integrand is the field spectrum
+  convolved with the beamlet momentum width (`~1/(k w0)`), so it is intrinsically
+  too broad for importance sampling to beat uniform, and the "0.97 cap" the feature
+  targeted does not even reproduce on a smooth 0.23-NA diverging transport (uniform
+  reaches fidelity 1.000 at n_p = 21).  Shipped opt-in per the plan with a
+  documented fidelity-vs-cost curve and the fundamental-trade explanation
+  (`docs/audit_real_lens_hammer_2026_07_19.md` N6b); the matching-weights
+  correctness (a valid quadrature; naive uniform weights over-count > 200% on
+  concentrated nodes) is unit-tested.  Tests: `tests/unit/test_niche_p5_sampling.py`.
+- **`validation/oracles/caustic_fold_truth.py` — multi-valued fold-caustic
+  ground-truth oracle (niche N0.3 / P5).**  Lumenairy-free.  Builds the reference
+  wave field at a through-focus plane of a strongly-aberrated singlet where the ray
+  map genuinely FOLDS, by a dense DIRECT Rayleigh-Sommerfeld ring integral of the
+  exact exit field (no stationary phase, no ray-branch assumptions); self-verified
+  (grid convergence 1.3e-5, energy closure 0.999, 2-branch fold).  Used to
+  cross-check FGA vs GBD vs traced at a fold — the N6a finding (hammer doc) is that
+  GBD/traced do NOT degrade there, so the naive "FGA niche" is refuted.
 - **`apply_real_lens_gbd(reexpand='auto')` — GBD strong-reconvergence frame
   re-expansion (accuracy niche N3 / P4).**  A converging input reconverged by a
   NEGATIVE element to a near real focus sheds ~6–12 % of its power at the INPUT
