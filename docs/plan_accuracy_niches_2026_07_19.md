@@ -252,6 +252,72 @@ prior rounds must be fixed FIRST, because N1/N2/N6 depend on them.
 
 ---
 
+## N10. Decentered/tilted elements: transverse ray walk-off (Run 3)
+
+Added at user request after Run 2. P3 delivered the analytic decenter/tilt
+*phase* (correct centroid + coma DIRECTION) but the single-plane screen cannot
+represent the transverse ray walk between a thick element's surfaces, so the
+induced-coma SPOT is wrong: model EE80 NARROWS ~0.906x where the geometric
+oracle and ZOS both BROADEN ~1.02-1.03x (decentered EE80 -19% vs ZOS,
+grid-robust to N=6144 -- a structural limit, not a sampling artefact). P3 also
+established that `traced` AND `gbd` currently IGNORE the decenter/tilt keys
+entirely (they return a centered spot), so there was no accurate model to route
+to. N10 makes the two ray-based models honor decenter/tilt so they become the
+accurate reference, THEN N11 attempts to lift the analytic screen to match.
+
+### N10a Traced decenter/tilt (the accurate reference -- do first)
+
+- **Current state:** `apply_real_lens_traced` traces a FULL 2-D ray congruence
+  (Xs_in, Ys_in meshgrid) but the surface intersection + normal ignore the
+  `decenter`/`tilt` keys.
+- **Approach:** thread per-surface `decenter=(dx,dy)` and `tilt=(tx,ty)` into the
+  Newton sag intersection and the surface-normal (vector-Snell) evaluation --
+  sag evaluated at the shifted/rotated coordinate `sag(R^T(x-dx, y-dy))`, normal
+  = the correspondingly transformed gradient. Because traced already carries
+  each ray through the glass gap, the transverse walk-off (and hence true coma
+  broadening) emerges naturally. Mirror the field-frame vs surface-frame
+  convention already defined for the analytic path (`surface_frame` kwarg) so
+  the two models agree on what a decenter MEANS.
+- **Adversarial validation:** (a) zero-decenter reproduces the current traced
+  result byte-identical (pin); (b) decentered singlet EE80 BROADENS and lands
+  within 10% of ZOS (POP + the P8 Huygens-PSF mode) AND within 10% of the
+  geometric-spot oracle -- direction AND magnitude correct, killing the P3
+  shrink; (c) sign-mirror: +d and -d produce mirror-image PSFs to <1%;
+  (d) tilt case vs ZOS; (e) two wavelengths.
+
+### N10b GBD decenter/tilt
+
+- **Current state:** the GBD real-lens path ignores decenter/tilt.
+- **Approach:** thread decenter/tilt into each beamlet's base-ray intersection +
+  refraction and pick up the LOCAL surface curvature at the (decentered)
+  intersection for the differential (ABCD) matrix. Reuse N10a's transformed
+  sag/normal helper so the two models share one geometry definition.
+- **Adversarial validation:** decentered singlet power >0.99 + EE80 broadening
+  within 10% of ZOS and within 10% of the N10a-fixed traced result (GBD vs
+  traced cross-check); zero-decenter byte-identical; sign-mirror.
+
+### N11 Analytic 2-D transverse-walk remap (fix the shrink)
+
+- **Approach:** generalize P2's exit-plane remap to the full 2-D off-axis case
+  -- launch a 2-D (non-meridional) congruence fan against the decentered
+  surface, build the 2-D exit map (x_out,y_out)(x_in,y_in) carrying the
+  transverse walk, and apply an energy-conserving scattered->grid remap with the
+  2-D Jacobian |d(x_in,y_in)/d(x_out,y_out)| plus the exit-pupil-referenced OPD.
+  This restores the walk-off the single-plane screen drops.
+- **Adversarial validation:** decentered EE80 broadens to within ~15% of ZOS and
+  of the N10a traced reference; symmetric/on-axis limit reproduces the P2
+  numbers byte-identical; phase-continuity fringe probe vs traced; sign-mirror.
+- **Risk (honest, pre-registered):** P2 measured remap == screen on the on-axis
+  conjugate cases (there the walk is symmetric = a radial rescale the screen
+  already captures), so the 2-D remap is NOT guaranteed to close the 19%
+  directional coma gap. If it cannot reach ~15%, the honest outcome is: keep the
+  analytic screen for centroid/pointing, DOCUMENT the residual, and have the N8
+  gate route strong-decenter-coma cases to the now-decenter-capable `traced`
+  (N10a) -- which is why N10 lands first and gives routing a correct target
+  either way.
+
+---
+
 ## Execution
 
 | Phase | Items | Depends on |
@@ -265,8 +331,12 @@ prior rounds must be fixed FIRST, because N1/N2/N6 depend on them.
 | P6 | N7 carrier astigmatic + apertures | -- |
 | P7 | N8 Seidel gate | P0, P2 |
 | P8 | N9 capstone E2E + adversarial regression | all |
+| P9 | N10a/N10b traced + GBD decenter/tilt (Run 3) | P3, P8 (ZOS Huygens PSF) |
+| P10 | N11 analytic 2-D transverse-walk remap (Run 3) | P9 |
 
 Sequential single-writer Opus agents; each phase = implementer -> adversarial
 verifier -> (on kills) fixer -> re-verify, max two rounds; unresolved kills are
 documented open findings, never silently accepted. Checkpoint commits after
-P0-P4 and after P5-P8. Release only on explicit user approval after P8.
+P0-P4, P5-P8, and P9-P10. Run 3 (P9-P10) launches ONLY after Run 2 (P5-P8) has
+landed + committed -- never two repo-writing workflows concurrently. Release
+only on explicit user approval.
