@@ -887,6 +887,41 @@ _NONCOLLIMATED_RESID_THRESH = 0.02
 # float round-off.
 _TILT_EIKONAL_MIN_RAD = 1e-2
 
+# R6 / audit F1 (2026-07-21): the ``carrier='auto'`` least-squares gradient fit
+# silently degraded to ~inf (no carrier) on a strongly-diverging / coarsely-
+# sampled spherical input -- exactly the input class it exists for.  Root cause:
+# the nearest-neighbour phase-increment ``angle(E[i+1] conj(E[i]))`` tilt reading
+# ALIASES (wraps past +-pi) at radii where the local carrier tilt exceeds the
+# grid Nyquist tilt ``lambda/(2 dx)``.  On the 121's S5-S7 group (R_in=+153 mm,
+# w=6 mm, dx=24.6 um) that boundary sits at r ~ 4 mm, well inside the beam, so
+# MOST of the bright support fed the fit wrapped (near-zero-mean) tilt samples
+# that pulled the fitted 1/R toward 0.  Fix: restrict the fit to the CONNECTED
+# un-aliased core -- the region, contiguous with the phase-flat point, where the
+# tilt reading stays below this fraction of the Nyquist tilt.  The wrapped rings
+# beyond the first Nyquist crossing form SEPARATE connected components (a high-
+# tilt annulus disconnects them from the core), so they are excluded and the
+# central parabola alone -- which fully determines the spherical R -- drives the
+# fit.  Recovers R to <~1% on S5-S7 and is byte-identical on well-sampled inputs
+# (whole bright support is one un-aliased component -> same samples as before).
+# The recovery is insensitive to this fraction over 0.35-0.7; 0.5 is a safe
+# midpoint (masks before ANY grid axis component wraps, since gmag is the vector
+# tilt magnitude).
+_AUTO_CARRIER_NYQUIST_FRAC = 0.5
+# Minimum un-aliased-core sample count below which the core restriction is
+# abandoned and the full bright support is used (the historical behaviour): too
+# few core samples cannot constrain the low-order fit, so a pathological /
+# near-fully-aliased input falls back rather than fitting noise.
+_AUTO_CARRIER_MIN_CORE = 64
+# The un-aliased-core restriction engages ONLY when at least this fraction of
+# the bright support reads as aliased (local tilt >= the Nyquist fraction).  A
+# well-sampled input -- flat, mildly diverging, or a MULTI-EMITTER array whose
+# beamlets are each Nyquist-sampled -- has ~no aliased samples, so the fit keeps
+# the full bright support (byte-identical to the historical single-component-
+# agnostic fit; critically, it does NOT collapse a disconnected multi-emitter
+# field onto one beamlet's connected component).  The F1 strongly-diverging
+# single carrier aliases the great majority of its support, far above this.
+_AUTO_CARRIER_ALIAS_FRAC = 0.05
+
 
 def _carrier_residual_rms(E_in, W_full, wavelength, dx):
     """RMS transverse angular spread (radians) of ``E_in`` AFTER removing
@@ -1022,8 +1057,48 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
         gy = E[1:, :] * np.conj(E[:-1, :])
         My = np.angle(gy) / (k0 * dx)
         del gy
-        mxx = mask[:, 1:] & mask[:, :-1]
-        myy = mask[1:, :] & mask[:-1, :]
+        # R6 / audit F1: build the CONNECTED un-aliased core mask so the
+        # gradient fit sees only samples whose local tilt reading is below the
+        # grid Nyquist tilt (i.e. NOT wrapped).  The per-pixel tilt magnitude is
+        # the vector norm of the two nearest-neighbour phase increments; where it
+        # exceeds ``_AUTO_CARRIER_NYQUIST_FRAC * (lambda/2dx)`` the reading is
+        # (approaching) aliased.  The restriction engages only when a non-trivial
+        # fraction (``_AUTO_CARRIER_ALIAS_FRAC``) of the bright support is
+        # aliased; then connected-component labelling keeps only the component
+        # containing the BRIGHTEST pixel (the beam centre): the central parabola
+        # whose curvature fixes the spherical R.  Wrapped rings past the first
+        # Nyquist crossing are separate components (a high-tilt annulus
+        # disconnects them) and are excluded.  The brightest-pixel seed is
+        # essential -- the min-tilt point can land on a wrapped-to-zero alias
+        # ring on a coarse grid, seeding an off-centre blob that injects a
+        # spurious tilt.  On a well-sampled input (~no aliasing) ``core`` stays
+        # the full bright support so the fit is byte-identical to before and a
+        # disconnected multi-emitter field is NOT collapsed onto one beamlet.
+        core = mask
+        if mask.any():
+            _gphx = np.angle(np.roll(E, -1, axis=1) * np.conj(E)) / (k0 * dx)
+            _gphy = np.angle(np.roll(E, -1, axis=0) * np.conj(E)) / (k0 * dx)
+            _gmag = np.hypot(_gphx, _gphy)
+            del _gphx, _gphy
+            _nyq_tilt = wavelength / (2.0 * dx)
+            _core_ok = mask & (_gmag < _AUTO_CARRIER_NYQUIST_FRAC * _nyq_tilt)
+            del _gmag
+            _n_bright = int(mask.sum())
+            _n_aliased = _n_bright - int(_core_ok.sum())
+            if (_n_aliased > _AUTO_CARRIER_ALIAS_FRAC * max(_n_bright, 1)
+                    and _core_ok.any()):
+                from scipy.ndimage import label as _ndlabel
+                _lbl, _nlbl = _ndlabel(_core_ok)
+                if _nlbl > 0:
+                    _seed_lbl = int(_lbl.ravel()[int(mag.ravel().argmax())])
+                    if _seed_lbl > 0:
+                        _cand = _lbl == _seed_lbl
+                        if int(_cand.sum()) >= _AUTO_CARRIER_MIN_CORE:
+                            core = _cand
+                del _lbl
+            del _core_ok
+        mxx = core[:, 1:] & core[:, :-1]
+        myy = core[1:, :] & core[:-1, :]
         # sample coords at the increment midpoints
         xax = (np.arange(N) - N / 2.0) * dx
         Xg, Yg = np.meshgrid(xax, xax, indexing='xy')
