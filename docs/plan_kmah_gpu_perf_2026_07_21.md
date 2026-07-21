@@ -115,6 +115,40 @@ Method rules (binding, inherited from the accuracy-niches campaign):
 - **No silent caps:** if an optimization changes a default (e.g. a new cache), it
   is documented and the memory footprint measured.
 
+## N16. Uniform-caustic (Airy / Pearcey) dark-side completion
+
+Added at user request after K1 exposed the honest limit ("please fold it in").
+
+- **Current state (K1):** the multibranch KMAH ray-density is a purely GEOMETRIC
+  sum, so it is identically ZERO on the DARK side of a fold (no real ray
+  branches) and misses the exponentially-decaying Airy tail (fold-truth r2m
+  -14.8%, energy 0.80).
+- **Physics:** near a FOLD the field is one Airy function `Ai(-k^{2/3} zeta)` —
+  oscillatory on the bright side (`zeta > 0`) and `Ai(+)` exponential tail on the
+  DARK side (`zeta < 0`).  This is the Chester-Friedman-Ursell / Ludwig uniform
+  asymptotic; a CUSP gets the Pearcey generalisation.
+- **The library already ships it:** `lenses_maslov.uniform_fold_airy(k, t1, t2,
+  f1, f2, fpp1, fpp2, g1, g2)` (CFU fold, validated 1e-14, finite through the
+  caustic) + `pearcey(x, y)` + `apply_real_lens_maslov`.
+- **Approach:** opt-in `caustic='uniform'` on the traced ray_density path
+  (default = K1 multibranch / single-branch, byte-identical).  Feed the SAME
+  per-branch data K1's finder returns into `uniform_fold_airy` (fold) / `pearcey`
+  (cusp) — REUSE, no reimplementation.  DARK SIDE: continue `zeta` NEGATIVE
+  through the caustic (the coalesced real rays become a complex-conjugate pair);
+  robust route = fit `zeta(x)`, `A(x)` from the bright side and analytically
+  continue across `zeta = 0`, then evaluate `Ai` at the negative argument →
+  exponential tail; rigorous route = the complex saddle (implement if the fit is
+  insufficient).  Higher catastrophes → GBD/ASM fallback, documented.
+- **Adversarial validation:** vs `caustic_fold_ref` the uniform field matches on
+  BOTH sides of the fold — close K1's -14.8% r2m / 0.80-energy gap to ~2-3% and
+  energy ~1.0, with the dark-side DECAY RATE checked against `Ai(+)` scaling;
+  bright side reduces to the geometric 2-branch sum away from the caustic and is
+  finite at it; the KMAH/phase matches a direct Rayleigh-Sommerfeld integral on a
+  CONFIRMED two-branch region (n_branch >= 2, monkeypatch-sensitive — the K1
+  lesson); energy conserved across the full plane; default byte-identical.
+- **Outcome:** traced becomes diffraction-correct THROUGH folds (and cusps) —
+  the "seamless" goal.
+
 ---
 
 ## Execution
@@ -124,6 +158,7 @@ Method rules (binding, inherited from the accuracy-niches campaign):
 | K1 | N13 multibranch KMAH ray-density caustic sum | — |
 | K2 | N14 CuPy + JAX carrier-ASM backends | — |
 | K3 | N15 perf / memory sweep | K1, K2 (so it profiles the final code) |
+| K4 | N16 uniform Airy/Pearcey dark-side completion | K1 |
 
 Sequential single-writer Opus agents; each phase = implementer → adversarial
 verifier → (on kills) fixer → re-verify, max two rounds; unresolved kills are
