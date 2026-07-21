@@ -180,6 +180,17 @@ _KNOWN_DY_THREADING_EXEMPTIONS = frozenset({
     # branch-splitting geometry and is staged; anamorphic callers use
     # ``apply_real_lens_traced`` (dy-threaded) instead.
     'apply_real_lens_traced_multibranch',
+
+    # ---- isotropic-grid by construction (v5.27 / K4) -----------------------
+    # ``apply_real_lens_traced_uniform`` is the CFU uniform-Airy dark-side
+    # completion of the multibranch field: it runs
+    # ``apply_real_lens_traced_multibranch`` (itself dy-exempt above) and
+    # adds a RADIAL, rotationally-symmetric single-fold-ring reconstruction
+    # (``r_c``, ``zeta = kappa (r_c - r)``, a 1/sqrt(r)-weighted radial fit)
+    # that is isotropic (``dx == dy``) by construction.  Anamorphic support
+    # inherits the multibranch geometry rework; anamorphic callers use
+    # ``apply_real_lens_traced`` (dy-threaded) instead.
+    'apply_real_lens_traced_uniform',
 })
 
 
