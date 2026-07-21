@@ -1390,12 +1390,27 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy):
     x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(x, y)
-    amp_grid = LinearNDInterpolator(pts, amp_out[m].ravel(),
-                                    fill_value=0.0)(Xg, Yg)
-    opl_grid = LinearNDInterpolator(pts, OPL[m].ravel())(Xg, Yg)
+    # K3 (N15 perf): the amplitude and OPL remaps share ONE Delaunay
+    # triangulation of ``pts`` -- a single LinearNDInterpolator with a 2-column
+    # value array does the barycentric interpolation for BOTH quantities in one
+    # pass.  The triangulation and the per-query-point barycentric weights depend
+    # only on ``pts`` (identical for both columns), and each column is a separate
+    # ``sum(weight_k * value_k)`` reduction, so this reproduces the two former
+    # single-column interps BIT-FOR-BIT while building the Delaunay once and
+    # walking the full-grid query once (measured ~1.6x on this 2-D remap).
+    # ``amp_grid`` / ``opl_grid`` are strided VIEWS into the single (Ny, Nx, 2)
+    # result -- no per-column dense copy -- so the peak footprint is the same one
+    # 2-wide grid the two separate (Ny, Nx) grids used before, not more.  Outside
+    # the hull both columns come back NaN: the amplitude is set to 0 (matching the
+    # former ``fill_value=0.0``) and the OPL is nearest-filled, exactly as before.
+    _opl_flat = OPL[m].ravel()
+    _q = LinearNDInterpolator(
+        pts, np.column_stack([amp_out[m].ravel(), _opl_flat]))(Xg, Yg)
+    amp_grid = _q[..., 0]
+    opl_grid = _q[..., 1]
     nan = np.isnan(opl_grid)
     if bool(nan.any()):
-        opl_grid[nan] = NearestNDInterpolator(pts, OPL[m].ravel())(
+        opl_grid[nan] = NearestNDInterpolator(pts, _opl_flat)(
             Xg[nan], Yg[nan])
         amp_grid[nan] = 0.0
     opl_ref = float(np.median(OPL[m]))

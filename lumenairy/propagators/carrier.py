@@ -171,6 +171,117 @@ _BRIDGE_ZR_FACTOR = 6.0
 _BRIDGE_FIT_MARGIN = 1.6
 
 
+# ===========================================================================
+# Backend abstraction (Phase K2, plan N14): NumPy / CuPy / JAX
+# ===========================================================================
+# The carrier ASM is backend-agnostic.  The backend is selected -- exactly
+# like every other lumenairy propagator (RCWA / PMM / ASM / Fresnel) -- by the
+# array type the caller passes in: ``array_namespace(E)`` returns ``numpy``,
+# ``cupy`` or ``jax.numpy`` and the FFTs + envelope-grid ops route through it.
+# The algorithm is identical; this is a backend PORT, accuracy-neutral.
+#
+# FIELD-INDEPENDENT float64 grids / phase screens / transfer functions are
+# built on ``bld`` -- host NumPy for the JAX backend (so the large
+# quadratic-phase argument ``k r^2 / 2R`` up to ~1e5 rad is not silently
+# truncated to float32 when ``jax_enable_x64`` is off -- the audit S2-3
+# contract the ASM / Fresnel kernels already honour) and the device namespace
+# otherwise -- then moved onto the device with :func:`_to_dev`.  The NumPy path
+# (``xp is bld is np``) runs the historical arithmetic verbatim and is
+# byte-identical (tolerance-pinned) to prior releases.
+#
+# The data-dependent focus-crossing split runs EAGERLY: its branch conditions
+# are host-side reductions of the field (``_envelope_amp_radius`` etc. return
+# Python floats), so no ``lax.cond`` is needed -- an eager JAX array
+# concretises them transparently.  The non-crossing fast leg touches no
+# field-derived branch, so it is fully ``jax.jit`` / ``jax.grad`` compatible
+# (a gradient through a carrier leg is validated in the K2 tests).  A jitted
+# focus-crossing split would need ``lax.cond``; that is out of scope (the eager
+# path is the documented one).
+
+
+def _backend_of(E):
+    """Return ``(xp, is_jax, bld)`` for a field ``E``: its array namespace,
+    whether it is a JAX array, and the module used to build field-independent
+    float64 grids (host NumPy for JAX, the device namespace otherwise)."""
+    from ..backend import array_namespace, is_jax_array
+    xp = array_namespace(E)
+    is_jax = is_jax_array(E)
+    return xp, is_jax, (np if is_jax else xp)
+
+
+def _to_dev(a, xp, is_jax):
+    """Move a ``bld``-built array onto the field's device.  Only JAX needs the
+    explicit host->device hop (CuPy grids are built on-device via ``bld=xp``;
+    NumPy is a no-op)."""
+    return xp.asarray(a) if is_jax else a
+
+
+def _is_complex(x):
+    """Complex-dtype predicate that inspects ``x.dtype`` only (never
+    materialises a device / traced array), so it is safe under ``jax.grad``."""
+    return np.issubdtype(x.dtype, np.complexfloating)
+
+
+def _cdtype_of(x):
+    """Target complex dtype for a field: its own dtype if complex, else the
+    library default complex dtype."""
+    if _is_complex(x):
+        return x.dtype
+    from .fft_infra import DEFAULT_COMPLEX_DTYPE
+    return np.dtype(DEFAULT_COMPLEX_DTYPE)
+
+
+def _freq_sq_1d_bld(N, d, bld):
+    """Centred ``(2*pi*f)^2`` float64 vector on backend ``bld`` -- the ``bld``
+    generalisation of :func:`_freq_sq_1d` (identical values for ``bld is np``)."""
+    f = (bld.arange(N, dtype=np.float64) - N / 2) / (N * d)
+    return (2.0 * np.pi * f) ** 2
+
+
+def _tf_phase_to_H(arg, target_cdtype, xp, is_jax, bld):
+    """``exp(1j*arg)`` at ``target_cdtype`` on the field's backend.
+
+    * NumPy (``xp is np``): the historical direct complex128 exponential
+      ``np.exp(1j*arg)`` -- byte-identical to the pre-K2 code (the caller casts
+      the finished field to its own dtype, exactly as before).
+    * CuPy / JAX: dtype-aware.  complex64 folds the phase ``mod 2*pi`` in
+      float64 BEFORE the float32 cast (the audit S2-3 mitigation, so a large
+      ``arg`` does not hit the float32 floor); complex128 the direct
+      exponential.  Built on ``bld`` (host f64 for JAX) then moved on-device.
+    """
+    if xp is np:
+        return np.exp(1j * arg)
+    tcd = np.dtype(target_cdtype)
+    if tcd == np.complex64:
+        ph = bld.mod(arg, 2.0 * np.pi)
+        H = bld.empty(arg.shape, dtype=np.complex64)
+        H.real[...] = bld.cos(ph).astype(np.float32)
+        H.imag[...] = bld.sin(ph).astype(np.float32)
+    else:
+        H = bld.exp(1j * arg).astype(tcd)
+    return _to_dev(H, xp, is_jax)
+
+
+def _fresnel_tf_2d_xp(E, z, wavelength, dx, dy, xp, is_jax, bld):
+    """Backend (CuPy / JAX) same-grid Fresnel transfer-function step -- the
+    ``xp`` analogue of :func:`fresnel_tf_propagate` (the NumPy path keeps using
+    the pyFFTW-backed ``fresnel_tf_propagate`` for its byte-identical fast
+    FFT).  ``H`` is built natural-layout on ``bld`` in float64 and moved onto
+    the device; the FFT pair runs in the field's namespace.  Carries the
+    on-axis piston ``exp(i k z)`` (the ``k*z`` term), matching
+    ``fresnel_tf_propagate``."""
+    Ny, Nx = E.shape
+    k = 2.0 * np.pi / wavelength
+    kx_sq = bld.fft.ifftshift(_freq_sq_1d_bld(Nx, dx, bld))
+    ky_sq = bld.fft.ifftshift(_freq_sq_1d_bld(Ny, dy, bld))
+    arg = (k * z) - (z / (2.0 * k)) * (ky_sq[:, None] + kx_sq[None, :])
+    H = _tf_phase_to_H(arg, _cdtype_of(E), xp, is_jax, bld)
+    out = xp.fft.ifft2(xp.fft.fft2(E) * H)
+    if _is_complex(E) and out.dtype != E.dtype:
+        out = out.astype(E.dtype)
+    return out
+
+
 class CarrierReferencedField(NamedTuple):
     """Result of a carrier-referenced propagation step.
 
@@ -200,16 +311,18 @@ class CarrierReferencedField(NamedTuple):
     dx: float
 
 
-def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign):
+def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign, bld=np):
     """``exp(sign*i*k*(x^2+y^2)/(2R))`` on the centred grid (float64
-    carrier argument, cast to nothing here -- caller casts)."""
+    carrier argument, cast to nothing here -- caller casts).  Built on backend
+    ``bld`` (host NumPy for JAX, the device namespace otherwise); ``bld is np``
+    reproduces the historical NumPy screen byte-for-byte."""
     Ny, Nx = shape
-    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
-    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
-    Y, X = np.meshgrid(y, x, indexing='ij')
+    x = (bld.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Y, X = bld.meshgrid(y, x, indexing='ij')
     r2 = X * X + Y * Y
     k = 2.0 * np.pi / wavelength
-    return np.exp(sign * 1j * k * r2 / (2.0 * R))
+    return bld.exp(sign * 1j * k * r2 / (2.0 * R))
 
 
 def propagate_carrier_referenced(
@@ -353,7 +466,12 @@ def propagate_carrier_referenced(
     # Collimated carrier: the transform degenerates to m == 1, z_eff == z;
     # an ordinary Fresnel transfer-function step, grid unchanged.
     if np.isinf(R):
-        env_out = fresnel_tf_propagate(E_env, z, wavelength, dx, dy)
+        xp, is_jax, bld = _backend_of(E_env)
+        if xp is np:
+            env_out = fresnel_tf_propagate(E_env, z, wavelength, dx, dy)
+        else:
+            env_out = _fresnel_tf_2d_xp(
+                E_env, z, wavelength, dx, dy, xp, is_jax, bld)
         return CarrierReferencedField(env_out, R, dx)
 
     if R == 0.0:
@@ -381,26 +499,46 @@ def _carrier_step_fast(E_env, R, z, wavelength, dx, dy):
     """The Sziklas-Siegman fast step for a NON-crossing leg (``m = R_out/R > 0``,
     ``R`` finite/non-zero, ``z != 0``).  Byte-identical to the historical inline
     fast path; extracted so the focus-crossing bridge can reuse it for the two
-    well-conditioned carrier legs.  Returns ``(env_out, R_out, dx_out)``."""
+    well-conditioned carrier legs.  Returns ``(env_out, R_out, dx_out)``.
+
+    Backend-agnostic (K2): NumPy keeps the pyFFTW-backed
+    :func:`fresnel_tf_propagate` for a byte-identical fast FFT; CuPy / JAX route
+    the envelope leg through :func:`_fresnel_tf_2d_xp` in the field's
+    namespace.  The leg is data-branch-free, so it is ``jax.jit`` / ``jax.grad``
+    compatible."""
+    xp, is_jax, bld = _backend_of(E_env)
     R_out = R + z
     m = R_out / R
     # Reduced (collimated-frame) envelope distance.  z_eff = z / m.
     z_eff = z * R / R_out
 
     # Envelope leg: ordinary collimated Fresnel TF step, SAME grid.
-    u_out = fresnel_tf_propagate(E_env, z_eff, wavelength, dx, dy)
+    if xp is np:
+        u_out = fresnel_tf_propagate(E_env, z_eff, wavelength, dx, dy)
+    else:
+        u_out = _fresnel_tf_2d_xp(E_env, z_eff, wavelength, dx, dy,
+                                  xp, is_jax, bld)
 
     # On-axis piston the reduced leg under-counts: z - z_eff = z^2 / R_out.
     k = 2.0 * np.pi / wavelength
     piston = np.exp(1j * k * (z * z / R_out))
     # 2-D power conservation: the co-moving area element grows by m^2, so
     # the amplitude carries 1/m (each axis 1/sqrt(m)).
-    scale = piston / m
-    env_out = scale * u_out
-    # Preserve the input complex dtype (the python-complex scalar would
-    # otherwise upcast complex64 -> complex128).
-    if np.iscomplexobj(E_env) and env_out.dtype != E_env.dtype:
-        env_out = env_out.astype(E_env.dtype)
+    if xp is np:
+        # Historical arithmetic -- pinned byte-identical.
+        scale = piston / m
+        env_out = scale * u_out
+        # Preserve the input complex dtype (the numpy-complex scalar would
+        # otherwise upcast complex64 -> complex128).
+        if np.iscomplexobj(E_env) and env_out.dtype != E_env.dtype:
+            env_out = env_out.astype(E_env.dtype)
+    else:
+        # Weak Python-complex scalar so a complex64 field is NOT upcast on a
+        # backend (a numpy complex128 scalar promotes a jnp complex64 array
+        # when jax_enable_x64 is on; a python complex stays weakly-typed).
+        env_out = complex(piston / m) * u_out
+        if _is_complex(E_env) and env_out.dtype != E_env.dtype:
+            env_out = env_out.astype(E_env.dtype)
 
     return CarrierReferencedField(env_out, R_out, m * dx)
 
@@ -409,7 +547,12 @@ def _envelope_amp_radius(E_env, dx, dy):
     """1/e AMPLITUDE radius of the (assumed roughly Gaussian) envelope on the
     centred grid, from the intensity second moment (``w = sqrt(2)*r2m``).
     Returns 0.0 for an empty / zero field."""
-    I = np.abs(np.asarray(E_env)) ** 2
+    # Host-side (Python-float) branch reduction: pull the field to host on ANY
+    # backend.  ``np.asarray`` raises on a CuPy device array (implicit transfer
+    # is blocked); ``to_numpy`` uses ``cupy.asnumpy`` / eager JAX copy and is a
+    # byte-identical no-op for a NumPy field.
+    from ..backend import to_numpy
+    I = np.abs(to_numpy(E_env)) ** 2
     tot = float(I.sum())
     if not (tot > 0.0):
         return 0.0
@@ -431,7 +574,7 @@ def _near_focus_needs_bridge(E_env, R, R_out, wavelength, dx, dy):
     w_in = _envelope_amp_radius(E_env, dx, dy)
     if not (w_in > 0.0):
         return False
-    Nx = np.asarray(E_env).shape[-1]
+    Nx = E_env.shape[-1]
     w0 = wavelength * abs(R) / (np.pi * w_in)          # est. focus waist
     w_geom = w_in * abs(R_out) / abs(R)                # geometric beam at R_out
     w_out = max(w_geom, w0)                             # diffraction floor
@@ -511,10 +654,10 @@ def _propagate_carrier_focus_crossing(E_env, R, z, wavelength, dx, dy):
 
 def _match_env_dtype(env, ref):
     """Cast ``env`` back to ``ref``'s complex dtype if the bridge upcast it
-    (preserve complex64 through the focus-crossing path)."""
-    env = np.asarray(env)
-    if np.iscomplexobj(ref) and env.dtype != np.asarray(ref).dtype:
-        return env.astype(np.asarray(ref).dtype)
+    (preserve complex64 through the focus-crossing path).  Inspects ``.dtype``
+    only, so it never concretises a CuPy / JAX ``env`` off its device."""
+    if _is_complex(ref) and env.dtype != ref.dtype:
+        return env.astype(ref.dtype)
     return env
 
 
@@ -574,15 +717,22 @@ def _fresnel_tf_axis(u, z, wavelength, d, axis):
     """1-D Fresnel transfer-function step along a single ``axis`` (the
     per-axis analogue of :func:`fresnel_tf_propagate`).  Carries the on-axis
     piston ``exp(i k z)`` (the ``k*z`` term), so composed legs stay phase-
-    faithful.  ``z`` here is the (already reduced) envelope distance."""
+    faithful.  ``z`` here is the (already reduced) envelope distance.
+
+    Backend-agnostic (K2): the 1-D FFT pair runs in the field's namespace
+    (``xp.fft``, which for NumPy is ``np.fft`` -- byte-identical to the prior
+    code, no pyFFTW is involved on this 1-D path); the transfer function is
+    built natural-layout on ``bld`` and moved on-device."""
+    xp, is_jax, bld = _backend_of(u)
     N = u.shape[axis]
     k = 2.0 * np.pi / wavelength
-    kx_sq = np.fft.ifftshift(_freq_sq_1d(N, d))
+    kx_sq = bld.fft.ifftshift(_freq_sq_1d_bld(N, d, bld))
     # phase = k*z - (z/2k) (2 pi f)^2  (== k*z - pi*lambda*z*f^2), 1-D.
-    H = np.exp(1j * (k * z - (z / (2.0 * k)) * kx_sq))
+    arg = k * z - (z / (2.0 * k)) * kx_sq
+    H = _tf_phase_to_H(arg, _cdtype_of(u), xp, is_jax, bld)
     H = _broadcast_axis(H, u.ndim, axis)
-    Uf = np.fft.fft(u, axis=axis)
-    return np.fft.ifft(Uf * H, axis=axis)
+    Uf = xp.fft.fft(u, axis=axis)
+    return xp.fft.ifft(Uf * H, axis=axis)
 
 
 def _asm_axis(E, z, wavelength, d, axis, bandlimit=True):
@@ -593,35 +743,56 @@ def _asm_axis(E, z, wavelength, d, axis, bandlimit=True):
     ``exp(i k z)`` (``kz(f=0) = k``).  The other axis is a spectator (its
     slowly-varying, carrier-referenced content has little transverse
     frequency, so the neglected ``k_y`` coupling in ``sqrt(k^2 - k_x^2)`` is
-    a small paraxial residual -- the regime this bridge operates in)."""
+    a small paraxial residual -- the regime this bridge operates in).
+
+    Backend-agnostic (K2): the FFT pair runs in the field's namespace; the
+    evanescent-masked, band-limited transfer function is built on ``bld``
+    (host f64 for JAX) and moved on-device.  ``xp is bld is np`` is
+    byte-identical to the historical code."""
+    xp, is_jax, bld = _backend_of(E)
     if z == 0:
         return E.copy() if hasattr(E, 'copy') else np.array(E)
     N = E.shape[axis]
     k = 2.0 * np.pi / wavelength
-    kx_sq = _freq_sq_1d(N, d)
+    kx_sq = _freq_sq_1d_bld(N, d, bld)
     kz_sq = k * k - kx_sq
     prop = kz_sq > 0
-    kz = np.where(prop, np.sqrt(np.maximum(kz_sq, 0.0)), 0.0)
-    Hc = np.exp(1j * z * kz)
+    kz = bld.where(prop, bld.sqrt(bld.maximum(kz_sq, 0.0)), 0.0)
+    if xp is np:
+        Hc = np.exp(1j * z * kz)
+    else:
+        # dtype-aware exp (S2-3): complex64 folds the phase mod 2*pi in f64
+        # before the float32 cast; complex128 the direct exponential.
+        tcd = np.dtype(_cdtype_of(E))
+        arg = z * kz
+        if tcd == np.complex64:
+            phf = bld.mod(arg, 2.0 * np.pi)
+            Hc = bld.empty(arg.shape, dtype=np.complex64)
+            Hc.real[...] = bld.cos(phf).astype(np.float32)
+            Hc.imag[...] = bld.sin(phf).astype(np.float32)
+        else:
+            Hc = bld.exp(1j * arg).astype(tcd)
     # dtype-aware zero (v4.14.1 audit P1-NEW-4): a literal ``0.0 + 0.0j`` is
     # complex128 and would silently upcast a complex64 transfer function.
-    H = np.where(prop, Hc, np.zeros((), dtype=Hc.dtype))
+    H = bld.where(prop, Hc, bld.zeros((), dtype=Hc.dtype))
     if bandlimit:
-        f = (np.arange(N, dtype=np.float64) - N / 2) / (N * d)
+        f = (bld.arange(N, dtype=np.float64) - N / 2) / (N * d)
         f_max = (N * d) / (2.0 * wavelength * abs(z))
-        H = np.where(np.abs(f) < f_max, H, np.zeros((), dtype=H.dtype))
-    H = _broadcast_axis(np.fft.ifftshift(H), E.ndim, axis)
-    Ef = np.fft.fft(E, axis=axis)
-    return np.fft.ifft(Ef * H, axis=axis)
+        H = bld.where(bld.abs(f) < f_max, H, bld.zeros((), dtype=H.dtype))
+    H = _broadcast_axis(bld.fft.ifftshift(H), E.ndim, axis)
+    H = _to_dev(H, xp, is_jax)
+    Ef = xp.fft.fft(E, axis=axis)
+    return xp.fft.ifft(Ef * H, axis=axis)
 
 
-def _axis_carrier_phase(shape, d, wavelength, R, axis, sign):
+def _axis_carrier_phase(shape, d, wavelength, R, axis, sign, bld=np):
     """``exp(sign*i*k*x_a^2/(2R))`` broadcast along a single ``axis`` (the
-    per-axis carrier)."""
+    per-axis carrier).  Built on backend ``bld`` (host NumPy for JAX);
+    ``bld is np`` reproduces the historical NumPy screen byte-for-byte."""
     N = shape[axis]
-    x = (np.arange(N, dtype=np.float64) - N / 2) * d
+    x = (bld.arange(N, dtype=np.float64) - N / 2) * d
     k = 2.0 * np.pi / wavelength
-    ph = np.exp(sign * 1j * k * x * x / (2.0 * R))
+    ph = bld.exp(sign * 1j * k * x * x / (2.0 * R))
     return _broadcast_axis(ph, len(shape), axis)
 
 
@@ -632,7 +803,10 @@ def _axis_amp_radius(u, d, axis):
     ``<x^2> = w^2/4``, so ``w = 2*sqrt(<x^2>)`` (the 1-D analogue of the 2-D
     ``w = sqrt(2)*r2m``, which folds in both axes).  0.0 for a zero/empty
     field."""
-    inten = np.abs(np.asarray(u)) ** 2
+    # Host-side reduction -> Python float; CuPy-safe pull (see
+    # ``_envelope_amp_radius``).
+    from ..backend import to_numpy
+    inten = np.abs(to_numpy(u)) ** 2
     other = tuple(a for a in range(inten.ndim) if a != axis)
     marg = inten.sum(axis=other)
     tot = float(marg.sum())
@@ -655,7 +829,7 @@ def _axis_near_focus_needs_bridge(u, R, R_out, wavelength, d, axis):
     w_in = _axis_amp_radius(u, d, axis)
     if not (w_in > 0.0):
         return False
-    N = np.asarray(u).shape[axis]
+    N = u.shape[axis]
     w0 = wavelength * abs(R) / (np.pi * w_in)
     w_geom = w_in * abs(R_out) / abs(R)
     w_out = max(w_geom, w0)
@@ -695,6 +869,7 @@ def _axis_bridge(u, R, z, wavelength, d, axis):
     waist) -> re-attach the flipped carrier -> (fast 1-D step to target).  The
     other axis rides along untouched (its carrier is still referenced out).
     Returns ``(u_out, R_out, d_out)`` carrying ``exp(i k z)``."""
+    xp, is_jax, bld = _backend_of(u)
     z_f = -R                                     # this axis's focus distance
     w_in = _axis_amp_radius(u, d, axis)
     if not (w_in > 0.0):
@@ -721,7 +896,9 @@ def _axis_bridge(u, R, z, wavelength, d, axis):
     # (a) fast 1-D step start -> a  (well conditioned; carries e^{ik z_a})
     u_a, R_a, d_a = _axis_step_fast(u, R, z_a, wavelength, d, axis)
     # reconstruct this axis's carrier on the (now fine) co-moving grid
-    E_a = u_a * _axis_carrier_phase(u_a.shape, d_a, wavelength, R_a, axis, +1)
+    E_a = u_a * _to_dev(
+        _axis_carrier_phase(u_a.shape, d_a, wavelength, R_a, axis, +1, bld),
+        xp, is_jax)
 
     beyond_b = (z - z_b) * sgn                   # >0 iff target is past b
     if beyond_b <= 0.0:
@@ -737,7 +914,9 @@ def _axis_bridge(u, R, z, wavelength, d, axis):
     # (b) bridge a -> b THROUGH the line waist with an exact 1-D ASM step
     E_b = _asm_axis(E_a, z_b - z_a, wavelength, d_a, axis)
     # (c) re-attach the flipped diverging carrier and continue
-    env_b = E_b * _axis_carrier_phase(E_b.shape, d_a, wavelength, R_b, axis, -1)
+    env_b = E_b * _to_dev(
+        _axis_carrier_phase(E_b.shape, d_a, wavelength, R_b, axis, -1, bld),
+        xp, is_jax)
     return _axis_step_fast(env_b, R_b, z - z_b, wavelength, d_a, axis)
 
 
@@ -767,7 +946,7 @@ def _propagate_carrier_astigmatic(E_env, R_x, R_y, z, wavelength, dx, dy):
     axis x then axis y, each with its own magnification and its own
     focus-crossing bridge.  Returns ``CarrierReferencedField`` with ``R`` =
     ``(R_x+z, R_y+z)`` and ``dx`` = ``(dx_out, dy_out)``."""
-    u = np.asarray(E_env)
+    u = E_env
     # axis 1 == x (pitch dx, radius R_x); axis 0 == y (pitch dy, radius R_y).
     u, Rx_out, dx_out = _axis_step(u, R_x, z, wavelength, dx, axis=1)
     u, Ry_out, dy_out = _axis_step(u, R_y, z, wavelength, dy, axis=0)
@@ -778,11 +957,13 @@ def _propagate_carrier_astigmatic(E_env, R_x, R_y, z, wavelength, dx, dy):
     return CarrierReferencedField(u, (Rx_out, Ry_out), (dx_out, dy_out))
 
 
-def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn):
+def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn,
+                         bld=np):
     """Carrier phase ``exp(sign*i*k*[x^2/(2R_x) + y^2/(2R_y)])`` for a scalar
     or ``(R_x, R_y)`` carrier.  Returns ``None`` when the carrier is fully
     collimated (a no-op).  Collimated axes of an astigmatic carrier drop out
-    of the per-axis product."""
+    of the per-axis product.  Built on backend ``bld`` (host NumPy for JAX);
+    ``bld is np`` reproduces the historical NumPy screen byte-for-byte."""
     R_x, R_y, is_astig = _parse_carrier(R_carrier, fn)
     if not is_astig:
         R = R_x
@@ -790,15 +971,18 @@ def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn):
             return None
         if R == 0.0:
             raise ValueError(f"{fn}: R_carrier == 0 (carrier focus).")
-        return _radial_carrier_phase(shape, dx, dy, wavelength, float(R), sign)
+        return _radial_carrier_phase(shape, dx, dy, wavelength, float(R), sign,
+                                     bld)
     if R_x == 0.0 or R_y == 0.0:
         raise ValueError(
             f"{fn}: an astigmatic carrier axis radius == 0 (carrier focus).")
     phase = None
     if np.isfinite(R_x):                          # axis 1 == x
-        phase = _axis_carrier_phase(shape, dx, wavelength, float(R_x), 1, sign)
+        phase = _axis_carrier_phase(shape, dx, wavelength, float(R_x), 1, sign,
+                                    bld)
     if np.isfinite(R_y):                          # axis 0 == y
-        py = _axis_carrier_phase(shape, dy, wavelength, float(R_y), 0, sign)
+        py = _axis_carrier_phase(shape, dy, wavelength, float(R_y), 0, sign,
+                                 bld)
         phase = py if phase is None else phase * py
     return phase
 
@@ -844,12 +1028,14 @@ def carrier_referenced_reconstruct(
     _check_2d_scalar_field(E_env, 'carrier_referenced_reconstruct')
     if dy is None:
         dy = dx
+    xp, is_jax, bld = _backend_of(E_env)
     phase = _build_carrier_phase(E_env.shape, dx, dy, wavelength, R_carrier,
-                                 +1, 'carrier_referenced_reconstruct')
+                                 +1, 'carrier_referenced_reconstruct', bld)
     if phase is None:
         return E_env.copy() if hasattr(E_env, 'copy') else np.array(E_env)
-    if np.iscomplexobj(E_env):
+    if _is_complex(E_env):
         phase = phase.astype(E_env.dtype, copy=False)
+    phase = _to_dev(phase, xp, is_jax)
     return E_env * phase
 
 
@@ -891,12 +1077,14 @@ def carrier_referenced_envelope(
     _check_2d_scalar_field(E_full, 'carrier_referenced_envelope')
     if dy is None:
         dy = dx
+    xp, is_jax, bld = _backend_of(E_full)
     phase = _build_carrier_phase(E_full.shape, dx, dy, wavelength, R_carrier,
-                                 -1, 'carrier_referenced_envelope')
+                                 -1, 'carrier_referenced_envelope', bld)
     if phase is None:
         return E_full.copy() if hasattr(E_full, 'copy') else np.array(E_full)
-    if np.iscomplexobj(E_full):
+    if _is_complex(E_full):
         phase = phase.astype(E_full.dtype, copy=False)
+    phase = _to_dev(phase, xp, is_jax)
     return E_full * phase
 
 
@@ -914,7 +1102,10 @@ def _fit_carrier_inv(E, wavelength, dx, dy, axis=None):
     ``1/R_x = Im[sum E* x dE/dx] / (k sum |E|^2 x^2)`` -- a phase-unwrap-free,
     aperture-robust estimator.  ``axis=None`` fits the isotropic (combined
     ``x^2+y^2``) curvature; ``axis=1``/``0`` fit x/y separately."""
-    E = np.asarray(E)
+    # Host-side least-squares curvature fit -> Python float; CuPy-safe pull
+    # (see ``_envelope_amp_radius``).
+    from ..backend import to_numpy
+    E = to_numpy(E)
     Ny, Nx = E.shape[-2], E.shape[-1]
     k = 2.0 * np.pi / wavelength
     x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
@@ -980,23 +1171,26 @@ def carrier_referenced_fit_radius(
     return np.inf if inv == 0.0 else 1.0 / inv
 
 
-def _rereference(env, R_old, R_new, wavelength, dx, dy):
+def _rereference(env, R_old, R_new, wavelength, dx, dy,
+                 bld=np, xp=np, is_jax=False):
     """Move an envelope from carrier ``R_old=(Rx,Ry)`` to ``R_new=(Rx,Ry)``:
-    ``env * exp(i*k*r^2/2 * (1/R_old - 1/R_new))`` per axis."""
+    ``env * exp(i*k*r^2/2 * (1/R_old - 1/R_new))`` per axis.  The phase screen
+    is built on ``bld`` (host NumPy for JAX) and moved on-device; NumPy
+    defaults reproduce the historical screen byte-for-byte."""
     Rox, Roy = R_old
     Rnx, Rny = R_new
     Ny, Nx = env.shape[-2], env.shape[-1]
     k = 2.0 * np.pi / wavelength
-    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
-    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
-    Y, X = np.meshgrid(y, x, indexing='ij')
+    x = (bld.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Y, X = bld.meshgrid(y, x, indexing='ij')
 
     def _inv(R):
         return 0.0 if np.isinf(R) else 1.0 / float(R)
 
     dphi = 0.5 * k * ((X * X) * (_inv(Rox) - _inv(Rnx))
                       + (Y * Y) * (_inv(Roy) - _inv(Rny)))
-    return env * np.exp(1j * dphi)
+    return env * _to_dev(bld.exp(1j * dphi), xp, is_jax)
 
 
 def carrier_referenced_aperture(
@@ -1081,21 +1275,31 @@ def carrier_referenced_aperture(
         raise ValueError(
             "carrier_referenced_aperture: pass at most one of refit_carrier "
             "and new_carrier.")
-    env = np.asarray(E_env)
+    xp, is_jax, bld = _backend_of(E_env)
+    env = E_env
     Ny, Nx = env.shape[-2], env.shape[-1]
 
     # -- build the (real) aperture mask -------------------------------------
+    # Built on ``bld`` (host f64 for JAX) and moved on-device with the field;
+    # ``bld is np`` reproduces the historical mask byte-for-byte.
     if mask is not None:
         msk = np.asarray(mask)
-        if msk.shape != env.shape:
+        if msk.shape != tuple(env.shape):
             raise ValueError(
                 f"carrier_referenced_aperture: mask shape {msk.shape} != "
-                f"field shape {env.shape}.")
-        msk = msk.astype(np.float64)
+                f"field shape {tuple(env.shape)}.")
+        # Move the (host) mask onto the field's device on ANY backend.  The
+        # mask is built host-side (``np.asarray(mask)``), NOT on ``bld``, so
+        # ``_to_dev`` -- which only hops for JAX -- would leave it host-NumPy on
+        # the CuPy backend; ``env * msk`` below would then mix a CuPy device
+        # array with a host array and raise.  ``xp.asarray`` is the correct
+        # backend-agnostic host->device move (NumPy no-op / byte-identical;
+        # CuPy + JAX move on-device).
+        msk = xp.asarray(msk.astype(np.float64))
     elif radius is not None or half_x is not None or half_y is not None:
-        x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
-        y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
-        Y, X = np.meshgrid(y, x, indexing='ij')
+        x = (bld.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+        y = (bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+        Y, X = bld.meshgrid(y, x, indexing='ij')
         if radius is not None:
             if not (radius > 0):
                 raise ValueError(
@@ -1107,16 +1311,17 @@ def carrier_referenced_aperture(
             if not (hx > 0 and hy > 0):
                 raise ValueError(
                     "carrier_referenced_aperture: half_x / half_y must be > 0.")
-            msk = ((np.abs(X) <= hx) & (np.abs(Y) <= hy)).astype(np.float64)
+            msk = ((bld.abs(X) <= hx) & (bld.abs(Y) <= hy)).astype(np.float64)
+        msk = _to_dev(msk, xp, is_jax)
     else:
         raise ValueError(
             "carrier_referenced_aperture: specify an aperture via radius=, "
             "half_x= / half_y=, or mask=.")
 
     # -- energy accounting (fraction; the dx*dy area element cancels) -------
-    p_before = float((np.abs(env) ** 2).sum())
+    p_before = float((xp.abs(env) ** 2).sum())
     env_ap = env * msk
-    p_after = float((np.abs(env_ap) ** 2).sum())
+    p_after = float((xp.abs(env_ap) ** 2).sum())
     transmission = (p_after / p_before) if p_before > 0.0 else 0.0
     # NO renormalisation: the clipped power is genuinely gone.
 
@@ -1127,7 +1332,7 @@ def carrier_referenced_aperture(
         Nx_new, Ny_new, out_astig = _parse_carrier(
             new_carrier, 'carrier_referenced_aperture')
         env_out = _rereference(env_ap, (R_x, R_y), (Nx_new, Ny_new),
-                               wavelength, dx, dy)
+                               wavelength, dx, dy, bld, xp, is_jax)
         R_out = (Nx_new, Ny_new) if out_astig else Nx_new
     elif refit_carrier:
         if in_astig:
@@ -1138,7 +1343,7 @@ def carrier_referenced_aperture(
             Rnx = np.inf if inx == 0.0 else 1.0 / inx
             Rny = np.inf if iny == 0.0 else 1.0 / iny
             env_out = _rereference(env_ap, (R_x, R_y), (Rnx, Rny),
-                                   wavelength, dx, dy)
+                                   wavelength, dx, dy, bld, xp, is_jax)
             R_out = (Rnx, Rny) if (Rnx != Rny) else Rnx
             out_astig = (Rnx != Rny)
         else:
@@ -1146,7 +1351,7 @@ def carrier_referenced_aperture(
             inv_new = (0.0 if np.isinf(R_x) else 1.0 / R_x) + iv
             Rn = np.inf if inv_new == 0.0 else 1.0 / inv_new
             env_out = _rereference(env_ap, (R_x, R_x), (Rn, Rn),
-                                   wavelength, dx, dy)
+                                   wavelength, dx, dy, bld, xp, is_jax)
             R_out = Rn
             out_astig = False
     else:

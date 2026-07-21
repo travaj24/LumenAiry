@@ -143,6 +143,7 @@ from .elements.lenses import (
     apply_real_lens_traced_multi,
     apply_real_lens_traced_multibranch,
     apply_real_lens_traced_segmented,
+    apply_real_lens_traced_uniform,
     apply_spherical_lens,
     apply_thin_lens,
     check_grid_vs_apertures,
@@ -1047,7 +1048,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='6.0',
 )
 
-__version__ = "5.26.0"
+__version__ = "5.27.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1135,6 +1136,7 @@ __all__ = [
     'apply_real_lens_traced',
     'apply_real_lens_traced_multi',
     'apply_real_lens_traced_multibranch',
+    'apply_real_lens_traced_uniform',
     'apply_real_lens_traced_segmented',
     'prepare_real_lens_traced',
     'PreparedTracedLens',

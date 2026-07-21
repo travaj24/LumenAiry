@@ -1011,3 +1011,78 @@ grid-robustly + monotonically but TRACKS the screen within 3% -- the honest
 exit-vertex limit).  Verifier repros: `scratchpad/rd_detj.py` (det J ~const at the
 exit vertex, -> 0 at the image), `scratchpad/rd_energy_caustic.py` (energy +
 caustic fold), `scratchpad/rd_focusprobe.py` (the focus caustic).
+
+## K4 -- uniform Airy/Pearcey dark-side completion of the traced caustic (niche N16, 2026-07-21)
+
+**Scope:** close the honest gap K1 (N13 multibranch KMAH ray-density) left open --
+the multibranch coherent sum is a purely GEOMETRIC (ART) construction, so on the
+DARK side of a fold caustic (where no real ray branch exists) it is identically
+ZERO and drops the exponentially-decaying Airy tail (fold-truth: windowed r2m
+**-14.8%**, energy **0.80**). `apply_real_lens_traced(amplitude_model='ray_density',
+caustic='uniform')` makes the traced field diffraction-correct THROUGH a fold.
+
+**Oracle (lumenairy-free):** `validation/oracles/caustic_fold_ref.npz` -- a dense
+DIRECT Rayleigh-Sommerfeld / Huygens field at a through-focus plane of the
+strongly-aberrated plano-convex singlet where the collimated ray map folds into a
+single caustic ring (`r_c ~ 14.26 um`); self-verified (grid convergence < 0.02%,
+energy closure 0.999, genuinely 2-branch). A meridional ray trace (via
+`lumenairy.raytrace`) supplies the fold GEOMETRY.
+
+### Mechanism (Chester-Friedman-Ursell uniform asymptotic, REUSE not reimplement)
+
+Near a FOLD the field is one Airy function `Ai(-k^{2/3} zeta)` -- oscillatory on
+the bright side (`zeta > 0`) and an `Ai(+)` exponential tail on the DARK side
+(`zeta < 0`). The library already ships the CFU fold integrator
+(`lenses_maslov.uniform_fold_airy`, validated ~1e-14) and the cusp Pearcey
+(`pearcey`). K4:
+
+1. Runs the K1 multibranch (`caustic_band='ludwig'`) for the finite, regularized
+   BRIGHT-side field (interior + near-caustic); only the dark side is ADDED.
+2. Meridional-ray-traces the fold to get, EXACTLY: the caustic radius `r_c` (the
+   turning point of `y_obs(h)`), the fold parameter `zeta(r) = kappa (r_c - r)`
+   (`kappa` = linear slope of `[3/4 (S+ - S-)]^{2/3}` from the eikonal difference
+   of the two coalescing branches; residual < 2%), and the mean phase
+   `A(r) = (S+ + S-)/2`.
+3. The two SMOOTH CFU amplitude coefficients `(a0, a1)` are hard to get from the
+   raw geometric ray-tube amplitudes near a sharp/asymmetric fold, so they are
+   FIT (radially-uniform-weighted complex least squares, band ~1 Airy scale
+   `l_airy = 1/(k^{2/3} kappa)` just inside `r_c`) to the multibranch BRIGHT
+   field, using the exact CFU kernel `lenses_maslov._fold_airy_eval` as the
+   (linear) basis. `uniform_fold_airy` was refactored to close through the same
+   `_fold_airy_eval` -- byte-identical, so the bright-side kernel and the
+   dark-side continuation are literally the same code.
+4. The SAME kernel is evaluated at `zeta < 0` (analytic continuation through the
+   caustic) to fill the dark-side pixels with the exponential Airy tail.
+
+### What was validated (measured, adversarial; `test_niche_k4_uniform_caustic.py`)
+
+| gate | metric | result |
+|---|---|---|
+| (a) fold-truth BOTH sides (N=768 vs `caustic_fold_ref`) | windowed r2m / EE50 / EE80 / energy | **r2m -1.9%, EE50 +0.9%, EE80 +3.4%, energy 0.96** (K1 was r2m -14.8%, energy 0.80); uniform decisively beats multibranch on r2m AND energy |
+| (b) dark-tail decay | fitted `kappa` from log-I vs `(r-r_c)^{3/2}` vs ray `kappa` | within ~12% (`Ai(+)` exponential scaling, not a geometric zero) |
+| (b/d) bright-side continuity | `r < r_c` vs multibranch; finite through caustic | BYTE-IDENTICAL bright side; finite everywhere; complex64/128 preserved |
+| (c) KMAH / phase | direct-RS 2-branch match | inherited from K1 (bright side IS the multibranch, whose det-Q KMAH the K1 suite pins vs direct RS) |
+| (e) cusp / non-fold | detect + fall back | `n_turn != 1` (cusp / multiple rings -> Pearcey regime), decenter/tilt, non-rot-sym input, carrier tilt, no-fold plane, or an under-resolved Airy scale (`l_airy < 1.2 dx`) all DETECT + fall back to the plain multibranch (finite, one-time warning) -- never inf/nan |
+
+**Honest envelope.** The completion targets a rotationally-symmetric SINGLE fold
+RING (the `caustic_fold_ref` class): collimated / rot-sym input, centred
+prescription, one interior meridional caustic. A decentered / astigmatic fold and
+a genuine CUSP are out of scope (the latter would need the shipped `pearcey`
+mapping layered on the branch data -- detect + fall back for now, documented). The
+residual r2m/EE is ~2-3% (the near-caustic tail is a hair fat and the far tail --
+dominated by hard-aperture-edge diffraction -- is not a pure fold Airy); GBD/FGA
+or single-branch `ray_density` + ASM remain the alternatives for the
+non-symmetric / cusp cases.
+
+### Tests + provenance
+
+`tests/unit/test_niche_k4_uniform_caustic.py` (runs WITHOUT Zemax, using the
+lumenairy-free `caustic_fold_ref.npz` + a meridional ray trace): CFU kernel
+finite on both sides + linear + `uniform_fold_airy` still matches the exact cubic
+to ~1e-13; default / multibranch paths unchanged; validation errors; the
+meridional fold detector + rotational-symmetry gate; bright-side byte-identity +
+finiteness + dtype; the fold-truth gate (a); the dark-tail decay gate (b); the
+decenter / non-rot-sym / no-fold fallbacks; and the cusp (`n_turn > 1`)
+detect+fallback (a synthetic 2-hump meridional map, since a single-element SA has
+only one meridional fold). New code: `lumenairy/elements/_lens_traced_uniform.py`
+(the completion) + `lenses_maslov._fold_airy_eval` (the shared CFU kernel).
