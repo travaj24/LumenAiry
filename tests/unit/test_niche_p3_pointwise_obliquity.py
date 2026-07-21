@@ -148,7 +148,10 @@ def test_default_is_meridional_byte_identical_on_symmetric():
     a = la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx,
                            surface_model='displaced')          # default 'auto'
     b = _disp(E0, p, dx, obliq='meridional')
-    assert np.array_equal(np.asarray(a), np.asarray(b))
+    # numerical (not bit) identity -- displaced LUT cache-warmth floats ~1 ULP
+    # across cross-test ordering; a real 2-D contribution is ~1e-3.
+    assert np.max(np.abs(np.asarray(a) - np.asarray(b))) <= \
+        1e-10 * float(np.max(np.abs(np.asarray(b))))
 
 
 def test_auto_routes_decentered_to_remap():
@@ -164,7 +167,8 @@ def test_auto_routes_decentered_to_remap():
                            surface_model='displaced')            # default 'auto'
     b = la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx,
                            surface_model='displaced', displaced_mode='remap')
-    assert np.array_equal(np.asarray(a), np.asarray(b))          # auto == remap
+    assert np.max(np.abs(np.asarray(a) - np.asarray(b))) <= \
+        1e-10 * float(np.max(np.abs(np.asarray(b))))            # auto == remap
     c = _disp(E0, p, dx, obliq='pointwise')                      # the screen peer
     assert not np.array_equal(np.asarray(a), np.asarray(c))      # remap != screen
 

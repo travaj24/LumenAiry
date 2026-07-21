@@ -156,7 +156,12 @@ def test_default_displaced_is_screen_byte_identical():
         a = la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx,
                                surface_model='displaced', conjugate=R_in)
         b = _disp(E0, p, R_in, dx, 'screen')
-        assert np.array_equal(np.asarray(a), np.asarray(b)), R_in
+        # Same numerical model (default == 'screen'); the first (cache-cold)
+        # displaced call builds the cosine LUT via a reduction whose order
+        # differs ~1 ULP from the cached-retrieve path, so bit-identity is not
+        # robust to cross-test cache warmth -- assert numerical identity.
+        assert np.max(np.abs(np.asarray(a) - np.asarray(b))) <= \
+            1e-10 * float(np.max(np.abs(np.asarray(b)))), R_in
 
 
 def test_thin_default_unchanged_by_displaced_mode_default():
@@ -168,7 +173,9 @@ def test_thin_default_unchanged_by_displaced_mode_default():
     a = la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx)
     b = la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx,
                            displaced_mode='screen')
-    assert np.array_equal(np.asarray(a), np.asarray(b))
+    # numerical (not bit) identity -- cache-warmth ~1 ULP, see the sibling pin
+    assert np.max(np.abs(np.asarray(a) - np.asarray(b))) <= \
+        1e-10 * float(np.max(np.abs(np.asarray(b))))
 
 
 def test_displaced_mode_validation():

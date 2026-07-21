@@ -189,7 +189,9 @@ def test_default_decentered_routes_to_2d_remap():
     a = _disp(E0, p, dx)                                        # default 'auto'
     b = _disp(E0, p, dx, displaced_mode='remap')
     c = _disp(E0, p, dx, displaced_obliquity='pointwise')      # screen peer
-    assert np.array_equal(a, b)
+    # auto routes to remap (same model) -- numerical, not bit, identity (the
+    # displaced-path cache floats ~1 ULP across cross-test ordering)
+    assert np.max(np.abs(a - b)) <= 1e-10 * float(np.max(np.abs(b)))
     assert not np.array_equal(a, c)
 
 

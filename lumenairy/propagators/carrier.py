@@ -602,11 +602,14 @@ def _asm_axis(E, z, wavelength, d, axis, bandlimit=True):
     kz_sq = k * k - kx_sq
     prop = kz_sq > 0
     kz = np.where(prop, np.sqrt(np.maximum(kz_sq, 0.0)), 0.0)
-    H = np.where(prop, np.exp(1j * z * kz), 0.0 + 0.0j)
+    Hc = np.exp(1j * z * kz)
+    # dtype-aware zero (v4.14.1 audit P1-NEW-4): a literal ``0.0 + 0.0j`` is
+    # complex128 and would silently upcast a complex64 transfer function.
+    H = np.where(prop, Hc, np.zeros((), dtype=Hc.dtype))
     if bandlimit:
         f = (np.arange(N, dtype=np.float64) - N / 2) / (N * d)
         f_max = (N * d) / (2.0 * wavelength * abs(z))
-        H = np.where(np.abs(f) < f_max, H, 0.0 + 0.0j)
+        H = np.where(np.abs(f) < f_max, H, np.zeros((), dtype=H.dtype))
     H = _broadcast_axis(np.fft.ifftshift(H), E.ndim, axis)
     Ef = np.fft.fft(E, axis=axis)
     return np.fft.ifft(Ef * H, axis=axis)
