@@ -4,6 +4,15 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.26.0] — 2026-07-20
+
+Accuracy-niches campaign (niches N1–N12): closes every documented real-lens /
+GBD / FGA / carrier-ASM accuracy niche, each phase impl → adversarial-verify →
+fix.  New opt-in API for decentered/tilted/freeform elements, a traced
+ray-density amplitude mode, astigmatic carrier-referenced propagation, a
+Seidel-based dispatcher gate, content-adaptive FGA sampling, and GBD
+re-expansion; rotationally-symmetric / collimated defaults byte-identical.
+
 ### Added
 
 - **Accuracy-niches capstone — composed end-to-end + full-aperture fast case
@@ -107,7 +116,63 @@ All notable changes to the core library are documented here.
   across the carrier focus are documented follow-ups.  Tests:
   `test_carrier_referenced.py`.
 
+- **Decentered / tilted / freeform elements (niches N2 / N10 / N11).**
+  Per-surface `decenter=(dx, dy)`, `tilt=(tx, ty)` and `sag_callable` are now
+  honored by the real-lens family.  `surface_model='displaced'` gains a pointwise
+  2-D vector-Snell obliquity path (P3) and a 2-D transverse-walk **remap** (P10)
+  that broadens induced coma correctly (RMS ratio ~1.02 @1 mm / ~1.09 @2 mm,
+  within ~10% of a lumenairy-free geometric oracle; the single-plane pointwise
+  screen shrinks); `apply_real_lens_traced` and `apply_real_lens_gbd` thread the
+  same field-frame geometry through the ray trace (P9, shared transformed
+  sag/normal helper; `raytrace == analytic == oracle` to 1e-11…1e-17).  **GBD is
+  the decentered encircled-energy reference** (grid-robust RMS second-moment; the
+  earlier "traced shrinks" reading was an EE80 quantization artifact on an
+  undersampled spot — traced also broadens under the RMS metric).  Rotationally-
+  symmetric defaults are byte-identical.  Tests: `test_niche_p3_*`,
+  `test_niche_p9_*`, `test_niche_p10_*`.
+- **`apply_real_lens_traced(amplitude_model='ray_density')` (niche N12).**  Opt-in
+  geometric ray-tube exit amplitude `|E_in(x_in)| / sqrt(|det J|)` from the
+  ray-map Jacobian — energy-conserving and **decenter-stable** (0.999 at
+  0/1/2 mm, where the screen amplitude leg leaks to ~0.907 at 2 mm), a smooth
+  envelope free of exit-aperture Fresnel ripple, and **caustic-safe** (detects
+  folds, floors the amplitude finite, warns and steers to GBD/FGA — never
+  inf/nan).  Default `'screen'` is byte-identical.  Note: the traced output is the
+  exit vertex (upstream of focus, where the ray map is near-identity), so the mode
+  does not by itself carry the focal decentered coma — that is a downstream/phase
+  effect; GBD remains the decentered-EE reference.  Tests:
+  `test_niche_p11_ray_density_amplitude.py`.
+- **Seidel-based dispatcher gate (niche N8).**  `apply_real_lens_universal` now
+  gates on a Seidel-S1 true-spherical-aberration estimate (validated < 0.5% vs an
+  independent Debye `r^4` wavefront fit), so an SA-nulled asphere routes to the
+  fast analytic path where the old `c4` sag-coefficient bound over-conservatively
+  sent it to ray tracing; gate SAFETY proven on M1–M6 × {collimated, diverging,
+  converging} (no aberrated case routes to analytic).  The `c4` bound is retained
+  as the fallback.  Tests: `test_niche_p7_seidel_gate.py`.
+
 ### Fixed
+
+- **Hammer audit H6-class — `apply_real_lens_traced(tilt_aware_rays=True)`
+  entrance eikonal (niche N5).**  The tilt-aware path omitted the entrance-plane
+  eikonal `k0·W(x_in)`, collapsing a diverging-input focus to the collimated
+  plane (EE100 ~0.01); now threaded through the shared carrier plumbing (EE100
+  0.97+ at the ABCD image, agreeing with `carrier=`), no double-count when an
+  explicit carrier is also supplied.  Collimated byte-identical.  Tests:
+  `test_niche_p1_traced_tiltaware.py`.
+- **`propagate_gbd_through_prescription` diverging/converging/tilted input
+  (niche N4).**  The prescription-chain entry still ran the old axial frame (the
+  H7 fix had only reached `apply_real_lens_gbd`); it now takes
+  `direction_sampling='auto'` (Husimi beamlets on curved/tilted input), lifting
+  chain power ~0.82 → 0.99 and matching back-to-back `apply_real_lens_gbd` calls
+  to numerical precision.  Collimated byte-identical.  Tests:
+  `test_niche_p1_gbd_chain.py`.
+- **Analytic displaced screen — extreme finite conjugates (niche N1).**  The
+  previously-reported ~0.5× oracle ratio on the negative-lens real-focus /
+  virtual-image cases was a **false oracle attribution** (a mislabeled
+  geometric-spot number).  Against a corrected, grid-converged congruence
+  diffraction oracle the shipped screen is 0.998× (exit-plane remap 1.000×), and
+  discriminating (a no-obliquity thin model and a sign-flipped conjugate both fail
+  a 15% gate).  Tests: `test_niche_p2_displaced_extreme.py`; oracle:
+  `validation/oracles/debye_oracle_v3.py`.
 
 - **Hammer audit H7 — `apply_real_lens_gbd` diverging-input energy collapse.**
   The position-only (axial) beamlet decomposition carried a strongly-diverging /
