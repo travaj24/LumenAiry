@@ -1783,10 +1783,29 @@ def apply_real_lens_traced(
 
           Requires ``inversion_method='newton'`` and the CPU path
           (``use_gpu=False``); incompatible with ``return_screen=True``.
-    caustic : {None, 'single', 'multibranch'}, default None
+    caustic : {None, 'single', 'multibranch', 'uniform'}, default None
         Opt-in MULTIBRANCH (KMAH / Maslov) refinement of the ``ray_density``
         amplitude (niche N13 / K1).  ``None`` / ``'single'`` (default) is the
         single-branch behaviour above -- BYTE-IDENTICAL to prior releases.
+
+        ``'uniform'`` (niche N16 / K4; requires ``amplitude_model='ray_density'``
+        + the CPU path) adds the Chester-Friedman-Ursell UNIFORM Airy DARK-side
+        completion on top of the multibranch bright field so the traced field is
+        diffraction-correct THROUGH a fold caustic.  The pure ``'multibranch'``
+        geometric sum is identically ZERO on the DARK side of a fold (no real ray
+        branch there) and so drops the exponentially-decaying Airy tail; the
+        ``'uniform'`` mode meridional-ray-traces the fold to get the caustic
+        radius ``r_c``, the fold parameter ``zeta(r) = kappa (r_c - r)`` and the
+        mean phase, FITS the two smooth Airy coefficients to the bright field just
+        inside ``r_c``, and continues the SAME ``uniform_fold_airy`` CFU kernel to
+        ``zeta < 0`` to fill the dark tail -- closing the K1 fold-truth gap
+        (windowed r2m -14.8% -> ~2%, energy 0.80 -> ~1.0 vs the direct
+        Rayleigh-Sommerfeld ``caustic_fold_ref``).  It applies to a
+        rotationally-symmetric SINGLE fold RING (collimated / rot-sym input,
+        centred prescription); a decentered / astigmatic fold, a carrier tilt, a
+        plane with no fold, or a CUSP / multiple rings (the Pearcey regime) are
+        DETECTED and fall back to the plain multibranch field (finite, one-time
+        warning).  Bright side ``r < r_c`` is byte-identical to ``'multibranch'``.
 
         ``'multibranch'`` (requires ``amplitude_model='ray_density'``) is the
         multi-valued generalisation: where the ray map FOLDS (``det J -> 0`` /
@@ -1870,27 +1889,37 @@ def apply_real_lens_traced(
     # amplitude, so it requires ``amplitude_model='ray_density'`` and the CPU
     # path.  The routing itself happens after the shared square-grid / dy / mirror
     # guards below (so it inherits them), via ``_multibranch``.
-    if caustic is not None and caustic not in ('single', 'multibranch'):
+    if caustic is not None and caustic not in ('single', 'multibranch',
+                                               'uniform'):
         raise ValueError(
-            "caustic must be None, 'single', or 'multibranch', got "
+            "caustic must be None, 'single', 'multibranch', or 'uniform', got "
             f"{caustic!r}.")
     _multibranch = (caustic == 'multibranch')
-    if _multibranch:
+    # ---- N16 (K4): opt-in UNIFORM (Airy) dark-side completion --------------
+    # ``caustic='uniform'`` runs the multibranch (bright side) and adds the
+    # Chester-Friedman-Ursell dark-side Airy tail so the traced field is
+    # diffraction-correct THROUGH a fold caustic; it shares the multibranch's
+    # ray_density / CPU / output_plane_distance requirements (routed via
+    # ``_uniform``).
+    _uniform = (caustic == 'uniform')
+    _mb_family = _multibranch or _uniform
+    if _mb_family:
+        _mode_name = 'multibranch' if _multibranch else 'uniform'
         if not _ray_density:
             raise ValueError(
-                "caustic='multibranch' requires amplitude_model='ray_density' "
+                f"caustic={_mode_name!r} requires amplitude_model='ray_density' "
                 "(it is the multi-valued generalisation of the ray-density "
                 f"amplitude); got amplitude_model={amplitude_model!r}.")
         if use_gpu or amp_use_gpu:
             raise ValueError(
-                "caustic='multibranch' requires the CPU path "
+                f"caustic={_mode_name!r} requires the CPU path "
                 "(use_gpu=amp_use_gpu=False): it reuses the CPU ray-trace "
                 "branch-finder + analytic det-Q KMAH counter.")
-    if float(output_plane_distance) != 0.0 and not _multibranch:
+    if float(output_plane_distance) != 0.0 and not _mb_family:
         raise ValueError(
-            "output_plane_distance is only honoured by caustic='multibranch' "
-            "(the single-branch / screen paths output at the exit vertex); got "
-            f"output_plane_distance={output_plane_distance!r} with "
+            "output_plane_distance is only honoured by caustic='multibranch' / "
+            "'uniform' (the single-branch / screen paths output at the exit "
+            f"vertex); got output_plane_distance={output_plane_distance!r} with "
             f"caustic={caustic!r}.")
     if _ray_density:
         if return_screen:
@@ -2036,10 +2065,8 @@ def apply_real_lens_traced(
     # at ``output_plane_distance`` past the exit vertex.  Bypasses the Newton
     # OPL machinery entirely (a ray-native construction; no phase unwrap, so
     # the ``on_undersample`` OPD-sampling check does not apply).
-    if _multibranch:
-        from ._lens_traced_multibranch import (
-            apply_real_lens_traced_multibranch,
-        )
+    if _mb_family:
+        _mode_name = 'multibranch' if _multibranch else 'uniform'
         # ``carrier`` -> ``input_carrier``: the multibranch launch is one
         # tilted congruence taking a transverse carrier wavevector (rad/m) or
         # 'auto'; the traced None/'auto' vocabulary maps directly.  A scalar
@@ -2051,21 +2078,41 @@ def apply_real_lens_traced(
             _input_carrier = 'auto'
         else:
             raise ValueError(
-                "caustic='multibranch' supports carrier=None or "
+                f"caustic={_mode_name!r} supports carrier=None or "
                 "carrier='auto' only (the launch is one tilted congruence); "
                 f"got carrier={carrier!r}.  Use the single-branch ray_density "
                 "path for a scalar-conjugate / explicit-wavefront carrier.")
-        _mb = np.asarray(apply_real_lens_traced_multibranch(
-            E_in,
-            prescription=prescription,
-            wavelength=wavelength,
-            dx=dx,
-            output_plane_distance=float(output_plane_distance),
-            ray_subsample=int(caustic_ray_subsample),
-            min_area_ratio=float(caustic_min_area_ratio),
-            caustic_band=caustic_band,
-            input_carrier=_input_carrier,
-        ))
+        if _uniform:
+            # N16 (K4): multibranch bright side + CFU uniform Airy dark tail
+            # (rotationally-symmetric fold ring; falls back to plain
+            # multibranch for cusp / non-symmetric / non-fold cases).
+            from ._lens_traced_uniform import apply_real_lens_traced_uniform
+            _mb = np.asarray(apply_real_lens_traced_uniform(
+                E_in,
+                prescription=prescription,
+                wavelength=wavelength,
+                dx=dx,
+                output_plane_distance=float(output_plane_distance),
+                ray_subsample=int(caustic_ray_subsample),
+                min_area_ratio=float(caustic_min_area_ratio),
+                caustic_band=caustic_band,
+                input_carrier=_input_carrier,
+            ))
+        else:
+            from ._lens_traced_multibranch import (
+                apply_real_lens_traced_multibranch,
+            )
+            _mb = np.asarray(apply_real_lens_traced_multibranch(
+                E_in,
+                prescription=prescription,
+                wavelength=wavelength,
+                dx=dx,
+                output_plane_distance=float(output_plane_distance),
+                ray_subsample=int(caustic_ray_subsample),
+                min_area_ratio=float(caustic_min_area_ratio),
+                caustic_band=caustic_band,
+                input_carrier=_input_carrier,
+            ))
         _target_cdtype = (E_in.dtype if np.iscomplexobj(E_in)
                           else np.complex128)
         if _mb.dtype != _target_cdtype:

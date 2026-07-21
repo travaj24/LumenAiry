@@ -956,6 +956,33 @@ def _select_poly_order_auto(u1, u2, u3, u4, opd, *, order_min, order_max,
     return order_max, res_by_p[order_max]
 
 
+def _fold_airy_eval(k, A, zeta, a0, a1):
+    """Evaluate the Chester-Friedman-Ursell fold-Airy uniform form given the
+    mapped mean phase ``A``, the fold parameter ``zeta`` and the two CFU
+    amplitude coefficients ``a0, a1``::
+
+        I = e^{ikA} 2pi [ a0 k^{-1/3} Ai(-k^{2/3} zeta)
+                          - i a1 k^{-2/3} Ai'(-k^{2/3} zeta) ]
+
+    This is the closing expression of :func:`uniform_fold_airy` (which computes
+    ``A, zeta, a0, a1`` from the two coalescing real saddles), factored out so
+    the DARK side of a fold can be reached by analytic continuation: ``zeta`` may
+    be **negative** (no real saddles -- the coalesced rays have become a
+    complex-conjugate pair), whereupon the Airy argument ``-k^{2/3} zeta`` is
+    POSITIVE and ``Ai``/``Ai'`` give the exponentially-decaying dark-side tail
+    (the missing evanescent diffraction the pure geometric multibranch sum drops
+    at ``zeta = 0``).  ``a0, a1`` are the SMOOTH (real-analytic through the
+    caustic) coefficients, so the traced ``caustic='uniform'`` completion fits
+    them on the BRIGHT side (``zeta > 0``) and evaluates HERE at ``zeta < 0`` --
+    reusing this one CFU kernel for both sides.  ``A``/``zeta``/``a0``/``a1`` may
+    be scalars or broadcastable arrays.  Convention ``exp(-i w t)`` /
+    ``exp(+i k f)`` (matches the rest of the library)."""
+    from scipy.special import airy
+    ai, aip, _, _ = airy(-(k ** (2.0 / 3.0)) * zeta)
+    return np.exp(1j * k * A) * 2 * np.pi * (
+        a0 * k ** (-1.0 / 3.0) * ai - 1j * a1 * k ** (-2.0 / 3.0) * aip)
+
+
 def uniform_fold_airy(k, t1, t2, f1, f2, fpp1, fpp2, g1=1.0, g2=1.0):
     """Uniform (Chester-Friedman-Ursell) value of the oscillatory integral
     ``I(k) = int g(t) exp(i k f(t)) dt`` near a **FOLD** caustic -- where two
@@ -997,7 +1024,6 @@ def uniform_fold_airy(k, t1, t2, f1, f2, fpp1, fpp2, g1=1.0, g2=1.0):
     -------
     complex -- the uniform integral value.
     """
-    from scipy.special import airy
     if f2 < f1:                        # sort so saddle 2 has the higher phase
         t1, t2, f1, f2, fpp1, fpp2, g1, g2 = t2, t1, f2, f1, fpp2, fpp1, g2, g1
     A = 0.5 * (f1 + f2)
@@ -1007,9 +1033,9 @@ def uniform_fold_airy(k, t1, t2, f1, f2, fpp1, fpp2, g1=1.0, g2=1.0):
     ep, em = np.exp(1j * np.pi / 4), np.exp(-1j * np.pi / 4)
     a0 = 0.5 * (ep * b2 + em * b1) * zeta ** 0.25
     a1 = -0.5 * (ep * b2 - em * b1) * zeta ** (-0.25)
-    ai, aip, _, _ = airy(-(k ** (2.0 / 3.0)) * zeta)
-    return np.exp(1j * k * A) * 2 * np.pi * (
-        a0 * k ** (-1.0 / 3.0) * ai - 1j * a1 * k ** (-2.0 / 3.0) * aip)
+    # The closing CFU expression is shared with the dark-side continuation via
+    # ``_fold_airy_eval`` (byte-identical to the former inline evaluation).
+    return _fold_airy_eval(k, A, zeta, a0, a1)
 
 
 def pearcey(x, y, *, mmax=60, pmax=60, tol=1e-16):

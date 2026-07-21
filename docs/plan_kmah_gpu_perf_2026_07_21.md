@@ -119,6 +119,24 @@ Method rules (binding, inherited from the accuracy-niches campaign):
 
 Added at user request after K1 exposed the honest limit ("please fold it in").
 
+**STATUS: DONE (K4, 2026-07-21).** Shipped as opt-in
+`apply_real_lens_traced(amplitude_model='ray_density', caustic='uniform')`.
+Meridional-ray-traces the fold (`r_c`, `zeta = kappa (r_c - r)`, mean phase),
+fits the two smooth CFU coefficients to the multibranch BRIGHT field just inside
+`r_c` using the exact `lenses_maslov._fold_airy_eval` kernel (into which
+`uniform_fold_airy` was refactored -- byte-identical), and continues the SAME
+kernel to `zeta < 0` for the dark tail. **Measured (vs `caustic_fold_ref`,
+N=768): windowed r2m -14.8% -> -1.9%, EE50 +0.9%, EE80 +3.4%, energy 0.80 ->
+0.96**; dark-tail decay `kappa` within ~12% of ray geometry (`Ai(+)` scaling);
+bright side byte-identical to multibranch; finite through the caustic. Scope: a
+rotationally-symmetric SINGLE fold RING; a cusp (`n_turn > 1` -> Pearcey regime),
+decenter/tilt, non-rot-sym input, carrier tilt, no-fold plane, or an
+under-resolved Airy scale are DETECTED and fall back to the plain multibranch
+(finite, warned). Code: `lumenairy/elements/_lens_traced_uniform.py`; tests:
+`tests/unit/test_niche_k4_uniform_caustic.py` (11 cases, oracle-backed, no
+Zemax); doc: `docs/audit_real_lens_displaced_2026_07_19.md` (K4 section). Complex
+saddle / full Pearcey cusp mapping deferred (documented detect+fallback).
+
 - **Current state (K1):** the multibranch KMAH ray-density is a purely GEOMETRIC
   sum, so it is identically ZERO on the DARK side of a fold (no real ray
   branches) and misses the exponentially-decaying Airy tail (fold-truth r2m
@@ -158,7 +176,7 @@ Added at user request after K1 exposed the honest limit ("please fold it in").
 | K1 | N13 multibranch KMAH ray-density caustic sum | — |
 | K2 | N14 CuPy + JAX carrier-ASM backends | — |
 | K3 | N15 perf / memory sweep | K1, K2 (so it profiles the final code) |
-| K4 | N16 uniform Airy/Pearcey dark-side completion | K1 |
+| K4 | N16 uniform Airy/Pearcey dark-side completion (DONE 2026-07-21) | K1 |
 
 Sequential single-writer Opus agents; each phase = implementer → adversarial
 verifier → (on kills) fixer → re-verify, max two rounds; unresolved kills are
