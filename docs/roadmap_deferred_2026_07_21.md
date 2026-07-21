@@ -236,6 +236,32 @@ cache ships.
 
 ---
 
+## Part D — traced-carrier-chain audit remediation (F1–F4)
+
+Added after the roadmap campaign surfaced
+`docs/audits/AUDIT_TRACED_CARRIER_CHAIN_2026_07_21.md` — traced-group fidelity on
+the design-121 carrier chain.  **F1+F2 are jointly the last blocker to a
+real-surface production traced model for corrected relays** (with them fixed, the
+carrier-referenced chain hits Zemax-class fidelity at N=2048 in <1 min, ~300×
+cheaper than fixed-grid).  Repro is local-only (needs the 121 `.zmx`), so
+remediation *unit* tests must be self-contained/synthetic.
+
+- **R6 / F1 (P1):** `carrier='auto'` does not engage on a clean spherical input
+  (auto-fit → ~∞ → silent no-carrier), so the full chain runs as if H6 never
+  landed.  Fix the auto-fit to recover a spherical R (unwrapped radial phase /
+  Husimi mean-slope).  Gate: `'auto'` == explicit R on the repro (r⁴ 0.588 →
+  0.005).
+- **R7 / F2 (P1) — the flagship:** thick groups leave a smooth exit-curvature
+  (defocus) error even with the correct explicit carrier; the intra-group
+  reference through the glass still assumes near-collimated, so error ~
+  thickness × curvature (triplets worst, windows exact), accumulating to ~6.8 rad
+  → Strehl ≈ 0.  Carrier-reference the intra-group propagation; "windows stay
+  exact" is the guard.  Gate: per-group rms < 0.1 rad on all 8 groups AND
+  end-to-end EE6 ≥ 99% at ~2.9 µm.
+- **R8 / F3 (P2) + F4 (P3):** guard/fix `tilt_aware_rays` on steep carriers;
+  ship the F4 ergonomics — a chain-orchestrator API (element supplies R_out) and
+  packaged near-focus landing.
+
 ## Suggested sequencing
 
 1. **P0** — `ByteBudgetedLRU` cache contract (§0).  Small, unblocks all of Part B
