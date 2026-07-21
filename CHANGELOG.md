@@ -4,6 +4,13 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.27.0] — 2026-07-21
+
+Deferred-items campaign after v5.26.0 (niches N13–N16): multibranch KMAH caustic
+sum for traced ray-density and its uniform-Airy dark-side completion (traced
+diffraction-correct through folds), CuPy + JAX backends for the carrier ASM, and
+a measured perf/memory sweep.  All new API is opt-in; defaults byte-identical.
+
 ### Added
 
 - **Multibranch KMAH / Maslov caustic amplitude for the traced ray-density mode
@@ -51,6 +58,34 @@ All notable changes to the core library are documented here.
     axial point focus) multibranch over-amplifies ~2-3x (the D5 caustic
     pile-up) — finite but not the decentered-PSF EE model (`apply_real_lens_gbd`
     remains that reference, N10b).
+
+- **Uniform Airy dark-side completion — traced diffraction-correct THROUGH a
+  fold (niche N16 / K4).**  New opt-in `apply_real_lens_traced(amplitude_model=
+  'ray_density', caustic='uniform')` (and the public
+  `apply_real_lens_traced_uniform`) keeps the K1 multibranch bright side and
+  fills the DARK side of a fold with the Chester-Friedman-Ursell uniform Airy
+  tail, so the traced field is diffraction-correct through the fold.  Closes
+  K1's dark-side gap: vs the lumenairy-free direct-Rayleigh-Sommerfeld
+  `caustic_fold_ref`, windowed r2m **-14.8% / energy 0.80** (multibranch) →
+  **-1.9% / 0.96** (uniform); the dark tail is the genuine `Ai(+)` exponential
+  (fitted decay matches the ray geometry to ~1.7%).  Reuses the validated
+  `uniform_fold_airy` through a shared `_fold_airy_eval` kernel (byte-identical,
+  ~1e-13 vs the exact cubic-phase Airy integral).  Default
+  (`caustic=None`/`'single'`/`'multibranch'`) byte-identical.  Envelope
+  (documented): the far tail beyond ~2× the caustic radius is aperture-edge
+  diffraction a pure fold-Airy underestimates (~2%); non-rotationally-symmetric /
+  decentered / cusp folds are detected and fall back to multibranch (GBD/FGA
+  remain the references there).  Tests: `test_niche_k4_uniform_caustic.py`.
+- **CuPy + JAX backends for the carrier-referenced ASM (niche N14 / K2).**  The
+  astigmatic / apertured Sziklas-Siegman pilot-beam propagator
+  (`propagate_carrier_referenced`, `carrier_referenced_aperture`) now runs on
+  CuPy and JAX alongside NumPy via one backend-parametrized code path.
+  JAX-vs-NumPy parity ~5e-16 on scalar-diverging / astigmatic / focus-crossing /
+  apertured legs; the isotropic `(R, R)` case reduces to the scalar path exactly;
+  no dtype upcast (complex64 preserved); the field is differentiable through a
+  carrier leg under JAX.  The NumPy default is byte-identical.  CuPy/JAX are
+  import-guarded (no hard dependency).  Tests:
+  `test_niche_k2_carrier_backends.py`.
 
 ### Performance
 
