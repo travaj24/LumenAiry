@@ -1441,6 +1441,11 @@ def apply_real_lens_traced(
     sag_chunk_rows: Optional[int] = None,
     return_screen: bool = False,
     amplitude_model: str = 'screen',
+    caustic: Optional[str] = None,
+    output_plane_distance: float = 0.0,
+    caustic_ray_subsample: int = 2,
+    caustic_band: str = 'ludwig',
+    caustic_min_area_ratio: float = 1e-6,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -1778,6 +1783,59 @@ def apply_real_lens_traced(
 
           Requires ``inversion_method='newton'`` and the CPU path
           (``use_gpu=False``); incompatible with ``return_screen=True``.
+    caustic : {None, 'single', 'multibranch'}, default None
+        Opt-in MULTIBRANCH (KMAH / Maslov) refinement of the ``ray_density``
+        amplitude (niche N13 / K1).  ``None`` / ``'single'`` (default) is the
+        single-branch behaviour above -- BYTE-IDENTICAL to prior releases.
+
+        ``'multibranch'`` (requires ``amplitude_model='ray_density'``) is the
+        multi-valued generalisation: where the ray map FOLDS (``det J -> 0`` /
+        sign change) it gathers ALL real ray branches reaching each output
+        pixel, weights each ``|E_in(x_in^b)| / sqrt(|det J_b|)``, applies the
+        Maslov phase ``exp(-i (pi/2) KMAH_b)`` (``KMAH_b`` = the number of
+        ``det J`` sign changes -- astigmatic focal-line crossings -- along that
+        branch's ray, counted ANALYTICALLY from the exact quadratic
+        ``det Q(z)``), and SUMS COHERENTLY.  It reuses the existing
+        :func:`apply_real_lens_traced_multibranch` branch-finder + det-Q KMAH
+        counter (Ludwig uniform-Airy swap in the Kravtsov-Orlov caustic band),
+        so the field is FINITE at the fold (never inf/nan / no ``sqrt``-blowup)
+        and the sqrt-singularity resolves into the finite fold-diffraction
+        profile.  Output is taken at ``output_plane_distance`` past the exit
+        vertex, so a through-focus caustic plane is reached DIRECTLY (no
+        separate ASM step).
+
+        Scope / honest caveat.  The multibranch field is a GEOMETRIC (ART)
+        construction: on the DARK side of a fold no real ray branches exist, so
+        it carries no evanescent diffraction tail there.  On a fine, wave-
+        resolved grid the single-branch ray-density exit field ASM-propagated
+        to the fold plane (a genuine wave propagation) is therefore MORE
+        accurate for the full caustic-ring r2m/EE than the pure multibranch
+        sum; keep :func:`apply_real_lens_gbd` / :func:`apply_real_lens_fga` (or
+        single-branch ``ray_density`` + ASM) as the quantitative caustic
+        reference.  Multibranch is the tool when you need the coherent
+        multi-arrival field / KMAH branch decomposition AT the caustic plane in
+        one call (finite, no blow-up) rather than an aliasing-sensitive wave
+        propagation.  See ``docs/plan_kmah_gpu_perf_2026_07_21.md`` (N13) and
+        ``tests/unit/test_niche_k1_kmah_caustic.py`` for the measured envelope.
+    output_plane_distance : float, default 0.0
+        Observation-plane distance [m] past the last surface's exit vertex,
+        honoured ONLY by ``caustic='multibranch'`` (the single-branch / screen
+        paths always output at the exit vertex; a non-zero value with any other
+        mode raises).  ``0.0`` = the exit vertex.
+    caustic_ray_subsample : int, default 2
+        ``caustic='multibranch'`` launch-grid spacing in units of ``dx`` (one
+        ray per ``caustic_ray_subsample`` pixels); smaller = denser ray
+        branches = finer caustic resolution.  Distinct from ``ray_subsample``
+        (the Newton-inversion coarse grid), which is unused on the multibranch
+        path.
+    caustic_band : {'ludwig', 'plain'}, default 'ludwig'
+        ``caustic='multibranch'`` fold-caustic band model: ``'ludwig'`` swaps a
+        coalescing branch pair in the Kravtsov-Orlov band for the uniform
+        Airy-fold field (finite at the fold); ``'plain'`` keeps the raw branch
+        sum (diverges toward the fold).
+    caustic_min_area_ratio : float, default 1e-6
+        ``caustic='multibranch'`` degenerate-triangle skip threshold (mapped /
+        launch area) -- the caustic set where ART is undefined.
 
     Returns
     -------
@@ -1804,6 +1862,36 @@ def apply_real_lens_traced(
             f"{amplitude_model!r}.")
     _ray_density = (amplitude_model == 'ray_density')
     _rd_fold_detected = [False]
+    # ---- N13 (K1): opt-in MULTIBRANCH (KMAH/Maslov) caustic refinement ----
+    # ``caustic=None``/'single' (default) is byte-identical to prior releases.
+    # ``'multibranch'`` routes the whole call to the existing
+    # ``apply_real_lens_traced_multibranch`` (branch-finder + det-Q KMAH
+    # counter); it is the multi-valued generalisation of the ray-density
+    # amplitude, so it requires ``amplitude_model='ray_density'`` and the CPU
+    # path.  The routing itself happens after the shared square-grid / dy / mirror
+    # guards below (so it inherits them), via ``_multibranch``.
+    if caustic is not None and caustic not in ('single', 'multibranch'):
+        raise ValueError(
+            "caustic must be None, 'single', or 'multibranch', got "
+            f"{caustic!r}.")
+    _multibranch = (caustic == 'multibranch')
+    if _multibranch:
+        if not _ray_density:
+            raise ValueError(
+                "caustic='multibranch' requires amplitude_model='ray_density' "
+                "(it is the multi-valued generalisation of the ray-density "
+                f"amplitude); got amplitude_model={amplitude_model!r}.")
+        if use_gpu or amp_use_gpu:
+            raise ValueError(
+                "caustic='multibranch' requires the CPU path "
+                "(use_gpu=amp_use_gpu=False): it reuses the CPU ray-trace "
+                "branch-finder + analytic det-Q KMAH counter.")
+    if float(output_plane_distance) != 0.0 and not _multibranch:
+        raise ValueError(
+            "output_plane_distance is only honoured by caustic='multibranch' "
+            "(the single-branch / screen paths output at the exit vertex); got "
+            f"output_plane_distance={output_plane_distance!r} with "
+            f"caustic={caustic!r}.")
     if _ray_density:
         if return_screen:
             raise ValueError(
@@ -1939,6 +2027,51 @@ def apply_real_lens_traced(
             "apply_real_lens_traced currently requires square pixels "
             f"(dx == dy); got dx={dx!r}, dy={dy!r}.  Use apply_real_lens "
             "for anamorphic grids.")
+
+    # ---- N13 (K1): dispatch the MULTIBRANCH (KMAH/Maslov) caustic sum ------
+    # Route the whole call to the existing multibranch branch-finder (REUSE,
+    # do not reimplement).  It gathers all real ray branches per output pixel,
+    # weights each ``|E_in| / sqrt(|det J|)``, applies ``exp(-i (pi/2) KMAH)``,
+    # and sums coherently -- finite at the fold (Ludwig uniform-Airy), output
+    # at ``output_plane_distance`` past the exit vertex.  Bypasses the Newton
+    # OPL machinery entirely (a ray-native construction; no phase unwrap, so
+    # the ``on_undersample`` OPD-sampling check does not apply).
+    if _multibranch:
+        from ._lens_traced_multibranch import (
+            apply_real_lens_traced_multibranch,
+        )
+        # ``carrier`` -> ``input_carrier``: the multibranch launch is one
+        # tilted congruence taking a transverse carrier wavevector (rad/m) or
+        # 'auto'; the traced None/'auto' vocabulary maps directly.  A scalar
+        # conjugate / explicit-wavefront carrier is not representable as a
+        # single launch tilt here.
+        if carrier is None:
+            _input_carrier = None
+        elif isinstance(carrier, str) and carrier == 'auto':
+            _input_carrier = 'auto'
+        else:
+            raise ValueError(
+                "caustic='multibranch' supports carrier=None or "
+                "carrier='auto' only (the launch is one tilted congruence); "
+                f"got carrier={carrier!r}.  Use the single-branch ray_density "
+                "path for a scalar-conjugate / explicit-wavefront carrier.")
+        _mb = np.asarray(apply_real_lens_traced_multibranch(
+            E_in,
+            prescription=prescription,
+            wavelength=wavelength,
+            dx=dx,
+            output_plane_distance=float(output_plane_distance),
+            ray_subsample=int(caustic_ray_subsample),
+            min_area_ratio=float(caustic_min_area_ratio),
+            caustic_band=caustic_band,
+            input_carrier=_input_carrier,
+        ))
+        _target_cdtype = (E_in.dtype if np.iscomplexobj(E_in)
+                          else np.complex128)
+        if _mb.dtype != _target_cdtype:
+            _mb = _mb.astype(_target_cdtype)
+        call_progress(progress, 'real_lens_traced', 1.0, 'done')
+        return _mb
 
     aperture = lens_prescription.get('aperture_diameter')
     thicknesses = lens_prescription['thicknesses']
@@ -3284,6 +3417,12 @@ def apply_real_lens_traced(
             return None
         return m
 
+    # K3 (N15 perf): the ray-density upsample below reuses the OPL upsample's
+    # coarse->full (2, N, N) coordinate stack when their coarse resolutions
+    # match (they always do -- both are ``X[::sub, ::sub]``).  Stashed here as
+    # ``(_coords, Ns)`` by the OPL sub>1 branch; ``None`` means build a fresh
+    # one.  Bounded to this call (freed after the ray-density upsample); no cache.
+    _rd_upsample_coords = None
     # Dispatch the OPL inversion to Newton (default) or the experimental
     # backward-trace alternative.  Both produce a wave-grid OPL map
     # with the same axis convention (on-axis referenced to zero, NaN
@@ -3368,7 +3507,14 @@ def apply_real_lens_traced(
             nan_coarse = np.isnan(opl_coarse).astype(np.float64)
             nan_full = map_coordinates(
                 nan_coarse, _coords, order=1, mode='nearest')
-            del _coords
+            # K3 (N15 perf): hand the coordinate stack to the ray-density
+            # upsample (identical ``Ns``) rather than let it rebuild
+            # ``np.indices`` + a second (2, N, N) float64 array.  For the
+            # screen path (no ray-density), free it now exactly as before.
+            if _ray_density:
+                _rd_upsample_coords = (_coords, Ns)
+            else:
+                del _coords
             opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
             del nan_full
     elif _use_fit:
@@ -3402,14 +3548,23 @@ def apply_real_lens_traced(
             ard_coarse = _ray_density_amp_grid(Xs_rd, Ys_rd)
             from scipy.ndimage import map_coordinates as _mc_rd
             Ns_rd = ard_coarse.shape[0]
-            ii_rd, jj_rd = np.indices((N, N), dtype=np.float64)
-            _coords_rd = np.array([ii_rd * Ns_rd / N, jj_rd * Ns_rd / N])
-            del ii_rd, jj_rd
+            # K3 (N15 perf): reuse the OPL upsample's coordinate stack when it
+            # matches this coarse resolution (it always does -- same
+            # ``X[::sub, ::sub]`` grid, so ``ii*Ns/N`` / ``jj*Ns/N`` are the
+            # SAME float64 array bit-for-bit); otherwise build a fresh one.
+            if (_rd_upsample_coords is not None
+                    and _rd_upsample_coords[1] == Ns_rd):
+                _coords_rd = _rd_upsample_coords[0]
+            else:
+                ii_rd, jj_rd = np.indices((N, N), dtype=np.float64)
+                _coords_rd = np.array([ii_rd * Ns_rd / N, jj_rd * Ns_rd / N])
+                del ii_rd, jj_rd
             _a_rd = _mc_rd(np.where(np.isnan(ard_coarse), 0.0, ard_coarse),
                            _coords_rd, order=1, mode='nearest')
             _nan_rd = _mc_rd(np.isnan(ard_coarse).astype(np.float64),
                              _coords_rd, order=1, mode='nearest')
             del _coords_rd
+            _rd_upsample_coords = None
             ard_map = np.where(_nan_rd > 0.5, np.nan, _a_rd)
         else:
             ard_map = _ray_density_amp_grid(X, Y)

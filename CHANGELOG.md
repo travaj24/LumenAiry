@@ -4,6 +4,99 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Multibranch KMAH / Maslov caustic amplitude for the traced ray-density mode
+  (niche N13 / K1).**  New opt-in `apply_real_lens_traced(amplitude_model=
+  'ray_density', caustic='multibranch', output_plane_distance=d)` connects the
+  ray-density amplitude to the EXISTING `apply_real_lens_traced_multibranch`
+  branch-finder + analytic det-Q KMAH counter (reuse, not a reimplementation).
+  Where the ray map folds (`det J -> 0` / sign change) it gathers ALL real ray
+  branches per output pixel, weights each `|E_in(x_in^b)| / sqrt(|det J_b|)`,
+  applies the Maslov phase `exp(-i (pi/2) KMAH_b)`, and sums COHERENTLY, with
+  the Ludwig uniform-Airy swap in the Kravtsov-Orlov band — so the field is
+  FINITE at the fold (the `sqrt`-singularity of single-branch ray density
+  resolves into the fold-diffraction profile; never inf/nan) and the output is
+  taken directly at `output_plane_distance` past the exit vertex (no separate
+  ASM step).  New knobs `caustic_ray_subsample` (launch density),
+  `caustic_band` (`'ludwig'`/`'plain'`), `caustic_min_area_ratio`.  Default
+  `caustic=None` is BYTE-IDENTICAL to prior releases.
+  - **Validated (lumenairy-free oracles, no Zemax):** the routing is
+    byte-identical to a direct `apply_real_lens_traced_multibranch` call
+    (`np.array_equal`).  **KMAH / Maslov correctness** is guarded at a GENUINE
+    two-branch region — the wave-resolved `caustic_fold_ref` fold RING, where
+    the bright-ring fringe position is set by the RELATIVE Maslov phase between
+    the two coalescing branches: the multibranch with the correct det-Q KMAH
+    reproduces the direct-RS reference bright ring (peak radius ~6.1 um,
+    radial-shape correlation ~0.95), while ZEROING or NEGATING the per-branch
+    KMAH index moves the ring out to ~14 um and drops the correlation to
+    ~0.55–0.64 (a wrong `+-pi/2` is decisively caught; the test monkeypatches
+    the counter to prove sensitivity), plus the `ludwig_fold` bright->dark unit
+    flip (>1e3x contrast).  A separate self-contained direct-Huygens match to
+    rel-L2 ~6% validates the branch AMPLITUDE + eikonal through the API at a
+    SINGLE-branch plane (`n_branch.max()==1`, KMAH uniformly 0 — it does not
+    exercise the Maslov index).  The single-branch limit reduces to the
+    ray-density field (<1% L2) and conserves energy <0.5%; the decenter
+    centroid tracks the geometric spot oracle to ~0.3%.
+    `tests/unit/test_niche_k1_kmah_caustic.py`.
+  - **HONEST residuals (pinned).**  On the fine, wave-resolved `caustic_fold_ref`
+    grid the pure GEOMETRIC multibranch does NOT beat the single-branch
+    ray-density exit field + ASM: it is identically zero on the DARK side of the
+    fold (no evanescent tail), so windowed r2m reads ~15% low and ~20% of the
+    caustic energy is missing, whereas single-branch+ASM (a genuine wave
+    propagation) already matches the reference to ~3%.  Single-branch
+    `ray_density` + ASM / `apply_real_lens_gbd` / `apply_real_lens_fga` remain
+    the quantitative caustic reference; multibranch is the finite, no-blow-up,
+    one-call coherent field AT the caustic.  At the paraxial image plane (an
+    axial point focus) multibranch over-amplifies ~2-3x (the D5 caustic
+    pile-up) — finite but not the decentered-PSF EE model (`apply_real_lens_gbd`
+    remains that reference, N10b).
+
+### Performance
+
+- **Perf / memory sweep across the accuracy-niche hot paths (niche N15 / K3).**
+  Profiled (cProfile + tracemalloc) the traced ray-density amplitude, the
+  displaced 2-D transverse-walk remap scatter, the GBD decenter path, the
+  astigmatic carrier ASM, the Seidel gate and adaptive FGA at representative
+  grids; applied the free (BYTE-IDENTICAL) wins only.  No default, cache, or
+  accuracy changed.
+  - **Displaced 2-D remap scatter (`displaced_mode='remap'`, and the DEFAULT
+    path for a decentered/tilted/freeform element): ~1.8x.**  The amplitude and
+    OPL remaps now share ONE Delaunay triangulation of the scattered exit points
+    via a single 2-column `LinearNDInterpolator`, instead of building two
+    triangulations + two full-grid queries.  The barycentric weights depend only
+    on the points (identical for both quantities), so each column reproduces the
+    former separate 1-column interp BIT-FOR-BIT (`np.array_equal`).  Measured at
+    N=1024: 1171 ms -> 659 ms (**1.78x**), peak memory unchanged (115 MB; the
+    per-column results are strided views into one `(Ny, Nx, 2)` array — no dense
+    copy). Guarded by `tests/unit/test_niche_k3_perf.py` (byte-identity vs the
+    pre-K3 two-interp algorithm reconstructed inline as the oracle + an in-test
+    speedup measurement).
+  - **Traced ray-density amplitude upsample: redundant per-call allocation
+    removed.**  On the sub>1 path the ray-density amplitude upsample now REUSES
+    the OPL upsample's coarse->full `(2, N, N)` coordinate stack (identical by
+    construction — same `X[::sub, ::sub]` grid) instead of rebuilding
+    `np.indices` + a second `(2, N, N)` float64 array.  Byte-identical
+    (`np.array_equal` vs the pre-change field at N=512/1024 and sub=1).  The
+    plan's hypothesised "double-trace" is REFUTED by measurement: the forward
+    ray trace + Chebyshev entrance->exit fit is already SHARED between the OPL
+    and the ray-density amplitude (the expensive part is not duplicated); only
+    the cheap coarse Newton INVERSE runs twice (~0.007 s at the default sub=8,
+    ~1% at sub=1), so it is left as-is rather than risk a masked/parallel
+    byte-identity break.  The ray-density call's peak is set by the analytic ASM
+    amplitude leg (needed for the exit phase), not the upsample.
+  - **No free byte-identical win (profiled, reported honestly):** the pointwise
+    2-D obliquity is Delaunay-query-bound (the ray trace is already fully
+    vectorised and the scatter already runs on a bounded coarse grid + bilinear
+    upsample — the existing 5.8x coarse-grid win); the astigmatic carrier ASM is
+    1-D-FFT-bound (the Sziklas-Siegman focus-crossing bridge's FFT count is
+    intrinsic); the GBD decenter overhead is negligible (~0.007 s field-frame
+    ray transfer) with the cost in the standard windowed beamlet reconstruction
+    (unchanged by decenter); the Seidel gate is already trivial (~14 ms at
+    N=512); adaptive FGA is bound by the pre-existing dual-number analytic
+    ray-transfer arithmetic (`raytrace/differential.py`), outside this phase's
+    byte-identical-free-win scope.
+
 ## [5.26.0] — 2026-07-20
 
 Accuracy-niches campaign (niches N1–N12): closes every documented real-lens /
