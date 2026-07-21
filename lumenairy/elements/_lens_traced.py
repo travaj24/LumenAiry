@@ -508,6 +508,47 @@ def _get_array_module(arr):
     return np
 
 
+def _solve_lstsq_thread_safe(A, b):
+    """Least-squares solve ``A @ x ~= b`` (overdetermined, single or multi RHS)
+    via the NORMAL EQUATIONS -- ``G x = A^T b`` with ``G = A^T A`` -- Cholesky
+    then LU, falling back to ``np.linalg.lstsq`` only if ``G`` is not positive-
+    definite (a genuinely rank-deficient design matrix).
+
+    B7 (jax x OpenBLAS mitigation): the traced Chebyshev/coordinate fits used
+    ``np.linalg.lstsq`` (LAPACK ``gelsd``, a divide-and-conquer SVD).  In one
+    process alongside JAX, ``gelsd``'s multi-threaded OpenBLAS OpenMP pool nests
+    inside JAX's OpenMP runtime and DEADLOCKS on the first large fit -- the CI
+    worked around it with ``OMP_NUM_THREADS=1`` pins that cannot be relied on
+    outside CI.  The normal equations reduce the factorisation to the tiny
+    ``M x M`` Gram matrix (``M`` = number of fit terms, ~28-70), which stays
+    below OpenBLAS's threading threshold and never takes the ``gelsd`` SVD path,
+    so the deadlock cannot recur.  ``A`` here is a well-conditioned normalised
+    tensor-Chebyshev / monomial Vandermonde (~1.5x oversampled), so squaring the
+    condition number in ``G`` is safe and the solution matches ``lstsq`` to
+    ~1e-12 relative (the M-P5 precedent, ``lenses_maslov._solve_fit``, measured
+    2.6e-15).  The ``lstsq`` fallback runs only for the rare rank-deficient case
+    that Cholesky AND LU both reject -- a path the well-conditioned traced fits
+    never reach in practice.
+
+    Returns ``x`` with the same trailing shape as ``b`` (1-D for a single RHS).
+    """
+    A = np.ascontiguousarray(A, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+    G = A.T @ A
+    rhs = A.T @ b
+    try:
+        from scipy.linalg import cho_factor, cho_solve
+        return cho_solve(cho_factor(G, check_finite=False), rhs,
+                         check_finite=False)
+    except (ImportError, ValueError, np.linalg.LinAlgError):
+        # scipy absent, or G not positive-definite (rank-deficient fit).
+        try:
+            return np.linalg.solve(G, rhs)
+        except np.linalg.LinAlgError:
+            x, *_ = np.linalg.lstsq(A, b, rcond=None)
+            return x
+
+
 class _Cheb2DEvaluator:
     """2-D Chebyshev tensor-product polynomial fit with an API compatible
     with a SciPy ``RectBivariateSpline`` for the subset used by
@@ -612,7 +653,9 @@ class _Cheb2DEvaluator:
         else:
             A = A_full[finite, :]
             rhs = vals_flat[finite]
-        c_np, *_ = np.linalg.lstsq(A, rhs, rcond=None)
+        # B7: normal-equations solve (thread-safe; never takes gelsd's SVD path
+        # that deadlocks against JAX's OpenMP runtime in a shared process).
+        c_np = _solve_lstsq_thread_safe(A, rhs)
         # Push coefficients + index arrays onto the target backend
         self.coeffs = xp.asarray(c_np, dtype=xp.float64)
         self._K1 = xp.asarray(K1_np, dtype=xp.int64)
@@ -1013,7 +1056,8 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
         w = np.concatenate([wL, wM])
         A = A * w[:, None]
         rhs = rhs * w
-        coef, *_ = np.linalg.lstsq(A, rhs, rcond=None)
+        # B7: normal-equations solve (thread-safe; no gelsd/JAX-OpenMP deadlock).
+        coef = _solve_lstsq_thread_safe(A, rhs)
 
         def _poly_and_grad(xq, yq):
             Wq = np.zeros_like(xq, dtype=np.float64)
@@ -2897,7 +2941,8 @@ def apply_real_lens_traced(
             return Vx[:, _terms[:, 0]] * Vy[:, _terms[:, 1]]   # (K, M)
 
         _Afit = _fit_design((_xo_s - _fx_c) / _fx_h, (_yo_s - _fy_c) / _fy_h)
-        _fit_coef, *_ = np.linalg.lstsq(_Afit, _op_s, rcond=None)
+        # B7: normal-equations solve (thread-safe; no gelsd/JAX-OpenMP deadlock).
+        _fit_coef = _solve_lstsq_thread_safe(_Afit, _op_s)
         # Domain: keep only exit pixels inside the convex hull of the ray
         # landing spots -- a vectorized half-plane test (A.x + b <= 0 for
         # every facet), far cheaper than a Delaunay simplex search over the

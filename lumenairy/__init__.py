@@ -147,15 +147,18 @@ from .elements.lenses import (
     apply_spherical_lens,
     apply_thin_lens,
     check_grid_vs_apertures,
+    clear_pointwise_cos_grid_cache,
     close_worker_pool,
     get_lens_parallel_amp,
     get_lens_sag_dtype,
+    get_pointwise_cos_grid_cache_budget,
     lens_sag_float32_opd_error,
     prepare_real_lens,
     prepare_real_lens_traced,
     recommend_grid_for_prescription,
     set_lens_parallel_amp,
     set_lens_sag_dtype,
+    set_pointwise_cos_grid_cache_budget,
     surface_sag_biconic,
     surface_sag_general,
 )
@@ -400,6 +403,18 @@ from .analysis.through_focus import (
     through_focus_scan_jax,
     tolerancing_report,
     tolerancing_sweep,
+)
+
+# -- Shared byte-budgeted LRU cache infrastructure (roadmap P0) ------------
+# The memory-safety foundation for every N^2-scale perf cache: a single
+# collective byte ceiling (LUMENAIRY_CACHE_BUDGET_MB / set_cache_budget),
+# LRU eviction within AND across caches, registry-drained by
+# ``clear_asm_caches``, and introspectable via ``cache_report``.
+from .cache import (
+    ByteBudgetedLRU,
+    cache_report,
+    get_cache_budget,
+    set_cache_budget,
 )
 
 # â”€â”€ Thin-film coatings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1132,6 +1147,9 @@ __all__ = [
     'get_lens_parallel_amp',
     'set_lens_sag_dtype',
     'get_lens_sag_dtype',
+    'set_pointwise_cos_grid_cache_budget',
+    'get_pointwise_cos_grid_cache_budget',
+    'clear_pointwise_cos_grid_cache',
     'lens_sag_float32_opd_error',
     'apply_real_lens_traced',
     'apply_real_lens_traced_multi',
@@ -1909,6 +1927,11 @@ __all__ = [
     # v4.16.0 (ROADMAP #15): central cache-clearer registry.
     'register_cache_clearer',
     'list_registered_cache_clearers',
+    # roadmap P0: shared byte-budgeted LRU cache infrastructure.
+    'ByteBudgetedLRU',
+    'cache_report',
+    'get_cache_budget',
+    'set_cache_budget',
 
     # Memory-aware batching
     'available_memory_bytes',

@@ -1227,6 +1227,9 @@ def reconstruct_field_from_beamlets(
     ``chunk_beamlets`` is auto-reduced.  This prevents the multi-GB peaks the
     fixed ``chunk_beamlets=2048`` hit at large ``N`` (13 GB at N=256) without
     changing small-``N`` results (the budget only bites when a chunk is large).
+    The same budget caps the windowed (``window``) path's per-tile beamlet
+    stack (B3); the ``LUMENAIRY_MEM_BUDGET_MB`` environment variable, if set, is
+    a HARD CEILING on it for a memory-constrained host.
     """
     xp = array_namespace(beamlets.positions)
     cx, cy = centre
@@ -1388,6 +1391,44 @@ def reconstruct_field_from_beamlets(
     return out
 
 
+def _env_mem_budget_mb():
+    """Read the ``LUMENAIRY_MEM_BUDGET_MB`` environment override (or ``None`` when
+    unset / invalid) -- the GBD sibling of
+    :func:`lumenairy.propagators.fga._env_mem_budget_mb`.  A positive value acts
+    as a HARD CEILING on the windowed-reconstruct per-chunk memory budget so a
+    memory-constrained / shared host can force smaller accumulation tiles than a
+    caller's ``mem_budget_mb`` requested, honoring the same env knob FGA's chunk
+    loop respects.  A non-positive / unparseable value is ignored with a one-line
+    warning so a typo does not silently disable the guard."""
+    import os
+    raw = os.environ.get('LUMENAIRY_MEM_BUDGET_MB')
+    if raw is None or str(raw).strip() == '':
+        return None
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        warnings.warn(
+            f"LUMENAIRY_MEM_BUDGET_MB={raw!r} is not a number; ignoring it for "
+            "the GBD windowed-reconstruct budget.",
+            RuntimeWarning, stacklevel=2)
+        return None
+    if not (val > 0.0):
+        warnings.warn(
+            f"LUMENAIRY_MEM_BUDGET_MB={raw!r} is not positive; ignoring it.",
+            RuntimeWarning, stacklevel=2)
+        return None
+    return val
+
+
+# Peak simultaneous per-cell footprint of one windowed accumulation TILE
+# (a ``(n_g, by, bx)`` beamlet x window-box stack).  After the v5.28 in-place
+# masking (below) the coexisting big arrays are: ``contrib`` (complex128, 16 B),
+# ``idx`` (int64, 8 B), plus the transient ``valid`` / ``bad`` bool masks
+# (1 B each, freed before the bincount) -- ~26 B/cell.  32 B/cell is the
+# chunk-sizing estimate with margin, so peak stays UNDER ``mem_budget_mb``.
+_WINDOWED_CELL_BYTES = 32.0
+
+
 def _reconstruct_windowed(
     beamlets: BeamletBundle,
     *,
@@ -1414,8 +1455,22 @@ def _reconstruct_windowed(
     ``exp(-n_sigma^2)`` (``1.4e-11`` at the default ``n_sigma=5``), far below the
     GBD propagator accuracy budget, so the result matches the dense sum to
     machine-relevant precision.
+
+    Memory (B3): the per-bucket beamlet stack is chunked so its peak transient
+    footprint stays under ``mem_budget_mb`` (mirroring the FGA position-lattice
+    chunk loop).  ``LUMENAIRY_MEM_BUDGET_MB`` (if set) is a HARD CEILING on that
+    budget, so a memory-constrained host caps the peak regardless of the passed
+    value.  With the env unset the default (``mem_budget_mb``) chunking is
+    unchanged, so the output is byte-identical to the pre-B3 path; the win comes
+    purely from dropping two redundant ``(n_g, by, bx)`` ``np.where`` copies in
+    favour of in-place index/contribution masking (~2x lower peak, same result).
     """
     cx, cy = centre
+    # B3: env ceiling on the per-chunk memory budget (never raises it).
+    _env_budget = _env_mem_budget_mb()
+    if _env_budget is not None:
+        mem_budget_mb = (_env_budget if mem_budget_mb is None
+                         else min(float(mem_budget_mb), _env_budget))
     k = 2.0 * float(np.pi) / wavelength
     out_dtype = beamlets.amplitude.dtype
     x_b = np.asarray(beamlets.positions[:, 0], dtype=np.float64)
@@ -1496,9 +1551,14 @@ def _reconstruct_windowed(
         Wy = int(Wy_q[sel[0]])
         bx = 2 * Wx + 1
         by = 2 * Wy + 1
-        # chunk this bucket so n_g * by * bx * 16 bytes stays under budget
+        # B3: chunk this bucket so the peak (n_g, by, bx) accumulation tile stays
+        # under mem_budget_mb.  _WINDOWED_CELL_BYTES counts the coexisting big
+        # arrays (contrib complex + idx int64 + bool masks) with margin; the
+        # estimate is unchanged from the pre-B3 32 B/cell, so with the default
+        # budget the chunk boundaries -- and hence the output -- are identical.
         cells = by * bx
-        chunk = max(1, int(mem_budget_mb * 1e6 / max(1.0, cells * 32.0)))
+        chunk = max(1, int(mem_budget_mb * 1e6
+                           / max(1.0, cells * _WINDOWED_CELL_BYTES)))
         off_x = np.arange(-Wx, Wx + 1, dtype=np.int64)
         off_y = np.arange(-Wy, Wy + 1, dtype=np.int64)
         for cs in range(0, sel.size, chunk):
@@ -1522,6 +1582,7 @@ def _reconstruct_windowed(
                     arg = (arg + L_all[g][:, None, None] * dX[:, None, :]
                            + M_all[g][:, None, None] * dY[:, :, None])
                 contrib = a_b[g][:, None, None] * np.exp(1j * k * arg)
+                del arg          # B3: free the (n_g, by, bx) skew arg buffer
             else:
                 # Separable: exp of an outer sum -> outer product of two exps.
                 if is_tensor:                            # diagonal tensor Q
@@ -1543,10 +1604,27 @@ def _reconstruct_windowed(
             idx = iyg[:, :, None] * Nx + ixg[:, None, :]            # (ng,by,bx)
             valid = ((iyg[:, :, None] >= 0) & (iyg[:, :, None] < Ny)
                      & (ixg[:, None, :] >= 0) & (ixg[:, None, :] < Nx))
-            idx = np.where(valid, idx, sentinel).ravel()
-            cflat = np.where(valid, contrib, 0.0).ravel()
-            out_r += np.bincount(idx, weights=cflat.real, minlength=Ny * Nx + 1)
-            out_i += np.bincount(idx, weights=cflat.imag, minlength=Ny * Nx + 1)
+            # B3: mask out-of-grid cells IN PLACE (route to the sentinel bin,
+            # zero their contribution) instead of building two extra
+            # (ng, by, bx) np.where copies.  idx / contrib are freshly-built
+            # C-contiguous arrays so .reshape(-1) is a view and the in-place
+            # writes hit their own buffers -- the bincount inputs are
+            # byte-identical to the np.where form, at ~2x lower peak memory.
+            idx_flat = idx.reshape(-1)
+            cflat = contrib.reshape(-1)
+            bad = ~valid.reshape(-1)
+            del valid
+            idx_flat[bad] = sentinel
+            cflat[bad] = 0.0
+            del bad
+            out_r += np.bincount(idx_flat, weights=cflat.real,
+                                 minlength=Ny * Nx + 1)
+            out_i += np.bincount(idx_flat, weights=cflat.imag,
+                                 minlength=Ny * Nx + 1)
+            # B3: free this tile's big (ng, by, bx) buffers before the next
+            # chunk allocates, so old- and new-iteration stacks never coexist
+            # (the cross-iteration double-buffering that dominated the peak).
+            del idx, idx_flat, contrib, cflat
 
     out = (out_r[:Ny * Nx] + 1j * out_i[:Ny * Nx]).reshape(Ny, Nx)
     return out.astype(out_dtype)
@@ -2675,6 +2753,128 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
     return P, alive
 
 
+def _upsample_nodes_to_grid(node_vals: np.ndarray, Ny: int, Nx: int,
+                            step: int) -> np.ndarray:
+    """Bilinearly upsample a coarse ``(n_iy, n_ix)`` complex NODE grid (values on
+    the beamlet subsample lattice -- node ``(a, b)`` at pixel ``(a*step,
+    b*step)``) to the full ``(Ny, Nx)`` grid.
+
+    Used by the vector prescription chain (A7 / N4 port) to spread the
+    per-beamlet Fresnel Jones (a SMOOTH per-surface diattenuation) densely, so
+    the Husimi launch reads the true input wavefront from ``E * P`` instead of
+    from a near-empty zero-scatter grid whose gradient is dominated by the fill.
+    At the exact nodes the ``order=1`` interpolation reproduces the node values,
+    so the sampled beamlet amplitudes are byte-identical to the scatter path --
+    only the launch DIRECTIONS gain the true wavevector.  Edge-clamped
+    (``mode='nearest'``) beyond the last node (the ~few-pixel margin where the
+    aperture field is already ~0)."""
+    from scipy.ndimage import map_coordinates
+    rr = np.clip(np.arange(Ny) / step, 0.0, node_vals.shape[0] - 1)
+    cc = np.clip(np.arange(Nx) / step, 0.0, node_vals.shape[1] - 1)
+    R, C = np.meshgrid(rr, cc, indexing='ij')
+    coords = np.stack([R.ravel(), C.ravel()])
+    out = (map_coordinates(node_vals.real, coords, order=1, mode='nearest')
+           + 1j * map_coordinates(node_vals.imag, coords, order=1,
+                                  mode='nearest'))
+    return out.reshape(Ny, Nx)
+
+
+def _vector_prescription_mixed_fields(
+    E_vec: np.ndarray,
+    dx: float,
+    prescription: Dict[str, Any],
+    *,
+    wavelength: float,
+    sample_step: int,
+    direction_sampling: Any,
+) -> Tuple[np.ndarray, np.ndarray, bool]:
+    """Resolve the SHARED carrier-launch policy on the ORIGINAL Jones field and
+    build the two per-component Fresnel-mixed input fields the scalar
+    prescription chain consumes.
+
+    Returns ``(ExF, EyF, ds)`` where ``ds`` is the resolved boolean
+    direction-sampling policy.  Split out so the vector chain and its
+    chain-vs-sequential equivalence oracle share ONE construction (no drift).
+
+    ``direction_sampling`` resolution (A7, mirrors N4's scalar chain):
+
+    * ``'auto'`` measures the RMS local-tilt spread of the input via the SHARED
+      :func:`_input_angular_spread` detector, on the ORIGINAL (un-mixed)
+      components -- the MAX over the two, so a diverging / converging / tilted
+      field fires even when only one component carries the curvature, and a
+      component with no power contributes 0.  Detecting on the ORIGINAL field
+      (not the P-mixed one) keeps a collimated input on the byte-identical axial
+      path: the Fresnel s/p phase P carries across the aperture would otherwise
+      trip ``'auto'`` on an otherwise flat wavefront.
+    * ``True`` / ``False`` force Husimi / axial.
+
+    Field construction:
+
+    * ``ds`` (Husimi): the scalar chain's carrier-normal launch reads the
+      wavevector from the DENSE field gradient, so the mixed component must be
+      DENSE.  Build ``ExF = P00_dense * Ex + P01_dense * Ey`` (and likewise
+      ``EyF``) with the Fresnel Jones bilinearly upsampled to the full grid
+      (:func:`_upsample_nodes_to_grid`) -- P is SMOOTH so it adds no spurious
+      carrier, while the DENSE original ``E_vec`` supplies the true, rapidly
+      varying wavefront phase.  At the beamlet nodes the upsampled P reproduces
+      P exactly, so the beamlet amplitudes are byte-identical to the scatter
+      path (only the launch direction changes).
+    * not ``ds`` (axial / collimated): the historical sparse scatter -- the
+      mixed samples on a zero-filled grid at the ``sample_step`` lattice --
+      which the axial decompose sub-samples identically.  Byte-identical to
+      prior releases (the axial launch ignores the gradient, so density does not
+      matter, but the exact old construction is kept so the default is provably
+      unchanged)."""
+    E_vec = np.asarray(E_vec)
+    Ny, Nx = E_vec.shape[-2], E_vec.shape[-1]
+    if direction_sampling == 'auto':
+        spread = max(
+            _input_angular_spread(E_vec[0], float(dx), float(dx),
+                                  float(wavelength)),
+            _input_angular_spread(E_vec[1], float(dx), float(dx),
+                                  float(wavelength)))
+        ds = spread > _GBD_AUTO_HUSIMI_THRESH
+    elif direction_sampling in (True, False):
+        ds = bool(direction_sampling)
+    else:
+        raise ValueError(
+            "propagate_gbd_vector_through_prescription: direction_sampling must "
+            f"be 'auto', True or False, got {direction_sampling!r}.")
+
+    iy = np.arange(0, Ny, sample_step)
+    ix = np.arange(0, Nx, sample_step)
+    Iy, Ix = np.meshgrid(iy, ix, indexing='ij')
+    xb = (Ix.ravel() - Nx / 2) * dx
+    yb = (Iy.ravel() - Ny / 2) * dx
+    zc = np.zeros_like(xb)
+    P, _alive = _fresnel_jones_matrix_per_beamlet(
+        xb, yb, zc, zc, prescription, wavelength)
+    ExS = E_vec[0][Iy, Ix].ravel()
+    EyS = E_vec[1][Iy, Ix].ravel()
+    ExM = (P[:, 0, 0] * ExS + P[:, 0, 1] * EyS).reshape(Iy.shape)
+    EyM = (P[:, 1, 0] * ExS + P[:, 1, 1] * EyS).reshape(Iy.shape)
+
+    if ds:
+        n_iy, n_ix = Iy.shape
+
+        def _dense(i, j):
+            return _upsample_nodes_to_grid(
+                P[:, i, j].reshape(n_iy, n_ix), Ny, Nx, sample_step)
+
+        # Build the two mixed components sequentially (each needs only its own
+        # row of the dense Jones), so at most TWO N^2 dense-P arrays coexist, not
+        # four -- the N^2-scale-array memory discipline (Section 0 spirit) even
+        # though this path adds no persistent cache.
+        ExF = _dense(0, 0) * E_vec[0] + _dense(0, 1) * E_vec[1]
+        EyF = _dense(1, 0) * E_vec[0] + _dense(1, 1) * E_vec[1]
+    else:
+        ExF = np.zeros((Ny, Nx), dtype=np.complex128)
+        EyF = np.zeros((Ny, Nx), dtype=np.complex128)
+        ExF[Iy, Ix] = ExM
+        EyF[Iy, Ix] = EyM
+    return ExF, EyF, ds
+
+
 def propagate_gbd_vector_through_prescription(
     E_vec: np.ndarray,
     dx: float,
@@ -2682,6 +2882,7 @@ def propagate_gbd_vector_through_prescription(
     *,
     wavelength: float,
     per_surface: bool = True,
+    direction_sampling: Any = 'auto',
     **kwargs: Any,
 ) -> np.ndarray:
     """Vector (Jones) GBD through a prescription with **polarization ray
@@ -2694,21 +2895,37 @@ def propagate_gbd_vector_through_prescription(
     :func:`_fresnel_jones_matrix_per_beamlet`: the diattenuation modifies the
     beamlet amplitudes, then each transformed component is reconstructed.
 
+    ``direction_sampling`` (A7, 2026-07-21) defaults to ``'auto'``, porting the
+    N4 carrier-normal launch to the vector chain: the SHARED
+    :func:`_input_angular_spread` detector (measured on the ORIGINAL Jones
+    field) selects the Husimi (carrier-normal) launch for a diverging /
+    converging / tilted source and the axial launch otherwise, resolved ONCE and
+    applied to BOTH components.  A collimated input measures ~0 spread and takes
+    the byte-identical axial path; a diverging input then conserves power (to the
+    Fresnel-transmission limit) instead of collapsing to the collimated plane and
+    shedding frame energy.  ``True`` / ``False`` force Husimi / axial.  See
+    :func:`_vector_prescription_mixed_fields`.
+
     Transmission only (no reflection / thin-film coatings -- those build on the
     same base-ray trace and are a documented extension).
 
-    Scope note (D10): the Jones-mixed samples are scattered onto zero-filled
-    full grids and rely on ``decompose_field_to_beamlets`` re-sampling the
-    IDENTICAL pixel set (same ``sample_step`` phase) -- correct today, but
-    coupled to that decomposition sampling convention.  Polarization itself is
-    evaluated for the AXIAL congruence only (``_fresnel_jones_matrix_per_beamlet``
-    is axial-launch by contract).
+    Scope note (D10): for the axial launch the Jones-mixed samples are scattered
+    onto zero-filled full grids and rely on ``decompose_field_to_beamlets``
+    re-sampling the IDENTICAL pixel set (same ``sample_step`` phase); for the
+    Husimi launch a DENSE mixed field (smooth Fresnel-Jones upsampled x the dense
+    input) is built so the carrier-normal decomposition reads the true wavevector
+    (the scatter grid's gradient is dominated by the zero fill and would collapse
+    the launch to axial).  Polarization itself is evaluated for the AXIAL
+    congruence only (``_fresnel_jones_matrix_per_beamlet`` is axial-launch by
+    contract).
 
     Parameters
     ----------
     E_vec : array ``(2, Ny, Nx)`` complex -- the ``(E_x, E_y)`` Jones field.
     dx, prescription, wavelength : as elsewhere.
     per_surface : bool -- passed to the envelope propagator.
+    direction_sampling : ``'auto'`` (default) / ``True`` / ``False`` -- the
+        shared carrier-normal launch policy (A7).
     **kwargs : forwarded to :func:`propagate_gbd_through_prescription`.
 
     Returns
@@ -2720,37 +2937,23 @@ def propagate_gbd_vector_through_prescription(
         raise ValueError(
             "propagate_gbd_vector_through_prescription: E_vec must be "
             f"(2, Ny, Nx); got {E_vec.shape}.")
-    # per-beamlet Fresnel Jones matrix from the base-ray grid (axial launch)
-    Ny, Nx = E_vec.shape[-2], E_vec.shape[-1]
-    sample_step = kwargs.get('sample_step', 1)
-    iy = np.arange(0, Ny, sample_step)
-    ix = np.arange(0, Nx, sample_step)
-    Iy, Ix = np.meshgrid(iy, ix, indexing='ij')
-    xb = (Ix.ravel() - Nx / 2) * dx
-    yb = (Iy.ravel() - Ny / 2) * dx
-    zc = np.zeros_like(xb)
-    P, _alive = _fresnel_jones_matrix_per_beamlet(
-        xb, yb, zc, zc, prescription, wavelength)
-    # apply P to the (E_x, E_y) samples, then envelope-propagate each mixed
-    # component and reconstruct.
-    ExS = E_vec[0][Iy, Ix].ravel()
-    EyS = E_vec[1][Iy, Ix].ravel()
-    ExM = (P[:, 0, 0] * ExS + P[:, 0, 1] * EyS).reshape(Iy.shape)
-    EyM = (P[:, 1, 0] * ExS + P[:, 1, 1] * EyS).reshape(Iy.shape)
-    # scatter the mixed samples back onto full grids (per component) so the
-    # existing decompose sub-samples them consistently.
-    ExF = np.zeros((Ny, Nx), dtype=np.complex128)
-    EyF = np.zeros((Ny, Nx), dtype=np.complex128)
-    ExF[Iy, Ix] = ExM
-    EyF[Iy, Ix] = EyM
+    sample_step = int(kwargs.get('sample_step', 1))
+    # A7 (2026-07-21): resolve the shared carrier launch on the ORIGINAL Jones
+    # field and build the per-component Fresnel-mixed inputs (dense for Husimi,
+    # sparse-scatter for axial) -- ONE construction shared with the equivalence
+    # oracle.  The resolved boolean ``ds`` is passed EXPLICITLY to the scalar
+    # chains so their ``'auto'`` does not re-measure on the P-modulated field.
+    ExF, EyF, ds = _vector_prescription_mixed_fields(
+        E_vec, dx, prescription, wavelength=wavelength,
+        sample_step=sample_step, direction_sampling=direction_sampling)
     kw = dict(kwargs)
     kw['sample_step'] = sample_step
     out_x = propagate_gbd_through_prescription(
         ExF, dx, prescription, wavelength=wavelength, per_surface=per_surface,
-        **kw)
+        direction_sampling=ds, **kw)
     out_y = propagate_gbd_through_prescription(
         EyF, dx, prescription, wavelength=wavelength, per_surface=per_surface,
-        **kw)
+        direction_sampling=ds, **kw)
     return np.stack([out_x, out_y], axis=0)
 
 

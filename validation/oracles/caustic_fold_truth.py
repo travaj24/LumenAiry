@@ -211,6 +211,48 @@ def build_exit_field(job, n_fan=None):
         z_img=z_img, y_im=yim, A_env=A_env, J=J, P_in=P_in, w0=w0, aper=aper)
 
 
+def build_exit_field_synthetic(job, n_fan=None):
+    """Exit field for a SYNTHETIC rotationally-symmetric CUSP (niche R2 / A1).
+
+    Rather than raytracing a surface list, the exit-plane wavefront is prescribed
+    directly as ``W'(h) = -A h exp(-((h - h_c)/s)^2)`` (an even, ``W'(0) = 0``
+    wavefront: unit-slope background with a localised converging bump), so the
+    downstream geometric landing ``y_im(h) = h + Z W'(h)`` folds TWICE at finite
+    radius -- a single CUSP ring (three ray branches between the two folds).  The
+    ``2``-hump meridional map is the roadmap's prescribed synthetic cusp oracle;
+    the direct Rayleigh-Sommerfeld propagation below (shared with the fold truth)
+    is unchanged and remains independent of any lens / propagator model.
+
+    Returns the same ``(h, y_exit, opl_exit, amp, z_exit, extras)`` tuple as
+    :func:`build_exit_field`."""
+    sc = job["synthetic_cusp"]
+    A = float(sc["A"])
+    h_c = float(sc["h_c_mm"]) * 1e-3
+    s = float(sc["s_mm"]) * 1e-3
+    Z = float(sc["Z_mm"]) * 1e-3
+    w0 = float(sc["w0_mm"]) * 1e-3
+    hmax = float(sc["hmax_mm"]) * 1e-3
+    n_fan = int(n_fan or job.get("n_fan", 14000))
+    h = np.linspace(hmax / n_fan, hmax, n_fan)
+    Wp = -A * h * np.exp(-((h - h_c) / s) ** 2)
+    # W(h) = int_0^h W'(s) ds  (additive constant is an irrelevant global phase)
+    Wint = np.concatenate([[0.0], np.cumsum(0.5 * (Wp[1:] + Wp[:-1]) * np.diff(h))])
+    amp = np.exp(-h ** 2 / w0 ** 2)
+    y_ex = h                      # flat exit vertex plane: exit height = launch
+    y_im = h + Z * Wp             # geometric landing at the observation plane
+    J = np.abs(np.gradient(y_ex, h))
+    P_in = 2.0 * np.pi * float(np.trapezoid(amp ** 2 * h, h))
+    return h, y_ex, Wint, amp, 0.0, dict(
+        z_img=Z, y_im=y_im, A_env=amp, J=J, P_in=P_in, w0=w0, aper=hmax)
+
+
+def _dispatch_exit_field(job, n_fan=None):
+    """Route to the synthetic-cusp or raytraced exit-field builder."""
+    if "synthetic_cusp" in job:
+        return build_exit_field_synthetic(job, n_fan=n_fan)
+    return build_exit_field(job, n_fan=n_fan)
+
+
 def _rs_integral(h, ys, opl, amp, zrel, wl, rho):
     """Energy-correct DIRECT Rayleigh-Sommerfeld ring integral (vectorized in
     rho, trapezoidal in the exit-ring coordinate ``ys``)."""
@@ -311,7 +353,7 @@ def evaluate(job, save_prefix=None):
     N = int(grid.get("N", 1024))
     dx = float(grid.get("dx_um", 2.0)) * 1e-6
 
-    h, ys, opl, amp, z_exit, extras = build_exit_field(job)
+    h, ys, opl, amp, z_exit, extras = _dispatch_exit_field(job)
     zrel = extras["z_img"] - z_exit
     rho = np.linspace(0.0, rho_max, n_rho)
     E_rho = _rs_integral(h, ys, opl, amp, zrel, wl, rho)
@@ -327,7 +369,7 @@ def evaluate(job, save_prefix=None):
     r2m_2d, e50_2d, e80_2d, e95_2d, _ = win_metrics_2d(I2d, dx, win)
 
     # ---- self-verification: fan/rho grid convergence (halve dx = double N) ----
-    h2, ys2, opl2, amp2, ze2, _ = build_exit_field(job, n_fan=2 * int(
+    h2, ys2, opl2, amp2, ze2, _ = _dispatch_exit_field(job, n_fan=2 * int(
         job.get("n_fan", 8000)))
     rho2 = np.linspace(0.0, rho_max, 2 * n_rho)
     E_rho2 = _rs_integral(h2, ys2, opl2, amp2, zrel, wl, rho2)
@@ -357,6 +399,8 @@ def evaluate(job, save_prefix=None):
         "grid_vs_radial_r2m_frac": abs(r2m_2d - r2m_r) / r2m_r,
         **fold,
     }
+    if "synthetic_cusp" in job:
+        out["synthetic_cusp"] = job["synthetic_cusp"]
     if save_prefix:
         np.savez_compressed(
             save_prefix + ".npz",
