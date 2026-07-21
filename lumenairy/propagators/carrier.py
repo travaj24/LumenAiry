@@ -58,12 +58,21 @@ because the envelope's residual angular content (after the carrier is
 removed) is tiny -- for a matched Gaussian carrier it is essentially the
 diffraction-limited spread ``lambda/(pi*w)``.
 
-Validity (prototype envelope)
------------------------------
-* Single spherical (isotropic) carrier: one ``R`` for both axes.  General
-  ASTIGMATIC carriers (separate ``R_x``, ``R_y``) are a documented
-  follow-up -- the transform generalises coordinate-wise but this
-  prototype ships the isotropic form.
+Validity (envelope)
+-------------------
+* Spherical (isotropic) carrier: one ``R`` for both axes -- the fast path
+  and the documented default.
+* ASTIGMATIC carrier (separate ``R_x``, ``R_y``) via ``carrier=(R_x,
+  R_y)`` (Phase P6 Task 1).  The Fresnel kernel is separable, so the
+  transform runs coordinate-wise: per-axis magnification ``m_x = (R_x +
+  z)/R_x``, ``m_y = (R_y + z)/R_y``, per-axis reduced envelope distance,
+  and per-axis grid pitch (``dx_out = m_x*dx``, ``dy_out = m_y*dy``).
+  The two geometric foci fall at DIFFERENT ``z`` (``-R_x`` vs ``-R_y``),
+  so the focus-crossing split/bridge below is applied INDEPENDENTLY on
+  each axis (a 1-D bridge that touches only that axis).  An astigmatic
+  call returns ``R`` and ``dx`` as 2-tuples ``(R_x_out, R_y_out)`` and
+  ``(dx_out, dy_out)``.  ``carrier=(R, R)`` (equal radii) routes to the
+  scalar path and is byte-identical to the isotropic form.
 * Stepping THROUGH the carrier's geometric focus is handled
   transparently by an automatic split (Task 2).  As ``R_out -> 0`` the
   magnification ``m -> 0`` (the co-moving grid collapses) and the frame
@@ -73,9 +82,15 @@ Validity (prototype envelope)
   crossing" below.  The no-crossing fast path is byte-identical.
 * The envelope must be sampled by the grid it is handed on (its own
   ``lambda/(pi*w)`` spread), and free of the carrier fringe -- that is the
-  whole point.  APERTURE handling at element planes (the envelope frame
-  does not clip the same way the full field does) is a documented
-  follow-up.
+  whole point.
+* A hard APERTURE mid-chain clips the envelope in place (the carrier is a
+  pure phase, so ``|env|`` is clipped exactly as the full field is) and
+  the clipped power is REMOVED, never renormalised.  A hard clip does not
+  change the wavefront curvature at the surviving points, so the carrier
+  ``R`` is unchanged by default; :func:`carrier_referenced_aperture`
+  optionally re-fits ``R`` from the apertured field (to absorb residual
+  envelope curvature) or re-references it to a user-supplied conjugate
+  (Phase P6 Task 2).
 
 Focus crossing (Task 2)
 -----------------------
@@ -108,7 +123,7 @@ the ASM leg runs straight to it and a carrier is fitted there.  Validated
 (w0=4 um, R=-30 mm, +60 mm through the waist, N=2048) to <0.1 % windowed
 r2m/EE on BOTH sides of focus and at the waist vs the analytic Gaussian
 (ABCD) and a resolved fine-grid ASM, provided the input grid holds the
-beam to the usual ``±>2.4 w`` (a tighter grid truncates the tail through
+beam to the usual ``+/->2.4 w`` (a tighter grid truncates the tail through
 the whole chain, the same finite-grid caveat as the non-crossing path).
 Raises only for an un-bridgeable case: a zero/empty envelope, or a focus
 coinciding with the start plane.
@@ -126,7 +141,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Tuple, Union
 
 import numpy as np
 
@@ -137,6 +152,8 @@ __all__ = [
     'propagate_carrier_referenced',
     'carrier_referenced_reconstruct',
     'carrier_referenced_envelope',
+    'carrier_referenced_aperture',
+    'carrier_referenced_fit_radius',
 ]
 
 # --- focus-crossing (auto-split) tuning (Task 2) ---------------------------
@@ -197,7 +214,7 @@ def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign):
 
 def propagate_carrier_referenced(
     E_env: np.ndarray,
-    R_carrier: float,
+    R_carrier: Union[float, Tuple[float, float]],
     z: float,
     wavelength: float,
     dx: float,
@@ -224,11 +241,16 @@ def propagate_carrier_referenced(
         :func:`carrier_referenced_envelope`, or construct it directly
         (e.g. a real Gaussian amplitude when the carrier is the beam's
         own wavefront).
-    R_carrier : float
+    R_carrier : float or (float, float)
         Signed carrier radius of curvature at the INPUT plane (m).
         ``R > 0`` diverging, ``R < 0`` converging, ``+/-inf`` collimated
         (the step then reduces to an ordinary Fresnel transfer-function
-        propagation with no grid magnification).
+        propagation with no grid magnification).  Pass a 2-tuple
+        ``(R_x, R_y)`` for an ASTIGMATIC carrier (separate x/y radii): the
+        separable Sziklas-Siegman transform magnifies each axis by its own
+        ``m`` and crosses each geometric focus independently.  An
+        astigmatic call returns ``R`` and ``dx`` as 2-tuples (see Returns).
+        ``(R, R)`` (equal radii) routes to the scalar path byte-identically.
     z : float
         Propagation distance (m); may be negative (back-propagation).
         ``z == 0`` returns the input unchanged.
@@ -246,6 +268,13 @@ def propagate_carrier_referenced(
         carrier radius ``R_carrier + z``, and the magnified output pitch
         ``m * dx``.  ``dy`` (if it differed from ``dx``) scales by the
         same ``m``; recover it as ``dy_out = dy_in * dx_out / dx_in``.
+        For an ASTIGMATIC carrier (``R_carrier=(R_x, R_y)``, distinct
+        radii) ``R`` is the 2-tuple ``(R_x + z, R_y + z)`` and ``dx`` is
+        the 2-tuple of per-axis pitches ``(m_x*dx_in, m_y*dy_in)`` (the
+        axes magnify independently, so no single scalar pitch applies).
+        Hand the astigmatic result to :func:`carrier_referenced_reconstruct`
+        / :func:`carrier_referenced_envelope`, which accept the same
+        ``(R_x, R_y)`` tuple plus ``dx``, ``dy``.
 
     Raises
     ------
@@ -295,7 +324,26 @@ def propagate_carrier_referenced(
         raise ValueError(
             f"propagate_carrier_referenced: z must be finite, got {z!r}.")
 
-    R = float(R_carrier)
+    # Parse a possibly-astigmatic carrier.  A 2-tuple (R_x, R_y) with
+    # DISTINCT radii routes to the separable astigmatic transform; equal
+    # radii (and the scalar form) route to the byte-identical scalar path.
+    R_x, R_y, is_astig = _parse_carrier(R_carrier,
+                                        'propagate_carrier_referenced')
+    if is_astig:
+        if R_x == 0.0 or R_y == 0.0:
+            raise ValueError(
+                "propagate_carrier_referenced: an astigmatic carrier axis "
+                "radius is 0 (the carrier's own focus, undefined "
+                "magnification).  Reference the beam a finite distance from "
+                "its focus on each axis.")
+        # z == 0: exact identity, astigmatic (R, dx) as 2-tuples.
+        if z == 0:
+            env0 = E_env.copy() if hasattr(E_env, 'copy') else np.array(E_env)
+            return CarrierReferencedField(env0, (R_x, R_y), (dx, dy))
+        return _propagate_carrier_astigmatic(
+            E_env, R_x, R_y, z, wavelength, dx, dy)
+
+    R = R_x  # scalar / isotropic path (equal-radii tuple collapses here)
 
     # z == 0: exact identity (mirror the ASM / fresnel_tf z==0 contract).
     if z == 0:
@@ -470,9 +518,294 @@ def _match_env_dtype(env, ref):
     return env
 
 
+# ===========================================================================
+# Astigmatic carrier (Task 1): separable per-axis Sziklas-Siegman
+# ===========================================================================
+# The 2-D Fresnel kernel factorises into an x-part and a y-part, and a
+# separable carrier ``exp(i k [x^2/(2 R_x) + y^2/(2 R_y)])`` references each
+# axis independently, so the whole transform runs coordinate-wise: a 1-D
+# Sziklas-Siegman step on axis x (magnification ``m_x``, pitch ``m_x*dx``)
+# and a 1-D step on axis y.  The two geometric foci sit at DIFFERENT z
+# (``-R_x`` vs ``-R_y``), so each axis carries its own focus-crossing bridge.
+#
+# Array convention: shape ``(Ny, Nx)``; axis 1 is x (pitch ``dx``, radius
+# ``R_x``), axis 0 is y (pitch ``dy``, radius ``R_y``).  Every 1-D op returns
+# an envelope that CARRIES the full on-axis piston ``exp(i k z)``; the two
+# axes therefore accumulate ``exp(i 2 k z)`` and the astigmatic driver
+# divides the single physical ``exp(i k z)`` back out once at the end (a
+# global phase -- it does not touch any intensity, but keeps composed legs
+# phase-faithful, matching the scalar path's convention).
+
+
+def _parse_carrier(R_carrier, fn):
+    """Return ``(R_x, R_y, is_astigmatic)``.
+
+    A scalar maps to ``(R, R, False)``.  A length-2 tuple/list/array maps to
+    ``(R_x, R_y, R_x != R_y)`` -- equal radii are treated as isotropic so the
+    caller routes them to the byte-identical scalar path.
+    """
+    if isinstance(R_carrier, (tuple, list, np.ndarray)):
+        arr = np.asarray(R_carrier, dtype=np.float64).ravel()
+        if arr.size != 2:
+            raise ValueError(
+                f"{fn}: carrier must be a scalar radius R or a 2-tuple "
+                f"(R_x, R_y); got {arr.size} values.")
+        R_x, R_y = float(arr[0]), float(arr[1])
+        return R_x, R_y, (R_x != R_y)
+    R = float(R_carrier)
+    return R, R, False
+
+
+def _freq_sq_1d(N, d):
+    """Centred ``(2*pi*f)^2`` float64 vector for a length-``N`` axis at pitch
+    ``d`` (matches the shared ASM/Fresnel freq-grid construction)."""
+    f = (np.arange(N, dtype=np.float64) - N / 2) / (N * d)
+    return (2.0 * np.pi * f) ** 2
+
+
+def _broadcast_axis(vec, ndim, axis):
+    """Reshape a 1-D vector to broadcast along ``axis`` of an ``ndim`` array."""
+    shape = [1] * ndim
+    shape[axis] = vec.shape[0]
+    return vec.reshape(shape)
+
+
+def _fresnel_tf_axis(u, z, wavelength, d, axis):
+    """1-D Fresnel transfer-function step along a single ``axis`` (the
+    per-axis analogue of :func:`fresnel_tf_propagate`).  Carries the on-axis
+    piston ``exp(i k z)`` (the ``k*z`` term), so composed legs stay phase-
+    faithful.  ``z`` here is the (already reduced) envelope distance."""
+    N = u.shape[axis]
+    k = 2.0 * np.pi / wavelength
+    kx_sq = np.fft.ifftshift(_freq_sq_1d(N, d))
+    # phase = k*z - (z/2k) (2 pi f)^2  (== k*z - pi*lambda*z*f^2), 1-D.
+    H = np.exp(1j * (k * z - (z / (2.0 * k)) * kx_sq))
+    H = _broadcast_axis(H, u.ndim, axis)
+    Uf = np.fft.fft(u, axis=axis)
+    return np.fft.ifft(Uf * H, axis=axis)
+
+
+def _asm_axis(E, z, wavelength, d, axis, bandlimit=True):
+    """1-D exact (band-limited) angular-spectrum step along a single ``axis``
+    -- the per-axis analogue of :func:`angular_spectrum_propagate`, used only
+    inside the near-focus bridge to carry the compact field across the waist
+    on the (now fine) co-moving grid.  Carries the on-axis piston
+    ``exp(i k z)`` (``kz(f=0) = k``).  The other axis is a spectator (its
+    slowly-varying, carrier-referenced content has little transverse
+    frequency, so the neglected ``k_y`` coupling in ``sqrt(k^2 - k_x^2)`` is
+    a small paraxial residual -- the regime this bridge operates in)."""
+    if z == 0:
+        return E.copy() if hasattr(E, 'copy') else np.array(E)
+    N = E.shape[axis]
+    k = 2.0 * np.pi / wavelength
+    kx_sq = _freq_sq_1d(N, d)
+    kz_sq = k * k - kx_sq
+    prop = kz_sq > 0
+    kz = np.where(prop, np.sqrt(np.maximum(kz_sq, 0.0)), 0.0)
+    Hc = np.exp(1j * z * kz)
+    # dtype-aware zero (v4.14.1 audit P1-NEW-4): a literal ``0.0 + 0.0j`` is
+    # complex128 and would silently upcast a complex64 transfer function.
+    H = np.where(prop, Hc, np.zeros((), dtype=Hc.dtype))
+    if bandlimit:
+        f = (np.arange(N, dtype=np.float64) - N / 2) / (N * d)
+        f_max = (N * d) / (2.0 * wavelength * abs(z))
+        H = np.where(np.abs(f) < f_max, H, np.zeros((), dtype=H.dtype))
+    H = _broadcast_axis(np.fft.ifftshift(H), E.ndim, axis)
+    Ef = np.fft.fft(E, axis=axis)
+    return np.fft.ifft(Ef * H, axis=axis)
+
+
+def _axis_carrier_phase(shape, d, wavelength, R, axis, sign):
+    """``exp(sign*i*k*x_a^2/(2R))`` broadcast along a single ``axis`` (the
+    per-axis carrier)."""
+    N = shape[axis]
+    x = (np.arange(N, dtype=np.float64) - N / 2) * d
+    k = 2.0 * np.pi / wavelength
+    ph = np.exp(sign * 1j * k * x * x / (2.0 * R))
+    return _broadcast_axis(ph, len(shape), axis)
+
+
+def _axis_amp_radius(u, d, axis):
+    """1/e amplitude radius of the envelope along a single ``axis`` from the
+    marginal-intensity second moment.  For a Gaussian amplitude
+    ``exp(-x^2/w^2)`` the marginal intensity ``exp(-2x^2/w^2)`` has
+    ``<x^2> = w^2/4``, so ``w = 2*sqrt(<x^2>)`` (the 1-D analogue of the 2-D
+    ``w = sqrt(2)*r2m``, which folds in both axes).  0.0 for a zero/empty
+    field."""
+    inten = np.abs(np.asarray(u)) ** 2
+    other = tuple(a for a in range(inten.ndim) if a != axis)
+    marg = inten.sum(axis=other)
+    tot = float(marg.sum())
+    if not (tot > 0.0):
+        return 0.0
+    N = marg.shape[0]
+    x = (np.arange(N, dtype=np.float64) - N / 2) * d
+    r2 = float((marg * x * x).sum()) / tot
+    return float(2.0 * np.sqrt(max(r2, 0.0)))
+
+
+def _axis_near_focus_needs_bridge(u, R, R_out, wavelength, d, axis):
+    """Per-axis analogue of :func:`_near_focus_needs_bridge`: is the same-sign
+    (``m>0``) landing so close to this axis's geometric focus that its
+    shrunken co-moving grid can no longer hold the diffraction-limited line
+    waist?  Cheap ``False`` (no width measurement) away from focus, so the
+    fast path is preserved."""
+    if abs(R_out) >= _NEAR_FOCUS_FRACTION * abs(R):
+        return False
+    w_in = _axis_amp_radius(u, d, axis)
+    if not (w_in > 0.0):
+        return False
+    N = np.asarray(u).shape[axis]
+    w0 = wavelength * abs(R) / (np.pi * w_in)
+    w_geom = w_in * abs(R_out) / abs(R)
+    w_out = max(w_geom, w0)
+    half = 0.5 * N * d * abs(R_out) / abs(R)
+    return half < _BRIDGE_FIT_MARGIN * w_out
+
+
+def _axis_step_fast(u, R, z, wavelength, d, axis):
+    """1-D Sziklas-Siegman fast step on a single ``axis`` (non-crossing,
+    ``m = (R+z)/R > 0``).  Returns ``(u_out, R_out, d_out)`` with the envelope
+    carrying the full ``exp(i k z)`` piston and the co-moving pitch magnified
+    by ``m``.  ``R`` finite/non-zero, ``z != 0``."""
+    R_out = R + z
+    m = R_out / R
+    z_eff = z * R / R_out                        # reduced envelope distance
+    u_prop = _fresnel_tf_axis(u, z_eff, wavelength, d, axis)   # carries e^{ik z_eff}
+    k = 2.0 * np.pi / wavelength
+    # complete the 1-D piston e^{ik z_eff} -> e^{ik z}: z - z_eff = z^2/R_out.
+    piston = np.exp(1j * k * (z - z_eff))
+    u_out = (piston / np.sqrt(m)) * u_prop
+    return u_out, R_out, m * d
+
+
+def _axis_collimated_step(u, z, wavelength, d, axis):
+    """Collimated (``R = +/-inf``) axis: a plain 1-D Fresnel-TF step, grid
+    unchanged, carrier stays collimated.  Carries ``exp(i k z)``."""
+    return _fresnel_tf_axis(u, z, wavelength, d, axis)
+
+
+def _axis_bridge(u, R, z, wavelength, d, axis):
+    """Auto-split a leg that crosses (or lands within a safety margin of) this
+    axis's geometric focus -- the 1-D analogue of
+    :func:`_propagate_carrier_focus_crossing`.
+
+    carrier -> (fast 1-D step to a plane a few Rayleigh ranges before the line
+    waist) -> reconstruct this axis's carrier -> (exact 1-D ASM across the
+    waist) -> re-attach the flipped carrier -> (fast 1-D step to target).  The
+    other axis rides along untouched (its carrier is still referenced out).
+    Returns ``(u_out, R_out, d_out)`` carrying ``exp(i k z)``."""
+    z_f = -R                                     # this axis's focus distance
+    w_in = _axis_amp_radius(u, d, axis)
+    if not (w_in > 0.0):
+        raise ValueError(
+            "propagate_carrier_referenced: cannot bridge an astigmatic "
+            "carrier focus -- the envelope has no finite width on this axis "
+            "to size the near-focus grid.  Reference the beam a finite "
+            "distance from its focus on each axis.")
+    w0 = wavelength * abs(R) / (np.pi * w_in)
+    zR = np.pi * w0 * w0 / wavelength
+    delta = _BRIDGE_ZR_FACTOR * zR
+    delta = min(delta, 0.45 * abs(z_f))
+    if not (delta > 0.0):
+        raise ValueError(
+            f"propagate_carrier_referenced: an astigmatic carrier focus "
+            f"(z_f={z_f:.6g} m) coincides with the start plane, so there is "
+            f"no room to hand off before the line waist.  Reference the beam "
+            f"a finite distance from its focus on each axis.")
+    sgn = 1.0 if z_f >= 0.0 else -1.0
+    z_a = z_f - sgn * delta
+    z_b = z_f + sgn * delta
+    R_b = R + z_b                                # = +sgn*delta (flipped)
+
+    # (a) fast 1-D step start -> a  (well conditioned; carries e^{ik z_a})
+    u_a, R_a, d_a = _axis_step_fast(u, R, z_a, wavelength, d, axis)
+    # reconstruct this axis's carrier on the (now fine) co-moving grid
+    E_a = u_a * _axis_carrier_phase(u_a.shape, d_a, wavelength, R_a, axis, +1)
+
+    beyond_b = (z - z_b) * sgn                   # >0 iff target is past b
+    if beyond_b <= 0.0:
+        # Target lands inside the bridge zone [a, b] (near the line waist):
+        # 1-D ASM straight to it.  Near the waist the true wavefront is flat,
+        # so the honest carrier is collimated (R=inf) -- referencing the
+        # geometric R_out (~0) would only imprint an aliased fringe and never
+        # changes |env|.  (E_a carries e^{ik z_a}; the ASM adds e^{ik(z-z_a)}
+        # -> the result carries e^{ik z}.)
+        E_t = _asm_axis(E_a, z - z_a, wavelength, d_a, axis)
+        return E_t, np.inf, d_a
+
+    # (b) bridge a -> b THROUGH the line waist with an exact 1-D ASM step
+    E_b = _asm_axis(E_a, z_b - z_a, wavelength, d_a, axis)
+    # (c) re-attach the flipped diverging carrier and continue
+    env_b = E_b * _axis_carrier_phase(E_b.shape, d_a, wavelength, R_b, axis, -1)
+    return _axis_step_fast(env_b, R_b, z - z_b, wavelength, d_a, axis)
+
+
+def _axis_step(u, R, z, wavelength, d, axis):
+    """Full 1-D Sziklas-Siegman transform of a single ``axis`` over distance
+    ``z``: collimated no-magnification step, fast step, or focus-crossing
+    bridge, chosen exactly as the scalar driver chooses.  Returns
+    ``(u_out, R_out, d_out)`` carrying ``exp(i k z)``."""
+    R = float(R)
+    if np.isinf(R):
+        return _axis_collimated_step(u, z, wavelength, d, axis), R, d
+    if R == 0.0:                                 # guarded upstream; belt+braces
+        raise ValueError(
+            "propagate_carrier_referenced: astigmatic carrier axis radius "
+            "== 0 (the carrier's own focus).")
+    R_out = R + z
+    with np.errstate(divide='ignore', invalid='ignore'):
+        m = R_out / R
+    if ((not np.isfinite(m)) or (m <= 0.0)
+            or _axis_near_focus_needs_bridge(u, R, R_out, wavelength, d, axis)):
+        return _axis_bridge(u, R, z, wavelength, d, axis)
+    return _axis_step_fast(u, R, z, wavelength, d, axis)
+
+
+def _propagate_carrier_astigmatic(E_env, R_x, R_y, z, wavelength, dx, dy):
+    """Separable astigmatic carrier step (Task 1): apply the 1-D transform on
+    axis x then axis y, each with its own magnification and its own
+    focus-crossing bridge.  Returns ``CarrierReferencedField`` with ``R`` =
+    ``(R_x+z, R_y+z)`` and ``dx`` = ``(dx_out, dy_out)``."""
+    u = np.asarray(E_env)
+    # axis 1 == x (pitch dx, radius R_x); axis 0 == y (pitch dy, radius R_y).
+    u, Rx_out, dx_out = _axis_step(u, R_x, z, wavelength, dx, axis=1)
+    u, Ry_out, dy_out = _axis_step(u, R_y, z, wavelength, dy, axis=0)
+    # Each 1-D op carries e^{ik z}; the physical field carries it once.
+    k = 2.0 * np.pi / wavelength
+    u = u * np.exp(-1j * k * z)
+    u = _match_env_dtype(u, E_env)
+    return CarrierReferencedField(u, (Rx_out, Ry_out), (dx_out, dy_out))
+
+
+def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn):
+    """Carrier phase ``exp(sign*i*k*[x^2/(2R_x) + y^2/(2R_y)])`` for a scalar
+    or ``(R_x, R_y)`` carrier.  Returns ``None`` when the carrier is fully
+    collimated (a no-op).  Collimated axes of an astigmatic carrier drop out
+    of the per-axis product."""
+    R_x, R_y, is_astig = _parse_carrier(R_carrier, fn)
+    if not is_astig:
+        R = R_x
+        if np.isinf(R):
+            return None
+        if R == 0.0:
+            raise ValueError(f"{fn}: R_carrier == 0 (carrier focus).")
+        return _radial_carrier_phase(shape, dx, dy, wavelength, float(R), sign)
+    if R_x == 0.0 or R_y == 0.0:
+        raise ValueError(
+            f"{fn}: an astigmatic carrier axis radius == 0 (carrier focus).")
+    phase = None
+    if np.isfinite(R_x):                          # axis 1 == x
+        phase = _axis_carrier_phase(shape, dx, wavelength, float(R_x), 1, sign)
+    if np.isfinite(R_y):                          # axis 0 == y
+        py = _axis_carrier_phase(shape, dy, wavelength, float(R_y), 0, sign)
+        phase = py if phase is None else phase * py
+    return phase
+
+
 def carrier_referenced_reconstruct(
     E_env: np.ndarray,
-    R_carrier: float,
+    R_carrier: Union[float, Tuple[float, float]],
     wavelength: float,
     dx: float,
     dy: Optional[float] = None,
@@ -493,8 +826,11 @@ def carrier_referenced_reconstruct(
     Parameters
     ----------
     E_env : ndarray, complex, shape (Ny, Nx)
-    R_carrier : float
-        Signed carrier radius (m); ``+/-inf`` -> collimated (no-op).
+    R_carrier : float or (float, float)
+        Signed carrier radius (m); ``+/-inf`` -> collimated (no-op).  A
+        2-tuple ``(R_x, R_y)`` imprints the separable ASTIGMATIC carrier
+        ``exp(i*k*[x^2/(2*R_x) + y^2/(2*R_y)])`` (a collimated axis drops
+        out); pass the astigmatic ``dx``/``dy`` alongside it.
     wavelength, dx : float
     dy : float, optional
         Defaults to ``dx``.
@@ -508,13 +844,10 @@ def carrier_referenced_reconstruct(
     _check_2d_scalar_field(E_env, 'carrier_referenced_reconstruct')
     if dy is None:
         dy = dx
-    if np.isinf(R_carrier):
+    phase = _build_carrier_phase(E_env.shape, dx, dy, wavelength, R_carrier,
+                                 +1, 'carrier_referenced_reconstruct')
+    if phase is None:
         return E_env.copy() if hasattr(E_env, 'copy') else np.array(E_env)
-    if R_carrier == 0.0:
-        raise ValueError(
-            "carrier_referenced_reconstruct: R_carrier == 0 (carrier focus).")
-    phase = _radial_carrier_phase(E_env.shape, dx, dy, wavelength,
-                                  float(R_carrier), +1)
     if np.iscomplexobj(E_env):
         phase = phase.astype(E_env.dtype, copy=False)
     return E_env * phase
@@ -522,7 +855,7 @@ def carrier_referenced_reconstruct(
 
 def carrier_referenced_envelope(
     E_full: np.ndarray,
-    R_carrier: float,
+    R_carrier: Union[float, Tuple[float, float]],
     wavelength: float,
     dx: float,
     dy: Optional[float] = None,
@@ -534,7 +867,8 @@ def carrier_referenced_envelope(
     the field's actual wavefront the result is slowly varying (its
     transverse phase is only the diffraction-limited residual), which is
     what makes the modest grid sufficient.  A collimated carrier is a
-    no-op.
+    no-op.  A 2-tuple ``(R_x, R_y)`` removes the separable astigmatic
+    carrier (a collimated axis drops out).
 
     NOTE (prototype): extracting an envelope on a grid that does NOT
     already sample the carrier fringe aliases it -- this helper is for
@@ -544,7 +878,7 @@ def carrier_referenced_envelope(
     Parameters
     ----------
     E_full : ndarray, complex, shape (Ny, Nx)
-    R_carrier : float
+    R_carrier : float or (float, float)
     wavelength, dx : float
     dy : float, optional
 
@@ -557,13 +891,272 @@ def carrier_referenced_envelope(
     _check_2d_scalar_field(E_full, 'carrier_referenced_envelope')
     if dy is None:
         dy = dx
-    if np.isinf(R_carrier):
+    phase = _build_carrier_phase(E_full.shape, dx, dy, wavelength, R_carrier,
+                                 -1, 'carrier_referenced_envelope')
+    if phase is None:
         return E_full.copy() if hasattr(E_full, 'copy') else np.array(E_full)
-    if R_carrier == 0.0:
-        raise ValueError(
-            "carrier_referenced_envelope: R_carrier == 0 (carrier focus).")
-    phase = _radial_carrier_phase(E_full.shape, dx, dy, wavelength,
-                                  float(R_carrier), -1)
     if np.iscomplexobj(E_full):
         phase = phase.astype(E_full.dtype, copy=False)
     return E_full * phase
+
+
+# ===========================================================================
+# Apertures (Task 2): hard clip on the envelope grid + carrier hardening
+# ===========================================================================
+
+
+def _fit_carrier_inv(E, wavelength, dx, dy, axis=None):
+    """Intensity-weighted mean wavefront inverse-curvature ``1/R`` of a field
+    (0.0 for a flat/collimated wavefront).
+
+    From ``E = A exp(i*phi)`` with ``phi = +k r^2/(2R)`` (the library's
+    diverging-``R>0`` convention), ``Im[E* (x dE/dx)] = k A^2 x^2 / R``, so
+    ``1/R_x = Im[sum E* x dE/dx] / (k sum |E|^2 x^2)`` -- a phase-unwrap-free,
+    aperture-robust estimator.  ``axis=None`` fits the isotropic (combined
+    ``x^2+y^2``) curvature; ``axis=1``/``0`` fit x/y separately."""
+    E = np.asarray(E)
+    Ny, Nx = E.shape[-2], E.shape[-1]
+    k = 2.0 * np.pi / wavelength
+    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Y, X = np.meshgrid(y, x, indexing='ij')
+    inten = np.abs(E) ** 2
+    if axis is None:
+        dE = np.gradient(E, dx, axis=1)
+        num = np.imag(np.sum(np.conj(E) * X * dE))
+        dE = np.gradient(E, dy, axis=0)
+        num += np.imag(np.sum(np.conj(E) * Y * dE))
+        den = k * float(np.sum(inten * (X * X + Y * Y)))
+    elif axis == 1:
+        dE = np.gradient(E, dx, axis=1)
+        num = np.imag(np.sum(np.conj(E) * X * dE))
+        den = k * float(np.sum(inten * X * X))
+    else:
+        dE = np.gradient(E, dy, axis=0)
+        num = np.imag(np.sum(np.conj(E) * Y * dE))
+        den = k * float(np.sum(inten * Y * Y))
+    num = float(num)
+    if den == 0.0 or not (np.isfinite(num) and np.isfinite(den)):
+        return 0.0
+    return num / den
+
+
+def carrier_referenced_fit_radius(
+    E_full: np.ndarray,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    astigmatic: bool = False,
+) -> Union[float, Tuple[float, float]]:
+    """Best-fit spherical carrier radius ``R`` of a full field's wavefront.
+
+    Returns the intensity-weighted mean radius (``+inf`` for a collimated
+    wavefront) using the phase-unwrap-free estimator in
+    :func:`_fit_carrier_inv`.  With ``astigmatic=True`` returns the per-axis
+    pair ``(R_x, R_y)``.  Use it to reference a measured / apertured field to
+    its actual wavefront so the envelope is flat and the co-moving grid is
+    well conditioned.
+
+    Parameters
+    ----------
+    E_full : ndarray, complex, shape (Ny, Nx)
+        Full physical field (carrier NOT divided out).
+    wavelength, dx : float
+    dy : float, optional
+        Defaults to ``dx``.
+    astigmatic : bool, default False
+        If True, fit ``R_x`` and ``R_y`` independently.
+    """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_full, 'carrier_referenced_fit_radius')
+    if dy is None:
+        dy = dx
+    if astigmatic:
+        ix = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=1)
+        iy = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=0)
+        return (np.inf if ix == 0.0 else 1.0 / ix,
+                np.inf if iy == 0.0 else 1.0 / iy)
+    inv = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=None)
+    return np.inf if inv == 0.0 else 1.0 / inv
+
+
+def _rereference(env, R_old, R_new, wavelength, dx, dy):
+    """Move an envelope from carrier ``R_old=(Rx,Ry)`` to ``R_new=(Rx,Ry)``:
+    ``env * exp(i*k*r^2/2 * (1/R_old - 1/R_new))`` per axis."""
+    Rox, Roy = R_old
+    Rnx, Rny = R_new
+    Ny, Nx = env.shape[-2], env.shape[-1]
+    k = 2.0 * np.pi / wavelength
+    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Y, X = np.meshgrid(y, x, indexing='ij')
+
+    def _inv(R):
+        return 0.0 if np.isinf(R) else 1.0 / float(R)
+
+    dphi = 0.5 * k * ((X * X) * (_inv(Rox) - _inv(Rnx))
+                      + (Y * Y) * (_inv(Roy) - _inv(Rny)))
+    return env * np.exp(1j * dphi)
+
+
+def carrier_referenced_aperture(
+    E_env: np.ndarray,
+    R_carrier: Union[float, Tuple[float, float]],
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    *,
+    radius: Optional[float] = None,
+    half_x: Optional[float] = None,
+    half_y: Optional[float] = None,
+    mask: Optional[np.ndarray] = None,
+    refit_carrier: bool = False,
+    new_carrier: Optional[Union[float, Tuple[float, float]]] = None,
+    return_transmission: bool = False,
+):
+    """Apply a hard aperture to a carrier-referenced field on its co-moving
+    grid, removing the clipped power exactly (Task 2).
+
+    A hard stop clips the ENVELOPE in place: the carrier is a pure phase, so
+    ``|env|`` is clipped exactly as ``|E_full|`` would be, and the same real
+    mask serves both.  The clipped power is genuinely REMOVED -- the envelope
+    is never renormalised, so a downstream power accounting sees the true
+    transmitted energy.
+
+    Carrier after the clip.  A hard amplitude aperture does not change the
+    wavefront curvature at the surviving points, so by default the carrier
+    ``R`` is returned UNCHANGED (this is the physically correct default).
+    Two opt-in modes harden it:
+
+    * ``refit_carrier=True`` -- re-fit ``R`` from the apertured envelope
+      (:func:`_fit_carrier_inv`) and re-reference to it, absorbing any
+      residual envelope curvature (e.g. the geometric-vs-Gaussian ``R``
+      mismatch accumulated over a chain) so the downstream envelope is flat.
+    * ``new_carrier=R`` (scalar or ``(R_x, R_y)``) -- re-reference to a
+      caller-supplied conjugate (e.g. the aperture is a new pupil for a
+      downstream relay).  NOTE: a large ``R`` change re-imprints a steep
+      fringe; the grid must resolve it (same caveat as
+      :func:`carrier_referenced_envelope`).
+
+    Parameters
+    ----------
+    E_env : ndarray, complex, shape (Ny, Nx)
+        Envelope on the co-moving grid.
+    R_carrier : float or (float, float)
+        The field's current carrier radius (scalar or astigmatic).
+    wavelength, dx : float
+    dy : float, optional
+        Defaults to ``dx``.
+    radius : float, optional
+        Circular hard-stop radius (m): keeps ``x^2 + y^2 <= radius^2``.
+    half_x, half_y : float, optional
+        Rectangular hard-stop half-widths (m): keeps ``|x| <= half_x`` and
+        ``|y| <= half_y`` (either may be omitted for a slit).
+    mask : ndarray, optional
+        Explicit real transmission mask, same shape as ``E_env`` (overrides
+        ``radius`` / ``half_x`` / ``half_y``).  Values need not be 0/1 (a
+        soft/graded stop is allowed), but the "hard aperture" energy contract
+        holds for any real mask.
+    refit_carrier : bool, default False
+        Re-fit and re-reference ``R`` from the apertured envelope.
+    new_carrier : float or (float, float), optional
+        Re-reference to this conjugate instead (mutually exclusive with
+        ``refit_carrier``).
+    return_transmission : bool, default False
+        If True, return ``(field, transmitted_fraction)`` instead of just the
+        field.
+
+    Returns
+    -------
+    CarrierReferencedField
+        ``(env, R, dx)`` with the apertured envelope; ``R`` / ``dx`` are
+        2-tuples when the (returned) carrier is astigmatic.  If
+        ``return_transmission`` is True, a ``(field, fraction)`` pair.
+    """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_env, 'carrier_referenced_aperture')
+    if dy is None:
+        dy = dx
+    if refit_carrier and new_carrier is not None:
+        raise ValueError(
+            "carrier_referenced_aperture: pass at most one of refit_carrier "
+            "and new_carrier.")
+    env = np.asarray(E_env)
+    Ny, Nx = env.shape[-2], env.shape[-1]
+
+    # -- build the (real) aperture mask -------------------------------------
+    if mask is not None:
+        msk = np.asarray(mask)
+        if msk.shape != env.shape:
+            raise ValueError(
+                f"carrier_referenced_aperture: mask shape {msk.shape} != "
+                f"field shape {env.shape}.")
+        msk = msk.astype(np.float64)
+    elif radius is not None or half_x is not None or half_y is not None:
+        x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+        y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+        Y, X = np.meshgrid(y, x, indexing='ij')
+        if radius is not None:
+            if not (radius > 0):
+                raise ValueError(
+                    "carrier_referenced_aperture: radius must be > 0.")
+            msk = (X * X + Y * Y <= float(radius) ** 2).astype(np.float64)
+        else:
+            hx = np.inf if half_x is None else float(half_x)
+            hy = np.inf if half_y is None else float(half_y)
+            if not (hx > 0 and hy > 0):
+                raise ValueError(
+                    "carrier_referenced_aperture: half_x / half_y must be > 0.")
+            msk = ((np.abs(X) <= hx) & (np.abs(Y) <= hy)).astype(np.float64)
+    else:
+        raise ValueError(
+            "carrier_referenced_aperture: specify an aperture via radius=, "
+            "half_x= / half_y=, or mask=.")
+
+    # -- energy accounting (fraction; the dx*dy area element cancels) -------
+    p_before = float((np.abs(env) ** 2).sum())
+    env_ap = env * msk
+    p_after = float((np.abs(env_ap) ** 2).sum())
+    transmission = (p_after / p_before) if p_before > 0.0 else 0.0
+    # NO renormalisation: the clipped power is genuinely gone.
+
+    R_x, R_y, in_astig = _parse_carrier(R_carrier, 'carrier_referenced_aperture')
+
+    # -- carrier: keep / re-fit / re-reference ------------------------------
+    if new_carrier is not None:
+        Nx_new, Ny_new, out_astig = _parse_carrier(
+            new_carrier, 'carrier_referenced_aperture')
+        env_out = _rereference(env_ap, (R_x, R_y), (Nx_new, Ny_new),
+                               wavelength, dx, dy)
+        R_out = (Nx_new, Ny_new) if out_astig else Nx_new
+    elif refit_carrier:
+        if in_astig:
+            ivx = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=1)
+            ivy = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=0)
+            inx = (0.0 if np.isinf(R_x) else 1.0 / R_x) + ivx
+            iny = (0.0 if np.isinf(R_y) else 1.0 / R_y) + ivy
+            Rnx = np.inf if inx == 0.0 else 1.0 / inx
+            Rny = np.inf if iny == 0.0 else 1.0 / iny
+            env_out = _rereference(env_ap, (R_x, R_y), (Rnx, Rny),
+                                   wavelength, dx, dy)
+            R_out = (Rnx, Rny) if (Rnx != Rny) else Rnx
+            out_astig = (Rnx != Rny)
+        else:
+            iv = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=None)
+            inv_new = (0.0 if np.isinf(R_x) else 1.0 / R_x) + iv
+            Rn = np.inf if inv_new == 0.0 else 1.0 / inv_new
+            env_out = _rereference(env_ap, (R_x, R_x), (Rn, Rn),
+                                   wavelength, dx, dy)
+            R_out = Rn
+            out_astig = False
+    else:
+        env_out = env_ap
+        R_out = (R_x, R_y) if in_astig else R_x
+        out_astig = in_astig
+
+    env_out = _match_env_dtype(env_out, E_env)
+    dx_out = (dx, dy) if out_astig else dx
+    field = CarrierReferencedField(env_out, R_out, dx_out)
+    if return_transmission:
+        return field, transmission
+    return field

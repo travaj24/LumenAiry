@@ -1,0 +1,16 @@
+{
+  "name": "caustic-fold-N0.3",
+  "description": "Strongly-aberrated plano-convex singlet (convex-first, f~5.2mm, f/3.65, N_F~82) at a through-focus plane 1.0 LSA short of the marginal focus, where the collimated ray map FOLDS into a single caustic ring (multi-valued, 2 branches) with Airy-type fringes. Reference field by dense direct Rayleigh-Sommerfeld ring integral. lambda=1.31um.",
+  "wavelength_um": 1.31,
+  "surfaces": [
+    {"radius_mm": 2.7, "thickness_mm": 1.0, "index": 1.5168, "conic": 0.0},
+    {"radius_mm": 0.0, "thickness_mm": 4.3704, "index": "air"}
+  ],
+  "input": {"w0_mm": 0.55},
+  "aperture_mm": 1.4,
+  "grid": {"N": 1280, "dx_um": 2.0},
+  "window_um": 60.0,
+  "n_fan": 8000,
+  "n_rho": 3000,
+  "rho_max_um": 120.0
+}

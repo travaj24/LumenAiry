@@ -1,0 +1,20 @@
+{
+ "wavelength_um": 1.31,
+ "R_in_mm": -35.0,
+ "aperture_mm": 20.0,
+ "pop": {
+  "w0_mm": 4.0
+ },
+ "surfaces": [
+  {
+   "radius_mm": -50.0,
+   "thickness_mm": 3.0,
+   "index": 1.5168
+  },
+  {
+   "radius_mm": 50.0,
+   "thickness_mm": 116.53,
+   "index": "air"
+  }
+ ]
+}

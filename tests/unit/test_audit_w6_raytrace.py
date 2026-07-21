@@ -292,6 +292,11 @@ def test_residual_check_is_grad_safe():
 # assertion below makes this test fail loudly if Surface ever grows a
 # field that is not listed here -- update BOTH this dict and
 # _surface_copy_with when that happens.
+def _W6_FIELD_SAG(xs, ys):
+    # Stable module-level callable so copy_with propagation is identity-checkable.
+    return 1e-6 * (xs + ys)
+
+
 _NON_DEFAULT = {
     'radius': 0.123,
     'conic': -0.5,
@@ -315,6 +320,9 @@ _NON_DEFAULT = {
     'conic_y': -1.0,
     'aspheric_coeffs_y': {6: -3.0e4},
     'freeform': {'kind': 'xy_polynomial', 'coefficients': {(2, 1): 1e-4}},
+    'field_decenter': (1e-3, -2e-3),
+    'field_tilt': (5e-4, -3e-4),
+    'field_sag_callable': _W6_FIELD_SAG,
     'bsdf': object(),
     'coating': (1.374 + 7.62j),
     'world_origin': np.array([0.1, -0.2, 1.0]),

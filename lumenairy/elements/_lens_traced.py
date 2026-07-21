@@ -98,6 +98,30 @@ def _load_numba():
 _NEWTON_MAX_ITERS = 12
 
 
+# N12 (P11): relative floor on |det J| for the opt-in ``amplitude_model=
+# 'ray_density'`` mode.  The ray-density exit amplitude is
+# ``|E_in| / sqrt(|det J|)``, which diverges as ``det J -> 0`` at a fold
+# caustic.  |det J| is floored at this fraction of the median |det J| over the
+# ray-covered region so the amplitude stays finite (never inf/nan); a fold is
+# also flagged when |det J| drops below the floor OR det J changes sign between
+# adjacent ray cells, which triggers a one-time caustic warning steering the
+# caller to GBD/FGA.  1e-3 is well below the ~O(1) det-J variation a smooth
+# (non-folding) coma redistribution produces, so it never clips a legitimate
+# aberrated spot; it only engages at a genuine fold.
+_RAY_DENSITY_CAUSTIC_FLOOR_REL = 1e-3
+
+# N12 (P11): a |det J| dynamic-range (max/min over the ray-covered region) above
+# this flags a near-caustic even when the coarse grid does not resolve the exact
+# fold curve (a sign change) or drive a sample below the absolute floor -- e.g.
+# tracing to a plane at/near a focus, where all rays crowd into a tiny region so
+# |det J| spans orders of magnitude and the single-branch ray-density amplitude
+# under-resolves the singular spot (energy is NOT conserved there).  A smooth,
+# non-folding aberrated map varies |det J| by <~a few x, well below this; a
+# genuine caustic spans >>30x.  Conservative (a false positive only steers the
+# caller to GBD/FGA, never returns a wrong number).
+_RAY_DENSITY_CAUSTIC_MAXMIN = 30.0
+
+
 # Module-level default for ``apply_real_lens_traced(parallel_amp=...)``.  The
 # kwarg default is ``None`` -> resolves to this global, so a process-wide
 # ``set_lens_parallel_amp(False)`` (or ``lumenairy.set_low_memory(True)``)
@@ -145,6 +169,39 @@ logger = get_logger(__name__)
 # amplitude leg of apply_real_lens_traced.  Lives in _lens_real.py
 # since v3.5.5; re-imported here for the in-function callbacks.
 from ._lens_real import apply_real_lens
+
+
+def _prescription_has_field_frame(prescription) -> bool:
+    """True when any surface carries a P3-style FIELD-FRAME decenter / tilt /
+    freeform ``sag_callable`` (the ``apply_real_lens`` displaced-pointwise
+    convention).  For such elements the ray trace (``trace`` ->
+    ``_intersect_surface`` / ``_refract`` via the shared field-frame
+    ``_surface_sag_xy``) carries the transverse ray WALK-OFF -- the true induced
+    coma -- into the geometry and OPL, so the traced centroid / sign-mirror /
+    tilt are oracle-matched.
+
+    Detection helper only (used by the tests and available for dispatcher
+    routing).  It does NOT gate any amplitude change: the P9 field-frame
+    amplitude override was REMOVED (2026-07-20) after the adversarial verifier
+    proved it was a model-mixing artefact.  The traced hybrid's grid-indexed
+    amplitude leg cannot carry the decentered walk-off (an asymmetric ray-
+    density redistribution), so its decentered-spot EE is amplitude-limited -- a
+    genuine model limit of the P3 single-plane class.  Route decentered-coma EE
+    to ``apply_real_lens_gbd`` (N10b), whose beamlets carry the walk-off
+    amplitude and BROADEN matching ZOS (1.035 @1.31um) + the geom-spot oracle.
+    See docs/audit_real_lens_displaced_2026_07_19.md (P9 / N10a)."""
+    for s in (prescription.get('surfaces') or []):
+        if not isinstance(s, dict):
+            continue
+        if s.get('sag_callable') is not None:
+            return True
+        dec = s.get('decenter') or (0.0, 0.0)
+        if float(dec[0]) != 0.0 or float(dec[1]) != 0.0:
+            return True
+        tl = s.get('tilt') or (0.0, 0.0)
+        if float(tl[0]) != 0.0 or float(tl[1]) != 0.0:
+            return True
+    return False
 
 
 def _newton_invert_chunk(args):
@@ -775,6 +832,18 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
 # on_noncollimated policy.
 _NONCOLLIMATED_RESID_THRESH = 0.02
 
+# N5 (2026-07-19): when ``tilt_aware_rays=True`` and no explicit ``carrier`` is
+# given, an auto-fit carrier eikonal is threaded through the carrier plumbing so
+# the exit wavefront carries the input congruence (matching the carrier path's
+# H6 entrance-eikonal fix).  It engages only when the fitted eikonal's peak phase
+# over the bright support exceeds this floor, so a (near-)collimated tilt_aware
+# input -- which fits ``W == 0`` exactly for a real / globally-phased field --
+# keeps the byte-identical plane-wave-reference path.  1e-2 rad (~lambda/628 of
+# OPD across the beam) sits far below any divergence that shifts the focus (a
+# gently diverging R=10 m beam already fits tens of radians) yet safely above
+# float round-off.
+_TILT_EIKONAL_MIN_RAD = 1e-2
+
 
 def _carrier_residual_rms(E_in, W_full, wavelength, dx):
     """RMS transverse angular spread (radians) of ``E_in`` AFTER removing
@@ -1371,6 +1440,7 @@ def apply_real_lens_traced(
     sag_dtype: Optional[Any] = None,
     sag_chunk_rows: Optional[int] = None,
     return_screen: bool = False,
+    amplitude_model: str = 'screen',
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -1676,6 +1746,38 @@ def apply_real_lens_traced(
         band) when ``N >= 4096``, whole-grid below.  ``0`` forces the
         whole-grid path in BOTH stages; a positive int forces that
         band size.  Byte-identical to the whole-grid path.
+    amplitude_model : {'screen', 'ray_density'}, default 'screen'
+        Which model supplies the exit-plane AMPLITUDE (the phase is the
+        ray-traced OPL either way).
+
+        * ``'screen'`` (default) -- the historical hybrid amplitude: the
+          magnitude of a single analytic :func:`apply_real_lens` call
+          (ASM through glass).  **Byte-identical to prior releases.**  This
+          amplitude is a single-plane phase-screen leg, so it carries no
+          asymmetric ray-density redistribution: on a DECENTERED / tilted
+          (generally aberrated) element the induced-coma SPOT is
+          amplitude-limited (it does not broaden -- P9 / N10a).  Good for
+          wavefront / pointing / on-axis work.
+        * ``'ray_density'`` (opt-in, niche N12) -- geometric ray-tube energy
+          conservation: with ``J = d(x_out,y_out)/d(x_in,y_in)`` the ray-map
+          Jacobian (from the analytic gradient of the entrance->exit fit),
+          the exit magnitude is ``|E_in(x_in)| / sqrt(|det J|)`` placed at the
+          exit ray position with the traced OPL phase.  This ``1/sqrt(|det J|)``
+          IS the asymmetric coma redistribution the screen leg lacks, so the
+          decentered / aberrated SPOT broadens (usable for PSF / spot-size /
+          EE metrics, not just wavefront).  Energy-conserving in the geometric
+          limit (no silent renormalisation).
+
+          **Caustic caveat.**  ``det J -> 0`` (or a sign change) at a fold, so
+          the single-branch amplitude diverges there.  This mode DETECTS the
+          fold (relative floor on ``|det J|`` + adjacent sign change), CAPS the
+          amplitude (never returns inf/nan), and emits a one-time
+          ``RuntimeWarning`` steering to :func:`apply_real_lens_gbd` /
+          :func:`apply_real_lens_fga` -- it does NOT sum the multi-valued ray
+          branches (no KMAH/Maslov phase); GBD/FGA remain the caustic reference.
+
+          Requires ``inversion_method='newton'`` and the CPU path
+          (``use_gpu=False``); incompatible with ``return_screen=True``.
 
     Returns
     -------
@@ -1687,6 +1789,44 @@ def apply_real_lens_traced(
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced')
+
+    # ---- N12 (P11): opt-in ray-density (Jacobian) amplitude model -------
+    # ``amplitude_model='screen'`` (default) is byte-identical to prior
+    # releases -- none of the ray-density code below runs.  ``'ray_density'``
+    # replaces the exit magnitude with the geometric ray-tube amplitude
+    # ``|E_in| / sqrt(|det J|)`` (see the docstring), keeping the traced OPL
+    # phase.  It is confined to the CPU Newton path so the entrance->exit fits
+    # + Newton inverse it reuses are available in-process; the fold-detection
+    # flag is a 1-element list so the nested amplitude closure can set it.
+    if amplitude_model not in ('screen', 'ray_density'):
+        raise ValueError(
+            f"amplitude_model must be 'screen' or 'ray_density', got "
+            f"{amplitude_model!r}.")
+    _ray_density = (amplitude_model == 'ray_density')
+    _rd_fold_detected = [False]
+    if _ray_density:
+        if return_screen:
+            raise ValueError(
+                "amplitude_model='ray_density' is incompatible with "
+                "return_screen=True: the ray-density amplitude depends on "
+                "|E_in| (and the traced phase), so it cannot be baked into an "
+                "input-independent prepared screen.")
+        if use_gpu:
+            raise ValueError(
+                "amplitude_model='ray_density' requires the CPU path "
+                "(use_gpu=False): it re-uses the in-process entrance->exit "
+                "fits + Newton inverse to build |E_in|/sqrt(|det J|).")
+        if inversion_method != 'newton':
+            raise ValueError(
+                "amplitude_model='ray_density' requires "
+                "inversion_method='newton' (it evaluates det J from the "
+                f"Newton entrance->exit fits); got {inversion_method!r}.")
+        # Full-grid Newton phase (no amp mask) so the reconstructed phasor
+        # covers the WHOLE ray-valid region -- the ray-density amplitude has
+        # energy (the coma tail) where |E_analytic| is small, which the amp
+        # mask would otherwise drop.  Whole-grid final assembly (below) so the
+        # magnitude swap sees the fully-built exit field.
+        newton_amp_mask_rel = 0.0
 
     # v5.1.0 (default-knob resolver rollout): resolve ``wave_propagator``
     # / ``dy`` from the library-wide defaults when callers leave them
@@ -1878,6 +2018,8 @@ def apply_real_lens_traced(
         sag_chunk_rows is not None and int(sag_chunk_rows) > 0
         and max(1, int(ray_subsample)) > 1
         and inversion_method == 'newton'
+        and not _ray_density   # ray-density does the magnitude swap on the
+                               # whole-grid exit field (below), not per band
     )
     if _chunk_assembly:
         X = Y = None
@@ -1898,20 +2040,57 @@ def apply_real_lens_traced(
     _carrier_W = None
     _carrier_grad = None
     _carrier_W_fn = None
-    if carrier is not None:
+    # N5 (2026-07-19): tilt_aware_rays with NO explicit carrier still needs an
+    # entrance-eikonal REFERENCE so the exit wavefront carries the input
+    # congruence -- the same physics the carrier path's H6 fix restored.  On the
+    # DEFAULT preserve_input_phase=True the plane-wave reference already works (a
+    # diverging/tilted tilt_aware input focuses at its true image: E_analytic
+    # carries the input eikonal and the plane-wave reference leg does not
+    # subtract it, unlike the carrier path's exp(i*k0*W) leg that made the H6
+    # collapse surface on the default path).  But preserve_input_phase=False
+    # builds the exit phase from opl_traced ALONE, which the ray tracer
+    # accumulates only from the entrance plane forward -- dropping k0*W(x_in) and
+    # collapsing a diverging/tilted input to the collimated focal plane (the H6
+    # class, here confined to the non-default mode).  Fix: auto-fit the input's
+    # smooth carrier and thread it through the SAME carrier plumbing (reference
+    # leg exp(i*k0*W) + the H6 entrance-eikonal OPL term); the per-pixel tilt
+    # LAUNCH below is retained (the tilt_aware branch wins).  A (near-)collimated
+    # input fits W == 0 exactly (real / globally-phased field -> zero tilt
+    # samples), so it keeps the byte-identical plane-wave path.
+    _carrier_src = carrier
+    if _carrier_src is None and tilt_aware_rays:
+        _carrier_src = 'auto'
+    if _carrier_src is not None:
         if X is None:
             _cx = (np.arange(E_in.shape[0]) - E_in.shape[0] / 2) * dx
             _CX, _CY = np.meshgrid(_cx, _cx)
         else:
             _CX, _CY = X, Y
-        _carrier_W, _carrier_grad, _carrier_W_fn = _compute_carrier(
-            carrier, E_in, wavelength, dx, _CX, _CY)
+        _cW, _cGrad, _cWfn = _compute_carrier(
+            _carrier_src, E_in, wavelength, dx, _CX, _CY)
         del _CX, _CY
-        # The fast_analytic_phase reference is the lens's on-axis geometric
-        # phase (input-independent), which cannot carry the carrier
-        # congruence; force the full wave reference when a carrier is set.
-        if fast_analytic_phase:
-            fast_analytic_phase = False
+        # Explicit carrier always engages.  The IMPLICIT tilt_aware auto-carrier
+        # engages only when the fitted eikonal is non-trivial, so a flat-wavefront
+        # input (fits W == 0) keeps the byte-identical plane-wave reference (pin:
+        # collimated tilt_aware unchanged in both preserve_input_phase modes).
+        _engage = True
+        if carrier is None:
+            _mag0 = np.abs(E_in)
+            _pk0 = float(_mag0.max()) if _mag0.size else 0.0
+            if _pk0 > 0:
+                _bright0 = _mag0 > 0.05 * _pk0
+                _peakW = (float(np.nanmax(np.abs(_cW[_bright0])))
+                          if _bright0.any() else 0.0)
+            else:
+                _peakW = 0.0
+            _engage = (_peakW * _k0) > _TILT_EIKONAL_MIN_RAD
+        if _engage:
+            _carrier_W, _carrier_grad, _carrier_W_fn = _cW, _cGrad, _cWfn
+            # The fast_analytic_phase reference is the lens's on-axis geometric
+            # phase (input-independent), which cannot carry the carrier
+            # congruence; force the full wave reference when a carrier is set.
+            if fast_analytic_phase:
+                fast_analytic_phase = False
 
     # F1 (audit) collimation guard: measure the residual angular spread
     # (after removing any carrier) and warn / delegate when the input is
@@ -2149,6 +2328,35 @@ def apply_real_lens_traced(
         amp = cp.asnumpy(amp)
     if phase_analytic_lens is not None and _is_cupy_array(phase_analytic_lens):
         phase_analytic_lens = cp.asnumpy(phase_analytic_lens)
+
+    # ---- N10a: NO field-frame amplitude override (removed 2026-07-20) -----
+    # The P9 build swapped the amplitude leg to the bare input envelope
+    # (``E_out = E_in * exp(i k0 opl)``) for field-frame (decenter/tilt)
+    # prescriptions, on the theory that coma is a pure exit-pupil PHASE
+    # aberration.  The adversarial verifier REFUTED this: forcing the input-
+    # envelope amplitude on CENTERED geometry (a 1e-7 decenter, or an exact-
+    # conic ``sag_callable``) already widened the on-axis EE80 by ~8% with ZERO
+    # decenter (grid-robust), so the reported "1.097 broadening / within 1.6% of
+    # ZOS" was an amplitude-MODEL artefact (decentered override-amp compared to
+    # centered analytic-amp), not induced coma.  Held to ONE amplitude model the
+    # traced EE80 under decenter is unstable and wavelength/plane-dependent
+    # (|E_analytic|: 0.88x @1.31 / 1.09x @0.633 at the paraxial image; |E_in|:
+    # 0.99x @1.31 / 0.95x @0.633) -- because the traced hybrid's GRID-INDEXED
+    # amplitude cannot carry the transverse walk-off (the coma flare is an
+    # asymmetric ray-DENSITY redistribution the Newton-inverted OPL alone does
+    # not put into |E|), and the singlet's paraxial plane is strongly defocused.
+    # This is a genuine traced-model limit of the same class as the P3 single-
+    # plane analytic limit.  The decenter GEOMETRY + OPL the traced model now
+    # carries are correct (centroid / sign-mirror / tilt all oracle-matched),
+    # but its decentered-spot EE is amplitude-limited, so the amplitude leg is
+    # left as the standard self-consistent reconstruction here (no swap).  The
+    # accurate decentered-coma EE reference is ``apply_real_lens_gbd`` (N10b):
+    # its beamlets carry the walk-off amplitude, so it BROADENS matching ZOS
+    # (ratio 1.035 @1.31um) and the geom-spot oracle (~1% on the ratio).  See
+    # docs/audit_real_lens_displaced_2026_07_19.md (P9 / N10a) for the full
+    # envelope + the routing to GBD.  ``_prescription_has_field_frame`` is kept
+    # as the field-frame detector (used by the tests and available for routing).
+
     call_progress(progress, 'real_lens_traced', 0.40,
                   'ray-tracing exit pupil')
 
@@ -2604,6 +2812,14 @@ def apply_real_lens_traced(
             f"newton_fit must be 'spline' or 'polynomial', "
             f"got {newton_fit!r}")
 
+    # N12 (P11): the forward-map fits Sx/Sy expose a combined value+gradient on
+    # the polynomial path (``_Cheb2DEvaluator.ev_value_and_grad``); the spline
+    # path uses the ``.ev(dx=1)`` / ``.ev(dy=1)`` API.  The ray-density
+    # amplitude closure needs the Jacobian d(x_out,y_out)/d(x_in,y_in), so it
+    # dispatches on this flag.
+    _has_combined_fits = (hasattr(Sx, 'ev_value_and_grad')
+                          and hasattr(Sy, 'ev_value_and_grad'))
+
     # ---- Paraxial magnification from the already-computed forward
     # trace.  Used as the Newton initial guess: (xe, ye) ~ (Xw, Yw) / M.
     #
@@ -2671,7 +2887,7 @@ def apply_real_lens_traced(
     MAX_NEWTON_ITERS = (int(newton_max_iters) if newton_max_iters is not None
                         else _NEWTON_MAX_ITERS)
 
-    def _invert_newton(Xw, Yw, sub_progress=None):
+    def _invert_newton(Xw, Yw, sub_progress=None, _want_entrance=False):
         """Run Newton iteration to find (xe, ye) such that (Sx, Sy)
         evaluated at (xe, ye) equals (Xw, Yw).  Returns OPL at the
         converged entrance positions plus a validity mask.
@@ -2681,6 +2897,12 @@ def apply_real_lens_traced(
 
         ``sub_progress`` is an optional ``ProgressScaler`` (or any
         callable ``f(frac, msg)``) driven once per Newton iteration.
+
+        ``_want_entrance`` (N12/P11, internal): when True, ALSO return the
+        converged entrance coordinates ``(xe, ye)`` (same shape as ``Xw``) as a
+        3-tuple ``(opl, xe, ye)`` so the ray-density amplitude closure can
+        evaluate ``det J`` and ``|E_in|`` at the entrance point.  Default False
+        keeps the historical single-array return byte-identical.
         """
         # Detect Newton-loop array backend from the evaluator.  The
         # evaluator's xp is either numpy (CPU) or cupy (GPU when
@@ -2821,6 +3043,15 @@ def apply_real_lens_traced(
         # sees a NumPy array.
         if xp is not np:
             opl_flat = cp.asnumpy(opl_flat)
+            if _want_entrance:
+                xe = cp.asnumpy(xe)
+                ye = cp.asnumpy(ye)
+        if _want_entrance:
+            # N12 (P11): the ray-density amplitude closure needs the converged
+            # entrance coordinates (to evaluate det J and |E_in| there).
+            return (opl_flat.reshape(Xw.shape),
+                    np.asarray(xe).reshape(Xw.shape),
+                    np.asarray(ye).reshape(Xw.shape))
         return opl_flat.reshape(Xw.shape)
 
     # ----- Coarse-grid Newton + interpolation --------------------------
@@ -2929,6 +3160,79 @@ def apply_real_lens_traced(
 
         opl_flat = np.concatenate(results)
         return opl_flat.reshape(Xw.shape)
+
+    def _ray_density_amp_grid(Xg, Yg):
+        """N12 (P11): geometric ray-density exit amplitude ``|E_in(x_in)| /
+        sqrt(|det J|)`` on the exit-position grid ``(Xg, Yg)``.
+
+        Uses the SAME entrance->exit fits (``Sx``, ``Sy``) + Newton inverse the
+        OPL phase uses, so the amplitude and phase are placed at consistent exit
+        positions.  For each exit pixel Newton returns the entrance point
+        ``(xe, ye)``; ``det J = d(x_out,y_out)/d(x_in,y_in)`` is the analytic
+        gradient of the forward-map fits there (energy-conserving in the
+        geometric limit -- the SAME ``1/sqrt(|det J|)`` Jacobian the ring-tube
+        oracle uses), and ``|E_in|`` is bilinearly sampled at the entrance.  NaN
+        where the ray map is out of domain.  ``|det J|`` is floored at a caustic
+        (never inf/nan) and the fold is flagged in ``_rd_fold_detected``.
+        """
+        opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+        sh = np.asarray(Xg).shape
+        invalid = ~np.isfinite(np.asarray(opl_f))
+        xef = np.asarray(xe_g, dtype=np.float64).ravel()
+        yef = np.asarray(ye_g, dtype=np.float64).ravel()
+        # Forward-map Jacobian J = d(x_out,y_out)/d(x_in,y_in) at the entrance.
+        if _has_combined_fits:
+            _fx, jxx, jxy = Sx.ev_value_and_grad(xef, yef)
+            _fy, jyx, jyy = Sy.ev_value_and_grad(xef, yef)
+        else:
+            jxx = np.asarray(Sx.ev(xef, yef, dx=1))
+            jxy = np.asarray(Sx.ev(xef, yef, dy=1))
+            jyx = np.asarray(Sy.ev(xef, yef, dx=1))
+            jyy = np.asarray(Sy.ev(xef, yef, dy=1))
+        det_j = (np.asarray(jxx) * np.asarray(jyy)
+                 - np.asarray(jxy) * np.asarray(jyx)).reshape(sh)
+        # |E_in| at the entrance (bilinear); rays whose entrance falls outside
+        # the input grid contribute zero amplitude.
+        from scipy.ndimage import map_coordinates as _mc
+        _absin = np.abs(np.asarray(E_in)).astype(np.float64)
+        _col = xef / dx + N / 2.0
+        _row = yef / dy + N / 2.0
+        a_in = _mc(_absin, np.vstack([_row, _col]), order=1,
+                   mode='constant', cval=0.0).reshape(sh)
+        absdet = np.abs(det_j)
+        fin = np.isfinite(absdet) & (~invalid)
+        ref = float(np.median(absdet[fin])) if fin.any() else 0.0
+        floor = _RAY_DENSITY_CAUSTIC_FLOOR_REL * ref
+        # Caustic/fold detection: |det J| driven below the floor (det J -> 0), a
+        # large |det J| dynamic range (near a focus/caustic the ray tube
+        # collapses so |det J| spans orders of magnitude), or a det J sign
+        # change between adjacent (valid) ray cells.
+        if fin.any():
+            _amin = float(np.min(absdet[fin]))
+            _amax = float(np.max(absdet[fin]))
+            if floor > 0.0 and _amin < floor:
+                _rd_fold_detected[0] = True
+            if _amin > 0.0 and _amax / _amin > _RAY_DENSITY_CAUSTIC_MAXMIN:
+                _rd_fold_detected[0] = True
+        _sd = np.sign(det_j)
+        _mh = fin[:, 1:] & fin[:, :-1]
+        _mv = fin[1:, :] & fin[:-1, :]
+        if (bool(np.any((_sd[:, 1:] * _sd[:, :-1] < 0.0) & _mh))
+                or bool(np.any((_sd[1:, :] * _sd[:-1, :] < 0.0) & _mv))):
+            _rd_fold_detected[0] = True
+        absdet_capped = np.maximum(absdet, floor) if floor > 0.0 else absdet
+        with np.errstate(divide='ignore', invalid='ignore'):
+            a_rd = a_in / np.sqrt(absdet_capped)
+        a_rd = np.where(invalid | (~np.isfinite(a_rd)), np.nan, a_rd)
+        # Aperture is a stop at the ENTRANCE: a ray whose entrance falls outside
+        # the aperture is physically blocked, so it carries no energy.  Masking
+        # on the entrance (vs the final exit-position mask, which for a
+        # converging element admits rays whose entrance exceeds the stop) makes
+        # the ray-density power exactly the aperture-transmitted input power.
+        if aperture is not None:
+            r_ent2 = (xef * xef + yef * yef).reshape(sh)
+            a_rd = np.where(r_ent2 <= (0.5 * aperture) ** 2, a_rd, np.nan)
+        return a_rd
 
     call_progress(progress, 'real_lens_traced', 0.55,
                   'inverting entrance->exit map')
@@ -3084,6 +3388,42 @@ def apply_real_lens_traced(
                 X_masked, Y_masked, sub_progress=newton_cb)
             opl_map = np.full(X.shape, np.nan, dtype=opl_1d.dtype)
             opl_map[mask_full] = opl_1d
+
+    # ---- N12 (P11): ray-density (Jacobian) exit amplitude on the wave grid ---
+    # Built on the SAME coarse Newton grid the OPL used (or the full grid at
+    # sub=1) and upsampled identically, so the ray-density magnitude and the
+    # traced OPL phase share exit positions.  ``_chunk_assembly`` is forced off
+    # for ray-density, so X/Y exist here.
+    ard_map = None
+    if _ray_density:
+        if sub > 1:
+            Xs_rd = X[::sub, ::sub]
+            Ys_rd = Y[::sub, ::sub]
+            ard_coarse = _ray_density_amp_grid(Xs_rd, Ys_rd)
+            from scipy.ndimage import map_coordinates as _mc_rd
+            Ns_rd = ard_coarse.shape[0]
+            ii_rd, jj_rd = np.indices((N, N), dtype=np.float64)
+            _coords_rd = np.array([ii_rd * Ns_rd / N, jj_rd * Ns_rd / N])
+            del ii_rd, jj_rd
+            _a_rd = _mc_rd(np.where(np.isnan(ard_coarse), 0.0, ard_coarse),
+                           _coords_rd, order=1, mode='nearest')
+            _nan_rd = _mc_rd(np.isnan(ard_coarse).astype(np.float64),
+                             _coords_rd, order=1, mode='nearest')
+            del _coords_rd
+            ard_map = np.where(_nan_rd > 0.5, np.nan, _a_rd)
+        else:
+            ard_map = _ray_density_amp_grid(X, Y)
+        if _rd_fold_detected[0]:
+            import warnings as _rd_warn
+            _rd_warn.warn(
+                "apply_real_lens_traced: amplitude_model='ray_density' "
+                "detected a fold caustic (det J -> 0 or a sign change) in the "
+                "ray map.  The single-branch ray-density amplitude is CAPPED "
+                "there (finite, never inf/nan) but is UNRELIABLE near the fold "
+                "-- this mode does NOT sum the multi-valued ray branches with "
+                "the KMAH/Maslov phase.  Use apply_real_lens_gbd or "
+                "apply_real_lens_fga for caustic-faithful amplitude.",
+                RuntimeWarning, stacklevel=2)
     call_progress(progress, 'real_lens_traced', 0.90,
                   'assembling exit field')
 
@@ -3208,6 +3548,22 @@ def apply_real_lens_traced(
     if aperture is not None:
         E_out = np.where(X ** 2 + Y ** 2 <= (aperture / 2) ** 2,
                          E_out, target_cdtype.type(0))
+    # ---- N12 (P11): swap the exit MAGNITUDE to the ray-density amplitude -----
+    # The screen-mode ``E_out`` above carries the correct traced OPL phase and
+    # the valid / aperture masks (it is 0 outside the ray-covered pupil).  In
+    # ray-density mode we keep that phase (its unit phasor) and replace the
+    # magnitude with ``|E_in|/sqrt(|det J|)`` -- the geometric ray-tube energy
+    # redistribution the screen amplitude lacks.  The unit phasor is 0 exactly
+    # where the screen field is 0 (masked region), so the ray-density field
+    # inherits the same support without a separate mask; NaN ray-density values
+    # (out-of-domain) contribute 0.
+    if _ray_density and ard_map is not None:
+        _absE = np.abs(E_out)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            _unit = np.divide(E_out, _absE,
+                              out=np.zeros_like(E_out), where=_absE > 0)
+        _ard = np.where(np.isfinite(ard_map), ard_map, 0.0)
+        E_out = _ard * _unit
     if E_out.dtype != target_cdtype:
         E_out = E_out.astype(target_cdtype)
     call_progress(progress, 'real_lens_traced', 1.0, 'done')

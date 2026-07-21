@@ -25,6 +25,7 @@ from .surface import (
     RAY_NAN,
     RAY_OK,
     RAY_TIR,
+    _field_frame_active,
     _surface_normal,
     _surface_sag_derivatives_xy,
     _surface_sag_xy,
@@ -84,6 +85,12 @@ def _intersect_surface(rays, surface, n_medium=1.0):
     asph = surface.aspheric_coeffs
     radius_y = getattr(surface, 'radius_y', None)
     freeform = getattr(surface, 'freeform', None)
+    # N10a: a FIELD-FRAME decenter / tilt / freeform sag_callable (the
+    # displaced-pointwise convention) makes the surface z = sag(x-dx, y-dy) +
+    # tilt-ramp, which neither the analytic ray-sphere quadratic nor the flat
+    # fast path represents -- route those through Newton (which evaluates the
+    # field-frame ``_surface_sag_xy`` / ``_surface_sag_derivatives_xy``).
+    field_frame = _field_frame_active(surface)
 
     # v4.12.1: detect the pure-spherical fast path.  Requires
     # finite R, conic == 0, no aspherics, no biconic axis, no
@@ -96,9 +103,10 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         and not asph
         and radius_y is None
         and freeform is None
+        and not field_frame
     )
 
-    if np.isinf(R) and not asph:
+    if np.isinf(R) and not asph and not field_frame:
         # Flat surface: intersect at z = 0
         # t such that z + N*t = 0  =>  t = -z / N
         with np.errstate(divide='ignore', invalid='ignore'):

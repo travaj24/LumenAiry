@@ -39,6 +39,7 @@ from ..propagators.gbd import (
     BeamletBundle,
     apply_prescription_persurface_to_beamlets,
     decompose_field_to_beamlets,
+    frame_completeness,
     reconstruct_field_from_beamlets,
 )
 
@@ -94,50 +95,15 @@ def _fft_upsample(Ec: np.ndarray, ky: int, kx: int) -> np.ndarray:
 _GBD_BEAMLETS_PER_APERTURE = 256
 
 # H7 (2026-07-19): ``direction_sampling='auto'`` engages the Husimi (carrier-
-# normal) launch when the input carries transverse angular content -- a curved
-# (diverging / converging) or tilted wavefront -- above this RMS local-tilt
-# threshold (radians).  Below it the flat-wavefront (collimated) field takes the
-# axial position-only decomposition, byte-identical to the historical default.
-# A real / globally-phased collimated field measures exactly 0 (see
-# ``_input_angular_spread``), so the threshold only guards against numerical
-# phase noise: 5e-4 rad (~0.03 deg) sits far below any divergence that shifts
-# the focus measurably yet far above float round-off.
-_GBD_AUTO_HUSIMI_THRESH = 5e-4
-
-
-def _input_angular_spread(E_in: np.ndarray, dx: float, dy: float,
-                          wavelength: float) -> float:
-    """RMS transverse direction cosine (local wavevector magnitude / k) of the
-    input field over its bright support -- the SPREAD (not the mean) of the
-    launch angles the beamlets would carry.
-
-    Unlike the intensity-weighted MEAN tilt (which is ~0 for a symmetric
-    diverging beam), this fires on a diverging / converging source: a curved
-    wavefront's local normals fan out, so their RMS magnitude ~ the beam NA.
-    Uses wrapping-safe nearest-neighbour phase increments
-    (``angle(E_i * conj(E_{i-1}))``) so it is robust to fringes up to the grid
-    Nyquist, and restricts to the bright support (``|E| > 0.05 max``) so
-    dark-region phase noise does not inflate it.  Returns ``0.0`` exactly for a
-    real / globally-phased (flat-wavefront) field, so the ``'auto'`` launch is a
-    strict no-op there.  NumPy host-side (a cheap eager reduction).
-    """
-    E = np.asarray(E_in)
-    mag = np.abs(E)
-    peak = float(mag.max()) if mag.size else 0.0
-    if peak <= 0.0:
-        return 0.0
-    k = 2.0 * np.pi / wavelength
-    mask = mag > 0.05 * peak
-    gx = E[:, 1:] * np.conj(E[:, :-1])
-    gy = E[1:, :] * np.conj(E[:-1, :])
-    mxx = mask[:, 1:] & mask[:, :-1]
-    myy = mask[1:, :] & mask[:-1, :]
-    lx = np.angle(gx[mxx]) / (k * dx)
-    my = np.angle(gy[myy]) / (k * dy)
-    vals = np.concatenate([lx, my])
-    if vals.size == 0:
-        return 0.0
-    return float(np.sqrt(np.mean(vals ** 2)))
+# normal) launch when the input carries transverse angular content.  The
+# threshold and the RMS-local-tilt detector now live in the beamlet layer
+# (:mod:`lumenairy.propagators.gbd`) so ``apply_real_lens_gbd`` and
+# ``propagate_gbd_through_prescription`` share ONE definition (N4, 2026-07-19);
+# re-exported here for backward-compatible imports.
+from ..propagators.gbd import (  # noqa: E402
+    _GBD_AUTO_HUSIMI_THRESH,
+    _input_angular_spread,
+)
 
 
 def _auto_sample_step(E_in: np.ndarray, dx: float,
@@ -184,6 +150,91 @@ def _entrance_aperture_mask(E_in: np.ndarray, dx: float, dy: float,
     return (X * X + Y * Y) <= (0.5 * float(ap)) ** 2
 
 
+# P4 / N3 (2026-07-20): frame-completeness threshold below which the
+# ``reexpand='auto'`` path re-decomposes the input with a carrier reference.  A
+# well-conditioned frame (collimated / mildly-curved input) reconstructs its
+# input to > 0.99; a strong reconvergence congruence (converging input through a
+# negative element) drops to ~0.88-0.94 because the flat-waist beamlets cannot
+# carry the input wavefront curvature.  0.98 sits above the best achievable naive
+# frame for that class (so it triggers) and below the collimated baseline (so it
+# does not fire there -- byte-identical output).
+_GBD_REEXPAND_COMPLETENESS_THRESH = 0.98
+
+
+def _carrier_referenced_bundle(
+    E_dec: np.ndarray, dx: float, dy: float, wavelength: float,
+    sample_step: int, waist_factor: float, carrier: Any = 'auto',
+):
+    """Carrier-referenced beamlet decomposition (P4 / N3 re-expansion).
+
+    A flat-waist Gaussian beamlet frame cannot represent a strongly-curved input
+    wavefront (a converging congruence reconverged by a negative element): the
+    un-captured per-beamlet curvature makes the frame incomplete, so its coherent
+    sum sheds ~6-12% of the power (measured at the DECOMPOSITION plane, before any
+    propagation -- an unrecoverable loss baked into the frame).
+
+    This re-decomposition removes the smooth carrier congruence ``W`` (the local
+    wavefront the beamlets cannot otherwise carry), decomposes the resulting
+    COMPACT, near-flat residual (which forms a near-complete frame), then seeds
+    each beamlet's launch **direction** (``grad W`` -- the carrier normals, the
+    H7 machinery), **curvature** (``Q += mean Hessian(W)``, so the beamlet rides
+    the local congruence rather than a flat waist), and **piston**
+    (``exp(i k0 W(centre))`` -- restoring the carrier phase the de-carriered
+    amplitude dropped).  The frame then reproduces the curved input to a
+    near-complete ``> 0.99`` and conserves power through the element evolution.
+
+    ``carrier`` reuses the traced ``carrier`` vocabulary via
+    :func:`lumenairy.elements._lens_traced._compute_carrier`: ``'auto'`` fits a
+    low-order polynomial congruence from ``E_dec``; a ``float`` is a signed
+    on-axis conjugate distance (m); an ndarray is an explicit wavefront ``W``.
+
+    Returns ``(bundle, n_kept)`` or ``(None, 0)`` when the carrier cannot be
+    built for this grid (anamorphic ``dy != dx`` -- ``_compute_carrier`` is
+    isotropic-grid only; the caller then keeps the naive frame).  The seeded
+    scalar (mean-curvature) ``Q`` matches an isotropic / mildly-astigmatic
+    carrier exactly; a strongly astigmatic carrier is N7's separable-axis scope.
+    """
+    if abs(float(dy) - float(dx)) > 1e-12 * max(abs(float(dx)), 1.0):
+        return None, 0                         # isotropic-grid carrier only
+    from ._lens_traced import _compute_carrier
+    N = E_dec.shape[-1]
+    ax = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(ax, ax)
+    try:
+        W_full, grad_fn, w_fn = _compute_carrier(
+            carrier, E_dec, wavelength, dx, X, Y)
+    except (ValueError, TypeError, np.linalg.LinAlgError):
+        return None, 0
+    k0 = 2.0 * np.pi / wavelength
+    E_flat = E_dec * np.exp(-1j * k0 * W_full)
+    bundle = decompose_field_to_beamlets(
+        E_flat, dx, wavelength=wavelength, dy=dy,
+        waist_factor=float(waist_factor), sample_step=int(sample_step),
+        direction_sampling=False)
+    bundle, n_kept = _prune_zero_beamlets(bundle)
+    pos = np.asarray(bundle.positions)
+    xc, yc = pos[:, 0], pos[:, 1]
+    # launch direction = carrier normal grad W (H7 carrier-normal launch)
+    Lc, Mc = grad_fn(xc, yc)
+    norm = np.sqrt(Lc * Lc + Mc * Mc + 1.0)
+    directions = np.stack([Lc / norm, Mc / norm, 1.0 / norm], axis=-1)
+    # seed beamlet curvature: Re(Q) += mean Hessian(W) (the local congruence the
+    # flat waist otherwise omits).  Hessian from finite differences of W_full;
+    # beamlet centres lie in the interior bright support so edge error is moot.
+    gWy, gWx = np.gradient(W_full, dx, dx)
+    Wxx = np.gradient(gWx, dx, axis=1)
+    Wyy = np.gradient(gWy, dx, axis=0)
+    fx = np.clip(xc / dx + N / 2.0, 0, N - 1).astype(np.int64)
+    fy = np.clip(yc / dx + N / 2.0, 0, N - 1).astype(np.int64)
+    curv = 0.5 * (Wxx[fy, fx] + Wyy[fy, fx])
+    Q = np.asarray(bundle.Q).astype(np.complex128) + curv
+    # restore the carrier piston the de-carriered amplitude dropped
+    amp = np.asarray(bundle.amplitude) * np.exp(1j * k0 * w_fn(xc, yc))
+    return (BeamletBundle(
+        positions=bundle.positions, directions=directions, Q=Q,
+        amplitude=amp.astype(Q.dtype), waist0=bundle.waist0), n_kept)
+
+
 def apply_real_lens_gbd(
     E_in: np.ndarray,
     *,
@@ -195,6 +246,9 @@ def apply_real_lens_gbd(
     beamlets_per_aperture: int = _GBD_BEAMLETS_PER_APERTURE,
     waist_factor: Optional[float] = None,
     direction_sampling: Any = 'auto',
+    reexpand: str = 'off',
+    reexpand_carrier: Any = 'auto',
+    reexpand_threshold: float = _GBD_REEXPAND_COMPLETENESS_THRESH,
     per_surface: bool = True,
     jacobian: str = 'auto',
     window: Optional[float] = 5.0,
@@ -206,6 +260,7 @@ def apply_real_lens_gbd(
     clip_aperture: bool = True,
     roi: Optional[Any] = None,
     normalize_output: str = 'none',
+    diagnostics: Optional[Dict[str, Any]] = None,
     progress: Optional[Any] = None,
     verbose: bool = False,
 ) -> np.ndarray:
@@ -246,14 +301,52 @@ def apply_real_lens_gbd(
         frame-completeness EDGE: the launch is still correct (focuses at the
         ABCD image) but the beamlet frame sheds a few percent of power that a
         finer frame does NOT recover (it saturates at the maximum density, ~0.94
-        for the G1 M5 biconcave at R_in=-35mm).  A negative element also needs a
-        finer ``beamlets_per_aperture`` than a positive one to tile its
-        diverging exit.  For absolute power in that regime pass
-        ``normalize_output='power'`` (restores it exactly).
+        for the G1 M5 biconcave at R_in=-35mm).  **P4 (2026-07-20): that ~0.94
+        limit is now closable with ``reexpand='auto'``** (carrier-referenced
+        re-decomposition -- see below), reaching > 0.99 power and windowed r2m
+        within 0.3% of ``traced``.  A negative element also needs a finer
+        ``beamlets_per_aperture`` than a positive one to tile its diverging exit.
+        For absolute power without re-expansion pass ``normalize_output='power'``
+        (restores the total but not the shed spatial structure).
+    reexpand :
+        Frame re-expansion policy for the strong-reconvergence edge (P4 / N3).
+        ``'off'`` (default) -- the single input-plane frame, **byte-identical**
+        to prior releases.  ``'auto'`` -- when the input carries wavefront
+        curvature AND the naive frame's input-plane completeness (see
+        :func:`lumenairy.propagators.gbd.frame_completeness`) falls below
+        ``reexpand_threshold``, re-decompose the input with a CARRIER REFERENCE:
+        remove the smooth congruence ``W`` (which a flat-waist beamlet cannot
+        carry), decompose the compact near-flat residual (a near-complete frame),
+        and seed each beamlet's launch direction (``grad W``), curvature
+        (``Q += Hessian W``) and piston from the carrier.  This closes the
+        frame-completeness loss that is otherwise baked into the input frame
+        (unrecoverable downstream).  A collimated / well-conditioned input
+        measures completeness > ``reexpand_threshold`` and is NOT re-expanded, so
+        ``'auto'`` there returns output byte-identical to ``'off'`` (it only adds
+        one input-plane completeness reconstruction).  Overhead when it fires is
+        ~2x (measured 1.5-1.9x on the M5 reconvergence case).
+    reexpand_carrier :
+        Carrier congruence for ``reexpand='auto'`` (reuses the ``traced``
+        ``carrier`` vocabulary): ``'auto'`` (default) fits a low-order polynomial
+        congruence from the input; a ``float`` is a signed on-axis conjugate
+        distance (m); an ndarray is an explicit wavefront ``W`` (m).  The seeded
+        scalar (mean-curvature) beamlet ``Q`` matches an isotropic / mildly
+        astigmatic carrier exactly; strongly astigmatic carriers are N7 scope.
+    reexpand_threshold :
+        Completeness below which ``reexpand='auto'`` re-decomposes (default 0.98).
     normalize_output :
         ``'none'`` (default, raw energy-conserving field) or ``'power'``
         (rescale so the output power equals the aperture-transmitted input
         power -- for like-for-like profile comparison with the other models).
+    diagnostics :
+        Optional dict; if provided it is populated in place (output unchanged)
+        with ``'frame_completeness'`` (reconstructed output power / aperture-
+        transmitted input power -- the P4 metric), ``'reexpanded'`` (bool),
+        ``'n_beamlets'``, and, on the ``reexpand='auto'`` path,
+        ``'frame_completeness_input'`` (the naive frame's input-plane
+        completeness that drove the re-expansion decision) and, when it fired,
+        ``'frame_completeness_reexpanded'``.  ``None`` (default) computes no
+        metric (zero overhead).
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_gbd')
@@ -298,8 +391,15 @@ def apply_real_lens_gbd(
     # at the true image ~0.09).  'auto' engages Husimi only when the input
     # carries measurable transverse angular content; a flat-wavefront
     # (collimated) field measures ~0 and takes the byte-identical axial path.
+    if reexpand not in ('off', 'auto'):
+        raise ValueError(
+            "apply_real_lens_gbd: reexpand must be 'off' or 'auto', "
+            f"got {reexpand!r}.")
+    # Input angular spread (RMS local tilt) -- gates both the Husimi launch and
+    # the P4 re-expansion (a flat / collimated frame is already complete, so
+    # re-expansion is skipped there -- byte-identical to 'off' + ~1x cost).
+    _spread = _input_angular_spread(E_dec, dx, dy, wavelength)
     if direction_sampling == 'auto':
-        _spread = _input_angular_spread(E_dec, dx, dy, wavelength)
         use_direction_sampling = _spread > _GBD_AUTO_HUSIMI_THRESH
     elif direction_sampling in (True, False):
         use_direction_sampling = bool(direction_sampling)
@@ -328,6 +428,42 @@ def apply_real_lens_gbd(
     bundle, n_kept = _prune_zero_beamlets(bundle)
     if verbose:
         print(f"  [gbd] {n_kept} illuminated beamlets after pruning", flush=True)
+
+    # P4 / N3 (2026-07-20): frame re-expansion for the strong-reconvergence edge.
+    # A converging input reconverged by a negative element sheds ~6-12% of its
+    # power at the INPUT decomposition (the flat-waist beamlets cannot carry the
+    # input wavefront curvature; the loss is baked into the frame and is NOT
+    # recoverable downstream).  When the naive frame's input-plane completeness
+    # falls below the threshold, re-decompose with a carrier reference (remove
+    # the smooth congruence, decompose the compact residual, seed direction /
+    # curvature / piston from the carrier).  Only fires for a CURVED input
+    # (a flat frame is already complete), so a collimated input is untouched and
+    # byte-identical to reexpand='off'.
+    reexpanded = False
+    comp_input = None
+    comp_reexp = None
+    if (reexpand == 'auto' and per_surface
+            and _spread > _GBD_AUTO_HUSIMI_THRESH):
+        comp_input = frame_completeness(
+            bundle, E_dec, dx, wavelength=wavelength, dy=dy, window=window,
+            mem_budget_mb=mem_budget_mb)
+        if comp_input < reexpand_threshold:
+            rb, rk = _carrier_referenced_bundle(
+                E_dec, dx, dy, wavelength, int(sample_step),
+                float(waist_factor), carrier=reexpand_carrier)
+            if rb is not None:
+                comp_reexp = frame_completeness(
+                    rb, E_dec, dx, wavelength=wavelength, dy=dy, window=window,
+                    mem_budget_mb=mem_budget_mb)
+                # accept only if the carrier reference genuinely improves the
+                # frame (guards against a mis-fit carrier degrading it).
+                if comp_reexp > comp_input:
+                    bundle, n_kept = rb, rk
+                    reexpanded = True
+                    if verbose:
+                        print(f"  [gbd] reexpand: carrier-referenced frame "
+                              f"({comp_input:.4f} -> {comp_reexp:.4f} "
+                              f"completeness, {n_kept} beamlets)", flush=True)
 
     if progress is not None:
         try:
@@ -374,6 +510,22 @@ def apply_real_lens_gbd(
             evolved, Ny=Ny, Nx=Nx, dx=dx, dy=dy, wavelength=wavelength,
             centre=(0.0, 0.0), window=window,
             chunk_beamlets=chunk_beamlets, mem_budget_mb=mem_budget_mb))
+
+    # P4 frame-completeness metric (opt-in via ``diagnostics``): the raw
+    # reconstructed output power over the aperture-transmitted input power --
+    # "power captured by the beamlet frame".  Computed from the RAW field before
+    # normalize_output='power' rescales it (which would force it to 1.0).
+    if diagnostics is not None:
+        p_in_ap = float(np.sum(np.abs(E_dec) ** 2))
+        p_out_raw = float(np.sum(np.abs(E_out) ** 2))
+        diagnostics['frame_completeness'] = (
+            p_out_raw / p_in_ap if p_in_ap > 0 else 0.0)
+        diagnostics['reexpanded'] = reexpanded
+        diagnostics['n_beamlets'] = int(n_kept)
+        if comp_input is not None:
+            diagnostics['frame_completeness_input'] = comp_input
+        if comp_reexp is not None:
+            diagnostics['frame_completeness_reexpanded'] = comp_reexp
 
     if normalize_output == 'power':
         p_in = float(np.sum(np.abs(E_dec) ** 2))

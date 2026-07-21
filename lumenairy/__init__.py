@@ -202,7 +202,9 @@ from .propagators.propagation import (
     angular_spectrum_propagate_mft,
     angular_spectrum_propagate_tilted,
     apply_fresnel_curvature,
+    carrier_referenced_aperture,
     carrier_referenced_envelope,
+    carrier_referenced_fit_radius,
     carrier_referenced_reconstruct,
     clear_asm_caches,
     fraunhofer_propagate,
@@ -953,6 +955,7 @@ from .propagators.gbd import (
     csp_beamlet_field,
     decompose_field_adaptive,
     decompose_field_to_beamlets,
+    frame_completeness,
     gbd_asm_gouy_phase,
     gbd_field_to_asm,
     gbd_ghost_analysis,
@@ -1044,7 +1047,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='6.0',
 )
 
-__version__ = "5.25.0"
+__version__ = "5.26.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1276,6 +1279,8 @@ __all__ = [
     'propagate_carrier_referenced',
     'carrier_referenced_reconstruct',
     'carrier_referenced_envelope',
+    'carrier_referenced_aperture',
+    'carrier_referenced_fit_radius',
     'fresnel_propagate_mft',
     'fraunhofer_propagate_mft',
     'angular_spectrum_propagate_mft',
@@ -1290,6 +1295,7 @@ __all__ = [
     'BeamletBundle',
     'decompose_field_to_beamlets',
     'decompose_field_adaptive',
+    'frame_completeness',
     'converge_gbd_sampling',
     'csp_beamlet_field',
     'propagate_gbd_freespace_csp',

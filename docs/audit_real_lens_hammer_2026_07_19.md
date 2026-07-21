@@ -30,7 +30,7 @@ penalty reproduced: oracle 43/128 µm); through-focus scans.
 |---|---|
 | `traced` | **Validated: 99.7 %** of dual-oracle r2m (64.77 vs 64.98 µm) at rule-compliant sampling; exact ray OPL to λ/44.  Diverging-input carrier path fixed (H6, PR #19): focuses the diverging singlet at the ABCD image, EE(100µm) = 0.999 |
 | `gbd` | **Validated: 98.4 %**, grid-insensitive (63.96/63.97 µm at dx = 3/6 µm).  Diverging-input carrier launch fixed (H7): `direction_sampling='auto'` default focuses the diverging singlet at the ABCD image, power 0.997–0.998 across the R_in = 300/150/100 mm scan, NaN warnings gone |
-| `fga` | Feasible + sane by default after H4/H5; r2m within ~2 % with matched sampling; GBD/traced remain preferable for smooth single-valued caustics (cost) |
+| `fga` | Feasible + sane by default after H4/H5; r2m within ~2 % with matched sampling.  **N6a (2026-07-20): the "FGA niche" over GBD/traced at a genuine MULTI-VALUED fold caustic is REFUTED** -- at a validated fold (f/3.65 singlet, direct-Huygens ground truth) FGA passes the 10 % r2m/EE gate (fidelity 0.9956) but a fine-frame GBD (0.9997, peak-I error 0.0 %) and `traced`(exit)+ASM (0.9991) MATCH or BEAT it; FGA's default is in fact the WORST at peak-I (17 %).  GBD/traced remain preferable for smooth single-valued AND single-fold caustics (cost); FGA's narrow value is a one-pass grid-insensitive caustic-plane field.  See N6a below |
 | `analytic` | Honest model plateau: converged 40.5 µm vs oracle 65 (H2); ~50 µm with the H1-fixed slant screen. Cannot represent orientation-dependent aberration (60.4/60.9 µm where truth is 43/128) |
 | benign regime | all models exact to 4 digits vs Zemax (29.981 vs 29.979 µm) |
 
@@ -216,6 +216,153 @@ design-intent surrogate (2.97 µm / EE6 = 100% vs Zemax 2.74 µm; the real desig
 residual WFE is only ~26–35 mλ), a higher-order sag-screen projection correction
 in the analytic model is still open, and H8 (FGA at production scale) is
 memory/compute-bound rather than incorrect.
+
+## N6a -- FGA fold-caustic validation: GBD/traced do NOT degrade at a genuine fold (P5, 2026-07-20)
+
+**Ground truth (independent, lumenairy-free):** `validation/oracles/caustic_fold_truth.py`
+builds the reference wave field at a THROUGH-FOCUS plane of a strongly-aberrated
+plano-convex singlet (convex-first, R1 = 2.7 mm, t = 1.0 mm, n = 1.5168,
+f ~ 5.2 mm, **f/3.65**, Fresnel number N_F ~ 82; observation plane 4.3704 mm past
+the exit vertex, 1.0 LSA short of the marginal focus) where the collimated ray map
+genuinely **FOLDS** -- two ray branches reach each radius inside a caustic RING at
+14.26 um, with Airy-type fringes on the bright side (on-axis I/I_peak = 0.32, peak
+at the 6 um fringe) and an exponential dark tail. The reference is a DENSE, DIRECT
+Rayleigh-Sommerfeld ring integral of the exact exit field (energy-conserving
+amplitude + eikonal phase) -- **no stationary phase, no ray-branch assumptions** in
+the propagation, so the fold interference emerges on its own. Self-verified (all
+lens-model-independent): **grid convergence** (windowed r2m changes 1.3e-5 << 0.5 %
+under fan/rho doubling), **energy closure 0.999**, and the **fold** (2 branches).
+Axis-centred reference metrics on the N = 1280, dx = 2 um grid:
+**r2m 11.22, EE50 10.05, EE80 13.50 um** (reproduces the grid-free radial metric to
+<1 %; the peak-centred `_wave_metrics` convention inflates r2m ~12 % on a
+rotationally-symmetric RING caustic -- the peak sits off-axis -- so axis-centred
+metrics are used for every model).
+
+**Comparison** (each model -> field at the fold plane vs the SAME reference, same
+grid, axis-centred; N = 1280, dx = 2 um):
+
+| model | r2m um (err) | EE80 um (err) | field fidelity | peak-I err | verdict |
+|---|---|---|---|---|---|
+| direct-Huygens reference | 11.22 | 13.50 | 1.0000 | 0.0 % | ground truth |
+| `apply_real_lens_fga` (auto default) | 11.39 (**1.5 %**) | 14.16 (**4.9 %**) | **0.9956** | **17.0 %** | within 10 % r2m/EE -- PASSES the gate |
+| `apply_real_lens_gbd` (b80) | 11.19 (**0.3 %**) | 13.90 (3.0 %) | **0.9997** | **0.0 %** | most accurate -- NO degradation |
+| `traced`(exit) + exact ASM | 11.13 (0.8 %) | 13.50 (0.0 %) | **0.9991** | 0.8 % | accurate -- NO degradation |
+| `traced_multibranch` (geometric) | 9.63 (14.2 %) | 12.17 (9.9 %) | 0.9003 | 1.1 % | degrades (SHAPE) |
+
+**FINDING (bidirectional, honest -- the naive niche is REFUTED).** The plan's N6a
+required FGA to land within 10 % (it does: r2m 1.5 %, EE80 4.9 %, fidelity 0.9956)
+**AND** GBD/traced to be SHOWN to DEGRADE at the fold. **They do not.** On the plan's
+own windowed r2m / EE / fidelity metric, a properly-framed GBD (fidelity 0.9997,
+peak-intensity error **0.0 %** -- the most accurate model here) and `traced`(exit) +
+exact ASM (0.9991) MATCH or BEAT FGA at this genuine multi-valued fold. So the
+blanket claim that FGA is *uniquely needed* at fold/cusp caustics while GBD/traced
+degrade is **false for a single-fold caustic**, and the FGA verdict is corrected
+(scoreboard row updated). In fact FGA's DEFAULT auto config has the WORST
+peak-intensity rendering here (17 % -- the wider default frozen beamlet
+`w0_factor=5` + the H5 content-sized / power-normalized swarm blur the sharp caustic
+peak).  A finer frozen beamlet (`w0_factor=3`, the FGA convergence knob) is expected
+to sharpen the peak, but that is a hand-tuned config; the DEFAULT is what ships and
+what a user gets, and its 17 % peak-I -- the WORST of the wave models here -- is the
+honest measured number.
+
+Why GBD/traced hold up at a fold:
+
+- **`traced` returns the field at the EXIT VERTEX** (single-valued -- the fold is
+  DOWNSTREAM); the caustic is then formed by an EXACT wave-propagation step (ASM),
+  which renders the fold accurately. `traced` never inverts the multi-valued map, so
+  it structurally cannot "degrade" at the fold -- it defers the caustic to wave
+  optics. (Cost: two steps + a grid that Nyquist-resolves the converging exit
+  wavefront and the fold fringes; FGA renders it in one beamlet pass,
+  grid-insensitively.)
+- **GBD** with an adequately fine beamlet frame (`beamlets_per_aperture=80`) resolves
+  the fold interference to fidelity 0.9997 / peak 0.0 %; its thawed per-beamlet phase
+  mis-renders a caustic only with a COARSE / few-beamlet frame, not here.
+- The ONLY model that degrades in SHAPE is `traced_multibranch` (the pure GEOMETRIC
+  multi-arrival / Maslov construction: fidelity 0.9003, r2m 14.2 %; its peak-I error
+  is only 1.1 %). FGA (full wave) correctly beats the geometric construction, but
+  that is a specialty geometric tool, not the primary GBD / `traced` family.
+
+**Corrected FGA verdict.** FGA is caustic-ACCURATE and passes the fold gate, but at a
+properly-sampled fold it holds **no accuracy advantage** over a well-framed GBD or
+`traced` + wave propagation, and its DEFAULT is actually the WORST at peak intensity.
+Its genuine, narrower value is: (i) rendering the multi-valued caustic-plane field in
+ONE beamlet pass, grid-insensitively (no separate wave-propagation step, no
+exit-Nyquist grid a `traced`+ASM needs); (ii) the documented coarse-frame
+peak-intensity edge over GBD from the original SA-caustic test (0.01-0.07 vs
+0.03-0.34) -- which is NOT reproduced here against a fine-frame GBD (whose peak-I
+error is itself 0.0 %). Reach for FGA when you need the caustic-plane field directly
+and cannot afford the exit-Nyquist grid; otherwise GBD / `traced` are equal or better
+and cheaper.
+
+Tests: the fold-caustic comparison is a scratch script (heavy -- N = 1280, four
+propagators); the reference oracle's self-checks and the sampling-weight correctness
+are unit tests (`tests/unit/test_niche_p5_sampling.py`). Reference case + field are
+installed at `validation/oracles/caustic_fold_case.json` /
+`caustic_fold_ref.npz`.
+
+## N6b -- FGA content-adaptive momentum sampling: implemented + opt-in, but a MEASURED non-improvement (P5, 2026-07-20)
+
+The `n_p`-capped ~0.97 fidelity on a 0.23-NA diverging transport (H8) motivated
+CONTENT-ADAPTIVE momentum sampling: importance-sample the `n_p` momentum nodes by
+the field's angular spectrum instead of a uniform grid.  Shipped as opt-in
+`apply_real_lens_fga(momentum_sampling='adaptive')` (default `'uniform'`,
+**byte-identical** to prior releases), with the MATCHING per-node midpoint-cell
+quadrature weights (which reduce to the uniform `dp**2` on a uniform grid) and
+auto power-normalization (the non-uniform quadrature carries the correct RELATIVE
+weights = the SHAPE, but not the calibrated uniform absolute scale).
+
+**MEASURED fidelity-vs-cost (fidelity vs exact ASM, free-space transports, dq_step 2):**
+
+0.23-NA diverging beam (content 0.23, p_max 0.345, z = 60 um, N = 256):
+
+| n_p | dp | uniform fid | adaptive fid |
+|---|---|---|---|
+| 11 | 0.069 | 0.9305 | **0.9452** |
+| 21 | 0.0345 | **1.00000** | 0.9942 |
+| 31 | 0.0230 | **1.00000** | 0.9993 |
+| 61 | 0.0115 | **1.00000** | 0.99998 |
+
+Concentrated-spectrum WIDE cone (content 0.093, p_max 0.30 = 3.2x content, z = 200 um):
+
+| n_p | uniform fid | adaptive fid |
+|---|---|---|
+| 15 | **0.9895** | 0.9812 |
+| 31 | **0.9997** | 0.9993 |
+| 61 | 0.9997 | 0.9996 |
+
+**FINDING (honest, adversarial).** Content-adaptive momentum sampling does NOT
+robustly improve FGA fidelity at fixed `n_p`:
+
+1. The "0.97 cap" does NOT reproduce for a smooth 0.23-NA diverging FREE-SPACE
+   transport -- UNIFORM already reaches fidelity **1.000 at n_p = 21**.  The
+   conservative `dp` target (0.008) over-estimates the sampling a smooth diverging
+   beam needs; the historical 0.97 was a STRUCTURED-field (fine-fringe) /
+   through-lens phenomenon.
+2. Adaptive is neutral-to-slightly-WORSE at n_p >= 21; it wins only in the
+   very-coarse n_p = 11 regime (0.945 vs 0.931).
+3. Even at p_max/content = 3.2 (a wide cone), uniform beats adaptive (0.989 vs
+   0.981 at n_p = 15).
+
+**Root cause -- the trade is FUNDAMENTAL.** The FGA reconstruction integrand is not
+the raw field spectrum but the spectrum CONVOLVED with each frozen beamlet's own
+momentum Gaussian (`sigma_p ~ 1/(k w0)`), so it is intrinsically broad -- never
+concentrated enough for importance sampling to beat uniform, and concentrating by
+the raw content UNDER-samples the completeness skirt.  Where the genuine 0.97 cap
+lives -- a STRUCTURED field whose fine fringes fill p-space with a BROAD spectrum --
+there is nothing to concentrate, so adaptive cannot help there either.  Importance
+sampling would only win for a SPARSE / multi-peak spectrum (discrete emitter tilts
+with spectral gaps), a niche the auto sampler does not target.
+
+**Acceptance (plan N6b OR-clause: ">= 0.99 fidelity at unchanged cost, OR a
+documented curve + knob if the trade is fundamental").**  The
+">= 0.99-at-fixed-cost" branch is not delivered by adaptive (uniform already meets
+it; adaptive does not beat it).  The **OR branch IS met**: the fidelity-vs-cost
+curve is documented above, the opt-in knob is shipped (default byte-identical), and
+the trade is shown fundamental.  The **adversarial weight-correctness** check is a
+unit test -- the matching midpoint-cell weights are a valid quadrature (< 30% error
+on a test integral, converging in `n_p`) while forcing the naive uniform `dp` weight
+on the SAME concentrated nodes over-counts by **> 200%** -- and the H5
+content-override contracts stay green.  Tests: `tests/unit/test_niche_p5_sampling.py`.
 
 ## Follow-ups (tracked, not blocking)
 

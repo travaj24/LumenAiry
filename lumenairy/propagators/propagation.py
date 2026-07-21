@@ -110,7 +110,9 @@ from .asm import (
 )
 from .carrier import (
     CarrierReferencedField,
+    carrier_referenced_aperture,
     carrier_referenced_envelope,
+    carrier_referenced_fit_radius,
     carrier_referenced_reconstruct,
     propagate_carrier_referenced,
 )
@@ -318,6 +320,8 @@ __all__ = [
     'propagate_carrier_referenced',
     'carrier_referenced_reconstruct',
     'carrier_referenced_envelope',
+    'carrier_referenced_aperture',
+    'carrier_referenced_fit_radius',
     # Rayleigh-Sommerfeld
     'rayleigh_sommerfeld_propagate',
     # SAS
