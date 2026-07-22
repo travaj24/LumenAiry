@@ -270,18 +270,84 @@ remediation *unit* tests must be self-contained/synthetic.
   band-limited ASM (no paraxial approximation); design-agnostic (synthetic
   NA-0.46 sphere → diffraction limit, EE-in-2w₀ 1.3% → 99.8%).  Lifted the 121
   end-to-end EE6 7.3% → 69.7% (~10×).
-- **Remaining item — wavefront-aware ray launch (the last 121 blocker):** R9
-  isolated the ceiling to a distinct, general model limitation — the
-  traced-carrier model launches rays along the carrier **sphere**, so a corrected
-  relay's deliberately **non-spherical intermediate wavefronts** (the
-  pre-correction its tail cancels) are carried uncorrected, accumulating ~1.68 rad
-  RMS entering the high-NA tail (front groups individually clean at < 0.023 rad).
-  Closing the 121 image to EE6 ≥ 99% needs launching rays along the **actual
-  accumulated wavefront** (the field's local phase gradient) rather than the
-  carrier sphere, through the whole chain (`tilt_aware_rays` is the closest
-  lever but is currently guarded off for explicit carriers per F3).  This is a
-  deeper model change, general (helps any corrected relay), and is the next
-  tracked item.
+## Part E — Wavefront-aware ray launch (close the corrected-relay image)
+
+**The flagship remaining item** (the last blocker to a production real-surface
+traced model for *corrected* relays; general, not 121-specific).  Isolated by
+R7 + R9 after per-group fidelity (F2) and high-NA focusing (R9) were both solved.
+
+### E1. Diagnosis (measured)
+
+The traced-carrier model launches each group's rays along the **carrier sphere**
+`S(R) = sign(R)(sqrt(r² + R²) − |R|)` — exact for a stigmatic (single point-source)
+congruence.  But a **corrected relay** deliberately carries **non-spherical
+intermediate wavefronts**: each group pre-shapes aberration that a later group
+cancels.  Launching along the sphere discards that inter-group deviation, so the
+pre-correction never propagates and the aberration the tail is designed to null
+isn't present when it gets there.  Measured on the 121: **~1.68 rad RMS**
+(a₄w⁴ ≈ +27…+44 rad) already present *entering* the high-NA tail, even though every
+group is individually clean (per-group exit rms < 0.023 rad post-F2).  Proven it
+is NOT the final leg / reconstruct / gap transport (the whole tail on one fine
+grid with exact-ASM gaps still plateaus at EE6 ≈ 70%).
+
+### E2. The fix — launch along the actual wavefront, not the sphere
+
+Keep the carrier as the **frame** (co-moving grid + envelope reference), but take
+each group's ray-**launch directions** from the incoming field's **actual local
+wavevector** (the gradient of its unwrapped phase / a Husimi mean-slope map),
+i.e. the sphere gradient **plus the residual non-spherical deviation**.  The
+existing `tilt_aware_rays=True` lever already launches per-pixel tilts from the
+field gradient — it *is* a wavefront-aware launch — but F3 currently guards it
+**off** for explicit carriers because on a steep spherical carrier it
+double-counted the carrier tilt.  Approach candidates:
+
+1. **Carrier-relative tilt-aware launch (preferred):** launch along
+   `grad(carrier sphere) + residual`, where `residual = grad(unwrapped field
+   phase) − grad(carrier sphere)`.  The carrier handles the spherical part
+   (fast, exact); tilt-aware carries only the non-spherical residual, so F3's
+   double-count vanishes and F3 becomes a *unification*, not a guard.  Reuses the
+   H6/R7 carrier eikonal + the tilt-aware machinery.
+2. **Full wavefront congruence:** drop the spherical ray launch entirely; build
+   the launch direction field directly from the incoming field's Husimi /
+   local-frequency map (the true ray congruence), with the carrier only setting
+   the frame.  More general, heavier.
+
+### E3. Challenges / risks
+
+- **Aliasing** — a corrected relay's intermediate wavefront can be steep and
+  high-order; extracting `grad(phase)` robustly needs the un-aliased-core /
+  Nyquist discipline that R6 (auto-fit) and R9 (NA-0.46 exit) already established
+  (a naive gradient over the full field is exactly what corrupted F1's auto-fit).
+- **No double-count** — the residual must subtract the carrier sphere cleanly
+  (the F3 failure mode) so collimated / stigmatic launches stay byte-identical.
+- **Per-group grid** — must Nyquist-sample the *actual* (non-spherical) local
+  frequency, which can exceed the sphere's; likely reuses R9's per-group fine
+  re-trace (`_fine_trace_group_exit`).
+- **Interaction** with F2's exact-sphere carrier + fit-domain restriction and the
+  multibranch / uniform-caustic machinery.
+
+### E4. Oracle / acceptance
+
+- **Design-agnostic synthetic:** a purpose-built 2–3-group *corrected* relay with
+  deliberately non-spherical intermediate wavefronts (a front group that
+  over-corrects, a tail that cancels) that a spherical launch (fail-before)
+  leaves aberrated and the wavefront-aware launch focuses to the **diffraction
+  limit** — validated vs an inline exact meridional-raytrace + eikonal oracle
+  (no `.zmx`, CI-safe).  This proves the *capability* independent of the 121.
+- **121 end-to-end (acceptance instance):** `propagate_traced_carrier_chain`
+  reaches **EE6 ≥ 99% at ~2.9 µm** (Zemax 2.736 µm; stigmatic 2.97 µm), from the
+  current ~70% / 4.05 µm.  Repro: `validation/repro_traced_carrier_121/
+  carrier_chain_121.py` (local `.zmx`).
+- **Byte-identical defaults:** stigmatic / single-element / collimated launches
+  unchanged (the sphere == the wavefront there, so the residual is ~0).
+
+### E5. Effort
+
+**L** — a genuine ray-launch model change touching the carrier reference, the
+tilt-aware path (unifying F3), and the per-group grid.  General: closes the
+image for *any* corrected relay, not just the 121.  Runs as its own campaign
+(same impl → adversarial-verify → fix harness), with the E4 synthetic as the
+generality gate and the 121 as the acceptance instance.
 
 ## Suggested sequencing
 
