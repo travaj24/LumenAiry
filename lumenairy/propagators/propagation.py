@@ -110,11 +110,14 @@ from .asm import (
 )
 from .carrier import (
     CarrierReferencedField,
+    TracedCarrierChainResult,
     carrier_referenced_aperture,
     carrier_referenced_envelope,
     carrier_referenced_fit_radius,
+    carrier_referenced_focus_readout,
     carrier_referenced_reconstruct,
     propagate_carrier_referenced,
+    propagate_traced_carrier_chain,
 )
 
 # ---------------------------------------------------------------------------
@@ -317,11 +320,14 @@ __all__ = [
     'fraunhofer_propagate_mft',
     # Carrier-referenced (Sziklas-Siegman) free-space step
     'CarrierReferencedField',
+    'TracedCarrierChainResult',
     'propagate_carrier_referenced',
     'carrier_referenced_reconstruct',
     'carrier_referenced_envelope',
     'carrier_referenced_aperture',
     'carrier_referenced_fit_radius',
+    'carrier_referenced_focus_readout',
+    'propagate_traced_carrier_chain',
     # Rayleigh-Sommerfeld
     'rayleigh_sommerfeld_propagate',
     # SAS

@@ -887,6 +887,14 @@ _NONCOLLIMATED_RESID_THRESH = 0.02
 # float round-off.
 _TILT_EIKONAL_MIN_RAD = 1e-2
 
+# F3 (audit 2026-07-21): when BOTH ``tilt_aware_rays=True`` and an EXPLICIT
+# engaged carrier are given, route the ray launch + the R7 intra-group fixes
+# through the carrier gradient (the ``carrier=R`` default path) instead of the
+# per-pixel tilt launch, which DEGRADES a steep spherical carrier (1.72 rad rms
+# vs 0.008 rad).  Exposed as a module flag so the regression test can force the
+# pre-fix per-pixel-tilt launch (fail-before) via monkeypatch.
+_F3_GUARD_TILTAWARE_EXPLICIT_CARRIER = True
+
 # R6 / audit F1 (2026-07-21): the ``carrier='auto'`` least-squares gradient fit
 # silently degraded to ~inf (no carrier) on a strongly-diverging / coarsely-
 # sampled spherical input -- exactly the input class it exists for.  Root cause:
@@ -921,6 +929,35 @@ _AUTO_CARRIER_MIN_CORE = 64
 # field onto one beamlet's connected component).  The F1 strongly-diverging
 # single carrier aliases the great majority of its support, far above this.
 _AUTO_CARRIER_ALIAS_FRAC = 0.05
+
+# R7 / audit F2 (2026-07-21): fraction of the entrance LAUNCH RADIUS inside which
+# the entrance->exit forward-map and OPL Chebyshev fits are restricted WHEN A
+# CARRIER IS SET.  The launch grid is a square spanning +-launch_radius (=1.5x
+# the aperture radius); its outer margin + corners carry the most strongly
+# aberrated / near-vignetting marginal rays, whose out-of-basis high order
+# (r^8+) ALIASES into the low-order (defocus / r^4) coefficients of the GLOBAL
+# order-6 tensor-Chebyshev least-squares fit.  On a strongly-focusing thick
+# group (the 121 triplets) that spurious defocus is the dominant per-group
+# exit-wavefront error (audit F2: 122% of 1/R_out on S18-S20, curvature-
+# dominated, hf~0, ray_subsample-invariant -- a fit artefact, NOT undersampling;
+# the local bicubic spline is immune).  Restricting the fit to r <= FRAC*
+# launch_radius (= 0.9x the aperture radius at FRAC=0.6) drops the contaminating
+# marginal rays, so the central coefficients are clean; the fit still spans the
+# full launch domain (the beam and its evaluated exit rays sit inside FRAC*
+# launch_radius, and the smooth low-order fit extrapolates faithfully to the
+# low-amplitude tail beyond it).  INPUT-INDEPENDENT (geometry only), so the
+# prepared-screen reuse path (return_screen / apply_real_lens_traced_multi)
+# stays valid.  Gated on a carrier being set, so the carrier=None default path
+# is byte-identical.  0.5 (= 0.75x the aperture radius) recovers per-group rms
+# well under 0.1 rad across the 121's 8 groups including the steepest triplet
+# (S25-S27 0.100 rad at FRAC=0.6 -> ~0.03 at 0.5); the recovery is insensitive
+# over ~0.45-0.6 (looser leaves the steep converging groups near the 0.1 gate;
+# tighter over-trims the diverging groups' exit-ray coverage).
+_CARRIER_FIT_RADIUS_FRAC = 0.5
+# Minimum in-disc coarse-sample count below which the restriction is abandoned
+# (too few samples to constrain the order-6 fit): fall back to the full launch
+# grid rather than fit noise.
+_CARRIER_FIT_MIN_SAMPLES = 64
 
 
 def _carrier_residual_rms(E_in, W_full, wavelength, dx):
@@ -1003,8 +1040,12 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
     ``carrier`` accepts:
 
     * ``float`` -- an on-axis point-source conjugate at signed distance
-      ``s`` (metres): paraxial spherical wavefront ``W = (x^2+y^2)/(2s)``
-      (``s > 0`` for a diverging source in front of the plane).
+      ``s`` (metres): the EXACT spherical wavefront
+      ``W = sign(s)(sqrt(x^2+y^2+s^2) - |s|)`` (R7 / audit F2; ``s > 0``
+      for a diverging source in front of the plane).  The exact sphere --
+      not the paraxial ``r^2/(2s)`` -- so the reference leg, ray-launch
+      cosines and H6 entrance eikonal match the true congruence on a STEEP
+      conjugate (reduces to the parabola to ~1e-10 when ``r/|s| << 1``).
     * ``ndarray`` -- an explicit wavefront (metres), same shape as ``E_in``.
     * ``'auto'`` -- a low-order (``auto_degree``) polynomial fit of the
       smooth carrier, obtained by least-squares matching the polynomial's
@@ -1158,17 +1199,33 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
 
         return W_full, grad_fn, w_fn
 
-    # scalar conjugate distance
+    # scalar conjugate distance -- an on-axis point-source conjugate at signed
+    # distance ``s``.  R7 / audit F2 (2026-07-21): use the EXACT spherical
+    # wavefront ``W = sign(s)(sqrt(r^2 + s^2) - |s|)``, NOT the paraxial parabola
+    # ``r^2/(2s)``.  The exact sphere is what an on-axis point source physically
+    # radiates and what the meridional-oracle input eikonal is; the paraxial form
+    # drops an ``-r^4/(8 s^3)`` term that, on a STEEP conjugate (``r/|s|`` not
+    # small -- e.g. the 121's S25-S27, ``w/R = 0.15``), leaves several radians of
+    # spurious r^4 in the exit wavefront because the carrier eikonal (H6), the
+    # reference leg ``exp(i k0 W)`` and the ray-launch cosines ``grad W`` no
+    # longer match the true diverging/converging sphere the wave model carries.
+    # With the exact sphere the three carrier legs agree with the ray trace to
+    # all orders (per-group r^4 residual 2.7 rad -> ~0 on S25-S27).  Reduces to
+    # the paraxial form to ~1e-10 for a gentle conjugate (``r/|s| << 1``), so
+    # every previously-validated gentle-carrier call is unchanged in practice.
     s = float(carrier)
     if s == 0.0:
         raise ValueError("carrier conjugate distance must be non-zero")
-    W_full = (X ** 2 + Y ** 2) / (2.0 * s)
+    _sgn = 1.0 if s > 0.0 else -1.0
+    _abs_s = abs(s)
+    W_full = _sgn * (np.sqrt(X ** 2 + Y ** 2 + s * s) - _abs_s)
 
     def grad_fn(xq, yq):
-        return xq / s, yq / s
+        _rho = np.sqrt(xq * xq + yq * yq + s * s)
+        return _sgn * xq / _rho, _sgn * yq / _rho
 
     def w_fn(xq, yq):
-        return (xq ** 2 + yq ** 2) / (2.0 * s)
+        return _sgn * (np.sqrt(xq * xq + yq * yq + s * s) - _abs_s)
 
     return W_full, grad_fn, w_fn
 
@@ -2368,21 +2425,25 @@ def apply_real_lens_traced(
         _cW, _cGrad, _cWfn = _compute_carrier(
             _carrier_src, E_in, wavelength, dx, _CX, _CY)
         del _CX, _CY
-        # Explicit carrier always engages.  The IMPLICIT tilt_aware auto-carrier
-        # engages only when the fitted eikonal is non-trivial, so a flat-wavefront
-        # input (fits W == 0) keeps the byte-identical plane-wave reference (pin:
-        # collimated tilt_aware unchanged in both preserve_input_phase modes).
-        _engage = True
-        if carrier is None:
-            _mag0 = np.abs(E_in)
-            _pk0 = float(_mag0.max()) if _mag0.size else 0.0
-            if _pk0 > 0:
-                _bright0 = _mag0 > 0.05 * _pk0
-                _peakW = (float(np.nanmax(np.abs(_cW[_bright0])))
-                          if _bright0.any() else 0.0)
-            else:
-                _peakW = 0.0
-            _engage = (_peakW * _k0) > _TILT_EIKONAL_MIN_RAD
+        # Engage the carrier machinery only when the carrier eikonal is
+        # NON-TRIVIAL over the bright support.  A (near-)collimated input --
+        # whether it reached here as an explicit long-conjugate ``carrier``, a
+        # ``carrier='auto'`` fit that returned W ~ 0, or the implicit
+        # ``tilt_aware_rays`` auto-carrier -- fits an eikonal below this floor,
+        # so it keeps the byte-identical plane-wave-reference path (pin:
+        # ``carrier='auto'`` == ``carrier=None`` on a collimated input; R7 also
+        # relies on this so its reference-taper / fit-restriction / cubic-upsample
+        # never perturb a W~0 carrier).  A carrier that actually shifts the focus
+        # is tens+ of radians over the beam, far above the 1e-2-rad floor.
+        _mag0 = np.abs(E_in)
+        _pk0 = float(_mag0.max()) if _mag0.size else 0.0
+        if _pk0 > 0:
+            _bright0 = _mag0 > 0.05 * _pk0
+            _peakW = (float(np.nanmax(np.abs(_cW[_bright0])))
+                      if _bright0.any() else 0.0)
+        else:
+            _peakW = 0.0
+        _engage = (_peakW * _k0) > _TILT_EIKONAL_MIN_RAD
         if _engage:
             _carrier_W, _carrier_grad, _carrier_W_fn = _cW, _cGrad, _cWfn
             # The fast_analytic_phase reference is the lens's on-axis geometric
@@ -2390,6 +2451,47 @@ def apply_real_lens_traced(
             # congruence; force the full wave reference when a carrier is set.
             if fast_analytic_phase:
                 fast_analytic_phase = False
+
+    # R7 / audit F2 (2026-07-21): the R7 intra-group fidelity fixes (reference
+    # taper to |E_in|, carrier-gated fit-domain restriction, cubic OPL upsample)
+    # apply to the CARRIER-REFERENCED path -- rays launched along the carrier
+    # normals grad(W).
+    #
+    # F3 (audit 2026-07-21): ``tilt_aware_rays=True`` DEGRADES a steep explicit
+    # carrier.  The per-pixel tilt launch (below) is redundant with -- and far
+    # less accurate than -- the carrier-gradient launch on a steeply-curved
+    # spherical input: measured on the 121 S5-S7 triplet the tilt_aware path
+    # reads 1.72 rad rms / ~185% exit-curvature error vs 0.008 rad / <1% for the
+    # ``carrier=R`` default, because the smooth carrier already carries the input
+    # congruence exactly while the per-pixel tilt reading is noisy AND the R7 fit
+    # fixes are inapplicable to it.  When the caller supplies BOTH an EXPLICIT
+    # engaged carrier (a float conjugate or an ndarray wavefront -- NOT the
+    # implicit / ``'auto'`` fit) AND ``tilt_aware_rays``, route the ray launch +
+    # the R7 path through the carrier gradient (i.e. the ``carrier=R`` default
+    # path) and warn.  The N5 auto-carrier tilt_aware path (``carrier`` None or
+    # ``'auto'``) is UNTOUCHED -- its per-pixel launch stays pinned byte-identical
+    # (a collimated input fits W == 0, so the guard never fires there).
+    _explicit_carrier = (carrier is not None) and not (
+        isinstance(carrier, str) and carrier == 'auto')
+    _tilt_aware_launch = tilt_aware_rays
+    if (_F3_GUARD_TILTAWARE_EXPLICIT_CARRIER and tilt_aware_rays
+            and (_carrier_W is not None) and _explicit_carrier):
+        _tilt_aware_launch = False
+        import warnings
+        warnings.warn(
+            "apply_real_lens_traced: tilt_aware_rays=True together with an "
+            "explicit carrier= is less accurate than the carrier-referenced "
+            "launch alone on a steeply-curved input (audit F3: ~5x the "
+            "exit-curvature error on a steep spherical carrier).  The explicit "
+            "carrier already carries the input congruence, so the per-pixel "
+            "tilt launch is routed to the carrier-gradient (carrier=) path.  "
+            "Drop tilt_aware_rays=True when passing an explicit carrier=.",
+            RuntimeWarning, stacklevel=2)
+    # ``_tilt_aware_launch`` is the EFFECTIVE launch mode after the F3 reroute;
+    # the R7 path launches rays along the carrier gradient grad(W) and is guarded
+    # OFF only for a genuine per-pixel tilt_aware launch (N5), i.e. when the F3
+    # guard did NOT reroute (``_tilt_aware_launch`` stays True).
+    _r7_carrier_path = (_carrier_W is not None) and (not _tilt_aware_launch)
 
     # F1 (audit) collimation guard: measure the residual angular spread
     # (after removing any carrier) and warn / delegate when the input is
@@ -2435,7 +2537,16 @@ def apply_real_lens_traced(
                     RuntimeWarning, stacklevel=2)
 
     # Reference input for the analytic lens-phase leg: the carrier
-    # wavefront when supplied, else a unit plane wave (legacy default).
+    # wavefront exp(i*k0*W) when supplied, else a unit plane wave (legacy
+    # default).  ``phase_analytic_lens = angle(apply_real_lens(reference))`` is
+    # subtracted from ``angle(E_analytic)`` in the exit assembly to remove the
+    # analytic model's lens phase before the exact ray-traced OPL is added; the
+    # carrier-referenced sphere makes that reference the beam's own congruence.
+    # (R7 / audit F2: with the exact-sphere carrier the untapered reference already
+    # cancels cleanly across the beam once the fit-restriction + cubic OPL upsample
+    # below fix the ray-traced OPL -- so the reference is left INPUT-INDEPENDENT,
+    # which keeps the prepared-screen / multi reuse path -- built on a ``ones``
+    # placeholder -- byte-identical to a direct carrier call.)
     def _reference_input():
         if _carrier_W is not None:
             return np.exp(1j * _k0 * _carrier_W).astype(E_in.dtype)
@@ -2779,7 +2890,7 @@ def apply_real_lens_traced(
     # rays correctly start at the angle implied by E_in, giving the
     # lens its actual per-ray OPL instead of a plane-wave-reference
     # OPL map.  See :func:`_sample_local_tilts` for the extraction.
-    if tilt_aware_rays:
+    if _tilt_aware_launch:
         L_in, M_in = _sample_local_tilts(E_in, wavelength, dx, Xs_in, Ys_in)
         L_in = L_in.ravel()
         M_in = M_in.ravel()
@@ -2979,6 +3090,25 @@ def apply_real_lens_traced(
     # exact sample because n_launch is odd)
     i_axis = n_launch // 2
     opl_grid = opl_grid - opl_grid[i_axis, i_axis]
+
+    # R7 / audit F2 (2026-07-21): CARRIER-GATED fit-domain restriction.  When a
+    # carrier is set, drop the entrance launch grid's outer margin + corners
+    # (the strongly-aberrated / near-vignetting marginal rays) from the fit by
+    # NaN-masking them here -- both the polynomial ``_Cheb2DEvaluator`` and the
+    # direct-``fit`` inverse map skip NaN samples, so this restricts the fitted
+    # region without touching the Newton loop.  Their out-of-basis high-order
+    # aberration otherwise ALIASES into the global fit's low-order (defocus)
+    # coefficients, the dominant per-group F2 error on strongly-focusing thick
+    # groups.  Skipped for the ``spline`` fit (RectBivariateSpline needs a
+    # regular NaN-free grid) and when a carrier is absent (byte-identical
+    # default).  See ``_CARRIER_FIT_RADIUS_FRAC``.
+    if _r7_carrier_path and newton_fit != 'spline':
+        _r2_launch = xs_in[:, None] ** 2 + xs_in[None, :] ** 2
+        _fit_disc = _r2_launch <= (_CARRIER_FIT_RADIUS_FRAC * launch_radius) ** 2
+        if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
+            x_out_grid = np.where(_fit_disc, x_out_grid, np.nan)
+            y_out_grid = np.where(_fit_disc, y_out_grid, np.nan)
+            opl_grid = np.where(_fit_disc, opl_grid, np.nan)
 
     # T-P2 (audit perf): optional DIRECT inverse-map fit.  Instead of Newton-
     # inverting the forward map per output pixel, fit ``opl`` as a smooth
@@ -3667,10 +3797,29 @@ def apply_real_lens_traced(
             ii, jj = np.indices((N, N), dtype=np.float64)
             _coords = np.array([ii * Ns / N, jj * Ns / N])
             del ii, jj
+            # R7 / audit F2 (2026-07-21): CUBIC (order-3) OPL upsample when a
+            # carrier is set.  The Newton OPL is solved on the COARSE grid
+            # (spacing sub*dx) and interpolated to the wave grid; LINEAR
+            # (order-1) upsampling of a rapidly-CURVING OPL leaves a smooth
+            # residual ~ f''*(sub*dx)^2/8 that grows toward the beam edge -- for
+            # the 121's steepest triplet (S25-S27) ~0.37 rad in the OUTER beam
+            # (r > w), invisible to the r<w per-group oracle but SCATTERING
+            # energy through the composed chain.  Cubic upsampling drops that
+            # residual ~2 orders (error ~ f''''*(sub*dx)^4/384) for the smooth
+            # OPL, at negligible cost.  Cubic needs a prefilter so the NaN 0-fill
+            # cannot bleed across the ray-domain boundary; ``map_coordinates``
+            # with ``prefilter=False`` on a 0-filled array plus the separate
+            # order-1 NaN mask (dilated by the > 0.5 threshold below) keeps the
+            # boundary crisp.  Gated on a carrier being set (byte-identical
+            # carrier=None default) and on the whole-grid path.
+            _opl_up_order = 3 if _r7_carrier_path else 1
             opl_map = map_coordinates(
                 np.where(np.isnan(opl_coarse), 0.0, opl_coarse),
-                _coords, order=1, mode='nearest')
-            # Propagate NaN mask
+                _coords, order=_opl_up_order, mode='nearest',
+                prefilter=(_opl_up_order > 1))
+            # Propagate NaN mask (order-1 keeps the ray-domain boundary crisp;
+            # any cubic bleed of the 0-fill into a valid pixel adjacent to NaN
+            # is masked out here).
             nan_coarse = np.isnan(opl_coarse).astype(np.float64)
             nan_full = map_coordinates(
                 nan_coarse, _coords, order=1, mode='nearest')
