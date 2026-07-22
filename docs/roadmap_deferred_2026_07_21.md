@@ -262,6 +262,27 @@ remediation *unit* tests must be self-contained/synthetic.
   ship the F4 ergonomics — a chain-orchestrator API (element supplies R_out) and
   packaged near-focus landing.
 
+### R9 (done) + the remaining 121-image blocker — wavefront-aware ray launch
+
+- **R9 (shipped, general):** the paraxial carrier could not focus the NA-0.46
+  final leg.  `carrier_referenced_exact_focus_readout` + the orchestrator's
+  `final_leg='auto'` (NA threshold) route any high-NA leg through exact
+  band-limited ASM (no paraxial approximation); design-agnostic (synthetic
+  NA-0.46 sphere → diffraction limit, EE-in-2w₀ 1.3% → 99.8%).  Lifted the 121
+  end-to-end EE6 7.3% → 69.7% (~10×).
+- **Remaining item — wavefront-aware ray launch (the last 121 blocker):** R9
+  isolated the ceiling to a distinct, general model limitation — the
+  traced-carrier model launches rays along the carrier **sphere**, so a corrected
+  relay's deliberately **non-spherical intermediate wavefronts** (the
+  pre-correction its tail cancels) are carried uncorrected, accumulating ~1.68 rad
+  RMS entering the high-NA tail (front groups individually clean at < 0.023 rad).
+  Closing the 121 image to EE6 ≥ 99% needs launching rays along the **actual
+  accumulated wavefront** (the field's local phase gradient) rather than the
+  carrier sphere, through the whole chain (`tilt_aware_rays` is the closest
+  lever but is currently guarded off for explicit carriers per F3).  This is a
+  deeper model change, general (helps any corrected relay), and is the next
+  tracked item.
+
 ## Suggested sequencing
 
 1. **P0** — `ByteBudgetedLRU` cache contract (§0).  Small, unblocks all of Part B
