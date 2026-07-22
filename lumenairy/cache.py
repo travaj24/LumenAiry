@@ -134,7 +134,7 @@ def _auto_cache_budget_bytes() -> int:
     """The conservative auto budget: ``min(512 MB, 10% of available RAM)``."""
     try:
         avail = int(available_memory_bytes())
-    except Exception:
+    except (ImportError, OSError, ValueError, TypeError, AttributeError):
         avail = _FALLBACK_AVAILABLE_BYTES
     frac = int(_DEFAULT_CACHE_BUDGET_RAM_FRACTION * avail)
     return int(max(0, min(_DEFAULT_CACHE_BUDGET_CAP_BYTES, frac)))
