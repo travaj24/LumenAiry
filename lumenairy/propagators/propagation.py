@@ -113,6 +113,7 @@ from .carrier import (
     TracedCarrierChainResult,
     carrier_referenced_aperture,
     carrier_referenced_envelope,
+    carrier_referenced_exact_focus_readout,
     carrier_referenced_fit_radius,
     carrier_referenced_focus_readout,
     carrier_referenced_reconstruct,
@@ -327,6 +328,7 @@ __all__ = [
     'carrier_referenced_aperture',
     'carrier_referenced_fit_radius',
     'carrier_referenced_focus_readout',
+    'carrier_referenced_exact_focus_readout',
     'propagate_traced_carrier_chain',
     # Rayleigh-Sommerfeld
     'rayleigh_sommerfeld_propagate',
