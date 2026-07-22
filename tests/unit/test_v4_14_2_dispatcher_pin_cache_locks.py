@@ -39,10 +39,37 @@ Legitimate non-cache locks (the reverse-direction exemption list):
 
 A future feature that adds a new ``^_.*_CACHE$`` global will fail
 this test at the parametrized entry point until the companion
-``_<...>_LOCK`` lands in the same module -- closing the P1-NEW-2-
-class regression at CI rather than at the next audit.
+``_<...>_LOCK`` lands in the same module (or, for a self-locking
+``ByteBudgetedLRU`` cache, is recognised as internally guarded --
+see below) -- closing the P1-NEW-2-class regression at CI rather
+than at the next audit.
 
-Author: Andrew Traverso -- v4.14.2 / Agent C
+Self-locking cache classes (v5.28.0 / R1)
+-----------------------------------------
+
+Roadmap P0 introduced ``lumenairy.cache.ByteBudgetedLRU`` -- the
+shared, byte-budgeted cache class that every Part-B perf cache is
+built on.  A ``ByteBudgetedLRU`` serialises every read-modify-write
+on its OWN internal mutex (the module-level ``_BUDGET_MUTEX``
+reentrant lock in ``lumenairy.cache``, shared across all budgeted
+caches so cross-cache global eviction cannot dead-lock), so it
+satisfies this pin's thread-safety invariant BY CONSTRUCTION and
+needs no companion module-level ``threading.Lock``.  When a cache
+global's value is a ``ByteBudgetedLRU`` instance, pin 1 accepts it
+as self-guarded (after checking it really does carry an internal
+lock).  This is the cache-side analogue of the
+``_LOCK_WITHOUT_CACHE_EXEMPTIONS`` reverse-direction allow-list: a
+permanent, documented exemption for a genuinely different
+(self-guarding) cache kind, NOT a per-cache waiver.  Adding a dead
+second ``threading.Lock`` in the cache's home module purely to
+satisfy the name-pair would be cargo-cult -- and using it around
+the get/compute/put would serialise the very ~3.9 s build the cache
+exists to avoid (``ByteBudgetedLRU`` runs ``compute`` OUTSIDE the
+lock by design).  The first such cache is
+``lumenairy.elements._lens_real._DISPLACED_COS_GRID_CACHE`` (B1).
+
+Author: Andrew Traverso -- v4.14.2 / Agent C;
+        v5.28.0 / R1 self-locking-cache exemption
 """
 from __future__ import annotations
 
@@ -55,6 +82,7 @@ from typing import List, Tuple
 import pytest
 
 import lumenairy as la
+from lumenairy.cache import ByteBudgetedLRU as _ByteBudgetedLRU
 
 # ============================================================================
 # Submodule walker
@@ -265,6 +293,28 @@ def test_cache_has_companion_lock(submod_name, cache_name, request):
                    f'See ``_KNOWN_CACHE_SIBLING_GAPS`` for details.',
             strict=True))
     mod = importlib.import_module(submod_name)
+    # Self-locking cache classes (roadmap P0 ``ByteBudgetedLRU``)
+    # serialise every read-modify-write on their OWN internal mutex,
+    # so they satisfy this pin's thread-safety invariant BY
+    # CONSTRUCTION and need no companion module-level
+    # ``threading.Lock``.  Accept a ``ByteBudgetedLRU`` cache global
+    # as self-guarded after confirming it really carries an internal
+    # lock (a broken future refactor that drops the lock re-trips the
+    # pin).  See the module docstring "Self-locking cache classes"
+    # section for the rationale.
+    cache_obj = getattr(mod, cache_name, None)
+    if isinstance(cache_obj, _ByteBudgetedLRU):
+        internal_lock = getattr(cache_obj, '_lock', None)
+        assert (internal_lock is not None
+                and hasattr(internal_lock, 'acquire')
+                and hasattr(internal_lock, 'release')), (
+            f'{submod_name}.{cache_name} is a ByteBudgetedLRU but '
+            f'carries no usable internal lock (_lock is '
+            f'{internal_lock!r}); its self-locking guarantee is '
+            f'broken, so it can no longer be exempted from the '
+            f'companion-lock pin.  Restore the internal mutex or add '
+            f'a companion module-level threading.Lock.')
+        return
     # First check the shared-lock mapping for known multi-cache
     # locks (e.g. ``_ASM_CACHE_LOCK``).
     shared = _SHARED_LOCK_MAPPING.get((submod_name, cache_name))

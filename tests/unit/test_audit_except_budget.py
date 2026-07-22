@@ -71,7 +71,14 @@ LUMENAIRY_DIR = os.path.join(REPO_ROOT, 'lumenairy')
 # trace-safe isotropy probe (D11a: concretize-or-fall-to-tensor-branch) and
 # `_tensor_is_traced_jax`'s concrete-inspectability probe (D12 tracer -> exact
 # general-path routing).  Slack of 2 retained (count 45 at bump time).
-_NON_UI_EXCEPT_BUDGET = 47
+#
+# v5.28.0 (2026-07-22, roadmap R4): +1 for the numba ADRT-kernel-build guard in
+# raytrace/differential.py -- ``_build_adrt_numba_kernel()`` can fail with any of
+# numba's untypeable compilation errors (TypingError/LoweringError/LLVM), the
+# sanctioned untypeable-guard class (like the jax-tracer guards above); on
+# failure it disables the numba path and falls back to the exact NumPy dual.  The
+# cache RAM-detection guard was NARROWED (not broad), so net +1.
+_NON_UI_EXCEPT_BUDGET = 48
 
 
 def _count_except_exception_in_non_ui() -> int:

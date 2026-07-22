@@ -694,29 +694,54 @@ def _disp_surface_z_grad(surf, x, y):
 
 def _build_displaced_cos_grid(surfaces, thicknesses, wavelength, r_max,
                               Nx, Ny, dx, dy, dir_fn=None, n_launch=257,
-                              n_coarse=384):
+                              n_coarse=384, interp_method='structured'):
     """Pointwise 2-D generalisation of :func:`_build_displaced_cos_luts` for
     decentered / tilted / freeform (callable-sag) elements.
 
-    Trace a 2-D ray grid (regular disk of radius ``r_max``, launched along the
-    input congruence ``dir_fn``) through the actual surfaces and return, per
-    surface, ``(cos_in_field, cos_out_field)`` -- the z-components of the ray
-    direction just before / after refraction, interpolated onto the FIELD grid
-    at each ray's crossing position.  These are the SAME cosines the meridional
-    LUT stores, so equation (1) OPD ``(n2 cos_out - n1 cos_in) * sag`` on a
-    rotationally-symmetric element reproduces the LUT path.  Vectorised Newton
-    intersection + vector Snell; wave-model-independent.
+    Trace a 2-D ray grid (regular square of half-extent ``r_max``, launched
+    along the input congruence ``dir_fn``) through the actual surfaces and
+    return, per surface, ``(cos_in_field, cos_out_field)`` -- the z-components
+    of the ray direction just before / after refraction, interpolated onto the
+    FIELD grid at each ray's crossing position.  These are the SAME cosines the
+    meridional LUT stores, so equation (1) OPD ``(n2 cos_out - n1 cos_in) *
+    sag`` on a rotationally-symmetric element reproduces the LUT path.
+    Vectorised Newton intersection + vector Snell; wave-model-independent.
+
+    ``interp_method`` (roadmap B5) selects how the per-surface cosines are
+    resampled from the traced ray crossings onto the field grid:
+
+    * ``'structured'`` (default) -- the launch fan is a STRUCTURED grid, so the
+      smooth launch->crossing map is inverted by a few Newton steps (evaluating
+      the crossing grids + their gradients with ``map_coordinates``) and the
+      cos grids are then sampled at the inverted launch coordinates, again with
+      ``map_coordinates``.  O(N^2) direct -- no triangulation build.
+    * ``'delaunay'`` -- the legacy (pre-R1) scattered ``LinearNDInterpolator``
+      (QHull Delaunay) path, byte-identical to v5.27.0, retained as the oracle
+      the structured backend is validated against.
     """
     from scipy.interpolate import (
         LinearNDInterpolator,
         NearestNDInterpolator,
         RegularGridInterpolator,
     )
-    ax = np.linspace(-r_max, r_max, int(n_launch))
+    from scipy.ndimage import distance_transform_edt, map_coordinates
+
+    if interp_method not in ('structured', 'delaunay'):
+        raise ValueError(
+            "_build_displaced_cos_grid: interp_method must be 'structured' "
+            f"or 'delaunay' (got {interp_method!r}).")
+    nl = int(n_launch)
+    ax = np.linspace(-r_max, r_max, nl)
     LX, LY = np.meshgrid(ax, ax)
-    disk = (LX * LX + LY * LY) <= (r_max * 1.0000001) ** 2
-    x0 = LX[disk].astype(np.float64)
-    y0 = LY[disk].astype(np.float64)
+    # B5: launch the FULL square ray grid (not just the inscribed disk) so the
+    # ray fan stays a STRUCTURED grid -- the structured interp inverts the
+    # smooth launch->crossing map with map_coordinates instead of triangulating
+    # a scattered point cloud.  ``disk_flat`` selects the pupil for the legacy
+    # Delaunay path; the extra corner rays are traced per-ray-independently, so
+    # the disk subset is byte-identical to the former disk-only launch.
+    disk_flat = ((LX * LX + LY * LY) <= (r_max * 1.0000001) ** 2).ravel()
+    x0 = LX.ravel().astype(np.float64)
+    y0 = LY.ravel().astype(np.float64)
     n = x0.size
     if dir_fn is None:
         gx = np.zeros(n)
@@ -737,30 +762,48 @@ def _build_displaced_cos_grid(surfaces, thicknesses, wavelength, r_max,
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     # The per-surface obliquity cosines vary smoothly across the aperture, so
-    # the scattered->grid interpolation is done on a COARSE regular grid
+    # the crossing->grid interpolation is done on a COARSE regular grid
     # (bounded resolution) and bilinearly upsampled to the full field grid --
-    # decoupling the cost from N (a full-N scattered query is ~10 us/point).
-    # ``n_coarse`` samples over the field extent resolve the aperture-scale cos
-    # variation to well under the model's obliquity tolerance.
+    # decoupling the cost from N.  ``n_coarse`` samples over the field extent
+    # resolve the aperture-scale cos variation to well under the obliquity tol.
     _ncx = min(Nx, n_coarse)
     _ncy = min(Ny, n_coarse)
     xcoarse = np.linspace(xax[0], xax[-1], _ncx)
     ycoarse = np.linspace(yax[0], yax[-1], _ncy)
     Xc, Yc = np.meshgrid(xcoarse, ycoarse)
     Xg, Yg = np.meshgrid(xax, yax)
+    # launch-grid physical spacing -> fractional-index scale for map_coordinates
+    _du = (2.0 * r_max) / (nl - 1) if nl > 1 else 1.0
 
     idx = []
     for s in surfaces:
         idx.append((float(get_glass_index(s['glass_before'], wavelength)),
                     float(get_glass_index(s['glass_after'], wavelength))))
 
-    def _interp2(pts, cin, cout):
-        """Interpolate BOTH cosines from the scattered ray crossings onto the
-        field grid.  ONE Delaunay (LinearNDInterpolator with a 2-column value
-        array) is queried on the COARSE grid; the out-of-hull NaN points are
-        nearest-filled; then the coarse cos maps are bilinearly upsampled to the
-        full field grid.  Both cosines share the triangulation and the coarse
-        query, so the cost is set by ``n_coarse`` (not N)."""
+    def _upsample_coarse(ci_c, co_c):
+        """Bilinearly upsample the coarse cos maps to the full field grid
+        (shared by both interp backends).  A no-op when the coarse grid IS the
+        field grid (small N)."""
+        if _ncx == Nx and _ncy == Ny:
+            return ci_c, co_c
+        rgi_i = RegularGridInterpolator(
+            (ycoarse, xcoarse), ci_c, method='linear',
+            bounds_error=False, fill_value=None)
+        rgi_o = RegularGridInterpolator(
+            (ycoarse, xcoarse), co_c, method='linear',
+            bounds_error=False, fill_value=None)
+        pq = np.stack([Yg.ravel(), Xg.ravel()], axis=-1)
+        ci = rgi_i(pq).reshape(Xg.shape)
+        co = rgi_o(pq).reshape(Xg.shape)
+        return ci, co
+
+    def _interp2_delaunay(pts, cin, cout):
+        """LEGACY (pre-R1) scattered Delaunay interpolation of BOTH cosines onto
+        the coarse grid.  ONE ``LinearNDInterpolator`` (2-column value array) is
+        queried on the coarse grid; out-of-hull NaNs are nearest-filled; the
+        coarse maps are upsampled to the field grid.  Byte-identical to the
+        v5.27.0 path -- retained as the structured backend's validation oracle
+        and reachable via ``interp_method='delaunay'``."""
         if pts.shape[0] < 4:
             ci = float(np.mean(cin)) if cin.size else 1.0
             co = float(np.mean(cout)) if cout.size else 1.0
@@ -774,18 +817,54 @@ def _build_displaced_cos_grid(surfaces, thicknesses, wavelength, r_max,
             qn = NearestNDInterpolator(pts, vals)(Xc[nan], Yc[nan])
             ci_c[nan] = qn[:, 0]
             co_c[nan] = qn[:, 1]
-        if _ncx == Nx and _ncy == Ny:
-            return ci_c, co_c
-        rgi_i = RegularGridInterpolator(
-            (ycoarse, xcoarse), ci_c, method='linear',
-            bounds_error=False, fill_value=None)
-        rgi_o = RegularGridInterpolator(
-            (ycoarse, xcoarse), co_c, method='linear',
-            bounds_error=False, fill_value=None)
-        pq = np.stack([Yg.ravel(), Xg.ravel()], axis=-1)
-        ci = rgi_i(pq).reshape(Xg.shape)
-        co = rgi_o(pq).reshape(Xg.shape)
-        return ci, co
+        return _upsample_coarse(ci_c, co_c)
+
+    def _interp2_structured(PX, PY, CIN, COUT, VALID):
+        """B5 STRUCTURED-grid interpolation (no triangulation build).
+
+        The launch grid is regular, so ``(PX, PY)`` -- the ray crossing
+        positions as functions of launch coordinate ``(u, v)`` -- is a smooth
+        curvilinear grid.  Invert it (Newton, evaluating ``PX/PY`` and their
+        gradients with ``map_coordinates``) to find, for each coarse field
+        point, the launch coordinate whose ray crosses there; then sample the
+        cos grids at that launch coordinate with ``map_coordinates``.  Dead /
+        TIR launch cells are filled by a structured nearest (EDT) fill first so
+        the map is finite everywhere; field points outside the ray-crossing
+        coverage clamp to the pupil edge (~the Delaunay nearest-fill)."""
+        invalid = ~VALID
+        if bool(invalid.any()):
+            if not bool(VALID.any()):
+                return _upsample_coarse(np.ones(Xc.shape), np.ones(Xc.shape))
+            fi = tuple(distance_transform_edt(
+                invalid, return_distances=False, return_indices=True))
+            PX = PX[fi]
+            PY = PY[fi]
+            CIN = CIN[fi]
+            COUT = COUT[fi]
+        dPX_dv, dPX_du = np.gradient(PX, _du, _du)
+        dPY_dv, dPY_du = np.gradient(PY, _du, _du)
+        Xt = Xc.ravel()
+        Yt = Yc.ravel()
+        u = Xt.copy()
+        v = Yt.copy()
+        for _ in range(8):
+            crd = np.stack([(v + r_max) / _du, (u + r_max) / _du])
+            rx = Xt - map_coordinates(PX, crd, order=1, mode='nearest')
+            ry = Yt - map_coordinates(PY, crd, order=1, mode='nearest')
+            a = map_coordinates(dPX_du, crd, order=1, mode='nearest')
+            b = map_coordinates(dPX_dv, crd, order=1, mode='nearest')
+            c = map_coordinates(dPY_du, crd, order=1, mode='nearest')
+            d = map_coordinates(dPY_dv, crd, order=1, mode='nearest')
+            det = a * d - b * c
+            det = np.where(np.abs(det) < 1e-30, 1e-30, det)
+            u = np.clip(u + (d * rx - b * ry) / det, -r_max, r_max)
+            v = np.clip(v + (-c * rx + a * ry) / det, -r_max, r_max)
+        crd = np.stack([(v + r_max) / _du, (u + r_max) / _du])
+        ci_c = np.ascontiguousarray(
+            map_coordinates(CIN, crd, order=1, mode='nearest').reshape(Xc.shape))
+        co_c = np.ascontiguousarray(
+            map_coordinates(COUT, crd, order=1, mode='nearest').reshape(Xc.shape))
+        return _upsample_coarse(ci_c, co_c)
 
     z_v = 0.0
     cos_grids = []
@@ -847,14 +926,164 @@ def _build_displaced_cos_grid(surfaces, thicknesses, wavelength, r_max,
         dzr = ndz / nn2
         cos_out_z = dzr.copy()
 
-        m = alive
-        pts = np.column_stack([px[m], py[m]])
-        ci, co = _interp2(pts, cos_in_z[m], cos_out_z[m])
+        if interp_method == 'delaunay':
+            m = alive & disk_flat
+            pts = np.column_stack([px[m], py[m]])
+            ci, co = _interp2_delaunay(pts, cos_in_z[m], cos_out_z[m])
+        else:
+            valid = (alive & np.isfinite(px) & np.isfinite(py)
+                     & np.isfinite(cos_in_z) & np.isfinite(cos_out_z))
+            ci, co = _interp2_structured(
+                px.reshape(nl, nl), py.reshape(nl, nl),
+                cos_in_z.reshape(nl, nl), cos_out_z.reshape(nl, nl),
+                valid.reshape(nl, nl))
         cos_grids.append((ci, co))
 
         if i < n_surf - 1:
             z_v += thicknesses[i]
     return cos_grids
+
+
+# ---------------------------------------------------------------------------
+# Pointwise cos-grid cache (roadmap B1) -- the per-surface 2-D obliquity
+# cos-grid is FIELD-INDEPENDENT given (prescription surfaces + thicknesses +
+# wavelength + fan extent + scalar/collimated conjugate + grid dx,N), so a
+# decentered-design iteration loop that only moves the field re-uses the
+# ~3.9 s Delaunay/structured trace instead of rebuilding it every call (K3).
+#
+# A cos-grid PAIR is ~2 * N^2 * 8 B = 16 MB @ N=1024, ~1 GB @ N=8192, so this
+# is an N^2-scale cache: it MUST be byte-budgeted + OPT-IN per the Section 0
+# contract.  It ships on the shared :class:`ByteBudgetedLRU` with
+# ``max_bytes=0`` (DISABLED -- stores nothing) so the default is off; the
+# caller enables it for a design loop with
+# :func:`set_pointwise_cos_grid_cache_budget`.  The instance auto-enrolls in
+# the byte-budgeted registry, so ``clear_asm_caches()`` drains it and
+# ``cache_report()`` shows its footprint.  Only the FIELD-INDEPENDENT
+# congruences (collimated / scalar conjugate) are cacheable; the 'auto' /
+# ndarray carriers depend on E_in and always rebuild (key is None).
+# ---------------------------------------------------------------------------
+from ..cache import ByteBudgetedLRU as _ByteBudgetedLRU  # noqa: E402
+
+_DISPLACED_COS_GRID_CACHE = _ByteBudgetedLRU(
+    'displaced_cos_grid', max_bytes=0)      # OPT-IN: off by default
+
+
+def set_pointwise_cos_grid_cache_budget(mb):
+    """Enable / size the OPT-IN pointwise cos-grid cache (roadmap B1).
+
+    The pointwise 2-D obliquity path (``surface_model='displaced'`` with
+    ``displaced_obliquity='pointwise'`` on a decentered / tilted / freeform
+    element) traces a 2-D ray grid to build the per-surface obliquity
+    cos-grid.  That grid is FIELD-INDEPENDENT given the prescription +
+    conjugate + wavelength + grid, so a design loop that only moves the field
+    can re-use it.  This cache is an **N^2-scale** cache (a cos-grid pair is
+    ~16 MB at N=1024, ~1 GB at N=8192) and therefore ships **off by default**;
+    call this to opt in for a design loop.
+
+    Parameters
+    ----------
+    mb : float or None
+        * ``0`` -- DISABLE (the default state) and clear the cache.
+        * ``None`` -- enable, bounded only by the collective global cache
+          ceiling (``LUMENAIRY_CACHE_BUDGET_MB`` / ``set_cache_budget``).
+        * ``> 0`` -- enable with a fixed local ceiling of ``mb`` megabytes
+          (still also bounded by the collective global ceiling).
+
+    Notes
+    -----
+    LRU eviction (byte-budgeted): once the retained bytes exceed the budget
+    the least-recently-used entry is dropped, so a loop that re-uses one
+    design keeps its hot entry.  ``cache_report()`` shows the live footprint;
+    ``clear_asm_caches()`` / :func:`clear_pointwise_cos_grid_cache` release it.
+    """
+    if mb is None:
+        _DISPLACED_COS_GRID_CACHE.set_budget(None)
+        return
+    mb = float(mb)
+    if mb < 0:
+        raise ValueError(
+            "set_pointwise_cos_grid_cache_budget: mb must be >= 0 or None "
+            f"(got {mb!r}); 0 disables, None binds to the global budget.")
+    _DISPLACED_COS_GRID_CACHE.set_budget(int(mb * 1024 * 1024))
+
+
+def get_pointwise_cos_grid_cache_budget():
+    """Return the pointwise cos-grid cache's LOCAL byte ceiling.
+
+    ``0`` -> disabled (the default); ``None`` -> bound only by the collective
+    global budget; a positive int -> the local ceiling in bytes.  Mirrors
+    :func:`set_pointwise_cos_grid_cache_budget` (which takes megabytes)."""
+    return _DISPLACED_COS_GRID_CACHE.max_bytes
+
+
+def clear_pointwise_cos_grid_cache():
+    """Drop every cached pointwise cos-grid, releasing its retained bytes.
+
+    Registered (via the shared byte-budgeted registry) so
+    :func:`lumenairy.clear_asm_caches` drains it too; does NOT change the
+    enabled/budget state (a subsequent call re-populates it)."""
+    _DISPLACED_COS_GRID_CACHE.clear()
+
+
+def _displaced_cos_grid_key(surfaces, thicknesses, wavelength, r_max,
+                            conjugate, Nx, Ny, dx, dy, n_launch, n_coarse,
+                            interp_method):
+    """Hashable COMPLETE key for the field-independent pointwise cos-grid
+    (roadmap Section 0 -- prescription + conjugate + wavelength + grid dx,N,
+    plus the fan/interp determinants).  Returns ``None`` for the
+    field-DEPENDENT 'auto' / ndarray congruences (they depend on E_in and are
+    never cached).  A freeform ``sag_callable`` is keyed by object identity
+    (held in the key so it cannot be GC'd out from under the entry); a fresh
+    callable each call simply misses (correct -- two callables cannot be
+    proven equal)."""
+    if not (conjugate is None
+            or (isinstance(conjugate, (int, float))
+                and not isinstance(conjugate, bool))):
+        return None
+    if conjugate is not None and not np.isfinite(float(conjugate)):
+        conjugate = None                       # +-inf == collimated
+    surf_key = tuple((
+        float(s.get('radius', np.inf))
+        if np.isfinite(s.get('radius', np.inf)) else np.inf,
+        float(s.get('conic', 0.0) or 0.0),
+        (tuple(sorted((int(p), float(a))
+                      for p, a in s['aspheric_coeffs'].items()))
+         if s.get('aspheric_coeffs') else None),
+        tuple(float(v) for v in (s.get('decenter') or (0.0, 0.0))),
+        tuple(float(v) for v in (s.get('tilt') or (0.0, 0.0))),
+        s.get('sag_callable'),                 # by identity (held -> no GC)
+        str(s.get('glass_before')), str(s.get('glass_after')))
+        for s in surfaces)
+    conj_key = None if conjugate is None else float(conjugate)
+    return (surf_key, tuple(float(t) for t in thicknesses),
+            float(wavelength), float(r_max), conj_key,
+            int(Nx), int(Ny), float(dx), float(dy),
+            int(n_launch), int(n_coarse), str(interp_method))
+
+
+def _get_displaced_cos_grid(surfaces, thicknesses, wavelength, r_max,
+                            Nx, Ny, dx, dy, dir_fn, conjugate,
+                            n_launch=257, n_coarse=384,
+                            interp_method='structured'):
+    """Build (or fetch from the opt-in byte-budgeted cache) the per-surface
+    pointwise cos-grid.  Field-independent congruences hit the cache when it is
+    enabled; everything else (and the disabled default) rebuilds.  Pure
+    memoization -- a cache hit returns the SAME arrays the cold trace produced,
+    so downstream output is byte-identical."""
+    key = _displaced_cos_grid_key(
+        surfaces, thicknesses, wavelength, r_max, conjugate, Nx, Ny, dx, dy,
+        n_launch, n_coarse, interp_method)
+    if key is not None:
+        hit = _DISPLACED_COS_GRID_CACHE.get(key)
+        if hit is not None:
+            return hit
+    grids = _build_displaced_cos_grid(
+        surfaces, thicknesses, wavelength, r_max, Nx, Ny, dx, dy,
+        dir_fn=dir_fn, n_launch=n_launch, n_coarse=n_coarse,
+        interp_method=interp_method)
+    if key is not None:
+        _DISPLACED_COS_GRID_CACHE.put(key, grids)
+    return grids
 
 
 def _element_is_asymmetric(surfaces):
@@ -2381,9 +2610,12 @@ def apply_real_lens(
             # grid.
             _disp_dir = _displaced_carrier_dir_fn(
                 conjugate, E_in, wavelength, dx, dy, Nx, Ny)
-            _disp_cos_grid = _build_displaced_cos_grid(
+            # B1: fetch from (or populate) the opt-in byte-budgeted cos-grid
+            # cache (default off -> a plain rebuild); B5: the trace uses the
+            # structured-grid interpolation by default.
+            _disp_cos_grid = _get_displaced_cos_grid(
                 surfaces, thicknesses, wavelength, _r_max, Nx, Ny, dx, dy,
-                dir_fn=_disp_dir)
+                dir_fn=_disp_dir, conjugate=conjugate)
         elif _remap_mode:
             # P2 candidate (a): trace the full entrance->exit ray map + OPL
             # (with the entrance eikonal) for the geometric-transfer remap

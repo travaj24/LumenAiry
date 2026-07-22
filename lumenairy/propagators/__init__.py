@@ -35,11 +35,15 @@ from __future__ import annotations
 # New propagators (no cycles).
 from .carrier import (
     CarrierReferencedField,
+    TracedCarrierChainResult,
     carrier_referenced_aperture,
     carrier_referenced_envelope,
+    carrier_referenced_exact_focus_readout,
     carrier_referenced_fit_radius,
+    carrier_referenced_focus_readout,
     carrier_referenced_reconstruct,
     propagate_carrier_referenced,
+    propagate_traced_carrier_chain,
 )
 from .dispatch import (
     ASM_FAMILY,
@@ -131,11 +135,15 @@ from .vectorial_hfpi import (
 __all__ = [
     'PropagationResult',
     'CarrierReferencedField',
+    'TracedCarrierChainResult',
     'propagate_carrier_referenced',
     'carrier_referenced_reconstruct',
     'carrier_referenced_envelope',
     'carrier_referenced_aperture',
     'carrier_referenced_fit_radius',
+    'carrier_referenced_focus_readout',
+    'carrier_referenced_exact_focus_readout',
+    'propagate_traced_carrier_chain',
     'BeamletBundle',
     'apply_real_lens_fga',
     'apply_real_lens_fga_vector',

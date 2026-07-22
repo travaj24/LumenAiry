@@ -936,10 +936,13 @@ from ._lens_jax import (  # noqa: E402, F401
 from ._lens_real import (  # noqa: E402, F401
     PreparedAnalyticLens,
     apply_real_lens,
+    clear_pointwise_cos_grid_cache,
     get_lens_sag_dtype,
+    get_pointwise_cos_grid_cache_budget,
     lens_sag_float32_opd_error,
     prepare_real_lens,
     set_lens_sag_dtype,
+    set_pointwise_cos_grid_cache_budget,
 )
 
 # ---------------------------------------------------------------------------

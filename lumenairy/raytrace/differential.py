@@ -541,6 +541,334 @@ def _adrt_numpy(x, y, ux, uy, surfaces, wavelength, per_surface):
                                 opd=opd, alive=alive)
 
 
+# ---------------------------------------------------------------------------
+# B4 (roadmap): numba-vectorized batched-dual acceleration of the composite
+# analytic ray transfer.  The scalar-object ``_AdrtDual`` overloads above run
+# one small NumPy op per elementary arithmetic step (K3: ``__mul__`` ~178 k
+# calls dominates the adaptive-FGA ``exact_jacobian`` path).  This kernel does
+# the identical forward-mode-AD ray transfer -- value ``v`` + the 4-vector
+# tangent ``d`` w.r.t. the seed state ``(x, y, ux, uy)`` -- but per-ray in a
+# single compiled loop, carrying each dual quantity as a homogeneous 5-tuple
+# ``(v, d0, d1, d2, d3)`` through inlined AD primitives.  No Python-object
+# allocation, no per-op NumPy dispatch, no ``(N, 4)`` temporaries.
+#
+# EXACTNESS: the primitives replicate the ``_AdrtDual`` arithmetic elementary
+# op-for-op (product forms -- ``v*v`` not ``v**2``; the ``_dual_sqrt`` clamp at
+# ``2*max(sqrt, 1e-300)``; the ``_dual_where`` flat-surface / TIR branches), and
+# numba's default (``fastmath=False``) emits standard IEEE-754 double ops with
+# no FMA contraction / reassociation, so the result matches the dual path to
+# the last ULP (validated element-wise on a ray batch in
+# tests/unit/test_niche_r4_fga_dual_vectorize.py).  It covers the composite
+# (``per_surface=False``) all-conic (sphere / conic) refract/reflect path -- the
+# FGA hot path.  Coordinate breaks, ``per_surface=True``, the JAX backend, and a
+# missing numba all fall back to the ``_AdrtDual`` / JAX implementations.
+#
+# MEASURED ENVELOPE (dev box, warm best-of-3 -- stated so it is never
+# overstated).  On the ISOLATED ray-transfer micro-batch this kernel replaces
+# (49 momenta x 1600 rays, biconvex singlet) numba is ~12x the ``_AdrtDual``
+# path (dual ~290 ms -> numba ~23 ms/loop).  END-TO-END adaptive FGA
+# (``apply_real_lens_fga``, N=512, dx=24um, coarse_stride=1,
+# exact_jacobian=True) is ~3.1x (dual ~26.5 s -> numba ~8.6 s): the ray
+# transfer is ~71-77% of the dual FGA cost, so by Amdahl the whole-call win is
+# bounded by the remaining FFT / momentum-quadrature work once the transfer
+# itself is ~12x cheaper.  Byte-identical output either way (pure arithmetic
+# replication, not an approximation) -- the value here is the ~12x on FGA's
+# single dominant cost, which the ~3.1x whole-call figure reflects after
+# dilution.
+_ADRT_NUMBA_KERNEL = None       # lazily-compiled kernel (NOT a data cache)
+_ADRT_NUMBA_STATE = None        # None=untried, False=unavailable, True=ready
+
+
+def _adrt_surfaces_numba_eligible(surfaces):
+    """True iff every surface is a plain rotationally-symmetric conic
+    refract/reflect surface (no coordinate break) -- the class the numba
+    forward-AD kernel handles.  Aspheric / freeform / biconic / field-frame
+    surfaces are already rejected by ``ray_transfer_jacobian_analytic`` before
+    this is reached; here we additionally exclude coordinate breaks (a smooth
+    frame transform handled only by the ``_AdrtDual`` ``_adrt_coordbreak``)."""
+    for s in surfaces:
+        if bool(getattr(s, 'is_coordbrk', False)):
+            return False
+    return True
+
+
+def _build_adrt_numba_kernel():
+    """Compile (once) the per-ray forward-mode-AD composite ray-transfer numba
+    kernel.  Returns the compiled callable, or raises on any numba failure (the
+    caller catches and falls back to the dual path)."""
+    import math
+
+    from numba import njit
+
+    # --- inlined dual primitives on 5-tuples (v, d0, d1, d2, d3) --------------
+    @njit(inline='always')
+    def _dadd(a, b):
+        return (a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3],
+                a[4] + b[4])
+
+    @njit(inline='always')
+    def _dsub(a, b):
+        return (a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3],
+                a[4] - b[4])
+
+    @njit(inline='always')
+    def _dmul(a, b):
+        # matches _AdrtDual.__mul__: v*v, v[:,None]*d + v[:,None]*d
+        return (a[0] * b[0],
+                a[0] * b[1] + b[0] * a[1],
+                a[0] * b[2] + b[0] * a[2],
+                a[0] * b[3] + b[0] * a[3],
+                a[0] * b[4] + b[0] * a[4])
+
+    @njit(inline='always')
+    def _ddiv(a, b):
+        # matches _AdrtDual.__truediv__: iv=1/b; (a.d*b.v - a.v*b.d)*(iv*iv)
+        iv = 1.0 / b[0]
+        iv2 = iv * iv
+        return (a[0] * iv,
+                (a[1] * b[0] - a[0] * b[1]) * iv2,
+                (a[2] * b[0] - a[0] * b[2]) * iv2,
+                (a[3] * b[0] - a[0] * b[3]) * iv2,
+                (a[4] * b[0] - a[0] * b[4]) * iv2)
+
+    @njit(inline='always')
+    def _dscale(a, c):
+        # dual * plain-scalar (c broadcast, zero tangent) -> c*d, c*v
+        return (a[0] * c, a[1] * c, a[2] * c, a[3] * c, a[4] * c)
+
+    @njit(inline='always')
+    def _daddc(a, c):
+        return (a[0] + c, a[1], a[2], a[3], a[4])
+
+    @njit(inline='always')
+    def _dneg(a):
+        return (-a[0], -a[1], -a[2], -a[3], -a[4])
+
+    @njit(inline='always')
+    def _dsqrtq(a):
+        # matches _dual_sqrt: vc=max(v,0); v=sqrt(vc); d/(2*max(v,1e-300))
+        vc = a[0] if a[0] > 0.0 else 0.0
+        v = math.sqrt(vc)
+        den = 2.0 * v if v > 1e-300 else 2.0e-300
+        return (v, a[1] / den, a[2] / den, a[3] / den, a[4] / den)
+
+    # SERIAL (parallel=False): each FGA momentum call carries a modest ray
+    # batch (~1e3-1e4); the per-call parallel-region setup/teardown cost of
+    # parallel=True dwarfs that little work and measured ~2x SLOWER.  The
+    # compiled serial loop already removes all the Python-object / per-op NumPy
+    # dispatch overhead that dominated the dual path.
+    @njit(cache=True)
+    def _kernel(x, y, ux, uy, radius, conic, ismir, n1a, n2a, thick, semidia,
+                applyt, jac, ox, oy, oux, ouy, oopd, oalive):
+        n = x.shape[0]
+        nsurf = radius.shape[0]
+        one = (1.0, 0.0, 0.0, 0.0, 0.0)
+        for i in range(n):
+            xq = (x[i], 1.0, 0.0, 0.0, 0.0)
+            yq = (y[i], 0.0, 1.0, 0.0, 0.0)
+            uxq = (ux[i], 0.0, 0.0, 1.0, 0.0)
+            uyq = (uy[i], 0.0, 0.0, 0.0, 1.0)
+            opd = 0.0
+            alive = True
+            for si in range(nsurf):
+                Rv = radius[si]
+                if math.isinf(Rv):
+                    c = 0.0
+                else:
+                    c = 1.0 / Rv
+                k = conic[si]
+                n1 = n1a[si]
+                n2 = n2a[si]
+                # sden = sqrt(1 + ux*ux + uy*uy); L,M,Nn = ux/sden, uy/sden, 1/sden
+                s2 = _dadd(_daddc(_dmul(uxq, uxq), 1.0), _dmul(uyq, uyq))
+                sden = _dsqrtq(s2)
+                L = _ddiv(uxq, sden)
+                M = _ddiv(uyq, sden)
+                Nn = _ddiv(one, sden)
+                # conic intersection quadratic coeffs
+                a = _dadd(_dscale(_dadd(_dmul(L, L), _dmul(M, M)), c),
+                          _dscale(_dmul(Nn, Nn), (1.0 + k) * c))
+                b = _dscale(_dsub(_dscale(_dadd(_dmul(xq, L), _dmul(yq, M)), c),
+                                  Nn), 2.0)
+                e = _dscale(_dadd(_dmul(xq, xq), _dmul(yq, yq)), c)
+                disc = _dsub(_dmul(b, b), _dmul(_dscale(a, 4.0), e))
+                sq = _dsqrtq(disc)
+                sgn = 1.0 if b[0] >= 0.0 else -1.0
+                q = _dscale(_dadd(b, _dscale(sq, sgn)), -0.5)
+                aabs = a[0] if a[0] >= 0.0 else -a[0]
+                if aabs < 1e-14:
+                    tau = _ddiv(_dneg(e), b)
+                else:
+                    tau = _ddiv(e, q)
+                xi = _dadd(xq, _dmul(tau, L))
+                yi = _dadd(yq, _dmul(tau, M))
+                zi = _dmul(tau, Nn)
+                # surface normal grad F, normalized
+                gx = _dscale(xi, 2.0 * c)
+                gy = _dscale(yi, 2.0 * c)
+                gz = _daddc(_dscale(zi, 2.0 * (1.0 + k) * c), -2.0)
+                gn = _dsqrtq(_dadd(_dadd(_dmul(gx, gx), _dmul(gy, gy)),
+                                   _dmul(gz, gz)))
+                nx = _ddiv(gx, gn)
+                ny = _ddiv(gy, gn)
+                nz = _ddiv(gz, gn)
+                # orient the normal against the incident ray
+                dn = _dadd(_dadd(_dmul(L, nx), _dmul(M, ny)), _dmul(Nn, nz))
+                fl = -1.0 if dn[0] > 0.0 else 1.0
+                nx = _dscale(nx, fl)
+                ny = _dscale(ny, fl)
+                nz = _dscale(nz, fl)
+                cos_i = _dneg(_dadd(_dadd(_dmul(L, nx), _dmul(M, ny)),
+                                    _dmul(Nn, nz)))
+                have_discr = False
+                discr_v = 0.0
+                if ismir[si]:
+                    two_ci = _dscale(cos_i, 2.0)
+                    Lp = _dadd(L, _dmul(two_ci, nx))
+                    Mp = _dadd(M, _dmul(two_ci, ny))
+                    Np = _dadd(Nn, _dmul(two_ci, nz))
+                else:
+                    eta = n1 / n2
+                    eta_sq = eta * eta
+                    disc_r = _dsub(one, _dscale(
+                        _dsub(one, _dmul(cos_i, cos_i)), eta_sq))
+                    root = _dsqrtq(disc_r)
+                    coeff = _dsub(_dscale(cos_i, eta), root)
+                    Lp = _dadd(_dscale(L, eta), _dmul(coeff, nx))
+                    Mp = _dadd(_dscale(M, eta), _dmul(coeff, ny))
+                    Np = _dadd(_dscale(Nn, eta), _dmul(coeff, nz))
+                    have_discr = True
+                    discr_v = disc_r[0]
+                if applyt[si]:
+                    t = thick[si]
+                    t_minus_zi = (t - zi[0], -zi[1], -zi[2], -zi[3], -zi[4])
+                    tau2 = _ddiv(t_minus_zi, Np)
+                    xo = _dadd(xi, _dmul(tau2, Lp))
+                    yo = _dadd(yi, _dmul(tau2, Mp))
+                    opd = opd + n1 * tau[0] + n2 * tau2[0]
+                else:
+                    xo = xi
+                    yo = yi
+                    opd = opd + n1 * tau[0]
+                uxo = _ddiv(Lp, Np)
+                uyo = _ddiv(Mp, Np)
+                # dead: missed surface + aperture vignette + TIR
+                if disc[0] < 0.0:
+                    alive = False
+                sd = semidia[si]
+                if math.isfinite(sd):
+                    if xi[0] * xi[0] + yi[0] * yi[0] > sd * sd:
+                        alive = False
+                if have_discr and discr_v < 0.0:
+                    alive = False
+                xq = xo
+                yq = yo
+                uxq = uxo
+                uyq = uyo
+            ox[i] = xq[0]
+            oy[i] = yq[0]
+            oux[i] = uxq[0]
+            ouy[i] = uyq[0]
+            oopd[i] = opd
+            oalive[i] = alive
+            jac[i, 0, 0] = xq[1]
+            jac[i, 0, 1] = xq[2]
+            jac[i, 0, 2] = xq[3]
+            jac[i, 0, 3] = xq[4]
+            jac[i, 1, 0] = yq[1]
+            jac[i, 1, 1] = yq[2]
+            jac[i, 1, 2] = yq[3]
+            jac[i, 1, 3] = yq[4]
+            jac[i, 2, 0] = uxq[1]
+            jac[i, 2, 1] = uxq[2]
+            jac[i, 2, 2] = uxq[3]
+            jac[i, 2, 3] = uxq[4]
+            jac[i, 3, 0] = uyq[1]
+            jac[i, 3, 1] = uyq[2]
+            jac[i, 3, 2] = uyq[3]
+            jac[i, 3, 3] = uyq[4]
+
+    return _kernel
+
+
+def _adrt_numba_kernel():
+    """Return the compiled numba kernel or ``None`` if numba is unavailable /
+    the kernel failed to build (one attempt, memoized)."""
+    global _ADRT_NUMBA_KERNEL, _ADRT_NUMBA_STATE
+    if _ADRT_NUMBA_STATE is not None:
+        return _ADRT_NUMBA_KERNEL if _ADRT_NUMBA_STATE else None
+    try:
+        import numba  # noqa: F401
+    except ImportError:
+        _ADRT_NUMBA_STATE = False
+        return None
+    try:
+        _ADRT_NUMBA_KERNEL = _build_adrt_numba_kernel()
+        _ADRT_NUMBA_STATE = True
+    except Exception:                                     # pragma: no cover
+        _ADRT_NUMBA_KERNEL = None
+        _ADRT_NUMBA_STATE = False
+    return _ADRT_NUMBA_KERNEL
+
+
+def _adrt_numba(x, y, ux, uy, surfaces, wavelength):
+    """numba forward-AD twin of :func:`_adrt_numpy` for the composite
+    (``per_surface=False``) all-conic path.  Bit-for-(near)-bit identical to the
+    ``_AdrtDual`` result (see the kernel docstring)."""
+    from ..glass import get_glass_index
+
+    kern = _adrt_numba_kernel()
+    if kern is None:
+        return None
+    x = np.asarray(x, np.float64)
+    n = x.shape[0]
+    y = np.broadcast_to(np.asarray(y, np.float64), (n,)).copy()
+    ux = np.broadcast_to(np.asarray(ux, np.float64), (n,)).copy()
+    uy = np.broadcast_to(np.asarray(uy, np.float64), (n,)).copy()
+    x = np.ascontiguousarray(np.broadcast_to(x, (n,)))
+    y = np.ascontiguousarray(y)
+    ux = np.ascontiguousarray(ux)
+    uy = np.ascontiguousarray(uy)
+
+    nsurf = len(surfaces)
+    radius = np.empty(nsurf, np.float64)
+    conic = np.empty(nsurf, np.float64)
+    ismir = np.empty(nsurf, np.bool_)
+    n1a = np.empty(nsurf, np.float64)
+    n2a = np.empty(nsurf, np.float64)
+    thick = np.empty(nsurf, np.float64)
+    semidia = np.empty(nsurf, np.float64)
+    applyt = np.empty(nsurf, np.bool_)
+    for si, s in enumerate(surfaces):
+        radius[si] = float(getattr(s, 'radius', np.inf))
+        conic[si] = float(getattr(s, 'conic', 0.0) or 0.0)
+        ismir[si] = bool(getattr(s, 'is_mirror', False))
+        n1a[si] = float(get_glass_index(
+            getattr(s, 'glass_before', None) or 'air', wavelength))
+        n2a[si] = float(get_glass_index(
+            getattr(s, 'glass_after', None) or 'air', wavelength))
+        thick[si] = float(getattr(s, 'thickness', 0.0) or 0.0)
+        semidia[si] = float(getattr(s, 'semi_diameter', np.inf))
+        applyt[si] = si < nsurf - 1
+
+    jac = np.zeros((n, 4, 4), np.float64)
+    ox = np.empty(n, np.float64)
+    oy = np.empty(n, np.float64)
+    oux = np.empty(n, np.float64)
+    ouy = np.empty(n, np.float64)
+    oopd = np.empty(n, np.float64)
+    oalive = np.empty(n, np.bool_)
+    kern(x, y, ux, uy, radius, conic, ismir, n1a, n2a, thick, semidia, applyt,
+         jac, ox, oy, oux, ouy, oopd, oalive)
+    # A dead ray (missed / TIR) can leave non-finite entries; zero them so they
+    # cannot contaminate array-wide ops downstream (matches _adrt_numpy).
+    jac = np.nan_to_num(jac, nan=0.0, posinf=0.0, neginf=0.0)
+    ox, oy, oux, ouy, oopd = (np.nan_to_num(v)
+                              for v in (ox, oy, oux, ouy, oopd))
+    return DifferentialTransfer(jacobian=jac, x=ox, y=oy, ux=oux, uy=ouy,
+                                opd=oopd, alive=oalive)
+
+
 def ray_transfer_jacobian_analytic(
     x, y, ux, uy, surfaces, wavelength, *, per_surface: bool = False,
 ):
@@ -617,6 +945,15 @@ def ray_transfer_jacobian_analytic(
     if is_jax_array(x) or is_jax_array(y) or is_jax_array(ux) \
             or is_jax_array(uy):
         return _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface)
+    # B4: the composite all-conic path (the adaptive-FGA exact_jacobian hot
+    # spot) runs the numba forward-AD kernel when numba is available -- ULP-
+    # identical to the ``_AdrtDual`` result, ~order-of-magnitude faster.  Any
+    # miss (per_surface, a coordinate break, or numba unavailable / a build
+    # failure) falls through to the pure-NumPy dual implementation.
+    if not per_surface and _adrt_surfaces_numba_eligible(surfaces):
+        dt = _adrt_numba(x, y, ux, uy, surfaces, wavelength)
+        if dt is not None:
+            return dt
     return _adrt_numpy(x, y, ux, uy, surfaces, wavelength, per_surface)
 
 

@@ -4,6 +4,81 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.28.0] — 2026-07-22
+
+Deferred-items roadmap implementation (`docs/roadmap_deferred_2026_07_21.md`)
+plus the traced-carrier-chain audit remediation.  All new API is opt-in;
+rotationally-symmetric / collimated / low-NA defaults are byte-identical
+(tolerance-pinned).  Every item was implemented → adversarially verified → fixed.
+
+### Added
+
+- **`lumenairy.cache.ByteBudgetedLRU` + the cache memory-safety contract (R0).**
+  A shared cache foundation bounded by TOTAL RETAINED BYTES (not entry count),
+  with a single collective global ceiling (`LUMENAIRY_CACHE_BUDGET_MB` +
+  `set_cache_budget`/`get_cache_budget`, default `min(512 MB, 10% of RAM)`),
+  global LRU eviction across caches, `register_cache_clearer` enrollment
+  (`clear_asm_caches()` drains it), `.release()`/`.clear()`, and a public
+  `cache_report()`.  Empirically bounded: a 10 MB-cap cache fed 800 MB of arrays
+  retained ≤ 8.39 MB.  Opt-in (`max_bytes=0` disabled) for N²-scale caches.
+- **Pointwise cos-grid cache + structured-grid interpolation (R1).**  The
+  `surface_model='displaced'` pointwise path gains an opt-in, byte-budgeted
+  cos-grid cache — a warm hit is ~6 µs vs ~1.0–1.2 s cold (~160,000× in a design
+  loop) — and a structured-grid `map_coordinates` replacing the scattered
+  Delaunay (~5× cold).  Byte-identical, default off.
+- **Pearcey cusp completion of `caustic='uniform'` (R2).**  Extends the uniform
+  Airy fold completion to cusps via the shipped `pearcey` kernel; beats the
+  multibranch fallback on a cusp ground truth.
+- **`propagate_gbd_vector_through_prescription(direction_sampling='auto')`
+  (R5).**  Husimi carrier decomposition on the vector GBD chain (diverging power
+  0.82 → 0.99+); collimated byte-identical.  Plus `caustic='uniform'`
+  higher-catastrophe detect + clean multibranch fallback.
+- **Traced carrier-chain composition API (R8).**  `propagate_traced_carrier_chain`
+  (packages the carrier-leg → reconstruct → element(carrier=R) → re-envelope
+  hand-off in one call; the element supplies R_out) + `TracedCarrierChainResult`
+  + `carrier_referenced_focus_readout` (packaged near-focus landing).
+- **Exact non-paraxial high-NA final leg (R9).**  `carrier_referenced_exact_focus_readout`
+  + `propagate_traced_carrier_chain(final_leg='auto', na_exact_threshold=0.15)`
+  route any high-NA leg through exact band-limited ASM (no paraxial magnification),
+  auto-selected by NA.  Design-agnostic: a synthetic NA-0.46 sphere focuses to
+  the diffraction limit (EE-in-2w₀ 1.3% paraxial → 99.8% exact); low-NA legs
+  byte-identical.
+
+### Performance
+
+- **Deferred perf/memory items (R3, R4).**  GBD `_reconstruct_windowed` chunked
+  into memory-budgeted tiles — peak 939.6 → 546.9 MB at N=1024 (−42%),
+  byte-identical, 1.35× bonus; a thread-safe normal-equations solver replaces a
+  JAX-OpenMP-deadlock-prone `lstsq` in the traced path.  Adaptive-FGA dual-number
+  ray-transfer → numba kernel (default), exact (bit-identical Jacobian) — ~12.7×
+  on the hot loop, ~3× end-to-end.
+
+### Fixed
+
+- **Traced-carrier-chain audit F1 — `carrier='auto'` on spherical input (R6).**
+  The `'auto'` fit spanned the full field, but aliasing beyond r ≈ 1.5–4 mm
+  corrupted the least-squares gradient (recovering R ≈ +1094 mm instead of
+  +153 mm → collapse to no-carrier).  Restricting the fit to the un-aliased core
+  recovers R to ~0.26% (r⁴ 0.588 → 0.005 == explicit); collimated byte-identical.
+- **Audit F2 — thick-group intra-group exit-curvature error (R7).**  The float
+  carrier used the paraxial parabola not the exact point-source sphere, and the
+  global Chebyshev map/OPL fit aliased marginal-ray high order into the defocus
+  coefficient.  Exact-sphere carrier + carrier-gated fit-domain restriction +
+  cubic OPL upsample bring per-group exit-wavefront rms on all 8 real-121 groups
+  from up to 1.8 rad down to ≤ 0.023 rad; default byte-identical.
+- **Audit F3 — `tilt_aware_rays` on a steep explicit carrier (R8).**  Guarded to
+  reroute through the carrier path (1.723 → 0.008 rad); collimated tilt-aware
+  byte-identical (N5 preserved).
+
+### Known limitation
+
+- The corrected-relay (design-121) end-to-end image improved ~10× (EE6 7.3% →
+  69.7%) with F2 + the exact high-NA leg, but does not yet reach EE6 ≥ 99%: the
+  traced-carrier model launches rays along the carrier **sphere**, so a corrected
+  relay's non-spherical intermediate wavefronts are carried uncorrected
+  (~1.68 rad accumulated).  A **wavefront-aware ray launch** is the tracked next
+  item (`docs/roadmap_deferred_2026_07_21.md`).
+
 ## [5.27.0] — 2026-07-21
 
 Deferred-items campaign after v5.26.0 (niches N13–N16): multibranch KMAH caustic

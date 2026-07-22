@@ -149,11 +149,15 @@ from .fresnel import fresnel_tf_propagate
 
 __all__ = [
     'CarrierReferencedField',
+    'TracedCarrierChainResult',
     'propagate_carrier_referenced',
     'carrier_referenced_reconstruct',
     'carrier_referenced_envelope',
     'carrier_referenced_aperture',
     'carrier_referenced_fit_radius',
+    'carrier_referenced_focus_readout',
+    'carrier_referenced_exact_focus_readout',
+    'propagate_traced_carrier_chain',
 ]
 
 # --- focus-crossing (auto-split) tuning (Task 2) ---------------------------
@@ -1365,3 +1369,729 @@ def carrier_referenced_aperture(
     if return_transmission:
         return field, transmission
     return field
+
+
+# ===========================================================================
+# Near-focus landing (audit F4.2): stop-short + fine Bluestein zoom
+# ===========================================================================
+# Landing a carrier-referenced leg AT (or within a few um of) the carrier's
+# geometric focus collapses the co-moving grid: the magnification m = R_out/R
+# -> 0, so the window ``N * dx * |R_out/R|`` shrinks below the diffraction-
+# limited waist AND clips the focused beam's halo, producing spurious sub-
+# wavelength "spots" (window-truncation ringing masquerading as speckle
+# peaks -- the exact artefact the design-121 carrier chain hit at the MSoP).
+# The working pattern (validated in
+# ``validation/repro_traced_carrier_121/carrier_chain_121.py``) is to stop the
+# carrier leg a small ``standoff`` SHORT of the target -- where the co-moving
+# grid still holds the whole beam and resolves its fringe -- reconstruct the
+# full field there, and finish with a fine band-limited angular-spectrum
+# Bluestein zoom (:func:`angular_spectrum_propagate_mft`) onto a user-chosen
+# output grid that is BOTH fine enough to resolve the focus AND wide enough to
+# hold the halo.  :func:`carrier_referenced_focus_readout` packages exactly
+# that.
+
+
+def carrier_referenced_focus_readout(
+    env: np.ndarray,
+    R_carrier: float,
+    z: float,
+    wavelength: float,
+    dx: float,
+    *,
+    dx_out: float,
+    N_out: int,
+    standoff: Optional[float] = None,
+    centre_out: Tuple[float, float] = (0.0, 0.0),
+    bandlimit: bool = True,
+) -> np.ndarray:
+    """Read a carrier-referenced beam at a target plane NEAR its focus without
+    the co-moving-grid collapse (audit F4.2).
+
+    Landing a carrier leg at / within a few um of the carrier's geometric
+    focus shrinks the co-moving grid below the diffraction-limited waist and
+    clips the beam's halo, producing spurious sub-wavelength speckle "spots".
+    This helper packages the working pattern: carrier-step to a plane a small
+    ``standoff`` SHORT of the target (where the co-moving grid still holds the
+    whole beam and resolves its fringe), reconstruct the full field there, and
+    finish with a fine band-limited angular-spectrum **Bluestein zoom**
+    (:func:`angular_spectrum_propagate_mft`) onto the user-chosen
+    ``(dx_out, N_out)`` grid -- fine enough to resolve the focus and wide
+    enough to hold the halo, the combination a single fixed grid cannot give.
+
+    Parameters
+    ----------
+    env : ndarray, complex, shape (Ny, Nx)
+        Beam ENVELOPE on the co-moving grid (the carrier phase divided out).
+    R_carrier : float
+        Signed carrier radius at the input plane (m); ``R < 0`` converging
+        toward a focus a distance ``-R`` ahead.  ``+/-inf`` (collimated) is
+        allowed -- there is no geometric focus to collapse, so the step is an
+        ordinary carrier leg plus the Bluestein readout.
+    z : float
+        Distance from the input plane to the TARGET (readout) plane (m).
+    wavelength, dx : float
+        Wavelength and input grid pitch (m).
+    dx_out : float
+        Output grid pitch (m) -- pick it fine enough to resolve the focused
+        spot (``<~ lambda / (few * NA)``).
+    N_out : int
+        Output grid size (square).
+    standoff : float, optional
+        Length of the final fine Bluestein-zoom leg (m): the carrier leg
+        covers ``z - standoff`` and stops that far SHORT of the target.  Must
+        be ``> 0``.  Defaults to ``_BRIDGE_ZR_FACTOR`` Rayleigh ranges of the
+        estimated focus (plus any distance the target sits past the focus),
+        clamped so the carrier leg ``z - standoff`` does not back before the
+        input plane.
+    centre_out : (float, float), optional
+        Physical ``(x, y)`` centre of the output grid (m).  Default on-axis.
+    bandlimit : bool, default True
+        Band-limit the ASM transfer function (Matsushima-Shimobaba).
+
+    Returns
+    -------
+    E_out : ndarray, complex, shape (N_out, N_out)
+        The full physical field at the target plane on the centred
+        ``(dx_out)`` grid -- carries the absolute physical phase, same
+        convention as :func:`angular_spectrum_propagate_mft`.
+
+    Notes
+    -----
+    The carrier leg is a fast (byte-identical) Sziklas-Siegman step because
+    the stop plane is chosen to PRECEDE the focus -- the near-focus bridge is
+    deliberately NOT relied upon (its output would land back on the collapsed
+    co-moving grid).  Validated against the analytic Gaussian focus and a
+    resolved fixed-grid reference in ``test_niche_r8_tiltaware_chain_api.py``.
+    """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(env, 'carrier_referenced_focus_readout')
+    if not np.isfinite(wavelength) or wavelength <= 0:
+        raise ValueError(
+            "carrier_referenced_focus_readout: wavelength must be finite and "
+            f"positive, got {wavelength!r}.")
+    if not (np.isfinite(dx) and dx > 0):
+        raise ValueError(
+            "carrier_referenced_focus_readout: dx must be finite and "
+            f"positive, got {dx!r}.")
+    if not (np.isfinite(dx_out) and dx_out > 0):
+        raise ValueError(
+            "carrier_referenced_focus_readout: dx_out must be finite and "
+            f"positive, got {dx_out!r}.")
+    if int(N_out) <= 0:
+        raise ValueError(
+            f"carrier_referenced_focus_readout: N_out must be > 0, got {N_out!r}.")
+    if not np.isfinite(z):
+        raise ValueError(
+            f"carrier_referenced_focus_readout: z must be finite, got {z!r}.")
+
+    R = float(R_carrier)
+    if standoff is None:
+        standoff = _default_focus_standoff(env, R, z, wavelength, dx)
+    standoff = float(standoff)
+    if not (standoff > 0.0):
+        raise ValueError(
+            "carrier_referenced_focus_readout: standoff must be > 0 (it is the "
+            f"length of the fine Bluestein-zoom leg), got {standoff!r}.")
+    # Keep the carrier leg (z - standoff) from backing before the input plane
+    # (and from overshooting to the far side of a very close target): clamp the
+    # Bluestein leg to |z|.  A leg equal to |z| reconstructs at the input plane
+    # and Bluestein-zooms the whole distance (still correct; just less of the
+    # compact-field win).
+    if standoff > abs(z) and z != 0.0:
+        standoff = abs(z)
+    z_stop = z - np.copysign(standoff, z) if z != 0.0 else -standoff
+
+    cr = propagate_carrier_referenced(env, R, z_stop, wavelength, dx)
+    env_s, R_s, dx_s = cr.env, cr.R, cr.dx
+    if isinstance(dx_s, tuple):
+        dx_s = dx_s[0]
+    if isinstance(R_s, tuple):
+        R_s = R_s[0]
+    E_stop = carrier_referenced_reconstruct(env_s, R_s, wavelength, dx_s)
+
+    from .mft import angular_spectrum_propagate_mft
+    return angular_spectrum_propagate_mft(
+        E_stop, z - z_stop, wavelength, dx_s, dx_out, int(N_out),
+        centre_out=centre_out, bandlimit=bandlimit)
+
+
+def _default_focus_standoff(env, R, z, wavelength, dx):
+    """Default fine-zoom leg length for :func:`carrier_referenced_focus_readout`:
+    ``_BRIDGE_ZR_FACTOR`` Rayleigh ranges of the estimated focus, plus any
+    distance the target sits PAST the focus, so the carrier leg stops safely
+    before the co-moving-grid collapse.  Falls back to half the target
+    distance when there is no geometric focus ahead (collimated / diverging)."""
+    z_focus = np.inf if not np.isfinite(R) else -R
+    w_env = _envelope_amp_radius(env, dx, dx)
+    if np.isfinite(z_focus) and z_focus > 0.0 and w_env > 0.0 and abs(R) > 0.0:
+        w0 = wavelength * abs(R) / (np.pi * w_env)      # estimated focus waist
+        zR = np.pi * w0 * w0 / wavelength
+        margin = _BRIDGE_ZR_FACTOR * zR
+        # Stop `margin` before the focus; if the target is PAST the focus, the
+        # zoom leg additionally spans that overshoot.
+        return margin + max(0.0, abs(z) - z_focus)
+    # No focus ahead: split the leg (the carrier step cannot collapse).
+    return 0.5 * abs(z) if z != 0.0 else 0.0
+
+
+# ===========================================================================
+# Exact (non-paraxial) high-NA final leg (audit R9 / F2 end-to-end)
+# ===========================================================================
+# The paraxial carrier (Sziklas-Siegman) references the beam's wavefront to a
+# quadratic PARABOLA ``exp(i k r^2/2R)``.  On a strongly-converging FINAL leg
+# (NA -> 0.5) the true converging wavefront is the EXACT sphere
+# ``S(R) = sign(R)(sqrt(r^2+R^2)-|R|)``, and ``parabola - sphere`` reaches
+# HUNDREDS of radians of r^4 at the beam edge (~200 rad on the design-121
+# f/1.1 image leg).  Re-enveloping such a leg with the paraxial ABCD ``R_out``
+# dumps that r^4 onto the paraxial envelope, which paraxial carrier propagation
+# CANNOT focus (R9: a carrier through-focus of an NA-0.46 sphere reaches only a
+# few % encircled energy).  The fix is an EXACT diffraction step: reference the
+# field to its own EXACT sphere (leaving a genuinely smooth envelope -- the
+# aliasing of the two steep phases cancels pointwise on the shared grid),
+# resample that smooth envelope onto a grid that Nyquist-samples the exact
+# sphere (``dx <= lambda/(2 NA)``), reconstruct, and propagate to the image
+# with the EXISTING exact band-limited angular-spectrum Bluestein zoom
+# (:func:`angular_spectrum_propagate_mft`) -- no paraxial magnification /
+# curvature on this leg.  Validated (R9) to focus a clean NA-0.3-0.46 exact
+# sphere to the diffraction limit (Strehl ~1) where the paraxial carrier path
+# gives ~5%.
+
+
+def _exact_sphere_eikonal(shape, dx, dy, wavelength, R):
+    """Exact on-axis point-source sphere eikonal ``S(R) = sign(R)(sqrt(r^2 +
+    R^2) - |R|)`` in METRES on the centred grid (host NumPy float64).  This is
+    the EXACT converging/diverging wavefront -- the paraxial parabola
+    ``r^2/2R`` is its small-``r/R`` truncation, dropping ``-r^4/8R^3`` which is
+    huge at high NA.  Same sign convention as ``apply_real_lens_traced``'s
+    carrier ``W`` (R7/F2) and :func:`carrier_referenced_reconstruct`."""
+    Ny, Nx = int(shape[-2]), int(shape[-1])
+    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Y, X = np.meshgrid(y, x, indexing='ij')
+    r2 = X * X + Y * Y
+    sgn = 1.0 if R > 0 else -1.0
+    return sgn * (np.sqrt(r2 + R * R) - abs(R))
+
+
+def _fourier_upsample_crop(env, n_crop, n_fine):
+    """Band-limited (Fourier zero-pad) upsample of a SMOOTH envelope: crop the
+    centred ``n_crop`` sub-window, embed its spectrum in an ``n_fine`` grid, and
+    inverse-transform.  Exact interpolation for a band-limited envelope (the
+    carrier having been divided out), and far cheaper than cubic
+    ``resample_field`` at the large ``n_fine`` a high-NA focus needs.  Returns
+    the envelope on the ``n_fine`` grid spanning the SAME physical window
+    (``n_crop * dx``), i.e. pitch ``dx * n_crop / n_fine``."""
+    env = np.asarray(env)
+    n = env.shape[-1]
+    c0 = n // 2 - n_crop // 2
+    ec = np.ascontiguousarray(env[c0:c0 + n_crop, c0:c0 + n_crop])
+    if n_fine <= n_crop:
+        return ec
+    F = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(ec)))
+    pad = np.zeros((n_fine, n_fine), dtype=np.complex128)
+    o = n_fine // 2 - n_crop // 2
+    pad[o:o + n_crop, o:o + n_crop] = F
+    out = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(pad)))
+    return out * (float(n_fine) / float(n_crop)) ** 2
+
+
+def carrier_referenced_exact_focus_readout(
+    E_full: np.ndarray,
+    R_carrier: float,
+    z: float,
+    wavelength: float,
+    dx: float,
+    *,
+    dx_out: float,
+    N_out: int,
+    dx_fine: Optional[float] = None,
+    N_fine: Optional[int] = None,
+    window_factor: float = 7.0,
+    centre_out: Tuple[float, float] = (0.0, 0.0),
+    bandlimit: bool = True,
+) -> np.ndarray:
+    """Exact (non-paraxial) readout of a strongly-converging FINAL leg (R9).
+
+    Propagate a high-NA converging FULL field ``E_full`` (e.g. the exit field
+    of the last traced group) a distance ``z`` to the image plane WITHOUT the
+    paraxial carrier re-envelope.  ``E_full`` is referenced to its own EXACT
+    spherical wavefront ``S(R) = sign(R)(sqrt(r^2+R^2)-|R|)`` (not the paraxial
+    parabola), the resulting SMOOTH envelope is resampled onto a grid that
+    Nyquist-samples the exact sphere (``dx_fine <= lambda/(2 NA)``), the field
+    is reconstructed, and it is propagated to the target with the exact
+    band-limited angular-spectrum Bluestein zoom
+    (:func:`angular_spectrum_propagate_mft`).  See the module's "Exact
+    high-NA final leg" section for why the paraxial carrier cannot focus this
+    leg.
+
+    Unlike :func:`carrier_referenced_focus_readout` (which takes the ENVELOPE
+    and carrier-steps short of the focus before an ASM zoom -- a PARAXIAL
+    envelope leg), this takes the FULL field and never applies a paraxial
+    magnification/curvature, so it focuses an NA-0.5 sphere to the diffraction
+    limit.  For a LOW-NA leg the two agree; use the paraxial (faster) path
+    there.
+
+    Parameters
+    ----------
+    E_full : ndarray, complex, shape (Ny, Nx)
+        The FULL physical field (carrier NOT divided out) on the ``dx`` grid --
+        its wavefront must be ~sphere(R_carrier) plus a smooth residual (the
+        genuine aberration).  The grid may UNDER-sample the exact sphere (the
+        typical co-moving-grid case): the sphere-referencing de-aliases it
+        pointwise before the resample.
+    R_carrier : float
+        Signed radius of the exact spherical wavefront to reference (m); the
+        beam's paraxial exit radius ``R_out``.  ``R < 0`` converging.  ``+/-inf``
+        (collimated) skips the sphere reference (a plain ASM-MFT).
+    z : float
+        Distance from ``E_full``'s plane to the target/image plane (m).
+    wavelength, dx : float
+        Wavelength and input grid pitch (m).
+    dx_out : float
+        Output (focal) grid pitch (m) -- pick it to resolve the focused spot
+        (``<~ lambda/(few*NA)``).
+    N_out : int
+        Output grid size (square).
+    dx_fine : float, optional
+        Pitch of the intermediate fine reconstruction grid (m).  Default:
+        ``lambda/(3*NA)`` from the measured NA (``NA = w/|R|``), so the exact
+        sphere is comfortably Nyquist-sampled.
+    N_fine : int, optional
+        Size of the intermediate fine grid (square).  Default: the next power
+        of two that spans ``window_factor`` amplitude-radii of the beam at
+        ``dx_fine``.
+    window_factor : float, default 7.0
+        Fine-grid physical span in units of the beam amplitude radius
+        (``_envelope_amp_radius``).  7 holds the beam to <1e-6 truncation.
+    centre_out : (float, float), optional
+        Physical ``(x, y)`` centre of the output grid (m).  Default on-axis.
+    bandlimit : bool, default True
+        Band-limit the ASM transfer function (Matsushima-Shimobaba).
+
+    Returns
+    -------
+    E_out : ndarray, complex, shape (N_out, N_out)
+        The full physical field at the target plane on the centred ``dx_out``
+        grid -- same absolute-phase convention as
+        :func:`angular_spectrum_propagate_mft`.
+    """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_full, 'carrier_referenced_exact_focus_readout')
+    if not np.isfinite(wavelength) or wavelength <= 0:
+        raise ValueError(
+            "carrier_referenced_exact_focus_readout: wavelength must be finite "
+            f"and positive, got {wavelength!r}.")
+    if not (np.isfinite(dx) and dx > 0):
+        raise ValueError(
+            "carrier_referenced_exact_focus_readout: dx must be finite and "
+            f"positive, got {dx!r}.")
+    if not (np.isfinite(dx_out) and dx_out > 0):
+        raise ValueError(
+            "carrier_referenced_exact_focus_readout: dx_out must be finite and "
+            f"positive, got {dx_out!r}.")
+    if int(N_out) <= 0:
+        raise ValueError(
+            "carrier_referenced_exact_focus_readout: N_out must be > 0, got "
+            f"{N_out!r}.")
+    if not np.isfinite(z):
+        raise ValueError(
+            "carrier_referenced_exact_focus_readout: z must be finite, got "
+            f"{z!r}.")
+
+    from ..backend import to_numpy
+    E = np.asarray(to_numpy(E_full))
+    N = E.shape[-1]
+    k = 2.0 * np.pi / wavelength
+    R = float(R_carrier)
+    w_amp = _envelope_amp_radius(E, dx, dx)
+
+    # -- exact-sphere envelope (SMOOTH; the two steep phases alias-cancel on the
+    #    shared grid, leaving only amplitude x exp(i * genuine aberration)) -----
+    if np.isfinite(R) and R != 0.0:
+        S = _exact_sphere_eikonal(E.shape, dx, dx, wavelength, R)
+        env = E * np.exp(-1j * k * S)
+    else:
+        env = E
+
+    # -- fine grid sizing -----------------------------------------------------
+    if dx_fine is None:
+        if np.isfinite(R) and R != 0.0 and w_amp > 0.0:
+            na = min(max(w_amp / abs(R), 0.02), 0.95)
+        else:
+            na = 0.1
+        dx_fine = wavelength / (3.0 * na)
+    dx_fine = float(dx_fine)
+    if not (dx_fine > 0.0):
+        raise ValueError(
+            "carrier_referenced_exact_focus_readout: dx_fine must be > 0, got "
+            f"{dx_fine!r}.")
+    # crop window (physical) that holds the beam
+    if w_amp > 0.0:
+        win = min(float(window_factor) * w_amp, N * dx)
+    else:
+        win = N * dx
+    n_crop = int(2 * round((win / dx) / 2))
+    n_crop = int(min(max(n_crop, 2), N))
+    win = n_crop * dx
+    if N_fine is None:
+        N_fine = int(2 ** int(np.ceil(np.log2(max(win / dx_fine, n_crop)))))
+    N_fine = int(N_fine)
+    dx_fine = win / N_fine
+
+    env_f = _fourier_upsample_crop(env, n_crop, N_fine)
+
+    # -- reconstruct the exact sphere on the fine grid ------------------------
+    if np.isfinite(R) and R != 0.0:
+        S_f = _exact_sphere_eikonal((N_fine, N_fine), dx_fine, dx_fine,
+                                    wavelength, R)
+        E_fine = (env_f * np.exp(1j * k * S_f)).astype(np.complex128)
+    else:
+        E_fine = np.asarray(env_f, dtype=np.complex128)
+
+    # -- exact band-limited ASM Bluestein zoom to the target ------------------
+    from .mft import angular_spectrum_propagate_mft
+    return angular_spectrum_propagate_mft(
+        E_fine, z, wavelength, dx_fine, dx_out, int(N_out),
+        centre_out=centre_out, bandlimit=bandlimit)
+
+
+# ===========================================================================
+# Chain orchestrator (audit F4.1): carrier-referenced traced element chain
+# ===========================================================================
+# The per-group hand-off -- analytic carrier leg -> reconstruct at the group
+# front vertex -> apply_real_lens_traced(carrier=R_in) -> re-envelope with the
+# group's exit curvature R_out -- is ~30 lines of user code per chain and needs
+# the element's OWN exit curvature R_out, which in the repro script came from an
+# EXTERNAL ABCD q-trace.  :func:`propagate_traced_carrier_chain` packages the
+# hand-off AND SUPPLIES R_out from each group's own paraxial ABCD
+# (:func:`system_abcd_prescription` applied to the incoming carrier), so the
+# caller needs no external q-trace.  The final leg optionally lands near the
+# image-plane focus via :func:`carrier_referenced_focus_readout`.
+
+
+class TracedCarrierChainResult(NamedTuple):
+    """Result of :func:`propagate_traced_carrier_chain`.
+
+    Attributes
+    ----------
+    field : ndarray, complex
+        Full physical field at the final (target) plane.  For a focus-readout
+        landing it is on the ``(dx, N_out)`` fine grid; otherwise on the
+        co-moving grid ``dx``.
+    R : float or None
+        Carrier radius at the final plane (m); ``None`` after a focus readout
+        (the Bluestein output carries its own absolute phase, not a single
+        referenced carrier).
+    dx : float
+        Grid pitch of ``field`` (m).
+    stages : list of dict
+        Per-group diagnostics, one dict per lens group, each with keys
+        ``name``, ``R_in``, ``R_out`` (m), ``dx`` (m), ``w`` (1/e^2 envelope
+        radius, m) and ``power`` (sum |env|^2 dx^2).
+    """
+
+    field: np.ndarray
+    R: Optional[float]
+    dx: float
+    stages: list
+
+
+def _paraxial_group_r_out(prescription, R_in, wavelength):
+    """Exit carrier radius the GROUP itself supplies: its air-to-air paraxial
+    ABCD (:func:`system_abcd_prescription`) mapped onto the incoming carrier
+    radius by the wavefront Moebius law ``R_out = (A R_in + B)/(C R_in + D)``.
+
+    This reproduces the design-121 repro script's external q-trace ``R_out`` to
+    full precision (the two are algebraically identical for the geometric
+    wavefront radius), so the orchestrator needs no external q-trace."""
+    from ..raytrace.seidel import system_abcd_prescription
+    M, _efl, _bfl, _ffl = system_abcd_prescription(prescription, wavelength)
+    A, B = float(M[0, 0]), float(M[0, 1])
+    C, D = float(M[1, 0]), float(M[1, 1])
+    if not np.isfinite(R_in):
+        return np.inf if abs(C) < 1e-300 else A / C
+    num = A * R_in + B
+    den = C * R_in + D
+    if abs(den) < 1e-300:
+        return np.inf
+    return num / den
+
+
+def _chain_envelope_stats(env, dx):
+    """(1/e^2 radius, total power) of an envelope on the centred grid."""
+    inten = np.abs(np.asarray(env)) ** 2
+    tot = float(inten.sum())
+    if not (tot > 0.0):
+        return 0.0, 0.0
+    n = inten.shape[-1]
+    x = (np.arange(n, dtype=np.float64) - n / 2) * dx
+    mx = inten.sum(axis=0)
+    cx = float((mx * x).sum() / tot)
+    vx = float((mx * (x - cx) ** 2).sum() / tot)
+    return 2.0 * np.sqrt(max(vx, 0.0)), tot * dx * dx
+
+
+def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
+                           n_workers, call_kw, R_out, na_exit,
+                           window_factor=5.0, n_fine_cap=16384):
+    """Re-trace a HIGH-NA group on a grid that Nyquist-samples its EXIT sphere
+    (R9).  The co-moving grid is sized for the group ENTRANCE curvature, so on a
+    strongly-focusing group the (much steeper) exit wavefront ALIASES -- the
+    exit-field build ``amp*exp(i*OPL)`` wraps > pi/pixel, and the coarse Newton/
+    poly OPL fit aliases high-order aberration into defocus (the design-121
+    per-group F2 residual).  Fix: upsample the SMOOTH incoming envelope (Fourier
+    zero-pad) onto a grid with ``dx_fine ~ lambda/(3*NA_exit)``, reconstruct, and
+    trace there.  Returns ``(E_exit_fine, dx_fine)`` -- the full exit field, now
+    properly sampled, ready for :func:`carrier_referenced_exact_focus_readout`.
+    """
+    from ..elements import apply_real_lens_traced
+    N = env.shape[-1]
+    w = _envelope_amp_radius(env, cur_dx, cur_dx)
+    na = min(max(na_exit, 0.02), 0.95)
+    dx_fine = wavelength / (3.0 * na)
+    win = min(window_factor * w, N * cur_dx) if w > 0 else N * cur_dx
+    n_crop = int(2 * round((win / cur_dx) / 2))
+    n_crop = int(min(max(n_crop, 2), N))
+    win = n_crop * cur_dx
+    n_fine = int(2 ** int(np.ceil(np.log2(max(win / dx_fine, n_crop)))))
+    n_fine = int(min(n_fine, n_fine_cap))
+    dx_fine = win / n_fine
+    env_f = _fourier_upsample_crop(env, n_crop, n_fine)
+    E_full = carrier_referenced_reconstruct(env_f, R_in, wavelength, dx_fine)
+    E_exit = apply_real_lens_traced(
+        E_full, prescription=presc, wavelength=wavelength, dx=dx_fine,
+        carrier=R_in, ray_subsample=ray_subsample, n_workers=n_workers,
+        **call_kw)
+    return np.asarray(E_exit), float(dx_fine)
+
+
+def propagate_traced_carrier_chain(
+    E_in: np.ndarray,
+    groups,
+    wavelength: float,
+    dx: float,
+    *,
+    r_in: float = np.inf,
+    ray_subsample: int = 4,
+    n_workers: Optional[int] = None,
+    traced_kwargs: Optional[dict] = None,
+    final_distance: float = 0.0,
+    focus_readout: Optional[dict] = None,
+    final_leg: str = 'auto',
+    na_exact_threshold: float = 0.15,
+) -> TracedCarrierChainResult:
+    """Propagate a beam ENVELOPE through a chain of real (traced) lens groups on
+    a co-moving carrier-referenced grid (audit F4.1).
+
+    Packages the per-group hand-off pattern -- analytic carrier leg ->
+    reconstruct at the group front vertex -> ``apply_real_lens_traced(carrier=
+    R_in)`` -> re-envelope with the group's exit curvature ``R_out`` -- into one
+    call.  The element SUPPLIES ``R_out`` from its own paraxial ABCD
+    (:func:`system_abcd_prescription` mapped onto the incoming carrier), so the
+    caller needs no external q-trace.  Reproduces
+    ``validation/repro_traced_carrier_121/carrier_chain_121.py`` in a few lines.
+
+    Parameters
+    ----------
+    E_in : ndarray, complex, shape (Ny, Nx)
+        Beam ENVELOPE at the input plane (the carrier phase divided out).  A
+        plain field with no pre-referenced carrier is its own envelope -- pass
+        it with ``r_in=inf`` (the default).
+    groups : sequence
+        The lens groups in order.  Each entry is either a lens **prescription
+        dict** (has a ``'surfaces'`` key; taken with ``gap_before=0``) or a
+        **group-spec dict** with keys:
+
+        * ``'prescription'`` (required) -- the group prescription for
+          :func:`apply_real_lens_traced`.
+        * ``'gap_before'`` (float, default 0) -- free-space air distance from
+          the previous plane (the input plane for the first group, else the
+          previous group's exit vertex) to this group's front vertex.
+        * ``'r_in'`` (optional) -- override the carrier radius handed to this
+          group (default: the propagated carrier radius).
+        * ``'r_out'`` (optional) -- override the exit carrier radius (default:
+          the group's paraxial ABCD, :func:`_paraxial_group_r_out`).
+        * ``'traced_kwargs'`` (optional dict) -- extra per-group kwargs merged
+          over the chain-wide ``traced_kwargs``.
+    wavelength, dx : float
+        Wavelength and input grid pitch (m).  Isotropic (square) grid only.
+    r_in : float, default ``inf``
+        Carrier radius of ``E_in`` (m).  ``inf`` = a plain (collimated-carrier)
+        field.
+    ray_subsample : int, default 4
+    n_workers : int, optional
+        Threaded into every :func:`apply_real_lens_traced` call.
+    traced_kwargs : dict, optional
+        Extra kwargs for every :func:`apply_real_lens_traced` call (e.g.
+        ``parallel_amp=False``).  ``carrier`` / ``dx`` / ``wavelength`` /
+        ``prescription`` / ``ray_subsample`` / ``n_workers`` are managed by the
+        orchestrator and must not appear here.
+    final_distance : float, default 0
+        Free-space distance from the last group's exit vertex to the target
+        (readout) plane (m).
+    focus_readout : dict, optional
+        When given, land the final leg via a focus readout.  Must supply
+        ``dx_out`` and ``N_out``; may supply ``centre_out`` / ``bandlimit``
+        (and ``standoff`` for the paraxial path, or ``dx_fine`` / ``N_fine`` /
+        ``window_factor`` for the exact path).  Otherwise the final leg is an
+        ordinary carrier step and the field is reconstructed on the co-moving
+        grid.
+    final_leg : {'auto', 'exact', 'paraxial'}, default 'auto'
+        How to land the FINAL leg when ``focus_readout`` is given.
+
+        * ``'paraxial'`` -- always the paraxial
+          :func:`carrier_referenced_focus_readout` (carrier-step short of focus
+          + Bluestein zoom).  Fast, but CANNOT focus a high-NA (NA -> 0.5)
+          converging leg -- the paraxial envelope cannot hold the exact-sphere
+          r^4 (R9).
+        * ``'exact'`` -- always the EXACT leg: re-trace the final group on a
+          grid that Nyquist-samples its exit sphere, then
+          :func:`carrier_referenced_exact_focus_readout` (exact-sphere
+          reference + band-limited ASM Bluestein zoom, no paraxial
+          magnification).
+        * ``'auto'`` (default) -- the exact leg IFF the final group's exit NA
+          exceeds ``na_exact_threshold`` (a strongly-focusing final group),
+          else the fast paraxial path.  For every low-NA final leg this is
+          byte-identical to ``'paraxial'`` (and to prior releases).
+    na_exact_threshold : float, default 0.15
+        Exit-NA (``w_env / |R_out|``) above which ``final_leg='auto'`` routes the
+        final leg through the exact path.
+
+    Returns
+    -------
+    TracedCarrierChainResult
+        ``(field, R, dx, stages)`` -- see the class docstring.  ``R`` is
+        ``None`` after any focus readout (paraxial or exact).
+    """
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'propagate_traced_carrier_chain')
+    from ..elements import apply_real_lens_traced
+
+    if not np.isfinite(wavelength) or wavelength <= 0:
+        raise ValueError(
+            "propagate_traced_carrier_chain: wavelength must be finite and "
+            f"positive, got {wavelength!r}.")
+    if not (np.isfinite(dx) and dx > 0):
+        raise ValueError(
+            "propagate_traced_carrier_chain: dx must be finite and positive, "
+            f"got {dx!r}.")
+
+    if final_leg not in ('auto', 'exact', 'paraxial'):
+        raise ValueError(
+            "propagate_traced_carrier_chain: final_leg must be 'auto', 'exact' "
+            f"or 'paraxial', got {final_leg!r}.")
+
+    groups = list(groups)
+    n_groups = len(groups)
+    base_kw = dict(traced_kwargs) if traced_kwargs else {}
+    R = float(r_in)
+    cur_dx = float(dx)
+    env = E_in
+    stages: list = []
+
+    for gi, g in enumerate(groups):
+        if isinstance(g, dict) and 'prescription' in g:
+            presc = g['prescription']
+            gap = float(g.get('gap_before', g.get('distance', 0.0)))
+            g_r_in = g.get('r_in')
+            g_r_out = g.get('r_out')
+            g_kw = g.get('traced_kwargs')
+        elif isinstance(g, dict) and 'surfaces' in g:
+            presc, gap, g_r_in, g_r_out, g_kw = g, 0.0, None, None, None
+        else:
+            raise ValueError(
+                f"propagate_traced_carrier_chain: groups[{gi}] must be a "
+                "prescription dict (with 'surfaces') or a group-spec dict "
+                "(with 'prescription'); got "
+                f"{type(g).__name__}.")
+
+        # free-space carrier leg to the group front vertex
+        if gap != 0.0:
+            cr = propagate_carrier_referenced(env, R, gap, wavelength, cur_dx)
+            env, R, cur_dx = cr.env, cr.R, cr.dx
+            if isinstance(cur_dx, tuple):
+                cur_dx = cur_dx[0]
+            if isinstance(R, tuple):
+                R = R[0]
+
+        R_use = float(R if g_r_in is None else g_r_in)
+        # the element SUPPLIES R_out (its own paraxial ABCD), unless overridden
+        R_out = (float(g_r_out) if g_r_out is not None
+                 else _paraxial_group_r_out(presc, R_use, wavelength))
+        _name = (presc.get('name', f'group{gi}') if isinstance(presc, dict)
+                 else f'group{gi}')
+        call_kw = dict(base_kw)
+        if g_kw:
+            call_kw.update(g_kw)
+
+        # ---- exact high-NA FINAL leg (R9): re-trace this (last) group on a
+        # grid that Nyquist-samples its exit sphere, then exact-ASM to target.
+        is_final = (gi == n_groups - 1)
+        do_exact = False
+        na_exit = 0.0
+        if is_final and focus_readout is not None and final_leg != 'paraxial':
+            w_in = _envelope_amp_radius(env, cur_dx, cur_dx)
+            if np.isfinite(R_out) and R_out != 0.0 and w_in > 0.0:
+                na_exit = w_in / abs(R_out)
+            do_exact = (final_leg == 'exact'
+                        or (final_leg == 'auto' and na_exit > na_exact_threshold))
+        if do_exact:
+            fr = dict(focus_readout)
+            if 'dx_out' not in fr or 'N_out' not in fr:
+                raise ValueError(
+                    "propagate_traced_carrier_chain: focus_readout must supply "
+                    "'dx_out' and 'N_out'.")
+            E_exit_fine, dx_fine = _fine_trace_group_exit(
+                env, R_use, cur_dx, presc, wavelength, ray_subsample, n_workers,
+                call_kw, R_out, na_exit,
+                window_factor=float(fr.get('window_factor', 7.0)))
+            w_stage, p_stage = _chain_envelope_stats(E_exit_fine, dx_fine)
+            stages.append({
+                'name': _name, 'R_in': R_use, 'R_out': R_out, 'dx': dx_fine,
+                'w': w_stage, 'power': p_stage, 'exact_final': True})
+            exact_kw = {kk: fr[kk] for kk in (
+                'dx_out', 'N_out', 'dx_fine', 'N_fine', 'window_factor',
+                'centre_out', 'bandlimit') if kk in fr}
+            field = carrier_referenced_exact_focus_readout(
+                E_exit_fine, R_out, final_distance, wavelength, dx_fine,
+                **exact_kw)
+            return TracedCarrierChainResult(
+                np.asarray(field), None, float(fr['dx_out']), stages)
+
+        # ---- standard coarse trace + paraxial re-envelope ------------------
+        E_full = carrier_referenced_reconstruct(env, R_use, wavelength, cur_dx)
+        E_exit = apply_real_lens_traced(
+            E_full, prescription=presc, wavelength=wavelength, dx=cur_dx,
+            carrier=R_use, ray_subsample=ray_subsample, n_workers=n_workers,
+            **call_kw)
+        E_exit = np.asarray(E_exit)
+        env = carrier_referenced_envelope(E_exit, R_out, wavelength, cur_dx)
+        R = R_out
+        w_stage, p_stage = _chain_envelope_stats(env, cur_dx)
+        stages.append({
+            'name': _name,
+            'R_in': R_use, 'R_out': R_out, 'dx': cur_dx,
+            'w': w_stage, 'power': p_stage})
+
+    # ---- final leg to the target plane ----
+    if focus_readout is not None:
+        fr = dict(focus_readout)
+        if 'dx_out' not in fr or 'N_out' not in fr:
+            raise ValueError(
+                "propagate_traced_carrier_chain: focus_readout must supply "
+                "'dx_out' and 'N_out'.")
+        field = carrier_referenced_focus_readout(
+            env, R, final_distance, wavelength, cur_dx, **fr)
+        return TracedCarrierChainResult(np.asarray(field), None,
+                                        float(fr['dx_out']), stages)
+
+    if final_distance != 0.0:
+        cr = propagate_carrier_referenced(env, R, final_distance, wavelength,
+                                          cur_dx)
+        env, R, cur_dx = cr.env, cr.R, cr.dx
+        if isinstance(cur_dx, tuple):
+            cur_dx = cur_dx[0]
+        if isinstance(R, tuple):
+            R = R[0]
+    field = carrier_referenced_reconstruct(env, R, wavelength, cur_dx)
+    return TracedCarrierChainResult(np.asarray(field), float(R), cur_dx, stages)
