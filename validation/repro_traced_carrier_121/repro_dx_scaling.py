@@ -86,10 +86,15 @@ RS = int(os.environ.get('RS','4'))
 NFC = int(os.environ.get('NFC', '16384'))
 WF = float(os.environ.get('WF', '7.0'))
 RNF = os.environ.get('RNF', '')
+# PIP=0 -> pass traced_kwargs={'preserve_input_phase': False} to every group
+# (defect-A diagnostic, AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S3); unset
+# (default) leaves the chain's call untouched.
+PIP = os.environ.get('PIP', '')
 _fr = {'dx_out': 0.05e-6, 'N_out': 1024, 'n_fine_cap': NFC,
        'window_factor': WF}
 if RNF:
     _fr['N_fine'] = int(RNF)
+_tkw = {'preserve_input_phase': False} if PIP == '0' else None
 zR = np.pi*w0*w0/lam
 w_z1 = w0*np.sqrt(1 + (z1/zR)**2)
 R1 = z1*(1 + (zR/z1)**2)
@@ -102,11 +107,12 @@ env0 = np.exp(-(x[None,:]**2 + x[:,None]**2)/w_z1**2).astype(np.complex128)
 P_in = float(np.sum(np.abs(env0)**2))*dx0*dx0
 
 t0 = time.time()
+_chain_kw = {} if _tkw is None else {'traced_kwargs': _tkw}
 res = la.propagate_traced_carrier_chain(
     env0, groups, lam, dx0, r_in=R1, ray_subsample=RS, n_workers=8,
     final_distance=TRAILING,
     focus_readout=_fr,
-    final_leg='auto')
+    final_leg='auto', **_chain_kw)
 print("chain done", f"{time.time()-t0:.0f}s")
 for st in res.stages:
     print(f"  stage {st.get('name','?'):<14} dx={st['dx']*1e6:8.4f}um "
@@ -133,7 +139,7 @@ fn = f'runA_field_N{N}.npy' if RS == 4 else f'diagA_N{N}_rs{RS}.npy'
 np.save(fn, E)
 Pwin = float(I.sum())*dxo*dxo/P_in
 print(f"RUN A N={N} dx0={dx0*1e6:.4f}um rs={RS} nfc={NFC} wf={WF} rnf={RNF or 'auto'} "
-      f"(traced noDOE, exact final leg): "
+      f"pip={PIP or '1'} (traced noDOE, exact final leg): "
       f"FWHM={fwhm*1e6:.2f}um EE3={ee[3]*100:.1f}% EE6={ee[6]*100:.1f}% EE12={ee[12]*100:.1f}% "
       f"window-total={Pwin*100:.1f}% "
       f"(refs: Zemax 2.74um; audit-R9 table 4.05um/52.1/69.7/73.6)")

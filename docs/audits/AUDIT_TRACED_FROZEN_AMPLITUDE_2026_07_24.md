@@ -1,8 +1,12 @@
 # Root-cause audit — the traced element's FROZEN INTRA-GROUP AMPLITUDE (2026-07-24)
 
-**Status: root cause of the traced-chain non-convergence (F-B / production-readiness §1)
-IDENTIFIED and MEASURED.  Fix not yet implemented (design below, pending adversarial
-review).**
+**Status: SUPERSEDED IN PART by §6 (same-day adversarial review).  The frozen-amplitude
+mechanism (§4) is CONFIRMED as a real defect, but it is a ~3-EE3-point effect, its
+chain-level narrative had the WRONG SIGN for the 121, and the DOMINANT defect is a
+different, first-order carrier-convention mismatch (§6.2) that closes the ideal chain
+EE6 63.4% → 99.7% by itself.  §5's fix design is superseded by §6.5 — implementing §5
+first would REGRESS the headline metric (measured, §6.3).  Read §6 before acting on
+anything above it.**
 
 Continues `AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24.md` (the P0 closure plan) on the
 64-GB-class box it called for (this box: 136 GB / 20 cores).  All numbers below were
@@ -167,17 +171,129 @@ consume the raw (carrier-aliased) field.  The phase side already obeys this (tra
    vs Zemax POP (2.74 µm) — the P1 measurement, expected to close most of the 50→99
    gap if this diagnosis is complete.
 
-## 6. Session artifacts / open items
+## 6. ADVERSARIAL REVIEW OUTCOME (2026-07-24, same day) — the dominant defect is a
+##    CARRIER-CONVENTION MISMATCH; §4's causal claim corrected; §5 superseded
 
-- Axis-A traced rows (full final-leg settings, readout N_fine pinned 16384):
-  N=1024 → FWHM 4.05 / EE3 66.4 / EE6 81.5 / EE12 82.8 / window 87.0 (N=2048+ in
-  progress at write time; the pre-fix audit matrix's divergent trend is expected to
-  reproduce).
-- Stigmatic axis-A rows OOM when run beside a traced row (the thin stub does not
-  compress the last-group beam, so its readout Bluestein needs ~4.5 GiB × several;
-  rerun sequentially if needed — axis B + the T1-T3 unit audit already carry the
-  machinery verdict).
-- N=28672 extent-preserving traced run (post-F-A-fix energy check) still queued — must
-  run ALONE (~100 GB).
+An independent adversarial review (Opus subagent; scratch scripts
+`scratchpad/review/{a_alias,stig_variants,real_traced,d_closure*}.py`, key runs
+re-verifiable via the env knobs documented in them) attacked §1–§5.  Verdicts:
+
+### 6.1 §4's mechanism CONFIRMED — as a real but ~3-point defect with the wrong sign
+
+The carrier-aliasing → frozen-transport mechanism was reproduced in isolation (bare
+band-limited ASM, no lens: Gaussian × exact sphere, sweep dx so the alias radius
+`r_al = |R|·λ/(2·dx)` crosses the beam).  The freeze is coherent (power conserved to
+1e-6, exit stays Gaussian) and is pure *angular clamping* (the grid cannot transport
+rays beyond λ/2dx).  Transition at `r_al/w ≈ 1`, full recovery by `≈ 2`; reproduces
+the §2 probe numbers quantitatively.  **Compression freezes identically** — and that
+flips §4's sign for the 121: the relay is net DEMAGNIFYING
+(Π|m_k| = 1.1267 · 1.0549 · 1.0000 · 1.0000 · 0.9419 · 0.9179 · 0.8744 · 0.3776 =
+**0.339**), so the frozen chain runs its final leg at an artifactual NA ≈ 0.45 where
+the TRUE design exit NA is **0.152** — every audit's "NA ~ 0.46 final leg" is itself
+the frozen-w artifact (`na_exit = w_in/|R_out|` at `carrier.py:2176` with the
+unexpanded w).  Direct cost of frozen amplitude in an otherwise-perfect chain:
+**3.2 EE3 points / 0.3 EE6 points** (§6.3 factorial).  §4's "under-sized beam →
+under-filled NA → wide focus" narrative is REFUTED (backwards for this design).
+
+### 6.2 The DOMINANT defect (new): the chain hands the element a PARABOLIC carrier;
+the element consumes an EXACT-SPHERE carrier
+
+`carrier_referenced_reconstruct`/`_envelope` build `exp(±i·k·r²/2R)`
+(`_radial_carrier_phase`, carrier.py:318); `apply_real_lens_traced`'s carrier
+machinery — `_compute_carrier` scalar branch, the H6 entrance eikonal, and
+`_reference_input()` — all use the exact sphere `W = sign(R)(√(r²+R²) − |R|)`
+(`_lens_traced.py:1207-1230`, whose own comment warns the parabola "leaves several
+radians of spurious r⁴" on a steep conjugate).  At `carrier.py:2206→2207` and
+`1948→1983` the field is therefore built with one convention and consumed as the
+other; the injected wavefront error is `+k·r⁴/(8R³)` per group: **+3.4 rad** at
+S3-S4 (r=w), −1.3 rad at S23-S24, **−5.9 rad** at S25-S27.  The R7 per-group oracle
+gates are blind to it by construction (the probe launches `E_in` with the SPHERE —
+`traced_group_dx_probe.py:157` — so element-only tests never see the chain's
+parabola).  This resolves the "individually clean groups / broken chain" paradox and
+is the best-supported home for the R9-addendum's "~1.68 rad accumulated wavefront".
+Measured on the real traced chain (N=2048, nfc=8192, wf=4.0): exit wavefront vs
+exact sphere(R_out) = **1.333 rad rms (PV 6.42 rad)**.
+
+### 6.3 The deciding 2×2 factorial (ideal-element chain, N=2048, NFC=8192, WF=4.0)
+
+| chain carrier convention | element amplitude | exit rms vs sphere(R_out) | FWHM | EE3 | EE6 | window |
+|---|---|---|---|---|---|---|
+| parabola (library today) | frozen (= §1 control) | 0.659 rad | 3.65 µm | 41.0% | 63.4% | 94.8% |
+| parabola | remapped by m (= §5 fix) | 0.598 rad | 7.85 µm | 20.7% | **49.5%** | 87.7% |
+| **exact sphere** | frozen | **0.000 rad** | 3.55 µm | 83.7% | **99.7%** | 100.0% |
+| **exact sphere** | remapped by m | **0.000 rad** | 3.55 µm | 86.9% | **100.0%** | 100.0% |
+
+(Last row's final-stage w = 1.1743 mm vs exact q-trace 1.1749 mm.)  Consequences:
+the convention fix alone is worth ~36 EE6 points; the §5 amplitude fix applied FIRST
+**regresses** EE6 63.4 → 49.5 (it correctly deflates the artifactual NA 0.45 → 0.152,
+un-masking the convention error the over-filled NA was hiding).  Sequencing is
+load-bearing: convention first, amplitude second, and expect the amplitude fix to
+look harmful if ever benchmarked in isolation.
+
+### 6.4 Further corrections adopted from the review
+
+- **§1 over-claim**: the stigmatic control established dx-STABILITY, not accuracy.
+  Its axis-B absolute numbers (65.2% / 84.0%) are additionally confounded by
+  `window_factor=2.0` — a self-inflicted 1·w crop applied twice (retrace + readout;
+  the readout's own docstring requires wf=7 for <1e-6 truncation).  At WF=4/NFC=8192
+  the same control reads FWHM 3.65 µm / EE6 63.4% / window 94.8%.  The §1(B) audit
+  matrix (incl. the nfc=8192 "collapse" row) carries the same 1·w-crop confound.
+- **Target metric unit error (all prior audits)**: Zemax POP's 2.736 µm is the waist
+  RADIUS (1/e²).  The correct comparison targets at the readout plane are
+  **FWHM 3.223 µm, EE3 ≈ 91%, EE6 ≈ 100%** (true exit NA 0.152; Gaussian waist
+  λ|R|/(πw) = 2.7373 µm matches POP to 4 digits).  The real miss is 3.950/3.223 =
+  1.23×, not 1.44×.
+- **§5's amplitude design superseded**: the library already ships the general,
+  carrier-alias-immune amplitude — `amplitude_model='ray_density'`
+  (`_lens_traced.py:1930-1963`, N12/P11: `|E_in(x_in)|/√|det J|` from the traced
+  entrance→exit Jacobian; non-paraxial, handles decenter/astigmatism, caustic-aware).
+  The proposed scalar `|env|(r/m)/|m|` remap is a weaker re-invention (singular at
+  internal conjugate images, scalar-symmetric only, uniform-magnification
+  approximation) and additionally double-counts expansion on the fine retrace leg,
+  where `r_al/w ≈ 2.3` means the wave pass ALREADY delivers ~82% of the true
+  compression (measured: 1.581 mm vs 3.51 frozen / 1.175 true).  Test `ray_density`
+  before writing any new amplitude code.
+- V2's 0.001 rad support for the "remapped residual phase transport" was vacuous
+  (the test input had `angle(env) ≡ 0`); in the chain the residual carries ~1.3 rad
+  rms and the transport term is untested.
+
+### 6.5 Revised P0.3 plan (supersedes §5)
+
+1. **Carrier-convention reconciliation at the element boundary** (the P0.3 core):
+   convert parabola↔sphere explicitly where the chain reconstructs for / re-envelopes
+   after `apply_real_lens_traced` (`carrier.py:2206/2212` and the fine-leg `1948`),
+   i.e. multiply by `exp(±i·k·(S(R) − r²/2R))` **band-limited to
+   r < r_safe = (R³λ/dx)^{1/3}** with a smooth taper (the difference term itself
+   aliases beyond r_safe; a whole-grid swap measurably breaks the real chain —
+   window 77.5% → 7.1% — because the guard band's junk phase scatters; r_safe/w =
+   10.5 (launch), 3.6 (S3-S4), 5.1 (S23-S24), 2.6 (S25-S27 coarse), 5.5 (fine), so
+   every group's beam is covered).  The envelope handed to Sziklas-Siegman transport
+   stays parabola-referenced (that approximation is what the transport is built on).
+   Acceptance: real-chain exit residual 1.333 rad rms → ≪0.1; EE6 up from 68.9%.
+2. **Amplitude second**: `traced_kwargs={'amplitude_model': 'ray_density'}` (existing
+   feature) on the convention-fixed chain; acceptance: final-stage w → ~1.175 mm,
+   FWHM → 3.223 µm, EE3 → ~91%.  Expect it to look harmful before step 1 lands
+   (§6.3) — that is the predicted signature, not a regression.
+3. **Then** re-run both convergence axes (the §1 sweeps) for the plateau gate, with
+   WF ≥ 4 (avoid the 1·w-crop confound) and the corrected targets (§6.4).
+4. Defect A (`preserve_input_phase` pair, 0.015 rad/group at chain pitch) and the
+   ~1-coarse-pixel diagonal focus walk: re-measure AFTER 1+2; only chase if they
+   survive.
+
+## 7. Session artifacts / open items (updated post-review)
+
+- Axis-A sweep COMPLETE.  Traced (full final-leg settings, readout N_fine pinned
+  16384): N=1024 → EE6 81.5 / window 87.0; N=2048 → 68.2 / 75.3; N=4096 → row
+  INVALID (the traced chain's ~1-coarse-pixel diagonal focus walk reached the
+  readout window corner: peak offset (−25.60, −25.60) µm — the window saw only the
+  spot's skirt, 2.0%); N=8192 → 49.7 / 61.7.  The un-freezing crawl is visible
+  directly in the stages (S3-S4 exit w = 4.996/5.002/5.167 mm at N=2048/4096/8192
+  vs design 5.627 mm).  Stigmatic control on the SAME axis: N=2048/4096/8192
+  IDENTICAL to the digit (FWHM 3.65 µm, EE6 63.2%, window 92.8%) — dx-stable, with
+  the absolute level explained by §6.2's convention error (63.4% in the §6.3
+  factorial at the same settings).
+- N=28672 extent-preserving traced run (post-F-A-fix energy check) running at write
+  time; result to be appended to the P0 record.
 - T4/T5 (readout end-to-end energy/convergence at NA 0.45) OOMed against the sweep;
-  rerun pinned when the box is free.
+  rerun pinned when the box is free.  Superseded in urgency by §6 (the readout was
+  cleared by T3 + the stigmatic flatness; T4/T5 remain worth one clean pinned run).
