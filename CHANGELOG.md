@@ -4,6 +4,28 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Traced-carrier-chain exact-final-leg dx-scaling fixes (audit
+  `AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22` F-A / F-C / F-D).**
+  `_fourier_upsample_crop` gains a true band-limited DOWNSAMPLE branch
+  (k-space truncation with the same value-preserving scale as the upsample
+  direction) instead of silently returning the raw wrong-pitch crop whenever
+  `n_fine <= n_crop` — the F-A bug that inflated the design-121 readout
+  window to 130.8% of launch power (EE6 102.3%) at chain N > 16384, exactly
+  when `n_crop > n_fine_cap` (F-A).  `_fine_trace_group_exit` now (F-C)
+  rescales `ray_subsample` on entry to preserve the CHAIN's physical ray
+  pitch on the fine retrace grid (pre-fix, the chain-level integer was
+  reinterpreted in fine-pixel units — observed an attempted 84.7 GiB
+  Chebyshev design matrix), with an independent `max_fine_launch_points`
+  backstop cap, and (F-D) warns when `n_fine_cap` forces `dx_fine` coarser
+  than the exit sphere's Nyquist pitch `lambda/(2*NA)` instead of silently
+  discarding outer-NA content.  `focus_readout` gains the `n_fine_cap` and
+  `max_fine_launch_points` keys.  Defaults byte-identical away from the
+  trigger conditions; regression pins in
+  `tests/unit/test_niche_r9_dx_scaling_fix.py` (F-B — the absolute-metric
+  dx-divergence — remains OPEN and is tracked in the audit).
+
 ## [5.28.0] — 2026-07-22
 
 Deferred-items roadmap implementation (`docs/roadmap_deferred_2026_07_21.md`)

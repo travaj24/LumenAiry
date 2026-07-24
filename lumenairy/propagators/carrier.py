@@ -1574,25 +1574,52 @@ def _exact_sphere_eikonal(shape, dx, dy, wavelength, R):
 
 
 def _fourier_upsample_crop(env, n_crop, n_fine):
-    """Band-limited (Fourier zero-pad) upsample of a SMOOTH envelope: crop the
-    centred ``n_crop`` sub-window, embed its spectrum in an ``n_fine`` grid, and
-    inverse-transform.  Exact interpolation for a band-limited envelope (the
-    carrier having been divided out), and far cheaper than cubic
-    ``resample_field`` at the large ``n_fine`` a high-NA focus needs.  Returns
-    the envelope on the ``n_fine`` grid spanning the SAME physical window
-    (``n_crop * dx``), i.e. pitch ``dx * n_crop / n_fine``."""
+    """Band-limited Fourier RESAMPLE of a SMOOTH envelope onto a new pixel
+    count spanning the SAME physical window: crop the centred ``n_crop``
+    sub-window, then either zero-pad its spectrum (``n_fine > n_crop`` --
+    exact band-limited upsample) or truncate its spectrum to the central
+    ``n_fine`` block (``n_fine < n_crop`` -- exact band-limited downsample,
+    valid because the envelope is smooth/band-limited by construction: the
+    carrier has already been divided out, so the discarded high frequencies
+    are ~0), and inverse-transform.  Far cheaper than cubic
+    ``resample_field`` at the large ``n_fine`` a high-NA focus needs.
+
+    Returns the envelope on the ``n_fine`` grid spanning the SAME physical
+    window (``n_crop * dx``), i.e. pitch ``dx * n_crop / n_fine`` -- in
+    EITHER direction: ``out.shape[-1] == n_fine`` always holds (audit
+    AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22 F-A: the pre-fix downsample
+    branch instead returned the raw ``n_crop``-sized crop, silently
+    mismatching the pitch every downstream caller assumed).
+    """
     env = np.asarray(env)
     n = env.shape[-1]
     c0 = n // 2 - n_crop // 2
     ec = np.ascontiguousarray(env[c0:c0 + n_crop, c0:c0 + n_crop])
-    if n_fine <= n_crop:
-        return ec
-    F = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(ec)))
-    pad = np.zeros((n_fine, n_fine), dtype=np.complex128)
-    o = n_fine // 2 - n_crop // 2
-    pad[o:o + n_crop, o:o + n_crop] = F
-    out = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(pad)))
-    return out * (float(n_fine) / float(n_crop)) ** 2
+    if n_fine == n_crop:
+        out = ec
+    else:
+        F = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(ec)))
+        if n_fine > n_crop:
+            # Zero-pad the spectrum (exact band-limited upsample).
+            pad = np.zeros((n_fine, n_fine), dtype=np.complex128)
+            o = n_fine // 2 - n_crop // 2
+            pad[o:o + n_crop, o:o + n_crop] = F
+        else:
+            # Truncate the spectrum to its central n_fine block (exact
+            # band-limited downsample -- k-space low-pass truncation).
+            o = n_crop // 2 - n_fine // 2
+            pad = F[o:o + n_fine, o:o + n_fine]
+        out = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(pad)))
+        # Same value-preserving scale in both directions: numpy's ifft2
+        # normalises by 1/(output size)^2, so re-gridding from n_crop to
+        # n_fine samples over the SAME window needs (n_fine/n_crop)^2 to
+        # restore the point-sample values a matched-size round trip would
+        # give (derivation: ifft2(fft2(ec)) == ec exactly at equal sizes).
+        out = out * (float(n_fine) / float(n_crop)) ** 2
+    assert out.shape[-1] == n_fine, (
+        f"_fourier_upsample_crop: internal shape invariant broken "
+        f"(got {out.shape[-1]}, expected n_fine={n_fine})")
+    return out
 
 
 def carrier_referenced_exact_focus_readout(
@@ -1833,7 +1860,8 @@ def _chain_envelope_stats(env, dx):
 
 def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                            n_workers, call_kw, R_out, na_exit,
-                           window_factor=5.0, n_fine_cap=16384):
+                           window_factor=5.0, n_fine_cap=16384,
+                           max_fine_launch_points=4096):
     """Re-trace a HIGH-NA group on a grid that Nyquist-samples its EXIT sphere
     (R9).  The co-moving grid is sized for the group ENTRANCE curvature, so on a
     strongly-focusing group the (much steeper) exit wavefront ALIASES -- the
@@ -1843,6 +1871,48 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     zero-pad) onto a grid with ``dx_fine ~ lambda/(3*NA_exit)``, reconstruct, and
     trace there.  Returns ``(E_exit_fine, dx_fine)`` -- the full exit field, now
     properly sampled, ready for :func:`carrier_referenced_exact_focus_readout`.
+
+    Audit AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22:
+
+    * F-A -- when the chain grid is large enough that ``n_crop`` (the window
+      expressed in ``cur_dx`` pixels) exceeds ``n_fine_cap``, ``n_fine`` gets
+      clamped BELOW ``n_crop`` here.  :func:`_fourier_upsample_crop` now
+      handles that direction correctly (band-limited spectral truncation)
+      instead of silently returning the raw, wrong-pitch ``n_crop``-sized
+      crop -- the fix closes an energy-non-conservation + core-blur bug that
+      triggered exactly when ``n_crop > n_fine_cap``.
+    * F-C -- ``ray_subsample`` is rescaled on entry so the retrace on the
+      (generally much finer) ``dx_fine`` grid keeps the CHAIN's physical ray
+      pitch (``ray_subsample * cur_dx``), rather than reinterpreting the same
+      integer in ``dx_fine`` pixel units (which silently densifies the
+      Newton/Cheb ray-fit grid by the ``cur_dx / dx_fine`` factor and can
+      exhaust memory -- observed (28, 20151, 20151) float64 = 84.7 GiB at
+      ``ray_subsample=1`` on a production-scale chain).
+      ``max_fine_launch_points`` is an independent backstop cap on the
+      resulting fit-grid size, active only if the pitch-preserving
+      ``ray_subsample`` would still exceed it.
+    * F-D -- when ``n_fine_cap`` forces ``dx_fine`` coarser than the exit
+      sphere's Nyquist pitch (``lambda / (2 * NA)``), a warning is emitted:
+      the retrace still runs (``bandlimit=True`` in the downstream readout
+      masks the aliased corner) but silently discards outer-NA content.
+
+    Interaction note (F-C, reviewed 2026-07-22): the pitch-preserving
+    ``ray_subsample`` rescale reduces the ray-fit density on THIS leg
+    relative to the pre-fix behaviour (which accidentally over-sampled by
+    reusing the chain-level integer in the finer grid's pixel units), so it
+    reduces -- but for a realistic beam/aperture ratio does not eliminate --
+    the safety margin against ``apply_real_lens_traced``'s own
+    ``min_coarse_samples_per_aperture`` aliasing floor (default 32,
+    ``on_undersample='error'`` by default).  Quantitatively: tripping it
+    requires the beam radius to be sampled by fewer than
+    ``16 * ray_subsample`` pixels on the co-moving grid for a
+    beam-filling aperture -- e.g. < 64 px at the default
+    ``ray_subsample=4`` (the design-121 R9 case samples it at 213 px, a
+    3.3x margin).  Any chain coarse enough to trip this was ALREADY
+    aliasing the Newton/Cheb fit silently pre-fix; post-fix it fails
+    loudly instead, which is strictly safer, but if you hit it, pass
+    ``traced_kwargs={'on_undersample': 'warn'}`` (or ``'silent'``) at the
+    ``propagate_traced_carrier_chain`` call rather than assuming a bug here.
     """
     from ..elements import apply_real_lens_traced
     N = env.shape[-1]
@@ -1856,11 +1926,63 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     n_fine = int(2 ** int(np.ceil(np.log2(max(win / dx_fine, n_crop)))))
     n_fine = int(min(n_fine, n_fine_cap))
     dx_fine = win / n_fine
+
+    # F-D: n_fine_cap can force dx_fine coarser than the exit sphere's
+    # Nyquist pitch.  The retrace still runs (the downstream exact readout's
+    # bandlimit=True masks the aliased corner) but silently discards
+    # outer-NA content -- warn so that's visible instead of silent.
+    nyquist_dx = wavelength / (2.0 * na)
+    if dx_fine > nyquist_dx:
+        import warnings
+        warnings.warn(
+            f"_fine_trace_group_exit: n_fine_cap={n_fine_cap} forces "
+            f"dx_fine={dx_fine * 1e6:.3f} um, coarser than the exit "
+            f"sphere's Nyquist pitch lambda/(2*NA)={nyquist_dx * 1e6:.3f} um "
+            f"at NA={na:.3f}.  The retrace will still run but silently "
+            f"discards outer-NA content.  Raise n_fine_cap or shrink "
+            f"window_factor (currently {window_factor}) via the "
+            f"focus_readout dict if the full NA is needed.",
+            RuntimeWarning, stacklevel=2)
+
     env_f = _fourier_upsample_crop(env, n_crop, n_fine)
     E_full = carrier_referenced_reconstruct(env_f, R_in, wavelength, dx_fine)
+
+    # F-C: preserve the CHAIN's physical ray pitch (ray_subsample * cur_dx)
+    # on the fine retrace grid, rather than reinterpreting the same integer
+    # ray_subsample in dx_fine pixel units.
+    rs_fine = max(1, int(round(float(ray_subsample) * cur_dx / dx_fine)))
+    # Independent backstop: cap the resulting Newton/Cheb ray-fit grid size
+    # even if the pitch-preserving rs_fine would still be too dense (e.g.
+    # the chain-level ray_subsample was itself already very fine relative to
+    # this leg's physically large window).  Only ever RAISES rs_fine above
+    # the pitch-preserving value, never lowers it.
+    launch_radius_est = 0.5 * win
+    if isinstance(presc, dict):
+        ap = presc.get('aperture_diameter')
+        if ap is not None and np.isfinite(ap) and ap > 0:
+            launch_radius_est = 0.5 * float(ap) * 1.50
+    n_launch_est = max(8, int(2.0 * launch_radius_est / (dx_fine * rs_fine)))
+    if n_launch_est > max_fine_launch_points:
+        rs_needed = int(np.ceil(
+            2.0 * launch_radius_est / (dx_fine * max_fine_launch_points)))
+        if rs_needed > rs_fine:
+            import warnings
+            warnings.warn(
+                f"_fine_trace_group_exit: the physical-pitch-preserving "
+                f"ray_subsample ({rs_fine}) would still give an estimated "
+                f"~{n_launch_est}x{n_launch_est} ray-fit grid on the fine "
+                f"retrace; capping at ~{max_fine_launch_points}x"
+                f"{max_fine_launch_points} by raising ray_subsample to "
+                f"{rs_needed} (chain ray_subsample={ray_subsample}).  Fit "
+                f"quality on this leg is reduced; lower window_factor / "
+                f"na_exact_threshold, or raise max_fine_launch_points, if "
+                f"you need finer sampling and can afford the memory.",
+                RuntimeWarning, stacklevel=2)
+            rs_fine = rs_needed
+
     E_exit = apply_real_lens_traced(
         E_full, prescription=presc, wavelength=wavelength, dx=dx_fine,
-        carrier=R_in, ray_subsample=ray_subsample, n_workers=n_workers,
+        carrier=R_in, ray_subsample=rs_fine, n_workers=n_workers,
         **call_kw)
     return np.asarray(E_exit), float(dx_fine)
 
@@ -1936,6 +2058,25 @@ def propagate_traced_carrier_chain(
         ``window_factor`` for the exact path).  Otherwise the final leg is an
         ordinary carrier step and the field is reconstructed on the co-moving
         grid.
+
+        Two additional keys govern the exact path's pre-readout re-trace
+        (:func:`_fine_trace_group_exit`, audit
+        AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22 F-C/F-D):
+
+        * ``n_fine_cap`` (int, default 16384) -- memory cap on the re-trace
+          grid size.  On a large enough chain grid the window can require
+          more pixels than this to Nyquist-sample the exit sphere; the
+          re-trace is then correctly DOWNSAMPLED to this size (F-A), but the
+          resulting pitch may fall below the sphere's Nyquist limit and a
+          ``RuntimeWarning`` fires (F-D) with the discarded-NA magnitude.
+          Raise this (RAM permitting) to resolve the full NA, or shrink
+          ``window_factor`` instead.
+        * ``max_fine_launch_points`` (int, default 4096) -- independent
+          backstop on the re-trace's Newton/Chebyshev ray-fit grid size,
+          in case the physical-pitch-preserving ``ray_subsample`` (F-C)
+          would still be too dense for this leg's window; a
+          ``RuntimeWarning`` fires if it has to raise ``ray_subsample``
+          above the pitch-preserving value to respect the cap.
     final_leg : {'auto', 'exact', 'paraxial'}, default 'auto'
         How to land the FINAL leg when ``focus_readout`` is given.
 
@@ -2044,7 +2185,10 @@ def propagate_traced_carrier_chain(
             E_exit_fine, dx_fine = _fine_trace_group_exit(
                 env, R_use, cur_dx, presc, wavelength, ray_subsample, n_workers,
                 call_kw, R_out, na_exit,
-                window_factor=float(fr.get('window_factor', 7.0)))
+                window_factor=float(fr.get('window_factor', 7.0)),
+                n_fine_cap=int(fr.get('n_fine_cap', 16384)),
+                max_fine_launch_points=int(
+                    fr.get('max_fine_launch_points', 4096)))
             w_stage, p_stage = _chain_envelope_stats(E_exit_fine, dx_fine)
             stages.append({
                 'name': _name, 'R_in': R_use, 'R_out': R_out, 'dx': dx_fine,
