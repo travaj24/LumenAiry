@@ -4,6 +4,34 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Investigated & reverted (no net code change)
+
+- **Roadmap Part E — wavefront-aware ray launch (candidate 1): implemented,
+  tested, and REVERTED. Part E remains OPEN.**  A carrier-relative residual ray
+  launch (`apply_real_lens_traced(tilt_aware_rays=True, carrier=<explicit>)` +
+  a chain `wavefront_aware` opt-in) was built to carry a corrected relay's
+  inter-group aberration through the ray launch.  It **did not work** — it
+  regressed the real design-121 focus (EE6 50.0% → 10.0%) and gave no
+  improvement on a synthetic corrected relay — so all of it (the kwarg, the
+  `_carrier_relative_launch` branch, the E2 diagnostic + its unit test, and the
+  residual-launch diagnostic script) was removed; the pre-existing F3 behavior
+  (tilt_aware + explicit carrier → carrier-alone launch + warn) is restored.
+  The investigation also **overturned an earlier reading**: the traced-carrier
+  chain does *not* fail corrected relays — at a beam-matched aperture the plain
+  sphere-only chain is diffraction-limited (Strehl 0.997, ties GBD); the poor
+  synthetic result was an oversized-aperture (2.5× beam) fit-corruption
+  artifact.  The real 121 residual is confirmed **neither** a launch **nor** an
+  aperture/fit problem (both eliminated by direct test).  Full record:
+  `docs/audits/AUDIT_WAVEFRONT_AWARE_RAY_LAUNCH_2026_07_23.md` (§4b–§4c).
+  `tests/unit/test_niche_e4_corrected_relay_oracle.py` is retained, repurposed
+  as a feature-independent regression (chain is diffraction-limited at a
+  matched aperture; degrades past the aperture:beam cliff).
+- **Known, unfixed:** the traced element's OPL fit is corrupted when the
+  physical aperture greatly exceeds the beam (marginal-ray aliasing into the
+  low-order fit; sharp cliff at ~1.5× the beam diameter on a fast singlet).
+  Candidate fix (not yet done): a beam-relative launch/fit radius that decouples
+  the ray-fit domain from the vignetting aperture.
+
 ### Fixed
 
 - **Traced-carrier-chain exact-final-leg dx-scaling fixes (audit

@@ -276,6 +276,39 @@ remediation *unit* tests must be self-contained/synthetic.
 traced model for *corrected* relays; general, not 121-specific).  Isolated by
 R7 + R9 after per-group fidelity (F2) and high-NA focusing (R9) were both solved.
 
+> **STATUS (updated 2026-07-24): STILL OPEN. Candidate 1 (E2 below) was
+> implemented, tested, and REVERTED. The 121 residual cause is now NARROWED but
+> unidentified — it is NOT the ray launch and NOT aperture/fit corruption.**
+>
+> A carrier-relative residual launch (`tilt_aware_rays=True` + explicit carrier,
+> wired to a chain `wavefront_aware` opt-in) was built and then **reverted** — it
+> regressed the real 121 (EE6 50.0% → 10.0%) and gave no improvement on a
+> synthetic corrected relay.  A follow-up "test all the literature options"
+> pass then produced a **major correction** (audit §4c):
+>
+> - The synthetic "corrected-relay failure" was a **test artifact** (the relay
+>   was built with a 2.5×-oversized aperture; the wildly-aberrated marginal rays
+>   corrupt the traced OPL fit).  At a beam-matched aperture the plain
+>   sphere-only chain is **diffraction-limited (Strehl 0.997)**, tying GBD
+>   (0.999).  So the traced-carrier chain does **not** fail corrected relays.
+> - GBD (option 3) ties the plain chain on gentle relays but is known to
+>   collapse on the 121 (2.4% power); options 1 (SFT/PFT) and 4 (ENZ) were not
+>   built (unwarranted — the chain already meets the mark on well-posed relays).
+> - The **real 121** 50→99% gap is confirmed **not** the launch (wavefront-aware
+>   worsens it) and **not** aperture/fit (clean `_CARRIER_FIT_RADIUS_FRAC` sweep
+>   with no vignetting is flat at ~50%).  Its true cause is unidentified —
+>   remaining suspects: the high-NA tail readout, the envelope/reconstruct
+>   hand-offs, or the paraxial gap transport.  **The next campaign must diagnose
+>   the failure stage before building any fix method** (the trap that produced
+>   this reverted Part E pass).
+>
+> Full write-up: **`docs/audits/AUDIT_WAVEFRONT_AWARE_RAY_LAUNCH_2026_07_23.md`**
+> (§4b–§4c).  The E4 acceptance below is **unmet**; the default (sphere-only)
+> launch remains the production path, byte-identical to before.  Separately, a
+> real, useful finding worth its own small task: the traced element's OPL fit is
+> corrupted when the aperture ≫ beam — a **beam-relative launch/fit radius**
+> (decoupled from the vignetting aperture) would guard against it.
+
 ### E1. Diagnosis (measured)
 
 The traced-carrier model launches each group's rays along the **carrier sphere**
