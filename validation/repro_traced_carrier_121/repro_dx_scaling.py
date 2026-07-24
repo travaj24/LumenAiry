@@ -77,6 +77,19 @@ print("groups:", [(gr['prescription'].get('name', '?'), f"{gr['gap_before']*1e3:
 import os
 N = int(os.environ.get('RN','2048'))
 RS = int(os.environ.get('RS','4'))
+# Optional final-leg knobs (defaults preserve the original behavior):
+# NFC = n_fine_cap for the pre-readout re-trace (default 16384)
+# WF  = window_factor for re-trace + readout (default 7.0)
+# RNF = PIN the exact readout's internal N_fine (default: unpinned -- the
+#       readout sizes itself to Nyquist, up to 32768^2 = 16 GiB at 121
+#       conditions; pin to 16384 to bound memory on smaller boxes)
+NFC = int(os.environ.get('NFC', '16384'))
+WF = float(os.environ.get('WF', '7.0'))
+RNF = os.environ.get('RNF', '')
+_fr = {'dx_out': 0.05e-6, 'N_out': 1024, 'n_fine_cap': NFC,
+       'window_factor': WF}
+if RNF:
+    _fr['N_fine'] = int(RNF)
 zR = np.pi*w0*w0/lam
 w_z1 = w0*np.sqrt(1 + (z1/zR)**2)
 R1 = z1*(1 + (zR/z1)**2)
@@ -92,7 +105,7 @@ t0 = time.time()
 res = la.propagate_traced_carrier_chain(
     env0, groups, lam, dx0, r_in=R1, ray_subsample=RS, n_workers=8,
     final_distance=TRAILING,
-    focus_readout={'dx_out': 0.05e-6, 'N_out': 1024},
+    focus_readout=_fr,
     final_leg='auto')
 print("chain done", f"{time.time()-t0:.0f}s")
 for st in res.stages:
@@ -119,7 +132,8 @@ ee = {r: float(I[rr <= r*1e-6].sum())*dxo*dxo/P_in for r in (3, 6, 12)}
 fn = f'runA_field_N{N}.npy' if RS == 4 else f'diagA_N{N}_rs{RS}.npy'
 np.save(fn, E)
 Pwin = float(I.sum())*dxo*dxo/P_in
-print(f"RUN A N={N} rs={RS} rays={getattr(res, 'count', '?')} (traced noDOE, exact final leg): "
+print(f"RUN A N={N} dx0={dx0*1e6:.4f}um rs={RS} nfc={NFC} wf={WF} rnf={RNF or 'auto'} "
+      f"(traced noDOE, exact final leg): "
       f"FWHM={fwhm*1e6:.2f}um EE3={ee[3]*100:.1f}% EE6={ee[6]*100:.1f}% EE12={ee[12]*100:.1f}% "
       f"window-total={Pwin*100:.1f}% "
       f"(refs: Zemax 2.74um; audit-R9 table 4.05um/52.1/69.7/73.6)")
