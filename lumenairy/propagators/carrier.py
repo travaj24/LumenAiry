@@ -1573,6 +1573,60 @@ def _exact_sphere_eikonal(shape, dx, dy, wavelength, R):
     return sgn * (np.sqrt(r2 + R * R) - abs(R))
 
 
+def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None):
+    """BAND-LIMITED parabola <-> exact-sphere carrier-convention conversion
+    factor ``exp(sign*i*k*(S(R) - r^2/(2R)) * T(r))`` on the centred grid, or
+    ``None`` for a collimated/degenerate carrier (nothing to convert).
+
+    The carrier-referenced machinery references the PARAXIAL PARABOLA
+    ``r^2/(2R)`` (:func:`_radial_carrier_phase`), while a traced element's ray
+    launch / carrier eikonal references the EXACT sphere
+    ``S(R) = sign(R)(sqrt(r^2+R^2) - |R|)`` (:func:`_exact_sphere_eikonal`).
+    The two differ by ``+k r^4/(8 R^3) + O(r^6)``, which is a few RADIANS at a
+    modest NA over a long carrier leg (design-121: +3.4 rad at r=w at the first
+    group vertex, emitter NA 0.104 over 45.9 mm) -- i.e. the paraxial carrier
+    leg leaves a spurious SPHERICAL-ABERRATION term relative to the physical
+    (spherical) diverging wave.  Multiplying by this factor converts a
+    parabola-referenced reconstruction into the exact-sphere-referenced field
+    the element consumes (``sign=+1``) and back (``sign=-1``).
+
+    ``T(r)`` is a ``cos^2`` roll-off from ``0.75*r_safe`` to
+    ``r_safe = (|R|^3 * lambda / dx)^(1/3)`` -- the radius beyond which the
+    DIFFERENCE term itself exceeds the grid's Nyquist slope, so a whole-grid
+    swap would scatter aliased guard-band junk into the beam (measured: the
+    tapered and whole-grid conversions agree to 4 digits on the design-121
+    stages, i.e. the guard band truly carries nothing, while the untapered
+    swap breaks a coarse chain).  ``w_beam`` (optional) enables a warning when
+    the taper reaches into the beam (``r_safe < 2*w_beam``), where the
+    representation would be mixed exactly where the amplitude matters.
+    """
+    if not np.isfinite(R) or R == 0.0:
+        return None
+    n = int(shape[-1])
+    ny = int(shape[-2])
+    x = (np.arange(n, dtype=np.float64) - n / 2) * dx
+    y = (np.arange(ny, dtype=np.float64) - ny / 2) * dx
+    r2 = x[None, :] ** 2 + y[:, None] ** 2
+    k = 2.0 * np.pi / wavelength
+    diff = _exact_sphere_eikonal((ny, n), dx, dx, wavelength, R) \
+        - r2 / (2.0 * R)
+    r_safe = (abs(R) ** 3 * wavelength / dx) ** (1.0 / 3.0)
+    if w_beam is not None and w_beam > 0.0 and r_safe < 2.0 * w_beam:
+        import warnings
+        warnings.warn(
+            f"_sphere_parab_conversion: the band-limit radius r_safe="
+            f"{r_safe * 1e3:.3f} mm (= (|R|^3 lambda/dx)^(1/3) at "
+            f"R={R * 1e3:.3f} mm, dx={dx * 1e6:.3f} um) reaches inside "
+            f"2x the beam radius (w={w_beam * 1e3:.3f} mm), so the "
+            f"parabola->sphere conversion is tapered off where the beam "
+            f"still carries power: the carrier convention is MIXED over the "
+            f"beam skirt.  Refine dx (or lower the carrier NA) if the exit "
+            f"wavefront matters at that radius.",
+            RuntimeWarning, stacklevel=3)
+    t = np.clip((np.sqrt(r2) - 0.75 * r_safe) / (0.25 * r_safe), 0.0, 1.0)
+    return np.exp(sign * 1j * k * diff * np.cos(0.5 * np.pi * t) ** 2)
+
+
 def _fourier_upsample_crop(env, n_crop, n_fine):
     """Band-limited Fourier RESAMPLE of a SMOOTH envelope onto a new pixel
     count spanning the SAME physical window: crop the centred ``n_crop``
@@ -1861,7 +1915,8 @@ def _chain_envelope_stats(env, dx):
 def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                            n_workers, call_kw, R_out, na_exit,
                            window_factor=5.0, n_fine_cap=16384,
-                           max_fine_launch_points=4096):
+                           max_fine_launch_points=4096,
+                           sphere_reference=False):
     """Re-trace a HIGH-NA group on a grid that Nyquist-samples its EXIT sphere
     (R9).  The co-moving grid is sized for the group ENTRANCE curvature, so on a
     strongly-focusing group the (much steeper) exit wavefront ALIASES -- the
@@ -1946,6 +2001,17 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
 
     env_f = _fourier_upsample_crop(env, n_crop, n_fine)
     E_full = carrier_referenced_reconstruct(env_f, R_in, wavelength, dx_fine)
+    if sphere_reference:
+        # The stored envelope is EXACT-SPHERE-referenced (chain
+        # ``carrier_reference='sphere'``): convert the parabola-referenced
+        # reconstruction so the element receives the physical wavefront.  No
+        # exit-side conversion here -- the exit field goes straight to
+        # carrier_referenced_exact_focus_readout, which references the exact
+        # sphere itself.
+        _cf = _sphere_parab_conversion(np.shape(E_full), dx_fine, wavelength,
+                                       R_in, +1, w_beam=w)
+        if _cf is not None:
+            E_full = np.asarray(E_full) * _cf
 
     # F-C: preserve the CHAIN's physical ray pitch (ray_subsample * cur_dx)
     # on the fine retrace grid, rather than reinterpreting the same integer
@@ -2001,6 +2067,7 @@ def propagate_traced_carrier_chain(
     focus_readout: Optional[dict] = None,
     final_leg: str = 'auto',
     na_exact_threshold: float = 0.15,
+    carrier_reference: str = 'parabola',
 ) -> TracedCarrierChainResult:
     """Propagate a beam ENVELOPE through a chain of real (traced) lens groups on
     a co-moving carrier-referenced grid (audit F4.1).
@@ -2097,6 +2164,54 @@ def propagate_traced_carrier_chain(
     na_exact_threshold : float, default 0.15
         Exit-NA (``w_env / |R_out|``) above which ``final_leg='auto'`` routes the
         final leg through the exact path.
+    carrier_reference : {'parabola', 'sphere'}, default 'parabola'
+        Which spherical reference the per-group HAND-OFFS use (audit
+        AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8).  ``'parabola'``
+        (default) is the historical behaviour and is byte-identical to prior
+        releases.
+
+        ``'sphere'`` band-limits the paraxial parabola out of the hand-off:
+        every reconstruction handed to :func:`apply_real_lens_traced` is
+        converted to the EXACT sphere the element's ray launch / carrier
+        eikonal assumes, and every traced exit is re-enveloped against the
+        exact sphere, via :func:`_sphere_parab_conversion`.  The stored
+        envelope is then the wavefront RESIDUAL vs the exact sphere -- the
+        physically meaningful carried content -- instead of the residual vs
+        the parabola (which contains a spurious ``+k r^4/(8 R^3)``, several
+        radians on a long carrier leg at even a modest NA).
+
+        This only changes the result when the element CONSUMES the input
+        phase, i.e. together with
+        ``traced_kwargs={'preserve_input_phase': 'remap', 'amplitude_model':
+        'ray_density'}``.  With the default ``preserve_input_phase=False`` the
+        element re-imposes its own spherical reference and discards whatever
+        wavefront the input carried, so the conversion is a measured no-op
+        (design-121: identical to 3 digits) -- and the chain's exit then
+        carries only the LAST group's own contribution, i.e. minus the sum of
+        the correction the earlier groups applied.  The validated
+        carrier-regime configuration is therefore all three together:
+
+        >>> res = propagate_traced_carrier_chain(          # doctest: +SKIP
+        ...     env0, groups, wavelength, dx, r_in=R1,
+        ...     carrier_reference='sphere',
+        ...     traced_kwargs={'amplitude_model': 'ray_density',
+        ...                    'preserve_input_phase': 'remap'},
+        ...     final_distance=z, focus_readout=fr)
+
+        On design-121 that combination takes the exit wavefront from
+        ``+3.11 rad`` of r^4 (0.347 rad rms) to the full-train ray oracle's
+        design floor (r^4 ``-0.13`` rad, rms 0.015 vs the oracle's 0.018) and
+        the focal metrics from FWHM 5.15 um / EE3 55.6 / EE6 79.7 to
+        FWHM 3.55 um / EE3 88.4 / EE6 99.3, dx-flat over N = 1024...4096.
+
+        Caveat (documented, measured): the inter-group Sziklas-Siegman leg
+        still transports the envelope with the PARAXIAL kernel, so under
+        ``'sphere'`` the ``(S - parabola)`` difference rides inside the
+        transported envelope (up to ~7 rad at r=w on the design-121 final
+        gap).  That is exact to the transport's own paraxial order and was
+        verified against the ray oracle hand-off by hand-off (agreement
+        <= 0.01 rad); a ``RuntimeWarning`` fires if the conversion's
+        band-limit radius reaches inside twice the beam radius.
 
     Returns
     -------
@@ -2121,6 +2236,12 @@ def propagate_traced_carrier_chain(
         raise ValueError(
             "propagate_traced_carrier_chain: final_leg must be 'auto', 'exact' "
             f"or 'paraxial', got {final_leg!r}.")
+
+    if carrier_reference not in ('parabola', 'sphere'):
+        raise ValueError(
+            "propagate_traced_carrier_chain: carrier_reference must be "
+            f"'parabola' or 'sphere', got {carrier_reference!r}.")
+    _sphere_ref = (carrier_reference == 'sphere')
 
     groups = list(groups)
     n_groups = len(groups)
@@ -2188,7 +2309,8 @@ def propagate_traced_carrier_chain(
                 window_factor=float(fr.get('window_factor', 7.0)),
                 n_fine_cap=int(fr.get('n_fine_cap', 16384)),
                 max_fine_launch_points=int(
-                    fr.get('max_fine_launch_points', 4096)))
+                    fr.get('max_fine_launch_points', 4096)),
+                sphere_reference=_sphere_ref)
             w_stage, p_stage = _chain_envelope_stats(E_exit_fine, dx_fine)
             stages.append({
                 'name': _name, 'R_in': R_use, 'R_out': R_out, 'dx': dx_fine,
@@ -2204,11 +2326,26 @@ def propagate_traced_carrier_chain(
 
         # ---- standard coarse trace + paraxial re-envelope ------------------
         E_full = carrier_referenced_reconstruct(env, R_use, wavelength, cur_dx)
+        if _sphere_ref:
+            # hand the element the EXACT-sphere-referenced wavefront its ray
+            # launch assumes (see carrier_reference)
+            _cf = _sphere_parab_conversion(
+                np.shape(E_full), cur_dx, wavelength, R_use, +1,
+                w_beam=_envelope_amp_radius(env, cur_dx, cur_dx))
+            if _cf is not None:
+                E_full = np.asarray(E_full) * _cf
         E_exit = apply_real_lens_traced(
             E_full, prescription=presc, wavelength=wavelength, dx=cur_dx,
             carrier=R_use, ray_subsample=ray_subsample, n_workers=n_workers,
             **call_kw)
         E_exit = np.asarray(E_exit)
+        if _sphere_ref:
+            # re-envelope against the EXACT exit sphere, so the stored
+            # envelope is the wavefront residual (the carried content)
+            _cf = _sphere_parab_conversion(E_exit.shape, cur_dx, wavelength,
+                                           R_out, -1)
+            if _cf is not None:
+                E_exit = E_exit * _cf
         env = carrier_referenced_envelope(E_exit, R_out, wavelength, cur_dx)
         R = R_out
         w_stage, p_stage = _chain_envelope_stats(env, cur_dx)
@@ -2218,6 +2355,16 @@ def propagate_traced_carrier_chain(
             'w': w_stage, 'power': p_stage})
 
     # ---- final leg to the target plane ----
+    # Both remaining paths are PARABOLA-referenced (the paraxial focus readout
+    # and the plain reconstruct), so under carrier_reference='sphere' convert
+    # the stored (sphere-referenced) envelope back first: the physical field is
+    # env*exp(ikS) = [env*exp(ik(S-parab))]*exp(ik*parab).
+    if _sphere_ref:
+        _cf = _sphere_parab_conversion(
+            np.shape(env), cur_dx, wavelength, R, +1,
+            w_beam=_envelope_amp_radius(env, cur_dx, cur_dx))
+        if _cf is not None:
+            env = np.asarray(env) * _cf
     if focus_readout is not None:
         fr = dict(focus_readout)
         if 'dx_out' not in fr or 'N_out' not in fr:

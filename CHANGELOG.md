@@ -34,6 +34,37 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **`propagate_traced_carrier_chain(carrier_reference='sphere')`** (opt-in;
+  default `'parabola'` is byte-identical to prior releases) — **closes the
+  design-121 converged fidelity plateau.**  The carrier machinery references
+  the paraxial parabola `r^2/(2R)`, while a traced element's ray launch and
+  carrier eikonal reference the EXACT sphere `S(R)`; the difference,
+  `+k r^4/(8R^3)`, is **+3.36 rad at r=w** at the design-121 first group vertex
+  (emitter NA 0.104 over 45.9 mm) — a spurious spherical aberration relative to
+  the physical diverging wave.  `'sphere'` band-limits that difference out of
+  every hand-off (`_sphere_parab_conversion`, `cos²` taper ending at
+  `r_safe = (|R|³λ/dx)^{1/3}`, the radius beyond which the difference term
+  itself aliases), so the transported envelope is the physical wavefront
+  RESIDUAL and `preserve_input_phase='remap'` then carries the design's genuine
+  inter-group correction instead of the parabola's artifact.  Measured on
+  design-121 with `{'amplitude_model': 'ray_density',
+  'preserve_input_phase': 'remap'}`: exit wavefront vs the exact exit sphere
+  **r⁴ −0.13 rad / rms 0.015 rad**, matching the independent full-train ray
+  oracle's design floor (0.018 rad); focus **FWHM 3.55 µm, EE3 88.4%,
+  EE6 99.3%** at best focus +5…+10 µm from the design plane (was FWHM 5.15 µm /
+  EE3 55.6 / EE6 79.7 at +60 µm), i.e. within 0.1 µm / 2 EE3 points of the
+  *ideal* field's ceiling through the same readout; **dx-flat** (EE6
+  99.0/99.3/99.3 at N = 1024/2048/4096).  Note the conversion is a measured
+  NO-OP under the default `preserve_input_phase=False` (the element re-imposes
+  its own spherical reference and discards the input wavefront — which is why
+  the chain's exit then carries only the last group's own contribution, i.e.
+  minus the sum of the correction the earlier groups applied); all three
+  options are needed together.  Caveat: the inter-group Sziklas-Siegman leg
+  still transports with the paraxial kernel, so the `(S − parabola)` term rides
+  inside the envelope (verified hand-off by hand-off against the ray oracle,
+  ≤0.01 rad); a `RuntimeWarning` fires if the band-limit radius reaches inside
+  2× the beam radius.  Pins: `tests/unit/test_niche_s8_sphere_carrier_reference.py`
+  (11 tests).  Full record: `docs/audits/AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24.md` §8.
 - **`apply_real_lens_traced(preserve_input_phase='remap')`** (opt-in; requires
   `amplitude_model='ray_density'` and an engaged `carrier=`): transports the
   input's carrier-de-chirped RESIDUAL phase to the exit geometrically, sampled

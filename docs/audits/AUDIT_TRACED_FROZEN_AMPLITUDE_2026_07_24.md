@@ -532,3 +532,224 @@ pitch-preserving rays, NFC=8192, WF=4.0, wide ±51.2 µm readout):
 - T4/T5 (readout end-to-end energy/convergence at NA 0.45) OOMed against the sweep;
   rerun pinned when the box is free.  Superseded in urgency by §6 (the readout was
   cleared by T3 + the stigmatic flatness; T4/T5 remain worth one clean pinned run).
+
+## 8. THE PLATEAU IS CLOSED (2026-07-25, adversarial review round 2) — the gap
+##    was the DISCARDED CARRIED CONTENT plus the PARABOLIC CARRIER CONVENTION,
+##    and the two had to be fixed TOGETHER
+
+Scripts: `scratchpad/review2/{common121,run_chain,dump_exit,amp_factorial,
+train_oracle,pupil_strehl}.py` with logs beside them (env knobs
+`AM/PIP/TAPER/NATIVE/PRECOMP/RN/RS/NFC/WF/NOUT/SCAN/DZ*/DUMP/TAG`).  All runs
+N=2048 unless stated, NFC=8192, WF=4.0, readout ±51.2 µm, **through-focus
+scanned** (−120…+100 µm, 10 µm steps; refined where needed).
+
+### 8.1 The priority hypothesis (truncated-disc exit AMPLITUDE) is REFUTED
+
+Measured on the field entering the exact readout in the converged `rd+pip0`
+configuration (`dump_exit.py` → 8192² dump → `amp_factorial.py`):
+
+| r/w | 0.25 | 0.50 | 0.75 | 1.00 | 1.25 | 1.45 | 1.75 | 2.00 |
+|---|---|---|---|---|---|---|---|---|
+| measured abs(E)/abs(E0) | 0.9315 | 0.7644 | 0.5544 | 0.3573 | 0.2061 | 0.1251 | 0.0511 | 0.0224 |
+| Gaussian(w) | 0.9340 | 0.7720 | 0.5644 | 0.3651 | 0.2090 | 0.1244 | 0.0474 | 0.0188 |
+| ratio | 0.997 | 0.990 | 0.982 | 0.978 | 0.986 | 1.006 | 1.077 | 1.194 |
+
+Super-Gaussian exponent **n = 1.971** (Gaussian = 2; a truncated disc / flat-top
+would be much greater than 2).  Encircled power P(r<0.5w/1.0w/1.5w/2.0w) =
+0.3985/0.8645/0.9875/0.9996 vs the Gaussian 0.3935/0.8647/0.9889/0.9997.  The
+x-cut and the diagonal agree to 4 digits.  **The exit amplitude is the design
+Gaussian to within 2 % inside 1.45w** — no clipping, no flat-topping, no
+vignetting signature.  (The mild >1 ratios at 1.75–2w are a skirt 7–19 % ABOVE
+Gaussian, i.e. the opposite of truncation, and carry 0.04 % of the power.)
+
+The decisive amplitude/phase 2×2 factorial (same dump, same exact readout, each
+row through-focus scanned):
+
+| variant | at-plane FWHM / EE3 / EE6 | best-focus dz / FWHM / EE3 / EE6 |
+|---|---|---|
+| V1 A_meas × phi_meas (= the chain) | 7.150 / 26.5 / 58.7 | +60 / 5.150 / 55.6 / 79.7 |
+| V2 A_meas × exact sphere | 3.450 / 87.6 / 99.8 | +2 / 3.450 / 89.2 / 99.8 |
+| V3 A_gauss × phi_meas | 7.150 / 26.3 / 58.3 | +60 / 5.050 / 55.7 / 79.6 |
+| V4 A_gauss × exact sphere | 3.550 / 87.6 / 99.8 | +4 / 3.450 / 90.3 / 99.8 |
+
+**100 % of the plateau is PHASE.**  Swapping the measured amplitude for a perfect
+Gaussian changes nothing (V1→V3: 0.1 µm FWHM, 0.1 EE6 point); swapping the
+measured phase for a perfect sphere recovers the target (V2).  V4 additionally
+fixes the **achievable ceiling through this readout**: FWHM 3.45–3.55 µm,
+EE3 90.3 %, EE6 99.8 % — so the paraxial-Gaussian target FWHM 3.223 µm is ~7 %
+optimistic for the exact-sphere readout of a 4w-windowed Gaussian, while the
+EE3 ≈ 91 % target is right.  Re-running V4 at `window_factor=10` (no crop at
+all) recovers part of it — best-focus FWHM **3.350 µm**, EE3 90.7, EE6 99.8 — so
+~0.1 µm of the offset is the wf=4 crop at 2w, and the remaining ~0.13 µm is the
+exit w (1.187 vs the design 1.175 mm), the non-paraxial sphere focus, and the
+azimuthal-profile FWHM estimator on a 0.05 µm grid.  **The ideal-field ceiling,
+not 3.223 µm, is the correct gate for a chain metric taken this way.**
+
+### 8.2 Why 0.347 rad DID explain a 1.6× FWHM — the rms figure was a cut artifact
+
+`pupil_strehl.py` computes the wrap-free, amplitude-weighted pupil metric
+`S = max_c |sum A e^{i(phi − c r^2)}|^2 / (sum A)^2` (the best-defocus coherent
+Strehl).  For `rd+pip0`: **Strehl 0.421**, rms_eff 0.931 rad, amplitude-weighted
+rms **1.032 rad** — 3× the 0.347 rad the campaign had been quoting, because 0.347
+came from an *unweighted* fit along the +x *cut* over r<1.1w, whereas the pupil
+integral weights by amplitude over AREA (and an r⁴ term grows as r⁴).  The
+defocus-removed, amplitude-weighted mean residual per annulus is
++0.740 / +0.299 / −0.299 / −0.493 / +0.536 rad at r/w = 0–0.25 / 0.25–0.5 /
+0.5–0.75 / 0.75–1.0 / 1.0–1.25 (97 % of the power) — textbook balanced spherical
+aberration of ≈1 rad.  Strehl 0.42 is fully consistent with FWHM 5.15 µm and
+EE3 55.6 %.  **No unexplained mechanism remained; the paradox was a metric
+error.**
+
+### 8.3 Localization — the ELEMENT IS EXACT; the CHAIN discards the design's
+###   carried content, and the exit shows minus what it dropped
+
+`dump_exit.py` prints a per-hand-off wavefront table (every
+`carrier_referenced_reconstruct` = group entrance, every
+`carrier_referenced_envelope` = traced exit, each fitted against the EXACT sphere
+of that boundary's carrier).  `train_oracle.py` traces the design (all 23
+surfaces, DGRATING faces flat = the as-run noDOE configuration) from the emitter
+waist as a spherical fan and reports the TRUE cumulative residual `C` at exactly
+those planes, plus each group's own contribution.
+
+| group | chain exit r⁴@w (rd+pip0) | ORACLE own contribution | oracle TRUE cumulative C at that exit |
+|---|---|---|---|
+| S3-S4 | −1.305 (rms 0.146) | −1.306 (0.146) | −1.306 |
+| S5-S7 | +1.233 (0.138) | +1.236 (0.138) | −0.072 |
+| S14-S15 | −0.000 (0.000) | +0.000 (0.000) | −0.072 |
+| S16-S17 | +0.000 (0.000) | +0.000 (0.000) | −0.072 |
+| S18-S20 | +4.702 (0.527) | +4.731 (0.528) | +4.660 |
+| S21-S22 | −0.901 (0.101) | −0.889 (0.099) | +3.747 |
+| S23-S24 | −7.020 (0.786) | −6.998 (0.778) | −3.272 |
+| S25-S27 (readout entrance) | **+3.113** (0.347) | — | **−0.000 (rms 0.018 = design floor)** |
+
+Three measured facts:
+
+1. **Every group's own traced contribution matches the ray oracle to ≤0.03 rad**
+   — at CHAIN conditions, including the fine-retrace final leg.  The traced
+   element, the ray-density amplitude, the retrace and the exact readout are all
+   exonerated.  Nothing "injects" the +3.1 rad.
+2. **`preserve_input_phase=False` wipes the incoming wavefront at every
+   hand-off.**  Direct proof: S14-S15 / S16-S17 receive an entrance residual of
+   −0.071 rad r⁴ and emit an EXACTLY spherical exit (r⁴ −0.000, rms 0.000); and
+   forcing the entrance field to be a perfect sphere (the band-limited
+   conversion, §8.4 cell A) moves the exits by ≤0.03 rad.  The element launches
+   rays normal to the exact sphere of `carrier=R_in` and writes `k·opl`, so its
+   exit is a function of the prescription and `R_in` ONLY.
+3. Consequently the chain's exit carries **only the last group's own
+   contribution** — and because the design distributes its correction, what the
+   last hand-off dropped is exactly what the exit shows with the opposite sign:
+   the discarded content at the S25-S27 entrance is `C = −3.273 rad r⁴,
+   d(1/R) = −0.145 1/m, rms 0.363` at w = 3.128 mm, which maps to the exit pupil
+   (m = 2.63) as +3.273 rad r⁴ and +1.007 1/m — measured exit **+3.113 rad /
+   +0.975 1/m / rms 0.347**, agreeing to ~5 %.
+
+**So the +3.1 rad r⁴ and the +59 µm defocus enter NOWHERE.  They are the design's
+own correction, appearing with the wrong sign because the chain throws the
+accumulated wavefront away at each element boundary.**
+
+A second, independent defect sits at the other end of the chain: the carrier is
+the paraxial PARABOLA, so at the first group vertex the reconstructed field
+carries **+3.362 rad of r⁴** relative to the physical (spherical) diverging wave
+— analytically `+k w⁴/(8R³)` = +3.39 rad at w = 4.994 mm, R = 47.907 mm, while
+the oracle's `C` there is 0.000.  This is the Fresnel error of the first carrier
+leg (emitter NA 0.104 over 45.9 mm).  It is **invisible under `pip=False`** (the
+element re-imposes the sphere) but is **carried straight to the exit the moment
+the carry is switched on**.  That is why every single-variable attempt plateaued,
+and it is the correct explanation of §6.8's `'remap'` discriminator (+4.302 rad):
+remap works — and it faithfully carried the parabola's artifact.
+
+### 8.4 The composition matrix, completed — and the candidate-2 FALSE NEGATIVE
+
+| # | hand-off reference | amplitude | preserve_input_phase | exit r⁴@w / cut rms | pupil Strehl | at-plane FWHM/EE3/EE6 | best-focus dz / FWHM/EE3/EE6 |
+|---|---|---|---|---|---|---|---|
+| A | sphere (band-limited) | ray_density | False | +3.086 / 0.345 | — | 7.150 / 26.5 / 58.7 | +60 / 5.150 / 55.7 / 79.8 |
+| B | parabola (library) | ray_density | False | +3.113 / 0.347 | 0.421 | 7.150 / 26.5 / 58.7 | +60 / 5.150 / 55.6 / 79.7 |
+| C | parabola + crude launch pre-comp | ray_density | False | +0.000 / 0.206 | — | 7.750 / 27.8 / 64.3 | +60 / 4.750 / 65.4 / 88.7 |
+| D | **sphere (band-limited)** | **ray_density** | **remap** | **−0.128 / 0.015** | **0.911** | **3.650 / 87.1 / 99.3** | **+10 / 3.550 / 88.4 / 99.3** |
+| E | parabola (library) | ray_density | remap | +4.302 / 0.479 | 0.349 | 7.850 / 20.7 / 49.7 | +70 / 5.450 / 47.8 / 74.5 |
+| F | sphere | screen | remap | rejected by validation (`remap` requires `ray_density`) | | | |
+| — | ideal reference V4 (Gaussian × exact sphere, same readout) | | | 0 / 0 | 1.000 | 3.550 / 87.6 / 99.8 | +4 / 3.450 / 90.3 / 99.8 |
+
+* **Cell A is a measured NO-OP** (the missing cell this review was asked to
+  fill): with `pip=False` the conversion makes the entrance field a perfect
+  sphere — a 3.36 rad change to the input — and the exits move by ≤0.03 rad, the
+  final metrics not at all.  Every "conversion alone" experiment in this campaign
+  was therefore *bound* to read null; §6.6's stronger inference that the
+  conversion is *harmful* came from the `pip=True` default, i.e. a different
+  mechanism (the input-honest wave pair).
+* **Cell C (crude launch pre-compensation) is a REFUTED red herring.**  It looks
+  like a win (+9 EE6 points, exit r⁴ → 0.000) but it works by *shrinking the
+  beam*: the pre-compensation phase is beyond Nyquist in the skirt, so the
+  second-moment w at the first vertex drops 4.994 → 4.400 mm and the exit w
+  1.189 → 1.041 mm; the r⁴ aberration over the illuminated pupil then falls as
+  w⁴ while the diffraction spot grows.  An apodization artifact, not a
+  correction.  Recorded so nobody re-chases it.
+* **The §6.8 candidate-2 refutation was a HARNESS BUG.**
+  `scratchpad/p0_sweep/convention_taper_proto.py` only honours `PIP=0`
+  (`preserve_input_phase=False`) — there is no `'remap'` branch — so the
+  "conversion + ray_density + remap" run actually executed with the library
+  DEFAULT `preserve_input_phase=True`, the wave-pair path §6.6 had already shown
+  collapses under the conversion.  Candidate 2 was never tested.  Re-run properly
+  (cell D) it is the fix.  (Its "best-focus EE6 77.7 at the scan edge" was also
+  taken at the edge of a −40 µm scan, as §6.8 itself flagged.)
+
+### 8.5 THE FIX (library, opt-in, gated) — `carrier_reference='sphere'`
+
+`propagate_traced_carrier_chain(carrier_reference='sphere')` band-limits the
+paraxial parabola out of every element hand-off: `_sphere_parab_conversion()`
+multiplies each reconstruction by `exp(+i k (S(R) − r²/2R) · T(r))` before the
+element sees it, and by the inverse after the traced exit, with a cos² taper
+ending at `r_safe = (|R|³ λ / dx)^{1/3}` (the radius beyond which the difference
+term itself aliases).  The stored envelope is then the physical wavefront
+RESIDUAL vs the exact sphere — the carried content — and
+`preserve_input_phase='remap'` transports it geometrically through each group.
+The three options are only meaningful together.
+
+Gate results (design-121, all measured this session):
+
+| gate | requirement | measured | verdict |
+|---|---|---|---|
+| (a) exit residual | approach the 0.016–0.018 rad full-train-oracle design floor | **rms 0.015 rad** (cut), r⁴ **−0.128**, defocus d(1/R) = −0.022 1/m ⇒ best focus **+1.3 µm** from the plane (oracle −2.9 µm); the per-hand-off table matches the oracle's TRUE cumulative residual at ALL 8 boundaries (−1.305/−0.071/−0.071/−0.071/+4.598/+3.703/−3.279/−0.128 vs oracle −1.306/−0.072/−0.072/−0.072/+4.660/+3.747/−3.272/−0.000) | **PASS** |
+| (b) focal metrics | best-focus FWHM ≲ 3.5 µm, EE3 ≳ 85 %, best focus within ±10 µm | **FWHM 3.550 µm** (ideal-field ceiling through this readout 3.45–3.55), **EE3 88.4 %** (peak 89.6 % at +5 µm; ceiling 90.3), **EE6 99.3 %** (ceiling 99.8), best focus **+5…+10 µm**, on-axis (walk 0.00 µm), window-total 99.4 % | **PASS** — FWHM equals the achievable ceiling (the 3.223 µm target is the paraxial-Gaussian estimate) |
+| (c) dx-flatness | flat at N=2048 vs 4096 | exit rms 0.016/0.015/0.015 and r⁴ −0.128/−0.128/−0.129 at **N = 1024/2048/4096** (pitch-preserving rays rs = 2/4/8); best-focus FWHM 3.650/3.550/3.550, EE3 87.8/88.4/88.4, EE6 **99.1/99.3/99.3** | **PASS** |
+| (d) byte-identical defaults | the pinned suites pass | `test_niche_{r6,r7,r8,r9_highna,r9_dx_scaling,e4,upsample_lattice}` **57 passed**; `test_carrier_referenced` + h3/h6/k2/p1 **46 passed, 3 skipped (no cupy)**; new `test_niche_s8_sphere_carrier_reference.py` **11 passed**.  Default `carrier_reference='parabola'` is byte-identical by construction (every new path is gated) and pinned by an explicit `array_equal` test | **PASS** |
+
+Equivalence check: the library implementation reproduces the monkeypatched
+prototype exactly (`NATIVE=1`: exit r⁴ −0.128 / rms 0.015 / dz +1.3 µm; at-plane
+3.650 / 87.1 / 99.3; best focus +10 µm → 3.550 / 88.4 / 99.3 — identical to
+cell D).
+
+Working-tree diff (NOT committed): `lumenairy/propagators/carrier.py`
+(`_sphere_parab_conversion`, `_fine_trace_group_exit(sphere_reference=)`,
+`propagate_traced_carrier_chain(carrier_reference=)` + docs),
+`tests/unit/test_niche_s8_sphere_carrier_reference.py` (new, 11 pins),
+`CHANGELOG.md`, and this section.
+
+**Recommended chain configuration for a carrier-regime traced chain** (and the
+candidate for the §6.8 default flip):
+
+    res = propagate_traced_carrier_chain(
+        env0, groups, wavelength, dx, r_in=R1,
+        carrier_reference='sphere',
+        traced_kwargs={'amplitude_model': 'ray_density',
+                       'preserve_input_phase': 'remap'},
+        final_distance=z, focus_readout=fr)
+
+### 8.6 What remains (P2-class; none of it blocks design-121)
+
+* **The residual 9 % of Strehl sits beyond r > 1.5w** (1.2 % of the power), where
+  the annulus rms is 0.965 rad against ≤0.16 rad everywhere inside 1.25w: that is
+  the band-limit taper's mixed-convention skirt plus the ray-fit domain edge.  A
+  `RuntimeWarning` now fires when `r_safe < 2w`; refining dx is the lever.
+* The inter-group Sziklas-Siegman leg is still **paraxial**, so under `'sphere'`
+  the `(S − parabola)` term rides inside the transported envelope (~7 rad at r=w
+  on the final 121 gap).  Verified against the oracle hand-off by hand-off
+  (≤0.01 rad), but it is an approximation with a validity envelope; an exact
+  sphere-referenced gap transport (the existing exact-readout machinery applied
+  to a gap) is the principled generalization, and the natural home for a
+  high-NA-gap guard.
+* The **default flip** (§6.8) is now unblocked: the validated triple is measured,
+  dx-flat and pinned.  Flipping the CHAIN defaults changes the R8 chain pins
+  deliberately and needs its own commit.
+* Untouched by this session: the aperture:beam cliff guard, the memory-bounded
+  mode, and the P2 design battery (production-readiness audit §4/§5).
