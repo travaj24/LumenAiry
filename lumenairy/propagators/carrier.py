@@ -1826,6 +1826,29 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None):
     swap breaks a coarse chain).  ``w_beam`` (optional) enables a warning when
     the taper reaches into the beam (``r_safe < 2*w_beam``), where the
     representation would be mixed exactly where the amplitude matters.
+
+    **The taper's mixed-convention skirt is a MEASURED NULL on design-121
+    (S12), not a residual error budget.**  Audit
+    AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8.6 attributed "the residual 9 %
+    of Strehl beyond r > 1.5 w" partly to this skirt; direct measurement
+    refutes that.  Scaling ``r_safe`` by 1.5 and by INFINITY (T == 1, i.e. the
+    whole-grid swap with no taper at all) reproduces the shipping design-121
+    result to the digit -- at-plane 3.650 um / 87.3 / 99.3 and best focus
+    3.550 um / EE3 89.57 / EE6 99.26 in all three runs.  Two reasons: (i) the
+    conversion and its inverse are POINTWISE, so ``env = E*exp(-ikS)`` is exact
+    at every grid point no matter how the phase slope compares with Nyquist --
+    only FFT-based steps that see the RESULT care, and a wider taper makes the
+    stored envelope smoother, not rougher; (ii) geometrically the taper barely
+    reaches the beam anyway -- on design-121 the taper onset ``0.75*r_safe``
+    sits at 2.73 w (first entrance), 3.60 w (S21-S22 exit) and 2.07 w (S23-S24
+    exit, the worst), and ``r_safe`` exceeds the whole grid on the fine
+    retrace leg (full conversion, no taper), so at most ~2e-4 of the power ever
+    sees a mixed convention.  The S8.6 skirt was really the
+    ``preserve_input_phase='remap'`` ray-lattice alias (see
+    ``apply_real_lens_traced``'s ``remap_sampling``).  The ``r_safe < 2*w``
+    warning is retained as a validity flag for OTHER geometries (a much higher
+    carrier NA or coarser dx can push the onset inside the beam), not as a
+    known design-121 defect.
     """
     if not np.isfinite(R) or R == 0.0:
         return None
@@ -2360,8 +2383,12 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     ``n_fine_cap=16384`` design-121 condition: chain pitch 0.286 um vs
     ``dx_fine`` 1.5 um).  Nothing finer is representable on that grid, so the
     clamp is forced rather than wrong, but the F-C contract ("keeps the CHAIN's
-    physical ray pitch") does not hold there; the F-D warning above fires in
-    the same regime and names the underlying cause (dx_fine too coarse).
+    physical ray pitch") does not hold there, so a ``RuntimeWarning`` fires
+    naming BOTH pitches and the remedy (raise ``n_fine_cap`` / shrink
+    ``window_factor``) whenever the clamp binds (S12) -- previously this was a
+    silent, docstring-only contract gap that only the F-D warning hinted at
+    (and F-D names the symptom, ``dx_fine`` vs the exit Nyquist pitch, not the
+    ray lattice).
 
     Interaction note (F-C, reviewed 2026-07-22): the pitch-preserving
     ``ray_subsample`` rescale reduces the ray-fit density on THIS leg
@@ -2435,7 +2462,32 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     # F-C: preserve the CHAIN's physical ray pitch (ray_subsample * cur_dx)
     # on the fine retrace grid, rather than reinterpreting the same integer
     # ray_subsample in dx_fine pixel units.
-    rs_fine = max(1, int(round(float(ray_subsample) * cur_dx / dx_fine)))
+    _rs_want = float(ray_subsample) * cur_dx / dx_fine
+    _rs_round = int(round(_rs_want))
+    rs_fine = max(1, _rs_round)
+    if _rs_round < 1:
+        # S12: the clamp BINDS -- dx_fine is coarser than the chain's physical
+        # ray pitch, so no integer subsample on this grid can reproduce it and
+        # the F-C contract ("keeps the CHAIN's physical ray pitch") silently
+        # does not hold.  Forced by the grid, not wrong, but the retrace then
+        # fits the traced OPL on a COARSER ray lattice than the chain used, so
+        # say so rather than leave it to the docstring.
+        import warnings
+        warnings.warn(
+            f"_fine_trace_group_exit: the chain's physical ray pitch "
+            f"({float(ray_subsample) * cur_dx * 1e6:.4f} um = ray_subsample="
+            f"{ray_subsample} x cur_dx={cur_dx * 1e6:.4f} um) CANNOT be "
+            f"preserved on this retrace grid: dx_fine={dx_fine * 1e6:.4f} um "
+            f"is already coarser than it, so the pitch-preserving rescale "
+            f"({_rs_want:.4f}) rounds below 1 and is clamped to "
+            f"ray_subsample=1, giving a retrace ray pitch of "
+            f"{dx_fine * 1e6:.4f} um -- {dx_fine / max(float(ray_subsample) * cur_dx, 1e-300):.2f}x "
+            f"the chain's.  The traced-OPL fit on this final leg therefore "
+            f"runs on a coarser ray lattice than the rest of the chain.  "
+            f"Remedy: raise n_fine_cap (currently {n_fine_cap}) or shrink "
+            f"window_factor (currently {window_factor}) via the focus_readout "
+            f"dict so dx_fine falls at or below the chain's ray pitch.",
+            RuntimeWarning, stacklevel=2)
     # Independent backstop: cap the resulting Newton/Cheb ray-fit grid size
     # even if the pitch-preserving rs_fine would still be too dense (e.g.
     # the chain-level ray_subsample was itself already very fine relative to
@@ -2769,6 +2821,37 @@ def propagate_traced_carrier_chain(
         verified against the ray oracle hand-off by hand-off (agreement
         <= 0.01 rad); a ``RuntimeWarning`` fires if the conversion's
         band-limit radius reaches inside twice the beam radius.
+
+        **How much that paraxial order actually costs is now MEASURED
+        directly (S12) and it is a null.**  An exact-ASM gap prototype
+        (reconstruct against the exact sphere -> non-paraxial band-limited
+        angular spectrum -> re-envelope -> band-limited re-grid onto the SS
+        pitch) was run against every converging design-121 gap.  Note a
+        whole-grid exact transport is NOT possible on the co-moving extent --
+        the reconstructed exact field is 9.2x beyond Nyquist at the grid edge
+        on the last gap even after a 2x upsample, which is precisely why the
+        carrier-referenced formulation exists -- so the prototype covers the
+        beam CORE (a 2-beam-radius crop upsampled until the edge slope is
+        0.77 of Nyquist) and blends into the SS result outside.  Measured
+        agreement with the paraxial transport, amplitude-weighted over the
+        core: **0.019 rad rms** on the final 3.323 mm gap (overlap 0.999936),
+        0.024 rad on the S21-S22 gap, 0.019 rad on the S18-S20 gap.  End to
+        end the exact transport moves best-focus EE3 by +0.20 points (89.57 ->
+        89.77) and EE6 by +0.11 (99.26 -> 99.37) -- and most of even that is
+        the prototype's own window bookkeeping (window-total 99.44 % ->
+        99.54 %).  So the paraxial inter-group transport is worth <= 0.2 EE3
+        points on this design; an exact sphere-referenced gap transport is
+        still the principled generalisation for a genuinely high-NA gap, but
+        it is not the design-121 error budget.
+
+        The design-121 residual budget that IS real lives in the element:
+        ``preserve_input_phase='remap'`` sampled the transported residual
+        phasor on the coarse RAY lattice, which aliases the design's own
+        r^4 carried content beyond ~1.5 beam radii.  Pass
+        ``traced_kwargs={'remap_sampling': 'full'}`` (see
+        :func:`lumenairy.apply_real_lens_traced`) to sample it at full
+        wave-grid resolution instead; that is the recommended addition to the
+        validated triple and is opt-in only for byte-compatibility.
 
     self_check : {'dx', 'off', None}, default None
         Opt-in convergence self-check (P2, audit

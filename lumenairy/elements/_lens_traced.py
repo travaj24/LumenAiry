@@ -1742,6 +1742,7 @@ def apply_real_lens_traced(
     min_coarse_samples_per_aperture: int = 32,
     on_undersample: str = 'error',
     preserve_input_phase: bool = True,
+    remap_sampling: str = 'lattice',
     tilt_aware_rays: bool = False,
     carrier: Optional[Any] = None,
     on_noncollimated: str = 'warn',
@@ -2105,7 +2106,9 @@ def apply_real_lens_traced(
         does not discard the input's genuine residual (a corrected
         relay's inter-group pre-shaping).  For a pure carrier-sphere
         input the residual is ~0 and 'remap' coincides with
-        ``False``.
+        ``False``.  See ``remap_sampling`` for the resolution at which
+        that residual is sampled -- it is the accuracy-limiting choice
+        of the mode.
 
         Cost: ``preserve_input_phase=True`` runs the analytic
         apply_real_lens *twice* (once for the input field, once for
@@ -2124,6 +2127,63 @@ def apply_real_lens_traced(
         the coarse grid is below ~200 k pixels (pool startup cost
         dominates) or when pool spawn fails.  Measured speedup on
         large grids: ~8x on 16 cores.
+
+    remap_sampling : {'lattice', 'full'}, default 'lattice'
+        Resolution at which ``preserve_input_phase='remap'`` samples the
+        transported residual phasor.  Ignored unless ``'remap'`` is in
+        force.
+
+        ``'lattice'`` (default, pre-S12 behaviour): the residual phasor is
+        sampled at the COARSE ray lattice's entrance pullback points
+        (pitch ``ray_subsample * dx``) and the resulting phasor is then
+        bilinearly upsampled to the wave grid.
+
+        ``'full'``: only the SMOOTH entrance pullback COORDINATES are
+        upsampled from the coarse lattice; the residual phasor is then
+        sampled at full wave-grid resolution.  Same cost class (two extra
+        ``map_coordinates`` calls on N^2 smooth arrays), strictly better
+        physics, and an exact no-op at ``ray_subsample == 1``.  Transient
+        peak memory is ~5 float64/complex128 arrays of the wave grid while
+        the residual map is built (~3 GiB at the N = 8192 fine retrace leg),
+        released immediately afterwards.
+
+        Why it matters (audit S12, measured on design-121): the residual a
+        carrier-regime chain carries is the design's own correction, which is
+        r^4-dominant, so its phase GRADIENT grows as r^3.  On a lattice of
+        pitch ``h = ray_subsample*dx`` the phasor therefore exceeds Nyquist
+        beyond a finite radius ``r_alias = (pi w^4 / (4 A h))^(1/3)`` (with
+        ``A`` the r^4 residual in rad at ``r = w``), and outside that radius
+        the transported residual is ALIASED -- the beam skirt receives
+        scrambled phase.  On the design-121 final leg (``A = 9.2`` rad,
+        ``w = 3.124`` mm, ``h = 50 * 1.524`` um) the prediction is
+        ``r_alias = 1.52 w``, and the measured exit residual rms jumps from
+        0.052 rad (r < w) and 0.139 rad (1-1.5 w) to 0.971 rad (1.5-2 w) --
+        95 % of the whole Strehl-loss variance, from 1.2 % of the power.
+
+        Measured effect of ``'full'`` (design-121, pure chain defaults
+        otherwise, N = 2048 / NFC = 8192 / WF = 4.0, through-focus scanned at
+        1 um, on-axis): exit-wavefront 1.5-2 w annulus rms **0.971 -> 0.486
+        rad**, amplitude-weighted pupil Strehl **0.910 -> 0.931**,
+        window-total **99.44 -> 99.79 %**; at the acceptance focus
+        (dz = +10 um) FWHM **3.550 -> 3.450 um**, EE3 **88.19 -> 88.83**,
+        EE6 **99.28 -> 99.58**; at each metric's own optimum EE3
+        89.57 -> 90.01 and EE6 99.26 -> 99.55 against an ideal-field ceiling
+        of 90.73 / 99.74 through the same readout.  Unchanged between
+        N = 2048 (``ray_subsample=4``) and N = 4096 (``ray_subsample=8``) to
+        the digit.  Combined with ``ray_subsample=2`` it reaches EE6 99.73 --
+        the ceiling.
+
+        The deeper reason to prefer it is CONVERGENCE, not the point gain:
+        the mode is documented as dx-independent by construction, but with
+        ``'lattice'`` its result depends on ``ray_subsample`` (measured
+        amplitude-weighted rms phase difference vs the full-resolution
+        ``ray_subsample=1`` reference: 0.55 / 0.84 / 1.09 rad at
+        ``ray_subsample`` 2 / 4 / 8).  With ``'full'`` the same differences
+        are 0.0001 / 0.0003 / 0.0059 rad -- a 180-9000x reduction, i.e. the
+        transported residual becomes a property of the physics rather than of
+        the ray-fit lattice.  ``'lattice'`` is kept as the default only for
+        byte-compatibility; ``'full'`` is the correct sampling and the
+        recommended setting for any carrier-regime chain.
 
     sag_dtype : {None, np.float32, np.float64}, default None
         v5.17.0 opt-in geometry dtype, forwarded to the internal
@@ -2291,7 +2351,16 @@ def apply_real_lens_traced(
     _pip_remap = (preserve_input_phase == 'remap')
     if _pip_remap:
         preserve_input_phase = False
+    if remap_sampling not in ('lattice', 'full'):
+        raise ValueError(
+            "apply_real_lens_traced: remap_sampling must be 'lattice' or "
+            f"'full', got {remap_sampling!r}.")
+    # S12: sample the transported residual PHASOR at full wave-grid resolution
+    # (upsample the SMOOTH entrance pullback, not the fast phasor).  Only
+    # meaningful when there is a coarse ray lattice to begin with.
+    _pip_full = _pip_remap and remap_sampling == 'full'
     _rd_resid_coarse = [None]
+    _rd_entrance_coarse = [None]
     _rd_resid_map = None
     # ---- N13 (K1): opt-in MULTIBRANCH (KMAH/Maslov) caustic refinement ----
     # ``caustic=None``/'single' (default) is byte-identical to prior releases.
@@ -2757,6 +2826,39 @@ def apply_real_lens_traced(
     # through near-collimated values (design-121 mid-chain R ~ +7e5 mm).
     _pip_remap_W = _carrier_W if (_pip_remap and _carrier_W is not None) \
         else (0.0 if _pip_remap else None)
+    # The carrier-de-chirped input residual UNIT PHASOR on the ENTRANCE wave
+    # grid, split into float64 real/imag parts for ``map_coordinates``.  Built
+    # lazily and cached: both remap sampling paths need it, and it is a full
+    # N^2 pair (the fine retrace leg runs at N = 8192-16384).
+    _pip_res_ri = [None]
+
+    def _pip_residual_ri():
+        if _pip_res_ri[0] is None:
+            _k = 2.0 * np.pi / wavelength
+            _r = np.asarray(E_in) * np.exp(-1j * _k * _pip_remap_W)
+            _a = np.abs(_r)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                _r = np.where(_a > 0.0, _r / np.maximum(_a, 1e-300),
+                              1.0 + 0.0j)
+            _pip_res_ri[0] = (np.real(_r).astype(np.float64),
+                              np.imag(_r).astype(np.float64))
+            del _r, _a
+        return _pip_res_ri[0]
+
+    def _pip_sample_residual(row, col, sh=None):
+        """Bilinearly sample the de-chirped input residual unit phasor at the
+        entrance pixel coordinates ``(row, col)``.  ``cval`` = identity phase
+        (1+0j) outside the input grid -- those rays carry zero amplitude
+        anyway.  Returns the RAW sample (``|z| <= 1`` off-node); callers
+        renormalise where they historically did, so the legacy sampling path
+        stays byte-identical."""
+        from scipy.ndimage import map_coordinates as _mc_r
+        _rr, _ri = _pip_residual_ri()
+        _c = np.vstack([np.asarray(row).ravel(), np.asarray(col).ravel()])
+        _sr = _mc_r(_rr, _c, order=1, mode='constant', cval=1.0)
+        _si = _mc_r(_ri, _c, order=1, mode='constant', cval=0.0)
+        _z = _sr + 1j * _si
+        return _z if sh is None else _z.reshape(sh)
 
     # F1 (audit) collimation guard: measure the residual angular spread
     # (after removing any carrier) and warn / delegate when the input is
@@ -3977,20 +4079,20 @@ def apply_real_lens_traced(
         # is already zero above.  De-chirp with the exact carrier eikonal is
         # pointwise-exact even where the raw carrier is beyond-Nyquist.
         if _pip_remap:
-            _k0_rm = 2.0 * np.pi / wavelength
-            _res = np.asarray(E_in) * np.exp(-1j * _k0_rm * _pip_remap_W)
-            _ra = np.abs(_res)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                _res = np.where(_ra > 0.0,
-                                _res / np.maximum(_ra, 1e-300), 1.0 + 0.0j)
-            _rr_s = _mc(np.real(_res).astype(np.float64),
-                        np.vstack([_row, _col]), order=1,
-                        mode='constant', cval=1.0).reshape(sh)
-            _ri_s = _mc(np.imag(_res).astype(np.float64),
-                        np.vstack([_row, _col]), order=1,
-                        mode='constant', cval=0.0).reshape(sh)
-            del _res, _ra
-            _rd_resid_coarse[0] = _rr_s + 1j * _ri_s
+            if _pip_full:
+                # S12 (remap_sampling='full'): do NOT sample the residual on
+                # this (possibly coarse) ray lattice -- keep the SMOOTH
+                # entrance pullback and let the caller re-sample the residual
+                # at full wave-grid resolution after upsampling these
+                # coordinates.  See the ``remap_sampling`` docstring for why:
+                # the residual's phase gradient grows as r^3 for r^4 carried
+                # content, so on a lattice of pitch ``ray_subsample*dx`` it
+                # exceeds Nyquist beyond a finite radius and the phasor
+                # aliases in the beam SKIRT.
+                _rd_entrance_coarse[0] = (
+                    xef.reshape(sh).copy(), yef.reshape(sh).copy())
+            else:
+                _rd_resid_coarse[0] = _pip_sample_residual(_row, _col, sh)
         absdet = np.abs(det_j)
         fin = np.isfinite(absdet) & (~invalid)
         ref = float(np.median(absdet[fin])) if fin.any() else 0.0
@@ -4285,6 +4387,26 @@ def apply_real_lens_traced(
                 _rd_resid_map = np.where(
                     _pa > 1e-6, _pz / np.maximum(_pa, 1e-300), 1.0 + 0.0j)
                 del _prc, _pz, _pa
+            elif _pip_full and _rd_entrance_coarse[0] is not None:
+                # S12 (remap_sampling='full'): upsample the SMOOTH entrance
+                # pullback coordinates with the SAME coordinate stack the
+                # amplitude uses (so phase and amplitude keep sharing exit
+                # positions), then sample the residual phasor at FULL wave-grid
+                # resolution.  The pullback is a geometric ray map -- smooth,
+                # so bilinear upsampling of it is accurate to O(h^2 * |x_e''|);
+                # the phasor is the fast quantity and is never resampled off a
+                # coarse lattice.
+                _xe_c, _ye_c = _rd_entrance_coarse[0]
+                _xe_f = _mc_rd(_xe_c, _coords_rd, order=1, mode='nearest')
+                _ye_f = _mc_rd(_ye_c, _coords_rd, order=1, mode='nearest')
+                _pz = _pip_sample_residual(_ye_f / dy + N / 2.0,
+                                           _xe_f / dx + N / 2.0,
+                                           _xe_f.shape)
+                del _xe_c, _ye_c, _xe_f, _ye_f
+                _pa = np.abs(_pz)
+                _rd_resid_map = np.where(
+                    _pa > 1e-6, _pz / np.maximum(_pa, 1e-300), 1.0 + 0.0j)
+                del _pz, _pa
             del _coords_rd
             _rd_upsample_coords = None
             ard_map = np.where(_nan_rd > 0.5, np.nan, _a_rd)
@@ -4292,6 +4414,21 @@ def apply_real_lens_traced(
             ard_map = _ray_density_amp_grid(X, Y)
             if _pip_remap and _rd_resid_coarse[0] is not None:
                 _rd_resid_map = _rd_resid_coarse[0]
+            elif _pip_full and _rd_entrance_coarse[0] is not None:
+                # sub == 1: the "coarse" lattice IS the wave grid, so 'full'
+                # and 'lattice' sample the residual at exactly the same
+                # coordinates.  Reproduce the legacy expression (including its
+                # un-normalised phasor) so remap_sampling is a no-op here.
+                _xe_c, _ye_c = _rd_entrance_coarse[0]
+                _rd_resid_map = _pip_sample_residual(
+                    _ye_c / dy + N / 2.0, _xe_c / dx + N / 2.0, _xe_c.shape)
+                del _xe_c, _ye_c
+        # Release the cached entrance-grid residual pair (2 float64 N^2
+        # arrays -- 1 GiB at the N = 8192 fine retrace leg): it is only ever
+        # needed while the residual map is being built.
+        _pip_res_ri[0] = None
+        _rd_entrance_coarse[0] = None
+        _rd_resid_coarse[0] = None
         if _rd_fold_detected[0]:
             import warnings as _rd_warn
             _rd_warn.warn(
