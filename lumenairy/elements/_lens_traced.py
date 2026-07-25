@@ -1568,7 +1568,15 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     # mode='nearest' + NaN-majority masking the Newton path uses.
     from scipy.ndimage import map_coordinates
     ii, jj = np.indices((N, N), dtype=np.float64)
-    coords = np.array([ii * N_c / N, jj * N_c / N])
+    # Coarse sample u sits at FINE index u*sub (idx_c = arange(0, N, sub)),
+    # so fine pixel ii maps to coarse coordinate ii/sub -- EXACT for any sub.
+    # The previous ``ii * N_c / N`` equals ii/sub only when sub divides N;
+    # otherwise it is a corner-anchored scale error that displaces the whole
+    # map diagonally by (N/2)*(N_c*sub - N)/N pixels (audit
+    # AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24: the traced chain's diagonal
+    # focus walk -- measured -6.100 um at N=8192/sub=50 vs -6.11 predicted).
+    # Bit-identical to the old expression whenever sub | N.
+    coords = np.array([ii / sub, jj / sub])
     # v5.17.0 lifetime hygiene (same pattern as the Newton-path upsample):
     # ii/jj are folded into coords -- free them before interpolating, and
     # free coords before the final mask combine.  Byte-identical.
@@ -3795,7 +3803,17 @@ def apply_real_lens_traced(
             # (~34 GB at N=32768) at the upsample peak.  Same coords,
             # same map_coordinates inputs -> byte-identical outputs.
             ii, jj = np.indices((N, N), dtype=np.float64)
-            _coords = np.array([ii * Ns / N, jj * Ns / N])
+            # Coarse sample u sits at FINE index u*sub (the ``X[::sub]``
+            # lattice), so the exact mapping is ii/sub for ANY sub.  The
+            # previous ``ii * Ns / N`` (Ns = ceil(N/sub)) equals ii/sub only
+            # when sub divides N; otherwise it displaced the OPL map
+            # diagonally toward the (-x,-y) corner by (N/2)*(Ns*sub-N)/N
+            # pixels and radially mis-scaled it -- the traced chain's
+            # diagonal focus walk (audit
+            # AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24; the F-C fine-retrace
+            # rescale routinely produces non-divisor ray_subsample values).
+            # Bit-identical whenever sub | N.
+            _coords = np.array([ii / sub, jj / sub])
             del ii, jj
             # R7 / audit F2 (2026-07-21): CUBIC (order-3) OPL upsample when a
             # carrier is set.  The Newton OPL is solved on the COARSE grid
@@ -3866,14 +3884,16 @@ def apply_real_lens_traced(
             Ns_rd = ard_coarse.shape[0]
             # K3 (N15 perf): reuse the OPL upsample's coordinate stack when it
             # matches this coarse resolution (it always does -- same
-            # ``X[::sub, ::sub]`` grid, so ``ii*Ns/N`` / ``jj*Ns/N`` are the
+            # ``X[::sub, ::sub]`` grid, so ``ii/sub`` / ``jj/sub`` are the
             # SAME float64 array bit-for-bit); otherwise build a fresh one.
             if (_rd_upsample_coords is not None
                     and _rd_upsample_coords[1] == Ns_rd):
                 _coords_rd = _rd_upsample_coords[0]
             else:
                 ii_rd, jj_rd = np.indices((N, N), dtype=np.float64)
-                _coords_rd = np.array([ii_rd * Ns_rd / N, jj_rd * Ns_rd / N])
+                # ii/sub, not ii*Ns/N: exact for any sub (see the OPL
+                # upsample above -- same lattice, same walk bug otherwise).
+                _coords_rd = np.array([ii_rd / sub, jj_rd / sub])
                 del ii_rd, jj_rd
             _a_rd = _mc_rd(np.where(np.isnan(ard_coarse), 0.0, ard_coarse),
                            _coords_rd, order=1, mode='nearest')
@@ -3958,7 +3978,9 @@ def apply_real_lens_traced(
             ii_b, jj_b = np.indices((r1 - r0, N), dtype=np.float64)
             if r0:
                 ii_b += r0
-            coords_b = np.array([ii_b * Ns / N, jj_b * Ns / N])
+            # ii/sub, not ii*Ns/N: exact for any sub (see the whole-grid
+            # OPL upsample -- same lattice, same walk bug otherwise).
+            coords_b = np.array([ii_b / sub, jj_b / sub])
             opl_b = map_coordinates(_opl_coarse_clean, coords_b,
                                     order=1, mode='nearest')
             nan_b = map_coordinates(_nan_coarse, coords_b,

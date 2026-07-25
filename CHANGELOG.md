@@ -34,6 +34,22 @@ All notable changes to the core library are documented here.
 
 ### Fixed
 
+- **Coarse→fine upsample LATTICE bug in `apply_real_lens_traced` (audit
+  `AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24`).**  The OPL / ray-density /
+  valid-mask maps were interpolated to the wave grid with coordinates
+  `ii*Ns/N` (`Ns = ceil(N/ray_subsample)`), which equals the exact `ii/sub`
+  only when `ray_subsample` divides `N`; otherwise every map was displaced
+  diagonally toward the (−x,−y) grid corner by `(N/2)·(Ns·sub−N)/N` pixels
+  and radially mis-scaled.  Measured on 121-final-leg conditions: −6.100 µm
+  at N=8192/sub=50 (predicted −6.11), −12.187 at sub=48, −14.467 at sub=51,
+  exactly 0 for divisor subs — this was the traced carrier chain's diagonal
+  focus walk (the F-C fine-retrace rescale routinely produces non-divisor
+  `ray_subsample` values).  Fixed at all four construction sites
+  (`coords = ii/sub`, exact for any sub); bit-identical whenever
+  `sub | N` (all pinned suites pass unchanged, 49/49).  Regression pins:
+  `tests/unit/test_niche_upsample_lattice_fix.py` (5 tests: exit centroid
+  on-axis for divisor AND non-divisor subs, both amplitude models, and
+  divisor/non-divisor field agreement).
 - **Traced-carrier-chain exact-final-leg dx-scaling fixes (audit
   `AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22` F-A / F-C / F-D).**
   `_fourier_upsample_crop` gains a true band-limited DOWNSAMPLE branch
