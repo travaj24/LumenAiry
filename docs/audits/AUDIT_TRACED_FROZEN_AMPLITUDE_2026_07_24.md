@@ -425,6 +425,28 @@ pitch-preserving rays, NFC=8192, WF=4.0, wide ±51.2 µm readout):
   hand-off) to find which group/transport injects it; then compare that
   group's traced OPL against the meridional oracle AT CHAIN CONDITIONS.
 
+- **FULL-TRAIN MERIDIONAL ORACLE (design truth, noDOE) — the reference
+  stands and the mechanism is pinned.**  Tracing rays through ALL 23
+  surfaces (DGRATING surfaces 9/11 flattened, exactly as the chain runs —
+  note: the .zmx import DROPS the grating parameters with a warning, so the
+  chain has always been the noDOE configuration) from the emitter waist to
+  the last exit vertex: the TRUE noDOE exit wavefront vs the ABCD sphere is
+  **defocus −2.9 µm, r⁴ −0.000 rad, rms 0.016 rad** — the glass train is
+  corrected WITHOUT the DOE, so the POP-class focus target stands for this
+  chain and the measured +3.11 rad / +59 µm is numerical error.  Combined
+  with the clean per-group probes (every group ≤0.04 rad r⁴ vs its own
+  oracle except S25-S27 at −0.277, at BOTH probe and exact retrace
+  conditions, rs=16/50 identical), the composition arithmetic pins the
+  mechanism: each group's `k·opl` exit phase carries only that group's OWN
+  design contribution; the design corrects via the CARRIED inter-group
+  content (individually large, transported sum ≈ 0), and
+  `preserve_input_phase=False` discards the carried part at every hand-off
+  — the exit then shows the negative of a large partial sum (+3.11 rad).
+  The per-group oracles are blind to this by construction (they test own
+  contributions only).  **Open puzzle:** `'remap'` carries the residual yet
+  measured fidelity-neutral (EE6 74.6) — either the carry fails at the
+  fine-retrace step or downstream; the exit-residual-under-remap
+  measurement (running at write time) discriminates.
 - **Default-flip decision (recorded 2026-07-24):** the element-level defaults
   stay as they are — `amplitude_model='screen'` and
   `preserve_input_phase=True` are genuinely correct for non-carrier /
