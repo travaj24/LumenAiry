@@ -1809,9 +1809,28 @@ class RCWAStack:
             return ("uniform", complex(data))
         if kind == "shapes":
             eps_bg, shapes = data
+            # PER-SHAPE and ORDER-PRESERVING (audit M1, 2026-07-25).  Flattening
+            # EVERY shape's (key, repr) pairs into ONE sorted multiset made
+            # structurally DIFFERENT shape lists COLLIDE: two disks of different
+            # radii with their centres EXCHANGED carry the same multiset of
+            # pairs, so the second layer silently reused the first layer's
+            # eigenmodes -- measured, an (A, B) stack returned bit-identically
+            # the (A, A) answer (3.7x relative error on the zeroth-order R
+            # against a rasterised eps_cell oracle) while conserving energy to
+            # 6e-15, i.e. invisible to the closure guard.  Each shape now
+            # contributes its OWN sorted tuple (so the same shape dict written
+            # with its keys in a different ORDER still dedupes) and the shape
+            # LIST order is kept.  A PERMUTED list is physically identical (the
+            # analytic form-factor sum is commutative) and now re-solves --
+            # conservative, and deliberately so: the accumulation order of the
+            # form factors is not commutative in floating point, so a
+            # permutation-invariant key would hand back modes that differ in the
+            # last bits from that layer's own solve.  ``repr`` keeps the key
+            # hashable (a 'size' / 'center' may be a list) and is faithful for
+            # the scalar geometry / eps fields the form factors read.
             return ("shapes", complex(eps_bg),
-                    tuple(sorted((k, repr(v)) for s in shapes
-                                 for k, v in s.items())))
+                    tuple(tuple(sorted((k, repr(v)) for k, v in s.items()))
+                          for s in shapes))
         try:                                   # iso / tensor: hash the cell
             arr = np.ascontiguousarray(to_numpy(data))
         except Exception:                      # traced array -> no dedup
