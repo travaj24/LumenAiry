@@ -594,7 +594,23 @@ def _place_uniform(
 
     # Use the larger of the two axes to anchor the grid count, scaled
     # so that the total cell count is close to n_rays.
-    aspect = max(Nx, Ny) / min(Nx, Ny)
+    #
+    # S9-RT3 (audit review4a, pattern #2 -- a pixel-count parameter whose
+    # PHYSICAL meaning flips with the grid).  ``aspect`` must be the SIGNED
+    # ratio ``Nx/Ny``, because it is divided into the ``y`` count only.  The
+    # orientation-blind ``max/min`` form gave the right (near-isotropic) ray
+    # pitch for ``Nx >= Ny`` and the INVERTED one for ``Ny > Nx``, putting
+    # FEWER samples on the LONGER axis: measured at ``n_rays=64``,
+    # ``(Nx, Ny) = (64, 256)`` gave nx_grid=16 / ny_grid=4 -> 4.20 px x-pitch
+    # vs 85.00 px y-pitch (20.2x anisotropic; isotropic would be 16 px), and
+    # (32, 512) gave 1.00 px vs 511.00 px (511x, i.e. TWO ray rows over 512
+    # rows), while the transposed (256, 64) / (512, 32) grids came out at
+    # 1.24x / 1.88x.  Same ``n_rays``, same physical field, ray density per
+    # metre changing 20-500x purely from the grid's orientation.
+    # ``Nx / Ny`` is the numerically identical expression to
+    # ``max(Nx, Ny) / min(Nx, Ny)`` whenever ``Nx >= Ny``, so every
+    # already-correct (wide or square) grid keeps a bit-identical placement.
+    aspect = Nx / Ny
     ny_grid = int(np.ceil(np.sqrt(n_rays / aspect)))
     nx_grid = int(np.ceil(n_rays / max(ny_grid, 1)))
     ny_grid = max(ny_grid, 1)

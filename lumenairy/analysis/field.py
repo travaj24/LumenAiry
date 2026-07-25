@@ -336,7 +336,25 @@ def distortion_vs_field(
             0.0,
         )
 
-    finite = np.isfinite(distortion_pct)
+    # S9-AN2 (audit review4a, pattern #4 -- a sentinel value silently
+    # disabling a gated guard).  ``distortion_pct`` is FORCED to 0.0 wherever
+    # ``|h_paraxial| <= 1e-15``, and ``thetas_deg`` always starts at 0.0, so
+    # the theta=0 entry is unconditionally finite -- making
+    # ``np.isfinite(distortion_pct).any()`` always True and the ``else``
+    # (all-NaN -> report NaN) branch DEAD CODE.  When every off-axis chief ray
+    # is vignetted the function then reported
+    # ``max_distortion_pct = 0.0, sign='unknown'`` -- indistinguishable from a
+    # perfectly distortion-free system.  Measured on a singlet with
+    # ``semi_diameter=1e-9`` (all chief rays clipped): h_chief finite 1/7 (only
+    # the on-axis y=0 ray, which always passes), yet max_distortion_pct came
+    # back 0.0; the same singlet at semi_diameter=12 mm reports 0.1646%
+    # barrel.  Gate on the entries where distortion was actually MEASURED --
+    # a real (finite) chief height at a field angle with non-zero paraxial
+    # height.  ``distortion_pct`` itself is untouched, so whenever at least one
+    # off-axis point traced (every non-degenerate call) the reductions below
+    # run on the identical array and the result is bit-identical.
+    measurable = np.abs(h_paraxial) > 1e-15
+    finite = np.isfinite(distortion_pct) & measurable
     if finite.any():
         max_d = float(np.nanmax(np.abs(distortion_pct)))
         d_max = float(np.nanmax(distortion_pct))

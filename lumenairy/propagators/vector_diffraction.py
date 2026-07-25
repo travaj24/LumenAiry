@@ -47,6 +47,17 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
         Pupil-plane grid spacing [m].
     N_focal : int, optional
         Focal-plane grid dimension.  Defaults to ``pupil.shape[0]``.
+
+        .. warning::
+           ``N_focal`` sets the FFT length, so ``N_focal < pupil.shape[0]``
+           centre-CROPS the pupil and therefore truncates the APERTURE
+           (effective NA ~ ``(N_focal*dx_pupil/2)/f``), not just the focal
+           sampling -- a ``RuntimeWarning`` is emitted when the crop discards
+           non-zero pupil content (S9-VD2).  Because the FFT-natural focal
+           window ``N_focal * dx_focal = wavelength*f/dx_pupil`` does not
+           depend on ``N_focal``, cropping gains no field of view: keep
+           ``N_focal >= pupil.shape[0]`` and crop or bin the RETURNED focal
+           field instead.
     dx_focal : float, optional
         Focal-plane grid spacing [m].  Default: ``wavelength / (4 * NA)``
         (Nyquist for the Airy pattern).
@@ -173,6 +184,45 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     # Mask to exit pupil (in_pupil built from sin_theta_raw above).
     P = pupil * apod * in_pupil
 
+    # S9-VD2 (audit review4a, pattern #3 -- degenerate resample/crop branch):
+    # the ``N_focal < Np`` branch of ``_fft_field`` below centre-CROPS the
+    # PUPIL, so asking for a smaller focal grid silently truncates the
+    # APERTURE (and hence the effective NA) instead of only coarsening the
+    # focal sampling.  Note the FFT-natural focal WINDOW extent
+    # ``N_focal * dx_focal = wavelength*f / dx_pupil`` is INDEPENDENT of
+    # ``N_focal``, so the crop buys nothing but lost aperture.  Measured on a
+    # NA=0.5 / f=4 mm / dx_pupil=20 um / Np=256 pupil (aperture radius 100 px):
+    # the focal-plane Parseval energy falls to 0.504 / 0.279 / 0.123 of the
+    # full-pupil value at N_focal = 128 / 96 / 64, tracking the predicted
+    # clipped-pupil area fraction 0.522 / 0.294 / 0.130 (the few-% residual is
+    # the 1/sqrt(cos theta) rim apodisation the crop preferentially discards).
+    # The returned field is then the PSF of an aperture the caller never asked
+    # for.  Values are unchanged (bit-identical); the breach is surfaced as a
+    # RuntimeWarning in the same style as the VD-1 immersion-NA guard and the
+    # 4.10 dx_focal mismatch warning -- and ONLY when the crop actually
+    # discards non-zero pupil content, so a zero-padded pupil whose support
+    # fits inside the crop stays silent.
+    if N_focal < Np:
+        _c0 = Np // 2 - N_focal // 2
+        _P2 = float(np.sum(np.abs(P) ** 2))
+        _kept = float(np.sum(np.abs(
+            P[_c0:_c0 + N_focal, _c0:_c0 + N_focal]) ** 2))
+        if _P2 > 0.0 and (_P2 - _kept) > 1e-12 * _P2:
+            import warnings
+            warnings.warn(
+                f"richards_wolf_focus: N_focal={N_focal} < pupil size "
+                f"Np={Np}, so the pupil is centre-CROPPED to {N_focal}x"
+                f"{N_focal} before the FFT -- this discards "
+                f"{100.0 * (1.0 - _kept / _P2):.1f}% of the exit-pupil energy "
+                f"and clips the effective NA to about "
+                f"{min(NA, (N_focal * dx_pupil / 2.0) / f):.3f} (requested "
+                f"{NA:.3f}).  The FFT-natural focal window "
+                f"N_focal*dx_focal = wavelength*f/dx_pupil is independent of "
+                f"N_focal, so cropping buys no field of view.  Pass "
+                f"N_focal >= Np (the default) and crop/bin the RETURNED focal "
+                f"field instead, or rebin the pupil.",
+                RuntimeWarning, stacklevel=2)
+
     # Polarisation Jones vector
     if isinstance(polarization, str):
         if polarization == 'x':
@@ -227,15 +277,40 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     for iz, z in enumerate(z_planes):
         defocus = np.exp(1j * k * z * ct)
         # Zero-pad or crop pupil arrays to N_focal for FFT
+        #
+        # S9-VD1 (audit review4a, pattern #1 -- interpolation/registration
+        # anchor): the transform chain is
+        # ``fftshift(fft2(ifftshift(padded)))``, and ``ifftshift`` treats index
+        # ``L//2`` (FLOOR) as the array centre.  Preserving the pupil's
+        # registration across the pad/crop therefore requires the pupil centre
+        # index ``Np//2`` to land exactly on ``N_focal//2``:
+        #     pad = N_focal//2 - Np//2       c0 = Np//2 - N_focal//2
+        # Pre-S9 this used ``(N_focal - Np)//2`` / ``(Np - N_focal)//2``, which
+        # is the SAME integer whenever ``Np`` and ``N_focal`` share parity but
+        # is off by exactly one index when they do not -- specifically for
+        # (Np odd, N_focal even) on the pad branch and (Np even, N_focal odd)
+        # on the crop branch.  That one-index slip translates the whole masked
+        # + apodised pupil by one pupil pixel, so the returned COMPLEX focal
+        # field picks up a spurious linear phase of ``2*pi/N_focal`` rad per
+        # focal pixel: measured 0.098175 rad/px at (Np, N_focal) = (33, 64)
+        # and 0.369599 rad/px at (32, 17), both matching the prediction
+        # ``2*pi*delta/N_focal`` to 6 digits, with the two fields differing by
+        # 145% in L2.  ``debye_wolf_psf`` (intensity) is blind to it; coherent
+        # superposition with a reference arm is not -- the same failure class
+        # the 4.11.2 ``exp(+i k f)`` sign fix addressed.  Both new expressions
+        # are IDENTICAL integers to the old ones for every same-parity
+        # (Np, N_focal) pair, so every even/even case -- i.e. every realistic
+        # call, including the ``N_focal is None -> Np`` default -- is
+        # bit-identical.
         def _fft_field(P_comp):
             if N_focal >= Np:
-                pad = (N_focal - Np) // 2
+                pad = N_focal // 2 - Np // 2
                 padded = np.pad(P_comp * defocus,
                                 ((pad, N_focal - Np - pad),
                                  (pad, N_focal - Np - pad)),
                                 mode='constant')
             else:
-                c0 = (Np - N_focal) // 2
+                c0 = Np // 2 - N_focal // 2
                 padded = (P_comp * defocus)[c0:c0 + N_focal,
                                             c0:c0 + N_focal]
             return np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(padded)))

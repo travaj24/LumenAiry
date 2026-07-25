@@ -1047,13 +1047,15 @@ def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0,
 def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
                 wavelength, z_image, dq_step, px, py, n_p, Np, coeff_frac,
                 use_sep, cw, nq_chunk, coarse_stride, cache_trace=False, Cp=None):
-    """Lever #3: coarse-lattice trace + quintic ``map_coordinates`` interpolation.
+    """Lever #3: coarse-lattice trace + spline ``map_coordinates`` interpolation.
 
     The ray trace is ~80% of FGA cost, and the exit-vertex map
     ``(q, p) -> (xv, yv, ux, uy, opd, a)`` is smooth and single-valued at the
     launch plane (the caustic fold is DOWNSTREAM), so trace only a
     stride-``coarse_stride`` position sub-lattice per momentum and interpolate the
-    smooth ray quantities to the full lattice with an order-5 (quintic)
+    smooth ray quantities to the full lattice with an order-``_COARSE_INTERP_ORDER``
+    (currently 3 = cubic; the public ``coarse_stride`` docstring and the constant
+    agree -- this docstring said "order-5 (quintic)" pre-S9)
     ``scipy.ndimage.map_coordinates`` -- C-backed and grid-regular, ~3.6-5.5x
     faster than the full trace (scaling up with N).  ``AW = C*a*exp(i k opd)`` is
     reconstructed at full resolution; the oscillating ``AW`` is NEVER

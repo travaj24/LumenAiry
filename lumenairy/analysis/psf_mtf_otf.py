@@ -840,8 +840,37 @@ def _radial_profile_subpixel(
     Ny, Nx = psf_arr.shape
     peak_idx = int(np.argmax(psf_arr))
     py, px = divmod(peak_idx, Nx)
-    # Maximum integer-pixel radius that stays inside the array.
-    r_max_pixels = float(min(py, Ny - 1 - py, px, Nx - 1 - px))
+    # S9-AN1 (audit review4a, pattern #1 -- index-vs-metric registration).
+    # The polar sample ring must be a circle of constant METRIC radius, but
+    # ``map_coordinates`` works in pixel-INDEX coordinates: on an anamorphic
+    # grid (``dy != dx``) a constant-index ring is an ELLIPSE in metres, so
+    # the azimuthal average below mixed radii spanning ``dx:dy`` while the
+    # returned axis was still labelled with the isotropic
+    # ``d_bin = sqrt(dx*dy)``.  The sibling ``_psf_1d_profile(axis='radial')``
+    # bins true Euclidean distance with the SAME ``d_bin`` label, so the two
+    # "radial" profiles disagreed, and ``rayleigh_resolution`` /
+    # ``sparrow_resolution`` documented "true Euclidean distance
+    # sqrt((dx*di)^2 + (dy*dj)^2)".  Measured on a metric-isotropic Airy PSF
+    # (lam=500 nm, f/4, analytic first zero 2.4400 um): this helper returned
+    # 2.4400 um at dy=dx but 3.3658 um at dy=2dx and 4.7600 um at dy=4dx
+    # (1.95x), while the Euclidean-binned sibling stayed at 2.40-2.49 um;
+    # ``sparrow_resolution(axis='radial')`` drifted 1.8943 -> 1.5971 ->
+    # 1.1376 um (analytic 1.8940) purely from the grid aspect ratio.
+    # Fix: convert the metric radius to PER-AXIS index offsets.  The square-
+    # grid case is branched out and keeps the historical construction
+    # byte-for-byte (there ``d_bin == dx == dy`` analytically, but only the
+    # explicit branch guarantees no last-bit drift through ``sqrt``).
+    dx_f, dy_f = float(dx), float(dy)
+    d_bin = float(np.sqrt(dx_f * dy_f))
+    if dx_f == dy_f:
+        s_ix = s_iy = 1.0
+        # Maximum integer-pixel radius that stays inside the array.
+        r_max_pixels = float(min(py, Ny - 1 - py, px, Nx - 1 - px))
+    else:
+        s_ix, s_iy = d_bin / dx_f, d_bin / dy_f
+        # largest METRIC radius that stays inside the array, in d_bin units
+        r_max_pixels = min(py * dy_f, (Ny - 1 - py) * dy_f,
+                           px * dx_f, (Nx - 1 - px) * dx_f) / d_bin
     if r_max_pixels < 4.0:
         # Insufficient grid for radial averaging.
         return (np.zeros(0, dtype=np.float64),
@@ -853,10 +882,10 @@ def _radial_profile_subpixel(
     n_phi = 64
     phi = np.linspace(0.0, 2.0 * np.pi, n_phi, endpoint=False)
     # Anamorphic conversion: the sample radius r is in metres on the
-    # canonical isotropic axis ``r_metric = pixel * sqrt(dx*dy)``,
-    # while map_coordinates uses pixel-index coordinates.
-    xs_all = px + r_pixels[:, None] * np.cos(phi)[None, :]
-    ys_all = py + r_pixels[:, None] * np.sin(phi)[None, :]
+    # canonical isotropic axis ``r_metric = r_pixels * sqrt(dx*dy)``, so the
+    # per-axis index offset is ``r_metric/dx`` and ``r_metric/dy``.
+    xs_all = px + (r_pixels[:, None] * s_ix) * np.cos(phi)[None, :]
+    ys_all = py + (r_pixels[:, None] * s_iy) * np.sin(phi)[None, :]
     samples_all = map_coordinates(
         psf_arr.astype(np.float64),
         [ys_all.ravel(), xs_all.ravel()],

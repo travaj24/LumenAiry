@@ -106,7 +106,35 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         and not field_frame
     )
 
-    if np.isinf(R) and not asph and not field_frame:
+    # S9-RT1 (audit review4a, pattern #4 -- an ``inf`` sentinel silently
+    # disabling logic).  ``radius = inf`` means "no power ON THE X AXIS", NOT
+    # "flat surface": a cylinder powered in y is spelled exactly
+    # ``radius=inf, radius_y=<finite>`` (and a phase plate on a flat base is
+    # ``radius=inf, freeform=...``).  ``is_pure_spherical`` above carefully
+    # excludes ``radius_y`` / ``freeform``, but the flat fast path was tested
+    # FIRST and excluded only ``asph`` / ``field_frame``, so every such
+    # surface was intersected at z = 0 -- the sag was silently discarded while
+    # ``_surface_normal`` still refracted off the TRUE biconic / freeform
+    # gradient (right bend, wrong point, and the vertex->sag OPL leg dropped
+    # entirely).  Measured on ``Surface(radius=inf, radius_y=50e-3)``: at
+    # y = 10 mm the true sag is 1010.205 um but the intersection returned
+    # z = 0.000 um with opd = 0.000 um (771 waves of missing OPL at
+    # 1.31 um); 250.628 um -> 0 at y = 5 mm.
+    # A surface is genuinely flat only when it has no y-axis power and no
+    # freeform departure either, so require that too.  ``radius_y = inf``
+    # (an explicitly-flat y axis) and ``radius_y = None`` both keep the fast
+    # path, so every truly-flat surface takes the byte-identical branch it
+    # took before.
+    # ``radius_y is None`` selects the ROTATIONALLY-SYMMETRIC sag dispatch,
+    # which ignores ``aspheric_coeffs_y`` entirely, so such a surface stays on
+    # the fast path (with ``asph`` already excluded its sag is identically 0).
+    # ``radius_y = inf`` takes the biconic dispatch, whose y term still ADDS
+    # ``aspheric_coeffs_y``, so that one must be checked.
+    flat_in_y = (radius_y is None
+                 or (np.isinf(radius_y)
+                     and not getattr(surface, 'aspheric_coeffs_y', None)))
+    if (np.isinf(R) and not asph and not field_frame
+            and freeform is None and flat_in_y):
         # Flat surface: intersect at z = 0
         # t such that z + N*t = 0  =>  t = -z / N
         with np.errstate(divide='ignore', invalid='ignore'):

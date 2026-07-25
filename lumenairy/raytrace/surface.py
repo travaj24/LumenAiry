@@ -491,10 +491,22 @@ def _base_surface_sag_derivatives_xy(x, y, surface):
     asph_y = (surface.aspheric_coeffs_y
               if surface.aspheric_coeffs_y is not None
               else surface.aspheric_coeffs)
+    # S9-RT2 (audit review4a): honour the SAME ``conic_y is None -> conic_x``
+    # default that the sag twin :func:`lenses.surface_sag_biconic` documents
+    # and implements ("conic_y : float, optional -- Conic constant along y.
+    # Defaults to ``conic_x`` if not given").  ``Surface.conic_y`` defaults to
+    # ``None``, so without this the DERIVATIVE (surface-normal) path raised
+    # ``TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'``
+    # at ``(1 + K)`` for EVERY biconic / cylindrical surface whose ``conic_y``
+    # was left unset, while the sag path computed fine -- i.e. a
+    # ``Surface(radius=50e-3, radius_y=60e-3)`` could not be traced at all
+    # (verified through the public ``trace()`` API).  Bit-identical whenever
+    # ``conic_y`` is not ``None`` (the only inputs that previously worked).
+    conic_y = (surface.conic_y if surface.conic_y is not None
+               else surface.conic)
     dz_dx = _axis_deriv(x, surface.radius, surface.conic,
                         surface.aspheric_coeffs)
-    dz_dy = _axis_deriv(y, surface.radius_y, surface.conic_y,
-                        asph_y)
+    dz_dy = _axis_deriv(y, surface.radius_y, conic_y, asph_y)
     return dz_dx, dz_dy
 
 
