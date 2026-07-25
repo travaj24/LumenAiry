@@ -138,6 +138,10 @@ def oracle_phase(surfs, z_exit, R_in, x_max, npts=600):
 GROUPS = os.environ.get('GROUPS', 'Lens S3-S4,Lens S5-S7').split(',')
 NS = [int(s) for s in os.environ.get('NS', '512,1024,2048,4096,8192').split(',')]
 REF_N, REF_RS = 2048, 4          # the oracle script's validated config
+# WINF: window in beam radii (default 8.4 = the R7 oracle setup); RSOV:
+# override ray_subsample directly (emulate e.g. the fine-retrace rs_fine).
+WINF = float(os.environ.get('WINF', '8.4'))
+RSOV = os.environ.get('RSOV', '')
 
 print(f"\n{'group':<14}{'N':>6}{'dx um':>9}{'rs':>4}{'ray-pitch um':>13}"
       f"{'rms_res':>9}{'dRout %':>9}{'rms_r4+':>9}{'rms_hf':>8}{'P_out/P_in':>11}"
@@ -149,8 +153,9 @@ for name in GROUPS:
     surfs, z_exit = group_geometry(ev)
     xe, ph = oracle_phase(surfs, z_exit, R_in, x_max=3.2 * w_)
     for N in NS:
-        dx = 8.4 * w_ / N
-        rs = max(1, int(round(REF_RS * N / REF_N)))   # pitch-preserving
+        dx = WINF * w_ / N
+        rs = (int(RSOV) if RSOV
+              else max(1, int(round(REF_RS * (N / REF_N) * (WINF / 8.4)))))
         x = (np.arange(N) - N // 2) * dx
         r2g = x[None, :] ** 2 + x[:, None] ** 2
         env = np.exp(-r2g / w_ ** 2)
@@ -159,9 +164,16 @@ for name in GROUPS:
         E_in = (env * np.exp(1j * k0 * Sin)).astype(np.complex128)
         P_in = float(np.sum(np.abs(E_in) ** 2)) * dx * dx
         t0 = time.time()
+        _tkw = {}
+        if os.environ.get('AM', ''):
+            _tkw['amplitude_model'] = os.environ['AM']
+        if os.environ.get('PIP', '') == '0':
+            _tkw['preserve_input_phase'] = False
+        elif os.environ.get('PIP', '') == 'remap':
+            _tkw['preserve_input_phase'] = 'remap'
         E_out = la.apply_real_lens_traced(
             E_in, prescription=ev['prescription'], wavelength=lam, dx=dx,
-            carrier=R_in, ray_subsample=rs, n_workers=8)
+            carrier=R_in, ray_subsample=rs, n_workers=8, **_tkw)
         E_out = np.asarray(E_out)
         P_out = float(np.sum(np.abs(E_out) ** 2)) * dx * dx
         rr = np.sqrt(r2g)
@@ -184,6 +196,25 @@ for name in GROUPS:
         ker = np.ones(21) / 21
         hf = rowu - np.convolve(rowu, ker, mode='same')
         rms_hf = np.std(hf[10:-10])
+        # r^4-at-w + implied defocus of the residual-vs-ORACLE, fitted over
+        # the FULL beam (r < w) on the radially-binned 2-D residual -- the
+        # R7-era 0.5w central-row metrics see an r^4 term at 1/16 of its
+        # value at w, so a coherent few-tenths-rad/group SA passes them
+        # unseen (audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S6.8).
+        rbin = np.clip((rr / (w_ / 64.0)).astype(int), 0, 80)
+        good = mask & (rbin < 65)
+        ssum = np.bincount(rbin[good].ravel(),
+                           weights=res0[good].ravel(), minlength=81)
+        scnt = np.bincount(rbin[good].ravel(), minlength=81)
+        rprof_sel = scnt[:65] > 8
+        rprof = ssum[:65][rprof_sel] / scnt[:65][rprof_sel]
+        rmid = ((np.arange(65) + 0.5) * (w_ / 64.0))[rprof_sel]
+        Vw = np.stack([np.ones_like(rmid), rmid ** 2, rmid ** 4], axis=1)
+        cw, *_ = np.linalg.lstsq(Vw, rprof, rcond=None)
+        r4_at_w = float(cw[2] * w_ ** 4)
+        k0_ = 2 * np.pi / lam
+        dinvR = 2.0 * cw[1] / k0_
+        dz_impl = (R_out * R_out * dinvR) if np.isfinite(R_out) else np.nan
         # exit-amplitude second-moment radius vs entrance (blur indicator)
         I_o = np.abs(E_out) ** 2
         vx = float((I_o.sum(axis=0) * x ** 2).sum() / I_o.sum())
@@ -192,4 +223,5 @@ for name in GROUPS:
         print(f"{name:<14}{N:>6}{dx*1e6:>9.3f}{rs:>4}{rs*dx*1e6:>13.3f}"
               f"{rms:>9.3f}{dRout_pct:>9.3f}{rms4:>9.3f}{rms_hf:>8.3f}"
               f"{P_out/P_in:>11.6f}{np.sqrt(vx/vxi):>11.6f}"
+              f"  r4@w={r4_at_w:+7.3f}rad dz_impl={dz_impl*1e6:+8.1f}um"
               f"  ({time.time()-t0:.0f}s)", flush=True)
