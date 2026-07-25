@@ -443,10 +443,33 @@ pitch-preserving rays, NFC=8192, WF=4.0, wide ±51.2 µm readout):
   `preserve_input_phase=False` discards the carried part at every hand-off
   — the exit then shows the negative of a large partial sum (+3.11 rad).
   The per-group oracles are blind to this by construction (they test own
-  contributions only).  **Open puzzle:** `'remap'` carries the residual yet
-  measured fidelity-neutral (EE6 74.6) — either the carry fails at the
-  fine-retrace step or downstream; the exit-residual-under-remap
-  measurement (running at write time) discriminates.
+  contributions only).  **Discriminator result:** under `'remap'` the exit
+  residual is WORSE (+4.302 rad r⁴, +82 µm defocus) — the carry actively
+  degrades.  Analysis: after every `k·opl`-form group exit, the parab-
+  referenced ENVELOPE legitimately carries `(S_exact−parab)(R_out)` + the
+  design content; that term is slow in the core but approaches the grid
+  Nyquist at the beam skirt on the co-moving pitch (~1.2 rad/px at r≈2w at
+  the last-group entrance), so BOTH the inter-group envelope transport of
+  it and remap's phasor pullback (which samples it, junk included, wherever
+  the entrance amplitude is non-negligible) degrade at exactly this order.
+  **The remaining P1 work is therefore a robust carried-content
+  representation across hand-offs**, with three candidate paths for the
+  next session: (1) skirt-gate/roll-off the remap phasor at a
+  beam-relative radius (carry the core content, identity beyond — the
+  carried correction lives in the core); (2) reference the hand-off
+  envelope to the EXACT sphere for the traced exits (making the carried
+  content core-slow by construction) with the band-limited (S−parab)
+  conversion applied ONLY between the exit and the next entrance (NOT the
+  stub-style whole-chain swap §6.6 refuted — the pip=False exit really IS
+  sphere-referenced, unlike the input-honest pip=True exit); or (3)
+  carrier-fit upgrade: let the per-group carrier include the r⁴ term
+  (an aspheric carrier eikonal), absorbing the dominant carried component
+  into the reference that both the OPL bookkeeping and the launch already
+  handle analytically.  Candidate (2) is the most principled: in the
+  converged configuration each exit's phase is k·opl = S_exact(R_out) +
+  own-design content EXACTLY, so an exact-sphere envelope reference at the
+  exit leaves only design content in the envelope — removing the
+  near-Nyquist (S−parab) skirt from the transport entirely.
 - **Default-flip decision (recorded 2026-07-24):** the element-level defaults
   stay as they are — `amplitude_model='screen'` and
   `preserve_input_phase=True` are genuinely correct for non-carrier /
