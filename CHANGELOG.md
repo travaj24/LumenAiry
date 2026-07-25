@@ -4,6 +4,46 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed (sibling-pattern sweep, 2026-07-25)
+
+Sixteen measured fixes from a library-wide sweep of the traced-campaign bug
+classes (two Opus-subagent territories; every fix repro'd with numbers
+first, bit-identical where the old path was correct, 77 new regression
+pins; full details in the `17c0ad7`/`fd78ad2` commit messages and
+`docs/audits/AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25.md`).  Highlights:
+
+- **raytrace**: the flat fast path silently discarded the sag of
+  y-cylinders / freeform-on-flat surfaces (771 waves of OPL at the probe);
+  biconics at the `conic_y=None` default were untraceable (`TypeError`);
+  tall-grid ray placement was 20-511× anisotropic.
+- **traced element**: `sag_chunk_rows` banding (auto-ON at N≥4096)
+  silently downgraded the R7 cubic OPL upsample to linear under an engaged
+  carrier (λ/216 rms); `carrier=±inf` built an all-NaN eikonal (the
+  "All-NaN slice" warning source) — now the analytic plane-wave limit;
+  `_multi` silently dropped `preserve_input_phase='remap'`; `prepare`
+  rejects incompatible modes with reasons.
+- **carrier**: `_fourier_upsample_crop` rejects `n_crop >` input (silent
+  wrong-window 1×1-crop branch); the auto-fit gains a dx-exact
+  `estimator='increment'` + alias guard (default `gradient` estimator bias:
+  +0.4% → +32% with pitch); the chain names its own default-flip conflicts.
+- **vector diffraction**: Richards-Wolf pad/crop parity phase
+  (2π/N_focal rad/px on mismatched parity) fixed; pupil-truncating
+  `N_focal` now warns with the measured NA/energy loss.
+- **analysis**: anamorphic-grid radial profile sampled an index-space
+  ellipse (Sparrow drifted 1.894→1.138 µm on an unchanged PSF); a dead
+  all-NaN guard reported fully-vignetted distortion sweeps as "0.0%".
+- **validation harnesses**: bare runs now measure the SHIPPING chain
+  configuration; unrecognised knob values error instead of silently
+  falling through (the class that produced the campaign's candidate-2
+  false negative).
+
+Ten further measured findings are recorded REPORT-ONLY with decision
+notes (flat-fold Seidel parity, NaN-ray aperture-gate polarity, detector
+`n_pixels`/`pixel_pitch` inconsistency, edge-anchored ray placement, and
+others) in the sweep audit, plus a verified-clean map (notably: the GBD
+node upsample — the original lattice bug's direct sibling — is correct,
+proven with a counterfactual probe).
+
 ### Added (P2 daily-driver guards)
 
 - **Aperture:beam cliff guard.**  `apply_real_lens_traced` gains
