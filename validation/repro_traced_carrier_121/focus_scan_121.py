@@ -1,11 +1,31 @@
-# Converged-config chain + THROUGH-FOCUS scan: every prior metric in this
-# campaign was taken exactly at the fixed MSoP plane (final_distance =
-# TRAILING); with NA 0.152 the focused Rayleigh range is ~18 um, so
-# focus-position errors of tens of um confound cross-config comparisons.
-# This runner executes the chain (ray_density + preserve_input_phase=False,
-# post lattice-fix), then scans the readout field through +/-DZ um (plain
-# fixed-grid Bluestein re-propagation of the readout plane) and reports
-# at-plane AND best-focus metrics.
+# Design-121 chain + THROUGH-FOCUS scan (the acceptance runner): every prior
+# metric in this campaign was taken exactly at the fixed MSoP plane
+# (final_distance = TRAILING); with NA 0.152 the focused Rayleigh range is
+# ~18 um, so focus-position errors of tens of um confound cross-config
+# comparisons.  This runner executes the chain, then scans the readout field
+# through +/-DZ um (plain fixed-grid Bluestein re-propagation of the readout
+# plane) and reports at-plane AND best-focus metrics.
+#
+# DEFAULTS = THE SHIPPING CONFIGURATION.  With CREF / AM / PIP unset the
+# script passes NO chain kwargs at all, so it measures whatever
+# propagate_traced_carrier_chain defaults to -- since v5.29 the validated
+# carrier-regime triple (carrier_reference='sphere' +
+# amplitude_model='ray_density' + preserve_input_phase='remap').  Expected
+# at N=2048 / NFC=8192 / WF=4.0: AT-PLANE 3.650 um / 87.1 / 99.3, best focus
+# dz=+5..+10 um -> FWHM 3.550 um / EE3 88.4 / EE6 99.3, ON-AXIS
+# (audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 gate (b)).
+#
+# Pre-v5.29 this script HARD-CODED AM='ray_density' + PIP='0' as its env
+# DEFAULTS, so a plain run silently measured the intermediate `rd+pip0`
+# plateau (best focus ~5.65 um / 46.6 / 76.7) instead of the shipping
+# configuration -- exactly the "harness measures a stale config" failure the
+# S6.8 candidate-2 false negative came from (audit S8.4).  The knobs are now
+# opt-IN overrides:
+#   CREF=sphere|parabola   -> carrier_reference=
+#   AM=ray_density|screen  -> traced_kwargs['amplitude_model']
+#   PIP=0|1|remap          -> traced_kwargs['preserve_input_phase']
+# e.g. the legacy pre-flip chain is CREF=parabola AM=screen PIP=1.
+# PowerShell reminder: `$env:AM=''` UNSETS the variable.
 import ast, os, re, sys, time, warnings
 import numpy as np
 
@@ -59,15 +79,26 @@ RS = int(os.environ.get('RS', '4'))
 NFC = int(os.environ.get('NFC', '8192'))
 WF = float(os.environ.get('WF', '4.0'))
 NOUT = int(os.environ.get('NOUT', '2048'))
-AM = os.environ.get('AM', 'ray_density')
-PIP = os.environ.get('PIP', '0')
+AM = os.environ.get('AM', '')
+PIP = os.environ.get('PIP', '')
+CREF = os.environ.get('CREF', '')
 _tkw = {}
 if AM:
     _tkw['amplitude_model'] = AM
-if PIP == '0':
-    _tkw['preserve_input_phase'] = False
-elif PIP == 'remap':
-    _tkw['preserve_input_phase'] = 'remap'
+if PIP:
+    # Unrecognised values must NOT fall through as "library default" -- that is
+    # how the S6.8 candidate-2 false negative happened (a harness that only
+    # honoured PIP=0 silently ran PIP=True for every other value).
+    if PIP not in ('0', '1', 'remap'):
+        raise SystemExit(f"PIP must be '0', '1', 'remap' or unset, got {PIP!r}")
+    _tkw['preserve_input_phase'] = {'0': False, '1': True,
+                                    'remap': 'remap'}[PIP]
+_ckw = {}
+if CREF:
+    if CREF not in ('sphere', 'parabola'):
+        raise SystemExit(
+            f"CREF must be 'sphere', 'parabola' or unset, got {CREF!r}")
+    _ckw['carrier_reference'] = CREF
 _fr = {'dx_out': 0.05e-6, 'N_out': NOUT, 'n_fine_cap': NFC,
        'window_factor': WF}
 zR = np.pi * w0 * w0 / lam
@@ -80,10 +111,13 @@ env0 = np.exp(-(x[None, :] ** 2 + x[:, None] ** 2) / w_z1 ** 2
 P_in = float(np.sum(np.abs(env0) ** 2)) * dx0 * dx0
 
 t0 = time.time()
+print(f"config: N={N} rs={RS} nfc={NFC} wf={WF} nout={NOUT} "
+      f"chain_kwargs={ {**_ckw, **({'traced_kwargs': _tkw} if _tkw else {})} }"
+      + ("  (pure library defaults)" if not (_ckw or _tkw) else ""))
 res = la.propagate_traced_carrier_chain(
     env0, groups, lam, dx0, r_in=R1, ray_subsample=RS, n_workers=8,
     final_distance=TRAILING, focus_readout=_fr, final_leg='auto',
-    **({'traced_kwargs': _tkw} if _tkw else {}))
+    **_ckw, **({'traced_kwargs': _tkw} if _tkw else {}))
 print(f"chain done {time.time()-t0:.0f}s")
 
 dxo = 0.05e-6
@@ -133,4 +167,7 @@ fw, ee, pk, off = best[2]
 print(f"BEST-FOCUS dz={best[0]:+d}um: FWHM={fw*1e6:.3f}um EE3={ee[3]*100:.1f}% "
       f"EE6={ee[6]*100:.1f}% EE12={ee[12]*100:.1f}% "
       f"off=({off[0]*1e6:+.2f},{off[1]*1e6:+.2f})um")
-print("  targets: FWHM 3.223um EE3 91.0% EE6 100.0% (POP waist 2.737um radius)")
+print("  targets: FWHM 3.223um EE3 91.0% EE6 100.0% (POP waist 2.737um radius;"
+      " ideal-field ceiling through this readout 3.45-3.55um / 90.3 / 99.8)")
+print("  shipping-default acceptance (CREF/AM/PIP unset, N=2048/NFC=8192/"
+      "WF=4.0): best focus 3.550um / 88.4 / 99.3, on-axis")

@@ -1113,6 +1113,11 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
       not the paraxial ``r^2/(2s)`` -- so the reference leg, ray-launch
       cosines and H6 entrance eikonal match the true congruence on a STEEP
       conjugate (reduces to the parabola to ~1e-10 when ``r/|s| << 1``).
+      ``+/-inf`` (a COLLIMATED conjugate -- the chain's documented
+      ``r_in=inf`` launch default) returns the plane-wave limit ``W == 0``
+      with zero gradient, so the caller keeps the byte-identical
+      plane-wave-reference path; the closed form would give an ALL-NaN
+      ``W`` there, which silently disabled the engage test instead.
     * ``ndarray`` -- an explicit wavefront (metres), same shape as ``E_in``.
     * ``'auto'`` -- a low-order (``auto_degree``) polynomial fit of the
       smooth carrier, obtained by least-squares matching the polynomial's
@@ -1283,6 +1288,36 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
     s = float(carrier)
     if s == 0.0:
         raise ValueError("carrier conjugate distance must be non-zero")
+    if not np.isfinite(s):
+        # COLLIMATED conjugate (``carrier=+/-inf``): the analytic |s| -> inf
+        # limit of the sphere is the PLANE WAVE, ``W == 0`` with zero
+        # gradient.  Evaluating the closed form would give ``inf - inf =
+        # NaN`` over the whole grid, and that all-NaN eikonal is a SILENT
+        # SENTINEL, not an error: ``np.nanmax`` on it returns NaN (plus an
+        # "All-NaN slice encountered" RuntimeWarning), the engage test
+        # ``NaN > _TILT_EIKONAL_MIN_RAD`` is False, and the carrier
+        # machinery -- including the R7 fit-domain restriction -- is
+        # skipped with no diagnostic (audit
+        # AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4 traced the
+        # aperture:beam cliff to exactly that path; the warning was its
+        # only visible symptom).  ``inf`` is a LEGITIMATE value here --
+        # ``propagate_traced_carrier_chain(r_in=inf)`` is the documented
+        # collimated-launch default -- so return the correct limit
+        # explicitly.  The engage test then reads ``_peakW = 0`` and the
+        # call keeps the byte-identical plane-wave-reference path it
+        # already took via the NaN, minus the two spurious warnings
+        # (verified: ``carrier=inf`` and ``carrier=None`` outputs are
+        # byte-equal before and after).
+        W_full = np.zeros_like(np.asarray(X, dtype=np.float64))
+
+        def grad_fn(xq, yq):
+            return np.zeros_like(xq, dtype=np.float64), \
+                np.zeros_like(yq, dtype=np.float64)
+
+        def w_fn(xq, yq):
+            return np.zeros_like(xq, dtype=np.float64)
+
+        return W_full, grad_fn, w_fn
     _sgn = 1.0 if s > 0.0 else -1.0
     _abs_s = abs(s)
     W_full = _sgn * (np.sqrt(X ** 2 + Y ** 2 + s * s) - _abs_s)
@@ -1360,6 +1395,40 @@ def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
         to suppress single-pixel aliasing while preserving tilts that
         vary on the scale of typical beam features (MLA beamlet
         diameters, Gaussian waists, etc.).
+
+        PIXEL UNITS -- so the PHYSICAL smoothing length is ``4*dx`` and
+        shrinks with the grid pitch.  Flagged as an F-B suspect by audit
+        AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22 ("physical smoothing
+        length shrinks linearly with dx"); isolated and MEASURED
+        2026-07-25 (fixed physical field + fixed physical launch
+        positions, pitch swept over 4 octaves, ``lambda = 1.31 um``):
+
+        * SINGLE-MODE input (smooth Gaussian x linear tilt -- the regime
+          the traced model is valid in): the returned tilt at the beam
+          CORE is ``+0.060000`` at every pitch, i.e. dx-invariant to 6
+          digits; the smoothing is the documented no-op there.  The only
+          dx dependence is in the far skirt (``r > 2.5 w``, amplitude
+          < 6e-4 of peak), where the ``den > den.max()*1e-6`` guard's
+          boundary moves with ``sigma*dx``: max ``|dL|`` 0.049 (= the
+          whole tilt) at individual skirt launch points, 0.014 with a
+          fixed PHYSICAL sigma.
+        * MULTI-MODE input (two plane waves, a physical fringe beat):
+          strongly pitch-dependent -- rms ``L`` 0.0103 / 0.0073 / 0.0024
+          / 0.0013 at ``dx = 4 / 2 / 1 / 0.5 um``.  A fixed physical
+          sigma does NOT fix it (0.0169 / 0.0073 / 0.0008 / 0.0003):
+          there is no single local ray direction to converge to, and
+          BOTH choices simply decay toward the collimated launch this
+          docstring already describes as the intended degeneration.
+
+        So the pixel unit is a real grid dependence but NOT an F-B
+        driver, and a physical-length rewrite would trade one arbitrary
+        length for another without a convergent target.  It is also
+        UNREACHABLE from the traced-carrier chain: this function is only
+        called for ``tilt_aware_rays=True`` (default False, and
+        ``propagate_traced_carrier_chain`` never sets it -- the F3 guard
+        additionally reroutes it whenever an explicit carrier is given)
+        and from the experimental ``inversion_method='backward'`` OPL.
+        Left at 4 px, pinned by ``test_niche_s10_sibling_patterns.py``.
     multimode_diagnostic : dict, optional
         If provided, gets populated with tilt-field statistics before
         and after smoothing (``raw_rms_L``, ``smoothed_rms_L``,
@@ -2548,6 +2617,10 @@ def apply_real_lens_traced(
         X = Y = None
     else:
         X, Y = np.meshgrid(x, x)
+    # OPL coarse->fine spline order; resolved for real once the carrier engage
+    # test has run (see the R7 note at its assignment).  Initialised here so
+    # the row-band assembly can never read it unbound.
+    _opl_up_order = 1
 
     # ----- Carrier-referenced correction (audit S5.1) -------------------
     # Traced's default correction is referenced to a PLANE WAVE (unit input
@@ -2606,8 +2679,20 @@ def apply_real_lens_traced(
         _pk0 = float(_mag0.max()) if _mag0.size else 0.0
         if _pk0 > 0:
             _bright0 = _mag0 > 0.05 * _pk0
-            _peakW = (float(np.nanmax(np.abs(_cW[_bright0])))
-                      if _bright0.any() else 0.0)
+            # NaN-safe peak WITHOUT np.nanmax's "All-NaN slice encountered"
+            # RuntimeWarning: an all-NaN eikonal (a user-supplied ndarray
+            # carrier with NaN holes -- the collimated scalar case is now
+            # handled analytically in _compute_carrier) must read 0.0 (=>
+            # do not engage) rather than NaN-compare its way there while
+            # emitting a warning nobody can act on.  Identical to
+            # np.nanmax on any slice that has at least one non-NaN sample.
+            if _bright0.any():
+                _cWb = np.abs(_cW[_bright0])
+                _fin0 = ~np.isnan(_cWb)
+                _peakW = float(_cWb[_fin0].max()) if _fin0.any() else 0.0
+                del _cWb, _fin0
+            else:
+                _peakW = 0.0
         else:
             _peakW = 0.0
         _engage = (_peakW * _k0) > _TILT_EIKONAL_MIN_RAD
@@ -4054,11 +4139,29 @@ def apply_real_lens_traced(
         # Bilinearly interpolate to full grid
         from scipy.ndimage import map_coordinates
         Ns = opl_coarse.shape[0]
+        # R7 / audit F2: CUBIC (order-3) OPL upsample when a carrier is set --
+        # see the whole-grid branch below for the derivation.  Resolved HERE,
+        # before the path split, because the row-band assembly needs the SAME
+        # order: it used to hard-code order=1, so ``sag_chunk_rows`` (which the
+        # v5.17 auto-resolver turns ON by default at N >= 4096) silently
+        # downgraded the R7 cubic upsample to linear on every carrier-
+        # referenced call, breaking this module's own "row-band assembly is
+        # BYTE-IDENTICAL to the whole-grid path" contract.  Measured
+        # 2026-07-25 (singlet, carrier=+30 mm, N=512, sub=8, forced band):
+        # 4.17e-2 max / 2.92e-2 rms relative field change AT THE BEAM CORE
+        # (power unchanged -> pure phase), i.e. ~lambda/216 rms of the very
+        # residual R7 exists to remove (~0.37 rad in the outer beam on the
+        # 121's steepest triplet).  Banding is over the OUTPUT coordinates
+        # while the (small, coarse) INPUT array and its spline prefilter are
+        # whole, so order-3 is exactly band-decomposable -- the fix restores
+        # bit-equality rather than trading it.
+        _opl_up_order = 3 if _r7_carrier_path else 1
         if _chunk_assembly:
             # Row-band path: defer the upsample into the Step-3 band loop
-            # (map_coordinates order-1 is pointwise in the output, so the
-            # banded interpolation is element-identical).  Only the SMALL
-            # coarse arrays are kept; the full-grid ii/jj index pair, the
+            # (map_coordinates is pointwise in the OUTPUT at any order -- the
+            # coarse input and its prefilter are whole -- so the banded
+            # interpolation is element-identical).  Only the SMALL coarse
+            # arrays are kept; the full-grid ii/jj index pair, the
             # (2, N, N) coords stack, opl_map and nan_full never allocate.
             _opl_coarse_clean = np.where(
                 np.isnan(opl_coarse), 0.0, opl_coarse)
@@ -4098,8 +4201,8 @@ def apply_real_lens_traced(
             # with ``prefilter=False`` on a 0-filled array plus the separate
             # order-1 NaN mask (dilated by the > 0.5 threshold below) keeps the
             # boundary crisp.  Gated on a carrier being set (byte-identical
-            # carrier=None default) and on the whole-grid path.
-            _opl_up_order = 3 if _r7_carrier_path else 1
+            # carrier=None default).  ``_opl_up_order`` is resolved above the
+            # path split so the row-band assembly uses the SAME order.
             opl_map = map_coordinates(
                 np.where(np.isnan(opl_coarse), 0.0, opl_coarse),
                 _coords, order=_opl_up_order, mode='nearest',
@@ -4250,10 +4353,14 @@ def apply_real_lens_traced(
         # Row-band assembly: upsample + delta-phase + combine + masks per
         # (chunk_rows x N) band, writing into E_analytic in place (it is not
         # read again after its own band is consumed).  Element-identical to
-        # the whole-grid branch below: map_coordinates(order=1) interpolates
-        # each output point independently from the WHOLE coarse grid, and
-        # every other op is pointwise; the band aperture term
-        # ``x[j]^2 + x[i]^2`` reproduces ``(X**2 + Y**2)[r0:r1]`` exactly.
+        # the whole-grid branch below: map_coordinates interpolates each
+        # output point independently from the WHOLE coarse grid (true at
+        # ANY spline order -- the prefilter runs on the coarse INPUT, which
+        # is never banded), and every other op is pointwise; the band
+        # aperture term ``x[j]^2 + x[i]^2`` reproduces
+        # ``(X**2 + Y**2)[r0:r1]`` exactly.  The OPL upsample uses the SAME
+        # ``_opl_up_order`` (cubic under an engaged carrier, R7) the
+        # whole-grid path uses -- see the note at its definition.
         from scipy.ndimage import map_coordinates
         cr = int(sag_chunk_rows)
         r_ap_sq = (aperture / 2) ** 2 if aperture is not None else None
@@ -4267,7 +4374,10 @@ def apply_real_lens_traced(
             # OPL upsample -- same lattice, same walk bug otherwise).
             coords_b = np.array([ii_b / sub, jj_b / sub])
             opl_b = map_coordinates(_opl_coarse_clean, coords_b,
-                                    order=1, mode='nearest')
+                                    order=_opl_up_order, mode='nearest',
+                                    prefilter=(_opl_up_order > 1))
+            # NaN mask stays order-1 (crisp ray-domain boundary), exactly as
+            # the whole-grid path does.
             nan_b = map_coordinates(_nan_coarse, coords_b,
                                     order=1, mode='nearest')
             del ii_b, jj_b, coords_b
@@ -4443,6 +4553,36 @@ def apply_real_lens_traced_multi(
     -------
     E_image : complex ndarray
         The coherently-summed output field, dtype following the emitter fields.
+
+    Notes
+    -----
+    RELATION TO THE v5.29 CHAIN DEFAULTS (audit
+    AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 §8.5 / this sibling sweep).  This
+    entry point CANNOT run the validated carrier-regime configuration
+    ``propagate_traced_carrier_chain`` defaults to, and the reasons are
+    structural, not oversights:
+
+    * ``preserve_input_phase`` is FORCED ``True`` (the per-emitter contract:
+      each emitter's own phase must ride through).  It used to be popped from
+      ``traced_kwargs`` SILENTLY, so ``preserve_input_phase='remap'`` returned a
+      field byte-identical to ``True`` (measured: 0.0 difference, while the
+      direct element call differs by 7.5e-3) -- a caller could not tell the
+      requested mode had been discarded.  A conflicting value now RAISES.
+    * ``amplitude_model='ray_density'`` and ``fit_radius_beam_factor`` are
+      input-DEPENDENT (the ray-tube amplitude scales ``|E_in|``; the fit radius
+      is measured from the beam), so they cannot be baked into a prepared
+      screen: they used to fail with an opaque ``TypeError`` from
+      :func:`prepare_real_lens_traced` on the DEFAULT ``reuse_prepared=True``
+      path while working on ``reuse_prepared=False``.  They are now rejected at
+      this entry point with the remedy named, and pass through on the
+      per-emitter path.
+
+    Consequence for accuracy: a multi-emitter scene therefore runs the
+    ``screen`` amplitude and, with ``reuse_prepared=True``, WITHOUT the P2
+    aperture:beam cliff guard.  Pass ``reuse_prepared=False,
+    fit_radius_beam_factor=2.0`` (optionally
+    ``amplitude_model='ray_density'``) to get the chain-grade per-emitter
+    treatment at the cost of one full traced pass per emitter.
     """
     fields = list(emitter_fields)
     if not fields:
@@ -4468,10 +4608,84 @@ def apply_real_lens_traced_multi(
     # OWN dim regions are never clipped -- they may still contribute where a
     # later emitter is bright, and the reuse path (prepared screen) already
     # forces this.  tilt_aware_rays is off (the carrier carries the tilt) and
-    # the phase is preserved.  These override any conflicting traced_kwargs.
-    for _k in ('newton_amp_mask_rel', 'tilt_aware_rays', 'preserve_input_phase',
-               'return_screen', 'parallel_amp'):
-        traced_kwargs.pop(_k, None)
+    # the phase is preserved.  These values are FIXED by the per-emitter
+    # contract.  Pre-v5.29 they were popped SILENTLY, so a caller asking for
+    # e.g. ``preserve_input_phase='remap'`` got ``True`` with no diagnostic
+    # (measured byte-identical to True while the direct element call differs by
+    # 7.5e-3).  Now: a value EQUAL to the forced one is accepted (no behaviour
+    # change), anything else raises with the reason.
+    _FORCED = {'newton_amp_mask_rel': 0.0, 'tilt_aware_rays': False,
+               'preserve_input_phase': True, 'return_screen': False,
+               'parallel_amp': False}
+    _FORCED_WHY = {
+        'newton_amp_mask_rel':
+            'each emitter must be Newton-inverted on the FULL coarse grid (its '
+            'own dim regions can still contribute where another emitter is '
+            'bright)',
+        'tilt_aware_rays':
+            'the per-emitter carrier already carries the tilt; the per-pixel '
+            'tilt launch would fight it (audit F3)',
+        'preserve_input_phase':
+            "each emitter's own input phase must ride through the traced leg "
+            "for the coherent sum to mean anything -- 'remap'/False would "
+            'discard or re-transport it per emitter',
+        'return_screen':
+            'this function returns a summed FIELD, not a reusable screen (use '
+            'prepare_real_lens_traced directly for that)',
+        'parallel_amp':
+            'the per-emitter loop is already the concurrency axis',
+    }
+    for _k, _forced in _FORCED.items():
+        if _k not in traced_kwargs:
+            continue
+        _got = traced_kwargs.pop(_k)
+        if _got is _forced or _got == _forced:
+            continue
+        raise ValueError(
+            f"apply_real_lens_traced_multi: {_k}={_got!r} conflicts with the "
+            f"per-emitter contract, which fixes {_k}={_forced!r} -- "
+            f"{_FORCED_WHY[_k]}.  Pre-v5.29 this argument was dropped "
+            f"SILENTLY, so the call returned a field for {_k}={_forced!r} "
+            f"while appearing to honour the request.  Drop the argument, or "
+            f"call apply_real_lens_traced per emitter yourself if you need "
+            f"this mode.")
+
+    # Keys the PREPARED-screen path structurally cannot express (they are
+    # input-dependent, so a screen built on the ``ones`` placeholder would be
+    # wrong): reject them at the entry point with the remedy, instead of the
+    # opaque ``TypeError: prepare_real_lens_traced() got an unexpected keyword
+    # argument`` they used to raise from three frames down -- and only on the
+    # DEFAULT reuse path, so the same call worked or crashed depending on the
+    # carrier kind.
+    _NO_SCREEN = {
+        'amplitude_model':
+            "the ray-density amplitude scales |E_in|, so it cannot be baked "
+            "into an input-independent screen",
+        'fit_radius_beam_factor':
+            "the fit radius is measured from the input beam, and the prepared "
+            "screen is built on a flat ``ones`` placeholder whose 'beam' is "
+            "meaningless",
+        'on_aperture_beam':
+            "the aperture:beam ratio is measured from the input beam, which "
+            "the prepared screen's ``ones`` placeholder does not have",
+        'caustic':
+            "the multibranch / uniform caustic modes require the ray-density "
+            "amplitude, hence the per-emitter path",
+    }
+    # Only when a carrier ACTUALLY routes to a prepared screen: ``'auto'`` /
+    # ndarray carriers always take the per-emitter path, where these modes work.
+    if reuse_prepared and any(_carrier_reuse_key(c) is not None
+                              for c in carr_list):
+        _bad = sorted(k for k in _NO_SCREEN if k in traced_kwargs)
+        if _bad:
+            raise ValueError(
+                "apply_real_lens_traced_multi: "
+                + '; '.join(f"{k}={traced_kwargs[k]!r} cannot be used with "
+                            f"reuse_prepared=True ({_NO_SCREEN[k]})"
+                            for k in _bad)
+                + ".  Pass reuse_prepared=False to run a full traced pass per "
+                  "emitter (these modes are honoured there), or drop the "
+                  "argument to keep the shared prepared screen.")
 
     N = int(shape0[0])
     prepared_cache = {}
@@ -4703,6 +4917,20 @@ def apply_real_lens_traced_segmented(
     Returns
     -------
     complex ndarray, or list of complex ndarray if ``return_segments``.
+
+    Notes
+    -----
+    ``traced_kwargs`` reach a DIFFERENT consumer depending on the segment
+    count: one segment goes straight to :func:`apply_real_lens_traced` (so the
+    v5.29 modes ``amplitude_model='ray_density'`` /
+    ``preserve_input_phase='remap'`` are honoured), while two or more go
+    through :func:`apply_real_lens_traced_multi`, whose per-emitter contract
+    fixes ``preserve_input_phase=True`` and (on the default
+    ``reuse_prepared=True``) cannot express the input-dependent modes at all --
+    see that function's Notes.  Both paths now REPORT the restriction instead
+    of silently dropping the argument, but the count-dependent reach is real:
+    if you need those modes on a multi-segment field, pass
+    ``reuse_prepared=False`` and drop ``preserve_input_phase``.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced_segmented')
@@ -4826,6 +5054,8 @@ def prepare_real_lens_traced(
     sag_chunk_rows: Optional[int] = None,
     n_workers: Optional[int] = None,
     progress: Optional[Any] = None,
+    amplitude_model: str = 'screen',
+    fit_radius_beam_factor: Optional[float] = None,
 ) -> PreparedTracedLens:
     """Precompute the input-independent traced-lens screen for reuse (T-P1).
 
@@ -4860,6 +5090,22 @@ def prepare_real_lens_traced(
     spuriously or, under ``'delegate'``, silently hand off to
     ``apply_real_lens`` (which ignores ``return_screen``) and cache a garbage
     screen.  The residual guard is the per-field caller's responsibility.
+
+    WHAT A SCREEN CANNOT HOLD (v5.29; audit
+    AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 §8.5 + this sibling sweep).  The
+    validated carrier-regime options ``propagate_traced_carrier_chain`` now
+    defaults to are all INPUT-DEPENDENT, so none of them is screen-able:
+    ``amplitude_model='ray_density'`` scales ``|E_in|`` by the ray-tube
+    Jacobian; ``preserve_input_phase='remap'`` transports the input's own
+    residual phase; ``fit_radius_beam_factor`` sizes the ray-fit disc from the
+    measured beam radius, which on the flat ``ones`` placeholder this screen is
+    built on is meaningless.  ``amplitude_model`` / ``fit_radius_beam_factor``
+    are accepted here ONLY at their screen-compatible values and rejected with
+    an explanation otherwise (they used to raise a bare ``TypeError`` from the
+    keyword binding, which is what surfaced when
+    :func:`apply_real_lens_traced_multi` forwarded them).  A prepared screen is
+    therefore a ``screen``-amplitude, aperture-fit-domain object: correct, but
+    not the chain-grade model.
     """
     if isinstance(carrier, str) and carrier == 'auto':
         raise ValueError(
@@ -4867,6 +5113,26 @@ def prepare_real_lens_traced(
             "carrier is fit from the field -> input-dependent).  Pass an "
             "explicit carrier (conjugate distance or wavefront ndarray) or "
             "None (plane-wave reference).")
+    if amplitude_model != 'screen':
+        raise ValueError(
+            f"prepare_real_lens_traced cannot cache amplitude_model="
+            f"{amplitude_model!r}: the ray-density exit amplitude is "
+            f"|E_in|/sqrt(|det J|), i.e. INPUT-DEPENDENT, so it cannot be "
+            f"baked into a reusable screen (apply_real_lens_traced rejects "
+            f"amplitude_model='ray_density' with return_screen=True for the "
+            f"same reason).  Call apply_real_lens_traced per field instead "
+            f"(apply_real_lens_traced_multi(..., reuse_prepared=False) for the "
+            f"multi-emitter case).")
+    if fit_radius_beam_factor is not None:
+        raise ValueError(
+            f"prepare_real_lens_traced cannot cache fit_radius_beam_factor="
+            f"{fit_radius_beam_factor!r}: the P2 aperture:beam cliff guard "
+            f"sizes the ray-FIT disc from the measured input beam radius, and "
+            f"this screen is built on a flat ``ones`` placeholder whose beam "
+            f"radius is the grid, not the beam.  Call apply_real_lens_traced "
+            f"per field (apply_real_lens_traced_multi(..., "
+            f"reuse_prepared=False)) if the guard is needed -- a prepared "
+            f"screen always uses the aperture-derived fit domain.")
     # The screen is built on a ``ones`` PLACEHOLDER (return_screen=True makes
     # it input-independent), so the collimation guard cannot judge it against a
     # carrier: force it off whenever a carrier is set.  For carrier=None the

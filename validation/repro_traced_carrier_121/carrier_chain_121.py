@@ -1,8 +1,39 @@
+# LEGACY-CONVENTION REFERENCE -- do not use as a model of the shipping chain.
+#
 # Carrier-referenced (pilot-beam) traced chain for design 121 (P8-style
-# composition): envelope legs via propagate_carrier_referenced, per-group
-# apply_real_lens_traced(carrier=R_in) at reconstructed planes, re-envelope
-# with the q-trace R_out.  N=2048 co-moving grid.  Per-stage w checks vs the
-# physical q-trace.
+# composition), written by hand: envelope legs via
+# propagate_carrier_referenced, per-group apply_real_lens_traced(carrier=R_in)
+# at reconstructed planes, re-envelope with the q-trace R_out.  N=2048
+# co-moving grid.  Per-stage w checks vs the physical q-trace.
+#
+# WHAT THIS SCRIPT IS (as of v5.29): the PRE-FLIP, PARABOLA-convention manual
+# composition, kept as the historical reference that
+# propagate_traced_carrier_chain was originally built to package.  Every
+# hand-off here is parabola-referenced (carrier_referenced_reconstruct /
+# _envelope with no sphere conversion) and every element call takes the OLD
+# element defaults (amplitude_model='screen', preserve_input_phase=True).
+# Audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S6.2/S8.3-S8.5 measured that
+# combination as the dominant fidelity defect for this design (best-focus
+# EE6 ~79.7% vs 99.3% for the validated triple), so the orchestrator's
+# DEFAULTS have since flipped and this script no longer represents it.
+#
+# The equivalent modern call -- byte-for-byte the same model as the loop below
+# -- is the explicit legacy escape hatch:
+#
+#     la.propagate_traced_carrier_chain(
+#         env0, groups, lam, dx, r_in=R1, ray_subsample=4, n_workers=8,
+#         carrier_reference='parabola',
+#         traced_kwargs={'amplitude_model': 'screen',
+#                        'preserve_input_phase': True,
+#                        'fit_radius_beam_factor': None},
+#         final_distance=TRAILING, focus_readout=...)
+#
+# For the SHIPPING configuration and the design-121 acceptance numbers use
+# focus_scan_121.py (defaults = library defaults) or repro_dx_scaling.py.
+# Note this script also lands its final leg with a hand-rolled
+# stop-short + angular_spectrum_propagate_mft zoom rather than the library's
+# exact readout, so its focal metrics are not comparable to those runners'
+# even at matched options.
 import ast, re, sys, time, warnings
 import numpy as np
 

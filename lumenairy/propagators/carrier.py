@@ -1097,7 +1097,47 @@ def carrier_referenced_envelope(
 # ===========================================================================
 
 
-def _fit_carrier_inv(E, wavelength, dx, dy, axis=None):
+# Fraction of the grid's Nyquist per-pixel phase step (pi rad/px) at which a
+# wrapping-safe increment reading counts as (approaching) ALIASED -- the same
+# constant and the same reasoning as the element-side
+# ``_AUTO_CARRIER_NYQUIST_FRAC`` (elements/_lens_traced.py, audit R6/F1).
+_FIT_CARRIER_NYQUIST_FRAC = 0.5
+# Fraction of the BRIGHT support that must read aliased before the fit's
+# reliability guard fires (mirrors ``_AUTO_CARRIER_ALIAS_FRAC``).
+_FIT_CARRIER_ALIAS_FRAC = 0.05
+
+
+def _carrier_fit_alias_fraction(E, bright_frac=0.05):
+    """Fraction of the BRIGHT support whose wrapping-safe nearest-neighbour
+    phase increment reads at/above ``_FIT_CARRIER_NYQUIST_FRAC * pi`` rad/px --
+    i.e. how much of the beam sits at or beyond the grid's ability to represent
+    its own carrier tilt.  Returns 0.0 when it cannot be formed."""
+    from ..backend import to_numpy
+    E = np.asarray(to_numpy(E))
+    mag = np.abs(E)
+    if mag.size == 0:
+        return 0.0
+    mx = float(mag.max())
+    if not np.isfinite(mx) or mx <= 0.0:
+        return 0.0
+    bright = mag > bright_frac * mx
+    if not bright.any():
+        return 0.0
+    thr = _FIT_CARRIER_NYQUIST_FRAC * np.pi
+    n_tot = 0
+    n_bad = 0
+    for g, mk in ((np.abs(np.angle(E[:, 1:] * np.conj(E[:, :-1]))),
+                   bright[:, 1:] & bright[:, :-1]),
+                  (np.abs(np.angle(E[1:, :] * np.conj(E[:-1, :]))),
+                   bright[1:, :] & bright[:-1, :])):
+        n_tot += int(mk.sum())
+        n_bad += int((g[mk] >= thr).sum())
+    if n_tot == 0:
+        return 0.0
+    return n_bad / float(n_tot)
+
+
+def _fit_carrier_inv(E, wavelength, dx, dy, axis=None, estimator='gradient'):
     """Intensity-weighted mean wavefront inverse-curvature ``1/R`` of a field
     (0.0 for a flat/collimated wavefront).
 
@@ -1105,7 +1145,21 @@ def _fit_carrier_inv(E, wavelength, dx, dy, axis=None):
     diverging-``R>0`` convention), ``Im[E* (x dE/dx)] = k A^2 x^2 / R``, so
     ``1/R_x = Im[sum E* x dE/dx] / (k sum |E|^2 x^2)`` -- a phase-unwrap-free,
     aperture-robust estimator.  ``axis=None`` fits the isotropic (combined
-    ``x^2+y^2``) curvature; ``axis=1``/``0`` fit x/y separately."""
+    ``x^2+y^2``) curvature; ``axis=1``/``0`` fit x/y separately.
+
+    ``estimator``:
+
+    * ``'gradient'`` (default, historical) -- ``dE/dx`` from
+      :func:`numpy.gradient`.  On a pure carrier the central difference reads
+      the per-pixel phase step ``h = k*dx*r/|R|`` as ``sin(h)`` rather than
+      ``h``, so ``1/R`` comes out LOW by ``sin(h)/h`` -- a GRID-PITCH-dependent
+      bias (measured table in :func:`carrier_referenced_fit_radius`).
+    * ``'increment'`` -- the wrapping-safe nearest-neighbour phase increment
+      ``angle(E[i+1] conj(E[i]))`` taken at the sample MIDPOINTS (the estimator
+      ``carrier='auto'`` and the element-side collimation guards already use).
+      For a parabolic carrier the midpoint increment is ``k*x_mid/R`` EXACTLY,
+      so the fit is dx-INDEPENDENT for every ``|h| < pi``.
+    """
     # Host-side least-squares curvature fit -> Python float; CuPy-safe pull
     # (see ``_envelope_amp_radius``).
     from ..backend import to_numpy
@@ -1115,21 +1169,44 @@ def _fit_carrier_inv(E, wavelength, dx, dy, axis=None):
     x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Y, X = np.meshgrid(y, x, indexing='ij')
-    inten = np.abs(E) ** 2
-    if axis is None:
-        dE = np.gradient(E, dx, axis=1)
-        num = np.imag(np.sum(np.conj(E) * X * dE))
-        dE = np.gradient(E, dy, axis=0)
-        num += np.imag(np.sum(np.conj(E) * Y * dE))
-        den = k * float(np.sum(inten * (X * X + Y * Y)))
-    elif axis == 1:
-        dE = np.gradient(E, dx, axis=1)
-        num = np.imag(np.sum(np.conj(E) * X * dE))
-        den = k * float(np.sum(inten * X * X))
+    if estimator == 'increment':
+        # Midpoint coordinates + midpoint |A| weights, per axis.  ``num`` sums
+        # exactly the axes ``den`` does, so the isotropic form reduces to 1/R
+        # on a parabola (each axis contributes ``(k/R) * sum w x_mid^2``).
+        num = 0.0
+        den = 0.0
+        if axis is None or axis == 1:
+            dphi = np.angle(E[:, 1:] * np.conj(E[:, :-1]))
+            wgt = np.abs(E[:, 1:]) * np.abs(E[:, :-1])
+            xm = 0.5 * (X[:, 1:] + X[:, :-1])
+            num += float(np.sum(wgt * xm * (dphi / dx)))
+            den += k * float(np.sum(wgt * xm * xm))
+        if axis is None or axis == 0:
+            dphi = np.angle(E[1:, :] * np.conj(E[:-1, :]))
+            wgt = np.abs(E[1:, :]) * np.abs(E[:-1, :])
+            ym = 0.5 * (Y[1:, :] + Y[:-1, :])
+            num += float(np.sum(wgt * ym * (dphi / dy)))
+            den += k * float(np.sum(wgt * ym * ym))
+    elif estimator == 'gradient':
+        inten = np.abs(E) ** 2
+        if axis is None:
+            dE = np.gradient(E, dx, axis=1)
+            num = np.imag(np.sum(np.conj(E) * X * dE))
+            dE = np.gradient(E, dy, axis=0)
+            num += np.imag(np.sum(np.conj(E) * Y * dE))
+            den = k * float(np.sum(inten * (X * X + Y * Y)))
+        elif axis == 1:
+            dE = np.gradient(E, dx, axis=1)
+            num = np.imag(np.sum(np.conj(E) * X * dE))
+            den = k * float(np.sum(inten * X * X))
+        else:
+            dE = np.gradient(E, dy, axis=0)
+            num = np.imag(np.sum(np.conj(E) * Y * dE))
+            den = k * float(np.sum(inten * Y * Y))
     else:
-        dE = np.gradient(E, dy, axis=0)
-        num = np.imag(np.sum(np.conj(E) * Y * dE))
-        den = k * float(np.sum(inten * Y * Y))
+        raise ValueError(
+            "_fit_carrier_inv: estimator must be 'gradient' or 'increment', "
+            f"got {estimator!r}.")
     num = float(num)
     if den == 0.0 or not (np.isfinite(num) and np.isfinite(den)):
         return 0.0
@@ -1142,8 +1219,11 @@ def carrier_referenced_fit_radius(
     dx: float,
     dy: Optional[float] = None,
     astigmatic: bool = False,
+    *,
+    estimator: str = 'gradient',
+    on_aliased: str = 'warn',
 ) -> Union[float, Tuple[float, float]]:
-    """Best-fit spherical carrier radius ``R`` of a full field's wavefront.
+    """Best-fit PARABOLIC (paraxial) carrier radius ``R`` of a field's wavefront.
 
     Returns the intensity-weighted mean radius (``+inf`` for a collimated
     wavefront) using the phase-unwrap-free estimator in
@@ -1151,6 +1231,46 @@ def carrier_referenced_fit_radius(
     pair ``(R_x, R_y)``.  Use it to reference a measured / apertured field to
     its actual wavefront so the envelope is flat and the co-moving grid is
     well conditioned.
+
+    Convention (audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 §6.2 / §8.5).
+    The fitted quantity is the coefficient of the paraxial PARABOLA
+    ``phi = k r^2/(2R)``, matching :func:`carrier_referenced_reconstruct` /
+    :func:`carrier_referenced_envelope`.  A field whose wavefront is the
+    physical EXACT SPHERE ``S(R) = sign(R)(sqrt(r^2+R^2)-|R|)`` -- what an
+    on-axis point source radiates and what ``apply_real_lens_traced``'s
+    ``carrier=`` consumes -- is NOT a parabola, so the best parabolic fit reads
+    FLATTER than the true sphere: for a Gaussian of 1/e amplitude radius ``w``,
+    ``R_fit/R ~ 1 + w^2/(2 R^2) = 1 + NA^2/2`` (measured 1.00497 at NA 0.10 vs
+    1.005 analytic, dx-INVARIANT -- see the last column below).  Do not treat
+    the returned value as an exact-sphere radius at a non-trivial NA; convert
+    explicitly (:func:`_sphere_parab_conversion`) if the two must agree.
+
+    GRID-PITCH DEPENDENCE of the default estimator (measured 2026-07-25 on a
+    FIXED physical field: Gaussian ``w = 200 um``, ``R = -2 mm`` (NA 0.10),
+    fixed 1.6 mm window, ``lambda = 1.31 um``; only the pitch is swept).
+    ``h = k*dx*w/|R|`` is the per-pixel carrier phase step at the beam edge;
+    ``parab`` / ``sph`` are parabola- and exact-sphere-phased inputs:
+
+    ====== ======== ========= ============ ============ ========== =========
+    dx um  h        sin(h)/h  parab:grad   parab:incr   sph:grad   sph:incr
+    ====== ======== ========= ============ ============ ========== =========
+    0.391  0.187    0.9942    1.00440      1.00000      1.00931    1.00497
+    0.781  0.375    0.9768    1.01771      1.00000      1.02247    1.00497
+    1.562  0.749    0.9090    1.07276      1.00000      1.07682    1.00497
+    3.125  1.499    0.6655    1.32438      1.00104      1.32507    1.00566
+    6.250  2.998    0.0478    3.07642      1.53749      3.05100    1.54927
+    12.50  5.995   -0.0473   89.57         -37.12       92.14      -33.04
+    ====== ======== ========= ============ ============ ========== =========
+
+    i.e. the ``'gradient'`` estimator reads ``sin(h)`` where the physics has
+    ``h`` (a pure GRID artefact: the same physical field reads +0.4% at
+    dx = 0.39 um and +32% at dx = 3.1 um), and past ``h = pi`` BOTH estimators
+    alias and the answer is meaningless.  ``'increment'`` is exact to 1e-5 for
+    the parabola while ``h < ~1``, leaving only the dx-invariant +NA^2/2
+    convention offset on a sphere -- so it separates the two error classes
+    instead of mixing them.  This is the ``carrier_referenced_*`` sibling of
+    the F-B "entrance-tilt finite differencing vs the per-pixel carrier phase
+    step" suspect (audit AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22).
 
     Parameters
     ----------
@@ -1161,17 +1281,59 @@ def carrier_referenced_fit_radius(
         Defaults to ``dx``.
     astigmatic : bool, default False
         If True, fit ``R_x`` and ``R_y`` independently.
+    estimator : {'gradient', 'increment'}, default 'gradient'
+        ``'gradient'`` is the historical central-difference estimator (kept as
+        the default so existing results are unchanged), with the ``sin(h)/h``
+        bias tabulated above.  ``'increment'`` uses the wrapping-safe
+        nearest-neighbour phase increment at the sample MIDPOINTS, where the
+        parabola's increment is ``k*x_mid/R`` exactly -- dx-independent to 1e-5
+        while the beam's step stays under ~1 rad/px, vs the 0.4%-32% drift of
+        ``'gradient'`` over the same pitches.
+    on_aliased : {'warn', 'silent'}, default 'warn'
+        Emit a ``RuntimeWarning`` when more than
+        ``_FIT_CARRIER_ALIAS_FRAC`` (5%) of the BRIGHT support reads a
+        per-pixel phase step at/above ``_FIT_CARRIER_NYQUIST_FRAC*pi``
+        (i.e. the grid cannot represent the beam's own carrier tilt, so
+        NEITHER estimator can recover ``R``).  Silence it once acknowledged.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_full, 'carrier_referenced_fit_radius')
     if dy is None:
         dy = dx
+    if estimator not in ('gradient', 'increment'):
+        raise ValueError(
+            "carrier_referenced_fit_radius: estimator must be 'gradient' or "
+            f"'increment', got {estimator!r}.")
+    if on_aliased not in ('warn', 'silent'):
+        raise ValueError(
+            "carrier_referenced_fit_radius: on_aliased must be 'warn' or "
+            f"'silent', got {on_aliased!r}.")
+    if on_aliased == 'warn':
+        _af = _carrier_fit_alias_fraction(E_full)
+        if _af > _FIT_CARRIER_ALIAS_FRAC:
+            import warnings
+            warnings.warn(
+                f"carrier_referenced_fit_radius: {100.0 * _af:.1f}% of the "
+                f"bright support reads a per-pixel phase step at/above "
+                f"{_FIT_CARRIER_NYQUIST_FRAC:g}*pi rad/px on this grid "
+                f"(dx={dx * 1e6:.4f} um), so the field's own carrier tilt is "
+                f"at or beyond the grid Nyquist and the fitted R is NOT "
+                f"recoverable from it -- the default 'gradient' estimator "
+                f"reads sin(h) for h and past h=pi aliases outright (measured: "
+                f"R_fit/R = 92 at h ~ 6 rad/px).  Refine dx, or reference the "
+                f"field to a known carrier first (carrier_referenced_envelope) "
+                f"and fit only the residual.  Pass on_aliased='silent' to "
+                f"acknowledge.",
+                RuntimeWarning, stacklevel=2)
     if astigmatic:
-        ix = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=1)
-        iy = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=0)
+        ix = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=1,
+                              estimator=estimator)
+        iy = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=0,
+                              estimator=estimator)
         return (np.inf if ix == 0.0 else 1.0 / ix,
                 np.inf if iy == 0.0 else 1.0 / iy)
-    inv = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=None)
+    inv = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=None,
+                           estimator=estimator)
     return np.inf if inv == 0.0 else 1.0 / inv
 
 
@@ -1180,7 +1342,20 @@ def _rereference(env, R_old, R_new, wavelength, dx, dy,
     """Move an envelope from carrier ``R_old=(Rx,Ry)`` to ``R_new=(Rx,Ry)``:
     ``env * exp(i*k*r^2/2 * (1/R_old - 1/R_new))`` per axis.  The phase screen
     is built on ``bld`` (host NumPy for JAX) and moved on-device; NumPy
-    defaults reproduce the historical screen byte-for-byte."""
+    defaults reproduce the historical screen byte-for-byte.
+
+    CONVENTION: both radii are PARABOLIC (paraxial) carriers, matching
+    :func:`carrier_referenced_reconstruct`/:func:`_radial_carrier_phase`.  The
+    difference of two parabolas is exact for the re-reference, but an envelope
+    stored against the EXACT SPHERE (a chain running
+    ``carrier_reference='sphere'``) must be converted back to the parabola
+    first (:func:`_sphere_parab_conversion` with ``sign=+1``) or the
+    ``(S - r^2/2R)`` term is silently reinterpreted as envelope content -- the
+    per-hand-off convention mismatch audit
+    AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 §6.2 quantifies at
+    ``k r^4/(8 R^3)`` (several radians at a modest NA).  Collimated radii
+    (``+/-inf``) contribute exactly 0 via ``_inv``, so a collimated
+    re-reference is a no-op rather than a NaN."""
     Rox, Roy = R_old
     Rnx, Rny = R_new
     Ny, Nx = env.shape[-2], env.shape[-1]
@@ -1211,6 +1386,7 @@ def carrier_referenced_aperture(
     refit_carrier: bool = False,
     new_carrier: Optional[Union[float, Tuple[float, float]]] = None,
     return_transmission: bool = False,
+    refit_estimator: str = 'gradient',
 ):
     """Apply a hard aperture to a carrier-referenced field on its co-moving
     grid, removing the clipped power exactly (Task 2).
@@ -1263,6 +1439,13 @@ def carrier_referenced_aperture(
     return_transmission : bool, default False
         If True, return ``(field, transmitted_fraction)`` instead of just the
         field.
+    refit_estimator : {'gradient', 'increment'}, default 'gradient'
+        Estimator used by ``refit_carrier=True`` (see
+        :func:`carrier_referenced_fit_radius`).  The default is the historical
+        central-difference reading, whose ``sin(h)/h`` bias makes the refitted
+        ``R`` GRID-PITCH dependent (measured +0.4% at 0.4 um pitch to +32% at
+        3.1 um on one fixed NA-0.10 field); ``'increment'`` is dx-independent.
+        Ignored unless ``refit_carrier=True``.
 
     Returns
     -------
@@ -1270,6 +1453,16 @@ def carrier_referenced_aperture(
         ``(env, R, dx)`` with the apertured envelope; ``R`` / ``dx`` are
         2-tuples when the (returned) carrier is astigmatic.  If
         ``return_transmission`` is True, a ``(field, fraction)`` pair.
+
+    Notes
+    -----
+    CONVENTION: ``R_carrier`` / ``new_carrier`` are PARABOLIC (paraxial) radii
+    -- the same convention as :func:`carrier_referenced_reconstruct` and
+    :func:`_rereference`, NOT the exact sphere ``apply_real_lens_traced``'s
+    ``carrier=`` consumes.  An envelope stored against the exact sphere (a
+    chain run with ``carrier_reference='sphere'``) must be converted back
+    before it is apertured with ``refit_carrier`` / ``new_carrier``; the hard
+    mask itself is convention-free (it touches only ``|env|``).
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_env, 'carrier_referenced_aperture')
@@ -1279,6 +1472,10 @@ def carrier_referenced_aperture(
         raise ValueError(
             "carrier_referenced_aperture: pass at most one of refit_carrier "
             "and new_carrier.")
+    if refit_estimator not in ('gradient', 'increment'):
+        raise ValueError(
+            "carrier_referenced_aperture: refit_estimator must be 'gradient' "
+            f"or 'increment', got {refit_estimator!r}.")
     xp, is_jax, bld = _backend_of(E_env)
     env = E_env
     Ny, Nx = env.shape[-2], env.shape[-1]
@@ -1340,8 +1537,10 @@ def carrier_referenced_aperture(
         R_out = (Nx_new, Ny_new) if out_astig else Nx_new
     elif refit_carrier:
         if in_astig:
-            ivx = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=1)
-            ivy = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=0)
+            ivx = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=1,
+                                   estimator=refit_estimator)
+            ivy = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=0,
+                                   estimator=refit_estimator)
             inx = (0.0 if np.isinf(R_x) else 1.0 / R_x) + ivx
             iny = (0.0 if np.isinf(R_y) else 1.0 / R_y) + ivy
             Rnx = np.inf if inx == 0.0 else 1.0 / inx
@@ -1351,7 +1550,8 @@ def carrier_referenced_aperture(
             R_out = (Rnx, Rny) if (Rnx != Rny) else Rnx
             out_astig = (Rnx != Rny)
         else:
-            iv = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=None)
+            iv = _fit_carrier_inv(env_ap, wavelength, dx, dy, axis=None,
+                                  estimator=refit_estimator)
             inv_new = (0.0 if np.isinf(R_x) else 1.0 / R_x) + iv
             Rn = np.inf if inv_new == 0.0 else 1.0 / inv_new
             env_out = _rereference(env_ap, (R_x, R_x), (Rn, Rn),
@@ -1462,6 +1662,21 @@ def carrier_referenced_focus_readout(
     deliberately NOT relied upon (its output would land back on the collapsed
     co-moving grid).  Validated against the analytic Gaussian focus and a
     resolved fixed-grid reference in ``test_niche_r8_tiltaware_chain_api.py``.
+
+    CONVENTION (audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 §6.2/§8.5).
+    This is the PARAXIAL path end to end: ``env`` must be referenced to the
+    paraxial PARABOLA ``exp(i k r^2/2R)`` (the
+    :func:`carrier_referenced_reconstruct` convention), because
+    :func:`propagate_carrier_referenced` transports it and reconstructs it with
+    that same parabola.  An envelope stored against the EXACT SPHERE -- what a
+    chain running ``carrier_reference='sphere'`` holds between hand-offs, and
+    what :func:`apply_real_lens_traced`'s ``carrier=`` consumes -- must be
+    converted back first (:func:`_sphere_parab_conversion`, ``sign=+1``);
+    :func:`propagate_traced_carrier_chain` does exactly that before calling
+    this.  Handing a sphere-referenced envelope straight in silently
+    reinterprets ``k(S - r^2/2R) ~ -k r^4/(8 R^3)`` as beam content.  For a
+    genuinely high-NA leg use :func:`carrier_referenced_exact_focus_readout`,
+    which references the exact sphere itself.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(env, 'carrier_referenced_focus_readout')
@@ -1563,8 +1778,20 @@ def _exact_sphere_eikonal(shape, dx, dy, wavelength, R):
     the EXACT converging/diverging wavefront -- the paraxial parabola
     ``r^2/2R`` is its small-``r/R`` truncation, dropping ``-r^4/8R^3`` which is
     huge at high NA.  Same sign convention as ``apply_real_lens_traced``'s
-    carrier ``W`` (R7/F2) and :func:`carrier_referenced_reconstruct`."""
+    carrier ``W`` (R7/F2) and :func:`carrier_referenced_reconstruct`.
+
+    A COLLIMATED carrier (``R = +/-inf``) returns the plane-wave eikonal
+    ``S == 0`` -- the analytic ``|R| -> inf`` limit.  Evaluating the closed
+    form there would give ``inf - inf = NaN`` over the whole grid, and an
+    all-NaN eikonal silently disables every downstream guard that reduces it
+    (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4 / this sibling
+    sweep: the element-side twin of this expression made a collimated
+    ``carrier=inf`` skip the R7 fit restriction and emit an "All-NaN slice
+    encountered" RuntimeWarning).  ``R == 0`` (the carrier's own focus) is
+    undefined and also returns zeros; callers guard it explicitly."""
     Ny, Nx = int(shape[-2]), int(shape[-1])
+    if not np.isfinite(R) or R == 0.0:
+        return np.zeros((Ny, Nx), dtype=np.float64)
     x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Y, X = np.meshgrid(y, x, indexing='ij')
@@ -1644,9 +1871,32 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22 F-A: the pre-fix downsample
     branch instead returned the raw ``n_crop``-sized crop, silently
     mismatching the pitch every downstream caller assumed).
+
+    ``n_crop`` must fit inside the input (``<= env.shape[-1]``) and be at
+    least 2.  A LARGER ``n_crop`` cannot be honoured -- the sub-window does
+    not exist -- and the centred slice then silently degenerates: with
+    ``n_crop = n + 2`` the negative start index wraps and the "crop" is a
+    single pixel, which the spectral pad then broadcasts to a full
+    ``n_fine`` array that passes the shape invariant while spanning
+    ``1*dx`` instead of the ``n_crop*dx`` window the caller assumes
+    (measured: garbage at rel-std 9.4).  That is the same silent-wrong-pitch
+    failure mode as F-A itself, so it is rejected explicitly rather than
+    left to an incidental ``AssertionError``/broadcast error.  Both library
+    call sites clamp ``n_crop`` to the grid, so this is a contract guard,
+    not a behaviour change.
     """
     env = np.asarray(env)
     n = env.shape[-1]
+    n_crop = int(n_crop)
+    n_fine = int(n_fine)
+    if n_crop > n or n_crop < 2 or n_fine < 2:
+        raise ValueError(
+            f"_fourier_upsample_crop: n_crop must satisfy 2 <= n_crop <= "
+            f"env.shape[-1] and n_fine >= 2 (got n_crop={n_crop}, "
+            f"n_fine={n_fine}, env.shape[-1]={n}).  A crop larger than the "
+            f"input has no defined window: the centred slice degenerates and "
+            f"the result would span the wrong physical extent while still "
+            f"having the requested shape.")
     c0 = n // 2 - n_crop // 2
     ec = np.ascontiguousarray(env[c0:c0 + n_crop, c0:c0 + n_crop])
     if n_fine == n_crop:
@@ -1833,6 +2083,37 @@ def carrier_referenced_exact_focus_readout(
     window_factor : float, default 7.0
         Fine-grid physical span in units of the beam amplitude radius
         (``_envelope_amp_radius``).  7 holds the beam to <1e-6 truncation.
+
+        DOUBLE APPLICATION when reached from
+        :func:`propagate_traced_carrier_chain`'s exact final leg: the SAME
+        ``window_factor`` has already cropped the pre-readout re-trace grid to
+        ``window_factor * w_entrance`` in :func:`_fine_trace_group_exit`, so
+        this crop is the SECOND one and it re-measures ``w`` on the field that
+        survived the first.  Truncating a Gaussian at ``a = wf/2`` beam radii
+        lowers its measured second moment by
+        ``rho(a) = sqrt((1-(1+u)e^-u)/(1-e^-u))``, ``u = 2 a^2/w^2`` (square
+        crop, so slightly above the disc value), and the second cut therefore
+        lands at ``wf * rho`` beam radii, not ``wf``.  Measured 2026-07-25
+        (Gaussian ``w = 200 um``, NA 0.10, ``lambda = 1.31 um``):
+
+        ==== ============= ================ ================================
+        wf   2nd cut at    win2/win1        at-focus FWHM / EE3 / window
+        ==== ============= ================ ================================
+        2.0  0.880 w       0.880            7.750 um / 29.8% / 79.8%
+        3.0  1.480 w       0.987            5.550 um / 59.1% / 99.1%
+        4.0  2.000 w       1.0000 (no-op)   5.150 um / 63.6% / 100.0%
+        7.0  3.500 w       1.0000 (no-op)   5.050 um / 63.9% / 100.0%
+        ==== ============= ================ ================================
+
+        (single-crop reference at wf=2.0: 6.950 um / 38.4% / 88.0% -- the
+        compounding costs 8.6 EE3 points and 0.8 um of FWHM there.)  So the
+        two crops are INTENDED and independent -- the first sizes the retrace
+        grid to the ENTRANCE beam, the second sizes the readout to the EXIT
+        beam, which is the right window for each -- but they compound below
+        ``wf ~ 3``.  At the default ``wf = 7`` (and anything >= 4) the second
+        crop is a measured exact no-op.  This is the ``1 w crop applied
+        twice`` confound flagged in audit
+        AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 §6.4, quantified.
     centre_out : (float, float), optional
         Physical ``(x, y)`` centre of the output grid (m).  Default on-axis.
     bandlimit : bool, default True
@@ -2059,6 +2340,29 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
       the retrace still runs (``bandlimit=True`` in the downstream readout
       masks the aliased corner) but silently discards outer-NA content.
 
+    ``window_factor`` is applied TWICE on this leg: here (cropping the retrace
+    grid to ``window_factor`` ENTRANCE-beam radii) and again inside
+    :func:`carrier_referenced_exact_focus_readout` (cropping to
+    ``window_factor`` EXIT-beam radii, re-measured on the field this leg
+    returns).  Each crop is the right window for its own beam, but they
+    COMPOUND: the second cut lands at ``window_factor * rho`` beam radii with
+    ``rho`` the truncated-second-moment shrink factor -- measured 0.880 at
+    ``window_factor=2`` (worth 8.6 EE3 points on the design-121-class case),
+    0.987 at 3, and an exact no-op from 4 upward.  See the ``window_factor``
+    entry of :func:`carrier_referenced_exact_focus_readout` for the formula and
+    the measured table; the shipping default (7.0) is in the no-op regime.
+
+    ``ray_subsample`` pitch preservation has one degenerate corner: when the
+    memory/Nyquist-capped ``dx_fine`` is itself COARSER than the chain's
+    physical ray pitch ``ray_subsample * cur_dx``, the rescale rounds to 0 and
+    is clamped to ``rs_fine = 1``, so the retrace's physical ray pitch is
+    ``dx_fine`` -- coarser than the chain's (measured 5.25x at the N=28672 /
+    ``n_fine_cap=16384`` design-121 condition: chain pitch 0.286 um vs
+    ``dx_fine`` 1.5 um).  Nothing finer is representable on that grid, so the
+    clamp is forced rather than wrong, but the F-C contract ("keeps the CHAIN's
+    physical ray pitch") does not hold there; the F-D warning above fires in
+    the same regime and names the underlying cause (dx_fine too coarse).
+
     Interaction note (F-C, reviewed 2026-07-22): the pitch-preserving
     ``ray_subsample`` rescale reduces the ray-fit density on THIS leg
     relative to the pre-fix behaviour (which accidentally over-sampled by
@@ -2276,8 +2580,16 @@ def propagate_traced_carrier_chain(
     R_in)`` -> re-envelope with the group's exit curvature ``R_out`` -- into one
     call.  The element SUPPLIES ``R_out`` from its own paraxial ABCD
     (:func:`system_abcd_prescription` mapped onto the incoming carrier), so the
-    caller needs no external q-trace.  Reproduces
-    ``validation/repro_traced_carrier_121/carrier_chain_121.py`` in a few lines.
+    caller needs no external q-trace.
+
+    ``validation/repro_traced_carrier_121/carrier_chain_121.py`` is the hand-
+    written form of that pattern.  NOTE (v5.29): the two agree only with the
+    LEGACY options -- ``carrier_reference='parabola'`` plus
+    ``traced_kwargs={'amplitude_model': 'screen', 'preserve_input_phase':
+    True}`` -- because the chain's defaults have since flipped to the validated
+    carrier-regime configuration (see ``carrier_reference``).  With the shipping
+    defaults this orchestrator is a DIFFERENT (and much more accurate) model
+    than that script: design-121 best-focus EE6 79.7% -> 99.3%.
 
     Parameters
     ----------
@@ -2342,6 +2654,15 @@ def propagate_traced_carrier_chain(
         ``window_factor`` for the exact path).  Otherwise the final leg is an
         ordinary carrier step and the field is reconstructed on the co-moving
         grid.
+
+        ``window_factor`` is consumed TWICE on the exact path -- once by the
+        pre-readout re-trace (:func:`_fine_trace_group_exit`, on the ENTRANCE
+        beam) and once by :func:`carrier_referenced_exact_focus_readout` (on
+        the EXIT beam).  The two crops compound below ``window_factor ~ 3``
+        (measured: the second cut lands at 0.880 beam radii per unit factor at
+        ``window_factor=2``, costing 8.6 EE3 points; exact no-op from 4
+        upward, so the default 7.0 is unaffected).  See that function's
+        ``window_factor`` entry for the formula and the measured table.
 
         Two additional keys govern the exact path's pre-readout re-trace
         (:func:`_fine_trace_group_exit`, audit
@@ -2588,6 +2909,31 @@ def propagate_traced_carrier_chain(
         call_kw = dict(base_kw)
         if g_kw:
             call_kw.update(g_kw)
+        # Default-flip boundary guard: the chain SUPPLIES
+        # preserve_input_phase='remap', which the element rejects unless
+        # amplitude_model='ray_density'.  A caller who overrides only the
+        # amplitude therefore hits an element-level error naming an option they
+        # never wrote.  Raise here instead, naming where 'remap' came from and
+        # the two ways out.
+        if (call_kw.get('preserve_input_phase') == 'remap'
+                and call_kw.get('amplitude_model') != 'ray_density'
+                and not (traced_kwargs
+                         and 'preserve_input_phase' in traced_kwargs)
+                and not (g_kw and 'preserve_input_phase' in g_kw)):
+            raise ValueError(
+                f"propagate_traced_carrier_chain: groups[{gi}] would run "
+                f"amplitude_model={call_kw.get('amplitude_model')!r} with the "
+                f"CHAIN-DEFAULT preserve_input_phase='remap', which "
+                f"apply_real_lens_traced rejects ('remap' reuses the "
+                f"ray-density entrance pullback).  Since v5.29 the chain "
+                f"defaults to the validated triple carrier_reference='sphere' "
+                f"+ amplitude_model='ray_density' + "
+                f"preserve_input_phase='remap' (see carrier_reference), so "
+                f"overriding the amplitude alone leaves an inconsistent pair.  "
+                f"Either keep amplitude_model='ray_density', or take the whole "
+                f"legacy configuration: carrier_reference='parabola' with "
+                f"traced_kwargs={{'amplitude_model': 'screen', "
+                f"'preserve_input_phase': True}}.")
 
         # ---- exact high-NA FINAL leg (R9): re-trace this (last) group on a
         # grid that Nyquist-samples its exit sphere, then exact-ASM to target.

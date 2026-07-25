@@ -1,11 +1,30 @@
 # dx-scaling repro for AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22 (F-A/F-B):
-# design-121 traced chain (no DOE) on the v5.28 stack --
-# propagate_traced_carrier_chain (R8) + R9 exact final leg (NA~0.46).
+# design-121 traced chain (no DOE) --
+# propagate_traced_carrier_chain (R8) + R9 exact final leg.
+#
+# DEFAULTS = THE SHIPPING CONFIGURATION (v5.29+).  With CREF / AM / PIP unset
+# the script passes NO chain kwargs, so it measures whatever the library
+# defaults to: the validated carrier-regime triple
+# (carrier_reference='sphere' + amplitude_model='ray_density' +
+# preserve_input_phase='remap'), plus the library-default final-leg knobs
+# (n_fine_cap 16384, window_factor 7.0 -- NFC/WF below mirror them).  The
+# original F-A/F-B table rows were taken on the PRE-flip v5.28 stack
+# (parabola + screen + preserve_input_phase=True); reproduce those with
+# CREF=parabola AM=screen PIP=1.
+#
 # Env knobs: RN = chain N; DX0 = launch pitch in metres (omit for the
 # extent-preserving default 1.0e-6*2048/RN, which walks the F-B divergence
-# and, at RN > 16384, the F-A n_fine-cap energy bug); RS = ray_subsample.
-# Audit table rows: (RN,DX0,RS) = (1024,2e-6,2) (2048,1e-6,4) (2048,1e-6,8)
-# (4096,.5e-6,8) (8192,.25e-6,4) (28672,extent-preserving,4).
+# and, at RN > 16384, exercised the (now fixed) F-A n_fine-cap energy bug);
+# RS = ray_subsample; NFC/WF/RNF = final-leg knobs;
+# CREF = carrier_reference; AM = amplitude_model; PIP = preserve_input_phase
+# (0 / 1 / remap).  Unrecognised CREF/PIP values ERROR rather than falling
+# through as "library default" -- a harness that silently ignored PIP=remap is
+# what produced the S6.8 candidate-2 false negative (audit
+# AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8.4).
+# PowerShell reminder: `$env:AM=''` UNSETS the variable.
+#
+# Audit table rows (pre-flip stack): (RN,DX0,RS) = (1024,2e-6,2) (2048,1e-6,4)
+# (2048,1e-6,8) (4096,.5e-6,8) (8192,.25e-6,4) (28672,extent-preserving,4).
 # Requires the design-study runner + zmx alongside (paths below), as
 # carrier_chain_121.py does.
 import ast, re, sys, time, warnings
@@ -86,23 +105,33 @@ RS = int(os.environ.get('RS','4'))
 NFC = int(os.environ.get('NFC', '16384'))
 WF = float(os.environ.get('WF', '7.0'))
 RNF = os.environ.get('RNF', '')
-# PIP=0 -> pass traced_kwargs={'preserve_input_phase': False} to every group
-# (defect-A diagnostic, AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S3); unset
-# (default) leaves the chain's call untouched.
-# AM=<model> -> traced_kwargs={'amplitude_model': <model>} (e.g. 'ray_density',
-# the S6.5 step-2 candidate); unset (default) leaves the call untouched.
+# PIP = preserve_input_phase override ('0' -> False, '1' -> True,
+# 'remap' -> 'remap'); AM = amplitude_model override; CREF =
+# carrier_reference override.  Each UNSET leaves the library default in place,
+# so a bare run measures the shipping configuration.  An unrecognised value is
+# an ERROR, never a silent fall-through (S8.4 harness-bug class).
 PIP = os.environ.get('PIP', '')
 AM = os.environ.get('AM', '')
+CREF = os.environ.get('CREF', '')
 _fr = {'dx_out': 0.05e-6, 'N_out': 1024, 'n_fine_cap': NFC,
        'window_factor': WF}
 if RNF:
     _fr['N_fine'] = int(RNF)
 _tkw = {}
-if PIP == '0':
-    _tkw['preserve_input_phase'] = False
+if PIP:
+    if PIP not in ('0', '1', 'remap'):
+        raise SystemExit(f"PIP must be '0', '1', 'remap' or unset, got {PIP!r}")
+    _tkw['preserve_input_phase'] = {'0': False, '1': True,
+                                    'remap': 'remap'}[PIP]
 if AM:
     _tkw['amplitude_model'] = AM
 _tkw = _tkw or None
+_ckw = {}
+if CREF:
+    if CREF not in ('sphere', 'parabola'):
+        raise SystemExit(
+            f"CREF must be 'sphere', 'parabola' or unset, got {CREF!r}")
+    _ckw['carrier_reference'] = CREF
 zR = np.pi*w0*w0/lam
 w_z1 = w0*np.sqrt(1 + (z1/zR)**2)
 R1 = z1*(1 + (zR/z1)**2)
@@ -115,7 +144,10 @@ env0 = np.exp(-(x[None,:]**2 + x[:,None]**2)/w_z1**2).astype(np.complex128)
 P_in = float(np.sum(np.abs(env0)**2))*dx0*dx0
 
 t0 = time.time()
-_chain_kw = {} if _tkw is None else {'traced_kwargs': _tkw}
+_chain_kw = dict(_ckw)
+if _tkw is not None:
+    _chain_kw['traced_kwargs'] = _tkw
+print("chain kwargs:", _chain_kw or '(pure library defaults)')
 res = la.propagate_traced_carrier_chain(
     env0, groups, lam, dx0, r_in=R1, ray_subsample=RS, n_workers=8,
     final_distance=TRAILING,
@@ -147,7 +179,10 @@ fn = f'runA_field_N{N}.npy' if RS == 4 else f'diagA_N{N}_rs{RS}.npy'
 np.save(fn, E)
 Pwin = float(I.sum())*dxo*dxo/P_in
 print(f"RUN A N={N} dx0={dx0*1e6:.4f}um rs={RS} nfc={NFC} wf={WF} rnf={RNF or 'auto'} "
-      f"pip={PIP or '1'} (traced noDOE, exact final leg): "
+      f"cref={CREF or 'default'} am={AM or 'default'} pip={PIP or 'default'} "
+      f"(traced noDOE, exact final leg): "
       f"FWHM={fwhm*1e6:.2f}um EE3={ee[3]*100:.1f}% EE6={ee[6]*100:.1f}% EE12={ee[12]*100:.1f}% "
       f"window-total={Pwin*100:.1f}% "
-      f"(refs: Zemax 2.74um; audit-R9 table 4.05um/52.1/69.7/73.6)")
+      f"(refs: Zemax POP waist radius 2.737um -> FWHM 3.223um; pre-flip "
+      f"v5.28 audit-R9 table 4.05um/52.1/69.7/73.6 needs "
+      f"CREF=parabola AM=screen PIP=1)")
