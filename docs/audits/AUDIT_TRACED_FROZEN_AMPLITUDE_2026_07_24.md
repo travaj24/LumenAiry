@@ -292,8 +292,20 @@ look harmful if ever benchmarked in isolation.
   IDENTICAL to the digit (FWHM 3.65 µm, EE6 63.2%, window 92.8%) — dx-stable, with
   the absolute level explained by §6.2's convention error (63.4% in the §6.3
   factorial at the same settings).
-- N=28672 extent-preserving traced run (post-F-A-fix energy check) running at write
-  time; result to be appended to the P0 record.
+- **N=28672 extent-preserving traced run (post-F-A-fix) COMPLETE — the energy-gain
+  bug is CLOSED and the frozen-amplitude mechanism is confirmed at chain level.**
+  (dx0=0.0714 µm, rs=4, nfc=16384, wf=7.0, readout auto; 2.6 h chain time.)
+  Result: FWHM 7.75 µm / EE3 21.6 / EE6 51.1 / EE12 70.2 / **window-total 88.9%**
+  — vs the PRE-fix audit row's impossible 102.3/128.2/130.8%.  Energy is conserved
+  at the F-A trigger condition (n_crop = 20924 > n_fine_cap); the production-
+  readiness audit's hypothesized "second, distinct energy-gain mechanism" is
+  REFUTED — F-A was the whole energy bug.  At this fully-carrier-resolved pitch
+  (alias radius beyond the beam at every stage) the stage beam trace lands on the
+  TRUE design values — S3-S4 exit w = 5.6277 mm (design 5.6265), S5-S7 6.357
+  (design 6.35), final group 1.1820 mm (design 1.1749) — and the diagonal focus
+  walk collapses to (−1.35, −1.35) µm from ~−21 µm at coarse N.  What remains at
+  the resolved grid (EE6 51%, FWHM 7.75 vs target 3.223 µm) is the §6.2
+  carrier-convention error class, exactly as the review's plan predicts.
 - T4/T5 (readout end-to-end energy/convergence at NA 0.45) OOMed against the sweep;
   rerun pinned when the box is free.  Superseded in urgency by §6 (the readout was
   cleared by T3 + the stigmatic flatness; T4/T5 remain worth one clean pinned run).
