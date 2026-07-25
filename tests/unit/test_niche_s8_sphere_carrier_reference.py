@@ -150,19 +150,32 @@ def test_chain_carrier_reference_guard(_chain_setup):
         _run(_chain_setup, carrier_reference='exact-sphere')
 
 
-def test_chain_default_is_parabola_byte_identical(_chain_setup):
-    """Omitting the kwarg and passing 'parabola' must be bit-for-bit equal
-    (the byte-identical-defaults gate)."""
+def test_chain_default_is_validated_config_and_legacy_is_reachable(
+        _chain_setup):
+    """v5.29 default flip (audit S8): omitting every knob must be bit-for-bit
+    the validated configuration (carrier_reference='sphere' + ray_density +
+    'remap'), and the documented LEGACY escape hatch
+    (carrier_reference='parabola' + screen amplitude + preserve_input_phase
+    =True) must be bit-for-bit the pre-flip chain."""
     N, dx, R_in, w, presc, env0, gap = _chain_setup
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        a = np.asarray(la.propagate_traced_carrier_chain(
+        default = np.asarray(la.propagate_traced_carrier_chain(
             env0, [{'prescription': presc, 'gap_before': gap}], _WL, dx,
             r_in=R_in, ray_subsample=8, n_workers=1,
             traced_kwargs=dict(on_undersample='silent',
                                on_noncollimated='silent')).field)
-    b = _run(_chain_setup, carrier_reference='parabola')
-    assert np.array_equal(a, b)
+    explicit = _run(_chain_setup, carrier_reference='sphere',
+                    amplitude_model='ray_density',
+                    preserve_input_phase='remap')
+    assert np.array_equal(default, explicit)
+    # the legacy escape hatch routes through the pre-flip branches (screen
+    # amplitude, wave-pair phase, parabola hand-offs) and must therefore
+    # differ from the new default on this setup -- guards against the
+    # default merge silently not reaching the per-group calls
+    legacy = _run(_chain_setup, carrier_reference='parabola',
+                  amplitude_model='screen', preserve_input_phase=True)
+    assert not np.array_equal(default, legacy)
 
 
 def test_sphere_reference_is_noop_when_input_phase_discarded(_chain_setup):

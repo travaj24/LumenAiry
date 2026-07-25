@@ -2067,7 +2067,7 @@ def propagate_traced_carrier_chain(
     focus_readout: Optional[dict] = None,
     final_leg: str = 'auto',
     na_exact_threshold: float = 0.15,
-    carrier_reference: str = 'parabola',
+    carrier_reference: str = 'sphere',
 ) -> TracedCarrierChainResult:
     """Propagate a beam ENVELOPE through a chain of real (traced) lens groups on
     a co-moving carrier-referenced grid (audit F4.1).
@@ -2164,11 +2164,20 @@ def propagate_traced_carrier_chain(
     na_exact_threshold : float, default 0.15
         Exit-NA (``w_env / |R_out|``) above which ``final_leg='auto'`` routes the
         final leg through the exact path.
-    carrier_reference : {'parabola', 'sphere'}, default 'parabola'
+    carrier_reference : {'sphere', 'parabola'}, default 'sphere'
         Which spherical reference the per-group HAND-OFFS use (audit
-        AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8).  ``'parabola'``
-        (default) is the historical behaviour and is byte-identical to prior
-        releases.
+        AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8).  The default
+        ``'sphere'`` -- together with the default per-group
+        ``traced_kwargs`` (``amplitude_model='ray_density'``,
+        ``preserve_input_phase='remap'``, see below) -- is the VALIDATED
+        carrier-regime configuration: the chain always operates with its
+        carrier beyond the grid Nyquist, where these are the correct
+        physics, not options (design-121: EE6 79.7% -> 99.3% at best
+        focus).  ``'parabola'`` is the pre-v5.29 historical behaviour,
+        retained as the legacy escape hatch: ``carrier_reference='parabola'``
+        together with ``traced_kwargs={'amplitude_model': 'screen',
+        'preserve_input_phase': True}`` reproduces pre-flip chain results
+        exactly.
 
         ``'sphere'`` band-limits the paraxial parabola out of the hand-off:
         every reconstruction handed to :func:`apply_real_lens_traced` is
@@ -2245,7 +2254,18 @@ def propagate_traced_carrier_chain(
 
     groups = list(groups)
     n_groups = len(groups)
-    base_kw = dict(traced_kwargs) if traced_kwargs else {}
+    # v5.29 default flip (audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8):
+    # the chain's per-group traced calls default to the validated
+    # carrier-regime configuration -- the chain ALWAYS operates with its
+    # carrier beyond the grid Nyquist, where the geometric (ray-density)
+    # amplitude and the geometric residual carry are the correct physics,
+    # not preferences.  Anything the caller passes in ``traced_kwargs`` (or a
+    # group's own ``traced_kwargs``) WINS over these defaults; the standalone
+    # ``apply_real_lens_traced`` element defaults are untouched.
+    base_kw = {'amplitude_model': 'ray_density',
+               'preserve_input_phase': 'remap'}
+    if traced_kwargs:
+        base_kw.update(traced_kwargs)
     R = float(r_in)
     cur_dx = float(dx)
     env = E_in

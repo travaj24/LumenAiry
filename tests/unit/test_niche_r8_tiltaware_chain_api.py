@@ -402,9 +402,17 @@ def test_r8_chain_orchestrator_matches_manual():
     E_manual = _manual_chain(env0, groups, np.inf, dx, 15e-3)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
+        # v5.29 (audit S8): the chain defaults flipped to the validated
+        # carrier-regime configuration; the manual pattern this test pins
+        # composes the LEGACY convention, so pass it explicitly (the
+        # documented escape hatch).  The flip itself is pinned in
+        # test_niche_s8_sphere_carrier_reference.py.
         res = la.propagate_traced_carrier_chain(
             env0, groups, _WL, dx, r_in=np.inf, ray_subsample=4, n_workers=1,
-            traced_kwargs=dict(parallel_amp=False), final_distance=15e-3)
+            carrier_reference='parabola',
+            traced_kwargs=dict(parallel_amp=False, amplitude_model='screen',
+                               preserve_input_phase=True),
+            final_distance=15e-3)
     E_orch = np.asarray(res.field)
     m = np.abs(E_orch) > 1e-3 * np.abs(E_orch).max()
     rel = (float(np.linalg.norm((E_orch - E_manual)[m]))
@@ -435,9 +443,14 @@ def test_r8_chain_orchestrator_final_focus_readout_matches_manual():
     E_manual = _manual_chain(env0, groups, np.inf, dx, final, focus_readout=fr)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
+        # v5.29 (audit S8): legacy configuration passed explicitly -- see
+        # test_r8_chain_orchestrator_matches_manual above.
         res = la.propagate_traced_carrier_chain(
             env0, groups, _WL, dx, r_in=np.inf, ray_subsample=4, n_workers=1,
-            traced_kwargs=dict(parallel_amp=False), final_distance=final,
+            carrier_reference='parabola',
+            traced_kwargs=dict(parallel_amp=False, amplitude_model='screen',
+                               preserve_input_phase=True),
+            final_distance=final,
             focus_readout=fr)
     E_orch = np.asarray(res.field)
     assert E_orch.shape == (256, 256)

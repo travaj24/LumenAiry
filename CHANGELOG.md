@@ -4,6 +4,32 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **`propagate_traced_carrier_chain` now DEFAULTS to the validated
+  carrier-regime configuration** (audit
+  `AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24` §8, the recorded §6.8
+  commitment): `carrier_reference='sphere'` and per-group
+  `traced_kwargs` defaults `{'amplitude_model': 'ray_density',
+  'preserve_input_phase': 'remap'}` (caller-supplied `traced_kwargs`
+  always win).  Rationale: the chain by construction operates with its
+  carrier beyond the grid Nyquist, where the geometric (ray-density)
+  amplitude and the geometric residual carry are the correct physics,
+  not options — with the old defaults the chain's exit discarded the
+  design's distributed correction (design-121: best-focus EE6 79.7% →
+  99.3%, FWHM 5.15 → 3.55 µm, dx-flat).  **This deliberately changes
+  chain results**; the R8 orchestrator-vs-manual pins were updated to
+  pass the legacy configuration explicitly, and the flip itself is
+  pinned (`test_chain_default_is_validated_config_and_legacy_is_reachable`).
+  Legacy escape hatch (pre-flip results, bit-for-bit):
+  `carrier_reference='parabola'` +
+  `traced_kwargs={'amplitude_model': 'screen', 'preserve_input_phase': True}`.
+  The standalone `apply_real_lens_traced` element defaults are UNTOUCHED.
+  Supporting element change: `preserve_input_phase='remap'` no longer
+  requires an engaged carrier — with an absent/unengaged (collimated)
+  carrier the de-chirp degenerates to the identity, and the input's own
+  (slow) phase is the carried residual.
+
 ### Investigated & reverted (no net code change)
 
 - **Roadmap Part E — wavefront-aware ray launch (candidate 1): implemented,

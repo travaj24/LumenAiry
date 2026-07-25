@@ -1900,11 +1900,12 @@ def apply_real_lens_traced(
         the lens-only OPD response on a synthetic plane wave;
         otherwise keep the default.
 
-        ``'remap'`` (opt-in; requires ``amplitude_model='ray_density'``
-        and an ENGAGED explicit ``carrier=``; audit
-        AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S6.7): the input's
+        ``'remap'`` (requires ``amplitude_model='ray_density'``; audit
+        AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S6.7/S8): the input's
         RESIDUAL phase -- the input field de-chirped by the carrier
-        eikonal, ``angle(E_in * exp(-i*k0*W_carrier))`` -- is
+        eikonal, ``angle(E_in * exp(-i*k0*W_carrier))``, with the
+        identity de-chirp (W=0) when the carrier is absent or too flat
+        to engage (a collimated beam's own phase IS its residual) -- is
         transported to the exit GEOMETRICALLY, sampled at each exit
         pixel's Newton-inverted entrance point (the same pullback the
         ray-density amplitude uses for ``|E_in|``), and multiplied
@@ -2542,13 +2543,16 @@ def apply_real_lens_traced(
     # preserve_input_phase='remap' needs the carrier eikonal to de-chirp the
     # input residual -- require an ENGAGED carrier (explicit or auto-fit that
     # engaged), else the "residual" would be the raw (possibly beyond-Nyquist)
-    # input phase and the mode's premise breaks.
-    if _pip_remap and _carrier_W is None:
-        raise ValueError(
-            "preserve_input_phase='remap' requires an ENGAGED carrier= "
-            "(the input residual is defined relative to the carrier "
-            "eikonal).  Pass an explicit engaged carrier, or use "
-            "preserve_input_phase=True/False.")
+    # input phase and the mode's premise breaks.  When the carrier is absent
+    # or too flat to engage (collimated / near-collimated leg: W ~ 0 over the
+    # grid), the de-chirp degenerates to the IDENTITY and the "residual" is
+    # simply the input's own phase -- which is exactly the slow quantity the
+    # pullback should carry there (a collimated beam's phase structure IS its
+    # residual).  So 'remap' degrades gracefully to a W=0 de-chirp instead of
+    # raising: required for the chain default, whose hand-off carriers pass
+    # through near-collimated values (design-121 mid-chain R ~ +7e5 mm).
+    _pip_remap_W = _carrier_W if (_pip_remap and _carrier_W is not None) \
+        else (0.0 if _pip_remap else None)
 
     # F1 (audit) collimation guard: measure the residual angular spread
     # (after removing any carrier) and warn / delegate when the input is
@@ -3694,7 +3698,7 @@ def apply_real_lens_traced(
         # pointwise-exact even where the raw carrier is beyond-Nyquist.
         if _pip_remap:
             _k0_rm = 2.0 * np.pi / wavelength
-            _res = np.asarray(E_in) * np.exp(-1j * _k0_rm * _carrier_W)
+            _res = np.asarray(E_in) * np.exp(-1j * _k0_rm * _pip_remap_W)
             _ra = np.abs(_res)
             with np.errstate(divide='ignore', invalid='ignore'):
                 _res = np.where(_ra > 0.0,
