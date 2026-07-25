@@ -141,11 +141,15 @@ def _system_surfaces(groups_with_gaps):
 
 
 def _trace_collimated(x0, surfs):
-    P = np.array([x0, 0.0]); u = np.array([0.0, 1.0]); opl = 0.0
+    P = np.array([x0, 0.0])
+    u = np.array([0.0, 1.0])
+    opl = 0.0
     for (zv, R_s, n1, n2) in surfs:
         if np.isfinite(R_s):
-            C = np.array([0.0, zv + R_s]); oc = P - C
-            b = np.dot(oc, u); c = np.dot(oc, oc) - R_s * R_s
+            C = np.array([0.0, zv + R_s])
+            oc = P - C
+            b = np.dot(oc, u)
+            c = np.dot(oc, oc) - R_s * R_s
             disc = b * b - c
             if disc < 0:
                 return None
@@ -156,14 +160,18 @@ def _trace_collimated(x0, surfs):
         else:
             if abs(u[1]) < 1e-12:
                 return None
-            t = (zv - P[1]) / u[1]; P2 = P + t * u; nv = np.array([0.0, 1.0])
+            t = (zv - P[1]) / u[1]
+            P2 = P + t * u
+            nv = np.array([0.0, 1.0])
         opl += n1 * t
-        c1 = np.dot(u, nv); eta = n1 / n2
+        c1 = np.dot(u, nv)
+        eta = n1 / n2
         d2 = 1.0 - eta * eta * (1.0 - c1 * c1)
         if d2 < 0:
             return None
         u = eta * u + (np.sqrt(d2) - eta * c1) * nv
-        u = u / np.linalg.norm(u); P = P2
+        u = u / np.linalg.norm(u)
+        P = P2
     return P, u, opl
 
 
@@ -177,22 +185,29 @@ def _oracle_rms(groups_with_gaps, x_max, w0, npts=240):
         return None
     Pn, un, _ = near
     z_f = Pn[1] + (-Pn[0] / un[0]) * un[1]
-    F = np.array([0.0, z_f]); rho = z_f - z_last
+    F = np.array([0.0, z_f])
+    rho = z_f - z_last
     x0s = np.linspace(1e-9, x_max, npts)
-    xe = np.full(npts, np.nan); W = np.full(npts, np.nan)
+    xe = np.full(npts, np.nan)
+    W = np.full(npts, np.nan)
     for j, x0 in enumerate(x0s):
         tr = _trace_collimated(x0, surfs)
         if tr is None:
             continue
         P, u, opl = tr
-        oc = P - F; b = np.dot(oc, u); c = np.dot(oc, oc) - rho * rho
+        oc = P - F
+        b = np.dot(oc, u)
+        c = np.dot(oc, oc) - rho * rho
         disc = b * b - c
         if disc < 0:
             continue
         t = min((-b - np.sqrt(disc), -b + np.sqrt(disc)), key=lambda tt: abs(tt))
         opl += n_final * t
-        xe[j] = (P + t * u)[0]; W[j] = opl
-    good = np.isfinite(W); x0g = x0s[good]; xe, W = xe[good], W[good]
+        xe[j] = (P + t * u)[0]
+        W[j] = opl
+    good = np.isfinite(W)
+    x0g = x0s[good]
+    xe, W = xe[good], W[good]
     wgt = np.exp(-2.0 * (x0g / w0) ** 2)
     W = W - W[0]
     A = np.vstack([np.ones_like(xe), xe ** 2]).T

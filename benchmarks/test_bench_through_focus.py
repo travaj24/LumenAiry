@@ -22,7 +22,6 @@ Workloads pinned here:
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 import lumenairy as lm
 from lumenairy.analysis.through_focus import through_focus_scan

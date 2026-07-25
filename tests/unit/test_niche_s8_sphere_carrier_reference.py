@@ -41,8 +41,7 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.propagators.carrier import (_exact_sphere_eikonal,
-                                           _sphere_parab_conversion)
+from lumenairy.propagators.carrier import _exact_sphere_eikonal, _sphere_parab_conversion
 
 _WL = 1.31e-6
 _K0 = 2.0 * np.pi / _WL

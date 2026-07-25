@@ -19,6 +19,7 @@ import sys
 
 def main():
     from PySide6.QtWidgets import QApplication
+
     from lumenairy.ui.main_window import MainWindow, apply_dark_theme
 
     app = QApplication(sys.argv)

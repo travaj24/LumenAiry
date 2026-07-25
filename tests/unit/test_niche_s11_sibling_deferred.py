@@ -439,8 +439,9 @@ def test_s11_2_first_failure_wins_guard_is_present():
 
 def test_s11_2_matches_the_jax_twin_polarity():
     """``jax_trace._apply_aperture_jax`` is the reference polarity."""
-    from lumenairy.raytrace.jax_trace import _apply_aperture_jax
     import inspect
+
+    from lumenairy.raytrace.jax_trace import _apply_aperture_jax
     src = inspect.getsource(_apply_aperture_jax)
     assert 'inside' in src and '<=' in src
     src_np = inspect.getsource(_intersect_surface)

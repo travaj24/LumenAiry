@@ -24,7 +24,6 @@ import pytest
 import lumenairy as lm
 from lumenairy.propagators import propagation as _prop
 
-
 # ---------------------------------------------------------------------
 # ASM at 1024^2 -- pyFFTW path
 # ---------------------------------------------------------------------

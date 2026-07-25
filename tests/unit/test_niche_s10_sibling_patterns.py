@@ -45,17 +45,21 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.elements._lens_traced import (_compute_carrier,
-                                             apply_real_lens_traced,
-                                             apply_real_lens_traced_multi,
-                                             prepare_real_lens_traced)
-from lumenairy.propagators.carrier import (_carrier_fit_alias_fraction,
-                                           _envelope_amp_radius,
-                                           _exact_sphere_eikonal,
-                                           _fourier_upsample_crop,
-                                           _radial_carrier_phase,
-                                           carrier_referenced_exact_focus_readout,
-                                           carrier_referenced_fit_radius)
+from lumenairy.elements._lens_traced import (
+    _compute_carrier,
+    apply_real_lens_traced,
+    apply_real_lens_traced_multi,
+    prepare_real_lens_traced,
+)
+from lumenairy.propagators.carrier import (
+    _carrier_fit_alias_fraction,
+    _envelope_amp_radius,
+    _exact_sphere_eikonal,
+    _fourier_upsample_crop,
+    _radial_carrier_phase,
+    carrier_referenced_exact_focus_readout,
+    carrier_referenced_fit_radius,
+)
 
 _WL = 1.31e-6
 

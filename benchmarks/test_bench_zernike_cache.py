@@ -20,14 +20,12 @@ into the normal ``test_bench_baseline.py`` cadence.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from lumenairy.analysis.core import (
     clear_zernike_basis_cache,
     zernike_basis_matrix,
     zernike_decompose,
 )
-
 
 # ---------------------------------------------------------------------
 # Shared fixtures

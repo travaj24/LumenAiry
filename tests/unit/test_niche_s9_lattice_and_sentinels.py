@@ -286,6 +286,7 @@ def test_distortion_reports_nan_when_every_chief_ray_is_vignetted():
     all-NaN branch was dead: a fully-clipped system reported
     ``max_distortion_pct = 0.0`` ("no distortion")."""
     import warnings as _w
+
     from lumenairy.analysis.field import distortion_vs_field
     with _w.catch_warnings():
         _w.simplefilter('ignore')
@@ -301,6 +302,7 @@ def test_distortion_healthy_case_is_unchanged():
     """Bit-identity companion: with a real aperture the reported value is the
     pre-fix one (0.16461028308262293 % barrel on this singlet)."""
     import warnings as _w
+
     from lumenairy.analysis.field import distortion_vs_field
     with _w.catch_warnings():
         _w.simplefilter('ignore')

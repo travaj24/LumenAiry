@@ -81,7 +81,7 @@ def test_ray_density_exit_centroid_on_axis(rs, _setup):
     the axis for divisor (8 | 512) AND non-divisor (7) ray_subsample.
     Pre-fix, rs=7 displaced the exit by (256*(74*7-512)/512) = 3 px = 30 um
     diagonally; the gate is 0.25 px."""
-    N, dx = _setup[0], _setup[1]
+    dx = _setup[1]
     cx, cy = _traced_centroid(_setup, rs, amplitude_model='ray_density',
                               preserve_input_phase=False)
     assert abs(cx) < 0.25 * dx, (rs, cx / dx)
@@ -93,7 +93,7 @@ def test_default_screen_exit_centroid_on_axis(rs, _setup):
     """Default (screen-amplitude, preserve_input_phase=True) path: the OPL
     map displacement alone must not walk the exit centroid off-axis for a
     non-divisor ray_subsample."""
-    N, dx = _setup[0], _setup[1]
+    dx = _setup[1]
     cx, cy = _traced_centroid(_setup, rs)
     assert abs(cx) < 0.25 * dx, (rs, cx / dx)
     assert abs(cy) < 0.25 * dx, (rs, cy / dx)

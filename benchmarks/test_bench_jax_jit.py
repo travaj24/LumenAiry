@@ -18,6 +18,7 @@ skips via ``pytest.importorskip``.
 from __future__ import annotations
 
 import time
+
 import numpy as np
 import pytest
 
@@ -102,8 +103,8 @@ def test_bench_propagate_through_system_jax_first_vs_warm(benchmark):
     # (radius/half_width_x/inner_radius) replaced by canonical
     # NumPy schema (diameter/width_x/inner_diameter).
     from lumenairy.propagators.system import (
-        propagate_through_system_jax,
         _PROPAGATE_SYSTEM_JAX_CACHE,
+        propagate_through_system_jax,
     )
     N, dx, wl = 128, 5e-6, 1.55e-6
     E = np.ones((N, N), dtype=np.complex64)

@@ -17,10 +17,8 @@ Workloads pinned here:
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 import lumenairy as lm
-
 
 # ---------------------------------------------------------------------
 # FFT-bound: single ASM propagate
@@ -55,7 +53,7 @@ def test_bench_apply_real_lens_512(benchmark):
 # ---------------------------------------------------------------------
 
 def test_bench_trace_1k_rays(benchmark):
-    from lumenairy.raytrace import trace, surfaces_from_prescription, make_fan
+    from lumenairy.raytrace import make_fan, surfaces_from_prescription, trace
     presc = lm.make_doublet(
         R1=50e-3, R2=-30e-3, R3=-50e-3,
         d1=4e-3, d2=2e-3,

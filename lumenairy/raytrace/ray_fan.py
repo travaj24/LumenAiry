@@ -40,7 +40,6 @@ from .trace import (
 )
 from .world_trace import trace_world
 
-
 # ============================================================================
 # Shared helper: entrance-pupil-centring launch offset
 # ============================================================================

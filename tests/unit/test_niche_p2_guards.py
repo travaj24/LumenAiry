@@ -26,8 +26,7 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.propagators.carrier import (_FINE_GRID_MIN,
-                                           _memory_bounded_n_fine)
+from lumenairy.propagators.carrier import _FINE_GRID_MIN, _memory_bounded_n_fine
 
 _WL = 1.31e-6
 
