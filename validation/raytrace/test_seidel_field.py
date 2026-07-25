@@ -203,7 +203,10 @@ def t_wfe_petzval_only_is_sigma2_rho2():
     theta = np.zeros_like(rho)
     sigma = 0.1
     W = la.seidel_wfe(fake_totals, rho, theta, field_angle=sigma)
-    expected = (1.0 / 4.0) * (-1.0) * (sigma ** 2) * rho ** 2
+    # The totals dict is in the library's code = -S_Welford convention;
+    # seidel_wfe negates it at ingestion (audit R-2 sign fix), so
+    # S4_code = -1.0 composes as S4_Welford = +1.0.
+    expected = (1.0 / 4.0) * (+1.0) * (sigma ** 2) * rho ** 2
     rel_err = float(np.max(np.abs(W - expected)))
     return rel_err < 1e-15, \
         f'max |W - expected| = {rel_err:.2e}'

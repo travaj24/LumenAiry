@@ -202,12 +202,14 @@ def seidel_wfe(
     explicitly):
 
     .. math::
-        W(\\rho, \\theta) = \\tfrac{1}{8} S_1\\rho^4
+        W(\\rho, \\theta) = -\\Big[
+                            \\tfrac{1}{8} S_1\\rho^4
                           + \\tfrac{1}{2} S_2\\rho^3 \\cos\\theta
                           + \\tfrac{1}{2} S_3\\rho^2 \\cos^2\\theta
                           + \\tfrac{1}{4} S_3 \\rho^2
                           + \\tfrac{1}{4} S_4 H^2 \\rho^2
                           + \\tfrac{1}{2} S_5\\rho \\cos\\theta
+                          \\Big]
 
     where :math:`H = n_0 \\, y_c \\, u_m - n_0 \\, y_m \\, u_c` is the
     Lagrange invariant (computed inside :func:`seidel_coefficients`).
@@ -226,6 +228,34 @@ def seidel_wfe(
     docstring and the implementation, so any synthetic / measured
     S3 contributed to astigmatism (cos^2 theta) but not to the
     rotationally symmetric field-curvature defocus.
+
+    **Sign convention.**  The leading minus on the bracket converts this
+    library's Seidel sums, which carry ``code = -S_Welford`` (the S3-1
+    note in :func:`lumenairy.seidel_coefficients`'s refracting branch),
+    into Welford's, for which the bracketed expansion is written.  With
+    it, ``W`` is an OPTICAL PATH DIFFERENCE referenced to the paraxial
+    image point -- ``W = OPL(pupil point) - OPL(reference ray)``, the
+    reference ray being the one through the pupil centre (``rho = 0``),
+    both paths measured from a common incoming wavefront -- so
+
+    * ``W < 0`` means that pupil point's path is SHORTER than the
+      reference (wavefront ADVANCED, leads the reference sphere);
+    * ``W > 0`` means LONGER (wavefront RETARDED, lags).
+
+    A positive singlet with undercorrected spherical aberration
+    therefore has ``W(rho = 1) < 0``.  R-2
+    (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): pre-fix the expansion was
+    composed directly out of the ``-S_Welford`` sums and so returned
+    ``-W``; measured against an exact-trace wavefront oracle the ratio
+    was ``-0.9975 ... -0.9998`` on four singlets over ``rho in
+    [0.3, 1]``, and ``-1.000`` term by term for the ``rho^2``, ``rho^3``
+    and ``rho^4`` terms.  Magnitude-only consumers (RMS / PV WFE, Strehl
+    proxies) are unaffected by the fix; anything that ADDS ``W`` to a
+    pupil phase, fits Zernikes to it, or reads the sign of coma /
+    distortion asymmetry flips.  Callers passing a BARE totals dict are
+    on the same convention -- the flip is applied to the ingested
+    ``S1..S5`` whatever their source, so hand-written sums are
+    interpreted as library-convention sums.
 
     Parameters
     ----------
@@ -257,7 +287,10 @@ def seidel_wfe(
     Returns
     -------
     W : ndarray
-        Wavefront error in the same units as the Seidel sums.
+        Wavefront error in the same units as the Seidel sums (metres for
+        a metre-unit prescription).  Signed -- see "Sign convention"
+        above; ``W < 0`` = path shorter than the reference = wavefront
+        advanced.
 
     See Also
     --------
@@ -291,11 +324,19 @@ def seidel_wfe(
             return float(v[field_index])
         return float(v)
 
-    S1 = _pick(T['S1'])
-    S2 = _pick(T['S2'])
-    S3 = _pick(T['S3'])
-    S4 = _pick(T['S4'])
-    S5 = _pick(T['S5'])
+    # R-2 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): ingest on WELFORD's
+    # sign convention.  ``seidel_coefficients`` returns ``code =
+    # -S_Welford`` (see the S3-1 note in ``seidel.py``'s refracting
+    # branch); the expansion composed below is Welford's.  Without this
+    # flip the function returned -W -- exact-trace ratio -0.9975..-0.9998
+    # across four singlets, uniformly -1 term by term.  Flipping here
+    # (rather than negating the return) keeps the composition literally
+    # textbook and puts the convention conversion in one visible place.
+    S1 = -_pick(T['S1'])
+    S2 = -_pick(T['S2'])
+    S3 = -_pick(T['S3'])
+    S4 = -_pick(T['S4'])
+    S5 = -_pick(T['S5'])
 
     # 4.9 fix: Petzval term needs |H|² (Lagrange invariant squared),
     # NOT bare sigma².  S4 = -c·(n2-n1)/(n1·n2) is the H-less

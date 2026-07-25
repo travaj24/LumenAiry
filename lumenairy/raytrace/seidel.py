@@ -579,6 +579,104 @@ def first_order_data(
     )
 
 
+def _pre_stop_abcd(
+    surfaces: List['Surface'],
+    wavelength: float,
+    stop_index: int,
+) -> np.ndarray:
+    """ABCD (reduced coords) from the FIRST surface vertex to the STOP vertex.
+
+    SINGLE SOURCE for the pre-stop sub-system used by BOTH
+    :func:`compute_pupils` (entrance-pupil imaging) and
+    :func:`seidel_coefficients` (marginal / chief ray initial
+    conditions).  Before AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 R-1 the
+    two built it independently and DISAGREED (see below).  Identity when
+    ``stop_index == 0``.  See :func:`_post_stop_abcd` for the other half.
+
+    Notes
+    -----
+    ``system_abcd`` walks transfers only BETWEEN surfaces (its guard is
+    ``if i < len(surfaces) - 1``), so a sliced surface list ends at the
+    LAST SLICED VERTEX, not at the stop:
+
+    * pre-stop: ``system_abcd(surfaces[:stop_index])`` stops at surface
+      ``stop_index - 1``'s vertex -- the final leg *to* the stop is
+      missing and must be prepended (applied on the LEFT, since it is
+      the last thing the ray does).  R-1: ``compute_pupils`` omitted
+      this leg entirely, freezing ``ep_z`` and under-reporting
+      ``ep_radius`` by 4% (2 mm gap) to 84% (40 mm gap) on every
+      non-front-stop system, and inflating ``f/#`` correspondingly
+      (11.884 vs 9.384 exact on the audit's 10 mm-gap singlet).
+    * post-stop: ``system_abcd(surfaces[stop_index + 1:])`` starts at
+      surface ``stop_index + 1``'s vertex -- the leg *from* the stop is
+      missing and must be appended (applied on the RIGHT).  R-1
+      follow-on: ``compute_pupils`` supplied this leg as a dummy
+      air-to-air ``Surface``, so its transfer was always evaluated in
+      AIR.  When the stop's image-side medium is glass (front stop on a
+      lens surface, or a stop inside a cemented block) the leg was
+      short by ``n``: measured ``xp_z`` error +3.8% (stop at a BK7
+      surface) and +7.9% (stop inside BK7), ``xp_radius`` +1.9% / +2.5%.
+
+    Both legs use the glass on the image side of the surface that OWNS
+    the thickness, which is what the trace itself does.
+
+    Known limitation (shared with the pre-R-1 twins, unchanged here):
+    the two legs use the UNSIGNED glass index, so a system with an odd
+    number of mirrors before (resp. after) the stop gets a leg whose
+    sign does not follow ``system_abcd``'s Welford ``n -> -n`` parity
+    bookkeeping.  Fixing that needs a dedicated mirror-fold pupil
+    oracle (see the "flagged, not claimed" coordinate-break /
+    mirror-sign item in the same audit) and is deliberately out of
+    scope; mirrorless systems -- and any system whose mirrors all sit
+    on the same side of the stop as the image -- are unaffected.
+    """
+    if stop_index == 0:
+        return np.eye(2)
+    M_pre, _, _, _ = system_abcd(surfaces[:stop_index], wavelength)
+    # Final leg: surface (stop_index - 1) vertex -> stop vertex, in the
+    # medium on that surface's image side.  Applied on the LEFT: it is
+    # the last thing the ray does before reaching the stop.
+    t_last = float(surfaces[stop_index - 1].thickness)
+    n_last = get_glass_index(
+        surfaces[stop_index - 1].glass_after, wavelength)
+    T_last = np.array([[1.0, t_last / n_last],
+                       [0.0, 1.0]])
+    return T_last @ M_pre
+
+
+def _post_stop_abcd(
+    surfaces: List['Surface'],
+    wavelength: float,
+    stop_index: int,
+) -> np.ndarray:
+    """ABCD (reduced coords) from the STOP vertex to the LAST surface vertex.
+
+    Image-side twin of :func:`_pre_stop_abcd` (read its Notes for the
+    ``system_abcd`` slicing asymmetry and the shared mirror-parity
+    limitation).  Identity when the stop IS the last surface.
+
+    Where the pre-stop slice is one leg SHORT, the post-stop slice
+    ``surfaces[stop_index + 1:]`` STARTS one leg late: the transfer from
+    the stop vertex to surface ``stop_index + 1`` belongs to the stop
+    surface's own ``thickness`` and must be appended on the RIGHT.
+
+    R-1 follow-on: ``compute_pupils`` used to supply that leg as a dummy
+    air-to-air ``Surface``, so it was always evaluated in AIR.  When the
+    stop's image-side medium is glass (a front stop declared on a lens
+    surface, or a stop inside a cemented block) the leg was short by a
+    factor ``n``: measured ``xp_z`` error +3.8% (stop at a BK7 surface),
+    +7.9% (stop inside BK7); ``xp_radius`` +1.9% / +2.5%.
+    """
+    if stop_index == len(surfaces) - 1:
+        return np.eye(2)
+    t_first = float(surfaces[stop_index].thickness)
+    n_first = get_glass_index(surfaces[stop_index].glass_after, wavelength)
+    T_first = np.array([[1.0, t_first / n_first],
+                        [0.0, 1.0]])
+    M_rest, _, _, _ = system_abcd(surfaces[stop_index + 1:], wavelength)
+    return M_rest @ T_first
+
+
 def compute_pupils(
     surfaces: List['Surface'],
     wavelength: float,
@@ -607,22 +705,43 @@ def compute_pupils(
 
     Notes
     -----
-    For the EP, we seek the object-space conjugate of the stop:
-    image distance from surface 0 at which an object placed there
-    would image onto the stop plane.  Equivalently, treat the stop
-    as the "source" and propagate in reverse through the pre-stop
-    sub-system.  For a reversed sub-system M_rev = T(-t1)
-    L1^{-1} T(-t2) L2^{-1} ..., but the cleanest implementation is
-    the imaging condition on the forward sub-system's ABCD:
-    if M_pre = [[A, B], [C, D]] maps (y_obj, u_obj) at surface 0
-    to (y_stop, u_stop) at the stop, then the object-space position
-    z_ep (measured from surface 0, negative = to the left) that
-    images to the stop satisfies A + B / (z_ep * ... ) = 0 after
-    prepending T(|z_ep|).  Equivalently, solve B_new = 0 for the
-    prepended distance:  B + z_ep * A = 0  =>  z_ep = -B / A.
+    Sign convention (:class:`PupilInfo`): ``ep_z`` is the SIGNED axial
+    coordinate of the EP measured from ``surfaces[0]`` (negative = to
+    the left / object side), ``xp_z`` likewise from ``surfaces[-1]``.
+    This is the convention every consumer relies on geometrically --
+    ``analysis/field.py`` offsets a launched chief ray so that it
+    crosses ``(0, 0, ep_z)``, ``analysis/image_plane_wfe.py`` measures
+    its reference sphere from ``xp_z`` -- so it must be the true
+    coordinate, not an unsigned distance.
+
+    For the EP we seek the object-space conjugate of the stop.  With
+    ``M_pre = [[A, B], [C, D]]`` mapping ``(y, nu)`` at surface 0 to
+    ``(y, nu)`` at the stop vertex (:func:`_pre_stop_abcd`), a plane
+    at ``z_ep`` sits a distance ``d = -z_ep`` in FRONT of surface 0, so
+    the object-plane-to-stop matrix is ``M_pre @ T(d)``, whose
+    off-diagonal is ``B + A d``.  The imaging condition ``B + A d = 0``
+    gives ``d = -B / A``, hence::
+
+        z_ep = -d = +B / A
+
+    R-1 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): this line used to read
+    ``ep_z = -B / A``, i.e. it returned the object DISTANCE (positive to
+    the left) under the name of a SIGNED COORDINATE -- the mirror image
+    of the true pupil plane.  Exact-real-ray discriminator: with a
+    powerless pre-stop leg (flat dummy, gap ``t``, then the stop) the EP
+    *is* the stop, at ``z_ep = +t``; the old expression gives ``-t``.
+    The defect was masked at ``stop_index == 0`` (``z_ep = 0``) and, for
+    every other system, by the missing pre-stop transfer above, which
+    left ``B`` too small to notice.
+
+    Magnification: at imaging ``M_pre @ T(d) = [[A, 0], [C, *]]``, so
+    ``y_stop = A * y_ep`` and ``ep_radius = |r_stop / A|``.
 
     For the XP: same logic on the post-stop sub-system in the
-    forward direction, with the stop as the object.
+    forward direction, with the stop as the object.  There the image
+    plane is appended on the LEFT (``T(z) @ M_post``), giving
+    ``B + z D = 0 => z_xp = -B / D`` -- already a signed coordinate
+    measured from the last vertex, and unchanged by R-1.
     """
     if not surfaces:
         raise ValueError("compute_pupils: empty surface list.")
@@ -649,42 +768,23 @@ def compute_pupils(
         stop_radius = float('nan')
 
     # ---- Entrance pupil -------------------------------------------
-    # Pre-stop sub-system: surfaces[0 .. stop_index-1], ending with
-    # the thickness from the last pre-stop surface to the stop's
-    # vertex (i.e. include the propagation gap up to the stop).
     if stop_index == 0:
         # Stop is at the first surface; EP coincides with it.
         ep_z = 0.0
         ep_radius = stop_radius
     else:
-        pre = [_surface_copy_with(s) for s in surfaces[:stop_index]]
-        # Append the propagation leg to the stop as a trailing
-        # thickness on the last pre-surface.  system_abcd walks
-        # thicknesses between surfaces, so we need to insert an extra
-        # "transfer only" leg.  Easiest: append a dummy flat air
-        # surface at the stop vertex (zero power, just for the
-        # transfer) -- its ABCD contribution is identity; the
-        # thickness accumulates from pre[-1].thickness which is the
-        # pre->stop gap.
-        # Actually the pre-stop sub-system already walks
-        # thicknesses[0..stop_index-1] which includes the gap from
-        # surface stop_index-1 to stop (since s.thickness = distance
-        # to NEXT surface).  So no dummy needed; system_abcd(pre)
-        # already lands the ray at the stop vertex.
-        M_pre, _, _, _ = system_abcd(pre, wavelength)
+        # R-1: the pre-stop sub-system comes from the SINGLE shared
+        # builder that ``seidel_coefficients`` also uses -- the two used
+        # to disagree (this side was missing the final leg to the stop).
+        M_pre = _pre_stop_abcd(surfaces, wavelength, stop_index)
         A_pre, B_pre = float(M_pre[0, 0]), float(M_pre[0, 1])
-        _C_pre, _D_pre = float(M_pre[1, 0]), float(M_pre[1, 1])
-        # Imaging condition: prepend T(z_obj) so B_total = 0.
-        # B + z * A = 0 ?  No: T(z) applied on the RIGHT gives
-        # M . T(z) = [[A, A*z+B], [C, C*z+D]].  So B_total = A*z + B.
-        # z_ep = -B / A (distance from surface 0 back to EP).
-        # Magnification through pre: m_pre = A_pre when B=0.
         if abs(A_pre) > 1e-30:
             # v5.4.6 (audit F-2): ``ep_z`` MUST be assigned here.  Pre-fix
-            # this line was a bare expression ``-B_pre / A_pre`` whose value
-            # was discarded, leaving ``ep_z`` unbound on every non-front-stop
-            # system -> UnboundLocalError at the ``return PupilInfo(...)`` line.
-            ep_z = -B_pre / A_pre
+            # this line was a bare expression whose value was discarded,
+            # leaving ``ep_z`` unbound on every non-front-stop system ->
+            # UnboundLocalError at the ``return PupilInfo(...)`` line.
+            # R-1: signed coordinate ``+B/A`` (see Notes) -- was ``-B/A``.
+            ep_z = B_pre / A_pre
             # Radius: EP is the reverse image of the stop with
             # magnification 1/A_pre (because the forward sub-system
             # maps object height to stop height with factor A when
@@ -699,23 +799,7 @@ def compute_pupils(
         xp_z = 0.0
         xp_radius = stop_radius
     else:
-        post = [_surface_copy_with(s) for s in surfaces[stop_index + 1:]]
-        # Propagation from stop to first post-surface is the
-        # thickness attribute on surfaces[stop_index], which lives on
-        # the stop surface itself.  To include it in the post
-        # sub-system we prepend a dummy air surface with that
-        # thickness.  Cleanest: pass a fake Surface at stop_index with
-        # zero power and the correct thickness.
-        stop_to_first_post = surfaces[stop_index].thickness
-        dummy = Surface(
-            radius=np.inf, conic=0.0,
-            semi_diameter=np.inf,
-            glass_before='air', glass_after='air',
-            is_mirror=False, is_stop=False,
-            thickness=stop_to_first_post,
-            label='(stop->XP transfer)')
-        post_full = [dummy] + post
-        M_post, _, _, _ = system_abcd(post_full, wavelength)
+        M_post = _post_stop_abcd(surfaces, wavelength, stop_index)
         A_post, B_post = float(M_post[0, 0]), float(M_post[0, 1])
         C_post, D_post = float(M_post[1, 0]), float(M_post[1, 1])
         # XP is the image-space conjugate of the stop.  Append
@@ -898,24 +982,18 @@ def seidel_coefficients(
 
     # ---- Pre-stop ABCD (surface 0 -> stop vertex) -----------------
     # system_abcd walks surfaces but only applies the transfer matrix
-    # between SURFACES (``if i < len(surfaces) - 1``).  For the
-    # pre-stop sub-system we need one additional transfer: from the
-    # last pre-stop surface's vertex to the stop's vertex, using the
-    # stop-ward glass index.  Build it explicitly.
-    if stop_index == 0:
-        A_pre, B_pre = 1.0, 0.0
-    else:
-        M_pre, _, _, _ = system_abcd(surfaces[:stop_index], wavelength)
-        # Transfer from surface (stop_index-1) to the stop vertex in
-        # the medium on its image side.
-        t_last = float(surfaces[stop_index - 1].thickness)
-        n_last = get_glass_index(
-            surfaces[stop_index - 1].glass_after, wavelength)
-        T_last = np.array([[1.0, t_last / n_last],
-                            [0.0, 1.0]])
-        M_pre = T_last @ M_pre
-        A_pre = float(M_pre[0, 0])
-        B_pre = float(M_pre[0, 1])
+    # between SURFACES (``if i < len(surfaces) - 1``), so the slice
+    # ``surfaces[:stop_index]`` lands one leg SHORT of the stop.  That
+    # leg is prepended by :func:`_pre_stop_abcd`, which is the single
+    # shared source for this sub-system: R-1 of
+    # AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 found ``compute_pupils``
+    # building the same split WITHOUT the final leg, so the two
+    # disagreed on the pre-stop system (and hence on the entrance
+    # pupil) for every non-front-stop design.  Bit-for-bit identical to
+    # the previous inline construction here.
+    M_pre = _pre_stop_abcd(surfaces, wavelength, stop_index)
+    A_pre = float(M_pre[0, 0])
+    B_pre = float(M_pre[0, 1])
 
     # ---- Initial conditions at surface 0 --------------------------
     # Marginal ray: on-axis object (u_0 = 0, nu_0 = 0), filling the

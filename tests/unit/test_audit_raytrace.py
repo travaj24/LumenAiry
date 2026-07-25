@@ -277,6 +277,10 @@ class TestAuditFixesV4_11_2_raytrace_SeidelWfeFieldCurvatureDcTerm:
 
         pre-4.11.2 result:  (1/2)(1)(1)(1) + 0 = 0.5
         v4.11.2 result:     0.5 + (1/4)(1)(1) = 0.75
+        v5.30 (audit R-2): seidel_wfe now negates the library's
+        code = -S_Welford values at ingestion so it returns the
+        physical W, so the same input gives -0.75.  The DC-companion
+        structure under test is unchanged.
     """
 
     def test_wfe_includes_field_curvature_dc_companion(self):
@@ -290,12 +294,16 @@ class TestAuditFixesV4_11_2_raytrace_SeidelWfeFieldCurvatureDcTerm:
             W = lm.seidel_wfe(totals, rho=1.0, theta=0.0,
                               field_angle=0.0)
         W = float(W)
-        # Expected: (1/2)*1*1*1 + (1/4)*1*1 = 0.5 + 0.25 = 0.75
-        assert abs(W - 0.75) < 1e-15, (
+        # Expected: -[(1/2)*1*1*1 + (1/4)*1*1] = -0.75 -- the input
+        # S3=1 is in the library's code = -S_Welford convention, which
+        # seidel_wfe negates at ingestion since the R-2 sign fix
+        # (audit 2026-07-25); the DC companion term is still present.
+        assert abs(W + 0.75) < 1e-15, (
             f"seidel_wfe(S3=1, S4=0, rho=1, theta=0) = {W!r}; "
-            f"expected 0.75 (= 0.5 from the (1/2) S3 rho^2 cos^2 theta "
-            f"astigmatism term plus 0.25 from the (1/4) S3 rho^2 "
-            f"field-curvature DC companion that was missing pre-4.11.2)."
+            f"expected -0.75 (= -(0.5 from the (1/2) S3 rho^2 cos^2 "
+            f"theta astigmatism term plus 0.25 from the (1/4) S3 rho^2 "
+            f"field-curvature DC companion), with the leading minus "
+            f"from the code = -S_Welford ingestion, audit R-2)."
         )
 
     def test_wfe_pre_fix_value_no_longer_returned(self):
@@ -321,7 +329,8 @@ class TestAuditFixesV4_11_2_raytrace_SeidelWfeFieldCurvatureDcTerm:
         with pytest.warns(RuntimeWarning):
             W = lm.seidel_wfe(totals, rho=rho, theta=theta,
                               field_angle=0.0)
-        expected = rho ** 2  # (1/4) * 4 * rho^2
+        expected = -rho ** 2  # -[(1/4) * 4 * rho^2]: code = -S_Welford
+        # ingestion (audit R-2 sign fix) negates the totals dict.
         max_err = float(np.max(np.abs(W - expected)))
         assert max_err < 1e-15, (
             f"seidel_wfe with S3=4, theta=pi/2 should give "
