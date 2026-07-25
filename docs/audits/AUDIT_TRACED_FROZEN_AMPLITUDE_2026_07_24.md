@@ -470,6 +470,26 @@ pitch-preserving rays, NFC=8192, WF=4.0, wide ±51.2 µm readout):
   own-design content EXACTLY, so an exact-sphere envelope reference at the
   exit leaves only design content in the envelope — removing the
   near-Nyquist (S−parab) skirt from the transport entirely.
+
+  **Candidate (2) prototype result (same day, script-level):** the full
+  stack (band-limited sphere hand-offs + ray_density + 'remap') flips the
+  defocus sign (best focus ≤ −40 µm vs +60 µm for pip=False; at-plane EE6
+  67.4, on-axis) but the best-focus EE6 stays in the same 75-80 band
+  (77.7 at the scan edge).  Across ALL configurations tried (pip=False /
+  remap / candidate-2), the defocus swings ±60 µm while the
+  defocus-removed exit rms stays 0.35-0.48 rad and best-focus EE6 stays
+  75-80 — the COMMON cap is that shared ~0.35 rad non-defocus residual,
+  not the defocus bookkeeping.  The naive composition of candidate (2)
+  over-corrects (likely double-counting the (S−parab) term between the
+  conversion and the remap de-chirp — both reference S_exact at the same
+  boundary).  NEXT SESSION: (i) fix the candidate-2 composition so the
+  conversion and the remap share ONE reference hand-off (the conversion
+  factor belongs on the TRANSPORT side only, or the remap's de-chirp
+  should use the post-conversion field's actual reference); (ii) decompose
+  the shared 0.35 rad residual (Zernike-order it: if it is coma-free
+  r⁴-balanced content it is still carried-content bookkeeping; if it is
+  higher-order/azimuthal it is a different mechanism); (iii) gate with the
+  full-train oracle (rms 0.016 rad is the design floor).
 - **Default-flip decision (recorded 2026-07-24):** the element-level defaults
   stay as they are — `amplitude_model='screen'` and
   `preserve_input_phase=True` are genuinely correct for non-carrier /
