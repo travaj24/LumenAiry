@@ -325,6 +325,48 @@ hereby REFUTED by direct measurement.
 - The dx-convergence question moves to: is the `ray_density` chain FLAT across the
   axis-A N-sweep?  (Running at write time.)
 
+### 6.7 CONVERGENCE CLOSED BY CONFIGURATION; the remaining gap is a converged
+###     fidelity plateau (same day, continued)
+
+Axis-A sweeps of the candidate configurations (extent-preserving N refinement,
+pitch-preserving rays, NFC=8192, WF=4.0, wide ±51.2 µm readout):
+
+| config | N=1024 | N=2048 | N=4096 | N=8192 |
+|---|---|---|---|---|
+| `ray_density` alone (EE6) | 89.1% | 85.8% | 60.8% | 56.7% |
+| `ray_density` + `preserve_input_phase=False` (EE6) | 78.6% | **76.7%** | **76.7%** | **76.7%** |
+
+- **The `rd+pip0` configuration is dx-flat TO THE DIGIT for N ≥ 2048** (FWHM 5.65 µm,
+  EE3 46.6, EE12 85.4, window 97.8 — all three rows byte-identical), meeting the
+  production-readiness P0 acceptance (EE6 stable < 2%, window ≈ stop losses,
+  genuine plateau).  With both dx-dependent ingredients removed (amplitude from the
+  ray Jacobian, phase from the ray fit alone) the traced exit is fully determined
+  by the physical ray pitch, and the chain inherits the machinery's grid
+  independence.  `ray_density` WITHOUT `pip0` remains non-convergent (the
+  preserve-pair phase corruption grows with fine dx and its coarse-N contribution
+  crosses BELOW the flat plateau by N=4096 — its +9 points at N=2048 are not real
+  fidelity).
+- **Residual-carry prototype (defect-A "proper fix" candidate): NULL RESULT.**
+  Multiplying the exit by the de-chirped entrance residual phasor
+  `exp(i·angle(E_in·e^{−ik·S(R_in)}))` (pointwise, no gradient extraction;
+  identity-coordinate transport) changes nothing (EE6 76.2 vs 76.7) despite the
+  carried content measuring ~1.8 rad rms/group (dominated by the legitimate
+  sphere-vs-parabola skirt term).  So the plateau is NOT limited by dropped input
+  phase at first order, and the preserve-pair's coarse-N advantage is confirmed
+  artifact.
+- **Open (the new P1 gap): the converged plateau sits at FWHM 5.65 µm / EE3 46.6 /
+  EE6 76.7 vs the corrected targets 3.223 µm / 91% / ~100%, with a constant
+  (−16.0, −16.0) µm diagonal peak walk** (dx-independent in the flat
+  configuration; the stigmatic control has none — element-linked, odd-order).
+  The clean-sphere per-group oracle shows only 0.001–0.012 rad rms in exactly this
+  configuration, which cannot explain a 1.75× FWHM — so the error either (a)
+  arises only under CHAIN conditions (parabola-referenced input + accumulated
+  content + chain windows), (b) lives in the amplitude/Jacobian leg (the oracle
+  gate is phase-only), or (c) is odd-order/2-D content the radial-cut metrics miss
+  (the diagonal walk points this way).  Next diagnosis: per-group ORACLE AT CHAIN
+  CONDITIONS with a complex-field overlap (Strehl-like) metric, groupwise walk/tilt
+  measurement, and a ray-pitch sensitivity check of the ray-density Jacobian.
+
 ## 7. Session artifacts / open items (updated post-review)
 
 - Axis-A sweep COMPLETE.  Traced (full final-leg settings, readout N_fine pinned
