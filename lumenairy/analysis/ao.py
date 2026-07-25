@@ -445,12 +445,39 @@ def zernike_modal_basis(
         raise ValueError("semi_aperture must be > 0")
 
     # Lenslet centres on a square grid clipped to the unit disk.
-    p = (np.arange(n_lenslets) - (n_lenslets - 1) / 2) / ((n_lenslets - 1) / 2)
+    #
+    # S11-6b (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): ``n_lenslets =
+    # 1`` made this ``0 / 0`` -> ``p = [nan]`` -> ``inside`` all False ->
+    # a silently EMPTY basis (measured: ``reconstructor.shape == (4, 0)``,
+    # ``lenslet_xy == (array([]), array([]))``, plus a bare
+    # ``RuntimeWarning: invalid value encountered in divide``), which then
+    # produces an all-zero modal solve instead of an error or a real
+    # single-lenslet basis.  The sibling site in ``make_shack_hartmann_wfs``
+    # already used the ``max(..., 1e-12)`` clamp; adopt it here so the two
+    # agree and ``n_lenslets = 1`` yields the one on-axis lenslet
+    # (``p = [0.0]``).  Bit-identical for ``n_lenslets >= 2``, where
+    # ``(n_lenslets - 1) / 2 >= 0.5 >> 1e-12``.
+    p = (np.arange(n_lenslets) - (n_lenslets - 1) / 2) / max(
+        (n_lenslets - 1) / 2, 1e-12)
     X, Y = np.meshgrid(p, p)
     inside = (X ** 2 + Y ** 2) <= 1.0
     xlens = X[inside] * semi_aperture
     ylens = Y[inside] * semi_aperture
     n_lens = xlens.size
+    # S11-6b: a square grid whose sample points all fall OUTSIDE the unit
+    # disk yields an empty influence matrix and a zero-column
+    # reconstructor, i.e. a silently physics-free basis whose modal solve
+    # is identically zero.  ``n_lenslets = 2`` is exactly this case (both
+    # samples sit at p = +-1, so every corner has rho = sqrt(2) > 1).
+    # Refuse it explicitly rather than returning an unusable object.
+    if n_lens == 0:
+        raise ValueError(
+            f"zernike_modal_basis: n_lenslets={n_lenslets} puts NO lenslet "
+            f"centre inside the unit pupil disk (the square grid samples "
+            f"p = (i - (n-1)/2) / ((n-1)/2), so for n = 2 all four samples "
+            f"lie at rho = sqrt(2) > 1).  The influence matrix would be "
+            f"empty and every reconstructed coefficient identically zero.  "
+            f"Use n_lenslets = 1 (single on-axis lenslet) or >= 3.")
 
     # Zernike-mode gradient at each lenslet via central finite
     # differences in normalised coords (rho in [0, 1]).
@@ -1159,6 +1186,46 @@ def make_shack_hartmann_wfs(
             n_lenslets=_subap,
         )
 
+        # 2b. Optional centroid noise.  S11-5
+        # (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): this block used to
+        # sit AFTER the ``/ slope_scale`` calibration rescale below, so a
+        # sigma quoted in RAW SH slope units (m of OPD per m of pupil)
+        # was added to slopes already converted to rad/m of PHASE -- a
+        # ``slope_scale`` (~1e-6 .. 1e-7, essentially lambda/2pi times the
+        # SH response) mis-scaling that made the knob inert.  Measured on
+        # a 64x64 defocus residual, ``subaperture_grid=8``,
+        # ``lenslet_focal=5e-3``: at ``dx_pupil = 1e-4`` m,
+        # ``noise_sigma_pixels = 1`` perturbed the reconstruction by
+        # 4.83e-5 relative (and 4.81e-7 at ``dx_pupil = 1e-5`` m) -- i.e.
+        # nothing.
+        #
+        # The fix is to inject the noise where it physically belongs:
+        # on the RAW measurement, upstream of the calibration.  That is
+        # algebraically identical to dividing the sigma by
+        # ``slope_scale`` after the rescale
+        # (``(s + n - ref)/ss == (s - ref)/ss + n/ss``) but needs no
+        # extra division, cannot blow up on a degenerate ``slope_scale``
+        # any worse than the signal path already does, and keeps the RNG
+        # draw count and order unchanged -- so a given ``rng_seed``
+        # produces the identical noise SEQUENCE, only correctly applied.
+        # The ``_noise == 0`` path is untouched and bit-identical.
+        #
+        # Documented effect, now true: ``noise_sigma_pixels = s`` injects
+        # an independent Gaussian centroid error of ``s * dx_pupil``
+        # metres per sub-aperture, i.e. a wavefront-slope error of
+        # ``s * dx_pupil / lenslet_focal`` radians of tilt.  Note this is
+        # a LARGE error for a coarse pupil grid: one whole pixel of
+        # centroid error on a 100 um pupil pitch with a 5 mm lenslet is
+        # 20 mrad of tilt.  Real SH systems sit at s ~ 0.01 - 0.1.
+        #
+        # NaN sentinels (out-of-bounds lenslets) stay NaN: finite noise
+        # added to NaN is NaN, so the ``good`` mask below is unchanged.
+        if _noise > 0.0:
+            sigma_slope = _noise * dx / _focal
+            rng = _rng
+            slopes_x = slopes_x + rng.standard_normal(slopes_x.shape) * sigma_slope
+            slopes_y = slopes_y + rng.standard_normal(slopes_y.shape) * sigma_slope
+
         # v5.4: subtract the zero-phase calibration and apply the
         # unit-phase-ramp linearity rescale.  Cached per grid geometry.
         # ``slope_scale`` is the SH-measured slope divided by the
@@ -1212,22 +1279,18 @@ def make_shack_hartmann_wfs(
         slopes_x = np.where(good, (slopes_x - sx_ref) / slope_scale, slopes_x)
         slopes_y = np.where(good, (slopes_y - sy_ref) / slope_scale, slopes_y)
 
-        # 3. Optional centroid noise: the factory-scoped RNG draws a
-        # FRESH realisation on every call (canonical noisy-WFS
-        # semantics); a fixed ``rng_seed`` makes the sequence of
-        # realisations reproducible across factory instances.
-        # ``noise_sigma_pixels`` is interpreted as SH-detector-pixel
-        # sigma, with a detector pixel pitch equal to the input grid
-        # spacing ``dx`` (the SH simulator samples the focal plane on
-        # the same Cartesian grid as the input field).  The
-        # corresponding slope-noise sigma is
-        # ``sigma_pixels * dx / lenslet_focal`` (m of OPD per m of
-        # pupil = radians of tilt).
-        if _noise > 0.0:
-            sigma_slope = _noise * dx / _focal
-            rng = _rng
-            slopes_x = slopes_x + rng.standard_normal(slopes_x.shape) * sigma_slope
-            slopes_y = slopes_y + rng.standard_normal(slopes_y.shape) * sigma_slope
+        # 3. (Centroid noise moved to step 2b above -- S11-5.  The
+        # factory-scoped RNG draws a FRESH realisation on every call
+        # [canonical noisy-WFS semantics]; a fixed ``rng_seed`` makes the
+        # sequence of realisations reproducible across factory
+        # instances.  ``noise_sigma_pixels`` is interpreted as
+        # SH-detector-pixel sigma, with a detector pixel pitch equal to
+        # the input grid spacing ``dx`` [the SH simulator samples the
+        # focal plane on the same Cartesian grid as the input field], so
+        # the corresponding slope-noise sigma is
+        # ``sigma_pixels * dx / lenslet_focal`` [m of OPD per m of
+        # pupil = radians of tilt] -- RAW SH slope units, which is why it
+        # must be applied before the ``/ slope_scale`` rescale.)
 
         # 4. Build (or fetch the cached) slope-to-modal reconstructor + the
         # full-pupil reprojection matrix, and pick out the in-disk lenslets in

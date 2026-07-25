@@ -1440,6 +1440,13 @@ def _radial_rms_profile(
     """
     Ny, Nx = opd.shape
     yy, xx = np.mgrid[0:Ny, 0:Nx]
+    # S11-6f NOT-CHANGED (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): this
+    # radial anchor is the ARRAY centre ``(N-1)/2`` while the library's field
+    # grids are centred on ``N/2`` (``x_j = (j - N/2)*dx``), a half-pixel
+    # disagreement for even N.  Changing it shifts every radial bin on every
+    # even-N input, so it is NOT bit-identical and is left for a deliberate
+    # grid-convention pass; the two differ by dx/2, well inside the annulus
+    # width this profile bins into.
     cy = (Ny - 1) / 2.0
     cx = (Nx - 1) / 2.0
     rx = (xx - cx) * dx

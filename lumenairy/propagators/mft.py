@@ -297,8 +297,15 @@ def resample_field(
     N_out : int or None
         Output grid size.  If ``None``, chosen so the output covers the
         same physical extent as the input: ``N_out = round(N_in * dx_in / dx_out)``.
+        S11-6a: must resolve to ``>= 1`` -- a ``dx_out`` so coarse that
+        the default rounds to 0 raises ``ValueError`` instead of silently
+        returning a ``(0, 0)`` array.
     order : int, default 3
-        Interpolation order (1=linear, 3=cubic, 5=quintic).
+        Interpolation order (0=nearest, 1=linear, 3=cubic, 5=quintic).
+        S11-6a: validated to an integer in ``[0, 5]`` -- out-of-range
+        values used to surface as a scipy-internal
+        ``RuntimeError: spline order not supported`` naming neither this
+        function nor the argument.
 
     Returns
     -------
@@ -328,12 +335,50 @@ def resample_field(
     _check_2d_scalar_field(E_in, 'resample_field')
     from scipy.ndimage import map_coordinates
 
+    # S11-6a (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1, "harness knobs
+    # must ERROR on unrecognised values"): ``order`` is passed straight
+    # to ``map_coordinates``, which accepts 0..5 -- but the docstring
+    # advertises 1 / 3 / 5, and an out-of-range value used to surface as
+    # a scipy-internal ``RuntimeError: spline order not supported``
+    # naming neither this function nor the argument.
+    if int(order) != order or not (0 <= int(order) <= 5):
+        raise ValueError(
+            f"resample_field: order must be an integer in [0, 5] "
+            f"(0=nearest, 1=linear, 3=cubic, 5=quintic); got {order!r}.")
+    if not np.isfinite(dx_in) or dx_in <= 0:
+        raise ValueError(
+            f"resample_field: dx_in must be positive and finite; "
+            f"got {dx_in!r}.")
+    if not np.isfinite(dx_out) or dx_out <= 0:
+        raise ValueError(
+            f"resample_field: dx_out must be positive and finite; "
+            f"got {dx_out!r}.")
+
     Ny_in, Nx_in = E_in.shape
     if N_out is None:
         Nx_out = int(round(Nx_in * dx_in / dx_out))
         Ny_out = int(round(Ny_in * dx_in / dx_out))
+        # S11-6a: the extent-preserving default silently rounds to 0 once
+        # ``dx_out`` exceeds the whole input extent (``dx_out >
+        # 2 * N_in * dx_in``), and the function then returned a (0, 0)
+        # array -- a shape-valid, physics-free result that only failed
+        # much later downstream.  Measured: ``N_in = 64``,
+        # ``dx_in = 1e-6``, ``dx_out = 1e-3`` -> ``round(0.064) = 0`` ->
+        # ``E_out.shape == (0, 0)``.
+        if Nx_out < 1 or Ny_out < 1:
+            raise ValueError(
+                f"resample_field: the extent-preserving default "
+                f"N_out = round(N_in * dx_in / dx_out) rounded to "
+                f"({Ny_out}, {Nx_out}) -- dx_out={dx_out!r} is too coarse "
+                f"to place even one sample across the input extent "
+                f"({Ny_in}x{Nx_in} @ dx_in={dx_in!r}, i.e. "
+                f"{Nx_in * dx_in!r} m).  Pass an explicit N_out >= 1 if "
+                f"you really want a coarser-than-the-field grid.")
     else:
         Nx_out = Ny_out = int(N_out)
+        if Nx_out < 1:
+            raise ValueError(
+                f"resample_field: N_out must be >= 1; got {N_out!r}.")
 
     # Output coordinates in input-pixel units.
     # Input grid:  x_in[i]  = (i - Nx_in/2)  * dx_in

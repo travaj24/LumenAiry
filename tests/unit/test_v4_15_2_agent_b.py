@@ -309,10 +309,22 @@ def _build_folded_prescription_curved() -> dict:
 
 
 class TestFromPrescriptionMirrorParity:
-    """v4.15.2 (audit P1-NEW-B): the operator-algebra ``from_prescription``
-    must condition ``mirror_parity ^= 1`` on the mirror having a finite
-    radius of curvature (curved mirror only), matching
-    ``raytrace.system_abcd`` exactly on folded prescriptions.
+    """v4.15.2 (audit P1-NEW-B): the operator-algebra
+    ``from_prescription`` must agree with ``raytrace.system_abcd``
+    exactly on folded prescriptions.
+
+    S11-1 RATIONALE UPDATE (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1;
+    both ASSERTIONS below are unchanged and still pass bit-for-bit).
+    This docstring used to state the contract as "condition
+    ``mirror_parity ^= 1`` on the mirror having a finite radius of
+    curvature (curved mirror only)".  That was the bug being copied, not
+    the contract: the Welford ``n' = -n`` flip encodes the REFLECTION,
+    not the power, so it is R-independent.  Both layers now flip on every
+    mirror.  Neither prescription in this class changes value under the
+    fix (``_build_folded_prescription_flat`` puts the flat fold LAST, so
+    there is no downstream leg to mis-sign), which is why both pins pass
+    untouched; the folded prescriptions that DO move are pinned in
+    tests/unit/test_v4_15_1_agent_g_matches_system_abcd.py.
     """
 
     def test_from_prescription_flat_mirror_parity_matches_system_abcd(
@@ -342,8 +354,9 @@ class TestFromPrescriptionMirrorParity:
         self,
     ) -> None:
         """Control test: a folded prescription with a CURVED mirror
-        must STILL flip parity correctly.  v4.15.2 only drops the
-        parity flip for flat mirrors; curved mirrors are unchanged.
+        must STILL flip parity correctly.  (S11-1: as of
+        AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1 flat mirrors flip too;
+        this curved-mirror control is bit-identical either way.)
 
         Verify by:
           1) confirming the algebra-layer ABCD matches ``system_abcd``

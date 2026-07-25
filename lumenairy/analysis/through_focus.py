@@ -484,7 +484,14 @@ def through_focus_scan(
     # NumPy path too -- the JAX twin (through_focus_scan_jax) already does,
     # so a backend switch silently changed ThroughFocusResult.best_focus_*
     # from a real value to the dataclass NaN default.
-    best_strehl = float(np.nanmax(strehl)) if ideal_peak else float('nan')
+    # S11-6e: all-NaN guard MIRRORING the ``np.nanmin(rms_r)`` sibling two
+    # lines down (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1).  An unguarded
+    # ``np.nanmax`` over an all-NaN ``strehl`` warns ("All-NaN slice
+    # encountered") and RAISES under warnings-as-errors, where the sibling
+    # returns a clean NaN.  Bit-identical whenever any entry is finite.
+    best_strehl = (float(np.nanmax(strehl))
+                   if (ideal_peak and np.any(np.isfinite(strehl)))
+                   else float('nan'))
     best_spot = (float(np.nanmin(rms_r))
                  if np.any(np.isfinite(rms_r)) else float('nan'))
     return ThroughFocusResult(
@@ -740,7 +747,12 @@ def apply_perturbations(
             # figure error -- avoids high-spatial-frequency noise.
             kx = np.fft.fftfreq(N, d=dx)
             KX, KY = np.meshgrid(kx, kx)
-            cutoff = 1.0 / (20.0 * dx)  # ~1/20 of Nyquist
+            # S11-6e (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1,
+            # comment-vs-code): the Nyquist spatial frequency of this grid
+            # is 1/(2*dx), so 1/(20*dx) is Nyquist/10, not "1/20 of
+            # Nyquist".  Comment corrected; the value is unchanged
+            # (bit-identical).
+            cutoff = 1.0 / (20.0 * dx)  # = Nyquist/10, Nyquist = 1/(2 dx)
             H = np.exp(-(KX ** 2 + KY ** 2) / (2 * cutoff ** 2))
             smooth = np.real(np.fft.ifft2(np.fft.fft2(raw) * H))
             smooth -= smooth.mean()
@@ -1301,7 +1313,14 @@ def through_focus_scan_jax(
         if 'strehl' in m:
             strehl[i] = m['strehl']
 
-    best_strehl = float(np.nanmax(strehl)) if ideal_peak else float('nan')
+    # S11-6e: all-NaN guard MIRRORING the ``np.nanmin(rms_r)`` sibling two
+    # lines down (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1).  An unguarded
+    # ``np.nanmax`` over an all-NaN ``strehl`` warns ("All-NaN slice
+    # encountered") and RAISES under warnings-as-errors, where the sibling
+    # returns a clean NaN.  Bit-identical whenever any entry is finite.
+    best_strehl = (float(np.nanmax(strehl))
+                   if (ideal_peak and np.any(np.isfinite(strehl)))
+                   else float('nan'))
     # v5.24.5 (AUDIT_V5_24_2 S3-8): all-NaN guard mirroring the NumPy twin
     # (through_focus_scan).  Since the S3-19 reconciliation routes this
     # backend through ``single_plane_metrics`` too, an all-zero scan now

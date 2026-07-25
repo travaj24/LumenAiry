@@ -48,7 +48,15 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
     units : str
         ``'mm'`` or ``'um'``.
     """
-    scale = {'um': 1e6, 'mm': 1e3, 'm': 1.0}[units]
+    # S11-6d (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): name the
+    # function and the offending value.  A wrong ``units`` string used to
+    # surface as a bare ``KeyError: 'cm'``.
+    _scales = {'um': 1e6, 'mm': 1e3, 'm': 1.0}
+    if units not in _scales:
+        raise ValueError(
+            f"trace_summary: units must be one of "
+            f"{sorted(_scales)}; got {units!r}.")
+    scale = _scales[units]
     label = {'um': 'µm', 'mm': 'mm', 'm': 'm'}[units]
 
     rms, (cx, cy) = spot_rms(result)
@@ -57,6 +65,14 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
     final = result.image_rays
     n_alive = int(np.sum(final.alive))
     n_total = final.n_rays
+    # S11-6d: an EMPTY bundle (n_total == 0) used to die here with a bare
+    # ``ZeroDivisionError: division by zero`` from ``n_alive / n_total``,
+    # naming neither the function nor the cause.
+    if n_total == 0:
+        raise ValueError(
+            "trace_summary: the trace result's image_rays bundle is EMPTY "
+            "(0 rays), so there is no vignetting fraction, centroid or spot "
+            "size to summarise.  Check the bundle passed to trace().")
     vignetting = 100 * (1 - n_alive / n_total)
 
     # Break down the loss by cause if error_code is available

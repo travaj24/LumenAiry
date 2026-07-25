@@ -567,6 +567,13 @@ def caustic_diagnostic(prescription: Dict[str, Any],
     # though the Maslov index counts both eigenvalues.
     caustic_z.sort()
     if len(caustic_z) > 1:
+        # S11-6f NOT-CHANGED (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): the
+        # dedup threshold uses the FIRST gap of ``z_samples`` as "one sample
+        # step", which is only the true local step on a UNIFORM axis -- on a
+        # log- or geometrically-spaced scan it under-merges at the coarse end
+        # and over-merges at the fine end.  A per-crossing local step is the
+        # correct form but changes the merge outcome on non-uniform axes, so it
+        # is not bit-identical and is left for a deliberate pass.
         sample_step = float(z_samples[1] - z_samples[0])
         merged = [caustic_z[0]]
         for zc in caustic_z[1:]:

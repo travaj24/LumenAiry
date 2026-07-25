@@ -468,8 +468,21 @@ def wave_opd_1d(
     wavelength : float
         Vacuum wavelength [m].  Used to convert unwrapped phase to OPL.
     axis : ``'x'`` or ``'y'``
-        Which pupil cut to extract.  ``'x'`` takes the row ``y = 0``;
-        ``'y'`` takes the column ``x = 0``.
+        Which pupil cut to extract.  ``'x'`` takes the row NEAREST
+        ``y = 0`` (row index ``Ny // 2``); ``'y'`` takes the column
+        nearest ``x = 0`` (column index ``Nx // 2``).
+
+        S11-6e (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1, the
+        ``N // 2``-vs-``N / 2`` label mismatch): the row/column INDEX is
+        the floor ``N // 2`` while the returned ``coord`` axis is
+        centred with the float ``N / 2``, so the extracted cut sits at
+        ``(N // 2 - N / 2) * d`` -- exactly ``0`` for EVEN ``N``, but
+        ``-d / 2`` for ODD ``N``.  That is not a bug in the row choice:
+        the centred grid ``(arange(N) - N / 2) * d`` has NO sample at
+        exactly 0 when ``N`` is odd, so ``N // 2`` is one of the two
+        nearest samples.  The docstring (which used to claim the cut is
+        at exactly ``y = 0`` / ``x = 0``) is what was wrong; the code and
+        the returned ``coord`` are unchanged.
     aperture : float, optional
         Clear-aperture diameter [m].  If given, the returned profile is
         cropped to |pupil coordinate| <= 0.5 * aperture.  Only the

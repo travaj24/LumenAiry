@@ -54,10 +54,19 @@ def apply_detector(
     dx_field : float
         Field grid spacing [m].
     pixel_pitch : float
-        Detector pixel pitch [m].  Determines the detector resolution.
+        Detector pixel pitch [m].  **The single authority on the
+        collecting area of one pixel**: each detector pixel integrates
+        the field over exactly ``pixel_pitch x pixel_pitch`` of physical
+        area, whatever ``n_pixels`` is (S11-4, see the Notes).
     n_pixels : int, optional
         Number of detector pixels across.  Default: covers the field
-        extent.
+        extent (``int(Nx * dx_field / pixel_pitch)``).  An explicit
+        value only sets the array SIZE -- it never rescales the pixel
+        area.  The detector therefore spans
+        ``n_pixels * pixel_pitch`` metres, centred on the field's
+        centre; field lying outside that span is DISCARDED (a smaller
+        detector inside a larger field collects less light), and
+        detector pixels lying outside the field collect nothing.
     exposure_time : float, default 1.0
         Integration time [s].
     quantum_efficiency : float, default 1.0
@@ -109,7 +118,54 @@ def apply_detector(
         Detected image in electrons (or photon-equivalent if input
         field is normalised to photons).
     x_det, y_det : ndarray
-        Detector pixel center coordinates [m].
+        Detector pixel coordinates [m], spaced by ``pixel_pitch``.
+        These are the LOWER-LEFT (minimum-x / minimum-y) EDGE of each
+        pixel, not its centre: pixel ``j`` integrates over
+        ``[x_det[j], x_det[j] + pixel_pitch)``.  (S11-4 note: the
+        pre-fix docstring called these "center coordinates", which they
+        have never been -- both binning branches map a field sample at
+        ``x`` to ``floor(x / pixel_pitch + n_pixels / 2)``.  The values
+        are left as-is rather than shifted by half a pixel because that
+        is a separate half-pixel-anchor decision of the same class as
+        ``analysis/plotting.py``'s ``(N-1)/2`` anchor, deliberately
+        deferred by AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1.  Add
+        ``pixel_pitch / 2`` if you need centres.)
+
+    Notes
+    -----
+    **S11-4 pixel-area contract**
+    (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1).  Pre-fix, an explicit
+    ``n_pixels`` silently redefined the pixel area: the integer fast
+    path block-summed ``Ny / n_pixels`` FIELD SAMPLES per detector pixel
+    while the returned axis was spaced by ``pixel_pitch``, so the
+    per-pixel signal was wrong by
+    ``((N * dx_field) / (n_pixels * pixel_pitch))**2`` and the whole
+    field's flux was crammed into (or smeared across) the declared
+    detector.  Measured at photon scale on a uniform
+    ``I0 = 1e18 /m^2/s`` field, 64x64 @ 1 um, QE 1, 1 s, no noise
+    (expected per-pixel electrons ``I0 * pixel_pitch**2``):
+
+    ======================== ============= =============
+    (n_pixels, pixel_pitch)  measured/exp  measured/exp
+    \\                        (pre-fix)     (post-fix)
+    ======================== ============= =============
+    (16, 4 um)  matched       1.0000        1.0000
+    (16, 2 um)                4.0000        1.0000
+    (16, 8 um)                0.2500        1.0000
+    (8,  2 um)               16.0000        1.0000
+    (16, 2.5 um)              2.5600        1.0000
+    ======================== ============= =============
+
+    The non-integer branch (v5.4.6 F-10) was already correct at every
+    combination -- it bins by physical position against ``pixel_pitch``
+    -- so the two branches also disagreed with each other.  The integer
+    block-sum fast path is now taken ONLY when it is provably identical
+    to the physical binning: ``pixel_pitch / dx_field`` an integer
+    ``s >= 1`` AND ``n_pixels * s == Nx == Ny`` (the detector exactly
+    tiling the field, which is what the default ``n_pixels`` produces).
+    Every other combination routes through the flux-conserving
+    physical-position branch.  Bit-identical for the default
+    ``n_pixels`` on a square field.
     """
     # v4.15.4 (P2-NEW-3WAY-2): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper.  v4.15.3 scoped the walker
@@ -125,8 +181,27 @@ def apply_detector(
     I_field = np.abs(E) ** 2  # intensity [per m^2 if field is normalised]
 
     # Determine detector grid
+    if not np.isfinite(pixel_pitch) or pixel_pitch <= 0:
+        raise ValueError(
+            f"apply_detector: pixel_pitch must be positive and finite; "
+            f"got {pixel_pitch!r}.")
+    if not np.isfinite(dx_field) or dx_field <= 0:
+        raise ValueError(
+            f"apply_detector: dx_field must be positive and finite; "
+            f"got {dx_field!r}.")
     if n_pixels is None:
         n_pixels = max(1, int(Nx * dx_field / pixel_pitch))
+    else:
+        # S11-4: a non-positive explicit count used to reach the binning
+        # block and die inside numpy ("zero-size array to reduction
+        # operation maximum" for 0, "can only specify one unknown
+        # dimension" for -2), naming neither this function nor the
+        # argument.
+        n_pixels = int(n_pixels)
+        if n_pixels < 1:
+            raise ValueError(
+                f"apply_detector: n_pixels must be >= 1 (or None to cover "
+                f"the field extent); got {n_pixels!r}.")
 
     x_det = (np.arange(n_pixels) - n_pixels / 2) * pixel_pitch
     y_det = (np.arange(n_pixels) - n_pixels / 2) * pixel_pitch
@@ -158,14 +233,27 @@ def apply_detector(
     # sample at the new pixel centers, scaled by pixel_pitch^2 so the
     # integral over each detector pixel is correctly represented.
     # (P4: removed a leftover compute-and-discard expression here.)
-    # Per-detector-pixel area in field samples.
-    samples_per_pix_y = (Ny / n_pixels) if n_pixels > 0 else 1.0
-    samples_per_pix_x = (Nx / n_pixels) if n_pixels > 0 else 1.0
-    if (abs(samples_per_pix_y - round(samples_per_pix_y)) < 1e-9
-            and abs(samples_per_pix_x - round(samples_per_pix_x)) < 1e-9):
-        # Integer ratio: block-sum is exact area integration.
-        spy = int(round(samples_per_pix_y))
-        spx = int(round(samples_per_pix_x))
+    #
+    # Per-detector-pixel area in field samples.  S11-4
+    # (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): this MUST come from
+    # ``pixel_pitch``, the physical pixel size, not from
+    # ``Ny / n_pixels``.  See the Notes block in the docstring for the
+    # photon-scale before/after table (up to 16x per-pixel error).
+    samples_per_pix = pixel_pitch / dx_field
+    _sp_int = int(round(samples_per_pix))
+    # The block-sum fast path starts its blocks at field sample 0 and so
+    # is identical to the physical-position binning only when the
+    # detector exactly tiles the field with an integer sample count --
+    # otherwise the block grid is offset from (and/or wider/narrower
+    # than) the physical pixel grid the returned axis describes.
+    if (_sp_int >= 1
+            and abs(samples_per_pix - _sp_int) < 1e-9
+            and n_pixels * _sp_int == Nx
+            and n_pixels * _sp_int == Ny):
+        # Integer ratio, detector exactly tiling the field: block-sum is
+        # exact area integration and coincides with the physical bins.
+        spy = _sp_int
+        spx = _sp_int
         # Use np.add.reduceat for the 2-D block-sum.  Trim trailing
         # samples that don't fit a full block, then reduceat with the
         # block-start indices.
@@ -184,8 +272,11 @@ def apply_detector(
         image[:block_h, :block_w] = block[:block_h, :block_w]
         image = image * (dx_field ** 2)
     else:
-        # v5.4.6 (audit F-10): flux-CONSERVING area integration for
-        # non-integer samples-per-pixel ratios.  Each field sample carries
+        # v5.4.6 (audit F-10): flux-CONSERVING area integration.  S11-4:
+        # this is now also the path for INTEGER ratios whose detector
+        # does not exactly tile the field -- it is the only branch that
+        # honours ``pixel_pitch`` as the pixel area, so it is the
+        # reference, not the fallback.  Each field sample carries
         # energy ``I_field * dx_field**2`` and is assigned to the detector
         # pixel that contains its physical centre; the per-pixel sum is the
         # integral of I_field over the covered area, exact to the field-grid
@@ -325,8 +416,21 @@ def shack_hartmann(
     n_lenslets : int, optional
         Number of lenslets across.  Default: auto from field extent.
     detector_pixels_per_lenslet : int, default 16
-        Pixel density per sub-aperture on the detector (determines
-        centroiding accuracy).
+        **RESERVED / currently inert.**  S11-4
+        (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1) confirmed this
+        parameter has never been read: the focal-plane intensity is
+        centroided on the sub-aperture's own FFT grid, whose sampling is
+        ``sa_pixels = round(lenslet_pitch / dx)`` -- set by ``dx`` and
+        ``lenslet_pitch``, never by this value.  It is validated (must be
+        a positive int) so a typo cannot pass silently, and kept in the
+        signature because ``shack_hartmann`` is public API and callers
+        pass it; it is NOT removed without the deprecation cycle this
+        repo uses for API breaks (cf. the v4.9-deprecate / v5.0-remove
+        path for ``cosmic_ray_rate``).  Wiring it -- rebinning
+        ``I_focus`` onto a coarser detector before centroiding -- is a
+        real pixelated-detector FEATURE that moves every SH slope, and
+        with it ``analysis.ao``'s ``slope_scale`` calibration and the
+        closed-loop AO pins; it needs its own gated pass.
     seed : int, optional
         Random seed for noise (currently deterministic; reserved).
 
@@ -349,6 +453,17 @@ def shack_hartmann(
     # 'pupil' (the SH-WFS measures a complex pupil-plane field).
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'shack_hartmann')
+    # S11-4: validate the reserved knob so a nonsense value cannot pass
+    # silently (see its docstring entry for why it is inert).
+    if (int(detector_pixels_per_lenslet) != detector_pixels_per_lenslet
+            or detector_pixels_per_lenslet < 1):
+        raise ValueError(
+            f"shack_hartmann: detector_pixels_per_lenslet must be a "
+            f"positive integer; got {detector_pixels_per_lenslet!r}.  "
+            f"NOTE this parameter is currently RESERVED and does not "
+            f"affect the result -- the focal-plane centroid is computed "
+            f"on the sub-aperture FFT grid of "
+            f"round(lenslet_pitch / dx) samples.")
     N = E.shape[0]
     extent = N * dx
     if n_lenslets is None:

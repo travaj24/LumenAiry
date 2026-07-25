@@ -2132,6 +2132,13 @@ def _caustic_zone(E_in, dx, prescription, wavelength, n_rays=25):
     amp = np.abs(row)
     if amp.max() <= 0.0:
         return None
+    # S11-6f NOT-CHANGED (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): the
+    # caustic zone below is the 5th-95th percentile of the axial crossings of
+    # an UNWEIGHTED, equally-radius-spaced meridional fan, so it weights every
+    # pupil zone alike rather than by annular area (2*pi*r*dr) or by the local
+    # |E|^2.  An area/amplitude-weighted percentile is the physically better
+    # metric but is NOT bit-identical on any input, so it is left for a
+    # deliberate metric-definition pass rather than folded into a hygiene fix.
     # local slope u = (1/k) d(arg E)/dx on the illuminated support (+x half)
     phase = np.unwrap(np.angle(np.where(amp > 1e-6 * amp.max(), row, 1.0)))
     slope = np.gradient(phase, dx) / k

@@ -198,11 +198,21 @@ def _build_folded_singlet() -> dict:
     """Build a folded prescription: refractive singlet followed by a
     flat fold mirror, then a final image plane.
 
-    ``system_abcd`` walks the surface list and treats the flat mirror
-    via the ``R_mat = np.eye(2)`` branch without flipping
-    ``mirror_parity``.  The operator-algebra ``from_prescription`` must
-    match this exactly -- pre-v4.15.2 it flipped parity for flat
-    mirrors and produced an off-sign ABCD on this prescription.
+    S11-1 RATIONALE UPDATE (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1;
+    the ASSERTION is unchanged and still passes bit-for-bit).  This
+    docstring used to say the flat mirror takes the ``R_mat = np.eye(2)``
+    branch "without flipping ``mirror_parity``" and that the algebra
+    layer must match that.  That was the BUG, not the contract: the
+    Welford ``n' = -n`` flip encodes the reflection, not the power, so it
+    is R-independent, and both layers now flip parity on every mirror.
+    This particular prescription's ABCD is UNCHANGED by the fix (the
+    flat fold is the LAST surface, so no downstream leg exists to
+    mis-sign) -- which is why the pin still passes untouched.  The
+    prescriptions that DO move are ``_build_folded_telephoto``,
+    ``_build_folded_4fold_periscope`` and
+    ``_build_folded_cassegrain_2curved_2flat``; see their docstrings.
+    The load-bearing content of this test is unchanged: the two layers
+    must agree.
     """
     glass = 'N-BK7'
     return {
@@ -228,9 +238,20 @@ def _build_folded_telephoto() -> dict:
 
     Doubles up the v4.15.2 audit scenario: a real folded design from a
     Cassegrain-ish layout where the first group is positive, then a
-    flat fold mirror, then a negative rear group.  The flat mirror
-    must NOT flip parity in either the algebra layer or
-    ``system_abcd``.
+    flat fold mirror, then a negative rear group.
+
+    S11-1 DELIBERATE PIN MOVE (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25
+    §1).  This docstring used to say "the flat mirror must NOT flip
+    parity in either the algebra layer or ``system_abcd``" -- that was
+    the bug.  Both layers now flip on every mirror (R-independent
+    Welford ``n' = -n``), so this prescription's answer MOVED:
+    EFL +0.51956755 -> +0.02596403 m, BFL +0.13624570 -> +0.02409210 m.
+    The new value is the correct one: the library's own exact 3-D trace
+    (``raytrace.trace``, which shares no code with ``system_abcd``)
+    puts the paraxial back focus at +0.024092097 m -- the new ABCD
+    matches it to 2.4e-13 while the old one was off by 1.12e-1 m.
+    The assertion itself (algebra layer == ``system_abcd``) is
+    unchanged and still holds bit-for-bit.
     """
     return {
         'name': 'FoldedTelephoto',
@@ -259,13 +280,22 @@ def _build_folded_4fold_periscope() -> dict:
     Four flat fold mirrors in sequence with a refractive singlet
     interleaved between the second and third fold.  This doubles the
     2-fold ``_build_folded_singlet`` case to exercise the
-    flat-mirror-parity path **four times** in a single prescription
-    -- each flat fold must NOT flip ``mirror_parity`` in either
-    layer (algebra or ``system_abcd``).
+    flat-mirror-parity path **four times** in a single prescription.
 
     Geometry mirrors a real-world periscope: a beam enters, bounces
     off four flat folds, traverses a refractive singlet, and exits.
     Total mirror count: 4; refractive elements: 1 (BK7 singlet).
+
+    S11-1 DELIBERATE PIN MOVE (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25
+    §1).  This docstring used to say "each flat fold must NOT flip
+    ``mirror_parity`` in either layer" -- that was the bug.  Both layers
+    now flip on every mirror, so this prescription's answer MOVED:
+    BFL +0.01757552 -> +0.04757552 m (EFL is unchanged at +0.05891071 m
+    because an even number of folds restores the parity, but the
+    intervening reduced thicknesses had the wrong sign).  The exact 3-D
+    trace puts the paraxial back focus at +0.047575518 m: the new ABCD
+    matches to 2.7e-13, the old one was off by 3.0e-2 m.  The assertion
+    itself (algebra layer == ``system_abcd``) is unchanged.
     """
     glass = 'N-BK7'
     return {
@@ -304,13 +334,22 @@ def _build_folded_cassegrain_2curved_2flat() -> dict:
     Two CURVED mirrors (primary concave + secondary convex) plus two
     FLAT fold mirrors after the cassegrain group.  This is the
     canonical mixed-mirror geometry: ``system_abcd`` and
-    ``from_prescription`` must agree even when CURVED mirrors flip
-    parity twice (cancelling) and FLAT mirrors don't flip parity at
-    all.  The cumulative parity at the output is therefore even (no
-    net flip) -- the parity bookkeeping is non-trivial but the
-    algebra layer must still match the ground truth.
+    ``from_prescription`` must agree across a non-trivial parity
+    sequence.  With 4 mirrors the cumulative parity at the output is
+    even (no net flip), but the reduced thicknesses of the intervening
+    legs do carry the running sign.
 
     Surface count: 4 mirrors.  Refractive elements: 0.
+
+    S11-1 DELIBERATE PIN MOVE (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25
+    §1).  This docstring used to say "FLAT mirrors don't flip parity at
+    all" -- that was the bug.  Both layers now flip on every mirror, so
+    this prescription's answer MOVED: BFL -0.18363636 -> -0.14363636 m
+    (EFL unchanged at -0.04545455 m -- 2 flat folds restore the parity,
+    but the fold-1 -> fold-2 leg had the wrong reduced-thickness sign).
+    The exact 3-D trace puts the paraxial back focus at -0.143636364 m:
+    the new ABCD matches to 1.2e-14, the old one was off by 4.0e-2 m.
+    The assertion itself (algebra layer == ``system_abcd``) is unchanged.
     """
     return {
         'name': 'FoldedCassegrain2Curved2Flat',
@@ -367,9 +406,21 @@ def test_from_prescription_matches_system_abcd_folded(
 
     Pre-v4.15.2 ``from_prescription`` unconditionally flipped
     ``mirror_parity`` on every ``is_mirror=True`` surface, while
-    ``system_abcd`` only flips parity for CURVED mirrors.  A
+    ``system_abcd`` only flipped parity for CURVED mirrors.  A
     folded design with a flat fold mirror therefore got an off-sign
-    ABCD from the algebra layer.
+    ABCD from the algebra layer.  v4.15.2 resolved that DISAGREEMENT by
+    making the algebra layer copy ``system_abcd``.
+
+    S11-1 (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1) then found that
+    the answer both layers had converged on was the WRONG one: the
+    Welford ``n' = -n`` flip is R-INDEPENDENT (it encodes the
+    reflection, not the power), and skipping it at a flat fold mis-signs
+    every downstream reduced thickness.  ``system_abcd`` and the algebra
+    twin now BOTH flip on every mirror.  This test's assertion is
+    unchanged -- it always was an agreement pin -- but the agreed value
+    moved on 3 of the 4 folded prescriptions; each ``_build_*``
+    docstring records its before/after and the exact-3-D-trace
+    validation.
 
     v4.15.3 (Tier-1): adds 4-fold-mirror coverage (periscope and
     cassegrain-style) per the v4.15.2 audit P3 recommendation.

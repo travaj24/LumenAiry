@@ -161,6 +161,23 @@ def conic_sag(x, y, R, conic, asph_items, *, xp):
     NaN instead; the two are intentionally distinct, so they are NOT
     merged).
 
+    Non-finite INPUT positions are the one exception (S11-7,
+    AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1).  The zero-clamp is a
+    domain policy for REAL, in-range-but-past-the-conic-limit heights; it
+    was ALSO swallowing ``x``/``y`` that had already gone NaN or inf
+    upstream, so ``conic_sag(nan) == +0.0`` -- a finite, plausible sag at
+    a phantom vertex that a jax-traced Newton solve could converge onto
+    and keep a faulted ray alive.  It was also inconsistent with this
+    module's own sibling: ``conic_sag_derivs(nan)`` already returned NaN
+    on the curved branch.  A non-finite ``h^2`` now propagates through to
+    the returned sag (``nan -> nan``, ``inf -> inf``) while every FINITE
+    input -- in-domain or out-of-domain -- keeps its previous value and
+    its previous (zero) out-of-domain gradient bit-for-bit.  The
+    propagation is written as ``where(isfinite(h_sq), sag, h_sq)``, whose
+    reverse-mode derivative selects the ``h_sq`` branch only where the
+    input is already non-finite, so ``jax.grad`` at healthy inputs is
+    untouched and NOT newly NaN-poisoned.
+
     Parameters
     ----------
     x, y :
@@ -186,6 +203,11 @@ def conic_sag(x, y, R, conic, asph_items, *, xp):
         valid, h_sq / (R_finite * (1.0 + xp.sqrt(denom_arg))), 0.0)
     is_flat = xp.isinf(R) | (xp.abs(R) > 1e15)
     sag = xp.where(is_flat, xp.zeros_like(h_sq), conic_term)
+    # S11-7: a non-finite INPUT position is a fault, not an out-of-domain
+    # height -- let it through instead of clamping it to a finite 0.0.
+    # (With aspheric terms the ``h_sq ** p`` below already propagated it;
+    # without them the clamp hid it entirely.)
+    sag = xp.where(xp.isfinite(h_sq), sag, h_sq)
     for power, coeff in asph_items:
         sag = sag + coeff * h_sq ** (power // 2)
     return sag
@@ -213,6 +235,13 @@ def conic_sag_derivs(x, y, R, conic, asph_items, *, xp):
     is_flat = xp.isinf(R) | (xp.abs(R) > 1e15)
     zx = xp.where(is_flat, xp.zeros_like(x), zx_conic)
     zy = xp.where(is_flat, xp.zeros_like(y), zy_conic)
+    # S11-7: match :func:`conic_sag` -- a non-finite input position
+    # propagates.  The CURVED branch above already did (``x / sd`` with a
+    # NaN ``x``); only the FLAT branch's ``zeros_like`` clamp hid it, so
+    # a flat surface reported a perfectly defined zero gradient at a NaN
+    # position.  Bit-identical for every finite input.
+    zx = xp.where(xp.isfinite(x), zx, x)
+    zy = xp.where(xp.isfinite(y), zy, y)
     for power, coeff in asph_items:
         if power == 2:
             zx = zx + 2.0 * coeff * x

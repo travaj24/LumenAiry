@@ -493,6 +493,12 @@ def _place_cdf(
     ix = np.clip(ix, 0, Nx - 1).astype(np.intp)
     iy = np.clip(iy, 0, Ny - 1).astype(np.intp)
 
+    # S11-6f NOT-CHANGED (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): the ray
+    # origin is anchored on ``N // 2`` while the propagators' centred field
+    # grid is ``(j - N/2)*dx``; the two agree for even N and differ by dx/2 for
+    # odd N.  Every placement helper in this module shares the anchor (so they
+    # are mutually consistent), and changing it moves every ray on every odd-N
+    # field -- not bit-identical, left for a deliberate grid-convention pass.
     x = (ix - Nx // 2) * dx
     y = (iy - Ny // 2) * dy
     return x.astype(np.float64), y.astype(np.float64), ix, iy
@@ -618,8 +624,33 @@ def _place_uniform(
 
     # Pick the central pixel of each sub-cell -- monotonic spacing
     # across the masked region.
-    iy_pixels = np.linspace(0, Ny - 1, ny_grid, dtype=np.intp)
-    ix_pixels = np.linspace(0, Nx - 1, nx_grid, dtype=np.intp)
+    #
+    # S11-3 (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1, the lattice /
+    # cell-centring pattern).  ``np.linspace(0, N-1, n)`` is EDGE-
+    # ANCHORED: it puts the first and last sub-grid point exactly ON the
+    # array edges (pixels 0 and N-1), which contradicts this function's
+    # own "central pixel of each sub-cell" contract and -- on any centred
+    # beam -- lands those points where the intensity is far below
+    # ``intensity_threshold``, so they are thresholded away.  Measured on
+    # a centred w0 = 80 um Gaussian on a 64x64 / 10 um grid at
+    # ``intensity_threshold = 1e-4``: n_rays = 1, 2 and 4 produced ZERO
+    # survivors (``rays_from_field`` then RAISED "no pixels survived
+    # intensity thresholding"), 9 -> 1 ray, 16 -> 4, 25 -> 5.
+    #
+    # The cell-centred lattice ``(arange(n) + 0.5) * N / n - 0.5`` places
+    # sub-grid point k at the centre of the k-th equal-area sub-cell of
+    # the pixel span [-0.5, N-0.5] -- the same convention
+    # ``analysis/detector.py`` uses for field-sample centres and
+    # ``elements/rcwa`` uses for period fractions.  For n = 1 it lands on
+    # the centre pixel (N=64 -> 31.5 -> pixel 32) instead of the corner.
+    # NOT bit-compatible at any n_rays: this is a deliberate placement
+    # change, pinned in tests/unit/test_niche_s11_sibling_deferred.py.
+    iy_pixels = np.clip(
+        np.round((np.arange(ny_grid) + 0.5) * Ny / ny_grid - 0.5),
+        0, Ny - 1).astype(np.intp)
+    ix_pixels = np.clip(
+        np.round((np.arange(nx_grid) + 0.5) * Nx / nx_grid - 0.5),
+        0, Nx - 1).astype(np.intp)
     iy_grid, ix_grid = np.meshgrid(iy_pixels, ix_pixels, indexing='ij')
     iy_flat = iy_grid.ravel()
     ix_flat = ix_grid.ravel()

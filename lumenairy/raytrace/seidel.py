@@ -115,21 +115,50 @@ def system_abcd(
         R = surf.radius
 
         # Refraction matrix
-        if np.isfinite(R) and not surf.is_mirror:
-            phi = (n2 - n1) / R
-            R_mat = np.array([[1.0, 0.0],
-                              [-phi, 1.0]])
-        elif surf.is_mirror and np.isfinite(R):
+        #
+        # S11-1 (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1, the
+        # ``isinf`` sentinel pattern): the mirror branch is tested FIRST
+        # and is R-INDEPENDENT.  Welford's ``n_after = -n_before`` and the
+        # parity flip encode the REFLECTION (the propagation direction
+        # reverses), not the POWER -- for R = inf the power term vanishes
+        # but the index sign flip still holds, because
+        # ``u' = nu'/n' = nu/(-n) = -u`` when c = 0.  Pre-fix the branch
+        # read ``elif surf.is_mirror and np.isfinite(R)``, so a FLAT fold
+        # mirror fell into the powerless ``np.eye(2)`` branch and skipped
+        # the bookkeeping entirely, leaving every downstream leg with the
+        # wrong index sign AND the wrong ray slope.  Measured on
+        # ``[flat fold(t=0.2), concave R=-1]``: EFL/BFL +0.500000 where
+        # the exact 3-D trace (raytrace.trace, no shared code) gives
+        # -0.500000 and the R = -1e9 curved fold gives -0.500000; on
+        # ``[mirror R=-1, flat fold, mirror R=-0.5]`` the error is not
+        # even a global sign -- EFL -0.19230769 vs the exact trace's
+        # +0.16666667 (the marginal ray height diverges at every surface
+        # past the fold: y = [12.700, 17.780, 22.860] mm instead of
+        # [12.700, 17.780, 12.700] mm).  The old gating was also
+        # DISCONTINUOUS in R: R = -1e12 gave EFL -0.1985770345 while
+        # R = inf gave +0.1985770345 on the same folded singlet.
+        # Bit-identical for curved mirrors, curved refractors and flat
+        # refractors (same arithmetic, same order).
+        if surf.is_mirror:
             # Welford mirror: n_after = -n_before.  Power is
             # phi = (n2 - n1)/R = -2*n1/R.  This is the OPPOSITE sign
             # from the pre-4.11.2 formula (phi = +2*n1/R) and matches
             # seidel_coefficients's mirror branch.
             n2 = -n1
-            phi = (n2 - n1) / R   # = -2 * n1 / R
-            R_mat = np.array([[1.0, 0.0],
-                              [-phi, 1.0]])
+            if np.isfinite(R):
+                phi = (n2 - n1) / R   # = -2 * n1 / R
+                R_mat = np.array([[1.0, 0.0],
+                                  [-phi, 1.0]])
+            else:
+                # Flat fold: zero power, identity refraction matrix --
+                # but the index/parity flip below still applies.
+                R_mat = np.eye(2)
             # Flip parity for the post-mirror legs.
             mirror_parity ^= 1
+        elif np.isfinite(R):
+            phi = (n2 - n1) / R
+            R_mat = np.array([[1.0, 0.0],
+                              [-phi, 1.0]])
         else:
             R_mat = np.eye(2)
 
@@ -995,7 +1024,74 @@ def seidel_coefficients(
         y_c[i] = y_val_c
         nu_c[i] = nu_val_c
 
-        if np.isfinite(R) and not surf.is_mirror:
+        # S11-1 (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): the mirror
+        # branch is tested FIRST and is R-INDEPENDENT -- see the matching
+        # note in :func:`system_abcd`.  Pre-fix a FLAT fold mirror fell
+        # into the flat-REFRACTOR branch below, which does not set
+        # ``n2 = -n1`` and does not flip ``mirror_parity``, so every
+        # surface downstream of a flat fold was evaluated at the wrong
+        # effective index sign and the wrong marginal/chief ray height.
+        if surf.is_mirror:
+            # Mirror in the Welford paraxial convention: treat as a
+            # refracting surface with n2 = -n1, so the same Welford
+            # Seidel sums apply.  Pre-4.10 the mirror branch only
+            # updated ray heights and never wrote S1..S5 -- every
+            # catadioptric / reflective design silently reported zero
+            # spherical, coma, astigmatism, Petzval, distortion.
+            #
+            # 4.11.2: ``n1`` already carries the running mirror-parity
+            # sign (from the ``sign`` multiplier above), so ``n2 = -n1``
+            # composes correctly across chained mirrors -- after two
+            # mirrors n1 returns to +1 (Cassegrain final leg), after
+            # three it's -1, etc.
+            #
+            # S11-1: ``c = 0`` for a flat fold makes every power-carrying
+            # term vanish exactly (``i = 0*y + u = u``, ``nu' = nu``,
+            # ``delta_un = 0``, ``S1..S5 = 0``), i.e. a flat fold
+            # contributes no aberration -- which is the correct physics
+            # and matches the flat-refractor branch's numbers for its own
+            # row.  What changes is ``n2`` (hence the transfer) and the
+            # parity for all following surfaces.
+            c = (1.0 / R) if np.isfinite(R) else 0.0
+            n2 = -n1
+            u_m = nu_val_m / n1
+            u_c = nu_val_c / n1
+
+            i_m = c * y_val_m + u_m
+            i_c = c * y_val_c + u_c
+
+            # Refract: phi = (n2 - n1) c = -2 n1 c
+            nu_m_after = nu_val_m - y_val_m * (n2 - n1) * c
+            nu_c_after = nu_val_c - y_val_c * (n2 - n1) * c
+
+            u_m_after = nu_m_after / n2
+
+            A_m = n1 * i_m   # = n2 * i_after (Snell)
+            A_c = n1 * i_c
+
+            h = y_val_m
+            delta_un = (u_m_after / n2) - (u_m / n1)
+
+            S1[i] = -(A_m ** 2) * h * delta_un
+            S2[i] = -(A_m * A_c) * h * delta_un
+            S3[i] = -(A_c ** 2) * h * delta_un
+            # S3-1 fix: the Petzval sum S_IV must carry the SAME sign
+            # convention as S1..S3 above (code = -S_Welford).  The prior
+            # form kept an extra minus, leaving S4 at +S_IV_Welford -- the
+            # opposite convention -- which then corrupted the Schwarzschild
+            # S5 (distortion) and the seidel_wfe field-curvature term.
+            S4[i] = (1.0 / (n2 * n1)) * c * (n2 - n1)
+            S5[i] = (A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
+
+            nu_val_m = nu_m_after
+            nu_val_c = nu_c_after
+
+            # Flip parity for the post-mirror legs so subsequent
+            # ``glass_before``/``glass_after`` lookups (which return
+            # positive indices) get sign-corrected via ``sign``.
+            mirror_parity ^= 1
+
+        elif np.isfinite(R):
             c = 1.0 / R  # curvature
 
             # Incidence angle (paraxial): i = c*y + u = c*y + nu/n
@@ -1049,57 +1145,6 @@ def seidel_coefficients(
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
 
-        elif surf.is_mirror and np.isfinite(R):
-            # Mirror in the Welford paraxial convention: treat as a
-            # refracting surface with n2 = -n1, so the same Welford
-            # Seidel sums apply.  Pre-4.10 the mirror branch only
-            # updated ray heights and never wrote S1..S5 -- every
-            # catadioptric / reflective design silently reported zero
-            # spherical, coma, astigmatism, Petzval, distortion.
-            #
-            # 4.11.2: ``n1`` already carries the running mirror-parity
-            # sign (from the ``sign`` multiplier above), so ``n2 = -n1``
-            # composes correctly across chained mirrors -- after two
-            # mirrors n1 returns to +1 (Cassegrain final leg), after
-            # three it's -1, etc.
-            c = 1.0 / R
-            n2 = -n1
-            u_m = nu_val_m / n1
-            u_c = nu_val_c / n1
-
-            i_m = c * y_val_m + u_m
-            i_c = c * y_val_c + u_c
-
-            # Refract: phi = (n2 - n1) c = -2 n1 c
-            nu_m_after = nu_val_m - y_val_m * (n2 - n1) * c
-            nu_c_after = nu_val_c - y_val_c * (n2 - n1) * c
-
-            u_m_after = nu_m_after / n2
-
-            A_m = n1 * i_m   # = n2 * i_after (Snell)
-            A_c = n1 * i_c
-
-            h = y_val_m
-            delta_un = (u_m_after / n2) - (u_m / n1)
-
-            S1[i] = -(A_m ** 2) * h * delta_un
-            S2[i] = -(A_m * A_c) * h * delta_un
-            S3[i] = -(A_c ** 2) * h * delta_un
-            # S3-1 fix: the Petzval sum S_IV must carry the SAME sign
-            # convention as S1..S3 above (code = -S_Welford).  The prior
-            # form kept an extra minus, leaving S4 at +S_IV_Welford -- the
-            # opposite convention -- which then corrupted the Schwarzschild
-            # S5 (distortion) and the seidel_wfe field-curvature term.
-            S4[i] = (1.0 / (n2 * n1)) * c * (n2 - n1)
-            S5[i] = (A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
-
-            nu_val_m = nu_m_after
-            nu_val_c = nu_c_after
-
-            # Flip parity for the post-mirror legs so subsequent
-            # ``glass_before``/``glass_after`` lookups (which return
-            # positive indices) get sign-corrected via ``sign``.
-            mirror_parity ^= 1
         else:
             # Flat refracting surface: c=0 but Δ(u/n) is still nonzero
             # for non-normal incidence (Snell's law: n1·u_m = n2·u_m_after,

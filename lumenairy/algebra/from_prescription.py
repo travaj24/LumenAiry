@@ -146,7 +146,34 @@ def from_prescription(
         n2 = sign * get_glass_index(surf.glass_after, wl)
         R = surf.radius
 
-        if np.isfinite(R) and not surf.is_mirror:
+        if surf.is_mirror:
+            # Welford mirror: n2 = -n1, phi = -2 n1 / R.
+            #
+            # S11-1 (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): the
+            # mirror branch is R-INDEPENDENT.  ``n2 = -n1`` and the
+            # parity toggle encode the REFLECTION, not the power: a flat
+            # fold has phi = 0 but still reverses the propagation
+            # direction, so the post-fold reduced thickness ``t / n2``
+            # must carry the flipped sign.
+            #
+            # v4.15.2 (audit P1-NEW-B) had made this layer skip the
+            # parity toggle for FLAT mirrors specifically to match
+            # ``raytrace.system_abcd``, whose own ``elif surf.is_mirror
+            # and np.isfinite(R)`` gating dropped it.  That made the two
+            # layers agree on the WRONG answer -- ``system_abcd`` is now
+            # fixed (see the S11-1 note in raytrace/seidel.py, with the
+            # exact-3-D-trace oracle numbers), so this twin follows it
+            # back to the R-independent form.  Bit-identical for curved
+            # mirrors and for every mirror-free prescription.
+            n2 = -n1
+            if np.isfinite(R):
+                phi = (n2 - n1) / R
+                if phi != 0.0:
+                    f_eff = 1.0 / phi
+                    chain.append(ThinLens(f_eff))
+            # Toggle mirror parity for the post-mirror legs.
+            mirror_parity ^= 1
+        elif np.isfinite(R):
             # Refractive curved surface: power phi = (n2 - n1)/R.
             phi = (n2 - n1) / R
             if phi != 0.0:
@@ -155,26 +182,8 @@ def from_prescription(
             # phi == 0 (rare: same glass on both sides with curved
             # radius, or n2 == n1 from a chromatic crossover) is the
             # identity, intentionally skipped.
-        elif surf.is_mirror and np.isfinite(R):
-            # Welford mirror: n2 = -n1, phi = -2 n1 / R.
-            n2 = -n1
-            phi = (n2 - n1) / R
-            if phi != 0.0:
-                f_eff = 1.0 / phi
-                chain.append(ThinLens(f_eff))
-            # Toggle mirror parity for the post-mirror legs.
-            mirror_parity ^= 1
         else:
-            # Flat refractive or flat mirror: no power contribution,
-            # no parity flip.  v4.15.2 (audit P1-NEW-B): mirror_parity
-            # is ONLY toggled for curved mirrors, matching
-            # ``raytrace.system_abcd`` (raytrace/core.py:2275-2291).
-            # In ``system_abcd`` a flat mirror falls into the
-            # ``R_mat = np.eye(2)`` branch and does not modify
-            # ``mirror_parity``.  Pre-v4.15.2 the algebra layer
-            # flipped parity unconditionally for ``is_mirror=True``,
-            # producing off-sign ABCDs on folded prescriptions with
-            # any flat fold mirror.
+            # Flat refractive surface: no power contribution.
             pass
 
         # Thickness gap to next surface.  ``n2`` here already

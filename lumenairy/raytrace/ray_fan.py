@@ -40,6 +40,36 @@ from .trace import (
 )
 from .world_trace import trace_world
 
+
+# ============================================================================
+# Shared helper: entrance-pupil-centring launch offset
+# ============================================================================
+
+def _ep_offset(ep_z: float, field_angle: float) -> float:
+    """Launch-height offset that puts a ``z = 0``-launched chief / fan ray
+    through the entrance-pupil centre at ``z = ep_z``.
+
+    ``-ep_z * tan(field_angle)`` -- but S11-6c
+    (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1) found that raw expression
+    produces ``NaN`` for an OBJECT-SPACE TELECENTRIC system, where
+    ``compute_pupils`` legitimately returns ``ep_z = inf`` (the stop sits
+    at the pre-stop group's rear focal plane, so ``A_pre = 0``): on-axis
+    that is ``inf * tan(0) = inf * 0 = NaN``, and the NaN then propagated
+    into every launched ray height, so ``ray_fan_data`` /
+    ``opd_fan_data`` returned all-NaN fans with no diagnostic.  An
+    entrance pupil at infinity has no FINITE centring offset at any
+    field, so fall back to the legacy origin-launched convention
+    (``ep_off = 0``) -- exactly what the callers' ``except`` branches
+    already do for every other pupil failure.
+
+    Bit-identical whenever ``ep_z`` is finite, which is every
+    non-telecentric system: the arithmetic is untouched there.
+    """
+    if not np.isfinite(ep_z):
+        return 0.0
+    return -ep_z * np.tan(field_angle)
+
+
 # ============================================================================
 # Analysis: spot diagram
 # ============================================================================
@@ -246,7 +276,7 @@ def ray_fan_data(
     # against a chief of the SAME orientation so ``ey(0) == ex(0) == 0``.
     try:
         fod = first_order_data(surfaces, wavelength)
-        ep_off = -fod.ep_z * np.tan(field_angle)
+        ep_off = _ep_offset(fod.ep_z, field_angle)
         # make_ray(x, y, L, M, *, wavelength): tangential chief tilts in M,
         # sagittal chief tilts in L; each launches at z=0 with the ep_off
         # offset along its axis so it crosses the EP centre at z=ep_z.
@@ -312,7 +342,7 @@ def ray_fan_data_world(
     # ``ep_off = 0`` reproduces the previous origin-launched behaviour.
     try:
         fod = first_order_data(surfaces, wavelength)
-        ep_off = -fod.ep_z * np.tan(field_angle)
+        ep_off = _ep_offset(fod.ep_z, field_angle)
         chief_y = make_ray(0.0, ep_off, 0.0, np.sin(field_angle),
                            wavelength=wavelength)
         chief_x = make_ray(ep_off, 0.0, np.sin(field_angle), 0.0,
@@ -458,7 +488,7 @@ def opd_fan_data(
     # ray of each fan reads exactly 0 waves.
     try:
         fod = first_order_data(surfaces, wavelength)
-        ep_off = -fod.ep_z * np.tan(field_angle)
+        ep_off = _ep_offset(fod.ep_z, field_angle)
         chief_y = make_ray(0.0, ep_off, 0.0, np.sin(field_angle),
                            wavelength=wavelength)
         chief_x = make_ray(ep_off, 0.0, np.sin(field_angle), 0.0,
@@ -507,7 +537,7 @@ def opd_fan_data_world(
     # chief (see ``ray_fan_data_world`` for the straight-axis/folded caveat).
     try:
         fod = first_order_data(surfaces, wavelength)
-        ep_off = -fod.ep_z * np.tan(field_angle)
+        ep_off = _ep_offset(fod.ep_z, field_angle)
         chief_y = make_ray(0.0, ep_off, 0.0, np.sin(field_angle),
                            wavelength=wavelength)
         chief_x = make_ray(ep_off, 0.0, np.sin(field_angle), 0.0,
@@ -691,6 +721,23 @@ def through_focus_rms(
         Image distance giving minimum RMS.
     """
     focus_shifts = np.asarray(focus_shifts, dtype=np.float64)
+    # S11-6d (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): an empty
+    # ``focus_shifts`` used to fall through the whole sweep and die at the
+    # ``focus_shifts[best_idx]`` return with a bare
+    # ``IndexError: index 0 is out of bounds for axis 0 with size 0``,
+    # naming neither this function nor the offending argument.
+    if focus_shifts.ndim != 1 or focus_shifts.size == 0:
+        raise ValueError(
+            f"through_focus_rms: focus_shifts must be a non-empty 1-D "
+            f"sequence of image distances [m]; got shape "
+            f"{focus_shifts.shape}.")
+    if num_rings < 1 or rays_per_ring < 1:
+        raise ValueError(
+            f"through_focus_rms: num_rings and rays_per_ring must both be "
+            f">= 1; got num_rings={num_rings}, "
+            f"rays_per_ring={rays_per_ring}.  A zero count produces an "
+            f"empty ring bundle whose spot RMS is identically 0.0 at every "
+            f"focus, which reads as a perfect focus.")
     rms_values = np.zeros_like(focus_shifts)
 
     rays = make_rings(semi_aperture, num_rings, rays_per_ring,

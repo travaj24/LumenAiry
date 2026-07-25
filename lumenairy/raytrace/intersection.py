@@ -306,14 +306,41 @@ def _intersect_surface(rays, surface, n_medium=1.0):
     # Vignette rays outside the clear aperture
     if np.isfinite(surface.semi_diameter):
         h_sq = rays.x ** 2 + rays.y ** 2
-        clipped = (h_sq > surface.semi_diameter ** 2) & rays.alive
+        # S11-2 (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): kill on
+        # NOT-INSIDE, never on "outside".  ``h_sq > sd**2`` is False for
+        # a NaN ``h_sq``, so a ray whose position went non-finite
+        # upstream sailed through this gate ALIVE and with
+        # ``error_code == RAY_OK`` -- measured on the flat fast path with
+        # a bundle ``x = [0, 20mm, nan, 0]`` / ``y = [0, 0, 0, nan]`` and
+        # ``sd = 10 mm``: ``alive = [T F T T]``, ``error_code =
+        # [0 2 0 0]``.  The JAX twin (``jax_trace._apply_aperture_jax``)
+        # already used the safe polarity ``inside = h_sq <= sd*sd`` /
+        # ``alive &= inside``, which kills NaN; this site now matches it.
+        # Bit-identical for every finite position (``~(a <= b) == (a > b)``
+        # exactly when neither operand is NaN).
+        inside = h_sq <= surface.semi_diameter ** 2
+        clipped = (~inside) & rays.alive
         if clipped.any():
             rays.alive = rays.alive & ~clipped
             if rays.error_code is not None:
-                # First-failure-wins: only set RAY_APERTURE on rays
-                # that were alive up to this surface.
-                rays.error_code = np.where(clipped, RAY_APERTURE,
-                                             rays.error_code)
+                # First-failure-wins: only overwrite RAY_OK entries.  The
+                # pre-fix line promised this in its comment but wrote
+                # ``np.where(clipped, ...)`` unconditionally, so a ray
+                # already carrying an earlier diagnosis (e.g. RAY_TIR from
+                # this surface's refraction on a previous pass, or a code
+                # set by a caller) had it silently relabelled.
+                first_failure = clipped & (rays.error_code == RAY_OK)
+                # A non-finite intersection height is an arithmetic fault,
+                # not a clear-aperture clip: report it as RAY_NAN so
+                # ``raytrace.layout``'s failure histogram does not
+                # mis-attribute numerical faults to vignetting.  Two
+                # scalar ``np.where`` calls (not a nested array-valued
+                # one) so ``error_code`` keeps its uint8 dtype.
+                nan_pos = ~np.isfinite(h_sq)
+                rays.error_code = np.where(first_failure & nan_pos,
+                                           RAY_NAN, rays.error_code)
+                rays.error_code = np.where(first_failure & ~nan_pos,
+                                           RAY_APERTURE, rays.error_code)
 
 
 # ============================================================================
