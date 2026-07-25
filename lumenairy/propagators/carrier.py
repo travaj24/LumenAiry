@@ -1676,6 +1676,86 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     return out
 
 
+# ---------------------------------------------------------------------------
+# P2 memory budget for the exact-readout / fine-retrace grids (audit
+# AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4, "Memory ceiling")
+# ---------------------------------------------------------------------------
+# The exact readout's internal fine grid is sized from the PHYSICS
+# (``window_factor`` beam radii at ``lambda/(3 NA)``) with no memory ceiling, so
+# a high-NA / wide-window request can demand a single 32768^2 complex128 array =
+# 16 GiB (measured on the design-121 thin-stub case) and the process dies with a
+# MemoryError mid-propagation -- or worse, swaps for minutes.  These constants
+# turn that into a bounded, ANNOUNCED degradation.
+#
+# Peak working set is ~4 arrays of the fine grid at complex128: the
+# Fourier-upsample pad + its inverse transform, then the reconstructed field
+# alongside the exact-sphere phasor, then the Bluestein zoom's own workspace.
+_FINE_GRID_WORK_ARRAYS = 4
+# Fraction of the RAM budget the fine grid may claim.  0.5 leaves room for the
+# caller's own field, the OS page cache and the FFT plan scratch.
+_FINE_GRID_RAM_FRAC = 0.5
+# Never degrade below this (a grid this small is useless but the caller asked
+# for a readout, so return something rather than raising).
+_FINE_GRID_MIN = 64
+
+
+def _memory_bounded_n_fine(n_req, label, *, ram_budget=None,
+                           n_work=_FINE_GRID_WORK_ARRAYS,
+                           frac=_FINE_GRID_RAM_FRAC,
+                           window=None, nyquist_dx=None):
+    """Cap a fine-grid size ``n_req`` (square, complex128) to the RAM budget.
+
+    Returns the (possibly reduced) size, always a power of two when ``n_req``
+    is, and emits a ``RuntimeWarning`` naming the un-degraded requirement when
+    the cap binds -- so a memory-limited result is never silently returned as if
+    it were the requested resolution.
+
+    ``ram_budget`` (bytes) overrides :func:`lumenairy.memory.get_ram_budget`
+    (which itself honours :func:`lumenairy.set_max_ram`); pass ``inf`` to
+    disable the cap entirely."""
+    n_req = int(n_req)
+    from ..memory import format_bytes, get_ram_budget
+    budget = float(get_ram_budget() if ram_budget is None else ram_budget)
+    if not np.isfinite(budget):
+        return n_req
+    if not (budget > 0.0):
+        budget = 0.0
+    allow = frac * budget
+    per_grid = float(n_work) * 16.0
+    n_max = int(np.floor(np.sqrt(max(allow, 0.0) / per_grid)))
+    # keep the power-of-two structure the FFT path wants
+    if n_max >= 2:
+        n_max = int(2 ** int(np.floor(np.log2(n_max))))
+    n_max = max(n_max, _FINE_GRID_MIN)
+    if n_req <= n_max:
+        return n_req
+    extra_msg = ''
+    if window is not None and nyquist_dx is not None and n_max > 0:
+        _dxc = float(window) / n_max
+        extra_msg = (
+            f"  At the capped size the fine pitch is {_dxc * 1e6:.4f} um vs the "
+            f"exact sphere's Nyquist pitch lambda/(2*NA)="
+            f"{float(nyquist_dx) * 1e6:.4f} um"
+            + (", so outer-NA content is DISCARDED (the downstream "
+               "bandlimit masks the aliased corner)."
+               if _dxc > float(nyquist_dx) else
+               ", which still Nyquist-samples the sphere."))
+    import warnings
+    warnings.warn(
+        f"{label}: the fine grid is MEMORY-LIMITED to {n_max}x{n_max} "
+        f"({format_bytes(n_work * n_max * n_max * 16)} peak working set).  The "
+        f"un-degraded requirement was {n_req}x{n_req} "
+        f"({format_bytes(n_work * n_req * n_req * 16)} at {n_work} complex128 "
+        f"working arrays), which exceeds {frac:.0%} of the "
+        f"{format_bytes(int(budget))} RAM budget.  The result is a "
+        f"RESOLUTION-LIMITED (non-converged) readout: the sampling below is "
+        f"coarser than the physics asked for.{extra_msg}  Raise the budget "
+        f"(lumenairy.set_max_ram), shrink window_factor, or run on a larger "
+        f"box to get the un-degraded number.",
+        RuntimeWarning, stacklevel=3)
+    return n_max
+
+
 def carrier_referenced_exact_focus_readout(
     E_full: np.ndarray,
     R_carrier: float,
@@ -1690,6 +1770,7 @@ def carrier_referenced_exact_focus_readout(
     window_factor: float = 7.0,
     centre_out: Tuple[float, float] = (0.0, 0.0),
     bandlimit: bool = True,
+    ram_budget: Optional[float] = None,
 ) -> np.ndarray:
     """Exact (non-paraxial) readout of a strongly-converging FINAL leg (R9).
 
@@ -1741,6 +1822,14 @@ def carrier_referenced_exact_focus_readout(
         Size of the intermediate fine grid (square).  Default: the next power
         of two that spans ``window_factor`` amplitude-radii of the beam at
         ``dx_fine``.
+
+        Either way the value is capped to the RAM budget (see ``ram_budget``):
+        the physics-driven default can demand 32768^2 complex128 = 16 GiB per
+        working array (measured, design-121 class), which used to die with a
+        ``MemoryError`` mid-propagation.  When the cap binds, a
+        ``RuntimeWarning`` names the un-degraded requirement and the result is
+        flagged as resolution-limited rather than silently returned as if it
+        were the requested resolution.
     window_factor : float, default 7.0
         Fine-grid physical span in units of the beam amplitude radius
         (``_envelope_amp_radius``).  7 holds the beam to <1e-6 truncation.
@@ -1748,6 +1837,16 @@ def carrier_referenced_exact_focus_readout(
         Physical ``(x, y)`` centre of the output grid (m).  Default on-axis.
     bandlimit : bool, default True
         Band-limit the ASM transfer function (Matsushima-Shimobaba).
+    ram_budget : float, optional
+        Memory budget in BYTES for the internal fine grid (P2, audit
+        AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4).  Default ``None`` =
+        :func:`lumenairy.get_ram_budget` (which honours
+        :func:`lumenairy.set_max_ram`).  ``N_fine`` is capped so the fine grid's
+        peak working set (4 complex128 arrays) stays within 50% of it; when the
+        cap binds a ``RuntimeWarning`` states that the readout is
+        resolution-limited and what the un-degraded requirement was.  Pass
+        ``float('inf')`` to disable the cap (pre-v5.29 behaviour: a hard
+        ``MemoryError`` when the physics asks for more than the box has).
 
     Returns
     -------
@@ -1817,6 +1916,15 @@ def carrier_referenced_exact_focus_readout(
     if N_fine is None:
         N_fine = int(2 ** int(np.ceil(np.log2(max(win / dx_fine, n_crop)))))
     N_fine = int(N_fine)
+    # P2 memory budget: cap the fine grid to what the RAM budget can hold and
+    # SAY SO (the pre-v5.29 path died with a MemoryError at 32768^2 = 16 GiB per
+    # array).  The Nyquist consequence of the coarser dx_fine is spelled out in
+    # the warning, mirroring the F-D message in _fine_trace_group_exit.
+    _na_ny = (min(max(w_amp / abs(R), 0.02), 0.95)
+              if (np.isfinite(R) and R != 0.0 and w_amp > 0.0) else 0.1)
+    N_fine = _memory_bounded_n_fine(
+        N_fine, 'carrier_referenced_exact_focus_readout', ram_budget=ram_budget,
+        window=win, nyquist_dx=wavelength / (2.0 * _na_ny))
     dx_fine = win / N_fine
 
     env_f = _fourier_upsample_crop(env, n_crop, N_fine)
@@ -1916,7 +2024,7 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                            n_workers, call_kw, R_out, na_exit,
                            window_factor=5.0, n_fine_cap=16384,
                            max_fine_launch_points=4096,
-                           sphere_reference=False):
+                           sphere_reference=False, ram_budget=None):
     """Re-trace a HIGH-NA group on a grid that Nyquist-samples its EXIT sphere
     (R9).  The co-moving grid is sized for the group ENTRANCE curvature, so on a
     strongly-focusing group the (much steeper) exit wavefront ALIASES -- the
@@ -1980,6 +2088,13 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     win = n_crop * cur_dx
     n_fine = int(2 ** int(np.ceil(np.log2(max(win / dx_fine, n_crop)))))
     n_fine = int(min(n_fine, n_fine_cap))
+    # P2 memory budget (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4):
+    # ``n_fine_cap`` is a COUNT cap the caller has to know to set; this is the
+    # box's actual RAM ceiling, applied on top of it so a large window degrades
+    # (announced) instead of OOM-ing the retrace.
+    n_fine = _memory_bounded_n_fine(
+        n_fine, '_fine_trace_group_exit', ram_budget=ram_budget,
+        window=win, nyquist_dx=wavelength / (2.0 * na))
     dx_fine = win / n_fine
 
     # F-D: n_fine_cap can force dx_fine coarser than the exit sphere's
@@ -2053,6 +2168,88 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     return np.asarray(E_exit), float(dx_fine)
 
 
+def _chain_result_metrics(res):
+    """Grid-comparable scalar metrics of a chain result, for the dx self-check.
+
+    After a focus readout both runs land on the SAME ``(dx_out, N_out)`` grid,
+    so the focal metrics are directly comparable: window power, peak intensity
+    and the 50%-encircled-energy radius about the peak.  Without a readout the
+    landing grids differ (co-moving pitch), so the comparable quantities are the
+    physical ones: envelope 1/e^2 radius, power and the carrier radius."""
+    E = np.asarray(res.field)
+    dxo = float(res.dx)
+    I = np.abs(E) ** 2
+    tot = float(I.sum())
+    if not np.isfinite(tot) or tot <= 0.0:
+        return {}
+    if res.R is not None:
+        w_env, power = _chain_envelope_stats(E, dxo)
+        out = {'w_env': w_env, 'power': power}
+        if np.isfinite(res.R):
+            out['R'] = float(res.R)
+        return out
+    iy, ix = np.unravel_index(int(np.argmax(I)), I.shape)
+    yy = np.arange(I.shape[0], dtype=np.float64) - float(iy)
+    xx = np.arange(I.shape[1], dtype=np.float64) - float(ix)
+    r_px = np.sqrt(xx[None, :] ** 2 + yy[:, None] ** 2)
+    ring = np.cumsum(np.bincount(r_px.astype(np.int64).ravel(),
+                                 weights=I.ravel()))
+    half = 0.5 * float(ring[-1])
+    j = int(np.searchsorted(ring, half))
+    j = min(j, ring.size - 1)
+    c0 = float(ring[j - 1]) if j > 0 else 0.0
+    frac = (half - c0) / max(float(ring[j]) - c0, 1e-300)
+    return {'power': tot * dxo * dxo, 'peak': float(I[iy, ix]),
+            'r50': float((j + min(max(frac, 0.0), 1.0)) * dxo)}
+
+
+def _run_chain_dx_self_check(kw, res, tol):
+    """Re-run the chain at ``dx/sqrt(2)`` (extent-preserving) and warn when the
+    focal metrics move by more than ``tol`` (relative).  The cheap "is this
+    number dx-stable" flag from the production-readiness plan (P2)."""
+    from ..backend import to_numpy
+    E_in = np.asarray(to_numpy(kw['E_in']))
+    N = int(E_in.shape[-1])
+    N2 = int(2 * round(N * np.sqrt(2.0) / 2.0))
+    if N2 <= N:
+        N2 = N + 2
+    dx0 = float(kw['dx'])
+    dx2 = dx0 * N / N2                      # same physical extent N*dx
+    m1 = _chain_result_metrics(res)
+    if not m1:
+        return
+    kw2 = dict(kw)
+    kw2['E_in'] = _fourier_upsample_crop(E_in, N, N2)
+    kw2['dx'] = dx2
+    res2 = propagate_traced_carrier_chain(**kw2)
+    m2 = _chain_result_metrics(res2)
+    bad = []
+    for key in sorted(set(m1) & set(m2)):
+        a, b = float(m1[key]), float(m2[key])
+        scale = max(abs(a), abs(b), 1e-300)
+        rel = abs(a - b) / scale
+        if rel > tol:
+            bad.append(f'{key}: {a:.6g} (dx={dx0 * 1e6:.4f} um) vs {b:.6g} '
+                       f'(dx={dx2 * 1e6:.4f} um), {100.0 * rel:.1f}% apart')
+    from .._logging import get_logger
+    get_logger(__name__).info(
+        "propagate_traced_carrier_chain self_check='dx': N %d -> %d, "
+        "dx %.6g -> %.6g m, metrics %r vs %r", N, N2, dx0, dx2, m1, m2)
+    if bad:
+        import warnings
+        warnings.warn(
+            f"propagate_traced_carrier_chain self_check='dx': the result is "
+            f"NOT dx-STABLE.  Refining the grid from N={N} (dx="
+            f"{dx0 * 1e6:.4f} um) to N={N2} (dx={dx2 * 1e6:.4f} um) at the same "
+            f"physical extent moved: " + '; '.join(bad) +
+            f" (tolerance {100.0 * tol:.1f}%).  A metric that moves with dx is "
+            f"not converged, so treat the returned numbers as indicative only "
+            f"-- refine until they plateau (or reduce ray_subsample / raise "
+            f"the focus_readout window_factor / n_fine_cap, which are the other "
+            f"resolution axes) before quoting absolute EE / FWHM.",
+            RuntimeWarning, stacklevel=3)
+
+
 def propagate_traced_carrier_chain(
     E_in: np.ndarray,
     groups,
@@ -2068,6 +2265,8 @@ def propagate_traced_carrier_chain(
     final_leg: str = 'auto',
     na_exact_threshold: float = 0.15,
     carrier_reference: str = 'sphere',
+    self_check: Optional[str] = None,
+    self_check_tol: float = 0.05,
 ) -> TracedCarrierChainResult:
     """Propagate a beam ENVELOPE through a chain of real (traced) lens groups on
     a co-moving carrier-referenced grid (audit F4.1).
@@ -2115,6 +2314,24 @@ def propagate_traced_carrier_chain(
         ``parallel_amp=False``).  ``carrier`` / ``dx`` / ``wavelength`` /
         ``prescription`` / ``ray_subsample`` / ``n_workers`` are managed by the
         orchestrator and must not appear here.
+
+        The chain applies three DEFAULTS on top of the element's own (anything
+        given here wins): ``amplitude_model='ray_density'`` and
+        ``preserve_input_phase='remap'`` (the validated carrier-regime
+        configuration -- see ``carrier_reference``) and
+        ``fit_radius_beam_factor=2.0`` (the P2 aperture:beam cliff guard, audit
+        AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4).  The last one ties
+        each group's ray-FIT domain to its beam instead of to the
+        prescription's vignetting aperture: with an aperture much larger than
+        the beam, marginal rays the beam never occupies corrupt the traced OPL
+        fit *inside* the beam and the focus collapses silently (E4 corrected
+        relay, beam w = 2 mm: exit-wavefront Strehl 0.998 at a 6 mm aperture ->
+        0.105 at 7 mm -> 0.039 at 10 mm; >= 0.999 at every aperture from 4 to
+        10 mm with the guard).  It
+        restricts only the fit domain -- no field energy is vignetted -- and
+        leaves the design-121 acceptance unchanged.  Pass
+        ``traced_kwargs={'fit_radius_beam_factor': None}`` for the pre-v5.29
+        aperture-only fit domain.
     final_distance : float, default 0
         Free-space distance from the last group's exit vertex to the target
         (readout) plane (m).
@@ -2144,6 +2361,16 @@ def propagate_traced_carrier_chain(
           would still be too dense for this leg's window; a
           ``RuntimeWarning`` fires if it has to raise ``ray_subsample``
           above the pitch-preserving value to respect the cap.
+        * ``ram_budget`` (float, optional) -- memory budget in BYTES for the
+          fine re-trace grid AND the exact readout's internal grid (P2, audit
+          AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4).  Default
+          :func:`lumenairy.get_ram_budget` (honours
+          :func:`lumenairy.set_max_ram`).  Both grids are capped so their peak
+          working set stays inside 50% of it, with a ``RuntimeWarning`` naming
+          the un-degraded requirement whenever the cap binds -- so a
+          memory-limited focus metric is flagged, never silently returned.
+          Pass ``float('inf')`` for the pre-v5.29 uncapped behaviour (a hard
+          ``MemoryError`` when the physics asks for more than the box has).
     final_leg : {'auto', 'exact', 'paraxial'}, default 'auto'
         How to land the FINAL leg when ``focus_readout`` is given.
 
@@ -2222,6 +2449,28 @@ def propagate_traced_carrier_chain(
         <= 0.01 rad); a ``RuntimeWarning`` fires if the conversion's
         band-limit radius reaches inside twice the beam radius.
 
+    self_check : {'dx', 'off', None}, default None
+        Opt-in convergence self-check (P2, audit
+        AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §5): with ``'dx'`` the
+        whole chain is run a SECOND time at ``dx/sqrt(2)`` -- ``N`` raised to
+        ``round_even(N*sqrt(2))`` so the physical extent is preserved, the input
+        band-limit-resampled onto it -- and a ``RuntimeWarning`` fires if the
+        focal metrics of the two runs disagree by more than ``self_check_tol``.
+
+        This is the cheap "is this number dx-stable" flag: the traced chain's
+        absolute focal metrics have historically drifted by tens of points under
+        grid refinement (audit §1), so a single-grid number carries no
+        convergence evidence on its own.  Compared metrics: after a focus
+        readout (both runs land on the same ``dx_out``/``N_out`` grid) the window
+        power, the peak intensity and the 50%-encircled-energy radius; without a
+        readout the envelope 1/e^2 radius, the power and the carrier radius.
+
+        Costs roughly 3x a plain run (the refined run is ~2x the primary), which
+        is why it is opt-in.  It is a NECESSARY-not-sufficient test: agreement at
+        two grids is evidence of a plateau, not proof.
+    self_check_tol : float, default 0.05
+        Relative tolerance (5%) for the ``self_check='dx'`` metric comparison.
+
     Returns
     -------
     TracedCarrierChainResult
@@ -2231,6 +2480,28 @@ def propagate_traced_carrier_chain(
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'propagate_traced_carrier_chain')
     from ..elements import apply_real_lens_traced
+
+    if self_check not in (None, 'off', 'dx'):
+        raise ValueError(
+            "propagate_traced_carrier_chain: self_check must be 'dx', 'off' or "
+            f"None, got {self_check!r}.")
+    if self_check == 'dx':
+        # Run the primary + the dx/sqrt(2) control through this same entry point
+        # with the check disabled, then compare.  (Recursion, not a refactor, so
+        # the validated body below stays byte-identical on the default path.)
+        # ``list(groups)`` first: the two runs must see the same groups, so a
+        # one-shot iterable would otherwise leave the control run empty.
+        _kw = dict(
+            E_in=E_in, groups=list(groups), wavelength=wavelength, dx=dx,
+            r_in=r_in,
+            ray_subsample=ray_subsample, n_workers=n_workers,
+            traced_kwargs=traced_kwargs, final_distance=final_distance,
+            focus_readout=focus_readout, final_leg=final_leg,
+            na_exact_threshold=na_exact_threshold,
+            carrier_reference=carrier_reference)
+        _res = propagate_traced_carrier_chain(**_kw)
+        _run_chain_dx_self_check(_kw, _res, float(self_check_tol))
+        return _res
 
     if not np.isfinite(wavelength) or wavelength <= 0:
         raise ValueError(
@@ -2262,8 +2533,20 @@ def propagate_traced_carrier_chain(
     # not preferences.  Anything the caller passes in ``traced_kwargs`` (or a
     # group's own ``traced_kwargs``) WINS over these defaults; the standalone
     # ``apply_real_lens_traced`` element defaults are untouched.
+    # P2 (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4): the chain also
+    # defaults the APERTURE:BEAM CLIFF GUARD on -- the ray-fit domain is tied to
+    # the beam, not to the (arbitrary, prescription-supplied) vignetting
+    # aperture.  A chain is exactly the daily-driver case that receives
+    # arbitrary apertures, and the cliff is silent: measured on the E4 corrected
+    # relay, exit-wavefront Strehl 0.998 (6 mm aperture) -> 0.105 (7 mm) ->
+    # 0.039 (10 mm) with no warning and no energy loss to show for it, recovered
+    # to 0.9995 at every aperture by this default.  Fit-domain only: no field
+    # energy is vignetted (measured identical exit power to 4 digits), and the
+    # design-121 acceptance is unchanged.
+    from ..elements._lens_traced import _FIT_RADIUS_BEAM_FACTOR_DEFAULT
     base_kw = {'amplitude_model': 'ray_density',
-               'preserve_input_phase': 'remap'}
+               'preserve_input_phase': 'remap',
+               'fit_radius_beam_factor': _FIT_RADIUS_BEAM_FACTOR_DEFAULT}
     if traced_kwargs:
         base_kw.update(traced_kwargs)
     R = float(r_in)
@@ -2330,14 +2613,15 @@ def propagate_traced_carrier_chain(
                 n_fine_cap=int(fr.get('n_fine_cap', 16384)),
                 max_fine_launch_points=int(
                     fr.get('max_fine_launch_points', 4096)),
-                sphere_reference=_sphere_ref)
+                sphere_reference=_sphere_ref,
+                ram_budget=fr.get('ram_budget'))
             w_stage, p_stage = _chain_envelope_stats(E_exit_fine, dx_fine)
             stages.append({
                 'name': _name, 'R_in': R_use, 'R_out': R_out, 'dx': dx_fine,
                 'w': w_stage, 'power': p_stage, 'exact_final': True})
             exact_kw = {kk: fr[kk] for kk in (
                 'dx_out', 'N_out', 'dx_fine', 'N_fine', 'window_factor',
-                'centre_out', 'bandlimit') if kk in fr}
+                'centre_out', 'bandlimit', 'ram_budget') if kk in fr}
             field = carrier_referenced_exact_focus_readout(
                 E_exit_fine, R_out, final_distance, wavelength, dx_fine,
                 **exact_kw)
@@ -2391,8 +2675,17 @@ def propagate_traced_carrier_chain(
             raise ValueError(
                 "propagate_traced_carrier_chain: focus_readout must supply "
                 "'dx_out' and 'N_out'.")
+        # Only the PARAXIAL readout's own kwargs: a caller who supplies the
+        # exact-path keys (``n_fine_cap`` / ``window_factor`` /
+        # ``max_fine_launch_points`` / ``dx_fine`` / ``N_fine`` /
+        # ``ram_budget``) and whose final leg then turns out to be low-NA used
+        # to get a bare ``TypeError`` from here.  The exact-only keys are
+        # inapplicable on this path, so drop them rather than crash.
+        _par_kw = {kk: fr[kk] for kk in (
+            'dx_out', 'N_out', 'standoff', 'centre_out', 'bandlimit')
+            if kk in fr}
         field = carrier_referenced_focus_readout(
-            env, R, final_distance, wavelength, cur_dx, **fr)
+            env, R, final_distance, wavelength, cur_dx, **_par_kw)
         return TracedCarrierChainResult(np.asarray(field), None,
                                         float(fr['dx_out']), stages)
 

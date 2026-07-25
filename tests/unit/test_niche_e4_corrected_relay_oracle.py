@@ -16,6 +16,31 @@ DURABLE, feature-independent finding that the Part E investigation uncovered:
   ~1.5x the beam diameter on this relay).  The original "chain fails corrected
   relays" reading was an ARTIFACT of an oversized (2.5x-beam) aperture.
 
+P2 UPDATE (2026-07-25) -- MECHANISM PINNED DOWN, AND GUARDED
+------------------------------------------------------------
+The cliff was localised (audit
+``AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24.md`` §4 work): it is carried
+ENTIRELY by group 1 (the fast biconvex singlet) -- G2's aperture can be 2.5x its
+beam with Strehl 0.963 -- and it is a pure PHASE (OPL-fit) effect, identical
+under every ``amplitude_model`` / ``preserve_input_phase`` /
+``carrier_reference`` combination.  The exit residual is 1.80 rad rms =
+pi/sqrt(3), i.e. a uniformly RANDOM wrapped phase across the whole beam
+(core included), not an outer-annulus aberration.
+
+Why group 1: the chain hands its first group ``carrier=r_in=inf``, whose exact
+sphere eikonal is non-finite, so the carrier never ENGAGES and the R7
+carrier-gated fit-domain restriction (``_CARRIER_FIT_RADIUS_FRAC``) is inactive
+there -- the order-6 forward-map / OPL fit then spans the whole launch SQUARE
+including its corners, at ``sqrt(2) * 0.75 * aperture`` = 3.7x the beam radius
+for a 7 mm aperture.  Sweeping ``_CARRIER_FIT_RADIUS_FRAC`` 0.5 -> 0.21 changes
+nothing (Strehl 0.1052 -> 0.1073) precisely because that mask never applies on
+this path.
+
+The P2 fix is ``fit_radius_beam_factor`` (chain default 2.0): the same
+NaN-masking mechanism, sized to the BEAM and applied on both paths, leaving
+``launch_radius`` / the Newton ``bound`` / the out-of-domain threshold alone so
+that no field energy is clipped.
+
 Self-contained (no ``.zmx``): a 2-group corrected relay (a fast biconvex singlet
 G1 that leaves spherical aberration, + a negative corrector G2 whose radii were
 least-squares-tuned against the inline oracle to null it), validated by an
@@ -151,15 +176,31 @@ def _oracle_strehl(groups_with_gaps, x_max, w0, npts=300):
 # ---------------------------------------------------------------------------
 # Chain exit-wavefront Strehl (focus-plane INDEPENDENT).
 # ---------------------------------------------------------------------------
-def _chain_strehl(ap, N=1536, dx=7e-6):
+_STREHL_CACHE = {}
+
+
+def _chain_strehl(ap, N=1536, dx=7e-6, guard='default'):
+    """Exit-wavefront Strehl of the 2-group relay at group aperture ``ap``.
+
+    ``guard='default'`` uses the chain's own defaults, which since v5.29
+    include the P2 aperture:beam cliff guard (``fit_radius_beam_factor=2.0``,
+    a BEAM-relative ray-fit domain).  ``guard=None`` restores the pre-v5.29
+    aperture-only ray-fit domain (the configuration the cliff was measured
+    in).  Cached: a call costs ~8 s and several tests share cells."""
+    key = (float(ap), int(N), float(dx), guard)
+    if key in _STREHL_CACHE:
+        return _STREHL_CACHE[key]
     x = (np.arange(N) - N / 2) * dx
     X, Y = np.meshgrid(x, x)
     env0 = np.exp(-(X ** 2 + Y ** 2) / _W0 ** 2).astype(np.complex128)
+    tkw = dict(parallel_amp=False)
+    if guard != 'default':
+        tkw['fit_radius_beam_factor'] = guard
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = la.propagate_traced_carrier_chain(
             env0, _groups(ap), _WL, dx, r_in=np.inf, ray_subsample=4, n_workers=1,
-            traced_kwargs=dict(parallel_amp=False), final_distance=0.0)
+            traced_kwargs=tkw, final_distance=0.0)
     env = carrier_referenced_envelope(np.asarray(res.field), float(res.R), _WL, float(res.dx))
     dxo = float(res.dx)
     n = env.shape[0]; xx = (np.arange(n) - n / 2) * dxo; XX, YY = np.meshgrid(xx, xx)
@@ -168,7 +209,9 @@ def _chain_strehl(ap, N=1536, dx=7e-6):
     coef, *_ = np.linalg.lstsq(A * np.sqrt(w)[:, None], ph[mask] * np.sqrt(w), rcond=None)
     resid = np.angle(np.exp(1j * (ph[mask] - A @ coef)))
     rms = np.sqrt(np.sum(w * resid ** 2) / np.sum(w))
-    return float(np.exp(-rms ** 2))
+    out = float(np.exp(-rms ** 2))
+    _STREHL_CACHE[key] = out
+    return out
 
 
 # ===========================================================================
@@ -207,21 +250,118 @@ def test_e4_chain_diffraction_limited_at_matched_aperture():
 
 
 # ===========================================================================
-# 3. Oversized aperture corrupts the traced fit (documents the artifact/cliff).
+# 3. Oversized aperture corrupts the traced fit (documents the artifact/cliff)
+#    -- with the P2 guard DISABLED, i.e. the pre-v5.29 fit domain.
 # ===========================================================================
-def test_e4_oversized_aperture_corrupts_fit():
-    """Regression guard for the audit §4c finding: an oversized aperture
-    (10 mm = 2.5x beam diameter) feeds wildly-aberrated marginal rays into the
-    traced OPL fit and collapses the focus (Strehl << the matched-aperture
-    value) -- the artifact that originally masqueraded as a 'chain fails
-    corrected relays' result.  Beam is unchanged; only the aperture grows."""
+def test_e4_oversized_aperture_corrupts_fit_without_guard():
+    """Regression guard for the audit §4c finding: with the pre-v5.29
+    aperture-only ray-fit domain (``fit_radius_beam_factor=None``) an oversized
+    aperture (10 mm = 2.5x beam diameter) feeds wildly-aberrated marginal rays
+    into the traced OPL fit and collapses the focus (Strehl << the
+    matched-aperture value) -- the artifact that originally masqueraded as a
+    'chain fails corrected relays' result.  Beam is unchanged; only the
+    aperture grows.  Measured 2026-07-25: 0.998 (6 mm) -> 0.039 (10 mm)."""
     _skip_if_low_ram(1536)
-    st_matched = _chain_strehl(6e-3)
-    st_oversized = _chain_strehl(10e-3)
+    st_matched = _chain_strehl(6e-3, guard=None)
+    st_oversized = _chain_strehl(10e-3, guard=None)
     assert st_oversized < 0.3, (
         f"oversized aperture should collapse the traced fit (got Strehl "
         f"{st_oversized:.3f})")
     assert st_matched > 3.0 * st_oversized, (st_matched, st_oversized)
+
+
+# ===========================================================================
+# 4. P2 aperture:beam cliff GUARD -- the chain default recovers the cliff.
+# ===========================================================================
+@pytest.mark.parametrize('ap_mm', [7.0, 8.0, 10.0])
+def test_e4_cliff_guard_recovers_oversized_aperture(ap_mm):
+    """The chain's default beam-relative ray-fit domain
+    (``fit_radius_beam_factor=2.0``, audit
+    AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4) recovers the whole cliff:
+    every aperture from 1.75x to 2.5x the beam diameter comes back to
+    diffraction-limited instead of collapsing.
+
+    Measured 2026-07-25 (Strehl, guard off -> guard on):
+    7 mm 0.105 -> 0.9995, 8 mm 0.042 -> 0.9995, 10 mm 0.039 -> 0.9995.
+
+    KNOWN-GOOD ENVELOPE: aperture:beam-diameter ratios 1.0-2.5x on this fast
+    (f/4.5) singlet-led relay; the guard's own recovery is flat for
+    ``fit_radius_beam_factor`` in 1.5-2.5 (3.0 starts to re-admit marginal
+    rays: 0.959 at 10 mm)."""
+    _skip_if_low_ram(1536)
+    st_guarded = _chain_strehl(ap_mm * 1e-3)
+    st_unguarded = _chain_strehl(ap_mm * 1e-3, guard=None)
+    assert st_guarded > 0.9, (
+        f"the cliff guard must restore a near-diffraction-limited focus at a "
+        f"{ap_mm} mm aperture (got Strehl {st_guarded:.4f})")
+    assert st_guarded > 5.0 * st_unguarded, (st_guarded, st_unguarded)
+
+
+def test_e4_cliff_guard_leaves_precliff_apertures_alone():
+    """The guard must not disturb the PRE-cliff (aperture <= 1.5x beam
+    diameter) results it was not needed for.  Measured 2026-07-25: 4 mm
+    0.9986 -> 0.9986, 5 mm 0.9997 -> 0.9996, 6 mm 0.9978 -> 0.9993 (the 6 mm
+    cell improves slightly -- it already sat on the cliff's shoulder)."""
+    _skip_if_low_ram(1536)
+    for ap_mm in (4.0, 5.0, 6.0):
+        off = _chain_strehl(ap_mm * 1e-3, guard=None)
+        on = _chain_strehl(ap_mm * 1e-3)
+        assert on > 0.99, (ap_mm, on)
+        assert on > off - 0.005, (
+            f"guard degraded the pre-cliff {ap_mm} mm aperture: "
+            f"{off:.4f} -> {on:.4f}")
+
+
+def test_e4_cliff_guard_conserves_energy():
+    """The guard restricts the ray-FIT domain only -- it must NOT vignette
+    (the failure mode of clamping the aperture, audit
+    AUDIT_WAVEFRONT_AWARE_RAY_LAUNCH_2026_07_23 §4c.3, where a 3x-beam
+    aperture clamp cost the design-121 22 EE6 points of real halo power).
+    Exit power with and without the guard must agree to <0.1%."""
+    _skip_if_low_ram(1536)
+    N, dx = 1536, 7e-6
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    env0 = np.exp(-(X ** 2 + Y ** 2) / _W0 ** 2).astype(np.complex128)
+    pw = {}
+    for guard in ('default', None):
+        tkw = dict(parallel_amp=False)
+        if guard is None:
+            tkw['fit_radius_beam_factor'] = None
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            res = la.propagate_traced_carrier_chain(
+                env0, _groups(10e-3), _WL, dx, r_in=np.inf, ray_subsample=4,
+                n_workers=1, traced_kwargs=tkw, final_distance=0.0)
+        f = np.asarray(res.field)
+        pw[guard] = float((np.abs(f) ** 2).sum()) * float(res.dx) ** 2
+    rel = abs(pw['default'] - pw[None]) / pw[None]
+    assert rel < 1e-3, f"guard changed transmitted power by {rel:.2e}"
+
+
+def test_e4_aperture_beam_warning_fires_and_is_silenceable():
+    """The warn-only half of the guard: with the beam-relative fit domain OFF
+    and an aperture well above 1.5x the beam diameter, a RuntimeWarning names
+    the ratio and the cliff; ``on_aperture_beam='silent'`` suppresses it, and
+    an engaged ``fit_radius_beam_factor`` suppresses it too (the regime is
+    guarded, so there is nothing to warn about)."""
+    N, dx = 512, 20e-6
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    E = np.exp(-(X ** 2 + Y ** 2) / _W0 ** 2).astype(np.complex128)
+    presc = _singlet(18e-3, -18e-3, 3e-3, 'N-BK7', 9e-3)
+    common = dict(prescription=presc, wavelength=_WL, dx=dx, ray_subsample=4,
+                  n_workers=1, parallel_amp=False, on_undersample='silent',
+                  on_noncollimated='off')
+    with pytest.warns(RuntimeWarning, match='beam 1/e\\^2 diameter'):
+        la.apply_real_lens_traced(E, fit_radius_beam_factor=None, **common)
+    for kw in (dict(on_aperture_beam='silent'),
+               dict(fit_radius_beam_factor=2.0)):
+        with warnings.catch_warnings(record=True) as wl:
+            warnings.simplefilter('always')
+            la.apply_real_lens_traced(E, **dict(common, **kw))
+        assert not [w for w in wl if 'beam 1/e^2 diameter' in str(w.message)], (
+            f'cliff warning should be suppressed by {kw}')
 
 
 if __name__ == '__main__':

@@ -4,6 +4,52 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added (P2 daily-driver guards)
+
+- **Aperture:beam cliff guard.**  `apply_real_lens_traced` gains
+  `fit_radius_beam_factor` (default `None` = byte-identical): restricts the
+  entrance ray samples entering the forward-map/OPL fits to a BEAM-relative
+  disc `r <= factor*w_in`, decoupling the fit domain from the vignetting
+  aperture — only the fit domain; `launch_radius`, the Newton bound and the
+  NaN threshold are untouched, so **no field energy is clipped** (the
+  aperture-clamp trap of audit 07-23 §4c.3 avoided; exit power identical to
+  4 digits across the sweep).  `propagate_traced_carrier_chain` defaults it
+  to `2.0` (escape hatch `traced_kwargs={'fit_radius_beam_factor': None}`):
+  the E4 cliff (exit Strehl 0.105/0.042/0.039 at 7/8/10 mm apertures on a
+  2 mm beam) recovers to **0.9995** with pre-cliff results and the
+  design-121 acceptance unchanged (EE6 99.3; EE3 88.4→88.2).  New warn-only
+  `on_aperture_beam='warn'` flags the possible-cliff regime (aperture >
+  1.5× beam 1/e² diameter with no guard active).  Mechanism correction to
+  the 07-24 audit §4: the cliff is the un-carriered launch SQUARE's corner
+  samples (a collimated `carrier=inf` eikonal is NaN, so R7's fit-domain
+  restriction never engages), evidenced by the per-group discriminator,
+  the `_CARRIER_FIT_RADIUS_FRAC`-sweep null, config-independence, and the
+  π/√3 random-wrapped-phase residual signature.
+- **Memory-bounded exact readout.**  `carrier_referenced_exact_focus_readout`
+  and `_fine_trace_group_exit` cap their internal fine grids against a RAM
+  budget (new `ram_budget=` kwarg / `focus_readout={'ram_budget': ...}`;
+  honours `set_max_ram` via `get_ram_budget()`, `inf` disables) with a
+  RuntimeWarning naming both the capped and the un-degraded sizes — no more
+  silent 16 GiB auto-sizing / MemoryError (the prior 34 GB box's crash
+  condition now degrades gracefully at N_fine=16384).
+- **Convergence self-check.**  Opt-in
+  `propagate_traced_carrier_chain(self_check='dx', self_check_tol=0.05)`
+  re-runs at dx/√2 (extent-preserving) and warns "NOT dx-STABLE" with
+  per-metric deltas when focal metrics disagree — the cheap
+  is-this-number-grid-stable flag (~3× cost, default off).
+- **Design battery** (`tests/unit/test_niche_p2_design_battery.py`, 17
+  tests): fast singlet / achromat doublet / triplet / E4 corrected relay ×
+  beam sizes × aperture:beam {1.2×, 2.5×}, gated against an inline
+  meridional ray oracle + analytic through-focus truths; documents the
+  known-good envelope (aperture:beam 1.2–2.5×, exit NA 0.013–0.20) and pins
+  the cliff in focal terms (relay 2.5×: EE-in-one-waist 81.1% guarded vs
+  0.2% unguarded).  Plus `test_niche_p2_guards.py` (12 tests).  E4 file
+  extended 3→9 tests (cliff pinned with the guard off + recovery/energy/
+  warning pins); two R8 and two H3 tests take documented escape hatches.
+- Fix: the paraxial final-leg readout no longer raises `TypeError` when
+  `focus_readout` carries exact-path keys (`n_fine_cap`, `window_factor`,
+  `ram_budget`, ...) and the leg turns out low-NA.
+
 ### Changed
 
 - **`propagate_traced_carrier_chain` now DEFAULTS to the validated

@@ -959,6 +959,73 @@ _CARRIER_FIT_RADIUS_FRAC = 0.5
 # grid rather than fit noise.
 _CARRIER_FIT_MIN_SAMPLES = 64
 
+# P2 / audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4 -- the APERTURE:BEAM
+# CLIFF.  The R7 restriction above is gated on a carrier being ENGAGED, so the
+# plane-wave-reference path (``carrier=None``, or a carrier too flat to engage --
+# e.g. the collimated first group of a chain) fits its OPL / forward map over the
+# WHOLE launch square, corners included.  When the physical aperture greatly
+# exceeds the beam, those corner rays are marginal rays the beam never occupies,
+# and on a FAST surface their out-of-basis high order destroys the global
+# low-order fit INSIDE the beam.  Measured on the E4 corrected relay (2026-07-25,
+# beam w = 2 mm, fast biconvex f/4.5 first group): exit-wavefront Strehl 0.999
+# (4 mm aperture) / 0.998 (6 mm) -> 0.105 (7 mm) -> 0.039 (10 mm).  The cliff is
+# a THRESHOLD, not a gradual degradation: it tracks the launch square growing
+# past ~2.5x the beam radius, and it is entirely a PHASE (fit) effect --
+# independent of ``amplitude_model`` / ``preserve_input_phase`` /
+# ``carrier_reference`` (all three flip it identically) and NOT recovered by
+# shrinking ``_CARRIER_FIT_RADIUS_FRAC`` (which is inactive on this path).
+#
+# ``fit_radius_beam_factor`` restricts the ray-FIT domain to a beam-relative
+# disc, on BOTH paths, WITHOUT touching ``launch_radius`` / ``bound`` /
+# ``out_of_domain`` -- so the Newton inversion still covers the full launch
+# domain, the low-order fit still extrapolates over the whole aperture, and NO
+# field energy is clipped (the failure mode of clamping the aperture itself,
+# which vignettes real halo power -- audit
+# AUDIT_WAVEFRONT_AWARE_RAY_LAUNCH_2026_07_23 §4c.3).
+_FIT_RADIUS_BEAM_FACTOR_DEFAULT = 2.0
+# Aperture diameter / beam 1/e^2 diameter above which the cliff is possible and
+# the warn-only guard fires (the E4 cliff starts at 1.75x; 1.5x is the last
+# measured-clean ratio).
+_APERTURE_BEAM_WARN_RATIO = 1.5
+
+
+def _input_beam_amp_radius(E_in, dx, dy=None):
+    """1/e AMPLITUDE radius of ``E_in`` on the centred wave grid, from the
+    intensity second moment (``w = sqrt(2 <r^2>)`` -- the same convention as
+    :func:`lumenairy.propagators.carrier._envelope_amp_radius`, so the chain's
+    per-stage ``w`` and this element-side measurement agree).
+
+    Returns ``0.0`` for an empty / zero / non-finite field (callers treat that
+    as "unmeasurable" and skip the beam-relative guard).
+
+    Accumulated in row BANDS so no full-grid ``|E|^2`` temporary is
+    materialised (this runs on every traced call at the default
+    ``on_aperture_beam='warn'``, where an N=8192 whole-grid float64 temporary
+    would cost 0.5 GiB)."""
+    E = np.asarray(E_in)
+    if E.ndim != 2 or E.size == 0:
+        return 0.0
+    Ny, Nx = E.shape[-2], E.shape[-1]
+    _dy = float(dy) if (dy is not None and np.isfinite(dy) and dy > 0) else dx
+    xg = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    yg = (np.arange(Ny, dtype=np.float64) - Ny / 2) * _dy
+    x2 = xg * xg
+    tot = 0.0
+    acc = 0.0
+    band = max(1, min(Ny, int(1 << 22) // max(Nx, 1)))
+    for r0 in range(0, Ny, band):
+        r1 = min(Ny, r0 + band)
+        Ib = np.abs(E[r0:r1]) ** 2
+        rows = Ib.sum(axis=1)
+        tot += float(rows.sum())
+        acc += float((Ib @ x2).sum()) + float(rows @ (yg[r0:r1] ** 2))
+    if not np.isfinite(tot) or tot <= 0.0 or not np.isfinite(acc):
+        return 0.0
+    r2 = acc / tot
+    if not np.isfinite(r2) or r2 <= 0.0:
+        return 0.0
+    return float(np.sqrt(2.0 * r2))
+
 
 def _carrier_residual_rms(E_in, W_full, wavelength, dx):
     """RMS transverse angular spread (radians) of ``E_in`` AFTER removing
@@ -1609,6 +1676,8 @@ def apply_real_lens_traced(
     tilt_aware_rays: bool = False,
     carrier: Optional[Any] = None,
     on_noncollimated: str = 'warn',
+    fit_radius_beam_factor: Optional[float] = None,
+    on_aperture_beam: str = 'warn',
     parallel_amp: Optional[bool] = None,
     parallel_amp_min_free_gb: float = 48.0,
     newton_amp_mask_rel: float = 1e-4,
@@ -1884,6 +1953,56 @@ def apply_real_lens_traced(
         ``RuntimeWarning`` pointing at ``carrier=`` / :func:`apply_real_lens`;
         ``'delegate'`` transparently falls back to :func:`apply_real_lens`;
         ``'off'`` disables the check (and its one-FFT-free cost).
+
+    fit_radius_beam_factor : float, optional
+        **Aperture:beam cliff guard** (P2, audit
+        AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4).  When set, the
+        entrance ray samples that enter the forward-map / OPL fits are
+        restricted to the BEAM-RELATIVE disc
+        ``r <= fit_radius_beam_factor * w_in``, where ``w_in`` is the input
+        beam's 1/e amplitude radius measured from ``E_in``
+        (``sqrt(2 <r^2>)``).  ``None`` (default) keeps the historical
+        aperture-only domain (byte-identical).
+
+        This decouples the ray-fit domain from the VIGNETTING aperture: when
+        the physical aperture greatly exceeds the beam, the launch square's
+        marginal / corner rays sample surface zones the beam never occupies,
+        and on a fast surface their out-of-basis high order corrupts the global
+        low-order fit *inside* the beam -- a sharp cliff, not a gradual
+        degradation (E4 corrected relay, beam w = 2 mm: exit-wavefront Strehl
+        0.998 at a 6 mm aperture -> 0.105 at 7 mm -> 0.039 at 10 mm).
+
+        Only the FIT domain is restricted.  ``launch_radius``, the Newton
+        ``bound`` and the out-of-domain NaN threshold are untouched, so the
+        Newton inversion still spans the full launch domain, the smooth
+        low-order fit still extrapolates over the whole aperture, and **no
+        field energy is clipped** -- unlike clamping the aperture itself,
+        which vignettes real halo power (audit
+        AUDIT_WAVEFRONT_AWARE_RAY_LAUNCH_2026_07_23 §4c.3).  The restriction
+        is combined (``min``) with the carrier-gated
+        ``_CARRIER_FIT_RADIUS_FRAC`` domain when a carrier is engaged, and is
+        abandoned (falling back to the unrestricted domain) if the disc would
+        hold fewer than 64 coarse samples.
+
+        ``2.0`` is the validated default used by
+        :func:`lumenairy.propagate_traced_carrier_chain`; the recovery is flat
+        for 1.5-2.5 (measured E4 Strehl at a 2.5x-beam aperture: 0.9988 at 1.5,
+        0.9995 at 2.0, 0.9967 at 2.5, 0.9591 at 3.0 -- above ~2.5 the marginal
+        rays start coming back in).  Note the resulting screen is
+        input-DEPENDENT (it reads ``|E_in|``), so it is not meaningful with
+        ``return_screen=True`` / :func:`prepare_real_lens_traced` -- on the
+        flat ``ones`` placeholder those use, the measured ``w_in`` spans the
+        grid and the restriction is inert.
+    on_aperture_beam : {'warn', 'silent'}, default 'warn'
+        Policy for the warn-only half of the cliff guard: emit a
+        ``RuntimeWarning`` when the physical aperture diameter exceeds
+        ``1.5x`` the beam 1/e^2 diameter (the last measured-clean ratio) and no
+        ``fit_radius_beam_factor`` restriction is active -- i.e. the call is in
+        the regime where a fast surface can silently mis-report.  ``'silent'``
+        suppresses it.  Whether the cliff actually bites depends on how
+        aberrated the surfaces are out at the aperture edge (a gently-corrected
+        group tolerates 6x), so this is a *possible-cliff* flag, not a
+        diagnosis.
 
     preserve_input_phase : bool or 'remap', default True
         If True, the input field's phase structure (source tilts,
@@ -2863,6 +2982,54 @@ def apply_real_lens_traced(
     else:
         launch_radius = 0.5 * N * dx
 
+    # ----- P2 aperture:beam cliff guard (audit
+    # AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4) -------------------
+    # Resolve the beam-relative RAY-FIT radius (used at the fit-mask site far
+    # below) and, independently, the warn-only aperture >> beam flag.  Only the
+    # fit domain is affected -- ``launch_radius`` above, the Newton ``bound``
+    # and the out-of-domain NaN threshold all stay aperture-derived, so no
+    # field energy is clipped by this guard.  See
+    # ``_FIT_RADIUS_BEAM_FACTOR_DEFAULT`` for the mechanism + measurements.
+    if on_aperture_beam not in ('warn', 'silent'):
+        raise ValueError(
+            "apply_real_lens_traced: on_aperture_beam must be 'warn' or "
+            f"'silent' (got {on_aperture_beam!r})")
+    _frbf = None
+    if fit_radius_beam_factor is not None:
+        _frbf = float(fit_radius_beam_factor)
+        if not (np.isfinite(_frbf) and _frbf > 0.0):
+            raise ValueError(
+                "apply_real_lens_traced: fit_radius_beam_factor must be a "
+                f"finite positive number or None (got "
+                f"{fit_radius_beam_factor!r})")
+    _beam_fit_radius = None
+    _w_in_beam = 0.0
+    if _frbf is not None or (on_aperture_beam == 'warn' and aperture is not None):
+        _w_in_beam = _input_beam_amp_radius(E_in, dx, dy)
+    if _frbf is not None and _w_in_beam > 0.0:
+        _beam_fit_radius = min(_frbf * _w_in_beam, launch_radius)
+    if (on_aperture_beam == 'warn' and aperture is not None
+            and _w_in_beam > 0.0 and _beam_fit_radius is None):
+        _ap_beam_ratio = float(aperture) / (2.0 * _w_in_beam)
+        if _ap_beam_ratio > _APERTURE_BEAM_WARN_RATIO:
+            import warnings
+            warnings.warn(
+                f"apply_real_lens_traced: the physical aperture "
+                f"({float(aperture)*1e3:.3f} mm) is {_ap_beam_ratio:.2f}x the "
+                f"beam 1/e^2 diameter ({2e3*_w_in_beam:.3f} mm), above the "
+                f"{_APERTURE_BEAM_WARN_RATIO}x aperture:beam ratio beyond "
+                f"which the traced OPL fit can be corrupted by marginal rays "
+                f"the beam never occupies (audit "
+                f"AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4: measured "
+                f"exit-wavefront Strehl 0.998 -> 0.039 across this cliff on a "
+                f"fast singlet).  Whether it bites depends on how aberrated "
+                f"the surfaces are at the aperture edge.  Pass "
+                f"fit_radius_beam_factor=2.0 to restrict the ray-fit domain to "
+                f"the beam (no energy is vignetted by that -- only the fit "
+                f"domain changes), or on_aperture_beam='silent' to "
+                f"acknowledge.",
+                RuntimeWarning, stacklevel=2)
+
     # ----- Subsampling guardrail --------------------------------------
     # The Newton-inversion step builds a cubic-spline interpolant of the
     # entrance->exit map on a coarse grid and uses bilinear interp to
@@ -3163,13 +3330,41 @@ def apply_real_lens_traced(
     # groups.  Skipped for the ``spline`` fit (RectBivariateSpline needs a
     # regular NaN-free grid) and when a carrier is absent (byte-identical
     # default).  See ``_CARRIER_FIT_RADIUS_FRAC``.
-    if _r7_carrier_path and newton_fit != 'spline':
+    #
+    # P2 (2026-07-25): ``fit_radius_beam_factor`` adds a BEAM-relative radius to
+    # the same mechanism and lifts the carrier gate -- the plane-wave-reference
+    # path (no engaged carrier) is exactly where the aperture:beam cliff lives,
+    # since it fits over the whole launch square including its corners.  The two
+    # radii combine by ``min``.  Still fit-domain-only: the Newton loop, the
+    # ``bound`` and the out-of-domain NaN threshold are untouched, so nothing is
+    # vignetted.  See ``_FIT_RADIUS_BEAM_FACTOR_DEFAULT``.
+    _fit_r_max = None
+    if _r7_carrier_path:
+        _fit_r_max = _CARRIER_FIT_RADIUS_FRAC * launch_radius
+    if _beam_fit_radius is not None:
+        _fit_r_max = (_beam_fit_radius if _fit_r_max is None
+                      else min(_fit_r_max, _beam_fit_radius))
+    if _fit_r_max is not None and newton_fit != 'spline':
         _r2_launch = xs_in[:, None] ** 2 + xs_in[None, :] ** 2
-        _fit_disc = _r2_launch <= (_CARRIER_FIT_RADIUS_FRAC * launch_radius) ** 2
+        _fit_disc = _r2_launch <= _fit_r_max ** 2
         if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
             x_out_grid = np.where(_fit_disc, x_out_grid, np.nan)
             y_out_grid = np.where(_fit_disc, y_out_grid, np.nan)
             opl_grid = np.where(_fit_disc, opl_grid, np.nan)
+        elif _beam_fit_radius is not None and on_aperture_beam == 'warn':
+            import warnings
+            warnings.warn(
+                f"apply_real_lens_traced: fit_radius_beam_factor would "
+                f"restrict the ray-fit domain to r <= "
+                f"{_fit_r_max * 1e3:.4f} mm, which holds only "
+                f"{int(_fit_disc.sum())} coarse ray samples (< "
+                f"{_CARRIER_FIT_MIN_SAMPLES} needed to constrain the "
+                f"order-{int(newton_poly_order)} fit).  The restriction is "
+                f"ABANDONED and the full launch domain is fitted, so the "
+                f"aperture:beam cliff guard is NOT active on this call.  "
+                f"Lower ray_subsample (currently {int(ray_subsample)}) or "
+                f"raise fit_radius_beam_factor.",
+                RuntimeWarning, stacklevel=2)
 
     # T-P2 (audit perf): optional DIRECT inverse-map fit.  Instead of Newton-
     # inverting the forward map per output pixel, fit ``opl`` as a smooth

@@ -71,17 +71,26 @@ def test_h3_guard_silent_on_benign_slow_beam():
     E0 = _gauss(1024, 8e-6, 0.5e-3)
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
+        # v5.29 (P2): this fixture is ALSO in the aperture:beam cliff regime
+        # (24 mm aperture, 1 mm beam = 24x) and the new warn-only cliff flag
+        # legitimately fires there.  This test is about the H3 NA_exit guard,
+        # so silence the unrelated flag rather than weaken the 'error' filter.
         la.apply_real_lens_traced(E0, prescription=_singlet_f5(),
-                                  wavelength=_WL, dx=8e-6)
+                                  wavelength=_WL, dx=8e-6,
+                                  on_aperture_beam='silent')
 
 
 def test_h3_guard_suppressed_by_silent_policy():
     E0 = _gauss(1024, 12e-6, 5e-3)
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
+        # ``on_aperture_beam='silent'``: see the note in
+        # test_h3_guard_silent_on_benign_slow_beam (this fixture's 24 mm
+        # aperture is 2.5x the 5 mm beam, so the v5.29 cliff flag also fires).
         la.apply_real_lens_traced(E0, prescription=_singlet_f5(),
                                   wavelength=_WL, dx=12e-6,
-                                  on_undersample='silent')
+                                  on_undersample='silent',
+                                  on_aperture_beam='silent')
 
 
 if __name__ == '__main__':

@@ -23,9 +23,28 @@
 >   +5–10 µm from the plane, at memory-feasible settings (N=2048,
 >   nfc=8192).  Verified against a full-train meridional ray oracle
 >   (design floor rms 0.018 rad; the chain delivers 0.015).
-> - **P2 (daily-driver guards, §4/§5):** in progress as its own package
->   (aperture:beam cliff guard, memory-bounded readout, convergence
->   self-check, design battery).
+> - **P2 (daily-driver guards, §4/§5): DELIVERED (2026-07-25).**
+>   (1) Aperture:beam cliff guard — `fit_radius_beam_factor` (chain default
+>   2.0; element opt-in) restricts the ray-FIT domain to a beam-relative
+>   disc, energy-neutral to 4 digits: E4 exit Strehl 0.105/0.042/0.039 at
+>   7/8/10 mm apertures → 0.9995, pre-cliff and 121 acceptance unchanged;
+>   warn-only `on_aperture_beam` flags the >1.5×-beam regime.  §4's cliff
+>   mechanism CORRECTED by measurement: it is the un-carriered launch
+>   SQUARE's corner samples — a collimated `carrier=inf` eikonal is NaN so
+>   the R7 fit restriction never engages; group-discriminated (entirely the
+>   fast first group), config-independent, `_CARRIER_FIT_RADIUS_FRAC`-null,
+>   π/√3 random-wrapped-phase residual signature.  (2) Memory-bounded
+>   readout — fine grids capped against `get_ram_budget()` (new
+>   `ram_budget=` kwarg / `focus_readout` key) with a warning naming the
+>   un-degraded requirement; the 34 GB-box crash condition now degrades
+>   gracefully.  (3) Opt-in `self_check='dx'` dx-stability flag (healthy
+>   chain silent at 0.06%; aliased-carrier case warns at 50%+ deltas).
+>   (4) CI-safe design battery (17 tests: singlet/doublet/triplet/relay ×
+>   NA × aperture:beam) + guards tests (12) documenting the known-good
+>   envelope (aperture:beam 1.2–2.5×, exit NA 0.013–0.20).  Consolidated
+>   suite 158 passed.  Note for future pins: the chain is FP-floor
+>   reproducible (~1e-15 rel), not bit-reproducible run-to-run —
+>   "byte-identical" claims should be stated as FP-floor identity.
 >
 > §5's P0.1 prediction is settled: stigmatic CONVERGES and traced diverged →
 > the defect was in the element/hand-off layer, as the plan's branch (a)
