@@ -357,11 +357,29 @@ def apply_spherical_lens(
     use_gpu: bool = False,
 ) -> np.ndarray:
     """
-    Apply the phase of a thick singlet with spherical surfaces.
+    Apply a THIN-ELEMENT phase screen for a singlet with spherical surfaces.
 
-    Computes the exact optical-path difference through a glass element with
-    two spherical surfaces, naturally including spherical aberration and all
-    higher-order monochromatic aberrations.
+    Imprints the sag-projection OPD ``-(n-1)*(sag1(h) - sag2(h))`` of a
+    two-surface singlet onto a SINGLE plane.  The sag is the full spherical
+    sag (not its paraxial ``h**2/2R`` expansion), so the screen carries the
+    quartic and every higher even order of the surface departure -- but the
+    model is the paraxial thin-element screen, NOT an exact ray trace
+    through the element: it never follows a ray inside the glass, it never
+    reads the centre thickness ``d``, and it cannot distinguish the two
+    orientations of a plano-convex singlet.  See "Validity boundary" below
+    for the measured error, and use :func:`apply_real_lens` /
+    :func:`apply_real_lens_traced` when real-lens accuracy is required.
+
+    See Also
+    --------
+    lumenairy.elements.apply_real_lens :
+        Per-SURFACE thin screens with exact angular-spectrum propagation
+        through the glass between them (so thickness and surface order do
+        act), plus ``surface_model='displaced'`` for the ray-angle
+        obliquity term this single screen drops.
+    lumenairy.elements.apply_real_lens_traced :
+        Per-pixel ray-traced OPL + wave-optics amplitude envelope; the
+        reference when the OPD tolerance is tighter than the bound below.
 
     Parameters
     ----------
@@ -376,7 +394,15 @@ def apply_spherical_lens(
         Negative = center of curvature on the input side (convex toward
         output).  Example: biconvex lens has R1 > 0, R2 < 0.
     d : float
-        Center thickness [m].
+        Center thickness [m].  ACCEPTED FOR SIGNATURE COMPATIBILITY BUT NOT
+        USED BY THIS MODEL: the single-plane screen
+        ``-(n-1)*(sag1 - sag2)`` has no ``d`` term, so ``d=1e-9`` and
+        ``d=1.0`` return BIT-IDENTICAL fields (measured; adversarial audit
+        2026-07-25, finding E-C2 -- pinned in
+        ``tests/unit/test_niche_audit_ec_thin_lens_claims.py``).  It stays
+        required so the call site records the physical element and the
+        signature matches :func:`apply_aspheric_lens`; if the thickness
+        must actually act on the field, use :func:`apply_real_lens`.
     n_lens : float
         Refractive index of the lens material.
     wavelength : float
@@ -399,16 +425,54 @@ def apply_spherical_lens(
 
     Notes
     -----
-    The thickness profile is ``t(h) = d - sag1(h) + sag2(h)`` (the glass
-    spans ``z`` in ``[sag1(h), d + sag2(h)]``) where each signed sag is
-    ``sag(h) = R - sign(R) * sqrt(R**2 - h**2)``.
+    Geometry.  The thickness profile of the physical element is
+    ``t(h) = d - sag1(h) + sag2(h)`` (the glass spans ``z`` in
+    ``[sag1(h), d + sag2(h)]``) where each signed sag is
+    ``sag(h) = R - sign(R) * sqrt(R**2 - h**2)``.  Only the ``h``-varying
+    part of that profile enters the screen; the constant ``d`` piston does
+    not (see the ``d`` parameter).
 
-    The OPD relative to the center is:
+    The phase this function imprints is exactly
 
         delta_phi(h) = -k * (n - 1) * (sag1(h) - sag2(h))
 
-    which reduces to ``-k/(2f) * h**2`` in the paraxial limit with
-    ``1/f = (n-1) * (1/R1 - 1/R2)`` (lensmaker's equation).
+    i.e. it is an EXACT evaluation of the sag-projection OPD, and reduces
+    to ``-k/(2f) * h**2`` in the paraxial limit with
+    ``1/f = (n-1) * (1/R1 - 1/R2)`` (lensmaker's equation).  Exactness of
+    that formula is not exactness of the LENS -- see below.
+
+    Validity boundary
+    -----------------
+    This is a **normal-projected thin phase screen**: ``sag(x, y)`` is the
+    axial (z) surface departure and the OPD is imprinted on a single axial
+    plane.  It is the same per-surface formula :func:`apply_real_lens`
+    uses (see that function's "Oblique validity boundary" section for the
+    general statement), with the extra simplification that BOTH surfaces
+    are collapsed onto ONE plane with no propagation between them.  A thin
+    screen collapses the finite ray traverse through the sag onto that
+    plane, so the residual OPD error scales as the leading obliquity term
+    ``~ sag * theta**2``, where ``theta`` is the local ray angle.  The
+    bound is therefore **design-dependent**: it grows with fast (high-NA)
+    surfaces, large sag and off-axis fields, and shrinks toward the axis
+    and for slow surfaces.
+
+    Measured against an exact meridional Snell + eikonal ray trace
+    (R = 50 mm N-BK7 singlet, n = 1.51509 at 632.8 nm, collimated on-axis
+    input, every wavefront referenced to its own best-fit exact sphere;
+    adversarial audit 2026-07-25, finding E-C2):
+
+    * Magnitude.  Screen-vs-trace PV error 0.011 waves at f/16, 0.18 at
+      f/8, 3.88 at f/3.9, and 21.7 waves at f/2.0 -- a good wavefront
+      model for slow elements only.
+    * Orientation blindness.  The screen sees ``sag1 - sag2`` only, so
+      flipping a plano-convex singlet end-for-end moves its output by 1.7%
+      (7.82 -> 7.95 waves PV) where the true aberration moves 4.0x
+      (3.94 -> 15.67 waves PV).  Orientation, thickness and internal
+      propagation studies therefore need :func:`apply_real_lens`
+      (per-surface screens + in-glass propagation;
+      ``surface_model='displaced'`` restores the obliquity term and the
+      ~4x orientation split) or :func:`apply_real_lens_traced` (per-pixel
+      ray-traced OPL).
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
@@ -505,7 +569,18 @@ def apply_aspheric_lens(
     use_gpu: bool = False,
 ) -> np.ndarray:
     """
-    Apply an aspheric singlet lens phase based on exact OPD through thick glass.
+    Apply a THIN-ELEMENT phase screen for a conic / aspheric singlet.
+
+    The conic-plus-polynomial twin of :func:`apply_spherical_lens` and the
+    same model: the sag-projection OPD ``-(n-1)*(sag1(h) - sag2(h))``
+    imprinted on a SINGLE plane.  The sag evaluation is exact for the
+    prescribed surfaces, but the element model is the paraxial thin-element
+    screen -- no ray is followed inside the glass, the centre thickness
+    ``d`` is not read, and the two orientations of a plano-convex singlet
+    are indistinguishable.  Read :func:`apply_spherical_lens`'s "Validity
+    boundary" section (it applies verbatim) and "SA-nulling conics" below
+    before using this function to design an asphere; for real-lens accuracy
+    use :func:`apply_real_lens` / :func:`apply_real_lens_traced`.
 
     Each surface follows the standard aspheric sag equation:
 
@@ -520,7 +595,10 @@ def apply_aspheric_lens(
         Radii of curvature [m] (same sign convention as
         :func:`apply_spherical_lens`).
     d : float
-        Center thickness [m].
+        Center thickness [m].  ACCEPTED FOR SIGNATURE COMPATIBILITY BUT NOT
+        USED BY THIS MODEL -- ``d=1e-9`` and ``d=1.0`` return BIT-IDENTICAL
+        fields (measured; adversarial audit 2026-07-25, finding E-C2).  See
+        the same parameter on :func:`apply_spherical_lens`.
     n_lens : float
         Refractive index at the operating wavelength.
     wavelength : float
@@ -548,10 +626,44 @@ def apply_aspheric_lens(
     Notes
     -----
     With ``k1=k2=0`` and ``A1=A2=None`` this reduces to
-    :func:`apply_spherical_lens`.
+    :func:`apply_spherical_lens`, whose "Validity boundary" section applies
+    unchanged here (single-plane normal-projected screen, ``d`` unused,
+    orientation-blind, residual OPD error ``~ sag * theta**2``).
 
-    A plano-convex lens with ``k1 = -n_lens**2`` on the curved surface
-    eliminates third-order spherical aberration for collimated input.
+    SA-nulling conics: the real lens vs this screen
+    -----------------------------------------------
+    Two DIFFERENT conics are involved and this docstring used to conflate
+    them: it prescribed the ``-n**2`` conic on the CURVED FIRST surface of a
+    plano-convex lens as a third-order-SA null for collimated input.  That
+    guidance is RETRACTED -- it names the wrong surface for a real lens AND
+    the wrong value for this screen (adversarial audit 2026-07-25, finding
+    E-C1).  Measured with an exact meridional Snell + eikonal trace
+    (R = 50 mm, N-BK7 n = 1.51509 at 632.8 nm, semi-aperture 12.5 mm =
+    f/3.9, collimated on-axis input, wavefront referenced to its best-fit
+    exact sphere):
+
+    * REAL LENS.  The ``k = -n**2`` hyperboloid belongs on the EXIT surface
+      of a FLAT-FIRST plano-convex singlet, where it is exactly stigmatic
+      for collimated on-axis input: measured PV 0.000000 waves (it is the
+      Cartesian oval for an infinite object conjugate, eccentricity ``n``).
+      Placing that same conic on the curved FIRST surface gives 10.38 waves
+      PV against 3.94 for a plain sphere in that orientation -- 2.6x WORSE,
+      not corrected.
+    * THIS SCREEN.  Within the thin-screen model the SA-minimising conic on
+      a curved-first singlet is ``k = -1 - (n_lens - 1)**2`` (= -1.2653 for
+      N-BK7), where the screen's sphere-referenced PV collapses to ~0
+      (401-point scan of k over [-2, -0.5]: argmin -1.265, PV 0.002 waves).
+      That value is a property of the SCREEN, not of the lens: fed to the
+      exact trace the same conic leaves 4.34 waves PV, and the exact
+      trace's own curved-first optimum sits near k1 = -0.58.
+
+    The two disagree because the screen is the normal (z) sag PROJECTION
+    collapsed onto one plane: it nulls the sag-difference OPD rather than
+    the traversed optical path, so its stationary point is displaced from
+    the true one and does not move with surface order or thickness.  Use
+    this function to imprint a PRESCRIBED asphere and to study the screen's
+    own OPD; use :func:`apply_real_lens` (``surface_model='displaced'``) or
+    :func:`apply_real_lens_traced` to design or verify an SA-nulled asphere.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
