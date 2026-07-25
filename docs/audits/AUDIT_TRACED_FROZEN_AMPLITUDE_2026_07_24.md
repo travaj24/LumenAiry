@@ -280,6 +280,51 @@ look harmful if ever benchmarked in isolation.
    ~1-coarse-pixel diagonal focus walk: re-measure AFTER 1+2; only chase if they
    survive.
 
+### 6.6 EXECUTION RESULT (same day): §6.5 step 1 REFUTED on the real chain;
+###     step 2 (`ray_density`) CONFIRMED as the working fix
+
+All §6.5 candidates were executed on the real 121 chain (N=2048, NFC=8192, WF=4.0,
+wide ±51.2 µm readout so the diagonal focus walk cannot escape the window):
+
+| config | peak offset | FWHM | EE3 | EE6 | window |
+|---|---|---|---|---|---|
+| library baseline | (−13.7, −13.7) µm | 3.95 µm | 54.8% | 68.9% | 85.6% |
+| **`amplitude_model='ray_density'` alone** | (−16.0, −16.0) | 4.55 µm | 56.0% | **85.8%** | **96.8%** |
+| band-limited sphere conversion alone | (−31.5, −31.5) | 12.65 µm | 7.1% | **22.3%** | 74.0% |
+| conversion + ray_density | (−27.4, −27.4) | 10.75 µm | 11.2% | 33.4% | 90.4% |
+
+(The taper worked as designed — stage traces identical to the whole-grid swap to 4
+digits, i.e. the guard band truly carries nothing — so the breakage is in-band and
+intrinsic, not an aliasing artifact.  The conversion runs' spot is walked AND
+genuinely blurred; the narrow-window 7.1% was the walk clipping the readout corner.)
+
+**Resolution — the real element is (approximately) INPUT-HONEST, the stub is not.**
+`apply_real_lens_traced`'s exit is `E_analytic·exp(i(k·opl − φ_pw))`: the
+input-dependent phase rides through `E_analytic = apply_real_lens(E_in)` (honest
+transport of whatever phase the input carries), while the input-independent pair
+replaces only the lens OPD.  Since `reconstruct∘envelope` is a pointwise identity,
+an input-honest element sees NO net boundary-convention error across a hand-off —
+§6.2's per-group r⁴ injection applies to the sphere-ASSUMING ideal stub (which
+imposes `exp(ik(S_out−S_in))`), i.e. to the CONTROLS that measured it, not to the
+real element.  Applying the boundary conversion to an honest element instead
+INJECTS `(S−parab)(R_in) − (S−parab)(R_out)` ≈ −3.3 rad at r=w per group (S3-S4)
+— quantitatively matching the observed collapse.  The §6.3 factorial remains valid
+for what it is (a stub-chain result); its 36-point transfer to the real chain is
+hereby REFUTED by direct measurement.
+
+**What stands after this round:**
+- `amplitude_model='ray_density'` (existing, opt-in, reachable via
+  `traced_kwargs`) is the verified fix for the §4 frozen-amplitude defect:
+  +16.9 EE6 points, window 96.8%, design beam trace restored at N=2048 (final
+  group w = 1.193 mm vs design 1.175 mm) — dx-independent by construction.
+- The real chain's remaining gap (EE6 85.8 vs ~100% target; FWHM 4.55 vs 3.223 µm;
+  the ~16 µm diagonal walk) is now the open P0/P1 question — candidates: the
+  element's internal phase-side dx effects (§3 defect A), the walk artifact, and
+  the exit residual composition (§6.2's 1.333 rad measurement needs re-taking
+  under `ray_density` before further attribution).
+- The dx-convergence question moves to: is the `ray_density` chain FLAT across the
+  axis-A N-sweep?  (Running at write time.)
+
 ## 7. Session artifacts / open items (updated post-review)
 
 - Axis-A sweep COMPLETE.  Traced (full final-leg settings, readout N_fine pinned
