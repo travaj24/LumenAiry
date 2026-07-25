@@ -413,6 +413,31 @@ pitch-preserving rays, NFC=8192, WF=4.0, wide ±51.2 µm readout):
   Next: MEASURE-hook exit-wavefront residual of the converged config, then
   bisect element-vs-transport with a fixed-fine-grid tail run.
 
+  **MEASURED (exit_residual probe, converged config, post-fix):** the field
+  entering the exact readout carries, vs the exact sphere(R_out=−7.7124 mm):
+  defocus d(1/R) = +0.975 m⁻¹ (≡ the observed +59 µm focus shift — the
+  readout leg is exonerated; the shift is created at/before the last exit),
+  **r⁴ = +3.113 rad at r = w** (r⁶ ≈ 0.000), defocus-removed rms 0.347 rad
+  (PV 1.47), and the +x/+y cuts are IDENTICAL (fully symmetric — the walk
+  fix holds).  The entire remaining P1 gap is this one symmetric
+  (defocus + spherical) pair.  Next leg: a per-stage r⁴/defocus tracker on
+  the converged chain (envelope-stage best-r²-removed radial fit per
+  hand-off) to find which group/transport injects it; then compare that
+  group's traced OPL against the meridional oracle AT CHAIN CONDITIONS.
+
+- **Default-flip decision (recorded 2026-07-24):** the element-level defaults
+  stay as they are — `amplitude_model='screen'` and
+  `preserve_input_phase=True` are genuinely correct for non-carrier /
+  well-sampled inputs (diffraction amplitude, tilt/DOE phase), and
+  `ray_density` genuinely degrades at caustics/folds — but the CHAIN
+  (`propagate_traced_carrier_chain`) always operates in the
+  beyond-Nyquist-carrier regime where the wave-pair corrupts and the screen
+  amplitude freezes, so the convergent configuration is not optional there.
+  Once the plateau leg concludes and the P0/P1 gates pass, the P0.3
+  packaging commit flips the CHAIN-level defaults to the validated
+  configuration (R8 chain pins updated deliberately and documented;
+  a legacy escape hatch retained for reproducing pre-flip runs).
+
 ## 7. Session artifacts / open items (updated post-review)
 
 - Axis-A sweep COMPLETE.  Traced (full final-leg settings, readout N_fine pinned
