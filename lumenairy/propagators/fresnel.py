@@ -33,6 +33,60 @@ __all__ = [
 ]
 
 
+def _centred_dft_halfpixel_args(Ny, Nx, xp=np):
+    """Index-offset phase corrections for the ``(n - N/2)`` coordinate
+    convention under an ``fftshift(fft2(ifftshift(.)))`` DFT (audit P1).
+
+    The single-FFT Fresnel / Fraunhofer kernels need the shifted DFT
+
+        W[k] = sum_m E[m] * exp(-2j*pi * (m - c)(k - c) / N),   c = N / 2
+
+    because ``c = N / 2`` is the coordinate origin this family documents
+    and evaluates (the same one ``fresnel_propagate_mft`` /
+    ``fraunhofer_propagate_mft`` use, with no shifts, and which the
+    quadratic phase screens here are built on).  What
+    ``fftshift(fft2(ifftshift(.)))`` actually computes is that sum with
+    the INTEGER anchor ``q = N // 2`` -- ``fftshift``/``ifftshift`` can
+    only roll by whole samples.  For even N, ``q == c`` and the two are
+    the same transform.  For ODD N they differ by a half-sample in BOTH
+    planes, which is not a mere relabelling: pre-fix the returned field
+    was half an output pixel off its own grid (measured intensity
+    centroid -0.5000 px) with a residual phase ramp, rel err 1.7e-1 vs
+    ``fresnel_propagate_mft`` on the same output grid at N=257
+    (even N: 3.2e-14).
+
+    Writing ``a = m - q``, ``b = k - q``, ``delta = c - q`` (0 or 1/2),
+
+        (m - c)(k - c) = a*b - delta*(a + b) + delta**2,
+
+    so the exact correction is a pre-chirp on the input index, a
+    post-chirp on the output index, and a constant -- all separable per
+    axis, and the constant folds into the post-chirp:
+
+        pre[m]  = exp(+2j*pi * delta * (m - N // 2) / N)
+        post[k] = exp(+2j*pi * delta * (k - N / 2)  / N)
+
+    Returns ``(pre_y, pre_x, post_y, post_x)`` as float64 PHASE ARGUMENTS
+    (radians) to be added into the existing exponents, or
+    ``(None, None, None, None)`` when both axes are even -- so the even-N
+    arithmetic is untouched and bit-identical, not merely
+    multiplied by 1.
+    """
+    if Ny % 2 == 0 and Nx % 2 == 0:
+        return None, None, None, None
+
+    def _axis(N):
+        delta = N / 2.0 - (N // 2)          # exactly 0.0 or 0.5
+        n = xp.arange(N, dtype=np.float64)
+        pre = (2.0 * np.pi * delta / N) * (n - (N // 2))
+        post = (2.0 * np.pi * delta / N) * (n - N / 2.0)
+        return pre, post
+
+    pre_x, post_x = _axis(Nx)
+    pre_y, post_y = _axis(Ny)
+    return pre_y, pre_x, post_y, post_x
+
+
 def fresnel_tf_propagate(
     E_in: np.ndarray,
     z: float,
@@ -101,8 +155,20 @@ def fresnel_tf_propagate(
     H = np.exp(1j * phase)
     out = _ifft2(_fft2(np.ascontiguousarray(E_in, dtype=np.complex128)) * H)
     if np.iscomplexobj(E_in) and E_in.dtype != np.complex128:
-        out = out.astype(E_in.dtype)
-    return out
+        # astype() already allocates a fresh, owned array -- no second copy.
+        return out.astype(E_in.dtype)
+    # v5.29.x (audit P2): ``.copy()`` is REQUIRED -- same class as the
+    # ``rs.py`` F-3 fix.  ``_ifft2`` hands back the cache-owned pyFFTW
+    # inverse ping-pong buffer, whose contents the double-buffer contract
+    # guarantees only until the NEXT same-key ``_ifft2`` call; unlike ASM
+    # and RS (which fftshift / slice-copy on the way out) this kernel
+    # returned the live buffer itself.  The 2nd subsequent same-shape call
+    # then silently overwrote an already-returned field -- measured
+    # max|delta| = 0.497 on a peak-1 field, the array becoming
+    # byte-identical to a LATER leg's result, and live in-library via
+    # ``carrier.propagate_carrier_referenced``, which stores this array
+    # into the returned ``CarrierReferencedField.env``.
+    return out.copy()
 
 
 def fresnel_propagate(
@@ -234,6 +300,15 @@ def fresnel_propagate(
     y2 = (_bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy_out
     X2, Y2 = _bld.meshgrid(x2, y2, indexing='xy')
 
+    # v5.29.x (audit P1): odd-N half-sample correction.  The grids above
+    # keep the family's documented ``(n - N/2)`` origin (unchanged, and
+    # bit-identical for even N); the ``fftshift(fft2(ifftshift(.)))`` below
+    # can only anchor on the integer pixel ``N // 2``, so for ODD N the
+    # exact shifted-DFT correction is folded into the two phase screens.
+    # See ``_centred_dft_halfpixel_args`` for the derivation.
+    _pre_y, _pre_x, _post_y, _post_x = _centred_dft_halfpixel_args(
+        Ny, Nx, _bld)
+
     # -- quadratic phase in input plane --------------------------------------
     # v5.17.x (audit P3-56): astype(copy=False) throughout -- the phase
     # screen is freshly allocated by xp.exp (never aliased) and E_in is
@@ -242,8 +317,12 @@ def fresnel_propagate(
     # passes (~4 GB transient each at 16384^2 complex128), partially
     # undoing the v5.17.0 lifetime hygiene in this function.
     # Byte-identical output.
-    phase_in = _bld.exp(1j * k / (2 * z) * (X1**2 + Y1**2)).astype(
+    _arg_in = k / (2 * z) * (X1**2 + Y1**2)
+    if _pre_x is not None:
+        _arg_in = _arg_in + (_pre_y[:, None] + _pre_x[None, :])
+    phase_in = _bld.exp(1j * _arg_in).astype(
         target_cdtype, copy=False)
+    del _arg_in
     if is_jax:
         phase_in = xp.asarray(phase_in)
     E_mod = E_in.astype(target_cdtype, copy=False) * phase_in
@@ -261,9 +340,13 @@ def fresnel_propagate(
     del E_mod
 
     # -- quadratic phase in output plane + prefactor -------------------------
+    _arg_out = k / (2 * z) * (X2**2 + Y2**2)
+    if _post_x is not None:
+        _arg_out = _arg_out + (_post_y[:, None] + _post_x[None, :])
     prefactor = (_bld.exp(1j * k * z) / (1j * wavelength * z)
-                 * _bld.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
+                 * _bld.exp(1j * _arg_out)
                  * dx * dy)
+    del _arg_out
     # v5.17.x (audit P3-56): copy=False -- prefactor is freshly built above.
     prefactor = prefactor.astype(target_cdtype, copy=False)
     if is_jax:
@@ -389,17 +472,39 @@ def fraunhofer_propagate(
     y2 = (_bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy_out
     X2, Y2 = _bld.meshgrid(x2, y2, indexing='xy')
 
+    # v5.29.x (audit P1): odd-N half-sample correction -- Fraunhofer is the
+    # far-field limit of Fresnel and shares its ``fftshift(fft2(
+    # ifftshift(.)))`` + ``(n - N/2)`` grid mismatch verbatim (measured rel err
+    # 1.5e-1 vs ``fraunhofer_propagate_mft`` at N=257, 2.8e-14 at N=256).
+    # See ``_centred_dft_halfpixel_args``; both correction vectors are
+    # ``None`` for even N, keeping that path bit-identical.
+    _pre_y, _pre_x, _post_y, _post_x = _centred_dft_halfpixel_args(
+        Ny, Nx, _bld)
+
     # Single FFT of the input field
     E_cast = E_in.astype(target_cdtype) if E_in.dtype != target_cdtype else E_in
+    if _pre_x is not None:
+        # Pre-chirp lives on the INPUT index; build it at float64 and cast
+        # the finished factor (the P2-29 f64-carrier-then-cast recipe).
+        _pre = _bld.exp(1j * (_pre_y[:, None] + _pre_x[None, :])).astype(
+            target_cdtype, copy=False)
+        if is_jax:
+            _pre = xp.asarray(_pre)
+        E_cast = E_cast * _pre
+        del _pre
     if is_jax:
         E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_cast)))
     else:
         E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_cast)))
 
     # Output quadratic phase + prefactor
+    _arg_out = k / (2 * z) * (X2**2 + Y2**2)
+    if _post_x is not None:
+        _arg_out = _arg_out + (_post_y[:, None] + _post_x[None, :])
     prefactor = (_bld.exp(1j * k * z) / (1j * wavelength * z)
-                 * _bld.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
+                 * _bld.exp(1j * _arg_out)
                  * dx * dy)
+    del _arg_out
     # v5.17.x (audit P3-56): copy=False -- prefactor is freshly built above.
     prefactor = prefactor.astype(target_cdtype, copy=False)
     if is_jax:

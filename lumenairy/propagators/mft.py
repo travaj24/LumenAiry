@@ -205,8 +205,18 @@ def angular_spectrum_propagate_mft(
              np.dtype(target_cdtype).str, 'ASM_MFT')
     H_np = _h_cache_lookup(h_key)
     if H_np is None:
-        fx = (np.arange(Nx_in, dtype=np.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
-        fy = (np.arange(Ny_in, dtype=np.float64) - Ny_in / 2.0) / (Ny_in * dy_in)
+        # audit P1 (2026-07-25): INTEGER DC anchor ``N // 2``.  H multiplies
+        # ``fftshift(fft2(ifftshift(E_in)))`` below, and fftshift anchors DC
+        # at the integer centred index for every N, so the centred bin
+        # labels must use ``N // 2``.  Bit-identical for even N; for ODD N
+        # the float ``N / 2`` mislabelled every bin by -df/2 and the kernel
+        # was evaluated at ``f_true - df/2`` -- a lateral walk of
+        # ``-lambda*z/(2*N*dx)`` (measured -3.89 px, rel err 1.5e-1 vs the
+        # Gaussian-ABCD oracle at N=257).  ``n_centre_in_*`` in the
+        # Bluestein call below carries the SAME anchor (it is the
+        # frequency-bin centre, not a spatial one).
+        fx = (np.arange(Nx_in, dtype=np.float64) - Nx_in // 2) / (Nx_in * dx_in)
+        fy = (np.arange(Ny_in, dtype=np.float64) - Ny_in // 2) / (Ny_in * dy_in)
         kx_sq = (2.0 * np.pi * fx) ** 2
         ky_sq = (2.0 * np.pi * fy) ** 2
         kz_sq = k * k - kx_sq[None, :] - ky_sq[:, None]
@@ -242,22 +252,38 @@ def angular_spectrum_propagate_mft(
     # The inverse FT of the propagated angular spectrum is
     #   E_out(x_out, y_out) = integral A(fx, fy) * exp(+2*pi*j*(fx*x_out + fy*y_out)) dfx dfy
     # Discretised on the centred input frequency grid:
-    #   fx[nx] = (nx - Nx_in/2) / (Nx_in * dx_in)   (with dfx = 1/(Nx_in * dx_in))
+    #   fx[nx] = (nx - Nx_in//2) / (Nx_in * dx_in)  (with dfx = 1/(Nx_in * dx_in))
     #   x_out[kx] = (kx - Nx_out/2) * dx_out + xc
     # The product fx[nx] * x_out[kx] expands to a centred Bluestein form
     # with alpha = dfx * dx_out = dx_out / (Nx_in * dx_in) and sign = +1.
     # The 1/(Nx_in*Ny_in) prefactor matches numpy/scipy's IFFT normalisation
     # so that round-tripping through ASM-MFT recovers the input on the
     # natural grid.
+    #
+    # audit P1 (2026-07-25), odd N: the ``ifftshift`` in step 2 makes the
+    # spectrum's implicit spatial origin the INTEGER pixel ``N_in // 2``,
+    # while this family's documented input/output coordinate convention is
+    # ``x = (n - N/2)*dx`` (the convention ``fresnel_propagate_mft`` and
+    # ``fraunhofer_propagate_mft`` evaluate directly, with no shifts).  For
+    # odd N_in the two origins differ by half an input pixel, so the
+    # reconstruction coordinate is ``x_out + off_in`` with
+    # ``off_in = (N_in/2 - N_in//2)*d_in``.  Folding that offset into the
+    # output centre is exact and keeps the declared grid: post-fix
+    # ASM-MFT reproduces angular_spectrum_propagate on the same grid to
+    # 4.4e-14 at N=257 (pre-fix: rel err 1.5e-1, centroid -3.39 px).
+    # ``off_in`` is exactly 0.0 for even N_in -> bit-identical.
     alpha_x = dx_out / (Nx_in * dx_in)
     alpha_y = dy_out / (Ny_in * dy_in)
-    kc_x = Nx_out / 2.0 - xc / dx_out
-    kc_y = Ny_out / 2.0 - yc / dy_out
+    off_in_x = (Nx_in / 2.0 - Nx_in // 2) * dx_in
+    off_in_y = (Ny_in / 2.0 - Ny_in // 2) * dy_in
+    kc_x = Nx_out / 2.0 - (xc + off_in_x) / dx_out
+    kc_y = Ny_out / 2.0 - (yc + off_in_y) / dy_out
 
     F = _bluestein_centred_2d(
         A_propagated, alpha_x, alpha_y, Ny_out, Nx_out,
-        n_centre_in_x=Nx_in / 2.0,
-        n_centre_in_y=Ny_in / 2.0,
+        # Frequency-bin centre: must match the ``fx`` / ``fy`` anchor above.
+        n_centre_in_x=float(Nx_in // 2),
+        n_centre_in_y=float(Ny_in // 2),
         k_centre_out_x=kc_x,
         k_centre_out_y=kc_y,
         sign=+1, xp=xp, fft2=fft2, ifft2=ifft2,

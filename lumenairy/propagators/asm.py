@@ -176,9 +176,11 @@ def _build_asm_H_square(
       ``E_fft = fftshift(fft2(ifftshift(E))) ; E_out = fftshift(
       ifft2(ifftshift(E_fft * H)))`` propagation idiom both call sites
       use.
-    * Frequency grid is ``(arange(N) - N/2) / (N * dx)``, i.e. the
+    * Frequency grid is ``(arange(N) - N // 2) / (N * dx)``, i.e. the
       same centered convention as :func:`_get_or_make_freq_grids`
-      with square ``dy == dx``.
+      with square ``dy == dx`` -- an INTEGER DC anchor, so the grid is
+      exactly ``fftshift(fftfreq(N, dx))`` for both parities of N
+      (audit P1).
     * Evanescent modes (``kz_sq <= 0``) are zeroed for ``z != 0``.
     * When ``bandlimit`` is True and ``z != 0`` the
       Matsushima 1-D mask (``|f| < L / (2*lambda*|z|)``) is applied
@@ -231,7 +233,17 @@ def _build_asm_H_square(
         # contract and the dispatcher's z=None copy.
         return np.ones((N, N), dtype=dtype)
     k = 2.0 * np.pi / wavelength
-    fx = (np.arange(N, dtype=np.float64) - N / 2) / (N * dx)
+    # audit P1 (2026-07-25): INTEGER DC anchor ``N // 2``.  The centred
+    # layout this returns is consumed as ``fftshift(fft2(ifftshift(E)))
+    # * H`` by both call sites, and fftshift anchors DC at the integer
+    # index ``N // 2`` for every N.  Identical to ``N / 2`` for even N
+    # (bit-identical H), but for ODD N the float anchor mislabelled every
+    # bin by -df/2, i.e. evaluated the kernel at ``f_true - df/2`` -- a
+    # linear phase in f, i.e. a lateral walk of ``-lambda*z/(2*N*dx)``.
+    # Measured via the shack_hartmann consumer path (ideal lens, Np=65,
+    # dx=1 um, lambda=633 nm, f=2 mm): focal-spot centroid -8.0874 px
+    # pre-fix vs -0.1535 px post-fix (Np=64: -0.1896 px, unchanged).
+    fx = (np.arange(N, dtype=np.float64) - N // 2) / (N * dx)
     fy = fx  # square sub-aperture (dy == dx)
     kx_sq = (2 * np.pi * fx) ** 2
     ky_sq = (2 * np.pi * fy) ** 2
@@ -334,8 +346,12 @@ def _get_asm_H_natural(
         # trace-safe: H does not depend on the field, so the field
         # gradient survives (only gradients w.r.t. the concrete-float
         # geometry z/dx/wavelength are foregone).
-        fx = (np.arange(Nx, dtype=np.float64) - Nx / 2) / (Nx * dx)
-        fy = (np.arange(Ny, dtype=np.float64) - Ny / 2) / (Ny * dy)
+        # audit P1: integer DC anchor ``N // 2`` -- this centred H is
+        # ``ifftshift``-ed below, and ifftshift anchors DC at the integer
+        # index.  Bit-identical for even N; fixes the odd-N half-bin
+        # frequency offset (see _get_or_make_freq_grids' layout contract).
+        fx = (np.arange(Nx, dtype=np.float64) - Nx // 2) / (Nx * dx)
+        fy = (np.arange(Ny, dtype=np.float64) - Ny // 2) / (Ny * dy)
         kx_sq = (2 * np.pi * fx) ** 2
         ky_sq = (2 * np.pi * fy) ** 2
         kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
@@ -1018,8 +1034,15 @@ def angular_spectrum_propagate_tilted(
         k = 2 * np.pi / wavelength
         dfx = 1.0 / (Nx * dx)
         dfy = 1.0 / (Ny * dy)
-        fx = (np.arange(Nx) - Nx / 2) * dfx
-        fy = (np.arange(Ny) - Ny / 2) * dfy
+        # audit P1: integer DC anchor ``N // 2`` -- H is built centred and
+        # ``ifftshift``-ed below (line ~1068), so the centred bin index
+        # must use the fftshift anchor.  Bit-identical for even N.  The
+        # SPATIAL carrier grid above keeps the ``- N/2`` convention: it
+        # cancels exactly between demodulation and remodulation (a change
+        # of spatial origin is a constant phase there), so only the
+        # frequency lattice matters for the tilted kernel.
+        fx = (np.arange(Nx) - Nx // 2) * dfx
+        fy = (np.arange(Ny) - Ny // 2) * dfy
         FX, FY = np.meshgrid(fx, fy)
 
         FX_shifted = FX + fx0

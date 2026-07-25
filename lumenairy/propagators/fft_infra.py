@@ -1378,12 +1378,33 @@ def set_asm_cache_size(
 def _get_or_make_freq_grids(Ny, Nx, dy, dx, xp_is_numpy):
     """Cached (kx_sq, ky_sq) 1-D float64 grids for the current shape /
     pixel pitch.  CuPy callers skip the cache (device arrays don't
-    survive a host-side dict)."""
+    survive a host-side dict).
+
+    Layout contract (audit P1, 2026-07-25)
+    --------------------------------------
+    The vectors are in CENTRED layout: element ``j`` is the bin that
+    ``fftshift`` puts at centred index ``j``, and every consumer either
+    ``ifftshift``-es them (``_get_asm_H_natural``, ``fresnel_tf_propagate``)
+    or multiplies them against an ``fftshift``-ed spectrum
+    (``through_focus_scan``).  ``fftshift``/``ifftshift`` anchor DC at the
+    INTEGER index ``N // 2`` for every N, so the centred bin index must be
+    offset by ``N // 2`` -- NOT by the float ``N / 2``.  The two agree
+    exactly for even N (bit-identical grids), but for ODD N the float
+    anchor puts DC half a bin off the lattice: ``ifftshift`` of
+    ``(arange(N) - N/2)*df`` gives ``f[0] = -0.5*df`` instead of ``0``, so
+    every transfer function is evaluated at ``f_true - df/2``.  For the
+    ASM / Fresnel-TF kernels that half-bin offset is a linear phase in f,
+    i.e. a lateral walk of the propagated field by
+    ``-lambda*z/(2*N*dx)`` -- measured -3.8916 px (rel err 2.6e-1 vs the
+    Gaussian-ABCD oracle) at N=257, dx=1 um, lambda=1 um, z=2 mm.
+    ``N // 2`` reproduces ``np.fft.fftshift(np.fft.fftfreq(N, dx))``
+    exactly for both parities.
+    """
     if not xp_is_numpy:
-        kx_sq = (2 * np.pi * (cp.arange(Nx) - Nx / 2) / (Nx * dx)) ** 2
-        ky_sq = (2 * np.pi * (cp.arange(Ny) - Ny / 2) / (Ny * dy)) ** 2
+        kx_sq = (2 * np.pi * (cp.arange(Nx) - Nx // 2) / (Nx * dx)) ** 2
+        ky_sq = (2 * np.pi * (cp.arange(Ny) - Ny // 2) / (Ny * dy)) ** 2
         # Note: matches the integer arithmetic of the legacy code,
-        # which used `(arange(N) - N/2) * (1/(N*dx))` then squared.
+        # which used `(arange(N) - N//2) * (1/(N*dx))` then squared.
         return kx_sq, ky_sq
     key = (int(Ny), int(Nx), float(dy), float(dx))
     with _ASM_CACHE_LOCK:
@@ -1392,8 +1413,9 @@ def _get_or_make_freq_grids(Ny, Nx, dy, dx, xp_is_numpy):
             return _FREQ_GRID_CACHE[key]
     dfx = 1.0 / (Nx * dx)
     dfy = 1.0 / (Ny * dy)
-    fx = (np.arange(Nx) - Nx / 2) * dfx
-    fy = (np.arange(Ny) - Ny / 2) * dfy
+    # audit P1: integer DC anchor (see the layout contract above).
+    fx = (np.arange(Nx) - Nx // 2) * dfx
+    fy = (np.arange(Ny) - Ny // 2) * dfy
     kx_sq = (2 * np.pi * fx) ** 2
     ky_sq = (2 * np.pi * fy) ** 2
     with _ASM_CACHE_LOCK:
@@ -1404,7 +1426,13 @@ def _get_or_make_freq_grids(Ny, Nx, dy, dx, xp_is_numpy):
 
 
 def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
-    """Cached 1-D band-limit masks.  Both axes share a single key."""
+    """Cached 1-D band-limit masks.  Both axes share a single key.
+
+    Same CENTRED layout + integer DC anchor (``N // 2``) contract as
+    :func:`_get_or_make_freq_grids` -- the masks are multiplied against
+    an H built from those very grids, so the two must label the bins
+    identically (audit P1).  Bit-identical for even N.
+    """
     if abs_z == 0:
         return None, None
     if not xp_is_numpy:
@@ -1412,8 +1440,8 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
         Ly = Ny * dy
         fx_max = Lx / (2 * wavelength * abs_z)
         fy_max = Ly / (2 * wavelength * abs_z)
-        fx = (cp.arange(Nx) - Nx / 2) / (Nx * dx)
-        fy = (cp.arange(Ny) - Ny / 2) / (Ny * dy)
+        fx = (cp.arange(Nx) - Nx // 2) / (Nx * dx)
+        fy = (cp.arange(Ny) - Ny // 2) / (Ny * dy)
         return cp.abs(fx) < fx_max, cp.abs(fy) < fy_max
     key = (int(Ny), int(Nx), float(dy), float(dx),
            float(wavelength), float(abs_z))
@@ -1425,8 +1453,9 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
     Ly = Ny * dy
     fx_max = Lx / (2 * wavelength * abs_z)
     fy_max = Ly / (2 * wavelength * abs_z)
-    fx = (np.arange(Nx) - Nx / 2) / (Nx * dx)
-    fy = (np.arange(Ny) - Ny / 2) / (Ny * dy)
+    # audit P1: integer DC anchor, matching _get_or_make_freq_grids.
+    fx = (np.arange(Nx) - Nx // 2) / (Nx * dx)
+    fy = (np.arange(Ny) - Ny // 2) / (Ny * dy)
     bl_x = np.abs(fx) < fx_max
     bl_y = np.abs(fy) < fy_max
     with _ASM_CACHE_LOCK:
