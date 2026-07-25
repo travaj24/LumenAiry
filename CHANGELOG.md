@@ -2,7 +2,26 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.29.0] — 2026-07-25
+
+**The traced-carrier production campaign.**  `propagate_traced_carrier_chain`
+becomes a production daily driver: energy-conserving, grid-convergent, and at
+its readout's ideal-field ceiling on the design-121 acceptance with ZERO
+configuration (best-focus FWHM 3.450 µm, EE3 88.8%, EE6 99.6%, EE12 99.8%,
+on-axis, dx- and ray_subsample-flat).  The chain DEFAULTS flip to the
+validated carrier-regime configuration (`carrier_reference='sphere'`,
+`amplitude_model='ray_density'`, `preserve_input_phase='remap'`,
+`remap_sampling='full'`, `fit_radius_beam_factor=2.0`; legacy escape hatch
+documented and pinned); standalone element defaults are untouched.  Includes
+the P2 daily-driver guards (aperture:beam cliff guard, memory-bounded exact
+readout, opt-in dx self-check, CI-safe design battery with a documented
+known-good envelope) and two library-wide sibling-pattern sweeps + their
+deferred-decision resolutions (33 measured fixes total, including the
+flat-fold Seidel parity physics fix and its v4.15.2 algebra twin, the
+upsample lattice bug, and the ray-trace flat-fast-path cylinder-sag drop).
+Every fix was landed measure-first with a regression pin (~500 new pins);
+full causal records in `docs/audits/AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24.md`
+and `docs/audits/AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25.md`.
 
 ### Fixed (deferred decision items resolved, S11/S12, 2026-07-25)
 
