@@ -29,6 +29,31 @@ verified-clean map.
 | `propagators/mft.py` `resample_field` | `N_out=None` with `dx_out ≫ N·dx_in` computes round()→0 and silently returns a (0,0) array; `order` unvalidated.  (Centering itself verified CLEAN to 5e-15 across all parities.) | Guard is trivial but was out of both agents' final scopes; small follow-up. |
 | `analysis/` minor flags | `plotting.py:1443` (N−1)/2-vs-N/2 half-pixel anchor; `aberration.py:562` first-gap dedup threshold on non-uniform axes; `through_focus.py:741` cutoff comment/code mismatch + unguarded `nanmax`; `opd.py:535` row Ny//2 labelled Nx/2; `ao.py:448` n_lenslets=1 → 0/0; `ray_fan.py:249` inf·tan(0)=NaN telecentric fan; `from_field.py:496/691` N//2-vs-N/2 and edge one-sided diffs; `ray_fan.py:714`/`layout.py:60` degenerate-input crashes; `fga.py:2136` unweighted meridional caustic metric. | Individually small; batch into a hygiene pass. |
 
+## 1b. RESOLUTIONS (same day, commits `403ea1f` / `75517cb` / `a9dc454`)
+
+Every §1 item is now resolved: **seidel flat-fold parity FIXED** (three
+independent oracles; the v4.15.2 algebra twin that had copied the bug fixed in
+lockstep; three folded pins moved to exact-trace values ≤3e-13);
+**intersection NaN-gate FIXED** (safe polarity, RAY_NAN attribution, the
+promised ==RAY_OK guard; no vignetting pins moved); **from_field placement
+FIXED** (cell-centred; n_rays 1-4 now usable); **detector contract FIXED**
+(`pixel_pitch` single authority, photon-scale verified;
+`detector_pixels_per_lenslet` documented RESERVED — wiring it is a deferred
+feature); **ao noise FIXED** (injected pre-calibration, RNG sequence
+preserved); **conic clamp** narrowly fixed (NaN inputs propagate; documented
+JAX zero-clamp for real out-of-domain heights preserved); **rs_fine clamp**
+now warns when the pitch contract cannot be met; **resample_field** and the
+degenerate-input batch guarded; **smooth_sigma_px** stays refuted/closed;
+the four not-bit-compatible analysis flags carry in-code deferral notes.
+Separately, the S12 budget pass measured the remaining-accuracy gap
+(taper-skirt attribution NULL; paraxial gap transport within 0.019 rad of
+exact; 1.37 EE3 of the nominal gap was focus-selection methodology) and
+found+fixed the real residual mechanism — the `'remap'` coarse-lattice
+phasor alias (predicted r_alias=1.52w, measured break at 1.5w) — via
+`remap_sampling='full'`, now a chain default: design-121 pure defaults =
+**best-focus FWHM 3.450 µm (the ideal-field ceiling) / EE3 88.8 / EE6 99.6 /
+EE12 99.8, on-axis, dx- and rs-flat**.
+
 ## 2. Verified-clean map (measured, incl. counterfactual sensitivity checks)
 
 - **GBD node upsample** (`gbd.py:2772`) — the reference lattice bug's direct sibling

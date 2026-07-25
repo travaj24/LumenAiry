@@ -23,6 +23,12 @@
 >   +5–10 µm from the plane, at memory-feasible settings (N=2048,
 >   nfc=8192).  Verified against a full-train meridional ray oracle
 >   (design floor rms 0.018 rad; the chain delivers 0.015).
+>   **Post-S12 (2026-07-25, `a9dc454`): the pure-defaults acceptance
+>   improved to best-focus FWHM 3.450 µm — equal to the measured
+>   ideal-field ceiling — EE3 88.8 / EE6 99.6 / EE12 99.8, on-axis,
+>   dx- and ray_subsample-flat** (the `remap_sampling='full'` chain
+>   default; the residual EE3 distance to 90.7 is the like-for-like
+>   ceiling gap, mostly irreducible readout per the measured S12 budget).
 > - **P2 (daily-driver guards, §4/§5): DELIVERED (2026-07-25).**
 >   (1) Aperture:beam cliff guard — `fit_radius_beam_factor` (chain default
 >   2.0; element opt-in) restricts the ray-FIT domain to a beam-relative

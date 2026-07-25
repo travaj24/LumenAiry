@@ -4,6 +4,42 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed (deferred decision items resolved, S11/S12, 2026-07-25)
+
+All ten report-only findings from the sibling-pattern sweep are resolved
+(commits `403ea1f` S11, `75517cb`+`a9dc454` S12; 105 new pins; full details
+in the commit messages).  Highlights:
+
+- **Seidel flat-fold parity (physics)**: a flat fold mirror skipped the
+  R-independent Welford `n' = −n` flip in `system_abcd`/`seidel_coefficients`
+  — EFL discontinuous at R=∞, ray heights diverging past the fold; validated
+  against first principles + R-continuity + 13 exact-trace probes; the
+  algebra layer had COPIED the bug in v4.15.2 (agreement-pinned on the wrong
+  answer) and is fixed in lockstep; three folded-prescription pins moved to
+  exact-trace-confirmed values (≤3e-13).
+- NaN-position rays no longer survive the NumPy aperture gate as `RAY_OK`;
+  cell-centred ray placement (`n_rays`=1..4 used to raise on valid input);
+  `pixel_pitch` is the detector's single pixel-area authority (explicit
+  `n_pixels` silently redefined it up to 16×); the AO `noise_sigma_pixels`
+  knob was inert (applied post-calibration) and now works as documented;
+  a guards batch (resample_field (0,0) array, telecentric NaN, degenerate-
+  input crashes, unguarded nanmax); conic NaN inputs propagate (the
+  documented JAX out-of-domain zero-clamp preserved).
+- **The remaining-accuracy budget, measured**: 1.37 of the nominal 2.1-EE3
+  gap to the ideal ceiling was a focus-selection artifact; the taper-skirt
+  attribution is a measured NULL; the paraxial gap transport agrees with
+  exact ASM to 0.019 rad.  The real mechanism — `'remap'` sampling the
+  carried residual phasor on the coarse ray lattice (aliasing beyond a
+  predicted-and-measured r_alias = 1.52 w) — is fixed by the new
+  `remap_sampling='full'` (element opt-in; **chain default**), which also
+  makes the mode `ray_subsample`-independent (180-9000× reduction).
+  Design-121 pure defaults: best-focus **FWHM 3.450 µm (= the ideal-field
+  ceiling), EE3 88.8, EE6 99.6, EE12 99.8**, on-axis, dx-flat.
+  `_fine_trace_group_exit` warns when the F-C ray-pitch contract cannot be
+  met on the retrace grid.  Deferred with documentation: wiring
+  `detector_pixels_per_lenslet` (a feature moving every SH slope) and four
+  flagged analysis sites whose fixes are not bit-compatible.
+
 ### Fixed (sibling-pattern sweep, 2026-07-25)
 
 Sixteen measured fixes from a library-wide sweep of the traced-campaign bug
