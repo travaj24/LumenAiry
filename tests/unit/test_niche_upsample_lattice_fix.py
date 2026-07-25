@@ -99,6 +99,68 @@ def test_default_screen_exit_centroid_on_axis(rs, _setup):
     assert abs(cy) < 0.25 * dx, (rs, cy / dx)
 
 
+def test_remap_no_double_count_on_pure_sphere(_setup):
+    """preserve_input_phase='remap' (audit S6.7): for a PURE carrier-sphere
+    input the de-chirped residual is ~0, so 'remap' must coincide with
+    preserve_input_phase=False to high accuracy (the no-double-count pin,
+    same guard class as the R8 F3 pins)."""
+    N, dx, R_in, presc, E_in = _setup
+    outs = {}
+    for pip in (False, 'remap'):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            outs[pip] = np.asarray(la.apply_real_lens_traced(
+                E_in, prescription=presc, wavelength=_WL, dx=dx,
+                carrier=R_in, ray_subsample=8, n_workers=1,
+                on_undersample='silent', on_noncollimated='silent',
+                amplitude_model='ray_density', preserve_input_phase=pip))
+    num = np.linalg.norm(outs['remap'] - outs[False])
+    den = np.linalg.norm(outs[False])
+    assert num / den < 1e-3, num / den
+
+
+def test_remap_requires_ray_density(_setup):
+    N, dx, R_in, presc, E_in = _setup
+    with pytest.raises(ValueError, match='remap'):
+        la.apply_real_lens_traced(
+            E_in, prescription=presc, wavelength=_WL, dx=dx, carrier=R_in,
+            ray_subsample=8, n_workers=1, preserve_input_phase='remap')
+
+
+def test_remap_carries_injected_residual(_setup):
+    """A gentle KNOWN residual multiplied onto the sphere input must appear
+    in the 'remap' exit but not the False exit: the difference field's phase
+    must correlate with the injected residual (transported), while
+    pip=False discards it entirely."""
+    N, dx, R_in, presc, E_in = _setup
+    x = (np.arange(N) - N // 2) * dx
+    r2 = x[None, :] ** 2 + x[:, None] ** 2
+    w = 0.6e-3
+    resid = 0.5 * (r2 / w ** 2) ** 2 * np.exp(-r2 / (2 * w * w))  # gentle r^4
+    E_res = (E_in * np.exp(1j * resid)).astype(np.complex128)
+    outs = {}
+    for pip in (False, 'remap'):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            outs[pip] = np.asarray(la.apply_real_lens_traced(
+                E_res, prescription=presc, wavelength=_WL, dx=dx,
+                carrier=R_in, ray_subsample=8, n_workers=1,
+                on_undersample='silent', on_noncollimated='silent',
+                amplitude_model='ray_density', preserve_input_phase=pip))
+    # the two exits must differ by a PHASE-ONLY factor of ~the residual's
+    # magnitude: same |E| (same amplitude model), different phase
+    a_f, a_r = np.abs(outs[False]), np.abs(outs['remap'])
+    assert np.allclose(a_f, a_r, atol=1e-12 + 1e-6 * a_f.max())
+    m = a_f > 0.05 * a_f.max()
+    dphi = np.angle(outs['remap'][m] * np.conj(outs[False][m]))
+    # injected residual rms over the same support (entrance~exit for this
+    # gentle singlet): the carried phase must be nonzero and of the same
+    # order as the injected content
+    inj = resid[m]
+    assert np.std(dphi) > 0.3 * np.std(inj)
+    assert np.std(dphi) < 3.0 * np.std(inj)
+
+
 def test_divisor_and_nondivisor_agree():
     """The exit fields at rs=8 (divisor) and rs=7 (non-divisor) sample the
     same smooth OPL at slightly different ray pitches -- post-fix they must

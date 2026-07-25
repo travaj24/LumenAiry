@@ -367,6 +367,52 @@ pitch-preserving rays, NFC=8192, WF=4.0, wide ±51.2 µm readout):
   CONDITIONS with a complex-field overlap (Strehl-like) metric, groupwise walk/tilt
   measurement, and a ray-pitch sensitivity check of the ray-density Jacobian.
 
+### 6.8 The upsample LATTICE bug (walk root cause, FIXED) + through-focus
+###     methodology + the remaining plateau's exclusion list
+
+- **Diagonal-walk root cause FOUND and FIXED (commit `0a743a6`).**  The
+  walk-hunter instrumentation localized the walk to the G8 fine-retrace call
+  (exit centroid jumps to (−16, −16) µm in one step, pointing stays 0 — an
+  amplitude-map SHIFT, not a tilt).  Cause: the coarse→fine upsample of the
+  OPL / ray-density / valid maps used `coords = ii·Ns/N` (`Ns = ceil(N/sub)`),
+  exact only when `ray_subsample | N`; otherwise a corner-anchored scale error
+  displaces every map diagonally by `(N/2)·(Ns·sub−N)/N` pixels.  Verified by
+  prediction (−6.100/−12.187/−14.467 µm measured vs −6.11/−12.22/−14.51
+  predicted at sub=50/48/51, exactly 0 at divisor subs), fixed at all four
+  sites (`ii/sub`), bit-identical for divisor subs (49/49 pinned tests),
+  pinned by `tests/unit/test_niche_upsample_lattice_fix.py`.  The F-C
+  fine-retrace rescale routinely produces non-divisor subs, so every
+  exact-final-leg run since F-C carried this walk.
+- **Through-focus scans are now mandatory methodology**: at NA 0.152 the
+  focused Rayleigh range is ~18 µm and the chain's best focus sits +60-75 µm
+  past the fixed MSoP readout plane, so at-plane numbers confound focus
+  position with quality (the pre-fix lattice scale error shifted best focus
+  TOWARD the plane — at-plane EE6 "dropped" 76.7→58.7 on fixing it while
+  best-focus quality stayed).  All P1 comparisons from here use best-focus +
+  at-plane pairs (`focus_scan` pattern).
+- **New opt-in mode `preserve_input_phase='remap'`** (this session): the
+  carrier-de-chirped input residual phase transported geometrically to the
+  exit, sampled at each exit pixel's Newton-inverted entrance point (the
+  ray-density pullback).  dx-independent by construction; no-double-count and
+  carried-residual pins green (8/8 in the lattice-fix test file).  On the 121
+  it is fidelity-neutral (best-focus EE6 74.6 vs 79.9 for `False`) — the
+  discarded-pre-correction hypothesis for the plateau is REFUTED.
+- **The remaining converged plateau** (best-focus FWHM ~5.15-5.35 µm / EE3
+  ~50-56 / EE6 ~75-80 / defocus +60-75 µm vs targets 3.223 µm / 91 / ~100 at
+  +6 µm) is now measured INDEPENDENT of: grid pitch (flat N=2048-8192), ray
+  fit density (rs=1/2/4 identical), input-residual handling (False / 'remap'
+  / entrance-coordinate carry all within ~5 EE6 pts), amplitude model
+  (ray_density restores the design beam trace), the walk (fixed), and the
+  machinery (stigmatic flat; unit-energy audits exact).  Remaining suspects,
+  in order: (a) traced-OPL accuracy under CHAIN conditions (the clean-sphere
+  per-group oracle reads 0.001-0.012 rad but the chain-level exit residual has
+  not been re-measured post-fix in the converged config); (b) the paraxial
+  inter-group envelope transport of the legitimate (S−parab) r⁴ content (±7
+  rad on the last gap at w=3.6 mm, R=−24 mm); (c) the exact-readout's
+  fine-leg re-trace conditions (n_fine_cap/window interplay at the retrace).
+  Next: MEASURE-hook exit-wavefront residual of the converged config, then
+  bisect element-vs-transport with a fixed-fine-grid tail run.
+
 ## 7. Session artifacts / open items (updated post-review)
 
 - Axis-A sweep COMPLETE.  Traced (full final-leg settings, readout N_fine pinned

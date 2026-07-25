@@ -32,6 +32,24 @@ All notable changes to the core library are documented here.
   Candidate fix (not yet done): a beam-relative launch/fit radius that decouples
   the ray-fit domain from the vignetting aperture.
 
+### Added
+
+- **`apply_real_lens_traced(preserve_input_phase='remap')`** (opt-in; requires
+  `amplitude_model='ray_density'` and an engaged `carrier=`): transports the
+  input's carrier-de-chirped RESIDUAL phase to the exit geometrically, sampled
+  at each exit pixel's Newton-inverted entrance point (the same pullback the
+  ray-density amplitude uses for `|E_in|`).  Unlike `True` it never touches
+  the analytic wave pair (whose phase corrupts under grid refinement on
+  carrier-referenced inputs: 0.015 → 0.243 rad/group as dx 20 → 5 µm measured
+  on the 121 front group), so it is dx-independent by construction; unlike
+  `False` it does not discard the input's genuine residual.  Combined with
+  `amplitude_model='ray_density'`, the traced-carrier 121 chain becomes
+  dx-CONVERGENT (EE6 identical to the digit across N=2048/4096/8192 — the
+  production-readiness P0 acceptance).  No-double-count and carried-residual
+  pins in `tests/unit/test_niche_upsample_lattice_fix.py`.  Defaults
+  byte-identical (both features opt-in).  Full record:
+  `docs/audits/AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24.md` §6.7-§6.8.
+
 ### Fixed
 
 - **Coarse→fine upsample LATTICE bug in `apply_real_lens_traced` (audit

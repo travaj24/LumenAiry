@@ -1885,7 +1885,7 @@ def apply_real_lens_traced(
         ``'delegate'`` transparently falls back to :func:`apply_real_lens`;
         ``'off'`` disables the check (and its one-FFT-free cost).
 
-    preserve_input_phase : bool, default True
+    preserve_input_phase : bool or 'remap', default True
         If True, the input field's phase structure (source tilts,
         MLA / DOE phase modulation, off-axis wavefronts, etc.) is
         preserved through the lens and combined with the ray-traced
@@ -1899,6 +1899,24 @@ def apply_real_lens_traced(
         OPL is retained.  Use this mode when you specifically want
         the lens-only OPD response on a synthetic plane wave;
         otherwise keep the default.
+
+        ``'remap'`` (opt-in; requires ``amplitude_model='ray_density'``
+        and an ENGAGED explicit ``carrier=``; audit
+        AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S6.7): the input's
+        RESIDUAL phase -- the input field de-chirped by the carrier
+        eikonal, ``angle(E_in * exp(-i*k0*W_carrier))`` -- is
+        transported to the exit GEOMETRICALLY, sampled at each exit
+        pixel's Newton-inverted entrance point (the same pullback the
+        ray-density amplitude uses for ``|E_in|``), and multiplied
+        onto the ``k0*OPL_traced`` exit phase.  Unlike ``True`` it
+        never touches the analytic wave pair (whose phase corrupts
+        with grid refinement on a carrier-referenced input: 0.015 ->
+        0.243 rad/group as dx 20 -> 5 um on the 121 front group), so
+        it is dx-independent by construction; unlike ``False`` it
+        does not discard the input's genuine residual (a corrected
+        relay's inter-group pre-shaping).  For a pure carrier-sphere
+        input the residual is ~0 and 'remap' coincides with
+        ``False``.
 
         Cost: ``preserve_input_phase=True`` runs the analytic
         apply_real_lens *twice* (once for the input field, once for
@@ -2065,6 +2083,27 @@ def apply_real_lens_traced(
             f"{amplitude_model!r}.")
     _ray_density = (amplitude_model == 'ray_density')
     _rd_fold_detected = [False]
+    # ---- preserve_input_phase='remap' (audit
+    # AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S6.7): geometric transport of
+    # the carrier-de-chirped input residual phase via the Newton entrance
+    # pullback.  Downstream, the assembly must take the ``False`` (pure
+    # k0*opl) branch and the ray-density block multiplies the remapped
+    # residual phasor in -- so normalise the flag here.
+    if not isinstance(preserve_input_phase, bool):
+        if preserve_input_phase != 'remap':
+            raise ValueError(
+                "preserve_input_phase must be True, False or 'remap', got "
+                f"{preserve_input_phase!r}.")
+        if not _ray_density:
+            raise ValueError(
+                "preserve_input_phase='remap' requires "
+                "amplitude_model='ray_density' (it reuses the ray-density "
+                "entrance pullback).")
+    _pip_remap = (preserve_input_phase == 'remap')
+    if _pip_remap:
+        preserve_input_phase = False
+    _rd_resid_coarse = [None]
+    _rd_resid_map = None
     # ---- N13 (K1): opt-in MULTIBRANCH (KMAH/Maslov) caustic refinement ----
     # ``caustic=None``/'single' (default) is byte-identical to prior releases.
     # ``'multibranch'`` routes the whole call to the existing
@@ -2500,6 +2539,16 @@ def apply_real_lens_traced(
     # OFF only for a genuine per-pixel tilt_aware launch (N5), i.e. when the F3
     # guard did NOT reroute (``_tilt_aware_launch`` stays True).
     _r7_carrier_path = (_carrier_W is not None) and (not _tilt_aware_launch)
+    # preserve_input_phase='remap' needs the carrier eikonal to de-chirp the
+    # input residual -- require an ENGAGED carrier (explicit or auto-fit that
+    # engaged), else the "residual" would be the raw (possibly beyond-Nyquist)
+    # input phase and the mode's premise breaks.
+    if _pip_remap and _carrier_W is None:
+        raise ValueError(
+            "preserve_input_phase='remap' requires an ENGAGED carrier= "
+            "(the input residual is defined relative to the carrier "
+            "eikonal).  Pass an explicit engaged carrier, or use "
+            "preserve_input_phase=True/False.")
 
     # F1 (audit) collimation guard: measure the residual angular spread
     # (after removing any carrier) and warn / delegate when the input is
@@ -3637,6 +3686,27 @@ def apply_real_lens_traced(
         _row = yef / dy + N / 2.0
         a_in = _mc(_absin, np.vstack([_row, _col]), order=1,
                    mode='constant', cval=0.0).reshape(sh)
+        # preserve_input_phase='remap': sample the carrier-de-chirped input
+        # residual UNIT PHASOR at the same entrance points (geometric
+        # transport of the residual along its ray).  cval=1 (identity phase)
+        # for rays whose entrance falls outside the grid -- their amplitude
+        # is already zero above.  De-chirp with the exact carrier eikonal is
+        # pointwise-exact even where the raw carrier is beyond-Nyquist.
+        if _pip_remap:
+            _k0_rm = 2.0 * np.pi / wavelength
+            _res = np.asarray(E_in) * np.exp(-1j * _k0_rm * _carrier_W)
+            _ra = np.abs(_res)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                _res = np.where(_ra > 0.0,
+                                _res / np.maximum(_ra, 1e-300), 1.0 + 0.0j)
+            _rr_s = _mc(np.real(_res).astype(np.float64),
+                        np.vstack([_row, _col]), order=1,
+                        mode='constant', cval=1.0).reshape(sh)
+            _ri_s = _mc(np.imag(_res).astype(np.float64),
+                        np.vstack([_row, _col]), order=1,
+                        mode='constant', cval=0.0).reshape(sh)
+            del _res, _ra
+            _rd_resid_coarse[0] = _rr_s + 1j * _ri_s
         absdet = np.abs(det_j)
         fin = np.isfinite(absdet) & (~invalid)
         ref = float(np.median(absdet[fin])) if fin.any() else 0.0
@@ -3899,11 +3969,27 @@ def apply_real_lens_traced(
                            _coords_rd, order=1, mode='nearest')
             _nan_rd = _mc_rd(np.isnan(ard_coarse).astype(np.float64),
                              _coords_rd, order=1, mode='nearest')
+            # 'remap': upsample the entrance-pulled residual phasor with the
+            # SAME coordinate stack, then renormalise to unit modulus (the
+            # bilinear interp of a unit phasor has |z| <= 1; where |z| ~ 0
+            # the phase is undefined -- identity there).
+            if _pip_remap and _rd_resid_coarse[0] is not None:
+                _prc = _rd_resid_coarse[0]
+                _pz = (_mc_rd(np.real(_prc), _coords_rd, order=1,
+                              mode='nearest')
+                       + 1j * _mc_rd(np.imag(_prc), _coords_rd, order=1,
+                                     mode='nearest'))
+                _pa = np.abs(_pz)
+                _rd_resid_map = np.where(
+                    _pa > 1e-6, _pz / np.maximum(_pa, 1e-300), 1.0 + 0.0j)
+                del _prc, _pz, _pa
             del _coords_rd
             _rd_upsample_coords = None
             ard_map = np.where(_nan_rd > 0.5, np.nan, _a_rd)
         else:
             ard_map = _ray_density_amp_grid(X, Y)
+            if _pip_remap and _rd_resid_coarse[0] is not None:
+                _rd_resid_map = _rd_resid_coarse[0]
         if _rd_fold_detected[0]:
             import warnings as _rd_warn
             _rd_warn.warn(
@@ -4057,6 +4143,11 @@ def apply_real_lens_traced(
                               out=np.zeros_like(E_out), where=_absE > 0)
         _ard = np.where(np.isfinite(ard_map), ard_map, 0.0)
         E_out = _ard * _unit
+        # preserve_input_phase='remap': multiply the geometrically-transported
+        # input-residual phasor onto the k0*opl exit phase (audit S6.7).  Unit
+        # modulus by construction, identity where the pullback is undefined.
+        if _rd_resid_map is not None:
+            E_out = E_out * _rd_resid_map.astype(E_out.dtype, copy=False)
     if E_out.dtype != target_cdtype:
         E_out = E_out.astype(target_cdtype)
     call_progress(progress, 'real_lens_traced', 1.0, 'done')
