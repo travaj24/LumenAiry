@@ -2950,7 +2950,13 @@ def propagate_traced_carrier_chain(
     from ..elements._lens_traced import _FIT_RADIUS_BEAM_FACTOR_DEFAULT
     base_kw = {'amplitude_model': 'ray_density',
                'preserve_input_phase': 'remap',
-               'fit_radius_beam_factor': _FIT_RADIUS_BEAM_FACTOR_DEFAULT}
+               'fit_radius_beam_factor': _FIT_RADIUS_BEAM_FACTOR_DEFAULT,
+               # S12 (audit sweep): sample the carried residual phasor at
+               # wave-grid resolution -- the coarse-ray-lattice sampling
+               # aliases the design's r^4 correction beyond ~1.5w and makes
+               # the result ray_subsample-dependent.  'full' is dx- and
+               # rs-flat and puts the 121 at the ideal-field FWHM ceiling.
+               'remap_sampling': 'full'}
     if traced_kwargs:
         base_kw.update(traced_kwargs)
     R = float(r_in)

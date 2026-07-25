@@ -154,7 +154,10 @@ def test_chain_default_is_validated_config_and_legacy_is_reachable(
         _chain_setup):
     """v5.29 default flip (audit S8): omitting every knob must be bit-for-bit
     the validated configuration (carrier_reference='sphere' + ray_density +
-    'remap'), and the documented LEGACY escape hatch
+    'remap'; since S12 the chain also defaults remap_sampling='full' and
+    fit_radius_beam_factor=2.0 -- both arms of this pin inherit those
+    non-overridden defaults, so the equality tests the merge, not the full
+    triple), and the documented LEGACY escape hatch
     (carrier_reference='parabola' + screen amplitude + preserve_input_phase
     =True) must be bit-for-bit the pre-flip chain."""
     N, dx, R_in, w, presc, env0, gap = _chain_setup
