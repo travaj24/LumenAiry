@@ -276,9 +276,26 @@ remediation *unit* tests must be self-contained/synthetic.
 traced model for *corrected* relays; general, not 121-specific).  Isolated by
 R7 + R9 after per-group fidelity (F2) and high-NA focusing (R9) were both solved.
 
-> **STATUS (updated 2026-07-24): STILL OPEN. Candidate 1 (E2 below) was
+> **STATUS (updated 2026-07-25): CLOSED — the E4 acceptance is MET
+> (design-121 best-focus EE6 99.3% ≥ 99%, FWHM 3.55 µm at the readout's
+> ideal-field ceiling, on-axis, dx-flat, with ZERO configuration on the
+> new chain defaults).  The resolution was NOT a ray-launch change (E2's
+> premise stays refuted): the closing campaign
+> (`AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24.md` §6–§8) found the true
+> mechanisms — the P0 non-convergence was the carrier-aliased amplitude
+> pass + the preserve-pair phase corruption + an upsample lattice bug,
+> and the fidelity gap was the chain DISCARDING the design's distributed
+> correction at every hand-off while the paraxial parabola hand-off
+> injected its own r⁴.  Fixed by `carrier_reference='sphere'` hand-offs +
+> `amplitude_model='ray_density'` + `preserve_input_phase='remap'`
+> (now the chain defaults, v5.29 flip).  Note also the E4 target-metric
+> correction: Zemax POP's 2.736 µm is the waist RADIUS (FWHM 3.223 µm);
+> "~2.9 µm" below inherits the old conflation.**
+>
+> Historical status (2026-07-24), superseded above:
+> STILL OPEN. Candidate 1 (E2 below) was
 > implemented, tested, and REVERTED. The 121 residual cause is now NARROWED but
-> unidentified — it is NOT the ray launch and NOT aperture/fit corruption.**
+> unidentified — it is NOT the ray launch and NOT aperture/fit corruption.
 >
 > A carrier-relative residual launch (`tilt_aware_rays=True` + explicit carrier,
 > wired to a chain `wavefront_aware` opt-in) was built and then **reverted** — it

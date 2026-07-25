@@ -1,5 +1,37 @@
 # Audit / handoff — traced-carrier propagator production-readiness (2026-07-24)
 
+> **CLOSURE (2026-07-25): P0 and P1 are CLOSED; the §6 acceptance criteria are
+> met.**  Full record: `AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24.md` §6–§8.
+> Scorecard against §6:
+>
+> - **converges under dx refinement (both axes):** YES — the validated chain
+>   configuration (now the v5.29 defaults: `carrier_reference='sphere'` +
+>   `amplitude_model='ray_density'` + `preserve_input_phase='remap'`) is
+>   dx-flat (EE6 99.1/99.3/99.3 at N=1024/2048/4096; the intermediate
+>   `rd+pip0` configuration is flat TO THE DIGIT).  The §1 divergence was:
+>   the carrier-aliased amplitude pass (frozen intra-group expansion) + the
+>   preserve-pair phase corruption + a coarse→fine upsample lattice bug
+>   (`ii·Ns/N` vs `ii/sub` — also the chain's diagonal focus walk).
+> - **conserves energy at every grid:** YES — the §1 energy gain was entirely
+>   the F-A clamp bug; post-fix N=28672 window-total 88.9%; the hypothesized
+>   second mechanism does not exist.  Window 99.4% at the validated config.
+> - **matches Zemax POP within a stated tolerance:** YES with a metric
+>   correction — POP's 2.736 µm is the waist RADIUS (FWHM 3.223 µm; the §1
+>   note "images to 2.74 µm" conflated the two).  Measured best focus:
+>   FWHM 3.550 µm (the ideal-field ceiling through the same readout is
+>   3.45–3.55), EE3 88.4% (ceiling 90.3), EE6 99.3%, on-axis, best focus
+>   +5–10 µm from the plane, at memory-feasible settings (N=2048,
+>   nfc=8192).  Verified against a full-train meridional ray oracle
+>   (design floor rms 0.018 rad; the chain delivers 0.015).
+> - **P2 (daily-driver guards, §4/§5):** in progress as its own package
+>   (aperture:beam cliff guard, memory-bounded readout, convergence
+>   self-check, design battery).
+>
+> §5's P0.1 prediction is settled: stigmatic CONVERGES and traced diverged →
+> the defect was in the element/hand-off layer, as the plan's branch (a)
+> anticipated — though the specific mechanisms differed from every §1-era
+> hypothesis; see the closing audit for the corrected causal chain.
+
 **Purpose:** a clean-slate reassessment of what stands between the traced-carrier propagator
 (`apply_real_lens_traced` + `propagate_traced_carrier_chain`) and being (a) production-ready for the
 **design-121** relay and (b) a trustworthy **daily-driver** propagator for arbitrary designs. Written
