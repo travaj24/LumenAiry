@@ -349,6 +349,68 @@ def mtf_radial(
 # Spec-sheet metrics (v4.14.0): encircled energy, MTF cutoff
 # ============================================================================
 
+def _ee_sorted_cumulative(
+    E: np.ndarray,
+    dx: float,
+    dy: float,
+    centroid: Optional[Tuple[float, float]],
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], float]:
+    """Internal: the EXACT radial cumulative-energy curve of a field.
+
+    Returns ``(r_sorted, p_cum, r_max)``:
+
+    * ``r_sorted`` -- every pixel's distance from the centre, sorted
+      ascending (length ``Ny * Nx``).
+    * ``p_cum`` -- ``cumsum`` of the pixel powers in that order,
+      normalised by the total in-grid power, so ``p_cum[k]`` is the
+      fraction of power inside (and including) ``r_sorted[k]``.
+    * ``r_max`` -- the largest in-grid radius (the grid corner).
+
+    ``(None, None, r_max)`` is returned for a degenerate (zero-power)
+    input so callers can emit their own zero curve.
+
+    This is the single source of truth for BOTH
+    :func:`encircled_energy_curve` (which samples it) and
+    :func:`encircled_energy_radius` (which inverts it) -- sharing the
+    construction is what makes the radius the exact inverse of the
+    curve rather than an approximation of it (audit
+    AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-2).
+
+    Callers are responsible for input validation; the helper performs
+    none.
+    """
+    from .beam_stats import beam_centroid
+
+    Ny, Nx = E.shape
+
+    if centroid is None:
+        cx, cy = beam_centroid(E, dx, dy)
+    else:
+        cx, cy = float(centroid[0]), float(centroid[1])
+
+    x = (np.arange(Nx) - Nx / 2) * dx
+    y = (np.arange(Ny) - Ny / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    R = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
+
+    I = np.abs(np.asarray(E)) ** 2
+    pixel_area = float(dx) * float(dy)
+    total = float(I.sum()) * pixel_area
+    if total <= 0:
+        return None, None, float(R.max())
+
+    # Sort pixels by radial distance and build the cumulative power
+    # curve once.  The same cumulative curve is sampled at every
+    # requested radius via np.searchsorted, which keeps the cost at
+    # O(N log N) regardless of how many radii are asked for.
+    r_flat = R.ravel()
+    i_flat = I.ravel() * pixel_area
+    order = np.argsort(r_flat)
+    r_sorted = r_flat[order]
+    p_cum = np.cumsum(i_flat[order]) / total
+    return r_sorted, p_cum, float(r_sorted[-1])
+
+
 def encircled_energy_curve(
     E: np.ndarray,
     dx: float,
@@ -405,6 +467,11 @@ def encircled_energy_curve(
     gives the same answer to floating-point precision when the
     requested radii are coarser than the pixel pitch.
 
+    The sort-and-accumulate step lives in ``_ee_sorted_cumulative``
+    and is shared with :func:`encircled_energy_radius`, so the radius
+    that function returns is the exact inverse of the curve this one
+    samples (v5.30, audit finding A-2).
+
     Examples
     --------
     >>> import numpy as np
@@ -429,7 +496,6 @@ def encircled_energy_curve(
     # intensity PSF -- the function detects both).
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'encircled_energy_curve')
-    from .beam_stats import beam_centroid
     if dy is None:
         dy = dx
     if E.ndim != 2:
@@ -441,47 +507,23 @@ def encircled_energy_curve(
             f"encircled_energy_curve: n_radii must be >= 2; got "
             f"{n_radii!r}.")
 
-    Ny, Nx = E.shape
+    r_sorted, p_cum, r_max_grid = _ee_sorted_cumulative(
+        E, dx, dy, centroid)
 
-    if centroid is None:
-        cx, cy = beam_centroid(E, dx, dy)
-    else:
-        cx, cy = float(centroid[0]), float(centroid[1])
-
-    x = (np.arange(Nx) - Nx / 2) * dx
-    y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
-    R = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
-
-    I = np.abs(np.asarray(E)) ** 2
-    pixel_area = float(dx) * float(dy)
-    total = float(I.sum()) * pixel_area
-    if total <= 0:
+    if p_cum is None:
         # Degenerate input -- emit a zero curve over the requested
         # (or default) radii grid so downstream callers don't have to
         # special-case the empty-field branch.
         if radii is None:
-            r_max = float(R.max())
-            radii_out = np.linspace(0.0, r_max if r_max > 0 else 1.0,
-                                    n_radii)
+            radii_out = np.linspace(
+                0.0, r_max_grid if r_max_grid > 0 else 1.0, n_radii)
         else:
             radii_out = np.asarray(radii, dtype=float)
             radii_out = np.sort(radii_out)
         return radii_out, np.zeros_like(radii_out)
 
-    # Sort pixels by radial distance and build the cumulative power
-    # curve once.  The same cumulative curve is sampled at every
-    # requested radius via np.searchsorted, which keeps the cost at
-    # O(N log N) regardless of how many radii are asked for.
-    r_flat = R.ravel()
-    i_flat = I.ravel() * pixel_area
-    order = np.argsort(r_flat)
-    r_sorted = r_flat[order]
-    p_cum = np.cumsum(i_flat[order]) / total
-
     if radii is None:
-        r_max = float(r_sorted[-1])
-        radii_out = np.linspace(0.0, r_max, n_radii)
+        radii_out = np.linspace(0.0, r_max_grid, n_radii)
     else:
         radii_out = np.asarray(radii, dtype=float)
         # Sort + validate -- the contract says the returned curve is
@@ -552,27 +594,67 @@ def encircled_energy_radius(
     Returns
     -------
     radius : float
-        Encircled-energy radius [m].  Linearly interpolated between
-        the two grid samples that straddle ``threshold``.  Returns the
-        maximum in-grid radius if the curve never reaches the
-        threshold (e.g. the beam clips the grid).
+        Encircled-energy radius [m] -- the smallest radius at which
+        the encircled-energy curve reaches ``threshold``.  Returns the
+        maximum in-grid radius (the grid corner) if the curve never
+        reaches the threshold (e.g. ``threshold = 1.0``, or the beam
+        clips the grid).
 
-        The encircled-energy curve sampled by
-        :func:`encircled_energy_curve` is NOT guaranteed to start at
-        ``ee[0] = 0``.  When the requested radii grid starts at
-        ``radii[0] = 0`` and at least one pixel sits exactly at the
-        centre (``r_sorted[0] = 0``), the cumulative-power lookup at
-        radius 0 picks up that centre-pixel contribution and
-        ``ee[0] = p_cum[0]`` (i.e. the centre-pixel's fractional
-        intensity).  If ``threshold`` is small enough that the
-        centre-pixel contribution alone already exceeds it (the
-        "hot-centre" case: a delta-like input concentrated at the
-        centre pixel), the short-circuit returns ``radii[0] = 0`` m,
-        which is the physically reasonable answer for that input.
+        The encircled-energy curve is NOT guaranteed to start at
+        ``ee(0) = 0``: when at least one pixel sits exactly at the
+        centre, the cumulative-power lookup at radius 0 already picks
+        up that centre-pixel contribution.  If ``threshold`` is small
+        enough that the centre-pixel contribution alone exceeds it
+        (the "hot-centre" case: a delta-like input concentrated in the
+        centre pixel), the short-circuit returns ``0.0`` m, which is
+        the physically reasonable answer for that input.
+
+    Notes
+    -----
+    **Exact curve inversion (v5.30, audit
+    AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-2).**  This
+    function inverts the cumulative-energy curve *directly*: the pixel
+    radii are sorted, the powers accumulated
+    (:func:`_ee_sorted_cumulative` -- the very same construction
+    :func:`encircled_energy_curve` samples), and the requested fraction
+    located with :func:`numpy.searchsorted` plus one linear
+    interpolation inside the straddling pixel-radius interval.  The
+    returned radius is therefore the exact inverse of the curve, and it
+    is **independent of the array size**.
+
+    Until v5.30 the crossing was hunted on a hard-coded 256-point
+    radius ladder spanning ``0`` to the *grid corner*.  Because the
+    corner grows with the array while the beam does not, the ladder
+    step -- and with it the interpolation error -- scaled with the
+    padding: on a fixed physical Gaussian (``w = 10`` px) the 86.5%
+    radius drifted ``+0.20% -> +6.05%`` over ``N = 64 -> 2048``
+    (measured).  The direct inversion returns bit-identical radii
+    across that same sweep.
+
+    **What still limits accuracy.**  Two intrinsic, array-size-
+    independent effects remain, and neither is a defect of the
+    inversion:
+
+    1. *Half-pixel quadrature bias.*  ``p_cum[k]`` is the power
+       including pixel ``k``, booked at that pixel's own radius, so the
+       curve runs about half a pixel-shell of energy "early".  On a
+       well-conditioned crossing this is a few tenths of a percent in
+       radius (measured ``-0.95%`` at ``w = 10`` px, ``-0.05%`` at
+       ``w = 40`` px on a Gaussian) and it shrinks with ``dx``, not
+       with ``N``.
+    2. *Ill-conditioning near a dark ring.*  ``dEE/dr = 2 pi r I(r)``
+       vanishes wherever the intensity does, so inverting a threshold
+       that sits at an Airy dark ring is intrinsically unstable: at
+       the first dark ring the *fraction* is recovered to ``<1e-4``
+       absolute while the *radius* for a threshold of 0.838 can move
+       several percent (measured ``+2.5%`` at 9.8 samples per first
+       zero).  Prefer :func:`encircled_energy_curve` (the forward
+       direction) when characterising an Airy null, and reserve this
+       function for the steep part of the curve.
 
     See Also
     --------
-    encircled_energy_curve : the underlying curve.
+    encircled_energy_curve : the underlying curve (forward direction).
     beam_diameter : intensity-drop diameter (e.g. 1/e^2, FWHM).
 
     Examples
@@ -589,36 +671,55 @@ def encircled_energy_radius(
     >>> bool(abs(r84 - w0) / w0 < 0.05)
     True
     """
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'encircled_energy_radius')
     if not (0.0 < threshold <= 1.0):
         raise ValueError(
             f"encircled_energy_radius: threshold must be in (0, 1]; "
             f"got {threshold!r}.")
+    dy_f = dx if dy is None else dy
 
-    # Dense grid so the threshold crossing has good interpolation
-    # support.  256 samples is well below the typical pixel count yet
-    # gives sub-percent accuracy on the threshold crossing.
-    radii, ee = encircled_energy_curve(
-        E, dx, dy=dy, centroid=centroid, n_radii=256)
+    # Invert the EXACT cumulative-energy curve (see Notes).  No radius
+    # ladder is involved, so the answer cannot depend on the array
+    # size / zero-padding.
+    r_sorted, p_cum, r_max_grid = _ee_sorted_cumulative(
+        E, dx, dy_f, centroid)
+    if p_cum is None:
+        # Degenerate (zero-power) input: the curve is identically zero
+        # and never reaches any threshold in (0, 1] -- report the grid
+        # extent, matching the documented clip behaviour.  The
+        # ``else 1.0`` mirrors encircled_energy_curve's degenerate
+        # radii grid for the pathological zero-extent (1x1) case.
+        return float(r_max_grid if r_max_grid > 0 else 1.0)
 
-    # If the curve never reaches the threshold (beam clips the grid
-    # or threshold > max(ee)), return the maximum radius.
-    if ee[-1] < threshold:
-        return float(radii[-1])
+    # Numerical-safety clamp -- np.cumsum can drift a few ULP outside
+    # [0, 1] but the curve is bounded there by definition.  Mirrors
+    # the clamp encircled_energy_curve applies to its own output so
+    # the two stay consistent.
+    np.clip(p_cum, 0.0, 1.0, out=p_cum)
 
-    # First index where ee >= threshold.  ``ee[0]`` is NOT always 0
-    # -- when ``radii[0] = 0`` collides with a centre-pixel at
-    # ``r_sorted[0] = 0`` (delta-like inputs), the cumulative-power
-    # lookup at radius 0 picks up the centre-pixel contribution and
-    # ``ee[0] = p_cum[0]``.  When ``threshold <= ee[0]`` the
-    # short-circuit below returns ``radii[0]`` (= 0 m), the
-    # physically-reasonable hot-centre answer.
-    idx = int(np.searchsorted(ee, threshold, side='left'))
+    # If the curve never reaches the threshold (beam clips the grid,
+    # or threshold == 1.0 and the cumulative sum saturates a hair
+    # below / exactly at 1), return the maximum in-grid radius.
+    if p_cum[-1] <= threshold:
+        return float(r_sorted[-1])
+
+    # First index where the cumulative power reaches the threshold.
+    # ``p_cum[0]`` is NOT always ~0: for a delta-like input the centre
+    # pixel alone can already exceed the threshold, in which case the
+    # short-circuit returns that pixel's radius (0.0 m for a centred
+    # delta) -- the physically-reasonable hot-centre answer.
+    idx = int(np.searchsorted(p_cum, threshold, side='left'))
     if idx <= 0:
-        return float(radii[0])
-    r_lo, r_hi = radii[idx - 1], radii[idx]
-    e_lo, e_hi = ee[idx - 1], ee[idx]
-    if e_hi == e_lo:
-        return float(r_hi)
+        return float(r_sorted[0])
+    r_lo, r_hi = float(r_sorted[idx - 1]), float(r_sorted[idx])
+    e_lo, e_hi = float(p_cum[idx - 1]), float(p_cum[idx])
+    # Ties in the pixel radii (very common on a square grid: (i, j)
+    # and (j, i) share a radius) make the curve vertical at r_hi, so
+    # the crossing IS r_hi -- the smallest radius whose closed disc
+    # holds the requested fraction.
+    if e_hi == e_lo or r_hi == r_lo:
+        return r_hi
     t = (threshold - e_lo) / (e_hi - e_lo)
     return float(r_lo + t * (r_hi - r_lo))
 
@@ -899,6 +1000,50 @@ def _radial_profile_subpixel(
     return r.astype(np.float64), radial.astype(np.float64)
 
 
+def _radial_metric_profile(
+    psf_arr: np.ndarray,
+    dx: float,
+    dy: float,
+) -> Tuple[np.ndarray, np.ndarray, bool]:
+    """Internal: the radial profile the resolution metrics measure on.
+
+    Prefers :func:`_radial_profile_subpixel` (polar resample, ~4
+    samples per pixel) and falls back to the integer-pixel binned
+    :func:`_psf_1d_profile` only when the sub-pixel path cannot run --
+    an array too small for a 4-pixel polar radius, or SciPy missing.
+
+    Returns ``(r, profile, subpixel)`` where ``subpixel`` records which
+    path produced the profile (used to phrase diagnostics honestly).
+
+    Rationale (v5.30, audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25
+    finding A-1): integer-pixel radial binning assigns every pixel
+    whose Euclidean radius rounds to bin ``k`` the *same* radius
+    ``k * d_bin``.  Near the peak the shells are tiny and lopsided, so
+    the azimuthal mean of bin ``k`` is systematically pulled DOWN
+    relative to ``I(k * d_bin)`` -- which drags any half-max or
+    first-zero crossing inward.  Measured on an analytic Airy PSF
+    (600 nm, f/4): ``fwhm_resolution(axis='radial')`` read -8.04% at
+    4.88 samples per first zero and -21.08% at 2.44, and
+    ``rayleigh_resolution(axis='radial')`` returned NaN at 2.44 while
+    blaming the PSF shape.  The same module's sub-pixel profile --
+    already used by ``sparrow_resolution(axis='radial')``, which the
+    audit measured clean at 0.1-0.5% -- reads +0.01% and -1.03% on
+    those two cases.  ``axis='x'`` / ``axis='y'`` never went through
+    the binning and are unchanged.
+    """
+    try:
+        r, prof = _radial_profile_subpixel(psf_arr, dx, dy)
+    except ImportError:                      # pragma: no cover - no SciPy
+        r, prof = np.zeros(0), np.zeros(0)
+    if r.size >= 4:
+        return r, prof, True
+    # Grid too small for the polar resample (or SciPy unavailable):
+    # fall back to the historical integer-bin profile so the tiny-grid
+    # and degenerate-input return contracts are preserved exactly.
+    r_b, prof_b = _psf_1d_profile(psf_arr, dx, axis='radial', dy=dy)
+    return r_b, prof_b, False
+
+
 def rayleigh_resolution(
     psf: np.ndarray,
     dx: float,
@@ -942,10 +1087,12 @@ def rayleigh_resolution(
     -------
     d_rayleigh : float
         Rayleigh resolution [m].  ``NaN`` if no zero can be located
-        (e.g. flat / zero-intensity input, or a Gaussian-like PSF
-        with no true first-ring minimum -- a ``RuntimeWarning`` is
-        emitted in the latter case directing the user to
-        :func:`fwhm_resolution` or :func:`sparrow_resolution`).
+        (e.g. flat / zero-intensity input, a Gaussian-like PSF with
+        no true first-ring minimum, or a PSF sampled too coarsely for
+        the first ring to survive the grid -- a ``RuntimeWarning``
+        naming the likelier of those two causes is emitted and
+        directs the user to :func:`fwhm_resolution` or
+        :func:`sparrow_resolution`).
 
     See Also
     --------
@@ -960,6 +1107,29 @@ def rayleigh_resolution(
     zero).  Some texts report the diameter (twice this value); we
     pin the radius form because it matches the standard
     ``1.22 lambda f/#`` formula directly.
+
+    Accuracy (v5.30, audit
+    AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-1):
+    ``axis='radial'`` measures the sub-pixel azimuthally-averaged
+    profile (:func:`_radial_profile_subpixel`, the same one
+    :func:`sparrow_resolution` uses) instead of the integer-pixel
+    radial binning it used through v5.29.  Measured on an analytic
+    Airy PSF (600 nm, f/4) against ``1.22 lambda f/#``:
+
+    ======================  ===============  ==============
+    samples / first zero    v5.29 (binned)   v5.30 (sub-px)
+    ======================  ===============  ==============
+    19.5                    -0.12%           +0.02%
+    9.8                     +1.54%           +0.10%
+    4.9                     +6.76%           +0.18%
+    2.4                     NaN + warning    +3.26%
+    ======================  ===============  ==============
+
+    Below ~3 samples per first zero the ring is barely resolved and
+    the residual error grows quickly (a few percent at 2.4, tens of
+    percent at 1.2); the metric is only meaningful on a PSF the grid
+    actually resolves.  ``axis='x'`` / ``axis='y'`` take pixel-aligned
+    cuts through the peak and are unchanged.
 
     The first-zero search requires a *true* local minimum (strict
     inequality on at least one side).  Gaussian-like PSFs whose
@@ -978,7 +1148,20 @@ def rayleigh_resolution(
         raise ValueError(
             f"rayleigh_resolution: wavelength must be positive and "
             f"finite; got {wavelength!r}.")
-    r, profile = _psf_1d_profile(psf_np, dx, axis=axis, dy=dy)
+    subpixel = False
+    if axis == 'radial':
+        # A-1: the default radial path measures the sub-pixel polar
+        # resample, NOT the integer-pixel radial binning (see the
+        # accuracy table above and ``_radial_metric_profile``).
+        if psf_np.ndim != 2:
+            raise ValueError(
+                f"rayleigh_resolution: expected 2-D PSF; got shape "
+                f"{psf_np.shape!r} (ndim={psf_np.ndim}).")
+        dy_f = float(dy) if dy is not None else float(dx)
+        r, profile, subpixel = _radial_metric_profile(
+            psf_np, float(dx), dy_f)
+    else:
+        r, profile = _psf_1d_profile(psf_np, dx, axis=axis, dy=dy)
 
     # Sanity check the profile -- a flat / zero PSF has no resolvable
     # first zero.
@@ -1055,13 +1238,46 @@ def rayleigh_resolution(
             break
 
     if first_zero_idx is None:
-        warnings.warn(
-            "rayleigh_resolution: no true first-ring minimum located "
-            "in the radial profile (the criterion is not defined for "
-            "Gaussian-like PSFs without a true first zero).  Use "
-            "fwhm_resolution or sparrow_resolution for PSFs without "
-            "a Rayleigh first ring.",
-            RuntimeWarning, stacklevel=2)
+        # A-1: name the LIKELIER cause instead of always blaming the
+        # PSF shape.  A profile that decays monotonically from the peak
+        # genuinely has no first ring (Gaussian-like).  A profile that
+        # still shows a rise larger than ``ring_margin`` somewhere --
+        # i.e. ring structure exists, just not a minimum below 5% of
+        # peak with a confirmed subsequent rise -- is an
+        # under-sampling symptom, and blaming the PSF there sent users
+        # hunting a non-existent physics bug (a perfect Airy at 2.4
+        # samples per first zero used to land here).
+        tail = profile_norm[max(scan_start - 1, 0):]
+        has_ring_structure = bool(
+            tail.size > 2
+            and float(np.max(tail[1:] - np.minimum.accumulate(tail[:-1])))
+            > ring_margin)
+        note = ('' if (axis != 'radial' or subpixel) else
+                "  (The grid was too small for the sub-pixel radial "
+                "resample, so the coarse integer-pixel binned profile "
+                "was measured.)")
+        if has_ring_structure:
+            warnings.warn(
+                "rayleigh_resolution: no true first-ring minimum "
+                "located, but the profile still shows ring structure "
+                "-- the PSF is most likely SAMPLED TOO COARSELY for "
+                "its first zero to survive the grid (check dx against "
+                "the expected first-zero radius; ~3 samples per first "
+                "zero is the practical floor, and a Gaussian-like PSF "
+                "with no true first zero is the other possible "
+                "cause).  Re-sample the PSF more finely, or use "
+                "fwhm_resolution / sparrow_resolution, which do not "
+                "need a resolved first ring." + note,
+                RuntimeWarning, stacklevel=2)
+        else:
+            warnings.warn(
+                "rayleigh_resolution: no true first-ring minimum "
+                "located -- the profile decays monotonically from the "
+                "peak, so the criterion is not defined for this PSF "
+                "(Gaussian-like PSFs have no true first zero).  Use "
+                "fwhm_resolution or sparrow_resolution for PSFs "
+                "without a Rayleigh first ring." + note,
+                RuntimeWarning, stacklevel=2)
         return float('nan')
 
     # Sub-pixel refinement via parabolic interpolation around the
@@ -1268,11 +1484,44 @@ def fwhm_resolution(
     For a radial profile the half-radius is the smallest r > 0 with
     ``profile(r) <= 0.5 * profile.max()``.  Linear interpolation
     across the crossing gives sub-pixel accuracy.
+
+    Accuracy (v5.30, audit
+    AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-1):
+    ``axis='radial'`` measures the sub-pixel azimuthally-averaged
+    profile (:func:`_radial_profile_subpixel`, the same one
+    :func:`sparrow_resolution` uses) instead of the integer-pixel
+    radial binning it used through v5.29, whose lopsided small-r
+    shells biased the half-max crossing sharply inward.  Measured on
+    an analytic Airy PSF (600 nm, f/4) against ``1.029 lambda f/#``:
+
+    ======================  ===============  ==============
+    samples / first zero    v5.29 (binned)   v5.30 (sub-px)
+    ======================  ===============  ==============
+    19.5                    -0.12%           -0.00%
+    9.8                     -1.92%           +0.01%
+    4.9                     -8.04%           +0.01%
+    2.4                     -21.08%          -1.03%
+    ======================  ===============  ==============
+
+    ``axis='x'`` / ``axis='y'`` take pixel-aligned cuts through the
+    peak and are unchanged (+0.1 to +1.4% over the same sweep).
     """
     xp = _xp_of(psf)
     psf_np = _to_numpy_host(psf)
     del xp
-    r, profile = _psf_1d_profile(psf_np, dx, axis=axis, dy=dy)
+    if axis == 'radial':
+        # A-1: the default radial path measures the sub-pixel polar
+        # resample, NOT the integer-pixel radial binning (see the
+        # accuracy table above and ``_radial_metric_profile``).
+        if psf_np.ndim != 2:
+            raise ValueError(
+                f"fwhm_resolution: expected 2-D PSF; got shape "
+                f"{psf_np.shape!r} (ndim={psf_np.ndim}).")
+        dy_f = float(dy) if dy is not None else float(dx)
+        r, profile, _subpixel = _radial_metric_profile(
+            psf_np, float(dx), dy_f)
+    else:
+        r, profile = _psf_1d_profile(psf_np, dx, axis=axis, dy=dy)
 
     peak = float(profile.max())
     if peak <= 0.0 or not np.all(np.isfinite(profile)):
