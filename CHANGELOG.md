@@ -215,6 +215,67 @@ unit paths, `quarter_wave_ar`).
   so the names stay discoverable.  Export integrity unchanged (every
   `__all__` entry still resolves; phantom names still raise `AttributeError`).
 
+### Fixed (adversarial-audit wave 4 — every remaining open item closed, 2026-07-26)
+
+Seven Opus agents + three follow-on legs drained the deferred/flagged
+list to zero (~640 new pins; every set verified failing pre-fix; all
+value pins authored with measured cross-platform tolerances):
+
+- **P5 return-contract transition DECIDED + shipped (`3097cda`)** — option
+  4: falsy-sentinel default (43/43 arrays bit-identical), registry-routed
+  DeprecationWarning only for external callers who didn't choose a
+  contract, flip bound to `API_TRANSITION_VERSION` (= registry
+  NEXT_REMOVAL_VERSION), P16 iteration arity decided permanent, flip-day
+  migration inventory in the roadmap; plus the `propagate_tilted` method
+  warning and the GBD paraxial z_image default fix.
+- **`input_kind` rollout (`ce0a265`)** — the deferred "67 sites" resolved
+  by AST inventory; closed vocabulary, 25 in-scope sites wired
+  fail-closed, handoff table auto-enforcing as owners wire theirs.
+- **h5 sibling writers (`30f0043`)** — all four remaining raw metadata
+  surfaces on the codec; legacy files read byte-identically.
+- **Shack-Hartmann reference calibration S12-1 (`c5d3e27`)** — the flag's
+  premise was wrong but measurement found the real defect: the flat-field
+  reference propagated with a bare fft2 in the wrong plane, reading up to
+  15.2 mrad of phantom tilt on a FLAT wavefront; now exactly 0.0 at all
+  45 configs; three degenerate pins rebased with documented arithmetic;
+  coherence-dock source shapes wired (+ a second silent bug: empty
+  source-angle lists returned a black frame); three ratio-based timing
+  pins retuned to measure their guarded regressions (each caught a real
+  flake during its own verification).
+- **Immersed-conjugate optics (`8fdcccc`, `aed46ac`, `21185b7`,
+  `d298207`)** — a four-leg oracle campaign: pupil positions were reduced
+  (exactly 1/n, −34/−39%; no pre-existing test exercised an immersed
+  conjugate, probe-proven); bfl/ffl/principal planes geometric while efl
+  stays reduced by consumer audit (the algebra twin structurally cannot
+  express the alternative; the agent retracted its own fnum claim with
+  the disproving measurement); analysis/ consumers fixed (distortion
+  reference was +51.7% = 100·(n−1) at every angle; the indexed Gauss
+  solve; folded bfl-as-thickness 185× RMS error); and the folded-frame
+  finale (world image planes placed along the TRACED exit direction,
+  resolving the two-flavour world-list ambiguity without frame marking;
+  folded reference spheres now reproduce their mirrorless controls
+  bit-for-bit across 32 configuration pairs — pre-fix 388 waves PV for a
+  1.1-wave system).
+- **Elements/raytrace gaps (`809314c`)** — odd-power guard on the five
+  wave-optics sag sites (100× silent sag error closed end-to-end);
+  non-finite f guards (damage differed per lens model — one was a silent
+  no-op); the 1-D-stack y-averaging trap now warns via
+  `RCWAYAverageWarning` (33.6% measured error, closure-invisible;
+  exported top-level); the last R-18 dead-code claim CONFIRMED by AST and
+  deleted.
+- **LG-merit stack completed (`8ffc90e`)** — adaptive σ-grid from a
+  triply-validated chirp bound (6–7× accuracy at the same verdicts, cap
+  measured); the (2,0) oscillation fixed by an opt-in curvature-matched
+  complex-q basis (0/6 sign flips vs 5/6); and the "local-only" JAX
+  fit-match red exposed as a REAL defect (Tikhonov floor 4.25× spec
+  through normal equations — QR fix, 12× truth-error improvement,
+  validation 48/48 everywhere).
+
+Campaign process lessons recorded en route: editable-install +
+script-dir sys.path can silently resolve the wrong tree from worktree
+scripts; `git stash` on the shared tree is forbidden (one incident,
+fully recovered); chirp-integral pins need ≥1e-2 measured tolerances.
+
 ### Fixed (adversarial-audit wave 3 — oracle resolutions + remaining MEDIUM/LOW territories, 2026-07-25/26)
 
 Seven Opus agents closed out the audit's MEDIUM/LOW inventory, the four

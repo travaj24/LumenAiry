@@ -66,6 +66,22 @@ cell + fff_nv `AssertionError`; `orientation=NaN`/`retardance=NaN` unguarded
 in polarization.  Fixes should follow the same measure-first / gate / pin
 discipline.
 
+**Status: WAVE 4 COMPLETE (2026-07-26) — EVERY OPEN, DEFERRED AND FLAGGED ITEM
+IS CLOSED.**  The deferred-with-record list from wave 3, the four new findings
+from the fix waves, both API decisions, and every item flagged during wave 4
+itself are now fixed, decided, or refuted-with-evidence: P5 option-4 transition
++ P16 decided `3097cda`; input_kind rollout `ce0a265`; h5 sibling writers
+`30f0043`; S12-1 Shack-Hartmann reference calibration + source-shape wiring +
+timing-pin retunes `c5d3e27`; the immersed-conjugate campaign (pupils
+`8fdcccc`, bfl/ffl `aed46ac`, analysis consumers `21185b7`, folded frames
+`d298207` — the W3-T2 1/n flag, the fnum claim RETRACTED with its disproving
+measurement, and the wave's own F1/F2 finale); elements/raytrace gaps + the
+last R-18 claim CONFIRMED-and-deleted `809314c`; the LG-merit stack completed
+incl. the "local-only" JAX fit red exposed as a REAL defect (QR fix, 48/48
+everywhere) `8ffc90e`.  ~640 wave-4 pins.  Remaining forward-looking entries
+are SCHEDULED, not open: the registry-managed v5.32 removals and the P5 flip
+(migration inventory in roadmap Part F1).
+
 **Status: WAVE 3 COMPLETE (2026-07-26) — THE AUDIT IS FULLY IMPLEMENTED.**
 Every finding in this report is now fixed, refuted-with-evidence, or
 explicitly deferred-with-record: infra `d045980`, UI/deprecation `54a2dcf`,
