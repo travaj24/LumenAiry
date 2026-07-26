@@ -9,9 +9,20 @@ maps and honest coverage statements are part of the record — what was checked 
 cleared matters as much as what was found.  Severity: **CRITICAL-physics** (wrong
 answers from public API), **HIGH-bug**, **MEDIUM-convention/bug**, **LOW-hygiene**.
 
-**Status: FINDINGS RECORDED, NOT YET FIXED.**  Nothing in this document has been
-remediated; fix campaigns should follow the measure-first / gate / pin discipline of
-the S8-S12 audits.
+**Status: TIER 1 FIXED (2026-07-25).**  All six CRITICALs plus the two
+silent-data-corruption HIGHs are fixed and pinned: P1+P2 `e29a8db`, R-1+R-2
+`1fc8b1f` (also fixing two further measured defects found during the fix: R-1b
+`ep_z` distance-vs-signed-coordinate, R-1c post-stop leg walked in air), A-1+A-2
+`720f689`, M1 `a240c15`, E-C1+E-C2 `2be264c` (docstring-only, AST-verified).  236
+new pins, each set verified to fail on pre-fix code; CHANGELOG [Unreleased] has
+the summary.  Two corrections to this report discovered during fixing: (a) R-1's
+"exact ep_z −16.9860 mm" is the object DISTANCE — the signed coordinate is
+**+16.9860 mm** (the audit oracle printed the + value; the − transcription was
+itself the R-1b convention slip); (b) M1's repro geometry is centro-symmetric, so
+the default `symmetry='auto'` fold MASKS the collision there — it reproduces on
+the default path with fold-ineligible centres (pinned that way).  All remaining
+findings (Tier 2+) are still open; fixes should follow the same measure-first /
+gate / pin discipline.
 
 ---
 

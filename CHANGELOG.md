@@ -2,6 +2,72 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Fixed (adversarial-audit Tier 1: all 6 CRITICALs + the 2 silent-data-corruption HIGHs, 2026-07-25)
+
+Fix wave over `docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md`, five
+Opus agents on disjoint territories, every finding reproduced by measurement
+BEFORE the fix and re-measured after; 236 new regression pins across 8 files,
+each set verified to fail on the pre-fix code.
+
+- **P1 (CRITICAL, `e29a8db`)** — odd-N frequency grids put DC at −0.5 bin, so
+  every ASM-family propagator returned laterally shifted, phase-wrong fields
+  (ASM N=257: 2.6e-1 max rel err, −3.89 px centroid walk).  DC anchor
+  `N/2 → N//2` in `fft_infra` freq grids/bandlimit masks and the three
+  `asm.py` H builders; ASM-MFT gets the matching integer anchor plus a
+  half-input-pixel `k_centre_out` offset; single-FFT Fresnel AND Fraunhofer
+  (same defect, found during the fix) get exact half-sample shifted-DFT phase
+  corrections so odd-N output agrees with the already-correct Bluestein
+  siblings (7e-14).  Odd N now matches the even-N accuracy floor everywhere;
+  even N proven bit-identical pre/post fix (78/78 captured arrays).
+- **P2 (HIGH, `e29a8db`)** — `fresnel_tf_propagate` returned the live pyFFTW
+  inverse ping-pong buffer; a later same-shape call silently overwrote
+  previously returned fields (measured 0.497 on a peak-1 field; consumer:
+  `propagate_carrier_referenced`).  Now returns a copy (rs.py F-3 precedent).
+- **R-1 (+R-1b/R-1c) (CRITICAL, `1fc8b1f`)** — `compute_pupils` dropped the
+  final pre-stop transfer (EP radius −21%, f/# +27% on the audit design, up
+  to −84% at larger stop gaps; fed `analysis/field.py` ray aiming), returned
+  `ep_z` as an object DISTANCE instead of the signed coordinate its docstring
+  and all four consumers require, and walked the post-stop leg in air even
+  when the stop's image side is glass (xp_z +7.9%).  Pre/post-stop subsystem
+  builders are now shared single-source with `seidel_coefficients`
+  (bit-for-bit) and all pupil quantities match an independent exact real-ray
+  oracle to ≤1.2e-12 on 5 designs.
+- **R-2 (CRITICAL, `1fc8b1f`)** — `seidel_wfe` returned −W (composed the
+  textbook expansion with the library's `code = −S_Welford` values without
+  converting).  S1..S5 negated at ingestion; sign convention documented and
+  anchored to a measured marginal-focus direction; two existing pins that
+  encoded the wrong sign corrected with justification.
+- **A-1 (CRITICAL, `720f689`)** — default `axis='radial'`
+  `fwhm_resolution`/`rayleigh_resolution` biased −8%/−21% (4.9/2.4 samples
+  per first zero) by integer-pixel radial binning; now routed through
+  `_radial_profile_subpixel` (+0.01%/−1.03%), and Rayleigh no longer returns
+  NaN blaming a "Gaussian-like" PSF on a perfectly sampled Airy.
+- **A-2 (HIGH, `720f689`)** — `encircled_energy_radius` inverted a 256-point
+  corner-spanning radius ladder (+6.05% drift under zero-padding alone); now
+  inverts the exact sorted cumulative curve (drift exactly 0.0, worst 0.17 px
+  from the analytic inverse over 21 configurations).
+- **M1 (HIGH, `a240c15`)** — the RCWA shapes-layer eigenmode cache key
+  flattened all shapes into one sorted multiset, colliding structurally
+  different layers (swapped-centre disks solved bit-identically to (A,A):
+  3.7× error in R₀, energy-conserving and silent; the default symmetry fold
+  masked the audit's own geometry — pinned on a fold-ineligible one).  Key is
+  now per-shape and order-preserving; dedup remains bit-exact memoization.
+- **E-C1/E-C2 (CRITICAL docs, `2be264c`)** — `_lens_thin.py` docstrings:
+  retracted the wrong-surface SA-null conic guidance (following it measured
+  2.6× WORSE than a plain sphere; the correct null is flat-first exit-surface
+  `k2=−n²`, exactly stigmatic, and the screen model's own null is
+  `k=−1−(n−1)²`) and the "exact OPD … all higher-order aberrations" claim
+  (the model is the orientation-blind single-plane sag-projection screen and
+  never reads `d`); replaced with measured validity boundaries mirroring
+  `apply_real_lens`'s house wording.  Code AST-verified unchanged.
+
+Known-unfixed items from the audit remain open in the report (Tier 2+:
+silent-junk-input validation cluster, frozen-defaults/ownership, guard gaps,
+conventions/dead code) plus the flagged world.py coord-break question and the
+mirror-parity signing of stop-adjacent pupil legs (needs a fold-pupil oracle).
+
 ## [5.29.0] — 2026-07-25
 
 **The traced-carrier production campaign.**  `propagate_traced_carrier_chain`
