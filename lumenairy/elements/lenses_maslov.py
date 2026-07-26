@@ -1245,7 +1245,25 @@ def apply_real_lens_maslov(
     ray trace, only re-propagating + refitting (cheap).  The composed field is
     exact: it matches baking the same distance into the prescription's last
     thickness to ~1e-10, and the ROI window is identical to the full-grid slice.
-    Not yet combined with ``fold_split``.
+    Not yet combined with ``fold_split`` (raises ``NotImplementedError`` rather
+    than silently dropping the requested observation plane).
+
+    ``normalize_output`` (default ``'power'``) sets the returned field's
+    absolute amplitude scale -- the Maslov integral itself carries an
+    arbitrary overall prefactor:
+
+    * ``'power'`` -- rescale so ``sum |E_out|^2 == sum |E_in|^2``.
+    * ``'peak'``  -- rescale so ``max |E_out| == max |E_in|``.
+    * ``'none'``  -- return the raw integral (no rescale).
+    * a scalar (int/float/complex) -- multiply by exactly that factor.
+
+    With ``roi=`` the two *global* modes are unavailable: ``'power'`` and
+    ``'peak'`` are reductions over the FULL output grid, which the ROI path
+    never evaluates.  Requesting either with ``roi=`` warns and falls back to
+    the raw ``'none'`` scale (which is what makes the ROI byte-identical to the
+    corresponding slice of a ``normalize_output='none'`` full-grid run); pass
+    ``'none'`` explicitly to silence the warning, or a scalar factor (which
+    *is* window-independent and is applied).
 
     ``use_gpu`` (opt-in) runs the per-pixel integrand on the GPU via
     CuPy -- the same ``use_gpu=True`` / cupy-array entry as
@@ -1286,9 +1304,40 @@ def apply_real_lens_maslov(
         from ..io.prescriptions_transforms import split_prescription_at_mirrors
         _legs = split_prescription_at_mirrors(prescription)
         if len(_legs) > 1:
+            # E-L20 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): ``_leg_kw``
+            # below forwards most of the signature but omitted
+            # output_plane_distance / output_plane_n / roi / progress, so a
+            # folded run SILENTLY evaluated the last lens vertex instead of
+            # the requested observation plane (and silently ignored a
+            # requested ROI window).  The docstring already says these are
+            # "not yet combined with fold_split"; make that a hard failure
+            # naming the dropped kwargs rather than a wrong answer.
+            # ``progress`` IS forwarded (it is a pure callback, no numerics --
+            # each leg simply reports its own 0->1 fraction).
+            _dropped = []
+            if roi is not None:
+                _dropped.append(f'roi={roi!r}')
+            if output_plane_distance:   # same truthiness gate the main path uses
+                _dropped.append(
+                    f'output_plane_distance={output_plane_distance!r}')
+                if output_plane_n != 1.0:
+                    _dropped.append(f'output_plane_n={output_plane_n!r}')
+            if _dropped:
+                raise NotImplementedError(
+                    f"apply_real_lens_maslov: fold_split=True is not yet "
+                    f"combined with {', '.join(_dropped)} -- the folded path "
+                    f"chains one Maslov call per refractive leg and has no "
+                    f"way to place a downstream observation plane / ROI "
+                    f"window on the final leg, so these were previously "
+                    f"DROPPED silently (the field came back at the last lens "
+                    f"vertex of the last leg).  Split the prescription "
+                    f"yourself with "
+                    f"lumenairy.io.split_prescription_at_mirrors(rx) and pass "
+                    f"these kwargs to the final leg's "
+                    f"apply_real_lens_maslov call.")
             from .elements import apply_mirror
             _leg_kw = dict(
-                wavelength=wavelength, dx=dx, dy=dy,
+                wavelength=wavelength, dx=dx, dy=dy, progress=progress,
                 ray_field_samples=ray_field_samples,
                 ray_pupil_samples=ray_pupil_samples, poly_order=poly_order,
                 n_v2=n_v2, output_subsample=output_subsample,
@@ -1826,17 +1875,53 @@ def apply_real_lens_maslov(
         # independently, so the returned (roi_n, roi_n) field is identical to
         # the ROI slice of the full-grid field, but costs O(roi_n^2) instead
         # of O(N^2) integrand evaluations -- 10^3-10^4x fewer for spot
-        # studies.  Full resolution only (output_subsample forced to 1); the
-        # power normalisation is skipped (ill-defined on a sub-window -- the
-        # ROI captures only part of the output power), so ROI returns the
-        # raw field, matching a normalize_output='none' full run.
+        # studies.  Full resolution only (output_subsample forced to 1).
         roi_cx, roi_cy, roi_hw = float(roi[0]), float(roi[1]), float(roi[2])
         output_subsample = 1
         N_out_coarse = max(1, int(round(2.0 * roi_hw / dx)))
         _ax = (np.arange(N_out_coarse) - N_out_coarse / 2) * dx
         out_axis_x = _ax + roi_cx
         out_axis_y = _ax + roi_cy
-        normalize_output = 'none'
+        # E-H5 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): this used to be
+        # an unconditional ``normalize_output = 'none'`` -- a SILENT overwrite
+        # of the caller's request.  With the default normalize_output='power'
+        # a roi= call returned a patch ~1e8 below the scale the very same call
+        # returns on the full grid (measured median |roi|/|full patch| =
+        # 0.000000), with no warning anywhere.  Split by whether the requested
+        # scale is computable from the window alone:
+        #
+        #  * scalar factor -> window-independent, so APPLY it (Step 6 below).
+        #    It was silently dropped too (measured ratio 0.500 for
+        #    normalize_output=2.0); that is a plain bug and is now fixed.
+        #  * 'none' -> nothing to do.
+        #  * 'power' / 'peak' -> genuinely NOT computable here: both are
+        #    global reductions (sum |E_out|^2 / max |E_out|) over the FULL
+        #    output grid, which the ROI path by construction never evaluates
+        #    -- that is the entire point of the O(roi_n^2) window.  Keep the
+        #    raw scale (which is what preserves the documented "identical to
+        #    the ROI slice of the full-grid field" contract against a
+        #    normalize_output='none' full run) but say so OUT LOUD, and
+        #    document it on ``normalize_output`` in the docstring.  Raising
+        #    was considered and rejected: 'power' is the default, so raising
+        #    would make every existing roi= call fail.
+        #
+        # An unrecognised normalize_output now also reaches Step 6's
+        # ValueError instead of being swallowed by the overwrite.
+        if normalize_output in ('power', 'peak'):
+            import warnings
+            warnings.warn(
+                f"apply_real_lens_maslov: roi= cannot honour "
+                f"normalize_output={normalize_output!r} -- that scale is a "
+                f"global reduction over the FULL output grid, and the ROI "
+                f"path evaluates only the window.  Returning the RAW field "
+                f"(the normalize_output='none' scale), which for a typical "
+                f"chart is many orders of magnitude below the "
+                f"power-normalised full-grid field.  Pass "
+                f"normalize_output='none' (explicit -- silences this "
+                f"warning), or an explicit scalar factor, or drop roi= for a "
+                f"normalised full grid.",
+                UserWarning, stacklevel=2)
+            normalize_output = 'none'
         _roi_active = True
     s2x_grid, s2y_grid = np.meshgrid(out_axis_x, out_axis_y, indexing='xy')
 
@@ -1938,9 +2023,13 @@ def apply_real_lens_maslov(
     # -----------------------------------------------------------------
     if integration_method not in ('quadrature', 'stationary_phase',
                                     'local_quadrature', 'levin'):
+        # E-M14 (audit): 'auto' -- the DEFAULT -- was missing from this
+        # message, so a typo'd method was told to use a set that excludes the
+        # value it already had.  ('auto' never reaches here: it is resolved to
+        # a concrete integrator above.)
         raise ValueError(
-            f"integration_method must be one of 'quadrature', "
-            f"'stationary_phase', 'local_quadrature', 'levin', "
+            f"integration_method must be one of 'auto' (default), "
+            f"'quadrature', 'stationary_phase', 'local_quadrature', 'levin', "
             f"got {integration_method!r}")
 
     _progress('integrate', 0.60,
@@ -1961,11 +2050,10 @@ def apply_real_lens_maslov(
 
     if integration_method == 'levin':
         E_out_coarse = _integrate_levin(
-            coef_opd, coef_s1x, coef_s1y, mi,
+            coef_opd, coef_s1x, coef_s1y,
             K1_arr, K2_arr, K3_arr, K4_arr,
             poly_order, N_out_coarse,
             u_s2x_out, u_s2y_out, inbox_flat,
-            v2x_h, v2y_h,
             sample_E_bilinear,
             levin_tol, _progress, verbose,
             out_dtype=E_in.dtype,
@@ -1989,7 +2077,7 @@ def apply_real_lens_maslov(
                 K1_arr, K2_arr, K3_arr, K4_arr,
                 poly_order, N_out_coarse,
                 u_s2x_out, u_s2y_out, inbox_flat,
-                v2x_c, v2y_c, v2x_h, v2y_h,
+                v2x_h, v2y_h,
                 sample_E_bilinear,
                 stationary_newton_iter, stationary_newton_tol,
                 _progress, verbose,
@@ -2011,11 +2099,11 @@ def apply_real_lens_maslov(
             ))
         else:
             E_out_coarse = _integrate_local_quadrature(
-                coef_opd, coef_s1x, coef_s1y, mi,
+                coef_opd, coef_s1x, coef_s1y,
                 K1_arr, K2_arr, K3_arr, K4_arr,
                 poly_order, N_out_coarse,
                 u_s2x_out, u_s2y_out, inbox_flat,
-                v2x_c, v2y_c, v2x_h, v2y_h,
+                v2x_h, v2y_h,
                 sample_E_bilinear,
                 stationary_newton_iter, stationary_newton_tol,
                 local_n_samples, local_window_sigma,
@@ -2085,7 +2173,7 @@ def apply_real_lens_maslov(
         else:
             E_out_coarse = _integrate_quadrature(
                 coef_opd, coef_s1x, coef_s1y, mi,
-                K1_arr, K2_arr, K3_arr, K4_arr,
+                K3_arr, K4_arr,
                 poly_order, Tx_1d, Ty_1d, N_out_coarse,
                 u_v2x_samples, u_v2y_samples, tuk_2d, du,
                 v2x_h, v2y_h, chunk_v2, inbox_flat,
@@ -2102,10 +2190,52 @@ def apply_real_lens_maslov(
     if output_subsample > 1:
         _progress('upsample', 0.95,
                   f'interpolating {N_out_coarse}^2 -> {N}^2 (cubic)')
-        from scipy.ndimage import zoom
-        zoom_factor = float(N) / float(N_out_coarse)
+        # E-H1 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the coarse
+        # output grid built at Step 3 is a STRIDE subsample of the standard
+        # lattice -- coarse sample j sits at physical
+        # ``(j - N_c/2) * sub * dx``, i.e. at FINE index
+        # ``j*sub + (N - N_c*sub)/2`` (the offset is 0 whenever sub divides
+        # N).  So the exact fine->coarse map is
+        #     j = (i - off) / sub,     off = (N - N_c*sub) / 2
+        # ``scipy.ndimage.zoom`` (grid_mode=False) instead maps
+        # ``i -> i*(N_c-1)/(N-1)``: EDGE-anchored, which both displaces the
+        # content and mis-magnifies it by ``(N-1)/(sub*(N_c-1))``.  Measured
+        # on a rotationally-symmetric on-axis singlet (true SPATIAL intensity
+        # centroid = 0, N=96): +0.5018 / +1.5359 / +3.7011 fine px at
+        # sub=2/4/8 against the closed form +0.5106 / +1.5652 / +3.8182, with
+        # a x1.010073 second-moment width (magnification) error at sub=2;
+        # post-fix +0.0024 / +0.0191 / +0.1061 px and x1.000502.  The coarse
+        # samples also now come back UNCHANGED at their own fine indices
+        # (i = sub*j, to 6e-16 relative; the zoom path was off by 2.7e-2 of
+        # the field peak there, 34% on a strong singlet).  A large real output
+        # tilt is rescaled by the same factor: a flat prism's recovered
+        # spectral tilt read +4.61% at sub=2 and +23.02% at sub=6 pre-fix vs
+        # 0.02% / 0.16% post-fix.  This is the exact sibling of the
+        # ``ii*Ns/N`` traced-upsample bug fixed at 0a743a6, and takes the same
+        # remedy: resample on the true lattice.
+        #
+        # ``affine_transform`` with a diagonal
+        # ``1/sub`` matrix + ``-off/sub`` shift is the same NI_ZoomShift
+        # spline kernel ``zoom`` uses (verified bit-identical to
+        # ``map_coordinates`` on these coordinates, and identical to
+        # ``zoom`` to ~1e-14 when evaluated at *zoom's* coordinates -- so the
+        # whole behaviour change here is the lattice), and unlike
+        # ``map_coordinates`` it needs no O(N^2) coordinate stack (which
+        # would be 17 GB at N=32768).  Output shape is exactly (N, N) by
+        # construction.  There is no CuPy twin to keep in lockstep here: all
+        # three GPU integrators ``_cp.asnumpy`` their coarse result above, so
+        # this host-side upsample is the single shared path.
+        from scipy.ndimage import affine_transform
+        _up_mat = np.array([1.0 / output_subsample, 1.0 / output_subsample])
+        _up_off = -((N - N_out_coarse * output_subsample) / 2.0
+                    / output_subsample)
+
+        def _upsample(_a):
+            return affine_transform(_a, _up_mat, offset=_up_off,
+                                    output_shape=(N, N), order=3,
+                                    mode='nearest')
         amp = np.abs(E_out_coarse)
-        amp_z = zoom(amp, zoom_factor, order=3, mode='nearest')
+        amp_z = _upsample(amp)
         # Phase upsampling: pre-3.5.6 used line-by-line np.unwrap then
         # cubic zoom of the unwrapped phase.  Line-by-line unwrap is
         # fragile near caustics / focal saddles where the phase wraps
@@ -2124,23 +2254,14 @@ def apply_real_lens_maslov(
         # path agrees with the OLD output to ~0.3% RMS while
         # eliminating the caustic-seam artifact.
         phase_c = np.angle(E_out_coarse)
-        cos_z = zoom(np.cos(phase_c), zoom_factor, order=3, mode='nearest')
-        sin_z = zoom(np.sin(phase_c), zoom_factor, order=3, mode='nearest')
-        E_out_re = amp_z * cos_z
-        E_out_im = amp_z * sin_z
-
-        def _fit(a):
-            if a.shape == (N, N):
-                return a
-            out = np.zeros((N, N), dtype=a.dtype)
-            rows = min(a.shape[0], N)
-            cols = min(a.shape[1], N)
-            out[:rows, :cols] = a[:rows, :cols]
-            return out
+        cos_z = _upsample(np.cos(phase_c))
+        sin_z = _upsample(np.sin(phase_c))
         # v4.14.0: ``1j * float64`` returns complex128; cast back to
-        # E_in.dtype so complex64 inputs are preserved through the
-        # final re-fit step.
-        E_out = (_fit(E_out_re) + 1j * _fit(E_out_im)).astype(E_in.dtype)
+        # E_in.dtype so complex64 inputs are preserved.  (The old zoom()
+        # path needed a shape re-fit here because ``zoom`` sizes its output
+        # by rounding; ``affine_transform`` is handed ``output_shape=(N, N)``
+        # explicitly, so the re-fit was provably dead and is gone.)
+        E_out = (amp_z * cos_z + 1j * (amp_z * sin_z)).astype(E_in.dtype)
     else:
         E_out = E_out_coarse
 
@@ -2164,10 +2285,10 @@ def apply_real_lens_maslov(
     #    not defensive: the slope MUST be applied on the FINE (post-upsample)
     #    grid, because a slope above the coarse Nyquist (c1 > N_out_coarse/4)
     #    aliases / flips under the cubic phase-zoom if applied on the coarse
-    #    field first.  The fine-pixel coordinate is reproduced by zooming the
-    #    coarse output axis with the SAME zoom call, so the tilt lands
-    #    exactly where the zoomed content lives (convention-independent;
-    #    avoids the grid_mode=False edge-stretch of a nominal fine axis).
+    #    field first.  The fine-pixel coordinate is reproduced by resampling
+    #    the coarse output axis with the SAME lattice map as the content, so
+    #    the tilt lands exactly where the resampled content lives
+    #    (convention-independent).
     #    The abs()>1e-6 gate skips the N x N coordinate build for the common
     #    symmetric case (where the slope is a negligible ~1e-10 waves and
     #    the meshgrid would otherwise cost ~17 GB at N=32768).
@@ -2183,24 +2304,27 @@ def apply_real_lens_maslov(
         E_out = (E_out * np.exp(2j * np.pi * _lin[0])).astype(E_in.dtype)
     if abs(_lin[1]) > 1e-6 or abs(_lin[2]) > 1e-6:
         if output_subsample > 1:
-            # subsample>1 is non-ROI.  v5.20: zoom BOTH axes independently --
-            # for anamorphic pixels out_axis_x (dx) != out_axis_y (dy), so the
-            # old ``out_axis_fy = out_axis_fx`` would place the y-tilt at the
-            # wrong pitch.  (Square pixels: the two zooms are identical.)
-            from scipy.ndimage import zoom as _zoom1d
+            # subsample>1 is non-ROI.  v5.20: resample BOTH axes
+            # independently -- for anamorphic pixels out_axis_x (dx) !=
+            # out_axis_y (dy), so the old ``out_axis_fy = out_axis_fx`` would
+            # place the y-tilt at the wrong pitch.  (Square pixels: the two
+            # are identical.)
+            # E-H1: use the SAME lattice map as the Step-5 content upsample
+            # above (``affine_transform``, 1/sub + -off/sub), not the
+            # edge-anchored ``zoom``, so the tilt still lands exactly where
+            # the resampled content lives.  On the true lattice this
+            # reproduces the standard fine axis ``(arange(N) - N/2)*dx`` to
+            # ~1e-16 over the interpolated interior, and follows the
+            # ``mode='nearest'`` clamp over the (sub-1)-wide extrapolated
+            # tail -- exactly where the content is clamped too.
+            from scipy.ndimage import affine_transform as _affine1d
 
-            def _zoom_axis(_ax):
-                _f = _zoom1d(_ax, float(N) / float(N_out_coarse),
-                             order=1, mode='nearest')
-                if _f.shape[0] != N:  # non-divisible safety (matches _fit)
-                    _tmp = np.zeros(N, dtype=_f.dtype)
-                    _n = min(_f.shape[0], N)
-                    _tmp[:_n] = _f[:_n]
-                    _f = _tmp
-                return _f
+            def _resample_axis(_ax):
+                return _affine1d(_ax, _up_mat[:1], offset=_up_off,
+                                 output_shape=(N,), order=1, mode='nearest')
 
-            out_axis_fx = _zoom_axis(out_axis_x)
-            out_axis_fy = _zoom_axis(out_axis_y)
+            out_axis_fx = _resample_axis(out_axis_x)
+            out_axis_fy = _resample_axis(out_axis_y)
         else:
             out_axis_fx = out_axis_x       # coarse grid == fine grid (ROI-safe)
             out_axis_fy = out_axis_y
@@ -2336,7 +2460,12 @@ def _count_multi_indices_4d(max_order: int) -> int:
 
 def _integrate_quadrature(
     coef_opd, coef_s1x, coef_s1y, mi,
-    K1_arr, K2_arr, K3_arr, K4_arr,
+    # E-L9 (audit): K1_arr / K2_arr were dead here -- the s2 (k1, k2) part of
+    # the basis reaches this integrator pre-evaluated as the Tx_1d / Ty_1d
+    # Vandermondes, so only the v2 exponents are needed.  Dropped; this now
+    # matches the arg list of the CuPy twin _integrate_quadrature_cupy, which
+    # never took them (audit-noted NumPy/CuPy twin drift).
+    K3_arr, K4_arr,
     poly_order, Tx_1d, Ty_1d, N_out_coarse,
     u_v2x_samples, u_v2y_samples, tuk_2d, du,
     v2x_h, v2y_h, chunk_v2, inbox_flat,
@@ -2709,7 +2838,11 @@ def _integrate_stationary_phase(
     K1_arr, K2_arr, K3_arr, K4_arr,
     poly_order, N_out_coarse,
     u_s2x_out, u_s2y_out, inbox_flat,
-    v2x_c, v2y_c, v2x_h, v2y_h,
+    # E-L9 (audit): v2x_c / v2y_c were dead -- the saddle is solved in the
+    # NORMALISED u_v2 coordinates and only the half-widths v2x_h / v2y_h enter
+    # (the Hessian de-normalisation).  Dropped; the CuPy twin
+    # _integrate_stationary_phase_cupy never took them either.
+    v2x_h, v2y_h,
     sample_E_bilinear,
     newton_iter, newton_tol,
     _progress, verbose,
@@ -2861,11 +2994,14 @@ def _warn_levin_over_tolerance(achieved_bounds, tolerances, n_total,
 
 
 def _integrate_levin(
-    coef_opd, coef_s1x, coef_s1y, mi,
+    # E-L9 (audit): ``mi`` was dead (the exponent tuples are consumed only as
+    # the K*_arr int64 arrays) and so were v2x_h / v2y_h (the Levin engine
+    # works entirely in the normalised unit v2 box; the physical half-widths
+    # never enter its residual bound).  Dropped.
+    coef_opd, coef_s1x, coef_s1y,
     K1_arr, K2_arr, K3_arr, K4_arr,
     poly_order, N_out_coarse,
     u_s2x_out, u_s2y_out, inbox_flat,
-    v2x_h, v2y_h,
     sample_E_bilinear,
     levin_tol, _progress, verbose,
     out_dtype=np.complex128,
@@ -3274,11 +3410,15 @@ def _integrate_levin(
 
 
 def _integrate_local_quadrature(
-    coef_opd, coef_s1x, coef_s1y, mi,
+    # E-L9 (audit): ``mi`` (consumed only as the K*_arr arrays) and the box
+    # centres v2x_c / v2y_c (the saddle + window live in normalised u_v2; only
+    # the half-widths de-normalise the Hessian) were dead.  Dropped; the CuPy
+    # twin _integrate_local_quadrature_cupy never took any of the three.
+    coef_opd, coef_s1x, coef_s1y,
     K1_arr, K2_arr, K3_arr, K4_arr,
     poly_order, N_out_coarse,
     u_s2x_out, u_s2y_out, inbox_flat,
-    v2x_c, v2y_c, v2x_h, v2y_h,
+    v2x_h, v2y_h,
     sample_E_bilinear,
     newton_iter, newton_tol,
     n_samples, window_sigma,
