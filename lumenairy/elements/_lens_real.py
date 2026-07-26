@@ -3516,16 +3516,27 @@ class PreparedAnalyticLens:
     Biggest effect on many-surface prescriptions and optimizer / tolerancing
     loops.  Mirrors the ``PreparedRCWA2D`` / ``PreparedTracedLens`` precedent.
 
-    Supports only the DEFAULT propagation path -- NumPy backend, ASM
-    propagator, plain conic + aspheric refractive surfaces.  The factory
-    raises ``NotImplementedError`` for decentred / tilted / freeform / biconic
-    / stop / mirror surfaces or the slant / fresnel / absorption / seidel /
-    surface-frame / GPU / non-ASM modes; use :func:`apply_real_lens` directly
-    for those.
+    Supports only the DEFAULT propagation path -- NumPy backend, plain conic +
+    aspheric refractive surfaces.  The factory raises ``NotImplementedError``
+    for decentred / tilted / freeform / biconic / stop / mirror surfaces or the
+    slant / fresnel / absorption / seidel / surface-frame / GPU modes; use
+    :func:`apply_real_lens` directly for those.
+
+    A prepared lens FREEZES the settings that were live when it was prepared
+    (v5.29.1; audit E-H3).  ``wave_propagator``, ``sag_dtype`` and ``_dy`` hold
+    the values :func:`prepare_real_lens` resolved from the process-wide
+    defaults (:func:`set_default_wave_propagator` /
+    :func:`set_lens_sag_dtype` / :func:`set_default_dy`), so a prepared object
+    keeps reproducing the field it was built for even if a global default is
+    flipped afterwards -- rebuild it to pick up new settings.  Pre-v5.29.1 the
+    class hard-coded ASM / ``dy = dx`` / float64 geometry and never consulted
+    the defaults at all, so after ``set_default_wave_propagator('fresnel')``
+    the prepared object diverged from :func:`apply_real_lens` by 49.6 on a
+    singlet with no diagnostic.
     """
 
     __slots__ = ('_screens', '_entrance_mask', '_gap', '_N', '_dx', '_dy',
-                 '_bandlimit')
+                 '_bandlimit', 'wave_propagator', 'sag_dtype')
 
     def __init__(self, **kw):
         for k, v in kw.items():
@@ -3552,9 +3563,16 @@ class PreparedAnalyticLens:
             E = E * sc
             if i < n_surf - 1:
                 thick, lam_med = self._gap[i]
-                E = angular_spectrum_propagate(
-                    E, thick, lam_med, self._dx, dy=self._dy,
-                    bandlimit=self._bandlimit)
+                # v5.29.1 (audit E-H3): dispatch on the propagator FROZEN at
+                # prepare time via the same helper apply_real_lens uses, so
+                # the two agree for every propagator (this used to hard-code
+                # ASM).  ``lam_med`` is already the in-medium wavelength, so
+                # the helper's ``wavelength / n_medium_r`` reduces to it with
+                # ``n_medium_r=1.0``; absorption is off here (the factory
+                # rejects it), which makes the ``kappa`` / ``k0`` args inert.
+                E = _propagate_through_glass(
+                    E, thick, lam_med, 1.0, 0.0, self._dx, self._dy,
+                    self._bandlimit, self.wave_propagator, False, 0.0, np)
         return E
 
 
@@ -3566,6 +3584,8 @@ def prepare_real_lens(
     N: int,
     dy: Optional[float] = None,
     bandlimit: bool = True,
+    wave_propagator: Optional[str] = None,
+    sag_dtype: Optional[Any] = None,
 ) -> PreparedAnalyticLens:
     """Precompute the input-independent screens of an analytic lens (A-P1).
 
@@ -3574,8 +3594,19 @@ def prepare_real_lens(
     costs only the FFT legs + one complex multiply per surface (the sag / OPD /
     ``exp`` recompute that :func:`apply_real_lens` does per call is paid once).
 
-    Only the default ASM / plain-conic-aspheric path is supported; see
+    Only the plain-conic-aspheric path is supported; see
     :class:`PreparedAnalyticLens` for the unsupported cases (which raise here).
+
+    **A prepared object freezes the settings that were live when it was
+    prepared** (v5.29.1; audit E-H3).  ``wave_propagator``, ``dy`` and the
+    geometry ``sag_dtype`` are resolved HERE against the process-wide defaults
+    (:func:`set_default_wave_propagator` / :func:`set_default_dy` /
+    :func:`set_lens_sag_dtype`) unless passed explicitly, and the resolved
+    values are stored on the returned object (``prepared.wave_propagator`` /
+    ``prepared.sag_dtype``).  Flipping a global afterwards therefore leaves the
+    prepared lens unchanged -- and its output equal to
+    :func:`apply_real_lens` called with the PREPARE-time settings; rebuild it
+    to adopt new defaults.
     """
     surfaces = prescription['surfaces']
     thicknesses = prescription['thicknesses']
@@ -3607,12 +3638,33 @@ def prepare_real_lens(
                 f"apply_real_lens directly.")
 
     N = int(N)
+    # v5.29.1 (audit E-H3): resolve the process-wide defaults AT PREPARE TIME
+    # (explicit kwargs win, exactly as in apply_real_lens) and freeze the
+    # resolved values on the returned object.  Pre-fix this function hard-coded
+    # ASM / dy=dx / float64 geometry and never consulted the defaults, so a
+    # later set_default_wave_propagator('fresnel') desynchronised the prepared
+    # object from apply_real_lens by 49.6 with no diagnostic.
+    if wave_propagator is None:
+        from ..propagators.propagation import get_default_wave_propagator
+        wave_propagator = get_default_wave_propagator()
+    if wave_propagator not in _VALID_WAVE_PROPAGATORS:
+        raise ValueError(
+            f"prepare_real_lens: unknown wave_propagator "
+            f"{wave_propagator!r}.  Valid choices: "
+            f"{sorted(set(_VALID_WAVE_PROPAGATORS))}.")
     if dy is None:
-        dy = dx
+        from ..propagators.propagation import get_default_dy
+        dy = get_default_dy()
+        if dy is None:
+            dy = dx
+    _sag_real = _resolve_sag_real(sag_dtype)
     k0 = 2.0 * np.pi / wavelength
-    # Grid -- matches apply_real_lens exactly (float division, meshgrid(x, y)).
-    x = (np.arange(N, dtype=np.float64) - N / 2) * dx
-    y = (np.arange(N, dtype=np.float64) - N / 2) * dy
+    # Grid -- matches apply_real_lens exactly (same dtype pin, float division,
+    # meshgrid(x, y)).
+    x = ((np.arange(N, dtype=_sag_real) - N / 2) * dx).astype(_sag_real,
+                                                              copy=False)
+    y = ((np.arange(N, dtype=_sag_real) - N / 2) * dy).astype(_sag_real,
+                                                              copy=False)
     X, Y = np.meshgrid(x, y)
     h_sq_axis = X ** 2 + Y ** 2
 
@@ -3627,8 +3679,14 @@ def prepare_real_lens(
         R = surf['radius']
         kc = surf.get('conic', 0.0)
         asph = surf.get('aspheric_coeffs')
-        n1r = get_glass_index(surf['glass_before'], wavelength)
-        n2r = get_glass_index(surf['glass_after'], wavelength)
+        # PYTHON floats, matching apply_real_lens (which reads ``n1c.real`` off
+        # a ``complex(...)``).  This matters for ``sag_dtype=np.float32``: a
+        # numpy-scalar index would promote ``(n2r - n1r) * sag`` back to
+        # float64 under NEP 50 weak-scalar rules, so the prepared screen would
+        # be computed at higher precision than the apply_real_lens screen it
+        # must reproduce (measured 5.1e-6 field divergence before this cast).
+        n1r = float(get_glass_index(surf['glass_before'], wavelength))
+        n2r = float(get_glass_index(surf['glass_after'], wavelength))
         sag = _surface_sag_general(h_sq_axis, R, kc, asph)
         opd = (n2r - n1r) * sag
         if bool(np.any(np.isnan(opd))):
@@ -3639,7 +3697,8 @@ def prepare_real_lens(
 
     return PreparedAnalyticLens(
         _screens=screens, _entrance_mask=entrance_mask, _gap=gap, _N=N,
-        _dx=dx, _dy=dy, _bandlimit=bandlimit)
+        _dx=dx, _dy=dy, _bandlimit=bandlimit,
+        wave_propagator=wave_propagator, sag_dtype=_sag_real)
 
 
 __all__ = ['apply_real_lens', 'prepare_real_lens', 'PreparedAnalyticLens']

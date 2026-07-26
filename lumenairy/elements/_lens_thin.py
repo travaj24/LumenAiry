@@ -139,10 +139,30 @@ def apply_thin_lens(
             R_in = inf (collimated input, the default) it reduces
             exactly to ``'nonparaxial'``.
         ``'local_only'``
-            Quadratic focusing about the decentered point *without* the
-            linear tilt that a decentered paraxial lens would produce.
-            Useful for micro-lens arrays where each lenslet should focus
-            locally without steering the beam.
+            **Deprecated since v5.29.1 (audit E-H7) -- and its pre-v5.29.1
+            docstring described the OPPOSITE of what it does.**  It is a
+            decentered quadratic *plus* the cancelling linear ramp
+            ``-k/f * (xc*X + yc*Y)``, which algebraically collapses to an
+            ORIGIN-centred parabola plus the constant piston
+            ``-k/(2f)(xc^2 + yc^2)``::
+
+                -k/(2f)[(X-xc)^2 + (Y-yc)^2] - k/f (xc X + yc Y)
+                  == -k/(2f)(X^2 + Y^2) - k/(2f)(xc^2 + yc^2)
+
+            So its local phase gradient at the lenslet centre is ``-k*xc/f``
+            (NOT zero): the sub-beam IS steered, by ``-xc/f``, i.e. straight
+            onto the optical axis -- measured -20.0 mrad for
+            ``xc = 100 um, f = 5 mm``, landing the spot at ``x = 0``.  It is
+            bit-identical to ``lens_model='paraxial'`` with ``xc = yc = 0``
+            up to that piston (measured ``|ratio|`` spread 7.8e-16,
+            ``arg`` spread 7.1e-14 rad).
+
+            The NO-STEER model the old text promised is the plain decentered
+            ``'paraxial'`` lens (``paraxial`` with ``xc``/``yc`` set), whose
+            gradient at ``(xc, yc)`` is exactly zero -- that is what a
+            micro-lens array wants.  This value is kept (unchanged behaviour)
+            for back-compatibility only; prefer ``'paraxial'`` with
+            ``xc = yc = 0`` if you actually want an axis-centred lens.
     conjugates : float or (float, float), optional
         Only used by ``lens_model='stigmatic'``.  Either the incoming
         wavefront radius of curvature ``R_in`` alone (signed, metres,
@@ -307,8 +327,16 @@ def apply_thin_lens(
             lens_phase = xp.exp(1j * (S_out - S_in))
 
     elif lens_model == 'local_only':
-        # Pure local focusing: the standard decentered quadratic minus the
-        # linear tilt k/f * (xc*x + yc*y) that would otherwise steer the beam.
+        # DEPRECATED (v5.29.1, audit E-H7).  The comment that used to sit here
+        # -- "the standard decentered quadratic minus the linear tilt that
+        # would otherwise steer the beam" -- was backwards, as was the
+        # docstring: the sum below expands to an ORIGIN-centred parabola plus a
+        # constant piston, so the local gradient at (xc, yc) is -k*xc/f and the
+        # sub-beam is steered ONTO THE AXIS.  The zero-gradient (no-steer)
+        # model is the plain decentered 'paraxial' lens.  Behaviour is
+        # deliberately unchanged (0 callers in-repo, but it is a public enum
+        # value -- deprecate, don't break); see the docstring for the algebra
+        # and the measured -20.0 mrad steer.
         decentered_phase = -k / (2 * f) * r_sq
         tilt_cancel = -k / f * (xc * X + yc * Y)
         lens_phase = xp.exp(1j * (decentered_phase + tilt_cancel))

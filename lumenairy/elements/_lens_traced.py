@@ -19,6 +19,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
+import threading
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -85,6 +86,85 @@ def _load_numba():
     from numba import prange as _pr
     _numba, _njit, _prange = _nb, _nj, _pr
     return True
+
+
+# v5.29.1 (audit E-L22): signature defaults of :func:`apply_real_lens_traced`,
+# resolved lazily on first use (the function is defined further down) and
+# cached.  Single source of truth for the "did the caller actually change this
+# knob?" tests, so the discarded-kwarg diagnostic on the
+# ``on_noncollimated='delegate'`` model swap cannot drift from the signature.
+_TRACED_KWARG_DEFAULTS_CACHE: Dict[str, Any] = {}
+_TRACED_KWARG_DEFAULTS_LOCK = threading.Lock()
+
+
+def _traced_kwarg_defaults() -> Dict[str, Any]:
+    """Return ``{kwarg: signature default}`` for ``apply_real_lens_traced``."""
+    if not _TRACED_KWARG_DEFAULTS_CACHE:
+        import inspect
+        with _TRACED_KWARG_DEFAULTS_LOCK:
+            if not _TRACED_KWARG_DEFAULTS_CACHE:
+                fill = {
+                    _n: _p.default
+                    for _n, _p in inspect.signature(
+                        apply_real_lens_traced).parameters.items()
+                    if _p.default is not inspect.Parameter.empty
+                }
+                _TRACED_KWARG_DEFAULTS_CACHE.update(fill)
+    return _TRACED_KWARG_DEFAULTS_CACHE
+
+
+def _copy_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a private copy of ``prescription`` for a prepared object to hold.
+
+    v5.29.1 (audit E-H4): a prepared lens must not alias the caller's dict, or
+    an in-place edit silently pairs its cached OPL screen with a DIFFERENT lens
+    in the per-call amplitude leg.  ``copy.deepcopy`` is the wanted semantics;
+    if some exotic member refuses to deep-copy (a ``sag_callable`` bound to an
+    object holding a lock / handle, say) fall back to copying exactly the
+    containers the mutation vector goes through -- the top-level dict, the
+    ``surfaces`` / ``elements`` lists and their member dicts -- and keep the
+    leaf objects shared.  Never raises for a copy failure: an aliased leaf is a
+    far smaller problem than refusing to prepare.
+    """
+    import copy as _copy
+    try:
+        return _copy.deepcopy(prescription)
+    except (TypeError, ValueError, RecursionError, AttributeError, OSError):
+        out = dict(prescription)
+        for _key in ('surfaces', 'elements'):
+            _seq = out.get(_key)
+            if isinstance(_seq, (list, tuple)):
+                out[_key] = [dict(_s) if isinstance(_s, dict) else _s
+                             for _s in _seq]
+        for _key in ('thicknesses',):
+            _seq = out.get(_key)
+            if isinstance(_seq, (list, tuple)):
+                out[_key] = list(_seq)
+        return out
+
+
+def _kwarg_differs_from_default(value: Any, default: Any) -> bool:
+    """True when ``value`` is not the signature ``default``.
+
+    ndarray-safe: an array argument (e.g. an explicit ``carrier`` wavefront)
+    is never equal to any scalar/None default, and ``!=`` on it would return
+    an array rather than a bool.
+    """
+    if value is default:
+        return False
+    if isinstance(value, np.ndarray) or isinstance(default, np.ndarray):
+        return True
+    try:
+        return bool(value != default)
+    except (ValueError, TypeError):
+        return True
+
+
+# Amplitude-masked-Newton default threshold (fraction of ``amp.max()`` below
+# which a coarse pixel's Newton solve is skipped).  Named so the
+# ``amplitude_model='ray_density'`` guard can tell "the shipped default" from
+# an explicitly-requested mask without a not-passed sentinel (audit E-M5).
+_NEWTON_AMP_MASK_REL_DEFAULT = 1e-4
 
 
 # Newton iter cap default.  Set to 12 (the historical value).
@@ -210,13 +290,27 @@ def _newton_invert_chunk(args):
     Rebuilds the three ``RectBivariateSpline`` objects from their knot
     data in-process (so we avoid pickling the SciPy spline objects,
     which is expensive) and runs the Newton loop on ``(x_chunk,
-    y_chunk)`` for up to ``_NEWTON_MAX_ITERS`` iterations.  Returns
-    the OPL at the converged entrance positions with NaN for any
-    points that landed outside the fit domain.
+    y_chunk)`` for up to ``knot_data['newton_max_iters']`` iterations.
+    Returns ``(opl, n_unconverged)``: the OPL at the converged entrance
+    positions with NaN for any points that landed outside the fit
+    domain, plus the number of chunk points still active at the
+    iteration cap.
+
+    v5.29.1 (audit E-H2): the cap used to be the module constant
+    ``_NEWTON_MAX_ITERS``, which made ``newton_max_iters`` INERT on the
+    pool path (>=200k points with ``newton_fit='spline'``) -- the caller's
+    cap was honoured by the serial closure only, so the OPL (pool) and the
+    ray-density amplitude (always serial) could come from DIFFERENT Newton
+    solutions.  The resolved cap now travels in the pickled payload;
+    payloads written by older callers (no key) keep the historical 12.
+    The unconverged count travels back so the pool path can emit the same
+    "did not converge ... increase newton_max_iters" warning the serial
+    path emits (pre-fix the pool was silent, and the advice in that very
+    message did nothing on this path).
 
     Lives at module scope so ``ProcessPoolExecutor`` can pickle it on
-    Windows (spawn) workers.  The caller is ``_invert_newton`` inside
-    :func:`apply_real_lens_traced`.
+    Windows (spawn) workers.  The caller is ``_invert_newton_parallel``
+    inside :func:`apply_real_lens_traced`.
     """
     (knot_data, x_chunk, y_chunk) = args
     from scipy.interpolate import RectBivariateSpline
@@ -235,6 +329,10 @@ def _newton_invert_chunk(args):
     # backwards compatible.
     inv_M_x = float(knot_data.get('inv_M_x', 1.10))
     inv_M_y = float(knot_data.get('inv_M_y', 1.10))
+    # Newton iteration cap, resolved by the caller (caller override >
+    # module default).  Pre-5.29.1 payloads have no key -- fall back to
+    # the module default so an old pickled payload still runs (audit E-H2).
+    max_iters = int(knot_data.get('newton_max_iters', _NEWTON_MAX_ITERS))
 
     Sx = RectBivariateSpline(xs_in, xs_in, x_out_grid, kx=3, ky=3)
     Sy = RectBivariateSpline(xs_in, xs_in, y_out_grid, kx=3, ky=3)
@@ -244,7 +342,7 @@ def _newton_invert_chunk(args):
     ye = y_chunk.copy() * inv_M_y
     tol = 0.01 * dx
     active = np.ones(xe.size, dtype=bool)
-    for _it in range(_NEWTON_MAX_ITERS):
+    for _it in range(max_iters):
         if not active.any():
             break
         xa = xe[active]
@@ -273,7 +371,9 @@ def _newton_invert_chunk(args):
 
     opl_flat = So.ev(xe, ye)
     out_of_domain = (xe * xe + ye * ye > (launch_radius * 0.99) ** 2)
-    return np.where(out_of_domain, np.nan, opl_flat)
+    # (opl, n_unconverged) -- the count lets the parent emit the serial
+    # path's unconverged warning for the pool path too (audit E-H2).
+    return (np.where(out_of_domain, np.nan, opl_flat), int(active.sum()))
 
 
 # --------------------------------------------------------------------------
@@ -1750,7 +1850,7 @@ def apply_real_lens_traced(
     on_aperture_beam: str = 'warn',
     parallel_amp: Optional[bool] = None,
     parallel_amp_min_free_gb: float = 48.0,
-    newton_amp_mask_rel: float = 1e-4,
+    newton_amp_mask_rel: float = _NEWTON_AMP_MASK_REL_DEFAULT,
     newton_mask_dilate_coarse_px: int = 2,
     newton_max_iters: Optional[int] = None,
     inversion_method: str = 'newton',
@@ -2021,8 +2121,40 @@ def apply_real_lens_traced(
         i.e. the plane-wave-referenced correction would blur (the silent
         regression class the audit was written for).  ``'warn'`` emits a
         ``RuntimeWarning`` pointing at ``carrier=`` / :func:`apply_real_lens`;
-        ``'delegate'`` transparently falls back to :func:`apply_real_lens`;
-        ``'off'`` disables the check (and its one-FFT-free cost).
+        ``'delegate'`` transparently falls back to :func:`apply_real_lens`
+        (a ``RuntimeWarning`` lists any traced-only physics kwargs the
+        analytic model cannot honour); ``'off'`` disables the check (and its
+        one-FFT-free cost).  ``'silent'`` and ``'ignore'`` are accepted
+        aliases for ``'off'`` (the sibling knobs here spell suppression
+        ``'silent'``).  v5.29.1 (audit E-M3): any OTHER value now raises --
+        it used to select ``'warn'`` silently, and ``'silent'`` in particular
+        therefore warned instead of suppressing.
+    inversion_method : {'newton', 'fit', 'backward_trace'}, default 'newton'
+        How the entrance->exit map is inverted to get the per-pixel OPL.
+        ``'newton'`` (default, fully validated) fits the forward map and runs
+        the per-pixel Newton inversion; ``'fit'`` (T-P2) fits the SCATTERED
+        inverse map directly (no Newton loop -- cheaper, slightly less
+        accurate); ``'backward_trace'`` is the experimental direct backward
+        trace through the reversed prescription.  ``amplitude_model=
+        'ray_density'`` requires ``'newton'``.  v5.29.1 (audit E-M4): an
+        unrecognised value now raises instead of silently running Newton.
+    newton_max_iters : int, optional
+        Newton iteration cap; ``None`` (default) uses the module default
+        (12).  Honoured by BOTH the serial and the process-pool inversion
+        paths since v5.29.1 (audit E-H2 -- the pool worker previously
+        hard-coded 12, making this knob inert whenever the pool engaged, i.e.
+        >=200k Newton points with ``newton_fit='spline'`` on the CPU path).
+        When more than 1% of pixels are still unconverged at the cap, both
+        paths emit the same ``RuntimeWarning`` (suppressed by
+        ``on_undersample='silent'``).
+    newton_amp_mask_rel : float, default 1e-4
+        Skip the Newton solve on coarse pixels whose analytic amplitude is
+        below this fraction of ``amp.max()`` (they contribute ~nothing to the
+        final field); ``0.0`` disables the mask and runs Newton on the whole
+        coarse grid.  ``amplitude_model='ray_density'`` REQUIRES ``0.0`` (its
+        amplitude carries the coma tail where ``|E_analytic|`` is small) --
+        since v5.29.1 an explicit non-default value there raises instead of
+        being overridden silently (audit E-M5).
 
     fit_radius_beam_factor : float, optional
         **Aperture:beam cliff guard** (P2, audit
@@ -2318,6 +2450,41 @@ def apply_real_lens_traced(
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced')
 
+    # ---- Enum membership guards (v5.29.1; audit E-M3 / E-M4) ------------
+    # Both knobs used to be read by EQUALITY against one value, so every
+    # other string (a typo, a value borrowed from a sibling knob, a
+    # non-string) silently selected the fall-through branch: any junk
+    # ``on_noncollimated`` behaved as 'warn' and any junk
+    # ``inversion_method`` as 'newton'.  House rule: unknown enum values
+    # raise.
+    #
+    # ``on_noncollimated``: 'silent' / 'ignore' are accepted ALIASES for
+    # 'off'.  The sibling knobs in this same signature spell suppression
+    # 'silent' (``on_undersample``, ``on_aperture_beam``), so every call
+    # site in this repo that wanted the check off wrote
+    # ``on_noncollimated='silent'`` -- and got the WARN branch, i.e. the
+    # opposite of what it asked for.  Honouring the alias is the fix; the
+    # canonical value stays 'off'.
+    _NONCOL_ALIASES = {'silent': 'off', 'ignore': 'off'}
+    if isinstance(on_noncollimated, str):
+        on_noncollimated = _NONCOL_ALIASES.get(on_noncollimated,
+                                               on_noncollimated)
+    if on_noncollimated not in ('warn', 'delegate', 'off'):
+        raise ValueError(
+            f"apply_real_lens_traced: on_noncollimated="
+            f"{on_noncollimated!r} is not a valid policy.  Choose from "
+            f"'warn' (default), 'delegate', 'off' ('silent' / 'ignore' are "
+            f"accepted aliases for 'off').  Pre-v5.29.1 any unrecognised "
+            f"value silently selected 'warn'.")
+    if inversion_method not in ('newton', 'fit', 'backward_trace'):
+        raise ValueError(
+            f"apply_real_lens_traced: inversion_method="
+            f"{inversion_method!r} is not a valid method.  Choose from "
+            f"'newton' (default: forward trace + per-pixel Newton "
+            f"inversion), 'fit' (scattered Chebyshev inverse-map fit) or "
+            f"'backward_trace' (experimental direct backward trace).  "
+            f"Pre-v5.29.1 any unrecognised value silently ran Newton.")
+
     # ---- N12 (P11): opt-in ray-density (Jacobian) amplitude model -------
     # ``amplitude_model='screen'`` (default) is byte-identical to prior
     # releases -- none of the ray-density code below runs.  ``'ray_density'``
@@ -2424,6 +2591,28 @@ def apply_real_lens_traced(
         # energy (the coma tail) where |E_analytic| is small, which the amp
         # mask would otherwise drop.  Whole-grid final assembly (below) so the
         # magnitude swap sees the fully-built exit field.
+        #
+        # v5.29.1 (audit E-M5): this override used to be SILENT while every
+        # other requirement in this block raises.  Match the block (and the
+        # ``_FORCED`` contract in apply_real_lens_traced_multi): a value equal
+        # to the forced 0.0 is accepted, anything else raises with the reason.
+        # The shipped default ``_NEWTON_AMP_MASK_REL_DEFAULT`` is read as "not
+        # requested" (there is no separate not-passed sentinel), so a caller
+        # who explicitly passes exactly the default still gets the silent
+        # override -- pass 0.0 to state the intent.
+        if float(newton_amp_mask_rel) not in (
+                0.0, _NEWTON_AMP_MASK_REL_DEFAULT):
+            raise ValueError(
+                f"apply_real_lens_traced: newton_amp_mask_rel="
+                f"{newton_amp_mask_rel!r} conflicts with "
+                f"amplitude_model='ray_density', which requires the FULL "
+                f"coarse Newton grid (newton_amp_mask_rel=0.0): the "
+                f"ray-density amplitude carries energy -- the coma tail -- "
+                f"exactly where |E_analytic| is small, so the amplitude mask "
+                f"would drop the rays that make this model differ from "
+                f"'screen'.  Pre-v5.29.1 the value was overridden SILENTLY.  "
+                f"Pass newton_amp_mask_rel=0.0 (or drop the argument), or use "
+                f"amplitude_model='screen' if you need the mask.")
         newton_amp_mask_rel = 0.0
 
     # v5.1.0 (default-knob resolver rollout): resolve ``wave_propagator``
@@ -2883,11 +3072,61 @@ def apply_real_lens_traced(
             _resid = 0.0
         if _resid > _NONCOLLIMATED_RESID_THRESH:
             if on_noncollimated == 'delegate':
+                # v5.29.1 (audit E-L22): the model swap DROPS every
+                # traced-only physics knob -- apply_real_lens has no ray
+                # trace, so there is nothing to carry them.  Report the
+                # non-default ones instead of discarding them silently (the
+                # caller asked for a carrier-referenced ray-density field and
+                # would otherwise receive an analytic screen field with no
+                # diagnostic).
+                _tdef = _traced_kwarg_defaults()
+                _dropped = [
+                    f'{_k}={_v!r}' for _k, _v in (
+                        ('carrier', carrier),
+                        ('amplitude_model', amplitude_model),
+                        ('preserve_input_phase',
+                         'remap' if _pip_remap else preserve_input_phase),
+                        ('remap_sampling', remap_sampling),
+                        ('caustic', caustic),
+                        ('output_plane_distance', output_plane_distance),
+                        ('tilt_aware_rays', tilt_aware_rays),
+                        ('fit_radius_beam_factor', fit_radius_beam_factor),
+                        ('inversion_method', inversion_method),
+                        ('newton_fit', newton_fit),
+                        ('newton_max_iters', newton_max_iters),
+                        ('newton_poly_order', newton_poly_order),
+                        ('ray_subsample', ray_subsample),
+                        # the most dangerous drop: apply_real_lens has no
+                        # notion of a reusable screen and returns a FIELD
+                        ('return_screen', return_screen),
+                    ) if _kwarg_differs_from_default(_v, _tdef.get(_k))]
+                if _dropped:
+                    import warnings
+                    warnings.warn(
+                        f"apply_real_lens_traced: on_noncollimated="
+                        f"'delegate' is handing this call to "
+                        f"apply_real_lens (input residual angular spread "
+                        f"{_resid:.3f} rad > "
+                        f"{_NONCOLLIMATED_RESID_THRESH} rad).  The analytic "
+                        f"model has no ray-trace leg, so these "
+                        f"traced-only arguments are DISCARDED: "
+                        f"{', '.join(_dropped)}.  Pass carrier= and keep "
+                        f"on_noncollimated='warn' if you need them "
+                        f"honoured, or call apply_real_lens directly to "
+                        f"make the model choice explicit.",
+                        RuntimeWarning, stacklevel=2)
+                # v5.29.1 (audit E-M2): forward the RAW ``sag_chunk_rows``,
+                # matching the four sibling amp-leg call sites -- the
+                # resolver maps the documented force-whole-grid sentinel 0 to
+                # None, which apply_real_lens then re-resolves to AUTO, so
+                # forwarding the RESOLVED value re-enabled row banding
+                # against an explicit opt-out.  See the resolver note above.
                 return apply_real_lens(
                     E_in, prescription=lens_prescription,
                     wavelength=wavelength, dx=dx, bandlimit=bandlimit,
                     use_gpu=amp_use_gpu, wave_propagator=wave_propagator,
-                    sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+                    sag_dtype=sag_dtype,
+                    sag_chunk_rows=_sag_chunk_rows_raw,
                     progress=progress)
             else:  # 'warn'
                 import warnings
@@ -3759,6 +3998,43 @@ def apply_real_lens_traced(
     # at _NEWTON_MAX_ITERS for the 8-vs-12 trade-off.
     MAX_NEWTON_ITERS = (int(newton_max_iters) if newton_max_iters is not None
                         else _NEWTON_MAX_ITERS)
+    # v5.29.1 (audit E-H2): carry the RESOLVED cap into the pickled worker
+    # payload.  ``_newton_invert_chunk`` used to hard-code
+    # ``_NEWTON_MAX_ITERS``, so ``newton_max_iters`` was inert whenever the
+    # process pool engaged (>=200k points, newton_fit='spline', CPU) -- and
+    # the ray-density amplitude leg, which always runs the SERIAL closure,
+    # could then be built from a different Newton solution than the OPL.
+    _spline_data['newton_max_iters'] = int(MAX_NEWTON_ITERS)
+
+    def _warn_newton_unconverged(n_unconverged, n_total, tol):
+        """Emit the Newton-unconverged RuntimeWarning (shared by the serial
+        and process-pool inversion paths so both report identically).
+
+        Healthy prescriptions can have a handful of out-of-domain edge pixels
+        left active at the iteration cap -- those are benign and don't warrant
+        a warning.  Threshold: >1% of total pixels unconverged means a real
+        convergence problem.  Honours the same ``on_undersample`` knob the
+        rest of the function uses ('silent' suppresses).  Pre-3.5.6
+        unconverged pixels were silently kept at their last Newton value; the
+        POOL path stayed silent until v5.29.1 (audit E-H2) even though the
+        message's own advice is "increase newton_max_iters".
+        """
+        n_unconverged = int(n_unconverged)
+        n_total = max(int(n_total), 1)
+        if not (n_unconverged > 0 and n_unconverged > 0.01 * n_total
+                and on_undersample != 'silent'):
+            return
+        import warnings as _warnings
+        _warnings.warn(
+            f"apply_real_lens_traced Newton inversion: "
+            f"{n_unconverged}/{n_total} pixels "
+            f"({100.0*n_unconverged/n_total:.1f}%) did not converge "
+            f"to tol={tol:.3e} m within {MAX_NEWTON_ITERS} "
+            f"iterations.  Affected pixels keep their last Newton "
+            f"value, which may carry residual error.  Increase "
+            f"newton_max_iters if this matters for your tolerance "
+            f"budget.",
+            RuntimeWarning, stacklevel=3)
 
     def _invert_newton(Xw, Yw, sub_progress=None, _want_entrance=False):
         """Run Newton iteration to find (xe, ye) such that (Sx, Sy)
@@ -3883,30 +4159,12 @@ def apply_real_lens_traced(
                 "residual_max=%.3e m remaining=%d/%d",
                 int(_it + 1), int(MAX_NEWTON_ITERS),
                 _res_norm, _remaining_log, int(n_total))
-        # Surface unconverged pixels.  Healthy prescriptions can have a
-        # handful of out-of-domain edge pixels left active at the
-        # iteration cap -- those are benign and don't warrant a warning.
-        # Threshold: >1% of total pixels unconverged means a real
-        # convergence problem.  Honour the same ``on_undersample`` knob
-        # the rest of the function uses ('silent' suppresses, 'warn'
-        # / 'error' default emits the warning).  Pre-3.5.6 unconverged
-        # pixels were silently kept at their last Newton value.
+        # Surface unconverged pixels (shared emitter -- see
+        # ``_warn_newton_unconverged``; the pool path calls the same helper).
         n_unconverged = int(active.sum()) if hasattr(
             active, 'sum') else 0
         n_total = int(active.size) if hasattr(active, 'size') else 1
-        if (n_unconverged > 0 and n_unconverged > 0.01 * n_total
-                and on_undersample != 'silent'):
-            import warnings as _warnings
-            _warnings.warn(
-                f"apply_real_lens_traced Newton inversion: "
-                f"{n_unconverged}/{n_total} pixels "
-                f"({100.0*n_unconverged/n_total:.1f}%) did not converge "
-                f"to tol={tol:.3e} m within {MAX_NEWTON_ITERS} "
-                f"iterations.  Affected pixels keep their last Newton "
-                f"value, which may carry residual error.  Increase "
-                f"newton_max_iters if this matters for your tolerance "
-                f"budget.",
-                RuntimeWarning, stacklevel=3)
+        _warn_newton_unconverged(n_unconverged, n_total, tol)
         opl_flat = So.ev(xe, ye)
         out_of_domain = (xe * xe + ye * ye > (launch_radius * 0.99) ** 2)
         opl_flat = xp.where(out_of_domain, xp.nan, opl_flat)
@@ -3968,8 +4226,10 @@ def apply_real_lens_traced(
         useful; fall back to the in-process serial path otherwise.
 
         Preserves the serial path's numerical behaviour exactly (same
-        Newton iteration count, same convergence tolerance, same
-        out-of-domain NaN policy -- see :func:`_newton_invert_chunk`).
+        Newton iteration count -- the resolved ``newton_max_iters`` travels
+        in ``_spline_data`` since v5.29.1 / audit E-H2 -- same convergence
+        tolerance, same out-of-domain NaN policy, and the same
+        unconverged-pixel warning; see :func:`_newton_invert_chunk`).
         """
         # GPU path must stay in-process: the worker function
         # ``_newton_invert_chunk`` rebuilds SciPy splines per worker
@@ -4031,7 +4291,13 @@ def apply_real_lens_traced(
             # a result.
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
 
-        opl_flat = np.concatenate(results)
+        # v5.29.1 (audit E-H2): the worker returns (opl, n_unconverged); sum
+        # the counts and emit the SAME warning the serial path emits (the
+        # pool used to be silent, so the one regime whose convergence the
+        # message's own advice addresses never reported).
+        opl_flat = np.concatenate([r[0] for r in results])
+        _warn_newton_unconverged(sum(int(r[1]) for r in results),
+                                 int(n_total), 0.01 * dx)
         return opl_flat.reshape(Xw.shape)
 
     def _ray_density_amp_grid(Xg, Yg):
@@ -5110,6 +5376,14 @@ class PreparedTracedLens:
     multi-field loops entirely (>=2x per call).  Mirrors the library's
     ``PreparedRCWA2D`` / ``PreparedPMM2D`` precedent.
 
+    A prepared lens FREEZES the settings that were live when it was prepared:
+    ``wave_propagator`` / ``sag_dtype`` hold the values
+    :func:`prepare_real_lens_traced` resolved from the process-wide defaults,
+    and ``prescription`` is a deep copy of the caller's dict.  Flipping a
+    global default or editing the prescription in place afterwards therefore
+    does NOT move a prepared lens -- rebuild it (audit E-H4; see that
+    function's docstring for the pre-v5.29.1 desynchronisation).
+
     Memory footprint
     ----------------
     The retained payload is the ``screen`` -- a single ``(N, N)`` complex128
@@ -5243,6 +5517,21 @@ def prepare_real_lens_traced(
     :func:`apply_real_lens_traced_multi` forwarded them).  A prepared screen is
     therefore a ``screen``-amplitude, aperture-fit-domain object: correct, but
     not the chain-grade model.
+
+    WHAT A PREPARED LENS FREEZES (v5.29.1; audit E-H4).  **A prepared object
+    freezes the settings that were live when it was prepared.**  Concretely:
+    ``wave_propagator`` and ``sag_dtype`` are RESOLVED here against the
+    process-wide defaults (:func:`set_default_wave_propagator` /
+    :func:`set_lens_sag_dtype`) and the resolved values are stored on the
+    returned object, and the ``prescription`` is DEEP-COPIED.  So flipping a
+    global default -- or mutating the prescription dict in place -- after
+    preparing leaves the prepared lens unchanged; rebuild it to pick up the
+    new settings.  Pre-v5.29.1 the unresolved ``None`` sentinels were stored,
+    so the frozen screen (prepare-time defaults) and the per-call analytic
+    amplitude leg (call-time defaults) silently desynchronised on a global
+    flip (measured 49.6 on a singlet), and an in-place prescription edit --
+    the optimizer / tolerancing pattern this class advertises -- produced a
+    stale-OPL x new-amplitude hybrid (measured 0.71 from a correct rebuild).
     """
     if isinstance(carrier, str) and carrier == 'auto':
         raise ValueError(
@@ -5276,6 +5565,22 @@ def prepare_real_lens_traced(
     # placeholder IS the plane-wave reference, so the caller's value applies
     # (a correct, silent no-op there).
     _screen_noncol = 'off' if carrier is not None else on_noncollimated
+    # v5.29.1 (audit E-H4): resolve the process-wide defaults NOW and store the
+    # resolved values, so the frozen screen and every later per-call amplitude
+    # leg use the SAME propagator / geometry dtype no matter what the caller
+    # flips afterwards.  See "WHAT A PREPARED LENS FREEZES" above.
+    if wave_propagator is None:
+        from ..propagators.propagation import get_default_wave_propagator
+        wave_propagator = get_default_wave_propagator()
+    if sag_dtype is None:
+        from ._lens_real import get_lens_sag_dtype
+        sag_dtype = get_lens_sag_dtype()
+    # Deep-copy the prescription: the stored dict must not alias the caller's,
+    # or an in-place edit (the advertised optimizer / tolerancing loop) silently
+    # pairs the cached OPL screen with a DIFFERENT lens in the amplitude leg.
+    # Cheap next to the trace/fit/Newton this function runs; plain functions in
+    # ``sag_callable`` survive (copy treats them as atomic).
+    prescription = _copy_prescription(prescription)
     ones = np.ones((int(N), int(N)), dtype=np.complex128)
     screen = apply_real_lens_traced(
         ones, prescription=prescription, wavelength=wavelength, dx=dx,
