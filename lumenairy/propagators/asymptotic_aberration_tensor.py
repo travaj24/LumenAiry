@@ -262,6 +262,132 @@ def _phi_v2_hessian(fit: CanonicalPolyFit, s2x: float, s2y: float,
     ])
 
 
+# Coarse probe grid (per axis) used to measure the image-plane field waist
+# that becomes the DEFAULT sigma-basis ``w_o``.  32 is measured to give the
+# waist to <= 4.4e-3 relative against a 201x201 reference on the validation
+# singlets (16 -> 4.9e-2, 24 -> 4.6e-2, 48 -> 3.0e-3); a few percent on a
+# BASIS scale is immaterial, and the probe costs ~25 % of one 64x64
+# projection grid.
+_W_O_PROBE_N = 32
+
+
+def _lg00_sampling_waist(M: np.ndarray) -> float:
+    """Default ``w_o`` for the pure-``(0, 0)`` CLOSED-FORM branch.
+
+    NOT an image-plane length.  That branch point-samples the field at the
+    chief ray and multiplies by ``conj(LG_00(0)) = sqrt(2/(pi w_o^2))``, so
+    ``w_o`` only fixes that normalisation constant; ``1/sqrt(lambda_max(Re
+    M))`` (the effective pupil acceptance, in direction cosines) is the
+    historical convention and is BIT-FOR-BIT the cross-backend contract of
+    ``asymptotic_jax_twin.aberration_tensor_lg00_jax``, which hardcodes the
+    identical expression.  Change one and you MUST change the other:
+    ``tests/unit/test_audit_raytrace.py::…lg00_jax_matches_numpy_0_0`` and
+    the W3-3 coupling pin in
+    ``tests/unit/test_niche_audit_w3_oracles.py`` hold them together.
+
+    The σ-integration branch, where ``w_o`` IS a length, uses
+    :func:`_measure_image_plane_waist` instead (audit W3-T3b).
+    """
+    eig_M_real = np.linalg.eigvalsh(np.real(M))
+    if eig_M_real.max() <= 0:
+        w = 1e-6  # fallback for ill-conditioned cases
+    else:
+        w = 1.0 / math.sqrt(float(eig_M_real.max()))
+    return max(min(w, 1.0), 1e-9)
+
+
+def _s2_validity_room(fit: CanonicalPolyFit,
+                      s2x_img: float, s2y_img: float) -> float:
+    """Half-width of the largest centred square around ``s2_image`` that
+    still lies inside the fit's ``s2`` validity box.  The asymptotic
+    propagator is identically ZERO outside that box, so nothing is lost by
+    never sampling beyond it."""
+    return min(
+        fit.s2x_centre + fit.s2x_halfrange - s2x_img,
+        s2x_img - (fit.s2x_centre - fit.s2x_halfrange),
+        fit.s2y_centre + fit.s2y_halfrange - s2y_img,
+        s2y_img - (fit.s2y_centre - fit.s2y_halfrange),
+    )
+
+
+def _measure_image_plane_waist(
+    fit: CanonicalPolyFit,
+    s2x_img: float, s2y_img: float,
+    source_point: Tuple[float, float],
+    pupil_amplitudes: Dict[Tuple[int, int], complex],
+    w_s: float, w_p: float,
+    v2_centre: Tuple[float, float],
+    propagate,
+    n: int = _W_O_PROBE_N,
+) -> Optional[float]:
+    """Measure the propagated field's image-plane Gaussian waist [m].
+
+    This is the DEFAULT output-basis scale for the σ-integration path.
+    It is measured, not modelled, because the quantity the LG projection
+    needs is by definition the field's own width, and that width is
+    dominated by the DEFOCUS / aberration blur -- which no function of the
+    pupil-space beam matrix ``M`` alone can see (audit W3-T3b: between the
+    two validation singlets the true waist moves 71.7 % while every
+    ``M``-only construction moves < 0.3 %).
+
+    Estimator: intensity second moment (D4σ/2) of ``|U|²`` on a coarse
+    grid spanning the fit's ``s2`` validity box, i.e. for an amplitude
+    ``exp(-r²/w²)`` -- whose intensity has per-axis variance ``w²/4`` --
+    ``w = 2·sqrt(var_per_axis)``.  One refinement pass fires only if the
+    field turns out to be sampled by fewer than 3 cells (a field far
+    narrower than the validity box), so the common case costs exactly one
+    coarse propagate.  The probe uses the FUNDAMENTAL source mode so the
+    basis scale cannot depend on the caller's ``source_modes`` ordering.
+
+    Returns ``None`` if the probe cannot produce a finite positive width
+    (dead field, degenerate box); the caller then falls back.
+    """
+    room = _s2_validity_room(fit, s2x_img, s2y_img)
+    if not (math.isfinite(room) and room > 0.0):
+        return None
+    ext = 0.98 * room
+    w = None
+    for _pass in range(2):
+        xs = np.linspace(s2x_img - ext, s2x_img + ext, n)
+        ys = np.linspace(s2y_img - ext, s2y_img + ext, n)
+        SX, SY = np.meshgrid(xs, ys, indexing='xy')
+        try:
+            U = propagate(
+                fit,
+                source_point=(float(source_point[0]), float(source_point[1])),
+                source_amplitudes={(0, 0): 1.0 + 0.0j},
+                pupil_amplitudes=pupil_amplitudes,
+                w_s=w_s, w_p=w_p, v2_centre=v2_centre,
+                s2_grid_x=SX, s2_grid_y=SY,
+            )
+        except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
+                np.linalg.LinAlgError):
+            return None
+        inten = np.abs(np.asarray(U)) ** 2
+        inten = np.where(np.isfinite(inten), inten, 0.0)
+        tot = float(inten.sum())
+        if not (tot > 0.0):
+            return None
+        lx = SX - s2x_img
+        ly = SY - s2y_img
+        cx = float((inten * lx).sum() / tot)
+        cy = float((inten * ly).sum() / tot)
+        var = float(
+            (inten * ((lx - cx) ** 2 + (ly - cy) ** 2)).sum() / tot) / 2.0
+        if not (math.isfinite(var) and var > 0.0):
+            return None
+        w = 2.0 * math.sqrt(var)
+        cell = 2.0 * ext / (n - 1)
+        if w >= 3.0 * cell:
+            return w
+        # Under-sampled: the field is far narrower than the validity box.
+        ext_next = min(6.0 * w, 0.98 * room)
+        if not (ext_next > 0.0) or ext_next >= ext:
+            return w
+        ext = ext_next
+    return w
+
+
 def aberration_tensor(
     fit: CanonicalPolyFit,
     s2_image: Tuple[float, float],
@@ -309,8 +435,27 @@ def aberration_tensor(
     w_s, w_p : float
         Source and pupil Gaussian waists [m and direction-cosine].
     w_o : float, optional
-        Output Gaussian waist [m].  Defaults to a value derived from
-        the local complex beam matrix (Maréchal-scale).
+        Output Gaussian waist [m].  An explicit value is honoured
+        verbatim on both branches.  The DEFAULT differs per branch,
+        because ``w_o`` plays two different roles (audit W3-T3b):
+
+        * σ-integration (any output mode other than ``(0, 0)``) --
+          ``w_o`` is a real IMAGE-PLANE LENGTH: the LG basis waist and,
+          via ``extent = 4·w_o``, the σ-grid span.  Defaults to the
+          MEASURED waist of the propagated field (intensity second
+          moment on a coarse probe over the fit's ``s2`` validity box;
+          see :func:`_measure_image_plane_waist`).  It has to be
+          measured: the width is set by the defocus/aberration blur,
+          which no function of the pupil-space beam matrix ``M`` can
+          see -- across the two validation singlets the true waist
+          moves +71.7 % while every ``M``-only construction moves
+          < 0.3 %.
+        * pure ``[(0, 0)]`` -- the closed form point-samples the field
+          and ``w_o`` only sets the ``sqrt(2/(π w_o²))`` normalisation.
+          Keeps the historical ``1/sqrt(λ_max(Re M))`` convention
+          BIT-FOR-BIT; it is the cross-backend contract of
+          ``aberration_tensor_lg00_jax`` (see
+          :func:`_lg00_sampling_waist`).
     v2_centre : (float, float), optional
         Pupil centre.
     sigma_grid_n : int, optional
@@ -320,6 +465,28 @@ def aberration_tensor(
         to ``(p, |ℓ|) ~ (3, 3)``; bump for higher orders.  Ignored for
         a pure ``[(0, 0)]`` request (the fast closed-form chief-ray
         sampling is used).
+
+        **Accuracy note (measured, audit W3-T3b).**  The image-plane
+        field is a CHIRP: its local spatial frequency at offset σ is
+        ``|v*(σ)|/λ``, so resolving it needs roughly
+        ``n >= 4·extent·v_max/λ`` samples (246 for the validation
+        singlet's ``extent = 4.03e-3 m``, ``v_max = 0.02``,
+        ``λ = 1.31 µm``).  At the default 64 the ``(2, 0)`` channel is
+        therefore aliasing-limited; measured against ``n = 384``:
+
+            n      = 64      96      128     192     256
+            R1=51.5  +2.3 %  -25 %   -13 %   -2.3 %  -0.7 %
+            R1=60.0  +33 %   -3.9 %  +1.4 %  -4.0 %  -2.6 %
+
+        Convergence is oscillatory, and ``n = 256`` costs ~15x ``n =
+        64`` (5.1 s vs 0.34 s here).  The default trades accuracy for
+        the optimiser loop this evaluator feeds; raise it when you need
+        converged channel MAGNITUDES.  Channel-to-channel and
+        design-to-design RESPONSES are robust to it (the curvature
+        discriminator reads 2.09e-1 relative at n = 64 and 4.04e-1 at
+        n = 256).  Note this is a property of the σ quadrature, not of
+        the W3-T3b waist: the same aliasing is present at any explicit
+        ``w_o`` that spans the same box.
     sigma_grid_extent : float, optional
         Half-extent of the σ-grid [m].  Default ``4 · w_o``, clamped to
         the fit's ``s2`` validity half-box measured from ``s2_image``
@@ -401,18 +568,72 @@ def aberration_tensor(
         src_x, src_y, w_s, w_p, v2_centre[0], v2_centre[1]
     )
 
+    # Which branch will run?  (Only the output modes decide -- see the
+    # routing note further down.)  The DEFAULT ``w_o`` differs between the
+    # two because ``w_o`` plays two completely different roles.
+    needs_sigma_integration = any(tuple(k_out) != (0, 0)
+                                  for k_out in output_modes)
+
     # Choose output waist if not supplied
     if w_o is None:
-        # Use the smaller of the two real-part eigenvalues of M^-1, and
-        # drop a factor of pi (Maréchal convention scales as
-        # 1/sqrt(lambda_max(Re M))).
-        eig_M_real = np.linalg.eigvalsh(np.real(M))
-        if eig_M_real.max() <= 0:
-            w_o = 1e-6  # fallback for ill-conditioned cases
+        if needs_sigma_integration:
+            # σ-INTEGRATION PATH:  here ``w_o`` is a genuine IMAGE-PLANE
+            # LENGTH -- the waist of the LG basis the field is projected
+            # onto, and (via ``extent = 4·w_o``) the span of the σ grid.
+            # It must therefore match the field's own image-plane width.
+            #
+            # v5.29 (audit W3-T3b).  The pre-fix default was
+            # ``1/sqrt(lambda_max(Re M))``, which is DIMENSIONALLY a pupil
+            # quantity: ``M``'s entries are ``J^T J / w_s^2 + I / w_p^2 -
+            # i·pi·H_phi`` with ``J = ds1/dv2`` [m/direction-cosine], so
+            # ``M`` is in 1/direction-cosine^2 and its inverse square root
+            # is an ANGLE -- the effective pupil acceptance -- used as if
+            # it were metres.  Being dimensionally wrong, its error had no
+            # fixed sign: measured 1.01e-4 "m" against a true field waist
+            # of 1.559e-3 m (15x too NARROW, so ``4·w_o`` sampled only the
+            # flat central 10 % of the field) on the validation singlet at
+            # w_p = 0.02, but 255x too WIDE (grid entirely outside the
+            # validity box, every entry of L exactly 0) at w_p = 0.05.
+            #
+            # Nor can any function of ``M`` alone be right: the image-plane
+            # width is dominated by the defocus/aberration blur, which
+            # lives in the σ↔v coupling, not in the pupil-space Hessian.
+            # Measured across the two validation singlets (R1 = 51.5 mm vs
+            # 60 mm): true waist 1.559e-3 -> 2.677e-3 m (+71.7 %) while
+            # ``1/sqrt(lambda_max(Re M))`` moves 1.0116e-4 -> 1.0086e-4
+            # (-0.3 %) and the diffraction image of that acceptance,
+            # ``lambda·sqrt(lambda_max)/pi``, moves +0.3 %.  A basis pinned
+            # to a design-independent scale makes every merit channel
+            # design-independent too -- exactly the CI symptom this fixes
+            # (``LGAberrationMerit`` responded 4.0e-3 relative to a 17 %
+            # curvature change; post-fix 2.0e-1).
+            #
+            # So measure it.  See :func:`_measure_image_plane_waist`.
+            w_o = _measure_image_plane_waist(
+                fit, s2x_img, s2y_img, (src_x, src_y), pupil_amplitudes,
+                w_s, w_p, v2_centre, propagate_modal_asymptotic,
+            )
+            if w_o is None:
+                # Probe could not produce a finite width (dead field or
+                # degenerate box).  Fall back to a quarter of the validity
+                # room, so the ``4·w_o`` grid spans the box exactly -- the
+                # know-nothing choice -- and only then to the legacy scale.
+                _room = _s2_validity_room(fit, s2x_img, s2y_img)
+                if math.isfinite(_room) and _room > 0.0:
+                    w_o = 0.25 * _room
+                else:
+                    w_o = _lg00_sampling_waist(M)
         else:
-            w_o = 1.0 / math.sqrt(float(eig_M_real.max()))
-        # Clamp to a physically reasonable range
-        w_o = max(min(w_o, 1.0), 1e-9)
+            # PURE-(0, 0) CLOSED-FORM PATH:  ``w_o`` is NOT a length here.
+            # The branch point-samples the field at the chief ray and
+            # multiplies by ``conj(LG_00(0)) = sqrt(2/(pi w_o^2))``, so
+            # ``w_o`` only sets that normalisation constant.  Its value is
+            # a CONVENTION, and it is the documented cross-backend contract
+            # of ``aberration_tensor_lg00_jax`` (which hardcodes
+            # ``A_lead·N_s·N_p·N_o`` with the identical default).  Left
+            # bit-for-bit by W3-T3b for exactly that reason; the twin
+            # carries the same formula and the pair is pinned.
+            w_o = _lg00_sampling_waist(M)
 
     # Stationary shift delta* = 0.5 M^-1 b
     M_inv = np.linalg.inv(M)
@@ -523,8 +744,10 @@ def aberration_tensor(
     # JAX twin's convention too; until then prefer multi-mode requests
     # (all entries mutually consistent overlaps) for anything but the
     # single Strehl-amplitude channel.
-    needs_sigma_integration = any(tuple(k_out) != (0, 0)
-                                  for k_out in output_modes)
+    #
+    # ``needs_sigma_integration`` was decided above the ``w_o`` default,
+    # which branches on it (audit W3-T3b: the two paths need different
+    # defaults because ``w_o`` means different things in them).
 
     if not needs_sigma_integration:
         # ---- Closed-form chief-ray sampling (output mode (0, 0) only) ---
@@ -588,25 +811,19 @@ def aberration_tensor(
             # v5.28.x (audit W3-T3):  ``propagate_modal_asymptotic`` is
             # identically ZERO outside the fit's s2 validity box, so a
             # default grid that overshoots the box does not merely waste
-            # samples -- it starves the quadrature completely.  The
-            # default ``w_o`` is derived from the beam matrix M, whose
-            # units are 1/direction-cosine^2, so it is a PUPIL-scale
-            # number used as an image-plane length:  measured 9.83e-3
-            # against a fit half-box of 1.54e-4 m, i.e. +-4 w_o was
-            # 255x outside the box and the 64x64 default grid landed
-            # ZERO valid pixels -> EVERY entry of L came back exactly
-            # 0.0 (silently resurrecting the pre-4.9 all-zero
-            # coma/astigmatism/tilt bug that the sigma path exists to
-            # fix).  Clamp the DEFAULT to the box actually reachable
-            # from s2_image; an explicit ``sigma_grid_extent`` is still
-            # honoured verbatim.  Nothing is lost by the clamp: the
+            # samples -- it starves the quadrature completely.  With the
+            # pre-W3-T3b pupil-scale ``w_o`` this fired hard (measured
+            # 9.83e-3 "m" against a 1.54e-4 m half-box: +-4 w_o was 255x
+            # outside the box, the 64x64 grid landed ZERO valid pixels and
+            # EVERY entry of L came back exactly 0.0, silently resurrecting
+            # the pre-4.9 all-zero coma/astigmatism/tilt bug).  The W3-T3b
+            # default is measured INSIDE this box so the clamp is now a
+            # guard rather than a load-bearing correction -- it still binds
+            # when the field fills the box (4 x 1.559e-3 > 4.034e-3 room on
+            # the validation singlet).  An explicit ``sigma_grid_extent``
+            # is honoured verbatim.  Nothing is lost by the clamp: the
             # integrand vanishes outside the box.
-            room = min(
-                fit.s2x_centre + fit.s2x_halfrange - s2x_img,
-                s2x_img - (fit.s2x_centre - fit.s2x_halfrange),
-                fit.s2y_centre + fit.s2y_halfrange - s2y_img,
-                s2y_img - (fit.s2y_centre - fit.s2y_halfrange),
-            )
+            room = _s2_validity_room(fit, s2x_img, s2y_img)
             if room > 0.0:
                 extent = min(extent, float(room))
         sx_arr = np.linspace(s2x_img - extent, s2x_img + extent, n_grid)

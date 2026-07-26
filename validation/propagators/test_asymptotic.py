@@ -939,7 +939,24 @@ H.run('LGAberrationMerit: evaluates without error', t_lg_merit_runs)
 def t_lg_merit_responds_to_curvature():
     """Changing R1 of the singlet should change the merit -- this
     verifies the merit is actually sensitive to design parameters
-    (otherwise it would be useless for optimisation)."""
+    (otherwise it would be useless for optimisation).
+
+    v5.29 (audit W3-T3b):  the criterion is RELATIVE.  It used to be
+    ``abs(val_a - val_b) > 1e-12``, an absolute floor calibrated when the
+    ``(2, 0)`` target still took the closed-form chief-ray branch and was
+    therefore BIT-IDENTICAL to the ``(0, 0)`` piston channel -- a point
+    sample of order ``1e+02`` (measured at 7ea2eb9: 2.488068e+02 vs
+    2.502985e+02, diff 1.4918).  The check passed on the piston channel's
+    scale and never exercised ``(2, 0)`` at all.  Since W3-T3 routed every
+    non-``(0, 0)`` mode to the σ-integration, the channel is a genuine
+    overlap integral -- units field*length instead of field/length -- so
+    its natural magnitude is ~1e-13 and NO correct value can clear a 1e-12
+    absolute floor.  Post-W3-T3b the physics response is far stronger than
+    the old proxy: 9.096898e-14 vs 7.197560e-14, i.e. 2.09e-1 RELATIVE
+    against the baseline proxy's 5.96e-3, for the same 17 % curvature
+    change.  Pinned as a unit test with the same discriminator in
+    ``tests/unit/test_niche_audit_w3_oracles.py`` (``test_w3_t3b_*``).
+    """
     pres_a = _build_test_singlet()
     pres_b = la.make_singlet(60.0e-3, np.inf, 4.1e-3, 'N-BK7',
                               aperture=12.0e-3)
@@ -964,9 +981,14 @@ def t_lg_merit_responds_to_curvature():
 
     val_a = merit.evaluate(ctx_a)
     val_b = merit.evaluate(ctx_b)
-    return abs(val_a - val_b) > 1e-12, (
+    scale = max(abs(val_a), abs(val_b))
+    rel = abs(val_a - val_b) / scale if scale > 0 else 0.0
+    ok = (scale > 0.0 and math.isfinite(val_a) and math.isfinite(val_b)
+          and rel > 1e-3)
+    return ok, (
         f'merit (R1=51.5mm) = {val_a:.4e}; '
-        f'merit (R1=60mm) = {val_b:.4e}; diff = {abs(val_a - val_b):.4e}'
+        f'merit (R1=60mm) = {val_b:.4e}; diff = {abs(val_a - val_b):.4e}; '
+        f'RELATIVE = {rel:.4e} (must exceed 1e-3)'
     )
 
 

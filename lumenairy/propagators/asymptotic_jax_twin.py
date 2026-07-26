@@ -342,8 +342,13 @@ def aberration_tensor_lg00_jax(
         Envelope-stationary point.
     source_point : (float, float)
     w_s, w_p, w_o : float
-        Gaussian waists for source / pupil / output.  ``w_o`` defaults
-        to a Maréchal scale derived from M.
+        Gaussian waists for source / pupil / output.  ``w_o`` defaults to
+        ``1/sqrt(lambda_max(Re M))``, identical to the NumPy
+        ``aberration_tensor``'s pure-``(0, 0)`` default.  On this
+        point-sampling evaluator ``w_o`` is only the ``sqrt(2/(pi w_o^2))``
+        normalisation constant, not an image-plane length (audit W3-T3b);
+        see the comment at the default and
+        ``asymptotic_aberration_tensor._lg00_sampling_waist``.
     v2_centre : (float, float)
     return_result : bool, default False
         If True, return a :class:`JaxAberrationTensorResult` whose
@@ -388,6 +393,28 @@ def aberration_tensor_lg00_jax(
         eig_M_real = jnp.linalg.eigvalsh(jnp.real(M))
         # eigvalsh returns ascending; the largest eigenvalue gives the
         # tightest output Gaussian; clamp to a positive minimum.
+        #
+        # v5.29 (audit W3-T3b) -- DO NOT "fix the units" here.  This is the
+        # LG_{0,0} point-sampling normalisation, NOT an image-plane length:
+        # the evaluator below returns ``A_lead·N_s·N_p·N_o`` where
+        # ``N_o = sqrt(2/(pi w_o^2))`` multiplies a field SAMPLED at the
+        # chief ray, so ``w_o`` only fixes a constant and its value is a
+        # convention.  It deliberately mirrors
+        # ``asymptotic_aberration_tensor._lg00_sampling_waist`` character
+        # for character so the NumPy ``aberration_tensor(...,
+        # output_modes=[(0, 0)])`` and this twin agree with NO explicit
+        # ``w_o`` (measured coupling: 1.011644168976e-04 both sides,
+        # 4.0e-16 relative -- one ulp of the eigensolver).  Change one and
+        # you must change the other; pinned by
+        # ``tests/unit/test_audit_raytrace.py::…lg00_jax_matches_numpy_0_0``
+        # and ``test_w3_t3b_jax_twin_default_w_o_tracks_numpy`` in
+        # ``tests/unit/test_niche_audit_w3_oracles.py``.
+        #
+        # ``w_o`` IS a real image-plane length on the NumPy σ-integration
+        # branch (any output mode other than (0, 0)); that branch measures
+        # the field's own waist instead -- see
+        # ``asymptotic_aberration_tensor._measure_image_plane_waist``.
+        # This twin has no σ branch, so nothing here needs that scale.
         w_o = 1.0 / jnp.sqrt(jnp.maximum(eig_M_real[-1], 1e-30))
 
     b_quad = 0.25 * (b @ M_inv @ b)

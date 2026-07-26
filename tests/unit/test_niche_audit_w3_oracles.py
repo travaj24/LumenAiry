@@ -1919,3 +1919,361 @@ def test_w3_t4_nan_field_data_is_still_not_rejected():
     f = create_linear_polarized(np.full((2, 2), np.nan, dtype=complex),
                                 DX, np.pi / 4)
     assert np.isnan(f.Ex).all()
+
+
+# ===========================================================================
+# W3-3b SECTION -- the DEFAULT output waist ``w_o`` of the sigma path
+# ===========================================================================
+_W3_3B_ORACLE = """W3-T3b -- the DEFAULT ``w_o`` of the sigma-integration path.
+
+THE FINDING (flagged as a follow-up by W3-T3, then hit CI)
+-----------------------------------------------------------
+``aberration_tensor``'s default ``w_o`` was ``1/sqrt(lambda_max(Re M))``.
+``M = J^T J / w_s^2 + I / w_p^2 - i pi H_phi`` with ``J = ds1/dv2``
+[m per direction-cosine], so ``M`` is in 1/direction-cosine^2 and that
+expression is an ANGLE -- the effective pupil acceptance -- used as an
+image-plane LENGTH.  Being dimensionally wrong its error had no fixed
+sign: measured 1.011644e-04 "m" against a true field waist of 1.552040e-03
+m (15.3x too NARROW, so the ``4*w_o`` sigma grid sampled only the flat
+central ~10 % of the field) on the validation singlet at w_p = 0.02, and
+255x too WIDE (grid entirely outside the fit's validity box, every entry
+of L exactly 0.0) at w_p = 0.05.
+
+Consequence, on the validation harness's own discriminator
+(``LGAberrationMerit``, targets={(2,0): 1.0}, 17 % curvature change
+R1 = 51.5 -> 60 mm):
+
+    committed tree   merit 2.506416e-13 vs 2.516524e-13 -> 4.0e-3 relative
+    W3-T3b           merit 9.0968975e-14 vs 7.1975598e-14 -> 2.088e-1
+
+WHY IT MUST BE MEASURED, NOT MODELLED
+-------------------------------------
+The image-plane width is dominated by the DEFOCUS / aberration blur, which
+lives in the sigma<->v coupling, not in the pupil-space Hessian.  Across
+the same two designs the TRUE waist moves 1.558851e-03 -> 2.676815e-03 m
+(+71.7 %) while every ``M``-only construction is flat:
+
+    1/sqrt(lambda_max(Re M))            1.0116e-04 -> 1.0086e-04  (-0.3 %)
+    lambda*sqrt(lambda_max(Re M))/pi    4.1219e-03 -> 4.1342e-03  (+0.3 %)
+    lambda/(pi w_p)                     2.0849e-05 -> 2.0849e-05  ( 0.0 %)
+
+A basis pinned to a design-independent scale makes every merit channel
+design-independent too -- exactly the CI symptom.  So the default is the
+field's own intensity second moment (D4sigma/2) on a coarse probe over the
+fit's s2 validity box.  Measured convergence against a 201x201 reference:
+n=16 4.9e-2, n=24 4.6e-2, n=32 4.4e-3, n=48 1.0e-3 relative -- for ~25 %
+of one 64x64 projection grid.
+
+WHAT IS DELIBERATELY UNCHANGED
+------------------------------
+The pure-[(0, 0)] closed form keeps ``1/sqrt(lambda_max(Re M))``
+BIT-FOR-BIT: there ``w_o`` is not a length at all, only the
+``sqrt(2/(pi w_o^2))`` normalisation of a point sample, and it is the
+cross-backend contract of ``aberration_tensor_lg00_jax``.  Verified
+bit-identical against BOTH 7ea2eb9 and e1fd64a, as is every explicit
+``w_o=`` call on either branch (12-case matrix).
+"""
+
+_WL_T3B = 1.31e-6
+_WS_T3B, _WP_T3B = 20e-6, 0.02
+_FITKW_T3B = dict(source_box_half=20e-6, pupil_box_half=0.02,
+                  n_field=6, n_pupil=6, poly_order=4)
+
+
+def _singlet_t3b(R1):
+    import lumenairy
+    p = lumenairy.make_singlet(R1, float('inf'), 4.1e-3, 'N-BK7',
+                               aperture=12.0e-3)
+    p['object_distance'] = 200e-3
+    return p
+
+
+@functools.lru_cache(maxsize=4)
+def _fit_t3b(R1):
+    from lumenairy.propagators.asymptotic import fit_canonical_polynomials
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return fit_canonical_polynomials(_singlet_t3b(R1),
+                                         wavelength=_WL_T3B, **_FITKW_T3B)
+
+
+@functools.lru_cache(maxsize=8)
+def _tensor_t3b(R1, modes, w_o=None):
+    from lumenairy.propagators.asymptotic import aberration_tensor
+    fit = _fit_t3b(R1)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return aberration_tensor(
+            fit, s2_image=(fit.s2x_centre, fit.s2y_centre),
+            source_point=(0.0, 0.0), source_modes=[(0, 0)],
+            pupil_modes=[(0, 0)], output_modes=list(modes),
+            w_s=_WS_T3B, w_p=_WP_T3B, w_o=w_o)
+
+
+def _legacy_w_o(R1):
+    """The pre-W3-T3b pupil-scale default, recomputed from scratch."""
+    from lumenairy.propagators.asymptotic import solve_envelope_stationary
+    from lumenairy.propagators.asymptotic_aberration_tensor import _compute_M_b
+    fit = _fit_t3b(R1)
+    s2 = (fit.s2x_centre, fit.s2y_centre)
+    v_star, _, _ = solve_envelope_stationary(
+        fit, s2, (0.0, 0.0), w_s=_WS_T3B, w_p=_WP_T3B, v2_centre=(0.0, 0.0))
+    M = _compute_M_b(fit, s2[0], s2[1], v_star[0], v_star[1], 0.0, 0.0,
+                     _WS_T3B, _WP_T3B, 0.0, 0.0)[0]
+    return 1.0 / math.sqrt(float(np.linalg.eigvalsh(np.real(M)).max()))
+
+
+def test_w3_t3b_lg_merit_responds_to_a_curvature_change():
+    """PRE-FIX FAILURE -- the validation harness's own discriminator
+    (``validation/propagators/test_asymptotic.py``) as a unit test.
+
+    A 17 % curvature change must move the (2, 0) merit channel.  Measured:
+    committed tree 2.506416e-13 vs 2.516524e-13 (4.0e-3 relative -- and the
+    validation's absolute ``> 1e-12`` floor, calibrated when (2, 0) was
+    still bit-identical to the ~1e+02 piston point sample, cannot be met by
+    ANY correct overlap-scale value); post-fix 9.0968975e-14 vs
+    7.1975598e-14 = 2.0879e-01 relative.
+    """
+    import lumenairy
+
+    class _Ctx:
+        wavelength = _WL_T3B
+        N = 64
+        dx = 20e-6
+
+    merit = lumenairy.LGAberrationMerit(
+        targets={(2, 0): 1.0}, field_points=[(0.0, 0.0)],
+        w_s=_WS_T3B, w_p=_WP_T3B, fit_kwargs=_FITKW_T3B)
+    ctx_a, ctx_b = _Ctx(), _Ctx()
+    ctx_a.prescription = _singlet_t3b(51.5e-3)
+    ctx_b.prescription = _singlet_t3b(60.0e-3)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        val_a = merit.evaluate(ctx_a)
+        val_b = merit.evaluate(ctx_b)
+    assert math.isfinite(val_a) and math.isfinite(val_b)
+    assert val_a > 0.0 and val_b > 0.0
+    rel = abs(val_a - val_b) / max(val_a, val_b)
+    assert rel > 1e-2, (
+        f'LG merit is curvature-insensitive: {val_a:.6e} vs {val_b:.6e}, '
+        f'relative {rel:.3e} (pre-fix 4.0e-3, post-fix 2.088e-1)')
+    # Pin the measured values so the channel cannot silently rescale.
+    # Tolerance 1e-4 RELATIVE, not bit-level: the default sigma grid is
+    # aliasing-limited on this chirped field (see the ``sigma_grid_n``
+    # accuracy table -- n=64 sits +2.3 % / +33 % off the n=384 value), so
+    # a tighter pin would be pinning quadrature noise, not physics.
+    assert abs(val_a - 9.0968975e-14) < 1e-4 * 9.0968975e-14
+    assert abs(val_b - 7.1975598e-14) < 1e-4 * 7.1975598e-14
+
+
+def test_w3_t3b_curvature_response_survives_a_finer_sigma_grid():
+    """The curvature response must be PHYSICS, not the default grid's
+    aliasing.  Re-measure the same two designs at n = 128 (4x the default
+    grid's samples): the response strengthens rather than collapsing
+    (measured relative response 2.09e-1 at n=64, 2.90e-1 at n=128,
+    4.04e-1 at n=256), so no part of the discriminator rests on the
+    under-resolution documented for the default."""
+    vals = []
+    for R1 in (51.5e-3, 60.0e-3):
+        from lumenairy.propagators.asymptotic import aberration_tensor
+        fit = _fit_t3b(R1)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            res = aberration_tensor(
+                fit, s2_image=(fit.s2x_centre, fit.s2y_centre),
+                source_point=(0.0, 0.0), source_modes=[(0, 0)],
+                pupil_modes=[(0, 0)], output_modes=[(0, 0), (2, 0)],
+                w_s=_WS_T3B, w_p=_WP_T3B, sigma_grid_n=128)
+        vals.append(abs(complex(res.L[1, 0])) ** 2)
+    rel = abs(vals[0] - vals[1]) / max(vals)
+    assert rel > 1e-2, (
+        f'response vanishes on a finer grid ({vals[0]:.4e} vs {vals[1]:.4e}, '
+        f'relative {rel:.3e}) -- the n=64 response would then be aliasing')
+
+
+@pytest.mark.parametrize('R1,expect_w_o,expect_room', [
+    (51.5e-3, 1.5520401e-03, 4.0343032e-03),
+    (60.0e-3, 2.6763308e-03, 4.0475961e-03),
+])
+def test_w3_t3b_default_w_o_is_the_measured_image_plane_waist(
+        R1, expect_w_o, expect_room):
+    """The sigma-path default is the field's own waist -- an image-plane
+    LENGTH well inside the validity box -- not the pupil acceptance."""
+    from lumenairy.propagators.asymptotic_aberration_tensor import (
+        _s2_validity_room,
+    )
+    fit = _fit_t3b(R1)
+    s2 = (fit.s2x_centre, fit.s2y_centre)
+    room = _s2_validity_room(fit, s2[0], s2[1])
+    assert abs(room - expect_room) < 1e-9
+    res = _tensor_t3b(R1, ((0, 0), (2, 0)))
+    assert abs(res.w_o - expect_w_o) < 1e-9
+    legacy = _legacy_w_o(R1)
+    assert 0.05 * room < res.w_o < room
+    assert res.w_o > 10.0 * legacy, (
+        f'default w_o {res.w_o:.6e} collapsed back onto the pupil-scale '
+        f'value {legacy:.6e}')
+
+
+def test_w3_t3b_default_w_o_tracks_defocus_where_M_alone_cannot():
+    """The discriminator for "measured, not modelled": between the two
+    designs the default must move like the true field waist (+71.7 %), not
+    like any function of the pupil-space beam matrix (< 0.3 %)."""
+    w_a = _tensor_t3b(51.5e-3, ((0, 0), (2, 0))).w_o
+    w_b = _tensor_t3b(60.0e-3, ((0, 0), (2, 0))).w_o
+    moved = abs(w_b - w_a) / w_a
+    assert moved > 0.5, f'default w_o barely moved ({moved:.3e})'
+    leg_a, leg_b = _legacy_w_o(51.5e-3), _legacy_w_o(60.0e-3)
+    assert abs(leg_b - leg_a) / leg_a < 0.01       # the M-only scale is flat
+    dif_a = _WL_T3B / (math.pi * leg_a)            # ... and its diffraction
+    dif_b = _WL_T3B / (math.pi * leg_b)            #     image too
+    assert abs(dif_b - dif_a) / dif_a < 0.01
+
+
+def test_w3_t3b_default_w_o_matches_an_independent_second_moment():
+    """The probe is a D4sigma/2 estimator: for an amplitude exp(-r^2/w^2)
+    the intensity has per-axis variance w^2/4.  Re-measure independently on
+    a 4x finer grid (128 vs the probe's 32); require 5 % -- a basis scale
+    needs no better, and the probe converges (4.4e-3 at n=32 against a
+    201x201 reference)."""
+    from lumenairy.propagators.asymptotic import propagate_modal_asymptotic
+    from lumenairy.propagators.asymptotic_aberration_tensor import (
+        _s2_validity_room,
+    )
+    for R1 in (51.5e-3, 60.0e-3):
+        fit = _fit_t3b(R1)
+        s2 = (fit.s2x_centre, fit.s2y_centre)
+        ext = 0.98 * _s2_validity_room(fit, s2[0], s2[1])
+        ax = np.linspace(s2[0] - ext, s2[0] + ext, 128)
+        ay = np.linspace(s2[1] - ext, s2[1] + ext, 128)
+        X, Y = np.meshgrid(ax, ay, indexing='xy')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            U = propagate_modal_asymptotic(
+                fit, source_point=(0.0, 0.0),
+                source_amplitudes={(0, 0): 1.0 + 0.0j},
+                pupil_amplitudes={(0, 0): 1.0 + 0.0j},
+                w_s=_WS_T3B, w_p=_WP_T3B, s2_grid_x=X, s2_grid_y=Y)
+        inten = np.abs(U) ** 2
+        tot = inten.sum()
+        lx, ly = X - s2[0], Y - s2[1]
+        cx = (inten * lx).sum() / tot
+        cy = (inten * ly).sum() / tot
+        var = ((inten * ((lx - cx) ** 2 + (ly - cy) ** 2)).sum() / tot) / 2.0
+        w_ref = 2.0 * math.sqrt(var)
+        w_lib = _tensor_t3b(R1, ((0, 0), (2, 0))).w_o
+        assert abs(w_lib - w_ref) / w_ref < 0.05, (
+            f'R1={R1}: default {w_lib:.6e} vs independent {w_ref:.6e}')
+
+
+def test_w3_t3b_sigma_overlaps_still_match_the_oracle_at_the_default():
+    """W3-T3's independent from-scratch LG quadrature must still reproduce
+    the library tensor with the DEFAULT (measured) waist in force -- the
+    fix moved the basis scale, not the projection."""
+    from lumenairy.propagators.asymptotic import propagate_modal_asymptotic
+    from lumenairy.propagators.asymptotic_aberration_tensor import (
+        _s2_validity_room,
+    )
+    modes = ((0, 0), (1, 0), (2, 0))
+    for R1 in (51.5e-3, 60.0e-3):
+        res = _tensor_t3b(R1, modes)
+        fit = _fit_t3b(R1)
+        s2 = (fit.s2x_centre, fit.s2y_centre)
+        # Exactly the grid the library used: 4*w_o clamped to the room.
+        extent = min(4.0 * res.w_o, _s2_validity_room(fit, s2[0], s2[1]))
+        X, Y, d = _grid(s2[0], s2[1], extent, 64)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            U = propagate_modal_asymptotic(
+                fit, source_point=(0.0, 0.0),
+                source_amplitudes={(0, 0): 1.0 + 0.0j},
+                pupil_amplitudes={(0, 0): 1.0 + 0.0j},
+                w_s=_WS_T3B, w_p=_WP_T3B, s2_grid_x=X, s2_grid_y=Y)
+        XL, YL = X - s2[0], Y - s2[1]
+        for i, (p, ell) in enumerate(modes):
+            want = _overlap(_lg_oracle(p, ell, res.w_o, XL, YL), U, d)
+            got = complex(res.L[i, 0])
+            rel = abs(got - want) / max(abs(want), 1e-300)
+            assert rel < 1e-12, (
+                f'R1={R1} mode {(p, ell)}: library {got:.6e} vs oracle '
+                f'{want:.6e} (rel {rel:.3e})')
+
+
+def test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged():
+    """MUST NOT MOVE.  On the closed-form branch ``w_o`` is only the
+    ``sqrt(2/(pi w_o^2))`` normalisation of a point sample, and it is the
+    cross-backend contract of ``aberration_tensor_lg00_jax``.  Verified
+    bit-identical against 7ea2eb9 and e1fd64a; hard-pinned here."""
+    for R1, w_want, want in (
+            (51.5e-3, 1.0116441690e-04,
+             1.544807582649e+01 + 3.188059447022e+00j),
+            (60.0e-3, 1.0086220541e-04,
+             -6.570638987023e+00 - 1.439184599267e+01j)):
+        res = _tensor_t3b(R1, ((0, 0),))
+        # the default IS the legacy pupil-scale formula, exactly
+        assert res.w_o == _legacy_w_o(R1)
+        assert abs(res.w_o - w_want) < 1e-13
+        got = complex(res.L[0, 0])
+        assert abs(got - want) / abs(want) < 1e-11, f'{got!r} != {want!r}'
+
+
+def test_w3_t3b_explicit_w_o_is_honoured_verbatim_on_both_branches():
+    """Explicit ``w_o=`` callers are untouched by the default change
+    (verified bit-identical against e1fd64a on a 12-case matrix)."""
+    for modes in (((0, 0),), ((0, 0), (2, 0)), ((0, 0), (1, 1), (0, 2))):
+        res = _tensor_t3b(51.5e-3, modes, 7.5e-4)
+        assert res.w_o == 7.5e-4
+
+
+def test_w3_t3b_probe_helper_is_robust_to_a_dead_field():
+    """The measured default must degrade gracefully, never to 0 / NaN: a
+    propagator that yields no usable field returns ``None`` from the probe,
+    and ``aberration_tensor`` then falls back to a quarter of the validity
+    room (so ``4*w_o`` spans the box exactly)."""
+    from lumenairy.propagators.asymptotic_aberration_tensor import (
+        _measure_image_plane_waist,
+    )
+    fit = _fit_t3b(51.5e-3)
+    s2 = (fit.s2x_centre, fit.s2y_centre)
+
+    def _dead(*a, **kw):
+        return np.zeros_like(kw['s2_grid_x'], dtype=complex)
+
+    def _nan(*a, **kw):
+        return np.full(kw['s2_grid_x'].shape, np.nan + 1j * np.nan)
+
+    def _boom(*a, **kw):
+        raise ValueError('propagator exploded')
+
+    for fn in (_dead, _nan, _boom):
+        assert _measure_image_plane_waist(
+            fit, s2[0], s2[1], (0.0, 0.0), {(0, 0): 1.0 + 0.0j},
+            _WS_T3B, _WP_T3B, (0.0, 0.0), fn) is None
+
+
+def test_w3_t3b_jax_twin_default_w_o_tracks_numpy():
+    """The (0, 0) default is a SHARED convention: the JAX twin hardcodes
+    the same expression, so with no explicit ``w_o`` the two backends must
+    agree (measured 1.011644168976e-04 both sides, 4.0e-16 relative)."""
+    pytest.importorskip('jax', reason='JAX not installed')
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    from lumenairy.propagators.asymptotic import (
+        aberration_tensor_lg00_jax,
+        solve_envelope_stationary,
+    )
+    fit = _fit_t3b(51.5e-3)
+    s2 = (fit.s2x_centre, fit.s2y_centre)
+    v_star, _, _ = solve_envelope_stationary(
+        fit, s2, (0.0, 0.0), w_s=_WS_T3B, w_p=_WP_T3B, v2_centre=(0.0, 0.0))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        res_j = aberration_tensor_lg00_jax(
+            fit, s2, v_star, source_point=(0.0, 0.0),
+            w_s=_WS_T3B, w_p=_WP_T3B, w_o=None, v2_centre=(0.0, 0.0),
+            return_result=True)
+    w_np = _tensor_t3b(51.5e-3, ((0, 0),)).w_o
+    rel = abs(float(res_j.w_o) - w_np) / w_np
+    assert rel < 1e-13, (
+        f'jax default w_o {float(res_j.w_o):.12e} drifted from numpy '
+        f'{w_np:.12e} (rel {rel:.3e}) -- the two defaults are one contract')
