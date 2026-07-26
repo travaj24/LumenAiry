@@ -140,6 +140,30 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         with np.errstate(divide='ignore', invalid='ignore'):
             t = np.where(rays.alive & (np.abs(rays.N) > 1e-30),
                          -rays.z / rays.N, 0.0)
+        # R-4 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): a ray parallel to
+        # this plane (|N| <= 1e-30) never reaches it, so the t = 0 fallback
+        # above must not be reported as a hit.  Pre-fix it stayed alive with
+        # RAY_OK -- an IMMORTAL PHANTOM that walked a 4-flat stack accruing
+        # opd = 0.0 and was still counted in the alive/centroid/RMS-spot
+        # summary.  Both JAX kernels already kill it (_intersect_jax pure-flat
+        # ``miss |= |N| <= eps``; _intersect_jax_param ``is_flat & ...``), so
+        # this restores the numpy<->jax<->jax-param triangle.
+        # SCOPE: this is the flat-INTERSECTION guard only.  The P3-58
+        # DOE-order case (a diffraction order landing exactly on the
+        # propagation cone, L^2 + M^2 == 1 so N == 0) is kept alive BY DESIGN
+        # by the strict ``sumsq > 1.0`` evanescence test in the trace loop --
+        # that kick is applied AFTER this intersection (where the ray still
+        # had N = 1), so the design case is untouched.  Only a SUBSEQUENT
+        # flat surface (which the grazing order provably cannot reach, and
+        # which trace_jax likewise kills) now ends the ray.
+        graze = rays.alive & ~(np.abs(rays.N) > 1e-30)
+        if graze.any():
+            rays.alive = rays.alive & ~graze
+            if rays.error_code is not None:
+                first_failure = graze & (rays.error_code == RAY_OK)
+                rays.error_code = np.where(
+                    first_failure, RAY_MISSED_SURFACE, rays.error_code
+                )
     elif is_pure_spherical:
         # ---- v4.12.1 Track C: Newton-skip fast path -----------------
         # For a sphere ``x^2 + y^2 + (z - R)^2 = R^2`` the ray-surface

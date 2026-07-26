@@ -323,11 +323,17 @@ class MatchIdealThinLensMerit(MeritTerm):
         # piston / tilt / defocus -- usually NOT what you want to
         # penalise unless you've fixed alignment).
         from ..analysis import zernike_decompose as _zd
-        finite = np.isfinite(diff)
-        # Replace NaN with 0 in the masked region; decompose handles it
-        diff_clean = np.where(finite, diff, 0.0)
+        # R-6 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): pass the RAW OPD
+        # difference.  ``zernike_decompose`` drops non-finite pupil samples
+        # from BOTH the design matrix and the RHS itself (zernike.py:
+        # ``finite = isfinite(opd_flat)``), so NaN means "no measurement
+        # here".  Zero-filling first turned an in-pupil vignetted annulus
+        # into a genuine 0-waves OPD and biased the fit: on a rho > 0.8 NaN
+        # annulus the injected coefficients went defocus 0.300 -> 0.126 and
+        # primary spherical +0.100 -> -0.017 waves (a SIGN FLIP, i.e. the
+        # wrong descent direction), where the raw map recovers both exactly.
         try:
-            coeffs, _ = _zd(diff_clean, ctx.dx, ap, n_modes=self.n_modes)
+            coeffs, _ = _zd(diff, ctx.dx, ap, n_modes=self.n_modes)
         except (ValueError, RuntimeError, np.linalg.LinAlgError,
                 ZeroDivisionError):
             # zernike_decompose can fail on under-sampled pupils
@@ -894,10 +900,12 @@ class MatchTargetOPDMerit(MeritTerm):
                 f'opd_map shape {ctx.opd_map.shape}')
         diff = ctx.opd_map - target
         from ..analysis import zernike_decompose as _zd
-        finite = np.isfinite(diff)
-        diff_clean = np.where(finite, diff, 0.0)
+        # R-6: raw OPD -- ``zernike_decompose`` masks non-finite samples
+        # itself; zero-filling turns in-pupil vignetting into genuine
+        # 0-waves OPD and flips the fitted coefficients' sign (see
+        # MatchIdealThinLensMerit.evaluate for the measured numbers).
         try:
-            coeffs, _ = _zd(diff_clean, ctx.dx, ap, n_modes=self.n_modes)
+            coeffs, _ = _zd(diff, ctx.dx, ap, n_modes=self.n_modes)
         except (ValueError, RuntimeError, np.linalg.LinAlgError,
                 ZeroDivisionError):
             return 0.0
@@ -947,10 +955,12 @@ class ZernikeCoefficientMerit(MeritTerm):
         if ap is None:
             return 0.0
         from ..analysis import zernike_decompose as _zd
-        finite = np.isfinite(ctx.opd_map)
-        opd_clean = np.where(finite, ctx.opd_map, 0.0)
+        # R-6: raw OPD -- ``zernike_decompose`` masks non-finite samples
+        # itself; zero-filling turns in-pupil vignetting into genuine
+        # 0-waves OPD and flips the fitted coefficients' sign (see
+        # MatchIdealThinLensMerit.evaluate for the measured numbers).
         try:
-            coeffs, _ = _zd(opd_clean, ctx.dx, ap, n_modes=self.n_modes)
+            coeffs, _ = _zd(ctx.opd_map, ctx.dx, ap, n_modes=self.n_modes)
         except (ValueError, RuntimeError, np.linalg.LinAlgError,
                 ZeroDivisionError):
             return 0.0
@@ -990,8 +1000,14 @@ class LGAberrationMerit(MeritTerm):
     targets : dict
         Map from output LG index ``(p, ell)`` to a float weight.  Each
         listed channel contributes ``|L_{(p, ell), 0}(s_2^img)|^2``
-        times the entry weight.  Channels not listed are unconstrained.
-        Common targets:
+        times the entry weight -- EXCEPT ``(0, 0)``, which is the
+        piston/Strehl AMPLITUDE channel and therefore contributes the
+        Strehl DEFICIT ``1 - |L_{(0, 0), 0}|^2`` (OPT-1 / R-5; matches the
+        JAX twin :func:`make_lg_aberration_merit_jax`).  Since
+        ``design_optimize`` MINIMISES the merit, listing ``(0, 0)``
+        MAXIMISES the on-axis Strehl, while listing any other channel
+        SUPPRESSES that aberration.  Channels not listed are
+        unconstrained.  Common targets:
 
             {(2, 0): 1.0, (1, 1): 1.0, (1, -1): 1.0, (0, 2): 1.0, (0, -2): 1.0}
 
@@ -1158,8 +1174,26 @@ class LGAberrationMerit(MeritTerm):
                 except KeyError:
                     continue
                 val = complex(tensor.L[i, 0])
-                total = total + wgt * (val.real * val.real
-                                       + val.imag * val.imag)
+                mag_sq = val.real * val.real + val.imag * val.imag
+                if (p, ell) == (0, 0):
+                    # OPT-1 (AUDIT_OPTIMIZE_MERITS) / R-5
+                    # (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the (0, 0)
+                    # channel is the leading STREHL AMPLITUDE -- |L|^2 -> 1
+                    # for a perfect system and -> 0 as aberration grows.  So
+                    # the (0, 0) contribution must be the Strehl DEFICIT
+                    # ``1 - |L|^2`` (0 for a perfect system, growing with
+                    # aberration), NOT ``|L|^2``: ``design_optimize``
+                    # MINIMISES the weighted merit sum, so the old ``|L|^2``
+                    # drove the design toward |Strehl| = 0 (MAXIMUM
+                    # aberration).  This is verbatim the fix the JAX twin
+                    # ``make_lg_aberration_merit_jax`` already carries
+                    # (jax_merits.py: ``piston_weight * (1 - |res|^2)``);
+                    # the two now agree numerically on the (0, 0) target.
+                    # Every OTHER (p, ell) channel keeps ``|L|^2`` -- driving
+                    # a named aberration channel to zero IS the intent there.
+                    total = total + wgt * (1.0 - mag_sq)
+                else:
+                    total = total + wgt * mag_sq
 
         return self.weight * total
 

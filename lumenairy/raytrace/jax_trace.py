@@ -267,6 +267,17 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
             # Flat-with-aspherics: start from z = 0 and let Newton run.
             N_safe = jnp.where(jnp.abs(state.N) > eps, state.N, eps)
             t0 = -state.z / N_safe
+            # R-3 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the same
+            # grazing-miss guard the pure-flat branch (above) and the
+            # ``_intersect_jax_param`` twin (``is_flat & (|N| <= eps)``)
+            # already carry.  Without it a ray parallel to the base plane
+            # (|N| <= eps) starts Newton at the clamped t0 = -z/eps, and
+            # under the default float32 the fori_loop can converge onto a
+            # BACKWARD intersection: measured on a {4: 300.0} Schmidt-like
+            # plate, a grazing ray survived with N flipped to -1 and a
+            # NEGATIVE OPL of -8.05e-3 m, while both the NumPy path
+            # (RAY_MISSED_SURFACE) and ``_intersect_jax_param`` killed it.
+            miss = miss | (jnp.abs(state.N) <= eps)
         else:
             # v5.4.6 (audit P1-1): direction-AWARE root pick, mirroring the
             # v5.4.1 NumPy fix in intersection.py.  The old direction-blind

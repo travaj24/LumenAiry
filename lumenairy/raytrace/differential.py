@@ -951,7 +951,22 @@ def ray_transfer_jacobian_analytic(
     # miss (per_surface, a coordinate break, or numba unavailable / a build
     # failure) falls through to the pure-NumPy dual implementation.
     if not per_surface and _adrt_surfaces_numba_eligible(surfaces):
-        dt = _adrt_numba(x, y, ux, uy, surfaces, wavelength)
+        # R-7 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): numba compiles with its
+        # default ``error_model='python'``, so a DEGENERATE bundle (a slope so
+        # large that N = 1/sqrt(1+u^2) underflows to 0, or a non-finite slope)
+        # makes the kernel's ``1.0 / b[0]`` RAISE ZeroDivisionError -- while
+        # the ``_AdrtDual`` sibling it is supposed to be bit-identical to runs
+        # under ``np.errstate(divide='ignore', invalid='ignore')`` and returns
+        # the documented masked/``nan_to_num``'d result (matching the FD
+        # :func:`ray_transfer_jacobian`, which also copes).  Route that
+        # numba-only failure into the SAME documented fallback the kernel
+        # already uses for every other miss (see ``_adrt_numba`` -> ``None``):
+        # recompute on the pure-NumPy dual path.  Non-degenerate bundles never
+        # reach the except arm, so the ULP-parity of the fast path is intact.
+        try:
+            dt = _adrt_numba(x, y, ux, uy, surfaces, wavelength)
+        except ZeroDivisionError:
+            dt = None
         if dt is not None:
             return dt
     return _adrt_numpy(x, y, ux, uy, surfaces, wavelength, per_surface)
