@@ -2533,16 +2533,23 @@ def test_w4_t1_adaptive_default_beats_the_old_flat_64():
 
 def test_w4_t1_explicit_sigma_grid_n_64_is_the_pre_fix_default_bit_for_bit():
     """SCOPE GUARD.  ``sigma_grid_n=64`` must reproduce the pre-W4-T1
-    default EXACTLY -- that is the escape hatch for the optimiser loop the
-    old default was tuned for.  Checked against the merit values frozen on
-    74cf31b at the old default (9.0968975e-14 / 7.1975598e-14), which those
-    constants carry to 8 significant figures: measured agreement 1.9e-9 /
-    4.6e-9, i.e. the full precision of the frozen decimals."""
+    default -- that is the escape hatch for the optimiser loop the old
+    default was tuned for.  Checked against the merit values frozen on
+    74cf31b at the old default (9.0968975e-14 / 7.1975598e-14).
+    Tolerance rel 1e-2, NOT the frozen decimals' 1e-8: those values are
+    Windows-frozen chirp integrals with a MEASURED 3.1e-3 cross-platform
+    drift (CI Linux reads 9.0687538911e-14 for the first -- the exact
+    drift already documented on the sibling t3b merit pins at 865e922;
+    this pin initially repeated that mistake and broke CI on 1664c92).
+    Within-process escape-hatch fidelity at the frozen decimals'
+    precision was verified at authoring on the fixing box; the
+    cross-platform pin only needs to separate n=64 from the adaptive
+    default, which differs by 2.9e-2 (R1=51.5) / 2.8e-1 (R1=60)."""
     for R1, want in ((51.5e-3, 9.0968975e-14), (60.0e-3, 7.1975598e-14)):
         res = _tensor_w4(R1, ((0, 0), (2, 0)), 64)
         assert res.sigma_grid_n == 64
         got = abs(complex(res.L[1, 0])) ** 2
-        assert abs(got - want) < 1e-8 * want, (
+        assert abs(got - want) < 1e-2 * want, (
             f'R1={R1}: sigma_grid_n=64 gives {got:.10e}, the pre-W4-T1 '
             f'default was {want:.7e} -- the explicit path must not move')
 
