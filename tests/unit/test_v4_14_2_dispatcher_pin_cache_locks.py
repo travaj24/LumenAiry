@@ -124,6 +124,15 @@ _LOCK_WITHOUT_CACHE_EXEMPTIONS = frozenset({
     # read-only singleton, NOT a growable keyed cache -- so it legitimately
     # has no companion ``_CACHE`` (same rationale as ``_ZARR_MKDIR_LOCK``).
     '_BLAS_CONTROLLER_LOCK',
+    # v5.30 (audit E-L2): ``_PERSISTENT_POOL_LOCK`` in
+    # ``lumenairy.elements._lens_traced`` guards the build-once/teardown
+    # of the persistent ProcessPoolExecutor singleton
+    # (``_PERSISTENT_POOL`` + its atexit-registration flag), NOT a
+    # keyed cache.  It was previously a lazily-built ``None`` (invisible
+    # to this walker AND itself a race -- the E-L2 finding); moving it
+    # to module scope made it visible here.  Same build-once-singleton
+    # rationale as ``_BLAS_CONTROLLER_LOCK``.
+    '_PERSISTENT_POOL_LOCK',
 })
 
 # Pattern-based exemption: ``_<X>_PATCH_LOCK`` guards an in-place

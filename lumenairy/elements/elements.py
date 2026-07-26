@@ -114,6 +114,16 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
 
     For parabolic mirrors (conic=-1), the reflection is aberration-free
     for on-axis collimated input.
+
+    Warning
+    -------
+    This function's arguments are **positional-or-keyword** -- the 4.7
+    keyword-only conversion covered the eight ``apply_*_lens`` entry
+    points only (see the "Scope of that guarantee" note in
+    :func:`lumenairy.elements.apply_thin_lens`).  ``wavelength``, ``dx``
+    and ``dy`` sit adjacent in the signature and are all small floats, so
+    a transposed positional call binds silently.  Pass every argument
+    past ``E_in`` by keyword.
     """
     if dy is None:
         dy = dx
@@ -248,6 +258,15 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
     -------
     E_out : ndarray (complex, Ny x Nx)
         Field with aperture applied (zeroed outside the opening).
+
+    Warning
+    -------
+    This function's arguments are **positional-or-keyword** -- the 4.7
+    keyword-only conversion covered the eight ``apply_*_lens`` entry
+    points only (see the "Scope of that guarantee" note in
+    :func:`lumenairy.elements.apply_thin_lens`).  ``dx``, ``xc``, ``yc``
+    and ``dy`` are all small floats, so a transposed positional call
+    binds silently.  Pass every argument past ``E_in`` by keyword.
     """
     if params is None:
         params = {}
@@ -527,9 +546,19 @@ def apply_zernike_aberration(E_in, dx, coefficients, aperture_radius,
 
     Examples
     --------
-    >>> # Add 1 wave of spherical aberration over a 5mm aperture
+    >>> # Add 1 wave of spherical aberration over a 10 mm-DIAMETER aperture.
+    >>> # ``aperture_radius`` is a RADIUS: 5e-3 m = 5 mm radius = 10 mm
+    >>> # diameter (v5.30, audit E-M11: this example's comment used to
+    >>> # label that a 5 mm aperture, off by the factor of 2).
     >>> E_out = apply_zernike_aberration(E_in, dx=2e-6,
     ...     coefficients={(4, 0): 1.0}, aperture_radius=5e-3)
+
+    Warning
+    -------
+    ``dx``, ``aperture_radius`` and ``dy`` are POSITIONAL-or-keyword
+    floats of similar magnitude, so a transposed call binds silently.
+    Pass every argument past ``E_in`` by keyword (see the "Scope of that
+    guarantee" note in :func:`lumenairy.elements.apply_thin_lens`).
     """
     if dy is None:
         dy = dx
@@ -961,9 +990,12 @@ def apply_apodized_pupil(E_in, dx, diameter, *,
         * ``'cos_power'``: ``T(rho) = cos^n(pi/2 * rho)`` with
           ``n = exponent``.  Higher ``n`` = smoother edge, fainter
           sidelobes, wider core.
-        * ``'gaussian'``: ``T(rho) = exp(-(r/sigma)^2 / 2)``.  Requires
-          ``sigma`` [m].  Pure Gaussian apodisation (Strehl-optimal for
-          a fixed-area aperture).
+        * ``'gaussian'``: ``T(rho) = exp(-(r/sigma)^2 / 2)``.  ``sigma``
+          [m] is OPTIONAL and defaults to ``diameter / 6`` (v5.30, audit
+          E-L19: this bullet used to declare sigma mandatory, which
+          contradicted both the ``sigma`` entry below and the code).
+          Pure Gaussian apodisation (Strehl-optimal for a fixed-area
+          aperture).
         * ``'sonine'``: ``T(rho) = (1 - rho^2)^exponent``.  The Sonine /
           Bracewell family.  ``exponent = 1`` is the simple Bartlett
           / cosine taper, higher integer values give faster sidelobe
@@ -1118,6 +1150,12 @@ def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None):
     The structure function of the resulting screen follows:
         D(r) = 6.88 * (r/r0)^(5/3)   for Kolmogorov
 
+    The centred frequency lattice uses the INTEGER DC anchor
+    ``(arange(N) - N // 2) * df``, which equals
+    ``fftshift(fftfreq(N, dx))`` for both parities of N -- so the
+    ``ifftshift`` and the DC kill agree with the lattice for odd N as
+    well as even (v5.30, audit E-L11; bit-identical for even N).
+
     References
     ----------
     [1] Schmidt, J.D. "Numerical Simulation of Optical Wave Propagation"
@@ -1133,8 +1171,25 @@ def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None):
     L = N * dx  # grid extent
     df = 1.0 / L  # frequency spacing
 
-    # Frequency grid (centered)
-    fx = (np.arange(N) - N / 2) * df
+    # Frequency grid (centered).
+    #
+    # v5.30 (audit E-L11): INTEGER DC anchor ``N // 2`` -- the sibling of the
+    # audit-P1 spectral-lattice fix (commit e29a8db) applied to this module's
+    # own frequency grid.  ``fftshift`` / ``ifftshift`` anchor DC at the integer
+    # index ``N // 2`` for every N, and this grid is consumed by
+    # ``ifftshift(phase_fft)`` below plus the ``psd[N//2, N//2] = 0`` DC kill,
+    # both of which assume ``fx[N // 2] == 0``.  With the float ``N / 2`` anchor
+    # that held only for EVEN N.  For ODD N every bin was mislabelled by
+    # ``-df/2``: measured at N = 65 / 129 / 257, ``fx[N//2] = -df/2`` (never 0),
+    # the smallest |f| on the lattice was ``0.707 df`` instead of 0 so the
+    # "zero DC" line below deleted a REAL spectral component while the lowest
+    # surviving bin carried 3.5636x the Kolmogorov PSD of the correct lattice's
+    # first non-DC bin, and the returned screen differed from the integer-anchor
+    # reference by 75-86% of its own peak.  ``N // 2`` reproduces
+    # ``fftshift(fftfreq(N, dx))`` exactly for both parities, and is
+    # BIT-IDENTICAL for even N (verified: max|screen - ref| = 0.0 at N = 64
+    # and N = 128).
+    fx = (np.arange(N) - N // 2) * df
     FX, FY = np.meshgrid(fx, fx)
     f_sq = FX**2 + FY**2
     f_mag = np.sqrt(f_sq)

@@ -31,6 +31,7 @@ Auto behaviour (nothing to tune for the common case)
   (the dense ``O(beamlets * Ny * Nx)`` sum is only ever a fallback).
 """
 
+import warnings
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -282,6 +283,26 @@ def apply_real_lens_gbd(
     clip_aperture :
         Clip ``E_in`` at the circular entrance aperture before decomposition
         (matches where the analytic / traced / thin models clip).
+    per_surface : bool, default True
+        ``True`` -- evolve each beamlet's tensor ``Q`` surface-by-surface via
+        the real per-ray differential ray transfer (carries off-axis
+        astigmatism and higher-order aberration).  ``False`` -- a single
+        whole-system paraxial ABCD (aberration-free reference), delegated to
+        :func:`lumenairy.propagators.gbd.propagate_gbd_through_prescription`.
+    jacobian : {'auto', 'fd', 'analytic'}, default 'auto'
+        Differential-ray-transfer Jacobian backend for the
+        ``per_surface=True`` path: ``'analytic'`` uses
+        :func:`lumenairy.raytrace.ray_transfer_jacobian_analytic`, ``'fd'``
+        the finite-difference :func:`lumenairy.raytrace.ray_transfer_jacobian`,
+        and ``'auto'`` (default) tries analytic first and falls back to fd.
+        An unknown value raises ``ValueError``.
+
+        **Only honoured when ``per_surface=True``.**  The paraxial
+        ``per_surface=False`` branch has no per-ray Jacobian to select, so a
+        non-default value there is ignored and emits a ``RuntimeWarning``
+        (v5.30, audit E-L21 -- previously the kwarg was forwarded only on the
+        ``per_surface=True`` branch, so on the other branch even a typo like
+        ``jacobian='BOGUS'`` was accepted in silence).
     direction_sampling :
         Beamlet LAUNCH-direction policy (H7).  ``'auto'`` (default) launches
         each beamlet along the input field's local wavevector (Husimi /
@@ -395,6 +416,34 @@ def apply_real_lens_gbd(
         raise ValueError(
             "apply_real_lens_gbd: reexpand must be 'off' or 'auto', "
             f"got {reexpand!r}.")
+    # v5.30 (audit E-L21): validate ``jacobian`` HERE, at the entry point, and
+    # flag it when it cannot act.  It used to be forwarded only on the
+    # ``per_surface=True`` branch (where
+    # ``apply_prescription_persurface_to_beamlets`` validates it), so on the
+    # ``per_surface=False`` whole-system-ABCD branch a typo sailed straight
+    # through: measured, ``apply_real_lens_gbd(..., per_surface=False,
+    # jacobian='BOGUS')`` returned a field bit-identical to ``jacobian='auto'``
+    # with no diagnostic, while the same call at ``per_surface=True`` raised
+    # "jacobian must be 'auto', 'fd' or 'analytic'".  Forwarding it on both
+    # branches would NOT fix that: the paraxial branch has no per-ray
+    # differential ray transfer to select, so ``jacobian`` is structurally
+    # inert there and the callee ignores it too.  So: raise on junk in BOTH
+    # branches (house rule -- unknown enum values raise), and warn when a
+    # non-default value is silently unused, exactly as the sibling
+    # ``z_image``-on-the-paraxial-path guard does in
+    # ``propagators.gbd.propagate_gbd_through_prescription``.
+    if jacobian not in ('auto', 'fd', 'analytic'):
+        raise ValueError(
+            "apply_real_lens_gbd: jacobian must be 'auto', 'fd' or "
+            f"'analytic', got {jacobian!r}.")
+    if jacobian != 'auto' and not per_surface:
+        warnings.warn(
+            f"apply_real_lens_gbd: jacobian={jacobian!r} is only honored on "
+            "the per_surface=True path (the per-ray differential ray "
+            "transfer); with per_surface=False the beamlets are evolved by a "
+            "single whole-system paraxial ABCD, which has no ray Jacobian to "
+            "select, so the value is ignored.  Pass per_surface=True to make "
+            "it act.", RuntimeWarning, stacklevel=2)
     # Input angular spread (RMS local tilt) -- gates both the Husimi launch and
     # the P4 re-expansion (a flat / collimated frame is already complete, so
     # re-expansion is skipped there -- byte-identical to 'off' + ~1x cost).

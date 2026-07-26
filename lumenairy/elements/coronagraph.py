@@ -1,12 +1,19 @@
 """
 lumenairy.elements.coronagraph -- coronagraph element builders.
 
-Pure namespace module (4.3.0+) that re-exports the four coronagraph
+Pure namespace module (4.3.0+) that re-exports the six coronagraph
 element factories for discoverability.  All functions remain defined
 in :mod:`lumenairy.elements.elements`; this module exists so users
 who explore the package layout can find the coronagraph builders
 together as a family rather than scattered across the general
 elements file.
+
+Nothing inside the library imports this module -- that is by design
+(it is a user-facing discoverability alias, documented in the README),
+NOT dead code.  ``tests/unit/test_niche_audit_w3_elements.py`` pins the
+re-export set against ``lumenairy.elements`` so the two cannot drift
+(v5.30, audit E-L18: the module had zero coverage and its docstring
+said "four" while it re-exported six).
 
 Element factories
 -----------------

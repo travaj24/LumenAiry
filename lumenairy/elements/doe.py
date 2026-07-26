@@ -141,6 +141,12 @@ def create_periodic_phase_mask(
     profiles (typical for far-field DOEs), this is adequate. For phase
     masks with sub-pixel features, consider pre-averaging the complex
     transmission exp(i*phase) over each simulation pixel.
+
+    The cell-pixel lookup is closed **periodically** (``index % cell_N``),
+    so every cell pixel is hit equally often on a grid-native design and
+    the tiling is exactly periodic (v5.30, audit E-M7 -- it used to clamp
+    with ``clip``, which folded the last half-pixel of each cell onto the
+    last column and injected spurious diffraction orders).
     """
     cell_N = phase_cell.shape[0]
     cell_extent = cell_N * cell_pixel_size
@@ -156,8 +162,22 @@ def create_periodic_phase_mask(
     # neighbour sample -- ``.astype(int)`` TRUNCATES (a left-edge, half-pixel-
     # biased sample), contradicting the documented "nearest-neighbor" resample
     # (same half-pixel class as the HFPI-1 / from_field binning nits).
-    idx = np.clip(np.round(in_cell / cell_pixel_size).astype(int),
-                  0, cell_N - 1)
+    #
+    # v5.30 (audit E-M7): close the lattice with ``% cell_N``, NOT
+    # ``clip(..., 0, cell_N - 1)``.  ``in_cell`` lives in ``[0, cell_extent)``
+    # so ``round(in_cell / cell_pixel_size)`` reaches ``cell_N`` for any sample
+    # in the last HALF pixel of the cell -- and the nearest cell pixel there is
+    # the WRAPPED one, index 0, not the clipped ``cell_N - 1``.  Clipping folded
+    # that whole half-pixel into the last column, breaking the periodicity the
+    # function's own docstring promises: measured on the grid-native
+    # 8-pixel/cell case (N=256, dx = cell_pixel_size) the per-cell-pixel
+    # occupancy was [21, 32, 32, 32, 32, 32, 32, 43] (spread 22 of 32) instead
+    # of a uniform 32, 2816 of 65536 mask pixels carried the wrong phase
+    # (max|dt| = 2.0, a full 0<->pi flip), and the tiled 0/pi 50 %-duty binary
+    # grating leaked 11.3 % of its power OFF the order lattice with 2.95 %
+    # landing in the EVEN (nominally forbidden) orders -- both exactly 0 with
+    # the modulo close.
+    idx = np.round(in_cell / cell_pixel_size).astype(int) % cell_N
     ix = idx
     iy = idx
 
@@ -662,9 +682,20 @@ def makedammann2d(
           explicit opt-in and emits a loud ``UserWarning`` on every
           rescale.
 
-        Inputs above 1 m are always rejected as unambiguously wrong,
-        regardless of ``_legacy_units`` -- a meter-scale grating
-        period or wavelength is nonsense in any unit system.
+        Inputs that RESOLVE to more than 1 m are rejected as
+        unambiguously wrong -- a meter-scale grating period or
+        wavelength is nonsense in any unit system.  The bound is
+        applied to the value in SI metres, i.e. AFTER the ``'auto'``
+        rescale (v5.30, deprecation-rot fix): in ``'SI'`` mode it fires
+        on the raw input; in ``'auto'`` mode on the post-rescale value,
+        so the shim's own documented legacy inputs
+        (``periodx=61.0`` = 61 um, ``waveln=1.31`` = 1.31 um) now reach
+        the deprecation path instead of raising before it -- previously
+        they raised, which made the retired shim unreachable for
+        exactly the values it exists to migrate.  ``'um'`` mode has no
+        upper bound on the raw input (the caller stated micrometres) but
+        its rescaled result is not bounded either, matching the prior
+        behaviour.
 
     Returns
     -------
@@ -738,7 +769,18 @@ def makedammann2d(
     # In ``'um'`` mode the caller explicitly stated micrometres, so
     # ``periodx=61.0`` (61 um) is a legitimate value -- skip the
     # upper-bound there.
-    if _legacy_units in ('auto', 'SI'):
+    #
+    # v5.30 (audit, deprecation rot): the bound is applied AFTER the
+    # ``'auto'`` rescale, not before it.  Run BEFORE, it made the shim's
+    # own advertised legacy inputs unreachable: the comment below offers
+    # ``periodx=61.0, waveln=1.31`` as "the only realistic way to land
+    # here", and both exceed 1 -- so ``_legacy_units='auto'`` raised on
+    # exactly the values it exists to migrate (measured: ValueError
+    # "periodx=61.0 m exceeds 1 m"), and only sub-metre legacy values
+    # (e.g. ``waveln=0.633`` um) ever reached the deprecation branch.
+    # Post-rescale the bound still catches genuine nonsense (a legacy
+    # value above 1e6 um = 1 m of grating period).
+    def _reject_above_one_metre():
         if periodx > 1.0:
             raise ValueError(
                 f"makedammann2d: periodx={periodx} m exceeds 1 m; "
@@ -766,6 +808,9 @@ def makedammann2d(
                 "If your input is genuinely in metres, the value is "
                 "physically implausible for a design wavelength."
             )
+
+    if _legacy_units == 'SI':
+        _reject_above_one_metre()
     if _legacy_units == 'um':
         # Explicit-legacy migration path.  Caller knows the inputs are
         # micrometres -- silent rescale with no warning.
@@ -843,6 +888,11 @@ def makedammann2d(
                 periody = periody * 1e-6
             if _waveln_legacy:
                 waveln = waveln * 1e-6
+        # v5.30: the unambiguous-nonsense bound now runs on the RESOLVED SI
+        # values (see ``_reject_above_one_metre``), so a genuine >1 m value
+        # is still rejected while the shim's advertised legacy inputs
+        # (``periodx=61.0``, ``waveln=1.31``) reach the deprecation path.
+        _reject_above_one_metre()
 
     if diforders is None:
         diforders = np.ones((12, 12))

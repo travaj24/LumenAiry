@@ -181,6 +181,34 @@ def apply_thin_lens(
     All arguments past ``E_in`` are keyword-only (since 4.7).  This
     makes the call order non-load-bearing and prevents typos that
     silently swap ``wavelength`` and ``dx`` (both ~1e-6).
+
+    Scope of that guarantee (v5.30, audit E-M9).  The 4.7 keyword-only
+    conversion covered the **eight** ``apply_*_lens`` entry points
+    (:func:`apply_thin_lens`, :func:`apply_spherical_lens`,
+    :func:`apply_aspheric_lens`, :func:`apply_cylindrical_lens`,
+    :func:`apply_grin_lens`,
+    :func:`lumenairy.elements.apply_real_lens`,
+    :func:`lumenairy.elements.apply_real_lens_traced`,
+    :func:`lumenairy.elements.apply_real_lens_maslov`) -- **not the
+    whole library**.  Several element / grating entry points still take
+    positional floats of similar magnitude, so the swap footgun is live
+    there and the call order IS load-bearing:
+
+    * :func:`apply_axicon` -- ``(E_in, alpha, n_axicon, wavelength, dx,
+      dy)``
+    * :func:`lumenairy.elements.apply_mirror` -- ``(E_in, wavelength,
+      dx, radius, conic, aperture_diameter, xc, yc, dy)``
+    * :func:`lumenairy.elements.apply_aperture` -- ``(E_in, dx, shape,
+      params, xc, yc, dy)``
+    * :func:`lumenairy.elements.apply_zernike_aberration` --
+      ``(E_in, dx, coefficients, aperture_radius, dy)``
+    * :func:`lumenairy.elements.thin_grating_efficiency_1d` -- an
+      all-positional ``(period, n_ridge, n_groove, n_substrate,
+      n_superstrate, depth, ...)`` float list
+
+    These are deliberately NOT converted (it would break the public
+    API without a deprecation cycle); pass every argument past the
+    field by keyword and the footgun disappears at the call site.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
@@ -441,7 +469,20 @@ def apply_spherical_lens(
         Grid spacing in y [m].  Defaults to *dx*.
     aperture_diameter : float or None
         Clear aperture diameter [m].  If None the aperture is set by the
-        surface radii of curvature.
+        surface radii of curvature (``h < 0.9999 * min(|R1|, |R2|)``).
+
+        A sphere of radius ``R`` exists only for ``h < |R|``.  Requesting
+        an ``aperture_diameter`` larger than ``2 * min(|R1|, |R2|)``
+        therefore asks for a surface that is not there, and those pixels
+        come back **NaN** (v5.30, audit E-M8 -- they used to come back
+        with a clamped, finite sag of ``0.99 R`` and ``|E| = 1``, a
+        transmission through a nonexistent surface).  NaN is the
+        library-wide out-of-domain convention: it matches
+        :func:`apply_aspheric_lens`,
+        :func:`lumenairy.elements.lenses.surface_sag_general` and
+        :func:`lumenairy.raytrace.conic_sag`, and it makes the
+        contradiction loud instead of silent.  Keep the aperture inside
+        the surface domain, or mask the NaNs yourself.
     xc, yc : float
         Lens center [m].
     use_gpu : bool
@@ -531,11 +572,34 @@ def apply_spherical_lens(
     h_sq = (X - xc) ** 2 + (Y - yc) ** 2
 
     def _surface_sag(h_sq, R):
-        """Signed spherical sag: positive for convex (R > 0)."""
+        """Signed spherical sag: positive for convex (R > 0).
+
+        NaN outside the sphere's domain (``h_sq / R**2 >= 0.9999``) --
+        the family convention (v5.30, audit E-M8).
+        """
         if R is None or np.isinf(R):
             return xp.zeros_like(h_sq)
-        h_sq_safe = xp.minimum(h_sq, R ** 2 * 0.9999)
-        return R - np.sign(R) * xp.sqrt(R ** 2 - h_sq_safe)
+        # v5.30 (audit E-M8): a sphere of radius R simply does not exist
+        # beyond ``h = |R|``, so return NaN there and let the aperture mask
+        # zero those pixels -- exactly what the aspheric sibling
+        # ``apply_aspheric_lens._aspheric_sag`` and the canonical
+        # ``lenses.surface_sag_general`` / ``raytrace.conic_sag`` helpers do.
+        # This function used to CLAMP ``h_sq`` to ``0.9999 R**2``, which
+        # saturates the sag at a finite ``0.99 R`` and therefore imprinted a
+        # unit-magnitude phase screen for a surface that is not there.  With
+        # ``aperture_diameter`` larger than ``2|R|`` those pixels survived the
+        # aperture: measured at R = 10 mm, aperture_diameter = 28 mm, N = 256,
+        # dx = 120 um, 20916 out-of-domain pixels left the function with
+        # |E| = 1.000000 and a bogus sag of 9.9 mm, while the aspheric sibling
+        # on the SAME geometry returned NaN at exactly those 20916 pixels.
+        # The ``aperture_diameter=None`` branch below already zeroes
+        # ``h_sq >= 0.9999 * min(R1**2, R2**2)``, so this changes nothing
+        # there (``where`` selects the zero, not the NaN).
+        norm = h_sq / R ** 2
+        valid = norm < 0.9999
+        h_sq_safe = xp.where(valid, h_sq, 0.0)
+        sag = R - np.sign(R) * xp.sqrt(R ** 2 - h_sq_safe)
+        return xp.where(valid, sag, xp.nan)
 
     sag1 = _surface_sag(h_sq, R1)
     sag2 = _surface_sag(h_sq, R2)
@@ -738,7 +802,20 @@ def apply_aspheric_lens(
         # silently extrapolating a 1e-12 floor that produced
         # near-singular sag (1e6 m for typical optics) outside the
         # surface domain.
-        valid = denom_arg > 0
+        # v5.30 (audit E-L8): gate on ``norm < 0.9999`` like every sibling
+        # (``lenses.surface_sag_general``, ``lenses._conic_sag_xp``,
+        # ``elements.apply_mirror``'s inline sag, ``raytrace.conic_sag``)
+        # rather than on ``denom_arg > 0`` (i.e. ``norm < 1.0``).  The two
+        # differ on the thin shell ``0.9999 <= norm < 1.0``, where the conic
+        # denominator ``1 + sqrt(denom_arg)`` is within 1e-2 of its vertical
+        # tangent and the sag is numerically meaningless; the siblings NaN it.
+        # Measured (R = 10 mm sphere, N = 2048, dx = 10 um): 352 pixels land
+        # in that shell and used to leave this function finite (|E| = 1.000000)
+        # while ``surface_sag_general`` returned NaN for all 352.  The
+        # ``aperture_diameter=None`` branch below already uses the matching
+        # ``h_sq < max_h_sq * 0.9999`` cut, so the two halves of this function
+        # now agree on where the surface stops existing.
+        valid = (1 + k_conic) * norm_h_sq < 0.9999
         denom_arg_safe = xp.where(valid, denom_arg, 1.0)
         sag_unsigned = h_sq / (R_abs * (1 + xp.sqrt(denom_arg_safe)))
         sag = np.sign(R) * sag_unsigned
@@ -1036,6 +1113,16 @@ def apply_axicon(
     A collimated input beam produces a non-diffracting Bessel-beam region
     extending over ``z_max ~ w0 / ((n - 1) * alpha)`` where *w0* is the
     input beam radius.
+
+    Warning
+    -------
+    Unlike the ``apply_*_lens`` family, this function's arguments are
+    **positional-or-keyword** (the 4.7 keyword-only conversion covered
+    the eight lens entry points only -- see the "Scope of that
+    guarantee" note in :func:`apply_thin_lens`).  ``alpha``,
+    ``wavelength``, ``dx`` and ``dy`` are all small floats, so a
+    transposed positional call binds silently and produces a plausible
+    but wrong cone.  Pass them by keyword.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the

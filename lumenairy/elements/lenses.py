@@ -99,22 +99,23 @@ def _load_numba():
     return True
 
 
-# Default Newton iteration cap for the entrance->exit map inversion.
-# 8 reaches sub-nm OPD residual on typical refractive lenses thanks
-# to the per-pixel `active`-mask early-exit that drops converged
-# pixels.  Bump to 12 explicitly via apply_real_lens_traced(
-# newton_max_iters=12) for cemented multi-element systems with steep
-# marginal-ray angles where the FD spline+Newton needs more passes.
-# (Audit perf #5: was 12, dropped to 8 in v3.5.5; saves ~25% of the
-# Newton stage which is ~30% of apply_real_lens_traced runtime.)
-_NEWTON_MAX_ITERS = 8
-
-# Minimum field size at which the numexpr phase-screen path beats the
-# straight numpy multiply (overhead of expression compile + thread
-# dispatch is fixed; benefit scales with array size).
-_NUMEXPR_MIN_SIZE = 1 << 20  # 1 Mi elements (~1024 x 1024)
-
-
+# v5.30 (audit E-L4/E-L5): two module constants deleted here as dead.
+#
+#   * ``_NEWTON_MAX_ITERS = 8`` -- 0 readers (grep-verified repo-wide:
+#     the only live definition is ``_lens_traced._NEWTON_MAX_ITERS = 12``,
+#     which is what ``apply_real_lens_traced`` actually uses and what
+#     ``tests/unit/test_niche_audit_e_prepared_and_enums.py`` pins).  Its
+#     comment additionally documented the OPPOSITE of shipped behaviour
+#     ("was 12, dropped to 8 in v3.5.5"), so a reader who found it here
+#     would conclude the Newton cap is 8.
+#   * ``_NUMEXPR_MIN_SIZE = 1 << 20`` -- 0 readers here; the live copy
+#     lives in ``_lens_real.py``, which now carries the rationale text
+#     that used to sit next to this definition.
+#
+# The numexpr scaffold ABOVE (``NUMEXPR_AVAILABLE`` / ``_ne`` /
+# ``_ensure_numexpr_loaded``) is NOT dead: ``lenses_maslov`` imports the
+# flag and the loader from this module, and ``elements/__init__`` +
+# ``lumenairy/__init__`` re-export ``NUMEXPR_AVAILABLE`` publicly.
 
 
 def _is_cupy_array(x):

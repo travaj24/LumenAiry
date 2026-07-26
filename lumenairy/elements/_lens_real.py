@@ -58,7 +58,14 @@ def _ensure_numexpr_loaded():
     return _ne is not None
 
 
-_NUMEXPR_MIN_SIZE = 1 << 20  # see lenses.py for rationale; sync if changed
+# Minimum field size at which the numexpr phase-screen path beats the straight
+# numpy multiply: the expression-compile + thread-dispatch overhead is fixed
+# while the benefit scales with the array size.  This is the ONLY live copy of
+# the constant (v5.30, audit E-L5: the dead twin in ``lenses.py`` -- which this
+# comment used to point at for the rationale -- has been deleted; the rationale
+# now lives here, next to its three readers below).  The propagators keep their
+# own ``asm._NE_MIN_SIZE``, deliberately separate.
+_NUMEXPR_MIN_SIZE = 1 << 20  # 1 Mi elements (~1024 x 1024)
 
 
 # Helpers shared with lenses.py / lenses_maslov.py.
@@ -2119,7 +2126,24 @@ def apply_real_lens(
         ``"surfaces"`` : list of dict
             Each surface dict contains:
 
-            - ``"radius"`` : float -- radius of curvature [m] (inf = flat)
+            - ``"radius"`` : float -- SIGNED radius of curvature [m]
+              (``inf`` = flat).  Sign convention (v5.30, audit E-M12):
+              **R > 0 puts the centre of curvature on the transmission
+              (downstream) side**, i.e. the surface is convex toward the
+              input -- identical to the ``R1`` / ``R2`` convention of
+              :func:`lumenairy.elements.apply_spherical_lens`, and the
+              same sign the library's ``surface_sag_general`` /
+              ``conic_sag`` helpers use (sag > 0 off-axis for R > 0).
+              Consequences: a converging plano-convex singlet is
+              ``radius=+R`` then ``inf``; a converging biconvex is
+              ``+R`` then ``-R``; the LAST surface of a converging
+              element has ``radius < 0``.  Verified by measurement --
+              ``system_abcd_prescription`` reports
+              ``EFL = +97.07056596 mm`` for a 3 mm N-BK7 plano-convex
+              with ``radius=[+50 mm, inf]`` at 632.8 nm, matching the
+              lensmaker value ``R/(n-1) = 97.07056596 mm`` to 10
+              digits, and ``-50 mm`` flips it to ``-97.07 mm``
+              (diverging).
             - ``"conic"`` : float -- conic constant (0 = sphere)
             - ``"aspheric_coeffs"`` : dict or None -- {4: A4, 6: A6, ...}
             - ``"glass_before"`` : str -- glass name before this surface
@@ -2183,12 +2207,19 @@ def apply_real_lens(
         leave off for plano-convex singlets and similar well-behaved
         cases, or use :func:`apply_real_lens_traced` for uniformly
         high accuracy.
-    seidel_poly_order : int, default 8
+    seidel_poly_order : int, default 6
         Highest even power of the radial polynomial fit used for the
         Seidel correction.  Order 4 is classical spherical-aberration
-        (``a*r^4``); order 8 includes 6th and 8th-order spherical
-        terms; higher is rarely beneficial because the fit is limited
-        by the 1-D sampling rather than by the polynomial basis.
+        (``a*r^4``); the default 6 adds the 6th-order spherical term and
+        8 adds the 8th; higher is rarely beneficial because the fit is
+        limited by the 1-D sampling rather than by the polynomial basis.
+        Must be a positive int and is capped at 12 (validated).
+
+        .. note::
+           v5.30 (audit E-M1): this entry read "default 8" while the
+           signature has shipped ``seidel_poly_order=6`` (and the UI's
+           lens-options dialog defaults to 6).  The DOC was wrong -- the
+           behaviour is unchanged.
     surface_frame : bool, default False
         v5.2+ opt-in.  When ``False`` (default), the per-surface
         ``"decenter"`` / ``"tilt"`` keys are honoured in the **field

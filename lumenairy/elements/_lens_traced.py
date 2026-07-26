@@ -45,20 +45,12 @@ def _is_cupy_array(x):
     return isinstance(x, cp.ndarray)
 
 
-# Optional numexpr fused-expression backend (lazy).
-NUMEXPR_AVAILABLE = _importlib_util.find_spec('numexpr') is not None
-_ne = None
-
-
-def _ensure_numexpr_loaded():
-    global _ne
-    if _ne is None and NUMEXPR_AVAILABLE:
-        import numexpr as _n
-        _ne = _n
-    return _ne is not None
-
-
-_NUMEXPR_MIN_SIZE = 1 << 20
+# v5.30 (audit E-L4): the numexpr scaffold that used to sit here
+# (``NUMEXPR_AVAILABLE`` / ``_ne`` / ``_ensure_numexpr_loaded`` /
+# ``_NUMEXPR_MIN_SIZE``) was DEAD -- 0 readers in this module and no importer
+# anywhere (the public ``NUMEXPR_AVAILABLE`` re-export comes from ``lenses.py``,
+# and the live numexpr phase-screen gate lives in ``_lens_real.py``).  Deleted:
+# it advertised a fused-expression fast path this module never had.
 
 # Optional Numba JIT, LAZILY imported on first kernel use (audit P2-D: the eager
 # ``import numba`` cost ~1.8 s of ``import lumenairy`` cold start).  The kernel
@@ -201,6 +193,50 @@ _RAY_DENSITY_CAUSTIC_FLOOR_REL = 1e-3
 # caller to GBD/FGA, never returns a wrong number).
 _RAY_DENSITY_CAUSTIC_MAXMIN = 30.0
 
+# v5.30 (audit E-M6): post-hoc energy self-check for ``amplitude_model=
+# 'ray_density'``.  The mode is documented as "energy-conserving in the
+# geometric limit", and it is -- in the LIMIT.  At finite ``ray_subsample`` the
+# Jacobian is evaluated on the coarse Newton lattice and the resulting
+# amplitude is bilinearly upsampled, so the exit power falls short of the
+# aperture-transmitted input power by an amount that shrinks monotonically as
+# ``ray_subsample -> 1``, with no diagnostic at all before this check.
+#
+# Measured over the P2 design-battery envelope (all 24 cells: the six groups of
+# the four battery designs x w0 in {0.6, 1.2} mm x aperture:beam in {1.2, 2.5},
+# N = 512, ``P_out / P_in_aperture``), full min..max per subsample:
+#
+#     ray_subsample = 1 : 0.95685 .. 1.00003
+#     ray_subsample = 2 : 0.95669 .. 0.99944
+#     ray_subsample = 4 : 0.95604 .. 0.99794
+#     ray_subsample = 8 : 0.95347 .. 0.99200   (the SHIPPED default)
+#
+# Two distinct effects are visible in that table and the band has to tolerate
+# BOTH:
+#
+#   * the ``ray_subsample`` discretisation loss -- the well-conditioned cells
+#     run 0.9992 at sub=1 and 0.9866-0.9913 at sub=8, i.e. ~1% at the shipped
+#     default, converging monotonically (this is the audit's finding);
+#   * a subsample-INDEPENDENT physical floor -- the battery's negative
+#     corrector (relay g2) at a 1.2x aperture:beam ratio sits at 0.9535 (sub=8)
+#     to 0.9569 (sub=1): its diverging exit fan genuinely leaves the output
+#     window, so that power is not "lost" by the model, it is off-grid.
+#
+# So: a sub-aware deficit tolerance ``BASE + SLOPE * (sub - 1)`` = 0.080 /
+# 0.090 / 0.110 / 0.150 at sub = 1 / 2 / 4 / 8, i.e. lower bounds 0.920 /
+# 0.910 / 0.890 / 0.850 against measured worst cells 0.9569 / 0.9567 / 0.9560 /
+# 0.9535 -- clear of every battery cell at every subsample, so the shipped
+# defaults never warn spuriously.  What it DOES catch is the order-of-magnitude
+# class: measured on a deliberately-broken cell (a strong biconcave, R = -3 /
+# +3 mm, on a grid barely covering its 3 mm aperture) the ratio came back
+# 1.100 at sub=8 and 1.330 at sub=4 -- energy GAIN, from a fold caustic
+# inflating the capped ``1/sqrt(|det J|)`` amplitude.
+#
+# The GAIN side has no discretisation excuse -- ray-tube transport cannot
+# create energy -- so it is a small fixed band (max measured 1.00003).
+_RD_ENERGY_DEFICIT_BASE = 0.080
+_RD_ENERGY_DEFICIT_PER_SUB = 0.010
+_RD_ENERGY_GAIN_TOL = 0.050
+
 
 # Module-level default for ``apply_real_lens_traced(parallel_amp=...)``.  The
 # kwarg default is ``None`` -> resolves to this global, so a process-wide
@@ -225,13 +261,15 @@ def get_lens_parallel_amp() -> bool:
     return bool(_LENS_PARALLEL_AMP_DEFAULT)
 
 
-# Helpers shared with lenses.py (single-element sag, aperture warning).
-from .lenses import (
-    _warn_if_aperture_exceeds_grid,
-    surface_sag_general,
-)
-
-_surface_sag_general = surface_sag_general
+# Helpers shared with lenses.py (aperture warning).
+# v5.30 (audit E-L4): ``surface_sag_general`` and its private
+# ``_surface_sag_general`` alias were imported/defined here with ZERO readers in
+# this module (grep-verified: the only two occurrences were the import and the
+# alias itself) and nothing imports either name FROM this module -- the live
+# users are ``_lens_real.py`` and ``elements.py``, which import from
+# ``lenses.py`` directly.  Both deleted; this module gets its sag from the
+# raytrace core via the trace, not from the analytic helper.
+from .lenses import _warn_if_aperture_exceeds_grid
 
 # Sibling-module imports.
 # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
@@ -393,7 +431,23 @@ def _newton_invert_chunk(args):
 
 _PERSISTENT_POOL = None
 _PERSISTENT_POOL_NWORKERS = None
-_PERSISTENT_POOL_LOCK = None  # threading.Lock built lazily
+# v5.30 (audit E-L2): the lock is built AT MODULE SCOPE.  It used to be a lazy
+# ``None`` that ``_get_persistent_worker_pool`` created on first use -- the
+# classic broken double-checked-locking shape, since the ``if
+# _PERSISTENT_POOL_LOCK is None: ... = threading.Lock()`` guard is itself
+# unsynchronised, so two threads racing the first parallel-Newton call could
+# each build a lock, each acquire their own, and both construct a pool (the
+# second overwriting the first, leaking its workers).  Building it here is
+# free (a ``threading.Lock`` costs nothing at import) and makes the guard
+# unnecessary.
+_PERSISTENT_POOL_LOCK = threading.Lock()
+# v5.30 (audit E-L1): one-shot flag for the atexit registration.  The handler
+# used to be registered INSIDE the pool-construction block, i.e. once per pool
+# creation: measured ``atexit._ncallbacks()`` growing 2 -> 8 across five
+# creations (one extra ``close_worker_pool`` callback each time after the
+# executor's own).  Every duplicate re-runs a full ``shutdown(wait=True)`` at
+# interpreter exit.
+_PERSISTENT_POOL_ATEXIT_REGISTERED = False
 
 
 def _get_persistent_worker_pool(n_workers):
@@ -401,13 +455,12 @@ def _get_persistent_worker_pool(n_workers):
 
     Reuses the same pool across calls when the requested ``n_workers``
     matches the cached pool's size.  Tears down and rebuilds when
-    ``n_workers`` changes.  Pool is registered with ``atexit`` for
-    clean shutdown on interpreter exit.
+    ``n_workers`` changes.  ``close_worker_pool`` is registered with
+    ``atexit`` EXACTLY ONCE per process for clean shutdown on
+    interpreter exit.
     """
-    global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS, _PERSISTENT_POOL_LOCK
-    import threading
-    if _PERSISTENT_POOL_LOCK is None:
-        _PERSISTENT_POOL_LOCK = threading.Lock()
+    global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
+    global _PERSISTENT_POOL_ATEXIT_REGISTERED
     with _PERSISTENT_POOL_LOCK:
         if _PERSISTENT_POOL is not None:
             if _PERSISTENT_POOL_NWORKERS == n_workers:
@@ -440,9 +493,13 @@ def _get_persistent_worker_pool(n_workers):
             mp_context=_spawn_ctx,
         )
         _PERSISTENT_POOL_NWORKERS = int(n_workers)
-        # Register atexit handler exactly once.
-        import atexit
-        atexit.register(close_worker_pool)
+        # Register the atexit handler exactly once per PROCESS, not once per
+        # pool creation (v5.30, audit E-L1 -- the guard is the module-level
+        # flag, checked under the same lock that guards the pool globals).
+        if not _PERSISTENT_POOL_ATEXIT_REGISTERED:
+            import atexit
+            atexit.register(close_worker_pool)
+            _PERSISTENT_POOL_ATEXIT_REGISTERED = True
     return _PERSISTENT_POOL
 
 
@@ -455,14 +512,20 @@ def close_worker_pool() -> None:
     before a long-running serial step (e.g. plotting, I/O).
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
-    if _PERSISTENT_POOL is not None:
-        try:
-            _PERSISTENT_POOL.shutdown(wait=True)
-        except (RuntimeError, OSError, BrokenPipeError):
-            # Same shutdown-race tolerance as ``_get_pool``.
-            pass
-        _PERSISTENT_POOL = None
-        _PERSISTENT_POOL_NWORKERS = None
+    # v5.30 (audit E-L2): take the SAME lock the constructor takes.  This
+    # function mutates the pool globals, so running it concurrently with
+    # ``_get_persistent_worker_pool`` could shut down a pool that had just
+    # been handed to a caller, or clear ``_PERSISTENT_POOL`` between the
+    # constructor's assignment and its return.
+    with _PERSISTENT_POOL_LOCK:
+        if _PERSISTENT_POOL is not None:
+            try:
+                _PERSISTENT_POOL.shutdown(wait=True)
+            except (RuntimeError, OSError, BrokenPipeError):
+                # Same shutdown-race tolerance as ``_get_pool``.
+                pass
+            _PERSISTENT_POOL = None
+            _PERSISTENT_POOL_NWORKERS = None
 
 
 # Sibling-module imports (created separately in this package) ----------------
@@ -2356,6 +2419,39 @@ def apply_real_lens_traced(
           EE metrics, not just wavefront).  Energy-conserving in the geometric
           limit (no silent renormalisation).
 
+          **What "in the geometric limit" costs at finite sampling**
+          (v5.30, audit E-M6).  The Jacobian is evaluated on the COARSE Newton
+          lattice and the resulting magnitude is bilinearly upsampled, so the
+          exit power falls short of the aperture-transmitted input power by an
+          amount that shrinks monotonically as ``ray_subsample`` approaches 1.
+          Measured on a well-conditioned battery cell (2.5x aperture:beam),
+          exit power / aperture-transmitted input power::
+
+              ray_subsample = 1 : 0.99981 .. 1.00003
+              ray_subsample = 2 : 0.99921 .. 0.99944
+              ray_subsample = 4 : 0.99664 .. 0.99794
+              ray_subsample = 8 : 0.98664 .. 0.99200   (shipped default)
+
+          i.e. **the shipped default loses about 1% of the power** (up to ~2%
+          on faster elements).  That is a sampling artefact, not a physical
+          loss -- if absolute throughput matters, drop ``ray_subsample`` and
+          watch the ratio converge rather than renormalising.  Separately,
+          a *subsample-independent* deficit is physical: on a strongly
+          diverging element at a tight aperture:beam the exit fan leaves the
+          output window (the battery's negative corrector sits at 0.9535-0.9569
+          at every subsample).
+
+          The function runs this ratio as a cheap post-hoc **energy
+          self-check** and emits a ``RuntimeWarning`` when it leaves a
+          ``ray_subsample``-aware band (deficit tolerance
+          ``0.080 + 0.010 * (ray_subsample - 1)``, gain tolerance ``0.050``).
+          The band is set from the full 24-cell battery sweep above, so
+          correct runs at the shipped defaults stay silent; what speaks up is
+          the order-of-magnitude class -- a fold caustic inflating the capped
+          ``1/sqrt(|det J|)`` (measured ratio 1.10 at sub=8 / 1.33 at sub=4 on
+          a deliberately-broken biconcave), a ray map running off the grid, or
+          an ``aperture_diameter`` wider than the traced pupil.
+
           **Caustic caveat.**  ``det J -> 0`` (or a sign change) at a fold, so
           the single-branch amplitude diverges there.  This mode DETECTS the
           fold (relative floor on ``|det J|`` + adjacent sign change), CAPS the
@@ -4205,6 +4301,7 @@ def apply_real_lens_traced(
     # versions, so threading delivers no speedup.
 
     from concurrent.futures import as_completed
+    from concurrent.futures.process import BrokenProcessPool
 
     from ..memory import available_cpus
 
@@ -4282,13 +4379,28 @@ def apply_real_lens_traced(
                     sub_progress(
                         frac,
                         f'newton chunk {done}/{len(args_list)} done')
-        except (RuntimeError, OSError, BrokenPipeError, EOFError,
-                ImportError, ValueError, MemoryError):
-            # Any pool failure (Windows antivirus blocking spawn,
-            # broken worker pipe, ImportError under pickled
-            # closures, MemoryError on a tight box) falls through
-            # to the serial path so the caller isn't left without
-            # a result.
+        except (BrokenProcessPool, RuntimeError, OSError, EOFError):
+            # POOL-INFRASTRUCTURE failures only (v5.30, audit E-L3):
+            # ``BrokenProcessPool`` (a worker died / spawn was blocked by
+            # Windows antivirus), ``RuntimeError`` (executor already shut
+            # down -- e.g. a prior atexit / interpreter-teardown race),
+            # ``OSError`` / ``BrokenPipeError`` (its subclass: the worker
+            # pipe broke) and ``EOFError`` (truncated pickle stream).  Fall
+            # through to the in-process serial path so the caller still gets
+            # a result, and DROP the cached executor first -- a pool that
+            # just failed is not reusable, and the old code left it cached
+            # so every subsequent call paid the same failure again.
+            #
+            # ``ValueError``, ``ImportError`` and ``MemoryError`` are
+            # deliberately NOT caught any more.  Those are raised by
+            # ``fut.result()`` on behalf of the WORKER, i.e. they are real
+            # faults in ``_newton_invert_chunk`` (a bad spline fit, a missing
+            # SciPy, an out-of-memory chunk).  Swallowing them silently re-ran
+            # the identical computation serially, where the same fault
+            # normally reproduces -- but with a completely different, much
+            # more confusing traceback -- or, worse, succeeded serially and
+            # hid a genuine parallel-path bug behind a silent 8x slowdown.
+            close_worker_pool()
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
 
         # v5.29.1 (audit E-H2): the worker returns (opl, n_unconverged); sum
@@ -4860,6 +4972,44 @@ def apply_real_lens_traced(
         # modulus by construction, identity where the pullback is undefined.
         if _rd_resid_map is not None:
             E_out = E_out * _rd_resid_map.astype(E_out.dtype, copy=False)
+        # ---- v5.30 (audit E-M6): post-hoc ENERGY SELF-CHECK ------------------
+        # Two N^2 reductions, negligible against the trace + Newton stages.
+        # Reference = the input power the element ADMITS (inside the entrance
+        # aperture), which is what the ray-tube map transports; comparing
+        # against the whole grid would flag legitimate vignetting (measured:
+        # 0.935 vs 0.990 on the same 1.2x aperture:beam cell).
+        _rd_pin = np.abs(np.asarray(E_in, dtype=np.complex128)) ** 2
+        if aperture is not None:
+            _rd_pin = np.where(X ** 2 + Y ** 2 <= (aperture / 2) ** 2,
+                               _rd_pin, 0.0)
+        _rd_p_in = float(_rd_pin.sum())
+        del _rd_pin
+        _rd_p_out = float((np.abs(E_out) ** 2).sum())
+        if _rd_p_in > 0.0:
+            _rd_ratio = _rd_p_out / _rd_p_in
+            _rd_lo = 1.0 - (_RD_ENERGY_DEFICIT_BASE
+                            + _RD_ENERGY_DEFICIT_PER_SUB * (sub - 1))
+            _rd_hi = 1.0 + _RD_ENERGY_GAIN_TOL
+            if not (_rd_lo <= _rd_ratio <= _rd_hi):
+                import warnings as _rd_ewarn
+                _rd_ewarn.warn(
+                    f"apply_real_lens_traced: amplitude_model='ray_density' "
+                    f"energy self-check FAILED -- exit power / "
+                    f"aperture-transmitted input power = {_rd_ratio:.6f}, "
+                    f"outside the documented band "
+                    f"[{_rd_lo:.4f}, {_rd_hi:.4f}] for ray_subsample={sub}.  "
+                    f"The ray-tube amplitude is energy-conserving only in the "
+                    f"GEOMETRIC LIMIT; at finite ray_subsample it loses about "
+                    f"1% at the shipped ray_subsample=8 (design-battery "
+                    f"envelope 0.9535-0.9920, converging to 0.9569-1.0000 at "
+                    f"ray_subsample=1), and this band is set clear of that "
+                    f"whole envelope.  A ratio this far off usually means "
+                    f"something else: a fold caustic capping |det J| (see the "
+                    f"fold-caustic warning -- use apply_real_lens_gbd / "
+                    f"apply_real_lens_fga there), a ray map running off the "
+                    f"grid, or an aperture_diameter wider than the traced "
+                    f"pupil.  Lower ray_subsample to check convergence.",
+                    RuntimeWarning, stacklevel=2)
     if E_out.dtype != target_cdtype:
         E_out = E_out.astype(target_cdtype)
     call_progress(progress, 'real_lens_traced', 1.0, 'done')

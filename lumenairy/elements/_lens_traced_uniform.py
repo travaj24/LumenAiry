@@ -514,12 +514,28 @@ def _cusp_geometry_from_branches(r_arr, phib, ampb, dxdhb, *,
 
 def _radial_amp_sampler(E_in, dx):
     """A callable ``r -> |E_in|(r)`` from the rotationally-symmetric input field,
-    sampling ``|E_in|`` along the ``+x`` grid axis (pixel-centre convention)."""
+    sampling ``|E_in|`` along the ``+x`` grid axis (pixel-centre convention).
+
+    Origin convention (v5.30, audit E-L10): every grid in this module is
+    ``x = (arange(N) - N/2) * dx``, so the axis origin sits at the FLOAT index
+    ``N/2`` -- an integer only for even N.  The row / column anchors and the
+    radii are therefore derived from that ``x`` vector, not from ``N // 2``.
+    For even N this is bit-identical to the old ``c = N // 2`` /
+    ``rp = arange(N - c) * dx`` form (``x[N//2] == 0`` exactly, so the row is
+    the same and ``hypot(x[c:], 0) == arange(N - c) * dx``).  For ODD N the old
+    form mislabelled each sample's radius by up to ~0.7 px: measured on an
+    exactly rotationally-symmetric Gaussian (w = 8 dx) the sampled profile was
+    off by 5.11e-2 in amplitude -- a best-fit radial shift of -0.44 px -- at
+    N = 65 and N = 127, versus 3.5e-3 (pure interpolation error) at N = 64 and
+    N = 128.
+    """
     a = np.abs(np.asarray(E_in))
     N = a.shape[0]
-    c = N // 2
-    rp = np.arange(N - c) * dx
-    ap = a[c, c:].astype(float)
+    x = (np.arange(N) - N / 2.0) * dx
+    c = int(np.ceil(N / 2.0))          # first column with x >= 0 (== N//2 even N)
+    row = int(np.argmin(np.abs(x)))    # row nearest y = 0        (== N//2 even N)
+    rp = np.hypot(x[c:], x[row])       # TRUE radius of each sampled pixel
+    ap = a[row, c:].astype(float)
 
     def sampler(r):
         return np.interp(np.abs(r), rp, ap, left=ap[0], right=0.0)
@@ -762,8 +778,15 @@ def apply_real_lens_traced_uniform(
     E_mb = np.asarray(E_mb)
 
     def _fallback(reason):
+        # v5.30 (audit E-M15): name THIS function first.  The message used to
+        # name only ``apply_real_lens_traced(caustic='uniform')``, which is one
+        # of the two routes here -- a direct
+        # ``apply_real_lens_traced_uniform(...)`` caller (a public entry point
+        # with no ``caustic`` kwarg at all) was told to look at a knob they
+        # never touched and cannot find in this signature.
         warnings.warn(
-            "apply_real_lens_traced(caustic='uniform'): the uniform Airy dark-"
+            "apply_real_lens_traced_uniform (also reached via "
+            "apply_real_lens_traced(caustic='uniform')): the uniform Airy dark-"
             f"side completion does not apply here ({reason}); returning the "
             "plain multibranch field (bright-side only, no dark tail).  The "
             "uniform completion covers a rotationally-symmetric SINGLE fold "
