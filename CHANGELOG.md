@@ -68,6 +68,80 @@ silent-junk-input validation cluster, frozen-defaults/ownership, guard gaps,
 conventions/dead code) plus the flagged world.py coord-break question and the
 mirror-parity signing of stop-adjacent pupil legs (needs a fold-pupil oracle).
 
+### Fixed (adversarial-audit Tier 2, batch A — remaining HIGH findings, 2026-07-25)
+
+Five more Opus agents over the same report, disjoint territories, same
+discipline (reproduce → fix → re-measure → pin; every pin set verified to
+fail on the pre-fix tree).  238 new pins across 6 files.
+
+- **R-3/R-4/R-5/R-6/R-7 (`bcb568d`)** — `LGAberrationMerit` minimized
+  |L(0,0)|² and drove Strehl toward 0 (NumPy and JAX merits were exactly `x`
+  vs `1−x`; the JAX OPT-1 fix is now ported, agreement 4.4e-9, descent
+  direction correct); all three OPD merits zero-filled non-finite OPD before
+  `zernike_decompose` (which masks NaN itself) — a vignetted annulus
+  SIGN-FLIPPED the fitted spherical coefficient, now recovered exactly;
+  grazing-ray guards added to the JAX flat-with-aspherics branch (negative
+  OPL −8.05e-3 m killed) and the NumPy flat fast path (immortal t=0 phantom
+  killed, first-failure semantics, DOE-order case measured unchanged);
+  degenerate ray bundles route to the documented `_adrt_numpy` fallback
+  instead of raising bare `ZeroDivisionError` (bit-equal to the sibling).
+- **E-H1/E-H5 (`03fa01e`)** — the Maslov `output_subsample` upsampler used
+  edge-anchored `zoom` against a stride-subsampled lattice (the exact sibling
+  of the 0a743a6 bug): +3.7 fine-px centroid walk at sub=8 → 0.000;
+  fixed with the exact affine map (memory-safe vs a 17 GB coordinate stack
+  at N=32768), sub=1 bit-identical, no CuPy twin exists (shared host path).
+  `roi=` silently discarded `normalize_output` ('power' default returned the
+  raw scale ~8 orders off): global reductions now warn loudly (they are
+  unevaluable on the ROI fast path by construction), scalar factors are
+  applied, junk raises; `fold_split` no longer silently drops the requested
+  observation plane; 10 dead integrator args removed.
+- **E-H2/E-H3/E-H4/E-H7 + E-M2..M5 (`0a443d6`)** — `newton_max_iters` now
+  travels to the ProcessPool Newton workers (was hardcoded 12; pool 1-vs-12
+  iters 0.0 → 5.98e-5) and the pool emits the unconverged warning;
+  `prepare_real_lens`/`PreparedTracedLens` now resolve and store their
+  PREPARE-TIME settings and deep-copy the prescription (global-flip and
+  in-place-mutation drifts measured 49.6/53.3/1.77 → all 0.0);
+  `on_noncollimated`/`inversion_method` raise on junk values; the delegate
+  model swap forwards raw `sag_chunk_rows` (caller's banding opt-out
+  honored) and warns when discarding non-default physics kwargs;
+  `lens_model='local_only'` docstring corrected to its measured (opposite)
+  behavior.  121 acceptance battery green after every edit.
+- **E-H8/E-H9/E-H10 + E-L12..L17 + E-M13 (`5f9d82b`)** — polarization
+  handedness typos no longer silently produce LEFT circular (closed alias
+  set, everything else raises); PBS `extinction_ratio < 1` raises instead of
+  silently swapping ports; `jones_pupil_to_stokes_unpolarized` accepts both
+  Jones-pupil layouts bit-identically and rejects shapes with no 2×2 block;
+  DOP floor made relative (a 1e-15 V/m fully-polarized field read DOP 0.0)
+  with NaN propagation and [0,1] clip; grazing `kz→1.0` substitution
+  (7e12×) now returns 0.0; `chi` domain enforced; the S3 convention
+  relabelled IEEE/right-hand-rule (measured; was mislabelled Born-Wolf —
+  code self-consistent, no sign changed) in the module docs and
+  CONVENTIONS.md.
+- **M2/M3/M4/M5/M6/M9 (`4602b7f`)** — `PMMStack.add_layer` validates segment
+  width fractions (sum-1.4 and metre-valued inputs were silently clipped to
+  a different structure); classical PMMStack rejects gain/NaN/non-propagating
+  media (the audit's suggested one-liner was verified INSUFFICIENT — three
+  guard layers applied; legit lossy media still solve silently);
+  `_warn_stack_energy` raises on non-finite/negative totals; the fff_nv
+  non-separable guard now also gates metallic cornered cells on max|Nx·Ny|
+  (the measured Cxy driver: 0.500 square vs 0.000 validated stripe) while
+  keeping validated lossless-dielectric cases admitted; fff_nv is exempted
+  from the `stabilize=True` lossless-closure ladder accounting (its closure
+  error is inherent/non-Hermitian — every rung warned, so stabilize ALWAYS
+  hard-raised; laurent/li accounting unchanged, injected-failure control
+  still trips); `set_blas_threads` warns once when threadpoolctl is absent
+  (internal sweep sites use a quiet variant); the geo-eig cache returns
+  read-only arrays (measured cache poisoning closed).
+
+New measured findings recorded during the wave (open, not fixed):
+`aberration_tensor` returns identical L for every `output_mode`
+(`propagators/asymptotic.py` — LG non-piston merit channels currently
+indistinguishable from piston); NumPy `propagate_through_system` junk-method
+fall-through to ASM (same class as P6, wider blast radius); uniform cell +
+`fff_nv` raises `AssertionError` instead of a clear error;
+`create_elliptical_polarized(orientation=NaN)` and
+`apply_waveplate(retardance=NaN)` unguarded.
+
 ### Fixed (adversarial-audit Tier 2, batch B — infra/contract findings, 2026-07-25)
 
 Second wave over the same report (Territories P + A and the two elements

@@ -37,8 +37,34 @@ substrate.  (b) **P6's "the NumPy twin validates and honours it" is only half
 true** — the twin honours `'fresnel'`/`'sas'` and rejects `'rs'`, but junk
 method names fall through to ASM there too (measured 0.0 relative difference
 from `method='asm'`); that sibling gap is NOT closed by this batch (see the
-declined list in the fix report).  All other Tier 2+ findings remain open;
-fixes should follow the same measure-first / gate / pin discipline.
+declined list in the fix report).
+
+**Status: TIER 2 BATCH A FIXED (2026-07-25)** — the remaining HIGH territories:
+R-3/R-4/R-5/R-6/R-7 `bcb568d`, E-H1/E-H5 `03fa01e`, E-H2/E-H3/E-H4/E-H7 +
+E-M2..M5 `0a443d6`, E-H8/E-H9/E-H10 + E-L12..L17 + E-M13 `5f9d82b` (incl. the
+CONVENTIONS.md IEEE relabel), M2/M3/M4/M5/M6/M9 `4602b7f`.  238 pins, each set
+verified failing pre-fix; the 121 acceptance battery gated every traced-engine
+edit.  Corrections to this report found while fixing: (a) **M3's suggested
+one-liner is insufficient AND mis-sited** — `_require_propagating_incidence`
+lives in `rcwa/_core.py:563`, `pmm/_core.py:786` is `_assemble_jones_farfield`,
+and the `kz_inc` comparison change alone misses NaN substrates and
+non-propagating metallic superstrates (three guard layers were needed); (b)
+M4's single "A = 0.208" figure was not reproduced — the same instability
+manifests as hard `_EnergyError`s at 3 of 5 truncations and survivors wandering
+A = 0.080-0.113 vs converged li 0.0787 (configuration-dependent, hence a scope
+gate rather than a numeric fix).
+
+**Every CRITICAL and HIGH finding in this audit is now fixed and pinned.**
+Still open: the MEDIUM/LOW inventory (incl. P5's dispatch return-shape design
+question — an API-contract decision for the owner), the flagged world.py
+coord-break transpose (needs a pure-tilt oracle), mirror-parity signing of
+stop-adjacent pupil legs (needs a fold-pupil oracle), and four NEW measured
+findings recorded during the fix waves: `aberration_tensor` output_mode
+degeneracy (LG non-piston channels indistinguishable from piston); NumPy
+`propagate_through_system` junk-method fall-through (P6's sibling); uniform
+cell + fff_nv `AssertionError`; `orientation=NaN`/`retardance=NaN` unguarded
+in polarization.  Fixes should follow the same measure-first / gate / pin
+discipline.
 
 ---
 
