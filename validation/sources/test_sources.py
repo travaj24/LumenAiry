@@ -125,8 +125,11 @@ H.run('Bessel: J0 peaks at center', t_bessel_central_peak)
 
 
 def t_led_source_angles():
-    E, angles, _, _ = la.create_led_source(64, 16e-6, 100e-6, 0.3,
-                                           1.31e-6)
+    # v5.30 shim removal: migrated from the legacy positional form
+    # (N, dx, diameter, na, wavelength) to the canonical signature.
+    E, angles, _, _ = la.create_led_source(64, 16e-6, 1.31e-6,
+                                           diameter=100e-6,
+                                           divergence_angle=0.3)
     max_angle = max(np.sqrt(a[0]**2 + a[1]**2) for a in angles)
     return max_angle <= 0.31 and len(angles) > 10, \
         f'{len(angles)} angles, max = {max_angle:.4f} rad'
