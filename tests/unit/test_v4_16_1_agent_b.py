@@ -60,18 +60,18 @@ needs_jax = pytest.mark.skipif(
 _SCHELL_KW = dict(
     N=32, dx=2e-6, wavelength=633e-9,
     w0=20e-6, sigma_g=8e-6,
-    n_realizations=4, seed=0,
+    n_realizations=4, rng=0,
 )
 
 
 def _make_simple_ensemble(n_realizations=4, N=32, dx=2e-6,
                            wavelength=633e-9, w0=20e-6, sigma_g=8e-6,
-                           seed=0):
+                           rng=0):
     """Build a small Schell ensemble for the B.1 propagation tests."""
     return create_gaussian_schell_source(
         N=N, dx=dx, wavelength=wavelength,
         w0=w0, sigma_g=sigma_g,
-        n_realizations=n_realizations, seed=seed,
+        n_realizations=n_realizations, rng=rng,
         return_kind='ensemble',
     )
 
@@ -181,7 +181,7 @@ class TestPropagateEnsemble:
         ens, _, _, _ = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=wl,
             w0=w0, sigma_g=sigma_g,
-            n_realizations=32, seed=0,
+            n_realizations=32, rng=0,
             return_kind='ensemble')
         I_partial = la.propagate_ensemble(
             ens, dx=dx, wavelength=wl, propagator='asm', z=z)
@@ -280,7 +280,7 @@ class TestSchellDefaultNoDeprecationWarning:
             create_schell_model_source(
                 N=N, dx=2e-6, wavelength=633e-9,
                 intensity_profile=I, coherence_length=8e-6,
-                n_realizations=4, seed=0)
+                n_realizations=4, rng=0)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
                and 'return_kind' in str(w.message)]
@@ -293,7 +293,7 @@ class TestSchellDefaultNoDeprecationWarning:
             create_annular_incoherent_source(
                 N=16, dx=2e-6, wavelength=633e-9,
                 inner_radius=4e-6, outer_radius=12e-6,
-                n_realizations=4, seed=0)
+                n_realizations=4, rng=0)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
                and 'return_kind' in str(w.message)]
@@ -320,42 +320,43 @@ class TestSchellDefaultNoDeprecationWarning:
             la.Source.schell_model(
                 N=N, dx=2e-6, wavelength=633e-9,
                 intensity_profile=I, coherence_length=8e-6,
-                n_realizations=4, seed=0)
+                n_realizations=4, rng=0)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
                and 'return_kind' in str(w.message)]
         assert dep == []
 
-    def test_sentinel_back_compat_preserved(self):
-        """v4.16.1 keeps ``_RETURN_KIND_UNSET`` + the helper
-        importable for back-compat (the v4.15.3 sentinel-promotion
-        meta-pin and any external custom-wrapper callers).  Sentinel
-        + subclass + helper must all import cleanly."""
-        from lumenairy.sources.core import (
-            _RETURN_KIND_UNSET,
-            _SchellReturnKindUnsetSentinel,
-            _warn_schell_return_kind_default,
-        )
-        assert _RETURN_KIND_UNSET is not None
-        assert callable(_warn_schell_return_kind_default)
-        assert isinstance(_RETURN_KIND_UNSET,
-                          _SchellReturnKindUnsetSentinel)
+    def test_sentinel_back_compat_is_SUPERSEDED_by_removal(self):
+        """SUPERSEDES ``test_sentinel_back_compat_preserved`` AND
+        ``test_explicit_sentinel_pass_through`` (v4.16.1).
 
-    def test_explicit_sentinel_pass_through(self):
-        """Explicit ``_RETURN_KIND_UNSET`` pass-through still resolves
-        cleanly to the ensemble path (default behaviour) with no
-        warning.  This is the back-compat surface for any custom
-        wrapper that explicitly forwards the sentinel."""
-        from lumenairy.sources.core import _RETURN_KIND_UNSET
+        v4.16.1 kept the sentinel + subclass + helper importable, and the
+        five call-site branches as no-ops, purely as a back-compat surface
+        for a hypothetical external wrapper that forwarded the sentinel.
+        v5.30 (W5) removes all of it -- the reachability pin in
+        ``test_niche_audit_w3_ui_deprecation.py`` had MEASURED zero
+        production call sites for the helper, and the branches had been
+        no-ops for fourteen releases.
+
+        What survives is the contract that actually matters: the DEFAULT
+        path returns the ensemble and stays silent (pinned in
+        ``test_default_path_is_silent_and_returns_the_ensemble``), and an
+        unrecognised ``return_kind`` is rejected by name."""
+        import lumenairy.sources.core as core
+        for name in ('_RETURN_KIND_UNSET',
+                     '_SchellReturnKindUnsetSentinel',
+                     '_warn_schell_return_kind_default'):
+            assert not hasattr(core, name), name
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            ens, dx, dy, wl = create_gaussian_schell_source(
-                return_kind=_RETURN_KIND_UNSET, **_SCHELL_KW)
-        dep = [w for w in caught
-               if issubclass(w.category, DeprecationWarning)
-               and 'return_kind' in str(w.message)]
-        assert dep == []
+            ens, dx, dy, wl = create_gaussian_schell_source(**_SCHELL_KW)
         assert ens.shape == (4, 32, 32)
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            [str(w.message) for w in caught])
+        with pytest.raises(ValueError, match="'ensemble' or 'mcf'"):
+            create_gaussian_schell_source(return_kind=object(),
+                                           **_SCHELL_KW)
 
 
 # ============================================================================

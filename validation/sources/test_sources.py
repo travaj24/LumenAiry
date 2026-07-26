@@ -23,7 +23,7 @@ H = Harness('sources')
 
 def t_gaussian_beam_power():
     N = 512; dx = 2e-6; w0 = 100e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, sigma=w0)
+    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, w0=(w0) * np.sqrt(2))
     I = np.abs(E)**2
     P_measured = float(np.sum(I) * dx**2)
     peak = np.abs(E).max()
@@ -153,7 +153,7 @@ def t_gaussian_beam_d4sigma_matches_w0():
     """A Gaussian beam created with waist w0 has D4-sigma diameter = 2*w0
     (the 1/e^2 diameter is 2*w0)."""
     N, dx, w0 = 512, 2e-6, 100e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, sigma=w0)
+    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, w0=(w0) * np.sqrt(2))
     d4x, d4y = la.beam_d4sigma(np.abs(E)**2, dx)
     # D4-sigma equals 2 * w0 for Gaussian.  Sampling pushes a small bias.
     rel = abs(d4x - 2 * w0) / (2 * w0)

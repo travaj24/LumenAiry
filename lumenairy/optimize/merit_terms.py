@@ -17,7 +17,7 @@ behaviour changes.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 import numpy as np
 
@@ -397,8 +397,10 @@ class MatchIdealSystemMerit(MeritTerm):
         Element list for the real system.  Dicts with
         ``type='_prescription_'`` are replaced at evaluation time
         with the current ``ctx.prescription`` wrapped as a
-        ``'real_lens'`` element (or ``'real_lens_traced'`` if
-        ``use_traced_lens=True``).  Default: a single-lens drop-in,
+        ``'real_lens'`` element.  (v5.30: the ``'real_lens_traced'``
+        variant is no longer reachable through a flag -- write that
+        element out explicitly here if you want it.)
+        Default: a single-lens drop-in,
         ``[{'type': '_prescription_'}]``, which is correct when the
         ideal is a single thin lens + propagate pair and the real
         prescription replaces that thin lens.
@@ -441,52 +443,14 @@ class MatchIdealSystemMerit(MeritTerm):
            :meth:`_intensity_overlap_penalty`) have ZERO callers and are
            therefore not covered by CI.  They are NOT deprecated -- the
            metric choice is a legitimate documented feature, unlike the
-           ``use_traced_lens`` / ``focus_search`` booleans -- but
-           validate their numbers on a known case before optimising
-           against them.
+           ``use_traced_lens`` / ``focus_search`` booleans that were
+           REMOVED in v5.30 -- but validate their numbers on a known
+           case before optimising against them.
     aperture_mask : ndarray or None
         Optional boolean / real mask applied to BOTH output fields
         before the comparison.  Use it to restrict the match to a
         region of interest (e.g. the intended image area) and avoid
         letting low-intensity grid edges dominate.
-    use_traced_lens : bool, default False
-        If True, propagate the real prescription via
-        ``apply_real_lens_traced`` (sub-nm OPD agreement with the
-        ray trace, 10-30x slower) rather than ``apply_real_lens``.
-
-        .. deprecated:: 5.30
-           DEPRECATED (removal v5.32).  R-17
-           (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25) grep-verified ZERO
-           callers repo-wide, so this branch has never been exercised
-           by CI.  Passing ``True`` emits a
-           :class:`DeprecationWarning`; the branch still runs.
-    ray_subsample : int, default 4
-        Passed to ``apply_real_lens_traced`` when used (i.e. only on
-        the deprecated ``use_traced_lens=True`` path).
-    focus_search : bool, default False
-        If True, scan a small range of axial offsets on the real
-        system's output plane and report the BEST (lowest-penalty)
-        match.  Decouples "correct focal plane" from "aberration
-        quality" so a small BFL shift caused by real-lens thickness
-        doesn't dominate the penalty.  Not valid for
-        ``match='intensity_mse'`` (no unique optimum under
-        translation); enable it with any of the other three metrics.
-
-        .. deprecated:: 5.30
-           DEPRECATED (removal v5.32).  R-17
-           (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25) grep-verified ZERO
-           callers repo-wide, so ``_focus_search_penalty`` (and the
-           ``focus_search_range`` / ``focus_search_n`` knobs that only
-           feed it) have never been exercised by CI.  Passing ``True``
-           emits a :class:`DeprecationWarning`; the scan still runs.
-    focus_search_range : tuple (z_lo, z_hi) or None
-        Axial-offset bracket for the focus search, relative to the
-        nominal output plane [m].  Default (None): +/- f/20 computed
-        from ``ctx.bfl`` or ``ctx.efl``, falling back to +/- 5 mm.
-        Only read on the deprecated ``focus_search=True`` path.
-    focus_search_n : int, default 9
-        Number of samples in the z-offset scan.  Only read on the
-        deprecated ``focus_search=True`` path.
     wavelengths : list of float, optional
         If given, evaluate the merit at each wavelength and average
         the results.  Drives the glass-index dispersion through
@@ -500,6 +464,31 @@ class MatchIdealSystemMerit(MeritTerm):
         simultaneously.  Combines Cartesian-product-wise with
         ``wavelengths``.
     weight : float
+
+    .. versionchanged:: 5.30
+        ``use_traced_lens``, ``ray_subsample``, ``focus_search``,
+        ``focus_search_range`` and ``focus_search_n`` are **REMOVED**
+        (deprecated earlier in v5.30; W5 shim-removal wave).  R-17
+        grep-verified ZERO callers repo-wide -- library, tests,
+        validation, examples, UI -- so neither the
+        ``apply_real_lens_traced`` branch nor ``_focus_search_penalty``
+        was ever exercised by CI.  Passing any of them raises
+        ``TypeError``.  Migration:
+
+        * ``use_traced_lens=True`` / ``ray_subsample=`` -> put an explicit
+          ``{'type': 'real_lens_traced', 'prescription': ...,
+          'ray_subsample': ...}`` entry in ``real_elements`` (the
+          ``_prescription_`` placeholder now always expands to
+          ``'real_lens'``).
+        * ``focus_search=True`` / ``focus_search_range=`` /
+          ``focus_search_n=`` -> add an explicit
+          ``{'type': 'propagate', 'z': dz}`` offset to ``ideal_elements``
+          (or sweep ``dz`` yourself and take the minimum penalty).
+          ``_focus_search_penalty`` is deleted with the flag -- it had no
+          other caller.
+
+        The three non-default ``match=`` metric kernels are NOT affected:
+        ``match`` is a live documented feature, not a deprecation.
 
     Notes
     -----
@@ -529,11 +518,6 @@ class MatchIdealSystemMerit(MeritTerm):
                  source_fn: Optional[Callable] = None,
                  match: str = 'field_overlap',
                  aperture_mask: Optional[np.ndarray] = None,
-                 use_traced_lens: bool = False,
-                 ray_subsample: int = 4,
-                 focus_search: bool = False,
-                 focus_search_range: Optional[Tuple[float, float]] = None,
-                 focus_search_n: int = 9,
                  wavelengths: Optional[Sequence[float]] = None,
                  field_angles: Optional[Sequence[float]] = None,
                  weight: float = 1.0) -> None:
@@ -544,12 +528,7 @@ class MatchIdealSystemMerit(MeritTerm):
         self.source_fn = source_fn
         self.match = str(match)
         self.aperture_mask = aperture_mask
-        self.use_traced_lens = bool(use_traced_lens)
-        self.ray_subsample = int(ray_subsample)
         self.weight = float(weight)
-        self.focus_search = bool(focus_search)
-        self.focus_search_range = focus_search_range
-        self.focus_search_n = int(focus_search_n)
         # ``wavelengths`` and ``field_angles`` drive built-in sweeps
         # (averaged penalty).  Both default to None = single
         # wavelength / on-axis.
@@ -562,35 +541,6 @@ class MatchIdealSystemMerit(MeritTerm):
         if self.match not in valid:
             raise ValueError(
                 f"match must be one of {valid}; got {self.match!r}")
-        if self.focus_search and self.match not in (
-                'field_overlap', 'field_mse', 'intensity_overlap'):
-            raise ValueError(
-                f"focus_search requires match in "
-                f"('field_overlap', 'field_mse', 'intensity_overlap'); "
-                f"got {self.match!r}.  intensity_mse doesn't have a "
-                f"unique optimum under axial translation.")
-        # R-17 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): both flags are
-        # documented public knobs with live branches and ZERO callers
-        # repo-wide (library / tests / validation / examples / UI,
-        # grep-verified twice).  Deprecated rather than deleted --
-        # out-of-repo callers may exist -- with removal scheduled for
-        # v5.32.  Warnings fire ONLY on a non-default value, so every
-        # existing (default) construction stays silent.
-        if self.use_traced_lens:
-            from .._deprecation import warn_deprecated_kwarg
-            warn_deprecated_kwarg(
-                'use_traced_lens',
-                "the default apply_real_lens path (or a custom "
-                "real_elements entry)",
-                function='MatchIdealSystemMerit',
-                version_added='5.30', version_removed='5.32', stacklevel=3)
-        if self.focus_search:
-            from .._deprecation import warn_deprecated_kwarg
-            warn_deprecated_kwarg(
-                'focus_search',
-                "an explicit z-offset in ideal_elements",
-                function='MatchIdealSystemMerit',
-                version_added='5.30', version_removed='5.32', stacklevel=3)
 
     # -- Helpers -----------------------------------------------------
 
@@ -671,11 +621,11 @@ class MatchIdealSystemMerit(MeritTerm):
         supplied, falls back to ``ctx.prescription`` -- the
         single-prescription (backward-compatible) case.
         """
-        lens_type = ('real_lens_traced' if self.use_traced_lens
-                     else 'real_lens')
-        extras = {}
-        if self.use_traced_lens:
-            extras['ray_subsample'] = self.ray_subsample
+        # v5.30 (W5): ``use_traced_lens`` is removed, so the placeholder
+        # always expands to the default ``'real_lens'`` element.  A caller
+        # who wants the traced propagator writes that element out in
+        # ``real_elements`` explicitly (with its own ``ray_subsample``).
+        lens_type = 'real_lens'
 
         prescriptions = ctx.prescriptions
         if prescriptions is None:
@@ -693,7 +643,6 @@ class MatchIdealSystemMerit(MeritTerm):
                 expanded.append({
                     'type': lens_type,
                     'prescription': prescriptions[idx],
-                    **extras,
                     # Preserve any user-specified bandlimit / per-
                     # element overrides passed through the sentinel,
                     # except for the meta keys we've already consumed.
@@ -752,51 +701,13 @@ class MatchIdealSystemMerit(MeritTerm):
             E_ideal = E_ideal * mask
             E_real = E_real * mask
 
-        # Optional axial focus search: find the z-offset where the
-        # real field best matches the ideal's radiation pattern.  This
-        # decouples "correct focal plane" from "aberration quality" so
-        # a small BFL shift introduced by lens thickness doesn't
-        # dominate the penalty.
-        if self.focus_search:
-            return self._focus_search_penalty(
-                E_ideal, E_real, ctx, wavelength)
-
+        # v5.30 (W5): the optional axial focus search is REMOVED with the
+        # ``focus_search`` flag that was its only gate, and
+        # ``_focus_search_penalty`` is deleted with it (grep-verified:
+        # ``self.focus_search`` here was the sole caller).  To decouple
+        # "correct focal plane" from "aberration quality", put an explicit
+        # ``{'type': 'propagate', 'z': dz}`` offset in ``ideal_elements``.
         return self._compute_penalty(E_ideal, E_real)
-
-    def _focus_search_penalty(self, E_ideal, E_real, ctx, wavelength):
-        """Propagate E_real through a small range of z offsets, pick
-        the one that minimises the penalty (i.e. maximises overlap),
-        and return that value.  Uses ASM (fast, exact, preserves dx).
-
-        R-17: reachable ONLY via the DEPRECATED ``focus_search=True``
-        (removal v5.32), for which the audit grep-verified zero callers
-        repo-wide -- so this helper is NOT exercised by CI.  Kept, but
-        validate your own numbers before trusting it in a merit sum.
-        """
-        from ..propagators.propagation import angular_spectrum_propagate
-        # Default range: +-f/20 where f ~= ctx.efl or ctx.bfl; fall
-        # back to +-5 mm if neither is available.
-        if self.focus_search_range is not None:
-            z_lo, z_hi = self.focus_search_range
-        else:
-            ref = ctx.bfl if (ctx.bfl and np.isfinite(ctx.bfl)
-                                and abs(ctx.bfl) < 10) else ctx.efl
-            if ref and np.isfinite(ref) and abs(ref) < 10:
-                half = max(abs(ref) / 20.0, 1e-4)
-            else:
-                half = 5e-3
-            z_lo, z_hi = -half, +half
-        zs = np.linspace(z_lo, z_hi, max(3, self.focus_search_n))
-        best = self.weight  # worst-case sentinel
-        for dz in zs:
-            E_shifted = (E_real if dz == 0.0
-                         else angular_spectrum_propagate(
-                             E_real, float(dz), wavelength, ctx.dx,
-                             bandlimit=True))
-            p = self._compute_penalty(E_ideal, E_shifted)
-            if p < best:
-                best = p
-        return best
 
     def _compute_penalty(self, E_ideal, E_real):
         if self.match == 'field_overlap':
@@ -834,8 +745,9 @@ class MatchIdealSystemMerit(MeritTerm):
         R-17: reachable ONLY via the non-default ``match='field_mse'``,
         for which the audit grep-verified zero callers repo-wide -- so
         this kernel is NOT exercised by CI.  Kept (the metric is a
-        legitimate documented choice), but validate your own numbers
-        before trusting it in a merit sum."""
+        legitimate documented choice, unlike the zero-caller flags
+        REMOVED in v5.30), but validate your own numbers before
+        trusting it in a merit sum."""
         p_i = float(np.sum(np.abs(E_ideal) ** 2))
         p_r = float(np.sum(np.abs(E_real) ** 2))
         if p_i < 1e-30 or p_r < 1e-30:

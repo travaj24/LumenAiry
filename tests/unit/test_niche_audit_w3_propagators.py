@@ -15,7 +15,8 @@ verified to FAIL on a pre-fix worktree at ``7ea2eb9``.
   (measured 0.0 relative difference vs ``method='asm'`` for
   ``'not_a_method'``, ``'ASM'``, ``'gbd'``, ``'fraunhofer'``), and so did
   the per-element ``elem['method']`` override.  Both now raise.
-* **P8** ``gbd.py`` -- ``recommend_gbd_sampling(wavelength=)`` was a
+* **P8** ``gbd.py`` (keyword REMOVED in v5.30 / W5; pins superseded
+  below) -- ``recommend_gbd_sampling(wavelength=)`` was a
   required keyword the body never read (identical output for lambda =
   0.4 um and 10 um).  Now optional + deprecated (v5.32): the
   wavelength dependence is data-driven, and the sibling
@@ -286,39 +287,29 @@ class TestP8RecommendGbdWavelength:
                 * np.exp(1j * k * (X ** 2 + Y ** 2) / (2 * R))
                 ).astype(np.complex128)
 
-    def test_wavelength_is_now_optional(self):
-        """Pre-fix it was a REQUIRED keyword -- omitting it raised
-        TypeError."""
+    def test_wavelength_is_removed(self):
+        """SUPERSEDES ``test_wavelength_is_now_optional``,
+        ``test_passing_wavelength_deprecation_warns`` and
+        ``test_wavelength_value_is_still_inert_by_construction`` (P8,
+        v5.30 warn phase).
+
+        P8 demoted the never-read REQUIRED keyword to optional +
+        ``DeprecationWarning``; the W5 wave deletes it in the same release
+        rather than shipping an inert keyword to v5.32.  The inertness the
+        third pin measured (identical dict for 0.4 um vs 10 um) is exactly
+        what makes the deletion output-neutral, so it is now a property of
+        the signature rather than of the body.
+        """
         from lumenairy.propagators.gbd import recommend_gbd_sampling
         sig = inspect.signature(recommend_gbd_sampling)
-        assert sig.parameters['wavelength'].default is None
+        assert 'wavelength' not in sig.parameters, sig
         with warnings.catch_warnings():
             warnings.simplefilter('error')          # must not warn
             out = recommend_gbd_sampling(self._curved(1.55e-6), 1e-6)
         assert set(out) == {'sample_step', 'waist_factor', 'n_beamlets'}
-
-    def test_passing_wavelength_deprecation_warns(self):
-        from lumenairy.propagators.gbd import recommend_gbd_sampling
-        with pytest.warns(DeprecationWarning) as rec:
+        with pytest.raises(TypeError, match='wavelength'):
             recommend_gbd_sampling(self._curved(1.55e-6), 1e-6,
                                    wavelength=1.55e-6)
-        m = str(rec[0].message)
-        assert 'recommend_gbd_sampling' in m
-        assert 'wavelength' in m and 'no effect' in m
-        assert 'v5.32' in m                          # removal registry
-        assert 'converge_gbd_sampling' in m          # the right tool
-
-    def test_wavelength_value_is_still_inert_by_construction(self):
-        """The deprecation is honest: the returned dict cannot depend on
-        the kwarg."""
-        from lumenairy.propagators.gbd import recommend_gbd_sampling
-        E = self._curved(1.55e-6)
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            a = recommend_gbd_sampling(E, 1e-6, wavelength=0.4e-6)
-            b = recommend_gbd_sampling(E, 1e-6, wavelength=10e-6)
-        c = recommend_gbd_sampling(E, 1e-6)
-        assert a == b == c
 
     def test_lambda_dependence_arrives_through_the_field(self):
         """The evidence behind declining a lambda-dependent term: a
@@ -330,11 +321,20 @@ class TestP8RecommendGbdWavelength:
         assert short['sample_step'] < long_['sample_step']
 
     def test_docstring_records_the_measured_rejection(self):
+        """The evidence must survive the keyword: a future reader asking
+        "why is there no wavelength here?" needs the measurement, and a
+        migrating caller needs to be pointed at
+        ``converge_gbd_sampling``.  (Superseded assertion: the docstring
+        used to have to carry a ``deprecated:: 5.30`` / v5.32 banner; it
+        now carries the ``versionchanged`` removal record instead.)"""
         from lumenairy.propagators.gbd import recommend_gbd_sampling
         doc = inspect.getdoc(recommend_gbd_sampling)
         assert 'Deprecated and unused' in doc
         assert 'converge_gbd_sampling' in doc
-        assert 'deprecated:: 5.30' in doc and 'v5.32' in doc
+        assert 'versionchanged:: 5.30' in doc and 'REMOVED' in doc
+        assert 'deprecated:: 5.30' not in doc, (
+            'the keyword is gone; the docstring must not still advertise '
+            'it as a live deprecation')
 
     def test_converge_gbd_sampling_does_not_self_warn(self):
         """The internal call must not forward the deprecated kwarg."""

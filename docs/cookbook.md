@@ -29,7 +29,8 @@ import numpy as np
 import lumenairy as la
 
 # Create a Gaussian beam
-E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, wavelength=1.3e-6, sigma=50e-6)
+E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, wavelength=1.3e-6,
+                                  w0=70.7e-6)  # 1/e^2 intensity radius
 
 # Propagate 10 cm through free space
 E_prop = la.angular_spectrum_propagate(E, z=0.1, wavelength=1.3e-6, dx=2e-6)
@@ -294,7 +295,7 @@ polarization code.
 
 ```python
 # Create a right-hand circularly polarized Gaussian beam
-scalar, _, _ = la.create_gaussian_beam(256, 2e-6, 1.3e-6, sigma=30e-6)
+scalar, _, _ = la.create_gaussian_beam(256, 2e-6, 1.3e-6, w0=42.4e-6)
 field = la.create_circular_polarized(scalar, dx=2e-6, handedness='right')
 
 # Propagate through a half-wave plate at 22.5°

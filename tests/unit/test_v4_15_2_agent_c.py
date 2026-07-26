@@ -90,7 +90,7 @@ def _make_mcf() -> PartialCoherenceMCF:
         N=N, dx=DX, wavelength=WAVELENGTH,
         w0=W0, sigma_g=SIGMA_G,
         n_realizations=N_REALIZATIONS,
-        seed=0, return_kind='mcf',
+        rng=0, return_kind='mcf',
     )
 
 
@@ -100,7 +100,7 @@ def _make_ensemble() -> np.ndarray:
         N=N, dx=DX, wavelength=WAVELENGTH,
         w0=W0, sigma_g=SIGMA_G,
         n_realizations=N_REALIZATIONS,
-        seed=0,
+        rng=0,
     )
     return ens
 

@@ -98,6 +98,26 @@ __all__ = [
 #     pin in ``tests/unit/test_niche_audit_w3_ui_deprecation.py`` asserts it
 #     returns no violations, so a shipped release cannot carry a horizon it
 #     has already passed.
+#
+# v5.30 (W5 shim-removal wave): the owner EXECUTED the overdue removals
+# rather than slipping them again -- see the CHANGELOG's ``### Removed``
+# section for the full old-form -> new-form table.  The retired shims were
+# the ones this registry existed to track:
+#
+#   * ``sources/core.py`` -- ``seed=`` / ``sigma=`` kwargs, the five
+#     ``Source.*`` legacy positional overloads, ``create_led_source``'s
+#     positional overload, and the Schell ``return_kind`` sentinel
+#     (``_RETURN_KIND_UNSET`` + ``_warn_schell_return_kind_default``).
+#   * ``elements/doe.py`` -- ``makedammann2d(_legacy_units='auto')``.
+#   * ``propagators/gbd.py`` / ``propagators/hf.py`` -- the inert
+#     ``wavelength=`` keywords.
+#   * ``optimize/`` -- the ``wave_traced`` / ``use_traced_lens`` /
+#     ``focus_search`` zero-caller flags.
+#
+# What that leaves live here: :data:`REMOVAL_SCHEDULE` is empty and the four
+# message builders + :data:`API_TRANSITION_VERSION` (the P5 return-contract
+# transition, still SCHEDULED, not executed) are unchanged.  The module stays
+# fully functional -- the next deprecation cycle registers here as before.
 
 #: Removal horizon for deprecations whose stated version has shipped.  Set
 #: it to a version the project can realistically hit; bumping it is a
@@ -108,13 +128,26 @@ NEXT_REMOVAL_VERSION = '5.32'
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule
 #: so the message can name both; values must lie in the future.
 #:
-#: ``'5.27'`` -- the v5.25 ``seed=`` -> ``rng=`` and ``sigma=`` -> ``w0=``
-#: source-factory kwarg deprecations (``sources/core.py``'s
-#: ``_DEPRECATION_VERSION_REMOVED``).  Two releases were budgeted; the
-#: shims are still shipping at v5.29 and are NOT removed here.
-REMOVAL_SCHEDULE: dict[str, str] = {
-    '5.27': NEXT_REMOVAL_VERSION,
-}
+#: **Currently empty** -- every re-scheduled deprecation has been EXECUTED.
+#:
+#: Tombstone, v5.30 (W5 shim-removal wave, owner decision: remove now
+#: rather than wait for v5.32):
+#:
+#: * ``'5.27' -> '5.32'`` (added v5.30) -- the v5.25 ``seed=`` -> ``rng=``
+#:   and ``sigma=`` -> ``w0=`` source-factory kwarg deprecations
+#:   (``sources/core.py``'s ``_DEPRECATION_VERSION_REMOVED``).  The kwargs
+#:   are GONE in v5.30; the entry is retired with them.  Entries are
+#:   deleted rather than kept-as-history because
+#:   :func:`check_removal_schedule` invariant 2 requires every value to
+#:   lie in the future -- a completed removal cannot satisfy that and
+#:   would turn the self-check permanently red.  The history lives here
+#:   as a comment and in the CHANGELOG's ``### Removed`` section.
+#:
+#: The :func:`resolve_removal_version` backstop still promotes a bare
+#: ``version_removed='5.27'`` (or any other already-shipped horizon) to
+#: :data:`NEXT_REMOVAL_VERSION`, so deleting an entry cannot resurrect a
+#: past-horizon banner.
+REMOVAL_SCHEDULE: dict[str, str] = {}
 
 #: Version at which the deferred **API-contract transitions** land -- the
 #: default-flip counterpart to :data:`NEXT_REMOVAL_VERSION` (which schedules

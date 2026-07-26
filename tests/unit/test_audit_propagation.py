@@ -288,7 +288,6 @@ class TestAuditFixesV4_11_2_hfpi_hf_HfWithOplCallableMaslovPrefactor:
             output_grid_x=out_x,
             output_grid_y=out_y,
             input_grid_dx=dx,
-            wavelength=wavelength,
             apply_van_vleck=False,  # focus on the prefactor sign
             chunk_output=1,
         )
@@ -1873,8 +1872,7 @@ class TestAuditFixesV4_12_1_grid_unify_HfGridConventionMatchesLibrary:
         E_hf = propagate_huygens_fresnel_with_opl_callable(
             E, opl_fn=opl,
             output_grid_x=out_x, output_grid_y=out_y,
-            input_grid_dx=dx, wavelength=wl,
-            apply_van_vleck=True,
+            input_grid_dx=dx,             apply_van_vleck=True,
             chunk_output=16,
         )
         E_hf = np.asarray(E_hf)

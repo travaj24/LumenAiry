@@ -530,7 +530,6 @@ def recommend_gbd_sampling(
     E_in: np.ndarray,
     dx: float,
     *,
-    wavelength: Optional[float] = None,
     target_overlap: float = 1.5,
     oversample: float = 4.0,
 ) -> Dict[str, Any]:
@@ -570,21 +569,21 @@ def recommend_gbd_sampling(
     rad/m for ``lambda`` = 0.4 / 1.55 / 10 um (exactly ``1/lambda``), and
     ``sample_step`` = 3 -> 4 -> 4 accordingly.
 
-    Parameters
-    ----------
-    wavelength : float, optional
-        **Deprecated and unused** (audit P8).  See above: the wavelength
-        reaches this function through ``E_in``'s phase gradient, so the
-        body has never read it.  A ``lambda``-dependent beamlet-divergence
-        term was considered and rejected on measurement -- the sibling
-        :func:`converge_gbd_sampling`, which scores real propagations
-        against the exact ASM oracle, returns the SAME optimal overlap
-        (1.0) at ``lambda`` = 0.633 / 1.55 / 3.0 um on a fixed field and
-        ``sample_step`` (only the error magnitude rises, 1.21e-2 ->
-        1.78e-2 -> 2.60e-2), so there is no wavelength-dependent optimum
-        for this function's ``waist_factor`` to track.  Use
-        :func:`converge_gbd_sampling` when you want the width tuned
-        against a propagation at a specific wavelength and distance.
+    Notes on the removed ``wavelength`` keyword
+    -------------------------------------------
+    ``wavelength`` was **Deprecated and unused** (audit P8) and is REMOVED
+    in v5.30.  See above: the wavelength reaches this function through
+    ``E_in``'s phase gradient, so the body never read it.  A
+    ``lambda``-dependent beamlet-divergence term was considered and
+    rejected on measurement -- the sibling
+    :func:`converge_gbd_sampling`, which scores real propagations
+    against the exact ASM oracle, returns the SAME optimal overlap
+    (1.0) at ``lambda`` = 0.633 / 1.55 / 3.0 um on a fixed field and
+    ``sample_step`` (only the error magnitude rises, 1.21e-2 ->
+    1.78e-2 -> 2.60e-2), so there is no wavelength-dependent optimum
+    for this function's ``waist_factor`` to track.  Use
+    :func:`converge_gbd_sampling` when you want the width tuned
+    against a propagation at a specific wavelength and distance.
 
     Returns
     -------
@@ -594,30 +593,19 @@ def recommend_gbd_sampling(
         ``propagate_gbd_*`` (``**recommend_gbd_sampling(...)`` minus
         ``n_beamlets``).
 
-    .. deprecated:: 5.30
-        ``wavelength`` (audit P8): a required keyword the body never read
-        (identical output for ``lambda`` = 0.4 um and 10 um at fixed
-        ``E_in``).  It is now optional; passing it emits a
-        ``DeprecationWarning`` and it will be removed in v5.32.
+    .. versionchanged:: 5.30
+        ``wavelength`` (audit P8) is **REMOVED**.  It was a required
+        keyword the body never read (identical output for ``lambda`` =
+        0.4 um and 10 um at fixed ``E_in``); v5.30 first made it optional
+        + ``DeprecationWarning``, and the W5 shim-removal wave deletes it
+        in the same release rather than carrying an inert keyword to
+        v5.32.  Migration: drop the kwarg -- the returned dict was proven
+        independent of it by construction, so no output changes.  For a
+        width tuned against a real propagation at a given wavelength and
+        distance use :func:`converge_gbd_sampling`.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'recommend_gbd_sampling')
-    # v5.30 (audit P8): ``wavelength`` was a REQUIRED keyword that the
-    # body never read.  Deprecated rather than consumed -- see the
-    # docstring's measured rejection of the lambda-dependent-divergence
-    # alternative.  Same shape as the v5.30 ``chunk_output`` /
-    # ``propagate_huygens_fresnel_with_opl_callable(wavelength=)``
-    # retirements (audit P7).
-    if wavelength is not None:
-        warnings.warn(
-            "recommend_gbd_sampling: wavelength is deprecated since v5.30 "
-            "and has no effect (it was a required keyword the body never "
-            "read -- identical output for lambda = 0.4 um and 10 um).  The "
-            "wavelength already reaches this function through E_in's phase "
-            "gradient, measured in rad/m; drop the kwarg.  For a width "
-            "tuned against a real propagation at a given wavelength and "
-            "distance use converge_gbd_sampling(...).  It will be removed "
-            "in v5.32.", DeprecationWarning, stacklevel=2)
+    _check_2d_scalar_field(E_in, 'recommend_gbd_sampling', input_kind='field')
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
     gx = xp.gradient(E_in, dx, axis=-1)
@@ -726,7 +714,7 @@ def converge_gbd_sampling(
         ``propagate_gbd_*``.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'converge_gbd_sampling')
+    _check_2d_scalar_field(E_in, 'converge_gbd_sampling', input_kind='field')
     from ..propagators.asm import angular_spectrum_propagate
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
@@ -868,7 +856,8 @@ def decompose_field_adaptive(
     JAX / CuPy use the uniform :func:`decompose_field_to_beamlets`.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'decompose_field_adaptive')
+    _check_2d_scalar_field(E_in, 'decompose_field_adaptive',
+                           input_kind='field')
     xp = array_namespace(E_in)
     if xp is not np:
         raise NotImplementedError(
@@ -2001,7 +1990,7 @@ def gbd_field_to_asm(E: np.ndarray, *, z: float, wavelength: float, dx: float,
     handoff).  ``z`` / ``waist_factor`` must match the ``propagate_gbd_freespace``
     call that produced ``E``."""
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'gbd_field_to_asm')
+    _check_2d_scalar_field(E, 'gbd_field_to_asm', input_kind='field')
     xp = array_namespace(E)
     return E * xp.exp(-1j * gbd_asm_gouy_phase(z, wavelength, dx, waist_factor))
 
@@ -2017,7 +2006,7 @@ def asm_field_to_gbd(E: np.ndarray, *, z: float, wavelength: float, dx: float,
     this (decomposition + reconstruction is self-consistent in GBD's
     convention)."""
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'asm_field_to_gbd')
+    _check_2d_scalar_field(E, 'asm_field_to_gbd', input_kind='field')
     xp = array_namespace(E)
     return E * xp.exp(1j * gbd_asm_gouy_phase(z, wavelength, dx, waist_factor))
 
@@ -2051,7 +2040,7 @@ def match_global_phase(E: np.ndarray, reference: np.ndarray) -> np.ndarray:
        :func:`lumenairy.propagators.asm.apply_fresnel_curvature`.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'match_global_phase')
+    _check_2d_scalar_field(E, 'match_global_phase', input_kind='field')
     xp = array_namespace(E)
     ip = xp.sum(xp.conj(reference) * E)
     return E * (xp.conj(ip) / (xp.abs(ip) + 1e-300))
@@ -2098,7 +2087,8 @@ def propagate_gbd_freespace_spectral(
         ``(Ny, Nx)`` real for ``combine='intensity'``.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'propagate_gbd_freespace_spectral')
+    _check_2d_scalar_field(E_in, 'propagate_gbd_freespace_spectral',
+                           input_kind='field')
     xp = array_namespace(E_in)
     lams = [float(_l) for _l in wavelengths]
     if not lams:
@@ -2429,7 +2419,8 @@ def propagate_gbd_freespace_csp(
     matches the dense sum to the tail truncation (``window=6.0`` -> ~1e-16 tail).
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'propagate_gbd_freespace_csp')
+    _check_2d_scalar_field(E_in, 'propagate_gbd_freespace_csp',
+                           input_kind='field')
     xp = array_namespace(E_in)
     if dy is None:
         dy = dx

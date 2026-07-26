@@ -511,7 +511,7 @@ class TestSourceGaussianSchellEnsembleTuple:
         result = Source.gaussian_schell(
             N=32, dx=1e-6, wavelength=633e-9,
             w0=10e-6, sigma_g=5e-6,
-            n_realizations=4, seed=0,
+            n_realizations=4, rng=0,
         )
         # Must NOT be a Source instance.
         assert not isinstance(result, Source), (
@@ -546,7 +546,7 @@ class TestSourceGaussianSchellEnsembleTuple:
             N=N, dx=2e-6, wavelength=633e-9,
             intensity_profile=I,
             coherence_length=8e-6,
-            n_realizations=4, seed=0,
+            n_realizations=4, rng=0,
         )
         assert not isinstance(result, Source)
         assert isinstance(result, tuple)
@@ -561,7 +561,7 @@ class TestSourceGaussianSchellEnsembleTuple:
         result = Source.gaussian_schell(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,
-            n_realizations=4, seed=0,
+            n_realizations=4, rng=0,
             return_kind='mcf',
         )
         assert isinstance(result, PartialCoherenceMCF)

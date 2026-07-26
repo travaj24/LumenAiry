@@ -65,7 +65,7 @@ def _make_simple_ensemble(n_realizations=4, N=16, dx=2e-6,
     return create_gaussian_schell_source(
         N=N, dx=dx, wavelength=wavelength,
         w0=w0, sigma_g=sigma_g,
-        n_realizations=n_realizations, seed=seed,
+        n_realizations=n_realizations, rng=seed,
         return_kind='ensemble',
     )
 

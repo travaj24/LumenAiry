@@ -1127,7 +1127,7 @@ def test_helper_rejects_mcf_with_v4_16_message():
     mcf = create_gaussian_schell_source(
         N=16, dx=2e-6, wavelength=633e-9,
         w0=10e-6, sigma_g=5e-6,
-        n_realizations=2, seed=0, return_kind='mcf')
+        n_realizations=2, rng=0, return_kind='mcf')
     with pytest.raises(TypeError) as excinfo:
         _check_2d_scalar_field(mcf, 'unit_test_fn')
     msg = str(excinfo.value)

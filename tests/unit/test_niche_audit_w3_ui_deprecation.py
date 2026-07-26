@@ -544,7 +544,12 @@ class TestDeprecationRemovalSchedule:
 
     def test_shipped_horizons_resolve_forward(self):
         cur = dep._version_tuple(la.__version__)
-        # The two horizons the audit measured as rotten.
+        # The two horizons the audit measured as rotten.  v5.30 (W5) EXECUTED
+        # the '5.27' removals and deleted the registry entry, so this now
+        # exercises the ``resolve_removal_version`` BACKSTOP rather than an
+        # explicit ``REMOVAL_SCHEDULE`` mapping -- which is the stronger
+        # property: deleting an entry must not resurrect a past-horizon
+        # banner for any site that still states the old version.
         for shipped in ('5.0', '5.27'):
             live = dep.resolve_removal_version(shipped)
             assert dep._version_tuple(live) > cur, (
@@ -552,6 +557,41 @@ class TestDeprecationRemovalSchedule:
                 f'not after the running v{la.__version__}')
         # A future horizon is passed through untouched.
         assert dep.resolve_removal_version('6.0') == '6.0'
+
+    def test_executed_removals_leave_no_registry_entry(self):
+        """v5.30 (W5) removal-bookkeeping invariant.
+
+        ``check_removal_schedule`` requires every ``REMOVAL_SCHEDULE``
+        VALUE to lie in the future (invariant 2), so an entry for a
+        completed removal can never be satisfied -- it would turn the
+        self-check permanently red.  The registry's convention is
+        therefore to DELETE the entry and tombstone it in a comment; the
+        backstop above keeps the banner safe either way."""
+        assert dep.REMOVAL_SCHEDULE == {}, (
+            f'REMOVAL_SCHEDULE should be empty after the v5.30 W5 wave '
+            f'executed its only entry; got {dep.REMOVAL_SCHEDULE!r}')
+        assert dep.check_removal_schedule() == []
+
+    def test_the_module_itself_stays_fully_functional(self):
+        """Removing the shims must not gut the registry: the next
+        deprecation cycle registers here exactly as before, and the P5
+        return-contract TRANSITION is still scheduled (explicitly out of
+        the W5 removal scope -- it flips a default, it deletes nothing)."""
+        cur = dep._version_tuple(la.__version__)
+        assert dep._version_tuple(dep.API_TRANSITION_VERSION) > cur
+        assert dep.API_TRANSITION_VERSION == dep.NEXT_REMOVAL_VERSION
+        for name in ('warn_deprecated_kwarg', 'warn_deprecated_alias',
+                     'warn_renamed_function', 'warn_deprecated_default',
+                     'warn_deprecated_signature', 'deprecated_alias'):
+            assert callable(getattr(dep, name)), name
+        # A fresh registry entry still resolves (simulated, not written).
+        dep.REMOVAL_SCHEDULE['5.1'] = dep.NEXT_REMOVAL_VERSION
+        try:
+            assert dep.check_removal_schedule() == []
+            assert dep.resolve_removal_version('5.1') == \
+                dep.NEXT_REMOVAL_VERSION
+        finally:
+            del dep.REMOVAL_SCHEDULE['5.1']
         assert dep.resolve_removal_version(None) is None
 
     def test_no_call_site_advertises_a_shipped_removal_version(self):
@@ -570,22 +610,42 @@ class TestDeprecationRemovalSchedule:
                          + '\n  '.join(bad))
 
     def test_emitted_banner_names_a_future_version(self):
-        """End-to-end through the production path (not the helper): the
-        v5.25 ``sigma=`` -> ``w0=`` source shim.  Pre-fix this emitted
-        'will be removed in v5.27' from v5.29.0."""
+        """End-to-end through a production path (not the helper).
+
+        SUPERSEDED CARRIER: this pin used to drive the v5.25 ``sigma=`` ->
+        ``w0=`` source shim, which is REMOVED in v5.30 (W5).  The
+        PROPERTY under test is unchanged -- a banner emitted from the
+        library must name a future version -- so the pin is re-pointed at
+        a live production deprecation instead of being deleted:
+        ``load_zmx_prescription``, the v4.7 Zemax-loader alias whose
+        horizon was realigned to v6.0 in S4-17."""
         cur = dep._version_tuple(la.__version__)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            la.create_gaussian_beam(N=16, dx=1e-6, wavelength=550e-9,
-                                    sigma=3e-6)
+            try:
+                la.load_zmx_prescription('does-not-exist.zmx')
+            except Exception:
+                pass          # the warning fires before any file access
         msgs = [str(w.message) for w in caught
                 if issubclass(w.category, DeprecationWarning)]
-        assert msgs, 'the sigma= shim no longer warns at all'
+        assert msgs, 'no live production deprecation banner fires at all'
         named = _REMOVAL_RE.findall(msgs[0])
         assert named, f'no removed-in clause in {msgs[0]!r}'
         assert dep._version_tuple(named[0]) > cur, (
             f'banner advertises v{named[0]} from a v{la.__version__} '
             f'library: {msgs[0]!r}')
+
+    def test_the_removed_sigma_shim_emits_nothing_at_all(self):
+        """Counter-pin to the supersession above: the carrier this test
+        used to drive is gone, so it must now raise rather than warn."""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            with pytest.raises(TypeError, match='sigma'):
+                la.create_gaussian_beam(N=16, dx=1e-6, wavelength=550e-9,
+                                        sigma=3e-6)
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            [str(w.message) for w in caught])
 
     def test_rescheduled_banner_keeps_the_original_horizon_visible(self):
         """A slip is reported as a slip -- the message names the live
@@ -714,13 +774,18 @@ class TestLensJaxDocstringParams:
 # ===========================================================================
 
 class TestSchellReturnKindShimReachability:
-    """MEASURED, not fixed here (``sources/core.py`` is another owner's
-    file this wave): the helper has zero production call sites -- the
+    """W3 MEASURED that the helper had zero production call sites -- the
     factories default ``return_kind='ensemble'`` outright since v4.16.1,
-    so only an explicit ``return_kind=_RETURN_KIND_UNSET`` reaches the
-    sentinel branch, and even that branch does not warn.  Pinned so the
-    state of affairs is recorded rather than rediscovered, and so that
-    when the helper IS called its banner is not stale."""
+    so only an explicit ``return_kind=_RETURN_KIND_UNSET`` reached the
+    sentinel branch, and even that branch did not warn.
+
+    v5.30 (W5 shim-removal wave) acted on that measurement: the helper,
+    the ``_RETURN_KIND_UNSET`` singleton, the
+    ``_SchellReturnKindUnsetSentinel`` subclass and all five no-op
+    branches are REMOVED.  The zero-call-sites scan below is kept (it now
+    passes trivially AND guards against reintroduction); the
+    'banner is not stale when invoked directly' pin is superseded by an
+    absence check."""
 
     def test_zero_production_call_sites(self):
         hits = []
@@ -752,12 +817,17 @@ class TestSchellReturnKindShimReachability:
                     if issubclass(w.category, DeprecationWarning)]
         assert isinstance(out, tuple) and np.shape(out[0]) == (2, 16, 16)
 
-    def test_helper_banner_is_not_stale_when_invoked_directly(self):
-        from lumenairy.sources.core import _warn_schell_return_kind_default
-        cur = dep._version_tuple(la.__version__)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            _warn_schell_return_kind_default('create_gaussian_schell_source')
-        msg = str(caught[0].message)
-        named = _REMOVAL_RE.findall(msg)
-        assert named and dep._version_tuple(named[0]) > cur, msg
+    def test_helper_is_removed(self):
+        """SUPERSEDES ``test_helper_banner_is_not_stale_when_invoked
+        _directly``.
+
+        A banner that can only be reached by a caller reaching into a
+        private helper, for a transition that completed in v4.15.1, has no
+        stale-ness left to guard -- v5.30 (W5) deletes it.  The stale-banner
+        property is still covered library-wide by
+        ``test_no_call_site_advertises_a_shipped_removal_version``."""
+        import lumenairy.sources.core as core
+        for name in ('_warn_schell_return_kind_default',
+                     '_RETURN_KIND_UNSET',
+                     '_SchellReturnKindUnsetSentinel'):
+            assert not hasattr(core, name), name

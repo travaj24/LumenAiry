@@ -72,7 +72,7 @@ def gaussian_beam(N_small, dx_m, wavelength_m) -> np.ndarray:
     unpacks the field for tests that only need the array.
     """
     E, _x, _y = la.create_gaussian_beam(N_small, dx_m, wavelength_m,
-                                          sigma=30e-6)
+                                          w0=(30e-6) * np.sqrt(2))
     return E
 
 

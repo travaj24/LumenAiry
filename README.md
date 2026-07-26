@@ -3461,7 +3461,8 @@ The library is wide -- pick a question and the table tells you where to start.
 ```python
 # 1. Free-space propagation, smart dispatch -- works for any geometry.
 import lumenairy as la
-E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, wavelength=1.31e-6, sigma=50e-6)
+E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, wavelength=1.31e-6,
+                                  w0=70.7e-6)  # 1/e^2 intensity radius
 E_focus = la.angular_spectrum_propagate(E, z=1e-3, wavelength=1.31e-6, dx=2e-6)
 print('centroid =', la.beam_centroid(E_focus, 2e-6))
 

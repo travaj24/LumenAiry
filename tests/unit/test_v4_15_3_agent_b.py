@@ -145,20 +145,23 @@ from lumenairy.algebra import (
     ThinLens,
 )
 from lumenairy.sources.core import (
-    _RETURN_KIND_UNSET,
     PartialCoherenceMCF,
     Source,
-    _SchellReturnKindUnsetSentinel,
     create_annular_incoherent_source,
     create_gaussian_schell_source,
     create_schell_model_source,
 )
 
+# v5.30 (W5 shim-removal wave): ``_RETURN_KIND_UNSET`` and
+# ``_SchellReturnKindUnsetSentinel`` are no longer importable -- the whole
+# return_kind sentinel apparatus was removed.  See
+# ``TestReturnKindUnsetSubclassSentinel`` below for the supersession record.
+
 # Shared parameter bundles for Schell-family tests.
 _GAUSSIAN_SCHELL_KW = dict(
     N=16, dx=2e-6, wavelength=633e-9,
     w0=20e-6, sigma_g=8e-6,
-    n_realizations=4, seed=0,
+    n_realizations=4, rng=0,
 )
 
 _SCHELL_MODEL_KW = dict(
@@ -167,7 +170,7 @@ _SCHELL_MODEL_KW = dict(
         -((np.linspace(-1, 1, 16)[:, None]) ** 2
           + (np.linspace(-1, 1, 16)[None, :]) ** 2) / 0.25),
     coherence_length=8e-6,
-    n_realizations=4, seed=0,
+    n_realizations=4, rng=0,
 )
 
 
@@ -405,26 +408,19 @@ class TestSchellDeprecationWarningStacklevel:
         ens, dx, dy, wl = result
         assert ens.shape == (4, 16, 16)
 
-    def test_warn_helper_still_callable_for_back_compat(self):
-        """The ``_warn_schell_return_kind_default`` helper is
-        preserved as a deprecated-but-importable symbol for back-
-        compat (the in-file ``LibraryWideStacklevelSweep`` pin and
-        any external user code that wired the helper into a custom
-        Schell wrapper).  v4.16.1 must NOT remove the symbol --
-        only the default-path call-site invocations.
-        """
-        from lumenairy.sources.core import _warn_schell_return_kind_default
-        assert callable(_warn_schell_return_kind_default)
-        # When invoked explicitly, the helper still emits the warning
-        # (used by callers maintaining their own custom Schell
-        # wrappers that opt into the legacy contract).
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            _warn_schell_return_kind_default('user_custom_factory')
-        dep = [w for w in caught
-               if issubclass(w.category, DeprecationWarning)
-               and 'user_custom_factory' in str(w.message)]
-        assert len(dep) >= 1
+    def test_warn_helper_is_removed(self):
+        """SUPERSEDES ``test_warn_helper_still_callable_for_back_compat``
+        (v4.16.1).
+
+        v4.16.1 kept ``_warn_schell_return_kind_default`` importable after
+        retiring its call sites, on the theory that an external custom
+        Schell wrapper might invoke it.  v5.30 (W5) removes it: the
+        ``test_niche_audit_w3_ui_deprecation`` reachability pin had
+        MEASURED zero production call sites, and the helper's only
+        remaining behaviour was to emit a banner for a transition that
+        completed five releases earlier."""
+        import lumenairy.sources.core as core
+        assert not hasattr(core, '_warn_schell_return_kind_default')
 
 
 # ============================================================================
@@ -473,36 +469,41 @@ class TestLibraryWideStacklevelSweep:
 
     @pytest.mark.parametrize('label,call', LEGACY_INVOCATIONS,
                               ids=[lbl for lbl, _ in LEGACY_INVOCATIONS])
-    def test_classmethod_legacy_positional_stacklevel(self, label, call):
-        """Each legacy-positional Source.* classmethod call must emit
-        a DeprecationWarning attributed to THIS test file (the user's
-        call site), not to ``sources/core.py``.
+    def test_classmethod_legacy_positional_raises_at_user_code(
+            self, label, call):
+        """SUPERSEDES ``test_classmethod_legacy_positional_stacklevel``
+        (v4.15.3 P1-NEW-F1-2).
+
+        The original pin fixed the warning's ``stacklevel`` so the
+        DeprecationWarning was attributed to the user's call site rather
+        than to ``sources/core.py``.  v5.30 (W5) removes the shim, so
+        there is no warning to place -- but the equivalent property still
+        matters and is still checkable: the ``TypeError`` traceback's
+        LAST user frame must be this file, i.e. the rejection happens at
+        the classmethod boundary and does not leak a deep library stack.
         """
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            try:
+            with pytest.raises(TypeError) as info:
                 call()
-            except TypeError:
-                # Some classmethods may raise post-warn-emission if
-                # the positional shim requires a specific arity; we
-                # only care about the warning's filename here.  The
-                # warning must have fired before any TypeError.
-                pass
-        dep = [w for w in caught
-               if issubclass(w.category, DeprecationWarning)
-               and label in str(w.message)]
-        assert len(dep) >= 1, (
-            f"{label} legacy-positional call must emit "
-            f"DeprecationWarning; got {[str(w.message) for w in caught]}.")
-        fn = dep[0].filename
-        norm = fn.replace('\\', '/').lower()
-        assert __file__.replace('\\', '/').lower() in norm, (
-            f"{label} DeprecationWarning must point at user code; "
-            f"got filename={fn!r}.")
-        assert 'sources/core.py' not in norm and \
-               'lumenairy/sources/core.py' not in norm, (
-            f"{label} DeprecationWarning must NOT point inside the "
-            f"library; got filename={fn!r}.")
+        assert label in str(info.value), str(info.value)
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            label, [str(w.message) for w in caught])
+        # Walk to the deepest frame: the rejection helper lives one frame
+        # inside the classmethod, so the library depth is bounded at 2.
+        tb, depth = info.tb, 0
+        frames = []
+        while tb is not None:
+            frames.append(tb.tb_frame.f_code.co_filename)
+            tb = tb.tb_next
+            depth += 1
+        norm = [f.replace('\\', '/').lower() for f in frames]
+        assert __file__.replace('\\', '/').lower() in norm[0], norm
+        lib = [f for f in norm if 'lumenairy/sources/core.py' in f]
+        assert len(lib) <= 2, (
+            f"{label}: the rejection must fire at the classmethod "
+            f"boundary, not deep in the library; frames={norm}")
 
 
 # ============================================================================
@@ -630,63 +631,55 @@ class TestSourceSchellClassmethodSentinel:
 
 
 class TestReturnKindUnsetSubclassSentinel:
-    """v4.15.3 (audit P2-NEW): ``_RETURN_KIND_UNSET`` was a bare
-    ``_Sentinel`` instance in v4.15.2.  v4.15.3 promotes it to a
-    dedicated ``_SchellReturnKindUnsetSentinel(_Sentinel)`` subclass
-    for consistency with the other sentinel patterns in the codebase
-    (``_ZeroApertureMaskSentinel`` / ``_AngleUnsetSentinel`` /
-    ``_NoDefaultSentinel``).
+    """SUPERSEDES the five v4.15.3 ``_RETURN_KIND_UNSET`` pins
+    (``..._is_subclass_instance``, ``..._pickle_round_trip``,
+    ``..._bool_false``, ``..._repr_matches_name``,
+    ``..._registry_singleton``).
+
+    v4.15.3 (audit P2-NEW) promoted ``_RETURN_KIND_UNSET`` from a bare
+    ``_Sentinel`` instance to a dedicated
+    ``_SchellReturnKindUnsetSentinel(_Sentinel)`` subclass, and those five
+    pins fixed its identity / pickle / repr / registry contract.
+
+    v5.30 (W5 shim-removal wave) removes the sentinel entirely: it existed
+    only to detect "caller did not pass ``return_kind``" for the v4.15.0 ->
+    v4.15.1 return-shape ``DeprecationWarning``, that warning was retired
+    in v4.16.1, and the five remaining branches were no-ops.  There is no
+    object left to have an identity contract.  The sentinel PATTERN those
+    pins guarded is still exercised by the other five ``_Sentinel``
+    subclasses via the auto-discovering walker in
+    ``tests/unit/test_v5_2_walker_sentinel_reduce.py``, so the contract
+    itself loses no coverage.
     """
 
-    def test_return_kind_unset_is_subclass_instance(self):
-        """The singleton must be an instance of the new dedicated
-        subclass, not a bare ``_Sentinel``."""
-        from lumenairy._deprecation import _Sentinel
-        assert type(_RETURN_KIND_UNSET).__name__ == (
-            '_SchellReturnKindUnsetSentinel'), (
-            f"_RETURN_KIND_UNSET must be a "
-            f"_SchellReturnKindUnsetSentinel instance; got "
-            f"type={type(_RETURN_KIND_UNSET).__name__}.")
-        # Subclass relationship:
-        assert isinstance(_RETURN_KIND_UNSET,
-                          _SchellReturnKindUnsetSentinel)
-        # Still inherits from the base _Sentinel (so the sentinel
-        # machinery -- __bool__, __reduce__, registry -- works):
-        assert isinstance(_RETURN_KIND_UNSET, _Sentinel)
-        # Not a bare _Sentinel:
-        assert type(_RETURN_KIND_UNSET) is not _Sentinel, (
-            "_RETURN_KIND_UNSET must be a SUBCLASS instance, not a "
-            "bare _Sentinel.")
+    def test_sentinel_and_subclass_are_not_importable(self):
+        import lumenairy.sources.core as core
+        for name in ('_RETURN_KIND_UNSET',
+                     '_SchellReturnKindUnsetSentinel'):
+            assert not hasattr(core, name), name
+        with pytest.raises(ImportError):
+            from lumenairy.sources.core import (  # noqa: F401
+                _RETURN_KIND_UNSET as _probe,
+            )
 
-    def test_return_kind_unset_pickle_round_trip(self):
-        """The singleton pickle protocol must preserve ``is``-identity
-        (the same registered instance comes back on unpickle).  This
-        is the canonical Python pattern for singleton sentinels that
-        cross pickle boundaries (joblib / multiprocessing workers)."""
-        restored = pickle.loads(pickle.dumps(_RETURN_KIND_UNSET))
-        assert restored is _RETURN_KIND_UNSET, (
-            f"pickle round-trip must preserve singleton identity; "
-            f"got id(original)={id(_RETURN_KIND_UNSET)}, "
-            f"id(restored)={id(restored)}.")
+    def test_registry_no_longer_holds_the_singleton(self):
+        """The name-keyed ``_SENTINEL_REGISTRY`` entry goes with the
+        class -- a stale entry would let an unpickle silently resurrect
+        a sentinel whose meaning no longer exists.
 
-    def test_return_kind_unset_bool_false(self):
-        """``__bool__`` -> False inherited from base ``_Sentinel``."""
-        assert not bool(_RETURN_KIND_UNSET)
-
-    def test_return_kind_unset_repr_matches_name(self):
-        """``repr`` includes the canonical registry name."""
-        r = repr(_RETURN_KIND_UNSET)
-        assert '_SCHELL_RETURN_KIND_UNSET' in r, (
-            f"_RETURN_KIND_UNSET repr should include the registry "
-            f"name; got {r!r}.")
-
-    def test_return_kind_unset_registry_singleton(self):
-        """The singleton is registered under the canonical name so
-        the unpickle path finds it without instantiating a new
-        instance."""
+        (The registry is populated at ``_Sentinel.__init__``, so with the
+        subclass gone nothing registers the name.  A leftover entry would
+        mean a copy of the class survived somewhere.)"""
         from lumenairy._deprecation import _SENTINEL_REGISTRY
-        assert _SENTINEL_REGISTRY.get('_SCHELL_RETURN_KIND_UNSET') is (
-            _RETURN_KIND_UNSET), (
-            f"_RETURN_KIND_UNSET must be the registered singleton "
-            f"under '_SCHELL_RETURN_KIND_UNSET'; got "
-            f"{_SENTINEL_REGISTRY.get('_SCHELL_RETURN_KIND_UNSET')!r}.")
+        assert '_SCHELL_RETURN_KIND_UNSET' not in _SENTINEL_REGISTRY, (
+            'a _SchellReturnKindUnsetSentinel is still being constructed '
+            'somewhere')
+
+    def test_stale_string_sentinel_gets_the_modern_error(self):
+        """A caller who forwarded the removed sentinel now lands on
+        ``_validate_return_kind``'s existing ``ValueError``, which already
+        names the modern values -- which is why the removal needed no
+        bespoke rejection branch."""
+        with pytest.raises(ValueError, match="'ensemble' or 'mcf'"):
+            create_gaussian_schell_source(
+                return_kind=object(), **_GAUSSIAN_SCHELL_KW)

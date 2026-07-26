@@ -39,8 +39,7 @@ def t_custom_opl_finite():
     out = propagate_huygens_fresnel_with_opl_callable(
         E, opl_fn=opl,
         output_grid_x=out_x, output_grid_y=out_y,
-        input_grid_dx=dx, wavelength=lam,
-        apply_van_vleck=True,
+        input_grid_dx=dx, apply_van_vleck=True,
         chunk_output=8,
     )
     return out.shape == (8, 8) and bool(np.all(np.isfinite(np.abs(out)))), 'finite'
@@ -58,10 +57,10 @@ def t_van_vleck_changes_amplitude():
     out_y = (np.arange(4) - 2 + 0.5) * dx * 2
     out_with = propagate_huygens_fresnel_with_opl_callable(
         E, opl_fn=opl, output_grid_x=out_x, output_grid_y=out_y,
-        input_grid_dx=dx, wavelength=lam, apply_van_vleck=True, chunk_output=4)
+        input_grid_dx=dx, apply_van_vleck=True, chunk_output=4)
     out_without = propagate_huygens_fresnel_with_opl_callable(
         E, opl_fn=opl, output_grid_x=out_x, output_grid_y=out_y,
-        input_grid_dx=dx, wavelength=lam, apply_van_vleck=False, chunk_output=4)
+        input_grid_dx=dx, apply_van_vleck=False, chunk_output=4)
     return float(np.max(np.abs(out_with - out_without))) > 0, 'differs'
 
 

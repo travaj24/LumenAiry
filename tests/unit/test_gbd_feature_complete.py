@@ -144,8 +144,8 @@ def test_recommend_sampling_scales_with_field_structure_and_roundtrips():
     smooth = np.exp(-(X ** 2 + Y ** 2) / (0.25e-3) ** 2).astype(np.complex128)
     fine = (smooth * np.exp(1j * 2 * np.pi / LAM * np.sin(0.05) * X)).astype(
         np.complex128)  # steep tilt -> fast phase gradient
-    rs = recommend_gbd_sampling(smooth, dx, wavelength=LAM)
-    rf = recommend_gbd_sampling(fine, dx, wavelength=LAM)
+    rs = recommend_gbd_sampling(smooth, dx)
+    rf = recommend_gbd_sampling(fine, dx)
     assert rs['sample_step'] >= 1 and rf['sample_step'] >= 1
     # the steeply-tilted (finer) field must not be sampled MORE coarsely
     assert rf['sample_step'] <= rs['sample_step']

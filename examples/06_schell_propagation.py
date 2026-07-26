@@ -28,7 +28,7 @@ def main():
         N=256, dx=2e-6, wavelength=633e-9,
         w0=50e-6, sigma_g=15e-6,
         n_realizations=64, return_kind='ensemble',
-        seed=0,
+        rng=0,
     )
     print(f'  Input ensemble shape: {ens.shape}')
     print(f'  Grid pitch: dx={dx*1e6:.3g} um, dy={dy*1e6:.3g} um')

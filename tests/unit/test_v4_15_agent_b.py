@@ -8,13 +8,13 @@ Agent B scope for the v4.15 dispatch:
 * **B.1 / ROADMAP v4.15 #2** -- ``Source.*`` size-arg normalisation.
   The 5 factory classmethods are migrated to the canonical kwarg-only
   form ``Source.method(*, N, dx, wavelength, <size_kwargs>)``.  The
-  legacy positional form is still accepted for one release with a
-  ``DeprecationWarning`` routed through
-  ``_deprecation.warn_deprecated_signature``
-  (``version_removed`` was ``'5.0'``; re-scheduled to
-  ``sources.core._OVERDUE_SHIM_VERSION_REMOVED`` = ``'5.32'`` in v5.30,
-  audit R-18, after the shims outlived the original horizon by 29
-  minor releases).
+  legacy positional form was accepted with a ``DeprecationWarning``
+  routed through ``_deprecation.warn_deprecated_signature``
+  (``version_removed`` was ``'5.0'``; re-scheduled to ``'5.32'`` in
+  v5.30, audit R-18, after the shims outlived the original horizon by 29
+  minor releases).  **v5.30 (W5 shim-removal wave) REMOVES it** -- the
+  owner executed the removal instead of slipping a third time -- so the
+  pins below assert the rejection, not the warning.
 
 * **B.2 / ROADMAP v4.15 #3** -- ``lumenairy.propagators.system.evaluate`` ergonomic
   one-call entry: build the element chain from a prescription dict,
@@ -40,11 +40,10 @@ Agent B scope for the v4.15 dispatch:
       ``TestP2FacFactoryValidationMetaPin`` carries the canonical
       kwarg-form copy of the meta-pin.
     - **P2-DEP-1**: ``makedammann2d`` + ``create_led_source`` shims
-      now route through ``_deprecation.warn_deprecated_signature``
-      with the removal version in the message text (``'5.0'`` at
-      v4.15; re-scheduled to ``'5.32'`` in v5.30 -- audit R-18 --
-      and asserted via
-      ``sources.core._OVERDUE_SHIM_VERSION_REMOVED``).
+      routed through ``_deprecation.warn_deprecated_signature`` with the
+      removal version in the message text (``'5.0'`` at v4.15;
+      re-scheduled to ``'5.32'`` in v5.30 -- audit R-18).  **Both are
+      REMOVED in v5.30 (W5)**: the pins below assert the rejection.
 
 Author: Andrew Traverso -- v4.15 / Agent B
 """
@@ -101,10 +100,9 @@ _NORMALISED_FACTORIES = [
 
 
 class TestB1SourceFactoryNormalisation:
-    """Every one of the 5 normalised factories must accept BOTH the
-    canonical kwarg-only form (no warning) AND the legacy positional
-    form (DeprecationWarning naming its removal version -- ``'5.32'``
-    since the v5.30 / R-18 re-schedule).
+    """Every one of the 5 normalised factories must accept the canonical
+    kwarg-only form with no warning, and REJECT the legacy positional
+    form (v5.30 / W5 removal).
     """
 
     @pytest.mark.parametrize('factory_name, legacy_args, kwargs',
@@ -121,50 +119,45 @@ class TestB1SourceFactoryNormalisation:
 
     @pytest.mark.parametrize('factory_name, legacy_args, kwargs',
                              _NORMALISED_FACTORIES)
-    def test_legacy_positional_form_still_works(self, factory_name,
-                                                  legacy_args, kwargs):
-        """Legacy positional form must still produce a Source (back-compat)."""
-        factory = getattr(Source, factory_name)
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', DeprecationWarning)
-            src = factory(*legacy_args)
-        assert isinstance(src, Source)
-        assert src.shape == (32, 32)
+    def test_legacy_positional_form_is_removed(self, factory_name,
+                                                legacy_args, kwargs):
+        """SUPERSEDES ``test_legacy_positional_form_still_works`` and
+        ``test_legacy_positional_emits_deprecation_warning`` (v4.15,
+        re-scheduled v5.30/R-18).
 
-    @pytest.mark.parametrize('factory_name, legacy_args, kwargs',
-                             _NORMALISED_FACTORIES)
-    def test_legacy_positional_emits_deprecation_warning(self, factory_name,
-                                                          legacy_args,
-                                                          kwargs):
-        """Legacy positional form must emit a DeprecationWarning that
-        names its removal version.
-
-        v5.30 (audit R-18 / overdue shims): the target was RE-SCHEDULED
-        from the blown ``v5.0`` date -- the shims were still shipping at
-        v5.29, 29 minor releases past their own removal version -- to
-        ``v5.32``, single-sourced in
-        ``sources.core._OVERDUE_SHIM_VERSION_REMOVED``.  This pin now
-        asserts against that constant, so a future re-schedule cannot
-        leave the warning text and the pin disagreeing."""
-        from lumenairy.sources.core import _OVERDUE_SHIM_VERSION_REMOVED
+        v5.30 (W5 shim-removal wave) REMOVES the legacy positional form.
+        Contract: ``TypeError`` -- not a warning, and not Python's bare
+        arity message.  Because the shim intercepted VALUES (the legacy
+        order put the SIZE argument in slot 1, so every quantity in a
+        positional call is one slot out of place), the classmethods keep
+        an always-raising ``*_legacy_positional`` collector and name the
+        canonical signature in the error.  Precedent for that shape:
+        ``propagators/system.py``'s ``_reject_legacy`` (v5.0 aperture
+        schema purge).  No ``DeprecationWarning`` may fire.
+        """
         factory = getattr(Source, factory_name)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            factory(*legacy_args)
-        dep = [w for w in caught
-               if issubclass(w.category, DeprecationWarning)]
-        assert len(dep) >= 1, (
-            f"Source.{factory_name} legacy positional call must emit "
-            f"DeprecationWarning; got {[str(w.message) for w in caught]}.")
-        msg = str(dep[0].message)
-        assert _OVERDUE_SHIM_VERSION_REMOVED in msg, (
-            f"DeprecationWarning must reference the "
-            f"v{_OVERDUE_SHIM_VERSION_REMOVED} removal target; "
-            f"got {msg!r}.")
-        assert 'removed in v5.0;' not in msg, (
-            f"shim still advertises the blown v5.0 horizon; got {msg!r}.")
-        assert factory_name in msg or f'Source.{factory_name}' in msg, (
-            f"DeprecationWarning must name the factory; got {msg!r}.")
+            with pytest.raises(TypeError) as info:
+                factory(*legacy_args)
+        msg = str(info.value)
+        assert f'Source.{factory_name}' in msg, msg
+        assert 'REMOVED in v5.30' in msg, msg
+        # The error must hand over the canonical form, not just complain.
+        assert '(*, N, dx, wavelength' in msg, msg
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            'the removed shim must not warn on its way out: '
+            f'{[str(w.message) for w in caught]}')
+
+    def test_overdue_shim_version_constant_is_gone(self):
+        """The re-schedule constant existed only to keep the 8 warning
+        sites' horizons in sync.  With every site removed it must go too
+        -- a live ``_OVERDUE_SHIM_VERSION_REMOVED`` after v5.30 would mean
+        a shim survived the wave."""
+        import lumenairy.sources.core as core
+        assert not hasattr(core, '_OVERDUE_SHIM_VERSION_REMOVED')
+        assert not hasattr(core, '_DEPRECATION_VERSION_REMOVED')
 
 
 # ============================================================================
@@ -248,7 +241,7 @@ class TestB3SchellSources:
         returns the raw ensemble and the test averages explicitly.
         """
         rng_kwargs = dict(N=32, dx=10e-6, wavelength=633e-9,
-                          w0=80e-6, sigma_g=40e-6, seed=42)
+                          w0=80e-6, sigma_g=40e-6, rng=42)
         ens_few, _, _, _ = create_gaussian_schell_source(
             n_realizations=4, **rng_kwargs)
         ens_many, _, _, _ = create_gaussian_schell_source(
@@ -284,7 +277,7 @@ class TestB3SchellSources:
             N=N, dx=10e-6, wavelength=633e-9,
             intensity_profile=I_target,
             coherence_length=20e-6,
-            n_realizations=16, seed=0)
+            n_realizations=16, rng=0)
         I_out = np.mean(np.abs(ens) ** 2, axis=0)
         # Compute correlation -- must be high since the source amplitude
         # is sqrt(I_target) up to phase + ensemble noise.
@@ -332,7 +325,7 @@ class TestB3SchellSources:
         """
         result = Source.gaussian_schell(
             N=32, dx=10e-6, wavelength=633e-9,
-            w0=80e-6, sigma_g=40e-6, n_realizations=4, seed=0)
+            w0=80e-6, sigma_g=40e-6, n_realizations=4, rng=0)
         # v4.15.2: ensemble tuple, not a Source.
         assert not isinstance(result, Source)
         assert isinstance(result, tuple)
@@ -372,7 +365,7 @@ class TestB4AnnularIncoherent:
         ens, _, _, _ = create_annular_incoherent_source(
             N=N, dx=dx, wavelength=633e-9,
             inner_radius=inner, outer_radius=outer,
-            n_realizations=8, seed=0)
+            n_realizations=8, rng=0)
         # Rebuild coordinate axes (the factory no longer returns them).
         x = (np.arange(N) - N / 2) * dx
         y = (np.arange(N) - N / 2) * dx
@@ -408,7 +401,7 @@ class TestB4AnnularIncoherent:
         defining property of the incoherent source.
         """
         kw = dict(N=32, dx=10e-6, wavelength=633e-9,
-                  inner_radius=80e-6, outer_radius=140e-6, seed=0)
+                  inner_radius=80e-6, outer_radius=140e-6, rng=0)
         ens, _, _, _ = create_annular_incoherent_source(
             n_realizations=4, **kw)
         # Inspect each realisation independently.
@@ -472,18 +465,18 @@ _DISPATCHER_PIN_PLAIN_FACTORIES = [
         id='create_multi_field_sources'),
     pytest.param(
         'create_gaussian_schell_source',
-        {'w0': 50e-6, 'sigma_g': 25e-6, 'n_realizations': 4, 'seed': 0},
+        {'w0': 50e-6, 'sigma_g': 25e-6, 'n_realizations': 4, 'rng': 0},
         id='create_gaussian_schell_source'),
     pytest.param(
         'create_schell_model_source',
         {'intensity_profile': np.ones((32, 32)),
          'coherence_length': 25e-6,
-         'n_realizations': 4, 'seed': 0},
+         'n_realizations': 4, 'rng': 0},
         id='create_schell_model_source'),
     pytest.param(
         'create_annular_incoherent_source',
         {'inner_radius': 50e-6, 'outer_radius': 120e-6,
-         'n_realizations': 4, 'seed': 0},
+         'n_realizations': 4, 'rng': 0},
         id='create_annular_incoherent_source'),
 ]
 
@@ -597,77 +590,54 @@ class TestP2Dep1ShimsMentionVersionRemoved:
     explicit opt-in + loud ``UserWarning`` naming v5.32 -- see the
     per-test docstring."""
 
-    def test_create_led_source_legacy_shim_mentions_removal_version(self):
-        """The legacy positional form of ``create_led_source`` must
-        emit a DeprecationWarning naming its removal version.
+    def test_create_led_source_legacy_shim_is_removed(self):
+        """SUPERSEDES
+        ``test_create_led_source_legacy_shim_mentions_removal_version``
+        (v4.15 / R-18).
 
-        v5.30 (R-18): asserts against
-        ``sources.core._OVERDUE_SHIM_VERSION_REMOVED`` (currently
-        '5.32') rather than the hard-coded, long-blown '5.0'."""
-        from lumenairy.sources.core import _OVERDUE_SHIM_VERSION_REMOVED
+        v5.30 (W5) REMOVES the positional form.  Contract: ``TypeError``
+        naming the canonical keyword-only signature; no warning."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            la.create_led_source(64, 16e-6, 100e-6, 0.3, 1.31e-6)
-        dep = [w for w in caught
-               if issubclass(w.category, DeprecationWarning)
-               and 'create_led_source' in str(w.message)]
-        assert len(dep) >= 1, (
-            f"Legacy create_led_source call must emit "
-            f"DeprecationWarning; got "
-            f"{[str(w.message) for w in caught]}.")
-        msg = str(dep[0].message)
-        assert _OVERDUE_SHIM_VERSION_REMOVED in msg, (
-            f"create_led_source DeprecationWarning must reference the "
-            f"v{_OVERDUE_SHIM_VERSION_REMOVED} removal; got {msg!r}.")
-        assert 'removed in v5.0;' not in msg, (
-            f"create_led_source still advertises the blown v5.0 removal "
-            f"horizon: {msg!r}.")
+            with pytest.raises(TypeError) as info:
+                la.create_led_source(64, 16e-6, 100e-6, 0.3, 1.31e-6)
+        msg = str(info.value)
+        assert 'create_led_source' in msg and 'REMOVED in v5.30' in msg, msg
+        assert 'diameter=' in msg and 'divergence_angle=' in msg, msg
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            [str(w.message) for w in caught])
 
-    def test_makedammann2d_legacy_shim_names_removal_version(self):
-        """The legacy micrometre auto-detect path in ``makedammann2d``
-        must emit a warning that names its removal version.
+    def test_makedammann2d_legacy_auto_mode_is_removed(self):
+        """SUPERSEDES
+        ``test_makedammann2d_legacy_shim_names_removal_version``
+        (v4.14.2 -> retired v5.30 E-H11 -> REMOVED v5.30 W5).
 
-        The heuristic fires when any of ``periodx`` / ``periody`` /
-        ``waveln`` exceeds ``1e-3`` (1 mm) but is below ``1`` m (the
-        v4.14.3 absolute upper-bound guard).  We pass values in the
-        narrow band ``(1e-3, 1)`` -- representing a legacy caller that
-        wrote ``periodx=0.5`` thinking micrometres but landed at half-
-        a-metre in SI -- so the heuristic-warning path fires without
-        tripping the upper-bound ``ValueError``.
-
-        v5.30 (audit E-H11): the shim is retired -- it needs an explicit
-        ``_legacy_units='auto'`` (the default is now ``'SI'``) and it
-        warns as a ``UserWarning`` naming v5.32, not as a
-        ``DeprecationWarning`` naming v5.0 (which Python suppressed by
-        default outside ``__main__``, hiding a silent 1e-6 rescale of
-        every SI THz/MMW design).
+        The ``'auto'`` micrometre-detect heuristic rescaled any
+        ``periodx`` / ``periody`` / ``waveln`` above 1 mm by ``1e-6``,
+        which is exactly wrong for a physical THz / MMW design.  E-H11
+        demoted it from default to explicit opt-in with a loud
+        ``UserWarning``; the W5 wave deletes it.  Contract: ``ValueError``
+        naming the two surviving modes and the ``'um'`` migration -- an
+        explicit named rejection rather than a bare "invalid" message,
+        because the mode name intercepted VALUES (``system.py``
+        ``_reject_legacy`` precedent).  No warning of any category.
         """
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            try:
+            with pytest.raises(ValueError) as info:
                 la.makedammann2d(
-                    # 0.5 -> 5e-7 after legacy * 1e-6 rescale (550 nm
-                    # period -- physically unrealistic for a Dammann
-                    # grating, but the test only cares that the
-                    # heuristic warning fires).
                     periodx=0.5, periody=0.5, waveln=0.5,
                     itr=1, plot=False, seed=0,
                     _legacy_units='auto')
-            except Exception:
-                # The function may still raise for other reasons
-                # downstream of the warning (degenerate near-field
-                # generated by the implausible 550 nm period x 550 nm
-                # wavelength); we only care about the warning being
-                # emitted, not about the IFTA reaching a useful design.
-                pass
-        dep = [w for w in caught
-               if issubclass(w.category, UserWarning)
-               and 'makedammann2d' in str(w.message)]
-        assert len(dep) >= 1, (
-            f"makedammann2d legacy micrometre call must emit a "
-            f"UserWarning; got "
-            f"{[str(w.message) for w in caught]}.")
-        msg = str(dep[0].message)
-        assert '5.32' in msg, (
-            f"makedammann2d retired-shim warning must reference its "
-            f"v5.32 removal; got {msg!r}.")
+        msg = str(info.value)
+        assert 'makedammann2d' in msg and 'REMOVED in v5.30' in msg, msg
+        assert "_legacy_units='um'" in msg, msg
+        assert not [w for w in caught
+                    if 'makedammann2d' in str(w.message)], (
+            [str(w.message) for w in caught])
+        # The retired shim used to promise a v5.32 removal; v5.30 executed
+        # it early, so no live message may advertise that horizon any more.
+        assert '5.32' not in msg, (
+            f"the removal happened in v5.30 -- the error must not still "
+            f"point at the abandoned v5.32 horizon; got {msg!r}")

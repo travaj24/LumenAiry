@@ -180,7 +180,7 @@ def test_gaussian_schell_source_amp_bit_identical():
     w0, sigma_g, nr, seed = 40.0e-6, 20.0e-6, 3, 777
     E_ens, dx, dy, lam = la.create_gaussian_schell_source(
         N=_N, dx=_DX, wavelength=_LAM, w0=w0, sigma_g=sigma_g,
-        n_realizations=nr, dy=_DY, seed=seed, return_kind='ensemble')
+        n_realizations=nr, dy=_DY, rng=seed, return_kind='ensemble')
     x, y = _axes(_N, _DX, _DY)
     X, Y = np.meshgrid(x, y)
     amp = np.exp(-(X * X + Y * Y) / (w0 ** 2))

@@ -77,7 +77,7 @@ class TestEnsembleContract:
         ens, dx, dy, wl = create_gaussian_schell_source(
             N=32, dx=2e-6, wavelength=633e-9,
             w0=40e-6, sigma_g=10e-6,
-            n_realizations=8, seed=0)
+            n_realizations=8, rng=0)
         assert isinstance(ens, np.ndarray)
         assert ens.shape == (8, 32, 32)
         assert np.iscomplexobj(ens)
@@ -93,7 +93,7 @@ class TestEnsembleContract:
             N=N, dx=2e-6, wavelength=633e-9,
             intensity_profile=I_target,
             coherence_length=10e-6,
-            n_realizations=8, seed=0)
+            n_realizations=8, rng=0)
         assert isinstance(ens, np.ndarray)
         assert ens.shape == (8, N, N)
         assert np.iscomplexobj(ens)
@@ -105,7 +105,7 @@ class TestEnsembleContract:
         ens, dx, dy, wl = create_annular_incoherent_source(
             N=32, dx=2e-6, wavelength=633e-9,
             inner_radius=20e-6, outer_radius=50e-6,
-            n_realizations=8, seed=0)
+            n_realizations=8, rng=0)
         assert isinstance(ens, np.ndarray)
         assert ens.shape == (8, 32, 32)
         assert np.iscomplexobj(ens)
@@ -119,7 +119,7 @@ class TestEnsembleContract:
         ens, _, _, _ = create_gaussian_schell_source(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,
-            n_realizations=4, seed=0)
+            n_realizations=4, rng=0)
         for i in range(ens.shape[0]):
             for j in range(i + 1, ens.shape[0]):
                 # Phase fields must not coincide; intensity overlap is
@@ -167,7 +167,7 @@ class TestSchellPhysics:
         ens, _, _, _ = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=633e-9,
             w0=w0, sigma_g=sigma_g,
-            n_realizations=n_real, seed=42)
+            n_realizations=n_real, rng=42)
         J = _mcf_from_ensemble_dense(ens)
         cy, cx = N // 2, N // 2
         flat_c = cy * N + cx
@@ -199,7 +199,7 @@ class TestSchellPhysics:
         ens, _, _, _ = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=633e-9,
             w0=40e-6, sigma_g=dx / 10.0,
-            n_realizations=2000, seed=0)
+            n_realizations=2000, rng=0)
         J = _mcf_from_ensemble_dense(ens)
         diag = np.real(np.diag(J))
         # Use the centre pixel as the reference (avoids the support
@@ -231,7 +231,7 @@ class TestSchellPhysics:
         ens, _, _, _ = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=633e-9,
             w0=40e-6, sigma_g=sigma_g,
-            n_realizations=16, seed=0)
+            n_realizations=16, rng=0)
         # Use the production MCF builder; this also exercises the
         # full-storage path on N=32.
         mcf = PartialCoherenceMCF.from_ensemble(
@@ -258,7 +258,7 @@ class TestMCFReturnMode:
         result = create_gaussian_schell_source(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,
-            n_realizations=8, seed=0,
+            n_realizations=8, rng=0,
             return_kind='mcf')
         assert isinstance(result, PartialCoherenceMCF)
         assert result.shape == (16, 16)
@@ -273,7 +273,7 @@ class TestMCFReturnMode:
         same ensemble."""
         kw = dict(N=16, dx=2e-6, wavelength=633e-9,
                   w0=20e-6, sigma_g=8e-6,
-                  n_realizations=8, seed=0)
+                  n_realizations=8, rng=0)
         ens, _, _, _ = create_gaussian_schell_source(**kw)
         # Pass the same ensemble through the dense-builder, matching
         # the seed/n_realizations exactly.
@@ -289,7 +289,7 @@ class TestMCFReturnMode:
         ens, _, _, _ = create_gaussian_schell_source(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,
-            n_realizations=16, seed=0)
+            n_realizations=16, rng=0)
         mcf = PartialCoherenceMCF.from_ensemble(
             ens, dx=2e-6, dy=2e-6, wavelength=633e-9)
         modes, eigvals = mcf.coherent_modes()
@@ -310,7 +310,7 @@ class TestMCFReturnMode:
         result = create_gaussian_schell_source(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,
-            n_realizations=8, seed=0,
+            n_realizations=8, rng=0,
             return_kind='mcf')
         assert result.J_full is not None
         assert result.modes is None
@@ -335,7 +335,7 @@ class TestMCFReturnMode:
         result = create_gaussian_schell_source(
             N=128, dx=2e-6, wavelength=633e-9,
             w0=200e-6, sigma_g=40e-6,
-            n_realizations=16, seed=0,
+            n_realizations=16, rng=0,
             return_kind='mcf')
         assert result.J_full is None
         assert result.modes is not None
@@ -361,7 +361,7 @@ class TestReturnKindValidation:
             create_gaussian_schell_source(
                 N=16, dx=2e-6, wavelength=633e-9,
                 w0=20e-6, sigma_g=8e-6,
-                n_realizations=4, seed=0,
+                n_realizations=4, rng=0,
                 return_kind='bogus')
         assert 'return_kind' in str(info.value)
 
@@ -371,7 +371,7 @@ class TestReturnKindValidation:
                 N=16, dx=2e-6, wavelength=633e-9,
                 intensity_profile=np.ones((16, 16)),
                 coherence_length=8e-6,
-                n_realizations=4, seed=0,
+                n_realizations=4, rng=0,
                 return_kind='wrong')
 
     def test_invalid_return_kind_raises_annular_incoherent(self):
@@ -379,7 +379,7 @@ class TestReturnKindValidation:
             create_annular_incoherent_source(
                 N=16, dx=2e-6, wavelength=633e-9,
                 inner_radius=10e-6, outer_radius=30e-6,
-                n_realizations=4, seed=0,
+                n_realizations=4, rng=0,
                 return_kind=None)
 
 
@@ -408,7 +408,7 @@ class TestSourceClassmethodMigration:
         result = Source.gaussian_schell(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,
-            n_realizations=4, seed=0)
+            n_realizations=4, rng=0)
         assert not isinstance(result, Source), (
             "v4.15.2: Source.gaussian_schell must NOT wrap a 3-D "
             "ensemble in a Source (every other Source.* produces a "
@@ -430,7 +430,7 @@ class TestSourceClassmethodMigration:
         result = Source.gaussian_schell(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,
-            n_realizations=4, seed=0,
+            n_realizations=4, rng=0,
             return_kind='mcf')
         assert isinstance(result, PartialCoherenceMCF)
         assert result.shape == (16, 16)
@@ -446,7 +446,7 @@ class TestSourceClassmethodMigration:
             N=N, dx=2e-6, wavelength=633e-9,
             intensity_profile=I,
             coherence_length=8e-6,
-            n_realizations=4, seed=0)
+            n_realizations=4, rng=0)
         assert not isinstance(result, Source)
         assert isinstance(result, tuple)
         assert len(result) == 4
@@ -473,7 +473,7 @@ class TestSchellModelIntensityKernel:
             N=N, dx=10e-6, wavelength=633e-9,
             intensity_profile=I_target,
             coherence_length=20e-6,
-            n_realizations=32, seed=0)
+            n_realizations=32, rng=0)
         I_out = np.mean(np.abs(ens) ** 2, axis=0)
         corr = float(np.corrcoef(I_out.ravel(), I_target.ravel())[0, 1])
         assert corr > 0.9, (
@@ -498,7 +498,7 @@ class TestAnnularIncoherentSupport:
         ens, _, _, _ = create_annular_incoherent_source(
             N=N, dx=dx, wavelength=633e-9,
             inner_radius=inner, outer_radius=outer,
-            n_realizations=4, seed=0)
+            n_realizations=4, rng=0)
         x = (np.arange(N) - N / 2) * dx
         X, Y = np.meshgrid(x, x)
         r = np.sqrt(X * X + Y * Y)
@@ -539,7 +539,7 @@ class TestMCFCoherenceAtHermiticity:
         ens, _, _, _ = create_gaussian_schell_source(
             N=8, dx=2e-6, wavelength=633e-9,
             w0=10e-6, sigma_g=4e-6,
-            n_realizations=12, seed=0)
+            n_realizations=12, rng=0)
         mcf = PartialCoherenceMCF.from_ensemble(
             ens, dx=2e-6, dy=2e-6, wavelength=633e-9)
         # The 8x8 grid is small enough to default to dense J_full.
@@ -583,7 +583,7 @@ class TestMCFCoherenceAtHermiticity:
         result = create_gaussian_schell_source(
             N=80, dx=2e-6, wavelength=633e-9,
             w0=80e-6, sigma_g=30e-6,
-            n_realizations=8, seed=0,
+            n_realizations=8, rng=0,
             return_kind='mcf')
         # max_full_N defaults to 64 so N=80 should be modal.
         assert result.J_full is None, (

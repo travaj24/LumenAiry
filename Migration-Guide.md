@@ -681,3 +681,100 @@ specifically called out.
 a user-attached handler, the `NullHandler` absorbs the records and
 nothing prints.
 
+
+---
+
+## 5.30.0 -- Deprecation-shim removals (W5 wave)
+
+Ten deprecation shims are **removed** in v5.30.  Eight had already blown
+through a stated removal version while continuing to ship
+(`version_removed='5.0'` at v5.29 — 29 minor releases late — or `'5.27'`
+for the v5.25 kwarg renames); the horizons were re-scheduled to v5.32 and
+then executed here rather than slipping a third time.
+
+Every *modern* call path is unchanged, bit-for-bit: 73 captured arrays are
+byte-identical to the pre-removal commit, and a 42-entry SHA-256 subset is
+frozen into `tests/unit/test_niche_audit_w5_shim_removals.py`.
+
+**Errors you may hit, and the fix**
+
+| Old form | New form |
+| --- | --- |
+| `create_gaussian_beam(..., sigma=s)` | `create_gaussian_beam(..., w0=s*sqrt(2))` |
+| `create_gaussian_schell_source(..., seed=k)` (and the other two Schell factories, `Source.gaussian_schell`, `Source.schell_model`) | `..., rng=k` — exactly equivalent |
+| `Source.gaussian(w0, N, dx, wavelength)` | `Source.gaussian(*, N, dx, wavelength, w0)` |
+| `Source.plane_wave(N, dx, wavelength)` | `Source.plane_wave(*, N, dx, wavelength)` |
+| `Source.point_source(N, dx, wavelength)` | `Source.point_source(*, N, dx, wavelength)` |
+| `Source.top_hat(diameter, N, dx, wavelength)` | `Source.top_hat(*, N, dx, wavelength, diameter)` |
+| `Source.fiber_mode(mfd, N, dx, wavelength)` | `Source.fiber_mode(*, N, dx, wavelength, mode_field_diameter)` |
+| `create_led_source(N, dx, diameter, divergence_angle, wavelength, ...)` | `create_led_source(N, dx, wavelength, *, diameter=..., divergence_angle=...)` |
+| `create_gaussian_schell_source(..., return_kind=_RETURN_KIND_UNSET)` | omit `return_kind`, or pass `'ensemble'` / `'mcf'` |
+| `makedammann2d(..., _legacy_units='auto')` | drop the kwarg (`'SI'` is the default) or pass `_legacy_units='um'` |
+| `recommend_gbd_sampling(E, dx, wavelength=lam)` | `recommend_gbd_sampling(E, dx)` |
+| `propagate_huygens_fresnel_with_opl_callable(..., wavelength=lam)` | drop the kwarg (`opl_fn` returns WAVES) |
+| `design_optimize(..., wave_traced=True)` | `register_wave_propagator('real_lens_traced', fn)` + `wave_propagator='real_lens_traced'` |
+| `MatchIdealSystemMerit(..., use_traced_lens=True, ray_subsample=n)` | an explicit `{'type': 'real_lens_traced', 'prescription': ..., 'ray_subsample': n}` entry in `real_elements` |
+| `MatchIdealSystemMerit(..., focus_search=True, focus_search_range=r, focus_search_n=n)` | an explicit `{'type': 'propagate', 'z': dz}` offset in `ideal_elements` |
+
+### `sigma` -> `w0` is a value conversion, not just a rename
+
+`w0` is the **1/e² intensity radius** (the beam waist); the removed `sigma`
+was the field *standard deviation*.  They relate as `w0 = sigma*sqrt(2)`:
+
+```python
+# Old (removed in 5.30):
+E, x, y = la.create_gaussian_beam(N, dx, wavelength, sigma=50e-6)
+
+# New -- same beam:
+E, x, y = la.create_gaussian_beam(N, dx, wavelength,
+                                  w0=50e-6 * np.sqrt(2))
+```
+
+Going the other way is exact: `w0=w` reproduces the old `sigma=w/sqrt(2)`
+field bit-for-bit, because `w0/sqrt(2)` is literally the division the
+factory performs.
+
+### `_legacy_units='auto'` is gone because it was wrong, not just old
+
+The v4.14.2 heuristic multiplied any `periodx` / `periody` / `waveln`
+above 1 mm by `1e-6`, on the theory that such a value "must" be legacy
+micrometres.  That is exactly backwards for a physical THz / MMW design:
+an SI 8 mm period at 1.1 mm wavelength came back with 5e-10 m cells — a
+factor 1e-6 wrong, and for five releases the only diagnostic was a
+`DeprecationWarning`, which Python hides outside `__main__`.  v5.30 raises
+`ValueError` instead.  If your inputs really are micrometres, say so with
+`_legacy_units='um'`; mixed-unit calls must be normalised by the caller,
+because no magnitude heuristic can tell which is which.
+
+### The traced real-lens path is still available
+
+`wave_traced` / `use_traced_lens` selected `apply_real_lens_traced` through
+a boolean that also changed the meaning of `ray_subsample`.  R-17
+grep-verified zero callers repo-wide, so CI never exercised those branches.
+The propagator itself is untouched — register it explicitly:
+
+```python
+from lumenairy.optimize.driver import register_wave_propagator
+from lumenairy import apply_real_lens_traced
+
+def _traced(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+    return apply_real_lens_traced(
+        E0, prescription=pres, wavelength=wavelength, dx=dx,
+        ray_subsample=opts.get('ray_subsample', 4), n_workers=1,
+        **wp_kwargs)
+
+register_wave_propagator('real_lens_traced', _traced)
+design_optimize(..., wave_propagator='real_lens_traced')
+```
+
+### Not removed
+
+`propagate()`'s scheduled **return-contract transition** (P5) is a default
+*flip*, not a shim removal, and remains scheduled for v5.32 — pass
+`return_result=True` (stable `PropagationResult`) or `return_result=False`
+(legacy shapes, available past the flip) to silence its warning now.
+`...with_opl_callable(chunk_output=)`, `rcwa_efficiency_1d_jax`,
+`load_zmx_prescription` / `load_zemax_prescription_txt`, the
+`output_grid` -> `output_shape` sub-propagator renames, `MultiFieldMerit`
+scalar `field_angles` and `PMM2DStack` all keep working: none is at or past
+its stated horizon.

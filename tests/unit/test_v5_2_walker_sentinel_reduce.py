@@ -200,22 +200,35 @@ def test_v15_walker_discovers_known_sentinel_floor():
     built to catch.
 
     v5.2.5 (AUDIT_V5_2_3 P3-F1-6): tightened from >= 5 to >= 6 to
-    reflect the v5.2.0-discovered baseline.  A floor of 6 catches
+    reflect the v5.2.0-discovered baseline.  A floor catches
     a walker collapse (e.g. the import-time self-registration
     broke, or ``pkgutil.walk_packages`` failed to enumerate
     ``lumenairy``) while leaving headroom for legitimate
     refactoring.  When new sentinels are added the floor should
     bump alongside.
+
+    v5.30 (W5 shim-removal wave): lowered 6 -> 5.  This is a DELIBERATE
+    relaxation, not a walker regression: the sixth subclass was
+    ``_SchellReturnKindUnsetSentinel``, whose only purpose was to detect
+    an unpassed Schell ``return_kind`` for a v4.15.1 transition warning
+    retired in v4.16.1; the whole apparatus was removed in v5.30.  The
+    assertion below therefore pins BOTH bounds -- at least 5 (walker
+    alive) and the specific absence of the removed name -- so the floor
+    cannot be quietly lowered again to hide a real collapse.
     """
     names = sorted(c.__qualname__ for c in _DISCOVERED_SUBCLASSES)
-    assert len(_DISCOVERED_SUBCLASSES) >= 6, (
+    assert len(_DISCOVERED_SUBCLASSES) >= 5, (
         f'V15 walker discovered only {len(_DISCOVERED_SUBCLASSES)} '
         f'``_Sentinel`` subclasses in the live ``lumenairy.*`` '
-        f'namespace; expected >= 6 (the v5.2.0 baseline).  '
+        f'namespace; expected >= 5 (the v5.30 baseline: the v5.2.0 six '
+        f'minus the removed _SchellReturnKindUnsetSentinel).  '
         f'Discovered: {names!r}.  The discovery walker may have '
         f'regressed (e.g. ``pkgutil.walk_packages`` no longer '
         f'imports the sentinel-defining submodules, or the '
         f'``__module__`` filter excludes a legitimate sentinel).')
+    assert '_SchellReturnKindUnsetSentinel' not in names, (
+        'the Schell return_kind sentinel was removed in v5.30; its '
+        'reappearance means a shim came back')
 
 
 def test_v15_walker_exemption_set_is_disjoint_from_discovered():

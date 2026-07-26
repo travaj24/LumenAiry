@@ -147,49 +147,34 @@ class TestAuditFixesV4_14_2_agent_d_P1New6MakedammannSiUnits:
             f"v4.14.2 fix should make these identical (no ``* 1e-6`` "
             f"rescale).")
 
-    def test_makedammann2d_micrometre_input_warns(self):
-        """Calling the auto-detect shim with the legacy micrometre form
-        in its range (``1e-3 < value <= 1.0``) must trigger a
-        migration warning that names the SI-metres replacement.
+    def test_makedammann2d_micrometre_auto_mode_is_removed(self):
+        """SUPERSEDES ``test_makedammann2d_micrometre_input_warns``
+        (v4.14.2 warn -> v5.30 E-H11 loud-opt-in -> v5.30 W5 REMOVED).
 
-        v4.14.3 note: values above 1 m now raise ``ValueError`` (the
-        P0-NEW-2 fix), so this test exercises mid-range values
-        (0.5 < x <= 1.0 m) that the heuristic still catches.  For
-        explicit legacy-um migration above that bound, callers should
-        pass ``_legacy_units='um'``.
-
-        v5.30 (audit E-H11): the heuristic is no longer the DEFAULT --
-        ``_legacy_units='SI'`` is, so reaching the shim needs an
-        explicit ``_legacy_units='auto'`` -- and the retired shim now
-        warns LOUDLY (``UserWarning``, default-visible) instead of with
-        a ``DeprecationWarning`` that Python hides outside ``__main__``.
+        The ``'auto'`` micrometre auto-detect mode is gone.  The error must
+        still carry the migration recipe the old warning carried -- the
+        mode name intercepted VALUES, so a caller stuck on micrometres
+        needs to be told about ``_legacy_units='um'``, not merely that
+        ``'auto'`` is invalid.
         """
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
-            _, _, _ = makedammann2d(
-                periodx=0.5, periody=0.5, waveln=0.01,
-                phaselevels=2, phasesteps=1,
-                diforders=np.ones((2, 2)),
-                itr=2, plot=False, seed=42,
-                _legacy_units='auto',
-            )
-            depwarns = [r for r in w
-                        if issubclass(r.category, UserWarning)
-                        and 'makedammann2d' in str(r.message)]
-            assert len(depwarns) >= 1, (
-                "Expected at least one UserWarning when "
-                "makedammann2d is called with legacy micrometre "
-                "values periodx=0.5, waveln=0.01 and "
-                "_legacy_units='auto'.  Got: "
-                f"{[r.message for r in w]}")
-            msg = str(depwarns[0].message)
-            # The message must explain the SI migration concretely.
-            assert 'micrometre' in msg.lower() or 'um' in msg.lower(), (
-                f"DeprecationWarning message should mention micrometres "
-                f"explicitly so users know how to migrate; got: {msg!r}")
-            assert 'SI' in msg or '1e-6' in msg, (
-                f"DeprecationWarning should reference SI / 1e-6 "
-                f"migration; got: {msg!r}")
+            with pytest.raises(ValueError) as info:
+                makedammann2d(
+                    periodx=0.5, periody=0.5, waveln=0.01,
+                    phaselevels=2, phasesteps=1,
+                    diforders=np.ones((2, 2)),
+                    itr=2, plot=False, seed=42,
+                    _legacy_units='auto',
+                )
+        msg = str(info.value)
+        assert 'REMOVED in v5.30' in msg, msg
+        # Same migration content the retired warning used to carry.
+        assert 'micrometre' in msg.lower(), msg
+        assert "_legacy_units='um'" in msg, msg
+        assert 'SI' in msg or '1e-6' in msg, msg
+        assert not [r for r in w if 'makedammann2d' in str(r.message)], (
+            [str(r.message) for r in w])
 
     def test_makedammann2d_micrometre_input_still_produces_correct_geometry(self):
         """Bit-for-bit continuity pin: a pre-v4.14.2 caller using the
@@ -252,8 +237,9 @@ class TestAuditFixesV4_14_2_agent_d_P1New9CreateLedSourceSignature:
     """``create_led_source`` now follows the canonical post-v4.7 layout:
     ``(N, dx, wavelength, *, diameter, divergence_angle, dy=None, x0=0,
     y0=0, dtype=None)``.  The legacy positional form
-    ``(N, dx, diameter, divergence_angle, wavelength, ...)`` is still
-    accepted for one release with a ``DeprecationWarning``.
+    ``(N, dx, diameter, divergence_angle, wavelength, ...)`` was accepted
+    with a ``DeprecationWarning`` from v4.14.2 and is **REMOVED in v5.30**
+    (W5 shim-removal wave).
     """
 
     def test_create_led_source_new_kwarg_form(self):
@@ -299,48 +285,40 @@ class TestAuditFixesV4_14_2_agent_d_P1New9CreateLedSourceSignature:
             f"dx not honoured; got x[1]-x[0] = {dx_actual} m, "
             f"expected 16e-6 m.")
 
-    def test_create_led_source_positional_form_deprecation(self):
-        """The legacy positional form
-        ``create_led_source(N, dx, diameter, divergence_angle, wavelength)``
-        must still work but emit a ``DeprecationWarning``.
+    def test_create_led_source_positional_form_is_removed(self):
+        """SUPERSEDES ``test_create_led_source_positional_form_deprecation``
+        AND ``test_create_led_source_positional_form_matches_kwarg_output``
+        (v4.14.2).
+
+        v5.30 (W5) REMOVES the legacy positional form, so there is no
+        second call form left to compare bit-for-bit against; the
+        continuity claim moves to the captured-baseline pin in
+        ``tests/unit/test_niche_audit_w5_shim_removals.py``.  What is
+        pinned here is the rejection, and that its message still carries
+        the keyword-only migration the old warning carried.
         """
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
+            with pytest.raises(TypeError) as info:
+                create_led_source(64, 16e-6, 100e-6, 0.3, 1.31e-6)
+        msg = str(info.value)
+        assert 'REMOVED in v5.30' in msg, msg
+        assert 'keyword' in msg.lower() or 'diameter=' in msg, msg
+        assert not [r for r in w
+                    if issubclass(r.category, DeprecationWarning)], (
+            [str(r.message) for r in w])
+
+    def test_create_led_source_canonical_form_is_the_only_form(self):
+        """Non-vacuity for the pin above: the canonical form still
+        produces the documented LED field, warning-free."""
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
             E, angles, x, y = create_led_source(
-                64, 16e-6, 100e-6, 0.3, 1.31e-6)
-            depwarns = [r for r in w
-                        if issubclass(r.category, DeprecationWarning)
-                        and 'create_led_source' in str(r.message)]
-            assert len(depwarns) >= 1, (
-                "Legacy positional call to create_led_source did NOT "
-                "emit a DeprecationWarning.  Got all warnings: "
-                f"{[r.message for r in w]}")
-            msg = str(depwarns[0].message)
-            # The migration message must point at the keyword-only form.
-            assert 'keyword' in msg.lower() or 'diameter=' in msg, (
-                f"DeprecationWarning should explain the keyword-only "
-                f"migration; got: {msg!r}")
-        # The legacy form should still produce the right output.
+                64, 16e-6, 1.31e-6,
+                diameter=100e-6, divergence_angle=0.3,
+            )
         assert E.shape == (64, 64)
         assert len(angles) == 37
-
-    def test_create_led_source_positional_form_matches_kwarg_output(self):
-        """Bit-for-bit continuity: legacy positional and new keyword-only
-        forms with the same parameters must produce identical output."""
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', category=DeprecationWarning)
-            E_legacy, ang_legacy, x_legacy, y_legacy = create_led_source(
-                64, 16e-6, 100e-6, 0.3, 1.31e-6)
-        E_new, ang_new, x_new, y_new = create_led_source(
-            64, 16e-6, 1.31e-6,
-            diameter=100e-6, divergence_angle=0.3,
-        )
-        assert np.array_equal(E_legacy, E_new), (
-            "Legacy positional and new keyword-only forms produce "
-            "different fields for identical physical parameters.")
-        assert ang_legacy == ang_new
-        assert np.array_equal(x_legacy, x_new)
-        assert np.array_equal(y_legacy, y_new)
 
     def test_create_led_source_missing_kwarg_raises_typeerror(self):
         """The new signature requires ``diameter`` and
@@ -354,16 +332,17 @@ class TestAuditFixesV4_14_2_agent_d_P1New9CreateLedSourceSignature:
         with pytest.raises(TypeError, match='divergence_angle'):
             create_led_source(64, 16e-6, 1.31e-6, diameter=100e-6)
 
-    def test_create_led_source_kwarg_conflict_legacy_positional_raises(self):
-        """Passing legacy positionals AND a conflicting kwarg should
-        raise ``TypeError`` with a clear message about the conflict.
-        """
-        with pytest.raises(TypeError, match="diameter.*both"):
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore', category=DeprecationWarning)
-                create_led_source(
-                    64, 16e-6, 100e-6, 0.3, 1.31e-6,
-                    diameter=50e-6)  # conflicts
+    def test_create_led_source_positional_plus_kwarg_still_raises(self):
+        """SUPERSEDES
+        ``test_create_led_source_kwarg_conflict_legacy_positional_raises``
+        (v4.14.2).  The "supplied both positionally and as a keyword"
+        message belonged to the shim's remap step; with the shim removed
+        the positional surplus is rejected first, so the conflict can no
+        longer be reached -- but the call must still fail loudly."""
+        with pytest.raises(TypeError, match='REMOVED in v5.30'):
+            create_led_source(
+                64, 16e-6, 100e-6, 0.3, 1.31e-6,
+                diameter=50e-6)
 
 
 # ============================================================================
@@ -379,7 +358,7 @@ _VALID_KWARGS = dict(
 
 
 def _gaussian_call(**override):
-    kw = {**_VALID_KWARGS, 'sigma': 30e-6}
+    kw = {**_VALID_KWARGS, 'w0': 30e-6 * np.sqrt(2)}
     kw.update(override)
     return create_gaussian_beam(**kw)
 
@@ -675,34 +654,47 @@ class TestAuditFixesV4_14_3_agent_b_B1LedSourceCanonicalPositionalFootgun:
             f"TypeError should point at the canonical positional order "
             f"or the scale-inversion symptom; got: {info.value!r}")
 
-    def test_create_led_source_legacy_eight_positional_still_warns(self):
-        """The full LEGACY positional form
+    def test_create_led_source_legacy_eight_positional_is_removed(self):
+        """SUPERSEDES ``test_create_led_source_legacy_eight_positional
+        _still_warns`` (v4.14.3).
+
+        The full LEGACY positional form
         ``(N, dx, diameter, divergence_angle, wavelength, x0, y0, dtype)``
-        must still work and emit ``DeprecationWarning`` so existing
-        callers have a transition window.  No TypeError, correct
-        output shape.
+        is REMOVED in v5.30 (W5).  It must now raise, and the message must
+        report the positional count so an 8-positional caller can see
+        which extras to move to keywords.
         """
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            E, angles, x, y = create_led_source(
-                64, 16e-6, 100e-6, 0.3, 1.31e-6, 0.0, 0.0, np.complex128,
-            )
-        # Output shape correctness -- the shim must have correctly
-        # re-mapped the legacy args.
-        assert E.shape == (64, 64), (
-            f"Legacy 8-positional call should yield shape (64, 64); "
-            f"got {E.shape}.")
-        assert E.dtype == np.complex128
-        assert len(angles) == 37, (
-            f"create_led_source returns 37 source angles "
-            f"(1 + 6 + 12 + 18); got {len(angles)}.")
-        # And the DeprecationWarning must have fired.
-        dep = [w for w in caught
-               if issubclass(w.category, DeprecationWarning)
-               and 'create_led_source' in str(w.message)]
-        assert len(dep) >= 1, (
-            f"Legacy positional call must emit DeprecationWarning; "
-            f"got {[str(w.message) for w in caught]}.")
+            with pytest.raises(TypeError) as info:
+                create_led_source(
+                    64, 16e-6, 100e-6, 0.3, 1.31e-6, 0.0, 0.0,
+                    np.complex128,
+                )
+        msg = str(info.value)
+        assert 'REMOVED in v5.30' in msg, msg
+        assert 'got 8 positional arguments' in msg, msg
+        assert 'dtype=' in msg, msg
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            [str(w.message) for w in caught])
+
+    def test_canonical_five_positional_and_legacy_share_one_rejection(self):
+        """The v4.14.3 scale-inversion heuristic existed only to tell the
+        two positional mistakes apart while ONE of them was still legal.
+        With both illegal, a single rejection covers them -- pinned so the
+        heuristic is not resurrected as dead code."""
+        import inspect
+
+        from lumenairy.sources import core
+        src = inspect.getsource(core.create_led_source)
+        assert 'scale-inverted' not in src, (
+            'the scale-inversion heuristic is dead once the legacy '
+            'positional form is rejected outright; remove it')
+        for args in ((64, 16e-6, 1.31e-6, 100e-6, 0.3),
+                     (64, 16e-6, 100e-6, 0.3, 1.31e-6)):
+            with pytest.raises(TypeError, match='REMOVED in v5.30'):
+                create_led_source(*args)
 
 
 # ============================================================================
@@ -738,7 +730,8 @@ class TestAuditFixesV4_14_3_agent_b_B2TupleNValidatorImplementationGap:
         """Invoke a named factory with the minimum required kwargs
         plus the test-supplied ``N``."""
         if name == 'create_gaussian_beam':
-            return create_gaussian_beam(N, dx, wavelength, sigma=10e-6)
+            return create_gaussian_beam(N, dx, wavelength,
+                                    w0=10e-6 * np.sqrt(2))
         if name == 'create_hermite_gauss':
             return create_hermite_gauss(N, dx, w0=10e-6,
                                           wavelength=wavelength)

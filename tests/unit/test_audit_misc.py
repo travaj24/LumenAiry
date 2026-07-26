@@ -1311,7 +1311,7 @@ class TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples:
         a tuple for Fraunhofer/Fresnel methods, separate audit B1-7).
         """
         E, x, y = la.create_gaussian_beam(
-            N=128, dx=2e-6, wavelength=1.31e-6, sigma=50e-6)
+            N=128, dx=2e-6, wavelength=1.31e-6, w0=(50e-6) * np.sqrt(2))
         # README uses angular_spectrum_propagate (near-field) so the
         # return is an ndarray rather than the (E, dx_out, dy_out)
         # tuple that the smart dispatcher returns from Fraunhofer.
@@ -1327,7 +1327,7 @@ class TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples:
         """Cookbook example 2: a Thorlabs lens, end-to-end.
         Pre-4.12.0 broke on positional ``presc``."""
         E, _, _ = la.create_gaussian_beam(
-            N=128, dx=2e-6, wavelength=1.31e-6, sigma=50e-6)
+            N=128, dx=2e-6, wavelength=1.31e-6, w0=(50e-6) * np.sqrt(2))
         presc = la.thorlabs_lens('AC254-100-C')
         with warnings.catch_warnings():
             # The 128 grid is intentionally tiny for test speed; the
@@ -1354,7 +1354,7 @@ class TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples:
         """Cookbook 'Basic propagation' block (line 2519).  Pre-4.12.0
         broke on missing ``wavelength`` in ``create_gaussian_beam``."""
         E, x, y = la.create_gaussian_beam(
-            N=128, dx=2e-6, wavelength=1.3e-6, sigma=50e-6)
+            N=128, dx=2e-6, wavelength=1.3e-6, w0=(50e-6) * np.sqrt(2))
         E_prop = la.angular_spectrum_propagate(
             E, z=0.01, wavelength=1.3e-6, dx=2e-6)
         cx, cy = la.beam_centroid(E_prop, 2e-6)
@@ -1367,7 +1367,7 @@ class TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples:
         Pre-4.12.0 broke on ``load_zmx_prescription`` (renamed) and
         positional ``rx``."""
         E_in, _, _ = la.create_gaussian_beam(
-            N=128, dx=2e-6, wavelength=1.3e-6, sigma=50e-6)
+            N=128, dx=2e-6, wavelength=1.3e-6, w0=(50e-6) * np.sqrt(2))
         # README uses la.thorlabs_lens as the second option; we use
         # it to avoid needing a .zmx file on disk for the test.
         rx = la.thorlabs_lens('AC254-200-C')
@@ -1387,7 +1387,7 @@ class TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples:
         """Cookbook 'Anamorphic / cylindrical / biconic' block
         (line 2613).  Pre-4.12.0 broke on positional ``pres``."""
         E_in, _, _ = la.create_gaussian_beam(
-            N=128, dx=2e-6, wavelength=1.3e-6, sigma=50e-6)
+            N=128, dx=2e-6, wavelength=1.3e-6, w0=(50e-6) * np.sqrt(2))
         pres_cyl = la.make_cylindrical(
             R_focus=50e-3, d=3e-3, glass='N-BK7', axis='x')
         with warnings.catch_warnings():
@@ -1414,7 +1414,7 @@ class TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples:
         which silently bound ``30e-6`` to ``wavelength`` and missed
         the required ``sigma`` kwarg."""
         scalar, _, _ = la.create_gaussian_beam(
-            128, 2e-6, 1.3e-6, sigma=30e-6)
+            128, 2e-6, 1.3e-6, w0=(30e-6) * np.sqrt(2))
         field = la.create_circular_polarized(
             scalar, dx=2e-6, handedness='right')
         la.apply_half_wave_plate(field, angle=np.pi / 8)
@@ -6370,7 +6370,7 @@ class TestAuditFixesV4_9_TIRMaskOutOfFresnelBlock:
         field (no NaN / Inf from the cos_tt division at TIR points)."""
         N, dx, wl = 64, 5e-6, 1.55e-6
         E = lm.create_gaussian_beam(
-            N=N, dx=dx, wavelength=wl, sigma=20e-6)[0]
+            N=N, dx=dx, wavelength=wl, w0=(20e-6) * np.sqrt(2))[0]
         prescription = lm.make_singlet(
             R1=50e-3, R2=np.inf, d=2e-3,
             glass='N-BK7', aperture=200e-6)

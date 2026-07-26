@@ -72,41 +72,50 @@ _SCHELL_FACTORIES = [
 ]
 
 
+# v5.30 (W5 shim-removal wave) SUPERSESSION of three v5.25 pins:
+#
+#   * ``test_rng_int_matches_deprecated_seed_bit_for_bit`` -> the
+#     bit-for-bit equivalence of ``seed=<int>`` and ``rng=<int>`` was the
+#     evidence that the rename is a lossless migration.  That evidence is
+#     what licensed the removal; there is no longer a second spelling to
+#     compare against.  Superseded by
+#     ``test_deprecated_seed_kwarg_is_removed`` (old form raises) plus the
+#     bit-identity capture in
+#     ``tests/unit/test_niche_audit_w5_shim_removals.py`` (modern form
+#     unchanged).
+#   * ``test_seed_still_works_and_warns`` -> inverted below: the kwarg is
+#     gone, so it must RAISE, not warn.
+#   * ``test_rng_and_seed_are_mutually_exclusive`` -> vacuous once ``seed``
+#     is not a parameter (the TypeError it asserted now fires for a
+#     different reason -- unexpected keyword -- which the supersession
+#     below pins explicitly).
+
+
 @pytest.mark.parametrize('factory, fn_name', _SCHELL_FACTORIES)
-def test_rng_int_matches_deprecated_seed_bit_for_bit(factory, fn_name):
-    """The new ``rng=<int>`` path reproduces the legacy
-    ``seed=<int>`` stream bit-for-bit (byte-identical migration)."""
-    ens_rng, *_ = factory(rng=7)
+def test_deprecated_seed_kwarg_is_removed(factory, fn_name):
+    """``seed=`` was deprecated in v5.25 (stated horizon v5.27, shipped
+    unremoved through v5.29) and is REMOVED in v5.30.
+
+    Contract: a plain ``TypeError`` from the signature, naming the kwarg.
+    Precedent for the bare signature removal on a kwarg RENAME (as
+    opposed to a value-intercepting shim):
+    ``analysis/detector.py``'s v5.0 ``cosmic_ray_rate`` retirement and
+    ``optimize/multiconfig.py``'s v5.0 ``wavelength``-default removal.
+    """
+    with pytest.raises(TypeError, match='seed'):
+        factory(seed=7)
+
+
+@pytest.mark.parametrize('factory, fn_name', _SCHELL_FACTORIES)
+def test_rng_int_path_is_the_only_seeded_spelling(factory, fn_name):
+    """The surviving ``rng=<int>`` path is deterministic and silent --
+    the property the removed ``seed=`` spelling existed to provide."""
     with warnings.catch_warnings():
-        warnings.simplefilter('ignore', DeprecationWarning)
-        ens_seed, *_ = factory(seed=7)
-    assert np.array_equal(ens_rng, ens_seed), (
-        f"{fn_name}: rng=7 and seed=7 must give a bit-identical ensemble")
-
-
-@pytest.mark.parametrize('factory, fn_name', _SCHELL_FACTORIES)
-def test_seed_still_works_and_warns(factory, fn_name):
-    """Legacy ``seed=`` must still work AND emit a DeprecationWarning
-    naming ``rng`` and the v5.27 removal (rule-4 old-form contract)."""
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter('always')
-        ens, *_ = factory(seed=3)
-    assert ens.shape[0] == 4
-    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)]
-    assert len(dep) >= 1, f"{fn_name}: seed= must emit a DeprecationWarning"
-    msg = str(dep[0].message)
-    assert 'seed' in msg and 'rng' in msg, (
-        f"{fn_name}: warning must name both 'seed' and 'rng'; got {msg!r}")
-    assert '5.27' in msg, (
-        f"{fn_name}: warning must state the v5.27 removal; got {msg!r}")
-
-
-@pytest.mark.parametrize('factory, fn_name', _SCHELL_FACTORIES)
-def test_rng_and_seed_are_mutually_exclusive(factory, fn_name):
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', DeprecationWarning)
-        with pytest.raises(TypeError):
-            factory(rng=1, seed=2)
+        warnings.simplefilter('error')
+        a, *_ = factory(rng=7)
+        b, *_ = factory(rng=7)
+    assert np.array_equal(a, b), (
+        f"{fn_name}: rng=7 must be reproducible bit-for-bit")
 
 
 @pytest.mark.parametrize('factory, fn_name', _SCHELL_FACTORIES)
@@ -140,18 +149,25 @@ def test_rng_rejects_unknown_type():
         _gaussian_schell(rng='not-a-generator')
 
 
-def test_source_classmethods_accept_rng_and_deprecate_seed():
-    """The Source.* Schell classmethods forward the rng/seed contract."""
-    ens_rng, *_ = la.Source.gaussian_schell(
-        N=32, dx=5e-6, wavelength=633e-9, w0=40e-6, sigma_g=20e-6,
-        n_realizations=4, rng=2)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter('always')
-        ens_seed, *_ = la.Source.gaussian_schell(
+def test_source_classmethods_accept_rng_and_reject_seed():
+    """SUPERSEDES ``test_source_classmethods_accept_rng_and_deprecate_seed``
+    (v5.25): the classmethods forward ``rng`` and no longer accept
+    ``seed`` at all (v5.30 removal).
+
+    Note the classmethods take ``**factory_kwargs``, so a stray ``seed=``
+    is rejected one frame in, by the top-level factory -- the message
+    still names the offending keyword, which is what a migrating caller
+    needs."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        ens_rng, *_ = la.Source.gaussian_schell(
+            N=32, dx=5e-6, wavelength=633e-9, w0=40e-6, sigma_g=20e-6,
+            n_realizations=4, rng=2)
+    assert ens_rng.shape[0] == 4
+    with pytest.raises(TypeError, match='seed'):
+        la.Source.gaussian_schell(
             N=32, dx=5e-6, wavelength=633e-9, w0=40e-6, sigma_g=20e-6,
             n_realizations=4, seed=2)
-    assert np.array_equal(ens_rng, ens_seed)
-    assert any(issubclass(w.category, DeprecationWarning) for w in caught)
 
 
 # ---------------------------------------------------------------------------
@@ -173,29 +189,56 @@ def test_w0_is_the_1_over_e2_intensity_radius():
         f"I(w0)/I(0) = {ratio:.6f} should equal exp(-2) = {np.exp(-2):.6f}")
 
 
-def test_w0_equals_sigma_over_sqrt2_bit_for_bit():
-    """``w0=w`` reproduces ``sigma=w/sqrt(2)`` bit-for-bit."""
+def test_w0_is_the_sqrt2_scaled_field_std_dev():
+    """SUPERSEDES ``test_w0_equals_sigma_over_sqrt2_bit_for_bit``
+    (v5.25), which compared the ``w0`` and (now removed) ``sigma``
+    spellings.  The physical relation it was really pinning --
+    ``w0 = sigma * sqrt(2)``, i.e. the field kernel is
+    ``exp(-r^2 / w0^2)`` -- is asserted directly against an independent
+    closed-form oracle instead, so it survives the removal.
+
+    The oracle is the ``w0``-form kernel written out longhand; it agrees
+    with the library's ``exp(-r^2/(2 sigma^2))``, ``sigma = w0/sqrt(2)``
+    arithmetic to round-off (the two groupings are algebraically but not
+    bit-wise identical), so this is a tight-tolerance -- not bit-exact --
+    physics pin.  The bit-exactness claim lives in
+    ``tests/unit/test_niche_audit_w5_shim_removals.py``, which compares the
+    modern path against a captured pre-removal baseline."""
     w0 = 12e-6
-    E_w0, _, _ = create_gaussian_beam(64, 1e-6, 633e-9, w0=w0,
-                                      normalize='none')
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', DeprecationWarning)
-        E_sg, _, _ = create_gaussian_beam(64, 1e-6, 633e-9,
-                                          sigma=w0 / np.sqrt(2),
-                                          normalize='none')
-    assert np.array_equal(E_w0, E_sg)
+    E, x, y = create_gaussian_beam(64, 1e-6, 633e-9, w0=w0,
+                                   normalize='none')
+    X, Y = np.meshgrid(x, y)
+    ref = np.exp(-(X ** 2 + Y ** 2) / w0 ** 2).astype(E.dtype)
+    assert np.allclose(E, ref, rtol=0, atol=8 * np.finfo(np.float64).eps), (
+        f'create_gaussian_beam(w0=w) must equal exp(-r^2/w^2); '
+        f'max|delta|={np.max(np.abs(E - ref)):.3e}')
+    # ... and exactly reproduce the internal sigma grouping.
+    sigma = w0 / np.sqrt(2.0)
+    ref_internal = np.exp(
+        -(X ** 2 + Y ** 2) / (2 * sigma ** 2)).astype(E.dtype)
+    assert np.array_equal(E, ref_internal), (
+        'w0 must resolve to sigma = w0/sqrt(2) bit-for-bit')
 
 
-def test_sigma_still_works_and_warns():
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter('always')
-        E, _, _ = create_gaussian_beam(32, 1e-6, 633e-9, sigma=5e-6)
-    assert E.shape == (32, 32)
-    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)]
-    assert dep, "sigma= must emit a DeprecationWarning"
-    msg = str(dep[0].message)
-    assert 'sigma' in msg and 'w0' in msg and '5.27' in msg, (
-        f"warning must name sigma, w0, and v5.27; got {msg!r}")
+def test_deprecated_sigma_kwarg_is_removed():
+    """SUPERSEDES ``test_sigma_still_works_and_warns`` (v5.25).
+
+    ``sigma=`` was deprecated in v5.25 (stated horizon v5.27, shipped
+    unremoved through v5.29) and is REMOVED in v5.30.  Contract: a plain
+    ``TypeError`` from the signature.  Migration: ``sigma=s`` ->
+    ``w0=s*sqrt(2)``.
+    """
+    with pytest.raises(TypeError, match='sigma'):
+        create_gaussian_beam(32, 1e-6, 633e-9, sigma=5e-6)
+
+
+def test_missing_width_arg_names_the_sigma_migration():
+    """The one place the removed name must still be spoken: the
+    missing-argument error tells a ``sigma=`` caller what to do."""
+    with pytest.raises(TypeError) as info:
+        create_gaussian_beam(32, 1e-6, 633e-9)
+    msg = str(info.value)
+    assert 'w0' in msg and 'sigma' in msg and 'sqrt(2)' in msg, msg
 
 
 def test_w0_form_is_warning_clean():
@@ -204,11 +247,15 @@ def test_w0_form_is_warning_clean():
         create_gaussian_beam(32, 1e-6, 633e-9, w0=7e-6)
 
 
-def test_sigma_and_w0_mutually_exclusive():
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', DeprecationWarning)
-        with pytest.raises(ValueError):
-            create_gaussian_beam(32, 1e-6, 633e-9, sigma=5e-6, w0=7e-6)
+def test_sigma_and_w0_mutual_exclusion_pin_is_SUPERSEDED():
+    """SUPERSEDES ``test_sigma_and_w0_mutually_exclusive`` (v5.25).
+
+    With ``sigma`` gone there is nothing to be mutually exclusive WITH,
+    so the ``ValueError`` the old pin asserted is unreachable; the
+    over-specified call is now rejected earlier, by the signature.
+    """
+    with pytest.raises(TypeError, match='sigma'):
+        create_gaussian_beam(32, 1e-6, 633e-9, sigma=5e-6, w0=7e-6)
 
 
 def test_neither_width_arg_raises():

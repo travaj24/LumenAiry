@@ -34,35 +34,40 @@ def _ensure_cupy_loaded():
 
 
 # ---------------------------------------------------------------------------
-# RNG convention (CONVENTIONS.md section 3): new source APIs accept ``rng=``
-# (None / int / numpy.random.Generator / lumenairy RandomState).  The legacy
-# ``seed=`` kwarg on the Schell-family factories is deprecated in favour of
-# ``rng=`` (S3-16 / B1).
+# RNG convention (CONVENTIONS.md section 3): source APIs accept ``rng=``
+# (None / int / numpy.random.Generator / lumenairy RandomState).
 # ---------------------------------------------------------------------------
 
-# v5.25 (audit S3-16 / B1): deprecation-cycle bookkeeping.  ``seed=`` (and the
-# ``create_gaussian_beam`` ``sigma=`` misnomer, below) are accepted for two
-# releases with a DeprecationWarning; removal is scheduled for v5.27.
-_DEPRECATION_VERSION_ADDED = '5.25'
-_DEPRECATION_VERSION_REMOVED = '5.27'
+# v5.30 (W5 shim-removal wave -- honest break, precedent:
+# ``propagators/system.py`` ``_reject_legacy`` / ``analysis/detector.py``
+# ``cosmic_ray_rate``).  Two families of shim are REMOVED from this module:
+#
+# 1. The v5.25 kwarg renames (audit S3-16 / B1), stated horizon v5.27,
+#    re-scheduled to v5.32 in v5.30 and then executed here instead of
+#    slipping a third time:
+#      * Schell-family ``seed=<int>``     ->  ``rng=<int>``   (exactly
+#        equivalent: ``seed`` was forwarded verbatim to ``rng``).
+#      * ``create_gaussian_beam(sigma=s)`` ->  ``w0=s*sqrt(2)``  (``w0`` is
+#        the 1/e^2 intensity radius, ``sigma`` was the field std-dev).
+#    Both are plain signature removals, so the old form now raises
+#    ``TypeError: ... unexpected keyword argument`` -- the same shape as the
+#    v5.0 ``cosmic_ray_rate`` retirement.
+#
+# 2. The v4.14.2 / v4.15 legacy POSITIONAL overloads (``create_led_source``,
+#    ``Source.gaussian`` / ``plane_wave`` / ``point_source`` / ``top_hat`` /
+#    ``fiber_mode``) and the v4.15.1 Schell ``return_kind`` sentinel, all of
+#    which advertised ``version_removed='5.0'`` while shipping through v5.29
+#    (R-18 re-scheduled the banner to v5.32; v5.30 executes it).  These
+#    intercepted VALUES, so -- following ``system.py``'s ``_reject_legacy``
+#    precedent -- the legacy shape is still DETECTED and rejected with an
+#    actionable ``TypeError`` naming the canonical form.  That rejection is
+#    permanent: it schedules nothing and adds no new deprecation debt.
+#
+# See the CHANGELOG ``### Removed`` section for the full migration table.
 
-# R-18 / overdue-shims (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the v4.14.2 /
-# v4.15 legacy-positional shims in this module (``create_led_source``,
-# ``Source.gaussian`` / ``plane_wave`` / ``point_source`` / ``top_hat`` /
-# ``fiber_mode``) and the v4.15.1 Schell ``return_kind`` default sentinel all
-# advertised ``version_removed='5.0'`` -- a horizon that passed 29 minor
-# releases ago while the shims kept shipping.  A removal version the library
-# has demonstrably blown through is worse than none: it trains callers to
-# ignore the message.  RE-SCHEDULED once, here, to v5.32 -- a single constant so
-# the next slip is a one-line edit and cannot drift between the 8 warning
-# sites.  The shims themselves are NOT removed (that is a v5.32 decision);
-# every warning still fires from the production path (measured).
-_OVERDUE_SHIM_VERSION_REMOVED = '5.32'
 
-
-def _coerce_source_rng(*, rng: Any, seed: Optional[int],
-                       fn_name: str) -> np.random.Generator:
-    """Resolve the ``rng`` / (deprecated) ``seed`` kwargs to a NumPy
+def _coerce_source_rng(*, rng: Any, fn_name: str) -> np.random.Generator:
+    """Resolve the ``rng`` kwarg to a NumPy
     :class:`numpy.random.Generator`.
 
     CONVENTIONS.md section 3 canonical ``rng`` handling:
@@ -75,27 +80,15 @@ def _coerce_source_rng(*, rng: Any, seed: Optional[int],
       RandomState raises (these factories run the band-limited-noise
       recipe on the host NumPy FFT).
 
-    ``seed=`` is the deprecated legacy spelling.  When it is supplied a
-    :class:`DeprecationWarning` naming ``rng`` and the v5.27 removal is
-    emitted; ``seed`` and ``rng`` are mutually exclusive.
+    v5.30: the deprecated ``seed=`` spelling (v5.25 -> v5.29) is REMOVED.
+    ``rng=<int>`` reproduces the old ``seed=<int>`` stream bit-for-bit --
+    ``seed`` was forwarded verbatim into ``rng`` -- so the migration is a
+    pure rename.  Passing ``seed=`` now raises ``TypeError`` from the
+    factory signature.
 
-    The default path (neither ``rng`` nor ``seed`` given) is
-    byte-identical to the historical ``numpy.random.default_rng(None)``;
-    the ``seed=<int>`` path is byte-identical to the historical
-    ``numpy.random.default_rng(seed)``.
+    The default path (no ``rng`` given) is byte-identical to the
+    historical ``numpy.random.default_rng(None)``.
     """
-    if seed is not None:
-        if rng is not None:
-            raise TypeError(
-                f"{fn_name}: pass either 'rng' (preferred) or the "
-                f"deprecated 'seed', not both.")
-        from .._deprecation import warn_deprecated_kwarg
-        warn_deprecated_kwarg(
-            'seed', 'rng', function=fn_name,
-            version_added=_DEPRECATION_VERSION_ADDED,
-            version_removed=_DEPRECATION_VERSION_REMOVED,
-            stacklevel=3)
-        rng = seed
     if rng is None:
         return np.random.default_rng()
     if isinstance(rng, (int, np.integer)):
@@ -117,41 +110,32 @@ def _coerce_source_rng(*, rng: Any, seed: Optional[int],
         f"or a lumenairy RandomState; got {type(rng).__name__}.")
 
 
-def _resolve_gaussian_width(*, sigma: Optional[float], w0: Optional[float],
+def _resolve_gaussian_width(*, w0: Optional[float],
                             fn_name: str) -> float:
     """Resolve the Gaussian-width argument to the internal field
     standard deviation ``sigma`` used by ``exp(-r^2 / (2 sigma^2))``.
 
-    v5.25 (audit S3-16 / B1): ``w0`` is the canonical width parameter --
+    ``w0`` is the canonical width parameter (v5.25, audit S3-16 / B1) --
     the **1/e^2 intensity radius** (the beam waist), matching every other
     lumenairy source factory (``create_gaussian_schell_source``,
-    ``create_fiber_mode``, ``Source.gaussian`` ...).  The legacy
-    ``sigma`` is the field *standard deviation*; the two relate as
-    ``w0 = sigma * sqrt(2)`` (equivalently ``sigma = w0 / sqrt(2)``).
+    ``create_fiber_mode``, ``Source.gaussian`` ...).
 
-    Exactly one of ``w0`` / ``sigma`` must be supplied.  ``sigma`` is
-    DEPRECATED (removal v5.27) and emits a :class:`DeprecationWarning`.
-    Passing ``w0`` reproduces the field of ``sigma = w0 / sqrt(2)``
-    bit-for-bit.
+    v5.30: the legacy ``sigma`` kwarg (the field *standard deviation* -- a
+    misnomer relative to the library-wide waist convention) is REMOVED.
+    It was deprecated in v5.25 with a stated v5.27 horizon that shipped
+    unremoved through v5.29.  Migration: ``sigma=s`` -> ``w0=s*sqrt(2)``
+    (equivalently ``w0=w`` reproduces ``sigma=w/sqrt(2)`` bit-for-bit --
+    that direction is exact because it is the division this function
+    performs).  Passing ``sigma=`` now raises ``TypeError`` from the
+    :func:`create_gaussian_beam` signature.
     """
-    if w0 is not None and sigma is not None:
-        raise ValueError(
-            f"{fn_name}: pass either 'w0' (the 1/e^2 intensity radius, "
-            f"preferred) or the deprecated 'sigma' (field std-dev), not "
-            f"both.  They relate as w0 = sigma * sqrt(2).")
     if w0 is not None:
         return float(w0) / np.sqrt(2.0)
-    if sigma is not None:
-        from .._deprecation import warn_deprecated_kwarg
-        warn_deprecated_kwarg(
-            'sigma', 'w0', function=fn_name,
-            version_added=_DEPRECATION_VERSION_ADDED,
-            version_removed=_DEPRECATION_VERSION_REMOVED,
-            stacklevel=4)
-        return float(sigma)
     raise TypeError(
         f"{fn_name}: missing required Gaussian-width argument; pass 'w0' "
-        f"(the 1/e^2 intensity radius in metres).")
+        f"(the 1/e^2 intensity radius in metres).  The legacy 'sigma' "
+        f"(field std-dev) kwarg was removed in v5.30: use "
+        f"w0 = sigma * sqrt(2).")
 
 
 def _warn_if_w0_wavelength_swapped(w0: float, wavelength: float, *,
@@ -422,7 +406,6 @@ def create_gaussian_beam(
     wavelength: float,
     *,
     w0: Optional[float] = None,
-    sigma: Optional[float] = None,
     x0: float = 0,
     y0: float = 0,
     use_gpu: bool = False,
@@ -444,17 +427,9 @@ def create_gaussian_beam(
         Beam waist -- the **1/e^2 intensity radius** [m] (canonical since
         v5.25).  This is the same width convention used by every other
         source factory (``create_gaussian_schell_source``,
-        ``create_fiber_mode``, ``Source.gaussian`` ...).  Exactly one of
-        ``w0`` / ``sigma`` must be supplied.
-    sigma : float
-        DEPRECATED since v5.25 (removal v5.27): the Gaussian *field
-        standard deviation* [m] -- a width misnomer relative to the
-        library-wide ``w0`` waist convention (audit S3-16).  Passing
-        ``sigma`` emits a :class:`DeprecationWarning`; it is mutually
-        exclusive with ``w0`` and relates to it by ``w0 = sigma *
-        sqrt(2)`` (so ``sigma=s`` and ``w0=s*sqrt(2)`` yield a
-        bit-identical field).  The kernel is
-        ``exp(-r^2 / (2 sigma^2)) == exp(-r^2 / w0^2)``.
+        ``create_fiber_mode``, ``Source.gaussian`` ...).  Required.
+        The kernel is ``exp(-r^2 / w0^2) == exp(-r^2 / (2 sigma^2))``
+        with the internal field std-dev ``sigma = w0 / sqrt(2)``.
     wavelength : float, optional
         Reserved for future use (e.g. adding a spherical phase for a
         focused beam). Currently unused -- the returned field has flat phase.
@@ -494,17 +469,21 @@ def create_gaussian_beam(
     v5.25 (audit S3-16): the width argument migrated from ``sigma`` (the
     field standard deviation -- a misnomer relative to the library-wide
     waist convention) to the canonical ``w0`` (the 1/e^2 intensity
-    radius).  Both are accepted; ``sigma`` is deprecated (removal v5.27)
-    and relates to ``w0`` by ``w0 = sigma * sqrt(2)``.
+    radius).
+
+    .. versionchanged:: 5.30
+        The deprecated ``sigma`` kwarg is **removed** (deprecated v5.25,
+        stated horizon v5.27, shipped unremoved through v5.29).  Migrate
+        ``sigma=s`` -> ``w0=s*sqrt(2)``; equivalently ``w0=w`` reproduces
+        the old ``sigma=w/sqrt(2)`` field bit-for-bit.  Passing ``sigma=``
+        raises ``TypeError``.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_gaussian_beam',
                           support_tuple_N=True)
-    # v5.25 (audit S3-16 / B1): resolve the canonical ``w0`` waist (1/e^2
-    # intensity radius) or the deprecated ``sigma`` (field std-dev) to the
+    # Resolve the canonical ``w0`` waist (1/e^2 intensity radius) to the
     # internal ``sigma`` used by exp(-r^2/(2 sigma^2)).  w0 = sigma*sqrt(2).
-    sigma = _resolve_gaussian_width(sigma=sigma, w0=w0,
-                                    fn_name='create_gaussian_beam')
+    sigma = _resolve_gaussian_width(w0=w0, fn_name='create_gaussian_beam')
     if CUPY_AVAILABLE and use_gpu:
         # 4.10: pre-4.10 reached for module-level ``cp`` without first
         # calling _ensure_cupy_loaded(), so ``cp`` was still None and
@@ -1448,11 +1427,54 @@ def create_fiber_mode(
                                  x0=x0, y0=y0, dy=dy, dtype=dtype)
 
 
+def _reject_led_legacy_positional(n_extra: int) -> None:
+    """Reject the pre-v4.14.2 ``create_led_source`` positional form.
+
+    v5.30 (W5 shim-removal wave): the positional form
+    ``(N, dx, diameter, divergence_angle, wavelength, x0, y0, dtype)`` is
+    REMOVED.  It was deprecated in v4.14.2 with ``version_removed='5.0'``
+    and kept shipping through v5.29 (R-18 re-scheduled the banner to
+    v5.32; the owner executed the removal at v5.30 rather than slipping a
+    third time).
+
+    The ``*_legacy_positional`` collector is RETAINED, always-raising --
+    the ``propagators/system.py`` ``_reject_legacy`` precedent (v5.0
+    aperture-schema purge).  Rationale: the shim intercepted VALUES (it
+    re-routed positional slot 3 from ``wavelength`` to ``diameter``), so a
+    caller on the old form is not merely passing an extra argument -- every
+    physical quantity is in the wrong slot.  Detecting the shape lets the
+    error name the exact remapping; dropping the collector would degrade
+    the diagnostic to Python's generic "takes from 2 to 3 positional
+    arguments but 5 were given".  The rejection is permanent and schedules
+    nothing.
+
+    It also subsumes the v4.14.3 scale-inversion guard: a canonical-order
+    5-positional call now raises here too, rather than needing a magnitude
+    heuristic to tell the two mistakes apart.
+
+    Lives at module level (not inline) so ``create_led_source``'s body head
+    stays inside the v5.4.7 ``_validate_grid_params`` meta-pin window --
+    ``tests/unit/test_v4_15_dispatcher_pin_validate_grid_params.py`` counts
+    comment lines as executable, and this rationale is 20+ lines long.
+    """
+    raise TypeError(
+        "create_led_source: the legacy positional form "
+        "``create_led_source(N, dx, diameter, divergence_angle, "
+        "wavelength, x0, y0, dtype)`` was deprecated in v4.14.2 and "
+        f"REMOVED in v5.30 (got {3 + n_extra} positional arguments; the "
+        "canonical form accepts at most 3).  ``diameter``, "
+        "``divergence_angle`` and every other physical parameter are "
+        "keyword-only, and ``wavelength`` is the THIRD positional.  "
+        "Migrate: ``create_led_source(N, dx, wavelength, *, "
+        "diameter=..., divergence_angle=..., dy=..., x0=..., y0=..., "
+        "dtype=...)``.  See Migration-Guide.md section 5.30.0.")
+
+
 def create_led_source(
     N: int,
     dx: float,
     wavelength: Optional[float] = None,
-    *args: Any,
+    *_legacy_positional: Any,
     diameter: Optional[float] = None,
     divergence_angle: Optional[float] = None,
     dy: Optional[float] = None,
@@ -1525,168 +1547,33 @@ def create_led_source(
     of keyword-only physical parameters with ``wavelength`` in the
     canonical 3rd positional slot.
 
-    The legacy positional form is still accepted for one release with a
-    ``DeprecationWarning``.  Migrate to the keyword-only form before
-    the deprecation grace period ends::
+    .. versionchanged:: 5.30
+        The legacy positional form is **removed** (deprecated v4.14.2,
+        stated horizon v5.0, shipped unremoved through v5.29 -- 29 minor
+        releases past its own date; R-18 re-scheduled the banner to v5.32
+        and v5.30 executes it).  Any positional surplus past ``wavelength``
+        now raises ``TypeError`` naming the canonical form, following the
+        ``propagators/system.py`` ``_reject_legacy`` precedent: the legacy
+        SHAPE is still detected so the diagnostic stays actionable instead
+        of degrading to Python's generic arity message.  Migration::
 
-        # Old (deprecated, still works with a warning)
-        E, angles, x, y = create_led_source(64, 16e-6, 100e-6, 0.3, 1.31e-6)
+            # Old (removed in v5.30 -- raises TypeError)
+            E, angles, x, y = create_led_source(
+                64, 16e-6, 100e-6, 0.3, 1.31e-6)
 
-        # New (canonical)
-        E, angles, x, y = create_led_source(
-            64, 16e-6, 1.31e-6,
-            diameter=100e-6, divergence_angle=0.3)
+            # New (canonical)
+            E, angles, x, y = create_led_source(
+                64, 16e-6, 1.31e-6,
+                diameter=100e-6, divergence_angle=0.3)
     """
+    # v5.30 (W5): legacy positional form REMOVED -- see the helper.
+    if _legacy_positional:
+        _reject_led_legacy_positional(len(_legacy_positional))
     # v5.4.7 (audit AUDIT_V5_4_6 gap #4): early grid validation, within the
-    # meta-pin's body-head window (the full validation also runs after the
-    # legacy shim resolves the wavelength; the shim never remaps N/dx).
-    if not args and wavelength is not None:
+    # meta-pin's body-head window (the full validation also runs below).
+    if wavelength is not None:
         _validate_grid_params(N, dx, wavelength, dy=dy,
                               fn_name='create_led_source')
-    # v4.14.2 (P1-NEW-9): backward-compat shim for the pre-v4.14.2
-    # positional ``(N, dx, diameter, divergence_angle, wavelength,
-    # x0, y0, dtype)`` form.  We detect it via ``*args``: under the
-    # new signature ``*args`` must be empty (everything after
-    # ``wavelength`` is keyword-only).  If any positional surplus
-    # arrives, treat the call as legacy:
-    #   - ``wavelength`` (the 3rd positional under the new sig) is
-    #     actually the legacy ``diameter``;
-    #   - ``args[0]`` is the legacy ``divergence_angle``;
-    #   - ``args[1]`` is the legacy ``wavelength``;
-    #   - ``args[2..3]``, if present, are legacy ``x0``, ``y0``;
-    #   - ``args[4]``, if present, is legacy ``dtype``.
-    #
-    # v4.14.3 (P1-NEW-4 / Agent B): the bare ``*args`` collector is a
-    # silent footgun if a user passes 5 positional arguments in the
-    # NEW canonical order ``(N, dx, wavelength, diameter,
-    # divergence_angle)``: the shim re-routes ``wavelength`` (e.g.
-    # 633e-9) as ``diameter`` and ``divergence_angle`` (e.g. 0.3 rad)
-    # as ``wavelength``, producing a 633 nm-wide LED with a 0.3 m
-    # "wavelength" -- and only a misleading DeprecationWarning.  The
-    # post-remap scale-inversion check below catches the canonical-
-    # order mistake by spotting the diameter/wavelength magnitude
-    # inversion that distinguishes the two call forms.  PEP 570
-    # ``/`` was considered but does not gate the ``*args`` collector
-    # so adds no safety here, while it would force every existing
-    # kwarg-based caller (incl. the v4.14.2 audit test
-    # infrastructure) to drop N/dx/wavelength out of kwargs.
-    if args:
-        # Re-map legacy positionals.  ``wavelength`` is the 3rd
-        # positional under the new sig but the legacy ``diameter``
-        # under the old sig.
-        _legacy_diameter = wavelength
-        _legacy_divergence = args[0]
-        _legacy_wavelength = args[1] if len(args) > 1 else None
-        if _legacy_wavelength is None:
-            raise TypeError(
-                "create_led_source (legacy positional form): "
-                "expected 5+ positional arguments "
-                "``(N, dx, diameter, divergence_angle, wavelength, ...)``; "
-                "got only 4.  Migrate to the new keyword-only form: "
-                "``create_led_source(N, dx, wavelength, *, "
-                "diameter=..., divergence_angle=...)``.")
-        # v4.14.3 (P1-NEW-4): scale-inversion sanity check.  In a
-        # legitimate legacy call ``_legacy_diameter`` is an emitting-
-        # area diameter (typically 10-1000 um, i.e. 1e-5..1e-3 m) and
-        # ``_legacy_wavelength`` is a vacuum wavelength (1e-7..3e-6 m
-        # over the UV-MWIR range).  If a user instead passes 5
-        # positionals in the NEW canonical order, ``_legacy_diameter
-        # = wavelength`` (1e-7..3e-6) and ``_legacy_wavelength =
-        # divergence_angle`` (typically O(0.1) rad).  The flag
-        # ``_legacy_wavelength > _legacy_diameter * 10`` separates
-        # the two forms: legacy callers never feed a wavelength 10x
-        # larger than the diameter (a 1 um LED at 10 um wavelength
-        # is a thermal emitter, not an "LED"), but the canonical-
-        # order mistake yields divergence/wavelength = 0.3/633e-9 ~
-        # 5e5, which trips the check loudly.
-        try:
-            _diam_f = float(_legacy_diameter)
-            _wl_f = float(_legacy_wavelength)
-        except (TypeError, ValueError):
-            _diam_f = _wl_f = None
-        if (_diam_f is not None and _wl_f is not None
-                and _diam_f > 0 and _wl_f > _diam_f * 10):
-            raise TypeError(
-                "create_led_source: detected scale-inverted positional "
-                "arguments (apparent wavelength {:.3e} m > 10x apparent "
-                "diameter {:.3e} m).  This usually means the call was "
-                "made in the NEW canonical positional order "
-                "``create_led_source(N, dx, wavelength, diameter, "
-                "divergence_angle)``, which is rejected since v4.14.3: "
-                "the canonical form requires ``diameter`` and "
-                "``divergence_angle`` to be passed as keyword "
-                "arguments.  Use ``create_led_source(N, dx, "
-                "wavelength, diameter=..., divergence_angle=...)``."
-                .format(_wl_f, _diam_f))
-        # v4.15 (P2-DEP-1): route the legacy-positional warning through
-        # the shared ``_deprecation.warn_deprecated_signature`` helper
-        # instead of inline ``warnings.warn``.  Same DeprecationWarning
-        # category, same message intent; the helper guarantees a
-        # consistent format (``... is deprecated since v4.14.2, will be
-        # removed in v5.32; use ...``) and pin-tested removal version.
-        # R-18: the removal version was re-scheduled from the blown
-        # v5.0 horizon to ``_OVERDUE_SHIM_VERSION_REMOVED``.
-        from .._deprecation import warn_deprecated_signature
-        # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 selects the
-        # user-code frame.  Chain: warnings.warn (in _emit) [1] ->
-        # _emit body [2] -> warn_deprecated_signature body [3] ->
-        # create_led_source body [4] -> user code [5 = target].
-        # Pre-v4.15.3 stacklevel=3 landed inside create_led_source
-        # itself.
-        warn_deprecated_signature(
-            function='create_led_source',
-            old_signature=(
-                'create_led_source(N, dx, diameter, divergence_angle, '
-                'wavelength, ...)'),
-            new_signature=(
-                'create_led_source(N, dx, wavelength, *, diameter=..., '
-                'divergence_angle=..., ...)'),
-            version_added='4.14.2',
-            version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
-            stacklevel=4,
-        )
-        # Promote legacy positionals into the canonical kwargs, but do
-        # not overwrite kwargs the caller explicitly supplied (that's
-        # an unambiguous error).
-        if diameter is not None:
-            raise TypeError(
-                "create_led_source: 'diameter' supplied both "
-                "positionally (legacy form) and as a keyword.")
-        if divergence_angle is not None:
-            raise TypeError(
-                "create_led_source: 'divergence_angle' supplied both "
-                "positionally (legacy form) and as a keyword.")
-        diameter = _legacy_diameter
-        divergence_angle = _legacy_divergence
-        wavelength = _legacy_wavelength
-        # x0, y0, dtype are still positional-or-keyword under both
-        # forms.  Pre-v4.14.2 they sat at positions 5, 6, 7 (after
-        # wavelength); only consume them from ``args`` if the caller
-        # actually passed positional surplus past wavelength.
-        if len(args) > 2:
-            x0 = args[2]
-        if len(args) > 3:
-            y0 = args[3]
-        if len(args) > 4:
-            dtype = args[4]
-        if len(args) > 5:
-            # v4.15.0 (P3-MSG from v4.14.2 audit): rewrite the "max 8
-            # (legacy) or 3 (canonical)" wording.  The canonical form
-            # caps positionals at 3 (``N, dx, wavelength``) and the
-            # legacy form caps at 8 (``N, dx, diameter,
-            # divergence_angle, wavelength, x0, y0, dtype``); the
-            # previous message conflated the two limits in a single
-            # opaque sentence.  Spell them out separately.
-            raise TypeError(
-                "create_led_source: too many positional arguments "
-                f"({3 + len(args)}).  The legacy positional form "
-                "accepts at most 8 positionals: ``(N, dx, diameter, "
-                "divergence_angle, wavelength, x0, y0, dtype)``.  "
-                "The canonical form accepts at most 3 positionals: "
-                "``(N, dx, wavelength)`` -- ``diameter``, "
-                "``divergence_angle``, and the other physical "
-                "parameters are keyword-only.  Migrate any extras "
-                "to keyword arguments.")
 
     # Validate the required keyword-only physical parameters
     # post-shim so the error path is the same for both call forms.
@@ -2149,113 +2036,34 @@ def _validate_return_kind(value: Any, fn_name: str) -> str:
 # ``DeprecationWarning`` was emitted on the default path so pre-v4.15.0
 # callers doing ``E, x, y = create_gaussian_schell_source(...)`` would
 # see a loud heads-up rather than a propagation-time wrong-shape
-# failure.  Detection used a per-module sentinel: when the caller left
-# ``return_kind`` unset, the factory saw the sentinel and warned;
-# explicit ``return_kind='ensemble'`` or ``'mcf'`` was silent.
+# failure.  Detection used a per-module sentinel
+# (``_RETURN_KIND_UNSET``, a ``_SchellReturnKindUnsetSentinel``): when
+# the caller left ``return_kind`` unset, the factory saw the sentinel and
+# warned; explicit ``return_kind='ensemble'`` / ``'mcf'`` was silent.
 #
-# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path warning
-# is retired -- the v4.15.0 -> v4.15.1 transition has had four
-# subsequent releases of exposure (v4.15.2 / v4.15.3 / v4.15.4 /
-# v4.15.5 / v4.16.0).  The kwarg default is now plain ``'ensemble'``;
-# the sentinel branch at each call site is preserved as a no-op for
-# back-compat (callers explicitly forwarding ``_RETURN_KIND_UNSET``
-# still resolve cleanly).  Sentinel + ``_warn_schell_return_kind_default``
-# helper are slated for removal in v5.32 (R-18: re-scheduled off the
-# blown v5.0 horizon).
+# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6) retired the warning itself --
+# the transition had had five releases of exposure -- leaving the kwarg
+# default at plain ``'ensemble'`` and the sentinel branch at each of the
+# five call sites as a pure no-op.
 #
-# v4.15.3 (audit P2-NEW): the sentinel itself is a dedicated
-# ``_SchellReturnKindUnsetSentinel(_Sentinel)`` subclass for
-# consistency with the other sentinel patterns in the codebase
-# (``_ZeroApertureMaskSentinel`` in ``optimize/core.py``,
-# ``_AngleUnsetSentinel`` in ``elements/polarization.py``,
-# ``_NoDefaultSentinel`` in ``_deprecation.py``).  The subclass-identity
-# pattern lets downstream code do ``isinstance(x,
-# _SchellReturnKindUnsetSentinel)`` without false positives from other
-# bare ``_Sentinel`` instances that share the same registry.  Singleton
-# instance still keyed by the ``_SCHELL_RETURN_KIND_UNSET`` registry
-# name; pickle round-trip via ``_SENTINEL_REGISTRY`` lookup is
-# unchanged.
-from .._deprecation import _Sentinel as _DeprecationSentinel
-
-
-class _SchellReturnKindUnsetSentinel(_DeprecationSentinel):
-    """Singleton sentinel for "Schell ``return_kind`` argument was not
-    explicitly passed by the caller".
-
-    v4.15.3 (audit P2-NEW): dedicated subclass for consistency with
-    :class:`_ZeroApertureMaskSentinel` (in ``optimize/core.py``),
-    :class:`_AngleUnsetSentinel` (in ``elements/polarization.py``),
-    :class:`_NoDefaultSentinel` (in ``_deprecation.py``).  No behaviour
-    change relative to the pre-v4.15.3 bare ``_Sentinel``: the new
-    subclass overrides nothing, the singleton is still keyed by the
-    ``_SCHELL_RETURN_KIND_UNSET`` registry name, and the
-    ``_SENTINEL_REGISTRY`` round-trip is identical.  The benefit is
-    discoverability: ``isinstance(x, _SchellReturnKindUnsetSentinel)``
-    works as a strict type-narrowing predicate without false positives
-    from sibling bare ``_Sentinel`` instances.
-    """
-    __slots__ = ()
-
-    def __init__(self) -> None:
-        super().__init__('_SCHELL_RETURN_KIND_UNSET')
-
-
-_RETURN_KIND_UNSET: Any = _SchellReturnKindUnsetSentinel()
-# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the singleton + the
-# subclass are retained as deprecated public-symbol attributes for
-# back-compat with the v4.15.3 test pins
-# (``tests/unit/test_v4_15_3_agent_b.py`` imports both names).  The
-# subclass remains pickle-safe via the shared
-# ``_SENTINEL_REGISTRY``; the singleton continues to compare
-# ``False`` and stringify with the canonical registry name.  Targeted
-# for removal in v5.32 alongside the rest of the deprecated-default
-# scaffolding.
-
-
-def _warn_schell_return_kind_default(fn_name: str) -> None:
-    """Emit the v4.15.0 -> v4.15.1 return-shape ``DeprecationWarning``.
-
-    v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path call
-    sites no longer invoke this helper -- the 3 factories +
-    ``Source.gaussian_schell`` / ``Source.schell_model`` classmethods
-    now default ``return_kind='ensemble'`` directly, with no warning
-    on the default path.  The helper itself is preserved for back-
-    compat -- the v4.15.3 stacklevel meta-pin in
-    ``tests/unit/test_v4_15_3_agent_b.py`` imports it -- and remains
-    invocable by external callers who want to surface the warning
-    manually (e.g. in custom Schell wrappers that still maintain the
-    pre-v4.15.1 single-field return signature).
-
-    Routed through the shared ``_deprecation.warn_deprecated_signature``
-    helper so the warning message format matches the rest of the
-    library and is silenceable with a single ``warnings.filterwarnings``
-    incantation.  ``version_removed=_OVERDUE_SHIM_VERSION_REMOVED``
-    documents the deprecation horizon (sentinel + helper are slated for
-    removal in v5.32 -- R-18 re-scheduled it off the blown v5.0 date).
-
-    Frame chain (innermost first), when invoked from a factory body:
-
-      1. ``warnings.warn`` (inside ``_emit`` body)
-      2. ``_emit`` -> ``warn_deprecated_signature``
-      3. ``warn_deprecated_signature`` -> ``_warn_schell_return_kind_default``
-      4. ``_warn_schell_return_kind_default`` -> factory body
-      5. factory body -> user code  <-- target of stacklevel
-    """
-    from .._deprecation import warn_deprecated_signature
-    warn_deprecated_signature(
-        function=fn_name,
-        old_signature=(
-            f'{fn_name}(...)  # v4.15.0 returned (E_2d, x, y)'),
-        new_signature=(
-            f"{fn_name}(..., return_kind='ensemble')  "
-            "# v4.15.1 default returns (ensemble_3d, dx, dy, "
-            "wavelength); pass return_kind='ensemble' (preserve "
-            "current 4-tuple) or return_kind='mcf' (opt into "
-            "PartialCoherenceMCF) explicitly"),
-        version_added='4.15.1',
-        version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
-        stacklevel=5,
-    )
+# v5.30 (W5 shim-removal wave): the whole sentinel apparatus is REMOVED --
+# ``_SchellReturnKindUnsetSentinel``, the ``_RETURN_KIND_UNSET`` singleton,
+# the ``_warn_schell_return_kind_default`` helper, and the five no-op
+# ``if return_kind is _RETURN_KIND_UNSET`` branches.  It advertised
+# ``version_removed='5.0'`` while shipping through v5.29 (R-18 re-scheduled
+# the banner to v5.32; the owner executed it at v5.30).  The helper had
+# ZERO production call sites (pinned in
+# ``tests/unit/test_niche_audit_w3_ui_deprecation.py``), so nothing on the
+# modern path changes.
+#
+# Old form -> new form: ``return_kind=_RETURN_KIND_UNSET`` (or omitted)
+# -> omit it, or pass ``return_kind='ensemble'`` explicitly.  A caller who
+# still holds a reference to the old sentinel object now gets the existing
+# ``ValueError`` from :func:`_validate_return_kind` ("return_kind must be
+# 'ensemble' or 'mcf'"), which already names the modern values -- so no
+# bespoke rejection branch is needed here (contrast the positional
+# overloads above, where the legacy shape carried no such self-describing
+# validator).
 
 
 def _schell_phase_realizations(
@@ -2342,7 +2150,6 @@ def create_gaussian_schell_source(
     n_realizations: int = 16,
     dy: Optional[float] = None,
     rng: Any = None,
-    seed: Optional[int] = None,
     dtype: Optional[Any] = None,
     return_kind: Any = 'ensemble',
     max_full_N: int = 64,
@@ -2388,12 +2195,6 @@ def create_gaussian_schell_source(
         draws a fresh generator; an ``int`` seeds one; a
         :class:`numpy.random.Generator` (or NumPy-backed lumenairy
         ``RandomState``) is used directly.
-    seed : int, optional
-        DEPRECATED since v5.25 (removal v5.27): legacy spelling of
-        ``rng``.  Passing ``seed`` emits a :class:`DeprecationWarning`;
-        it is mutually exclusive with ``rng`` and is forwarded verbatim
-        (``seed=<int>`` reproduces the historical
-        ``numpy.random.default_rng(seed)`` stream bit-for-bit).
     dtype : optional
         Complex dtype for the returned ensemble (default: library
         default).  Ignored when ``return_kind='mcf'`` -- the MCF
@@ -2409,10 +2210,13 @@ def create_gaussian_schell_source(
         v4.15.0 -> v4.15.1 return-shape change is retired now that
         the new ensemble contract has had multiple releases of
         exposure.  The default is ``'ensemble'`` and the call is
-        silent.  Callers can still inspect the sentinel via
-        ``_RETURN_KIND_UNSET`` for back-compat (it is treated as
-        ``'ensemble'``; sentinel + helper are slated for removal in
-        v5.32 -- R-18 re-scheduled this off the blown v5.0 horizon).
+        silent.
+
+        .. versionchanged:: 5.30
+            The ``_RETURN_KIND_UNSET`` sentinel (and the
+            ``_warn_schell_return_kind_default`` helper) are **removed**
+            -- both had been no-ops since v4.16.1.  Omit ``return_kind``
+            or pass ``'ensemble'`` / ``'mcf'`` explicitly.
     max_full_N : int, default 64
         Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
         ``return_kind='mcf'``.  Grids with ``Ny * Nx > max_full_N**2``
@@ -2460,14 +2264,11 @@ def create_gaussian_schell_source(
             f"create_gaussian_schell_source: n_realizations must be a "
             f"positive integer; got {n_realizations!r}.")
     # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
-    # ``DeprecationWarning`` (v4.15.2 -> v4.15.5) is retired now that
-    # the v4.15.0 return-shape change has had multiple releases of
-    # exposure.  The kwarg default is plain ``'ensemble'``; the
-    # sentinel branch below is preserved as a no-op for back-compat
-    # so callers explicitly passing ``return_kind=_RETURN_KIND_UNSET``
-    # (rare; flagged by the v4.15.3 meta-pin) keep working.
-    if return_kind is _RETURN_KIND_UNSET:
-        return_kind = 'ensemble'
+    # ``DeprecationWarning`` (v4.15.2 -> v4.15.5) was retired once the
+    # v4.15.0 return-shape change had multiple releases of exposure.
+    # v5.30 (W5): the no-op ``_RETURN_KIND_UNSET`` sentinel branch is
+    # removed with the rest of the shim; the kwarg default is plain
+    # ``'ensemble'`` and validation happens in one place.
     rk = _validate_return_kind(
         return_kind, fn_name='create_gaussian_schell_source')
 
@@ -2483,8 +2284,7 @@ def create_gaussian_schell_source(
     # amp = exp(-r^2 / w0^2).
     amp = np.exp(-(X * X + Y * Y) / (w0 ** 2))
 
-    rng = _coerce_source_rng(rng=rng, seed=seed,
-                             fn_name='create_gaussian_schell_source')
+    rng = _coerce_source_rng(rng=rng, fn_name='create_gaussian_schell_source')
     phi = _schell_phase_realizations(
         Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
         coherence_length=float(sigma_g),
@@ -2515,7 +2315,6 @@ def create_schell_model_source(
     n_realizations: int = 16,
     dy: Optional[float] = None,
     rng: Any = None,
-    seed: Optional[int] = None,
     dtype: Optional[Any] = None,
     return_kind: Any = 'ensemble',
     max_full_N: int = 64,
@@ -2549,11 +2348,6 @@ def create_schell_model_source(
     rng : None | int | numpy.random.Generator | RandomState, optional
         Randomness source (CONVENTIONS.md section 3); see
         :func:`create_gaussian_schell_source`.
-    seed : int, optional
-        DEPRECATED since v5.25 (removal v5.27): legacy spelling of
-        ``rng`` (emits a :class:`DeprecationWarning`; mutually exclusive
-        with ``rng``; ``seed=<int>`` reproduces the historical stream
-        bit-for-bit).
     dtype : optional
         Complex dtype for the ensemble form; ignored for ``'mcf'``.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
@@ -2591,11 +2385,9 @@ def create_schell_model_source(
         raise ValueError(
             "create_schell_model_source: intensity_profile must be "
             "non-negative.")
-    # v4.16.1: default-path warning retired; sentinel kept for back-
-    # compat (see :func:`create_gaussian_schell_source` for the
-    # rationale).
-    if return_kind is _RETURN_KIND_UNSET:
-        return_kind = 'ensemble'
+    # v4.16.1: default-path warning retired.  v5.30 (W5): the no-op
+    # sentinel branch is removed (see
+    # :func:`create_gaussian_schell_source`).
     rk = _validate_return_kind(
         return_kind, fn_name='create_schell_model_source')
 
@@ -2604,8 +2396,7 @@ def create_schell_model_source(
     target_dtype = _resolve_complex_dtype(dtype)
     amp = np.sqrt(I)
 
-    rng = _coerce_source_rng(rng=rng, seed=seed,
-                             fn_name='create_schell_model_source')
+    rng = _coerce_source_rng(rng=rng, fn_name='create_schell_model_source')
     phi = _schell_phase_realizations(
         Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
         coherence_length=float(coherence_length),
@@ -2633,7 +2424,6 @@ def create_annular_incoherent_source(
     n_realizations: int = 16,
     dy: Optional[float] = None,
     rng: Any = None,
-    seed: Optional[int] = None,
     dtype: Optional[Any] = None,
     return_kind: Any = 'ensemble',
     max_full_N: int = 64,
@@ -2685,11 +2475,6 @@ def create_annular_incoherent_source(
     rng : None | int | numpy.random.Generator | RandomState, optional
         Randomness source (CONVENTIONS.md section 3); see
         :func:`create_gaussian_schell_source`.
-    seed : int, optional
-        DEPRECATED since v5.25 (removal v5.27): legacy spelling of
-        ``rng`` (emits a :class:`DeprecationWarning`; mutually exclusive
-        with ``rng``; ``seed=<int>`` reproduces the historical stream
-        bit-for-bit).
     dtype : optional
         Complex dtype.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
@@ -2727,11 +2512,9 @@ def create_annular_incoherent_source(
         raise ValueError(
             f"create_annular_incoherent_source: n_realizations must be "
             f"a positive integer; got {n_realizations!r}.")
-    # v4.16.1: default-path warning retired; sentinel kept for back-
-    # compat (see :func:`create_gaussian_schell_source` for the
-    # rationale).
-    if return_kind is _RETURN_KIND_UNSET:
-        return_kind = 'ensemble'
+    # v4.16.1: default-path warning retired.  v5.30 (W5): the no-op
+    # sentinel branch is removed (see
+    # :func:`create_gaussian_schell_source`).
     rk = _validate_return_kind(
         return_kind, fn_name='create_annular_incoherent_source')
 
@@ -2749,8 +2532,7 @@ def create_annular_incoherent_source(
     if norm > 0:
         amp = amp / norm
 
-    rng = _coerce_source_rng(rng=rng, seed=seed,
-                             fn_name='create_annular_incoherent_source')
+    rng = _coerce_source_rng(rng=rng, fn_name='create_annular_incoherent_source')
     nr = int(n_realizations)
     E_ensemble = np.empty((nr, int(N), int(N)), dtype=target_dtype)
     for k in range(nr):
@@ -2951,11 +2733,21 @@ class Source:
     #
     # v4.15 picks the canonical order
     # ``Source.method(*, N, dx, wavelength, <size_kwargs>)`` (kwarg-only
-    # with the ``*`` separator).  The legacy positional form is still
-    # accepted for one release with a ``DeprecationWarning`` routed
-    # through ``_deprecation.warn_deprecated_signature``; removal is
-    # scheduled for v5.32 (R-18: re-scheduled off the blown v5.0
-    # horizon -- see ``_OVERDUE_SHIM_VERSION_REMOVED``).
+    # with the ``*`` separator).
+    #
+    # v5.30 (W5 shim-removal wave): the legacy positional form is REMOVED
+    # from all five.  It was deprecated in v4.15 with
+    # ``version_removed='5.0'`` and kept shipping through v5.29 (R-18
+    # re-scheduled the banner to v5.32; the owner executed the removal at
+    # v5.30).  Each classmethod keeps an always-raising
+    # ``*_legacy_positional`` collector so the legacy SHAPE is still
+    # detected and the ``TypeError`` can name the exact canonical
+    # signature -- the ``propagators/system.py`` ``_reject_legacy``
+    # precedent.  This matters most for ``gaussian`` / ``top_hat`` /
+    # ``fiber_mode``, where the legacy order put the SIZE argument first,
+    # so a positional caller has every quantity one slot out; a bare
+    # arity error would not say that.  The rejection is permanent and
+    # schedules nothing.
     #
     # The three already-kwarg-only factories (``plane_wave``,
     # ``point_source``) keep their existing signature; the only change
@@ -2964,8 +2756,22 @@ class Source:
     # docs and the factory-validation parametrize list.
     # -----------------------------------------------------------------
 
+    #: Shared body of the v5.30 legacy-positional rejection.  One helper so
+    #: the five messages cannot drift apart (the pre-removal shims had five
+    #: independently-maintained copies of the same remap logic).
+    @staticmethod
+    def _reject_legacy_positional(n_given: int, *, function: str,
+                                  old_signature: str,
+                                  new_signature: str) -> None:
+        raise TypeError(
+            f"{function}: the legacy positional form ``{old_signature}`` "
+            f"was deprecated in v4.15 and REMOVED in v5.30 (got {n_given} "
+            f"positional argument(s); the canonical form takes NONE -- "
+            f"every parameter is keyword-only).  Migrate to "
+            f"``{new_signature}``.  See Migration-Guide.md section 5.30.0.")
+
     @classmethod
-    def gaussian(cls, *args,
+    def gaussian(cls, *_legacy_positional,
                   w0: _Optional[float] = None,
                   N: _Optional[int] = None,
                   dx: _Optional[float] = None,
@@ -2984,55 +2790,17 @@ class Source:
         ``factory_kwargs`` (e.g. ``dy=``, ``dtype=``) are forwarded to
         :func:`create_gaussian_beam`.
 
-        Legacy signature (deprecated since v4.15, removal v5.32):
-            ``Source.gaussian(w0, N, dx, wavelength, ...)``
+        Legacy signature (deprecated v4.15, **REMOVED in v5.30**):
+            ``Source.gaussian(w0, N, dx, wavelength, ...)`` -- raises
+            ``TypeError`` naming the canonical form.
         """
-        # Legacy positional shim: pre-v4.15 callers passed
-        # ``(w0, N, dx, wavelength)`` positionally.  Detect via *args
-        # and emit a DeprecationWarning before remapping.
-        if args:
-            from .._deprecation import warn_deprecated_signature
-            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
-            # code (chain: _emit [1] -> warn_deprecated_signature [2]
-            # -> Source.gaussian classmethod body [3] -> user [4]).
-            warn_deprecated_signature(
+        if _legacy_positional:
+            cls._reject_legacy_positional(
+                len(_legacy_positional),
                 function='Source.gaussian',
                 old_signature='Source.gaussian(w0, N, dx, wavelength, ...)',
                 new_signature=(
-                    'Source.gaussian(*, N, dx, wavelength, w0, ...)'),
-                version_added='4.15',
-                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
-                stacklevel=4,
-            )
-            if len(args) > 4:
-                raise TypeError(
-                    "Source.gaussian (legacy positional form): too many "
-                    f"positional arguments; got {len(args)}, max 4 "
-                    "(w0, N, dx, wavelength).")
-            legacy = (None, None, None, None)
-            legacy = args + legacy[len(args):]
-            _l_w0, _l_N, _l_dx, _l_wl = legacy
-            # Reject overlap with canonical kwargs.
-            if w0 is not None and _l_w0 is not None:
-                raise TypeError("Source.gaussian: 'w0' supplied both "
-                                "positionally and as keyword.")
-            if N is not None and _l_N is not None:
-                raise TypeError("Source.gaussian: 'N' supplied both "
-                                "positionally and as keyword.")
-            if dx is not None and _l_dx is not None:
-                raise TypeError("Source.gaussian: 'dx' supplied both "
-                                "positionally and as keyword.")
-            if wavelength is not None and _l_wl is not None:
-                raise TypeError("Source.gaussian: 'wavelength' supplied "
-                                "both positionally and as keyword.")
-            if w0 is None:
-                w0 = _l_w0
-            if N is None:
-                N = _l_N
-            if dx is None:
-                dx = _l_dx
-            if wavelength is None:
-                wavelength = _l_wl
+                    'Source.gaussian(*, N, dx, wavelength, w0, ...)'))
         if w0 is None:
             raise TypeError(
                 "Source.gaussian: missing required keyword argument "
@@ -3060,7 +2828,7 @@ class Source:
                    name=name or f'Gaussian(w0={w0:.2g}m)')
 
     @classmethod
-    def plane_wave(cls, *args,
+    def plane_wave(cls, *_legacy_positional,
                     N: _Optional[int] = None,
                     dx: _Optional[float] = None,
                     wavelength: _Optional[float] = None,
@@ -3074,46 +2842,17 @@ class Source:
         Canonical signature (v4.15+):
             ``Source.plane_wave(*, N, dx, wavelength, ...)``
 
-        Legacy signature (deprecated since v4.15, removal v5.32):
-            ``Source.plane_wave(N, dx, wavelength, ...)``
+        Legacy signature (deprecated v4.15, **REMOVED in v5.30**):
+            ``Source.plane_wave(N, dx, wavelength, ...)`` -- raises
+            ``TypeError`` naming the canonical form.
         """
-        if args:
-            from .._deprecation import warn_deprecated_signature
-            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
-            # code (chain: _emit [1] -> warn_deprecated_signature [2]
-            # -> Source.plane_wave classmethod body [3] -> user [4]).
-            warn_deprecated_signature(
+        if _legacy_positional:
+            cls._reject_legacy_positional(
+                len(_legacy_positional),
                 function='Source.plane_wave',
                 old_signature='Source.plane_wave(N, dx, wavelength, ...)',
                 new_signature=(
-                    'Source.plane_wave(*, N, dx, wavelength, ...)'),
-                version_added='4.15',
-                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
-                stacklevel=4,
-            )
-            if len(args) > 3:
-                raise TypeError(
-                    "Source.plane_wave (legacy positional form): too "
-                    f"many positional arguments; got {len(args)}, max 3 "
-                    "(N, dx, wavelength).")
-            legacy = (None, None, None)
-            legacy = args + legacy[len(args):]
-            _l_N, _l_dx, _l_wl = legacy
-            if N is not None and _l_N is not None:
-                raise TypeError("Source.plane_wave: 'N' supplied both "
-                                "positionally and as keyword.")
-            if dx is not None and _l_dx is not None:
-                raise TypeError("Source.plane_wave: 'dx' supplied both "
-                                "positionally and as keyword.")
-            if wavelength is not None and _l_wl is not None:
-                raise TypeError("Source.plane_wave: 'wavelength' "
-                                "supplied both positionally and as keyword.")
-            if N is None:
-                N = _l_N
-            if dx is None:
-                dx = _l_dx
-            if wavelength is None:
-                wavelength = _l_wl
+                    'Source.plane_wave(*, N, dx, wavelength, ...)'))
         if N is None:
             raise TypeError(
                 "Source.plane_wave: missing required keyword argument 'N'.")
@@ -3134,7 +2873,7 @@ class Source:
                    name=name or 'PlaneWave')
 
     @classmethod
-    def point_source(cls, *args,
+    def point_source(cls, *_legacy_positional,
                       N: _Optional[int] = None,
                       dx: _Optional[float] = None,
                       wavelength: _Optional[float] = None,
@@ -3147,50 +2886,21 @@ class Source:
         Canonical signature (v4.15+):
             ``Source.point_source(*, N, dx, wavelength, ...)``
 
-        Legacy signature (deprecated since v4.15, removal v5.32):
-            ``Source.point_source(N, dx, wavelength, ...)``
+        Legacy signature (deprecated v4.15, **REMOVED in v5.30**):
+            ``Source.point_source(N, dx, wavelength, ...)`` -- raises
+            ``TypeError`` naming the canonical form.
 
         ``z0 < 0`` -> diverging wavefront (source before grid);
         ``z0 > 0`` -> converging wavefront (focus after grid).
         See :func:`create_point_source` for the sign-convention details.
         """
-        if args:
-            from .._deprecation import warn_deprecated_signature
-            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
-            # code (chain: _emit [1] -> warn_deprecated_signature [2]
-            # -> Source.point_source classmethod body [3] -> user [4]).
-            warn_deprecated_signature(
+        if _legacy_positional:
+            cls._reject_legacy_positional(
+                len(_legacy_positional),
                 function='Source.point_source',
                 old_signature='Source.point_source(N, dx, wavelength, ...)',
                 new_signature=(
-                    'Source.point_source(*, N, dx, wavelength, ...)'),
-                version_added='4.15',
-                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
-                stacklevel=4,
-            )
-            if len(args) > 3:
-                raise TypeError(
-                    "Source.point_source (legacy positional form): "
-                    f"too many positional arguments; got {len(args)}, "
-                    "max 3 (N, dx, wavelength).")
-            legacy = (None, None, None)
-            legacy = args + legacy[len(args):]
-            _l_N, _l_dx, _l_wl = legacy
-            if N is not None and _l_N is not None:
-                raise TypeError("Source.point_source: 'N' supplied both "
-                                "positionally and as keyword.")
-            if dx is not None and _l_dx is not None:
-                raise TypeError("Source.point_source: 'dx' supplied "
-                                "both positionally and as keyword.")
-            if wavelength is not None and _l_wl is not None:
-                raise TypeError("Source.point_source: 'wavelength' "
-                                "supplied both positionally and as keyword.")
-            if N is None:
-                N = _l_N
-            if dx is None:
-                dx = _l_dx
-            if wavelength is None:
-                wavelength = _l_wl
+                    'Source.point_source(*, N, dx, wavelength, ...)'))
         if N is None:
             raise TypeError(
                 "Source.point_source: missing required keyword argument 'N'.")
@@ -3211,7 +2921,7 @@ class Source:
                    name=name or 'PointSource')
 
     @classmethod
-    def top_hat(cls, *args,
+    def top_hat(cls, *_legacy_positional,
                   diameter: _Optional[float] = None,
                   N: _Optional[int] = None,
                   dx: _Optional[float] = None,
@@ -3225,51 +2935,18 @@ class Source:
         Canonical signature (v4.15+):
             ``Source.top_hat(*, N, dx, wavelength, diameter, ...)``
 
-        Legacy signature (deprecated since v4.15, removal v5.32):
-            ``Source.top_hat(diameter, N, dx, wavelength, ...)``
+        Legacy signature (deprecated v4.15, **REMOVED in v5.30**):
+            ``Source.top_hat(diameter, N, dx, wavelength, ...)`` -- raises
+            ``TypeError`` naming the canonical form.
         """
-        if args:
-            from .._deprecation import warn_deprecated_signature
-            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
-            # code (chain: _emit [1] -> warn_deprecated_signature [2]
-            # -> Source.top_hat classmethod body [3] -> user [4]).
-            warn_deprecated_signature(
+        if _legacy_positional:
+            cls._reject_legacy_positional(
+                len(_legacy_positional),
                 function='Source.top_hat',
-                old_signature='Source.top_hat(diameter, N, dx, wavelength, ...)',
+                old_signature=(
+                    'Source.top_hat(diameter, N, dx, wavelength, ...)'),
                 new_signature=(
-                    'Source.top_hat(*, N, dx, wavelength, diameter, ...)'),
-                version_added='4.15',
-                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
-                stacklevel=4,
-            )
-            if len(args) > 4:
-                raise TypeError(
-                    "Source.top_hat (legacy positional form): too many "
-                    f"positional arguments; got {len(args)}, max 4 "
-                    "(diameter, N, dx, wavelength).")
-            legacy = (None, None, None, None)
-            legacy = args + legacy[len(args):]
-            _l_diameter, _l_N, _l_dx, _l_wl = legacy
-            if diameter is not None and _l_diameter is not None:
-                raise TypeError("Source.top_hat: 'diameter' supplied "
-                                "both positionally and as keyword.")
-            if N is not None and _l_N is not None:
-                raise TypeError("Source.top_hat: 'N' supplied both "
-                                "positionally and as keyword.")
-            if dx is not None and _l_dx is not None:
-                raise TypeError("Source.top_hat: 'dx' supplied both "
-                                "positionally and as keyword.")
-            if wavelength is not None and _l_wl is not None:
-                raise TypeError("Source.top_hat: 'wavelength' supplied "
-                                "both positionally and as keyword.")
-            if diameter is None:
-                diameter = _l_diameter
-            if N is None:
-                N = _l_N
-            if dx is None:
-                dx = _l_dx
-            if wavelength is None:
-                wavelength = _l_wl
+                    'Source.top_hat(*, N, dx, wavelength, diameter, ...)'))
         if diameter is None:
             raise TypeError(
                 "Source.top_hat: missing required keyword argument "
@@ -3294,7 +2971,7 @@ class Source:
                    name=name or f'TopHat(D={diameter:.2g}m)')
 
     @classmethod
-    def fiber_mode(cls, *args,
+    def fiber_mode(cls, *_legacy_positional,
                     mode_field_diameter: _Optional[float] = None,
                     N: _Optional[int] = None,
                     dx: _Optional[float] = None,
@@ -3310,56 +2987,20 @@ class Source:
             ``Source.fiber_mode(*, N, dx, wavelength,
             mode_field_diameter, ...)``
 
-        Legacy signature (deprecated since v4.15, removal v5.32):
+        Legacy signature (deprecated v4.15, **REMOVED in v5.30**):
             ``Source.fiber_mode(mode_field_diameter, N, dx, wavelength,
-            ...)``
+            ...)`` -- raises ``TypeError`` naming the canonical form.
         """
-        if args:
-            from .._deprecation import warn_deprecated_signature
-            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
-            # code (chain: _emit [1] -> warn_deprecated_signature [2]
-            # -> Source.fiber_mode classmethod body [3] -> user [4]).
-            warn_deprecated_signature(
+        if _legacy_positional:
+            cls._reject_legacy_positional(
+                len(_legacy_positional),
                 function='Source.fiber_mode',
                 old_signature=(
                     'Source.fiber_mode(mode_field_diameter, N, dx, '
                     'wavelength, ...)'),
                 new_signature=(
                     'Source.fiber_mode(*, N, dx, wavelength, '
-                    'mode_field_diameter, ...)'),
-                version_added='4.15',
-                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
-                stacklevel=4,
-            )
-            if len(args) > 4:
-                raise TypeError(
-                    "Source.fiber_mode (legacy positional form): too "
-                    f"many positional arguments; got {len(args)}, max "
-                    "4 (mode_field_diameter, N, dx, wavelength).")
-            legacy = (None, None, None, None)
-            legacy = args + legacy[len(args):]
-            _l_mfd, _l_N, _l_dx, _l_wl = legacy
-            if mode_field_diameter is not None and _l_mfd is not None:
-                raise TypeError(
-                    "Source.fiber_mode: 'mode_field_diameter' supplied "
-                    "both positionally and as keyword.")
-            if N is not None and _l_N is not None:
-                raise TypeError("Source.fiber_mode: 'N' supplied both "
-                                "positionally and as keyword.")
-            if dx is not None and _l_dx is not None:
-                raise TypeError("Source.fiber_mode: 'dx' supplied both "
-                                "positionally and as keyword.")
-            if wavelength is not None and _l_wl is not None:
-                raise TypeError("Source.fiber_mode: 'wavelength' "
-                                "supplied both positionally and as keyword.")
-            if mode_field_diameter is None:
-                mode_field_diameter = _l_mfd
-            if N is None:
-                N = _l_N
-            if dx is None:
-                dx = _l_dx
-            if wavelength is None:
-                wavelength = _l_wl
+                    'mode_field_diameter, ...)'))
         if mode_field_diameter is None:
             raise TypeError(
                 "Source.fiber_mode: missing required keyword argument "
@@ -3396,16 +3037,18 @@ class Source:
                          source_point: _Tuple[float, float] = (0.0, 0.0),
                          name: _Optional[str] = None,
                          rng: Any = None,
-                         seed: _Optional[int] = None,
                          return_kind: Any = 'ensemble',
                          **factory_kwargs) -> Any:
         """Gaussian-Schell partial-coherence source.
 
         Wraps :func:`create_gaussian_schell_source`.  Accepts the
         canonical ``rng=`` randomness kwarg (None / int /
-        ``numpy.random.Generator`` / ``RandomState``); the legacy
-        ``seed=`` is DEPRECATED since v5.25 (removal v5.27) and forwarded
-        with a :class:`DeprecationWarning`.
+        ``numpy.random.Generator`` / ``RandomState``).
+
+        .. versionchanged:: 5.30
+            The legacy ``seed=`` kwarg is **removed** (deprecated v5.25,
+            stated horizon v5.27).  ``rng=<int>`` reproduces the old
+            ``seed=<int>`` stream bit-for-bit.
 
         v4.15.2 (Agent E, AUDIT_V4_15_1 P2): the return type now
         matches the top-level factory's return-type convention
@@ -3421,12 +3064,8 @@ class Source:
         v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
         ``DeprecationWarning`` (v4.15.2 -> v4.15.5) for the v4.15.0
         -> v4.15.1 return-shape change is retired.  The default is
-        plain ``'ensemble'`` and the call is silent.  The sentinel
-        ``_RETURN_KIND_UNSET`` is preserved as a deprecated
-        compatibility shim (treated as ``'ensemble'`` at the
-        classmethod boundary); both sentinel + helper are slated for
-        removal in v5.32 (R-18: re-scheduled off the blown v5.0
-        horizon).
+        plain ``'ensemble'`` and the call is silent.  v5.30 (W5): the
+        ``_RETURN_KIND_UNSET`` sentinel + helper are removed.
 
         Return contract (v4.15.2+)
         --------------------------
@@ -3472,14 +3111,11 @@ class Source:
         is in scope for v4.16+ but is NOT shipped in v4.15.3.
         """
         # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
-        # DeprecationWarning is retired; the sentinel pass-through is
-        # preserved so callers explicitly forwarding the sentinel
-        # (rare; the v4.15.3 meta-pin path) still resolve cleanly.
-        if return_kind is _RETURN_KIND_UNSET:
-            return_kind = 'ensemble'
+        # DeprecationWarning is retired.  v5.30 (W5): the no-op sentinel
+        # pass-through is removed with the rest of the shim.
         result = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=wavelength, w0=w0, sigma_g=sigma_g,
-            n_realizations=n_realizations, rng=rng, seed=seed,
+            n_realizations=n_realizations, rng=rng,
             return_kind=return_kind, **factory_kwargs)
         # v4.15.2 (Agent E): pass the factory's return value through
         # verbatim -- either the (ensemble, dx, dy, wavelength) tuple
@@ -3506,7 +3142,6 @@ class Source:
                       source_point: _Tuple[float, float] = (0.0, 0.0),
                       name: _Optional[str] = None,
                       rng: Any = None,
-                      seed: _Optional[int] = None,
                       return_kind: Any = 'ensemble',
                       **factory_kwargs) -> Any:
         """Generic Schell-model partial-coherence source.
@@ -3515,15 +3150,14 @@ class Source:
         :meth:`Source.gaussian_schell` for the v4.15.2 return-type
         convention (ensemble tuple by default, MCF object on
         ``return_kind='mcf'``; NOT a :class:`Source`-wrapped 3-D
-        ensemble) and for the ``rng=`` / deprecated ``seed=`` randomness
-        contract.
+        ensemble) and for the ``rng=`` randomness contract (the legacy
+        ``seed=`` spelling was removed in v5.30).
 
         v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
         ``DeprecationWarning`` is retired in line with
         :meth:`Source.gaussian_schell`.  The default is plain
-        ``'ensemble'`` and the call is silent.  The sentinel is
-        preserved for back-compat (see :meth:`Source.gaussian_schell`
-        docstring).
+        ``'ensemble'`` and the call is silent.  v5.30 (W5): the sentinel
+        is removed (see :meth:`Source.gaussian_schell`).
 
         2-D ``Source.E`` invariant break (intentional): the 4-tuple
         return has ``E_ensemble.shape == (n_realizations, Ny, Nx)``
@@ -3534,15 +3168,14 @@ class Source:
         for the full rationale and the v4.16+ ``Source.realizations()``
         per-realization-iterator plan.
         """
-        # v4.16.1: default-path DeprecationWarning retired; sentinel
-        # pass-through preserved (see Source.gaussian_schell).
-        if return_kind is _RETURN_KIND_UNSET:
-            return_kind = 'ensemble'
+        # v4.16.1: default-path DeprecationWarning retired.  v5.30 (W5):
+        # the no-op sentinel pass-through is removed (see
+        # Source.gaussian_schell).
         result = create_schell_model_source(
             N=N, dx=dx, wavelength=wavelength,
             intensity_profile=intensity_profile,
             coherence_length=coherence_length,
-            n_realizations=n_realizations, rng=rng, seed=seed,
+            n_realizations=n_realizations, rng=rng,
             return_kind=return_kind, **factory_kwargs)
         # v4.15.2 (Agent E): same return-type contract as
         # ``Source.gaussian_schell`` -- pass the factory return through

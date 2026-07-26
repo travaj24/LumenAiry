@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 # tests that monkey-patch ``core._json`` / ``core._os`` to count I/O
 # calls continue to intercept the binding actually used by the
 # implementation.  See ``test_v4_16_0_agent_c::test_state_save_every_throttles_io``.
-from ..elements.lenses import apply_real_lens, apply_real_lens_traced
+from ..elements.lenses import apply_real_lens
 
 # 4.10.2: pull get_default_complex_dtype to module scope so merit-leg
 # wave-propagation source fields (apply_real_lens inputs) can be
@@ -74,8 +74,7 @@ _MINIMIZE_METHODS_SUPPORTING_BOUNDS = frozenset({
 #     fn(E0, pres, *, wavelength, dx, N, wp_kwargs, opts) -> E_exit
 #
 # where ``opts`` is a dict of design_optimize-internal flags (e.g.
-# ``wave_traced`` / ``ray_subsample``) so the registered function can
-# honour them.  ``wp_kwargs`` is a mutable dict the function may
+# ``ray_subsample``) so the registered function can honour them.  ``wp_kwargs`` is a mutable dict the function may
 # ``.pop`` from to extract its own options.  Returns the post-lens
 # field on the (Ny, Nx, dx) grid expected by the wave-leg merits.
 #
@@ -99,7 +98,9 @@ def register_wave_propagator(name: str, fn: Callable) -> None:
 
     where ``wp_kwargs`` is a mutable dict the function may pop from,
     and ``opts`` is a dict carrying ``design_optimize``-internal
-    flags (``wave_traced``, ``ray_subsample``, ...).
+    flags (``ray_subsample``, ...).  v5.30: ``wave_traced`` is gone --
+    register a traced propagator here instead (recipe in
+    ``_wave_real_lens``).
     """
     WAVE_PROPAGATOR_REGISTRY[name] = fn
 
@@ -110,11 +111,23 @@ def unregister_wave_propagator(name: str) -> None:
 
 
 def _wave_real_lens(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
-    if opts.get('wave_traced', False):
-        return apply_real_lens_traced(
-            E0, prescription=pres, wavelength=wavelength, dx=dx,
-            ray_subsample=opts.get('ray_subsample', 4), n_workers=1,
-            **wp_kwargs)
+    # v5.30 (W5 shim-removal wave): the ``opts['wave_traced']`` branch that
+    # routed to ``apply_real_lens_traced`` is REMOVED with the
+    # ``design_optimize(wave_traced=)`` flag that was its only gate (R-17
+    # grep-verified zero callers repo-wide, so CI never covered it).  To
+    # drive ``apply_real_lens_traced`` from a design run, register a
+    # propagator -- one dispatch mechanism instead of a boolean that
+    # mutates the meaning of ``ray_subsample``::
+    #
+    #     def _traced(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+    #         return apply_real_lens_traced(
+    #             E0, prescription=pres, wavelength=wavelength, dx=dx,
+    #             ray_subsample=opts.get('ray_subsample', 4), n_workers=1,
+    #             **wp_kwargs)
+    #     register_wave_propagator('real_lens_traced', _traced)
+    #     design_optimize(..., wave_propagator='real_lens_traced')
+    #
+    # ``opts`` still carries ``ray_subsample`` for exactly that purpose.
     return apply_real_lens(E0, prescription=pres, wavelength=wavelength, dx=dx, **wp_kwargs)
 
 
@@ -457,7 +470,6 @@ def design_optimize(parameterization: Any,
                     E_in: Optional[np.ndarray] = None,
                     method: str = 'L-BFGS-B',
                     max_iter: int = 100,
-                    wave_traced: bool = False,
                     wave_propagator: str = 'real_lens',
                     wave_propagator_kwargs: Optional[Dict[str, Any]] = None,
                     ray_subsample: int = 4,
@@ -479,19 +491,20 @@ def design_optimize(parameterization: Any,
     docstring; the body lives here post-v5.1.0 split.  Parameter and
     behaviour contracts are unchanged.
 
-    .. deprecated:: 5.30
-       ``wave_traced=True`` is DEPRECATED (removal v5.32).  R-17
+    .. versionchanged:: 5.30
+       ``wave_traced`` is **REMOVED** (deprecated earlier in v5.30, W5
+       shim-removal wave).  R-17
        (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25) grep-verified ZERO
        callers anywhere in the repo -- library, tests, validation,
        examples, UI -- so the ``apply_real_lens_traced`` branch it
-       selects in ``_wave_real_lens`` has never been exercised by CI.
-       Register an explicit propagator that calls
+       selected in ``_wave_real_lens`` was never exercised by CI.
+       Passing ``wave_traced=`` now raises ``TypeError``.  Migration:
+       register an explicit propagator that calls
        ``apply_real_lens_traced`` via
        :func:`register_wave_propagator` and select it with
-       ``wave_propagator=<name>`` instead -- one dispatch mechanism
-       rather than a boolean that mutates the meaning of another
-       argument.  Passing a non-default value emits a
-       :class:`DeprecationWarning`; the branch still runs.
+       ``wave_propagator=<name>`` -- one dispatch mechanism rather than
+       a boolean that mutates the meaning of another argument.  See
+       ``_wave_real_lens`` for a copy-paste recipe.
 
     v5.24.x (audit S4-18): ``seed`` controls the RNG of the stochastic
     global methods (``differential_evolution`` / ``basin_hopping`` /
@@ -566,21 +579,6 @@ def design_optimize(parameterization: Any,
             except Exception:
                 pass
     _dtype_restore_guard = _RestoreDtype(_orig_complex_dtype)
-
-    # R-17 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): ``wave_traced`` is a
-    # documented public flag with a live branch in ``_wave_real_lens``
-    # and ZERO callers anywhere (library / tests / validation / examples
-    # / UI, grep-verified twice).  Deprecated rather than deleted --
-    # out-of-repo callers may exist and the branch is harmless -- with
-    # removal scheduled for v5.32.  The warning fires ONLY on a
-    # non-default value, so every existing (default) call is silent.
-    if wave_traced:
-        from .._deprecation import warn_deprecated_kwarg
-        warn_deprecated_kwarg(
-            'wave_traced', "wave_propagator=<a propagator registered via "
-                            "register_wave_propagator>",
-            function='design_optimize',
-            version_added='5.30', version_removed='5.32', stacklevel=3)
 
     # v4.14 (audit P2 #14): warn if the user selected a non-default
     # wave_propagator (e.g. 'gbd') AND any of the three Merit classes
@@ -877,8 +875,10 @@ def design_optimize(parameterization: Any,
                     f"{sorted(WAVE_PROPAGATOR_REGISTRY)} "
                     "(register custom propagators with "
                     "register_wave_propagator(name, fn)).")
+            # v5.30 (W5): ``wave_traced`` dropped from ``opts`` with the
+            # kwarg.  ``ray_subsample`` stays -- it is the documented
+            # channel for a user-registered traced propagator.
             _opts = {
-                'wave_traced': wave_traced,
                 'ray_subsample': ray_subsample,
             }
             E_exit = _wave_fn(

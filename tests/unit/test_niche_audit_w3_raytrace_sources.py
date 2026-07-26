@@ -36,7 +36,8 @@ Findings pinned here
 * **R-9 / R-10** -- HG/LG take ``w0`` in the slot every other factory
   uses for ``wavelength``; annular siblings disagree on radius vs
   diameter.  Documented + a zero-false-positive runtime swap warning.
-* **R-17** -- ``wave_traced`` / ``use_traced_lens`` / ``focus_search``
+* **R-17** (all three flags REMOVED in v5.30 / W5; pins superseded
+  below) -- ``wave_traced`` / ``use_traced_lens`` / ``focus_search``
   are documented public flags with live branches and zero callers:
   deprecated (removal v5.32), not deleted.
 * **R-18 / overdue shims** -- ``version_removed='5.0'`` was still
@@ -616,37 +617,47 @@ class TestR10AnnularRadiusVsDiameter:
 # R-17 -- zero-caller optimize flags are deprecated, not deleted
 # ==========================================================================
 
-class TestR17DeadOptimizeFlagsDeprecated:
-    """``design_optimize(wave_traced=)`` and
-    ``MatchIdealSystemMerit(use_traced_lens=, focus_search=)`` are
+class TestR17DeadOptimizeFlagsRemoved:
+    """SUPERSEDES ``TestR17DeadOptimizeFlagsDeprecated`` (R-17, v5.30 warn
+    phase).
+
+    ``design_optimize(wave_traced=)`` and
+    ``MatchIdealSystemMerit(use_traced_lens=, focus_search=)`` were
     documented public flags with live branches and ZERO callers anywhere in
     the repo (grep-verified twice: library, tests, validation, examples,
-    UI).  Deprecated with removal v5.32 -- NOT deleted, since out-of-repo
-    callers cannot be ruled out.  Warnings fire only on a non-default
-    value, so the whole existing corpus stays silent."""
+    UI).  R-17 deprecated rather than deleted them; the v5.30 W5 wave
+    REMOVES them, together with the knobs that only fed them
+    (``ray_subsample`` on the merit, ``focus_search_range``,
+    ``focus_search_n``) and the one helper that becomes fully dead
+    (``_focus_search_penalty``).
 
-    def test_r17_use_traced_lens_warns(self):
+    Grep-verified scope boundary: the OTHER three unexercised penalty
+    helpers are gated by ``match=``, a live documented feature, so they
+    are KEPT.  That distinction is pinned below -- deleting them would
+    have been the easy over-reach."""
+
+    def test_r17_use_traced_lens_is_removed(self):
         from lumenairy.optimize.merit_terms import MatchIdealSystemMerit
-        with pytest.warns(DeprecationWarning, match=r"'use_traced_lens'"):
+        with pytest.raises(TypeError, match='use_traced_lens'):
             MatchIdealSystemMerit([{'type': 'lens', 'f': 50e-3}],
                                    use_traced_lens=True)
 
-    def test_r17_focus_search_warns(self):
+    def test_r17_focus_search_is_removed(self):
         from lumenairy.optimize.merit_terms import MatchIdealSystemMerit
-        with pytest.warns(DeprecationWarning, match=r"'focus_search'"):
+        with pytest.raises(TypeError, match='focus_search'):
             MatchIdealSystemMerit([{'type': 'lens', 'f': 50e-3}],
                                    focus_search=True)
 
-    def test_r17_warnings_name_the_v5_32_removal(self):
+    def test_r17_feeder_knobs_are_removed_too(self):
+        """``ray_subsample`` / ``focus_search_range`` / ``focus_search_n``
+        were read ONLY on the removed branches, so they go with them."""
         from lumenairy.optimize.merit_terms import MatchIdealSystemMerit
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            MatchIdealSystemMerit([{'type': 'lens', 'f': 50e-3}],
-                                   use_traced_lens=True, focus_search=True)
-        msgs = [str(w.message) for w in caught
-                if issubclass(w.category, DeprecationWarning)]
-        assert len(msgs) == 2, msgs
-        assert all('v5.32' in m for m in msgs), msgs
+        for kw, val in (('ray_subsample', 8),
+                        ('focus_search_range', (-1e-3, 1e-3)),
+                        ('focus_search_n', 5)):
+            with pytest.raises(TypeError, match=kw):
+                MatchIdealSystemMerit([{'type': 'lens', 'f': 50e-3}],
+                                       **{kw: val})
 
     def test_r17_default_construction_is_silent(self):
         from lumenairy.optimize.merit_terms import MatchIdealSystemMerit
@@ -657,74 +668,106 @@ class TestR17DeadOptimizeFlagsDeprecated:
                     if issubclass(w.category, DeprecationWarning)], (
             [str(w.message) for w in caught])
 
-    def test_r17_flags_and_branches_still_exist(self):
-        """Deprecated, not removed: the kwargs and the four unexercised
-        penalty helpers must all still be there."""
+    def test_r17_flags_and_the_dead_helper_are_gone(self):
+        """SUPERSEDES ``test_r17_flags_and_branches_still_exist``."""
         from lumenairy.optimize.driver import design_optimize
         from lumenairy.optimize.merit_terms import MatchIdealSystemMerit
-        assert 'wave_traced' in inspect.signature(design_optimize).parameters
-        mp = inspect.signature(MatchIdealSystemMerit.__init__).parameters
-        assert {'use_traced_lens', 'focus_search', 'match'} <= set(mp)
-        for helper in ('_focus_search_penalty', '_field_mse_penalty',
-                       '_intensity_mse_penalty', '_intensity_overlap_penalty'):
-            assert callable(getattr(MatchIdealSystemMerit, helper)), helper
+        assert 'wave_traced' not in inspect.signature(
+            design_optimize).parameters
+        mp = set(inspect.signature(MatchIdealSystemMerit.__init__).parameters)
+        assert not ({'use_traced_lens', 'focus_search', 'ray_subsample',
+                     'focus_search_range', 'focus_search_n'} & mp), mp
+        assert 'match' in mp, 'match= is a live feature, not a deprecation'
+        assert not hasattr(MatchIdealSystemMerit, '_focus_search_penalty'), (
+            '_focus_search_penalty was gated ONLY by focus_search; it must '
+            'go with it')
 
-    def test_r17_unexercised_helpers_say_so_in_their_docstrings(self):
+    def test_r17_match_gated_kernels_are_KEPT(self):
+        """The scope boundary: three of the four R-17 "zero-caller"
+        helpers are reachable via ``match=``, which is a documented
+        feature, not a deprecation.  They must survive."""
         from lumenairy.optimize.merit_terms import MatchIdealSystemMerit
-        for helper in ('_focus_search_penalty', '_field_mse_penalty',
-                       '_intensity_mse_penalty', '_intensity_overlap_penalty'):
+        for helper in ('_field_mse_penalty', '_intensity_mse_penalty',
+                       '_intensity_overlap_penalty'):
+            assert callable(getattr(MatchIdealSystemMerit, helper)), helper
             doc = inspect.getdoc(getattr(MatchIdealSystemMerit, helper)) or ''
             assert 'R-17' in doc, helper
+        for m in ('field_overlap', 'field_mse', 'intensity_mse',
+                  'intensity_overlap'):
+            assert MatchIdealSystemMerit(
+                [{'type': 'lens', 'f': 50e-3}], match=m).match == m
 
-    def test_r17_design_optimize_wave_traced_warns(self):
-        """The flag's warning must fire from the PUBLIC entry point, not
-        only from an internal helper."""
+    def test_r17_design_optimize_wave_traced_is_removed(self):
+        """SUPERSEDES ``test_r17_design_optimize_wave_traced_warns``: the
+        public entry point must reject the flag, not warn about it."""
         from lumenairy.optimize.driver import design_optimize
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            try:
-                design_optimize(object(), [], _WL, wave_traced=True)
-            except Exception:
-                pass          # any downstream failure is fine; we want the warn
-        dep = [str(w.message) for w in caught
-               if issubclass(w.category, DeprecationWarning)
-               and 'wave_traced' in str(w.message)]
-        assert dep, [str(w.message) for w in caught]
-        assert 'v5.32' in dep[0], dep
+        with pytest.raises(TypeError, match='wave_traced'):
+            design_optimize(object(), [], _WL, wave_traced=True)
+
+    def test_r17_traced_propagator_is_still_reachable_by_registration(self):
+        """The migration path the removal points at must actually work:
+        ``register_wave_propagator`` + ``wave_propagator=<name>`` still
+        receives ``ray_subsample`` through ``opts``."""
+        from lumenairy.optimize.driver import (
+            WAVE_PROPAGATOR_REGISTRY,
+            register_wave_propagator,
+            unregister_wave_propagator,
+        )
+        seen = {}
+
+        def _probe(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+            seen.update(opts)
+            return E0
+
+        register_wave_propagator('_w5_probe', _probe)
+        try:
+            assert '_w5_probe' in WAVE_PROPAGATOR_REGISTRY
+            WAVE_PROPAGATOR_REGISTRY['_w5_probe'](
+                None, None, wavelength=_WL, dx=1e-6, N=8, wp_kwargs={},
+                opts={'ray_subsample': 7})
+            assert seen == {'ray_subsample': 7}, seen
+        finally:
+            unregister_wave_propagator('_w5_probe')
 
 
 # ==========================================================================
 # Overdue shims -- the blown v5.0 horizon is re-scheduled, and still fires
 # ==========================================================================
 
-class TestOverdueSourceShims:
-    """``sources/core.py`` shipped ``version_removed='5.0'`` at v5.29 -- 29
+class TestOverdueSourceShimsRemoved:
+    """SUPERSEDES ``TestOverdueSourceShims`` (R-18, v5.30 re-schedule
+    phase).
+
+    ``sources/core.py`` shipped ``version_removed='5.0'`` at v5.29 -- 29
     minor releases past its own removal date -- across the
     ``create_led_source`` positional shim, the five ``Source.*`` legacy
-    positional shims and the Schell ``return_kind`` sentinel helper.  A
-    removal version the library has demonstrably blown through trains
-    callers to ignore the message.  Re-scheduled ONCE, to v5.32, through the
-    single ``_OVERDUE_SHIM_VERSION_REMOVED`` constant."""
+    positional shims and the Schell ``return_kind`` sentinel helper.  R-18
+    re-scheduled all eight warning sites to v5.32 through a single
+    ``_OVERDUE_SHIM_VERSION_REMOVED`` constant; the v5.30 W5 wave EXECUTES
+    the removal instead of letting the horizon slip a third time.
 
-    def test_shims_no_longer_advertise_the_blown_v5_0_horizon(self):
+    So the module must now contain no removal horizon at all for these:
+    not v5.0, not v5.32, and no re-schedule constant."""
+
+    def test_no_shim_horizon_survives_in_the_module(self):
         core = importlib.import_module('lumenairy.sources.core')
         src = inspect.getsource(core)
-        # match the CALL form (trailing comma) so this module's own
-        # explanatory comment about the old value doesn't self-trip.
         assert "version_removed='5.0'," not in src, (
             'a shim still hard-codes the blown v5.0 removal horizon')
-        assert core._OVERDUE_SHIM_VERSION_REMOVED == '5.32'
+        assert 'version_removed=_OVERDUE_SHIM_VERSION_REMOVED' not in src, (
+            'a shim still routes through the re-schedule constant')
+        assert not hasattr(core, '_OVERDUE_SHIM_VERSION_REMOVED')
+        assert not hasattr(core, '_DEPRECATION_VERSION_REMOVED')
+        assert not hasattr(core, '_DEPRECATION_VERSION_ADDED')
 
-    def test_led_positional_shim_fires_and_names_v5_32(self):
-        core = importlib.import_module('lumenairy.sources.core')
+    def test_led_positional_shim_is_removed(self):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            la.create_led_source(64, 16e-6, 100e-6, 0.3, 1.31e-6)
-        dep = [str(w.message) for w in caught
-               if issubclass(w.category, DeprecationWarning)
-               and 'create_led_source' in str(w.message)]
-        assert dep, [str(w.message) for w in caught]
-        assert f'v{core._OVERDUE_SHIM_VERSION_REMOVED}' in dep[0], dep[0]
+            with pytest.raises(TypeError, match='REMOVED in v5.30'):
+                la.create_led_source(64, 16e-6, 100e-6, 0.3, 1.31e-6)
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            [str(w.message) for w in caught])
 
     @pytest.mark.parametrize('factory, args', [
         ('gaussian', (50e-6, 32, 4e-6, 1.31e-6)),
@@ -733,29 +776,37 @@ class TestOverdueSourceShims:
         ('top_hat', (50e-6, 32, 4e-6, 1.31e-6)),
         ('fiber_mode', (50e-6, 32, 4e-6, 1.31e-6)),
     ])
-    def test_source_legacy_positional_shims_fire_and_name_v5_32(
-            self, factory, args):
-        """Measured, not assumed: each shim must actually emit from the
-        production classmethod, with the re-scheduled version in the text."""
-        core = importlib.import_module('lumenairy.sources.core')
+    def test_source_legacy_positional_shims_are_removed(self, factory, args):
+        """Measured, not assumed: each production classmethod must reject
+        the legacy shape, naming itself and the canonical form."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            getattr(la.Source, factory)(*args)
-        dep = [str(w.message) for w in caught
-               if issubclass(w.category, DeprecationWarning)
-               and f'Source.{factory}' in str(w.message)]
-        assert dep, (factory, [str(w.message) for w in caught])
-        assert f'v{core._OVERDUE_SHIM_VERSION_REMOVED}' in dep[0], dep[0]
+            with pytest.raises(TypeError) as info:
+                getattr(la.Source, factory)(*args)
+        msg = str(info.value)
+        assert f'Source.{factory}' in msg, msg
+        assert 'REMOVED in v5.30' in msg, msg
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            factory, [str(w.message) for w in caught])
 
-    def test_schell_return_kind_helper_names_v5_32(self):
+    def test_schell_return_kind_sentinel_apparatus_is_removed(self):
+        """The helper had ZERO production call sites (pinned in
+        ``test_niche_audit_w3_ui_deprecation.py``) and the five sentinel
+        branches had been no-ops since v4.16.1, so the whole apparatus
+        goes: helper, singleton and subclass."""
         core = importlib.import_module('lumenairy.sources.core')
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            core._warn_schell_return_kind_default('probe_factory')
-        dep = [str(w.message) for w in caught
-               if issubclass(w.category, DeprecationWarning)]
-        assert dep, [str(w.message) for w in caught]
-        assert f'v{core._OVERDUE_SHIM_VERSION_REMOVED}' in dep[0], dep[0]
+        for name in ('_warn_schell_return_kind_default',
+                     '_RETURN_KIND_UNSET',
+                     '_SchellReturnKindUnsetSentinel'):
+            assert not hasattr(core, name), name
+        # Scan CODE only: the module keeps an explanatory tombstone comment
+        # that quotes the removed branch, and a naive substring test would
+        # self-trip on it.
+        code = [ln for ln in inspect.getsource(core).splitlines()
+                if not ln.lstrip().startswith('#')]
+        assert not [ln for ln in code
+                    if 'if return_kind is _RETURN_KIND_UNSET' in ln], code[:0]
 
     def test_canonical_kwarg_calls_stay_silent(self):
         """Non-vacuity in the other direction: the shims must NOT fire on

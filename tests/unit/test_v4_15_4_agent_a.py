@@ -51,7 +51,7 @@ def _make_mcf():
     return create_gaussian_schell_source(
         N=16, dx=2e-6, wavelength=633e-9,
         w0=10e-6, sigma_g=5e-6,
-        n_realizations=2, seed=0, return_kind='mcf')
+        n_realizations=2, rng=0, return_kind='mcf')
 
 
 def _make_3d_ensemble(n=4, ny=16, nx=16):

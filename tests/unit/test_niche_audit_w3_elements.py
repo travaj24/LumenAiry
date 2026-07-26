@@ -21,7 +21,8 @@ Findings covered
 * **E-L11** turbulence-screen frequency lattice on an odd-N grid.
 * **E-L18** ``elements/coronagraph.py`` namespace module had zero coverage.
 * **E-L21** ``apply_real_lens_gbd(jacobian=...)`` unvalidated / inert.
-* **doe deprecation rot** -- the ``_legacy_units='auto'`` shim was unreachable
+* **doe deprecation rot** (shim REMOVED in v5.30 / W5; pins superseded
+  below) -- the ``_legacy_units='auto'`` shim was unreachable
   for the very values its comment advertises.
 """
 from __future__ import annotations
@@ -149,21 +150,27 @@ class TestDoeLegacyUnitsDeprecationReachability:
     _KW = dict(diforders=np.ones((2, 2)), itr=2, plot=False, seed=1,
                wavsamp=2.0)
 
-    def test_auto_shim_fires_for_the_values_its_comment_advertises(self):
-        """``periodx=61.0`` / ``waveln=1.31`` are the shim's own documented
-        legacy inputs.  Pre-fix they raised ``ValueError`` (the > 1 m bound ran
-        BEFORE the rescale), so the deprecation branch was dead for exactly the
-        values it exists to migrate."""
-        with pytest.warns(UserWarning, match='RETIRED'):
-            _nf, _ff, cell_auto = makedammann2d(
-                periodx=61.0, periody=61.0, waveln=1.31,
-                _legacy_units='auto', **self._KW)
-        _nf2, _ff2, cell_um = makedammann2d(
+    def test_auto_shim_is_removed_and_um_carries_its_documented_values(self):
+        """SUPERSEDES ``test_auto_shim_fires_for_the_values_its_comment
+        _advertises`` (v5.30 doe deprecation-rot fix).
+
+        The W3 fix moved the >1 m bound after the rescale so the ``'auto'``
+        branch became reachable for ``periodx=61.0`` / ``waveln=1.31`` --
+        the shim's own documented legacy inputs.  v5.30 (W5) removes the
+        branch outright.  The migration target must still accept exactly
+        those values, which is what licensed the removal: ``'um'``
+        reproduces what the reachable ``'auto'`` branch produced.
+        """
+        with pytest.raises(ValueError, match='REMOVED in v5.30'):
+            makedammann2d(periodx=61.0, periody=61.0, waveln=1.31,
+                          _legacy_units='auto', **self._KW)
+        _nf, _ff, cell_um = makedammann2d(
             periodx=61.0, periody=61.0, waveln=1.31,
             _legacy_units='um', **self._KW)
-        assert cell_auto[0] == pytest.approx(cell_um[0], rel=1e-12), (
-            f"the 'auto' shim must reproduce the explicit 'um' migration; "
-            f"got {cell_auto[0]} vs {cell_um[0]}")
+        # 61 um / 1.31 um design -> the usual wavsamp sizing.
+        n_ord = int(np.ceil(61e-6 / (self._KW['wavsamp'] * 1.31e-6)
+                            * 0.5)) * 2
+        assert cell_um[0] == pytest.approx(61e-6 / n_ord, rel=1e-12)
 
     def test_si_mode_still_rejects_metre_scale_input(self):
         """The unambiguous-nonsense bound is NOT weakened for the default
@@ -176,14 +183,18 @@ class TestDoeLegacyUnitsDeprecationReachability:
             with pytest.raises(ValueError, match=name):
                 makedammann2d(itr=1, plot=False, **kw)
 
-    def test_auto_mode_rejects_post_rescale_nonsense(self):
-        """In ``'auto'`` the bound moves to the RESOLVED SI value, so a legacy
-        input that is still metre-scale after the 1e-6 rescale still raises."""
-        with pytest.raises(ValueError, match='periodx'):
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                makedammann2d(periodx=2.0e7, periody=61.0, waveln=1.31,
-                              _legacy_units='auto', **self._KW)
+    def test_auto_mode_post_rescale_bound_pin_is_SUPERSEDED(self):
+        """SUPERSEDES ``test_auto_mode_rejects_post_rescale_nonsense``.
+
+        With ``'auto'`` removed there is no post-rescale bound to test:
+        the mode is rejected before any value is inspected.  ``'um'``
+        deliberately has NO upper bound (the caller stated the unit), so
+        the metre-scale guard that pin exercised now lives only on the
+        ``'SI'`` path -- covered by
+        :meth:`test_si_mode_still_rejects_metre_scale_input` above."""
+        with pytest.raises(ValueError, match='REMOVED in v5.30'):
+            makedammann2d(periodx=2.0e7, periody=61.0, waveln=1.31,
+                          _legacy_units='auto', **self._KW)
 
 
 # ===========================================================================

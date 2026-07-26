@@ -222,7 +222,7 @@ def t_gaussian_q_parameter():
     z = 50e-3
     z_R = np.pi * w0**2 / lam
     w_expected = w0 * np.sqrt(1 + (z / z_R)**2)
-    E, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=sigma)
+    E, _, _ = la.create_gaussian_beam(N, dx, lam, w0=(sigma) * np.sqrt(2))
     E_prop = la.angular_spectrum_propagate(E, z, lam, dx)
     d4x, d4y = la.beam_d4sigma(E_prop, dx)
     w_measured = d4x / 2
@@ -244,7 +244,7 @@ def t_gaussian_through_thick_lens():
     pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=sigma)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, w0=(sigma) * np.sqrt(2))
     E_exit = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
     z_range = np.linspace(max(bfl - 10e-3, 1e-3), bfl + 10e-3, 41)
     best_d4 = np.inf
@@ -321,7 +321,7 @@ H.section('Power / encircled energy / overlap invariance')
 
 def t_beam_power_gaussian():
     N = 512; dx = 2e-6; w0 = 100e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, sigma=w0)
+    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, w0=(w0) * np.sqrt(2))
     I = np.abs(E)**2
     P_measured = float(np.sum(I) * dx**2)
     peak = np.abs(E).max()
@@ -336,7 +336,7 @@ H.run('Beam power: normalised Gaussian = 1.0',
 def t_radial_power_bands():
     from lumenairy.analysis import radial_power_bands
     N = 512; dx = 2e-6; w0 = 100e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, sigma=w0)
+    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, w0=(w0) * np.sqrt(2))
     sigma = w0
     radii = [sigma, 2*sigma, 3*sigma]
     powers = radial_power_bands(E, dx, radii)

@@ -16,7 +16,8 @@ verified to FAIL on the pre-fix tree (git worktree at ``5c9f7c3``).
 * **P6** ``system.py`` -- ``propagate_through_system_jax(method=...)``
   was never read: every value (including junk) returned the ASM field
   while the NumPy twin honours ``'fresnel'`` / ``'sas'``.  Now raises.
-* **P7** ``hf.py`` -- ``…with_opl_callable(wavelength=)`` was a REQUIRED
+* **P7** ``hf.py`` (keyword REMOVED in v5.30 / W5; pin superseded below)
+  -- ``…with_opl_callable(wavelength=)`` was a REQUIRED
   keyword the body never read, and the ``opl_fn`` units contract (WAVES,
   not metres -- a factor ~1e6) was documented nowhere.  Now optional +
   deprecated, contract documented.
@@ -25,7 +26,8 @@ verified to FAIL on the pre-fix tree (git worktree at ``5c9f7c3``).
   matched only to a substrate of 2.778 and measured WORSE THAN BARE
   GLASS on every common substrate.  Now the quarter-wave admittance
   match ``n_H = n_L*sqrt(n_substrate)``.
-* **E-H11** ``doe.py`` -- ``makedammann2d(_legacy_units='auto')`` default
+* **E-H11** ``doe.py`` (``'auto'`` mode REMOVED in v5.30 / W5; pins
+  superseded below) -- ``makedammann2d(_legacy_units='auto')`` default
   silently multiplied any period/wavelength above 1 mm by 1e-6 (SI THz
   design -> 5e-10 m cells) behind a default-suppressed
   ``DeprecationWarning``.  Default is now ``'SI'``; the shim is retired
@@ -170,11 +172,18 @@ class TestP7OplCallableUnitsContract:
             "The units contract must contrast waves with metres so the "
             "~1e6 error mode is discoverable.")
 
-    def test_wavelength_is_optional_and_call_succeeds_without_it(self):
-        p = inspect.signature(_hf_opl).parameters['wavelength']
-        assert p.default is None, (
-            f"wavelength default is {p.default!r}; it must be optional "
-            f"(the body never read it -- audit P7).")
+    def test_wavelength_is_removed_and_call_succeeds_without_it(self):
+        """SUPERSEDES ``test_wavelength_is_optional_and_call_succeeds
+        _without_it`` (P7, v5.30 warn phase).
+
+        P7 made the never-read ``wavelength`` keyword optional +
+        ``DeprecationWarning``; the W5 wave deletes it in the same release
+        rather than shipping an inert keyword to v5.32.  There was never a
+        future in which it acquired a meaning: consuming it (dividing an
+        assumed-metres Phi by wavelength) would break every existing
+        waves-returning ``opl_fn`` by ~1e6."""
+        assert 'wavelength' not in inspect.signature(_hf_opl).parameters, (
+            'the inert wavelength keyword must be gone (audit P7 / W5)')
         with warnings.catch_warnings():
             warnings.simplefilter('error')          # no warning at all
             out = _hf_opl(
@@ -185,20 +194,28 @@ class TestP7OplCallableUnitsContract:
                 input_grid_dx=4e-6)
         assert np.isfinite(np.asarray(out)).all()
 
-    def test_passing_wavelength_warns_and_does_not_change_the_result(self):
+    def test_passing_wavelength_now_raises(self):
+        """SUPERSEDES ``test_passing_wavelength_warns_and_does_not_change
+        _the_result`` (P7, v5.30 warn phase).
+
+        The old pin's real content -- that the keyword was inert -- is what
+        made deleting it output-neutral, and it is now structural: there is
+        no parameter to pass.  Contract: ``TypeError`` from the signature,
+        no warning."""
         kw = dict(opl_fn=_fresnel_opl_waves,
                   output_grid_x=np.array([0.0, 5e-6]),
                   output_grid_y=np.array([0.0]),
                   input_grid_dx=4e-6)
         E = np.ones((8, 8), dtype=np.complex128)
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
             out_bare = np.asarray(_hf_opl(E, **kw))
-        with pytest.warns(DeprecationWarning, match='wavelength'):
-            out_wl = np.asarray(_hf_opl(E, wavelength=_LAM, **kw))
-        assert np.array_equal(out_bare, out_wl), (
-            "Deprecating ``wavelength`` must not change the numbers: the "
-            "parameter was inert and stays inert.")
+            with pytest.raises(TypeError, match='wavelength'):
+                _hf_opl(E, wavelength=_LAM, **kw)
+        assert out_bare.shape == (1, 2)
+        assert not [w for w in caught
+                    if issubclass(w.category, DeprecationWarning)], (
+            [str(w.message) for w in caught])
 
     def test_metres_valued_callable_is_the_documented_error_mode(self):
         """Discriminator for the contract: a metres-returning callable
@@ -513,39 +530,43 @@ class TestEH11DammannUnitDefault:
         b = makedammann2d(**self._THZ, _legacy_units='SI', **self._KW)
         assert np.array_equal(a[0], b[0]) and a[2] == b[2]
 
-    def test_legacy_auto_still_converts_but_warns_loudly(self):
+    def test_legacy_auto_is_removed(self):
+        """SUPERSEDES ``test_legacy_auto_still_converts_but_warns_loudly``
+        AND ``test_legacy_warning_is_visible_under_the_default_filter``
+        (E-H11, v5.30 retire phase).
+
+        E-H11 demoted ``'auto'`` from default to explicit opt-in with a
+        loud ``UserWarning``; the W5 wave deletes it.  A shim that
+        silently rewrites physical inputs -- and whose rewrite is KNOWN
+        wrong for a legitimate design regime (SI THz / MMW) -- does not
+        get another cycle, so visibility-of-warning is no longer the
+        contract: unreachability is.  The 5e-10 m cell the old pin
+        measured is exactly the miscompilation, and it is now impossible
+        to obtain."""
         from lumenairy.elements.doe import makedammann2d
-        with pytest.warns(UserWarning, match='RETIRED') as rec:
-            _nf, _ff, cell = makedammann2d(
-                **self._THZ, _legacy_units='auto', **self._KW)
-        assert cell[0] == pytest.approx(5e-10, rel=1e-9), (
-            f"the explicit legacy path must still convert (cell={cell[0]})")
-        msg = str(rec[0].message)
-        assert '5.32' in msg and 'um' in msg, (
-            f"the retired-shim warning must name the removal version and "
-            f"the ``_legacy_units='um'`` migration; got {msg!r}")
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            with pytest.raises(ValueError) as info:
+                makedammann2d(**self._THZ, _legacy_units='auto',
+                              **self._KW)
+        msg = str(info.value)
+        assert 'REMOVED in v5.30' in msg, msg
+        assert "_legacy_units='um'" in msg, msg
+        assert '5.32' not in msg, (
+            f"the removal happened in v5.30; the error must not still "
+            f"advertise the abandoned v5.32 horizon: {msg!r}")
+        assert not [w for w in rec if 'makedammann2d' in str(w.message)], (
+            [str(w.message) for w in rec])
+        # Non-vacuity: the SI reading of the same numbers still works and
+        # is NOT the 5e-10 m miscompilation the removed mode produced.
+        _nf, _ff, cell = makedammann2d(**self._THZ, **self._KW)
+        assert cell[0] > 1e-5, cell
 
-    def test_legacy_warning_is_visible_under_the_default_filter(self):
-        """A ``DeprecationWarning`` is hidden outside ``__main__``; that is
-        how the 1e-6 rescale stayed silent for five releases."""
+    def test_auto_is_not_an_accepted_mode_value(self):
+        """The surviving modes are exactly ``{'SI', 'um'}``."""
         from lumenairy.elements.doe import makedammann2d
-        seen = []
-        old = warnings.showwarning
-
-        def hook(message, category, filename, lineno, file=None, line=None):
-            seen.append(category)
-
-        warnings.showwarning = hook
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter('default')
-                makedammann2d(**self._THZ, _legacy_units='auto', **self._KW)
-        finally:
-            warnings.showwarning = old
-        assert any(issubclass(c, UserWarning)
-                   and not issubclass(c, DeprecationWarning) for c in seen), (
-            f"the retired legacy path must surface under the DEFAULT "
-            f"warning filter; surfaced categories: {seen}")
+        with pytest.raises(ValueError, match="'um', 'SI'"):
+            makedammann2d(**self._THZ, _legacy_units='m', **self._KW)
 
     def test_explicit_um_path_unchanged(self):
         from lumenairy.elements.doe import makedammann2d

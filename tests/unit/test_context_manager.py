@@ -230,7 +230,7 @@ class TestFactoryDtypeKwarg:
         try:
             set_default_complex_dtype(np.complex64)
             E, _, _ = lm.create_gaussian_beam(
-                N=64, dx=5e-6, wavelength=1.55e-6, sigma=10e-6)
+                N=64, dx=5e-6, wavelength=1.55e-6, w0=(10e-6) * np.sqrt(2))
             assert E.dtype == np.dtype(np.complex64)
         finally:
             set_default_complex_dtype(prior)
@@ -240,7 +240,7 @@ class TestFactoryDtypeKwarg:
         try:
             set_default_complex_dtype(np.complex64)
             E, _, _ = lm.create_gaussian_beam(
-                N=64, dx=5e-6, wavelength=1.55e-6, sigma=10e-6,
+                N=64, dx=5e-6, wavelength=1.55e-6, w0=(10e-6) * np.sqrt(2),
                 dtype=np.complex128)
             assert E.dtype == np.dtype(np.complex128)
         finally:
@@ -298,7 +298,7 @@ class TestFactoryDtypeKwarg:
     def test_invalid_dtype_raises(self):
         with pytest.raises(ValueError, match="complex64 or np.complex128"):
             lm.create_gaussian_beam(
-                N=64, dx=5e-6, wavelength=1.55e-6, sigma=10e-6,
+                N=64, dx=5e-6, wavelength=1.55e-6, w0=(10e-6) * np.sqrt(2),
                 dtype=np.float32)
 
     def test_factory_inside_context_manager(self):
@@ -307,11 +307,11 @@ class TestFactoryDtypeKwarg:
         prior = get_default_complex_dtype()
         with lumenairy_context(complex_dtype=np.complex64):
             E, _, _ = lm.create_gaussian_beam(
-                N=64, dx=5e-6, wavelength=1.55e-6, sigma=10e-6)
+                N=64, dx=5e-6, wavelength=1.55e-6, w0=(10e-6) * np.sqrt(2))
             assert E.dtype == np.dtype(np.complex64)
         # After the with: factory falls back to whatever was outside
         E_after, _, _ = lm.create_gaussian_beam(
-            N=64, dx=5e-6, wavelength=1.55e-6, sigma=10e-6)
+            N=64, dx=5e-6, wavelength=1.55e-6, w0=(10e-6) * np.sqrt(2))
         assert E_after.dtype == np.dtype(prior)
 
 

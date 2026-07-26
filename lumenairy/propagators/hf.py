@@ -195,7 +195,6 @@ def propagate_huygens_fresnel_with_opl_callable(
     output_grid_x: np.ndarray,
     output_grid_y: np.ndarray,
     input_grid_dx: float,
-    wavelength: Optional[float] = None,
     apply_van_vleck: bool = True,
     finite_diff_step: float = 1e-6,
     chunk_output: Optional[int] = None,
@@ -258,10 +257,6 @@ def propagate_huygens_fresnel_with_opl_callable(
         transverse feature size -- a good rule of thumb is
         ``h ~ sqrt(eps_rel) * L`` with ``L`` the scale over which
         ``d2 Phi / d s1 d s2`` varies.
-    wavelength : float, optional
-        **Deprecated and unused.**  See the units contract above: the
-        wavelength is already folded into ``opl_fn``'s waves-valued
-        return, so this function has never read it.
 
     .. versionchanged:: 5.30
         ``finite_diff_step`` default 1e-9 -> 1e-6 m (audit P3,
@@ -271,12 +266,15 @@ def propagate_huygens_fresnel_with_opl_callable(
         end-to-end error vs exact Fresnel quadrature).  Callers who
         passed ``finite_diff_step`` explicitly are unaffected.
 
-    .. deprecated:: 5.30
-        ``wavelength`` (audit P7): a required keyword that the body
-        never read.  It is now optional; passing it emits a
-        ``DeprecationWarning`` and it will be removed in v5.32.  The
-        OPL callable's return is in WAVES, so no wavelength is needed
-        here -- divide by the wavelength inside ``opl_fn``.
+    .. versionchanged:: 5.30
+        ``wavelength`` (audit P7) is **REMOVED**.  It was a required
+        keyword that the body never read; v5.30 first made it optional +
+        ``DeprecationWarning``, and the W5 shim-removal wave deletes it in
+        the same release rather than carrying an inert keyword to v5.32.
+        The OPL callable's return is in WAVES (see the units contract
+        above), so no wavelength is needed here.  Migration: drop the
+        kwarg; if your ``opl_fn`` returns METRES, divide by the wavelength
+        inside ``opl_fn`` -- passing it here never did that.
 
     .. deprecated:: 5.17
         ``chunk_output`` (audit P3-57): the parameter never had any
@@ -288,22 +286,18 @@ def propagate_huygens_fresnel_with_opl_callable(
         For a genuinely chunk-vectorised HF quadrature use
         :func:`propagate_hf_chebyshev_quadrature`.
     """
-    # v5.30 (audit P7): ``wavelength`` was a REQUIRED keyword that the
-    # body never read -- the OPL callable returns waves, so the kernel
-    # ``exp(2j*pi*Phi)`` is already dimensionless.  Deprecated rather
-    # than consumed: consuming it (dividing an assumed-metres Phi by
-    # wavelength) would silently break every existing waves-returning
-    # callable by a factor of ~1e6.  Same shape as the v5.17
-    # ``chunk_output`` retirement below.
-    if wavelength is not None:
-        warnings.warn(
-            "propagate_huygens_fresnel_with_opl_callable: wavelength is "
-            "deprecated since v5.30 and has no effect (it was a required "
-            "keyword the body never read).  ``opl_fn`` must return the "
-            "optical path in WAVES, so the exp(2j*pi*Phi) kernel needs no "
-            "wavelength -- divide your metre-valued OPL by the wavelength "
-            "inside ``opl_fn`` and drop this kwarg.  It will be removed "
-            "in v5.32.", DeprecationWarning, stacklevel=2)
+    # v5.30 (audit P7, W5 removal): ``wavelength`` was a REQUIRED keyword
+    # that the body never read -- the OPL callable returns waves, so the
+    # kernel ``exp(2j*pi*Phi)`` is already dimensionless.  It is now GONE
+    # rather than inert: consuming it (dividing an assumed-metres Phi by
+    # wavelength) would have silently broken every existing
+    # waves-returning callable by a factor of ~1e6, so there was never a
+    # future in which the keyword acquired a meaning.
+    #
+    # ``chunk_output`` below is NOT removed in this wave: it was
+    # deprecated in v5.17 with NO stated removal version ("a future
+    # release"), so unlike ``wavelength`` it is not past a horizon.  It
+    # stays warn-only until a horizon is set.
     if chunk_output is not None:
         warnings.warn(
             "propagate_huygens_fresnel_with_opl_callable: chunk_output is "

@@ -253,7 +253,7 @@ H.run('Axicon: bright center after propagation', t_axicon_bessel)
 
 def t_4f_relay():
     N = 512; dx = 4e-6; lam = 1.31e-6; f = 50e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6,
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, w0=(50e-6) * np.sqrt(2),
                                          x0=30e-6, y0=-20e-6)
     E = la.angular_spectrum_propagate(E_in, f, lam, dx)
     E = la.apply_thin_lens(E, f=f, wavelength=lam, dx=dx)
@@ -391,7 +391,7 @@ def t_apply_real_lens_wave_propagator_sas():
     and produce similar peak amplitude."""
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, w0=(50e-6) * np.sqrt(2))
     E_asm = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='asm')
     E_sas = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='sas')
     peak_asm = np.abs(E_asm).max()
@@ -409,7 +409,7 @@ H.run('apply_real_lens: wave_propagator=sas produces valid field',
 def t_apply_real_lens_traced_wave_propagator_sas():
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, w0=(50e-6) * np.sqrt(2))
     E_out = la.apply_real_lens_traced(
         E_in, prescription=pres, wavelength=lam, dx=dx, ray_subsample=1, n_workers=1,
         wave_propagator='sas', preserve_input_phase=False)
@@ -425,7 +425,7 @@ H.run('apply_real_lens_traced: wave_propagator=sas threads through',
 def t_apply_real_lens_wave_propagator_fresnel():
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, w0=(50e-6) * np.sqrt(2))
     E_out = la.apply_real_lens(
         E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='fresnel')
     ok = (E_out.shape == (N, N) and np.all(np.isfinite(E_out))
@@ -440,7 +440,7 @@ H.run('apply_real_lens: wave_propagator=fresnel produces valid field',
 def t_apply_real_lens_wave_propagator_rs():
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, w0=(50e-6) * np.sqrt(2))
     E_out = la.apply_real_lens(
         E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='rayleigh_sommerfeld')
     ok = (E_out.shape == (N, N) and np.all(np.isfinite(E_out))
@@ -458,7 +458,7 @@ def t_apply_real_lens_rs_matches_asm():
     results (peak-amplitude agreement within a few percent)."""
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, w0=(50e-6) * np.sqrt(2))
     E_asm = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='asm')
     E_rs = la.apply_real_lens(
         E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='rayleigh_sommerfeld')

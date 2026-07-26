@@ -4,6 +4,142 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Removed (W5 shim-removal wave — the scheduled deprecations are executed, not slipped again)
+
+Owner decision: the overdue deprecation shims ship **removed in v5.30**
+rather than waiting for the re-scheduled v5.32 horizon.  Eight of the ten
+had already blown through a stated removal version while continuing to ship
+(`version_removed='5.0'` at v5.29 — 29 minor releases late — or v5.27 for
+the v5.25 kwarg renames); R-18/E-H11/R-17/P7/P8 re-scheduled the banners,
+and this wave executes them.  `lumenairy._deprecation.REMOVAL_SCHEDULE` is
+now empty and `check_removal_schedule()` returns no violations.
+
+Every surviving (modern) call path is proven **bit-identical** to the
+pre-removal commit `24c7d30`: 73 captured arrays byte-for-byte equal, with a
+42-entry SHA-256 subset frozen into
+`tests/unit/test_niche_audit_w5_shim_removals.py` so a future edit cannot
+silently perturb a path this wave rewrote.
+
+Error shapes follow existing in-repo precedent.  A kwarg **rename** or an
+**inert** kwarg is a plain signature removal → `TypeError: … unexpected
+keyword argument` (precedent: `analysis/detector.py`'s v5.0
+`cosmic_ray_rate`, `optimize/multiconfig.py`'s v5.0 `wavelength` default).
+A shim that intercepted **values** keeps an always-raising detector so the
+error can name the modern form (precedent: `propagators/system.py`'s
+`_reject_legacy`, v5.0 aperture-schema purge) — permanently, scheduling
+nothing new.
+
+**`lumenairy/sources/core.py`**
+
+- **`create_gaussian_beam(sigma=)`** (deprecated v5.25, stated v5.27) —
+  `sigma=s` → **`w0=s*sqrt(2)`**.  `w0` is the 1/e² intensity radius;
+  `sigma` was the field std-dev.  Equivalently `w0=w` reproduces the old
+  `sigma=w/sqrt(2)` field bit-for-bit.  The surviving missing-argument
+  `TypeError` names the conversion for one more cycle.
+- **Schell-family `seed=`** on `create_gaussian_schell_source` /
+  `create_schell_model_source` / `create_annular_incoherent_source` /
+  `Source.gaussian_schell` / `Source.schell_model` (v5.25, stated v5.27) —
+  `seed=<int>` → **`rng=<int>`**.  Exactly equivalent: `seed` was forwarded
+  verbatim into `rng`.
+- **The five `Source.*` legacy positional overloads** (v4.15, stated v5.0,
+  re-scheduled v5.32 by R-18) —
+  `Source.gaussian(w0, N, dx, wavelength)` →
+  **`Source.gaussian(*, N, dx, wavelength, w0)`**; likewise
+  `plane_wave(N, dx, wavelength)`, `point_source(N, dx, wavelength)`,
+  `top_hat(diameter, N, dx, wavelength)` and
+  `fiber_mode(mode_field_diameter, N, dx, wavelength)` → their
+  `(*, N, dx, wavelength, <size>)` forms.  The legacy order put the SIZE
+  argument first, so a positional caller has every quantity one slot out of
+  place; each classmethod therefore keeps an always-raising
+  `*_legacy_positional` collector and names its canonical signature via one
+  shared `Source._reject_legacy_positional` helper.
+- **`create_led_source` legacy positional form** (v4.14.2, stated v5.0) —
+  `create_led_source(N, dx, diameter, divergence_angle, wavelength, x0, y0,
+  dtype)` → **`create_led_source(N, dx, wavelength, *, diameter=…,
+  divergence_angle=…, dy=…, x0=…, y0=…, dtype=…)`**.  The v4.14.3
+  scale-inversion heuristic goes with it: it existed only to tell the
+  canonical-order mistake apart from a legitimate legacy call while one of
+  them was still legal, and both now hit the same rejection.
+- **The Schell `return_kind` sentinel apparatus** (v4.15.1; its warning was
+  already retired in v4.16.1) — `_RETURN_KIND_UNSET`,
+  `_SchellReturnKindUnsetSentinel`, `_warn_schell_return_kind_default` and
+  the five no-op `if return_kind is _RETURN_KIND_UNSET` branches.
+  `return_kind=_RETURN_KIND_UNSET` → **omit `return_kind`, or pass
+  `'ensemble'` / `'mcf'` explicitly**.  No bespoke rejection was needed: an
+  unrecognised value already lands on `_validate_return_kind`'s
+  `ValueError`, which names both modern values.  The zero-production-call-site
+  measurement that licensed this is pinned in
+  `tests/unit/test_niche_audit_w3_ui_deprecation.py`.
+- The bookkeeping constants `_OVERDUE_SHIM_VERSION_REMOVED`,
+  `_DEPRECATION_VERSION_ADDED` and `_DEPRECATION_VERSION_REMOVED` (they
+  existed only to keep the eight warning sites' horizons in sync).
+
+**`lumenairy/elements/doe.py`**
+
+- **`makedammann2d(_legacy_units='auto')`** (v4.14.2; demoted from default
+  to explicit loud opt-in by v5.30 E-H11) → **drop the kwarg** (`'SI'` is
+  the default) **or pass `_legacy_units='um'`** for genuinely
+  micrometre-valued inputs.  The heuristic multiplied any `periodx` /
+  `periody` / `waveln` above 1 mm by `1e-6`, so a physically correct SI
+  THz/MMW design (8 mm period at 1.1 mm wavelength) came back with 5e-10 m
+  cells.  A shim that silently rewrites physical inputs, and is known wrong
+  for a legitimate design regime, does not get another cycle; `'auto'` now
+  raises `ValueError` naming both survivors and the `'um'` recipe.
+  Accepted modes are exactly `{'SI', 'um'}`.
+
+**`lumenairy/propagators/`**
+
+- **`gbd.recommend_gbd_sampling(wavelength=)`** (audit P8) → **drop it**.
+  A required keyword the body never read; output was proven independent of
+  it (identical dict at λ = 0.4 µm and 10 µm on a fixed `E_in`).  Wavelength
+  dependence still arrives through `E_in`'s phase gradient in rad/m; for a
+  width tuned against a real propagation use `converge_gbd_sampling`.
+- **`hf.propagate_huygens_fresnel_with_opl_callable(wavelength=)`**
+  (audit P7) → **drop it**.  Same shape: never read, and it could never
+  acquire a meaning — consuming it would break every existing
+  waves-returning `opl_fn` by ~1e6.  `opl_fn` returns WAVES; divide a
+  metre-valued OPL by the wavelength inside `opl_fn`.
+- *Kept:* `…with_opl_callable(chunk_output=)` stays warn-only — deprecated
+  in v5.17 with **no** stated horizon, so it is not past one.
+
+**`lumenairy/optimize/`**
+
+- **`design_optimize(wave_traced=)`** (R-17) → **register a propagator**:
+  `register_wave_propagator('real_lens_traced', fn)` +
+  `design_optimize(wave_propagator='real_lens_traced')`.  One dispatch
+  mechanism instead of a boolean that mutated the meaning of
+  `ray_subsample`; `opts` still carries `ray_subsample` for exactly that
+  purpose, and `_wave_real_lens` carries a copy-paste recipe.
+- **`MatchIdealSystemMerit(use_traced_lens=, ray_subsample=)`** (R-17) →
+  put an explicit `{'type': 'real_lens_traced', 'prescription': …,
+  'ray_subsample': …}` entry in `real_elements`; the `_prescription_`
+  placeholder now always expands to `'real_lens'`.
+- **`MatchIdealSystemMerit(focus_search=, focus_search_range=,
+  focus_search_n=)`** (R-17) → add an explicit
+  `{'type': 'propagate', 'z': dz}` offset to `ideal_elements` (or sweep
+  `dz` and take the minimum penalty).  The now-dead
+  `_focus_search_penalty` helper is deleted with them.
+- R-17 grep-verified ZERO callers repo-wide (library, tests, validation,
+  examples, UI) for all three flags, so CI never covered these branches
+  (`e843f6f`).  **Scope boundary:** only *one* of the four "zero-caller"
+  penalty helpers becomes dead.  `_field_mse_penalty`,
+  `_intensity_mse_penalty` and `_intensity_overlap_penalty` are gated by
+  `match=`, a live documented feature that R-17 explicitly declined to
+  deprecate — they are **kept**, and a pin now asserts so.
+
+**Explicitly NOT removed (still scheduled / not past horizon)**
+
+- The **P5 return-contract transition** (`propagators/dispatch.py` sentinel
+  plus `_deprecation.API_TRANSITION_VERSION`, still bound to
+  `NEXT_REMOVAL_VERSION = 5.32`).  It flips a default rather than deleting a
+  name, so it is not a shim removal; `_deprecation.py` itself stays fully
+  functional and the next deprecation cycle registers there as before.
+- `rcwa_efficiency_1d_jax` (v6.0.0), `load_zmx_prescription` /
+  `load_zemax_prescription_txt` (v6.0) — horizons still in the future.
+- The `output_grid` → `output_shape` sub-propagator renames,
+  `MultiFieldMerit` scalar `field_angles`, `PMM2DStack`, and the
+  `Constraint` auto-probe notice — deprecated with no stated horizon.
+
 ### Fixed (adversarial-audit Tier 1: all 6 CRITICALs + the 2 silent-data-corruption HIGHs, 2026-07-25)
 
 Fix wave over `docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md`, five

@@ -283,7 +283,7 @@ H.run('plot_cross_section: returns figure',
 
 
 def t_plot_beam_profile():
-    E, _, _ = la.create_gaussian_beam(N_plot, dx_plot, 1.31e-6, sigma=20e-6)
+    E, _, _ = la.create_gaussian_beam(N_plot, dx_plot, 1.31e-6, w0=(20e-6) * np.sqrt(2))
     fig, _ = la.plot_beam_profile(E, dx_plot)
     import matplotlib.pyplot as plt
     plt.close(fig)

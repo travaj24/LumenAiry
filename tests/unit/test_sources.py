@@ -20,7 +20,7 @@ class TestGaussianBeam:
 
     def test_shape_and_dtype(self, N_small, dx_m, wavelength_m):
         E, x, y = la.create_gaussian_beam(N_small, dx_m, wavelength_m,
-                                            sigma=30e-6)
+                                            w0=(30e-6) * np.sqrt(2))
         assert E.shape == (N_small, N_small)
         assert np.iscomplexobj(E)
         assert x.shape == (N_small,)
@@ -28,7 +28,7 @@ class TestGaussianBeam:
 
     def test_peak_at_center(self, N_small, dx_m, wavelength_m):
         E, _x, _y = la.create_gaussian_beam(N_small, dx_m, wavelength_m,
-                                              sigma=30e-6)
+                                              w0=(30e-6) * np.sqrt(2))
         I = np.abs(E) ** 2
         iy, ix = np.unravel_index(int(np.argmax(I)), I.shape)
         assert abs(iy - N_small // 2) <= 1
@@ -36,7 +36,7 @@ class TestGaussianBeam:
 
     def test_finite_power(self, N_small, dx_m, wavelength_m):
         E, _x, _y = la.create_gaussian_beam(N_small, dx_m, wavelength_m,
-                                              sigma=30e-6)
+                                              w0=(30e-6) * np.sqrt(2))
         power = float(np.sum(np.abs(E) ** 2) * dx_m ** 2)
         assert power > 0
         assert np.isfinite(power)
