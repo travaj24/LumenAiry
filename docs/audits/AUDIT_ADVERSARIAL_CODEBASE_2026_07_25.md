@@ -66,6 +66,31 @@ cell + fff_nv `AssertionError`; `orientation=NaN`/`retardance=NaN` unguarded
 in polarization.  Fixes should follow the same measure-first / gate / pin
 discipline.
 
+**Status: WAVE 3 COMPLETE (2026-07-26) — THE AUDIT IS FULLY IMPLEMENTED.**
+Every finding in this report is now fixed, refuted-with-evidence, or
+explicitly deferred-with-record: infra `d045980`, UI/deprecation `54a2dcf`,
+propagators `3f22778`, oracle wave `1523d8e`+`86cadbe`, raytrace/sources
+`e843f6f`, RCWA/PMM `3ead8cb`, elements `bba1bc4` (+ CI cross-platform pin
+fix `0f63efe`).  ~470 wave-3 pins, every set verified failing pre-fix.
+Audit-correction ledger from wave 3: **REFUTED** — R-18's
+`_invalidate_glass_name`/`_GLASS_CACHE`/`_POLYNOMIAL_STUB_NAMES`/
+`TraceResult.rays_at` dead-code claims (live caller; reflection-based
+walker dependency; documented invariant; documented API), E-L18
+`coronagraph.py` unreferenced (public namespace), `FirstOrderData.summary`
+and `DifferentialTransfer`/`ParetoResult` dead-claims (public API).
+**CORRECTED** — P10's offset formula (half the surplus coverage, not
+w·overlap/2 in general); P11's replica period (kernel-dependent); M3's
+mask drift attribution (PMM-1-D vs everything, not PMM vs RCWA).
+**DECLINED WITH MEASUREMENT** — R-14 dead-row clip parity, R-15 fan-axis
+convention (both contract-locked), E-H5's power/peak ROI normalization
+(unevaluable by construction, loud warning instead), P5 return-type
+unification (deferred to roadmap Part F/F1, owner decision).
+**DEFERRED WITH RECORD** — input_kind 67-site rollout; A-4's three h5
+sibling writers; the immersed-conjugate pupil 1/n finding (W3-2, needs
+its own oracle); the 1-D-RCWAStack y-averaging trap; `aberration_tensor`
+default w_o dimensional question + JAX-twin scale split; the GBD paraxial
+z_image default warning.
+
 **Status: W3 ORACLE WAVE (2026-07-25)** — the two oracle-needing physics
 questions above are RESOLVED, both by building the oracle first:
 **(W3-1)** the flagged `world.py` coord-break rotation is a CONFIRMED

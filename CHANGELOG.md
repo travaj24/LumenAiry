@@ -215,6 +215,72 @@ unit paths, `quarter_wave_ar`).
   so the names stay discoverable.  Export integrity unchanged (every
   `__all__` entry still resolves; phantom names still raise `AttributeError`).
 
+### Fixed (adversarial-audit wave 3 — oracle resolutions + remaining MEDIUM/LOW territories, 2026-07-25/26)
+
+Seven Opus agents closed out the audit's MEDIUM/LOW inventory, the four
+new findings from the fix waves, and the two oracle-needing physics
+questions (measure-first throughout; ~470 new pins across 7 files, every
+set verified failing on pre-fix worktrees).  Territory blocks for
+raytrace/sources and UI/deprecation follow separately below; the other
+five in brief (full numbers in the commit messages):
+
+- **Oracle wave (`1523d8e`, `86cadbe`)** — three real physics defects
+  confirmed and fixed by building the oracle first: **(W3-1)** the
+  coordinate-break rotation was INVERTED in `intersection.py`,
+  `differential.py` and `ui/model.py` since 3.7.1 (8.24° of refracted-ray
+  disagreement at a single 12° tilt; `world.py` proven the correct
+  local-to-world side per OpticStudio KA-01638; the 2026-07-08 "phantom"
+  revert argument retracted — a mirror fold is provably sign-degenerate;
+  a test that pinned the bug rewritten; new canonical CONVENTIONS.md §7
+  row; **user-visible: every non-zero coord-break tilt now folds the
+  other way**); **(W3-2)** the stop-adjacent pupil legs dropped the
+  Welford mirror-parity sign (flat fold 15 mm before the stop: ep_z
+  +307% and bit-identical to the mirrorless control; fixed to 7.8e-14 vs
+  two independent oracles; new flagged finding: immersed-conjugate pupil
+  positions drop 1/n); **(W3-3)** `aberration_tensor` output modes were
+  POINT SAMPLES, not projections (every (p,0) returned the piston value
+  bit-identically; now routed through σ-integration, 4.9e-15 vs an
+  independent LG-overlap oracle); **(W3-4)** 30 silent NaN-field leaks in
+  polarization angle/retardance inputs guarded at the shared helper.
+- **Infra (`d045980`)** — h5 `append_plane_h5` metadata now round-trips
+  all 19 probe types via the module's own codec (was 14 OK/4 raise/1
+  dropped; legacy files read byte-identically); `deep_nbytes` charges
+  views by base (a ByteBudgetedLRU could retain 64× its cap);
+  `estimate_asm_memory` re-fit to a measured 1.02–1.09× bound;
+  user-library corruption now warns; zernike basis cache read-only; io
+  `__all__`; negative memory costs raise.
+- **Propagators (`3f22778`)** — `propagate(method='auto')` warns when a
+  grid-changing kernel alters the return contract (API redesign recorded
+  as roadmap Part F/F1); NumPy `propagate_through_system` junk-method
+  fall-through closed (system + per-element); `recommend_gbd_sampling
+  (wavelength=)` measured inert-by-physics and deprecated;
+  `fga_memory_estimate(nsig=)` wired (calibrated 0.993);
+  `patches_for_box(centred=True)` implemented symmetric (audit's offset
+  formula corrected); MFT output-grid validation + kernel-dependent
+  replica warnings (audit's period formula extended by measurement);
+  band-limit docstrings state the Matsushima asymptote; `beam_d4sigma`
+  fallback shape bug; dead guards/params pruned with live ones
+  counter-pinned.
+- **RCWA/PMM (`3ead8cb`)** — uniform-cell `fff_nv` routed to `laurent`
+  (was `AssertionError`); `n_orders_y=0` allowed on y-invariant cells
+  (matches the 1-D solver at 5e-15, 27× cheaper) WITH a new guard: a
+  y-varying cell at `N_y=0` previously solved the y-averaged structure
+  silently (~2× wrong, energy-clean); missing
+  `formulation`/`stabilize`/`symmetry` kwargs threaded into the two
+  wrapper entry points (default paths digest-identical); the
+  propagating-order mask drift was PMM-1-D vs everything else — aligned
+  on the documented convention, zero pin movement; hygiene batch.
+- **Elements (`bba1bc4`)** — ray_density energy self-check (band sized on
+  the measured battery envelope incl. a subsample-independent physical
+  floor); DOE periodic-mask half-pixel wrap bug (even-order leakage
+  0.0295 → 3.7e-33); thin-lens out-of-domain NaN parity; worker-pool
+  atexit/locking/exception-swallowing repaired (worker faults now
+  propagate; broken pools reset); the P1 odd-N anchor fixed at its two
+  elements siblings (uniform-caustic sampler, turbulence-screen DC bin —
+  screens differed by up to 86% of peak at odd N); dead numexpr scaffold
+  deleted; `coronagraph.py` deletion claim REFUTED (public namespace)
+  and covered by a test instead.
+
 ### Fixed (adversarial-audit Tier 2, wave 3 — Territory R: raytrace / glass / sources / optimize MEDIUM + LOW, 2026-07-25)
 
 Territory R's MEDIUM/LOW tail plus the dead-code and overdue-shim sweep.
