@@ -961,7 +961,7 @@ def _build_plan_entry(direction, shape_t, dt, threads, flag):
     }
 
 
-def _promote_entry_to_measure(entry, direction, shape_t, dt, threads):
+def _promote_entry_to_measure(direction, shape_t, dt, threads):
     """Rebuild the cache entry under FFTW_MEASURE in-place.
 
     Returns the new entry (a fresh dict produced by
@@ -969,6 +969,14 @@ def _promote_entry_to_measure(entry, direction, shape_t, dt, threads):
     is responsible for updating the cache.  Emits a one-time info log
     so users see "lumenairy: promoting (..., MEASURE) ..." the first
     time any key promotes.
+
+    .. versionchanged:: 5.30
+        Dropped the leading ``entry`` parameter (audit P13): despite the
+        "in-place" wording it was never read -- the function builds a
+        FRESH entry from ``(direction, shape_t, dt, threads)`` and the
+        single call site copies ``entry['calls']`` across itself.
+        Module-private (underscore, one caller inside this module), so no
+        public signature changed.
     """
     import logging
     _log = logging.getLogger('lumenairy')
@@ -1080,7 +1088,7 @@ def _get_or_make_plan(direction, shape, dtype, threads):
                     # common case) are unaffected.
                     _ensure_pyfftw_loaded()
                     new_entry = _promote_entry_to_measure(
-                        entry, direction, shape_t, dt, threads)
+                        direction, shape_t, dt, threads)
                     new_entry['calls'] = entry['calls']
                     _PYFFTW_PLAN_CACHE[key] = new_entry
                     entry = new_entry
@@ -1432,6 +1440,58 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
     :func:`_get_or_make_freq_grids` -- the masks are multiplied against
     an H built from those very grids, so the two must label the bins
     identically (audit P1).  Bit-identical for even N.
+
+    What the cutoff ``L / (2*lambda*|z|)`` actually is  (audit P12)
+    --------------------------------------------------------------
+    This is the **z -> infinity asymptote** of the Matsushima &
+    Shimobaba (2009) band-limited-ASM criterion, NOT the exact criterion
+    the paper derives.  Requiring the local frequency of the ASM chirp
+    ``exp(i*z*sqrt(k^2 - (2 pi f)^2))`` to stay under the grid's Nyquist
+    over the source extent ``L = N*dx`` gives the exact limit
+
+        f_lim = 1 / (lambda * sqrt((2*z / L)^2 + 1)) ,
+
+    whose large-``z`` behaviour is ``f_lim -> L / (2*lambda*z)``.  Every
+    band-limit site in this library (this function,
+    :func:`lumenairy.propagators.asm._build_asm_H_square`,
+    ``_get_asm_H_natural``, the tilted-ASM builder,
+    :func:`lumenairy.propagators.rs.rayleigh_sommerfeld_propagate` on the
+    padded extent, and
+    :func:`lumenairy.propagators.mft.angular_spectrum_propagate_mft`)
+    applies the asymptote.
+
+    The substitution is **one-sided safe**: since
+    ``sqrt((2z/L)^2 + 1) > 2z/L``, the asymptote is always LARGER than
+    the exact limit, so it keeps every frequency the exact criterion
+    would keep and can only be too permissive -- it never over-filters a
+    legitimate band.  The over-width factor is
+    ``sqrt(1 + (L / (2 z))^2)``; measured (any ``L``, since the factor
+    depends only on ``z/L``):
+
+    ========  ================  ==================  ==============
+    ``z/L``   exact ``f_lim``   asymptote           asym / exact
+    ========  ================  ==================  ==============
+    0.25      1.412997e+06      3.159558e+06        2.236068
+    0.50      1.117072e+06      1.579779e+06        1.414214
+    1.00      7.064986e+05      7.898894e+05        1.118034
+    2.00      3.831526e+05      3.949447e+05        1.030776
+    5.00      1.571939e+05      1.579779e+05        1.004988
+    20.0      3.948213e+04      3.949447e+04        1.000312
+    ========  ================  ==================  ==============
+
+    (``lambda = 633 nm``; the ``f_lim`` columns are in 1/m.)  So the two
+    agree to <0.5% for ``z >= 5 L`` and the asymptote is up to ~2.2x too
+    wide in the deep near field ``z ~ L/4`` -- where the un-filtered ASM
+    is anyway the accurate choice.  The cutoff is deliberately left as
+    the asymptote (it is the pinned, one-sided-safe behaviour); only the
+    docstrings that mis-attributed it to the paper's exact expression
+    were corrected.
+
+    References
+    ----------
+    Matsushima, K. and Shimobaba, T. (2009). "Band-limited angular
+    spectrum method for numerical simulation of free-space propagation in
+    far and near fields." Opt. Express 17(22): 19662-19673.
     """
     if abs_z == 0:
         return None, None

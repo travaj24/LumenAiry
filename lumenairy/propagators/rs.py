@@ -85,8 +85,16 @@ def rayleigh_sommerfeld_propagate(
     dy : float, optional
         Grid spacing in y [m].  Defaults to dx.
     bandlimit : bool, default False
-        Apply a Matsushima-style frequency cutoff to the FFT'd kernel
-        ``H = FFT(h)``.  Default ``False`` preserves the historical
+        Apply a Matsushima-style frequency cutoff
+        ``|f| < L2 / (2*lambda*|z|)`` to the FFT'd kernel
+        ``H = FFT(h)``.  v5.30 (audit P12): that expression is the
+        **z -> infinity asymptote** of Matsushima & Shimobaba's exact
+        local-frequency limit ``1/(lambda*sqrt((2z/L2)^2 + 1))``, not the
+        exact limit -- it is strictly the larger of the two, so it never
+        over-filters (see
+        :func:`~lumenairy.propagators.fft_infra._get_or_make_bandlimit`
+        for the derivation and the measured over-width table).
+        Default ``False`` preserves the historical
         "exact Green's function" character of RS that justifies its
         use over ASM in the near field.  Set ``True`` to suppress
         aliasing artifacts on coarse grids at long propagation
@@ -143,7 +151,9 @@ def rayleigh_sommerfeld_propagate(
     [3] Matsushima, K. and Shimobaba, T. (2009). "Band-limited angular
         spectrum method for numerical simulation of free-space
         propagation in far and near fields." Opt. Express 17(22):
-        19662-19673.
+        19662-19673.  NOTE (v5.30, audit P12): ``bandlimit=True`` applies
+        the ``z -> infinity`` asymptote of this paper's local-frequency
+        limit, not the exact expression (never over-filters).
 
     Examples
     --------
@@ -278,7 +288,21 @@ def rayleigh_sommerfeld_propagate(
         # (Lx2 = 2*Nx*dx) since the FFT length is what determines the
         # discrete frequency support.  The mask is built in centred
         # order then ifftshifted to align with H's DC-at-corner layout.
-        if bandlimit and z != 0:
+        #
+        # v5.30 (audit P12): the cutoff ``L / (2*lambda*|z|)`` is the
+        # z -> infinity ASYMPTOTE of Matsushima & Shimobaba's exact
+        # local-frequency limit, not that limit itself -- see
+        # :func:`lumenairy.propagators.fft_infra._get_or_make_bandlimit`
+        # for the derivation and the measured over-width table.  It is an
+        # upper bound, so it never over-filters.
+        #
+        # v5.30 (audit P13): dropped the dead ``and z != 0`` conjunct.  RS
+        # is forward-only and the guard above hard-raises for ``z <= 0``
+        # (measured: ``z=0`` and ``z=-1e-3`` both ValueError), so ``z``
+        # here is always > 0 and the test could never be False.  ASM /
+        # ASM-MFT keep THEIR ``z != 0`` conjuncts -- those DO accept
+        # ``z == 0`` (the exact identity, audit S2-11) and rely on it.
+        if bandlimit:
             fx = (np.arange(Nx2) - Nx2 / 2) / (Nx2 * dx)
             fy = (np.arange(Ny2) - Ny2 / 2) / (Ny2 * dy)
             Lx2 = Nx2 * dx

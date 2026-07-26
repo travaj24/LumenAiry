@@ -182,9 +182,15 @@ def _build_asm_H_square(
       exactly ``fftshift(fftfreq(N, dx))`` for both parities of N
       (audit P1).
     * Evanescent modes (``kz_sq <= 0``) are zeroed for ``z != 0``.
-    * When ``bandlimit`` is True and ``z != 0`` the
-      Matsushima 1-D mask (``|f| < L / (2*lambda*|z|)``) is applied
-      as the outer product of the per-axis masks.
+    * When ``bandlimit`` is True and ``z != 0`` the 1-D mask
+      ``|f| < L / (2*lambda*|z|)`` is applied as the outer product of the
+      per-axis masks.  v5.30 (audit P12): that cutoff is the
+      **z -> infinity asymptote** of Matsushima & Shimobaba's exact
+      local-frequency limit ``1/(lambda*sqrt((2z/L)^2 + 1))``, not the
+      exact limit itself; it is strictly larger, so it never over-filters
+      (up to 2.24x too wide at ``z = L/4``, within 0.5% for ``z >= 5 L``).
+      See :func:`~lumenairy.propagators.fft_infra._get_or_make_bandlimit`
+      for the derivation and the measured table.
     * ``z == 0`` short-circuits to ``H = 1`` for EVERY bin (evanescent
       bins included) -- i.e. the exact identity; both the bandlimit and
       the evanescent mask are bypassed so ASM(z=0) reproduces the input
@@ -204,7 +210,9 @@ def _build_asm_H_square(
         Target complex dtype.  Defaults to ``np.complex128``.  Real
         dtypes are promoted to ``np.complex128``.
     bandlimit : bool, default True
-        Apply the Matsushima 1-D bandlimit mask.
+        Apply the 1-D bandlimit mask ``|f| < L / (2*lambda*|z|)`` -- the
+        z -> infinity asymptote of the Matsushima-Shimobaba cutoff (audit
+        P12; see the Notes above).
 
     Returns
     -------
@@ -556,6 +564,11 @@ def angular_spectrum_propagate(
     [2] Matsushima, K. and Shimobaba, T. (2009). "Band-limited angular
         spectrum method for numerical simulation of free-space propagation
         in far and near fields." Opt. Express 17(22): 19662-19673.
+        NOTE (v5.30, audit P12): ``bandlimit=True`` applies the
+        ``z -> infinity`` asymptote ``L / (2*lambda*|z|)`` of this paper's
+        local-frequency limit, not the exact expression.  The asymptote is
+        the larger of the two, so it never over-filters; see
+        :func:`~lumenairy.propagators.fft_infra._get_or_make_bandlimit`.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper.  v4.15.2 inlined the guard

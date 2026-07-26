@@ -530,7 +530,7 @@ def recommend_gbd_sampling(
     E_in: np.ndarray,
     dx: float,
     *,
-    wavelength: float,
+    wavelength: Optional[float] = None,
     target_overlap: float = 1.5,
     oversample: float = 4.0,
 ) -> Dict[str, Any]:
@@ -551,6 +551,41 @@ def recommend_gbd_sampling(
     sample_step`` so neighbouring beamlets overlap (``w0 = target_overlap *
     spacing``); ``target_overlap ~ 1.5`` is a good smooth-field default.
 
+    Wavelength dependence is DATA-DRIVEN, not parametric
+    ----------------------------------------------------
+    Both feature scales are measured off ``E_in`` itself and neither needs
+    ``wavelength``:
+
+    * the amplitude scale ``||E|| / ||grad E||`` is a pure envelope
+      property;
+    * the phase scale ``2*pi / max|grad(arg E)|`` is read from the field's
+      own phase gradient in **rad/m**, and for any physical field that
+      gradient already carries the ``1/lambda`` scaling (a converging
+      wavefront ``exp(i k r^2 / 2R)`` has ``|grad phi| = k r / R``).
+
+    So the recommendation *does* move with wavelength -- through the
+    field, which is the only place the wavelength is actually observable.
+    Measured on a Gaussian with ``R = 4 mm`` curvature (N=96,
+    ``dx = 1 um``): ``max|grad phi|`` = 2.159e5 -> 5.602e4 -> 8.686e3
+    rad/m for ``lambda`` = 0.4 / 1.55 / 10 um (exactly ``1/lambda``), and
+    ``sample_step`` = 3 -> 4 -> 4 accordingly.
+
+    Parameters
+    ----------
+    wavelength : float, optional
+        **Deprecated and unused** (audit P8).  See above: the wavelength
+        reaches this function through ``E_in``'s phase gradient, so the
+        body has never read it.  A ``lambda``-dependent beamlet-divergence
+        term was considered and rejected on measurement -- the sibling
+        :func:`converge_gbd_sampling`, which scores real propagations
+        against the exact ASM oracle, returns the SAME optimal overlap
+        (1.0) at ``lambda`` = 0.633 / 1.55 / 3.0 um on a fixed field and
+        ``sample_step`` (only the error magnitude rises, 1.21e-2 ->
+        1.78e-2 -> 2.60e-2), so there is no wavelength-dependent optimum
+        for this function's ``waist_factor`` to track.  Use
+        :func:`converge_gbd_sampling` when you want the width tuned
+        against a propagation at a specific wavelength and distance.
+
     Returns
     -------
     dict
@@ -558,9 +593,31 @@ def recommend_gbd_sampling(
         -- splat into ``decompose_field_to_beamlets`` /
         ``propagate_gbd_*`` (``**recommend_gbd_sampling(...)`` minus
         ``n_beamlets``).
+
+    .. deprecated:: 5.30
+        ``wavelength`` (audit P8): a required keyword the body never read
+        (identical output for ``lambda`` = 0.4 um and 10 um at fixed
+        ``E_in``).  It is now optional; passing it emits a
+        ``DeprecationWarning`` and it will be removed in v5.32.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'recommend_gbd_sampling')
+    # v5.30 (audit P8): ``wavelength`` was a REQUIRED keyword that the
+    # body never read.  Deprecated rather than consumed -- see the
+    # docstring's measured rejection of the lambda-dependent-divergence
+    # alternative.  Same shape as the v5.30 ``chunk_output`` /
+    # ``propagate_huygens_fresnel_with_opl_callable(wavelength=)``
+    # retirements (audit P7).
+    if wavelength is not None:
+        warnings.warn(
+            "recommend_gbd_sampling: wavelength is deprecated since v5.30 "
+            "and has no effect (it was a required keyword the body never "
+            "read -- identical output for lambda = 0.4 um and 10 um).  The "
+            "wavelength already reaches this function through E_in's phase "
+            "gradient, measured in rad/m; drop the kwarg.  For a width "
+            "tuned against a real propagation at a given wavelength and "
+            "distance use converge_gbd_sampling(...).  It will be removed "
+            "in v5.32.", DeprecationWarning, stacklevel=2)
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
     gx = xp.gradient(E_in, dx, axis=-1)
@@ -676,8 +733,11 @@ def converge_gbd_sampling(
     if dy is None:
         dy = dx
     if sample_step is None:
-        sample_step = int(recommend_gbd_sampling(
-            E_in, dx, wavelength=wavelength)['sample_step'])
+        # v5.30 (audit P8): ``wavelength`` is deprecated on the
+        # recommender (it never read it) -- don't forward it, or every
+        # default-``sample_step`` convergence run emits a spurious
+        # DeprecationWarning from inside the library.
+        sample_step = int(recommend_gbd_sampling(E_in, dx)['sample_step'])
     used_asm = reference is None
     if used_asm:
         reference = angular_spectrum_propagate(E_in, test_distance,

@@ -28,6 +28,28 @@ import numpy as np
 class PropagationResult:
     """Unified result container for any propagator output.
 
+    .. warning::
+       **Iteration yields TWO items, not three** (audit P16).
+       ``PropagationResult`` is iterable purely for back-compat with the
+       legacy ``E, intermediates = propagate_through_system(...)`` call
+       form, so :meth:`__iter__` yields ``(field, intermediates)``.  The
+       *un-wrapped* Fresnel / Fraunhofer / SAS kernels -- and therefore
+       ``propagate(..., method='sas')`` without ``return_result`` -- yield
+       a **three**-element ``(E, dx_out, dy_out)`` tuple instead.  The two
+       are NOT interchangeable::
+
+           E, dxo, dyo = propagate(E0, z=..., method='sas')            # OK
+           E, dxo, dyo = propagate(E0, z=..., method='sas',
+                                   return_result=True)   # ValueError:
+                                                         # not enough values
+
+       Prefer the attributes over unpacking -- ``result.field``,
+       ``result.dx`` / :attr:`dx_out`, ``result.dy`` / :attr:`dy_out` --
+       which are defined for every propagator regardless of its native
+       return shape.  ``np.asarray(result)`` also works (see
+       :meth:`__array__`).  The 2-item arity is pinned behaviour and will
+       not change; the un-wrapped kernels' 3-tuple is likewise pinned.
+
     Attributes
     ----------
     field : ndarray (complex)
@@ -114,9 +136,14 @@ class PropagationResult:
         return tuple(self.field.shape[-2:])
 
     def __iter__(self) -> Any:
-        """Tuple-unpack as ``(field, intermediates)`` for backward
-        compat with callers that did
+        """Tuple-unpack as ``(field, intermediates)`` -- **2 items** --
+        for backward compat with callers that did
         ``E, intermediates = propagate_through_system(...)``.
+
+        Deliberately NOT the ``(E, dx_out, dy_out)`` 3-tuple that the
+        un-wrapped Fresnel / Fraunhofer / SAS kernels return; see the
+        class docstring's warning (audit P16).  Read :attr:`dx_out` /
+        :attr:`dy_out` for the output sampling.
         """
         yield self.field
         yield self.intermediates if self.intermediates is not None else []

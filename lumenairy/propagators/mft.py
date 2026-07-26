@@ -21,6 +21,7 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from typing import Optional, Tuple
 
 import numpy as np
@@ -44,6 +45,98 @@ __all__ = [
     'fraunhofer_propagate_mft',
     'resample_field',
 ]
+
+
+def _validate_mft_output_grid(dx_out, dy_out, N_out, *, fn_name):
+    """Validate the caller-specified MFT output grid (audit P11).
+
+    Pre-v5.30 none of the three MFT propagators checked ``dx_out`` /
+    ``dy_out`` / ``N_out`` at all, so the Bluestein sampler happily
+    consumed garbage:
+
+    * ``dx_out = -1e-6`` was ACCEPTED and returned a finite field on a
+      silently x-mirrored grid (measured);
+    * ``dx_out = nan`` was ACCEPTED and returned an all-NaN field
+      (measured);
+    * ``dx_out = 0`` died with a bare ``ZeroDivisionError`` from inside
+      the chirp construction;
+    * ``N_out <= 0`` died with ``ValueError: N_out must be positive, got
+      (0, 0)`` from ``_bluestein_centred_2d`` -- correct, but naming an
+      internal tuple instead of the propagator the user called.
+
+    Raising here, up front, names the offending parameter and the
+    function the caller actually invoked.
+    """
+    for name, val in (('dx_out', dx_out), ('dy_out', dy_out)):
+        if val is None:
+            continue
+        v = float(val)
+        if not np.isfinite(v):
+            raise ValueError(
+                f'{fn_name}: {name} must be a finite positive output pitch '
+                f'in metres; got {val!r}.')
+        if v <= 0.0:
+            raise ValueError(
+                f'{fn_name}: {name} must be > 0 (got {val!r}).  The output '
+                f'grid is built as ``(arange(N_out) - N_out/2) * {name} + '
+                f'centre``, so a zero pitch collapses it to a point and a '
+                f'negative pitch silently mirrors the axis.  Pass '
+                f'centre_out=... to move the window instead.')
+    n = int(N_out)
+    if n < 1:
+        raise ValueError(
+            f'{fn_name}: N_out must be >= 1 (got {N_out!r}).')
+
+
+def _warn_mft_output_window(period_x, period_y, dx_out, dy_out, N_out, *,
+                            fn_name, period_expr):
+    """Warn when the requested output window exceeds one spatial period of
+    the discrete transform, i.e. when the extra samples are periodic
+    REPLICAS rather than new information (audit P11).
+
+    A discrete transform of ``N`` samples reconstructs a field that is
+    periodic in the output coordinate; sampling beyond one period wraps.
+    The period differs per kernel and this helper takes it as an argument:
+
+    * ASM-MFT Bluestein-inverts the SPECTRUM (``N_in`` bins at
+      ``df = 1/(N_in*dx_in)``), so the period is ``1/df = N_in*dx_in``;
+    * Fresnel- / Fraunhofer-MFT transform the FIELD (``N_in`` samples at
+      ``dx_in``), so the period is ``lambda*|z|/dx_in``.
+
+    Both were verified by measurement (N_in=64, dx_in=2 um,
+    lambda=633 nm, z=0.5 mm, a narrow Gaussian): at a 4x-period window
+    the centre-row profile shows three equal lobes separated by exactly
+    the predicted period, at 1x and 2x it shows one.  The natural /
+    same-grid calls land exactly ON one period, so the strict ``>``
+    comparison leaves them silent.
+    """
+    n = int(N_out)
+    win_x = n * float(dx_out)
+    win_y = n * float(dy_out)
+    tol = 1.0 + 1e-9
+    bad = []
+    if win_x > float(period_x) * tol:
+        bad.append(('x', win_x, float(period_x), float(dx_out)))
+    if win_y > float(period_y) * tol:
+        bad.append(('y', win_y, float(period_y), float(dy_out)))
+    if not bad:
+        return
+    detail = '; '.join(
+        f'{ax}: window N_out*d{ax}_out = {n} * {d:.6e} = {w:.6e} m '
+        f'vs period {p:.6e} m ({w / p:.4g}x)'
+        for ax, w, p, d in bad)
+    axes = ' and '.join(ax for ax, _w, _p, _d in bad)
+    raw = ', '.join(f'{p:.6e}' for _ax, _w, p, _d in bad)
+    warnings.warn(
+        f"{fn_name}: the requested output window exceeds one spatial period "
+        f"of the discrete transform on {axes} -- {detail}.  The period is "
+        f"{period_expr} (= {raw} m here); samples beyond +/-period/2 of "
+        f"centre_out are PERIODIC REPLICAS of the field, not new "
+        f"information, so a broad or structured field will alias into the "
+        f"outer part of the window.  Reduce N_out*d_out below the period, "
+        f"or use a propagator whose natural grid already spans the region "
+        f"you need.",
+        UserWarning, stacklevel=3)
 
 
 def angular_spectrum_propagate_mft(
@@ -95,9 +188,14 @@ def angular_spectrum_propagate_mft(
         Physical ``(x, y)`` centre of the output grid [m].  Defaults to
         ``(0, 0)`` (on-axis).
     bandlimit : bool, default True
-        Apply Matsushima-Shimobaba band-limiting to the ASM transfer
-        function on the input frequency grid.  Same default and effect
-        as :func:`angular_spectrum_propagate`.
+        Apply Matsushima-Shimobaba band-limiting
+        (``|f| < L / (2*lambda*|z|)``) to the ASM transfer function on the
+        input frequency grid.  Same default and effect as
+        :func:`angular_spectrum_propagate`.  v5.30 (audit P12): that
+        cutoff is the **z -> infinity asymptote** of the paper's exact
+        local-frequency limit ``1/(lambda*sqrt((2z/L)^2 + 1))``, not the
+        exact limit; being the larger of the two it never over-filters.
+        See :func:`~lumenairy.propagators.fft_infra._get_or_make_bandlimit`.
     use_gpu : bool, default False
 
     Returns
@@ -119,6 +217,24 @@ def angular_spectrum_propagate_mft(
     :func:`angular_spectrum_propagate` to roughly float64 round-off
     (~1e-12 relative error).
 
+    Raises
+    ------
+    ValueError
+        If ``dx_out`` / ``dy_out`` is non-finite or ``<= 0``, or
+        ``N_out < 1`` (v5.30, audit P11 -- previously ``dx_out < 0`` was
+        accepted and returned a finite field on a silently mirrored grid,
+        and ``dx_out = nan`` returned an all-NaN field).
+
+    Warns
+    -----
+    UserWarning
+        When ``N_out * dx_out`` exceeds ``Nx_in * dx_in`` (or the y
+        equivalent).  The Bluestein step inverse-transforms the input
+        SPECTRUM, whose reconstruction is periodic with period
+        ``N_in * d_in``; beyond that the extra samples are periodic
+        REPLICAS, not new information (v5.30, audit P11).  The same-grid
+        call sits exactly on one period and is silent.
+
     See also
     --------
     angular_spectrum_propagate : exact ASM with the natural FFT grid.
@@ -133,6 +249,10 @@ def angular_spectrum_propagate_mft(
 
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='angular_spectrum_propagate_mft')
+    # v5.30 (audit P11): validate the caller-specified OUTPUT grid too --
+    # ``_validate_propagator_inputs`` only covers the input side.
+    _validate_mft_output_grid(dx_out, dy_out, N_out,
+                              fn_name='angular_spectrum_propagate_mft')
     from ..backend import is_jax_array
     from ._bluestein import _bluestein_centred_2d
 
@@ -173,6 +293,17 @@ def angular_spectrum_propagate_mft(
     k = 2.0 * np.pi / wavelength
     xc, yc = float(centre_out[0]), float(centre_out[1])
 
+    # v5.30 (audit P11): the Bluestein step below inverse-transforms the
+    # INPUT SPECTRUM (Nx_in bins at df = 1/(Nx_in*dx_in)), so the field it
+    # reconstructs is periodic in x with period 1/df = Nx_in*dx_in (and
+    # likewise in y).  Asking for a window wider than that returns
+    # periodic replicas, silently -- warn with the numbers.
+    _warn_mft_output_window(
+        Nx_in * dx_in, Ny_in * dy_in, dx_out, dy_out, Ny_out,
+        fn_name='angular_spectrum_propagate_mft',
+        period_expr='N_in*d_in (the input cell, since the Bluestein step '
+                    'inverts the input spectrum)')
+
     # ----- 1) Build ASM transfer function H(fx, fy) on the input freq grid --
     # Same construction as angular_spectrum_propagate (centred convention,
     # exact `kz = sqrt(k^2 - kx^2 - ky^2)`, optional Matsushima band-limit).
@@ -198,7 +329,10 @@ def angular_spectrum_propagate_mft(
     # are foregone.  NumPy / CuPy paths are byte-identical to before,
     # and JAX now shares the same cached, f64-built H.  4.12.0: strict
     # `<` band-limit (Matsushima-Shimobaba open interval; matches plain
-    # ASM).
+    # ASM).  v5.30 (audit P12): the cutoff below is the z -> infinity
+    # ASYMPTOTE ``L / (2*lambda*|z|)`` of the paper's exact
+    # local-frequency limit, not that limit -- strictly larger, so it
+    # never over-filters.  See ``fft_infra._get_or_make_bandlimit``.
     h_key = (int(Ny_in), int(Nx_in), float(dy_in), float(dx_in),
              float(wavelength), float(z),
              bool(bandlimit),
@@ -509,6 +643,22 @@ def fresnel_propagate_mft(
     ``exp(i*k/(2z) * (X_in^2 + Y_in^2))`` -- if ``dx_in`` is too coarse
     for the chosen ``z``, the output is aliased regardless of ``dx_out``.
 
+    Raises
+    ------
+    ValueError
+        If ``dx_out`` / ``dy_out`` is non-finite or ``<= 0``, or
+        ``N_out < 1`` (v5.30, audit P11).
+
+    Warns
+    -----
+    UserWarning
+        When ``N_out * dx_out`` exceeds ``lambda*|z|/dx_in`` (or the y
+        equivalent) -- the spatial period of a Bluestein transform of the
+        input FIELD.  Beyond one period the extra samples are periodic
+        REPLICAS (v5.30, audit P11).  The natural Fresnel grid
+        (``dx_out = lambda*z/(N*dx_in)``, ``N_out = N_in``) sits exactly on
+        one period and is silent.
+
     See also
     --------
     fresnel_propagate : single-FFT Fresnel with the natural FFT output grid.
@@ -523,6 +673,9 @@ def fresnel_propagate_mft(
 
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='fresnel_propagate_mft')
+    # v5.30 (audit P11): validate the caller-specified OUTPUT grid too.
+    _validate_mft_output_grid(dx_out, dy_out, N_out,
+                              fn_name='fresnel_propagate_mft')
     # 4.9 fix (audit #3.3): forward-only -- see ``fresnel_propagate``.
     if z <= 0:
         raise ValueError(
@@ -571,6 +724,20 @@ def fresnel_propagate_mft(
 
     k = 2.0 * np.pi / wavelength
     xc, yc = float(centre_out[0]), float(centre_out[1])
+
+    # v5.30 (audit P11): the Bluestein step transforms the INPUT FIELD
+    # (Nx_in samples at dx_in) with kernel ``exp(-i k u x / z)``, so the
+    # output is periodic in x with period ``lambda*|z|/dx_in`` (NOT the
+    # input cell -- that is the ASM-MFT case).  A wider window returns
+    # periodic replicas; warn with the numbers.  ``dx_out = lambda*z /
+    # (N*dx_in)`` with ``N_out = N_in`` (the natural Fresnel grid) sits
+    # exactly on one period and stays silent.
+    _warn_mft_output_window(
+        wavelength * abs(z) / dx_in, wavelength * abs(z) / dy_in,
+        dx_out, dy_out, Ny_out,
+        fn_name='fresnel_propagate_mft',
+        period_expr='lambda*|z|/d_in (the transform is of the input '
+                    'field, not its spectrum)')
 
     # ----- coordinate grids (numpy for chirp construction) ------------------
     n_x = np.arange(Nx_in, dtype=np.float64)
@@ -680,6 +847,21 @@ def fraunhofer_propagate_mft(
     -------
     E_out : ndarray (complex, N_out x N_out)
 
+    Raises
+    ------
+    ValueError
+        If ``dx_out`` / ``dy_out`` is non-finite or ``<= 0``, or
+        ``N_out < 1`` (v5.30, audit P11).
+
+    Warns
+    -----
+    UserWarning
+        When ``N_out * dx_out`` exceeds ``lambda*z/dx_in`` (or the y
+        equivalent) -- the spatial period of a Bluestein transform of the
+        input FIELD.  Beyond one period the extra samples are periodic
+        REPLICAS (v5.30, audit P11).  The natural Fraunhofer grid sits
+        exactly on one period and is silent.
+
     See also
     --------
     fraunhofer_propagate : single-FFT Fraunhofer with the natural FFT grid.
@@ -694,6 +876,9 @@ def fraunhofer_propagate_mft(
 
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='fraunhofer_propagate_mft')
+    # v5.30 (audit P11): validate the caller-specified OUTPUT grid too.
+    _validate_mft_output_grid(dx_out, dy_out, N_out,
+                              fn_name='fraunhofer_propagate_mft')
     # 4.9 fix (audit #3.3): forward-only -- see ``fraunhofer_propagate``.
     if z <= 0:
         raise ValueError(
@@ -740,6 +925,16 @@ def fraunhofer_propagate_mft(
 
     k = 2.0 * np.pi / wavelength
     xc, yc = float(centre_out[0]), float(centre_out[1])
+
+    # v5.30 (audit P11): same period as Fresnel-MFT -- the transform is of
+    # the input FIELD, so the output is periodic with period
+    # ``lambda*|z|/d_in``.  Warn when the requested window exceeds it.
+    _warn_mft_output_window(
+        wavelength * abs(z) / dx_in, wavelength * abs(z) / dy_in,
+        dx_out, dy_out, Ny_out,
+        fn_name='fraunhofer_propagate_mft',
+        period_expr='lambda*|z|/d_in (the transform is of the input '
+                    'field, not its spectrum)')
 
     # PK-3: the input-plane index grids were removed with the Fraunhofer
     # (no input quadratic phase) simplification; only the OUTPUT index grids

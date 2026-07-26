@@ -420,7 +420,15 @@ def aperture_subdomain(
 
     out_surface = in_surface  # zero-thickness operator
 
-    def _prop(E, in_s, out_s, **kw):
+    # ``out_s`` / ``**_kw`` are unused here but are NOT removable (audit
+    # P13): :meth:`MhsPipeline.run` calls every subdomain uniformly as
+    # ``sub.propagator(E, sub.in_surface, sub.out_surface, **sub.kwargs)``,
+    # so the third positional parameter is part of the propagator protocol
+    # and dropping it raises ``TypeError``.  This is a zero-thickness
+    # operator (``out_surface is in_surface``), which is exactly why it has
+    # nothing to read from ``out_s``.  Underscore-prefixed to mark the
+    # non-use as deliberate.
+    def _prop(E, in_s, _out_s, **_kw):
         xp = array_namespace(E)
         cx, cy = centre
         # v4.12.1 (B1-10): pixel-centred grid (drop the `+0.5`), matches

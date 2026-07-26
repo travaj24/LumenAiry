@@ -178,6 +178,54 @@ def _require_square_pitch(current_dx: float, current_dy: float,
             f"this element.")
 
 
+# v5.30: the free-space kernels the ``'propagate'`` element step actually
+# implements.  ``'asm'`` is the default (and the only one that honours the
+# ``tilt_x`` / ``tilt_y`` keys, via ``angular_spectrum_propagate_tilted``).
+_SYSTEM_METHODS = ('asm', 'sas', 'fresnel')
+# Recognised elsewhere in the library but deliberately not offered here:
+# RS has no resample-back path in this chain (and the default-resolver
+# branch above rejects it with a dedicated message).
+_SYSTEM_REJECTED_METHODS = ('rs', 'rayleigh_sommerfeld')
+
+
+def _validate_system_method(method: Any, where: str) -> None:
+    """Reject a free-space ``method`` this chain does not implement.
+
+    v5.30 -- the NumPy twin of audit P6 (recorded as a new measured
+    finding in ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25``).  Pre-v5.30 the
+    ``'propagate'`` element step ran ``if prop_method == 'fresnel' ...
+    elif prop_method == 'sas' ... else: # Default: ASM``, so ANY other
+    string -- ``'gbd'``, ``'fraunhofer'``, ``'ASM'`` (wrong case), or
+    outright junk -- silently produced the ASM field (measured 0.0
+    relative difference vs ``method='asm'``).  Silent fall-through on a
+    junk input is the forbidden class, and the JAX twin
+    :func:`propagate_through_system_jax` was already fixed to name what it
+    implements, so both entry points now raise with the same wording.
+
+    ``where`` names the offending site -- ``'method'`` for the
+    entry-point kwarg, ``"elements[i]['method']"`` for a per-element
+    override -- so the message points at the key the caller wrote.
+    """
+    if method in _SYSTEM_METHODS:
+        return
+    if method in _SYSTEM_REJECTED_METHODS:
+        raise ValueError(
+            f"propagate_through_system: {where}={method!r} is not "
+            f"supported in this entry point.  Supported here: "
+            f"{list(_SYSTEM_METHODS)}.  Rayleigh-Sommerfeld has no "
+            f"resample-back-to-input-pitch path in the element chain; "
+            f"call rayleigh_sommerfeld_propagate() directly for a "
+            f"single free-space leg.")
+    raise ValueError(
+        f"propagate_through_system: {where}={method!r} is not a "
+        f"recognised free-space method.  Supported here: "
+        f"{list(_SYSTEM_METHODS)}; additionally recognised by the library "
+        f"(and rejected here): {list(_SYSTEM_REJECTED_METHODS)}.  "
+        f"Pre-v5.30 an unrecognised value was silently ignored and you "
+        f"got the ASM field.  Tilted propagation is requested with the "
+        f"element's ``tilt_x`` / ``tilt_y`` keys, not via ``method``.")
+
+
 def propagate_through_system(E_in: np.ndarray,
                              elements: Sequence[Dict[str, Any]],
                              wavelength: float,
@@ -236,6 +284,21 @@ def propagate_through_system(E_in: np.ndarray,
         Element-level physics (lenses, mirrors, apertures) are always
         applied using their native models regardless of this setting.
 
+        Anything outside ``{'asm', 'sas', 'fresnel'}`` raises
+        ``ValueError`` -- including ``'rs'``, ``'gbd'``, ``'fraunhofer'``
+        and wrong-case spellings like ``'ASM'``.  Same for a per-element
+        ``elem['method']`` override.  Tilted propagation is requested via
+        the element's ``tilt_x`` / ``tilt_y`` keys, not through ``method``.
+
+        .. versionchanged:: 5.30
+            ``method`` (and the per-element ``elem['method']`` override)
+            are validated.  Pre-v5.30 an unrecognised value fell through
+            to the ``else: # Default: ASM`` branch and silently returned
+            the ASM field -- measured 0.0 relative difference vs
+            ``method='asm'`` for ``'not_a_method'``, ``'gbd'``,
+            ``'fraunhofer'`` and ``'ASM'``.  This is the NumPy twin of
+            the JAX-side audit P6 fix.
+
         To compare methods, run the same ``elements`` list twice with
         different ``method`` values::
 
@@ -287,7 +350,8 @@ def propagate_through_system(E_in: np.ndarray,
         ``tilt_x`` (float, optional, default 0, carrier tilt [rad]),
         ``tilt_y`` (float, optional, default 0, carrier tilt [rad]),
         ``method`` (str, optional, per-element override of the system
-        ``method`` parameter).
+        ``method`` parameter -- validated against the same
+        ``{'asm', 'sas', 'fresnel'}`` set since v5.30).
 
     ``'propagate_tilted'``
         Legacy alias for ``'propagate'`` with tilt parameters.
@@ -442,6 +506,15 @@ def propagate_through_system(E_in: np.ndarray,
             f"Supported choices in this entry point: 'asm', 'sas', "
             f"'fresnel'.  Pass ``method=`` explicitly or reset the "
             f"default via ``set_default_wave_propagator('asm')``.")
+    # v5.30 (audit: the NumPy twin of P6, recorded as a new measured
+    # finding in AUDIT_ADVERSARIAL_CODEBASE_2026_07_25).  Pre-v5.30 every
+    # unrecognised ``method`` -- 'gbd', 'fraunhofer', 'ASM', outright junk
+    # -- fell through the ``if/elif`` chain below to the ``else: # Default:
+    # ASM`` branch and silently returned the ASM field (measured 0.0
+    # relative difference vs method='asm').  Validate at ENTRY against the
+    # honoured set; the JAX twin (v5.30, audit P6) already does the same
+    # with the same wording.
+    _validate_system_method(method, 'method')
     if dy is None:
         from .propagation import get_default_dy
         dy = get_default_dy()
@@ -468,6 +541,14 @@ def propagate_through_system(E_in: np.ndarray,
             bandlimit = elem.get('bandlimit', True)
             # Per-element method override: elem.get('method') > system method
             prop_method = elem.get('method', method)
+            # v5.30 (NumPy twin of audit P6): the per-element override took
+            # the same silent fall-through to ASM as the entry-point kwarg
+            # (measured 0.0 rel diff vs method='asm' for
+            # ``{'method': 'not_a_method'}``), so it needs the identical
+            # validation -- an entry-only check would leave the hole open.
+            if 'method' in elem:
+                _validate_system_method(
+                    prop_method, f"elements[{i}]['method']")
 
             # Check for tilt parameters — if present, use tilted ASM
             tilt_x = elem.get('tilt_x', 0.0)

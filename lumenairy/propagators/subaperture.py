@@ -57,7 +57,61 @@ def patches_for_box(
     overlap: float = 0.25,
     centred: bool = True,
 ) -> PatchGrid:
-    """Build a regular patch tiling over a rectangular box."""
+    """Build a regular patch tiling over a rectangular box.
+
+    Parameters
+    ----------
+    box_size : (W_x, W_y)
+        Full width of the box to tile [m].  The box is understood to be
+        centred on the origin, i.e. it spans ``[-W/2, +W/2]`` per axis.
+    patch_size : (w_x, w_y)
+        Full width of one patch [m].
+    overlap : float, default 0.25
+        Fractional overlap between neighbouring patches; the centre-to-
+        centre step is ``w * (1 - overlap)``.
+    centred : bool, default True
+        Centre the tiling on the origin (v5.30 -- audit P10).
+
+        * ``True`` (default): the patch centres are placed symmetrically
+          about 0, ``c_i = (i - (n-1)/2) * step``, so the covered span
+          ``[-((n-1)*step + w)/2, +((n-1)*step + w)/2]`` is exactly
+          symmetric and the box's two edges get equal margin.
+        * ``False``: the pre-v5.30 layout, ``c_i = -W/2 + w/2 + i*step``
+          -- the FIRST patch is flush with the box's low edge and the
+          surplus coverage ``(n-1)*step + w - W`` all piles up past the
+          high edge.  Kept bit-for-bit for callers that stored patch
+          coordinates from an earlier release.
+
+        The two layouts differ by a constant per-axis offset equal to
+        HALF THE SURPLUS COVERAGE,
+        ``((n - 1)*step + w - W) / 2`` (``centred=True`` sits that much
+        lower) -- i.e. the legacy layout pushed the entire surplus past
+        the high edge instead of splitting it.  When ``W`` is an exact
+        multiple of ``step`` the surplus is ``w - step = w*overlap`` and
+        the offset reduces to ``w * overlap / 2``; that is the case for
+        :func:`propagate_subaperture_asymptotic`, whose box is built as
+        ``n * patch_size * (1 - patch_overlap)``, so its tiling shifts by
+        exactly ``source_box_half * patch_overlap`` per axis.
+
+        Measured on ``box_size=(100 um, 100 um)``,
+        ``patch_size=(50 um, 50 um)``, ``overlap=0.25`` (``step=37.5 um``,
+        ``n=3``, surplus 25 um): ``centred=False`` spans x in
+        ``[-50.000, +75.000] um`` (asymmetry +25.000 um) while
+        ``centred=True`` spans ``[-62.500, +62.500] um`` (asymmetry 0).
+
+    Returns
+    -------
+    PatchGrid
+
+    .. versionchanged:: 5.30
+        ``centred`` was accepted and completely inert (audit P10):
+        ``centred=True`` and ``centred=False`` returned bit-identical
+        grids, and the single layout they shared was the asymmetric one.
+        ``centred=True`` now does what its name says; pass
+        ``centred=False`` for the legacy layout.  This shifts the tiling
+        used by :func:`propagate_subaperture_asymptotic` (which takes the
+        default) by ``source_box_half * patch_overlap`` per axis.
+    """
     W_x, W_y = float(box_size[0]), float(box_size[1])
     w_x, w_y = float(patch_size[0]), float(patch_size[1])
 
@@ -67,8 +121,17 @@ def patches_for_box(
     n_x = max(1, int(np.ceil(W_x / step_x)))
     n_y = max(1, int(np.ceil(W_y / step_y)))
 
-    x0 = -W_x / 2 + w_x / 2
-    y0 = -W_y / 2 + w_y / 2
+    if centred:
+        # v5.30 (audit P10): symmetric tiling -- the run of centres is
+        # centred on the origin, so the covered span is symmetric and both
+        # box edges get the same margin.  For n = 1 this is c = 0.
+        x0 = -0.5 * (n_x - 1) * step_x
+        y0 = -0.5 * (n_y - 1) * step_y
+    else:
+        # Pre-v5.30 layout: first patch flush with the box's low edge, all
+        # the surplus coverage past the high edge.  Bit-for-bit preserved.
+        x0 = -W_x / 2 + w_x / 2
+        y0 = -W_y / 2 + w_y / 2
 
     cx = np.array([x0 + i * step_x for i in range(n_x)])
     cy = np.array([y0 + j * step_y for j in range(n_y)])

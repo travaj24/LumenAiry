@@ -565,9 +565,22 @@ def propagate_huygens_fresnel_through_prescription(
             # total-power normalisation.  Fall back to twice the explicit
             # second-moment sigma (== the 1/e^2 radius for a Gaussian),
             # which is numerically stable for any finite |E|^2 distribution.
-            w_s = 2.0 * float(_np.sqrt(_np.sum(_np.abs(E_in) ** 2 *
-                                          (_np.arange(Nx) - Nx / 2) ** 2 * dx ** 2)
-                                  / max(_np.sum(_np.abs(E_in) ** 2), 1e-30)))
+            #
+            # v5.30 (audit P14): the x-axis grid MUST come from the INPUT
+            # field's own dimensions.  Pre-v5.30 this line used ``Nx`` --
+            # the OUTPUT grid width resolved above -- against
+            # ``|E_in|**2``, so whenever ``output_shape != E_in.shape``
+            # the fallback died with an uncaught, unrelated-looking
+            # ``ValueError: operands could not be broadcast together with
+            # shapes (32,32) (64,)`` instead of returning a waist.  (The
+            # pitch was already the input ``dx``, so mixing in the output
+            # count was wrong even when the two happened to be equal.)
+            _Nx_src = E_in.shape[-1]
+            _I_src = _np.abs(E_in) ** 2
+            _x_src = (_np.arange(_Nx_src) - _Nx_src / 2) * dx
+            w_s = 2.0 * float(_np.sqrt(
+                _np.sum(_I_src * _x_src ** 2)
+                / max(_np.sum(_I_src), 1e-30)))
         if w_s <= 0 or not _np.isfinite(w_s):
             w_s = source_box_half / 2
 

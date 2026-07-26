@@ -26,6 +26,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import math
+import warnings
 from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
@@ -34,6 +35,17 @@ VALID_METHODS = (
     'auto', 'asm', 'sas', 'fresnel', 'fraunhofer', 'rs',
     'maslov', 'asymptotic', 'gbd', 'hfpi', 'hf', 'mhs',
 )
+
+# v5.30 (audit P5): the bare-grid kernels whose native return is the
+# ``(E, dx_out, dy_out)`` triple at a kernel-chosen output pitch rather
+# than a bare ndarray at the input pitch.  ``method='auto'`` can pick
+# any of these, so an ``auto`` caller who reads the return as an ndarray
+# silently gets a tuple -- and at a different sampling.  The dispatcher
+# warns (see :func:`propagate`); the return types themselves are NOT
+# changed (that is an API-contract decision for the owner -- recorded in
+# ``docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md`` P5 and in the
+# deferred roadmap).
+_GRID_CHANGING_METHODS = ('sas', 'fresnel', 'fraunhofer')
 
 
 def propagate(
@@ -56,6 +68,54 @@ def propagate(
     based on the geometry of the request and the structure of the
     prescription (when provided).  See the module docstring for
     selection logic.
+
+    ``method='auto'`` return contract (audit P5)
+    -------------------------------------------
+    **The native return type and the output sampling both depend on
+    which kernel the selector picks**, i.e. on ``z`` / ``prescription``
+    / ``accuracy`` -- not on anything the caller wrote.  With
+    ``return_result=False`` (the default) the caller receives whatever
+    the chosen kernel returns:
+
+    * **asm** -- native return ``ndarray``; output pitch ``dx``
+      (unchanged).  Chosen for free space when ``z`` is None / 0 /
+      negative, or when ``N_F >= 0.1`` and ``Q <= 1``.
+    * **sas** -- native return ``(E, dx_out, dy_out)``; output pitch
+      ``lambda*z / (pad*N*dx)``.  Chosen for free space when
+      ``N_F >= 0.1`` and ``Q > 1``.
+    * **fraunhofer** -- native return ``(E, dx_out, dy_out)``; output
+      pitch ``lambda*z / (N*dx)``.  Chosen for free space when
+      ``N_F < 0.1``.
+    * **maslov** / **gbd** / **hfpi** / **hf** -- native return
+      ``ndarray``; output pitch ``dx`` (or ``output_dx`` when asked).
+      Chosen when a ``prescription`` is supplied; see
+      :func:`_auto_select_method` for the sub-branching.
+
+    Measured at ``N=64``, ``dx = 2 um``, ``lambda = 633 nm``:
+    ``z = 1e-4`` -> ``asm``, ndarray at 2.0000e-06 m; ``z = 1e-3`` ->
+    ``sas``, 3-tuple at 2.4727e-06 m; ``z = 5`` -> ``fraunhofer``,
+    3-tuple at 2.4727e-02 m.
+
+    ``N_F = (N*dx/2)^2 / (lambda*|z|)`` is the aperture Fresnel number
+    and ``Q = lambda*|z| / (N*dx^2)`` the grid Fresnel ratio; ``N`` is
+    ``max(Ny, Nx)``.  ``fresnel`` is never auto-selected but shares the
+    triple-return contract when named explicitly.
+
+    Because a bare ndarray and a 3-tuple at a *different* pitch are not
+    interchangeable, ``propagate`` emits a :class:`UserWarning` whenever
+    ``method='auto'`` resolves to a grid-changing kernel **and**
+    ``return_result`` is falsy -- naming the method, the output pitch it
+    produced, and the stable alternative.  Pass ``return_result=True``
+    (or a specific ``method=``) for a single, shape-stable contract:
+    :class:`~lumenairy.propagators.PropagationResult` always exposes
+    ``.field`` / ``.dx`` / ``.dy`` regardless of which kernel ran.
+
+    .. note::
+       Changing the *return types* to a single contract is deliberately
+       NOT done here -- it is a breaking API decision deferred to the
+       module owner (audit P5; see
+       ``docs/roadmap_deferred_2026_07_21.md``).  Only the warning and
+       this table were added.
 
     Parameters
     ----------
@@ -107,6 +167,33 @@ def propagate(
         the kernel's **output** dx, not the input dx.  Pre-4.12 audit
         round-4 B1-7: tuple unpacking silently failed, ``field`` was
         ``None``, and ``dx`` was the input pitch.
+
+        .. warning::
+           **The wrapper is not a drop-in for the un-wrapped tuple**
+           (audit P16).  ``PropagationResult`` is iterable, but it yields
+           exactly **two** items -- ``(field, intermediates)`` -- for
+           back-compat with ``E, inter = propagate_through_system(...)``,
+           whereas the un-wrapped Fresnel / Fraunhofer / SAS kernels
+           yield **three** (``E, dx_out, dy_out``).  So::
+
+               E, dxo, dyo = propagate(..., method='sas')                # OK
+               E, dxo, dyo = propagate(..., method='sas',
+                                       return_result=True)              # ValueError
+
+           Read the attributes (``.field``, ``.dx_out``, ``.dy_out``)
+           instead of unpacking.  The 2-item iteration is pinned
+           behaviour and is not going to change.
+
+    Warns
+    -----
+    UserWarning
+        When ``method='auto'`` selects a grid-changing kernel
+        (``sas`` / ``fraunhofer``) and ``return_result`` is falsy -- see
+        the return-contract table above (audit P5).  Explicit
+        ``method='sas'`` / ``'fresnel'`` / ``'fraunhofer'`` calls are
+        silent: the caller named that kernel and knows its contract, and
+        so are ``return_result=True`` calls (the wrapped result is
+        shape-stable).
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard for PartialCoherenceMCF
     # and non-2-D inputs via the shared ``_check_2d_scalar_field``
@@ -123,7 +210,8 @@ def propagate(
             f"propagate: method must be one of {VALID_METHODS}, "
             f"got {method!r}.")
 
-    if method == 'auto':
+    auto_selected = (method == 'auto')
+    if auto_selected:
         method = _auto_select_method(
             E_in, z=z, wavelength=wavelength, dx=dx,
             prescription=prescription, accuracy=accuracy)
@@ -137,6 +225,19 @@ def propagate(
         **method_kwargs,
     )
     if not return_result:
+        # v5.30 (audit P5): the auto-selector can hand back a bare
+        # ndarray at the input pitch OR an ``(E, dx_out, dy_out)`` triple
+        # at a kernel-chosen pitch, decided purely by ``z`` -- and the
+        # caller has no way to know which without re-running the
+        # selector.  Return types are NOT changed (deferred API decision
+        # for the owner); instead say so, out loud, exactly when it bites:
+        # ``auto`` chose a grid-changing kernel and the caller did not opt
+        # into the shape-stable wrapper.  The reported pitch is read off
+        # the kernel's own return, so no formula is duplicated here.
+        if auto_selected and method in _GRID_CHANGING_METHODS:
+            warnings.warn(
+                _auto_grid_change_message(method, out, dx),
+                UserWarning, stacklevel=2)
         return out
 
     from .result import PropagationResult
@@ -169,6 +270,43 @@ def propagate(
         dx=out_dx, dy=out_dy, wavelength=wavelength,
         z=z, method=method,
         metadata={'native_return': out},
+    )
+
+
+def _auto_grid_change_message(method, out, dx_in):
+    """Build the audit-P5 ``UserWarning`` text for an ``auto``-selected
+    grid-changing kernel returned un-wrapped.
+
+    Reads the delivered return SHAPE and the kernel-reported output pitch
+    off ``out`` itself (rather than re-deriving ``dx_out`` from the
+    kernel's formula) so the numbers quoted can never drift from what the
+    caller actually holds.
+    """
+    _field, dx_out, dy_out = _coerce_field(out)
+    ret_kind = ('a bare ndarray' if isinstance(out, np.ndarray)
+                else f'a {len(out)}-tuple (E, dx_out, dy_out)'
+                if isinstance(out, (tuple, list))
+                else f'a {type(out).__name__}')
+    if dx_out is None:
+        pitch = 'a kernel-chosen output pitch'
+    elif dy_out is not None and dy_out != dx_out:
+        pitch = (f'output pitch dx_out={dx_out:.6e} m, dy_out={dy_out:.6e} m '
+                 f'(input dx={float(dx_in):.6e} m)')
+    else:
+        pitch = (f'output pitch dx_out={dx_out:.6e} m '
+                 f'(input dx={float(dx_in):.6e} m, '
+                 f'ratio {dx_out / float(dx_in):.4g}x)')
+    return (
+        f"propagate(method='auto'): the selector chose {method!r}, which "
+        f"returns {ret_kind} at {pitch} -- NOT a bare ndarray at the input "
+        f"pitch as method='asm' would.  Which kernel runs (and therefore "
+        f"both the return shape and the output sampling) depends on z, so a "
+        f"caller that unpacks this return has no stable contract.  Pass "
+        f"return_result=True for one shape-stable contract "
+        f"(PropagationResult.field / .dx / .dy for every method), or name "
+        f"the method explicitly to silence this warning.  See the "
+        f"method='auto' return-contract table in propagate()'s docstring "
+        f"(audit P5)."
     )
 
 

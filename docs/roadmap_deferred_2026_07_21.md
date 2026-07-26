@@ -415,3 +415,57 @@ generality gate and the 121 as the acceptance instance.
 Effort key: **S** ≈ hours, **M** ≈ 1–2 days, **L** ≈ multi-day.  Each item lands
 opt-in with byte-identical defaults, an independent oracle, and — for every
 cache — the §0 byte-budgeted / registered / releasable / introspectable contract.
+
+## Part F — deferred API-contract decisions
+
+### F1. `propagate(method='auto')` return shape (audit P5, owner decision)
+
+`lumenairy.propagators.dispatch.propagate` returns **either** a bare `ndarray`
+at the input pitch **or** an `(E, dx_out, dy_out)` triple at a kernel-chosen
+pitch, decided entirely by which kernel the `'auto'` selector picks — i.e. by
+`z`, not by anything the caller wrote.  Measured (N=64, `dx = 2 µm`,
+`λ = 633 nm`):
+
+| `z` | `auto` picks | native return | output pitch |
+|---|---|---|---|
+| 1e-4 m | `asm` | `ndarray` | 2.0000e-06 m (= input) |
+| 1e-3 m | `sas` | 3-tuple | 2.4727e-06 m |
+| 5e-2 m | `sas` | 3-tuple | 1.2363e-04 m |
+| 5 m | `fraunhofer` | 3-tuple | 2.4727e-02 m |
+
+A caller cannot know which they will get without re-running the selector.
+
+**v5.30 did NOT change the return types** — that is a breaking API decision for
+the module owner.  What landed instead (see
+`docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md` P5):
+
+- a `UserWarning` whenever `'auto'` resolves to a grid-changing kernel while
+  `return_result` is falsy, naming the selected method, the delivered return
+  shape, the output pitch (read off the kernel's own return, so it cannot
+  drift) and the stable alternative;
+- the full `auto` behaviour table in `propagate()`'s docstring;
+- pins for the warning **and** for its absence on same-grid (`asm`) selections,
+  on explicitly-named methods, and on `return_result=True`.
+
+**The open decision.**  Options, in rough order of disruption:
+
+1. **Status quo + warning** (what shipped).  Zero breakage; the caller still has
+   to branch on the return type.
+2. **Always return `PropagationResult`** from `propagate()`.  One contract for
+   every method; breaks every existing `E = propagate(...)` and
+   `E, dxo, dyo = propagate(...)` call site unless `PropagationResult` grows a
+   3-item `__iter__` — which collides with audit **P16** (it yields 2 items,
+   `(field, intermediates)`, and that arity is itself pinned).
+3. **Always return a 3-tuple** `(E, dx_out, dy_out)`, with `dx_out == dx` for
+   the same-grid kernels.  Uniform and cheap, but breaks bare-`ndarray`
+   consumers of the ASM path (the common case today).
+4. **Make `return_result=True` the default** over a deprecation cycle, keeping
+   `return_result=False` available.  Least abrupt; needs a release of
+   `DeprecationWarning` plus a `__array__`-based grace path.
+
+Whichever is chosen, P16 must be resolved in the same pass: the wrapper's
+2-item iteration and the kernels' 3-item tuple cannot both be "the" unpacking
+contract.
+
+Not in the sequencing list above — it is an API/compat decision, not an
+engineering task.

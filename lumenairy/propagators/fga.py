@@ -689,6 +689,78 @@ _TRACE_STATE_BYTES = 360.0  # per-point ray state threaded through the system (m
 # the vector path carries two input fields, hence x2.
 _FGA_GRID_BYTES_PER_PX_SCALAR = 48.0
 
+# Gabor-window pool for the memory estimate (audit P9).  ``nsig`` sets the
+# truncation radius ``R = nsig * w0`` of the Gabor analysis/synthesis window,
+# which fixes the half-width of the window in samples,
+# ``m = int(R / dx) + 1``.  Two allocations scale with that half-width and
+# with NOTHING else in the model, so ``nsig`` is exactly the knob that moves
+# them:
+#
+#   * the SHARED separable tables built once per call by
+#     :func:`_gabor_coeff_sep` -- ``gx`` / ``gy`` (length ``2m+1``) plus the
+#     phase tables ``Exr``/``Exi``/``Eyr``/``Eyi`` of shape ``(2m+1, n_p)``.
+#     The build also holds ``phx`` / ``phy`` and the ``np.sin`` / unary-negate
+#     temporaries at peak, so the count is calibrated rather than derived:
+#     ``_GABOR_TABLES_PER_AXIS`` arrays of ``(2m+1) * n_p`` float64 per axis.
+#     MEASURED by tracemalloc on the peak DELTA between nsig=3 and nsig=12
+#     (the nsig-independent ``ascontiguousarray(u0.real/.imag)`` copies and
+#     the njit compilation cancel in the delta): 54.72 kB at both N=128 and
+#     N=256 (dx=3 um, w0=5*dx, n_p=9), i.e. 8.44 table-equivalents across the
+#     two axes -> 4.22 per axis, so 4.25 is the calibrated, slightly
+#     conservative value (model 55.08 kB, 0.7% high);
+#   * the per-thread inner-x workspace ``ixr`` / ``ixi`` of shape
+#     ``(nrow, n_p)`` float64 inside the ``prange`` body of ``_coeff_sep``,
+#     with ``nrow <= 2*int(R/dy) + 3``.  numba's ``parallel=True`` gives each
+#     worker its own, so it multiplies by the thread count.
+#
+# The direct (non-separable, ``n_p < 5``) kernel accumulates into scalars and
+# allocates nothing window-sized, so this pool is zero there.
+_GABOR_TABLES_PER_AXIS = 4.25     # measured (see above), per axis
+_GABOR_WORKSPACE_ARRAYS = 2.0     # ixr + ixi, per numba worker
+
+
+def _fga_numba_threads():
+    """Worker count numba's ``prange`` will use (for the P9 window-pool term).
+
+    Reads numba's own configured thread count when numba is importable so the
+    estimate matches the run; falls back to ``os.cpu_count()`` (numba's own
+    default) when it is not, so the estimate stays available on a
+    numba-less box.
+    """
+    try:
+        import numba
+        return max(1, int(numba.get_num_threads()))
+    except (ImportError, AttributeError, RuntimeError, ValueError):
+        # ImportError: numba absent.  AttributeError: an old / stub numba
+        # without the threading-layer API.  RuntimeError / ValueError:
+        # numba present but its threading layer failed to initialise.
+        import os
+        return max(1, int(os.cpu_count() or 1))
+
+
+def _fga_gabor_window_bytes(nsig, w0, dx, dyg, n_p, use_sep, cfull_mult=1.0,
+                            n_threads=None):
+    """Peak bytes of the ``nsig``-sized Gabor-window pool (audit P9).
+
+    ``nsig`` was documented on :func:`fga_memory_estimate` as "as on
+    :func:`apply_real_lens_fga`" but was never read, while the real path reads
+    it six times -- so the estimate was invariant to a 12x change in the
+    window radius.  This is the term that makes it live.  Returns 0.0 on the
+    direct (non-separable) kernel, which allocates nothing window-sized.
+    """
+    if not use_sep:
+        return 0.0
+    R = float(nsig) * float(w0)
+    mx = int(R / float(dx)) + 1
+    my = int(R / float(dyg)) + 1
+    npf = float(n_p)
+    tables = _GABOR_TABLES_PER_AXIS * 8.0 * npf * ((2 * mx + 1) + (2 * my + 1))
+    threads = _fga_numba_threads() if n_threads is None else int(n_threads)
+    workspace = (_GABOR_WORKSPACE_ARRAYS * 8.0 * npf
+                 * (2 * my + 3) * threads)
+    return float(cfull_mult) * (tables + workspace)
+
+
 # Lever #3 (coarse-lattice trace + interpolation) tunables.
 _COARSE_INTERP_ORDER = 3    # cubic map_coordinates upsample (opd ~2e-5 waves, well
 #                             under the ~1e-3 FGA floor; ~2x faster than quintic)
@@ -1045,7 +1117,7 @@ def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0,
 
 
 def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
-                wavelength, z_image, dq_step, px, py, n_p, Np, coeff_frac,
+                wavelength, z_image, dq_step, px, py, n_p, Np,
                 use_sep, cw, nq_chunk, coarse_stride, cache_trace=False, Cp=None):
     """Lever #3: coarse-lattice trace + spline ``map_coordinates`` interpolation.
 
@@ -1066,7 +1138,14 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
     are traced DIRECTLY (dark exterior points interp-marked alive are harmless --
     their Gabor coefficient is ~0, so weight ~0).  Keeps the separable analysis
     and the batched numba scatter; position pruning is not applied (the coarse
-    trace already visits only ``O(Nq / coarse_stride^2)`` points)."""
+    trace already visits only ``O(Nq / coarse_stride^2)`` points).
+
+    .. versionchanged:: 5.30
+        Dropped the ``coeff_frac`` parameter (audit P13): it appeared only in
+        the signature and was never read in the body, so a caller's
+        momentum-coefficient pruning request was silently discarded on the
+        coarse path.  Momentum pruning is simply not implemented here -- the
+        signature now says so.  Module-private, one call site."""
     from scipy.ndimage import (
         binary_dilation,
         distance_transform_edt,
@@ -1335,7 +1414,7 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     if coarse_stride and int(coarse_stride) > 1:
         return _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2,
                            surfs, wavelength, z_image, dq_step, px, py, n_p, Np,
-                           coeff_frac, use_sep, cw, nq_chunk, int(coarse_stride),
+                           use_sep, cw, nq_chunk, int(coarse_stride),
                            cache_trace=bool(cache_trace), Cp=Cp)
     qbounds = ([(0, Nq)] if nq_chunk is None
                else [(s, min(s + nq_chunk, Nq)) for s in range(0, Nq, nq_chunk)])
@@ -1709,14 +1788,23 @@ def fga_memory_estimate(
     ``LUMENAIRY_MEM_BUDGET_MB`` env override) -- instead of discovering an OOM at
     runtime (the H8 agent had to reverse-engineer these numbers).
 
-    Two memory pools:
+    Three memory pools:
 
     * a FIXED full-grid floor (``grid_arrays_mb``) -- the input field, the
       ``outr``/``outi`` accumulators and the complex output; it does NOT shrink
       with the swarm chunking and is not bounded by ``mem_budget_mb``;
+    * a FIXED Gabor-window pool (``gabor_window_mb``, v5.30 / audit P9) -- the
+      shared separable window + phase tables and the per-numba-worker inner-x
+      workspace, both sized by the window half-width ``int(nsig*w0/dx) + 1``.
+      This is the only term ``nsig`` moves, and it is why ``nsig`` is read at
+      all (see below).  Zero on the direct kernel (``n_p < 5``), which
+      accumulates into scalars;
     * the beamlet SWARM (``swarm_peak_mb``) -- ``Nq`` position-lattice points x
       ``Np = n_p**2`` momenta; THIS is what ``mem_budget_mb`` bounds by chunking
       the ``Nq`` lattice into ``nq_chunk`` blocks, giving ``chunked_swarm_peak_mb``.
+
+    ``peak_unchunked_mb`` / ``peak_chunked_mb`` are the two fixed pools plus the
+    corresponding swarm term.
 
     Parameters
     ----------
@@ -1741,7 +1829,8 @@ def fga_memory_estimate(
         on ``apply_real_lens_fga``.
     dq_step, w0_factor, nsig, exact_jacobian, mem_budget_mb :
         As on :func:`apply_real_lens_fga`.  ``mem_budget_mb=None`` uses the
-        library default (env override or 25%-of-RAM).
+        library default (env override or 25%-of-RAM).  ``nsig`` sizes the
+        Gabor-window pool (``gabor_window_mb``) -- see the pool list above.
     vector : bool, default False
         Size the vector (``apply_real_lens_fga_vector``) path: two input fields
         and a ``cfull_mult=2`` coefficient array.
@@ -1751,13 +1840,24 @@ def fga_memory_estimate(
     dict
         ``Ny, Nx, dx, dy, p_max, n_p, Np, dq_step, Nq_full, use_separable,
         exact_jacobian, bytes_per_lattice_point, swarm_peak_mb,
-        chunked_swarm_peak_mb, grid_arrays_mb, peak_unchunked_mb,
-        peak_chunked_mb, budget_mb, nq_chunk, swarm_fits_budget,
-        sampling_basis, n_p_target``.  ``Nq_full`` is the UN-pruned lattice
+        chunked_swarm_peak_mb, grid_arrays_mb, nsig, gabor_window_mb,
+        peak_unchunked_mb, peak_chunked_mb, budget_mb, nq_chunk,
+        swarm_fits_budget, sampling_basis, n_p_target``.
+        ``Nq_full`` is the UN-pruned lattice
         (upper bound; ``prune_frac`` reduces it for a concentrated field), and
         ``n_p_target`` (when set) is the un-clamped ``n_p`` that would meet the
         ``dp`` target -- the memory of that finer swarm scales by
         ``(n_p_target / n_p)**2``.
+
+    .. versionchanged:: 5.30
+        ``nsig`` is now READ (audit P9).  Pre-v5.30 it was documented as
+        "as on :func:`apply_real_lens_fga`" but never consulted, so the
+        whole estimate was bit-identical for ``nsig`` = 1.0 and 12.0 while
+        the real path reads it six times.  It now sizes the new
+        ``gabor_window_mb`` pool, and ``nsig`` itself is echoed back in the
+        result dict.  Every other key is unchanged;
+        ``peak_unchunked_mb`` / ``peak_chunked_mb`` grow by
+        ``gabor_window_mb``.
     """
     from ..raytrace import surfaces_from_prescription
 
@@ -1826,6 +1926,18 @@ def fga_memory_estimate(
     grid_bytes = _FGA_GRID_BYTES_PER_PX_SCALAR * (2.0 if vector else 1.0)
     grid_arrays_mb = grid_bytes * float(Ny) * float(Nx) / 1e6
 
+    # ---- audit P9: the nsig-sized Gabor-window pool ---------------------
+    # ``nsig`` was documented here but never read, while ``_fga_coarse`` /
+    # ``_gabor_coeff*`` / ``_lattice_support_mask`` read it 6x -- so the
+    # estimate was bit-identical for nsig = 1 and nsig = 12 (measured).
+    # This is a third FIXED pool alongside the grid floor: it does not
+    # shrink with the lattice chunking and is not bounded by
+    # ``mem_budget_mb`` (the chunk sizer bounds the swarm only).
+    gabor_window_mb = _fga_gabor_window_bytes(
+        float(nsig), w0, float(dx), dyg, int(n_p_r), use_sep,
+        cfull_mult=cfull_mult) / 1e6
+    fixed_mb = grid_arrays_mb + gabor_window_mb
+
     budget = (float(mem_budget_mb) if mem_budget_mb is not None
               else _default_mem_budget_mb())
     nq_chunk = _resolve_nq_chunk(Nq_full, Np, use_sep, Np, budget,
@@ -1843,8 +1955,10 @@ def fga_memory_estimate(
         'swarm_peak_mb': float(swarm_peak_mb),
         'chunked_swarm_peak_mb': float(chunked_swarm_peak_mb),
         'grid_arrays_mb': float(grid_arrays_mb),
-        'peak_unchunked_mb': float(grid_arrays_mb + swarm_peak_mb),
-        'peak_chunked_mb': float(grid_arrays_mb + chunked_swarm_peak_mb),
+        'nsig': float(nsig),
+        'gabor_window_mb': float(gabor_window_mb),
+        'peak_unchunked_mb': float(fixed_mb + swarm_peak_mb),
+        'peak_chunked_mb': float(fixed_mb + chunked_swarm_peak_mb),
         'budget_mb': float(budget),
         'nq_chunk': (None if nq_chunk is None else int(nq_chunk)),
         'swarm_fits_budget': bool(nq_chunk is None),
