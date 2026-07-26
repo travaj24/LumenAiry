@@ -65,6 +65,91 @@ from .twod import (
 )
 
 
+class RCWAYAverageWarning(UserWarning):
+    """A 1-D :class:`RCWAStack` is solving the y-AVERAGE of a y-VARYING cell.
+
+    v5.31 (audit W4-3, closing the deferred 1-D-stack half of audit M8).  A 1-D
+    (mono-periodic) stack carries only the ``n = 0`` y-harmonic, so a 2-D cell
+    handed to it contributes only its ``c_{k,0}`` Fourier coefficients -- the
+    y-AVERAGED permittivity.  That is the stack's long-standing, deliberate
+    contract for a y-INVARIANT 2-D cell (an x-only grating written on a 2-D
+    grid: the average IS the structure, and the answer is exact).  For a
+    genuinely y-VARYING cell it silently solves a DIFFERENT structure.
+
+    Measured (24x24 square-pillar cell, n_lo/n_hi = 1.5/2.5, period 1 um,
+    lambda = 633 nm, theta = 0.1 rad, n_orders = 5): the 1-D stack returned
+    ``sum(R) = 0.244615594382`` -- BIT-identical to explicitly pre-averaging the
+    cell along y -- against the y-resolved 2-D stack's ``0.183045443696``, a
+    33.6% error, with the energy closure equally clean in both solves so no
+    tripwire can see it.
+
+    This is a diagnostic, NOT a rejection: the y-average is the documented
+    behaviour and an existing pin relies on feeding 2-D-shaped cells to 1-D
+    stacks.  Its own category is provided so callers can silence exactly this
+    (``filterwarnings('ignore', category=RCWAYAverageWarning)``) or promote
+    exactly this to an error, without touching the surrounding
+    ``UserWarning``-based diagnostics.
+    """
+
+
+def _warn_if_y_averaged(fn_name, cell, n_orders_y, *, strict_y, stacklevel=3):
+    """Emit :class:`RCWAYAverageWarning` when a 1-D stack is about to y-average
+    a genuinely y-VARYING 2-D cell.
+
+    Complements :func:`~lumenairy.elements.rcwa._core._validate_cell_sampling`,
+    whose ``strict_y=True`` branch RAISES on this input for the explicitly-2-D
+    entry points.  The stack passes ``strict_y=not self.is_1d``, so a 1-D stack
+    (``noy = 0`` sentinel) skips that check entirely -- the y-average is its
+    contract.  This is the missing diagnostic for that skipped case.
+
+    The y-variance test is deliberately the SAME formulation as the
+    ``strict_y`` branch's -- per-component peak-to-peak along the y axis (real
+    plus imaginary), on concrete arrays only, since a traced JAX cell cannot be
+    inspected -- so the two can never disagree about whether a cell is
+    y-varying.  ``tests/unit/test_niche_audit_w4_gaps.py`` pins that agreement.
+
+    No-ops (returns False) unless ``strict_y`` is False AND ``n_orders_y == 0``
+    AND the cell has more than one y sample AND the cell actually varies along
+    y.  Returns True when it warned.
+
+    ``stacklevel`` is the number of frames from this function's ``warn`` call
+    out to the USER's line, so the diagnostic points at the ``add_layer`` /
+    ``solve_vs_wavelength`` call the user wrote rather than at library
+    internals: 3 from ``add_layer`` (which calls this directly), 5 from
+    ``_materialized_layers`` (measured chain: user -> ``solve_vs_wavelength``
+    -> ``_solve_one`` -> ``_materialized_layers``).  A too-large value simply
+    clamps at the outermost frame, so the threaded sweep degrades gracefully.
+    """
+    if strict_y or int(n_orders_y) != 0:
+        return False
+    if is_jax_array(cell):
+        return False                          # tracer: not inspectable
+    Sx, Sy = int(cell.shape[0]), int(cell.shape[1])
+    if Sy <= 1:
+        return False                          # already a 1-D cell, nothing lost
+    xpc = array_namespace(cell)
+    arr = xpc.asarray(cell)
+    spatial = arr.reshape(Sx, Sy, -1)
+    yspread = xpc.ptp(spatial.real, axis=1)
+    if xpc.iscomplexobj(spatial):
+        yspread = yspread + xpc.ptp(spatial.imag, axis=1)
+    ysp = float(xpc.max(yspread))
+    if ysp == 0.0:
+        return False                          # y-INVARIANT: the average is exact
+    warnings.warn(
+        f"{fn_name}: this stack is 1-D (mono-periodic -- no period_y / "
+        f"n_orders_y), so the {(Sx, Sy)} cell enters only through its "
+        f"y-AVERAGED permittivity, but the cell VARIES along y (max per-row "
+        f"spread {ysp:.6g}).  The solve returns the y-averaged structure's "
+        f"answer, which is bit-identical to pre-averaging the cell yourself "
+        f"and can be tens of percent from the y-resolved result while the "
+        f"energy closure stays clean (so no tripwire fires).  This is exact "
+        f"and intended for a y-INVARIANT 2-D cell; if the y structure is "
+        f"real, build a 2-D stack (pass period_y AND n_orders_y >= 1).",
+        RCWAYAverageWarning, stacklevel=stacklevel)
+    return True
+
+
 def _layer_offplane_or_traced(data):
     """True if a ``(3, 3)`` tensor cell has OUT-OF-PLANE coupling.  A concrete
     array is inspected; a TRACED jax array (under ``jax.grad`` / ``jit``) cannot
@@ -1110,6 +1195,8 @@ class RCWAStack:
                 cell = cell[:, None]
             _validate_cell_sampling("add_layer", cell, self.nox, self.noy,
                                     strict_y=not self.is_1d)
+            _warn_if_y_averaged("add_layer", cell, self.noy,
+                                strict_y=not self.is_1d)
             self._layers.append(_RCWALayer(thickness, "iso", cell,
                                            formulation=f))
         elif shapes is not None:
@@ -1138,6 +1225,8 @@ class RCWAStack:
                      else np.asarray(eps_tensor_cell, dtype=_C))
             _validate_cell_sampling("add_layer", tcell, self.nox, self.noy,
                                     strict_y=not self.is_1d)
+            _warn_if_y_averaged("add_layer", tcell, self.noy,
+                                strict_y=not self.is_1d)
             # OUT-OF-PLANE tensor layers are SUPPORTED since v5.14.1 (the
             # rcwa_jones_2d GAP2 machinery promoted to the stack via the
             # PMM2DStack any_oop pattern), including the DIFFERENTIABLE (JAX)
@@ -1527,6 +1616,8 @@ class RCWAStack:
                 _validate_cell_sampling("solve_vs_wavelength", cell, self.nox,
                                         self.noy,
                                         strict_y=not self.is_1d)
+                _warn_if_y_averaged("solve_vs_wavelength", cell, self.noy,
+                                    strict_y=not self.is_1d, stacklevel=5)
                 out.append(_RCWALayer(L.thickness, "iso", cell,
                                       formulation=L.formulation))
             elif L.kind == "shapes":
@@ -1542,6 +1633,8 @@ class RCWAStack:
                 _validate_cell_sampling("solve_vs_wavelength", tcell, self.nox,
                                         self.noy,
                                         strict_y=not self.is_1d)
+                _warn_if_y_averaged("solve_vs_wavelength", tcell, self.noy,
+                                    strict_y=not self.is_1d, stacklevel=5)
                 # Mirror the STATIC add_layer tensor contract (audit P3-38):
                 # out-of-plane tensors are supported since v5.14.1, so the
                 # materialised dispersive cell must not re-impose the old
@@ -2365,6 +2458,9 @@ class RCWAStack:
 __all__ = [
     "rcwa_convergence",
     "RCWAResult",
+    # v5.31 (audit W4-3): exported so callers can silence / promote exactly the
+    # 1-D-stack y-averaging diagnostic without touching sibling UserWarnings.
+    "RCWAYAverageWarning",
     "_RCWALayer",
     "_STACK_STABILIZE_WINDOW",
     "_STACK_STABILIZE_TOL",

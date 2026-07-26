@@ -954,7 +954,7 @@ def _running_under_trace(initial_state, jp):
     return False
 
 
-def _trace_body_static(state, jp, wavelength, surface_diffraction):
+def _trace_body_static(state, jp, wavelength):
     """Inline kernel using the static-branch ``_intersect_jax`` /
     ``_refract_jax`` (Python-time radius / conic / aspheric flags).
 
@@ -965,6 +965,15 @@ def _trace_body_static(state, jp, wavelength, surface_diffraction):
     work even when this body is called inside :func:`jax.jit` (where the
     LEAVES of ``jp`` would appear as tracers).  The leaves themselves are
     only used by the traced-leaf path (:func:`_trace_body_traced`).
+
+    v5.31 (audit R-18, verified): the former 4th parameter
+    ``surface_diffraction`` was DEAD and is gone.  The DOE kicks are read from
+    ``jp.aux[-1]`` (``diff_aux``), which :func:`_build_jax_prescription` folds
+    in; the parameter was a vestige of the pre-``JaxPrescription`` signature
+    and was never referenced in either trace body.  Passing a spec here could
+    only mislead -- ``trace_jax`` raises (RT-8) if ``surface_diffraction`` is
+    supplied alongside a pre-built prescription, precisely because this path
+    cannot honour it.
     """
     (n_surf, asph_powers, semi_ds, n_pre, n_post,
      radii_py, conics_py, thicks_py, asph_pairs, diff_aux) = jp.aux
@@ -993,7 +1002,7 @@ def _trace_body_static(state, jp, wavelength, surface_diffraction):
     return state
 
 
-def _trace_body_traced(state, jp, wavelength, surface_diffraction):
+def _trace_body_traced(state, jp, wavelength):
     """Inline kernel using the always-Newton ``_intersect_jax_param`` /
     ``_refract_jax_param`` path (JAX-array radius / conic / aspheric
     coeffs).
@@ -1003,6 +1012,9 @@ def _trace_body_traced(state, jp, wavelength, surface_diffraction):
     roughly 10% higher than the static path (one extra Newton iter on
     pure-spherical surfaces), and we lose the closed-form flat-surface
     fast path.  Gradient correctness is the reason we use this branch.
+
+    v5.31 (audit R-18, verified): the dead ``surface_diffraction`` parameter is
+    gone -- see :func:`_trace_body_static`.
     """
     (n_surf, asph_powers, semi_ds, n_pre, n_post,
      radii_py, conics_py, thicks_py, asph_pairs, diff_aux) = jp.aux
@@ -1085,11 +1097,22 @@ except ImportError:
     pass
 
 
-def _make_jit_kernel(jp_aux, wavelength_float, surface_diffraction):
-    """Build a jit-compiled kernel keyed on ``jp_aux`` (static aux).
+def _make_jit_kernel(wavelength_float):
+    """Build a jit-compiled kernel for one wavelength.
 
     The kernel takes ``(state, jp_concrete)`` where ``jp_concrete`` is a
     :class:`JaxPrescription` whose leaves are concrete JAX arrays.
+
+    v5.31 (audit R-18, verified): the former ``jp_aux`` and
+    ``surface_diffraction`` parameters were both DEAD and are gone.  ``jp_aux``
+    was never referenced in the body -- the cache KEY is built by the caller
+    (:func:`trace_jax`, ``cache_key = (jp.aux, wavelength, diff_aux)``), not
+    here, so the old docstring's "keyed on ``jp_aux``" described the caller's
+    job; the aux the kernel actually reads arrives with ``jp`` at call time.
+    ``surface_diffraction`` was only forwarded to :func:`_trace_body_static`,
+    which ignored it (the DOE kicks live in ``jp.aux[-1]``).  ``wavelength`` is
+    the one genuinely-closed-over static value -- it scales the DOE kick -- and
+    it is part of the caller's cache key for exactly that reason.
     """
     import jax
 
@@ -1098,8 +1121,7 @@ def _make_jit_kernel(jp_aux, wavelength_float, surface_diffraction):
         # The kernel itself uses the static-branch path; if a future
         # caller threads tracer leaves in we'd hit ``_running_under_trace``
         # and bypass this cached kernel entirely.
-        return _trace_body_static(
-            state, jp, wavelength_float, surface_diffraction)
+        return _trace_body_static(state, jp, wavelength_float)
 
     return jax.jit(_kernel)
 
@@ -1206,10 +1228,8 @@ def trace_jax(
     # owns the trace context so an extra jit wrap is unnecessary.
     if _running_under_trace(initial_state, jp):
         if not _leaves_are_concrete(jp):
-            return _trace_body_traced(
-                initial_state, jp, wavelength, surface_diffraction)
-        return _trace_body_static(
-            initial_state, jp, wavelength, surface_diffraction)
+            return _trace_body_traced(initial_state, jp, wavelength)
+        return _trace_body_static(initial_state, jp, wavelength)
 
     # Eager path: look up or build a jit-compiled kernel keyed on the
     # static signature.  Wavelength + diffraction_spec roll into the
@@ -1235,8 +1255,7 @@ def trace_jax(
         # keys differ.  Two threads may double-build on a cold cache
         # for the same key -- benign waste; the second insert just
         # overwrites the first.
-        kernel = _make_jit_kernel(
-            jp.aux, float(wavelength), surface_diffraction)
+        kernel = _make_jit_kernel(float(wavelength))
         with _TRACE_JAX_CACHE_LOCK:
             _TRACE_JAX_CACHE[cache_key] = kernel
             while len(_TRACE_JAX_CACHE) > _TRACE_JAX_CACHE_MAXSIZE:

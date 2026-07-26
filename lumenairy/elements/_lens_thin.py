@@ -176,6 +176,21 @@ def apply_thin_lens(
     -------
     E_out : ndarray (complex), same shape as *E_in*
 
+    Raises
+    ------
+    ValueError
+        If ``f`` is not finite.  v5.31 (audit W4-1, sibling of the v5.29
+        W3-T4 polarization guards): pre-fix ``f=np.nan`` returned a field
+        whose every pixel was ``nan+nanj`` under ``'paraxial'`` /
+        ``'nonparaxial'`` -- and, under ``'aplanatic'``, silently applied
+        NO lens at all (the ``r < |f|`` domain test is False everywhere for
+        NaN, so the unit-phase sentinel covers the whole grid).  ``f=+-inf``
+        inverted that split: a flat no-op under ``'paraxial'``, all-NaN
+        under the two sqrt models.  Nothing was raised in any case, and
+        :meth:`~lumenairy.elements.polarization.JonesField.apply_thin_lens`
+        -- which routes both components through here and mutates itself in
+        place -- propagated the poison into the caller's own object.
+
     Notes
     -----
     All arguments past ``E_in`` are keyword-only (since 4.7).  This
@@ -217,6 +232,44 @@ def apply_thin_lens(
     # broadcast.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_thin_lens')
+
+    # v5.31 (audit W4-1, sibling of the v5.29 W3-T4 polarization guards): a
+    # non-finite ``f`` used to sail straight through into the phase, and the
+    # three lens models disagreed about the damage -- so the SAME bad input was
+    # a NaN field, a silent no-op, or nothing at all depending on
+    # ``lens_model``.  Measured pre-guard (N = 32, dx = 5 um, lambda = 1.55 um,
+    # fraction of non-finite output pixels):
+    #
+    #   f          paraxial   nonparaxial   aplanatic
+    #   nan        1.000      1.000         0.000  (silent NO-OP: the
+    #                                              ``r**2/f**2 < 1`` domain
+    #                                              test is False everywhere, so
+    #                                              the unit-phase sentinel wins
+    #                                              and NO lens is applied)
+    #   +-inf      0.000      1.000         1.000  (paraxial's ``k/(2f) -> 0``
+    #                                              is a flat no-op; the two
+    #                                              sqrt models hit inf - inf)
+    #
+    # ``JonesField.apply_thin_lens`` (polarization.py) routes BOTH components
+    # through here and mutates itself in place while returning ``self``, so
+    # ``f=nan`` poisoned the caller's own object: every pixel of Ex AND Ey came
+    # back ``nan+nanj``, ``degree_of_polarization`` and every Stokes parameter
+    # read all-NaN, and nothing was raised.  Rejecting non-finite ``f`` here
+    # fixes the scalar entry point and the Jones method together.  Note ``f``
+    # is NOT periodic, so there is nothing for the caller to reduce -- an
+    # infinite focal length means "no lens", which is what omitting the call
+    # expresses; pass a large finite ``f`` if you want the residual power.
+    _f = float(f)
+    if not np.isfinite(_f):
+        raise ValueError(
+            f"apply_thin_lens: f must be a finite focal length in metres "
+            f"(positive = converging, negative = diverging); got f={f!r}.  "
+            f"A non-finite f is silently absorbed by the phase in a way that "
+            f"DIFFERS per lens_model -- 'paraxial'/'nonparaxial' return a "
+            f"field whose every pixel is nan+nanj (nothing raised), while "
+            f"f=nan under 'aplanatic' falls entirely outside the r<|f| domain "
+            f"and applies NO lens at all.  For 'no lens' omit the call; for a "
+            f"nearly-collimating lens pass a large finite f.")
 
     # Determine array library.  PEP 562 ``__getattr__`` cannot
     # resolve bare ``cp`` inside a function body (LEGB rules skip
@@ -763,6 +816,24 @@ def apply_aspheric_lens(
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_aspheric_lens')
 
+    # v5.31 (audit R-8 / E-L7 residual): reject ODD aspheric powers on BOTH
+    # surfaces up front.  ``_aspheric_sag`` below evaluates
+    # ``coeff * h_sq ** (power // 2)`` on its flat AND its curved branch, so an
+    # odd power silently floors to the next-lower EVEN one and the screen
+    # imprints a DIFFERENT surface with no diagnostic.  Measured pre-guard
+    # (N = 64, dx = 5 um, lambda = 1.55 um): ``A1={5: 1e6}`` returned a field
+    # BIT-identical to ``A1={4: 1e6}`` on both branches (and likewise for
+    # ``A2``), the underlying sag being 100x the true ``h**5`` value at
+    # h = 10 mm.  Same shared checker (and message) as
+    # ``lenses.surface_sag_general`` / ``raytrace.conic_sag``; the import is
+    # function-local because ``lumenairy.raytrace.__init__`` imports
+    # ``raytrace.surface``, which imports ``elements.lenses``.
+    from ..raytrace._conic_core import check_even_aspheric_powers
+    for _which, _A in (('A1', A1), ('A2', A2)):
+        if _A:
+            check_even_aspheric_powers(
+                _A.keys(), fn_label=f'apply_aspheric_lens ({_which})')
+
     # See apply_thin_lens for the ``_lenses_module.cp`` rationale.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
         if _lenses_module.cp is None:
@@ -918,6 +989,23 @@ def apply_cylindrical_lens(
     # guard).
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_cylindrical_lens')
+
+    # v5.31 (audit W4-2): the SIBLING of the ``apply_thin_lens`` non-finite-f
+    # guard -- the only other ``f``-taking entry point in this module, with the
+    # identical failure.  Measured pre-guard (N = 16, dx = 5 um): ``f=nan``
+    # returned a field whose every pixel was ``nan+nanj`` with nothing raised;
+    # ``f=+-inf`` collapsed ``k/(2f)`` to zero and silently applied NO lens.
+    # Guarded here rather than left for a later sweep so the two cannot drift.
+    _f = float(f)
+    if not np.isfinite(_f):
+        raise ValueError(
+            f"apply_cylindrical_lens: f must be a finite focal length in "
+            f"metres (positive = converging, negative = diverging); got "
+            f"f={f!r}.  f=nan makes every pixel of the returned field "
+            f"nan+nanj with nothing raised, and f=+-inf silently applies NO "
+            f"lens.  For 'no lens' omit the call; for a nearly-collimating "
+            f"lens pass a large finite f.  (Sibling of the same guard on "
+            f"apply_thin_lens.)")
 
     # v4.13.2 (audit C-P1-6): dispatch through CuPy when use_gpu=True
     # or E_in is already a CuPy array.  Resolve ``cp`` via the

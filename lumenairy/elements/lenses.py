@@ -236,6 +236,25 @@ def surface_sag_general(
         sag = conic_sag
 
     if aspheric_coeffs:
+        # v5.31 (audit R-8 / E-L7 residual): reject ODD powers HERE, at the
+        # wave-optics sag entry point.  Both branches below evaluate
+        # ``h_sq ** (power // 2)`` (the numba kernel's ``powers[j] // 2`` and
+        # the NumPy fallback's ``power // 2``), so an odd power silently floors
+        # to the NEXT-LOWER EVEN one -- a different surface, returned with no
+        # diagnostic.  Measured pre-guard at ``{5: 1e6}``, h = 10 mm, flat base:
+        # sag 0.01 m (== the ``{4: 1e6}`` sag, BIT-identical) against the true
+        # 1.0e-4 m -- 100x -- with dz/dh 4.0 vs the true 0.05 (80x).  The same
+        # ``{5: ...}`` fed through ``apply_real_lens`` returned a field
+        # bit-identical to the ``{4: ...}`` lens.  ``Surface`` and the JAX
+        # prescription path already reject it via the SAME shared checker; this
+        # is the wave-optics path, which never builds a ``Surface``.
+        # Import is function-local: ``lumenairy.raytrace.__init__`` pulls in
+        # ``raytrace.surface``, which imports THIS module, so a module-level
+        # ``from ..raytrace._conic_core import ...`` cycles at import time.
+        # (Same deferred-import pattern as ``.._validation`` in _lens_thin.py.)
+        from ..raytrace._conic_core import check_even_aspheric_powers
+        check_even_aspheric_powers(aspheric_coeffs.keys(),
+                                   fn_label='surface_sag_general')
         # 3.2.14: fused single-pass numba kernel when available.
         # Skips the per-term temporary array allocation that the
         # legacy NumPy fallback required (5 aspheric coeffs at N=4096
@@ -350,12 +369,28 @@ def surface_sag_biconic(
 
     if R_y is None:
         # Reduce to the rotationally-symmetric formula for backward
-        # compatibility.
+        # compatibility.  (Its own R-8 guard covers ``aspheric_coeffs``;
+        # ``aspheric_coeffs_y`` is unread on this branch, as documented.)
         h_sq = X ** 2 + Y ** 2
         return surface_sag_general(h_sq, R_x, conic_x, aspheric_coeffs)
 
     if conic_y is None:
         conic_y = conic_x
+
+    # v5.31 (audit R-8 / E-L7 residual): reject ODD powers on BOTH per-axis
+    # coefficient dicts before ``_axis_sag`` floors them via
+    # ``h_sq ** (power // 2)``.  Measured pre-guard at ``{3: 1e4}``, h = 10 mm,
+    # flat base: sag 1.0 m -- BIT-identical to the ``{2: 1e4}`` sag -- against
+    # the true 0.01 m, i.e. 100x, on the x AND the y coefficient set.  Same
+    # shared checker (and message) as ``surface_sag_general`` /
+    # ``raytrace.conic_sag``; see that site for the function-local-import note.
+    from ..raytrace._conic_core import check_even_aspheric_powers
+    if aspheric_coeffs:
+        check_even_aspheric_powers(aspheric_coeffs.keys(),
+                                   fn_label='surface_sag_biconic')
+    if aspheric_coeffs_y:
+        check_even_aspheric_powers(aspheric_coeffs_y.keys(),
+                                   fn_label='surface_sag_biconic (aspheric_coeffs_y)')
 
     def _axis_sag(h_sq, R, K, asph):
         s = xp.zeros_like(h_sq)
