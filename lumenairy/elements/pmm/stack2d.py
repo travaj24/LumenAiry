@@ -29,13 +29,13 @@ import warnings
 import numpy as np
 
 from ..rcwa._core import (
+    _blas_threads_quiet,
     _grazing_safe_wavelength,
     _interface_smatrix_general,
     _modes_to_M,
     _propagation_smatrix_general,
     _require_propagating_incidence,
     _symmetry_on,
-    rcwa_blas_threads,
 )
 from ._core import (
     PerOrderAmplitudesMixin,
@@ -1117,7 +1117,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             sub._internal = None
             sub._layers = self._materialized_layers(w, base)
             sub.set_source(w, theta=theta, phi=phi, angle=angle)
-            with rcwa_blas_threads(blas_per_worker):
+            with _blas_threads_quiet(blas_per_worker):
                 o, R1, T1, j1 = sub.solve()
             return i, o, R1, np.asarray(T1), np.asarray(j1)
 

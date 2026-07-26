@@ -783,11 +783,22 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     """
     safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
     safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-    if abs(kz_inc) < 1e-9:
+    # TWO-SIDED + non-finite-aware (audit M3 2026-07-25): the former
+    # ``abs(kz_inc) < 1e-9`` accepted a NEGATIVE kz_inc, which is exactly what a
+    # GAIN superstrate produces (``_kz_forward`` takes its Re < 0 root), and
+    # every efficiency is then silently NEGATED (measured tot = [-0.95, -0.82]
+    # through the classical PMMStack cascade).  ``not (kz_inc > 1e-9)`` covers
+    # grazing, negative AND NaN in one comparison, for all five callers.
+    if not (kz_inc > 1e-9):
         raise ValueError(
-            "pmm: grazing/evanescent incidence (kz_inc ~ 0) -- the incident wave "
-            "carries ~no z-flux, so the R/T flux normalization is ill-defined.  "
-            "Reduce the incidence angle below grazing.")
+            f"pmm: non-propagating incidence (kz_inc = {kz_inc:.6g}; needs "
+            "> 0) -- either grazing/evanescent (kz_inc ~ 0: the incident wave "
+            "carries ~no z-flux, so the R/T flux normalization is "
+            "ill-defined), or a GAIN / non-propagating incidence medium whose "
+            "forward root flips kz_inc negative and would negate every "
+            "efficiency.  Reduce the incidence angle below grazing and use a "
+            "lossless or lossy (Im(n_superstrate) >= 0) propagating "
+            "superstrate.")
     m0 = np.where(orders == 0)[0][0]
     jones = np.zeros((2, 2), dtype=_C)
     R_eff = np.zeros((2, N))
@@ -909,11 +920,17 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
     kz_sup = _kz_forward(eps_sup, kx)
     kz_sub = _kz_forward(eps_sub, kx)
     kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
-    if abs(kz_inc) < 1e-9:
+    # TWO-SIDED + non-finite-aware (audit M3 2026-07-25) -- see the identical
+    # guard in _assemble_jones_farfield: a negative kz_inc (gain superstrate)
+    # silently negates every efficiency, and NaN slips past a one-sided test.
+    if not (kz_inc > 1e-9):
         raise ValueError(
-            "pmm: grazing/evanescent incidence (kz_inc ~ 0) -- the incident wave "
-            "carries ~no z-flux, so R/T normalization is ill-defined.  Reduce the "
-            "incidence angle below grazing.")
+            f"pmm: non-propagating incidence (kz_inc = {kz_inc:.6g}; needs "
+            "> 0) -- grazing/evanescent, or a GAIN incidence medium whose "
+            "forward root flips kz_inc negative and would negate every "
+            "efficiency.  Reduce the incidence angle below grazing and use a "
+            "lossless or lossy (Im(n_superstrate) >= 0) propagating "
+            "superstrate.")
     if polarization == "te":
         R = np.real(kz_sup / kz_inc) * np.abs(r_ord) ** 2
         T = np.real(kz_sub / kz_inc) * np.abs(t_ord) ** 2
@@ -1319,13 +1336,21 @@ def _clear_geo_eig_cache():
 
 def _cached_geo_eig(key, compute):
     """Memoize the k0-independent geometric eig ``compute()`` on ``key`` (a
-    bytes fingerprint of the geometry+angle pencil).  Bounded LRU."""
+    bytes fingerprint of the geometry+angle pencil).  Bounded LRU.
+
+    The cached arrays are handed to callers BY IDENTITY, so they are marked
+    READ-ONLY with the module's :func:`_readonly` guard (audit M9 2026-07-25 --
+    the other cache sites already do this): an accidental in-place write on a
+    returned eigenvector block would otherwise poison the cache for every
+    later solve on the same geometry (measured: ``w[0,0] += 1`` changed the
+    value the next two cache hits saw).  Callers only read / matmul these."""
     with _GEO_EIG_CACHE_LOCK:
         hit = _GEO_EIG_CACHE.get(key)
         if hit is not None:
             _GEO_EIG_CACHE.move_to_end(key)          # LRU: refresh recency
             return hit
     res = compute()
+    res = tuple(_readonly(a) if isinstance(a, np.ndarray) else a for a in res)
     with _GEO_EIG_CACHE_LOCK:
         _GEO_EIG_CACHE[key] = res
         while len(_GEO_EIG_CACHE) > _GEO_EIG_CACHE_SIZE:

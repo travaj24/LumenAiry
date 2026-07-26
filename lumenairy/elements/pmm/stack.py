@@ -17,7 +17,10 @@ import numpy as np
 # top-level import introduces no cycle.
 from ...backend import is_jax_array
 from ..rcwa import _interface_smatrix_general
-from ..rcwa._core import rcwa_blas_threads
+from ..rcwa._core import (
+    _blas_threads_quiet,
+    _require_propagating_incidence,
+)
 from ._core import (
     _C,
     _COV_MIN_SLANT_RAD,
@@ -48,19 +51,43 @@ from ._core import (
 
 
 def _warn_stack_energy(R_eff, T_eff):
-    """Warn if a solve returns non-physical gain (``R+T > 1`` per incident
-    polarization) -- the signature of a near-singular interface mode-match in the
-    Redheffer cascade (the measure-zero quasi-resonance RCWA guards with
-    ``_check_energy``; the many-interface tapered z-staircase can hit it at large
-    ``n_slices``).  A passive structure cannot reflect+transmit more than the
-    incident power regardless of loss, so this is a pure instability tripwire
-    (lossy media give ``R+T < 1`` and never trip).  A WARNING (not a raise) so it
-    never breaks an existing working solve; reduce ``n_slices`` / raise ``degree``
-    to clear it."""
+    """Energy tripwire for a stack solve -- the PMM counterpart of RCWA's
+    ``_check_energy`` (replicated, not imported: pmm does not depend on rcwa
+    internals).  Three severities, matching that model:
+
+    * NON-FINITE total -> **raise**.  A NaN/inf half-space index or
+      permittivity used to reach the far field and return ``tot = [nan, nan]``
+      completely silently (audit M3 2026-07-25): a one-sided ``>`` comparison
+      is NaN-blind, so the tripwire never fired.
+    * NEGATIVE total -> **raise**.  ``R``/``T`` are flux ratios of non-negative
+      numerators, so a negative total means the NORMALISATION is non-physical
+      (a gain / non-propagating incidence medium flipping ``kz_inc`` past the
+      entry guards -- the audit-P1 class RCWA also raises on).
+    * ``R+T > 1`` -> **warn** (unchanged).  A passive structure cannot
+      reflect+transmit more than the incident power regardless of loss, so this
+      is the pure instability signature of a near-singular interface mode-match
+      in the Redheffer cascade (the measure-zero quasi-resonance; the
+      many-interface tapered z-staircase can hit it at large ``n_slices``).
+      Kept a WARNING (not a raise) so it never breaks an existing working
+      solve; reduce ``n_slices`` / raise ``degree`` to clear it.
+    """
     R = np.asarray(R_eff)
     T = np.asarray(T_eff)
     tot = np.real(R).sum(axis=-1) + np.real(T).sum(axis=-1)
+    if tot.size and not np.all(np.isfinite(tot)):
+        raise ValueError(
+            "PMMStack.solve: non-finite total efficiency (R+T = "
+            f"{np.array2string(np.asarray(tot), precision=4)}); a NaN/inf "
+            "material index or permittivity reached the solve (check "
+            "n_substrate / n_superstrate and the layer eps values).")
     worst = float(np.max(tot)) if tot.size else 0.0
+    least = float(np.min(tot)) if tot.size else 0.0
+    if least < -1e-9:
+        raise ValueError(
+            f"PMMStack.solve: NEGATIVE total efficiency (min R+T = "
+            f"{least:.3e}); the efficiency normalisation is non-physical -- a "
+            "gain or non-propagating incidence medium slipped past the entry "
+            "guards (kz_inc < 0 negates every order).")
     if worst > 1.0 + 1e-2:
         import warnings
         warnings.warn(
@@ -201,7 +228,10 @@ class PMMStack:
     def add_layer(self, thickness, *, segments=None, eps=None, slant_angle=0.0):
         """Append a layer.  Give exactly one of ``eps`` (uniform: scalar or
         ``(3,3)`` tensor) or ``segments`` (a list of ``(width_fraction, eps)`` --
-        each ``eps`` scalar or ``(3,3)``; widths sum to 1).  ``slant_angle``
+        each ``eps`` scalar or ``(3,3)``; the widths are FRACTIONS of the period,
+        each ``> 0``, and must sum to 1 within ``1e-6`` -- ENFORCED, as in
+        :func:`pmm_jones_1d_segments`; absolute (metre-valued) widths raise).
+        ``slant_angle``
         (radians) tilts the layer's straight side-walls from the vertical (``0``
         = vertical); a slanted layer is solved by the div-conforming covariant-
         metric generator and cascaded via the general fwd/back S-matrix, so a
@@ -224,6 +254,31 @@ class PMMStack:
                 raise ValueError("PMMStack.add_layer: empty segments.")
             segs = [(float(w), e if (callable(e) or isinstance(e, str))
                      else self._as_tensor(e)) for w, e in segments]
+            # Width-FRACTION validation (audit M2 2026-07-25) -- the same check
+            # the 1-D sibling ``pmm_jones_1d_segments`` runs in
+            # ``_segment_walls`` (sum to 1 within 1e-6, every width > 0),
+            # replicated here because ``_pmm_union_grid`` normalises with
+            # ``cw[-1] = 1.0`` and therefore SILENTLY CLIPS a bad list: widths
+            # summing to 1.4 solved bit-identically to the clipped structure,
+            # and METRE-valued widths (the common misuse -- absolute widths
+            # instead of fractions) solved as a physically unrelated,
+            # energy-clean near-uniform slab.  Energy conservation provably
+            # cannot detect either, so the input must be rejected here.
+            _w = np.asarray([w for w, _e in segs], dtype=float)
+            if not np.all(np.isfinite(_w)) or np.any(_w <= 0.0):
+                raise ValueError(
+                    "PMMStack.add_layer: every segment width FRACTION must be "
+                    f"finite and > 0 (got {list(_w)}).")
+            _s = float(_w.sum())
+            if abs(_s - 1.0) > 1e-6:
+                raise ValueError(
+                    "PMMStack.add_layer: segment width FRACTIONS must sum to 1 "
+                    f"(got {_s:.6g}).  They are fractions of the period, NOT "
+                    "absolute widths -- a metre-valued list such as "
+                    "[(0.25e-6, eps), ...] on a 0.5e-6 period must be written "
+                    "[(0.5, eps), ...].  (Unvalidated widths were silently "
+                    "CLIPPED to sum 1 and solved as a different structure that "
+                    "still conserved energy.)")
         # Thickness validation (audit P3-30) -- mirror PMM2DStack.add_layer:
         # finite and > 0.  A CONCRETE JAX thickness is checked; a TRACED one
         # (under jit/grad) has no value to range-check and skips the guard.
@@ -928,6 +983,17 @@ class PMMStack:
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(self.n_sup)) * np.sin(angle) * k0
         eps_sup, eps_sub = self.n_sup ** 2, self.n_sub ** 2
+        # Suite-standard incidence guard (audit M3 2026-07-25): the CLASSICAL
+        # (phi = 0) cascade was the one PMM solve path without it -- a gain
+        # superstrate (public Im(n_sup) < 0, even -1e-9j) flips _kz_forward to
+        # its Re < 0 root, so kz_inc < 0 SILENTLY negated every efficiency
+        # (measured tot = [-0.95, -0.82] with no warning), and a metallic /
+        # evanescent incidence medium returned tot ~ 55.  The conical dispatch
+        # already guards here (its own call below); this covers the covariant,
+        # convection and all-vertical branches from one place.  ``eps_sup`` is
+        # PUBLIC here -> conj to the internal loss gauge the guard expects.
+        _require_propagating_incidence("PMMStack.solve", np.conj(_C(eps_sup)),
+                                       (kx0 / k0) ** 2)
 
         # ---- factorization dispatch: covariant (SPECTRAL slant) vs convection --
         # 'auto' uses the covariant oblique-coordinate generator (spectral TM)
@@ -1891,7 +1957,13 @@ class PMMStack:
                 n_sup_w, n_sub_w, msup, msub = n_sup0, n_sub0, mats_sup, mats_sub
             eps_sup, eps_sub = n_sup_w ** 2, n_sub_w ** 2
             kx0 = float(np.real(n_sup_w)) * np.sin(angle) * k0
-            with rcwa_blas_threads(blas_per_worker):
+            # Same guard as PMMStack.solve (audit M3): a DISPERSIVE half-space
+            # can turn gain / non-propagating at one wavelength only, so it is
+            # checked per point (eps_sup is PUBLIC here -> conj).
+            _require_propagating_incidence(
+                "PMMStack.solve_vs_wavelength", np.conj(_C(eps_sup)),
+                (kx0 / k0) ** 2)
+            with _blas_threads_quiet(blas_per_worker):
                 _geo = _uniform_geo_eig(msup, k0, kx0)
                 Wsup, Vsup, _l, _g = _sem_modes_uniform(msup, k0, kx0,
                                                         eps_sup, _geo)
@@ -2230,6 +2302,10 @@ class _PreparedPMMStack:
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(st.n_sup)) * np.sin(angle) * k0
         eps_sup, eps_sub = st.n_sup ** 2, st.n_sub ** 2
+        # Same guard as PMMStack.solve (audit M3 -- the prepared path is a
+        # third classical cascade entry; eps_sup is PUBLIC here -> conj).
+        _require_propagating_incidence("PMMStack.prepare().solve",
+                                       np.conj(_C(eps_sup)), (kx0 / k0) ** 2)
         nU = len(self._uwidths)
         rk = (wl, angle)
         with self._cache_lock:

@@ -20,7 +20,6 @@ from ._core import (
     _check_energy,
     _concrete,
     _EnergyError,
-    _EnergyWarning,
     _forward_flux_kz,
     _grazing_safe_wavelength,
     _homogeneous_eigenmodes,
@@ -40,6 +39,7 @@ from ._core import (
     _require_propagating_incidence,
     _sqrt_forward,
     _stabilize_bumps,
+    _stabilize_closure_failure,
     _symmetric_cascade_rt,
     _symmetric_solve_rt,
     _symmetry_on,
@@ -492,9 +492,12 @@ def _nv_curved_wall_fraction(eps_cell):
     the two gradients are co-significant over an extended fraction of the
     boundary.  ``max|Nx*Ny|`` on the *smoothed* normal-vector field cannot tell
     the two apart (both saturate at 0.5 -- a square's smoothed corners look as
-    diagonal as a disk's wall), so the gate uses this raw co-gradient fraction
-    instead: ~0.0-0.03 for squares / stripes / axis-aligned unions, ~0.17+ for
-    disks / ellipses."""
+    diagonal as a disk's wall), so CURVATURE is discriminated by this raw
+    co-gradient fraction: ~0.0-0.03 for squares / stripes / axis-aligned unions,
+    ~0.17+ for disks / ellipses.  ``max|Nx*Ny|`` is used SEPARATELY, as the
+    CORNER discriminator (see :func:`_nv_nonseparable_guard`) -- that is the
+    quantity the ``Cxy`` cross term actually keys on, and it is 0.000 on a
+    stripe but 0.500 on ANY cornered feature, curved or not."""
     e = np.abs(np.asarray(eps_cell)).astype(float)
     rng = float(e.max() - e.min())
     if rng < 1e-12:                        # uniform cell -> no walls
@@ -508,29 +511,88 @@ def _nv_curved_wall_fraction(eps_cell):
     return float((bx & by).sum()) / nb if nb else 0.0
 
 
+def _nv_metallic_cell(eps_cell):
+    """True when the unit cell carries METALLIC / absorbing material -- any
+    ``Re(eps) < 0`` or a materially non-zero ``Im(eps)``.  Convention-agnostic
+    (``|Im|``), so it holds in both the public ``exp(-iwt)`` and the internal
+    ``exp(+iwt)`` gauges."""
+    e = to_numpy(eps_cell)
+    scale = max(1.0, float(np.max(np.abs(e))))
+    return (float(np.max(np.abs(np.imag(e)))) > 1e-6 * scale
+            or float(np.min(np.real(e))) < 0.0)
+
+
+# fff_nv validated-scope thresholds.  ``_NV_CURVED_FRAC_MAX`` gates CURVATURE
+# (disks/ellipses, any material); ``_NV_NORMAL_PRODUCT_MAX`` gates CORNERS on a
+# METALLIC cell.  Measured discriminator (audit M4 2026-07-25): max|Nx*Ny| is
+# 0.000 on the validated stripe and 0.500 on a square / disk, so any threshold
+# in between separates them with a wide margin.
+_NV_CURVED_FRAC_MAX = 0.06
+_NV_NORMAL_PRODUCT_MAX = 0.05
+
+
 def _nv_nonseparable_guard(fn_name, eps_cell, allow_nonseparable_nv):
-    """fff_nv non-separability gate (AUDIT P1-A 2026-06-07 -> hardened to RAISE in
-    P1-B 2026-06-09).  ``fff_nv``'s cross-term factorization is validated for
-    axis-aligned features (squares, stripes, rectangular unions -- where it beats
-    2-D li/laurent on metal stripes) but MIS-SPLITS absorptance by ~50% on CURVED
-    / non-axis-aligned walls -- a lossless-trap failure (total ``R+T+A`` still
-    closes, but the channel split, hence the per-order R/T and the absorptance,
-    is wrong).
+    """fff_nv validated-scope gate (AUDIT P1-A 2026-06-07 -> hardened to RAISE in
+    P1-B 2026-06-09 -> corner discriminator added in audit M4 2026-07-25).
+    ``fff_nv``'s off-diagonal cross term ``Cxy = -Delta @ [[Nx Ny]]`` is driven by
+    ``max|Nx*Ny|``, which is 0 only for a STRIPE (x- or y-invariant cell) and
+    ~0.5 for ANY cornered feature -- square, rectangular union or disk alike.
+    Two independent failure modes are gated:
+
+    * CURVED / non-axis-aligned walls (disks, ellipses; ``frac`` above
+      ``_NV_CURVED_FRAC_MAX``) MIS-SPLIT absorptance by ~50% -- a lossless-trap
+      failure (total ``R+T+A`` still closes, but the channel split, hence the
+      per-order R/T and the absorptance, is wrong).
+    * CORNERED features on a METALLIC cell (``max|Nx*Ny|`` above
+      ``_NV_NORMAL_PRODUCT_MAX``) are UNSTABLE, not merely mis-split.  Measured
+      on an axis-aligned Ag square pillar (audit M4): ``R+T = 2.135`` at
+      ``n_orders=3`` and hard energy failures at 3 of 5 truncations, with the
+      surviving points wandering ``A = 0.080-0.113`` against a converged ``'li'``
+      value of ``0.079`` -- while ``'li'``/``'laurent'`` stay energy-clean at
+      every truncation on the same cell.  The old curvature-only gate ADMITTED
+      that square (``frac = 0.004``).  LOSSLESS dielectric cornered cells are
+      NOT gated: there the closure holds to ~1e-15 and fff_nv tracks ``'li'``
+      (the validated no-bias case), and a lossless cell has no absorptance to
+      mis-split.
 
     By DEFAULT this **raises** so a wrong number can never silently propagate
-    (``'li'``/``'laurent'`` are rigorous for that geometry -- use them).  The
+    (``'li'``/``'laurent'`` are rigorous for these geometries -- use them).  The
     reflection channel happens to still track on curved walls, so an expert who
     needs only R can pass ``allow_nonseparable_nv=True`` to DOWNGRADE to a warning
     and accept the (possibly wrong) absorptance split."""
     frac = _nv_curved_wall_fraction(eps_cell)
-    if frac <= 0.06:                       # axis-aligned -> fff_nv is validated
+    # A UNIFORM cell has no walls, so there is no cross term to mis-factorize
+    # (and its normal-vector field is undefined) -- nothing to gate, and the
+    # N-field must not be built here.
+    _e = to_numpy(eps_cell)
+    if float(np.max(np.abs(_e - _e.flat[0]))) < 1e-12 * max(
+            1.0, float(np.max(np.abs(_e)))):
         return
-    msg = (f"{fn_name}(formulation='fff_nv'): NON-SEPARABLE geometry (curved / "
-           f"non-axis-aligned walls; {frac:.0%} of the boundary runs diagonal to "
-           f"the axes).  fff_nv's cross-term factorization is NOT validated there "
-           f"-- it mis-splits absorptance by ~50% (total R+T+A still closes, so "
-           f"the error is silent).  Use formulation='li' or 'laurent' for curved "
-           f"/ non-separable patterns (both are rigorous there)")
+    # period_x/period_y are UNUSED by the smoothed-gradient N-field (its
+    # frequencies are per-pixel), so unit placeholders serve here.
+    Nx, Ny = _nv_field_2d(eps_cell, 1.0, 1.0)
+    nxny = float(np.abs(Nx * Ny).max())
+    curved = frac > _NV_CURVED_FRAC_MAX
+    metal_corner = (nxny > _NV_NORMAL_PRODUCT_MAX
+                    and _nv_metallic_cell(eps_cell))
+    if not (curved or metal_corner):       # inside the validated scope
+        return
+    if curved:
+        why = (f"curved / non-axis-aligned walls; {frac:.0%} of the boundary "
+               f"runs diagonal to the axes, max|Nx*Ny| = {nxny:.3f}).  "
+               f"fff_nv's cross-term factorization is NOT validated there -- it "
+               f"mis-splits absorptance by ~50% (total R+T+A still closes, so "
+               f"the error is silent")
+    else:
+        why = (f"CORNERED features on a METALLIC cell; max|Nx*Ny| = "
+               f"{nxny:.3f}, which is 0 only for a stripe).  fff_nv's "
+               f"cross-term factorization is NOT validated there -- it is "
+               f"UNSTABLE (measured R+T up to 2.1 and hard energy failures at "
+               f"most truncations on an axis-aligned metal square), not merely "
+               f"mis-split")
+    msg = (f"{fn_name}(formulation='fff_nv'): NON-SEPARABLE geometry ({why}).  "
+           f"Use formulation='li' or 'laurent' for curved / metallic-cornered "
+           f"patterns (both are rigorous there)")
     if allow_nonseparable_nv:
         warnings.warn(
             msg + ".  [allow_nonseparable_nv=True -> proceeding with a WARNING; "
@@ -636,31 +698,53 @@ def rcwa_efficiency_2d(
           rule (``EZZ = [[eps]]``, matching the analytic-shape solver) since
           audit F1 (v5.14.1): the pre-v5.14.1 dual-Laurent ``[[1/eps]]`` z-rule
           violated Li's rule 3 and biased the absorptance by ~+0.35.  This is the
-          convergence-accelerating factorization for **SEPARABLE / axis-aligned
-          2-D metallic gratings**: there it reaches a target accuracy in fewer
+          convergence-accelerating factorization for **SEPARABLE (STRIPE) 2-D
+          metallic gratings**: there it reaches a target accuracy in fewer
           orders than ``'li'`` and matches the rigorous 1-D-Li oracle (absorptance
           to ~6e-5 on a metal stripe).  ``N`` is built automatically from a
           Gaussian-smoothed gradient of the material indicator.
 
-          VALIDATION SCOPE (corrected, 2026-06-07 audit): the diagonal
-          normal/tangential projection (the dominant win) is validated for
-          AXIS-ALIGNED / SEPARABLE features -- it matches the analytic-shape
-          reference on a clean dielectric to ~1e-3 and genuinely beats 2-D
-          ``'li'`` / ``'laurent'`` on a metal stripe.  The off-diagonal cross term
-          ``Cxy = -Delta @ [[Nx Ny]]`` (nonzero only on CURVED boundaries --
-          disks/ellipses) is **NOT validated**: on a lossy metal disk it
-          **mis-splits the absorptance by ~50%** -- a lossless-trap failure
-          (``R+T+A`` still closes, but the per-channel split is wrong; converged
-          oracles give ``A ~ 0.094-0.096``, ``fff_nv`` gives ``A ~ 0.046-0.077``).
-          A non-separable geometry now **raises** ``ValueError`` (audit P1-B) so a
-          wrong absorptance can't propagate silently; **use** ``'li'`` **or**
-          ``'laurent'`` **for curved / non-separable walls** (both rigorous
-          there).  The reflection channel still tracks on curved walls, so an
-          expert who needs only R may pass ``allow_nonseparable_nv=True`` to
-          DOWNGRADE the raise to a warning and accept the (possibly wrong)
-          absorptance split.  ``'fff_nv'`` is NumPy / CuPy only and is
-          incompatible with the ``symmetry`` even-parity fast path (transparently
-          skipped).
+          VALIDATION SCOPE (corrected 2026-06-07; NARROWED for metals in audit
+          M4 2026-07-25): the off-diagonal cross term
+          ``Cxy = -Delta @ [[Nx Ny]]`` is driven by ``max|Nx Ny|``, which
+          vanishes ONLY on a STRIPE (an x- or y-invariant cell) and is ~0.5 on
+          ANY cornered feature -- square, rectangular union or disk alike.  So
+          the validated scope is:
+
+          * LOSSLESS / dielectric cells with axis-aligned features (squares,
+            rectangular unions): validated -- closure holds to ~1e-15 and
+            ``fff_nv`` tracks the sequential-rule ``'li'`` limit.
+          * METALLIC cells: validated on STRIPES only, where it matches the
+            rigorous 1-D-Li oracle (absorptance to ~6e-5) and genuinely beats
+            2-D ``'li'``/``'laurent'``.  A metallic CORNERED cell is **not
+            validated and is unstable**: on an axis-aligned Ag square pillar
+            ``R+T`` reached ``2.135`` and 3 of 5 truncations failed the energy
+            guard outright, while the surviving points wandered
+            ``A = 0.080-0.113`` against a converged ``'li'`` value of ``0.079``
+            (``'li'``/``'laurent'`` stay energy-clean on the same cell).
+          * CURVED walls (disks/ellipses), any material: **not validated** --
+            **mis-splits the absorptance by ~50%**, a lossless-trap failure
+            (``R+T+A`` still closes, but the per-channel split is wrong;
+            converged oracles give ``A ~ 0.094-0.096``, ``fff_nv`` gives
+            ``A ~ 0.046-0.077``).
+
+          Out-of-scope geometry **raises** ``ValueError`` (audit P1-B) so a
+          wrong number can't propagate silently; **use** ``'li'`` **or**
+          ``'laurent'`` **there** (both rigorous).  The reflection channel
+          still tracks on curved walls, so an expert who needs only R may pass
+          ``allow_nonseparable_nv=True`` to DOWNGRADE the raise to a warning
+          and accept the (possibly wrong) absorptance split.
+
+          INHERENT CLOSURE ERROR (audit M5 2026-07-25): the ``fff_nv`` in-plane
+          operator is NON-Hermitian, so there is no finite-truncation energy
+          theorem behind it -- a LOSSLESS ``fff_nv`` cell violates ``R+T = 1``
+          by ~1e-2..6e-2 at oblique/conical incidence at EVERY truncation, and
+          the resulting ``_EnergyWarning`` is a property of the formulation,
+          not an instability signal.  ``stabilize=True`` therefore does NOT
+          treat it as a failed rung for ``'fff_nv'`` (see ``stabilize``).
+
+          ``'fff_nv'`` is NumPy / CuPy only and is incompatible with the
+          ``symmetry`` even-parity fast path (transparently skipped).
 
         (``'fff'`` is accepted as an alias of ``'li'``.)
     truncation : {'rectangular', 'circular'}, optional
@@ -679,6 +763,18 @@ def rcwa_efficiency_2d(
         energy-conserving solve (its order count may then differ from the
         request).  Default ``False`` raises (bit-for-bit backward compatible).
         NumPy / CuPy only.
+
+        A LOSSLESS-closure ``_EnergyWarning`` normally counts as a failed rung
+        too (the audited silent window where the per-order answers are wrong),
+        EXCEPT for ``formulation='fff_nv'``: its closure error is inherent to
+        the non-Hermitian normal-vector operator and fires on every truncation,
+        so counting it burned the whole ladder and ``fff_nv`` + ``stabilize=True``
+        ALWAYS hard-raised on a lossless cell -- measured on the most accurate
+        of the three formulations, after 7 full solves, with the tripwire's own
+        advice being "pass stabilize=True" (audit M5 2026-07-25).  For
+        ``'fff_nv'`` the closure warning is re-emitted to the caller instead,
+        and only a HARD energy failure (``R+T`` beyond the 5% tripwire) advances
+        the ladder.
     symmetry : {'auto', True, False}, optional
         When enabled AND the cell is centro-symmetric AND incidence is normal
         (``theta == 0``), run the WHOLE single-layer solve in the even-parity
@@ -736,13 +832,9 @@ def rcwa_efficiency_2d(
                 continue
             # A lossless-closure _EnergyWarning marks the silent window where
             # the per-order answers are wrong (audit P1) -> failed attempt.
-            closure = None
-            for w in wlist:
-                if issubclass(w.category, _EnergyWarning):
-                    closure = closure or w
-                else:
-                    warnings.warn_explicit(w.message, w.category, w.filename,
-                                           w.lineno)
+            # EXCEPT for fff_nv, whose closure error is inherent to its
+            # non-Hermitian operator and fires on every rung (audit M5).
+            closure = _stabilize_closure_failure(wlist, formulation)
             if closure is not None:
                 last = _EnergyError(str(closure.message))
                 continue
@@ -1861,6 +1953,9 @@ __all__ = [
     "_eps_convolution_2d",
     "_nv_field_2d",
     "_nv_convolutions_2d",
+    "_nv_curved_wall_fraction",
+    "_nv_metallic_cell",
+    "_nv_nonseparable_guard",
     "rcwa_efficiency_2d",
     "PreparedRCWA2D",
     "prepare_rcwa_2d",

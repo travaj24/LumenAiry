@@ -48,6 +48,41 @@ def _get_blas_threads() -> Optional[int]:
     return getattr(_BLAS_STATE, "n", None)
 
 
+# ``threadpoolctl`` is an OPTIONAL dependency and is NOT bundled with numpy
+# (audit M6 2026-07-25 -- two in-code comments claimed otherwise).  Without it
+# the cap cannot be applied at all, so a requested cap is inert; warn once
+# rather than let the caller believe a reported cap is in force.
+_BLAS_WARNED_UNCONTROLLABLE = False
+
+
+def _threadpoolctl_available() -> bool:
+    """True when ``threadpoolctl`` is importable -- i.e. when a requested BLAS
+    cap can actually be APPLIED (via ``ThreadpoolController`` or the legacy
+    ``threadpool_limits``)."""
+    try:
+        import threadpoolctl  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _warn_blas_uncontrollable() -> None:
+    """Warn ONCE per process when a BLAS cap is requested with no controller
+    installed, so the cap is silently inert (audit M6 2026-07-25)."""
+    global _BLAS_WARNED_UNCONTROLLABLE
+    if _BLAS_WARNED_UNCONTROLLABLE or _threadpoolctl_available():
+        return
+    _BLAS_WARNED_UNCONTROLLABLE = True
+    warnings.warn(
+        "rcwa: set_blas_threads(...) / rcwa_blas_threads(...) needs the "
+        "optional `threadpoolctl` package, which is not installed -- the "
+        "requested BLAS-thread cap is INERT (the solve runs at the "
+        "environment's default threading even though _get_blas_threads() "
+        "reports the requested value).  Install threadpoolctl to make the cap "
+        "effective, or set OMP_NUM_THREADS / OPENBLAS_NUM_THREADS / "
+        "MKL_NUM_THREADS in the environment instead.", stacklevel=3)
+
+
 
 def set_blas_threads(n: Optional[int]) -> None:
     """Cap the BLAS thread pool used by subsequent NumPy/CuPy RCWA solves on
@@ -61,18 +96,42 @@ def set_blas_threads(n: Optional[int]) -> None:
     (XLA manages its own threads).  The setting is thread-local, so concurrent
     solves with different caps don't interfere.  For a scoped cap use
     :func:`rcwa_blas_threads`.
+
+    REQUIRES ``threadpoolctl``.  Without it the cap cannot be applied and this
+    call is INERT -- it then warns ONCE per process (audit M6 2026-07-25: the
+    cap was silently ignored while :func:`_get_blas_threads` kept reporting it,
+    so a caller measuring "no speed-up" had no way to see why).
     """
     _BLAS_STATE.n = None if n is None else max(1, int(n))
+    if _BLAS_STATE.n is not None:
+        _warn_blas_uncontrollable()
 
 
 
 @contextlib.contextmanager
 def rcwa_blas_threads(n: Optional[int]):
     """Context manager that caps the BLAS pool for RCWA solves within the
-    ``with`` block on the current thread (see :func:`set_blas_threads`);
-    restores the prior setting on exit."""
+    ``with`` block on the current thread (see :func:`set_blas_threads`, whose
+    ``threadpoolctl`` requirement and once-per-process inert-cap warning this
+    shares); restores the prior setting on exit."""
     prev = _get_blas_threads()
     set_blas_threads(n)
+    try:
+        yield
+    finally:
+        _BLAS_STATE.n = prev
+
+
+
+@contextlib.contextmanager
+def _blas_threads_quiet(n: Optional[int]):
+    """:func:`rcwa_blas_threads` without the inert-cap warning -- for the
+    LIBRARY's own per-worker caps inside threaded sweeps (audit M6): the user
+    did not request those, so surfacing "your cap is inert" there would turn a
+    diagnostic into noise on an ordinary sweep.  The public setters keep the
+    warning."""
+    prev = _get_blas_threads()
+    _BLAS_STATE.n = None if n is None else max(1, int(n))
     try:
         yield
     finally:
@@ -107,7 +166,7 @@ def _get_blas_controller():
         if _BLAS_CONTROLLER is None and not _BLAS_CONTROLLER_UNAVAILABLE:
             try:
                 from threadpoolctl import ThreadpoolController
-            except ImportError:  # pragma: no cover - threadpoolctl ships with numpy
+            except ImportError:  # pragma: no cover - env-dependent optional dep
                 _BLAS_CONTROLLER_UNAVAILABLE = True
                 return None
             _BLAS_CONTROLLER = ThreadpoolController()
@@ -126,10 +185,11 @@ def _blas_limit():
         return controller.limit(limits=n, user_api="blas")
     # threadpoolctl too old to expose ThreadpoolController: preserve the
     # legacy per-call path (re-enumerates, but keeps the cap) so the opt-in
-    # behaviour is unchanged; a no-op if threadpoolctl is missing entirely.
+    # behaviour is unchanged.  If threadpoolctl is missing ENTIRELY the cap is
+    # inert -- set_blas_threads() has already warned once (audit M6).
     try:
         from threadpoolctl import threadpool_limits
-    except ImportError:  # pragma: no cover - threadpoolctl ships with numpy
+    except ImportError:  # pragma: no cover - env-dependent optional dep
         return contextlib.nullcontext()
     return threadpool_limits(limits=n, user_api="blas")
 
@@ -353,6 +413,46 @@ def _check_energy(fn_name, R, T, lossless=False):
             f"the PER-ORDER efficiencies are suspect.  Pass stabilize=True "
             f"(retries nearby truncations) or change n_orders."),
             stacklevel=3)
+
+
+
+def _stabilize_closure_failure(wlist, formulation=None):
+    """Triage one ``stabilize=`` ladder rung's recorded warnings.
+
+    Re-emits the warnings the caller should still see and returns the
+    lossless-closure :class:`_EnergyWarning` that marks this rung a FAILED
+    attempt (so the ladder moves to the next truncation), or ``None`` when the
+    rung stands.  Extracted from the two identical inline loops in
+    :func:`rcwa_efficiency_1d` / :func:`rcwa_efficiency_2d` so the accounting
+    policy lives in one place.
+
+    Normally a lossless-closure violation means the per-order answers are wrong
+    (audit P1: the silent ``1e-6..0.05`` window), so returning the rung would
+    hand back a byte-identical wrong answer.
+
+    ``formulation='fff_nv'`` is EXEMPT (audit M5 2026-07-25).  Its in-plane
+    normal-vector operator is NON-Hermitian, so no finite-truncation energy
+    theorem backs it: a lossless ``fff_nv`` cell violates the closure by
+    ~1e-2..6e-2 at EVERY truncation (measured +1.9e-2 / +2.8e-2 / -5.9e-2
+    across truncations and grids on a lossless dielectric pillar at conical
+    incidence, while ``'li'`` held 1e-15 on the same cells).  Counting that
+    inherent property as a failure burned the entire ladder, so ``fff_nv`` +
+    ``stabilize=True`` ALWAYS hard-raised on a lossless cell -- on the most
+    accurate of the three formulations, after a full ladder of solves, and with
+    the tripwire's own printed advice being "Pass stabilize=True".  The warning
+    is re-emitted instead, so the caller still sees it; only a HARD
+    :class:`_EnergyError` (the 5% tripwire) advances the ladder for ``fff_nv``.
+    ``'laurent'``/``'li'`` are UNCHANGED -- for them the closure IS a valid
+    instability signal.
+    """
+    exempt = (formulation == "fff_nv")
+    closure = None
+    for w in wlist:
+        if issubclass(w.category, _EnergyWarning) and not exempt:
+            closure = closure or w
+        else:
+            warnings.warn_explicit(w.message, w.category, w.filename, w.lineno)
+    return closure
 
 
 
@@ -2451,9 +2551,11 @@ __all__ = [
     "_get_blas_threads",
     "set_blas_threads",
     "rcwa_blas_threads",
+    "_blas_threads_quiet",
     "_blas_limit",
     "_with_blas_limit",
     "_stabilize_bumps",
+    "_stabilize_closure_failure",
     "_eig_for",
     "_block",
     "_rcwa_xp",

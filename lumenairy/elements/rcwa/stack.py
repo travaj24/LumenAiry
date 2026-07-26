@@ -17,6 +17,7 @@ from ...backend import (
 )
 from ._core import (
     _C,
+    _blas_threads_quiet,
     _cached_homogeneous_eigenmodes,
     _cell_lossless,
     _check_energy,
@@ -52,7 +53,6 @@ from ._core import (
     _validate_geometry,
     _validate_shapes,
     _with_blas_limit,
-    rcwa_blas_threads,
 )
 from .oned import (
     _resolve_incidence,
@@ -1627,7 +1627,7 @@ class RCWAStack:
             sub._source = dict(base_src, wavelength=w)
             try:
                 # the BLAS cap is THREAD-LOCAL, so each worker sets its own.
-                with rcwa_blas_threads(blas_per_worker):
+                with _blas_threads_quiet(blas_per_worker):
                     return i, sub.solve(stabilize=stabilize)
             except _EnergyError:
                 return i, None

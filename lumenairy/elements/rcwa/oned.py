@@ -21,7 +21,6 @@ from ._core import (
     _concrete,
     _eig_for,
     _EnergyError,
-    _EnergyWarning,
     _forward_flux_kz,
     _fourier_coeffs_1d,
     _grazing_safe_wavelength,
@@ -45,6 +44,7 @@ from ._core import (
     _sqrt_decay,
     _sqrt_forward,
     _stabilize_bumps,
+    _stabilize_closure_failure,
     _tensor_convolutions,
     _tensor_convolutions_full,
     _tensor_offplane_or_traced,
@@ -414,13 +414,10 @@ def rcwa_efficiency_1d(
             # means the per-order answers are wrong (audit P1: the silent
             # 1e-6..0.05 window) -> treat as a failed attempt and keep
             # laddering instead of returning the byte-identical wrong answer.
-            closure = None
-            for w in wlist:
-                if issubclass(w.category, _EnergyWarning):
-                    closure = closure or w
-                else:
-                    warnings.warn_explicit(w.message, w.category, w.filename,
-                                           w.lineno)
+            # (Shared with the 2-D ladder; ``formulation`` is only ever
+            # 'auto'/'laurent'/'li' here -- 1-D has no fff_nv -- so the audit-M5
+            # exemption never applies on this path.)
+            closure = _stabilize_closure_failure(wlist, formulation)
             if closure is not None:
                 last = _EnergyError(str(closure.message))
                 continue
