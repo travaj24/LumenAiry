@@ -52,6 +52,58 @@ its Snell / reflection step routes through the shared core here.
 from __future__ import annotations
 
 
+def check_even_aspheric_powers(powers, *, fn_label):
+    """Reject ODD (and non-integral) aspheric power keys.
+
+    R-8 / E-L7 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): only EVEN
+    aspheric powers are representable by this module's sag/normal pair.
+    The sag evaluates ``coeff * h_sq ** (power // 2)`` (== ``h ** power``
+    for even ``power``), while the NumPy normal uses
+    ``power * h ** (power - 1)`` and the JAX normal
+    ``coeff * power * h_sq ** ((power - 2) // 2) * x``.  For an ODD
+    ``power`` the ``//`` floors silently, so the surface evaluates as the
+    NEXT-LOWER EVEN power in the sag and is sag/normal-INCONSISTENT --
+    differently per backend.  Measured at ``{5: 1e6}``, h = 10 mm, flat
+    base: sag 0.01 m (i.e. h**4, the floored even power) with
+    dz/dx = 0.05 (NumPy) vs 5.0 (JAX) against the sag-consistent 4.0 --
+    a 100x cross-backend divergence and a silently wrong trace.
+
+    ``validate_prescription`` has always rejected this at the
+    prescription level; this is the SHARED entry-point guard so the
+    ``Surface`` dataclass and the JAX prescription path (which never
+    builds a ``Surface``) reject it too, with the same message.
+
+    Parameters
+    ----------
+    powers : iterable
+        Aspheric power keys (``dict`` keys or the ``power`` half of the
+        ``(power, coeff)`` pairs).
+    fn_label : str
+        Prefix naming the rejecting site, for the error message.
+
+    Raises
+    ------
+    ValueError
+        If any power is not an even integer.
+    """
+    odd = []
+    for p in powers:
+        try:
+            ip = int(p)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f'{fn_label}: non-integer aspheric power key {p!r}; only '
+                f'EVEN integer powers are supported.') from None
+        if ip != p or ip % 2 != 0:
+            odd.append(p)
+    if odd:
+        raise ValueError(
+            f'{fn_label}: contains ODD aspheric power(s) '
+            f'{sorted(odd, key=float)}; only EVEN powers are supported '
+            f'(sag uses h**(p//2) while the normal uses p*h**(p-1), so an '
+            f'odd power is sag/normal-inconsistent).')
+
+
 def _identity(a):
     """Default ``val`` op: arrays already support the ``>`` / ``<``
     comparisons the Snell law needs; only the ADRT dual overrides this
@@ -208,6 +260,11 @@ def conic_sag(x, y, R, conic, asph_items, *, xp):
     # (With aspheric terms the ``h_sq ** p`` below already propagated it;
     # without them the clamp hid it entirely.)
     sag = xp.where(xp.isfinite(h_sq), sag, h_sq)
+    if asph_items:
+        # R-8: an ODD power would silently floor to the next-lower EVEN
+        # one here and disagree with :func:`conic_sag_derivs`.
+        check_even_aspheric_powers((p for p, _ in asph_items),
+                                   fn_label='conic_sag')
     for power, coeff in asph_items:
         sag = sag + coeff * h_sq ** (power // 2)
     return sag
@@ -242,6 +299,11 @@ def conic_sag_derivs(x, y, R, conic, asph_items, *, xp):
     # position.  Bit-identical for every finite input.
     zx = xp.where(xp.isfinite(x), zx, x)
     zy = xp.where(xp.isfinite(y), zy, y)
+    if asph_items:
+        # R-8: keep the derivative's ODD-power rejection identical to the
+        # sag twin's, so the two can never disagree about a surface.
+        check_even_aspheric_powers((p for p, _ in asph_items),
+                                   fn_label='conic_sag_derivs')
     for power, coeff in asph_items:
         if power == 2:
             zx = zx + 2.0 * coeff * x
@@ -253,4 +315,5 @@ def conic_sag_derivs(x, y, R, conic, asph_items, *, xp):
     return zx, zy
 
 
-__all__ = ['refract_snell', 'reflect_mirror', 'conic_sag', 'conic_sag_derivs']
+__all__ = ['refract_snell', 'reflect_mirror', 'conic_sag', 'conic_sag_derivs',
+           'check_even_aspheric_powers']

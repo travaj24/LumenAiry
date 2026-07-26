@@ -431,6 +431,19 @@ class MatchIdealSystemMerit(MeritTerm):
           (e.g. matching a target irradiance profile).
         * ``'intensity_overlap'``: correlation of ``|E|^2`` patterns,
           phase-blind.
+
+        .. note::
+           R-17 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the DEFAULT
+           ``'field_overlap'`` is the only value exercised anywhere in
+           the repo.  The other three kernels
+           (:meth:`_field_mse_penalty`,
+           :meth:`_intensity_mse_penalty`,
+           :meth:`_intensity_overlap_penalty`) have ZERO callers and are
+           therefore not covered by CI.  They are NOT deprecated -- the
+           metric choice is a legitimate documented feature, unlike the
+           ``use_traced_lens`` / ``focus_search`` booleans -- but
+           validate their numbers on a known case before optimising
+           against them.
     aperture_mask : ndarray or None
         Optional boolean / real mask applied to BOTH output fields
         before the comparison.  Use it to restrict the match to a
@@ -440,8 +453,16 @@ class MatchIdealSystemMerit(MeritTerm):
         If True, propagate the real prescription via
         ``apply_real_lens_traced`` (sub-nm OPD agreement with the
         ray trace, 10-30x slower) rather than ``apply_real_lens``.
+
+        .. deprecated:: 5.30
+           DEPRECATED (removal v5.32).  R-17
+           (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25) grep-verified ZERO
+           callers repo-wide, so this branch has never been exercised
+           by CI.  Passing ``True`` emits a
+           :class:`DeprecationWarning`; the branch still runs.
     ray_subsample : int, default 4
-        Passed to ``apply_real_lens_traced`` when used.
+        Passed to ``apply_real_lens_traced`` when used (i.e. only on
+        the deprecated ``use_traced_lens=True`` path).
     focus_search : bool, default False
         If True, scan a small range of axial offsets on the real
         system's output plane and report the BEST (lowest-penalty)
@@ -450,12 +471,22 @@ class MatchIdealSystemMerit(MeritTerm):
         doesn't dominate the penalty.  Not valid for
         ``match='intensity_mse'`` (no unique optimum under
         translation); enable it with any of the other three metrics.
+
+        .. deprecated:: 5.30
+           DEPRECATED (removal v5.32).  R-17
+           (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25) grep-verified ZERO
+           callers repo-wide, so ``_focus_search_penalty`` (and the
+           ``focus_search_range`` / ``focus_search_n`` knobs that only
+           feed it) have never been exercised by CI.  Passing ``True``
+           emits a :class:`DeprecationWarning`; the scan still runs.
     focus_search_range : tuple (z_lo, z_hi) or None
         Axial-offset bracket for the focus search, relative to the
         nominal output plane [m].  Default (None): +/- f/20 computed
         from ``ctx.bfl`` or ``ctx.efl``, falling back to +/- 5 mm.
+        Only read on the deprecated ``focus_search=True`` path.
     focus_search_n : int, default 9
-        Number of samples in the z-offset scan.
+        Number of samples in the z-offset scan.  Only read on the
+        deprecated ``focus_search=True`` path.
     wavelengths : list of float, optional
         If given, evaluate the merit at each wavelength and average
         the results.  Drives the glass-index dispersion through
@@ -538,6 +569,28 @@ class MatchIdealSystemMerit(MeritTerm):
                 f"('field_overlap', 'field_mse', 'intensity_overlap'); "
                 f"got {self.match!r}.  intensity_mse doesn't have a "
                 f"unique optimum under axial translation.")
+        # R-17 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): both flags are
+        # documented public knobs with live branches and ZERO callers
+        # repo-wide (library / tests / validation / examples / UI,
+        # grep-verified twice).  Deprecated rather than deleted --
+        # out-of-repo callers may exist -- with removal scheduled for
+        # v5.32.  Warnings fire ONLY on a non-default value, so every
+        # existing (default) construction stays silent.
+        if self.use_traced_lens:
+            from .._deprecation import warn_deprecated_kwarg
+            warn_deprecated_kwarg(
+                'use_traced_lens',
+                "the default apply_real_lens path (or a custom "
+                "real_elements entry)",
+                function='MatchIdealSystemMerit',
+                version_added='5.30', version_removed='5.32', stacklevel=3)
+        if self.focus_search:
+            from .._deprecation import warn_deprecated_kwarg
+            warn_deprecated_kwarg(
+                'focus_search',
+                "an explicit z-offset in ideal_elements",
+                function='MatchIdealSystemMerit',
+                version_added='5.30', version_removed='5.32', stacklevel=3)
 
     # -- Helpers -----------------------------------------------------
 
@@ -714,6 +767,11 @@ class MatchIdealSystemMerit(MeritTerm):
         """Propagate E_real through a small range of z offsets, pick
         the one that minimises the penalty (i.e. maximises overlap),
         and return that value.  Uses ASM (fast, exact, preserves dx).
+
+        R-17: reachable ONLY via the DEPRECATED ``focus_search=True``
+        (removal v5.32), for which the audit grep-verified zero callers
+        repo-wide -- so this helper is NOT exercised by CI.  Kept, but
+        validate your own numbers before trusting it in a merit sum.
         """
         from ..propagators.propagation import angular_spectrum_propagate
         # Default range: +-f/20 where f ~= ctx.efl or ctx.bfl; fall
@@ -771,7 +829,13 @@ class MatchIdealSystemMerit(MeritTerm):
     def _field_mse_penalty(self, E_ideal, E_real):
         """Power-normalised, global-phase-aligned, squared L2 of the
         field residual.  Roughly the "fraction of energy in the
-        difference" when amplitude-normalised."""
+        difference" when amplitude-normalised.
+
+        R-17: reachable ONLY via the non-default ``match='field_mse'``,
+        for which the audit grep-verified zero callers repo-wide -- so
+        this kernel is NOT exercised by CI.  Kept (the metric is a
+        legitimate documented choice), but validate your own numbers
+        before trusting it in a merit sum."""
         p_i = float(np.sum(np.abs(E_ideal) ** 2))
         p_r = float(np.sum(np.abs(E_real) ** 2))
         if p_i < 1e-30 or p_r < 1e-30:
@@ -785,7 +849,11 @@ class MatchIdealSystemMerit(MeritTerm):
 
     def _intensity_mse_penalty(self, E_ideal, E_real):
         """Phase-blind: compares |E|^2 patterns, normalised to equal
-        total power."""
+        total power.
+
+        R-17: reachable ONLY via the non-default
+        ``match='intensity_mse'`` (zero callers repo-wide) -- NOT
+        exercised by CI.  See :meth:`_field_mse_penalty`."""
         I_i = np.abs(E_ideal) ** 2
         I_r = np.abs(E_real) ** 2
         p_i = float(np.sum(I_i))
@@ -796,6 +864,11 @@ class MatchIdealSystemMerit(MeritTerm):
         return self.weight * float(np.sum((I_i - I_r_norm) ** 2) / (p_i ** 2))
 
     def _intensity_overlap_penalty(self, E_ideal, E_real):
+        """Phase-blind correlation of the two |E|^2 patterns.
+
+        R-17: reachable ONLY via the non-default
+        ``match='intensity_overlap'`` (zero callers repo-wide) -- NOT
+        exercised by CI.  See :meth:`_field_mse_penalty`."""
         I_i = np.abs(E_ideal) ** 2
         I_r = np.abs(E_real) ** 2
         num = float(np.sum(I_i * I_r))

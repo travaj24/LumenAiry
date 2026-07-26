@@ -10,7 +10,11 @@ Agent B scope for the v4.15 dispatch:
   form ``Source.method(*, N, dx, wavelength, <size_kwargs>)``.  The
   legacy positional form is still accepted for one release with a
   ``DeprecationWarning`` routed through
-  ``_deprecation.warn_deprecated_signature`` (``version_removed='5.0'``).
+  ``_deprecation.warn_deprecated_signature``
+  (``version_removed`` was ``'5.0'``; re-scheduled to
+  ``sources.core._OVERDUE_SHIM_VERSION_REMOVED`` = ``'5.32'`` in v5.30,
+  audit R-18, after the shims outlived the original horizon by 29
+  minor releases).
 
 * **B.2 / ROADMAP v4.15 #3** -- ``lumenairy.propagators.system.evaluate`` ergonomic
   one-call entry: build the element chain from a prescription dict,
@@ -37,7 +41,10 @@ Agent B scope for the v4.15 dispatch:
       kwarg-form copy of the meta-pin.
     - **P2-DEP-1**: ``makedammann2d`` + ``create_led_source`` shims
       now route through ``_deprecation.warn_deprecated_signature``
-      with ``version_removed='5.0'`` in the message text.
+      with the removal version in the message text (``'5.0'`` at
+      v4.15; re-scheduled to ``'5.32'`` in v5.30 -- audit R-18 --
+      and asserted via
+      ``sources.core._OVERDUE_SHIM_VERSION_REMOVED``).
 
 Author: Andrew Traverso -- v4.15 / Agent B
 """
@@ -96,7 +103,8 @@ _NORMALISED_FACTORIES = [
 class TestB1SourceFactoryNormalisation:
     """Every one of the 5 normalised factories must accept BOTH the
     canonical kwarg-only form (no warning) AND the legacy positional
-    form (DeprecationWarning, removal-version='5.0' in the message).
+    form (DeprecationWarning naming its removal version -- ``'5.32'``
+    since the v5.30 / R-18 re-schedule).
     """
 
     @pytest.mark.parametrize('factory_name, legacy_args, kwargs',
@@ -129,7 +137,16 @@ class TestB1SourceFactoryNormalisation:
                                                           legacy_args,
                                                           kwargs):
         """Legacy positional form must emit a DeprecationWarning that
-        mentions v5.0 removal."""
+        names its removal version.
+
+        v5.30 (audit R-18 / overdue shims): the target was RE-SCHEDULED
+        from the blown ``v5.0`` date -- the shims were still shipping at
+        v5.29, 29 minor releases past their own removal version -- to
+        ``v5.32``, single-sourced in
+        ``sources.core._OVERDUE_SHIM_VERSION_REMOVED``.  This pin now
+        asserts against that constant, so a future re-schedule cannot
+        leave the warning text and the pin disagreeing."""
+        from lumenairy.sources.core import _OVERDUE_SHIM_VERSION_REMOVED
         factory = getattr(Source, factory_name)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
@@ -140,9 +157,12 @@ class TestB1SourceFactoryNormalisation:
             f"Source.{factory_name} legacy positional call must emit "
             f"DeprecationWarning; got {[str(w.message) for w in caught]}.")
         msg = str(dep[0].message)
-        assert '5.0' in msg, (
-            f"DeprecationWarning must reference v5.0 removal target; "
+        assert _OVERDUE_SHIM_VERSION_REMOVED in msg, (
+            f"DeprecationWarning must reference the "
+            f"v{_OVERDUE_SHIM_VERSION_REMOVED} removal target; "
             f"got {msg!r}.")
+        assert 'removed in v5.0;' not in msg, (
+            f"shim still advertises the blown v5.0 horizon; got {msg!r}.")
         assert factory_name in msg or f'Source.{factory_name}' in msg, (
             f"DeprecationWarning must name the factory; got {msg!r}.")
 
@@ -557,7 +577,8 @@ class TestP2FacFactoryValidationMetaPin:
 
 
 # ============================================================================
-# B.5.c -- P2-DEP-1: shim migration mentions version_removed='5.0'
+# B.5.c -- P2-DEP-1: shim migration names its version_removed
+# (v5.30 / R-18: re-scheduled from the blown '5.0' to '5.32')
 # ============================================================================
 
 class TestP2Dep1ShimsMentionVersionRemoved:
@@ -565,15 +586,25 @@ class TestP2Dep1ShimsMentionVersionRemoved:
     must state their removal version in the message text.
 
     ``create_led_source`` still routes its ``DeprecationWarning``
-    through ``_deprecation.warn_deprecated_signature`` (v5.0).
+    through ``_deprecation.warn_deprecated_signature``.  v5.30 (audit
+    R-18 / overdue shims): the removal horizon was RE-SCHEDULED from the
+    blown ``v5.0`` date (29 minor releases stale while the shim kept
+    shipping) to ``v5.32``, single-sourced in
+    ``sources.core._OVERDUE_SHIM_VERSION_REMOVED``; this pin now asserts
+    against that constant so the next re-schedule cannot leave the
+    message and the pin disagreeing.
     ``makedammann2d``'s unit shim was RETIRED in v5.30 (audit E-H11):
     explicit opt-in + loud ``UserWarning`` naming v5.32 -- see the
     per-test docstring."""
 
-    def test_create_led_source_legacy_shim_mentions_v5_0(self):
+    def test_create_led_source_legacy_shim_mentions_removal_version(self):
         """The legacy positional form of ``create_led_source`` must
-        emit a DeprecationWarning that contains 'v5.0' (the removal
-        version)."""
+        emit a DeprecationWarning naming its removal version.
+
+        v5.30 (R-18): asserts against
+        ``sources.core._OVERDUE_SHIM_VERSION_REMOVED`` (currently
+        '5.32') rather than the hard-coded, long-blown '5.0'."""
+        from lumenairy.sources.core import _OVERDUE_SHIM_VERSION_REMOVED
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             la.create_led_source(64, 16e-6, 100e-6, 0.3, 1.31e-6)
@@ -585,9 +616,12 @@ class TestP2Dep1ShimsMentionVersionRemoved:
             f"DeprecationWarning; got "
             f"{[str(w.message) for w in caught]}.")
         msg = str(dep[0].message)
-        assert '5.0' in msg, (
-            f"create_led_source DeprecationWarning must reference v5.0 "
-            f"removal; got {msg!r}.")
+        assert _OVERDUE_SHIM_VERSION_REMOVED in msg, (
+            f"create_led_source DeprecationWarning must reference the "
+            f"v{_OVERDUE_SHIM_VERSION_REMOVED} removal; got {msg!r}.")
+        assert 'removed in v5.0;' not in msg, (
+            f"create_led_source still advertises the blown v5.0 removal "
+            f"horizon: {msg!r}.")
 
     def test_makedammann2d_legacy_shim_names_removal_version(self):
         """The legacy micrometre auto-detect path in ``makedammann2d``

@@ -162,7 +162,7 @@ def optical_invariant(efl: float, f_number_val: float,
 
 
 def f_number(prescription: dict, wavelength: float) -> float:
-    """Paraxial f-number ``EFL / D_pupil`` for a prescription.
+    """Paraxial f-number ``abs(EFL) / D_pupil`` for a prescription.
 
     Parameters
     ----------
@@ -175,8 +175,21 @@ def f_number(prescription: dict, wavelength: float) -> float:
     Returns
     -------
     float
-        f-number.  Returns ``inf`` for a degenerate prescription
-        (zero aperture or zero EFL).
+        f-number, always NON-NEGATIVE.  Returns ``inf`` for a
+        degenerate prescription (zero aperture or zero EFL).
+
+    Notes
+    -----
+    R-11 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the returned f/# is
+    ``abs(EFL) / D``.  Pre-fix this function returned the SIGNED ratio,
+    so a diverging prescription read ``f/-9.97`` while all three
+    siblings that compute the same quantity -- ``raytrace.layout``
+    (``abs(efl) / ap``), ``optimize.merit_terms.MaxFNumberMerit``
+    (``abs(ctx.efl) / ap``) and ``seidel.compute_pupils`` -- reported
+    ``+9.97``.  f/# is a cone-angle magnitude by definition (``1 / (2
+    NA)``); read ``EFL`` itself if you need the conjugate sign.  No
+    consumer relied on the sign (grep-verified: every call site either
+    takes a converging prescription or abs()es already).
     """
     from .core import surfaces_from_prescription, system_abcd
     surfs = surfaces_from_prescription(prescription)
@@ -184,7 +197,7 @@ def f_number(prescription: dict, wavelength: float) -> float:
     ap = float(prescription.get('aperture_diameter', 0.0))
     if ap <= 0 or not np.isfinite(efl) or efl == 0:
         return float('inf')
-    return float(efl / ap)
+    return float(abs(efl) / ap)
 
 
 def defocus_waves_to_zernike(defocus_waves: float) -> float:

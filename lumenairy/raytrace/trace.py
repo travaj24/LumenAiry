@@ -98,8 +98,12 @@ def trace(
 
         applied AFTER refraction at surface ``i`` (so the rays
         continue propagation through the post-surface medium with the
-        diffractive kick applied).  ``period_y`` may be ``np.inf`` for
-        a 1-D grating; ``order_x`` / ``order_y`` may be half-integer
+        diffractive kick applied).  A ZERO or NON-FINITE period on
+        either axis means "no grating along that axis" and contributes
+        a zero kick (``np.inf`` for a 1-D grating is the idiomatic
+        spelling; ``0.0`` / ``nan`` take the same branch since R-13,
+        matching ``jax_trace._apply_doe_kick_jax``).  ``order_x`` /
+        ``order_y`` may be half-integer
         (Dammann-style even-N splitters).  Orders that turn evanescent
         (``L_new**2 + M_new**2 > 1``) are flagged
         ``alive=False`` with ``error_code=RAY_EVANESCENT``.  See also
@@ -108,6 +112,26 @@ def trace(
     Returns
     -------
     result : TraceResult
+
+    Notes
+    -----
+    **Per-surface step order (R-14).**  This loop runs
+    intersect-(and-aperture-clip)-then-refract: the clear-aperture
+    vignette lives inside :func:`_intersect_surface`, so a ray clipped at
+    surface ``i`` is already ``alive=False`` when :func:`_refract` runs
+    and keeps its INCIDENT direction cosines (``_refract`` updates
+    ``L/M/N`` under ``np.where(rays.alive, ...)``).  The JAX backend
+    (``jax_trace._trace_body_static`` / ``_trace_body_traced``) clips
+    AFTER refracting, so its clipped rows carry the REFRACTED direction
+    instead.  The two are exactly equivalent for every ALIVE ray -- the
+    alive mask is the same conjunction either way, and the clip depends
+    only on ``(x, y)``, which refraction does not touch: measured
+    0.0 (bit-identical) alive-row ``L`` and ``x`` across the backends on
+    a 4-ray probe straddling a 4 mm semi-diameter, with the alive masks
+    equal.  Only DEAD-row direction cosines differ (measured up to
+    ``|dL| = 0.187`` on the clipped rows), i.e. post-mortem bookkeeping.
+    Do not read ``L/M/N`` of a dead row and expect cross-backend
+    agreement; read ``alive`` / ``error_code``.
     """
     r = rays.copy()
     history = [] if output_filter != 'last' else None
@@ -176,8 +200,22 @@ def trace(
         _diff_spec = _diff.get(i)
         if _diff_spec is not None:
             _mx, _my, _px, _py = _diff_spec
-            _dL = float(_mx) * wavelength / float(_px)
-            _dM = float(_my) * wavelength / float(_py)
+            # R-13 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): a zero or
+            # non-finite period means "no grating along that axis" and
+            # yields a ZERO kick -- exactly the JAX twin's contract
+            # (``jax_trace._apply_doe_kick_jax._kick``: "Returns 0.0 when
+            # ``period`` is non-finite or zero").  Pre-fix this site
+            # divided unguarded: ``period=0.0`` raised
+            # ``ZeroDivisionError`` mid-trace and ``period=nan`` silently
+            # NaN-poisoned (L, M) (measured: numpy (nan, nan) vs jax
+            # (0.0, 0.0)).  ``inf`` already gave 0.0 by IEEE division, so
+            # that case is bit-identical.
+            _px_f = float(_px)
+            _py_f = float(_py)
+            _dL = (float(_mx) * wavelength / _px_f
+                   if (np.isfinite(_px_f) and _px_f != 0.0) else 0.0)
+            _dM = (float(_my) * wavelength / _py_f
+                   if (np.isfinite(_py_f) and _py_f != 0.0) else 0.0)
             r.L = r.L + _dL
             r.M = r.M + _dM
             _sumsq = r.L * r.L + r.M * r.M
@@ -815,13 +853,41 @@ def make_fan(
         Number of rays (odd recommended to include the chief ray).
     field_angle : float
         Off-axis field angle [radians].  Applied as a direction cosine
-        tilt in the fan axis.
+        tilt ALONG THE FAN AXIS: ``axis='y'`` tilts in ``M``,
+        ``axis='x'`` tilts in ``L``.  Each ``make_fan`` call therefore
+        builds the MERIDIONAL (tangential) fan of the plane that
+        contains ``axis`` -- ``make_fan('x', fa)`` is the y-fan rotated
+        90 deg about z, not the sagittal fan of a +y field.
     wavelength : float
         Vacuum wavelength [m].
 
     Returns
     -------
     RayBundle
+
+    Notes
+    -----
+    R-15 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): this per-axis field
+    convention DIFFERS from :func:`make_ring` / :func:`make_grid`, which
+    always tilt in ``M`` regardless of the sampling pattern.  The
+    difference is deliberate and load-bearing, NOT a bug:
+
+    * ``ray_fan_data`` / ``ray_fan_data_world`` / ``opd_fan_data`` /
+      ``opd_fan_data_world`` (``raytrace/ray_fan.py``) reference each
+      fan against a chief ray of the SAME orientation (``chief_y``
+      tilted in ``M``, ``chief_x`` tilted in ``L``) precisely so that
+      ``ey(0) == ex(0) == 0`` -- the RT-5 invariant.  Putting the field
+      angle in ``M`` for the x-fan would break it at all four sites.
+    * Callers that want a true sagittal fan at a +y field must build
+      the bundle directly, as ``analysis.field.field_aberration_sweep``
+      does (see its 4.10 comment, which documents exactly this trap:
+      using ``make_fan('x', fa)`` for "sag" and ``make_fan('y', fa)``
+      for "tan" compares two TANGENTIAL fans at two DIFFERENT fields) --
+      spread in ``x`` with the chief tilted in ``M``.  Do NOT reach for
+      ``make_fan('x', field_angle)`` for that.
+
+    Pinned by ``tests/unit/test_niche_audit_w3_raytrace_sources.py`` so
+    the convention cannot silently flip.
     """
     t = np.linspace(-1, 1, n_rays)
     if axis == 'y':

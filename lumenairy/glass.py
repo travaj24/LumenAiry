@@ -642,31 +642,83 @@ def _sellmeier_index(wavelength_m, coeffs, glass_name=None):
     positive.  Pre-4.10 a wavelength near a resonance raised an opaque
     ``math domain error``; this version raises ``ValueError`` with the
     glass name and the offending wavelength.
+
+    R-12 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): accepts either a
+    Python scalar (returns ``float``, the historical contract, on a pure
+    ``math`` fast path) or an array-like ``wavelength_m`` (returns an
+    ndarray of the same shape) -- mirroring the ``_polynomial_index``
+    sibling, whose docstring already claimed the two were at parity.
+    Pre-fix an array input died on ``abs(lam2 - ci) < 1e-12`` with
+    numpy's opaque "truth value of an array with more than one element
+    is ambiguous", and a list died with "can't multiply sequence by
+    non-int of type 'float'".  The scalar path is bit-identical (same
+    ``_math.sqrt`` of the same float expression); the vector path agrees
+    with a scalar loop to 0 ULP.
     """
     label = f" for glass {glass_name!r}" if glass_name else ""
     wavelength_m = _guard_wavelength(
         wavelength_m, f"_sellmeier_index{label}", sign_symmetric=True)
-    lam2 = (wavelength_m * 1e6) ** 2  # wavelength^2 in um^2
     (B1, B2, B3), (C1, C2, C3) = coeffs
-    for ci in (C1, C2, C3):
-        if abs(lam2 - ci) < 1e-12:
+
+    # Scalar fast-path: keep the common get_glass_index('NAME', 587.6e-9)
+    # call a pure float round-trip (no numpy allocation).  Mirrors the
+    # ``_polynomial_index`` scalar/vector split exactly.
+    if not hasattr(wavelength_m, '__len__') and not hasattr(
+            wavelength_m, 'shape'):
+        lam2 = (wavelength_m * 1e6) ** 2  # wavelength^2 in um^2
+        for ci in (C1, C2, C3):
+            if abs(lam2 - ci) < 1e-12:
+                raise ValueError(
+                    f"_sellmeier_index{label}: wavelength "
+                    f"{wavelength_m*1e9:.3f} nm "
+                    f"coincides with a Sellmeier resonance (lam² ≈ C_i = "
+                    f"{ci:.6f} "
+                    f"um²).  Use a wavelength away from the resonance, or "
+                    f"select a different glass model that covers this range.")
+        n_sq_minus_1 = (
+            B1 * lam2 / (lam2 - C1)
+            + B2 * lam2 / (lam2 - C2)
+            + B3 * lam2 / (lam2 - C3)
+        )
+        if n_sq_minus_1 <= -1.0:
             raise ValueError(
-                f"_sellmeier_index{label}: wavelength {wavelength_m*1e9:.3f} nm "
-                f"coincides with a Sellmeier resonance (lam² ≈ C_i = {ci:.6f} "
-                f"um²).  Use a wavelength away from the resonance, or "
-                f"select a different glass model that covers this range.")
+                f"_sellmeier_index{label}: extrapolation produced negative n² "
+                f"(n²-1 = {n_sq_minus_1:.6f}) at wavelength "
+                f"{wavelength_m*1e9:.3f} nm. "
+                f"This wavelength is likely outside the catalogue's valid "
+                f"range; pass a wavelength within the glass's specified band.")
+        return _math.sqrt(1.0 + n_sq_minus_1)
+
+    # Vector path: lift via numpy.  Works for lists, tuples, numpy
+    # arrays, and (read-only) JAX arrays (which expose ``__array__``).
+    lam_m = np.asarray(wavelength_m, dtype=float)
+    lam2 = (lam_m * 1e6) ** 2
+    for ci in (C1, C2, C3):
+        near = np.abs(lam2 - ci) < 1e-12
+        if np.any(near):
+            bad_idx = int(np.argmax(near))
+            raise ValueError(
+                f"_sellmeier_index{label}: wavelength "
+                f"{float(lam_m.flat[bad_idx])*1e9:.3f} nm "
+                f"coincides with a Sellmeier resonance (lam² ≈ C_i = "
+                f"{ci:.6f} um²) (one of {lam2.size} inputs).  Use a "
+                f"wavelength away from the resonance, or select a different "
+                f"glass model that covers this range.")
     n_sq_minus_1 = (
         B1 * lam2 / (lam2 - C1)
         + B2 * lam2 / (lam2 - C2)
         + B3 * lam2 / (lam2 - C3)
     )
-    if n_sq_minus_1 <= -1.0:
+    if np.any(n_sq_minus_1 <= -1.0):
+        bad_idx = int(np.argmin(n_sq_minus_1))
         raise ValueError(
             f"_sellmeier_index{label}: extrapolation produced negative n² "
-            f"(n²-1 = {n_sq_minus_1:.6f}) at wavelength {wavelength_m*1e9:.3f} nm. "
+            f"(n²-1 = {float(n_sq_minus_1.flat[bad_idx]):.6f}) at wavelength "
+            f"{float(lam_m.flat[bad_idx])*1e9:.3f} nm (one of "
+            f"{n_sq_minus_1.size} inputs). "
             f"This wavelength is likely outside the catalogue's valid "
             f"range; pass a wavelength within the glass's specified band.")
-    return _math.sqrt(1.0 + n_sq_minus_1)
+    return np.sqrt(1.0 + n_sq_minus_1)
 
 
 # ---------------------------------------------------------------------------

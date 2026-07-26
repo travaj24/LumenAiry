@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from ..elements.lenses import surface_sag_biconic, surface_sag_general
+from ._conic_core import check_even_aspheric_powers
 
 # ============================================================================
 # Data structures
@@ -136,7 +137,12 @@ class Surface:
         Conic constant (0 = sphere, -1 = paraboloid).
     aspheric_coeffs : dict or None
         Even polynomial coefficients ``{power: coeff}``
-        (e.g. ``{4: A4, 6: A6}``).
+        (e.g. ``{4: A4, 6: A6}``).  ONLY even integer powers are
+        supported; an odd (or non-integral) power raises
+        :class:`ValueError` at construction (R-8) -- the sag would
+        silently floor to the next-lower even power while the surface
+        normal used the odd one, giving a sag/normal-inconsistent
+        surface that differs between the NumPy and JAX backends.
     semi_diameter : float
         Clear semi-aperture [m].  Rays outside are vignetted.
     glass_before : str
@@ -254,6 +260,26 @@ class Surface:
     # ``origin = (0, 0, cum_z), R = I``.
     world_origin: Optional[np.ndarray] = None
     world_R: Optional[np.ndarray] = None
+
+    def __post_init__(self) -> None:
+        # R-8 / E-L7 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): reject ODD
+        # aspheric powers AT CONSTRUCTION.  ``validate_prescription``
+        # already rejected them on the prescription path, but a
+        # hand-built ``Surface(aspheric_coeffs={5: A5})`` bypassed that
+        # guard entirely and traced a sag/normal-INCONSISTENT surface --
+        # the sag floors ``h_sq ** (5 // 2)`` to ``h**4`` while the NumPy
+        # normal uses ``5 * h**4`` and the JAX normal ``5 * h_sq * x``,
+        # measured 0.05 vs 5.0 against the sag-consistent 4.0 at
+        # h = 10 mm (a 100x cross-backend divergence).  Same message as
+        # ``validate_prescription`` (single-sourced in
+        # ``_conic_core.check_even_aspheric_powers``), and the shared
+        # core rejects the JAX prescription path (which never builds a
+        # ``Surface``) at the same wording.
+        for _field in ('aspheric_coeffs', 'aspheric_coeffs_y'):
+            _ac = getattr(self, _field, None)
+            if isinstance(_ac, dict) and _ac:
+                check_even_aspheric_powers(
+                    _ac.keys(), fn_label=f'Surface.{_field}')
 
 
 @dataclass

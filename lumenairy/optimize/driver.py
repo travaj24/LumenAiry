@@ -479,6 +479,20 @@ def design_optimize(parameterization: Any,
     docstring; the body lives here post-v5.1.0 split.  Parameter and
     behaviour contracts are unchanged.
 
+    .. deprecated:: 5.30
+       ``wave_traced=True`` is DEPRECATED (removal v5.32).  R-17
+       (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25) grep-verified ZERO
+       callers anywhere in the repo -- library, tests, validation,
+       examples, UI -- so the ``apply_real_lens_traced`` branch it
+       selects in ``_wave_real_lens`` has never been exercised by CI.
+       Register an explicit propagator that calls
+       ``apply_real_lens_traced`` via
+       :func:`register_wave_propagator` and select it with
+       ``wave_propagator=<name>`` instead -- one dispatch mechanism
+       rather than a boolean that mutates the meaning of another
+       argument.  Passing a non-default value emits a
+       :class:`DeprecationWarning`; the branch still runs.
+
     v5.24.x (audit S4-18): ``seed`` controls the RNG of the stochastic
     global methods (``differential_evolution`` / ``basin_hopping`` /
     ``dual_annealing``).  Defaults to ``42`` -- the historical hard-coded
@@ -552,6 +566,21 @@ def design_optimize(parameterization: Any,
             except Exception:
                 pass
     _dtype_restore_guard = _RestoreDtype(_orig_complex_dtype)
+
+    # R-17 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): ``wave_traced`` is a
+    # documented public flag with a live branch in ``_wave_real_lens``
+    # and ZERO callers anywhere (library / tests / validation / examples
+    # / UI, grep-verified twice).  Deprecated rather than deleted --
+    # out-of-repo callers may exist and the branch is harmless -- with
+    # removal scheduled for v5.32.  The warning fires ONLY on a
+    # non-default value, so every existing (default) call is silent.
+    if wave_traced:
+        from .._deprecation import warn_deprecated_kwarg
+        warn_deprecated_kwarg(
+            'wave_traced', "wave_propagator=<a propagator registered via "
+                            "register_wave_propagator>",
+            function='design_optimize',
+            version_added='5.30', version_removed='5.32', stacklevel=3)
 
     # v4.14 (audit P2 #14): warn if the user selected a non-default
     # wave_propagator (e.g. 'gbd') AND any of the three Merit classes

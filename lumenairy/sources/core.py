@@ -46,6 +46,19 @@ def _ensure_cupy_loaded():
 _DEPRECATION_VERSION_ADDED = '5.25'
 _DEPRECATION_VERSION_REMOVED = '5.27'
 
+# R-18 / overdue-shims (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the v4.14.2 /
+# v4.15 legacy-positional shims in this module (``create_led_source``,
+# ``Source.gaussian`` / ``plane_wave`` / ``point_source`` / ``top_hat`` /
+# ``fiber_mode``) and the v4.15.1 Schell ``return_kind`` default sentinel all
+# advertised ``version_removed='5.0'`` -- a horizon that passed 29 minor
+# releases ago while the shims kept shipping.  A removal version the library
+# has demonstrably blown through is worse than none: it trains callers to
+# ignore the message.  RE-SCHEDULED once, here, to v5.32 -- a single constant so
+# the next slip is a one-line edit and cannot drift between the 8 warning
+# sites.  The shims themselves are NOT removed (that is a v5.32 decision);
+# every warning still fires from the production path (measured).
+_OVERDUE_SHIM_VERSION_REMOVED = '5.32'
+
 
 def _coerce_source_rng(*, rng: Any, seed: Optional[int],
                        fn_name: str) -> np.random.Generator:
@@ -139,6 +152,59 @@ def _resolve_gaussian_width(*, sigma: Optional[float], w0: Optional[float],
     raise TypeError(
         f"{fn_name}: missing required Gaussian-width argument; pass 'w0' "
         f"(the 1/e^2 intensity radius in metres).")
+
+
+def _warn_if_w0_wavelength_swapped(w0: float, wavelength: float, *,
+                                    fn_name: str) -> None:
+    """Warn when ``w0`` / ``wavelength`` look positionally SWAPPED.
+
+    R-9 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the mode factories
+    :func:`create_hermite_gauss` / :func:`create_laguerre_gauss` take
+    ``w0`` in argument slot 3 -- the slot every OTHER ``create_*`` factory
+    uses for ``wavelength`` (``create_gaussian_beam(N, dx, wavelength, *,
+    w0=...)``, ``create_annular_beam``, ``create_bessel_beam``,
+    ``create_top_hat_beam``, ...).  ``create_hermite_gauss(N, dx,
+    wavelength, w0)`` is therefore SILENTLY accepted with the two
+    swapped, producing
+    a wavelength-scale "waist" (a field concentrated in a single pixel
+    for any realistic ``dx``) with no error at all.  The signature cannot
+    be changed without breaking every existing caller, so this is the
+    cheap runtime plausibility check.
+
+    Discriminator: a physical paraxial mode always has
+    ``w0 >= wavelength`` (typically ``w0 >> wavelength``); a swap
+    inverts that.  ``w0 < wavelength`` is therefore near-certain
+    evidence of the swap and is diagnosable with ZERO false positives on
+    the existing corpus: the six in-repo HG/LG call sites run at
+    ``w0 / wavelength`` = 6.45, 15.8, 19.1, 38.2, 45.8 and 2000, so the
+    tightest one still clears the threshold by 6.4x.  Call this AFTER
+    the ``w0 > 0``
+    validation so the deliberate ``w0 = 0`` / ``w0 < 0`` probes keep
+    raising ``ValueError`` without a spurious warning first.
+
+    Emits :class:`UserWarning` (a plausibility hint, not a deprecation);
+    the call proceeds unchanged so no working code breaks.
+    """
+    try:
+        w0_f = float(w0)
+        wl_f = float(wavelength)
+    except (TypeError, ValueError):
+        return
+    if not (np.isfinite(w0_f) and np.isfinite(wl_f)):
+        return
+    if w0_f < wl_f:
+        import warnings
+        warnings.warn(
+            f"{fn_name}: w0={w0_f:.4g} m is SMALLER than "
+            f"wavelength={wl_f:.4g} m, which is unphysical for a paraxial "
+            f"mode.  This is the signature of a swapped positional call: "
+            f"{fn_name} takes (N, dx, w0, wavelength) -- w0 THIRD -- "
+            f"whereas create_gaussian_beam / create_annular_beam / "
+            f"create_bessel_beam and every other create_* factory take "
+            f"wavelength third.  Did you mean "
+            f"{fn_name}(N, dx, w0={wl_f:.4g}, wavelength={w0_f:.4g})?  "
+            f"Pass both as keywords to remove the ambiguity.",
+            UserWarning, stacklevel=3)
 
 
 def _apply_field_normalization(E: np.ndarray, mode: str, dx: float,
@@ -550,6 +616,20 @@ def create_hermite_gauss(
     """
     Create a Hermite-Gaussian (HG_mn) beam mode at the waist.
 
+    .. warning::
+
+       **ARGUMENT-ORDER HAZARD (R-9).**  This factory takes ``w0`` in
+       positional slot 3 -- the slot every other ``create_*`` factory
+       uses for ``wavelength``
+       (``create_gaussian_beam(N, dx, wavelength, *, w0=...)``,
+       ``create_annular_beam(N, dx, wavelength, *, ...)``,
+       ``create_bessel_beam(N, dx, wavelength, cone_angle, ...)``, ...).
+       A swapped call ``create_hermite_gauss(N, dx, wavelength, w0)``
+       is syntactically valid and was silently accepted before v5.30;
+       it now emits a :class:`UserWarning` when ``w0 < wavelength``
+       (the unphysical signature of the swap) but still runs.
+       **Pass ``w0=`` and ``wavelength=`` as keywords.**
+
     Parameters
     ----------
     N : int or (Ny, Nx)
@@ -616,6 +696,9 @@ def create_hermite_gauss(
         raise ValueError(
             f"create_hermite_gauss: w0 must be a positive finite beam "
             f"waist [m]; got {w0}.")
+    # R-9: cheap positional-swap plausibility check (see the helper).
+    _warn_if_w0_wavelength_swapped(w0, wavelength,
+                                    fn_name='create_hermite_gauss')
     if dy is None:
         dy = dx
     if isinstance(N, (tuple, list)):
@@ -713,6 +796,17 @@ def create_laguerre_gauss(
     """
     Create a Laguerre-Gaussian (LG_pl) beam mode at the waist.
 
+    .. warning::
+
+       **ARGUMENT-ORDER HAZARD (R-9).**  This factory takes ``w0`` in
+       positional slot 3 -- the slot every other ``create_*`` factory
+       uses for ``wavelength`` (see
+       :func:`create_hermite_gauss` for the full note).  A swapped call
+       ``create_laguerre_gauss(N, dx, wavelength, w0)`` is syntactically
+       valid; it now emits a :class:`UserWarning` when
+       ``w0 < wavelength`` but still runs.
+       **Pass ``w0=`` and ``wavelength=`` as keywords.**
+
     Parameters
     ----------
     N : int or (Ny, Nx)
@@ -774,6 +868,9 @@ def create_laguerre_gauss(
         raise ValueError(
             f"create_laguerre_gauss: w0 must be a positive finite beam "
             f"waist [m]; got {w0}.")
+    # R-9: cheap positional-swap plausibility check (see the helper).
+    _warn_if_w0_wavelength_swapped(w0, wavelength,
+                                    fn_name='create_laguerre_gauss')
     if dy is None:
         dy = dx
     if isinstance(N, (tuple, list)):
@@ -1192,12 +1289,27 @@ def create_annular_beam(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Annular (donut) beam.
 
+    .. warning::
+
+       **RADIUS-vs-DIAMETER HAZARD (R-10).**  This factory takes
+       **DIAMETERS** (``outer_diameter`` / ``inner_diameter``); its
+       incoherent sibling :func:`create_annular_incoherent_source` takes
+       **RADII** (``outer_radius`` / ``inner_radius``) for the same
+       geometry.  The two are a factor of 2 apart and neither name can
+       be changed without breaking callers, so the kwargs are
+       keyword-ONLY at both sites (a silent positional mix-up is
+       impossible) -- but copying a call from one to the other and just
+       renaming the keywords gives a ring of half (or double) the
+       intended size with no error.  Convert explicitly.
+
     Parameters
     ----------
     N, dx : int, float
     wavelength : float
         Reserved for future use.
     outer_diameter, inner_diameter : float [m]
+        DIAMETERS, not radii -- contrast
+        :func:`create_annular_incoherent_source`.
     normalize : ``'power'`` (default) / ``'peak'`` / ``'none'``
         Output scaling.  **Native convention: ``'power'``** -- a
         unit-integrated-power field (``E /= sqrt(sum|E|^2 dx dy)``), the
@@ -1511,7 +1623,9 @@ def create_led_source(
         # instead of inline ``warnings.warn``.  Same DeprecationWarning
         # category, same message intent; the helper guarantees a
         # consistent format (``... is deprecated since v4.14.2, will be
-        # removed in v5.0; use ...``) and pin-tested removal version.
+        # removed in v5.32; use ...``) and pin-tested removal version.
+        # R-18: the removal version was re-scheduled from the blown
+        # v5.0 horizon to ``_OVERDUE_SHIM_VERSION_REMOVED``.
         from .._deprecation import warn_deprecated_signature
         # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 selects the
         # user-code frame.  Chain: warnings.warn (in _emit) [1] ->
@@ -1528,7 +1642,7 @@ def create_led_source(
                 'create_led_source(N, dx, wavelength, *, diameter=..., '
                 'divergence_angle=..., ...)'),
             version_added='4.14.2',
-            version_removed='5.0',
+            version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
             stacklevel=4,
         )
         # Promote legacy positionals into the canonical kwargs, but do
@@ -2046,7 +2160,8 @@ def _validate_return_kind(value: Any, fn_name: str) -> str:
 # the sentinel branch at each call site is preserved as a no-op for
 # back-compat (callers explicitly forwarding ``_RETURN_KIND_UNSET``
 # still resolve cleanly).  Sentinel + ``_warn_schell_return_kind_default``
-# helper are slated for removal in v5.0.
+# helper are slated for removal in v5.32 (R-18: re-scheduled off the
+# blown v5.0 horizon).
 #
 # v4.15.3 (audit P2-NEW): the sentinel itself is a dedicated
 # ``_SchellReturnKindUnsetSentinel(_Sentinel)`` subclass for
@@ -2093,7 +2208,7 @@ _RETURN_KIND_UNSET: Any = _SchellReturnKindUnsetSentinel()
 # subclass remains pickle-safe via the shared
 # ``_SENTINEL_REGISTRY``; the singleton continues to compare
 # ``False`` and stringify with the canonical registry name.  Targeted
-# for removal in v5.0 alongside the rest of the deprecated-default
+# for removal in v5.32 alongside the rest of the deprecated-default
 # scaffolding.
 
 
@@ -2114,8 +2229,9 @@ def _warn_schell_return_kind_default(fn_name: str) -> None:
     Routed through the shared ``_deprecation.warn_deprecated_signature``
     helper so the warning message format matches the rest of the
     library and is silenceable with a single ``warnings.filterwarnings``
-    incantation.  ``version_removed='5.0'`` documents the deprecation
-    horizon (sentinel + helper are slated for removal in v5.0).
+    incantation.  ``version_removed=_OVERDUE_SHIM_VERSION_REMOVED``
+    documents the deprecation horizon (sentinel + helper are slated for
+    removal in v5.32 -- R-18 re-scheduled it off the blown v5.0 date).
 
     Frame chain (innermost first), when invoked from a factory body:
 
@@ -2137,7 +2253,7 @@ def _warn_schell_return_kind_default(fn_name: str) -> None:
             "current 4-tuple) or return_kind='mcf' (opt into "
             "PartialCoherenceMCF) explicitly"),
         version_added='4.15.1',
-        version_removed='5.0',
+        version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
         stacklevel=5,
     )
 
@@ -2296,7 +2412,7 @@ def create_gaussian_schell_source(
         silent.  Callers can still inspect the sentinel via
         ``_RETURN_KIND_UNSET`` for back-compat (it is treated as
         ``'ensemble'``; sentinel + helper are slated for removal in
-        v5.0).
+        v5.32 -- R-18 re-scheduled this off the blown v5.0 horizon).
     max_full_N : int, default 64
         Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
         ``return_kind='mcf'``.  Grids with ``Ny * Nx > max_full_N**2``
@@ -2527,8 +2643,18 @@ def create_annular_incoherent_source(
     """Annular (ring) source -- spatially-incoherent at the source
     plane (v4.15, ROADMAP v4.16 #11; v4.15.1 P0-NEW-2 redesign).
 
+    .. warning::
+
+       **RADIUS-vs-DIAMETER HAZARD (R-10).**  This factory takes
+       **RADII** (``inner_radius`` / ``outer_radius``); the coherent
+       sibling :func:`create_annular_beam` takes **DIAMETERS**
+       (``inner_diameter`` / ``outer_diameter``) for the same geometry.
+       Porting a call between the two by renaming the keywords -- without
+       the factor of 2 -- silently halves or doubles the ring.
+
     Distinct from :func:`create_annular_beam`, which returns the
-    deterministic coherent annular field.  This factory samples
+    deterministic coherent annular field (and takes DIAMETERS -- see the
+    warning above).  This factory samples
     independent random-phase realisations whose common amplitude is
     the unit-norm annular indicator function; each pixel has its own
     independent uniform-(-pi, pi) phase (i.e. fully incoherent at the
@@ -2828,7 +2954,8 @@ class Source:
     # with the ``*`` separator).  The legacy positional form is still
     # accepted for one release with a ``DeprecationWarning`` routed
     # through ``_deprecation.warn_deprecated_signature``; removal is
-    # scheduled for v5.0.
+    # scheduled for v5.32 (R-18: re-scheduled off the blown v5.0
+    # horizon -- see ``_OVERDUE_SHIM_VERSION_REMOVED``).
     #
     # The three already-kwarg-only factories (``plane_wave``,
     # ``point_source``) keep their existing signature; the only change
@@ -2857,7 +2984,7 @@ class Source:
         ``factory_kwargs`` (e.g. ``dy=``, ``dtype=``) are forwarded to
         :func:`create_gaussian_beam`.
 
-        Legacy signature (deprecated since v4.15, removal v5.0):
+        Legacy signature (deprecated since v4.15, removal v5.32):
             ``Source.gaussian(w0, N, dx, wavelength, ...)``
         """
         # Legacy positional shim: pre-v4.15 callers passed
@@ -2874,7 +3001,7 @@ class Source:
                 new_signature=(
                     'Source.gaussian(*, N, dx, wavelength, w0, ...)'),
                 version_added='4.15',
-                version_removed='5.0',
+                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
                 stacklevel=4,
             )
             if len(args) > 4:
@@ -2947,7 +3074,7 @@ class Source:
         Canonical signature (v4.15+):
             ``Source.plane_wave(*, N, dx, wavelength, ...)``
 
-        Legacy signature (deprecated since v4.15, removal v5.0):
+        Legacy signature (deprecated since v4.15, removal v5.32):
             ``Source.plane_wave(N, dx, wavelength, ...)``
         """
         if args:
@@ -2961,7 +3088,7 @@ class Source:
                 new_signature=(
                     'Source.plane_wave(*, N, dx, wavelength, ...)'),
                 version_added='4.15',
-                version_removed='5.0',
+                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
                 stacklevel=4,
             )
             if len(args) > 3:
@@ -3020,7 +3147,7 @@ class Source:
         Canonical signature (v4.15+):
             ``Source.point_source(*, N, dx, wavelength, ...)``
 
-        Legacy signature (deprecated since v4.15, removal v5.0):
+        Legacy signature (deprecated since v4.15, removal v5.32):
             ``Source.point_source(N, dx, wavelength, ...)``
 
         ``z0 < 0`` -> diverging wavefront (source before grid);
@@ -3038,7 +3165,7 @@ class Source:
                 new_signature=(
                     'Source.point_source(*, N, dx, wavelength, ...)'),
                 version_added='4.15',
-                version_removed='5.0',
+                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
                 stacklevel=4,
             )
             if len(args) > 3:
@@ -3098,7 +3225,7 @@ class Source:
         Canonical signature (v4.15+):
             ``Source.top_hat(*, N, dx, wavelength, diameter, ...)``
 
-        Legacy signature (deprecated since v4.15, removal v5.0):
+        Legacy signature (deprecated since v4.15, removal v5.32):
             ``Source.top_hat(diameter, N, dx, wavelength, ...)``
         """
         if args:
@@ -3112,7 +3239,7 @@ class Source:
                 new_signature=(
                     'Source.top_hat(*, N, dx, wavelength, diameter, ...)'),
                 version_added='4.15',
-                version_removed='5.0',
+                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
                 stacklevel=4,
             )
             if len(args) > 4:
@@ -3183,7 +3310,7 @@ class Source:
             ``Source.fiber_mode(*, N, dx, wavelength,
             mode_field_diameter, ...)``
 
-        Legacy signature (deprecated since v4.15, removal v5.0):
+        Legacy signature (deprecated since v4.15, removal v5.32):
             ``Source.fiber_mode(mode_field_diameter, N, dx, wavelength,
             ...)``
         """
@@ -3201,7 +3328,7 @@ class Source:
                     'Source.fiber_mode(*, N, dx, wavelength, '
                     'mode_field_diameter, ...)'),
                 version_added='4.15',
-                version_removed='5.0',
+                version_removed=_OVERDUE_SHIM_VERSION_REMOVED,
                 stacklevel=4,
             )
             if len(args) > 4:
@@ -3298,7 +3425,8 @@ class Source:
         ``_RETURN_KIND_UNSET`` is preserved as a deprecated
         compatibility shim (treated as ``'ensemble'`` at the
         classmethod boundary); both sentinel + helper are slated for
-        removal in v5.0.
+        removal in v5.32 (R-18: re-scheduled off the blown v5.0
+        horizon).
 
         Return contract (v4.15.2+)
         --------------------------

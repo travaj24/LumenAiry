@@ -215,6 +215,120 @@ unit paths, `quarter_wave_ar`).
   so the names stay discoverable.  Export integrity unchanged (every
   `__all__` entry still resolves; phantom names still raise `AttributeError`).
 
+### Fixed (adversarial-audit Tier 2, wave 3 — Territory R: raytrace / glass / sources / optimize MEDIUM + LOW, 2026-07-25)
+
+Territory R's MEDIUM/LOW tail plus the dead-code and overdue-shim sweep.
+Every finding reproduced by measurement BEFORE the fix and re-measured after;
+72 pins in `tests/unit/test_niche_audit_w3_raytrace_sources.py`, 47 verified
+failing on a pre-fix worktree of `7ea2eb9` (the 25 that pass pre-fix are
+non-vacuity probes plus the three DECLINED-finding locks, each labelled as
+such in its class docstring).
+
+- **R-8 / E-L7 (MEDIUM)** — an ODD aspheric power made a surface
+  sag/normal-INCONSISTENT, and inconsistent DIFFERENTLY per backend: the sag
+  floors `h_sq ** (p // 2)` to the next-lower EVEN power while the NumPy
+  normal uses `p*h**(p-1)` and the JAX normal `p*h_sq**((p-2)//2)*x`
+  (measured at `{5: 1e6}`, h = 10 mm, flat base: sag 0.01 m, NumPy dz/dx
+  0.05, JAX dz/dx 5.0 against the sag-consistent 4.0 — a 100x
+  cross-backend divergence).  `validate_prescription` already rejected it,
+  but a hand-built `Surface(aspheric_coeffs={5: A5})` and the JAX
+  prescription path (which never builds a `Surface`) both sailed through:
+  `trace_jax` returned a finite ray height off the inconsistent surface.
+  One shared guard now sits at both entry points —
+  `raytrace/_conic_core.py:55` (`check_even_aspheric_powers`, called from
+  the sag/derivative twins at `:266` and `:305`, which is the JAX backend's
+  only sag route) and `raytrace/surface.py:264` (`Surface.__post_init__`)
+  — with the same message `validate_prescription` emits.  Non-integral
+  powers (`4.5`) are rejected too; EVEN powers are byte-unchanged.
+- **R-11 (MEDIUM)** — `paraxial.f_number` returned the SIGNED ratio, so a
+  diverging prescription read `f/-9.965` while all three siblings computing
+  the same quantity (`raytrace/layout.py`, `merit_terms.MaxFNumberMerit`,
+  `FirstOrderData.fnum`) reported `+9.965`.  Now `abs(EFL)/D`
+  (`raytrace/paraxial.py:200`); all four agree bitwise.  Grep-verified that
+  no consumer read the sign.
+- **R-12 (MEDIUM)** — `glass._sellmeier_index` was scalar-only: an ndarray
+  died on the resonance guard with numpy's opaque "truth value of an array
+  with more than one element is ambiguous" and a list with "can't multiply
+  sequence by non-int of type 'float'" — while the `_polynomial_index`
+  sibling's docstring advertised scalar/array parity with it.  Given the
+  same scalar-fast-path + vector-path split as that sibling
+  (`glass.py:694`); the vector result is bit-identical (0 ULP) to a scalar
+  loop over the same wavelengths, the scalar path is unchanged, and the
+  vector path keeps the 4.10 resonance / negative-n2 diagnoses.
+- **R-13 (MEDIUM)** — the NumPy DOE kick divided by the grating period
+  unguarded: `period=0.0` raised `ZeroDivisionError` mid-trace and
+  `period=nan` silently NaN-poisoned (L, M) (measured NumPy `(nan, nan)` vs
+  JAX `(0.0, 0.0)`).  Now zero/non-finite means "no grating on that axis"
+  — exactly the JAX twin's documented contract (`raytrace/trace.py:213`).
+  `inf` was already 0.0 by IEEE division and is bit-identical.
+- **R-16 (LOW)** — the numba dual `_dsqrtq` clamped a NaN radicand to a
+  finite `0.0` (because `nan > 0.0` is False) where the `_dual_sqrt` NumPy
+  twin propagates NaN through `np.maximum`.  NaN now propagates in value AND
+  tangent (`raytrace/differential.py:681`); finite radicands, including
+  exactly 0.0 and negatives, are bit-identical.  The divergence is invisible
+  at the public boundary (`_adrt_numba` scrubs with `np.nan_to_num`; 7
+  NaN/inf probes x refract/mirror stacks came back IDENTICAL pre-fix), so
+  the njit primitives are published as `_ADRT_NUMBA_PRIMS` for the pin to
+  compare against `_dual_sqrt` directly.
+- **R-9 / R-10 (MEDIUM API hazards, documented — no signature change)** —
+  `create_hermite_gauss` / `create_laguerre_gauss` take `w0` in the
+  positional slot every other `create_*` factory uses for `wavelength`, and
+  the swapped call was silently accepted.  Prominent docstring warnings plus
+  a zero-false-positive runtime check (`sources/core.py:157`, called at
+  `:700` / `:872` AFTER the `w0 > 0` validation): a paraxial mode always has
+  `w0 >= wavelength`, and the six in-repo HG/LG call sites run at ratios
+  6.45-2000, so the tightest clears the threshold by 6.4x.  The annular
+  radius-vs-diameter split (`create_annular_beam` takes DIAMETERS,
+  `create_annular_incoherent_source` RADII) is now flagged at both sites.
+- **R-17 (LOW)** — `design_optimize(wave_traced=)` and
+  `MatchIdealSystemMerit(use_traced_lens=, focus_search=)` are documented
+  public flags with live branches and ZERO callers anywhere (library, tests,
+  validation, examples, UI).  Deprecated through the shared registry with
+  removal v5.32 (`optimize/driver.py:577`, `optimize/merit_terms.py:579`)
+  — NOT deleted, since out-of-repo callers cannot be ruled out.  The
+  warnings fire only on a non-default value, so the existing corpus stays
+  silent.  The four consequently-unexercised penalty helpers keep their code
+  and now say in their docstrings that CI does not cover them.  `match=` was
+  NOT deprecated: its default is the exercised path and the metric choice is
+  a real feature (only its three non-default kernels are uncovered).
+- **Overdue shims re-scheduled** — seven `version_removed` = `5.0` sites in
+  `sources/core.py` (the `create_led_source` positional shim, the five
+  `Source.*` legacy positional shims, the Schell `return_kind` sentinel
+  helper) were still shipping at v5.29, 29 minor releases past their own
+  removal date.  Re-scheduled ONCE to v5.32 through a single constant
+  (`sources/core.py:60`) so the next slip is a one-line edit and cannot drift
+  between sites; measured that all seven warnings still fire from the
+  production path.  Two existing pins that hard-coded the old string were
+  corrected to assert against the constant, with the rationale in their
+  docstrings.
+- **Declined, with the measurement that justifies each** — **R-14**
+  (aperture-clip order differs NumPy-vs-JAX): only DEAD rows differ (`|dL|`
+  up to 0.187); the alive masks are equal and every ALIVE row's `x`/`L` is
+  bit-identical, because the clip reads only `(x, y)` which refraction never
+  touches.  Documented in `trace()`'s Notes and pinned; the reorder would
+  touch two other territories and would relabel a vignetted-AND-TIRing ray
+  from `RAY_APERTURE` to `RAY_TIR`.  **R-15** (`make_fan(axis='x')` tilts in
+  `L` where `make_ring`/`make_grid` tilt in `M`): the per-axis convention is
+  load-bearing — monkeypatching the proposed "always M" form moved
+  `ray_fan_data`'s `ex(0)` from exactly 0.0 to -1.381e-04 m at a 3 deg
+  field, breaking the RT-5 invariant at four call sites.  Documented on
+  `make_fan` and locked by a pin.  **R-18 dead code**: four of the
+  "grep-verified dead, delete" entries have live or grep-invisible
+  consumers — `_invalidate_glass_name` is called by
+  `raytrace.trace._register_fixed_index`; `_GLASS_CACHE` is the companion
+  name the v4.14.2 cache/lock walker discovers BY REFLECTION (the lower-case
+  `_glass_cache` does not match its candidate list);
+  `_POLYNOMIAL_STUB_NAMES` is a documented forward-compat hook whose
+  emptiness IS the invariant, read by a load-time well-formedness loop and
+  already acknowledged by two skipping tests; `TraceResult.rays_at` is
+  public documented API that `trace()`'s own `output_filter` contract
+  describes.  `DifferentialTransfer` / `ParetoResult` are the return TYPES
+  of public functions, not unused exports.  Counter-pins record each
+  consumer so the next hygiene pass does not repeat the mistake.
+- **CHANGELOG line-citation refresh** — `optimize/merit_terms.py:536` ->
+  `optimize/merit_terms.py:638` (`MatchIdealSystem._make_source` `ap>0`
+  branch; the R-17 docstring additions shifted it by 53 lines).
+
 ### Fixed (adversarial-audit Tier 2, wave 3 — UI breadth + deprecation registry, 2026-07-25)
 
 Territory A's UI pass and deprecation rot.  All six dead UI actions were
