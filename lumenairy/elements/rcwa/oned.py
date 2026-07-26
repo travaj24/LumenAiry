@@ -632,7 +632,7 @@ def rcwa_efficiency_1d(
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        S11, S12, S21, S22 = S
+        S11, _S12, S21, _S22 = S
 
         # --- incident field (delta on 0th order, chosen polarization) ----
         if polarization == "te":
@@ -950,7 +950,7 @@ def rcwa_jones_vs_wavelength_segments(
 
 def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
                             eps_sup, eps_sub, kz_inc, depth, kx0, xp, is_jax,
-                            fn_name, lossless=False):
+                            fn_name, lossless=False, formulation="li"):
     """Shared 1-D anisotropic Jones solve core (binary or multi-segment).
 
     Given the per-component one-period ``profiles`` (5 keys for the in-plane
@@ -970,8 +970,21 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
     :func:`rcwa_jones_1d_segments` reuses the EXACT same core; the binary and
     multi-segment callers differ only in how they sample ``profiles``.  Keeps
     the JAX-differentiable stack-based structure (no in-place assignment).
+
+    ``formulation`` ('li' default / 'laurent') selects the in-plane
+    factorization rule, see :func:`_tensor_convolutions`.  The FULL-3x3
+    (``offplane``) branch is the Li-2003 successive factorization by
+    construction and accepts ``'li'`` only.
     """
     N = 2 * M + 1
+    if offplane and formulation != "li":
+        raise NotImplementedError(
+            f"{fn_name}: formulation={formulation!r} is not available for an "
+            f"OUT-OF-PLANE (full-3x3) tensor -- that path is the Li-2003 "
+            f"successive factorization by construction (the out-of-plane "
+            f"components ride the wall-normal pivots through the Schur "
+            f"reorganization, which has no direct-rule form).  Use "
+            f"formulation='li' there, or an IN-PLANE tensor for 'laurent'.")
     if offplane:
         # ---- FULL-3x3 (out-of-plane) path (Li 2003) ------------------------
         # Sample all nine component profiles, build the full convolutions +
@@ -990,9 +1003,9 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         S = _interface_smatrix_general(Mref, Ml)
         S = _propagation_star_general(S, lam, lam_b, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
-        S11, S12, S21, S22 = S
+        S11, _S12, S21, _S22 = S
     else:
-        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M)
+        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M, formulation)
 
         Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
         Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
@@ -1000,7 +1013,7 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        S11, S12, S21, S22 = S
+        S11, _S12, S21, _S22 = S
 
     delta = xp.asarray((orders == 0).astype(_C))
     zeros_N = xp.zeros(N, dtype=_C)
@@ -1062,6 +1075,7 @@ def rcwa_jones_1d(
     angle: float = 0.0,
     theta: float | None = None,
     n_orders: int = 11,
+    formulation: str = "li",
     use_gpu: bool = False,
     return_jones_transmission: bool = False,
 ) -> Tuple[np.ndarray, ...]:
@@ -1090,6 +1104,22 @@ def rcwa_jones_1d(
     depth, duty_cycle, wavelength, angle, n_orders
         As in :func:`rcwa_efficiency_1d` (ridge occupies ``duty_cycle`` of
         the period; planar incidence at ``angle``).
+    formulation : {'li', 'auto', 'laurent'}, optional
+        In-plane Fourier factorization (audit M7 2026-07-25 -- previously
+        hard-wired, so the family could not be driven from one setting).
+        ``'li'`` is the DEFAULT here (``'auto'`` / ``'fff'`` are aliases of it),
+        NOT ``'auto'`` as in :func:`rcwa_efficiency_1d`: an anisotropic layer
+        makes ``D_x`` discontinuous at every wall for BOTH incident
+        polarizations, so the Li-1996 inverse rule (``Cxx = [[1/exx]]^{-1}``,
+        with the Schur-completed off-diagonal blocks) is the only rigorous
+        choice and there is nothing to auto-detect.  ``'laurent'`` applies the
+        DIRECT rule to all four in-plane blocks: a factorization-study /
+        cross-check mode that converges slowly (the same status an explicit
+        ``'laurent'`` has for TM in :func:`rcwa_efficiency_1d`), useful for
+        confirming the two rules meet -- they agree to eig precision for a
+        uniform (x-invariant) tensor and converge to the same limit for a
+        patterned one.  An OUT-OF-PLANE (full-3x3) tensor accepts ``'li'`` only
+        (its Li-2003 path has no direct-rule form) and raises otherwise.
     return_jones_transmission : bool, optional
         When ``True`` append the zeroth-order TRANSMISSION Jones as a fifth
         return value (see Returns).  Default ``False`` keeps the historical
@@ -1134,6 +1164,14 @@ def rcwa_jones_1d(
     if not (0.0 <= float(duty_cycle) <= 1.0):
         raise ValueError(
             f"rcwa_jones_1d: duty_cycle must be in [0, 1], got {duty_cycle}.")
+    formulation = str(formulation).lower()
+    if formulation in ("auto", "fff"):
+        formulation = "li"
+    if formulation not in ("li", "laurent"):
+        raise ValueError(
+            f"rcwa_jones_1d: formulation must be 'li'/'auto'/'fff' (the "
+            f"inverse rule, default) or 'laurent' (the direct rule), got "
+            f"{formulation!r}.")
     # Out-of-plane (full-3x3) tensors are allowed on the 1-D path (v5.11.0);
     # the flag routes to the general full-tensor solver below.  In-plane tensors
     # keep the existing path bit-identical.
@@ -1228,7 +1266,8 @@ def rcwa_jones_1d(
     res = _jones_1d_from_profiles(
         profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
         eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
-        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d", lossless=lossless)
+        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d", lossless=lossless,
+        formulation=formulation)
     return res if return_jones_transmission else res[:4]
 
 

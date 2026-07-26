@@ -78,6 +78,24 @@ def _normalize_2d_formulation(fn_name, formulation):
     return f
 
 
+def _uniform_cell(eps_cell):
+    """True if every sample of ``eps_cell`` is the same value (a homogeneous
+    layer handed to a 2-D solver as an array), to a RELATIVE ``1e-12``.
+
+    A uniform cell is the degenerate case of every Fourier-factorization rule:
+    ``[[eps]] = [[1/eps]]^{-1} = eps*I``, so Laurent / Li / normal-vector FFF
+    all coincide and the SCALAR laurent path (whose analytic uniform modes
+    avoid the degenerate eig, and whose normal-vector field would be the 0/0
+    of a cell with no walls) is the one to route to.  Concrete arrays only --
+    a traced JAX cell has no inspectable values, so callers gate on
+    ``not is_jax`` first.  This is the single definition of "uniform cell"
+    shared by the ``'li'`` / ``'fff_nv'`` routing and by
+    :func:`_nv_nonseparable_guard`."""
+    e = to_numpy(eps_cell)
+    scale = max(1.0, float(np.max(np.abs(e))))
+    return float(np.max(np.abs(e - e.flat[0]))) < 1e-12 * scale
+
+
 
 # ===========================================================================
 # 2-D crossed gratings (doubly periodic)
@@ -123,6 +141,16 @@ def _harmonic_orders_2d(n_orders_x, n_orders_y, *, truncation="rectangular",
                 "_harmonic_orders_2d: truncation='circular' needs period_x "
                 "and period_y (the reciprocal-circle radius is "
                 "period-dependent).")
+        if My == 0:
+            # The inscribed circle has radius min(Mx/px, 0) = 0, so the kept
+            # set would silently collapse to the single (0, 0) order (audit M8).
+            raise ValueError(
+                "_harmonic_orders_2d: truncation='circular' is incompatible "
+                "with n_orders_y=0 -- the inscribed reciprocal circle then has "
+                "ZERO radius and the retained set would collapse to the single "
+                "(0, 0) order.  Use truncation='rectangular' for a y-invariant "
+                "cell (the y-harmonics are exactly decoupled there anyway), or "
+                "n_orders_y >= 1.")
         gx = m / float(period_x)
         gy = n / float(period_y)
         r2 = min(Mx / float(period_x), My / float(period_y)) ** 2
@@ -221,7 +249,17 @@ def _nv_field_2d(eps_cell, period_x, period_y, *, method="smoothed_gradient",
     ``method='xy_wedge'``: the closed-form axis-aligned field (Schuster
     Fig. 7c) -- the cell is split by the diagonals of a single centred
     rectangle and each wedge carries the wall normal it faces.  Exact for one
-    axis-aligned rectangular feature; ``sigma_px`` is ignored.
+    axis-aligned rectangular feature; ``sigma_px`` is ignored.  NO public
+    entry point selects it (audit M10 2026-07-25 confirmed by grep): every
+    solver calls this helper with the default, and the wedge arm exists as the
+    closed-form CROSS-CHECK of the smoothed-gradient field on the one geometry
+    where the exact normals are known -- which is what
+    ``tests/unit/test_v5_11_0_rcwa_fff_nv_2d.py`` uses it for.  It is
+    deliberately NOT wired to a solver kwarg: the smoothed gradient is the
+    shape-agnostic field (it handles multi-shape / curved / numeric cells,
+    where the single-rectangle wedge construction is simply wrong), and
+    ``fff_nv``'s own validated scope excludes the cornered metal cells a wedge
+    field would target (see :func:`_nv_nonseparable_guard`).
 
     ``eps_cell`` MUST be the INTERNAL (loss-bridge-conjugated) sample so the
     indicator lives in the same namespace as the eps operators.  The field is
@@ -563,10 +601,9 @@ def _nv_nonseparable_guard(fn_name, eps_cell, allow_nonseparable_nv):
     frac = _nv_curved_wall_fraction(eps_cell)
     # A UNIFORM cell has no walls, so there is no cross term to mis-factorize
     # (and its normal-vector field is undefined) -- nothing to gate, and the
-    # N-field must not be built here.
-    _e = to_numpy(eps_cell)
-    if float(np.max(np.abs(_e - _e.flat[0]))) < 1e-12 * max(
-            1.0, float(np.max(np.abs(_e)))):
+    # N-field must not be built here.  (The solvers route such a cell to
+    # 'laurent' before they reach this guard; see _uniform_cell.)
+    if _uniform_cell(eps_cell):
         return
     # period_x/period_y are UNUSED by the smoothed-gradient N-field (its
     # frequencies are per-pixel), so unit placeholders serve here.
@@ -660,7 +697,16 @@ def rcwa_efficiency_2d(
         ``'te'`` (s) / ``'tm'`` (p) relative to the plane of incidence.
     n_orders_x, n_orders_y : int, optional
         Retained orders per side along each axis (default 5 -> 11x11 = 121
-        harmonics).
+        harmonics).  ``n_orders_y = 0`` is legal on a y-INVARIANT cell (a
+        stripe / 1-D grating driven through the 2-D engine): the ``n != 0``
+        y-harmonics are exactly decoupled there, so dropping them reproduces
+        :func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d` per order to ~5e-15
+        while cutting the retained-harmonic count -- hence the ``O(N^3)``
+        eigensolve -- by 3x (27x) versus ``n_orders_y = 1`` (audit M8).  A cell
+        that VARIES along y raises: with zero y-harmonics only the y-AVERAGED
+        permittivity enters, which is a silent, energy-clean wrong answer.
+        ``truncation='circular'`` also raises (its inscribed circle would have
+        zero radius).  ``n_orders_x >= 1`` always.
     formulation : {'laurent', 'li', 'fff', 'fff_nv'}, optional
         Fourier factorization of the patterned layer.
 
@@ -745,6 +791,12 @@ def rcwa_efficiency_2d(
 
           ``'fff_nv'`` is NumPy / CuPy only and is incompatible with the
           ``symmetry`` even-parity fast path (transparently skipped).
+
+        A spatially UNIFORM ``eps_cell`` (a homogeneous layer handed in as an
+        array) is routed to ``'laurent'`` under ``'li'`` AND ``'fff_nv'``: with
+        no walls every rule coincides (``[[eps]] = [[1/eps]]^{-1} = eps I``)
+        and there is no normal-vector field to build, so the returned value is
+        bit-identical to an explicit ``formulation='laurent'`` call.
 
         (``'fff'`` is accepted as an alias of ``'li'``.)
     truncation : {'rectangular', 'circular'}, optional
@@ -850,7 +902,7 @@ def rcwa_efficiency_2d(
                                    depth=depth, wavelength=wavelength),
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
     _validate_cell_sampling("rcwa_efficiency_2d", eps_cell,
-                            n_orders_x, n_orders_y)
+                            n_orders_x, n_orders_y, strict_y=True)
     polarization = _normalize_pol("rcwa_efficiency_2d", polarization)
     formulation = _normalize_2d_formulation("rcwa_efficiency_2d", formulation)
 
@@ -924,19 +976,25 @@ def rcwa_efficiency_2d(
     # 'li' per-order to ~1e-14.
     li_ops = None
     if formulation == "li":
-        if not is_jax:
+        if not is_jax and _uniform_cell(eps_cell):
             # Uniform cell: all rules coincide; route to the scalar path whose
             # analytic uniform modes avoid the degenerate eig.  (Under JAX the
             # tensor eigensolver's iso-uniform blend handles this tracer-safe.)
-            e_np = to_numpy(eps_cell)
-            scale = max(1.0, float(np.max(np.abs(e_np))))
-            if float(np.max(np.abs(e_np - e_np.flat[0]))) < 1e-12 * scale:
-                formulation = "laurent"
+            formulation = "laurent"
         if formulation == "li":
             Cxx_li, Cyy_li = _li_convolutions_2d(
                 eps_cell, orders, n_orders_x, n_orders_y, xp)
             li_ops = (Cxx_li, Cyy_li, EPS)
     ez_inv = None
+    # Uniform cell + 'fff_nv': route to 'laurent' exactly as 'li' does above.
+    # A cell with no walls has NO normal-vector field -- ``_nv_field_2d``'s
+    # indicator gradient is identically zero, so its normalisation is 0/0 and
+    # the unit-norm assertion fired with ``max |N| = nan`` (a bare
+    # AssertionError, no actionable message) instead of solving the homogeneous
+    # slab every rule agrees on.  The non-separability guard already exempts a
+    # uniform cell for the same reason.
+    if formulation == "fff_nv" and _uniform_cell(eps_cell):
+        formulation = "laurent"
     # Normal-vector FFF (Schuster 2007): build the local wall-normal field from
     # the SAME internal (loss-bridge-conjugated) cell and assemble the full
     # in-plane tensor operator (the inverse rule projected on the normal, the
@@ -1009,7 +1067,7 @@ def rcwa_efficiency_2d(
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        S11, S12, S21, S22 = S
+        S11, _S12, S21, _S22 = S
         r = S11 @ cinc
         t = S21 @ cinc
     rx, ry = r[:N], r[N:]
@@ -1121,7 +1179,7 @@ class PreparedRCWA2D:
             S = _interface_smatrix(Wref, Vref, Wl, Vl)
             S = _propagation_star(S, lam, k0 * self.depth)
             S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-            S11, S12, S21, S22 = S
+            S11, _S12, S21, _S22 = S
             r = S11 @ self.cinc
             t = S21 @ self.cinc
         rx, ry = r[:N], r[N:]
@@ -1170,7 +1228,8 @@ def prepare_rcwa_2d(
     _validate_geometry("prepare_rcwa_2d",
                        period=period_x, period_y=period_y, depth=depth,
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
-    _validate_cell_sampling("prepare_rcwa_2d", eps_cell, n_orders_x, n_orders_y)
+    _validate_cell_sampling("prepare_rcwa_2d", eps_cell, n_orders_x,
+                            n_orders_y, strict_y=True)
     polarization = _normalize_pol("prepare_rcwa_2d", polarization)
     formulation = _normalize_2d_formulation("prepare_rcwa_2d", formulation)
 
@@ -1203,15 +1262,18 @@ def prepare_rcwa_2d(
     fff = None
     if formulation == "li":
         # Li-1997 sequential rule (v5.14.1, audit F1) -- see _li_convolutions_2d.
-        e_np = to_numpy(eps_cell)
-        scale = max(1.0, float(np.max(np.abs(e_np))))
-        if float(np.max(np.abs(e_np - e_np.flat[0]))) < 1e-12 * scale:
+        if _uniform_cell(eps_cell):
             formulation = "laurent"   # uniform cell: analytic scalar modes
         else:
             Cxx_li, Cyy_li = _li_convolutions_2d(
                 eps_cell, orders, n_orders_x, n_orders_y, xp)
             Zli = xp.zeros_like(Cxx_li)
             fff = (Cxx_li, Zli, Zli, Cyy_li, EPS)
+    # Uniform cell + 'fff_nv': route to 'laurent' (no walls -> no normal-vector
+    # field; ``_nv_field_2d`` would assert on a 0/0 NaN) -- see the twin in
+    # rcwa_efficiency_2d.
+    if formulation == "fff_nv" and _uniform_cell(eps_cell):
+        formulation = "laurent"
     if formulation == "fff_nv":
         _nv_nonseparable_guard("prepare_rcwa_2d", eps_cell,
                                allow_nonseparable_nv)
@@ -1477,7 +1539,7 @@ def rcwa_jones_2d(
                                    depth=depth, wavelength=wavelength),
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
     _validate_cell_sampling("rcwa_jones_2d", eps_tensor_cell,
-                            n_orders_x, n_orders_y)
+                            n_orders_x, n_orders_y, strict_y=True)
     # OUT-OF-PLANE tensors are SUPPORTED since v5.14.1 (audit GAP2) via the
     # generalized forward/backward cascade below; the remaining contract is a
     # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  The
@@ -1674,7 +1736,7 @@ def rcwa_jones_2d(
         S = _propagation_star(S, lam, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
     if S is not None:
-        S11, S12, S21, S22 = S
+        S11, _S12, S21, _S22 = S
 
     p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
@@ -1715,17 +1777,20 @@ def rcwa_jones_2d(
 
 
 # ===========================================================================
-# Analytic shape Fourier transforms + dual-Laurent 2-D factorization
+# Analytic shape Fourier transforms + Laurent 2-D factorization
 # ===========================================================================
 #
 # For known shapes (rectangle, disk, ellipse) the permittivity Fourier
 # coefficients are computed in CLOSED FORM (exact form factors) instead of
 # by FFT-sampling a pixelated cell -- eliminating the aliasing / staircase
 # error of pixelation, so the spectrum is exact and convergence is clean.
-# Both [[eps]] and [[1/eps]] are built from the SAME analytic form factors,
-# and the layer eigenproblem uses the dual-Laurent factorization (the
-# in-plane Q block uses [[eps]]; the E_z elimination uses [[1/eps]]
-# directly) -- the formulation used by mature analytic-FT FMM codes.
+# Both [[eps]] and [[1/eps]] are built from the SAME analytic form factors.
+# The layer eigenproblem uses the LAURENT (direct) rule throughout: the
+# in-plane Q block AND the E_z elimination both take [[eps]] (E_z is
+# wall-tangential, Li 1997 Eq. 27).  It was the "dual-Laurent" rule
+# ([[1/eps]] for the z-elimination) until v5.14.1, when audit F1 measured
+# that as the WRONG factorization (+0.35 metal absorptance); only the name
+# lingered in these comments (audit M10 2026-07-25).
 
 def _shape_form_factor(shape, gxv, gyv, period_x, period_y):
     """Analytic Fourier form factor ``F(G) = (1/A_cell) integral_shape
@@ -1764,7 +1829,16 @@ def _analytic_convolutions_2d(eps_background, shapes, orders, n_orders_x,
     """Analytic ``[[eps]]`` and ``[[1/eps]]`` convolution matrices for a 2-D
     unit cell of background ``eps_background`` overlaid with ``shapes`` (each
     a dict ``{'shape', 'eps', geometry, ['center']}``).  Returns
-    ``(EPS, EPS_inv_laurent)``."""
+    ``(EPS, EPS_inv_laurent)``.
+
+    NB the second return is the DIRECT-rule Laurent transform of ``1/eps``,
+    i.e. ``[[1/eps]]`` and NOT the inverse-rule operator ``[[1/eps]]^{-1}``.
+    No shipped formulation reads it any more: it fed the "dual-Laurent" ``E_z``
+    elimination that audit F1 (v5.14.1) measured as the wrong factorization, and
+    all three call sites now discard it explicitly (audit M10 2026-07-25).  It
+    is kept -- exported and test-covered -- because it is the analytic
+    counterpart of the pixel path's ``[[1/eps]]`` and is what a factorization
+    study needs; do not read it expecting an inverse-rule operator."""
     Mx, My = int(n_orders_x), int(n_orders_y)
     ks = np.arange(-2 * Mx, 2 * Mx + 1)
     ls = np.arange(-2 * My, 2 * My + 1)
@@ -1805,11 +1879,14 @@ def rcwa_efficiency_2d_shapes(
     polarization: str = "te",
     n_orders_x: int = 5,
     n_orders_y: int = 5,
+    formulation: str = "laurent",
     truncation: str = "rectangular",
+    stabilize: bool = False,
+    symmetry=False,
     use_gpu: bool = False,
 ) -> Efficiency2D:
     """Rigorous 2-D crossed-grating efficiencies using **analytic** shape
-    Fourier transforms and the dual-Laurent factorization.
+    Fourier transforms and the Laurent (direct-rule) factorization.
 
     Backend-dispatched for NumPy / CuPy (``use_gpu``).  The analytic shape
     form factors are evaluated on the host (closed form) and the resulting
@@ -1835,14 +1912,80 @@ def rcwa_efficiency_2d_shapes(
         ``'semi_axes': (ax, ay)`` for an ellipse (all metres).  Shapes are
         painted in order over the background.
     n_substrate, n_superstrate, depth, wavelength, theta, phi, polarization,
-    n_orders_x, n_orders_y
-        As in :func:`rcwa_efficiency_2d`.
+    n_orders_x, n_orders_y, truncation, stabilize
+        As in :func:`rcwa_efficiency_2d` (audit M7 2026-07-25 added
+        ``formulation`` / ``stabilize`` / ``symmetry`` here so the whole 2-D
+        family takes the same control set).
+    symmetry : {False, 'auto', True}, optional
+        Even-parity fast path, as in :func:`rcwa_efficiency_2d` -- but the
+        default here is ``False``, NOT ``'auto'``: the fold is a mode-wise
+        rescale/reorder of the same subspace, so it moves the returned values by
+        ~1e-13 (measured 1.2e-13 on a centred disk, 121 harmonics), and this
+        argument was added AFTER the function shipped -- keeping ``False`` makes
+        the default path bit-for-bit what it always was.  Pass ``'auto'`` /
+        ``True`` to opt in; on a centro-symmetric shape list at normal
+        incidence it engaged and cut the solve by ~2-90x (the analytic form
+        factors of a centred shape are exactly flip-invariant, and an
+        off-centre shape is handled by the recentering gauge).  The deliberate
+        default difference is recorded in the cross-family table in
+        ``rcwa/_core.py``.
+    formulation : {'laurent'}, optional
+        Fourier factorization.  Only ``'laurent'`` (the direct rule everywhere,
+        with the DIRECT-rule ``E_z`` elimination ``inv([[eps]])`` -- v5.14.1
+        audit F1) is available on the ANALYTIC-shape path, and it is the
+        default, so this argument exists for signature parity with
+        :func:`rcwa_efficiency_2d`: it lets a caller thread one
+        ``formulation`` through the family and get a CLEAR error instead of a
+        silently-ignored kwarg.  ``'li'`` and ``'fff_nv'`` raise
+        :class:`NotImplementedError`: both need per-pixel-LINE operators (Li's
+        sequential rule inverts a 1-D Toeplitz per pixel row/column; the
+        normal-vector FFF needs a sampled wall-normal field), whereas the
+        analytic form factors deliver only the GLOBAL Fourier coefficients.
+        Rasterise the cell and call :func:`rcwa_efficiency_2d` for those.
 
     Returns
     -------
     orders : (N, 2) int ndarray
     R_eff, T_eff : (N,) float ndarray
     """
+    formulation = _normalize_2d_formulation("rcwa_efficiency_2d_shapes",
+                                            formulation)
+    if formulation != "laurent":
+        raise NotImplementedError(
+            f"rcwa_efficiency_2d_shapes: formulation={formulation!r} is not "
+            f"available on the analytic-shape path -- the sequential ('li') and "
+            f"normal-vector ('fff_nv') rules need per-pixel-line operators, "
+            f"while the analytic form factors give only the global Fourier "
+            f"coefficients.  Use formulation='laurent' here, or rasterise the "
+            f"cell and call rcwa_efficiency_2d for 'li' / 'fff_nv'.")
+    if stabilize:
+        # Same nearest-first ladder as rcwa_efficiency_2d (see its `stabilize`):
+        # a measure-zero layer<->region mode-match blows the energy up at an
+        # erratic set of truncations, and the clean ones bracket the bad ones.
+        # No cell-sampling pre-filter is needed here: the analytic form factors
+        # have no aliasing bound, so every bump is reachable.
+        last = None
+        for bump in _stabilize_bumps(min(int(n_orders_x), int(n_orders_y))):
+            try:
+                with warnings.catch_warnings(record=True) as wlist:
+                    warnings.simplefilter("always")
+                    res = rcwa_efficiency_2d_shapes(
+                        period_x, period_y, eps_background, shapes,
+                        n_substrate, n_superstrate, depth, wavelength,
+                        theta=theta, phi=phi, polarization=polarization,
+                        n_orders_x=int(n_orders_x) + bump,
+                        n_orders_y=int(n_orders_y) + bump,
+                        formulation=formulation, truncation=truncation,
+                        stabilize=False, symmetry=symmetry, use_gpu=use_gpu)
+            except _EnergyError as e:
+                last = e
+                continue
+            closure = _stabilize_closure_failure(wlist, formulation)
+            if closure is not None:
+                last = _EnergyError(str(closure.message))
+                continue
+            return res
+        raise last
     _validate_geometry("rcwa_efficiency_2d_shapes", period=period_x,
                        period_y=period_y, depth=depth, wavelength=wavelength,
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
@@ -1896,22 +2039,12 @@ def rcwa_efficiency_2d_shapes(
 
     # Analytic (host) form factors -> move the convolution matrices to the
     # backend for the eigensolve.
-    EPS_np, _EPS_inv_np = _analytic_convolutions_2d(
+    EPS_np, _ = _analytic_convolutions_2d(     # [[1/eps]] unused (M10)
         eps_bg, shapes_c, orders, n_orders_x, n_orders_y, period_x, period_y)
     EPS = xp.asarray(EPS_np)
 
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-    # In-plane uses the analytic [[eps]]; the E_z elimination uses the
-    # DIRECT rule inv([[eps]]) (v5.14.1 audit F1: the dual-Laurent [[1/eps]]
-    # z-rule was the wrong factorization -- E_z is wall-tangential -- and
-    # reproduced the identical metal-absorptance blow-up here, +0.35 at M=16,
-    # refuting the old attribution to the pixel route).
-    Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
-    S = _interface_smatrix(Wref, Vref, Wl, Vl)
-    S = _propagation_star(S, lam, k0 * depth)
-    S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-    S11, S12, S21, S22 = S
 
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
     kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
@@ -1928,8 +2061,30 @@ def rcwa_efficiency_2d_shapes(
             ex0, ey0 = ax, ay
             einc_sq = 1.0 + (kt / kz_inc) ** 2
     cinc = xp.concatenate([ex0 * delta, ey0 * delta])
-    r = S11 @ cinc
-    t = S21 @ cinc
+
+    # In-plane uses the analytic [[eps]]; the E_z elimination uses the
+    # DIRECT rule inv([[eps]]) (v5.14.1 audit F1: the dual-Laurent [[1/eps]]
+    # z-rule was the wrong factorization -- E_z is wall-tangential -- and
+    # reproduced the identical metal-absorptance blow-up here, +0.35 at M=16,
+    # refuting the old attribution to the pixel route).
+    # Opt-in even-parity fold (audit M7: the same `symmetry` contract as
+    # rcwa_efficiency_2d).  The scalar laurent operator pair is exactly what
+    # _symmetric_solve_rt folds; it returns None (-> full 2N solve) unless the
+    # cell is centro-symmetric at normal incidence.
+    rt = None
+    if _symmetry_on(symmetry) and kt < 1e-12:
+        rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS, None,
+                                 orders, k0, depth, cinc, xp)
+    if rt is not None:
+        r, t = rt
+    else:
+        Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
+        S = _interface_smatrix(Wref, Vref, Wl, Vl)
+        S = _propagation_star(S, lam, k0 * depth)
+        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+        S11, _S12, S21, _S22 = S
+        r = S11 @ cinc
+        t = S21 @ cinc
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
     kz_ref_f = _forward_flux_kz(eps_sup, kxv, kyv)

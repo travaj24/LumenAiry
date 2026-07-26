@@ -1,7 +1,17 @@
 """PMM shared core: GLL/Lagrange spectral-element basis, the metric /
 convection / covariant slant generators, the slant solvers + stabilize selector,
 S-matrix cascade, and the far-field nodal->Rayleigh projection.
-NOT a public import surface -- use ``lumenairy.elements.pmm``."""
+NOT a public import surface -- use ``lumenairy.elements.pmm``.
+
+CONVENTIONS shared with the RCWA family (order-count kwarg spellings, the
+``formulation`` / ``stabilize`` / ``symmetry`` defaults that deliberately differ
+between siblings, and the single ``Re(kz) > 0`` propagating-order mask): see the
+CROSS-FAMILY KWARG / DEFAULT MAP in the module docstring of
+``lumenairy/elements/rcwa/_core.py`` (audit M7 2026-07-25).  PMM's ``degree`` is
+a spectral-element POLYNOMIAL degree and is NOT interchangeable with an RCWA
+retained-harmonic ``n_orders``; PMM's ``n_orders`` is an alias of
+``far_field_orders`` (the projected Rayleigh-order count) on the 1-D entry
+points."""
 from __future__ import annotations
 
 import functools
@@ -572,11 +582,17 @@ def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     ``-i kx0 (C - C^T)`` (``C = INT phi phi'``; for TM the 1/eps-weighted
     ``Cinv``, which is NOT antisymmetric across the wall -> the (Cinv - Cinv^T)
     form is required, not ``2 Cinv``) and the ``kx0^2`` mass.  At ``kx0 == 0``
-    the shift vanishes.  ``robust`` forces the NOISE-ROBUST forward branch even at
-    ``kx0 == 0`` (the legacy ``Im(q) >= 0`` branch is bit-identical to the prior
-    binary solve but has dense isolated-degree resonances for many-element /
-    multi-region cells; the robust branch suppresses them).  Binary passes
-    ``robust=False`` (bit-identical); the segmented solver passes ``robust=True``.
+    the shift vanishes.
+
+    ``robust`` is ACCEPTED AND IGNORED (audit M10 2026-07-25 corrected this
+    docstring, which used to describe it as selecting the branch): the
+    NOISE-ROBUST forward selector has been UNCONDITIONAL since v5.14
+    (robustness audit P1 -- the legacy ``Im(q) >= 0`` test flipped near-real
+    propagating modes on ~1e-15 QZ noise and produced dense spurious
+    resonances), so ``robust=False`` does NOT restore the legacy branch.  The
+    parameter is retained only so the existing call sites (binary passes
+    ``False``, segmented ``True``) keep their signatures; the same is true of
+    :func:`_sem_modes_tensor`.
     """
     k02 = k0 * k0
     if polarization == "te":
@@ -819,8 +835,15 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
                                 + np.abs(rz) ** 2) / flux_inc
         Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
                                 + np.abs(tz) ** 2) / flux_inc
-        R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
-        T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
+        # Propagating-order mask: STRICTLY the cut-off ``Re(kz) > 0`` -- the ONE
+        # threshold the whole family uses (rcwa ``_project_efficiency`` and the
+        # 9 PMM 2-D / conical / JAX far-field sites), and the one this
+        # function's own docstring documents.  Audit M7 2026-07-25: these five
+        # 1-D PMM sites carried a ``> 1e-12`` floor instead, which differed only
+        # for an order within 1e-12 of cut-off but made "below cut-off"
+        # engine-dependent; measured zero effect on every pin.
+        R_eff[col] = np.where(np.real(kz_sup) > 0.0, np.real(Re), 0.0)
+        T_eff[col] = np.where(np.real(kz_sub) > 0.0, np.real(Te), 0.0)
         jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
         jones[1, col] = ry[m0]
         amp["rx"][col], amp["ry"][col] = rx, ry
@@ -938,8 +961,10 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
         flux_inc = np.real(kz_inc / eps_sup)
         R = np.real(kz_sup / eps_sup) * np.abs(r_ord) ** 2 / flux_inc
         T = np.real(kz_sub / eps_sub) * np.abs(t_ord) ** 2 / flux_inc
-    R = np.where(np.real(kz_sup) > 1e-12, np.real(R), 0.0)
-    T = np.where(np.real(kz_sub) > 1e-12, np.real(T), 0.0)
+    # ``Re(kz) > 0`` -- the family-wide cut-off mask (audit M7; see
+    # _assemble_jones_farfield for the measurement).
+    R = np.where(np.real(kz_sup) > 0.0, np.real(R), 0.0)
+    T = np.where(np.real(kz_sub) > 0.0, np.real(T), 0.0)
     return R, T
 
 
@@ -1010,7 +1035,8 @@ def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
     (the layer ``mats`` and the matching homogeneous half-space ``mats_sup`` /
     ``mats_sub``, all sharing the same node layout).  Shared by the binary
     :func:`_pmm_solve` and the multi-region :func:`_pmm_solve_segments`
-    (``robust`` forces the noise-robust forward branch -- see :func:`_sem_modes`)."""
+    (``robust`` is accepted and IGNORED -- the noise-robust forward branch is
+    unconditional since v5.14; see :func:`_sem_modes`)."""
     k0 = 2.0 * np.pi / wl
     n_glob = mats["n_glob"]
     # Rayleigh order set for the (forward-only) far-field projection: cover the
@@ -2388,8 +2414,9 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
         flux_inc = jnp.real(kz_inc / eps_sup)
         R = jnp.real(kz_sup / eps_sup) * jnp.abs(r_ord) ** 2 / flux_inc
         T = jnp.real(kz_sub / eps_sub) * jnp.abs(t_ord) ** 2 / flux_inc
-    R = jnp.where(jnp.real(kz_sup) > 1e-12, jnp.real(R), 0.0)
-    T = jnp.where(jnp.real(kz_sub) > 1e-12, jnp.real(T), 0.0)
+    # ``Re(kz) > 0`` cut-off mask, matching the NumPy twin (audit M7).
+    R = jnp.where(jnp.real(kz_sup) > 0.0, jnp.real(R), 0.0)
+    T = jnp.where(jnp.real(kz_sub) > 0.0, jnp.real(T), 0.0)
     return orders, R, T
 
 
@@ -2903,8 +2930,9 @@ def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
                                  + jnp.abs(rz) ** 2) / flux_inc
         Te = jnp.real(kz_sub) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
                                  + jnp.abs(tz) ** 2) / flux_inc
-        rows_R.append(jnp.where(jnp.real(kz_sup) > 1e-12, jnp.real(Re), 0.0))
-        rows_T.append(jnp.where(jnp.real(kz_sub) > 1e-12, jnp.real(Te), 0.0))
+        # ``Re(kz) > 0`` cut-off mask, matching the NumPy twin (audit M7).
+        rows_R.append(jnp.where(jnp.real(kz_sup) > 0.0, jnp.real(Re), 0.0))
+        rows_T.append(jnp.where(jnp.real(kz_sub) > 0.0, jnp.real(Te), 0.0))
         jcols.append(jnp.stack([rx[m0], ry[m0]]))   # [Ex; Ey] reflected, order 0
     R_eff = jnp.stack(rows_R)
     T_eff = jnp.stack(rows_T)

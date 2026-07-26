@@ -1,6 +1,78 @@
 """RCWA shared core: BLAS controls, validation, S-matrix / Redheffer
 algebra, eigenmodes, convolutions, and dimension-agnostic public utilities.
-NOT a public import surface -- use ``lumenairy.elements.rcwa``."""
+NOT a public import surface -- use ``lumenairy.elements.rcwa``.
+
+CROSS-FAMILY KWARG / DEFAULT MAP (audit M7 2026-07-25)
+------------------------------------------------------
+The rigorous-grating family grew engine by engine, so the SAME physical control
+is spelled differently across it and some defaults deliberately differ.  Nothing
+below is renamed (every existing spelling stays valid -- renaming would break
+callers); this table is the single place that reconciles them.  Consult it
+before threading one settings dict through several engines.
+
+Truncation / discretisation ("how many unknowns"):
+
+    engine                          order-count kwarg(s)          default
+    rcwa_efficiency_1d              n_orders                      11
+    rcwa_jones_1d[_segments]        n_orders                      11
+    rcwa_efficiency_2d              n_orders_x, n_orders_y        5, 5
+    rcwa_jones_2d                   n_orders_x, n_orders_y        5, 5
+    rcwa_efficiency_2d_shapes       n_orders_x, n_orders_y        5, 5
+    prepare_rcwa_2d                 n_orders_x, n_orders_y        5, 5
+    RCWAStack                       n_orders, n_orders_y          11, None(=x)
+    pmm_efficiency_1d / _jones_1d   degree, far_field_orders      16, 21
+                                    (+ n_orders alias -> far_field_orders)
+    pmm_efficiency_2d[_cell]        degree, n_orders              11, 11
+    pmm_jones_2d                    degree, n_orders              11, 11
+
+  ``n_orders*`` is a RETAINED-HARMONIC count per side (total ``2n+1`` per axis);
+  PMM's ``degree`` is the spectral-element POLYNOMIAL degree (the modal basis
+  size) and its ``n_orders``/``far_field_orders`` counts only the Rayleigh
+  far-field orders projected out afterwards -- they are NOT interchangeable
+  knobs.  ``RCWAStack`` spells the x count ``n_orders`` (with ``n_orders_y=None``
+  meaning "same as x"), unlike the free 2-D functions' ``n_orders_x``.
+  ``n_orders_y = 0`` is legal on a y-INVARIANT cell (audit M8, see
+  :func:`_validate_geometry`); every other count needs ``>= 1``.
+
+``formulation`` (Fourier factorization) -- the defaults differ ON PURPOSE:
+
+    rcwa_efficiency_1d              'auto'    -> 'li' for TM/metal, else laurent
+    rcwa_jones_1d                   'li'      anisotropy makes D_x discontinuous
+                                              for both polarizations: nothing to
+                                              auto-detect ('laurent' is a study
+                                              mode; full-3x3 is 'li'-only)
+    rcwa_efficiency_2d              'laurent' historical default, kept for
+                                              bit-compatibility ('li'/'fff_nv'
+                                              opt-in; 'auto' maps to 'li' here,
+                                              NOT to the 1-D adaptive rule)
+    rcwa_jones_2d                   'laurent' as rcwa_efficiency_2d
+    rcwa_efficiency_2d_shapes       'laurent' the ONLY analytic-shape rule --
+                                              'li'/'fff_nv' need per-pixel-line
+                                              operators and raise
+    pmm_efficiency_2d[_cell]        'li'      PMM chose the rigorous rule as its
+    pmm_jones_2d                    'laurent' default; its Jones twin did not
+  A uniform cell routes 'li' AND 'fff_nv' to 'laurent' in the 2-D pixel engines
+  (all rules coincide with no walls; the NV field would be 0/0).
+
+``stabilize`` / ``symmetry``:
+
+    stabilize   False everywhere in rcwa (incl. the shapes solver since M7) and
+                in the PMM 2-D engines, but TRUE by default in pmm_efficiency_1d
+                / pmm_jones_1d (their degree ladder heals the resonant-degree
+                band).
+    symmetry    'auto' in rcwa_efficiency_2d / rcwa_jones_2d / prepare_rcwa_2d
+                and the PMM 2-D engines; ``False`` in rcwa_efficiency_2d_shapes,
+                where the kwarg arrived after the function shipped and 'auto'
+                would have moved the default answer by ~1e-13 (the fold is a
+                mode-wise rescale, not bit-identical).
+
+Propagating-order (cut-off) mask: ONE convention family-wide --
+``Re(kz) > 0`` zeroes an evanescent output order (:func:`_project_efficiency`
+and all 14 PMM far-field sites).  The five 1-D PMM sites carried a ``> 1e-12``
+floor until audit M7 aligned them; the two differ only for an order within
+1e-12 of cut-off, and RCWA's ``_grazing_safe_wavelength`` nudge keeps every
+order ``|kz| > ~3e-5`` away from it in the first place.
+"""
 from __future__ import annotations
 
 import contextlib
@@ -730,7 +802,19 @@ def _validate_geometry(fn_name, *, period=None, period_y=None, depth=None,
     2) on any non-physical geometry.  Replaces the silent-wrong-answer /
     cryptic-LinAlgError failure modes the v5.5.0 audit found: ``depth < 0``
     silently returned a wrong answer, ``period = 0`` raised ``ZeroDivision``,
-    and ``n_orders < 1`` raised a bare ``zero-size array`` error."""
+    and ``n_orders < 1`` raised a bare ``zero-size array`` error.
+
+    ``n_orders_y = 0`` IS allowed (audit M8 2026-07-25): a y-INVARIANT 2-D cell
+    (a stripe / 1-D grating solved through the 2-D engine) needs no y-harmonics
+    at all -- the ``n != 0`` orders are exactly decoupled, and the ``N_y = 0``
+    solve reproduces :func:`rcwa_efficiency_1d` per order to ~5e-15 with a
+    ~1e-14 closure, at 1/27 of the ``N_y = 1`` eigensolve (the retained-harmonic
+    count triples, and the eig is ``O(N^3)``; measured 5 ms vs 2.6 s at
+    ``n_orders_x = 12``).  The forced minimum was therefore pure cost.
+    ``n_orders`` (the x count) still requires ``>= 1``: with ZERO x-harmonics
+    there is no diffraction problem left.  A cell that VARIES along y is
+    rejected by :func:`_validate_cell_sampling`, which owns the cell (it would
+    otherwise silently solve the y-AVERAGED structure)."""
     def _pos(name, val):
         if val is None:
             return
@@ -747,18 +831,24 @@ def _validate_geometry(fn_name, *, period=None, period_y=None, depth=None,
     _pos("period_y", period_y)
     _pos("depth", depth)
     _pos("wavelength", wavelength)
-    for name, val in (("n_orders", n_orders), ("n_orders_y", n_orders_y)):
+    for name, val, lo in (("n_orders", n_orders, 1),
+                          ("n_orders_y", n_orders_y, 0)):
         if val is None:
             continue
         try:
             iv = int(val)
         except (TypeError, ValueError):
             raise ValueError(
-                f"{fn_name}: {name} must be an integer >= 1, got "
+                f"{fn_name}: {name} must be an integer >= {lo}, got "
                 f"{val!r}.") from None
-        if iv != val or iv < 1:
+        if iv != val or iv < lo:
+            # A 2-D caller who tried n_orders=0 gets told where 0 IS legal.
+            hint = (" (only the Y count may be 0, and only on a y-INVARIANT "
+                    "cell)" if lo == 1 and iv == 0 and n_orders_y is not None
+                    else "")
             raise ValueError(
-                f"{fn_name}: {name} must be an integer >= 1, got {val!r}.")
+                f"{fn_name}: {name} must be an integer >= {lo}, got "
+                f"{val!r}{hint}.")
     # Upper bound: the dense 2N x 2N non-Hermitian eigenproblem is O((2N)^3)
     # time and O((2N)^2) memory, where N is the retained-harmonic count (1-D:
     # 2*n_orders+1; 2-D: (2*nox+1)(2*noy+1)).  Without a ceiling a fat-finger
@@ -780,7 +870,8 @@ def _validate_geometry(fn_name, *, period=None, period_y=None, depth=None,
 
 
 
-def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y):
+def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y, *,
+                            strict_y=False):
     """Enforce the 2-D Fourier-aliasing bound.  The Laurent convolution table
     spans difference orders ``[-2N..2N]`` per axis, so a PATTERNED cell must
     satisfy ``S >= 4*n_orders + 1`` along each axis or the ``% S`` wrap aliases
@@ -791,7 +882,26 @@ def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y):
     passed as an array) has only a DC coefficient, but that DC term still
     aliases onto off-diagonal entries (corrupting the otherwise ``const*I``
     convolution into a singular matrix) once ``S <= 2*n_orders``; it is exact
-    only for ``S >= 2*n_orders + 1``, the relaxed floor used here."""
+    only for ``S >= 2*n_orders + 1``, the relaxed floor used here.
+
+    ``strict_y=True`` + ``n_orders_y = 0`` (allowed since audit M8 2026-07-25 --
+    see :func:`_validate_geometry`) additionally requires a y-INVARIANT cell and
+    is rejected otherwise: retaining only the ``n = 0`` y-harmonic keeps only
+    the ``c_{k,0}`` Fourier coefficients, i.e. the y-AVERAGED permittivity, so a
+    y-varying cell would silently solve a DIFFERENT structure.  Measured on a
+    64x64 square-pillar cell: ``n_orders_y = 0`` returned ``R00 = 0.009880268``
+    -- bit-identical to solving the explicitly y-averaged cell -- against the
+    y-resolved ``0.020193`` (2x off), with the energy closure a perfect
+    ``-2.2e-16``, so no tripwire could catch it.
+
+    ``strict_y`` is opt-IN because ``n_orders_y = 0`` is overloaded: the 2-D
+    entry points take it as a user's explicit truncation choice (checked), while
+    :class:`~lumenairy.elements.rcwa.RCWAStack` uses ``noy = 0`` INTERNALLY as
+    its "this is a 1-D (mono-periodic) stack" sentinel (``self.is_1d``), where a
+    2-D-shaped cell is long-standing accepted input whose y-average is what the
+    1-D stack is defined to use.  That case is deliberately left alone; the
+    stack passes ``strict_y=not self.is_1d``, so an explicitly 2-D stack built
+    with ``n_orders_y=0`` IS checked."""
     Sx, Sy = int(cell.shape[0]), int(cell.shape[1])
     Mx, My = int(n_orders_x), int(n_orders_y)
     # Uniformity is a VALUE check -- only attempt it on a concrete (non-traced)
@@ -809,6 +919,22 @@ def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y):
         if xpc.iscomplexobj(spatial):
             spread = spread + xpc.ptp(spatial.imag, axis=(0, 1))
         uniform = bool(float(xpc.max(spread)) == 0.0)
+        # N_y = 0 keeps ONLY the y-averaged spectrum (audit M8): legal on a
+        # y-INVARIANT cell, a silent wrong structure on any other.  Same
+        # per-component spread, taken along y ONLY (axis 1).
+        if strict_y and My == 0 and not uniform:
+            yspread = xpc.ptp(spatial.real, axis=1)
+            if xpc.iscomplexobj(spatial):
+                yspread = yspread + xpc.ptp(spatial.imag, axis=1)
+            if float(xpc.max(yspread)) != 0.0:
+                raise ValueError(
+                    f"{fn_name}: n_orders_y=0 needs a y-INVARIANT cell, but "
+                    f"this cell varies along y (max per-row spread "
+                    f"{float(xpc.max(yspread)):.6g}).  With zero retained "
+                    f"y-harmonics only the y-AVERAGED permittivity enters, so "
+                    f"the solve would silently return the y-averaged "
+                    f"structure's answer (energy-clean, hence undetectable).  "
+                    f"Use n_orders_y >= 1 for a y-varying cell.")
     fac = 2 if uniform else 4
     need_x, need_y = fac * Mx + 1, fac * My + 1
     if Sx < need_x or Sy < need_y:
@@ -1413,8 +1539,12 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None):
         return xp.eye(2 * N, dtype=_C), Q @ xp.diag(_inv_lam(lam)), lam
 
     def _structured_modes():
-        # E_z elimination (P block): inv([[eps]]) by default, or the supplied
-        # Laurent [[1/eps]] for the dual-Laurent (analytic-FT) formulation.
+        # E_z elimination (P block): inv([[eps]]) -- the DIRECT rule, Li 1997
+        # Eq. 27, which every shipped formulation now uses.  The
+        # ``ez_laurent_inv`` override supplies a Laurent [[1/eps]] instead (the
+        # "dual-Laurent" rule); NO caller passes it since v5.14.1 audit F1
+        # measured that as the wrong factorization (+0.35 metal absorptance),
+        # and it is kept only as the factorization-study hook (audit M10).
         EPS_inv = (ez_laurent_inv if ez_laurent_inv is not None
                    else xp.linalg.inv(EPS))
         P = _block(xp, [
@@ -1896,7 +2026,7 @@ def _inv_toeplitz_of_profile(profile, n_orders):
 
 
 
-def _tensor_convolutions(profiles, n_orders):
+def _tensor_convolutions(profiles, n_orders, formulation="li"):
     """Anisotropic 1-D Fourier operators (Li 1996; wall normal along x).
 
     ``profiles`` holds the one-period samplings of the tensor components
@@ -1908,13 +2038,39 @@ def _tensor_convolutions(profiles, n_orders):
     (INVERSE rule along wall-normal x) and ``Cyy = [[eps]]`` (DIRECT rule
     along tangential y).  These coincide only for a UNIFORM cell (where
     ``[[1/eps]]^{-1} = [[eps]]``); for a PATTERNED scalar cell ``Cxx != Cyy``.
+
+    ``formulation`` (audit M7 2026-07-25) selects the rule, mirroring
+    :func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d`:
+
+    * ``'li'`` (default, ``'auto'`` and ``'fff'`` are aliases) -- the Li-1996
+      factorization above, the rigorous rule for a wall-normal-discontinuous
+      ``D_x``.  Bit-for-bit the historical behaviour.
+    * ``'laurent'`` -- the DIRECT rule on all four in-plane blocks
+      (``[[exx]], [[exy]], [[eyx]], [[eyy]]``).  Converges SLOWLY (it is the
+      rule Li's paper exists to replace) and is a factorization-study /
+      cross-check mode, exactly as an explicit ``'laurent'`` is for TM in the
+      scalar 1-D solver.  It coincides with ``'li'`` to eig precision for a
+      UNIFORM (x-invariant) cell, where every rule agrees.
     """
+    if formulation in ("auto", "fff"):
+        formulation = "li"
+    if formulation not in ("li", "laurent"):
+        raise ValueError(
+            f"_tensor_convolutions: formulation must be 'li'/'auto'/'fff' (the "
+            f"inverse rule) or 'laurent' (the direct rule), got "
+            f"{formulation!r}.")
     xp = array_namespace(profiles["xx"])
     a = xp.asarray(profiles["xx"]).astype(_C)
     b = xp.asarray(profiles["xy"]).astype(_C)
     c = xp.asarray(profiles["yx"]).astype(_C)
     d = xp.asarray(profiles["yy"]).astype(_C)
     ezz = xp.asarray(profiles["zz"]).astype(_C)
+    if formulation == "laurent":
+        return (_toeplitz_of_profile(a, n_orders),
+                _toeplitz_of_profile(b, n_orders),
+                _toeplitz_of_profile(c, n_orders),
+                _toeplitz_of_profile(d, n_orders),
+                _toeplitz_of_profile(ezz, n_orders))
     inv_a = _inv_toeplitz_of_profile(a, n_orders)             # [[1/exx]]^{-1}
     T_b_a = _toeplitz_of_profile(b / a, n_orders)             # [[exy/exx]]
     T_c_a = _toeplitz_of_profile(c / a, n_orders)             # [[eyx/exx]]

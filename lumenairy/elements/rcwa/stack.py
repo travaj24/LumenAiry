@@ -1108,7 +1108,8 @@ class RCWAStack:
                     else np.asarray(eps_cell, dtype=_C))
             if cell.ndim == 1:
                 cell = cell[:, None]
-            _validate_cell_sampling("add_layer", cell, self.nox, self.noy)
+            _validate_cell_sampling("add_layer", cell, self.nox, self.noy,
+                                    strict_y=not self.is_1d)
             self._layers.append(_RCWALayer(thickness, "iso", cell,
                                            formulation=f))
         elif shapes is not None:
@@ -1135,7 +1136,8 @@ class RCWAStack:
                 return self
             tcell = (eps_tensor_cell.astype(_C) if is_jax_array(eps_tensor_cell)
                      else np.asarray(eps_tensor_cell, dtype=_C))
-            _validate_cell_sampling("add_layer", tcell, self.nox, self.noy)
+            _validate_cell_sampling("add_layer", tcell, self.nox, self.noy,
+                                    strict_y=not self.is_1d)
             # OUT-OF-PLANE tensor layers are SUPPORTED since v5.14.1 (the
             # rcwa_jones_2d GAP2 machinery promoted to the stack via the
             # PMM2DStack any_oop pattern), including the DIFFERENTIABLE (JAX)
@@ -1523,7 +1525,8 @@ class RCWAStack:
                 if cell.ndim == 1:
                     cell = cell[:, None]
                 _validate_cell_sampling("solve_vs_wavelength", cell, self.nox,
-                                        self.noy)
+                                        self.noy,
+                                        strict_y=not self.is_1d)
                 out.append(_RCWALayer(L.thickness, "iso", cell,
                                       formulation=L.formulation))
             elif L.kind == "shapes":
@@ -1537,7 +1540,8 @@ class RCWAStack:
             else:
                 tcell = np.asarray(L.data(wl), dtype=_C)
                 _validate_cell_sampling("solve_vs_wavelength", tcell, self.nox,
-                                        self.noy)
+                                        self.noy,
+                                        strict_y=not self.is_1d)
                 # Mirror the STATIC add_layer tensor contract (audit P3-38):
                 # out-of-plane tensors are supported since v5.14.1, so the
                 # materialised dispersive cell must not re-impose the old
@@ -1700,7 +1704,7 @@ class RCWAStack:
             eps_bg, shapes = layer.data
             shapes_c = [dict(sh, eps=complex(np.conj(_C(sh["eps"]))))
                         for sh in shapes]
-            EPS_np, _inv = _analytic_convolutions_2d(
+            EPS_np, _ = _analytic_convolutions_2d(   # [[1/eps]] unused (M10)
                 complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
                 self.noy, self.period_x, self.period_y)
             EPS = xp.asarray(EPS_np)
@@ -1758,7 +1762,7 @@ class RCWAStack:
             # Analytic (host) form factors -> move the convolution to backend.
             eps_bg, shapes = layer.data
             shapes_c = [dict(s, eps=complex(np.conj(_C(s["eps"])))) for s in shapes]
-            EPS_np, _EPS_inv_np = _analytic_convolutions_2d(
+            EPS_np, _ = _analytic_convolutions_2d(   # [[1/eps]] unused (M10)
                 complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
                 self.noy, self.period_x, self.period_y)
             EPS = xp.asarray(EPS_np)
@@ -2153,7 +2157,7 @@ class RCWAStack:
             if retain_internal:
                 gen_ifc.append(ifc_sub)
         if S is not None:
-            S11, S12, S21, S22 = S
+            S11, _S12, S21, _S22 = S
 
         p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
         delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))

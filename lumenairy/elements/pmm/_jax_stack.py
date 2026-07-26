@@ -420,8 +420,9 @@ def _pmm_stack_solve_jax(stack):
                                  + jnp.abs(rz) ** 2) / flux_inc
         Te = jnp.real(kz_sub) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
                                  + jnp.abs(tz) ** 2) / flux_inc
-        rows_R.append(jnp.where(jnp.real(kz_sup) > 1e-12, jnp.real(Re), 0.0))
-        rows_T.append(jnp.where(jnp.real(kz_sub) > 1e-12, jnp.real(Te), 0.0))
+        # ``Re(kz) > 0`` cut-off mask, matching the NumPy twin (audit M7).
+        rows_R.append(jnp.where(jnp.real(kz_sup) > 0.0, jnp.real(Re), 0.0))
+        rows_T.append(jnp.where(jnp.real(kz_sub) > 0.0, jnp.real(Te), 0.0))
         jcols.append(jnp.stack([rx[m0], ry[m0]]))
     R_eff = jnp.stack(rows_R)
     T_eff = jnp.stack(rows_T)

@@ -418,8 +418,11 @@ def pmm_efficiency_1d(
     wrong split).  Gradients are valid BETWEEN Rayleigh-order cutoffs (the
     propagating-order count is fixed per trace; set ``far_field_orders`` high enough
     to cover the working wavelength when differentiating ``wavelength``).  Requires
-    ``jax_enable_x64`` (a warning fires otherwise -- complex64 is too ill-conditioned
-    for the modal eig).  TM converges monotone-with-no-floor but only
+    ``jax_enable_x64`` (it RAISES otherwise -- complex64 is too ill-conditioned
+    for the modal eig, and a suppressible warning is not enough for a
+    correctness-critical precision requirement; see ``_require_jax_x64``.  The
+    docstring said "a warning fires" until audit M10 2026-07-25, describing the
+    behaviour that guard replaced).  TM converges monotone-with-no-floor but only
     spectral-*ish* (the discontinuous TM partner is C0-averaged at the wall);
     ``elements_per_region>1, grade=True`` recovers the rate for metals.
 
