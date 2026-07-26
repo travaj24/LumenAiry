@@ -71,6 +71,32 @@ def system_abcd(
         Back focal length (distance from last surface to rear focus) [m].
     ffl : float
         Front focal length (distance from first surface to front focus) [m].
+
+    Notes
+    -----
+    W4 SIBLING -- MEASURED, NOT FIXED.  ``efl`` / ``bfl`` / ``ffl`` are
+    read straight out of the REDUCED matrix, so for an IMMERSED
+    conjugate they are reduced (``z / n``) distances, not geometric
+    ones -- the same confusion W4 fixed in :func:`compute_pupils`
+    (which now multiplies its terminal reduced distance back by the
+    terminal index).  ``bfl`` is unambiguously wrong there: measured
+    against the exact real-ray focus (``raytrace.trace``) on a singlet
+    with an N-BK7 image space, ``bfl`` = +12.251795 mm reported vs
+    +18.583524 mm exact, and ``bfl * n_img == bfl_exact`` to 1e-11 on
+    two designs (N-BK7 and N-SF2 image spaces).  ``ffl`` is the
+    object-side twin.  ``efl`` is a CONVENTION question rather than a
+    defect (``-1/C = 1/Phi`` is the reduced / equivalent focal length;
+    the image-space EFL is ``n'/Phi``), but the two differ by ``n'`` for
+    immersed systems and everything derived from these three inherits
+    it: :class:`FirstOrderData`'s ``bfl``, ``ffl``, ``pp_object_z``,
+    ``pp_image_z`` and ``fnum`` (``|efl| / (2 ep_radius)``, whose
+    ``ep_radius`` IS geometric, so the ratio mixes the two: 11.2647
+    reported vs 17.0863 for the BK7-immersed design).  Air systems are
+    unaffected (``n = 1``).  Deliberately out of W4's scope: fixing it
+    means changing this function's public return contract and picking
+    the EFL convention, which needs its own oracle and its own consumer
+    sweep (``find_paraxial_focus``, ``_append_image_plane``, every
+    ``bfl``-defaulted image distance in ``analysis/``).
     """
     # Build system matrix by multiplying surface-by-surface.
     #
@@ -406,6 +432,13 @@ class PupilInfo:
       Negative = EP is to the left (object side) of the first surface.
     * ``xp_z``: axial distance from ``surfaces[-1]`` to XP.
       Positive = XP is to the right (image side) of the last surface.
+
+    W4: both are GEOMETRIC z coordinates in the real medium -- NOT the
+    reduced (``z / n``) distances the Welford ABCD algebra works in.
+    They differ whenever the object / image conjugate is IMMERSED, and
+    the geometric form is the contract, because every consumer advances
+    real rays through real space by these numbers.  See the W4 note in
+    :func:`compute_pupils`.
     """
     ep_z: float
     ep_radius: float
@@ -718,6 +751,36 @@ def _post_stop_abcd(
     return M_rest @ T_first
 
 
+def _image_space_index(
+    surfaces: List['Surface'],
+    wavelength: float,
+) -> float:
+    """``|n|`` of the medium the LAST surface refracts INTO (image space).
+
+    The magnitude of the output index of the reduced-coordinate frame
+    that ``system_abcd(surfaces)`` leaves the ray in.  Mirrors the
+    bookkeeping of :func:`system_abcd` exactly:
+
+    * a mirror is Welford's ``n2 = -n1``, so its output medium is
+      ``glass_before`` (reflection does not change the medium --
+      ``trace.py``'s prescription builder sets
+      ``glass_after = glass_before`` on mirrors for the same reason).
+      Only the MAGNITUDE is returned; the parity SIGN is supplied
+      separately by the caller.
+    * a coord-break carries ``glass_after == glass_before``, and
+      ``system_abcd`` skips its refraction matrix entirely, so
+      ``glass_after`` is right there too.
+
+    Used by :func:`compute_pupils` (W4) to turn the reduced image-side
+    conjugate distance into the geometric ``xp_z`` coordinate.
+    """
+    last = surfaces[-1]
+    glass = (last.glass_before
+             if (last.is_mirror and not last.is_coordbrk)
+             else last.glass_after)
+    return abs(float(get_glass_index(glass, wavelength)))
+
+
 def compute_pupils(
     surfaces: List['Surface'],
     wavelength: float,
@@ -755,15 +818,40 @@ def compute_pupils(
     its reference sphere from ``xp_z`` -- so it must be the true
     coordinate, not an unsigned distance.
 
+    W4 GEOMETRIC-vs-REDUCED (the immersed-conjugate contract).  Both
+    pupil coordinates are GEOMETRIC z, in the real medium.  The ABCD
+    algebra below is in Welford REDUCED coordinates ``(y, nu = n u)``,
+    where a transfer of geometric length ``t`` through index ``n``
+    appears as the reduced length ``t / n``; solving the imaging
+    condition therefore yields ``t / n``, and the geometric coordinate
+    is recovered by multiplying by the index of THAT terminal medium
+    (``surfaces[0].glass_before`` for the EP, the medium the last
+    surface refracts into for the XP -- :func:`_image_space_index`).
+    Air-immersed conjugates hide the distinction (``n = 1``), which is
+    why it survived R-1 and W3-T2.  The geometric coordinate is the
+    contract every consumer needs, because all of them advance REAL
+    rays through REAL space by it: ``analysis/field.py`` offsets a
+    launched bundle by ``t = ep_z / cos(fa)`` along the ray,
+    ``raytrace/ray_fan.py`` by ``-ep_z tan(fa)``, and
+    ``analysis/image_plane_wfe.py`` forms the reference-sphere radius
+    as ``img_d_m - xp_z`` with ``img_d_m`` a geometric distance -- a
+    reduced coordinate would be dimensionally wrong in all three.
+    ``seidel_coefficients`` independently corroborates the EP side: it
+    launches its chief ray at ``y_0 = -B_pre * n_first * u_0 / A_pre``,
+    i.e. crossing the axis at ``+B_pre * n_first / A_pre``, the value
+    below.  Both radii are provably index-INDEPENDENT (they are height
+    ratios; see the magnification notes) and were measured unchanged.
+
     For the EP we seek the object-space conjugate of the stop.  With
     ``M_pre = [[A, B], [C, D]]`` mapping ``(y, nu)`` at surface 0 to
     ``(y, nu)`` at the stop vertex (:func:`_pre_stop_abcd`), a plane
-    at ``z_ep`` sits a distance ``d = -z_ep`` in FRONT of surface 0, so
-    the object-plane-to-stop matrix is ``M_pre @ T(d)``, whose
-    off-diagonal is ``B + A d``.  The imaging condition ``B + A d = 0``
-    gives ``d = -B / A``, hence::
+    at ``z_ep`` sits a geometric distance ``d = -z_ep`` in FRONT of
+    surface 0, so the object-plane-to-stop matrix is
+    ``M_pre @ T(d)`` with ``T(d) = [[1, d / n_obj], [0, 1]]``, whose
+    off-diagonal is ``B + A d / n_obj``.  The imaging condition
+    ``B + A d / n_obj = 0`` gives ``d = -B n_obj / A``, hence::
 
-        z_ep = -d = +B / A
+        z_ep = -d = +B n_obj / A
 
     R-1 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): this line used to read
     ``ep_z = -B / A``, i.e. it returned the object DISTANCE (positive to
@@ -780,9 +868,11 @@ def compute_pupils(
 
     For the XP: same logic on the post-stop sub-system in the
     forward direction, with the stop as the object.  There the image
-    plane is appended on the LEFT (``T(z) @ M_post``), giving
-    ``B + z D = 0 => z_xp = -B / D`` -- already a signed coordinate
-    measured from the last vertex, and unchanged by R-1.
+    plane is appended on the LEFT (``T(z) @ M_post``) with the reduced
+    leg ``z / n_img``, giving ``B + z D / n_img = 0`` =>
+    ``z_xp = -B n_img / D`` -- a signed coordinate measured from the
+    last vertex (unchanged by R-1; ``n_img``'s SIGN was restored by
+    W3-T2 and its MAGNITUDE by W4).
     """
     if not surfaces:
         raise ValueError("compute_pupils: empty surface list.")
@@ -819,13 +909,24 @@ def compute_pupils(
         # to disagree (this side was missing the final leg to the stop).
         M_pre = _pre_stop_abcd(surfaces, wavelength, stop_index)
         A_pre, B_pre = float(M_pre[0, 0]), float(M_pre[0, 1])
+        # W4: the object-side leg is REDUCED (``d / n_obj``), so the
+        # imaging condition returns a reduced distance; multiply by the
+        # object-space index to get the GEOMETRIC coordinate every
+        # consumer needs (see the W4 note in the docstring).  ``n_obj``
+        # is the input index of ``M_pre``'s frame, which is always
+        # parity 0 (no mirror can precede surface 0), so no Welford sign
+        # applies here -- unlike the stop-side leg inside
+        # ``_pre_stop_abcd`` and unlike ``sign_out`` on the XP side.
+        n_obj = abs(float(get_glass_index(
+            surfaces[0].glass_before, wavelength)))
         if abs(A_pre) > 1e-30:
             # v5.4.6 (audit F-2): ``ep_z`` MUST be assigned here.  Pre-fix
             # this line was a bare expression whose value was discarded,
             # leaving ``ep_z`` unbound on every non-front-stop system ->
             # UnboundLocalError at the ``return PupilInfo(...)`` line.
             # R-1: signed coordinate ``+B/A`` (see Notes) -- was ``-B/A``.
-            ep_z = B_pre / A_pre
+            # W4: ``* n_obj`` -- was reduced (bit-identical in air).
+            ep_z = B_pre * n_obj / A_pre
             # Radius: EP is the reverse image of the stop with
             # magnification 1/A_pre (because the forward sub-system
             # maps object height to stop height with factor A when
@@ -872,19 +973,34 @@ def compute_pupils(
         # independent of ``n_out`` -- and was measured exact (<= 1.2e-12
         # relative) in every one of those 11 configurations.
         #
-        # The MAGNITUDE of ``n_out`` (a last surface whose image side is
-        # GLASS) is a separate, measured, NOT-fixed sibling of this same
-        # dropped factor: ``xp_z`` reads -24.161034 mm where the exact
-        # oracle gives -36.647419 mm for a BK7 image space (ratio
-        # 1/1.516798 exactly), and ``ep_z`` has the mirror-image defect
-        # for a GLASS OBJECT space (+51.299438 mm vs +77.810907 mm exact,
-        # same 1/n).  Neither involves mirrors, both need their own
-        # immersed-conjugate oracle, and both are out of scope here.
+        # W4 (the MAGNITUDE of ``n_out``, flagged-but-unfixed by W3-T2 and
+        # now FIXED): a last surface whose image side is GLASS made
+        # ``xp_z`` a REDUCED distance, short by exactly ``n_img``.  The
+        # mirror-image defect on the EP side (glass OBJECT space) is fixed
+        # above.  Measured against the same exact real-ray oracle, on a
+        # singlet + air stop + a surface refracting into N-BK7:
+        # ``xp_z`` = -23.876267 mm reported vs -36.215523 mm exact, ratio
+        # 0.659282685426 = 1/1.516800 to 12 digits; glass OBJECT space
+        # gave ``ep_z`` +8.439248 mm vs +12.800652 mm exact (same 1/n);
+        # a design with N-BK7 object space and N-SF2 image space showed
+        # the two factors are INDEPENDENT (ep ratio 1/1.516800, xp ratio
+        # 0.606910363484 = 1/1.647690); and the magnitude composes
+        # multiplicatively with ``sign_out`` (glass image space behind an
+        # odd fold: ratio +0.659282685426, sign already right).  Both
+        # radii were measured index-independent (<= 1.3e-12 rel, the
+        # oracle floor) exactly as the algebra requires.  Oracle-free
+        # discriminator: with nothing but a homogeneous glass block of
+        # thickness ``t`` behind the stop the XP *is* the stop, so
+        # ``xp_z`` must be ``-t``; the reduced form gave ``-t / n``.
         _m_post = sum(1 for s in surfaces[stop_index + 1:]
                       if s.is_mirror and not s.is_coordbrk)
         sign_out = -1.0 if (_m_post % 2) else 1.0
+        # Signed output index of ``_post_stop_abcd``'s own frame:
+        # magnitude from the medium the last surface refracts into,
+        # sign from the post-stop mirror parity (see above).
+        n_out = sign_out * _image_space_index(surfaces, wavelength)
         if abs(D_post) > 1e-30:
-            xp_z = -B_post * sign_out / D_post
+            xp_z = -B_post * n_out / D_post
             # After prepending T(z_xp) on the image side to enforce
             # B+z·D = 0, the new matrix is [[A+z_xp·C, 0], [C, D]].  Its
             # transverse magnification at imaging is m = det(M)/D =
