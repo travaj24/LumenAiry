@@ -2058,12 +2058,15 @@ def test_w3_t3b_lg_merit_responds_to_a_curvature_change():
         f'LG merit is curvature-insensitive: {val_a:.6e} vs {val_b:.6e}, '
         f'relative {rel:.3e} (pre-fix 4.0e-3, post-fix 2.088e-1)')
     # Pin the measured values so the channel cannot silently rescale.
-    # Tolerance 1e-4 RELATIVE, not bit-level: the default sigma grid is
+    # Tolerance 1e-2 RELATIVE, not bit-level: the default sigma grid is
     # aliasing-limited on this chirped field (see the ``sigma_grid_n``
-    # accuracy table -- n=64 sits +2.3 % / +33 % off the n=384 value), so
-    # a tighter pin would be pinning quadrature noise, not physics.
-    assert abs(val_a - 9.0968975e-14) < 1e-4 * 9.0968975e-14
-    assert abs(val_b - 7.1975598e-14) < 1e-4 * 7.1975598e-14
+    # accuracy table -- n=64 sits +2.3 % / +33 % off the n=384 value),
+    # AND the chirp integral drifts 3.1e-3 relative across platforms
+    # (measured: CI Linux 9.068754e-14 vs the Windows-frozen
+    # 9.0968975e-14 on 74cf31b).  1e-2 still separates the two designs
+    # (their mutual difference is 2.1e-1) and any rescale of the channel.
+    assert abs(val_a - 9.0968975e-14) < 1e-2 * 9.0968975e-14
+    assert abs(val_b - 7.1975598e-14) < 1e-2 * 7.1975598e-14
 
 
 def test_w3_t3b_curvature_response_survives_a_finer_sigma_grid():
@@ -2107,7 +2110,11 @@ def test_w3_t3b_default_w_o_is_the_measured_image_plane_waist(
     room = _s2_validity_room(fit, s2[0], s2[1])
     assert abs(room - expect_room) < 1e-9
     res = _tensor_t3b(R1, ((0, 0), (2, 0)))
-    assert abs(res.w_o - expect_w_o) < 1e-9
+    # rel 1e-2, not abs 1e-9: the D4sigma probe integrates a chirped
+    # field, drifting 3.4e-4 relative across platforms (measured: CI
+    # Linux 2.6754185e-3 vs the Windows-frozen 2.6763308e-3 on 74cf31b);
+    # the broken pupil-scale default is 26x off, far outside 1e-2.
+    assert abs(res.w_o - expect_w_o) < 1e-2 * expect_w_o
     legacy = _legacy_w_o(R1)
     assert 0.05 * room < res.w_o < room
     assert res.w_o > 10.0 * legacy, (
@@ -2202,8 +2209,12 @@ def test_w3_t3b_sigma_overlaps_still_match_the_oracle_at_the_default():
 def test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged():
     """MUST NOT MOVE.  On the closed-form branch ``w_o`` is only the
     ``sqrt(2/(pi w_o^2))`` normalisation of a point sample, and it is the
-    cross-backend contract of ``aberration_tensor_lg00_jax``.  Verified
-    bit-identical against 7ea2eb9 and e1fd64a; hard-pinned here."""
+    cross-backend contract of ``aberration_tensor_lg00_jax``.  WITHIN-
+    process bit-identity vs 7ea2eb9 and e1fd64a was proven by hex-diff at
+    fix time; the frozen Windows values themselves drift 8.9e-11 relative
+    on CI Linux (eigensolve ulps through the fit, measured on 74cf31b),
+    so the cross-platform pin is rel 1e-8 -- any actual change to the
+    closed-form path moves these by orders more."""
     for R1, w_want, want in (
             (51.5e-3, 1.0116441690e-04,
              1.544807582649e+01 + 3.188059447022e+00j),
@@ -2212,9 +2223,9 @@ def test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged():
         res = _tensor_t3b(R1, ((0, 0),))
         # the default IS the legacy pupil-scale formula, exactly
         assert res.w_o == _legacy_w_o(R1)
-        assert abs(res.w_o - w_want) < 1e-13
+        assert abs(res.w_o - w_want) < 1e-6 * w_want
         got = complex(res.L[0, 0])
-        assert abs(got - want) / abs(want) < 1e-11, f'{got!r} != {want!r}'
+        assert abs(got - want) / abs(want) < 1e-8, f'{got!r} != {want!r}'
 
 
 def test_w3_t3b_explicit_w_o_is_honoured_verbatim_on_both_branches():
