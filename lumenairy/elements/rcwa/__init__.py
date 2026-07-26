@@ -36,6 +36,7 @@ __all__ = [
     "uniaxial_tensor",
     "RCWAStack",
     "RCWAResult",
+    "RCWAYAverageWarning",
     "set_blas_threads",
     "rcwa_blas_threads",
 ]

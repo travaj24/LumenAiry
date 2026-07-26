@@ -86,6 +86,7 @@ class _DictAttrMixin:
         return getattr(self, key, default)
 
 from ..raytrace import (
+    RayBundle,
     Surface,
     TraceResult,
     make_rings,
@@ -130,6 +131,50 @@ def _resolve_surfaces(system_or_prescription) -> List[Surface]:
     return list(system_or_prescription)
 
 
+def _world_exit_direction(world_surfaces: List[Surface]) -> np.ndarray:
+    """Unit direction the AXIAL ray leaves the last world surface along.
+
+    W4d (F1).  A world-frame surface list is self-describing about this:
+    ``trace_world`` reflects off the true surface normals, so tracing one
+    on-axis probe answers "which way is downstream?" exactly, for both
+    the fold-re-aligned and the non-re-aligned flavours (see
+    :func:`_append_image_plane`).  The probe is traced through
+    semi-diameter-neutralised clones so an aperture cannot vignette it.
+
+    Returns ``last.world_R[:, 2]`` (the pre-W4d assumption) if the probe
+    cannot be traced or arrives with a degenerate direction -- that is
+    also the exact answer for every unfolded list, so the fallback is
+    never silently wrong for the systems it applies to.
+    """
+    last = world_surfaces[-1]
+    z_hat = np.asarray(last.world_R[:, 2], dtype=float)
+    try:
+        from copy import copy as _copy
+        probe_surfs = []
+        for s in world_surfaces:
+            c = _copy(s)
+            c.semi_diameter = float('inf')
+            probe_surfs.append(c)
+        first = world_surfaces[0]
+        d0 = np.asarray(first.world_R[:, 2], dtype=float)
+        o0 = np.asarray(first.world_origin, dtype=float) - d0 * 1e-3
+        rays = RayBundle(
+            x=np.array([o0[0]]), y=np.array([o0[1]]), z=np.array([o0[2]]),
+            L=np.array([d0[0]]), M=np.array([d0[1]]), N=np.array([d0[2]]),
+            wavelength=1e-6, alive=np.ones(1, bool), opd=np.zeros(1))
+        out = trace_world(rays, probe_surfs, 1e-6).ray_history[-1]
+        if not bool(out.alive[0]):
+            return z_hat
+        d = np.array([float(out.L[0]), float(out.M[0]), float(out.N[0])])
+        nrm = float(np.linalg.norm(d))
+        if not np.isfinite(nrm) or nrm < 1e-12:
+            return z_hat
+        return d / nrm
+    except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+            IndexError, AttributeError, TypeError):
+        return z_hat
+
+
 def _append_image_plane(surfaces: List[Surface],
                          image_distance: float) -> List[Surface]:
     """Return a new surface list with a flat image plane appended
@@ -160,12 +205,32 @@ def _append_image_plane(surfaces: List[Surface],
     Bit-identical for every system with an even mirror count, including
     all mirrorless ones.
 
-    The WORLD-frame branch is deliberately NOT mapped: it places the
-    plane along ``last.world_R[:, 2]``, and whether that axis already
-    follows the reflected ray depends on the prescription's coord-breaks
-    (``world_surfaces_from_prescription`` re-aligns the frame only at a
-    coord-break, never at a mirror).  See the W4c FLAGGED note in
-    ``tests/unit/test_niche_audit_w4c_analysis_immersed.py``.
+    W4d (closes W4c's flag F1).  The WORLD-frame branch used to place the
+    plane along ``last.world_R[:, 2]`` unconditionally, which is right for
+    some world lists and wrong for others -- and the AMBIGUITY IS REAL:
+    ``world_surfaces_from_prescription`` re-aligns the running frame ONLY
+    at a coord-break, never at a mirror, and a coord-break emits no
+    surface.  So a folded world list that ENDS AT THE MIRROR carries the
+    PRE-fold frame (``z_hat`` points back up the incoming axis, and
+    ``+image_distance * z_hat`` lands the plane 2*|bfl| on the wrong
+    side), while one that ends at a surface AFTER the re-aligning
+    coord-break carries the POST-fold frame (``z_hat`` already follows the
+    ray, and the old behaviour is correct).  No property of a raw
+    prescription distinguishes them.
+
+    Resolved at the source of the ambiguity rather than by guessing: the
+    world list itself determines the outgoing direction unambiguously, so
+    the plane is placed along the axial ray's ACTUAL outgoing direction,
+    obtained from the same ``trace_world`` the caller will use (see
+    :func:`_world_exit_direction`).  That is correct for BOTH flavours by
+    construction and needs no frame marker, no builder change and no
+    convention flag.  Bit-identical wherever ``z_hat`` already was the
+    propagation direction -- i.e. every unfolded list and every
+    coord-break-re-aligned one -- because the probe returns exactly
+    ``z_hat`` there.  Measured discriminator (1-mirror world list, no
+    re-aligning coord-break): the marginal probe lands at
+    x = +5.5954e-04 m with the old placement and -7.94e-08 m with this
+    one; for the re-aligned flavour the two agree bit-for-bit.
     """
     surfs = list(surfaces)
     if not surfs:
@@ -188,8 +253,10 @@ def _append_image_plane(surfaces: List[Surface],
             label='Image',
         )
         return surfs[:-1] + [last_clone, img]
-    # World-frame: place along last surface's local +z.
-    z_hat = last.world_R[:, 2]
+    # World-frame: place along the axial ray's ACTUAL outgoing direction
+    # (W4d / F1 -- see the docstring).  Falls back to the frame's +z, the
+    # pre-W4d behaviour, if the probe cannot be traced.
+    z_hat = _world_exit_direction(surfs)
     new_origin = last.world_origin + z_hat * float(image_distance)
     img = Surface(
         radius=float('inf'), conic=0.0,

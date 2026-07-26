@@ -48,7 +48,11 @@ from ..raytrace import (
 # W4c: terminal-index factors from their SINGLE SOURCE in
 # raytrace.seidel -- re-deriving them here is the drift R-1 and S11-1
 # were caused by (see the module note in raytrace/seidel.py).
-from ..raytrace.seidel import _image_space_index, _object_space_index
+from ..raytrace.seidel import (
+    _image_space_index,
+    _mirror_parity_sign,
+    _object_space_index,
+)
 
 __all__ = [
     'ImagePlaneWFE',
@@ -548,12 +552,28 @@ def eval_image_plane_wfe(
     # through the chief and the resulting quadratic shape error was
     # absorbed as phantom defocus by ``best_rms``.  On-axis (N=1) this
     # is a no-op.
+    # W4d (F2): FOLDED FRAME.  Everything below is done in the ALONG-THE-RAY
+    # axial frame -- the one ``img_d_m`` (from ``bfl``/``pp_image_z``, both
+    # unfolded per W4b/S11-1) is already expressed in, and the only frame in
+    # which "downstream of the last surface" means the same thing for a
+    # folded and an unfolded system.  After an ODD number of mirrors the
+    # traced chief runs against global +z, so ``N_chief < 0``; the along-ray
+    # z-cosine is ``_fold_sign * N_chief``, and every place a global-z
+    # quantity meets an along-ray axial distance carries ``_fold_sign``
+    # (``cz``, ``t_advance``, and ``xp_z``, which W3-T2/W4 define in GLOBAL
+    # z).  Pre-fix, on an air singlet + flat fold, ``1/N_chief`` inverted
+    # every arc-length factor and the sphere was centred on the wrong side:
+    # ``r_sphere_m`` came back NEGATIVE (-4.288895e-02 m) and the WFE read
+    # 321.00 waves PV / 100.17 waves RMS for a system that is a few waves
+    # unfolded.  ``_fold_sign`` is exactly +1 for every unfolded system
+    # (and every even mirror count), so all of this is an IEEE no-op there.
+    _fold_sign = _mirror_parity_sign(surfaces)
     if alive[chief]:
         _N_chief = float(Nd[chief])
         if abs(_N_chief) < 1e-12:
             N_chief_for_R = 1.0
         else:
-            N_chief_for_R = _N_chief
+            N_chief_for_R = _fold_sign * _N_chief
     else:
         N_chief_for_R = 1.0
 
@@ -578,10 +598,12 @@ def eval_image_plane_wfe(
         # xp_z is the SIGNED offset from last vertex (negative when
         # XP is inside the lens).  Axial separation (image - XP) is
         # (d - xp_z); divide by N_chief for ray-arc length.
-        return (d - fod.xp_z) / N_chief_for_R
+        # W4d: ``xp_z`` is a GLOBAL-z coordinate (W3-T2 / W4) while ``d``
+        # is along-the-ray, so it is mapped into that frame first.
+        return (d - _fold_sign * fod.xp_z) / N_chief_for_R
 
     R = _radius_for(img_d_m)
-    cz = z_chief + img_d_m
+    cz = z_chief + _fold_sign * img_d_m
 
     def _chief_image_xy(d):
         """Transverse position of the chief ray at axial distance
@@ -599,7 +621,11 @@ def eval_image_plane_wfe(
         N_chief = float(Nd[chief])
         if abs(N_chief) < 1e-12:
             return float('nan'), float('nan')
-        t_advance = d / N_chief  # geometric path length
+        # W4d: ``d`` is an ALONG-THE-RAY axial distance, so the arc length
+        # uses the along-ray z-cosine ``_fold_sign * N_chief`` (identical
+        # to ``N_chief`` for every unfolded system).  Without this a folded
+        # chief advanced BACKWARDS to its "image".
+        t_advance = d / (_fold_sign * N_chief)  # geometric path length
         cx = float(s2x[chief] + Ld[chief] * t_advance)
         cy = float(s2y[chief] + Md[chief] * t_advance)
         return cx, cy
@@ -656,9 +682,11 @@ def eval_image_plane_wfe(
                     # applied in ``_radius_for`` so the new axial
                     # ``img_d_m`` stays self-consistent for off-axis
                     # fields.  On-axis (N_chief = 1) this is a no-op.
+                    # W4d: ``xp_z`` is GLOBAL z, ``img_d_m`` along-the-ray.
                     if sphere_tangent == 'exit_pupil':
                         img_d_m = (R_new * N_chief_for_R
-                                   + float(getattr(fod, 'xp_z', 0.0)))
+                                   + _fold_sign
+                                   * float(getattr(fod, 'xp_z', 0.0)))
                     else:
                         img_d_m = R_new * N_chief_for_R
         elif image_plane == 'best_pv':
@@ -667,7 +695,7 @@ def eval_image_plane_wfe(
             # falls back to a coarse + bisect search.
             def _pv_at(d_test):
                 R_t = _radius_for(d_test)
-                cz_t = z_chief + d_test
+                cz_t = z_chief + _fold_sign * d_test   # W4d: along-the-ray
                 cx_t, cy_t = _chief_image_xy(d_test)
                 w = _ray_sphere_opd(opd_a_w, s2x, s2y, s2z,
                                        Ld, Md, Nd, cz_t, R_t,
@@ -698,7 +726,7 @@ def eval_image_plane_wfe(
                 img_d_m = float(img_d_m + shifts[int(np.argmin(pvs))])
         # Re-evaluate with the shifted image distance
         R = _radius_for(img_d_m)
-        cz = z_chief + img_d_m
+        cz = z_chief + _fold_sign * img_d_m       # W4d: along-the-ray
         cx, cy = _chief_image_xy(img_d_m)
         rs_w = _ray_sphere_opd(opd_a_w, s2x, s2y, s2z, Ld, Md, Nd,
                                   cz, R, wavelength, chief, alive,
