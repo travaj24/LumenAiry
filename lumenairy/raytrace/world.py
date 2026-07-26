@@ -69,13 +69,35 @@ def _apply_coord_break(origin: np.ndarray, R: np.ndarray,
     ty = np.radians(float(cb.get('tilt_y_deg', 0.0)))
     tz = np.radians(float(cb.get('tilt_z_deg', 0.0)))
     order = int(cb.get('order', 0) or 0)
-    # RT-4 was REVERTED (AUDIT_RAYTRACE_CORE finding proven a PHANTOM):
-    # ``world_R``'s new-frame local-to-world rotation ``_rot_x(+tx)`` already
-    # AGREES with the legacy ``trace()`` path -- both send a +z ray to world
-    # -y after a +90 deg tilt_x (verified empirically, and pinned by the
-    # ``periscope`` folded-design + ``test_world_surfaces`` validation
-    # oracles).  The audit's "world folds opposite to trace()" claim was
-    # wrong; flipping to ``-tx`` INTRODUCED the disagreement.  Keep +tx/+ty/+tz.
+    # W3-1 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, "Flagged, not claimed"):
+    # THIS SITE IS CORRECT and is the reference for the whole library.
+    # ``world_R`` is the LOCAL-TO-WORLD rotation, and Zemax defines
+    # ``Tilt About X/Y/Z`` by exactly that matrix: the right-hand
+    # ``R_math(+theta)`` forms composed in intrinsic X->Y->Z order for
+    # PARM 6 = 0, satisfying ``r_global = R @ r_local + offset``
+    # (OpticStudio KB KA-01638, "Rotation Matrix and Tilt About X/Y/Z";
+    # cross-checked there by the inverse formula ``Tilt About X =
+    # ATAN2(N, -M)`` on the local +z axis ``(L, M, N) = R[:, 2]``, which
+    # ``_rot_x(+tx)`` reproduces exactly).  A +90 deg tilt_x therefore puts
+    # the new local +z at world -y, as the ``test_world_surfaces``
+    # right-hand-rule oracle and the ``periscope`` folded design pin.
+    #
+    # History (do not re-flip this line):
+    #  * RT-4 (AUDIT_RAYTRACE_CORE_2026_07_08) correctly DIAGNOSED that
+    #    ``intersection._apply_coord_break`` disagrees with this site, but
+    #    "fixed" the wrong side (this one) and was reverted.
+    #  * The revert's "PHANTOM" argument compared ``trace()``'s
+    #    ray-coordinate direction ``Q.T @ ez`` (a vector in the NEW LOCAL
+    #    frame) with ``world_R[:, 2] = Q @ ez`` (a vector in WORLD).  Both
+    #    equal ``Rx_math(+90) @ ez``, but their numerical equality is the
+    #    category error, not agreement -- it holds precisely BECAUSE the
+    #    two sites were transposes of each other.
+    #  * W3-1 measured the disagreement with a pure-tilt oracle (no fold:
+    #    a mirror fold is sign-degenerate in the local frame) and fixed
+    #    ``intersection._apply_coord_break`` / ``differential.
+    #    _adrt_coordbreak`` / ``ui.model.recompute_element_frames`` to the
+    #    transpose/local-to-world convention above.  Pinned in
+    #    ``tests/unit/test_niche_audit_w3_oracles.py``.
     tilt_R = _rot_x(tx) @ _rot_y(ty) @ _rot_z(tz)
     if order == 0:
         # Decenter first (in current frame), then tilt.
@@ -122,6 +144,15 @@ def world_surfaces_from_prescription(prescription: Dict[str, Any]) -> List[Surfa
     * The Zemax PARM convention is honoured for coord-break ordering
       (``parm6 = 0`` -> decenter then tilt, ``= 1`` -> tilt then
       decenter).
+    * **Tilt sign (canonical for the whole library).**  ``tilt_x_deg`` /
+      ``tilt_y_deg`` / ``tilt_z_deg`` are Zemax's ``Tilt About X/Y/Z``,
+      defined by the LOCAL-TO-WORLD rotation: right-hand
+      ``R_math(+theta)`` matrices composed in intrinsic X->Y->Z order,
+      so ``world_R`` satisfies ``r_world = world_R @ r_local +
+      world_origin`` (OpticStudio KB KA-01638).  A ``tilt_x_deg = +90``
+      break therefore puts the new local ``+z`` at world ``-y``, and the
+      matrix applied to RAY coordinates by the local-frame path
+      (``intersection._apply_coord_break``) is the TRANSPOSE of this one.
     * For prescriptions without coord-breaks the result is the same
       surface set as :func:`surfaces_from_prescription`, only with
       identity ``world_R`` and a cumulative origin populated.
