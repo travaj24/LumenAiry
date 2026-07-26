@@ -195,9 +195,9 @@ def propagate_huygens_fresnel_with_opl_callable(
     output_grid_x: np.ndarray,
     output_grid_y: np.ndarray,
     input_grid_dx: float,
-    wavelength: float,
+    wavelength: Optional[float] = None,
     apply_van_vleck: bool = True,
-    finite_diff_step: float = 1e-9,
+    finite_diff_step: float = 1e-6,
     chunk_output: Optional[int] = None,
 ) -> np.ndarray:
     """Evaluate the HF integral for a user-supplied OPL callable
@@ -212,6 +212,72 @@ def propagate_huygens_fresnel_with_opl_callable(
     where the cross-Hessian determinant is evaluated by central
     differences on the supplied callable.
 
+    Units contract -- ``opl_fn`` MUST return WAVES
+    -------------------------------------------------
+    ``opl_fn(s1x, s1y, s2x, s2y)`` takes input-plane coordinates as
+    arrays (broadcast over the whole input grid) and output-plane
+    coordinates as scalars, all in **metres**, and must return the
+    optical path ``Phi`` in **WAVES** (cycles, i.e. OPL_metres /
+    wavelength).  The kernel applied here is ``exp(2j*pi*Phi)``, so a
+    callable that returns metres is wrong by the factor ``1/wavelength``
+    (~1e6 at visible / near-IR wavelengths) -- it produces an almost
+    phase-free integrand and a silently wrong field.  Convert inside the
+    callable::
+
+        def opl_fn(s1x, s1y, s2x, s2y):          # WAVES, not metres
+            r = np.sqrt((s1x - s2x)**2 + (s1y - s2y)**2 + z*z)
+            return r / wavelength
+
+    The Van Vleck factor inherits that convention: with ``Phi`` in waves
+    the cross-Hessian entries scale as ``1/(wavelength*z)`` and its
+    determinant as ``(1/(wavelength*z))**2`` (e.g. exactly
+    ``(2.0e7)**2`` for the Fresnel OPL at ``z=50 mm``,
+    ``wavelength=1 um``).  The sibling
+    :func:`propagate_hf_chebyshev_quadrature` and the
+    ``fit_hf_polynomials`` / ``fit_canonical_polynomials`` containers it
+    consumes use the same waves convention (``phi = opd / wavelength``).
+
+    Parameters
+    ----------
+    finite_diff_step : float, default ``1e-6`` (metres)
+        Central-difference step ``h`` used for the Van Vleck
+        cross-Hessian ``d2 Phi / d s1 d s2``.  The stencil is
+        second-order accurate, so its error scales as ``h^2`` in the
+        truncation term and as ``eps/h^2`` in the round-off term; for a
+        waves-valued ``Phi`` of order ``z/wavelength`` the round-off
+        term dominates below ~1e-7 m.  Measured on an exact-quadratic
+        (Fresnel) OPL oracle with ``z=50 mm``, ``wavelength=1 um``: the
+        recovered ``sqrt|det|`` amplitude is in error by -9.05e-2 at
+        ``h=1e-9`` (the pre-v5.30 default -- essentially all round-off),
+        -1.06e-5 at 1e-7, **-2.53e-8 at the 1e-6 default**, and
+        -1.6e-9 at 1e-5.  End-to-end against exact Fresnel quadrature
+        on the same discretisation the amplitude error falls from
+        1.56e-2 to 8.3e-9.  ``h`` is an absolute step in metres: if you
+        work at a wildly different length scale (e.g. mm-scale grids or
+        a ``Phi`` with structure finer than a micron) scale it with your
+        transverse feature size -- a good rule of thumb is
+        ``h ~ sqrt(eps_rel) * L`` with ``L`` the scale over which
+        ``d2 Phi / d s1 d s2`` varies.
+    wavelength : float, optional
+        **Deprecated and unused.**  See the units contract above: the
+        wavelength is already folded into ``opl_fn``'s waves-valued
+        return, so this function has never read it.
+
+    .. versionchanged:: 5.30
+        ``finite_diff_step`` default 1e-9 -> 1e-6 m (audit P3,
+        ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25``): at 1e-9 the
+        cross-Hessian stencil was almost pure round-off (9.05% low
+        amplitude at the origin, up to 1.56e-2 spatially-varying
+        end-to-end error vs exact Fresnel quadrature).  Callers who
+        passed ``finite_diff_step`` explicitly are unaffected.
+
+    .. deprecated:: 5.30
+        ``wavelength`` (audit P7): a required keyword that the body
+        never read.  It is now optional; passing it emits a
+        ``DeprecationWarning`` and it will be removed in v5.32.  The
+        OPL callable's return is in WAVES, so no wavelength is needed
+        here -- divide by the wavelength inside ``opl_fn``.
+
     .. deprecated:: 5.17
         ``chunk_output`` (audit P3-57): the parameter never had any
         effect -- evaluation has always been strictly per output pixel
@@ -222,6 +288,22 @@ def propagate_huygens_fresnel_with_opl_callable(
         For a genuinely chunk-vectorised HF quadrature use
         :func:`propagate_hf_chebyshev_quadrature`.
     """
+    # v5.30 (audit P7): ``wavelength`` was a REQUIRED keyword that the
+    # body never read -- the OPL callable returns waves, so the kernel
+    # ``exp(2j*pi*Phi)`` is already dimensionless.  Deprecated rather
+    # than consumed: consuming it (dividing an assumed-metres Phi by
+    # wavelength) would silently break every existing waves-returning
+    # callable by a factor of ~1e6.  Same shape as the v5.17
+    # ``chunk_output`` retirement below.
+    if wavelength is not None:
+        warnings.warn(
+            "propagate_huygens_fresnel_with_opl_callable: wavelength is "
+            "deprecated since v5.30 and has no effect (it was a required "
+            "keyword the body never read).  ``opl_fn`` must return the "
+            "optical path in WAVES, so the exp(2j*pi*Phi) kernel needs no "
+            "wavelength -- divide your metre-valued OPL by the wavelength "
+            "inside ``opl_fn`` and drop this kwarg.  It will be removed "
+            "in v5.32.", DeprecationWarning, stacklevel=2)
     if chunk_output is not None:
         warnings.warn(
             "propagate_huygens_fresnel_with_opl_callable: chunk_output is "

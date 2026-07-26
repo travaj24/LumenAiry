@@ -148,16 +148,21 @@ class TestAuditFixesV4_14_2_agent_d_P1New6MakedammannSiUnits:
             f"rescale).")
 
     def test_makedammann2d_micrometre_input_warns(self):
-        """Calling with the legacy micrometre form in the auto-detect
-        range (``1e-3 < value <= 1.0``) must trigger a
-        ``DeprecationWarning`` with a migration message that names
-        the SI-metres replacement.
+        """Calling the auto-detect shim with the legacy micrometre form
+        in its range (``1e-3 < value <= 1.0``) must trigger a
+        migration warning that names the SI-metres replacement.
 
         v4.14.3 note: values above 1 m now raise ``ValueError`` (the
         P0-NEW-2 fix), so this test exercises mid-range values
         (0.5 < x <= 1.0 m) that the heuristic still catches.  For
         explicit legacy-um migration above that bound, callers should
         pass ``_legacy_units='um'``.
+
+        v5.30 (audit E-H11): the heuristic is no longer the DEFAULT --
+        ``_legacy_units='SI'`` is, so reaching the shim needs an
+        explicit ``_legacy_units='auto'`` -- and the retired shim now
+        warns LOUDLY (``UserWarning``, default-visible) instead of with
+        a ``DeprecationWarning`` that Python hides outside ``__main__``.
         """
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
@@ -166,13 +171,16 @@ class TestAuditFixesV4_14_2_agent_d_P1New6MakedammannSiUnits:
                 phaselevels=2, phasesteps=1,
                 diforders=np.ones((2, 2)),
                 itr=2, plot=False, seed=42,
+                _legacy_units='auto',
             )
             depwarns = [r for r in w
-                        if issubclass(r.category, DeprecationWarning)]
+                        if issubclass(r.category, UserWarning)
+                        and 'makedammann2d' in str(r.message)]
             assert len(depwarns) >= 1, (
-                "Expected at least one DeprecationWarning when "
+                "Expected at least one UserWarning when "
                 "makedammann2d is called with legacy micrometre "
-                "values periodx=0.5, waveln=0.01.  Got: "
+                "values periodx=0.5, waveln=0.01 and "
+                "_legacy_units='auto'.  Got: "
                 f"{[r.message for r in w]}")
             msg = str(depwarns[0].message)
             # The message must explain the SI migration concretely.

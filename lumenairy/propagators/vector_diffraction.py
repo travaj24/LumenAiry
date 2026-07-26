@@ -45,6 +45,18 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
         Focal length [m].
     dx_pupil : float
         Pupil-plane grid spacing [m].
+
+        .. warning::
+           The array must SPAN the exit pupil: the geometric rim sits at
+           ``rho = f * NA`` while the array only reaches
+           ``Np * dx_pupil / 2``.  If ``Np*dx_pupil/2 < f*NA`` the rim
+           mask never bites and the effective exit pupil degenerates into
+           the square array boundary at the array-limited
+           ``NA_eff = (Np*dx_pupil/2)/f`` -- measured 5.5x focal-FWHM
+           error at NA_eff=0.16 against a requested NA=0.9.  A
+           ``RuntimeWarning`` reports the delivered NA_eff and the
+           ``dx_pupil`` / ``Np`` needed (P4, v5.30); pre-v5.30 this was
+           silent.
     N_focal : int, optional
         Focal-plane grid dimension.  Defaults to ``pupil.shape[0]``.
 
@@ -164,6 +176,74 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     sin_theta_raw = rho_p / f
     in_pupil = sin_theta_raw <= np.sin(theta_max)
     sin_theta = np.clip(sin_theta_raw, 0, np.sin(theta_max))
+
+    # P4 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the rim mask above
+    # only bites where the ARRAY reaches the geometric rim radius
+    # ``rho_rim = f * NA``.  The pupil array spans ``|x|, |y| <=
+    # Np*dx_pupil/2``, so when ``Np*dx_pupil/2 < f*NA`` the mask is True
+    # everywhere along both axes and the "exit pupil" silently degenerates
+    # into the SQUARE array boundary at the array-limited NA
+    # ``NA_eff = (Np*dx_pupil/2) / f`` -- a completely different aperture
+    # from the one requested, with no diagnostic.  Measured on
+    # wavelength=633 nm / NA=0.9 / f=2 mm / Np=128: at dx_pupil=5 um the
+    # array half-extent is 0.320 mm against a 1.800 mm rim, NA_eff=0.160,
+    # and the focal FWHM comes out 1.9833 um -- 5.5x the 0.3587 um Airy
+    # width of the requested NA (and within 3% of 0.51*wavelength/NA_eff).
+    # Surfaced as a RuntimeWarning in the same style as the VD-1
+    # immersion-NA guard, the 4.10 dx_focal mismatch warning and the
+    # S9-VD2 crop warning; VALUES ARE UNCHANGED (bit-identical) -- this is
+    # a diagnostic only, so a caller who genuinely wants the
+    # array-limited aperture can silence it.
+    #
+    # Gated on ACTUAL truncation, exactly like S9-VD2 below: the array
+    # boundary can only be the limiting aperture if the caller's pupil
+    # amplitude is still non-zero when it reaches that boundary.  A
+    # zero-padded pupil whose support ends inside the array is limited by
+    # its own mask, not by the grid, so it stays silent (no false
+    # positives -- pinned by
+    # tests/unit/test_niche_s9_vector_diffraction_registration.py).
+    _half_extent = Np * dx_pupil / 2.0
+    _rho_rim = f * NA
+    _pupil_abs = np.abs(pupil)
+    _pmax = float(_pupil_abs.max()) if _pupil_abs.size else 0.0
+    _edge = float(max(_pupil_abs[0, :].max(), _pupil_abs[-1, :].max(),
+                      _pupil_abs[:, 0].max(), _pupil_abs[:, -1].max())
+                  ) if _pupil_abs.size else 0.0
+    if (_half_extent < _rho_rim
+            and _pmax > 0.0 and _edge > 1e-12 * _pmax):
+        import warnings
+        _NA_eff = _half_extent / f
+        _dx_needed = 2.0 * _rho_rim / Np
+        # Degenerate-input safety: a zero / non-finite pitch must not make
+        # the DIAGNOSTIC raise (ZeroDivisionError) where the computation
+        # itself would have carried on.
+        _Np_needed = (int(np.ceil(2.0 * _rho_rim / dx_pupil))
+                      if dx_pupil > 0 else float('inf'))
+        _widen = (NA / _NA_eff) if _NA_eff > 0 else float('inf')
+        # The mask is fully square once even the array CORNERS sit inside
+        # the rim; between the two bounds it is a corner-clipped square.
+        _shape = ('a SQUARE (the array boundary)'
+                  if _half_extent * np.sqrt(2.0) <= _rho_rim
+                  else 'a corner-clipped SQUARE')
+        warnings.warn(
+            f"richards_wolf_focus: the pupil array does not span the exit "
+            f"pupil.  The geometric rim sits at rho = f*NA = "
+            f"{_rho_rim:.4e} m but the array only reaches "
+            f"Np*dx_pupil/2 = {_half_extent:.4e} m "
+            f"(Np={Np}, dx_pupil={dx_pupil:.4e} m) with the pupil still "
+            f"non-zero at that boundary, so the rim mask never "
+            f"bites and the effective exit pupil becomes {_shape} at the "
+            f"array-limited NA_eff={_NA_eff:.4f} instead of the requested "
+            f"NA={NA:.4f}.  The returned focal field is the PSF of that "
+            f"aperture (focal width scales as 1/NA_eff, i.e. about "
+            f"{_widen:.2f}x too wide).  To deliver the requested NA "
+            f"keep Np*dx_pupil/2 >= f*NA: either dx_pupil >= "
+            f"{_dx_needed:.4e} m at Np={Np}, or Np >= {_Np_needed} at "
+            f"dx_pupil={dx_pupil:.4e} m.  If the array-limited aperture is "
+            f"what you want, pass NA <= {_NA_eff:.4f} (or filter this "
+            f"warning).",
+            RuntimeWarning, stacklevel=2)
+
     theta = np.arcsin(sin_theta)
     cos_theta = np.cos(theta)
     phi_p = np.arctan2(Yp, Xp)

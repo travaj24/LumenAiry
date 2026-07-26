@@ -68,6 +68,79 @@ silent-junk-input validation cluster, frozen-defaults/ownership, guard gaps,
 conventions/dead code) plus the flagged world.py coord-break question and the
 mirror-parity signing of stop-adjacent pupil legs (needs a fold-pupil oracle).
 
+### Fixed (adversarial-audit Tier 2, batch B — infra/contract findings, 2026-07-25)
+
+Second wave over the same report (Territories P + A and the two elements
+findings in the same blast radius), same discipline: reproduced by measurement
+first, re-measured after, 55 new pins in
+`tests/unit/test_niche_audit_p2b_infra_contracts.py` of which 40 were verified
+to fail on the pre-fix tree.  Everything the fixes claim NOT to change was
+proven bit-identical across the two trees (22/22 captured arrays: the
+Richards-Wolf fields at all three probe pitches, the HF callable at explicit
+finite-difference steps, the JAX/NumPy ASM system walk, the explicit Dammann
+unit paths, `quarter_wave_ar`).
+
+- **P3 (HIGH)** — `hf.py` Van-Vleck cross-Hessian `finite_diff_step` default
+  1e-9 → 1e-6 m.  At 1e-9 the central-difference stencil was essentially pure
+  round-off: on an exact-quadratic (Fresnel) OPL oracle the recovered density
+  amplitude was −9.05e-2 wrong at the origin and the end-to-end field was up
+  to 1.56e-2 off exact Fresnel quadrature; at the new default those become
+  −2.5e-8 and 8.3e-9.  Docstring now carries the h² / eps-h² error budget and
+  how to scale `h` with the caller's length scale.
+- **P4 (HIGH)** — `richards_wolf_focus` now warns (`RuntimeWarning`, VD-1 /
+  S9-VD2 house style) when `Np*dx_pupil/2 < f*NA`, i.e. when the pupil ARRAY
+  cannot reach the geometric rim and the exit pupil silently degenerates into
+  the square array boundary: measured 5.53× focal-FWHM error (1.9833 µm vs the
+  0.3587 µm Airy width) at NA_eff = 0.160 against a requested NA = 0.9, with
+  zero diagnostics before.  The message reports requested NA, delivered
+  NA_eff, and both remedies by number (`dx_pupil >=` / `Np >=`).  Diagnostic
+  only — fields bit-identical, and a spanning pupil stays silent.
+- **P6 (MEDIUM)** — `propagate_through_system_jax(method=...)` was accepted
+  and never read: `'fresnel'`, `'sas'`, `'rs'` and outright junk all returned
+  the ASM field, 5.0e-2 relative L2 from the NumPy twin's Fresnel answer.  The
+  JAX path is ASM-only by construction (the twin's Fresnel/SAS branches
+  resample via `scipy map_coordinates`), so it now says so: `NotImplementedError`
+  for the NumPy-twin-only methods, `ValueError` for unrecognised names,
+  docstring updated to match.
+- **P7 (MEDIUM)** — `propagate_huygens_fresnel_with_opl_callable`: the
+  `opl_fn` units contract (returns **WAVES**, not metres — a metres-valued
+  callable measures 1.0e-6 of the correct field) is now documented
+  prominently, and the required-but-unread `wavelength` keyword is optional +
+  deprecated (removal v5.32) rather than consumed, which would have broken
+  every existing waves-returning callable by ~1e6.  Numbers unchanged.
+- **E-H6 (HIGH)** — `broadband_ar_v_coat(n_substrate, ...)` never read
+  `n_substrate`: the hard-coded n_H=2.3 / n_L=1.38 quarter-quarter stack
+  satisfies the admittance match only for a substrate of (2.3/1.38)² = 2.778,
+  and measured with this module's own TMM at 550 nm it was WORSE THAN BARE
+  GLASS across the common range (R = 0.0856 vs 0.0426 bare on N-BK7 — an "AR"
+  coating that doubled the reflectance; 0.0986 vs 0.0337 at n_s = 1.45).  The
+  high-index layer is now set by the quarter-wave admittance condition
+  `n_H = n_L·sqrt(n_substrate/n_ambient)`, giving R ≤ 1e-31 at the design
+  wavelength for every substrate probed (1.45 → 4.0) and a 450–650 nm residual
+  of 0.0202 (N-BK7) to 0.0058 (n_s = 2.78).  Layer order (ambient-side first,
+  v5.4.6 P3-6) and the QW thicknesses are unchanged; non-physical
+  `n_substrate` now raises.
+- **E-H11 (HIGH)** — `makedammann2d(_legacy_units=)` default flipped
+  `'auto'` → `'SI'` and the micrometre auto-detect shim retired.  The
+  heuristic multiplied any period/wavelength above 1 mm by 1e-6, so a correct
+  SI THz/MMW design (8 mm period at 1.1 mm) came back with 5e-10 m cells —
+  behind a `DeprecationWarning` that Python suppresses outside `__main__`, so
+  the surfaced-warning set at a library call site was literally empty.  SI is
+  now taken at face value (no rescale, no warning); the heuristic survives one
+  cycle behind an explicit `_legacy_units='auto'` with a **loud** `UserWarning`
+  (removal v5.32); `_legacy_units='um'` is unchanged as the migration path.
+  Two existing pins that encoded the old default/category were updated with
+  justification.
+- **A-3 (HIGH)** — `lumenairy.DEFAULT_COMPLEX_DTYPE` / `DEFAULT_REAL_DTYPE` /
+  `DEFAULT_WAVE_PROPAGATOR` / `DEFAULT_DY` were import-time snapshots the
+  four setters did not move (`set_default_complex_dtype('complex64')` left the
+  top-level constant reading complex128 while the getter and the submodule
+  twin both read complex64).  Now PEP-562 live-forwarded to
+  `propagators.fft_infra`, replicating the `propagation.py:296` precedent
+  (whitelist + delete the stale bindings + `__getattr__`), plus a `__dir__`
+  so the names stay discoverable.  Export integrity unchanged (every
+  `__all__` entry still resolves; phantom names still raise `AttributeError`).
+
 ## [5.29.0] — 2026-07-25
 
 **The traced-carrier production campaign.**  `propagate_traced_carrier_chain`

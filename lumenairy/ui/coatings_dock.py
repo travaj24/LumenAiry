@@ -565,10 +565,16 @@ class CoatingsDock(QWidget):
         wl_center_m = 0.5 * (450e-9 + 650e-9)
         layers = la.broadband_ar_v_coat(n_sub, wl_center_m)
         self._clear_layers()
-        # The V-coat helper hardcodes n_L = 1.38 (MgF2-like) and
-        # n_H = 2.3 (TiO2-like).  Map those to material names so the
-        # GUI display lines up with the library's intent.
-        material_for_n = {1.38: 'MgF2', 2.30: 'TiO2'}
+        # The V-coat helper fixes n_L = 1.38 (MgF2-like) on the ambient
+        # side and DERIVES the high-index layer from the substrate via
+        # the quarter-wave admittance match n_H = n_L*sqrt(n_substrate)
+        # (v5.30, audit E-H6 -- pre-v5.30 it was hardcoded to 2.3, which
+        # is matched only to a substrate of 2.778).  Only the low-index
+        # layer maps onto a bundled material name in general; the derived
+        # n_H shows as 'Custom' unless it happens to land on one.
+        material_for_n = {1.38: 'MgF2', 2.30: 'TiO2', 1.74: 'MgO',
+                          1.77: 'Al2O3', 1.93: 'Y2O3', 2.15: 'ZrO2',
+                          2.35: 'ZnS', 2.40: 'TiO2'}
         for (n_layer, d_m) in layers:
             n_val = float(np.real(n_layer))
             mat = material_for_n.get(round(n_val, 2), 'Custom')

@@ -441,18 +441,84 @@ def broadband_ar_v_coat(
     n_substrate: float,
     wavelength_center: float,
 ) -> List[Tuple[float, float]]:
-    """Design a simple 2-layer V-coat AR for broadband use.
+    """Design a 2-layer quarter-quarter V-coat AR on ``n_substrate``.
 
     Returns a list of ``(n, d)`` layers in ``coating_reflectance`` order:
     AMBIENT-SIDE FIRST (outermost first).  The low-index (MgF2-like,
     n=1.38) layer is returned first because it sits on the air/ambient
-    side; the high-index (TiO2-like, n=2.3) layer is next to the
-    substrate.  v5.4.6 (audit P3-6): this order is load-bearing -- feeding
-    the list to ``coating_reflectance`` substrate-first would model an HR
-    stack, not an AR V-coat.  Pinned by a 550 nm round-trip test.
+    side; the high-index layer is next to the substrate.  v5.4.6 (audit
+    P3-6): this order is load-bearing -- feeding the list to
+    ``coating_reflectance`` substrate-first would model an HR stack, not
+    an AR V-coat.  Pinned by a 550 nm round-trip test.
+
+    Design condition (quarter-wave admittance match)
+    ------------------------------------------------
+    Both layers are a quarter wave thick at ``wavelength_center``, so
+    each contributes the characteristic matrix of a QW plate and the
+    stack's input admittance collapses to
+
+        Y = n_L**2 * n_substrate / n_H**2                    (1)
+
+    Zero reflectance at the design wavelength therefore requires
+    ``Y = n_ambient``, i.e.
+
+        n_H = n_L * sqrt(n_substrate / n_ambient)            (2)
+
+    With ``n_ambient = 1`` (air; same assumption as
+    :func:`quarter_wave_ar` -- see its docstring for the general form)
+    the high-index layer is fixed by the substrate:
+    ``n_H = 1.38 * sqrt(n_substrate)``.
+
+    .. versionchanged:: 5.30
+        ``n_substrate`` is now READ (audit E-H6,
+        ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25``).  Pre-v5.30 this
+        function returned a hard-coded ``n_H = 2.3`` / ``n_L = 1.38``
+        pair for every substrate, so the ``n_substrate`` argument was
+        inert -- and by (2) that fixed pair is matched only to a
+        substrate of ``(2.3/1.38)**2 = 2.778``.  Measured with this
+        module's own TMM at 550 nm, the old stack was WORSE THAN BARE
+        GLASS over the whole common range: R = 0.0986 vs 0.0337 bare at
+        n_s=1.45, R = 0.0856 vs 0.0426 bare at n_s=1.52 (N-BK7, i.e.
+        double the uncoated reflectance), R = 0.0515 vs 0.0744 at 1.75,
+        and only R = 0.0 at n_s=2.778.  With (2) the design is exact for
+        every substrate: R(550 nm) <= 1e-31 for n_s in
+        {1.45, 1.52, 1.75, 2.0, 2.35, 2.78, 3.42, 4.0}, and the residual
+        over a 450-650 nm band is 0.0202 (n_s=1.52) to 0.0058
+        (n_s=2.78) -- the V-shaped response the name advertises.
+
+    Notes
+    -----
+    Realizability: (2) gives ``n_H = 1.66`` at n_s=1.45, ``1.70`` at
+    1.52 (N-BK7), ``1.83`` at 1.75, ``1.95`` at 2.0, ``2.30`` at 2.778
+    and ``2.76`` at 4.0 (Ge).  Values up to ~2.4 are covered by bundled
+    :data:`COATING_MATERIAL_REGISTRY` materials (MgO 1.74, Al2O3 1.77,
+    Y2O3 1.93, ZrO2 2.15, ZnS 2.35, TiO2 2.40); in practice the exact
+    index is hit with a co-deposited mixture.  Above ~2.6 (n_s > ~3.5)
+    no common oxide reaches the required index -- for high-index
+    semiconductor substrates design a 2-material V-coat by solving the
+    two layer THICKNESSES at fixed ``(n_L, n_H)`` instead.  That variant
+    keeps real materials but has no real solution in the band
+    ``n_L**2/n_ambient < n_substrate < n_ambient*(n_H/n_L)**2`` (with
+    n_L=1.38, n_H=2.3 that is 1.904 < n_s < 2.778, e.g. ZnS at 2.35),
+    nor above ``n_H**2/n_ambient``; the quarter-quarter form used here
+    has a solution for every substrate, which is why it is the default.
+
+    Dispersion: the returned indices are non-dispersive scalars, matching
+    the single-scalar-index contract of :func:`coating_reflectance` (see
+    its COAT-1 note).  ``n_substrate`` should be the substrate index AT
+    ``wavelength_center``.
     """
-    n_H = 2.3  # TiO2-like
-    n_L = 1.38  # MgF2-like
+    n_substrate = float(n_substrate)
+    if not (np.isfinite(n_substrate) and n_substrate > 0.0):
+        raise ValueError(
+            f"broadband_ar_v_coat: n_substrate must be finite and > 0; "
+            f"got {n_substrate!r}.  It sets the high-index layer via "
+            f"n_H = n_L * sqrt(n_substrate) (quarter-wave admittance "
+            f"match), so a non-physical value silently produces a "
+            f"non-physical stack.")
+    n_L = 1.38  # MgF2-like outer (ambient-side) layer
+    # Quarter-wave admittance match, eq. (2) above, at n_ambient = 1.
+    n_H = n_L * math.sqrt(n_substrate)
     d_H = wavelength_center / (4 * n_H)
     d_L = wavelength_center / (4 * n_L)
     return [(n_L, d_L), (n_H, d_H)]

@@ -1973,3 +1973,66 @@ __all__ = [
     'CancellableProgress',
     'is_cancelled',
 ]
+
+
+# ---------------------------------------------------------------------------
+# A-3: PEP-562 live forwarding for the mutable DEFAULT_* config knobs.
+# ---------------------------------------------------------------------------
+#
+# audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-3: the four
+# ``DEFAULT_*`` names re-exported near the top of this file were
+# import-time SNAPSHOTS.  The canonical mutable globals live in
+# :mod:`lumenairy.propagators.fft_infra` and the four ``set_default_*``
+# setters mutate them there, so after
+# ``la.set_default_complex_dtype('complex64')`` the getter
+# ``la.get_default_complex_dtype()`` returned complex64 while the
+# constant ``la.DEFAULT_COMPLEX_DTYPE`` still read complex128 -- the
+# same defect, at the same names, that
+# ``lumenairy/propagators/propagation.py:296`` already fixes for the
+# submodule path.  Replicating that precedent exactly: whitelist the
+# live names, DELETE the stale module-level bindings so attribute
+# lookup falls through, and forward to the canonical module in
+# ``__getattr__``.
+#
+# Consequences of the fall-through, all intended:
+#   * ``la.DEFAULT_COMPLEX_DTYPE`` and ``from lumenairy import
+#     DEFAULT_COMPLEX_DTYPE`` both return the CURRENT value.
+#   * every ``__all__`` entry still resolves via ``getattr`` (the
+#     export-integrity pin in tests/unit/test_public_api.py, which
+#     parametrises over all 688 top-level entries, stays green), and a
+#     phantom name still raises ``AttributeError``.
+#   * ``__dir__`` is overridden so the four names remain visible to
+#     ``dir(lumenairy)`` / tab-completion despite not being in
+#     ``globals()``.
+_LIVE_FORWARD_NAMES = frozenset({
+    'DEFAULT_COMPLEX_DTYPE',
+    'DEFAULT_REAL_DTYPE',
+    'DEFAULT_WAVE_PROPAGATOR',
+    'DEFAULT_DY',
+})
+
+# Drop the import-time snapshots (see propagation.py:285-293 for the
+# identical step).  Without this, normal attribute lookup succeeds on the
+# stale binding and ``__getattr__`` is never consulted.
+for _name in _LIVE_FORWARD_NAMES:
+    if _name in globals():
+        del globals()[_name]
+del _name
+
+
+def __getattr__(name):
+    """Forward the mutable ``DEFAULT_*`` knobs to their live values.
+
+    Mirrors :func:`lumenairy.propagators.propagation.__getattr__`; the
+    canonical globals live in ``propagators.fft_infra`` (the module the
+    ``set_default_*`` setters mutate), so one hop gets the current value.
+    """
+    if name in _LIVE_FORWARD_NAMES:
+        from .propagators import fft_infra as _fft_infra
+        return getattr(_fft_infra, name)
+    raise AttributeError(
+        f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(globals()) | _LIVE_FORWARD_NAMES)

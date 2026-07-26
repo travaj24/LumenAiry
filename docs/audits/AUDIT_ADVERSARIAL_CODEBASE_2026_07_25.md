@@ -20,9 +20,25 @@ the summary.  Two corrections to this report discovered during fixing: (a) R-1's
 **+16.9860 mm** (the audit oracle printed the + value; the − transcription was
 itself the R-1b convention slip); (b) M1's repro geometry is centro-symmetric, so
 the default `symmetry='auto'` fold MASKS the collision there — it reproduces on
-the default path with fold-ineligible centres (pinned that way).  All remaining
-findings (Tier 2+) are still open; fixes should follow the same measure-first /
-gate / pin discipline.
+the default path with fold-ineligible centres (pinned that way).
+
+**Status: TIER 2 BATCH B FIXED (2026-07-25)** — the infra/contract cluster
+`P3, P4, P6, P7, E-H6, E-H11, A-3`, 55 pins in
+`tests/unit/test_niche_audit_p2b_infra_contracts.py` (40 verified failing
+pre-fix), with 22/22 captured arrays proven bit-identical across the pre/post
+trees for everything the fixes claim not to change; CHANGELOG [Unreleased] has
+the numbers.  Two corrections to this report found while fixing: (a) **E-H6 is
+worse than "parameter never read"** — the fixed n_H=2.3/n_L=1.38 stack
+satisfies the quarter-wave admittance match only at n_substrate = 2.778, so
+measured against this module's own TMM it is *worse than bare glass* over the
+whole common range (R = 0.0856 vs 0.0426 uncoated on N-BK7); it is an AR
+function that doubled the reflectance, not merely a design frozen to one
+substrate.  (b) **P6's "the NumPy twin validates and honours it" is only half
+true** — the twin honours `'fresnel'`/`'sas'` and rejects `'rs'`, but junk
+method names fall through to ASM there too (measured 0.0 relative difference
+from `method='asm'`); that sibling gap is NOT closed by this batch (see the
+declined list in the fix report).  All other Tier 2+ findings remain open;
+fixes should follow the same measure-first / gate / pin discipline.
 
 ---
 

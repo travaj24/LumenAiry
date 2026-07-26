@@ -1215,6 +1215,36 @@ def propagate_through_system_jax(E_in: np.ndarray,
     Element-by-element walk where each element type is dispatched to a
     JAX-compatible handler.
 
+    Free-space method
+    -----------------
+    ``method`` selects the free-space kernel used for ``'propagate'``
+    elements.  This entry point implements **ASM only**: the whole point
+    of the JAX path is a single jit'd XLA graph, and the NumPy twin's
+    ``'fresnel'`` / ``'sas'`` branches both resample back onto the input
+    pitch (``resample_field`` -> ``scipy.ndimage.map_coordinates``), which
+    has no JAX-traceable equivalent here.  Any other value raises rather
+    than silently returning the ASM answer:
+
+      * ``'asm'`` (default) -- angular-spectrum, jit-traceable.
+      * ``'fresnel'`` / ``'sas'`` / ``'rs'`` -- recognised by
+        :func:`propagate_through_system` but NOT implemented on the JAX
+        path -> :class:`NotImplementedError` (use the NumPy twin).
+      * anything else -> :class:`ValueError`.
+
+    Note that, unlike the NumPy twin, this function does **not** consult
+    ``set_default_wave_propagator()``: the JAX path is ASM-only by
+    construction, so a process-wide default of ``'fresnel'`` would make
+    every JAX call raise.  Pass ``method`` explicitly.
+
+    .. versionchanged:: 5.30
+        ``method`` is validated (audit P6,
+        ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25``).  Pre-v5.30 the
+        parameter was accepted and never read, so
+        ``method='fresnel'`` silently returned the ASM field -- measured
+        5.0e-2 relative L2 away from the NumPy twin's Fresnel result on
+        a 128^2 / z=2 mm Gaussian probe, and bit-identical to the
+        ``method='asm'`` call.
+
     Supported (traceable) element types
     -----------------------------------
     The set of element types with a fully JAX-traceable code path is
@@ -1267,7 +1297,11 @@ def propagate_through_system_jax(E_in: np.ndarray,
     ------
     NotImplementedError
         If any element in ``elements`` has a ``'type'`` not in
-        :data:`_TRACEABLE_ELEMENT_TYPES`.
+        :data:`_TRACEABLE_ELEMENT_TYPES`, or if ``method`` names a
+        free-space kernel the NumPy twin supports but this JAX path does
+        not (``'fresnel'`` / ``'sas'`` / ``'rs'``).
+    ValueError
+        If ``method`` is not a recognised free-space method name.
     ImportError
         If JAX is not installed.
     """
@@ -1296,6 +1330,41 @@ def propagate_through_system_jax(E_in: np.ndarray,
 
     if dy is None:
         dy = dx
+
+    # ------------------------------------------------------------------
+    # v5.30 (audit P6): validate ``method``.
+    # ------------------------------------------------------------------
+    # Pre-v5.30 ``method`` was accepted and never read: every value --
+    # including 'fresnel', 'sas' and outright junk -- returned the ASM
+    # field (bit-identical), while the NumPy twin
+    # ``propagate_through_system`` honours 'fresnel' / 'sas' (and rejects
+    # 'rs').  Silent fall-through is the forbidden class, so the JAX path
+    # now names what it implements: ASM.  ``method=None`` is accepted as
+    # an explicit "use this entry point's default" (it does NOT resolve
+    # ``set_default_wave_propagator()`` -- see the docstring).
+    _JAX_METHODS = ('asm',)
+    _NUMPY_TWIN_ONLY_METHODS = ('fresnel', 'sas', 'rs', 'rayleigh_sommerfeld')
+    if method is None:
+        method = 'asm'
+    if method not in _JAX_METHODS:
+        if method in _NUMPY_TWIN_ONLY_METHODS:
+            raise NotImplementedError(
+                f"propagate_through_system_jax: method={method!r} has no "
+                f"JAX-traceable free-space kernel here; this entry point "
+                f"implements {list(_JAX_METHODS)} only (the 'fresnel' / "
+                f"'sas' branches of the NumPy twin resample back onto the "
+                f"input pitch via scipy map_coordinates, which is not "
+                f"JAX-traceable).  Pre-v5.30 this argument was silently "
+                f"ignored and you got the ASM field.  Use "
+                f"lumenairy.propagators.system.propagate_through_system() "
+                f"(NumPy) for method={method!r}, or pass method='asm' if "
+                f"the ASM field is what you want.")
+        raise ValueError(
+            f"propagate_through_system_jax: method={method!r} is not a "
+            f"recognised free-space method.  Supported here: "
+            f"{list(_JAX_METHODS)}; additionally recognised by the NumPy "
+            f"twin (and rejected here with NotImplementedError): "
+            f"{list(_NUMPY_TWIN_ONLY_METHODS)}.")
 
     # ------------------------------------------------------------------
     # B1-2 fix: fail-fast on non-traceable elements.

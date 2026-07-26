@@ -562,9 +562,13 @@ class TestP2FacFactoryValidationMetaPin:
 
 class TestP2Dep1ShimsMentionVersionRemoved:
     """Both legacy shims (``makedammann2d`` and ``create_led_source``)
-    must route their DeprecationWarning through
-    ``_deprecation.warn_deprecated_signature`` and mention
-    ``version_removed='5.0'`` in the message text."""
+    must state their removal version in the message text.
+
+    ``create_led_source`` still routes its ``DeprecationWarning``
+    through ``_deprecation.warn_deprecated_signature`` (v5.0).
+    ``makedammann2d``'s unit shim was RETIRED in v5.30 (audit E-H11):
+    explicit opt-in + loud ``UserWarning`` naming v5.32 -- see the
+    per-test docstring."""
 
     def test_create_led_source_legacy_shim_mentions_v5_0(self):
         """The legacy positional form of ``create_led_source`` must
@@ -585,9 +589,9 @@ class TestP2Dep1ShimsMentionVersionRemoved:
             f"create_led_source DeprecationWarning must reference v5.0 "
             f"removal; got {msg!r}.")
 
-    def test_makedammann2d_legacy_shim_mentions_v5_0(self):
+    def test_makedammann2d_legacy_shim_names_removal_version(self):
         """The legacy micrometre auto-detect path in ``makedammann2d``
-        must emit a DeprecationWarning that contains 'v5.0'.
+        must emit a warning that names its removal version.
 
         The heuristic fires when any of ``periodx`` / ``periody`` /
         ``waveln`` exceeds ``1e-3`` (1 mm) but is below ``1`` m (the
@@ -596,6 +600,13 @@ class TestP2Dep1ShimsMentionVersionRemoved:
         wrote ``periodx=0.5`` thinking micrometres but landed at half-
         a-metre in SI -- so the heuristic-warning path fires without
         tripping the upper-bound ``ValueError``.
+
+        v5.30 (audit E-H11): the shim is retired -- it needs an explicit
+        ``_legacy_units='auto'`` (the default is now ``'SI'``) and it
+        warns as a ``UserWarning`` naming v5.32, not as a
+        ``DeprecationWarning`` naming v5.0 (which Python suppressed by
+        default outside ``__main__``, hiding a silent 1e-6 rescale of
+        every SI THz/MMW design).
         """
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
@@ -606,7 +617,8 @@ class TestP2Dep1ShimsMentionVersionRemoved:
                     # grating, but the test only cares that the
                     # heuristic warning fires).
                     periodx=0.5, periody=0.5, waveln=0.5,
-                    itr=1, plot=False, seed=0)
+                    itr=1, plot=False, seed=0,
+                    _legacy_units='auto')
             except Exception:
                 # The function may still raise for other reasons
                 # downstream of the warning (degenerate near-field
@@ -615,13 +627,13 @@ class TestP2Dep1ShimsMentionVersionRemoved:
                 # emitted, not about the IFTA reaching a useful design.
                 pass
         dep = [w for w in caught
-               if issubclass(w.category, DeprecationWarning)
+               if issubclass(w.category, UserWarning)
                and 'makedammann2d' in str(w.message)]
         assert len(dep) >= 1, (
-            f"makedammann2d legacy micrometre call must emit "
-            f"DeprecationWarning; got "
+            f"makedammann2d legacy micrometre call must emit a "
+            f"UserWarning; got "
             f"{[str(w.message) for w in caught]}.")
         msg = str(dep[0].message)
-        assert '5.0' in msg, (
-            f"makedammann2d DeprecationWarning must reference v5.0 "
-            f"removal; got {msg!r}.")
+        assert '5.32' in msg, (
+            f"makedammann2d retired-shim warning must reference its "
+            f"v5.32 removal; got {msg!r}.")

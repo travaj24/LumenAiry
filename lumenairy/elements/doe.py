@@ -531,7 +531,7 @@ def makedammann2d(
     seed: Optional[int] = None,
     save_path: Optional[str] = None,
     cell_pixels: Optional[Union[int, Tuple[int, int]]] = None,
-    _legacy_units: str = 'auto',
+    _legacy_units: str = 'SI',
 ) -> Tuple[np.ndarray, np.ndarray, Tuple[float, float]]:
     """
     Design a 2D Dammann grating using an iterative Fourier transform algorithm.
@@ -566,7 +566,24 @@ def makedammann2d(
         ``_legacy_units='SI'`` to opt out of the auto rescale and
         accept mm-scale inputs as SI metres.  Supported wavelength
         range: 10 nm (``1e-8 m``) -- 1 mm (``1e-3 m``) under the
-        default ``'auto'`` mode; up to 1 m under ``'SI'`` mode.
+        ``'auto'`` mode; up to 1 m under ``'SI'`` mode.
+
+    .. versionchanged:: 5.30
+        ``_legacy_units`` default flipped ``'auto'`` -> ``'SI'`` and the
+        micrometre auto-detect shim retired (audit E-H11,
+        ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25``).  The ``'auto'``
+        heuristic silently multiplied any ``periodx`` / ``periody`` /
+        ``waveln`` above 1 mm by ``1e-6``, so a physically correct SI
+        THz / MMW design (8 mm period at 1.1 mm wavelength) came back
+        with 5e-10 m cells -- a factor 1e-6 wrong -- and the only
+        diagnostic was a ``DeprecationWarning``, which is suppressed by
+        default outside ``__main__``.  SI metres are now taken at face
+        value: no rescale, no warning.  The heuristic stays reachable
+        for one release cycle via an explicit ``_legacy_units='auto'``,
+        which now emits a **loud** ``UserWarning`` instead of a
+        ``DeprecationWarning``; it will be removed in v5.32.  Explicit
+        ``_legacy_units='um'`` is unchanged and is the supported
+        migration path for genuine micrometre call sites.
 
     Parameters
     ----------
@@ -624,22 +641,26 @@ def makedammann2d(
         count must be even (the annealing / order-embedding logic uses
         ``n // 2``) and at least as large as the corresponding
         ``diforders`` dimension.
-    _legacy_units : {'auto', 'um', 'SI'}, default ``'auto'``
-        Controls the legacy-micrometre heuristic introduced in
-        v4.14.2 and refined in v4.14.3.
+    _legacy_units : {'SI', 'um', 'auto'}, default ``'SI'``
+        Unit system of ``periodx`` / ``periody`` / ``waveln``.
 
-        - ``'auto'`` (default): each of ``periodx`` / ``periody`` /
-          ``waveln`` is rescaled by ``1e-6`` and a
-          ``DeprecationWarning`` is emitted if its value exceeds
-          ``1e-3`` (1 mm).  This is the v4.14.2 behaviour.
-        - ``'um'``: the inputs are interpreted as legacy micrometres
-          unconditionally -- each value is multiplied by ``1e-6``.
-          No warning is emitted.
-        - ``'SI'``: the inputs are interpreted as SI metres
+        - ``'SI'`` (default since v5.30): the inputs are SI metres,
           unconditionally -- no rescale, no warning, even if values
-          exceed 1 mm.  **Use this for THz / MMW designs** where
+          exceed 1 mm.  This is correct for THz / MMW designs where
           ``periodx=5e-3`` (5 mm) and ``waveln=1.1e-3`` (1.1 mm
           far-IR) are physically meaningful.
+        - ``'um'``: the inputs are interpreted as legacy micrometres
+          unconditionally -- each value is multiplied by ``1e-6``.
+          No warning is emitted (the caller stated the convention).
+          This is the supported migration path for call sites that
+          still hold micrometre values.
+        - ``'auto'``: **retired shim, removal in v5.32.**  The v4.14.2
+          per-parameter heuristic -- each of ``periodx`` / ``periody``
+          / ``waveln`` larger than ``1e-3`` (1 mm) is rescaled by
+          ``1e-6``.  Was the default up to v5.29, which silently
+          miscompiled every SI THz / MMW design; now requires an
+          explicit opt-in and emits a loud ``UserWarning`` on every
+          rescale.
 
         Inputs above 1 m are always rejected as unambiguously wrong,
         regardless of ``_legacy_units`` -- a meter-scale grating
@@ -677,11 +698,13 @@ def makedammann2d(
     # v4.14.3: dispatch on ``_legacy_units``.  Three modes:
     #
     #   'SI'   -- pass-through, accept mm-scale inputs as SI metres
-    #             (intended for THz / MMW designs).
+    #             (intended for THz / MMW designs).  DEFAULT since
+    #             v5.30 (audit E-H11).
     #   'um'   -- explicit legacy micrometres; rescale unconditionally
     #             with NO warning.
     #   'auto' -- the v4.14.2 heuristic: rescale and warn if a value
-    #             exceeds 1 mm (1e-3 m).
+    #             exceeds 1 mm (1e-3 m).  RETIRED in v5.30: explicit
+    #             opt-in only, loud UserWarning, removal in v5.32.
     #
     # Validate the mode here so a typo (e.g. ``_legacy_units='m'``)
     # fails fast rather than silently picking up 'auto' fallback.
@@ -778,29 +801,36 @@ def makedammann2d(
         _legacy_um = (_periodx_legacy or _periody_legacy
                       or _waveln_legacy)
         if _legacy_um:
-            # v4.15 (P2-DEP-1): route through the shared
-            # ``_deprecation.warn_deprecated_signature`` helper.  The
-            # legacy form is a *unit-system* shim rather than a
-            # signature change, so the helper's
-            # ``old_signature``/``new_signature`` slots are used to
-            # advertise the micrometre -> SI migration and the message
-            # carries the same v4.14.2 + v5.0 dates as before.
-            from .._deprecation import warn_deprecated_signature
-            warn_deprecated_signature(
-                function='makedammann2d',
-                old_signature=(
-                    f'makedammann2d(periodx={periodx} [um? legacy], '
-                    f'periody={periody}'
-                    f"{' [legacy um]' if _periody_legacy else ''}, "
-                    f"waveln={waveln}"
-                    f"{' [legacy um]' if _waveln_legacy else ''})"),
-                new_signature=(
-                    'makedammann2d(periodx=61e-6, periody=61e-6, '
-                    "waveln=1.31e-6)  # SI metres; or pass "
-                    "``_legacy_units='SI'`` for THz/MMW"),
-                version_added='4.14.2',
-                version_removed='5.0',
-                stacklevel=3,
+            # v5.30 (audit E-H11): the shim is RETIRED -- reachable only
+            # via an explicit ``_legacy_units='auto'`` and no longer
+            # routed through ``_deprecation.warn_deprecated_signature``.
+            # That helper emits a ``DeprecationWarning``, which Python
+            # suppresses by default outside ``__main__``: for the five
+            # releases this was the DEFAULT mode, a library call site
+            # that handed in SI metres above 1 mm got its geometry
+            # multiplied by 1e-6 with no visible diagnostic at all
+            # (measured: 8 mm period / 1.1 mm wavelength -> 5e-10 m
+            # cells).  A retired shim that still silently rewrites
+            # physical inputs must be LOUD, so this is a plain
+            # ``UserWarning`` (default-visible) while keeping the
+            # helper's message shape: function, versions, and the
+            # concrete migration recipe.
+            _which = ', '.join(
+                nm for nm, flag in (('periodx', _periodx_legacy),
+                                    ('periody', _periody_legacy),
+                                    ('waveln', _waveln_legacy)) if flag)
+            warnings.warn(
+                f"makedammann2d: _legacy_units='auto' is a RETIRED "
+                f"micrometre-detect shim (deprecated since v4.14.2, "
+                f"removal in v5.32) and is silently rescaling {_which} by "
+                f"1e-6 because the value(s) exceed 1 mm: periodx="
+                f"{periodx}, periody={periody}, waveln={waveln}.  If these "
+                f"are SI metres (e.g. a THz / MMW design: 8 mm period at "
+                f"1.1 mm wavelength) the rescale is WRONG -- drop "
+                f"``_legacy_units`` entirely, since 'SI' is the default "
+                f"since v5.30.  If they really are micrometres, pass "
+                f"``_legacy_units='um'`` to convert without this warning.",
+                UserWarning, stacklevel=3,
             )
             # Per-parameter rescale: only convert the ones that
             # actually look like legacy um.  This keeps a hybrid call

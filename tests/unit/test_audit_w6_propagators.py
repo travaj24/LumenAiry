@@ -289,8 +289,13 @@ class TestP357ChunkOutputDeprecated:
 
         E = np.ones((8, 8), np.complex128)
         g = (np.arange(4) - 2) * 1e-5
+        # v5.30 (audit P7): ``wavelength`` is deprecated on this entry
+        # point (the body never read it; ``opl_fn`` returns WAVES) and
+        # now emits its own DeprecationWarning, so it is dropped here to
+        # keep ``test_default_is_silent`` a pin on ``chunk_output``
+        # alone.  The OPL callable above already divides by 1.31 um.
         kwargs = dict(opl_fn=opl_fn, output_grid_x=g, output_grid_y=g,
-                      input_grid_dx=1e-6, wavelength=1.31e-6)
+                      input_grid_dx=1e-6)
         if chunk is not None:
             kwargs["chunk_output"] = chunk
         return propagate_huygens_fresnel_with_opl_callable(E, **kwargs)
