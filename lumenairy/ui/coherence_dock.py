@@ -25,6 +25,122 @@ from matplotlib.figure import Figure
 from .model import SystemModel
 
 
+# ---------------------------------------------------------------------------
+# Source-pupil geometry.  v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25,
+# Territory A follow-up): Tab 1's "Source shape" combo (Circular / Annular /
+# Dipole / Quadrupole) had NEVER been wired -- ``_run`` built its params dict
+# without reading ``combo_shape`` at all, so all four entries produced the
+# identical filled-disk image (a live instance of the audit's inert-control
+# pattern).  The shape -> source-point mapping lives HERE, at module scope
+# and free of any Qt dependency, so it is exercisable (and pinned) on a box
+# with no PySide6 installed; the docks only call it.
+#
+# ``n`` keeps one meaning across every shape: "source samples per axis", the
+# same knob ``koehler_image``'s ``n_source_points`` names.
+#
+#   * Cartesian-masked shapes (Circular / Annular / Gaussian / Custom) sample
+#     the n x n grid over [-hw, +hw] and keep the points the mask admits, so
+#     the count is ~(fill factor) * n**2.  Bit-preserved from the pre-fix
+#     Tab 3 helper -- Tab 3's numbers do not move.
+#   * Pole shapes (Dipole / Quadrupole) are sampled in POLAR coordinates
+#     instead: each pole gets an ``m x m`` (radius x azimuth) patch with
+#     ``m = max(2, round(n / 2))``, for ``n_poles * m**2`` points total.
+#     A Cartesian mask cannot express these robustly -- the wedges are thin,
+#     and for EVEN n the grid contains neither the axis (no 0 sample) nor any
+#     point inside the 0.6-1.0 annulus, so the mask comes out EMPTY
+#     (measured: n=4 admits 0 points).  The polar construction always
+#     returns exactly the documented count.
+_SOURCE_POLE_AZIMUTHS_DEG = {
+    'Dipole': (0.0, 180.0),                     # poles on the +/-x axis
+    'Quadrupole': (45.0, 135.0, 225.0, 315.0),  # poles on the diagonals
+}
+# Half-width of each pole's azimuthal wedge [deg], and the inner-radius
+# fraction of the annulus the poles live in -- the conventional lithography
+# off-axis-illumination pupil.  The same inner fraction defines 'Annular'
+# (it is the 0.6 the pre-fix Tab 3 helper hard-coded).
+_SOURCE_POLE_HALF_ANGLE_DEG = 30.0
+_SOURCE_INNER_FRAC = 0.6
+# Every shape any dock combo may offer.  Membership is CHECKED below: an
+# unrecognised name raises instead of silently degrading to a disk, which is
+# the exact failure mode that let the unwired combo ship green.
+SOURCE_SHAPES = ('Circular', 'Annular', 'Gaussian', 'Custom',
+                 'Dipole', 'Quadrupole')
+
+
+def build_source_angles(shape, half_angle_rad, n):
+    """Return ``(angles, weights)`` for a named source-pupil distribution.
+
+    Parameters
+    ----------
+    shape : str
+        One of :data:`SOURCE_SHAPES`.  An unknown name raises
+        ``ValueError`` rather than falling back to a disk.
+    half_angle_rad : float
+        Angular radius of the source pupil [rad] -- the outer edge of the
+        distribution.  Clamped to >= 1e-9 so a zeroed spin box cannot
+        produce a divide-by-zero.
+    n : int
+        Source samples per axis (>= 1).
+
+    Returns
+    -------
+    angles : list of (angle_x, angle_y) tuples [rad]
+        Ready for ``extended_source_image(source_angles=...)``.
+    weights : list of float
+        Matching relative intensities, same length as ``angles``.
+    """
+    if shape not in SOURCE_SHAPES:
+        raise ValueError(
+            f'unknown source shape {shape!r}; expected one of '
+            f'{SOURCE_SHAPES}.  (A combo entry was added without wiring '
+            f'the distribution that backs it.)')
+    hw = max(float(half_angle_rad), 1e-9)
+    n = max(1, int(n))
+
+    if shape in _SOURCE_POLE_AZIMUTHS_DEG:
+        m = max(2, int(round(n / 2)))
+        radii = np.linspace(_SOURCE_INNER_FRAC * hw, hw, m)
+        half = np.radians(_SOURCE_POLE_HALF_ANGLE_DEG)
+        angles, weights = [], []
+        for centre_deg in _SOURCE_POLE_AZIMUTHS_DEG[shape]:
+            centre = np.radians(centre_deg)
+            az = np.linspace(centre - half, centre + half, m)
+            Rg, Ag = np.meshgrid(radii, az, indexing='ij')
+            angles.extend(zip((Rg * np.cos(Ag)).ravel(),
+                              (Rg * np.sin(Ag)).ravel()))
+            weights.extend([1.0] * Rg.size)
+        return angles, weights
+
+    ax = np.linspace(-hw, hw, n)
+    AX, AY = np.meshgrid(ax, ax)
+    R = np.sqrt(AX ** 2 + AY ** 2)
+    if shape == 'Annular':
+        W = ((R <= hw) & (R >= _SOURCE_INNER_FRAC * hw)).astype(np.float64)
+    elif shape == 'Gaussian':
+        W = np.exp(-(R ** 2) / (2.0 * (hw / 2.355) ** 2))
+    elif shape == 'Custom':
+        W = np.clip(1.0 - (R / hw), 0.0, 1.0)
+    else:  # 'Circular'
+        W = (R <= hw).astype(np.float64)
+    mask = W > 0
+    if not mask.any():
+        # Territory A follow-up, second silent failure found while wiring
+        # the combo: the Cartesian annulus mask can admit ZERO points at
+        # coarse n (measured, hw=1: n=3 -> 4 pts, n=4 -> 0 pts, n=5 -> 8).
+        # ``extended_source_image`` accepts an empty ``source_angles`` and
+        # returns an all-zero image without complaint (measured: shape
+        # preserved, sum 0.0, all finite), so Tab 3 'Annular' at
+        # source_n=4 rendered a black frame with no error anywhere.  Fail
+        # loudly instead -- both docks surface this in their summary box.
+        raise ValueError(
+            f'source shape {shape!r} admits no sample points at n={n}: the '
+            f'{n}x{n} pupil grid has no node inside the mask.  Increase '
+            f'"Source N (per axis)" (n=5 is the smallest that works for '
+            f'Annular).')
+    return (list(zip(AX[mask].ravel(), AY[mask].ravel())),
+            W[mask].ravel().tolist())
+
+
 # Legacy Schell / Koehler worker (preserved for Tab 1).
 class _KoehlerWorker(QThread):
     finished_result = Signal(object)
@@ -56,6 +172,15 @@ class _KoehlerWorker(QThread):
         #   * ``n_modes``    -> n_source_points, which is the per-AXIS
         #                       count (total evaluations ~ n^2), so the
         #                       requested mode count maps as ceil(sqrt(n)).
+        #
+        # Territory A follow-up: ``shape`` is now READ (it never was -- see
+        # ``build_source_angles`` above).  ``koehler_image`` can only
+        # describe a FILLED condenser disk, which is exactly 'Circular', so
+        # that entry keeps the call -- and the numbers -- it already had;
+        # the three non-disk pupils route through ``extended_source_image``,
+        # whose ``source_angles`` / ``source_weights`` accept an arbitrary
+        # point set.  ``condenser_NA`` is the sine of the marginal ray
+        # angle, so the pupil's angular radius is ``asin(cond_na)``.
         try:
             import math
             import lumenairy as la
@@ -73,9 +198,17 @@ class _KoehlerWorker(QThread):
                                      float(self.params['sigma']) * na_pupil))
             n_src = max(1, int(math.ceil(
                 math.sqrt(float(self.params['n_modes'])))))
-            res = la.koehler_image(
-                object_field=obj, prescription=pres, wavelength=wv, dx=dx,
-                condenser_NA=cond_na, n_source_points=n_src)
+            shape = str(self.params.get('shape', 'Circular'))
+            if shape == 'Circular':
+                res = la.koehler_image(
+                    object_field=obj, prescription=pres, wavelength=wv, dx=dx,
+                    condenser_NA=cond_na, n_source_points=n_src)
+            else:
+                angles, weights = build_source_angles(
+                    shape, math.asin(cond_na), n_src)
+                res = la.extended_source_image(
+                    object_field=obj, prescription=pres, wavelength=wv, dx=dx,
+                    source_angles=angles, source_weights=weights)
             self.finished_result.emit(res)
         except Exception as exc:
             self.finished_result.emit(
@@ -141,22 +274,12 @@ class _CoherenceAnalysisWorker(QThread):
 
     @staticmethod
     def _build_source_angles(shape, fwhm_rad, n):
-        """Return (angles, weights) for a parametric source distribution."""
-        hw = max(fwhm_rad, 1e-9)
-        ax = np.linspace(-hw, hw, n)
-        AX, AY = np.meshgrid(ax, ax)
-        R = np.sqrt(AX ** 2 + AY ** 2)
-        if shape == 'Annular':
-            W = ((R <= hw) & (R >= 0.6 * hw)).astype(np.float64)
-        elif shape == 'Gaussian':
-            W = np.exp(-(R ** 2) / (2.0 * (hw / 2.355) ** 2))
-        elif shape == 'Custom':
-            W = np.clip(1.0 - (R / hw), 0.0, 1.0)
-        else:  # 'Circular'
-            W = (R <= hw).astype(np.float64)
-        mask = W > 0
-        return (list(zip(AX[mask].ravel(), AY[mask].ravel())),
-                W[mask].ravel().tolist())
+        """Return (angles, weights) for a parametric source distribution.
+
+        Thin delegate to the module-level :func:`build_source_angles`, so
+        Tab 1 and Tab 3 share one implementation and one set of pins.
+        """
+        return build_source_angles(shape, fwhm_rad, n)
 
     @classmethod
     def _load_ensemble(cls, path):
@@ -267,6 +390,11 @@ class CoherenceDock(QWidget):
         self.combo_shape = QComboBox()
         self.combo_shape.addItems(
             ['Circular', 'Annular', 'Dipole', 'Quadrupole'])
+        self.combo_shape.setToolTip(
+            'Condenser-pupil shape.  Circular integrates the filled '
+            'condenser disk via koehler_image; Annular / Dipole / '
+            'Quadrupole build the corresponding off-axis source-point set '
+            '(build_source_angles) and sum it via extended_source_image.')
         form.addRow('Source shape:', self.combo_shape)
         self.spin_sigma = QDoubleSpinBox()
         self.spin_sigma.setRange(0.01, 1.0)
@@ -332,6 +460,11 @@ class CoherenceDock(QWidget):
 
     def _run(self):
         params = dict(
+            # Territory A follow-up: ``shape`` is the line that was missing.
+            # ``combo_shape`` was built, populated and laid out, but never
+            # read -- so picking Annular / Dipole / Quadrupole changed
+            # nothing at all.  _KoehlerWorker.run consumes it.
+            shape=self.combo_shape.currentText(),
             sigma=float(self.spin_sigma.value()),
             n_modes=int(self.spin_modes.value()),
             N=int(self.spin_N.value()),

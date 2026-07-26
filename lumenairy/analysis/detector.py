@@ -442,7 +442,99 @@ def shack_hartmann(
         Reconstructed wavefront [m] via cumulative trapezoidal
         integration of the slopes.
     centroids_x, centroids_y : ndarray
-        Raw centroid positions [m] at each sub-aperture.
+        Reference-subtracted centroid positions [m] at each sub-aperture
+        (NOT raw: the flat-wavefront reference centroid, measured through
+        the same propagation, is removed -- see the Notes).
+
+    Notes
+    -----
+    **A GLOBAL tilt produces a UNIFORM slope map -- read the MEAN, not the
+    spread** (S12-2 contract, AUDIT_ADVERSARIAL_CODEBASE_2026_07_25
+    Territory A follow-up).  Every sub-aperture of a globally tilted pupil
+    sees the *same* local tilt, so ``slopes_x`` comes out spatially
+    constant: ``ptp(slopes_x)`` measures 3e-19..1e-17 rad (floating-point
+    noise) while ``nanmean(slopes_x)`` carries the full signal.  Code that
+    summarises the sensor with ``ptp`` / ``std`` therefore reads ~0 for a
+    pure tilt and can wrongly conclude the sensor is blind to it -- the
+    original observation behind the ``54a2dcf`` flag ("~0 slopes for a
+    global 2 mrad tilt", measured as 4.8e-14 urad = 4.8e-20 rad, which is
+    the *spread*).  The tilt IS recovered: at ``dx = 5 um``, 32 px per
+    sub-aperture, ``lenslet_focal = 5 mm``, a 1.0 mrad tilt reads back as
+    0.945 mrad.  Nor is it cancelled by the reference subtraction, which
+    removes a single constant: doubling the tilt doubles the answer.
+
+    **flat in => zero slopes out.**  A flat wavefront reports EXACTLY
+    ``0.0`` -- not merely something small -- because the flat-field
+    reference is slice 0 of the very batch that carries the measurements,
+    so on a flat input it is bit-identical to every measurement slice and
+    the subtraction cancels to the last bit.  Verified at all 45
+    ``(dx, pitch/dx, focal)`` combinations swept.
+
+    **Measured response (dx = 5 um, 32 px/sub-aperture, f = 5 mm,
+    632.8 nm).**  Against the analytic oracles ``centroid = f tan(theta)``
+    and ``dOPD/dx = 2 W x / R**2``:
+
+    * tilt response has gain 0.948 / 0.949 / 0.945 at theta = 0.2 / 0.5 /
+      1.0 mrad.  The ~5% deficit is finite sub-aperture truncation of the
+      shifted spot and grows with the walk-out fraction
+      ``f theta / (pitch / 2)`` -- 0.878 for the 1 -> 2 mrad step.
+    * defocus and astigmatism slope maps are linear in the pupil
+      coordinate with the same 0.946-0.949 gain and a residual three
+      orders below the signal, i.e. the SHAPE is exact.  Astigmatism
+      carries opposite-signed x / y gains, as it must.
+    * tilt and defocus superpose to within 2-5%.
+
+    Sampling caveat: the sub-aperture is propagated on a window equal to
+    its own width, so the focal spot is only resolvable while
+    ``wavelength * lenslet_focal / (sa_pixels * dx) < sa_pixels * dx``.
+    Outside that regime the focal intensity is essentially uniform, the
+    centroid degenerates to the window mean, and slopes read 0 regardless
+    of the input -- e.g. ``sa_pixels = 2`` at ``f = 5 mm``, 1.31 um puts
+    the spot ~65x wider than the window.  Choose ``lenslet_pitch`` /
+    ``lenslet_focal`` so the spot fits.
+
+    **FIXED IN v5.30 -- S12-1, the reference-centroid transform
+    mismatch.**  Before v5.30 the reference-centroid pass propagated its
+    flat calibration field with a bare
+    ``fftshift(fft2(ifftshift(...)))`` while the measurement pass used the
+    bandlimited angular-spectrum kernel at ``z = lenslet_focal``.  The
+    mismatch dated from the v4.10 reference pass and was merely hoisted
+    out of the loop by v4.13.0.  Two independent errors compounded:
+
+    1. *Different transform.*  ``cx_ref`` was not the centroid this
+       pipeline yields for a flat wavefront, so subtracting it INJECTED a
+       bias rather than removing one.
+    2. *Wrong sample spacing.*  A bare ``fft2`` lands in the Fraunhofer
+       plane, whose sample pitch is
+       ``wavelength * lenslet_focal / (sa_pixels * dx)``, not ``dx``, so
+       centroiding it against ``Xsa`` was dimensionally wrong too.  The
+       two pitches coincide when
+       ``sa_pixels * dx**2 == wavelength * lenslet_focal``, which is why
+       the error swung wildly with sampling instead of being a constant.
+
+    The observable was a spurious UNIFORM tilt on a PERFECTLY FLAT
+    wavefront.  Measured ``nanmean(slopes_x)`` [rad] on a 256x256 flat
+    field at 632.8 nm, which must be 0:
+
+    ========= ========= ======= ================ ==============
+    dx        pitch/dx  focal   pre-v5.30        v5.30
+    ========= ========= ======= ================ ==============
+    5 um      4         2 mm    -1.245e-03       0.0
+    5 um      32        5 mm    -2.472e-05       0.0
+    10 um     16        2 mm    +6.514e-03       0.0
+    20 um     8         5 mm    +2.075e-03       0.0
+    20 um     32        2 mm    -1.523e-02       0.0
+    ========= ========= ======= ================ ==============
+
+    Worst case over the 45-configuration sweep: 1.5235e-02 rad, i.e.
+    15.2 mrad of invented tilt -- larger than the 2 mrad signal such a
+    sensor is typically asked to measure.  Because the bias was a single
+    constant added to every sub-aperture, it left the slope map's
+    UNIFORMITY and every least-squares SHAPE gain untouched and corrupted
+    only the zero point; that is why the aberration oracles above read the
+    same before and after, and why the fix is a pure CALIBRATION
+    correction.  Pinned in
+    ``tests/unit/test_niche_s12_shack_hartmann_reference.py``.
     """
     # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper.  Pre-v4.15.5 an MCF / 3-D
@@ -527,27 +619,6 @@ def shack_hartmann(
         # to wavefront reconstruction (which NaN-zeros the slope grid).
         pass
     else:
-        # ---- reference-centroid pass on a flat-wavefront calibration field.
-        # 4.10: pre-4.10 reported raw centroid / lenslet_focal as the slope,
-        # baking in any per-lenslet centring bias from sa_pixels rounding
-        # / x0 offset as a fake tilt in EVERY measurement.  Compute the
-        # zero-slope reference centroids once from a unit-amplitude flat
-        # field and subtract.
-        # v4.13.0: a flat (ones) field produces an IDENTICAL sub-aperture
-        # for every lenslet, so the reference centroid is the same value
-        # at every valid (iy_r, ix_r).  Compute ONCE and broadcast.
-        E_sub_ref = lenslet_phase  # ones * phase = phase
-        E_focus_ref = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(E_sub_ref)))
-        I_focus_ref = np.abs(E_focus_ref) ** 2
-        total_ref = float(np.sum(I_focus_ref))
-        if total_ref > 0:
-            cx_ref = float(np.sum(Xsa * I_focus_ref) / total_ref)
-            cy_ref = float(np.sum(Ysa * I_focus_ref) / total_ref)
-        else:
-            cx_ref = 0.0
-            cy_ref = 0.0
-        # (P4: removed two leftover compute-and-discard np.where statements.)
-
         # ---- measurement pass: gather valid sub-apertures into one
         # (K, sa, sa) batch and propagate in a single shot.
         iy_idx, ix_idx = np.where(valid_mask)  # both shape (K,)
@@ -572,6 +643,29 @@ def shack_hartmann(
         # Apply the (shared) lenslet focusing phase across the batch.
         E_batch = E_batch * lenslet_phase[None, :, :]
 
+        # ---- reference-centroid slice on a flat-wavefront calibration field.
+        # 4.10: pre-4.10 reported raw centroid / lenslet_focal as the slope,
+        # baking in any per-lenslet centring bias from sa_pixels rounding
+        # / x0 offset as a fake tilt in EVERY measurement.  Compute the
+        # zero-slope reference centroid from a unit-amplitude flat field
+        # and subtract.  A flat (ones) field produces an IDENTICAL
+        # sub-aperture for every lenslet (``ones * lenslet_phase ==
+        # lenslet_phase``), so ONE reference slice serves every lenslet.
+        #
+        # v5.30 (S12-1): the reference is slice 0 of the SAME batch that
+        # carries the measurements, so it goes through bit-identically the
+        # same transform.  Pre-v5.30 it was propagated by a BARE
+        # ``fftshift(fft2(ifftshift(...)))`` while the measurement used the
+        # bandlimited angular-spectrum kernel at ``z = lenslet_focal`` -- a
+        # mismatch present since the v4.10 reference pass was introduced
+        # and merely hoisted out of the loop by v4.13.0 (whose comment
+        # above names the two different transforms without flagging the
+        # asymmetry).  See the ``Notes`` block in this function's docstring
+        # for the measured before/after table.
+        E_all = np.concatenate(
+            (lenslet_phase[None, :, :].astype(E_batch.dtype), E_batch),
+            axis=0)  # (K + 1, sa, sa); slice 0 is the flat-field reference
+
         # Batched angular-spectrum propagation to the focal plane.
         # The transfer function H is the same for every lenslet
         # (geometry-only: sa_pixels, dx, wavelength, lenslet_focal,
@@ -583,34 +677,45 @@ def shack_hartmann(
         from ..propagators.propagation import _build_asm_H_square
         H = _build_asm_H_square(
             sa_pixels, dx, lenslet_focal, wavelength,
-            dtype=E_batch.dtype, bandlimit=True)
+            dtype=E_all.dtype, bandlimit=True)
         # E_out = fftshift(ifft2(ifftshift(fft2(ifftshift(E_in)) * H)))
         # Apply along the last two axes so the batch dimension passes
         # through unmolested.
-        E_batch_shifted = np.fft.ifftshift(E_batch, axes=(-2, -1))
+        E_batch_shifted = np.fft.ifftshift(E_all, axes=(-2, -1))
         E_batch_fft = np.fft.fft2(E_batch_shifted, axes=(-2, -1))
         E_batch_fft = np.fft.fftshift(E_batch_fft, axes=(-2, -1))
         # H is built fftshifted to match the existing ASM convention.
         E_batch_fft = E_batch_fft * H[None, :, :]
         E_batch_fft = np.fft.ifftshift(E_batch_fft, axes=(-2, -1))
-        E_focus_batch = np.fft.ifft2(E_batch_fft, axes=(-2, -1))
-        E_focus_batch = np.fft.fftshift(E_focus_batch, axes=(-2, -1))
+        E_focus_all = np.fft.ifft2(E_batch_fft, axes=(-2, -1))
+        E_focus_all = np.fft.fftshift(E_focus_all, axes=(-2, -1))
 
-        # Per-slice intensity and centroid.
-        I_focus_batch = np.abs(E_focus_batch) ** 2  # (K, sa, sa)
-        total_batch = I_focus_batch.sum(axis=(-2, -1))  # (K,)
+        # Per-slice intensity and centroid, reference slice included.
+        I_focus_all = np.abs(E_focus_all) ** 2       # (K + 1, sa, sa)
+        total_all = I_focus_all.sum(axis=(-2, -1))   # (K + 1,)
+        # Suppress divide warning for zero-total slices; replaced later.
+        with np.errstate(divide='ignore', invalid='ignore'):
+            sum_Xsa_I = (Xsa[None, :, :] * I_focus_all).sum(axis=(-2, -1))
+            sum_Ysa_I = (Ysa[None, :, :] * I_focus_all).sum(axis=(-2, -1))
+            cx_all = sum_Xsa_I / total_all
+            cy_all = sum_Ysa_I / total_all
+
+        # Split slice 0 (the flat-wavefront reference) off the front.
+        if total_all[0] > 0:
+            cx_ref = float(cx_all[0])
+            cy_ref = float(cy_all[0])
+        else:
+            cx_ref = 0.0
+            cy_ref = 0.0
+        total_batch = total_all[1:]                  # (K,)
+        cx_raw = cx_all[1:]
+        cy_raw = cy_all[1:]
         # Guard zero-total slices (echoes the pre-4.13 `if total < 1e-30`
         # check that left those lenslets at the NaN sentinel).
         ok = total_batch >= 1e-30
-        # Suppress divide warning for ok==False slices; replace later.
-        with np.errstate(divide='ignore', invalid='ignore'):
-            sum_Xsa_I = (Xsa[None, :, :] * I_focus_batch).sum(axis=(-2, -1))
-            sum_Ysa_I = (Ysa[None, :, :] * I_focus_batch).sum(axis=(-2, -1))
-            cx_raw = sum_Xsa_I / total_batch
-            cy_raw = sum_Ysa_I / total_batch
 
         # Calibrated centroids (subtract the (single) reference value
-        # computed above for the valid lenslets).
+        # measured through the SAME transform, for the valid lenslets).
         cx_arr = cx_raw - cx_ref
         cy_arr = cy_raw - cy_ref
 

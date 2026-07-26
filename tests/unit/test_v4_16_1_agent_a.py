@@ -238,14 +238,58 @@ def test_bug1_multiwavelength_merit_sibling_parity():
 
 # ============================================================================
 # Bug 2 -- ``shack_hartmann`` wavefront pitch quantisation
+#
+# PROBE RE-BASED in v5.30 (S12-1).  These three tests pin the RECONSTRUCTION
+# multiplier ``P`` -- that ``wavefront = cumsum(slopes) * P`` uses the on-grid
+# ``sa_pixels * dx`` rather than the requested ``lenslet_pitch``.  The
+# centroid physics is only a means to obtain nonzero slopes to invert.
+#
+# The original probe used ``lenslet_pitch = 1.7 * dx`` -> ``sa_pixels = 2``,
+# which is DEGENERATE: each sub-aperture is propagated on a window equal to
+# its own width (10 um here), while the diffraction spot
+# ``wavelength * lenslet_focal / (sa_pixels * dx)`` is ~65x wider at
+# f = 5 mm.  The focal-plane intensity is then uniform, so the centroid is
+# just the window mean and carries NO information about the wavefront.  The
+# slopes were nonzero only because of the S12-1 reference-transform bias --
+# a phantom tilt of up to 15.2 mrad that v5.30 removes.  With that bias
+# gone the old probe returns slopes of 0 and ``P`` is unrecoverable (nan),
+# so it had to be re-based rather than re-valued.
+#
+# Re-based probe, measured (dx = 5 um, N = 256, 633 nm):
+#
+#   lenslet_pitch  sa_pixels  pitch_actual  focal   spot/window  slope gain
+#   8.55 * dx      9          45 um         1.0 mm  0.31         0.905
+#
+# -- a resolvable spot, slopes linear in tilt to 0.1% (ratio 1.999 between
+# 0.5 and 1.0 mrad), and ``P`` recovered as 45.0000 um exactly.
+# ``n_lenslets`` is now passed explicitly (``N // sa_pixels``) so every
+# sub-aperture is in bounds; the old probe left ``x0`` negative and most
+# lenslets NaN, which the recovery had to mask around.
+#
+# One threshold necessarily loosens: the pre-fix discriminator
+# ``rel_pre > 0.15``.  On-grid quantisation can shift the pitch by at most
+# ``0.5 / sa_pixels`` relatively, so a >15% gap REQUIRES sa_pixels <= 3 --
+# i.e. it is only reachable inside the degenerate regime.  At sa_pixels = 9
+# the gap is 5.26%, still 5x outside the 1% band ``rel_post`` must sit in,
+# and ``test_bug2_shack_hartmann_amplitude_ratio_physics_pin`` below carries
+# the sharp form of the same discriminator (two requested pitches that round
+# to the same sa_pixels must yield the SAME P -- pre-fix they differed by
+# 10.5%, against a 1% tolerance).
 # ============================================================================
+
+# Re-based probe constants (see the block comment above).
+_SH_DX = 5e-6
+_SH_SA_PIXELS = 9
+_SH_FOCAL = 1.0e-3
+_SH_N = 256
 
 
 def _run_tilt_sh(lenslet_pitch: float, dx: float,
                  N: int = 256,
                  wavelength: float = 633e-9,
-                 lenslet_focal: float = 5e-3,
-                 tilt_x: float = 1e-3):
+                 lenslet_focal: float = _SH_FOCAL,
+                 tilt_x: float = 1e-3,
+                 n_lenslets: int = None):
     """Build a known linear-tilt wavefront ``phi(x) = tilt_x * x``,
     propagate through Shack-Hartmann, and return diagnostic
     quantities.
@@ -280,9 +324,15 @@ def _run_tilt_sh(lenslet_pitch: float, dx: float,
     sa_pixels = int(round(lenslet_pitch / dx))
     pitch_actual = sa_pixels * dx
 
+    if n_lenslets is None:
+        # Keep every sub-aperture in bounds: n_lenslets is otherwise derived
+        # from the REQUESTED (smaller) pitch while the sub-apertures are
+        # sa_pixels wide, so they overrun the grid and most lenslets come
+        # back NaN.  See the section comment above.
+        n_lenslets = N // sa_pixels
     sx, sy, wf, _, _ = shack_hartmann(
         E, dx, wavelength, lenslet_pitch, lenslet_focal,
-        detector_pixels_per_lenslet=4)
+        n_lenslets=n_lenslets, detector_pixels_per_lenslet=4)
     return wf, sx, sy, sa_pixels, pitch_actual
 
 
@@ -334,8 +384,8 @@ def test_bug2_shack_hartmann_non_integer_pitch_amplitude():
     Physics check: the cumsum-style integration step has a
     multiplicative pitch ``P``.  Pre-v4.16.1 ``P = lenslet_pitch``
     (the user-requested value).  Post-v4.16.1 ``P = sa_pixels * dx``
-    (the actual on-grid pitch).  For ``lenslet_pitch / dx = 1.7``
-    the two values differ by ``2/1.7 = 1.176`` (~18%).
+    (the actual on-grid pitch).  For ``lenslet_pitch / dx = 8.55``
+    the two values differ by ``9/8.55 = 1.053`` (5.26%).
 
     The slopes ARE measured between sub-aperture centres spaced by
     ``sa_pixels * dx``, so the on-grid pitch is the physically
@@ -343,17 +393,31 @@ def test_bug2_shack_hartmann_non_integer_pitch_amplitude():
     from the cumsum-step relationship and asserts ``P ==
     sa_pixels * dx`` to within 1%.
 
-    This test FAILS pre-v4.16.1 (recovered P == lenslet_pitch =
-    8.5 um) and PASSES post-v4.16.1 (P == sa_pixels * dx = 10 um).
+    v5.30: probe re-based from ``1.7 * dx`` (sa_pixels=2, degenerate --
+    see the section comment) to ``8.55 * dx`` (sa_pixels=9, spot/window
+    0.31, slope gain 0.905).  Measured recovery: P = 45.0000 um exactly,
+    rel_post = 0.000000, rel_pre = 5.26%.
     """
-    dx = 5e-6
-    lenslet_pitch = 1.7 * dx  # 8.5 um, non-integer ratio -> sa_pixels=2
+    dx = _SH_DX
+    # 42.75 um, non-integer ratio -> sa_pixels = 9, pitch_actual = 45 um
+    lenslet_pitch = 8.55 * dx
     wf, sx, sy, sa_pixels, pitch_actual = _run_tilt_sh(
-        lenslet_pitch=lenslet_pitch, dx=dx, N=256,
+        lenslet_pitch=lenslet_pitch, dx=dx, N=_SH_N,
         tilt_x=1e-3)
-    assert sa_pixels == 2
-    assert pitch_actual == pytest.approx(2.0 * dx, rel=1e-12)
+    assert sa_pixels == _SH_SA_PIXELS
+    assert pitch_actual == pytest.approx(_SH_SA_PIXELS * dx, rel=1e-12)
     assert pitch_actual != lenslet_pitch  # the non-integer-ratio case
+
+    # The probe must be non-degenerate: a resolvable spot AND slopes that
+    # actually respond to the tilt.  Without this guard the recovery below
+    # can "succeed" off floating-point noise (2*wf_diff/s is exactly
+    # pitch_actual even when s is 1e-19), which is how the pre-v5.30
+    # sa_pixels=2 probe passed while measuring nothing.
+    assert abs(float(np.nanmean(sx))) > 1e-6, (
+        f"probe is degenerate: mean slope {np.nanmean(sx):.3e} rad is "
+        f"floating-point noise, so P would be recovered from a ratio of "
+        f"noise to noise.  Spot/window = "
+        f"{633e-9 * _SH_FOCAL / (pitch_actual ** 2):.3f} (must be < 1).")
 
     P_measured = _measured_pitch_from_wf(wf, sx)
     assert np.isfinite(P_measured), (
@@ -372,7 +436,11 @@ def test_bug2_shack_hartmann_non_integer_pitch_amplitude():
         f"to within 1% (rel error {rel_post*100:.2f}%).  "
         f"sa_pixels={sa_pixels}, requested lenslet_pitch="
         f"{lenslet_pitch*1e6:.3f} um.")
-    assert rel_pre > 0.15, (
+    # 0.03, not the original 0.15: on-grid quantisation can only shift the
+    # pitch by <= 0.5 / sa_pixels relatively, so a >15% gap is reachable
+    # ONLY at sa_pixels <= 3, i.e. inside the degenerate regime this probe
+    # was re-based to escape.  5.26% measured, against a 1% rel_post band.
+    assert rel_pre > 0.03, (
         f"recovered P = {P_measured*1e6:.4f} um IS still close to "
         f"the pre-fix lenslet_pitch ({lenslet_pitch*1e6:.3f} um, rel "
         f"diff {rel_pre*100:.2f}%).  The fix may not be active.  "
@@ -384,17 +452,22 @@ def test_bug2_shack_hartmann_integer_pitch_sanity():
     """Pin: integer-ratio case (sa_pixels*dx == lenslet_pitch) is
     unchanged by the fix.
 
-    At ``lenslet_pitch / dx = 2.0`` the pre-v4.16.1 bug had no
+    At ``lenslet_pitch / dx = 9.0`` the pre-v4.16.1 bug had no
     visible effect because ``sa_pixels * dx`` IS ``lenslet_pitch``.
     The fix is a no-op at integer ratios; verify nothing regressed.
+
+    v5.30: probe re-based 2.0 * dx -> 9.0 * dx alongside its two siblings
+    (see the section comment).  Measured P = 45.0000 um exactly.
     """
-    dx = 5e-6
-    lenslet_pitch = 2.0 * dx  # 10 um, exact integer ratio
+    dx = _SH_DX
+    lenslet_pitch = 9.0 * dx  # 45 um, exact integer ratio
     wf, sx, sy, sa_pixels, pitch_actual = _run_tilt_sh(
-        lenslet_pitch=lenslet_pitch, dx=dx, N=256,
+        lenslet_pitch=lenslet_pitch, dx=dx, N=_SH_N,
         tilt_x=1e-3)
-    assert sa_pixels == 2
+    assert sa_pixels == _SH_SA_PIXELS
     assert pitch_actual == lenslet_pitch  # exact match: integer ratio
+    assert abs(float(np.nanmean(sx))) > 1e-6, (
+        f"probe is degenerate: mean slope {np.nanmean(sx):.3e} rad")
 
     P_measured = _measured_pitch_from_wf(wf, sx)
     assert np.isfinite(P_measured)
@@ -414,26 +487,36 @@ def test_bug2_shack_hartmann_amplitude_ratio_physics_pin():
     have IDENTICAL on-grid pitch.  Post-v4.16.1 the integration
     step is ``sa_pixels * dx`` for both, so the recovered P
     matches.  Pre-v4.16.1 the integration step was the requested
-    ``lenslet_pitch``, which differed by ``2.4/1.6 = 1.5x`` between
+    ``lenslet_pitch``, which differs by ``9.45/8.55 = 1.105x`` between
     the two configurations.
 
-    This test is the analytical pin for the fix.
+    This test is the analytical pin for the fix, and the SHARP form of
+    its pre-fix discriminator: it does not depend on how large the
+    quantisation gap is, only on the two requested pitches differing --
+    so re-basing the probe off the degenerate ``sa_pixels = 2`` regime
+    (v5.30, see the section comment) costs it nothing.  Measured
+    P_a = P_b = 45.0000 um exactly; pre-fix they would read 42.75 and
+    47.25 um, a 10.5% split against this test's 1% tolerance.
     """
-    dx = 5e-6
-    # Both ratios round to sa_pixels = 2 on this grid.
+    dx = _SH_DX
+    # Both ratios round to sa_pixels = 9 on this grid.
     wf_a, sx_a, _, sa_a, pitch_a = _run_tilt_sh(
-        lenslet_pitch=1.6 * dx, dx=dx, N=256, tilt_x=1e-3)
+        lenslet_pitch=8.55 * dx, dx=dx, N=_SH_N, tilt_x=1e-3)
     wf_b, sx_b, _, sa_b, pitch_b = _run_tilt_sh(
-        lenslet_pitch=2.4 * dx, dx=dx, N=256, tilt_x=1e-3)
-    assert sa_a == sa_b == 2
+        lenslet_pitch=9.45 * dx, dx=dx, N=_SH_N, tilt_x=1e-3)
+    assert sa_a == sa_b == _SH_SA_PIXELS
     assert pitch_a == pytest.approx(pitch_b, rel=1e-12)
+    for tag, s in (('a', sx_a), ('b', sx_b)):
+        assert abs(float(np.nanmean(s))) > 1e-6, (
+            f"probe {tag} is degenerate: mean slope "
+            f"{np.nanmean(s):.3e} rad is floating-point noise")
 
     P_a = _measured_pitch_from_wf(wf_a, sx_a)
     P_b = _measured_pitch_from_wf(wf_b, sx_b)
     assert np.isfinite(P_a) and np.isfinite(P_b), (
         f"could not recover P (P_a={P_a}, P_b={P_b}).")
 
-    # Post-fix: both must equal pitch_actual = sa_pixels*dx (10 um).
+    # Post-fix: both must equal pitch_actual = sa_pixels*dx (45 um).
     rel = abs(P_a - P_b) / max(abs(P_a), abs(P_b), 1e-30)
     assert rel < 0.01, (
         f"Two SH configurations sharing the same sa_pixels (={sa_a}) "
@@ -441,8 +524,8 @@ def test_bug2_shack_hartmann_amplitude_ratio_physics_pin():
         f"(P_a={P_a*1e6:.4f} um, P_b={P_b*1e6:.4f} um, |delta|/max="
         f"{rel*100:.2f}%).  Post-v4.16.1 both use the on-grid pitch "
         f"({pitch_a*1e6:.3f} um); pre-v4.16.1 they would track the "
-        f"two different requested lenslet_pitch values (1.6*dx="
-        f"{1.6*dx*1e6:.3f} vs 2.4*dx={2.4*dx*1e6:.3f}, ratio 1.5x).")
+        f"two different requested lenslet_pitch values (8.55*dx="
+        f"{8.55*dx*1e6:.3f} vs 9.45*dx={9.45*dx*1e6:.3f}, ratio 1.105x).")
 
 
 # ============================================================================
