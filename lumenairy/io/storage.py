@@ -387,6 +387,19 @@ def _h5_write_meta_attrs(holder, metadata) -> None:
                 pass
 
 
+# The plane-dict keys ``save_planes_h5`` handles STRUCTURALLY -- exactly
+# the set ``append_plane_h5`` writes as native attributes itself.  They
+# stay raw h5py attributes so their read-back types are unchanged for
+# every file ever written (measured: ``dx``/``dy``/``z``/``wavelength``
+# -> ``np.float64``, ``label``/``dtype``/``lumenairy_version`` -> ``str``).
+# Every OTHER key in a plane dict is caller metadata -- the per-plane
+# equivalent of ``append_plane_h5(metadata=)`` -- and is routed through
+# the canonical codec (A-4 follow-up).
+_PLANE_NATIVE_KEYS = frozenset({
+    'dx', 'dy', 'z', 'label', 'wavelength', 'dtype', 'lumenairy_version',
+})
+
+
 def _h5_read_attrs(holder) -> Dict[str, Any]:
     """Decode every attribute of an h5py dataset / group to Python types.
 
@@ -483,15 +496,18 @@ def save_field_h5(filepath: str, E: np.ndarray, dx: float,
             dset.attrs['wavelength'] = float(wavelength)
         if label is not None:
             dset.attrs['label'] = str(label)
-        if metadata:
-            for key, value in metadata.items():
-                # storage-nit (AUDIT_IO_STORAGE_CODEGEN): h5py cannot store a
-                # ``None`` attr and raises deep in its C layer; skip it at this
-                # boundary (a ``None`` metadata value carries no information and
-                # reads back as simply absent).
-                if value is None:
-                    continue
-                dset.attrs[str(key)] = value
+        # A-4 follow-up (recorded in d045980, closed 2026-07-26): route
+        # ``metadata`` through the canonical type-tagged codec instead of
+        # handing raw values to h5py attrs.  Measured over the module's
+        # 19-type probe set, the raw loop wrote 14 without raising / 4
+        # raised (heterogeneous list, flat + nested dict, arbitrary
+        # object) / 1 was silently DROPPED (``None``) / 7 came back a
+        # different type; the codec round-trips 19/19.  This SUPERSEDES
+        # the storage-nit ``None``-skip below it (the blob stores ``None``
+        # faithfully, which is what the zarr backend already did):
+        #     if value is None: continue        # <- dropped the value
+        #     dset.attrs[str(key)] = value      # <- raised on containers
+        _h5_write_meta_attrs(dset, metadata)
 
 
 def load_field_h5(filepath: str) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -561,11 +577,11 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
         grp.attrs['lumenairy_version'] = _get_lumenairy_version()
         if wavelength is not None:
             grp.attrs['wavelength'] = float(wavelength)
-        if metadata:
-            for k, v in metadata.items():
-                if v is None:   # storage-nit: h5py can't store None; skip
-                    continue
-                grp.attrs[str(k)] = v
+        # A-4 follow-up (see save_field_h5): the run-level ``metadata``
+        # mapping goes through the canonical codec, not raw h5py attrs.
+        # Same measured before-state as its siblings (14 wrote / 4 raised /
+        # ``None`` dropped / 7 coerced over the 19-type probe set).
+        _h5_write_meta_attrs(grp, metadata)
         for i, plane in enumerate(planes):
             if 'field' not in plane or 'dx' not in plane:
                 raise ValueError(
@@ -581,12 +597,23 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
                 compression=compression,
                 compression_opts=compression_opts
             )
+            # A-4 follow-up: structural keys stay native (see
+            # _PLANE_NATIVE_KEYS); the caller's extra keys are per-plane
+            # metadata and go through the codec.  Raw, those extras
+            # measured the same as every other A-4 site over the 19-type
+            # probe set: 14 wrote without raising / 4 raised / 1 silently
+            # dropped (``None``) / 7 type-coerced.
+            extras = {}
             for key, value in plane.items():
                 if key == 'field':
                     continue
-                if value is None:   # storage-nit: h5py can't store None; skip
-                    continue
-                dset.attrs[str(key)] = value
+                if key in _PLANE_NATIVE_KEYS:
+                    if value is None:   # h5py cannot store a None attr
+                        continue
+                    dset.attrs[str(key)] = value
+                else:
+                    extras[str(key)] = value
+            _h5_write_meta_attrs(dset, extras)
             if 'dy' not in plane:
                 dset.attrs['dy'] = float(plane['dx'])
             dset.attrs['dtype'] = str(E.dtype)
@@ -681,15 +708,14 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
             grp.attrs['wavelength'] = float(wavelength)
         if label is not None:
             grp.attrs['label'] = str(label)
-        if metadata:
-            for k, v in metadata.items():
-                # storage-nit (AUDIT S4-9): h5py cannot store a ``None``
-                # attr and raises deep in its C layer; skip it at this
-                # boundary so the HDF5 backend matches zarr (which stores
-                # ``None`` fine) instead of crashing.  Mirrors save_field_h5.
-                if v is None:
-                    continue
-                grp.attrs[str(k)] = v
+        # A-4 follow-up (see save_field_h5).  This SUPERSEDES the S4-9
+        # ``None``-skip that used to live here: S4-9's stated goal was to
+        # stop the h5py C-layer crash and "match zarr, which stores
+        # ``None`` fine", which it reached by DROPPING the key; the codec
+        # reaches it by actually storing ``None``.  Measured before-state
+        # over the 19-type probe set: 14 wrote without raising / 4 raised /
+        # 1 silently dropped (``None``) / 7 type-coerced -> now 19/19.
+        _h5_write_meta_attrs(grp, metadata)
         dset_ex = grp.create_dataset(
             'Ex', data=Ex,
             compression=compression, compression_opts=compression_opts)

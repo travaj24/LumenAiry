@@ -1277,9 +1277,18 @@ def test_cg1_codegen_mirror_aspheric_warns():
             include_plotting=False, include_analysis=False)
 
 
-def test_storage_none_metadata_attr_skipped(tmp_path):
-    """storage-nit: a None metadata value is skipped at the boundary (h5py
-    cannot store None and would otherwise raise deep in its C layer)."""
+def test_storage_none_metadata_attr_preserved(tmp_path):
+    """storage-nit: a None metadata value must not crash the h5 writer.
+
+    SUPERSEDED 2026-07-26 by the A-4 follow-up (see
+    ``tests/unit/test_niche_audit_w3_infra.py``): ``save_planes_h5`` now
+    routes ``metadata=`` through the module's canonical type-tagged codec,
+    so ``None`` is STORED (matching the zarr backend) rather than dropped
+    at the boundary.  The original name (``..._attr_skipped``) and its
+    ``'note' not in meta`` assertion pinned the lossy half of the
+    storage-nit fix; both are updated here.  The no-crash half -- the
+    actual point of the nit -- is unchanged and still pinned.
+    """
     pytest.importorskip('h5py')
     from lumenairy.io.storage import load_planes_h5, save_planes_h5
     E = np.ones((8, 8), dtype=np.complex128)
@@ -1290,9 +1299,10 @@ def test_storage_none_metadata_attr_skipped(tmp_path):
                                                            'run': 'A'})
     loaded, meta = load_planes_h5(p)
     assert len(loaded) == 1
-    # The None key is simply absent on read-back; the real one survives.
+    # The real key survives; the None key is now stored, not dropped.
     assert meta.get('run') == 'A'
-    assert 'note' not in meta
+    assert 'note' in meta
+    assert meta['note'] is None
 
 
 # =========================================================================

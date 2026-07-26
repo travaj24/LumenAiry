@@ -9,6 +9,14 @@ Covered findings, each measured before the fix and re-measured after:
   own ``_meta_dumps`` codec round-trips 19/19 and was wired only to
   ``write_sim_metadata``.  Post-fix 19/19, and files written by the old
   raw-attr scheme still read.
+* **A-4 follow-up** (recorded in d045980, closed 2026-07-26) -- the sibling
+  writers ``save_field_h5`` / ``save_planes_h5`` / ``save_jones_field_h5``
+  were still raw.  Re-measured on 865e922, each of their FOUR raw metadata
+  surfaces (``save_planes_h5`` has two) reproduced the pre-A-4 numbers
+  exactly: whole-probe-dict call raised ``TypeError: No conversion path for
+  dtype: dtype('<U32')``, per key 14 wrote / 4 raised / 1 silently dropped
+  (``None``) / 7 type-coerced.  Post-fix 19/19 at all four, agreeing key
+  for key with the ``append_plane_h5`` control.
 * **A-5** ``cache.deep_nbytes`` -- charged a numpy VIEW its slice size
   (16 B for a 16-byte window on a 4 MiB base) while double-counting
   repeated arrays.  Measured: a view-heavy cache under a 1 MiB ceiling
@@ -234,6 +242,348 @@ class TestA4AppendPlaneMetadataFidelity:
         assert back['v_none'] is None
         assert back['v_dict_nested'] == {'a': {'b': [1, 2]}}
         assert isinstance(back['v_tuple'], tuple)
+
+
+# =========================================================================
+# A-4 FOLLOW-UP -- the three sibling h5 writers (recorded in d045980,
+# closed 2026-07-26)
+# =========================================================================
+#
+# d045980 fixed ``append_plane_h5`` and recorded ``save_field_h5`` /
+# ``save_planes_h5`` / ``save_jones_field_h5`` as a follow-up ("read side
+# already compatible" -- ``_h5_read_attrs`` was already wired into all 8
+# read paths).  Re-measured on 865e922 with the SAME 19-type probe set,
+# all four remaining raw-attr sites behaved identically to each other and
+# to the pre-A-4 append path:
+#
+#     14 wrote without raising / 4 raised (heterogeneous list, flat dict,
+#     nested dict, arbitrary object) / 1 silently DROPPED (``None``) /
+#     7 read back as a different type
+#
+# and the whole-19-key call -- what a real caller actually writes -- died
+# with ``TypeError: No conversion path for dtype: dtype('<U32')`` at every
+# one of them.  (d045980's headline said "4 coerced" for the same probe
+# set: it counted only the container/bytes coercions ``list``/``tuple`` ->
+# ``ndarray`` and ``bytes`` -> ``str``.  The 7 here additionally counts
+# the numpy-scalar wrappers ``bool`` -> ``np.bool_``, ``int`` ->
+# ``np.int64`` and ``np.float32`` staying ``np.float32``, which the codec
+# contract lowers back to Python ``bool``/``int``/``float``.)
+#
+# Four sites, not three: ``save_planes_h5`` has TWO raw metadata surfaces
+# -- the run-level ``metadata=`` on the ``/planes`` group and the extra
+# keys of each plane dict, which are the per-plane equivalent of
+# ``append_plane_h5(metadata=)``.  Fixing only the former would have left
+# the same function preserving ``None`` on one surface and dropping it on
+# the other.  The plane dict's STRUCTURAL keys (``storage._PLANE_NATIVE_KEYS``
+# -- exactly the set ``append_plane_h5`` writes natively itself) stay raw
+# h5py attributes, so their read-back types are unchanged; that half is
+# pinned as an invariance counter-pin below.
+
+def _rt_save_field(tmp_path, meta):
+    from lumenairy.io import storage as st
+    p = str(tmp_path / 'w_field.h5')
+    st.save_field_h5(p, np.ones((8, 8), dtype=np.complex128), dx=1e-6,
+                     metadata=meta)
+    return st.load_field_h5(p)[1]
+
+
+def _rt_save_planes_file(tmp_path, meta):
+    from lumenairy.io import storage as st
+    p = str(tmp_path / 'w_planes_file.h5')
+    st.save_planes_h5(p, [{'field': np.ones((8, 8), dtype=np.complex128),
+                           'dx': 1e-6}], metadata=meta)
+    return st.load_planes_h5(p)[1]
+
+
+def _rt_save_planes_per_plane(tmp_path, meta):
+    from lumenairy.io import storage as st
+    p = str(tmp_path / 'w_planes_per.h5')
+    plane = {'field': np.ones((8, 8), dtype=np.complex128), 'dx': 1e-6}
+    plane.update(meta)
+    st.save_planes_h5(p, [plane])
+    return st.load_planes_h5(p)[0][0]
+
+
+def _rt_save_jones(tmp_path, meta):
+    from lumenairy.elements.polarization import JonesField
+    from lumenairy.io import storage as st
+    p = str(tmp_path / 'w_jones.h5')
+    jf = JonesField(np.ones((6, 6), dtype=np.complex128),
+                    np.zeros((6, 6), dtype=np.complex128), 1e-6, 1e-6)
+    st.save_jones_field_h5(p, jf, metadata=meta)
+    return st.load_jones_field_h5(p)[1]
+
+
+def _rt_append_plane(tmp_path, meta):
+    from lumenairy.io import storage as st
+    p = str(tmp_path / 'w_append.h5')
+    st.append_plane_h5(p, np.ones((8, 8), dtype=np.complex128), dx=1e-6,
+                       metadata=meta, swmr=False)
+    return st.load_planes_h5(p)[0][0]
+
+
+# (id, driver) -- the four fixed-here surfaces plus the d045980 control,
+# which must keep agreeing with them key for key.
+_WRITER_SURFACES = [
+    ('save_field_h5', _rt_save_field),
+    ('save_planes_h5_file_level', _rt_save_planes_file),
+    ('save_planes_h5_per_plane', _rt_save_planes_per_plane),
+    ('save_jones_field_h5', _rt_save_jones),
+    ('append_plane_h5_control', _rt_append_plane),
+]
+_WRITER_IDS = [i for i, _ in _WRITER_SURFACES]
+_WRITER_DRIVERS = [d for _, d in _WRITER_SURFACES]
+
+
+def _assert_probe_round_trip(got, meta, who):
+    """Exact type + value fidelity over the 19 probe kinds.
+
+    Identical to the per-key assertions d045980 pinned for
+    ``append_plane_h5``, factored out so every writer is held to the one
+    contract.
+    """
+    missing = [k for k in meta if k not in got]
+    assert not missing, (
+        f"{who} dropped metadata keys {missing} -- A-4 follow-up "
+        f"regression (``None`` was the pre-fix casualty at every writer).")
+    assert got['v_none'] is None, who
+    assert got['v_bool'] is True, who
+    assert isinstance(got['v_int'], int) and not isinstance(
+        got['v_int'], bool) and got['v_int'] == 7, who
+    assert isinstance(got['v_float'], float) and got['v_float'] == 2.5, who
+    assert isinstance(got['v_str'], str) and got['v_str'] == 'hello', who
+    assert isinstance(got['v_complex'], complex), who
+    assert got['v_complex'] == 1 + 2j, who
+    assert isinstance(got['v_bytes'], bytes), who
+    assert got['v_bytes'] == b'\x01\x02', who
+    # numpy scalars lower to their Python counterparts (documented codec
+    # contract) -- NOT to np.float32 / np.complex128 wrappers.
+    assert isinstance(got['v_np_scalar_f'], float), who
+    assert got['v_np_scalar_f'] == 1.5, who
+    assert isinstance(got['v_np_scalar_c'], complex), who
+    assert got['v_np_scalar_c'] == 3 - 4j, who
+    for key in ('v_ndarray_f', 'v_ndarray_c', 'v_ndarray_2d'):
+        assert isinstance(got[key], np.ndarray), f'{who}/{key}'
+        assert got[key].dtype == meta[key].dtype, f'{who}/{key}'
+        np.testing.assert_array_equal(got[key], meta[key])
+    # lists stay lists (the raw-attr path coerced them to ndarray).
+    assert isinstance(got['v_list_int'], list), who
+    assert got['v_list_int'] == [1, 2, 3], who
+    assert isinstance(got['v_list_mixed'], list), who
+    assert got['v_list_mixed'] == [1, 'a', 2.5], who
+    assert isinstance(got['v_list_empty'], list), who
+    assert got['v_list_empty'] == [], who
+    assert isinstance(got['v_tuple'], tuple) and got['v_tuple'] == (1, 2), who
+    assert got['v_dict_flat'] == {'a': 1}, who
+    assert got['v_dict_nested'] == {'a': {'b': [1, 2]}}, who
+    assert isinstance(got['v_obj'], str), who   # repr fallback, documented
+
+
+class TestA4FollowUpSiblingWriterMetadataFidelity:
+
+    @pytest.mark.parametrize('drv', _WRITER_DRIVERS, ids=_WRITER_IDS)
+    def test_all_19_probe_kinds_round_trip(self, tmp_path, drv):
+        """Pre-fix at the four non-control surfaces: the call itself raised
+        TypeError on the nested dict, and per-key measurement gave 14 wrote
+        / 4 raise / 1 drop / 7 coerced."""
+        pytest.importorskip('h5py')
+        meta = _probe_metadata()
+        got = drv(tmp_path, dict(meta))
+        _assert_probe_round_trip(got, meta, drv.__name__)
+
+    @pytest.mark.parametrize('drv', _WRITER_DRIVERS, ids=_WRITER_IDS)
+    def test_none_value_is_stored_not_dropped(self, tmp_path, drv):
+        """The single sharpest pre-fix casualty, isolated: ``None`` was
+        skipped at the writer boundary and read back as an absent key --
+        while the zarr backend stored it.  Now stored everywhere."""
+        pytest.importorskip('h5py')
+        got = drv(tmp_path, {'note': None, 'run': 'A'})
+        assert 'note' in got
+        assert got['note'] is None
+        assert got['run'] == 'A'
+
+    @pytest.mark.parametrize('drv', _WRITER_DRIVERS, ids=_WRITER_IDS)
+    def test_containers_no_longer_raise(self, tmp_path, drv):
+        """The four pre-fix hard raises, isolated (h5py has no conversion
+        path for a dict, an object, or a heterogeneous list)."""
+        pytest.importorskip('h5py')
+        meta = {'nested': {'a': {'b': [1, 2]}}, 'mixed': [1, 'a', 2.5],
+                'empty': [], 'obj': object()}
+        got = drv(tmp_path, meta)
+        assert got['nested'] == {'a': {'b': [1, 2]}}
+        assert got['mixed'] == [1, 'a', 2.5]
+        assert got['empty'] == []
+        assert isinstance(got['obj'], str)
+
+    @pytest.mark.parametrize('drv', _WRITER_DRIVERS, ids=_WRITER_IDS)
+    def test_reserved_blob_key_and_flat_shadows_never_surface(
+            self, tmp_path, drv):
+        """The serialization carrier must not leak into user-visible keys,
+        and the writer's dotted flat copies must not double-report -- while
+        still being ON DISK for HDFView / h5dump."""
+        pytest.importorskip('h5py')
+        from lumenairy.io import storage as st
+        got = drv(tmp_path, {'run': {'id': 3, 'tag': 'x'}})
+        assert st._META_BLOB_KEY not in got
+        assert got['run'] == {'id': 3, 'tag': 'x'}
+        assert 'run.id' not in got and 'run.tag' not in got
+
+    @pytest.mark.parametrize('drv', _WRITER_DRIVERS, ids=_WRITER_IDS)
+    def test_every_writer_agrees_with_the_d045980_control(self, tmp_path,
+                                                          drv):
+        """Cross-writer consistency: the four surfaces fixed here must
+        return exactly what the already-fixed ``append_plane_h5`` returns
+        for the same metadata -- the parity the follow-up was for."""
+        pytest.importorskip('h5py')
+        meta = {'nested': {'a': [1, 2]}, 'nothing': None, 'tup': (1, 2),
+                'blob': b'\x01', 'arr': np.arange(3, dtype=np.float64)}
+        got = drv(tmp_path, dict(meta))
+        ref_dir = tmp_path / 'ref'
+        ref_dir.mkdir()
+        ref = _rt_append_plane(ref_dir, dict(meta))
+        for key in ('nested', 'nothing', 'tup', 'blob'):
+            assert got[key] == ref[key], key
+            assert type(got[key]) is type(ref[key]), key
+        np.testing.assert_array_equal(got['arr'], ref['arr'])
+        assert got['arr'].dtype == ref['arr'].dtype
+
+    # ── invariance / back-compat pins (green both sides of the fix) ─────
+
+    @pytest.mark.parametrize('holder,write,read', [
+        ('field', 'save_field_h5', 'load_field_h5'),
+        ('planes', 'save_planes_h5', 'load_planes_h5'),
+        ('jones', 'save_jones_field_h5', 'load_jones_field_h5'),
+    ])
+    def test_legacy_raw_attr_files_still_read(self, tmp_path, holder, write,
+                                              read):
+        """BACK-COMPAT (green pre- AND post-fix, by design): a file whose
+        metadata was written by the pre-fix raw-attr scheme carries no blob
+        and must read back byte-identically -- same values AND same numpy
+        types as it always did."""
+        pytest.importorskip('h5py')
+        import h5py
+
+        from lumenairy.elements.polarization import JonesField
+        from lumenairy.io import storage as st
+        p = str(tmp_path / f'legacy_{holder}.h5')
+        E = np.ones((4, 4), dtype=np.complex128)
+        if write == 'save_field_h5':
+            st.save_field_h5(p, E, dx=1e-6, label='leg')
+            reader = st.load_field_h5
+        elif write == 'save_planes_h5':
+            st.save_planes_h5(p, [{'field': E, 'dx': 1e-6}])
+            reader = st.load_planes_h5
+        else:
+            st.save_jones_field_h5(
+                p, JonesField(E, np.zeros_like(E), 1e-6, 1e-6), label='leg')
+            reader = st.load_jones_field_h5
+        # Emulate the pre-fix writer: raw values straight onto the attrs of
+        # the holder this writer's reader reads from.  Explicit int dtype --
+        # the numpy default integer width is platform-dependent.
+        legacy_arr = np.arange(3, dtype=np.int32)
+        with h5py.File(p, 'a') as f:
+            h = f[holder]
+            assert st._META_BLOB_KEY not in h.attrs
+            h.attrs['legacy_scalar'] = 3.5
+            h.attrs['legacy_str'] = 'raw'
+            h.attrs['legacy_arr'] = legacy_arr
+        got = reader(p)[1]
+        assert isinstance(got['legacy_scalar'], np.float64)
+        assert got['legacy_scalar'] == 3.5       # exact: a stored constant
+        assert isinstance(got['legacy_str'], str)
+        assert got['legacy_str'] == 'raw'
+        assert got['legacy_arr'].dtype == np.int32
+        np.testing.assert_array_equal(got['legacy_arr'], legacy_arr)
+
+    def test_metadata_free_writes_grow_no_blob(self, tmp_path):
+        """INVARIANCE: no metadata in -> no blob attribute out, at every
+        holder each writer touches (keeps old readers and byte-level file
+        diffs clean).  Green pre- and post-fix."""
+        pytest.importorskip('h5py')
+        import h5py
+
+        from lumenairy.elements.polarization import JonesField
+        from lumenairy.io import storage as st
+        E = np.ones((4, 4), dtype=np.complex128)
+        p_f = str(tmp_path / 'nb_field.h5')
+        st.save_field_h5(p_f, E, dx=1e-6)
+        p_p = str(tmp_path / 'nb_planes.h5')
+        st.save_planes_h5(p_p, [{'field': E, 'dx': 1e-6}])
+        p_j = str(tmp_path / 'nb_jones.h5')
+        st.save_jones_field_h5(
+            p_j, JonesField(E, np.zeros_like(E), 1e-6, 1e-6))
+        for path, holders in ((p_f, ['field']),
+                              (p_p, ['planes', 'planes/plane_00']),
+                              (p_j, ['jones'])):
+            with h5py.File(path, 'r') as f:
+                for h in holders:
+                    assert st._META_BLOB_KEY not in f[h].attrs, (path, h)
+
+    def test_structural_plane_keys_keep_their_native_types(self, tmp_path):
+        """COUNTER-PIN for the ``save_planes_h5`` per-plane split: the plane
+        dict's structural keys stay raw h5py attributes, so every existing
+        caller still gets the measured native types (``np.float64`` for the
+        geometry, ``str`` for the labels) rather than Python scalars out of
+        the blob.  Green pre- and post-fix -- that is the point."""
+        pytest.importorskip('h5py')
+        from lumenairy.io import storage as st
+        p = str(tmp_path / 'native.h5')
+        st.save_planes_h5(
+            p, [{'field': np.ones((4, 4), dtype=np.complex128), 'dx': 1e-6,
+                 'dy': 2e-6, 'z': 0.5, 'label': 'p0',
+                 'wavelength': 1.55e-6}],
+            wavelength=1.55e-6)
+        plane = st.load_planes_h5(p)[0][0]
+        for key in ('dx', 'dy', 'z', 'wavelength'):
+            assert isinstance(plane[key], np.float64), key
+        for key in ('label', 'dtype', 'lumenairy_version'):
+            assert isinstance(plane[key], str), key
+        assert plane['dx'] == pytest.approx(1e-6)
+        assert plane['dy'] == pytest.approx(2e-6)
+        assert plane['z'] == pytest.approx(0.5)
+        assert plane['label'] == 'p0'
+        # Every structural key is native, so no blob is needed for them.
+        import h5py
+        with h5py.File(p, 'r') as f:
+            assert st._META_BLOB_KEY not in f['planes/plane_00'].attrs
+
+    def test_writer_owned_plane_keys_still_win_over_a_caller_collision(
+            self, tmp_path):
+        """COUNTER-PIN: ``dtype`` / ``lumenairy_version`` are written by
+        ``save_planes_h5`` AFTER the plane dict is consumed, so a caller key
+        of the same name is overwritten -- unchanged by the split (had the
+        split routed them through the blob, the caller's value would now
+        win on read and the provenance stamp would be forgeable)."""
+        pytest.importorskip('h5py')
+        from lumenairy.io import storage as st
+        p = str(tmp_path / 'collide.h5')
+        st.save_planes_h5(p, [{'field': np.ones((4, 4), dtype=np.complex64),
+                               'dx': 1e-6, 'dtype': 'JUNK',
+                               'lumenairy_version': '0.0.0'}],
+                          preserve_dtype=True)
+        plane = st.load_planes_h5(p)[0][0]
+        assert plane['dtype'] == 'complex64'
+        assert plane['lumenairy_version'] != '0.0.0'
+
+    def test_plane_extras_and_file_metadata_do_not_cross_contaminate(
+            self, tmp_path):
+        """Two blobs in one file (``/planes`` and ``/planes/plane_00``) must
+        stay independent -- the run-level mapping is not visible per plane
+        and vice versa."""
+        pytest.importorskip('h5py')
+        from lumenairy.io import storage as st
+        p = str(tmp_path / 'two_blobs.h5')
+        st.save_planes_h5(
+            p, [{'field': np.ones((4, 4), dtype=np.complex128), 'dx': 1e-6,
+                 'per_plane': {'i': 0}, 'p_none': None}],
+            metadata={'run_level': {'j': 1}, 'f_none': None})
+        planes, file_meta = st.load_planes_h5(p)
+        assert file_meta['run_level'] == {'j': 1}
+        assert file_meta['f_none'] is None
+        assert 'per_plane' not in file_meta and 'p_none' not in file_meta
+        assert planes[0]['per_plane'] == {'i': 0}
+        assert planes[0]['p_none'] is None
+        assert 'run_level' not in planes[0] and 'f_none' not in planes[0]
 
 
 # =========================================================================

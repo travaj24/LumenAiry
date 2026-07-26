@@ -16,8 +16,16 @@ not the other):
     A-4, which routes that function's ``metadata=`` through the module's
     canonical type-tagged codec -- so ``None`` is now preserved rather
     than dropped (and nested / heterogeneous containers no longer raise
-    at all).  ``save_jones_field_h5`` still uses the S4-9 skip guard, so
-    its test below is unchanged.
+    at all).
+
+    2026-07-26: A-4's recorded follow-up closed the remaining raw-attr
+    siblings (``save_field_h5``, ``save_planes_h5`` file-level AND
+    per-plane, ``save_jones_field_h5``), so the ``save_jones_field_h5``
+    half of (4) is SUPERSEDED the same way -- its test below now pins
+    ``None`` round-tripping as ``None``, plus the cross-backend parity
+    with zarr that was S4-9's actual premise.  No h5 writer drops a
+    metadata value any more; the skip-guard survives only for the
+    structural plane keys h5py must receive natively.
 
 (2) An unrecognised ``UNIT`` (``.zmx``) / ``Lens Units`` (``.txt``)
     token silently defaulted to millimeters -- a potential
@@ -107,8 +115,21 @@ class TestS4_9HDF5NoneMetadataGuard:
         assert 'note' in planes[0]
         assert planes[0]['note'] is None
 
-    def test_save_jones_field_h5_skips_none_metadata(self, tmp_path):
-        """POST-fix: same guard on the Jones-field writer."""
+    def test_save_jones_field_h5_preserves_none_metadata(self, tmp_path):
+        """POST-fix: a ``None`` metadata value no longer crashes the
+        Jones-field writer.
+
+        SUPERSEDED BY THE A-4 FOLLOW-UP (recorded in d045980, closed
+        2026-07-26) -- the same supersession already applied to the
+        ``append_plane_h5`` half above.  S4-9 reached its stated goal
+        ("match the zarr backend, which stores ``None`` fine") by DROPPING
+        the key: the crash stops but the value is lost.  Routing
+        ``save_jones_field_h5(metadata=)`` through the module's type-tagged
+        codec reaches the same goal by actually storing ``None``, so it
+        now round-trips as ``None``.  The original name of this test
+        (``..._skips_none_metadata``) and its ``'pol' not in`` assertion
+        pinned the lossy half of the S4-9 fix; both are updated here.
+        """
         pytest.importorskip('h5py')
         from lumenairy.elements.polarization import JonesField
         from lumenairy.io.storage import (
@@ -119,11 +140,44 @@ class TestS4_9HDF5NoneMetadataGuard:
         Ex = np.ones((6, 6), dtype=np.complex128)
         Ey = np.zeros((6, 6), dtype=np.complex128)
         jf = JonesField(Ex, Ey, 1e-6, 1e-6)
-        # Would raise pre-fix on the ``pol=None`` entry.
+        # Would raise pre-S4-9 on the ``pol=None`` entry.
         save_jones_field_h5(p, jf, metadata={'run': 7, 'pol': None})
         _, meta = load_jones_field_h5(p)
         assert meta['run'] == 7
-        assert 'pol' not in meta
+        # Non-None key survives; the None key is now STORED, not dropped.
+        assert 'pol' in meta
+        assert meta['pol'] is None
+
+    def test_zarr_parity_on_the_none_value_is_now_exact(self, tmp_path):
+        """The measured cross-backend oracle S4-9 was actually chasing.
+
+        S4-9's whole premise was that the same unified-API call stored
+        ``None`` on zarr but crashed on HDF5, and A-4's commit message
+        claimed the parity was measured -- but nothing pinned it.  This
+        does: the zarr twin's ``None`` and the codec-routed HDF5 writer's
+        ``None`` now agree, where the S4-9 skip-guard made HDF5 return the
+        key as absent while zarr returned it as ``None``.
+
+        GREEN ON 865e922 by design -- the unified ``append_plane`` reaches
+        ``append_plane_h5``, which d045980 already fixed; this pin protects
+        that parity rather than re-proving the follow-up.  It fails on any
+        tree predating d045980.
+        """
+        pytest.importorskip('h5py')
+        pytest.importorskip('zarr')
+        from lumenairy.io.storage import append_plane, load_planes
+        field = np.ones((8, 8), dtype=np.complex128)
+        meta = {'source': 'probe', 'note': None}
+        h5 = str(tmp_path / 'p.h5')
+        zr = str(tmp_path / 'p.zarr')
+        append_plane(h5, field, dx=1e-6, metadata=meta, swmr=False)
+        append_plane(zr, field, dx=1e-6, metadata=meta)
+        h5_plane = load_planes(h5)[0][0]
+        zr_plane = load_planes(zr)[0][0]
+        for d in (h5_plane, zr_plane):
+            assert 'note' in d
+            assert d['note'] is None
+            assert d['source'] == 'probe'
 
 
 # =========================================================================
