@@ -811,19 +811,54 @@ def _differentiable_lstsq(A, b):
     below trips under jax>=0.11 (v5.24.4: JAX now runs in CI on the S4-4
     leg, so this previously-invisible NaN-gradient regression is caught).
 
-    The normal-equations solve ``(A^H A) x = A^H b`` has a finite VJP for
-    the full-rank, well-conditioned Chebyshev design matrix and reproduces
-    the SAME least-squares solution as ``lstsq`` for full rank; a tiny
-    Tikhonov floor (relative to the matrix scale) keeps both the solve and
-    its gradient finite in the degenerate limit without shifting the
-    well-conditioned solution beyond ~1e-10 relative.
+    QR is the estimator (``A = QR``, then ``R x = Q^H b``).  Its JVP/VJP is
+    a triangular solve plus a ``copyltu`` -- no singular-value differences
+    anywhere -- so it is finite for ANY full-column-rank ``A``, however
+    degenerate its singular-value SPECTRUM; and unlike the normal equations
+    it works at ``cond(A)``, not ``cond(A)^2``.
+
+    v5.29 (audit W4-T3) -- WHY NOT THE NORMAL EQUATIONS.  This function
+    used to solve ``(A^H A + floor·I) x = A^H b`` with
+    ``floor = 1e-12·(trace(A^H A)/n + 1)``, documented as shifting the
+    solution by "~1e-10 relative".  MEASURED on the validation harness's
+    own fit (singlet R1 = 20 mm, ``n_field=4, n_pupil=8, poly_order=4``:
+    ``A`` is 1024x70, full rank 70/70, ``sigma_max = 47.68``,
+    ``sigma_min = 7.29e-6``, so ``cond(A) = 6.54e+06`` and
+    ``cond(A^H A) = 4.28e+13``) that claim was wrong by eight orders:
+
+        estimator                          max |coef_phi - lstsq| / scale
+        normal eq, floor 2.257e-10 (old)   4.4898e-02   <-- the CI/local red
+        normal eq, floor 2.247e-14         1.1839e-03
+        normal eq, floor 2.247e-18         6.9218e-04
+        normal eq, floor 0                 1.2213e-03
+        QR                                 1.2374e-10
+
+    Two independent failures compounded.  (1) The floor was 4.25x LARGER
+    than ``sigma_min^2 = 5.31e-11``, so it did not "keep the solve finite"
+    -- it DOMINATED the two smallest singular directions (the spectrum
+    drops 2.48e-3 -> 8.01e-6 -> 7.29e-6, i.e. two near-null directions).
+    (2) Even with the floor removed entirely, squaring a 6.5e+06 condition
+    number leaves the normal equations ~1e-3 short of ``lstsq``, so
+    shrinking the floor could never have reached the 1e-5 the validation
+    check asks for.  QR fixes both at the same cost class.
+
+    Physical size of the old error, measured the same way (see
+    ``validation/propagators/test_asymptotic.py::
+    t_fit_canonical_polynomials_jax_matches_numpy``): the two coefficient
+    vectors fitted the TRAINING samples equally well (1.01e-07 waves apart,
+    RMS residual 2.6128e-07 vs 2.6250e-07) and agreed to 1.15e-05 waves on
+    an INDEPENDENT physically-reachable ray set -- the 4.5e-02 lived almost
+    entirely in the near-null directions, i.e. the corners of the
+    normalised box that the trace never reaches, where both fits are pure
+    extrapolation (uniform-random box points: 1.87e-01 waves apart).  So
+    the old behaviour was a small real accuracy loss (truth error on the
+    independent set 1.21e-05 waves against NumPy's 9.81e-07) wearing a
+    scary-looking coefficient number.  Post-fix the coefficients agree to
+    ~1e-10 and the distinction is moot.
     """
     import jax.numpy as jnp
-    Ah = jnp.conj(A.T)
-    AtA = Ah @ A
-    n = AtA.shape[0]
-    floor = 1e-12 * (jnp.trace(AtA).real / n + 1.0)
-    return jnp.linalg.solve(AtA + floor * jnp.eye(n, dtype=AtA.dtype), Ah @ b)
+    Q, R = jnp.linalg.qr(A)
+    return jnp.linalg.solve(R, jnp.conj(Q.T) @ b)
 
 
 def fit_canonical_polynomials_jax(

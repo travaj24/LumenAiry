@@ -1305,7 +1305,17 @@ def _screen(X: np.ndarray, Y: np.ndarray, w: float) -> np.ndarray:
 
 
 # ===========================================================================
-# Cached library objects (the whole module must stay well under a minute)
+# Cached library objects.  RUNTIME BUDGET: the W3-T3 probes below must stay
+# cheap (they are, ~13 s for the whole file at v5.28); the W3-T3b and W4
+# sections cost more because the evaluator's own σ-grid default is now
+# ADAPTIVE and lands on n = 256 / 192 instead of 64 on those singlets, i.e.
+# ~16x the grid per call (audit W4-T1).  Measured 170 s for the file here,
+# with the four dominant tests already cost-trimmed: the accuracy check runs
+# ONE design against a 512 (not 768) reference, ``_w4_extent`` reads ``w_o``
+# off a cheap n=64 call (the measured waist is grid-independent), the two
+# curvature tests share one ``_tensor_w4`` cache key, and the cap test's
+# negative case uses a small ``sigma_grid_extent``.  Keep new σ-branch tests
+# on an EXPLICIT ``sigma_grid_n`` unless the default is what is under test.
 # ===========================================================================
 
 @functools.lru_cache(maxsize=1)
@@ -2056,17 +2066,36 @@ def test_w3_t3b_lg_merit_responds_to_a_curvature_change():
     rel = abs(val_a - val_b) / max(val_a, val_b)
     assert rel > 1e-2, (
         f'LG merit is curvature-insensitive: {val_a:.6e} vs {val_b:.6e}, '
-        f'relative {rel:.3e} (pre-fix 4.0e-3, post-fix 2.088e-1)')
+        f'relative {rel:.3e} (pre-W3-T3b 4.0e-3, W3-T3b 2.088e-1, '
+        f'W4-T1 4.123e-1)')
     # Pin the measured values so the channel cannot silently rescale.
-    # Tolerance 1e-2 RELATIVE, not bit-level: the default sigma grid is
-    # aliasing-limited on this chirped field (see the ``sigma_grid_n``
-    # accuracy table -- n=64 sits +2.3 % / +33 % off the n=384 value),
-    # AND the chirp integral drifts 3.1e-3 relative across platforms
-    # (measured: CI Linux 9.068754e-14 vs the Windows-frozen
-    # 9.0968975e-14 on 74cf31b).  1e-2 still separates the two designs
-    # (their mutual difference is 2.1e-1) and any rescale of the channel.
-    assert abs(val_a - 9.0968975e-14) < 1e-2 * 9.0968975e-14
-    assert abs(val_b - 7.1975598e-14) < 1e-2 * 7.1975598e-14
+    #
+    # v5.29 (audit W4-T1) RE-MEASURED at the ADAPTIVE sigma-grid default.
+    # The frozen numbers moved because the default n did: 64 -> 256 (R1 =
+    # 51.5) and 64 -> 192 (R1 = 60), which is the aliasing fix landing.
+    #
+    #   quantity              W3-T3b (n=64)   W4-T1 (adaptive)
+    #   val_a (R1 = 51.5)     9.0968975e-14   8.8334897780e-14   n = 256
+    #   val_b (R1 = 60.0)     7.1975598e-14   5.1912550770e-14   n = 192
+    #   design response       2.088e-1        4.1232e-1
+    #
+    # Tolerance 2e-2 RELATIVE, not bit-level.  Measured inputs: the value is
+    # exactly reproducible IN-process (0.0 spread over 3 repeats), the
+    # W3-T3b-era cross-platform drift of this chirp integral was 3.1e-3
+    # (CI Linux 9.068754e-14 vs Windows 9.0968975e-14 on 74cf31b), and the
+    # sensitivity to a one-rung shift of the σ ladder -- the amplification
+    # channel a platform's fit-coefficient ulps would act through -- is
+    # 6.6e-3 (a, 256 vs 384) and 1.4e-2 (b, 192 vs 256).  2e-2 covers all
+    # three with margin and still sits 20x below the design response, so it
+    # separates the two designs and catches any rescale of the channel.
+    assert abs(val_a - 8.8334897780e-14) < 2e-2 * 8.8334897780e-14
+    assert abs(val_b - 5.1912550770e-14) < 2e-2 * 5.1912550770e-14
+    # The RESPONSE is the physics and is far more stable in n than either
+    # value: measured 2.892e-1 at n=128, 4.021e-1 at 192, 4.040e-1 at 256,
+    # 3.920e-1 at 384, 3.795e-1 at 512.  Band it generously.
+    assert 0.25 < rel < 0.55, (
+        f'design response {rel:.6e} left the measured n>=128 band '
+        f'[2.89e-1, 4.04e-1]')
 
 
 def test_w3_t3b_curvature_response_survives_a_finer_sigma_grid():
@@ -2186,9 +2215,15 @@ def test_w3_t3b_sigma_overlaps_still_match_the_oracle_at_the_default():
         res = _tensor_t3b(R1, modes)
         fit = _fit_t3b(R1)
         s2 = (fit.s2x_centre, fit.s2y_centre)
-        # Exactly the grid the library used: 4*w_o clamped to the room.
+        # Exactly the grid the library used: 4*w_o clamped to the room, at
+        # the σ-grid size the library actually chose.  v5.29 (audit W4-T1):
+        # read it off the result instead of hard-coding 64 -- the default is
+        # now ADAPTIVE (256 / 192 on these two designs), and a hard-coded 64
+        # made this oracle compare two different quadratures (it read
+        # rel 3.4e-1, entirely grid mismatch).
         extent = min(4.0 * res.w_o, _s2_validity_room(fit, s2[0], s2[1]))
-        X, Y, d = _grid(s2[0], s2[1], extent, 64)
+        assert res.sigma_grid_n is not None
+        X, Y, d = _grid(s2[0], s2[1], extent, int(res.sigma_grid_n))
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             U = propagate_modal_asymptotic(
@@ -2288,3 +2323,586 @@ def test_w3_t3b_jax_twin_default_w_o_tracks_numpy():
     assert rel < 1e-13, (
         f'jax default w_o {float(res_j.w_o):.12e} drifted from numpy '
         f'{w_np:.12e} (rel {rel:.3e}) -- the two defaults are one contract')
+
+
+# ==========================================================================
+# W4 SECTION -- closing the three items W3-T3b flagged but did not fix
+# ==========================================================================
+_W4_ORACLE = """W4 oracles for the LG aberration-tensor stack.  Three items were MEASURED
+and FLAGGED in 74cf31b but left open; this section pins their closure.
+
+W4-T1 -- sigma-grid aliasing, ADAPTIVE default
+----------------------------------------------
+The image-plane field is a chirp: dPhi/ds2 = v*/lambda (Phi in waves), so its
+local fringe rate at offset sigma is |v*(sigma)|/lambda cycles/m and Nyquist
+on n samples across 2*extent needs n >= 4*extent*v_max/lambda.  Three
+INDEPENDENT measurements agree that this is the right model:
+
+  * the amplitude-weighted 99.9th percentile of the field's own local fringe
+    rate, from the unwrapped phase of a 1-D cut, CONVERGED in the cut's own
+    sampling (4097 / 16385 / 65537 points -> 4.4938e+3 / 4.4932e+3 /
+    4.4941e+3 cycles/m at R1 = 51.5 mm);
+  * max |v*|/lambda over the pixels the propagator declares ALIVE:
+    4.4290e+3 cycles/m -- 1.5 % from the above (0.5 % at R1 = 60 mm);
+  * the 1-D power spectrum's 99th percentile, 5.8e+3 cycles/m.
+
+(The raw MAXIMUM phase gradient is NOT bandwidth -- it diverges with the
+cut's sampling, 1.19e5 -> 3.79e5 -> 6.37e5, being the pi-jump at the
+amplitude zeros.)
+
+v_max is taken from the fit's v2 VALIDITY BOX because
+``propagate_modal_asymptotic`` zeroes every pixel whose Newton solve leaves
+it, making the box a STRICT bound on the alive region -- and it costs no
+extra propagate.  It is loose (the alive region's actual max |v*| is 0.00580
+/ 0.00891 vs box 0.0199 / 0.01415) and conservative in the correct direction
+for a default that used to UNDER-resolve.
+
+Required n: 246 / 175 on the two validation singlets -> ladder 256 / 192,
+against the old flat 64.  Measured worst-channel error against n = 768:
+1.58e-1 -> 1.37e-2 (11.6x better) and 1.51e-1 -> 2.94e-2 (5.1x).
+
+W4-T2 -- the (2,0) channel's basis-design oscillation
+-----------------------------------------------------
+FIXED, behind an opt-in flag.  The field is a strongly CURVED wavefront
+(-30.1 waves of quadratic phase at the sigma-grid edge at R1 = 51.5 mm,
+equivalent radius -0.206 m, sweeping to -21.5 waves at R1 = 60 mm), so a
+REAL-waist LG basis needs far more than three (p, 0) modes to represent it
+and the truncated (2, 0) coefficient is an interference residue whose phase
+rotates with the design.  Matching the basis curvature (a complex-q basis:
+the same radial profile times exp(+i*pi*sigma^T C sigma/lambda) with
+C = dv*/dsigma) removes the rotation.  MEASURED, eight designs
+R1 = 51.5 -> 60 mm at sigma_grid_n = 256:
+
+    basis                       sign flips   ptp/mean
+    flat (the default)            5 of 6       0.307
+    curvature-matched             0 of 6       2.197
+
+i.e. STRICTLY MONOTONE, and a 7x stronger discriminator.  The rejected
+alternative -- "exclude defocus from the channel" by removing the (1, 0)
+projection -- is a no-op in an orthonormal basis and moves |L(2,0)| by only
+0.4 % - 20 % on the discrete grid (Gram off-diagonal 4.4e-4 .. 0.219), still
+leaving 2 of 6 sign flips.  The rotating PHASE, not the defocus AMPLITUDE,
+is what makes the channel non-smooth.
+
+W4-T3 -- the local jax-fit-match red
+------------------------------------
+Diagnosed as the JAX twin's least-squares ESTIMATOR, not JAX: reproducing
+``_differentiable_lstsq``'s algorithm in pure NumPy on the captured 1024x70
+design matrix gives the same 4.49e-02.  The Tikhonov floor was 4.25x LARGER
+than sigma_min^2, and even at floor 0 the normal equations sit ~1e-3 from
+``lstsq`` because they square a 6.5e+06 condition number.  QR fixes both.
+"""
+
+_W4_R1S = (51.5e-3, 53.9e-3, 56.3e-3, 58.7e-3, 60.0e-3)
+
+
+def _w4_extent(R1):
+    """The σ half-extent the library's DEFAULT would build.
+
+    Deliberately obtains ``w_o`` from a ``sigma_grid_n=64`` call: the
+    measured waist comes from its own coarse probe (``_W_O_PROBE_N``) and is
+    therefore independent of the σ grid, so this is the same number for a
+    fraction of the cost of the adaptive 256/192 grid.
+    """
+    from lumenairy.propagators.asymptotic_aberration_tensor import (
+        _s2_validity_room,
+    )
+    fit = _fit_t3b(R1)
+    res = _tensor_w4(R1, ((0, 0), (2, 0)), 64)
+    return min(4.0 * res.w_o,
+               _s2_validity_room(fit, fit.s2x_centre, fit.s2y_centre))
+
+
+@functools.lru_cache(maxsize=64)
+def _tensor_w4(R1, modes, n=None, n_max=None, curv=False):
+    from lumenairy.propagators.asymptotic import aberration_tensor
+    fit = _fit_t3b(R1)
+    kw = {}
+    if n is not None:
+        kw['sigma_grid_n'] = n
+    if n_max is not None:
+        kw['sigma_grid_n_max'] = n_max
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return aberration_tensor(
+            fit, s2_image=(fit.s2x_centre, fit.s2y_centre),
+            source_point=(0.0, 0.0), source_modes=[(0, 0)],
+            pupil_modes=[(0, 0)], output_modes=list(modes),
+            w_s=_WS_T3B, w_p=_WP_T3B,
+            curvature_matched_basis=curv, **kw)
+
+
+# ---------------------------------------------------------------------------
+# W4-T1 -- adaptive sigma-grid default
+# ---------------------------------------------------------------------------
+
+def test_w4_t1_chirp_formula_is_the_measured_bandwidth():
+    """The Nyquist requirement must come out of the FIT, at call time, and
+    must reproduce the independently measured bandwidth.
+
+    ``v_max`` is the fit's v2 box extremum, which is a strict bound because
+    ``propagate_modal_asymptotic``'s ``in_box_v`` mask zeroes every pixel
+    whose ``v2*`` leaves it -- so a NON-ZERO pixel cannot chirp faster.
+    Measured n_req: 246 (R1 = 51.5 mm) and 175 (R1 = 60 mm).
+    """
+    from lumenairy.propagators.asymptotic_aberration_tensor import (
+        _required_sigma_grid_n,
+        _sigma_chirp_v_max,
+    )
+    for R1, n_want, v_want in ((51.5e-3, 246, 1.989729e-02),
+                               (60.0e-3, 175, 1.415340e-02)):
+        fit = _fit_t3b(R1)
+        v_max = _sigma_chirp_v_max(fit)
+        assert abs(v_max - v_want) < 1e-4 * v_want, (
+            f'R1={R1}: v_max {v_max:.6e} != measured {v_want:.6e}')
+        # strict-bound property: the box extremum, not something smaller
+        assert v_max >= fit.v2x_halfrange - 1e-15
+        assert v_max >= fit.v2y_halfrange - 1e-15
+        n_req = _required_sigma_grid_n(fit, _w4_extent(R1))
+        assert n_req == n_want, (
+            f'R1={R1}: chirp formula asks for n={n_req}, measured {n_want} '
+            f'(4*extent*v_max/lambda)')
+        # ...and it IS the formula, not a constant
+        assert n_req == max(64, math.ceil(
+            4.0 * _w4_extent(R1) * v_max / fit.wavelength))
+
+
+def test_w4_t1_default_sigma_grid_n_is_adaptive_and_on_the_ladder():
+    """PRE-FIX RED.  The default was a flat 64 for every design; it is now
+    the chirp requirement rounded up onto the documented cost ladder --
+    256 (R1 = 51.5) and 192 (R1 = 60), i.e. it MOVES with the design."""
+    from lumenairy.propagators.asymptotic_aberration_tensor import (
+        _SIGMA_GRID_LADDER,
+        _sigma_grid_n_on_ladder,
+    )
+    got = []
+    for R1, n_want in ((51.5e-3, 256), (60.0e-3, 192)):
+        res = _tensor_w4(R1, ((0, 0), (1, 0), (2, 0)))
+        assert res.sigma_grid_n == n_want, (
+            f'R1={R1}: adaptive default resolved to {res.sigma_grid_n}, '
+            f'measured {n_want} (pre-fix: 64 for every design)')
+        assert res.sigma_grid_n in _SIGMA_GRID_LADDER
+        got.append(res.sigma_grid_n)
+    assert got[0] != got[1], (
+        'the default must DEPEND on the design -- a flat default is the '
+        'defect W4-T1 closes')
+    # the ladder rounds UP, never down
+    for n in (1, 64, 65, 96, 97, 246, 256, 257, 1025, 3000):
+        assert _sigma_grid_n_on_ladder(n) >= n
+
+
+def test_w4_t1_adaptive_default_beats_the_old_flat_64():
+    """The point of the change.  Worst error over the ``(p, 0)`` ladder
+    ``[(0,0), (1,0), (2,0), (3,0)]`` against a finer reference:
+
+        ref    R1        n_adaptive   err adaptive   err n=64    ratio
+        768    51.5 mm      256        2.1932e-02   1.5794e-01   7.2x
+        768    60.0 mm      192        2.9391e-02   1.7560e-01   6.0x
+        512    51.5 mm      256        2.3124e-02   1.6251e-01   7.0x
+        512    60.0 mm      192        2.8145e-02   1.7492e-01   6.2x
+
+    Run on R1 = 60 mm with ref = 512 -- the same verdict at a third of the
+    wall time, and the more informative of the two designs because its
+    adaptive ``n`` is 192, i.e. chosen by the FORMULA rather than clipped by
+    the cap (R1 = 51.5's 256 is pinned by
+    ``test_w4_t1_default_sigma_grid_n_is_adaptive_and_on_the_ladder``).
+
+    NO tight value pins here on purpose: these are DIFFERENCES of chirp
+    quadratures, the most platform-sensitive quantity in this stack (the
+    W3-T3b-era pins broke CI on exactly that, at 3.4e-4 on a much tamer
+    number).  The load-bearing claims are the ORDERING and the
+    order-of-magnitude bands, both with >2x headroom above.
+    """
+    modes = tuple(MODES_ELL0)
+    R1 = 60.0e-3
+    ref = np.abs(np.asarray(_tensor_w4(R1, modes, 512).L).ravel())
+    ad = np.abs(np.asarray(_tensor_w4(R1, modes).L).ravel())
+    lo = np.abs(np.asarray(_tensor_w4(R1, modes, 64).L).ravel())
+    e_ad = float(np.max(np.abs(ad - ref) / ref))
+    e_64 = float(np.max(np.abs(lo - ref) / ref))
+    assert e_ad < 0.5 * e_64, (
+        f'adaptive-default error {e_ad:.4e} is not clearly better than '
+        f'n=64 ({e_64:.4e}) -- measured 2.81e-2 vs 1.75e-1')
+    assert e_64 > 5e-2, (
+        f'premise: the old flat n=64 must actually be ~1e-1 off on this '
+        f'ladder, got {e_64:.4e} (measured 1.75e-1)')
+    assert e_ad < 6e-2, (
+        f'the adaptive default must land in the low 1e-2 band, got '
+        f'{e_ad:.4e} (measured 2.81e-2)')
+
+
+def test_w4_t1_explicit_sigma_grid_n_64_is_the_pre_fix_default_bit_for_bit():
+    """SCOPE GUARD.  ``sigma_grid_n=64`` must reproduce the pre-W4-T1
+    default EXACTLY -- that is the escape hatch for the optimiser loop the
+    old default was tuned for.  Checked against the merit values frozen on
+    74cf31b at the old default (9.0968975e-14 / 7.1975598e-14), which those
+    constants carry to 8 significant figures: measured agreement 1.9e-9 /
+    4.6e-9, i.e. the full precision of the frozen decimals."""
+    for R1, want in ((51.5e-3, 9.0968975e-14), (60.0e-3, 7.1975598e-14)):
+        res = _tensor_w4(R1, ((0, 0), (2, 0)), 64)
+        assert res.sigma_grid_n == 64
+        got = abs(complex(res.L[1, 0])) ** 2
+        assert abs(got - want) < 1e-8 * want, (
+            f'R1={R1}: sigma_grid_n=64 gives {got:.10e}, the pre-W4-T1 '
+            f'default was {want:.7e} -- the explicit path must not move')
+
+
+def test_w4_t1_cap_truncation_warns_with_both_numbers():
+    """When the cap bites, the caller must be TOLD -- and told both the
+    required ``n`` and the cap, so the message is actionable."""
+    from lumenairy.propagators.asymptotic import aberration_tensor
+    fit = _fit_t3b(51.5e-3)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        res = aberration_tensor(
+            fit, s2_image=(fit.s2x_centre, fit.s2y_centre),
+            source_point=(0.0, 0.0), source_modes=[(0, 0)],
+            pupil_modes=[(0, 0)], output_modes=[(0, 0), (2, 0)],
+            w_s=_WS_T3B, w_p=_WP_T3B, sigma_grid_n_max=64)
+    assert res.sigma_grid_n == 64, (
+        f'the cap must bind: got n={res.sigma_grid_n}')
+    msgs = [str(w.message) for w in rec
+            if w.category is UserWarning
+            and 'sigma_grid_n_max' in str(w.message)]
+    assert len(msgs) == 1, (
+        f'expected exactly one cap-truncation UserWarning, got {len(msgs)}')
+    m = msgs[0]
+    assert '246' in m, f'required n missing from the warning: {m!r}'
+    assert '64' in m, f'the cap missing from the warning: {m!r}'
+    # user-visible text must survive a cp1252 console (a 'sigma' glyph here
+    # raised UnicodeEncodeError on this box's default stdout)
+    m.encode('ascii')
+
+    # ...and NO warning when the cap does not bite.  Shrink the σ extent so
+    # the chirp requirement itself drops below the floor (n_req = 4*5e-4*
+    # 0.0199/1.31e-6 = 30 -> clamped to 64, well under the 256 cap) -- which
+    # also keeps this negative case on a cheap 64-point grid.
+    with warnings.catch_warnings(record=True) as rec2:
+        warnings.simplefilter('always')
+        res2 = aberration_tensor(
+            fit, s2_image=(fit.s2x_centre, fit.s2y_centre),
+            source_point=(0.0, 0.0), source_modes=[(0, 0)],
+            pupil_modes=[(0, 0)], output_modes=[(0, 0), (2, 0)],
+            w_s=_WS_T3B, w_p=_WP_T3B, sigma_grid_extent=5e-4)
+    assert res2.sigma_grid_n == 64
+    assert not [w for w in rec2 if w.category is UserWarning
+                and 'sigma_grid_n_max' in str(w.message)]
+
+
+def test_w4_t1_pure_lg00_has_no_sigma_grid_and_is_unchanged():
+    """SCOPE GUARD.  The closed-form branch builds no sigma grid, so the
+    adaptive default cannot touch it -- and its value stays the W3-T3b
+    frozen one (cross-backend contract of ``aberration_tensor_lg00_jax``)."""
+    for R1, want in (
+            (51.5e-3, 1.544807582649e+01 + 3.188059447022e+00j),
+            (60.0e-3, -6.570638987023e+00 - 1.439184599267e+01j)):
+        res = _tensor_w4(R1, ((0, 0),))
+        assert res.sigma_grid_n is None
+        assert res.sigma_curvature is None
+        got = complex(res.L[0, 0])
+        assert abs(got - want) / abs(want) < 1e-8, f'{got!r} != {want!r}'
+
+
+# ---------------------------------------------------------------------------
+# W4-T2 -- curvature-matched (complex-q) output basis
+# ---------------------------------------------------------------------------
+
+def _flips(vals):
+    d = np.diff(np.asarray(vals, dtype=float))
+    return int(np.sum(np.sign(d[1:]) != np.sign(d[:-1])))
+
+
+def test_w4_t2_curvature_matched_basis_makes_L20_monotone_in_R1():
+    """THE W4-T2 CLAIM.  Five designs R1 = 51.5 -> 60 mm at a fixed
+    ``sigma_grid_n = 96`` (so the sigma quadrature is held constant and only
+    the BASIS changes).  ``|L(2, 0)|`` must go from oscillating to monotone.
+
+    Measured:
+        flat basis  2.575157e-07 2.633322e-07 2.293199e-07 2.076991e-07
+                    2.279086e-07      -> 2 of 3 sign flips, ptp/mean 0.235
+        curv basis  4.186632e-08 1.447793e-07 2.947767e-07 5.393557e-07
+                    7.295257e-07      -> 0 of 3 sign flips, ptp/mean 1.964
+    Same verdict at n = 128 (2 flips vs 0) and, on eight designs at n = 256,
+    5 of 6 vs 0 of 6.
+    """
+    modes = ((0, 0), (1, 0), (2, 0))
+    raw, cur = [], []
+    for R1 in _W4_R1S:
+        raw.append(abs(complex(_tensor_w4(R1, modes, 96).L[2, 0])))
+        cur.append(abs(complex(
+            _tensor_w4(R1, modes, 96, None, True).L[2, 0])))
+    assert _flips(raw) >= 1, (
+        f'premise: the flat-basis channel must actually oscillate on this '
+        f'design ladder, got {raw} (measured 2 of 3 sign flips)')
+    assert _flips(cur) == 0, (
+        f'curvature-matched |L(2,0)| is still not monotone: {cur} '
+        f'({_flips(cur)} sign flips; measured 0)')
+    d = np.diff(cur)
+    assert np.all(d > 0.0), (
+        f'curvature-matched |L(2,0)| must be strictly increasing in R1 on '
+        f'this ladder, got steps {d}')
+    # ...and it is a STRONGER discriminator, not merely a smoother one
+    spread_raw = float(np.ptp(raw) / np.mean(raw))
+    spread_cur = float(np.ptp(cur) / np.mean(cur))
+    assert spread_cur > 4.0 * spread_raw, (
+        f'ptp/mean: flat {spread_raw:.4f} vs curvature-matched '
+        f'{spread_cur:.4f} (measured 0.235 vs 1.964)')
+
+
+def test_w4_t2_measured_curvature_is_the_fields_own_quadratic_phase():
+    """The basis curvature must be the field's, i.e. ``C = dv*/dsigma``, and
+    it must be BIG -- the whole reason a real-waist basis fails.  Measured
+    ``C_xx``: -4.841694 (R1 = 51.5) to -3.424957 (R1 = 60), monotone, i.e.
+    -30.1 -> -21.5 WAVES of quadratic phase at the sigma-grid edge.
+
+    Uses the SAME ``_tensor_w4`` cache key as the monotonicity test above so
+    the five-design sweep is paid for once."""
+    prev = None
+    for R1, c_want in ((51.5e-3, -4.841694), (53.9e-3, -4.395232),
+                       (56.3e-3, -3.987775), (58.7e-3, -3.614427),
+                       (60.0e-3, -3.424957)):
+        res = _tensor_w4(R1, ((0, 0), (1, 0), (2, 0)), 96, None, True)
+        C = res.sigma_curvature
+        assert C is not None and C.shape == (2, 2)
+        assert C[0, 1] == C[1, 0], 'C is a Hessian; it must be symmetric'
+        # rotationally symmetric singlet, on axis -> isotropic curvature
+        assert abs(C[0, 0] - C[1, 1]) < 1e-9 * abs(C[0, 0])
+        assert abs(float(C[0, 0]) - c_want) < 1e-3 * abs(c_want), (
+            f'R1={R1}: C_xx {float(C[0, 0]):.6e} != measured {c_want:.6e}')
+        # ...and the quadratic phase it encodes is many waves, not a nudge
+        ext = _w4_extent(R1)
+        waves = abs(float(C[0, 0])) * ext * ext / (2.0 * _WL_T3B)
+        assert waves > 10.0, (
+            f'R1={R1}: only {waves:.2f} waves of quadratic phase at the '
+            f'grid edge -- the premise of W4-T2 is that this is large '
+            f'(measured 30.1 down to 21.5)')
+        if prev is not None:
+            assert float(C[0, 0]) > prev, (
+                'measured curvature must move monotonically with R1')
+        prev = float(C[0, 0])
+
+
+def test_w4_t2_default_off_is_bit_for_bit_the_flat_basis():
+    """SCOPE GUARD.  ``curvature_matched_basis`` is OPT-IN: the default and
+    an explicit ``False`` must be BIT-IDENTICAL, and must report no
+    curvature -- every pinned channel value and the oracle comparisons are
+    defined on the flat basis."""
+    a = _tensor_w4(51.5e-3, tuple(MODES_MIXED), 96)
+    b = _tensor_w4(51.5e-3, tuple(MODES_MIXED), 96, None, False)
+    assert a.sigma_curvature is None and b.sigma_curvature is None
+    assert np.array_equal(np.asarray(a.L).view(np.float64),
+                          np.asarray(b.L).view(np.float64)), (
+        'default and explicit curvature_matched_basis=False diverged')
+    # ...and turning it ON must actually change the answer (otherwise the
+    # flag would be silently inert)
+    c = _tensor_w4(51.5e-3, tuple(MODES_MIXED), 96, None, True)
+    assert c.sigma_curvature is not None
+    i20 = MODES_MIXED.index((2, 0))
+    assert abs(complex(c.L[i20, 0]) - complex(a.L[i20, 0])) > 0.1 * abs(
+        complex(a.L[i20, 0]))
+
+
+def test_w4_t2_flag_is_inert_on_the_pure_lg00_closed_form():
+    """The closed form point-samples at sigma = 0, where any sigma-quadratic
+    basis phase is exactly 1 -- so the flag must be a no-op there, not a
+    silent rescale of the cross-backend contract."""
+    on = _tensor_w4(51.5e-3, ((0, 0),), None, None, True)
+    off = _tensor_w4(51.5e-3, ((0, 0),))
+    assert complex(on.L[0, 0]) == complex(off.L[0, 0])
+    assert on.sigma_curvature is None and on.sigma_grid_n is None
+
+
+def test_w4_t2_excluding_defocus_algebraically_is_the_rejected_option():
+    """MEASURED REJECTION of candidate (b).  'Exclude defocus from the
+    channel' by removing the ``(1, 0)`` projection is a no-op in an
+    orthonormal basis; on the discrete sigma grid the coupling is the Gram
+    off-diagonal, measured 4.39e-04 at R1 = 51.5 mm rising to 0.219 at
+    R1 = 60 mm (where the ``extent`` clamp truncates the basis to
+    +-1.51 w_o).  So it moves ``|L(2,0)|`` by at most ~20 % -- and 2 of 6
+    sign flips survive.  Pinned so the docstring's rejection stays true."""
+    fit = _fit_t3b(51.5e-3)
+    s2 = (fit.s2x_centre, fit.s2y_centre)
+    res = _tensor_w4(51.5e-3, ((0, 0), (1, 0), (2, 0)), 96)
+    w_o = res.w_o
+    ext = _w4_extent(51.5e-3)
+    X, Y, d = _grid(s2[0], s2[1], ext, 96)
+    XL, YL = X - s2[0], Y - s2[1]
+    g = [_lg_oracle(p, 0, w_o, XL, YL) for p in (0, 1, 2)]
+    G = np.array([[_overlap(a, b, d) for b in g] for a in g])
+    off = float(max(abs(G[0, 1]), abs(G[0, 2]), abs(G[1, 2])))
+    assert off < 1e-2, (
+        f'Gram off-diagonal {off:.3e} (measured 4.39e-04) -- the basis is '
+        f'near-orthonormal here, which is exactly why removing the (1, 0) '
+        f'projection cannot change (2, 0)')
+    L10, L20 = complex(res.L[1, 0]), complex(res.L[2, 0])
+    moved = abs(complex(G[2, 1]) * L10) / abs(L20)
+    assert moved < 0.05, (
+        f'removing the (1, 0) projection moves |L(2,0)| by {moved:.3e} '
+        f'relative -- far too little to fix a channel that reverses '
+        f'direction on 5 of 6 design steps (that is what W4-T2 does)')
+
+
+# ---------------------------------------------------------------------------
+# W4-T3 -- the jax canonical-fit estimator
+# ---------------------------------------------------------------------------
+
+def test_w4_t3_normal_equations_are_the_wrong_estimator_here():
+    """PRE-FIX RED, WITH NO JAX INVOLVED.  The validation harness's
+    ``fit_canonical_polynomials_jax matches NumPy fit`` red (rel coef_phi
+    4.480e-02, local-only) was the JAX twin's least-squares ESTIMATOR, and
+    this pure-NumPy oracle reproduces it on the same design matrix:
+
+        estimator                                  max |dcoef| / scale
+        normal eq, floor 1e-12*(tr/n + 1)              4.4898e-02
+        normal eq, floor 0                             1.2213e-03
+        QR (what ``_differentiable_lstsq`` now is)     1.2374e-10
+
+    Two compounding causes, both pinned below: the old floor was LARGER
+    than sigma_min^2 (so it damped real singular directions rather than
+    regularising a degenerate one), and the normal equations square a
+    6.54e+06 condition number so even floor 0 cannot reach 1e-5.
+    """
+    import lumenairy as la
+    import lumenairy.propagators.asymptotic_canonical_fit as CF
+    from lumenairy.propagators.asymptotic import fit_canonical_polynomials
+
+    cap = []
+    real = np.linalg.lstsq
+
+    def _spy(A, b, rcond=None):
+        cap.append((np.array(A), np.array(b)))
+        return real(A, b, rcond=rcond)
+
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                            glass='N-BK7', aperture=4e-3)
+    CF.np.linalg.lstsq = _spy
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            fit_canonical_polynomials(
+                presc, 633e-9, source_box_half=20e-6, pupil_box_half=0.05,
+                n_field=4, n_pupil=8, poly_order=4)
+    finally:
+        CF.np.linalg.lstsq = real
+
+    A, b = cap[1]                    # cap[0] is the 5-column linear prefit
+    assert A.shape == (1024, 70), f'design matrix shape moved: {A.shape}'
+    sv = np.linalg.svd(A, compute_uv=False)
+    cond = float(sv[0] / sv[-1])
+    assert abs(cond - 6.540087e+06) < 1e-2 * 6.540087e+06, (
+        f'cond(A) = {cond:.6e}, measured 6.540087e+06')
+    # full rank -- so this is NOT a rank-deficiency story
+    rcut = sv[0] * max(A.shape) * np.finfo(float).eps
+    assert int((sv > rcut).sum()) == 70
+    # ...but two singular values sit 2+ decades below the rest
+    assert sv[-1] / sv[-3] < 1e-2
+
+    n = A.shape[1]
+    AtA = A.T @ A
+    x_svd = real(A, b, rcond=None)[0]
+    scale = float(np.max(np.abs(x_svd)))
+
+    floor_old = 1e-12 * (float(np.trace(AtA)) / n + 1.0)
+    assert floor_old > float(sv[-1]) ** 2, (
+        f'the premise of the defect: the old Tikhonov floor '
+        f'{floor_old:.4e} was LARGER than sigma_min^2 = '
+        f'{float(sv[-1]) ** 2:.4e} (measured ratio 4.25)')
+
+    def _rel(x):
+        return float(np.max(np.abs(x - x_svd)) / scale)
+
+    e_old = _rel(np.linalg.solve(AtA + floor_old * np.eye(n), A.T @ b))
+    e_ne = _rel(real(AtA, A.T @ b, rcond=None)[0])
+    Q, R = np.linalg.qr(A)
+    e_qr = _rel(np.linalg.solve(R, Q.T @ b))
+
+    assert e_old > 1e-2, (
+        f'the old estimator must reproduce the red: {e_old:.4e} '
+        f'(measured 4.4898e-02)')
+    assert e_ne > 1e-4, (
+        f'floor 0 must still miss by ~1e-3 (the cond(A)^2 penalty): '
+        f'{e_ne:.4e} (measured 1.2213e-03) -- shrinking the floor was '
+        f'never going to be the fix')
+    assert e_qr < 1e-7, (
+        f'QR must reproduce SVD lstsq: {e_qr:.4e} (measured 1.2374e-10)')
+    assert e_qr < 1e-5 * e_old
+
+
+def test_w4_t3_jax_fit_matches_numpy_in_coefficients_and_evaluation():
+    """The validation red, as a unit pin.  Post-QR MEASURED: coef_phi
+    1.223e-07, coef_s1x 2.501e-11, coef_s1y 6.479e-11, evaluated phi
+    8.896e-08 relative to ptp(phi) over 4096 uniform in-box points
+    (pre-fix 4.480e-02 and 3.253e-02).  Tolerances ~100x above measured:
+    QR drift across LAPACK builds scales as cond(A)*eps ~ 1.5e-09."""
+    pytest.importorskip('jax', reason='JAX not installed')
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import lumenairy as la
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials,
+        fit_canonical_polynomials_jax,
+    )
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                            glass='N-BK7', aperture=4e-3)
+    kw = dict(source_box_half=20e-6, pupil_box_half=0.05,
+              n_field=4, n_pupil=8, poly_order=4)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        f_np = fit_canonical_polynomials(presc, 633e-9, **kw)
+        f_jx = fit_canonical_polynomials_jax(presc, 633e-9, **kw)
+
+    def rel(a, b):
+        a = np.asarray(a, dtype=np.float64)
+        b = np.asarray(b, dtype=np.float64)
+        return float(np.max(np.abs(b - a))
+                     / max(float(np.max(np.abs(a))), 1e-30))
+
+    assert rel(f_np.coef_phi, f_jx.coef_phi) < 1e-5
+    assert rel(f_np.coef_s1x, f_jx.coef_s1x) < 1e-8
+    assert rel(f_np.coef_s1y, f_jx.coef_s1y) < 1e-8
+
+    rng = np.random.default_rng(20260726)
+    u = rng.uniform(-1.0, 1.0, size=(4, 4096))
+    pts = (f_np.s2x_centre + u[0] * f_np.s2x_halfrange,
+           f_np.s2y_centre + u[1] * f_np.s2y_halfrange,
+           f_np.v2x_centre + u[2] * f_np.v2x_halfrange,
+           f_np.v2y_centre + u[3] * f_np.v2y_halfrange)
+    p_np = np.asarray(f_np.eval_phi(*pts), dtype=np.float64)
+    p_jx = np.asarray(f_jx.eval_phi(*pts), dtype=np.float64)
+    ev = float(np.max(np.abs(p_jx - p_np)) / np.ptp(p_np))
+    assert ev < 1e-5, (
+        f'EVALUATED phi differs by {ev:.4e} of its range (pre-fix '
+        f'3.253e-02 = 1.867e-01 waves; post-fix 8.896e-08)')
+
+
+def test_w4_t3_jax_fit_gradient_stays_finite_through_qr():
+    """The reason ``_differentiable_lstsq`` exists at all: ``jnp.linalg.
+    lstsq``'s SVD gradient NaNs on near-degenerate singular values.  QR's
+    VJP has no singular-value differences, so the gradient must stay finite
+    -- and land on the v4.11.2 baseline that the ``test_audit_raytrace``
+    pin bands at [1e2, 1e6].  Measured 1.027390e+04 (baseline ~10273.9)."""
+    pytest.importorskip('jax', reason='JAX not installed')
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+
+    import lumenairy as la
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials_jax,
+    )
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                            glass='N-BK7', aperture=4e-3)
+
+    def loss(sbh):
+        f = fit_canonical_polynomials_jax(
+            presc, 633e-9, source_box_half=sbh, pupil_box_half=0.05,
+            n_field=4, n_pupil=8, poly_order=4)
+        return jnp.sum(f.coef_phi ** 2)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        g = float(jax.grad(loss)(20e-6))
+    assert np.isfinite(g), f'QR gradient is not finite: {g}'
+    assert 1e2 < abs(g) < 1e6, (
+        f'gradient {g:.6e} left the v4.11.2 band [1e2, 1e6] that '
+        f'test_audit_raytrace pins (measured 1.027390e+04)')

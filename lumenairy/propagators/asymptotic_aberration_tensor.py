@@ -25,6 +25,7 @@ so existing call sites continue to work unchanged.
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -84,6 +85,17 @@ class AberrationTensorResult:
         Source, pupil, output Gaussian waists.
     v_star : (float, float)
         Envelope-stationary v_2* at s2_image.
+    sigma_grid_n : int or None
+        σ-grid size actually used [audit W4-T1].  ``None`` on the
+        pure-``(0, 0)`` closed-form branch, which builds no grid.  Read it
+        to see what the ADAPTIVE default resolved to.
+    sigma_curvature : ndarray (2, 2) or None
+        Measured quadratic-phase curvature ``C = dv*/dσ`` [direction
+        cosine per metre] that the curvature-matched output basis was
+        built from [audit W4-T2].  ``None`` unless
+        ``curvature_matched_basis=True`` produced a usable measurement --
+        so it doubles as the flag's "did it actually engage?" report.  The
+        basis carried ``exp(+i·π·σᵀCσ/λ)``.
 
     Notes
     -----
@@ -102,6 +114,10 @@ class AberrationTensorResult:
     w_p: float
     w_o: float
     v_star: Tuple[float, float]
+    # v5.29 (audit W4-T1 / W4-T2).  Appended WITH defaults so every existing
+    # construction -- positional or keyword -- keeps working unchanged.
+    sigma_grid_n: Optional[int] = None
+    sigma_curvature: Optional[np.ndarray] = None
 
 
 def _multiply_polys_2d(p_a: Dict[Tuple[int, int], complex],
@@ -310,6 +326,122 @@ def _s2_validity_room(fit: CanonicalPolyFit,
     )
 
 
+# ---------------------------------------------------------------------------
+# v5.29 (audit W4-T1) -- adaptive default σ-grid size
+# ---------------------------------------------------------------------------
+# The image-plane field is a CHIRP.  Its phase is ``2π·Φ(s2, v*(s2))`` and the
+# envelope-stationary relation gives ``dΦ/ds2 = v*/λ`` (Φ in waves, v* a
+# direction cosine), so the LOCAL FRINGE RATE at σ is ``|v*(σ)|/λ`` cycles per
+# metre.  Nyquist on a grid of ``n`` samples across ``2·extent`` therefore
+# needs ``2·extent/(n - 1) <= λ/(2·v_max)``, i.e.
+#
+#     n >= 4·extent·v_max/λ                                        (W4-T1)
+#
+# MEASURED (validation singlet R1 = 51.5 mm, extent 4.034e-3 m, λ 1.31 µm):
+# the amplitude-weighted 99.9th percentile of the field's own local fringe
+# rate, obtained by differentiating the unwrapped phase of a 1-D cut and
+# converged in the cut's own sampling (4497 -> 16385 -> 65537 points gives
+# 4.4938e+3 / 4.4932e+3 / 4.4941e+3 cycles/m), agrees with ``max|v*|/λ`` over
+# the pixels the propagator declares ALIVE (4.4290e+3 cycles/m) to 1.5 %.
+# (The raw MAXIMUM of the phase gradient diverges with the cut's sampling --
+# 1.19e5 -> 3.79e5 -> 6.37e5 -> it is the π-jump at the amplitude zeros, not
+# bandwidth.)  On R1 = 60 mm the same pair reads 6.8342e+3 vs 6.7996e+3
+# cycles/m (0.5 %).  So the chirp model is the right predictor and ``v_max``
+# is the only free quantity.
+#
+# ``v_max`` is taken from the fit's ``v2`` VALIDITY BOX, which is a STRICT
+# upper bound on the alive region: ``propagate_modal_asymptotic`` zeroes any
+# pixel whose Newton solve leaves ``|u3| <= 1, |u4| <= 1`` (see its ``in_box_v``
+# mask), so no non-zero pixel can carry a fringe rate above
+# ``(|v2c| + v2_halfrange)/λ``.  It costs nothing (no extra propagate), it is
+# deterministic and platform-stable (fit outputs), and it reproduces the 246
+# quoted in the ``sigma_grid_n`` docstring.  It IS loose -- the alive region's
+# actual max |v*| is 0.00580 / 0.00891 against box bounds 0.0199 / 0.01415,
+# so the bound over-asks by 3.4x / 1.6x -- and it even ORDERS the two designs
+# the wrong way round (245 vs 175 required, while the measured n = 64 error is
+# +2.3 % vs +33 %).  Conservative is the correct failure direction for a
+# default whose old value UNDER-resolved, and a tighter bound would need the
+# alive mask, i.e. the propagate we are trying to size.
+_SIGMA_GRID_N_MIN = 64
+
+# Cost/accuracy ladder.  Powers of two and their 1.5x midpoints: each rung is
+# a modest cost step, and every rung in the measured table below is on it.
+_SIGMA_GRID_LADDER = (64, 96, 128, 192, 256, 384, 512, 768, 1024)
+
+# Default cap.  Chosen from the MEASURED accuracy/cost table below (this box,
+# 11-mode request on the two validation singlets; error is relative to
+# ``n = 1024``, cost is wall-clock relative to ``n = 64`` = 0.726 s, best of
+# two reps with nothing else running):
+#
+#     n     cost    (0,0)               (1,0)               (2,0)
+#                   51.5mm   60.0mm     51.5mm   60.0mm     51.5mm   60.0mm
+#     64    1.0x    1.1e-1   5.7e-2     1.6e-1   1.4e-1     2.0e-2   1.5e-1
+#     96    2.3x    1.5e-1   4.9e-2     5.8e-2   6.1e-2     1.3e-1   2.2e-2
+#     128   4.7x    9.0e-2   1.9e-2     6.0e-3   2.7e-2     6.1e-2   4.5e-3
+#     192   11.1x   2.0e-2   2.6e-2     4.7e-2   2.9e-2     3.7e-3   2.3e-2
+#     256   15.6x   1.8e-2   1.4e-2     6.1e-3   9.9e-3     4.9e-3   1.6e-2
+#     384   19.7x   8.9e-3   2.7e-4     7.3e-4   2.0e-4     8.2e-3   2.5e-3
+#     512   40.1x   4.0e-3   1.9e-4     3.2e-3   1.1e-3     6.8e-4   1.8e-4
+#
+# (Cost grows SUB-quadratically past n = 256 -- 19.7x / 40.1x against 36x /
+# 64x pixels -- because the fixed w_o probe and the serial Maslov unwrap stop
+# dominating; do not extrapolate the low rungs.)
+#
+# Convergence is OSCILLATORY (a chirp integral: each rung moves the sample
+# phases, not just their density), so no rung is monotonically better than the
+# one below -- but the ~1e-1 plateau of ``n = 64`` is gone by ``n = 256`` on
+# every (p, 0) channel, and the W4-T1 formula asks for 245 / 175 on these two
+# designs, i.e. ladder 256 / 192.  256 therefore buys the order-of-magnitude
+# accuracy the flagged defect was about at the 15.6x that the flag already
+# measured, without ever truncating on the reference designs.  Push it to 512
+# when you need ~1e-3 magnitudes and can pay 63x.  ``sigma_grid_n_max``
+# exposes it per call; an optimiser loop that wants the old speed should pass
+# ``sigma_grid_n=64`` explicitly (bit-for-bit the pre-W4-T1 default).
+_SIGMA_GRID_N_MAX_DEFAULT = 256
+
+
+def _sigma_chirp_v_max(fit: CanonicalPolyFit) -> float:
+    """Strict upper bound on ``|v2*|`` over the pixels the σ-branch's
+    propagator can return a NON-ZERO field at [direction cosine].
+
+    ``propagate_modal_asymptotic`` masks out every pixel whose
+    envelope-stationary ``v2*`` falls outside the fit's ``v2`` box, so this
+    is also a strict upper bound on the field's local fringe rate times λ.
+    """
+    return max(abs(float(fit.v2x_centre)) + abs(float(fit.v2x_halfrange)),
+               abs(float(fit.v2y_centre)) + abs(float(fit.v2y_halfrange)))
+
+
+def _required_sigma_grid_n(fit: CanonicalPolyFit, extent: float) -> int:
+    """Nyquist sample count for the chirped image-plane field on a σ grid of
+    half-extent ``extent``:  ``n >= 4·extent·v_max/λ`` (audit W4-T1).
+
+    Returns :data:`_SIGMA_GRID_N_MIN` if any input is degenerate.
+    """
+    lam = float(fit.wavelength)
+    v_max = _sigma_chirp_v_max(fit)
+    if not (math.isfinite(lam) and lam > 0.0
+            and math.isfinite(extent) and extent > 0.0
+            and math.isfinite(v_max) and v_max > 0.0):
+        return _SIGMA_GRID_N_MIN
+    n_req = 4.0 * extent * v_max / lam
+    if not math.isfinite(n_req):
+        return _SIGMA_GRID_N_MIN
+    return max(_SIGMA_GRID_N_MIN, int(math.ceil(n_req)))
+
+
+def _sigma_grid_n_on_ladder(n_req: int) -> int:
+    """Round ``n_req`` UP onto :data:`_SIGMA_GRID_LADDER` (doubling past its
+    top rung, so the result is never below what was asked for)."""
+    for cand in _SIGMA_GRID_LADDER:
+        if cand >= n_req:
+            return cand
+    n = _SIGMA_GRID_LADDER[-1]
+    while n < n_req:
+        n *= 2
+    return n
+
+
 def _measure_image_plane_waist(
     fit: CanonicalPolyFit,
     s2x_img: float, s2y_img: float,
@@ -388,6 +520,91 @@ def _measure_image_plane_waist(
     return w
 
 
+# ---------------------------------------------------------------------------
+# v5.29 (audit W4-T2) -- curvature-matched (complex-q) output basis
+# ---------------------------------------------------------------------------
+def _measure_sigma_phase_curvature(
+    fit: CanonicalPolyFit,
+    s2x_img: float, s2y_img: float,
+    src_x: float, src_y: float,
+    w_s: float, w_p: float,
+    v2_centre: Tuple[float, float],
+    extent: float,
+) -> Optional[np.ndarray]:
+    """Measure the image-plane field's QUADRATIC phase curvature at the
+    chief ray:  ``C = d v*/d σ`` [direction cosine per metre], symmetric 2x2.
+
+    The field's phase is ``2π·Φ(s2, v*(s2))`` and ``dΦ/ds2 = v*/λ`` (Φ in
+    waves), so ``C/λ`` is the Hessian of the phase in waves and the field
+    carries ``exp(i·π·σᵀCσ/λ)`` to second order -- a defocus/curvature term
+    of ``-30.1`` waves at the σ-grid edge on the validation singlet at
+    R1 = 51.5 mm (``C_xx = -4.847``, equivalent radius -0.206 m), i.e. the
+    field is a strongly curved wavefront, which is exactly why a REAL-waist
+    LG basis cannot represent it in a few ``(p, 0)`` modes.
+
+    Estimated by a central difference of :func:`solve_envelope_stationary`
+    about ``s2_image`` with step ``extent/8`` -- four Newton solves, no
+    propagate.  MEASURED against the alternative (an amplitude-weighted
+    least-squares fit of ``v*(σ)`` over a 33x33 probe grid, which costs a
+    full coarse propagate + Newton batch): ``C_xx`` agrees to 0.11 % - 0.28 %
+    and the resulting ``|L(2, 0)|`` to 0.9 % - 3.4 % across eight designs,
+    and BOTH make the channel STRICTLY MONOTONE in R1 (0 of 6 sign flips) --
+    so the cheap estimator is the one that ships.
+
+    Returns ``None`` if the probe leaves the fit's validity box or the
+    Newton solves do not produce a finite symmetric result; the caller then
+    keeps the flat-phase basis.
+    """
+    for shrink in (1.0, 0.25):
+        h = abs(float(extent)) * 0.125 * shrink
+        if not (math.isfinite(h) and h > 0.0):
+            return None
+        pts = ((s2x_img + h, s2y_img), (s2x_img - h, s2y_img),
+               (s2x_img, s2y_img + h), (s2x_img, s2y_img - h))
+        if any(not bool(fit.in_box(np.asarray(px), np.asarray(py),
+                                   np.asarray(v2_centre[0]),
+                                   np.asarray(v2_centre[1])))
+               for (px, py) in pts):
+            continue
+        vs = []
+        ok = True
+        for (px, py) in pts:
+            try:
+                v, _n, _r = solve_envelope_stationary(
+                    fit, (px, py), (src_x, src_y),
+                    w_s=w_s, w_p=w_p, v2_centre=v2_centre,
+                )
+            except (ValueError, RuntimeError, ZeroDivisionError,
+                    np.linalg.LinAlgError):
+                ok = False
+                break
+            vx, vy = float(v[0]), float(v[1])
+            if not (math.isfinite(vx) and math.isfinite(vy)):
+                ok = False
+                break
+            # Outside the v2 box the propagator returns an identically
+            # ZERO field, so a derivative taken there describes nothing.
+            if not bool(fit.in_box(np.asarray(px), np.asarray(py),
+                                   np.asarray(vx), np.asarray(vy))):
+                ok = False
+                break
+            vs.append((vx, vy))
+        if not ok:
+            continue
+        (vpx_x, vpx_y), (vmx_x, vmx_y), (vpy_x, vpy_y), (vmy_x, vmy_y) = vs
+        c_xx = (vpx_x - vmx_x) / (2.0 * h)
+        c_yy = (vpy_y - vmy_y) / (2.0 * h)
+        # Symmetrise: C is a Hessian, so the mixed partials must agree;
+        # averaging both estimates halves the finite-difference error.
+        c_xy = 0.5 * ((vpy_x - vmy_x) / (2.0 * h)
+                      + (vpx_y - vmx_y) / (2.0 * h))
+        C = np.array([[c_xx, c_xy], [c_xy, c_yy]], dtype=np.float64)
+        if not np.all(np.isfinite(C)):
+            continue
+        return C
+    return None
+
+
 def aberration_tensor(
     fit: CanonicalPolyFit,
     s2_image: Tuple[float, float],
@@ -402,7 +619,9 @@ def aberration_tensor(
     w_o: Optional[float] = None,
     v2_centre: Tuple[float, float] = (0.0, 0.0),
     sigma_grid_n: Optional[int] = None,
+    sigma_grid_n_max: Optional[int] = None,
     sigma_grid_extent: Optional[float] = None,
+    curvature_matched_basis: bool = False,
 ) -> AberrationTensorResult:
     """LG aberration tensor at a single chief-ray image point.
 
@@ -461,32 +680,68 @@ def aberration_tensor(
     sigma_grid_n : int, optional
         Output-plane grid size used for the σ-integration path, i.e.
         whenever ``output_modes`` requests anything other than the
-        single mode ``(0, 0)``.  Default 64 is accurate for LG modes up
-        to ``(p, |ℓ|) ~ (3, 3)``; bump for higher orders.  Ignored for
-        a pure ``[(0, 0)]`` request (the fast closed-form chief-ray
-        sampling is used).
+        single mode ``(0, 0)``.  Ignored for a pure ``[(0, 0)]`` request
+        (the fast closed-form chief-ray sampling is used).
 
-        **Accuracy note (measured, audit W3-T3b).**  The image-plane
-        field is a CHIRP: its local spatial frequency at offset σ is
-        ``|v*(σ)|/λ``, so resolving it needs roughly
-        ``n >= 4·extent·v_max/λ`` samples (246 for the validation
-        singlet's ``extent = 4.03e-3 m``, ``v_max = 0.02``,
-        ``λ = 1.31 µm``).  At the default 64 the ``(2, 0)`` channel is
-        therefore aliasing-limited; measured against ``n = 384``:
+        An explicit value is honoured VERBATIM, and ``sigma_grid_n=64``
+        reproduces the pre-v5.29 flat default bit-for-bit -- pass it in
+        an optimiser loop that wants the old speed.
 
-            n      = 64      96      128     192     256
-            R1=51.5  +2.3 %  -25 %   -13 %   -2.3 %  -0.7 %
-            R1=60.0  +33 %   -3.9 %  +1.4 %  -4.0 %  -2.6 %
+        **The DEFAULT is ADAPTIVE since v5.29 (audit W4-T1).**  The
+        image-plane field is a CHIRP: the envelope-stationary relation
+        ``dΦ/ds2 = v*/λ`` makes its local fringe rate at offset σ equal
+        to ``|v*(σ)|/λ`` cycles/m, so Nyquist needs
 
-        Convergence is oscillatory, and ``n = 256`` costs ~15x ``n =
-        64`` (5.1 s vs 0.34 s here).  The default trades accuracy for
-        the optimiser loop this evaluator feeds; raise it when you need
-        converged channel MAGNITUDES.  Channel-to-channel and
-        design-to-design RESPONSES are robust to it (the curvature
-        discriminator reads 2.09e-1 relative at n = 64 and 4.04e-1 at
-        n = 256).  Note this is a property of the σ quadrature, not of
-        the W3-T3b waist: the same aliasing is present at any explicit
-        ``w_o`` that spans the same box.
+            n >= 4·extent·v_max/λ
+
+        with ``v_max`` bounded by the fit's ``v2`` validity box (the
+        propagator zeroes every pixel whose ``v2*`` leaves it, so no
+        non-zero pixel can chirp faster).  That is 245 / 175 on the two
+        validation singlets, against the old flat default of 64 -- which
+        therefore UNDER-resolved by 1.1x - 1.7x and cost +2.3 % / +33 %
+        on the ``(2, 0)`` magnitude.  The default now rounds the required
+        ``n`` up onto the cost ladder ``64, 96, 128, 192, 256, 384, 512,
+        768, 1024`` and clamps it to ``sigma_grid_n_max``.
+
+        Measured accuracy (relative to ``n = 1024``) and cost (relative
+        to ``n = 64``, best of two clean reps on this box):
+
+            n     cost   |(0,0)| err      |(2,0)| err
+                         51.5mm  60.0mm   51.5mm  60.0mm
+            64    1.0x   1.1e-1  5.7e-2   2.0e-2  1.5e-1
+            128   4.7x   9.0e-2  1.9e-2   6.1e-2  4.5e-3
+            192   11.1x  2.0e-2  2.6e-2   3.7e-3  2.3e-2
+            256   15.6x  1.8e-2  1.4e-2   4.9e-3  1.6e-2
+            384   19.7x  8.9e-3  2.7e-4   8.2e-3  2.5e-3
+            512   40.1x  4.0e-3  1.9e-4   6.8e-4  1.8e-4
+
+        Convergence is OSCILLATORY -- a chirp integral moves its sample
+        phases, not just their density, at every rung -- so no single
+        rung is monotonically better than the one below; what the
+        adaptive default buys is the exit from the ~1e-1 plateau that
+        ``n = 64`` sat on.  (Cost grows SUB-quadratically past 256 --
+        19.7x / 40.1x against 36x / 64x pixels -- because the fixed
+        ``w_o`` probe and the serial Maslov unwrap stop dominating.)
+        Channel-to-channel and design-to-design
+        RESPONSES were always robust to it (the curvature discriminator
+        reads 2.09e-1 relative at n = 64 and 4.04e-1 at n = 256).  This
+        is a property of the σ quadrature, not of the W3-T3b waist: the
+        same aliasing is present at any explicit ``w_o`` that spans the
+        same box.
+
+        Residual limitation: the amplitude is HARD-TRUNCATED where the
+        fit's validity box ends (only 30 % / 65 % of the default grid
+        carries a non-zero field on the two singlets), and that step has
+        no band limit -- so no finite ``n`` converges the last ~1e-3.
+    sigma_grid_n_max : int, optional
+        Cap on the ADAPTIVE ``sigma_grid_n`` default; ignored when
+        ``sigma_grid_n`` is given explicitly.  Default 256, picked from
+        the table above (the accuracy elbow that the W4-T1 formula
+        already asks for on the reference designs, at the 15.6x that the
+        W3-T3b flag measured).  When the cap truncates the required
+        ``n``, a ``UserWarning`` naming BOTH numbers is emitted.  Raise
+        it to 512 for ~1e-3 magnitudes at 31x; lower it (or pass
+        ``sigma_grid_n=64``) inside an optimiser loop.
     sigma_grid_extent : float, optional
         Half-extent of the σ-grid [m].  Default ``4 · w_o``, clamped to
         the fit's ``s2`` validity half-box measured from ``s2_image``
@@ -494,6 +749,62 @@ def aberration_tensor(
         overshooting grid samples no field at all -- see the W3-T3 note
         at the branch).  An explicit value is honoured verbatim, so
         pass one if you want the raw ``4 · w_o`` behaviour.
+
+        When the clamp binds (the field fills the validity box), the σ
+        grid spans FEWER than ``4 · w_o`` and the LG basis is truncated:
+        measured on the validation singlets, the discrete basis Gram
+        matrix departs from the identity by 2.7e-3 at R1 = 51.5 mm but by
+        0.455 at R1 = 60 mm (where ``±extent`` is only ``±1.51 w_o``).
+        The channel values are still exact overlaps of that discrete
+        basis -- what degrades is the basis's own orthonormality, so
+        cross-channel interpretation gets softer as the clamp bites.
+    curvature_matched_basis : bool, optional
+        Opt-in (default ``False`` = the historical flat-phase basis,
+        BIT-FOR-BIT).  When ``True``, project onto a curvature-matched
+        COMPLEX-q LG basis: the same radial profile times the field's own
+        MEASURED quadratic phase, ``LG_k(σ; w_o) · exp(i·π·σᵀCσ/λ)`` with
+        ``C = dv*/dσ`` from :func:`_measure_sigma_phase_curvature`.
+        Ignored on the pure-``(0, 0)`` closed-form branch (no σ grid, so
+        no σ-dependent phase to match) and when the curvature cannot be
+        measured (a ``UserWarning`` says so and the flat basis is kept).
+
+        **Use it when you need a channel that is a SMOOTH function of the
+        design** -- an optimiser gradient, a merit trend, a tolerance
+        sweep.  Measured (audit W4-T2, eight singlets R1 = 51.5 -> 60 mm,
+        ``sigma_grid_n = 256``, ``|L(2, 0)|``):
+
+            basis                          sign flips   ptp/mean
+            flat (default)                    5 of 6      0.307
+            curvature-matched (this flag)     0 of 6      2.197
+
+        i.e. the flag turns a channel that reversed direction on five of
+        six adjacent design steps into a STRICTLY MONOTONE one, and makes
+        it a 7x stronger discriminator at the same time.  The physics: the
+        field is a strongly curved wavefront (-30.1 waves of quadratic
+        phase at the σ-grid edge at R1 = 51.5 mm, equivalent radius
+        -0.206 m, sweeping to -21.5 waves at R1 = 60 mm), and expanding
+        that in a REAL-waist basis needs far more than three ``(p, 0)``
+        modes -- so the truncated ``(2, 0)`` coefficient is an
+        interference residue whose phase rotates with the design rather
+        than a measure of spherical aberration.  Matching the basis
+        curvature removes the rotation and leaves the residual (genuinely
+        aberration) content.
+
+        **Do NOT use it** when you need the raw overlap onto the standard
+        flat LG basis -- the cross-backend ``(0, 0)`` contract, the
+        oracle-comparable overlaps, and every pinned channel VALUE are
+        defined on the default basis.  The two bases are different
+        expansions of the same field; their coefficients are not
+        interchangeable.
+
+        Rejected alternative, MEASURED: "exclude defocus from the
+        channel" by algebraically removing the ``(1, 0)`` projection
+        before reading ``(2, 0)``.  In an orthonormal basis that is
+        identically a no-op, and on the discrete grid it moves
+        ``|L(2, 0)|`` by only 0.4 % - 20 % (via the Gram off-diagonal,
+        4.4e-4 to 0.219) -- not enough: 2 of 6 sign flips remain.  The
+        rotating phase, not the defocus AMPLITUDE, is what makes the
+        channel non-smooth.
 
     Returns
     -------
@@ -749,6 +1060,11 @@ def aberration_tensor(
     # which branches on it (audit W3-T3b: the two paths need different
     # defaults because ``w_o`` means different things in them).
 
+    # Reported back on the result.  The closed-form branch has no σ grid and
+    # no σ-dependent basis phase, so both stay None there (audit W4-T1/T2).
+    n_grid: Optional[int] = None
+    C_sigma: Optional[np.ndarray] = None
+
     if not needs_sigma_integration:
         # ---- Closed-form chief-ray sampling (output mode (0, 0) only) ---
         for io, k_out in enumerate(output_modes):
@@ -803,7 +1119,10 @@ def aberration_tensor(
         # be tuned via the new ``sigma_grid_n`` / ``sigma_grid_extent``
         # kwargs added below for users who need higher orders or
         # tighter accuracy.
-        n_grid = int(sigma_grid_n) if sigma_grid_n is not None else 64
+        # NOTE (audit W4-T1):  ``extent`` is resolved BEFORE ``n_grid``,
+        # because the adaptive default for ``n_grid`` is a Nyquist condition
+        # on the chirp across ``extent``.  Nothing in the extent branch reads
+        # ``n_grid``, so the reorder is value-neutral.
         if sigma_grid_extent is not None:
             extent = float(sigma_grid_extent)
         else:
@@ -826,6 +1145,46 @@ def aberration_tensor(
             room = _s2_validity_room(fit, s2x_img, s2y_img)
             if room > 0.0:
                 extent = min(extent, float(room))
+
+        # ---- σ-grid size: ADAPTIVE default (audit W4-T1) ---------------
+        # An explicit ``sigma_grid_n`` is honoured verbatim -- BIT-FOR-BIT
+        # the pre-W4-T1 behaviour, including ``sigma_grid_n=64`` which
+        # reproduces the old default exactly.
+        n_req_chirp = None
+        if sigma_grid_n is not None:
+            n_grid = int(sigma_grid_n)
+        else:
+            # The old flat default 64 was measured to under-resolve this
+            # chirp by 1.1x - 1.7x on the validation singlets, costing
+            # +2.3 % to +33 % on the (2, 0) magnitude.  Size the grid from
+            # the chirp instead:  n >= 4·extent·v_max/λ, rounded up onto
+            # the cost ladder, clamped to ``sigma_grid_n_max``.
+            n_req_chirp = _required_sigma_grid_n(fit, extent)
+            n_cap = (_SIGMA_GRID_N_MAX_DEFAULT if sigma_grid_n_max is None
+                     else max(_SIGMA_GRID_N_MIN, int(sigma_grid_n_max)))
+            n_grid = _sigma_grid_n_on_ladder(n_req_chirp)
+            if n_grid > n_cap:
+                # ASCII-only: warning text reaches consoles/log handlers
+                # whose encoding may be cp1252 (a 'sigma'/'lambda' glyph
+                # here raised UnicodeEncodeError on this box's default
+                # stdout).  The docstrings keep the maths glyphs.
+                warnings.warn(
+                    f"aberration_tensor: the image-plane field on this "
+                    f"sigma grid is a chirp whose local fringe rate "
+                    f"reaches v_max/lambda = "
+                    f"{_sigma_chirp_v_max(fit) / float(fit.wavelength):.4g}"
+                    f" cycles/m over half-extent {extent:.4g} m, so "
+                    f"Nyquist needs sigma_grid_n >= {n_req_chirp} "
+                    f"({n_grid} on the cost ladder); TRUNCATED to the cap "
+                    f"sigma_grid_n_max = {n_cap}.  The (p, 0) channel "
+                    f"MAGNITUDES are therefore aliasing-limited (measured "
+                    f"~1e-1 relative at n = 64 against n = 1024); "
+                    f"channel-to-channel and design-to-design RESPONSES "
+                    f"are robust to it.  Raise sigma_grid_n_max, pass an "
+                    f"explicit sigma_grid_n, or shrink "
+                    f"sigma_grid_extent.",
+                    UserWarning, stacklevel=2)
+                n_grid = n_cap
         sx_arr = np.linspace(s2x_img - extent, s2x_img + extent, n_grid)
         sy_arr = np.linspace(s2y_img - extent, s2y_img + extent, n_grid)
         S2X, S2Y = np.meshgrid(sx_arr, sy_arr, indexing='xy')
@@ -835,6 +1194,36 @@ def aberration_tensor(
         max_p_o = max((k_out[0] for k_out in output_modes), default=0)
         max_ell_o = max((abs(k_out[1]) for k_out in output_modes),
                         default=0)
+
+        # ---- Optional curvature-matched (complex-q) basis (W4-T2) -------
+        # Projecting onto ``LG_k · exp(+i·π·σᵀCσ/λ)`` is identical to
+        # projecting the PHASE-FLATTENED field ``U · exp(-i·π·σᵀCσ/λ)`` onto
+        # the plain LG basis, because the overlap conjugates the mode.  Doing
+        # it that way reuses ``decompose_lg`` (and its mode-stack cache)
+        # unchanged, so the default path is untouched.
+        if curvature_matched_basis:
+            C_sigma = _measure_sigma_phase_curvature(
+                fit, s2x_img, s2y_img, src_x, src_y, w_s, w_p,
+                v2_centre, extent,
+            )
+            if C_sigma is None:
+                warnings.warn(
+                    "aberration_tensor: curvature_matched_basis=True but "
+                    "the field's quadratic phase could not be measured "
+                    "(the finite-difference probe left the fit's validity "
+                    "box, or the Newton solves failed).  Falling back to "
+                    "the default FLAT-phase LG basis, whose (p, 0) "
+                    "channels are the non-smooth ones this flag exists to "
+                    "fix (audit W4-T2).",
+                    UserWarning, stacklevel=2)
+            else:
+                q_waves = (
+                    (C_sigma[0, 0] * SX_local * SX_local
+                     + 2.0 * C_sigma[0, 1] * SX_local * SY_local
+                     + C_sigma[1, 1] * SY_local * SY_local)
+                    / (2.0 * float(fit.wavelength))
+                )
+                basis_phase = np.exp(-2j * math.pi * q_waves)
 
         for js, k_src in enumerate(source_modes):
             # Field on the grid for THIS source mode (with the
@@ -848,6 +1237,8 @@ def aberration_tensor(
                 w_s=w_s, w_p=w_p, v2_centre=v2_centre,
                 s2_grid_x=S2X, s2_grid_y=S2Y,
             )
+            if C_sigma is not None:
+                field = np.asarray(field) * basis_phase
             overlaps = decompose_lg(
                 field, SX_local, SY_local,
                 w=w_o, p_max=max_p_o, ell_max=max_ell_o,
@@ -863,6 +1254,8 @@ def aberration_tensor(
         s2_image=(s2x_img, s2y_img),
         w_s=w_s, w_p=w_p, w_o=w_o,
         v_star=(v2x_star, v2y_star),
+        sigma_grid_n=n_grid,
+        sigma_curvature=C_sigma,
     )
 
 

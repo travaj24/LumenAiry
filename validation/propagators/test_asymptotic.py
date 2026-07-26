@@ -1500,7 +1500,46 @@ H.run('solve_envelope_stationary_jax_ift IFT backward matches FD',
 # ===========================================================================
 
 def t_fit_canonical_polynomials_jax_matches_numpy():
-    """JAX fit's coefficients agree with the NumPy fit on the same prescription."""
+    """JAX fit agrees with the NumPy fit -- in COEFFICIENTS and, the
+    physically meaningful criterion, in the EVALUATED polynomial.
+
+    v5.29 (audit W4-T3) -- attribution.  This check was RED locally
+    (``rel coef_phi diff = 4.480e-02``, identical at 7ea2eb9) while green on
+    CI, and the whole gap was the JAX twin's least-squares ESTIMATOR, not
+    JAX or its version: reproducing the twin's algorithm in pure NumPy on
+    the captured 1024x70 design matrix gives the same 4.49e-02.
+
+        estimator (on the captured A, full rank 70/70,
+        sigma_max 47.68, sigma_min 7.29e-6,
+        cond(A) 6.54e+06, cond(A^H A) 4.28e+13)      max |dcoef| / scale
+        normal eq, Tikhonov floor 2.257e-10 (old)          4.4898e-02
+        normal eq, floor 2.247e-14                         1.1839e-03
+        normal eq, floor 0                                 1.2213e-03
+        QR (the fix)                                       1.2374e-10
+
+    The old floor was 4.25x LARGER than ``sigma_min^2 = 5.31e-11``, so it
+    damped the two near-null singular directions outright; and squaring a
+    6.5e+06 condition number leaves the normal equations ~1e-3 short of
+    ``lstsq`` even at floor 0, so no floor could have reached this check's
+    1e-5.  ``_differentiable_lstsq`` now uses QR (same finite-VJP property,
+    ``cond(A)`` instead of ``cond(A)^2``).  Post-fix, MEASURED here:
+    coef_phi 1.223e-07, coef_s1x 2.501e-11, coef_s1y 6.479e-11,
+    linear_coeffs 8.919e-16, evaluated phi 8.896e-08 relative to
+    ``ptp(phi)``, evaluated s1 1.824e-11 / 4.878e-11.  Tolerances are set
+    ~100x above those (cross-platform headroom: QR drift across LAPACK
+    builds scales as ``cond(A)*eps`` ~ 1.5e-09).
+
+    The EVALUATED comparison is added because the coefficient one alone was
+    never the physical criterion.  Pre-fix the two coefficient vectors fit
+    the TRAINING samples equally well (1.014e-07 waves apart; RMS residual
+    2.6128e-07 vs 2.6250e-07 waves) and agreed to 1.151e-05 waves on an
+    INDEPENDENT physically-reachable ray set, yet differed by 1.867e-01
+    waves at uniform-random points of the normalised box -- because the box
+    is the bounding box of a CURVED 4-D sample manifold, so its corners are
+    pure extrapolation and are exactly where the near-null directions live.
+    A coefficient-only check therefore reports a number that is neither an
+    upper nor a lower bound on the physics; the evaluated check is.
+    """
     if not la.JAX_AVAILABLE:
         return True, 'skipped (no jax)'
     import jax
@@ -1511,22 +1550,47 @@ def t_fit_canonical_polynomials_jax_matches_numpy():
     presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
                              glass='N-BK7', aperture=4e-3)
     wl = 633e-9
-    fit_np = fit_canonical_polynomials(
-        presc, wl, source_box_half=20e-6, pupil_box_half=0.05,
-        n_field=4, n_pupil=8, poly_order=4,
-    )
-    fit_jx = fit_canonical_polynomials_jax(
-        presc, wl, source_box_half=20e-6, pupil_box_half=0.05,
-        n_field=4, n_pupil=8, poly_order=4,
-    )
-    diff_phi = float(np.max(np.abs(
-        np.asarray(fit_jx.coef_phi) - fit_np.coef_phi)))
-    diff_s1 = float(np.max(np.abs(
-        np.asarray(fit_jx.coef_s1x) - fit_np.coef_s1x)))
-    rel_phi = diff_phi / max(np.max(np.abs(fit_np.coef_phi)), 1e-30)
-    return rel_phi < 1e-5, (
-        f'rel coef_phi diff={rel_phi:.3e}, '
-        f'abs coef_s1x diff={diff_s1:.3e}')
+    kw = dict(source_box_half=20e-6, pupil_box_half=0.05,
+              n_field=4, n_pupil=8, poly_order=4)
+    fit_np = fit_canonical_polynomials(presc, wl, **kw)
+    fit_jx = fit_canonical_polynomials_jax(presc, wl, **kw)
+
+    def _rel(a, b):
+        a = np.asarray(a, dtype=np.float64)
+        b = np.asarray(b, dtype=np.float64)
+        return float(np.max(np.abs(b - a))
+                     / max(float(np.max(np.abs(a))), 1e-30))
+
+    rel_phi = _rel(fit_np.coef_phi, fit_jx.coef_phi)
+    rel_s1x = _rel(fit_np.coef_s1x, fit_jx.coef_s1x)
+    rel_s1y = _rel(fit_np.coef_s1y, fit_jx.coef_s1y)
+
+    # EVALUATED fit: uniform points of the normalised validity box (the
+    # corners included -- that is where a representation-only agreement
+    # would show up).
+    rng = np.random.default_rng(20260726)
+    u = rng.uniform(-1.0, 1.0, size=(4, 4096))
+    pts = (fit_np.s2x_centre + u[0] * fit_np.s2x_halfrange,
+           fit_np.s2y_centre + u[1] * fit_np.s2y_halfrange,
+           fit_np.v2x_centre + u[2] * fit_np.v2x_halfrange,
+           fit_np.v2y_centre + u[3] * fit_np.v2y_halfrange)
+    phi_n = np.asarray(fit_np.eval_phi(*pts), dtype=np.float64)
+    phi_j = np.asarray(fit_jx.eval_phi(*pts), dtype=np.float64)
+    ev_phi = float(np.max(np.abs(phi_j - phi_n)) / max(np.ptp(phi_n), 1e-30))
+    s1_n = fit_np.eval_s1(*pts)
+    s1_j = fit_jx.eval_s1(*pts)
+    ev_s1 = max(
+        float(np.max(np.abs(np.asarray(s1_j[k], dtype=np.float64)
+                            - np.asarray(s1_n[k], dtype=np.float64)))
+              / max(np.ptp(np.asarray(s1_n[k], dtype=np.float64)), 1e-30))
+        for k in (0, 1))
+
+    ok = (rel_phi < 1e-5 and rel_s1x < 1e-8 and rel_s1y < 1e-8
+          and ev_phi < 1e-5 and ev_s1 < 1e-8)
+    return ok, (
+        f'coef rel: phi={rel_phi:.3e} (<1e-5) s1x={rel_s1x:.3e} '
+        f's1y={rel_s1y:.3e} (<1e-8); EVALUATED rel: phi={ev_phi:.3e} '
+        f'(<1e-5) s1={ev_s1:.3e} (<1e-8)')
 
 
 def t_fit_canonical_polynomials_jax_grad_finite():
