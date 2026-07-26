@@ -50,6 +50,25 @@ class PropagationResult:
        :meth:`__array__`).  The 2-item arity is pinned behaviour and will
        not change; the un-wrapped kernels' 3-tuple is likewise pinned.
 
+    .. note::
+       **P16 resolved (v5.30, roadmap Part F1).**  The deferred F1 decision
+       -- ``propagate()``'s default return becoming a ``PropagationResult``
+       at :data:`lumenairy._deprecation.API_TRANSITION_VERSION` -- was
+       required to settle P16 in the same pass, because the wrapper's 2-item
+       iteration and the kernels' 3-item tuple cannot both be "the"
+       unpacking contract once the wrapper is the default.
+
+       **Decision: iteration stays 2-item, permanently.**  It is NOT
+       scheduled to become ``(field, dx_out, dy_out)`` at the flip, and no
+       registry entry schedules such a change.  Rationale: the chosen F1
+       option keeps ``return_result=False`` available past the flip, so a
+       caller who unpacks ``E, dxo, dyo`` migrates by naming that contract
+       -- no arity change needed.  Re-arity-ing :meth:`__iter__` would
+       instead break the ``E, intermediates = propagate_through_system(...,
+       return_result=True)`` callers this method exists for, i.e. trade one
+       breakage for a new one, which is exactly what the least-breaking
+       option was chosen to avoid.
+
     Attributes
     ----------
     field : ndarray (complex)
@@ -144,6 +163,11 @@ class PropagationResult:
         un-wrapped Fresnel / Fraunhofer / SAS kernels return; see the
         class docstring's warning (audit P16).  Read :attr:`dx_out` /
         :attr:`dy_out` for the output sampling.
+
+        v5.30 (roadmap Part F1): this arity is NOT scheduled to change when
+        ``propagate()``'s default return flips to ``PropagationResult`` --
+        see the P16 note on the class.  3-tuple unpackers pass
+        ``return_result=False``.
         """
         yield self.field
         yield self.intermediates if self.intermediates is not None else []

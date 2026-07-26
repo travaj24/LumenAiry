@@ -370,7 +370,7 @@ def apply_real_lens_gbd(
         metric (zero overhead).
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_gbd')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_gbd', input_kind='field')
     if roi is not None:
         raise NotImplementedError(
             "apply_real_lens_gbd: roi windowing is not yet supported; "
@@ -528,11 +528,24 @@ def apply_real_lens_gbd(
         # Paraxial whole-system ABCD (aberration-free reference); imported
         # lazily so the common per-surface path has no extra import cost.
         from ..propagators.gbd import propagate_gbd_through_prescription
+        # v5.30 (audit bba1bc4 follow-up): pass ``None`` -- not ``0.0`` -- when
+        # no extra output leg was requested.  The callee's S2-4 guard is
+        # ``if z_image is not None and not per_surface`` and ``0.0`` is
+        # ``not None``, so the DEFAULT ``output_plane_distance=0.0`` tripped a
+        # RuntimeWarning ("z_image is only honored on the per_surface=True
+        # path") on EVERY ``per_surface=False`` call -- an un-actionable warning
+        # about a value the caller never passed.  ``0.0`` and ``None`` mean the
+        # same thing to this branch (the paraxial path reconstructs at the exit
+        # vertex and ignores ``z_image`` either way -- measured byte-identical),
+        # so the mapping is behaviour-free; a genuinely-requested non-zero
+        # distance still warns, because there it really IS dropped.
         return propagate_gbd_through_prescription(
             E_dec, dx, prescription, wavelength=wavelength,
             output_shape=(Ny, Nx), output_dx=dx,
             direction_sampling=use_direction_sampling,
-            per_surface=False, z_image=float(output_plane_distance))
+            per_surface=False,
+            z_image=(float(output_plane_distance)
+                     if float(output_plane_distance) != 0.0 else None))
 
     if progress is not None:
         try:

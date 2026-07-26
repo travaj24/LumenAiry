@@ -51,6 +51,7 @@ __all__ = [
     # "deprecation registry rot"): the removal-schedule registry.
     'NEXT_REMOVAL_VERSION',
     'REMOVAL_SCHEDULE',
+    'API_TRANSITION_VERSION',
     'resolve_removal_version',
     'check_removal_schedule',
     # v4.15.1 (Agent E): pickle-safe sentinel helpers; the unpickler
@@ -114,6 +115,38 @@ NEXT_REMOVAL_VERSION = '5.32'
 REMOVAL_SCHEDULE: dict[str, str] = {
     '5.27': NEXT_REMOVAL_VERSION,
 }
+
+#: Version at which the deferred **API-contract transitions** land -- the
+#: default-flip counterpart to :data:`NEXT_REMOVAL_VERSION` (which schedules
+#: shim *removals*).  A transition changes a default value rather than
+#: deleting a name, so it needs its own registry entry: nothing is removed at
+#: this version and the legacy behaviour stays reachable behind an explicit
+#: argument.
+#:
+#: v5.30 (roadmap ``docs/roadmap_deferred_2026_07_21.md`` Part F1, audit P5 --
+#: owner decision).  Scheduled here:
+#:
+#: * :func:`lumenairy.propagators.dispatch.propagate` -- the DEFAULT return
+#:   becomes a :class:`~lumenairy.propagators.PropagationResult` for every
+#:   method (roadmap F1 option 4, the option costed as least-breaking).  From
+#:   v5.30 a ``DeprecationWarning`` fires whenever the default path hands back
+#:   the unstable legacy contract (bare ndarray **or** ``(E, dx_out, dy_out)``
+#:   triple); ``return_result=True`` (stable) and ``return_result=False``
+#:   (legacy shapes, kept available past the flip) are both silent.
+#:
+#: NOT scheduled here (decided against in the same pass):
+#:
+#: * ``PropagationResult.__iter__`` -- stays **2-item** ``(field,
+#:   intermediates)`` permanently (audit P16).  Option 4 keeps
+#:   ``return_result=False`` available, so 3-tuple unpackers migrate by
+#:   naming the legacy contract instead of by us re-arity-ing iteration --
+#:   which would break the ``E, inter = propagate_through_system(...,
+#:   return_result=True)`` callers that the 2-item form exists for.
+#:
+#: Bound to :data:`NEXT_REMOVAL_VERSION` by construction, so
+#: :func:`check_removal_schedule`'s "lies in the future" invariant covers it
+#: too and a shipped release cannot advertise a transition it has passed.
+API_TRANSITION_VERSION = NEXT_REMOVAL_VERSION
 
 
 def _version_tuple(version: str) -> tuple[int, ...]:

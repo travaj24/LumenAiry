@@ -418,7 +418,15 @@ cache — the §0 byte-budgeted / registered / releasable / introspectable contr
 
 ## Part F — deferred API-contract decisions
 
-### F1. `propagate(method='auto')` return shape (audit P5, owner decision)
+### F1. `propagate(method='auto')` return shape (audit P5) — **DECIDED (v5.30)**
+
+> **Status: DECIDED — option 4, registry-scheduled transition.  No immediate
+> breaking change.**  The mechanics landed in v5.30; the flip itself lands at
+> `lumenairy._deprecation.API_TRANSITION_VERSION`.  The "Decision (v5.30)"
+> subsection at the end of this item records what shipped, what is scheduled,
+> and the internal call sites still to migrate.  The measurements and the
+> four-option costing that led there are kept below as the decision record
+> (only the chosen option is marked).
 
 `lumenairy.propagators.dispatch.propagate` returns **either** a bare `ndarray`
 at the input pitch **or** an `(E, dx_out, dy_out)` triple at a kernel-chosen
@@ -435,8 +443,9 @@ pitch, decided entirely by which kernel the `'auto'` selector picks — i.e. by
 
 A caller cannot know which they will get without re-running the selector.
 
-**v5.30 did NOT change the return types** — that is a breaking API decision for
-the module owner.  What landed instead (see
+**The return types are unchanged** — changing them is a breaking API decision,
+so it was routed to the module owner rather than taken in the audit pass.  What
+landed first (see
 `docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md` P5):
 
 - a `UserWarning` whenever `'auto'` resolves to a grid-changing kernel while
@@ -447,10 +456,10 @@ the module owner.  What landed instead (see
 - pins for the warning **and** for its absence on same-grid (`asm`) selections,
   on explicitly-named methods, and on `return_result=True`.
 
-**The open decision.**  Options, in rough order of disruption:
+**The decision (was: open).**  Options, in rough order of disruption:
 
-1. **Status quo + warning** (what shipped).  Zero breakage; the caller still has
-   to branch on the return type.
+1. **Status quo + warning** (what v5.30 shipped first).  Zero breakage; the
+   caller still has to branch on the return type.
 2. **Always return `PropagationResult`** from `propagate()`.  One contract for
    every method; breaks every existing `E = propagate(...)` and
    `E, dxo, dyo = propagate(...)` call site unless `PropagationResult` grows a
@@ -461,11 +470,91 @@ the module owner.  What landed instead (see
    consumers of the ASM path (the common case today).
 4. **Make `return_result=True` the default** over a deprecation cycle, keeping
    `return_result=False` available.  Least abrupt; needs a release of
-   `DeprecationWarning` plus a `__array__`-based grace path.
+   `DeprecationWarning` plus a `__array__`-based grace path.  ← **CHOSEN**
 
 Whichever is chosen, P16 must be resolved in the same pass: the wrapper's
 2-item iteration and the kernels' 3-item tuple cannot both be "the" unpacking
 contract.
 
-Not in the sequencing list above — it is an API/compat decision, not an
+#### Decision (v5.30)
+
+**Option 4** — the one costed above as *least abrupt*.  Options 2 and 3 reach
+the single contract by breaking live call sites **in the release that ships
+them**; option 4 reaches the same end state and breaks nobody now, because it
+separates the announcement from the change and leaves the legacy contract
+reachable forever behind an explicit argument.  Option 1 is not an end state —
+it leaves the caller branching on the return type indefinitely, which is the
+finding.  The `__array__`-based grace path option 4 asks for **already exists**
+(`PropagationResult.__array__`, so `np.asarray(result)` yields the field), so
+the cost was only the warning + the scheduling.
+
+**What lands now (v5.30) — nothing about the return changes.**  The shapes are
+pinned bit-for-bit identical to pre-v5.30 (`propagate(...)` default ≡
+`propagate(..., return_result=False)`, verified against the kernels called
+directly):
+
+- `propagate()`'s `return_result` default becomes the `_NO_DEFAULT` sentinel
+  instead of `False`, so the library can distinguish *"did not choose"* from
+  *"chose the legacy contract"*.  The sentinel is falsy, so every
+  `if not return_result` routing test inside `propagate` behaves exactly as
+  `False` did — that is the mechanism behind the byte-identity.
+- A `DeprecationWarning` fires when the default is relied on **and** the call
+  returns the unstable legacy contract (bare `ndarray` **or**
+  `(E, dx_out, dy_out)` triple).  That is *strictly more* than where the P5
+  `UserWarning` fires: it covers the same-grid `asm` bare-`ndarray` case too,
+  because option 4 replaces the default return for **every** method, not just
+  the grid-changing ones.
+- Both explicit values silence it and neither is deprecated — *not choosing* is.
+  `return_result=True` is the stable contract (and what the default becomes);
+  `return_result=False` keeps today's shapes past the flip and is the migration
+  path for `E, dxo, dyo` unpackers.
+- The P5 `UserWarning` is deliberately **not** silenced by
+  `return_result=False`: opting into the legacy contract does not make a
+  `z`-dependent return *shape* stable, so that diagnostic is still true.
+- Library-internal default-path calls are exempt (`_caller_is_internal`): a
+  warning fired from `lumenairy.algebra.primitives` names a file the user
+  cannot edit and an argument the user never wrote.  The predicate fails open
+  (warns) if frame introspection is unavailable, so it can only ever make the
+  library noisier, never quieter.
+
+**What is scheduled.**  The flip version lives in the deprecation registry as
+`lumenairy._deprecation.API_TRANSITION_VERSION`, bound to
+`NEXT_REMOVAL_VERSION`, and is read through `resolve_removal_version()` at warn
+time.  So (a) the horizon is in exactly one place, (b) `check_removal_schedule()`
+already covers it with its "lies in the future" invariant, and (c) a release
+cannot advertise a transition version it has already passed — the registry-rot
+class this mechanism was built for.  At that version:
+`propagate()`'s **default** return becomes `PropagationResult` for every
+method; `return_result=False` stays available and unchanged.
+
+**P16, resolved in the same pass: `PropagationResult.__iter__` stays 2-item —
+permanently, and is NOT scheduled to change at the flip.**  Option 4 keeps
+`return_result=False` available, so a caller who unpacks `E, dxo, dyo` migrates
+by *naming that contract*; no arity change is needed.  Re-arity-ing `__iter__`
+would instead break the `E, intermediates = propagate_through_system(...,
+return_result=True)` callers the 2-item form exists for — trading one breakage
+for a new one, which is exactly what choosing the least-breaking option was
+meant to avoid.  So the two unpacking contracts are separated by *which object
+you asked for*, not by arity: the wrapper yields `(field, intermediates)`, the
+legacy return yields `(E, dx_out, dy_out)`, and `.dx_out` / `.dy_out` /
+`np.asarray(result)` cover the rest.  Recorded in the registry entry and in
+both docstrings; no registry entry schedules an iteration change.
+
+**Still to do at the flip (measured inventory of internal default-path
+callers).**  These do not warn today (internal exemption) and must be migrated
+in the same commit as the flip:
+
+| site | passes `return_result`? | flip-safe today? |
+|---|---|---|
+| `sources/core.py` `Source.propagate` | yes, `True` | yes — already explicit |
+| `algebra/primitives.py` `FreeSpace._apply` | no | yes — `_coerce_propagation_output` already accepts a `PropagationResult` |
+| `propagators/mhs.py` (2 sites, `maslov` / output-grid) | no | **no** — returns the dispatcher output straight through as a field; needs `return_result=False` or `.field` |
+
+Pins: `tests/unit/test_niche_audit_w4_p5_return_contract.py` (warning fires on
+the default unstable path incl. the same-grid case; both explicit modes silent;
+returns bit-identical to explicit `False` and to the kernels directly; registry
+horizon resolved and in the future; P16 arity + decision recorded; internal
+exemption with an external counter-pin).
+
+Not in the sequencing list above — it was an API/compat decision, not an
 engineering task.

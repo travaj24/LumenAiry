@@ -357,6 +357,17 @@ def propagate_through_system(E_in: np.ndarray,
         Legacy alias for ``'propagate'`` with tilt parameters.
         Prefer using ``{'type': 'propagate', 'tilt_x': ..., 'tilt_y': ...}``
         in new code.
+        Keys: ``z``, ``tilt_x`` / ``tilt_y`` (optional, default 0),
+        ``bandlimit`` (bool, optional, default True).
+
+        **This element is ASM-only and ignores ``method``.**  It calls
+        :func:`angular_spectrum_propagate_tilted` directly, so a ``method``
+        key is neither honoured nor validated (there is no tilted Fresnel /
+        SAS kernel).  Since v5.30 supplying one emits a ``UserWarning``
+        naming the limitation; pre-v5.30 it was dropped silently (measured
+        bit-identical output for ``'fresnel'``, ``'sas'`` and outright junk).
+        Use the unified ``'propagate'`` element if you need ``method``
+        validation.
 
     ``'lens'``
         Thin-lens phase screen (paraxial or higher-order model).
@@ -705,6 +716,31 @@ def propagate_through_system(E_in: np.ndarray,
             # Legacy alias — redirect to the unified 'propagate' handler
             # with tilt parameters.  New code should use:
             #   {'type': 'propagate', 'z': ..., 'tilt_x': ..., 'tilt_y': ...}
+            #
+            # v5.30 (flagged in 3f22778): this handler is ASM-ONLY -- it goes
+            # straight to ``angular_spectrum_propagate_tilted`` and never reads
+            # ``elem['method']``.  Pre-v5.30 a ``method`` key here was dropped
+            # in complete silence: MEASURED 0.0 relative difference (and
+            # bit-identical output) for ``method='fresnel'``, ``'sas'`` AND
+            # ``'not_a_method'`` versus omitting the key -- i.e. not even
+            # validated, unlike the ``'propagate'`` element which raises on an
+            # unrecognised value.  Warn rather than raise: raising would be a
+            # new breakage class for a legacy alias that has silently accepted
+            # the key for many releases.
+            if 'method' in elem:
+                warnings.warn(
+                    f"propagate_through_system: elements[{i}] has "
+                    f"type='propagate_tilted' with method="
+                    f"{elem['method']!r}, which is IGNORED.  The legacy "
+                    f"'propagate_tilted' element is ASM-only -- it always "
+                    f"calls angular_spectrum_propagate_tilted and neither "
+                    f"honours nor validates a 'method' key (there is no "
+                    f"tilted Fresnel/SAS kernel).  Use the unified element "
+                    f"{{'type': 'propagate', 'z': ..., 'tilt_x': ..., "
+                    f"'tilt_y': ..., 'method': ...}} instead: it validates "
+                    f"'method' and, for an untilted leg, honours it.  Drop "
+                    f"the 'method' key to silence this warning.",
+                    UserWarning, stacklevel=2)
             E = angular_spectrum_propagate_tilted(
                 E, elem['z'], wavelength, current_dx, current_dy,
                 tilt_x=elem.get('tilt_x', 0),

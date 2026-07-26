@@ -26,10 +26,17 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import math
+import sys
 import warnings
 from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
+
+from .._deprecation import (
+    _NO_DEFAULT,
+    API_TRANSITION_VERSION,
+    resolve_removal_version,
+)
 
 VALID_METHODS = (
     'auto', 'asm', 'sas', 'fresnel', 'fraunhofer', 'rs',
@@ -42,10 +49,115 @@ VALID_METHODS = (
 # any of these, so an ``auto`` caller who reads the return as an ndarray
 # silently gets a tuple -- and at a different sampling.  The dispatcher
 # warns (see :func:`propagate`); the return types themselves are NOT
-# changed (that is an API-contract decision for the owner -- recorded in
+# changed (recorded in
 # ``docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md`` P5 and in the
-# deferred roadmap).
+# deferred roadmap).  The owner decision that P5 was routed to is now
+# MADE -- roadmap Part F1 option 4, a registry-scheduled default flip; see
+# the transition block below.  This set stays as-is: it gates the
+# shape-instability ``UserWarning``, which is a narrower condition than the
+# transition warning (grid-changing kernels only, not every method).
 _GRID_CHANGING_METHODS = ('sas', 'fresnel', 'fraunhofer')
+
+# ---------------------------------------------------------------------------
+# audit P5 / roadmap Part F1 -- the scheduled return-contract transition
+# ---------------------------------------------------------------------------
+# v5.30: the F1 decision (four costed options in
+# ``docs/roadmap_deferred_2026_07_21.md``) landed as **option 4** -- make
+# ``return_result=True`` the default over a deprecation cycle, keeping
+# ``return_result=False`` available.  The roadmap costs it as the least abrupt:
+# options 2 and 3 break live call sites in the release that ships them, whereas
+# option 4 breaks nobody now and gives every caller a release in which to name
+# the contract it wants.  Nothing about the RETURN changes in v5.30 (shapes are
+# pinned bit-unchanged); what lands is the announcement.
+#
+# The flip version lives in the deprecation registry
+# (:data:`lumenairy._deprecation.API_TRANSITION_VERSION`, bound to
+# ``NEXT_REMOVAL_VERSION``) and is read through
+# :func:`~lumenairy._deprecation.resolve_removal_version` at warn time, so this
+# horizon cannot rot the way the pre-v5.30 hand-interpolated ones did.
+_P5_DEPRECATED_SINCE = '5.30'
+
+#: Native return types that the flip will REPLACE with a PropagationResult --
+#: the "unstable contract" the warning is about.  A bare ndarray (asm / rs /
+#: maslov / gbd / hfpi / hf) and an ``(E, dx_out, dy_out)`` triple (sas /
+#: fresnel / fraunhofer) are not interchangeable, and which one a
+#: ``method='auto'`` caller receives is decided by ``z``.
+_P5_UNSTABLE_RETURN_TYPES = (np.ndarray, tuple, list)
+
+
+def _caller_is_internal(depth: int) -> bool:
+    """True when the frame ``depth`` levels up lives inside ``lumenairy``.
+
+    Used to keep the P5 transition ``DeprecationWarning`` off the library's
+    OWN default-path calls to :func:`propagate`
+    (``lumenairy.propagators.mhs``, ``lumenairy.algebra.primitives``).  A
+    warning fired there names a file the user cannot edit and an argument the
+    user never wrote, so it is noise, not a migration signal -- the same reason
+    pandas resolves ``stacklevel`` to the first non-pandas frame before
+    warning.  Those internal sites are migrated as part of the flip itself and
+    are inventoried in the roadmap's Part F1 entry, not left to a warning.
+
+    ``depth`` is counted from THIS function's caller (``depth=1`` is the
+    caller's caller).  Falls back to ``False`` -- i.e. warn -- if the frame is
+    unavailable (non-CPython, or the stack is shallower than ``depth``), so a
+    missing introspection facility can only make the library noisier, never
+    quieter.
+    """
+    try:
+        frame = sys._getframe(depth + 1)
+    except (AttributeError, ValueError):
+        return False
+    name = frame.f_globals.get('__name__', '')
+    return name == 'lumenairy' or name.startswith('lumenairy.')
+
+
+def _p5_transition_message(out: Any) -> str:
+    """Build the P5 / F1 transition ``DeprecationWarning`` text.
+
+    The flip version is resolved through the registry
+    (:func:`lumenairy._deprecation.resolve_removal_version`) rather than
+    interpolated verbatim, so it tracks a re-scheduled horizon and can never
+    advertise a version the running release has already passed.  Resolved per
+    call rather than cached at import, because the registry is editable at
+    runtime.
+
+    Cost (MEASURED, N=64 asm): the whole added default-path sequence -- frame
+    check 0.23 us + this message build 3.4 us + ``warnings.warn`` 0.8 us =
+    4.4 us, against a propagate of 230-400 us, so ~1-2%.  A caller who passes
+    ``return_result`` explicitly pays **zero**: the sentinel identity test
+    short-circuits before any of it, which is also the migration the warning
+    asks for.  (The ``_deprecation`` import is at module scope for this
+    reason -- as a function-level import it cost 1 us more per call.)
+    """
+    live = (resolve_removal_version(API_TRANSITION_VERSION)
+            or API_TRANSITION_VERSION)
+    if isinstance(out, np.ndarray):
+        kind = 'a bare ndarray'
+    elif isinstance(out, (tuple, list)) and len(out) == 3:
+        kind = 'a 3-tuple (E, dx_out, dy_out)'
+    elif isinstance(out, (tuple, list)):
+        # Not the canonical triple (e.g. ``method='mhs'`` with
+        # ``return_intermediate=True``): report the arity without asserting a
+        # field layout the return may not have.
+        kind = f'a {len(out)}-element {type(out).__name__}'
+    else:  # pragma: no cover -- gated by _P5_UNSTABLE_RETURN_TYPES
+        kind = f'a {type(out).__name__}'
+    return (
+        f"propagate: relying on the default value of 'return_result' "
+        f"(currently False) is deprecated since v{_P5_DEPRECATED_SINCE}; the "
+        f"default return will become a PropagationResult for every method in "
+        f"v{live}.  This call returned {kind} -- the legacy contract, whose "
+        f"SHAPE depends on which kernel ran (and, under method='auto', "
+        f"therefore on z).  Pass it explicitly to pick a contract and silence "
+        f"this: return_result=True for the stable PropagationResult "
+        f"(.field / .dx / .dy for every method; np.asarray(result) still "
+        f"yields the field), or return_result=False to keep today's "
+        f"bare-ndarray-or-3-tuple shapes past v{live}.  Note "
+        f"PropagationResult iteration stays 2-item -- (field, intermediates), "
+        f"audit P16 -- so code that unpacks `E, dxo, dyo` wants "
+        f"return_result=False.  See propagate()'s docstring and "
+        f"docs/roadmap_deferred_2026_07_21.md Part F1."
+    )
 
 
 def propagate(
@@ -59,7 +171,13 @@ def propagate(
     accuracy: str = 'balanced',
     output_grid: Optional[tuple] = None,
     output_dx: Optional[float] = None,
-    return_result: bool = False,
+    # v5.30 (audit P5 / roadmap F1): the default is the "not passed" sentinel,
+    # NOT ``False``, so the scheduled-transition DeprecationWarning can tell
+    # "relying on the default" apart from "explicitly asked for the legacy
+    # contract".  ``_NO_DEFAULT`` is falsy, so every ``not return_result`` /
+    # ``if return_result`` test below still routes exactly as ``False`` did --
+    # the legacy return shapes are bit-unchanged.
+    return_result: Any = _NO_DEFAULT,
     **method_kwargs: Any,
 ) -> Any:
     """Top-level smart-method propagator.
@@ -69,13 +187,39 @@ def propagate(
     prescription (when provided).  See the module docstring for
     selection logic.
 
+    .. warning::
+       **Scheduled API transition (audit P5, roadmap Part F1).**  Today's
+       DEFAULT return is the chosen kernel's native shape -- a bare
+       ``ndarray`` *or* an ``(E, dx_out, dy_out)`` triple, see the table
+       below.  From the version named by
+       :data:`lumenairy._deprecation.API_TRANSITION_VERSION` the default
+       becomes a :class:`~lumenairy.propagators.PropagationResult` for
+       **every** method.  Nothing has changed yet; since v5.30 relying on
+       the default merely emits a :class:`DeprecationWarning`.  Choose a
+       contract now and the warning goes away for good:
+
+       * ``return_result=True`` -- the stable contract, and what the
+         default becomes.  ``.field`` / ``.dx`` / ``.dy`` are defined for
+         every kernel, and ``np.asarray(result)`` yields the field, so
+         most ndarray consumers need no other change.
+       * ``return_result=False`` -- today's native shapes, explicitly
+         requested.  Still supported after the flip; this is the answer
+         for code that unpacks ``E, dxo, dyo``.
+
+       ``PropagationResult`` iteration is **not** moving to 3 items at the
+       flip (audit P16): it stays ``(field, intermediates)``, which is what
+       ``E, inter = propagate_through_system(..., return_result=True)``
+       needs.  Re-arity-ing it would trade one breakage for another, and
+       option 4 does not require it -- ``return_result=False`` is the
+       migration path for 3-tuple unpackers.
+
     ``method='auto'`` return contract (audit P5)
     -------------------------------------------
     **The native return type and the output sampling both depend on
     which kernel the selector picks**, i.e. on ``z`` / ``prescription``
-    / ``accuracy`` -- not on anything the caller wrote.  With
-    ``return_result=False`` (the default) the caller receives whatever
-    the chosen kernel returns:
+    / ``accuracy`` -- not on anything the caller wrote.  On the legacy
+    path (``return_result=False``, and today's default) the caller
+    receives whatever the chosen kernel returns:
 
     * **asm** -- native return ``ndarray``; output pitch ``dx``
       (unchanged).  Chosen for free space when ``z`` is None / 0 /
@@ -111,11 +255,21 @@ def propagate(
     ``.field`` / ``.dx`` / ``.dy`` regardless of which kernel ran.
 
     .. note::
-       Changing the *return types* to a single contract is deliberately
-       NOT done here -- it is a breaking API decision deferred to the
-       module owner (audit P5; see
-       ``docs/roadmap_deferred_2026_07_21.md``).  Only the warning and
-       this table were added.
+       The return types are **unchanged in v5.30** -- the shapes above are
+       bit-for-bit what earlier releases produced.  v5.30 lands only the
+       announcement (the ``DeprecationWarning``) of the transition costed
+       as *option 4* in the deferred roadmap
+       (``docs/roadmap_deferred_2026_07_21.md`` Part F1, audit P5): flip the
+       default over a deprecation cycle rather than break call sites in the
+       release that ships the change.  The flip version is held in the
+       deprecation registry
+       (:data:`lumenairy._deprecation.API_TRANSITION_VERSION`) and read
+       through :func:`~lumenairy._deprecation.resolve_removal_version`, so a
+       re-scheduled horizon can never be advertised stale.
+
+       Library-internal default-path calls to ``propagate`` do not emit the
+       transition warning (it would name a file the caller cannot edit);
+       they are inventoried for migration in the roadmap's F1 entry.
 
     Parameters
     ----------
@@ -154,13 +308,23 @@ def propagate(
         these kwargs and returned a bare-grid output at the input
         pitch -- a quiet wrong-physics path that audit round-4 B1-8
         flagged.
-    return_result : bool, default False
+    return_result : bool, optional
+        Selects the return contract.  **Currently defaults to the legacy
+        contract (equivalent to False); scheduled to default to True** --
+        see the transition warning at the top of this docstring.
+
         When True, wrap the output in a
         :class:`lumenairy.propagators.PropagationResult` carrying
         the field plus ``dx``, ``wavelength``, ``method``, and a
-        ``metadata`` dict.  When False (default), return the bare
+        ``metadata`` dict.  When False, return the bare
         propagator output (typically a complex ndarray) -- preserving
         backward compatibility and zero-overhead fast loops.
+
+        **Leaving it unset is what is deprecated, not either value.**  Both
+        ``True`` and ``False`` are supported now and after the flip, and
+        both silence the :class:`DeprecationWarning`; the sentinel default
+        exists only so the library can tell "did not choose" apart from
+        "chose the legacy contract" (v5.30, audit P5 / roadmap F1).
 
         4.12: for tuple-returning kernels (Fresnel / Fraunhofer / SAS
         return ``(E, dx_out, dy_out)``) the wrapped result now reports
@@ -182,7 +346,10 @@ def propagate(
 
            Read the attributes (``.field``, ``.dx_out``, ``.dy_out``)
            instead of unpacking.  The 2-item iteration is pinned
-           behaviour and is not going to change.
+           behaviour and is not going to change -- **including at the F1
+           flip**, which was decided explicitly in the same pass rather
+           than left as a collision (audit P16).  ``return_result=False``
+           is the supported migration for ``E, dxo, dyo`` unpackers.
 
     Warns
     -----
@@ -194,6 +361,14 @@ def propagate(
         silent: the caller named that kernel and knows its contract, and
         so are ``return_result=True`` calls (the wrapped result is
         shape-stable).
+    DeprecationWarning
+        When ``return_result`` is not passed at all and the call returns
+        the legacy contract (bare ndarray **or** 3-tuple) -- i.e. wherever
+        the ``UserWarning`` above fires, PLUS the same-grid bare-ndarray
+        case, because the scheduled flip replaces the default return for
+        every method (audit P5 / roadmap F1, v5.30).  Passing
+        ``return_result=True`` or ``return_result=False`` silences it;
+        library-internal calls are exempt.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard for PartialCoherenceMCF
     # and non-2-D inputs via the shared ``_check_2d_scalar_field``
@@ -229,15 +404,32 @@ def propagate(
         # ndarray at the input pitch OR an ``(E, dx_out, dy_out)`` triple
         # at a kernel-chosen pitch, decided purely by ``z`` -- and the
         # caller has no way to know which without re-running the
-        # selector.  Return types are NOT changed (deferred API decision
-        # for the owner); instead say so, out loud, exactly when it bites:
-        # ``auto`` chose a grid-changing kernel and the caller did not opt
-        # into the shape-stable wrapper.  The reported pitch is read off
-        # the kernel's own return, so no formula is duplicated here.
+        # selector.  Return types are still NOT changed here (the flip is
+        # scheduled -- see the transition warning below); this one just says
+        # so, out loud, exactly when it bites: ``auto`` chose a grid-changing
+        # kernel and the caller did not opt into the shape-stable wrapper.
+        # The reported pitch is read off the kernel's own return, so no
+        # formula is duplicated here.  Kept separate from the transition
+        # warning: this fires for an explicit ``return_result=False`` too,
+        # because choosing the legacy contract does not make a z-dependent
+        # return SHAPE stable.
         if auto_selected and method in _GRID_CHANGING_METHODS:
             warnings.warn(
                 _auto_grid_change_message(method, out, dx),
                 UserWarning, stacklevel=2)
+        # v5.30 (audit P5 / roadmap F1 option 4): announce the scheduled
+        # default flip.  Fires exactly where the UserWarning above fires PLUS
+        # the same-grid bare-ndarray case -- because option 4 replaces the
+        # default return for EVERY method, so the asm caller who reads the
+        # return as an ndarray is affected just as much as the sas caller who
+        # unpacks three items.  Gated on the sentinel, so a caller who has
+        # already chosen (either value) is silent; gated on the return type, so
+        # a kernel that already hands back something else is not mislabelled.
+        if (return_result is _NO_DEFAULT
+                and isinstance(out, _P5_UNSTABLE_RETURN_TYPES)
+                and not _caller_is_internal(1)):
+            warnings.warn(_p5_transition_message(out),
+                          DeprecationWarning, stacklevel=2)
         return out
 
     from .result import PropagationResult
