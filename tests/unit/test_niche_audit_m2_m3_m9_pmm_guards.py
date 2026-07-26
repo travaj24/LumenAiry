@@ -109,18 +109,20 @@ def test_m2_nonpositive_and_nonfinite_widths_raise():
 
 def test_m2_valid_fractions_unchanged_bit_for_bit():
     """A VALID fraction list is untouched: the frozen pre-fix values (recorded
-    on this exact configuration) must still come out bit-for-bit."""
+    on this exact configuration) must still come out unchanged.  Held to rel
+    1e-10, not exact equality: the solve is bit-reproducible on one machine
+    but drifts ~4e-14 relative across platforms/BLAS builds (measured: CI
+    Linux vs the Windows box the values were frozen on); a validation gate
+    with any numeric side effect would move these by far more than 1e-10."""
     st = _stack()
     st.add_layer(THK, segments=[(0.5, EPS_R), (0.5, EPS_G)])
     orders, R, T, J = st.set_source(WL, angle=0.0).solve()
-    # frozen at 5c9f7c3 (pre-fix), full precision -> the validation must be a
-    # pure gate with no numeric side effect
-    assert complex(J[0, 0]) == complex(-0.11741987478962615,
-                                       0.18695773604145147)
-    assert complex(J[1, 1]) == complex(-0.41864855426106673,
-                                       -0.09161162775657859)
-    assert float(R.sum()) == 0.23239992438644771
-    assert float(T.sum()) == 1.7676000851170701
+    assert complex(J[0, 0]) == pytest.approx(
+        complex(-0.11741987478962615, 0.18695773604145147), rel=1e-10)
+    assert complex(J[1, 1]) == pytest.approx(
+        complex(-0.41864855426106673, -0.09161162775657859), rel=1e-10)
+    assert float(R.sum()) == pytest.approx(0.23239992438644771, rel=1e-10)
+    assert float(T.sum()) == pytest.approx(1.7676000851170701, rel=1e-10)
     # a 3-segment list whose float sum is 1 only to round-off still passes
     edge = 0.5 * (1.0 - 0.4)
     st2 = _stack()

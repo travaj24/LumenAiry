@@ -37,7 +37,7 @@ import warnings
 import numpy as np
 import pytest
 
-from lumenairy.raytrace import Surface, RayBundle, trace, seidel_coefficients
+from lumenairy.raytrace import RayBundle, Surface, seidel_coefficients, trace
 from lumenairy.raytrace.seidel_analysis import seidel_wfe
 
 _WL = 587.5618e-9

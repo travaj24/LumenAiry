@@ -181,8 +181,7 @@ def test_r3_grazing_alive_parity_numpy_jax_static_jax_param():
     the grazing probe, for the pure-flat AND flat+aspherics surfaces."""
     _jax_f32_or_skip()
     from lumenairy.raytrace import trace
-    from lumenairy.raytrace.jax_trace import (make_jax_ray_state, trace_jax,
-                                              trace_jax_with_params)
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax, trace_jax_with_params
     flat_rx = {
         'surfaces': [
             {'radius': np.inf, 'glass_before': 'air', 'glass_after': 'air'},
@@ -288,8 +287,7 @@ def test_r4_doe_order_grazing_case_is_unchanged():
 
     jax = pytest.importorskip('jax')
     del jax
-    from lumenairy.raytrace.jax_trace import (make_jax_ray_state, trace_jax,
-                                              trace_jax_with_params)
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax, trace_jax_with_params
     rx = {'surfaces': [
         {'radius': np.inf, 'glass_before': 'air', 'glass_after': 'air'}] * 3,
         'thicknesses': [0.02, 0.02, 0.0]}
@@ -338,8 +336,7 @@ def _lg_chan_sq(pres, s2, chan=(0, 0), w_s=20e-6):
     """``|L_{chan, (0,0)}|^2`` straight from the merit's own documented
     dependency (``asymptotic.aberration_tensor``), so the pin does not
     re-derive the merit's arithmetic from the merit itself."""
-    from lumenairy.propagators.asymptotic import (aberration_tensor,
-                                                  fit_canonical_polynomials)
+    from lumenairy.propagators.asymptotic import aberration_tensor, fit_canonical_polynomials
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         fit = fit_canonical_polynomials(pres, wavelength=_LG_WL)
@@ -412,8 +409,7 @@ def test_r5_numpy_lg_merit_matches_jax_twin():
     Pre-fix they differed by ~0.99 -- they were literally ``x`` vs ``1-x``."""
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
-    from lumenairy.optimize.core import (EvaluationContext,
-                                         make_lg_aberration_merit_jax)
+    from lumenairy.optimize.core import EvaluationContext, make_lg_aberration_merit_jax
     pres = _lg_singlet()
     for w_s in (5e-6, 20e-6, 50e-6):
         merit = make_lg_aberration_merit_jax(
@@ -579,7 +575,9 @@ def _r7_surfaces():
 def test_r7_analytic_jacobian_handles_degenerate_bundle(label):
     """R-7: the analytic twin must not raise where the FD sibling copes."""
     from lumenairy.raytrace.differential import (
-        ray_transfer_jacobian, ray_transfer_jacobian_analytic)
+        ray_transfer_jacobian,
+        ray_transfer_jacobian_analytic,
+    )
     surfs = _r7_surfaces()
     z = np.array([0.0])
     u = np.array([_R7_DEGENERATE[label]])

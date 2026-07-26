@@ -195,13 +195,16 @@ def test_m4_admitted_cells_still_solve_end_to_end():
 def test_m4_li_and_laurent_untouched_bit_for_bit(form, r00, t00, tot):
     """The gate must not perturb the rigorous formulations.  Per-order values
     frozen at 5c9f7c3 (pre-fix) on the audit's metal square, S=25,
-    n_orders=3 (the total is only held to 1e-12: the array reduction's
-    summation order is not bit-reproducible across runs)."""
+    n_orders=3.  Held to rel 1e-10, not exact equality: the eigensolve is
+    bit-reproducible on one machine but drifts ~4e-14 relative across
+    platforms/BLAS builds (measured: CI Linux vs the Windows box the values
+    were frozen on), while any actual gate perturbation of these
+    formulations would move them by far more than 1e-10."""
     o, R, T = _audit_solve(_sq(25, .25, EPS_AG), 3, form)
     p0 = int(np.where((o[:, 0] == 0) & (o[:, 1] == 0))[0][0])
-    assert float(R[p0]) == r00
-    assert float(T[p0]) == t00
-    assert float(R.sum() + T.sum()) == pytest.approx(tot, abs=1e-12)
+    assert float(R[p0]) == pytest.approx(r00, rel=1e-10)
+    assert float(T[p0]) == pytest.approx(t00, rel=1e-10)
+    assert float(R.sum() + T.sum()) == pytest.approx(tot, abs=1e-10)
 
 
 # ===========================================================================

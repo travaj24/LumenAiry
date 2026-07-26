@@ -45,16 +45,20 @@ import numpy as np
 import pytest
 
 import lumenairy.elements._lens_traced as LT
-from lumenairy.elements._lens_real import (apply_real_lens, get_lens_sag_dtype,
-                                           prepare_real_lens,
-                                           set_lens_sag_dtype)
+from lumenairy.elements._lens_real import (
+    apply_real_lens,
+    get_lens_sag_dtype,
+    prepare_real_lens,
+    set_lens_sag_dtype,
+)
 from lumenairy.elements._lens_thin import apply_thin_lens
-from lumenairy.elements._lens_traced import (apply_real_lens_traced,
-                                             prepare_real_lens_traced)
-from lumenairy.propagators.propagation import (get_default_dy,
-                                               get_default_wave_propagator,
-                                               set_default_dy,
-                                               set_default_wave_propagator)
+from lumenairy.elements._lens_traced import apply_real_lens_traced, prepare_real_lens_traced
+from lumenairy.propagators.propagation import (
+    get_default_dy,
+    get_default_wave_propagator,
+    set_default_dy,
+    set_default_wave_propagator,
+)
 
 _WL = 632.8e-9
 
@@ -609,7 +613,6 @@ _H7 = dict(f=5.0e-3, wavelength=1.0e-6, dx=2.0e-6, xc=100e-6, yc=0.0)
 
 def _phase_slope_at_lenslet_centre(model):
     N = 256
-    x = (np.arange(N) - N / 2) * _H7['dx']
     E = np.ones((N, N), dtype=np.complex128)
     out = apply_thin_lens(E, lens_model=model, **_H7)
     ph = np.unwrap(np.unwrap(np.angle(out), axis=0), axis=1)

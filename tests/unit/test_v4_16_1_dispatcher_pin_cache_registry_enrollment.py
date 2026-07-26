@@ -158,6 +158,17 @@ _CACHE_REGISTRY_EXEMPTIONS = frozenset({
     # OrderedDict isn't separately enrolled.
     ('lumenairy/analysis/phase_retrieval.py', '_ER_KERNEL_CACHE'),
     ('lumenairy/analysis/phase_retrieval.py', '_HIO_KERNEL_CACHE'),
+
+    # ---- elements/_lens_traced.py ----------------------------------------
+    # ``_TRACED_KWARG_DEFAULTS_CACHE`` is a SINGLETON built once per
+    # process (audit E-L22 fix, v5.30): it holds the immutable signature
+    # defaults of ``apply_real_lens_traced`` (a dozen scalars resolved via
+    # ``inspect.signature``), never grows past that single fill, and holds
+    # no array/device memory -- there is nothing for a cache clear to
+    # reclaim, and draining it would only force an identical rebuild.
+    # Guarded by ``_TRACED_KWARG_DEFAULTS_LOCK`` per the v4.14.2
+    # companion-lock pin.
+    ('lumenairy/elements/_lens_traced.py', '_TRACED_KWARG_DEFAULTS_CACHE'),
 })
 
 

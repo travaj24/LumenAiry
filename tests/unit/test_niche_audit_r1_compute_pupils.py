@@ -48,8 +48,14 @@ import warnings
 import numpy as np
 import pytest
 
-from lumenairy.raytrace import (Surface, RayBundle, trace, compute_pupils,
-                                first_order_data, seidel_coefficients)
+from lumenairy.raytrace import (
+    RayBundle,
+    Surface,
+    compute_pupils,
+    first_order_data,
+    seidel_coefficients,
+    trace,
+)
 
 _WL = 587.5618e-9          # He d-line, the audit's wavelength
 _TOL = 1e-6                # relative tolerance vs the oracle (it is itself
