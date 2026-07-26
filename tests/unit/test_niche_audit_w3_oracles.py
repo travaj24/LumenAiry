@@ -1830,19 +1830,24 @@ def test_w3_t4_nonfinite_check_precedes_angle_conflict_check():
 # ---------------------------------------------------------------------------
 
 def test_w3_t4_valid_input_physics_unchanged():
-    """Exact Jones / Stokes values for three known-good cases.
+    """Jones / Stokes values for three known-good cases.
 
-    These are the pre-fix values measured on v5.29.0 before the guards were
-    added; the guards only read ``float(param)`` into a throwaway local, so
-    every number below must be reproduced bit-for-bit.
+    Frozen values measured on v5.29.0 (Windows) before the guards were
+    added; the guards only read ``float(param)`` into a throwaway local.
+    Held at rel 1e-12, not bitwise: the values are trig-derived and libm
+    sin/cos differ by ~1 ULP across platforms (measured: CI Linux vs
+    this box on e1fd64a).  WITHIN-process bit-identity to the unguarded
+    formula is still asserted exactly where both sides share one libm.
     """
     one = np.ones((1, 1), dtype=complex)
 
     # (a) linear at pi/3 -- create_linear_polarized's own guarded path.
     lin = create_linear_polarized(one.copy(), DX, np.pi / 3)
-    assert lin.Ex[0, 0] == 0.5000000000000001 + 0j
-    assert lin.Ey[0, 0] == 0.8660254037844386 + 0j
-    # Bit-identical to the un-guarded formula.
+    assert lin.Ex[0, 0] == pytest.approx(0.5000000000000001 + 0j,
+                                         rel=1e-12)
+    assert lin.Ey[0, 0] == pytest.approx(0.8660254037844386 + 0j,
+                                         rel=1e-12)
+    # Bit-identical to the un-guarded formula (same-process libm).
     assert lin.Ex[0, 0] == one[0, 0] * np.cos(np.pi / 3)
     assert lin.Ey[0, 0] == one[0, 0] * np.sin(np.pi / 3)
 
@@ -1851,11 +1856,13 @@ def test_w3_t4_valid_input_physics_unchanged():
     #     docstring.  Pins apply_waveplate's retardance path.
     qwp = apply_waveplate(create_linear_polarized(one.copy(), DX, 0.0),
                           np.pi / 2, -np.pi / 4)
-    assert qwp.Ex[0, 0] == 0.5000000000000001 + 0.5000000000000001j
-    assert qwp.Ey[0, 0] == -0.5 + 0.5000000000000001j
+    assert qwp.Ex[0, 0] == pytest.approx(
+        0.5000000000000001 + 0.5000000000000001j, rel=1e-12)
+    assert qwp.Ey[0, 0] == pytest.approx(
+        -0.5 + 0.5000000000000001j, rel=1e-12)
     S = stokes_parameters(qwp)
-    assert S['S0'][0, 0] == 1.0000000000000004
-    assert S['S3'][0, 0] == 1.0000000000000004
+    assert S['S0'][0, 0] == pytest.approx(1.0, rel=1e-12)
+    assert S['S3'][0, 0] == pytest.approx(1.0, rel=1e-12)
     np.testing.assert_allclose([S['S1'][0, 0], S['S2'][0, 0]], [0.0, 0.0],
                                rtol=0.0, atol=2e-16)
     np.testing.assert_allclose(degree_of_polarization(qwp), [[1.0]],
@@ -1864,13 +1871,15 @@ def test_w3_t4_valid_input_physics_unchanged():
     # (c) elliptical at chi = pi/8, psi = pi/6 -- pins BOTH guarded params
     #     of create_elliptical_polarized on their valid domain.
     ell = create_elliptical_polarized(one.copy(), DX, np.pi / 8, np.pi / 6)
-    assert ell.Ex[0, 0] == 0.8001031451912656 - 0.19134171618254486j
-    assert ell.Ey[0, 0] == 0.4619397662556433 + 0.3314135740355918j
+    assert ell.Ex[0, 0] == pytest.approx(
+        0.8001031451912656 - 0.19134171618254486j, rel=1e-12)
+    assert ell.Ey[0, 0] == pytest.approx(
+        0.4619397662556433 + 0.3314135740355918j, rel=1e-12)
     Se = stokes_parameters(ell)
-    assert Se['S0'][0, 0] == 1.0000000000000002
-    assert Se['S1'][0, 0] == 0.353553390593274
-    assert Se['S2'][0, 0] == 0.6123724356957945
-    assert Se['S3'][0, 0] == 0.7071067811865476
+    assert Se['S0'][0, 0] == pytest.approx(1.0000000000000002, rel=1e-12)
+    assert Se['S1'][0, 0] == pytest.approx(0.353553390593274, rel=1e-12)
+    assert Se['S2'][0, 0] == pytest.approx(0.6123724356957945, rel=1e-12)
+    assert Se['S3'][0, 0] == pytest.approx(0.7071067811865476, rel=1e-12)
     # chi = pi/8 -> S3/S0 = sin(2 chi) = sin(pi/4).
     np.testing.assert_allclose(Se['S3'][0, 0] / Se['S0'][0, 0],
                                np.sin(np.pi / 4), rtol=0.0, atol=2e-16)

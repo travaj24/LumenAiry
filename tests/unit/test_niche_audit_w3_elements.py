@@ -34,12 +34,12 @@ import numpy as np
 import pytest
 
 import lumenairy as la
+from lumenairy.elements import _lens_real as real_mod
 from lumenairy.elements import _lens_thin, _lens_traced, _lens_traced_uniform
 from lumenairy.elements import coronagraph as coronagraph_ns
 from lumenairy.elements import elements as elements_mod
 from lumenairy.elements import lenses as lenses_mod
 from lumenairy.elements import lenses_gbd as gbd_mod
-from lumenairy.elements import _lens_real as real_mod
 from lumenairy.elements.doe import create_periodic_phase_mask, makedammann2d
 from lumenairy.elements.lenses import surface_sag_general
 

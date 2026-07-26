@@ -58,11 +58,16 @@ import pytest
 
 import lumenairy as la
 from lumenairy.raytrace._conic_core import conic_sag, conic_sag_derivs
-from lumenairy.raytrace.surface import (Surface, _surface_sag_derivatives_xy,
-                                        _surface_sag_xy)
-from lumenairy.raytrace.trace import (_make_bundle, make_fan, make_grid,
-                                      make_ring, surfaces_from_prescription,
-                                      trace, validate_prescription)
+from lumenairy.raytrace.surface import Surface, _surface_sag_derivatives_xy, _surface_sag_xy
+from lumenairy.raytrace.trace import (
+    _make_bundle,
+    make_fan,
+    make_grid,
+    make_ring,
+    surfaces_from_prescription,
+    trace,
+    validate_prescription,
+)
 
 _WL = 587.56e-9
 
@@ -133,8 +138,7 @@ class TestR8OddAsphericPowerRejected:
         from a sag/normal-inconsistent surface: the one backend that bypasses
         BOTH ``validate_prescription`` and the ``Surface`` dataclass."""
         pytest.importorskip('jax')
-        from lumenairy.raytrace.jax_trace import (make_jax_ray_state,
-                                                  trace_jax)
+        from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
         pres = {'surfaces': [{'radius': 50e-3, 'glass_before': 'air',
                               'glass_after': 'N-BK7',
                               'aspheric_coeffs': {5: 1.0e6}},
@@ -318,8 +322,7 @@ class TestR13DoeZeroPeriodGuard:
     @pytest.mark.parametrize('period', [0.0, np.nan, np.inf])
     def test_r13_matches_the_jax_twin(self, period):
         pytest.importorskip('jax')
-        from lumenairy.raytrace.jax_trace import (_apply_doe_kick_jax,
-                                                  make_jax_ray_state)
+        from lumenairy.raytrace.jax_trace import _apply_doe_kick_jax, make_jax_ray_state
         st = make_jax_ray_state(
             x=np.array([0.0]), y=np.array([1e-3]), z=np.array([0.0]),
             L=np.array([0.0]), M=np.array([0.0]), N=np.array([1.0]),
@@ -364,8 +367,7 @@ class TestR14ApertureClipOrderParity:
         1.9e-07 relative).  A clip-order change that touched live rays would
         blow past both."""
         jax = pytest.importorskip('jax')
-        from lumenairy.raytrace.jax_trace import (make_jax_ray_state,
-                                                  trace_jax)
+        from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
         x64 = bool(jax.config.read('jax_enable_x64'))
         xs = np.array([0.0, 2e-3, 6e-3, 9e-3])
         ys = np.zeros(4)

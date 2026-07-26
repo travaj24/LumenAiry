@@ -397,7 +397,15 @@ def test_m7_jones_1d_laurent_is_a_real_second_rule():
     Convergence to the common limit was measured separately rather than pinned
     -- it needs a large truncation, and the approach is not monotone:
     ``|dJ00|`` = 2.76e-4 (n_orders 6), 1.44e-2 (12), 8.11e-4 (24), 3.79e-5
-    (48) on this cell.
+    (48) on the original bg=2.25 cell.
+
+    The patterned pair uses bg = 4.0, n_orders = 8: the original
+    bg = 2.25 / n_orders = 6 cell sits ON the solver's own documented
+    instability class (li read R+T = 2.019 locally and hard-raised
+    _EnergyError at 2.20 on CI Linux -- a platform coin flip).  At
+    bg = 4.0 BOTH rules close energy to 1e-9 (asserted below), so any
+    future marginality shows up as a closure failure, not a platform
+    lottery; |dJ00| = 3.0e-4 there.
     """
     t = _lc_tensor(1.5, 1.7, 0.4)
     with warnings.catch_warnings():
@@ -407,10 +415,15 @@ def test_m7_jones_1d_laurent_is_a_real_second_rule():
         u_la = rcwa_jones_1d(P, t, t, 1.5, 1.0, 0.3e-6, 0.45, WL, n_orders=6,
                              formulation="laurent")
         assert np.asarray(u_la[3]).tobytes() == np.asarray(u_li[3]).tobytes()
-        a = rcwa_jones_1d(P, t, 2.25 * np.eye(3), 1.5, 1.0, 0.3e-6, 0.45, WL,
-                          n_orders=6, formulation="li")
-        b = rcwa_jones_1d(P, t, 2.25 * np.eye(3), 1.5, 1.0, 0.3e-6, 0.45, WL,
-                          n_orders=6, formulation="laurent")
+        a = rcwa_jones_1d(P, t, 4.0 * np.eye(3), 1.5, 1.0, 0.3e-6, 0.45, WL,
+                          n_orders=8, formulation="li")
+        b = rcwa_jones_1d(P, t, 4.0 * np.eye(3), 1.5, 1.0, 0.3e-6, 0.45, WL,
+                          n_orders=8, formulation="laurent")
+    # Both rules must be WELL-CONDITIONED here (lossless: R+T = 2 over
+    # the two polarizations) -- the guard against re-marginalising this
+    # pin's geometry.
+    assert float(np.sum(a[1]) + np.sum(a[2])) == pytest.approx(2.0, abs=1e-6)
+    assert float(np.sum(b[1]) + np.sum(b[2])) == pytest.approx(2.0, abs=1e-6)
     assert abs(complex(a[3][0, 0]) - complex(b[3][0, 0])) > 1e-5
     assert np.asarray(a[3]).tobytes() != np.asarray(b[3]).tobytes()
 

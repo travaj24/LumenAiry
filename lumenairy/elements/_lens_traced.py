@@ -269,8 +269,6 @@ def get_lens_parallel_amp() -> bool:
 # users are ``_lens_real.py`` and ``elements.py``, which import from
 # ``lenses.py`` directly.  Both deleted; this module gets its sag from the
 # raytrace core via the trace, not from the analytic helper.
-from .lenses import _warn_if_aperture_exceeds_grid
-
 # Sibling-module imports.
 # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
 # Module-level logger for apply_real_lens_traced entry / per-Newton-
@@ -280,6 +278,7 @@ from .lenses import _warn_if_aperture_exceeds_grid
 from .._logging import get_logger
 from ..glass import get_glass_index
 from ..progress import ProgressScaler, call_progress
+from .lenses import _warn_if_aperture_exceeds_grid
 
 logger = get_logger(__name__)
 
