@@ -45,6 +45,11 @@ from ..raytrace import (
     trace,
 )
 
+# W4c: terminal-index factors from their SINGLE SOURCE in
+# raytrace.seidel -- re-deriving them here is the drift R-1 and S11-1
+# were caused by (see the module note in raytrace/seidel.py).
+from ..raytrace.seidel import _image_space_index, _object_space_index
+
 __all__ = [
     'ImagePlaneWFE',
     'eval_image_plane_wfe',
@@ -385,12 +390,37 @@ def eval_image_plane_wfe(
         #   location relative to surf 0; obj_d_m is measured from
         #   surf 0 too, so we ADD when H is on +z of surf 0).
         u_pp = obj_d_m + fod.pp_object_z
-        # Solve 1/v_pp = 1/efl - 1/u_pp for diverging or converging
-        denom = (1.0 / fod.efl) - (1.0 / u_pp) if u_pp != 0 else np.inf
+        # Solve the Gauss conjugate equation at the principal planes.
+        #
+        # W4c (finding 2).  The textbook air form ``1/u + 1/v = 1/f``
+        # only holds for air-to-air conjugates.  ``fod.efl`` is the
+        # REDUCED focal length ``1/Phi`` (W4b made that explicit) while
+        # ``u_pp`` and ``v_pp`` are GEOMETRIC distances, so the general
+        # form must carry the terminal indices:
+        #
+        #     n_obj / u_pp  +  n_img / v_pp  =  Phi  =  1 / efl
+        #
+        # Pre-fix, measured against an exact real-ray oracle (a ray from
+        # the axial object point, axis crossing read past the last
+        # surface): an N-BK7 IMAGE space gave img_d_m = +41.569590 mm vs
+        # +70.557940 mm exact (-41.1%, and the resulting misplaced
+        # reference sphere reported 114.8 waves PV); an N-BK7 OBJECT
+        # space gave +34.023215 mm vs +35.549003 mm (-4.3%, 292.8 waves
+        # PV).  The index-threaded form below matches that oracle to
+        # <= 5.3e-12 on both, and to 1.8e-12 on the air control.  Note
+        # the two errors are NOT a common factor -- n_obj and n_img enter
+        # differently -- which is why both must be threaded.
+        #
+        # Air conjugates are bit-identical: both indices are exactly 1.0,
+        # so ``n_obj / u_pp`` IS ``1.0 / u_pp`` and ``n_img / denom`` IS
+        # ``1.0 / denom``.
+        n_obj_g = _object_space_index(surfaces, wavelength)
+        n_img_g = _image_space_index(surfaces, wavelength)
+        denom = (1.0 / fod.efl) - (n_obj_g / u_pp) if u_pp != 0 else np.inf
         if denom == 0:
             img_d_m = float('inf')  # object at front focal plane
         else:
-            v_pp = 1.0 / denom
+            v_pp = n_img_g / denom
             # Image distance from LAST surface vertex:
             #   v_pp is measured from image PP (H'); H' is at
             #   pp_image_z relative to last surface.  So

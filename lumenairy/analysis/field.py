@@ -97,6 +97,13 @@ from ..raytrace import (
 )
 from ..raytrace.core import _make_bundle, trace_world
 
+# W4c: the reduced<->geometric and unfolded<->global-z conversion factors
+# are imported from their SINGLE SOURCE in raytrace.seidel rather than
+# re-derived here.  Re-deriving them locally is exactly the drift that
+# R-1 (two copies of the stop split) and S11-1 (two mirror-parity
+# conventions) were caused by; see the module note in raytrace/seidel.py.
+from ..raytrace.seidel import _mirror_parity_sign, _object_space_index
+
 
 def _trace(rays, surfaces, wavelength):
     """Trace via ``trace_world`` if every surface carries a world
@@ -128,10 +135,37 @@ def _append_image_plane(surfaces: List[Surface],
     """Return a new surface list with a flat image plane appended
     ``image_distance`` past the last surface along its local +z axis.
 
+    ``image_distance`` is ALONG THE RAY (the "unfolded" convention that
+    :func:`~lumenairy.raytrace.system_abcd`'s ``bfl`` is expressed in),
+    positive = downstream.  Every caller here defaults it to ``bfl``, so
+    this is the convention that keeps the two consistent.
+
     Works for both local-frame (legacy) and world-frame surface lists.
     In local-frame mode the previous-last surface's ``thickness`` is
-    bumped to ``image_distance`` so :func:`trace` actually propagates
-    the rays the requested distance to the new image plane.
+    bumped so :func:`trace` actually propagates the rays the requested
+    distance to the new image plane.
+
+    W4c (finding 3).  A local-frame ``thickness`` is a GLOBAL-Z step --
+    ``trace`` reaches the next vertex plane via ``t = (thickness - z)/N``
+    -- while ``bfl`` is an along-the-ray distance, and after an ODD
+    number of mirrors those point in opposite directions.  The thickness
+    therefore carries :func:`_mirror_parity_sign`, exactly the mapping
+    S11-1 documents (``test_niche_s11_sibling_deferred`` writes
+    ``surf[-1].thickness = (-1.0) ** n_mir * fod.bfl`` for the same
+    reason).  Pre-fix, on an air singlet + flat fold, the appended
+    "image plane" sat 2*|bfl| = 75.07 mm from the focus: a collimated
+    probe launched at 1.0e-7 m arrived 1.53x its launch height off axis
+    instead of on it, and the traced RMS spot read 3.947e-3 m instead of
+    2.130e-5 m (a 185x error, and the mirrorless control's own value).
+    Bit-identical for every system with an even mirror count, including
+    all mirrorless ones.
+
+    The WORLD-frame branch is deliberately NOT mapped: it places the
+    plane along ``last.world_R[:, 2]``, and whether that axis already
+    follows the reflected ray depends on the prescription's coord-breaks
+    (``world_surfaces_from_prescription`` re-aligns the frame only at a
+    coord-break, never at a mirror).  See the W4c FLAGGED note in
+    ``tests/unit/test_niche_audit_w4c_analysis_immersed.py``.
     """
     surfs = list(surfaces)
     if not surfs:
@@ -145,7 +179,8 @@ def _append_image_plane(surfaces: List[Surface],
         # surface i to surface i+1 using surfaces[i].thickness.
         from copy import copy as _copy
         last_clone = _copy(last)
-        last_clone.thickness = float(image_distance)
+        last_clone.thickness = (_mirror_parity_sign(surfs)
+                                * float(image_distance))
         img = Surface(
             radius=float('inf'), conic=0.0,
             glass_before=last.glass_after, glass_after=last.glass_after,
@@ -328,7 +363,19 @@ def distortion_vs_field(
             # let the downstream filter mask it.
             pass
 
-    h_paraxial = efl * np.tan(thetas_rad)
+    # W4c (finding 1): the f-tan(theta) reference height for an infinite
+    # object conjugate is ``f_obj * tan(theta)`` with ``f_obj`` the
+    # OBJECT-SPACE focal length ``n_obj * efl``, not the reduced ``efl``
+    # that ``system_abcd`` returns (W4b made that convention explicit).
+    # Measured on an N-BK7 object space against a real ray at
+    # theta = 1e-7 rad: the true reference slope dh/dtan(theta) is
+    # +5.373730037e-02 m, which ``n_obj * efl`` reproduces to 7.7e-16
+    # while ``efl`` alone is 34.07% low -- reported as a spurious
+    # +51.680024% = 100*(n_obj - 1) distortion at EVERY field angle,
+    # including the theta -> 0 limit where it must vanish.  Exactly
+    # bit-identical for an air object space (n_obj is exactly 1.0).
+    n_obj = _object_space_index(surfaces, wavelength)
+    h_paraxial = n_obj * efl * np.tan(thetas_rad)
     with np.errstate(divide='ignore', invalid='ignore'):
         distortion_pct = np.where(
             np.abs(h_paraxial) > 1e-15,
@@ -528,8 +575,11 @@ def distortion_grid(
                 # leave actual_x/y at NaN and let the caller mask.
                 pass
 
-    para_x = (efl * np.tan(ths_rad))[None, :].repeat(n_grid, axis=0)
-    para_y = (efl * np.tan(ths_rad))[:, None].repeat(n_grid, axis=1)
+    # W4c (finding 1): object-space focal length, not the reduced efl --
+    # see the note in :func:`distortion_vs_field`.  Bit-identical in air.
+    _f_obj = _object_space_index(surfaces, wavelength) * efl
+    para_x = (_f_obj * np.tan(ths_rad))[None, :].repeat(n_grid, axis=0)
+    para_y = (_f_obj * np.tan(ths_rad))[:, None].repeat(n_grid, axis=1)
 
     return DistortionGrid(
         theta_x_deg=ths,
@@ -1098,14 +1148,32 @@ def field_aberration_sweep(
             # entry as NaN.
             continue
 
-        sag_rms = np.array([_propagate_rms(sag_res, bfl + dz)
+        # W4c (finding 3): ``_propagate_rms``'s ``z_to`` is a GLOBAL-Z
+        # axial position (it forms ``dz = z_to - z0`` against the traced
+        # ray's own z), while ``bfl`` is an along-the-ray distance, so the
+        # search must be centred on ``sign * bfl``.  Pre-fix, on an air
+        # singlet + flat fold the whole +-|bfl|/20 window sat on the wrong
+        # side of the last vertex: RMS 3.947e-3 m instead of 2.130e-5 m.
+        # Bit-identical for even mirror parity (``_z_focus == bfl``).
+        _z_sign = _mirror_parity_sign(surfaces)
+        _z_focus = _z_sign * bfl
+        sag_rms = np.array([_propagate_rms(sag_res, _z_focus + dz)
                               for dz in z_offsets])
-        tan_rms = np.array([_propagate_rms(tan_res, bfl + dz)
+        tan_rms = np.array([_propagate_rms(tan_res, _z_focus + dz)
                               for dz in z_offsets])
+        # W4c (finding 3, reporting half): the offsets are searched in
+        # GLOBAL z, so map the winner back to the ALONG-THE-RAY frame the
+        # rest of the first-order API reports in (``bfl``, ``ffl``,
+        # ``pp_*``).  Without this a folded system reports its focus
+        # shifts with the opposite sign to its own mirrorless control
+        # (measured: -8.318839e-04 m vs +8.445650e-04 m on an air
+        # singlet with and without a flat fold, the residual 1.3e-05 m
+        # being the z-grid step).  ``astigmatism`` is a DIFFERENCE of the
+        # two and so was already sign-invariant.  No-op for even parity.
         if np.isfinite(sag_rms).any():
-            sag_shift[i] = float(z_offsets[np.nanargmin(sag_rms)])
+            sag_shift[i] = float(_z_sign * z_offsets[np.nanargmin(sag_rms)])
         if np.isfinite(tan_rms).any():
-            tan_shift[i] = float(z_offsets[np.nanargmin(tan_rms)])
+            tan_shift[i] = float(_z_sign * z_offsets[np.nanargmin(tan_rms)])
 
     astig = sag_shift - tan_shift
     pr = petzval_radius(surfaces, wavelength)
