@@ -190,6 +190,21 @@ def apply_thin_lens(
         :meth:`~lumenairy.elements.polarization.JonesField.apply_thin_lens`
         -- which routes both components through here and mutates itself in
         place -- propagated the poison into the caller's own object.
+    ValueError
+        If ``f == 0``.  v5.32 (audit W5-2) closes the inconsistency W4-2
+        measured and recorded but deliberately did not fix: ``f = 0`` is
+        physically meaningless for a thin lens (an infinite-power surface
+        with no realisation), yet the five ``lens_model`` branches split
+        three ways -- ``'paraxial'`` / ``'stigmatic'`` / ``'local_only'``
+        raised a bare ``ZeroDivisionError('division by zero')`` naming
+        neither this function nor the argument, while ``'nonparaxial'``
+        and ``'aplanatic'`` returned ``E_in`` EXACTLY UNCHANGED (no lens
+        applied at all -- silently for the former; with two bare numpy
+        ``RuntimeWarning``\\ s for the latter).  The guard sits above the
+        ``lens_model`` dispatch, so all five now raise identically, and
+        :func:`apply_cylindrical_lens` was given the matching guard in the
+        same change.  Nearby small-``f`` values are untouched
+        bit-for-bit -- only exact zero is rejected.
 
     Notes
     -----
@@ -231,7 +246,7 @@ def apply_thin_lens(
     # rather than a downstream AttributeError or silent wrong-axis
     # broadcast.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_thin_lens')
+    _check_2d_scalar_field(E_in, 'apply_thin_lens', input_kind='field')
 
     # v5.31 (audit W4-1, sibling of the v5.29 W3-T4 polarization guards): a
     # non-finite ``f`` used to sail straight through into the phase, and the
@@ -259,17 +274,60 @@ def apply_thin_lens(
     # is NOT periodic, so there is nothing for the caller to reduce -- an
     # infinite focal length means "no lens", which is what omitting the call
     # expresses; pass a large finite ``f`` if you want the residual power.
+    #
+    # v5.32 (audit W5-2): the guard now also rejects ``f == 0``, which
+    # W4-2 measured and deliberately left alone as "recorded-not-fixed"
+    # (a pre-existing inconsistency needing its own decision).  That
+    # decision: ``f = 0`` is physically meaningless for a thin lens --
+    # an infinite-power surface with no realisation -- so it raises,
+    # like every other unusable ``f``.  Measured pre-guard (N = 16,
+    # dx = 5 um, lambda = 1.55 um, f = 0.0), the FIVE ``lens_model``
+    # branches split THREE ways:
+    #
+    #   lens_model    f = 0 pre-v5.32
+    #   paraxial      ZeroDivisionError('division by zero')  <- k/(2f)
+    #   nonparaxial   silent NO-OP, exactly E_in back, no warning
+    #   aplanatic     silent NO-OP, exactly E_in back, + 2 bare
+    #                 RuntimeWarnings (invalid value / divide by zero
+    #                 from ``r_sq / f**2``)
+    #   stigmatic     ZeroDivisionError                      <- 1.0/f
+    #   local_only    ZeroDivisionError
+    #
+    # The two sqrt models no-op because ``sqrt(0 + r_sq) - |0| = r``
+    # times ``sign(0) = 0`` is a zero phase, and 'aplanatic' additionally
+    # fails its ``r**2/f**2 < 1`` domain test everywhere so the
+    # unit-phase sentinel covers the whole grid.  So the SAME meaningless
+    # input was a bare uninformative exception naming neither this
+    # function nor the argument, OR the caller's field handed straight
+    # back with no lens applied and (in one arm) two anonymous numpy
+    # warnings.  Guarding here -- above the ``lens_model`` dispatch --
+    # makes all five agree, and covers ``JonesField.apply_thin_lens``
+    # for f=0 exactly as it already does for non-finite f.
     _f = float(f)
-    if not np.isfinite(_f):
+    if not np.isfinite(_f) or _f == 0.0:
+        _detail = (
+            "f=0 is not a lens: it is an infinite-power surface with no "
+            "physical realisation.  Pre-v5.32 the five lens_model "
+            "branches disagreed three ways -- 'paraxial' / 'stigmatic' / "
+            "'local_only' raised a bare ZeroDivisionError('division by "
+            "zero') naming neither this function nor the argument, while "
+            "'nonparaxial' and 'aplanatic' returned the input field "
+            "EXACTLY UNCHANGED, applying NO lens at all (silently for "
+            "'nonparaxial'; with two bare numpy RuntimeWarnings for "
+            "'aplanatic')."
+            if _f == 0.0 else
+            "A non-finite f is silently absorbed by the phase in a way "
+            "that DIFFERS per lens_model -- 'paraxial'/'nonparaxial' "
+            "return a field whose every pixel is nan+nanj (nothing "
+            "raised), while f=nan under 'aplanatic' falls entirely "
+            "outside the r<|f| domain and applies NO lens at all."
+        )
         raise ValueError(
             f"apply_thin_lens: f must be a finite focal length in metres "
-            f"(positive = converging, negative = diverging); got f={f!r}.  "
-            f"A non-finite f is silently absorbed by the phase in a way that "
-            f"DIFFERS per lens_model -- 'paraxial'/'nonparaxial' return a "
-            f"field whose every pixel is nan+nanj (nothing raised), while "
-            f"f=nan under 'aplanatic' falls entirely outside the r<|f| domain "
-            f"and applies NO lens at all.  For 'no lens' omit the call; for a "
-            f"nearly-collimating lens pass a large finite f.")
+            f"and must not be zero (positive = converging, negative = "
+            f"diverging); got f={f!r}.  {_detail}  For 'no lens' omit the "
+            f"call; for a nearly-collimating lens pass a large finite f, "
+            f"and for a very strong one a small finite f.")
 
     # Determine array library.  PEP 562 ``__getattr__`` cannot
     # resolve bare ``cp`` inside a function body (LEGB rules skip
@@ -600,7 +658,7 @@ def apply_spherical_lens(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_spherical_lens')
+    _check_2d_scalar_field(E_in, 'apply_spherical_lens', input_kind='field')
 
     # See apply_thin_lens for the ``_lenses_module.cp`` rationale.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
@@ -814,7 +872,7 @@ def apply_aspheric_lens(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_aspheric_lens')
+    _check_2d_scalar_field(E_in, 'apply_aspheric_lens', input_kind='field')
 
     # v5.31 (audit R-8 / E-L7 residual): reject ODD aspheric powers on BOTH
     # surfaces up front.  ``_aspheric_sag`` below evaluates
@@ -979,6 +1037,20 @@ def apply_cylindrical_lens(
     -------
     E_out : ndarray (complex, N x N)
 
+    Raises
+    ------
+    ValueError
+        If ``f`` is not finite (v5.31, audit W4-2) or is exactly zero
+        (v5.32, audit W5-2).  Pre-guard, ``f=nan`` returned a field whose
+        every pixel was ``nan+nanj`` with nothing raised, ``f=+-inf``
+        collapsed ``k/(2f)`` to zero and silently applied NO lens, and
+        ``f=0`` raised a bare ``ZeroDivisionError('division by zero')``
+        that named neither this function nor the argument.  Both guards
+        deliberately mirror :func:`apply_thin_lens` -- the only other
+        ``f``-taking entry point in this module -- so the two cannot
+        drift apart on the same bad input.  Nearby small-``f`` values are
+        untouched bit-for-bit; only exact zero is rejected.
+
     Notes
     -----
     Produces a line focus (orthogonal to the focusing axis) instead of a
@@ -988,7 +1060,7 @@ def apply_cylindrical_lens(
     # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
     # guard).
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_cylindrical_lens')
+    _check_2d_scalar_field(E_in, 'apply_cylindrical_lens', input_kind='field')
 
     # v5.31 (audit W4-2): the SIBLING of the ``apply_thin_lens`` non-finite-f
     # guard -- the only other ``f``-taking entry point in this module, with the
@@ -996,16 +1068,38 @@ def apply_cylindrical_lens(
     # returned a field whose every pixel was ``nan+nanj`` with nothing raised;
     # ``f=+-inf`` collapsed ``k/(2f)`` to zero and silently applied NO lens.
     # Guarded here rather than left for a later sweep so the two cannot drift.
+    #
+    # v5.32 (audit W5-2): extended to ``f == 0`` alongside its
+    # ``apply_thin_lens`` sibling, for the same reason and in the same
+    # commit so the pair still cannot drift.  This function has NO
+    # ``lens_model`` knob -- it is unconditionally the paraxial
+    # ``k/(2f) x**2`` form -- so, measured pre-guard (N = 16, dx = 5 um,
+    # both ``axis='x'`` and ``axis='y'``), ``f=0`` raised
+    # ``ZeroDivisionError('division by zero')`` here on EVERY path: there
+    # was no silent-no-op arm to unify away, only a bare exception naming
+    # neither this function nor the argument.  Post-guard it raises the
+    # same ``ValueError`` as ``apply_thin_lens``, so the two entry points
+    # now answer f=0 identically -- which is the whole point, since
+    # 'paraxial' ``apply_thin_lens`` and this function compute the same
+    # quadratic and previously disagreed with each other's *other* models.
     _f = float(f)
-    if not np.isfinite(_f):
+    if not np.isfinite(_f) or _f == 0.0:
+        _detail = (
+            "f=0 is not a lens: it is an infinite-power surface with no "
+            "physical realisation, and pre-v5.32 it raised only a bare "
+            "ZeroDivisionError('division by zero') that named neither "
+            "this function nor the argument."
+            if _f == 0.0 else
+            "f=nan makes every pixel of the returned field nan+nanj with "
+            "nothing raised, and f=+-inf silently applies NO lens."
+        )
         raise ValueError(
             f"apply_cylindrical_lens: f must be a finite focal length in "
-            f"metres (positive = converging, negative = diverging); got "
-            f"f={f!r}.  f=nan makes every pixel of the returned field "
-            f"nan+nanj with nothing raised, and f=+-inf silently applies NO "
-            f"lens.  For 'no lens' omit the call; for a nearly-collimating "
-            f"lens pass a large finite f.  (Sibling of the same guard on "
-            f"apply_thin_lens.)")
+            f"metres and must not be zero (positive = converging, negative "
+            f"= diverging); got f={f!r}.  {_detail}  For 'no lens' omit the "
+            f"call; for a nearly-collimating lens pass a large finite f, "
+            f"and for a very strong one a small finite f.  (Sibling of the "
+            f"same guard on apply_thin_lens.)")
 
     # v4.13.2 (audit C-P1-6): dispatch through CuPy when use_gpu=True
     # or E_in is already a CuPy array.  Resolve ``cp`` via the
@@ -1114,7 +1208,7 @@ def apply_grin_lens(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_grin_lens')
+    _check_2d_scalar_field(E_in, 'apply_grin_lens', input_kind='field')
 
     # v4.13.2 (audit C-P1-6): CuPy dispatch (was previously numpy-only).
     # See apply_cylindrical_lens above for the _lenses_module.cp
@@ -1216,7 +1310,7 @@ def apply_axicon(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_axicon')
+    _check_2d_scalar_field(E_in, 'apply_axicon', input_kind='field')
 
     # v4.13.2 (audit C-P1-6): CuPy dispatch.  See
     # apply_cylindrical_lens above for the _lenses_module.cp

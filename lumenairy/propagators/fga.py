@@ -1711,7 +1711,7 @@ def apply_real_lens_fga(
         The field at the output plane.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_fga')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_fga', input_kind='field')
     xp = array_namespace(E_in)
     if xp.__name__ != "numpy":
         raise NotImplementedError(
@@ -2337,7 +2337,7 @@ def apply_real_lens_auto(
     also covers the wave boundary layer around the geometric caustic.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_auto')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_auto', input_kind='field')
     if method not in ("auto", "gbd", "fga"):
         raise ValueError(f"method must be 'auto', 'gbd' or 'fga', got {method!r}.")
     fga_kwargs = dict(fga_kwargs or {})
@@ -2947,7 +2947,8 @@ def apply_real_lens_universal(
        ``method='fga'``.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_universal')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_universal',
+                           input_kind='field')
     valid = ("auto", "phase_screen", "displaced", "gbd", "traced", "fga")
     if method not in valid:
         raise ValueError(f"method must be one of {valid}, got {method!r}.")

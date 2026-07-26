@@ -175,7 +175,7 @@ def apply_detector(
     # than the cryptic ``ValueError: too many values to unpack`` at
     # the ``Ny, Nx = E.shape`` line below.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'apply_detector')
+    _check_2d_scalar_field(E, 'apply_detector', input_kind='field')
 
     Ny, Nx = E.shape
     I_field = np.abs(E) ** 2  # intensity [per m^2 if field is normalised]
@@ -541,10 +541,30 @@ def shack_hartmann(
     # ensemble input failed at ``E.shape[0]`` (3-D returned a wrong
     # ``N``) or attribute access (MCF), then propagated wrong slopes
     # / centroids through the lenslet loop.  Routes both to the
-    # canonical v4.16 message via the V6 walker.  Input kind:
-    # 'pupil' (the SH-WFS measures a complex pupil-plane field).
+    # canonical v4.16 message via the V6 walker.
+    #
+    # v5.32 (audit A-9 handoff): ``input_kind='field'``, superseding this
+    # comment's own v4.15.5 claim of "Input kind: 'pupil' (the SH-WFS
+    # measures a complex pupil-plane field)".  That gloss argued itself
+    # out of its own conclusion -- "pupil-plane" names the PLANE, while
+    # the thing this argument carries is a FIELD, which is exactly what
+    # the Parameters entry above says ("E : ndarray, complex, shape
+    # (N, N) / Input field at the lenslet array plane").  ``input_kind``
+    # picks the noun in the rejection message, so it must match the
+    # argument the caller actually passed: declaring 'pupil' here would
+    # tell someone who passed ``E`` that a "2-D complex pupil" was
+    # expected -- re-creating, in mirror image, the very A-9 defect
+    # (``compute_psf(pupil, ...)`` reporting "field") that this rollout
+    # exists to close.  The library-wide convention after A-9 is that
+    # only the three sites whose parameter IS named ``pupil``
+    # (``compute_psf``, ``richards_wolf_focus``, ``debye_wolf_psf``)
+    # declare 'pupil'.  Physically consistent too: this entry point
+    # takes ``dx`` and ``wavelength`` and propagates each sub-aperture
+    # with the bandlimited angular-spectrum kernel at
+    # ``z = lenslet_focal``, which needs a metrically-scaled field, not
+    # a dimensionless pupil function.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'shack_hartmann')
+    _check_2d_scalar_field(E, 'shack_hartmann', input_kind='field')
     # S11-4: validate the reserved knob so a nonsense value cannot pass
     # silently (see its docstring entry for why it is inert).
     if (int(detector_pixels_per_lenslet) != detector_pixels_per_lenslet

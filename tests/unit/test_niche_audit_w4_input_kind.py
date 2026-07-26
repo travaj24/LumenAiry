@@ -13,26 +13,46 @@ twice as "wants its own AST-driven batch".
 
 This file pins the closure:
 
-1. Every in-scope call site declares an **explicit** ``input_kind``
-   (no reliance on the default), and the declared value matches the
-   semantics of the argument being guarded.
+1. Every call site declares an **explicit** ``input_kind`` (no reliance
+   on the default), and the declared value matches the semantics of the
+   argument being guarded.
 2. A junk ``input_kind`` raises ``ValueError`` naming the offending
    value *and* the allowed set (house rule for enum-valued knobs),
    checked per wired site.
 3. The vocabulary is closed (``_INPUT_KINDS``) rather than prose-only.
-4. Structural fail-closed pin: no ``_check_2d_scalar_field`` call in the
-   in-scope modules may omit ``input_kind``, so the next entry point
-   cannot land unwired (the 'fix N, miss N+1' meta-pattern).
+4. Structural fail-closed pin: **no** ``_check_2d_scalar_field`` call
+   anywhere in ``lumenairy/`` may omit ``input_kind``, so the next entry
+   point cannot land unwired (the 'fix N, miss N+1' meta-pattern).
 5. Bit-identity spot checks: wiring changes only the *message wording*
    for rejected inputs, never the value returned for accepted ones.
 
-The message text actually changes at only 3 of the 25 newly-wired
-sites -- ``compute_psf`` ('pupil'), ``compute_otf`` / ``compute_mtf``
-('psf').  The other 22 declare ``'field'``, which was the pre-fix
-default, so their text is byte-identical and the win is that the
-intent is now machine-checkable instead of a prose comment.
+**Rollout history: 2 -> 27 -> 68 of 68.**  v4.15.5 wired 2 (both in
+``propagators/vector_diffraction.py``).  ce0a265 (v5.31) wired 25 more
+and left a 41-site **handoff table** (``_HANDOFF_PREFIXES``) for the
+modules then owned by sibling agents -- ``analysis/detector.py``,
+``elements/_lens_thin.py`` and all of ``propagators/``.  v5.32 (this
+change) wires those 41, so the handoff list is now **empty** and the
+fail-closed pin in item 4 covers the whole package.  ``_WIRED_SITES``
+below is the complete 68-row inventory, and
+``test_inventory_is_complete_and_exact`` asserts it matches what an AST
+walk of ``lumenairy/`` actually finds -- in **both** directions, so a
+future site can neither land unwired nor land wired-but-undeclared.
 
-Author: Andrew Traverso -- v5.31 / audit A-9 (wave W4)
+The user-visible message text changed at only 3 of the 68 sites --
+``compute_psf`` ('pupil'), ``compute_otf`` / ``compute_mtf`` ('psf').
+The other 65 declare ``'field'``, which was the pre-fix default, so
+their text is byte-identical and the win is that the intent is now
+machine-checkable instead of a prose comment.
+
+**One recorded intent was wrong and is corrected here.**  The ce0a265
+handoff table recorded ``shack_hartmann`` as ``'pupil'``, taken from
+that function's own in-source comment ("Input kind: 'pupil' (the SH-WFS
+measures a complex pupil-plane field)").  It is wired ``'field'``
+instead -- see ``test_shack_hartmann_declares_field_not_pupil`` for the
+reasoning and the measurement.
+
+Author: Andrew Traverso -- v5.31 / audit A-9 (wave W4);
+completed v5.32 / audit W5-1 (wave W5)
 """
 from __future__ import annotations
 
@@ -49,20 +69,32 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ---------------------------------------------------------------------------
-# The wired inventory.  Built by an AST walk of ``lumenairy/`` (see the
-# audit record); each row is (module_relpath, guarded_arg, fn_name_literal,
-# expected_input_kind).
+# The wired inventory -- ALL 68 call sites as of v5.32.  Built by an AST
+# walk of ``lumenairy/`` (see the audit record); each row is
+# (module_relpath, guarded_arg, fn_name_literal, expected_input_kind).
+#
+# The (module, arg, fn_name) triple is unique across all 68 rows, which is
+# what lets ``test_wired_site_declares_expected_input_kind`` demand
+# exactly one AST match per row.
+#
+# Kept in package-walk order (sorted by module path, then source order
+# within a module) so a diff against a fresh AST dump is readable.
 # ---------------------------------------------------------------------------
 
 _WIRED_SITES = (
-    ('lumenairy/analysis/ao.py', 'E_in', 'DeformableMirror.apply', 'field'),
     ('lumenairy/analysis/ao.py', 'E_in', 'apply_dm', 'field'),
+    ('lumenairy/analysis/ao.py', 'E_in', 'DeformableMirror.apply', 'field'),
     ('lumenairy/analysis/beam_stats.py', 'E', 'beam_d4sigma', 'field'),
     ('lumenairy/analysis/beam_stats.py', 'E', 'M2', 'field'),
     ('lumenairy/analysis/coherence.py', 'object_field', 'koehler_image',
      'field'),
     ('lumenairy/analysis/coherence.py', 'object_field',
      'extended_source_image', 'field'),
+    # v5.32: the two former handoff sites in analysis/detector.py.
+    # ``shack_hartmann`` is 'field', NOT the recorded 'pupil' -- see
+    # ``test_shack_hartmann_declares_field_not_pupil``.
+    ('lumenairy/analysis/detector.py', 'E', 'apply_detector', 'field'),
+    ('lumenairy/analysis/detector.py', 'E', 'shack_hartmann', 'field'),
     ('lumenairy/analysis/opd.py', 'E', 'wave_opd_2d', 'field'),
     # The three sites whose user-visible wording actually changes:
     ('lumenairy/analysis/psf_mtf_otf.py', 'pupil', 'compute_psf', 'pupil'),
@@ -77,6 +109,16 @@ _WIRED_SITES = (
     ('lumenairy/analysis/strehl.py', 'E', 'coupling_efficiency', 'field'),
     ('lumenairy/analysis/strehl.py', 'mode', 'coupling_efficiency', 'field'),
     ('lumenairy/elements/_lens_real.py', 'E_in', 'apply_real_lens', 'field'),
+    # v5.32: the six former handoff sites in elements/_lens_thin.py.
+    ('lumenairy/elements/_lens_thin.py', 'E_in', 'apply_thin_lens', 'field'),
+    ('lumenairy/elements/_lens_thin.py', 'E_in', 'apply_spherical_lens',
+     'field'),
+    ('lumenairy/elements/_lens_thin.py', 'E_in', 'apply_aspheric_lens',
+     'field'),
+    ('lumenairy/elements/_lens_thin.py', 'E_in', 'apply_cylindrical_lens',
+     'field'),
+    ('lumenairy/elements/_lens_thin.py', 'E_in', 'apply_grin_lens', 'field'),
+    ('lumenairy/elements/_lens_thin.py', 'E_in', 'apply_axicon', 'field'),
     ('lumenairy/elements/_lens_traced.py', 'E_in', 'apply_real_lens_traced',
      'field'),
     ('lumenairy/elements/_lens_traced.py', 'E_in',
@@ -91,30 +133,94 @@ _WIRED_SITES = (
      'field'),
     ('lumenairy/optimize/jax_merits.py', 'E_in', 'optimize_traced_geometry',
      'field'),
+    # v5.32: the 33 former handoff sites in propagators/ (the module's own
+    # 2 vector-diffraction 'pupil' sites were wired back in v4.15.5 and are
+    # listed at the end of this block).
+    ('lumenairy/propagators/asm.py', 'E_in', 'angular_spectrum_propagate',
+     'field'),
+    ('lumenairy/propagators/asm.py', 'E_in',
+     'angular_spectrum_propagate_tilted', 'field'),
+    ('lumenairy/propagators/carrier.py', 'E_env',
+     'propagate_carrier_referenced', 'field'),
+    ('lumenairy/propagators/carrier.py', 'E_env',
+     'carrier_referenced_reconstruct', 'field'),
+    ('lumenairy/propagators/carrier.py', 'E_full',
+     'carrier_referenced_envelope', 'field'),
+    ('lumenairy/propagators/carrier.py', 'E_full',
+     'carrier_referenced_fit_radius', 'field'),
+    ('lumenairy/propagators/carrier.py', 'E_env',
+     'carrier_referenced_aperture', 'field'),
+    ('lumenairy/propagators/carrier.py', 'env',
+     'carrier_referenced_focus_readout', 'field'),
+    ('lumenairy/propagators/carrier.py', 'E_full',
+     'carrier_referenced_exact_focus_readout', 'field'),
+    ('lumenairy/propagators/carrier.py', 'E_in',
+     'propagate_traced_carrier_chain', 'field'),
+    ('lumenairy/propagators/dispatch.py', 'E_in', 'propagate', 'field'),
+    ('lumenairy/propagators/fga.py', 'E_in', 'apply_real_lens_fga', 'field'),
+    ('lumenairy/propagators/fga.py', 'E_in', 'apply_real_lens_auto', 'field'),
+    ('lumenairy/propagators/fga.py', 'E_in', 'apply_real_lens_universal',
+     'field'),
+    ('lumenairy/propagators/fresnel.py', 'E_in', 'fresnel_tf_propagate',
+     'field'),
+    ('lumenairy/propagators/fresnel.py', 'E_in', 'fresnel_propagate',
+     'field'),
+    ('lumenairy/propagators/fresnel.py', 'E_in', 'fraunhofer_propagate',
+     'field'),
+    ('lumenairy/propagators/gbd.py', 'E_in', 'recommend_gbd_sampling',
+     'field'),
+    ('lumenairy/propagators/gbd.py', 'E_in', 'converge_gbd_sampling',
+     'field'),
+    ('lumenairy/propagators/gbd.py', 'E_in', 'decompose_field_adaptive',
+     'field'),
+    ('lumenairy/propagators/gbd.py', 'E', 'gbd_field_to_asm', 'field'),
+    ('lumenairy/propagators/gbd.py', 'E', 'asm_field_to_gbd', 'field'),
+    ('lumenairy/propagators/gbd.py', 'E', 'match_global_phase', 'field'),
+    ('lumenairy/propagators/gbd.py', 'E_in',
+     'propagate_gbd_freespace_spectral', 'field'),
+    ('lumenairy/propagators/gbd.py', 'E_in', 'propagate_gbd_freespace_csp',
+     'field'),
+    ('lumenairy/propagators/mft.py', 'E_in', 'angular_spectrum_propagate_mft',
+     'field'),
+    ('lumenairy/propagators/mft.py', 'E_in', 'resample_field', 'field'),
+    ('lumenairy/propagators/mft.py', 'E_in', 'fresnel_propagate_mft',
+     'field'),
+    ('lumenairy/propagators/mft.py', 'E_in', 'fraunhofer_propagate_mft',
+     'field'),
+    ('lumenairy/propagators/rs.py', 'E_in', 'rayleigh_sommerfeld_propagate',
+     'field'),
+    ('lumenairy/propagators/sas.py', 'E_in',
+     'scalable_angular_spectrum_propagate', 'field'),
+    ('lumenairy/propagators/system.py', 'E_in', 'propagate_through_system',
+     'field'),
+    ('lumenairy/propagators/system.py', 'E_in',
+     'propagate_through_system_jax', 'field'),
+    # The original v4.15.5 pair -- the only 'pupil' sites outside
+    # ``compute_psf``, and the reason ``input_kind`` exists at all.
+    ('lumenairy/propagators/vector_diffraction.py', 'pupil',
+     'richards_wolf_focus', 'pupil'),
+    ('lumenairy/propagators/vector_diffraction.py', 'pupil',
+     'debye_wolf_psf', 'pupil'),
     ('lumenairy/raytrace/from_field.py', 'E', 'rays_from_field', 'field'),
 )
 
-# Modules whose call sites are owned by a sibling agent in this wave and
-# are therefore out of scope for the structural pin below.  Each entry is
-# a handoff, NOT a permanent exemption: when the owning change lands, drop
-# the entry and the fail-closed pin covers those sites too.
+# v5.32: **EMPTY**.  ce0a265 parked 41 call sites here while sibling
+# agents owned ``analysis/detector.py``, ``elements/_lens_thin.py`` and
+# ``propagators/``; every one of those is now wired and listed in
+# ``_WIRED_SITES`` above, so the structural fail-closed pin
+# (``test_no_in_scope_guard_call_omits_input_kind``) applies to the whole
+# of ``lumenairy/`` with no exemptions.
 #
-# * ``analysis/detector.py``      -- 2 sites (``apply_detector`` 'field',
-#                                    ``shack_hartmann`` 'pupil')
-# * ``elements/_lens_thin.py``    -- 6 sites, all 'field'
-# * ``propagators/**``            -- 35 sites; 33 'field' plus the 2
-#                                    already-wired vector-diffraction
-#                                    'pupil' sites
-_HANDOFF_PREFIXES = (
-    'lumenairy/analysis/detector.py',
-    'lumenairy/elements/_lens_thin.py',
-    'lumenairy/propagators/',
-    # Exclusion-list members with zero call sites (listed so the reader
-    # does not have to re-derive that they are vacuous):
-    'lumenairy/io/storage.py',
-    'lumenairy/raytrace/seidel.py',
-    'lumenairy/elements/rcwa/',
-)
+# ``str.startswith(())`` is False for every string, so an empty tuple
+# exempts nothing -- the pin below is genuinely package-wide.
+#
+# DO NOT re-add entries to make a failing pin pass.  A new unwired call
+# site is the A-9 defect recurring; wire it and add its row above.  (The
+# three former "vacuous" members -- ``io/storage.py``,
+# ``raytrace/seidel.py``, ``elements/rcwa/`` -- were listed by ce0a265
+# only to save the reader re-deriving that they hold zero call sites;
+# they need no exemption and are dropped.)
+_HANDOFF_PREFIXES: tuple[str, ...] = ()
 
 _BAD_3D = np.ones((3, 8, 8), dtype=np.complex128)
 
@@ -185,11 +291,18 @@ def test_input_kinds_vocabulary_is_a_closed_frozenset():
 
 
 def test_default_input_kind_is_field_backcompat():
-    """The default stays ``'field'``: ~43 handoff call sites still rely
-    on it, and the v4.15.5 back-compat pin
+    """The default stays ``'field'``.
+
+    As of v5.32 no call site in ``lumenairy/`` relies on it -- all 68
+    declare explicitly -- but the default is still load-bearing for two
+    reasons: the v4.15.5 back-compat pin
     (``test_v4_15_5_agent_b.py::
-    test_validation_helper_input_kind_default_field_backcompat``)
-    asserts the historic wording.
+    test_validation_helper_input_kind_default_field_backcompat``) asserts
+    the historic wording, and ``_check_2d_scalar_field`` is a private
+    helper that downstream forks / in-flight branches call positionally.
+    Removing the default would be an unrelated API break, so the
+    fail-closed pin below -- not the signature -- is what keeps sites
+    from silently defaulting.
     """
     with pytest.raises(ValueError) as ei:
         _check_2d_scalar_field(_BAD_3D, 'fake_fn')
@@ -323,11 +436,15 @@ def test_wired_site_message_names_declared_kind(site):
 def test_no_in_scope_guard_call_omits_input_kind():
     """Fail-closed structural pin (the A-9 counter-measure).
 
-    Every ``_check_2d_scalar_field`` call in ``lumenairy/`` must pass
-    ``input_kind``, except in the modules listed in
-    ``_HANDOFF_PREFIXES``.  A new entry point that copies the old
-    ``_check_2d_scalar_field(E, 'my_fn')`` form trips this pin instead
-    of silently re-opening the 2-of-68 gap.
+    **Every** ``_check_2d_scalar_field`` call in ``lumenairy/`` must pass
+    ``input_kind``.  As of v5.32 ``_HANDOFF_PREFIXES`` is empty, so this
+    is package-wide with no exemptions (it is retained as a mechanism
+    only because a future genuinely-scoped handoff may need it, and
+    ``test_handoff_list_is_empty`` guards against casual use).
+
+    A new entry point that copies the old
+    ``_check_2d_scalar_field(E, 'my_fn')`` form trips this pin instead of
+    silently re-opening the 2-of-68 gap.
     """
     unwired = []
     for rel, _path in _iter_package_files():
@@ -344,28 +461,176 @@ def test_no_in_scope_guard_call_omits_input_kind():
         f"{sorted(_INPUT_KINDS)}:\n  - " + "\n  - ".join(unwired))
 
 
-def test_handoff_sites_are_accounted_for():
-    """Diagnostic counter-pin: the handoff modules really do hold the
-    remaining call sites, so the exclusion list is a scoped handoff
-    rather than a way to make the pin above vacuously true.
+def test_handoff_list_is_empty():
+    """The A-9 rollout is complete: nothing is exempt from the
+    fail-closed pin any more.
+
+    ce0a265 parked 41 sites in ``_HANDOFF_PREFIXES`` because sibling
+    agents owned those files.  v5.32 wired them.  An entry reappearing
+    here would silently re-open the very hole item 4 exists to close, so
+    the emptiness is itself pinned -- re-adding a prefix to quiet a
+    failing pin now has to defeat this assertion first, which forces the
+    conversation.
     """
-    in_scope = 0
-    handoff = 0
+    assert _HANDOFF_PREFIXES == (), (
+        f"_HANDOFF_PREFIXES must stay empty; got {_HANDOFF_PREFIXES}.  A "
+        f"new unwired call site is the A-9 defect recurring -- wire it "
+        f"and add its row to _WIRED_SITES rather than exempting its "
+        f"module.")
+
+
+def test_inventory_is_complete_and_exact():
+    """Completeness pin (the counter-measure that makes 68/68 assertable).
+
+    An AST walk of ``lumenairy/`` must find **exactly** the sites listed
+    in ``_WIRED_SITES`` -- checked in BOTH directions:
+
+    * a guard call the inventory does not list => a new entry point
+      landed without being declared here (even if it happens to pass
+      ``input_kind``, nobody reviewed *which* kind it should be);
+    * an inventory row with no matching guard call => a site was removed
+      or renamed and the pin has gone stale, silently reducing coverage.
+
+    Either direction alone is escapable, which is how "2 of 68" survived
+    five minor releases.  Together they mean the count in this file's
+    docstring cannot drift from reality.
+    """
+    found = set()
     for rel, _path in _iter_package_files():
-        n = len(_guard_calls(rel))
-        if rel.startswith(_HANDOFF_PREFIXES):
-            handoff += n
-        else:
-            in_scope += n
-    assert in_scope == len(_WIRED_SITES), (
-        f"in-scope guard-call count drifted: found {in_scope}, "
-        f"_WIRED_SITES lists {len(_WIRED_SITES)}.  A site was added or "
-        f"removed -- update _WIRED_SITES (and wire the new one).")
-    assert handoff >= 40, (
-        f"expected >= 40 handoff call sites in {_HANDOFF_PREFIXES}; "
-        f"found {handoff}.  If a sibling agent's wiring landed, drop "
-        f"that module from _HANDOFF_PREFIXES so the fail-closed pin "
-        f"covers it.")
+        for arg_src, fn_lit, _kind, _lineno in _guard_calls(rel):
+            found.add((rel, arg_src, fn_lit))
+    listed = {(rel, arg, fn) for rel, arg, fn, _k in _WIRED_SITES}
+
+    undeclared = sorted(found - listed)
+    stale = sorted(listed - found)
+    assert not undeclared, (
+        "guard call sites present in lumenairy/ but MISSING from "
+        "_WIRED_SITES -- add a row (module, arg, fn_name, input_kind) "
+        "for each, having decided which kind it guards:\n  - "
+        + "\n  - ".join(f"{r}: {f}({a})" for r, a, f in undeclared))
+    assert not stale, (
+        "_WIRED_SITES rows with no matching guard call -- the site moved, "
+        "was renamed, or was deleted; update the inventory:\n  - "
+        + "\n  - ".join(f"{r}: {f}({a})" for r, a, f in stale))
+    assert found == listed
+
+
+def test_all_sixty_eight_sites_are_wired():
+    """The headline counter: 68 call sites, 68 explicit declarations, 0
+    relying on the default.
+
+    The literal 68 is asserted (not merely derived) so that *reducing*
+    the inventory cannot make the rollout look complete -- shrinking
+    ``_WIRED_SITES`` to match a regression would trip this, and growing
+    the package legitimately requires a deliberate bump here plus a row
+    above.
+    """
+    total = sum(len(_guard_calls(rel)) for rel, _p in _iter_package_files())
+    declared = sum(
+        1 for rel, _p in _iter_package_files()
+        for c in _guard_calls(rel) if c[2] is not None)
+    assert len(_WIRED_SITES) == 68, (
+        f"_WIRED_SITES must hold all 68 sites; got {len(_WIRED_SITES)}.")
+    assert total == 68, (
+        f"expected 68 ``_check_2d_scalar_field`` calls in lumenairy/; "
+        f"found {total}.  If an entry point was legitimately added or "
+        f"removed, wire it, update _WIRED_SITES, and bump this count in "
+        f"the same change (and in this file's docstring).")
+    assert declared == total, (
+        f"only {declared} of {total} guard calls declare input_kind.")
+
+
+def test_declared_kind_distribution():
+    """Diagnostic counter-pin: 63 'field' / 3 'pupil' / 2 'psf'.
+
+    Documents *which* sites are the interesting ones, and catches a
+    careless bulk edit that flips a kind -- e.g. a future sweep
+    "normalising" ``compute_psf`` back to 'field' would keep every other
+    pin in this file green while undoing the headline A-9 fix.
+
+    The 3 'pupil' sites are exactly the ones whose parameter IS named
+    ``pupil`` (``compute_psf``, ``richards_wolf_focus``,
+    ``debye_wolf_psf``); the 2 'psf' sites are ``compute_otf`` /
+    ``compute_mtf``.  Everything else guards a complex field.
+    """
+    from collections import Counter
+
+    counts = Counter(kind for _r, _a, _f, kind in _WIRED_SITES)
+    assert dict(counts) == {'field': 63, 'pupil': 3, 'psf': 2}, (
+        f"declared-kind distribution drifted: {dict(counts)}")
+
+    pupil_fns = {fn for _r, _a, fn, k in _WIRED_SITES if k == 'pupil'}
+    assert pupil_fns == {'compute_psf', 'richards_wolf_focus',
+                         'debye_wolf_psf'}, pupil_fns
+    psf_fns = {fn for _r, _a, fn, k in _WIRED_SITES if k == 'psf'}
+    assert psf_fns == {'compute_otf', 'compute_mtf'}, psf_fns
+
+    # Every 'pupil' site guards an argument literally named ``pupil``,
+    # and every 'psf' site one named ``psf``.  That correspondence is the
+    # rule the shack_hartmann correction below rests on.
+    for _r, arg, fn, kind in _WIRED_SITES:
+        if kind in ('pupil', 'psf'):
+            assert arg == kind, (
+                f"{fn}: declares input_kind={kind!r} but guards an "
+                f"argument named {arg!r}; the two must agree (see "
+                f"test_shack_hartmann_declares_field_not_pupil).")
+
+
+def test_shack_hartmann_declares_field_not_pupil():
+    """Recorded-intent CORRECTION (v5.32).
+
+    The ce0a265 handoff table recorded ``analysis/detector.py``'s
+    ``shack_hartmann`` as ``'pupil'``, sourced from that function's own
+    comment: "Input kind: 'pupil' (the SH-WFS measures a complex
+    pupil-plane field)".  Verified against the actual contract, it is
+    ``'field'``:
+
+    1. The gloss argues itself out of its own conclusion -- "pupil-plane"
+       names the PLANE; the thing the argument carries is a FIELD.  The
+       Parameters entry agrees verbatim: "E : ndarray, complex, shape
+       (N, N) / Input field at the lenslet array plane."
+    2. ``input_kind`` picks the noun in the rejection message, so it must
+       match what the caller passed.  Declaring 'pupil' would tell
+       someone who passed ``E`` that a "2-D complex pupil" was expected
+       -- re-creating in mirror image the exact A-9 defect
+       (``compute_psf(pupil, ...)`` reporting "field") this rollout
+       closes.
+    3. Library-wide correspondence (pinned in
+       ``test_declared_kind_distribution``): only the sites whose
+       parameter IS named ``pupil`` declare 'pupil'.
+    4. Physically it must be a metrically-scaled field, not a
+       dimensionless pupil function: the entry point takes ``dx`` and
+       ``wavelength`` and propagates each sub-aperture with the
+       bandlimited angular-spectrum kernel at ``z = lenslet_focal``.
+
+    Consequence: ``shack_hartmann``'s rejection wording is UNCHANGED from
+    pre-A-9 ('field' was the default), so this correction also keeps the
+    site off the "message text changed" list -- 3 sites, not 4.
+    """
+    from lumenairy.analysis import shack_hartmann
+
+    matches = [c for c in _guard_calls('lumenairy/analysis/detector.py')
+               if c[1] == 'shack_hartmann']
+    assert len(matches) == 1
+    assert matches[0][2] == 'field', (
+        f"shack_hartmann must declare input_kind='field' (see this "
+        f"test's docstring); got {matches[0][2]!r}.")
+
+    with pytest.raises(ValueError) as ei:
+        shack_hartmann(_BAD_3D, 5e-6, 633e-9, 40e-6, 5e-3)
+    msg = str(ei.value)
+    assert 'expected 2-D complex field of shape' in msg, msg
+    assert 'complex pupil' not in msg, msg
+
+    # The superseded claim must not survive as an unqualified assertion
+    # in the source: the next reader who greps that comment must find the
+    # correction attached to it, not just a comment silently contradicted
+    # by the line beneath it.
+    src = (_REPO_ROOT / 'lumenairy/analysis/detector.py').read_text(
+        encoding='utf-8')
+    assert 'superseding' in src, (
+        "detector.py must record that the v4.15.5 \"Input kind: 'pupil'\" "
+        "comment was superseded, not merely contradict it.")
 
 
 def test_stale_input_kind_todo_is_gone():

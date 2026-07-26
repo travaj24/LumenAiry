@@ -578,7 +578,8 @@ def angular_spectrum_propagate(
     # actionable error rather than a downstream AttributeError or a
     # silent wrong-axis FFT.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate')
+    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate',
+                           input_kind='field')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='angular_spectrum_propagate')
@@ -969,7 +970,8 @@ def angular_spectrum_propagate_tilted(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate_tilted')
+    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate_tilted',
+                           input_kind='field')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='angular_spectrum_propagate_tilted')

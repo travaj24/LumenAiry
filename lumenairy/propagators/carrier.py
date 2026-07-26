@@ -426,7 +426,8 @@ def propagate_carrier_referenced(
             env_out, R_out, wavelength, dx_out)
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_env, 'propagate_carrier_referenced')
+    _check_2d_scalar_field(E_env, 'propagate_carrier_referenced',
+                           input_kind='field')
     if dy is None:
         dy = dx
     if not np.isfinite(wavelength) or wavelength <= 0:
@@ -1029,7 +1030,8 @@ def carrier_referenced_reconstruct(
         Same shape / dtype as ``E_env``.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_env, 'carrier_referenced_reconstruct')
+    _check_2d_scalar_field(E_env, 'carrier_referenced_reconstruct',
+                           input_kind='field')
     if dy is None:
         dy = dx
     xp, is_jax, bld = _backend_of(E_env)
@@ -1078,7 +1080,8 @@ def carrier_referenced_envelope(
         Same shape / dtype as ``E_full``.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_full, 'carrier_referenced_envelope')
+    _check_2d_scalar_field(E_full, 'carrier_referenced_envelope',
+                           input_kind='field')
     if dy is None:
         dy = dx
     xp, is_jax, bld = _backend_of(E_full)
@@ -1297,7 +1300,8 @@ def carrier_referenced_fit_radius(
         NEITHER estimator can recover ``R``).  Silence it once acknowledged.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_full, 'carrier_referenced_fit_radius')
+    _check_2d_scalar_field(E_full, 'carrier_referenced_fit_radius',
+                           input_kind='field')
     if dy is None:
         dy = dx
     if estimator not in ('gradient', 'increment'):
@@ -1465,7 +1469,8 @@ def carrier_referenced_aperture(
     mask itself is convention-free (it touches only ``|env|``).
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_env, 'carrier_referenced_aperture')
+    _check_2d_scalar_field(E_env, 'carrier_referenced_aperture',
+                           input_kind='field')
     if dy is None:
         dy = dx
     if refit_carrier and new_carrier is not None:
@@ -1679,7 +1684,8 @@ def carrier_referenced_focus_readout(
     which references the exact sphere itself.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(env, 'carrier_referenced_focus_readout')
+    _check_2d_scalar_field(env, 'carrier_referenced_focus_readout',
+                           input_kind='field')
     if not np.isfinite(wavelength) or wavelength <= 0:
         raise ValueError(
             "carrier_referenced_focus_readout: wavelength must be finite and "
@@ -2160,7 +2166,8 @@ def carrier_referenced_exact_focus_readout(
         :func:`angular_spectrum_propagate_mft`.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_full, 'carrier_referenced_exact_focus_readout')
+    _check_2d_scalar_field(E_full, 'carrier_referenced_exact_focus_readout',
+                           input_kind='field')
     if not np.isfinite(wavelength) or wavelength <= 0:
         raise ValueError(
             "carrier_referenced_exact_focus_readout: wavelength must be finite "
@@ -2882,7 +2889,8 @@ def propagate_traced_carrier_chain(
         ``None`` after any focus readout (paraxial or exact).
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'propagate_traced_carrier_chain')
+    _check_2d_scalar_field(E_in, 'propagate_traced_carrier_chain',
+                           input_kind='field')
     from ..elements import apply_real_lens_traced
 
     if self_check not in (None, 'off', 'dx'):

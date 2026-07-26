@@ -140,7 +140,8 @@ def scalable_angular_spectrum_propagate(
     # iterate-over-ensemble message and runs *before* any other input
     # validation.)
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'scalable_angular_spectrum_propagate')
+    _check_2d_scalar_field(E_in, 'scalable_angular_spectrum_propagate',
+                           input_kind='field')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, None,
                                 fn_name='scalable_angular_spectrum_propagate')

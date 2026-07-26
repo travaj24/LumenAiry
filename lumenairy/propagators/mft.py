@@ -245,7 +245,8 @@ def angular_spectrum_propagate_mft(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate_mft')
+    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate_mft',
+                           input_kind='field')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='angular_spectrum_propagate_mft')
@@ -492,7 +493,7 @@ def resample_field(
     # contain ``_propagate``); the V6 first-positional-name filter
     # catches it via ``E_in``.  Input kind: 'field'.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'resample_field')
+    _check_2d_scalar_field(E_in, 'resample_field', input_kind='field')
     from scipy.ndimage import map_coordinates
 
     # S11-6a (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1, "harness knobs
@@ -669,7 +670,7 @@ def fresnel_propagate_mft(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'fresnel_propagate_mft')
+    _check_2d_scalar_field(E_in, 'fresnel_propagate_mft', input_kind='field')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='fresnel_propagate_mft')
@@ -872,7 +873,8 @@ def fraunhofer_propagate_mft(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'fraunhofer_propagate_mft')
+    _check_2d_scalar_field(E_in, 'fraunhofer_propagate_mft',
+                           input_kind='field')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='fraunhofer_propagate_mft')

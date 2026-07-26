@@ -481,7 +481,8 @@ def propagate_through_system(E_in: np.ndarray,
     # clear, actionable error rather than a downstream AttributeError
     # or a silent wrong-axis FFT.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'propagate_through_system')
+    _check_2d_scalar_field(E_in, 'propagate_through_system',
+                           input_kind='field')
 
     from ..progress import ProgressScaler, call_progress
     if store is not None:
@@ -1434,7 +1435,8 @@ def propagate_through_system_jax(E_in: np.ndarray,
     # point (it is wrapped via ``jnp.asarray`` further down), so
     # the helper's ``getattr(E, 'ndim', None)`` path is well-defined.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'propagate_through_system_jax')
+    _check_2d_scalar_field(E_in, 'propagate_through_system_jax',
+                           input_kind='field')
 
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:

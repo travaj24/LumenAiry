@@ -241,6 +241,13 @@ class TestW42NonFiniteFocalLength:
     ``JonesField.apply_thin_lens(f=nan)`` returned ``self`` with every pixel of
     Ex AND Ey ``nan+nanj``, and ``degree_of_polarization`` /
     ``stokes_parameters`` read all-NaN.
+
+    W4-2 scoped itself to NON-FINITE ``f`` and recorded ``f = 0`` as a
+    measured-but-unfixed sibling inconsistency.  v5.32 (audit W5-2) took
+    that decision and extended this same guard to ``f == 0``; see
+    :meth:`test_f_zero_recorded_contract_is_SUPERSEDED_by_w5_2` for the
+    supersession record and :class:`TestW52ZeroFocalLength` for the live
+    contract.  The non-finite behaviour pinned in this class is unchanged.
     """
 
     _E = np.ones((16, 16), dtype=complex)
@@ -338,24 +345,250 @@ class TestW42NonFiniteFocalLength:
             assert 'must be a finite focal length in metres' in m
             assert 'omit the call' in m
 
-    def test_f_zero_is_out_of_scope_and_recorded(self):
-        """NOT fixed here, pinned so the next reader knows it was measured:
-        ``f = 0`` raises ``ZeroDivisionError`` under 'paraxial' but is a
-        SILENT no-op under 'nonparaxial' / 'aplanatic'.  Deliberately left
-        alone -- W4-2 is scoped to NON-FINITE f, and no caller in the repo
-        passes ``f=0``.  If this contract is unified later, this test is the
-        one to update."""
-        with pytest.raises(ZeroDivisionError):
-            apply_thin_lens(self._E, f=0.0, wavelength=_WL, dx=_DX,
-                            lens_model='paraxial')
+    def test_f_zero_recorded_contract_is_SUPERSEDED_by_w5_2(self):
+        """**SUPERSEDED (v5.32, audit W5-2) -- do not restore.**
+
+        W4-2 measured ``f = 0`` and deliberately left it alone, recording
+        the split contract here so the next reader would not have to
+        re-derive it:
+
+            "``f = 0`` raises ``ZeroDivisionError`` under 'paraxial' but is a
+            SILENT no-op under 'nonparaxial' / 'aplanatic'.  Deliberately
+            left alone -- W4-2 is scoped to NON-FINITE f, and no caller in
+            the repo passes ``f=0``.  If this contract is unified later,
+            this test is the one to update."
+
+        This is that update.  W5-2 took the decision the recorded note
+        asked for: ``f = 0`` is physically meaningless for a thin lens (an
+        infinite-power surface with no realisation), so it now raises
+        ``ValueError`` from the same guard as non-finite ``f``, above the
+        ``lens_model`` dispatch.
+
+        The full pre-W5-2 measurement, for the record -- W4-2 named three
+        models but ``apply_thin_lens`` has FIVE, and they split THREE ways
+        (N = 16, dx = 5 um, lambda = 1.55 um, f = 0.0)::
+
+            lens_model    pre-W5-2 behaviour on f = 0
+            paraxial      ZeroDivisionError('division by zero')   <- k/(2f)
+            nonparaxial   silent NO-OP, exactly E_in back, no warning
+            aplanatic     silent NO-OP, exactly E_in back, + 2 bare
+                          numpy RuntimeWarnings
+            stigmatic     ZeroDivisionError                       <- 1.0/f
+            local_only    ZeroDivisionError
+
+        ``apply_cylindrical_lens`` has no ``lens_model`` knob and raised
+        ``ZeroDivisionError`` on every path, so it had no silent arm to
+        unify away -- only a bare exception naming neither the function
+        nor the argument.  Both now raise ``ValueError``.
+
+        The live contract is pinned in
+        :class:`TestW52ZeroFocalLength` below; this test remains only as
+        the supersession record, and asserts the OLD behaviour is gone.
+        """
+        # The two silent-no-op arms are the ones that mattered: a
+        # meaningless f used to return the caller's field untouched.
         for lm in ('nonparaxial', 'aplanatic'):
             with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                out = apply_thin_lens(self._E, f=0.0, wavelength=_WL, dx=_DX,
-                                      lens_model=lm)
-            assert np.isfinite(out).all(), (
-                f"recorded (unfixed) contract: f=0 under {lm} is a silent "
-                f"no-op, not a raise")
+                warnings.simplefilter('error')     # no bare numpy warnings
+                with pytest.raises(ValueError,
+                                   match='must not be zero'):
+                    apply_thin_lens(self._E, f=0.0, wavelength=_WL, dx=_DX,
+                                    lens_model=lm)
+        # ...and the ZeroDivisionError arms no longer leak a bare builtin.
+        for lm in ('paraxial', 'stigmatic', 'local_only'):
+            with pytest.raises(ValueError):
+                apply_thin_lens(self._E, f=0.0, wavelength=_WL, dx=_DX,
+                                lens_model=lm)
+            try:
+                apply_thin_lens(self._E, f=0.0, wavelength=_WL, dx=_DX,
+                                lens_model=lm)
+            except ZeroDivisionError:               # pragma: no cover
+                pytest.fail(f"f=0 under {lm} still raises the bare "
+                            f"ZeroDivisionError W5-2 replaced")
+            except ValueError:
+                pass
+
+
+# ===========================================================================
+# W5-2 -- f == 0 in apply_thin_lens / apply_cylindrical_lens
+#         (the decision W4-2 recorded but did not take)
+# ===========================================================================
+
+class TestW52ZeroFocalLength:
+    """``f`` must not be zero, and all five ``lens_model`` branches must
+    say so identically.
+
+    Decision (v5.32): ``f = 0`` is physically meaningless for a thin or
+    cylindrical lens -- zero focal length is an infinite-power surface with
+    no physical realisation -- so it is rejected rather than given a
+    consistent *value* semantics.  There is no defensible value: 'no lens'
+    is ``f = inf`` (expressed by omitting the call), and the two sqrt
+    models' accidental no-op was the ``f = inf`` answer returned for the
+    ``f = 0`` question.
+
+    Pre-fix the five branches split THREE ways (bare ZeroDivisionError /
+    silent no-op / silent no-op plus two anonymous numpy RuntimeWarnings);
+    see ``TestW42NonFiniteFocalLength::
+    test_f_zero_recorded_contract_is_SUPERSEDED_by_w5_2`` for the table.
+    """
+
+    _E = np.ones((16, 16), dtype=complex)
+    _MODELS = ('paraxial', 'nonparaxial', 'aplanatic', 'stigmatic',
+               'local_only')
+
+    @pytest.mark.parametrize('lens_model', _MODELS)
+    @pytest.mark.parametrize('f', [0.0, -0.0, 0])
+    def test_every_model_raises_valueerror_on_zero_f(self, lens_model, f):
+        """The headline: no branch may quietly accept ``f = 0`` any more.
+
+        ``-0.0`` and the ``int`` ``0`` are covered too -- ``float(f) == 0.0``
+        is True for all three, and a caller who computes ``f`` from a
+        difference can easily land on negative zero.
+        """
+        with pytest.raises(ValueError, match='must not be zero'):
+            apply_thin_lens(self._E, f=f, wavelength=_WL, dx=_DX,
+                            lens_model=lens_model)
+
+    def test_all_five_models_give_the_IDENTICAL_message(self):
+        """Consistency is the actual fix, so it is pinned directly: the
+        guard sits above the ``lens_model`` dispatch, therefore the message
+        cannot vary by model.  A future refactor that pushed the check down
+        into each branch would still pass the test above while re-opening
+        the divergence this closed."""
+        msgs = set()
+        for lm in self._MODELS:
+            with pytest.raises(ValueError) as ei:
+                apply_thin_lens(self._E, f=0.0, wavelength=_WL, dx=_DX,
+                                lens_model=lm)
+            msgs.add(str(ei.value))
+        assert len(msgs) == 1, (
+            f"f=0 must produce ONE message across all five lens_model "
+            f"branches; got {len(msgs)}:\n" + "\n---\n".join(sorted(msgs)))
+
+    def test_no_bare_numpy_warning_survives(self):
+        """'aplanatic' used to emit two anonymous numpy RuntimeWarnings
+        (invalid value / divide-by-zero from ``r_sq / f**2``) on its way to
+        returning the field unchanged.  The guard fires first, so nothing
+        reaches numpy."""
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            with pytest.raises(ValueError):
+                apply_thin_lens(self._E, f=0.0, wavelength=_WL, dx=_DX,
+                                lens_model='aplanatic')
+
+    def test_message_names_the_function_argument_and_the_old_split(self):
+        """CONVENTIONS.md: the message carries the ``fn_name: `` prefix and
+        the offending value.  It also names the pre-fix divergence, because
+        a bare ZeroDivisionError naming neither the function nor the
+        argument is what made this hard to attribute."""
+        with pytest.raises(ValueError) as ei:
+            apply_thin_lens(self._E, f=0.0, wavelength=_WL, dx=_DX)
+        msg = str(ei.value)
+        assert msg.startswith('apply_thin_lens: ')
+        assert 'f=0.0' in msg
+        assert 'NO lens' in msg and 'ZeroDivisionError' in msg
+        assert 'omit the call' in msg
+
+    @pytest.mark.parametrize('axis', ['x', 'y'])
+    @pytest.mark.parametrize('f', [0.0, -0.0, 0])
+    def test_cylindrical_sibling_rejects_zero_f(self, axis, f):
+        """``apply_cylindrical_lens`` gets the matching guard in the same
+        change -- the W3-T4 sweep exists precisely because an earlier guard
+        fixed one of a pair and left the sibling to drift."""
+        from lumenairy.elements import apply_cylindrical_lens
+        with pytest.raises(ValueError, match='must not be zero'):
+            apply_cylindrical_lens(self._E, f=f, wavelength=_WL, dx=_DX,
+                                   axis=axis)
+
+    def test_both_zero_f_guards_share_one_message_shape(self):
+        """Same house-style pin the non-finite guards carry: a user who
+        hits one and greps for the other finds the same wording."""
+        from lumenairy.elements import apply_cylindrical_lens
+        for fn in (apply_thin_lens, apply_cylindrical_lens):
+            with pytest.raises(ValueError) as ei:
+                fn(self._E, f=0.0, wavelength=_WL, dx=_DX)
+            m = str(ei.value)
+            assert 'must be a finite focal length in metres' in m
+            assert 'must not be zero' in m
+            assert 'f=0 is not a lens' in m
+            assert 'omit the call' in m
+
+    def test_jonesfield_rejects_zero_f_without_mutating(self):
+        """``JonesField.apply_thin_lens`` routes both components through
+        the guarded scalar entry point and mutates itself in place, so the
+        f=0 guard must protect the caller's object exactly as the
+        non-finite guard does."""
+        jf = JonesField(self._E.copy(), self._E.copy(), _DX)
+        with pytest.raises(ValueError, match='must not be zero'):
+            jf.apply_thin_lens(f=0.0, wavelength=_WL)
+        assert np.array_equal(jf.Ex, self._E)
+        assert np.array_equal(jf.Ey, self._E)
+        assert np.isfinite(degree_of_polarization(jf)).all()
+
+    @pytest.mark.parametrize('f', [1e-9, -1e-9, 1e-3, 0.03, -0.03])
+    @pytest.mark.parametrize('lens_model', _MODELS)
+    def test_nearby_small_f_is_untouched(self, f, lens_model):
+        """Scope pin: ONLY exact zero is rejected.
+
+        The guard is ``float(f) == 0.0``, not a tolerance, so focal lengths
+        arbitrarily close to zero still compute.  ``1e-9`` is nine orders
+        below the grid pitch -- far into "absurd but legal" territory --
+        and must come back a finite unit-modulus phase screen.
+        """
+        out = apply_thin_lens(self._E, f=f, wavelength=_WL, dx=_DX,
+                              lens_model=lens_model)
+        assert out.shape == self._E.shape
+        assert np.isfinite(out).all(), (
+            f"f={f} under {lens_model} must still produce a finite field")
+        assert np.allclose(np.abs(out), 1.0, atol=1e-12), (
+            "a thin lens is a pure phase screen on a unit field")
+
+    @pytest.mark.parametrize('lens_model', _MODELS)
+    def test_smallest_denormal_f_is_accepted_not_rejected(self, lens_model):
+        """The boundary case, kept separate because its OUTPUT is garbage
+        while its ACCEPTANCE is the point.
+
+        ``5e-324`` is the smallest positive double.  ``k / (2f)`` overflows
+        and the returned field is NaN-poisoned -- but that is pre-existing
+        floating-point behaviour shared with every other absurd-but-finite
+        input, and it is emphatically NOT this guard's business.  Pinning
+        acceptance here stops a future reader from "hardening" the guard
+        into ``abs(f) < eps``, which would start silently rejecting inputs
+        the library has always accepted.  Warnings are suppressed because
+        the overflow is expected, not because it is hidden.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            out = apply_thin_lens(self._E, f=5e-324, wavelength=_WL, dx=_DX,
+                                  lens_model=lens_model)
+        assert out.shape == self._E.shape        # accepted, did not raise
+
+    def test_small_f_paraxial_still_matches_closed_form_exactly(self):
+        """Guard-only change: the accepted-path phase is bit-for-bit the
+        closed form, right down to a focal length nine orders below the
+        grid pitch."""
+        N, f = 16, 1e-9
+        E = np.ones((N, N), dtype=complex)
+        out = apply_thin_lens(E, f=f, wavelength=_WL, dx=_DX)
+        x = (np.arange(N) - N / 2) * _DX
+        X, Y = np.meshgrid(x, x)
+        want = np.exp(-1j * (2 * np.pi / _WL) / (2 * f) * (X ** 2 + Y ** 2))
+        assert np.array_equal(out, want)
+
+    @pytest.mark.parametrize('f', [np.nan, np.inf, -np.inf])
+    def test_non_finite_f_contract_unchanged(self, f):
+        """W4-2's guard is extended, not replaced: ``f = nan / +-inf`` still
+        raises, still names the per-model divergence, and still carries the
+        substrings the W4-2 pins match on."""
+        from lumenairy.elements import apply_cylindrical_lens
+        for fn in (apply_thin_lens, apply_cylindrical_lens):
+            with pytest.raises(ValueError) as ei:
+                fn(self._E, f=f, wavelength=_WL, dx=_DX)
+            m = str(ei.value)
+            assert 'must be a finite focal length in metres' in m
+            assert 'omit the call' in m
+            # the f=0-specific explanation must NOT leak onto this path
+            assert 'f=0 is not a lens' not in m
 
 
 # ===========================================================================

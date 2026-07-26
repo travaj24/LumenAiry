@@ -171,7 +171,8 @@ def rayleigh_sommerfeld_propagate(
     # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
     # guard).
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'rayleigh_sommerfeld_propagate')
+    _check_2d_scalar_field(E_in, 'rayleigh_sommerfeld_propagate',
+                           input_kind='field')
 
     # 4.12.0 (audit round-4 B1-3): RS is forward-only.  Pre-4.12 the
     # function accepted z <= 0 silently and computed a 180-degrees-

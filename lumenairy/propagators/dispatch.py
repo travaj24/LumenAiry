@@ -378,7 +378,7 @@ def propagate(
     # gets a clear, actionable error rather than a downstream
     # AttributeError or a silent wrong-axis FFT.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'propagate')
+    _check_2d_scalar_field(E_in, 'propagate', input_kind='field')
 
     if method not in VALID_METHODS:
         raise ValueError(

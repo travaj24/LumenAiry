@@ -133,7 +133,7 @@ def fresnel_tf_propagate(
         Output field on the SAME grid.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'fresnel_tf_propagate')
+    _check_2d_scalar_field(E_in, 'fresnel_tf_propagate', input_kind='field')
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='fresnel_tf_propagate')
     if dy is None:
@@ -234,7 +234,7 @@ def fresnel_propagate(
     # guard).  Runs FIRST so the user gets a clear, actionable error
     # rather than a downstream AttributeError or silent wrong-axis FFT.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'fresnel_propagate')
+    _check_2d_scalar_field(E_in, 'fresnel_propagate', input_kind='field')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='fresnel_propagate')
@@ -425,7 +425,7 @@ def fraunhofer_propagate(
     # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
     # guard).
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'fraunhofer_propagate')
+    _check_2d_scalar_field(E_in, 'fraunhofer_propagate', input_kind='field')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='fraunhofer_propagate')
