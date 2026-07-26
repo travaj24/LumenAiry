@@ -42,6 +42,89 @@ from .surface import Surface, _surface_copy_with
 from .trace import find_stop, surfaces_from_prescription
 
 # ============================================================================
+# Reduced <-> geometric conversion (W4 / W4b)
+# ============================================================================
+# Every matrix in this module is a WELFORD REDUCED-COORDINATE ABCD: it
+# acts on ``(y, nu = n u)``, and a transfer of GEOMETRIC length ``t``
+# through index ``n`` enters it as the REDUCED length ``t / n``.  Any
+# quantity solved out of such a matrix therefore comes back reduced, and
+# is turned into the geometric distance a real ray actually travels by
+# multiplying by the index of the terminal medium it lives in -- the
+# OBJECT-space index for object-side quantities (``ffl``, ``H``,
+# ``ep_z``) and the SIGNED image-space index for image-side ones
+# (``bfl``, ``H'``, ``xp_z``).  Air-to-air systems hide the whole
+# distinction (``n = 1``), which is why it survived to W4.
+#
+# The three helpers below are the single source for those factors, shared
+# by :func:`system_abcd` and :func:`compute_pupils` so the two can never
+# drift apart on the question again.
+# ============================================================================
+
+def _object_space_index(
+    surfaces: List['Surface'],
+    wavelength: float,
+) -> float:
+    """``|n|`` of the medium in FRONT of the first surface.
+
+    The input index of the reduced frame every matrix in this module
+    starts in.  No mirror sign applies: nothing can precede surface 0,
+    so the INPUT frame always has Welford parity 0 (see
+    :func:`_mirror_parity_sign`).
+    """
+    return abs(float(get_glass_index(surfaces[0].glass_before, wavelength)))
+
+
+def _image_space_index(
+    surfaces: List['Surface'],
+    wavelength: float,
+) -> float:
+    """``|n|`` of the medium the LAST surface refracts INTO (image space).
+
+    The magnitude of the output index of the reduced-coordinate frame
+    that ``system_abcd(surfaces)`` leaves the ray in.  Mirrors the
+    bookkeeping of :func:`system_abcd` exactly:
+
+    * a mirror is Welford's ``n2 = -n1``, so its output medium is
+      ``glass_before`` (reflection does not change the medium --
+      ``trace.py``'s prescription builder sets
+      ``glass_after = glass_before`` on mirrors for the same reason).
+      Only the MAGNITUDE is returned; the parity SIGN comes from
+      :func:`_mirror_parity_sign`.
+    * a coord-break carries ``glass_after == glass_before``, and
+      ``system_abcd`` skips its refraction matrix entirely, so
+      ``glass_after`` is right there too.
+
+    Used by :func:`compute_pupils` (W4) for ``xp_z`` and by
+    :func:`system_abcd` (W4b) for ``bfl``.
+    """
+    last = surfaces[-1]
+    glass = (last.glass_before
+             if (last.is_mirror and not last.is_coordbrk)
+             else last.glass_after)
+    return abs(float(get_glass_index(glass, wavelength)))
+
+
+def _mirror_parity_sign(surfaces: List['Surface']) -> float:
+    """``(-1) ** (number of real mirrors)`` -- the Welford frame sign.
+
+    :func:`system_abcd` carries a running ``n' = -n`` on every index it
+    touches after a mirror (house precedent 403ea1f / S11-1: the flip
+    encodes the REFLECTION, so it is R-independent and a flat fold flips
+    too), which means the OUTPUT reduced coordinates of a system with an
+    ODD mirror count live in an axis-flipped frame.  Image-side
+    geometric distances must therefore carry this sign as well as the
+    index magnitude.  Coord-breaks are excluded exactly as
+    ``system_abcd`` excludes them (it ``continue``s past them before any
+    mirror bookkeeping).
+
+    Object-side quantities never take this sign -- their frame is the
+    input one, whose parity is 0 by construction.
+    """
+    m = sum(1 for s in surfaces if s.is_mirror and not s.is_coordbrk)
+    return -1.0 if (m % 2) else 1.0
+
+
+# ============================================================================
 # Paraxial ray trace and ABCD matrix
 # ============================================================================
 
@@ -66,37 +149,117 @@ def system_abcd(
     abcd : ndarray, shape (2, 2)
         System matrix ``[[A, B], [C, D]]``.
     efl : float
-        Effective focal length ``-1/C`` [m].
+        Effective focal length ``-1/C = 1/Phi`` [m] -- the REDUCED (a.k.a.
+        equivalent / air-referred) focal length, NOT a geometric
+        distance.  See the EFL CONVENTION note below: this is a
+        deliberate, audited choice, and it is what makes
+        ``fnum = |efl| / (2 ep_radius)`` equal ``1 / (2 NA')`` for
+        immersed image spaces.
     bfl : float
-        Back focal length (distance from last surface to rear focus) [m].
+        Back focal length: the GEOMETRIC axial distance from the last
+        surface vertex to the rear focal point [m], in the image
+        medium and in the surface list's own (unfolded) z frame.
     ffl : float
-        Front focal length (distance from first surface to front focus) [m].
+        Front focal length: the GEOMETRIC axial distance from the first
+        surface vertex to the front focal point [m], in the object
+        medium.
 
     Notes
     -----
-    W4 SIBLING -- MEASURED, NOT FIXED.  ``efl`` / ``bfl`` / ``ffl`` are
-    read straight out of the REDUCED matrix, so for an IMMERSED
-    conjugate they are reduced (``z / n``) distances, not geometric
-    ones -- the same confusion W4 fixed in :func:`compute_pupils`
-    (which now multiplies its terminal reduced distance back by the
-    terminal index).  ``bfl`` is unambiguously wrong there: measured
-    against the exact real-ray focus (``raytrace.trace``) on a singlet
-    with an N-BK7 image space, ``bfl`` = +12.251795 mm reported vs
-    +18.583524 mm exact, and ``bfl * n_img == bfl_exact`` to 1e-11 on
-    two designs (N-BK7 and N-SF2 image spaces).  ``ffl`` is the
-    object-side twin.  ``efl`` is a CONVENTION question rather than a
-    defect (``-1/C = 1/Phi`` is the reduced / equivalent focal length;
-    the image-space EFL is ``n'/Phi``), but the two differ by ``n'`` for
-    immersed systems and everything derived from these three inherits
-    it: :class:`FirstOrderData`'s ``bfl``, ``ffl``, ``pp_object_z``,
-    ``pp_image_z`` and ``fnum`` (``|efl| / (2 ep_radius)``, whose
-    ``ep_radius`` IS geometric, so the ratio mixes the two: 11.2647
-    reported vs 17.0863 for the BK7-immersed design).  Air systems are
-    unaffected (``n = 1``).  Deliberately out of W4's scope: fixing it
-    means changing this function's public return contract and picking
-    the EFL convention, which needs its own oracle and its own consumer
-    sweep (``find_paraxial_focus``, ``_append_image_plane``, every
-    ``bfl``-defaulted image distance in ``analysis/``).
+    W4b REDUCED -> GEOMETRIC (the immersed-conjugate sibling of W4's
+    :func:`compute_pupils` fix, now FIXED here).  ``-A/C`` and ``-D/C``
+    fall out of the REDUCED matrix and are therefore reduced distances;
+    ``bfl`` and ``ffl`` now multiply them by the terminal index
+    (:func:`_image_space_index` x :func:`_mirror_parity_sign` and
+    :func:`_object_space_index` respectively) so they mean what their
+    names and every consumer say: a geometric distance.  Measured
+    against an exact real-ray oracle -- and specifically against the
+    OPERATIONAL definition every consumer uses (``bfl`` is appended to
+    the surface list as a thickness by ``_append_image_plane`` /
+    ``find_paraxial_focus`` callers, so the ground truth is "the
+    thickness at which the real parallel ray lands on the axis"):
+
+    * BK7 image space, no mirrors: ``bfl`` +12.251795 mm reported vs
+      +18.583524 mm operational (ratio 1/1.516800 to 12 digits).
+    * N-SF2 image space: ratio 1/1.647690.  BK7 OBJECT space: ``ffl``
+      +40.798207 mm vs +61.882721 mm (ratio 1/n_obj); ``ffl`` takes NO
+      mirror sign, because the object-side frame has parity 0.
+    FRAMES -- ``bfl``/``ffl`` and ``xp_z``/``ep_z`` do NOT use the same
+    one, and both are oracle-pinned, so do not "unify" them.  These two
+    are reported in the UNFOLDED (along-the-ray) frame: S11-1's oracle
+    (``test_niche_s11_sibling_deferred._exact_bfl_unfolded``) maps the
+    traced global-z axis crossing into it with an explicit
+    ``(-1) ** n_mirrors``, and its consumers un-map it the same way when
+    they use ``bfl`` as a surface THICKNESS (thickness is a global-z step
+    in ``trace``).  ``compute_pupils`` instead reports ``xp_z`` as a
+    global-z coordinate and therefore DOES carry
+    :func:`_mirror_parity_sign` (W3-T2).  Consequence for the conversion
+    here: the geometric distance is ``sign * n_img * (-A/C)`` in global z,
+    and mapping it into the unfolded frame multiplies by ``sign`` again,
+    so the two signs cancel and this function needs the index MAGNITUDE
+    only.  Measured both ways on 10 designs (6 immersed + 4 air mirror
+    controls, 0-2 mirrors, both post-mirror thickness sign conventions):
+    ``sign * n_img * (-A/C)`` reproduces the operational global-z oracle
+    to <= 1.7e-11, and ``n_img * (-A/C)`` reproduces S11-1's unfolded
+    oracle -- e.g. a single concave mirror (R = -100 mm) has global-z
+    focus at -100.000000 mm and unfolded ``bfl`` +100.000000 mm.  An
+    earlier draft of this fix applied the sign here and broke seven
+    S11-1 pins; that was a category error, retracted.
+
+    Air-to-air systems are therefore bit-identical at ANY mirror count:
+    both factors are exactly ``1.0`` and IEEE multiplication by 1.0 is
+    the identity.  Only immersed conjugates move.
+
+    EFL CONVENTION (audited, W4b).  ``efl`` stays ``1/Phi``, the reduced
+    focal length, and is NOT converted.  Enumerating the consumers:
+
+    * ``ui/model.py`` ``na = epd / (2 |efl|)`` and
+      ``ui/spot_field_dock.py``'s Airy radius
+      ``1.22 lambda |efl| / (2 semi_ap)`` both want ``1/Phi``: the
+      image-space numerical aperture is ``NA' = r_ep / |1/Phi|``
+      exactly (verified against the real marginal ray on all six
+      immersed designs, <= 3e-11 rel), so these are correct as written
+      only with the reduced value.
+    * :func:`first_order_data`'s ``fnum = |efl| / (2 ep_radius)`` is
+      therefore ``1 / (2 NA')`` -- the standard immersed generalisation
+      of f/# -- measured equal to ``1/(2 NA')`` on all six immersed
+      designs (e.g. 11.264729957829 vs 11.264729957791).  The
+      alternative ``f'/D_ep = n' /Phi / (2 r_ep)`` gives 17.086342788618
+      on that design and is the AIR-ONLY formula.  An earlier draft of
+      this note wrongly called ``fnum`` defective on that basis; the
+      measurement retracts it.
+    * ``analysis/image_plane_wfe.py`` solves ``1/v = 1/efl - 1/u``,
+      which is the Gauss equation in REDUCED distances, so it needs
+      ``1/Phi`` too (its ``u``/``v`` being geometric is a separate,
+      analysis-side immersed defect -- see the FLAGGED item below).
+    * The ALGEBRA TWIN settles it structurally (the S11 lockstep
+      lesson): ``algebra/from_prescription`` emits ``FreeSpace(t / n)``
+      + ``ThinLens(1/phi)``, i.e. it builds the SAME reduced matrix, and
+      ``algebra.base.Operator.efl`` is documented as ``-1/C`` matching
+      this function.  A bare ``CompositeOperator`` has folded the media
+      into its reduced lengths and retains NO terminal-index
+      information, so it structurally CANNOT produce ``n'/Phi`` or a
+      geometric ``bfl``.  Redefining ``efl`` as ``n'/Phi`` here would
+      silently break that documented lockstep for immersed
+      prescriptions with no way for the twin to follow; ``bfl``/``ffl``
+      are not exposed by the twin at all, so making THEM geometric
+      breaks no lockstep.  Pinned in
+      ``test_niche_audit_w4_immersed_pupils.py``.
+
+    The object-/image-space focal lengths are recoverable exactly:
+    ``f = n_obj * efl`` and ``f' = sign * n_img * efl``;
+    :class:`FirstOrderData` uses precisely those to place its principal
+    planes.
+
+    FLAGGED, MEASURED, NOT FIXED (outside this module).  Two consumers
+    read ``efl`` as if it were an object-space GEOMETRIC focal length:
+    ``analysis/field.py``'s distortion reference ``h_paraxial = efl *
+    tan(theta)`` (and the matching ``para_x``/``para_y`` grid) needs
+    ``n_obj * efl``; and ``analysis/image_plane_wfe.py``'s Gauss solve
+    mixes geometric ``u``/``v`` with the reduced ``efl``.  Both are
+    exact in air and wrong by ``n_obj`` / ``n``,``n'`` for immersed
+    conjugates.  They live in ``analysis/`` and need that package's
+    own consumer sweep.
     """
     # Build system matrix by multiplying surface-by-surface.
     #
@@ -201,9 +364,20 @@ def system_abcd(
     A, _B = M[0, 0], M[0, 1]
     C, D = M[1, 0], M[1, 1]
 
-    efl = -1.0 / C if abs(C) > 1e-30 else np.inf
-    bfl = -A / C if abs(C) > 1e-30 else np.inf
-    ffl = -D / C if abs(C) > 1e-30 else np.inf
+    if abs(C) > 1e-30:
+        # W4b: ``-A/C`` and ``-D/C`` are REDUCED distances; convert each
+        # to the geometric distance a real ray travels, in the terminal
+        # medium it lives in (see the module's reduced<->geometric note).
+        # ``efl = -1/C = 1/Phi`` is NOT a distance and is left alone.
+        #
+        # MAGNITUDE ONLY -- no ``_mirror_parity_sign`` here, unlike
+        # ``compute_pupils``.  These two report in DIFFERENT frames and
+        # both are oracle-pinned; see the FRAMES note in the docstring.
+        efl = -1.0 / C
+        bfl = _image_space_index(surfaces, wavelength) * (-A / C)
+        ffl = _object_space_index(surfaces, wavelength) * (-D / C)
+    else:
+        efl = bfl = ffl = np.inf
 
     return M, efl, bfl, ffl
 
@@ -466,15 +640,21 @@ class FirstOrderData:
     Attributes
     ----------
     efl : float
-        Effective focal length [m].  ``-1 / C`` where ``C`` is the
-        bottom-left ABCD element.
+        Effective focal length [m].  ``-1 / C = 1 / Phi`` where ``C`` is
+        the bottom-left ABCD element -- the REDUCED (equivalent /
+        air-referred) focal length, NOT a geometric distance.  For an
+        IMMERSED conjugate the geometric focal lengths are
+        ``f = n_obj * efl`` (object side) and ``f' = n_img * efl``
+        (image side); see the audited EFL CONVENTION note in
+        :func:`system_abcd` for why the reduced value is the one
+        reported.  Identical for air-to-air systems.
     bfl : float
-        Back focal length: distance from the LAST surface vertex to
-        the rear focal point [m].  Positive = on image side.
+        Back focal length: GEOMETRIC distance from the LAST surface
+        vertex to the rear focal point [m], in the image medium.
+        Positive = downstream along the ray.
     ffl : float
-        Front focal length: distance from the FIRST surface vertex to
-        the front focal point [m].  Negative typically (focal point
-        on object side).
+        Front focal length: GEOMETRIC distance from the FIRST surface
+        vertex to the front focal point [m], in the object medium.
     ep_z, ep_radius : float
         Entrance pupil axial position and radius (see
         :class:`PupilInfo`).
@@ -484,20 +664,29 @@ class FirstOrderData:
     pp_object_z : float
         Object-space principal plane H, measured from
         ``surfaces[0]``.  Positive = image-side of the first
-        vertex.  Computed as ``efl - ffl``: front focal point is at
-        ``-ffl`` from the first vertex (sign convention here treats
-        ``ffl`` as the unsigned magnitude returned by
-        :func:`system_abcd`), and H is one EFL forward of it.
-        For a thin lens, ``efl == ffl`` and H collapses to the
-        vertex (zero).
+        vertex.  Computed as ``f - ffl`` with ``f = n_obj * efl``:
+        the front focal point is at ``-ffl`` from the first vertex
+        (sign convention here treats ``ffl`` as the unsigned magnitude
+        returned by :func:`system_abcd`), and H is one OBJECT-space
+        focal length forward of it.  For a thin lens, ``f == ffl`` and H
+        collapses to the vertex (zero).  W4b: was ``efl - ffl``, which
+        mixed a reduced length with a geometric one for immersed
+        conjugates; bit-identical in air.
     pp_image_z : float
         Image-space principal plane H', measured from
         ``surfaces[-1]``.  Positive = image-side.
-        ``pp_image_z = bfl - efl`` (rear focal point measured from
-        last vertex, walked backward by efl).
+        ``pp_image_z = bfl - f'`` with ``f' = n_img * efl`` (rear focal
+        point measured from the last vertex, walked backward by one
+        IMAGE-space focal length).  W4b: was ``bfl - efl``;
+        bit-identical in air.
     fnum : float
-        Working f-number (``efl / (2 * ep_radius)``) when EP radius
-        is finite, else ``inf``.
+        Working f-number (``|efl| / (2 * ep_radius)``) when EP radius
+        is finite, else ``inf``.  Because ``efl`` is the reduced focal
+        length and ``ep_radius`` a real height, this is exactly
+        ``1 / (2 NA')`` with ``NA'`` the image-space numerical aperture
+        -- the correct immersed generalisation of f/#, verified against
+        the real marginal ray (W4b).  It is NOT ``f'/D_ep``, which is
+        the air-only formula.
     abcd : ndarray, shape (2, 2)
         Full system ABCD matrix from
         :func:`system_abcd`.
@@ -574,10 +763,14 @@ def first_order_data(
     Notes
     -----
     Principal planes are computed from the focal lengths via the
-    standard relations:
+    standard relations, in GEOMETRIC lengths throughout (W4b -- the
+    focal length used on each side is that side's own, ``f = n_obj *
+    efl`` and ``f' = n_img * efl``, because ``efl`` itself is reduced;
+    for air-to-air systems ``n_obj = n_img = 1`` and these collapse to
+    the historical ``efl - ffl`` / ``bfl - efl``):
 
-        H   = ffl + efl       (object-side, from first surface)
-        H'  = bfl - efl       (image-side,  from last surface)
+        H   = f  - ffl        (object-side, from first surface)
+        H'  = bfl - f'        (image-side,  from last surface)
 
     These are the conjugate points where the system acts as a
     "thin lens" of focal length ``efl``.  For a thin lens both
@@ -590,8 +783,22 @@ def first_order_data(
         surfaces = surfaces_or_prescription
     abcd, efl, bfl, ffl = system_abcd(surfaces, wavelength)
     pupils = compute_pupils(surfaces, wavelength, stop_index=stop_index)
-    pp_object_z = efl - ffl       # H from first vertex
-    pp_image_z = bfl - efl        # H' from last vertex
+    # W4b: the principal planes are DISTANCES from their reference
+    # vertices, so they are built from the GEOMETRIC focal distances
+    # ``bfl`` / ``ffl`` and the matching terminal focal length --
+    # ``f = n_obj * efl`` on the object side, ``f' = n_img * efl`` on the
+    # image side -- NOT from the reduced ``efl`` directly.  Equivalent to
+    # ``n_obj * (efl_red - ffl_red)`` and ``n_img * (bfl_red - efl_red)``,
+    # i.e. the same magnitude-only conversion (and the same frame) as
+    # ``bfl`` / ``ffl`` above.  Both matched an exact real-ray oracle (the
+    # plane where the incoming and outgoing ray extensions cross at equal
+    # height, mapped into the reporting frame) to <= 2.3e-11 on all six
+    # immersed designs.  Bit-identical in air: both factors are exactly
+    # 1.0, so ``1.0 * efl`` is an IEEE no-op.
+    n_obj = _object_space_index(surfaces, wavelength)
+    n_img = _image_space_index(surfaces, wavelength)
+    pp_object_z = n_obj * efl - ffl       # H from first vertex  (f - FFL)
+    pp_image_z = bfl - n_img * efl        # H' from last vertex  (BFL - f')
     if np.isfinite(pupils.ep_radius) and pupils.ep_radius > 0:
         fnum = abs(efl) / (2.0 * pupils.ep_radius)
     else:
@@ -749,36 +956,6 @@ def _post_stop_abcd(
                         [0.0, 1.0]])
     M_rest, _, _, _ = system_abcd(surfaces[stop_index + 1:], wavelength)
     return M_rest @ T_first
-
-
-def _image_space_index(
-    surfaces: List['Surface'],
-    wavelength: float,
-) -> float:
-    """``|n|`` of the medium the LAST surface refracts INTO (image space).
-
-    The magnitude of the output index of the reduced-coordinate frame
-    that ``system_abcd(surfaces)`` leaves the ray in.  Mirrors the
-    bookkeeping of :func:`system_abcd` exactly:
-
-    * a mirror is Welford's ``n2 = -n1``, so its output medium is
-      ``glass_before`` (reflection does not change the medium --
-      ``trace.py``'s prescription builder sets
-      ``glass_after = glass_before`` on mirrors for the same reason).
-      Only the MAGNITUDE is returned; the parity SIGN is supplied
-      separately by the caller.
-    * a coord-break carries ``glass_after == glass_before``, and
-      ``system_abcd`` skips its refraction matrix entirely, so
-      ``glass_after`` is right there too.
-
-    Used by :func:`compute_pupils` (W4) to turn the reduced image-side
-    conjugate distance into the geometric ``xp_z`` coordinate.
-    """
-    last = surfaces[-1]
-    glass = (last.glass_before
-             if (last.is_mirror and not last.is_coordbrk)
-             else last.glass_after)
-    return abs(float(get_glass_index(glass, wavelength)))
 
 
 def compute_pupils(
@@ -992,9 +1169,15 @@ def compute_pupils(
         # discriminator: with nothing but a homogeneous glass block of
         # thickness ``t`` behind the stop the XP *is* the stop, so
         # ``xp_z`` must be ``-t``; the reduced form gave ``-t / n``.
-        _m_post = sum(1 for s in surfaces[stop_index + 1:]
-                      if s.is_mirror and not s.is_coordbrk)
-        sign_out = -1.0 if (_m_post % 2) else 1.0
+        # W4b: the post-stop mirror parity now comes from the shared
+        # :func:`_mirror_parity_sign` (bit-identical to the inline
+        # ``sum(...) % 2`` it replaces -- it is the same expression,
+        # applied to the post-stop slice because ``_post_stop_abcd``'s
+        # frame starts at the stop).  NOTE the deliberate asymmetry with
+        # ``system_abcd``, which needs the MAGNITUDE only: ``xp_z`` is a
+        # global-z coordinate while ``bfl``/``ffl`` are unfolded-frame
+        # distances.  See the FRAMES note in :func:`system_abcd`.
+        sign_out = _mirror_parity_sign(surfaces[stop_index + 1:])
         # Signed output index of ``_post_stop_abcd``'s own frame:
         # magnitude from the medium the last surface refracts into,
         # sign from the post-stop mirror parity (see above).

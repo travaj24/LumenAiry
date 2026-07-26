@@ -112,6 +112,7 @@ from lumenairy.raytrace import (
     compute_pupils,
     first_order_data,
     seidel_coefficients,
+    system_abcd,
     trace,
 )
 
@@ -822,3 +823,667 @@ class TestW4IndependentCrossChecks:
         r_stop = float(surfaces[stop].semi_diameter)
         assert 0.1 * r_stop < p.ep_radius < 10.0 * r_stop
         assert 0.1 * r_stop < p.xp_radius < 10.0 * r_stop
+
+
+# ======================================================================
+# ======================================================================
+# W4b: the FOCAL-DISTANCE sibling -- system_abcd's bfl / ffl and
+#      FirstOrderData's principal planes were reduced too
+# ======================================================================
+# ======================================================================
+_W4B_ORACLE = """W4b: reduced-vs-geometric focal distances.
+
+(Same file as W4 on purpose: same mechanism, same designs, same oracle
+machinery, one layer up.  W4 fixed ``compute_pupils``; the flag it left
+behind -- ``system_abcd``'s ``efl``/``bfl``/``ffl`` come straight out of
+the REDUCED matrix -- is closed here.)
+
+VERDICT
+-------
+``bfl`` (``-A/C``) and ``ffl`` (``-D/C``) ARE reduced distances and were
+wrong by the terminal index for immersed conjugates.  FIXED:
+``bfl = n_img * (-A/C)``, ``ffl = n_obj * (-D/C)``.  Measured [mm]:
+
+    design                  quantity  pre-fix     exact       ratio
+    glass_image             bfl       +12.251795  +18.583524  1/n_BK7
+    glass_object            ffl       +40.798207  +61.882721  1/n_BK7
+    both_immersed           bfl      +171.005538 +281.764076  1/n_SF2
+    both_immersed           ffl      +120.783374 +183.204226  1/n_BK7
+    stop_in_glass_immersed  bfl      +141.068436 +213.972609  1/n_BK7
+    stop_in_glass_immersed  ffl      +147.661263 +223.972609  1/n_BK7
+    glass_image_fold        bfl       +71.654969 +108.686259  1/n_BK7
+    glass_object_fold       ffl       -28.036251  -42.525386  1/n_BK7
+
+i.e. -34.1% / -39.3%, ratio equal to 1/n to 12 digits.
+``FirstOrderData.pp_object_z``/``pp_image_z`` inherited it exactly (they
+are ``f - FFL`` and ``BFL - f'``) and are fixed with them.  Ground truth
+is the exact real-ray oracle below AND, for ``bfl``, the OPERATIONAL
+definition every consumer uses -- ``bfl`` is appended to the surface
+list as a thickness, so "the thickness at which the real parallel ray
+lands on the axis" is the contract (pinned separately).
+
+``efl`` is NOT converted.  It stays ``-1/C = 1/Phi``, the REDUCED
+(equivalent / air-referred) focal length.  That is a decision taken by
+consumer audit; three legs:
+
+1. The NA consumers need ``1/Phi``.  ``NA' = r_ep / |1/Phi|`` exactly
+   (verified against the real marginal ray on all six immersed designs
+   to <= 6.1e-12), so ``ui/model.py``'s ``na = epd / (2 |efl|)``,
+   ``ui/spot_field_dock.py``'s Airy radius and ``first_order_data``'s
+   ``fnum = |efl| / (2 ep_radius)`` are correct ONLY with the reduced
+   value.  ``fnum`` is therefore ``1 / (2 NA')`` -- the standard
+   immersed generalisation of f/# -- and is UNCHANGED by this fix:
+   11.264729957829 vs 11.264729957791 on ``glass_image``, where the
+   air-only ``f'/D_ep`` would read 17.086342789.  W4's first draft of
+   the flag called ``fnum`` defective on exactly that basis; the
+   measurement retracts it, and the retraction is pinned below.
+2. ``analysis/image_plane_wfe.py`` solves ``1/v = 1/efl - 1/u``, the
+   Gauss equation in REDUCED distances.
+3. THE ALGEBRA TWIN settles it structurally (the S11 lockstep lesson).
+   ``algebra/from_prescription`` emits ``FreeSpace(t / n)`` +
+   ``ThinLens(1/phi)``, i.e. it builds the SAME reduced matrix, and
+   ``Operator.efl`` is documented as ``-1/C`` "matching system_abcd".  A
+   ``CompositeOperator`` has folded the media into its reduced lengths
+   and keeps NO terminal-index information, so it structurally CANNOT
+   produce ``n'/Phi`` or a geometric ``bfl``.  Redefining ``efl`` would
+   break that documented lockstep with no way for the twin to follow;
+   ``bfl``/``ffl`` are not exposed by the twin at all, so making THEM
+   geometric breaks no lockstep.  Both halves are pinned below, on an
+   IMMERSED prescription.
+
+FRAMES (the trap -- and a retracted error of my own)
+----------------------------------------------------
+``bfl``/``ffl`` are reported in the UNFOLDED (along-the-ray) frame:
+S11-1's oracle (``test_niche_s11_sibling_deferred._exact_bfl_unfolded``)
+maps the traced global-z axis crossing into it with an explicit
+``(-1) ** n_mirrors``, and its consumers un-map it the same way when
+they use ``bfl`` as a THICKNESS.  ``xp_z``/``ep_z`` (W3-T2, W4) are
+global-z coordinates and DO carry the mirror-parity sign.  So the
+conversion here needs the index MAGNITUDE only: the global-z distance is
+``sign * n_img * (-A/C)``, and mapping it back into the unfolded frame
+multiplies by ``sign`` again.  A first draft of this fix applied the
+sign here too and broke seven S11-1 pins (measured: a single concave
+mirror R = -100 mm has its focus at global z -100.000000 mm and unfolded
+``bfl`` +100.000000 mm).  Category error, retracted;
+``test_w4b_frame_convention_is_the_unfolded_one`` pins it so it cannot
+come back.
+
+Consequence: air-to-air systems are bit-identical at ANY mirror count
+(both factors are exactly 1.0) -- asserted bitwise below on the seven
+R-1/W3-T2 air designs plus four air MIRROR controls (0-2 mirrors, both
+post-mirror thickness sign conventions).
+
+Oracle floor: 5.3e-11 relative (worst over 6 designs x 4 quantities; the
+``ffl`` root-find is the noisy one), so ``_TOL = 1e-9`` is ~19x above the
+floor and ~7 orders below every defect above.
+"""
+
+# Independent local re-implementations of the three conversion factors.
+# The ORACLE must not import the code it judges (the campaign rule), and
+# keeping them local also lets every value pin below fail on its own
+# NUMBERS against a pre-fix build rather than on an ImportError.  The
+# library helpers are imported ONLY by the tests that unit-test them.
+def _loc_parity_sign(surfaces):
+    m = sum(1 for s in surfaces if s.is_mirror and not s.is_coordbrk)
+    return -1.0 if (m % 2) else 1.0
+
+
+def _loc_n_obj(surfaces, wl=None):
+    return abs(float(get_glass_index(surfaces[0].glass_before, wl or _WL)))
+
+
+def _loc_n_img(surfaces, wl=None):
+    last = surfaces[-1]
+    glass = (last.glass_before if (last.is_mirror and not last.is_coordbrk)
+             else last.glass_after)
+    return abs(float(get_glass_index(glass, wl or _WL)))
+
+
+_HP = 1e-7          # parallel-ray launch height for the focal oracle
+_U0F = 1e-6         # slope for the exit-parallel root-find
+
+
+def _oracle_focal(surfaces, wl):
+    """Exact real-ray focal distances, in ``system_abcd``'s own frame.
+
+    * ``bfl`` -- parallel ray in (u = 0, height ``_HP``); its axis
+      crossing after the last surface, mapped into the unfolded frame.
+    * ``f'``  -- ``-h / u_out`` for that ray, same mapping.
+    * ``H'``  -- where the OUTGOING ray reaches the incoming height.
+    * ``ffl`` -- root-find the input height whose ray EXITS parallel; the
+      front focal point is that input ray's axis crossing.  Object-side,
+      so NO frame mapping (the input frame has parity 0).
+    * ``H``   -- where the INCOMING ray reaches the outgoing height.
+    """
+    last = len(surfaces) - 1
+    s = _loc_parity_sign(surfaces)
+    y_L, u_L = _state_at(surfaces, wl, last, _HP, 0.0)
+    bfl = s * (-y_L / u_L)
+    f_prime = s * (-_HP / u_L)
+    pp_image_z = s * ((_HP - y_L) / u_L)
+    _, ua = _state_at(surfaces, wl, last, 0.0, _U0F)
+    _, ub = _state_at(surfaces, wl, last, 1e-7, _U0F)
+    slope = (ub - ua) / 1e-7
+    y0 = -ua / slope
+    for _ in range(3):
+        y0 -= _state_at(surfaces, wl, last, y0, _U0F)[1] / slope
+    yL2, uL2 = _state_at(surfaces, wl, last, y0, _U0F)
+    assert abs(uL2) < 1e-13, f"oracle: exit not parallel (u={uL2!r})"
+    ffl = y0 / _U0F
+    pp_object_z = (yL2 - y0) / _U0F
+    return dict(bfl=bfl, ffl=ffl, f_prime=f_prime, pp_image_z=pp_image_z,
+                pp_object_z=pp_object_z, u_L=u_L)
+
+
+def _append_flat(surfaces, T):
+    """``surfaces`` + a flat index-matched plane ``T`` further on.
+
+    Exactly what ``analysis``'s ``_append_image_plane`` and
+    ``ui``'s ``surfs[-1].thickness = bfl`` do, which is why it is the
+    operational contract for ``bfl``.
+    """
+    last = surfaces[-1]
+    glass = (last.glass_before if (last.is_mirror and not last.is_coordbrk)
+             else last.glass_after)
+    out = [Surface(radius=s.radius, conic=s.conic,
+                   semi_diameter=s.semi_diameter,
+                   glass_before=s.glass_before, glass_after=s.glass_after,
+                   is_mirror=s.is_mirror, is_stop=s.is_stop,
+                   thickness=(float(T) if i == len(surfaces) - 1
+                              else s.thickness),
+                   is_coordbrk=s.is_coordbrk)
+           for i, s in enumerate(surfaces)]
+    out.append(Surface(radius=np.inf, glass_before=glass, glass_after=glass,
+                       thickness=0.0, semi_diameter=np.inf))
+    return out
+
+
+def _bfl_operational(surfaces, wl, scale):
+    """The thickness at which the real parallel ray lands on the axis.
+
+    ``y_image(T)`` is affine in ``T``, so two probes plus a Newton polish
+    is exact.  Returned in GLOBAL z (thickness semantics), i.e. it must be
+    compared with ``(-1) ** n_mirrors * bfl``.
+    """
+    s = abs(scale) if abs(scale) > 1e-6 else 1e-3
+    n = len(surfaces)
+    y0 = _state_at(_append_flat(surfaces, 0.0), wl, n, _HP, 0.0)[0]
+    y1 = _state_at(_append_flat(surfaces, s), wl, n, _HP, 0.0)[0]
+    slope = (y1 - y0) / s
+    T = -y0 / slope
+    for _ in range(3):
+        T -= _state_at(_append_flat(surfaces, T), wl, n, _HP, 0.0)[0] / slope
+    return T
+
+
+# Post-fix values == the exact oracle to <= 5.3e-11, 12 significant
+# digits.  ``f_prime``/``f_object`` are ``n_img * efl`` / ``n_obj * efl``.
+_EXACT_FOCAL = {
+    'glass_image': dict(
+        bfl=+1.858352382661e-02, ffl=+3.511459421589e-02,
+        pp_image_z=-4.573796761541e-02, pp_object_z=+7.291451392618e-03,
+        efl=+4.240604560851e-02, f_prime=+6.432149144202e-02,
+        f_object=+4.240604560851e-02, fnum=+1.126472995783e+01),
+    'glass_object': dict(
+        bfl=+5.403776792272e-02, ffl=+6.188272127217e-02,
+        pp_image_z=-1.529711869456e-02, pp_object_z=+4.328443714100e-02,
+        efl=+6.933488661727e-02, f_prime=+6.933488661727e-02,
+        f_object=+1.051671584132e-01, fnum=+3.080912207960e+01),
+    'both_immersed': dict(
+        bfl=+2.817640762774e-01, ffl=+1.832042262387e-01,
+        pp_image_z=+2.223706977438e-02, pp_object_z=+5.570638575325e-02,
+        efl=+1.575096298509e-01, f_prime=+2.595270065031e-01,
+        f_object=+2.389106119920e-01, fnum=+5.964514682166e+01),
+    'stop_in_glass_immersed': dict(
+        bfl=+2.139726088441e-01, ffl=+2.239726088441e-01,
+        pp_image_z=-2.058997875636e-02, pp_object_z=+1.058997875636e-02,
+        efl=+1.546430526537e-01, f_prime=+2.345625876004e-01,
+        f_object=+2.345625876004e-01, fnum=+7.640018227536e+01),
+    'glass_image_fold': dict(
+        bfl=+1.086862588571e-01, ffl=+7.193354268866e-02,
+        pp_image_z=+2.644344672449e-03, pp_object_z=-2.021944737293e-03,
+        efl=+6.991159795136e-02, f_prime=+1.060419141846e-01,
+        f_object=+6.991159795136e-02, fnum=+1.857129710025e+01),
+    'glass_object_fold': dict(
+        bfl=-1.013849393378e-02, ffl=-4.252538633442e-02,
+        pp_image_z=+3.211720141947e-02, pp_object_z=-2.156805383522e-02,
+        efl=-4.225569535324e-02, f_prime=-4.225569535324e-02,
+        f_object=-6.409344016965e-02, fnum=+1.695660684908e+01),
+}
+
+# Pre-fix (reduced) values, measured on 8fdcccc.
+_PREFIX_FOCAL = {
+    'glass_image': dict(
+        bfl=+1.225179549309e-02, ffl=+3.511459421589e-02,
+        pp_image_z=-3.015425011542e-02, pp_object_z=+7.291451392618e-03),
+    'glass_object': dict(
+        bfl=+5.403776792272e-02, ffl=+4.079820666180e-02,
+        pp_image_z=-1.529711869456e-02, pp_object_z=+2.853667995548e-02),
+    'both_immersed': dict(
+        bfl=+1.710055379505e-01, ffl=+1.207833742561e-01,
+        pp_image_z=+1.349590809961e-02, pp_object_z=+3.672625559479e-02),
+    'stop_in_glass_immersed': dict(
+        bfl=+1.410684361664e-01, ffl=+1.476612630206e-01,
+        pp_image_z=-1.357461648736e-02, pp_object_z=+6.981789633100e-03),
+    'glass_image_fold': dict(
+        bfl=+7.165496860821e-02, ffl=+7.193354268866e-02,
+        pp_image_z=+1.743370656845e-03, pp_object_z=-2.021944737293e-03),
+    'glass_object_fold': dict(
+        bfl=-1.013849393378e-02, ffl=-2.803625090134e-02,
+        pp_image_z=+3.211720141947e-02, pp_object_z=-1.421944445190e-02),
+}
+
+# Which quantity was reduced on which design, and by which index.
+# ``bfl``/``pp_image_z`` take the IMAGE index, ``ffl``/``pp_object_z``
+# the OBJECT one; a design whose conjugate on that side is AIR is
+# unaffected there, which is what pins the per-side application.
+_DEFECTIVE_FOCAL = {
+    'glass_image': {'bfl': _N_BK7, 'pp_image_z': _N_BK7},
+    'glass_object': {'ffl': _N_BK7, 'pp_object_z': _N_BK7},
+    'both_immersed': {'bfl': _N_SF2, 'pp_image_z': _N_SF2,
+                      'ffl': _N_BK7, 'pp_object_z': _N_BK7},
+    'stop_in_glass_immersed': {'bfl': _N_BK7, 'pp_image_z': _N_BK7,
+                               'ffl': _N_BK7, 'pp_object_z': _N_BK7},
+    'glass_image_fold': {'bfl': _N_BK7, 'pp_image_z': _N_BK7},
+    'glass_object_fold': {'ffl': _N_BK7, 'pp_object_z': _N_BK7},
+}
+
+_FOCAL_KEYS = ('bfl', 'ffl', 'pp_image_z', 'pp_object_z')
+
+
+def _focal_report(surfaces, stop):
+    """``{bfl, ffl, pp_image_z, pp_object_z, efl, fnum}`` as reported."""
+    _M, efl, bfl, ffl = system_abcd(surfaces, _WL)
+    fod = first_order_data(surfaces, _WL, stop_index=stop)
+    return dict(bfl=bfl, ffl=ffl, pp_image_z=fod.pp_image_z,
+                pp_object_z=fod.pp_object_z, efl=efl, fnum=fod.fnum)
+
+
+# ----------------------------------------------------------------------
+# air mirror controls (0-2 mirrors, both post-mirror thickness signs)
+# ----------------------------------------------------------------------
+def _d_mirror_concave(t=50e-3, R=-100e-3):
+    """Single concave mirror in air -- ``system_abcd``'s own docstring
+    case (``efl = +50 mm`` is "the conventional answer")."""
+    return [
+        Surface(radius=R, glass_before='air', glass_after='air',
+                thickness=t, semi_diameter=10e-3, is_mirror=True,
+                is_stop=True),
+        Surface(radius=np.inf, glass_before='air', glass_after='air',
+                thickness=0.0, semi_diameter=np.inf),
+    ], 0
+
+
+def _d_two_mirrors():
+    """Flat fold + concave mirror: EVEN parity (no frame flip)."""
+    return [
+        Surface(radius=np.inf, glass_before='air', glass_after='air',
+                thickness=20e-3, semi_diameter=10e-3, is_mirror=True,
+                is_stop=True),
+        Surface(radius=-100e-3, glass_before='air', glass_after='air',
+                thickness=50e-3, semi_diameter=np.inf, is_mirror=True),
+        Surface(radius=np.inf, glass_before='air', glass_after='air',
+                thickness=0.0, semi_diameter=np.inf),
+    ], 0
+
+
+def _d_singlet_then_fold(t_sign=+1.0):
+    """Air singlet then a flat fold: ODD parity, no immersion.  ``t_sign``
+    exercises both post-mirror thickness conventions."""
+    return [
+        Surface(radius=50e-3, glass_before='air', glass_after='N-BK7',
+                thickness=5e-3, semi_diameter=2e-3, is_stop=True),
+        Surface(radius=-50e-3, glass_before='N-BK7', glass_after='air',
+                thickness=10e-3, semi_diameter=np.inf),
+        Surface(radius=np.inf, glass_before='air', glass_after='air',
+                thickness=t_sign * 15e-3, semi_diameter=np.inf,
+                is_mirror=True),
+        Surface(radius=np.inf, glass_before='air', glass_after='air',
+                thickness=0.0, semi_diameter=np.inf),
+    ], 0
+
+
+_AIR_MIRROR_DESIGNS = {
+    'mirror_concave': _d_mirror_concave,
+    'two_mirrors_even': _d_two_mirrors,
+    'singlet_then_fold': _d_singlet_then_fold,
+    'singlet_then_fold_negt': lambda: _d_singlet_then_fold(-1.0),
+}
+
+
+# ======================================================================
+# W4b vs the exact real-ray oracle
+# ======================================================================
+class TestW4bFocalDistancesVsExactRealRay:
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_all_four_quantities_match_the_live_oracle(self, name):
+        surfaces, stop = _DESIGNS[name]()
+        o = _oracle_focal(surfaces, _WL)
+        got = _focal_report(surfaces, stop)
+        for key in _FOCAL_KEYS:
+            assert _rel(got[key], o[key]) < _TOL, (
+                f"{name}.{key}: reported {got[key]!r}, exact real-ray "
+                f"oracle {o[key]!r} (rel {_rel(got[key], o[key]):.3e}); the "
+                f"pre-fix reduced value was {_PREFIX_FOCAL[name][key]!r}.")
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_pinned_against_hardcoded_oracle_values(self, name):
+        surfaces, stop = _DESIGNS[name]()
+        got = _focal_report(surfaces, stop)
+        for key, want in _EXACT_FOCAL[name].items():
+            if key in ('f_prime', 'f_object'):
+                continue          # covered by the focal-length test below
+            assert _rel(got[key], want) < _TOL, (
+                f"{name}.{key} = {got[key]!r}, pinned {want!r} "
+                f"(rel {_rel(got[key], want):.3e})")
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_prefix_reduced_values_are_rejected(self, name):
+        surfaces, stop = _DESIGNS[name]()
+        got = _focal_report(surfaces, stop)
+        for key, n_dropped in _DEFECTIVE_FOCAL[name].items():
+            bad = _PREFIX_FOCAL[name][key]
+            assert _rel(got[key], bad) > 0.2, (
+                f"{name}.{key} = {got[key]!r} is the pre-fix REDUCED value "
+                f"{bad!r} (short by n = {n_dropped!r}).")
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_the_defect_ratio_was_exactly_one_over_n(self, name):
+        """Mechanism, not just magnitude: pinned pre-fix value times the
+        dropped index reproduces the exact value to roundoff.  Pure
+        arithmetic on hard-coded literals, so platform-independent."""
+        for key, n_dropped in _DEFECTIVE_FOCAL[name].items():
+            recovered = _PREFIX_FOCAL[name][key] * n_dropped
+            assert _rel(recovered, _EXACT_FOCAL[name][key]) < 1e-11, (
+                f"{name}.{key}: pre-fix {_PREFIX_FOCAL[name][key]!r} * n "
+                f"{n_dropped!r} = {recovered!r} vs exact "
+                f"{_EXACT_FOCAL[name][key]!r} -- the 1/n signature does not "
+                f"hold, so the mechanism is not reduced-vs-geometric.")
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_the_side_with_an_air_conjugate_never_moved(self, name):
+        """Per-side application: ``bfl``/``pp_image_z`` take the image
+        index and ``ffl``/``pp_object_z`` the object one, so a design
+        immersed on ONE side only must be bit-identical on the other."""
+        surfaces, stop = _DESIGNS[name]()
+        M, efl, bfl, ffl = system_abcd(surfaces, _WL)
+        A, C, D = float(M[0, 0]), float(M[1, 0]), float(M[1, 1])
+        got = _focal_report(surfaces, stop)
+        if 'bfl' not in _DEFECTIVE_FOCAL[name]:
+            assert bfl == -A / C, (
+                f"{name}: bfl {bfl!r} != the pre-fix -A/C {-A / C!r} even "
+                f"though image space is AIR.")
+            assert got['pp_image_z'] == bfl - efl
+        if 'ffl' not in _DEFECTIVE_FOCAL[name]:
+            assert ffl == -D / C, (
+                f"{name}: ffl {ffl!r} != the pre-fix -D/C {-D / C!r} even "
+                f"though object space is AIR.")
+            assert got['pp_object_z'] == efl - ffl
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_focal_lengths_are_recoverable_from_the_reduced_efl(self, name):
+        """``f' = n_img * efl`` and ``f = n_obj * efl`` -- the pieces a
+        caller needs once ``efl`` is documented as reduced.  ``f'`` is
+        checked against the real parallel ray's ``-h / u_out``."""
+        surfaces, _stop = _DESIGNS[name]()
+        _M, efl, _b, _f = system_abcd(surfaces, _WL)
+        n_img = _loc_n_img(surfaces)
+        n_obj = _loc_n_obj(surfaces)
+        o = _oracle_focal(surfaces, _WL)
+        assert _rel(n_img * efl, o['f_prime']) < _TOL, (
+            f"{name}: n_img*efl = {n_img * efl!r} but the real parallel "
+            f"ray gives f' = {o['f_prime']!r}")
+        assert _rel(n_img * efl, _EXACT_FOCAL[name]['f_prime']) < _TOL
+        assert _rel(n_obj * efl, _EXACT_FOCAL[name]['f_object']) < _TOL
+        # and the two-sided relation f'/f == n'/n
+        if abs(n_obj * efl) > 1e-12:
+            assert _rel((n_img * efl) / (n_obj * efl), n_img / n_obj) < 1e-11
+
+
+# ======================================================================
+# The operational contract: bfl is consumed as a THICKNESS
+# ======================================================================
+class TestW4bOperationalBflContract:
+    """``bfl`` is fed straight back into the surface list as a thickness
+    (``analysis``'s ``_append_image_plane(surfaces, bfl)``, ``ui``'s
+    ``surfs[-1].thickness = bfl``), so the convention-free ground truth
+    is "the thickness at which the real parallel ray lands on the axis".
+    Thickness is a GLOBAL-z step in ``trace`` while ``bfl`` is reported in
+    the unfolded frame, so the comparison carries S11-1's
+    ``(-1) ** n_mirrors`` -- exactly as
+    ``test_niche_s11_sibling_deferred`` does when it writes
+    ``surf[-1].thickness = (-1.0) ** n_mir * fod.bfl``.
+    """
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_immersed_designs(self, name):
+        surfaces, _stop = _DESIGNS[name]()
+        _M, _efl, bfl, _ffl = system_abcd(surfaces, _WL)
+        s = _loc_parity_sign(surfaces)
+        T = _bfl_operational(surfaces, _WL, bfl)
+        assert _rel(s * bfl, T) < _TOL, (
+            f"{name}: appending (-1)**m * bfl = {s * bfl!r} as a thickness "
+            f"does not land the parallel ray on the axis; the operational "
+            f"thickness is {T!r} (rel {_rel(s * bfl, T):.3e}).  Pre-fix "
+            f"bfl was {_PREFIX_FOCAL[name]['bfl']!r}.")
+        # the pre-fix value demonstrably did NOT satisfy this contract
+        if 'bfl' in _DEFECTIVE_FOCAL[name]:
+            assert _rel(s * _PREFIX_FOCAL[name]['bfl'], T) > 0.2
+
+    @pytest.mark.parametrize('name', sorted(_AIR_MIRROR_DESIGNS))
+    def test_air_mirror_controls(self, name):
+        surfaces, _stop = _AIR_MIRROR_DESIGNS[name]()
+        _M, _efl, bfl, _ffl = system_abcd(surfaces, _WL)
+        s = _loc_parity_sign(surfaces)
+        T = _bfl_operational(surfaces, _WL, bfl)
+        assert abs(s * bfl - T) < 1e-9 * max(1e-3, abs(T)), (
+            f"{name}: (-1)**m * bfl = {s * bfl!r} vs operational {T!r}")
+
+
+class TestW4bFrameConvention:
+    """Pins the frame so the retracted category error cannot return."""
+
+    @pytest.mark.parametrize('name', ['mirror_concave', 'singlet_then_fold',
+                                      'singlet_then_fold_negt'])
+    def test_w4b_frame_convention_is_the_unfolded_one(self, name):
+        """For ODD mirror parity, ``bfl`` must have the OPPOSITE sign to
+        the global-z axis crossing -- that is what "unfolded frame" means
+        and what S11-1's oracle asserts.  A first draft of W4b applied
+        ``_mirror_parity_sign`` to ``bfl`` and broke seven S11-1 pins."""
+        surfaces, _stop = _AIR_MIRROR_DESIGNS[name]()
+        _M, _efl, bfl, _ffl = system_abcd(surfaces, _WL)
+        T = _bfl_operational(surfaces, _WL, bfl)          # global z
+        assert bfl * T < 0, (
+            f"{name}: bfl {bfl!r} and the global-z focus {T!r} have the "
+            f"SAME sign; the unfolded-frame convention has been broken.")
+        assert abs(abs(bfl) - abs(T)) < 1e-9 * abs(T)
+
+    def test_even_parity_needs_no_mapping(self):
+        surfaces, _stop = _AIR_MIRROR_DESIGNS['two_mirrors_even']()
+        _M, _efl, bfl, _ffl = system_abcd(surfaces, _WL)
+        T = _bfl_operational(surfaces, _WL, bfl)
+        assert bfl * T > 0 and abs(bfl - T) < 1e-9 * abs(T)
+
+
+# ======================================================================
+# What must NOT change
+# ======================================================================
+class TestW4bAirIsBitIdentical:
+    """Air-to-air systems must not move by one bit -- at ANY mirror count,
+    since the conversion is magnitude-only.
+
+    Structural: both factors are exactly ``1.0`` and IEEE multiplication
+    by 1.0 is the identity.  Empirical: recompute the pre-fix expressions
+    in-process from the returned matrix and require exact equality.
+    """
+
+    @staticmethod
+    def _air_designs():
+        return (TestW4AirConjugatesAreBitIdentical._air_designs()
+                + [(k, v()) for k, v in sorted(_AIR_MIRROR_DESIGNS.items())])
+
+    def test_both_terminal_indices_are_exactly_one(self):
+        from lumenairy.raytrace.seidel import _image_space_index, _object_space_index
+        for name, (surfaces, _stop) in self._air_designs():
+            assert _object_space_index(surfaces, _WL) == 1.0, name
+            assert _image_space_index(surfaces, _WL) == 1.0, name
+
+    def test_prefix_expressions_reproduced_exactly(self):
+        for name, (surfaces, stop) in self._air_designs():
+            M, efl, bfl, ffl = system_abcd(surfaces, _WL)
+            A, C, D = float(M[0, 0]), float(M[1, 0]), float(M[1, 1])
+            if abs(C) <= 1e-30:
+                continue
+            assert efl == -1.0 / C, f"{name}: efl moved"
+            assert bfl == -A / C, (
+                f"{name}: bfl = {bfl!r} but the pre-fix expression gives "
+                f"{-A / C!r}; air systems must be bit-identical.")
+            assert ffl == -D / C, (
+                f"{name}: ffl = {ffl!r} but the pre-fix expression gives "
+                f"{-D / C!r}.")
+            fod = first_order_data(surfaces, _WL, stop_index=stop)
+            assert fod.pp_object_z == efl - ffl, f"{name}: pp_object_z moved"
+            assert fod.pp_image_z == bfl - efl, f"{name}: pp_image_z moved"
+
+    def test_find_paraxial_focus_tracks_bfl(self):
+        """It is a one-liner over ``system_abcd``; pin that it still is,
+        so the geometric fix reaches every ``find_paraxial_focus`` caller
+        (the ui image-plane placement path) too."""
+        from lumenairy.raytrace import find_paraxial_focus
+        for name in _ALL:
+            surfaces, _stop = _DESIGNS[name]()
+            _M, _efl, bfl, _ffl = system_abcd(surfaces, _WL)
+            assert find_paraxial_focus(surfaces, _WL) == bfl, name
+
+
+class TestW4bEflConventionAndFNumber:
+    """``efl`` stays reduced; ``fnum`` stays ``1/(2 NA')``."""
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_efl_is_untouched_and_equals_minus_one_over_C(self, name):
+        surfaces, _stop = _DESIGNS[name]()
+        M, efl, _b, _f = system_abcd(surfaces, _WL)
+        assert efl == -1.0 / float(M[1, 0])
+        assert _rel(efl, _EXACT_FOCAL[name]['efl']) < _TOL
+
+    @pytest.mark.parametrize('name', _ALL)
+    def test_fnum_is_one_over_twice_the_image_space_NA(self, name):
+        """The measurement that retracts W4's "fnum is wrong" flag: the
+        reported f/# equals ``1/(2 NA')`` computed from the REAL marginal
+        ray, on every immersed design."""
+        surfaces, stop = _DESIGNS[name]()
+        fod = first_order_data(surfaces, _WL, stop_index=stop)
+        p = compute_pupils(surfaces, _WL, stop_index=stop)
+        n_img = _loc_n_img(surfaces)
+        o = _oracle_focal(surfaces, _WL)
+        na = abs(n_img * o['u_L']) * (p.ep_radius / _HP)
+        assert _rel(fod.fnum, 1.0 / (2.0 * na)) < _TOL, (
+            f"{name}: fnum {fod.fnum!r} != 1/(2 NA') "
+            f"{1.0 / (2.0 * na)!r} (NA' = {na!r})")
+        assert _rel(fod.fnum, _EXACT_FOCAL[name]['fnum']) < _TOL
+
+    def test_the_air_only_f_over_D_formula_is_rejected(self):
+        """``f'/D_ep`` is the AIR-ONLY f/#; on a BK7 image space it reads
+        17.086 where ``1/(2 NA')`` reads 11.265.  Pinning the difference
+        keeps the retraction honest -- if someone "fixes" fnum to
+        ``f'/D_ep`` this fails."""
+        surfaces, stop = _DESIGNS['glass_image']()
+        fod = first_order_data(surfaces, _WL, stop_index=stop)
+        p = compute_pupils(surfaces, _WL, stop_index=stop)
+        n_img = _loc_n_img(surfaces)
+        f_over_d = abs(n_img * fod.efl) / (2.0 * p.ep_radius)
+        assert _rel(f_over_d, 1.708634278862e+01) < _TOL
+        assert _rel(fod.fnum, 1.126472995783e+01) < _TOL
+        assert _rel(fod.fnum, f_over_d) > 0.3
+
+
+# ======================================================================
+# The algebra twin (S11 lockstep)
+# ======================================================================
+def _immersed_prescription():
+    """``glass_object``-like design as a prescription dict: N-BK7 object
+    space, air image space, so the twin sees an immersed conjugate."""
+    return {
+        'name': 'W4bImmersedObject',
+        'aperture_diameter': 4e-3,
+        'surfaces': [
+            {'radius': 70e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+             'glass_before': 'N-BK7', 'glass_after': 'air'},
+            {'radius': 55e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'N-SF2'},
+            {'radius': -90e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+             'glass_before': 'N-SF2', 'glass_after': 'air'},
+        ],
+        'thicknesses': [21e-3, 4e-3, 0.0],
+    }
+
+
+def _immersed_image_prescription():
+    """Air object space, N-BK7 IMAGE space (the ``bfl`` side)."""
+    return {
+        'name': 'W4bImmersedImage',
+        'aperture_diameter': 4e-3,
+        'surfaces': [
+            {'radius': 45e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'N-BK7'},
+            {'radius': -60e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+             'glass_before': 'N-BK7', 'glass_after': 'air'},
+            {'radius': 80e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'N-BK7'},
+        ],
+        'thicknesses': [6e-3, 18e-3, 0.0],
+    }
+
+
+class TestW4bAlgebraTwinLockstep:
+    """S11 lesson: check the lockstep twin for the same defect.
+
+    ``algebra/from_prescription`` builds the SAME reduced matrix out of
+    ``FreeSpace(t / n)`` + ``ThinLens(1/phi)``, so:
+
+    * its ``.abcd`` and its ``.efl`` must still match ``system_abcd``
+      EXACTLY on an immersed prescription -- which they do, because
+      ``efl`` was deliberately left reduced.  Had ``efl`` been redefined
+      as ``n'/Phi``, this test would fail and the twin could not follow:
+      a ``CompositeOperator`` has no terminal-index information at all.
+    * it exposes no ``bfl``/``ffl``, so the geometric change here cannot
+      desynchronise the two layers.  Pinned structurally below.
+    """
+
+    @pytest.mark.parametrize('builder', [_immersed_prescription,
+                                         _immersed_image_prescription])
+    def test_twin_abcd_and_efl_still_match_on_an_immersed_prescription(
+            self, builder):
+        import lumenairy as la
+        from lumenairy.raytrace import surfaces_from_prescription
+        rx = builder()
+        wl = _WL
+        surfaces = surfaces_from_prescription(rx)
+        M_ref, efl_ref, _bfl, _ffl = system_abcd(surfaces, wl)
+        op = la.Operator.from_prescription(rx, wl)
+        assert np.allclose(op.abcd, M_ref, rtol=1e-9, atol=1e-12), (
+            f"{rx['name']}: twin ABCD\n{op.abcd}\ndiffers from "
+            f"system_abcd\n{M_ref}")
+        assert _rel(op.efl, efl_ref) < 1e-9, (
+            f"{rx['name']}: twin efl {op.efl!r} != system_abcd efl "
+            f"{efl_ref!r} -- the reduced-EFL lockstep is broken.")
+        # the twin's efl is the REDUCED one, so it is NOT the geometric
+        # image-space focal length whenever the image space is glass
+        n_img = _loc_n_img(surfaces, wl)
+        if n_img != 1.0:
+            assert _rel(op.efl, n_img * efl_ref) > 0.2
+
+    def test_the_twin_exposes_no_focal_distances(self):
+        """Structural half: nothing to keep in lockstep on the ``bfl`` /
+        ``ffl`` side, because the algebra layer never exposed them (and
+        could not compute them -- a CompositeOperator has folded the
+        media into its reduced lengths)."""
+        import lumenairy as la
+        op = la.Operator.from_prescription(_immersed_prescription(), _WL)
+        for attr in ('bfl', 'ffl', 'pp_image_z', 'pp_object_z'):
+            assert not hasattr(op, attr), (
+                f"Operator now exposes {attr!r}; it must be kept in "
+                f"lockstep with system_abcd's geometric convention (see "
+                f"the W4b note in seidel.system_abcd).")
+        assert hasattr(op, 'efl')
