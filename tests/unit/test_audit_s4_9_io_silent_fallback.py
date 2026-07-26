@@ -12,6 +12,13 @@ not the other):
     two siblings did not.  Fix: mirror the ``if value is None:
     continue`` guard.  (Highest value / lowest risk.)
 
+    v5.29.1: the ``append_plane_h5`` half of (4) is SUPERSEDED by audit
+    A-4, which routes that function's ``metadata=`` through the module's
+    canonical type-tagged codec -- so ``None`` is now preserved rather
+    than dropped (and nested / heterogeneous containers no longer raise
+    at all).  ``save_jones_field_h5`` still uses the S4-9 skip guard, so
+    its test below is unchanged.
+
 (2) An unrecognised ``UNIT`` (``.zmx``) / ``Lens Units`` (``.txt``)
     token silently defaulted to millimeters -- a potential
     order-of-magnitude mis-scale with no warning.  Fix: warn before the
@@ -69,24 +76,36 @@ class TestS4_9HDF5NoneMetadataGuard:
             with pytest.raises(Exception):
                 grp.attrs['bad'] = None
 
-    def test_append_plane_h5_skips_none_metadata(self, tmp_path):
+    def test_append_plane_h5_preserves_none_metadata(self, tmp_path):
         """POST-fix: a ``None`` metadata value no longer crashes the HDF5
-        backend; it is dropped (reads back as absent) while sibling
-        non-None keys survive -- matching the zarr backend and
-        ``save_field_h5``."""
+        backend.
+
+        SUPERSEDED BY A-4 (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25).  S4-9
+        satisfied its goal -- "match the zarr backend, which stores
+        ``None`` fine" -- by DROPPING the key, which stops the crash but
+        loses the value.  A-4 routes ``append_plane_h5(metadata=)`` through
+        the module's own type-tagged codec instead, so ``None`` now
+        round-trips as ``None``: measured against the zarr twin, both
+        backends return ``note is None`` (and both return the nested-dict
+        case identically), i.e. this closes the same divergence S4-9
+        targeted, more completely.  The original name of this test
+        (``..._skips_none_metadata``) and its ``'note' not in`` assertion
+        pinned the lossy half of that fix; both are updated here.
+        """
         pytest.importorskip('h5py')
         from lumenairy.io.storage import append_plane_h5, load_planes_h5
         p = str(tmp_path / 'planes.h5')
         field = np.ones((8, 8), dtype=np.complex128)
-        # Would raise pre-fix on the ``note=None`` entry.
+        # Would raise pre-S4-9 on the ``note=None`` entry.
         append_plane_h5(p, field, dx=1e-6,
                         metadata={'source': 'probe', 'note': None},
                         swmr=False)
         planes, _ = load_planes_h5(p)
         assert len(planes) == 1
-        # Non-None key survives; None key was dropped (absent), not stored.
+        # Non-None key survives; the None key is now STORED, not dropped.
         assert planes[0]['source'] == 'probe'
-        assert 'note' not in planes[0]
+        assert 'note' in planes[0]
+        assert planes[0]['note'] is None
 
     def test_save_jones_field_h5_skips_none_metadata(self, tmp_path):
         """POST-fix: same guard on the Jones-field writer."""

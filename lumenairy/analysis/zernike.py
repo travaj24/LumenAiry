@@ -307,9 +307,20 @@ def zernike_basis_matrix(
     entries) plus ``n_modes`` and ``pupil_radius``.  Two structurally
     identical grids hit the same cache entry even if they are distinct
     array objects -- this is the common case under
-    ``design_optimize``.  The same underlying arrays are returned on a
-    cache hit -- treat the returned ``basis`` and ``pupil_mask`` as
-    immutable; copy first if you need to modify them.  Call
+    ``design_optimize``.
+
+    **The returned arrays are READ-ONLY** (``flags.writeable is False``)
+    because they are the cache's own arrays, shared by every caller that
+    hits the same key.  Writing to them raises ``ValueError``; use
+    ``basis.copy()`` if you need a mutable copy.  v5.29.1 (audit A-13ish):
+    they used to come back writable, so a single stray in-place write
+    silently poisoned the basis for every later consumer in the process
+    (measured: a value written into ``basis[0, 0]`` was still there on the
+    next call, and the LRU key never noticed).  Every in-library consumer
+    -- ``zernike_decompose``, ``zernike_reconstruct``,
+    ``analysis.ao._wfs``'s cached reprojection matrix -- uses the arrays
+    read-only (slicing, ``@``, and out-of-place elementwise scaling), so
+    the freeze costs nothing and changes no numeric output.  Call
     :func:`clear_zernike_basis_cache` to drop the cache (e.g. after
     mutating a grid in place).
     """
@@ -328,6 +339,15 @@ def zernike_basis_matrix(
     # overwrites the first.
     basis, pupil_mask = _zernike_basis_matrix_build(
         n_modes, X, Y, pupil_radius)
+
+    # A-13ish: freeze BEFORE the arrays become reachable through the cache,
+    # so the miss path and the hit path hand out identically-flagged
+    # objects (a contract that differed between first and later calls would
+    # be worse than no contract).  ``_zernike_basis_matrix_build`` itself
+    # still returns writable arrays for callers that want the uncached
+    # build.
+    basis.setflags(write=False)
+    pupil_mask.setflags(write=False)
 
     with _ZERNIKE_BASIS_CACHE_LOCK:
         _ZERNIKE_BASIS_CACHE[key] = (basis, pupil_mask)

@@ -2020,3 +2020,15 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
 
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
+
+
+# A-13ish (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): declare the public
+# surface explicitly, matching the convention every ``analysis/`` module
+# already follows.  Every name here is re-exported through
+#  ``lumenairy.io.prescriptions`` (v5.1.0 split) and the top-level facade.
+__all__ = [
+    'load_zemax_zmx',
+    'load_zemax_prescription_data_txt',
+    'export_zemax_lens_data',
+    'export_zemax_zmx',
+]

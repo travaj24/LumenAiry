@@ -523,3 +523,18 @@ def thorlabs_lens(part_number: str) -> Dict[str, Any]:
 
     else:
         raise ValueError(f"Unknown lens type: {entry['type']}")
+
+
+# A-13ish (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): declare the public
+# surface explicitly, matching the convention every ``analysis/`` module
+# already follows.  Every name here is re-exported through
+#  ``lumenairy.io.prescriptions`` (v5.1.0 split) and the top-level facade.
+__all__ = [
+    'make_singlet',
+    'make_doublet',
+    'make_cylindrical',
+    'make_biconic',
+    'make_off_axis_parabola',
+    'thorlabs_lens',
+    'THORLABS_CATALOG',
+]

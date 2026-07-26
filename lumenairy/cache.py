@@ -197,26 +197,74 @@ def set_cache_budget(mb: Optional[float]) -> None:
 # Byte accounting
 # ---------------------------------------------------------------------------
 
+def _buffer_owner(arr: Any) -> Any:
+    """Walk an array's ``.base`` chain to the object that owns the buffer.
+
+    A NumPy (or CuPy) VIEW keeps its base buffer alive in full: a 16-byte
+    ``big[0:1, 0:1]`` slice of a 4 MiB array retains all 4 MiB.  The base
+    chain is followed to the ultimate owner so the retained bytes are
+    attributed to the buffer, not to the window onto it.  Returns ``arr``
+    itself for a base-less (owning) array or for any object whose ``base``
+    does not expose an integer ``nbytes`` (e.g. a ``bytes`` buffer behind
+    ``np.frombuffer``) -- in which case the caller falls back to the
+    view's own size, the historical behaviour.
+    """
+    owner = arr
+    for _ in range(64):   # cycle/pathology guard; real chains are 1-2 deep
+        base = getattr(owner, 'base', None)
+        if base is None:
+            return owner
+        if not isinstance(getattr(base, 'nbytes', None), (int, np.integer)):
+            return owner
+        owner = base
+    return owner
+
+
 def deep_nbytes(obj: Any, _seen: Optional[set] = None) -> int:
     """Best-effort retained-byte size of a cache value.
 
-    * ndarray (anything exposing an integer ``.nbytes``): the buffer size.
+    * ndarray (anything exposing an integer ``.nbytes``): the size of the
+      BUFFER it keeps alive -- i.e. the ultimate ``.base`` owner's
+      ``nbytes``, not the window's.  See :func:`_buffer_owner`.
     * tuple / list / set / frozenset: container overhead + recursive sum
       of the elements (the common ``(cos_in, cos_out)`` array-pair case).
     * dict: container overhead + recursive sum of keys and values.
     * anything else: ``sys.getsizeof``.
 
-    Cycles are handled with an id-based ``_seen`` set (each object counted
-    once).  Under-counting is the fail-safe direction: it can only let a
-    cache hold a little more than its budget, never corrupt behaviour.
+    Each distinct buffer / container is counted ONCE per call, keyed on the
+    id of its owner (this also breaks reference cycles).  Two views onto
+    the same base, or the same array appearing twice in a tuple, therefore
+    contribute their shared buffer a single time.
+
+    v5.29.1 (audit A-5): both halves of this used to be wrong in
+    OPPOSITE directions.  A view was charged its slice size (measured: 16 B
+    for a 16-byte window on a 4 MiB base), so a view-heavy cache under a
+    1 MiB ceiling accounted 256 B while genuinely retaining 64 MiB -- 64x
+    over budget, and eviction never fired.  Meanwhile repeated arrays were
+    double-counted because the ``nbytes`` shortcut returned before the
+    ``_seen`` check (``deep_nbytes((a, a))`` charged 8000 B twice).
+    Charging the base buffer once per unique owner fixes the dangerous
+    direction without re-introducing the double count.  Residual
+    under-count sources (objects with no ``nbytes`` and no
+    ``getsizeof`` support, buffers shared ACROSS cache entries) remain the
+    fail-safe direction: the cache may hold a little more than its budget,
+    never less.
     """
     if obj is None:
         return 0
-    nb = getattr(obj, 'nbytes', None)
-    if isinstance(nb, (int, np.integer)):
-        return int(nb)
     if _seen is None:
         _seen = set()
+    nb = getattr(obj, 'nbytes', None)
+    if isinstance(nb, (int, np.integer)):
+        owner = _buffer_owner(obj)
+        oid = id(owner)
+        if oid in _seen:
+            return 0
+        _seen.add(oid)
+        onb = getattr(owner, 'nbytes', None)
+        if isinstance(onb, (int, np.integer)):
+            return int(onb)
+        return int(nb)
     oid = id(obj)
     if oid in _seen:
         return 0

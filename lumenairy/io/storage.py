@@ -347,6 +347,76 @@ def _flatten_metadata(d, prefix=''):
     return items
 
 
+def _h5_write_meta_attrs(holder, metadata) -> None:
+    """Write a user ``metadata`` mapping onto an h5py attrs holder faithfully.
+
+    A-4 (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25).  Handing the raw values
+    to ``holder.attrs[k] = v`` measured 4 hard raises (nested dict,
+    heterogeneous list, any non-serializable object) plus a silent DROP of
+    ``None`` and four silent type coercions (``list``/``tuple`` ->
+    ``ndarray``, ``bytes`` -> ``str``) over the module's own 19-type probe
+    set -- while :func:`_meta_dumps` (already the contract for
+    ``write_sim_metadata``, S4-19) round-trips all 19.  This helper routes
+    ``metadata`` through the SAME canonical codec:
+
+    * the authoritative, type-tagged JSON blob under ``_META_BLOB_KEY``;
+    * plus the best-effort *flattened* native-attr copy so external tools
+      (HDFView, ``h5dump``) and older library readers still see readable
+      keys.  The flat copy is lossy by construction and is discarded on
+      read in favour of the blob (see :func:`_h5_read_attrs`).
+
+    BACK-COMPAT: files written by the pre-A-4 raw-attr scheme carry no
+    blob and read back byte-for-byte as before -- :func:`_h5_read_attrs`
+    only consults the blob when it is present.
+    """
+    if not metadata:
+        return
+    holder.attrs[_META_BLOB_KEY] = _meta_dumps(metadata)
+    for k, v in _flatten_metadata(metadata).items():
+        if v is None:   # h5py cannot store a None attr; the blob carries it
+            continue
+        # Best-effort external-inspection view only -- never aborts the
+        # write (the blob is authoritative).  Mirrors
+        # :func:`_h5_write_sim_metadata`.
+        try:
+            holder.attrs[str(k)] = v
+        except (TypeError, ValueError):
+            try:
+                holder.attrs[str(k)] = str(v)
+            except (TypeError, ValueError):
+                pass
+
+
+def _h5_read_attrs(holder) -> Dict[str, Any]:
+    """Decode every attribute of an h5py dataset / group to Python types.
+
+    Equivalent to ``{k: _decode_attr(v) for k, v in holder.attrs.items()}``
+    (the historical behaviour, preserved exactly for files with no
+    metadata blob) plus the A-4 blob overlay: when ``_META_BLOB_KEY`` is
+    present its decoded mapping is authoritative, and the lossy flattened
+    shadow copies of those same keys are dropped so the caller sees the
+    structure it wrote rather than a mix of both views.  The reserved blob
+    key itself is never surfaced.
+    """
+    out = {k: _decode_attr(holder.attrs[k]) for k in holder.attrs.keys()}
+    blob = out.pop(_META_BLOB_KEY, None)
+    if blob is None:
+        return out
+    try:
+        decoded = _meta_loads(blob)
+    except (ValueError, TypeError):
+        # Truncated / foreign blob: fall back to the native attrs rather
+        # than losing them (the flat copy is still there).
+        return out
+    if not isinstance(decoded, dict):
+        return out
+    # Drop the flattened shadow copies the writer left for external tools.
+    for flat_key in _flatten_metadata(decoded):
+        out.pop(flat_key, None)
+    out.update(decoded)
+    return out
+
+
 # ── Single field I/O (HDF5-specific) ────────────────────────────────────
 
 def save_field_h5(filepath: str, E: np.ndarray, dx: float,
@@ -441,8 +511,7 @@ def load_field_h5(filepath: str) -> Tuple[np.ndarray, Dict[str, Any]]:
                            f"load_planes instead.")
         dset = f['field']
         E = np.array(dset[()])
-        metadata = {k: _decode_attr(dset.attrs[k])
-                    for k in dset.attrs.keys()}
+        metadata = _h5_read_attrs(dset)
     return E, metadata
 
 
@@ -546,8 +615,7 @@ def load_planes_h5(filepath: str,
         n = int(grp.attrs['n_planes'])
         if indices is None:
             indices = list(range(n))
-        file_metadata = {k: _decode_attr(grp.attrs[k])
-                         for k in grp.attrs.keys()}
+        file_metadata = _h5_read_attrs(grp)
         planes = []
         for i in indices:
             name = f'plane_{i:02d}'
@@ -555,8 +623,7 @@ def load_planes_h5(filepath: str,
                 raise KeyError(f"Plane {name} not found in file")
             dset = grp[name]
             plane = {'field': np.array(dset[()])}
-            for k in dset.attrs.keys():
-                plane[k] = _decode_attr(dset.attrs[k])
+            plane.update(_h5_read_attrs(dset))
             planes.append(plane)
     return planes, file_metadata
 
@@ -653,8 +720,7 @@ def load_jones_field_h5(filepath: str) -> Tuple[Any, Dict[str, Any]]:
         Ey = np.array(grp['Ey'][()])
         dx = float(grp.attrs['dx'])
         dy = float(grp.attrs['dy'])
-        metadata = {k: _decode_attr(grp.attrs[k])
-                    for k in grp.attrs.keys()}
+        metadata = _h5_read_attrs(grp)
     return JonesField(Ex, Ey, dx, dy), metadata
 
 
@@ -685,7 +751,17 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
     z, label, metadata
-        Per-plane stored attributes.
+        Per-plane stored attributes.  ``metadata`` may be an arbitrarily
+        nested mapping: v5.29.1+ (audit A-4) serialises it through the
+        same canonical type-tagged JSON codec ``write_sim_metadata``
+        uses, so ``None``, ``bytes``, ``complex``, ``tuple``, empty and
+        heterogeneous lists, and nested dicts all survive the round-trip
+        through :func:`load_planes` / :func:`load_planes_h5` as the exact
+        Python types written.  Pre-v5.29.1 the values were handed
+        straight to h5py attrs, which raised on nested / heterogeneous
+        containers and silently dropped ``None``.  A flattened
+        native-attr copy of the scalars is still written for external
+        inspection tools.
     compression, compression_opts
         HDF5 compression filter and level.
     chunk_size : int, default 1024
@@ -842,15 +918,14 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
                     dset.attrs['z'] = float(z)
                 if label is not None:
                     dset.attrs['label'] = str(label)
-                if metadata:
-                    for k, v in metadata.items():
-                        # storage-nit (AUDIT S4-9): skip ``None`` attrs so
-                        # the HDF5 backend matches zarr (which stores ``None``
-                        # fine) instead of raising deep in h5py's C layer.
-                        # Mirrors save_field_h5.
-                        if v is None:
-                            continue
-                        dset.attrs[str(k)] = v
+                # A-4 (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): route
+                # ``metadata`` through the canonical type-tagged codec
+                # instead of handing raw values to h5py attrs.  This
+                # SUPERSEDES the S4-9 ``None``-skip: the blob stores
+                # ``None`` faithfully (matching zarr, which was S4-9's
+                # stated goal) instead of dropping it, and nested /
+                # heterogeneous / empty containers no longer raise.
+                _h5_write_meta_attrs(dset, metadata)
                 # v4.16.0 SWMR: enable single-writer-multiple-reader
                 # mode AFTER the new dataset + attributes are in
                 # place.  HDF5 SWMR requires that no schema changes
@@ -921,8 +996,7 @@ def _h5_list_planes(filepath):
                 f"File {filepath} does not contain a '/planes' group.")
         grp = f['planes']
         n = int(grp.attrs['n_planes'])
-        file_metadata = {k: _decode_attr(grp.attrs[k])
-                         for k in grp.attrs.keys()}
+        file_metadata = _h5_read_attrs(grp)
         planes = []
         for i in range(n):
             name = f'plane_{i:02d}'
@@ -930,8 +1004,7 @@ def _h5_list_planes(filepath):
                 continue
             dset = grp[name]
             info = {'index': i, 'shape': tuple(dset.shape)}
-            for k in dset.attrs.keys():
-                info[k] = _decode_attr(dset.attrs[k])
+            info.update(_h5_read_attrs(dset))
             planes.append(info)
     return planes, file_metadata
 
@@ -956,8 +1029,7 @@ def _h5_load_plane_by_label(filepath, label_substring, *,
             haystack = label if case_sensitive else label.lower()
             if target in haystack:
                 plane = {'index': i, 'field': np.array(dset[()])}
-                for k in dset.attrs.keys():
-                    plane[k] = _decode_attr(dset.attrs[k])
+                plane.update(_h5_read_attrs(dset))
                 return plane
     raise KeyError(f"No plane in {filepath} with label containing "
                    f"{label_substring!r}")
@@ -975,8 +1047,7 @@ def _h5_load_plane_slice(filepath, plane_index, y_slice, x_slice):
             raise KeyError(f"Plane {name} not found in {filepath}")
         dset = grp[name]
         E_sub = dset[y_slice, x_slice]
-        attrs = {k: _decode_attr(dset.attrs[k])
-                 for k in dset.attrs.keys()}
+        attrs = _h5_read_attrs(dset)
     return E_sub, attrs
 
 
@@ -1041,8 +1112,7 @@ def list_h5_contents(filepath: str) -> Dict[str, Any]:
         print("=" * 60)
 
         def _walk(name, obj):
-            attrs = {k: _decode_attr(obj.attrs[k])
-                     for k in obj.attrs.keys()}
+            attrs = _h5_read_attrs(obj)
             if isinstance(obj, h5py.Dataset):
                 entry = {
                     'type': 'dataset', 'shape': obj.shape,
@@ -1058,8 +1128,7 @@ def list_h5_contents(filepath: str) -> Dict[str, Any]:
             info[name] = entry
 
         f.visititems(_walk)
-        root_attrs = {k: _decode_attr(f.attrs[k])
-                      for k in f.attrs.keys()}
+        root_attrs = _h5_read_attrs(f)
         if root_attrs:
             info['/'] = {'type': 'root', 'attrs': root_attrs}
             print("  / (root attrs):")
@@ -1836,3 +1905,42 @@ def replay_run(filepath: str, *,
         history=history,
         metadata={'source': str(filepath)},
     )
+
+
+# A-13ish (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): every module under
+# ``analysis/`` declares its public surface with ``__all__``; the ``io/``
+# modules did not, so ``from ... import *`` leaked private helpers and the
+# ``__all__``-symmetry walkers had nothing to check against here.  This
+# list is the module's public surface exactly as re-exported by
+# ``lumenairy.io.__init__`` (plus the backwards-compatible ``*_store`` /
+# ``*_metadata`` aliases defined above).
+__all__ = [
+    # HDF5-specific
+    'save_field_h5',
+    'load_field_h5',
+    'save_planes_h5',
+    'load_planes_h5',
+    'save_jones_field_h5',
+    'load_jones_field_h5',
+    'append_plane_h5',
+    'list_h5_contents',
+    # Unified backend dispatch
+    'set_storage_backend',
+    'get_storage_backend',
+    'default_extension',
+    'append_plane',
+    'load_planes',
+    'list_planes',
+    'load_plane_by_label',
+    'load_plane_slice',
+    'write_sim_metadata',
+    'read_sim_metadata',
+    'replay_run',
+    'TempFieldStore',
+    # Backwards-compatible aliases
+    'list_planes_store',
+    'load_plane_by_label_store',
+    'load_plane_slice_store',
+    'write_metadata',
+    'read_metadata',
+]

@@ -217,7 +217,19 @@ def compute_otf(psf: np.ndarray) -> np.ndarray:
     Returns
     -------
     otf : ndarray (complex, N×N)
-        Complex OTF, normalized so ``otf[0, 0]`` (DC) = 1.
+        Complex OTF on an **fftshifted** frequency lattice: zero
+        frequency sits at the array CENTRE, ``otf[N // 2, N // 2]``, and
+        that is the element normalized to exactly 1.  The corner
+        ``otf[0, 0]`` is the most negative frequency bin, not DC (on a
+        symmetric PSF it measures ~1e-17, i.e. numerical zero).
+
+        v5.29.1 (audit A-7): this docstring previously claimed
+        ``otf[0, 0]`` was the DC = 1 element, contradicting the
+        ``fftshift`` the implementation has always applied.  Behaviour is
+        unchanged -- only the documented convention is corrected.  The
+        matching spatial-frequency axes are
+        ``fftshift(fftfreq(N, d=dx_psf))``; see :func:`mtf_radial`, which
+        already assumes the centred layout.
 
     Notes
     -----
@@ -261,7 +273,12 @@ def compute_mtf(psf: np.ndarray) -> np.ndarray:
     Returns
     -------
     mtf : ndarray (real, N×N)
-        MTF normalized so ``mtf[0, 0]`` = 1 at DC.
+        ``|OTF|`` on the same **fftshifted** lattice as
+        :func:`compute_otf`: DC is the array CENTRE,
+        ``mtf[N // 2, N // 2]`` = 1.  ``mtf[0, 0]`` is the corner
+        (highest-|frequency|) bin, ~1e-17 on a symmetric PSF -- NOT the
+        DC value the pre-v5.29.1 docstring claimed (audit A-7,
+        documentation-only correction).
 
     Notes
     -----

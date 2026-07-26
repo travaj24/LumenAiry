@@ -555,3 +555,16 @@ def combine_prescriptions(
         'surfaces': surfaces,
         'thicknesses': thicknesses,
     }
+
+
+# A-13ish (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): declare the public
+# surface explicitly, matching the convention every ``analysis/`` module
+# already follows.  Every name here is re-exported through
+#  ``lumenairy.io.prescriptions`` (v5.1.0 split) and the top-level facade.
+__all__ = [
+    'scale_prescription',
+    'normalize_prescription',
+    'split_prescription_at_mirrors',
+    'combine_prescriptions',
+    'has_mirrors',
+]

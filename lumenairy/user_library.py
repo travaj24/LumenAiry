@@ -887,23 +887,54 @@ def load_all_materials() -> None:
 
     Called automatically on import so that saved materials are
     immediately available in any script.
+
+    A corrupted / partially-written entry is SKIPPED -- one bad file must
+    not cost the user every other saved glass -- but v5.29.1 (audit A-8)
+    also emits a :class:`UserWarning` naming the entry, the file on disk,
+    and the exception.  Pre-fix this was a bare ``except ...: pass`` at
+    both levels, so a user glass that failed to load simply vanished:
+    every later ``get_glass_index('MyGlass', ...)`` raised
+    "unknown glass" with nothing anywhere pointing at the real cause.
     """
+    lib = get_library_path() / 'materials'
     for name in list_materials():
         try:
             load_material(name)
-        except (OSError, ValueError, KeyError, RuntimeError, ImportError):
-            # Corrupted / partially-written user material file; skip
-            # it and continue loading the others.
-            pass
+        except (OSError, ValueError, KeyError, RuntimeError,
+                ImportError) as exc:
+            warnings.warn(
+                f"user_library: saved material {name!r} could not be "
+                f"loaded and is NOT registered in GLASS_REGISTRY "
+                f"(file: {lib / f'{_safe_name(name)}.json'}) -- "
+                f"{type(exc).__name__}: {exc}.  Every other saved "
+                f"material still loaded; fix or delete this entry "
+                f"(lumenairy.user_library.delete_material) to clear "
+                f"this warning.",
+                UserWarning,
+                stacklevel=2,
+            )
 
 
 # Auto-load on import
 try:
     load_all_materials()
-except (OSError, ValueError, KeyError, RuntimeError, ImportError):
+except (OSError, ValueError, KeyError, RuntimeError, ImportError) as _exc:
     # Library import must never fail because of a broken user-library
     # store -- the directory may be missing, permission-locked, or
     # contain corrupted entries.  Library functions still work; the
     # user just won't see their saved materials until they fix the
-    # underlying issue.
-    pass
+    # underlying issue.  v5.29.1 (audit A-8): say so instead of
+    # swallowing it silently.  This outer handler now only fires for
+    # STORE-level failures (unreadable library directory) -- per-entry
+    # failures are warned about and skipped inside
+    # ``load_all_materials``.
+    warnings.warn(
+        f"user_library: the saved-material store could not be read, so NO "
+        f"user materials were registered in GLASS_REGISTRY -- "
+        f"{type(_exc).__name__}: {_exc}.  The rest of lumenairy is "
+        f"unaffected; check the library directory "
+        f"(lumenairy.user_library.get_library_path) or override it with "
+        f"set_library_path().",
+        UserWarning,
+        stacklevel=2,
+    )

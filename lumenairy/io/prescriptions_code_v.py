@@ -463,3 +463,13 @@ def load_codev_seq(filepath: str,
     if bfl is not None and bfl != 0.0 and np.isfinite(bfl):
         result['back_focal_length'] = float(bfl)
     return result
+
+
+# A-13ish (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): declare the public
+# surface explicitly, matching the convention every ``analysis/`` module
+# already follows.  Every name here is re-exported through
+#  ``lumenairy.io.prescriptions`` (v5.1.0 split) and the top-level facade.
+__all__ = [
+    'load_codev_seq',
+    'export_codev_seq',
+]

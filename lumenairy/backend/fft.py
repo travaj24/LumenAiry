@@ -45,18 +45,16 @@ from typing import Any, Optional, Sequence, Union
 import numpy as np
 
 from .array import (
-    JAX_AVAILABLE,
     _get_jnp,
     is_cupy_array,
     is_jax_array,
 )
 
-
-def _jnp_or_none() -> Optional[Any]:
-    """Lazy accessor for jax.numpy.  Avoids loading JAX at import time
-    when the FFT path doesn't actually run JAX (which is most of the
-    time)."""
-    return _get_jnp() if JAX_AVAILABLE else None
+# Dead code removed in v5.29.1 (audit A-9..A-14): ``_jnp_or_none()`` had
+# zero references repo-wide (grep-verified over every .py/.pyi/.md/.cfg/
+# .toml in the tree -- the only hits were its own ``def`` line and the
+# audit report naming it).  ``_jnp_required`` below is the live accessor;
+# the ``JAX_AVAILABLE`` import went with it, having had no other use here.
 
 
 def _jnp_required() -> Any:
@@ -87,6 +85,40 @@ def fft2(x: Any) -> Any:
     * Otherwise (NumPy / CuPy)  -> :func:`lumenairy.propagation._fft2`
       which preserves the pyFFTW > scipy.fft > numpy.fft priority
       chain plus CuPy short-circuit.
+
+    Returned-buffer ownership -- THE CALLER DOES NOT OWN THE RESULT
+    ---------------------------------------------------------------
+    v5.29.1 (audit P13-P16): this function forwards
+    :func:`lumenairy.propagators.fft_infra._fft2` **unchanged**, and so
+    inherits its double-buffer contract verbatim.  On the pyFFTW path
+    (NumPy input, complex dtype, ``shape[0] >= FFTW_MIN_SIZE``, plan-cache
+    double-buffer enabled -- the shipped default) the returned array is a
+    view into one of two ping-pong workspace buffers owned by the plan
+    cache, NOT a fresh allocation (``result.flags.owndata is False``).
+    Therefore:
+
+    * The result is guaranteed stable across exactly **ONE** subsequent
+      same-shape FFT call.  The SECOND one silently overwrites it.
+      Measured at N=512 complex128: unchanged after one further ``fft2``
+      (max|delta| = 0.0), then ``max|delta| = 3.66e3`` on a field whose own
+      peak magnitude is 2.45e3 after the second (``ifft2``: 1.40e-2
+      against a 9.33e-3 peak).
+    * Callers that keep the result alive across more than one further FFT
+      -- storing it in a cache, a returned dataclass, a plane log, or a
+      transfer function -- **must** ``.copy()`` it.  See
+      ``propagators/rs.py`` (audit F-3) and ``propagators/fresnel.py``
+      (audit P2) for the two in-library sites where exactly this bug was
+      found and fixed with a ``.copy()``; P2's symptom was a
+      previously-returned field silently becoming byte-identical to a
+      later leg's result.
+    * No copy is added here on purpose: in-library callers rely on the
+      zero-copy path (it is the ~256 MB-1 GB per-call saving at 4k-8k
+      grids that motivated the ping-pong), so the copy belongs at the
+      sites that retain the array.  ``set_fft_double_buffer(False)`` makes
+      every return a private copy globally if you want that trade.
+    * The scipy / numpy fallback path, the CuPy path, and the JAX path all
+      return fresh arrays, so a defensive ``.copy()`` is a harmless no-op
+      there.
     """
     if is_jax_array(x):
         return _jnp_required().fft.fft2(x)
@@ -99,7 +131,11 @@ def fft2(x: Any) -> Any:
 
 def ifft2(x: Any) -> Any:
     """Backend-aware 2-D inverse FFT.  Same priority chain as
-    :func:`fft2`."""
+    :func:`fft2` -- and the SAME returned-buffer ownership contract: on
+    the pyFFTW path the result is a view into the inverse ping-pong
+    workspace, stable across exactly one subsequent same-shape call.
+    Callers retaining it longer must ``.copy()``.  See :func:`fft2` for
+    the measured numbers and the in-library precedents (audit P13-P16)."""
     if is_jax_array(x):
         return _jnp_required().fft.ifft2(x)
     from ..propagators import fft_infra as _prop

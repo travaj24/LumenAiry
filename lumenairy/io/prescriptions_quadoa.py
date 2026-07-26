@@ -386,3 +386,14 @@ def load_quadoa_qos(filepath: str,
                 and np.isfinite(last_surface_thickness)):
             result['back_focal_length'] = float(last_surface_thickness)
     return result
+
+
+# A-13ish (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): declare the public
+# surface explicitly, matching the convention every ``analysis/`` module
+# already follows.  Every name here is re-exported through
+#  ``lumenairy.io.prescriptions`` (v5.1.0 split) and the top-level facade.
+__all__ = [
+    'load_quadoa_qos',
+    'export_quadoa_qos',
+    'QUADOA_SCHEMA_VERSION',
+]

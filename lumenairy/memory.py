@@ -286,7 +286,11 @@ def pick_batch_size(n_items: int, cost_per_item: int,
     n_items : int
         Total number of items to process.
     cost_per_item : int
-        Memory cost of ONE item in bytes.
+        Memory cost of ONE item in bytes.  ``0`` means "free" (the whole
+        workload fits in one batch); a NEGATIVE cost is rejected (audit
+        A-9..A-14 -- pre-v5.29.1 it was silently treated as free, so a
+        sign-flipped or subtracted-in-the-wrong-order caller got the
+        maximum batch size and OOMed instead of being told).
     available : int or None
         Available memory in bytes.  If ``None``, uses
         :func:`get_ram_budget` (the :func:`set_max_ram` override when
@@ -317,7 +321,12 @@ def pick_batch_size(n_items: int, cost_per_item: int,
     if available is None:
         available = get_ram_budget()
 
-    if cost_per_item <= 0:
+    if cost_per_item < 0:
+        raise ValueError(
+            f"pick_batch_size: cost_per_item must be >= 0 bytes (got "
+            f"{cost_per_item!r}).  A negative memory cost is meaningless; "
+            f"pass 0 if the per-item cost really is negligible.")
+    if cost_per_item == 0:
         return max(min_batch, n_items)
 
     budget = int(available * safety)
@@ -339,7 +348,8 @@ def should_split(total_cost: int,
     ----------
     total_cost : int
         Estimated memory cost of running the whole operation at once,
-        in bytes.
+        in bytes.  Must be >= 0: a negative cost is rejected rather than
+        silently answering "no split needed" (audit A-9..A-14).
     available : int or None
         Available memory in bytes.  Defaults to :func:`get_ram_budget`
         (honours a :func:`set_max_ram` override -- audit P2-21).
@@ -350,9 +360,18 @@ def should_split(total_cost: int,
     -------
     split : bool
         True if ``total_cost`` exceeds ``safety * available``.
+
+    Raises
+    ------
+    ValueError
+        If ``total_cost`` is negative.
     """
     if available is None:
         available = get_ram_budget()
+    if total_cost < 0:
+        raise ValueError(
+            f"should_split: total_cost must be >= 0 bytes (got "
+            f"{total_cost!r}).  A negative memory cost is meaningless.")
     return total_cost > int(available * safety)
 
 
@@ -488,7 +507,34 @@ _LENS_F64_ARRAYS = 6.2            # coord lineage + sag/opd transients + opl_map
 _LENS_SLANT_F64_ARRAYS = 6.0     # extra angle stack (dsag_dx/dy, grad_sq, cos_ti/tt, opd) when slant/fresnel
 _LENS_COMPLEX_ARRAYS = 0.8       # resident complex set after the v5.17.0 eager frees
 _NEWTON_BYTES_PER_COARSE_PT = 2490.0   # coarse-grid Newton solve + poly fit + map_coordinates, per (N/sub)^2 pt
-_ASM_COMPLEX_ARRAYS = 4.0        # bare ASM step: E_in + H + fft scratch (+ resident plan buffers added separately)
+# Bare ASM step (audit A-6, RE-DERIVED 2026-07-25 from fresh-interpreter
+# tracemalloc profiles of ``angular_spectrum_propagate`` at N=64..2048 in
+# complex64 and complex128; see :func:`estimate_asm_memory`).  The measured
+# allocation profile separates into three terms that each fit to <1%:
+#
+#   * 2 complex full-grid arrays -- the cached transfer function H and the
+#     returned output field.  (The steady-state per-call peak, with H and the
+#     pyFFTW plans already resident, measures 1.00x N^2*itemsize exactly: the
+#     output field alone.)
+#   * ~0.63 FLOAT64 full-grid arrays -- the fx/fy/kz frequency-grid
+#     transients, which do NOT shrink with complex64 (visible only in the
+#     complex64 readings, where the shape term is 6.63x itemsize vs 6.00x for
+#     complex128).  Rounded UP to 0.7 so the complex128 case is bounded too.
+#   * 2 aligned pyFFTW workspace buffers per resident plan key
+#     (``plan_cache_keys``), added separately below.
+#
+# The pre-A-6 constant was 4.0 with no float64 or fixed term, giving
+# est/measured 0.53 (N=512) / 0.96 (1024) / 1.22 (2048) -- neither a bound
+# nor a steady-state figure.
+_ASM_COMPLEX_ARRAYS = 2.0
+_ASM_F64_GRID_ARRAYS = 0.7       # dtype-independent frequency-grid transients
+# One-time, N-INDEPENDENT cost of the first ASM call in a fresh process: the
+# lazy import of the FFT backend (pyFFTW / scipy.fft) and its plan
+# infrastructure.  Measured 38.17-38.50 MB at N=64/128/256/512/1024/2048
+# (constant to 4 significant figures across all six grids and both dtypes);
+# rounded up to 40 MiB for headroom.  This term is what made the old
+# estimate a 0.53x UNDER-estimate at N=512 -- at small N it dominates.
+_ASM_FIRST_CALL_FIXED_BYTES = 40 * 1024 * 1024
 # Row-band (sag_chunk_rows) mode: the full-grid float64 lens stack never
 # materialises; the peak is the resident complex fields + FFT plan buffers +
 # band transients.  Calibrated from the c128 chunked anchor (26.3 GB at
@@ -662,15 +708,61 @@ def estimate_asm_memory(n_grid: int,
                         complex_dtype: Any = 'complex128',
                         *,
                         plan_cache_keys: int = 2) -> int:
-    """Estimate the peak RAM (bytes) of one band-limited ASM propagation
-    step, including the resident pyFFTW double-buffer aligned workspaces
-    (``plan_cache_keys`` distinct fwd/inv plan keys, two buffers each)."""
+    """Estimate the FIRST-CALL peak RAM (bytes) of a band-limited ASM step.
+
+    WHICH QUANTITY THIS ESTIMATES (audit A-6): the peak additional memory
+    of the FIRST :func:`angular_spectrum_propagate` call at a given grid in
+    a fresh process -- the worst case, and the quantity a pre-flight
+    guardrail needs.  That peak comprises
+
+    * the cached transfer function H + the returned output field
+      (``_ASM_COMPLEX_ARRAYS`` full-grid complex arrays),
+    * the float64 frequency-grid transients, which do not shrink with
+      ``complex64`` (``_ASM_F64_GRID_ARRAYS``),
+    * two aligned pyFFTW workspace buffers per resident plan key
+      (``plan_cache_keys`` distinct fwd/inv keys), and
+    * a fixed, N-independent one-time cost for the lazy FFT-backend import
+      (``_ASM_FIRST_CALL_FIXED_BYTES``).
+
+    It is deliberately NOT the steady-state figure.  Once H and the pyFFTW
+    plans are resident, the measured per-call peak is just the output field
+    -- ``1.00 x N^2 x itemsize`` (measured 1.000-1.008 over
+    N = 256..2048) -- so this estimate runs ~6.4x that asymptotically, and
+    more at small N where the fixed import term dominates (16x at N=512
+    complex128).  Use ``N * N * np.dtype(complex_dtype).itemsize`` if a
+    steady-state per-call transient is what you want.
+
+    Accuracy (measured 2026-07-25, fresh-interpreter ``tracemalloc``,
+    pyFFTW present with the double-buffer ping-pong enabled): est/measured
+    first-call peak = **1.02-1.09** over the eight points
+    N = 256 / 512 / 1024 / 2048 x {complex64, complex128} -- conservative
+    (a bound) at every one, within 9%.  The pre-A-6 formula read
+    0.53 / 0.96 / 1.22 at N = 512 / 1024 / 2048 complex128: an
+    under-estimate where it mattered most.  On a box with no pyFFTW the
+    plan-buffer and import terms over-predict, which is the fail-safe
+    direction.
+
+    Raises
+    ------
+    ValueError
+        If ``n_grid <= 0`` or ``plan_cache_keys < 0`` (audit A-9..A-14:
+        junk sizing inputs raise rather than silently clamping).
+    """
     N = int(n_grid)
+    if N <= 0:
+        raise ValueError(
+            f"estimate_asm_memory: n_grid must be positive (got {n_grid!r}).")
+    keys = int(plan_cache_keys)
+    if keys < 0:
+        raise ValueError(
+            f"estimate_asm_memory: plan_cache_keys must be >= 0 "
+            f"(got {plan_cache_keys!r}).")
     npix = N * N
     cb = _as_complex_itemsize(complex_dtype)
     work = _ASM_COMPLEX_ARRAYS * cb * npix
-    plan_bufs = max(0, int(plan_cache_keys)) * 2 * cb * npix
-    return int(work + plan_bufs)
+    grids = _ASM_F64_GRID_ARRAYS * 8 * npix
+    plan_bufs = keys * 2 * cb * npix
+    return int(work + grids + plan_bufs + _ASM_FIRST_CALL_FIXED_BYTES)
 
 
 @overload

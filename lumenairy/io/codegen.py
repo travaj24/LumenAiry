@@ -1049,3 +1049,14 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
         lines.append("print(f'Throughput: {P_out/P_in:.4f}')")
 
     return '\n'.join(lines)
+
+
+# A-13ish (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): declare the public
+# surface explicitly, matching the convention every ``analysis/`` module
+# already follows.  Names re-exported through ``lumenairy.io``
+#  and the top-level facade.
+__all__ = [
+    'generate_simulation_script',
+    'generate_script_from_zmx',
+    'generate_script_from_txt',
+]
