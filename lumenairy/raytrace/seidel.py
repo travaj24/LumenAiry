@@ -620,15 +620,35 @@ def _pre_stop_abcd(
     Both legs use the glass on the image side of the surface that OWNS
     the thickness, which is what the trace itself does.
 
-    Known limitation (shared with the pre-R-1 twins, unchanged here):
-    the two legs use the UNSIGNED glass index, so a system with an odd
-    number of mirrors before (resp. after) the stop gets a leg whose
-    sign does not follow ``system_abcd``'s Welford ``n -> -n`` parity
-    bookkeeping.  Fixing that needs a dedicated mirror-fold pupil
-    oracle (see the "flagged, not claimed" coordinate-break /
-    mirror-sign item in the same audit) and is deliberately out of
-    scope; mirrorless systems -- and any system whose mirrors all sit
-    on the same side of the stop as the image -- are unaffected.
+    W3-T2 MIRROR PARITY (was the "known limitation" recorded here by
+    R-1, now FIXED).  ``M_pre`` comes out of ``system_abcd``, which
+    carries a running Welford ``n' = -n`` parity sign on EVERY index it
+    touches (house precedent 403ea1f / S11-1: the flip encodes the
+    REFLECTION, so it is R-independent and a flat fold flips too).  The
+    final leg appended here used the UNSIGNED index, so for an ODD
+    number of mirrors in ``surfaces[:stop_index]`` the two halves of
+    ``M_pre`` described different frames and the leg's reduced length
+    came out with the wrong SIGN (right magnitude).  Measured against an
+    exact real-ray oracle (``raytrace.trace``, shares no code with this
+    module; EP = the object-space plane where back-projected rays that
+    graze the stop edge cross the axis, which is the DEFINITION) on
+    ``[plate, BK7 singlet, flat fold, STOP(6 mm), plate, BK7 singlet]``
+    with a 15 mm fold->stop gap:
+
+    * ``ep_z``     +68.389182 mm reported vs +16.812946 mm exact (+307%)
+    * ``ep_radius``  9.610969 mm reported vs   6.439672 mm exact (+49.2%)
+    * ``f/#``            2.0086 reported vs        2.9977 exact (-33.0%)
+
+    and with a powered fold (R = -300 mm) ``ep_radius`` is +84.7% high.
+    The signature is exact: pre-fix the flat-fold system returned
+    BIT-IDENTICAL pupils to the mirrorless control (the fold's only
+    paraxial effect on this leg IS the sign), the error vanishes iff the
+    fold->stop gap is 0 (``ep_z`` error is proportional to
+    ``t_last * det(M_slice)``), and it is exactly zero for EVEN mirror
+    parity.  Both consumers are affected: ``compute_pupils`` (EP, hence
+    ``f/#`` and every chief/marginal aim in ``analysis/field.py`` and
+    ``raytrace/ray_fan.py``) and ``seidel_coefficients`` (marginal /
+    chief initial conditions).
     """
     if stop_index == 0:
         return np.eye(2)
@@ -639,6 +659,13 @@ def _pre_stop_abcd(
     t_last = float(surfaces[stop_index - 1].thickness)
     n_last = get_glass_index(
         surfaces[stop_index - 1].glass_after, wavelength)
+    # W3-T2: apply ``system_abcd``'s Welford parity sign to this leg's
+    # index.  Coord-breaks are excluded exactly as ``system_abcd``
+    # excludes them (it ``continue``s past them before any mirror
+    # bookkeeping), so a coord-break never toggles parity.
+    if sum(1 for s in surfaces[:stop_index]
+           if s.is_mirror and not s.is_coordbrk) % 2:
+        n_last = -n_last
     T_last = np.array([[1.0, t_last / n_last],
                        [0.0, 1.0]])
     return T_last @ M_pre
@@ -666,6 +693,20 @@ def _post_stop_abcd(
     surface, or a stop inside a cemented block) the leg was short by a
     factor ``n``: measured ``xp_z`` error +3.8% (stop at a BK7 surface),
     +7.9% (stop inside BK7); ``xp_radius`` +1.9% / +2.5%.
+
+    W3-T2 MIRROR PARITY -- deliberately NOT signed here, unlike
+    :func:`_pre_stop_abcd`.  This matrix is the post-stop sub-system in
+    its OWN Welford frame, the one whose parity is 0 in the medium on
+    the stop's image side: ``T_first`` uses the unsigned index AND
+    ``system_abcd(surfaces[stop_index + 1:])`` starts its own parity
+    walk at 0, so the two halves agree and the product is the exact
+    sub-system matrix.  (Upstream mirrors would merely conjugate it by
+    ``diag(1, -1)``, which cancels out of every quantity
+    :func:`compute_pupils` derives from it -- proven numerically on 11
+    fold configurations, including a mirror AT the stop.)  What the
+    local frame does NOT know is its own OUTPUT index sign, which
+    ``compute_pupils`` must supply when it converts the reduced ``B/D``
+    into a real ``xp_z`` -- see the ``sign_out`` note there.
     """
     if stop_index == len(surfaces) - 1:
         return np.eye(2)
@@ -803,11 +844,47 @@ def compute_pupils(
         A_post, B_post = float(M_post[0, 0]), float(M_post[0, 1])
         C_post, D_post = float(M_post[1, 0]), float(M_post[1, 1])
         # XP is the image-space conjugate of the stop.  Append
-        # T(z_img) on the LEFT (image side) so B_total = 0:
-        # T(z) . M = [[A + z*C, B + z*D], [C, D]].  B_new = B + z*D = 0
-        # => z_xp = -B_post / D_post.
+        # T(z_img) on the LEFT (image side) so B_total = 0.  In REDUCED
+        # coordinates that leg is T(z) = [[1, z / n_out], [0, 1]], so
+        # T(z) . M = [[A + z*C/n_out, B + z*D/n_out], [C, D]] and
+        # B_new = 0 => z_xp = -B_post * n_out / D_post.
+        #
+        # W3-T2 (mirror parity): pre-fix this line read ``-B/D``, i.e. it
+        # dropped ``n_out`` entirely.  ``_post_stop_abcd`` works in the
+        # sub-system's OWN Welford frame (parity 0 on the stop's image
+        # side), so that frame's output index is
+        # ``(-1)**(mirrors strictly after the stop) * n(last.glass_after)``
+        # -- and every mirror STRICTLY AFTER the stop therefore flipped
+        # ``xp_z``'s SIGN.  Measured against an exact real-ray oracle
+        # (``raytrace.trace``; XP = the plane where rays leaving the stop
+        # form its image, by definition) on
+        # ``[plate, BK7 singlet, plate, STOP(6 mm), flat fold, BK7
+        # singlet]``: ``xp_z`` = +3.547510 mm reported vs -3.547510 mm
+        # exact (a pure sign flip, -200% relative), and -2.550903 mm
+        # exact for a powered R = -300 mm fold.  The ratio
+        # ``xp_z_reported / xp_z_exact`` was measured to be exactly
+        # ``(-1)**m_post`` on 11 fold configurations (both sides of the
+        # stop, 0-3 mirrors, a mirror AT the stop, and both thickness-
+        # sign conventions), which is why a fold BEFORE the stop leaves
+        # ``xp_z`` untouched: the frame conjugation and the missing
+        # ``n_out`` sign cancel there.  ``xp_radius`` is provably
+        # unaffected -- ``m = A + (C/n_out) z_xp = det(M)/D`` is
+        # independent of ``n_out`` -- and was measured exact (<= 1.2e-12
+        # relative) in every one of those 11 configurations.
+        #
+        # The MAGNITUDE of ``n_out`` (a last surface whose image side is
+        # GLASS) is a separate, measured, NOT-fixed sibling of this same
+        # dropped factor: ``xp_z`` reads -24.161034 mm where the exact
+        # oracle gives -36.647419 mm for a BK7 image space (ratio
+        # 1/1.516798 exactly), and ``ep_z`` has the mirror-image defect
+        # for a GLASS OBJECT space (+51.299438 mm vs +77.810907 mm exact,
+        # same 1/n).  Neither involves mirrors, both need their own
+        # immersed-conjugate oracle, and both are out of scope here.
+        _m_post = sum(1 for s in surfaces[stop_index + 1:]
+                      if s.is_mirror and not s.is_coordbrk)
+        sign_out = -1.0 if (_m_post % 2) else 1.0
         if abs(D_post) > 1e-30:
-            xp_z = -B_post / D_post
+            xp_z = -B_post * sign_out / D_post
             # After prepending T(z_xp) on the image side to enforce
             # B+z·D = 0, the new matrix is [[A+z_xp·C, 0], [C, D]].  Its
             # transverse magnification at imaging is m = det(M)/D =

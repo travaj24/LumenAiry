@@ -166,8 +166,22 @@ def trace_world(
         _diff_spec = _diff.get(i)
         if _diff_spec is not None:
             _mx, _my, _px, _py = _diff_spec
-            _dL = float(_mx) * wavelength / float(_px)
-            _dM = float(_my) * wavelength / float(_py)
+            # R-13 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25), world twin:
+            # a zero or non-finite period means "no grating along that
+            # axis" and yields a ZERO kick -- the same contract the JAX
+            # path documents (``jax_trace._apply_doe_kick_jax._kick``:
+            # "Returns 0.0 when ``period`` is non-finite or zero") and
+            # the sibling numpy loop (``trace.py``) now enforces.  Pre-fix
+            # this site divided unguarded, so ``period=0.0`` raised
+            # ``ZeroDivisionError`` mid-trace and ``period=nan`` silently
+            # NaN-poisoned (L, M).  ``inf`` already gave 0.0 by IEEE
+            # division, so that case is bit-identical.
+            _px_f = float(_px)
+            _py_f = float(_py)
+            _dL = (float(_mx) * wavelength / _px_f
+                   if (np.isfinite(_px_f) and _px_f != 0.0) else 0.0)
+            _dM = (float(_my) * wavelength / _py_f
+                   if (np.isfinite(_py_f) and _py_f != 0.0) else 0.0)
             r.L = r.L + _dL
             r.M = r.M + _dM
             _sumsq = r.L * r.L + r.M * r.M

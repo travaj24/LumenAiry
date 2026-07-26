@@ -543,9 +543,29 @@ def _resolve_angle(
     ``0.0`` when neither is supplied; otherwise returns the (radian)
     value of whichever was supplied.  If both are supplied with
     disagreeing numeric values raises :class:`ValueError`; agreement
-    is checked to ``atol=1e-12`` rad.
+    is checked to ``atol=1e-12`` rad.  A non-finite ``angle`` or
+    ``angle_deg`` also raises (v5.29, audit W3-T4).
     """
     angle_supplied = angle is not _ANGLE_UNSET
+    # v5.29 (audit W3-T4, sibling of the E-L16 ellipticity guard): reject a
+    # non-finite angle in the one helper every angle-taking element shares
+    # (apply_polarizer / apply_waveplate / apply_half_wave_plate /
+    # apply_quarter_wave_plate / apply_rotator /
+    # apply_polarizing_beam_splitter), so the guard cannot drift apart
+    # between siblings.  Checked BEFORE the conflict test below, which would
+    # otherwise report NaN vs NaN as "disagreeing angles".
+    for _name, _val, _unit in (('angle', angle, 'radians'),
+                               ('angle_deg', angle_deg, 'degrees')):
+        if _val is None or _val is _ANGLE_UNSET:
+            continue
+        if not np.isfinite(float(_val)):
+            raise ValueError(
+                f"{func_name}: {_name} must be a finite angle in {_unit}; "
+                f"got {_val!r}.  cos/sin of NaN or +-inf is NaN, so a "
+                f"non-finite angle silently poisons every entry of the Jones "
+                f"matrix and EVERY pixel of the returned field comes back "
+                f"NaN with nothing raised.  Angles are periodic, so reduce "
+                f"an unbounded one yourself.")
     if angle_deg is None:
         return float(angle) if angle_supplied else 0.0
     angle_from_deg = float(np.radians(angle_deg))
@@ -705,6 +725,14 @@ def apply_waveplate(
         with :func:`apply_rotator` / :func:`apply_polarizer` and the
         half/quarter-wave-plate wrappers.
 
+        Also if ``retardance`` (or either angle) is not finite.  v5.29
+        (audit W3-T4, sibling of the E-L16 ellipticity guard): pre-fix
+        ``retardance=np.nan`` returned a field whose every pixel was
+        ``nan+nanj`` -- ``exp(+1j*nan)`` is NaN -- with nothing raised,
+        so the NaN only surfaced far downstream (or not at all, since
+        :func:`degree_of_polarization` reads NaN as NaN and intensity
+        plots show blank).
+
     Notes
     -----
     The Jones matrix for a waveplate with fast axis at angle theta and
@@ -750,6 +778,16 @@ def apply_waveplate(
     cross-family alignment; see CONVENTIONS.md section 7.
     """
     angle = _resolve_angle('apply_waveplate', angle, angle_deg)
+    _phi = float(retardance)
+    if not np.isfinite(_phi):
+        raise ValueError(
+            f"apply_waveplate: retardance must be a finite phase in radians "
+            f"(pi/2 = quarter-wave, pi = half-wave); got {retardance!r}.  "
+            f"exp(+1j*NaN) and exp(+-1j*inf) are NaN, so a non-finite "
+            f"retardance silently poisons every entry of the Jones matrix "
+            f"and EVERY pixel of the returned field comes back NaN with "
+            f"nothing raised.  Retardance is periodic (2 pi), so reduce an "
+            f"unbounded one yourself.")
     c = np.cos(angle)
     s = np.sin(angle)
     # Slow axis picks up POSITIVE relative phase exp(+i phi) under the
@@ -995,7 +1033,25 @@ def create_linear_polarized(
     Returns
     -------
     JonesField
+
+    Raises
+    ------
+    ValueError
+        If ``angle`` is not finite.  v5.29 (audit W3-T4): sibling of the
+        :func:`create_elliptical_polarized` ``orientation`` guard -- this
+        is the same major-axis angle, and pre-fix ``angle=np.nan``
+        returned a field whose every pixel was ``nan+nanj`` with nothing
+        raised.
     """
+    _angle = float(angle)
+    if not np.isfinite(_angle):
+        raise ValueError(
+            f"create_linear_polarized: angle must be a finite angle in "
+            f"radians measured from +x (0 = x-polarized, pi/2 = "
+            f"y-polarized); got {angle!r}.  cos/sin of NaN or +-inf is NaN, "
+            f"so a non-finite angle silently returns a field whose every "
+            f"pixel is nan+nanj with nothing raised.  The angle is periodic "
+            f"(pi), so reduce an unbounded one yourself.")
     Ex = scalar_field * np.cos(angle)
     Ey = scalar_field * np.sin(angle)
     return JonesField(Ex, Ey, dx, dy)
@@ -1141,6 +1197,11 @@ def create_elliptical_polarized(
     Raises
     ------
     ValueError
+        If ``orientation`` is not finite.  v5.29 (audit W3-T4): pre-fix
+        ``orientation=np.nan`` (or ``+-inf``) returned a field whose
+        every pixel was ``nan+nanj`` with nothing raised -- the sibling
+        gap left by the E-L16 ``ellipticity`` guard below.
+
         If ``ellipticity`` is not finite or ``|ellipticity| > pi/4``.
         v5.29 (audit E-L16): the ellipse parameterisation below is only
         one-to-one on ``|chi| <= pi/4``; beyond it ``|sin chi| >
@@ -1172,6 +1233,15 @@ def create_elliptical_polarized(
             f"one-to-one: the major and minor axes swap, so the state "
             f"that comes back from polarization_ellipse() is NOT the one "
             f"requested.")
+    _psi = float(orientation)
+    if not np.isfinite(_psi):
+        raise ValueError(
+            f"create_elliptical_polarized: orientation (psi) must be a "
+            f"finite angle in radians measured from +x; got "
+            f"{orientation!r}.  cos/sin of NaN or +-inf is NaN, so a "
+            f"non-finite psi silently returns a field whose every pixel is "
+            f"nan+nanj with nothing raised.  psi is periodic (pi), so "
+            f"reduce an unbounded one yourself.")
     cp = np.cos(orientation)
     sp = np.sin(orientation)
     cc = np.cos(ellipticity)

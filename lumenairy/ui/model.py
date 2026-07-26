@@ -1270,8 +1270,17 @@ class SystemModel(QObject):
           for that), but cb_post sits AT the mirror's exit so its
           tilt applies BEFORE the gap to the next surface
           (tilt-then-advance is right for that).
-        * Optical-convention ``Rx`` / ``Ry`` (Zemax PARM 3 / 4):
-          +tilt_x rotates local +z toward +y.
+        * Zemax ``Rx`` / ``Ry`` (PARM 3 / 4) as LOCAL-TO-WORLD
+          rotations: ``+tilt_x`` rotates local +z toward **-y** and
+          ``+tilt_y`` rotates local +z toward **+x** -- the right-hand
+          (``R_math(+theta)``) forms Zemax prints for
+          ``r_global = R @ r_local + offset`` (OpticStudio KB
+          KA-01638).  W3-1 (audit 2026-07-25) corrected the 3.7.4
+          blocks, which used ``R_math(-theta)`` and so mirrored every
+          folded layout about the y = 0 plane relative to Zemax, to
+          ``world_surfaces_from_prescription``, and (after the matching
+          W3-1 fix in ``intersection._apply_coord_break``) to this
+          model's own local-frame trace.
         """
         origin = np.zeros(3, dtype=float)
         R = np.eye(3, dtype=float)
@@ -1297,14 +1306,14 @@ class SystemModel(QObject):
                 # exit (mirror back vertex), THEN advance.
                 if tx_rad:
                     c, s = np.cos(tx_rad), np.sin(tx_rad)
-                    R = R @ np.array([[1, 0, 0],
-                                      [0, c,  s],
-                                      [0, -s, c]])
+                    R = R @ np.array([[1, 0, 0],       # W3-1: Rx_math(+tx)
+                                      [0, c, -s],
+                                      [0, s,  c]])
                 if ty_rad:
                     c, s = np.cos(ty_rad), np.sin(ty_rad)
-                    R = R @ np.array([[c, 0, -s],
+                    R = R @ np.array([[c, 0,  s],      # W3-1: Ry_math(+ty)
                                       [0, 1,  0],
-                                      [s, 0,  c]])
+                                      [-s, 0, c]])
                 origin = origin + d * R[:, 2]
                 if dx:
                     origin = origin + dx * R[:, 0]
@@ -1320,14 +1329,14 @@ class SystemModel(QObject):
                     origin = origin + dy * R[:, 1]
                 if tx_rad:
                     c, s = np.cos(tx_rad), np.sin(tx_rad)
-                    R = R @ np.array([[1, 0, 0],
-                                      [0, c,  s],
-                                      [0, -s, c]])
+                    R = R @ np.array([[1, 0, 0],       # W3-1: Rx_math(+tx)
+                                      [0, c, -s],
+                                      [0, s,  c]])
                 if ty_rad:
                     c, s = np.cos(ty_rad), np.sin(ty_rad)
-                    R = R @ np.array([[c, 0, -s],
+                    R = R @ np.array([[c, 0,  s],      # W3-1: Ry_math(+ty)
                                       [0, 1,  0],
-                                      [s, 0,  c]])
+                                      [-s, 0, c]])
 
             # Record the front-vertex frame on the element.
             elem.origin = origin.copy()

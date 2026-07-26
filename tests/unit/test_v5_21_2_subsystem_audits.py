@@ -251,12 +251,25 @@ def test_rt3_dead_paraxial_trio_removed():
 
 
 def test_rt4_world_coord_break_matches_legacy_trace_fold():
-    """RT-4 was a PHANTOM (reverted): world._apply_coord_break's ``_rot_x(+tx)``
-    already agrees with the legacy ``trace()`` fold -- both send a +z ray to
-    world -y after a +90 deg tilt_x.  Pin that agreement (a regression guard
-    against re-flipping the sign): the world frame's new local-to-world +z
-    column equals the direction ``trace()`` gives a +z ray through the same
-    coord break."""
+    """RT-4, RESOLVED W3-1 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25).
+
+    RT-4's DIAGNOSIS was right (``world._apply_coord_break`` and
+    ``intersection._apply_coord_break`` disagreed) but its fix flipped the
+    wrong side, and the 408b8c3 revert then declared it a "phantom" on this
+    very assertion -- which compared ``trace()``'s ray direction ``Q.T @ ez``
+    (a vector in the NEW LOCAL frame) against ``world_R[:, 2] = Q @ ez`` (a
+    vector in WORLD).  Both equalled ``Rx_math(+90) @ ez`` numerically, but
+    that equality is the category error itself: it holds precisely BECAUSE
+    the two sites were transposes of each other.
+
+    W3-1 fixed ``intersection`` / ``differential`` / ``ui.model`` to the
+    Zemax local-to-world convention that ``world.py`` already implemented
+    (OpticStudio KB KA-01638).  What this test now pins is the physically
+    meaningful relation: a coordinate break is a PASSIVE frame change, so
+    the ray transform is the TRANSPOSE of the frame rotation and the ray's
+    WORLD direction is invariant across the break.  Full oracle in
+    ``tests/unit/test_niche_audit_w3_oracles.py``.
+    """
     import numpy as np
 
     from lumenairy.raytrace import RayBundle
@@ -265,10 +278,12 @@ def test_rt4_world_coord_break_matches_legacy_trace_fold():
     from lumenairy.raytrace.world import _apply_coord_break as _world_cb
 
     tx_deg = 90.0
-    # World: new-frame +z axis expressed in world.
-    _, new_R = _world_cb(np.zeros(3), np.eye(3), {'tilt_x_deg': tx_deg})
-    world_new_z = new_R[:, 2]
-    # Legacy trace(): a +z-going ray's direction after the same coord break.
+    # World: the new frame's local-to-world rotation.  Zemax's +tilt_x puts
+    # the new local +z at world -y.
+    _, Q = _world_cb(np.zeros(3), np.eye(3), {'tilt_x_deg': tx_deg})
+    np.testing.assert_allclose(Q[:, 2], [0.0, -1.0, 0.0], atol=1e-9)
+    # Legacy trace(): a +z-going ray's direction after the same coord break,
+    # expressed in the NEW LOCAL frame.
     r = RayBundle(x=np.array([0.0]), y=np.array([0.0]), z=np.array([0.0]),
                   L=np.array([0.0]), M=np.array([0.0]), N=np.array([1.0]),
                   opd=np.array([0.0]), alive=np.array([True]),
@@ -276,9 +291,10 @@ def test_rt4_world_coord_break_matches_legacy_trace_fold():
     _local_cb(r, Surface(radius=np.inf, is_coordbrk=True, tilt_x_deg=tx_deg))
     local_dir = np.array([np.ravel(r.L)[0], np.ravel(r.M)[0],
                           np.ravel(r.N)[0]])
-    # Both must send +z -> world -y; they must AGREE.
-    np.testing.assert_allclose(world_new_z, [0.0, -1.0, 0.0], atol=1e-9)
-    np.testing.assert_allclose(local_dir, world_new_z, atol=1e-9)
+    # Passive-frame identity: local = Q.T @ world, so Q @ local == world.
+    np.testing.assert_allclose(local_dir, Q.T @ np.array([0.0, 0.0, 1.0]),
+                               atol=1e-9)
+    np.testing.assert_allclose(Q @ local_dir, [0.0, 0.0, 1.0], atol=1e-9)
 
 
 def test_rt5_offaxis_fan_passes_through_zero():

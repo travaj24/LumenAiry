@@ -353,15 +353,21 @@ def _adrt_coordbreak(x, y, ux, uy, surf, wavelength, apply_transfer,
         return px - dcx, py - dcy
 
     def _tilts(px, py, pz, L, M, Nn):
-        cx, sx = math.cos(tx), math.sin(tx)      # Rx (optical convention)
-        py, pz = cx * py - sx * pz, sx * py + cx * pz
-        M, Nn = cx * M - sx * Nn, sx * M + cx * Nn
-        cy, sy = math.cos(ty), math.sin(ty)      # Ry
-        px, pz = cy * px + sy * pz, -sy * px + cy * pz
-        L, Nn = cy * L + sy * Nn, -sy * L + cy * Nn
-        cz, sz = math.cos(tz), math.sin(tz)      # Rz
-        px, py = cz * px - sz * py, sz * px + cz * py
-        L, M = cz * L - sz * M, sz * L + cz * M
+        # W3-1 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the ray-coordinate
+        # transform is the TRANSPOSE of Zemax's local-to-world tilt
+        # (``Rx_math(+theta)``, KB KA-01638), i.e. ``Rx_math(-theta)``.
+        # Op-for-op replication of the corrected
+        # ``intersection._apply_coord_break`` (see its _rot_x comment for
+        # the derivation and the measured pre-fix numbers).
+        cx, sx = math.cos(tx), math.sin(tx)      # Rx_math(-tx)
+        py, pz = cx * py + sx * pz, -sx * py + cx * pz
+        M, Nn = cx * M + sx * Nn, -sx * M + cx * Nn
+        cy, sy = math.cos(ty), math.sin(ty)      # Ry_math(-ty)
+        px, pz = cy * px - sy * pz, sy * px + cy * pz
+        L, Nn = cy * L - sy * Nn, sy * L + cy * Nn
+        cz, sz = math.cos(tz), math.sin(tz)      # Rz_math(-tz)
+        px, py = cz * px + sz * py, -sz * px + cz * py
+        L, M = cz * L + sz * M, -sz * L + cz * M
         return px, py, pz, L, M, Nn
 
     if order == 1:
@@ -578,6 +584,17 @@ def _adrt_numpy(x, y, ux, uy, surfaces, wavelength, per_surface):
 _ADRT_NUMBA_KERNEL = None       # lazily-compiled kernel (NOT a data cache)
 _ADRT_NUMBA_STATE = None        # None=untried, False=unavailable, True=ready
 
+# R-16 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the njit dual primitives are
+# CLOSURES inside :func:`_build_adrt_numba_kernel`, so there is no other way to
+# exercise their arithmetic conventions directly against the ``_AdrtDual``
+# twins -- and every public boundary (:func:`_adrt_numba`) scrubs non-finites
+# through ``np.nan_to_num``, which hides exactly the NaN-convention class of
+# divergence the audit found.  The builder publishes them here (populated only
+# once the kernel is built) purely so the numba<->NumPy parity pin can compare
+# them primitive-by-primitive.  NOT part of the public API; do not consume from
+# library code.
+_ADRT_NUMBA_PRIMS = None        # None until _build_adrt_numba_kernel() runs
+
 
 def _adrt_surfaces_numba_eligible(surfaces):
     """True iff every surface is a plain rotationally-symmetric conic
@@ -647,6 +664,23 @@ def _build_adrt_numba_kernel():
     @njit(inline='always')
     def _dsqrtq(a):
         # matches _dual_sqrt: vc=max(v,0); v=sqrt(vc); d/(2*max(v,1e-300))
+        #
+        # R-16 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): a NaN radicand
+        # must PROPAGATE, exactly as the NumPy twin does.  ``nan > 0.0``
+        # is False, so the pre-fix ternary clamped a NaN radicand to
+        # ``vc = 0.0`` and returned a perfectly finite ``0.0`` value with
+        # a huge-but-finite tangent -- while ``_dual_sqrt``'s
+        # ``np.maximum(nan, 0.0)`` is ``nan`` (numpy's maximum
+        # propagates NaN), giving ``nan`` value AND ``nan`` tangent
+        # (``d / (2 * np.maximum(nan, 1e-300))``).  Measured pre-fix:
+        # numpy nan vs numba 0.0.  A silent 0.0 turns an already-faulted
+        # ray into a plausible on-axis one that the numba FGA kernel then
+        # keeps alive, so the numba and NumPy dual backends disagreed
+        # about which rays are faulted.  Finite radicands (including
+        # exactly 0.0 and negatives) are bit-identical.
+        if math.isnan(a[0]):
+            nan = a[0]
+            return (nan, a[1] / nan, a[2] / nan, a[3] / nan, a[4] / nan)
         vc = a[0] if a[0] > 0.0 else 0.0
         v = math.sqrt(vc)
         den = 2.0 * v if v > 1e-300 else 2.0e-300
@@ -788,6 +822,14 @@ def _build_adrt_numba_kernel():
             jac[i, 3, 2] = uyq[3]
             jac[i, 3, 3] = uyq[4]
 
+    # R-16: publish the dual primitives for the numba<->NumPy parity pin
+    # (see the ``_ADRT_NUMBA_PRIMS`` note at module level).
+    global _ADRT_NUMBA_PRIMS
+    _ADRT_NUMBA_PRIMS = {
+        'dadd': _dadd, 'dsub': _dsub, 'dmul': _dmul, 'ddiv': _ddiv,
+        'dscale': _dscale, 'daddc': _daddc, 'dneg': _dneg,
+        'dsqrt': _dsqrtq,
+    }
     return _kernel
 
 

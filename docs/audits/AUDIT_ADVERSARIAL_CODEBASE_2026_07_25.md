@@ -66,6 +66,24 @@ cell + fff_nv `AssertionError`; `orientation=NaN`/`retardance=NaN` unguarded
 in polarization.  Fixes should follow the same measure-first / gate / pin
 discipline.
 
+**Status: W3 ORACLE WAVE (2026-07-25)** — the two oracle-needing physics
+questions above are RESOLVED, both by building the oracle first:
+**(W3-1)** the flagged `world.py` coord-break rotation is a CONFIRMED
+disagreement and **`world.py` is the correct side** — Zemax defines
+`Tilt About X/Y/Z` by the LOCAL-TO-WORLD matrix (right-hand `R_math(+θ)`,
+intrinsic X→Y→Z for `PARM 6 = 0`, `r_global = R·r_local + offset`;
+OpticStudio KB KA-01638), so `intersection._apply_coord_break` (the 3.7.1
+flip), its op-for-op twin `differential._adrt_coordbreak`, and
+`ui.model.recompute_element_frames` (3.7.4) were the three inverted sites and
+were fixed to the transpose convention.  A pure-tilt oracle was required
+because a balanced mirror fold is sign-degenerate in the local frame — the
+reason the 408b8c3 revert mistook RT-4 for a phantom (that revert's argument
+is retracted in `AUDIT_RAYTRACE_CORE_2026_07_08.md` §RT-4).  Measured
+pre-fix: 8.243032° of angular disagreement on a single `tilt_x = +12°` break.
+Also closed the `world_trace.py:169` DOE zero/non-finite period guard (R-13's
+sibling: `ZeroDivisionError` / silent NaN-alive ray pre-fix).  See the
+Territory R "Flagged, not claimed" entry for the full numbers.
+
 ---
 
 ## Executive summary
@@ -140,6 +158,41 @@ the audit's repro scripts are the seeds.
   `differential.py:356`; a prior audit's fix was reverted as a phantom on a
   mirror-fold oracle — which cannot constrain a pure tilt sign.  Needs a dedicated
   pure-`tilt_x` oracle.  (INSPECTION)
+  → **RESOLVED W3-1 (2026-07-25): CONFIRMED defect, and `world.py` is the CORRECT
+  side.**  Pure-tilt oracle (one `tilt_x` coord break in front of a flat
+  air→N-BK7 interface, axial ray, ground truth = exact vector Snell in the world
+  basis against the normal `Q·ẑ`): at `tilt_x = +12°` `trace()` deviated the ray
+  **+4.121516° toward world +y** and `trace_world()` **−4.121516° toward world
+  −y** — 8.243032° apart, local `M = ∓0.137072578`, max|Δ| = 2.741452e-01 (2.301e-02
+  at 1°, 6.593e-01 at 30°); each was exact for its OWN frame convention (≤1.2e-16),
+  so neither had a Snell bug.  A coordinate break is a passive frame change, so
+  `T == Qᵀ` is linear algebra, not convention; Zemax fixes the sign by defining
+  `Tilt About X/Y/Z` through the LOCAL-TO-WORLD matrix with right-hand
+  `R_math(+θ)` in intrinsic X→Y→Z order for `PARM 6 = 0` (`r_global = R·r_local +
+  offset`, OpticStudio KB KA-01638). So `world.py` (`Rx(+tx)@Ry(+ty)@Rz(+tz)` as
+  `world_R`) is right and three sites were inverted and were fixed:
+  `intersection._apply_coord_break` (the 3.7.1 flip),
+  `differential._adrt_coordbreak` (its op-for-op twin) and
+  `ui.model.recompute_element_frames` (3.7.4, `elem.R` — feeds both GUI layouts
+  AND `world_trace_surfaces`, so the GUI had the inverted frame on both of its own
+  trace paths).  Corrections to the flag's wording: for MULTI-axis tilts the two
+  sites are **not** transposes but the same intrinsic X→Y→Z order with every angle
+  negated (the transpose statement is exact only for a single axis), and the
+  decenter halves already AGREED (measured max|Δpos| = 0.0 pre-fix), refuting
+  RT-4's "the decenter half does not flip" claim.  Zero effect whenever every
+  coord-break tilt is 0 (bit-identical control pinned); a balanced mirror fold is
+  sign-degenerate in the local frame, which is exactly why the 408b8c3 revert
+  looked like a phantom — that revert's own argument compared `Qᵀ·ẑ` (new LOCAL
+  frame) with `world_R[:,2] = Q·ẑ` (WORLD) and is retracted in
+  `AUDIT_RAYTRACE_CORE_2026_07_08.md` §RT-4.  20 pins in
+  `tests/unit/test_niche_audit_w3_oracles.py` (15 verified failing pre-fix); the
+  `test_v5_21_2_subsystem_audits.py` RT-4 pin, which asserted the category error,
+  was rewritten to pin the passive-frame identity `Q @ local_dir == world_dir`.
+- `world_trace.py:169` NumPy DOE kick had no zero/non-finite period guard (the
+  R-13 sibling site).  MEASURED pre-fix: `period=0.0` → `ZeroDivisionError`
+  mid-trace; `period=nan` → `(L, M, N, opd) = (nan, 0.0, nan, nan)` with
+  `alive=True`, a silently NaN-poisoned LIVE ray.  Fixed to the JAX twin's
+  contract (zero kick); `inf` and real periods bit-identical.  Pinned.
 
 ### Verified clean (highlights; method in the agent record)
 Glass dispersion exact vs published catalog values (|Δn_d| ≤ 1e-6, Abbe ≤ 0.003; no

@@ -517,10 +517,25 @@ def _apply_coord_break(rays, surface):
     rays in the new frame we apply the *inverse* of the frame
     transformation:
 
-    * Decenter (dx, dy) → subtract from (x, y).
-    * Tilt about X / Y / Z by angles (tx, ty, tz) → rotate ray
-      position and direction by the inverse of those rotations
-      (i.e., by ``Rx(-tx) @ Ry(-ty) @ Rz(-tz)``).
+    * Decenter (dx, dy) → subtract from (x, y).  (The new frame's origin
+      moves by ``+(dx, dy)``, so ray coordinates lose it.)
+    * Tilt about X / Y / Z by angles (tx, ty, tz) → rotate ray position
+      and direction by the TRANSPOSE of the frame's local-to-world
+      rotation.  Zemax defines those tilts BY that local-to-world
+      matrix, ``Q = Rx(+tx) @ Ry(+ty) @ Rz(+tz)`` with the right-hand
+      ``R_math`` forms in intrinsic X→Y→Z order (OpticStudio KB
+      KA-01638; ``world._apply_coord_break`` composes exactly this and
+      stores it as ``world_R``), so the ray transform applied here is
+
+          Q.T == Rz(-tz) @ Ry(-ty) @ Rx(-tx)
+
+      i.e. ``_rot_x(tx)`` below implements ``Rx_math(-tx)``, applied
+      first, then ``_rot_y``, then ``_rot_z``.  A ``tilt_x = +90 deg``
+      break therefore puts the new local ``+z`` at world ``-y`` and
+      leaves a ``+z``-going ray at local ``+y``.  See W3-1 in
+      ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md``: from 3.7.1 to v5.29
+      this site applied ``Q`` instead of ``Q.T``, folding every tilt the
+      opposite way from ``trace_world``.
 
     Order follows Zemax PARM 6:
 
@@ -550,44 +565,63 @@ def _apply_coord_break(rays, surface):
     def _rot_x(theta):
         if theta == 0.0:
             return
-        # 3.7.1: optical-convention frame rotation by +theta about X
-        # (Zemax / Code-V convention) is the inverse of the math
-        # right-hand-rule rotation.  To express a ray vector in the
-        # new frame we apply Rx_math(+theta), i.e.
-        #   y' = c*y - s*z;   z' = s*y + c*z.
-        # The previous (3.7.0) implementation used Rx_math(-theta),
-        # which made the 3D layout's post-fold orientation opposite
-        # to the 2D layout's.
+        # W3-1 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, "Flagged, not
+        # claimed"): a coordinate break is a PASSIVE frame change, so the
+        # matrix applied to RAY coordinates is the TRANSPOSE of the new
+        # frame's local-to-world rotation.  Zemax defines
+        # ``Tilt About X = +theta`` BY that local-to-world rotation,
+        # ``Rx_math(+theta)`` (OpticStudio KB KA-01638 "Rotation Matrix and
+        # Tilt About X/Y/Z": ``r_global = R @ r_local + offset``, intrinsic
+        # X-Y-Z for PARM 6 = 0), which sends the new local +z to world -y.
+        # Rays are therefore rotated by ``Rx_math(-theta)``:
+        #   y' =  c*y + s*z;   z' = -s*y + c*z
+        # -- which is what this function's own docstring above already
+        # says (``Rx(-tx) @ Ry(-ty) @ Rz(-tz)``) and what
+        # ``world._apply_coord_break`` composes.
+        #
+        # The 3.7.1 change to ``Rx_math(+theta)`` was justified by making
+        # the 3D layout agree with the 2D layout, but both layouts read
+        # ``ui.model.recompute_element_frames``, whose own tilt blocks
+        # carried the SAME inverted sign -- so it aligned two renderers
+        # with each other while inverting the physics relative to Zemax
+        # and to ``trace_world``.  Measured pre-fix on a pure-tilt oracle
+        # (single +12 deg tilt_x coord break, flat air->N-BK7 interface,
+        # axial ray): this path refracted the ray +4.121516 deg toward
+        # world +y while ``trace_world`` gave -4.121516 deg toward world
+        # -y (8.243032 deg apart).  Both are now -4.121516 deg, and each
+        # matches exact vector Snell in the world frame to <= 1.2e-16.
         c, s = np.cos(theta), np.sin(theta)
-        y_n =  c * rays.y - s * rays.z
-        z_n =  s * rays.y + c * rays.z
+        y_n =  c * rays.y + s * rays.z
+        z_n = -s * rays.y + c * rays.z
         rays.y, rays.z = y_n, z_n
-        M_n =  c * rays.M - s * rays.N
-        N_n =  s * rays.M + c * rays.N
+        M_n =  c * rays.M + s * rays.N
+        N_n = -s * rays.M + c * rays.N
         rays.M, rays.N = M_n, N_n
 
     def _rot_y(theta):
         if theta == 0.0:
             return
         c, s = np.cos(theta), np.sin(theta)
-        # Optical convention: Ry_math(+theta) applied to the ray.
-        x_n =  c * rays.x + s * rays.z
-        z_n = -s * rays.x + c * rays.z
+        # W3-1: Ry_math(-theta) applied to the ray = transpose of the
+        # Zemax local-to-world Ry_math(+theta) (see _rot_x).
+        x_n =  c * rays.x - s * rays.z
+        z_n =  s * rays.x + c * rays.z
         rays.x, rays.z = x_n, z_n
-        L_n =  c * rays.L + s * rays.N
-        N_n = -s * rays.L + c * rays.N
+        L_n =  c * rays.L - s * rays.N
+        N_n =  s * rays.L + c * rays.N
         rays.L, rays.N = L_n, N_n
 
     def _rot_z(theta):
         if theta == 0.0:
             return
         c, s = np.cos(theta), np.sin(theta)
-        # Optical convention: Rz_math(+theta) applied to the ray.
-        x_n =  c * rays.x - s * rays.y
-        y_n =  s * rays.x + c * rays.y
+        # W3-1: Rz_math(-theta) applied to the ray = transpose of the
+        # Zemax local-to-world Rz_math(+theta) (see _rot_x).
+        x_n =  c * rays.x + s * rays.y
+        y_n = -s * rays.x + c * rays.y
         rays.x, rays.y = x_n, y_n
-        L_n =  c * rays.L - s * rays.M
-        M_n =  s * rays.L + c * rays.M
+        L_n =  c * rays.L + s * rays.M
+        M_n = -s * rays.L + c * rays.M
         rays.L, rays.M = L_n, M_n
 
     def _tilts():

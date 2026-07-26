@@ -175,18 +175,46 @@ Full reads of the remaining nine modules — `core.py` (re-export shell),
 
 ### RT-4 (P3) — `world.py` tilts use the opposite sign convention from the legacy coord-break path
 
-> **REMEDIATION NOTE (2026-07-11): this finding is a PHANTOM and was NOT
-> applied (an attempted fix was reverted).**  The claim that
-> `world._apply_coord_break`'s `Rx_math(+θ)` disagrees with the legacy
-> `trace()` path is **false**.  Verified empirically: a +90° tilt_x sends a
-> `+z` ray to world `-y` in BOTH paths — `trace()`'s ray direction becomes
-> `[0,-1,0]`, and the original `world_R[:,2]` (`_rot_x(+tx)` col 2) is
-> `[0,-1,0]` too.  The `periscope` folded-design and `test_world_surfaces`
-> validation oracles both pin `-y` as correct.  Flipping to `_rot_x(-tx)`
-> INTRODUCED the disagreement (world → `+y`) and broke those oracles, so the
-> change was reverted; `world.py` keeps `_rot_x(+tx)`.  (The audit's
-> derivation confused the passive ray-coordinate transform with the
-> `world_R` column direction.)
+> **RETRACTED REMEDIATION NOTE (2026-07-11) — the "PHANTOM" verdict below
+> was itself WRONG; superseded 2026-07-25 by W3-1.**  Kept verbatim as the
+> record of the mis-diagnosis:
+>
+> > *this finding is a PHANTOM and was NOT applied (an attempted fix was
+> > reverted).  The claim that `world._apply_coord_break`'s `Rx_math(+θ)`
+> > disagrees with the legacy `trace()` path is **false**.  Verified
+> > empirically: a +90° tilt_x sends a `+z` ray to world `-y` in BOTH paths
+> > — `trace()`'s ray direction becomes `[0,-1,0]`, and the original
+> > `world_R[:,2]` (`_rot_x(+tx)` col 2) is `[0,-1,0]` too.  … Flipping to
+> > `_rot_x(-tx)` INTRODUCED the disagreement (world → `+y`) and broke
+> > those oracles, so the change was reverted.*
+>
+> **Why that argument fails:** the two `[0,-1,0]`s are different objects.
+> `trace()`'s post-break ray direction is `Qᵀ·ẑ` — a vector in the NEW
+> LOCAL frame; `world_R[:,2]` is `Q·ẑ` — a vector in WORLD.  They came out
+> numerically equal *precisely because* the two sites were transposes of
+> each other, so the equality was the symptom, not the refutation.  (The
+> revert note accused RT-4 of exactly the confusion it then committed.)
+>
+> **Resolution (W3-1, `AUDIT_ADVERSARIAL_CODEBASE_2026_07_25`).**  RT-4's
+> *diagnosis* — the two sites disagree — is CONFIRMED by a pure-tilt oracle
+> (a mirror fold is sign-degenerate in the local frame, which is why the
+> `periscope` oracle could not arbitrate): one `tilt_x = +12°` break in
+> front of a flat air→N-BK7 interface refracted an axial ray **+4.121516°
+> toward world +y** through `trace()` and **−4.121516° toward world −y**
+> through `trace_world()` — 8.243032° apart, local `M = ∓0.137072578`,
+> max|Δ| = 2.741452e-01.  RT-4's *fix* picked the wrong side.  Zemax
+> defines `Tilt About X/Y/Z` by the LOCAL-TO-WORLD matrix using the
+> right-hand `R_math(+θ)` forms in intrinsic X→Y→Z order for `PARM 6 = 0`
+> (`r_global = R·r_local + offset`; OpticStudio KB KA-01638 "Rotation
+> Matrix and Tilt About X/Y/Z", cross-checked by its inverse formula
+> `Tilt About X = ATAN2(N, −M)` on `(L,M,N) = R[:,2]`), so **`world.py` is
+> correct** and `intersection._apply_coord_break` (3.7.1),
+> `differential._adrt_coordbreak` and `ui.model.recompute_element_frames`
+> (3.7.4) were the inverted sites.  All three were fixed to the transpose
+> convention on 2026-07-25; `world.py` is unchanged.  The 3.7.1
+> justification ("the 3D layout's post-fold orientation was opposite to
+> the 2D layout's") aligned two renderers that both read the same
+> inverted `ui.model` frames — a rendering argument, not a physics one.
 
 `intersection._apply_coord_break` (the 3.7.1 "optical convention"
 fix, validated against the 2D layout) transforms ray coordinates by

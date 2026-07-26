@@ -8,7 +8,8 @@ change.  Holds:
 * :class:`AberrationTensorResult` -- container for the LG tensor
   evaluated at one chief-ray image point.
 * :func:`aberration_tensor` -- the closed-form Wick-contraction
-  evaluator (with σ-grid fallback for ℓ ≠ 0 output modes).
+  evaluator (used for a pure ``(0, 0)`` output request; every other
+  output-mode request routes to the σ-grid projection -- audit W3-T3).
 * The 2-D polynomial algebra (``_multiply_polys_2d``,
   ``_polynomial_under_affine_shift``,
   ``_polynomial_substitute_linear_2d``,
@@ -313,15 +314,19 @@ def aberration_tensor(
     v2_centre : (float, float), optional
         Pupil centre.
     sigma_grid_n : int, optional
-        Output-plane grid size used for the σ-integration path when
-        any requested ``output_modes`` has ``ℓ ≠ 0``.  Default 64 is
-        accurate for LG modes up to ``(p, |ℓ|) ~ (3, 3)``; bump for
-        higher orders.  Ignored when all output modes have ``ℓ = 0``
-        (the fast closed-form chief-ray projection is used).
+        Output-plane grid size used for the σ-integration path, i.e.
+        whenever ``output_modes`` requests anything other than the
+        single mode ``(0, 0)``.  Default 64 is accurate for LG modes up
+        to ``(p, |ℓ|) ~ (3, 3)``; bump for higher orders.  Ignored for
+        a pure ``[(0, 0)]`` request (the fast closed-form chief-ray
+        sampling is used).
     sigma_grid_extent : float, optional
-        Half-extent of the σ-grid [m].  Default ``4 · w_o`` captures
-        > 99.9 % of the LG tail mass.  Increase only if the output
-        beam has unusually long tails (large pupil aberrations).
+        Half-extent of the σ-grid [m].  Default ``4 · w_o``, clamped to
+        the fit's ``s2`` validity half-box measured from ``s2_image``
+        (the propagator is identically zero outside it, so an
+        overshooting grid samples no field at all -- see the W3-T3 note
+        at the branch).  An explicit value is honoured verbatim, so
+        pass one if you want the raw ``4 · w_o`` behaviour.
 
     Returns
     -------
@@ -338,9 +343,23 @@ def aberration_tensor(
     even when the underlying aberration was present.  4.9 fixes this
     by doing the actual σ-integration via a small output-plane grid
     and a numerical LG projection (``propagate_modal_asymptotic`` +
-    ``decompose_lg``).  ℓ = 0 modes still use the fast closed-form
-    chief-ray path -- you get the new behaviour only when you ask
-    for an ℓ ≠ 0 output mode.
+    ``decompose_lg``).
+
+    **v5.28.x (audit W3-T3) -- ℓ = 0 degeneracy removed.**  4.9-5.28
+    kept EVERY ℓ = 0 output mode on the closed-form chief-ray path,
+    which is a point-sampling functional whose whole output-mode
+    dependence is ``conj(LG_k)`` evaluated at one point:  that equals
+    ``N_{p,0} = sqrt(2/(π w_o²))`` for every ``(p, 0)`` mode, so
+    ``L`` came back BIT-IDENTICAL for piston / defocus / spherical /
+    every higher ``(p, 0)`` channel (and across separate single-mode
+    calls, with no warning).  Only the pure ``[(0, 0)]`` request --
+    whose LG polynomial genuinely IS that constant, and which is the
+    documented cross-backend contract of
+    ``aberration_tensor_lg00_jax`` -- still uses the closed form; every
+    other request routes to the σ-integration, whose overlaps an
+    independent from-scratch LG quadrature reproduces to ~1e-14
+    relative.  The two paths carry different overall scales (sampling
+    vs. overlap integral); see the note at the branch.
     """
     # Late import to avoid the propagators.asymptotic shell ↔ this
     # submodule import cycle; ``propagate_modal_asymptotic`` lives in
@@ -470,45 +489,45 @@ def aberration_tensor(
     # output Gaussian-moment integral against the LG_o basis without
     # collapsing the σ-dependence.
     #
-    # For pure ℓ = 0 output sets we keep the closed-form chief-ray
-    # evaluation -- it's faster and gives identical numbers in that
-    # regime.  Mixed ℓ = 0 / ℓ ≠ 0 sets fall through to the grid path.
-    needs_sigma_integration = any(k_out[1] != 0 for k_out in output_modes)
-    # 4.10.3: closed-form ℓ=0 path now evaluates the output LG
-    # polynomial at the saddle's σ_image (instead of grabbing only its
-    # x⁰y⁰ Cartesian constant), so different (p, 0) modes are
-    # distinguished for any OFF-axis saddle.  For an axial saddle
-    # σ_image=(0,0), the LG_p,0 polynomial reduces to the
-    # normalisation constant N_p,0 = sqrt(2/(π w_o²)) -- the same
-    # for all p (point evaluation at the origin of orthonormal modes
-    # that all peak there is a fundamental closed-form / saddle-point
-    # limitation; the σ-grid path has the right orthogonal structure
-    # but a different overall normalisation than the closed-form,
-    # so we don't auto-route).  Pass a non-axial source_point /
-    # s2_image, or include an ℓ ≠ 0 mode, to force the discriminating
-    # behaviour.
-    if not needs_sigma_integration:
-        ell0_p_values = {k_out[0] for k_out in output_modes
-                          if k_out[1] == 0}
-        is_axial_saddle = (abs(s2x_img) + abs(s2y_img)
-                            < 1e-9 * max(w_o, 1e-12))
-        if len(ell0_p_values) > 1 and is_axial_saddle:
-            import warnings
-            warnings.warn(
-                "aberration_tensor: ON-AXIS saddle σ_image=(0,0) with "
-                f"multiple radial-p modes in {sorted(ell0_p_values)}.  "
-                "All LG_p,0 modes have the same value N_p,0 at the "
-                "origin, so the saddle-point closed-form cannot "
-                "distinguish them.  This is a fundamental limit of the "
-                "point-evaluation approximation, not a bug.  Use an "
-                "off-axis source_point / s2_image to lift the "
-                "degeneracy, or include an ℓ ≠ 0 mode to force the "
-                "σ-grid integration path.",
-                RuntimeWarning, stacklevel=3,
-            )
+    # v5.28.x (audit W3-T3):  the closed-form branch is a *point-sampling*
+    # functional, not a projection -- its ENTIRE output-mode dependence is
+    # the scalar ``out_const`` below, i.e. the output LG polynomial
+    # evaluated at ONE point.  Measured on a 500 mm N-BK7 singlet
+    # (w_s = 20 um, w_p = 0.05, on-axis):  the branch returns
+    # ``L = U(chief) * N_{p,0}(w_o)`` to 6.9e-17, and
+    # ``N_{p,0} = sqrt(2/(pi w_o^2))`` is INDEPENDENT of p, so
+    # ``output_modes = [(0, 0), (1, 0), (2, 0), (3, 0), (5, 0)]`` all came
+    # back BIT-IDENTICAL (max spread 2.0e-17) -- and separate single-mode
+    # calls did too, with no warning emitted.  The pre-4.10.3 escape
+    # ("go off-axis to lift the degeneracy") is a phantom: evaluating the
+    # output polynomial at the ABSOLUTE image coordinate (which is not the
+    # output-basis coordinate -- the sigma-grid branch below correctly
+    # centres the basis ON s2_image) only perturbs the shared constant by
+    # O((s2_img/w_o)^2), measured 1.9e-5 relative at s2 = 30 um, and that
+    # perturbation is not the mode's overlap integral.
+    #
+    # So (0, 0) -- whose LG polynomial IS the bare constant N_{0,0} -- is
+    # the only output mode the closed form can represent.  Everything else
+    # routes to the sigma-integration, which an independent from-scratch
+    # LG quadrature oracle reproduces to ~1e-14 relative.  Keeping the
+    # pure-(0, 0) request on the closed form preserves the documented
+    # cross-backend contract with ``aberration_tensor_lg00_jax`` (which
+    # hardcodes exactly ``A_lead * N_s * N_p * N_o``).
+    #
+    # NOTE (known, pre-existing): the two branches do not share an overall
+    # scale -- the closed form returns ``U(chief) * conj(LG_k(0))`` (units
+    # of field/length) while the sigma branch returns the true overlap
+    # ``integral conj(LG_k) U`` (units of field*length).  A request for
+    # ``[(0, 0)]`` alone is therefore NOT on the same scale as the (0, 0)
+    # entry of a multi-mode request.  Unifying them requires changing the
+    # JAX twin's convention too; until then prefer multi-mode requests
+    # (all entries mutually consistent overlaps) for anything but the
+    # single Strehl-amplitude channel.
+    needs_sigma_integration = any(tuple(k_out) != (0, 0)
+                                  for k_out in output_modes)
 
     if not needs_sigma_integration:
-        # ---- Closed-form chief-ray projection (ℓ = 0 only) -------------
+        # ---- Closed-form chief-ray sampling (output mode (0, 0) only) ---
         for io, k_out in enumerate(output_modes):
             out_poly_full = lg_polynomial(k_out[0], k_out[1], w_o)
             out_poly = {key: c.conjugate()
@@ -534,25 +553,19 @@ def aberration_tensor(
                     P_eta = _multiply_polys_2d(src_poly_eta, pup_poly_eta)
                     exp_val = _contract_against_moment_table(
                         P_eta, eta_moments)
-                    # 4.10.3: evaluate out_poly at the saddle's
-                    # σ_image (the saddle is held fixed across the
-                    # η-integration).  Pre-4.10.3 grabbed only the
-                    # x⁰y⁰ Cartesian constant, which equals N_p,0
-                    # for every (p, 0) mode and therefore collapsed
-                    # defocus / spherical / secondary-spherical to
-                    # the same scalar.  Evaluating the full
-                    # polynomial at (s2x_img, s2y_img) recovers the
-                    # mode-discriminating polynomial terms.  The
-                    # ON-axis multi-p case is automatically routed
-                    # to the σ-grid path by the
-                    # needs_sigma_integration check above (modes
-                    # genuinely degenerate at the origin in the
-                    # saddle-point limit).
-                    # v5.4.6 (audit F-6): REVIEWED -- evaluating out_poly at
-                    # the absolute image coord (s2x_img, s2y_img) is the
-                    # intentional v4.10.3 fix (see the comment above) and is
-                    # consistent with the sigma-grid branch, which builds its
-                    # grid centered on s2x_img/s2y_img.  Not a defect.
+                    # Point sampling of the output basis at the chief
+                    # ray.  Reachable ONLY for output mode (0, 0) since
+                    # v5.28.x (audit W3-T3) -- see the routing note
+                    # above -- and LG_{0,0}'s polynomial is the bare
+                    # constant N_{0,0}, so this loop collapses to
+                    # ``out_const = conj(N_{0,0}) = sqrt(2/(pi w_o^2))``
+                    # regardless of (s2x_img, s2y_img).  The 4.10.3
+                    # "evaluate at the absolute image coordinate"
+                    # heuristic (which pretended to lift the p
+                    # degeneracy but only perturbed the shared constant
+                    # by O((s2_img/w_o)^2)) is therefore inert here; it
+                    # is kept only so the expression stays a faithful
+                    # generic polynomial evaluation.
                     out_const = 0.0 + 0.0j
                     for (ii, jj), c in out_poly.items():
                         out_const += c * (s2x_img ** ii) * (s2y_img ** jj)
@@ -568,8 +581,34 @@ def aberration_tensor(
         # kwargs added below for users who need higher orders or
         # tighter accuracy.
         n_grid = int(sigma_grid_n) if sigma_grid_n is not None else 64
-        extent = (float(sigma_grid_extent)
-                  if sigma_grid_extent is not None else 4.0 * w_o)
+        if sigma_grid_extent is not None:
+            extent = float(sigma_grid_extent)
+        else:
+            extent = 4.0 * w_o
+            # v5.28.x (audit W3-T3):  ``propagate_modal_asymptotic`` is
+            # identically ZERO outside the fit's s2 validity box, so a
+            # default grid that overshoots the box does not merely waste
+            # samples -- it starves the quadrature completely.  The
+            # default ``w_o`` is derived from the beam matrix M, whose
+            # units are 1/direction-cosine^2, so it is a PUPIL-scale
+            # number used as an image-plane length:  measured 9.83e-3
+            # against a fit half-box of 1.54e-4 m, i.e. +-4 w_o was
+            # 255x outside the box and the 64x64 default grid landed
+            # ZERO valid pixels -> EVERY entry of L came back exactly
+            # 0.0 (silently resurrecting the pre-4.9 all-zero
+            # coma/astigmatism/tilt bug that the sigma path exists to
+            # fix).  Clamp the DEFAULT to the box actually reachable
+            # from s2_image; an explicit ``sigma_grid_extent`` is still
+            # honoured verbatim.  Nothing is lost by the clamp: the
+            # integrand vanishes outside the box.
+            room = min(
+                fit.s2x_centre + fit.s2x_halfrange - s2x_img,
+                s2x_img - (fit.s2x_centre - fit.s2x_halfrange),
+                fit.s2y_centre + fit.s2y_halfrange - s2y_img,
+                s2y_img - (fit.s2y_centre - fit.s2y_halfrange),
+            )
+            if room > 0.0:
+                extent = min(extent, float(room))
         sx_arr = np.linspace(s2x_img - extent, s2x_img + extent, n_grid)
         sy_arr = np.linspace(s2y_img - extent, s2y_img + extent, n_grid)
         S2X, S2Y = np.meshgrid(sx_arr, sy_arr, indexing='xy')
