@@ -83,7 +83,7 @@ def koehler_image(
     # walker.  Input kind: 'field' (the object transmission is a
     # 2-D scalar complex field on the object plane).
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(object_field, 'koehler_image')
+    _check_2d_scalar_field(object_field, 'koehler_image', input_kind='field')
     N = object_field.shape[0]
     k0 = 2 * np.pi / wavelength
     x = (np.arange(N) - N / 2) * dx
@@ -156,7 +156,8 @@ def extended_source_image(
     # ``_check_2d_scalar_field`` helper (sibling of ``koehler_image``).
     # Input kind: 'field' (object transmission).
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(object_field, 'extended_source_image')
+    _check_2d_scalar_field(object_field, 'extended_source_image',
+                           input_kind='field')
     N = object_field.shape[0]
     k0 = 2 * np.pi / wavelength
     x = (np.arange(N) - N / 2) * dx

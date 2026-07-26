@@ -418,7 +418,8 @@ def apply_real_lens_traced_multibranch(
     (N, N) complex output field (plus diagnostics dict if requested).
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_traced_multibranch')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_traced_multibranch',
+                           input_kind='field')
     E_in = np.asarray(E_in)
     N = E_in.shape[0]
     if E_in.shape[0] != E_in.shape[1]:

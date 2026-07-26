@@ -79,8 +79,8 @@ def strehl_ratio(
     # unhelpful Python TypeError.  Input kind: 'field' (both args
     # are 2-D scalar complex amplitudes).
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'strehl_ratio')
-    _check_2d_scalar_field(E_ref, 'strehl_ratio')
+    _check_2d_scalar_field(E, 'strehl_ratio', input_kind='field')
+    _check_2d_scalar_field(E_ref, 'strehl_ratio', input_kind='field')
     xp = _xp_of(E, E_ref)
     I = xp.abs(E) ** 2
     I_ref = xp.abs(E_ref) ** 2
@@ -263,8 +263,8 @@ def coupling_efficiency(
     # modes to the canonical v4.16 message.  Input kind: 'field'
     # (both args are 2-D scalar complex amplitudes).
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'coupling_efficiency')
-    _check_2d_scalar_field(mode, 'coupling_efficiency')
+    _check_2d_scalar_field(E, 'coupling_efficiency', input_kind='field')
+    _check_2d_scalar_field(mode, 'coupling_efficiency', input_kind='field')
     if E.shape != mode.shape:
         raise ValueError(
             f"coupling_efficiency: shape mismatch -- E is {E.shape}, "

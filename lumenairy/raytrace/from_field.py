@@ -258,7 +258,7 @@ def rays_from_field(
     # symmetry (its message is more specific to the rays-from-field
     # use case).  Input kind: 'field'.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'rays_from_field')
+    _check_2d_scalar_field(E, 'rays_from_field', input_kind='field')
     # ------------------------------------------------------------------
     # Input validation -- audit posture: fail loudly at the boundary.
     # ------------------------------------------------------------------

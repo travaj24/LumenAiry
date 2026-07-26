@@ -2543,7 +2543,7 @@ def apply_real_lens_traced(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_traced')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_traced', input_kind='field')
 
     # ---- Enum membership guards (v5.29.1; audit E-M3 / E-M4) ------------
     # Both knobs used to be read by EQUALITY against one value, so every
@@ -5485,7 +5485,8 @@ def apply_real_lens_traced_segmented(
     ``reuse_prepared=False`` and drop ``preserve_input_phase``.
     """
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_traced_segmented')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_traced_segmented',
+                           input_kind='field')
     if dy is None:
         dy = dx
     if isinstance(n_segments, (tuple, list)) and len(n_segments) == 2:

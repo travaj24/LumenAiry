@@ -38,6 +38,26 @@ from typing import Any
 # constraints AND keeps the helper hot-loop cheap.
 from lumenairy.sources.core import PartialCoherenceMCF as _MCF
 
+# v5.31 (audit A-9): the closed vocabulary for ``input_kind``.
+#
+# v4.15.5 introduced ``input_kind`` as a free-form string interpolated
+# straight into the rejection message and documented three
+# "conventional values" in prose.  Prose is not a contract: a typo
+# (``'feild'``), a plural (``'pupils'``), or a value borrowed from a
+# sibling knob (``'intensity'``) produced a *silently* misleading
+# error message -- the guard still fired, but told the user to pass a
+# 2-D complex "feild".  The A-9 rollout (2 -> 27 wired call sites)
+# multiplies the number of places that mistake can be made by ~13x,
+# so the vocabulary is now closed and checked.
+#
+# Membership is a frozenset lookup (~40 ns), which matters because
+# this helper runs at the entry point of every propagator / lens call
+# and is therefore on the merit-evaluation hot path (see the
+# module-level import note above).  Adding a value here is the
+# supported way to extend the vocabulary; passing an unlisted one is
+# a library bug, not a user error, so it fails loudly.
+_INPUT_KINDS = frozenset({'field', 'psf', 'pupil'})
+
 
 def _check_2d_scalar_field(
     E: Any,
@@ -60,13 +80,16 @@ def _check_2d_scalar_field(
         Semantic name of the rejected argument -- used in the error
         message wording so callers passing a non-conforming
         ``pupil`` (``richards_wolf_focus``, ``debye_wolf_psf``) or
-        ``psf`` (``compute_otf`` / ``compute_mtf`` if Agent A wires
-        them up) see "expected 2-D complex pupil" / "psf" instead
-        of the literal "field" string.  Conventional values:
-        ``'field'`` (default), ``'pupil'``, ``'psf'``.  v4.15.5
-        (P2-NEW-F1-3): parameterised after the v4.15.4 audit noted
-        that the vector-diffraction sites took a pupil, not a field,
-        but the error message hardcoded "field".
+        ``psf`` (``compute_otf`` / ``compute_mtf``) see
+        "expected 2-D complex pupil" / "psf" instead of the literal
+        "field" string.  v4.15.5 (P2-NEW-F1-3): parameterised after
+        the v4.15.4 audit noted that the vector-diffraction sites
+        took a pupil, not a field, but the error message hardcoded
+        "field".  v5.31 (audit A-9): the value must be a member of
+        the closed :data:`_INPUT_KINDS` vocabulary
+        (``'field'`` / ``'psf'`` / ``'pupil'``) -- see the Raises
+        section -- and is now declared explicitly at every wired
+        call site rather than defaulted.
 
     Raises
     ------
@@ -81,6 +104,16 @@ def _check_2d_scalar_field(
         which iterates a Schell-family ensemble through any coherent
         propagator and returns ``< |E_k|^2 >_k``.
     ValueError
+        If ``input_kind`` is not a member of :data:`_INPUT_KINDS`.
+        Checked BEFORE the input itself: an unlisted kind is a
+        library bug (the string is supplied by lumenairy's own call
+        sites, never by the end user), and reporting the user's
+        array shape while the guard's own message wording is broken
+        would bury the real defect.  The message names the offending
+        value and the sorted allowed set (house rule for enum-valued
+        knobs, cf. ``normalize`` in ``compute_psf`` and
+        ``on_noncollimated`` in ``apply_real_lens_traced``).
+    ValueError
         If ``E.ndim != 2``.  Common cause: the user passed a
         v4.15.1+ Schell-family ensemble (shape
         ``(n_realizations, Ny, Nx)``) directly to a coherent
@@ -88,6 +121,19 @@ def _check_2d_scalar_field(
         :func:`lumenairy.propagate_ensemble` (v4.16.1) for the
         canonical workflow.
     """
+    if input_kind not in _INPUT_KINDS:
+        raise ValueError(
+            f"{fn_name}: input_kind must be one of "
+            f"{sorted(_INPUT_KINDS)}; got {input_kind!r}.  "
+            f"``input_kind`` only selects the noun used in this "
+            f"guard's rejection message ('expected 2-D complex "
+            f"<kind>'); it does not change what is accepted.  If a "
+            f"new entry point genuinely guards a different kind of "
+            f"2-D array, add the value to "
+            f"``lumenairy._validation._INPUT_KINDS`` rather than "
+            f"passing an unlisted string."
+        )
+
     if isinstance(E, _MCF):
         # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the prior
         # rejection message cited "v4.16+ scope" -- but the library

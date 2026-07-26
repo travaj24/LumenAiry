@@ -641,7 +641,7 @@ def wave_opd_2d(
     # ``AttributeError`` (MCF) -- routes both to the canonical
     # v4.16 message via the V6 walker.  Input kind: 'field'.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'wave_opd_2d')
+    _check_2d_scalar_field(E, 'wave_opd_2d', input_kind='field')
     if dy is None:
         dy = dx
 

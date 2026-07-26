@@ -357,7 +357,8 @@ class DeformableMirror:
         # of raising).  Paired with the v4.15.5 walker descent into
         # class bodies (P2-NEW-F2-4).
         from lumenairy._validation import _check_2d_scalar_field
-        _check_2d_scalar_field(E_in, 'DeformableMirror.apply')
+        _check_2d_scalar_field(E_in, 'DeformableMirror.apply',
+                               input_kind='field')
         phi = scale * self.phase()
         return E_in * np.exp(1j * phi)
 
@@ -380,7 +381,7 @@ def apply_dm(
     # 3-D ensemble inputs get a clear v4.16-roadmap message rather
     # than a downstream ``AttributeError`` inside ``dm.apply``.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_dm')
+    _check_2d_scalar_field(E_in, 'apply_dm', input_kind='field')
     return dm.apply(E_in, scale=scale)
 
 

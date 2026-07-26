@@ -127,11 +127,13 @@ def compute_psf(
     # ValueError instead of the canonical v4.16 message.  Input
     # kind: 'pupil' (the function consumes a 2-D pupil amplitude *
     # phase product and does a single Fraunhofer FT to the PSF
-    # plane).  Note: ``input_kind='pupil'`` would be ideal once
-    # Agent B's parameterised ``_check_2d_scalar_field`` lands;
-    # the default form here is correct in the interim.
+    # plane).  v5.31 (audit A-9): ``input_kind='pupil'`` is now
+    # actually passed.  v4.15.5 landed the parameterised helper in a
+    # parallel branch and left a marker comment here deferring to it;
+    # the marker outlived the thing it was waiting for by five minor
+    # releases, so this guard described a pupil as a "field".
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(pupil, 'compute_psf')
+    _check_2d_scalar_field(pupil, 'compute_psf', input_kind='pupil')
     xp = _xp_of(pupil)
     # 4.11.2: enforce the (long-undocumented) square-pupil assumption.
     # Pre-4.11.2 the function silently used ``pupil.shape[0]`` for
@@ -247,7 +249,7 @@ def compute_otf(psf: np.ndarray) -> np.ndarray:
     # both failure modes to the canonical v4.16 message via the V6
     # walker.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(psf, 'compute_otf')
+    _check_2d_scalar_field(psf, 'compute_otf', input_kind='psf')
     xp = _xp_of(psf)
     otf = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(psf)))
     # Normalize so DC component = 1
@@ -297,7 +299,7 @@ def compute_mtf(psf: np.ndarray) -> np.ndarray:
     # call would catch the same failure mode but with a less
     # informative call-site name.  Input kind: 'psf'.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(psf, 'compute_mtf')
+    _check_2d_scalar_field(psf, 'compute_mtf', input_kind='psf')
     xp = _xp_of(psf)
     return xp.abs(compute_otf(psf))
 
@@ -512,7 +514,7 @@ def encircled_energy_curve(
     # walker.  Input kind: 'field' (or 'psf' if user passed an
     # intensity PSF -- the function detects both).
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'encircled_energy_curve')
+    _check_2d_scalar_field(E, 'encircled_energy_curve', input_kind='field')
     if dy is None:
         dy = dx
     if E.ndim != 2:
@@ -689,7 +691,7 @@ def encircled_energy_radius(
     True
     """
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'encircled_energy_radius')
+    _check_2d_scalar_field(E, 'encircled_energy_radius', input_kind='field')
     if not (0.0 < threshold <= 1.0):
         raise ValueError(
             f"encircled_energy_radius: threshold must be in (0, 1]; "

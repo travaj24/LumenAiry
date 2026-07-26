@@ -270,7 +270,7 @@ def beam_d4sigma(
     # routes both failure modes to the canonical v4.16 message.
     # Input kind: 'field' (2-D scalar complex amplitude).
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'beam_d4sigma')
+    _check_2d_scalar_field(E, 'beam_d4sigma', input_kind='field')
     if dy is None:
         dy = dx
     xp = _xp_of(E)
@@ -464,7 +464,7 @@ def M2(
     # modes to the canonical v4.16 message via the V6 walker.
     # Input kind: 'field'.
     from lumenairy._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'M2')
+    _check_2d_scalar_field(E, 'M2', input_kind='field')
     _ = float(wavelength)  # validation only; wavelength cancels out
     if dy is None:
         dy = dx

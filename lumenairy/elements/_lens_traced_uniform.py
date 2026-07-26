@@ -760,7 +760,8 @@ def apply_real_lens_traced_uniform(
     ``return_diagnostics`` -- with the resolved ``r_c``, ``kappa``, the fitted
     Airy coefficients, the fit residual, and ``fell_back`` / ``reason``)."""
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_traced_uniform')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_traced_uniform',
+                           input_kind='field')
     E_in = np.asarray(E_in)
     N = E_in.shape[0]
     if E_in.ndim != 2 or E_in.shape[0] != E_in.shape[1]:

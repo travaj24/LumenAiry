@@ -2448,7 +2448,7 @@ def apply_real_lens(
     # rather than a downstream AttributeError or silent wrong-axis
     # broadcast.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens')
+    _check_2d_scalar_field(E_in, 'apply_real_lens', input_kind='field')
 
     # v5.1.0 (default-knob resolver rollout): when ``wave_propagator``
     # is left at the default ``None``, resolve via the library-wide

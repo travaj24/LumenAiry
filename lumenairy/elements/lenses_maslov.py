@@ -1283,7 +1283,7 @@ def apply_real_lens_maslov(
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens_maslov')
+    _check_2d_scalar_field(E_in, 'apply_real_lens_maslov', input_kind='field')
 
     # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
     # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription
