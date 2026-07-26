@@ -62,8 +62,7 @@ release.
 
 | Dock | File | Library backing |
 |------|------|-----------------|
-| Surface table | `surface_table.py` | `elements.lenses`, `model.SystemModel.prescription` |
-| Element table | `element_table.py` | `elements/elements.py` |
+| Element table | `element_table.py` | `elements/elements.py`, `model.SystemModel.prescription` |
 | Surface editors | `surface_editors.py` | `elements.freeform`, `elements.coatings` |
 | Layout 2D | `layout_2d.py` | `raytrace.layout` |
 | Layout 3D | `layout_3d.py` | `raytrace.layout`, `vtkmodules` |

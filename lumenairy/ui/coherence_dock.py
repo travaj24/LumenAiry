@@ -35,15 +35,47 @@ class _KoehlerWorker(QThread):
         self.params = params
 
     def run(self):
+        # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, Territory A
+        # UI pass): this call passed ``source_sigma`` / ``N`` /
+        # ``n_modes`` -- none of which koehler_image has ever accepted --
+        # and omitted the REQUIRED ``object_field``, so Tab 1's Run button
+        # could only ever report "koehler_image failed: TypeError:
+        # koehler_image() got an unexpected keyword argument
+        # 'source_sigma'" (measured by signature bind).  Mapped onto the
+        # real signature ``koehler_image(object_field, prescription,
+        # wavelength, dx, condenser_NA=, n_source_points=,
+        # focal_length=)``:
+        #   * ``N``          -> the demo object's grid (same loader Tab 2
+        #                       uses, so both tabs image the same object);
+        #   * ``sigma``      -> condenser NA.  The UI defines sigma as
+        #                       NA_source / NA_pupil, so the condenser NA
+        #                       is sigma * NA_pupil with NA_pupil from the
+        #                       model's EPD / (2 EFL); when the EFL is not
+        #                       yet solved, NA_pupil falls back to
+        #                       koehler_image's own 0.1 default.
+        #   * ``n_modes``    -> n_source_points, which is the per-AXIS
+        #                       count (total evaluations ~ n^2), so the
+        #                       requested mode count maps as ceil(sqrt(n)).
         try:
+            import math
             import lumenairy as la
             pres = self.sm.to_prescription()
             wv = self.sm.wavelength_m
+            N = int(self.params['N'])
+            dx = float(self.params['dx'])
+            obj = _CoherenceAnalysisWorker._load_object('', N)
+            efl_mm = float(getattr(self.sm, 'efl_mm', np.inf))
+            if np.isfinite(efl_mm) and efl_mm > 0:
+                na_pupil = float(self.sm.epd_m) / (2.0 * efl_mm * 1e-3)
+            else:
+                na_pupil = 0.1
+            cond_na = min(0.999, max(1e-6,
+                                     float(self.params['sigma']) * na_pupil))
+            n_src = max(1, int(math.ceil(
+                math.sqrt(float(self.params['n_modes'])))))
             res = la.koehler_image(
-                prescription=pres, wavelength=wv,
-                source_sigma=self.params['sigma'],
-                N=self.params['N'], dx=self.params['dx'],
-                n_modes=self.params['n_modes'])
+                object_field=obj, prescription=pres, wavelength=wv, dx=dx,
+                condenser_NA=cond_na, n_source_points=n_src)
             self.finished_result.emit(res)
         except Exception as exc:
             self.finished_result.emit(

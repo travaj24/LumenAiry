@@ -215,6 +215,77 @@ unit paths, `quarter_wave_ar`).
   so the names stay discoverable.  Export integrity unchanged (every
   `__all__` entry still resolves; phantom names still raise `AttributeError`).
 
+### Fixed (adversarial-audit Tier 2, wave 3 — UI breadth + deprecation registry, 2026-07-25)
+
+Territory A's UI pass and deprecation rot.  All six dead UI actions were
+measured headlessly (PySide6 absent) exactly as the audit measured them:
+`importlib` on the import TARGETS, `inspect.signature(...).bind` on the
+kwargs.  36 pins in `tests/unit/test_niche_audit_w3_ui_deprecation.py`, 23
+verified failing on the pre-fix tree.
+
+- **Four dead propagator menu choices** — `waveoptics_dock.py:775-795`
+  imported GBD / HFPI / Huygens-Fresnel / Subaperture from
+  `propagators.propagation`, the v5.1.0 re-export shell for the
+  ASM/Fresnel/RS/SAS/MFT family, which has never exported them.  Every one of
+  the four whole-prescription runs died with `ImportError` and was reported to
+  the user as a generic "`<method>` failed".  Now imported from the owning
+  submodules (`propagators.gbd` / `.hfpi` / `.hf` / `.subaperture`) — the same
+  targets `optimize/driver.py` and `propagators/dispatch.py` use; the call
+  kwargs were already correct and bind unchanged.
+- **Dead detector option + the unpack bug behind it** —
+  `waveoptics_dock.py:994` imported a nonexistent `..detector`
+  (`ModuleNotFoundError`, swallowed by `except Exception: pass`), so the
+  "Apply detector to focal field" checkbox has always been a no-op.  Behind
+  it, `analysis.detector.apply_detector` returns `(image, x_det, y_det)`,
+  which the dock bound to `E_focus` — fixing only the import would have traded
+  a silent no-op for a `ValueError` one line later.  Import corrected, the
+  3-tuple unpacked, the electron image carried as an amplitude-equivalent
+  field (`sqrt(clip(image, 0))`, pitch → `pixel_pitch`) so `|E_focus|²` IS the
+  detected image for every downstream consumer, and detection moved AFTER the
+  chief-relative-OPD conversion (detection destroys phase).  That handler now
+  reports through `ui.diagnostics.diag`.
+- **Three stale-kwarg docks** — `coherence_dock.py:42` passed
+  `source_sigma`/`N`/`n_modes` to `koehler_image` and omitted the required
+  `object_field`; `shack_hartmann_dock.py:128` passed `lenslet_focal_length`
+  (the parameter is `lenslet_focal`) and `n_zernike` (never a parameter), then
+  read `res.slopes_x` off what is actually a 5-tuple;
+  `lg_aberration_dock.py:104` called `aberration_tensor(prescription,
+  wavelength=, w0=, p_max=, l_max=)` against a signature taking
+  `(fit: CanonicalPolyFit, s2_image, …)`.  All three re-bound against the real
+  APIs: the Schell tab maps sigma → condenser NA via the model's EPD/2·EFL and
+  mode count → `n_source_points`; the SH dock unpacks the 5-tuple and fits the
+  advertised Zernike spectrum with `zernike_decompose`; the LG dock routes
+  through the public `aberration_summary` wrapper (which owns the
+  fit → envelope-solve → tensor chain) and renders `.L` with real (p, ℓ)
+  Seidel labels instead of raw matrix indices.
+- **Optimizer abort** — `optimizer_dock.py:1088` built
+  `ToleranceAwareMerit(inner_merit=…, radius_sigma_frac=…, thickness_sigma=…)`;
+  the parameter is `sub_merit`, the other two do not exist, and the required
+  `perturbation_spec` was missing — selecting that merit raised `TypeError`
+  and aborted the run.  Now passes `sub_merit` plus a per-surface
+  decentre/tilt spec, and logs that radius/thickness sigmas are not part of
+  this merit's Monte-Carlo model rather than silently reinterpreting them.
+- **`ui/surface_table.py` DELETED** (370 lines, `SurfaceTableEditor`) — zero
+  references repo-wide (verified in pure Python, no shelled-out `rg`);
+  superseded by `element_table.py`.  The `ui/__init__.py` architecture list
+  also named a `workers.py` that has never existed in this tree.
+- **Deprecation removal-schedule registry** — the removed-in banner emitted
+  "will be removed in v5.27" FROM v5.29.0, and nothing in the library ever
+  compared a stated horizon against `__version__` (four independent f-strings
+  each interpolated `version_removed` verbatim).  `lumenairy/_deprecation.py`
+  now owns `REMOVAL_SCHEDULE` / `NEXT_REMOVAL_VERSION` (v5.32) /
+  `resolve_removal_version` / `check_removal_schedule`, routed through a
+  single `_format_removal` builder: a re-scheduled horizon reports as
+  `will be removed in v5.32 (rescheduled from v5.27)` — naming the slip
+  instead of moving the goalpost silently — and ANY stated version that has
+  already shipped is promoted to the live one as a backstop.  No shim is
+  removed (that stays a release decision for each module owner).
+- **`_lens_jax.py`** — `apply_real_lens_traced_jax` documented a parameter
+  `lens_prescription`; that is the function's internal alias and the real
+  keyword is `prescription`, so the documented call form raised `TypeError`.
+  Pinned generically: every parameter documented in that module must exist in
+  the signature.
+
 ## [5.29.0] — 2026-07-25
 
 **The traced-carrier production campaign.**  `propagate_traced_carrier_chain`

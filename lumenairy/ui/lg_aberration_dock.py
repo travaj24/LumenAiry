@@ -94,6 +94,21 @@ class LGAberrationDock(QWidget):
         self.canvas.draw_idle()
 
     def _run(self):
+        # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, Territory A
+        # UI pass): this called ``aberration_tensor(pres, wavelength=,
+        # w0=, p_max=, l_max=)``, but that function takes
+        # ``(fit: CanonicalPolyFit, s2_image, *, source_point=,
+        # source_modes=, pupil_modes=, output_modes=, w_s=, w_p=, ...)``
+        # -- a prescription is not a fit and none of the four kwargs
+        # exist, so Run could only report "aberration_tensor failed:
+        # TypeError: missing a required argument: 's2_image'" (measured by
+        # signature bind).  Routed through the public one-shot wrapper
+        # ``aberration_summary``, which owns the
+        # fit_canonical_polynomials -> solve_envelope_stationary ->
+        # aberration_tensor chain (the same sequence
+        # analysis/aberration.py uses) and reports why in ``notes`` when
+        # the asymptotic fit does not converge.  The dock's p / |l| grid
+        # becomes the OUTPUT mode list -- the rows of the returned L.
         try:
             import lumenairy as la
             pres = self.sm.to_prescription()
@@ -101,12 +116,20 @@ class LGAberrationDock(QWidget):
             w0 = float(self.spin_w0_um.value()) * 1e-6
             pmax = int(self.spin_pmax.value())
             lmax = int(self.spin_lmax.value())
-            T = la.aberration_tensor(
-                pres, wavelength=wv, w0=w0,
-                p_max=pmax, l_max=lmax)
+            out_modes = [(p, ell)
+                         for p in range(pmax + 1)
+                         for ell in range(-lmax, lmax + 1)]
+            summary = la.aberration_summary(
+                pres, wv, output_modes=out_modes, w_s=w0)
+            T = summary.lg_tensor
+            if T is None:
+                self.summary.setPlainText(
+                    'LG aberration tensor unavailable:\n  '
+                    + '\n  '.join(summary.notes or ['(no diagnostics)']))
+                return
         except Exception as exc:
             self.summary.setPlainText(
-                f'aberration_tensor failed: {type(exc).__name__}: {exc}')
+                f'aberration_summary failed: {type(exc).__name__}: {exc}')
             return
         self._draw_tensor(T)
 
@@ -115,16 +138,23 @@ class LGAberrationDock(QWidget):
         ax = self.fig.add_subplot(111)
         ax.set_facecolor('#0a0c10')
         try:
-            arr = np.asarray(getattr(T, 'tensor', T))
+            # v5.30: ``AberrationTensorResult`` carries the matrix on
+            # ``.L`` (rows = output modes, columns = source modes); the
+            # pre-fix ``getattr(T, 'tensor', T)`` fell through to the
+            # dataclass itself and np.asarray'd an object.
+            arr = np.asarray(getattr(T, 'L', getattr(T, 'tensor', T)))
             if arr.ndim > 2:
                 arr = arr.reshape(arr.shape[0], -1)
-            im = ax.imshow(np.abs(arr), cmap='magma', origin='lower')
+            if arr.ndim == 1:
+                arr = arr.reshape(-1, 1)
+            im = ax.imshow(np.abs(arr), cmap='magma', origin='lower',
+                           aspect='auto')
             ax.set_title(
                 'LG aberration tensor (|element|)',
                 color='#dde8f8', fontfamily='monospace')
-            ax.set_xlabel('mode index n', color='#dde8f8',
+            ax.set_xlabel('source mode index', color='#dde8f8',
                           fontfamily='monospace')
-            ax.set_ylabel('mode index m', color='#dde8f8',
+            ax.set_ylabel('output mode index', color='#dde8f8',
                           fontfamily='monospace')
             ax.tick_params(colors='#7a94b8', labelsize=8)
             for s in ax.spines.values():
@@ -132,15 +162,21 @@ class LGAberrationDock(QWidget):
             # Try to surface a Seidel-equivalent label list.
             try:
                 import lumenairy as la
-                P, L = arr.shape[:2]
-                lines = ['Largest tensor elements (|coeff|, mode pair → Seidel):']
+                # v5.30: label rows by their (p, ell) OUTPUT mode -- the
+                # pre-fix code fed the raw matrix indices (i, j) to
+                # lg_seidel_label(p, ell), mislabelling every row.
+                out_modes = list(getattr(T, 'output_modes', []) or [])
+                lines = ['Largest tensor elements (|coeff|, output mode → Seidel):']
                 idx = np.dstack(np.unravel_index(
                     np.argsort(np.abs(arr).ravel())[::-1][:8], arr.shape))
                 for (i, j) in idx[0]:
-                    label = la.lg_seidel_label(i, j) \
-                        if hasattr(la, 'lg_seidel_label') else ''
+                    if i < len(out_modes):
+                        p, ell = out_modes[i]
+                        label = f'(p={p}, l={ell:+d}) {la.lg_seidel_label(p, ell)}'
+                    else:
+                        label = ''
                     lines.append(
-                        f'  |T[{i},{j}]| = {np.abs(arr[i,j]):.4e}  {label}')
+                        f'  |L[{i},{j}]| = {np.abs(arr[i,j]):.4e}  {label}')
                 self.summary.setPlainText('\n'.join(lines))
             except Exception:
                 self.summary.setPlainText(

@@ -1082,13 +1082,42 @@ class OptimizerDock(QWidget):
             elif geo_idx == 7:
                 # Tolerance-aware wrapper -- user sets the wrapped merit
                 # implicitly (we wrap the currently-selected wave merit
-                # if any, otherwise EFL target).  ``target`` here is the
-                # number of Monte-Carlo trials.
+                # if any, otherwise EFL target).  v5.30: the previous
+                # comment here claimed ``target`` was the Monte-Carlo
+                # trial count; it is not -- it is the EFL target in mm
+                # (the trial count is the fixed 16 below), and the code
+                # has always read it that way.
                 inner = FocalLengthMerit(target=target * 1e-3, weight=1.0)
+                # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25,
+                # Territory A UI pass): this call named THREE kwargs
+                # ToleranceAwareMerit has never had -- ``inner_merit``
+                # (the parameter is ``sub_merit``), ``radius_sigma_frac``
+                # and ``thickness_sigma`` -- and omitted the REQUIRED
+                # ``perturbation_spec``, so selecting the tolerance-aware
+                # merit raised TypeError and aborted the whole optimizer
+                # run (measured: "missing a required argument:
+                # 'sub_merit'").  The merit's Monte-Carlo model perturbs
+                # surface decentre / tilt / form error (see
+                # ``monte_carlo_tolerancing``); radius and thickness
+                # sigmas are not part of it, so they are dropped rather
+                # than silently reinterpreted -- logged below so the
+                # substitution is visible in the run log.
+                tol_spec = [
+                    {'surface_index': si,
+                     'decenter_std': 10e-6,     # 10 um lateral, 1-sigma
+                     'tilt_std': 1e-4,          # 100 urad (~21 arcsec)
+                     'form_error_rms': 0.0}
+                    for si in range(len(pres.get('surfaces', [])))
+                ]
+                self.log.append(
+                    f'  (tolerance-aware: {len(tol_spec)} surfaces x '
+                    f'16 trials, 10 um decentre / 100 urad tilt 1-sigma; '
+                    f'radius / thickness sigmas are not modelled by '
+                    f'ToleranceAwareMerit and are ignored)')
                 merit_terms.append(ToleranceAwareMerit(
-                    inner_merit=inner,
-                    n_trials=16, radius_sigma_frac=0.002,
-                    thickness_sigma=5e-6, seed=1, weight=1.0))
+                    sub_merit=inner,
+                    perturbation_spec=tol_spec,
+                    n_trials=16, seed=1, weight=1.0))
 
             wave_idx = self.combo_merit_wave.currentIndex()
             if wave_idx == 1:

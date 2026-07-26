@@ -119,16 +119,39 @@ class ShackHartmannDock(QWidget):
                 '(F5); the focal-plane field is then routed here '
                 'automatically.')
             return
+        # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, Territory A
+        # UI pass): this call passed ``lenslet_focal_length`` (the
+        # parameter is ``lenslet_focal``) and ``n_zernike`` (never a
+        # parameter -- ``shack_hartmann`` does no modal fit), so Run could
+        # only report "shack_hartmann failed: TypeError: missing a required
+        # argument: 'lenslet_focal'" (measured by signature bind).  The
+        # function also returns a 5-TUPLE, not an object, so the
+        # ``res.slopes_x`` / ``res.zernike_coeffs`` reads below were dead
+        # too; the tuple is unpacked here and re-presented as a namespace
+        # with the same attribute names, and the Zernike spectrum the dock
+        # advertises is fitted explicitly from the reconstructed wavefront.
         try:
+            from types import SimpleNamespace
             import lumenairy as la
             pitch = float(self.spin_pitch_um.value()) * 1e-6
             fl = float(self.spin_fl_mm.value()) * 1e-3
             n_zern = int(self.spin_n_zern.value())
             wv = self.sm.wavelength_m
-            res = la.shack_hartmann(
-                self._last_field, self._last_dx,
-                lenslet_pitch=pitch, lenslet_focal_length=fl,
-                wavelength=wv, n_zernike=n_zern)
+            sx, sy, wf, cx, cy = la.shack_hartmann(
+                self._last_field, self._last_dx, wavelength=wv,
+                lenslet_pitch=pitch, lenslet_focal=fl)
+            zern = None
+            if n_zern > 0:
+                # The reconstructed wavefront lives on the lenslet
+                # lattice: one sample per sub-aperture, pitch =
+                # lenslet_pitch, OOB lenslets NaN (zernike_decompose
+                # masks non-finite samples itself).
+                zern, _labels = la.zernike_decompose(
+                    wf, pitch, wf.shape[0] * pitch, n_modes=n_zern)
+            res = SimpleNamespace(
+                slopes_x=sx, slopes_y=sy, wavefront=wf,
+                centroids_x=cx, centroids_y=cy,
+                n_lenslets=wf.shape[0], zernike_coeffs=zern)
         except Exception as exc:
             self.summary.setPlainText(
                 f'shack_hartmann failed: {type(exc).__name__}: {exc}')

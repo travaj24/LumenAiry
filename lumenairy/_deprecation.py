@@ -36,6 +36,7 @@ or, to surface them as errors in CI::
 from __future__ import annotations
 
 import functools
+import sys
 import warnings
 from typing import Any, Callable, Optional
 
@@ -46,11 +47,205 @@ __all__ = [
     'warn_renamed_function',
     'warn_deprecated_default',
     'warn_deprecated_signature',
+    # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, Territory A
+    # "deprecation registry rot"): the removal-schedule registry.
+    'NEXT_REMOVAL_VERSION',
+    'REMOVAL_SCHEDULE',
+    'resolve_removal_version',
+    'check_removal_schedule',
     # v4.15.1 (Agent E): pickle-safe sentinel helpers; the unpickler
     # must be importable by name at the module top level for the
     # ``_Sentinel.__reduce__`` protocol to round-trip cleanly.
     '_sentinel_unpickle',
 ]
+
+
+# ===========================================================================
+# Removal-schedule registry
+# ===========================================================================
+# v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, Territory A
+# "deprecation registry rot").  MEASURED defect: the removed-in banner
+# emitted ``will be removed in v5.27`` from a v5.29.0 library -- i.e. the
+# message advertised a horizon the release had already blown through.  Ten
+# of twelve live deprecations were past their stated removal version (eight
+# said v5.0).
+#
+# The bug is structural, not a typo: the four message builders below
+# interpolated ``version_removed`` verbatim, so NOTHING in the library ever
+# compared a stated horizon against the running ``__version__``.  Every
+# call site was free to rot independently, and CI could not see it (the
+# pins assert the version STRING appears, which a stale string does).
+#
+# The fix keeps the mechanics in exactly one place:
+#
+#   * :data:`REMOVAL_SCHEDULE` is the registry of re-scheduled horizons --
+#     ``{stated at the shim site: live removal version}``.  Re-scheduling
+#     an overdue deprecation is a one-line edit HERE; the shim itself is
+#     never removed by this mechanism (removal is a release decision for
+#     the module owner).
+#   * :func:`resolve_removal_version` maps any stated horizon onto the live
+#     one, and -- as a backstop for a site that rots without a registry
+#     entry -- promotes ANY already-shipped horizon to
+#     :data:`NEXT_REMOVAL_VERSION`.  A banner therefore cannot advertise a
+#     removal version <= ``lumenairy.__version__`` again, whatever the call
+#     site says.
+#   * The emitted text names the live horizon and, when they differ, the
+#     original one (``will be removed in v5.32 (rescheduled from v5.27)``)
+#     so a caller reading the warning can see the slip rather than a
+#     silently-moved goalpost.
+#   * :func:`check_removal_schedule` makes the registry self-checking; the
+#     pin in ``tests/unit/test_niche_audit_w3_ui_deprecation.py`` asserts it
+#     returns no violations, so a shipped release cannot carry a horizon it
+#     has already passed.
+
+#: Removal horizon for deprecations whose stated version has shipped.  Set
+#: it to a version the project can realistically hit; bumping it is a
+#: deliberate one-line slip, recorded in the CHANGELOG.
+NEXT_REMOVAL_VERSION = '5.32'
+
+#: Re-scheduled horizons: ``{version as written at the shim call site:
+#: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule
+#: so the message can name both; values must lie in the future.
+#:
+#: ``'5.27'`` -- the v5.25 ``seed=`` -> ``rng=`` and ``sigma=`` -> ``w0=``
+#: source-factory kwarg deprecations (``sources/core.py``'s
+#: ``_DEPRECATION_VERSION_REMOVED``).  Two releases were budgeted; the
+#: shims are still shipping at v5.29 and are NOT removed here.
+REMOVAL_SCHEDULE: dict[str, str] = {
+    '5.27': NEXT_REMOVAL_VERSION,
+}
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    """Parse a ``'5.29.0'`` / ``'v5.27'`` / ``'4.15.1'`` version string
+    into a comparable 3-tuple, tolerating suffixes (``'5.30.0rc1'``).
+
+    Missing components read as 0, so ``'5.27' -> (5, 27, 0)`` compares
+    correctly against ``'5.29.0' -> (5, 29, 0)``.  Unparseable chunks
+    read as 0 rather than raising: a malformed version must not turn a
+    deprecation warning into an exception.
+    """
+    parts: list[int] = []
+    for chunk in str(version).strip().lstrip('vV').split('.'):
+        digits = ''
+        for ch in chunk:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        parts.append(int(digits) if digits else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+
+def _current_version() -> str:
+    """Return the running ``lumenairy.__version__``, or ``''`` if unknown.
+
+    Read from :data:`sys.modules` rather than by importing the package:
+    ``lumenairy/__init__.py`` imports THIS module (for
+    :func:`deprecated_alias`) long before it binds ``__version__``, so an
+    import here would either cycle or read a half-initialised module.  At
+    warning time the package is fully loaded, so the lookup succeeds; the
+    ``''`` fallback (partial init, or ``_deprecation`` imported
+    standalone) simply disables the overdue backstop -- the explicit
+    :data:`REMOVAL_SCHEDULE` entries still apply.
+    """
+    mod = sys.modules.get('lumenairy')
+    return str(getattr(mod, '__version__', '') or '')
+
+
+def resolve_removal_version(
+    version_removed: Optional[str],
+) -> Optional[str]:
+    """Map a stated removal version onto the live one.
+
+    Parameters
+    ----------
+    version_removed : str or None
+        Removal version as written at the deprecation call site.
+
+    Returns
+    -------
+    str or None
+        ``None`` when ``version_removed`` is ``None`` (the message then
+        states no horizon at all).  Otherwise the live horizon: the
+        :data:`REMOVAL_SCHEDULE` entry if
+        one exists, else :data:`NEXT_REMOVAL_VERSION` when the stated
+        version has already shipped, else the stated version unchanged.
+    """
+    if version_removed is None:
+        return None
+    stated = str(version_removed).strip().lstrip('vV')
+    live = REMOVAL_SCHEDULE.get(stated, stated)
+    current = _current_version()
+    if current and _version_tuple(live) <= _version_tuple(current):
+        # Backstop: a site that rotted without a registry entry.
+        return NEXT_REMOVAL_VERSION
+    return live
+
+
+def _format_removal(version_removed: Optional[str], *,
+                    verb: str = 'removed') -> str:
+    """Build the ``, will be removed in vX`` clause of a warning message.
+
+    Single source of the removed-in banner for all four message builders
+    below (pre-v5.30 each interpolated ``version_removed`` itself, which
+    is how four independent copies of the same rot survived).  ``verb`` is
+    ``'removed'`` for shims and ``'required'`` for deprecated defaults.
+    """
+    if not version_removed:
+        return ''
+    stated = str(version_removed).strip().lstrip('vV')
+    live = resolve_removal_version(stated)
+    if live == stated:
+        return f', will be {verb} in v{live}'
+    return f', will be {verb} in v{live} (rescheduled from v{stated})'
+
+
+def check_removal_schedule() -> list[str]:
+    """Return a list of registry inconsistencies; empty == self-consistent.
+
+    Checked invariants:
+
+    1. :data:`NEXT_REMOVAL_VERSION` lies in the future.
+    2. Every re-scheduled horizon (a :data:`REMOVAL_SCHEDULE` value) lies
+       in the future.
+    3. Every key is a horizon that HAS shipped -- a key that is still in
+       the future would silently move a live deprecation's goalpost
+       instead of documenting a slip.
+    4. :func:`resolve_removal_version` returns a future version for every
+       key and value.
+
+    Returns human-readable strings so a failing pin names the offender.
+    """
+    current = _current_version()
+    problems: list[str] = []
+    if not current:
+        return ['lumenairy.__version__ is not importable; cannot check '
+                'the removal schedule']
+    cur_t = _version_tuple(current)
+    if _version_tuple(NEXT_REMOVAL_VERSION) <= cur_t:
+        problems.append(
+            f"NEXT_REMOVAL_VERSION={NEXT_REMOVAL_VERSION!r} is not after "
+            f"the running version {current!r}")
+    for stated, live in REMOVAL_SCHEDULE.items():
+        if _version_tuple(live) <= cur_t:
+            problems.append(
+                f"REMOVAL_SCHEDULE[{stated!r}]={live!r} is not after the "
+                f"running version {current!r}")
+        if _version_tuple(stated) > cur_t:
+            problems.append(
+                f"REMOVAL_SCHEDULE[{stated!r}] re-schedules a horizon that "
+                f"has NOT shipped yet (running {current!r}); remove the "
+                f"entry or fix the call site instead")
+        for probe in (stated, live):
+            resolved = resolve_removal_version(probe)
+            if resolved is None or _version_tuple(resolved) <= cur_t:
+                problems.append(
+                    f"resolve_removal_version({probe!r}) -> {resolved!r} is "
+                    f"not after the running version {current!r}")
+    return problems
 
 
 class _Sentinel:
@@ -196,11 +391,12 @@ def warn_deprecated_kwarg(
         Version in which the deprecation began.
     version_removed : str, optional
         Version in which removal is scheduled (only stated if known).
+        Routed through :func:`resolve_removal_version`, so an already-
+        shipped horizon is reported as the live one.
     stacklevel : int
         Passed through to ``warnings.warn``.
     """
-    removal = (f', will be removed in v{version_removed}'
-               if version_removed else '')
+    removal = _format_removal(version_removed)
     _emit(
         f"{function}: keyword argument '{old_name}' is deprecated since "
         f"v{version_added}{removal}; use '{new_name}' instead.",
@@ -217,8 +413,7 @@ def warn_deprecated_alias(
     stacklevel: int = 3,
 ) -> None:
     """Warn that a top-level function alias has been renamed."""
-    removal = (f', will be removed in v{version_removed}'
-               if version_removed else '')
+    removal = _format_removal(version_removed)
     _emit(
         f"{old_name}() is a deprecated alias since v{version_added}"
         f"{removal}; use {new_name}() instead.",
@@ -298,13 +493,12 @@ def warn_deprecated_default(
             if wavelength is _NO_DEFAULT:
                 warn_deprecated_default(
                     'wavelength', 550e-9, function='keplerian_telescope',
-                    version_removed='5.0',
+                    version_removed='5.32',
                 )
                 wavelength = 550e-9
             ...
     """
-    removal = (f', will be required in v{version_removed}'
-               if version_removed else '')
+    removal = _format_removal(version_removed, verb='required')
     _emit(
         f"{function}: relying on the default value of '{arg_name}' "
         f"({default_value!r}) is deprecated since v{version_added}"
@@ -343,11 +537,12 @@ def warn_deprecated_signature(
         Version in which this deprecation began.
     version_removed : str, optional
         Version in which removal is scheduled (only stated if known).
+        Routed through :func:`resolve_removal_version`, so an already-
+        shipped horizon is reported as the live one.
     stacklevel : int
         Passed through to ``warnings.warn``.
     """
-    removal = (f', will be removed in v{version_removed}'
-               if version_removed else '')
+    removal = _format_removal(version_removed)
     _emit(
         f"{function}: legacy positional call form "
         f"``{old_signature}`` is deprecated since v{version_added}"

@@ -770,26 +770,39 @@ class WaveOpticsWorker(QThread):
                 step = total_steps - 2
                 self.progress.emit(step, total_steps,
                                     f'Running {method} (whole-prescription)')
+                # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25,
+                # Territory A UI pass): these four imports named
+                # ``propagators.propagation``, the v5.1.0 re-export shell
+                # for the ASM/Fresnel/RS/SAS/MFT family only -- it has
+                # never exported the whole-prescription propagators.  Every
+                # one of the four menu choices therefore died with
+                # ``ImportError: cannot import name ... from
+                # lumenairy.propagators.propagation`` (measured), which the
+                # surrounding handler turned into a generic "<method>
+                # failed" result.  Import from the owning submodules (the
+                # same targets ``optimize/driver.py`` and
+                # ``propagators/dispatch.py`` use); the call signatures
+                # below are unchanged and bind cleanly against them.
                 try:
                     if method == 'gbd':
-                        from ..propagators.propagation import (
+                        from ..propagators.gbd import (
                             propagate_gbd_through_prescription)
                         E_focus = propagate_gbd_through_prescription(
                             E, dx, pres, wavelength=wv)
                     elif method == 'hfpi':
-                        from ..propagators.propagation import (
+                        from ..propagators.hfpi import (
                             propagate_hfpi_through_prescription)
                         E_focus = propagate_hfpi_through_prescription(
                             E, dx, pres, wavelength=wv,
                             n_paths=cfg.get('hfpi_n_paths', 4096))
                     elif method == 'huygens-fresnel':
-                        from ..propagators.propagation import (
+                        from ..propagators.hf import (
                             propagate_huygens_fresnel_through_prescription)
                         E_focus = (
                             propagate_huygens_fresnel_through_prescription(
                                 E, dx, pres, wavelength=wv))
                     elif method == 'subaperture':
-                        from ..propagators.propagation import (
+                        from ..propagators.subaperture import (
                             propagate_subaperture_asymptotic)
                         E_focus = propagate_subaperture_asymptotic(
                             E, dx, pres, wavelength=wv)
@@ -988,20 +1001,6 @@ class WaveOpticsWorker(QThread):
                 # operands.  Skipped on MFT-Fraunhofer (the natural
                 # output is already a far-field amplitude where this
                 # conversion is ill-defined).
-                # 3.6: optional detector model (applied to E_focus).
-                if cfg.get('detector_apply', False):
-                    try:
-                        from ..detector import apply_detector
-                        E_focus = apply_detector(
-                            E_focus, current_dx,
-                            pixel_pitch=cfg['detector_pixel_um'] * 1e-6,
-                            quantum_efficiency=cfg['detector_qe'],
-                            read_noise_e=cfg['detector_read_noise_e'],
-                            dark_current_e_per_s=cfg['detector_dark_e_per_s'],
-                            exposure_time=cfg['detector_exposure_s'])
-                    except Exception:
-                        pass
-
                 if (chief_relative_focal
                         and method != 'fraunhofer'
                         and method != 'fraunhofer-mft'):
@@ -1011,6 +1010,53 @@ class WaveOpticsWorker(QThread):
                         if abs(R) > 1e-9:
                             E_focus = apply_fresnel_curvature(
                                 E_focus, current_dx, wv, R=R, sign=-1)
+
+                # 3.6: optional detector model (applied to E_focus).
+                # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25,
+                # Territory A UI pass): three defects, all silent.
+                #  (a) ``..detector`` has never existed (measured:
+                #      ModuleNotFoundError) -- the module is
+                #      ``..analysis.detector`` -- so the checkbox was a
+                #      no-op for every run;
+                #  (b) behind it, ``apply_detector`` returns
+                #      ``(image, x_det, y_det)``, so the assignment bound a
+                #      3-tuple to ``E_focus`` and the next line
+                #      (``np.abs(E_focus) ** 2``) would have raised on the
+                #      ragged tuple (measured ValueError) -- i.e. fixing
+                #      only the import would have traded a silent no-op for
+                #      a dead run;
+                #  (c) the handler swallowed both without a trace.
+                # Detection is now LAST (it destroys phase, so the
+                # chief-relative conversion above must precede it), the
+                # 3-tuple is unpacked, and the electron image is carried as
+                # an amplitude-equivalent field so |E_focus|^2 IS the
+                # detected image and every downstream consumer (I_focus,
+                # beam_power, d4sigma, plane save) keeps one convention.
+                if cfg.get('detector_apply', False):
+                    try:
+                        from ..analysis.detector import apply_detector
+                        pixel_pitch = cfg['detector_pixel_um'] * 1e-6
+                        image_e, _x_det, _y_det = apply_detector(
+                            E_focus, current_dx,
+                            pixel_pitch=pixel_pitch,
+                            quantum_efficiency=cfg['detector_qe'],
+                            read_noise_e=cfg['detector_read_noise_e'],
+                            dark_current_e_per_s=cfg['detector_dark_e_per_s'],
+                            exposure_time=cfg['detector_exposure_s'])
+                        # Read noise can push a pixel slightly negative;
+                        # clip before the sqrt so the amplitude is real.
+                        E_focus = np.sqrt(np.clip(
+                            np.asarray(image_e, dtype=np.float64),
+                            0.0, None)).astype(np.complex128)
+                        current_dx = pixel_pitch
+                    except Exception as e:
+                        from .diagnostics import diag
+                        diag.report(
+                            'waveoptics-detector', e,
+                            context=(f'detector model skipped; focal field '
+                                     f'left undetected '
+                                     f'(pixel={cfg.get("detector_pixel_um")}'
+                                     f' um)'))
 
                 maybe_save('Focus', E_focus, z_cum)
             else:

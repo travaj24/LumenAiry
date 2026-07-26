@@ -326,7 +326,7 @@ def apply_real_lens_traced_jax(
     """JAX-traceable per-pixel ray-traced apply_real_lens.
 
     Builds a phase screen from the per-pixel ray-traced OPL through
-    ``lens_prescription`` and applies it to ``E_in``::
+    ``prescription`` and applies it to ``E_in``::
 
         E_out(x, y) = E_in(x, y) * mask(x, y) * exp(i k0 OPD(x, y))
 
@@ -352,8 +352,12 @@ def apply_real_lens_traced_jax(
     Parameters
     ----------
     E_in : (N, N) complex array
-    lens_prescription : dict
-        Same format as :func:`apply_real_lens`.
+    prescription : dict
+        Same format as :func:`apply_real_lens`.  (Documented as
+        ``lens_prescription`` before v5.30 -- audit
+        AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 Territory A: that name is
+        the function's INTERNAL alias, never an accepted keyword, so the
+        documented call form raised ``TypeError``.)
     wavelength : float
     dx : float
     dy : float, optional
