@@ -1140,7 +1140,7 @@ unit paths, `quarter_wave_ar`).
   four setters did not move (`set_default_complex_dtype('complex64')` left the
   top-level constant reading complex128 while the getter and the submodule
   twin both read complex64).  Now PEP-562 live-forwarded to
-  `propagators.fft_infra`, replicating the `propagation.py:296` precedent
+  `propagators.fft_infra`, replicating the `propagation.py:298` precedent
   (whitelist + delete the stale bindings + `__getattr__`), plus a `__dir__`
   so the names stay discoverable.  Export integrity unchanged (every
   `__all__` entry still resolves; phantom names still raise `AttributeError`).

@@ -103,6 +103,32 @@ def _run(E, kw, **over):
         return np.asarray(la.apply_real_lens_traced(E, **kw, **over))
 
 
+@pytest.fixture(scope='module', autouse=True)
+def _warm(_setup):
+    """Push every byte-identity pair in this file PAST the traced pipeline's
+    warm-up boundary (audit W9 CI calibration, d3941f5).
+
+    MEASURED: in a fresh process the traced output for one fixed input
+    changes ONCE, by ~2.7e-15 (max abs, ulp scale), after the first two
+    calls -- every later call is byte-identical to every other later call,
+    and the (lattice, full) pair is byte-identical WITHIN any iteration
+    (30/30).  The byte-identity pins in this file are therefore correct
+    if and only if both compared calls sit on the same side of that
+    boundary.  On CI the shard's PRECEDING call history decides where the
+    boundary falls: the d3941f5 collection put it between this file's two
+    inertness calls on three Pythons at once (deterministically -- same
+    layout, same history), while a210de4 / d78b39f / 848e8f9 layouts did
+    not.  Two warm-up calls with this module's own geometry (same FFT
+    shapes, same cache keys) land the boundary before any pinned pair.
+    The underlying call-history ulp drift is recorded as an open
+    determinism defect to root-cause -- this fixture makes the pins
+    measure what they claim (remap_sampling inertness), not cache
+    warm-up."""
+    E, kw, _ = _setup
+    for _ in range(2):
+        _run(E, kw, ray_subsample=4)
+
+
 def _rms_phase_diff(a, b, mask=None):
     """Amplitude-weighted rms phase difference b vs a over the illuminated
     region (``a`` as the weight / reference)."""
