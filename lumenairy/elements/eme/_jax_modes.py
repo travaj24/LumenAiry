@@ -132,6 +132,43 @@ def _frozen_helmholtz_L(Nx, Ny, Lx, Ly, kx0, ky0):
     return L
 
 
+def _concrete_bloch_phase(fn_name, kx0, ky0):
+    """The frozen FD/Yee operators are built in NumPy, so ``kx0``/``ky0`` must be
+    CONCRETE.  AUDIT W6: ``ref_2d_modes``'s JAX dispatch tests
+    ``is_jax_array(kx0)``, which reads as "a traced Bloch phase is supported" --
+    it is not, and it surfaced as a bare ``ConcretizationTypeError`` naming only
+    "the `float` function".  ``qz^2`` is differentiable w.r.t. ``eps`` and ``k0``
+    only."""
+    for name, v in (("kx0", kx0), ("ky0", ky0)):
+        try:
+            float(v)
+        except Exception as exc:                                   # noqa: BLE001
+            raise NotImplementedError(
+                f"{fn_name}: {name} must be a CONCRETE scalar on the JAX path -- "
+                f"the finite-difference / Yee operators carrying the Bloch phase "
+                f"are frozen into the trace as NumPy constants, so qz^2 is "
+                f"differentiable w.r.t. eps and k0 only (not w.r.t. kx0 / ky0).  "
+                f"Sweep the Bloch phase outside the traced function."
+            ) from exc
+
+
+def _warn_jax_lossy_discard(fn_name, eps_xy):
+    """Mirror the NumPy oracle's lossy ``return_complex=False`` warning on the
+    JAX path (AUDIT W6: the scalar twin dropped ``Im(qz^2)`` silently while its
+    NumPy sibling warned)."""
+    import warnings
+    try:
+        lossy = bool(np.any(np.asarray(eps_xy).imag != 0.0))
+    except Exception:                                              # noqa: BLE001
+        return                                       # traced/abstract -> skip
+    if lossy:
+        warnings.warn(
+            f"{fn_name}: eps has a nonzero imaginary part (lossy) but "
+            f"return_complex=False -- the imaginary parts of qz^2 are DISCARDED; "
+            f"pass return_complex=True to keep the complex spectrum.",
+            stacklevel=3)
+
+
 def _reject_jax_unsupported(fn_name, eps_xy, *, k, return_vecs, mu_xy=None):
     """Raise a clear error for the JAX-path inputs that have no differentiable
     route (tensor eps, sparse shift-invert, field reconstruction, magnetic mu)."""
@@ -166,6 +203,8 @@ def _ref_2d_modes_jax(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
     and ``k0``."""
     _require_jax_x64("ref_2d_modes")
     _reject_jax_unsupported("ref_2d_modes", eps_xy, k=k, return_vecs=return_vecs)
+    _concrete_bloch_phase("ref_2d_modes", kx0, ky0)
+    _warn_jax_lossy_discard("ref_2d_modes", eps_xy)
     import jax.numpy as jnp
     L = jnp.asarray(_frozen_helmholtz_L(Nx, Ny, Lx, Ly, kx0, ky0), jnp.complex128)
     eps = jnp.asarray(eps_xy, jnp.complex128).reshape(Nx * Ny)
@@ -185,6 +224,9 @@ def _ref_2d_modes_vector_jax(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
     _require_jax_x64("ref_2d_modes_vector")
     _reject_jax_unsupported("ref_2d_modes_vector", eps_xy, k=k,
                             return_vecs=return_vecs, mu_xy=mu_xy)
+    _concrete_bloch_phase("ref_2d_modes_vector", kx0, ky0)
+    if not return_complex:
+        _warn_jax_lossy_discard("ref_2d_modes_vector", eps_xy)
     import jax.numpy as jnp
     DxF, DxB, DyF, DyB = (jnp.asarray(op, jnp.complex128) for op in
                           _frozen_yee_dense(Nx, Ny, Lx, Ly, kx0, ky0))

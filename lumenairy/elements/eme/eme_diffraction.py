@@ -140,32 +140,59 @@ def mode_match(qz2, Psi, orders, *, kx0, ky0, k0, eps_sup, eps_sub, depth,
     of the retained-order space -- true for a uniform layer (modes == plane
     waves), false for a structured layer's truncated real-space modes (see the
     module docstring).
+
+    STABILITY (AUDIT W6 fix -- this was a silent wrong-answer bug).  The layer
+    basis always contains EVANESCENT modes (``qz^2 < 0`` -> ``qz = i|qz|``), and
+    the backward amplitudes ``c-`` used to be referenced at ``z = 0``, which put
+    ``Einv = exp(-i qz depth) = exp(+|qz| depth)`` into the matrix -- the
+    exponentially GROWING factor that the ``eme_2d`` lateral cascade uses
+    S-matrices precisely to avoid.  ``cond(A)`` then grew as
+    ``exp(2 |qz|_max depth)`` (measured 9.3 -> 3.8e6 -> 1.4e17 -> 8.7e38 for
+    ``depth = 0.2 -> 2 -> 5.3 -> 12`` on a 1-um cell) and once it passed the
+    ``lstsq(rcond=None)`` cutoff the physical solution was truncated to zero,
+    returning ``R_00 = 1.000``, ``T_00 = 0.000`` for a HOMOGENEOUS index-matched
+    medium whose exact answer is ``T = 1`` -- with ``energy = 1.000000``, so the
+    energy check did not catch it.  ``c-`` is now referenced at ``z = depth``
+    (``c- = E d-``), so only the DECAYING ``E = exp(i qz depth)`` ever appears;
+    algebraically identical, ``cond(A)`` stays ~2 and the analytic Airy slab is
+    reproduced to ~1e-15 at every depth tested (0.2 .. 12).
     """
     U, kx, ky = pw_matrix(orders, kx0, ky0, Lx, Ly, Nx, Ny)
     w = Lx * Ly / (Nx * Ny)                              # cell quadrature weight
     # normalise modes, overlaps O[order, mode] = <U_order, psi_mode>
-    Psi = Psi / np.sqrt(w * np.sum(np.abs(Psi) ** 2, axis=0))
+    pnorm = w * np.sum(np.abs(Psi) ** 2, axis=0)
+    if np.any(pnorm <= 0) or not np.all(np.isfinite(pnorm)):
+        raise ValueError(
+            "mode_match: Psi has a zero-norm or non-finite mode column, so it "
+            "cannot be normalised (this used to surface as an opaque "
+            "'SVD did not converge' LinAlgError from the least-squares solve).")
+    Psi = Psi / np.sqrt(pnorm)
     O = w * (U.conj().T @ Psi)                           # (Npw, K)
-    qz = np.sqrt(np.asarray(qz2, complex) + 0j)          # forward branch
+    qz = np.sqrt(np.asarray(qz2, complex) + 0j)
+    # forward = DECAYING branch Im(qz) >= 0, matching eme_2d._ky_forward.  Needed
+    # for a lossy layer, whose complex qz^2 can come back with a roundoff-negative
+    # imaginary part from eig -- np.sqrt alone guarantees only Re(qz) >= 0 and
+    # would put exp(i qz depth) on the GROWING branch.
+    qz = np.where(qz.imag < 0.0, -qz, qz)
     kz_sup = _kz(eps_sup, k0, kx, ky)
     kz_sub = _kz(eps_sub, k0, kx, ky)
     Ksup, Ksub, Qz = np.diag(kz_sup), np.diag(kz_sub), np.diag(qz)
-    E = np.diag(np.exp(1j * qz * depth))
-    Einv = np.diag(np.exp(-1j * qz * depth))
+    E = np.diag(np.exp(1j * qz * depth))                 # DECAYING only
     e_inc = np.array([1.0 if o == inc_order else 0.0 for o in orders], complex)
     kz0 = kz_sup[orders.index(inc_order)]
-    # unknowns x = [c+, c-]; rows: (I) z=0 deriv-eliminated, (II) z=depth radiation
-    #  (I)  Ksup O (c+ + c-) + O Qz (c+ - c-) = 2 Ksup e_inc
-    #  (II) (O Qz - Ksub O) E c+ - (O Qz + Ksub O) Einv c- = 0
+    # unknowns x = [c+, d-] with d- the backward amplitude referenced at z = depth
+    # (c- = E d-); rows: (I) z=0 deriv-eliminated, (II) z=depth radiation
+    #  (I)  Ksup O (c+ + E d-) + O Qz (c+ - E d-) = 2 Ksup e_inc
+    #  (II) (O Qz - Ksub O) E c+ - (O Qz + Ksub O) d- = 0
     KsO, OQ, KbO = Ksup @ O, O @ Qz, Ksub @ O
-    top = np.hstack([KsO + OQ, KsO - OQ])
-    bot = np.hstack([(OQ - KbO) @ E, -(OQ + KbO) @ Einv])
+    top = np.hstack([KsO + OQ, (KsO - OQ) @ E])
+    bot = np.hstack([(OQ - KbO) @ E, -(OQ + KbO)])
     A = np.vstack([top, bot])
     rhs = np.concatenate([2.0 * (Ksup @ e_inc), np.zeros(len(orders), complex)])
     cpm = np.linalg.lstsq(A, rhs, rcond=None)[0]
-    cp, cm = cpm[:O.shape[1]], cpm[O.shape[1]:]
-    r = O @ (cp + cm) - e_inc                            # reflected amplitudes
-    t = O @ (E @ cp + Einv @ cm)                         # transmitted amplitudes
+    cp, dm = cpm[:O.shape[1]], cpm[O.shape[1]:]
+    r = O @ (cp + E @ dm) - e_inc                        # reflected amplitudes
+    t = O @ (E @ cp + dm)                                # transmitted amplitudes
     prop_s, prop_b = kz_sup.real > 1e-9, kz_sub.real > 1e-9
     R = np.where(prop_s, kz_sup.real / kz0.real * np.abs(r) ** 2, 0.0)
     T = np.where(prop_b, kz_sub.real / kz0.real * np.abs(t) ** 2, 0.0)
@@ -189,11 +216,22 @@ def diffraction_fd(eps_xy, Lx, Ly, Nx, Ny, k0, eps_sup, eps_sub, depth,
 
     WARNS (audit S1-17) for a STRUCTURED layer: the result is non-convergent
     there (use ``rcwa_efficiency_2d`` / ``pmm_efficiency_2d``).  A UNIFORM layer
-    is exact and does not warn."""
+    is exact and does not warn.
+
+    LOSSY layers (AUDIT W6 fix).  A complex ``eps_xy`` now keeps the COMPLEX
+    ``qz^2`` (``ref_2d_modes(return_complex=True)``), so absorption is modelled.
+    It previously took the real part, which made an absorbing slab behave as a
+    lossless one: measured, ``n = 1.5 + 0.2j`` at ``depth = 4`` reported
+    ``energy = 1.000000`` (and ``R_00 = 0.032``) where the analytic lossy Airy
+    slab gives ``R + T = 0.046505`` (``R_00 = 0.046``) -- i.e. it claimed all the
+    light emerged while 95% was absorbed.  With the complex spectrum the analytic
+    lossy Airy R/T are reproduced to 6 decimals.  A REAL ``eps_xy`` takes the
+    identical (byte-for-byte) legacy path."""
     if _eme_layer_is_structured(eps_xy):
         _warn_structured_nonconvergence("diffraction_fd")
+    lossy = bool(np.any(np.asarray(eps_xy).imag))
     w, V = ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=kx0, ky0=ky0,
-                        return_vecs=True)
+                        return_vecs=True, return_complex=lossy)
     K = (2 * Mx + 1) * (2 * My + 1) if n_modes is None else n_modes
     K = min(K, len(w))
     Psi = V[:, :, :K].reshape(Nx * Ny, K)

@@ -194,6 +194,85 @@ third (reducing the qz²-scan resolution `n_scan`) was investigated and **reject
 — it trades away recall (sharp σ_min dips need fine sampling to bracket). Net: the
 test suite went 357 s → 33 s (~11×).
 
+## Physics-interior audit W6 (2026-07-26) — what was wrong, and the oracles
+
+This subsystem was the *honest coverage gap* of the 2026-07-25 adversarial audit
+(never numerically validated there; the 2026-07-09 EME audit was read-only and
+concluded "none above nit level"). Four independent oracles were built first and
+now live in `tests/unit/test_niche_audit_w6_eme.py`:
+
+1. **analytic symmetric 3-layer slab dispersion**, bisected from the textbook
+   equation with no package code (`_slab_betas`). Because the EME is *analytic in
+   y* and the discrete x-Laplacian is exact on `exp(i kx0 x)`, an x-uniform
+   `[clad|core|clad]` cell must satisfy `qz² = β²_slab − kx0²` — measured to
+   **2.4e-8 relative** on the confined modes;
+2. **lossless power conservation** of the lateral cell S-matrix,
+   `Σ_i Re(ky_i)(|S11[i,j]|² + |S21[i,j]|²) = Re(ky_j)` for every propagating
+   input `j` (both S ports live in strip 0's basis);
+3. the **analytic Airy / Fabry-Pérot slab**, lossless *and lossy*, for the
+   mode-matching driver;
+4. the package's own 2-D-FD oracles used as a **recall / spurious** cross-check.
+
+**The `kx0 ≠ 0` path was broken (CRITICAL).** `strip_x_modes` keyed its solver on
+`kx0 == 0`, but `A = D + diag(ε k0²)` is **Hermitian for a real ε at any real
+`kx0`** — the wrap corners carry `exp(+i kx0 Lx)` and its conjugate. Sending it
+to `eig` anyway (a) returned `lam` with roundoff imaginary parts of *arbitrary
+sign*, and `np.sqrt`'s principal branch (`Re ≥ 0`, **not** `Im ≥ 0`) then put
+8–11 of 16 strip modes on the exponentially **growing** propagator — the exact
+pitfall row 1 of the table above says S-matrices cure — and (b) normalised with
+the complex-*symmetric* bilinear form, which is the wrong metric for a Hermitian
+operator (`max|Φ^H Φ − I| = 43.2`). Measured on the reference structured cell at
+`kx0 = 0.37`, `ky0 = π`: **68 roots returned, 0/3 real modes recovered, all 68
+spurious**, and power conservation violated by 1.5e-2 (up to 1.8e-1 at
+`kx0 = 1.1`). `kx0 = 0` was correct throughout, which is why every shipped test
+passed. Fixed by `eigh` for real ε at any `kx0`, an exactly-Hermitian wrap phase
+(`conj(ph)`), and one shared **decaying-branch** selector `_ky_forward`
+(`Im(ky) ≥ 0`, matching the vector sibling's `_strip_split_forward`) used by
+`_wv`, `_global_lateral_nullspace` and `mode_field` — the two field
+reconstruction sites had inlined the same unguarded `np.sqrt`. Post-fix: power
+conserved to 1.3e-15, recall 3/3 with 0 spurious at every `kx0` tested.
+
+**`mode_match` carried the same class of growing exponential in z (HIGH).** The
+backward layer amplitudes were referenced at `z = 0`, so
+`exp(−i qz depth) = exp(+|qz| depth)` entered the matched system for every
+evanescent layer mode; `cond(A) ~ exp(2|qz|max·depth)` reached 8.7e38 and past
+the `lstsq` cutoff the answer collapsed to `R_00 = 1`, `T_00 = 0` **for a
+homogeneous index-matched medium** (exact `T = 1`) — with `energy = 1.000000`
+masking it. The backward amplitudes are now referenced at `z = depth`
+(algebraically identical, only the decaying `exp(i qz depth)` survives):
+`cond(A) ≈ 2` and the analytic Airy slab is reproduced to ~5e-15 for
+`depth = 0.2 … 16`.
+
+**`diffraction_fd` did not absorb (HIGH).** It discarded `Im(qz²)`, so an
+absorbing slab reported `energy = 1.000000` — at `n = 1.5 + 0.2j`, `depth = 4` it
+claimed all the light emerged while 95% was absorbed. A complex `eps_xy` now
+keeps the complex spectrum; the analytic lossy Airy R/T match to 8 decimals.
+
+**The negative result above still stands.** W6-2 was a conditioning bug in the
+*z* match; the structured non-convergence is a *basis* problem. With the stable
+reformulation in place a structured layer still fails to converge and still warns.
+
+**The vector finder had no band-edge guard (found by one of this wave's own
+pins).** A vector strip mode's H-part is `(C U)/(i ky)`, which divides by zero
+for a mode exactly on a band edge — and `qz² = 0` puts the reference cell's
+uniform `ε = 2` strip precisely there (`min|ky| = 0.000e+00` at `Nx = 8`,
+`k0 = 8`). The `NaN` then surfaced several frames later as
+`ValueError: array must not contain infs or NaNs`, so the entirely natural
+window `qz2_range = (0, …)` crashed; the same opaque error came from a `qz²` so
+far outside the band that `exp(+|ky| h)` overflows. The scalar sibling has
+skipped its analogous sample since audit P3-18. Both cases now raise a *named*
+`LinAlgError` from one shared `_equilibrated_G` builder, which
+`layer_vector_modes` skips just as `layer_modes` does.
+
+Also fixed: the rasterizers now enforce the layer finders' `sum(h) == Ly`
+contract (they used to leave uncovered y rows at `ε = 0` → `inf`/`NaN` in the
+vector oracle); a junk `solver=` value is rejected instead of silently running
+dense; the `layer_vector_modes` detection density is per unit of the
+*dimensionless* `(hi − lo)·Ly²` (it was per unit of raw `qz²`, so one physical
+cell asked for 3944 points in µm, 400 in nm and 3.94e9 — a 31.5 GB `linspace` —
+in mm); `sigma` without `k` raises instead of being inert; the scalar sparse
+oracle takes a fixed ARPACK `v0` like both its siblings.
+
 ## Known v1 limitation (scalar)
 
 Exactly **degenerate** modes (e.g. a 4-strip checkerboard with a symmetry-paired

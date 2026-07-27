@@ -49,45 +49,92 @@ from ...backend.array import is_jax_array
 def strip_x_modes(eps_x, Lx, Nx, k0, kx0=0.0):
     """1-D-x eigenproblem ``[d2/dx2 + eps(x) k0^2] phi = lam phi`` on a periodic
     cell (Bloch phase ``kx0``).  Returns ``(lam, Phi)`` with ``Phi`` columns the
-    orthonormal x-eigenfunctions (the strip's lateral cross-section modes)."""
+    orthonormal x-eigenfunctions (the strip's lateral cross-section modes).
+
+    Solver routing (AUDIT W6 fix -- the previous routing was keyed on ``kx0 == 0``
+    and was WRONG for ``kx0 != 0``):  the discrete Bloch operator
+    ``A = D + diag(eps k0^2)`` is **HERMITIAN for a real ``eps`` at ANY real
+    ``kx0``** -- the two wrap corners carry ``exp(+i kx0 Lx)`` and its CONJUGATE,
+    so ``A = A^H`` exactly.  Real ``eps`` therefore always takes ``eigh``
+    (ascending real ``lam``, ``Phi^H Phi = I``).  Only a LOSSY ``eps`` needs the
+    general ``eig``: at ``kx0 = 0`` it makes ``A`` complex SYMMETRIC (``eigh``
+    would silently discard ``Im(eps)`` -- LAPACK ignores the imaginary diagonal),
+    and at ``kx0 != 0`` it is neither Hermitian nor symmetric.
+
+    Sending real ``eps`` at ``kx0 != 0`` through ``eig`` (the pre-fix behaviour)
+    was doubly damaging and made ``layer_modes`` return pure garbage there
+    (measured: 68 modes returned, 0/3 real modes recovered, every one spurious):
+    (i) ``eig`` returned ``lam`` with ROUNDOFF imaginary parts of arbitrary sign,
+    which flipped ``_ky_forward``'s branch and put 8-11 of 16 strip modes on the
+    exponentially GROWING propagator (``max|exp(i ky h)| = 6e6``) -- exactly the
+    T-matrix blow-up the S-matrix cascade exists to avoid; and (ii) the
+    complex-symmetric bilinear normaliser ``sum(Phi^2)`` is the WRONG metric for a
+    Hermitian ``A``, leaving the basis non-orthonormal (measured
+    ``max|Phi^H Phi - I| = 43.2``) so the interface solves were ill-conditioned
+    and ``sigma_min(M)`` lost all meaning against ``tol``.
+    """
     h = Lx / Nx
     ph = np.exp(1j * kx0 * Lx)
     D = np.zeros((Nx, Nx), dtype=complex)
     for i in range(Nx):
         D[i, i] = -2.0 / h ** 2
         D[i, (i + 1) % Nx] += (ph if i == Nx - 1 else 1.0) / h ** 2
-        D[i, (i - 1) % Nx] += ((1.0 / ph) if i == 0 else 1.0) / h ** 2
+        # np.conj(ph), NOT 1/ph: for |ph| = 1 they agree analytically but 1/ph
+        # carries a roundoff error that makes A only APPROXIMATELY Hermitian.
+        # (Identical bits at kx0 = 0, where ph = 1.)
+        D[i, (i - 1) % Nx] += (np.conj(ph) if i == 0 else 1.0) / h ** 2
     eps_c = np.asarray(eps_x, dtype=complex)
     A = D + np.diag(eps_c * k0 ** 2)
-    if kx0 == 0.0 and not np.any(eps_c.imag):        # real symmetric -> orthonormal
+    if not np.any(eps_c.imag):                  # Hermitian at ANY real kx0
         lam, Phi = np.linalg.eigh(A.real if np.isrealobj(A) else A)
     else:
-        # A lossy eps (Im(eps) != 0) at kx0 = 0 makes A complex SYMMETRIC, not
-        # Hermitian -- eigh would silently discard Im(eps) (LAPACK ignores the
-        # imaginary diagonal), so route it to the general eig path (matching the
-        # kx0 != 0 branch) and keep the complex spectrum.
         from scipy.linalg import eig
         # EME-nit (AUDIT_EME): unlike the ``eigh`` branch (ascending ``lam``),
         # ``eig`` returns the eigenpairs UNSORTED.  Downstream ``layer_modes``
         # scans ``qz^2`` and does not rely on ordering, so this is safe here;
         # a future consumer must NOT assume sorted ``lam`` from this branch.
         lam, Phi = eig(A)
-        # EME-nit: floor the complex-SYMMETRIC bilinear norm ``sum(Phi^2)``
-        # (the correct non-Hermitian normaliser here).  For a defective
-        # (non-diagonalisable) ``A`` -- a degenerate/lossy edge -- it can
-        # vanish, which would divide the eigenvector to inf/NaN; leave such a
-        # column un-normalised (divide by 1) instead.
+        # Normalise with the complex-SYMMETRIC bilinear form ``sum(Phi^2)`` (the
+        # correct non-Hermitian normaliser for the kx0 = 0 lossy operator).  Its
+        # magnitude is compared RELATIVE to the column's Hermitian norm: for a
+        # defective (non-diagonalisable) A -- or at kx0 != 0, where A is neither
+        # Hermitian nor symmetric and the bilinear form of a complex eigenvector
+        # can be ~0 by cancellation -- the bilinear norm collapses and dividing
+        # by it would inflate the column by 1/eps.  Those columns fall back to
+        # the Hermitian unit 2-norm (a pure column rescale: it leaves the mode
+        # condition, a similarity invariant, untouched and keeps the interface
+        # solves conditioned).
         _bilin = np.sum(Phi ** 2, axis=0)
-        _bilin = np.where(np.abs(_bilin) < 1e-30, 1.0, _bilin)
-        Phi = Phi / np.sqrt(_bilin)                     # complex-orthonormal
+        _herm = np.sum(np.abs(Phi) ** 2, axis=0)
+        _bad = np.abs(_bilin) < 1e-8 * np.maximum(_herm, 1e-300)
+        _nrm = np.where(_bad, _herm, _bilin)
+        Phi = Phi / np.sqrt(np.where(np.abs(_nrm) < 1e-300, 1.0, _nrm))
     return lam, Phi.astype(complex)
+
+
+def _ky_forward(lam, qz2):
+    """The strip's FORWARD lateral wavenumber ``ky`` from ``ky^2 = lam - qz2``,
+    on the DECAYING branch ``Im(ky) >= 0`` (so ``_prop``'s ``exp(i ky h)`` never
+    grows -- the whole premise of the S-matrix cascade).
+
+    ``np.sqrt``'s principal branch guarantees only ``Re >= 0``: for
+    ``Im(ky^2) < 0`` it returns ``Im(ky) < 0`` and ``exp(i ky h)`` GROWS.  That
+    happens whenever ``lam`` carries a roundoff-negative imaginary part (measured
+    up to 8-11 of 16 strip modes, ``max|exp(i ky h)| = 6e6``).  This matches the
+    vector sibling's forward-set convention (``_strip_split_forward``:
+    ``Im(ky) > 0`` first, ties by ``Re(ky) > 0``).  Behaviour change: a GAIN
+    medium (``Im(eps) < 0`` in the ``exp(-i omega t)`` convention) now also takes
+    the decaying branch -- gain is out of scope for both the scalar and the
+    vector cascade."""
+    ky = np.sqrt(np.asarray(lam) - qz2 + 0j)
+    return np.where(ky.imag < 0.0, -ky, ky)
 
 
 def _wv(lam, Phi, qz2):
     """The strip's forward modal field matrices: ``W = Phi`` (psi), ``V = Phi
-    diag(i ky)`` (d psi/dy), with ``ky = sqrt(lam - qz2)`` on the principal
-    (forward-decaying) branch.  Backward modes are ``[W; -V]``."""
-    ky = np.sqrt(lam - qz2 + 0j)
+    diag(i ky)`` (d psi/dy), with ``ky`` on the decaying-forward branch
+    (:func:`_ky_forward`).  Backward modes are ``[W; -V]``."""
+    ky = _ky_forward(lam, qz2)
     return Phi, Phi @ np.diag(1j * ky), ky
 
 
@@ -131,6 +178,34 @@ def cell_smatrix(strip_modes, qz2):
     return S
 
 
+def _check_n_scan(fn_name, n_scan, minimum=3):
+    """Validate the real-axis scan density.  AUDIT W6: ``n_scan = 0`` / ``1``
+    silently returned ZERO modes (the 3-point local-minimum test needs at least
+    three samples), which is indistinguishable from 'no modes in this window'."""
+    if int(n_scan) < minimum:
+        raise ValueError(
+            f"{fn_name}: n_scan = {n_scan} is too small; the dip-detection scan "
+            f"needs at least {minimum} samples (a smaller value silently returned "
+            f"an EMPTY mode set, which reads as 'no modes in the window').")
+
+
+def _check_strip_heights(fn_name, strips, Ly):
+    """Shared contract check: strip heights must sum to ``Ly``.
+
+    AUDIT W6: the two LAYER finders enforced this but the RASTERIZERS that feed
+    the FD oracle did not -- measured, ``strips_to_eps_xy`` with heights summing
+    to 0.25 of ``Ly`` silently left 24/32 grid cells at ``eps = 0``, and the
+    vector oracle's ``1/(k0 eps)`` then produced ``inf``/``NaN`` generators (a
+    silent-data-corruption path into an 'independent oracle')."""
+    hsum = float(np.real(sum(s[1] for s in strips)))
+    if abs(hsum - Ly) > 1e-9 * max(abs(Ly), 1.0):
+        raise ValueError(
+            f"{fn_name}: strip heights sum to {hsum:g} but Ly = {Ly:g}; the cell "
+            "physics uses sum(h) while the Bloch wrap phase / rasterization uses "
+            "Ly, so they must agree (documented contract: heights sum to Ly).  "
+            "Un-covered y rows would silently be left at eps = 0.")
+
+
 def _bloch_residual_M(S, t):
     """The Bloch-QEP residual matrix ``M(qz^2)``; singular at a layer mode
     (Bloch eigenvalue ``= t``)."""
@@ -171,12 +246,8 @@ def layer_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
             "root-find) is NOT differentiable.  For differentiable 2-D modes use "
             "ref_2d_modes with a JAX eps (the eig-based FD-oracle twin), or solve "
             "on NumPy and apply implicit differentiation at the converged mode.")
-    hsum = float(np.real(sum(s[1] for s in strips)))
-    if abs(hsum - Ly) > 1e-9 * max(abs(Ly), 1.0):
-        raise ValueError(
-            f"layer_modes: strip heights sum to {hsum:g} but Ly = {Ly:g}; the "
-            "cell physics uses sum(h) while the Bloch wrap phase uses Ly, so "
-            "they must agree (documented contract: heights sum to Ly).")
+    _check_n_scan("layer_modes", n_scan)
+    _check_strip_heights("layer_modes", strips, Ly)
     lo, hi = qz2_range
     grid = np.linspace(lo, hi, n_scan)
     sm_all = [(strip_x_modes(e, Lx, Nx, k0, kx0), h) for e, h in strips]
@@ -231,7 +302,7 @@ def _global_lateral_nullspace(strip_modes, qz2, t):
     Nx = strip_modes[0][0][1].shape[0]
     wv = []
     for (lam, Phi), h in strip_modes:
-        ky = np.sqrt(lam - qz2 + 0j)
+        ky = _ky_forward(lam, qz2)          # decaying branch (same as _wv)
         wv.append((Phi, ky, h, np.exp(1j * ky * h), np.exp(-1j * ky * h)))
     n = 2 * Nx * S
     G = np.zeros((n, n), dtype=complex)
@@ -287,7 +358,7 @@ def mode_field(strip_modes, qz2, ky0, Ly, Ny):
     for j, y in enumerate(yc):
         s = min(int(np.searchsorted(edges, y, side="right")) - 1, S - 1)
         (lam, Phi), _ = strip_modes[s]
-        ky = np.sqrt(lam - qz2 + 0j)
+        ky = _ky_forward(lam, qz2)          # decaying branch (same as _wv)
         a = c[2 * Nx * s:2 * Nx * s + Nx]
         b = c[2 * Nx * s + Nx:2 * Nx * (s + 1)]
         eta = y - edges[s]
@@ -323,6 +394,14 @@ def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False
         return _ref_2d_modes_jax(
             eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, return_vecs=return_vecs,
             k=k, sigma=sigma)
+    if sigma is not None and k is None:
+        # AUDIT W6: sigma was silently INERT without k (the dense path ignores it
+        # entirely -- measured bit-identical results for sigma=1e9), so a caller
+        # asking for modes near a shift got the whole dense spectrum instead.
+        raise ValueError(
+            "ref_2d_modes: sigma only applies to the SPARSE shift-invert path -- "
+            "pass k (the number of modes wanted near sigma) as well, or drop "
+            "sigma for the dense full spectrum.")
     if not return_complex and np.any(np.asarray(eps_xy).imag):
         import warnings
         warnings.warn(
@@ -373,7 +452,14 @@ def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False
             # nearest, preserving the 'nearest sigma' semantics; the 1e-3 relative
             # offset mirrors ``_fd_eig_dist``'s accepted offset.
             sigma = float(np.max(eps_xy.real)) * k0 ** 2 * (1.0 + 1e-3)
-        w, Vv = eigs(A, k=min(k, N - 2), sigma=sigma)
+        # Fixed ARPACK start vector, matching BOTH siblings
+        # (``ref_2d_modes_vector`` and ``_fd_eig_dist``).  Without it ARPACK
+        # draws from NumPy's GLOBAL RNG, so this oracle's output depended on
+        # unrelated seeding elsewhere in the process (measured: 1.7e-13 drift
+        # between two global seeds -- reproducibility, not accuracy).  The
+        # eigenvalues are v0-independent up to convergence tolerance.
+        v0 = np.random.default_rng(0).standard_normal(N).astype(complex)
+        w, Vv = eigs(A, k=min(k, N - 2), sigma=sigma, v0=v0)
         if not return_vecs:
             if not return_complex:
                 return np.sort(w.real)[::-1]

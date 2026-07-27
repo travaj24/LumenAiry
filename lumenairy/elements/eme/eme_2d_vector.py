@@ -79,6 +79,7 @@ from scipy.optimize import minimize_scalar
 from scipy.sparse.linalg import eigs, splu
 
 from ...backend.array import is_jax_array
+from .eme_2d import _check_n_scan, _check_strip_heights
 
 
 # =========================================================================== #
@@ -306,6 +307,26 @@ def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0, mu_x=1.0):
         if fwd.shape[0] != n2:           # degenerate-real fallback (Berreman-style)
             fwd = np.lexsort((-kys.real, -kys.imag))[:n2]
         ky_f, U_f, mu_f = kys[fwd], Us[:, fwd], mus[fwd]
+        # BAND EDGE (AUDIT W6).  The H-part is recovered as ``(C U)/mu`` with
+        # ``mu = i ky``, which is EXACTLY 0 for a strip mode sitting on a band edge
+        # -- e.g. a uniform ``eps = 2`` strip at ``qz^2 = 0`` with ``Nx = 8``,
+        # ``k0 = 8`` (measured ``min|ky| = 0.000e+00``).  The division then
+        # produced NaN and every consumer died several frames later with
+        # ``svdvals: array must not contain infs or NaNs`` -- which is how
+        # ``layer_vector_modes`` crashed on the perfectly natural window
+        # ``qz2_range = (0, ...)``.  The forward/backward Berreman split is
+        # genuinely degenerate there (the generator is defective), so this is not
+        # a mode candidate: raise the same ``LinAlgError`` that the scalar
+        # sibling's singular ``_interface`` solve raises and that its layer finder
+        # skips (``eme_2d.layer_modes``, audit P3-18).
+        floor = 1e-12 * max(1.0, float(np.max(np.abs(mus))))
+        if np.any(np.abs(mu_f) <= floor):
+            raise np.linalg.LinAlgError(
+                "strip_vector_modes: a strip mode sits exactly on a band edge "
+                "(ky = 0), where the forward/backward Berreman split is "
+                "degenerate and the H-part (C U)/(i ky) is undefined.  Nudge "
+                "qz^2 (or k0 / Nx) off the band edge; the layer finders skip "
+                "such samples automatically.")
         return ky_f, U_f, (C @ U_f) / mu_f[None, :]
     # general fallback: full 4Nx eig(A), then re-split E/H from the eigenvectors.
     mu_all, Psi = np.linalg.eig(A)       # mu = i ky
@@ -434,7 +455,38 @@ _NULL_KMAX = 6      # max null-space dimension the rank-drop test scans for (a
 # registration flipped with grid alignment and the per-point sigma_min wobble
 # that varies across BLAS backends -- so real modes flickered in/out of the set
 # (flaky recall 9..16/16 across CI runners).
-_DETECT_PPU = 8     # detection-scan points per unit qz^2 (dense-band resolution)
+#
+# SCALE INVARIANCE (AUDIT W6).  The density is per unit of the DIMENSIONLESS
+# window ``(hi - lo) * Ly^2`` -- NOT per unit of the raw ``qz^2``, which has units
+# of 1/length^2.  The raw form made the detection grid depend on the caller's
+# length unit for one and the same physical cell: measured, the reference
+# 1-um-period cell asked for 3944 points with lengths in um, 400 (the n_scan
+# floor -> UNDER-resolved) in nm, and 3.94e9 points (a 31.5 GB ``linspace``, i.e.
+# a hang / MemoryError) in mm.  With the ``Ly^2`` factor all four unit systems
+# ask for the same 3944.  Every shipped test uses ``Ly = 1``, where the two forms
+# are identical.
+_DETECT_PPU = 8     # detection points per unit of the dimensionless (qz Ly)^2
+_DETECT_MAX = 200_000   # hard cap on the detection grid (a pathological window)
+
+
+def _detect_grid_size(lo, hi, Ly, n_scan):
+    """Number of ``sigma_min`` detection samples for the window ``[lo, hi]``.
+
+    SCALE-INVARIANT (AUDIT W6): the density is ``_DETECT_PPU`` per unit of the
+    DIMENSIONLESS window ``(hi - lo) * Ly^2``, so the same physical cell gets the
+    same grid in any length unit; ``n_scan`` remains a floor and ``_DETECT_MAX`` a
+    cap (warning loudly rather than attempting a pathological allocation)."""
+    dscan = max(int(n_scan), int(_DETECT_PPU * (hi - lo) * Ly ** 2) + 1)
+    if dscan > _DETECT_MAX:
+        import warnings
+        warnings.warn(
+            f"layer_vector_modes: the requested detection grid ({dscan} points "
+            f"for a dimensionless window (hi-lo)*Ly^2 = {(hi - lo) * Ly ** 2:g}) "
+            f"exceeds the {_DETECT_MAX}-point cap and is CLAMPED -- closely "
+            f"packed modes in this window may be missed.  Narrow qz2_range (scan "
+            f"it in sub-windows) for full recall.", stacklevel=3)
+        dscan = _DETECT_MAX
+    return dscan
 
 
 def _sigma_min_invpow(Geq, iters=60, tol=1e-14):
@@ -458,6 +510,7 @@ def _sigma_min_invpow(Geq, iters=60, tol=1e-14):
     x = rng.standard_normal(n) + 1j * rng.standard_normal(n)
     x /= np.linalg.norm(x)
     prev = 0.0
+    cur = 0.0                # AUDIT W6: iters <= 0 used to raise UnboundLocalError
     for _ in range(iters):
         z = lu.solve(luH.solve(x))
         nz = np.linalg.norm(z)
@@ -469,21 +522,61 @@ def _sigma_min_invpow(Geq, iters=60, tol=1e-14):
     return cur
 
 
+def _equilibrated_G(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly):
+    """Build the equilibrated global block ``G(qz^2)`` (and its column norms) for
+    one trial ``qz^2``, raising ``numpy.linalg.LinAlgError`` for the two samples
+    at which it cannot be evaluated (AUDIT W6 -- the scalar sibling
+    ``eme_2d.layer_modes`` already skips its analogous band-edge failure, P3-18):
+
+    * a STRIP BAND EDGE (``ky = 0``) -- raised by ``strip_vector_modes``;
+    * a ``qz^2`` so far outside the band that a hyper-evanescent strip mode's
+      ``exp(+|ky| h)`` OVERFLOWS to ``inf`` and the column equilibration turns it
+      into ``NaN`` (measured at ``qz^2 = 1e7`` for the reference cell,
+      ``max|ky| = 3.2e3``).  Previously this surfaced as
+      ``svdvals: array must not contain infs or NaNs``.
+    """
+    wvk = _strip_modes_at(strips, Lx, Nx, k0, kx0, qz2)
+    Geq, cn = _global_block_G(wvk, np.exp(1j * ky0 * Ly))
+    if not np.all(np.isfinite(Geq)):
+        raise np.linalg.LinAlgError(
+            f"global block G is not finite at qz^2 = {np.real(qz2):g}: a strip "
+            "mode is so deeply evanescent there that exp(+|ky| h) overflows.  "
+            "Such a sample is far outside the band and cannot be a mode; narrow "
+            "qz2_range to the physical band (|qz^2| <~ max(eps) k0^2).")
+    return Geq, cn, wvk
+
+
 def _block_singvals(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly):
     """All singular values (descending) of the equilibrated global block
     ``G(qz^2)``.  ``[-1]`` is ``sigma_min``; a clean rank drop ``s_k << s_{k+1}``
     among the smallest values marks a k-fold-degenerate mode."""
-    wvk = _strip_modes_at(strips, Lx, Nx, k0, kx0, qz2)
-    Geq, _ = _global_block_G(wvk, np.exp(1j * ky0 * Ly))
+    Geq, _cn, _wvk = _equilibrated_G(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly)
     return svdvals(Geq)
+
+
+_SOLVERS = ("dense", "banded")
+
+
+def _check_solver(solver):
+    """Validate the ``solver`` selector.  AUDIT W6: every junk value (including
+    ``None``, ``''``, ``'DENSE'`` and ``7``) silently fell through the
+    ``if solver == "banded"`` test to the dense path -- measured bit-identical to
+    ``solver='dense'`` -- so a typo'd or wrongly-cased selector quietly ignored
+    the caller's request (the P6 junk-method fall-through class)."""
+    if solver not in _SOLVERS:
+        raise ValueError(
+            f"unknown solver {solver!r}; expected one of {_SOLVERS} "
+            "('dense' = svdvals, 'banded' = the O(S) inverse-power sigma_min).")
 
 
 def dispersion_vec(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly, solver="dense"):
     """``sigma_min(G(qz^2))`` -- zero at a 2-D vector Bloch layer mode.
     ``solver="dense"`` (default, byte-identical) uses ``svdvals``; ``"banded"``
-    uses the O(S) inverse-power ``sigma_min`` (same zeros, for fine staircases)."""
-    wvk = _strip_modes_at(strips, Lx, Nx, k0, kx0, qz2)
-    Geq, _ = _global_block_G(wvk, np.exp(1j * ky0 * Ly))
+    uses the O(S) inverse-power ``sigma_min`` (same zeros, for fine staircases;
+    measured agreement ~2e-5 relative on the reference structured cell).  Any
+    other value raises (it used to fall through to dense silently)."""
+    _check_solver(solver)
+    Geq, _cn, _wvk = _equilibrated_G(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly)
     if solver == "banded":
         return _sigma_min_invpow(Geq)
     return svdvals(Geq)[-1]
@@ -496,6 +589,7 @@ def _strips_to_mu_xy(strips, Nx, Ly, Ny):
     if all(len(s) < 3 or not np.any(np.asarray(s[2], dtype=complex) != 1.0)
            for s in strips):
         return None
+    _check_strip_heights("_strips_to_mu_xy", strips, Ly)   # sibling of eps (W6)
     edges = np.cumsum([0.0] + [s[1] for s in strips])
     yc = (np.arange(Ny) + 0.5) / Ny * Ly
     mu = np.ones((Nx, Ny), dtype=complex)
@@ -589,17 +683,22 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
             "ref_2d_modes_vector with a JAX eps (the eig-based FD-oracle twin), or "
             "solve on NumPy and apply implicit differentiation at the converged "
             "mode.")
-    hsum = float(np.real(sum(s[1] for s in strips)))
-    if abs(hsum - Ly) > 1e-9 * max(abs(Ly), 1.0):
-        raise ValueError(
-            f"layer_vector_modes: strip heights sum to {hsum:g} but Ly = {Ly:g}; "
-            "the cell physics uses sum(h) while the Bloch wrap phase uses Ly, so "
-            "they must agree (documented contract: heights sum to Ly).")
+    _check_solver(solver)
+    _check_n_scan("layer_vector_modes", n_scan)
+    _check_strip_heights("layer_vector_modes", strips, Ly)
     lo, hi = qz2_range
     vny = verify_ny if verify_ny is not None else max(48, 6 * len(strips))
 
     def f(q):
-        return dispersion_vec(strips, Lx, Nx, k0, kx0, q, ky0, Ly, solver)
+        try:
+            return dispersion_vec(strips, Lx, Nx, k0, kx0, q, ky0, Ly, solver)
+        except np.linalg.LinAlgError:
+            # AUDIT W6, mirroring eme_2d.layer_modes (P3-18): a scan sample
+            # landing exactly on a strip band edge (ky = 0, e.g. qz^2 = 0 for a
+            # uniform strip) or so far outside the band that exp(+|ky| h)
+            # overflows is NOT a mode candidate -- report +inf so the scan skips
+            # it instead of dying with "array must not contain infs or NaNs".
+            return np.inf
 
     found = []                                        # (qz2, multiplicity)
 
@@ -612,7 +711,10 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
         interval finds the interior minimum without that requirement."""
         r = minimize_scalar(f, bounds=(lo_b, hi_b), method="bounded",
                             options={"xatol": 1e-7})
-        s = _block_singvals(strips, Lx, Nx, k0, kx0, r.x, ky0, Ly)
+        try:
+            s = _block_singvals(strips, Lx, Nx, k0, kx0, r.x, ky0, Ly)
+        except np.linalg.LinAlgError:
+            return                                    # band edge / overflow (W6)
         # clean rank-drop test, degeneracy-agnostic: a genuine k-fold mode has a
         # sharp GAP s_k << s_{k+1} somewhere in the smallest few singular values
         # (k=1 non-degenerate; k=2 TE/TM pair; k=4 a uniform layer's +-ky x 2-pol;
@@ -637,8 +739,7 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     # ratio_tol -- real modes rank-drop ~1e-6 while a spurious det(G) ghost-zero
     # only ~5e-3, a 2-3 decade margin) filters spurious; dedup is unchanged.
     from scipy.signal import find_peaks
-    dscan = max(n_scan, int(_DETECT_PPU * (hi - lo)) + 1)
-    grid = np.linspace(lo, hi, dscan)
+    grid = np.linspace(lo, hi, _detect_grid_size(lo, hi, Ly, n_scan))
     d = np.array([f(q) for q in grid])
     peaks, _ = find_peaks(-d, height=-tol)
     for i in peaks:
@@ -660,8 +761,7 @@ def mode_field_vec(strips, Lx, Nx, Ly, k0, qz2, ky0, Ny, *, kx0=0.0):
     mode-finder uses.  Returns ``(Ex, Ez, sigma)`` with the tangential-E components
     on an ``(Nx, Ny)`` grid (cell-centre y, matching the oracle) and
     ``sigma = sigma_min(G)`` (small confirms a true mode)."""
-    wvk = _strip_modes_at(strips, Lx, Nx, k0, kx0, qz2)
-    Geq, cn = _global_block_G(wvk, np.exp(1j * ky0 * Ly))
+    Geq, cn, wvk = _equilibrated_G(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly)
     s = np.linalg.svd(Geq, compute_uv=True)
     c = s[2][-1].conj() / cn                      # null vector of the UNscaled G
     sigma = s[1][-1]
@@ -917,6 +1017,24 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
         return _ref_2d_modes_vector_jax(
             eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, return_vecs=return_vecs,
             k=k, sigma=sigma, return_complex=return_complex, mu_xy=mu_xy)
+    if sigma is not None and k is None:
+        # AUDIT W6 (sibling of the scalar oracle): sigma was silently INERT
+        # without k -- measured bit-identical results for sigma=1e9.
+        raise ValueError(
+            "ref_2d_modes_vector: sigma only applies to the SPARSE shift-invert "
+            "path -- pass k (the number of modes wanted near sigma) as well, or "
+            "drop sigma for the dense full spectrum.")
+    if not return_complex and (np.any(np.asarray(eps_xy).imag)
+                               or (mu_xy is not None
+                                   and np.any(np.asarray(mu_xy).imag))):
+        # AUDIT W6: the scalar sibling ``eme_2d.ref_2d_modes`` warns here; this
+        # oracle discarded Im(qz^2) silently.
+        import warnings
+        warnings.warn(
+            "ref_2d_modes_vector: eps (or mu) has a nonzero imaginary part "
+            "(lossy) but return_complex=False -- the imaginary parts of qz^2 are "
+            "DISCARDED; pass return_complex=True to keep the complex spectrum.",
+            stacklevel=2)
     N = Nx * Ny
     G, (DxF, DxB, DyF, DyB), eps = _build_generator(
         eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, mu_xy)
@@ -968,7 +1086,12 @@ def strips_to_eps_xy(strips, Lx, Nx, Ly, Ny):
     ignored here -- see ``_strips_to_mu_xy`` for the ``mu`` grid).  ``eps_x`` is a
     scalar isotropic ``(Nx,)`` profile (-> ``(Nx, Ny)`` output) OR a per-node
     ``(Nx, 3, 3)`` permittivity tensor (-> ``(Nx, Ny, 3, 3)`` output, the oracle's
-    anisotropic input)."""
+    anisotropic input).
+
+    Enforces the same ``sum(h) == Ly`` contract as the layer finders (AUDIT W6):
+    un-covered y rows used to be left silently at ``eps = 0``, which the vector
+    oracle's ``1/(k0 eps)`` turns into ``inf``/``NaN``."""
+    _check_strip_heights("strips_to_eps_xy", strips, Ly)
     edges = np.cumsum([0.0] + [s[1] for s in strips])
     yc = (np.arange(Ny) + 0.5) / Ny * Ly
     ex0 = np.asarray(strips[0][0], dtype=complex)
@@ -1007,6 +1130,14 @@ def eps_xy_to_strips(eps, Nx, S, Lx, Ly):
     if callable(eps):
         return [(np.array([eps(x, y) for x in xc], dtype=complex), h) for y in yc]
     arr = np.asarray(eps, dtype=complex)
+    if arr.ndim != 2:
+        # AUDIT W6: a tensor (Nx, Ny, 3, 3) grid used to die on the shape unpack
+        # with a bare "too many values to unpack (expected 2, got 4)".
+        raise NotImplementedError(
+            "eps_xy_to_strips: the GRID input must be a scalar isotropic "
+            f"(Nx, Ny) array (got ndim={arr.ndim}).  Tensor eps is supported only "
+            "via a hand-built strip list of (Nx, 3, 3) per-strip tensors, or via "
+            "a callable eps(x, y) returning a scalar.")
     nxi, nyi = arr.shape
     ix = np.minimum((xc / Lx * nxi).astype(int), nxi - 1)
     jy = np.minimum((yc / Ly * nyi).astype(int), nyi - 1)
