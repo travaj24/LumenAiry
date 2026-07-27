@@ -48,6 +48,7 @@ from collections import OrderedDict
 import numpy as np
 
 from ...backend import is_jax_array  # noqa: F401  (re-exported for the dispatch)
+from ._core import _freeze_cached
 
 _C = np.complex128
 # LRU-bounded (audit P3-28): the key includes the CONTINUOUS pillar bounds /
@@ -170,7 +171,7 @@ def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
         IprojF=Tp @ Tpinv,
         order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
     with _STATIC_CACHE_LOCK:
-        _STATIC_CACHE[key] = out
+        _STATIC_CACHE[key] = _freeze_cached(out)     # W7 A13
         while len(_STATIC_CACHE) > _STATIC_CACHE_SIZE:
             _STATIC_CACHE.popitem(last=False)
     return out
@@ -253,7 +254,7 @@ def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
         IprojF=np.kron(Ty @ Typ, Tx @ Txp),
         order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
     with _STATIC_CACHE_LOCK:
-        _STATIC_CACHE[key] = out
+        _STATIC_CACHE[key] = _freeze_cached(out)     # W7 A13
         while len(_STATIC_CACHE) > _STATIC_CACHE_SIZE:
             _STATIC_CACHE.popitem(last=False)
     return out

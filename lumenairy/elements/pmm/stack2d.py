@@ -39,6 +39,7 @@ from ..rcwa._core import (
 )
 from ._core import (
     PerOrderAmplitudesMixin,
+    _freeze_cached,
     _interface_smatrix,
     _propagation_smatrix,
     _redheffer_star,
@@ -121,6 +122,31 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # (geometry change).  A dispersive layer's tile changes per wl -> a new
         # content key, so the cache never serves a stale build.
         self._geom_cache = {}
+
+    def _geom_key(self, L):
+        """Cache key for the per-layer nodal/projected build.
+
+        W7 A11 (2026-07-26): the key used to carry the LAYER geometry only
+        (kind / tile bytes+shape / walls / element counts).  But the cached
+        value is produced by ``_build_axis(self.period_*, ..., self.degree,
+        ..., self.grade)`` and ``_scalar_projected_ops(..., self.period_x,
+        self.period_y)`` over the ``self.n_orders`` order set -- five SOLVER
+        parameters that were absent from the key while ``_geom_cache``
+        persists across ``solve()`` and is dropped only by ``add_layer``.
+        They are plain public attributes with no property guard, so mutating
+        one after a solve served the STALE build with no signal.  Measured
+        pre-fix (4x4 cell + uniform film, ``n_orders=2``): ``degree`` 5 -> 9
+        returned ``sum(R) = 0.237212592`` where a fresh object gives
+        ``0.243068009`` (8.58e-03); ``degree`` 5 -> 7 and 5 -> 11 came back
+        BIT-IDENTICAL to the degree-5 answer (6.24e-03 / 9.48e-03);
+        ``grade`` False -> True drifted 2.03e-02.  Clearing ``_geom_cache``
+        by hand made every one of them bit-identical to the fresh object --
+        the build was right, only the key was wrong."""
+        return (L["kind"], L["tile"].tobytes(), L["tile"].shape,
+                tuple(np.ravel(L["xw"])), tuple(np.ravel(L["yw"])),
+                tuple(np.ravel(L["el_x"])), tuple(np.ravel(L["el_y"])),
+                float(self.period_x), float(self.period_y),
+                int(self.degree), bool(self.grade), int(self.n_orders))
 
     # ------------------------------------------------------------------ #
     # builder
@@ -457,9 +483,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):    # uniform tile
                 specs.append(("uniform", eps0))
                 continue
-            gkey = (L["kind"], L["tile"].tobytes(), L["tile"].shape,
-                    tuple(np.ravel(L["xw"])), tuple(np.ravel(L["yw"])),
-                    tuple(np.ravel(L["el_x"])), tuple(np.ravel(L["el_y"])))
+            gkey = self._geom_key(L)
             gc = self._geom_cache.get(gkey)
             if gc is not None:
                 ax, ay, lops = gc
@@ -470,7 +494,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                                  L["el_y"], self.grade)
                 lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
                                              self.period_x, self.period_y)
-                self._geom_cache[gkey] = (ax, ay, lops)
+                self._geom_cache[gkey] = _freeze_cached((ax, ay, lops))
             GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
             GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
             EpsF, EinvF, EpnF = lops["EpsF"], lops["EinvF"], lops["EpnF"]
@@ -632,9 +656,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                         modes.append(("sym", Wl, Vl, lam, L["t"]))
                         continue
                 # patterned scalar or tensor -> expensive build + eig; dedup it
-                gkey = (L["kind"], L["tile"].tobytes(), L["tile"].shape,
-                        tuple(np.ravel(L["xw"])), tuple(np.ravel(L["yw"])),
-                        tuple(np.ravel(L["el_x"])), tuple(np.ravel(L["el_y"])))
+                gkey = self._geom_key(L)
                 hit = _mode_cache.get(gkey)
                 if hit is not None:
                     modes.append(hit + (L["t"],))
@@ -652,7 +674,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                     lops = (_scalar_projected_ops(ax, ay, tile_i, ox, oy,
                                                   self.period_x, self.period_y)
                             if L["kind"] == "scalar" else None)
-                    self._geom_cache[gkey] = (ax, ay, lops)
+                    self._geom_cache[gkey] = _freeze_cached((ax, ay, lops))
                 if L["kind"] == "scalar":
                     GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
                     GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]

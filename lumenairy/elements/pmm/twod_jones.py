@@ -65,6 +65,7 @@ from ..rcwa._core import (
 )
 from ._core import (
     _interface_smatrix,
+    _lossy_incidence,
     _propagation_smatrix,
     _redheffer_star,
     _stabilize_jones,
@@ -541,7 +542,8 @@ def pmm_jones_2d(
         return _stabilize_jones(_scan_solver(_solve_at, degree), degree,
                                 "pmm_jones_2d",
                                 passive_tol=_PASSIVE_TOL_2D,
-                                per_order_tol=_PER_ORDER_TOL_2D)
+                                per_order_tol=_PER_ORDER_TOL_2D,
+                                super_unity_ok=_lossy_incidence(n_superstrate))
     res = _solve_at(degree)
     # Blowup guard (mirror rcwa_jones_2d): a high-contrast / birefringent cell
     # at a near-singular (degree, n_orders) truncation -- common at CONICAL

@@ -38,6 +38,7 @@ from ._core import (
     _kz_forward,
     _l2g_periodic,
     _lagrange_derivative_matrix,
+    _mass_flux_cut,
     _pmm_union_grid,
     _segment_elem_bnds,
 )
@@ -174,8 +175,7 @@ def _jstack_modes_uniform(S0, mu, w, jnp, eps):
     SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
     flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
                     - jnp.einsum("in,in->n", W2[n:], SVt))
-    fscale = 1e-9 * jnp.maximum(jnp.max(jnp.abs(flux)), 1.0)
-    prop = jnp.abs(flux) > fscale
+    prop = _mass_flux_cut(flux, W2, SVt, SVb, n, jnp)  # W7 B2: unit-safe cut
     flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
     q = jnp.where(flip, -q, q)
     lam = -1j * q

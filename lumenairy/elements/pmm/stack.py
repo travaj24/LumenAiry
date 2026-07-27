@@ -29,6 +29,7 @@ from ._core import (
     _build_sem_tensor_segments,
     _cov_layer_4n,
     _cov_split,
+    _freeze_cached,
     _half_M_sym_metric,
     _interface_smatrix,
     _kz_forward,
@@ -2137,9 +2138,32 @@ class PMMStack:
         N = len(orders)
         kx = kx0 / k0 + orders * (2.0 * np.pi / period) / k0
         Tp = _sem_fourier_projection(orders, period, mats_s)
-        kz_sup = _kz_forward(eps_sup, kx)
-        kz_sub = _kz_forward(eps_sub, kx)
-        kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+        # W7 F-C (2026-07-26), the Berreman-F-1 twin.  ``_kz_forward`` is a
+        # PUBLIC-gauge helper (``Im(kz) >= 0`` for ``exp(-iwt)``), but
+        # ``eps_sup``/``eps_sub`` are INTERNAL exp(+iwt) here (conjugated at the
+        # top of this method) -- so a LOSSY half-space arrived double-
+        # conjugated, ``sqrt`` landed in the 4th quadrant, the ``Im < 0`` flip
+        # sent ``Re(kz) < 0``, and the ``Re(kz) > 0`` propagating mask inside
+        # _assemble_jones_farfield SILENTLY ZEROED T.  Measured pre-fix on a
+        # HOMOGENEOUS eps=2.25 slab (where the slant is a physical no-op, so
+        # the vertical cascade is the exact oracle), P=0.30 um, 0.22 um deep,
+        # wl 0.55 um, slant 0.35 rad, theta=0.3:
+        #     n_sub 1.5+0.01j  ->  T = [0, 0]   (oracle [0.96586, 0.95613])
+        #     n_sub 1.5+0.30j  ->  T = [0, 0]   (oracle [0.98578, 0.98047])
+        #     n_sub 0.2+3.5j   ->  T = [0, 0]   (oracle [0.08641, 0.08135])
+        # with ZERO warnings -- ``_warn_stack_energy`` only sees super-unity /
+        # negative totals, and 0.014 is "passive".  An absorbing SUPERSTRATE
+        # was worse: ``kz_inc = -1.14651`` tripped the "non-propagating
+        # incidence" raise on a perfectly propagating medium.  Un-conjugating
+        # restores the public gauge (identity for a real eps -> every lossless
+        # solve is BYTE-UNCHANGED); this is exactly the ``kz_ord`` bridge in
+        # ``_core._pmm_jones_oblique_core`` and rcwa's ``_forward_flux_kz``.
+        # (The MODAL kz inside the cascade keeps the internal convention -- that
+        # path is already correct.)
+        kz_sup = _kz_forward(np.conj(eps_sup), kx)
+        kz_sub = _kz_forward(np.conj(eps_sub), kx)
+        kz_inc = float(np.real(
+            _kz_forward(np.conj(eps_sup), np.array([kx0 / k0]))[0]))
         Hsup = np.vstack([Tp @ Ws[:n_glob, fs], Tp @ Ws[n_glob:, fs]])
         Hsub = np.vstack([Tp @ Wb[:n_glob, fb], Tp @ Wb[n_glob:, fb]])
         R, T, jones = _assemble_jones_farfield(
@@ -2271,7 +2295,7 @@ class _PreparedPMMStack:
             st.degree, st.n_el, st.grade)
         modes = _sem_modes_tensor(mats, k0, kx0, True)
         with self._cache_lock:
-            self._eig_cache[ck] = modes
+            self._eig_cache[ck] = _freeze_cached(modes)   # W7 A13
             while len(self._eig_cache) > self._EIG_CACHE_SIZE:
                 self._eig_cache.popitem(last=False)
         return modes
@@ -2327,7 +2351,7 @@ class _PreparedPMMStack:
                 _sem_modes_uniform(m_sup, k0, kx0, eps_sup, _geo),
                 _sem_modes_uniform(m_sub, k0, kx0, eps_sub, _geo))
             with self._cache_lock:
-                self._mats_cache[rk] = entry
+                self._mats_cache[rk] = _freeze_cached(entry)  # W7 A13
                 while len(self._mats_cache) > self._MATS_CACHE_SIZE:
                     self._mats_cache.popitem(last=False)
         mats_sup, _mats_sub, sup_modes, sub_modes = entry

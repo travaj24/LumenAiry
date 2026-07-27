@@ -20,6 +20,7 @@ from ...backend import is_jax_array
 from ._core import (
     _C,
     _COV_MIN_SLANT_RAD,
+    _lossy_incidence,
     _pmm_efficiency_1d_jax,
     _pmm_jones_1d_jax,
     _pmm_jones_oblique_segments_solve,
@@ -281,7 +282,8 @@ def pmm_jones_1d(
             return o, R, T, J
         return _stabilize_jones(
             lambda d: _pmm_jones_slant_solve(*sargs, degree=d, **skw)[:4],
-            int(degree), "pmm_jones_1d")
+            int(degree), "pmm_jones_1d",
+            super_unity_ok=_lossy_incidence(n_superstrate))
 
     args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
             duty_cycle, wavelength)
@@ -296,7 +298,7 @@ def pmm_jones_1d(
     # AND the under-resolved-but-energy-passive degrees; see _stabilize_jones).
     return _stabilize_jones(
         lambda d: _pmm_jones_solve(*args, degree=d, **kw)[:4], int(degree),
-        "pmm_jones_1d")
+        "pmm_jones_1d", super_unity_ok=_lossy_incidence(n_superstrate))
 
 
 
@@ -499,7 +501,7 @@ def pmm_efficiency_1d(
     # converged degree, else warn/raise.  See _stabilize_scalar.
     return _stabilize_scalar(
         lambda d: _pmm_solve(*args, degree=d, **kw)[:3], int(degree),
-        "pmm_efficiency_1d")
+        "pmm_efficiency_1d", super_unity_ok=_lossy_incidence(n_superstrate))
 
 
 
@@ -638,7 +640,8 @@ def pmm_efficiency_1d_segments(
         return o, R, T
     return _stabilize_scalar(
         lambda d: _pmm_solve_segments(*sa, degree=d, **kw)[:3], int(degree),
-        "pmm_efficiency_1d_segments")
+        "pmm_efficiency_1d_segments",
+        super_unity_ok=_lossy_incidence(n_superstrate))
 
 
 
@@ -729,7 +732,8 @@ def pmm_jones_1d_segments(
             return o, R, T, J
         return _stabilize_jones(
             lambda d: _pmm_jones_slant_segments_solve(*oargs, degree=d, **okw)[:4],
-            int(degree), "pmm_jones_1d_segments")
+            int(degree), "pmm_jones_1d_segments",
+            super_unity_ok=_lossy_incidence(n_superstrate))
     sa = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
           wavelength)
     kw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
@@ -740,7 +744,8 @@ def pmm_jones_1d_segments(
         return o, R, T, J
     return _stabilize_jones(
         lambda d: _pmm_jones_solve_segments(*sa, degree=d, **kw)[:4],
-        int(degree), "pmm_jones_1d_segments")
+        int(degree), "pmm_jones_1d_segments",
+        super_unity_ok=_lossy_incidence(n_superstrate))
 
 
 
@@ -875,7 +880,8 @@ def pmm_efficiency_1d_slanted(
         return orders, R, T
     return _stabilize_scalar(
         lambda d: _pmm_slant_solve(*args, degree=d, **kw)[:3], int(degree),
-        "pmm_efficiency_1d_slanted")
+        "pmm_efficiency_1d_slanted",
+        super_unity_ok=_lossy_incidence(n_superstrate))
 
 
 
@@ -1129,7 +1135,8 @@ def pmm_jones_1d_slanted(
             return o, R, T, J
         return _stabilize_jones(
             lambda d: _pmm_jones_oblique_solve(*cargs, degree=d, **ckw)[:4],
-            int(degree), "pmm_jones_1d_slanted")
+            int(degree), "pmm_jones_1d_slanted",
+            super_unity_ok=_lossy_incidence(n_superstrate))
 
     # ---- THE DIAGONAL CURE (round 16, Granet 2017/2023; Liu 2015) -----------
     # For a DIAGONAL in-plane tensor (exy = eyx = 0) WITH exx == ezz BOTH
@@ -1174,7 +1181,8 @@ def pmm_jones_1d_slanted(
                                                **dkw)
         return _stabilize_jones(
             lambda d: _pmm_jones_slant_diag_solve(*dargs, degree=d, **dkw),
-            int(degree), "pmm_jones_1d_slanted")
+            int(degree), "pmm_jones_1d_slanted",
+            super_unity_ok=_lossy_incidence(n_superstrate))
 
     args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
             duty_cycle, wavelength, float(slant_angle))
@@ -1187,7 +1195,8 @@ def pmm_jones_1d_slanted(
         return o, R, T, J
     return _stabilize_jones(
         lambda d: _pmm_jones_slant_solve(*args, degree=d, **kw)[:4],
-        int(degree), "pmm_jones_1d_slanted")
+        int(degree), "pmm_jones_1d_slanted",
+        super_unity_ok=_lossy_incidence(n_superstrate))
 
 
 
@@ -1328,7 +1337,8 @@ def pmm_jones_1d_slanted_segments(
             return o, R, T, J
         return _stabilize_jones(
             lambda d: _pmm_jones_oblique_segments_solve(*ca, degree=d, **ckw)[:4],
-            int(degree), "pmm_jones_1d_slanted_segments")
+            int(degree), "pmm_jones_1d_slanted_segments",
+            super_unity_ok=_lossy_incidence(n_superstrate))
     # OUT-OF-PLANE (eps_xz/yz/zx/zy != 0): SUPPORTED (2026-06-07).  Multi-region
     # out-of-plane + slant rides the SAME exact-convection slant treatment as the
     # binary path (see _build_generator_metric), so it reaches the ~1e-4 wall-
@@ -1347,7 +1357,8 @@ def pmm_jones_1d_slanted_segments(
         return o, R, T, J
     return _stabilize_jones(
         lambda d: _pmm_jones_slant_segments_solve(*sa, degree=d, **kw)[:4],
-        int(degree), "pmm_jones_1d_slanted_segments")
+        int(degree), "pmm_jones_1d_slanted_segments",
+        super_unity_ok=_lossy_incidence(n_superstrate))
 
 
 

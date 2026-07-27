@@ -568,6 +568,81 @@ def _forward_branch_flip(q, xp=np):
 
 
 
+def _freeze_cached(obj):
+    """Mark every ndarray reachable in a cached value NON-WRITEABLE, in place.
+
+    W7 A13 (2026-07-26).  The PMM caches hand out the STORED objects by
+    IDENTITY, so a caller that writes into one silently poisons every later
+    solve that hits the same key.  Measured pre-fix (mutate one entry by
+    ``+= 1e-3``, then re-solve): ``PMM2DStackHybrid._geom_cache`` 21 of 23
+    arrays writeable -> next solve drifts 1.543e-06;
+    ``_PreparedPMMStack._eig_cache`` 12 of 12 -> 7.844e-07;
+    ``stack2d._epsF_cache`` -> ``internal_field`` Ez drifts 1.377e-04; and
+    ``_jax_twod._STATIC_CACHE`` 8 of 8 at MODULE scope, so the poison
+    survives for the whole process.  No in-tree caller mutates them, so this
+    closes a hardening gap rather than a live defect -- the same treatment
+    ``_cached_geo_eig`` (M9), ``_LAGRANGE_DREF_CACHE`` and
+    ``berreman._freeze`` already apply.  Walks tuples / lists / dicts."""
+    if isinstance(obj, np.ndarray):
+        if obj.flags.owndata or obj.base is None:
+            obj.flags.writeable = False
+        else:                          # a view: freeze what it looks through
+            try:
+                obj.flags.writeable = False
+            except ValueError:         # pragma: no cover - non-freezable view
+                pass
+    elif isinstance(obj, (tuple, list)):
+        for v in obj:
+            _freeze_cached(v)
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            _freeze_cached(v)
+    return obj
+
+
+def _mass_flux_cut(flux, W2, SVt, SVb, n, xp=np):
+    """Propagating-mode cut for the MASS-WEIGHTED modal z-flux -- UNIT-SAFE.
+
+    W7 B2 (2026-07-26).  ``flux = Im(E^T S0 conj(H))`` is contracted through
+    the nodal mass ``S0``, whose entries carry the element JACOBIAN, so the
+    whole flux spectrum scales LINEARLY with the ABSOLUTE period.  The
+    historical floor was ``1e-9 * max(max|flux|, 1.0)`` -- and that ``1.0``
+    has length units, pinning the cut at an ABSOLUTE ``1e-9``.  Harmless in
+    micrometres; in METRES the entire spectrum sinks below it and EVERY
+    propagating mode is reclassified evanescent, dropping the selector back to
+    the legacy ``Im(q) < 0`` sign test that the v5.14 robustness audit
+    replaced precisely because it spawns dense spurious resonances.
+
+    Measured (degree 7, 28 DOF, in-plane tensor layer): ``max|flux| = 9.07e-2``
+    at period 0.8 (um scale) but ``9.07e-10`` for the SAME 8 nm structure
+    expressed in metres -- against a fixed ``1e-9``, 6 of 6 modes flip.
+    Through ``pmm_jones_1d`` (8 nm period, 5.5 nm wavelength, 3.5 nm depth,
+    degree 7) that is
+
+        nanometres  -> sum(R) = 0.029337  sum(T) = 1.970666  R+T = 2.000003
+        micrometres -> sum(R) = 0.029337  sum(T) = 1.970666  R+T = 2.000003
+        metres      -> sum(R) = 0.036208  sum(T) = 1.991085  R+T = 2.027293
+
+    -- a 1.4% energy-conservation violation produced by the UNIT CHOICE alone
+    (max per-order drift 3.4e-2).  The metre break period grows with degree
+    (5.2 nm at degree 5, 24.9 nm at degree 24, since more DOF means a smaller
+    unit-norm eigenvector flux), and even far above it the margin is degraded:
+    at an 800 nm period, degree 16, metres, ``max|flux| = 4.8e-8`` against
+    ``1e-9`` is a 48x margin instead of the intended 1e9x.
+
+    The floor is now the ROUND-OFF BOUND of the two contractions,
+    ``max|W2| (max|SVt| + max|SVb|) n eps``, which carries the same Jacobian
+    as ``flux`` and is therefore unit-invariant.  In micrometres it sits many
+    decades below the ``1e-9 max|flux|`` term, so the cut is unchanged there.
+    (``_build_generator_metric``'s selector is NOT routed here: its flux is a
+    plain nodal sum with no ``S0``, hence already dimensionless.)"""
+    fmax = xp.max(xp.abs(flux))
+    fnoise = (xp.max(xp.abs(W2))
+              * (xp.max(xp.abs(SVt)) + xp.max(xp.abs(SVb)))
+              * (int(n) * float(np.finfo(np.float64).eps)))
+    return xp.abs(flux) > xp.maximum(1e-9 * fmax, fnoise)
+
+
 def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     """Periodic generalized eigenproblem on the nodal basis.
 
@@ -930,7 +1005,9 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
 
     The TE channel normalizes by ``kz`` (the standard plane-wave z-flux); the TM
     channel normalizes by the wall-normal flux ``kz/eps`` (the inverse-rule
-    channel), with the incident flux ``kz_inc/eps_sup``.  Orders below cut-off
+    channel; the TM amplitudes are ``Hy``, and ``Re(kz/eps)|Hy|^2`` is the EXACT
+    time-averaged ``Sz`` even in an absorbing medium, since
+    ``Re(kz/eps) == Re(kz)(|kz|^2+kx^2)/|eps|^2``).  Orders below cut-off
     (``Re(kz) <= 0``) carry zero efficiency.  Shared verbatim by the vertical
     scalar core and the scalar slant solver.
 
@@ -942,7 +1019,8 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
                                    (kx0 / k0) ** 2)
     kz_sup = _kz_forward(eps_sup, kx)
     kz_sub = _kz_forward(eps_sub, kx)
-    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+    kz0 = complex(_kz_forward(eps_sup, np.array([kx0 / k0]))[0])
+    kz_inc = float(np.real(kz0))
     # TWO-SIDED + non-finite-aware (audit M3 2026-07-25) -- see the identical
     # guard in _assemble_jones_farfield: a negative kz_inc (gain superstrate)
     # silently negates every efficiency, and NaN slips past a one-sided test.
@@ -959,6 +1037,28 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
         T = np.real(kz_sub / kz_inc) * np.abs(t_ord) ** 2
     else:
         flux_inc = np.real(kz_inc / eps_sup)
+        if float(np.imag(_C(eps_sup))) != 0.0:
+            # W7 F-B (2026-07-26): for an ABSORBING SUPERSTRATE the historical
+            # ``Re(kz_inc/eps_sup)`` mixed gauges -- a REAL kz_inc (already
+            # ``Re`` of the complex order-0 root) divided into a COMPLEX
+            # eps_sup, which is the flux of no wave, while the NUMERATORS use
+            # the full complex kz.  It broke the hardest symmetry there is: at
+            # NORMAL incidence on an ISOTROPIC slab, TE and TM must be
+            # identical, and they were not (measured T drift 1.4e-4 at
+            # Im(n_sup)=0.01, 3.4e-3 at 0.05, 5.8e-2 at 0.2), so this ONE
+            # recipe disagreed with every other far field in the family
+            # (rcwa ``_project_efficiency``, ``_assemble_jones_farfield``, the
+            # 2-D/conical sites) on the SAME physical problem.
+            #
+            # The family normalizes an E-amplitude flux by
+            # ``kz_inc * einc_sq``; in the TM channel's Hy gauge that incident
+            # flux is ``(kz_inc^2+kx0^2)/kz_inc * |kz0/eps_sup|^2`` (the
+            # ``|Ex_inc|^2 = |kz0/eps_sup|^2`` conversion for unit Hy).  For a
+            # REAL eps_sup this equals ``kz_inc/eps_sup`` identically, so the
+            # branch is skipped and every lossless solve is BYTE-UNCHANGED.
+            # Post-fix: rcwa parity 1.3e-14, TE == TM at normal 2.7e-15.
+            flux_inc = (((kz_inc ** 2 + (kx0 / k0) ** 2) / kz_inc)
+                        * abs(kz0 / _C(eps_sup)) ** 2)
         R = np.real(kz_sup / eps_sup) * np.abs(r_ord) ** 2 / flux_inc
         T = np.real(kz_sub / eps_sub) * np.abs(t_ord) ** 2 / flux_inc
     # ``Re(kz) > 0`` -- the family-wide cut-off mask (audit M7; see
@@ -1328,8 +1428,7 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
     SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
     flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
                    - np.einsum("in,in->n", W2[n:], SVt))
-    fscale = 1e-9 * max(float(np.max(np.abs(flux))), 1.0)
-    prop = np.abs(flux) > fscale
+    prop = _mass_flux_cut(flux, W2, SVt, SVb, n)      # W7 B2: unit-safe cut
     flip = np.where(prop, flux < 0.0, q.imag < 0.0)
     q = np.where(flip, -q, q)
     lam = -1j * q
@@ -1454,8 +1553,7 @@ def _sem_modes_uniform(mats, k0, kx0, eps, geo=None):
     SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
     flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
                    - np.einsum("in,in->n", W2[n:], SVt))
-    fscale = 1e-9 * max(float(np.max(np.abs(flux))), 1.0)
-    prop = np.abs(flux) > fscale
+    prop = _mass_flux_cut(flux, W2, SVt, SVb, n)      # W7 B2: unit-safe cut
     flip = np.where(prop, flux < 0.0, q.imag < 0.0)
     q = np.where(flip, -q, q)
     lam = -1j * q
@@ -1822,15 +1920,47 @@ class _StabilizeScanExhausted(Exception):
     and the consensus is evaluated on the degrees already solved."""
 
 
+def _lossy_incidence(n_superstrate):
+    """True when the INCIDENCE half-space absorbs (public ``Im(n_sup) > 0``).
+
+    W7 F-A (2026-07-26).  ``sum(R)+sum(T) <= 1`` is a theorem only for a
+    LOSSLESS incidence medium.  With an absorbing superstrate the family's
+    ``kz_inc = Re(kz_sup)`` flux normalization legitimately returns totals
+    ABOVE unity (measured on a plain slab: 1.00026 at ``Im(n_sup)=0.01``,
+    1.0152 at 0.05, 1.0303 at 0.2 -- and rcwa/the Jones path agree to ~4e-7),
+    so the stabilizers' super-unity gate is not a resonance discriminator
+    there -- ``_require_propagating_incidence``, which every one of these
+    entry points already calls, documents exactly this ("R + T != 1 by
+    construction ... treat the sums as indicative"), so the gate was
+    contradicting the contract stated one call earlier.  Measured pre-fix,
+    ``pmm_efficiency_1d`` raised ``RuntimeError: no resonance-free
+    solve in degrees [10, 26); the requested degree sits in a high-degree
+    resonance band`` for EVERY degree from ``Im(n_sup) = 0.01`` up, blaming
+    the user's degree for a perfectly healthy solve (the ``stabilize=False``
+    answer matches rcwa to 4e-7).  This mirrors the skip already in
+    :func:`~lumenairy.elements.pmm.twod._warn_lossless_energy_2d` and rcwa's
+    ``_check_energy(..., lossless=)``.  A non-finite / non-scalar index reads
+    False (keep the strict gate)."""
+    try:
+        return float(np.imag(_C(n_superstrate))) > 0.0
+    except (TypeError, ValueError):        # traced / array-valued index
+        return False
+
+
 def _stabilize_scalar(solve_at_degree, d0, label, *, passive_tol=None,
-                      per_order_tol=None):
+                      per_order_tol=None, super_unity_ok=False):
     """Per-order convergence consensus over a degree window; ``solve_at_degree(d)
     -> (orders, R, T)``.  Shared by the binary + segmented scalar solvers (and
     the 2-D cell solver, whose closure maps the scan index onto odd degrees and
     raises :class:`_StabilizeScanExhausted` at its cost cap).  ``passive_tol`` /
     ``per_order_tol`` default to the 1-D-calibrated constants; the 2-D hybrid
     passes looser values (its Fourier-truncation energy floor ~1e-2 exceeds the
-    1-D no-floor tolerance)."""
+    1-D no-floor tolerance).
+
+    ``super_unity_ok`` (W7 F-A) drops ONLY the ``tot <= 1 + tol`` half of the
+    gate -- see :func:`_lossy_incidence`.  The lower bound and the per-order
+    non-negativity stay, and the per-order convergence consensus (the real
+    accuracy signal) is untouched."""
     passive_tol = _PASSIVE_TOL if passive_tol is None else passive_tol
     per_order_tol = _PER_ORDER_TOL if per_order_tol is None else per_order_tol
     scanned = []
@@ -1847,7 +1977,8 @@ def _stabilize_scalar(solve_at_degree, d0, label, *, passive_tol=None,
         # 'converged cluster' with ZERO warnings.
         eff_min = min(float(np.min(np.real(R))) if np.size(R) else 0.0,
                       float(np.min(np.real(T))) if np.size(T) else 0.0)
-        passive_ok = (-passive_tol <= tot <= 1.0 + passive_tol
+        passive_ok = (-passive_tol <= tot
+                      and (super_unity_ok or tot <= 1.0 + passive_tol)
                       and eff_min >= -passive_tol)
         scanned.append((d, orders, R, T, passive_ok, tot))
         records = [(s[1], (s[2], s[3]), None) for s in scanned]
@@ -1865,7 +1996,11 @@ def _stabilize_scalar(solve_at_degree, d0, label, *, passive_tol=None,
             f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); the requested degree sits in a "
             f"high-degree resonance band.  Use a lower degree (PMM converges "
             f"spectrally -- degree<=32 typically suffices) or "
-            f"elements_per_region>1 with grade=True.")
+            f"elements_per_region>1 with grade=True."
+            + ("" if super_unity_ok else
+               "  (If the incidence medium ABSORBS, sum R+T legitimately "
+               "exceeds 1 under the Re(kz_inc) flux normalization -- that "
+               "case is exempted from the super-unity gate.)"))
     warnings.warn(
         f"{label}: the per-order solution did not converge within degrees "
         f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the highest degree tried "
@@ -1879,11 +2014,13 @@ def _stabilize_scalar(solve_at_degree, d0, label, *, passive_tol=None,
 
 
 def _stabilize_jones(solve_at_degree, d0, label, *, passive_tol=None,
-                     per_order_tol=None):
+                     per_order_tol=None, super_unity_ok=False):
     """Per-order + Jones convergence consensus; ``solve_at_degree(d) ->
     (orders, R, T, J)``.  Shared by the binary + segmented anisotropic solvers
     (and the 2-D tensor solver; see :class:`_StabilizeScanExhausted` and the
-    tolerance note on :func:`_stabilize_scalar`)."""
+    tolerance / ``super_unity_ok`` notes on :func:`_stabilize_scalar` -- here
+    the Jones target is 2, so the absorbing-superstrate exemption drops the
+    ``tot <= 2 + 2 tol`` half of the gate)."""
     passive_tol = _JONES_PASSIVE_TOL if passive_tol is None else passive_tol
     per_order_tol = _PER_ORDER_TOL if per_order_tol is None else per_order_tol
     scanned = []
@@ -1897,7 +2034,9 @@ def _stabilize_jones(solve_at_degree, d0, label, *, passive_tol=None,
         # the Jones twin's target is 2 (both incident pols) with the 2x tol.
         eff_min = min(float(np.min(np.real(R))) if np.size(R) else 0.0,
                       float(np.min(np.real(T))) if np.size(T) else 0.0)
-        passive_ok = (-2.0 * passive_tol <= tot <= 2.0 + 2.0 * passive_tol
+        passive_ok = (-2.0 * passive_tol <= tot
+                      and (super_unity_ok
+                           or tot <= 2.0 + 2.0 * passive_tol)
                       and eff_min >= -2.0 * passive_tol)
         scanned.append((d, o, R, T, J, passive_ok, tot))
         records = [(s[1], (s[2], s[3]), s[4]) for s in scanned]
@@ -2402,16 +2541,19 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
     # kz_inc stays a TRACED jnp scalar so d/d(wavelength) AND d/d(angle) /
     # d/d(n_sup) flow through the efficiency normaliser.  At oblique the
     # incident transverse wavenumber is kx0/k0 (the order-0 Rayleigh channel);
-    # the scalar TM normaliser is flux_inc = kz_inc/eps_sup (mirror of
-    # _pmm_solve_core -- the Ez longitudinal flux is already folded into the
-    # scalar 1/eps weighting, unlike the Jones path's explicit (1+(kx0/kz)^2)).
+    # the scalar TM normaliser is the family-consistent incident flux in the
+    # Hy gauge -- see the W7 F-B note on the NumPy `_scalar_farfield_RT`.  It is
+    # written BRANCH-FREE here (a traced eps_sup cannot be tested for exact-real
+    # loss), and reduces IDENTICALLY to kz_inc/eps_sup for a real superstrate.
     kx0n = kx0 / k0
-    kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
+    kz0 = _kzf(eps_sup, jnp.asarray(kx0n, cj))
+    kz_inc = jnp.real(kz0)
     if polarization == "te":
         R = jnp.real(kz_sup / kz_inc) * jnp.abs(r_ord) ** 2
         T = jnp.real(kz_sub / kz_inc) * jnp.abs(t_ord) ** 2
     else:
-        flux_inc = jnp.real(kz_inc / eps_sup)
+        flux_inc = (((kz_inc ** 2 + kx0n ** 2) / kz_inc)
+                    * jnp.abs(kz0 / eps_sup) ** 2)
         R = jnp.real(kz_sup / eps_sup) * jnp.abs(r_ord) ** 2 / flux_inc
         T = jnp.real(kz_sub / eps_sub) * jnp.abs(t_ord) ** 2 / flux_inc
     # ``Re(kz) > 0`` cut-off mask, matching the NumPy twin (audit M7).
@@ -2734,8 +2876,7 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
     flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
                     - jnp.einsum("in,in->n", W2[n:], SVt))
-    fscale = 1e-9 * jnp.maximum(jnp.max(jnp.abs(flux)), 1.0)
-    prop = jnp.abs(flux) > fscale
+    prop = _mass_flux_cut(flux, W2, SVt, SVb, n, jnp)  # W7 B2: unit-safe cut
     flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
     q = jnp.where(flip, -q, q)
     lam = -1j * q
@@ -2794,8 +2935,7 @@ def _jpmm_sem_modes_uniform(mats, jnp, eig, k0, kx0, eps, geo=None):
     SVb = S0 @ jnp.conj(V0[n:])
     flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
                     - jnp.einsum("in,in->n", W2[n:], SVt))
-    fscale = 1e-9 * jnp.maximum(jnp.max(jnp.abs(flux)), 1.0)
-    prop = jnp.abs(flux) > fscale
+    prop = _mass_flux_cut(flux, W2, SVt, SVb, n, jnp)  # W7 B2: unit-safe cut
     flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
     q = jnp.where(flip, -q, q)
     lam = -1j * q
@@ -4739,6 +4879,8 @@ __all__ = [
     "_resolve_incidence",
     "_resolve_incidence_checked",
     "_forward_branch_flip",
+    "_freeze_cached",
+    "_mass_flux_cut",
     "_STABILIZE_MAX_SCAN",
     "_MIN_PLATEAU",
     "_PASSIVE_TOL",
@@ -4784,6 +4926,7 @@ __all__ = [
     "_build_sem_tensor_segments",
     "_pmm_solve_segments",
     "_pmm_jones_solve_segments",
+    "_lossy_incidence",
     "_stabilize_scalar",
     "_stabilize_jones",
     "_graded_fractions",

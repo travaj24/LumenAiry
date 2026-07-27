@@ -92,6 +92,7 @@ from ._core import (
     _graded_boundaries,
     _interface_smatrix,
     _lagrange_derivative_matrix,
+    _lossy_incidence,
     _propagation_smatrix,
     _propagation_star,
     _redheffer_star,
@@ -696,15 +697,32 @@ def _symmetric_solve_2d(kxv, kyv, order_x, order_y, GxF, GyF, EpsF, EinvF,
         return None
     EPS_nx_r, EPS_ny_r = _rc(EPS_nx), _rc(EPS_ny)
     EPS_inv_r = _rc(EinvF) if formulation == "li" else np.linalg.inv(EpsF_r)
-    # GxF/GyF are diagonal in the order index (momentum) -> gauge-invariant
-    # under D (a diagonal conjugation of a diagonal matrix is itself), so use
-    # them directly.
+    # W7 F-D (2026-07-26): these MUST be recentred too.  The comment here used
+    # to read "GxF/GyF are diagonal in the order index (momentum) ->
+    # gauge-invariant under D ... so use them directly" -- true of rcwa's
+    # Fourier ``Kx``/``Ky``, but FALSE of the hybrid PMM's SEM-PROJECTED
+    # derivative operators, which are DENSE (measured on a 4x4 corner-block
+    # cell, degree 5: ``max|off-diag(Gx0F)| = 1.15e5`` against
+    # ``max|diag| = 2.50e7``, and ``max|D^-1 Gx0F D - Gx0F| = 1.76e5``).  So
+    # the eps operators were recentred and the derivative operators were not,
+    # giving an INCONSISTENT (P, Q) whenever the symmetry centre is off the
+    # cell origin -- and ``_flip_invariant`` only tests ``EpsF``, so nothing
+    # caught it.  Measured on the DEFAULT ``symmetry='auto'`` path of
+    # ``pmm_efficiency_2d_cell`` (degree 5, n_orders 2): fold vs full solve
+    # ``dR = 8.46e-03``, ``dT = 2.04e-02`` (and the fold was the side FURTHER
+    # from unity, 1.010103 vs 1.004432).  Rolling the SAME rectangle so its
+    # centre lands on the origin makes ``D`` trivial and the two agree to
+    # 8.9e-16 -- the decisive control.  A diagonal operator is unchanged by
+    # ``_rc``, so rcwa's Fourier path and every already-centred cell stay
+    # byte-identical.
+    GxF_r, GyF_r = _rc(GxF), _rc(GyF)
     Nf = GxF.shape[0]
     Imat = np.eye(Nf, dtype=_C)
-    Q = np.block([[GxF @ GyF, EPS_ny_r - GxF @ GxF],
-                  [GyF @ GyF - EPS_nx_r, -GyF @ GxF]])
-    P = np.block([[GxF @ EPS_inv_r @ GyF, Imat - GxF @ EPS_inv_r @ GxF],
-                  [GyF @ EPS_inv_r @ GyF - Imat, -GyF @ EPS_inv_r @ GxF]])
+    Q = np.block([[GxF_r @ GyF_r, EPS_ny_r - GxF_r @ GxF_r],
+                  [GyF_r @ GyF_r - EPS_nx_r, -GyF_r @ GxF_r]])
+    P = np.block([[GxF_r @ EPS_inv_r @ GyF_r, Imat - GxF_r @ EPS_inv_r @ GxF_r],
+                  [GyF_r @ EPS_inv_r @ GyF_r - Imat,
+                   -GyF_r @ EPS_inv_r @ GxF_r]])
     desc = _even_basis_desc(flip)
     Mp = _even_fold(P @ Q, desc, np)
     lam2_e, Wl_e = np.linalg.eig(Mp)
@@ -1077,7 +1095,9 @@ def pmm_efficiency_2d(
     o, R, T = _stabilize_scalar(_scan_solver(_solve_at, degree), degree,
                                 "pmm_efficiency_2d",
                                 passive_tol=_PASSIVE_TOL_2D,
-                                per_order_tol=_PER_ORDER_TOL_2D)
+                                per_order_tol=_PER_ORDER_TOL_2D,
+                                super_unity_ok=_lossy_incidence(
+                                    n_superstrate))
     return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2)
 
 
@@ -1235,7 +1255,9 @@ def pmm_efficiency_2d_cell(
     o, R, T = _stabilize_scalar(_scan_solver(_solve_at, degree), degree,
                                 "pmm_efficiency_2d_cell",
                                 passive_tol=_PASSIVE_TOL_2D,
-                                per_order_tol=_PER_ORDER_TOL_2D)
+                                per_order_tol=_PER_ORDER_TOL_2D,
+                                super_unity_ok=_lossy_incidence(
+                                    n_superstrate))
     return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2)
 
 
