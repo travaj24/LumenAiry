@@ -269,13 +269,57 @@ re-implement the old scan from.  Pins:
   call that immediately raised `TypeError: ... missing 1 required
   keyword-only argument: 'n_paths'`.  It could not be repointed: this library
   has no prescription-embedded DOE representation — diffractive data travels
-  as the `surface_diffraction` / `diffracting_surfaces` kwargs — and hfpi was
-  not measurably the better automatic choice anyway (on a thin-grating
-  analytic oracle it missed the order-1 deflection by 85–97%, versus maslov's
-  100%; the hfpi deflection miss is recorded as an open interiors question).
-  DOE kwargs handed to a member that cannot accept them now raise a
+  as the `surface_diffraction` / `diffracting_surfaces` kwargs.  (An initial
+  supporting measurement — that hfpi "missed the analytic order-1 deflection
+  by 85–97%" — was later traced to HFPI under-sampling and is WITHDRAWN, see
+  the W9-14 note below; the two structural reasons above are decisive on
+  their own.)  DOE kwargs handed to a member that cannot accept them now raise a
   dispatcher-level `ValueError` naming the members that can, instead of a raw
   `TypeError` from `apply_real_lens_maslov`.
+
+### Fixed — HFPI says when it is under-sampled (audit W9-14, `propagators/hfpi.py`)
+
+- Paths are drawn into a cone of half-angle `cone_half_angle` — a full forward
+  hemisphere by default — while a realistic output grid subtends a few
+  degrees, so almost every path can miss the grid and the survivors are far
+  too few to interfere into a field.  MEASURED at the default cone on a 128^2
+  output grid subtending 7.3 deg: the fraction of output pixels that ever
+  received a path was 0.6% / 2.1% / 7.9% at n_paths = 20k / 80k / 320k, and
+  two seeds of the SAME physics agreed to an intensity-shape fidelity of
+  0.000 / 0.005 / 0.021.  The binned profile was a broad dome spanning the
+  whole grid for both a control and a grating case — the Monte-Carlo sampling
+  envelope, not a propagated field — and nothing warned, despite the
+  docstring's guarantee that "fringe positions and interference contrast
+  (phase structure) are correct".  `accumulate_to_grid` — the single point all
+  HFPI entry points, scalar and vectorial, funnel through — now counts the
+  paths that actually LANDED and warns below one per output pixel, naming the
+  counts and both levers (raise `n_paths`; far more effective, narrow
+  `cone_half_angle` toward the angle the output grid subtends — the library's
+  own HFPI test already did this by hand).  New
+  `on_undersampled={'warn', 'silent', 'error'}` policy on
+  `accumulate_to_grid`, `propagate_hfpi_freespace_aperture` and
+  `propagate_hfpi_through_prescription`; `'warn'` is the default.  One landed
+  path per pixel is a necessary and nowhere near sufficient condition — the
+  same probe still only reached seed-to-seed fidelity 0.44 at ~12 per pixel —
+  so the bar is set where the failure is unambiguous, not where the answer
+  becomes trustworthy.
+- **HFPI's `surface_diffraction` is correct**, and the W9 dispatcher audit's
+  initial report that it "missed the analytic thin-grating order-1 deflection
+  by 85–97%" is WITHDRAWN: that measurement was taken on the under-sampled
+  output described above.  Verified at the ray level, where
+  `raytrace.trace(surface_diffraction=...)` puts the exit direction cosine at
+  `m*lambda/Lambda` to a relative error of 0.0–2.2e-16 and the exit offset at
+  `t*tan(asin(m*lambda/Lambda))`, for Lambda/m of 80/1, 40/1, 20/1, 20/2 and
+  10/1 — including the (20 um, m=2) == (10 um, m=1) degeneracy — and with a
+  pure y-order deflecting only the y direction cosine.  At the HFPI level the
+  deflection converges toward the analytic value as the estimator is fed
+  (ratio 0.401 / 0.530 / 0.742 / 0.861 at n_paths = 0.1M / 0.4M / 1.6M /
+  6.4M at fixed geometry), which is non-convergence, not a physics error.
+  `fit_canonical_polynomials`, the other `surface_diffraction` consumer,
+  routes through the same exact `trace` path and is deterministic (no
+  Monte-Carlo sampling), so neither finding affects it.  Pins:
+  `tests/unit/test_niche_audit_w9_hfpi_doe.py` (16 cases; 8 fail pre-fix, 8
+  ray-level fences pass at both baselines).
 
 ### Fixed — dispatcher usability follow-ups (audit W9-10 / W9-12)
 

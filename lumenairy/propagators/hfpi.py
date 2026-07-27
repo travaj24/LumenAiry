@@ -371,6 +371,22 @@ def apply_aperture_diffraction(
 # Coherent accumulation at the output plane
 # ============================================================================
 
+# v5.31 (audit W9-14): a Monte-Carlo estimator that never puts a path in a
+# pixel has not estimated that pixel.  Below ONE landed path per output pixel
+# the returned array is not a field at all -- it is the sampling envelope, and
+# it is seed-noise on top.  MEASURED (thin air plate, 2 mm, 128^2 output, the
+# DEFAULT ~90-degree cone): occupancy -- the fraction of output pixels that ever
+# receive a path -- was 0.6% / 2.1% / 7.9% at n_paths = 20k / 80k / 320k, and the
+# seed-to-seed intensity-shape fidelity was 0.005 / 0.005 / 0.021, i.e. two runs
+# of the same physics agreed with each other not at all.
+#
+# One path per pixel is a NECESSARY, nowhere near sufficient, condition: at ~12
+# landed paths per pixel the same probe still only reached seed-to-seed fidelity
+# 0.44.  The bar is set where the failure is UNAMBIGUOUS rather than where the
+# result becomes trustworthy, so the guard cannot cry wolf.
+_MIN_LANDED_PATHS_PER_OUTPUT_PIXEL = 1.0
+
+
 def accumulate_to_grid(
     paths: PathBundle,
     *,
@@ -379,15 +395,36 @@ def accumulate_to_grid(
     dx: float,
     centre: Tuple[float, float] = (0.0, 0.0),
     output_dtype: Optional[Any] = None,
+    on_undersampled: str = 'warn',
 ) -> np.ndarray:
     """Coherently bin a PathBundle into a 2-D output field.
 
     For each path, identify the destination pixel and add the
     path's complex weight to that pixel.  Paths that fall outside
     the grid are dropped.
+
+    Parameters
+    ----------
+    on_undersampled : {'warn', 'silent', 'error'}, default 'warn'
+        Policy for the v5.31 sampling-adequacy guard (audit W9-14).  Paths are
+        sampled into a cone of half-angle ``cone_half_angle`` (default ~90
+        degrees, a full forward hemisphere) while a realistic output grid
+        subtends a few degrees, so the great majority of paths can miss the grid
+        entirely and the survivors are too few to interfere into a field.  This
+        counts the paths that actually LANDED and warns when there is less than
+        :data:`_MIN_LANDED_PATHS_PER_OUTPUT_PIXEL` of them per output pixel --
+        the point below which most pixels are exactly zero and the array is the
+        sampling envelope plus shot noise, not a propagated field.  ``'error'``
+        raises instead; ``'silent'`` suppresses (use it when you are pinning
+        plumbing rather than physics).  Skipped for JAX arrays, whose path count
+        is not readable under tracing.
     """
     xp = array_namespace(paths.positions)
     cx, cy = centre
+    if on_undersampled not in ('warn', 'silent', 'error'):
+        raise ValueError(
+            "accumulate_to_grid: on_undersampled must be 'warn', 'silent' or "
+            f"'error' (got {on_undersampled!r})")
 
     if output_dtype is None:
         output_dtype = paths.weights.dtype
@@ -401,6 +438,41 @@ def accumulate_to_grid(
     ix = xp.floor(x / dx + Nx / 2 + 0.5).astype(xp.int64)
     iy = xp.floor(y / dx + Ny / 2 + 0.5).astype(xp.int64)
     inside = (ix >= 0) & (ix < Nx) & (iy >= 0) & (iy < Ny) & paths.alive
+
+    # v5.31 (audit W9-14): the sampling-adequacy guard.  ``inside`` is already
+    # computed, so the count is free.  See
+    # ``_MIN_LANDED_PATHS_PER_OUTPUT_PIXEL`` for the measurements behind the
+    # threshold.
+    if on_undersampled != 'silent' and not is_jax_array(paths.positions):
+        _n_total = int(np.asarray(inside).size)
+        _n_landed = int(np.count_nonzero(np.asarray(inside)))
+        _per_px = _n_landed / float(max(Ny * Nx, 1))
+        if _per_px < _MIN_LANDED_PATHS_PER_OUTPUT_PIXEL:
+            _msg = (
+                f"HFPI is UNDER-SAMPLED for this output grid: of {_n_total} "
+                f"paths only {_n_landed} landed on the {Ny}x{Nx} grid "
+                f"({100.0 * _n_landed / max(_n_total, 1):.2f}%), i.e. "
+                f"{_per_px:.3g} landed paths per output pixel.  Below "
+                f"{_MIN_LANDED_PATHS_PER_OUTPUT_PIXEL:g} per pixel most pixels "
+                f"are EXACTLY ZERO and the returned array is the Monte-Carlo "
+                f"sampling envelope plus shot noise, not a propagated field -- "
+                f"measured on a 128^2 probe at the default cone, two seeds of "
+                f"the same physics agreed to an intensity-shape fidelity of "
+                f"0.005.  The docstring's guarantee that 'fringe positions and "
+                f"interference contrast are correct' does NOT hold here.  Two "
+                f"levers: raise n_paths, and -- usually far more effective -- "
+                f"narrow ``cone_half_angle`` from its ~90-degree default "
+                f"(a full forward hemisphere) toward the angle the output grid "
+                f"actually subtends, so paths are not spent where they cannot "
+                f"land.  NOTE one path per pixel is necessary, not sufficient: "
+                f"the same probe still only reached seed-to-seed fidelity 0.44 "
+                f"at ~12 paths per pixel.  Pass on_undersampled='silent' to "
+                f"acknowledge."
+            )
+            if on_undersampled == 'error':
+                raise ValueError('accumulate_to_grid: ' + _msg)
+            warnings.warn('accumulate_to_grid: ' + _msg, RuntimeWarning,
+                          stacklevel=3)
 
     w_masked = xp.where(inside, paths.weights, 0)
     flat_idx = xp.where(inside, iy * Nx + ix, 0)
@@ -550,6 +622,7 @@ def propagate_hfpi_freespace_aperture(
     output_centre: Tuple[float, float] = (0.0, 0.0),
     aperture_shape: str = 'circular',
     aperture_centre: Tuple[float, float] = (0.0, 0.0),
+    on_undersampled: str = 'warn',
 ) -> np.ndarray:
     """End-to-end three-leg HFPI: source plane -> free space ->
     aperture -> free space -> output plane.
@@ -605,6 +678,8 @@ def propagate_hfpi_freespace_aperture(
         # v5.17.x (P2-32): promote real input dtypes to complex so the
         # scatter-add keeps the imaginary half of the path weights.
         output_dtype=_complex_output_dtype(E_in.dtype),
+        # v5.31 (audit W9-14): sampling-adequacy guard.
+        on_undersampled=on_undersampled,
     )
 
 
@@ -772,6 +847,7 @@ def propagate_hfpi_through_prescription(
     output_centre: Tuple[float, float] = (0.0, 0.0),
     sampling: str = 'stratified',
     cone_half_angle: float = np.pi / 2 - 1e-6,
+    on_undersampled: str = 'warn',
 ) -> np.ndarray:
     """End-to-end HFPI through a sequential lumenairy prescription.
 
@@ -816,6 +892,13 @@ def propagate_hfpi_through_prescription(
     cone_half_angle : float
         Half-angle of the forward emission cone for path
         initialisation and per-surface re-sampling.
+    on_undersampled : {'warn', 'silent', 'error'}, default 'warn'
+        Policy for the v5.31 sampling-adequacy guard (audit W9-14): HFPI warns
+        when fewer than one sampled path per output pixel actually LANDS on the
+        grid, the point below which the return is the Monte-Carlo sampling
+        envelope rather than a field.  The usual cause is ``cone_half_angle``
+        (a full forward hemisphere by default) versus an output grid that
+        subtends a few degrees.  See :func:`accumulate_to_grid`.
 
     Returns
     -------
@@ -976,6 +1059,8 @@ def propagate_hfpi_through_prescription(
         # v5.17.x (P2-32): promote real input dtypes to complex so the
         # scatter-add keeps the imaginary half of the path weights.
         output_dtype=_complex_output_dtype(E_in.dtype),
+        # v5.31 (audit W9-14): sampling-adequacy guard.
+        on_undersampled=on_undersampled,
     )
 
 

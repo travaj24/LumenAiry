@@ -439,8 +439,11 @@ class TestAccumulateAliveMaskDispatcherPin:
             weights[n_alive:] = 1e9  # huge dead-ray weight
             paths = PathBundle(positions=positions, directions=directions,
                                 weights=weights, opl=opl, alive=alive)
+            # v5.31 (audit W9-14): a deliberate handful of synthetic paths
+            # on a 64-pixel grid trips the sampling-adequacy guard.  True, and
+            # irrelevant here -- this pins the alive-mask plumbing, not physics.
             grid = accumulate_to_grid(
-                paths, Ny=N, Nx=N, dx=dx)
+                paths, Ny=N, Nx=N, dx=dx, on_undersampled='silent')
             total = complex(np.sum(grid))
             expected = float(n_alive)  # n_alive * 1.0
             assert abs(total - expected) < 1e-9, (
@@ -491,7 +494,8 @@ class TestAccumulateAliveMaskDispatcherPin:
             weights = np.ones(n, dtype=np.complex128) * (1.0 + 0.0j)
             paths = PathBundle(positions=positions, directions=directions,
                                 weights=weights, opl=opl, alive=alive)
-            grid = accumulate_to_grid(paths, Ny=N, Nx=N, dx=dx)
+            grid = accumulate_to_grid(paths, Ny=N, Nx=N, dx=dx,
+                                      on_undersampled='silent')
             assert abs(complex(np.sum(grid)) - float(n)) < 1e-9
         else:
             Ex = np.ones(n, dtype=np.complex128)

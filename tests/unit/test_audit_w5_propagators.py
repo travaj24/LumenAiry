@@ -358,7 +358,16 @@ class TestP232RealInputComplexOutput:
     def test_real_input_keeps_imaginary_part(self):
         kw = dict(z_to_aperture=50e-6, aperture_radius=20e-6,
                   z_aperture_to_output=150e-6, wavelength=0.5e-6,
-                  n_paths=20000, rng=42)
+                  n_paths=20000, rng=42,
+                  # v5.31 (audit W9-14): the new sampling-adequacy guard fires
+                  # on this geometry -- of 20000 paths only ~114 land on the
+                  # 32x32 grid (0.11 per pixel) because the default
+                  # cone_half_angle is a full forward hemisphere.  That is a
+                  # TRUE positive, but this test pins the real-input DTYPE
+                  # contract, not sampling, and it runs under
+                  # ``simplefilter("error")`` -- so acknowledge the guard here
+                  # rather than let an unrelated diagnostic fail the dtype pin.
+                  on_undersampled='silent')
         E_real = np.ones((32, 32), dtype=np.float64)
         with warnings.catch_warnings():
             # Pre-fix this emitted np.exceptions.ComplexWarning at the
