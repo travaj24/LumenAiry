@@ -2231,6 +2231,66 @@ def _jpmm_build_dynamic(topo, jnp, period, d_wall):
 
 
 
+def _require_concrete_wavelength(wl, label, alt):
+    """Reject a TRACED wavelength on a JAX PMM entry point.
+
+    W7 F-E (2026-07-27).  The Rayleigh ORDER SET is chosen from the
+    wavelength: :func:`_jpmm_order_set` sizes it as
+    ``max(far_field_orders, 2*m_prop+5)`` with
+    ``m_prop = floor(n_max * period / wl)`` -- a DATA-DEPENDENT INTEGER COUNT,
+    and an integer count sets array SHAPES, which cannot be materialized from
+    a tracer.  Under ``jax.jit`` / ``jax.grad`` the wavelength has no concrete
+    value, so the old code silently fell back to ``wl = inf`` -> ``m_prop = 0``
+    -> the order set COLLAPSED to the bare ``far_field_orders`` floor, DROPPING
+    propagating orders that the NumPy policy includes.
+
+    It was silent in the worst way: un-jitted the value is concrete, so the
+    forward answer was bit-exact and only the TRACED evaluation was wrong.
+    Measured pre-fix (2-layer stack, degree 24/30, n_sub 1.5, wl 633 nm,
+    ``jax.jit`` over the wavelength):
+
+    ========  ===  ======  =====  ============  ============
+    period    ffo  NumPy N  jit N  forward rel   d/d(wl) rel
+    ========  ===  ======  =====  ============  ============
+    2.4 um      5      19      5     3.90e-02      1.76e-02
+    3.2 um      5      25      5     4.15e-02      2.07e-01
+    2.4 um      9      19      9     6.58e-15      9.14e-11
+    3.2 um     11      25     11     5.74e-15      9.28e-09
+    ========  ===  ======  =====  ============  ============
+
+    -- a 20.7% wrong gradient and a 4.2% wrong forward, with ``jax.jit``
+    returning a DIFFERENT ARRAY LENGTH than the un-jitted call on the same
+    inputs (``(2, 5)`` vs ``(2, 9)``).  The last two rows are the control: once
+    ``far_field_orders >= 2*m_prop+1`` there is nothing left to drop and the
+    traced path is exact, which is why the default ``far_field_orders=21``
+    hid this.
+
+    Raising follows the EME precedent for a data-dependent selection under a
+    trace.  A traced EPS is deliberately NOT rejected: it shrinks the order
+    set the same way (n_max loses the traced component), but only EVANESCENT
+    orders drop, so the totals stay exact -- measured 3.4e-15 / 6.7e-14 /
+    2.9e-15 over the same periods.
+    """
+    try:                        # same probe the callers' _re_or_none uses
+        float(np.real(np.asarray(wl)))
+        return
+    except Exception:           # noqa: BLE001 - a Tracer has no concrete value
+        pass
+    raise NotImplementedError(
+        f"{label}: a TRACED wavelength is not supported on the "
+        f"differentiable path.  The propagating-order SET is selected from "
+        f"the wavelength (m_prop = floor(n_max*period/wavelength)), and that "
+        f"integer count fixes the result's array shapes -- it cannot be read "
+        f"from a tracer, so jax.jit/jax.grad over the wavelength silently "
+        f"solved a DIFFERENT, smaller order set than the NumPy path (measured "
+        f"4.2% forward error and a 20.7% wrong d/d(wavelength), with jit and "
+        f"un-jitted returning different array lengths).  At a FIXED concrete "
+        f"wavelength the gradients are exact and fully supported -- eps "
+        f"(re+im), layer thickness, incidence angle and the half-space "
+        f"indices all match a NumPy central difference to <= 2e-8.  For a "
+        f"dispersive / wavelength sweep use {alt}.")
+
+
 def _jpmm_order_set(static, period, wl, n_max, far_field_orders, degree, label):
     """The Rayleigh order set for the forward far-field projection -- the SAME
     sizing as :func:`_pmm_solve_core`, computed from CONCRETE (real, static)
@@ -2644,11 +2704,12 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
             return None
 
     period_c = float(period)
+    # W7 F-E: a traced wavelength cannot size the order set -- raise instead of
+    # silently collapsing it to the far_field_orders floor.
+    _require_concrete_wavelength(
+        wavelength, "pmm_efficiency_1d",
+        "pmm_efficiency_1d_vs_wavelength (or loop concrete wavelengths)")
     wl_c = _re_or_none(wavelength)
-    if wl_c is None:
-        # wavelength is the traced grad variable: size from the far_field_orders
-        # floor only (m_prop unknown without a concrete wl), capped at n_glob.
-        wl_c = float("inf")
     n_max_vals = [v for v in (_re_or_none(n_superstrate), _re_or_none(n_substrate),
                               _re_or_none(n_ridge), _re_or_none(n_groove))
                   if v is not None]
@@ -3131,9 +3192,11 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
             return None
 
     period_c = float(period)
+    # W7 F-E: see _require_concrete_wavelength.
+    _require_concrete_wavelength(
+        wavelength, "pmm_jones_1d",
+        "pmm_jones_1d_vs_wavelength (or loop concrete wavelengths)")
     wl_c = _re_or_none(wavelength)
-    if wl_c is None:
-        wl_c = float("inf")
     nsup_c = _re_or_none(n_superstrate)
     nsub_c = _re_or_none(n_substrate)
     # n_max from the COMPLEX eps (Re(sqrt(eps))), matching the numpy reference
@@ -4934,6 +4997,7 @@ __all__ = [
     "_jpmm_build_static",
     "_jpmm_build_dynamic",
     "_jpmm_order_set",
+    "_require_concrete_wavelength",
     "_jpmm_fourier_projection",
     "_jpmm_projection_quad",
     "_jpmm_fourier_projection_jax",

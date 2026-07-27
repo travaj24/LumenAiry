@@ -82,9 +82,22 @@ def test_pmm_stack_jax_grad_eps_thickness():
 
 
 def test_pmm_stack_jax_grad_wavelength_angle_halfspace():
+    """W7 F-E (2026-07-27): the WAVELENGTH arm now RAISES.
+
+    The propagating-order SET is selected from the wavelength
+    (m_prop = floor(n_max*period/wl)), an integer count that fixes the array
+    shapes, so it cannot be read from a tracer.  The old fallback silently
+    sized the solve from the ``far_field_orders`` floor alone -- measured 4.2%
+    forward error, a 20.7% wrong d/d(wl), and ``jax.jit`` returning ``(2, 5)``
+    where the un-jitted call returns ``(2, 9)``.  The angle / half-space arms
+    are unaffected and still match FD."""
     def loss_wl(wl):
         _, R, _, _ = _stack_1d(wl=wl, jax_on=("wl",)).solve()
         return R[0].sum()
+
+    with pytest.raises(NotImplementedError, match="TRACED wavelength"):
+        jax.grad(loss_wl)(WL)
+    assert np.isfinite(float(loss_wl(WL)))       # concrete wl still solves
 
     def loss_ang(a):
         _, R, _, _ = _stack_1d(ang=a, jax_on=("ang",)).solve()
@@ -94,8 +107,7 @@ def test_pmm_stack_jax_grad_wavelength_angle_halfspace():
         _, _, T, _ = _stack_1d(nsub=n, jax_on=("nsub",)).solve()
         return T[0].sum()
 
-    for f, x, h in ((loss_wl, WL, 1e-12), (loss_ang, 0.3, 1e-6),
-                    (loss_n, 1.5, 1e-6)):
+    for f, x, h in ((loss_ang, 0.3, 1e-6), (loss_n, 1.5, 1e-6)):
         ad = float(jax.grad(f)(x))
         fd = _fd(lambda v, _f=f: float(_f(jnp.asarray(v))), x, h)
         assert abs(ad - fd) / max(abs(fd), 1e-12) < 1e-5, (ad, fd)

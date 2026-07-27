@@ -40,6 +40,7 @@ from ._core import (
     _lagrange_derivative_matrix,
     _mass_flux_cut,
     _pmm_union_grid,
+    _require_concrete_wavelength,
     _segment_elem_bnds,
 )
 
@@ -246,6 +247,13 @@ def _pmm_stack_solve_jax(stack):
 
     wl = stack._src["wl"]
     angle = stack._src["angle"]
+    # W7 F-E: the propagating-order SET is selected from the wavelength, so a
+    # TRACED wl silently solved a smaller order set than the NumPy path (and
+    # jit returned a different array length than un-jitted).
+    _require_concrete_wavelength(
+        wl, "PMMStack.solve",
+        "PMMStack.solve_vs_wavelength (NumPy) or a loop over concrete "
+        "wavelengths")
     # concrete-only grazing/evanescent-incidence guard (audit P2-10; a traced
     # n_sup / angle skips it -- see _grazing_guard_concrete)
     _grazing_guard_concrete(stack.n_sup, angle)

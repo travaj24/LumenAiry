@@ -68,7 +68,7 @@ def _solve_jax(c, pol, *, n_ridge=None, n_groove=None, depth=None,
     return pmm_efficiency_1d(
         c["period"], jnp.asarray(nr, _CJ), jnp.asarray(ng, _CJ),
         jnp.asarray(c["n_substrate"], _CJ), jnp.asarray(c["n_superstrate"], _CJ),
-        jnp.asarray(dep), duty, jnp.asarray(wl),
+        jnp.asarray(dep), duty, wl,
         angle=0.0, polarization=pol, degree=c["degree"], stabilize=False,
         grade=grade)
 
@@ -189,37 +189,27 @@ def test_grad_wrt_depth_matches_fd(cname, pol):
 @pytest.mark.parametrize("pol", ["te", "tm"])
 @pytest.mark.parametrize("cname", list(CELLS))
 def test_grad_wrt_wavelength_matches_fd(cname, pol):
+    """A traced wavelength is rejected on the differentiable path.
+
+    W7 F-E (2026-07-27): a TRACED wavelength now RAISES.  The propagating-order
+    SET is selected from the wavelength (m_prop = floor(n_max*period/wl)) and
+    that integer count fixes the array shapes, so it cannot be read from a
+    tracer -- the old fallback silently solved a smaller order set (measured
+    4.2% forward error, 20.7% wrong d/d(wl), and jax.jit returning a different
+    array length than un-jitted).  This test therefore pins the RAISE; the FD
+    reference it used to compare against went through the same collapsed path,
+    which is why it passed while being wrong.
+    """
     c = CELLS[cname]
 
-    def sumT(wl):
+    def sumT_wl(wl):
         _, _, T = _solve_jax(c, pol, wavelength=wl)
         return jnp.sum(T)
 
-    def sumR(wl):
-        _, R, _ = _solve_jax(c, pol, wavelength=wl)
-        return jnp.sum(R)
-
-    x0 = c["wavelength"]
-    h = 1e-12
-    gT = float(jax.grad(sumT)(x0))
-    gR = float(jax.grad(sumR)(x0))
-    fdT = float(_central_fd(lambda x: float(sumT(x)), x0, h))
-    fdR = float(_central_fd(lambda x: float(sumR(x)), x0, h))
-    assert np.isfinite(gT) and np.isfinite(gR)
-    assert abs(gT - fdT) <= 1e-4 * abs(fdT) + 1.0
-    assert abs(gR - fdR) <= 1e-4 * abs(fdR) + 1.0
-
-
-# ---------------------------------------------------------------------------
-# Phase 2: d/d(duty_cycle) -- the moving-boundary (fixed-topology) gradient
-# ---------------------------------------------------------------------------
-# The grating wall sits EXACTLY on an element boundary, so duty is a smooth
-# fixed-topology moving-mesh parameter (no remeshing, no Gibbs / blurred-step
-# non-smoothness).  Route B: the d_wall-dependent geometry (element boundaries,
-# Jacobians, masses, stiffnesses, projection phases) is rebuilt in jnp when
-# duty is traced, so the moving Jacobians + projection phases carry the
-# gradient; the element COUNT stays fixed (jit-safe).
-
+    with pytest.raises(NotImplementedError, match="TRACED wavelength"):
+        jax.grad(sumT_wl)(jnp.asarray(c["wavelength"]))
+    # ... while the CONCRETE-wavelength solve is untouched
+    assert np.isfinite(float(sumT_wl(c["wavelength"])))
 
 @pytest.mark.parametrize("grade", [False, True])
 @pytest.mark.parametrize("cname", list(CELLS))
@@ -273,7 +263,7 @@ def test_grad_wrt_duty_does_not_disturb_phase1():
     """GATE-PH1-PRESERVED: with duty_cycle a plain python float (NOT traced),
     the eps_ridge / depth / wavelength gradients still flow + match FD."""
     c = CELLS["cell1"]
-    h_eps, h_dep, h_wl = 1e-5, 1e-10, 1e-12
+    h_eps, h_dep = 1e-5, 1e-10
 
     def sumT_eps(eps):
         _, _, T = _solve_jax(c, "tm", n_ridge=jnp.sqrt(eps))
@@ -297,10 +287,10 @@ def test_grad_wrt_duty_does_not_disturb_phase1():
     fd = float(_central_fd(lambda v: float(sumT_dep(v)), x, h_dep))
     assert abs(g - fd) <= 1e-4 * abs(fd) + 1e-3
 
-    x = c["wavelength"]
-    g = float(jax.grad(sumT_wl)(x))
-    fd = float(_central_fd(lambda v: float(sumT_wl(v)), x, h_wl))
-    assert abs(g - fd) <= 1e-4 * abs(fd) + 1.0
+    # W7 F-E: the wavelength arm now RAISES (data-dependent order set); the
+    # eps / depth arms above are the part this gate is really about.
+    with pytest.raises(NotImplementedError, match="TRACED wavelength"):
+        jax.grad(sumT_wl)(c["wavelength"])
 
 
 @pytest.mark.parametrize("duty", [0.05, 0.95])
@@ -340,7 +330,7 @@ def test_jit_grad_wrt_duty():
             jnp.asarray(c["n_groove"], _CJ),
             jnp.asarray(c["n_substrate"], _CJ),
             jnp.asarray(c["n_superstrate"], _CJ), jnp.asarray(c["depth"]),
-            duty, jnp.asarray(c["wavelength"]), angle=0.0, polarization="te",
+            duty, c["wavelength"], angle=0.0, polarization="te",
             degree=c["degree"], stabilize=False)
         return jnp.sum(T)
 
@@ -382,7 +372,7 @@ def test_jax_grad_is_jittable():
             c["period"], n_ridge, jnp.asarray(c["n_groove"], _CJ),
             jnp.asarray(c["n_substrate"], _CJ),
             jnp.asarray(c["n_superstrate"], _CJ), depth, c["duty_cycle"],
-            jnp.asarray(c["wavelength"]), angle=0.0, polarization="te",
+            c["wavelength"], angle=0.0, polarization="te",
             degree=c["degree"], stabilize=False)
         return jnp.sum(T)
 
@@ -419,7 +409,7 @@ def _solve_jax_oblique(c, pol, angle, *, n_ridge=None, n_superstrate=None,
     return pmm_efficiency_1d(
         c["period"], jnp.asarray(nr, _CJ), jnp.asarray(c["n_groove"], _CJ),
         jnp.asarray(c["n_substrate"], _CJ), jnp.asarray(nsup, _CJ),
-        jnp.asarray(c["depth"]), c["duty_cycle"], jnp.asarray(c["wavelength"]),
+        jnp.asarray(c["depth"]), c["duty_cycle"], c["wavelength"],
         angle=ang, polarization=pol, degree=c["degree"], stabilize=False)
 
 
@@ -506,7 +496,7 @@ def _solve_jax_lossy(c, pol, angle, eps_re, eps_im):
         c["period"], n_ridge, jnp.asarray(c["n_groove"], _CJ),
         jnp.asarray(c["n_substrate"], _CJ),
         jnp.asarray(c["n_superstrate"], _CJ),
-        jnp.asarray(c["depth"]), c["duty_cycle"], jnp.asarray(c["wavelength"]),
+        jnp.asarray(c["depth"]), c["duty_cycle"], c["wavelength"],
         angle=jnp.asarray(angle), polarization=pol, degree=c["degree"],
         stabilize=False)
 

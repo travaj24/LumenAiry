@@ -1145,3 +1145,132 @@ def test_w7_a13_caches_hand_out_read_only_arrays():
         _writeable(v, bad)
     assert bad == [], bad
     assert all(np.array_equal(a, b) for a, b in zip(r1, r2))
+
+
+# ===========================================================================
+# F-E -- a TRACED wavelength cannot size the propagating-order set
+# ===========================================================================
+
+def _fe_stack(period, wl, ffo, degree, eps=4.0 + 0.5j):
+    st = P.PMMStack(period, n_substrate=1.5, n_superstrate=1.0, degree=degree,
+                    far_field_orders=ffo)
+    st.add_layer(0.25e-6, segments=[(0.4, eps), (0.6, 1.0)])
+    st.add_layer(0.10e-6, eps=2.25)
+    st.set_source(wl, angle=0.0)
+    return st
+
+
+_FE_WL = 0.633e-6
+
+
+@pytest.mark.parametrize("mode", ["jit", "grad"])
+def test_w7_fe_traced_wavelength_raises_on_the_stack(mode):
+    """F-E: the order set is ``max(ffo, 2*m_prop+5)`` with
+    ``m_prop = floor(n_max*period/wl)`` -- a data-dependent INTEGER COUNT that
+    fixes array shapes, so it cannot come from a tracer.  Pre-fix it fell back
+    to ``wl = inf`` -> ``m_prop = 0`` -> the set collapsed to the ``ffo``
+    floor, DROPPING propagating orders.
+
+    Measured pre-fix (2-layer stack, wl 633 nm, ``jax.jit`` over wl):
+    period 2.4 um / ffo 5 -> NumPy N=19 but jit N=5, forward 3.90e-02 rel,
+    ``d/d(wl)`` 1.76e-02 rel; period 3.2 um / ffo 5 -> N=25 vs 5, forward
+    4.15e-02, gradient **2.07e-01**.  Un-jitted the value is concrete, so the
+    forward answer was bit-exact -- only the traced evaluation was wrong."""
+    jax = pytest.importorskip("jax")
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+
+    def f(wl):
+        _o, R, _T, _J = _fe_stack(2.4e-6, wl, 5, 24).solve()
+        return R if mode == "jit" else R[0].sum()
+
+    with pytest.raises(NotImplementedError, match="TRACED wavelength"):
+        if mode == "jit":
+            jax.jit(f)(jnp.asarray(_FE_WL))
+        else:
+            jax.grad(f)(_FE_WL)
+
+
+@pytest.mark.parametrize("entry", ["pmm_efficiency_1d", "pmm_jones_1d"])
+def test_w7_fe_traced_wavelength_raises_on_the_1d_entries(entry):
+    """The same collapse in the two functional JAX entries -- measured pre-fix
+    on ``pmm_efficiency_1d`` under ``jax.jit`` over wl: period 2.4 um / ffo 5
+    -> NumPy N=27 vs jit N=5 and **15.0%** forward error; 3.2 um -> N=35 vs 5
+    and **13.3%**.  (0.8 um / ffo 5 -> N=11 vs 5 but 7.3e-16, because the
+    dropped orders are evanescent there -- which is how it stayed hidden.)"""
+    jax = pytest.importorskip("jax")
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+
+    def f(wl):
+        if entry == "pmm_efficiency_1d":
+            return P.pmm_efficiency_1d(
+                2.4e-6, jnp.asarray(3.0 + 0j), jnp.asarray(1.0 + 0j), 1.5,
+                1.0, 0.25e-6, 0.4, wl, degree=24, far_field_orders=5,
+                polarization="te", stabilize=False)[1]
+        return P.pmm_jones_1d(
+            2.4e-6, jnp.asarray(9.0 + 0j) * I3, jnp.asarray(1.0 + 0j) * I3,
+            1.5, 1.0, 0.25e-6, 0.4, wl, degree=24, far_field_orders=5,
+            stabilize=False)[1]
+
+    with pytest.raises(NotImplementedError, match="TRACED wavelength"):
+        jax.jit(f)(jnp.asarray(_FE_WL))
+
+
+def test_w7_fe_concrete_wavelength_jit_matches_unjitted():
+    """The contract the bug broke: with a CONCRETE wavelength, ``jax.jit`` must
+    return the SAME SHAPE as the un-jitted call (pre-fix jit gave ``(2, 5)``
+    where un-jitted gave ``(2, 9)``), and the physically-invariant totals must
+    agree.  Traced EPS is deliberately still allowed -- it also shrinks the
+    order set, but only EVANESCENT orders drop, so the totals are exact
+    (measured 0.0 / 1.4e-17 here)."""
+    jax = pytest.importorskip("jax")
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+
+    for period, ffo, degree in ((0.8e-6, 21, 12), (0.8e-6, 11, 12),
+                                (2.4e-6, 19, 24)):
+        def g(eps, _p=period, _f=ffo, _d=degree):
+            return _fe_stack(_p, _FE_WL, _f, _d, eps=eps).solve()[1]
+
+        a = np.asarray(g(jnp.asarray(4.0 + 0.5j)))
+        b = np.asarray(jax.jit(g)(jnp.asarray(4.0 + 0.5j)))
+        assert a.shape == b.shape, (period, ffo, a.shape, b.shape)
+        assert abs(a[0].sum() - b[0].sum()) < 1e-14
+        assert abs(a[1].sum() - b[1].sum()) < 1e-14
+
+
+def test_w7_fe_concrete_wavelength_gradients_stay_exact():
+    """What the raise preserves: at a FIXED wavelength every other gradient is
+    exact.  Measured vs a NumPy central difference -- eps.re 2.5e-9,
+    thickness 2.0e-10, angle 1.8e-8, n_sub 5.8e-9."""
+    jax = pytest.importorskip("jax")
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+
+    def mk(eps=4.0 + 0.5j, t1=0.25e-6, ang=0.0, nsub=1.5, traced=()):
+        def j(n, v):
+            return jnp.asarray(v) if n in traced else v
+
+        st = P.PMMStack(0.8e-6, n_substrate=j("nsub", nsub),
+                        n_superstrate=1.0, degree=12, far_field_orders=21)
+        st.add_layer(j("t1", t1), segments=[(0.4, j("eps", eps)), (0.6, 1.0)])
+        st.add_layer(0.10e-6, eps=2.25)
+        st.set_source(_FE_WL, angle=j("ang", ang))
+        return st
+
+    cases = (
+        ("eps.re", lambda v: mk(eps=v + 0.5j,
+                                traced=("eps",)).solve()[1][0].sum(),
+         4.0, 1e-6),
+        ("thickness", lambda v: mk(t1=v, traced=("t1",)).solve()[1][0].sum(),
+         0.25e-6, 1e-12),
+        ("angle", lambda v: mk(ang=v, traced=("ang",)).solve()[1][1].sum(),
+         0.3, 1e-6),
+        ("n_sub", lambda v: mk(nsub=v, traced=("nsub",)).solve()[2][0].sum(),
+         1.5, 1e-6),
+    )
+    for name, f, x, h in cases:
+        ad = float(jax.grad(f)(x))
+        fd = float((f(x + h) - f(x - h)) / (2 * h))
+        assert abs(ad - fd) <= 1e-6 * max(abs(fd), 1e-12), (name, ad, fd)

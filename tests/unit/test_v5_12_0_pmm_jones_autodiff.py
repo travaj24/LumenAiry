@@ -98,7 +98,9 @@ def _solve_jax(c, angle, *, er=None, eg=None, depth=None, wl=None,
     erj = jnp.asarray(c["er"] if er is None else er, _CJ)
     egj = jnp.asarray(c["eg"] if eg is None else eg, _CJ)
     dep = jnp.asarray(c["depth"] if depth is None else depth)
-    wlj = jnp.asarray(c["wl"] if wl is None else wl)
+    # W7 F-E: wavelength stays CONCRETE (a traced wl now raises -- the
+    # propagating-order set is selected from it).
+    wlj = c["wl"] if wl is None else wl
     nsub = jnp.asarray(c["n_sub"] if n_sub is None else n_sub, _CJ)
     nsup = jnp.asarray(c["n_sup"] if n_sup is None else n_sup, _CJ)
     ang = (angle_arr if angle_arr is not None
@@ -267,17 +269,26 @@ def test_grad_wrt_depth():
 
 
 def test_grad_wrt_wavelength():
+    """A traced wavelength is rejected on the differentiable Jones path.
+
+    W7 F-E (2026-07-27): a TRACED wavelength now RAISES.  The propagating-order
+    SET is selected from the wavelength (m_prop = floor(n_max*period/wl)) and
+    that integer count fixes the array shapes, so it cannot be read from a
+    tracer -- the old fallback silently solved a smaller order set (measured
+    4.2% forward error, 20.7% wrong d/d(wl), and jax.jit returning a different
+    array length than un-jitted).  This test therefore pins the RAISE; the FD
+    reference it used to compare against went through the same collapsed path,
+    which is why it passed while being wrong.
+    """
     c = CELLS["offdiag"]
 
     def fom(wl):
         _, R, _, _ = _solve_jax(c, 0.35, wl=wl)
         return jnp.sum(R)
 
-    x0 = jnp.asarray(c["wl"])
-    ad = float(jax.grad(fom)(x0))
-    fd = float(_fd(lambda x: float(fom(x)), x0, c["wl"] * 1e-5))
-    assert np.isfinite(ad)
-    assert abs(ad - fd) <= 1e-3 * abs(fd) + 1.0   # large scale (1/wl ~ 1e6)
+    with pytest.raises(NotImplementedError, match="TRACED wavelength"):
+        jax.grad(fom)(jnp.asarray(c["wl"]))
+    assert np.isfinite(float(fom(c["wl"])))
 
 
 @pytest.mark.parametrize("angle0", [0.05, 0.2, 0.35])
@@ -333,7 +344,7 @@ def test_diagonal_tensor_reduces_to_scalar_te_grad():
         eg = jnp.diag(jnp.asarray([ng ** 2, ng ** 2, ng ** 2], _CJ))
         _, _, T, _ = pmm_jones_1d(
             period, er, eg, jnp.asarray(n_sub, _CJ), jnp.asarray(n_sup, _CJ),
-            jnp.asarray(depth), duty, jnp.asarray(wl), angle=ang, degree=degree,
+            jnp.asarray(depth), duty, wl, angle=ang, degree=degree,
             stabilize=False)
         return jnp.sum(T[1])             # incident E_y (row 1) transmitted total
 
@@ -341,7 +352,7 @@ def test_diagonal_tensor_reduces_to_scalar_te_grad():
         _, _, T = pmm_efficiency_1d(
             period, jnp.sqrt(eps_r), jnp.asarray(ng, _CJ),
             jnp.asarray(n_sub, _CJ), jnp.asarray(n_sup, _CJ), jnp.asarray(depth),
-            duty, jnp.asarray(wl), angle=ang, polarization="te", degree=degree,
+            duty, wl, angle=ang, polarization="te", degree=degree,
             stabilize=False)
         return jnp.sum(T)
 
@@ -385,7 +396,7 @@ def test_jax_path_requires_stabilize_false():
         pmm_jones_1d(
             c["period"], jnp.asarray(c["er"], _CJ), jnp.asarray(c["eg"], _CJ),
             jnp.asarray(c["n_sub"], _CJ), jnp.asarray(c["n_sup"], _CJ),
-            jnp.asarray(c["depth"]), c["duty"], jnp.asarray(c["wl"]),
+            jnp.asarray(c["depth"]), c["duty"], c["wl"],
             angle=0.0, degree=c["degree"], stabilize=True)
 
 
@@ -400,5 +411,5 @@ def test_jax_path_out_of_plane_raises():
         pmm_jones_1d(
             c["period"], jnp.asarray(er, _CJ), jnp.asarray(c["eg"], _CJ),
             jnp.asarray(c["n_sub"], _CJ), jnp.asarray(c["n_sup"], _CJ),
-            jnp.asarray(c["depth"]), c["duty"], jnp.asarray(c["wl"]),
+            jnp.asarray(c["depth"]), c["duty"], c["wl"],
             angle=0.0, degree=c["degree"], stabilize=False)
