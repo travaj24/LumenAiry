@@ -2,7 +2,31 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.30.0] — 2026-07-27
+
+**The adversarial-audit campaign.**  One whole-codebase adversarial audit
+(171k lines, five Opus agents, measured-repro evidence rules) followed by
+seven fix waves: every finding fixed, decided, or refuted-with-evidence.
+**15 CRITICAL-physics defects** found and corrected — none previously
+caught by CI — including the 2-year coordinate-break inversion (folded
+designs now trace correctly), odd-N propagator grids, non-front-stop and
+immersed-conjugate pupils/focal distances, the Shack-Hartmann reference
+calibration (15 mrad phantom tilt on a flat wavefront), the EME
+Hermitian-solver Bloch-phase keying, the BOR staggered wall anchor
+(first→second-order convergence, now the default), the Berreman and PMM
+flux-gauge conjugations silently zeroing transmission into absorbing
+substrates, and RCWA duty cycles silently quantised to the FFT grid.
+~3,300 regression pins added (every pin set verified failing on pre-fix
+code; all value pins carry measured cross-platform tolerances); the
+DynaMeta consumer contract held green throughout.  BREAKING: all ten
+scheduled deprecation shims executed (see Removed + Migration-Guide
+§5.30.0), the P5 return contract flipped (`propagate()` returns
+`PropagationResult` by default; `return_result=False` is the permanent
+legacy escape hatch), and the coordinate-break fold and BOR wall-anchor
+conventions changed to the oracle-verified-correct ones.  Full causal
+record in `docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md`;
+per-territory verified-clean maps and honest coverage statements in the
+commit history.
 
 ### Fixed — EME physics interiors (audit W6, `elements/eme/**`)
 
