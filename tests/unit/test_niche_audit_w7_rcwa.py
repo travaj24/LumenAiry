@@ -778,8 +778,12 @@ def test_clean_unit_scale_invariance(scale):
                 np.asarray(res.efficiencies()[1]),
                 res.layer_absorption(nx=64, nz_per_layer=8))
 
+    # 1e-12, not 5e-15: the eigensolve's unit-scale residue drifts to
+    # 1.27e-14 on CI Linux at scale=1e9 (measured, 8a07baf run) vs 7.5e-16
+    # on the authoring box.  1e-12 still discriminates the B2 defect class
+    # by ~10 orders (PMM's unit-dependent floor measured 2.7e-2 absolute).
     for a, b in zip(run(1.0), run(scale)):
-        assert np.max(np.abs(a - b)) < 5e-15
+        assert np.max(np.abs(a - b)) < 1e-12
 
 
 # ===========================================================================

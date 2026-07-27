@@ -851,8 +851,11 @@ def test_numpy_value_regression_pins():
     args = (1.2e-6, 2.5, 1.0, 1.5, 1.0, 0.4e-6)
     o, R, T = rcwa_efficiency_1d(*args, 0.4, 0.55e-6, angle=np.deg2rad(15),
                                  polarization="tm", n_orders=40)
-    assert abs(float(R.sum()) - 0.1909714119006098) < 1e-12
-    assert abs(float(T.sum()) - 0.8090285880994013) < 1e-12
+    # 1e-9, not 1e-12: the n_orders=40 TM eigensolve drifts 2.9e-12 on CI
+    # Linux vs the Windows box these were frozen on (measured, 8a07baf run);
+    # 1e-9 still discriminates the 4.0e-4 geometry shift by 5+ orders.
+    assert abs(float(R.sum()) - 0.1909714119006098) < 1e-9
+    assert abs(float(T.sum()) - 0.8090285880994013) < 1e-9
     # ATTRIBUTION: the historical numbers were the LEGACY GEOMETRY's answer.
     legacy_duty = float(np.count_nonzero((np.arange(4096) + 0.5) / 4096
                                          < 0.4)) / 4096
@@ -867,7 +870,7 @@ def test_numpy_value_regression_pins():
 
     o, R, T = rcwa_efficiency_1d(1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5, WL,
                                  polarization="te", n_orders=11)
-    assert abs(float(T[len(T) // 2]) - 0.6835549231702593) < 1e-12
+    assert abs(float(T[len(T) // 2]) - 0.6835549231702593) < 1e-9
 
 
 # ====================== backend dispatch (v5.5.1) =========================
