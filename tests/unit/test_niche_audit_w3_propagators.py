@@ -382,9 +382,17 @@ class TestP9FgaMemoryEstimateNsig:
         """Pre-fix EVERY key was bit-identical across nsig = 1 -> 12."""
         vals = [self._est(N, ns) for ns in self.NSIGS]
         win = [v['gabor_window_mb'] for v in vals]
-        peak = [v['peak_chunked_mb'] for v in vals]
         assert all(b > a for a, b in zip(win, win[1:])), win
-        assert all(b > a for a, b in zip(peak, peak[1:])), peak
+        # The nsig term must REACH peak_chunked_mb -- but assert it net of
+        # chunked_swarm_peak_mb, whose chunk sizing reads the machine's
+        # AVAILABLE RAM at call time: on a busy CI runner it jitters
+        # ~0.2 MB between the four calls (measured, bc6738b 3.10 shard 2),
+        # swamping the sub-MB gabor steps and making raw peak
+        # monotonicity a coin flip.  Net of it, the sequence is exactly
+        # grid + gabor_window, deterministic on every machine.
+        peak_net = [v['peak_chunked_mb'] - v['chunked_swarm_peak_mb']
+                    for v in vals]
+        assert all(b > a for a, b in zip(peak_net, peak_net[1:])), peak_net
         assert win[-1] > 4.0 * win[0]        # ~linear in the window radius
 
     @pytest.mark.parametrize('N', [512, 1024])
