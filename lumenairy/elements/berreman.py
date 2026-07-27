@@ -107,8 +107,16 @@ except ImportError:  # pragma: no cover - registry always present in-tree
 
 def _as_eps_tensor(eps):
     """Scalar or ``(3,3)`` permittivity -> ``(3,3)`` complex tensor (PUBLIC
-    convention, ``Im > 0`` for loss)."""
+    convention, ``Im > 0`` for loss).
+
+    W6 F-2: a NaN/inf permittivity is rejected HERE, at the single conversion
+    funnel both entry points share, so it never reaches ``np.linalg.eig`` as a
+    bare ``LinAlgError`` (nor warns its way through ``inf * eye``)."""
     M = np.asarray(eps, dtype=_C)
+    if not np.all(np.isfinite(M)):
+        raise ValueError(
+            f"berreman: layer permittivity is not finite ({eps!r}); a NaN/inf "
+            f"eps would propagate silently through the modal eigensolve.")
     if M.ndim == 0:
         return M * np.eye(3, dtype=_C)
     if M.shape != (3, 3):
@@ -200,10 +208,27 @@ def _layer_modes(eps_tensor, Kx, Ky):
     return Wf, Vf, lamf, Wb, Vb, lamb
 
 
+def _freeze(res):
+    """Mark every ndarray in a cached tuple NON-WRITEABLE before it is shared.
+
+    W6 F-5 (2026-07-26).  Both LRUs hand out the STORED arrays, and the
+    docstrings assert "the arrays are read-only downstream" -- but nothing
+    enforced it, so a caller that wrote into a returned block silently poisoned
+    every later solve (measured pre-fix:
+    ``_layer_modes_cached(eps, Kx, Ky)[0][0, 0] = 999`` made the very next call
+    return ``Wf[0, 0] = 999``).  No in-tree caller mutates them, so this closes a
+    hardening gap rather than a live defect -- the ``pmm/_core.py`` grid cache
+    precedent, which freezes its cached arrays the same way."""
+    for a in res:
+        if isinstance(a, np.ndarray):
+            a.flags.writeable = False
+    return res
+
+
 def _layer_modes_cached(eps_tensor, Kx, Ky):
     """:func:`_layer_modes` memoized on ``(eps, Kx, Ky)``.  The eig is
     wavelength-independent, so a fixed-angle sweep or a periodic stack reuses it
-    byte-for-byte (the arrays are read-only downstream)."""
+    byte-for-byte (the returned arrays are frozen NON-WRITEABLE -- W6 F-5)."""
     a = np.ascontiguousarray(np.asarray(eps_tensor, dtype=_C))
     key = (a.tobytes(), a.shape, complex(Kx), complex(Ky))
     with _MODE_CACHE_LOCK:
@@ -211,7 +236,7 @@ def _layer_modes_cached(eps_tensor, Kx, Ky):
         if hit is not None:
             _MODE_CACHE.move_to_end(key)            # LRU: refresh recency
             return hit
-    res = _layer_modes(eps_tensor, Kx, Ky)
+    res = _freeze(_layer_modes(eps_tensor, Kx, Ky))
     with _MODE_CACHE_LOCK:
         _MODE_CACHE[key] = res
         while len(_MODE_CACHE) > _MODE_CACHE_SIZE:
@@ -222,21 +247,146 @@ def _layer_modes_cached(eps_tensor, Kx, Ky):
 def _interface_smatrix_cached(Ma, Mb):
     """:func:`_interface_smatrix_general` memoized on the two field-mode matrices
     ``(Ma, Mb)``.  Both are wavelength-independent (built from the cached modes),
-    so a fixed-angle sweep reuses the byte-identical 4-tuple (read-only
-    downstream)."""
-    key = (np.ascontiguousarray(Ma).tobytes(),
-           np.ascontiguousarray(Mb).tobytes())
+    so a fixed-angle sweep reuses the byte-identical 4-tuple (frozen
+    NON-WRITEABLE -- W6 F-5).
+
+    The key carries each matrix's SHAPE alongside its bytes (W6 F-5b, matching
+    :func:`_layer_modes_cached`): the Berreman block is always ``4x4`` so a
+    same-bytes / different-shape collision is unreachable here, but keying on raw
+    bytes alone is the latent form of the bug."""
+    A = np.ascontiguousarray(Ma)
+    Bm = np.ascontiguousarray(Mb)
+    key = (A.tobytes(), A.shape, Bm.tobytes(), Bm.shape)
     with _IFACE_CACHE_LOCK:
         hit = _IFACE_CACHE.get(key)
         if hit is not None:
             _IFACE_CACHE.move_to_end(key)              # LRU: refresh recency
             return hit
-    res = _interface_smatrix_general(Ma, Mb)
+    res = _freeze(_interface_smatrix_general(Ma, Mb))
     with _IFACE_CACHE_LOCK:
         _IFACE_CACHE[key] = res
         while len(_IFACE_CACHE) > _IFACE_CACHE_SIZE:
             _IFACE_CACHE.popitem(last=False)
     return res
+
+
+def _checked_angle(fn_name, angle, theta):
+    """``angle`` / ``theta`` alias resolution PLUS the shared back-side-incidence
+    range guard (W6 F-2, 2026-07-26).
+
+    Routes to the SAME ``_resolve_incidence_checked`` the rcwa 1-D and PMM entry
+    points use, so ``|angle| >= pi/2`` is rejected identically across the whole
+    solver family.  The angle enters this solve only through
+    ``Kx/Ky ~ sin(angle)``, so a back-side angle previously aliased BYTE-
+    IDENTICALLY onto the supplementary front-side angle ``pi - angle`` and
+    returned a plausible, energy-conserving answer for the WRONG geometry
+    (measured pre-fix: ``angle = 2.0`` rad gave R = [0.01771, 0.19647], the
+    ``pi - 2.0 = 1.1416`` rad answer, and ``angle = 10.0`` rad was accepted too;
+    ``angle = pi/2`` and ``angle = nan`` raised a bare ``LinAlgError`` with no
+    context).  A TRACED JAX angle skips the guard (the resolver's tracer
+    carve-out); ``theta`` still wins when both are given."""
+    from .rcwa.oned import _resolve_incidence_checked
+    return _resolve_incidence_checked(fn_name, angle, theta)
+
+
+def _check_inputs(fn_name, eps_sup, eps_sub, eps_layers, thicks, wavelength,
+                  Kx, Ky):
+    """Geometry + propagating-incidence guards for a Berreman solve (W6 F-2).
+
+    Sibling-identical to the RCWA / PMM entry points: :func:`_validate_geometry`
+    for the wavelength, the per-layer thickness rule
+    ``BerremanStack.add_layer`` already enforced (the FUNCTIONAL entry silently
+    accepted ``t = 0`` and ``t < 0``), a finiteness screen on every material
+    value (audit P3's NaN-index class), and
+    :func:`_require_propagating_incidence` for an evanescent / metallic / GAIN
+    incidence half-space.  Measured pre-fix: a metallic superstrate
+    ``n_sup = 0.15+3.5j`` at ``theta = 0.5`` returned ``T = [30.78, 30.73]`` -- a
+    3000% energy violation -- silently, where ``rcwa_jones_1d`` raises
+    ``the incidence half-space is non-propagating``.  ``eps_sup`` is PUBLIC here;
+    the guard takes the INTERNAL gauge, so it is conjugated on the way in."""
+    from .rcwa._core import _require_propagating_incidence, _validate_geometry
+    _validate_geometry(fn_name, wavelength=wavelength)
+    for i, t in enumerate(thicks):
+        tv = float(np.real(t))
+        if not np.isfinite(tv) or tv <= 0.0:
+            raise ValueError(
+                f"{fn_name}: layer {i} thickness must be > 0, got {t!r} "
+                f"(BerremanStack.add_layer enforces the same rule).")
+    for name, val in (("eps_superstrate", eps_sup), ("eps_substrate", eps_sub)):
+        if not np.all(np.isfinite(np.asarray(val, dtype=_C))):
+            raise ValueError(
+                f"{fn_name}: {name} is not finite ({val!r}); a NaN/inf "
+                f"half-space index would propagate silently through the solve.")
+    for i, e in enumerate(eps_layers):
+        ea = np.asarray(e, dtype=_C)
+        if not np.all(np.isfinite(ea)):
+            raise ValueError(
+                f"{fn_name}: layer {i} permittivity is not finite ({e!r}).")
+        if abs(ea[2, 2]) == 0.0:
+            raise ValueError(
+                f"{fn_name}: layer {i} has eps_zz = 0; the Berreman Delta "
+                f"eliminates Ez / Hz through 1/eps_zz and is undefined there.")
+    kt2 = float(np.real(Kx)) ** 2 + float(np.real(Ky)) ** 2
+    if not np.isfinite(kt2):
+        raise ValueError(
+            f"{fn_name}: the transverse wavevector is not finite (Kx = {Kx!r}, "
+            f"Ky = {Ky!r}); check angle / phi / n_superstrate.")
+    _require_propagating_incidence(fn_name, np.conj(_C(eps_sup)), kt2)
+
+
+def _is_passive(eps_layers, eps_sup, eps_sub):
+    """True when EVERY medium in the problem is passive (loss-or-lossless).
+
+    Passivity of a (possibly non-Hermitian, possibly gyrotropic) permittivity is
+    the positive-semidefiniteness of its anti-Hermitian part
+    ``(eps - eps^H) / (2i)`` -- which is ``Im(eps)`` for a scalar, ZERO for a
+    Hermitian gyrotropic tensor (correctly lossless), and negative-definite for
+    a gain medium.  Diagonal-``Im`` screening would misclassify a rotated lossy
+    tensor, so use the eigenvalues."""
+    for e in list(eps_layers) + [eps_sup, eps_sub]:
+        M = np.asarray(e, dtype=_C)
+        if M.ndim == 0:
+            M = M * np.eye(3, dtype=_C)
+        tol = 1e-9 * max(1.0, float(np.max(np.abs(M))))
+        anti = (M - M.conj().T) / 2.0j
+        if float(np.min(np.linalg.eigvalsh(anti))) < -tol:
+            return False
+    return True
+
+
+def _check_energy_pols(fn_name, R, T, passive=True):
+    """Passive-energy tripwire on the ``(2,)`` per-lab-polarization ``R`` / ``T``
+    (W6 F-2).  Reuses the family-wide :func:`_check_energy` with the arrays
+    reshaped to ``(2, 1)`` so ``n_states = 2`` (two incident polarizations) and a
+    lossless stack's exact total of ``2.0`` sits inside the shared 5% band.
+
+    Berreman was the one solver in the family with NO tripwire: measured pre-fix
+    it returned ``R + T = 1.086`` per pol for a lossy superstrate, and
+    ``T = [30.78, 30.73]`` for a metallic one, silently, where
+    ``rcwa_jones_1d`` raises.
+
+    ACTIVE MEDIA -- DECLINED WITH MEASUREMENT (W6).  ``rcwa_jones_1d`` DOES trip
+    on a gain layer (measured: the ``(1.5-0.05j)^2`` / 0.5 um slab raises
+    ``_EnergyError`` with ``sum R+T = 3.253``), and berreman returns 3.253
+    instead.  That divergence is left in place ON PURPOSE: berreman's gain
+    behaviour is contract-locked by
+    ``tests/unit/test_audit_v5_24_2_g01_conventions.py::
+    test_s1_6_berreman_public_path_raw_eps_absorbs_with_positive_imag``, which
+    asserts a gain slab returns ``R + T > 1`` as the sign-convention oracle for
+    the raw-eps public cascade -- and that value is CORRECT (it matches this
+    library's scalar TMM to 1e-15 at 2 um and 5 um; it is the exact formal
+    steady state of an above-threshold cavity, not a numerical artefact).  So
+    the tripwire is applied only when :func:`_is_passive` holds; a gain
+    SUPERSTRATE is still rejected outright by
+    :func:`_require_propagating_incidence`, matching rcwa."""
+    from .rcwa._core import _check_energy, _EnergyError
+    if passive:
+        _check_energy(fn_name, np.asarray(R)[:, None], np.asarray(T)[:, None])
+    elif not np.isfinite(float(np.sum(R) + np.sum(T))):
+        raise _EnergyError(
+            f"{fn_name}: non-finite total efficiency (sum R+T = "
+            f"{float(np.sum(R) + np.sum(T))}); a NaN/inf material value reached "
+            f"the solve.")
 
 
 def _flux(Etan, Hmodal):
@@ -331,9 +481,20 @@ def _solve_core(eps_layers, thicks, eps_sup, eps_sub, wavelength, Kx, Ky,
     return out
 
 
-def _farfield(core, eps_sup, eps_sub, Kx, Ky):
-    """Reflected / transmitted Jones (INTERNAL convention, ``2x2`` columns =
-    incident lab ``[Ex; Ey]``) and per-incident-polarization power ``R, T``."""
+def _farfield(core):
+    """Reflected / transmitted Jones (PUBLIC ``exp(-i w t)`` convention, ``2x2``
+    columns = incident lab ``[Ex; Ey]``) and per-incident-polarization power
+    ``R, T``.
+
+    Everything needed is already in ``core``: the half-space mode blocks give the
+    fields and the ``_flux`` Poynting projection carries the ``n cos(theta)`` /
+    ``n / cos(theta)`` admittances, so the incident geometry never re-enters.
+    W6 F-4 (2026-07-26): this used to take ``(core, eps_sup, eps_sub, Kx, Ky)``
+    and reference NONE of the four extras (AST-verified) -- inert parameters that
+    invited the reader to think the far field re-derives the flux weights.  The
+    docstring also mislabelled the return gauge as INTERNAL; it is PUBLIC (this
+    cascade runs on raw public eps end to end, and the returned Jones is pinned
+    bit-identical to ``rcwa_jones_1d``'s public-convention Jones)."""
     Wf_s, Wb_s, Vf_s, Vb_s = (core["Wf_s"], core["Wb_s"],
                               core["Vf_s"], core["Vb_s"])
     Wf_b, Vf_b = core["Wf_b"], core["Vf_b"]
@@ -365,13 +526,8 @@ def _farfield(core, eps_sup, eps_sub, Kx, Ky):
 # out-of-plane-tensor + oblique incidence: generalized S-matrix cascade
 # =========================================================================== #
 #
-# The native Berreman 4x4 S-matrix cascade above is EXACT for isotropic,
-# in-plane-anisotropic and out-of-plane-tensor-at-NORMAL layers, but its
-# forward/backward mode convention is subtly wrong for an OUT-OF-PLANE tensor
-# (``eps_xz/eps_yz != 0``) at OBLIQUE incidence -- the [W; -V] <-> -lam symmetry
-# the native pairing implicitly relies on is BROKEN there, so the reflected
-# amplitudes come out ~2% off (energy still conserves, so the error is silent).
-# For that regime ONLY we route to the SAME generalized (Li 2003) S-matrix that
+# For an OUT-OF-PLANE tensor (``eps_xz/eps_yz != 0``) at OBLIQUE incidence this
+# module routes to the SAME generalized (Li 2003) S-matrix that
 # ``rcwa_jones_1d`` / ``RCWAStack`` use: a planar stack is a single-Fourier-order
 # grating, so the RCWA mode machinery (``_homogeneous_eigenmodes`` for the
 # isotropic half-spaces / scalar spacers, ``_layer_eigenmodes_tensor`` fed the
@@ -382,6 +538,24 @@ def _farfield(core, eps_sup, eps_sub, Kx, Ky):
 # that previously flagged this as a "berreman bug" each carried their own
 # transfer-direction error, single-layer and multilayer; the generalized S-matrix
 # is the independently-cross-checked truth.)
+#
+# HISTORY / CORRECTION (W6 audit, 2026-07-26).  This block used to claim the
+# NATIVE cascade above is "subtly wrong" for an out-of-plane tensor at oblique
+# incidence -- that "the [W; -V] <-> -lam symmetry the native pairing implicitly
+# relies on is BROKEN there, so the reflected amplitudes come out ~2% off".  That
+# claim is REFUTED by measurement and is no longer true of this code: the native
+# ``_solve_core`` / ``_farfield`` and this generalized cascade agree to 3.8e-15 on
+# R, T, jones_r AND jones_t for rotx- / roty- / rotx-then-rotz-rotated biaxial
+# slabs at theta in {0.2, 0.5, 0.9, 1.2} and phi in {0, 0.6, 2.4}, and to 1.0e-11
+# worst over a 4000-config randomized sweep (1-3 fully-rotated biaxial layers,
+# lossy layers, absorbing substrates, n_sup / n_sub in [1, 3.5], all angles and
+# azimuths).  The pairing is restored by the 2026-07-14 FACTOR-i correction to
+# :func:`_berreman_delta` -- which POST-DATES this router -- so the router is now
+# a redundant (but independently cross-validated) second path, not an accuracy
+# requirement.  It is KEPT because it is the path pinned against ``rcwa_jones_1d``
+# and because the two-path agreement is itself a standing cross-family gate
+# (``tests/unit/test_niche_audit_w6_berreman.py``).  Do NOT re-derive the "~2%"
+# figure from this comment: measure it.
 
 
 def _tensor_is_offplane(eps):
@@ -456,7 +630,7 @@ def _offplane_condensed_M_cached(eps_internal, Kx1, Ky1):
         if hit is not None:
             _MODE_CACHE.move_to_end(key)            # LRU: refresh recency
             return hit
-    res = _offplane_condensed_M(eps_internal, Kx1, Ky1)
+    res = _freeze(_offplane_condensed_M(eps_internal, Kx1, Ky1))
     with _MODE_CACHE_LOCK:
         _MODE_CACHE[key] = res
         while len(_MODE_CACHE) > _MODE_CACHE_SIZE:
@@ -557,8 +731,20 @@ def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
                     S_below_bot=S_below_bot, eps_layers=list(eps_layers),
                     k0=k0, Wf_s=cj(Wr), Vf_s=-cj(Vr))
     kz_inc = float(np.real(_sqrt_forward(_C(eps_sup) - kx0 ** 2 - ky0 ** 2)))
-    kzrf = _forward_flux_kz(_C(eps_sup), np.array([kx0]), np.array([ky0]))[0]
-    kztf = _forward_flux_kz(_C(eps_sub), np.array([kx0]), np.array([ky0]))[0]
+    # W6 F-1 (2026-07-26): ``_forward_flux_kz`` takes the INTERNAL-gauge eps and
+    # UN-conjugates it itself (every rcwa call site passes ``eps_sup = conj(n**2)``);
+    # this cascade holds the PUBLIC eps, so feeding it raw conjugated the value
+    # TWICE and returned ``Re(kz) < 0`` for an absorbing half-space -- which the
+    # ``Re(kz) > 0`` propagating mask below read as evanescent and SILENTLY
+    # ZEROED.  Measured pre-fix: a tilted-director slab on
+    # n_sub = 1.5+0.3j at theta = 0.3 returned T = 0.000000 where
+    # ``rcwa_jones_1d`` (this path's own stated reference) gives T = 0.930316.
+    # Conjugating here restores the rcwa call convention exactly; LOSSLESS eps is
+    # real so conj is the identity and every lossless result is byte-unchanged.
+    kzrf = _forward_flux_kz(np.conj(_C(eps_sup)),
+                            np.array([kx0]), np.array([ky0]))[0]
+    kztf = _forward_flux_kz(np.conj(_C(eps_sub)),
+                            np.array([kx0]), np.array([ky0]))[0]
     Jr = np.zeros((2, 2), dtype=_C)
     Jt = np.zeros((2, 2), dtype=_C)
     R = np.zeros(2)
@@ -645,14 +831,36 @@ def berreman_jones_1d(
     --------
     Exact (machine precision) for isotropic, in-plane-anisotropic and
     out-of-plane-tensor layers at any incidence, including OBLIQUE and CONICAL.
-    Two internal paths: the native Berreman ``4x4`` S-matrix cascade for the
-    symmetric cases (isotropic / in-plane / out-of-plane-at-NORMAL), and -- for
-    an OUT-OF-PLANE tensor (``eps_xz/eps_yz != 0``) at OBLIQUE incidence, where
-    that cascade's forward/backward mode convention would be ~a few percent off
-    -- the generalized (Li 2003) single-Fourier-order S-matrix that
+    Two internal paths: the native Berreman ``4x4`` S-matrix cascade, and -- for
+    an OUT-OF-PLANE tensor (``eps_xz/eps_yz != 0``) at OBLIQUE incidence -- the
+    generalized (Li 2003) single-Fourier-order S-matrix that
     :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` / ``RCWAStack`` use, to which
     it is validated to machine precision (all regimes + lossy + multilayer).
-    The route is automatic; both paths agree on every case they share.
+    The route is automatic and the two paths agree to ~1e-15 on R, T and BOTH
+    Jones matrices EVERYWHERE, including the out-of-plane-oblique regime the
+    router exists for (W6 audit 2026-07-26; the older "the native cascade is ~2%
+    off there" note is refuted -- see the comment above
+    :func:`_tensor_is_offplane` for the measurement).
+
+    Scope
+    -----
+    A propagating, non-amplifying INCIDENCE half-space is required: an
+    evanescent / metallic / gain superstrate raises (the flux normalisation
+    divides by ``kz_inc``), and for a PASSIVE stack an energy tripwire rejects a
+    gross ``R + T >> 1`` -- the same guards ``rcwa_jones_1d`` / ``pmm_jones_1d``
+    apply.  ``|angle| < pi/2`` (front-side illumination).  Unlike the grating
+    engines, a GAIN LAYER is NOT rejected here: it returns the exact formal
+    steady state (``R + T > 1``), a documented sign-convention contract of this
+    module (audit S1-6) -- see :func:`_check_energy_pols`.  A LOSSY superstrate
+    is accepted but the per-polarization ``R`` / ``T`` are only physically
+    meaningful for a LOSSLESS incidence medium (each wave is normalised by its
+    own ``|amp|^2`` z-flux while the incident/reflected cross-term carries net
+    flux -- the family-wide caveat recorded on
+    ``rcwa._core._forward_flux_kz``).  Note also that ``Kx``/``Ky`` use
+    ``Re(n_superstrate) sin(angle)``, matching ``rcwa`` / ``pmm``; the scalar
+    :func:`~lumenairy.elements.coatings.coating_reflectance` TMM instead carries
+    a COMPLEX Snell invariant, so the two agree only for a lossless incidence
+    medium (verified: 1.9e-15 across 48 lossless-superstrate configs).
     """
     # Differentiable (JAX) dispatch: any traced input routes to the jnp twin.
     from ..backend import is_jax_array
@@ -662,16 +870,21 @@ def berreman_jones_1d(
             or any(is_jax_array(e) or is_jax_array(t) for e, t in layers)):
         # The jnp twin routes a concretely-detected out-of-plane tensor to the
         # SAME generalized (out-of-plane-correct) S-matrix as the NumPy path, so
-        # differentiable out-of-plane-oblique / conical is supported.  (A stack
-        # whose out-of-plane tensor is itself a TRACED array cannot be detected
-        # and falls through to the native cascade -- accurate for iso / in-plane,
-        # ~2% off only for a traced-tensor out-of-plane-oblique gradient.)
+        # differentiable out-of-plane-oblique / conical is supported.  (A TRACED
+        # (3, 3) tensor is routed there by SHAPE alone -- D12 -- so no stack
+        # falls through to the native cascade for want of inspection; both
+        # cascades are measured equal to ~1e-15 anyway, W6.)
         from ._berreman_jax import _berreman_jones_1d_jax
         return _berreman_jones_1d_jax(layers, n_substrate, n_superstrate,
                                       wavelength, angle=angle, phi=phi,
                                       theta=theta)
-    if theta is not None:
-        angle = float(theta)
+    angle = float(_checked_angle("berreman_jones_1d", angle, theta))
+    for _nm, _n in (("n_superstrate", n_superstrate),
+                    ("n_substrate", n_substrate)):
+        if not np.isfinite(_C(_n)):            # W6 F-2, before the ** 2
+            raise ValueError(
+                f"berreman_jones_1d: {_nm} is not finite ({_n!r}); a NaN/inf "
+                f"half-space index would propagate silently through the solve.")
     eps_layers = [_as_eps_tensor(e) for e, _t in layers]
     thicks = [float(t) for _e, t in layers]
     eps_sup = complex(_C(n_superstrate) ** 2)
@@ -679,14 +892,20 @@ def berreman_jones_1d(
     nre = float(np.real(_C(n_superstrate)))
     Kx = nre * np.sin(angle) * np.cos(phi)
     Ky = nre * np.sin(angle) * np.sin(phi)
+    _check_inputs("berreman_jones_1d", eps_sup, eps_sub, eps_layers, thicks,
+                  wavelength, Kx, Ky)
+    passive = _is_passive(eps_layers, eps_sup, eps_sub)
     if _offplane_oblique(eps_layers, Kx, Ky):
         # out-of-plane tensor at oblique incidence: the generalized S-matrix
         # cascade (matches rcwa_jones_1d / RCWAStack to machine precision).
-        return _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub,
-                                       wavelength, Kx, Ky)
+        R, T, Jr, Jt = _offplane_oblique_solve(
+            eps_layers, thicks, eps_sup, eps_sub, wavelength, Kx, Ky)
+        _check_energy_pols("berreman_jones_1d", R, T, passive)
+        return R, T, Jr, Jt
     core = _solve_core(eps_layers, thicks, eps_sup, eps_sub, wavelength,
                        Kx, Ky)
-    Jr, Jt, R, T = _farfield(core, eps_sup, eps_sub, Kx, Ky)
+    Jr, Jt, R, T = _farfield(core)
+    _check_energy_pols("berreman_jones_1d", R, T, passive)
     return R, T, Jr, Jt
 
 
@@ -762,10 +981,14 @@ class BerremanStack:
 
     def set_source(self, wavelength, *, angle=0.0, theta=None, phi=0.0):
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
-        ``angle`` / ``theta`` [rad], azimuth ``phi`` [rad])."""
+        ``angle`` / ``theta`` [rad], azimuth ``phi`` [rad]).
+
+        W6 F-2: the ``angle`` / ``theta`` alias now resolves through the shared
+        CHECKED resolver, so a back-side ``|angle| >= pi/2`` is rejected HERE --
+        the ``PMMStack.set_source`` precedent (audit S1-7), which found the
+        setter bypassing the guard the functional entry had."""
         from ..backend import is_jax_array
-        if theta is not None:
-            angle = theta
+        angle = _checked_angle("BerremanStack.set_source", angle, theta)
         self._src = dict(
             wl=wavelength if is_jax_array(wavelength) else float(wavelength),
             angle=angle if is_jax_array(angle) else float(angle),
@@ -811,6 +1034,9 @@ class BerremanStack:
                 self, retain_internal=retain_internal)
         wl, eps_sup, eps_sub, Kx, Ky, eps_layers, thicks = self._geom()
         eps_layers = [_as_eps_tensor(e) for e in eps_layers]
+        _check_inputs("BerremanStack.solve", eps_sup, eps_sub, eps_layers,
+                      thicks, wl, Kx, Ky)
+        passive = _is_passive(eps_layers, eps_sup, eps_sub)
         if _offplane_oblique(eps_layers, Kx, Ky):
             # out-of-plane tensor at oblique incidence -> generalized S-matrix.
             if retain_internal:
@@ -832,6 +1058,7 @@ class BerremanStack:
                 core["R"], core["T"] = R, T
                 self._internal = core
                 self._jones_t = Jt                    # A1
+                _check_energy_pols("BerremanStack.solve", R, T, passive)
                 return R, T, Jr
             R, T, Jr, Jt = _offplane_oblique_solve(
                 eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky)
@@ -839,10 +1066,11 @@ class BerremanStack:
             # Jones the far-field close-out already computed (consumers
             # previously re-solved via the functional entry just for t).
             self._jones_t = Jt
+            _check_energy_pols("BerremanStack.solve", R, T, passive)
             return R, T, Jr
         core = _solve_core(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
                            retain=retain_internal)
-        Jr, Jt, R, T = _farfield(core, eps_sup, eps_sub, Kx, Ky)
+        Jr, Jt, R, T = _farfield(core)
         self._jones_t = Jt                    # A1: zero extra compute
         if retain_internal:
             # incident modal amplitudes per lab polarization, for the field /
@@ -855,6 +1083,7 @@ class BerremanStack:
             core["Kx"], core["Ky"] = Kx, Ky
             core["R"], core["T"] = R, T
             self._internal = core
+        _check_energy_pols("BerremanStack.solve", R, T, passive)
         return R, T, Jr
 
     def jones_transmission(self):

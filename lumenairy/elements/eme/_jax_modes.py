@@ -142,7 +142,10 @@ def _concrete_bloch_phase(fn_name, kx0, ky0):
     for name, v in (("kx0", kx0), ("ky0", ky0)):
         try:
             float(v)
-        except Exception as exc:                                   # noqa: BLE001
+        except (TypeError, ValueError) as exc:
+            # JAX tracer errors (ConcretizationTypeError, TracerArrayConversion-
+            # Error) subclass TypeError, so this carve-out is exact -- the same
+            # narrowing the berreman JAX twin uses (except-budget discipline).
             raise NotImplementedError(
                 f"{fn_name}: {name} must be a CONCRETE scalar on the JAX path -- "
                 f"the finite-difference / Yee operators carrying the Bloch phase "
@@ -159,7 +162,9 @@ def _warn_jax_lossy_discard(fn_name, eps_xy):
     import warnings
     try:
         lossy = bool(np.any(np.asarray(eps_xy).imag != 0.0))
-    except Exception:                                              # noqa: BLE001
+    except (TypeError, ValueError):
+        # JAX tracer errors subclass TypeError; ValueError covers ragged
+        # inputs.  Narrowed per the except-budget discipline.
         return                                       # traced/abstract -> skip
     if lossy:
         warnings.warn(

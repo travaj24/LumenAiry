@@ -348,7 +348,7 @@ def _tensor_is_offplane_jax(e, jnp):
 def _tensor_is_traced_jax(e):
     """True if ``e`` is a TRACED ``(3, 3)`` tensor -- a jit tracer whose values
     cannot be concretely inspected (so :func:`_tensor_is_offplane_jax` cannot
-    see its off-plane coupling and would wrongly route it to the ~2%-off native
+    see its off-plane coupling and would route it by default to the native
     cascade).  Shape IS available on a tracer, so a traced ``(3, 3)`` layer is
     detectable without concretizing (D12).  Routed to the generalized (Li-2003)
     path, which is exact at all incidences for in-plane AND out-of-plane
@@ -444,9 +444,17 @@ def _offplane_solve_jax(eps_layers, thicks, eps_sup, eps_sub, wl, kx0, ky0, jnp)
         S, _interface_smatrix_general(M_prev, _modes_to_M(Wt, Vt, Wt, -Vt)))
     S11, _S12, S21, _S22 = S
     kz_inc = jnp.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2))
-    kzrf = _forward_flux_kz(eps_sup, jnp.reshape(kx0, (1,)),
+    # W6 F-1 (2026-07-26): mirror the NumPy fix -- ``_forward_flux_kz`` expects the
+    # INTERNAL-gauge eps and un-conjugates it itself, so the PUBLIC eps held here
+    # must be conjugated on the way in or an absorbing half-space comes back with
+    # ``Re(kz) < 0`` and the propagating mask silently zeroes the channel.  This
+    # twin reached the defect WIDER than NumPy: a concrete out-of-plane tensor
+    # routes here at EVERY incidence (no obliqueness test), so pre-fix the JAX
+    # path returned T = 0 on n_sub = 1.5+0.3j even at NORMAL incidence, where the
+    # NumPy native cascade gives T = 0.988 (a 0.988 twin divergence).
+    kzrf = _forward_flux_kz(jnp.conj(eps_sup), jnp.reshape(kx0, (1,)),
                             jnp.reshape(ky0, (1,)))[0]
-    kztf = _forward_flux_kz(eps_sub, jnp.reshape(kx0, (1,)),
+    kztf = _forward_flux_kz(jnp.conj(eps_sub), jnp.reshape(kx0, (1,)),
                             jnp.reshape(ky0, (1,)))[0]
     # D11(b): mirror the NumPy path's grazing guards -- avoid dividing the
     # longitudinal rz/tz by a ~0 kz (NaN at exactly-grazing edges) and mask a
@@ -482,8 +490,28 @@ def _prep(layers, n_substrate, n_superstrate, wavelength, angle, phi, theta):
     from .rcwa import _require_jax_x64
     _require_jax_x64("berreman_jones_1d")
     cj = jnp.complex128
-    if theta is not None:
-        angle = theta
+    # W6 F-2 (2026-07-26): the same back-side-incidence guard the NumPy entry
+    # gets, via the shared checked resolver -- CONCRETE JAX angles are range
+    # checked, a TRACER skips (the resolver's materialise-or-skip carve-out), so
+    # jit / grad are unaffected.  ``theta`` still wins when both are given.
+    from .berreman import _checked_angle
+    angle = _checked_angle("berreman_jones_1d", angle, theta)
+    # Concrete-only propagating / gain incidence guard: a metallic or gain
+    # superstrate silently produced T ~ 30 (a 3000% energy violation) on this
+    # path too.  No energy tripwire here -- the family convention is that
+    # ``_check_energy`` is skipped when the totals are traced.
+    # (a JAX tracer raises TracerArrayConversionError / ConcretizationTypeError,
+    # both TypeError subclasses, so the narrow catch IS the tracer carve-out)
+    try:
+        _eps_sup_c = complex(np.asarray(n_superstrate, dtype=_C)) ** 2
+        _kt = (float(np.real(np.asarray(n_superstrate, dtype=_C)))
+               * float(np.sin(float(np.asarray(angle)))))
+    except (TypeError, ValueError):
+        _eps_sup_c = None                       # traced -> not inspectable
+    if _eps_sup_c is not None:
+        from .rcwa._core import _require_propagating_incidence
+        _require_propagating_incidence("berreman_jones_1d",
+                                       np.conj(_eps_sup_c), _kt ** 2)
 
     def _t3(e):
         M = jnp.asarray(e, cj)
@@ -492,6 +520,15 @@ def _prep(layers, n_substrate, n_superstrate, wavelength, angle, phi, theta):
         return M
     eps_layers = [_t3(e) for e, _t in layers]
     thicks = [jnp.asarray(t) for _e, t in layers]
+    for _i, _t in enumerate(thicks):          # W6 F-2: concrete thickness rule
+        try:
+            _tv = float(np.real(np.asarray(_t)))
+        except (TypeError, ValueError):
+            continue                           # traced -> nothing to check
+        if not np.isfinite(_tv) or _tv <= 0.0:
+            raise ValueError(
+                f"berreman_jones_1d: layer {_i} thickness must be > 0, got "
+                f"{_tv!r} (BerremanStack.add_layer enforces the same rule).")
     eps_sup = jnp.asarray(n_superstrate, cj) ** 2
     eps_sub = jnp.asarray(n_substrate, cj) ** 2
     nre = jnp.real(jnp.asarray(n_superstrate, cj))
@@ -505,15 +542,17 @@ def _berreman_jones_1d_jax(layers, n_substrate, n_superstrate, wavelength,
     jnp, eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky = _prep(
         layers, n_substrate, n_superstrate, wavelength, angle, phi, theta)
     # A CONCRETELY-detectable out-of-plane tensor routes to the generalized
-    # (out-of-plane-correct) S-matrix -- the native cascade below is ~2% off in
-    # that regime (see berreman._offplane_oblique_solve).  The generalized path
-    # is correct at ALL incidences, so no obliqueness test is needed (which also
-    # sidesteps a traced angle).
+    # S-matrix, which is correct at ALL incidences, so no obliqueness test is
+    # needed (which also sidesteps a traced angle).  NB this is WIDER than the
+    # NumPy router (which also requires oblique incidence), so an out-of-plane
+    # tensor at NORMAL incidence takes DIFFERENT internal paths on the two
+    # backends -- they agree to ~1e-15 (W6 2026-07-26), but that asymmetry is
+    # what made the W6 F-1 flux-gauge bug reach normal incidence here and not
+    # there; keep the two in mind together when touching either.
     # D12: a TRACED (3, 3) tensor cannot be inspected for off-plane coupling, so
     # it also routes to the generalized path (detectable by shape) -- exact for
     # in-plane AND out-of-plane, so forward and gradient share one branch,
-    # mirroring the rcwa tracer -> general-path fix (a traced OOP tensor no
-    # longer silently falls through to the ~2%-off native cascade).
+    # mirroring the rcwa tracer -> general-path fix.
     if any(_tensor_is_offplane_jax(e, jnp) or _tensor_is_traced_jax(e)
            for e, _t in layers):
         return _offplane_solve_jax(eps_layers, thicks, eps_sup, eps_sub,
