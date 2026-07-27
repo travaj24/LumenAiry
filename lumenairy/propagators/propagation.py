@@ -159,6 +159,8 @@ from .fft_infra import (
     DEFAULT_DY,
     DEFAULT_REAL_DTYPE,
     DEFAULT_WAVE_PROPAGATOR,
+    # v5.31 (audit W9-8): frozen factory value; immutable, so no live forward
+    DEFAULT_WAVE_PROPAGATOR_SHIPPED,
     FFTW_MIN_SIZE,
     # FFT backend config (globals + setters)
     FFTW_THREADS,
@@ -340,6 +342,7 @@ __all__ = [
     'DEFAULT_COMPLEX_DTYPE',
     'DEFAULT_REAL_DTYPE',
     'DEFAULT_WAVE_PROPAGATOR',
+    'DEFAULT_WAVE_PROPAGATOR_SHIPPED',
     'DEFAULT_DY',
     'set_default_complex_dtype',
     'get_default_complex_dtype',

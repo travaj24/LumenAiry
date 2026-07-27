@@ -199,6 +199,9 @@ from .propagators.propagation import (
     # accessors being top-level since v4.16.2.
     DEFAULT_REAL_DTYPE,
     DEFAULT_WAVE_PROPAGATOR,
+    # v5.31 (audit W9-8): the frozen factory value propagate() compares the
+    # knob against.  IMMUTABLE, so a static re-export (no live forwarding).
+    DEFAULT_WAVE_PROPAGATOR_SHIPPED,
     # FFT backend configuration
     PYFFTW_AVAILABLE,
     CarrierReferencedField,
@@ -1908,6 +1911,7 @@ __all__ = [
     # module-level globals are now first-class at top level.
     'DEFAULT_REAL_DTYPE',
     'DEFAULT_WAVE_PROPAGATOR',
+    'DEFAULT_WAVE_PROPAGATOR_SHIPPED',
     'DEFAULT_DY',
     'set_default_wave_propagator',
     'get_default_wave_propagator',
