@@ -350,6 +350,41 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # v5.30 (W6 CI): the c0073c2 jax-job failure produced ZERO
+      # externally-visible detail -- exit 1 with no FAILED lines means an
+      # ERROR-class outcome (collection/fixture/internal), and the log
+      # artifact needs admin auth.  Mirror the matrix jobs' two
+      # visibility steps so the next failure names itself via the public
+      # annotations API.
+      - name: Dump jax tail to job summary on failure
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo "## JAX unit test output (last 200 lines)"
+            echo ""
+            echo '```'
+            tail -n 200 jax_unit_output.txt || echo "(no output file)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Emit jax FAILED/ERROR lines as annotations
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f jax_unit_output.txt ]; then
+            grep -E "^FAILED |^ERROR |error |Error:|INTERNALERROR|Timeout" jax_unit_output.txt \
+              | head -n 20 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done
+            tail -n 5 jax_unit_output.txt | while IFS= read -r line; do
+              echo "::warning::TAIL: ${line}"
+            done
+          else
+            echo "::error::No jax_unit_output.txt produced"
+          fi
+
   slow-tests:
     name: Slow tests shard ${{ matrix.shard }}/3 (eig-heavy)
     runs-on: ubuntu-latest
