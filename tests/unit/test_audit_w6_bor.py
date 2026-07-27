@@ -156,12 +156,20 @@ def test_p13_assemble_warns_at_longitudinal_resonance():
 def test_p14_staggered_face_grid_returned():
     """Staggered layer_modes exposes the face grid + per-half quadrature
     weights; the two-grid flux is exactly the unit normalization while the
-    legacy single-``wq`` quadrature (the P3-14 trap) is off by O(h)."""
+    legacy single-``wq`` quadrature (the P3-14 trap) is off by O(h).
+
+    DELIBERATE UPDATE 2026-07-26 (audit W6-B1 wall-anchor flip): the grid
+    spacing is now ``Rbig/(N + 0.5)`` rather than ``Rbig/N`` -- the staggered
+    PEC wall is anchored on ``Rbig`` instead of ``Rbig + h/2``.  ``h`` is read
+    back from the returned face grid so this gate stays anchor-agnostic; the
+    P3-14 property under test (the face grid is EXPOSED, and the two-grid
+    quadrature is the correct one) is unchanged by the flip."""
     m, Rbig, N, k0 = 1, 8.0, 60, 2.0
     L = layer_modes(m, Rbig, N,
                     lambda r: np.full_like(r, 2.0, dtype=complex), k0,
                     staggered=True)
-    h = Rbig / N
+    h = float(np.real(L["r_face"][0]))            # face 0 sits at exactly 1*h
+    assert h == pytest.approx(Rbig / (N + 0.5), rel=1e-15)   # W6-B1 anchor
     assert np.array_equal(L["r_face"], (np.arange(N) + 1.0) * h)
     assert np.array_equal(L["wq_face"], (L["r_face"] * h).astype(complex))
     assert np.array_equal(L["wq_node"], L["wq"])          # alias, node half

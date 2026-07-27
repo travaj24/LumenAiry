@@ -6,21 +6,22 @@ Two halves.
 
 **Fix pins** (each verified FAILING on a pre-fix ``3a1da2b`` worktree):
 
-* ``W6-B1`` -- LATTICE ANCHOR, shipped OPT-IN (``STAGGERED_WALL_ANCHOR``).
-  ``_fd_grid_staggered`` uses ``h = Rbig/N`` with a "ghost node = 0" outer
-  stencil, so the PEC wall of the *production* ``BORStack`` basis sits at
-  ``Rbig + h/2``, not ``Rbig``: the transverse wavenumbers converge to
-  ``j_{m,n}/(Rbig + h/2)`` and the scheme is FIRST-order (measured p = 0.99,
+* ``W6-B1`` -- LATTICE ANCHOR, now the DEFAULT (``STAGGERED_WALL_ANCHOR``).
+  ``_fd_grid_staggered`` used ``h = Rbig/N`` with a "ghost node = 0" outer
+  stencil, so the PEC wall of the *production* ``BORStack`` basis sat at
+  ``Rbig + h/2``, not ``Rbig``: the transverse wavenumbers converged to
+  ``j_{m,n}/(Rbig + h/2)`` and the scheme was FIRST-order (measured p = 0.99,
   -8.3e-3 relative at N = 60) despite the module's documented 2nd order.  The
-  repair ``h = Rbig/(N + 0.5)`` puts the ghost node exactly on ``Rbig`` --
-  second order (p = 1.99), 6.5e-7 at N = 60 -- while keeping the exact discrete
+  fix ``h = Rbig/(N + 0.5)`` puts the ghost node exactly on ``Rbig`` -- second
+  order (p = 1.99), 6.5e-7 at N = 60 -- while keeping the exact discrete
   ``curl.grad == 0`` and the machine-precision cascade energy that the
   antisymmetric-ghost alternative destroys (it breaks de Rham to 1.1e-3
-  relative and the energy to 2.1e-4).  It is opt-in rather than default because
-  the flip moves every shipped ``BORStack`` number and invalidates three
-  assertions in ANOTHER audit's regression file (measured below) -- an owner
-  decision that must land with their retune.  The pins below lock BOTH the
-  shipped defect and the repair, so the flip is executable rather than prose.
+  relative and the energy to 2.1e-4).  Shipped opt-in first, then flipped to
+  the default by owner decision (2026-07-26) under the better-physics-default
+  policy; ``'ghost'`` remains as a documented legacy escape hatch.  The pins
+  below lock the defect, the fix, the flip, and the hatch's bit-identity with
+  the pre-flip cavity.  The downstream deliberate update lives in
+  ``tests/unit/test_audit_bor_grazing_cutoff.py``.
 * ``W6-B2`` -- ``guided_modes`` used ABSOLUTE margins (1e-2, 1e-3) on ``q``,
   which has units 1/length: the same fiber written in nanometres has its whole
   guided window below 1e-2, so the function silently returned ``[]``.
@@ -104,6 +105,21 @@ def _cell_grid(R, N):
     return (np.arange(N) + 0.5) * h, h
 
 
+def _grazing_reproducer(rbig_um, N, scale=1e6):
+    """The AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13 ring grating (um
+    scale), radius parametrized so both wall anchors can be compared on the
+    same physical cavity."""
+    k0 = 2.0 * np.pi / (1.0e-6 * scale)
+    s = BORStack(Rbig=rbig_um * 1e-6 * scale, m=1, N=N,
+                 n_superstrate=1.41 + 0j, n_substrate=1.41 + 0j)
+    s.add_layer(0.5e-6 * scale, rings=(3.0e-6 * scale, 0.5, 2.45 + 0j,
+                                       1.41 + 0j))
+    s.set_source(k0=k0)
+    out = s.solve()
+    out["_k0"] = k0
+    return out
+
+
 def _box_gammas(m, eps, R, N, k0):
     """Transverse wavenumbers gamma = sqrt(eps k0^2 - q^2) of the staggered
     homogeneous-cylinder box modes (the analytic set is {j_mn, j'_mn}/R)."""
@@ -129,16 +145,16 @@ def anchor(monkeypatch):
 def test_w6_b1_wall_radius_per_anchor_setting(Rbig, N, anchor):
     """The staggered outer stencil forces the tangential field to zero at the
     GHOST NODE (index N, radius ``(N + 0.5) h``), so THAT radius is the PEC
-    wall.  The shipped ``'ghost'`` anchor puts it half a cell OUTSIDE the
-    requested domain; ``'rbig'`` puts it exactly on ``Rbig``."""
-    anchor("ghost")                                    # shipped default
+    wall.  The legacy ``'ghost'`` hatch puts it half a cell OUTSIDE the
+    requested domain; the ``'rbig'`` DEFAULT puts it exactly on ``Rbig``."""
+    anchor("ghost")                                    # legacy escape hatch
     r_n, r_f, h, Dn2f, Df2n, An2f, Af2n = _fd_grid_staggered(Rbig, N)
     assert h == pytest.approx(Rbig / N, rel=1e-15)
     assert (N + 0.5) * h == pytest.approx(Rbig + h / 2.0, rel=1e-14)
     assert (N + 0.5) * h > Rbig                        # THE DEFECT
     assert r_f[-1] == pytest.approx(Rbig, rel=1e-14)   # last face == Rbig
 
-    anchor("rbig")                                     # opt-in repair
+    anchor("rbig")                                     # corrected DEFAULT
     r_n2, r_f2, h2, Dn2f2, _Df, An2f2, _Af = _fd_grid_staggered(Rbig, N)
     assert h2 == pytest.approx(Rbig / (N + 0.5), rel=1e-15)
     assert (N + 0.5) * h2 == pytest.approx(Rbig, rel=1e-14, abs=0.0)
@@ -152,12 +168,12 @@ def test_w6_b1_wall_radius_per_anchor_setting(Rbig, N, anchor):
 
 
 @pytest.mark.slow
-def test_w6_b1_shipped_anchor_is_first_order_and_repair_is_second(anchor):
+def test_w6_b1_legacy_anchor_is_first_order_and_default_is_second(anchor):
     """MEASURED, both ways.  Homogeneous PEC cylinder vs the analytic Bessel
-    set ``{j_{m,n}, j'_{m,n}}/Rbig``.  The shipped ``'ghost'`` anchor converges
+    set ``{j_{m,n}, j'_{m,n}}/Rbig``.  The legacy ``'ghost'`` hatch converges
     to ``j/(Rbig + h/2)`` -- FIRST order, -8.3e-3 at N = 60 -- contradicting the
-    module docstring's "Convergence is 2nd-order in N (FD)".  ``'rbig'`` is
-    4 decades better at identical cost."""
+    module docstring's "Convergence is 2nd-order in N (FD)".  The ``'rbig'``
+    default is 4 decades better at identical cost."""
     m, eps, R, k0 = 1, 4.0, 8.0, 2.0
     exact = np.sort(np.concatenate([jn_zeros(m, 6) / R, jnp_zeros(m, 6) / R]))
 
@@ -218,35 +234,84 @@ def test_w6_b1_both_anchors_keep_de_rham_and_machine_precision_energy(anchor):
         assert np.max(np.abs(res["energy"] - 1.0)) < 1e-11, setting
 
 
+def test_w6_b1_default_is_the_corrected_anchor():
+    """THE FLIP PIN (owner decision, 2026-07-26): the shipped default is the
+    CORRECTED anchor, and the default code path is bit-identical to asking for
+    ``'rbig'`` explicitly (i.e. the switch has no separate default branch)."""
+    assert cre_mod.STAGGERED_WALL_ANCHOR == "rbig"
+    for Rbig, N in ((1.0, 17), (8.0, 60), (48.09375, 256)):
+        default = _fd_grid_staggered(Rbig, N)
+        assert default[2] == Rbig / (N + 0.5)
+        assert (N + 0.5) * default[2] == pytest.approx(Rbig, rel=1e-14)
+
+
+def test_w6_b1_default_path_is_bit_identical_to_explicit_rbig(anchor):
+    """Setting the switch to its own default must change nothing, bit for bit
+    -- grids, stencils and a full ``BORStack`` solve."""
+    ref_grid = _fd_grid_staggered(8.0, 60)
+    s = BORStack(Rbig=4.0, m=1, N=60, n_superstrate=1.4142, n_substrate=1.4142)
+    s.add_layer(0.5, rings=(0.8, 0.5, 2.449, 1.414))
+    s.set_source(k0=2.0)
+    ref = s.solve()
+    anchor("rbig")                                   # explicit == default
+    got_grid = _fd_grid_staggered(8.0, 60)
+    for a, b in zip(ref_grid, got_grid):
+        assert np.array_equal(a, b) if np.ndim(a) else a == b
+    s2 = BORStack(Rbig=4.0, m=1, N=60, n_superstrate=1.4142,
+                  n_substrate=1.4142)
+    s2.add_layer(0.5, rings=(0.8, 0.5, 2.449, 1.414))
+    s2.set_source(k0=2.0)
+    got = s2.solve()
+    for key in ("R", "T", "q", "energy"):
+        assert np.array_equal(np.asarray(ref[key]), np.asarray(got[key])), key
+
+
 @pytest.mark.slow
-def test_w6_b1_default_is_the_legacy_anchor_and_the_flip_cost_is_pinned():
-    """The default must stay ``'ghost'`` until the owner lands the flip WITH
-    the downstream retune: on the AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY
-    reproducer the repair MEASURES 319 -> 318 incident propagating orders,
-    fundamental R 0.146135 -> 0.142290 and min q/k0 0.0493 -> 0.0512, and three
-    assertions in ``tests/unit/test_audit_bor_grazing_cutoff.py`` (one of them
-    that audit's deliberate lossless-trap guard) encode the old values."""
-    assert cre_mod.STAGGERED_WALL_ANCHOR == "ghost"
-    # the reproducer, small-N surrogate: the two anchors must DIFFER in the
-    # propagating-order count for a cell whose edge sits near a mode cutoff
-    counts = {}
+def test_w6_b1_legacy_hatch_reproduces_the_pre_flip_cavity_bit_for_bit(anchor):
+    """The escape hatch must be exactly that: ``'ghost'`` at radius ``Rbig`` is
+    the SAME discretization as the default ``'rbig'`` at ``Rbig + h/2``, since
+    that is the cavity the legacy anchor was really simulating.  Verified on
+    the AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY geometry (48 um, N = 256, so
+    h/2 = 0.09375 um): grids, all four stencils, and all 319 R/T/q/energy
+    values are BIT-identical -- which is what lets that file's near-grazing
+    gates keep the audit's published numbers (319 orders, min q/k0 = 0.049293,
+    fundamental R = 0.146135, shipped-bug 0.145113, 2.28e-2 leak)."""
+    Rbig_um, N = 48.0, 256
+    anchor("ghost")
+    g_legacy = _fd_grid_staggered(Rbig_um, N)
+    leg = _grazing_reproducer(Rbig_um, N)
+    anchor("rbig")
+    g_default = _fd_grid_staggered(Rbig_um + Rbig_um / N / 2.0, N)
+    cur = _grazing_reproducer(Rbig_um + Rbig_um / N / 2.0, N)
+    for a, b in zip(g_legacy, g_default):
+        assert np.array_equal(a, b) if np.ndim(a) else a == b
+    for key in ("R", "T", "q", "energy"):
+        assert np.array_equal(np.asarray(leg[key]), np.asarray(cur[key])), key
+    assert len(cur["R"]) == 319                          # the audit's count
+
+
+@pytest.mark.slow
+def test_w6_b1_flip_cost_on_the_grazing_reproducer_is_pinned(anchor):
+    """The measured cost of the flip on the nominal 48 um cavity, i.e. the
+    deliberate update carried by ``test_audit_bor_grazing_cutoff.py``:
+    319 -> 318 incident orders, fundamental R 0.146135 -> 0.142290, min q/k0
+    0.049293 -> 0.051165 -- with energy closure unaffected either way."""
+    got = {}
     for setting in ("ghost", "rbig"):
-        cre_mod.STAGGERED_WALL_ANCHOR = setting
-        try:
-            s = BORStack(Rbig=12.0, m=1, N=120, n_superstrate=1.41,
-                         n_substrate=1.41)
-            s.add_layer(0.5, rings=(3.0, 0.5, 2.45, 1.41))
-            s.set_source(k0=2.0)
-            res = s.solve()
-            counts[setting] = (len(res["R"]),
-                               float(np.max(np.abs(res["energy"] - 1.0))))
-        finally:
-            cre_mod.STAGGERED_WALL_ANCHOR = "ghost"
-    # energy closes either way -- the flip is an ACCURACY change, not a
-    # correctness-of-the-cascade change
-    for setting, (_n, en) in counts.items():
-        assert en < 1e-9, (setting, en)
-    assert counts["ghost"][0] >= counts["rbig"][0], counts
+        anchor(setting)
+        res = _grazing_reproducer(48.0, 256)
+        q = np.asarray(res["q"], float)
+        got[setting] = (len(res["R"]),
+                        float(np.asarray(res["R"])[int(np.argmax(q))]),
+                        float((q / res["_k0"]).min()),
+                        float(np.max(np.abs(np.asarray(res["energy"]) - 1.0))))
+    assert got["ghost"][0] == 319 and got["rbig"][0] == 318, got
+    assert abs(got["ghost"][1] - 0.146135) < 1e-4, got["ghost"]
+    assert abs(got["rbig"][1] - 0.142290) < 1e-4, got["rbig"]
+    assert abs(got["ghost"][2] - 0.049293) < 1e-5, got["ghost"]
+    assert abs(got["rbig"][2] - 0.051165) < 1e-5, got["rbig"]
+    for setting, row in got.items():
+        assert row[3] < 1e-9, (setting, row)     # measured ~7e-12 both ways
 
 
 # ===================================================================== #

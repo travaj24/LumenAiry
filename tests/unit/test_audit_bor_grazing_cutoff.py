@@ -21,6 +21,12 @@ Gates (audit section 5): the reproducer at three unit scales; the
 near-grazing band is populated; the fundamental-mode R pin (the lossless-trap
 guard -- a fix that "closes" energy by renormalizing instead of restoring the
 missing order fails it); JAX twin parity; the ``bor_solve`` twin.
+
+Values were deliberately updated on 2026-07-26 for the audit W6-B1 staggered
+wall-anchor flip -- see the DELIBERATE UPDATE block below the imports for the
+old/new numbers, why the near-grazing gates moved to the ``48 + h/2`` cavity
+(bit-identical to the pre-flip run) to keep their teeth, and the new gate 3b
+that pins that discriminating power explicitly.
 """
 import os
 
@@ -36,12 +42,52 @@ pytestmark = pytest.mark.slow      # dense modal eigensolves (N=256 half-spaces)
 
 _LAM = 1.0e-6      # 1 um design wavelength (physical scale)
 
+# --------------------------------------------------------------------------- #
+#  DELIBERATE UPDATE 2026-07-26 -- audit W6-B1 staggered wall-anchor flip
+#
+#  ``coupled_radial_eigensolver.STAGGERED_WALL_ANCHOR`` flipped from the legacy
+#  ``'ghost'`` (h = Rbig/N) to the corrected ``'rbig'`` (h = Rbig/(N + 0.5)).
+#  The staggered outer stencil zeroes the tangential field at the GHOST NODE,
+#  radius ``(N + 0.5) h``, so the legacy spacing put the PEC wall at
+#  ``Rbig + h/2`` -- the discretized cavity was half a cell LARGER than the
+#  requested ``Rbig``, and the box spectrum was FIRST order (p = 0.99 vs 1.99).
+#
+#  What that does to THIS file's reproducer (nominal Rbig = 48 um, N = 256,
+#  so h/2 = 0.09375 um), MEASURED, identical at all three unit scales:
+#      incident propagating orders   319       -> 318
+#      fundamental-mode R            0.146135  -> 0.142290
+#      min q/k0                      0.049293  -> 0.051165
+#      full-set energy closure       ~1.2e-11  -> ~1.2e-11   (unchanged)
+#  The order that disappears is the near-grazing one at q/k0 = 0.049293: it
+#  belonged to the oversized cavity, not to the 48 um cavity that was asked
+#  for.  Gates 1, 3 and 6 below carry the new values.
+#
+#  KEEPING THE TEETH.  Gates 2 and 3 exist to catch a re-introduced angular
+#  cutoff, and both need a near-grazing order BELOW q/k0 = 0.05 to bite.  At
+#  the corrected anchor the nominal 48 um cavity has none (min q/k0 = 0.051165)
+#  and the truncation delta on the fundamental R collapses from 1.022e-3 to
+#  0.0 -- i.e. a retune-in-place would silently defang them.  So those two
+#  gates now request ``Rbig = 48.09375 um`` = 48 + h/2, which is EXACTLY the
+#  physical cavity the legacy anchor was simulating: verified BIT-IDENTICAL
+#  (r_node, r_face, h, all four stencils, and all 319 R/T/q/energy values) to
+#  the pre-flip ``Rbig = 48 um`` run, so every number the original audit
+#  published still reproduces -- 319 orders, min q/k0 = 0.049293, fundamental
+#  R = 0.146135, the shipped-bug value 0.145113, and the 2.28e-2 energy leak.
+# --------------------------------------------------------------------------- #
 
-def _reproducer(scale, ring_index=2.45 + 0j, N=256):
+#: nominal cell radius (um): what a caller asks for
+_RBIG_UM = 48.0
+#: the cavity the pre-flip anchor actually simulated = 48 + h/2 at N = 256.
+#: Requesting it at the corrected anchor is bit-identical to the pre-flip run,
+#: and it is the geometry that keeps the near-grazing gates' teeth.
+_RBIG_UM_AUDIT_CAVITY = 48.09375
+
+
+def _reproducer(scale, ring_index=2.45 + 0j, N=256, rbig_um=_RBIG_UM):
     """The audit's lossless concentric ring grating between index-matched
     half-spaces, m=1, at unit scale ``scale`` (1 = metres)."""
     k0 = 2.0 * np.pi / (_LAM * scale)
-    s = BORStack(Rbig=48e-6 * scale, m=1, N=N,
+    s = BORStack(Rbig=rbig_um * 1e-6 * scale, m=1, N=N,
                  n_superstrate=1.41 + 0j, n_substrate=1.41 + 0j)
     s.add_layer(0.5e-6 * scale, rings=(3.0e-6 * scale, 0.5, ring_index,
                                        1.41 + 0j))
@@ -49,38 +95,121 @@ def _reproducer(scale, ring_index=2.45 + 0j, N=256):
     return s.solve(), k0
 
 
+def _leak_with_angular_cutoff(res, k0, cut=0.05):
+    """The audit's OWN leak metric: max|R+T-1| over incident modes once the
+    classifier floor is raised to ``cut`` -- i.e. exactly what the pre-fix
+    ``q/k0 > 0.05`` classifier produced.  Validated against the audit's
+    published 2.28e-2 (this metric returns 2.2756e-02 on the audit cavity)."""
+    qn = np.asarray(res["q"], float) / k0
+    inc, out = res["inc"], res["out"]
+    S11, S21 = res["S"][0], res["S"][2]
+    keep = qn > cut
+    ii, oo = inc[keep], out[keep]
+    worst = 0.0
+    for j in ii:
+        rc = float(np.sum(np.abs(S11[np.ix_(ii, [j])]) ** 2))
+        tc = float(np.sum(np.abs(S21[np.ix_(oo, [j])]) ** 2))
+        worst = max(worst, abs(rc + tc - 1.0))
+    return worst, int(np.sum(~keep))
+
+
 @pytest.mark.parametrize("scale", [1.0, 1e6, 1e9], ids=["m", "um", "nm"])
 def test_bor_grazing_reproducer_closes_at_all_scales(scale):
-    """Gate 1: energy closure to 1e-9 with the full 319-mode incident set at
-    m / um / nm unit scales.  Pre-fix: 318 modes, max|R+T-1| = 2.28e-2."""
+    """Gate 1: energy closure to 1e-9 with the FULL incident set at m / um / nm
+    unit scales.  Pre-fix (the cutoff bug): one order short, max|R+T-1| =
+    2.28e-2.
+
+    DELIBERATE UPDATE (W6-B1 anchor flip): the count was pinned at **319** for
+    the legacy ``Rbig + h/2`` cavity; the corrected anchor gives the 48 um
+    cavity that was actually requested, which has **318** propagating orders
+    (measured identically at all three scales).  Closure is unaffected:
+    max|R+T-1| = 8.2e-12 / 6.8e-12 / 5.0e-12 at m / um / nm."""
     res, _k0 = _reproducer(scale)
     e = np.asarray(res["energy"], float)
-    assert e.size == 319, f"incident-mode count {e.size} != 319"
+    assert e.size == 318, f"incident-mode count {e.size} != 318"
     assert float(np.max(np.abs(e - 1.0))) < 1e-9
 
 
 def test_bor_grazing_band_is_kept():
     """Gate 2: the near-grazing band the bug silenced (q/k0 in (1e-3, 0.05)
-    with essentially-zero imag) is populated in the kept incident set -- the
-    reproducer's mode comb has a clean propagating mode at q/k0 = 0.0493."""
-    res, k0 = _reproducer(1e6)
+    with essentially-zero imag) is populated in the kept incident set, and the
+    historical ``q/k0 > 0.05`` angular cutoff MEASURABLY leaks energy there.
+
+    DELIBERATE UPDATE (W6-B1 anchor flip): this gate needs a mode below 0.05 to
+    have any teeth.  The nominal 48 um cavity had one at q/k0 = 0.049293 only
+    because the legacy anchor was really simulating 48 + h/2; at the corrected
+    anchor its min q/k0 is 0.051165 and the gate would pass vacuously.  So it
+    now requests ``_RBIG_UM_AUDIT_CAVITY`` -- bit-identical to the pre-flip run
+    -- which restores q/k0 = 0.049293 exactly, and the leak assertion below
+    (new) turns "the band is populated" into "the old cutoff really did lose
+    2.28e-2 of energy here"."""
+    res, k0 = _reproducer(1e6, rbig_um=_RBIG_UM_AUDIT_CAVITY)
     qn = np.asarray(res["q"], float) / k0
     band = (qn > 1e-3) & (qn < 0.05)
     assert np.any(band), "no kept incident mode in the near-grazing band"
+    assert abs(qn.min() - 0.049293) < 1e-5, f"min q/k0 = {qn.min():.6f}"
+    # with the full set the cascade closes; with the historical angular cutoff
+    # it leaks the audit's published 2.28e-2 (metric reproduces 2.2756e-02)
+    assert np.max(np.abs(np.asarray(res["energy"], float) - 1.0)) < 1e-9
+    leak, ndropped = _leak_with_angular_cutoff(res, k0, 0.05)
+    assert ndropped == 1, f"{ndropped} orders below the 0.05 cutoff (expect 1)"
+    assert leak > 1e-2, f"angular-cutoff leak {leak:.4e} -- gate has no teeth"
+    assert abs(leak - 2.2756e-2) < 5e-4, f"leak {leak:.6e} != audit 2.28e-2"
 
 
 def test_bor_fundamental_mode_reflectance_pin():
-    """Gate 3 (the lossless-trap guard): pin the fundamental (near-axis)
-    incident mode's R = 0.146135 -- the converged value re-derived in the
-    audit from the SHIPPED S-matrix with the correct mode sets.  A fix that
-    closes energy by renormalizing rather than by restoring the dropped
-    order fails this (the shipped-bug value was 0.145113)."""
-    res, _k0 = _reproducer(1e6)
+    """Gate 3 (the lossless-trap guard), retuned value + re-derived INTENT.
+
+    DELIBERATE UPDATE (W6-B1 anchor flip): the pinned number was **0.146135**
+    for the legacy ``Rbig + h/2`` cavity; the 48 um cavity actually requested
+    gives **0.142290** (measured, all three unit scales).
+
+    What this gate GUARDS is not the number but the mechanism: R must be the
+    DIRECT sum of ``|S11|^2`` over the COMPLETE propagating set -- a fix that
+    "closes" energy by renormalizing a truncated set must fail.  The number
+    alone can no longer carry that (see the teeth gate below), so the property
+    is now asserted directly."""
+    res, k0 = _reproducer(1e6)
     q = np.asarray(res["q"], float)
     R = np.asarray(res["R"], float)
+    T = np.asarray(res["T"], float)
+    inc, S11 = res["inc"], res["S"][0]
     j = int(np.argmax(q))              # near-axis fundamental = largest q
-    assert abs(R[j] - 0.146135) < 1e-4, f"fundamental R = {R[j]:.6f}"
+    assert abs(R[j] - 0.142290) < 1e-4, f"fundamental R = {R[j]:.6f}"
     assert abs(float(np.asarray(res["energy"])[j]) - 1.0) < 1e-9
+    # (i) NO renormalization anywhere: R is literally the sum over ``inc``
+    direct = np.array([float(np.sum(np.abs(S11[np.ix_(inc, [jj])]) ** 2))
+                       for jj in inc])
+    assert np.max(np.abs(R - direct)) < 1e-15, "R is not the raw modal sum"
+    # (ii) the set is COMPLETE against the physical criterion, and closure is
+    #      therefore earned rather than imposed
+    assert R.size == 318 and T.size == 318
+    assert np.max(np.abs(R + T - 1.0)) < 1e-9
+
+
+def test_bor_fundamental_mode_pin_has_teeth_on_the_audit_cavity():
+    """Gate 3b (NEW, W6-B1): the lossless-trap guard's discriminating power,
+    on the cavity the audit actually measured (bit-identical to its pre-flip
+    run).  Truncating the near-grazing tail the way the shipped bug did moves
+    the fundamental R from 0.146135 to 0.145113 -- delta 1.022e-3, an order of
+    magnitude above the 1e-4 pin tolerance, so the pin genuinely catches it.
+
+    (On the nominal 48 um cavity at the corrected anchor the same truncation
+    moves nothing -- delta 0.0, because no order sits below 0.05 there -- which
+    is precisely why this gate exists separately.)"""
+    res, k0 = _reproducer(1e6, rbig_um=_RBIG_UM_AUDIT_CAVITY)
+    qn = np.asarray(res["q"], float) / k0
+    R = np.asarray(res["R"], float)
+    inc, S11 = res["inc"], res["S"][0]
+    j = int(np.argmax(qn))
+    assert R.size == 319                       # the audit's own mode count
+    assert abs(R[j] - 0.146135) < 1e-4, f"full-set R = {R[j]:.6f}"
+    keep = qn > 0.05                           # the shipped bug's angular cut
+    truncated = float(np.sum(np.abs(S11[np.ix_(inc[keep], [inc[j]])]) ** 2))
+    assert abs(truncated - 0.145113) < 1e-4, f"truncated R = {truncated:.6f}"
+    assert abs(truncated - R[j]) > 1e-3, (
+        f"truncation delta {abs(truncated - R[j]):.3e} <= the 1e-4 pin "
+        f"tolerance -- the lossless-trap guard would not bite")
 
 
 def test_bor_jax_twin_parity_on_reproducer():
@@ -136,11 +265,15 @@ def test_bor_solve_twin_classifier_keeps_grazing_band():
 def test_bor_solve_twin_cascade_closes_on_reproducer():
     """Gate 6: the ``build_layer``/``solve`` cascade twin end-to-end on the
     audit reproducer (um scale).  On the staggered default basis this must
-    reproduce the production ``BORStack`` numbers exactly: 319 incident
-    modes, machine-precision closure, and the gate-3 fundamental-mode R pin
-    (probe-verified per-mode R parity with ``BORStack`` is 0.0 -- same basis,
-    same cascade, agreeing classifier sets).  Pre-fix (nodal basis) this
-    configuration returned max|R+T-1| ~ 4e32."""
+    reproduce the production ``BORStack`` numbers exactly: the full incident
+    mode set, machine-precision closure, and the gate-3 fundamental-mode R pin
+    (per-mode R parity with ``BORStack`` re-measured at exactly 0.0 -- same
+    basis, same cascade, agreeing classifier sets).  Pre-fix (nodal basis) this
+    configuration returned max|R+T-1| ~ 4e32.
+
+    DELIBERATE UPDATE (W6-B1 anchor flip): 319 -> **318** incident modes and
+    R 0.146135 -> **0.142290**, tracking gates 1 and 3 (measured: closure
+    6.79e-12, twin-vs-BORStack per-mode |dR| = 0.0)."""
     from lumenairy.elements.bor.bor_solve import build_layer, solve
 
     scale = 1e6
@@ -161,7 +294,7 @@ def test_bor_solve_twin_cascade_closes_on_reproducer():
     Lg = build_layer(1, Rbig, N, eps_rings, k0, thickness=0.5e-6 * scale)
     res = solve([Lh, Lg, Lh], k0)
     e = np.asarray(res["energy"], float)
-    assert e.size == 319, f"incident-mode count {e.size} != 319"
+    assert e.size == 318, f"incident-mode count {e.size} != 318"
     assert float(np.max(np.abs(e - 1.0))) < 1e-9
     jf = int(np.argmax(np.real(res["q_inc"])))     # near-axis fundamental
-    assert abs(res["R"][jf] - 0.146135) < 1e-4, f"fundamental R = {res['R'][jf]:.6f}"
+    assert abs(res["R"][jf] - 0.142290) < 1e-4, f"fundamental R = {res['R'][jf]:.6f}"
