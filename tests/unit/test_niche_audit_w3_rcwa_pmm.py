@@ -85,12 +85,24 @@ def _square(S=25, half=0.25, eps_in=6.25 + 0j, eps_out=1.0 + 0j):
                     eps_in, eps_out).astype(_C)
 
 
-# y-INVARIANT (x-only) cell sampled exactly like the 1-D solver's internal grid,
-# so the two engines see the SAME Fourier coefficients.
+# y-INVARIANT (x-only) cell expressing the SAME geometry as the 1-D solver.
+#
+# Grid retune, audit W7-A (2026-07-26): the default was Sx = 4096, chosen to
+# mirror the 1-D path's own internal FFT grid.  That grid does NOT divide
+# DUTY = 0.4 (0.4*4096 = 1638.4), so BOTH engines were realising duty
+# 1638/4096 = 0.399902344 and matched at 1e-13 only because they shared the
+# same rounding.  The 1-D binary profile is now built from its EXACT analytic
+# Fourier series (it realises 0.4), so the oracle has to express 0.4 too:
+# 0.4*5120 = 2048 exactly, making the rasterised duty exactly 0.4.  Measured
+# cross-engine gap at THETA = 0.17: 8.71e-05 (Sx = 4096, i.e. the pure
+# duty-rounding difference) -> 5.29e-08 (Sx = 5120), the pixel path's own
+# O((k/Sx)^2) quadrature factor, which test_m8_... below pins as CONVERGENT
+# under refinement rather than as a fixed constant.
 DUTY, N_R, N_G, DEPTH, THETA = 0.4, 2.5, 1.0, 0.22e-6, 0.17
+_YSTRIPE_SX = 5120                       # 0.4 * 5120 = 2048 -> duty exact
 
 
-def _ystripe(Sx=4096, Sy=1):
+def _ystripe(Sx=_YSTRIPE_SX, Sy=1):
     x = (np.arange(Sx) + 0.5) / Sx
     prof = np.where(x < DUTY, N_R ** 2, N_G ** 2).astype(_C)
     return np.repeat(prof[:, None], Sy, axis=1)
@@ -185,20 +197,40 @@ def test_m8_validator_allows_zero_y_orders_only():
 @pytest.mark.parametrize("nox", [5, 12])
 def test_m8_y_invariant_zero_y_orders_matches_the_1d_solver(pol, form, nox):
     """The claim that makes ``N_y = 0`` legitimate: on a y-invariant cell it IS
-    the rigorous 1-D answer."""
-    o2, R2, T2 = rcwa_efficiency_2d(
-        P, P, _ystripe(), 1.5, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
-        polarization=pol, n_orders_x=nox, n_orders_y=0, formulation=form,
-        symmetry=False)
+    the rigorous 1-D answer.
+
+    Retuned (audit W7-A): the 1-D engine now builds the binary profile from
+    its EXACT Fourier series while this oracle is a RASTERISED cell, so the
+    two can only agree to the rasterisation's own accuracy.  The bar is the
+    measured one at ``_YSTRIPE_SX`` (5.29e-08 worst over this matrix), and it
+    is backed by a refinement check -- the residual must SHRINK when the cell
+    is refined, which is the statement "the N_y = 0 path converges to the
+    rigorous 1-D answer" and is strictly stronger than a fixed constant.  A
+    routing / order-set defect (what this pin exists to catch) is O(1)."""
+    def two_d(cell):
+        return rcwa_efficiency_2d(
+            P, P, cell, 1.5, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
+            polarization=pol, n_orders_x=nox, n_orders_y=0, formulation=form,
+            symmetry=False)
+
+    o2, R2, T2 = two_d(_ystripe())
     o1, R1, T1 = rcwa_efficiency_1d(
         P, N_R, N_G, 1.5, 1.0, DEPTH, DUTY, WL, angle=THETA, polarization=pol,
         n_orders=nox, formulation=form)
     assert o2.shape == (2 * nox + 1, 2)
     assert np.array_equal(o2[:, 1], np.zeros(2 * nox + 1, dtype=o2.dtype))
     idx = [int(np.where(o2[:, 0] == m)[0][0]) for m in np.asarray(o1)]
-    assert np.max(np.abs(np.asarray(R2)[idx] - np.asarray(R1))) < 1e-13
-    assert np.max(np.abs(np.asarray(T2)[idx] - np.asarray(T1))) < 1e-12
+    dR = float(np.max(np.abs(np.asarray(R2)[idx] - np.asarray(R1))))
+    dT = float(np.max(np.abs(np.asarray(T2)[idx] - np.asarray(T1))))
+    assert dR < 5e-7 and dT < 5e-7, (dR, dT)
     assert abs(float(R2.sum() + T2.sum()) - 1.0) < 1e-12
+    # refinement: 4x the cell samples must cut the residual (the pixel path's
+    # quadrature factor is O((k/Sx)^2)), proving the gap is discretisation and
+    # not a routing difference.
+    o4, R4, _T4 = two_d(_ystripe(4 * _YSTRIPE_SX))
+    i4 = [int(np.where(o4[:, 0] == m)[0][0]) for m in np.asarray(o1)]
+    dR4 = float(np.max(np.abs(np.asarray(R4)[i4] - np.asarray(R1))))
+    assert dR4 < 0.5 * dR, (dR, dR4)
 
 
 def test_m8_zero_y_orders_cuts_the_harmonic_count_by_three():
@@ -373,15 +405,38 @@ def test_m7_jones_1d_default_path_is_bit_identical():
     """Frozen on the PRE-fix tree (7ea2eb9); ``rel=1e-11`` rather than ``==``
     for the same BLAS-threading reason as the shapes twin above.  The
     bit-for-bit claim is the alias loop at the end (same process, same
-    threading)."""
+    threading).
+
+    RE-PINNED 2026-07-26 (audit W7-A), ATTRIBUTED not merely re-taken: the
+    per-component tensor profiles are now EXACT piecewise-constant Fourier
+    series instead of 4096-point midpoint samplings, so ``duty_cycle=0.45``
+    is realised as 0.45 and no longer as 1843/4096 = 0.449951171875.  Asking
+    the fixed solver for that LEGACY duty reproduces every historical value
+    to <= 7e-08 (asserted below -- the residue is the sampled path's
+    O((k/4096)^2) quadrature factor); the nominal move is ~4.7e-06, i.e. the
+    geometry difference alone."""
     o, R, T, jr = rcwa_jones_1d(P, _lc_tensor(1.5, 1.7, 0.9), np.eye(3), 1.5,
                                 1.0, 0.3e-6, 0.45, WL, angle=0.25, n_orders=6)
     assert complex(jr[0, 0]) == pytest.approx(
-        complex(-0.18216190259927903, 0.011312428104752179), rel=1e-11)
+        complex(-0.18216402891484051, 0.011308225186530407), rel=1e-11)
     assert complex(jr[1, 0]) == pytest.approx(
-        complex(-0.025780469223113889, 0.003854822163207039), rel=1e-11)
-    assert float(R[0, 6]) == pytest.approx(0.033948831185424952, rel=1e-11)
-    assert float(T[0, 6]) == pytest.approx(0.56038943435996447, rel=1e-11)
+        complex(-0.025784037397908133, 0.0038516306744368345), rel=1e-11)
+    assert float(R[0, 6]) == pytest.approx(0.033949660424249774, rel=1e-11)
+    assert float(T[0, 6]) == pytest.approx(0.5603766840875755, rel=1e-11)
+    # ATTRIBUTION: the historical numbers ARE the legacy (grid-rounded)
+    # geometry's answer, reproduced by the fixed solver.
+    legacy_duty = float(np.count_nonzero((np.arange(4096) + 0.5) / 4096
+                                         < 0.45)) / 4096
+    assert legacy_duty == 0.449951171875
+    _o, Rl, Tl, jrl = rcwa_jones_1d(P, _lc_tensor(1.5, 1.7, 0.9), np.eye(3),
+                                    1.5, 1.0, 0.3e-6, legacy_duty, WL,
+                                    angle=0.25, n_orders=6)
+    assert abs(complex(jrl[0, 0])
+               - complex(-0.18216190259927903, 0.011312428104752179)) < 7e-8
+    assert abs(complex(jrl[1, 0])
+               - complex(-0.025780469223113889, 0.003854822163207039)) < 7e-8
+    assert abs(float(Rl[0, 6]) - 0.033948831185424952) < 7e-8
+    assert abs(float(Tl[0, 6]) - 0.56038943435996447) < 7e-8
     for alias in ("li", "auto", "fff", "LI"):
         got = rcwa_jones_1d(P, _lc_tensor(1.5, 1.7, 0.9), np.eye(3), 1.5, 1.0,
                             0.3e-6, 0.45, WL, angle=0.25, n_orders=6,

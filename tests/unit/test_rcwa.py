@@ -9,6 +9,8 @@ references are the analytic Airy thin-film, the library's own TMM
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -161,17 +163,36 @@ def test_large_period_energy_blowup_guarded():
     but WHICH (P, M) pairs blow up is BLAS-build dependent (OpenBLAS trips
     different truncations of the same geometry class), so the build-portable
     contract is: every case either RAISES the loud guard or solves with
-    CLEAN lossless closure -- never a silent wrong answer."""
+    CLEAN lossless closure -- never a silent wrong answer.
+
+    COMPLETED 2026-07-26 (audit W7-A): ``_check_energy`` actually has THREE
+    outcomes, and only two were encoded here.  Between clean and the raise
+    sits the ``1e-6 .. 0.05`` band, where it emits a LOUD ``_EnergyWarning``
+    ("the truncation is numerically unstable here and the PER-ORDER
+    efficiencies are suspect") -- also not a silent wrong answer.  Switching
+    the 1-D binary profile to its exact Fourier series perturbs these
+    knife-edge truncations by ~5e-08 in the coefficients, which is enough to
+    move (15 um, M=15) from clean to the WARN band (measured closure
+    +6.618e-04) on this build -- exactly the erratic, build-dependent
+    behaviour the docstring above describes.  The invariant being pinned is
+    "never SILENT", so the warn band is accepted here and asserted to be
+    diagnosed."""
     n_raised = 0
     for P, M in ((15e-6, 15), (20e-6, 15), (20e-6, 8)):
         try:
-            o, R, T = rcwa_efficiency_1d(P, 1.52, 1.5, 1.5, 1.5, 0.8e-6, 0.5,
-                                         WL, n_orders=M)
+            with warnings.catch_warnings(record=True) as wl:
+                warnings.simplefilter("always")
+                o, R, T = rcwa_efficiency_1d(P, 1.52, 1.5, 1.5, 1.5, 0.8e-6,
+                                             0.5, WL, n_orders=M)
         except ValueError as e:
             assert "energy non-conservation" in str(e)
             n_raised += 1
             continue
-        assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6
+        closure = abs(float(R.sum() + T.sum()) - 1.0)
+        if closure >= 1e-6:                      # the WARN band, not silence
+            assert any("energy closure violated" in str(w.message) for w in wl)
+            assert closure < 0.05
+        assert np.all(np.isfinite(R)) and np.all(np.isfinite(T))
     # a valid lossy (metal) solve with R+T < 1 must NOT be tripped
     o, R, T = rcwa_efficiency_1d(0.6e-6, 0.056 + 4.28j, 1.0, 1.5, 1.0, 0.12e-6,
                                  0.5, WL, n_orders=15)
@@ -811,16 +832,42 @@ def test_conical_2d_jones_energy_and_crosspol():
 
 def test_numpy_value_regression_pins():
     """Committed value pins for the NumPy path -- any future backend / helper
-    refactor that perturbs the physics is caught here (these are the exact
-    pre-keystone v5.5.0 values)."""
-    o, R, T = rcwa_efficiency_1d(1.2e-6, 2.5, 1.0, 1.5, 1.0, 0.4e-6, 0.4,
-                                 0.55e-6, angle=np.deg2rad(15),
+    refactor that perturbs the physics is caught here.
+
+    RE-PINNED 2026-07-26 (audit W7-A) with the move fully ATTRIBUTED, not
+    merely re-taken.  The 1-D binary profile is now built from its exact
+    Fourier series instead of a 4096-point midpoint sampling, and the old
+    values were those of a grating whose duty had been silently rounded onto
+    that grid.  Decomposition of the 4.024e-04 shift in the first pin:
+
+    * GEOMETRY, 4.020e-04 -- the sampler realised duty 1638/4096 =
+      0.39990234375 instead of the requested 0.4.  Asking the FIXED solver
+      for that legacy duty reproduces the historical 0.1905690334313482 to
+      4.09e-07 (asserted below).
+    * QUADRATURE, 4.09e-07 -- the O((k/4096)^2) factor the DFT of a sampled
+      step carries and the analytic series does not.  It is the whole of the
+      second pin's 1.36e-07 move (duty 0.5 was already grid-exact).
+    """
+    args = (1.2e-6, 2.5, 1.0, 1.5, 1.0, 0.4e-6)
+    o, R, T = rcwa_efficiency_1d(*args, 0.4, 0.55e-6, angle=np.deg2rad(15),
                                  polarization="tm", n_orders=40)
-    assert abs(float(R.sum()) - 0.1905690334313482) < 1e-12
-    assert abs(float(T.sum()) - 0.809430966568596) < 1e-12
+    assert abs(float(R.sum()) - 0.1909714119006098) < 1e-12
+    assert abs(float(T.sum()) - 0.8090285880994013) < 1e-12
+    # ATTRIBUTION: the historical numbers were the LEGACY GEOMETRY's answer.
+    legacy_duty = float(np.count_nonzero((np.arange(4096) + 0.5) / 4096
+                                         < 0.4)) / 4096
+    assert legacy_duty == 0.39990234375
+    _o, Rl, Tl = rcwa_efficiency_1d(*args, legacy_duty, 0.55e-6,
+                                    angle=np.deg2rad(15), polarization="tm",
+                                    n_orders=40)
+    assert abs(float(Rl.sum()) - 0.1905690334313482) < 5e-7
+    assert abs(float(Tl.sum()) - 0.809430966568596) < 5e-7
+    # ... and the nominal-vs-legacy gap IS the duty error, not a physics change
+    assert abs(abs(float(R.sum()) - float(Rl.sum())) - 4.0279e-4) < 1e-7
+
     o, R, T = rcwa_efficiency_1d(1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5, WL,
                                  polarization="te", n_orders=11)
-    assert abs(float(T[len(T) // 2]) - 0.6835550591286147) < 1e-12
+    assert abs(float(T[len(T) // 2]) - 0.6835549231702593) < 1e-12
 
 
 # ====================== backend dispatch (v5.5.1) =========================

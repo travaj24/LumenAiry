@@ -38,6 +38,7 @@ from ._core import (
     _propagation_star_general,
     _rcwa_convergence_stack,
     _rcwa_xp,
+    _readonly,
     _recentering_phase,
     _redheffer_star,
     _require_jax_x64,
@@ -351,9 +352,14 @@ class RCWAResult:
         m = self._require_modal()
         ex, ey = ("rx", "ry") if port == "reflection" else ("tx", "ty")
         kz = m["kz_ref"] if port == "reflection" else m["kz_trn"]
+        # ``kz`` comes straight out of the module-level homogeneous-mode cache,
+        # which now hands its values out READ-ONLY (audit W7-B).  Copy it here
+        # so the public dict keeps its writable-array contract while a caller's
+        # in-place edit can no longer poison the cache for later solves.
         return dict(orders=self.orders, Ex=to_numpy(m[ex]), Ey=to_numpy(m[ey]),
                     kx=to_numpy(m["kx"]), ky=to_numpy(m["ky"]),
-                    kz=to_numpy(kz), wavelength=m["wavelength"],
+                    kz=np.array(to_numpy(kz), copy=True),
+                    wavelength=m["wavelength"],
                     # incidence terms for the power-normalized field bridge
                     # (jones_field_from_orders): the transmission-port kz is the
                     # SUBSTRATE kz, so the flux weight Re(kz_m/kz_inc) needs the
@@ -770,9 +776,27 @@ class RCWAResult:
     @staticmethod
     def _cell_grid_index(xg, yg, period_x, period_y, Sx, Sy):
         """Nearest-cell-pixel ``(ix, iy)`` index grids mapping the real-space
-        field samples ``(xg, yg)`` onto a ``(Sx, Sy)`` unit-cell sampling."""
-        ix = (np.floor((xg % period_x) / period_x * Sx).astype(int)) % Sx
-        iy = (np.floor((yg % period_y) / period_y * Sy).astype(int)) % Sy
+        field samples ``(xg, yg)`` onto a ``(Sx, Sy)`` unit-cell sampling.
+
+        The solver's permittivity convention is set by
+        :func:`~lumenairy.elements.rcwa.twod._eps_convolution_2d`, whose
+        ``fft2(eps_cell)/(Sx Sy)`` makes the band-limited ``eps(x, y)`` pass
+        EXACTLY through ``eps_cell[j, i]`` at the NODE ``(j Px/Sx, i Py/Sy)``.
+        The nearest node to a field sample is therefore ``round``, not
+        ``floor``: ``floor`` reads the pixel at or below, a systematic
+        HALF-CELL-PIXEL bias of ``P/(2 Sx)`` that does NOT shrink with the
+        field grid ``nx`` (it is fixed by ``Sx``).
+
+        .. versionchanged:: 5.29
+           Was ``floor`` despite this docstring's "Nearest" (audit W7-D).
+           Measured on a half-metal / half-air 64-pixel cell over a lossy
+           spacer: :meth:`layer_absorption` converged to 0.16548922 (floor)
+           vs 0.16541527 (nearest) for the metal layer -- a 7.4e-5 absolute /
+           4.5e-4 relative offset in the per-layer split that persisted at
+           ``nx = 4096``.
+        """
+        ix = (np.round((xg % period_x) / period_x * Sx).astype(int)) % Sx
+        iy = (np.round((yg % period_y) / period_y * Sy).astype(int)) % Sy
         return ix, iy
 
     @staticmethod
@@ -2099,7 +2123,8 @@ class RCWAStack:
             # (a traced theta/phi cannot feed the concrete guard; the traced
             # solve documents its skipped guards -- D1)
             _require_propagating_incidence("RCWAStack.solve", eps_sup,
-                                           kx0 ** 2 + ky0 ** 2)
+                                           kx0 ** 2 + ky0 ** 2,
+                                           warn_lossy=True)
             # The traced (JAX) layer permittivities cannot feed the concrete
             # grazing nudge, so on the differentiable path the nudge sees only
             # the region indices (the dominant region Rayleigh anomaly is
@@ -2193,6 +2218,13 @@ class RCWAStack:
             if cached is None:
                 cached = self._layer_modes(L, Kx, Ky, orders)
                 if key is not None:
+                    # Freeze before sharing (audit W7-B, the M9 class): the
+                    # SAME tuple object is appended for every layer with an
+                    # identical eig key, so with retain_internal=True a
+                    # 3-period DBR has info['W'][0] IS info['W'][2] IS
+                    # info['W'][4] (measured).  A write through one layer's
+                    # view silently rewrote the others.
+                    cached = tuple(_readonly(a) for a in cached)
                     _mode_cache[key] = cached
             modes.append(cached)
         any_oop = any(isinstance(m, tuple) and len(m) == 8 and m[0] == "gen"

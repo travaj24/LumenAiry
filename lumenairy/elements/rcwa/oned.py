@@ -54,48 +54,81 @@ from ._core import (
 )
 
 
+def _binary_step_coeffs(c_lo, c_hi, duty, n_coeffs, xp):
+    """EXACT centred Fourier coefficients of the one-period binary profile that
+    equals ``c_hi`` on ``[0, duty)`` and ``c_lo`` on ``[duty, 1)``::
+
+        c_k = c_lo [k == 0] + (c_hi - c_lo) d sinc(k d) exp(-i pi k d)
+
+    (``np.sinc(z) = sin(pi z)/(pi z)``, so the k = 0 entry needs no branch:
+    ``d sinc(0) = d``.)  Length ``2*n_coeffs - 1``, ordered
+    ``k = -(n_coeffs-1) .. (n_coeffs-1)`` -- the :func:`_fourier_coeffs_1d`
+    layout, so it drops straight into :func:`_toeplitz_1d`.
+
+    Backend-agnostic (NumPy / CuPy / JAX) and differentiable in ``c_lo``,
+    ``c_hi`` AND ``duty``."""
+    k = xp.arange(-(n_coeffs - 1), n_coeffs).astype(float)
+    ramp = duty * xp.sinc(k * duty) * xp.exp(-1j * np.pi * k * duty)
+    dc = (k == 0).astype(_C)
+    return c_lo * dc + (c_hi - c_lo) * ramp
+
+
 def _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, n_orders,
                                  n_samples=4096, use_li=True):
     """Convolution matrices for a 1-D binary grating: the Laurent ``[[eps]]``
     and the Li inverse-rule ``[[1/eps]]^{-1}``.  The ridge (index
     ``n_ridge``) occupies the fraction ``duty_cycle`` of the period.
 
-    A closed-form Fourier series exists for a binary profile, but sampling
-    + FFT keeps the path identical to the (future) arbitrary-profile and
-    2-D cases and is exact to machine precision at this sampling.
+    Uses the EXACT closed-form Fourier series of the binary profile
+    (:func:`_binary_step_coeffs`) -- no spatial sampling at all.
 
-    Backend-agnostic / JAX-differentiable: the hard-edge ``where`` selects
-    between the (possibly traced) ridge / groove permittivities, so the
-    gradient flows to the INDEX VALUES (the documented JAX design targets);
-    ``duty_cycle`` is a discrete threshold and is not differentiated.
+    .. versionchanged:: 5.29
+       Was a ``n_samples``-point midpoint sampling + FFT, whose DFT is
+       provably the analytic series of a grating with duty ``J/n_samples``,
+       ``J = #{j : (j+0.5)/n_samples < duty}`` -- i.e. the requested duty
+       silently ROUNDED to the internal grid, error up to ``0.5/n_samples``
+       (1.22e-4 at the 4096 default).  Measured (audit W7-A, period 1 um,
+       depth 0.4 um, 633 nm, n=2/1 on n_sub=1.5, TE): at ``duty_cycle=0.4``
+       the realised duty was 0.399902344 and ``R_0`` was low by 9.779e-5 --
+       a geometry error that NO amount of ``n_orders`` removes and that
+       energy closure cannot see (closure stayed 1e-14).  The predicted
+       shift ``dR0/d(duty) x d(duty) = 1.0013 x (-9.766e-5) = -9.778e-5``
+       matched the measurement to three figures.  It also made
+       ``asr_eta > 0`` (which quantises on its OWN 16384-point grid) unable
+       to converge to the uniform answer: the two paths sat 1.1e-4 apart at
+       every order.  Both docstring claims that this path uses "the exact
+       binary-grating Fourier coefficients" (see
+       :func:`rcwa_efficiency_1d_jax`) are now true.  At ``duty_cycle=0.5``
+       (grid-exact, the value nearly every regression pins) the change is
+       5.0e-8 TE / 3.0e-9 TM.
 
-    ``use_li`` (default ``True``) controls whether the inverse-rule matrix is
-    built: the Laurent / TE-dielectric path never reads it, so passing
-    ``use_li=False`` skips an O(n_orders^3) matrix inverse + one FFT and returns
-    ``EPS_II = None`` (byte-identical result -- the matrix was discarded anyway).
+    Backend-agnostic / JAX-differentiable: the coefficients are analytic in
+    the (possibly traced) ridge / groove permittivities.  ``duty_cycle`` is
+    now analytic too, though the public 1-D entry points still materialise it
+    to a Python float before this call.
+
+    ``n_samples`` is accepted for back-compatibility and IGNORED (the exact
+    coefficients need no grid; the former 4*n_orders aliasing hazard is
+    structurally gone).  ``use_li`` (default ``True``) controls whether the
+    inverse-rule matrix is built: the Laurent / TE-dielectric path never reads
+    it, so ``use_li=False`` skips an O(n_orders^3) matrix inverse and returns
+    ``EPS_II = None`` (byte-identical result -- the matrix was discarded
+    anyway).
     """
+    del n_samples                       # exact coefficients need no sampling
     xp = array_namespace(n_ridge, n_groove)
-    # The Toeplitz needs c_k for |k| up to 2*n_orders; an N-sample FFT represents
-    # c_k WITHOUT ALIASING only for |k| <= N/2, so N must exceed 4*n_orders.  When
-    # n_orders is large (> ~1024 at the 4096 default) the modular wrap full[k % N]
-    # folds high harmonics onto low orders and SILENTLY corrupts EPS/EPS_II -- bump
-    # the internal grid to the next power of two that clears the Nyquist limit.
-    need = 4 * n_orders + 2
-    if n_samples < need:
-        n_samples = 1 << (need - 1).bit_length()
-    x = (xp.arange(n_samples) + 0.5) / n_samples
     eps_r = xp.asarray(n_ridge).astype(_C) ** 2
     eps_g = xp.asarray(n_groove).astype(_C) ** 2
-    eps = xp.where(x < duty_cycle, eps_r, eps_g).astype(_C)
     # The Toeplitz matrix needs coefficients c_k for k = -(N-1)..(N-1) with
     # N = 2*n_orders+1, i.e. n_coeffs = N.
     n_coeffs = 2 * n_orders + 1
-    eps_coeffs = _fourier_coeffs_1d(eps, n_coeffs)
-    EPS = _toeplitz_1d(eps_coeffs, n_orders)               # Laurent rule
+    EPS = _toeplitz_1d(                                    # Laurent rule
+        _binary_step_coeffs(eps_g, eps_r, duty_cycle, n_coeffs, xp), n_orders)
     if not use_li:
         return EPS, None                                   # inverse rule unused
-    inv_eps_coeffs = _fourier_coeffs_1d(1.0 / eps, n_coeffs)
-    EPS_II = xp.linalg.inv(_toeplitz_1d(inv_eps_coeffs, n_orders))  # inverse rule
+    inv_c = _binary_step_coeffs(1.0 / eps_g, 1.0 / eps_r, duty_cycle,
+                                n_coeffs, xp)
+    EPS_II = xp.linalg.inv(_toeplitz_1d(inv_c, n_orders))  # inverse rule
     return EPS, EPS_II
 
 
@@ -194,16 +227,37 @@ def _asr_convolutions(n_ridge, n_groove, duty_cycle, n_orders, eta, xp,
     NumPy/CuPy only (the ASR path is gated off JAX).  The permittivity is
     sampled from the ALREADY-CONJUGATED internal indices, so it shares the
     public->internal convention bridge with ``_binary_grating_convolutions``.
+
+    .. versionchanged:: 5.29
+       Three coefficient conventions had to be made mutually consistent
+       (audit W7-A).  (i) ``eps(x(u))`` is a binary step in ``u`` with walls
+       EXACTLY at ``u = 0`` and ``u = duty_cycle`` -- that is the whole
+       premise of the matched coordinate map -- so it now uses the analytic
+       :func:`_binary_step_coeffs` instead of thresholding a 16384-point
+       ``u``-grid (which quantised the wall to the grid and therefore did NOT
+       land it on a coordinate line).  (ii) the smooth metric ``1/f`` keeps
+       its midpoint quadrature but carries the ``exp(-i pi k / n_samples)``
+       half-sample phase that a bare FFT of midpoint samples omits (without
+       it the operators describe ``u + 0.5/n_samples`` while ``G`` below
+       describes ``u``).  (iii) ``G`` is unchanged.  Before this, ASR floored
+       at |R0 - uniform| ~ 1.1e-4 at EVERY order; after, it converges.
     """
     u, f_u, x_u, in_ridge = _asr_metric_profile(duty_cycle, eta, n_samples)
     eps_r = complex(n_ridge) ** 2
     eps_g = complex(n_groove) ** 2
-    eps_u = np.where(in_ridge, eps_r, eps_g).astype(_C)   # eps(x(u)) on u-grid
     n_coeffs = 2 * n_orders + 1
-    Fi = _toeplitz_1d(_fourier_coeffs_1d(1.0 / f_u, n_coeffs), n_orders)
-    EPS = _toeplitz_1d(_fourier_coeffs_1d(eps_u, n_coeffs), n_orders)
-    EPS_II = np.linalg.inv(
-        _toeplitz_1d(_fourier_coeffs_1d(1.0 / eps_u, n_coeffs), n_orders))
+    # Midpoint-quadrature coefficients of the SMOOTH metric: the FFT of
+    # samples at u_j = (j+0.5)/Ns returns c_k of 1/f(u + 0.5/Ns), so undo that
+    # half-sample shift and stay in the same u gauge as x_u / G.
+    kfix = np.exp(-1j * np.pi
+                  * np.arange(-(n_coeffs - 1), n_coeffs) / n_samples)
+    Fi = _toeplitz_1d(_fourier_coeffs_1d(1.0 / f_u, n_coeffs) * kfix, n_orders)
+    EPS = _toeplitz_1d(
+        _binary_step_coeffs(eps_g, eps_r, float(duty_cycle), n_coeffs, np),
+        n_orders)
+    EPS_II = np.linalg.inv(_toeplitz_1d(
+        _binary_step_coeffs(1.0 / eps_g, 1.0 / eps_r, float(duty_cycle),
+                            n_coeffs, np), n_orders))
     # u<->x Rayleigh bridge (period-normalised orders; normal incidence).
     orders = np.arange(-n_orders, n_orders + 1)
     twopi = 2.0 * np.pi
@@ -498,7 +552,7 @@ def rcwa_efficiency_1d(
                 except TypeError:
                     pass                      # array-valued: checked downstream
         _require_propagating_incidence("rcwa_efficiency_1d", complex(eps_sup),
-                                       complex(kx0) ** 2)
+                                       complex(kx0) ** 2, warn_lossy=True)
         eps_reals = [complex(eps_sup), complex(eps_sub)]
         if not _is_traced(n_ridge):
             eps_reals += [complex(n_ridge) ** 2, complex(n_groove) ** 2]
@@ -950,7 +1004,8 @@ def rcwa_jones_vs_wavelength_segments(
 
 def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
                             eps_sup, eps_sub, kz_inc, depth, kx0, xp, is_jax,
-                            fn_name, lossless=False, formulation="li"):
+                            fn_name, lossless=False, formulation="li",
+                            edges=None):
     """Shared 1-D anisotropic Jones solve core (binary or multi-segment).
 
     Given the per-component one-period ``profiles`` (5 keys for the in-plane
@@ -966,9 +1021,14 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
     it unless ``return_jones_transmission=True`` so the default tuple arity is
     unchanged.
 
+    ``profiles`` are PIECEWISE-CONSTANT descriptions: per-segment VALUE arrays
+    plus the shared period-normalised breakpoints ``edges`` (audit W7-A), so
+    the Fourier operators are exact rather than grid-rounded.  Passing
+    ``edges=None`` keeps the legacy uniform-SAMPLING interpretation.
+
     Factored out of :func:`rcwa_jones_1d` so that
     :func:`rcwa_jones_1d_segments` reuses the EXACT same core; the binary and
-    multi-segment callers differ only in how they sample ``profiles``.  Keeps
+    multi-segment callers differ only in how they describe ``profiles``.  Keeps
     the JAX-differentiable stack-based structure (no in-place assignment).
 
     ``formulation`` ('li' default / 'laurent') selects the in-plane
@@ -992,7 +1052,7 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         # half-space regions as [W; -V] (the in-plane symmetry holds for an
         # isotropic half-space) and the layer via the GENERAL S-matrix.
         Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ = \
-            _tensor_convolutions_full(profiles, M)
+            _tensor_convolutions_full(profiles, M, edges=edges)
         Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
         Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
         Wl, Vl, lam, Wlb, Vlb, lam_b = _layer_eigenmodes_tensor(
@@ -1005,7 +1065,8 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
         S11, _S12, S21, _S22 = S
     else:
-        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M, formulation)
+        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M,
+                                                       formulation, edges)
 
         Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
         Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
@@ -1219,7 +1280,8 @@ def rcwa_jones_1d(
     # non-propagating incidence are caught on JAX too.  The tensor-layer
     # diagonal permittivities are added to the nudge only when concrete.
     if not is_jax or not _is_traced(wavelength):
-        _require_propagating_incidence("rcwa_jones_1d", eps_sup, kx0 ** 2)
+        _require_propagating_incidence("rcwa_jones_1d", eps_sup, kx0 ** 2,
+                                       warn_lossy=True)
         eps_reals = [eps_sup, eps_sub]
         if not is_jax:
             eps_reals += [complex(eps_ridge[0, 0]), complex(eps_ridge[1, 1]),
@@ -1236,25 +1298,21 @@ def rcwa_jones_1d(
     Ky = xp.zeros((N, N), dtype=_C)
     kxv = xp.asarray(kx.astype(_C))
 
-    # Sample the per-component profiles across one period (ridge over duty).
-    n_samples = 4096
-    xq = (xp.arange(n_samples) + 0.5) / n_samples
-    inside = xq < duty_cycle
+    # Per-component profiles as EXACT two-segment step functions: the ridge
+    # occupies [0, duty) and the groove [duty, 1).  Audit W7-A: these used to
+    # be 4096-point midpoint SAMPLINGS, which realise duty rounded to that
+    # grid (up to 1.22e-4) -- the same silent geometry error the scalar core
+    # carried, and it broke the documented tensor = scalar*I reduction
+    # (measured 2.45e-05 at normal incidence, 1.84e-04 at 20 deg, duty 0.4).
+    edges = (0.0, float(duty_cycle), 1.0)
+    comp_map = {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0), "yy": (1, 1),
+                "zz": (2, 2)}
     if offplane:
-        # ---- FULL-3x3 (out-of-plane) path (Li 2003): sample all nine
-        # component profiles (ridge over duty), the rest is the shared core.
-        profiles = {}
-        for key, (ii, jj) in {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0),
-                              "yy": (1, 1), "zz": (2, 2), "xz": (0, 2),
-                              "zx": (2, 0), "yz": (1, 2), "zy": (2, 1)}.items():
-            profiles[key] = xp.where(inside, eps_ridge[ii, jj],
-                                     eps_groove[ii, jj]).astype(_C)
-    else:
-        profiles = {}
-        for key, (ii, jj) in {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0),
-                              "yy": (1, 1), "zz": (2, 2)}.items():
-            profiles[key] = xp.where(inside, eps_ridge[ii, jj],
-                                     eps_groove[ii, jj]).astype(_C)
+        comp_map.update({"xz": (0, 2), "zx": (2, 0), "yz": (1, 2),
+                         "zy": (2, 1)})
+    profiles = {key: xp.stack([xp.asarray(eps_ridge[ii, jj]).astype(_C),
+                               xp.asarray(eps_groove[ii, jj]).astype(_C)])
+                for key, (ii, jj) in comp_map.items()}
 
     kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2)))
     # Lossless-closure tripwire (audit S1-2): route the provable-losslessness
@@ -1267,7 +1325,7 @@ def rcwa_jones_1d(
         profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
         eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
         xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d", lossless=lossless,
-        formulation=formulation)
+        formulation=formulation, edges=edges)
     return res if return_jones_transmission else res[:4]
 
 
@@ -1424,7 +1482,7 @@ def rcwa_jones_1d_segments(
     # diagonal permittivities are added to the nudge only when concrete.
     if not is_jax or not _is_traced(wavelength):
         _require_propagating_incidence("rcwa_jones_1d_segments", eps_sup,
-                                       kx0 ** 2)
+                                       kx0 ** 2, warn_lossy=True)
         eps_reals = [eps_sup, eps_sub]
         if not is_jax:
             for t in eps_tensors:
@@ -1442,14 +1500,14 @@ def rcwa_jones_1d_segments(
     Ky = xp.zeros((N, N), dtype=_C)
     kxv = xp.asarray(kx.astype(_C))
 
-    # Sample the per-component profiles across one period.  For sample x in
-    # [0, 1) find which segment's cumulative [c_{k-1}, c_k) interval it lands
-    # in and take that segment's component.  Built stack-based via nested
-    # xp.where over the segments (no in-place assignment -> JAX-differentiable).
-    n_samples = 4096
-    xq = (xp.arange(n_samples) + 0.5) / n_samples
+    # Per-component profiles as EXACT piecewise-constant step functions:
+    # segment k occupies [cum[k], cum[k+1]).  Audit W7-A: these used to be
+    # 4096-point midpoint SAMPLINGS, which round every segment boundary onto
+    # that grid (up to 1.22e-4 of a period) -- a silent geometry error no
+    # order count removes and the energy closure cannot see.
     cum = np.cumsum([0.0] + widths)
     cum[-1] = 1.0  # close the last interval exactly despite float roundoff
+    edges = tuple(float(v) for v in cum)
 
     if offplane:
         comp_map = {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0), "yy": (1, 1),
@@ -1458,17 +1516,9 @@ def rcwa_jones_1d_segments(
     else:
         comp_map = {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0), "yy": (1, 1),
                     "zz": (2, 2)}
-    profiles = {}
-    for key, (ii, jj) in comp_map.items():
-        # Start from the LAST segment, then fold earlier segments in REVERSE
-        # order so each segment's left boundary ``xq < c_{k+1}`` is applied
-        # over the wider ones -- segment k wins on [c_k, c_{k+1}) because every
-        # later-applied (smaller-k) mask is the disjoint left part.
-        prof = xp.full(n_samples, eps_tensors[-1][ii, jj], dtype=_C)
-        for k in range(len(eps_tensors) - 2, -1, -1):
-            in_seg = xq < cum[k + 1]
-            prof = xp.where(in_seg, eps_tensors[k][ii, jj], prof)
-        profiles[key] = prof.astype(_C)
+    profiles = {key: xp.stack([xp.asarray(t[ii, jj]).astype(_C)
+                               for t in eps_tensors])
+                for key, (ii, jj) in comp_map.items()}
 
     kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2)))
     # Lossless-closure tripwire (audit S1-2): forward the provable-losslessness
@@ -1480,7 +1530,8 @@ def rcwa_jones_1d_segments(
     res = _jones_1d_from_profiles(
         profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
         eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
-        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d_segments", lossless=lossless)
+        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d_segments",
+        lossless=lossless, edges=edges)
     return res if return_jones_transmission else res[:4]
 
 
@@ -1620,7 +1671,22 @@ def jones_retardance_diattenuation(jones_reflection):
     ``(-pi, pi]``] (for a TE/TM-aligned grating, ``arg(r_TM) - arg(r_TE)``);
     ``diattenuation`` = ``(Tmax - Tmin)/(Tmax + Tmin)`` of the intensity
     eigentransmittances (0 = none, 1 = ideal polarizer); ``fast_axis_rad`` is the
-    orientation of the maximum-transmittance input eigenpolarization."""
+    AZIMUTH of the maximum-transmittance input eigenpolarization -- the major
+    axis of its polarization ellipse, in ``(-pi/2, pi/2]``.
+
+    .. versionchanged:: 5.29
+       The azimuth was ``arctan2(Re v_y, Re v_x)`` (audit W7-E), which is only
+       the ellipse axis when the eigenpolarization is LINEAR.  A diattenuating
+       grating's max-T eigenpolarization is generally ELLIPTICAL, and the real
+       parts then describe a different direction: measured on a Hermitian
+       ``J`` whose max-T eigenvector is ``(0.6, 0.8i)`` (major axis clearly y,
+       ``|E_y| = 0.8 > |E_x| = 0.6``) the old expression returned
+       ``pi`` rad = the x axis -- a 90-degree error.  It also returned values
+       outside a half-open pi-period range (``pi`` for a plain x-axis
+       linear eigenpolarization), so downstream mod-pi comparisons had to
+       normalise by hand.  The ellipse azimuth
+       ``psi = 0.5 atan2(2 Re(v_x conj(v_y)), |v_x|^2 - |v_y|^2)`` reduces to
+       the old value (mod pi) for every real / linear eigenpolarization."""
     J = np.asarray(jones_reflection, dtype=_C)
     if J.shape != (2, 2):
         raise ValueError("jones_retardance_diattenuation: expected a (2, 2) "
@@ -1631,7 +1697,11 @@ def jones_retardance_diattenuation(jones_reflection):
     ev = np.linalg.eigvals(U @ Vh)                 # unitary retarder eigenphases
     retard = float(np.angle(ev[0] / ev[1]))
     v0 = np.conj(Vh[0])                            # max-T input eigenpolarization
-    fast_axis = float(np.arctan2(np.real(v0[1]), np.real(v0[0])))
+    # Polarization-ellipse azimuth (Born & Wolf 1.4.2): the tan(2 psi) form is
+    # exact for linear, elliptical and circular states alike.
+    fast_axis = 0.5 * float(np.arctan2(
+        2.0 * float(np.real(v0[0] * np.conj(v0[1]))),
+        float(np.abs(v0[0]) ** 2 - np.abs(v0[1]) ** 2)))
     return retard, diatt, fast_axis
 
 

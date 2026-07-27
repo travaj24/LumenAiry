@@ -732,7 +732,8 @@ def _sqrt_decay(x: np.ndarray) -> np.ndarray:
 # Robustness guards: non-propagating incidence + generalized Wood-anomaly
 # ===========================================================================
 
-def _require_propagating_incidence(fn_name, eps_sup, kt0_sq):
+def _require_propagating_incidence(fn_name, eps_sup, kt0_sq, *,
+                                   warn_lossy=False):
     """Raise if the incidence half-space is non-propagating, i.e. the
     incident plane wave is evanescent in the superstrate
     (``Re(eps_superstrate) <= kx0^2 + ky0^2``).  Without this guard the
@@ -748,7 +749,36 @@ def _require_propagating_incidence(fn_name, eps_sup, kt0_sq):
     (TE ``sum T = -11.7``, TM ``-392.8`` on a plain lossless grating) while
     the reflected orders were masked to zero -- a discontinuity at
     ``Im(n_sup) = 0^-`` invisible to the one-sided energy tripwire.  An
-    infinitesimally LOSSY superstrate remains continuous and supported."""
+    infinitesimally LOSSY superstrate remains continuous and supported (it is
+    continuous, but NOT energy-exact -- see the loss warning below).
+
+    A LOSSY incidence medium (public ``Im(n_superstrate) > 0``) is out of
+    :func:`_forward_flux_kz`'s scope by construction: each wave is normalised by
+    its own ``|amp|^2`` z-flux while the incident/reflected CROSS-term carries
+    net flux, so ``R + T != 1`` even for a lossless structure.  Nothing used to
+    say so, and the lossless clause of :func:`_check_energy` is disarmed for a
+    lossy cell, so the violation was fully silent.  Measured (audit W7-F, a
+    lossless 200 nm n=2 slab on n_sub=1.5): ``Im(n_sup) = 0.01`` -> ``R + T =
+    1.001896`` (normal) / ``1.002479`` (theta=0.4); ``Im(n_sup) = 0.1`` ->
+    ``1.022957`` / ``1.030396``.  The per-order values still match analytic
+    Fresnel exactly; it is the SUM that is not a conservation law here.
+
+    ``warn_lossy`` (opt-in) emits that diagnostic.  It is OFF by default so
+    every non-RCWA caller of this shared guard (PMM, Berreman) keeps its
+    pinned silent-on-loss behaviour; the RCWA entry points pass ``True``."""
+    if warn_lossy and float(np.imag(eps_sup)) < 0.0:
+        # internal Im(eps) < 0 == public Im(n) > 0 == an ABSORBING incidence
+        # medium (the loss-convention bridge conjugates the region eps).
+        warnings.warn(
+            f"{fn_name}: LOSSY incidence medium (public eps_superstrate = "
+            f"{complex(np.conj(complex(eps_sup))):.6g}).  R and T are each "
+            f"normalised by their own z-flux, but the incident/reflected "
+            f"cross-term in an absorbing half-space also carries net flux, so "
+            f"R + T != 1 by construction (measured +0.2% at Im(n_sup)=0.01, "
+            f"+2.3% at 0.1) and the energy tripwire cannot see it.  The "
+            f"PER-ORDER efficiencies are still exact; treat the sums as "
+            f"indicative.  Use a lossless incidence medium for energy "
+            f"accounting.", stacklevel=3)
     if float(np.imag(eps_sup)) > 0.0:
         raise ValueError(
             f"{fn_name}: gain incidence medium (Im(n_superstrate) < 0; "
@@ -1893,7 +1923,19 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
     estimate : float
         The extrapolated ``N -> infinity`` value.
     """
-    v = np.asarray(values, dtype=float).ravel()
+    v_in = np.asarray(values).ravel()
+    if np.iscomplexobj(v_in):
+        # Audit W7-G: a COMPLEX sample sequence (a Jones amplitude, an S-matrix
+        # element) used to die inside NumPy's unsafe float cast with a bare
+        # "float() argument must be ... not 'complex'".  Both estimators are
+        # real-tail models; say so by name instead of leaking a cast error.
+        raise ValueError(
+            "rcwa_extrapolate: `values` must be REAL (efficiencies, "
+            "absorptance, a phase in radians); a complex sequence was passed "
+            "and both estimators model a real algebraic / geometric tail.  "
+            "Extrapolate np.real(...) and np.imag(...) (or np.abs / np.angle) "
+            "separately.")
+    v = v_in.astype(float)
     if v.size < 3:
         raise ValueError(
             "rcwa_extrapolate: need at least 3 samples (the quantity at "
@@ -2009,24 +2051,75 @@ def uniaxial_tensor(n_o, n_e, theta, *, phi=0.0):
 
 
 
-def _toeplitz_of_profile(profile, n_orders):
-    """Laurent (direct-rule) Toeplitz ``[[f]]`` of a sampled one-period
-    profile."""
-    return _toeplitz_1d(_fourier_coeffs_1d(profile, 2 * n_orders + 1), n_orders)
+def _step_coeffs(values, edges, n_coeffs):
+    """EXACT centred Fourier coefficients of a PIECEWISE-CONSTANT one-period
+    profile: ``values[s]`` on ``[edges[s], edges[s+1])``, with ``edges[0] = 0``
+    and ``edges[-1] = 1`` (period-normalised).
+
+        c_k = sum_s v_s w_s sinc(k w_s) exp(-i pi k (e_s + e_{s+1})),
+        w_s = e_{s+1} - e_s
+
+    (``np.sinc(z) = sin(pi z)/(pi z)``, so ``k = 0`` needs no branch and gives
+    the area average ``sum_s v_s w_s``.)  Length ``2*n_coeffs - 1`` in the
+    :func:`_fourier_coeffs_1d` ordering.  Backend-agnostic and differentiable
+    in ``values``; ``edges`` are concrete host floats (geometry).
+
+    Audit W7-A: the 1-D anisotropic Jones path used to SAMPLE these profiles on
+    a 4096-point midpoint grid and FFT them, which realises the segment widths
+    ROUNDED to that grid (up to 1.22e-4 of a period).  The scalar core is now
+    exact, so the sampled tensor path both carried the same silent geometry
+    error and broke the documented ``tensor = scalar*I`` reduction."""
+    xp = array_namespace(values)
+    e = np.asarray(edges, dtype=float)
+    w = e[1:] - e[:-1]                                   # (n_seg,)
+    mid_sum = e[1:] + e[:-1]
+    k = np.arange(-(n_coeffs - 1), n_coeffs, dtype=float)  # (n_k,)
+    # (n_k, n_seg) analytic kernel -- host-side geometry, no tracing needed
+    kern = xp.asarray((w[None, :] * np.sinc(k[:, None] * w[None, :])
+                       * np.exp(-1j * np.pi * k[:, None] * mid_sum[None, :]))
+                      .astype(_C))
+    dc = xp.asarray((k == 0).astype(_C))
+    # Split off the constant part BEFORE the quadrature.  Analytically
+    # ``sum_s w_s sinc(k w_s) exp(...) = delta_{k0}``, but in floating point it
+    # leaves ~1e-16 residue in every harmonic -- and a UNIFORM layer whose
+    # convolution is not EXACTLY diagonal has a doubly-degenerate eig whose
+    # eigenvector matrix is then arbitrary and near-singular (measured: an
+    # oblique isotropic slab through ``rcwa_jones_1d`` returned R+T = 22.9,
+    # since _layer_eigenmodes_tensor has no analytic uniform branch).
+    # Referencing to the first segment makes the uniform case bit-exact
+    # (``dev == 0`` -> every off-DC coefficient is an exact zero) and is a
+    # strict conditioning improvement otherwise.
+    vals = xp.asarray(values).astype(_C)
+    base = vals[0]
+    return (kern @ (vals - base)) + base * dc
+
+
+def _toeplitz_of_profile(profile, n_orders, edges=None):
+    """Laurent (direct-rule) Toeplitz ``[[f]]`` of a one-period profile.
+
+    ``edges=None`` (default): ``profile`` is a uniform SAMPLING and the
+    coefficients come from its FFT -- the historical path, bit-for-bit.
+    ``edges`` given: ``profile`` is the per-segment VALUE array of a
+    piecewise-constant profile and the coefficients are exact
+    (:func:`_step_coeffs`)."""
+    if edges is None:
+        return _toeplitz_1d(_fourier_coeffs_1d(profile, 2 * n_orders + 1),
+                            n_orders)
+    return _toeplitz_1d(_step_coeffs(profile, edges, 2 * n_orders + 1),
+                        n_orders)
 
 
 
-def _inv_toeplitz_of_profile(profile, n_orders):
-    """Inverse-rule operator ``[[1/f]]^{-1}`` of a sampled one-period
-    profile."""
+def _inv_toeplitz_of_profile(profile, n_orders, edges=None):
+    """Inverse-rule operator ``[[1/f]]^{-1}`` of a one-period profile (see
+    :func:`_toeplitz_of_profile` for the ``edges`` contract -- ``1/f`` is
+    elementwise on either representation)."""
     xp = array_namespace(profile)
-    return xp.linalg.inv(
-        _toeplitz_1d(_fourier_coeffs_1d(1.0 / profile, 2 * n_orders + 1),
-                     n_orders))
+    return xp.linalg.inv(_toeplitz_of_profile(1.0 / profile, n_orders, edges))
 
 
 
-def _tensor_convolutions(profiles, n_orders, formulation="li"):
+def _tensor_convolutions(profiles, n_orders, formulation="li", edges=None):
     """Anisotropic 1-D Fourier operators (Li 1996; wall normal along x).
 
     ``profiles`` holds the one-period samplings of the tensor components
@@ -2066,20 +2159,20 @@ def _tensor_convolutions(profiles, n_orders, formulation="li"):
     d = xp.asarray(profiles["yy"]).astype(_C)
     ezz = xp.asarray(profiles["zz"]).astype(_C)
     if formulation == "laurent":
-        return (_toeplitz_of_profile(a, n_orders),
-                _toeplitz_of_profile(b, n_orders),
-                _toeplitz_of_profile(c, n_orders),
-                _toeplitz_of_profile(d, n_orders),
-                _toeplitz_of_profile(ezz, n_orders))
-    inv_a = _inv_toeplitz_of_profile(a, n_orders)             # [[1/exx]]^{-1}
-    T_b_a = _toeplitz_of_profile(b / a, n_orders)             # [[exy/exx]]
-    T_c_a = _toeplitz_of_profile(c / a, n_orders)             # [[eyx/exx]]
-    T_schur = _toeplitz_of_profile(d - c * b / a, n_orders)   # [[eyy - eyx exy/exx]]
+        return (_toeplitz_of_profile(a, n_orders, edges),
+                _toeplitz_of_profile(b, n_orders, edges),
+                _toeplitz_of_profile(c, n_orders, edges),
+                _toeplitz_of_profile(d, n_orders, edges),
+                _toeplitz_of_profile(ezz, n_orders, edges))
+    inv_a = _inv_toeplitz_of_profile(a, n_orders, edges)      # [[1/exx]]^{-1}
+    T_b_a = _toeplitz_of_profile(b / a, n_orders, edges)      # [[exy/exx]]
+    T_c_a = _toeplitz_of_profile(c / a, n_orders, edges)      # [[eyx/exx]]
+    T_schur = _toeplitz_of_profile(d - c * b / a, n_orders, edges)
     Cxx = inv_a
     Cxy = inv_a @ T_b_a
     Cyx = T_c_a @ inv_a
     Cyy = T_schur + T_c_a @ inv_a @ T_b_a
-    EZZ = _toeplitz_of_profile(ezz, n_orders)
+    EZZ = _toeplitz_of_profile(ezz, n_orders, edges)
     return Cxx, Cxy, Cyx, Cyy, EZZ
 
 
@@ -2112,7 +2205,7 @@ def _tensor_has_offplane(profiles):
 
 
 
-def _tensor_convolutions_full(profiles, n_orders):
+def _tensor_convolutions_full(profiles, n_orders, edges=None):
     """Full anisotropic 1-D Fourier operators with OUT-OF-PLANE coupling
     (Li 2003; wall normal along x).
 
@@ -2137,7 +2230,8 @@ def _tensor_convolutions_full(profiles, n_orders):
     has_off = _tensor_has_offplane(profiles)
     if not has_off:
         # Bit-identical in-plane path + zero off-plane operators.
-        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, n_orders)
+        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, n_orders,
+                                                       edges=edges)
         N = 2 * n_orders + 1
         Z = xp.zeros((N, N), dtype=_C)
         return Cxx, Cxy, Cyx, Cyy, EZZ, Z, Z, Z, Z
@@ -2162,21 +2256,22 @@ def _tensor_convolutions_full(profiles, n_orders):
     d_eff = d - eyz * ezy * inv_ezz
 
     # ----- existing wall-normal-x Li factorization on the EFFECTIVE profile ---
-    inv_a = _inv_toeplitz_of_profile(a_eff, n_orders)        # [[1/a_eff]]^{-1}
-    T_b_a = _toeplitz_of_profile(b_eff / a_eff, n_orders)
-    T_c_a = _toeplitz_of_profile(c_eff / a_eff, n_orders)
-    T_schur = _toeplitz_of_profile(d_eff - c_eff * b_eff / a_eff, n_orders)
+    inv_a = _inv_toeplitz_of_profile(a_eff, n_orders, edges)  # [[1/a_eff]]^{-1}
+    T_b_a = _toeplitz_of_profile(b_eff / a_eff, n_orders, edges)
+    T_c_a = _toeplitz_of_profile(c_eff / a_eff, n_orders, edges)
+    T_schur = _toeplitz_of_profile(d_eff - c_eff * b_eff / a_eff, n_orders,
+                                   edges)
     Cxx = inv_a
     Cxy = inv_a @ T_b_a
     Cyx = T_c_a @ inv_a
     Cyy = T_schur + T_c_a @ inv_a @ T_b_a
-    EZZ = _toeplitz_of_profile(ezz, n_orders)
+    EZZ = _toeplitz_of_profile(ezz, n_orders, edges)
 
     # ----- direct-rule operators for the generator cross-blocks A, B ----------
-    EZX = _toeplitz_of_profile(ezx, n_orders)
-    EZY = _toeplitz_of_profile(ezy, n_orders)
-    EXZ = _toeplitz_of_profile(exz, n_orders)
-    EYZ = _toeplitz_of_profile(eyz, n_orders)
+    EZX = _toeplitz_of_profile(ezx, n_orders, edges)
+    EZY = _toeplitz_of_profile(ezy, n_orders, edges)
+    EXZ = _toeplitz_of_profile(exz, n_orders, edges)
+    EYZ = _toeplitz_of_profile(eyz, n_orders, edges)
     return Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ
 
 
@@ -2669,6 +2764,21 @@ def _clear_rcwa_caches() -> None:
 
 
 
+def _readonly(x):
+    """Mark a NumPy array non-writeable (identity for every other type).
+
+    Cache values are handed out BY IDENTITY, so a consumer that writes into a
+    returned array poisons the cache for every later call.  The PMM twin's
+    geo-eig cache was hardened this way in audit M9; audit W7-B measured the
+    same live path here (``RCWAResult.per_order_amplitudes()['kz']`` IS the
+    cached ``kz``: an in-place ``*= 2`` made the NEXT solve return the doubled
+    array).  Freezing turns a silent corruption into a loud
+    ``ValueError: assignment destination is read-only``."""
+    if isinstance(x, np.ndarray):
+        x.setflags(write=False)
+    return x
+
+
 def _cached_homogeneous_eigenmodes(eps, Kx, Ky, key):
     with _HOMOG_LOCK:
         hit = _HOMOG_CACHE.get(key)
@@ -2676,7 +2786,7 @@ def _cached_homogeneous_eigenmodes(eps, Kx, Ky, key):
             _HOMOG_CACHE.move_to_end(key)
     if hit is not None:
         return hit
-    res = _homogeneous_eigenmodes(Kx, Ky, eps)
+    res = tuple(_readonly(a) for a in _homogeneous_eigenmodes(Kx, Ky, eps))
     with _HOMOG_LOCK:
         _HOMOG_CACHE[key] = res
         _HOMOG_CACHE.move_to_end(key)
@@ -2715,6 +2825,7 @@ __all__ = [
     "_eig_for",
     "_block",
     "_rcwa_xp",
+    "_readonly",
     "_is_traced",
     "_concrete",
     "Efficiency2D",
@@ -2763,6 +2874,7 @@ __all__ = [
     "_rcwa_convergence_stack",
     "rcwa_extrapolate",
     "uniaxial_tensor",
+    "_step_coeffs",
     "_toeplitz_of_profile",
     "_inv_toeplitz_of_profile",
     "_tensor_convolutions",

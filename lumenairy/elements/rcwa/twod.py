@@ -535,8 +535,24 @@ def _nv_curved_wall_fraction(eps_cell):
     ~0.17+ for disks / ellipses.  ``max|Nx*Ny|`` is used SEPARATELY, as the
     CORNER discriminator (see :func:`_nv_nonseparable_guard`) -- that is the
     quantity the ``Cxy`` cross term actually keys on, and it is 0.000 on a
-    stripe but 0.500 on ANY cornered feature, curved or not."""
-    e = np.abs(np.asarray(eps_cell)).astype(float)
+    stripe but 0.500 on ANY cornered feature, curved or not.
+
+    .. versionchanged:: 5.29
+       The material indicator was ``|eps|``, which is blind to two materials
+       of equal MODULUS and different phase (audit W7-H): a disk of
+       ``2.5 e^{i}`` in a background of ``2.5`` read ``frac = 0.0000``
+       against ``0.1852`` for the same geometry with distinct moduli -- the
+       CURVATURE arm of the ``fff_nv`` gate simply did not see the wall.  (No
+       silent wrong answer was reachable: such a cell is metallic by
+       ``_nv_metallic_cell`` and cornered by ``max|Nx*Ny| = 0.500``, so
+       :func:`_nv_nonseparable_guard` still raised -- via the wrong arm, with
+       the wrong message.)  The indicator is now the complex-difference
+       modulus ``|eps - eps[0, 0]|``, the same convention
+       :func:`_nv_field_2d` already used.  The documented discriminator
+       values are unchanged where they were meaningful: stripe 0.0000,
+       square 0.0105, disk 0.1852."""
+    ec = np.asarray(to_numpy(eps_cell))
+    e = np.abs(ec - ec.flat[0]).astype(float)   # complex-aware material indicator
     rng = float(e.max() - e.min())
     if rng < 1e-12:                        # uniform cell -> no walls
         return 0.0
@@ -942,7 +958,7 @@ def rcwa_efficiency_2d(
                          or _is_traced(phi))
     if not is_jax or geom_concrete:
         _require_propagating_incidence("rcwa_efficiency_2d", eps_sup,
-                                       kx0 ** 2 + ky0 ** 2)
+                                       kx0 ** 2 + ky0 ** 2, warn_lossy=True)
         eps_reals = [eps_sup, eps_sub]
         if not is_jax:
             eps_reals += [float(xp.real(eps_cell).min()),
@@ -1139,7 +1155,8 @@ class PreparedRCWA2D:
         # Per-wavelength grazing / non-propagating guards (nudge only kx/Kx,
         # never the cached eps coefficients -- so the factorization stays valid).
         _require_propagating_incidence("rcwa_efficiency_2d", self.eps_sup,
-                                       self.kx0 ** 2 + self.ky0 ** 2)
+                                       self.kx0 ** 2 + self.ky0 ** 2,
+                                       warn_lossy=True)
         wl_eff = _grazing_safe_wavelength(
             float(wavelength), self.kx0, self.ky0, orders[:, 0], orders[:, 1],
             self.period_x, self.period_y, self.eps_reals)
@@ -1194,7 +1211,15 @@ class PreparedRCWA2D:
                                            rx, ry, rz, tx, ty, tz, self.einc_sq)
         _check_energy("rcwa_efficiency_2d", R_eff, T_eff,
                       lossless=getattr(self, "lossless", False))
-        return Efficiency2D(orders, R_eff, T_eff, 2 * N)
+        # Hand out a COPY of the order table (audit W7-C): returning
+        # ``self.orders`` by identity made every Efficiency2D of the sweep --
+        # and the prepared object itself -- share one array, so a caller that
+        # wrote into one result's ``orders`` silently corrupted the prepared
+        # geometry and every past AND future solve (measured: ``res[0][:] = 0``
+        # left ``prep.orders`` all-zero and the next ``solve()`` reported
+        # zeroed orders).  The free entry points already return a fresh
+        # ``_harmonic_orders_2d`` array per call; this restores parity.
+        return Efficiency2D(np.array(orders, copy=True), R_eff, T_eff, 2 * N)
 
 
 @_with_blas_limit
@@ -1600,7 +1625,7 @@ def rcwa_jones_2d(
                          or _is_traced(phi))
     if not is_jax or geom_concrete:
         _require_propagating_incidence("rcwa_jones_2d", eps_sup,
-                                       kx0 ** 2 + ky0 ** 2)
+                                       kx0 ** 2 + ky0 ** 2, warn_lossy=True)
         eps_reals = [eps_sup, eps_sub]
         if not is_jax:
             dr = xp.real(eps_t[:, :, [0, 1, 2], [0, 1, 2]])
@@ -2024,7 +2049,7 @@ def rcwa_efficiency_2d_shapes(
     kx0 = nre * np.sin(theta) * np.cos(phi)
     ky0 = nre * np.sin(theta) * np.sin(phi)
     _require_propagating_incidence("rcwa_efficiency_2d_shapes", eps_sup,
-                                   kx0 ** 2 + ky0 ** 2)
+                                   kx0 ** 2 + ky0 ** 2, warn_lossy=True)
     layer_eps = [eps_bg] + [s["eps"] for s in shapes_c]
     wl_eff = _grazing_safe_wavelength(
         wavelength, kx0, ky0, orders[:, 0], orders[:, 1], period_x, period_y,
