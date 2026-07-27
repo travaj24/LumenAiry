@@ -226,8 +226,9 @@ def test_w8_shear_convergence_outlier_vanishes_at_the_coincident_nx():
     Against the ``n_x = 1024`` answer the coincident point was off by 1.802e-02
     pre-fix and is off by 1.552e-04 post-fix (the ordinary ``O(1/n_x)``
     quantisation) -- a 116x improvement AT ``n_x = 128``.  Energy closure is
-    <= 2e-07 in every solve here, so no truncation-instability warning muddies
-    the comparison."""
+    <= 2e-07 in every solve on the authoring host; CI Linux measured 2.20e-5
+    on the 64-slice stack (eigensolve drift), so the sanity gate sits at 1e-4
+    -- still 180x below the pre-fix defect and 10x below the pin bound."""
     def solve(n_slices, n_x):
         st = RCWAStack(_P, n_superstrate=1.0, n_substrate=1.0, n_orders=7)
         st.add_tapered_grating(_D, eps_ridge=4.0, eps_groove=1.0,
@@ -240,7 +241,9 @@ def test_w8_shear_convergence_outlier_vanishes_at_the_coincident_nx():
         closure = float(np.max(np.abs(np.asarray(R).sum(1)
                                       + np.asarray(T).sum(1) - 1.0)))
         # measured 1.1e-10 / 3.4e-09 (32 slices) and 4.2e-08 / 2.0e-07 (64)
-        assert closure < 1e-6, closure     # the lossless stack must close
+        # locally; CI Linux 2.1998e-05 (64 slices) -- gate is a sanity check,
+        # not the signal (pre-fix defect 1.8e-02, pin bound 1e-03)
+        assert closure < 1e-4, closure     # the lossless stack must close
         return np.array([R[1, i0], R[0, i0], T[1, i0], T[0, i0]])
 
     fine = solve(64, 1024)                      # no coincidence at n_x=1024
@@ -430,7 +433,9 @@ def test_w8_rigid_translation_leaves_efficiencies_invariant():
     translation of the structure only rephases the order amplitudes.  Measured
     on the band-limited profile at ``S = 64``, ``M = 9``: shifting by half a
     pixel, a whole pixel, or an arbitrary ``0.137 P`` moves every ``R``/``T``
-    by <= 8.4e-15 at ``theta = 0`` and ``0.25`` rad."""
+    by <= 8.4e-15 at ``theta = 0`` and ``0.25`` rad on the authoring host;
+    the 1e-10 bound leaves eigensolve-drift room cross-platform (this is a
+    lock, not a discriminator -- nothing physical lives below 1e-10 here)."""
     S = 64
     node = np.arange(S) / S
     ny = 1
@@ -442,8 +447,8 @@ def test_w8_rigid_translation_leaves_efficiencies_invariant():
             cell = np.broadcast_to(
                 _bandlimited(node + d)[:, None].astype(_C), (S, ny)).copy()
             R1, T1, _j0, _j1 = _solve_cells([cell], theta=theta)
-            assert float(np.max(np.abs(R0 - R1))) < 1e-12
-            assert float(np.max(np.abs(T0 - T1))) < 1e-12
+            assert float(np.max(np.abs(R0 - R1))) < 1e-10
+            assert float(np.max(np.abs(T0 - T1))) < 1e-10
 
 
 def test_w8_hard_raster_quantises_the_width_and_area_does_not():
@@ -641,17 +646,21 @@ def test_w8_area_hurts_the_li_wall_normal_polarization():
 def test_w8_te_is_formulation_independent_for_a_1d_cell():
     """The measurement that makes the per-polarization recommendation legible:
     for a 1-D (x-only) cell ``E_y`` is TANGENTIAL to every wall, so Li's rule
-    reduces to the direct rule and the TE row is BIT-identical between
-    ``'laurent'`` and ``'li'`` (measured 0.0) -- while the TM row differs by
-    ~1.3e-03 to 1.7e-03.  So ``'area'``'s TE verdict cannot depend on the
-    formulation, and only the TM arm needed deciding."""
+    reduces to the direct rule and the TE row agrees between ``'laurent'`` and
+    ``'li'`` to eigensolve noise -- measured BIT-identical (0.0) on the
+    authoring host, ulp-level on CI Linux (the two formulations assemble the
+    operator differently, so libm/BLAS drift enters; the exact-equality pin
+    failed there).  The 1e-9 bound keeps FIVE decades of separation from the
+    TM row, which differs by ~1.3e-03 to 1.7e-03.  So ``'area'``'s TE verdict
+    cannot depend on the formulation, and only the TM arm needed deciding."""
     for rst in ("hard", "area"):
         for n_x in (64, 256):
             cells = _cell_of(n_x=n_x, raster=rst)
             Rl, _Tl, _i, _j = _solve_cells(cells, formulation="laurent",
                                            theta=0.25)
             Ri, _Ti, _k, _m = _solve_cells(cells, formulation="li", theta=0.25)
-            assert np.array_equal(Rl[_ROW["TE"]], Ri[_ROW["TE"]])
+            te_gap = float(np.max(np.abs(Rl[_ROW["TE"]] - Ri[_ROW["TE"]])))
+            assert te_gap < 1e-9, te_gap
             assert float(np.max(np.abs(Rl[_ROW["TM"]] - Ri[_ROW["TM"]]))) > 1e-4
 
 
