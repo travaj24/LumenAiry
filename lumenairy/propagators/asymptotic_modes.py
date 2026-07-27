@@ -283,6 +283,38 @@ except ImportError:
     pass
 
 
+def _grid_corner_fingerprint(X: np.ndarray, Y: np.ndarray
+                              ) -> Tuple[float, ...]:
+    """Six corner values that pin a rectilinear grid's affine layout.
+
+    v5.30 (audit W6-A11).  Shape + pitch + ``(X[0, 0], Y[0, 0])`` do NOT
+    identify a meshgrid: an ``indexing='xy'`` grid and an
+    ``indexing='ij'`` grid built from the SAME two 1-D axes of the SAME
+    length agree on every one of those, because
+    :func:`_meshgrid_axis_step` deliberately detects the varying axis (so
+    ``dx``/``dy`` come out the same) and both have ``X[0, 0] = x[0]``,
+    ``Y[0, 0] = y[0]``.  The two stacks are transposes of each other, so
+    the second caller silently received the first caller's modes.
+
+    Measured on ``x = linspace(-40 um, 40 um, 65)``,
+    ``y = linspace(-25 um, 25 um, 65)`` with an asymmetric probe field:
+    both orientations reproduce an independent overlap oracle to
+    3.8e-15 / 5.2e-15 when the cache is cleared between them, but the
+    ``'ij'`` call issued AFTER an ``'xy'`` call came back with a worst
+    relative error of **8.232e+00** (degradation factor 1.6e+15) off ONE
+    shared cache entry.  ``decompose_hg`` behaved the same way.
+
+    Adding ``X[0, -1]`` and ``X[-1, 0]`` (and the Y counterparts)
+    separates them: for ``'xy'`` X varies along axis 1
+    (``X[0, -1] = x[-1]``, ``X[-1, 0] = x[0]``) and for ``'ij'`` along
+    axis 0 (``X[0, -1] = x[0]``, ``X[-1, 0] = x[-1]``).  For a
+    rectilinear grid these three corners plus the shape determine the
+    whole coordinate array.
+    """
+    return (float(X[0, 0]), float(X[0, -1]), float(X[-1, 0]),
+            float(Y[0, 0]), float(Y[0, -1]), float(Y[-1, 0]))
+
+
 def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
                          p_max: int, ell_max: int,
                          cx: float, cy: float,
@@ -313,6 +345,16 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     physical sample positions, so two same-shape/same-pitch grids at
     different offsets (e.g. a shifted ROI) collided and the second call
     silently received modes evaluated at the first grid's coordinates.
+
+    v5.30 (audit W6-A11):  the origin is not enough either -- an
+    ``indexing='xy'`` grid and an ``indexing='ij'`` grid built from the
+    same two equal-length axes share shape, pitch AND origin, so they
+    collided and the second caller received the first caller's
+    TRANSPOSED stack (measured worst relative error 8.232e+00 against an
+    independent overlap oracle, vs 5.2e-15 with the cache cleared in
+    between).  The key now carries the three corners per axis --
+    :func:`_grid_corner_fingerprint` -- which pin a rectilinear grid
+    completely.
     """
     X = np.asarray(X)
     Y = np.asarray(Y)
@@ -323,8 +365,7 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
         int(p_max), int(ell_max), Ny, Nx,
         float(w), float(cx), float(cy),
         float(dx), float(dy), dtype_str,
-        float(X.flat[0]), float(Y.flat[0]),
-    )
+    ) + _grid_corner_fingerprint(X, Y)
     with _LG_MODE_STACK_LOCK:
         cached = _LG_MODE_STACK_CACHE.get(cache_key)
         if cached is not None:
@@ -346,6 +387,14 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
         polynomial = _evaluate_poly2d(poly, rx, ry)
         # Conjugate once here so the einsum reduction is direct.
         stack[idx] = np.conj(polynomial * envelope)
+    # v5.30 (audit W6-A13): the cached stack is handed back BY IDENTITY on
+    # every hit, so a caller that writes into it poisons the cache for the
+    # rest of the process (measured: setting stack[0, 0, 0] = 12345 made
+    # the NEXT call return 12345 where the mode value is 7.6946e-18).
+    # Same class as the PMM geo-eig cache (audit M9); mark it read-only,
+    # which every in-library consumer (the einsum in decompose_lg /
+    # decompose_hg) is fine with.
+    stack.setflags(write=False)
     keys_t = tuple(keys)
     with _LG_MODE_STACK_LOCK:
         _LG_MODE_STACK_CACHE[cache_key] = (keys_t, stack)
@@ -370,6 +419,11 @@ def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
 
     v5.17.1 (audit P1-06):  the grid origin ``(X[0, 0], Y[0, 0])`` is
     included in the cache key; see :func:`_lg_mode_conj_stack`.
+
+    v5.30 (audit W6-A11):  the three corners per axis replace the bare
+    origin so an ``indexing='xy'`` grid cannot collide with the
+    ``indexing='ij'`` grid built from the same axes; see
+    :func:`_grid_corner_fingerprint`.
     """
     X = np.asarray(X)
     Y = np.asarray(Y)
@@ -380,8 +434,7 @@ def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
         int(m_max), int(n_max), Ny, Nx,
         float(wx), float(wy), float(cx), float(cy),
         float(dx), float(dy), dtype_str,
-        float(X.flat[0]), float(Y.flat[0]),
-    )
+    ) + _grid_corner_fingerprint(X, Y)
     with _HG_MODE_STACK_LOCK:
         cached = _HG_MODE_STACK_CACHE.get(cache_key)
         if cached is not None:
@@ -401,6 +454,8 @@ def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
         poly = hg_polynomial(mi, nj, wx, wy)
         polynomial = _evaluate_poly2d(poly, rx, ry)
         stack[idx] = np.conj(polynomial * envelope)
+    # v5.30 (audit W6-A13): see :func:`_lg_mode_conj_stack`.
+    stack.setflags(write=False)
     keys_t = tuple(keys)
     with _HG_MODE_STACK_LOCK:
         _HG_MODE_STACK_CACHE[cache_key] = (keys_t, stack)
@@ -723,13 +778,26 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
 
     Computes overlap integrals
         a_{p, ell} = integral conj(LG_{p, ell}(x, y)) * field(x, y) dx dy
-    by trapezoidal quadrature on the supplied grid.
+    by a plain RECTANGLE (midpoint) sum on the supplied grid --
+    ``sum(conj(mode) * field) * dx * dy``, with no edge weighting.
+    v5.30 (audit W6-A14): pre-fix this line said "trapezoidal
+    quadrature", which the code has never done.  It is immaterial when
+    the field is contained inside the grid (measured 5.0e-15 relative
+    difference between the two rules on an LG_{0,0} over +-4w) but it is
+    NOT immaterial for a field with support at the boundary.
+
+    The grid step is taken as ``mean(diff(axis))``, so a NON-UNIFORM
+    grid is silently accepted and integrated with the mean pitch.
 
     Parameters
     ----------
-    field : ndarray, complex, shape (Nx, Ny)
-    x, y : ndarray, shape (Nx, Ny)
-        Cartesian coordinates [m] (typically from meshgrid).
+    field : ndarray, complex, shape (Ny, Nx)
+        Row-major, matching ``np.meshgrid(x, y, indexing='xy')``.
+        (v5.30 audit W6-A14: the pre-fix docstring said ``(Nx, Ny)``.)
+    x, y : ndarray
+        Cartesian coordinates [m].  Either 1-D axes or 2-D meshgrids in
+        EITHER ``indexing='xy'`` or ``indexing='ij'`` orientation; the
+        area element is inferred from the varying axis.
     w : float
         LG basis waist [m].
     p_max, ell_max : int

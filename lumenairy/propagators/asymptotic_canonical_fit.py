@@ -455,7 +455,6 @@ def fit_canonical_polynomials(
         opd_residual = phi_live.copy()
 
     multi_indices = _multi_indices_total_degree(4, poly_order)
-    len(multi_indices)
     T1 = _chebyshev_vandermonde(u_s2x, poly_order)
     T2 = _chebyshev_vandermonde(u_s2y, poly_order)
     T3 = _chebyshev_vandermonde(u_v2x, poly_order)
@@ -489,18 +488,26 @@ def fit_canonical_polynomials(
             and res_phi > float(auto_bump_threshold_waves)
             and poly_order < int(max_auto_poly_order)):
         import warnings as _w
+        # v5.30 (audit W6-A15): CLAMP the +2 step to the documented cap.
+        # Pre-fix the gate tested ``poly_order < max_auto_poly_order`` but
+        # the bump was an unconditional ``+2``, so any cap of the opposite
+        # parity was OVERSHOT by one -- measured (deliberately
+        # under-fitting threshold 1e-12 on the stock N-BK7 singlet):
+        # start=9 cap=10 -> returned poly_order=11; start=5 cap=6 -> 7;
+        # start=3 cap=4 -> 5.  Only start=6 cap=10 landed on the cap.
+        next_order = min(poly_order + 2, int(max_auto_poly_order))
         _w.warn(
             f"fit_canonical_polynomials: order={poly_order} fit "
             f"residual {res_phi:.3e} waves exceeds threshold "
             f"{auto_bump_threshold_waves:.3e}; auto-bumping to "
-            f"order={poly_order + 2} (max {max_auto_poly_order}).",
+            f"order={next_order} (max {max_auto_poly_order}).",
             RuntimeWarning, stacklevel=2)
         return fit_canonical_polynomials(
             prescription, wavelength,
             source_box_half=source_box_half,
             pupil_box_half=pupil_box_half,
             n_field=n_field, n_pupil=n_pupil,
-            poly_order=poly_order + 2,
+            poly_order=next_order,
             extract_linear_phase=extract_linear_phase,
             object_distance=object_distance,
             surface_diffraction=surface_diffraction,
@@ -1030,6 +1037,50 @@ def propagate_hf_chebyshev_quadrature(
     dy = float(np.mean(np.diff(input_grid_y)))
     pixel_area = dx * dy
 
+    # ------------------------------------------------------------------
+    # v5.30 (audit W6-A16): validity guards.  Pre-fix this function had
+    # NO in-box check at all and no uniformity check on the input grid.
+    # ------------------------------------------------------------------
+    import warnings as _w
+    for _axis, _step, _name in ((input_grid_x, dx, 'input_grid_x'),
+                                 (input_grid_y, dy, 'input_grid_y')):
+        _d = np.diff(np.asarray(_axis, dtype=np.float64))
+        if _d.size and np.max(np.abs(_d - _step)) > 1e-9 * abs(_step):
+            _w.warn(
+                f"propagate_hf_chebyshev_quadrature: {_name} is NOT "
+                f"uniformly spaced (steps span "
+                f"[{float(np.min(_d)):.4e}, {float(np.max(_d)):.4e}]) but "
+                f"the quadrature uses a single mean pitch "
+                f"{_step:.4e} as the area element, so the result is a "
+                f"mis-weighted Riemann sum.  Resample onto a uniform "
+                f"grid.", RuntimeWarning, stacklevel=2)
+    _u1_edge = np.max(np.abs(
+        (np.asarray(input_grid_x, dtype=np.float64) - fit.s1x_centre)
+        / fit.s1x_halfrange))
+    _u2_edge = np.max(np.abs(
+        (np.asarray(input_grid_y, dtype=np.float64) - fit.s1y_centre)
+        / fit.s1y_halfrange))
+    _u3_edge = np.max(np.abs(
+        (np.asarray(output_grid_x, dtype=np.float64) - fit.s2x_centre)
+        / fit.s2x_halfrange))
+    _u4_edge = np.max(np.abs(
+        (np.asarray(output_grid_y, dtype=np.float64) - fit.s2y_centre)
+        / fit.s2y_halfrange))
+    _worst = max(_u1_edge, _u2_edge, _u3_edge, _u4_edge)
+    if _worst > 1.0:
+        _w.warn(
+            f"propagate_hf_chebyshev_quadrature: the sample grids leave "
+            f"the fit's validity box -- worst normalised coordinate "
+            f"|u| = {_worst:.4f} (input |u1|={_u1_edge:.4f}, "
+            f"|u2|={_u2_edge:.4f}; output |u3|={_u3_edge:.4f}, "
+            f"|u4|={_u4_edge:.4f}; 1.0 is the box edge).  Phi is a "
+            f"Chebyshev tensor product with NO extrapolation control "
+            f"there: measured on a stock N-BK7 singlet HF fit, an input "
+            f"grid 1.5x / 3x / 10x the s1 half-box inflated max|E_out| "
+            f"by 2.23x / 8.48x / 44.9x with no other symptom.  Restrict "
+            f"the grids or refit with a larger source_box_half / "
+            f"pupil_box_half.", RuntimeWarning, stacklevel=2)
+
     S1X, S1Y = np.meshgrid(input_grid_x, input_grid_y, indexing='xy')
     # 4.11.2: force a complex output dtype so a real-valued E_in (e.g. a
     # pure intensity mask) doesn't silently strip the imaginary part of
@@ -1044,7 +1095,9 @@ def propagate_hf_chebyshev_quadrature(
         out_dtype = np.complex128
     else:
         out_dtype = np.complex64
-    out = np.zeros((Ny_out, Nx_out), dtype=out_dtype)
+    # v5.30 (audit W6-A16): the pre-fix ``out = np.zeros(...)`` here was
+    # dead -- ``out`` is unconditionally rebound from ``flat_out`` after
+    # the chunk loop.
 
     # ------------------------------------------------------------------
     # 4.12.0 (perf #6): vectorise across the output chunk.

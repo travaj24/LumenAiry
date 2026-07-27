@@ -260,7 +260,7 @@ def propagate_modal_asymptotic(
     v2_centre: Tuple[float, float] = (0.0, 0.0),
     s2_grid_x: np.ndarray,
     s2_grid_y: np.ndarray,
-    maslov_tracking: str = 'row_reset',
+    maslov_tracking: str = 'principal',
 ) -> np.ndarray:
     """Evaluate the leading-order modal asymptotic propagator on a 2-D
     output grid.
@@ -287,26 +287,132 @@ def propagate_modal_asymptotic(
     s2_grid_x, s2_grid_y : ndarray
         Output-plane sample points [m].  Same shape; iterated jointly.
     maslov_tracking : str, optional
-        Strategy for the Keller-Maslov branch index of ``sqrt(det M)``:
+        Strategy for the Keller-Maslov branch index of ``sqrt(det M)``.
 
-        * ``'principal'``  -- no unwrap; ``sqrt(det M)`` uses the
-          principal branch (pre-4.10 behaviour; introduces an
-          unphysical pi-phase jump every caustic crossing).
-        * ``'1d_raster'``  -- 4.10 behaviour: unwrap along the raster-
-          ordered pixel stream.  Works correctly along a single
-          row but spuriously flips the counter at every row wrap
-          because the raster jump in (x, y) is not a continuous path
-          in the actual output plane.
-        * ``'row_reset'``  -- 4.11.2 default: same as ``'1d_raster'``
+        * ``'principal'``  -- **default since v5.30 (audit W6-A1) and
+          the only correct choice here**: no unwrap, ``sqrt(det M)``
+          takes the principal branch.  This is a *pointwise* function
+          of the pixel, so the returned field does not depend on which
+          other pixels were requested in the same call.
+        * ``'1d_raster'``  -- LEGACY (4.10 behaviour), retained only to
+          reproduce pre-v5.30 output.  Unwraps along the raster-ordered
+          pixel stream.
+        * ``'row_reset'``  -- LEGACY (4.11.2 - v5.29 default), retained
+          only to reproduce pre-v5.30 output.  Same as ``'1d_raster'``
           but resets the unwrap state at the start of each row.
+
+        **Why the unwrap is provably wrong for this propagator.**
+        :func:`_compute_M_b_batch` builds ``M = M_real - i pi H_phi``
+        with ``M_real = J^T J / w_s^2 + I / w_p^2``, whose real part is
+        *strictly positive definite* for every finite ``w_p > 0``.
+        Factoring ``M = R^{1/2}(I - i K)R^{1/2}`` with ``R = Re M`` and
+        ``K = R^{-1/2}(pi H_phi)R^{-1/2}`` (real symmetric, eigenvalues
+        ``k1, k2``) gives
+
+            arg det M = -atan(k1) - atan(k2)   in (-pi, +pi) STRICTLY,
+
+        so ``det M`` can never reach the principal branch cut.  The
+        principal ``sqrt`` is therefore the unique globally analytic
+        continuation, the Maslov index is identically zero, and the
+        physical pi/2 phase advance through a fold caustic arrives
+        *continuously* as ``arg det M`` sweeps ``-pi -> 0`` (verified:
+        the measured half-sweep across a synthetic fold tends to pi/2
+        from below as the Gaussian regularisation is weakened).
+
+        What the legacy raster unwrap actually detects is
+        *undersampling*.  When ``w_s``/``w_p`` are large the
+        regularisation is weak, ``arg det M`` hugs +-pi, and its sign
+        flips between adjacent pixels; the resulting spurious
+        ``|d_arg| ~ 2 pi`` advances the counter and multiplies the pixel
+        by ``-1``.  Measured on the stock N-BK7 singlet fit of
+        ``validation/propagators/test_asymptotic.py`` at
+        ``w_s = 1e-3``, ``w_p = 0.1``: ``'row_reset'`` sign-flips
+        742 of 4209 non-zero pixels on a 65x65 grid (``max |dE| /
+        max |E| = 1.012``, i.e. the brightest pixels are hit), and the
+        flip pattern is GRID-DEPENDENT -- 60 of the 289 output points
+        shared between a 17x17 and a 65x65 grid come back with
+        *opposite sign* on the two grids (relative difference exactly
+        2.0), while ``'principal'`` reproduces those same points to
+        3.4e-11.  At the library-default waists the three modes are
+        bit-identical (measured ``max |dE| = 0.0``), so this default
+        change is a no-op on well-regularised inputs.  Passing a legacy
+        mode now emits a ``RuntimeWarning`` if it actually flips a
+        pixel.
 
     Returns
     -------
     ndarray, complex, same shape as s2_grid_x
         Output field E(s_2).
 
+        .. note::
+
+           **Piston/tilt reference (audit W6-A4).**  The evaluator
+           reads ``Phi`` with ``include_linear=False``, so when the
+           fit was built with ``extract_linear_phase=True`` (the
+           default) the returned phase is referenced to the fit's
+           5-parameter linear ramp: the piston ``a0`` and the
+           output-plane tilt ``a1, a2`` are *removed*.  This is the
+           usual Strehl/Seidel convention (piston and tilt are
+           subtracted before a wavefront error is quoted) but it means
+           the same physical system fitted with
+           ``extract_linear_phase=False`` returns a *different phase*.
+           Measured on the stock singlet: amplitudes agree to 1.4e-8
+           (pure lstsq noise) while the phase differs by a constant
+           2.5454 rad (spread 1e-6 rad -- pure piston); with a 2 um
+           first-order grating on surface 1 the phase difference
+           acquires a genuine spread of 5.369 rad (0.854 waves) across
+           the grid because ``a1 = 2.017e+03`` waves of diffracted
+           tilt is removed.  The v2-linear part is negligible on every
+           case measured (``|a3| + |a4| <= 1.7e-09`` waves, amplitude
+           impact <= 3.2e-11), so the removal is phase-only.
+
     Notes
     -----
+    **Measured accuracy envelope (audit W6-A3/A9/A6).**  The evaluator's
+    only approximations are (a) freezing ``det J`` at ``v*``, (b)
+    linearising ``s1`` about ``v*``, (c) truncating the exponent at
+    quadratic order in ``v2 - v*``.  Verified against brute-force
+    Gauss-Legendre quadrature of the SAME phase-space integral on a
+    synthetic fit whose ``Phi`` is an exact polynomial with phase scale
+    ``k`` waves (``w_s = 1.0``, ``w_p = 0.10``, 9-sigma window, oracle
+    self-converged to 5.5e-14):
+
+    * With an exactly-QUADRATIC ``Phi`` the closed-form Gaussian-moment
+      contraction is **exact**: 6.78e-14 relative, and 4.67e-14 worst over
+      nine LG mode pairs up to total order 6 -- so the batched polynomial
+      algebra is clean.
+    * With a cubic present the leading-order error on the LG_{0,0}
+      channel is 3.85e-06 / 3.41e-05 / 3.24e-04 / 1.31e-03 / 7.89e-03 at
+      ``k`` = 1 / 3 / 10 / 30 / 100 (empirical order ~``k**2`` in this
+      construction).
+    * The error is NOT uniform across channels.  At ``k = 10`` it runs
+      from 3.24e-04 on LG_{0,0} x LG_{0,0} to **1.17e-01** on
+      LG_{3,0} x LG_{0,+3} -- 362x -- because the higher Wick moments
+      weight the Gaussian tails where the neglected cubic dominates.
+      Read a high-order channel off this propagator with that in mind.
+    * ``v*`` is the **envelope**-stationary point, not the complex saddle
+      of the full exponent.  On a deliberate fold caustic the two
+      coincide and the answer is good ON the caustic (2.9e-03 / 1.1e-02 /
+      6.2e-02 relative at ``k`` = 30 / 60 / 150), but a couple of
+      effective widths off it they separate, the result becomes dominated
+      by ``exp(b_quad)``, and the leading-order value under-predicts --
+      measured a factor 55 low at ``k = 150``, 1.6 widths off-caustic
+      (2.258e-08 vs a converged 1.250e-06).
+
+    **No radiometric normalisation.**  The return value is the bare
+    phase-space integral: no ``1/(i lambda z)``-class prefactor is applied
+    and ``fit.wavelength`` is never read here (the wavelength enters only
+    through ``Phi``, stored in waves).  Measured ``sum |E|^2 dA`` over the
+    whole fit box, with BOTH the source and pupil LG_{0,0} carrying unit
+    L2 norm: 1.657e-11 (w_s=50 um, w_p=0.05) / 5.128e-11 (20 um, 0.02) /
+    1.059e-10 (20 um, 0.002) -- so the amplitude is not on a
+    conserved-power scale, and it is not on the same scale as
+    :func:`propagate_hf_chebyshev_quadrature` (which applies an explicit
+    ``-1j`` Maslov factor and ``pixel_area``).  The evaluator IS exactly
+    linear in ``source_amplitudes`` / ``pupil_amplitudes`` (bitwise for a
+    real scale factor, 6.4e-16 for a complex one), so supply your own
+    prefactor if you need absolute radiometry.
+
     **v4.15 vectorisation closure.**  Prior to v4.15 this function
     used a per-pixel Python loop with a warm-started Newton chain.
     The chain landed in *wrong-saddle basins* near the grid edges,
@@ -344,6 +450,18 @@ def propagate_modal_asymptotic(
     if s2x_arr.shape != s2y_arr.shape:
         raise ValueError(
             f"s2_grid_x and s2_grid_y shape mismatch: {s2x_arr.shape} vs {s2y_arr.shape}")
+    # v5.30 (audit W6-A5): explicit rank guard.  Pre-fix the row-major
+    # unpack below (``Ny, Nx = s2x_arr.shape``) raised a bare
+    # ``ValueError: too many values to unpack (expected 2, got 3)`` from
+    # the middle of the function for any ndim >= 3 input -- an internal
+    # error message with no mention of the offending argument.
+    if s2x_arr.ndim > 2:
+        raise ValueError(
+            f"propagate_modal_asymptotic: s2_grid_x / s2_grid_y must be "
+            f"0-D, 1-D or 2-D (the Maslov raster ordering is defined on a "
+            f"row-major 2-D grid), got ndim={s2x_arr.ndim} "
+            f"shape={s2x_arr.shape}.  Ravel the grid to 1-D and reshape "
+            f"the result if you need higher rank.")
 
     # Determine moment-table order needed
     max_order_src = max(
@@ -375,8 +493,9 @@ def propagate_modal_asymptotic(
     if N_pix == 0:
         return flat_out.reshape(s2x_arr.shape)
 
-    Ny_grid, Nx_grid = (s2x_arr.shape if s2x_arr.ndim >= 2
-                         else (1, s2x_arr.size))
+    # Row length for the ``'row_reset'`` raster wrap.  ``Ny`` is not
+    # needed (v5.30 audit W6-A5: it was an unused unpack target).
+    Nx_grid = (s2x_arr.shape[1] if s2x_arr.ndim >= 2 else s2x_arr.size)
 
     # ------------------------------------------------------------------
     # v4.15 (ROADMAP #1) -- batched cold-start Newton + batched M/b/poly
@@ -468,12 +587,17 @@ def propagate_modal_asymptotic(
         return flat_out.reshape(s2x_arr.shape)
 
     # ---- sqrt(det M) with Maslov-branch unwrap ----------------------
+    # v5.30 (audit W6-A1): 'principal' is the default and the only
+    # correct branch here -- Re(M) is positive definite by construction
+    # so arg(det M) is confined to (-pi, +pi) and det M never crosses
+    # the principal cut.  See the ``maslov_tracking`` docstring.
     if maslov_tracking == 'principal':
         sqrt_detM_all = np.sqrt(det_M)
     else:
         sqrt_detM_all = np.empty_like(det_M)
         last_arg = None
         branch_counter = 0
+        n_flipped = 0
         for idx in range(N_pix):
             if (maslov_tracking == 'row_reset' and s2x_arr.ndim >= 2
                     and Nx_grid > 0 and idx % Nx_grid == 0):
@@ -489,7 +613,23 @@ def propagate_modal_asymptotic(
                     maslov_branch=branch_counter,
                 )
             )
+            if branch_counter % 2 != 0:
+                n_flipped += 1
             sqrt_detM_all[idx] = sqrt_val
+        if n_flipped:
+            import warnings as _w
+            _w.warn(
+                f"propagate_modal_asymptotic: maslov_tracking="
+                f"{maslov_tracking!r} applied a spurious sign flip to "
+                f"{n_flipped} of {int(valid.sum())} in-box pixels.  "
+                f"Re(M) = J^T J / w_s^2 + I / w_p^2 is positive definite, "
+                f"so arg(det M) is confined to (-pi, +pi) and det M never "
+                f"crosses the principal branch cut -- the raster unwrap is "
+                f"detecting undersampling of arg(det M) near +-pi, not a "
+                f"caustic.  The flipped pixels carry a spurious pi phase "
+                f"and the pattern is grid-dependent.  Use the default "
+                f"maslov_tracking='principal'.",
+                RuntimeWarning, stacklevel=2)
 
     # ---- amp_lead = detJ * pi/sqrt(det M) * G0 * exp(2*pi*i*phi) * exp(b_quad)
     # v4.14.2 dtype-aware sentinel (np.zeros((), dtype=...)) per

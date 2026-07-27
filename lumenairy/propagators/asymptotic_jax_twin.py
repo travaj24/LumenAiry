@@ -903,6 +903,33 @@ def fit_canonical_polynomials_jax(
     * Vignetting is folded in via a finite-mass weight on each ray;
       heavy vignetting (>50% of rays dead) raises an error matching
       the NumPy version's behaviour.
+
+      v5.30 (audit W6-A10) -- MEASURED parity under vignetting.  The
+      NumPy twin SLICES the design matrix to the live rays; this one
+      keeps every row and zeroes the dead ones
+      (``A_w = A * w[:, None]``).  That is safe because the ray tracer
+      leaves a dead ray's recorded position FINITE (verified: no NaN in
+      ``final.x`` for the dead rays at any aperture probed), so no
+      ``nan * 0`` ever reaches the QR.  Both paths return finite
+      coefficients and IDENTICAL normalisers (centre/half-range agree to
+      5.1e-15).  The coefficient agreement DOES loosen as rays die,
+      because the two estimators (NumPy SVD ``lstsq`` on the sliced
+      system, JAX QR on the row-weighted one) pick different
+      representatives in the near-null space of an increasingly
+      ill-conditioned ``A`` -- measured on the ``make_singlet(51.5 mm,
+      inf, 4.1 mm, N-BK7)`` fit at ``n_field=4, n_pupil=6,
+      poly_order=4``:
+
+          alive      max |coef_phi_jax - coef_phi_np| / scale
+          576/576                1.588e-06
+          512/576                6.002e-07
+          384/576                1.670e-04
+
+      The fit RESIDUALS are equal to all printed digits in every row
+      (2.7513e-04 / 1.3617e-04 / 1.4932e-06), i.e. the two coefficient
+      vectors describe the training data equally well -- the same
+      near-null-direction effect analysed at length in
+      :func:`_differentiable_lstsq`.
     """
     if not JAX_AVAILABLE:
         raise ImportError(
@@ -1038,7 +1065,6 @@ def fit_canonical_polynomials_jax(
 
     # ---- Total-degree multi-indices (Python-time) -------------------
     multi_indices = _multi_indices_total_degree(4, poly_order)
-    len(multi_indices)
 
     # ---- Build Chebyshev Vandermonde for each axis ------------------
     def cheb_vand_jax(u, max_k):

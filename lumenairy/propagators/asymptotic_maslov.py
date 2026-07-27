@@ -84,6 +84,45 @@ def _maslov_branch_corrected_sqrt(det_M, last_arg_detM=None,
     pre-computing an external Maslov index, switching the JAX twins
     to a closed-form complex sqrt with explicit branch cut) only
     needs to be done in one place.
+
+    .. warning::
+
+       **This unwrap must NOT be driven from a pixel raster for the
+       ``M`` matrices this module builds** (audit W6).  The generic
+       logic below is correct for an arbitrary ``det_M`` path that
+       really does cross the principal branch cut, but
+       :func:`_compute_M_b_batch` builds
+
+           M = M_real - i pi H_phi,
+           M_real = J^T J / w_s^2 + I / w_p^2
+
+       whose real part is **strictly positive definite** for any
+       finite ``w_p > 0``.  Factor ``M = R^{1/2} (I - i K) R^{1/2}``
+       with ``R = Re M`` and ``K = R^{-1/2} (pi H_phi) R^{-1/2}`` real
+       symmetric with eigenvalues ``k1, k2``.  Then
+
+           det M    = det(R) * (1 - i k1) (1 - i k2),
+           arg det M = -atan(k1) - atan(k2)   in   (-pi, +pi)
+
+       *strictly*, because ``det R > 0`` and each ``atan`` lies in
+       ``(-pi/2, +pi/2)``.  So ``det M`` can never reach, let alone
+       cross, the negative real axis: the principal ``sqrt`` is the
+       unique globally analytic continuation, the Keller-Maslov index
+       is identically zero, and the physical pi/2 phase advance
+       through a fold caustic is delivered *continuously* by the
+       principal branch as ``arg det M`` sweeps ``-pi -> 0``.
+
+       Measured on the stock N-BK7 singlet fit of
+       ``validation/propagators/test_asymptotic.py``: the identity
+       ``arg det M == -atan(k1) - atan(k2)`` holds to 8.1e-14, and
+       ``min eig Re M`` is 1.0e+06 (never near zero).  What a
+       raster-driven unwrap then sees is *undersampling*: when the
+       Gaussian regularisation is weak (large ``w_s``/``w_p``),
+       ``arg det M`` hugs +-pi and its sign flips between adjacent
+       pixels, producing a spurious ``|d_arg| ~ 2pi`` and a spurious
+       factor of ``-1``.  See :func:`propagate_modal_asymptotic`'s
+       ``maslov_tracking`` docstring for the measured end-to-end
+       damage and why ``'principal'`` is the default.
     """
     import math as _math
     arg_detM = float(np.angle(det_M))
@@ -457,9 +496,33 @@ def _solve_envelope_stationary_batch(
     Returns ``(v2x_star, v2y_star, converged_mask)``.  Pixels that
     fail (singular Hessian or non-finite update) carry the last
     finite iterate and ``converged_mask=False``.  ``converged_mask`` is
-    ``True`` only for pixels whose residual fell below ``tol``;
-    stalled and singular pixels remain ``False`` so callers can branch
-    on the failure mode.
+    ``True`` only for pixels whose residual fell below
+    ``tol * max(r0, 1)``, where ``r0`` is that pixel's residual at the
+    cold-start iterate; stalled and singular pixels remain ``False`` so
+    callers can branch on the failure mode.
+
+    v5.30 (audit W6-A2) -- WHY THE VERDICT IS SCALE-RELATIVE.  The
+    residual
+
+        r(v) = J^T (s1 - s_src) / w_s^2 + (v - v_c) / w_p^2
+
+    is DIMENSIONAL (units of 1/length in the pupil term), so an
+    absolute ``tol`` is not a tolerance at all.  Measured on the stock
+    N-BK7 singlet fit of ``validation/propagators/test_asymptotic.py``
+    over a 17x17 output grid: the cold-start residual has median
+    ``2.0e+07`` at ``w_s = 20 um, w_p = 0.02``, Newton drives it to
+    median ``6.8e-09`` -- a relative reduction of ``3.9e-16``, i.e.
+    full machine precision -- and yet ``rn < 1e-12`` held for exactly
+    ONE of 289 pixels, so the returned flag said "failed" for 288
+    pixels that had converged perfectly.  The iteration itself is
+    unaffected: ``done`` still keys off the original absolute
+    ``rn < tol`` (plus the stall / singular / non-finite tests), so
+    every returned ``v2x_star`` / ``v2y_star`` is bit-for-bit what
+    pre-v5.30 produced.  Note also that leading-order accuracy does not
+    hinge on this: the Gaussian-moment formula is exact for a quadratic
+    exponent about ANY expansion point (the linear term is retained via
+    ``b`` and ``b_quad``), so ``v2*`` only has to be a good enough
+    centre for the cubic-and-higher truncation.
 
     All pixels iterate in lockstep starting from ``(v_cx, v_cy)``;
     converged pixels still consume CPU on subsequent iterations but
@@ -473,7 +536,8 @@ def _solve_envelope_stationary_batch(
     failures as successes -- contrary to the documented contract.
     The function now uses a separate ``finished`` mask for the
     active-set bookkeeping and writes ``True`` to ``converged`` only
-    for genuinely-converged pixels (``rn < tol``).
+    for genuinely-converged pixels (``rn < tol`` pre-v5.30,
+    ``rn < tol * max(r0, 1)`` from v5.30 -- see above).
     """
     s2x = np.asarray(s2x, dtype=np.float64)
     s2y = np.asarray(s2y, dtype=np.float64)
@@ -490,9 +554,20 @@ def _solve_envelope_stationary_batch(
     inv_ws2 = 1.0 / (w_s * w_s)
     inv_wp2 = 1.0 / (w_p * w_p)
     last_norm = np.full(N, np.inf, dtype=np.float64)
-    np.array([src_x, src_y], dtype=np.float64)
-    np.array([v_cx, v_cy], dtype=np.float64)
     eye2 = np.eye(2, dtype=np.float64)
+    # v5.30 (audit W6-A2): per-pixel scale for the convergence VERDICT.
+    # ``tol`` is an ABSOLUTE tolerance on a DIMENSIONAL residual whose
+    # natural size is ``|J| |s1 - src| / w_s^2 + |v - vc| / w_p^2``; on
+    # the library's own default waists that is O(1e7), so the documented
+    # default ``tol=1e-12`` was unreachable and ``converged`` came back
+    # False for pixels that had in fact converged to full machine
+    # precision (measured: 1/289 True at w_s=20 um, w_p=0.02 while the
+    # median residual reduction was 3.9e-16 relative).  ``conv_scale``
+    # is the residual at the cold-start iterate, captured below on the
+    # first sweep; the VERDICT is scale-relative while the ITERATION
+    # (and therefore every returned v2*) keeps the original absolute
+    # test bit-for-bit.
+    conv_scale = np.ones(N, dtype=np.float64)
     for it in range(max_iter):
         active = ~finished
         if not np.any(active):
@@ -524,6 +599,9 @@ def _solve_envelope_stationary_batch(
             'kij,kj->ki', np.swapaxes(J, -1, -2), delta_s1
         ) + inv_wp2 * delta_v
         rn = np.sqrt(residual[:, 0] ** 2 + residual[:, 1] ** 2)
+        if it == 0:
+            # Cold-start residual -> the per-pixel scale the verdict uses.
+            conv_scale = np.maximum(rn, 1.0)
         # Mark convergence / stall.  Match the scalar logic:
         #   is_converged = rn < tol
         #   is_stalling  = (it >= 2 and rn > 0.9 * last_norm and last_norm > 1e-300)
@@ -553,7 +631,11 @@ def _solve_envelope_stationary_batch(
         done = done | bad
         # v4.14.1 (P1-NEW-3): ``converged`` is the user-facing success
         # flag; only set it for residual-passes-tol pixels.
-        converged[idx[is_conv]] = True
+        # v5.30 (audit W6-A2): the flag test is scale-relative
+        # (``tol * conv_scale``, ``conv_scale >= 1``) so it is a
+        # meaningful verdict on a dimensional residual.  ``is_conv``
+        # (absolute) still drives ``done``, so v2* is unchanged.
+        converged[idx[rn < tol * conv_scale[idx]]] = True
         # Non-done pixels: take the Newton step.
         update_mask = ~done
         v2x[idx[update_mask]] = vx[update_mask] - step[update_mask, 0]
