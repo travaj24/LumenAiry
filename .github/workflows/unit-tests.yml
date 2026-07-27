@@ -42,6 +42,16 @@ jobs:
     # timed out at 30 min WITH EVERY TEST PASSING (3db860b).  Rebalancing to 4
     # shards or regenerating .test_durations for the new files is the proper
     # long-term fix -- recorded, not done here.
+    # v5.31 (audit W9): .test_durations REGENERATED end-to-end -- full fast
+    # gate (10,116 tests timed) + slow gate (206) captured and merged, +4,302
+    # new entries covering every campaign pin file (W1-W9).  Simulated
+    # least_duration 3-way split is even to <0.1% on both gates, so the
+    # count-split pile-ups (and the shard-layout roulette they caused for
+    # order-sensitive tests) are gone.  Timeouts kept at 45/50: headroom, not
+    # need.  NOTE: a reshuffle relocates every test -- one latent
+    # order-dependence (the s12 byte-identity warm-up straddle) was already
+    # found and fixed this way (8352e79); treat any post-rebalance new red as
+    # a candidate for that class before suspecting the code.
     timeout-minutes: 50
 
     steps:
@@ -87,10 +97,10 @@ jobs:
         shell: bash
         # v5.23.0: this shard runs ~1/3 of the fast gate SERIALLY on its own
         # runner (pytest-split --splits 3 --group).  Serial -> the timing/speedup
-        # pins are unaffected and no per-file-state concerns.  ``.test_durations``
-        # only carries the slow-test timings, so the fast tests split by count
-        # here -- balanced enough for the fairly uniform fast suite; refine with a
-        # fast-gate durations file later if a shard drifts.
+        # pins are unaffected and no per-file-state concerns.  v5.31:
+        # ``.test_durations`` now carries FRESH timings for the whole fast gate
+        # (see the job-cap comment), so this split is duration-balanced -- the
+        # old "only slow timings, split by count" note no longer applies.
         run: |
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=5 -v \
