@@ -546,6 +546,60 @@ unit paths, `quarter_wave_ar`).
   so the names stay discoverable.  Export integrity unchanged (every
   `__all__` entry still resolves; phantom names still raise `AttributeError`).
 
+### Fixed (wave 6 — the four never-validated solver interiors, audited and fixed, 2026-07-26)
+
+Four Opus agents took oracles into the territory the original audit
+honestly declared unreached (~10k lines of EME / BOR / Berreman /
+asymptotic numerics). Three CRITICAL-physics defects found and fixed,
+plus deep verified-clean maps (~640 pins):
+
+- **EME (`2ecd20b`)** — the strip solver keyed Hermitian-vs-general on
+  `kx0 == 0`, but the operator is Hermitian for real ε at ANY real Bloch
+  phase: oblique cells returned 68 spurious roots, growing propagators
+  (|exp(i ky h)| to 6.2e6) under the wrong normalisation metric — now
+  3/3 analytic modes, 0 spurious, unitary to 9e-16. `mode_match`'s
+  z=0-referenced backward amplitudes grew cond to 8.7e38 — an
+  index-matched medium returned R=1.000000 with energy=1.000000 masking
+  it (now Airy to 5e-15 through depth 16). Absorbing slabs behaved
+  LOSSLESS (`Im(qz²)` discarded — 95% absorbed power reported emergent).
+- **BOR (`884115d`, flip `aae5f38`)** — the staggered eigensolver's wall
+  anchor sat half a cell out: FIRST-order convergence in the production
+  BORStack basis (p=0.995 measured). The corrected anchor (p=1.989, four
+  decades at identical cost, de Rham + energy preserved) is now the
+  DEFAULT, with the legacy anchor kept as a documented escape hatch and
+  the 2026-07-13 audit gates retuned by the bit-exact equivalence
+  `Rbig+h/2` (every historical number still reproduces; the
+  lossless-trap gate's discriminator re-derived as a property so the
+  retune could not defang it). Plus: dimensional guided-mode margins
+  (nanometre fibers silently returned []), junk-wall/PML validation,
+  modal-LRU cyclic collapse (41→21 eigs), one-node-ring interface
+  clobbering, complex-eps lexicographic angle ordering. The classic
+  r-dr-weight defect REFUTED at 4.6e-14 under an independent quadrature.
+- **Berreman (`c314d01`)** — the off-plane solvers double-conjugated the
+  flux gauge into `_forward_flux_kz`, silently ZEROING transmission into
+  absorbing substrates (T=0.000000 vs the rcwa-verified 0.930316; the
+  JAX twin hit it at every incidence, a 0.988 twin divergence). Full
+  guard parity with siblings added (a metallic superstrate had returned
+  3000% energy violation silently; back-side angle aliasing). The
+  router's "~2% off" claim refuted at 4.3e-15; isotropic limit matches
+  the TMM at 1.9e-15; uniaxial closed forms, rotation covariance,
+  reciprocity, twist-continuum order 4.00 all verified.
+- **Asymptotic (`2a54deb`)** — the Maslov raster unwrap made a pointwise
+  field GRID-DEPENDENT (proven analytically unnecessary: Re M is PD so
+  the principal branch is unique and the true index is 0; 60/289 shared
+  points flipped sign between grids); the LG/HG mode-stack cache
+  collided `xy`/`ij` meshgrids (callers received TRANSPOSED stacks at
+  1.6e15× error); quadrature validity/uniformity warnings; the
+  scale-relative Newton verdict; measured accuracy envelopes and the
+  rank-deficiency of the default fit documented in the public
+  docstrings.
+
+Also in this phase: the P5 return-contract flip executed (`2898665`,
+roadmap F1 EXECUTED — with the flip inventory's one wrong entry caught
+by measurement), all scheduled shims removed (`3a1da2b` + `bfb6179`),
+input_kind 68/68 (`29f8dbc`), and two CI pin recalibrations to measured
+cross-platform envelopes (`c0073c2`, `bfb6179`).
+
 ### Fixed (adversarial-audit wave 4 — every remaining open item closed, 2026-07-26)
 
 Seven Opus agents + three follow-on legs drained the deferred/flagged

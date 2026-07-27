@@ -66,6 +66,25 @@ cell + fff_nv `AssertionError`; `orientation=NaN`/`retardance=NaN` unguarded
 in polarization.  Fixes should follow the same measure-first / gate / pin
 discipline.
 
+**Status: WAVES 5-6 COMPLETE (2026-07-26) — SHIMS REMOVED, P5 FLIPPED, AND THE
+FOUR UNREACHED SOLVER INTERIORS AUDITED AND FIXED.**  W5: all ten scheduled
+deprecation shims executed (`3a1da2b`), input_kind 68/68 (`29f8dbc`), the P5
+return-contract flip executed with roadmap F1 EXECUTED (`2898665` — the flip
+inventory's one wrong entry caught by measurement).  W6 closed this report's
+largest honest coverage gap — the eme/bor/berreman/asymptotic interiors —
+finding THREE MORE CRITICAL-physics defects the original audit could not
+reach: the EME Hermitian-solver Bloch-phase keying (`2ecd20b`), the BOR
+staggered wall anchor (first-order convergence in the production basis;
+corrected anchor now the default with a bit-exact-equivalence gate retune,
+`884115d`+`aae5f38`), and the Berreman flux-gauge double conjugation zeroing
+transmission into absorbing substrates (`c314d01`); plus the asymptotic
+Maslov grid-dependence and mode-stack cache collision (`2a54deb`).  ~640 W6
+pins with per-territory verified-clean maps and honest coverage statements
+in the commit messages.  Remaining honest non-coverage after W6: CuPy numeric
+paths (no GPU on any available box), UI widget runtime behavior (PySide6
+absent — source/bind-level pinned only), and the per-territory "unreached"
+items recorded in each W6 commit.
+
 **Status: WAVE 4 COMPLETE (2026-07-26) — EVERY OPEN, DEFERRED AND FLAGGED ITEM
 IS CLOSED.**  The deferred-with-record list from wave 3, the four new findings
 from the fix waves, both API decisions, and every item flagged during wave 4
