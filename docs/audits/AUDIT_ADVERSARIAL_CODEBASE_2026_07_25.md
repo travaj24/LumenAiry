@@ -66,6 +66,26 @@ cell + fff_nv `AssertionError`; `orientation=NaN`/`retardance=NaN` unguarded
 in polarization.  Fixes should follow the same measure-first / gate / pin
 discipline.
 
+**Status: WAVE 7 COMPLETE (2026-07-27) — THE W6 SIBLING-CLASS SWEEP OVER
+RCWA AND PMM.**  The owner's question ("do pmm/rcwa carry the same defect
+classes W6 found?") answered: YES, twelve more FOUND+FIXED groups.  PMM
+(`5e52a08`, `7893468`): the Berreman flux-gauge class ×3 (slanted-layer T
+silently zeroed into absorbing substrates; TE≠TM at normal incidence; the
+stabilizer rejecting absorbing incidence — all 71 gauge sites AST-classified,
+PMM and RCWA need OPPOSITE bridges), the default SEM fold's dense-operator
+gauge, unit-dependent flux floors, stale geometry-cache keys, writeable
+caches, and traced-wavelength rejection (jit returned different array
+LENGTHS with silently wrong gradients; 16 in-repo callers migrated).  RCWA
+(`6405095`): duty cycles silently quantised to the FFT grid (invisible to
+convergence AND closure — the exact analytic series now used, which also
+un-broke ASR convergence), cache/prepared-object identity leaks (mutations
+poisoned SUBSEQUENT solves), the floor-vs-nearest cell bias, the 90°
+fast-axis error for circular eigenpolarizations, silent lossy-incidence
+energy violations.  Four W6 classes REFUTED per package with from-scratch
+oracles; two moved pins retuned with decomposed geometry-vs-drift
+attribution.  Remaining recorded scope: the eps_cell rasterisation
+semantics decision, CuPy (no device), PySide6 runtime.
+
 **Status: WAVES 5-6 COMPLETE (2026-07-26) — SHIMS REMOVED, P5 FLIPPED, AND THE
 FOUR UNREACHED SOLVER INTERIORS AUDITED AND FIXED.**  W5: all ten scheduled
 deprecation shims executed (`3a1da2b`), input_kind 68/68 (`29f8dbc`), the P5

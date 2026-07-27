@@ -546,6 +546,51 @@ unit paths, `quarter_wave_ar`).
   so the names stay discoverable.  Export integrity unchanged (every
   `__all__` entry still resolves; phantom names still raise `AttributeError`).
 
+### Fixed (wave 7 — the W6 sibling-class sweep over RCWA and PMM interiors, 2026-07-27)
+
+The question "do pmm/rcwa carry the same defect classes W6 found?"
+answered by two Opus agents with the seven W6 classes as targeted
+hunts plus the original audit's recorded non-coverage. Verdict: YES —
+twelve more FOUND+FIXED groups, four classes refuted per package with
+oracle evidence (~330 pins):
+
+- **PMM (`5e52a08`, `7893468`)** — the Berreman flux-gauge class hit
+  THREE times: every slanted-layer `PMMStack` solve silently zeroed T
+  into absorbing substrates (internal gauge fed to the public-gauge
+  `_kz_forward`; all 71 gauge sites now AST-classified — PMM and RCWA
+  need OPPOSITE bridges, documented); the TM incident flux mixed real
+  `kz_inc` into complex `eps_sup` (TE≠TM at NORMAL incidence by up to
+  5.8e-2); the stabilizer rejected every degree under an absorbing
+  incidence medium. Plus the default 2-D SEM symmetry fold missing the
+  gauge on its dense operators (2e-2), length-unit-dependent flux
+  floors (R+T=2.027 in metres vs 2.000003 in nm), an incomplete
+  geometry cache key returning bit-identical STALE answers across
+  degree changes, five writeable caches, and traced-wavelength
+  rejection at all three entries (jit had returned different array
+  LENGTHS than un-jitted with 0.39%-wrong gradients; 16 in-repo sites
+  migrated, 9 of which were asserting d/dλ against an FD reference that
+  went through the same collapsed path).
+- **RCWA (`6405095`)** — requested DUTY CYCLES silently rounded to the
+  FFT sampling grid (invisible to order-convergence and closure;
+  error matched the analytic prediction to 3 figures; now the exact
+  Fourier series), which also explains why ASR NEVER CONVERGED (a flat
+  1e-4 quantisation gap at every order — ASR now beats uniform 15× at
+  M=9); returned arrays that WERE the caches (mutating `kz` poisoned
+  the next solve; a prepared object's order table was every solve's
+  order table); a floor-vs-nearest cell-indexing bias that no grid
+  refinement shrinks; a 90° fast-axis error for circular
+  eigenpolarizations; silent R+T=1.023 under lossy incidence (now
+  warns); two moved pins retuned with DECOMPOSED attribution (the
+  fixed solver at the legacy quantised duty reproduces the historical
+  values — proven geometry, not drift).
+
+Refuted per package with oracles: exponential cascade conditioning,
+discarded-Im absorption (from-scratch TMM at 1e-15/1e-16), the
+even-parity folds, forward-mode classification at degenerate edges,
+dimensional tolerances elsewhere. Deferred with record: the `eps_cell`
+rasterisation contract (anti-aliasing is a semantics decision), CuPy
+(no device).
+
 ### Fixed (wave 6 — the four never-validated solver interiors, audited and fixed, 2026-07-26)
 
 Four Opus agents took oracles into the territory the original audit
