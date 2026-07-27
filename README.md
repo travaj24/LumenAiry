@@ -3407,7 +3407,7 @@ The library is wide -- pick a question and the table tells you where to start.
 
 | Situation | Use |
 |---|---|
-| Don't know which propagator to pick | `la.propagate(E, z=z, wavelength=wl, dx=dx)` -- smart auto-dispatch |
+| Don't know which propagator to pick | `la.propagate(E, z=z, wavelength=wl, dx=dx)` -- smart auto-dispatch; returns a `PropagationResult` (`.field` / `.dx` / `.dy`, v5.30). Add `return_result=False` for the kernels' native `ndarray` / `(E, dx_out, dy_out)` shapes |
 | Standard near/mid-field | `la.angular_spectrum_propagate(E, z, wl, dx)` |
 | Need a specific output grid pitch (focal-plane zoom, MFT) | `la.fresnel_propagate_mft(...)` or `la.fraunhofer_propagate_mft(...)` |
 | Long-z (z*lambda/(N*dx) > 1, plain ASM would need an oversized grid) | `la.scalable_angular_spectrum_propagate(...)` |

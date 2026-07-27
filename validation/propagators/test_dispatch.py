@@ -106,13 +106,31 @@ def t_propagate_return_result():
         f'type={type(out).__name__}, method={getattr(out, "method", None)!r}')
 
 
-def t_propagate_default_returns_ndarray():
-    """propagate() default return is unchanged (bare ndarray)."""
+def t_propagate_default_returns_result():
+    """v5.30 (audit P5 / roadmap F1): propagate()'s DEFAULT return is the
+    stable PropagationResult -- for every method, not just this one."""
     N = 16; dx = 5e-6; lam = 633e-9
     E = np.ones((N, N), dtype=np.complex128)
     out = propagate(E, z=1e-3, wavelength=lam, dx=dx, method='asm')
-    return isinstance(out, np.ndarray) and out.shape == E.shape, (
-        f'type={type(out).__name__}')
+    sas = propagate(E, z=1e-3, wavelength=lam, dx=5e-7, method='sas')
+    return (isinstance(out, la.PropagationResult)
+            and out.shape == E.shape
+            and isinstance(sas, la.PropagationResult)), (
+        f'asm={type(out).__name__}, sas={type(sas).__name__}')
+
+
+def t_propagate_false_returns_native_shapes():
+    """The permanent escape hatch: return_result=False keeps the kernels'
+    native shapes -- bare ndarray for ASM, (E, dx_out, dy_out) for SAS."""
+    N = 16; dx = 5e-6; lam = 633e-9
+    E = np.ones((N, N), dtype=np.complex128)
+    bare = propagate(E, z=1e-3, wavelength=lam, dx=dx, method='asm',
+                     return_result=False)
+    triple = propagate(E, z=1e-3, wavelength=lam, dx=5e-7, method='sas',
+                       return_result=False)
+    return (isinstance(bare, np.ndarray) and bare.shape == E.shape
+            and isinstance(triple, tuple) and len(triple) == 3), (
+        f'asm={type(bare).__name__}, sas={type(triple).__name__}')
 
 
 def t_auto_aspheric_picks_gbd():
@@ -235,8 +253,10 @@ def main():
     H.section('PropagationResult opt-in + interop')
     H.run('propagate(return_result=True) returns PropagationResult',
           t_propagate_return_result)
-    H.run('propagate() default returns bare ndarray',
-          t_propagate_default_returns_ndarray)
+    H.run('propagate() default returns PropagationResult (v5.30 F1 flip)',
+          t_propagate_default_returns_result)
+    H.run('propagate(return_result=False) returns the native shapes',
+          t_propagate_false_returns_native_shapes)
     H.run('np.asarray(result) returns the field array',
           t_propagation_result_array_protocol)
     H.run('result tuple-unpacks as (field, intermediates)',

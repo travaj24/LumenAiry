@@ -88,6 +88,14 @@ SINGLET = {
 # ======================================================================
 
 class TestP5AutoReturnContract:
+    """v5.30 (roadmap F1 flip, audit P5): every pin in this class now names
+    ``return_result=False`` explicitly.  The shape-instability diagnostic these
+    pins are about lives ON that path -- the dispatcher's DEFAULT return became
+    a shape-stable ``PropagationResult`` for every method, so there is nothing
+    left to warn about there (counter-pins for the new default live in
+    ``test_niche_audit_w4_p5_return_contract.py``).  The warning text, its
+    gating set and the pitch it quotes are unchanged.
+    """
 
     # z values chosen from the selector's own thresholds at N=64,
     # dx=2 um, lambda=633 nm: Q = lambda*z/(N*dx^2) crosses 1 at
@@ -105,7 +113,8 @@ class TestP5AutoReturnContract:
         assert _auto_select_method(E, z=z, wavelength=LAM, dx=2e-6,
                                    prescription=None) == expect
         with pytest.warns(UserWarning) as rec:
-            out = propagate(E, z=z, wavelength=LAM, dx=2e-6, method='auto')
+            out = propagate(E, z=z, wavelength=LAM, dx=2e-6, method='auto',
+                            return_result=False)
         assert isinstance(out, tuple) and len(out) == 3
         msgs = [str(w.message) for w in rec
                 if issubclass(w.category, UserWarning)]
@@ -132,7 +141,8 @@ class TestP5AutoReturnContract:
                                    prescription=None) == 'asm'
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
-            out = propagate(E, z=1e-4, wavelength=LAM, dx=2e-6, method='auto')
+            out = propagate(E, z=1e-4, wavelength=LAM, dx=2e-6,
+                            method='auto', return_result=False)
         assert isinstance(out, np.ndarray)
         assert not [w for w in rec
                     if issubclass(w.category, UserWarning)
@@ -144,7 +154,7 @@ class TestP5AutoReturnContract:
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
             out = propagate(_gauss(), z=1e-3, wavelength=LAM, dx=2e-6,
-                            method='sas')
+                            method='sas', return_result=False)
         assert isinstance(out, tuple)
         assert not [w for w in rec
                     if issubclass(w.category, UserWarning)
@@ -155,7 +165,8 @@ class TestP5AutoReturnContract:
         warn -- and must carry the kernel's output pitch."""
         from lumenairy.propagators.dispatch import propagate
         E = _gauss()
-        bare = propagate(E, z=1e-3, wavelength=LAM, dx=2e-6, method='sas')
+        bare = propagate(E, z=1e-3, wavelength=LAM, dx=2e-6, method='sas',
+                         return_result=False)
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
             res = propagate(E, z=1e-3, wavelength=LAM, dx=2e-6,
@@ -189,7 +200,7 @@ class TestP5AutoReturnContract:
                      'mhs'):
                 continue
             out = dispatch.propagate(E, z=1e-3, wavelength=LAM, dx=2e-6,
-                                     method=m)
+                                     method=m, return_result=False)
             is_triple = isinstance(out, (tuple, list)) and len(out) == 3
             assert is_triple == (m in dispatch._GRID_CHANGING_METHODS), m
 
@@ -891,7 +902,7 @@ class TestP16ResultIterArity:
     def test_unwrapped_kernels_still_yield_three(self):
         from lumenairy.propagators.dispatch import propagate
         out = propagate(_gauss(), z=1e-3, wavelength=LAM, dx=2e-6,
-                        method='sas')
+                        method='sas', return_result=False)
         assert len(out) == 3
 
     def test_class_docstring_documents_the_hazard_prominently(self):

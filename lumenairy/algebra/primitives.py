@@ -147,12 +147,28 @@ class FreeSpace(Operator):
         method = self.method
         if anamorphic and method == 'auto':
             method = 'asm'
+        # v5.30 (audit P5 / roadmap F1, flip-day migration): ``return_result``
+        # named explicitly.  The roadmap's F1 inventory listed this site as
+        # already flip-safe because ``_coerce_propagation_output`` accepts a
+        # ``PropagationResult`` -- MEASURED, that is true for the field but NOT
+        # for the anamorphic y-pitch.  On the wrapped path a pitch-PRESERVING
+        # kernel (asm / rs, which is what an anamorphic chain forces above)
+        # reports ``result.dy == result.dx`` by the documented v4.13.0 / DS-1
+        # convention -- ``Source.propagate`` carries an explicit workaround for
+        # exactly that -- whereas the bare-ndarray branch of
+        # ``_coerce_propagation_output`` returns the caller's own ``dy_default``.
+        # Measured with dx=2e-6, dy=3e-6: dy_out was 3e-6 unwrapped and 2e-6
+        # wrapped, i.e. the flip would have silently squared an anamorphic
+        # algebra chain's output pitch.  Naming the legacy contract keeps the
+        # operator's ``(E, dx_out, dy_out)`` bit-identical to pre-flip (and
+        # skips a wrapper allocation per FreeSpace in optimiser loops).
         out = propagate(
             E,
             z=self.distance,
             wavelength=wavelength,
             dx=dx,
             method=method,
+            return_result=False,
             **kw,
         )
         return _coerce_propagation_output(

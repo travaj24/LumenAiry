@@ -33,24 +33,36 @@ def main():
     print(f'  After 50-mm thin lens applied')
 
     # --- 4. Propagate to focus ----------------------------------------
-    E_focus = la.propagate(
+    # v5.30 (audit P5 / roadmap F1): the DEFAULT return is a
+    # PropagationResult for every method -- .field / .dx / .dy mean the
+    # same thing whichever kernel ran, so nothing here depends on z
+    # having selected ASM rather than SAS or Fraunhofer.
+    result = la.propagate(
         E_after_lens, z=f_lens, wavelength=src.wavelength,
         dx=src.dx, method='asm',
     )
-    peak_focus = float(np.max(np.abs(E_focus) ** 2))
+    peak_focus = float(np.max(np.abs(result.field) ** 2))
     print(f'  Peak |E|^2 at focus: {peak_focus:.4e}')
-
-    # --- 5. Same call with return_result=True -------------------------
-    # Demonstrates the opt-in PropagationResult container.
-    result = la.propagate(
-        E_after_lens, z=f_lens, wavelength=src.wavelength,
-        dx=src.dx, method='asm', return_result=True,
-    )
     print()
     print(f'  PropagationResult: {result}')
     print(f'    field shape: {result.shape}')
     print(f'    method: {result.method}')
     print(f'    z: {result.z*1e3:.3f} mm')
+    print(f'    output pitch: {result.dx*1e6:.4f} um')
+
+    # --- 5. The legacy contract, when you want the bare array ---------
+    # ``return_result=False`` is a permanent, supported escape hatch: it
+    # returns each kernel's native shape (a bare ndarray for ASM; an
+    # ``(E, dx_out, dy_out)`` triple for SAS / Fresnel / Fraunhofer).
+    # Useful for fast loops that want no wrapper allocation -- and it is
+    # the migration path for pre-v5.30 code, bit-for-bit.
+    E_focus = la.propagate(
+        E_after_lens, z=f_lens, wavelength=src.wavelength,
+        dx=src.dx, method='asm', return_result=False,
+    )
+    print()
+    print(f'  return_result=False -> {type(E_focus).__name__}, '
+          f'same peak: {float(np.max(np.abs(E_focus) ** 2)):.4e}')
 
 
 if __name__ == '__main__':

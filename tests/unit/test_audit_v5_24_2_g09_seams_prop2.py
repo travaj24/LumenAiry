@@ -83,10 +83,13 @@ class TestS2_11Z0Identity:
         from lumenairy.propagators.dispatch import propagate
 
         E = _random_field(_N, 2)
+        # v5.30 (audit P5 / roadmap F1 flip): ``return_result=False`` names the
+        # native-ndarray contract these two spellings are compared in; the
+        # dispatcher's default is now a PropagationResult.
         E_none = propagate(E, z=None, wavelength=_WAVELENGTH,
-                           dx=_DX_SUB, method='asm')
+                           dx=_DX_SUB, method='asm', return_result=False)
         E_z0 = propagate(E, z=0.0, wavelength=_WAVELENGTH,
-                         dx=_DX_SUB, method='asm')
+                         dx=_DX_SUB, method='asm', return_result=False)
         max_diff = float(np.max(np.abs(E_none - E_z0)))
         assert max_diff < 1e-12, (
             f"z=None copy and z=0 propagate disagree: {max_diff}")

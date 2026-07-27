@@ -8,6 +8,8 @@ Contracts checked:
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -106,17 +108,23 @@ class TestPropagateDispatch:
     def test_propagate_smoke(self, gaussian_beam, wavelength_m, dx_m):
         """High-level dispatch should run for reasonable inputs.
 
-        The auto-selector may route to ``asm`` (bare ndarray return)
-        or to ``sas`` / ``fresnel`` (``(E, dx_out, dy_out)`` tuple
-        return) depending on the grid Fresnel ratio ``Q``.  Accept
-        either form."""
-        out = la.propagate(gaussian_beam, z=10e-3,
+        v5.30 (audit P5 / roadmap F1): the default return is a
+        ``PropagationResult`` whichever kernel the auto-selector picks, so
+        this no longer has to accept either form.  The legacy branch it used
+        to need -- ``asm`` gives a bare ndarray, ``sas`` / ``fresnel`` an
+        ``(E, dx_out, dy_out)`` tuple, decided by the grid Fresnel ratio
+        ``Q`` -- is exercised through ``return_result=False`` below."""
+        res = la.propagate(gaussian_beam, z=10e-3,
                              wavelength=wavelength_m, dx=dx_m)
-        assert out is not None
-        if isinstance(out, tuple):
-            field = out[0]
-        else:
-            field = out
+        assert res.field.shape == gaussian_beam.shape
+        assert float(res.dx) > 0.0
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            legacy = la.propagate(gaussian_beam, z=10e-3,
+                                  wavelength=wavelength_m, dx=dx_m,
+                                  return_result=False)
+        field = legacy[0] if isinstance(legacy, tuple) else legacy
         assert field.shape == gaussian_beam.shape
 
     def test_valid_methods_nonempty(self):

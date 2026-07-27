@@ -541,6 +541,16 @@ def prescription_subdomain(
         subdomain a non-square input grid or a non-square output grid,
         we raise at construction time (rather than letting the kernel
         raise mid-pipeline).
+
+    .. versionchanged:: 5.30
+        Both dispatcher calls now pass ``return_result=False`` explicitly
+        (audit P5 / roadmap Part F1): v5.30 flipped
+        :func:`~lumenairy.propagators.dispatch.propagate`'s default return to
+        a :class:`~lumenairy.propagators.PropagationResult`, and this
+        subdomain must hand a bare **field** to the MHS pipeline.  Outputs are
+        bit-identical to pre-v5.30.  A ``return_result`` passed through
+        ``**method_kwargs`` is therefore ignored rather than forwarded -- the
+        subdomain's own return contract is the pipeline's, not the caller's.
     """
     from .dispatch import propagate
     from .mft import resample_field
@@ -582,14 +592,24 @@ def prescription_subdomain(
         # resample is L2-energy preserving (matching the maslov kernel's
         # built-in ``normalize_output='power'`` contract).
         if kw['method'] == 'maslov':
+            # v5.30 (audit P5 / roadmap F1, flip-day migration): pass
+            # ``return_result=False`` explicitly.  This function's contract is
+            # to hand a bare FIELD back to the MHS pipeline (it is measured
+            # with ``np.abs`` / ``.dtype`` just below and stitched into the
+            # next subdomain), and since v5.30 the dispatcher's DEFAULT return
+            # is a ``PropagationResult``.  The roadmap's F1 inventory listed
+            # this site as NOT flip-safe for exactly that reason; naming the
+            # legacy contract keeps the output bit-identical.
             E_native = propagate(
                 E,
                 wavelength=kw['wavelength'],
                 dx=in_s.dx,
                 prescription=kw['prescription'],
                 method=kw['method'],
+                return_result=False,
                 **{k: v for k, v in kw.items()
-                   if k not in ('wavelength', 'prescription', 'method')},
+                   if k not in ('wavelength', 'prescription', 'method',
+                                'return_result')},
             )
             same_shape = (int(in_s.Ny) == int(out_s.Ny)
                           and int(in_s.Nx) == int(out_s.Nx))
@@ -642,6 +662,11 @@ def prescription_subdomain(
                 f"sub-propagator directly if a true anamorphic output is "
                 f"required.",
                 RuntimeWarning, stacklevel=2)
+        # v5.30 (audit P5 / roadmap F1, flip-day migration): ``return_result``
+        # named explicitly for the same reason as the maslov branch above --
+        # this return goes straight into the MHS pipeline as a field, so it
+        # must stay the kernel's bare output now that the dispatcher default
+        # is a ``PropagationResult``.
         return propagate(
             E,
             wavelength=kw['wavelength'],
@@ -650,8 +675,10 @@ def prescription_subdomain(
             method=kw['method'],
             output_grid={'N': out_s.Ny, 'dx': out_s.dx},
             output_dx=out_s.dx,
+            return_result=False,
             **{k: v for k, v in kw.items()
-               if k not in ('wavelength', 'prescription', 'method')},
+               if k not in ('wavelength', 'prescription', 'method',
+                            'return_result')},
         )
 
     kwargs = {

@@ -380,8 +380,9 @@ class TestTwoDPassthrough:
     def test_2d_input_still_works_dispatch(self):
         E = _make_2d_field()
         E_out = propagate(E, z=1e-3, wavelength=WAVELENGTH, dx=DX,
-                           method='asm')
-        # ASM returns a bare ndarray.
+                           method='asm', return_result=False)
+        # ASM's native return is a bare ndarray -- named explicitly since the
+        # v5.30 F1 flip made PropagationResult the dispatcher default.
         assert isinstance(E_out, np.ndarray)
         assert E_out.shape == E.shape
 

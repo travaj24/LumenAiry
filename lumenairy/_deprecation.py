@@ -114,10 +114,17 @@ __all__ = [
 #   * ``optimize/`` -- the ``wave_traced`` / ``use_traced_lens`` /
 #     ``focus_search`` zero-caller flags.
 #
-# What that leaves live here: :data:`REMOVAL_SCHEDULE` is empty and the four
-# message builders + :data:`API_TRANSITION_VERSION` (the P5 return-contract
-# transition, still SCHEDULED, not executed) are unchanged.  The module stays
-# fully functional -- the next deprecation cycle registers here as before.
+# The same wave then EXECUTED the one **API transition** on the books -- the
+# P5 / roadmap-F1 ``propagate()`` return-contract flip (see
+# :data:`API_TRANSITION_VERSION`).  Same reasoning, one release earlier in its
+# own cycle: the announcement and the flip had not yet shipped in a release, so
+# waiting would have shipped a warning about a change no caller could see yet.
+#
+# What that leaves live here: :data:`REMOVAL_SCHEDULE` is empty, the four
+# message builders are unchanged, and :data:`API_TRANSITION_VERSION` schedules
+# nothing (its one entry is a tombstone).  The module stays fully functional --
+# the next deprecation cycle, or the next API transition, registers here as
+# before.
 
 #: Removal horizon for deprecations whose stated version has shipped.  Set
 #: it to a version the project can realistically hit; bumping it is a
@@ -149,25 +156,37 @@ NEXT_REMOVAL_VERSION = '5.32'
 #: past-horizon banner.
 REMOVAL_SCHEDULE: dict[str, str] = {}
 
-#: Version at which the deferred **API-contract transitions** land -- the
+#: Version at which any scheduled **API-contract transition** lands -- the
 #: default-flip counterpart to :data:`NEXT_REMOVAL_VERSION` (which schedules
 #: shim *removals*).  A transition changes a default value rather than
 #: deleting a name, so it needs its own registry entry: nothing is removed at
 #: this version and the legacy behaviour stays reachable behind an explicit
 #: argument.
 #:
-#: v5.30 (roadmap ``docs/roadmap_deferred_2026_07_21.md`` Part F1, audit P5 --
-#: owner decision).  Scheduled here:
+#: **Currently schedules nothing** -- the one transition registered here has
+#: been EXECUTED.  The constant stays as the slot the next API transition
+#: registers in (and as the anchor for the invariant below).
 #:
-#: * :func:`lumenairy.propagators.dispatch.propagate` -- the DEFAULT return
-#:   becomes a :class:`~lumenairy.propagators.PropagationResult` for every
-#:   method (roadmap F1 option 4, the option costed as least-breaking).  From
-#:   v5.30 a ``DeprecationWarning`` fires whenever the default path hands back
-#:   the unstable legacy contract (bare ndarray **or** ``(E, dx_out, dy_out)``
-#:   triple); ``return_result=True`` (stable) and ``return_result=False``
-#:   (legacy shapes, kept available past the flip) are both silent.
+#: Tombstone, v5.30 (roadmap ``docs/roadmap_deferred_2026_07_21.md`` Part F1,
+#: audit P5 -- owner decision: flip now rather than wait for v5.32):
 #:
-#: NOT scheduled here (decided against in the same pass):
+#: * :func:`lumenairy.propagators.dispatch.propagate` -- the DEFAULT return is
+#:   a :class:`~lumenairy.propagators.PropagationResult` for every method
+#:   (roadmap F1 option 4, the option costed as least-breaking).  **Done in
+#:   v5.30**, in the same release that announced it: the transition
+#:   ``DeprecationWarning`` and its ``_caller_is_internal`` external-caller
+#:   predicate are retired with it, because a warning saying "the default will
+#:   become a PropagationResult in vX" cannot outlive the version that makes it
+#:   one.  ``return_result=False`` keeps the legacy bare-ndarray /
+#:   ``(E, dx_out, dy_out)`` shapes permanently and un-deprecated;
+#:   ``return_result=True`` is unchanged.  As with the
+#:   :data:`REMOVAL_SCHEDULE` entries above, the completed entry is recorded
+#:   here as prose and in the CHANGELOG rather than left in a live registry
+#:   field -- an executed transition cannot satisfy a "lies in the future"
+#:   invariant.
+#:
+#: NOT scheduled here (decided against in the same pass, and NOT changed by the
+#: flip):
 #:
 #: * ``PropagationResult.__iter__`` -- stays **2-item** ``(field,
 #:   intermediates)`` permanently (audit P16).  Option 4 keeps

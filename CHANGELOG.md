@@ -4,6 +4,200 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — EME physics interiors (audit W6, `elements/eme/**`)
+
+The territory the 2026-07-25 adversarial audit named as its own coverage gap
+(never numerically validated; the 2026-07-09 read-only EME audit concluded
+"none above nit level").  Audited oracles-first: an independently bisected
+analytic symmetric-slab dispersion, lossless power conservation of the lateral
+cell S-matrix, the analytic Airy/Fabry-Perot slab (lossless **and** lossy), and
+the package's own 2-D-FD mode oracles used as a recall/spurious cross-check.
+75 pins in `tests/unit/test_niche_audit_w6_eme.py`, 49 of them verified failing
+on a pre-fix worktree of `3a1da2b` (the other 26 are verified-clean locks that
+must pass in both trees).
+
+- **CRITICAL — `layer_modes` returned pure garbage at a nonzero x-Bloch phase
+  (`kx0 != 0`).**  `strip_x_modes` keyed its solver choice on `kx0 == 0`, but
+  the discrete Bloch operator `A = D + diag(eps k0^2)` is **Hermitian for a real
+  `eps` at ANY real `kx0`** (the two wrap corners carry `exp(+i kx0 Lx)` and its
+  conjugate).  Routing it to `scipy.linalg.eig` anyway did two things: (i) `lam`
+  came back with roundoff imaginary parts of *arbitrary sign*, and `np.sqrt`'s
+  principal branch (`Re >= 0`, not `Im >= 0`) then put 8-11 of 16 strip modes on
+  the exponentially **growing** propagator (measured `max|exp(i ky h)| = 6.2e6`)
+  — the T-matrix blow-up the S-matrix cascade exists to avoid; (ii) the
+  complex-symmetric bilinear normaliser `Phi/sqrt(sum(Phi^2))` is the wrong
+  metric for a Hermitian operator, leaving the basis non-orthonormal (measured
+  `max|Phi^H Phi - I| = 43.2`, column norms 1.01..6.65) so the interface solves
+  were ill-conditioned and `sigma_min(M)` lost all meaning against `tol`.
+  Measured end effect on the reference structured cell at `kx0 = 0.37`,
+  `ky0 = pi`: **68 roots returned, 0 of the 3 real modes recovered, all 68
+  spurious** (nearest FD eigenvalue to the best of them 0.56 away), and the
+  lossless cell S-matrix violated power conservation by 1.5e-2 (`kx0 = 0.37`) /
+  1.8e-1 (`kx0 = 1.1`).  `kx0 = 0` was correct throughout, which is why every
+  shipped test passed.  Fixed by routing real `eps` to `eigh` at any `kx0`,
+  building the wrap phase with `conj(ph)` (exactly Hermitian), and adding
+  `_ky_forward` — one shared decaying-branch (`Im(ky) >= 0`) selector, matching
+  the vector sibling's `_strip_split_forward` convention, now used by `_wv`,
+  `_global_lateral_nullspace` and `mode_field` (the two field-reconstruction
+  sites had inlined the same unguarded `np.sqrt`).  Post-fix: power conserved to
+  1.3e-15 at every `kx0`, recall 3/3 with 0 spurious, and the analytic slab
+  reproduced at `kx0 != 0` via `qz^2 = beta^2 - kx0^2`.
+- **HIGH — `mode_match` carried a growing exponential and silently returned
+  R = 1 / T = 0 for a homogeneous medium.**  The backward layer amplitudes were
+  referenced at `z = 0`, so `Einv = exp(-i qz depth) = exp(+|qz| depth)` entered
+  the matched system for every evanescent layer mode.  `cond(A)` grew as
+  `exp(2 |qz|max depth)` — measured 9.3 -> 3.8e6 -> 1.4e17 -> 8.7e38 for
+  `depth = 0.2 / 2 / 5.3 / 12` on a 1-um cell — and once it passed the
+  `lstsq(rcond=None)` cutoff the physical solution was truncated to zero:
+  an **index-matched** layer (`n_sup = n_lay = n_sub`) reported
+  `R_00 = 1.000000`, `T_00 = 0.000000` where the exact answer is `T = 1`, and a
+  `n = 1.5` slab reported `R_00 = 1.0` at `depth >= 8` against analytic 0.1461.
+  `energy = 1.000000` in every failing case, so the module's own energy check
+  could not see it.  Fixed by referencing the backward amplitudes at
+  `z = depth` (`c- = E d-`), algebraically identical but leaving only the
+  decaying `E = exp(i qz depth)`: `cond(A)` now stays ~2 and the analytic Airy
+  slab is reproduced to ~5e-15 at every depth from 0.2 to 16.
+- **HIGH — `diffraction_fd` did not absorb.**  It took `Re(qz^2)` from the FD
+  oracle, so an absorbing layer behaved as a lossless one: at `n = 1.5 + 0.2j`,
+  `depth = 4` it reported `energy = 1.000000` and `R_00 = 0.032362` where the
+  analytic lossy Airy slab gives `R + T = 0.046505`, `R_00 = 0.046099` — it
+  claimed all the light emerged while 95% was absorbed.  A complex `eps_xy` now
+  keeps the complex spectrum (`return_complex=True`) and `mode_match` selects the
+  decaying `qz` branch; the analytic lossy R/T are reproduced to 8 decimals
+  across four (index, depth) combinations.  A **real** `eps_xy` takes the
+  byte-identical legacy path.
+- **MEDIUM — the rasterizers `strips_to_eps_xy` / `_strips_to_mu_xy` lacked the
+  `sum(h) == Ly` guard both layer finders have.**  Measured: heights summing to
+  0.25 of `Ly` silently produced a grid with **24/32 cells at `eps = 0`**, and
+  the vector oracle's `1/(k0 eps)` then built `inf`/`NaN` generators — silent
+  data corruption on the way into an "independent oracle".  The contract check
+  is now one shared helper (`_check_strip_heights`) used by all four sites.
+- **MEDIUM — `solver=` accepted any junk value and silently ran dense.**
+  `'bananas'`, `'DENSE'`, `'sparse'`, `''`, `None` and `7` all measured
+  bit-identical to `solver='dense'` (the P6 junk-method fall-through class).
+  Now validated in `dispersion_vec` / `layer_vector_modes`.  Measured tolerance
+  recorded for the two *valid* solvers: `banded` reproduces the dense
+  `sigma_min` to 1.7e-3 relative, recovered modes to 2e-5 relative.
+- **MEDIUM — the `layer_vector_modes` detection grid was not scale-invariant.**
+  `_DETECT_PPU` was documented and applied as "points per unit `qz^2`", a
+  quantity with units of 1/length^2, so ONE physical cell was scanned at wildly
+  different densities depending on the caller's length unit: measured 3944
+  points in um, 400 (the `n_scan` floor, i.e. **under-resolved**) in nm, and
+  3.94e9 points — a 31.5 GB `linspace`, i.e. a hang or `MemoryError` — in mm.
+  The density is now per unit of the dimensionless `(hi - lo) * Ly^2` (identical
+  at `Ly = 1`, which every shipped test uses), with a 200_000-point cap that
+  warns loudly instead of trying to allocate a pathological window.
+- **MEDIUM — `sigma` was silently inert without `k`** in both FD oracles
+  (measured bit-identical results with `sigma=1e9`), so a caller asking for a
+  few modes near a shift silently received the full dense spectrum.  Now raises.
+- **MEDIUM — the vector layer finder had no band-edge guard, so a `qz2_range`
+  starting at 0 crashed.**  Found by one of this wave's own pins.  The H-part of
+  a vector strip mode is recovered as `(C U)/(i ky)`, which is division by zero
+  for a mode sitting exactly on a band edge — measured `min|ky| = 0.000e+00` for
+  a uniform `eps = 2` strip at `qz^2 = 0` with `Nx = 8`, `k0 = 8`.  That produced
+  `NaN` in the modal state and the call then died several frames downstream with
+  `ValueError: array must not contain infs or NaNs`; the same opaque error came
+  from the *other* non-evaluable sample, a `qz^2` so far outside the band that
+  `exp(+|ky| h)` overflows (measured at `qz^2 = 1e7`, `max|ky| = 3.2e3`).  The
+  scalar sibling `layer_modes` has skipped its analogous band-edge sample since
+  audit P3-18; the vector sibling never got that guard.  Both cases now raise a
+  *named* `numpy.linalg.LinAlgError` from one shared `_equilibrated_G` builder,
+  and `layer_vector_modes` skips such samples exactly as `layer_modes` does.
+- **LOW cluster.**  The scalar sparse oracle `ref_2d_modes(k=...)` lacked the
+  fixed ARPACK `v0` both its siblings pass, so its output depended on the global
+  NumPy RNG state (measured 1.7e-13 drift between two seeds) — now deterministic.
+  The lossy `Im(qz^2)`-discard warning that `ref_2d_modes` emits was missing on
+  the JAX scalar twin **and** on the NumPy `ref_2d_modes_vector` — both now warn.
+  `layer_modes(n_scan <= 1)` silently returned an empty mode set (reads as "no
+  modes in this window") — now rejected.  Opaque failures given clear messages:
+  `eps_xy_to_strips` on a tensor grid (`too many values to unpack (expected 2,
+  got 4)`), `mode_match` with a zero-norm mode column (`SVD did not converge in
+  Linear Least Squares`), `_sigma_min_invpow(iters=0)` (`UnboundLocalError`), and
+  a traced `kx0`/`ky0` on the JAX path (a bare `ConcretizationTypeError` naming
+  only "the `float` function", although the dispatch's `is_jax_array(kx0)` test
+  reads as support — the frozen FD/Yee operators make `qz^2` differentiable
+  w.r.t. `eps` and `k0` only).
+- **Behaviour changes to note.**  (a) Real-`eps` strips at `kx0 != 0` now return
+  ascending real `lam` and an orthonormal `Phi` from `eigh` instead of unsorted
+  `eig` output — the pre-fix values there were unusable, so this is a repair, not
+  a re-tuning.  (b) `_ky_forward` forces the decaying branch, which also flips a
+  **gain** medium (`Im(eps) < 0`) onto the decaying branch; gain is out of scope
+  for the scalar and the vector cascade alike (the vector sibling already did
+  this).  (c) `diffraction_fd` on a **lossy** layer now returns
+  absorption-correct, energy-non-conserving efficiencies.  (d) `mode_match`
+  rearranges its unknowns, so lossless results are equal to lstsq roundoff rather
+  than bit-identical.  Everything the fixes claim not to change was checked:
+  `strip_x_modes` (real and lossy) at `kx0 = 0`, `cell_smatrix`, `dispersion`,
+  `layer_modes`, `mode_field`, the vector `_global_block_G` / `dispersion_vec` /
+  `layer_vector_modes` / `mode_field_vec`, both dense FD oracles, and the
+  rasterizer output are **bit-identical** across the pre/post trees.
+- The module's documented **negative result stands**: with the stable
+  reformulation in place a STRUCTURED layer's mode-matched efficiencies still do
+  not converge (energy strays, `T_00` wanders) and still warn.  W6-2 was a
+  conditioning bug in the `z` match; the structured non-convergence is a basis
+  problem, and the fix does not disturb it.
+
+### Changed (BREAKING) — `propagate()`'s default return is now a `PropagationResult` (audit P5 / roadmap F1, EXECUTED)
+
+Owner decision, same shape as the W5 wave below: **execute the scheduled API
+transition now** rather than ship only its announcement.  The transition was
+decided and announced earlier in this same (unreleased) v5.30 cycle
+(`3097cda`, option 4 of the four costed in
+`docs/roadmap_deferred_2026_07_21.md` Part F1); waiting for the registry
+horizon would have shipped a `DeprecationWarning` about a change no released
+version had yet made.
+
+- **`lumenairy.propagate(...)` without `return_result` now returns a
+  `PropagationResult` for every method** — `.field` / `.dx` / `.dy` /
+  `.dx_out` / `.dy_out` mean the same thing whichever kernel ran, and
+  `np.asarray(result)` yields the field.  Previously the default return was
+  the selected kernel's native shape: a bare `ndarray` (asm / rs / maslov /
+  gbd / hfpi / hf) **or** an `(E, dx_out, dy_out)` triple at a kernel-chosen
+  pitch (sas / fresnel / fraunhofer) — under `method='auto'` decided by `z`,
+  so a caller could not know which it would get without re-running the
+  selector.  That was audit finding P5.
+- **Migration: `return_result=False`** returns those native shapes, bit-for-bit
+  as before.  It is permanent and un-deprecated — the answer for code that
+  unpacks `E, dxo, dyo` (`PropagationResult` iteration stays 2-item,
+  `(field, intermediates)`, audit P16) and for fast loops that want no wrapper
+  allocation.  `return_result=True` is unchanged.
+- Measured bit-identity against `3a1da2b` over a 55-record capture: all 14
+  `return_result=False` records, all 14 `return_result=True` records, all three
+  `mhs.prescription_subdomain` paths, all eight `algebra.FreeSpace` paths and
+  both `Source.propagate` paths byte-identical (41/41).  The 14 changed records
+  are the default-path ones, each byte-equal to that case's pre-flip
+  `return_result=True` record — the container changed, the content did not.
+- **Retired with the flip:** the transition `DeprecationWarning`, its
+  `_caller_is_internal` external-caller predicate, and dispatch's
+  `API_TRANSITION_VERSION` / `resolve_removal_version` imports — a warning
+  reading "the default *will* become a `PropagationResult` in vX" cannot
+  outlive the version that makes it one.  `_deprecation.API_TRANSITION_VERSION`
+  survives as the (empty) slot for the next transition, still bound to
+  `NEXT_REMOVAL_VERSION` so `check_removal_schedule()` still covers it, with
+  the executed entry recorded as a tombstone comment — the same convention this
+  release used for `REMOVAL_SCHEDULE`.
+- The grid-change `UserWarning` (v5.30, P5) now fires **only** on the
+  `return_result=False` path: the stable contract has no `z`-dependent return
+  shape to warn about.
+- Internal call sites migrated in the same commit:
+  `propagators/mhs.py`'s two `prescription_subdomain` dispatcher calls and
+  `algebra/primitives.py`'s `FreeSpace._apply` now name
+  `return_result=False`.  The roadmap's flip-day inventory had listed the
+  algebra site as already flip-safe; measurement showed it was tolerant of the
+  wrapper for the *field* but not for the anamorphic *y-pitch* (`dx = 2 µm`,
+  `dy = 3 µm` returned `dy_out = 3e-6` unwrapped, `2e-6` wrapped), so the flip
+  would have silently squared an anamorphic algebra chain's output pitch.
+- Updated for the new default: `validation/propagators/test_dispatch.py`
+  (contract check superseded; 19/19), `examples/01_basic_propagation.py`,
+  the `README.md` quick-start table, and seven legacy-shape pins across
+  `tests/unit/` (`test_niche_audit_w3_propagators.py`,
+  `test_v5_3_hf_freespace_output_grid.py`,
+  `test_audit_v5_24_2_g09_seams_prop2.py`, `test_v4_15_2_agent_c.py`).
+- Pins: `tests/unit/test_niche_audit_w4_p5_return_contract.py` rewritten to the
+  shipped contract (53 pins, announcement-phase classes marked `SUPERSEDES`;
+  32 of them fail on a `3a1da2b` worktree, the other 21 being the invariance
+  pins).
+
 ### Removed (W5 shim-removal wave — the scheduled deprecations are executed, not slipped again)
 
 Owner decision: the overdue deprecation shims ship **removed in v5.30**
@@ -129,11 +323,12 @@ nothing new.
 
 **Explicitly NOT removed (still scheduled / not past horizon)**
 
-- The **P5 return-contract transition** (`propagators/dispatch.py` sentinel
-  plus `_deprecation.API_TRANSITION_VERSION`, still bound to
-  `NEXT_REMOVAL_VERSION = 5.32`).  It flips a default rather than deleting a
-  name, so it is not a shim removal; `_deprecation.py` itself stays fully
-  functional and the next deprecation cycle registers there as before.
+- The **P5 return-contract transition** is not a shim removal (it flips a
+  default rather than deleting a name), so it is not part of this wave — it was
+  EXECUTED separately in the same release, see
+  *Changed (BREAKING) — `propagate()`'s default return* above.
+  `_deprecation.py` itself stays fully functional and the next deprecation
+  cycle (or API transition) registers there as before.
 - `rcwa_efficiency_1d_jax` (v6.0.0), `load_zmx_prescription` /
   `load_zemax_prescription_txt` (v6.0) — horizons still in the future.
 - The `output_grid` → `output_shape` sub-propagator renames,

@@ -5,12 +5,17 @@ A lightweight, opt-in result type that bundles a propagated field with
 its sampling metadata and (when applicable) the per-stage history of a
 multi-step propagation.
 
-PropagationResult is **additive** -- every existing propagator continues
-to return its native shape (bare ndarray, list of (surface, field), or
-(E, intermediates) tuple) by default.  Pass ``return_result=True`` to
-opt into the structured container instead.  This keeps fast-loop and
-notebook code unaffected while letting downstream consumers (plotting,
-storage, replay) take a single uniform input.
+PropagationResult is **additive** for every propagator except the
+top-level dispatcher: ``propagate_through_system``, the MHS pipeline and
+friends still return their native shapes (bare ndarray, list of
+(surface, field), or (E, intermediates) tuple) unless asked for the
+container with ``return_result=True``.  :func:`lumenairy.propagate` is
+the exception -- since v5.30 (audit P5 / roadmap Part F1) it returns a
+``PropagationResult`` BY DEFAULT for every method, because its native
+shape depended on which kernel ``method='auto'`` picked; its native
+shapes remain available, bit-identical, via ``return_result=False``.
+Either way the container lets downstream consumers (plotting, storage,
+replay) take a single uniform input.
 
 Author: Andrew Traverso
 """
@@ -34,11 +39,14 @@ class PropagationResult:
        legacy ``E, intermediates = propagate_through_system(...)`` call
        form, so :meth:`__iter__` yields ``(field, intermediates)``.  The
        *un-wrapped* Fresnel / Fraunhofer / SAS kernels -- and therefore
-       ``propagate(..., method='sas')`` without ``return_result`` -- yield
+       ``propagate(..., method='sas', return_result=False)`` -- yield
        a **three**-element ``(E, dx_out, dy_out)`` tuple instead.  The two
        are NOT interchangeable::
 
-           E, dxo, dyo = propagate(E0, z=..., method='sas')            # OK
+           E, dxo, dyo = propagate(E0, z=..., method='sas',
+                                   return_result=False)               # OK
+           E, dxo, dyo = propagate(E0, z=..., method='sas')  # ValueError:
+                                                            # 2-item wrapper
            E, dxo, dyo = propagate(E0, z=..., method='sas',
                                    return_result=True)   # ValueError:
                                                          # not enough values
@@ -53,10 +61,10 @@ class PropagationResult:
     .. note::
        **P16 resolved (v5.30, roadmap Part F1).**  The deferred F1 decision
        -- ``propagate()``'s default return becoming a ``PropagationResult``
-       at :data:`lumenairy._deprecation.API_TRANSITION_VERSION` -- was
-       required to settle P16 in the same pass, because the wrapper's 2-item
-       iteration and the kernels' 3-item tuple cannot both be "the"
-       unpacking contract once the wrapper is the default.
+       for every method, EXECUTED in v5.30 -- was required to settle P16 in
+       the same pass, because the wrapper's 2-item iteration and the
+       kernels' 3-item tuple cannot both be "the" unpacking contract once
+       the wrapper is the default.
 
        **Decision: iteration stays 2-item, permanently.**  It is NOT
        scheduled to become ``(field, dx_out, dy_out)`` at the flip, and no
@@ -164,10 +172,10 @@ class PropagationResult:
         class docstring's warning (audit P16).  Read :attr:`dx_out` /
         :attr:`dy_out` for the output sampling.
 
-        v5.30 (roadmap Part F1): this arity is NOT scheduled to change when
-        ``propagate()``'s default return flips to ``PropagationResult`` --
-        see the P16 note on the class.  3-tuple unpackers pass
-        ``return_result=False``.
+        v5.30 (roadmap Part F1): this arity did NOT change when
+        ``propagate()``'s default return became a ``PropagationResult``,
+        and is NOT scheduled to change -- see the P16 note on the class.
+        3-tuple unpackers pass ``return_result=False``.
         """
         yield self.field
         yield self.intermediates if self.intermediates is not None else []

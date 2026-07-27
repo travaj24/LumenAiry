@@ -59,10 +59,12 @@ def test_hf_freespace_with_output_grid_does_not_raise():
     # Pre-v5.3 this raised TypeError; v5.3 must return cleanly.
     out = la.propagate(
         E, z=z, wavelength=wavelength, dx=dx,
-        method='hf', output_grid=(N, dx))
+        method='hf', output_grid=(N, dx), return_result=False)
 
     # When resampling at the same N + dx, the return contract is
-    # the resample-tuple form (E_out, dx_out).
+    # the resample-tuple form (E_out, dx_out).  ``return_result=False``
+    # names that native contract -- since the v5.30 F1 flip (audit P5) the
+    # dispatcher's default return is a PropagationResult for every method.
     assert isinstance(out, tuple), (
         f'expected (E_out, dx_out) tuple from resample path; '
         f'got {type(out).__name__}.')
@@ -84,22 +86,24 @@ def test_hf_freespace_with_output_dx_alone():
 
     out = la.propagate(
         E, z=z, wavelength=wavelength, dx=dx,
-        method='hf', output_dx=dx)
+        method='hf', output_dx=dx, return_result=False)
     assert isinstance(out, tuple)
     E_out, dx_out = out
     assert E_out.shape == (N, N)
 
 
 def test_hf_freespace_no_output_kwargs_returns_bare_ndarray():
-    """The default pass-through (no ``output_grid`` / ``output_dx``)
-    must return a bare ``ndarray`` -- v5.2.3-and-earlier contract
-    preserved bit-for-bit for the common case.
+    """The no-resample pass-through (no ``output_grid`` / ``output_dx``)
+    must return a bare ``ndarray`` on the native contract
+    (``return_result=False``) -- v5.2.3-and-earlier shape preserved
+    bit-for-bit for the common case.
     """
     N, dx = 64, 10e-6
     E = _build_test_field(N=N, dx=dx)
     z, wavelength = 0.01, 633e-9
 
-    out = la.propagate(E, z=z, wavelength=wavelength, dx=dx, method='hf')
+    out = la.propagate(E, z=z, wavelength=wavelength, dx=dx, method='hf',
+                       return_result=False)
     assert isinstance(out, np.ndarray), (
         f'default pass-through must return bare ndarray; got '
         f'{type(out).__name__}.')
@@ -126,7 +130,7 @@ def test_hf_freespace_resampled_power_is_preserved():
     p_in = float(np.sum(np.abs(E) ** 2) * dx * dx)
     E_out, dx_out = la.propagate(
         E, z=z, wavelength=wavelength, dx=dx,
-        method='hf', output_grid=(N, dx))
+        method='hf', output_grid=(N, dx), return_result=False)
     p_out = float(np.sum(np.abs(E_out) ** 2) * dx_out * dx_out)
 
     # Tight Parseval pin -- the renorm step in
