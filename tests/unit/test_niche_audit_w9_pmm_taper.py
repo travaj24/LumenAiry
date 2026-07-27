@@ -530,9 +530,21 @@ def test_staircase_error_law_is_second_order():
     the staircase; the DEFAULT ``'hard'`` raster injects ``O(1/n_x)`` duty
     quantisation that masks the law entirely).
 
-    MEASURED with ``nox = 15``, ``n_x = 1024``, reference ``n_slices = 512``:
-    the error falls by a factor ~3.9 per doubling of ``n_slices`` from 16 to
-    128 -- pinned as ``> 2.5`` per doubling (measured 3.5-4.0)."""
+    MEASURED with ``nox = 15``, ``n_x = 1024``, reference ``n_slices = 256``:
+    the error falls by a factor ~3-4 per doubling of ``n_slices`` from 4 to 32
+    (measured 6.355e-03 / 2.153e-03 / 5.640e-04 / 1.399e-04, ratios
+    2.95 / 3.82 / 4.03) -- pinned as ``> 2.5`` per doubling.
+
+    CALIBRATION NOTE (CI red at d3941f5, py3.12): the original window
+    (ns 16..128, reference 512) put the tail error at 8.4e-6 locally, INSIDE
+    the catalogued CI multi-slice drift band (~1e-5 -- unpinned BLAS threads on
+    the fast gate drift a many-layer cascade run-to-run; the 64-slice stack
+    class measured 2.2e-5 on CI vs 2e-7 locally in W8).  CI 3.12 read the
+    64->128 ratio at 2.18 there while the SAME code was green at a210de4 --
+    coin-flip noise, not physics: the a210de4-vs-d3941f5 oracle solves are
+    bit-identical for every n_slices (measured in clean worktrees).  The
+    window is shifted up the error curve so its smallest error (1.4e-4) sits
+    14x above that noise floor."""
     def _obs(ns):
         st = RCWAStack(_P, n_substrate=1.5, n_superstrate=1.0, n_orders=15)
         st.add_tapered_grating(_TH, eps_ridge=_ER, eps_groove=_EG,
@@ -545,11 +557,11 @@ def test_staircase_error_law_is_second_order():
         return np.concatenate([np.asarray(R)[:, idx].ravel(),
                                np.asarray(T)[:, idx].ravel()])
 
-    ref = _obs(512)
-    err = {n: float(np.max(np.abs(_obs(n) - ref))) for n in (16, 32, 64, 128)}
-    assert err[16] > 1e-4, err                 # measured 1.3e-03
-    for n in (32, 64, 128):
-        assert err[n // 2] / err[n] > 2.5, err  # measured 3.5 .. 4.0
+    ref = _obs(256)
+    err = {n: float(np.max(np.abs(_obs(n) - ref))) for n in (4, 8, 16, 32)}
+    assert err[4] > 1e-3, err                  # measured 6.36e-03
+    for n in (8, 16, 32):
+        assert err[n // 2] / err[n] > 2.5, err  # measured 2.95 / 3.82 / 4.03
 
 
 def test_pmm_lateral_exactness_beats_the_rcwa_raster():
