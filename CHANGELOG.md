@@ -105,6 +105,117 @@ altogether.
 Pins: `tests/unit/test_niche_audit_w9_pmm_taper.py` (19; 16 fail on a
 pre-change worktree, 3 pass as regression + error-law locks).
 
+### Fixed — the `'area'`-under-`'li'` raster regression: `raster='harmonic'` (audit W9, `elements/rcwa/stack.py`)
+
+W8 shipped `raster='area'` with a measured wart in its own docstrings: area
+weighting is 1-3 orders better than `'hard'` under the default
+`formulation='laurent'` for both polarizations, but WORSE than `'hard'` for the
+wall-NORMAL polarization under `'li'`.  The cause, now fixed: the cell is
+consumed TWICE with OPPOSITE rules — `Cxx = [[1/eps]]^{-1}` (inverse,
+wall-normal) and `Cyy` / `EZZ = [[eps]]` (direct, tangential) — and a boundary
+pixel's correct effective medium is the ARITHMETIC average for one and the
+HARMONIC average for the other (Farjadpour et al. 2006).  One scalar cell
+cannot carry both.
+
+- **`raster='harmonic'`** (`stack.py:321`, `_raster_companions` at
+  `stack.py:404`) paints the AREA cell — BIT-IDENTICAL to `raster='area'`, so
+  `plot_geometry`, the Im(eps) loss maps and `layer_absorption` read exactly
+  the cell they always did — and rides an inverse-rule COMPANION PAIR
+  `(exx, eyy)` that ONLY the `'li'` inverse Toeplitz reads.  The layer stays
+  ISOTROPIC: the pair is two DISCRETIZATIONS of one scalar material, not a
+  birefringent tensor (which is why it does not ride in an `eps_tensor_cell` —
+  that would report a fake birefringence to the absorption machinery).
+- **`add_layer(..., eps_cell_normal=(exx, eyy))`** (`stack.py:1471`) is the
+  seam; `formulation='li'` is required and every other pairing raises.
+  `RCWAStack._li_blocks` (`stack.py:2527`) is the SINGLE place the inverse rule
+  reads its cell, shared by `_layer_modes` and the even-parity
+  `_layer_even_spec`, so the two cascades cannot factorize a layer differently.
+  With the pair equal to the cell it reduces to `_li_convolutions_2d` exactly
+  (measured: `Cxx` bit-identical, `Cyy` 4.2e-16).  The pair enters
+  `_layer_eig_key` (`stack.py:2628`) — two layers with the same `eps_cell` and
+  different companions have different eigenproblems.
+- **The tapered builders grew `formulation=`** (`'laurent'` default,
+  bit-preserving; `stack.py:1797`/`1987`/`2060`, forwarded by
+  `add_graded_layer`, `stack.py:1705`), which also closes the documented wart
+  that reaching `'li'` meant rasterizing by hand.
+
+MEASURED, vertical binary grating against the EXACT analytic oracle (`n = 2/1`,
+`duty = 0.37`, `P = 1 um`, `wl = 633 nm`, `M = 9`, `theta = 0.25` rad),
+`'li'` TM `max|x - x_exact|` over `(R0, T0, R+1, T+1)`:
+
+      n_x |   hard      area     harmonic  | vs hard  vs area
+       64 | 3.07e-03  1.18e-03  3.71e-04   |    8.3x     3.2x
+      256 | 1.56e-03  7.30e-04  5.16e-05   |   30.3x    14.1x
+     1024 | 4.76e-04  1.89e-04  3.63e-06   |  131.3x    52.0x
+     8192 | 6.45e-05  2.21e-05  5.79e-08   | 1115.7x   381.2x
+
+`'area'` PLATEAUS on this channel while `'harmonic'` keeps converging.  On the
+`'laurent'` TE/TM and `'li'` TE channels `'harmonic'` IS `'area'` (bit-identical
+cell, no companion read), so it is never worse than `'area'` and never worse
+than `'hard'` — one safe choice per formulation: `'area'` under `'laurent'`,
+`'harmonic'` under `'li'`.  On the W8 SHEARED taper (shear 0.4, 16 slices,
+reference `n_x = 4096`) where `'area'` was outright worse than `'hard'`
+(4.79e-03 vs 1.92e-03 at `n_x = 64`), `'harmonic'` is 8.41e-04 — 2.3x on
+`'hard'`, 5.7x on `'area'`.  On a NON-taper two-material multi-ridge
+(`eps = 12` and `4 + 0.3j` in air) at `n_x = 64`: 2.02e-02 / 2.11e-02 /
+3.83e-03.  For 2-D pillars BOTH in-plane blocks take an inverse rule, so both
+polarizations gain (single pillar, `M = 4`, `n = 64`: `'li'` TM 4.25e-03 /
+1.67e-02 / 1.46e-03, `'li'` TE 3.60e-02 / 3.15e-03 / 1.92e-03).
+
+REJECTED, with numbers: a SCALAR harmonic cell (the harmonic mean stored IN
+`eps_cell`) gains only 1.1-3.5x on `'li'` TM and is 5-40x WORSE than `'area'`
+under `'laurent'` (1.11e-02 vs 2.86e-04 at `n_x = 64`, TE) — it corrupts the
+direct-rule channel it also feeds.
+
+`raster` defaults to `'hard'` and every default call is bit-for-bit unchanged.
+Pins: `tests/unit/test_niche_audit_w9_raster_harmonic.py` (22 cases; 20 fail
+pre-fix, 2 regression fences pass pre-fix).
+
+### Changed — EXACT pair predicates in the shape-overlap guard (audit W9, `elements/rcwa/_core.py`)
+
+W8's guard decided every curved pair by scanning the support functions over
+4096 directions, which UNDER-estimates the separating-axis maximum by up to
+~2e-7 of a period.  That approximation lived INSIDE the predicate, so the
+guard's blindness was the entanglement of two unrelated numbers.
+`_shapes_overlap` (`_core.py:1072`) is now exact algebra: rect/rect by interval
+overlap, disk/disk by centre distance, rect/ellipse by axis-scaling the ellipse
+to the UNIT DISK (which keeps the rectangle axis-aligned), and ellipse/ellipse
+by axis-scaling the first to the unit disk — reducing every curved pair to
+POINT-ELLIPSE distance (`_point_ellipse_distance`, `_core.py:1020`: the distance
+quartic as a BRACKETED monotone root, a proven bracket and a fixed 64 bisections,
+never an unbracketed iteration).  Shapes are axis-aligned throughout — the shape
+dicts carry no rotation entry and neither do the form factors that read them.
+
+What remains is ONE explicit, named, one-sided tolerance,
+`_OVERLAP_SLACK_FRAC = 1e-6` (`_core.py:998`), overridable per call via
+`tol_frac`.  Its VALUE is unchanged: it is a deliberate forgiveness for layouts
+whose centres came out of float arithmetic, not blindness.
+
+MEASURED: 20000 random pairs across all six kind combinations agree with the
+pre-W9 scan at the shipped window — 0 disagreements — and 0 order-asymmetric
+verdicts (both shapes are eroded by `tol/2`, so a verdict cannot depend on list
+ORDER).  What changes is that the tolerance can now be BELIEVED: at
+`tol_frac <= 1e-8` the old scan reported 406 (1e-8) and 735 (1e-10) FALSE
+POSITIVES per 3000 exactly-tangent / gapped LEGAL disk pairs, while the exact
+predicate reports ZERO at every tolerance — so the detection floor is now the
+tolerance itself, measured to resolve overlaps of 1e-8, 1e-10, 1e-12 and 1e-14
+of a period while never flagging tangency at exactly 0.  Faster, too: 1024 disks
+51.8 ms against W8's recorded 81 ms (1024 ellipses 60.1 ms; 1024 nearly-touching
+ellipses, where every neighbour reaches the predicate, 54.4 ms).
+
+Tangent / abutting shapes stay LEGAL (their intersection has measure zero), the
+wrap-aware minimal periodic image is unchanged, and the bounding-box pre-filter
+is unchanged.  Two consequences recorded: a shape whose semi-axis is BELOW
+`tol/2` now lies entirely inside its own forgiveness window and is reported
+disjoint (0.06 pm scale, far below anything the form factors resolve); and the
+predicate now always returns a Python `bool` — a numpy-scalar semi-axis used to
+leak a `np.bool_`, which breaks the `is True` / `is False` tests its callers and
+pins use.  The now-unused `_OVERLAP_DIRS` constant is removed;
+`_shape_support` is retained as the independent cross-check the W9 pins
+re-implement the old scan from.  Pins:
+`tests/unit/test_niche_audit_w9_overlap_exact.py` (19 cases; 13 fail pre-fix,
+6 regression fences pass pre-fix).
+
 ### Changed — auto-dispatcher follow-up wave (audit W9 items 1–7, `propagators/dispatch.py`, `system.py`, `fga.py`, `fft_infra.py`)
 
 - **One free-space regime rule (W9-7).**  `_select_asm_variant` — behind

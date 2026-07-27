@@ -64,6 +64,7 @@ from .twod import (
     _eps_convolution_2d,
     _harmonic_orders_2d,
     _li_convolutions_2d,
+    _li_convolutions_2d_tensor,
 )
 
 
@@ -279,6 +280,34 @@ entries (exact piecewise-constant Fourier series), or a
 ``raster='area'`` is a THIRD, opt-in mitigation -- see
 :func:`_raster_cover_1d`.
 
+TWO OPERATORS, TWO CELLS (audit W9, ``raster='harmonic'``).  A subpixel average
+cannot be a single number, because the factorization consumes the cell TWICE
+with opposite rules.  Under ``formulation='li'`` the wall-NORMAL block is the
+inverse-rule ``Cxx = [[1/eps]]^{-1}`` and the wall-TANGENTIAL blocks are the
+direct-rule ``Cyy = [[eps]]`` / ``EZZ = [[eps]]``; a boundary pixel's correct
+effective medium is the ARITHMETIC (area) average for the tangential blocks and
+the HARMONIC one for the normal block (Farjadpour et al. 2006 subpixel
+smoothing).  ``raster='harmonic'`` therefore emits BOTH: the ``eps_cell`` is the
+area-averaged cell (BIT-IDENTICAL to ``raster='area'``, so every direct-rule
+consumer -- ``plot_geometry``, the loss maps, ``layer_absorption`` -- sees the
+same isotropic cell it always did) plus an inverse-rule COMPANION PAIR
+``(exx, eyy)`` (:func:`_raster_companions`) that ONLY the ``'li'`` inverse
+Toeplitz reads (``add_layer(..., eps_cell_normal=(exx, eyy))``).  The layer is
+still ISOTROPIC: the pair is two DISCRETIZATIONS of one scalar material, not a
+birefringent tensor -- which is why it does not ride in an
+``eps_tensor_cell`` (that would report a fake birefringence to the absorption /
+Im(eps) machinery).  Under ``formulation='laurent'`` there is no inverse
+Toeplitz, so no companion is emitted and ``'harmonic'`` IS ``'area'``,
+bit-for-bit.  MEASURED (vertical grating vs the exact analytic oracle,
+``duty = 0.37``, ``M = 9``, ``theta = 0.25`` rad), ``'li'`` TM: 3.71e-04 /
+3.63e-06 / 5.79e-08 at ``n_x = 64 / 1024 / 8192`` against ``'hard'``
+3.07e-03 / 4.76e-04 / 6.45e-05 (8x / 131x / 1115x) and ``'area'``
+1.18e-03 / 1.89e-04 / 2.21e-05 (3.2x / 52x / 381x); ``'li'`` TE is EXACTLY
+``'area'`` (TE reads only ``Cyy``).  A SCALAR harmonic cell -- the naive
+"store the harmonic mean" -- was measured and REJECTED: it gains only 1.1-3.5x
+on ``'li'`` TM and is 5-40x WORSE than ``'area'`` under ``'laurent'``
+(:meth:`RCWAStack.add_tapered_grating`'s table).
+
 NOT AFFECTED (checked by grep + measurement, audit W8).  The PMM tapered
 siblings do NOT rasterize at all: ``PMMStack.add_tapered_grating`` /
 ``add_tapered_ridges`` emit exact ``(width_fraction, eps)`` SEGMENTS, and
@@ -289,7 +318,7 @@ They realise the requested duty exactly at every ``n_slices`` -- so the
 boundary-coincidence class cannot arise and they were left untouched.
 """
 
-_RASTER_MODES = ("hard", "area")
+_RASTER_MODES = ("hard", "area", "harmonic")
 
 
 def _validate_raster(fn_name, raster):
@@ -297,8 +326,8 @@ def _validate_raster(fn_name, raster):
     r = str(raster).lower()
     if r not in _RASTER_MODES:
         raise ValueError(
-            f"{fn_name}: raster must be 'hard' (default) or 'area', got "
-            f"{raster!r}.")
+            f"{fn_name}: raster must be 'hard' (default), 'area' or "
+            f"'harmonic', got {raster!r}.")
     return r
 
 
@@ -351,6 +380,109 @@ def _raster_cover_1d(u, lo, width, raster):
         return w * fl + np.minimum(np.maximum(t - fl, 0.0), w)
 
     return np.clip((_G(b) - _G(a)) * S, 0.0, 1.0)
+
+
+def _raster_wants_companions(fn_name, raster, formulation):
+    """Does this ``(raster, formulation)`` pair emit inverse-rule companions?
+
+    ONLY ``raster='harmonic'`` with ``formulation='li'``: the companion pair is
+    read by the inverse Toeplitz ``[[1/eps]]^{-1}``, which exists only in the Li
+    factorization.  Under ``'laurent'`` the pair would be dead weight, so
+    ``'harmonic'`` degenerates to ``'area'`` -- bit-for-bit, deliberately: the
+    mode is then a no-op rather than a trap, and it can be swept across
+    formulations without special-casing (audit W9)."""
+    f = str(formulation).lower()
+    if f == "fff":
+        f = "li"
+    if f not in ("laurent", "li"):
+        raise ValueError(
+            f"{fn_name}: formulation must be 'laurent' (default) or 'li'/'fff', "
+            f"got {formulation!r}.")
+    return raster == "harmonic" and f == "li"
+
+
+def _raster_companions(features, eps_bg, n_x, n_y):
+    """INVERSE-RULE companion pair ``(exx, eyy)`` for ``raster='harmonic'``
+    (audit W9) -- the wall-NORMAL subpixel average of a list of SEPARABLE
+    axis-aligned features, on the same ``(n_x, n_y)`` midpoint lattice the
+    ``eps_cell`` uses.
+
+    ``features`` is a list of ``(ax, ay, eps)``: ``ax`` is the per-pixel x
+    coverage (an ``(n_x,)`` area weight from :func:`_raster_cover_1d`), ``ay``
+    the ``(n_y,)`` y coverage or ``None`` for a feature that SPANS y (the 1-D
+    ridge case), and ``eps`` the feature permittivity.  Features must be
+    mutually disjoint (the builders enforce that on the hard masks).
+
+    WHAT IS AVERAGED, AND WHY IT IS NOT ONE NUMBER.  ``E_x`` is continuous
+    ACROSS a y-wall and its flux ``D_x`` is continuous across an x-wall, so the
+    x-normal effective medium is a SERIES (harmonic) average along x followed by
+    a PARALLEL (arithmetic) one along y::
+
+        exx = < 1 / < 1/eps >_x >_y        eyy = < 1 / < 1/eps >_y >_x
+
+    (the two-stage directional average of Farjadpour et al. 2006).  Both
+    reductions are EXACT:
+
+    * a feature that spans y (``ay=None``, every 1-D builder) gives
+      ``exx = 1/(sum_k cov_k/eps_k + (1 - sum_k cov_k)/eps_bg)`` -- the joint
+      full-pixel harmonic mean, for ANY number of ridges sharing the pixel --
+      and ``eyy = eps_bg + sum_k cov_k (eps_k - eps_bg)``, i.e. EXACTLY the
+      area-averaged cell (along y the material is constant, so the series
+      average collapses and only the arithmetic x-average survives);
+    * a pixel cut by ONE rectangle gives ``exx = ay h_x + (1 - ay) eps_bg``
+      with ``h_x = 1/(ax/eps + (1 - ax)/eps_bg)``, which is the pure harmonic
+      mean on a vertical wall (``ay = 1``), the pure ARITHMETIC mean on a
+      horizontal wall (``ax = 1``, where x is tangential and the harmonic
+      average would be the wrong medium), the feature's own ``eps`` inside and
+      ``eps_bg`` outside.
+
+    APPROXIMATION, documented: for a 2-D pixel shared by TWO OR MORE pillars the
+    y-band decomposition is not recoverable from the per-axis coverage marginals
+    alone (their y-bands may or may not overlap inside that one pixel), so the
+    bands are taken as disjoint and their heights renormalised when they total
+    more than the pixel.  Pillars are validated disjoint, so this needs two
+    pillars closer than one pixel; every single-feature pixel -- the whole
+    boundary of an ordinary layout -- is exact.
+    """
+    nx, ny = int(n_x), int(n_y)
+    eb = _C(eps_bg)
+    inv_bg = 1.0 / eb
+    if all(ay is None for _ax, ay, _e in features):
+        # ONE y-band (every feature spans y): the series average along x is
+        # taken JOINTLY over all features in that band -- exact for any number
+        # of 1-D ridges sharing a boundary pixel.  Along y the material is
+        # constant, so eyy collapses to the arithmetic (area) average.
+        inv = np.full(nx, inv_bg, dtype=_C)
+        ari = np.full(nx, eb, dtype=_C)
+        for ax, _ay, e in features:
+            w = np.asarray(ax, dtype=float)
+            inv = inv + w * (1.0 / _C(e) - inv_bg)
+            ari = ari + w * (_C(e) - eb)
+        col_x = (1.0 / inv).astype(_C)
+        return (np.broadcast_to(col_x[:, None], (nx, ny)).copy(),
+                np.broadcast_to(ari[:, None], (nx, ny)).copy())
+    # 2-D: one y-band per feature, taken DISJOINT (see the docstring).
+    exx = np.zeros((nx, ny), dtype=_C)
+    eyy = np.zeros((nx, ny), dtype=_C)
+    bx, by, hx, hy = [], [], [], []
+    for ax, ay, e in features:
+        wx = np.asarray(ax, dtype=float)
+        wy = (np.asarray(ay, dtype=float) if ay is not None
+              else np.ones(ny, dtype=float))
+        bx.append(wx[:, None])
+        by.append(wy[None, :])
+        hx.append((1.0 / (wx * (1.0 / _C(e) - inv_bg) + inv_bg))[:, None])
+        hy.append((1.0 / (wy * (1.0 / _C(e) - inv_bg) + inv_bg))[None, :])
+    sx = np.clip(sum(bx) + np.zeros((nx, ny)), 0.0, None)
+    sy = np.clip(sum(by) + np.zeros((nx, ny)), 0.0, None)
+    fx = np.where(sx > 1.0, 1.0 / np.where(sx > 0.0, sx, 1.0), 1.0)
+    fy = np.where(sy > 1.0, 1.0 / np.where(sy > 0.0, sy, 1.0), 1.0)
+    for k in range(len(features)):
+        exx = exx + (by[k] * fy) * hx[k]
+        eyy = eyy + (bx[k] * fx) * hy[k]
+    exx = exx + (1.0 - np.clip(sy, 0.0, 1.0)) * eb
+    eyy = eyy + (1.0 - np.clip(sx, 0.0, 1.0)) * eb
+    return exx.astype(_C), eyy.astype(_C)
 
 
 def _layer_offplane_or_traced(data):
@@ -1114,16 +1246,20 @@ class RCWAResult:
 
 
 class _RCWALayer:
-    __slots__ = ("thickness", "kind", "data", "formulation", "dispersive")
+    __slots__ = ("thickness", "kind", "data", "formulation", "dispersive",
+                 "normal_cells")
 
     def __init__(self, thickness, kind, data, formulation="laurent",
-                 dispersive=False):
+                 dispersive=False, normal_cells=None):
         # keep a traced (JAX) thickness native so layer DEPTH is differentiable
         self.thickness = thickness if is_jax_array(thickness) else float(thickness)
         self.kind = kind          # 'uniform' | 'iso' | 'shapes' | 'tensor'
         self.data = data
         self.formulation = formulation   # 'laurent' | 'li' (iso layers)
         self.dispersive = dispersive     # data holds wl -> value callable(s)
+        # (exx, eyy) INVERSE-RULE companion cells of an iso 'li' layer, or None
+        # (audit W9: raster='harmonic' subpixel smoothing -- see add_layer).
+        self.normal_cells = normal_cells
 
 
 
@@ -1334,7 +1470,7 @@ class RCWAStack:
 
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
                   eps_tensor_cell=None, shapes=None, eps_background=None,
-                  formulation="laurent"):
+                  formulation="laurent", eps_cell_normal=None):
         """Append a layer.  Provide exactly one layer specification:
 
         * ``eps`` (scalar) -- uniform isotropic spacer; a ``(3, 3)`` array is a
@@ -1381,6 +1517,24 @@ class RCWAStack:
         fast-converging factorization for metal / high-contrast layers.
         For 1-D stacks it reduces to the rigorous 1-D ``'li'`` placement.
         Uniform / shapes / tensor layers accept only the default.
+
+        ``eps_cell_normal`` (audit W9, ``formulation='li'`` only): the
+        INVERSE-RULE companion pair ``(exx, eyy)``, two cells of the SAME shape
+        as ``eps_cell`` that the wall-NORMAL blocks are built from --
+        ``Cxx = [[1/exx]]^{-1}`` (inverse rule along x) and
+        ``Cyy = [[1/eyy]]^{-1}`` (along y) -- while ``eps_cell`` itself keeps
+        feeding every DIRECT-rule consumer (the tangential ``EZZ = [[eps_cell]]``,
+        ``plot_geometry``, the Im(eps) loss maps, ``layer_absorption``).  The
+        layer stays ISOTROPIC: the pair is two DISCRETIZATIONS of one scalar
+        material -- the arithmetic and harmonic subpixel averages of the same
+        geometry (Farjadpour et al. 2006) -- and NOT a birefringent tensor, so it
+        does not belong in ``eps_tensor_cell``.  Pass ``None`` (the default) and
+        the single cell feeds both rules, bit-for-bit as before.
+        :meth:`add_tapered_grating` / :meth:`~RCWAStack.add_tapered_ridges` /
+        :meth:`~RCWAStack.add_tapered_pillars` with ``raster='harmonic'`` build
+        the pair for you; see the PIXEL CELL CONTRACT block at the top of this
+        module for what it buys (measured: 8x-1115x on the ``'li'`` wall-normal
+        polarization).
         """
         # Uniform ANISOTROPIC entry (audit S1-14 / S5-11): a (3, 3) permittivity
         # tensor passed as ``eps`` is a spatially-uniform tensor layer.  A bare
@@ -1414,6 +1568,39 @@ class RCWAStack:
                 "add_layer: formulation='li' applies to isotropic patterned "
                 "layers (eps_cell) only; uniform / shapes / tensor layers "
                 "use their own factorizations.")
+        # INVERSE-RULE companion pair (audit W9).  Validated here, up front, so
+        # a mis-shaped or mis-routed pair can never reach the solver and be read
+        # as a different geometry than the cell it rides with.
+        if eps_cell_normal is not None:
+            if eps_cell is None:
+                raise ValueError(
+                    "add_layer: eps_cell_normal is the INVERSE-RULE companion "
+                    "pair of an isotropic patterned cell; pass it with "
+                    "eps_cell (uniform / shapes / tensor layers have no "
+                    "inverse-rule cell to companion).")
+            if f != "li":
+                raise ValueError(
+                    "add_layer: eps_cell_normal requires formulation='li'/"
+                    "'fff' -- the companion pair is read ONLY by the inverse "
+                    "Toeplitz [[1/eps]]^{-1}, which the 'laurent' (direct) "
+                    "rule never builds, so pairing it with 'laurent' would "
+                    "silently discard the smoothing.  Drop the pair or switch "
+                    "to formulation='li'.")
+            if callable(eps_cell):
+                raise ValueError(
+                    "add_layer: eps_cell_normal is not supported for a "
+                    "DISPERSIVE (callable) eps_cell -- the companion would have "
+                    "to be re-derived per wavelength from the geometry.  "
+                    "Rasterize per wavelength and add the layers explicitly.")
+            if (not isinstance(eps_cell_normal, (tuple, list))
+                    or len(eps_cell_normal) != 2):
+                got = type(eps_cell_normal).__name__
+                if isinstance(eps_cell_normal, (tuple, list)):
+                    got = f"{got} of length {len(eps_cell_normal)}"
+                raise ValueError(
+                    f"add_layer: eps_cell_normal must be the PAIR (exx, eyy) "
+                    f"of wall-normal companion cells -- exx for the inverse "
+                    f"rule along x, eyy along y -- got {got}.")
         if eps is not None:
             if callable(eps):
                 self._layers.append(_RCWALayer(thickness, "uniform", eps,
@@ -1442,8 +1629,25 @@ class RCWAStack:
                                     strict_y=not self.is_1d)
             _warn_if_y_averaged("add_layer", cell, self.noy,
                                 strict_y=not self.is_1d)
+            pair = None
+            if eps_cell_normal is not None:
+                pair = []
+                for nm, c in zip(("exx", "eyy"), eps_cell_normal):
+                    cc = (c.astype(_C) if is_jax_array(c)
+                          else np.asarray(c, dtype=_C))
+                    if cc.ndim == 1:
+                        cc = cc[:, None]
+                    if cc.shape != cell.shape:
+                        raise ValueError(
+                            f"add_layer: eps_cell_normal {nm} has shape "
+                            f"{cc.shape}, which does not match the eps_cell "
+                            f"shape {cell.shape}; the companion must sample the "
+                            f"SAME lattice as the cell it rides with (the two "
+                            f"describe one geometry under two averaging rules).")
+                    pair.append(cc)
+                pair = tuple(pair)
             self._layers.append(_RCWALayer(thickness, "iso", cell,
-                                           formulation=f))
+                                           formulation=f, normal_cells=pair))
         elif shapes is not None:
             if eps_background is None:
                 raise ValueError(
@@ -1499,7 +1703,7 @@ class RCWAStack:
         return self
 
     def add_graded_layer(self, thickness, profile, *, n_slices=8,
-                         rule="midpoint"):
+                         rule="midpoint", formulation="laurent"):
         """Append a continuously-graded ``eps(z)`` layer as an auto-sliced
         z-staircase of ``n_slices`` thin layers (audit GAP4 / P4).
 
@@ -1523,6 +1727,16 @@ class RCWAStack:
         rule : {'midpoint', 'trapezoid'}, optional
             Sample each slice at its centre (``'midpoint'``, default) or average
             its two edges (``'trapezoid'``).
+        formulation : {'laurent', 'li'}, optional
+            Factorization handed to :meth:`add_layer` for every ``(Sx, Sy)``
+            slice (audit W9; ``'laurent'`` is the DEFAULT and bit-preserving).
+            ``'li'`` is what makes ``raster='harmonic'`` in the tapered builders
+            do anything -- the companion pair it emits is read only by the
+            inverse Toeplitz.  Scalar (uniform) and ``(Sx, Sy, 3, 3)`` tensor
+            slices IGNORE it and are added as before: a uniform slice has no
+            factorization to choose (every rule coincides on it) and a tensor
+            slice has its own, so :meth:`add_layer` -- which REJECTS the keyword
+            for both -- is never handed it.
 
         Notes
         -----
@@ -1531,8 +1745,14 @@ class RCWAStack:
         carry that method's contract: NODE point samples at
         ``(j Px/Sx, i Py/Sy)``, hard-assigned, ``O(1/Sx)`` geometric
         quantisation of any in-plane feature edge (see the PIXEL CELL CONTRACT
-        block at the top of this module).  Every slice is sampled with
-        ``formulation='laurent'``.
+        block at the top of this module).
+
+        A profile may also return the 3-tuple ``(cell, exx, eyy)`` -- an
+        ``(Sx, Sy)`` cell plus the INVERSE-RULE companion pair of
+        ``raster='harmonic'`` (audit W9, see :func:`_raster_companions`), which
+        is forwarded as :meth:`add_layer`'s ``eps_cell_normal``.  Under
+        ``rule='trapezoid'`` the companions are averaged edge-to-edge with the
+        cell, so the two stay consistent slice by slice.
         """
         n = int(n_slices)
         if n < 1:
@@ -1544,15 +1764,27 @@ class RCWAStack:
                 f"got {rule!r}.")
         dz = float(thickness) / n
         for k in range(n):
+            # A profile may return the cell alone, or -- for raster='harmonic'
+            # (audit W9) -- the 3-tuple ``(cell, exx, eyy)`` carrying the
+            # inverse-rule companion pair alongside it.
             if rule == "midpoint":
-                eps_k = np.asarray(profile((k + 0.5) / n), dtype=_C)
+                raw = profile((k + 0.5) / n)
+                comp = raw[1:] if isinstance(raw, tuple) else None
+                eps_k = np.asarray(raw[0] if comp else raw, dtype=_C)
             else:
-                eps_k = 0.5 * (np.asarray(profile(k / n), dtype=_C)
-                               + np.asarray(profile((k + 1) / n), dtype=_C))
+                r0, r1 = profile(k / n), profile((k + 1) / n)
+                c0 = r0[1:] if isinstance(r0, tuple) else None
+                c1 = r1[1:] if isinstance(r1, tuple) else None
+                eps_k = 0.5 * (np.asarray(r0[0] if c0 else r0, dtype=_C)
+                               + np.asarray(r1[0] if c1 else r1, dtype=_C))
+                comp = (tuple(0.5 * (np.asarray(a, dtype=_C)
+                                     + np.asarray(b, dtype=_C))
+                              for a, b in zip(c0, c1)) if c0 and c1 else None)
             if eps_k.ndim == 0:
                 self.add_layer(dz, eps=complex(eps_k))
             elif eps_k.ndim == 2:
-                self.add_layer(dz, eps_cell=eps_k)
+                self.add_layer(dz, eps_cell=eps_k, formulation=formulation,
+                               eps_cell_normal=comp)
             elif eps_k.ndim == 4:
                 self.add_layer(dz, eps_tensor_cell=eps_k)
             else:
@@ -1564,7 +1796,7 @@ class RCWAStack:
 
     def add_tapered_grating(self, thickness, *, eps_ridge, eps_groove,
                             duty_bottom, duty_top=None, n_slices=12, n_x=256,
-                            shear=0.0, raster="hard"):
+                            shear=0.0, raster="hard", formulation="laurent"):
         """Append a 1-D grating with SLANTED (trapezoidal) sidewalls as an
         auto-sliced z-staircase (audit GAP4 -- fab realism).
 
@@ -1598,16 +1830,25 @@ class RCWAStack:
             shear=d*tan(0.524)/period)``.  Wrap-aware (the ridge may cross
             the cell edge).  Default 0 (centred, unchanged).  Staircase
             accuracy class: ~1e-3 absolute at 16-32 slices.
-        raster : {'hard', 'area'}, optional
-            Pixel assignment of the ridge walls (audit W8, v5.31).  ``'hard'``
-            (DEFAULT, bit-preserved) gives every pixel one material, half-open
-            ``[centre - duty/2, centre + duty/2)``; the realised duty is
-            therefore the requested one QUANTISED to the ``n_x`` lattice
-            (``O(1/n_x)``).  ``'area'`` (OPT-IN, experimental) gives each
-            boundary pixel the AREA-WEIGHTED eps average, making the realised
-            duty exact at any ``n_x``.  See the PIXEL CELL CONTRACT note at the
-            top of this module and the measured convergence table in the Notes
-            below before choosing ``'area'``.
+        raster : {'hard', 'area', 'harmonic'}, optional
+            Pixel assignment of the ridge walls (audit W8, v5.31; ``'harmonic'``
+            audit W9).  ``'hard'`` (DEFAULT, bit-preserved) gives every pixel one
+            material, half-open ``[centre - duty/2, centre + duty/2)``; the
+            realised duty is therefore the requested one QUANTISED to the ``n_x``
+            lattice (``O(1/n_x)``).  ``'area'`` gives each boundary pixel the
+            AREA-WEIGHTED eps average, making the realised duty exact at any
+            ``n_x``.  ``'harmonic'`` paints the SAME area-averaged cell (it is
+            ``'area'`` bit-for-bit) and additionally rides the INVERSE-RULE
+            companion pair the Li factorization needs -- it therefore does
+            something only with ``formulation='li'``, where it is the one mode
+            that is right for BOTH polarizations.  See the PIXEL CELL CONTRACT
+            note at the top of this module and the measured table in the Notes.
+        formulation : {'laurent', 'li'}, optional
+            Factorization the emitted slices are solved with (audit W9;
+            ``'laurent'`` is the DEFAULT and bit-preserving).  Before W9 the
+            builder could only emit ``'laurent'`` layers and reaching ``'li'``
+            meant rasterizing by hand; passing ``'li'`` here is what activates
+            ``raster='harmonic'``.
 
         Notes
         -----
@@ -1638,48 +1879,69 @@ class RCWAStack:
         now off by 1.552e-04 -- the ordinary ``O(1/n_x)`` quantisation, a 116x
         improvement, achieved AT ``n_x = 128`` rather than by refining.
 
-        ``raster='area'`` -- MEASURED, and the recommendation is
-        PER-FORMULATION.  Convergence of the rasterized cell against the EXACT
-        analytic 1-D oracle (:func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d`
-        at the same ``formulation``), vertical binary grating ``n = 2/1``,
-        ``duty = 0.37`` (deliberately NOT grid-aligned), ``P = 1 um``,
-        ``wl = 633 nm``, ``d = 300 nm``, ``M = 9``, ``theta = 0.25`` rad; the
-        error is ``max|x - x_exact|`` over ``(R0, T0, R+1, T+1)``::
+        ``raster`` -- MEASURED, and the recommendation is PER-FORMULATION.
+        Convergence of the rasterized cell against the EXACT analytic 1-D oracle
+        (:func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d` at the same
+        ``formulation``), vertical binary grating ``n = 2/1``, ``duty = 0.37``
+        (deliberately NOT grid-aligned), ``P = 1 um``, ``wl = 633 nm``,
+        ``d = 300 nm``, ``M = 9``, ``theta = 0.25`` rad; the error is
+        ``max|x - x_exact|`` over ``(R0, T0, R+1, T+1)``::
 
-              n_x |  'laurent' TE       |  'laurent' TM       |  'li' TM
-                  |  hard       area    |  hard       area    |  hard       area
-               37 | 2.34e-02  2.60e-03  | 1.05e-02  7.51e-04  | 1.08e-02  2.33e-03
-               64 | 5.49e-03  2.86e-04  | 2.33e-03  5.67e-05  | 3.07e-03  1.18e-03
-              128 | 5.10e-03  2.01e-04  | 2.23e-03  5.14e-05  | 2.73e-03  9.48e-04
-              256 | 3.10e-03  5.56e-05  | 1.34e-03  1.51e-05  | 1.56e-03  7.30e-04
-              512 | 1.16e-03  1.11e-05  | 5.03e-04  2.94e-06  | 6.04e-04  2.28e-04
-             1024 | 9.29e-04  3.84e-06  | 4.02e-04  1.03e-06  | 4.76e-04  1.89e-04
+              n_x |  'laurent' TE / TM AND 'li' TE  |  'li' TM
+                  |  hard       area == harmonic    |  hard      area      harmonic
+               37 | 2.34e-02  2.60e-03  (TE)        | 1.08e-02  2.33e-03  2.15e-03
+               64 | 5.49e-03  2.86e-04  (TE)        | 3.07e-03  1.18e-03  3.71e-04
+              128 | 5.10e-03  2.01e-04  (TE)        | 2.73e-03  9.48e-04  2.00e-04
+              256 | 3.10e-03  5.56e-05  (TE)        | 1.56e-03  7.30e-04  5.16e-05
+              512 | 1.16e-03  1.11e-05  (TE)        | 6.04e-04  2.28e-04  1.07e-05
+             1024 | 9.29e-04  3.84e-06  (TE)        | 4.76e-04  1.89e-04  3.63e-06
+             8192 | 1.25e-04  6.12e-08  (TE)        | 6.45e-05  2.21e-05  5.79e-08
 
-        ``'li'`` TE is BIT-IDENTICAL to ``'laurent'`` TE here (measured 0.0):
-        ``E_y`` is tangential to every wall of a 1-D grating, so Li's rule
-        reduces to the direct rule and the TE column is shared.
+        (``'laurent'`` TM runs 1.05e-02 / 7.51e-04 at ``n_x = 37`` down to
+        5.43e-05 / 1.64e-08 at 8192, the same shape as the TE column.)  ``'li'``
+        TE is BIT-IDENTICAL to ``'laurent'`` TE (measured 0.0): ``E_y`` is
+        tangential to every wall of a 1-D grating, so Li's rule reduces to the
+        direct rule -- which is also why ``'harmonic'`` EQUALS ``'area'`` in
+        every column but ``'li'`` TM.
 
-        RECOMMENDATION.  With the DEFAULT ``formulation='laurent'``, prefer
-        ``raster='area'``: it is 1-3 orders of magnitude more accurate at the
-        SAME ``n_x`` for both polarizations, and it makes the realised feature
-        width exact (``|sum(cover)/n_x - duty| <= 3.7e-15`` over 5000 random
-        cases, against ``O(1/n_x)`` -- up to 6.1e-02 at ``n_x = 16`` -- for
-        ``'hard'``).  With ``formulation='li'``/``'fff'`` KEEP ``'hard'`` for
-        the WALL-NORMAL polarization (TM / ``E_x``): the Li inverse rule assumes
-        a SHARP interface, and the arithmetic (area) average is the wrong
-        effective medium for the normal component -- it wants the HARMONIC one
-        (Farjadpour 2006 subpixel smoothing).  Measured above, ``'li'`` TM gains
-        only ~2.5x from ``'area'`` and plateaus (``2.2e-05`` at ``n_x = 8192``
-        against ``1.6e-08`` for ``'laurent'`` TM); on the SHEARED taper
-        (``shear = 0.4``, ``duty = 0.37``, 16 slices, reference ``n_x = 16384``)
-        ``'li'`` TM ``'area'`` is outright WORSE than ``'hard'`` -- by 10.6x at
-        ``n_x = 64``, 9.2x at ``n_x = 256``, 2.2x at ``n_x = 512`` -- while
-        ``'laurent'`` TE improves by up to 120x on the same sweep.  ``'area'``
-        is therefore shipped OPT-IN and DEFAULT OFF: it is a real accuracy win
-        on the default factorization and a regression on one arm of ``'li'``.
-        Note ``add_graded_layer`` (which this builder drives) always uses
-        ``formulation='laurent'``; reaching ``'li'`` means rasterizing yourself
-        and calling :meth:`add_layer`.
+        RECOMMENDATION, per formulation x polarization (all MEASURED):
+
+        =============== ============ ==================================
+        formulation     polarization use
+        =============== ============ ==================================
+        ``'laurent'``   TE           ``'area'`` (== ``'harmonic'``)
+        ``'laurent'``   TM           ``'area'`` (== ``'harmonic'``)
+        ``'li'``        TE           ``'area'`` (== ``'harmonic'``)
+        ``'li'``        TM           ``'harmonic'``
+        =============== ============ ==================================
+
+        So: ``'area'`` under ``'laurent'``, ``'harmonic'`` under ``'li'`` (it is
+        never worse than ``'area'`` and never worse than ``'hard'`` -- one safe
+        choice per formulation).  Both make the realised feature width exact
+        (``|sum(cover)/n_x - duty| <= 3.7e-15`` over 5000 random cases, against
+        ``O(1/n_x)`` -- up to 6.1e-02 at ``n_x = 16`` -- for ``'hard'``).
+
+        WHY ``'area'`` ALONE IS NOT ENOUGH UNDER ``'li'`` (audit W8 found it,
+        W9 fixed it).  The Li inverse rule assumes a SHARP interface, and the
+        arithmetic (area) average is the wrong effective medium for the
+        wall-NORMAL component -- it wants the HARMONIC one (Farjadpour et al.
+        2006 subpixel smoothing), while the tangential blocks still want the
+        arithmetic one.  One scalar cell cannot carry both, so ``'harmonic'``
+        carries two (see the PIXEL CELL CONTRACT block).  Measured on the
+        SHEARED taper (``shear = 0.4``, ``duty = 0.37``, 16 slices, reference
+        ``n_x = 16384``), ``'li'`` TM: ``'area'`` is outright WORSE than
+        ``'hard'`` (4.79e-03 vs 1.92e-03 at ``n_x = 64``, 1.27e-03 vs 7.87e-04 at
+        256) while ``'harmonic'`` is better than both (8.41e-04 / 5.26e-05 --
+        2.3x and 15x on ``'hard'``, 5.7x and 24x on ``'area'``).  On a NON-taper
+        two-material multi-ridge (``eps = 12`` and ``4 + 0.3j`` in air, vertical
+        walls, reference ``n_x = 16384``) ``'li'`` TM at ``n_x = 64/1024`` runs
+        ``'hard'`` 2.02e-02 / 2.17e-03, ``'area'`` 2.11e-02 / 1.38e-03,
+        ``'harmonic'`` 3.83e-03 / 1.92e-05.  A SCALAR harmonic cell -- storing
+        the harmonic mean IN ``eps_cell`` -- was measured and REJECTED: it gains
+        only 1.1-3.5x on ``'li'`` TM (2.73e-03 / 1.34e-04 / 1.82e-05 at
+        ``n_x = 64 / 1024 / 8192`` on the table above) and is 5-40x WORSE than
+        ``'area'`` under ``'laurent'`` (1.11e-02 vs 2.86e-04 at ``n_x = 64``,
+        TE), because it corrupts the direct-rule channel it also feeds.
         """
         dt = float(duty_bottom if duty_top is None else duty_top)
         db = float(duty_bottom)
@@ -1693,6 +1955,8 @@ class RCWAStack:
         sh = float(shear)
         x = (np.arange(int(n_x)) + 0.5) / int(n_x)
         n_y = max(1, 4 * self.noy + 1)              # grating is uniform in y
+        companions = _raster_wants_companions("add_tapered_grating", rst,
+                                              formulation)
 
         def _profile(zeta):
             duty = dt + (db - dt) * zeta            # top (0) -> bottom (1)
@@ -1701,18 +1965,28 @@ class RCWAStack:
             # (PIXEL CELL CONTRACT): a wall exactly on a pixel centre is
             # assigned to the ridge at the LOWER wall and to the groove at the
             # UPPER one, so the pixel count is exact instead of short by one.
-            cov = _raster_cover_1d(x, centre - 0.5 * duty, duty, rst)
+            lo = centre - 0.5 * duty
+            # 'harmonic' paints the AREA cell (bit-identical to raster='area')
+            # and rides an inverse-rule companion pair alongside it (audit W9).
+            cov = _raster_cover_1d(x, lo, duty, "area" if rst == "harmonic"
+                                   else rst)
             if rst == "hard":
                 col = np.where(cov > 0.0, er, eg).astype(_C)
             else:
                 col = (eg + (er - eg) * cov).astype(_C)
-            return np.broadcast_to(col[:, None], (int(n_x), n_y)).copy()
+            cell = np.broadcast_to(col[:, None], (int(n_x), n_y)).copy()
+            if not companions:
+                return cell
+            exx, eyy = _raster_companions([(cov, None, er)], eg, int(n_x), n_y)
+            return cell, exx, eyy
 
         return self.add_graded_layer(thickness, _profile, n_slices=n_slices,
-                                     rule="midpoint")
+                                     rule="midpoint",
+                                     formulation=formulation)
 
     def add_tapered_ridges(self, thickness, *, ridges, eps_groove,
-                           n_slices=12, n_x=256, n_y=None, raster="hard"):
+                           n_slices=12, n_x=256, n_y=None, raster="hard",
+                           formulation="laurent"):
         """Append a MULTI-RIDGE tapered grating as an auto-sliced z-staircase
         (device-geometry roadmap item 1, 2026-06-10) -- the N-feature,
         center-anchored generalization of :meth:`add_tapered_grating`.
@@ -1723,13 +1997,18 @@ class RCWAStack:
         center -- the audited geometry bug).  Wrap-aware; later ridges may
         NOT overlap earlier ones (raises).  ``eps_groove`` fills the rest.
 
-        ``raster`` is ``'hard'`` (default, bit-preserved) or ``'area'``, exactly
-        as in :meth:`add_tapered_grating`: each ridge occupies the HALF-OPEN
-        interval ``[center - w/2, center + w/2)`` (audit W8 -- a wall exactly on
-        a pixel centre no longer loses the pixel).  The OVERLAP guard always
-        reads the HARD masks, so whether two ridges collide is a property of the
-        geometry and not of the raster mode; ridges that TOUCH exactly are legal
-        and, under ``'area'``, share the boundary pixel by area.
+        ``raster`` is ``'hard'`` (default, bit-preserved), ``'area'`` or
+        ``'harmonic'``, and ``formulation`` is ``'laurent'`` (default) or
+        ``'li'``, exactly as in :meth:`add_tapered_grating` (whose Notes carry
+        the measured per-formulation recommendation): each ridge occupies the
+        HALF-OPEN interval ``[center - w/2, center + w/2)`` (audit W8 -- a wall
+        exactly on a pixel centre no longer loses the pixel).  The OVERLAP guard
+        always reads the HARD masks, so whether two ridges collide is a property
+        of the geometry and not of the raster mode; ridges that TOUCH exactly are
+        legal and, under ``'area'`` / ``'harmonic'``, share the boundary pixel by
+        area.  ``'harmonic'``'s inverse-rule companion is EXACT for any number of
+        ridges sharing one boundary pixel -- the reciprocal averages add inside
+        the pixel before it is inverted (:func:`_raster_companions`).
         """
         n = int(n_slices)
         if n < 1:
@@ -1742,10 +2021,14 @@ class RCWAStack:
         nx = int(n_x)
         ny = int(n_y) if n_y is not None else max(1, 4 * self.noy + 1)
         x = (np.arange(nx) + 0.5) / nx          # period fractions
+        companions = _raster_wants_companions("add_tapered_ridges", rst,
+                                              formulation)
+        wgt = "area" if rst == "harmonic" else rst
 
         def _profile(zeta):
             col = np.full(nx, eg, dtype=_C)
             covered = np.zeros(nx, dtype=bool)
+            feats = []
             for c, wt, wb, e in rid:
                 w = wt + (wb - wt) * zeta
                 if w <= 0.0:
@@ -1761,14 +2044,22 @@ class RCWAStack:
                 if rst == "hard":
                     col[m] = e
                 else:
-                    col = col + (e - eg) * _raster_cover_1d(x, lo, frac, rst)
-            return np.broadcast_to(col[:, None], (nx, ny)).copy()
+                    cov = _raster_cover_1d(x, lo, frac, wgt)
+                    col = col + (e - eg) * cov
+                    feats.append((cov, None, e))     # spans y: ay = None
+            cell = np.broadcast_to(col[:, None], (nx, ny)).copy()
+            if not companions:
+                return cell
+            exx, eyy = _raster_companions(feats, eg, nx, ny)
+            return cell, exx, eyy
 
         return self.add_graded_layer(thickness, _profile, n_slices=n,
-                                     rule="midpoint")
+                                     rule="midpoint",
+                                     formulation=formulation)
 
     def add_tapered_pillars(self, thickness, *, pillars, eps_host,
-                            n_slices=8, n_x=None, n_y=None, raster="hard"):
+                            n_slices=8, n_x=None, n_y=None, raster="hard",
+                            formulation="laurent"):
         """Append MULTI-PILLAR tapered 2-D layers as an auto-sliced
         z-staircase (device-geometry roadmap item 1; the 2-D RCWA stack had
         NO tapered builder at all).
@@ -1779,12 +2070,27 @@ class RCWAStack:
         center.  ``eps_host`` fills the rest.  Wrap-aware in both axes;
         overlapping pillars raise.
 
-        ``raster`` is ``'hard'`` (default, bit-preserved) or ``'area'``, exactly
-        as in :meth:`add_tapered_grating`.  Each pillar occupies the HALF-OPEN
-        box ``[cx - wx/2, cx + wx/2) x [cy - wy/2, cy + wy/2)`` (audit W8), and
-        the rectangle is SEPARABLE so the ``'area'`` weight is the exact
-        product of the two per-axis coverage fractions (corner pixels included).
-        The overlap guard reads the HARD masks in both modes.
+        ``raster`` is ``'hard'`` (default, bit-preserved), ``'area'`` or
+        ``'harmonic'``, and ``formulation`` is ``'laurent'`` (default) or
+        ``'li'``, exactly as in :meth:`add_tapered_grating`.  Each pillar
+        occupies the HALF-OPEN box
+        ``[cx - wx/2, cx + wx/2) x [cy - wy/2, cy + wy/2)`` (audit W8), and the
+        rectangle is SEPARABLE so the ``'area'`` weight is the exact product of
+        the two per-axis coverage fractions (corner pixels included).  The
+        overlap guard reads the HARD masks in every mode.
+
+        In 2-D BOTH in-plane blocks take an inverse rule (along x for ``Cxx``,
+        along y for ``Cyy``), so ``raster='harmonic'`` + ``formulation='li'``
+        improves BOTH polarizations here, not just the wall-normal one -- and it
+        repairs the same ``'area'``-under-``'li'`` regression the 1-D builders
+        show.  MEASURED (single 0.37 x 0.29-period pillar, ``eps = 4`` in air,
+        ``M = 4``, ``theta = 0.2`` rad, reference ``n = 512`` harmonic;
+        ``n_x = n_y = 64``): ``'li'`` TM ``'hard'`` 4.25e-03, ``'area'``
+        1.67e-02 (WORSE than hard), ``'harmonic'`` 1.46e-03; ``'li'`` TE
+        3.60e-02 / 3.15e-03 / 1.92e-03.  The companion is EXACT for every pixel
+        cut by ONE pillar (the whole boundary of an ordinary layout) and a
+        documented band approximation only where two pillars share a single pixel
+        (see :func:`_raster_companions`).
         """
         if self.is_1d:
             raise ValueError(
@@ -1803,10 +2109,14 @@ class RCWAStack:
         pil = [((float(c[0]), float(c[1])), (float(wt[0]), float(wt[1])),
                 (float(wb[0]), float(wb[1])), _C(e))
                for c, wt, wb, e in pillars]
+        companions = _raster_wants_companions("add_tapered_pillars", rst,
+                                              formulation)
+        wgt = "area" if rst == "harmonic" else rst
 
         def _profile(zeta):
             cell = np.full((nx, ny), eh, dtype=_C)
             covered = np.zeros((nx, ny), dtype=bool)
+            feats = []
             for (cx, cy), (wxt, wyt), (wxb, wyb), e in pil:
                 wxz = wxt + (wxb - wxt) * zeta
                 wyz = wyt + (wyb - wyt) * zeta
@@ -1826,13 +2136,18 @@ class RCWAStack:
                 if rst == "hard":
                     cell[m] = e
                 else:
-                    ax = _raster_cover_1d(xs, lox, fx, rst)
-                    ay = _raster_cover_1d(ys, loy, fy, rst)
+                    ax = _raster_cover_1d(xs, lox, fx, wgt)
+                    ay = _raster_cover_1d(ys, loy, fy, wgt)
                     cell = cell + (e - eh) * (ax[:, None] * ay[None, :])
-            return cell
+                    feats.append((ax, ay, e))
+            if not companions:
+                return cell
+            exx, eyy = _raster_companions(feats, eh, nx, ny)
+            return cell, exx, eyy
 
         return self.add_graded_layer(thickness, _profile, n_slices=n,
-                                     rule="midpoint")
+                                     rule="midpoint",
+                                     formulation=formulation)
 
     def plot_geometry(self, ax=None, material_names=None):
         """Draw the stack cross-section as the solver sees it (device-geometry
@@ -2181,8 +2496,7 @@ class RCWAStack:
                 e_np = to_numpy(cell_c)
                 scale = max(1.0, float(np.max(np.abs(e_np))))
                 if float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale:
-                    Cxx, Cyy = _li_convolutions_2d(cell_c, orders, self.nox,
-                                                   self.noy, xp)
+                    Cxx, Cyy = self._li_blocks(layer, cell_c, orders, xp)
                     Z = xp.zeros_like(Cxx)
                     P, Q = _tensor_PQ(Kx, Ky, Cxx, Z, Z, Cyy, EPS, xp)
                     return ("PQ", P, Q, EPS)
@@ -2209,6 +2523,31 @@ class RCWAStack:
                           cv(et[:, :, 1, 0]), cv(et[:, :, 1, 1]),
                           cv(et[:, :, 2, 2]), xp)
         return ("PQ", P, Q, cv(et[:, :, 0, 0]))
+
+    def _li_blocks(self, layer, cell_c, orders, xp):
+        """The Li wall-normal blocks ``(Cxx, Cyy)`` of an ``'li'`` iso layer --
+        THE single place the inverse rule reads its cell (audit W9), shared by
+        :meth:`_layer_modes` and :meth:`_layer_even_spec` so the ordinary and
+        even-parity cascades can never factorize the same layer differently.
+
+        Without a companion pair this is :func:`_li_convolutions_2d` on the one
+        cell, bit-for-bit as before.  WITH one it is
+        :func:`_li_convolutions_2d_tensor` on the DIAGONAL ``(exx, 0, 0, eyy)``,
+        which is the same construction reading a different cell per axis --
+        ``Cxx`` from the inverse rule along x on ``exx``, ``Cyy`` from the
+        inverse rule along y on ``eyy`` -- and reduces to
+        :func:`_li_convolutions_2d` EXACTLY when both companions are the cell
+        (measured: ``Cxx`` bit-identical, ``Cyy`` to 4.2e-16).  The
+        direct-rule ``EPS`` / ``EZZ`` keeps coming from ``eps_cell`` itself."""
+        pair = getattr(layer, "normal_cells", None)
+        if pair is None:
+            return _li_convolutions_2d(cell_c, orders, self.nox, self.noy, xp)
+        exx = xp.conj(xp.asarray(pair[0]))
+        eyy = xp.conj(xp.asarray(pair[1]))
+        Z = xp.zeros_like(exx)
+        Cxx, _Cxy, _Cyx, Cyy = _li_convolutions_2d_tensor(
+            exx, Z, Z, eyy, orders, self.nox, self.noy, xp)
+        return Cxx, Cyy
 
     def _layer_modes(self, layer, Kx, Ky, orders):
         """Layer eigenmodes ``(W, V, lam, EPS)``.  ``EPS`` is the wall-tangential
@@ -2238,8 +2577,7 @@ class RCWAStack:
                 e_np = to_numpy(cell_c)
                 scale = max(1.0, float(np.max(np.abs(e_np))))
                 if float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale:
-                    Cxx, Cyy = _li_convolutions_2d(cell_c, orders, self.nox,
-                                                   self.noy, xp)
+                    Cxx, Cyy = self._li_blocks(layer, cell_c, orders, xp)
                     Zli = xp.zeros_like(Cxx)
                     W, V, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Zli,
                                                          Zli, Cyy, EPS)
@@ -2325,10 +2663,18 @@ class RCWAStack:
                           for s in shapes))
         try:                                   # iso / tensor: hash the cell
             arr = np.ascontiguousarray(to_numpy(data))
+            # The INVERSE-RULE companion pair is part of the eigenproblem (audit
+            # W9): two layers with the SAME eps_cell but different companions
+            # factorize differently, so the pair must enter the key or the second
+            # one would silently reuse the first one's modes.
+            comp = ()
+            for c in (getattr(layer, "normal_cells", None) or ()):
+                ca = np.ascontiguousarray(to_numpy(c))
+                comp += (ca.shape, str(ca.dtype), ca.tobytes())
         except Exception:                      # traced array -> no dedup
             return None
         return (kind, getattr(layer, "formulation", "laurent"), arr.shape,
-                str(arr.dtype), arr.tobytes())
+                str(arr.dtype), arr.tobytes()) + comp
 
     @_with_blas_limit
     def solve(self, *, retain_internal=False, stabilize=False,
