@@ -2274,7 +2274,10 @@ def _require_concrete_wavelength(wl, label, alt):
     try:                        # same probe the callers' _re_or_none uses
         float(np.real(np.asarray(wl)))
         return
-    except Exception:           # noqa: BLE001 - a Tracer has no concrete value
+    except (TypeError, ValueError):
+        # JAX tracer errors (ConcretizationTypeError, TracerArrayConversion-
+        # Error) subclass TypeError -- the exact carve-out used by the
+        # berreman/eme JAX twins (except-budget discipline).
         pass
     raise NotImplementedError(
         f"{label}: a TRACED wavelength is not supported on the "
