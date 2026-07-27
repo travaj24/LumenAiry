@@ -114,7 +114,12 @@ def propagate(
     wavelength: float,
     dx: float,
     prescription: Optional[Dict[str, Any]] = None,
-    method: str = 'auto',
+    # v5.31 (audit W9-8): the "caller did not pass a method" sentinel, so
+    # ``method='auto'`` (an explicit request for auto-selection) stays
+    # distinguishable from silence -- only silence consults
+    # ``set_default_wave_propagator()``.  ``_NO_DEFAULT`` is FALSY; resolve it
+    # once via :func:`_resolve_method` and never test it directly.
+    method: Any = _NO_DEFAULT,
     accuracy: str = 'balanced',
     output_grid: Optional[tuple] = None,
     output_dx: Optional[float] = None,
@@ -232,6 +237,34 @@ def propagate(
 
     Parameters
     ----------
+    method : str, optional
+        One of :data:`VALID_METHODS`.  **Leaving it unset is not the same as
+        passing ``'auto'``** (v5.31, audit W9-8):
+
+        * unset, on a FREE-SPACE call, while
+          :func:`~lumenairy.set_default_wave_propagator` has been moved off its
+          shipped ``'asm'`` -- that library-wide default is used, mirroring
+          :func:`~lumenairy.propagate_through_system`.  Both spellings of
+          Rayleigh-Sommerfeld resolve to ``'rs'``, which this entry point
+          supports natively (the chain rejects it).
+        * unset in any other situation -- ``'auto'``, bit-for-bit the
+          pre-v5.31 behaviour.  "Any other situation" is: the knob still holds
+          its shipped value, **or** a ``prescription`` was supplied.  The knob
+          names free-space kernels only, and MEASURED,
+          ``propagate(E, prescription=rx, method='asm')`` returns the input
+          UNCHANGED (``z`` is None on that path, so ASM takes its
+          ``E_in.copy()`` fast path and the prescription is silently ignored) --
+          so honouring the knob for prescription calls would turn them into
+          silent no-ops.
+        * ``method='auto'`` explicitly -- always auto-selects, whatever the
+          library default holds.  This is the way to ask for auto-selection
+          from inside a process that has set a default.
+
+        Comparing against the shipped value (rather than latching "the setter
+        was called") keeps the resolution stateless: restoring the knob with
+        ``set_default_wave_propagator('asm')`` restores auto-selection too.
+        The cost is that explicitly setting the shipped value reads as "no
+        preference"; pass ``method='asm'`` to pin ASM for a call.
     accuracy : 'fast' | 'balanced' | 'accurate', default 'balanced'
         Hint for the ``method='auto'`` selector:
 
@@ -353,6 +386,11 @@ def propagate(
     # AttributeError or a silent wrong-axis FFT.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'propagate', input_kind='field')
+
+    # v5.31 (audit W9-8): resolve "no method passed" against the library-wide
+    # default knob BEFORE validation, so an out-of-range knob is reported the
+    # same way an out-of-range argument is.
+    method = _resolve_method(method, prescription)
 
     if method not in VALID_METHODS:
         raise ValueError(
@@ -575,6 +613,59 @@ def _coerce_field(x):
     return None, None, None
 
 
+def _resolve_method(method, prescription):
+    """Resolve :func:`propagate`'s ``method`` argument (v5.31, audit W9-8).
+
+    Three states, not two:
+
+    * an explicit string (including ``'auto'``) -- honoured verbatim.  Asking
+      for ``method='auto'`` is a REQUEST for auto-selection and always gets it,
+      whatever the library default says.
+    * ``_NO_DEFAULT`` (nothing passed) on a FREE-SPACE call, with the
+      library-wide default moved OFF its shipped value -- that default.
+    * ``_NO_DEFAULT`` otherwise -- ``'auto'``, i.e. bit-for-bit the pre-v5.31
+      behaviour.
+
+    Two deliberate departures from a literal mirror of
+    ``propagate_through_system`` (which resolves the knob unconditionally),
+    each forced by a measurement:
+
+    * **Prescription calls keep ``'auto'``.**  The knob names FREE-SPACE
+      kernels only (``asm`` / ``sas`` / ``fresnel`` / ``rs``).  MEASURED:
+      ``propagate(E, prescription=rx, method='asm')`` returns the input array
+      UNCHANGED -- ``z`` is None on the prescription path, so the ASM branch
+      takes its ``E_in.copy()`` fast path and the prescription is silently
+      ignored.  Resolving the knob for prescription calls would therefore turn
+      every ``propagate(prescription=...)`` into a silent no-op.  A
+      prescription is itself a statement about which member is wanted.
+    * **The knob is honoured only once it differs from the SHIPPED default.**
+      ``DEFAULT_WAVE_PROPAGATOR`` ships as ``'asm'``; resolving unconditionally
+      would silently retire ``propagate``'s auto-selection for every caller who
+      never asked for that -- far-field calls would stop choosing
+      ``fraunhofer`` / ``sas``.  Comparing against the shipped constant (rather
+      than latching "the setter was called") is what makes the resolution
+      STATELESS: a caller -- or a test -- that restores the knob with
+      ``set_default_wave_propagator('asm')`` restores this behaviour too,
+      with no cross-call or cross-process residue.  The one nuance that costs:
+      explicitly setting the shipped value is indistinguishable from never
+      touching the knob, so it yields ``'auto'``.  Pass ``method='asm'`` to
+      pin ASM for a single call; that is exact and always has been.
+
+    ``propagate`` supports ``'rs'`` natively (unlike
+    ``propagate_through_system``, which rejects it), so both spellings of the
+    Rayleigh-Sommerfeld default resolve rather than raise.
+    """
+    if method is not _NO_DEFAULT:
+        return method
+    if prescription is not None:
+        return 'auto'
+    from . import fft_infra
+    name = fft_infra.get_default_wave_propagator()
+    if name == fft_infra.DEFAULT_WAVE_PROPAGATOR_SHIPPED:
+        return 'auto'
+    return 'rs' if name == 'rayleigh_sommerfeld' else name
+
+
 def _requested_output_dx(output_grid, output_dx):
     """The output pitch the CALLER asked for, or ``None`` if they asked for
     none (v5.31, audit W9-5).
@@ -628,10 +719,86 @@ _NO_OUTPUT_GRID_METHODS = ('maslov', 'asymptotic', 'mhs')
 
 _OUTPUT_GRID_CAPABLE_METHODS = ('gbd', 'hf', 'hfpi')
 
+# v5.31 (audit W9-9): how a DOE / grating is declared in this library -- as
+# KWARGS, never as a prescription key.  Only ``hfpi`` (directly) and
+# ``asymptotic`` (through its ``fit_kwargs``) accept them.
+_DOE_KWARGS = ('surface_diffraction', 'diffracting_surfaces')
+_DOE_CAPABLE_METHODS = ('hfpi', 'asymptotic')
+
+# v5.31 (audit W9-10): keyword-only arguments the kernel behind each method
+# REQUIRES and cannot default.  Pre-fix the dispatcher forwarded ``**kwargs``
+# blind and the caller got a raw ``TypeError`` naming a function they never
+# called -- e.g. ``propagate(method='hfpi', prescription=rx)`` ->
+# ``TypeError: propagate_hfpi_through_prescription() missing 1 required
+# keyword-only argument: 'n_paths'`` and
+# ``propagate(method='asymptotic', prescription=rx)`` ->
+# ``TypeError: propagate_modal_asymptotic() missing 2 required keyword-only
+# arguments: 's2_grid_x' and 's2_grid_y'``.  Two of the twelve VALID_METHODS
+# were therefore unusable through this entry point as documented.  Deliberately
+# NO invented defaults: ``n_paths`` is a Monte-Carlo budget and ``s2_grid_*``
+# are output-plane grids: any value the dispatcher picked would be a silent
+# accuracy decision.  The 4.12 B1-6 rule -- raise from the dispatcher, naming
+# :func:`propagate` and everything that is missing.
+_REQUIRED_METHOD_KWARGS = {
+    ('hfpi', True): (
+        ('n_paths',),
+        'propagate_hfpi_through_prescription',
+        "n_paths=200000 is a reasonable starting budget for a smooth "
+        "single-aperture case; raise it until the speckle floor stops moving.",
+    ),
+    ('hfpi', False): (
+        ('z_to_aperture', 'aperture_radius', 'z_aperture_to_output',
+         'n_paths'),
+        'propagate_hfpi_freespace_aperture',
+        "the three-leg free-space form needs the full geometry, not just "
+        "aperture_radius (pre-v5.31 this branch checked only that one and let "
+        "the kernel raise about the other three).",
+    ),
+    ('asymptotic', None): (
+        ('s2_grid_x', 's2_grid_y'),
+        'propagate_modal_asymptotic',
+        "s2_grid_x / s2_grid_y are the output-plane direction-cosine grids; "
+        "build them with numpy.linspace over the exit cone you want sampled.",
+    ),
+}
+
+
+def _check_required_method_kwargs(method, kwargs, has_prescription):
+    """Raise a dispatcher-level ValueError for kernel kwargs the caller must
+    supply and did not (v5.31, audit W9-10).  See ``_REQUIRED_METHOD_KWARGS``.
+    """
+    spec = _REQUIRED_METHOD_KWARGS.get((method, has_prescription))
+    if spec is None:
+        spec = _REQUIRED_METHOD_KWARGS.get((method, None))
+    if spec is None:
+        return
+    required, kernel, hint = spec
+    missing = [k for k in required if k not in kwargs]
+    if not missing:
+        return
+    raise ValueError(
+        f"propagate(method={method!r}): missing required argument(s) "
+        f"{missing!r}.  They are forwarded to {kernel}(), which cannot "
+        f"default them, and pre-v5.31 the omission surfaced as a raw "
+        f"TypeError naming that kernel rather than propagate().  "
+        f"Pass them through propagate(...): {hint}")
+
 
 def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
                           accuracy='balanced', output_requested=False):
     """Pick a method from the geometry + prescription structure.
+
+    **This is the CANONICAL free-space regime logic for the whole module**
+    (v5.31, audit W9-7).  :func:`_select_asm_variant` -- behind
+    :func:`which_propagator` / :func:`asm_propagate` -- delegates its
+    near-/intermediate-/far-field decision here rather than carrying its own
+    thresholds, because two selectors in one module with two different trip
+    points is how the W9 audit's measured far-field defect arose (the
+    ASM-family copy tripped to ``fraunhofer`` at ``Q > 20``, i.e. at aperture
+    Fresnel number ``N/80``, giving fidelity 0.41 against an exact oracle at
+    N=512 where this function's rule stays on the exact ``sas``; full table in
+    :func:`_select_asm_variant`).  Any future change to the regime bands
+    belongs HERE and nowhere else.
 
     Selection logic
     ---------------
@@ -683,15 +850,41 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
         request is bit-for-bit unchanged.
     """
     if prescription is not None:
-        events = prescription.get('events_json') or []
-        has_doe = False
-        if isinstance(events, list):
-            for ev in events:
-                if isinstance(ev, dict) and ev.get('type') == 'doe':
-                    has_doe = True
-                    break
-        if has_doe:
-            return 'hfpi'
+        # v5.31 (audit W9-9): the DOE -> 'hfpi' branch that used to sit here is
+        # GONE.  It keyed on ``prescription['events_json']``, a key that at
+        # HEAD occurs exactly ONCE in the repository -- in this file.  No
+        # loader (``load_zemax_zmx``) and no factory (``make_singlet`` /
+        # ``make_doublet`` / ...) has ever emitted it, so the branch could not
+        # fire; and when forced (by hand-injecting the key) it routed to a call
+        # that immediately raised
+        # ``TypeError: propagate_hfpi_through_prescription() missing 1 required
+        # keyword-only argument: 'n_paths'``.  Dead AND broken.
+        #
+        # It could not be repaired by pointing at a different key either:
+        # MEASURED, this library has NO prescription-embedded DOE
+        # representation at all.  Diffractive information travels as the
+        # ``surface_diffraction`` / ``diffracting_surfaces`` KWARGS
+        # (``{surf_index: (m_x, m_y, period_x, period_y)}``), accepted by
+        # ``propagate_hfpi_through_prescription`` and
+        # ``fit_canonical_polynomials`` and by nothing else --
+        # ``apply_real_lens_maslov`` has no DOE parameter and raises on one.
+        # There is therefore nothing on the prescription to detect.
+        #
+        # Nor was there a measured case for routing to ``hfpi`` automatically.
+        # On the one analytic oracle available (a thin air-to-air grating, exit
+        # centroid at ``t*tan(asin(m*lambda/Lambda))``), hfpi WITH
+        # ``surface_diffraction`` missed the order-1 deflection by 85-97%
+        # (period 40/20 um) -- no better than maslov's 100% -- so it is not
+        # measurably the better automatic choice.  (That hfpi result is a
+        # separate, undiagnosed finding recorded for an HFPI-interiors audit;
+        # it is NOT evidence about routing beyond "no basis to prefer it".)
+        #
+        # What replaces the branch is honesty at the point of use: DOE kwargs
+        # handed to a member that cannot accept them now raise a
+        # dispatcher-level error naming the members that can, instead of the
+        # raw ``apply_real_lens_maslov() got an unexpected keyword argument
+        # 'surface_diffraction'`` a caller used to get from a kernel they never
+        # named.  See ``_DOE_KWARGS`` in :func:`_dispatch_to_method`.
 
         # Inspect surfaces for aspherics and hard apertures.
         surfs = prescription.get('surfaces') or []
@@ -937,6 +1130,32 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
     # the MFT variant or raise a clear ValueError.  Free-space GBD /
     # HFPI / HF *do* take output_grid / output_dx and forward them
     # through their own dispatch below.
+    # v5.31 (audit W9-9): DOE / grating kwargs handed to a member that cannot
+    # accept them.  MEASURED pre-fix: ``propagate(E, prescription=rx,
+    # surface_diffraction={0: (1, 0, 20e-6, 20e-6)})`` -- the library's own way
+    # to declare a grating -- auto-selected ``maslov`` and died with
+    # ``TypeError: apply_real_lens_maslov() got an unexpected keyword argument
+    # 'surface_diffraction'``, from a kernel the caller never named.  The
+    # ``events_json`` prescription check that was meant to catch this could
+    # never fire (audit W9-9, see ``_auto_select_method``); the declaration the
+    # library actually uses is a kwarg, and it is visible right here.
+    _doe_given = [k for k in _DOE_KWARGS if k in kwargs]
+    if _doe_given and method not in _DOE_CAPABLE_METHODS:
+        raise ValueError(
+            f"propagate(method={method!r}): {_doe_given!r} declare a "
+            f"diffractive surface, and {method!r} has no parameter for them -- "
+            f"the request would either raise from inside the kernel or be "
+            f"dropped.  Members that accept them: "
+            f"{list(_DOE_CAPABLE_METHODS)} (``hfpi`` takes them directly; "
+            f"``asymptotic`` takes ``surface_diffraction`` inside "
+            f"``fit_kwargs``).  NOTE: a DOE cannot be declared on the "
+            f"prescription in this library -- it is a kwarg -- so "
+            f"method='auto' has no way to detect one and will not route you "
+            f"here; name the method explicitly.")
+
+    # v5.31 (audit W9-10): required kernel kwargs the caller must supply.
+    _check_required_method_kwargs(method, kwargs, prescription is not None)
+
     # v5.31 (audit W9-4): ``maslov`` / ``asymptotic`` / ``mhs`` never thread
     # ``output_grid`` / ``output_dx`` to their kernels, and pre-fix the request
     # was dropped in silence -- with the ``output_dx`` shortcut the wrapper even
@@ -1038,11 +1257,15 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
             propagate_hfpi_through_prescription,
         )
         if prescription is None:
-            if 'aperture_radius' not in kwargs:
-                raise ValueError(
-                    "propagate(method='hfpi') without prescription "
-                    "needs at least an aperture geometry "
-                    "(aperture_radius=...).")
+            # v5.31 (audit W9-10): the precondition check that used to live
+            # here named ONLY ``aperture_radius`` -- "needs at least an
+            # aperture geometry" -- while the kernel also requires
+            # ``z_to_aperture``, ``z_aperture_to_output`` and ``n_paths``, so
+            # supplying just the advertised one still produced
+            # ``TypeError: propagate_hfpi_freespace_aperture() missing 3
+            # required keyword-only arguments`` (MEASURED).  All four are now
+            # checked together, up front, by
+            # ``_check_required_method_kwargs`` via ``_REQUIRED_METHOD_KWARGS``.
             # v5.2.5 (AUDIT_V5_2_3 P2-F1-1): thread the resolved
             # ``output_grid``/``output_dx`` through the freespace
             # branch too.  v5.2.3 fixed the through-prescription path
@@ -1168,12 +1391,20 @@ def _select_asm_variant(
     1. Output grid pitch requested AND different from input -> ``asm_mft``
        (Bluestein output sampling).
     2. Significant tilt (> 1e-6 rad) -> ``asm_tilted``.
-    3. ``z >> L^2 / (N * lambda)`` (small Fresnel number) -> ``sas``
-       for a scalable output pitch, else ``fraunhofer`` if extreme.
-    4. Intermediate Fresnel number -> plain ``asm`` (the band-limited
-       transfer function handles both near- and intermediate-field).
+    3. Back-propagation (``z < 0``) -> ``asm`` (the only sign-agnostic
+       bare-grid member left once 1 and 2 have declined).
+    4. Otherwise the free-space regime decision is delegated verbatim to
+       :func:`_auto_select_method`, the CANONICAL regime logic:
+       ``N_F < 0.1`` -> ``fraunhofer``, else ``Q > 1`` -> ``sas``, else
+       ``asm``.  ``N_F = (N*dx/2)^2 / (lambda*|z|)`` is the aperture Fresnel
+       number and ``Q = lambda*|z| / (N*dx^2)`` the grid Fresnel ratio.
 
-    The regime threshold uses the full grid extent ``L = N * dx`` as the
+    There is exactly ONE set of free-space regime thresholds in this module
+    and it lives in :func:`_auto_select_method` (v5.31, audit W9-7).  This
+    selector adds only the three ASM-family-specific branches above; it does
+    not second-guess the regime.
+
+    The regime criterion uses the full grid extent ``L = N * dx`` as the
     transverse scale.  ``aperture_radius`` is accepted for signature
     parity with :func:`which_propagator` (which uses it for the *reported*
     Fresnel number) but is **not** consulted by the branch logic here --
@@ -1205,6 +1436,38 @@ def _select_asm_variant(
          emits a :class:`UserWarning` -- the same call v5.30 made for the
          sibling case, the legacy ``'propagate_tilted'`` element ignoring
          ``elem['method']``.
+       * **Far-field trip re-based on the canonical criterion (W9-7).**  The
+         free-space regime decision is now DELEGATED to
+         :func:`_auto_select_method`, which is the library's canonical regime
+         logic; this selector no longer carries thresholds of its own.  Pre-fix
+         it tripped to ``'fraunhofer'`` at ``|z| > 20 * L^2/(N*lambda)``, i.e.
+         at grid-Fresnel ratio ``Q > 20``.  Because ``N_F * Q = N/4``, that trip
+         sits at aperture Fresnel number ``N_F = N/80`` -- it grows LINEARLY
+         with the grid, so the branch fires further inside the near field the
+         bigger the grid gets.  MEASURED just above the old trip
+         (``z = 20.05 * L^2/(N*lambda)``, hard circular aperture filling half
+         the grid, dx = 2 um, lambda = 633 nm), complex overlap fidelity against
+         a pad-converged EXACT ``angular_spectrum_propagate_mft`` on the central
+         8x8 patch of each candidate's own output grid:
+
+         ======  ========  ==================  =============
+         N       N_F(ap)   fid('fraunhofer')   fid('sas')
+         ======  ========  ==================  =============
+         128     0.399     0.9516              1.00000
+         256     0.798     0.8185              1.00000
+         512     1.596     0.4111              1.00000
+         1024    3.192     0.4241              1.00000
+         ======  ========  ==================  =============
+
+         The canonical rule (``N_F < 0.1`` -> fraunhofer) keeps ``'sas'`` there,
+         which is exact.  The SAS boundary moves with it, from ``Q > 2`` to the
+         canonical ``Q > 1``; MEASURED in the newly-``'sas'`` band
+         ``1 < Q <= 2`` on the same probe, both members are exact and NEITHER
+         warns -- ``asm`` 0.99997-1.00000 vs ``sas`` 1.00000 at
+         Q = 1.05 / 1.5 / 2.0 for N = 256 and 512 -- while at ``Q = 0.5`` (still
+         ``'asm'`` under both rules) ``sas`` is the worse of the two
+         (0.9955 / 0.9964), confirming ``Q > 1`` is the right place for it to
+         start.
     """
     has_tilt = (abs(float(tilt_x)) > 1e-6) or (abs(float(tilt_y)) > 1e-6)
     if output_dx is not None and abs(float(output_dx) - float(dx)) > 0:
@@ -1233,22 +1496,17 @@ def _select_asm_variant(
     # above are sign-agnostic and keep their precedence.)
     if float(z) < 0:
         return 'asm'
-    # Compare propagation distance to L^2 / (N * lambda) -- the
-    # SAS-regime threshold.  We need an aperture radius or the grid
-    # extent L to make this judgement; if neither is supplied, fall
-    # back to plain ASM.
-    Ny, Nx = E_in.shape[-2], E_in.shape[-1]
-    N = max(Ny, Nx)
-    L = N * dx
-    threshold = (L * L) / (N * wavelength)
-    if abs(float(z)) > 20.0 * threshold:
-        # Far-field-ish; Fraunhofer is closed-form and cheaper.
-        return 'fraunhofer'
-    if abs(float(z)) > 2.0 * threshold:
-        # The beam has spread far enough that the SAS rescaling
-        # pays off.
-        return 'sas'
-    return 'asm'
+    # v5.31 (audit W9-7): delegate the free-space regime decision to
+    # ``_auto_select_method``, which is the CANONICAL regime logic (see its
+    # docstring).  Pre-fix this selector carried its own thresholds --
+    # ``Q > 20`` -> fraunhofer, ``Q > 2`` -> sas, where
+    # ``Q = lambda|z|/(N dx^2)`` -- and they disagreed with the canonical rule
+    # in both bands.  See the ``versionchanged`` note above for the measured
+    # fidelity table; ``prescription=None`` because every ASM-family member is
+    # a bare-grid free-space kernel.
+    return _auto_select_method(
+        E_in, z=float(z), wavelength=float(wavelength), dx=float(dx),
+        prescription=None)
 
 
 def which_propagator(
@@ -1299,20 +1557,34 @@ def which_propagator(
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
     N = max(Ny, Nx)
     L = N * dx
-    threshold = (L * L) / (N * wavelength)
     a = aperture_radius if aperture_radius is not None else (L / 2.0)
     if abs(float(z)) > 0:
         fn = (a * a) / (wavelength * abs(float(z)))
+        # The grid Fresnel ratio the canonical selector actually keys on (it
+        # uses the grid extent, not ``aperture_radius`` -- see
+        # ``_select_asm_variant``), quoted in the reasons below so the advice
+        # names the number that DECIDED, not just the one it reports.
+        q = wavelength * abs(float(z)) / (N * dx * dx)
+        fn_grid = (0.5 * dx * N) ** 2 / (wavelength * abs(float(z)))
     else:
         fn = float('inf')
+        q = 0.0
+        fn_grid = float('inf')
 
+    # v5.31 (audit W9-7): the sas / fraunhofer reasons quote the CANONICAL
+    # criteria (``Q > 1`` / ``N_F < 0.1``, both from ``_auto_select_method``),
+    # not this module's former ASM-family-only ``L^2/(N*lambda)`` multiples,
+    # which no longer decide anything.
     reasons = {
         'asm':       'near/intermediate field; band-limited ASM is exact.',
         'asm_tilted':'mean propagation direction is tilted; use carrier-shifted ASM.',
         'asm_mft':   'output grid pitch != input; Bluestein output sampling.',
-        'sas':       (f'z = {z!r} >> L^2/(N*lambda) = {threshold:.3g}; '
-                       'scalable ASM rescales the output grid.'),
-        'fraunhofer':'extreme far field; closed-form Fraunhofer is cheapest.',
+        'sas':       (f'grid Fresnel ratio Q = lambda|z|/(N dx^2) = {q:.3g} > 1 '
+                       f'(grid N_F = {fn_grid:.3g} >= 0.1); scalable ASM '
+                       'rescales the output grid.'),
+        'fraunhofer':(f'far field: grid N_F = (N dx/2)^2/(lambda|z|) = '
+                       f'{fn_grid:.3g} < 0.1; closed-form Fraunhofer is '
+                       'cheapest.'),
     }
     advice = {
         'method': method,

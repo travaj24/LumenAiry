@@ -2919,6 +2919,23 @@ def apply_real_lens_universal(
     suppresses nor duplicates it.  Pass ``method_kwargs={'traced':
     {'on_undersample': 'silent'}}`` to quiet it for a deliberately coarse grid.
 
+    Aperture:beam cliff guard on the ``'traced'`` route (v5.31, audit W9-13)
+    ----------------------------------------------------------------------
+    This router now runs ``'traced'`` with ``fit_radius_beam_factor=2.0`` -- the
+    P2 guard that is :func:`~lumenairy.propagate_traced_carrier_chain`'s default --
+    rather than inheriting the element's historical ``None``.  Without it a
+    physical aperture much larger than the beam lets wildly-aberrated marginal
+    rays into the traced OPL fit and the focus collapses; MEASURED on the E4
+    corrected relay at the element's own defaults, exit-wavefront Strehl
+    0.9701 / 0.1085 / 0.0384 at 1.50x / 1.75x / 2.50x the beam diameter without
+    the guard versus 0.9874 / 0.9820 / 0.9816 with it.  Only the ray-FIT domain
+    is restricted -- no field energy is vignetted -- and the pre-cliff regime is
+    unharmed.  Pass ``method_kwargs={'traced': {'fit_radius_beam_factor': None}}``
+    for the pre-v5.31 aperture-only fit domain.  The chain's other three
+    validated options are deliberately NOT adopted here: they are carrier-regime
+    options and this router supplies no carrier (measured equal-or-worse without
+    one).
+
     The two ray/wave-exact-surface members that are NOT caustic-native
     (``phase_screen``, ``traced``) return the field at the exit vertex, so the
     output-plane leg is finished with an exact angular-spectrum propagation.
@@ -3001,6 +3018,42 @@ def apply_real_lens_universal(
         from ..elements import apply_real_lens, apply_real_lens_traced
         extra = dict(mkw.get(chosen, {}))
         if chosen == "traced":
+            # v5.31 (audit W9-13): adopt the P2 aperture:beam cliff GUARD as
+            # this router's traced default.  ``apply_real_lens_traced``'s own
+            # signature default is ``fit_radius_beam_factor=None`` (the
+            # historical aperture-only ray-fit domain, kept for byte-identity
+            # on the direct-call path), and this branch inherited it -- so
+            # 'auto' routed high-NA collimated beams straight into the regime
+            # the v5.29 P2 work exists to survive, with only the element's
+            # warn-only ``on_aperture_beam`` RuntimeWarning for company.
+            #
+            # MEASURED (E4 corrected relay, N=1536, dx=7 um, beam w=2 mm, every
+            # other option at the ELEMENT defaults -- i.e. exactly this branch's
+            # configuration -- exit-wavefront Strehl in the carrier-referenced
+            # envelope):
+            #
+            #   aperture   1.50x beam   1.75x beam   2.50x beam
+            #   frbf=None      0.9701       0.1085       0.0384
+            #   frbf=2.0       0.9874       0.9820       0.9816
+            #
+            # i.e. +0.87 and +0.94 Strehl past the cliff, and +0.017 (no harm)
+            # before it.  The guard restricts only the ray-FIT domain -- no
+            # field energy is vignetted -- so this is not an accuracy/energy
+            # trade.  ``setdefault``: ``method_kwargs={'traced':
+            # {'fit_radius_beam_factor': None}}`` still opts back out.
+            #
+            # NOT adopted: the chain's other three validated options
+            # (``amplitude_model='ray_density'``, ``preserve_input_phase=
+            # 'remap'``, ``remap_sampling='full'``).  Those are CARRIER-regime
+            # options -- ``propagate_traced_carrier_chain`` applies them
+            # together with ``carrier_reference='sphere'`` and an
+            # element-supplied ``carrier=R_in``, which this router cannot
+            # provide (it has no q-trace).  MEASURED on a single element with no
+            # carrier they do not pay: exit Strehl deltas of -0.0025 / -0.0249 /
+            # -0.1912 at 1.0x / 1.5x / 1.75x beam, i.e. equal or worse.
+            from ..elements._lens_traced import _FIT_RADIUS_BEAM_FACTOR_DEFAULT
+            extra.setdefault('fit_radius_beam_factor',
+                             _FIT_RADIUS_BEAM_FACTOR_DEFAULT)
             exitf = apply_real_lens_traced(
                 E_in, prescription=prescription, wavelength=wavelength, dx=dx,
                 dy=dy, **extra)

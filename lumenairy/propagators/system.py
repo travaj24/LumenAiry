@@ -226,6 +226,142 @@ def _validate_system_method(method: Any, where: str) -> None:
         f"element's ``tilt_x`` / ``tilt_y`` keys, not via ``method``.")
 
 
+# ---------------------------------------------------------------------------
+# v5.31 (audit W9-11): the ``'real_lens_traced'`` element's kwarg surface
+# ---------------------------------------------------------------------------
+# Pre-v5.31 this element handler hard-coded FOUR arguments (``prescription``,
+# ``bandlimit``, ``ray_subsample``, ``progress``) and every other key on the
+# element dict was DROPPED IN SILENCE.  MEASURED: output bit-identical to
+# omitting the key for all nine of ``amplitude_model``,
+# ``preserve_input_phase``, ``remap_sampling``, ``fit_radius_beam_factor``,
+# ``carrier``, ``on_undersample``, ``n_workers``, ``traced_kwargs`` -- and for
+# an outright typo key.  The consequence the W9 audit was asked about: the
+# v5.29 + S12 VALIDATED traced configuration (``amplitude_model='ray_density'``
+# + ``preserve_input_phase='remap'`` + ``remap_sampling='full'`` +
+# ``fit_radius_beam_factor=2.0``, the shipping defaults of
+# ``propagate_traced_carrier_chain``) was UNREACHABLE through this chain API,
+# and a caller who wrote those keys got the legacy configuration with no
+# diagnostic.
+#
+# The keys are now forwarded, and anything the element does not accept RAISES.
+# Silent fall-through on an unrecognised key is the class the v5.30 P6 twin fix
+# closed for ``method``; this closes it for the traced element's parameters.
+_TRACED_ELEMENT_STRUCTURAL_KEYS = frozenset({
+    'type', 'prescription', 'traced_kwargs',
+})
+# Managed by the chain loop itself -- an element may not set them, because the
+# loop owns the working grid, the field and the progress plumbing.
+_TRACED_ELEMENT_MANAGED_KWARGS = frozenset({
+    'E_in', 'wavelength', 'dx', 'dy', 'progress',
+})
+
+
+def _traced_element_accepted_kwargs():
+    """The ``apply_real_lens_traced`` keyword parameters an element dict may
+    set, resolved from the function signature so the two cannot drift."""
+    import inspect
+    params = inspect.signature(apply_real_lens_traced).parameters
+    return frozenset(
+        name for name, p in params.items()
+        if p.kind is inspect.Parameter.KEYWORD_ONLY
+        and name not in _TRACED_ELEMENT_MANAGED_KWARGS
+    )
+
+
+def _resolve_traced_element_kwargs(elem, index):
+    """Collect + validate the ``apply_real_lens_traced`` kwargs for one
+    ``'real_lens_traced'`` element (v5.31, audit W9-11).
+
+    Accepted spellings, merged in this order (later wins):
+
+    1. the element's own top-level keys (``{'type': 'real_lens_traced',
+       'prescription': rx, 'amplitude_model': 'ray_density'}``), matching how
+       ``'real_lens'`` already forwards ``slant_correction`` / ``fresnel`` /
+       ``absorption``;
+    2. an explicit ``'traced_kwargs'`` dict, for callers who prefer to keep the
+       propagator options in one bag (and the spelling
+       ``propagate_traced_carrier_chain`` uses).
+
+    Any other key raises :class:`ValueError` naming it and listing what is
+    accepted.  ``ray_subsample`` keeps an element-level default -- see
+    ``_TRACED_ELEMENT_RAY_SUBSAMPLE_DEFAULT``.
+    """
+    accepted = _traced_element_accepted_kwargs()
+    out = {}
+    unknown = []
+    for key, value in elem.items():
+        if key in _TRACED_ELEMENT_STRUCTURAL_KEYS:
+            continue
+        if key in accepted:
+            out[key] = value
+        else:
+            unknown.append(key)
+    bag = elem.get('traced_kwargs') or {}
+    if not isinstance(bag, dict):
+        raise ValueError(
+            f"propagate_through_system: elements[{index}]['traced_kwargs'] "
+            f"must be a dict of apply_real_lens_traced keyword arguments, got "
+            f"{type(bag).__name__}.")
+    for key, value in bag.items():
+        if key in accepted:
+            out[key] = value
+        else:
+            unknown.append(f"traced_kwargs[{key!r}]")
+    if unknown:
+        raise ValueError(
+            f"propagate_through_system: elements[{index}] "
+            f"(type='real_lens_traced') has unrecognised key(s) "
+            f"{sorted(unknown)!r}.  Pre-v5.31 every key this handler did not "
+            f"name was dropped in SILENCE -- measured bit-identical output to "
+            f"omitting it -- so a typo, or an attempt to select the validated "
+            f"traced configuration, produced the legacy result with no "
+            f"diagnostic.  Accepted here: 'prescription' (required), "
+            f"'traced_kwargs' (a dict of the same options), and any "
+            f"keyword-only parameter of apply_real_lens_traced: "
+            f"{sorted(accepted)}.  Managed by the chain and therefore "
+            f"refused: {sorted(_TRACED_ELEMENT_MANAGED_KWARGS)}.")
+    out.setdefault('bandlimit', True)
+    out.setdefault('ray_subsample', _TRACED_ELEMENT_RAY_SUBSAMPLE_DEFAULT)
+    return out
+
+
+# v5.31 (audit W9-12): one number, three values, for the same physics --
+# ``apply_real_lens_traced`` defaults ``ray_subsample=8``,
+# ``propagate_traced_carrier_chain`` defaults 4 (its VALIDATED value), and this
+# chain element hard-codes 1 while its docstring used to say "default 1; 4 is
+# the recommended production value" -- a docstring recommending against the code
+# directly beneath it.  The DOCSTRING is what was wrong, and it is fixed; the
+# VALUE stays 1, against the first instinct to align it on the chain's 4,
+# because the measurement argues the other way:
+#
+#   * No fidelity to gain.  On the E4 corrected relay (N=1536, dx=7 um, the
+#     harness the E4 pins use) the exit-wavefront Strehl at ray_subsample
+#     1 / 4 / 8 measures 0.9994 / 0.9993 / 0.9974 at a beam-matched 6 mm
+#     aperture and 0.9996 / 0.9995 / 0.9976 at an oversized 10 mm one: 1 and 4
+#     agree to 1e-4 (8 is the one that costs, ~2e-3), while 4 runs 1.8-3.4x
+#     faster.  Against the ray_subsample=1 full-density reference the single
+#     element's output has an overlap deficit of 1.3e-4 at 4 and 1.3e-3 at 8,
+#     for a 3.9x / 4.0x speedup.  So 4 is a pure speed choice here -- which is
+#     exactly why the chain takes it -- and 1 loses nothing but time.
+#   * Real breakage to pay.  ``apply_real_lens_traced`` enforces
+#     ``min_coarse_samples_per_aperture=32`` with ``on_undersample='error'``, so
+#     the coarse density is ``aperture/(dx*ray_subsample)`` and raising the
+#     divisor to 4 QUADRUPLES the grid an existing chain needs.  MEASURED on a
+#     2 mm-aperture singlet: ``ray_subsample=1`` runs at every grid tried, while
+#     ``ray_subsample=4`` raises ``ValueError`` ("only 12.5 coarse samples ...
+#     threshold 32") whenever the aperture spans fewer than ~128 samples --
+#     broken at 50 and 100 samples, fine at 200 and 400.  Flipping the default
+#     would turn working coarse-grid chains into hard failures for no measured
+#     accuracy return.
+#
+# 4 is now REACHABLE (``{'type': 'real_lens_traced', ..., 'ray_subsample': 4}``
+# forwards, as does every other traced option -- audit W9-11) and the docstring
+# says so.  The ELEMENT's own default likewise stays 8: that is the direct
+# ``apply_real_lens_traced`` path, outside this chain, and moving it would shift
+# pinned results for callers who never touched the chain.
+_TRACED_ELEMENT_RAY_SUBSAMPLE_DEFAULT = 1
+
+
 def propagate_through_system(E_in: np.ndarray,
                              elements: Sequence[Dict[str, Any]],
                              wavelength: float,
@@ -402,10 +538,55 @@ def propagate_through_system(E_in: np.ndarray,
         with the geometric ray trace.  Slower but high-accuracy; the
         recommended choice for cemented doublets and other multi-surface
         curved-interface systems.
-        Keys: ``prescription`` (dict),
-        ``bandlimit`` (bool, optional, default True),
-        ``ray_subsample`` (int, optional, default 1; 4 is the recommended
-        production value — ~15x faster with sub-nm fidelity).
+
+        Keys: ``prescription`` (dict, required), plus **any keyword-only
+        parameter of** :func:`~lumenairy.apply_real_lens_traced`, either as a
+        top-level element key or inside a ``traced_kwargs`` dict.  Unrecognised
+        keys raise ``ValueError`` listing what is accepted.
+
+        .. versionchanged:: 5.31
+            **The traced options are reachable, and typos are loud** (audit
+            W9-11).  Pre-v5.31 the handler forwarded only ``prescription`` /
+            ``bandlimit`` / ``ray_subsample`` and dropped every other key in
+            SILENCE -- measured bit-identical output to omitting it for all of
+            ``amplitude_model``, ``preserve_input_phase``, ``remap_sampling``,
+            ``fit_radius_beam_factor``, ``carrier``, ``on_undersample``,
+            ``n_workers``, ``traced_kwargs`` and an outright typo key.  The
+            v5.29 + S12 validated traced configuration was therefore
+            unreachable through this API::
+
+                {'type': 'real_lens_traced', 'prescription': rx,
+                 'traced_kwargs': {'amplitude_model': 'ray_density',
+                                   'preserve_input_phase': 'remap',
+                                   'remap_sampling': 'full',
+                                   'fit_radius_beam_factor': 2.0}}
+
+            (that dict is what :func:`~lumenairy.propagate_traced_carrier_chain`
+            applies by default; use the chain itself when you also want its
+            carrier-referenced hand-offs, which a flat element list cannot
+            express).
+
+        ``ray_subsample`` defaults to **1** here (full ray density).  The three
+        entry points to the same physics disagree on purpose:
+        :func:`~lumenairy.apply_real_lens_traced` defaults 8,
+        :func:`~lumenairy.propagate_traced_carrier_chain` defaults 4 (its
+        validated value), this element 1.
+
+        .. versionchanged:: 5.31
+            The *docstring* here is fixed, not the value (audit W9-12).  It used
+            to read "default 1; 4 is the recommended production value", i.e. it
+            recommended against the code beneath it.  4 IS the better production
+            setting and is now reachable (``'ray_subsample': 4`` forwards, as
+            does every other traced option), but it is not the default, because
+            MEASURED it buys no fidelity and can break existing chains: on the
+            E4 corrected relay the exit-wavefront Strehl at 1 / 4 / 8 is
+            0.9994 / 0.9993 / 0.9974 (6 mm) and 0.9996 / 0.9995 / 0.9976
+            (10 mm), while ``min_coarse_samples_per_aperture=32`` with
+            ``on_undersample='error'`` means a divisor of 4 quadruples the grid
+            a chain needs -- a 2 mm aperture spanning 50 or 100 samples runs at
+            ``ray_subsample=1`` and raises ``ValueError`` at 4.  Set it
+            explicitly when your grid can afford it: ~3.9x faster per element,
+            1.3e-4 overlap deficit against full density.
 
     ``'cylindrical_lens'``
         Thin cylindrical lens (power in one axis only).
@@ -662,13 +843,13 @@ def propagate_through_system(E_in: np.ndarray,
             )
 
         elif elem['type'] == 'real_lens_traced':
+            _tkw = _resolve_traced_element_kwargs(elem, i)
             E = apply_real_lens_traced(
                 E, prescription=elem['prescription'], wavelength=wavelength,
                 dx=current_dx, dy=current_dy,
-                bandlimit=elem.get('bandlimit', True),
-                ray_subsample=elem.get('ray_subsample', 1),
                 progress=(lambda stage, frac, msg='': sub_cb(frac, msg))
                         if progress is not None else None,
+                **_tkw,
             )
 
         elif elem['type'] == 'mirror':

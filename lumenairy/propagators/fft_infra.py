@@ -312,6 +312,19 @@ DEFAULT_REAL_DTYPE = np.float64
 
 DEFAULT_WAVE_PROPAGATOR = 'asm'
 
+# v5.31 (audit W9-8): the SHIPPED value of the knob above, frozen at import and
+# never reassigned.  ``propagate()`` compares against it to tell "the caller
+# moved the library default" from "nobody touched it, so the value is still the
+# factory one" -- it honours the knob only in the first case, because resolving
+# it unconditionally would silently retire ``propagate``'s far-field
+# auto-selection for every caller who never asked for that.  A CONSTANT rather
+# than a "setter was called" latch on purpose: comparison is stateless, so
+# restoring the knob with ``set_default_wave_propagator('asm')`` restores the
+# behaviour with no cross-call or cross-process residue.
+# ``propagate_through_system`` is unaffected -- it resolves the knob
+# unconditionally, as it has since v5.1.0.
+DEFAULT_WAVE_PROPAGATOR_SHIPPED = DEFAULT_WAVE_PROPAGATOR
+
 DEFAULT_DY = None  # None means "match dx"
 
 # v4.16.3 (audit P2-NEW-F1-4): module-level latches that gated the
@@ -2134,7 +2147,7 @@ __all__ = [
     'reset_fft_backend',
     # Default-config knobs
     'DEFAULT_COMPLEX_DTYPE', 'DEFAULT_REAL_DTYPE',
-    'DEFAULT_WAVE_PROPAGATOR', 'DEFAULT_DY',
+    'DEFAULT_WAVE_PROPAGATOR', 'DEFAULT_WAVE_PROPAGATOR_SHIPPED', 'DEFAULT_DY',
     'set_default_complex_dtype', 'get_default_complex_dtype',
     'set_default_real_dtype', 'get_default_real_dtype',
     'set_default_wave_propagator', 'get_default_wave_propagator',

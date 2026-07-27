@@ -240,14 +240,23 @@ def test_asm_propagate_back_prop_round_trip_returns_the_input(mult):
 
 
 def test_forward_asm_family_routing_is_unchanged():
-    """Regression fence: for z > 0 the ASM-family selector's decision table
-    must be untouched."""
+    """Regression fence: for z > 0 the ASM-family selector's decision table.
+
+    .. note::
+       **Updated deliberately in the W9 follow-up wave (audit W9-7).**  The
+       ``30 * threshold -> 'fraunhofer'`` row asserted here originally is GONE:
+       that trip point was the measured far-field defect (it fires at aperture
+       Fresnel number ``N/80``, giving fidelity 0.41 against an exact oracle at
+       N=512), and ``_select_asm_variant`` now delegates the regime decision to
+       the canonical ``_auto_select_method``.  The far-field row is re-pinned,
+       with its fidelity table, in ``test_niche_audit_w9_dispatch2.py``; what
+       stays here are the rows the delegation did NOT change.
+    """
     g = _BACKPROP_GEOM
     E = _gauss(g['N'], g['dx'], g['w0'])
     thr = _threshold(g['N'], g['dx'])
     assert _select_asm_variant(E, 0.5 * thr, LAM, g['dx']) == 'asm'
     assert _select_asm_variant(E, 3.0 * thr, LAM, g['dx']) == 'sas'
-    assert _select_asm_variant(E, 30.0 * thr, LAM, g['dx']) == 'fraunhofer'
     assert _select_asm_variant(E, 3.0 * thr, LAM, g['dx'],
                               tilt_x=0.05) == 'asm_tilted'
     assert _select_asm_variant(E, 3.0 * thr, LAM, g['dx'],

@@ -105,6 +105,96 @@ altogether.
 Pins: `tests/unit/test_niche_audit_w9_pmm_taper.py` (19; 16 fail on a
 pre-change worktree, 3 pass as regression + error-law locks).
 
+### Changed — auto-dispatcher follow-up wave (audit W9 items 1–7, `propagators/dispatch.py`, `system.py`, `fga.py`, `fft_infra.py`)
+
+- **One free-space regime rule (W9-7).**  `_select_asm_variant` — behind
+  `which_propagator` / `asm_propagate` — no longer carries its own
+  thresholds; it delegates to `_auto_select_method`, now documented as the
+  canonical regime logic.  Its old far-field trip (`Q > 20`) sat at aperture
+  Fresnel number `N/80`, so it fired further inside the near field the bigger
+  the grid: measured complex-overlap fidelity against an exact
+  `angular_spectrum_propagate_mft` oracle just above that trip was
+  0.9516 / 0.8185 / 0.4111 / 0.4241 at N = 128 / 256 / 512 / 1024, where the
+  canonical rule stays on `sas` and scores 1.00000 at all four.  The SAS
+  boundary moves with it (`Q > 2` -> `Q > 1`); in the newly-`sas` band both
+  members are exact and neither warns.  ROUTING CHANGE in the transition band.
+- **`propagate()` honours `set_default_wave_propagator()` (W9-8).**  Leaving
+  `method` unset is no longer the same as passing `'auto'`: on a free-space
+  call, with the knob moved off its shipped `'asm'`, that default is used.
+  `method='auto'` explicitly always auto-selects.  Two deliberate departures
+  from `propagate_through_system`'s unconditional resolution, each forced by
+  measurement: prescription calls keep `'auto'` (measured,
+  `propagate(prescription=rx, method='asm')` returns the input UNCHANGED, so
+  applying a free-space knob there would make it a silent no-op); and the
+  knob is honoured only once it differs from the shipped value
+  (`DEFAULT_WAVE_PROPAGATOR_SHIPPED`, `fft_infra.py:326`), so resolution
+  stays stateless and restoring the knob restores auto-selection.
+- **Traced options are reachable through the element chain (W9-11).**  The
+  `'real_lens_traced'` element forwards every keyword-only parameter of
+  `apply_real_lens_traced`, as top-level keys or in a `traced_kwargs` dict,
+  and REJECTS anything else with a named `ValueError`.  Pre-fix the handler
+  forwarded four arguments and dropped the rest in silence — measured
+  bit-identical output for all of `amplitude_model`, `preserve_input_phase`,
+  `remap_sampling`, `fit_radius_beam_factor`, `carrier`, `on_undersample`,
+  `n_workers`, `traced_kwargs` and an outright typo key — which made the
+  v5.29 + S12 validated traced configuration unreachable through this API.
+- **The universal router runs `traced` with the P2 cliff guard (W9-13).**
+  `apply_real_lens_universal` now defaults `fit_radius_beam_factor=2.0` on its
+  traced route instead of inheriting the element's `None`.  Measured on the E4
+  corrected relay at the element's own defaults, exit-wavefront Strehl
+  0.9701 / 0.1085 / 0.0384 at 1.50x / 1.75x / 2.50x the beam diameter without
+  the guard versus 0.9874 / 0.9820 / 0.9816 with it.  The chain's other three
+  validated options are NOT adopted: they are carrier-regime options and this
+  router supplies no carrier (measured -0.0025 / -0.0249 / -0.1912 without
+  one).  Opt out with
+  `method_kwargs={'traced': {'fit_radius_beam_factor': None}}`.
+
+### Removed — the dead DOE routing branch (audit W9-9, `propagators/dispatch.py`)
+
+- `_auto_select_method`'s "prescription with diffractive surfaces -> hfpi"
+  rule keyed on `prescription['events_json']`, a key that occurred exactly
+  once in the repository — in `dispatch.py`.  No loader or factory ever
+  emitted it, so the branch could not fire, and when forced it routed to a
+  call that immediately raised `TypeError: ... missing 1 required
+  keyword-only argument: 'n_paths'`.  It could not be repointed: this library
+  has no prescription-embedded DOE representation — diffractive data travels
+  as the `surface_diffraction` / `diffracting_surfaces` kwargs — and hfpi was
+  not measurably the better automatic choice anyway (on a thin-grating
+  analytic oracle it missed the order-1 deflection by 85–97%, versus maslov's
+  100%; the hfpi deflection miss is recorded as an open interiors question).
+  DOE kwargs handed to a member that cannot accept them now raise a
+  dispatcher-level `ValueError` naming the members that can, instead of a raw
+  `TypeError` from `apply_real_lens_maslov`.
+
+### Fixed — dispatcher usability follow-ups (audit W9-10 / W9-12)
+
+- **`hfpi` / `asymptotic` are usable through `propagate()` (W9-10).**  Missing
+  required kernel arguments now raise a `ValueError` naming `propagate()` and
+  EVERY missing name, per the 4.12 B1-6 rule, instead of a raw `TypeError`
+  naming a kernel the caller never called: `n_paths` for
+  hfpi-with-prescription, all four of `z_to_aperture` / `aperture_radius` /
+  `z_aperture_to_output` / `n_paths` for the hfpi free-space form (the old
+  check advertised only `aperture_radius`), and `s2_grid_x` / `s2_grid_y` for
+  asymptotic.  No invented defaults: those are Monte-Carlo budgets and output
+  grids, and any value the dispatcher picked would be a silent accuracy
+  decision.
+- **The `ray_subsample` docstring contradiction (W9-12).**  The
+  `'real_lens_traced'` element docstring read "default 1; 4 is the recommended
+  production value" while the code hard-coded 1.  The docstring is corrected
+  and 4 is now reachable, but the default stays 1: measured, the E4
+  exit-wavefront Strehl at 1 / 4 / 8 is 0.9994 / 0.9993 / 0.9974 (6 mm) and
+  0.9996 / 0.9995 / 0.9976 (10 mm), so 4 buys no fidelity — while
+  `min_coarse_samples_per_aperture=32` means a divisor of 4 quadruples the
+  grid a chain needs, raising `ValueError` for a 2 mm aperture spanning 50 or
+  100 samples that runs fine at `ray_subsample=1`.  The three entry-point
+  defaults (element 8, chain 4, chain element 1) are deliberate and now
+  pinned together.
+
+Pins for the follow-up wave: `tests/unit/test_niche_audit_w9_dispatch2.py`
+(80 cases) plus one attributed edit to `test_niche_audit_w9_dispatch.py`;
+54 of the combined 115 fail at `268b019` in a read-only worktree, 61 pass as
+regression fences.
+
 ### Fixed — auto-dispatcher `output_grid`/`output_dx` handling and the ASM-family twin (audit W9, `propagators/dispatch.py`)
 
 Six measured defects in `lumenairy/propagators/dispatch.py`:
