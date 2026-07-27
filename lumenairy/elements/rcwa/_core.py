@@ -2991,10 +2991,82 @@ def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
 # The one hard gradient is through ``jnp.linalg.eig`` of the non-Hermitian
 # layer matrix (reverse-mode AD of general eig is unstable near degenerate
 # eigenvalues).  We register a custom VJP with the torcwa-style
-# Lorentzian-broadened eigenvector gradient (``eps_broaden``) plus a
-# canonical eigenvector gauge, so the decomposition is a deterministic,
-# differentiable function of the matrix (validated entrywise vs complex
-# finite differences to < 1e-5).
+# Lorentzian-broadened eigenvector gradient plus a canonical eigenvector gauge,
+# so the decomposition is a deterministic, differentiable function of the
+# matrix (validated entrywise vs complex finite differences to < 1e-5).
+#
+# ---------------------------------------------------------------------------
+# Why the broadening is SPECTRUM-RELATIVE and not an absolute constant (W9)
+# ---------------------------------------------------------------------------
+# The exact eigenvector-gradient factor is ``F_ij = 1/conj(lam_j - lam_i)``.
+# The Lorentzian ``F = D / (|D|^2 + eps)`` only exists to keep that finite when
+# two eigenvalues collide.  The historical ``eps`` was an ABSOLUTE 1e-10, but
+# the eigenvalues of these modal operators are dimensionful: ``max|lam|`` is
+# ~6e2 on the PMM spectral-element fold and ~3e1 on the RCWA ``P@Q`` fold, and
+# both change with the truncation order and the units of the geometry.  An
+# absolute floor therefore corrupted a scale-dependent, physically meaningless
+# window: ``F`` is wrong whenever ``|D| <~ sqrt(eps) = 1e-5`` -- which is a
+# RELATIVE splitting of only 1.6e-8 on the PMM fold.  Measured on the exact
+# entrywise oracle ``L = |tr(expm(A) X)|^2`` (the eig route vs the known-correct
+# ``jax.scipy.linalg.expm`` route -- gauge-invariant, no finite differences),
+# the absolute floor gave a 72% gradient error at a relative splitting of 3e-7
+# and STILL 2.3e-9 at FULL separation, i.e. it perturbed EVERY gradient.  The
+# relative floor is exact to 1e-14 over the whole resolved range.
+#
+# ``tau_rel`` is the fraction of ``max|lam|`` below which a splitting is
+# declared UNRESOLVED.  It must sit above the LAPACK eigenvalue rounding floor
+# (~eps_mach * ||A||; measured 2.6e-17 relative on the PMM half-space fold and
+# ~1e-15 on a cond(V)~30 constructed case) and below the smallest splitting the
+# physics needs (4.9e-11 relative at 1e-8 rad off normal).  1e-12 sits ~5
+# decades above the measured rounding floor and ~50x below the physics floor,
+# and it BOUNDS the degenerate block by 1/(2 tau_rel max|lam|) -- an unfloored
+# 1/D would divide by pure rounding noise.
+#
+# ``max|lam|`` (not a per-pair scale) is the RIGHT normaliser because the LAPACK
+# eigenvalue error is set by the global norm, ~eps_mach * ||A||, so a splitting
+# is resolvable exactly when it is large RELATIVE to the whole spectrum.  The
+# resulting envelope is scale-free -- measured on the expm oracle with a tiny
+# near-degenerate cluster hidden under an outlier eigenvalue 1x / 1e3x / 1e6x
+# larger, the relative gradient error depends ONLY on ``split / max|lam|``:
+#     split/max|lam|  1e-4    1e-6    1e-7    1e-9    1e-10   1e-11   1e-12
+#     rel grad error  1.5e-11 2.5e-9  1.2e-8  4.9e-6  5.4e-4  5.4e-2  2.7
+# i.e. exact down to ~1e-10 relative, degrading through 1e-11, fully floored at
+# tau_rel.  That envelope is the contract.
+#
+# KNOWN LIMIT -- an EXACT (symmetry-enforced) degeneracy is not recoverable by
+# ANY choice of F.  For a matrix-function loss ``L = tr(g(A) X)`` (which is what
+# a layer ``V exp(i q d) V^-1`` is), the eigenvector cotangent carries
+# ``M_ij = (g(lam_j) - g(lam_i)) Y_ji`` with ``Y = V^-1 X V``, so the physical
+# factor is the divided difference ``M_ij / D_ij -> g'(lam) Y_ji``.  When
+# ``lam_i == lam_j`` EXACTLY, ``M_ij`` is identically zero and ``Y_ji`` is gone
+# from the cotangent -- ``eig`` itself is not differentiable there (``V`` jumps
+# by a direction-dependent in-subspace rotation), so no VJP for it can be
+# correct.  Confirmed numerically: at an exactly degenerate pair the oracle
+# error is 0.16-0.47 relative for EVERY variant (floored, unfloored, absolute).
+# In practice this bites only where the perturbation's intra-cluster block is
+# non-diagonal: for the PMM 1-D fold ``A = eps I - Lop/k0^2`` that is d/d(angle)
+# at EXACTLY normal incidence and nothing else -- d/d(eps) gives ``U = I`` and
+# d/d(depth) does not touch the half-space matrices at all, so every DESIGN
+# gradient at normal incidence is clean (measured to 2e-8 relative).
+#
+# Practical consequence, measured on ``pmm_efficiency_1d`` TE against the
+# FD-free oracle "``dR/dtheta`` is LINEAR in theta near normal" (relative error
+# of the AD slope; the exact value is ``1.754069 * theta``):
+#     theta      1e-9    1e-8    1e-7    1e-6    1e-5    1e-4
+#     absolute  1.7e+5  5.7e+4  4.1e+3  2.3e+1  1.3e-2  7.3e-6
+#     relative  1.0e+3  4.3e-1  1.7e-3  2.5e-6  2.6e-6  0.0
+# i.e. the smallest USABLE off-normal angle drops from ~1e-4 rad to ~1e-6 rad.
+# Exactly 0.0 stays unrecoverable, but it now has a trivial workaround (offset
+# the angle by 1e-6 rad) that did NOT exist before -- the whole near-normal
+# region used to be contaminated.  ``tau_rel`` is a per-call argument if a
+# consumer must resolve finer splittings; lowering it trades noise immunity at
+# an exact degeneracy for reach (measured: 1e-13 takes theta=1e-8 from 43% to
+# ~5%, while removing the floor entirely makes the exactly degenerate point
+# 7.7x WORSE -- 1.71e-02 against 2.22e-03).
+
+# Fraction of ``max|lam|`` below which an eigenvalue splitting is treated as
+# unresolved by the eigenvector VJP (see the block comment above).
+_EIG_TAU_REL = 1e-12
 
 _JAX_EIG_STABLE = None
 
@@ -3011,7 +3083,7 @@ def _jax_eig_stable():
     import jax.numpy as jnp
 
     @partial(jax.custom_vjp, nondiff_argnums=(1,))
-    def _eig_raw(A, eps_broaden=1e-10):
+    def _eig_raw(A, tau_rel=_EIG_TAU_REL):
         # Return a PLAIN tuple, not whatever ``jnp.linalg.eig`` returns: modern
         # JAX (>=0.4.x / numpy 2.0) returns an ``EigResult`` namedtuple, a custom
         # pytree node.  ``custom_vjp`` requires the primal ``f`` and its ``fwd``
@@ -3022,17 +3094,25 @@ def _jax_eig_stable():
         lam, V = jnp.linalg.eig(A)
         return lam, V
 
-    def _eig_raw_fwd(A, eps_broaden):
+    def _eig_raw_fwd(A, tau_rel):
         lam, V = jnp.linalg.eig(A)
         return (lam, V), (lam, V)
 
-    def _eig_raw_bwd(eps_broaden, res, cot):
+    def _eig_raw_bwd(tau_rel, res, cot):
         lam, V = res
         lam_bar, V_bar = cot
         D = lam[None, :] - lam[:, None]
         n = lam.shape[0]
         offdiag = 1.0 - jnp.eye(n, dtype=D.dtype)
-        denom = jnp.abs(D) ** 2 + eps_broaden
+        # SPECTRUM-RELATIVE regularisation (see the block comment above): the
+        # exact factor is 1/conj(D); the floor only replaces it inside the
+        # LAPACK rounding floor of the eigenvalues, which is set by the SCALE of
+        # the spectrum (|delta lam| ~ eps_mach * ||A||), not by any absolute
+        # constant.  ``scale`` is traced -- no host branch, jit/vmap-safe.
+        scale = jnp.max(jnp.abs(lam))
+        scale = jnp.where(scale > 0, scale, 1.0)
+        floor = (tau_rel * scale) ** 2
+        denom = jnp.abs(D) ** 2 + floor
         F = jnp.where(offdiag != 0, D / jnp.where(denom == 0, 1.0, denom), 0.0)
         Vinv = jnp.linalg.inv(V)
         VinvH = jnp.conj(Vinv).T
@@ -3154,6 +3234,7 @@ __all__ = [
     "_stabilize_bumps",
     "_stabilize_closure_failure",
     "_eig_for",
+    "_EIG_TAU_REL",
     "_block",
     "_rcwa_xp",
     "_readonly",

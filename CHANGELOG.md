@@ -105,6 +105,59 @@ altogether.
 Pins: `tests/unit/test_niche_audit_w9_pmm_taper.py` (19; 16 fail on a
 pre-change worktree, 3 pass as regression + error-law locks).
 
+### Fixed — the shared eig VJP's broadening floor is now SPECTRUM-RELATIVE (audit W9, `elements/rcwa/_core.py`)
+
+The custom-VJP `eig` (`_jax_eig_stable`, shared by RCWA, PMM 1-D/2-D/Jones/stacks,
+EME, BOR and Berreman) regularised its eigenvector-gradient factor
+`F = D/(|D|^2 + eps)` with an **absolute** `eps = 1e-10`.  The eigenvalues of
+these modal operators are dimensionful — `max|lam|` is ~6e2 on the PMM
+spectral-element fold, ~3e1 on the RCWA `P@Q` fold, ~1 on the Berreman 4x4 —
+so that floor corrupted a scale-dependent window: `F` was wrong whenever
+`|D| <~ 1e-5`, a *relative* splitting of only 1.6e-8 on PMM.
+
+- **Symptom.** `pmm_efficiency_1d` TE `d(sum R)/d(theta)` at 1e-6 rad off
+  normal: AD `4.217e-05` against FD `1.755e-06` — a **24x** error, clean only
+  by ~1e-4 rad.  (Independently reported by a downstream consumer at exactly
+  theta = 0.)
+- **Cause, MEASURED.** The exact factor is `1/conj(D)`; the degenerate
+  cross-block is physical, not noise — `|M_ij|/|D_ij|` converges to
+  `2.0584e-02`, identical to 5 digits from theta 1e-8 to 1e-3.  On an exact
+  entrywise oracle (`L = |tr(expm(A) X)|^2` via the eig route vs
+  `jax.scipy.linalg.expm`'s known-correct VJP — gauge-invariant, no finite
+  differences) the absolute floor gave a **72% gradient error at 3e-7 relative
+  splitting and still 2.3e-9 at FULL separation**, i.e. it perturbed every
+  gradient, degenerate or not.
+- **Fix.** `denom = |D|^2 + (_EIG_TAU_REL * max|lam|)^2`, `_EIG_TAU_REL = 1e-12`
+  (per-call `tau_rel`).  Exact wherever the splitting is numerically resolved;
+  the floor only bites inside the LAPACK rounding floor, where an unfloored
+  `1/D` divides by noise (measured 7.7x worse).  The scale is read off traced
+  `lam`, so jit/vmap keep working and each `vmap` element gets its own scale.
+- **No forward change** — the primal and `fwd` rules are untouched;
+  `pmm_efficiency_1d`, `rcwa_efficiency_1d`, `berreman_jones_1d` and
+  `pmm_efficiency_2d` are **bit-identical** (`array_equal`, max |diff| 0.0).
+- **Measured effect.** pmm 1-D `d/d(theta)` at 1e-6 rad: `|AD - FD|` 4.04e-05
+  -> **1.09e-09**; against the FD-free oracle "`dR/dtheta` is linear in theta"
+  the relative error goes 23 -> **2.5e-06**.  pmm 2-D at normal incidence
+  4.11e-05 -> 1.12e-06.  The smallest USABLE off-normal angle drops from
+  ~1e-4 to ~1e-6 rad.  RCWA 1-D (the clean control, analytic half-space modes)
+  is unchanged at 1.1e-13; EME, BOR, Berreman and the 2-D stacks were already
+  clean and stay so.
+- **KNOWN LIMIT, now documented and pinned.**  At an EXACT (symmetry-enforced)
+  degeneracy no choice of `F` can be right: for a matrix-function loss
+  `L = tr(g(A) X)` the cotangent carries `M_ij = (g(lam_j) - g(lam_i)) Y_ji`,
+  so when `lam_i == lam_j` exactly `M_ij` is identically zero and the divided-
+  difference factor `g'(lam) Y_ji` is absent — `eig` itself is not
+  differentiable there.  Measured 0.16-0.75 relative error for every variant.
+  It bites only where the perturbation's intra-cluster block is non-diagonal,
+  i.e. `d/d(angle)` at EXACTLY normal incidence on the PMM paths (2.22e-03 TE /
+  9.66e-02 TM); every DESIGN gradient at normal incidence is clean to 2e-08.
+  Offset the angle by >= 1e-6 rad if the angle derivative itself is the
+  objective.  (The structural cure — analytic half-space modes for the PMM
+  fold, which is why RCWA is clean — is recorded as the follow-up.)
+
+New pins: `tests/unit/test_niche_audit_w9_eig_vjp.py` (29; 11 fail pre-fix, 18
+regression fences pass pre-fix).
+
 ### Fixed — the `'area'`-under-`'li'` raster regression: `raster='harmonic'` (audit W9, `elements/rcwa/stack.py`)
 
 W8 shipped `raster='area'` with a measured wart in its own docstrings: area
