@@ -44,6 +44,7 @@ from ._core import (
     _require_jax_x64,
     _require_propagating_incidence,
     _scalar_PQ,
+    _shapes_y_varying,
     _sqrt_decay,
     _sqrt_forward,
     _symmetric_cascade_rt,
@@ -67,7 +68,7 @@ from .twod import (
 
 
 class RCWAYAverageWarning(UserWarning):
-    """A 1-D :class:`RCWAStack` is solving the y-AVERAGE of a y-VARYING cell.
+    """A 1-D :class:`RCWAStack` is solving the y-AVERAGE of a y-VARYING layer.
 
     v5.31 (audit W4-3, closing the deferred 1-D-stack half of audit M8).  A 1-D
     (mono-periodic) stack carries only the ``n = 0`` y-harmonic, so a 2-D cell
@@ -76,6 +77,11 @@ class RCWAYAverageWarning(UserWarning):
     contract for a y-INVARIANT 2-D cell (an x-only grating written on a 2-D
     grid: the average IS the structure, and the answer is exact).  For a
     genuinely y-VARYING cell it silently solves a DIFFERENT structure.
+
+    Audit W8 extended the diagnostic to the ANALYTIC-SHAPE layer flavour
+    (:func:`_warn_if_shapes_y_averaged`), which had the identical trap with no
+    cell to inspect: a disk on a 1-D stack returned ``R00 = 0.054846364``
+    against the y-resolved ``0.006896833`` -- 8x -- with a 4.4e-16 closure.
 
     Measured (24x24 square-pillar cell, n_lo/n_hi = 1.5/2.5, period 1 um,
     lambda = 633 nm, theta = 0.1 rad, n_orders = 5): the 1-D stack returned
@@ -149,6 +155,202 @@ def _warn_if_y_averaged(fn_name, cell, n_orders_y, *, strict_y, stacklevel=3):
         f"real, build a 2-D stack (pass period_y AND n_orders_y >= 1).",
         RCWAYAverageWarning, stacklevel=stacklevel)
     return True
+
+
+def _warn_if_shapes_y_averaged(fn_name, shapes, period_y, n_orders_y, *,
+                               strict_y, stacklevel=3):
+    """Emit :class:`RCWAYAverageWarning` when a 1-D stack is about to y-average
+    a genuinely y-VARYING ANALYTIC-SHAPE layer (audit W8 2026-07-27).
+
+    The exact analogue of :func:`_warn_if_y_averaged` for the shapes flavour,
+    which had the same trap and no cell to inspect: an analytic shape list is
+    geometry, so the y-variance verdict comes from
+    :func:`~lumenairy.elements.rcwa._core._shapes_y_varying` -- THE shared
+    predicate that the ``n_orders_y = 0`` raise in
+    :func:`~lumenairy.elements.rcwa._core._validate_shapes` also reads, exactly
+    as this function's pixel twin shares the M8 ``strict_y`` variance test.
+    Neither pair can drift; both agreements are pinned
+    (``tests/unit/test_niche_audit_w4_gaps.py`` for the cell flavour,
+    ``tests/unit/test_niche_audit_w8_shapes.py`` for this one).
+
+    No-ops (returns ``False``) unless ``strict_y`` is False AND
+    ``n_orders_y == 0`` AND some shape actually varies along y -- so an empty
+    list and a full-``period_y`` rectangle (an x-only grating expressed
+    analytically, the legitimate idiom) stay silent.  Returns True when it
+    warned.  ``stacklevel`` follows the same convention as the pixel twin: 3
+    from ``add_layer``, 5 from ``_materialized_layers``."""
+    if strict_y or int(n_orders_y) != 0:
+        return False
+    i = _shapes_y_varying(shapes, period_y)
+    if i is None:
+        return False                          # y-INVARIANT: the average is exact
+    warnings.warn(
+        f"{fn_name}: this stack is 1-D (mono-periodic -- no period_y / "
+        f"n_orders_y), so the shape list enters only through its y-AVERAGED "
+        f"permittivity, but shapes[{i}] ({shapes[i].get('shape')}) VARIES "
+        f"along y (only a rectangle spanning the full period_y "
+        f"{float(period_y):.6g} m does not).  The solve returns the y-averaged "
+        f"structure's answer, which can be many times the y-resolved result "
+        f"(measured on a disk: R00 = 0.054846 against 0.006897) while the "
+        f"energy closure stays clean (so no tripwire fires).  This is exact "
+        f"and intended for a y-INVARIANT layer; if the y structure is real, "
+        f"build a 2-D stack (pass period_y AND n_orders_y >= 1).",
+        RCWAYAverageWarning, stacklevel=stacklevel)
+    return True
+
+
+# The module-level documentation block below is the SINGLE canonical statement
+# of the pixel-cell contract; every ``eps_cell``-accepting entry point in the
+# suite points at it by name ("PIXEL CELL CONTRACT") rather than restating it.
+"""
+PIXEL CELL CONTRACT (audit W8, v5.31 -- ``eps_cell`` rasterization semantics)
+============================================================================
+
+Two lattices are in play and they are HALF A PIXEL apart.  Both statements
+below are MEASURED, not asserted (``tests/unit/test_niche_audit_w8_raster.py``
+:func:`test_w8_pixel_is_a_node_sample_of_the_factorization` /
+:func:`test_w8_generator_lattice_is_the_pixel_midpoint`):
+
+1. WHAT THE SOLVER READS.  Every ``eps_cell`` / ``eps_tensor_cell`` entry
+   point factorizes the cell as ``fft2(eps_cell)/(Sx Sy)``
+   (:func:`~lumenairy.elements.rcwa.twod._eps_convolution_2d`), whose
+   band-limited ``eps(x, y)`` passes EXACTLY through ``eps_cell[j, i]`` at the
+   NODE ``(j Px/Sx, i Py/Sy)``.  Measured on a band-limited analytic profile
+   (``1.7 + 0.4 cos(2pi x/P) - 0.3 sin(4pi x/P)``, ``S = 16``, ``M = 2``): a
+   NODE-sampled cell reproduces the exact analytic Toeplitz matrix to
+   ``1.1e-16``, a MIDPOINT-sampled one is off by ``5.9e-02``, and the
+   per-order ratio of the two DFTs is ``exp(+i pi k / S)`` to ``8e-16``, i.e.
+   a midpoint-sampled cell is read as the same profile TRANSLATED by
+   ``-P/(2 Sx)``.  ``eps_cell[j, i]`` therefore MEANS "the permittivity at the
+   node ``(j Px/Sx, i Py/Sy)``" -- not a cell average.  This is what
+   :meth:`RCWAResult._cell_grid_index` samples with ``round`` (audit W7-D).
+
+2. WHAT THE INTERNAL GENERATORS WRITE.  The tapered / sheared builders
+   (:meth:`RCWAStack.add_tapered_grating`, :meth:`~RCWAStack.add_tapered_ridges`,
+   :meth:`~RCWAStack.add_tapered_pillars`) evaluate their analytic geometry on
+   the pixel-CENTRE lattice ``u = (arange(S) + 0.5)/S`` -- a pixel is the
+   half-open footprint ``[j/S, (j+1)/S)`` sampled at its centre.  That is HALF
+   A PIXEL off the lattice (1) reads.  The consequence, measured, is NOT a
+   separate error term:
+
+   * For a BAND-LIMITED cell the midpoint lattice is EXACTLY the node lattice
+     of the same profile TRANSLATED by ``-P/(2 Sx)``, and a rigid lateral
+     translation leaves the diffraction EFFICIENCIES invariant (only the order
+     amplitudes rephase).  Measured on the band-limited profile above at
+     ``S = 64``, ``M = 9``, ``theta = 0`` and ``0.25`` rad: shifting the sampled
+     profile by half a pixel, a whole pixel, or an arbitrary ``0.137 P`` moves
+     every ``R`` / ``T`` by at most ``8.4e-15``.
+   * For a HARD-RASTERIZED (binary, NOT band-limited) cell the two lattices
+     ALIAS differently (``sum_n c_{k+nS}`` vs ``sum_n (-1)^n c_{k+nS}``), so
+     they are two different ``O(1/Sx)`` quantisations of the same geometry
+     rather than translates.  Measured (sheared taper, ``shear = 0.4``,
+     ``duty = 0.37``, 16 slices, ``M = 9``) the node-vs-midpoint gap in
+     ``R``/``T`` falls ``7.36e-03 -> 3.37e-03 -> 2.66e-03 -> 1.35e-03 ->
+     5.66e-04`` for ``n_x = 128 -> 2048``, i.e. it lives INSIDE the
+     quantisation budget of the next bullet and vanishes with it.
+
+   The midpoint lattice is kept (it is the natural pixel-footprint centre, and
+   what ``raster='area'`` integrates over); :meth:`RCWAStack.plot_geometry`
+   renders on the SAME midpoint lattice so the picture matches the generator.
+
+BOUNDARY PIXELS ARE HARD-ASSIGNED, HALF-OPEN.  A feature occupying the
+period-fraction interval ``[lo, lo + w)`` claims pixel ``j`` iff
+``(u_j - lo) mod 1 < w``: the LOWER edge is INCLUSIVE, the UPPER edge
+EXCLUSIVE.  This is the house convention already used by the analytic 1-D
+paths (``oned.py``: "the ridge occupies ``[0, duty)`` and the groove
+``[duty, 1)``"), by
+:meth:`~lumenairy.elements.pmm.PMMStack._ridges_to_segments` (``lo <= mid <
+hi``) and by
+:meth:`~lumenairy.elements.segment_geometry.SegmentStackGeometry.to_rcwa_stack`
+(``(xs >= lo) & (xs < hi)``).  Before v5.31 the tapered generators used the
+SYMMETRIC test ``|dist| < half``, which excludes BOTH edges: an edge landing
+EXACTLY on a pixel centre lost the pixel (audit W8).
+
+ACCURACY CONSEQUENCE.  A hard-assigned raster realises the requested feature
+width ROUNDED to the pixel lattice: ``O(1/Sx)`` geometric quantisation
+(``<= P/(2 Sx)`` per wall), which no ``n_orders`` and no energy closure can
+see (this is the W7-A defect class in the user-facing pixel cell).  The two
+escapes are (a) raise ``n_x`` / ``Sx`` -- the error is strictly ``O(1/Sx)``;
+(b) use an EXACT-geometry path instead: :meth:`RCWAStack.add_layer` with
+``shapes=`` (analytic form factors, no lattice at all),
+:func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d` / the ``segments`` 1-D
+entries (exact piecewise-constant Fourier series), or a
+:class:`~lumenairy.elements.pmm.PMMStack` taper (nodal walls, no raster).
+``raster='area'`` is a THIRD, opt-in mitigation -- see
+:func:`_raster_cover_1d`.
+
+NOT AFFECTED (checked by grep + measurement, audit W8).  The PMM tapered
+siblings do NOT rasterize at all: ``PMMStack.add_tapered_grating`` /
+``add_tapered_ridges`` emit exact ``(width_fraction, eps)`` SEGMENTS, and
+``PMM2DStack*.add_tapered_pillars`` / ``add_tapered_pillar`` emit exact
+spectral-element WALLS; both resolve a strip's material at the strip MIDPOINT
+(``lo <= mid < hi`` / ``x0 < mx < x1``), which can never coincide with a wall.
+They realise the requested duty exactly at every ``n_slices`` -- so the
+boundary-coincidence class cannot arise and they were left untouched.
+"""
+
+_RASTER_MODES = ("hard", "area")
+
+
+def _validate_raster(fn_name, raster):
+    """Normalise + validate the ``raster`` mode of an internal rasterizer."""
+    r = str(raster).lower()
+    if r not in _RASTER_MODES:
+        raise ValueError(
+            f"{fn_name}: raster must be 'hard' (default) or 'area', got "
+            f"{raster!r}.")
+    return r
+
+
+def _raster_cover_1d(u, lo, width, raster):
+    """Per-pixel coverage weight in ``[0, 1]`` of the PERIODIC interval
+    ``[lo, lo + width)`` (period-1 fractions) on the pixel-centre lattice
+    ``u = (arange(S) + 0.5)/S``.
+
+    ``raster='hard'`` (default everywhere) returns EXACT ``0.0`` / ``1.0``: the
+    half-open membership test ``(u - lo) mod 1 < width`` -- lower edge in,
+    upper edge out (see the PIXEL CELL CONTRACT note above).  The caller must
+    turn this into ``np.where(w > 0, eps_feature, eps_background)`` so the
+    output permittivities are the caller's literals, bit-for-bit.
+
+    ``raster='area'`` returns the FRACTION of the pixel FOOTPRINT
+    ``[j/S, (j+1)/S)`` covered by the interval, so a boundary pixel gets the
+    area-weighted eps average (anti-aliasing / subpixel smoothing).  Exact for
+    an arbitrary interval, wrap-aware, and it makes the realised feature width
+    exact (``sum(w)/S == width``) instead of lattice-quantised.  Whether that
+    HELPS is a per-polarization physics question -- Li's factorization rules
+    assume sharp interfaces -- and is measured in
+    :meth:`RCWAStack.add_tapered_grating`'s docstring table.
+
+    ``u`` must be the midpoint lattice (the pixel width is inferred as
+    ``1/len(u)``); ``width`` is clipped to ``[0, 1]`` by the callers.
+    """
+    S = int(np.size(u))
+    if raster == "hard":
+        if width >= 1.0:
+            return np.ones(np.shape(u))
+        if width <= 0.0:
+            return np.zeros(np.shape(u))
+        # Half-open, wrap-aware.  A sample exactly AT ``lo`` maps to 0 (IN);
+        # one exactly at ``lo + width`` maps to ``width`` (OUT); one just BELOW
+        # ``lo`` maps near 1 -- and ``np.mod`` may round that to exactly 1.0,
+        # which is still OUT for every ``width < 1`` (``width >= 1`` short-
+        # circuits above, so the rounding can never flip a pixel).
+        return (np.mod(u - lo, 1.0) < width).astype(float)
+    # Area: measure of the periodic set ``union_k [lo+k, lo+k+width)`` inside
+    # each pixel footprint.  With ``lo`` shifted to 0, the measure of that set
+    # below ``t`` is ``_G(t) = width*floor(t) + clip(t - floor(t), 0, width)``,
+    # so a footprint ``[a, b]`` carries ``_G(b) - _G(a)``.
+    w = min(max(float(width), 0.0), 1.0)
+    half = 0.5 / S
+    a = np.asarray(u, dtype=float) - half - lo
+    b = np.asarray(u, dtype=float) + half - lo
+
+    def _G(t):
+        fl = np.floor(t)
+        return w * fl + np.minimum(np.maximum(t - fl, 0.0), w)
+
+    return np.clip((_G(b) - _G(a)) * S, 0.0, 1.0)
 
 
 def _layer_offplane_or_traced(data):
@@ -1143,9 +1345,28 @@ class RCWAStack:
         * ``eps_tensor_cell`` (``(Sx, Sy, 3, 3)``) -- anisotropic patterned;
         * ``shapes`` (with ``eps_background``) -- isotropic patterned using
           ANALYTIC shape Fourier transforms (exact form factors, direct-rule
-          ``E_z``; see :func:`rcwa_efficiency_2d_shapes`).
+          ``E_z``; see :func:`rcwa_efficiency_2d_shapes`).  The shapes must be
+          mutually DISJOINT: their form factors are ADDED, not painted in order,
+          so an overlap would double-count its shared area -- overlapping pairs
+          are rejected up front (audit W8).  On a 1-D stack a y-VARYING shape
+          list (anything but a full-``period_y`` rectangle) enters only through
+          its y-AVERAGE and raises :class:`RCWAYAverageWarning`, exactly as a
+          y-varying ``eps_cell`` does.
 
         Permittivities are in the PUBLIC convention (``Im(eps) > 0`` lossy).
+
+        WHAT A PIXEL MEANS (audit W8 -- see the PIXEL CELL CONTRACT block at the
+        top of this module for the measurements).  ``eps_cell[j, i]`` /
+        ``eps_tensor_cell[j, i]`` is a POINT SAMPLE at the NODE
+        ``(j Px/Sx, i Py/Sy)``, not a cell average: the factorization is
+        ``fft2(cell)/(Sx Sy)``, whose band-limited ``eps(x, y)`` passes exactly
+        through the samples on that lattice (measured to 1.1e-16 against an
+        analytic band-limited profile).  YOU own these pixels -- nothing here
+        anti-aliases them, and a boundary pixel you hard-assign realises the
+        feature width QUANTISED to your lattice (``O(1/Sx)``, invisible to
+        ``n_orders`` convergence AND to the energy closure).  Escapes: raise
+        ``Sx``; use ``shapes=`` (analytic form factors, no lattice); or let the
+        tapered builders rasterize with ``raster='area'``.
 
         DISPERSIVE materials (audit GAP5, v5.14.1): ``eps``, ``eps_cell``,
         ``eps_tensor_cell``, ``eps_background``, and each shape's ``eps`` may
@@ -1230,8 +1451,15 @@ class RCWAStack:
             disp = callable(eps_background) or any(
                 callable(sh.get("eps")) for sh in shapes)
             if not disp:
+                # n_orders_y mirrors the cell path's strict_y=not is_1d (audit
+                # W8): a 1-D stack's noy=0 sentinel WANTS the y-average, an
+                # explicitly-2-D stack with noy=0 needs a y-invariant list.
                 _validate_shapes("add_layer", shapes, self.period_x,
-                                 self.period_y)
+                                 self.period_y,
+                                 n_orders_y=None if self.is_1d else self.noy)
+                _warn_if_shapes_y_averaged("add_layer", shapes, self.period_y,
+                                           self.noy,
+                                           strict_y=not self.is_1d)
                 self._layers.append(
                     _RCWALayer(thickness, "shapes",
                                (_C(eps_background), shapes)))
@@ -1295,6 +1523,16 @@ class RCWAStack:
         rule : {'midpoint', 'trapezoid'}, optional
             Sample each slice at its centre (``'midpoint'``, default) or average
             its two edges (``'trapezoid'``).
+
+        Notes
+        -----
+        A ``(Sx, Sy)`` / ``(Sx, Sy, 3, 3)`` return goes straight to
+        :meth:`add_layer` as ``eps_cell`` / ``eps_tensor_cell``, so its pixels
+        carry that method's contract: NODE point samples at
+        ``(j Px/Sx, i Py/Sy)``, hard-assigned, ``O(1/Sx)`` geometric
+        quantisation of any in-plane feature edge (see the PIXEL CELL CONTRACT
+        block at the top of this module).  Every slice is sampled with
+        ``formulation='laurent'``.
         """
         n = int(n_slices)
         if n < 1:
@@ -1326,7 +1564,7 @@ class RCWAStack:
 
     def add_tapered_grating(self, thickness, *, eps_ridge, eps_groove,
                             duty_bottom, duty_top=None, n_slices=12, n_x=256,
-                            shear=0.0):
+                            shear=0.0, raster="hard"):
         """Append a 1-D grating with SLANTED (trapezoidal) sidewalls as an
         auto-sliced z-staircase (audit GAP4 -- fab realism).
 
@@ -1360,6 +1598,88 @@ class RCWAStack:
             shear=d*tan(0.524)/period)``.  Wrap-aware (the ridge may cross
             the cell edge).  Default 0 (centred, unchanged).  Staircase
             accuracy class: ~1e-3 absolute at 16-32 slices.
+        raster : {'hard', 'area'}, optional
+            Pixel assignment of the ridge walls (audit W8, v5.31).  ``'hard'``
+            (DEFAULT, bit-preserved) gives every pixel one material, half-open
+            ``[centre - duty/2, centre + duty/2)``; the realised duty is
+            therefore the requested one QUANTISED to the ``n_x`` lattice
+            (``O(1/n_x)``).  ``'area'`` (OPT-IN, experimental) gives each
+            boundary pixel the AREA-WEIGHTED eps average, making the realised
+            duty exact at any ``n_x``.  See the PIXEL CELL CONTRACT note at the
+            top of this module and the measured convergence table in the Notes
+            below before choosing ``'area'``.
+
+        Notes
+        -----
+        BOUNDARY COINCIDENCE (audit W8, fixed v5.31).  The wall test used to be
+        the SYMMETRIC ``|x - centre| < duty/2``, which excludes BOTH walls, so a
+        wall landing EXACTLY on a pixel centre lost that pixel.  At
+        ``shear = 0.5, duty = 0.5`` the lower wall of slice ``k`` sits at
+        ``lo = (k + 0.5)/(2 n_slices)``, which hits a pixel centre
+        ``(i + 0.5)/n_x`` for EVERY slice whenever ``n_x == 2 n_slices`` -- a
+        whole coincidence FAMILY, not one unlucky point.  Measured pre-fix at
+        ``n_slices = 128, n_x = 256``: all 128 slices realised duty
+        ``0.49609375 = 127/256`` (-3.906e-03).
+
+        The physics, on a clean-closure case (``P = 1 um``, ``wl = 633 nm``,
+        ``d = 300 nm``, ``eps_ridge = 4``, ``M = 7``, ``n_slices = 64``, so the
+        coincidence is at ``n_x = 128``; realised duty ``63/128 = 0.4921875``).
+        ``(R0_TE, R0_TM, T0_TE, T0_TM)`` versus ``n_slices`` at ``n_x = 128``::
+
+            n_slices | pre-fix                                | post-fix
+                  16 | 0.067642 0.135155 0.167056 0.571015    | identical
+                  32 | 0.067392 0.135313 0.168182 0.569711    | identical
+                  64 | 0.070403 0.125244 0.161805 0.587247 <- | 0.067328 0.135350 0.168465 0.569385
+                 128 | 0.067270 0.135390 0.168769 0.569466    | identical
+
+        The ``n_slices = 64`` row is the OUTLIER; every other row is BIT-identical
+        pre and post (the fix touches only coincident pixels).  Against the
+        ``n_x = 1024`` answer the coincident point was off by 1.802e-02 and is
+        now off by 1.552e-04 -- the ordinary ``O(1/n_x)`` quantisation, a 116x
+        improvement, achieved AT ``n_x = 128`` rather than by refining.
+
+        ``raster='area'`` -- MEASURED, and the recommendation is
+        PER-FORMULATION.  Convergence of the rasterized cell against the EXACT
+        analytic 1-D oracle (:func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d`
+        at the same ``formulation``), vertical binary grating ``n = 2/1``,
+        ``duty = 0.37`` (deliberately NOT grid-aligned), ``P = 1 um``,
+        ``wl = 633 nm``, ``d = 300 nm``, ``M = 9``, ``theta = 0.25`` rad; the
+        error is ``max|x - x_exact|`` over ``(R0, T0, R+1, T+1)``::
+
+              n_x |  'laurent' TE       |  'laurent' TM       |  'li' TM
+                  |  hard       area    |  hard       area    |  hard       area
+               37 | 2.34e-02  2.60e-03  | 1.05e-02  7.51e-04  | 1.08e-02  2.33e-03
+               64 | 5.49e-03  2.86e-04  | 2.33e-03  5.67e-05  | 3.07e-03  1.18e-03
+              128 | 5.10e-03  2.01e-04  | 2.23e-03  5.14e-05  | 2.73e-03  9.48e-04
+              256 | 3.10e-03  5.56e-05  | 1.34e-03  1.51e-05  | 1.56e-03  7.30e-04
+              512 | 1.16e-03  1.11e-05  | 5.03e-04  2.94e-06  | 6.04e-04  2.28e-04
+             1024 | 9.29e-04  3.84e-06  | 4.02e-04  1.03e-06  | 4.76e-04  1.89e-04
+
+        ``'li'`` TE is BIT-IDENTICAL to ``'laurent'`` TE here (measured 0.0):
+        ``E_y`` is tangential to every wall of a 1-D grating, so Li's rule
+        reduces to the direct rule and the TE column is shared.
+
+        RECOMMENDATION.  With the DEFAULT ``formulation='laurent'``, prefer
+        ``raster='area'``: it is 1-3 orders of magnitude more accurate at the
+        SAME ``n_x`` for both polarizations, and it makes the realised feature
+        width exact (``|sum(cover)/n_x - duty| <= 3.7e-15`` over 5000 random
+        cases, against ``O(1/n_x)`` -- up to 6.1e-02 at ``n_x = 16`` -- for
+        ``'hard'``).  With ``formulation='li'``/``'fff'`` KEEP ``'hard'`` for
+        the WALL-NORMAL polarization (TM / ``E_x``): the Li inverse rule assumes
+        a SHARP interface, and the arithmetic (area) average is the wrong
+        effective medium for the normal component -- it wants the HARMONIC one
+        (Farjadpour 2006 subpixel smoothing).  Measured above, ``'li'`` TM gains
+        only ~2.5x from ``'area'`` and plateaus (``2.2e-05`` at ``n_x = 8192``
+        against ``1.6e-08`` for ``'laurent'`` TM); on the SHEARED taper
+        (``shear = 0.4``, ``duty = 0.37``, 16 slices, reference ``n_x = 16384``)
+        ``'li'`` TM ``'area'`` is outright WORSE than ``'hard'`` -- by 10.6x at
+        ``n_x = 64``, 9.2x at ``n_x = 256``, 2.2x at ``n_x = 512`` -- while
+        ``'laurent'`` TE improves by up to 120x on the same sweep.  ``'area'``
+        is therefore shipped OPT-IN and DEFAULT OFF: it is a real accuracy win
+        on the default factorization and a regression on one arm of ``'li'``.
+        Note ``add_graded_layer`` (which this builder drives) always uses
+        ``formulation='laurent'``; reaching ``'li'`` means rasterizing yourself
+        and calling :meth:`add_layer`.
         """
         dt = float(duty_bottom if duty_top is None else duty_top)
         db = float(duty_bottom)
@@ -1368,6 +1688,7 @@ class RCWAStack:
                 raise ValueError(
                     f"add_tapered_grating: duty cycles must be in [0, 1], got "
                     f"duty_top={dt}, duty_bottom={db}.")
+        rst = _validate_raster("add_tapered_grating", raster)
         er, eg = _C(eps_ridge), _C(eps_groove)
         sh = float(shear)
         x = (np.arange(int(n_x)) + 0.5) / int(n_x)
@@ -1375,17 +1696,23 @@ class RCWAStack:
 
         def _profile(zeta):
             duty = dt + (db - dt) * zeta            # top (0) -> bottom (1)
-            half = 0.5 * duty
             centre = 0.5 + sh * (zeta - 0.5)        # sheared ridge centre
-            dist = np.abs((x - centre + 0.5) % 1.0 - 0.5)   # wrap-aware
-            col = np.where(dist < half, er, eg).astype(_C)
+            # HALF-OPEN ridge [centre - duty/2, centre + duty/2), wrap-aware
+            # (PIXEL CELL CONTRACT): a wall exactly on a pixel centre is
+            # assigned to the ridge at the LOWER wall and to the groove at the
+            # UPPER one, so the pixel count is exact instead of short by one.
+            cov = _raster_cover_1d(x, centre - 0.5 * duty, duty, rst)
+            if rst == "hard":
+                col = np.where(cov > 0.0, er, eg).astype(_C)
+            else:
+                col = (eg + (er - eg) * cov).astype(_C)
             return np.broadcast_to(col[:, None], (int(n_x), n_y)).copy()
 
         return self.add_graded_layer(thickness, _profile, n_slices=n_slices,
                                      rule="midpoint")
 
     def add_tapered_ridges(self, thickness, *, ridges, eps_groove,
-                           n_slices=12, n_x=256, n_y=None):
+                           n_slices=12, n_x=256, n_y=None, raster="hard"):
         """Append a MULTI-RIDGE tapered grating as an auto-sliced z-staircase
         (device-geometry roadmap item 1, 2026-06-10) -- the N-feature,
         center-anchored generalization of :meth:`add_tapered_grating`.
@@ -1395,11 +1722,20 @@ class RCWAStack:
         width-sequence construction that left-anchors a ridge drifts its
         center -- the audited geometry bug).  Wrap-aware; later ridges may
         NOT overlap earlier ones (raises).  ``eps_groove`` fills the rest.
+
+        ``raster`` is ``'hard'`` (default, bit-preserved) or ``'area'``, exactly
+        as in :meth:`add_tapered_grating`: each ridge occupies the HALF-OPEN
+        interval ``[center - w/2, center + w/2)`` (audit W8 -- a wall exactly on
+        a pixel centre no longer loses the pixel).  The OVERLAP guard always
+        reads the HARD masks, so whether two ridges collide is a property of the
+        geometry and not of the raster mode; ridges that TOUCH exactly are legal
+        and, under ``'area'``, share the boundary pixel by area.
         """
         n = int(n_slices)
         if n < 1:
             raise ValueError(
                 f"add_tapered_ridges: n_slices must be >= 1, got {n_slices}.")
+        rst = _validate_raster("add_tapered_ridges", raster)
         rid = [(float(c), float(wt), float(wb), _C(e))
                for c, wt, wb, e in ridges]
         eg = _C(eps_groove)
@@ -1414,22 +1750,25 @@ class RCWAStack:
                 w = wt + (wb - wt) * zeta
                 if w <= 0.0:
                     continue
-                half = 0.5 * w / self.period_x
-                dist = np.abs((x - c / self.period_x + 0.5) % 1.0 - 0.5)
-                m = dist < half
+                frac = w / self.period_x
+                lo = c / self.period_x - 0.5 * frac
+                m = _raster_cover_1d(x, lo, frac, "hard") > 0.0
                 if np.any(m & covered):
                     raise ValueError(
                         "add_tapered_ridges: ridges overlap; merge or "
                         "separate them explicitly.")
                 covered |= m
-                col[m] = e
+                if rst == "hard":
+                    col[m] = e
+                else:
+                    col = col + (e - eg) * _raster_cover_1d(x, lo, frac, rst)
             return np.broadcast_to(col[:, None], (nx, ny)).copy()
 
         return self.add_graded_layer(thickness, _profile, n_slices=n,
                                      rule="midpoint")
 
     def add_tapered_pillars(self, thickness, *, pillars, eps_host,
-                            n_slices=8, n_x=None, n_y=None):
+                            n_slices=8, n_x=None, n_y=None, raster="hard"):
         """Append MULTI-PILLAR tapered 2-D layers as an auto-sliced
         z-staircase (device-geometry roadmap item 1; the 2-D RCWA stack had
         NO tapered builder at all).
@@ -1439,6 +1778,13 @@ class RCWAStack:
         ABSOLUTE metres; each pillar tapers linearly about its own fixed
         center.  ``eps_host`` fills the rest.  Wrap-aware in both axes;
         overlapping pillars raise.
+
+        ``raster`` is ``'hard'`` (default, bit-preserved) or ``'area'``, exactly
+        as in :meth:`add_tapered_grating`.  Each pillar occupies the HALF-OPEN
+        box ``[cx - wx/2, cx + wx/2) x [cy - wy/2, cy + wy/2)`` (audit W8), and
+        the rectangle is SEPARABLE so the ``'area'`` weight is the exact
+        product of the two per-axis coverage fractions (corner pixels included).
+        The overlap guard reads the HARD masks in both modes.
         """
         if self.is_1d:
             raise ValueError(
@@ -1448,6 +1794,7 @@ class RCWAStack:
         if n < 1:
             raise ValueError(
                 f"add_tapered_pillars: n_slices must be >= 1, got {n_slices}.")
+        rst = _validate_raster("add_tapered_pillars", raster)
         nx = int(n_x) if n_x is not None else max(33, 4 * self.nox + 1)
         ny = int(n_y) if n_y is not None else max(33, 4 * self.noy + 1)
         eh = _C(eps_host)
@@ -1465,16 +1812,23 @@ class RCWAStack:
                 wyz = wyt + (wyb - wyt) * zeta
                 if wxz <= 0.0 or wyz <= 0.0:
                     continue
-                dx = np.abs((xs - cx / self.period_x + 0.5) % 1.0 - 0.5)
-                dy = np.abs((ys - cy / self.period_y + 0.5) % 1.0 - 0.5)
-                m = (dx[:, None] < 0.5 * wxz / self.period_x) & \
-                    (dy[None, :] < 0.5 * wyz / self.period_y)
+                fx, fy = wxz / self.period_x, wyz / self.period_y
+                lox = cx / self.period_x - 0.5 * fx
+                loy = cy / self.period_y - 0.5 * fy
+                hx = _raster_cover_1d(xs, lox, fx, "hard")
+                hy = _raster_cover_1d(ys, loy, fy, "hard")
+                m = (hx[:, None] > 0.0) & (hy[None, :] > 0.0)
                 if np.any(m & covered):
                     raise ValueError(
                         "add_tapered_pillars: pillars overlap; merge or "
                         "separate them explicitly.")
                 covered |= m
-                cell[m] = e
+                if rst == "hard":
+                    cell[m] = e
+                else:
+                    ax = _raster_cover_1d(xs, lox, fx, rst)
+                    ay = _raster_cover_1d(ys, loy, fy, rst)
+                    cell = cell + (e - eh) * (ax[:, None] * ay[None, :])
             return cell
 
         return self.add_graded_layer(thickness, _profile, n_slices=n,
@@ -1522,7 +1876,8 @@ class RCWAStack:
                                       // nx])
                 else:                       # shapes: rasterize via the cut
                     eps_bg, shapes = L.data
-                    xs = (np.arange(nx) + 0.5) / nx * self.period_x
+                    xf = (np.arange(nx) + 0.5) / nx      # period fractions
+                    xs = xf * self.period_x
                     ym = 0.5 * self.period_y
                     row = np.full(nx, np.real(complex(eps_bg)))
                     for sh in shapes:
@@ -1530,9 +1885,20 @@ class RCWAStack:
                                                    self.period_y / 2))
                         if sh["shape"] == "rectangle":
                             wx, wy = sh["size"]
-                            m = (np.abs(xs - cx) < 0.5 * wx) & \
-                                (abs(ym - cy) < 0.5 * wy)
-                        else:               # disk / ellipse
+                            # HALF-OPEN + wrap-aware (audit W8, PIXEL CELL
+                            # CONTRACT): the old ``|xs - cx| < wx/2`` excluded
+                            # BOTH walls (an edge exactly on a pixel centre
+                            # dropped the pixel) and silently dropped any
+                            # rectangle crossing the cell edge from the render.
+                            m = _raster_cover_1d(
+                                xf, (cx - 0.5 * wx) / self.period_x,
+                                wx / self.period_x, "hard") > 0.0
+                            m = m & (-0.5 * wy <= ym - cy < 0.5 * wy)
+                        else:               # disk / ellipse: a curved boundary
+                            # has no half-open side, so the tie at a pixel
+                            # centre exactly on the rim breaks toward the
+                            # BACKGROUND (strict ``<``) -- deterministic, and
+                            # measure-zero for a non-axis-aligned rim.
                             rx = sh.get("radius", sh.get("size", (0, 0))[0])
                             ry = sh.get("radius", sh.get("size", (0, 0))[-1])
                             m = ((xs - cx) / rx) ** 2 + \
@@ -1650,7 +2016,12 @@ class RCWAStack:
                 sh = [dict(d, eps=(_C(d["eps"](wl)) if callable(d["eps"])
                                    else _C(d["eps"]))) for d in shapes]
                 _validate_shapes("solve_vs_wavelength", sh, self.period_x,
-                                 self.period_y)
+                                 self.period_y,
+                                 n_orders_y=None if self.is_1d else self.noy)
+                _warn_if_shapes_y_averaged("solve_vs_wavelength", sh,
+                                           self.period_y, self.noy,
+                                           strict_y=not self.is_1d,
+                                           stacklevel=5)
                 out.append(_RCWALayer(L.thickness, "shapes", (bgv, sh)))
             else:
                 tcell = np.asarray(L.data(wl), dtype=_C)

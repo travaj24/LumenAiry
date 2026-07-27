@@ -84,7 +84,30 @@ fast-axis error for circular eigenpolarizations, silent lossy-incidence
 energy violations.  Four W6 classes REFUTED per package with from-scratch
 oracles; two moved pins retuned with decomposed geometry-vs-drift
 attribution.  Remaining recorded scope: the eps_cell rasterisation
-semantics decision, CuPy (no device), PySide6 runtime.
+semantics decision, CuPy (no device), PySide6 runtime.  *(The eps_cell
+rasterisation item was CLOSED in wave 8 — the boundary-coincidence class
+fixed with the half-open convention, the pixel semantics measured and
+documented as a single canonical contract block, and area weighting shipped
+opt-in / default-off with a measured per-polarization verdict; 22 pins in
+`tests/unit/test_niche_audit_w8_raster.py`, 16 failing pre-fix.  See the
+`[Unreleased]` CHANGELOG section.)*  *(Wave 8 also closed the other W7
+carry-over — the ANALYTIC form-factor path, read but never numerically
+cross-validated against the rasterised one, which is what the campaign's
+"use the shapes path for accuracy-critical geometry" recommendation rested
+on.  The form factors are VERIFIED CLEAN (exact DC area fraction, exact
+uniform-cell and merged-shape limits, exact periodic wrap, and the raster
+converging to them at `O(1/S)` point-sampled / `O(1/S^2)` area-averaged with
+no systematic residual); three plumbing defects were FOUND+FIXED around them
+— overlapping shapes silently SUPERPOSED against a docstring that promised
+paint-in-order (R/T off by up to 1.3e-1, energy-clean; the AUDIT_V5_5_2
+identical-disk case finally closed), `n_orders_y=0` silently solving the
+y-AVERAGED structure on a y-varying shape list — both halves: the 2-D RAISE
+(8x on R00; the pixel path's M8 guard had no analytic twin) and the 1-D-stack
+`RCWAYAverageWarning` DIAGNOSTIC (7.95x through the stack API; commit
+`809314c` gave the pixel cell one and the shape list none), now sharing one
+y-variance predicate so they cannot diverge — and bare `KeyError`s from
+malformed shape dicts.  119 pins in
+`tests/unit/test_niche_audit_w8_shapes.py`, 39 failing pre-fix.)*
 
 **Status: WAVES 5-6 COMPLETE (2026-07-26) — SHIMS REMOVED, P5 FLIPPED, AND THE
 FOUR UNREACHED SOLVER INTERIORS AUDITED AND FIXED.**  W5: all ten scheduled

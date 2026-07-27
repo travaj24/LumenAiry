@@ -170,6 +170,20 @@ def _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y):
     Entry ``[p, p'] = c_{(m-m'), (n-n')}`` where ``c`` are the centred 2-D
     Fourier coefficients of ``eps``; built by vectorised fancy-indexing into
     the coefficient table (the block-Toeplitz-Toeplitz structure).
+
+    THIS FUNCTION DEFINES WHAT A PIXEL MEANS for the whole suite (audit W8): the
+    ``fft2(eps_cell)/(Sx Sy)`` below makes the band-limited ``eps(x, y)`` pass
+    EXACTLY through ``eps_cell[j, i]`` at the NODE ``(j Px/Sx, i Py/Sy)``, so a
+    pixel is a POINT SAMPLE on the node lattice ``arange(S)/S`` -- NOT a cell
+    average and NOT the midpoint lattice ``(arange(S) + 0.5)/S``.  Measured on
+    a band-limited analytic profile (``1.7 + 0.4 cos(2pi x/P) - 0.3
+    sin(4pi x/P)``, ``S = 16``, ``M = 2``): the node sampling reproduces the
+    exact analytic Toeplitz matrix to ``1.1e-16``, the midpoint sampling is off
+    by ``5.9e-02``, and the two DFTs differ by exactly ``exp(+i pi k / S)`` (to
+    ``8e-16``) -- i.e. a midpoint-sampled cell is read as the same profile
+    translated by ``-P/(2 Sx)``.  The full statement of the consequences for
+    hard-rasterized (non-band-limited) cells is the PIXEL CELL CONTRACT block in
+    :mod:`lumenairy.elements.rcwa.stack`.
     """
     xp = array_namespace(eps_cell)
     Mx, My = int(n_orders_x), int(n_orders_y)
@@ -694,7 +708,17 @@ def rcwa_efficiency_2d(
     eps_cell : (Sx, Sy) array_like of complex
         Permittivity sampled over one unit cell (PUBLIC convention
         ``Im(eps) > 0`` for loss).  ``Sx``/``Sy`` must comfortably exceed
-        ``4*n_orders_{x,y}`` to avoid Fourier aliasing.  CONVENTION WARNING:
+        ``4*n_orders_{x,y}`` to avoid Fourier aliasing.  PIXEL SEMANTICS (audit
+        W8): ``eps_cell[j, i]`` is a POINT SAMPLE at the NODE
+        ``(j period_x/Sx, i period_y/Sy)`` -- not a cell average (measured; see
+        :func:`_eps_convolution_2d`, which defines it, and the PIXEL CELL
+        CONTRACT block in :mod:`lumenairy.elements.rcwa.stack`).  The caller owns
+        every pixel: nothing here anti-aliases a boundary pixel, so a
+        hard-assigned edge realises the feature width QUANTISED to the lattice
+        (``O(1/Sx)``, invisible to ``n_orders`` convergence and to the energy
+        closure).  Escapes: raise ``Sx``/``Sy``, or use the exact-geometry
+        :func:`rcwa_efficiency_2d_shapes` (analytic form factors, no lattice).
+        CONVENTION WARNING:
         ``eps_cell`` is PERMITTIVITY ``eps = n**2`` while ``n_substrate`` /
         ``n_superstrate`` below are refractive INDEX ``n`` -- one call mixes both
         conventions and a wrong-convention value is silently accepted (pass
@@ -1247,7 +1271,11 @@ def prepare_rcwa_2d(
 
     Parameters are the geometry/angle/formulation subset of
     :func:`rcwa_efficiency_2d` (no ``wavelength``; no ``stabilize`` -- pin a
-    validated ``n_orders`` for the sweep).  NON-DISPERSIVE indices and a FIXED
+    validated ``n_orders`` for the sweep), INCLUDING its ``eps_cell`` pixel
+    semantics: ``eps_cell[j, i]`` is a NODE point sample at
+    ``(j period_x/Sx, i period_y/Sy)``, hard-assigned, ``O(1/Sx)`` geometric
+    quantisation (audit W8; PIXEL CELL CONTRACT in
+    :mod:`lumenairy.elements.rcwa.stack`).  NON-DISPERSIVE indices and a FIXED
     ``(theta, phi)`` are assumed; NumPy / CuPy only.
     """
     _validate_geometry("prepare_rcwa_2d",
@@ -1451,7 +1479,12 @@ def rcwa_jones_2d(
         OUT-OF-PLANE couplings ``xz, yz, zx, zy`` when present (supported
         since v5.14.1 -- see Notes; ``e_xz = e_yz = 0`` recovers the
         z-decoupled in-plane subset).  ``Sx``/``Sy`` must exceed
-        ``4*n_orders_{x,y}``.
+        ``4*n_orders_{x,y}``.  PIXEL SEMANTICS as in
+        :func:`rcwa_efficiency_2d`: ``eps_tensor_cell[j, i]`` is a POINT SAMPLE
+        at the NODE ``(j period_x/Sx, i period_y/Sy)``, hard-assigned, with
+        ``O(1/Sx)`` geometric quantisation of any in-plane feature edge (audit
+        W8; see the PIXEL CELL CONTRACT block in
+        :mod:`lumenairy.elements.rcwa.stack`).
     n_substrate, n_superstrate, depth, wavelength, theta, phi,
     n_orders_x, n_orders_y
         As in :func:`rcwa_efficiency_2d`.
@@ -1934,13 +1967,39 @@ def rcwa_efficiency_2d_shapes(
         Each shape is ``{'shape': 'rectangle'|'disk'|'ellipse', 'eps':
         complex, ...geometry..., 'center': (cx, cy) [m]}``; geometry is
         ``'size': (wx, wy)`` for a rectangle, ``'radius': r`` for a disk,
-        ``'semi_axes': (ax, ay)`` for an ellipse (all metres).  Shapes are
-        painted in order over the background.
+        ``'semi_axes': (ax, ay)`` for an ellipse (all metres).  ``center``
+        defaults to the cell centre and may sit anywhere -- a shape that runs
+        off an edge continues PERIODICALLY, exactly (the form factor is sampled
+        on the reciprocal lattice, so the wrapped tiling is what it transforms;
+        measured translation-invariant to 1.1e-16 in ``|[[eps]]|`` and 1.1e-14
+        in ``R``/``T``).
+
+        LAYERING (corrected in audit W8 2026-07-27 -- this said "painted in
+        order over the background", which the analytic factorization cannot do):
+        each shape's form factor is **ADDED** over the background,
+        ``eps = eps_background + sum_s (eps_s - eps_background) F_s``, because
+        closed-form form factors exist for the shapes themselves and not for the
+        set differences a paint-over rule would need.  Superposition and
+        paint-over agree exactly on a DISJOINT list and only there, so the
+        shapes must not overlap: an overlap would get ``eps_background +
+        (eps_1 - eps_background) + (eps_2 - eps_background)`` on the shared area
+        -- neither shape's ``eps`` -- and stay perfectly energy-clean while doing
+        it, so :func:`_validate_shapes` rejects overlapping pairs up front
+        (measured before the guard: two 5/6-overlapping rectangles moved R/T by
+        6.1e-2, two identical disks by 1.1e-1, closures -6.7e-16 / -1.9e-14).
+        Decompose a union into disjoint pieces (a cross is three rectangles), or
+        rasterise the cell and call :func:`rcwa_efficiency_2d`, whose pixel cell
+        genuinely does paint in order.
     n_substrate, n_superstrate, depth, wavelength, theta, phi, polarization,
     n_orders_x, n_orders_y, truncation, stabilize
         As in :func:`rcwa_efficiency_2d` (audit M7 2026-07-25 added
         ``formulation`` / ``stabilize`` / ``symmetry`` here so the whole 2-D
-        family takes the same control set).
+        family takes the same control set).  ``n_orders_y = 0`` carries the same
+        y-INVARIANCE requirement as there, checked on the shape list instead of
+        on a cell: only a rectangle spanning the full ``period_y`` is
+        y-invariant, and anything else raises (audit W8 2026-07-27 -- it used to
+        return the y-AVERAGED structure's answer silently: R00 = 0.0548 for a
+        disk against the y-resolved 0.0069, energy closure 4.4e-16).
     symmetry : {False, 'auto', True}, optional
         Even-parity fast path, as in :func:`rcwa_efficiency_2d` -- but the
         default here is ``False``, NOT ``'auto'``: the fold is a mode-wise
@@ -2014,7 +2073,8 @@ def rcwa_efficiency_2d_shapes(
     _validate_geometry("rcwa_efficiency_2d_shapes", period=period_x,
                        period_y=period_y, depth=depth, wavelength=wavelength,
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
-    _validate_shapes("rcwa_efficiency_2d_shapes", shapes, period_x, period_y)
+    _validate_shapes("rcwa_efficiency_2d_shapes", shapes, period_x, period_y,
+                     n_orders_y=n_orders_y)
     if abs(_C(eps_background)) < 1e-12:
         raise ValueError(
             f"rcwa_efficiency_2d_shapes: eps_background ~ 0 ({eps_background!r}); "

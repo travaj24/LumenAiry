@@ -32,7 +32,15 @@ Truncation / discretisation ("how many unknowns"):
   knobs.  ``RCWAStack`` spells the x count ``n_orders`` (with ``n_orders_y=None``
   meaning "same as x"), unlike the free 2-D functions' ``n_orders_x``.
   ``n_orders_y = 0`` is legal on a y-INVARIANT cell (audit M8, see
-  :func:`_validate_geometry`); every other count needs ``>= 1``.
+  :func:`_validate_geometry`); every other count needs ``>= 1``.  y-INVARIANCE
+  is checked per input KIND but to ONE contract (audit W8): a pixel cell by
+  per-row peak-to-peak (:func:`_validate_cell_sampling`), an analytic shape list
+  by geometry (:func:`_shapes_y_varying` -- only a full-``period_y`` rectangle
+  qualifies).  Each has the same two halves: the explicitly-2-D entry points
+  RAISE, while a 1-D ``RCWAStack`` (whose ``noy = 0`` is a sentinel, not a
+  truncation choice) accepts and emits
+  :class:`~lumenairy.elements.rcwa.stack.RCWAYAverageWarning`.  Raise and warn
+  read the same predicate per kind, so they cannot diverge.
 
 ``formulation`` (Fourier factorization) -- the defaults differ ON PURPOSE:
 
@@ -978,13 +986,98 @@ def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y, *,
 
 
 
-def _validate_shapes(fn_name, shapes, period_x, period_y):
-    """Validate the analytic-shape list against three silent-wrong-answer
-    traps, each rejected up front with a ``fn_name:`` prefix:
+_OVERLAP_DIRS = 4096      # support-function scan resolution (_shapes_overlap)
 
-    * unknown kind / zero or negative size -- a non-positive dimension
-      vanishes or sign-flips the shape's contribution to the permittivity
-      spectrum;
+
+def _shape_support(kind, sx, sy, ux, uy):
+    """Support function ``h(u) = max_{r in shape} r.u`` of a shape CENTRED at
+    the origin, evaluated at the unit directions ``(ux, uy)``.  ``(sx, sy)``
+    are the HALF-widths of a ``rectangle`` and the semi-axes of a
+    ``disk`` / ``ellipse`` -- i.e. its bounding-box half-extents either way."""
+    if kind == "rectangle":
+        return sx * np.abs(ux) + sy * np.abs(uy)
+    return np.hypot(sx * ux, sy * uy)
+
+
+def _shapes_overlap(a, b, period_x, period_y):
+    """``True`` when two shape descriptors ``(kind, sx, sy, (cx, cy))`` overlap
+    on the PERIODIC cell (audit W8 2026-07-27).
+
+    Separating-axis test on the SUPPORT functions: two convex bodies are
+    disjoint iff some direction ``u`` separates them, i.e. ``d.u > h_a(u) +
+    h_b(u)`` for ``d`` the centre offset -- one formula for every
+    {rectangle, disk, ellipse} pair, no per-kind case analysis.  ``d`` is the
+    MINIMAL periodic image, which is sufficient: the Minkowski sum of two
+    axis-aligned centrally-symmetric convex bodies is convex and reflection-
+    symmetric about both axes, so shrinking ``|dx|`` (or ``|dy|``) can only move
+    ``d`` INTO the sum -- if any periodic image overlaps, the minimal one does.
+
+    A bounding-box separation is tried first: it is cheap, it is EXACT for a
+    rectangle pair (the box IS the shape), and it keeps the scan off all but the
+    genuinely-close pairs.  The ``_OVERLAP_DIRS`` scan under-estimates the true
+    maximum by at most ``(|d| + max semi-axis) * (2 pi / _OVERLAP_DIRS)^2 / 8 <
+    2e-7 * period``, so the ``1e-6 * period`` slack is ONE-SIDED by construction:
+    an exactly-touching (or gapped) pair is never reported as overlapping, while
+    any overlap deeper than ~1e-6 of a period always is."""
+    ka, sax, say, ca = a
+    kb, sbx, sby, cb = b
+    tol = 1e-6 * min(float(period_x), float(period_y))
+    dx = ((cb[0] - ca[0]) + 0.5 * period_x) % period_x - 0.5 * period_x
+    dy = ((cb[1] - ca[1]) + 0.5 * period_y) % period_y - 0.5 * period_y
+    if abs(dx) > sax + sbx - tol or abs(dy) > say + sby - tol:
+        return False                       # bounding boxes already separate
+    if ka == "rectangle" and kb == "rectangle":
+        return True                        # for two boxes that IS the test
+    th = 2.0 * np.pi * np.arange(_OVERLAP_DIRS) / _OVERLAP_DIRS
+    ux, uy = np.cos(th), np.sin(th)
+    gap = float(np.max(dx * ux + dy * uy
+                       - _shape_support(ka, sax, say, ux, uy)
+                       - _shape_support(kb, sbx, sby, ux, uy)))
+    return gap < -tol
+
+
+def _shapes_y_varying(shapes, period_y):
+    """Index of the first shape in ``shapes`` that VARIES along y, or ``None``
+    when the whole list is y-INVARIANT (an empty list included -- a uniform
+    background).
+
+    THE SINGLE definition of "y-invariant shape list", shared by the
+    ``n_orders_y = 0`` RAISE in :func:`_validate_shapes` (the explicitly-2-D
+    entry points) and the 1-D-stack ``RCWAYAverageWarning`` DIAGNOSTIC in
+    :func:`~lumenairy.elements.rcwa.stack._warn_if_shapes_y_averaged`, so the
+    two can never reach different verdicts about the same shape list -- the
+    no-divergence contract commit ``809314c`` pinned for the pixel path
+    (``_warn_if_y_averaged`` vs the M8 ``strict_y`` branch), carried over to the
+    analytic flavour in audit W8.
+
+    Only a RECTANGLE spanning the full ``period_y`` is y-invariant: it tiles y,
+    so its form factor's ``sinc(l)`` kills every ``l != 0`` coefficient
+    EXACTLY (measured: such a stripe solved with ``n_orders_y = 0`` reproduces
+    the y-resolved solve to 2.9e-16).  A disk, an ellipse or a shorter
+    rectangle all carry real y structure, and retaining no y-harmonic would
+    silently solve their y-AVERAGE instead (measured on a disk: R00 = 0.054846
+    against the y-resolved 0.006897, energy closure 4.4e-16).  Geometry is
+    assumed already validated by :func:`_validate_shapes`; both callers run
+    immediately after it."""
+    for i, sh in enumerate(shapes):
+        if sh.get("shape") == "rectangle":
+            wy = float(sh["size"][1])
+            if wy >= float(period_y) * (1.0 - 1e-9):
+                continue                      # a full-height stripe IS y-flat
+        return i
+    return None
+
+
+def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
+    """Validate the analytic-shape list against the silent-wrong-answer traps,
+    each rejected up front with a ``fn_name:`` prefix:
+
+    * malformed input -- a shape that is not a dict, an unknown kind, or a
+      missing / non-numeric ``eps``, geometry or ``center`` entry.  These used
+      to surface as a bare ``KeyError('radius')`` / ``TypeError`` from deep
+      inside the form factors (audit W8 2026-07-27);
+    * zero or negative size -- a non-positive dimension vanishes or sign-flips
+      the shape's contribution to the permittivity spectrum;
     * area fraction > 1 -- a shape whose area exceeds the cell drives the
       ``G = 0`` (DC) Fourier coefficient (the cell-average permittivity)
       past the shape's own ``eps``; an average must lie between
@@ -995,7 +1088,22 @@ def _validate_shapes(fn_name, shapes, period_x, period_y):
       shape's form factor over the background, so the painted area must total
       <= one cell (disjoint shapes).  Two disjoint disks at fraction 0.6 each
       (total 1.2) drive the DC permittivity past the shapes' eps just as a
-      single oversized shape would; the per-shape check alone misses it.
+      single oversized shape would; the per-shape check alone misses it;
+    * OVERLAPPING shapes -- the same additive factorization double-counts any
+      shared area, so an overlap models neither shape's ``eps`` there.  The
+      cumulative-area check above is blind to it whenever the total still fits
+      in one cell (audit W8 2026-07-27: two 5/6-overlapping rectangles at total
+      fraction 0.33 returned R/T off by 6.1e-2 with a -6.7e-16 energy closure).
+      Mirrors the ``add_tapered_ridges`` / ``add_tapered_pillars`` overlap
+      guards;
+    * ``n_orders_y = 0`` on a y-VARYING shape list -- the analytic counterpart
+      of the cell path's ``_validate_cell_sampling(strict_y=True)`` check
+      (audit W8 2026-07-27).  Only a rectangle spanning the FULL ``period_y``
+      is y-invariant; for anything else, retaining no y-harmonic silently
+      solves the y-AVERAGED structure.  Pass ``n_orders_y`` to enable the check
+      (``None`` -- the default -- skips it, for callers such as a 1-D
+      :class:`~lumenairy.elements.rcwa.RCWAStack` whose ``noy = 0`` sentinel
+      means "y-average is what I want").
 
     The solver runs without complaint on any of these (it even conserves
     energy R + T = 1) while modelling a non-physical structure, hence the
@@ -1003,22 +1111,71 @@ def _validate_shapes(fn_name, shapes, period_x, period_y):
     periods [m]."""
     area_cell = float(period_x) * float(period_y)
     total_fraction = 0.0
+    if isinstance(shapes, dict):
+        raise ValueError(
+            f"{fn_name}: shapes must be a LIST of shape dicts, got a single "
+            f"dict; wrap it as [shape].")
+    descs = []
     for i, sh in enumerate(shapes):
+        if not isinstance(sh, dict):
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] must be a dict "
+                f"{{'shape': ..., 'eps': ..., geometry, ['center']}}, got "
+                f"{type(sh).__name__}.")
         kind = sh.get("shape")
-        if kind == "rectangle":
-            wx, wy = (float(v) for v in sh["size"])
-            dims, ext_x, ext_y, area_shape = (wx, wy), wx, wy, wx * wy
-        elif kind == "disk":
-            r = float(sh["radius"])
-            dims, ext_x, ext_y, area_shape = (r,), 2.0 * r, 2.0 * r, np.pi * r * r
-        elif kind == "ellipse":
-            ax, ay = (float(v) for v in sh["semi_axes"])
-            dims = (ax, ay)
-            ext_x, ext_y, area_shape = 2.0 * ax, 2.0 * ay, np.pi * ax * ay
-        else:
+        if kind not in ("rectangle", "disk", "ellipse"):
             raise ValueError(
                 f"{fn_name}: shapes[{i}] has unknown shape {kind!r} (expected "
                 f"'rectangle', 'disk' or 'ellipse').")
+
+        def _req(key, n, what, _i=i, _sh=sh, _kind=kind):
+            """The required geometry entry, as a tuple of ``n`` floats."""
+            if key not in _sh:
+                raise ValueError(
+                    f"{fn_name}: shapes[{_i}] ({_kind}) is missing the "
+                    f"required {key!r} entry ({what}, in metres).")
+            val = _sh[key]
+            vals = (val,) if n == 1 else val
+            try:
+                out = tuple(float(v) for v in vals)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"{fn_name}: shapes[{_i}] ({_kind}) has a non-numeric "
+                    f"{key!r} entry {val!r} (expected {what}, in "
+                    f"metres).") from None
+            if len(out) != n:
+                raise ValueError(
+                    f"{fn_name}: shapes[{_i}] ({_kind}) has {key!r} of length "
+                    f"{len(out)}; expected {what}, in metres.")
+            return out
+
+        if sh.get("eps") is None:
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] ({kind}) is missing the required "
+                f"'eps' entry (the shape permittivity, PUBLIC convention "
+                f"Im(eps) > 0 lossy).")
+        if kind == "rectangle":
+            wx, wy = _req("size", 2, "a (wx, wy) pair")
+            dims, ext_x, ext_y, area_shape = (wx, wy), wx, wy, wx * wy
+            sup_x, sup_y = 0.5 * wx, 0.5 * wy
+        elif kind == "disk":
+            (r,) = _req("radius", 1, "a scalar radius")
+            dims, ext_x, ext_y, area_shape = (r,), 2.0 * r, 2.0 * r, np.pi * r * r
+            sup_x = sup_y = r
+        else:
+            ax, ay = _req("semi_axes", 2, "an (ax, ay) pair")
+            dims = (ax, ay)
+            ext_x, ext_y, area_shape = 2.0 * ax, 2.0 * ay, np.pi * ax * ay
+            sup_x, sup_y = ax, ay
+        if "center" in sh:
+            cx, cy = _req("center", 2, "a (cx, cy) pair")
+        else:
+            cx, cy = 0.5 * float(period_x), 0.5 * float(period_y)
+        if not (np.isfinite(cx) and np.isfinite(cy)):
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] ({kind}) has a non-finite center "
+                f"{(cx, cy)!r}; the form factor's phase would be NaN.")
+        descs.append((kind, sup_x, sup_y, (cx, cy)))
         for d in dims:
             if not (np.isfinite(d) and d > 0.0):
                 raise ValueError(
@@ -1026,7 +1183,7 @@ def _validate_shapes(fn_name, shapes, period_x, period_y):
                     f"dimension {d!r}; all sizes / radii / semi-axes must "
                     f"be > 0 metres.")
         eps_sh = sh.get("eps")
-        if eps_sh is not None and abs(_C(eps_sh)) < 1e-12:
+        if eps_sh is not None and not callable(eps_sh) and abs(_C(eps_sh)) < 1e-12:
             raise ValueError(
                 f"{fn_name}: shapes[{i}] ({kind}) has eps ~ 0 ({eps_sh!r}); a "
                 f"zero permittivity blows up the averaged-eps / inverse-rule "
@@ -1061,6 +1218,55 @@ def _validate_shapes(fn_name, shapes, period_x, period_y):
             f"the average (G=0) permittivity past the shapes' eps -- a "
             f"non-physical structure.  Reduce the shapes or enlarge the "
             f"period.")
+    # Pairwise OVERLAP (audit W8 2026-07-27).  The cumulative-area check above
+    # only sees the TOTAL, so any overlap that still fits in one cell slips
+    # through and is silently double-counted by the additive form factors.
+    # The O(K^2) part is the bounding-box pre-filter, vectorised row by row
+    # (O(K) memory, and this runs per WAVELENGTH on a dispersive sweep): only
+    # box-overlapping pairs reach the exact predicate.  Measured on a lattice of
+    # disks: 256 shapes 19.4 -> 7.9 ms, 1024 shapes 326 -> 81 ms.
+    cxs = np.array([d[3][0] for d in descs], dtype=float)
+    cys = np.array([d[3][1] for d in descs], dtype=float)
+    sxs = np.array([d[1] for d in descs], dtype=float)
+    syy = np.array([d[2] for d in descs], dtype=float)
+    otol = 1e-6 * min(float(period_x), float(period_y))
+    for i in range(len(descs) - 1):
+        dxs = np.abs(((cxs[i + 1:] - cxs[i]) + 0.5 * period_x) % period_x
+                     - 0.5 * period_x)
+        dys = np.abs(((cys[i + 1:] - cys[i]) + 0.5 * period_y) % period_y
+                     - 0.5 * period_y)
+        cand = np.nonzero((dxs <= sxs[i + 1:] + sxs[i] - otol)
+                          & (dys <= syy[i + 1:] + syy[i] - otol))[0]
+        for j in (int(c) + i + 1 for c in cand):
+            if _shapes_overlap(descs[i], descs[j], period_x, period_y):
+                raise ValueError(
+                    f"{fn_name}: shapes[{i}] ({descs[i][0]}) and shapes[{j}] "
+                    f"({descs[j][0]}) OVERLAP on the periodic cell; the "
+                    f"analytic form factors are ADDED, so the shared area gets "
+                    f"eps_background + (eps_{i} - eps_background) + (eps_{j} - "
+                    f"eps_background) instead of either shape's own eps -- a "
+                    f"structure that is neither, and energy-clean (measured: "
+                    f"two 5/6-overlapping rectangles returned R/T off by "
+                    f"6.1e-2 from the painted geometry with a -6.7e-16 "
+                    f"closure).  Decompose the union into DISJOINT pieces (a "
+                    f"cross is three rectangles), or rasterise the cell and "
+                    f"use the eps_cell entry points, which do paint in order.")
+    # n_orders_y = 0 keeps ONLY the y-averaged spectrum -- the analytic twin of
+    # the cell path's _validate_cell_sampling(strict_y=True) check (audit W8).
+    # The verdict comes from _shapes_y_varying, which the 1-D stack's
+    # RCWAYAverageWarning also reads, so raise and warn cannot diverge.
+    if n_orders_y is not None and int(n_orders_y) == 0:
+        i = _shapes_y_varying(shapes, period_y)
+        if i is not None:
+            raise ValueError(
+                f"{fn_name}: n_orders_y=0 needs a y-INVARIANT shape list, but "
+                f"shapes[{i}] ({descs[i][0]}) varies along y -- only a "
+                f"rectangle spanning the full period_y ({period_y:.4g} m) is "
+                f"y-invariant.  With zero retained y-harmonics only the "
+                f"y-AVERAGED permittivity enters, so the solve would silently "
+                f"return the y-averaged structure's answer (measured on a disk: "
+                f"R00 = 0.0548 against the y-resolved 0.0069, with a 4.4e-16 "
+                f"energy closure -- undetectable).  Use n_orders_y >= 1.")
 
 
 
@@ -2844,6 +3050,9 @@ __all__ = [
     "_grazing_safe_wavelength",
     "_validate_geometry",
     "_validate_cell_sampling",
+    "_shape_support",
+    "_shapes_overlap",
+    "_shapes_y_varying",
     "_validate_shapes",
     "_fourier_coeffs_1d",
     "_toeplitz_1d",

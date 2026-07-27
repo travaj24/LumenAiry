@@ -2,6 +2,187 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Fixed — the analytic shape path's layering contract (audit W8, `elements/rcwa/twod.py`, `_core.py`)
+
+The other item W7 left open: `rcwa_efficiency_2d_shapes`' analytic form-factor
+path "was read but not numerically cross-validated against the rasterised
+path", while the campaign's standing recommendation ("for accuracy-critical
+geometry use the shapes path — exact form factors, no rasterization") rested on
+exactly that validation.  It is now cross-validated for every kind
+`_shape_form_factor` supports (`rectangle` / `disk` / `ellipse`), lossless and
+lossy, normal and conical, at two fill fractions each — and the **form factors
+are clean**.  The three defects found were all in the plumbing around them, all
+silent, all energy-clean.
+
+- **The form factors, verified clean (89 pins,
+  `tests/unit/test_niche_audit_w8_shapes.py`).**  The DC coefficient is the
+  closed-form area fraction **bit-exactly** (0.0 for all three kinds); a
+  cell-filling rectangle reproduces the uniform cell (7.3e−16 in `[[eps]]`,
+  4.4e−34 in R/T) and still does off-centre; two abutting rectangles equal their
+  merged rectangle (1.1e−16, 5.9e−15 in R/T); a vanishing shape approaches the
+  background at the exact area rate (ratio 100.00 per decade of radius);
+  `F(−G) = conj(F(G))` to 0.0, so `[[eps]]` is Hermitian for real `eps` and
+  obeys `[[eps]](conj eps) = conj([[eps]])^T` exactly.  Periodic wrap is
+  **exact, not asymptotic** — a shape at a corner, across a seam or outside the
+  cell leaves `|[[eps]]|` invariant to 1.1e−16 and R/T to 1.1e−14, because the
+  form factor is sampled on the reciprocal lattice where one shape and its whole
+  wrapped tiling transform alike.  And the rasterised path converges **to** the
+  analytic answer with no systematic residual: `O(1/S)` for a point-sampled cell
+  (measured 1.99 + 1.99 per doubling for a rectangle), `O(1/S²)` for an
+  area-averaged one (3.46 … 4.55 per doubling across all 12 kind/fill/eps
+  combinations, 3.98 … 4.00 in R/T for the rectangle across all 8 of its
+  eps/angle/polarization combinations), down to 5.4e−5 in `[[eps]]` and 8.4e−6
+  in R/T.  The second return of `_analytic_convolutions_2d` really is the
+  analytic `[[1/eps]]` (net 3.73 … 4.28 over a 4× refinement).
+- **W8-A — overlapping shapes (FOUND + FIXED).**  The docstring promised
+  "shapes are painted in order over the background"; the analytic factorization
+  **adds** the form factors, which is the same thing only on a *disjoint* list.
+  Overlaps were accepted whenever the total area still fitted in one cell (the
+  v5.5.3 cumulative-area guard sees only the total, not the arrangement) and the
+  shared area silently got `eps_bg + (eps_1 − eps_bg) + (eps_2 − eps_bg)` —
+  neither shape's `eps`: R/T off by **6.1e−02** (two 5/6-overlapping
+  rectangles, DC permittivity 2.833 against the painted 2.501), **1.3e−01**
+  (two partially overlapping disks) and **1.1e−01** (two IDENTICAL disks — the
+  case AUDIT_V5_5_2 2026-05-31 recorded and the cumulative fix did not reach),
+  with energy closures of −6.7e−16 / −3.8e−15 / −1.9e−14.  `_validate_shapes`
+  now rejects overlapping pairs via a support-function separating-axis test
+  (exact for every {rectangle, disk, ellipse} pair, wrap-aware, one-sided at
+  tangency: exactly-tangent circles and exactly-abutting rectangles stay legal,
+  and so do diagonal neighbours whose bounding boxes overlap), mirroring the
+  `add_tapered_ridges` / `add_tapered_pillars` guards.  The docstring now states
+  the additive rule and the disjointness requirement.
+- **W8-B — `n_orders_y = 0` on a y-varying shape list (FOUND + FIXED).**  With
+  no retained y-harmonic only the y-AVERAGED permittivity enters, so the solve
+  returned a **different structure's** answer: R00 = 0.054846 for a disk against
+  the y-resolved 0.006897 (8×), matching the explicitly y-averaged pixel cell,
+  with a 4.4e−16 closure.  The pixel path has rejected exactly this since audit
+  M8 (`_validate_cell_sampling(strict_y=True)`); the analytic path and
+  `RCWAStack.add_layer(shapes=…)` had no counterpart and now do.  A full-height
+  rectangle (a stripe) is genuinely y-invariant and keeps the M8 fast path
+  (reproduces the y-resolved solve to 2.9e−16).
+- **W8-B′ — the 1-D-stack half of the same trap (FOUND + FIXED).**  A 1-D
+  stack's `noy = 0` is a SENTINEL, not a truncation choice, so the raise above
+  must not fire there — which is exactly why commit `809314c` gave the pixel
+  path a `RCWAYAverageWarning` DIAGNOSTIC for that case.  The analytic-shape
+  layer had no such flavour and averaged in silence: measured through the stack
+  API (P = 0.6 µm, λ = 550 nm, d = 220 nm, eps 6.25 disk r = 160 nm,
+  `n_orders = 6`), the 1-D stack returned **R00 = 0.054846364** against the 2-D
+  stack's **0.006896833** — **7.95×**, absolute error 0.047950 — with closures
+  −8.9e−16 and −1.5e−14, so neither tripwire could see it.  The mechanism is
+  measured, not inferred: feeding the explicitly y-AVERAGED *pixel* cell of the
+  same disk to the same 1-D stack gives 0.054845052 at S = 512 and 0.054846287
+  at S = 2048, converging on the shapes answer (|Δ| 1.3e−06 → 7.7e−08, the
+  raster's own residual).  New `_warn_if_shapes_y_averaged` at both shapes sites
+  (`add_layer`, and `_materialized_layers` for the dispersive route, one report
+  per wavelength), same `RCWAYAverageWarning` category so one filter covers both
+  flavours, and stacklevel 3 / 5 as on the pixel path.  It is a diagnostic, not
+  a rejection: the 1-D + shapes contract is unchanged.  Raise and warn now read
+  ONE predicate (`_shapes_y_varying`), so they cannot drift — the same
+  no-divergence contract `809314c` pinned for the pixel pair, extended to the
+  analytic flavour and pinned over 6 shape lists.
+- **W8-C — malformed shape dicts (FOUND + FIXED).**  A missing or non-numeric
+  `radius` / `size` / `semi_axes` / `eps` / `center`, a non-dict shape or a bare
+  shape dict passed as the list escaped as `KeyError('radius')` /
+  `TypeError: 'float' object is not iterable` / `AttributeError` from inside the
+  form factors; all eleven cases are now named `ValueError`s (house rule).
+
+### Fixed — the `eps_cell` rasterization contract (audit W8, `elements/rcwa/**`)
+
+The one item the W7 rcwa audit deferred *by design*: the tapered / sheared
+generators rasterized their analytic shapes with a **symmetric** `|dist| <
+half`, which excludes **both** walls, so an edge landing exactly on a pixel
+centre lost one pixel — the W7-A defect class (a duty quantised to a grid),
+but in the **user-facing pixel cell**, where changing the semantics is a
+contract decision rather than a bug fix.  The decision is now taken and
+recorded in three parts.
+
+- **Boundary coincidence (FOUND + FIXED).**  All three internal rasterizers
+  (`RCWAStack.add_tapered_grating` / `add_tapered_ridges` /
+  `add_tapered_pillars`, plus the shapes branch of `plot_geometry`) now use the
+  **half-open** convention `[lo, lo + w)` — lower wall inclusive, upper
+  exclusive — which is the house convention already used by the analytic 1-D
+  paths (`oned.py`: "the ridge occupies `[0, duty)`"),
+  `PMMStack._ridges_to_segments` (`lo <= mid < hi`) and
+  `SegmentStackGeometry.to_rcwa_stack` (`(xs >= lo) & (xs < hi)`).  The
+  recorded W7 outlier reproduced exactly: at `shear=0.5, duty=0.5,
+  n_slices=128, n_x=256` **all 128 slices** realised duty `127/256 =
+  0.49609375` (−3.906e−03).  `n_x == 2*n_slices` is a whole coincidence
+  *family*, not one unlucky point, and there is a matching family at `duty=1`
+  (the pixel antipodal to the ridge centre became a groove — an "all ridge"
+  layer with a hole).  On a clean-closure case (P = 1 µm, λ = 633 nm, d = 300
+  nm, `eps_ridge=4`, M = 7, 64 slices, coincidence at `n_x=128`) the zeroth
+  orders were off by **1.802e−02** pre-fix and are off by **1.552e−04** now
+  (the ordinary `O(1/n_x)` quantisation) — a 116× improvement **at** `n_x=128`
+  rather than by refining.  Every non-coincident geometry is **bit-identical**:
+  40 000 random `(S, width, centre)` triples measured 0 mask differences, and
+  the `n_slices = 16/32/128` rows of the convergence sequence above are
+  bit-for-bit unchanged.
+- **Pixel semantics documented, by measurement.**  A single canonical **PIXEL
+  CELL CONTRACT** block in `elements/rcwa/stack.py`, pointed at from every
+  `eps_cell`-accepting entry point (`add_layer`, `add_graded_layer`,
+  `rcwa_efficiency_2d`, `rcwa_jones_2d`, `prepare_rcwa_2d`,
+  `_eps_convolution_2d`).  `eps_cell[j, i]` is a **node point sample** at
+  `(j Px/Sx, i Py/Sy)` — *not* a cell average: measured against a band-limited
+  analytic profile, a node sampling reproduces the exact convolution matrix to
+  **1.1e−16** while a midpoint sampling is off by **5.9e−02**, the two DFTs
+  differing by exactly `exp(+iπk/S)` (to 8e−16).  Boundary pixels are
+  hard-assigned, half-open, with `O(1/Sx)` geometric quantisation that no
+  `n_orders` convergence and no energy closure can see (measured up to
+  6.1e−02 of a period at `Sx = 16`), and two escapes: raise `Sx`, or use an
+  exact-geometry path (`shapes=`, the 1-D `segments` entries, a `PMMStack`
+  taper).  The generators write the pixel-**centre** lattice, half a pixel off
+  what the factorization reads; measured, that is an exact rigid `−P/(2 Sx)`
+  translation for a band-limited cell (efficiencies invariant to **8.4e−15**
+  under any shift) and, for a hard raster, a second `O(1/Sx)` aliasing
+  difference that shrinks with the first (7.36e−03 → 5.66e−04 for
+  `n_x = 128 → 2048`).  **PMM is exempt** (checked by grep + measurement): its
+  tapered helpers emit exact segments / spectral-element walls and resolve a
+  strip at its midpoint, so the coincidence class cannot arise — left
+  untouched.
+
+### Added — opt-in area-weighted rasterization (audit W8)
+
+- `raster='hard' | 'area'` on `RCWAStack.add_tapered_grating` /
+  `add_tapered_ridges` / `add_tapered_pillars`.  **Default `'hard'`, and the
+  default call is bit-identical to the previous behaviour** (pinned).
+  `'area'` gives each boundary pixel the area-weighted `eps` average, making
+  the realised feature width exact at any `n_x` (`|Σcover/n_x − width| ≤
+  3.7e−15` over 5000 random cases, against `O(1/n_x)` for `'hard'`); the
+  rectangle is separable, so the 2-D pillar weight is the exact product of the
+  two per-axis coverages.  The overlap guards read the **hard** masks in both
+  modes, so whether two features collide is a property of the geometry, not of
+  the raster mode — and features that *touch* exactly are legal and share the
+  boundary pixel by area.
+- **The physics was measured, per polarization and per formulation, and the
+  docstring recommendation follows the measurement** (full table in
+  `add_tapered_grating`).  Against the exact analytic 1-D oracle (vertical
+  `duty = 0.37`, θ = 0.25 rad, M = 9), with the default
+  `formulation='laurent'`, `'area'` is **1–3 orders of magnitude** more
+  accurate at the same `n_x` for **both** polarizations (TE 5.49e−03 →
+  2.86e−04 at `n_x=64`, 9.29e−04 → 3.84e−06 at 1024; TM 2.33e−03 → 5.67e−05 →
+  1.03e−06).  With `formulation='li'`/`'fff'` the **wall-normal (TM)**
+  polarization should keep `'hard'`: Li's inverse rule assumes a sharp
+  interface and the arithmetic (area) average is the wrong effective medium
+  for the normal component — it wants the harmonic one (Farjadpour 2006
+  subpixel smoothing).  Measured, `'li'` TM gains only ~2.5× and plateaus
+  (2.2e−05 at `n_x=8192` against 1.6e−08 for `'laurent'` TM), and on a sheared
+  taper it is outright **worse** than `'hard'` — by 10.6× at `n_x=64`, 9.2× at
+  256 — while TE on the same sweep improves by up to 120×.  (TE is
+  bit-identical between the two formulations for a 1-D cell — `E_y` is
+  tangential to every wall, measured 0.0 — so only the TM arm needed
+  deciding.)  Hence: opt-in, default off, with the regression recorded rather
+  than hidden.
+- `plot_geometry`'s shapes branch is now wrap-aware as well as half-open: a
+  rectangle crossing the cell edge used to vanish from the picture entirely
+  even though the solver's analytic form factor included it.
+
+22 pins in `tests/unit/test_niche_audit_w8_raster.py`, **16 of them verified
+failing on a clean `e37d7b7` worktree**; the 6 that pass in both trees are
+documented non-discriminators (the contract locks and the control arm that
+explains why the defect read as a convergence outlier).
+
 ## [5.30.0] — 2026-07-27
 
 **The adversarial-audit campaign.**  One whole-codebase adversarial audit
