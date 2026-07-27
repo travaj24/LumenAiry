@@ -4,6 +4,54 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — auto-dispatcher `output_grid`/`output_dx` handling and the ASM-family twin (audit W9, `propagators/dispatch.py`)
+
+Six measured defects in `lumenairy/propagators/dispatch.py`:
+
+- **`method='auto'` with an output-grid request no longer selects `sas` in the
+  `Q > 1` band (W9-1).**  SAS has no output-grid path, so the request raised
+  `ValueError: propagate(method='sas', ...)` — naming a kernel the caller
+  never wrote, decided purely by `z` (measured: `output_dx=3e-6` succeeded at
+  `z=1e-4` and `z=5`, raised at `z=1e-3`, N=64/dx=2 um/633 nm).  The band now
+  selects `asm`, which auto-promotes to the exact
+  `angular_spectrum_propagate_mft` — the remedy the SAS error message itself
+  recommended.  Explicit `method='sas'` still raises, unchanged.
+- **`which_propagator` / `asm_propagate` no longer route `z < 0` into the
+  forward-only `sas` / `fraunhofer` kernels (W9-2)** (measured: `z=-1.21e-3`
+  -> `scalable_angular_spectrum_propagate: z must be > 0`).  This is the 4.12
+  B1-6 guard its twin `_auto_select_method` has carried since 4.12.
+- **A carrier tilt passed alongside `output_dx` was silently discarded
+  (W9-3)** (the `asm_mft` branch outranks the tilt branch and the MFT kernel
+  has no tilt parameter): measured bit-identical output, `max|difference| =
+  0.0`, for `tilt_x=0.05` vs `0.0`.  The collision now emits a `UserWarning`,
+  matching the v5.30 treatment of the legacy `'propagate_tilted'` element.
+- **`maslov` / `asymptotic` / `mhs` with `output_grid` / `output_dx` now raise
+  a dispatcher-level `ValueError` (W9-4)** naming the members that honour the
+  request (`gbd` / `hf` / `hfpi`).  Pre-fix the request was dropped in
+  silence — and with the `output_dx` shortcut the returned
+  `PropagationResult.dx` reported the requested pitch while the field was
+  still at the input pitch.  `maslov` is what `method='auto'` picks for a
+  prescription without aspherics.
+- **`PropagationResult.dx` now honours `output_grid=(N_out, dx_out)`, not only
+  the `output_dx` shortcut (W9-5).**  Pre-fix an `output_grid` call returned a
+  field genuinely resampled to `dx_out` (bit-identical to additionally passing
+  `output_dx`) labelled with the INPUT pitch — for asm / fresnel / fraunhofer
+  via the MFT promotion and for gbd / hf / hfpi.
+- **The wrapper no longer publishes `PropagationResult(field=None)` (W9-6).**
+  Measured: `propagate(method='mhs', ..., return_intermediate=True)` returned
+  a null field with no warning, because `_coerce_field` cannot read MHS's
+  native `[(HuygensSurface, ndarray), ...]` history.  It now raises and names
+  `return_result=False`, which returns that history intact.  The P5 flip's
+  guarantee is that `.field` is defined whichever kernel ran.
+
+Routing with no output-grid request, and all forward `z > 0` ASM-family
+routing, are bit-for-bit unchanged.  Also verified in the same audit: the P5
+return contract, method validation on BOTH system twins, and the odd-N
+round-trip are clean; the traced chain-default flip (v5.29→v5.30 commitment)
+SHIPPED in `455be4a`/`a9dc454`.  Pins:
+`tests/unit/test_niche_audit_w9_dispatch.py` (35 cases; 25 fail pre-fix, 10
+regression fences pass pre-fix).
+
 ### Fixed — the analytic shape path's layering contract (audit W8, `elements/rcwa/twod.py`, `_core.py`)
 
 The other item W7 left open: `rcwa_efficiency_2d_shapes`' analytic form-factor

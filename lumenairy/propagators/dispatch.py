@@ -186,7 +186,12 @@ def propagate(
       negative, or when ``N_F >= 0.1`` and ``Q <= 1``.
     * **sas** -- native return ``(E, dx_out, dy_out)``; output pitch
       ``lambda*z / (pad*N*dx)``.  Chosen for free space when
-      ``N_F >= 0.1`` and ``Q > 1``.
+      ``N_F >= 0.1`` and ``Q > 1`` **and no output grid was requested**.
+      v5.31 (audit W9-1): with ``output_grid`` / ``output_dx`` given, that
+      band selects ``asm`` instead (SAS has no output-grid path, so
+      selecting it raised a ``ValueError`` naming a kernel the caller
+      never wrote); ``asm`` auto-promotes to the exact
+      :func:`angular_spectrum_propagate_mft`.
     * **fraunhofer** -- native return ``(E, dx_out, dy_out)``; output
       pitch ``lambda*z / (N*dx)``.  Chosen for free space when
       ``N_F < 0.1``.
@@ -253,7 +258,22 @@ def propagate(
           ``output_dx`` is given.
         - SAS / RS do not support arbitrary output-grid sampling and
           raise ``ValueError`` (pointing at the ASM-MFT entry point)
-          if ``output_grid`` / ``output_dx`` is passed.
+          if ``output_grid`` / ``output_dx`` is passed.  Since v5.31
+          ``method='auto'`` no longer *selects* SAS when an output grid is
+          requested (audit W9-1), so that raise is reachable only by
+          naming ``method='sas'`` yourself.
+        - Maslov / asymptotic / MHS do not thread the request to their
+          kernels and raise ``ValueError`` naming the members that do
+          (v5.31, audit W9-4).  Pre-v5.31 the request was silently
+          dropped -- and with the ``output_dx`` shortcut the returned
+          ``PropagationResult.dx`` reported the requested pitch while the
+          field was still at the input pitch.
+        - The pitch reported on the result honours **either** form: since
+          v5.31 ``output_grid=(N_out, dx_out)`` sets
+          ``PropagationResult.dx`` to ``dx_out`` (audit W9-5); pre-fix
+          only the ``output_dx`` shortcut did, so an ``output_grid`` call
+          came back labelled with the input pitch even though the field
+          had genuinely been resampled.
 
         ``output_grid`` may be a ``(N_out, dx_out)`` tuple or a
         ``{'N': ..., 'dx': ...}`` dict.  ``output_dx`` is a shortcut
@@ -341,9 +361,14 @@ def propagate(
 
     auto_selected = (method == 'auto')
     if auto_selected:
+        # v5.31 (audit W9-1): the selector has to know that the caller asked
+        # for a non-native output grid, otherwise it can pick a kernel that
+        # cannot deliver one and the caller gets a ValueError naming a method
+        # they never wrote.  Same principle as the 4.12 B1-6 z<0 guard.
         method = _auto_select_method(
             E_in, z=z, wavelength=wavelength, dx=dx,
-            prescription=prescription, accuracy=accuracy)
+            prescription=prescription, accuracy=accuracy,
+            output_requested=(output_grid is not None or output_dx is not None))
 
     # v5.30 (audit P5 / roadmap F1 option 4, EXECUTED): resolve the return
     # contract ONCE, here, and route on ``wrap`` alone below.  ``_NO_DEFAULT``
@@ -384,7 +409,22 @@ def propagate(
         return out
 
     from .result import PropagationResult
-    default_out_dx = output_dx if output_dx is not None else dx
+    # v5.31 (audit W9-5): the requested output pitch can arrive EITHER as the
+    # ``output_dx`` shortcut OR as the second element of the canonical
+    # ``output_grid = (N_out, dx_out)`` tuple / ``{'N': ..., 'dx': ...}`` dict.
+    # Pre-fix only the shortcut was read here, so an ``output_grid=(96, 80e-6)``
+    # call -- which every honouring kernel really does resample to 80 um (the
+    # field is bit-identical to additionally passing ``output_dx=80e-6``) --
+    # came back labelled with the INPUT pitch.  MEASURED on a 64^2 / dx=40 um
+    # probe: ``propagate(..., output_grid=(96, 80e-6))`` returned
+    # ``field.shape == (96, 96)`` with ``result.dx == 4e-05`` for asm (via the
+    # MFT promotion) and for gbd / hf / hfpi (which forward the request), i.e.
+    # the wrapper's own sampling metadata was wrong by 2x on the DEFAULT
+    # (post-P5-flip) contract, for every downstream coordinate / plot / store
+    # consumer.  Kernels that report their own ``dx_out`` still win below.
+    default_out_dx = _requested_output_dx(output_grid, output_dx)
+    if default_out_dx is None:
+        default_out_dx = dx
     # Best-effort: bare ndarray -> wrap directly; tuple / list / other
     # -> unpack the field and record the propagator-reported output
     # pitch when present.  4.12 fix (audit round-4 B1-7): kernels like
@@ -401,6 +441,30 @@ def propagate(
     if isinstance(out, PropagationResult):
         return out
     field_arr, dx_from_kernel, dy_from_kernel = _coerce_field(out)
+    # v5.31 (audit W9-6): the whole point of the P5 flip is that ``.field`` is
+    # defined "whichever kernel ran".  ``_coerce_field`` has a ``(None, None,
+    # None)`` sentinel for returns it cannot read, and pre-fix that sentinel was
+    # wrapped as-is -- so the flipped contract handed back a
+    # ``PropagationResult(field=None)`` in complete silence.  MEASURED:
+    # ``propagate(E, method='mhs', subdomains=[...], return_intermediate=True)``
+    # -> ``PropagationResult`` with ``field is None``, no warning.  (MHS's
+    # native shape there is a ``list`` of ``(HuygensSurface, ndarray)`` pairs,
+    # and ``return_intermediate=True`` is MhsPipeline.run's OWN default -- the
+    # dispatcher merely defaults it to False.)  A wrapper that cannot honour its
+    # own contract must say so rather than emit a null field.
+    if field_arr is None:
+        raise ValueError(
+            f"propagate(method={method!r}): the kernel returned a "
+            f"{type(out).__name__} that this dispatcher cannot express as a "
+            f"PropagationResult -- there is no single output field to put in "
+            f"``.field`` (a per-plane/per-surface sequence, most likely).  "
+            f"Since v5.30 the DEFAULT return is the shape-stable wrapper "
+            f"(audit P5), and pre-v5.31 this path silently produced "
+            f"``PropagationResult(field=None)``.  Pass return_result=False to "
+            f"receive the kernel's native return unchanged (for method='mhs' "
+            f"that is the ``[(surface, field), ...]`` history), or drop the "
+            f"argument that makes the kernel return a sequence (e.g. "
+            f"return_intermediate=True) to get a single output plane.")
     out_dx = dx_from_kernel if dx_from_kernel is not None else default_out_dx
     # v4.13.0 (audit L3): thread the kernel-reported ``dy_out`` onto
     # the wrapped result.  For square-grid kernels that only return
@@ -511,8 +575,62 @@ def _coerce_field(x):
     return None, None, None
 
 
+def _requested_output_dx(output_grid, output_dx):
+    """The output pitch the CALLER asked for, or ``None`` if they asked for
+    none (v5.31, audit W9-5).
+
+    ``output_dx`` is the shortcut; ``output_grid`` is the canonical
+    ``(N_out, dx_out)`` tuple / ``{'N': ..., 'dx': ...}`` dict whose second
+    element carries the same quantity.  ``output_dx`` wins when both are given
+    (the same precedence :func:`_dispatch_bare_grid_with_output` and
+    :func:`_resolve_dispatcher_output_grid` already use, so the pitch reported
+    on the result cannot disagree with the pitch handed to the kernel).
+
+    Deliberately tolerant: a malformed ``output_grid`` returns ``None`` here
+    rather than raising, because the authoritative validation lives in the two
+    resolvers above -- this helper only labels the result.
+    """
+    if output_dx is not None:
+        return float(output_dx)
+    if output_grid is None:
+        return None
+    cand = None
+    if isinstance(output_grid, dict):
+        cand = output_grid.get('dx')
+    elif isinstance(output_grid, (tuple, list)) and len(output_grid) >= 2:
+        cand = output_grid[1]
+    if cand is None:
+        return None
+    try:
+        return float(cand)
+    except (TypeError, ValueError):
+        return None
+
+
+# v5.31 (audit W9-4): the methods whose dispatcher branch does NOT thread
+# ``output_grid`` / ``output_dx`` to its kernel.  ``maslov`` is the default
+# ``method='auto'`` choice for any prescription without aspherics, so this was
+# the most-travelled silent-drop path in the dispatcher.  MEASURED pre-fix on a
+# 64^2 / dx=40 um singlet probe:
+#
+#   propagate(E, prescription=rx, output_dx=80e-6)
+#     -> field BIT-IDENTICAL to the no-request call (still 40 um sampling)
+#        but PropagationResult.dx reported 8e-05  <-- wrong metadata
+#   propagate(E, prescription=rx, output_grid=(96, 80e-6))
+#     -> shape (64, 64), dx 4e-05: the request vanished entirely, silently
+#
+# ``gbd`` / ``hf`` / ``hfpi`` all honour both forms (measured: shape 64->96 and
+# dx 40->80 um), so the diagnostic names them.  Raising here is the 4.12 B1-8
+# treatment already given to ``sas`` / ``rs``; the alternative (silently
+# switching ``auto`` to ``gbd``) would trade a wrong answer for an unannounced
+# 100x slowdown and a different physics model.
+_NO_OUTPUT_GRID_METHODS = ('maslov', 'asymptotic', 'mhs')
+
+_OUTPUT_GRID_CAPABLE_METHODS = ('gbd', 'hf', 'hfpi')
+
+
 def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
-                          accuracy='balanced'):
+                          accuracy='balanced', output_requested=False):
     """Pick a method from the geometry + prescription structure.
 
     Selection logic
@@ -540,8 +658,29 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
       - Far-field (Fresnel number ``N_F < 0.1``)                ->  ``fraunhofer``.
       - Grid Fresnel ratio ``Q = z*lambda/(N*dx^2) > 1``         ->  ``sas``
         (scalable ASM rescales the output pitch so the spread
-        beam fits without aliasing the ASM transfer function).
+        beam fits without aliasing the ASM transfer function)
+        -- **unless** ``output_requested``, see below.
       - Otherwise                                               ->  ``asm``.
+
+    Parameters
+    ----------
+    output_requested : bool, default False
+        True when the caller passed ``output_grid`` / ``output_dx`` to
+        :func:`propagate`.  v5.31 (audit W9-1): ``sas`` has no output-grid
+        path -- :func:`_dispatch_bare_grid_with_output` raises for it -- so
+        selecting it for a caller who asked for one produced a ``ValueError``
+        naming a kernel the caller never wrote, decided purely by ``z``.
+        MEASURED pre-fix at N=64, dx=2 um, lambda=633 nm: ``output_dx=3e-6``
+        succeeded at ``z=1e-4`` (asm) and ``z=5`` (fraunhofer) and raised
+        ``"propagate(method='sas', ...): SAS does not support arbitrary
+        output-grid sampling"`` at ``z=1e-3``.  With ``output_requested`` the
+        ``Q > 1`` band selects ``asm`` instead, which auto-promotes to the
+        EXACT :func:`angular_spectrum_propagate_mft` -- precisely the remedy
+        that SAS error message recommends, applied automatically.  This is the
+        4.12 B1-6 rule ("never route the user into a hard-raise from a kernel
+        they did not pick by name") applied to the B1-8 feature.  ``fraunhofer``
+        is left alone: it has an MFT variant.  Routing with no output-grid
+        request is bit-for-bit unchanged.
     """
     if prescription is not None:
         events = prescription.get('events_json') or []
@@ -611,7 +750,13 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
     # the output pitch so the beam fits without aliasing.
     Q = wavelength * abs_z / (N_max * dx * dx)
     if Q > 1.0:
-        return 'sas'
+        # v5.31 (audit W9-1): SAS's output pitch is fixed by construction
+        # (``lambda*z/(pad*N*dx)``) and it has no MFT analogue, so it cannot
+        # serve a caller who asked for a specific output grid.  ASM can, exactly
+        # (Bluestein), for any sign of z -- take it.  See ``output_requested``.
+        if not output_requested:
+            return 'sas'
+        return 'asm'
     return 'asm'
 
 
@@ -792,6 +937,30 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
     # the MFT variant or raise a clear ValueError.  Free-space GBD /
     # HFPI / HF *do* take output_grid / output_dx and forward them
     # through their own dispatch below.
+    # v5.31 (audit W9-4): ``maslov`` / ``asymptotic`` / ``mhs`` never thread
+    # ``output_grid`` / ``output_dx`` to their kernels, and pre-fix the request
+    # was dropped in silence -- with the ``output_dx`` shortcut the wrapper even
+    # LABELLED the un-resampled field with the requested pitch.  Say so, out
+    # loud, and name the members that do honour it (measured: gbd / hf / hfpi
+    # all resample).  Same treatment ``sas`` / ``rs`` got in 4.12 (B1-8).
+    if method in _NO_OUTPUT_GRID_METHODS and (output_grid is not None
+                                              or output_dx is not None):
+        raise ValueError(
+            f"propagate(method={method!r}, output_grid/output_dx=...): this "
+            f"method does not support an output grid that differs from the "
+            f"input sampling -- its kernel is not given the request, so "
+            f"pre-v5.31 it was silently dropped (and with the ``output_dx`` "
+            f"shortcut the returned PropagationResult.dx reported the pitch "
+            f"you asked for while the field was still at the input pitch).  "
+            f"Use one of {list(_OUTPUT_GRID_CAPABLE_METHODS)} -- they forward "
+            f"``output_grid`` / ``output_dx`` to their prescription "
+            f"propagators -- or drop the argument and resample the result "
+            f"yourself (lumenairy.resample_field).  NOTE: {method!r} is what "
+            f"method='auto' selects for a prescription without aspheric "
+            f"coefficients, so an ``auto`` call with an output-grid request "
+            f"lands here; name method='gbd' (or 'hf' / 'hfpi') to keep the "
+            f"request.")
+
     _BARE_GRID_METHODS = ('asm', 'sas', 'fresnel', 'fraunhofer', 'rs')
     if method in _BARE_GRID_METHODS and (output_grid is not None
                                           or output_dx is not None):
@@ -1010,12 +1179,60 @@ def _select_asm_variant(
     Fresnel number) but is **not** consulted by the branch logic here --
     the selector deliberately keys on the grid extent so the choice is
     reproducible from the field shape alone.
+
+    .. versionchanged:: 5.31
+       Two audit-W9 fixes, both bringing this selector in line with rules its
+       twin :func:`_auto_select_method` has carried since 4.12:
+
+       * **Back-propagation (W9-2).**  ``z < 0`` can no longer select ``sas`` /
+         ``fraunhofer``.  Those kernels are forward-only and raised on the sign
+         of ``z``, so :func:`asm_propagate` -- which runs whatever this returns
+         -- crashed for any back-propagation past ``2 * L^2/(N*lambda)``.
+         MEASURED pre-fix at N=64, dx=2 um, lambda=633 nm (threshold
+         4.0442e-4 m): ``z=-1.2133e-3`` -> ``sas`` ->
+         ``"scalable_angular_spectrum_propagate: z must be > 0"``;
+         ``z=-1.2133e-2`` -> ``fraunhofer`` -> the analogous raise.  Every
+         ASM-family member (``asm`` / ``asm_tilted`` / ``asm_mft``) accepts
+         either sign, so the negative-``z`` case now stays inside that set --
+         the 4.12 B1-6 guard, ported.
+       * **Dropped tilt (W9-3).**  The ``asm_mft`` branch sits ABOVE the tilt
+         branch and :func:`angular_spectrum_propagate_mft` has no ``tilt_x`` /
+         ``tilt_y`` parameter, so a tilt passed alongside ``output_dx``
+         vanished in complete silence: MEASURED bit-identical output
+         (``max|difference| = 0.0``) for ``tilt_x=0.05`` versus ``tilt_x=0.0``
+         at N=64, dx=2 um, z=5e-4, output_dx=3e-6.  The precedence is kept
+         (there is no tilted-MFT kernel to route to) but the collision now
+         emits a :class:`UserWarning` -- the same call v5.30 made for the
+         sibling case, the legacy ``'propagate_tilted'`` element ignoring
+         ``elem['method']``.
     """
     has_tilt = (abs(float(tilt_x)) > 1e-6) or (abs(float(tilt_y)) > 1e-6)
     if output_dx is not None and abs(float(output_dx) - float(dx)) > 0:
+        if has_tilt:
+            warnings.warn(
+                f"which_propagator/asm_propagate: an output pitch "
+                f"(output_dx={float(output_dx):.6e} m, input dx="
+                f"{float(dx):.6e} m) was requested TOGETHER with a carrier "
+                f"tilt (tilt_x={float(tilt_x):.6g}, tilt_y="
+                f"{float(tilt_y):.6g} rad).  The output-grid branch wins and "
+                f"routes to 'asm_mft', whose kernel "
+                f"(angular_spectrum_propagate_mft) has no tilt parameter, so "
+                f"THE TILT IS DROPPED -- the result is bit-identical to the "
+                f"untilted call (measured).  There is no tilted-MFT kernel: "
+                f"either drop output_dx and let the tilt route to "
+                f"'asm_tilted', or apply the carrier yourself (multiply by "
+                f"exp(i*k*(tilt_x*x + tilt_y*y)) before the MFT call) and "
+                f"pass tilt_x=tilt_y=0 to silence this.",
+                UserWarning, stacklevel=3)
         return 'asm_mft'
     if has_tilt:
         return 'asm_tilted'
+    # v5.31 (audit W9-2): the two far-field branches below call forward-only
+    # kernels.  Restrict the regime test to z >= 0 so a back-propagation never
+    # lands on one; plain ASM handles either sign.  (``asm_mft`` / ``asm_tilted``
+    # above are sign-agnostic and keep their precedence.)
+    if float(z) < 0:
+        return 'asm'
     # Compare propagation distance to L^2 / (N * lambda) -- the
     # SAS-regime threshold.  We need an aperture radius or the grid
     # extent L to make this judgement; if neither is supplied, fall
