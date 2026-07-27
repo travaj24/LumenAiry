@@ -297,29 +297,98 @@ class PMMStack:
         self._layers.append((thickness, segs, float(slant_angle)))
         return self
 
+    @staticmethod
+    def _ridge_slice_segments(duty, centre, eps_ridge, eps_groove,
+                              tol=1e-12):
+        """One vertical slice of a SINGLE-ridge grating as the consecutive
+        ``(width_fraction, eps)`` segment list, laid out from ``u = 0``.
+
+        ``duty`` is the ridge fraction (assumed strictly inside ``(0, 1)`` --
+        the callers short-circuit the vanished-ridge / vanished-groove ends)
+        and ``centre`` its centre in period fractions (it may sit anywhere on
+        the real line: the ridge interval is reduced mod 1).  The ridge is the
+        HALF-OPEN period-1 interval ``[centre - duty/2, centre + duty/2)``,
+        which is EXACTLY the convention
+        :meth:`RCWAStack.add_tapered_grating` rasterizes, so the two packages
+        build the same staircase geometry -- laterally EXACT here, lattice-
+        quantised there.
+
+        Two layouts, both WRAP-aware:
+
+        * ``[groove | ridge | groove]`` -- the ridge lies inside the cell;
+        * ``[ridge_head | groove | ridge_tail]`` -- the ridge crosses ``u = 1``.
+
+        The widths are built so the list sums to 1 to within one ULP even
+        though only ``duty`` and the total groove ``1 - duty`` are computed
+        directly (:meth:`add_layer` enforces ``sum == 1`` within ``1e-6`` and
+        every width ``> 0``): the centred case reproduces the historical
+        ``[edge, duty, edge]`` triple BIT-for-BIT because
+        ``(1 - duty)/2 == 0.5 - duty/2`` exactly in binary floating point
+        (halving is exact).  Slivers narrower than ``tol`` period fractions
+        (``1e-18`` m on a micron pitch -- far below the ``min_feature``
+        union-grid snap) are DROPPED rather than handed to the nodal grid as a
+        degenerate element."""
+        groove = 1.0 - duty                     # total groove fraction
+        lo = float(centre - 0.5 * duty) % 1.0   # ridge lower wall, in [0, 1)
+        if lo + duty > 1.0 + tol:               # ... the ridge wraps u = 1
+            tail = 1.0 - lo                     # ridge part at u in [lo, 1)
+            raw = ((duty - tail, eps_ridge), (groove, eps_groove),
+                   (tail, eps_ridge))
+        else:
+            raw = ((lo, eps_groove), (duty, eps_ridge),
+                   (groove - lo, eps_groove))
+        return [(w, e) for w, e in raw if w > tol]
+
     def add_tapered_grating(self, thickness, *, eps_ridge, eps_groove,
                             duty_bottom, duty_top=None, n_slices=8,
-                            rule="midpoint"):
+                            rule="midpoint", shear=0.0):
         """Append a 1-D grating with SLANTED / TRAPEZOIDAL sidewalls as an
         auto-sliced z-staircase of thin VERTICAL PMM layers -- the spectral-
         element counterpart of :meth:`RCWAStack.add_tapered_grating`.
 
-        The centred ridge's duty cycle varies linearly with depth from
+        The ridge's duty cycle varies linearly with depth from
         ``duty_top`` (top, ``zeta = 0``) to ``duty_bottom`` (bottom, ``zeta = 1``);
         each slice is a vertical binary grating whose walls are resolved EXACTLY
         by the nodal grid (no Fourier/Gibbs floor in x -- the PMM advantage), so
         the only approximation is the z-staircase of the taper (a true trapezoid
         is the ``n_slices -> infinity`` limit).  ``duty_top == duty_bottom`` gives
-        the usual vertical binary grating.
+        the usual vertical binary grating.  ``shear`` additionally walks the
+        ridge CENTRE across the cell with depth (a parallelogram / sheared
+        profile), wrap-aware.
 
         COST NOTE: every slice's two walls enter the stack's SHARED union grid, so
         the global node count -- and thus each layer's eig -- grows with
         ``n_slices``.  This is laterally exact and beats an RCWA z-staircase per
         slice (no Fourier floor), but is practical for MODEST ``n_slices``; for a
         scalable no-floor taper prefer a single covariant taper-metric layer (a
-        roadmap item).  The ``z``-staircase converges as ``O(1/n_slices^2)`` with
-        the default centre (``'midpoint'``) rule.  A wavelength sweep should use
+        roadmap item).  A wavelength sweep should use
         :meth:`solve_vs_wavelength`, which assembles the (large) shared grid ONCE.
+
+        MEASURED BUDGET (audit W9).  Cost is ``~O(n_slices^3.4)`` end to end
+        (``P = 1 um``, ``wl = 633 nm``, ``d = 300 nm``, ``eps_ridge = 4``,
+        ``duty 0.30 -> 0.62``, ``degree = 12``: ``n_slices`` 4/8/16 ->
+        0.30/2.97/34.1 s), because the union grid grows with the slice count and
+        every layer's eig grows with it.  The z-staircase itself converges
+        ``O(1/n_slices^2)`` with either rule -- CONFIRMED on the cross-package
+        oracle (the RCWA twin at ``raster='area'``, whose realised duty is exact
+        so the ONLY z error is the staircase; reference ``n_slices = 768``): the
+        max error over ``(R, T)`` of orders ``-1, 0, +1`` and both polarizations
+        falls 3.82e-03 / 1.27e-03 / 3.34e-04 / 8.47e-05 / 2.18e-05 / 5.70e-06 at
+        ``n_slices`` 8 / 16 / 32 / 64 / 128 / 256 -- a factor 3.9 per doubling,
+        and every one of the 12 components shares it (3.5-4.6 at 32 -> 64).
+
+        DO NOT bother RICHARDSON-extrapolating in ``n_slices``.  It was measured
+        across 8 designs (duty ranges 0.10-0.85, lossy, oblique 0.17/0.45,
+        ``eps_ridge`` 4/9, deep + sheared, with and without shear) against the
+        EQUAL-COST comparator ``f(2n)`` -- ``cost(n) + cost(2n) ~ 1.1 cost(2n)``
+        here -- and the ``(n, 2n)``, ``p = 2`` two-point Richardson gains only
+        3.0x / 7.4x / 14.5x on the clean designs and 1.0x / 0.95x / 1.17x
+        (i.e. NOTHING) on the steep-duty, narrow-duty, high-contrast and deep
+        designs at ``n = 8/16/32``.  Multi-exponent (``1/n + 1/n^2``) and
+        3-point FITTED-exponent variants are outright WORSE (fitted-p at
+        ``n = 4, 5, 6`` returned 9.2e-03 against ``f(6) = 4.4e-03``: the
+        per-component exponent fit amplifies solver noise).  The staircase error
+        is not a single clean power law per component below ``n ~ 16``.
 
         Parameters
         ----------
@@ -335,8 +404,50 @@ class PMMStack:
         n_slices : int, optional
             Staircase slice count (the convergence knob; default 8).
         rule : {'midpoint', 'trapezoid'}, optional
-            Sample each slice's duty at its centre (``'midpoint'``, default,
-            ``O(1/n^2)``) or average its two edges (``'trapezoid'``).
+            Sample each slice's duty at its centre (``'midpoint'``, default) or
+            average its two edges (``'trapezoid'``).  For the LINEAR duty ramp
+            this builder lays down these are the SAME RULE -- ``0.5*(k/n +
+            (k+1)/n) == (k + 0.5)/n`` exactly -- so ``'trapezoid'`` is a no-op
+            up to last-bit rounding (audit W9; MEASURED bit-identical for 5 of
+            the 7 slices at ``n_slices = 7`` and 1 ULP apart for the other 2).
+            It is kept
+            for signature parity with :meth:`add_graded_layer`, where the
+            profile is arbitrary and the two rules genuinely differ.
+        shear : float, optional
+            SHEARED (parallelogram) sidewalls -- the EXACT convention of
+            :meth:`RCWAStack.add_tapered_grating` (audit GAP1, v5.14.1),
+            mirrored here so the two packages build the IDENTICAL staircase:
+            the ridge CENTRE is ``0.5 + shear * (zeta - 0.5)`` in period
+            fractions, i.e. it shifts by ``shear`` PERIODS from top to bottom
+            about the mid-depth plane (so
+            ``shear = depth * tan(wall_angle) / period`` renders a wall tilt).
+            ``zeta`` is sampled per slice by the SAME ``rule`` as the duty.
+            Wrap-aware (the ridge may cross the cell edge, giving the
+            ``[ridge_head, groove, ridge_tail]`` layout).  Default 0 (centred,
+            BIT-identical to the pre-``shear`` builder).
+
+        Notes
+        -----
+        CROSS-PACKAGE STAIRCASE PARITY (audit W9).  At the SAME
+        ``(n_slices, duty_bottom, duty_top, shear)`` the RCWA sibling's
+        rasterized staircase converges to this laterally-exact one as its
+        ``n_x`` grows (``O(1/n_x)``, the ``raster='hard'`` quantisation).
+        MEASURED on ``P = 1 um``, ``wl = 633 nm``, ``d = 300 nm``,
+        ``eps_ridge = 4``, ``n_sub = 1.5``, ``theta = 0.17`` rad,
+        ``duty 0.30 -> 0.62``, ``shear = 0.35``, ``n_slices = 6``,
+        ``degree = 12`` / ``nox = 9``; error is ``max|x_RCWA - x_PMM|`` over
+        the propagating ``(R, T)`` of both polarizations::
+
+            n_x |  err     | ratio
+            512 | 1.53e-03 |
+           2048 | 2.60e-04 | 5.9x
+           8192 | 8.98e-05 | 2.9x
+
+        The two builders' realised staircase GEOMETRY agrees to the raster
+        lattice exactly: rasterizing these segments on the RCWA pixel-centre
+        lattice reproduces its ``eps_cell`` for every slice at
+        ``n_x = 64..4096``, ``shear = -1.7 .. 1.7`` (measured 0 mismatched
+        pixels), including the wrapping cases.
         """
         n = int(n_slices)
         if n < 1:
@@ -353,30 +464,149 @@ class PMMStack:
                 raise ValueError(
                     f"add_tapered_grating: duty cycles must be in [0, 1], got "
                     f"duty_top={dt}, duty_bottom={db}.")
+        sh = float(shear)
+        if not np.isfinite(sh):
+            raise ValueError(
+                f"add_tapered_grating: shear must be finite, got {shear!r}.")
         self._taper_recipes.append((len(self._layers), n,
                                     "add_tapered_grating",
                                     dict(thickness=thickness,
                                          eps_ridge=eps_ridge,
                                          eps_groove=eps_groove,
                                          duty_bottom=duty_bottom,
-                                         duty_top=duty_top, rule=rule)))
+                                         duty_top=duty_top, rule=rule,
+                                         shear=shear)))
         dz = float(thickness) / n
         for k in range(n):
             if rule == "midpoint":
-                duty = dt + (db - dt) * ((k + 0.5) / n)
+                zeta = (k + 0.5) / n
             else:
-                duty = dt + (db - dt) * 0.5 * (k / n + (k + 1) / n)
+                zeta = 0.5 * (k / n + (k + 1) / n)
+            duty = dt + (db - dt) * zeta
             tol = 1e-9
             if duty <= tol:                       # ridge vanished -> all groove
                 self.add_layer(dz, eps=eps_groove)
             elif duty >= 1.0 - tol:               # groove vanished -> all ridge
                 self.add_layer(dz, eps=eps_ridge)
-            else:                                 # centred ridge between grooves
-                edge = 0.5 * (1.0 - duty)
-                self.add_layer(dz, segments=[(edge, eps_groove),
-                                             (duty, eps_ridge),
-                                             (edge, eps_groove)])
+            else:                                 # ridge between grooves; the
+                # RCWA centre convention (bit-identical [edge, duty, edge] at
+                # shear = 0 -- see _ridge_slice_segments)
+                self.add_layer(dz, segments=self._ridge_slice_segments(
+                    duty, 0.5 + sh * (zeta - 0.5), eps_ridge, eps_groove))
         return self
+
+    def add_sheared_grating(self, thickness, *, eps_ridge, eps_groove, duty,
+                            shear, centre=0.5):
+        """Append a PURE-SHEAR (parallelogram) binary grating as ONE EXACT
+        SLANTED layer -- NO z-staircase at all (audit W9).
+
+        ``add_tapered_grating(d, ..., duty_top=duty_bottom, shear=s)`` builds
+        exactly this geometry as an ``n_slices`` staircase; but a parallelogram
+        is the ONE taper the shipped covariant / convection machinery solves
+        EXACTLY, because ``u = x - z tan(phi)`` keeps the modal coefficients
+        z-independent (the symmetric trapezoid does not -- see the note on
+        :meth:`add_tapered_grating`).  Same ``shear`` units, same centre law:
+        the ridge centre is ``centre + shear * (zeta - 0.5)`` in period
+        fractions, so this and the staircase describe the SAME structure and
+        the two are interchangeable at the call site.
+
+        Parameters
+        ----------
+        thickness : float
+            Grating thickness (metres).
+        eps_ridge, eps_groove : complex or (3, 3)
+            Ridge / groove permittivity (PUBLIC ``Im(eps) > 0``).
+        duty : float
+            Ridge fraction, strictly inside ``(0, 1)``.
+        shear : float
+            Lateral walk of the ridge centre from top to bottom, in PERIODS
+            (the same knob as :meth:`add_tapered_grating`'s).  Realised as
+            ``slant_angle = arctan(shear * period / thickness)``; ``0`` gives a
+            plain VERTICAL layer.  Wrap-aware.
+        centre : float, optional
+            Ridge centre at MID-DEPTH (``zeta = 0.5``) in period fractions;
+            default ``0.5``.  Lateral position is a symmetry of an otherwise
+            uniform stack, so it is (numerically) unobservable in the
+            efficiencies and the zeroth-order Jones -- MEASURED 8.8e-06 between
+            ``centre - shear/2`` and ``centre + shear/2`` at degree 16, i.e.
+            300x below this path's own per-order floor below.
+
+        Notes
+        -----
+        MEASURED BUDGET (audit W9), against the ``n_slices`` staircase of the
+        IDENTICAL geometry (``P = 1 um``, ``wl = 633 nm``, ``d = 300 nm``,
+        ``eps_ridge = 4``, ``duty = 0.45``, ``shear = 0.35`` -- a 49.4 deg wall
+        tilt, ``theta = 0.17`` rad, ``n_sub = 1.5``, ``degree = 10``; error is
+        ``max|x - x_staircase(n_slices=20)|`` over ``(R, T)`` of orders
+        ``|m| <= 2``, both polarizations)::
+
+            route                       | err       | time    | R+T - 1
+            add_tapered_grating ns=4    | 2.59e-02  |  0.25 s | 2e-11
+            add_tapered_grating ns=8    | 6.93e-03  |  2.27 s | 3e-11
+            add_tapered_grating ns=12   | 2.63e-03  |  7.53 s | 4e-11
+            add_tapered_grating ns=16   | 9.01e-04  | 23.04 s | 5e-11
+            add_sheared_grating deg=8   | 3.16e-03  |  0.03 s | 6.9e-05
+            add_sheared_grating deg=12  | 2.93e-03  |  0.05 s | 1.9e-05
+            add_sheared_grating deg=16  | 2.91e-03  |  0.13 s | 3.3e-06
+            add_sheared_grating deg=24  | 2.93e-03  |  0.24 s | 9.9e-07
+
+        READ THIS TABLE BOTH WAYS.  At a matched budget the exact layer WINS
+        BIG -- 2.93e-03 in 0.05 s against the staircase's 2.59e-02 in 0.25 s
+        (8.9x more accurate at a fifth of the cost), and it reaches the
+        staircase's ``n_slices = 12`` answer ~150x faster.  But it PLATEAUS: at
+        ``degree >= 12`` refining does NOT help, because the residual is the
+        slant solver's OWN wall-normal per-order floor (see the limitation note
+        on :func:`~lumenairy.elements.pmm.pmm_jones_1d_slanted`), and the
+        staircase overtakes it by ``n_slices = 16``.  That floor GROWS WITH THE
+        WALL TILT (``sec^2`` conditioning) -- MEASURED plateau, same probe::
+
+            wall tilt      | plateau  | matches the staircase at
+            45.0 deg, obl. | 1.76e-03 | n_slices ~ 11  (19.2 s -> 0.10 s)
+            49.4 deg, th=0 | 1.89e-03 | n_slices ~ 12  ( 7.4 s -> 0.05 s)
+            49.4 deg, obl. | 2.93e-03 | n_slices ~ 12  ( 7.5 s -> 0.05 s)
+            69.4 deg, obl. | 1.16e-02 | n_slices ~  8  ( 1.9 s -> 0.06 s)
+
+        (the 45 deg row is a different design -- ``duty = 0.60``,
+        ``d = 200 nm``, ``shear = 0.20``, ``theta = 0.30`` -- so the four rows
+        are four designs, not one lucky probe)
+
+        so use this method for design SWEEPS and for accuracy targets at or
+        above its plateau for your tilt (~2e-03 at 50 deg, ~1e-02 at 70 deg),
+        and switch to the staircase below that.  Energy closure is this path's
+        own too: MEASURED ``|R+T-1|`` 6.9e-05 (degree 8) falling to ~1e-06
+        (degree 20-24), against the staircase's ~5e-11.
+
+        RESTRICTIONS inherited from the slant path: a slanted layer promotes
+        the whole stack to the generalized forward/backward S-matrix, and
+        :meth:`solve_vs_wavelength`, :meth:`prepare`,
+        ``solve(retain_internal=True)`` (so :meth:`internal_field` /
+        :meth:`layer_absorption`), the JAX (differentiable) dispatch and
+        conical incidence (``phi != 0``) all reject slanted stacks -- they
+        raise ``NotImplementedError``, loudly (VERIFIED here for
+        ``solve_vs_wavelength``, ``prepare``, ``retain_internal`` and conical;
+        the JAX guard is the shared all-vertical one already pinned by
+        ``test_audit_w3_pmm_jax_guards``).
+        ``stabilize='slices'`` has nothing to re-slice here (no staircase
+        recipe) and warns instead.  Where you need any of those, build the same
+        geometry with ``add_tapered_grating(..., duty_top=duty_bottom,
+        shear=...)`` and pay the staircase.  Returns ``self``."""
+        d = float(duty)
+        if not (0.0 < d < 1.0):
+            raise ValueError(
+                f"add_sheared_grating: duty must be strictly inside (0, 1), "
+                f"got {duty}.  A vanished ridge or groove is a uniform layer "
+                f"-- use add_layer(thickness, eps=...).")
+        sh = float(shear)
+        if not np.isfinite(sh):
+            raise ValueError(
+                f"add_sheared_grating: shear must be finite, got {shear!r}.")
+        # The slant frame is anchored at the layer TOP (u = x - z tan(phi)), so
+        # the u-frame ridge centre is the zeta = 0 one; the lab centre is then
+        # ``centre + shear * (zeta - 0.5)`` -- add_tapered_grating's law.
+        segs = self._ridge_slice_segments(d, float(centre) - 0.5 * sh,
+                                          eps_ridge, eps_groove)
+        phi = float(np.arctan(sh * self.period / float(thickness)))
+        return self.add_layer(thickness, segments=segs, slant_angle=phi)
 
     @staticmethod
     def _ridges_to_segments(period, ridges, eps_groove):
@@ -421,7 +651,7 @@ class PMMStack:
         return segs
 
     def add_tapered_ridges(self, thickness, *, ridges, eps_groove,
-                           n_slices=8, rule="midpoint"):
+                           n_slices=8, rule="midpoint", shear=0.0):
         """Append a MULTI-RIDGE tapered grating as an auto-sliced z-staircase
         (device-geometry roadmap item 1, 2026-06-10) -- the N-feature
         generalization of :meth:`add_tapered_grating`.
@@ -439,6 +669,18 @@ class PMMStack:
         Each ``eps`` may be scalar, ``(3, 3)``, a ``wl -> value`` callable
         (solve with :meth:`solve_vs_wavelength`) or a material KEY string
         (resolve with ``materials={...}``).
+
+        ``shear`` (audit W9) walks EVERY ridge centre together, in the same
+        units as :meth:`add_tapered_grating`'s: ``shear`` PERIODS from top to
+        bottom about the mid-depth plane, i.e. each centre becomes
+        ``center + shear * period * (zeta - 0.5)`` (so the shear is a rigid
+        lateral drift of the whole tooth pattern -- the fabrication
+        undercut/lean, not a change of pitch).  ``zeta`` is sampled per slice
+        by the same ``rule`` as the widths, wrap-aware, and the overlap guard
+        still applies at every slice.  Default 0 -- BIT-identical to the
+        pre-``shear`` builder.  A single ridge at ``center = period/2``
+        reproduces :meth:`add_tapered_grating` at the same ``shear``
+        (MEASURED agreement of the realised segment widths: ``<= 1.2e-16``).
         """
         n = int(n_slices)
         if n < 1:
@@ -448,19 +690,25 @@ class PMMStack:
             raise ValueError(
                 f"add_tapered_ridges: rule must be 'midpoint' or 'trapezoid', "
                 f"got {rule!r}.")
+        sh = float(shear)
+        if not np.isfinite(sh):
+            raise ValueError(
+                f"add_tapered_ridges: shear must be finite, got {shear!r}.")
         rid = [(float(c), float(wt), float(wb), e)
                for c, wt, wb, e in ridges]
         self._taper_recipes.append((len(self._layers), n,
                                     "add_tapered_ridges",
                                     dict(thickness=thickness, ridges=ridges,
-                                         eps_groove=eps_groove, rule=rule)))
+                                         eps_groove=eps_groove, rule=rule,
+                                         shear=shear)))
         dz = float(thickness) / n
         for k in range(n):
             if rule == "midpoint":
                 zeta = (k + 0.5) / n
             else:
                 zeta = 0.5 * (k / n + (k + 1) / n)
-            slice_ridges = [(c, wt + (wb - wt) * zeta, e)
+            dc = sh * (zeta - 0.5) * self.period     # exactly 0.0 at shear = 0
+            slice_ridges = [(c + dc, wt + (wb - wt) * zeta, e)
                             for c, wt, wb, e in rid]
             segs = self._ridges_to_segments(self.period, slice_ridges,
                                             eps_groove)

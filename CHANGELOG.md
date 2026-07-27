@@ -4,6 +4,107 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added — PMM tapered-builder `shear` + an exact single-layer route for the pure-shear taper (audit W9, `elements/pmm/stack.py`)
+
+The RCWA twin has carried sheared (parallelogram) sidewalls since v5.14.1
+(audit GAP1); the PMM tapered builders could only make a *symmetric* trapezoid,
+so the one profile class a fab undercut actually produces had no laterally-exact
+(no-Fourier-floor) solver.  Both PMM builders now take `shear`, with the
+**exact** RCWA convention mirrored so the two packages build the *identical*
+staircase — and the pure-shear sub-case gets a route that skips the staircase
+altogether.
+
+- **`shear` on `PMMStack.add_tapered_grating` and `add_tapered_ridges`**
+  (`stack.py:342`, `stack.py:653`).  The ridge centre is
+  `0.5 + shear * (zeta - 0.5)` in period fractions — `shear` *periods* of
+  lateral walk from top to bottom about mid-depth, `zeta` sampled per slice by
+  the same `rule` as the duty, wrap-aware (`stack.py:494`, `stack.py:710`).
+  `add_tapered_ridges` walks every tooth rigidly (`center + shear*period*(zeta-0.5)`)
+  and keeps its overlap guard on the *sheared* geometry.  Both record `shear` in
+  the taper recipe (`stack.py:478`, `stack.py:703`) so `_resliced_clone` /
+  `solve(stabilize='slices')` replay the sheared structure rather than silently
+  re-slicing an unsheared one.
+- **`shear=0` is BIT-identical to the pre-change builder.**  The new wrap-aware
+  slice builder `PMMStack._ridge_slice_segments` (`stack.py:301`) reproduces the
+  historical `[0.5*(1-duty), duty, 0.5*(1-duty)]` triple *bit-for-bit*, because
+  halving is exact in binary floating point (`(1-d)/2 == 0.5 - d/2`) and the
+  groove widths are built as differences of the total groove so the list
+  telescopes.  MEASURED against a reference dumped from a pre-change worktree:
+  0 differing widths over 9 `(duty_bottom, duty_top, n_slices, rule)` cases —
+  including the vanished-ridge and vanished-groove ends — × both builders ×
+  {kwarg omitted, `shear=0.0`} (7 of the 9 carried into the pin), and the solve
+  is bit-identical (max |diff| = 0.0).
+- **Cross-package staircase identity, MEASURED two ways.**  *Geometry*:
+  rasterizing the PMM segments on RCWA's pixel-centre lattice reproduces its
+  `eps_cell` with **0 mismatched pixels** over `shear` ∈ [-1.7, 2.5] × 3 duty
+  configs × `n_x` ∈ {64, 256, 1024, 4096}, wrapping cases included.  *Physics*:
+  at the same `(n_slices, duties, shear)` the RCWA answer converges to the PMM
+  one as `n_x` grows — TE row, `eps_ridge = 2.1`, `nox = 31`, `n_slices = 6`:
+  4.683e-04 → 1.023e-04 → 9.362e-06 at `n_x` 512 / 2048 / 8192 (a 50x fall),
+  and 1.073e-04 → 3.302e-05 → 1.099e-05 at `shear = 0.90` (the WRAP layout).
+  The full-row gap instead saturates on RCWA's `O(1/nox)` Fourier floor
+  (measured 4.7e-04 at *both* `nox = 31` and `61`); `shear` only phase-shifts
+  the cell's Fourier coefficients, so that floor is shear-invariant (measured
+  identical 4.6888e-04 at `shear` 0.35 and 1.4).
+- **NEW `PMMStack.add_sheared_grating`** (`stack.py:498`) — the taper-metric
+  roadmap item's *shear* sub-case, exactly.  A parallelogram is the one taper
+  the shipped covariant/convection machinery solves with **no z-staircase at
+  all** (`u = x - z tan(phi)` keeps the modal coefficients z-independent), so
+  this emits ONE slanted layer with
+  `slant_angle = arctan(shear*period/thickness)` (`stack.py:608`) and the same
+  centre law as the staircase.  MEASURED against the staircase of the identical
+  geometry (`P = 1 um`, `wl = 633 nm`, `d = 300 nm`, `eps_ridge = 4`,
+  `duty = 0.45`, `shear = 0.35` = a 49.4° wall, `theta = 0.17`; error vs the
+  `n_slices = 20` staircase over `(R, T)` of `|m| <= 2`, both polarizations):
+
+  | route                        | err      | time    |
+  |------------------------------|----------|---------|
+  | `add_tapered_grating` ns=4   | 2.59e-02 |  0.25 s |
+  | `add_tapered_grating` ns=8   | 6.93e-03 |  2.27 s |
+  | `add_tapered_grating` ns=12  | 2.63e-03 |  7.53 s |
+  | `add_tapered_grating` ns=16  | 9.01e-04 | 23.04 s |
+  | `add_sheared_grating` deg=12 | 2.93e-03 |  0.05 s |
+
+  i.e. **8.9x more accurate than the `n_slices = 4` staircase at a fifth of the
+  cost, and the `n_slices = 12` answer ~150x faster**.  It *plateaus* on the
+  slant path's own wall-normal per-order floor, which grows with the wall tilt:
+  measured plateau 1.76e-03 at 45.0°, 1.89e-03 at 49.4°/normal, 2.93e-03 at
+  49.4°/oblique, 1.16e-02 at 69.4° (four different designs) — so the staircase
+  overtakes it at `n_slices ≈ 16` and remains the route below the plateau.  The
+  docstring carries both readings plus the inherited restrictions
+  (`solve_vs_wavelength`, `prepare`, `retain_internal`, JAX and conical all
+  raise `NotImplementedError` on a slanted stack — all four verified).
+
+### Documented — the tapered z-staircase's MEASURED budget, and two dead ends (audit W9, `elements/pmm/stack.py`)
+
+- **`O(1/n_slices^2)` CONFIRMED, and the cost quantified** (`stack.py:367`).
+  Cost is `~O(n_slices^3.4)` end to end (`n_slices` 4/8/16 → 0.30/2.97/34.1 s at
+  `degree = 12`) because the union grid — and therefore every layer's eig —
+  grows with the slice count.  The staircase error itself was measured on the
+  cross-package oracle that *isolates* it (the RCWA twin at `raster='area'`,
+  whose realised duty is exact, reference `n_slices = 768`): 3.82e-03 /
+  1.27e-03 / 3.34e-04 / 8.47e-05 / 2.18e-05 / 5.70e-06 at `n_slices`
+  8/16/32/64/128/256 — a factor 3.9 per doubling, shared by all 12 observables
+  (3.5–4.6 at 32 → 64).
+- **`rule='trapezoid'` is a NO-OP here** (`stack.py:406`).  For the LINEAR duty
+  ramp these builders lay down, `0.5*(k/n + (k+1)/n) == (k + 0.5)/n` exactly, so
+  `'trapezoid'` samples the same duty as `'midpoint'` up to last-bit rounding
+  (measured bit-identical for 5 of the 7 slices at `n_slices = 7`, 1 ULP apart
+  for the other 2).  It is kept for signature parity with `add_graded_layer`, whose profile is
+  arbitrary and where the rules genuinely differ.
+- **Richardson extrapolation in `n_slices`: REJECTED, with numbers**
+  (`stack.py:380`).  Measured across 8 designs (duty ranges 0.10–0.85, lossy,
+  oblique 0.17/0.45, `eps_ridge` 4/9, deep + sheared, with and without shear)
+  against the *equal-cost* comparator `f(2n)`: the `(n, 2n)`, `p = 2` two-point
+  Richardson gains 3.0x / 7.4x / 14.5x on the clean designs but 1.0x / 0.95x /
+  1.17x — i.e. nothing — on the steep-duty, narrow-duty, high-contrast and deep
+  designs at `n = 8/16/32`.  Multi-exponent (`1/n + 1/n^2`) and 3-point
+  fitted-exponent variants are outright worse (fitted-p at `n = 4, 5, 6`
+  returned 9.2e-03 against `f(6) = 4.4e-03`).
+
+Pins: `tests/unit/test_niche_audit_w9_pmm_taper.py` (19; 16 fail on a
+pre-change worktree, 3 pass as regression + error-law locks).
+
 ### Fixed — auto-dispatcher `output_grid`/`output_dx` handling and the ASM-family twin (audit W9, `propagators/dispatch.py`)
 
 Six measured defects in `lumenairy/propagators/dispatch.py`:
