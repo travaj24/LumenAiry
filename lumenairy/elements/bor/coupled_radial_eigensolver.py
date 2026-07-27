@@ -52,6 +52,49 @@ def _fd_grid(Rbig, N):
     return r, D, h
 
 
+#: Where the staggered PEC wall is anchored (audit W6-B1).
+#:
+#: ``'ghost'`` (SHIPPED DEFAULT, legacy) -- ``h = Rbig / N``.  The outer
+#: stencil forces the tangential field to zero at the GHOST NODE, whose radius
+#: is ``(N + 0.5) h = Rbig + h/2``: the discretized cavity is half a cell
+#: LARGER than the ``Rbig`` the caller asked for.  MEASURED consequence
+#: (homogeneous m=1 cylinder, eps=4, Rbig=8, k0=2, gamma vs the analytic
+#: ``{j_{m,n}, j'_{m,n}}/Rbig``): the transverse wavenumbers converge to
+#: ``j/(Rbig + h/2)``, so the error is FIRST order -- p = 0.994 / 0.997 / 0.998
+#: over N = 60 -> 480, with a -8.26e-3 relative bias at N = 60 and still
+#: -1.04e-3 at N = 480; the implied effective radius matches ``Rbig + h/2`` to
+#: 4-5 digits (ratio 0.9999 / 1.0000 / 1.0000 / 1.0000).  This contradicts the
+#: module docstring's "Convergence is 2nd-order in N (FD)".
+#:
+#: ``'rbig'`` (CORRECTED) -- ``h = Rbig / (N + 0.5)``, so the ghost node lands
+#: exactly on ``Rbig``.  Same case: 6.52e-7 at N = 60, 4.14e-8 at N = 240,
+#: p = 1.99 -- four decades better at identical cost -- while KEEPING both
+#: properties that make this basis worth having: the exact discrete de Rham
+#: identity (3.6e-15 vs 1.8e-15) and machine-precision cascade energy
+#: (1.28e-14 vs 1.47e-14 on the ring-grating reproducer).  The competing
+#: antisymmetric-ghost repair (``Dn2f[N-1,N-1] = -2/h``, ``An2f[N-1,N-1] = 0``)
+#: also anchors the wall on ``Rbig`` and also reaches p = 2.000, but was
+#: MEASURED to destroy both: de Rham 1.58e-2 (1.05e-3 relative) and cascade
+#: energy 2.06e-4.  The algebra explains why -- for a ghost ``t * f_{N-1}`` the
+#: identity residual is exactly ``m t / (r_{N-1} Rbig)``, zero only at ``t = 0``
+#: -- so moving the anchor, not the stencil, is the correct repair.
+#:
+#: WHY THIS IS OPT-IN, NOT THE DEFAULT.  Flipping it changes every shipped
+#: ``BORStack`` number (towards the exact answer).  On the
+#: ``AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13`` reproducer
+#: (``tests/unit/test_audit_bor_grazing_cutoff.py``, Rbig = 48 um, N = 256,
+#: n = 1.41, lam = 1 um) the corrected anchor shrinks the cavity by
+#: h/2 = 0.094 um and MEASURES: incident propagating orders 319 -> 318 (the
+#: outermost near-grazing order was an artifact of the oversized cavity),
+#: fundamental-mode R 0.146135 -> 0.142290, and min q/k0 0.0493 -> 0.0512 (so
+#: that file's near-grazing-band gate no longer has a mode in (1e-3, 0.05)).
+#: Energy closure is unaffected (6.79e-12).  Those three assertions live in
+#: ANOTHER audit's regression file -- one of them the deliberate
+#: "lossless-trap" guard -- so the default flip is an owner decision that must
+#: land together with their retune, not a side effect of this wave.
+STAGGERED_WALL_ANCHOR = "ghost"
+
+
 def _fd_grid_staggered(Rbig, N):
     """Yee-staggered (div-conforming) radial grid -- the spurious-mode CURE.
 
@@ -65,8 +108,18 @@ def _fd_grid_staggered(Rbig, N):
     still ``2N`` (a complete square basis).  Returns the two grids + the four
     inter-grid bidiagonal operators (node->face / face->node derivative and
     average).
+
+    LATTICE ANCHOR (audit W6-B1) -- see :data:`STAGGERED_WALL_ANCHOR`.  The
+    outer stencil closes the PEC wall by forcing the tangential field to zero
+    at the GHOST NODE (index ``N``, radius ``(N + 0.5) h``), so THAT radius is
+    the wall.  With the shipped default ``h = Rbig / N`` the wall therefore
+    sits at ``Rbig + h/2``, half a cell OUTSIDE the domain the caller asked
+    for, and the box spectrum converges to ``j_{m,n}/(Rbig + h/2)`` -- FIRST
+    order.  ``'rbig'`` puts ``h = Rbig / (N + 0.5)`` so the ghost node lands
+    exactly on ``Rbig`` and the scheme reaches the 2nd order this module
+    documents.
     """
-    h = Rbig / N
+    h = Rbig / (N + 0.5) if STAGGERED_WALL_ANCHOR == "rbig" else Rbig / N
     r_node = (np.arange(N) + 0.5) * h
     r_face = (np.arange(N) + 1.0) * h          # face i between node i, i+1
     Dn2f = np.zeros((N, N))                     # (Dn2f f)_{i+1/2} = (f_{i+1}-f_i)/h
@@ -88,6 +141,28 @@ def _fd_grid_staggered(Rbig, N):
         Af2n[i, i - 1] = Af2n[i, i] = 0.5
     Af2n[0, 0] = 0.5
     return r_node, r_face, h, Dn2f, Df2n, An2f, Af2n
+
+
+#: the two radial boundary conditions the NODAL operators implement
+_WALLS = ("natural", "pec")
+
+
+def _check_wall(wall, staggered=False):
+    """Validate the ``wall`` kwarg (audit W6-B3).  ``None`` means "the default
+    for this basis": ``'natural'`` on the nodal path, the built-in closed
+    Dirichlet wall on the staggered path.  An unrecognized value used to fall
+    through to ``'natural'`` silently -- a typo bought open-boundary physics."""
+    if wall is None:
+        return
+    if wall not in _WALLS:
+        raise ValueError(
+            "wall must be one of %r or None (got %r)" % (list(_WALLS), wall))
+    if staggered and wall != "pec":
+        raise ValueError(
+            "the staggered (Yee div-conforming) basis builds the closed "
+            "Dirichlet wall into its node->face stencil; wall=%r would be "
+            "IGNORED.  Pass wall='pec' (or omit it) on the staggered path, "
+            "or staggered=False for the leaky natural wall." % (wall,))
 
 
 def _normal_eps_faces(eps_node):
@@ -203,12 +278,33 @@ def _pec_wall_ops(D, h, N):
 
 def _normal_eps(eps):
     """Wall-normal effective eps: harmonic mean across each eps jump
-    ([[1/eps]]^{-1} inverse rule), pointwise elsewhere."""
-    en = (1.0 / eps).copy()
+    ([[1/eps]]^{-1} inverse rule), pointwise elsewhere.
+
+    ORDER INDEPENDENCE (audit W6-B9).  The historical loop wrote the pair
+    ``en[i] = en[i-1] = 1/hm`` IN PLACE, so a node sitting between two
+    back-to-back jumps (a ring exactly ONE node wide) had the inner
+    interface's harmonic mean silently CLOBBERED by the outer one -- the
+    normal eps then depended on the loop direction, i.e. mirroring the radial
+    profile did not mirror the operator (measured: ``[2,6,3,3] -> [3,4,4,3]``
+    but the mirrored profile gave ``[3,4,3,3]`` reversed, not ``[3,4,4,3]``).
+    Each interface's inverse-eps mean is now accumulated and AVERAGED over the
+    interfaces a node participates in, which is mirror-symmetric by
+    construction and BIT-IDENTICAL for every isolated interface (rings two or
+    more nodes wide -- i.e. every profile the gates exercise).
+    """
+    inv = (1.0 / eps).copy()
+    acc = np.zeros(len(eps), dtype=inv.dtype)
+    hits = np.zeros(len(eps), dtype=int)
     for i in range(1, len(eps)):
         if eps[i] != eps[i - 1]:
-            hm = 2.0 / (1.0 / eps[i] + 1.0 / eps[i - 1])
-            en[i] = en[i - 1] = 1.0 / hm
+            # same expression as the historical `1.0 / (2.0 / (a + b))` so an
+            # isolated interface stays bit-identical
+            hmi = 1.0 / (2.0 / (inv[i] + inv[i - 1]))
+            acc[i] += hmi
+            acc[i - 1] += hmi
+            hits[i] += 1
+            hits[i - 1] += 1
+    en = np.where(hits > 0, acc / np.maximum(hits, 1), inv)
     return 1.0 / en
 
 
@@ -249,7 +345,7 @@ def _mode_reldiv(Er, Ephi, qj, D, mr, Lei, A, eps, eps_n, rg, k0):
 
 
 def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
-                         R_pml=None, sigma_max=5.0, pml_p=2, wall="natural",
+                         R_pml=None, sigma_max=5.0, pml_p=2, wall=None,
                          staggered=False):
     """All radial vector modes for azimuthal order ``m``.
 
@@ -257,13 +353,40 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
     ``R_pml`` : if set, a radial PML (M3) occupies ``[R_pml, Rbig]`` so the
     radial boundary is OPEN (radiation modes absorbed -> complex q; bound modes
     unchanged).  Default ``None`` = hard wall (byte-identical to the M2 path).
-    ``staggered`` : if True, use the Yee div-conforming discretization (the
-    spurious-mode CURE) -- ``E_r`` on faces, ``E_phi`` on nodes; the spurious
-    gradient sea collapses out of the physical window (eig still 2N).  Returns
-    a list of dicts: ``q``, ``reldiv``, ``Er``/``Ephi``/``Ez`` fields, ``r``.
+    ``wall`` : ``'natural'`` (default) = the leaky one-sided wall; ``'pec'`` =
+    the Dirichlet (closed) wall.  ``staggered`` : if True, use the Yee
+    div-conforming discretization (the spurious-mode CURE) -- ``E_r`` on faces,
+    ``E_phi`` on nodes; the spurious gradient sea collapses out of the physical
+    window (eig still 2N).  Returns a list of dicts: ``q``, ``reldiv``,
+    ``Er``/``Ephi``/``Ez`` fields, ``r``.
+
+    VALIDATION (audit W6-B3/B4).  ``wall`` is now checked against the two
+    supported values: an unrecognized value (a typo such as ``'PEC'``) used to
+    fall through to the leaky ``'natural'`` wall SILENTLY, so a caller asking
+    for a closed box quietly got open-boundary physics.  And the staggered
+    path -- which builds the closed Dirichlet wall into its node->face stencil
+    and always applies the FACE inverse rule -- now rejects the nodal-only
+    ``R_pml`` / ``wall='natural'`` / ``inverse_rule=False`` instead of
+    silently ignoring them (measured: bit-identical output, i.e. a caller
+    asking for an OPEN radial boundary got the closed wall with no signal).
     """
+    _check_wall(wall, staggered)
     if staggered:
+        if R_pml is not None:
+            raise ValueError(
+                "radial_coupled_modes(staggered=True): the radial PML is a "
+                "NODAL-basis feature; the staggered (Yee div-conforming) "
+                "discretization builds in the closed Dirichlet wall and would "
+                "IGNORE R_pml=%r.  Use staggered=False for an open radial "
+                "boundary." % (R_pml,))
+        if not inverse_rule:
+            raise ValueError(
+                "radial_coupled_modes(staggered=True): inverse_rule=False is "
+                "not available on the staggered basis -- the wall-normal "
+                "inverse rule lives on the FACE grid there by construction "
+                "(_normal_eps_faces) and cannot be switched off.")
         return _radial_coupled_modes_staggered(m, Rbig, N, eps_profile, k0)
+    wall = "natural" if wall is None else wall
     r, D, h = _fd_grid(Rbig, N)
     eps = np.asarray(eps_profile(r), dtype=complex)
     eps_n = _normal_eps(eps) if inverse_rule else eps
@@ -333,14 +456,30 @@ def _radial_coupled_modes_staggered(m, Rbig, N, eps_profile, k0):
 
 def guided_modes(m, a, Rbig, N, eps_core, eps_clad, k0, *,
                  reldiv_tol=1.0, tail_tol=0.05):
-    """Bound guided modes (div-free AND decaying in the cladding), q descending."""
+    """Bound guided modes (div-free AND decaying in the cladding), q descending.
+
+    UNIT INVARIANCE (audit W6-B2).  The guided-window margin and the real-axis
+    tolerance are expressed as fractions of ``k0``, not as absolute numbers on
+    ``q``.  ``q`` has units 1/length, so the historical absolute ``1e-2`` /
+    ``1e-3`` were an implicit "lengths are microns" assumption: the SAME
+    physical fiber written in nanometres (``k0 = 2e-3`` /nm) has its entire
+    guided window ``sqrt(eps_clad) k0 .. sqrt(eps_core) k0`` = 2.8e-3..4.9e-3
+    BELOW the 1e-2 margin, so ``qlo + 1e-2 < q < qhi - 1e-2`` was empty and
+    this function silently returned ``[]`` while the raw spectrum held the
+    correct bound modes.  ``5e-3 * k0`` / ``5e-4 * k0`` reproduce the historical
+    constants bit-exactly at the validated ``k0 = 2.0`` (same recast as the
+    P2-06 / AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY classifier fixes).
+    """
     def eps_profile(rr):
         return np.where(rr <= a, eps_core, eps_clad)
     out = []
     qlo, qhi = np.sqrt(eps_clad) * k0, np.sqrt(eps_core) * k0
+    q_margin = 5e-3 * k0                 # == 1e-2 at k0 = 2.0 (bit-exact)
+    imag_tol = 5e-4 * k0                 # == 1e-3 at k0 = 2.0 (bit-exact)
     for md in radial_coupled_modes(m, Rbig, N, eps_profile, k0):
         q = md["q"]
-        if not (qlo + 1e-2 < q.real < qhi - 1e-2 and abs(q.imag) < 1e-3):
+        if not (qlo + q_margin < q.real < qhi - q_margin
+                and abs(q.imag) < imag_tol):
             continue
         if md["reldiv"] > reldiv_tol:
             continue                                    # spurious

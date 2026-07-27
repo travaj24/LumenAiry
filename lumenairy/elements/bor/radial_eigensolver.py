@@ -96,7 +96,24 @@ def radial_spectrum(m, R, degree, n_el, *, bc="dirichlet", n_low=6,
     ``bc='dirichlet'`` (TM, psi(R)=0 -> Bessel zeros j_{m,n}) or ``'neumann'``
     (TE, natural psi'(R)=0 -> derivative zeros j'_{m,n}).  Returns the sorted
     eigenvalues, or ``(eigvals, nodal_eigvecs, r_nodes)`` if ``return_modes``.
+
+    Domain validation (audit W6-B12): ``R <= 0`` used to be accepted -- the
+    element Jacobian, the ``r`` measure and the ``1/r`` stiffness all flip sign
+    together, so ``R = -1`` silently returned the ``|R| = 1`` spectrum -- and
+    ``n_el < 1`` died with a bare ``IndexError`` from the local->global map.
+    ``BORStack`` has guarded its own ``Rbig > 0`` since P3-10; this is the
+    sibling gap.
     """
+    R = float(R)
+    if not np.isfinite(R) or R <= 0.0:
+        raise ValueError(
+            f"radial_spectrum: R (cylinder radius) must be finite and > 0, "
+            f"got {R}.")
+    if not float(n_el).is_integer() or int(n_el) < 1:
+        raise ValueError(
+            f"radial_spectrum: n_el (number of radial elements) must be an "
+            f"integer >= 1, got {n_el!r}.")
+    n_el = int(n_el)
     ref_nodes, _w = _gll_nodes_weights(degree)
     p = degree + 1
     bnds = _graded_boundaries(0.0, R, n_el)

@@ -30,6 +30,7 @@ from scipy.linalg import eig
 
 from .coupled_radial_eigensolver import (
     _assemble_staggered,
+    _check_wall,
     _fast_geig,
     _fd_grid,
     _mode_reldiv,
@@ -106,7 +107,7 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
 
 
 def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
-                pml_p=2, wall="natural", staggered=False, with_reldiv=False):
+                pml_p=2, wall=None, staggered=False, with_reldiv=False):
     """Return the forward modal basis of a layer: ``W`` (2N x 2N tangential E),
     ``V`` (2N x 2N tangential H), ``q`` (2N axial wavenumbers, forward-oriented),
     plus the shared grid ``r`` and ``r*dr`` weights ``wq``.
@@ -137,9 +138,26 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
        Flux/far-field quadrature must weight the face rows by ``wq_face`` and
        the node rows by ``wq_node`` (a single shared ``wq`` is only correct
        for ``staggered=False``, where all rows share one cell-centered grid).
+
+    .. note:: (audit W6-B3/B4) ``wall`` is validated -- an unrecognized value
+       used to fall through to the leaky ``'natural'`` wall silently -- and the
+       staggered path REJECTS the nodal-only ``R_pml`` / ``wall='natural'``
+       rather than ignoring them (measured bit-identical output, so a caller
+       asking for an open radial boundary got the closed Dirichlet wall with no
+       signal).  ``wall=None`` means "this basis's default": ``'natural'``
+       nodal, built-in closed Dirichlet staggered.
     """
+    _check_wall(wall, staggered)
     if staggered:
+        if R_pml is not None:
+            raise ValueError(
+                "layer_modes(staggered=True): the radial PML is a NODAL-basis "
+                "feature; the staggered (Yee div-conforming) discretization "
+                "builds in the closed Dirichlet wall and would IGNORE "
+                "R_pml=%r.  Use staggered=False for an open radial boundary."
+                % (R_pml,))
         return _layer_modes_staggered(m, Rbig, N, eps_profile, k0)
+    wall = "natural" if wall is None else wall
     r, D, h = _fd_grid(Rbig, N)
     eps = np.asarray(eps_profile(r), dtype=complex)
     eps_n = _normal_eps(eps)

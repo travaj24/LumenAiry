@@ -70,7 +70,19 @@ def build_layer(m, Rbig, N, eps_profile, k0, *, wall="pec", thickness=None,
     radius exceeds a few vacuum wavelengths -- the regime where the spurious-mode
     sea silently drives the cascade energy up to ~1e29.  The staggered wall is
     the closed Dirichlet wall, so ``wall`` must stay ``'pec'`` there.
+
+    ``thickness`` is validated (audit W6-B11): the ``BORStack.add_layer`` sibling
+    has guarded it since P3-10 ("a NEGATIVE thickness flips the propagation
+    exponent exp(iqL) so forward-oriented evanescent modes GROW, silently
+    destabilizing the Redheffer cascade instead of raising"), but this
+    lower-level twin accepted ``thickness=-0.5`` and cascaded it silently.
     """
+    if thickness is not None:
+        thickness = float(thickness)
+        if not np.isfinite(thickness) or thickness <= 0.0:
+            raise ValueError(
+                "build_layer: thickness must be > 0 and finite (or None for a "
+                "semi-infinite half-space), got %r" % (thickness,))
     if basis == "staggered":
         if wall != "pec":
             raise ValueError("basis='staggered' builds in the closed Dirichlet "
@@ -178,7 +190,21 @@ def solve(layers, k0):
     Returns a dict: ``S`` (S-matrix), ``inc`` (superstrate physical-prop indices),
     ``out`` (substrate ...), ``R``/``T`` (arrays over ``inc``: total reflected /
     transmitted power fraction), ``energy`` (R+T per incident mode).
+
+    Audit W6-B11: a MIDDLE layer left at the ``build_layer`` default
+    ``thickness=None`` used to die inside ``propagation_smatrix`` with a bare
+    ``TypeError: unsupported operand type(s) for *: 'complex' and 'NoneType'``.
     """
+    if len(layers) < 2:
+        raise ValueError(
+            "bor_solve.solve needs at least the two semi-infinite half-spaces "
+            "(got %d layer(s))" % (len(layers),))
+    for i in range(1, len(layers) - 1):
+        if layers[i].get("thickness") is None:
+            raise ValueError(
+                "bor_solve.solve: middle layer %d has no thickness -- pass "
+                "thickness=... to build_layer for every layer between the "
+                "half-spaces." % (i,))
     S = interface_smatrix(layers[0]["W"], layers[0]["V"],
                           layers[1]["W"], layers[1]["V"])
     for i in range(1, len(layers) - 1):

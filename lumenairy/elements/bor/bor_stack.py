@@ -112,6 +112,26 @@ class BORStack:
             raise ValueError(
                 f"BORStack: N (radial grid points) must be an integer >= 2, "
                 f"got {N!r}.")
+        # Half-space index validation (audit W6-B6 -- the P3-10 sibling gap).
+        # These were the only builder arguments left unguarded, and each
+        # failure mode is silent or cryptic: n = 0 gives eps = 0, an empty
+        # propagating set and hence an EMPTY R/T (exactly the failure P3-10
+        # guarded for wavelength <= 0); a NEGATIVE n silently means |n| because
+        # only n**2 is used (measured: n_superstrate=-1.5 solved happily with 5
+        # orders); NaN/inf reach LAPACK as "array must not contain infs or
+        # NaNs" / OverflowError from deep inside the eigensolve.
+        for _nm, _n in (("n_superstrate", n_superstrate),
+                        ("n_substrate", n_substrate)):
+            _nc = complex(_n)
+            if not (np.isfinite(_nc.real) and np.isfinite(_nc.imag)):
+                raise ValueError(
+                    f"BORStack: {_nm} must be finite, got {_n!r}.")
+            if _nc.real <= 0.0:
+                raise ValueError(
+                    f"BORStack: {_nm} must have a positive real part (a "
+                    f"refractive index), got {_n!r}.  Only n**2 is used, so a "
+                    f"negative n would silently mean |n| and n = 0 gives an "
+                    f"empty propagating set (empty R/T).")
         self.Rbig = Rbig
         self.m = int(m)
         self.N = int(N)
@@ -149,7 +169,18 @@ class BORStack:
 
         Layers with the SAME profile fingerprint (identical ``rings`` /
         ``eps`` parameters, or the same ``eps_profile`` callable object)
-        share one eigensolve per ``k0`` via the modal LRU (audit P3-12)."""
+        share one eigensolve per ``k0`` via the modal LRU (audit P3-12).
+
+        "Exactly one of" is now ENFORCED (audit W6-B7): passing two of them
+        silently applied a precedence (``rings`` beat ``eps``, ``eps_profile``
+        beat ``eps``) and quietly discarded the other."""
+        _given = [nm for nm, v in (("eps_profile", eps_profile),
+                                   ("rings", rings), ("eps", eps))
+                  if v is not None]
+        if len(_given) > 1:
+            raise ValueError(
+                "BORStack.add_layer: pass EXACTLY ONE of eps_profile / rings / "
+                "eps (got %s)." % (", ".join(_given),))
         if rings is not None:
             period, duty, n_r, n_g = rings
             # er/eg computed lazily (inside prof / the key) so a TRACED ring
@@ -230,6 +261,11 @@ class BORStack:
     def set_source(self, wavelength=None, *, k0=None):
         # Source validation (audit P3-10): wavelength <= 0 gives k0 = inf /
         # negative, and solve() then silently returns EMPTY R/T.
+        # W6-B7: give BOTH and the wavelength used to be silently discarded.
+        if wavelength is not None and k0 is not None:
+            raise ValueError(
+                "BORStack.set_source: give wavelength OR k0, not both (got "
+                f"wavelength={wavelength!r}, k0={k0!r}).")
         if k0 is None:
             if wavelength is None:
                 raise ValueError(
@@ -329,7 +365,23 @@ class BORStack:
                else self._build(("eps", self.eps_sub),
                                 lambda r: np.full_like(r, self.eps_sub,
                                                        dtype=complex)))
-        mids = [(thk, self._build(key, fn)) for thk, fn, key in self._layers]
+        # Per-solve memo ON TOP of the LRU (audit W6-B8).  The LRU alone makes
+        # the documented "an ABAB... periodic stack pays one eig per DISTINCT
+        # profile, not per repetition" promise FALSE as soon as the number of
+        # distinct profiles exceeds _MODAL_CACHE_SIZE: a cyclic sweep is the
+        # LRU worst case, so every entry is evicted exactly before it is needed
+        # again and the hit rate collapses to ZERO (measured: 20 distinct
+        # profiles x 2 repetitions = 41 eigs instead of 21, and 41 again on
+        # every re-solve).  This local dict makes the WITHIN-solve dedup
+        # cap-independent; the LRU still governs ACROSS-solve reuse.  It holds
+        # only references the ``mids`` list already holds, so no extra memory.
+        _seen = {}
+        mids = []
+        for thk, fn, key in self._layers:
+            L = _seen.get(key)
+            if L is None:
+                L = _seen[key] = self._build(key, fn)
+            mids.append((thk, L))
         # cascade: sup -> [mid prop mid] ... -> sub.  The interface list is
         # precomputed (same matrices the inline build produced -- bit-identical
         # cascade) so retain_internal can reuse it for the partial cascades.

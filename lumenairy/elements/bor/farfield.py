@@ -22,6 +22,8 @@ diffraction efficiencies (combined with the modal z-flux for the propagating set
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy.special import jn_zeros, jv
 
@@ -32,9 +34,28 @@ def fourier_bessel(f, r, h, m, nmax):
 
     Returns ``(c, kt, norm)``: coefficients ``c_n``, transverse wavenumbers
     ``kt_n = alpha_n / R``, and the squared-norms ``N_n`` (for Parseval / power).
+
+    SAMPLING (audit W6-B5).  The coefficient integral is a midpoint rule on the
+    given grid, so a requested order is only meaningful while its kernel is
+    resolved: ``kt_n = alpha_n / R <= pi / h`` (the grid Nyquist).  Beyond that
+    the ``J_m`` kernel aliases and the coefficients become noise whose Parseval
+    sum OVER-counts the field power -- measured 3.0x at ``nmax = 250`` on an
+    ``N = 100`` grid, with the round-trip reconstruction 100% wrong, and
+    ``order_power_fractions`` renormalizes ``frac`` by that inflated total so
+    nothing in the returned dict betrays it.  A ``UserWarning`` now fires
+    instead of silence.
     """
     R = r[-1] + h / 2.0                       # domain edge (cell-centered grid)
     alpha = jn_zeros(m, nmax)
+    n_alias = int(np.sum(alpha / R > np.pi / h))
+    if n_alias:
+        warnings.warn(
+            f"fourier_bessel: {n_alias} of the {nmax} requested orders have "
+            f"kt = alpha_n/R above the grid Nyquist pi/h = {np.pi / h:.4g} "
+            f"(kt_max = {alpha[-1] / R:.4g}); their J_m kernels alias on this "
+            f"{len(r)}-point grid, so those coefficients are noise and the "
+            f"Parseval power sum over-counts.  Use nmax <~ {len(r)} for this "
+            f"grid, or refine the grid.", stacklevel=2)
     c = np.zeros(nmax, dtype=complex)
     norm = np.zeros(nmax)
     for n in range(nmax):
@@ -46,8 +67,26 @@ def fourier_bessel(f, r, h, m, nmax):
 
 def far_field_angles(kt, eps, k0):
     """Polar angles ``theta_n`` (radians) for transverse wavenumbers ``kt`` in a
-    medium of permittivity ``eps``; NaN for evanescent (non-radiating) orders."""
-    s = kt / (np.sqrt(eps) * k0)
+    medium of permittivity ``eps``; NaN for evanescent (non-radiating) orders.
+
+    ``eps`` may be complex; the angle is taken in the REAL refractive index
+    ``Re sqrt(eps)`` -- the same convention ``BORStack.solve`` uses for its
+    ``angles`` (``eps_sup.real``).  Audit W6-B10: a complex ``eps`` used to make
+    ``s`` complex, so the propagating mask fell back to numpy's LEXICOGRAPHIC
+    complex comparison and ``theta`` was filled from a complex ``arcsin`` whose
+    imaginary part was dropped with only a ``ComplexWarning`` -- silently wrong
+    angles for any lossy half-space (``order_power_fractions`` passes ``eps``
+    straight through).
+    """
+    with np.errstate(invalid="ignore"):
+        n_med = np.sqrt(np.asarray(eps, dtype=complex)).real
+    if not np.all(np.isfinite(n_med)) or np.any(n_med <= 0.0):
+        raise ValueError(
+            "far_field_angles: Re sqrt(eps) must be finite and > 0 (got eps=%r)"
+            % (eps,))
+    # kt is a transverse wavenumber MAGNITUDE (alpha_n / R) -- real by
+    # construction; np.real is a no-op on a real array.
+    s = np.real(np.asarray(kt)) / (n_med * float(k0))
     theta = np.full_like(s, np.nan, dtype=float)
     prop = s <= 1.0
     theta[prop] = np.arcsin(s[prop])
@@ -59,6 +98,14 @@ def order_power_fractions(f, r, h, m, eps, k0, nmax):
     with the propagating mask and far-field angles.  (Power-normalized via the
     Parseval relation; lossless fractions over the propagating set + evanescent
     tail sum to 1.)
+
+    ``total`` is the power carried by the RETAINED ``nmax`` orders, i.e.
+    ``sum |c_n|^2 N_n`` -- it equals ``INT_0^R |f|^2 r dr`` only once the series
+    has converged (measured deficit 9.6e-3 at nmax = 5 vs 4.5e-9 at nmax = 10 on
+    a smooth Gaussian).  ``frac`` is normalized BY ``total``, so it sums to 1 by
+    construction and cannot itself reveal a truncation (or an aliasing) loss --
+    compare ``total`` against ``sum(|f|**2 * r * h)`` if that matters, and see
+    the ``fourier_bessel`` Nyquist note (audit W6-B5).
     """
     c, kt, norm = fourier_bessel(f, r, h, m, nmax)
     total = np.sum(np.abs(c) ** 2 * norm)
