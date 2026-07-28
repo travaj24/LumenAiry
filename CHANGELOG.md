@@ -4,6 +4,15 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.31.0] — 2026-07-27
+
+The **W8 + W9 audit follow-up waves** to the v5.30.0 adversarial-audit campaign:
+the PMM tapered builders gain an exact sheared-sidewall route, the RCWA
+rasterization contract is closed (`raster='harmonic'`), the auto-dispatcher's
+regime rule is unified, and a set of measured physics/CI fixes land with
+regression pins.  `.test_durations` was regenerated end-to-end (the W9 shard
+rebalance).
+
 ### Added — PMM tapered-builder `shear` + an exact single-layer route for the pure-shear taper (audit W9, `elements/pmm/stack.py`)
 
 The RCWA twin has carried sheared (parallelogram) sidewalls since v5.14.1

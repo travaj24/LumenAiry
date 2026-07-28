@@ -1071,7 +1071,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='6.0',
 )
 
-__version__ = "5.30.0"
+__version__ = "5.31.0"
 
 #
 # __all__ is grouped by user-journey tier:
