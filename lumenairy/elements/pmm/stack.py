@@ -2555,11 +2555,6 @@ class PMMStack:
             FOURTH element only when ``jones=True`` (default ``False`` keeps
             the released 3-tuple).
         """
-        if self.layer_grids == "per-layer":
-            raise NotImplementedError(
-                "PMMStack.solve_vs_wavelength: shared-grid only (v1 of "
-                "layer_grids='per-layer' covers solve()); use "
-                "layer_grids='shared' for wavelength sweeps.")
         self._internal = None   # supersedes any retained internals (audit P1-04)
         self._modal = None      # ... and retained per-order amplitudes (B)
         if self._holds_traced():
@@ -2598,6 +2593,11 @@ class PMMStack:
                 "PMMStack.solve_vs_wavelength: all-vertical in-plane stacks only "
                 "(the symmetric cascade); call solve() per wavelength for slanted "
                 "/ out-of-plane stacks.")
+
+        if self.layer_grids == "per-layer":
+            return self._solve_vs_wavelength_perlayer(
+                wl, angle, jones, max_workers, blas_per_worker,
+                disp_layer, disp_region, _tens)
 
         # ---- GEOMETRY-ONLY assembly (reused across the whole sweep) ----
         # The union WIDTHS depend only on segment widths (never on eps), so the
@@ -2745,6 +2745,191 @@ class PMMStack:
             # byte-identical to the serial path regardless of worker count.
             with ThreadPoolExecutor(max_workers=_mw) as _ex:
                 for res in _ex.map(lambda p: _solve_one(*p),
+                                   list(enumerate(wl))):
+                    _store(*res)
+        if jones:
+            return orders, R_all, T_all, J_all
+        return orders, R_all, T_all
+
+    def _solve_vs_wavelength_perlayer(self, wl, angle, jones, max_workers,
+                                      blas_per_worker, disp_layer,
+                                      disp_region, _tens):
+        """Per-layer-grids wavelength sweep (audit R-6).  GEOMETRY is hoisted
+        once -- the neighbour-window grids, the exact masses and pairwise
+        cross-masses of every non-conforming interface, and the two half-space
+        Rayleigh projectors are all wavelength-independent -- so each sweep
+        point costs only the per-layer eigs + mortar solves + cascade.
+        Contracts mirror :meth:`solve_vs_wavelength`: fixed order set covering
+        the shortest wavelength, per-point incidence guard, index-ordered
+        stores (byte-identical to serial for any worker count)."""
+        import os as _os
+        # ---- hoisted geometry: window grids + masses + cross-masses --------
+        nlay = len(self._layers)
+        grid_of = []
+        for i in range(nlay):
+            js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
+            uw_i, rows_i = _pmm_union_grid(
+                [self._layers[j][1] for j in js],
+                self.min_feature / self.period)
+            grid_of.append((np.asarray(uw_i, dtype=float),
+                            rows_i[js.index(i)]))
+        wkeys = [w.tobytes() for w, _r in grid_of]
+        w0_ref = float(wl[0])
+        geo_mats_by = [
+            _build_sem_tensor_segments(
+                self.period, w_i,
+                [_tensor3_dict(_tens(e, w0_ref)) for e in row],
+                self.degree, self.n_el, self.grade)
+            for w_i, row in grid_of]
+        _mass_memo = {}
+
+        def _massg(i):
+            M = _mass_memo.get(wkeys[i])
+            if M is None:
+                M = _sem_mass_exact(geo_mats_by[i])
+                _mass_memo[wkeys[i]] = M
+            return M
+
+        cross_of = {}
+        for i in range(nlay - 1):
+            if wkeys[i] != wkeys[i + 1]:
+                cross_of[i] = _sem_cross_mass(geo_mats_by[i],
+                                              geo_mats_by[i + 1])
+
+        def _hs_mats(w):
+            nsup = self._seg_at(self.n_sup, w)
+            nsub = self._seg_at(self.n_sub, w)
+            t_sup = _tensor3_dict(_C(nsup) ** 2 * np.eye(3))
+            t_sub = _tensor3_dict(_C(nsub) ** 2 * np.eye(3))
+            m_sup = _build_sem_tensor_segments(
+                self.period, grid_of[0][0], [t_sup] * len(grid_of[0][0]),
+                self.degree, self.n_el, self.grade)
+            m_sub = _build_sem_tensor_segments(
+                self.period, grid_of[-1][0], [t_sub] * len(grid_of[-1][0]),
+                self.degree, self.n_el, self.grade)
+            return _C(nsup), _C(nsub), m_sup, m_sub
+
+        n_sup0, n_sub0, mats_sup0, mats_sub0 = _hs_mats(w0_ref)
+        n0g, nNg = mats_sup0["n_glob"], mats_sub0["n_glob"]
+
+        # ---- fixed order set over the sweep --------------------------------
+        _nmx = [np.real(n_sup0), np.real(n_sub0)]
+        scan = ([w0_ref] if not (any(disp_layer) or disp_region)
+                else [float(x) for x in wl])
+        for w in scan:
+            for _wi, row in grid_of:
+                for e in row:
+                    M3 = _tens(e, w)
+                    _nmx.append(np.real(np.sqrt(M3[0, 0])))
+                    _nmx.append(np.real(np.sqrt(M3[1, 1])))
+            if disp_region:
+                _nmx.append(np.real(_C(self._seg_at(self.n_sup, w))))
+                _nmx.append(np.real(_C(self._seg_at(self.n_sub, w))))
+        n_max = max(_nmx)
+        m_prop = _n_propagating_orders(self.period, float(np.min(wl)), n_max)
+        n_proj = max(self.ffo, 2 * m_prop + 5)
+        cap = min(n0g if n0g % 2 else n0g - 1, nNg if nNg % 2 else nNg - 1)
+        n_proj = min(n_proj, cap)
+        if n_proj % 2 == 0:
+            n_proj -= 1
+        if 2 * m_prop + 1 > n_proj:
+            raise ValueError(
+                f"PMMStack.solve_vs_wavelength(layer_grids='per-layer'): "
+                f"degree={self.degree} too low for the {2 * m_prop + 1} "
+                f"propagating orders at the shortest wavelength (half-space "
+                f"n_glob = {n0g}/{nNg}); raise degree/elements_per_region.")
+        half = (n_proj - 1) // 2
+        orders = np.arange(-half, half + 1)
+        N = len(orders)
+        G = 2.0 * np.pi / self.period
+        Tp_sup = _sem_fourier_projection(orders, self.period, mats_sup0)
+        Tp_sub = _sem_fourier_projection(orders, self.period, mats_sub0)
+
+        R_all = np.empty((wl.size, 2, N), dtype=float)
+        T_all = np.empty((wl.size, 2, N), dtype=float)
+        J_all = np.empty((wl.size, 2, 2), dtype=complex)
+        depths = [float(L[0]) for L in self._layers]
+
+        def _solve_one(iw, w):
+            w = float(w)
+            k0 = 2.0 * np.pi / w
+            if disp_region:
+                n_sup_w, n_sub_w, msup, msub = _hs_mats(w)
+            else:
+                n_sup_w, n_sub_w, msup, msub = (n_sup0, n_sub0,
+                                                mats_sup0, mats_sub0)
+            eps_sup, eps_sub = n_sup_w ** 2, n_sub_w ** 2
+            kx0 = float(np.real(n_sup_w)) * np.sin(angle) * k0
+            _require_propagating_incidence(
+                "PMMStack.solve_vs_wavelength", np.conj(_C(eps_sup)),
+                (kx0 / k0) ** 2)
+            with _blas_threads_quiet(blas_per_worker):
+                Wsup, Vsup, _l, _g = _sem_modes_uniform(
+                    msup, k0, kx0, eps_sup, _uniform_geo_eig(msup, k0, kx0))
+                Wsub, Vsub, _l2, _g2 = _sem_modes_uniform(
+                    msub, k0, kx0, eps_sub, _uniform_geo_eig(msub, k0, kx0))
+                _eig_memo = {}
+                lmodes = []
+                mats_l = []
+                for i, (w_i, row) in enumerate(grid_of):
+                    ck = (wkeys[i],
+                          tuple(np.asarray(_tens(e, w), dtype=_C).tobytes()
+                                for e in row))
+                    hit = _eig_memo.get(ck)
+                    if hit is None:
+                        mm = (geo_mats_by[i] if not disp_layer[i]
+                              else _build_sem_tensor_segments(
+                                  self.period, w_i,
+                                  [_tensor3_dict(_tens(e, w)) for e in row],
+                                  self.degree, self.n_el, self.grade))
+                        hit = (mm, _sem_modes_tensor(mm, k0, kx0, True))
+                        _eig_memo[ck] = hit
+                    mats_l.append(hit[0])
+                    lmodes.append(hit[1])
+
+                def _ifc_w(Wa, Va, Wb, Vb, ia, ib):
+                    if ia is None or ib is None or wkeys[ia] == wkeys[ib]:
+                        return _interface_smatrix(Wa, Va, Wb, Vb)
+                    return _interface_smatrix_mortar(
+                        Wa, Va, Wb, Vb, _massg(ia), _massg(ib), cross_of[ia])
+
+                S = _ifc_w(Wsup, Vsup, lmodes[0][0], lmodes[0][1], None, 0)
+                for i in range(nlay):
+                    S = _propagation_star(S, lmodes[i][2], k0 * depths[i])
+                    if i < nlay - 1:
+                        nxt = _ifc_w(lmodes[i][0], lmodes[i][1],
+                                     lmodes[i + 1][0], lmodes[i + 1][1],
+                                     i, i + 1)
+                    else:
+                        nxt = _ifc_w(lmodes[i][0], lmodes[i][1],
+                                     Wsub, Vsub, i, None)
+                    S = _redheffer_star_rect(S, nxt)
+            S11, _S12, S21, _S22 = S
+            kx = (kx0 + orders * G) / k0
+            Hsup = np.vstack([Tp_sup @ Wsup[:n0g, :], Tp_sup @ Wsup[n0g:, :]])
+            Hsub = np.vstack([Tp_sub @ Wsub[:nNg, :], Tp_sub @ Wsub[nNg:, :]])
+            kz_sup = _kz_forward(eps_sup, kx)
+            kz_sub = _kz_forward(eps_sub, kx)
+            kz_inc = float(np.real(_kz_forward(eps_sup,
+                                               np.array([kx0 / k0]))[0]))
+            R, T, jr = _assemble_jones_farfield(
+                Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
+                kx0 / k0, N)
+            return iw, R, T, np.asarray(jr)
+
+        def _store(iw, R, T, jr):
+            _warn_stack_energy(R, T)
+            R_all[iw], T_all[iw], J_all[iw] = R, T, jr
+
+        _mw = (min(_os.cpu_count() or 1, int(wl.size)) if max_workers is None
+               else max(1, int(max_workers)))
+        if _mw == 1 or wl.size == 1:
+            for iw, w in enumerate(wl):
+                _store(*_solve_one(iw, w))
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=_mw) as _ex:
+                for res in _ex.map(lambda pp: _solve_one(*pp),
                                    list(enumerate(wl))):
                     _store(*res)
         if jones:

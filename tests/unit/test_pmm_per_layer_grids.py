@@ -118,8 +118,6 @@ def test_unsupported_combinations_raise():
         st.solve(stabilize="slices")
     with pytest.raises(NotImplementedError, match="per-layer"):
         st.prepare()
-    with pytest.raises(NotImplementedError, match="per-layer"):
-        st.solve_vs_wavelength([WL])
     sl = PMMStack(P, degree=6, far_field_orders=7, layer_grids="per-layer")
     sl.add_layer(100e-9, segments=[(0.4, 4.0 + 0j), (0.6, 1.0 + 0j)],
                  slant_angle=0.2)
@@ -188,3 +186,32 @@ def test_retain_internal_per_layer_fields_and_absorption():
     for col in range(2):
         gap = 1.0 - R.sum(axis=1)[col] - T.sum(axis=1)[col]
         assert abs(float(A[:, col].sum()) - gap) < 5e-3
+
+
+def test_solve_vs_wavelength_per_layer():
+    # (a) the per-layer sweep must be bit-identical to per-wavelength
+    # per-layer solve() on the propagating orders; (b) on a conforming
+    # (2-layer) stack it must also match the SHARED sweep bit-for-bit.
+    wls = [640e-9, 700e-9, 760e-9]
+    sp = _stack(LAY_TWO, "per-layer")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        o_sw, R_sw, T_sw, J_sw = sp.solve_vs_wavelength(
+            wls, angle=np.deg2rad(8.0), jones=True, max_workers=1)
+        for iw, w in enumerate(wls):
+            o1, R1, T1, J1 = sp.set_source(
+                w, theta=np.deg2rad(8.0)).solve()
+            m = np.isin(o1, o_sw)
+            msw = np.isin(o_sw, o1)
+            # ULP-level: the sweep pins worker BLAS threads
+            # (_blas_threads_quiet) while solve() uses the ambient pool
+            assert float(np.max(np.abs(np.asarray(R1)[:, m]
+                                       - R_sw[iw][:, msw]))) < 1e-14
+            assert float(np.max(np.abs(np.asarray(J1) - J_sw[iw]))) < 1e-12
+        ss = _stack(LAY_TWO, "shared")
+        o_sh, R_sh, T_sh, J_sh = ss.solve_vs_wavelength(
+            wls, angle=np.deg2rad(8.0), jones=True, max_workers=1)
+    m2 = np.isin(o_sh, o_sw)
+    m2b = np.isin(o_sw, o_sh)
+    assert float(np.max(np.abs(R_sh[:, :, m2] - R_sw[:, :, m2b]))) < 1e-14
+    assert float(np.max(np.abs(J_sh - J_sw))) < 1e-12
