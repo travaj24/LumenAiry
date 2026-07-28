@@ -119,8 +119,6 @@ def test_unsupported_combinations_raise():
     with pytest.raises(NotImplementedError, match="per-layer"):
         st.solve(stabilize="slices")
     with pytest.raises(NotImplementedError, match="per-layer"):
-        st.set_source(WL, theta=0.1, phi=0.3).solve()      # conical
-    with pytest.raises(NotImplementedError, match="per-layer"):
         st.prepare()
     with pytest.raises(NotImplementedError, match="per-layer"):
         st.solve_vs_wavelength([WL])
@@ -131,3 +129,19 @@ def test_unsupported_combinations_raise():
         sl.set_source(WL, theta=0.1).solve()
     with pytest.raises(ValueError, match="layer_grids"):
         PMMStack(P, layer_grids="bananas")
+
+def test_conical_per_layer_matches_shared_bit_exact():
+    # conical (phi != 0) v2: a 2-layer patterned stack's neighbour window IS
+    # the full union, so per-layer conical must reproduce the shared-grid
+    # nodal conical cascade bit-for-bit (same grids, same eigs, plain
+    # interfaces).
+    for phi in (0.3, 1.2):
+        Rs = Ts = Js = Rp = Tp = Jp = None
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            o, Rs, Ts, Js = (_stack(LAY_TWO, "shared")
+                             .set_source(WL, theta=0.15, phi=phi).solve())
+            o, Rp, Tp, Jp = (_stack(LAY_TWO, "per-layer")
+                             .set_source(WL, theta=0.15, phi=phi).solve())
+        assert float(np.max(np.abs(np.asarray(Js) - np.asarray(Jp)))) == 0.0
+        assert float(np.max(np.abs(np.asarray(Rs) - np.asarray(Rp)))) == 0.0

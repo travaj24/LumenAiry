@@ -220,13 +220,15 @@ class PMMStack:
         self.min_feature = (float(period) * 1e-5 if min_feature is None
                             else float(min_feature))
         # 'per-layer' (audit R-6, 2026-07-28): each layer is assembled on its
-        # OWN element grid (its own walls only) and adjacent layers are coupled
-        # by an exact L2 mortar at the interface.  Cross-layer wall collisions
-        # -- the tapered-staircase pathology the shared union grid suffers --
-        # cannot form, and ``min_feature`` is inert by construction.  v1
-        # surface: solve() on ALL-VERTICAL IN-PLANE NumPy stacks at phi = 0;
-        # conical / slant / OOP / JAX / stabilize / retain_internal / prepare /
-        # solve_vs_wavelength raise with the shared-grid alternative named.
+        # OWN element grid (its walls + its two NEIGHBOURS' -- the interface-
+        # conforming window) and adjacent layers are coupled by an exact L2
+        # mortar at the interface.  Cross-layer wall accumulation -- the
+        # tapered-staircase pathology the shared union grid suffers -- cannot
+        # form, and ``min_feature`` acts only window-locally.  Surface:
+        # solve() on ALL-VERTICAL IN-PLANE NumPy stacks, classical (phi = 0)
+        # AND conical (phi != 0, the patterned nodal cascade); slant / OOP /
+        # JAX / stabilize / retain_internal / prepare / solve_vs_wavelength
+        # raise with the shared-grid alternative named.
         self.layer_grids = layer_grids
         self._layers = []                          # (thickness, segments)
         self._taper_recipes = []                   # (i0, count, method, kwargs)
@@ -989,7 +991,8 @@ class PMMStack:
                 _C(self.n_sub) ** 2, wl, angle, phi, self.degree, self.n_el,
                 self.grade, max(3, (self.ffo - 1) // 2),
                 min_feature=self.min_feature,
-                label="PMMStack.solve (conical)", return_modal=True)
+                label="PMMStack.solve (conical)", return_modal=True,
+                layer_grids=self.layer_grids)
             self._modal = modal          # AUDIT_DYNAMETA_CONSUMER_API_GAPS B
             _warn_stack_energy(R_eff, T_eff)
             # stack contract: the 1-D (m,) order array (pmm_jones_1d_segments
@@ -1242,11 +1245,6 @@ class PMMStack:
                 raise NotImplementedError(
                     "PMMStack: conical incidence (phi != 0) is not available for "
                     "SLANTED layers; use PMM2DStack with y-invariant cells.")
-            if self.layer_grids == "per-layer":
-                raise NotImplementedError(
-                    "PMMStack(layer_grids='per-layer'): conical incidence "
-                    "(phi != 0) is shared-grid only (v1); use "
-                    "layer_grids='shared'.")
             return self._solve_conical(self._src["wl"], self._src["angle"], phi)
 
         # ---- differentiable (JAX) dispatch ---------------------------------
