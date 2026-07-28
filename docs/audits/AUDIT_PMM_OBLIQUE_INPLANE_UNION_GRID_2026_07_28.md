@@ -38,11 +38,13 @@ recommends, so on this geometry it merged **nothing**.
 **Immediate fix [M]:** `min_feature = 1.5e-9` collapses the degree spread **91 % → 0.1 %** and runs
 **2.1× faster**. Every physical film survives (≤1.2 % width drift).
 
-**Geometric origin [A], and the most actionable finding in this report:** the collisions are not generic.
-The per-slice taper wall offset is `slice_thickness × tan(2°)` = **5.41 nm**, and the Al₂O₃ coat is
-**5.00 nm** — a **0.41 nm** mismatch. Three of the six observed collision pairs are *exactly* 0.41 nm [M].
-**`n_slice = 2` is close to the worst possible choice for this geometry**, and choosing `n_slice` to avoid
-the resonance is free.
+**Geometric origin of the collisions [A]:** the per-slice taper wall offset is `slice_thickness × tan(2°)`
+= **5.41 nm** against a **5.00 nm** Al₂O₃ coat — a **0.41 nm** mismatch, and three of the six observed
+collision pairs are *exactly* 0.41 nm [M]. This explains **where the collisions come from**. It does **not**
+explain the loss of convergence: choosing `n_slice = 3` to avoid the resonance was predicted to restore
+conditioning and **was measured and REFUTED** (§4.4). Collision *geometry* and conditioning *failure* are
+not the same thing, and no cheap geometric workaround has survived testing — which strengthens the case for
+the structural fix (R-6) over further tuning.
 
 **Structural limit [M]:** fixing `min_feature` cures `degree` and then exposes the next wall. Refining the
 staircase (`n_slice` 2 → 4) improves the geometry but **re-breaks conditioning** (degree spread 15.7 % at
@@ -219,10 +221,39 @@ al+sin = 20 nm) at integer multiples `k`:
 | 3 | 3.61 nm | k=1 → 3.61 vs 5 | 1.4 nm — mild |
 | **4** | **2.70 nm** | **k=2 → 5.41 vs 5** | **0.41 nm — severe** |
 
-**`n_slice` 2 and 4 both hit the resonance; 1 and 3 do not** [A]. This independently explains why ns=1 sat
-so far from ns=2 (§5.3) and why ns=4 re-broke. **`n_slice = 3` is predicted to be well-conditioned without
-relying on `min_feature` at all** — a free change, and the single most actionable item here. *(Prediction,
-not yet measured — see §10.)*
+**`n_slice` 2 and 4 both hit the resonance; 1 and 3 do not** [A].
+
+### 4.5 The resonance does NOT drive the convergence failure — prediction tested and REFUTED [M]
+
+§4.4 predicted that `n_slice = 3`, which avoids the 0.41 nm resonance, would be well-conditioned **without**
+any snapping. Tested at the **library-default** `min_feature` (nothing snapped, confirmed: 0 merged pairs):
+
+| n_slice | θ0 (deg6 / deg8) | θ8 (deg6 / deg8) | θ10 (deg6 / deg8) | worst degree spread |
+|---|---|---|---|---|
+| 2 (resonant) | 58.889 / 58.768 | 60.130 / **2.222** | 56.359 / 51.637 | **96.3 %** (θ8) |
+| 3 (non-resonant) | 65.756 / 58.399 | 49.977 / 47.074 | 53.525 / **3.887** | **92.7 %** (θ10) |
+
+**`n_slice = 3` is just as badly non-convergent as `n_slice = 2`** — the failure simply moves to a
+different angle. The prediction is **refuted**.
+
+What survives and what does not:
+
+* **Survives [M/A]:** the arithmetic explaining *where the collisions come from*. `155 × tan 2° − 5.00 =
+  0.41 nm` matches three of six measured pair separations exactly. That is a correct account of the
+  **geometry**.
+* **Refuted [M]:** the inference that those collisions **cause** the loss of degree-convergence, and hence
+  that avoiding them fixes it. Collision geometry and conditioning failure are **not** the same thing.
+
+This is the **second** hypothesis falsified in this audit (after the `J → 0` sliver, §4.2). Both were
+plausible, quantitatively consistent with some of the evidence, and wrong. The pattern in the failures is
+notable: the collapse lands on an apparently arbitrary `(n_slice, degree, θ)` cell (θ8 at ns=2/deg8;
+θ10 at ns=3/deg8; θ10 at ns=4/deg8) rather than tracking any geometric parameter — which is what one would
+expect from a conditioning threshold being crossed unpredictably, not from a systematic geometric
+resonance.
+
+**Consequence for the recommendations:** no cheap geometric workaround has survived testing. `min_feature`
+remains the only lever measured to work (and only at `n_slice = 2`, §5.3). That is an argument for the
+structural fix — **R-6** — rather than for further parameter tuning, and **R-8 is withdrawn**.
 
 ---
 
@@ -399,7 +430,7 @@ documentation + detection; see R-3 for the principled default.
 | **R-5** | P3 | Covariant taper-metric layer for the general trapezoid (§8.3) — research-adjacent | open |
 | **R-6** | **P2** | **Per-layer element grids with interface projection (§8.2)** — removes the collision class outright, retires `min_feature` as an accuracy knob, lets `n_slice` scale, and is plausibly a large net **speed-up**. ~1–3 weeks. **The recommended structural fix.** | open |
 | **R-7** | P3 | Replace the cascading pairwise snap with **lattice quantisation** (§8.1), sized by the separations to remove (~1 nm here), for determinism and bounded displacement | open |
-| **R-8** | **P2** | Warn when the per-slice taper offset is within ~a few tenths of a nm of a coat thickness or small multiple (§4.4) — cheap, and would have caught this at build time | open |
+| ~~R-8~~ | — | ~~Warn when the per-slice taper offset resonates with a coat thickness (§4.4)~~ — **WITHDRAWN**: the resonance explains where collisions come from but **not** the convergence failure; `n_slice = 3` avoids it and is equally non-convergent (§4.5) [M] | **withdrawn** |
 
 ### For users of tapered `PMMStack` geometry, today
 1. **Set `min_feature` explicitly.** Do not accept the default on a tapered stack. Validate by sweeping it:
