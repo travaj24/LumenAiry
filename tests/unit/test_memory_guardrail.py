@@ -295,7 +295,10 @@ def test_set_low_memory_restores_user_customizations():
         assert la.get_fft_auto_promote() is False   # user pin survives
         assert la.get_fft_plan_cache_size() == 16   # user size survives
     finally:
-        la.set_fft_auto_promote(True)
+        # audit W9: the shipped default is False since v5.30.1 (auto-promote
+        # is opt-in), so restoring True here would leak the non-reproducible
+        # planner into the rest of the worker.
+        la.set_fft_auto_promote(False)
         la.set_fft_plan_cache_size(8)
 
 

@@ -122,7 +122,7 @@ from ..memory import available_cpus as _available_cpus
 # capped at ``_FFTW_DEFAULT_THREAD_CAP``.  This is NOT bit-identical to the
 # all-core count (a different thread count changes the FFT reduction order at
 # the LSB, ~1e-15 relative -- the same order-of-magnitude perturbation the
-# ESTIMATE->MEASURE auto-promote already introduces), so it is applied only to
+# opt-in ESTIMATE->MEASURE auto-promote introduces), so it is applied only to
 # the DEFAULT; pass an explicit ``set_fft_threads(n)`` to pin ANY count,
 # including all cores via ``set_fft_threads(<available_cpus()>)``.
 _FFTW_DEFAULT_THREAD_CAP = 8
@@ -624,12 +624,55 @@ _PYFFTW_PLAN_FLAGS = ('FFTW_ESTIMATE',)
 
 # 4.12 auto-promote: when an ESTIMATE-flagged plan key gets called this
 # many times, the plan is evicted and rebuilt with FFTW_MEASURE so the
-# steady-state hot path benefits from the better planner without making
-# the user opt in explicitly.  Below the threshold the one-shot MEASURE
-# planning cost (~0.1-1 s on a 4k grid) isn't recouped, so we stay with
-# ESTIMATE.  Disable globally via ``set_fft_auto_promote(False)`` for
-# bit-for-bit deterministic-output workflows.
-_PYFFTW_AUTO_PROMOTE = True
+# steady-state hot path benefits from the better planner.  Below the
+# threshold the one-shot MEASURE planning cost (~0.2-11 s, 256^2..4096^2
+# measured) isn't recouped, so we stay with ESTIMATE.
+#
+# v5.30.1 (audit W9): the DEFAULT is now False -- auto-promote is OPT-IN.
+# It was on by default from 4.12 through v5.30, which made lumenairy
+# silently non-reproducible, in two separate ways:
+#
+#   1. IN-PROCESS.  The switch happens mid-session, at whichever call
+#      crosses the threshold at that key.  A caller doing N transforms per
+#      user-level call sees its output change bits after ceil(5/N) calls
+#      on one FIXED input -- measured on apply_real_lens_traced (4
+#      transforms per call at one 256^2 key): calls 0-1 give one value,
+#      calls 2+ a different one, max|d| ~ 2.8e-15.  Because 'calls' is
+#      global state keyed on (direction, shape, dtype, threads), an
+#      UNRELATED earlier caller at the same shape moves the boundary --
+#      which is how this reached CI as a collection-order-dependent
+#      failure of a byte-identity pin.
+#   2. ACROSS PROCESSES.  FFTW_MEASURE picks its algorithm by TIMING
+#      candidate plans at plan time, so the winner depends on machine
+#      noise.  Measured: 4 fresh processes, same input, 4 DIFFERENT
+#      post-promotion bit patterns -- while the ESTIMATE result was
+#      identical in all 4.  Only ESTIMATE is a deterministic planner.
+#
+# Neither result is "more correct" (both are valid FFTs, differing at the
+# ULP), so the tie-break is reproducibility: a physics library must return
+# the same bits for the same inputs on the same box.  The throughput is
+# still one call away, and BOTH opt-in routes are in-process deterministic
+# because they plan at FIRST use and never swap mid-run:
+#
+#   set_pyfftw_planner('FFTW_MEASURE')  -- plan every key with MEASURE from
+#       call 1 (recommended; also skips the wasted ESTIMATE warm-up phase).
+#   set_fft_auto_promote(True)          -- restore the pre-v5.30.1 threshold
+#       behaviour, boundary and all.
+#
+# Measured ESTIMATE -> MEASURE steady-state execution speedup on this box
+# (complex128, 8 threads): 1.39x @256^2, 2.22x @512^2, 2.04x @1024^2,
+# 3.67x @2048^2, 4.55x @4096^2 -- so the opt-in is well worth it for
+# long-running production sweeps, and is documented as such.
+#
+# ``_PYFFTW_AUTO_PROMOTE_SHIPPED`` is the immutable source-declared default
+# (mirroring ``DEFAULT_WAVE_PROPAGATOR_SHIPPED``).  ``_PYFFTW_AUTO_PROMOTE``
+# is the live, setter-mutable value.  Keeping the two separate lets
+# ``memory.py``'s ``_LOW_MEMORY_SHIPPED_DEFAULTS`` and the audit-W9 pin
+# assert the shipped contract without depending on whatever the current
+# process last set -- deliberately NOT in ``__all__``, same as the live
+# global and the other FFT backend-config knobs.
+_PYFFTW_AUTO_PROMOTE_SHIPPED = False
+_PYFFTW_AUTO_PROMOTE = _PYFFTW_AUTO_PROMOTE_SHIPPED
 _PYFFTW_AUTO_PROMOTE_THRESHOLD = 5
 
 
@@ -651,7 +694,22 @@ def set_pyfftw_planner(planner: str = 'FFTW_ESTIMATE') -> None:
     subsequent calls re-plan with the new flag.  For optimisation
     runs that hit a small number of shapes, calling this once at
     script start with ``'FFTW_MEASURE'`` is the recommended
-    production setup.
+    production setup -- planning at first use keeps the whole process
+    on ONE algorithm per key, so results stay internally consistent
+    (unlike :func:`set_fft_auto_promote`, which swaps mid-session).
+
+    .. warning::
+        Switching **back** to ``'FFTW_ESTIMATE'`` does not restore the
+        bits you had before (audit W9).  Clearing the plan cache does
+        not clear libfftw3's process-global *wisdom*: once MEASURE has
+        planned a given problem size, later ESTIMATE plans at that size
+        reuse the wisdom-recorded algorithm.  Measured on a 256^2
+        complex128 transform -- the post-switch ESTIMATE result matched
+        the MEASURE result, not the clean-process ESTIMATE result.  A
+        higher-effort planner is therefore a one-way door within a
+        process; start a fresh process (or
+        ``pyfftw.forget_wisdom()``) to get the deterministic ESTIMATE
+        baseline back.
     """
     global _PYFFTW_PLAN_FLAGS, _PYFFTW_AUTO_PROMOTE_LOGGED
     valid = {'FFTW_ESTIMATE', 'FFTW_MEASURE',
@@ -1049,10 +1107,11 @@ def _get_or_make_plan(direction, shape, dtype, threads):
     call.  See :func:`_fft2` / :func:`_ifft2` docstrings for the
     contract.
 
-    Auto-promote: when ``_PYFFTW_AUTO_PROMOTE`` is True (default), an
-    entry whose plan was built with ``FFTW_ESTIMATE`` is rebuilt with
-    ``FFTW_MEASURE`` after its 5th call.  See
-    :func:`set_fft_auto_promote`.
+    Auto-promote: when ``_PYFFTW_AUTO_PROMOTE`` is True (v5.30.1: OPT-IN,
+    default False), an entry whose plan was built with ``FFTW_ESTIMATE``
+    is rebuilt with ``FFTW_MEASURE`` after its 5th call -- which changes
+    the output bits mid-session at whichever caller crosses the shared
+    per-key counter.  See :func:`set_fft_auto_promote`.
     """
     shape_t = tuple(int(s) for s in shape)
     dt = np.dtype(dtype)
@@ -1653,15 +1712,15 @@ def get_pyfftw_planner() -> str:
 def set_fft_auto_promote(enabled: bool) -> None:
     """Enable or disable automatic ESTIMATE -> MEASURE plan promotion (4.12).
 
-    When enabled (the default), the pyFFTW plan cache tracks the
-    call count for every ``(direction, shape, dtype, threads)`` key
-    that was built under :data:`_PYFFTW_PLAN_FLAGS` =
-    ``'FFTW_ESTIMATE'`` (i.e. the library default).  After the 5th
-    call at the same key, the plan is rebuilt with ``FFTW_MEASURE``
-    so that the steady-state hot path benefits from FFTW's more
-    aggressive algorithm choice (~1.3-2x faster execution on common
-    optics shapes, in exchange for a one-shot ~100-1000 ms planning
-    cost at the promotion call).
+    When enabled, the pyFFTW plan cache tracks the call count for
+    every ``(direction, shape, dtype, threads)`` key that was built
+    under :data:`_PYFFTW_PLAN_FLAGS` = ``'FFTW_ESTIMATE'`` (i.e. the
+    library default).  After the 5th call at the same key, the plan is
+    rebuilt with ``FFTW_MEASURE`` so that the steady-state hot path
+    benefits from FFTW's more aggressive algorithm choice (measured
+    1.4x @256^2 to 4.6x @4096^2 faster execution on complex128 optics
+    shapes, in exchange for a one-shot ~0.2-11 s planning cost at the
+    promotion call).
 
     Promotion is one-shot per key and survives until the next
     :func:`reset_fft_backend` / :func:`set_pyfftw_planner` /
@@ -1669,13 +1728,29 @@ def set_fft_auto_promote(enabled: bool) -> None:
     Eviction from the LRU restarts the call counter from zero, so a
     rarely-used key won't keep paying the MEASURE cost on rebuild.
 
-    Pass ``False`` for bit-for-bit reproducibility across runs: the
-    FFTW MEASURE planner can pick a different algorithm than
-    ESTIMATE, and while the change is at the float-LSB level it can
-    perturb the final ULP of cumulative-sum outputs.  Disable also
-    if you have an explicit :func:`set_pyfftw_planner` strategy
-    (e.g. ``'FFTW_PATIENT'``) and want to control the planner
-    yourself.
+    .. versionchanged:: 5.30.1
+        **The default is now** ``False`` **(opt-in)**; it was ``True``
+        from 4.12 through v5.30.  Auto-promote is not reproducible, and
+        it was on by default: (1) it swaps the plan MID-SESSION, so one
+        FIXED input returns one bit pattern before the threshold call
+        and a different one after (measured ~2.8e-15 on a 256^2 traced
+        lens: calls 0-1 vs calls 2+), and the counter is GLOBAL per
+        ``(direction, shape, dtype, threads)`` key, so an unrelated
+        earlier caller at the same shape moves the boundary; (2)
+        ``FFTW_MEASURE`` selects its algorithm by timing candidates at
+        plan time, so the winner -- and therefore the output bits --
+        varies with machine noise (measured: 4 fresh processes, 4
+        distinct post-promotion results, where ESTIMATE gave one).
+        Neither result is more accurate; the default now favours
+        reproducibility.
+
+    To get the throughput back, prefer ``set_pyfftw_planner(
+    'FFTW_MEASURE')`` over ``set_fft_auto_promote(True)``: it plans
+    every key with MEASURE at FIRST use, so the process is internally
+    byte-consistent from call 1 and skips the wasted ESTIMATE warm-up
+    phase entirely.  Both opt-ins trade run-to-run reproducibility for
+    speed -- that is inherent to a timing-based planner, not a
+    lumenairy limitation.
 
     Companion to :func:`get_fft_auto_promote`.  No-op when pyFFTW
     is not installed.
@@ -1687,8 +1762,14 @@ def set_fft_auto_promote(enabled: bool) -> None:
 def get_fft_auto_promote() -> bool:
     """Return whether auto-promote of ESTIMATE -> MEASURE is on (4.12).
 
-    Mirrors :func:`set_fft_auto_promote`.  Defaults to ``True`` at
+    Mirrors :func:`set_fft_auto_promote`.  Defaults to ``False`` at
     import time.
+
+    .. versionchanged:: 5.30.1
+        The import-time default flipped ``True`` -> ``False`` (audit W9):
+        auto-promote is now opt-in because it is not reproducible either
+        in-process (the plan swaps mid-session) or across processes (the
+        MEASURE planner picks by timing).  See :func:`set_fft_auto_promote`.
     """
     return bool(_PYFFTW_AUTO_PROMOTE)
 

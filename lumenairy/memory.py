@@ -982,7 +982,14 @@ _LOW_MEMORY_SHIPPED_DEFAULTS: Dict[str, Any] = {
     'plan_cache_size': 8,
     'lens_parallel_amp': True,
     'fft_double_buffer': True,
-    'fft_auto_promote': True,
+    # v5.30.1 (audit W9): tracks the fft_infra default, which flipped
+    # True -> False when ESTIMATE->MEASURE auto-promote became opt-in.
+    # Must stay in sync -- this table is what set_low_memory(False)
+    # restores when there is no enable on record, so a stale True here
+    # would silently switch a caller INTO the non-reproducible planner.
+    # Companion-locked to fft_infra._PYFFTW_AUTO_PROMOTE_SHIPPED by
+    # tests/unit/test_niche_audit_w9_traced_determinism.py.
+    'fft_auto_promote': False,
 }
 
 
@@ -1000,6 +1007,10 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
       * ``set_lens_parallel_amp(False)``   -- sequential amp (largest claw-back)
       * ``set_fft_double_buffer(False)``   -- one aligned buffer per plan key
       * ``set_fft_auto_promote(False)``    -- no transient MEASURE re-plan
+        (v5.30.1: already the shipped default, so this is a no-op unless
+        the caller opted in; before v5.30.1 the "byte-identical to a
+        default run" claim above was false for THIS knob, since a default
+        run promoted to MEASURE after the 5th call at a key)
 
     Aggressive set (CHANGE NUMERICS -- gated + logged):
       * ``set_default_complex_dtype(np.complex64)``  (~80 dB dynamic range)

@@ -120,10 +120,16 @@ def _warm(_setup):
     layout, same history), while a210de4 / d78b39f / 848e8f9 layouts did
     not.  Two warm-up calls with this module's own geometry (same FFT
     shapes, same cache keys) land the boundary before any pinned pair.
-    The underlying call-history ulp drift is recorded as an open
-    determinism defect to root-cause -- this fixture makes the pins
-    measure what they claim (remap_sampling inertness), not cache
-    warm-up."""
+    RESOLVED (same wave): the drift was fft_infra's ESTIMATE->MEASURE
+    plan auto-promote tripping its 5-transform per-key counter inside
+    the traced pipeline's second call; auto-promote now ships OFF
+    (audit W9, tests/unit/test_niche_audit_w9_traced_determinism.py
+    pins the contract), which makes this fixture REDUNDANT (measured
+    10/10 green with it neutered).  Kept anyway as defense-in-depth:
+    if any test earlier in a shard opts back in without restoring
+    (set_fft_auto_promote(True) / set_pyfftw_planner), the warm-up
+    keeps these byte-identity pins measuring remap_sampling inertness
+    rather than that leak."""
     E, kw, _ = _setup
     for _ in range(2):
         _run(E, kw, ray_subsample=4)

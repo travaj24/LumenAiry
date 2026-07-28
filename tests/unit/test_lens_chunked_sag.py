@@ -30,10 +30,16 @@ from lumenairy.elements._lens_traced import apply_real_lens_traced
 
 @pytest.fixture(autouse=True)
 def _deterministic_fft():
-    """Pin FFT plan determinism across calls for byte-equality asserts."""
+    """Pin FFT plan determinism across calls for byte-equality asserts.
+
+    audit W9: restore the PRIOR value, not a hardcoded True.  Since
+    v5.30.1 the shipped default is False, so a hardcoded True teardown
+    would leak the non-reproducible planner into the rest of the worker.
+    """
+    prev = la.get_fft_auto_promote()
     la.set_fft_auto_promote(False)
     yield
-    la.set_fft_auto_promote(True)
+    la.set_fft_auto_promote(prev)
 
 
 def _presc(decenter=None):

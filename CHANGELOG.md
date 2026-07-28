@@ -105,6 +105,57 @@ altogether.
 Pins: `tests/unit/test_niche_audit_w9_pmm_taper.py` (19; 16 fail on a
 pre-change worktree, 3 pass as regression + error-law locks).
 
+### Fixed — ESTIMATE→MEASURE FFT plan auto-promote now ships OFF (audit W9, `propagators/fft_infra.py`)
+
+`apply_real_lens_traced` on one FIXED input returned one bit pattern for its
+first two calls and a different one (max|d| ~ 2.8e-15) for every call after,
+in a fresh process. Root cause was not the traced pipeline: `fft_infra`
+shipped auto-promote ON since 4.12, and one traced call runs exactly four
+transforms at one 256² plan key, so the per-key counter trips the 5-call
+threshold *inside call 2* and rebuilds the plan under `FFTW_MEASURE`
+mid-session.
+
+- **The default flipped `True` → `False`** (`_PYFFTW_AUTO_PROMOTE_SHIPPED`, a
+  new immutable source-declared constant mirroring
+  `DEFAULT_WAVE_PROPAGATOR_SHIPPED`). Two independent reproducibility
+  failures, both MEASURED: (1) the counter is global per
+  `(direction, shape, dtype, threads)`, so an unrelated earlier caller at the
+  same shape moves the boundary — this reached CI as a byte-identity pin
+  failing on one pytest collection layout and passing on three others; (2)
+  `FFTW_MEASURE` selects its algorithm by *timing* candidates, so four fresh
+  processes gave four DIFFERENT post-promotion results where ESTIMATE gave
+  one identical result in all four. Only ESTIMATE is a deterministic planner.
+  Neither result is more accurate, so the tie-break is reproducibility —
+  and `docs/TOLERANCE_POLICY.md` already promised it ("determinism within a
+  build is guaranteed" — false before this fix).
+- **The feature is kept, as an opt-in**, because the speedup is real
+  (complex128, 8 threads): 1.39x @256², 2.22x @512², 2.04x @1024²,
+  3.67x @2048², 4.55x @4096². Prefer `set_pyfftw_planner('FFTW_MEASURE')`
+  over `set_fft_auto_promote(True)`: it plans every key at FIRST use, so the
+  process stays internally byte-consistent from call 0 (MEASURED 8/8) and
+  skips the wasted ESTIMATE warm-up.
+- **`set_pyfftw_planner` now documents that a high-effort planner is a
+  one-way door.** Clearing the plan cache does not clear libfftw3's
+  process-global *wisdom*: after a MEASURE plan, later ESTIMATE plans at that
+  size reuse the wisdom-recorded algorithm (MEASURED `f51bdc2a28c2` clean vs
+  `5d609b5be4f7` post-MEASURE on a 256² transform).
+- **`memory._LOW_MEMORY_SHIPPED_DEFAULTS['fft_auto_promote']` → `False`**,
+  companion-locked to the fft_infra constant by the new pin. A stale `True`
+  would have made `set_low_memory(False)` with no enable on record silently
+  opt the caller INTO the non-reproducible planner.
+- **Result (MEASURED, post-fix):** the 30-iteration traced stress reports
+  `0/30 iterations diverged`; a 100-call fresh-process byte map is a single
+  group `calls 0..99`, with the SAME hash in three separate processes and
+  equal to the pre-fix call-0 value. Also verified at 512² and 1024². The
+  s12 warm-up fixture (8352e79) is thereby redundant and retained only as
+  defense-in-depth against an unrestored opt-in leaking across a shard.
+- New pin `tests/unit/test_niche_audit_w9_traced_determinism.py` (7 tests;
+  3 fail against the pre-fix default). It snapshots/restores FFTW wisdom so
+  its own opt-in tests cannot perturb later tests in the same worker, and it
+  passes identically under four different collection layouts. Four existing
+  fixtures that restored auto-promote to a hardcoded `True` now restore the
+  prior value instead.
+
 ### Fixed — the shared eig VJP's broadening floor is now SPECTRUM-RELATIVE (audit W9, `elements/rcwa/_core.py`)
 
 The custom-VJP `eig` (`_jax_eig_stable`, shared by RCWA, PMM 1-D/2-D/Jones/stacks,
