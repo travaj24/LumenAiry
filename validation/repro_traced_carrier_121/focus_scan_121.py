@@ -11,9 +11,11 @@
 # propagate_traced_carrier_chain defaults to -- since v5.29 the validated
 # carrier-regime triple (carrier_reference='sphere' +
 # amplitude_model='ray_density' + preserve_input_phase='remap').  Expected
-# at N=2048 / NFC=8192 / WF=4.0: AT-PLANE 3.650 um / 87.1 / 99.3, best focus
-# dz=+5..+10 um -> FWHM 3.550 um / EE3 88.4 / EE6 99.3, ON-AXIS
-# (audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 gate (b)).
+# at N=2048 / NFC=8192 / WF=4.0, best focus -> FWHM 3.450 um / EE3 88.8 /
+# EE6 99.6 / EE12 99.8, ON-AXIS -- the post-S12 SHIPPING-DEFAULT acceptance,
+# equal to the measured ideal-field ceiling for this readout
+# (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24; the earlier
+# 3.550 / 88.4 / 99.3 line was the pre-S12 configuration).
 #
 # Pre-v5.29 this script HARD-CODED AM='ray_density' + PIP='0' as its env
 # DEFAULTS, so a plain run silently measured the intermediate `rd+pip0`
@@ -170,4 +172,4 @@ print(f"BEST-FOCUS dz={best[0]:+d}um: FWHM={fw*1e6:.3f}um EE3={ee[3]*100:.1f}% "
 print("  targets: FWHM 3.223um EE3 91.0% EE6 100.0% (POP waist 2.737um radius;"
       " ideal-field ceiling through this readout 3.45-3.55um / 90.3 / 99.8)")
 print("  shipping-default acceptance (CREF/AM/PIP unset, N=2048/NFC=8192/"
-      "WF=4.0): best focus 3.550um / 88.4 / 99.3, on-axis")
+      "WF=4.0): best focus 3.450um / 88.8 / 99.6, on-axis")

@@ -769,10 +769,10 @@ design_optimize(..., wave_propagator='real_lens_traced')
 
 ### Not removed
 
-`propagate()`'s scheduled **return-contract transition** (P5) is a default
-*flip*, not a shim removal, and remains scheduled for v5.32 — pass
-`return_result=True` (stable `PropagationResult`) or `return_result=False`
-(legacy shapes, available past the flip) to silence its warning now.
+`propagate()`'s **return-contract transition** (P5) is a default *flip*, not a
+shim removal — and it **executed in v5.30**: `propagate()` now returns a
+`PropagationResult` by default.  Pass `return_result=False` for the legacy
+shapes; that escape hatch is permanent and is not scheduled for removal.
 `...with_opl_callable(chunk_output=)`, `rcwa_efficiency_1d_jax`,
 `load_zmx_prescription` / `load_zemax_prescription_txt`, the
 `output_grid` -> `output_shape` sub-propagator renames, `MultiFieldMerit`

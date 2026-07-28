@@ -2857,8 +2857,10 @@ def propagate_traced_carrier_chain(
         r^4 carried content beyond ~1.5 beam radii.  Pass
         ``traced_kwargs={'remap_sampling': 'full'}`` (see
         :func:`lumenairy.apply_real_lens_traced`) to sample it at full
-        wave-grid resolution instead; that is the recommended addition to the
-        validated triple and is opt-in only for byte-compatibility.
+        wave-grid resolution instead.  Since the S12 flip this is a CHAIN
+        DEFAULT (part of the shipped validated configuration); pass
+        ``'ray'`` explicitly only to reproduce the pre-S12 byte-identical
+        behaviour.
 
     self_check : {'dx', 'off', None}, default None
         Opt-in convergence self-check (P2, audit
