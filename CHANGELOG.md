@@ -4,6 +4,45 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added — PMM per-layer element grids with interface mortar (audit R-6, `elements/pmm/`)
+
+`PMMStack(..., layer_grids='per-layer')` (opt-in; default `'shared'` is
+byte-identical to prior behaviour): each layer's SEM operators are assembled
+on its OWN element grid — its walls plus its two NEIGHBOURS' (the
+interface-conforming window) — and adjacent layers are coupled by an exact L2
+mortar (`_interface_smatrix_mortar`), with rectangular-block Redheffer
+support (`_redheffer_star_rect`).  Removes the shared-union-grid
+wall-collision pathology structurally: MEASURED on the 2-deg coated-pillar
+taper, in-plane oblique degree spread 91% -> 5–6% at the library-DEFAULT
+`min_feature` (inert on this path), the n_slice=4 conditioning re-break
+15.7% -> 4.7%, and 17.8x faster (97.3 s -> 5.5 s per solve pair).  The
+n_slice staircase ladder is now affordable and CONVERGES (ns~6, 0.1–0.4%
+ns6->ns8); the ns=2 values used previously carried 10–30% staircase-geometry
+error at oblique angles.  Conical (`phi != 0`) is covered via the same
+construction in `_conical_nodal_solve` (bit-exact on 2-layer stacks; 1.4–5.8%
+vs the converged shared reference on the audit device; 14–18x faster).
+Known residual: the non-conforming mortar remainder decays spectrally
+(|R+T-1| ~1e-4 at degree 6 -> ~1e-6 at degree 10) — use degree >= 8 for
+deep-null work; publication-grade closure stays with the shared grid, and the
+two paths now cross-check each other (the independent oracle
+`AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md` §7 found missing).
+Not on the per-layer surface (raise loudly): slant, out-of-plane tensors,
+JAX, `stabilize`, `retain_internal`, `prepare()`, `solve_vs_wavelength`.
+Implementation report: `docs/audits/AUDIT_PMM_PER_LAYER_GRIDS_IMPL_2026_07_28.md`.
+
+### Fixed — the staircase guard is reachable on geometry-built stacks (audit R-1, `elements/pmm/stack.py`)
+
+`solve(stabilize='slices')` previously SKIPPED entirely when no taper-builder
+recipe was recorded, leaving every `SegmentStackGeometry`-built stack — the
+documented device route — unprotected against the passive-but-wrong staircase
+pathology.  It now falls back to a union-grid consensus (`min_feature`
+perturbation anchored to a physical ~nm scale), verified to fire on the
+pathological stack and stay silent on clean ones.  The wall-snap warning
+reports its max wall displacement, and `min_feature` is documented as an
+ACCURACY knob (its default, `period * 1e-5`, is ~200x too small for tapered
+stacks whose collision scale is `(thickness/n_slices)*tan(sidewall)`).
+
+
 ## [5.31.0] — 2026-07-27
 
 The **W8 + W9 audit follow-up waves** to the v5.30.0 adversarial-audit campaign:
