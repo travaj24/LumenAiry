@@ -3545,6 +3545,47 @@ def _interface_smatrix_mortar(Wa, Va, Wb, Vb, Ma, Mb, Cab):
     return (S11, S12, S21, S22)
 
 
+def _interface_smatrix_general_mortar(Ma, Mb, Mass_a, Mass_b, Cab):
+    """GENERAL (explicit forward/backward) interface S-matrix between mode
+    sets on DIFFERENT nodal grids (audit R-6, slant/OOP extension).
+
+    ``Ma = [[Wf_a, Wb_a], [Vf_a, Vb_a]]`` etc. (rows = 2n field values E over
+    H; cols = forward over backward modes).  Continuity is enforced weakly --
+    tangential E tested on grid ``b``, tangential H on grid ``a`` (the same
+    energy-consistent pairing as :func:`_interface_smatrix_mortar`), giving
+    the square scattering system::
+
+        [ Cba Wb_a   -M_b Wf_b ] [ca-]   [ -Cba Wf_a   M_b Wb_b ] [ca+]
+        [ M_a Vb_a   -Cab Vf_b ] [cb+] = [ -M_a Vf_a   Cab Vb_b ] [cb-]
+
+    with ``Cba = Cab^T`` and every mass/cross applied blockwise over the
+    2-component field stacking.  On identical grids this reduces to the plain
+    continuity of :func:`_interface_smatrix_general` (same equations, solved
+    in the scattering arrangement)."""
+    na2 = Ma.shape[0] // 2          # 2 * n_glob_a  (field rows per E/H block)
+    nb2 = Mb.shape[0] // 2
+    ma = Ma.shape[1] // 2           # forward-mode count of a
+    mb = Mb.shape[1] // 2
+    Wf_a, Wb_a = Ma[:na2, :ma], Ma[:na2, ma:]
+    Vf_a, Vb_a = Ma[na2:, :ma], Ma[na2:, ma:]
+    Wf_b, Wb_b = Mb[:nb2, :mb], Mb[:nb2, mb:]
+    Vf_b, Vb_b = Mb[nb2:, :mb], Mb[nb2:, mb:]
+    bMa = np.kron(np.eye(2), Mass_a)
+    bMb = np.kron(np.eye(2), Mass_b)
+    bCab = np.kron(np.eye(2), Cab)
+    bCba = np.kron(np.eye(2), Cab.T)
+    A = np.block([[bCba @ Wb_a, -(bMb @ Wf_b)],
+                  [bMa @ Vb_a, -(bCab @ Vf_b)]])
+    B = np.block([[-(bCba @ Wf_a), bMb @ Wb_b],
+                  [-(bMa @ Vf_a), bCab @ Vb_b]])
+    X = np.linalg.solve(A, B)
+    S11 = X[:ma, :ma]
+    S12 = X[:ma, ma:]
+    S21 = X[ma:, :ma]
+    S22 = X[ma:, ma:]
+    return (S11, S12, S21, S22)
+
+
 def _redheffer_star_rect(SA, SB):
     """Redheffer star tolerating RECTANGULAR off-diagonal blocks (adjacent
     per-layer grids carry different mode counts).  Identity blocks are sized

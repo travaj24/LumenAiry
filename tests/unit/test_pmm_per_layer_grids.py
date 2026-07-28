@@ -118,11 +118,6 @@ def test_unsupported_combinations_raise():
         st.solve(stabilize="slices")
     with pytest.raises(NotImplementedError, match="per-layer"):
         st.prepare()
-    sl = PMMStack(P, degree=6, far_field_orders=7, layer_grids="per-layer")
-    sl.add_layer(100e-9, segments=[(0.4, 4.0 + 0j), (0.6, 1.0 + 0j)],
-                 slant_angle=0.2)
-    with pytest.raises(NotImplementedError, match="per-layer"):
-        sl.set_source(WL, theta=0.1).solve()
     with pytest.raises(ValueError, match="layer_grids"):
         PMMStack(P, layer_grids="bananas")
 
@@ -215,3 +210,59 @@ def test_solve_vs_wavelength_per_layer():
     m2b = np.isin(o_sw, o_sh)
     assert float(np.max(np.abs(R_sh[:, :, m2] - R_sw[:, :, m2b]))) < 1e-14
     assert float(np.max(np.abs(J_sh - J_sw))) < 1e-12
+
+
+LAY_SLANT = [(220e-9, [(0.30, 4.0 + 0j), (0.70, 1.0 + 0j)]),
+             (180e-9, [(0.50, 2.25 + 0j), (0.50, 1.0 + 0j)])]
+_OOP_T = np.eye(3, dtype=complex) * 2.25
+_OOP_T[0, 2] = _OOP_T[2, 0] = 0.35 + 0.0j
+
+
+def _stack_slant(grids, degree=6):
+    st = PMMStack(P, n_substrate=1.5, n_superstrate=1.0, degree=degree,
+                  far_field_orders=7, layer_grids=grids)
+    st.add_layer(220e-9, segments=[(0.30, 4.0 + 0j), (0.70, 1.0 + 0j)],
+                 slant_angle=0.25)
+    st.add_layer(180e-9, segments=[(0.50, 2.25 + 0j), (0.50, 1.0 + 0j)])
+    return st
+
+
+def _stack_oop(grids, degree=6):
+    st = PMMStack(P, n_substrate=1.5, n_superstrate=1.0, degree=degree,
+                  far_field_orders=7, layer_grids=grids)
+    st.add_layer(220e-9, segments=[(0.30, _OOP_T), (0.70, 1.0 + 0j)])
+    st.add_layer(180e-9, segments=[(0.50, 2.25 + 0j), (0.50, 1.0 + 0j)])
+    return st
+
+
+def test_general_cascade_per_layer_matches_shared_on_conforming():
+    # MIXED-slant and OOP-tensor stacks take the GENERAL fwd/back cascade on
+    # both paths; a 2-layer stack's neighbour window is the full union, so
+    # the per-layer general cascade must match shared to solver round-off.
+    for build in (_stack_slant, _stack_oop):
+        Rs, Ts, Js = _solve(build("shared"))
+        Rp, Tp, Jp = _solve(build("per-layer"))
+        assert float(np.max(np.abs(Js - Jp))) < 1e-9
+        assert float(np.max(np.abs(Rs - Rp))) < 1e-9
+
+
+def test_general_mortar_energy_on_nonconforming_slant():
+    # 3 lossless layers with DIFFERENT walls (non-conforming interfaces:
+    # the general mortar engages), one slanted: energy must close within the
+    # mortar band and tighten with degree.
+    def build(deg):
+        st = PMMStack(P, n_substrate=1.5, n_superstrate=1.0, degree=deg,
+                      far_field_orders=7, layer_grids="per-layer")
+        st.add_layer(150e-9, segments=[(0.30, 4.0 + 0j), (0.70, 1.0 + 0j)])
+        st.add_layer(200e-9, segments=[(0.42, 4.0 + 0j), (0.58, 1.0 + 0j)],
+                     slant_angle=0.2)
+        st.add_layer(120e-9, segments=[(0.55, 2.25 + 0j), (0.45, 1.0 + 0j)])
+        return st
+    errs = []
+    for deg in (6, 10):
+        R, T, _ = _solve(build(deg))
+        errs.append(float(np.max(np.abs(R.sum(axis=1) + T.sum(axis=1)
+                                        - 1.0))))
+    assert errs[0] < 5e-3
+    assert errs[1] < 5e-4
+    assert errs[1] < errs[0]
