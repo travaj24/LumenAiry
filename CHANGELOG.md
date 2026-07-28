@@ -4,6 +4,27 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added — PMM per-layer grids: full surface build-out (`elements/pmm/`)
+
+The per-layer surface now covers (each gated in
+`tests/unit/test_pmm_per_layer_grids.py`, 11/11): `retain_internal` ->
+`internal_field` / `layer_absorption` (per-layer partial cascades; fields
+reconstruct on each layer's own machinery and REQUIRE `nx=` -- there is no
+single shared nodal axis; absorption closes ΣA ~= 1-R-T to 5e-3 on
+non-conforming stacks); `solve_vs_wavelength` (window grids, interface
+masses/cross-masses and both Rayleigh projectors hoisted once per sweep;
+<1e-14 vs per-λ solve and vs the shared sweep on conforming stacks;
+dispersive materials and thread-pool semantics preserved); SLANTED layers and
+OUT-OF-PLANE tensors via `_interface_smatrix_general_mortar` (the mixed
+weak-continuity scattering system; E tested on the lower grid, H on the
+upper; <1e-9 vs the shared general cascade on conforming windows); and the
+JAX twin `_pmm_stack_solve_jax_perlayer` (geometry concrete, eps/thickness/
+angle traced; forward <1e-10 vs NumPy, `jax.grad` vs FD to 5e-5).  Still
+shared-grid-only: the covariant uniform-slant route (single-frame by
+construction) and `prepare()` (design sketch + sequencing in
+`docs/audits/ROADMAP_PMM_PER_LAYER_GRIDS_2026_07_28.md`, together with the
+PMM2DStack per-layer extension plan and the remaining quality items).
+
 ### Added — PMM per-layer element grids with interface mortar (audit R-6, `elements/pmm/`)
 
 `PMMStack(..., layer_grids='per-layer')` (opt-in; default `'shared'` is
