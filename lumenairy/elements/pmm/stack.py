@@ -1255,11 +1255,6 @@ class PMMStack:
         # surface as the single-layer _pmm_jones_1d_jax -- so everything else
         # raises HERE (loudly, with the numpy alternative named).
         if self._holds_traced():
-            if self.layer_grids == "per-layer":
-                raise NotImplementedError(
-                    "PMMStack(layer_grids='per-layer'): the differentiable "
-                    "(JAX) twin is shared-grid only; use NumPy inputs or "
-                    "layer_grids='shared'.")
             if retain_internal:
                 raise NotImplementedError(
                     "PMMStack.solve(retain_internal=True): not available on "
@@ -1288,6 +1283,9 @@ class PMMStack:
                             "in-plane.  NB a TRACED (3,3) tensor cannot be "
                             "inspected -- its xz/yz/zx/zy entries are "
                             "ignored.")
+            if self.layer_grids == "per-layer":
+                from ._jax_stack import _pmm_stack_solve_jax_perlayer
+                return _pmm_stack_solve_jax_perlayer(self)
             from ._jax_stack import _pmm_stack_solve_jax
             return _pmm_stack_solve_jax(self)
 

@@ -266,3 +266,51 @@ def test_general_mortar_energy_on_nonconforming_slant():
     assert errs[0] < 5e-3
     assert errs[1] < 5e-4
     assert errs[1] < errs[0]
+
+
+def test_jax_per_layer_twin_forward_and_grad():
+    jax = pytest.importorskip("jax")
+    import jax.numpy as jnp
+    jax.config.update("jax_enable_x64", True)
+    # non-conforming 3-layer lossless stack: the mortar path in the twin
+    lay = [(150e-9, [(0.30, 4.0 + 0j), (0.70, 1.0 + 0j)]),
+           (200e-9, [(0.42, 4.0 + 0j), (0.58, 1.0 + 0j)]),
+           (120e-9, [(0.55, 2.25 + 0j), (0.45, 1.0 + 0j)])]
+
+    def build(eps_mid, grids):
+        st = PMMStack(P, n_substrate=1.5, n_superstrate=1.0, degree=6,
+                      far_field_orders=7, layer_grids=grids)
+        st.add_layer(150e-9, segments=[(0.30, 4.0 + 0j), (0.70, 1.0 + 0j)])
+        st.add_layer(200e-9, segments=[(0.42, eps_mid), (0.58, 1.0 + 0j)])
+        st.add_layer(120e-9, segments=[(0.55, 2.25 + 0j), (0.45, 1.0 + 0j)])
+        return st
+
+    th = np.deg2rad(8.0)
+    # forward parity: traced (JAX) per-layer vs NumPy per-layer
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        o_np, R_np, T_np, J_np = build(4.0 + 0j, "per-layer").set_source(
+            WL, theta=th).solve()
+        o_j, R_j, T_j, J_j = build(jnp.asarray(4.0 + 0j),
+                                   "per-layer").set_source(
+            WL, theta=th).solve()
+    m = np.isin(np.asarray(o_j), np.asarray(o_np))
+    mb = np.isin(np.asarray(o_np), np.asarray(o_j))
+    assert float(np.max(np.abs(np.asarray(R_j)[:, m]
+                               - np.asarray(R_np)[:, mb]))) < 1e-10
+    assert float(np.max(np.abs(np.asarray(J_j) - np.asarray(J_np)))) < 1e-10
+
+    # gradient: d(R00)/d(eps_mid) vs central finite difference
+    def f(e):
+        st = build(e, "per-layer").set_source(WL, theta=th)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _o, R, _T, _J = st.solve()
+        m0 = int(np.where(np.asarray(_o) == 0)[0][0])
+        return jnp.real(R[0, m0])
+
+    g = jax.grad(lambda e: f(e))(jnp.asarray(4.0 + 0.0j))
+    h = 1e-6
+    fd = (float(f(jnp.asarray(4.0 + h + 0j)))
+          - float(f(jnp.asarray(4.0 - h + 0j)))) / (2 * h)
+    assert abs(float(np.real(g)) - fd) < 5e-5 * max(1.0, abs(fd))
