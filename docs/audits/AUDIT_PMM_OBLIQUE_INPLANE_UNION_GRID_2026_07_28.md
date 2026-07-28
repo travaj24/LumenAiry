@@ -101,6 +101,34 @@ At `min_feature = 1.5 nm` every tested angle converges (θ0 0.2 %, θ8 0.1 %, θ
 is 2.1× faster. At 3.0 nm the snap over-perturbs the geometry and conditioning degrades again — the
 usable window is bounded on both sides.
 
+### Staircase convergence: `min_feature` cures `degree`, and exposes the n_slice limit
+
+Fixing `degree`-convergence is necessary but not sufficient: the answer must also be stationary in
+`n_slice`, the knob that actually approaches the physical taper (`O(1/n_slices^2)`). Measured at
+`min_feature = 1.5 nm` (in-plane ER, W_hiER2):
+
+| n_slice | θ0 (deg6 / deg8) | θ8 (deg6 / deg8) | θ10 (deg6 / deg8) | degree-spread |
+|---|---|---|---|---|
+| 1 | 17.442 / 17.470 | 12.506 / 12.525 | 10.398 / 10.413 | ≤ 0.16 % |
+| 2 | 49.640 / 49.555 | 54.889 / 54.834 | 54.702 / 54.679 | ≤ 0.17 % |
+| 4 | 49.964 / 49.848 | 55.959 / 55.877 | 56.233 / **47.400** | θ10 **15.7 %** |
+
+Two results:
+
+1. **The staircase is converging.** `n_slice = 1` is degenerate (one slab, no taper resolution) and must be
+   excluded; on the meaningful `2 → 4` step, five of six entries agree to **0.6–2.8 %**, consistent with the
+   documented `O(1/n_slices^2)` law. At `n_slice = 2` the residual staircase error is therefore ~1–3 % —
+   an engineering-usable number, versus the 20× corruption at the default `min_feature`.
+2. **But refining the staircase re-breaks the conditioning.** At `n_slice = 4`, θ10, the degree spread jumps
+   to **15.7 %** where every other cell is ≤ 0.23 %: `min_feature = 1.5 nm` is sufficient at `n_slice = 2`
+   and **not** at `n_slice = 4`.
+
+This is the structural vise, now measured: converging the taper needs MORE slices, but more slices grow the
+shared union grid (cost `O(n^3.4)`) and multiply cross-layer wall collisions, so conditioning degrades as
+geometry fidelity improves. `min_feature` mitigates but does not remove it, and it must be re-tuned per
+`n_slice`. Accuracy for tapered devices is therefore capped by the SHARED-GRID ARCHITECTURE, not by the
+staircase law. See R-6.
+
 ### Corroboration
 
 Removing the thin conformal coats (`ta = al = sin = 0`), which eliminates most cross-layer wall
@@ -191,6 +219,7 @@ Two points from that literature bear on this defect:
 | R-3 | **P2** | Make the `min_feature` default taper-aware: scale from `(thickness/n_slices)·tan(sidewall)` when a taper is present, instead of `period × 1e-5`. |
 | R-4 | **P2** | Document `min_feature` as an **accuracy** knob, not only a cost knob, and report cumulative snapped displacement. |
 | R-5 | **P3** | Advance the covariant taper-metric layer (general trapezoid, the roadmap item) — the structural fix that removes the collision class, as `add_sheared_grating` already does for pure shear. |
+| R-6 | **P2** | **Break the shared-union-grid coupling: give each layer its own element grid, with a projection / mortar at the interfaces.** This is the tractable half of R-5 and addresses the measured cap directly. Today every slice's walls enter ONE global grid, so refining a taper degrades every layer's conditioning and costs `O(n_slices^3.4)` — the vise measured in §3: `n_slice` 2 → 4 improves the geometry (0.6–2.8 % shift) but breaks degree-convergence at one angle (15.7 %). With per-layer grids a slice's walls stay local, cross-layer collisions cannot form, `min_feature` stops being an accuracy knob, and `n_slice` scales. Standard non-conforming spectral-element practice — engineering, not research, unlike R-5. |
 
 ### For users of tapered `PMMStack` geometry (immediately actionable)
 
@@ -212,6 +241,10 @@ Two points from that literature bear on this defect:
 - **Affected:** in-plane oblique extinction, which must be recomputed at `min_feature = 1.5e-9`. Under the
   corrected setting the in-plane response is smooth and *more* tolerant than previously reported
   (ER ≈ 49.6 / 54.9 / 54.7 at θ = 0 / 8 / 10°), replacing a jagged curve that was a conditioning artifact.
+- **Residual uncertainty, stated:** at the campaign's `n_slice = 2` the recomputed values carry a **~1–3 %
+  staircase uncertainty** (§3, the `n_slice` 2 → 4 step). They should be quoted with that band, not as
+  exact. Driving it lower is blocked by the vise above, i.e. by R-6 / R-5 — not by anything the user can
+  set. For the campaign's conclusions (which turn on 10 dB-scale differences) a 3 % band is immaterial.
 
 ---
 
