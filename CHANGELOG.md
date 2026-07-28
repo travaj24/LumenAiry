@@ -24,17 +24,17 @@ staircase — and the pure-shear sub-case gets a route that skips the staircase
 altogether.
 
 - **`shear` on `PMMStack.add_tapered_grating` and `add_tapered_ridges`**
-  (`stack.py:342`, `stack.py:653`).  The ridge centre is
+  (`lumenairy/elements/pmm/stack.py:342`, `lumenairy/elements/pmm/stack.py:653`).  The ridge centre is
   `0.5 + shear * (zeta - 0.5)` in period fractions — `shear` *periods* of
   lateral walk from top to bottom about mid-depth, `zeta` sampled per slice by
-  the same `rule` as the duty, wrap-aware (`stack.py:494`, `stack.py:710`).
+  the same `rule` as the duty, wrap-aware (`lumenairy/elements/pmm/stack.py:494`, `lumenairy/elements/pmm/stack.py:710`).
   `add_tapered_ridges` walks every tooth rigidly (`center + shear*period*(zeta-0.5)`)
   and keeps its overlap guard on the *sheared* geometry.  Both record `shear` in
-  the taper recipe (`stack.py:478`, `stack.py:703`) so `_resliced_clone` /
+  the taper recipe (`lumenairy/elements/pmm/stack.py:478`, `lumenairy/elements/pmm/stack.py:703`) so `_resliced_clone` /
   `solve(stabilize='slices')` replay the sheared structure rather than silently
   re-slicing an unsheared one.
 - **`shear=0` is BIT-identical to the pre-change builder.**  The new wrap-aware
-  slice builder `PMMStack._ridge_slice_segments` (`stack.py:301`) reproduces the
+  slice builder `PMMStack._ridge_slice_segments` (`lumenairy/elements/pmm/stack.py:301`) reproduces the
   historical `[0.5*(1-duty), duty, 0.5*(1-duty)]` triple *bit-for-bit*, because
   halving is exact in binary floating point (`(1-d)/2 == 0.5 - d/2`) and the
   groove widths are built as differences of the total groove so the list
@@ -55,12 +55,12 @@ altogether.
   (measured 4.7e-04 at *both* `nox = 31` and `61`); `shear` only phase-shifts
   the cell's Fourier coefficients, so that floor is shear-invariant (measured
   identical 4.6888e-04 at `shear` 0.35 and 1.4).
-- **NEW `PMMStack.add_sheared_grating`** (`stack.py:498`) — the taper-metric
+- **NEW `PMMStack.add_sheared_grating`** (`lumenairy/elements/pmm/stack.py:498`) — the taper-metric
   roadmap item's *shear* sub-case, exactly.  A parallelogram is the one taper
   the shipped covariant/convection machinery solves with **no z-staircase at
   all** (`u = x - z tan(phi)` keeps the modal coefficients z-independent), so
   this emits ONE slanted layer with
-  `slant_angle = arctan(shear*period/thickness)` (`stack.py:608`) and the same
+  `slant_angle = arctan(shear*period/thickness)` (`lumenairy/elements/pmm/stack.py:608`) and the same
   centre law as the staircase.  MEASURED against the staircase of the identical
   geometry (`P = 1 um`, `wl = 633 nm`, `d = 300 nm`, `eps_ridge = 4`,
   `duty = 0.45`, `shear = 0.35` = a 49.4° wall, `theta = 0.17`; error vs the
@@ -86,7 +86,7 @@ altogether.
 
 ### Documented — the tapered z-staircase's MEASURED budget, and two dead ends (audit W9, `elements/pmm/stack.py`)
 
-- **`O(1/n_slices^2)` CONFIRMED, and the cost quantified** (`stack.py:367`).
+- **`O(1/n_slices^2)` CONFIRMED, and the cost quantified** (`lumenairy/elements/pmm/stack.py:367`).
   Cost is `~O(n_slices^3.4)` end to end (`n_slices` 4/8/16 → 0.30/2.97/34.1 s at
   `degree = 12`) because the union grid — and therefore every layer's eig —
   grows with the slice count.  The staircase error itself was measured on the
@@ -95,14 +95,14 @@ altogether.
   1.27e-03 / 3.34e-04 / 8.47e-05 / 2.18e-05 / 5.70e-06 at `n_slices`
   8/16/32/64/128/256 — a factor 3.9 per doubling, shared by all 12 observables
   (3.5–4.6 at 32 → 64).
-- **`rule='trapezoid'` is a NO-OP here** (`stack.py:406`).  For the LINEAR duty
+- **`rule='trapezoid'` is a NO-OP here** (`lumenairy/elements/pmm/stack.py:406`).  For the LINEAR duty
   ramp these builders lay down, `0.5*(k/n + (k+1)/n) == (k + 0.5)/n` exactly, so
   `'trapezoid'` samples the same duty as `'midpoint'` up to last-bit rounding
   (measured bit-identical for 5 of the 7 slices at `n_slices = 7`, 1 ULP apart
   for the other 2).  It is kept for signature parity with `add_graded_layer`, whose profile is
   arbitrary and where the rules genuinely differ.
 - **Richardson extrapolation in `n_slices`: REJECTED, with numbers**
-  (`stack.py:380`).  Measured across 8 designs (duty ranges 0.10–0.85, lossy,
+  (`lumenairy/elements/pmm/stack.py:380`).  Measured across 8 designs (duty ranges 0.10–0.85, lossy,
   oblique 0.17/0.45, `eps_ridge` 4/9, deep + sheared, with and without shear)
   against the *equal-cost* comparator `f(2n)`: the `(n, 2n)`, `p = 2` two-point
   Richardson gains 3.0x / 7.4x / 14.5x on the clean designs but 1.0x / 0.95x /
@@ -230,26 +230,26 @@ pixel's correct effective medium is the ARITHMETIC average for one and the
 HARMONIC average for the other (Farjadpour et al. 2006).  One scalar cell
 cannot carry both.
 
-- **`raster='harmonic'`** (`stack.py:321`, `_raster_companions` at
-  `stack.py:404`) paints the AREA cell — BIT-IDENTICAL to `raster='area'`, so
+- **`raster='harmonic'`** (`lumenairy/elements/rcwa/stack.py:321`, `_raster_companions` at
+  `lumenairy/elements/rcwa/stack.py:404`) paints the AREA cell — BIT-IDENTICAL to `raster='area'`, so
   `plot_geometry`, the Im(eps) loss maps and `layer_absorption` read exactly
   the cell they always did — and rides an inverse-rule COMPANION PAIR
   `(exx, eyy)` that ONLY the `'li'` inverse Toeplitz reads.  The layer stays
   ISOTROPIC: the pair is two DISCRETIZATIONS of one scalar material, not a
   birefringent tensor (which is why it does not ride in an `eps_tensor_cell` —
   that would report a fake birefringence to the absorption machinery).
-- **`add_layer(..., eps_cell_normal=(exx, eyy))`** (`stack.py:1471`) is the
+- **`add_layer(..., eps_cell_normal=(exx, eyy))`** (`lumenairy/elements/rcwa/stack.py:1471`) is the
   seam; `formulation='li'` is required and every other pairing raises.
-  `RCWAStack._li_blocks` (`stack.py:2527`) is the SINGLE place the inverse rule
+  `RCWAStack._li_blocks` (`lumenairy/elements/rcwa/stack.py:2527`) is the SINGLE place the inverse rule
   reads its cell, shared by `_layer_modes` and the even-parity
   `_layer_even_spec`, so the two cascades cannot factorize a layer differently.
   With the pair equal to the cell it reduces to `_li_convolutions_2d` exactly
   (measured: `Cxx` bit-identical, `Cyy` 4.2e-16).  The pair enters
-  `_layer_eig_key` (`stack.py:2628`) — two layers with the same `eps_cell` and
+  `_layer_eig_key` (`lumenairy/elements/rcwa/stack.py:2628`) — two layers with the same `eps_cell` and
   different companions have different eigenproblems.
 - **The tapered builders grew `formulation=`** (`'laurent'` default,
-  bit-preserving; `stack.py:1797`/`1987`/`2060`, forwarded by
-  `add_graded_layer`, `stack.py:1705`), which also closes the documented wart
+  bit-preserving; `lumenairy/elements/rcwa/stack.py:1797`/`1987`/`2060`, forwarded by
+  `add_graded_layer`, `lumenairy/elements/rcwa/stack.py:1705`), which also closes the documented wart
   that reaching `'li'` meant rasterizing by hand.
 
 MEASURED, vertical binary grating against the EXACT analytic oracle (`n = 2/1`,
@@ -290,17 +290,17 @@ W8's guard decided every curved pair by scanning the support functions over
 4096 directions, which UNDER-estimates the separating-axis maximum by up to
 ~2e-7 of a period.  That approximation lived INSIDE the predicate, so the
 guard's blindness was the entanglement of two unrelated numbers.
-`_shapes_overlap` (`_core.py:1072`) is now exact algebra: rect/rect by interval
+`_shapes_overlap` (`lumenairy/elements/rcwa/_core.py:1072`) is now exact algebra: rect/rect by interval
 overlap, disk/disk by centre distance, rect/ellipse by axis-scaling the ellipse
 to the UNIT DISK (which keeps the rectangle axis-aligned), and ellipse/ellipse
 by axis-scaling the first to the unit disk — reducing every curved pair to
-POINT-ELLIPSE distance (`_point_ellipse_distance`, `_core.py:1020`: the distance
+POINT-ELLIPSE distance (`_point_ellipse_distance`, `lumenairy/elements/rcwa/_core.py:1020`: the distance
 quartic as a BRACKETED monotone root, a proven bracket and a fixed 64 bisections,
 never an unbracketed iteration).  Shapes are axis-aligned throughout — the shape
 dicts carry no rotation entry and neither do the form factors that read them.
 
 What remains is ONE explicit, named, one-sided tolerance,
-`_OVERLAP_SLACK_FRAC = 1e-6` (`_core.py:998`), overridable per call via
+`_OVERLAP_SLACK_FRAC = 1e-6` (`lumenairy/elements/rcwa/_core.py:998`), overridable per call via
 `tol_frac`.  Its VALUE is unchanged: it is a deliberate forgiveness for layouts
 whose centres came out of float arithmetic, not blindness.
 
