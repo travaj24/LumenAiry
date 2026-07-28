@@ -7,6 +7,29 @@ design-121 8-group chain (Tx02-MSOP16, lam = 1.31 um, 4 um-waist launch,
 exact final leg at NA ~ 0.46) by sweeping the launch grid at production
 scale (N = 28672 requested by the design study).
 
+> **STATUS (amended 2026-07-27, v5.31.0): ALL FOUR FINDINGS CLOSED.**
+>
+> * **F-A / F-C / F-D** — fixed by `7189dfd`; `_fourier_upsample_crop` gained a
+>   real band-limited downsample branch (shape invariant now holds in both
+>   directions).
+> * **F-B** — root-caused and closed, but never under the label "F-B", which is
+>   why this document read as open for five days. It was NOT the parabola
+>   hand-off: see `AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24.md` §2-§4 (frozen
+>   intra-group amplitude + `preserve_input_phase=True` analytic-pair phase
+>   corruption, both reproduced in ONE group with no chain machinery) and §6.7
+>   (dx-flat by configuration), plus `0a743a6` (coarse->fine upsample lattice
+>   bug). Shipped as the v5.29 chain default flip (`455be4a`, `a9dc454`).
+>   Design-121 acceptance is now EE6 99.6 / EE3 88.8 / FWHM 3.450 um at the SAME
+>   N=2048 / dx0=1.0 um where this audit measured 69.7%.
+> * Caveats carried forward into
+>   `ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27.md` §P4: dx-flatness is
+>   published only over N=1024-4096, so the worst row of the matrix below
+>   (dx0=0.25 um / N=8192, EE6 46.5% pre-flip) has never been re-published under
+>   the shipped defaults.
+> * The "Validity map" section below is superseded on one point: re-attributing
+>   the DOE fan scramble no longer "needs the F-B fix first" (that prerequisite
+>   is met). It lands on the multi-congruence gap instead — same roadmap, §P1.
+
 Summary: one hard bug (F-A, energy non-conservation at chain N > 16384), one
 first-order accuracy defect (F-B, the chain's absolute EE numbers are NOT
 dx-converged -- no plateau anywhere in the tested range), and two smaller

@@ -86,7 +86,7 @@ all; F2: intra-group fit conditioning; F3: guarding against a worse alternative;
 leg's sphere is the wrong reference at high NA). Part E is the first item that says the sphere
 itself is an incomplete basis for a corrected relay's ray launch.
 
-### 1.4 Relationship to F-B (dx-scaling audit, still open)
+### 1.4 Relationship to F-B (dx-scaling audit — CLOSED 2026-07-24, see note at end of §2)
 
 `AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22.md` F-B observed that the 121's *absolute* focal metrics
 (EE3/EE6/FWHM) do not converge with grid pitch — they drift by ~15 EE6 points per octave of `dx`,
@@ -188,7 +188,12 @@ in practice before adding complexity for a case that may not occur.
   directly (`_carrier_W` and `_carrier_grad` exist for all three `_compute_carrier` branches), but
   the acceptance target (E4) is the scalar-conjugate chain the 121 actually uses. Wiring the other
   two is low-risk follow-on, not blocking.
-* **F-B (dx-convergence).** Left open per the dx-scaling audit's own conclusion; see §1.4.
+* **F-B (dx-convergence).** ~~Left open per the dx-scaling audit's own conclusion; see §1.4.~~
+  **SUPERSEDED (2026-07-27):** F-B was root-caused and closed the day AFTER this audit was
+  written — see `AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24.md` §2-§4 (frozen intra-group
+  amplitude + the `preserve_input_phase=True` analytic-pair phase corruption) and §6.7
+  (dx-flat by configuration), plus `0a743a6` (coarse->fine upsample lattice bug). Closed by
+  the v5.29 default flip, never under the label "F-B". See §1.4 note.
 * **Roadmap Parts A/B/C** (caustic coverage, perf/memory, GPU, validation infra) — unrelated to this
   gap.
 
