@@ -273,10 +273,6 @@ def test_jax_per_layer_twin_forward_and_grad():
     import jax.numpy as jnp
     jax.config.update("jax_enable_x64", True)
     # non-conforming 3-layer lossless stack: the mortar path in the twin
-    lay = [(150e-9, [(0.30, 4.0 + 0j), (0.70, 1.0 + 0j)]),
-           (200e-9, [(0.42, 4.0 + 0j), (0.58, 1.0 + 0j)]),
-           (120e-9, [(0.55, 2.25 + 0j), (0.45, 1.0 + 0j)])]
-
     def build(eps_mid, grids):
         st = PMMStack(P, n_substrate=1.5, n_superstrate=1.0, degree=6,
                       far_field_orders=7, layer_grids=grids)
