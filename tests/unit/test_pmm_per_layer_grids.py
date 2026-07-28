@@ -115,8 +115,6 @@ def test_unsupported_combinations_raise():
     st = _stack(LAY_TWO, "per-layer")
     st.set_source(WL, theta=0.1)
     with pytest.raises(NotImplementedError, match="per-layer"):
-        st.solve(retain_internal=True)
-    with pytest.raises(NotImplementedError, match="per-layer"):
         st.solve(stabilize="slices")
     with pytest.raises(NotImplementedError, match="per-layer"):
         st.prepare()
@@ -145,3 +143,46 @@ def test_conical_per_layer_matches_shared_bit_exact():
                              .set_source(WL, theta=0.15, phi=phi).solve())
         assert float(np.max(np.abs(np.asarray(Js) - np.asarray(Jp)))) == 0.0
         assert float(np.max(np.abs(np.asarray(Rs) - np.asarray(Rp)))) == 0.0
+
+
+def test_retain_internal_per_layer_fields_and_absorption():
+    # identical-wall stack: per-layer grids == shared grid, so fields and
+    # absorption must match the shared path to solver round-off; a lossy
+    # different-wall stack must close energy: sum(A) ~= 1 - R - T (the
+    # method's own invariant, flux-vs-farfield).
+    zprobe = np.array([50e-9, 250e-9, 400e-9])
+    ss = _stack(LAY_COMMON, "shared")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        o, Rs, Ts, _ = ss.set_source(WL, theta=np.deg2rad(8.0)).solve(
+            retain_internal=True)
+        Fs = ss.internal_field(zprobe, nx=32)
+        As = ss.layer_absorption()
+    sp = _stack(LAY_COMMON, "per-layer")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        o, Rp, Tp, _ = sp.set_source(WL, theta=np.deg2rad(8.0)).solve(
+            retain_internal=True)
+        Fp = sp.internal_field(zprobe, nx=32)
+        Ap = sp.layer_absorption()
+    for c in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+        assert float(np.max(np.abs(np.asarray(Fs[c])
+                                   - np.asarray(Fp[c])))) < 1e-8
+    assert float(np.max(np.abs(np.asarray(As) - np.asarray(Ap)))) < 1e-10
+    # per-layer internal_field REQUIRES nx (no single shared nodal axis)
+    with pytest.raises(ValueError, match="nx"):
+        sp.internal_field(100e-9)
+    # lossy DIFFERENT-wall stack: absorption closure within the mortar band
+    lay = [(200e-9, [(0.30, 4.0 + 0j), (0.70, 1.0 + 0j)]),
+           (150e-9, [(0.45, 6.25 + 0.30j), (0.55, 1.0 + 0j)]),
+           (120e-9, [(0.60, 2.25 + 0j), (0.40, 1.0 + 0j)])]
+    sq = _stack(lay, "per-layer", degree=8)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        o, R, T, _ = sq.set_source(WL, theta=np.deg2rad(8.0)).solve(
+            retain_internal=True)
+        A = sq.layer_absorption()
+    R = np.asarray(R); T = np.asarray(T); A = np.asarray(A)
+    for col in range(2):
+        gap = 1.0 - R.sum(axis=1)[col] - T.sum(axis=1)[col]
+        assert abs(float(A[:, col].sum()) - gap) < 5e-3

@@ -1376,11 +1376,6 @@ class PMMStack:
                     "PMMStack(layer_grids='per-layer'): all-vertical IN-PLANE "
                     "stacks only (v1); slanted / out-of-plane-tensor layers "
                     "need layer_grids='shared'.")
-            if retain_internal:
-                raise NotImplementedError(
-                    "PMMStack.solve(retain_internal=True): not available with "
-                    "layer_grids='per-layer' (v1); use layer_grids='shared' "
-                    "for internal fields / absorption.")
             if stabilize not in (None, False):
                 raise NotImplementedError(
                     "PMMStack.solve(stabilize='slices'): not applicable with "
@@ -1388,7 +1383,8 @@ class PMMStack:
                     "the SHARED grid (n_slices re-slice / min_feature), and "
                     "per-layer grids have no cross-layer walls to perturb.")
             return self._solve_vertical_perlayer(wl, angle, k0, kx0,
-                                                 eps_sup, eps_sub)
+                                                 eps_sup, eps_sub,
+                                                 retain_internal=retain_internal)
 
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)
@@ -1608,7 +1604,8 @@ class PMMStack:
                 f"{stabilize!r}.")
         return orders, R_eff, T_eff, jones
 
-    def _solve_vertical_perlayer(self, wl, angle, k0, kx0, eps_sup, eps_sub):
+    def _solve_vertical_perlayer(self, wl, angle, k0, kx0, eps_sup, eps_sub,
+                                 retain_internal=False):
         """ALL-VERTICAL IN-PLANE cascade on PER-LAYER element grids (audit
         R-6, 2026-07-28): each layer's SEM operators are built from its OWN
         walls only, adjacent layers are coupled by the exact L2 mortar
@@ -1698,16 +1695,63 @@ class PMMStack:
                 _sem_cross_mass(mats_by[ia], mats_by[ib]))
 
         # ---- Redheffer cascade: sup -> layers -> sub -----------------------
-        S = _ifc(Wsup, Vsup, modes_by[0][0], modes_by[0][1], None, 0)
+        ifc = [_ifc(Wsup, Vsup, modes_by[0][0], modes_by[0][1], None, 0)]
+        for i in range(1, nlay):
+            ifc.append(_ifc(modes_by[i - 1][0], modes_by[i - 1][1],
+                            modes_by[i][0], modes_by[i][1], i - 1, i))
+        ifc.append(_ifc(modes_by[-1][0], modes_by[-1][1], Wsub, Vsub,
+                        nlay - 1, None))
+        S = ifc[0]
         for i in range(nlay):
             S = _propagation_star(S, modes_by[i][2], k0 * self._layers[i][0])
-            if i < nlay - 1:
-                nxt = _ifc(modes_by[i][0], modes_by[i][1],
-                           modes_by[i + 1][0], modes_by[i + 1][1], i, i + 1)
-            else:
-                nxt = _ifc(modes_by[i][0], modes_by[i][1], Wsub, Vsub, i, None)
-            S = _redheffer_star_rect(S, nxt)
+            S = _redheffer_star_rect(S, ifc[i + 1])
         S11, _S12, S21, _S22 = S
+        if retain_internal:
+            # Partial cascades for internal-amplitude recovery -- the exact
+            # shared-path recurrences (P2-12 linear form) with the
+            # rectangular-safe star.  Amplitude algebra downstream
+            # (_internal_amplitudes) is grid-independent.
+            S_above = [None] * nlay
+            S_above[0] = ifc[0]
+            for i in range(1, nlay):
+                S_above[i] = _redheffer_star_rect(
+                    _redheffer_star_rect(S_above[i - 1], _propagation_smatrix(
+                        modes_by[i - 1][2],
+                        k0 * self._layers[i - 1][0])), ifc[i])
+            S_below_bot = [None] * nlay
+            S_below_bot[nlay - 1] = ifc[nlay]
+            for i in range(nlay - 2, -1, -1):
+                S_below_bot[i] = _redheffer_star_rect(
+                    _redheffer_star_rect(ifc[i + 1], _propagation_smatrix(
+                        modes_by[i + 1][2],
+                        k0 * self._layers[i + 1][0])),
+                    S_below_bot[i + 1])
+            S_above = [(None, None, Sa[2], Sa[3]) for Sa in S_above]
+            S_below_bot = [(Sbb[0], None, None, None) for Sbb in S_below_bot]
+            # per-cell material labels on EACH layer's OWN grid (the shared
+            # path labels the one union grid; here every layer has its own)
+            labels_u = None
+            seg_labels = getattr(self, "_segment_labels", None)
+            if seg_labels and len(seg_labels) >= nlay:
+                labels_u = []
+                for li, (_t, segs, _sl) in enumerate(self._layers):
+                    labs = seg_labels[li]
+                    cw = np.concatenate(
+                        [[0.0], np.cumsum([w for w, _ in segs])])
+                    cw[-1] = 1.0
+                    uw_i = grid_of[li][0]
+                    uwalls = np.concatenate([[0.0], np.cumsum(uw_i)])
+                    mids = 0.5 * (uwalls[:-1] + uwalls[1:])
+                    labels_u.append([
+                        labs[min(max(int(np.searchsorted(
+                            cw, m, side="right") - 1), 0),
+                            len(labs) - 1)] for m in mids])
+            self._internal = dict(
+                lmodes=modes_by, S_above=S_above, S_below_bot=S_below_bot,
+                layer_mats=mats_by, layer_eps_u=[r for _w, r in grid_of],
+                uwidths=None, uwidths_by=[w for w, _r in grid_of],
+                mats_sup=mats_sup, k0=k0, kx0=kx0,
+                n_glob=None, labels_u=labels_u, per_layer=True)
 
         # ---- far-field projection (per-grid Rayleigh operators) ------------
         n_max = max([np.real(np.sqrt(np.asarray(e, _C).reshape(3, 3)[0, 0]
@@ -1749,6 +1793,17 @@ class PMMStack:
             kx0 / k0, N, return_modal=True)
         modal["wavelength"] = float(wl)
         self._modal = modal
+        if retain_internal and getattr(self, "_internal", None) is not None:
+            m0 = np.where(orders == 0)[0][0]
+            cinc_cols = []
+            for col in range(2):
+                rhs = np.zeros(2 * N, dtype=_C)
+                rhs[(col * N) + m0] = 1.0
+                ci, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+                cinc_cols.append(ci)
+            self._internal["cinc"] = np.stack(cinc_cols, axis=1)
+            self._internal["R_tot"] = R_eff.sum(axis=1)
+            self._internal["T_tot"] = T_eff.sum(axis=1)
         _warn_stack_energy(R_eff, T_eff)
         return orders, R_eff, T_eff, jones
 
@@ -1960,8 +2015,11 @@ class PMMStack:
         Wl, Vl, lam, _q = d["lmodes"][i]
         c_fwd, c_bwd = amps[i]
         k0, t = d["k0"], self._layers[i][0]
-        n_glob = d["n_glob"]
-        S0 = d["mats_sup"]["S0"]
+        # the layer's OWN grid size + (eps-independent) mass -- identical to
+        # the former d["n_glob"] / mats_sup lookups on the shared grid, and
+        # the only correct choice on per-layer grids
+        n_glob = d["layer_mats"][i]["n_glob"]
+        S0 = d["layer_mats"][i]["S0"]
         P = np.exp(-lam * k0 * (z_frac * t))[:, None]
         Q = np.exp(-lam * k0 * ((1.0 - z_frac) * t))[:, None]
         E = Wl @ (P * c_fwd) + Wl @ (Q * c_bwd)
@@ -2048,6 +2106,123 @@ class PMMStack:
         z_top = np.concatenate([[0.0], np.cumsum(thick)])
         zs = np.atleast_1d(np.asarray(z, dtype=float))
         scalar_in = np.ndim(z) == 0
+
+        # ---- PER-LAYER grids (audit R-6): every layer carries its OWN nodal
+        # grid, so a single nodal x-axis does not exist -- reconstruction is
+        # resampled onto a UNIFORM grid (nx=) and each layer uses its own
+        # element machinery.  The field math is identical to the shared
+        # branch below.
+        if d.get("per_layer"):
+            if nx is None:
+                raise ValueError(
+                    "PMMStack.internal_field(layer_grids='per-layer'): pass "
+                    "nx= (a uniform x-resolution) -- per-layer stacks have "
+                    "no single shared nodal grid to return fields on.")
+            from ._core import _gll_nodes_weights, _lagrange_derivative_matrix
+            nxi = int(nx)
+            xu = np.arange(nxi) * (self.period / nxi)
+            mach = {}
+
+            def _mach(mats_i):
+                key = id(mats_i)
+                hit = mach.get(key)
+                if hit is not None:
+                    return hit
+                deg_i = mats_i["degree"]
+                ref_i, _wi = _gll_nodes_weights(deg_i)
+                Dref_i = _lagrange_derivative_matrix(ref_i)
+                l2g_i = mats_i["l2g"]
+                ng_i = mats_i["n_glob"]
+                eb_i = mats_i["elem_bnds"]
+                wb = np.ones(deg_i + 1)
+                for jj in range(deg_i + 1):
+                    for kk in range(deg_i + 1):
+                        if kk != jj:
+                            wb[jj] /= (ref_i[jj] - ref_i[kk])
+                R_i = np.zeros((nxi, ng_i))
+                for e, (xl, xr, _t) in enumerate(eb_i):
+                    inside = np.where((xu >= xl - 1e-15)
+                                      & (xu <= xr + 1e-15))[0]
+                    if inside.size == 0:
+                        continue
+                    xi = (2.0 * (xu[inside] - xl) / (xr - xl)) - 1.0
+                    for r, xv in zip(inside, xi):
+                        dif = xv - ref_i
+                        hitn = np.argmin(np.abs(dif))
+                        if abs(dif[hitn]) < 1e-14:
+                            R_i[r, l2g_i[e][hitn]] += 1.0
+                        else:
+                            num = wb / dif
+                            for a in range(deg_i + 1):
+                                R_i[r, l2g_i[e][a]] += num[a] / num.sum()
+                rs = R_i.sum(axis=1)
+                R_i[rs > 1.5] *= 0.5
+                mach[key] = (R_i, l2g_i, ng_i, Dref_i, eb_i)
+                return mach[key]
+
+            out = {c: np.empty((zs.shape[0], nxi), dtype=_C) for c in want}
+            layers_out = np.empty(zs.shape[0], dtype=int)
+            carrier = (np.exp(1j * kx0 * xu) if abs(kx0) > 0
+                       else np.ones(nxi))
+            cache = {}
+            for zi, zz in enumerate(zs):
+                if layer is None:
+                    i = int(np.clip(
+                        np.searchsorted(z_top, zz, side="right") - 1,
+                        0, len(thick) - 1))
+                    zloc = zz - z_top[i]
+                else:
+                    i, zloc = int(layer), float(zz)
+                layers_out[zi] = i
+                t_i = thick[i]
+                Wl, Vl, lam, _q = d["lmodes"][i]
+                mats_i = d["layer_mats"][i]
+                R_i, l2g_i, ng_i, Dref_i, eb_i = _mach(mats_i)
+                if i not in cache:
+                    c_fwd, c_bwd = amps[i]
+                    cache[i] = (ex0 * c_fwd[:, 0] + ey0 * c_fwd[:, 1],
+                                ex0 * c_bwd[:, 0] + ey0 * c_bwd[:, 1])
+                cF, cB = cache[i]
+                Pz = np.exp(-lam * k0 * zloc)
+                Qz = np.exp(-lam * k0 * max(t_i - zloc, 0.0))
+                sfield = Wl @ (Pz * cF) + Wl @ (Qz * cB)
+                ufield = Vl @ (Pz * cF) - Vl @ (Qz * cB)
+                Ex_e, Ey_e = sfield[:ng_i], sfield[ng_i:]
+                Hx_e, Hy_e = 1j * ufield[:ng_i], 1j * ufield[ng_i:]
+                h = dict(Ex=Ex_e, Ey=Ey_e, Hx=Hx_e, Hy=Hy_e)
+
+                def _ddx_i(env):
+                    o = np.zeros(ng_i, dtype=_C)
+                    cnt = np.zeros(ng_i)
+                    for e, (xl, xr, _t) in enumerate(eb_i):
+                        J = 0.5 * (xr - xl)
+                        idx = l2g_i[e]
+                        o[idx] += (Dref_i @ env[idx]) / J
+                        cnt[idx] += 1.0
+                    return o / cnt
+
+                if "Ez" in want:
+                    dHy = _ddx_i(Hy_e) + 1j * kx0 * Hy_e
+                    ez_n = np.zeros(ng_i, dtype=_C)
+                    cnt = np.zeros(ng_i)
+                    for e, (xl, xr, tns) in enumerate(eb_i):
+                        ez_n[l2g_i[e]] += tns["ezz"]
+                        cnt[l2g_i[e]] += 1.0
+                    ez_n /= cnt
+                    h["Ez"] = (1j / k0) * dHy / ez_n
+                if "Hz" in want:
+                    dEy = _ddx_i(Ey_e) + 1j * kx0 * Ey_e
+                    h["Hz"] = -(1j / k0) * dEy
+                for c in want:
+                    out[c][zi] = (R_i @ h[c]) * carrier
+            result = {}
+            for c in want:
+                result[c] = out[c][0] if scalar_in else out[c]
+            result["x"] = xu
+            result["z"] = float(zs[0]) if scalar_in else zs
+            result["layer"] = (int(layers_out[0]) if scalar_in
+                               else layers_out)
+            return result
 
         # ---- shared nodal geometry (one union grid for every layer) -------
         from ._core import _gll_nodes_weights, _lagrange_derivative_matrix
@@ -2250,8 +2425,8 @@ class PMMStack:
             c_fwd, c_bwd = amps[i]
             t = self._layers[i][0]
             mats_i = d["layer_mats"][i]
-            n_glob = d["n_glob"]
-            elem_bnds = mats_i["elem_bnds"]
+            n_glob = mats_i["n_glob"]          # == d["n_glob"] on the shared
+            elem_bnds = mats_i["elem_bnds"]    # grid; the layer's own per-layer
             l2g = mats_i["l2g"]
             from ._core import _gll_nodes_weights, _lagrange_derivative_matrix
             _rn, ref_w = _gll_nodes_weights(mats_i["degree"])
@@ -2259,8 +2434,9 @@ class PMMStack:
             keyed = {}
             ez_terms = []   # (key, idx, 1/J, wel, ezz, Im(ezz)) per element
             labels_u = d.get("labels_u")
-            ucum = np.concatenate([[0.0], np.cumsum(d["uwidths"])]) \
-                * self.period
+            _uw = (d["uwidths_by"][i] if d.get("per_layer")
+                   else d["uwidths"])
+            ucum = np.concatenate([[0.0], np.cumsum(_uw)]) * self.period
             for e, (xl, xr, tns) in enumerate(elem_bnds):
                 if labels_u is not None:
                     # attribute by material KEY: locate the element's union
@@ -2268,7 +2444,7 @@ class PMMStack:
                     mid = 0.5 * (xl + xr)
                     cell = min(max(int(np.searchsorted(
                         ucum, mid, side="right") - 1), 0),
-                        len(d["uwidths"]) - 1)
+                        len(_uw) - 1)
                     key = labels_u[i][cell]
                 else:
                     key = complex(tns["exx"])
