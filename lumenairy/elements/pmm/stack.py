@@ -191,6 +191,24 @@ class PMMStack:
         # union grid -- measured 5.7x (321 s -> 56 s) on an ns8 coated taper
         # at min_feature=1.5e-9, at a ~1.6% geometry-perturbation cost
         # (+-0.75 nm wall moves).
+        #
+        # AND IT IS AN ACCURACY KNOB (audit 2026-07-28) -- the one the default
+        # does NOT serve on a TAPERED stack.  The default scales with the
+        # PERIOD, but the collision scale of a taper is the per-slice wall
+        # offset ~ (thickness / n_slices) * tan(sidewall), which is NANOMETRES
+        # and is INDEPENDENT of the period: on a 700 nm pitch the default is
+        # 0.007 nm, ~200x too small to snap the ~1.2 nm collisions a 2-deg
+        # taper produces, so nothing is snapped and the resulting J -> 0
+        # slivers silently corrupt deep resonant nulls (passive-but-wrong;
+        # raising `degree` restores passivity, NOT accuracy).  MEASURED on a
+        # 2-deg coated pillar taper: in-plane oblique extinction scattered 91%
+        # across degree 6/8/10 at the default and converged to 0.1% (and ran
+        # 2.1x faster) at min_feature=1.5e-9.  The snap also MOVES walls
+        # (<= min_feature/2), so the converged value itself depends on it --
+        # choose the value where the answer is stationary in BOTH `degree` and
+        # `min_feature`, not merely the largest one that runs.  A cross-layer
+        # sliver left in the grid is now reported by `_pmm_union_grid`.  See
+        # docs/audits/AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md.
         self.min_feature = (float(period) * 1e-5 if min_feature is None
                             else float(min_feature))
         self._layers = []                          # (thickness, segments)
@@ -853,6 +871,23 @@ class PMMStack:
                 t, segs, slant = self._layers[i]
                 clone._layers.append((t, segs, slant))
                 i += 1
+        return clone
+
+    def _min_feature_clone(self, mf):
+        """A copy of this stack, every layer VERBATIM, with a different
+        ``min_feature`` -- the union-grid consensus probe (audit 2026-07-28).
+
+        Unlike :meth:`_resliced_clone` this needs NO taper recipe, so it works
+        for hand-added and ``SegmentStackGeometry``-built stacks: it perturbs
+        only the shared union grid, which is where the wall-collision pathology
+        lives."""
+        clone = PMMStack(self.period, n_substrate=self.n_sub,
+                         n_superstrate=self.n_sup, degree=self.degree,
+                         elements_per_region=self.n_el, grade=self.grade,
+                         far_field_orders=self.ffo,
+                         factorization=self.factorization,
+                         min_feature=float(mf))
+        clone._layers = list(self._layers)
         return clone
 
     def _holds_traced(self):
@@ -1588,10 +1623,13 @@ class PMMStack:
         staircase detector (energy cannot see this failure class)."""
         import warnings as _warnings
         if not self._taper_recipes:
-            _warnings.warn(
-                "PMMStack.solve(stabilize='slices'): no taper builder "
-                "recorded on this stack (hand-added layers cannot be "
-                "re-sliced); the consensus check was skipped.", stacklevel=3)
+            # No builder recipe -> the n_slices probe is impossible.  Fall back
+            # to the UNION-GRID consensus (audit 2026-07-28, R-1): it needs no
+            # recipe, so the guard is finally reachable on hand-added and
+            # SegmentStackGeometry-built stacks -- previously the ENTIRE
+            # geometry-built path (the documented device route) was silently
+            # unprotected against the very pathology this check exists for.
+            self._union_grid_consensus_check(jones, tol=tol)
             return
         deltas = []
         for dn in (-1, +1):
@@ -1616,6 +1654,64 @@ class PMMStack:
                 f"while the answer is wrong).  Reduce n_slices toward the "
                 f"converged plateau, raise min_feature, or check the "
                 f"staircase against a coarser-sliced reference.",
+                stacklevel=3)
+
+    def _union_grid_consensus_check(self, jones, tol=0.02):
+        """UNION-GRID consensus (audit 2026-07-28): re-solve with ``min_feature``
+        perturbed and warn if the zeroth-order Jones moves.
+
+        The recipe-free counterpart of :meth:`_slices_consensus_check`.  A stack
+        whose union grid has NO near-coincident cross-layer walls is exactly
+        INSENSITIVE to ``min_feature`` (nothing is within any threshold), so a
+        clean stack scores 0 and cannot false-positive.  Movement means the
+        answer depends on how colliding walls were snapped -- i.e. the
+        passive-but-wrong staircase pathology, which energy closure cannot see.
+        Costs two extra solves, matching the documented ~3x of ``stabilize``.
+
+        The probe range is anchored to a PHYSICAL scale, not to a multiple of
+        the current value (audit 2026-07-28): the failure mode is a
+        ``min_feature`` set far BELOW the collision scale, and scaling such a
+        value by a small factor merely stays inside the same broken regime --
+        measured, a +-4x probe around the 0.007 nm default moved the Jones by
+        0.0 while 0.007 nm vs 1.5 nm moved the extinction by 91%.  The upper
+        probe is therefore pinned near the nanometre scale on which staircase
+        walls actually collide, capped at 1% of the period so it stays far
+        below any real feature."""
+        import warnings as _warnings
+        base = float(self.min_feature)
+        hi = max(base * 4.0, min(2.0e-9, 0.01 * float(self.period)))
+        deltas, probes = [], []
+        for mf in (base * 0.25, hi):
+            clone = self._min_feature_clone(mf)
+            clone._src = dict(self._src)
+            try:
+                with _warnings.catch_warnings():
+                    _warnings.simplefilter("ignore")   # probe noise is not the user's
+                    _o, _R, _T, j2 = clone.solve()
+            except Exception:
+                # SKIP, do not score.  Unlike the re-slice probe (where a
+                # blow-up IS the evidence), perturbing `min_feature` can fail
+                # for reasons unrelated to conditioning, and this guard runs on
+                # every stabilize call -- a false "pathology" claim is worse
+                # than silence.  A stack with nothing to snap simply scores 0.
+                continue
+            deltas.append(float(np.max(np.abs(np.asarray(j2)
+                                              - np.asarray(jones)))))
+            probes.append(mf)
+        if deltas and max(deltas) > tol:
+            worst = probes[int(np.argmax(deltas))]
+            _warnings.warn(
+                f"PMMStack.solve(stabilize='slices'): the zeroth-order Jones "
+                f"moved {max(deltas):.3g} (> {tol}) when `min_feature` was "
+                f"perturbed from {base:.3g} m to {worst:.3g} m -- the answer "
+                f"depends on how COLLIDING cross-layer walls were snapped "
+                f"(the PASSIVE-BUT-WRONG staircase pathology: energy stays "
+                f"clean while the answer is wrong, and raising `degree` "
+                f"restores passivity, NOT accuracy).  Sweep `min_feature` and "
+                f"`degree` together and use the value where the answer is "
+                f"stationary in BOTH; reducing n_slices also helps.  See "
+                f"docs/audits/"
+                f"AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md.",
                 stacklevel=3)
 
     @staticmethod

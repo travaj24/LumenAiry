@@ -3372,13 +3372,19 @@ def _pmm_union_grid(layer_segments, min_feature=None):
                     f"({a:.6g}, {b:.6g})" for a, b in merged_pairs[:6])
                 more = ("" if len(merged_pairs) <= 6
                         else f" (+{len(merged_pairs) - 6} more)")
+                # ACCURACY accounting (audit 2026-07-28): the snap MOVES walls,
+                # so report the displacement -- min_feature is an accuracy knob,
+                # not only a cost knob, and the caller cannot otherwise see how
+                # far the solved geometry has drifted from the requested one.
+                max_disp = max(0.5 * abs(b - a) for a, b in merged_pairs)
                 _warnings.warn(
                     f"_pmm_union_grid: snapped {len(merged_pairs)} pair(s) of "
                     f"NEAR-COINCIDENT cross-layer walls closer than "
                     f"min_feature={mf:.3g} (period fractions): {pairs_txt}"
                     f"{more}.  These near-zero-width union elements are the "
                     f"staircase wall-collision pathology (passive-but-wrong / "
-                    f"blow-up); the snap moves each pair to its midpoint.  "
+                    f"blow-up); the snap moves each pair to its midpoint "
+                    f"(max wall displacement {max_disp:.3g} of a period).  "
                     f"Single-layer thin features are never merged.",
                     stacklevel=3)
             keep = out_w
