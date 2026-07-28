@@ -182,7 +182,9 @@ def test_retain_internal_per_layer_fields_and_absorption():
         o, R, T, _ = sq.set_source(WL, theta=np.deg2rad(8.0)).solve(
             retain_internal=True)
         A = sq.layer_absorption()
-    R = np.asarray(R); T = np.asarray(T); A = np.asarray(A)
+    R = np.asarray(R)
+    T = np.asarray(T)
+    A = np.asarray(A)
     for col in range(2):
         gap = 1.0 - R.sum(axis=1)[col] - T.sum(axis=1)[col]
         assert abs(float(A[:, col].sum()) - gap) < 5e-3
