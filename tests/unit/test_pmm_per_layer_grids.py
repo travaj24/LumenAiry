@@ -1,0 +1,133 @@
+"""PMMStack(layer_grids='per-layer') -- audit R-6 (2026-07-28).
+
+Per-layer element grids (own walls + the two neighbours' walls, the
+interface-conforming enrichment) coupled by an exact L2 mortar
+(:func:`_interface_smatrix_mortar`).  Pins measured on the implementation run:
+
+* identical-grid stacks and 2-layer stacks reproduce the shared grid
+  BIT-EXACTLY (a 2-layer neighbour union IS the full union);
+* the mortar on identical grids reduces to :func:`_interface_smatrix` to
+  solver round-off (the algebraic identity behind the fast path);
+* lossless energy closure of a synthetic colliding-wall staircase converges
+  spectrally (measured 1.10e-4 at degree 6 -> 1.17e-6 at degree 10 -- the
+  non-conforming mortar residual, NOT round-off: tolerances carry headroom);
+* every unsupported combination raises loudly.
+"""
+import warnings
+
+import numpy as np
+import pytest
+
+from lumenairy.elements.pmm import PMMStack
+from lumenairy.elements.pmm._core import (
+    _C,
+    _build_sem_tensor_segments,
+    _interface_smatrix,
+    _interface_smatrix_mortar,
+    _sem_cross_mass,
+    _sem_mass_exact,
+    _sem_modes_tensor,
+    _tensor3_dict,
+)
+
+WL = 700e-9
+P = 1.0e-6
+
+
+def _stack(layers, grids, degree=6, ffo=7, **kw):
+    st = PMMStack(P, n_substrate=1.5, n_superstrate=1.0, degree=degree,
+                  far_field_orders=ffo, layer_grids=grids, **kw)
+    for t, segs in layers:
+        st.add_layer(t, segments=segs)
+    return st
+
+
+def _solve(st, th=8.0):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        o, R, T, J = st.set_source(WL, theta=np.deg2rad(th)).solve()
+    return np.asarray(R), np.asarray(T), np.asarray(J)
+
+
+LAY_COMMON = [(200e-9, [(0.35, 4.0 + 0j), (0.65, 1.0 + 0j)]),
+              (150e-9, [(0.35, 2.25 + 0j), (0.65, 1.0 + 0j)]),
+              (120e-9, [(0.35, 6.25 + 0.1j), (0.65, 1.0 + 0j)])]
+LAY_TWO = [(220e-9, [(0.30, 4.0 + 0j), (0.70, 1.0 + 0j)]),
+           (180e-9, [(0.50, 2.25 + 0j), (0.50, 1.0 + 0j)])]
+
+
+def test_identical_wall_stack_is_bit_exact_vs_shared():
+    Rs, Ts, Js = _solve(_stack(LAY_COMMON, "shared"))
+    Rp, Tp, Jp = _solve(_stack(LAY_COMMON, "per-layer"))
+    assert float(np.max(np.abs(Js - Jp))) == 0.0
+    assert float(np.max(np.abs(Rs - Rp))) == 0.0
+    assert float(np.max(np.abs(Ts - Tp))) == 0.0
+
+
+def test_two_layer_stack_is_bit_exact_vs_shared():
+    # each layer's neighbour union IS the full 2-layer union -> conforming
+    # interfaces -> the per-layer path must reproduce shared bit-for-bit.
+    for deg in (6, 10):
+        Rs, Ts, Js = _solve(_stack(LAY_TWO, "shared", degree=deg))
+        Rp, Tp, Jp = _solve(_stack(LAY_TWO, "per-layer", degree=deg))
+        assert float(np.max(np.abs(Js - Jp))) == 0.0
+        assert float(np.max(np.abs(Rs - Rp))) == 0.0
+
+
+def test_mortar_reduces_to_plain_interface_on_identical_grids():
+    w = np.array([0.4, 0.6])
+    t1 = [_tensor3_dict(np.eye(3) * (4.0 + 0j)),
+          _tensor3_dict(np.eye(3) * (1.0 + 0j))]
+    t2 = [_tensor3_dict(np.eye(3) * (2.25 + 0j)),
+          _tensor3_dict(np.eye(3) * (1.0 + 0j))]
+    k0 = 2.0 * np.pi / WL
+    m1 = _build_sem_tensor_segments(P, w, t1, 5, 1, True)
+    m2 = _build_sem_tensor_segments(P, w, t2, 5, 1, True)
+    W1, V1, _l, _q = _sem_modes_tensor(m1, k0, 0.1 * k0, True)
+    W2, V2, _l, _q = _sem_modes_tensor(m2, k0, 0.1 * k0, True)
+    ref = _interface_smatrix(W1, V1, W2, V2)
+    M1 = _sem_mass_exact(m1)
+    M2 = _sem_mass_exact(m2)
+    C = _sem_cross_mass(m1, m2)
+    got = _interface_smatrix_mortar(W1, V1, W2, V2, M1, M2, C)
+    for a, b in zip(ref, got):
+        assert float(np.max(np.abs(np.asarray(a) - np.asarray(b)))) < 1e-9
+
+
+def test_energy_closure_synthetic_staircase():
+    # six lossless slices whose walls shift 4 nm per slice: the colliding-wall
+    # staircase geometry with no metals.  Measured mortar residual: 1.10e-4 at
+    # degree 6, 1.17e-6 at degree 10 (spectral decay) -- pinned with headroom.
+    lay = [(60e-9, [(0.5 - 0.35 / 2 - 0.002 * i, 1.0 + 0j),
+                    (0.35 + 0.004 * i, 4.0 + 0j),
+                    (0.5 - 0.35 / 2 - 0.002 * i, 1.0 + 0j)])
+           for i in range(6)]
+    R6, T6, _ = _solve(_stack(lay, "per-layer", degree=6, ffo=11))
+    R10, T10, _ = _solve(_stack(lay, "per-layer", degree=10, ffo=11))
+    e6 = float(np.max(np.abs(R6.sum(axis=1) + T6.sum(axis=1) - 1.0)))
+    e10 = float(np.max(np.abs(R10.sum(axis=1) + T10.sum(axis=1) - 1.0)))
+    assert e6 < 5e-4
+    assert e10 < 2e-5
+    assert e10 < e6            # the residual must DECAY with degree
+
+
+def test_unsupported_combinations_raise():
+    st = _stack(LAY_TWO, "per-layer")
+    st.set_source(WL, theta=0.1)
+    with pytest.raises(NotImplementedError, match="per-layer"):
+        st.solve(retain_internal=True)
+    with pytest.raises(NotImplementedError, match="per-layer"):
+        st.solve(stabilize="slices")
+    with pytest.raises(NotImplementedError, match="per-layer"):
+        st.set_source(WL, theta=0.1, phi=0.3).solve()      # conical
+    with pytest.raises(NotImplementedError, match="per-layer"):
+        st.prepare()
+    with pytest.raises(NotImplementedError, match="per-layer"):
+        st.solve_vs_wavelength([WL])
+    sl = PMMStack(P, degree=6, far_field_orders=7, layer_grids="per-layer")
+    sl.add_layer(100e-9, segments=[(0.4, 4.0 + 0j), (0.6, 1.0 + 0j)],
+                 slant_angle=0.2)
+    with pytest.raises(NotImplementedError, match="per-layer"):
+        sl.set_source(WL, theta=0.1).solve()
+    with pytest.raises(ValueError, match="layer_grids"):
+        PMMStack(P, layer_grids="bananas")

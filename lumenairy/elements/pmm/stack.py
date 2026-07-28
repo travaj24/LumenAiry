@@ -32,10 +32,14 @@ from ._core import (
     _freeze_cached,
     _half_M_sym_metric,
     _interface_smatrix,
+    _interface_smatrix_mortar,
     _kz_forward,
     _layer_modes_metric,
     _n_propagating_orders,
     _pmm_union_grid,
+    _redheffer_star_rect,
+    _sem_cross_mass,
+    _sem_mass_exact,
     _propagation_smatrix,
     _propagation_star,
     _propagation_star_general,
@@ -161,7 +165,7 @@ class PMMStack:
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
                  degree=16, elements_per_region=1, grade=True,
                  far_field_orders=21, n_orders=None, factorization="auto",
-                 min_feature=None):
+                 min_feature=None, layer_grids="shared"):
         far_field_orders = _resolve_order_count(far_field_orders, n_orders)
         if int(degree) < 2:
             raise ValueError("PMMStack: degree must be >= 2.")
@@ -169,6 +173,10 @@ class PMMStack:
             raise ValueError(
                 "PMMStack: factorization must be 'auto', 'convection' or "
                 f"'covariant', got {factorization!r}.")
+        if layer_grids not in ("shared", "per-layer"):
+            raise ValueError(
+                "PMMStack: layer_grids must be 'shared' or 'per-layer', got "
+                f"{layer_grids!r}.")
         self.period = float(period)
         # A JAX half-space index stays RAW so its gradient flows (the
         # differentiable dispatch in solve()); _C() would sever the trace.
@@ -211,6 +219,15 @@ class PMMStack:
         # docs/audits/AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md.
         self.min_feature = (float(period) * 1e-5 if min_feature is None
                             else float(min_feature))
+        # 'per-layer' (audit R-6, 2026-07-28): each layer is assembled on its
+        # OWN element grid (its own walls only) and adjacent layers are coupled
+        # by an exact L2 mortar at the interface.  Cross-layer wall collisions
+        # -- the tapered-staircase pathology the shared union grid suffers --
+        # cannot form, and ``min_feature`` is inert by construction.  v1
+        # surface: solve() on ALL-VERTICAL IN-PLANE NumPy stacks at phi = 0;
+        # conical / slant / OOP / JAX / stabilize / retain_internal / prepare /
+        # solve_vs_wavelength raise with the shared-grid alternative named.
+        self.layer_grids = layer_grids
         self._layers = []                          # (thickness, segments)
         self._taper_recipes = []                   # (i0, count, method, kwargs)
         self._src = None
@@ -856,7 +873,8 @@ class PMMStack:
                          elements_per_region=self.n_el, grade=self.grade,
                          far_field_orders=self.ffo,
                          factorization=self.factorization,
-                         min_feature=self.min_feature)
+                         min_feature=self.min_feature,
+                         layer_grids=self.layer_grids)
         recipes = sorted(self._taper_recipes, key=lambda r: r[0])
         i = 0
         ri = 0
@@ -886,7 +904,8 @@ class PMMStack:
                          elements_per_region=self.n_el, grade=self.grade,
                          far_field_orders=self.ffo,
                          factorization=self.factorization,
-                         min_feature=float(mf))
+                         min_feature=float(mf),
+                         layer_grids=self.layer_grids)
         clone._layers = list(self._layers)
         return clone
 
@@ -1223,6 +1242,11 @@ class PMMStack:
                 raise NotImplementedError(
                     "PMMStack: conical incidence (phi != 0) is not available for "
                     "SLANTED layers; use PMM2DStack with y-invariant cells.")
+            if self.layer_grids == "per-layer":
+                raise NotImplementedError(
+                    "PMMStack(layer_grids='per-layer'): conical incidence "
+                    "(phi != 0) is shared-grid only (v1); use "
+                    "layer_grids='shared'.")
             return self._solve_conical(self._src["wl"], self._src["angle"], phi)
 
         # ---- differentiable (JAX) dispatch ---------------------------------
@@ -1232,6 +1256,11 @@ class PMMStack:
         # surface as the single-layer _pmm_jones_1d_jax -- so everything else
         # raises HERE (loudly, with the numpy alternative named).
         if self._holds_traced():
+            if self.layer_grids == "per-layer":
+                raise NotImplementedError(
+                    "PMMStack(layer_grids='per-layer'): the differentiable "
+                    "(JAX) twin is shared-grid only; use NumPy inputs or "
+                    "layer_grids='shared'.")
             if retain_internal:
                 raise NotImplementedError(
                     "PMMStack.solve(retain_internal=True): not available on "
@@ -1330,10 +1359,38 @@ class PMMStack:
                 raise NotImplementedError(
                     "PMMStack.solve(retain_internal=True): all-vertical "
                     "in-plane stacks only (the symmetric cascade).")
+            if self.layer_grids == "per-layer":
+                raise NotImplementedError(
+                    "PMMStack(layer_grids='per-layer'): the covariant "
+                    "(uniform-slant) cascade is shared-grid only; use "
+                    "layer_grids='shared' for slanted stacks.")
             res = self._solve_covariant(wl, angle, k0)
             if stabilize == "slices":
                 self._slices_consensus_check(res[3])
             return res
+
+        # ---- PER-LAYER element grids (audit R-6, 2026-07-28) ---------------
+        # Each layer on its OWN grid + exact L2 mortar at every interface --
+        # no cross-layer wall collisions, min_feature inert by construction.
+        if self.layer_grids == "per-layer":
+            if _oop or any(abs(L[2]) > 1e-12 for L in self._layers):
+                raise NotImplementedError(
+                    "PMMStack(layer_grids='per-layer'): all-vertical IN-PLANE "
+                    "stacks only (v1); slanted / out-of-plane-tensor layers "
+                    "need layer_grids='shared'.")
+            if retain_internal:
+                raise NotImplementedError(
+                    "PMMStack.solve(retain_internal=True): not available with "
+                    "layer_grids='per-layer' (v1); use layer_grids='shared' "
+                    "for internal fields / absorption.")
+            if stabilize not in (None, False):
+                raise NotImplementedError(
+                    "PMMStack.solve(stabilize='slices'): not applicable with "
+                    "layer_grids='per-layer' -- the consensus probes perturb "
+                    "the SHARED grid (n_slices re-slice / min_feature), and "
+                    "per-layer grids have no cross-layer walls to perturb.")
+            return self._solve_vertical_perlayer(wl, angle, k0, kx0,
+                                                 eps_sup, eps_sub)
 
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)
@@ -1551,6 +1608,150 @@ class PMMStack:
             raise ValueError(
                 f"PMMStack.solve: stabilize must be None or 'slices', got "
                 f"{stabilize!r}.")
+        return orders, R_eff, T_eff, jones
+
+    def _solve_vertical_perlayer(self, wl, angle, k0, kx0, eps_sup, eps_sub):
+        """ALL-VERTICAL IN-PLANE cascade on PER-LAYER element grids (audit
+        R-6, 2026-07-28): each layer's SEM operators are built from its OWN
+        walls only, adjacent layers are coupled by the exact L2 mortar
+        (:func:`_interface_smatrix_mortar`), and the half-spaces are built on
+        the grid of the layer they touch (so the two half-space interfaces are
+        plain :func:`_interface_smatrix`).  Cross-layer wall collisions -- the
+        tapered-staircase pathology of the shared union grid -- cannot form,
+        and ``min_feature`` never enters.  Interfaces between IDENTICAL grids
+        (repeated layers) also take the plain interface, so a vertical
+        binary-grating stack with common walls reproduces the shared-grid
+        answer to solver round-off."""
+        period = self.period
+        eye3 = np.eye(3)
+
+        def _widths(segs):
+            w = np.asarray([float(x) for x, _e in segs], dtype=float)
+            return w / w.sum()
+
+        # ---- per-layer grids: OWN walls + the two NEIGHBOURS' walls --------
+        # (interface-conforming enrichment).  The interface field carries
+        # structure exactly at the two adjacent layers' material walls; with
+        # both wall sets present on both sides of every interface, the mortar
+        # only bridges benign (smooth-field) mismatches and keeps spectral
+        # accuracy -- measured: own-walls-only grids left a wall-mismatch
+        # boundary-layer error in the Ex (wall-normal) channel that corrupted
+        # deep nulls at low degree.  The window is LOCAL (3 layers), so the
+        # grid stays ~an order smaller than the global union and cross-stack
+        # wall accumulation cannot form.
+        nlay = len(self._layers)
+        grid_of = []                        # (widths, eps_row) per layer
+        for i in range(nlay):
+            js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
+            uw, eps_rows = _pmm_union_grid(
+                [self._layers[j][1] for j in js],
+                self.min_feature / self.period)
+            grid_of.append((np.asarray(uw, dtype=float),
+                            eps_rows[js.index(i)]))
+
+        # ---- per-layer operators + eigs (memoised on the layer fingerprint)
+        mats_by, modes_by = [], []
+        Ms_by = {}                          # widths-key -> exact mass matrix
+        memo = {}
+        for w, eps_row in grid_of:
+            wkey = w.tobytes()
+            ekey = tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_row)
+            hit = memo.get((wkey, ekey))
+            if hit is None:
+                m = _build_sem_tensor_segments(
+                    period, w, [_tensor3_dict(e) for e in eps_row],
+                    self.degree, self.n_el, self.grade)
+                hit = (m, _sem_modes_tensor(m, k0, kx0, True), wkey)
+                memo[(wkey, ekey)] = hit
+            mats_by.append(hit[0])
+            modes_by.append(hit[1])
+        wkeys = [w.tobytes() for w, _r in grid_of]
+
+        # ---- half-spaces on the grids of the layers they touch -------------
+        t_sup = _tensor3_dict(eps_sup * eye3)
+        t_sub = _tensor3_dict(eps_sub * eye3)
+        w0 = grid_of[0][0]
+        wN = grid_of[-1][0]
+        mats_sup = _build_sem_tensor_segments(
+            period, w0, [t_sup] * len(w0), self.degree, self.n_el, self.grade)
+        mats_sub = _build_sem_tensor_segments(
+            period, wN, [t_sub] * len(wN), self.degree, self.n_el, self.grade)
+        Wsup, Vsup, _l, _g = _sem_modes_uniform(
+            mats_sup, k0, kx0, eps_sup, _uniform_geo_eig(mats_sup, k0, kx0))
+        Wsub, Vsub, _l, _g = _sem_modes_uniform(
+            mats_sub, k0, kx0, eps_sub, _uniform_geo_eig(mats_sub, k0, kx0))
+
+        def _mass(i):
+            key = wkeys[i]
+            M = Ms_by.get(key)
+            if M is None:
+                M = _sem_mass_exact(mats_by[i])
+                Ms_by[key] = M
+            return M
+
+        def _ifc(Wa, Va, Wb, Vb, ia, ib):
+            """Interface a -> b; plain when the two grids are identical."""
+            if ia is not None and ib is not None and wkeys[ia] == wkeys[ib]:
+                return _interface_smatrix(Wa, Va, Wb, Vb)
+            if ia is None or ib is None:        # half-space: same grid by
+                return _interface_smatrix(Wa, Va, Wb, Vb)   # construction
+            return _interface_smatrix_mortar(
+                Wa, Va, Wb, Vb, _mass(ia), _mass(ib),
+                _sem_cross_mass(mats_by[ia], mats_by[ib]))
+
+        # ---- Redheffer cascade: sup -> layers -> sub -----------------------
+        S = _ifc(Wsup, Vsup, modes_by[0][0], modes_by[0][1], None, 0)
+        for i in range(nlay):
+            S = _propagation_star(S, modes_by[i][2], k0 * self._layers[i][0])
+            if i < nlay - 1:
+                nxt = _ifc(modes_by[i][0], modes_by[i][1],
+                           modes_by[i + 1][0], modes_by[i + 1][1], i, i + 1)
+            else:
+                nxt = _ifc(modes_by[i][0], modes_by[i][1], Wsub, Vsub, i, None)
+            S = _redheffer_star_rect(S, nxt)
+        S11, _S12, S21, _S22 = S
+
+        # ---- far-field projection (per-grid Rayleigh operators) ------------
+        n_max = max([np.real(np.sqrt(np.asarray(e, _C).reshape(3, 3)[0, 0]
+                                     if np.asarray(e).ndim == 2 else
+                                     np.asarray(e, _C)))
+                     for L in self._layers for _w, e in L[1]]
+                    + [np.real(np.sqrt(np.asarray(e, _C).reshape(3, 3)[1, 1]))
+                       for L in self._layers for _w, e in L[1]
+                       if np.asarray(e).ndim == 2]
+                    + [np.real(self.n_sup), np.real(self.n_sub)])
+        m_prop = _n_propagating_orders(period, wl, n_max)
+        n_proj = max(self.ffo, 2 * m_prop + 5)
+        n0, nN = mats_sup["n_glob"], mats_sub["n_glob"]
+        cap = min(n0 if n0 % 2 else n0 - 1, nN if nN % 2 else nN - 1)
+        n_proj = min(n_proj, cap)
+        if n_proj % 2 == 0:
+            n_proj -= 1
+        if 2 * m_prop + 1 > n_proj:
+            raise ValueError(
+                f"PMMStack.solve(layer_grids='per-layer'): degree="
+                f"{self.degree} too low to resolve the {2 * m_prop + 1} "
+                f"propagating orders (half-space n_glob = {n0}/{nN}); raise "
+                f"degree or elements_per_region.")
+        half = (n_proj - 1) // 2
+        orders = np.arange(-half, half + 1)
+        G = 2.0 * np.pi / period
+        kx = (kx0 + orders * G) / k0
+        N = len(orders)
+        Tp_sup = _sem_fourier_projection(orders, period, mats_sup)
+        Tp_sub = _sem_fourier_projection(orders, period, mats_sub)
+        Hsup = np.vstack([Tp_sup @ Wsup[:n0, :], Tp_sup @ Wsup[n0:, :]])
+        Hsub = np.vstack([Tp_sub @ Wsub[:nN, :], Tp_sub @ Wsub[nN:, :]])
+        kz_sup = _kz_forward(eps_sup, kx)
+        kz_sub = _kz_forward(eps_sub, kx)
+        kz_inc = float(np.real(_kz_forward(eps_sup,
+                                           np.array([kx0 / k0]))[0]))
+        R_eff, T_eff, jones, modal = _assemble_jones_farfield(
+            Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
+            kx0 / k0, N, return_modal=True)
+        modal["wavelength"] = float(wl)
+        self._modal = modal
+        _warn_stack_energy(R_eff, T_eff)
         return orders, R_eff, T_eff, jones
 
     def per_order_amplitudes(self, port="reflection"):
@@ -2180,6 +2381,11 @@ class PMMStack:
             FOURTH element only when ``jones=True`` (default ``False`` keeps
             the released 3-tuple).
         """
+        if self.layer_grids == "per-layer":
+            raise NotImplementedError(
+                "PMMStack.solve_vs_wavelength: shared-grid only (v1 of "
+                "layer_grids='per-layer' covers solve()); use "
+                "layer_grids='shared' for wavelength sweeps.")
         self._internal = None   # supersedes any retained internals (audit P1-04)
         self._modal = None      # ... and retained per-order amplitudes (B)
         if self._holds_traced():
@@ -2393,6 +2599,11 @@ class PMMStack:
                 "PMMStack.prepare: the prepared (assemble-once) path "
                 "is NumPy-only; traced (JAX) inputs dispatch through "
                 "solve().")
+        if self.layer_grids == "per-layer":
+            raise NotImplementedError(
+                "PMMStack.prepare: shared-grid only (v1 of "
+                "layer_grids='per-layer' covers solve()); use "
+                "layer_grids='shared' for material sweeps.")
         return _PreparedPMMStack(self)
 
     def _solve_covariant(self, wl, angle, k0):
