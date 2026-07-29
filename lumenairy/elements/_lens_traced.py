@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import importlib.util as _importlib_util
 import threading
-from typing import Any, Dict, Optional
+from typing import Any, Dict, NamedTuple, Optional
 
 import numpy as np
 
@@ -192,6 +192,18 @@ _RAY_DENSITY_CAUSTIC_FLOOR_REL = 1e-3
 # genuine caustic spans >>30x.  Conservative (a false positive only steers the
 # caller to GBD/FGA, never returns a wrong number).
 _RAY_DENSITY_CAUSTIC_MAXMIN = 30.0
+
+# D1 (2026-07-28): the whole-grid det J scan is NOT masked to the beam's own
+# support when the ray-fit disc sits off centre.  An earlier D1 revision did
+# mask it, on the reading that an off-centre disc leaves the rest of the launch
+# domain to polynomial EXTRAPOLATION whose det J is not a property of the
+# optics.  That reading was wrong in the only way that matters: the fold the
+# scan reported was REAL -- the hard-masked off-centre fit genuinely folded, and
+# the same calls returned a spurious lobe at 0.75 of the on-beam peak (see
+# ``_FIT_DISC_OUTSIDE_WEIGHT_REL``).  Masking the scan would have converted a
+# loud wrong answer into a silent one.  With the fit regularised the fold is
+# gone at the source and the unmasked scan is silent on the same cases, so the
+# scan stays exactly as it was on every path.
 
 # v5.30 (audit E-M6): post-hoc energy self-check for ``amplitude_model=
 # 'ray_density'``.  The mode is documented as "energy-conserving in the
@@ -764,7 +776,7 @@ class _Cheb2DEvaluator:
     __slots__ = ('order', 'coeffs', 'xmin', 'xmax', 'ymin', 'ymax',
                  '_mi', '_K1', '_K2', 'xp')
 
-    def __init__(self, xs_in, ys_in, values, order=6, xp=None):
+    def __init__(self, xs_in, ys_in, values, order=6, xp=None, weights=None):
         if xp is None:
             xp = _get_array_module(values)
         self.xp = xp
@@ -809,7 +821,30 @@ class _Cheb2DEvaluator:
         A_full = (Tu_np[K1_np] * Tv_np[K2_np]).reshape(n_terms, -1).T
         vals_flat = vals_np.ravel()
         finite = np.isfinite(vals_flat)
-        if finite.all():
+        if weights is not None:
+            # D1 (2026-07-28): WEIGHTED least squares.  ``weights`` is a
+            # per-sample amplitude weight with the same shape as ``values``;
+            # the residual minimised is ``sum (w_i r_i)^2``.  A hard sample
+            # mask is the ``w in {0, 1}`` special case, and it is the RIGHT
+            # one only when the retained samples are concentric with this
+            # basis's domain -- see ``_FIT_DISC_OUTSIDE_WEIGHT_REL``.
+            w_flat = np.asarray(
+                xp.asnumpy(weights) if xp is not np else weights,
+                dtype=np.float64).ravel()
+            if w_flat.shape != vals_flat.shape:
+                raise ValueError(
+                    "_Cheb2DEvaluator: weights shape "
+                    f"{np.shape(weights)} != values shape {vals_np.shape}")
+            keep = finite & np.isfinite(w_flat) & (w_flat > 0.0)
+            _all = bool(keep.all())
+            # one design-matrix copy, scaled in place: the unweighted branch
+            # also pays exactly one (``_solve_lstsq_thread_safe`` makes ``A``
+            # contiguous), so weighting does not raise peak memory.
+            A = np.ascontiguousarray(A_full if _all else A_full[keep, :])
+            w_keep = w_flat if _all else w_flat[keep]
+            A *= w_keep[:, None]
+            rhs = (vals_flat if _all else vals_flat[keep]) * w_keep
+        elif finite.all():
             A = A_full
             rhs = vals_flat
         else:
@@ -1150,12 +1185,120 @@ _FIT_RADIUS_BEAM_FACTOR_DEFAULT = 2.0
 # measured-clean ratio).
 _APERTURE_BEAM_WARN_RATIO = 1.5
 
+# D1 (2026-07-28): RELATIVE Gram-matrix budget given to the samples OUTSIDE an
+# OFF-CENTRE ray-fit disc.  Both fit-domain restrictions above (R7 and P2) are
+# implemented as a hard sample mask -- ``w in {0, 1}`` -- and that is safe only
+# while the retained disc is CONCENTRIC with the tensor-Chebyshev basis's own
+# domain (the launch square).  Then the unconstrained directions of the fit
+# inherit the map's radial symmetry, the extrapolation outside the disc stays
+# MONOTONE, and the Newton inversion cannot find a second root.
+#
+# A decentred beam (``beam_centre`` / a decentred ``TiltedCarrier``) breaks
+# that.  Measured on an 80/-80 N-BK7 singlet, 30 mm aperture, 1 mm beam at
+# x_c = 10 mm, order-6 fit, 341 in-disc coarse samples of 55225: the hard-mask
+# fit reproduces the traced forward map to 1.3 pm INSIDE the disc but departs
+# from it by up to 135 mm outside, and d(x_out)/d(x_in) changes sign -- i.e.
+# the fitted map FOLDS.  The Newton inverse then sends far-field exit pixels
+# back into the bright beam, and ``amplitude_model='ray_density'`` gives them
+# real amplitude: a spurious lobe carrying 6.8e-3 of the input power at 0.75 of
+# the on-beam peak, ~20 mm from the beam.  (The concentric on-axis fit of the
+# same geometry: no sign change, ghost power 1.0e-8 -- identical to no
+# restriction at all.)
+#
+# The fix keeps every sample in the fit and gives the out-of-disc ones a tiny
+# weight instead, sized so their total contribution to the normal matrix is
+# ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` of the in-disc one:
+#
+#     w_out = sqrt(_FIT_DISC_OUTSIDE_WEIGHT_REL * n_in / n_out)
+#
+# (grid-count-independent, so it does not drift with ``ray_subsample`` / ``N``).
+# The well-determined directions -- the ones the disc exists to clean -- keep
+# the in-disc solution; the directions the disc leaves FREE are pinned to the
+# traced map instead of to fit noise.  Same measurement as above: in-disc
+# agreement 0.2 nm (the hard mask's ill-conditioned solve is no better), the
+# out-of-disc departure from the traced map 135 mm -> 0.14 mm, no sign change,
+# and the returned field back on the local-spline oracle (ghost power 6.8e-3 ->
+# 2.5e-8 of Pin, max off-beam amplitude 0.75 -> 3e-4 of peak).
+#
+# Measured end to end on both geometries, sweeping this constant: ANY nonzero
+# value removes the fold; the returned field tracks the spline oracle to
+# <= 3.4e-4 of peak over 1e-14..1e-8 and then degrades as the out-of-disc data
+# starts to matter (7.6e-3 at 1e-6, 9.1e-2 at 1e-2, 0.97 at 1.0 -- at 1.0 the
+# restriction is gone and this IS the aperture:beam cliff the disc exists to
+# prevent).  1e-8 sits in the middle of the plateau, ~4 decades clear of the
+# fold on one side and ~2 of the cliff on the other.  Engaged ONLY when the
+# disc is off centre, so the concentric (default) path is byte-identical.
+#
+# Keeping the samples also keeps the GRID intact, which matters twice over: the
+# paraxial-magnification stencil that seeds Newton reads ``x_out_grid`` AT THE
+# AXIS (NaN there -> the 0.91 fallback -> Newton seeded on the wrong branch of
+# the folded map, which is what actually populated the spurious lobe), and the
+# process-pool knot data / direct-fit exit hull are built from the same arrays.
+# Set to ``0.0`` to restore the historical hard NaN mask exactly -- that is the
+# fail-before switch the D1 tests use, not a supported configuration.
+_FIT_DISC_OUTSIDE_WEIGHT_REL = 1e-8
 
-def _input_beam_amp_radius(E_in, dx, dy=None):
+# D7 (2026-07-29): POLYNOMIAL ORDER for the OFF-CENTRE ray fit.
+#
+# Same regime as ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` above (a decentred beam, so
+# the ray-fit disc is not concentric with the launch square), and it is the
+# ONLY thing that measurably limits that fit.  A disc of radius ``r`` about a
+# chief ray ``|c|`` off axis reaches ``|c| + r`` into the aperture instead of
+# ``r``, i.e. into strictly more aberrated marginal territory, so the SAME
+# total-degree budget buys a worse approximation.  Measured on design 121's
+# last group (20.397 mm aperture, w = 3.1255 mm beam,
+# ``fit_radius_beam_factor=2``, weighted fit, OPL residual rms over ``r <= w``
+# about the beam):
+#
+#     order        6        8       10       12       14
+#     on axis   0.177 nm  0.003    0.000    0.000    0.000
+#     |c| = 0.97 w   2.508 nm  0.667    0.121    0.114    0.199
+#
+# i.e. order 6 is 14x worse off axis than on, order 10 recovers 20x of that,
+# and order 14 starts to LOSE to conditioning (the normal-equations Gram matrix
+# runs 1.0e10 -> 1.9e13 across the sweep).  End to end on the niche-D6
+# ``K = -n^2`` conic stand-in -- whose truth is analytic AND decentre-invariant,
+# so chain/oracle EE ratios are directly comparable on axis and off -- the EE2
+# ratio at one full beam radius of decentre reads 0.9498 (order 6), 0.9828
+# (order 10), 0.9877 (order 14) against 0.9966 on axis.  10 takes ~87 % of the
+# available recovery at 66 basis terms against 120.
+#
+# Engaged ONLY on the off-centre branch (the concentric / on-axis path keeps
+# ``newton_poly_order`` exactly, so the shipped default is byte-identical), and
+# only ever RAISES the order -- a caller asking for more still gets more.  Pass
+# ``decentred_fit_poly_order=<newton_poly_order>`` to restore the pre-D7
+# behaviour exactly; that is the fail-before switch the D7 tests use.
+#
+# NOT taken, and why (measured, 2026-07-29): re-mapping the tensor-Chebyshev
+# BASIS DOMAIN onto the off-centre disc (an affine re-centre + re-scale) is a
+# NO-OP for accuracy -- the total-degree space is affine-invariant, so the
+# weighted least-squares solution is the same polynomial, and the OPL residual
+# over the beam agreed to 4-5 significant figures across launch-square vs
+# disc-bbox domains AND normal-equations vs SVD solves (2.5076 nm both ways at
+# order 6, 0.1210 vs 0.1210 at order 10).  It is also a LIABILITY: the Newton
+# loop evaluates these same fits over the WHOLE launch square, where the
+# re-mapped basis runs to ``|u| = 2.4`` and ``max|T_k| = 5.7e8`` at order 12, and
+# the two mathematically-identical fits then differ by up to 9.9e-7 m of
+# ``x_out`` at the launch corners (5.2e-9 m at order 6).  Conditioning alone is
+# not a reason to ship it: cond(Gram) does fall 1.0e10 -> 3.2e4, but float64
+# already carries the answer.
+_DECENTRED_FIT_POLY_ORDER = 10
+
+
+def _input_beam_amp_radius(E_in, dx, dy=None, centre=None):
     """1/e AMPLITUDE radius of ``E_in`` on the centred wave grid, from the
     intensity second moment (``w = sqrt(2 <r^2>)`` -- the same convention as
     :func:`lumenairy.propagators.carrier._envelope_amp_radius`, so the chain's
     per-stage ``w`` and this element-side measurement agree).
+
+    ``centre=(x0, y0)`` (metres) measures the second moment about that
+    transverse point instead of the GRID ORIGIN -- required whenever the beam
+    is decentred (the niche-D1 tilted-carrier hand-off puts the beam at its
+    physical chief-ray position ``(x_c, y_c)``).  About the origin a beam of
+    true radius ``w`` sitting at ``x_c`` reads ``sqrt(2 x_c^2 + w^2)``, so the
+    P2 aperture:beam guard that is SIZED from this number silently stops
+    guarding as the decentre grows.  ``None`` / ``(0, 0)`` leaves the grid
+    arrays untouched (byte-identical default).
 
     Returns ``0.0`` for an empty / zero / non-finite field (callers treat that
     as "unmeasurable" and skip the beam-relative guard).
@@ -1171,6 +1314,12 @@ def _input_beam_amp_radius(E_in, dx, dy=None):
     _dy = float(dy) if (dy is not None and np.isfinite(dy) and dy > 0) else dx
     xg = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yg = (np.arange(Ny, dtype=np.float64) - Ny / 2) * _dy
+    if centre is not None:
+        _cx, _cy = float(centre[0]), float(centre[1])
+        if _cx:
+            xg = xg - _cx
+        if _cy:
+            yg = yg - _cy
     x2 = xg * xg
     tot = 0.0
     acc = 0.0
@@ -1261,6 +1410,92 @@ def _input_tilt_stats(E_in, wavelength, dx):
     return (tilt_rms, coherence_ratio)
 
 
+class TiltedCarrier(NamedTuple):
+    """A SPHERE-PLUS-LINEAR-TILT reference congruence (niche D1, roadmap
+    ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27 P1a).
+
+    The eikonal (metres; reference phase ``k0 * W``) is
+
+    .. code-block:: text
+
+        W(x, y) = S_R(sqrt(u^2 + v^2)) + L*u + M*v ,   u = x - x0, v = y - y0
+        S_R(rho) = sign(R) * (sqrt(rho^2 + R^2) - |R|)          (EXACT sphere)
+
+    i.e. the exact on-axis point-source sphere of :func:`_compute_carrier`'s
+    scalar branch, transversely centred at ``(x0, y0)`` and carrying a uniform
+    direction-cosine tilt ``(L, M)``.  ``R = +/-inf`` degenerates to the pure
+    tilted PLANE ``W = L*u + M*v`` (the post-DOE order at a pupil), which is
+    exactly what a scalar ``carrier=inf`` cannot express.
+
+    Why it exists: a post-DOE fan is K comparable-power beams at well-separated
+    angles, and ``apply_real_lens_traced``'s entrance->exit map assumes ONE
+    congruence per exit pixel (see the ``carrier`` docstring's validity
+    paragraph).  Taken ONE ORDER AT A TIME each beam IS a single clean
+    congruence -- but only if the reference can carry its tilt, which a scalar
+    conjugate distance cannot.  With this spec each order's residual after the
+    carrier is removed is the same small diffraction residual the on-axis case
+    has, so the ``_NONCOLLIMATED_RESID_THRESH`` envelope is respected per order
+    instead of being violated by the full split angle.
+
+    Closed under paraxial transfer: through an air-to-air ABCD the state
+    ``(R, L, x0)`` maps to ``R' = (A R + B)/(C R + D)`` (the wavefront Moebius
+    law :func:`lumenairy.propagators.carrier._paraxial_group_r_out` already
+    uses) with the CHIEF RAY ``(x0, L)`` transforming as an ordinary paraxial
+    ray, ``x0' = A x0 + B L``, ``L' = C x0 + D L`` -- which is what lets
+    :func:`lumenairy.propagate_traced_carrier_chain` carry it hand-off by
+    hand-off (pass ``r_in=TiltedCarrier(...)``).
+
+    Attributes
+    ----------
+    R : float
+        Signed sphere radius (m); ``> 0`` diverging in front of the plane,
+        ``+/-inf`` collimated (pure tilt).
+    L, M : float
+        Transverse direction cosines of the uniform tilt (rad, paraxially).
+    x0, y0 : float, default 0
+        Transverse centre of the congruence (m) -- the chief-ray position at
+        this plane.  The tilt is referenced to it, so ``W(x0, y0) == 0``.
+    """
+
+    R: float
+    L: float = 0.0
+    M: float = 0.0
+    x0: float = 0.0
+    y0: float = 0.0
+
+    @property
+    def is_tilted(self) -> bool:
+        """True when this spec carries anything a scalar ``carrier=R``
+        cannot (a tilt or a transverse decentre)."""
+        return bool(self.L or self.M or self.x0 or self.y0)
+
+
+def _tilted_carrier_parts(spec, X, Y):
+    """``(W, L_grad, M_grad)`` for a :class:`TiltedCarrier` on the query
+    coordinates ``X, Y`` (arrays or scalars).  Analytic -- no finite
+    differences, no grid lookup -- so the ray launch, the H6 entrance eikonal
+    and the ``exp(i k0 W)`` reference leg all see the SAME congruence to all
+    orders (the ndarray-carrier branch can only offer ``np.gradient`` +
+    nearest-neighbour, which quantises the launch cosines to the grid)."""
+    s = float(spec.R)
+    L, M = float(spec.L), float(spec.M)
+    u = X - float(spec.x0)
+    v = Y - float(spec.y0)
+    if s == 0.0:
+        raise ValueError("TiltedCarrier: R == 0 (the congruence's own focus)")
+    if not np.isfinite(s):
+        # collimated limit: the pure tilted PLANE (the |R| -> inf limit of the
+        # sphere).  Evaluating the closed form here would give inf - inf = NaN
+        # over the whole grid, and an all-NaN eikonal is a SILENT sentinel that
+        # disables the engage test (same trap the scalar branch documents).
+        W = L * u + M * v
+        return W, np.full_like(W, L), np.full_like(W, M)
+    sgn = 1.0 if s > 0.0 else -1.0
+    rho = np.sqrt(u * u + v * v + s * s)
+    W = sgn * (rho - abs(s)) + L * u + M * v
+    return W, sgn * u / rho + L, sgn * v / rho + M
+
+
 def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
     """Build the carrier reference wavefront ``W(x, y)`` (length units;
     reference phase = ``k0 * W``) and a callable giving its transverse
@@ -1297,6 +1532,21 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
     the collimated focal plane.
     """
     N = X.shape[0]
+    if isinstance(carrier, TiltedCarrier):
+        # niche D1: exact sphere + uniform tilt about (x0, y0), evaluated
+        # ANALYTICALLY everywhere (grid, ray-launch heights, H6 eikonal).
+        W_full, _, _ = _tilted_carrier_parts(carrier, X, Y)
+
+        def grad_fn(xq, yq):
+            _, Lq, Mq = _tilted_carrier_parts(carrier, xq, yq)
+            return Lq, Mq
+
+        def w_fn(xq, yq):
+            Wq, _, _ = _tilted_carrier_parts(carrier, xq, yq)
+            return Wq
+
+        return W_full, grad_fn, w_fn
+
     if isinstance(carrier, np.ndarray):
         W_full = np.asarray(carrier, dtype=np.float64)
         if W_full.shape != X.shape:
@@ -1910,6 +2160,8 @@ def apply_real_lens_traced(
     on_noncollimated: str = 'warn',
     fit_radius_beam_factor: Optional[float] = None,
     on_aperture_beam: str = 'warn',
+    beam_centre: Optional[Any] = None,
+    decentred_fit_poly_order: Optional[int] = None,
     parallel_amp: Optional[bool] = None,
     parallel_amp_min_free_gb: float = 48.0,
     newton_amp_mask_rel: float = _NEWTON_AMP_MASK_REL_DEFAULT,
@@ -2155,6 +2407,16 @@ def apply_real_lens_traced(
           ``s`` metres (``W = (x^2+y^2)/(2s)``; ``s > 0`` diverging in front).
         * ``ndarray`` -- an explicit wavefront ``W(x, y)`` in metres,
           same shape as ``E_in`` (reference phase = ``k0 * W``).
+        * :class:`TiltedCarrier` ``(R, L, M, x0, y0)`` -- the exact sphere
+          ``R`` transversely centred at ``(x0, y0)`` PLUS a uniform tilt
+          ``(L, M)``, evaluated analytically (niche D1).  This is the
+          per-ORDER reference for a post-DOE fan: each order is a single
+          clean congruence once its own tilt is carried, so the residual
+          stays inside the ``on_noncollimated`` envelope instead of being
+          the full split angle.  ``R=inf`` gives the pure tilted plane wave.
+          Prefer it over an equivalent ``ndarray``: the ndarray branch can
+          only differentiate/sample by ``np.gradient`` + nearest neighbour,
+          which quantises the ray-launch cosines to the grid.
         * ``'auto'`` -- fit a low-order polynomial carrier from ``E_in``'s
           intensity-weighted, wrapping-safe local tilt field (never
           per-pixel gradients -- that is the ``tilt_aware_rays`` failure
@@ -2257,6 +2519,40 @@ def apply_real_lens_traced(
         ``return_screen=True`` / :func:`prepare_real_lens_traced` -- on the
         flat ``ones`` placeholder those use, the measured ``w_in`` spans the
         grid and the restriction is inert.
+
+        Both ``w_in`` and the disc are referenced to ``beam_centre`` (below),
+        so a DECENTRED beam is guarded exactly as an on-axis one is.
+    beam_centre : (float, float), optional
+        Transverse position ``(x0, y0)`` (metres) of the input beam on the
+        wave grid.  ``None`` (default) means: take it from ``carrier`` when
+        that is a :class:`TiltedCarrier` (its ``(x0, y0)`` IS the chief-ray
+        position at this plane), else the grid origin -- so the on-axis
+        default path is byte-identical.
+
+        This is what keeps the ``fit_radius_beam_factor`` cliff guard honest
+        off axis.  Both the measured beam radius (an intensity second moment)
+        and the ray-FIT disc are otherwise referenced to the grid ORIGIN, so a
+        beam of radius ``w`` at ``x_c`` reads ``sqrt(2 x_c^2 + w^2)`` and the
+        disc it sizes grows with the DECENTRE instead of following the beam:
+        measured (30 mm aperture, ``w`` = 1 mm, ``fit_radius_beam_factor=2``)
+        the guard degrades from "disc == the beam" at ``x_c`` = 0 to the FULL
+        launch domain -- i.e. inert, the exact regime the guard exists to
+        exclude -- by ``x_c`` = 8 mm, silently.  Set this (or pass a
+        :class:`TiltedCarrier`) whenever the beam is not on the grid centre.
+
+        Only the ray-FIT domain and the warn-only aperture:beam ratio move
+        with it; ``launch_radius``, the Newton ``bound`` and the out-of-domain
+        threshold stay aperture-derived, so nothing is vignetted.  The
+        carrier-gated ``_CARRIER_FIT_RADIUS_FRAC`` disc stays APERTURE-centred
+        (it exists to drop near-vignetting marginal rays, which is a property
+        of the aperture, not of the beam); the two discs INTERSECT.
+
+        An off-centre restriction is applied by WEIGHTS, not by dropping the
+        out-of-disc ray samples: a hard mask leaves the global fit's remaining
+        freedom unconstrained, and off centre the fitted forward map then folds
+        and the returned field grows a bright spurious lobe far from the beam.
+        See ``_FIT_DISC_OUTSIDE_WEIGHT_REL``.  The concentric (on-axis) path
+        keeps the historical hard mask and is byte-identical.
     on_aperture_beam : {'warn', 'silent'}, default 'warn'
         Policy for the warn-only half of the cliff guard: emit a
         ``RuntimeWarning`` when the physical aperture diameter exceeds
@@ -2267,6 +2563,28 @@ def apply_real_lens_traced(
         aberrated the surfaces are out at the aperture edge (a gently-corrected
         group tolerates 6x), so this is a *possible-cliff* flag, not a
         diagnosis.
+    decentred_fit_poly_order : int, optional
+        Minimum tensor-Chebyshev total degree for the ray fit WHEN THAT FIT'S
+        DISC IS OFF CENTRE (niche D7).  ``None`` (default) uses
+        ``_DECENTRED_FIT_POLY_ORDER`` = 10; the effective order is
+        ``max(newton_poly_order, this)``, so a caller asking for more still
+        gets more, and passing your own ``newton_poly_order`` restores the
+        pre-D7 behaviour exactly.
+
+        Why it exists: an off-centre disc of radius ``r`` about a chief ray
+        ``|c|`` off axis covers the aperture out to ``|c| + r`` instead of
+        ``r``, so the same degree buys a worse fit over strictly more aberrated
+        territory.  Measured on design 121's last group at 0.97 beam radii of
+        decentre, the OPL residual over the beam is **14x** the on-axis one at
+        order 6 (2.508 nm vs 0.177 nm) and recovers 20x at order 10 (0.121 nm);
+        end to end on the ``K = -n^2`` conic stand-in the chain/oracle EE2 ratio
+        goes 0.9498 -> 0.9828 at one beam radius of decentre.  See
+        ``_DECENTRED_FIT_POLY_ORDER`` for the full sweep, the cost, and the
+        basis-domain re-map that was measured and REFUSED.
+
+        Ignored (and the on-axis path byte-identical) whenever the disc is
+        concentric with the launch square, and on ``newton_fit='spline'``,
+        which takes no fit-domain restriction at all.
 
     preserve_input_phase : bool or 'remap', default True
         If True, the input field's phase structure (source tilts,
@@ -3190,6 +3508,7 @@ def apply_real_lens_traced(
                         ('newton_fit', newton_fit),
                         ('newton_max_iters', newton_max_iters),
                         ('newton_poly_order', newton_poly_order),
+                        ('decentred_fit_poly_order', decentred_fit_poly_order),
                         ('ray_subsample', ray_subsample),
                         # the most dangerous drop: apply_real_lens has no
                         # notion of a reusable screen and returns a FIELD
@@ -3523,10 +3842,49 @@ def apply_real_lens_traced(
                 "apply_real_lens_traced: fit_radius_beam_factor must be a "
                 f"finite positive number or None (got "
                 f"{fit_radius_beam_factor!r})")
+    # niche D1: the beam is not always on the grid centre.  Both halves of the
+    # guard (the measured radius AND the disc it sizes) are second moments /
+    # discs about a POINT; referencing them to the origin makes the guard read
+    # sqrt(2 x_c^2 + w^2) and go inert as the decentre grows (see
+    # ``beam_centre``).  A TiltedCarrier already states the chief-ray position,
+    # so it supplies the default and the chain needs no extra plumbing.
+    # D7: minimum fit order for an OFF-CENTRE disc (resolved here so a bad
+    # value raises before any ray work, like every other guard above).
+    if decentred_fit_poly_order is None:
+        _dec_order = int(_DECENTRED_FIT_POLY_ORDER)
+    else:
+        try:
+            _dec_order = int(decentred_fit_poly_order)
+        except (TypeError, ValueError):
+            raise ValueError(
+                "apply_real_lens_traced: decentred_fit_poly_order must be a "
+                f"positive integer or None (got "
+                f"{decentred_fit_poly_order!r})")
+        if _dec_order < 1 or _dec_order != decentred_fit_poly_order:
+            raise ValueError(
+                "apply_real_lens_traced: decentred_fit_poly_order must be a "
+                f"positive integer or None (got "
+                f"{decentred_fit_poly_order!r})")
+    _bcx = _bcy = 0.0
+    if beam_centre is not None:
+        try:
+            _bcx, _bcy = (float(_v) for _v in beam_centre)
+        except (TypeError, ValueError):
+            raise ValueError(
+                "apply_real_lens_traced: beam_centre must be a 2-sequence "
+                f"(x0, y0) in metres, or None (got {beam_centre!r})")
+        if not (np.isfinite(_bcx) and np.isfinite(_bcy)):
+            raise ValueError(
+                "apply_real_lens_traced: beam_centre must be finite (got "
+                f"{beam_centre!r})")
+    elif isinstance(carrier, TiltedCarrier):
+        _bcx, _bcy = float(carrier.x0), float(carrier.y0)
+    _beam_decentred = bool(_bcx or _bcy)
     _beam_fit_radius = None
     _w_in_beam = 0.0
     if _frbf is not None or (on_aperture_beam == 'warn' and aperture is not None):
-        _w_in_beam = _input_beam_amp_radius(E_in, dx, dy)
+        _w_in_beam = _input_beam_amp_radius(
+            E_in, dx, dy, centre=((_bcx, _bcy) if _beam_decentred else None))
     if _frbf is not None and _w_in_beam > 0.0:
         _beam_fit_radius = min(_frbf * _w_in_beam, launch_radius)
     if (on_aperture_beam == 'warn' and aperture is not None
@@ -3859,32 +4217,106 @@ def apply_real_lens_traced(
     # radii combine by ``min``.  Still fit-domain-only: the Newton loop, the
     # ``bound`` and the out-of-domain NaN threshold are untouched, so nothing is
     # vignetted.  See ``_FIT_RADIUS_BEAM_FACTOR_DEFAULT``.
-    _fit_r_max = None
-    if _r7_carrier_path:
-        _fit_r_max = _CARRIER_FIT_RADIUS_FRAC * launch_radius
+    #
+    # D1 (2026-07-28): the two radii are discs about DIFFERENT points once the
+    # beam is decentred -- the R7 one is aperture-relative (it drops the
+    # near-vignetting marginal rays, a property of the aperture), the P2 one
+    # follows the BEAM.  ``min`` of two radii is only their intersection when
+    # they are concentric, so combine by ``min`` on axis (byte-identical) and
+    # by INTERSECTION off axis.  If the intersection is too thin to constrain
+    # the fit, the BEAM disc alone wins: keeping the guard active on the rays
+    # the beam actually uses beats falling back to the whole launch square,
+    # which is exactly the cliff regime.
+    #
+    # An OFF-CENTRE disc is also restricted DIFFERENTLY: by weights, not by the
+    # hard NaN mask, because a hard mask leaves the fit's remaining freedom
+    # unconstrained and the resulting map FOLDS -- a spurious bright lobe in
+    # the returned field, not merely a fit that is loose where nothing lives.
+    # See ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` for the mechanism + measurements.
+    # ``_fit_weights is None`` (concentric disc) keeps the historical mask, so
+    # the on-axis path is byte-identical.
+    #
+    # D7 (2026-07-29): an off-centre disc also needs MORE TERMS.  Its radius is
+    # the same but it sits over aperture out to ``|c| + r``, where the map is
+    # more aberrated, so a total-degree-6 fit is 14x worse there than the
+    # concentric one (design 121 last group, measured).  ``_fit_poly_order``
+    # raises the order on exactly the weighted branch below and nowhere else,
+    # so the concentric path is byte-identical.  See
+    # ``_DECENTRED_FIT_POLY_ORDER``.
+    _fit_weights = None
+    _fit_poly_order = int(newton_poly_order)
+    _fit_r_geom = (_CARRIER_FIT_RADIUS_FRAC * launch_radius
+                   if _r7_carrier_path else None)
+    _fit_r_max = _fit_r_geom
     if _beam_fit_radius is not None:
         _fit_r_max = (_beam_fit_radius if _fit_r_max is None
                       else min(_fit_r_max, _beam_fit_radius))
     if _fit_r_max is not None and newton_fit != 'spline':
         _r2_launch = xs_in[:, None] ** 2 + xs_in[None, :] ** 2
-        _fit_disc = _r2_launch <= _fit_r_max ** 2
+        _fit_why = f"r <= {_fit_r_max * 1e3:.4f} mm"
+        if _beam_fit_radius is not None and _beam_decentred:
+            # launch grid is indexing='ij': axis 0 is X, axis 1 is Y (see the
+            # ``np.meshgrid(..., indexing='ij')`` note at the launch site).
+            _fit_disc = (((xs_in[:, None] - _bcx) ** 2
+                          + (xs_in[None, :] - _bcy) ** 2)
+                         <= _beam_fit_radius ** 2)
+            _fit_why = (f"|r - ({_bcx * 1e3:.4f}, {_bcy * 1e3:.4f}) mm| <= "
+                        f"{_beam_fit_radius * 1e3:.4f} mm")
+            if _fit_r_geom is not None:
+                _both = _fit_disc & (_r2_launch <= _fit_r_geom ** 2)
+                if int(_both.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
+                    _fit_disc = _both
+                    _fit_why += (f" AND r <= {_fit_r_geom * 1e3:.4f} mm")
+        else:
+            _fit_disc = _r2_launch <= _fit_r_max ** 2
         if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
-            x_out_grid = np.where(_fit_disc, x_out_grid, np.nan)
-            y_out_grid = np.where(_fit_disc, y_out_grid, np.nan)
-            opl_grid = np.where(_fit_disc, opl_grid, np.nan)
+            if (_beam_fit_radius is not None and _beam_decentred
+                    and _FIT_DISC_OUTSIDE_WEIGHT_REL > 0.0):
+                # D1: OFF-CENTRE disc -- regularised restriction.  Keep every
+                # traced sample (so the paraxial-magnification stencil, the
+                # process-pool knot data and the direct-fit exit hull all stay
+                # intact) and down-weight the out-of-disc ones to a fixed
+                # fraction of the in-disc Gram contribution.
+                _n_in = int(_fit_disc.sum())
+                _n_out = int(_fit_disc.size) - _n_in
+                _w_out = (float(np.sqrt(_FIT_DISC_OUTSIDE_WEIGHT_REL
+                                        * _n_in / _n_out))
+                          if _n_out > 0 else 1.0)
+                _fit_weights = np.where(_fit_disc, 1.0, _w_out)
+                # D7: and give that off-centre fit the terms its region needs
+                # -- but never more terms than the disc can constrain.  The
+                # out-of-disc samples carry ~1e-4 of the weight, so the
+                # IN-DISC count is what determines the fit; require 3 samples
+                # per basis term (order 10 -> 66 terms -> 198 samples) and
+                # step the order down until that holds.  Without this the
+                # raise could hand an order-10 fit as few as
+                # ``_CARRIER_FIT_MIN_SAMPLES`` = 64 effective rows for 66
+                # unknowns -- an under-determined normal matrix.
+                while (_dec_order > _fit_poly_order
+                       and (_dec_order + 1) * (_dec_order + 2) * 3 // 2
+                       > _n_in):
+                    _dec_order -= 1
+                _fit_poly_order = max(_fit_poly_order, _dec_order)
+            else:
+                x_out_grid = np.where(_fit_disc, x_out_grid, np.nan)
+                y_out_grid = np.where(_fit_disc, y_out_grid, np.nan)
+                opl_grid = np.where(_fit_disc, opl_grid, np.nan)
         elif _beam_fit_radius is not None and on_aperture_beam == 'warn':
             import warnings
             warnings.warn(
                 f"apply_real_lens_traced: fit_radius_beam_factor would "
-                f"restrict the ray-fit domain to r <= "
-                f"{_fit_r_max * 1e3:.4f} mm, which holds only "
+                f"restrict the ray-fit domain to "
+                f"{_fit_why}, which holds only "
                 f"{int(_fit_disc.sum())} coarse ray samples (< "
                 f"{_CARRIER_FIT_MIN_SAMPLES} needed to constrain the "
                 f"order-{int(newton_poly_order)} fit).  The restriction is "
                 f"ABANDONED and the full launch domain is fitted, so the "
                 f"aperture:beam cliff guard is NOT active on this call.  "
                 f"Lower ray_subsample (currently {int(ray_subsample)}) or "
-                f"raise fit_radius_beam_factor.",
+                f"raise fit_radius_beam_factor"
+                + (f" (the beam is {np.hypot(_bcx, _bcy) * 1e3:.4f} mm off "
+                   f"the grid centre, so the disc that must hold it sits off "
+                   f"axis too)" if _beam_decentred else "") + ".",
                 RuntimeWarning, stacklevel=2)
 
     # T-P2 (audit perf): optional DIRECT inverse-map fit.  Instead of Newton-
@@ -3902,11 +4334,17 @@ def apply_real_lens_traced(
     if _use_fit:
         from numpy.polynomial.chebyshev import chebvander as _chebvander
         from scipy.spatial import ConvexHull as _ConvexHull
-        _fo = int(newton_poly_order)
+        # D7: the direct inverse-map fit reads the SAME off-centre samples
+        # through the SAME weights, so it takes the SAME raised order.
+        _fo = int(_fit_poly_order)
         _xo_s = x_out_grid.ravel()
         _yo_s = y_out_grid.ravel()
         _op_s = opl_grid.ravel()
         _g = np.isfinite(_xo_s) & np.isfinite(_yo_s) & np.isfinite(_op_s)
+        # D1: an OFF-CENTRE fit disc is expressed as weights, not as a NaN
+        # mask, so the restriction reaches this path through ``_fit_weights``
+        # (None -> unweighted, byte-identical).
+        _wfit_s = None if _fit_weights is None else _fit_weights.ravel()[_g]
         _xo_s, _yo_s, _op_s = _xo_s[_g], _yo_s[_g], _op_s[_g]
         _fx_c = 0.5 * (_xo_s.max() + _xo_s.min())
         _fx_h = 0.5 * (_xo_s.max() - _xo_s.min()) or 1.0
@@ -3924,7 +4362,11 @@ def apply_real_lens_traced(
 
         _Afit = _fit_design((_xo_s - _fx_c) / _fx_h, (_yo_s - _fy_c) / _fy_h)
         # B7: normal-equations solve (thread-safe; no gelsd/JAX-OpenMP deadlock).
-        _fit_coef = _solve_lstsq_thread_safe(_Afit, _op_s)
+        if _wfit_s is None:
+            _fit_coef = _solve_lstsq_thread_safe(_Afit, _op_s)
+        else:
+            _fit_coef = _solve_lstsq_thread_safe(_Afit * _wfit_s[:, None],
+                                                 _op_s * _wfit_s)
         # Domain: keep only exit pixels inside the convex hull of the ray
         # landing spots -- a vectorized half-plane test (A.x + b <= 0 for
         # every facet), far cheaper than a Delaunay simplex search over the
@@ -3999,11 +4441,14 @@ def apply_real_lens_traced(
         _yout_xp = _xp.asarray(y_out_grid)
         _opl_xp = _xp.asarray(opl_grid)
         Sx = _Cheb2DEvaluator(_xs_xp, _xs_xp, _xout_xp,
-                               order=newton_poly_order, xp=_xp)
+                               order=_fit_poly_order, xp=_xp,
+                               weights=_fit_weights)
         Sy = _Cheb2DEvaluator(_xs_xp, _xs_xp, _yout_xp,
-                               order=newton_poly_order, xp=_xp)
+                               order=_fit_poly_order, xp=_xp,
+                               weights=_fit_weights)
         So = _Cheb2DEvaluator(_xs_xp, _xs_xp, _opl_xp,
-                               order=newton_poly_order, xp=_xp)
+                               order=_fit_poly_order, xp=_xp,
+                               weights=_fit_weights)
     elif newton_fit == 'spline':
         try:
             from scipy.interpolate import RectBivariateSpline
@@ -5028,6 +5473,9 @@ def _carrier_reuse_key(carrier):
         return None            # 'auto' (or any string mode): never share
     if isinstance(carrier, np.ndarray):
         return None            # explicit per-field wavefront: never share
+    if isinstance(carrier, TiltedCarrier):
+        # analytic geometry, no per-field data: shareable like a scalar
+        return ('tilted',) + tuple(float(v) for v in carrier)
     try:
         return ('scalar', float(carrier))
     except (TypeError, ValueError):
@@ -5088,12 +5536,18 @@ def apply_real_lens_traced_multi(
         Each ``E_k`` is the field AT THE LENS-INPUT PLANE from emitter ``k``
         alone (propagate each emitter to the lens plane first).  All must share
         the grid.
-    carriers : 'auto' | None | float | ndarray | sequence
+    carriers : 'auto' | None | float | ndarray | TiltedCarrier | sequence
         Per-emitter carrier passed to :func:`apply_real_lens_traced`.  A scalar
-        / string / single ndarray is broadcast to every emitter; a list/tuple of
-        length ``len(emitter_fields)`` is used element-wise.  Default ``'auto'``
-        fits each emitter's own congruence (drives its residual angular spread
-        to ~0), which is what a divergent point-source array needs.
+        / string / single ndarray / single :class:`TiltedCarrier` is broadcast
+        to every emitter; a list/tuple of length ``len(emitter_fields)`` is used
+        element-wise.  Default ``'auto'`` fits each emitter's own congruence
+        (drives its residual angular spread to ~0), which is what a divergent
+        point-source array needs.
+
+        A :class:`TiltedCarrier` is a ``NamedTuple``, i.e. a ``tuple``: it is
+        matched BEFORE the sequence test, so one shared spec broadcasts instead
+        of being unpacked into five per-emitter carriers.  Pass ``[tc] * n``
+        (or a list of distinct specs) for the genuine per-emitter case.
     reuse_prepared : bool
         When True and a carrier is a shared geometry (``None`` or a float
         conjugate distance), a :class:`PreparedTracedLens` screen is built once
@@ -5147,7 +5601,19 @@ def apply_real_lens_traced_multi(
                 f"apply_real_lens_traced_multi: emitter_fields[{k}] shape "
                 f"{np.asarray(E).shape} != emitter_fields[0] {shape0}.")
 
-    if isinstance(carriers, (list, tuple)):
+    # D1 (2026-07-28): a :class:`TiltedCarrier` IS a tuple (NamedTuple), so the
+    # sequence test below would take its five FIELDS as five per-emitter
+    # carriers.  Measured with n = 5: the five emitters were traced with scalar
+    # conjugate distances (R, L, M, x0, y0) metres, silently -- 2.61x low total
+    # power, relative field error 1.74, no carrier-related error or warning; for
+    # n != 5 it raised "carriers list length 5 != number of emitters", naming a
+    # list the caller never wrote.  A single TiltedCarrier is ONE carrier and
+    # broadcasts like a scalar.  (``propagate_traced_carrier_chain`` was never
+    # affected -- its ``_parse_chain_carrier`` isinstance-checks TiltedCarrier
+    # first -- so this hole was in the ``_multi`` dispatcher alone.)
+    if isinstance(carriers, TiltedCarrier):
+        carr_list = [carriers] * n
+    elif isinstance(carriers, (list, tuple)):
         if len(carriers) != n:
             raise ValueError(
                 f"apply_real_lens_traced_multi: carriers list length "
@@ -5220,6 +5686,13 @@ def apply_real_lens_traced_multi(
         'on_aperture_beam':
             "the aperture:beam ratio is measured from the input beam, which "
             "the prepared screen's ``ones`` placeholder does not have",
+        'beam_centre':
+            "it only positions the beam-relative fit disc, which the prepared "
+            "screen has no beam to build (a decentred TiltedCarrier carrier "
+            "already states the chief-ray position for the per-emitter path)",
+        'decentred_fit_poly_order':
+            "it only orders the OFF-CENTRE ray fit, and the prepared screen "
+            "has no beam to place a disc around (niche D7)",
         'caustic':
             "the multibranch / uniform caustic modes require the ray-density "
             "amplitude, hence the per-emitter path",

@@ -26,23 +26,28 @@ This file pins the closure:
 5. Bit-identity spot checks: wiring changes only the *message wording*
    for rejected inputs, never the value returned for accepted ones.
 
-**Rollout history: 2 -> 27 -> 68 of 68.**  v4.15.5 wired 2 (both in
+**Rollout history: 2 -> 27 -> 68 of 68 -> 69 of 69.**  v4.15.5 wired 2 (both in
 ``propagators/vector_diffraction.py``).  ce0a265 (v5.31) wired 25 more
 and left a 41-site **handoff table** (``_HANDOFF_PREFIXES``) for the
 modules then owned by sibling agents -- ``analysis/detector.py``,
 ``elements/_lens_thin.py`` and all of ``propagators/``.  v5.32 (this
 change) wires those 41, so the handoff list is now **empty** and the
 fail-closed pin in item 4 covers the whole package.  ``_WIRED_SITES``
-below is the complete 68-row inventory, and
+below is the complete 69-row inventory, and
 ``test_inventory_is_complete_and_exact`` asserts it matches what an AST
 walk of ``lumenairy/`` actually finds -- in **both** directions, so a
 future site can neither land unwired nor land wired-but-undeclared.
 
-The user-visible message text changed at only 3 of the 68 sites --
+The user-visible message text changed at only 3 of the 69 sites --
 ``compute_psf`` ('pupil'), ``compute_otf`` / ``compute_mtf`` ('psf').
-The other 65 declare ``'field'``, which was the pre-fix default, so
+The other 66 declare ``'field'``, which was the pre-fix default, so
 their text is byte-identical and the win is that the intent is now
 machine-checkable instead of a prose comment.
+
+v5.32 (niche D2) added the 69th: ``_normalise_congruence`` in
+``propagators/carrier.py``, which guards every member field of
+``propagate_traced_carrier_chain_multi``'s congruence SEQUENCE.  It is the
+only row whose ``fn_name`` literal is ``None`` -- see the comment on the row.
 
 **One recorded intent was wrong and is corrected here.**  The ce0a265
 handoff table recorded ``shack_hartmann`` as ``'pupil'``, taken from
@@ -69,11 +74,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ---------------------------------------------------------------------------
-# The wired inventory -- ALL 68 call sites as of v5.32.  Built by an AST
+# The wired inventory -- ALL 69 call sites as of v5.32.  Built by an AST
 # walk of ``lumenairy/`` (see the audit record); each row is
 # (module_relpath, guarded_arg, fn_name_literal, expected_input_kind).
 #
-# The (module, arg, fn_name) triple is unique across all 68 rows, which is
+# The (module, arg, fn_name) triple is unique across all 69 rows, which is
 # what lets ``test_wired_site_declares_expected_input_kind`` demand
 # exactly one AST match per row.
 #
@@ -156,6 +161,18 @@ _WIRED_SITES = (
      'carrier_referenced_exact_focus_readout', 'field'),
     ('lumenairy/propagators/carrier.py', 'E_in',
      'propagate_traced_carrier_chain', 'field'),
+    # v5.32 (niche D2): the ONLY site whose ``fn_name`` is not a string
+    # literal -- ``_normalise_congruence`` guards each member field of
+    # ``propagate_traced_carrier_chain_multi``'s congruence SEQUENCE and names
+    # the offender positionally
+    # (f"{fn}: congruences[{i}]['field']"), which is the whole value of the
+    # message there.  The AST walk therefore records ``None`` for the literal;
+    # the (module, arg) pair is still unique, so the one-match rule holds.
+    # This is also what makes the ``propagate_traced_carrier_chain_multi``
+    # entry-point exemption in
+    # ``test_v4_15_3_dispatcher_pin_2d_scalar_field`` honest: the sequence is
+    # not a 2-D field, but every member of it IS guarded, here.
+    ('lumenairy/propagators/carrier.py', 'field', None, 'field'),
     ('lumenairy/propagators/dispatch.py', 'E_in', 'propagate', 'field'),
     ('lumenairy/propagators/fga.py', 'E_in', 'apply_real_lens_fga', 'field'),
     ('lumenairy/propagators/fga.py', 'E_in', 'apply_real_lens_auto', 'field'),
@@ -293,7 +310,7 @@ def test_input_kinds_vocabulary_is_a_closed_frozenset():
 def test_default_input_kind_is_field_backcompat():
     """The default stays ``'field'``.
 
-    As of v5.32 no call site in ``lumenairy/`` relies on it -- all 68
+    As of v5.32 no call site in ``lumenairy/`` relies on it -- all 69
     declare explicitly -- but the default is still load-bearing for two
     reasons: the v4.15.5 back-compat pin
     (``test_v4_15_5_agent_b.py::
@@ -480,7 +497,7 @@ def test_handoff_list_is_empty():
 
 
 def test_inventory_is_complete_and_exact():
-    """Completeness pin (the counter-measure that makes 68/68 assertable).
+    """Completeness pin (the counter-measure that makes 69/69 assertable).
 
     An AST walk of ``lumenairy/`` must find **exactly** the sites listed
     in ``_WIRED_SITES`` -- checked in BOTH directions:
@@ -516,10 +533,10 @@ def test_inventory_is_complete_and_exact():
 
 
 def test_all_sixty_eight_sites_are_wired():
-    """The headline counter: 68 call sites, 68 explicit declarations, 0
+    """The headline counter: 69 call sites, 69 explicit declarations, 0
     relying on the default.
 
-    The literal 68 is asserted (not merely derived) so that *reducing*
+    The literal 69 is asserted (not merely derived) so that *reducing*
     the inventory cannot make the rollout look complete -- shrinking
     ``_WIRED_SITES`` to match a regression would trip this, and growing
     the package legitimately requires a deliberate bump here plus a row
@@ -529,10 +546,10 @@ def test_all_sixty_eight_sites_are_wired():
     declared = sum(
         1 for rel, _p in _iter_package_files()
         for c in _guard_calls(rel) if c[2] is not None)
-    assert len(_WIRED_SITES) == 68, (
-        f"_WIRED_SITES must hold all 68 sites; got {len(_WIRED_SITES)}.")
-    assert total == 68, (
-        f"expected 68 ``_check_2d_scalar_field`` calls in lumenairy/; "
+    assert len(_WIRED_SITES) == 69, (
+        f"_WIRED_SITES must hold all 69 sites; got {len(_WIRED_SITES)}.")
+    assert total == 69, (
+        f"expected 69 ``_check_2d_scalar_field`` calls in lumenairy/; "
         f"found {total}.  If an entry point was legitimately added or "
         f"removed, wire it, update _WIRED_SITES, and bump this count in "
         f"the same change (and in this file's docstring).")
@@ -541,7 +558,7 @@ def test_all_sixty_eight_sites_are_wired():
 
 
 def test_declared_kind_distribution():
-    """Diagnostic counter-pin: 63 'field' / 3 'pupil' / 2 'psf'.
+    """Diagnostic counter-pin: 64 'field' / 3 'pupil' / 2 'psf'.
 
     Documents *which* sites are the interesting ones, and catches a
     careless bulk edit that flips a kind -- e.g. a future sweep
@@ -556,7 +573,7 @@ def test_declared_kind_distribution():
     from collections import Counter
 
     counts = Counter(kind for _r, _a, _f, kind in _WIRED_SITES)
-    assert dict(counts) == {'field': 63, 'pupil': 3, 'psf': 2}, (
+    assert dict(counts) == {'field': 64, 'pupil': 3, 'psf': 2}, (
         f"declared-kind distribution drifted: {dict(counts)}")
 
     pupil_fns = {fn for _r, _a, fn, k in _WIRED_SITES if k == 'pupil'}

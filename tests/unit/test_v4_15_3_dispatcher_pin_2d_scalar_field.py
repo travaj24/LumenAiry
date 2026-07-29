@@ -156,6 +156,26 @@ _GUARD_EXEMPTIONS = frozenset({
     # below.
     ('lumenairy/propagators/ensemble.py', 'propagate_ensemble'),
 
+    # ---- propagators/carrier.py --------------------------------------------
+    # v5.32 (niche D2, roadmap
+    # ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27 P1b):
+    # ``propagate_traced_carrier_chain_multi`` takes a SEQUENCE of
+    # congruence specs (each a dict carrying its own ``field`` plus a
+    # carrier / weight / name, or a bare ndarray), not a single 2-D
+    # scalar field -- it is the K-congruence orchestrator around
+    # ``propagate_traced_carrier_chain`` (which IS guarded, first
+    # statement).  Routing the sequence through
+    # ``_check_2d_scalar_field`` would reject the only valid input
+    # shape.  Every member field is guarded individually inside
+    # ``_normalise_congruence`` (``_check_2d_scalar_field(field,
+    # "...congruences[i]['field']", input_kind='field')``) BEFORE any
+    # propagation work starts, so an MCF / 3-D ensemble handed to any
+    # congruence still gets the canonical v4.16 roadmap-pointer message.
+    # Symmetric to the ``propagate_ensemble`` /
+    # ``angular_spectrum_propagate_batch`` exemptions above.
+    ('lumenairy/propagators/carrier.py',
+     'propagate_traced_carrier_chain_multi'),
+
     # ---- propagators/propagation.py ----------------------------------------
     # ``apply_fresnel_curvature`` takes a 2-D field but is a phase
     # multiplication helper (not a propagator); it is not in the

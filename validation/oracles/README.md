@@ -38,6 +38,34 @@ matrix and the measured wave/geometric split.
 The `evaluate(job, dz_off_mm)` function is importable for in-process use by
 `tests/unit/test_niche_p2_*.py`.
 
+### D5 additions (2026-07-29) -- both opt-in, pre-D5 behaviour unchanged
+
+* **`"entrance_eikonal"` job key**, `'paraxial'` (default, unchanged) or
+  `'sphere'`.  `'paraxial'` is the historical `W_in = h^2/(2 R_in)`, i.e.
+  `R_in` denotes a PARABOLIC carrier.  `'sphere'` is
+  `sign(R_in)(sqrt(h^2+R_in^2) - |R_in|)`, the EXACT spherical wave from a
+  point source at `R_in` -- which is what lumenairy's
+  `carrier_reference='sphere'` (the chain default since v5.29) means by
+  `r_in`.  The two differ by `h^4/(8 R_in^3)`: 1.8 rad at the rim of a
+  +-2.5w launch window on a 2 mm conjugate, so it is NOT optional for a
+  small-waist launch.
+* **`huygens_radial_profile(job, dz_off_mm=0.0, rho=None) -> (rho, I)`** --
+  the ring-Huygens focal profile with the `2 pi dh / (i lambda)` constant
+  applied, so `trapezoid(I * 2 pi rho, rho)` is the FRACTION OF THE LAUNCHED
+  POWER inside `rho`.  That makes FWHM and encircled energy comparable to a
+  wave solver's readout with no free scale factor.  The profile's own total is
+  then a measurement of the oracle's absolute accuracy: on the D5 stand-in it
+  reads **1.019**, the ~1.9 % being the ring-Huygens kernel's missing
+  obliquity factor at NA 0.2 -- so consumers should renormalise EE by the
+  measured total rather than trust it to 0.1 %.  Only valid for a REAL
+  (downstream) image.  Used as the ABSOLUTE level anchor of
+  `tests/unit/test_niche_d5_dx_flatness_gate.py`.
+
+`evaluate()` was refactored onto the shared `_trace_fan` / `_ring_huygens_E`
+helpers at the same time; `test_niche_p8_capstone.py`,
+`test_niche_p2_displaced_extreme.py`, `test_niche_p7_seidel_gate.py` and
+`test_niche_p11_ray_density_amplitude.py` were re-run green against it.
+
 ## `geom_spot_decenter_oracle.py` (P3 / niche N2)
 
 Lumenairy-free 3-D geometric spot-diagram oracle for **decentered / tilted**
