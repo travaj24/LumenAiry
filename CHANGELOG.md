@@ -4,6 +4,62 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — the chain's chief ray is TRACED, not linearised (`propagators/carrier.py`)
+
+Under a tilted carrier the chain transferred `(x_c, y_c, L, M)` through each
+group's lumped paraxial ABCD.  That is not a self-consistent convention: this
+module carries angles as DIRECTION COSINES (the free-leg advance
+`z L / cos(theta)` is already exact), while an ABCD ray vector is
+`[height, SLOPE]`.  The obvious repair -- converting cosine to slope and back
+across the ABCD -- was implemented, MEASURED, and **refused**: against an exact
+meridional trace on the D1 two-singlet relay at 46 mrad it lands **+1.1208 um**
+out where the raw-cosine form lands **+0.1214 um**, i.e. 9x worse.  A lumped
+group ABCD is not one convention at all (Snell refracts linearly in SINES,
+free transfer in TANGENTS) and a group of this class is refraction-dominated.
+
+So the predictor is no longer linearised: the chief ray is traced through the
+group's own surfaces with the same engine the tests use as their oracle
+(`_group_chief_transfer`), falling back to the ABCD only if a group cannot be
+traced.  Residual against the exact trace **0.1214 um -> 0.0** (machine
+precision), at ANY angle -- the `z L^3 / 2`-class error cannot arise.  Judged by
+an independent conic ray trace, all five affected closures improved
+(0.0440 / 0.2881 / 0.0037 / 0.00045 / **12.3724** um -> 0.0), and on the D6
+stand-in the predictor now sits ON the Fermat focus where the light actually
+lands, 0.000468 um from the measured spot centroid.  `_chain_chief_ray_at_target`
+uses the same step -- the orchestrator cross-checks the two and raises on a
+mismatch.  An untilted, undecentred ray short-circuits, so the on-axis path is
+byte-identical.
+
+### Added — `on_gap_paraxial`: a guard on the inter-group paraxial transport (`propagators/carrier.py`)
+
+The Sziklas-Siegman inter-group step is exact for the quadratic carrier and
+PARAXIAL for the envelope, and nothing measured that.  The obvious metric --
+the quartic sag phase `phi_sag = k w^4 / (8 |R|^3)`, the "~7 rad on the 121
+final gap" the roadmap quotes -- is **wrong, and a guard built on it would have
+fired hardest on the SAFEST legs**.  A leg does not carry `phi_sag`; it drops
+the CHANGE in it, `k z NA^4 / 8`, which is exactly the Fresnel kernel's own
+defect.  At fixed `phi_sag` = 8 rad the measured cost runs **-2.1 to -65 EE
+points** with leg length alone, and at fixed NA the disagreement FALLS as
+`1/phi_sag`.
+
+Better still, under the shipping `carrier_reference='sphere'` that dropped
+quartic **cancels exactly**: the parabola/sphere conversions bracketing a leg
+contribute `-z (parabola - S)`, and with the Fresnel leg's `z (1 + t^2/2)` the
+total is `z sqrt(1 + t^2)` -- the exact tilted-ray path, to all orders in `t`
+(verified to 2.2e-16).  Measured over NA 0.35-0.45 and `phi_sag` 1-100 rad:
+**0.000 EE points on every row**, against -20 to -33 points for the same legs
+under legacy `'parabola'`.
+
+The guard therefore trips on the DROPPED quartic (`gap_sag_tol`, default
+0.30 rad; 1 EE3 point is crossed at 0.40) and on the gap NA (0.60, the first
+row off the zero-cost floor), with per-leg diagnostics in `stages`.  Design 121
+is SILENT on every shipping leg with **4.08x** margin; under legacy
+`'parabola'` it fires on two, independently corroborated by this library's own
+audit of that legacy triple (best-focus EE6 79.7 % vs 99.3 %).  Note the
+largest drop is the SOURCE leg, not the final gap.  Diagnostic only: fields are
+bitwise identical across every setting, verified by monkeypatching the entire
+added path out.
+
 ### Added — design 121 full configuration: tilted carriers and a per-congruence fan (`propagators/carrier.py`, `elements/_lens_traced.py`, `io/prescriptions_zemax.py`)
 
 The traced chain can now carry a **tilted** congruence, so a DOE order is a

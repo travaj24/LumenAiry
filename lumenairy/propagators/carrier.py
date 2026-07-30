@@ -3144,6 +3144,89 @@ def _tilt_obliquity(L, M, fn):
     return 1.0 / np.sqrt(1.0 - s)
 
 
+def _group_chief_transfer(presc, abcd, x, y, L, M, wavelength, fn):
+    """Transfer the CHIEF RAY through one lens group, front vertex -> back
+    vertex, by an EXACT ray trace.  Returns ``(x_out, y_out, L_out, M_out)``
+    with the angles as direction cosines, matching the rest of this module.
+
+    Niche C3 (2026-07-30).  This replaces a paraxial ``ABCD`` transfer that
+    the roadmap carried as "one caveat, recorded not fixed": the chain stores
+    angles as DIRECTION COSINES (``_tilt_obliquity`` is
+    ``1/sqrt(1-L^2-M^2)``, and the free-leg advance ``z L / cos(theta)`` is
+    ``z tan``, already exact), but fed them to a group ABCD, whose ray vector
+    is ``[height, SLOPE]``.
+
+    THE OBVIOUS FIX IS WRONG, and was measured to be wrong before this one was
+    written.  Converting cosine -> slope into the ABCD and back
+    (``u = L/cos``, then ``L = u/sqrt(1+u^2+v^2)``) makes the group transfer
+    formally consistent with the free legs, and on the D1 two-singlet relay at
+    46 mrad it moves the predicted image height the WRONG WAY: against an
+    exact meridional trace (1.783248056 mm) the raw-cosine ABCD lands
+    +0.1214 um out and the converted one +1.1208 um, i.e. 9x worse.  The
+    reason is that a lumped group ABCD is not a single convention at all --
+    refraction at a surface is linear in SINES (Snell), free transfer inside
+    the group is linear in TANGENTS -- so no scalar angle convention can be
+    right for both, and a group of this class is refraction-dominated
+    (``B = t/n ~ 2 mm`` against ``GAP``/``fd`` legs two orders larger, which
+    already use the exact ``tan``).
+
+    So the predictor is not linearised at all any more: the chief ray is
+    TRACED, through the group's own surfaces, with the same engine the tests
+    use as their oracle.  Measured on that fixture the residual against the
+    exact trace goes ``0.1214 um -> 0.0`` (machine precision).  It is exact at
+    ANY angle, so the ``z L^3 / 2``-class error simply does not arise: on the
+    D6 synthetic stand-in (``L = -0.20``) the old predictor sat 12.4 um from
+    the Fermat focus while the exact leg's spot landed ON it.
+
+    Apertures are removed from the traced copy on purpose.  The ABCD this
+    replaces was a purely geometric transfer that could not vignette, so
+    honouring ``semi_diameter`` here would make the chief-ray PREDICTOR change
+    regime (and silently fall back) exactly where a beam runs near the rim.
+    Vignetting remains the business of the element and of the aperture guards,
+    not of this predictor.
+
+    Falls back to the paraxial ABCD if the group cannot be traced (a
+    prescription the ray engine will not build, or a dead ray), so this can
+    never be the thing that kills a propagation.  An UNTILTED, UNDECENTRED
+    ray short-circuits to zeros, which is what the ABCD returned too -- the
+    on-axis path is byte-identical.
+    """
+    A, B, C, D = abcd
+    x = float(x)
+    y = float(y)
+    L = float(L)
+    M = float(M)
+    if x == 0.0 and y == 0.0 and L == 0.0 and M == 0.0:
+        return 0.0, 0.0, 0.0, 0.0
+    try:
+        import dataclasses
+
+        from ..raytrace import Surface, make_ray, trace
+        from ..raytrace.trace import surfaces_from_prescription
+        sf = [dataclasses.replace(s, semi_diameter=np.inf)
+              for s in surfaces_from_prescription(presc)]
+        if sf:
+            sf[-1] = dataclasses.replace(sf[-1], thickness=0.0)
+            sf.append(Surface(radius=np.inf, conic=0.0,
+                              semi_diameter=np.inf, glass_before='air',
+                              glass_after='air', is_mirror=False,
+                              thickness=0.0, label='_chief_vertex'))
+            im = trace(make_ray(x, y, L, M, wavelength=float(wavelength)),
+                       sf, float(wavelength),
+                       output_filter='last').image_rays
+            _ok = bool(np.asarray(im.alive).ravel()[0])
+            _xo = float(np.asarray(im.x).ravel()[0])
+            _yo = float(np.asarray(im.y).ravel()[0])
+            _Lo = float(np.asarray(im.L).ravel()[0])
+            _Mo = float(np.asarray(im.M).ravel()[0])
+            if _ok and all(np.isfinite(v) for v in (_xo, _yo, _Lo, _Mo)):
+                return _xo, _yo, _Lo, _Mo
+    except (ValueError, RuntimeError, KeyError, IndexError, TypeError,
+            AttributeError, ImportError, FloatingPointError):
+        pass
+    return A * x + B * L, A * y + B * M, C * x + D * L, C * y + D * M
+
+
 def _shift_envelope(env, sx, sy, dx):
     """Band-limited translation of a SMOOTH envelope by ``(sx, sy)`` metres:
     returns ``env_out(x, y) = env(x - sx, y - sy)`` via a Fourier phase ramp.
@@ -3287,6 +3370,250 @@ _DECENTRE_FIT_FRAC_DEFAULT = 0.5
 # D6's paraxial pre-check -- that is the fail-before switch the C1 tests use,
 # not a supported configuration.
 _TILT_EXACT_NA_POWER_TOL = 1e-2
+
+
+# ---------------------------------------------------------------------------
+# niche C3 (2026-07-30) -- the HIGH-NA-GAP guard roadmap P7 asked for.
+# ---------------------------------------------------------------------------
+# P7 recorded "inter-group transport is still paraxial (Sziklas-Siegman) ...
+# there is no high-NA-gap guard, so the next design finds the edge the hard
+# way", and proposed the QUARTIC SAG PHASE as the metric: the exact sphere
+# ``S(r)`` minus the parabola the carrier machinery references is
+# ``-r^4/(8R^3)``, i.e.
+#
+#     phi_sag = k w^4 / (8 |R|^3) = k w NA^3 / 8       (NA = w/|R|, a TANGENT)
+#
+# radians at r = w.  On design 121's final gap that is 6.88 rad entering and
+# 5.95 rad leaving -- P7's "~7 rad" is the ENTERING value, and the 6.06 rad
+# sometimes quoted for the same leg is the exit value taken with the MEASURED
+# w = 3.1255 mm rather than the paraxial 3.111 mm.
+#
+# WHAT THE CALIBRATION FOUND, and why the guard does NOT trip on phi_sag.
+# Measured by scoring the shipped :func:`propagate_carrier_referenced` against
+# an INDEPENDENT band-limited angular-spectrum oracle (Matsushima, plain FFT,
+# no library code) on a synthetic converging leg, both branches then taken to
+# the geometric focus through the SAME exact radial (Hankel) Debye readout so
+# only the leg model differs.  Two results decide the design:
+#
+# (1) A leg does not carry ``phi_sag``; it drops the CHANGE in it,
+#
+#         phi_drop = |phi_sag(exit) - phi_sag(entry)| = k z NA^4 / 8
+#
+#     (exact identity: w and |R| both scale by m = R_out/R_in, so NA is
+#     invariant and phi_sag scales by m).  This is the same quantity as the
+#     Fresnel kernel's own defect ``k z (sqrt(1-a^2) - 1 + a^2/2)`` at
+#     a = NA -- verified: the shipped step reproduces a plain Fresnel transfer
+#     function on the FULL field to 3e-8 of peak, so SS-vs-ASM IS
+#     Fresnel-vs-exact and nothing else.  At FIXED phi_sag = 8 rad the measured
+#     end-to-end cost runs from -2.1 to -65 EE points as the leg length runs
+#     0.02 |R| -> 0.9 |R|, i.e. phi_sag ALONE predicts nothing; and at fixed
+#     phi_drop = 0.95 rad the cost is 33.0 / 31.1 / 26.2 / 21.6 EE points at
+#     NA 0.148 / 0.25 / 0.40 / 0.50, i.e. phi_drop predicts it and NA does not.
+#     An independent analytic model (Gaussian pupil + pure quartic phase C,
+#     paraxial Hankel focus, no library and no ASM) reproduces the full
+#     pipeline to 0.6 EE points at C = 0.95, so the number is not an artefact
+#     of the oracle.
+#
+# (2) Under the SHIPPING ``carrier_reference='sphere'`` that drop CANCELS
+#     EXACTLY.  The chain converts parabola -> exact sphere entering a group
+#     and back leaving it (:func:`_sphere_parab_conversion`), and those two
+#     conversions differ by (R_in - R_out) x (parabola - S) = -z x (parabola -
+#     S); adding the Fresnel leg's own ``z(1 + t^2/2)`` gives ``z sqrt(1+t^2)``
+#     -- the EXACT tilted-ray path -- to ALL orders in t = r/|R|.  Measured, at
+#     phi_sag 1 -> 100 rad (phi_drop 0.5 -> 50 rad):
+#
+#       convention  phi_sag  phi_drop   core rms      dEE (2.92 diffr. radii)
+#       sphere         1        0.5     1.8e-03 rad     0.000 pts
+#       sphere         8        4.0     2.2e-04         0.000
+#       sphere        40       20.0     4.4e-05         0.000
+#       sphere       100       50.0     4.9e-05         0.000
+#       parabola       8        4.0     7.6e-01        -20.5
+#       parabola      16        8.0     1.2e+00        -32.8
+#
+#     The residual FALLS as phi_sag rises (at fixed NA, larger phi_sag means a
+#     larger, more geometric beam), so a guard tripping on large phi_sag would
+#     fire on the SAFE configurations and stay silent on the risky ones.  That
+#     is why this guard trips on the leg's DROPPED quartic and on the gap NA,
+#     and merely REPORTS phi_sag (which is a valid conservative upper bound:
+#     phi_drop <= phi_sag for any leg that does not cross the focus).
+#
+# ARM A -- ``_GAP_SAG_TOL_DEFAULT``, the UNCANCELLED drop.  Only reachable
+# under the legacy ``carrier_reference='parabola'``.  Measured cost of an
+# uncancelled quartic C (analytic Gaussian-pupil model, cross-checked against
+# the full pipeline; EE points at 2.92 diffraction radii = design 121's EE3
+# convention, at the geometric focus / at the branch's own best focus):
+#
+#     C rad   0.05    0.10    0.20    0.30    0.50    0.95    2.00    4.00
+#     fixed  -0.000  -0.001  -0.061  -0.360  -1.832  -7.160 -18.426 -30.281
+#     bestfo -0.000  -0.001  -0.014  -0.063  -0.298  -1.309  -5.144 -14.321
+#
+# 1 EE3 point (fixed focus) is crossed at C ~ 0.40 rad; 0.30 keeps the default
+# one step conservative of that, the same way ``_DECENTRE_FIT_FRAC_DEFAULT``
+# does.  (At the much TIGHTER radius where the ideal reads 90 % -- 1.07
+# diffraction radii -- the same table crosses 1 point at C ~ 0.09 rad; 0.30 is
+# stated against the 121-comparable convention, not that one.)
+#
+# ARM B -- ``_GAP_NA_TOL``, the residual the 'sphere' cancellation leaves.
+# Measured at phi_sag = 16 rad, z = |R|/2, against the same oracle (core rms
+# phase / EE points at 1.07 diffraction radii, the TIGHT convention because
+# nothing is visible on the loose one):
+#
+#     gap NA   0.20      0.30      0.45      0.60      0.75      0.90
+#     rms rad  1.2e-05   5.9e-05   3.1e-04   1.0e-03   6.7e-03   5.2e-02
+#     dEE pts   0.000     0.000     0.000    -0.008    -0.121    -0.504
+#
+# Sampling adequacy for every row above: the oracle's Nyquist direction cosine
+# is 1.45x - 3.76x the beam's marginal-ray SINE and the measured input power
+# above that Nyquist is 1.9e-06 (worst row, NA 0.90) to 1e-19, i.e. two to
+# fifteen decades below the effect being measured.  The exact SPHERE saturates
+# the ray sine at r/sqrt(R^2+r^2), so a tangent NA of 0.90 only asks the grid
+# for 0.669 -- which is why these rows are samplable at all.
+#
+# NOTHING ACCEPTED TODAY BECOMES REFUSED.  Design 121's leg table (paraxial
+# q-trace off the real prescription; phi_sag entry -> exit, drop, gap NA):
+#
+#     leg (gap before)          z mm    phi_sag      drop    gap NA
+#     source -> S3-S4          45.906  0.14 -> 3.39  3.248   0.1042
+#     S3-S4  -> S5-S7          10.000  0.20 -> 0.22  0.014   0.0392
+#     DOE leg                  51.539  0.00 -> 0.00  0.000   0.0000
+#     S14-S15 .. S18-S20        7/5/5  0.00 -> 0.00  0.000   0.0000
+#     S18-S20 -> S21-S22       32.479  0.04 -> 0.04  0.005   0.0227
+#     S21-S22 -> S23-S24        8.678  1.48 -> 1.26  0.213   0.0800
+#     S23-S24 -> S25-S27        3.323  6.88 -> 5.95  0.935   0.1479
+#
+# On the SHIPPING defaults ('sphere') arm A does not apply and arm B has 4.1x
+# of margin (worst gap NA 0.1479 against 0.60).  Under the LEGACY
+# ``carrier_reference='parabola'`` arm A fires on the source leg (3.248 rad
+# against 0.30) -- correctly, and independently corroborated: the library's own
+# audit measured that exact legacy triple costing design 121 best-focus EE6
+# 79.7 % against 99.3 % for the shipping configuration, which is the same
+# ~20-point order this calibration predicts for a 3.2 rad uncancelled drop.
+# The default action is 'warn', so no configuration is refused either way.
+_GAP_SAG_TOL_DEFAULT = 0.30
+
+# Gap NA (w/|R|, a TANGENT) above which even the sphere-CANCELLED leg costs
+# measurable end-to-end accuracy -- arm B of ``on_gap_paraxial``.  0.60 is the
+# first measured row that leaves the 0.000-point floor (-0.008 pts); by 0.75 it
+# is -0.121 and by 0.90 -0.504.  Design 121's worst gap is 0.1479.
+_GAP_NA_TOL = 0.60
+
+
+def _gap_amp_radius(env, dx):
+    """``_envelope_amp_radius`` about the grid origin, computed SEPARABLY from
+    the two marginals instead of a full ``meshgrid``.
+
+    Mathematically the same second moment ``sqrt(2 (<x^2> + <y^2>))`` -- only
+    the summation order differs -- but it never materialises the two ``(Ny,
+    Nx)`` coordinate arrays, which at the design-121 production grid
+    (N = 28672) would be 6.6 GB each.  This runs on EVERY inter-group leg for
+    the ``on_gap_paraxial`` diagnostic, so it has to be free."""
+    from ..backend import to_numpy
+    inten = np.abs(to_numpy(env)) ** 2
+    tot = float(inten.sum())
+    if not (tot > 0.0):
+        return 0.0
+    ny, nx = inten.shape[-2], inten.shape[-1]
+    x = (np.arange(nx, dtype=np.float64) - nx / 2) * dx
+    y = (np.arange(ny, dtype=np.float64) - ny / 2) * dx
+    r2 = (float((inten.sum(axis=0) * x * x).sum())
+          + float((inten.sum(axis=1) * y * y).sum())) / tot
+    return float(np.sqrt(2.0 * max(r2, 0.0)))
+
+
+def _check_gap_paraxial(w_in, R_in, z, m, wavelength, where, action, sag_tol,
+                        sphere_ref):
+    """Report an inter-group free-space leg whose PARAXIAL (Sziklas-Siegman)
+    transport is outside the calibrated envelope (niche C3, roadmap P7).
+
+    Returns the per-leg diagnostic dict (``phi_sag`` at both ends, the dropped
+    quartic and the gap NA) whether or not it fires, so a consumer can read the
+    margin off ``stages`` without catching a warning.  See the module-level
+    ``_GAP_SAG_TOL_DEFAULT`` note for the full calibration and for why the trip
+    is on the DROPPED quartic / the gap NA rather than on ``phi_sag`` itself.
+
+    WHAT THIS METRIC IS NOT.  ``phi_sag`` here is the UNTILTED sag term -- the
+    on-axis sphere-vs-parabola difference of a radially symmetric carrier.  A
+    TILTED congruence adds a separate, independent effect that this guard does
+    not measure: per :func:`_tilt_obliquity`, the envelope's own diffraction
+    wants an effective distance ``z/(1-L^2)^{3/2}`` ALONG the tilt but
+    ``z/(1-L^2)^{1/2}`` ACROSS it (+0.32 % and +0.11 % respectively at
+    46 mrad), i.e. the residual envelope transport becomes mildly ANISOTROPIC
+    under tilt while the chief-ray advance and the path piston stay exact.
+    That correction is not implemented and is not folded into the numbers here.
+
+    Scope: the inter-group free-space legs.  The FINAL leg to the target plane
+    is parabola-referenced on both remaining routes (see the conversion just
+    before the readout), but it already has its own guard --
+    ``on_na_proximity`` names the ~200 rad the paraxial focus readout costs at
+    a design-121-class exit NA, and ``final_leg='exact'`` is the fix there.
+    """
+    k = 2.0 * np.pi / wavelength
+    R_out = R_in + z
+    finite_in = bool(np.isfinite(R_in)) and R_in != 0.0 and w_in > 0.0
+    na = (float(w_in) / abs(float(R_in))) if finite_in else 0.0
+    w_out = abs(float(m)) * float(w_in)
+
+    def _sag(w, R):
+        if not np.isfinite(R) or R == 0.0 or not (w > 0.0):
+            return 0.0
+        return float(k * w ** 4 / (8.0 * abs(R) ** 3))
+
+    phi_in = _sag(w_in, R_in)
+    phi_out = _sag(w_out, R_out)
+    phi_drop = float(k * abs(z) * na ** 4 / 8.0)
+    stats = {'gap_phi_sag_in': phi_in, 'gap_phi_sag_out': phi_out,
+             'gap_phi_drop': phi_drop, 'gap_na': na}
+    if action == 'ignore':
+        return stats
+    _geom = (f"w = {w_in * 1e3:.4f} mm over |R| = {abs(R_in) * 1e3:.4f} mm, "
+             f"gap NA {na:.4f}, leg {z * 1e3:.4f} mm; phi_sag = "
+             f"k w^4/(8|R|^3) runs {phi_in:.3f} -> {phi_out:.3f} rad across "
+             f"the leg")
+    if (not sphere_ref) and sag_tol > 0.0 and phi_drop > sag_tol:
+        _guard_dispose(
+            action,
+            f"propagate_traced_carrier_chain: the free-space leg into {where} "
+            f"DROPS {phi_drop:.3f} rad of quartic sag (k z NA^4 / 8 = the "
+            f"CHANGE in phi_sag across the leg), above gap_sag_tol="
+            f"{sag_tol}, and carrier_reference='parabola' does not put it "
+            f"back.  ({_geom}.)  The Sziklas-Siegman step is exact for the "
+            f"FRESNEL kernel, so what it leaves behind is exactly the "
+            f"Fresnel-vs-exact defect at the gap NA -- pupil SPHERICAL "
+            f"ABERRATION, not a small residual.  MEASURED end-to-end cost of "
+            f"an uncancelled drop C, in EE points at 2.92 diffraction radii "
+            f"(design 121's EE3 convention), at the geometric focus / at best "
+            f"focus: C=0.1 -> -0.00/-0.00; 0.2 -> -0.06/-0.01; 0.3 -> "
+            f"-0.36/-0.06; 0.5 -> -1.83/-0.30; 0.95 -> -7.16/-1.31; 2.0 -> "
+            f"-18.43/-5.14; 4.0 -> -30.28/-14.32.  REMEDIES, in order: (1) "
+            f"drop carrier_reference='parabola' -- the shipping 'sphere' "
+            f"default cancels this term EXACTLY (measured 0.000 EE points at "
+            f"a 50 rad drop; design-121 best-focus EE6 79.7 % -> 99.3 %); (2) "
+            f"put the long gap in a slower space (the drop goes as NA^4); (3) "
+            f"propagate that leg with an exact ASM step outside the chain.  "
+            f"on_gap_paraxial='error' makes this fatal, 'ignore' silences it.",
+            stacklevel=3)
+    elif na > _GAP_NA_TOL:
+        _guard_dispose(
+            action,
+            f"propagate_traced_carrier_chain: the free-space leg into {where} "
+            f"runs at gap NA {na:.4f}, above the calibrated envelope "
+            f"{_GAP_NA_TOL}.  ({_geom}.)  The leg's {phi_drop:.3f} rad "
+            f"quartic sag drop is cancelled exactly by the "
+            f"carrier_reference='sphere' conversions, so what is left is the "
+            f"DIFFRACTIVE residual of the paraxial envelope transport, and "
+            f"that is what grows with NA.  MEASURED against an "
+            f"independent band-limited ASM at phi_sag 16 rad, z = |R|/2 (core "
+            f"rms phase / EE points at 1.07 diffraction radii): NA 0.20 -> "
+            f"1.2e-05 rad / 0.000; 0.30 -> 5.9e-05 / 0.000; 0.45 -> 3.1e-04 / "
+            f"0.000; 0.60 -> 1.0e-03 / -0.008; 0.75 -> 6.7e-03 / -0.121; 0.90 "
+            f"-> 5.2e-02 / -0.504.  Design 121's worst gap runs NA 0.1479, "
+            f"4.1x below this threshold.  REMEDIES: re-reference the carrier "
+            f"closer to the beam so the gap is spent at a lower NA; split the "
+            f"leg around an explicit exact ASM step; or treat the returned "
+            f"image metrics as indicative.  on_gap_paraxial='error' makes "
+            f"this fatal, 'ignore' silences it.",
+            stacklevel=3)
+    return stats
 
 
 def _check_decentred_fit(w, x_c, y_c, where, action, frac):
@@ -4155,6 +4482,8 @@ def propagate_traced_carrier_chain(
     on_tilt_exact_grid: str = 'error',
     on_decentred_fit: str = 'warn',
     decentre_fit_frac: float = _DECENTRE_FIT_FRAC_DEFAULT,
+    on_gap_paraxial: str = 'warn',
+    gap_sag_tol: float = _GAP_SAG_TOL_DEFAULT,
 ) -> TracedCarrierChainResult:
     """Propagate a beam ENVELOPE through a chain of real (traced) lens groups on
     a co-moving carrier-referenced grid (audit F4.1).
@@ -4763,6 +5092,45 @@ def propagate_traced_carrier_chain(
         ``on_decentred_fit`` fires.  The measured onset on the decentre-
         invariant stand-in above is ~0.75 w; 0.5 keeps the default one step
         conservative of it.  ``0`` disables the check.
+    on_gap_paraxial : {'warn', 'error', 'ignore'}, default 'warn'
+        Guard rail on the PARAXIAL INTER-GROUP TRANSPORT (niche C3, roadmap
+        P7).  Inter-group free-space legs are Sziklas-Siegman, i.e. exact for
+        the FRESNEL kernel; relative to an exact angular spectrum each leg
+        therefore drops ``phi_drop = k z NA^4 / 8`` radians of quartic --
+        exactly the CHANGE across the leg in the sag phase
+        ``phi_sag = k w^4/(8|R|^3)`` that P7 named (~7 rad entering design
+        121's final gap).  DIAGNOSTIC ONLY: it never changes a number.
+
+        Two complementary trips, both reported per leg in ``stages``
+        (``gap_phi_sag_in`` / ``gap_phi_sag_out`` / ``gap_phi_drop`` /
+        ``gap_na``) so the margin is readable without catching a warning:
+
+        * the dropped quartic exceeds ``gap_sag_tol`` AND the chain is running
+          the legacy ``carrier_reference='parabola'``, which does not put it
+          back.  Under the shipping ``'sphere'`` the two sphere/parabola
+          conversions bracketing the leg cancel that drop EXACTLY (to all
+          orders -- their difference is ``-z x (parabola - S)``, which turns
+          the Fresnel leg's ``z(1 + t^2/2)`` into the exact ``z sqrt(1+t^2)``),
+          measured 0.000 EE points at a 50 rad drop, so this trip is inert
+          there by construction.
+        * the gap NA (``w/|R|``, a tangent) exceeds 0.60 (``_GAP_NA_TOL``),
+          where the DIFFRACTIVE residual the cancellation leaves first comes
+          off the floor (-0.008 EE points at 0.60, -0.121 at 0.75, -0.504 at
+          0.90).  Design 121's worst gap runs 0.1479, 4.1x clear.
+
+        The guard deliberately does NOT trip on ``phi_sag`` itself: measured,
+        the residual FALLS as ``phi_sag`` rises at fixed NA, so such a trip
+        would fire on the safe configurations and stay silent on the risky
+        ones.  ``phi_sag`` is still reported (and is a valid conservative upper
+        bound, ``phi_drop <= phi_sag`` for any non-focus-crossing leg).  See
+        ``_GAP_SAG_TOL_DEFAULT`` in this module for the full calibration table,
+        its sampling-adequacy statement and design 121's per-leg numbers.
+    gap_sag_tol : float, default 0.30
+        Dropped quartic, in radians at ``r = w``, above which
+        ``on_gap_paraxial``'s first trip fires.  1 EE3 point (at design 121's
+        3 um / 2.92-diffraction-radii convention, no refocus) is crossed at
+        ~0.40 rad; 0.30 keeps the default one step conservative of that.  ``0``
+        disables that trip; the gap-NA trip is unaffected.
 
     Returns
     -------
@@ -4786,6 +5154,11 @@ def propagate_traced_carrier_chain(
     _check_guard_action('on_rs_fine_clamp', on_rs_fine_clamp, _fn)
     _check_guard_action('on_tilt_exact_grid', on_tilt_exact_grid, _fn)
     _check_guard_action('on_decentred_fit', on_decentred_fit, _fn)
+    _check_guard_action('on_gap_paraxial', on_gap_paraxial, _fn)
+    if not (np.isfinite(gap_sag_tol) and gap_sag_tol >= 0.0):
+        raise ValueError(
+            f"{_fn}: gap_sag_tol must be a finite non-negative number of "
+            f"radians of dropped quartic sag, got {gap_sag_tol!r}.")
     # niche C1 item 5: ``focus_readout`` had no key whitelist, so a typo was
     # silently accepted and the caller kept the DEFAULT -- e.g.
     # ``'on_readout_windo'`` left ``on_readout_window`` at the hard ``'error'``
@@ -5047,13 +5420,25 @@ def propagate_traced_carrier_chain(
         pend_own = 0.0
 
         # free-space carrier leg to the group front vertex
+        _gap_diag = {}
         if gap != 0.0:
+            # niche C3 / roadmap P7: measure the leg BEFORE transporting it --
+            # the guard needs the entering (w, R), and the exit pair follows
+            # from the magnification the step returns.  Read-only.
+            _w_gap = _gap_amp_radius(env, cur_dx)
+            _R_gap = float(R) if np.isscalar(R) or np.ndim(R) == 0 else R
             cr = propagate_carrier_referenced(env, R, gap, wavelength, cur_dx)
             env, R, cur_dx = cr.env, cr.R, cr.dx
             if isinstance(cur_dx, tuple):
                 cur_dx = cur_dx[0]
             if isinstance(R, tuple):
                 R = R[0]
+            if np.isscalar(_R_gap) and np.isfinite(_R_gap) and _R_gap != 0.0:
+                _gap_diag = _check_gap_paraxial(
+                    _w_gap, _R_gap, gap, (_R_gap + gap) / _R_gap, wavelength,
+                    f"groups[{gi}] ({presc.get('name', f'group{gi}')})"
+                    if isinstance(presc, dict) else f"groups[{gi}]",
+                    on_gap_paraxial, gap_sag_tol, _sphere_ref)
         if _tilted and _own != 0.0:
             # The chief ray advances by the EXACT geometric
             # ``gap * (L, M)/cos(theta)`` and the frame picks up the exact
@@ -5194,7 +5579,7 @@ def propagate_traced_carrier_chain(
             stages.append({
                 'name': _name, 'R_in': R_use, 'R_out': R_out, 'dx': dx_fine,
                 'w': w_stage, 'power': p_stage, 'exact_final': True,
-                'na_exit': na_exit})
+                'na_exit': na_exit, **_gap_diag})
             # niche C1 item 4: report the element's MEASURED exit NA and the
             # exit power above this grid's Nyquist NA alongside the paraxial
             # ``na_exit`` the leg was SIZED from, so the margin is visible
@@ -5219,11 +5604,14 @@ def propagate_traced_carrier_chain(
                 # readout is told where the beam actually is and takes its own
                 # window about that point; ``centre_out`` stays absolute.
                 _A, _B, _C, _D = _group_abcd(presc, wavelength)
-                _xco = _A * x_c + _B * tilt_L
-                _yco = _A * y_c + _B * tilt_M
+                # niche C3: EXACT chief-ray trace through this group (see
+                # ``_group_chief_transfer``); the exact leg's spot lands on
+                # the Fermat focus, so the PREDICTOR is what had to move.
+                _xco, _yco, _Lco, _Mco = _group_chief_transfer(
+                    presc, (_A, _B, _C, _D), x_c, y_c, tilt_L, tilt_M,
+                    wavelength, _fn)
                 exact_kw['centre'] = (_xco, _yco)
-                exact_kw['tilt'] = (_C * x_c + _D * tilt_L,
-                                    _C * y_c + _D * tilt_M)
+                exact_kw['tilt'] = (_Lco, _Mco)
                 stages[-1].update({
                     'L_out': exact_kw['tilt'][0], 'M_out': exact_kw['tilt'][1],
                     'x_c_out': _xco, 'y_c_out': _yco})
@@ -5311,10 +5699,13 @@ def propagate_traced_carrier_chain(
             # exit congruence: sphere R_out about the transferred CHIEF RAY,
             # plus the transferred tilt (the closure derived in the D1 note).
             _A, _B, _C, _D = _group_abcd(presc, wavelength)
-            x_c_out = _A * x_c + _B * tilt_L
-            y_c_out = _A * y_c + _B * tilt_M
-            L_out = _C * x_c + _D * tilt_L
-            M_out = _C * y_c + _D * tilt_M
+            # niche C3: the chief ray is TRACED through the group's own
+            # surfaces, not pushed through the lumped paraxial ABCD (which
+            # is neither a sine nor a tangent convention).  Exact at any
+            # angle; see ``_group_chief_transfer``.
+            x_c_out, y_c_out, L_out, M_out = _group_chief_transfer(
+                presc, (_A, _B, _C, _D), x_c, y_c, tilt_L, tilt_M,
+                wavelength, _fn)
             _rp = _tilt_ramp(E_exit.shape, cur_dx, wavelength,
                              L_out, M_out, x_c_out, y_c_out, -1)
             if _rp is not None:
@@ -5338,7 +5729,7 @@ def propagate_traced_carrier_chain(
         stage = {
             'name': _name,
             'R_in': R_use, 'R_out': R_out, 'dx': cur_dx,
-            'w': w_stage, 'power': p_stage}
+            'w': w_stage, 'power': p_stage, **_gap_diag}
         if _tilted:
             stage.update({'L_out': tilt_L, 'M_out': tilt_M,
                           'x_c_out': x_c, 'y_c_out': y_c})
@@ -5714,8 +6105,14 @@ def _chain_chief_ray_at_target(groups, wavelength, carrier, final_distance,
     Mirrors :func:`propagate_traced_carrier_chain`'s own closure exactly, and
     needs nothing but it: on a free leg the chief ray advances by
     ``gap * (L, M) / cos(theta)`` with the tilt invariant, and through a group
-    the pair ``(x_c, L)`` transforms as an ordinary paraxial ray under the
-    group's air-to-air ABCD (:func:`_group_abcd`).  The carrier RADIUS never
+    it is TRACED, exactly, through that group's own surfaces
+    (:func:`_group_chief_transfer`; niche C3 -- it used to go through the
+    group's lumped paraxial ABCD, which is neither a sine nor a tangent
+    convention and left 0.044-0.288 um per group on the D1 relay at 46 mrad).
+    Both closures must use the SAME step: the orchestrator cross-checks this
+    prediction against the chain's own ``stages[-1]`` and RAISES on a
+    mismatch, so converting one without the other is a hard break.  The
+    carrier RADIUS never
     enters -- which is why this prediction cannot drift from the chain's own
     bookkeeping under a curvature change.  A per-group ``r_in`` override that
     is itself a :class:`~lumenairy.TiltedCarrier` re-seeds the congruence,
@@ -5766,9 +6163,14 @@ def _chain_chief_ray_at_target(groups, wavelength, carrier, final_distance,
                 g_r_in, f"{fn}: groups[{gi}]['r_in']")
             if otilt:
                 L, M, x_c, y_c, tilted = oL, oM, ox, oy, True
-        A, B, C, D = _group_abcd(presc, wavelength)
-        x_c, y_c, L, M = (A * x_c + B * L, A * y_c + B * M,
-                          C * x_c + D * L, C * y_c + D * M)
+        # niche C3: the SAME exact chief-ray trace the chain itself uses (see
+        # ``_group_chief_transfer``).  These two closures must agree to the
+        # digit -- ``propagate_traced_carrier_chain_multi`` cross-checks them
+        # and RAISES on a mismatch -- so converting the chain's group step
+        # without converting this one is a hard break, not a drift.
+        x_c, y_c, L, M = _group_chief_transfer(
+            presc, _group_abcd(presc, wavelength), x_c, y_c, L, M,
+            wavelength, fn)
         tilted = tilted or bool(L or M or x_c or y_c)
     final_distance = pend + final_distance
     if final_distance != 0.0 and tilted:
@@ -5899,6 +6301,8 @@ def propagate_traced_carrier_chain_multi(
     on_tilt_exact_grid: str = 'error',
     on_decentred_fit: str = 'warn',
     decentre_fit_frac: float = _DECENTRE_FIT_FRAC_DEFAULT,
+    on_gap_paraxial: str = 'warn',
+    gap_sag_tol: float = _GAP_SAG_TOL_DEFAULT,
     progress: Optional[Callable] = None,
 ) -> TracedCarrierChainMultiResult:
     """Run K INDEPENDENT congruences through one traced lens chain and
@@ -6117,7 +6521,7 @@ def propagate_traced_carrier_chain_multi(
         What to do when the estimate exceeds the budget.  The default FAILS
         LOUDLY rather than reporting a degraded number from an unattended
         batch run.
-    on_multi_congruence, multi_congruence_threshold, on_na_proximity, na_proximity_frac, on_ram_cap, on_rs_fine_clamp, on_tilt_exact_grid, on_decentred_fit, decentre_fit_frac
+    on_multi_congruence, multi_congruence_threshold, on_na_proximity, na_proximity_frac, on_ram_cap, on_rs_fine_clamp, on_tilt_exact_grid, on_decentred_fit, decentre_fit_frac, on_gap_paraxial, gap_sag_tol
         The niche-D3 (plus D6's ``on_tilt_exact_grid`` and
         ``on_decentred_fit``) guard rails,
         forwarded VERBATIM to every per-congruence
@@ -6244,10 +6648,15 @@ def propagate_traced_carrier_chain_multi(
     _check_guard_action('on_rs_fine_clamp', on_rs_fine_clamp, fn)
     _check_guard_action('on_tilt_exact_grid', on_tilt_exact_grid, fn)
     _check_guard_action('on_decentred_fit', on_decentred_fit, fn)
+    _check_guard_action('on_gap_paraxial', on_gap_paraxial, fn)
     if not (np.isfinite(decentre_fit_frac) and decentre_fit_frac >= 0.0):
         raise ValueError(
             f"{fn}: decentre_fit_frac must be a finite non-negative number of "
             f"beam amplitude radii, got {decentre_fit_frac!r}.")
+    if not (np.isfinite(gap_sag_tol) and gap_sag_tol >= 0.0):
+        raise ValueError(
+            f"{fn}: gap_sag_tol must be a finite non-negative number of "
+            f"radians of dropped quartic sag, got {gap_sag_tol!r}.")
     readout_capture_tol = float(readout_capture_tol)
     if not (np.isfinite(readout_capture_tol) and readout_capture_tol > 0.0):
         raise ValueError(
@@ -6400,7 +6809,9 @@ def propagate_traced_carrier_chain_multi(
             on_ram_cap=on_ram_cap, on_rs_fine_clamp=on_rs_fine_clamp,
             on_tilt_exact_grid=on_tilt_exact_grid,
             on_decentred_fit=('ignore' if quiet else on_decentred_fit),
-            decentre_fit_frac=decentre_fit_frac)
+            decentre_fit_frac=decentre_fit_frac,
+            on_gap_paraxial=('ignore' if quiet else on_gap_paraxial),
+            gap_sag_tol=gap_sag_tol)
 
     def _fit(period):
         """Largest EVEN window (px) that fits inside one spatial period."""

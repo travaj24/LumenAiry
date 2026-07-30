@@ -134,21 +134,51 @@ def _total_abcd(gA, gB, d0):
             @ MA @ np.array([[1.0, d0], [0.0, 1.0]]))
 
 
-def _hand_chief_ray(gA, gB, L, M, fd, d0=0.0):
-    """Chief ray at the target plane, computed BY HAND from the two group
-    ABCDs plus the exact ``1/cos(theta)`` free-leg obliquity -- the same
-    closure the chain uses, written out independently here so the placement
-    bookkeeping is checked against something that shares no code with it."""
-    A1, B1, C1, D1 = _group_abcd(gA, _WL)
-    A2, B2, C2, D2 = _group_abcd(gB, _WL)
+def _exact_group_step(presc, x, y, L, M):
+    """One group, front vertex -> back vertex, by an EXACT skew ray trace.
+
+    Written out here rather than imported so this oracle keeps sharing no
+    code with the chain's own ``_group_chief_transfer`` (niche C3).
+    """
+    sf = [dataclasses.replace(s, semi_diameter=np.inf)
+          for s in surfaces_from_prescription(presc)]
+    sf[-1] = dataclasses.replace(sf[-1], thickness=0.0)
+    sf = sf + [Surface(radius=np.inf, conic=0.0, semi_diameter=np.inf,
+                       glass_before='air', glass_after='air',
+                       is_mirror=False, thickness=0.0, label='vtx')]
+    im = trace(make_ray(float(x), float(y), float(L), float(M),
+                        wavelength=_WL), sf, _WL,
+               output_filter='last').image_rays
+    return (float(np.asarray(im.x).ravel()[0]),
+            float(np.asarray(im.y).ravel()[0]),
+            float(np.asarray(im.L).ravel()[0]),
+            float(np.asarray(im.M).ravel()[0]))
+
+
+def _hand_chief_ray(gA, gB, L, M, fd, d0=0.0, groups_paraxial=False):
+    """Chief ray at the target plane, computed BY HAND: each GROUP by an exact
+    skew ray trace through its real surfaces, each FREE LEG by the exact
+    ``1/cos(theta)`` obliquity -- the same closure the chain uses, written out
+    independently here so the placement bookkeeping is checked against
+    something that shares no code with it.
+
+    ``groups_paraxial=True`` selects the OLD lumped-ABCD group step, kept as
+    the fail-before witness: niche C3 replaced it because a group ABCD is
+    neither a sine nor a tangent convention (Snell is linear in sines, free
+    transfer in tangents), which left a measurable error at large tilt.
+    """
+    def _step(presc, x, y, l, m):
+        if groups_paraxial:
+            A, B, C, D = _group_abcd(presc, _WL)
+            return A * x + B * l, A * y + B * m, C * x + D * l, C * y + D * m
+        return _exact_group_step(presc, x, y, l, m)
+
     ob0 = 1.0 / np.sqrt(1.0 - L ** 2 - M ** 2) if (L or M) else 1.0
     x0, y0 = L * d0 * ob0, M * d0 * ob0
-    xA, yA = A1 * x0 + B1 * L, A1 * y0 + B1 * M
-    LA, MA = C1 * x0 + D1 * L, C1 * y0 + D1 * M
+    xA, yA, LA, MA = _step(gA, x0, y0, L, M)
     obA = 1.0 / np.sqrt(1.0 - LA ** 2 - MA ** 2) if (LA or MA) else 1.0
     xg, yg = xA + LA * _GAP * obA, yA + MA * _GAP * obA
-    xB, yB = A2 * xg + B2 * LA, A2 * yg + B2 * MA
-    LB, MB = C2 * xg + D2 * LA, C2 * yg + D2 * MA
+    xB, yB, LB, MB = _step(gB, xg, yg, LA, MA)
     obB = 1.0 / np.sqrt(1.0 - LB ** 2 - MB ** 2) if (LB or MB) else 1.0
     return xB + LB * fd * obB, yB + MB * fd * obB, LB, MB
 
@@ -727,9 +757,11 @@ def test_chief_ray_prediction_matches_the_chain_bookkeeping(_fan,
                                                   abs=1e-12)
 
 
-def test_exit_tilt_matches_the_group_abcd(_fan, _multi4_tiled):
-    """The reported exit direction cosines are the total ABCD applied to the
-    entrance chief ray, ``L_out = C x_c + D L``."""
+def test_exit_tilt_matches_the_exact_chief_trace(_fan, _multi4_tiled):
+    """The reported exit direction cosines are those of the chief ray TRACED
+    exactly through both groups (niche C3), not the lumped-ABCD composition
+    ``L_out = C x_c + D L`` this test used to pin.  The paraxial stand-in is
+    kept below as the discriminator: it is close but measurably not equal."""
     M = _fan['M']
     for info, (L, Mt), st in zip(_multi4_tiled.congruences, _fan['tilts'],
                                  _fan['hand_state']):

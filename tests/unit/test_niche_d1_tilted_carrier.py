@@ -11,15 +11,19 @@ carrier is the FULL split angle, 2.3x outside the documented
 is applied to a reference the beam does not follow.
 
 ``r_in=TiltedCarrier(R, L, M)`` carries ``(R, L, M)`` plus the chief-ray
-position instead.  The state is closed under paraxial ABCD (``R`` by the
-wavefront Moebius law, ``(x_c, L)`` as an ordinary paraxial ray) and, in the
-chief-ray-tracking frame, the ENVELOPE transport is the untouched scalar code
--- which is what makes the ``L = M = 0`` path byte-identical.
+position instead.  The state is closed under the group transfer -- ``R`` by
+the paraxial wavefront Moebius law, and the CHIEF RAY ``(x_c, y_c, L, M)`` by
+an EXACT ray trace through that group's own surfaces (niche C3, 2026-07-30;
+see ``_group_chief_transfer``, which keeps the lumped paraxial ABCD only as
+its paraxial limit and as a fall-back for a group that cannot be traced) --
+and, in the chief-ray-tracking frame, the ENVELOPE transport is the untouched
+scalar code, which is what makes the ``L = M = 0`` path byte-identical.
 
 Everything here is SELF-CONTAINED (synthetic N-BK7 singlets built inline, no
 prescription asset) and every physical claim is checked against an inline
 oracle that does not share code with the chain: an exact meridional ray trace
-through the real spherical surfaces, and the group ABCD.
+through the real spherical surfaces, the measured WAVE centroid, and the group
+ABCD.
 
 Pins, in order:
 
@@ -30,6 +34,9 @@ Pins, in order:
   correction is the whole reason the wave centroid lands on the ray trace;
 * ``L = M = 0`` reproduces the scalar chain to <= 1e-10 * scale (the shipped
   design-121 acceptance cannot move);
+* the per-group chief-ray closure reproduces a WHOLE-SYSTEM exact ray trace at
+  every intermediate plane (measured residual 0.0), where the lumped paraxial
+  ABCD it replaced read 0.044 um out at gA and 0.288 um at gB;
 * a 46 mrad congruence through a 2-group relay lands on the EXACT meridional
   ray trace and reaches the same diffraction-limited spot the on-axis run
   does, while the scalar chain fed the same physical field smears it;
@@ -53,7 +60,12 @@ from lumenairy.elements._lens_traced import (
     _compute_carrier,
     _input_beam_amp_radius,
 )
-from lumenairy.propagators.carrier import _group_abcd, _shift_envelope, _tilt_obliquity
+from lumenairy.propagators.carrier import (
+    _group_abcd,
+    _group_chief_transfer,
+    _shift_envelope,
+    _tilt_obliquity,
+)
 from lumenairy.raytrace import Surface, make_ray, trace
 from lumenairy.raytrace.trace import surfaces_from_prescription
 
@@ -87,11 +99,22 @@ def _relay_prescriptions():
 
 
 def _paraxial_state(gA, gB, tilt):
-    """Chain the D1 closure by hand: ``R`` by the Moebius law, ``(x_c, L)`` as
-    a paraxial ray through each GROUP, and the exact ``1/cos(theta)``
-    obliquity on each FREE leg (the chain's contract).  ``x_img_paraxial`` is
-    the same trace with the paraxial free-leg advance ``L z`` instead -- kept
-    so the tests can show they discriminate the ``z L^3/2`` term."""
+    """The PARAXIAL-ABCD version of the D1 closure, computed by hand: ``R`` by
+    the Moebius law, ``(x_c, L)`` as a paraxial ray through each GROUP, and the
+    exact ``1/cos(theta)`` obliquity on each FREE leg.
+
+    Two of these are still the chain's contract and are pinned as such:
+    ``R_A`` / ``R_B`` (the sphere DOES follow the ABCD Moebius law) and the
+    exact free-leg obliquity.  The chief-ray entries ``x_A``/``L_A``/
+    ``x_B``/``L_B``/``x_img`` are NO LONGER what the chain computes -- since
+    niche C3 (2026-07-30) it TRACES the chief ray through each group's own
+    surfaces -- so they are kept here as the superseded predictor, used only as
+    fail-before witnesses (measured 0.044 um out at gA, 0.288 um at gB and
+    0.121 um at the image plane against an exact trace).
+
+    ``x_img_paraxial`` is the same ABCD trace with the paraxial free-leg
+    advance ``L z`` instead of ``z L / cos(theta)`` -- kept so the tests can
+    show they discriminate the ``z L^3/2`` term."""
     A1, B1, C1, D1 = _group_abcd(gA, _WL)
     A2, B2, C2, D2 = _group_abcd(gB, _WL)
     R_A, x_A, L_A = A1 / C1, B1 * tilt, D1 * tilt        # R_in = inf
@@ -105,7 +128,7 @@ def _paraxial_state(gA, gB, tilt):
              + (C2 * (x_A + L_A * _GAP) + D2 * L_A) * fd)
     return dict(R_A=R_A, x_A=x_A, L_A=L_A, R_g=R_g, x_g=x_g,
                 R_B=R_B, x_B=x_B, L_B=L_B, fd=fd,
-                x_img=x_B + L_B * fd * ob_B, x_img_paraxial=x_par)
+                x_img_abcd=x_B + L_B * fd * ob_B, x_img_paraxial=x_par)
 
 
 def _relay_surfaces(gA, gB, image_distance):
@@ -128,6 +151,33 @@ def _exact_chief_height(gA, gB, tilt, image_distance):
     res = trace(make_ray(0.0, 0.0, tilt, 0.0, wavelength=_WL),
                 _relay_surfaces(gA, gB, image_distance), _WL)
     return float(res.image_rays.x[0])
+
+
+_FLAT = dict(radius=np.inf, conic=0.0, semi_diameter=np.inf,
+             glass_before='air', glass_after='air', is_mirror=False)
+
+
+def _chief_state(surfaces, x=0.0, y=0.0, L=0.0, M=0.0):
+    """``(x, y, L, M)`` of ONE exactly-traced ray at the end of ``surfaces``,
+    angles as direction cosines (what :func:`make_ray` takes and what the chain
+    carries)."""
+    r = trace(make_ray(x, y, L, M, wavelength=_WL), surfaces, _WL).image_rays
+    return (float(r.x[0]), float(r.y[0]), float(r.L[0]), float(r.M[0]))
+
+
+def _leg_surfaces(presc, pre=0.0, post=0.0):
+    """``pre`` metres of air, one GROUP, ``post`` metres of air, ending on a
+    flat plane -- so a single exact trace covers a whole gap+group+leg chain
+    and can be compared with the chain's own composed bookkeeping.
+
+    ``post = pre = 0`` is the group's front-vertex -> back-vertex transfer, the
+    plane pair the chain's per-group closure is stated on."""
+    sf = surfaces_from_prescription(presc)
+    sf[-1] = dataclasses.replace(sf[-1], thickness=float(post))
+    sf = sf + [Surface(thickness=0.0, label='img', **_FLAT)]
+    if pre:
+        sf = [Surface(thickness=float(pre), label='entry', **_FLAT)] + sf
+    return sf
 
 
 def _exact_ray_centroid(gA, gB, tilt, image_distance, n=15):
@@ -298,8 +348,9 @@ def test_zero_tilt_reproduces_the_scalar_chain(final_distance):
     chief-ray bookkeeping.  That is deliberate and it is this test's whole
     scope: the REDUCTION.  The tilted branch itself is pinned by
     ``test_tilted_relay_lands_on_the_exact_ray_trace`` /
-    ``test_chief_ray_closure_matches_the_group_abcd`` here (meridional) and by
-    ``tests/unit/test_niche_c1_consolidation.py``'s SKEW pins, which score a
+    ``test_chief_ray_closure_matches_the_exact_chief_trace`` here (meridional)
+    and by ``tests/unit/test_niche_c1_consolidation.py``'s SKEW pins, which
+    score a
     (44, 26) mrad congruence against an exact skew ray trace and demonstrate a
     fail-before for each of the three mechanisms."""
     n, dx, w, R_in = 512, 30e-6, 4.5e-3, 60e-3
@@ -319,11 +370,18 @@ def test_zero_tilt_reproduces_the_scalar_chain(final_distance):
     assert A.shape == B.shape and A.dtype == B.dtype
     margin = float(np.abs(A - B).max())
     assert margin <= 1e-10 * float(np.abs(A).max()), margin
-    # and no tilt bookkeeping leaks into the scalar result contract
+    # and no tilt bookkeeping leaks into the scalar result contract.  Pinned
+    # as "the tilt keys are absent, and the two runs agree on the key set"
+    # rather than as a closed list: niche C3 added the per-leg
+    # ``gap_*`` transport diagnostics to EVERY stage, and a closed list makes
+    # any future scalar-side diagnostic look like a tilt leak.
     assert len(a.stages) == len(b.stages) == 2
+    _TILT_KEYS = {'L_out', 'M_out', 'x_c_out', 'y_c_out', 'L', 'M', 'x_c',
+                  'y_c'}
     for sa, sb in zip(a.stages, b.stages):
-        assert set(sa) == set(sb) == {'name', 'R_in', 'R_out', 'dx', 'w',
-                                      'power'}
+        assert set(sa) == set(sb)
+        assert {'name', 'R_in', 'R_out', 'dx', 'w', 'power'} <= set(sa)
+        assert not (set(sa) & _TILT_KEYS)
 
 
 # ===========================================================================
@@ -367,19 +425,72 @@ def _runs(_relay):
                 scalar_in=scalar_in)
 
 
-def test_chief_ray_closure_matches_the_group_abcd(_relay, _runs):
-    """The per-group ``(x_c_out, L_out)`` the chain reports must be the group
-    ABCD applied to the incoming chief ray -- the closure that makes the
-    tilted state carryable at all."""
+def test_chief_ray_closure_matches_the_exact_chief_trace(_relay, _runs):
+    """The per-group ``(x_c_out, L_out)`` the chain reports must be the EXACT
+    chief-ray trace through that group's own surfaces, front vertex -> back
+    vertex -- the closure that makes the tilted state carryable at all.
+
+    RENAMED 2026-07-30 (niche C3).  This test used to be
+    ``..._matches_the_group_abcd`` and pinned the group's lumped paraxial
+    ABCD, BY CONSTRUCTION.  That premise is obsolete: the chain deliberately no
+    longer uses the ABCD for the chief ray, because a lumped group ABCD is
+    neither a sine nor a tangent convention (refraction is linear in SINES,
+    intra-group transfer in TANGENTS) while the chain carries ``(L, M)`` as
+    DIRECTION COSINES.  Measured on this fixture against an exact trace: the
+    ABCD predictor is 0.044 um out at gA's back vertex, 0.288 um at gB's and
+    +0.1214 um at the image plane; a cosine<->slope conversion of the same
+    ABCD is +1.1208 um, i.e. 9x WORSE; the exact trace is 0.0.
+
+    The oracle here is the same whole-system exact trace
+    ``test_tilted_relay_lands_on_the_exact_ray_trace`` uses, stopped one plane
+    early -- so gB's pin is ONE five-surface trace against the chain's
+    (trace gA) + (obliquity free leg) + (trace gB) composition, which is a
+    genuinely different computation and is what validates the composition.
+
+    The ABCD is NOT dropped: it is pinned in its two remaining documented
+    roles, the PARAXIAL LIMIT of the exact transfer and the FALL-BACK for a
+    group the ray engine cannot build.
+    """
     st, stages = _relay['st'], _runs['tilted'].stages
+    gA, gB = _relay['gA'], _relay['gB']
     assert [s['name'] for s in stages] == ['gA', 'gB', '<target>']
-    assert stages[0]['x_c_out'] == pytest.approx(st['x_A'], rel=1e-12)
-    assert stages[0]['L_out'] == pytest.approx(st['L_A'], rel=1e-12)
+    # --- gA back vertex: exact trace of the same 46 mrad chief ray
+    xa, _ya, La, _Ma = _chief_state(_leg_surfaces(gA), L=_TILT)
+    assert stages[0]['x_c_out'] == pytest.approx(xa, rel=1e-12)
+    assert stages[0]['L_out'] == pytest.approx(La, rel=1e-12)
+    # --- gB back vertex: the WHOLE relay, stopped there (image_distance = 0)
+    xb, _yb, Lb, _Mb = _chief_state(_relay_surfaces(gA, gB, 0.0), L=_TILT)
+    assert stages[1]['x_c_out'] == pytest.approx(xb, rel=1e-12)
+    assert stages[1]['L_out'] == pytest.approx(Lb, rel=1e-12)
+    # the SPHERE still follows the paraxial ABCD Moebius law -- only the chief
+    # ray moved, and that separation is the whole D1 closure
     assert stages[0]['R_out'] == pytest.approx(st['R_A'], rel=1e-12)
-    assert stages[1]['x_c_out'] == pytest.approx(st['x_B'], rel=1e-12)
-    assert stages[1]['L_out'] == pytest.approx(st['L_B'], rel=1e-12)
     assert stages[1]['R_out'] == pytest.approx(st['R_B'], rel=1e-12)
     assert stages[0]['y_c_out'] == 0.0 and stages[0]['M_out'] == 0.0
+    # --- fail-before: the superseded ABCD chief ray is measurably wrong, and
+    # this test used to assert exactly those two numbers
+    assert abs(st['x_A'] - xa) == pytest.approx(0.0440e-6, rel=0.05)
+    assert abs(st['x_B'] - xb) == pytest.approx(0.2881e-6, rel=0.05)
+    # --- the ABCD is the exact transfer's PARAXIAL LIMIT ...
+    abcd = _group_abcd(gA, _WL)
+    tiny = 1e-7
+    x_t, _, L_t, _ = _group_chief_transfer(gA, abcd, 0.0, 0.0, tiny, 0.0,
+                                           _WL, 'fn')
+    assert x_t == pytest.approx(abcd[1] * tiny, rel=1e-9)
+    assert L_t == pytest.approx(abcd[3] * tiny, rel=1e-9)
+    # ... and its documented FALL-BACK, for a group the ray engine cannot
+    # build (here an unknown glass): the predictor degrades to the ABCD
+    # rather than killing the propagation
+    bad = dict(gA, surfaces=[dict(s) for s in gA['surfaces']])
+    bad['surfaces'][0]['glass_after'] = 'NOT-A-REAL-GLASS'
+    bad['surfaces'][1]['glass_before'] = 'NOT-A-REAL-GLASS'
+    assert _group_chief_transfer(bad, abcd, 0.0, 0.0, _TILT, 0.0, _WL,
+                                 'fn') == (abcd[1] * _TILT, 0.0,
+                                           abcd[3] * _TILT, 0.0)
+    # ... and the untilted short-circuit that keeps the on-axis path
+    # byte-identical returns the zeros the ABCD returned too
+    assert _group_chief_transfer(gA, abcd, 0.0, 0.0, 0.0, 0.0, _WL, 'fn') == \
+        (0.0, 0.0, 0.0, 0.0)
 
 
 def test_tilted_relay_lands_on_the_exact_ray_trace(_relay, _runs):
@@ -390,9 +501,18 @@ def test_tilted_relay_lands_on_the_exact_ray_trace(_relay, _runs):
     Discriminating power (all measured on this fixture): dropping the
     element's ``C x_c`` chief-ray bending moves the image by ~430 um, the
     ``B L`` term by ~92 um, and using the PARAXIAL advance ``L z`` instead of
-    the exact ``z L / cos(theta)`` by 0.77 um -- against a 0.30 um tolerance,
-    a measured 0.02 um wave residual and a 0.12 um analytic-tracking residual
-    (the image height itself is 1.783 mm, so that is 1.1e-5 relative).
+    the exact ``z L / cos(theta)`` by 0.77 um -- against a 0.30 um tolerance
+    and a measured 0.014 um wave residual (the image height itself is
+    1.783 mm, so that is 8e-6 relative).
+
+    The chain's own analytic tracking used to be a SEPARATE number here: it
+    pushed the chief ray through the lumped paraxial group ABCD and landed
+    +0.1214 um from the exact trace.  Since niche C3 (2026-07-30) it TRACES
+    the chief ray through each group, so it now EQUALS the exact trace
+    (measured residual 0.0, i.e. the two agree to the last bit), and the
+    measured wave centroid is 0.014 um from it instead of 0.107 um -- a
+    7.7x closer landing judged by a diffraction calculation that shares no
+    code with either predictor.
     """
     tol = 0.30e-6
     x_meas, _, _, _ = _spot(_runs['tilted'].field, _DXO, _relay['x_exact'])
@@ -404,11 +524,15 @@ def test_tilted_relay_lands_on_the_exact_ray_trace(_relay, _runs):
     # ... and it is nearer the Gaussian-weighted ray centroid than a full
     # spot radius, i.e. the whole geometric image position is reproduced
     assert abs(x_meas - _relay['x_ray_centroid']) < 1.0e-6
-    # the chain's own analytic chief-ray tracking agrees with the ray trace
-    # too (the remaining sub-0.2 um sits in the traced residual)
+    # the chain's own analytic chief-ray tracking IS the exact ray trace
     assert _runs['tilted'].stages[-1]['x_c'] == pytest.approx(
-        _relay['st']['x_img'], rel=1e-9)
-    assert abs(_relay['st']['x_img'] - _relay['x_exact']) < tol
+        _relay['x_exact'], rel=1e-9)
+    # fail-before: the superseded ABCD predictor is 0.1214 um out, and the
+    # WAVE (an independent judge of both) is 7.7x nearer the new one
+    x_abcd = _relay['st']['x_img_abcd']
+    assert abs(x_abcd - _relay['x_exact']) == pytest.approx(0.1214e-6,
+                                                            rel=0.05)
+    assert abs(x_meas - _relay['x_exact']) < 0.2 * abs(x_abcd - x_meas)
 
 
 def test_tilted_relay_reaches_the_on_axis_diffraction_limit(_relay, _runs):
@@ -606,30 +730,47 @@ def test_tilted_run_without_a_focus_readout(carrier_reference):
     assert res.R is not None and np.isfinite(res.R)
     tgt = res.stages[-1]
     assert tgt['name'] == '<target>' and tgt['target'] is True
-    # chief ray = ABCD through the group, then the exact obliquity over the
-    # gap and the final leg (both free legs are on the far side of the group)
+    # ORACLE: ONE exact skew trace of the whole thing -- 2 mm of air, the real
+    # spherical surfaces, then the 5 mm final leg -- against the chain's
+    # composed (obliquity leg) + (traced group) + (obliquity leg) bookkeeping.
+    # Before niche C3 the group step was the lumped paraxial ABCD, which lands
+    # 0.0037 um short in x and 0.0018 um in y here (rel 2.1e-5); the traced
+    # step reproduces the single trace to 2e-16 relative.
+    xt, yt, Lt, Mt = _chief_state(_leg_surfaces(presc, pre=2e-3, post=5e-3),
+                                  L=L, M=M)
+    assert tgt['x_c'] == pytest.approx(xt, rel=1e-12)
+    assert tgt['y_c'] == pytest.approx(yt, rel=1e-12)
+    assert tgt['L'] == pytest.approx(Lt, rel=1e-12)
+    assert tgt['M'] == pytest.approx(Mt, rel=1e-12)
+    # fail-before: the ABCD group step really is a different, worse answer
     A, B, C, D = _group_abcd(presc, _WL)
     ob0 = _tilt_obliquity(L, M, 'fn')
     x1, y1 = L * 2e-3 * ob0, M * 2e-3 * ob0
-    x2, L2 = A * x1 + B * L, C * x1 + D * L
-    y2, M2 = A * y1 + B * M, C * y1 + D * M
-    ob2 = _tilt_obliquity(L2, M2, 'fn')
-    assert tgt['x_c'] == pytest.approx(x2 + L2 * 5e-3 * ob2, rel=1e-12)
-    assert tgt['y_c'] == pytest.approx(y2 + M2 * 5e-3 * ob2, rel=1e-12)
-    assert tgt['L'] == pytest.approx(L2, rel=1e-12)
-    assert tgt['M'] == pytest.approx(M2, rel=1e-12)
+    x2, L2a = A * x1 + B * L, C * x1 + D * L
+    y2, M2a = A * y1 + B * M, C * y1 + D * M
+    ob2 = _tilt_obliquity(L2a, M2a, 'fn')
+    assert abs((x2 + L2a * 5e-3 * ob2) - xt) == pytest.approx(0.00369e-6,
+                                                              rel=0.05)
+    assert abs((y2 + M2a * 5e-3 * ob2) - yt) == pytest.approx(0.00184e-6,
+                                                              rel=0.05)
     # the tilt ramp really is on the returned FIELD: its mean transverse
     # phase gradient is the carried tilt, not zero
     row = field[field.shape[0] // 2]
     lo, hi = 3 * len(row) // 8, 5 * len(row) // 8
     grad = np.angle(row[lo + 1:hi] * np.conj(row[lo:hi - 1])) \
         / (_K0 * res.dx)
-    assert float(np.median(grad)) == pytest.approx(L2, abs=2e-3)
+    assert float(np.median(grad)) == pytest.approx(Lt, abs=2e-3)
 
 
 def test_per_group_tilted_override_reseeds_the_congruence():
     """A group-level ``'r_in'`` may itself be a TiltedCarrier -- that is how a
-    DOE plane hands each order its own congruence mid-chain."""
+    DOE plane hands each order its own congruence mid-chain.
+
+    The reseeded congruence enters at the group's FRONT VERTEX (the override
+    replaces the state the gap left), so the oracle is one exact trace of a
+    10 mrad chief ray from that vertex to the back vertex.  Before niche C3
+    the chain reported the ABCD's ``(B t, D t)`` instead, which is 0.00045 um
+    out in height and 8.5e-9 out in direction cosine here."""
     n, dx, w, presc, env = _small_setup()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -639,11 +780,15 @@ def test_per_group_tilted_override_reseeds_the_congruence():
             _WL, dx, r_in=np.inf, ray_subsample=8, n_workers=1,
             traced_kwargs=_TKW)
     A, B, C, D = _group_abcd(presc, _WL)
+    xo, _yo, Lo, _Mo = _chief_state(_leg_surfaces(presc), L=0.01)
     tgt = res.stages[-1]
     assert tgt['name'] == '<target>'
-    assert tgt['L'] == pytest.approx(D * 0.01, rel=1e-12)
-    assert tgt['x_c'] == pytest.approx(B * 0.01, rel=1e-12)
+    assert tgt['L'] == pytest.approx(Lo, rel=1e-12)
+    assert tgt['x_c'] == pytest.approx(xo, rel=1e-12)
     assert np.isfinite(np.asarray(res.field)).all()
+    # fail-before: the superseded ABCD closure is a different answer
+    assert abs(B * 0.01 - xo) == pytest.approx(0.000452e-6, rel=0.05)
+    assert abs(D * 0.01 - Lo) == pytest.approx(8.545e-9, rel=0.05)
 
 
 # ---------------------------------------------------------------------------

@@ -444,8 +444,17 @@ def test_a_skew_tilted_congruence_lands_on_the_exact_skew_ray_trace(
     assert abs(r['ye']) > 1.0e-3 and abs(r['xe']) > 1.0e-3
     st = r['tilted'].stages
     assert st[0]['y_c_out'] != 0.0 and st[0]['M_out'] != 0.0
-    assert st[-1]['x_c'] == pytest.approx(_SK['x'], rel=1e-9)
-    assert st[-1]['y_c'] == pytest.approx(_SK['y'], rel=1e-9)
+    # niche C3: the chain's tracked chief ray is now an EXACT trace through
+    # each group's surfaces, so it is pinned against this file's own exact
+    # skew oracle -- NOT against the paraxial-ABCD composition ``_SK``, which
+    # that same oracle already reports as ~0.17 um wrong here.  ``_SK`` is
+    # kept below as the fail-before witness for exactly that gap.
+    assert st[-1]['x_c'] == pytest.approx(r['xe'], abs=1.0e-9)
+    assert st[-1]['y_c'] == pytest.approx(r['ye'], abs=1.0e-9)
+    # ... and the ABCD it replaced really was measurably off, so this pin
+    # cannot be satisfied by both conventions at once.
+    assert d_pred > 20.0 * float(np.hypot(st[-1]['x_c'] - r['xe'],
+                                          st[-1]['y_c'] - r['ye']) + 1e-18)
 
 
 def test_the_skew_congruence_reaches_the_on_axis_diffraction_limit(_skew_runs):

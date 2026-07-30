@@ -60,17 +60,33 @@ beam is diffraction-limited by construction and the exact leg has a hard target
 to hit, while the paraxial readout (~200 rad of wavefront wrong at this exit NA)
 demonstrably misses it.
 
-One measured caveat this stand-in exposes, recorded rather than asserted
-because it belongs to D1's convention and not to D6: the chain carries
-``(L, M)`` as DIRECTION COSINES (advancing the chief ray by ``z L / cos``,
-which is exact for a free leg) but obtains them from the group's PARAXIAL
-ABCD, where they are slopes.  At this stand-in's exit tilt ``L_out = -0.20``
-that mixes ``tan`` with ``sin`` and puts the predicted chief ray 12.4 um from
-the Fermat focus at ``f = 3 mm``.  Design 121's final group leaves
-``L_out = 8.3e-5``, where the same term is 6 pm.  The tests below therefore
-centre the readout on the analytically-known Fermat focus and check that the
-EXACT leg's spot lands THERE -- which is a stronger statement than agreeing
-with the predictor.
+**The caveat this stand-in exposed is now FIXED** (niche C3, 2026-07-30).  The
+chain carries ``(L, M)`` as DIRECTION COSINES -- advancing the chief ray by
+``z L / cos(theta)``, which is exact for a free leg -- but used to obtain them
+from the group's PARAXIAL ABCD, where they are slopes.  At this stand-in's exit
+tilt that mixed ``tan`` with ``sin`` and put the predicted chief ray **12.4 um**
+from the Fermat focus at ``f = 3 mm``, while the exact leg's SPOT landed on the
+Fermat focus.  The predictor now TRACES the chief ray through the group's own
+surfaces (:func:`~lumenairy.propagators.carrier._group_chief_transfer`) and
+lands on the Fermat focus to 1e-19 m, i.e. 0.0005 um from the measured spot
+centroid -- pinned by ``test_the_exact_leg_is_reachable_under_a_tilted_carrier``
+below.
+
+The OBVIOUS repair was refuted before that one shipped, and the refutation is
+worth keeping: converting cosine -> slope into the ABCD and back makes the group
+transfer formally consistent with the free legs, and on the D1 two-singlet relay
+at 46 mrad it moves the predicted image height the WRONG WAY -- against an exact
+meridional trace the raw-cosine ABCD is +0.1214 um out and the converted one
++1.1208 um, 9x worse.  A lumped group ABCD is refraction-dominated and Snell is
+linear in SINES while intra-group free transfer is linear in TANGENTS, so no
+scalar angle convention is right for it.  Exact tracing is +0.0000 um.  Design
+121's final group leaves ``L_out = 8.3e-5``, where the whole term was 6 pm --
+invisible, which is why nothing in that study saw it before this stand-in.
+
+The tests below still centre the readout on the analytically-known Fermat focus
+and check that the EXACT leg's spot lands THERE, which remains a stronger
+statement than agreeing with the predictor; what changed is that the predictor
+is now checked against the measured spot centroid as well.
 
 Cost: 6 chain runs on a 2048-square fine leg, measured ~60 s total on Windows
 (the exact leg is 6 s, the paraxial 2 s).  Every chain-running test is
@@ -441,19 +457,46 @@ def test_the_inline_oracle_is_diffraction_limited_and_grid_converged():
 
 def test_the_exact_leg_is_reachable_under_a_tilted_carrier():
     """The headline: no ``NotImplementedError``, and the run reports the exact
-    leg plus the chief ray it landed on."""
+    leg plus the chief ray it landed on -- which is now the chief ray the SPOT
+    is actually measured at.
+
+    STRENGTHENED 2026-07-30 (niche C3).  This used to assert only that the
+    chain echoed back the ABCD prediction the test had seeded ``centre_out``
+    with, which was true by construction on both sides and said nothing about
+    where the light went; the roadmap separately RECORDED that the predictor
+    sat 12.4 um from the Fermat focus while the exact leg's spot landed on it.
+    The predictor is an exact chief-ray trace now, so the statement worth
+    pinning is the one that was previously only recorded.
+
+    Measured here, readout centred on the analytically-known Fermat focus:
+    predictor ``x_c`` = -1.1e-19 m (the Fermat focus itself, to double
+    precision) against a measured spot centroid of 4.7e-10 m -- the two agree
+    to 0.0005 um, 1/6700 of the 3.15 um FWHM.  The superseded ABCD predictor
+    sat 12.372 um away, 3.9 FWHM, far enough that a readout tile centred on it
+    clipped the spot on this +/-7.2 um window (EE2 0.363 against 0.703).
+    """
     _ram_guard()
     car = la.TiltedCarrier(np.inf, 0.0, 0.0, _X0, 0.0)
-    res, centre = _run_chain(car, final_leg='auto')
+    res, centre = _run_chain(car, final_leg='auto', centre_out=(0.0, 0.0))
     last_group = [s for s in res.stages if s.get('exact_final')
                   and not s.get('target')]
     assert last_group, 'the exact final leg did not run'
     assert last_group[0]['na_exit'] > 0.15
     tgt = res.stages[-1]
     assert tgt.get('target') and tgt.get('exact_final')
-    assert abs(float(tgt['x_c']) - centre[0]) < 1e-12
     F = np.asarray(res.field)
     assert F.shape == (_NOUT, _NOUT) and np.isfinite(F).all()
+    # the predicted chief ray is ON the Fermat focus -- the stand-in's
+    # analytically exact answer for any sub-aperture of the collimated bundle
+    assert abs(float(tgt['x_c'])) < 1e-12, tgt['x_c']
+    assert abs(float(tgt['y_c'])) < 1e-12, tgt['y_c']
+    # ... and ON the measured spot centroid, to a fiftieth of the spot width
+    m = _metrics(F)
+    cx = centre[0] + m['centroid'][0]
+    cy = centre[1] + m['centroid'][1]
+    assert abs(float(tgt['x_c']) - cx) < 0.02 * m['fwhm'], (tgt['x_c'], cx)
+    assert abs(float(tgt['y_c']) - cy) < 0.02 * m['fwhm'], (tgt['y_c'], cy)
+    assert float(np.hypot(cx, cy)) < 0.05e-6
 
 
 def test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle():
@@ -461,31 +504,60 @@ def test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle():
 
     The decentred collimated beam is diffraction-limited by construction, so
     the inline oracle IS the right answer.  The exact leg must land on it; the
-    paraxial readout -- the only route available before D6 -- must not."""
+    paraxial readout -- the only route available before D6 -- must not.
+
+    THE FAIL-BEFORE RATIO MOVED, 2026-07-30 (niche C3), and this is the reason
+    so the next reader is not surprised again.  The paraxial leg used to read
+    **3.19x** the oracle FWHM (EE2 6.5 % against 71.9 %); it now reads
+    **1.857x** (EE2 10.6 % against 71.6 %).  Nothing about the paraxial
+    readout changed -- its wavefront is still ~200 rad wrong at this exit NA.
+    What changed is the chief-ray PREDICTOR that places its spot: it is an
+    exact trace now instead of a lumped paraxial ABCD, so the paraxial leg's
+    (still wrong) spot is at least in the right PLACE, and less of it falls
+    off the +/-7.2 um readout window.  The exact leg improved on the same
+    change, from 9.5 % / 0.951x / 0.991x on FWHM / EE2 / EE4 to
+    **0.0 % / 0.982x / 0.995x**.
+
+    Because the FWHM bar had to come down, the discrimination is carried by
+    two measurements that did NOT weaken, both on the shipped window: the
+    paraxial leg keeps 14.8 % of the oracle's EE2 (pinned below 25 %), and its
+    brightest pixel sits at the window EDGE while the exact leg's sits at the
+    centre.  On a +/-38 um window -- measured, not asserted, since this test
+    deliberately keeps the shipped readout -- the paraxial peak is 8.25 um
+    from the Fermat focus and only 2.8 % of its power lands within 2 um of it,
+    against the exact leg's 70.2 % and the oracle's 71.6 %."""
     _ram_guard()
     car = la.TiltedCarrier(np.inf, 0.0, 0.0, _X0, 0.0)
     # Window centred on the ANALYTICALLY KNOWN Fermat focus (on axis for any
-    # sub-aperture of a collimated bundle through this conic), not on the
-    # chain's paraxial chief-ray predictor -- see the module note on the
-    # sin/tan convention, which places the predictor 12.4 um away here.
+    # sub-aperture of a collimated bundle through this conic).  The chain's
+    # own chief-ray predictor now agrees with it to 1e-19 m, but the point of
+    # centring here is that this centre is known WITHOUT the chain.
     ex, _ = _run_chain(car, final_leg='exact', centre_out=(0.0, 0.0))
     px, _ = _run_chain(car, final_leg='paraxial', centre_out=(0.0, 0.0))
     orc = _metrics(_oracle_on_grid((0.0, 0.0), x0=_X0))
     m_ex = _metrics(np.asarray(ex.field))
     m_px = _metrics(np.asarray(px.field))
-    # the exact leg tracks the independent oracle (measured 9.5 % on FWHM,
-    # 0.951x on EE2, 0.991x on EE4)
+    # the exact leg tracks the independent oracle (measured 0.0 % on FWHM,
+    # 0.982x on EE2, 0.995x on EE4)
     assert abs(m_ex['fwhm'] / orc['fwhm'] - 1.0) < 0.15, (
         f"exact FWHM {m_ex['fwhm'] * 1e6:.4f} um vs oracle "
         f"{orc['fwhm'] * 1e6:.4f} um")
     assert m_ex['ee'][2.0] > 0.90 * orc['ee'][2.0]
     assert m_ex['ee'][4.0] > 0.97 * orc['ee'][4.0]
-    # ... and the paraxial one does not, by a wide margin (measured 3.19x the
-    # oracle FWHM, EE2 6.5 % against 71.9 %)
-    assert m_px['fwhm'] > 2.0 * orc['fwhm'], (
+    # ... and the paraxial one does not, by a wide margin.  Measured 1.857x
+    # the oracle FWHM (was 3.19x -- see the docstring for why it moved).
+    assert m_px['fwhm'] > 1.70 * orc['fwhm'], (
         f"paraxial FWHM {m_px['fwhm'] * 1e6:.4f} um should be far wide of the "
         f"oracle's {orc['fwhm'] * 1e6:.4f} um -- the fail-before half of this "
         f"test has stopped failing")
+    # the two discriminators that did NOT weaken with the predictor fix
+    assert m_px['ee'][2.0] < 0.25 * orc['ee'][2.0], (
+        f"paraxial EE2 {m_px['ee'][2.0]:.4f} against the oracle's "
+        f"{orc['ee'][2.0]:.4f} (measured ratio 0.148)")
+    assert abs(m_px['peak_off'][0]) > 4.0e-6, (
+        f"the paraxial leg's brightest pixel is {m_px['peak_off'][0] * 1e6:+.3f}"
+        f" um off the Fermat focus -- it used to be on the window edge")
+    assert abs(m_ex['peak_off'][0]) < 0.5e-6
     assert m_ex['fwhm'] < 0.60 * m_px['fwhm']
     assert m_ex['ee'][2.0] > 5.0 * m_px['ee'][2.0]
     # the spot lands on the FERMAT focus, i.e. where the physics puts it

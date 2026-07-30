@@ -300,21 +300,68 @@ the chain multiplexed at v5.28.
 > Bonus: the exact readout's Bluestein period is **4762-4808 um** against the
 > paraxial route's 483-492 um, so the D2 replica guard gains a 10x margin.
 >
-> **One caveat, recorded not fixed** (it belongs to D1's convention): the chain
-> carries `(L, M)` as DIRECTION COSINES -- advancing the chief ray by
-> `z L / cos(theta)`, exact for a free leg -- but obtains them from the group's
-> PARAXIAL ABCD, where they are slopes.  Where the exit tilt is large the two
-> mix `tan` with `sin`: on the D6 synthetic stand-in (`L_out = -0.20`,
-> `f = 3 mm`) the predicted chief ray sits **12.4 um** from the Fermat focus,
-> and the exact leg's spot lands on the FERMAT focus (measured centroid within
-> 0.002 um), not on the predictor.  Design 121's final group leaves
-> `L_out = 8.3e-5`, where the same term is **6 pm** -- invisible, which is why
-> nothing in this study saw it before.  Pinned by
-> `tests/unit/test_niche_d6_exact_tilted_leg.py` (17 tests, no `.zmx`, ~75 s,
-> RAM-guarded), whose oracle is a lumenairy-FREE inline exact conic raytrace
-> plus a Rayleigh-Sommerfeld surface integral: the exact leg tracks it to
-> **9.5 % on FWHM / 0.951x EE2 / 0.991x EE4** while the paraxial leg it
-> replaces is **3.19x** wide (EE2 6.5 % against 71.9 %).
+> **One caveat, ~~recorded not fixed~~ NOW FIXED** (niche C3, 2026-07-30; it
+> belonged to D1's convention).  The chain carries `(L, M)` as DIRECTION
+> COSINES -- advancing the chief ray by `z L / cos(theta)`, exact for a free
+> leg -- but USED TO obtain them from the group's PARAXIAL ABCD, where they are
+> slopes.  Where the exit tilt was large the two mixed `tan` with `sin`: on the
+> D6 synthetic stand-in (`L_out = -0.20`, `f = 3 mm`) the predicted chief ray
+> sat **12.4 um** from the Fermat focus while the exact leg's spot landed on
+> the FERMAT focus (measured centroid within 0.002 um), i.e. not on the
+> predictor.  Design 121's final group leaves `L_out = 8.3e-5`, where the same
+> term is **6 pm** -- invisible, which is why nothing in this study saw it
+> before.
+>
+> **The fix, and the refutation that shaped it.**  `_group_chief_transfer` no
+> longer linearises the group at all: the chief ray is TRACED through that
+> group's own surfaces, front vertex -> back vertex, with the same engine the
+> tests use as their oracle (apertures removed, since a purely geometric
+> predictor must not change regime by vignetting).  The obvious repair was
+> tried FIRST and REFUTED.  Measured on the D1 two-singlet relay at 46 mrad,
+> against an exact meridional ray trace at **1.783248056 mm**:
+>
+> | chief-ray predictor | image-height residual |
+> |---|---|
+> | old lumped paraxial ABCD (raw cosines) | **+0.1214 um** |
+> | cosine<->slope conversion of that ABCD | **+1.1208 um** (9x WORSE) |
+> | EXACT chief-ray trace (shipped) | **0.0000 um** |
+>
+> The conversion loses because a lumped group ABCD is not a single angle
+> convention at all: refraction at a surface is linear in SINES (Snell) while
+> free transfer inside the group is linear in TANGENTS, and a group of this
+> class is refraction-dominated (`B = t/n ~ 2 mm` against `GAP`/`fd` legs two
+> orders larger, which already used the exact `tan`).  So no scalar convention
+> can be right for it, and the predictor had to stop being linear.  The ABCD
+> survives in two documented roles only -- the exact transfer's paraxial limit
+> (checked to 1e-9 relative at 1e-7 rad) and the fall-back for a group the ray
+> engine cannot build -- and an untilted, undecentred ray still short-circuits
+> to zeros, so the on-axis path is byte-identical.
+>
+> On the D6 stand-in the predictor now lands on the Fermat focus to **1e-19 m**,
+> **0.0005 um** from the measured spot centroid (1/6700 of the 3.15 um FWHM).
+> Pinned by `tests/unit/test_niche_d6_exact_tilted_leg.py` (38 tests, no
+> `.zmx`, ~135 s, RAM-guarded), whose oracle is a lumenairy-FREE inline exact
+> conic raytrace plus a Rayleigh-Sommerfeld surface integral: the exact leg
+> tracks it to **0.0 % on FWHM / 0.982x EE2 / 0.995x EE4** (was 9.5 % / 0.951x
+> / 0.991x -- the readout's `centre`/`tilt` are exact now too), while the
+> paraxial leg it replaces is **1.857x** wide (EE2 10.6 % against 71.6 %).
+> That fail-before ratio was **3.19x** before the fix and moved for a good
+> reason: the paraxial leg's wavefront is still ~200 rad wrong, but its spot is
+> now correctly PLACED, so less of it falls off the readout window.  The
+> discrimination is carried by two numbers that did not weaken -- the paraxial
+> leg keeps 14.8 % of the oracle's EE2 and puts its brightest pixel on the
+> window edge, 8.25 um from the Fermat focus, with 2.8 % of its power within
+> 2 um of it against the exact leg's 70.2 %.
+>
+> **Still open (2026-07-30).**  `_chain_chief_ray_at_target` -- the helper that
+> places `propagate_traced_carrier_chain_multi`'s per-congruence readout tiles,
+> and which `test_niche_d4_dgrating.py` pins as "the library's own predictor
+> agrees with the chain to the digit" -- was NOT converted and still applies the
+> lumped ABCD.  On the D6 stand-in it therefore now reports a chief ray
+> **12.372 um** from the one the chain itself lands on, and a tile centred on it
+> clips the spot (EE2 0.363 against 0.703).  Design 121's `L_out = 8.3e-5`
+> keeps this at 6 pm there, so the shipped fan is unaffected, but the helper
+> should be routed through `_group_chief_transfer` too.
 
 ---
 

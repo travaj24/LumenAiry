@@ -482,7 +482,7 @@ def _dsag(r, R, K, asph):
     return dz
 
 
-def _surface_table(drop_corrector=False):
+def _surface_stack(drop_corrector=False):
     """``[(z_vertex, R, K, asph, n_after), ...]`` in world z from the LAUNCH
     plane (z=0), i.e. the plane ``E_in`` lives on."""
     groups, _w_c, _w_last, _f4 = _stand_in()
@@ -509,7 +509,7 @@ def _meridional_error(h0, z_img, surfs=None):
     exact ``carrier_reference='sphere'`` launch); returns its transverse miss
     at ``z_img`` (m).  Snell in 2-D on the exact conic + aspheric sag, no
     paraxial step anywhere."""
-    surfs = _surface_table() if surfs is None else surfs
+    surfs = _surface_stack() if surfs is None else surfs
     _zR = np.pi * _W0 * _W0 / _WL
     R1 = _Z1 * (1.0 + (_zR / _Z1) ** 2)
     u = h0 / R1
@@ -555,7 +555,7 @@ def test_the_stand_in_is_a_corrected_relay():
     G4; measured at G4's entrance it is 2.0 rad of r^4 at r=w (design 121
     carries 9.2 rad on its final leg)."""
     _groups, _w_c, _w_last, f4 = _stand_in()
-    tab = _surface_table()
+    tab = _surface_stack()
     z_img = tab[-1][0] + f4
     zR = np.pi * _W0 * _W0 / _WL
     w1 = _W0 * np.sqrt(1.0 + (_Z1 / zR) ** 2)
@@ -564,7 +564,7 @@ def test_the_stand_in_is_a_corrected_relay():
     assert all(np.isfinite(errs)), errs
     assert max(errs) < 0.5e-6, [f'{e * 1e6:.4f} um' for e in errs]
     assert abs(_meridional_error(1.5 * w1, z_img, tab)) < 1.5e-6
-    bare = _surface_table(drop_corrector=True)
+    bare = _surface_stack(drop_corrector=True)
     lost = [abs(_meridional_error(f * w1, z_img, bare)) for f in (1.0, 1.5)]
     assert min(lost) > 20 * max(errs), (lost, errs)
     assert lost[0] > 5e-6, lost           # measured 10.15 um
