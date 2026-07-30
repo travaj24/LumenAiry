@@ -284,10 +284,24 @@ def test_shift_envelope_is_exact_for_a_band_limited_envelope():
 
 @pytest.mark.parametrize('final_distance', [0.0, 8e-3])
 def test_zero_tilt_reproduces_the_scalar_chain(final_distance):
-    """``TiltedCarrier(R, 0, 0)`` must route through the scalar path exactly:
-    a 2-group relay with a gap and a final leg, compared with a TOLERANCE
-    (<= 1e-10 * scale) rather than array_equal, since both arms are live FFT
-    work.  (Measured margin here: exactly 0.)"""
+    """``TiltedCarrier(R, 0, 0)`` REDUCES to the scalar path: the new entry
+    point must not perturb the shipped scalar default.  A 2-group relay with a
+    gap and a final leg, compared with a TOLERANCE (<= 1e-10 * scale) rather
+    than array_equal, since both arms are live FFT work.  (Measured margin
+    here: exactly 0.)
+
+    WHAT THIS DOES NOT COVER (niche C1 item 2, 2026-07-30).
+    ``_parse_chain_carrier(TiltedCarrier(R, 0.0, 0.0), fn)`` reports
+    ``tilted=False``, so both arms below are literally the SAME code path and
+    the zero margin says nothing at all about the tilted branch -- not about
+    the tilted transport, not about the obliquity piston, not about the
+    chief-ray bookkeeping.  That is deliberate and it is this test's whole
+    scope: the REDUCTION.  The tilted branch itself is pinned by
+    ``test_tilted_relay_lands_on_the_exact_ray_trace`` /
+    ``test_chief_ray_closure_matches_the_group_abcd`` here (meridional) and by
+    ``tests/unit/test_niche_c1_consolidation.py``'s SKEW pins, which score a
+    (44, 26) mrad congruence against an exact skew ray trace and demonstrate a
+    fail-before for each of the three mechanisms."""
     n, dx, w, R_in = 512, 30e-6, 4.5e-3, 60e-3
     presc = _singlet(60e-3, -60e-3, 3e-3, 'N-BK7', 14e-3, 'p')
     env = _gauss_env(n, dx, w)

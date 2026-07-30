@@ -4,6 +4,111 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added — design 121 full configuration: tilted carriers and a per-congruence fan (`propagators/carrier.py`, `elements/_lens_traced.py`, `io/prescriptions_zemax.py`)
+
+The traced chain can now carry a **tilted** congruence, so a DOE order is a
+first-class chain input instead of something the caller has to hand-split.
+`TiltedCarrier(R, L, M, x0, y0)` carries sphere + tilt through every hand-off
+with the exact obliquity `1/sqrt(1-L^2-M^2)` (the chief ray advances by
+`z L / cos(theta)`, not `z L`), and
+`propagate_traced_carrier_chain_multi(congruences, groups, ..., recombine='coherent')`
+runs each congruence through the shipped-default chain and recombines on a
+common image grid.  The 32-order design-121 fan now runs end to end and its
+per-frame power reproduces the Dammann design to **3.0e-4** — the v5.28
+scramble was readout **replica aliasing** (a readout window wider than the
+Bluestein reconstruction's spatial period wraps the frame), now sized away by
+`readout_tile='auto'` and refused by `on_replica`.
+
+The exact high-NA final leg carries tilt too (it previously raised
+`NotImplementedError` and forced `final_leg='paraxial'`, capping every
+per-order spot).  `carrier_referenced_exact_focus_readout` references sphere
+AND tilt about the chief ray and takes its crop there, so an off-axis beam
+costs what an on-axis beam of the same radius costs.  On design 121, order
+(-4,-2): FWHM 8.400 -> **4.400 um**, EE3 22.8 -> **64.8 %**.  The single-beam
+acceptance is unchanged at **3.450 um / EE3 88.8 / EE6 99.6 / EE12 99.8**.
+
+Zemax `DGRATING` surfaces are imported (`prescription['diffractives']`) with
+their axial gaps measured to the neighbouring real elements, so the DOE drops
+straight into a `groups` list.  Also new: `decentred_fit_poly_order`, and the
+guards `on_replica`, `on_readout_window`, `on_tilt_exact_grid`,
+`on_na_proximity` and the chain-entry multi-congruence check.
+
+### Fixed — the off-centre ray fit folded, and its polynomial budget was too small (`elements/_lens_traced.py`)
+
+A decentred beam broke the ray-fit disc's core assumption.  The disc is
+retained by a hard sample mask, which is safe only while it is CONCENTRIC with
+the Chebyshev basis's own domain; off centre the fitted map **folds**
+(`d(x_out)/d(x_in)` changes sign), the Newton inverse then sends far exit
+pixels back into the bright beam, and `amplitude_model='ray_density'` gives
+them real amplitude — a spurious lobe carrying **6.8e-3 of input power at 0.75
+of the on-beam peak**.  Replaced by a weighted least-squares restriction
+(`_FIT_DISC_OUTSIDE_WEIGHT_REL`) that keeps every sample and pins the fit's
+free directions to the traced map: ghost power **6.8e-3 -> 2.5e-8**, no sign
+change.  Separately, an off-centre disc of radius `r` about a chief ray `|c|`
+covers the aperture out to `|c| + r`, so the same total degree buys a worse fit
+over more aberrated territory — the OPL residual is **14x** the on-axis one at
+order 6 and recovers 20x at order 10, so the off-centre branch now fits at
+`_DECENTRED_FIT_POLY_ORDER = 10`.  Both engage **only** off centre; the
+concentric path is byte-identical (21 configurations, max |dE| = 0.0).
+
+### Fixed — five consolidation defects from the D1–D7 adversarial verifiers (niche C1)
+
+* **A null decentre flipped the whole ray fit.**  The off-centre branch was
+  selected by `bool(_bcx or _bcy)`, so a numerically tiny beam centre swapped
+  the concentric mask for the weighted solve *and* the raised order — moving
+  the returned field by **8.3e-6 of peak at 1e-9 pixels** of decentre.  Now
+  gated on `max(_DECENTRE_GATE_PIXELS * dx, _DECENTRE_GATE_W_FRAC * w)`.
+* **The DGRATING import re-opened the v5.17.1 no-STOP aperture pollution.**
+  Reproduced at **12.000 -> 100.000 mm (8.33x)** with a dummy reference plane
+  between the DOE and the glass; the fallback now reads the GLASS/MIRROR span
+  only.
+* **The tilted exact-leg guard measured the wrong NA** (the chain's paraxial
+  `w_in/|R_out|`, 0.4780, not the element's measured 0.4052), so it stayed
+  silent on a leg the element itself warned was under-sampled.  Re-armed on the
+  measured NA as a **power budget** — the fraction of exit power above the grid
+  Nyquist NA — calibrated so the demonstrably-converged shipped configuration
+  still passes (it clears by 12.5x; nothing previously accepted is now refused).
+* `_FOCUS_READOUT_KEYS` is now a whitelist — unknown keys raise rather than
+  being silently dropped.
+* A D1 test that asserted a tilted claim through an untilted code path is
+  replaced by a genuinely skew one, scored against an inline exact skew ray
+  trace with three demonstrated fail-before switches.
+
+### Fixed — a DGRATING gap that runs through glass is no longer transported as air (`io/prescriptions_zemax.py`, `propagators/carrier.py`)
+
+`gap_before` / `gap_after` are raw axial thicknesses and the chain transports
+them through **air**, so a grating ruled on a substrate was placed at the wrong
+optical distance (`t - t/n` per glass leg — 1.0 mm for a 3 mm N-BK7 plate) with
+no symptom in the output.  The importer now records a `gap_media` marker and
+warns, and `_normalise_doe_entry` **refuses** such an entry, naming the gap to
+override.  The refusal is at the point of use, not at import: `load_zemax_zmx`
+serves far more than the DOE drop-in and the rest of such a file is correct.
+Design 121 is unaffected (both gaps free space).
+
+### Changed — claim corrections in the traced/carrier notes (niche C2)
+
+Re-measurement of the shipped documentation corrected two claims that were
+**wrong**, not merely loose.  The multi-congruence detector's envelope said its
+score is "set by the finest fringes, i.e. the nearest-neighbour order spacing";
+measured, an 8x8 fan spanning +-23 mrad reads **5.3x above** what that rule
+predicts and 0.8x of an equal-**span** pair, and densifying at fixed span moves
+the score **down**, not up.  Corrected rule: score a fan by its total span,
+derated ~20 %.  And "the decentred figure sits BELOW the on-axis one" holds
+only for the **untilted** baseline (0.90 vs 1.28 urad); against the tilted
+on-axis control — the regime 121's orders are actually in — it sits **1.4x
+above** (0.90 vs 0.64).  Neither changes a conclusion, and both were stated
+without the qualifier.  Also disclosed: D7's raised order can go **inert
+silently** when the fit disc holds fewer than 3 samples per basis term (it
+survives only while `fit_radius_beam_factor * w / (dx * ray_subsample) >~ 7.9`;
+live at the default `ray_subsample=8`, but the documented f/6 example clears by
+only 1.13x and reverts to order 6 at 16), and the `_FIT_DISC_OUTSIDE_WEIGHT_REL`
+plateau is now labelled as evidence from **one** regime (aperture:beam 30:1,
+low NA) — it cannot be extended to design 121's regime by the same method,
+because `newton_fit='spline'`, the fit-domain-free oracle that sweep is scored
+against, fails to converge for **100 %** of pixels there and returns an
+all-zero field.  Full record in
+`docs/audits/ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27.md`.
+
 ### Added — PMM per-layer grids: full surface build-out (`elements/pmm/`)
 
 The per-layer surface now covers (each gated in
@@ -87,10 +192,10 @@ altogether.
   (`lumenairy/elements/pmm/stack.py:342`, `lumenairy/elements/pmm/stack.py:653`).  The ridge centre is
   `0.5 + shear * (zeta - 0.5)` in period fractions — `shear` *periods* of
   lateral walk from top to bottom about mid-depth, `zeta` sampled per slice by
-  the same `rule` as the duty, wrap-aware (`lumenairy/elements/pmm/stack.py:494`, `lumenairy/elements/pmm/stack.py:710`).
+  the same `rule` as the duty, wrap-aware (`lumenairy/elements/pmm/stack.py:494`, `lumenairy/elements/pmm/stack.py:711`).
   `add_tapered_ridges` walks every tooth rigidly (`center + shear*period*(zeta-0.5)`)
   and keeps its overlap guard on the *sheared* geometry.  Both record `shear` in
-  the taper recipe (`lumenairy/elements/pmm/stack.py:478`, `lumenairy/elements/pmm/stack.py:703`) so `_resliced_clone` /
+  the taper recipe (`lumenairy/elements/pmm/stack.py:470`, `lumenairy/elements/pmm/stack.py:703`) so `_resliced_clone` /
   `solve(stabilize='slices')` replay the sheared structure rather than silently
   re-slicing an unsheared one.
 - **`shear=0` is BIT-identical to the pre-change builder.**  The new wrap-aware

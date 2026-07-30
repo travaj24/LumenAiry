@@ -391,12 +391,21 @@ def test_the_documented_detection_floor_is_a_pinned_boundary():
     """The honest envelope, pinned rather than merely prosed.
 
     The absolute cutoff (0.06 x 0.15 = 9.0e-3 rad canonical) corresponds, via
-    ``canon ~ 3.5 theta^1.5``, to a crossing half-angle of ~19 mrad.  A DENSE
-    fan is scored by its finest fringes, not by its total span, so an 8x8 fan
-    spanning +-23 mrad reads like a ~17-19 mrad PAIR and sits ON the boundary:
-    it is NOT reliably caught, at any pitch.  That is a real gap and this pin
-    is where it is recorded -- if a future cutoff change moves it, this test
-    says so instead of the gap silently becoming a surprise."""
+    ``canon ~ 3.5 theta^1.5``, to a crossing half-angle of ~19 mrad.  An 8x8
+    fan spanning +-23 mrad reads like a ~17-19 mrad PAIR and sits ON the
+    boundary: it is NOT reliably caught, at any pitch.  That is a real gap and
+    this pin is where it is recorded -- if a future cutoff change moves it,
+    this test says so instead of the gap silently becoming a surprise.
+
+    WHY it reads that way (corrected, niche C2 2026-07-30 -- an earlier
+    revision of this docstring said a dense fan "is scored by its finest
+    fringes, not by its total span", and that is measurably backwards).  The
+    score tracks the TOTAL SPAN, derated ~20 %: this fan's nearest-neighbour
+    spacing is 6.571 mrad, and a PAIR at that spacing reads only 3.2-3.5 mrad
+    equivalent -- 5.3x below the fan -- while a pair at its +-23 mrad span
+    reads 22.5-23.0.  Densifying at fixed span moves the score DOWN, not up
+    (4 / 8 / 16 orders across +-23 read like 16.7 / 14.2 / 12.8 mrad).  The
+    boundary asserted below is unchanged; only the reason for it is."""
     for dx in (4.0e-6, 2.0e-6):
         fan = _sym_fan_8x8(_CN if dx == _CDX else int(round(2.048e-3 / dx)),
                            dx, _CW)

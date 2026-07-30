@@ -1229,6 +1229,30 @@ _APERTURE_BEAM_WARN_RATIO = 1.5
 # fold on one side and ~2 of the cliff on the other.  Engaged ONLY when the
 # disc is off centre, so the concentric (default) path is byte-identical.
 #
+# ENVELOPE OF THAT SWEEP -- narrower than it reads (niche C2, 2026-07-30).
+# Every number above comes from ONE regime: the 80/-80 N-BK7 singlet, a 1 mm
+# beam in a 30 mm aperture, i.e. aperture:beam = 30:1 and a low exit NA.  It is
+# NOT established for a beam that FILLS its aperture at design-121-class NA
+# (20.397 mm aperture / 6.251 mm beam = 3.26:1, exit NA 0.405), and an attempt
+# to extend it there does not merely give a different answer -- it cannot be
+# run at all by this method, because the oracle the sweep is scored against
+# stops working first.  On design 121's last group at N=1024 / dx = 33.211 um
+# the exit NA is 0.356 against a grid Nyquist direction cosine of 0.0197 (18x
+# short), and ``newton_fit='spline'`` -- the fit-domain-free reference this
+# note and D7's leans on -- fails to converge for 100.0 % of 65536 pixels and
+# returns an ALL-ZERO field (the polynomial path fails for 81.4 % and still
+# returns a usable one).  With ``on_undersample='silent'`` that zero is
+# returned without a word, so a caller reaching for the spline oracle in this
+# regime gets nothing and is not told.
+#
+# So: treat 1e-14..1e-8 as a plateau MEASURED AT LOW NA with a small beam, and
+# 1e-8 as a defensible default rather than a value centred on evidence that
+# spans the library's regimes.  Nothing here affects the shipped design-121
+# chain, which never reads this element at 33 um: it re-traces the final leg on
+# a fine grid (``n_fine_cap`` 12288) and its acceptance is unchanged.  Widening
+# the evidence needs an oracle that survives high exit NA on a coarse grid,
+# which no shipped estimator currently does.
+#
 # Keeping the samples also keeps the GRID intact, which matters twice over: the
 # paraxial-magnification stencil that seeds Newton reads ``x_out_grid`` AT THE
 # AXIS (NaN there -> the 0.91 fallback -> Newton seeded on the wrong branch of
@@ -1253,6 +1277,22 @@ _FIT_DISC_OUTSIDE_WEIGHT_REL = 1e-8
 #     order        6        8       10       12       14
 #     on axis   0.177 nm  0.003    0.000    0.000    0.000
 #     |c| = 0.97 w   2.508 nm  0.667    0.121    0.114    0.199
+#
+# RAY GRID, pinned (it was not stated when this table was first written, and
+# the numbers do depend on it): ``ray_subsample=4`` on the N=1024 co-moving
+# grid, i.e. a 256^2 coarse launch.  Re-measured there the row reads 0.177 /
+# 2.507 / 0.122, which is the table above to 3 digits.  The ARGUMENT does not
+# hinge on that choice -- at ``ray_subsample=8`` (128^2) the same row reads
+# 0.178 on axis and 2.495 / 0.675 / 0.108 / 0.121 / 0.211 off, so order 6 is
+# still ~14x worse off axis and order 10 still recovers ~20x of it.  Note that
+# NRAY in ``decentred_fit_defect.py`` (default 161) is NOT this quantity: it
+# sizes the FFT estimator's oracle bundle and never feeds the fit.
+#
+# The on-axis entries at order >= 10 are printed as 0.000 but are better read
+# as "negligible" than as exact zeros: on axis the fit takes the concentric
+# HARD-MASK branch rather than the weighted one, and a re-fit through the
+# weighted path puts them at the 0.02-0.10 nm level.  Nothing in the D7
+# argument rests on them -- it rests on the off-axis row.
 #
 # i.e. order 6 is 14x worse off axis than on, order 10 recovers 20x of that,
 # and order 14 starts to LOSE to conditioning (the normal-equations Gram matrix
@@ -1283,6 +1323,59 @@ _FIT_DISC_OUTSIDE_WEIGHT_REL = 1e-8
 # not a reason to ship it: cond(Gram) does fall 1.0e10 -> 3.2e4, but float64
 # already carries the answer.
 _DECENTRED_FIT_POLY_ORDER = 10
+
+# niche C1 item 1 (2026-07-30): WHEN a declared beam centre counts as OFF
+# CENTRE at all.
+#
+# D1 selected the off-centre branch with ``bool(_bcx or _bcy)``, i.e. ANY
+# nonzero offset -- including a physically NULL one.  That is a discontinuity,
+# not a superset: the branch swaps the historical concentric HARD NaN MASK for
+# the weighted restriction (``_FIT_DISC_OUTSIDE_WEIGHT_REL``) AND raises the
+# fit order (``_DECENTRED_FIT_POLY_ORDER``), so the returned field jumps at the
+# first ulp of decentre.  Measured (synthetic N-BK7 f/6 singlet, N=512,
+# dx=30 um, w=1.0 mm, ``fit_radius_beam_factor=2``, ``ray_subsample=8``): the
+# two branches differ by ``max|dE| / max|E|`` = **8.32e-6** at a decentre of
+# 3e-8 m = **1e-9 pixels**, and that same 8.3e-6 persists flat out to ~0.3 w
+# (9.46e-5 at 1.0 w, where the physics finally dominates).  A step of 8.3e-6 at
+# 1e-9 px is the whole finding: it is 100x the pipeline's ~1e-7 roundoff floor
+# and it is bought by nothing.
+#
+# WHERE the off-centre branch starts to EARN it, same geometry but w = 1.4 mm
+# (fit disc r = 2.8 mm inside a 5.0 mm semi-aperture, so ``|c| + r`` really does
+# reach new territory), scored against ``newton_fit='spline'`` -- a LOCAL
+# bicubic spline of the traced map, which skips the polynomial fit and its disc
+# restriction entirely (the disc block is gated on ``newton_fit != 'spline'``),
+# so it is the fit-domain-free reference D1/D7 already use.  ``max|dE|/max|E|``
+# over the lit region, concentric arm vs off-centre arm:
+#
+#     |c|/w      0     0.01   0.02   0.05    0.1    0.2    0.35   0.5    0.75   1.0
+#     concentric 3.71e-8 3.74 3.77   3.86   3.39   12.08  36.48  98.24  316.9  1155.5   (x1e-8)
+#     off-centre 3.71e-8 1.70 1.02   1.64   1.32    1.32   2.54   2.64   3.24    3.84   (x1e-8)
+#
+# The concentric arm sits on its own on-axis floor (3.4-3.9e-8) out to
+# |c| = 0.1 w and departs from it between 0.1 w and 0.2 w (3.3x the floor at
+# 0.2 w, then 2.6x per doubling: 26x at 0.5 w, 312x at 1.0 w).  The off-centre
+# arm is FLAT at 1.0-3.8e-8 across the whole sweep -- never worse, decisively
+# better from ~0.15 w up.
+#
+# So the gate is a floor, not a knee-chaser: below
+#
+#     |c| <= max(_DECENTRE_GATE_PIXELS * dx, _DECENTRE_GATE_W_FRAC * w)
+#
+# the concentric path is kept BYTE-IDENTICALLY (which includes measuring the
+# beam radius about the GRID ORIGIN, as the historical path does), and above it
+# the weighted + raised-order path runs exactly as D1/D7 shipped.  0.05 w sits
+# 3x below the measured departure (concentric error 1.04x its floor at 0.05 w
+# against 3.3x at 0.2 w) and the ``0.5 * dx`` term covers the degenerate corner
+# where the beam is sampled so coarsely that 0.05 w is itself sub-pixel.
+# Design 121 is nowhere near it: its final-group chief ray is 3.373 mm against
+# an entrance beam radius 3.126 mm, i.e. **1.08 w = 21x** the gate.
+#
+# Setting BOTH constants to 0.0 restores the pre-C1 ``bool(_bcx or _bcy)``
+# selector exactly -- that is the fail-before switch the C1 tests use, not a
+# supported configuration.
+_DECENTRE_GATE_PIXELS = 0.5
+_DECENTRE_GATE_W_FRAC = 0.05
 
 
 def _input_beam_amp_radius(E_in, dx, dy=None, centre=None):
@@ -2183,6 +2276,7 @@ def apply_real_lens_traced(
     caustic_ray_subsample: int = 2,
     caustic_band: str = 'ludwig',
     caustic_min_area_ratio: float = 1e-6,
+    _exit_na_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -2553,6 +2647,13 @@ def apply_real_lens_traced(
         and the returned field grows a bright spurious lobe far from the beam.
         See ``_FIT_DISC_OUTSIDE_WEIGHT_REL``.  The concentric (on-axis) path
         keeps the historical hard mask and is byte-identical.
+
+        "Off centre" is a MEASURED threshold, not ``!= 0``: an offset within
+        ``max(0.5 * dx, 0.05 * w)`` of the grid centre keeps the concentric
+        path byte-identically (a physically null offset must not swap the fit
+        branch -- measured, it moved the returned field by 8.3e-6 of peak at
+        1e-9 pixels of decentre).  See ``_DECENTRE_GATE_W_FRAC`` for the sweep
+        that set both floors.
     on_aperture_beam : {'warn', 'silent'}, default 'warn'
         Policy for the warn-only half of the cliff guard: emit a
         ``RuntimeWarning`` when the physical aperture diameter exceeds
@@ -2585,6 +2686,32 @@ def apply_real_lens_traced(
         Ignored (and the on-axis path byte-identical) whenever the disc is
         concentric with the launch square, and on ``newton_fit='spline'``,
         which takes no fit-domain restriction at all.
+
+        CAN GO INERT, SILENTLY.  The raise is capped by the "3 samples per
+        basis term" step-down below it: order 10 needs 198 in-disc COARSE ray
+        samples, and the loop walks the order back down to
+        ``newton_poly_order`` until that holds.  The disc holds about
+        ``pi * (fit_radius_beam_factor * w / (dx * ray_subsample)) ** 2``
+        samples, so the raise survives only while
+
+            ``fit_radius_beam_factor * w / (dx * ray_subsample) >~ 7.9``
+
+        i.e. while the fit disc spans ~8 coarse pixels in radius.  Both
+        documented configurations clear this at the default
+        ``ray_subsample=8`` -- but not by much, and ONE step is enough to lose
+        it, with no warning and no diagnostic:
+
+          * the synthetic f/6 example above (N=512, dx=30 um, w=1.0 mm,
+            ``fit_radius_beam_factor=2``) holds 223 samples against 198, a
+            **1.13x** margin; at ``ray_subsample=16`` it holds 56 and the
+            order falls straight back to 6, i.e. D7 is fully inert.
+          * design 121's last group (N=1024, dx=33.211 um, w=3.1255 mm) holds
+            1735 at ``ray_subsample=8`` and 432 at 16, and goes inert at 32.
+
+        So a caller who coarsens the ray grid to buy speed can silently get
+        the pre-D7 fit back.  If the off-centre accuracy matters, keep
+        ``ray_subsample`` low enough to satisfy the inequality above rather
+        than assuming the raise is in force.
 
     preserve_input_phase : bool or 'remap', default True
         If True, the input field's phase structure (source tilts,
@@ -2851,6 +2978,19 @@ def apply_real_lens_traced(
     caustic_min_area_ratio : float, default 1e-6
         ``caustic='multibranch'`` degenerate-triangle skip threshold (mapped /
         launch area) -- the caustic set where ART is undefined.
+    _exit_na_out : dict, optional
+        PRIVATE diagnostic sink (niche C1 item 4).  When given, it is filled
+        with the exit-NA measurement this function already makes for its own
+        Nyquist warning: ``na_exit`` (the largest exit direction-cosine
+        magnitude over rays carrying >= e^-4 of the peak input AMPLITUDE),
+        ``dx`` / ``na_nyquist`` (this grid's pitch and the NA it can carry),
+        ``power_frac_above_nyquist`` (the |E_in|^2-weighted fraction of the
+        traced exit power at an NA this grid cannot carry) and ``n_rays``.
+        Nothing in this function reads it back, so no default behaviour
+        depends on it.  Consumed by
+        :func:`lumenairy.propagators.carrier._fine_trace_group_exit`, whose
+        ``on_tilt_exact_grid`` refusal must be sourced from the MEASURED exit
+        NA rather than from the chain's paraxial ``w_in/|R_out|``.
 
     Returns
     -------
@@ -3879,12 +4019,27 @@ def apply_real_lens_traced(
                 f"{beam_centre!r})")
     elif isinstance(carrier, TiltedCarrier):
         _bcx, _bcy = float(carrier.x0), float(carrier.y0)
-    _beam_decentred = bool(_bcx or _bcy)
+    # niche C1 item 1: a NULL decentre must NOT flip the fit branch.  Stage
+    # one is the grid-pitch floor (an offset the grid cannot even represent);
+    # stage two, below, is the beam-relative floor -- it needs the measured
+    # radius, so it runs after it.  See ``_DECENTRE_GATE_W_FRAC`` for both
+    # thresholds and the sweep that set them.
+    _dec_mag = float(np.hypot(_bcx, _bcy))
+    _dec_null_floor = _DECENTRE_GATE_PIXELS * min(float(dx), float(dy))
+    _beam_decentred = _dec_mag > _dec_null_floor
     _beam_fit_radius = None
     _w_in_beam = 0.0
     if _frbf is not None or (on_aperture_beam == 'warn' and aperture is not None):
         _w_in_beam = _input_beam_amp_radius(
             E_in, dx, dy, centre=((_bcx, _bcy) if _beam_decentred else None))
+        if (_beam_decentred and _w_in_beam > 0.0
+                and _dec_mag <= _DECENTRE_GATE_W_FRAC * _w_in_beam):
+            # A disc this nearly concentric reaches no further into the
+            # aperture than the historical one did, so keep the historical
+            # path -- INCLUDING its origin-referenced radius, which is what
+            # makes the fall-back byte-identical rather than merely close.
+            _beam_decentred = False
+            _w_in_beam = _input_beam_amp_radius(E_in, dx, dy, centre=None)
     if _frbf is not None and _w_in_beam > 0.0:
         _beam_fit_radius = min(_frbf * _w_in_beam, launch_radius)
     if (on_aperture_beam == 'warn' and aperture is not None
@@ -4159,6 +4314,31 @@ def apply_real_lens_traced(
         _na_exit = float(np.sqrt(final.L[_sig] ** 2
                                  + final.M[_sig] ** 2).max())
         _dx_eff = max(dx, _dy_eff)
+        # niche C1 item 4: report the MEASURED exit NA (and how much exit
+        # power sits above this grid's Nyquist angle) to a caller who asked
+        # for it.  ``_exit_na_out`` is private and pure-diagnostic -- nothing
+        # here reads it back, so no default behaviour depends on it.  The
+        # chain's tilted-leg guard (``on_tilt_exact_grid``) uses it because
+        # its own ``na_exit`` is the CHAIN's paraxial ``w_in/|R_out|``, which
+        # on design 121 reads 0.4053 against this measurement's 0.4780 -- so
+        # the guard used to stay silent on a leg the element itself calls
+        # under-sampled.  The power fraction is what makes the refusal
+        # calibratable: the marginal ray is at the e^-4 AMPLITUDE contour
+        # (r = 2w for a Gaussian), where the content carries ~3e-4 of the
+        # power, so a bare NA comparison over-refuses.
+        if _exit_na_out is not None:
+            _na_all = np.sqrt(final.L ** 2 + final.M ** 2)
+            _wgt = (_amp.ravel() ** 2) * final.alive
+            _wtot = float(_wgt.sum())
+            _na_ny = (wavelength / (2.0 * _dx_eff)) if _dx_eff > 0 else np.inf
+            _exit_na_out.update({
+                'na_exit': _na_exit,
+                'dx': float(_dx_eff),
+                'na_nyquist': float(_na_ny),
+                'power_frac_above_nyquist': (
+                    float(_wgt[_na_all > _na_ny].sum()) / _wtot
+                    if _wtot > 0.0 else 0.0),
+                'n_rays': int(final.alive.sum())})
         if _na_exit > 0 and _dx_eff > wavelength / (2.0 * _na_exit):
             _dx_need = wavelength / (2.0 * _na_exit)
             if on_undersample != 'silent':
@@ -4292,6 +4472,15 @@ def apply_real_lens_traced(
                 # raise could hand an order-10 fit as few as
                 # ``_CARRIER_FIT_MIN_SAMPLES`` = 64 effective rows for 66
                 # unknowns -- an under-determined normal matrix.
+                #
+                # This cap is SILENT and it can zero the raise out entirely:
+                # the disc holds ~pi (frbf w / (dx rs))^2 samples, so order 10
+                # survives only while frbf*w/(dx*rs) >~ 7.9 coarse pixels.  At
+                # the DEFAULT ray_subsample=8 both documented configs clear it
+                # (223 samples for the synthetic f/6 example, 1735 for design
+                # 121's last group, against 198) -- but the first clears by
+                # only 1.13x and reverts to order 6 at ray_subsample=16, and
+                # design 121 reverts at 32.  See ``decentred_fit_poly_order``.
                 while (_dec_order > _fit_poly_order
                        and (_dec_order + 1) * (_dec_order + 2) * 3 // 2
                        > _n_in):

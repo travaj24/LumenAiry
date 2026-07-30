@@ -218,7 +218,15 @@ the chain multiplexed at v5.28.
 > > >
 > > > **Measured payoff.**  Element, design 121 last group, aliasing-free exit
 > > > slope: **7.16 -> 0.90 urad at 0.97 w** (on axis 1.28 urad, unchanged), so
-> > > the decentred figure now sits BELOW the on-axis one.  Conic stand-in
+> > > the decentred figure now sits below the on-axis one *in the untilted
+> > > sweep* -- the qualifier matters, because the repro's decentre sweep runs
+> > > entirely at `tilt_L = 0`, and against the TILTED on-axis control (48.7
+> > > mrad, the regime 121's orders are actually in) the same 0.90 urad sits
+> > > **1.4x ABOVE** a 0.64 urad baseline.  The payoff and every conclusion
+> > > drawn from it are indifferent to the choice -- 0.90 urad is 0.007 um of
+> > > blur on a 3.5 um FWHM either way -- but the unqualified "sits BELOW"
+> > > claim, as first written here, is true only of the untilted column.
+> > > Conic stand-in
 > > > (`K = -n^2`, decentre-invariant truth), chain / oracle EE2 ratio:
 > > >
 > > > | decentre | 0 w | 0.25 w | 0.50 w | 0.75 w | 1.0 w | 1.5 w |
@@ -364,9 +372,17 @@ expressible and the gaps being bookkept by the library.
 > Note the DOE entry's order DEFAULTS to the .zmx's design order (-4 / -2 for
 > the 121), not to 0 — a bare `{'doe': rx['diffractives'][k]}` reproduces the
 > order Zemax's sequential trace follows. It is reported in `stages`, and on
-> design 121 it is loud rather than silent: a deflected congruence makes the
-> exact high-NA final leg raise (D1's documented limit), naming
-> `final_leg='paraxial'`.
+> design 121 it is loud rather than silent.
+>
+> **STALE AS WRITTEN (superseded by niche D6, 2026-07-29).** This paragraph
+> originally ended "a deflected congruence makes the exact high-NA final leg
+> raise (D1's documented limit), naming `final_leg='paraxial'`". That refusal
+> no longer exists: D6 carries a TILTED congruence through the exact leg, and
+> the 32-order fan runs there. What can still refuse on that route is narrower
+> and differently named — `on_tilt_exact_grid` (a `RuntimeError`, default
+> `'error'`) when the fine grid is too coarse to sample the widened,
+> axis-centred retrace window, and the trailing-DOE `NotImplementedError`
+> (D4), which is about a screen after the last group, not about deflection.
 >
 > **CORRECTION (2026-07-28, adversarial re-measure).** The first revision of
 > this note justified the deferred transport with "the carrier step is
@@ -797,3 +813,63 @@ full record in `AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24.md` S0.4.
 P1 and P3 together are what turn "design 121 runs" into "design 121 runs
 *smoothly, with the DOE, and tells you when it can't*". P3 is small and would
 have saved this study a full experiment cycle.
+
+---
+
+## Niche C2 (2026-07-30) — claim corrections and disclosure pins
+
+C1 closed the five *code* findings the D1–D7 verifiers left. C2 closes the
+*claim* findings: places where the shipped text asserted more than the
+measurement supported. Every item below was re-measured before being rewritten,
+and two of the original claims turned out to be **wrong**, not merely loose.
+
+| # | Claim | Verdict |
+|---|---|---|
+| 1 | "A deflected congruence makes the exact high-NA final leg raise" | **STALE** — D6 removed that refusal; corrected |
+| 2 | `_FIT_DISC_OUTSIDE_WEIGHT_REL` plateau 1e-14..1e-8 | **NARROWED** — evidence is low-NA/small-beam only |
+| 3 | Off-centre branch is "strictly a superset of the mask" | already retired by C1 item 1 |
+| 4 | Detector B's score is "set by the finest fringes / nearest-neighbour order spacing" | **REFUTED** — it tracks the total SPAN |
+| 5 | "`gap_before` is always the true distance" | **FALSE** for a grating on glass — now flagged + refused |
+| 6 | "the decentred figure sits BELOW the on-axis one" | **TRUE ONLY UNTILTED** — 1.4x above the tilted control |
+| 7 | D7's raised fit order | **can go inert silently**; boundary documented |
+| 8 | The order-vs-residual calibration table | ray grid **pinned** (`ray_subsample=4`) |
+
+**Item 4 — the substantive refutation.** The multi-congruence detector's
+documented envelope claimed a dense fan hides far below its span, because "the
+score is set by the finest fringes". Re-measured with the shipped helper (the
+harness reproduces the 8×8 row to 3 digits, so it is the same measurement):
+
+| construction | canonical rad, dx0 = 4 / 2 / 1 µm | equivalent PAIR |
+|---|---|---|
+| 8×8 fan, span ±23 mrad, NN 6.571 | 7.83e-3 / 8.41e-3 / 8.93e-3 | 17.1–18.7 mrad |
+| PAIR at that NN spacing, ±3.286 | 7.37e-4 / 6.79e-4 / 6.46e-4 | 3.2–3.5 mrad |
+| PAIR at that span, ±23.0 | 1.19e-2 / 1.22e-2 / 1.22e-2 | 22.5–23.0 mrad |
+
+The fan reads **5.3× above** the nearest-neighbour rule and 0.8× of an
+equal-span pair, and densifying at fixed span moves the score **down**
+(4 / 8 / 16 orders across ±23 read like 16.7 / 14.2 / 12.8 mrad) — the opposite
+of the old rule's direction. Corrected rule: **score a fan by its total span,
+derated ~20 %**. The old wording was over-conservative rather than unsafe, and
+both concrete verdicts it reported still stand.
+
+**Item 2 — why the envelope could not simply be widened.** The plateau was
+measured entirely at aperture:beam = 30:1 and low NA. Extending it to design
+121's regime (3.26:1, exit NA 0.405) is not merely a different answer — the
+oracle fails first. On 121's last group at N=1024 / dx = 33.211 µm the exit NA
+is 0.356 against a grid Nyquist direction cosine of 0.0197 (**18× short**), and
+`newton_fit='spline'` — the fit-domain-free reference the note leans on — fails
+to converge for **100.0 %** of 65536 pixels and returns an **all-zero field**
+(the polynomial path fails for 81.4 % and still returns a usable one). Under
+`on_undersample='silent'` that zero is returned without a word. The envelope is
+therefore narrowed and labelled, not extended. **The shipped 121 chain is
+unaffected** — it re-traces the final leg at `n_fine_cap` 12288 and its
+acceptance is unchanged (3.450 µm / EE3 88.8 / EE6 99.6 / EE12 99.8).
+
+**Item 5 — the only behaviour change.** `gap_before` / `gap_after` are raw
+axial thicknesses and the chain transports them through **air**, so a grating
+ruled on a substrate would be placed at the wrong optical distance (`t - t/n`
+per glass leg; 1.0 mm for a 3 mm N-BK7 plate) with no symptom. The importer now
+records a `gap_media` marker and warns; the refusal itself lives at the **point
+of use** (`_normalise_doe_entry`), because `load_zemax_zmx` serves far more than
+the DOE drop-in and the rest of such a file imports correctly. Design 121 is
+untouched (both gaps free space; markers absent, gaps still 51.5393 / 7.0000 mm).

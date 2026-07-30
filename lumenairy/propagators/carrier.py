@@ -2253,14 +2253,37 @@ def _check_guard_action(name, value, fn):
 # Closing it needs an estimator that separates crossing congruences from edge
 # ringing at small angle, which no shipped estimator does.
 #
-# The floor is stated in the angle between INTERFERING PAIRS, not in a fan's
-# total span, and for a DENSE fan those are different numbers: the score is set
-# by the finest fringes, i.e. by the nearest-neighbour order spacing.  Measured:
-# an 8x8 fan spanning +-23 mrad (order spacing 6.6 mrad) reads 7.9e-3 / 8.5e-3 /
-# 9.0e-3 rad canonical at dx0 = 4 / 2 / 1 um -- an equivalent PAIR angle of
-# 17.3 / 18.1 / 18.8 mrad -- so it sits ON the cutoff with no margin either way
-# and is not reliably caught, while the design-121 8x4 fan at +-46 / +-23 mrad
-# clears it by ~2x at every pitch.  That boundary is pinned by
+# The floor is stated in the angle between INTERFERING PAIRS.  Mapping a FAN
+# onto that pair scale is the part an earlier cut of this note got wrong, in
+# both magnitude and DIRECTION: it claimed the score is "set by the finest
+# fringes, i.e. by the nearest-neighbour order spacing", so that a dense fan
+# would hide far below its span.  It does not.  Re-measured with the shipped
+# helper (``_chain_entry_congruence_stats``; the harness reproduces the 8x8
+# row below to 3 digits, so this is the same measurement, not a competing one):
+#
+#   construction                       canonical rad, dx0 = 4 / 2 / 1 um   eq. PAIR
+#   8x8 fan, span +-23, NN 6.571    7.83e-3 / 8.41e-3 / 8.93e-3   17.1-18.7 mrad
+#   PAIR at that NN spacing +-3.286 7.37e-4 / 6.79e-4 / 6.46e-4     3.2-3.5 mrad
+#   PAIR at that span       +-23.0  1.19e-2 / 1.22e-2 / 1.22e-2    22.5-23.0 mrad
+#
+# The fan reads 5.3x ABOVE what the nearest-neighbour rule predicts and 0.8x of
+# an equal-SPAN pair, so the TOTAL SPAN -- not the order spacing -- is what
+# carries the score.  Densifying at FIXED span moves it DOWN, not up, which is
+# the direction the old rule got backwards: a 1-D fan of 4 / 8 / 16 orders
+# spanning +-23 (NN 15.3 / 6.6 / 3.1 mrad) reads 7.56e-3 / 5.92e-3 / 5.04e-3
+# canonical at dx0 = 2 um -- an equivalent pair of 16.7 / 14.2 / 12.8 mrad,
+# a 1.5x drift over a 5x change in spacing, and never anywhere near the 3 mrad
+# the spacing rule would demand.
+#
+# OPERATIONAL RULE, corrected: score a fan by its total span, derated ~20 %.
+# A fan whose SPAN clears the ~19 mrad floor is caught even when its order
+# spacing is far below the floor -- the old wording told callers the opposite,
+# and was over-conservative rather than unsafe.  The two concrete verdicts it
+# reported still stand on the re-measurement: the 8x8 +-23 fan sits ON the
+# cutoff with no margin either way and is not reliably caught (though because
+# its SPAN lands there, not its spacing), while the design-121 8x4 fan at
+# +-46 / +-23 mrad reads 1.65e-2 / 1.82e-2 / 1.87e-2 and clears by ~2x at every
+# pitch.  That boundary is pinned by
 # ``test_the_documented_detection_floor_is_a_pinned_boundary`` so a future
 # cutoff change cannot move it silently.
 #
@@ -2955,6 +2978,18 @@ class TracedCarrierChainResult(NamedTuple):
         CHAIN_2026_07_21.md`` already recorded the last leg at "NA ~ 0.46,
         R_out = -7.71 mm".)  The paraxial side of the flip is ~200 rad of
         wavefront wrong at that NA, which is why the guard exists at all.
+
+        On the EXACT final leg that entry is joined by three more (niche C1
+        item 4): ``'na_exit_measured'`` -- the exit NA
+        :func:`~lumenairy.elements.apply_real_lens_traced` actually measured
+        from the traced exit direction cosines on the grid it used (design 121
+        order (-4,-2): **0.4780**, against the 0.4052 paraxial ``'na_exit'``
+        that SIZED that grid) -- plus ``'na_grid_nyquist'``
+        (``lambda/(2*dx_fine)``, the NA the retrace grid can carry) and
+        ``'exit_power_above_nyquist'`` (the |E_in|^2-weighted fraction of
+        traced exit power above it, **7.97e-04** at the shipped
+        ``n_fine_cap`` = 12288).  The last of those is what
+        ``on_tilt_exact_grid`` refuses on.
     """
 
     field: np.ndarray
@@ -3184,6 +3219,75 @@ def _check_tilt_fits(env, dx, x_c, y_c, where):
 # CONSERVATIVE of that.
 _DECENTRE_FIT_FRAC_DEFAULT = 0.5
 
+# niche C1 item 4 (2026-07-30): how much of a TILTED exact final leg's traced
+# exit power may sit above its own grid Nyquist NA before
+# ``on_tilt_exact_grid`` refuses.
+#
+# WHY IT IS A POWER FRACTION AND NOT AN NA COMPARISON.  D6 sized the guard from
+# the chain's PARAXIAL ``na_exit = w_in / |R_out|``; the element measures the
+# exit NA from the traced direction cosines and gets a bigger number (design
+# 121, order (-4,-2), N=1024, dx0=2.0 um, rs 4, wf 4.0: paraxial 0.4053 vs
+# measured 0.4780, 1.18x).  Re-pointing the guard at the measured NA alone
+# REFUSES the shipped headline: at ``n_fine_cap`` 12288 the leg runs at
+# ``dx_fine`` = 1.508 um, which carries NA 0.4343 -- below 0.4780 -- yet 12288
+# and 16384 give IDENTICAL FWHM / EE3 / EE6 / EE12 (verified independently).
+# The reason is that the measured NA is the MARGINAL ray at the e^-4 AMPLITUDE
+# contour (r = 2w on a Gaussian, ~3e-4 of the power), so requiring Nyquist out
+# to it demands full sampling of content that carries essentially nothing.
+#
+# MEASURED, on the real design 121 (post-DOE 6-group chain, order (-4,-2),
+# N=1024, dx0 = 2.0 um, rs 4, ``window_factor`` 4.0, exact final leg, readout
+# dx_out 0.05 um / N_out 1024, ``on_tilt_exact_grid='warn'`` so every row runs).
+# ``frac`` is the |E_in|^2-weighted fraction of traced exit power above the
+# grid's Nyquist NA, as reported by ``_exit_na_out``.  Every row measures
+# paraxial na_exit **0.4052** against a MEASURED exit NA **0.4780**:
+#
+#   n_fine_cap  dx_fine um  NA carried   frac        FWHM um  EE3     EE6     EE12    s
+#   16384        1.1311      0.5791      0.000e+00   4.3000   61.137  89.502  97.357  312
+#   12288        1.5081      0.4343      7.967e-04   4.3000   61.135  89.501  97.356  171
+#    8192        2.2622      0.2895      7.482e-03   4.3000   61.127  89.498  97.356   84
+#
+# Two things follow, and the second is the reason this is a POWER BUDGET rather
+# than a fitted accuracy knee.
+#
+# (i) The shipped headline (12288) measures **7.967e-04**, so 1e-2 clears it by
+#     12.5x -- the guard stays silent on the configuration the verifier proved
+#     converged (12288 vs 16384 agree to 0.002 EE points here, reproducing that
+#     result on this readout).  8192 -- which D6's PARAXIAL pre-check refuses,
+#     and still does, unchanged -- reads 7.482e-03, so the post-check does not
+#     fire there either: the two tests are complementary, and NOTHING accepted
+#     today becomes refused.
+#
+# (ii) On BOTH geometries measured, the spot metrics are essentially INSENSITIVE
+#      to the aliased fraction at any level reached: 121 moves 0.010 EE3 points
+#      across 16384 -> 8192 (frac 0 -> 7.5e-3), and on the synthetic below
+#      EE4 wanders 3.56-3.68 % with no monotone trend from frac 4.3e-7 to
+#      1.7e-1.  So there IS no measured knee to fit, and claiming one would be
+#      claiming a measurement that does not exist.  1e-2 is instead a stated
+#      budget -- 1 % of the delivered power landing at the wrong radius -- in
+#      the same spirit as the sibling ``readout_window_tol`` = 1e-4, whose
+#      quantity (truncated beam power) is the same kind of thing.
+#
+# WHAT THE POST-CHECK NEWLY CATCHES is the paraxial pre-check's BLIND SPOT: a
+# group whose measured exit NA far exceeds ``w_in/|R_out|``.  Measured on a
+# synthetic N-BK7 singlet (R 8/-8 mm, 1.5 mm thick, aperture 3.2 mm,
+# collimated w = 0.40 mm, tilt L = 0.02, N = 2048, dx0 = 2.0 um, rs 2,
+# ``window_factor`` 4.0): paraxial na_exit **0.0520** against a measured
+# **0.3407** (6.6x), so the pre-check is silent at EVERY grid, while frac runs
+#
+#   n_fine_cap  2048       1024       512      384      256      192      128
+#   dx_fine um  1.5625     1.5625     3.125    4.167    6.250    8.333   12.500
+#   NA carried  0.4192     0.4192     0.2096   0.1572   0.1048   0.0786   0.0524
+#   frac        4.25e-07   4.25e-07   2.12e-3  3.25e-3  4.95e-3  2.11e-2  1.73e-1
+#
+# and the post-check fires from n_fine_cap 192 down -- a grid carrying 23 % of
+# the measured exit NA, which no pre-check in the library could see.
+#
+# Set to ``np.inf`` to disable the measured post-check entirely and keep only
+# D6's paraxial pre-check -- that is the fail-before switch the C1 tests use,
+# not a supported configuration.
+_TILT_EXACT_NA_POWER_TOL = 1e-2
+
 
 def _check_decentred_fit(w, x_c, y_c, where, action, frac):
     """Report a traced hand-off whose chief ray is far enough off the ELEMENT
@@ -3202,6 +3306,15 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
     group is **1.28 urad on axis and 0.90 urad at 0.97 beam radii of decentre**
     post-D7 (7.16 urad pre-D7) -- 0.007 um of blur against a 3.5 um
     diffraction FWHM, i.e. the element's fit is no longer the limit.
+
+    Do NOT read the 0.90 < 1.28 ordering as "decentre is now cheaper than
+    being on axis".  Both rows are UNTILTED (the repro sweeps ``x0`` at
+    ``tilt_L = 0``), and against the TILTED on-axis control -- the case design
+    121's orders actually are -- the decentred figure sits 1.4x ABOVE, not
+    below: 48.7 mrad of tilt on axis reads 0.64 urad against the same 0.90.
+    The conclusion above is indifferent to which baseline is picked, because
+    0.90 urad is 0.007 um of blur on a 3.5 um FWHM either way; only the
+    ordering is, and an earlier revision stated it without the qualifier.
 
     What it IS.  A decentred hand-off still measurably costs image quality end
     to end, and the calibration is now taken on geometries whose truth is
@@ -3253,7 +3366,9 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
         f"unaffected and still validated to 3e-4.  NOTE (niche D7, "
         f"2026-07-29): the residual is NOT apply_real_lens_traced's off-centre "
         f"ray fit any more -- that fit now carries 0.90 urad of exit slope at "
-        f"0.97 w against 1.28 urad on axis (0.007 um of blur against a 3.5 um "
+        f"0.97 w against 1.28 urad on axis UNTILTED (0.64 urad tilted, so the "
+        f"decentred figure is not uniformly the smaller one; either way it is "
+        f"0.007 um of blur against a 3.5 um "
         f"FWHM), and it is not the fine-retrace grid, the Newton iteration cap "
         f"or the readout window either (each moves EE3 by <= 0.01 point).  An "
         f"earlier revision of this message quoted a 3.7 -> 408 urad exit-slope "
@@ -3358,7 +3473,7 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
 _DOE_SPEC_KEYS = frozenset({
     'type', 'period', 'order', 'angle_deg', 'origin', 'lines_per_um',
     'surf_num', 'comment', 'semi_diameter', 'gap_before', 'gap_after',
-    'name'})
+    'name', 'gap_media'})
 _DOE_ENTRY_KEYS = frozenset({
     'doe', 'gap_before', 'gap_after', 'order', 'amplitude', 'name'})
 
@@ -3475,6 +3590,30 @@ def _normalise_doe_entry(g, gi, wavelength, fn):
             raise ValueError(
                 f"{where}['{_nm}'] must be a finite distance in metres, got "
                 f"{_v!r}.")
+    # niche C2: the importer flags a DGRATING whose axial gap runs through
+    # glass rather than air.  This chain transports gap_before / gap_after as
+    # FREE-SPACE distances, so honouring such an entry would misplace the
+    # grating by t - t/n per glass leg with no symptom in the output.  Refuse
+    # unless the caller has overridden the offending gap explicitly, which is
+    # exactly the documented "split the run at the substrate" remedy.
+    _media = spec.get('gap_media') or ()
+    _unhandled = [m for m in _media if m.get('gap') not in g]
+    if _unhandled:
+        _txt = ', '.join(
+            f"{float(m.get('thickness', 0.0)) * 1e3:.4f} mm of "
+            f"{m.get('glass')!r} in {m.get('gap')} (Zemax surface "
+            f"{m.get('surf_num')})" for m in _unhandled)
+        raise NotImplementedError(
+            f"{where}['doe'] was imported from a Zemax file in which the "
+            f"grating's axial gap does not lie in free space -- it traverses "
+            f"{_txt}.  propagate_traced_carrier_chain transports gap_before "
+            f"and gap_after through AIR, so this entry would place the grating "
+            f"at the wrong optical distance (error t - t/n per glass leg; 1.0 "
+            f"mm for a 3 mm N-BK7 substrate).  A grating ruled on a substrate "
+            f"is not supported by the drop-in import: split the run at the "
+            f"substrate, or override the offending gap on THIS entry (pass "
+            f"{sorted({m.get('gap') for m in _unhandled})} yourself) once you "
+            f"have reduced it to a free-space distance.")
     # the grating equation, in direction cosines and therefore EXACT
     ax = 0.0 if not np.isfinite(px) else mx * float(wavelength) / px
     ay = 0.0 if not np.isfinite(py) else my * float(wavelength) / py
@@ -3511,7 +3650,8 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                            centre=(0.0, 0.0), tilt=(0.0, 0.0),
                            on_tilt_exact_grid='error',
                            on_decentred_fit='warn',
-                           decentre_fit_frac=_DECENTRE_FIT_FRAC_DEFAULT):
+                           decentre_fit_frac=_DECENTRE_FIT_FRAC_DEFAULT,
+                           na_diag_out=None):
     """Re-trace a HIGH-NA group on a grid that Nyquist-samples its EXIT sphere
     (R9).  The co-moving grid is sized for the group ENTRANCE curvature, so on a
     strongly-focusing group the (much steeper) exit wavefront ALIASES -- the
@@ -3623,6 +3763,28 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     window, the required ``n_fine`` and the ``n_fine_cap`` that bound it.
     Silently returning a leg whose outer NA has been discarded is exactly
     the plausible-looking wrong answer this campaign exists to prevent.
+
+    ``on_tilt_exact_grid`` fires from TWO tests (niche C1 item 4), because D6's
+    single test measured the wrong NA:
+
+    * a cheap PRE-check, before any tracing, from the chain's PARAXIAL
+      ``na_exit = w_in / |R_out|`` -- unchanged from D6, so nothing that
+      refused before stops refusing;
+    * the DECISIVE POST-check, from the exit NA
+      :func:`~lumenairy.elements.apply_real_lens_traced` actually MEASURED on
+      the grid it just used (``_exit_na_out``).  The paraxial estimate is the
+      smaller of the two -- design 121's order (-4,-2) reads 0.4053 against a
+      measured 0.4780 -- so at the shipped ``n_fine_cap`` = 12288 the
+      pre-check passed a leg the element itself warned was under-sampled.  The
+      post-check's criterion is the |E_in|^2-weighted fraction of traced exit
+      power above grid Nyquist, against ``_TILT_EXACT_NA_POWER_TOL``; see that
+      constant for why a bare NA comparison would refuse a configuration the
+      measurements prove converged.
+
+    ``na_diag_out`` (dict, optional) receives that measurement, so the caller
+    can report it -- ``propagate_traced_carrier_chain`` puts it on the final
+    stage as ``na_exit_measured`` / ``na_grid_nyquist`` /
+    ``exit_power_above_nyquist``.
     """
     from ..elements import apply_real_lens_traced
     N = env.shape[-1]
@@ -3826,10 +3988,62 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                 RuntimeWarning, stacklevel=2)
             rs_fine = rs_needed
 
+    _na_diag: dict = {}
     E_exit = apply_real_lens_traced(
         E_full, prescription=presc, wavelength=wavelength, dx=dx_fine,
         carrier=_carrier_arg, ray_subsample=rs_fine, n_workers=n_workers,
-        **call_kw)
+        _exit_na_out=_na_diag, **call_kw)
+    # ---- niche C1 item 4: the DECISIVE tilted-leg sampling test -------------
+    # The pre-check above is sized from ``na_exit``, which is the CHAIN's
+    # PARAXIAL exit NA ``w_in / |R_out|``.  That is not the element's own exit
+    # NA, and the gap is not small: on design 121's order (-4,-2) the chain
+    # reads 0.4053 while ``apply_real_lens_traced`` MEASURES 0.4780 from the
+    # traced exit direction cosines.  At the shipped headline
+    # (``n_fine_cap`` 12288) ``dx_fine`` = 1.508 um passes the paraxial test
+    # (its Nyquist pitch 1.616 um) while the element itself warns "NA_exit=
+    # 0.4780 ... needs dx <= 1.37 um but the grid has dx = 1.51 um" -- i.e. the
+    # guard whose whole job is refusing an under-sampled tilted leg stayed
+    # SILENT on a leg the element calls under-sampled.
+    #
+    # It cannot simply be re-pointed at the measured NA, because that
+    # measurement is the MARGINAL ray at the e^-4 AMPLITUDE contour (r = 2w for
+    # a Gaussian), whose content carries ~3e-4 of the power -- and the verifier
+    # PROVED the 12288 result converged (12288 vs 16384: identical FWHM / EE3 /
+    # EE6 / EE12).  So the criterion is the discarded exit POWER, weighted by
+    # |E_in|^2 over the traced rays and measured by the element on the very
+    # grid it just used.  See ``_TILT_EXACT_NA_POWER_TOL`` for the calibration.
+    if na_diag_out is not None and _na_diag:
+        na_diag_out.update(_na_diag)
+    if _tilted and float(_na_diag.get('na_exit') or 0.0) > 0.0:
+        _frac = float(_na_diag.get('power_frac_above_nyquist', 0.0))
+        if _frac > _TILT_EXACT_NA_POWER_TOL:
+            _guard_dispose(
+                on_tilt_exact_grid,
+                f"_fine_trace_group_exit: the EXACT high-NA final leg for this "
+                f"TILTED congruence ran on a grid that cannot carry its own "
+                f"MEASURED exit NA.  The element traced the exit direction "
+                f"cosines out to NA={float(_na_diag['na_exit']):.4f} (the "
+                f"chain's paraxial estimate w_in/|R_out| = {na_exit:.4f} is "
+                f"the number that SIZED the grid, and it is the smaller of "
+                f"the two), while dx_fine={dx_fine * 1e6:.4f} um carries only "
+                f"NA={float(_na_diag['na_nyquist']):.4f} -- so "
+                f"{_frac * 100:.3f} % of the traced exit power sits above grid "
+                f"Nyquist and ALIASES (tolerance "
+                f"{_TILT_EXACT_NA_POWER_TOL * 100:.3g} %).  This congruence is "
+                f"tilted at (L, M) = ({tL:+.5f}, {tM:+.5f}) with its chief ray "
+                f"{max(abs(x_c), abs(y_c)) * 1e3:.4f} mm off axis at this "
+                f"group's entrance, so the axis-centred retrace window is "
+                f"{win * 1e3:.4f} mm "
+                f"({win / max(window_factor * w, 1e-300):.3f}x the on-axis "
+                f"window), and n_fine_cap={n_fine_cap} (with the RAM budget) "
+                f"allowed only n_fine={n_fine}.  Remedies, in order: raise "
+                f"n_fine_cap to >= "
+                f"{int(2 ** int(np.ceil(np.log2(max(win * 2.0 * float(_na_diag['na_exit']) / wavelength, 2.0)))))} "
+                f"in the focus_readout dict; shrink window_factor; or pass "
+                f"final_leg='paraxial' for this order.  Pass "
+                f"on_tilt_exact_grid='warn' to accept the aliased outer NA, "
+                f"'ignore' to silence this entirely.",
+                stacklevel=2)
     return np.asarray(E_exit), float(dx_fine)
 
 
@@ -4166,7 +4380,10 @@ def propagate_traced_carrier_chain(
         (and ``standoff`` for the paraxial path, or ``dx_fine`` / ``N_fine`` /
         ``window_factor`` for the exact path).  Otherwise the final leg is an
         ordinary carrier step and the field is reconstructed on the co-moving
-        grid.
+        grid.  Unknown keys RAISE (niche C1): a silently-dropped
+        ``'on_readout_windo'`` would leave the hard ``'error'`` default in
+        place while reading as a downgrade.  The accepted set is
+        ``_FOCUS_READOUT_KEYS``.
 
         Under a TILTED ``r_in`` (niche D1) ``centre_out`` is the ABSOLUTE
         image-plane position (optical-axis coordinates) to centre the window
@@ -4433,11 +4650,16 @@ def propagate_traced_carrier_chain(
         INTERFERING PAIRS, so two comparable beams closer than that are not
         caught by this detector at any pitch (measured +-10 mrad: 3.1e-3 -
         4.3e-3 rad, inside the clipped-beam population) and are caught only if
-        they also trip the angular-spread detector.  For a DENSE fan the
-        relevant angle is the nearest-neighbour ORDER SPACING, not the total
-        span: an 8x8 fan spanning +-23 mrad reads like a 17-19 mrad pair and
-        sits ON the cutoff with no margin, while the design-121 8x4 fan at
-        +-46 / +-23 mrad clears it by ~2x.
+        they also trip the angular-spread detector.  Score a FAN by its TOTAL
+        SPAN, derated about 20 % -- NOT by its order spacing, which
+        under-predicts by ~5x: an 8x8 fan spanning +-23 mrad (spacing 6.6 mrad)
+        reads like a 17-19 mrad pair, against 3.2-3.5 for a pair AT that
+        spacing and 22.5-23.0 for a pair at that span.  Densifying at fixed
+        span moves the score DOWN, not up (4 / 8 / 16 orders across +-23 read
+        like 16.7 / 14.2 / 12.8 mrad).  So a fan whose span clears the floor is
+        caught even when its spacing does not: the 8x8 +-23 fan sits ON the
+        cutoff with no margin, while the design-121 8x4 fan at +-46 / +-23 mrad
+        clears it by ~2x.
     on_na_proximity : {'warn', 'error', 'ignore'}, default 'warn'
         Guard rail on the EXIT-NA NEAR MISS (niche D3, roadmap P5).  With
         ``final_leg='auto'`` the readout silently routes to the PARAXIAL path
@@ -4490,6 +4712,22 @@ def propagate_traced_carrier_chain(
         silences it.  Measured on design 121's extreme order (-4,-2) at
         N=1024: the on-axis leg needs ``n_fine_cap`` 8192, the tilted one
         16384 -- 4x the memory and time for the same ``dx_fine``.
+
+        TWO tests dispose through this knob (niche C1 item 4).  The one above
+        is a cheap PRE-check from the chain's PARAXIAL exit NA
+        ``w_in / |R_out|``, which is what SIZES the grid.  That is not the
+        element's own exit NA and is systematically the smaller of the two
+        (design 121 order (-4,-2): 0.4052 paraxial vs 0.4780 measured from the
+        traced exit direction cosines), so a leg could pass it while
+        ``apply_real_lens_traced`` itself warned the grid was too coarse.  The
+        DECISIVE test is therefore a POST-check on the MEASURED exit NA, and
+        its criterion is the fraction of traced exit power above the grid's
+        Nyquist NA -- reported on the final stage as
+        ``exit_power_above_nyquist`` next to ``na_exit_measured`` /
+        ``na_grid_nyquist``, so the margin is visible without catching a
+        warning.  See ``_TILT_EXACT_NA_POWER_TOL`` for the budget and the
+        measurements that set it; the shipped 121 headline measures 7.97e-04
+        against a 1e-2 budget, so nothing that runs today stops running.
     on_decentred_fit : {'error', 'warn', 'ignore'}, default 'warn'
         Disposition when a traced hand-off's chief ray sits more than
         ``decentre_fit_frac`` beam amplitude radii off the ELEMENT grid centre.
@@ -4511,8 +4749,10 @@ def propagate_traced_carrier_chain(
         Niche D7 (2026-07-29) re-scoped this guard: the residual is NOT
         ``apply_real_lens_traced``'s off-centre ray fit -- measured
         aliasing-free, that fit carries 0.90 urad of exit slope at 0.97 beam
-        radii against 1.28 urad on axis (0.007 um of blur against a 3.5 um
-        FWHM) -- nor the fine-retrace grid, the Newton cap or the readout
+        radii against 1.28 urad on axis UNTILTED, and 0.64 urad on axis under
+        48.7 mrad of tilt, so it is not uniformly the smaller of the two
+        (0.007 um of blur against a 3.5 um FWHM on any of those readings)
+        -- nor the fine-retrace grid, the Newton cap or the readout
         window, each of which moves design 121's extreme-order EE3 by
         <= 0.01 point.  The 3.7 -> 408 urad exit-slope curve this docstring
         used to quote was an artefact of the repro script's FFT-derivative
@@ -4546,6 +4786,26 @@ def propagate_traced_carrier_chain(
     _check_guard_action('on_rs_fine_clamp', on_rs_fine_clamp, _fn)
     _check_guard_action('on_tilt_exact_grid', on_tilt_exact_grid, _fn)
     _check_guard_action('on_decentred_fit', on_decentred_fit, _fn)
+    # niche C1 item 5: ``focus_readout`` had no key whitelist, so a typo was
+    # silently accepted and the caller kept the DEFAULT -- e.g.
+    # ``'on_readout_windo'`` left ``on_readout_window`` at the hard ``'error'``
+    # while the caller believed they had downgraded it.  Refuse, naming the
+    # accepted set (the same contract ``congruences`` / ``output_grid`` / the
+    # DOE entries already have).
+    if focus_readout is not None:
+        if not isinstance(focus_readout, dict):
+            raise ValueError(
+                f"{_fn}: focus_readout must be a dict with 'dx_out' and "
+                f"'N_out' (the image-plane readout grid); got "
+                f"{type(focus_readout).__name__}.")
+        _fr_unknown = set(focus_readout) - _FOCUS_READOUT_KEYS
+        if _fr_unknown:
+            raise ValueError(
+                f"{_fn}: focus_readout has unknown key(s) "
+                f"{sorted(_fr_unknown)!r}; accepted keys are "
+                f"{sorted(_FOCUS_READOUT_KEYS)!r}.  (A dropped key is not "
+                f"inert: 'on_readout_windo' would leave on_readout_window at "
+                f"its hard 'error' default while reading as a downgrade.)")
     if not (np.isfinite(decentre_fit_frac) and decentre_fit_frac >= 0.0):
         raise ValueError(
             f"{_fn}: decentre_fit_frac must be a finite non-negative number "
@@ -4913,6 +5173,7 @@ def propagate_traced_carrier_chain(
                 raise ValueError(
                     "propagate_traced_carrier_chain: focus_readout must supply "
                     "'dx_out' and 'N_out'.")
+            _na_diag: dict = {}
             E_exit_fine, dx_fine = _fine_trace_group_exit(
                 env, R_use, cur_dx, presc, wavelength, ray_subsample, n_workers,
                 call_kw, R_out, na_exit,
@@ -4927,12 +5188,24 @@ def propagate_traced_carrier_chain(
                 tilt=((tilt_L, tilt_M) if _tilted else (0.0, 0.0)),
                 on_tilt_exact_grid=on_tilt_exact_grid,
                 on_decentred_fit=on_decentred_fit,
-                decentre_fit_frac=decentre_fit_frac)
+                decentre_fit_frac=decentre_fit_frac,
+                na_diag_out=_na_diag)
             w_stage, p_stage = _chain_envelope_stats(E_exit_fine, dx_fine)
             stages.append({
                 'name': _name, 'R_in': R_use, 'R_out': R_out, 'dx': dx_fine,
                 'w': w_stage, 'power': p_stage, 'exact_final': True,
                 'na_exit': na_exit})
+            # niche C1 item 4: report the element's MEASURED exit NA and the
+            # exit power above this grid's Nyquist NA alongside the paraxial
+            # ``na_exit`` the leg was SIZED from, so the margin is visible
+            # without catching a warning (the same reason D3 put 'na_exit'
+            # here).
+            if _na_diag.get('na_exit') is not None:
+                stages[-1].update({
+                    'na_exit_measured': float(_na_diag['na_exit']),
+                    'na_grid_nyquist': float(_na_diag['na_nyquist']),
+                    'exit_power_above_nyquist': float(
+                        _na_diag['power_frac_above_nyquist'])})
             exact_kw = {kk: fr[kk] for kk in (
                 'dx_out', 'N_out', 'dx_fine', 'N_fine', 'window_factor',
                 'centre_out', 'bandlimit', 'ram_budget',
@@ -5320,7 +5593,28 @@ _CONGRUENCE_KEYS = frozenset({'field', 'carrier', 'weight', 'name',
 # and the per-congruence tile), so they are not forwarded from output_grid.
 _OUTPUT_GRID_PASSTHROUGH = ('standoff', 'bandlimit', 'window_factor',
                             'n_fine_cap', 'max_fine_launch_points',
-                            'ram_budget', 'dx_fine', 'N_fine')
+                            'ram_budget', 'dx_fine', 'N_fine',
+                            # niche C1 item 5: the readout-window guard's own
+                            # message prescribes ``on_readout_window='warn'``
+                            # (and ``readout_window_tol``) as THE remedy, and
+                            # the guard fires from inside the exact final leg
+                            # -- which is exactly where the design-121 fan runs.
+                            # Without these two the prescribed remedy was
+                            # unreachable from this entry point: measured,
+                            # ``output_grid={'on_readout_window': 'warn'}``
+                            # raised "output_grid has unknown key(s)".
+                            'on_readout_window', 'readout_window_tol')
+
+# niche C1 item 5: the keys ``propagate_traced_carrier_chain`` understands in
+# ``focus_readout``.  It had NO whitelist, so a typo ('on_readout_windo') was
+# silently accepted and the caller kept the hard ``'error'`` default while
+# believing they had downgraded it -- the same silently-dropped-key class the
+# ``congruences`` / ``output_grid`` / DOE-entry validators already refuse.
+# ``dx_out`` / ``N_out`` are required; ``standoff`` and ``centre_out`` are the
+# paraxial readout's; the rest belong to the exact leg and are DROPPED (not
+# rejected) when the leg turns out to be paraxial -- see ``_par_kw``.
+_FOCUS_READOUT_KEYS = frozenset(
+    {'dx_out', 'N_out', 'centre_out'} | set(_OUTPUT_GRID_PASSTHROUGH))
 
 
 def _doe_groups_for_order(groups, doe_order, where):
@@ -5687,7 +5981,14 @@ def propagate_traced_carrier_chain_multi(
         (absolute ``(x, y)`` centre, default on-axis) and any of
         ``standoff`` / ``bandlimit`` / ``window_factor`` / ``n_fine_cap`` /
         ``max_fine_launch_points`` / ``ram_budget`` / ``dx_fine`` /
-        ``N_fine``, which are forwarded to the chain's ``focus_readout``.
+        ``N_fine`` / ``on_readout_window`` / ``readout_window_tol``, which are
+        forwarded to the chain's ``focus_readout``.  Unknown keys RAISE.
+
+        ``on_readout_window`` / ``readout_window_tol`` (niche C1) are the
+        remedy the exact readout's own window guard prescribes, and the exact
+        leg is where a design-121-class fan runs -- so they have to be
+        reachable from here, not only from
+        :func:`propagate_traced_carrier_chain`.
 
         A common grid (and therefore a focus readout) is REQUIRED: without it
         each congruence would land on its own co-moving grid and "sum the

@@ -231,9 +231,16 @@ def _collect_diffractives(elements, thicknesses, surfaces_raw, unit_scale,
     GAP CONVENTION -- each axial leg is recorded EXACTLY ONCE, because the
     chain adds ``gap_before + gap_after`` for every DOE entry it is handed:
 
-      * ``gap_before`` is always the true distance from the previous optical
-        element (mirror / glass boundary / another DGRATING), with flat
-        air-to-air dummy planes collapsed into it.
+      * ``gap_before`` is the distance from the previous optical element
+        (mirror / glass boundary / another DGRATING), with flat air-to-air
+        dummy planes collapsed into it.  It is the TRUE transport distance
+        while the intervening legs are free space, which is the only case
+        this importer accepts: it is a raw axial thickness, and the chain
+        transports it through air, so a DGRATING ruled on a glass substrate
+        would be placed at the wrong optical distance.  That layout is
+        REFUSED (``NotImplementedError``) rather than imported, per niche C2 --
+        earlier revisions of this docstring claimed the distance was true for
+        any gaps, and it is not.
       * ``gap_after`` is the TRAILING leg to the next optical element -- and
         is 0.0 when that element is another DGRATING, because that grating's
         own ``gap_before`` already carries the leg.
@@ -263,6 +270,24 @@ def _collect_diffractives(elements, thicknesses, surfaces_raw, unit_scale,
         return float(sum(thicknesses[j] for j in range(j0, j1)
                          if 0 <= j < len(thicknesses)))
 
+    def _span_media(j0, j1):
+        """Non-air media the legs in ``[j0, j1)`` traverse, as
+        ``[(surf_num, glass_name, thickness), ...]``.
+
+        The leg leaving element ``j`` sits in element ``j``'s ``glass_after``,
+        so a gap summed by ``_sum_t`` is a FREE-SPACE distance only while every
+        one of those is air (niche C2).
+        """
+        bad = []
+        for j in range(j0, j1):
+            if not (0 <= j < len(thicknesses)) or j >= n_el:
+                continue
+            g = (elements[j].get('glass_after') or 'air')
+            if g.lower() != 'air' and abs(float(thicknesses[j])) > 0.0:
+                bad.append((elements[j].get('surf_num'), g,
+                            float(thicknesses[j])))
+        return bad
+
     out = []
     for i in idx:
         p = i - 1
@@ -286,6 +311,42 @@ def _collect_diffractives(elements, thicknesses, surfaces_raw, unit_scale,
         _next_is_doe = (q < n_el and anchor[q]
                         and elements[q].get('diffractive') is not None)
         d['gap_after'] = 0.0 if _next_is_doe else _sum_t(i, q)
+        # niche C2: FLAG a gap that is not free space.  ``_sum_t`` adds raw
+        # axial thicknesses, and the chain transports gap_before + gap_after
+        # through AIR, so a leg inside glass -- the grating-ruled-on-a-substrate
+        # layout -- would be propagated at the wrong optical distance with no
+        # symptom.  For a 3 mm N-BK7 plate that is 1.0 mm of misplaced focus
+        # (t - t/n at n = 1.5169).
+        #
+        # The marker is recorded here and REFUSED at the point of use
+        # (``_parse_doe_entry``) rather than at import, because
+        # ``load_zemax_zmx`` serves far more than the DOE drop-in -- geometry,
+        # surfaces, glasses -- and none of that is wrong for such a file.  Only
+        # the gap bookkeeping is, so only the consumer of the gaps refuses.
+        _media = []
+        for _which, (_j0, _j1) in (('gap_before', (max(p, 0), i)),
+                                   ('gap_after', (i, q) if not _next_is_doe
+                                    else (i, i))):
+            for _s, _g, _t in _span_media(_j0, _j1):
+                _media.append({'gap': _which, 'surf_num': _s, 'glass': _g,
+                               'thickness': _t})
+        if _media:
+            d['gap_media'] = _media
+            warnings.warn(
+                f"{filepath}: DGRATING at Zemax surface "
+                f"{elements[i]['surf_num']} has an axial gap that does NOT lie "
+                f"in free space -- it traverses "
+                + ', '.join(f"{m['thickness'] * 1e3:.4f} mm of {m['glass']!r} "
+                            f"(surface {m['surf_num']}, {m['gap']})"
+                            for m in _media)
+                + ".  gap_before / gap_after are raw axial thicknesses and "
+                "propagate_traced_carrier_chain transports them through AIR, "
+                "so this grating would be placed at the wrong optical "
+                "distance (the error is t - t/n per glass leg).  The rest of "
+                "the import is unaffected; the DOE entry itself is REFUSED if "
+                "handed to the chain.  Split the run at the substrate and "
+                "supply the legs explicitly.",
+                RuntimeWarning, stacklevel=2)
         out.append(d)
         warnings.warn(
             f"{filepath}: Zemax surface {d['surf_num']} is a DGRATING.  Its "
@@ -571,6 +632,11 @@ def load_zemax_zmx(filepath: str,
     # ------------------------------------------------------------------
     # Determine which surfaces are part of the lens
     # ------------------------------------------------------------------
+    # niche C1 item 3: the sub-window the no-STOP aperture fallback is allowed
+    # to read (the GLASS/MIRROR span, i.e. the pre-D4 window).  ``None`` means
+    # "the whole imported window", which is the historical behaviour and what
+    # every non-diffractive file gets.  See the aperture block below.
+    _ap_span = None
     if surface_range is not None:
         s_first, s_last = surface_range
         lens_surfaces = [s for s in optical_surfaces
@@ -628,6 +694,26 @@ def load_zemax_zmx(filepath: str,
             s_last = active[-1]['surf_num'] + 1
         lens_surfaces = [s for s in optical_surfaces
                          if s_first <= s['surf_num'] <= s_last]
+        # niche C1 item 3: the widening above is what P2 asked for, but it
+        # feeds the no-STOP aperture fallback, which is a ``max`` over every
+        # surface in the window.  Re-derive the PRE-D4 (glass/mirror) span --
+        # identical to ``(s_first, s_last)`` for every non-diffractive file, so
+        # nothing else moves -- and let the fallback read only that.  Measured
+        # pollution without this: 12.000 -> 13.000 mm on the D4 suite's own
+        # ``collimated -> DGRATING -> singlet`` fixture (the DOE's own
+        # ``DIAM 6.5``), and 12.000 -> **100.000 mm (8.33x)** as soon as an
+        # ordinary dummy reference plane with a large ``DIAM`` sits between the
+        # DOE and the glass -- which is verbatim the v5.17.1 (P3-42) failure
+        # three lines above: "pulled in the next surface (often the image plane
+        # or a dummy) as a bogus air-air 'surface' element whose DIAM then
+        # polluted the no-STOP aperture fallback".
+        _gm = [s for s in optical_surfaces
+               if s['glass'] is not None or s['is_mirror']]
+        if _gm:
+            _gm_last = (_gm[-1]['surf_num'] if _gm[-1]['is_mirror']
+                        else _gm[-1]['surf_num'] + 1)
+            if (_gm[0]['surf_num'], _gm_last) != (s_first, s_last):
+                _ap_span = (_gm[0]['surf_num'], _gm_last)
 
     # v5.17.1 (audit P3-42): a single terminal mirror is a legitimate
     # one-element system (elements-only prescription for apply_mirror);
@@ -931,7 +1017,38 @@ def load_zemax_zmx(filepath: str,
     if stop_surfaces:
         aperture = stop_surfaces[0]['semi_diameter'] * 2 * unit_scale
     else:
-        aperture = max(s['semi_diameter'] for s in lens_surfaces) * 2 * unit_scale
+        # niche C1 item 3: read the largest semi-diameter over the GLASS/MIRROR
+        # span only when the DGRATING auto-detect widened the window past it
+        # (``_ap_span``), so a diffractive -- or a dummy plane the widening
+        # dragged in with it -- cannot become the no-STOP aperture.  Unchanged
+        # (``_ap_span is None``) for every file without an out-of-span
+        # DGRATING, and unchanged for an explicit ``surface_range``, which is
+        # the caller's own window.
+        _ap_pool = lens_surfaces
+        if _ap_span is not None:
+            _sub = [s for s in lens_surfaces
+                    if _ap_span[0] <= s['surf_num'] <= _ap_span[1]]
+            if _sub:
+                _ap_pool = _sub
+        aperture = max(s['semi_diameter'] for s in _ap_pool) * 2 * unit_scale
+        if _ap_pool is not lens_surfaces:
+            _ap_wide = (max(s['semi_diameter'] for s in lens_surfaces)
+                        * 2 * unit_scale)
+            if _ap_wide != aperture:
+                warnings.warn(
+                    f"{filepath}: no STOP surface, so aperture_diameter falls "
+                    f"back to the largest semi-diameter -- taken over the "
+                    f"GLASS/MIRROR span (surfaces "
+                    f"{_ap_span[0]}-{_ap_span[1]}, giving "
+                    f"{aperture * 1e3:.4f} mm) and NOT over the whole imported "
+                    f"window, which the DGRATING auto-detect widened and which "
+                    f"would give {_ap_wide * 1e3:.4f} mm.  A diffractive is an "
+                    f"air-to-air flat and the dummy planes beside it carry "
+                    f"Zemax default DIAMs, so neither is the ray-limiting "
+                    f"hardware (audit P3-42, v5.17.1).  If the DOE really is "
+                    f"the limiting aperture here, set aperture_diameter "
+                    f"explicitly or declare a STOP.",
+                    UserWarning, stacklevel=2)
     # v5.24.x (audit S4-9): a prescription with no STOP and no semi-diameter
     # data yields aperture == 0.0, which silently fully-clips the downstream
     # field with no diagnostic.  Warn so the caller can supply an aperture.

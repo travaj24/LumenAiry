@@ -43,8 +43,17 @@
 #   0.80 w       6.56            0.91
 #   0.97 w       7.16            0.90
 #
-# i.e. the element was never carrying 408 urad, and after D7 the decentred
-# figure sits BELOW the on-axis one.  Design 121's per-order chain metric is
+# i.e. the element was never carrying 408 urad.  After D7 the decentred figure
+# sits below the on-axis one AS SWEPT ABOVE -- but every row of that sweep is
+# UNTILTED (``measure`` defaults to ``tilt_L=0``), and that ordering does not
+# survive adding the tilt design 121's orders actually carry: see the CONTROL
+# block this script prints, where 48.7 mrad on axis reads 0.64 urad against the
+# same 0.90 at 0.97 w, i.e. the decentred figure sits 1.4x ABOVE.  Nothing
+# downstream turns on the ordering -- 0.90 urad is 0.007 um of blur on a 3.5 um
+# FWHM under either baseline -- but an earlier revision of this header, the
+# roadmap and the guard message all stated "sits BELOW the on-axis one"
+# unqualified, which is only true of the untilted column.
+# Design 121's per-order chain metric is
 # still a LOWER BOUND on the design -- the residual is elsewhere (see the D7
 # correction in the roadmap for the four candidates it is measurably NOT).
 #
