@@ -66,7 +66,7 @@ from lumenairy.propagators.carrier import (
     _shift_envelope,
     _tilt_obliquity,
 )
-from lumenairy.raytrace import Surface, make_ray, trace
+from lumenairy.raytrace import RayBundle, Surface, make_ray, trace
 from lumenairy.raytrace.trace import surfaces_from_prescription
 
 _WL = 1.31e-6
@@ -197,6 +197,30 @@ def _exact_ray_centroid(gA, gB, tilt, image_distance, n=15):
     return float((hits * wgt).sum() / wgt.sum())
 
 
+def _exact_ray_rms_radius(gA, gB, tilt, image_distance, n=61):
+    """Gaussian-weighted GEOMETRIC rms spot radius from a 2-D exact skew ray
+    trace -- the independent oracle for how much of the wave spot's width is
+    the relay's own aberration rather than diffraction (niche C5)."""
+    t = np.linspace(-2.5 * _W_IN, 2.5 * _W_IN, n)
+    X, Y = np.meshgrid(t, t)
+    wq = np.exp(-2.0 * (X ** 2 + Y ** 2) / _W_IN ** 2).ravel()
+    N0 = np.sqrt(1.0 - tilt ** 2)
+    rb = RayBundle(x=X.ravel().copy(), y=Y.ravel().copy(),
+                   z=np.zeros(X.size), L=np.full(X.size, float(tilt)),
+                   M=np.zeros(X.size), N=np.full(X.size, N0),
+                   wavelength=_WL, alive=np.ones(X.size, bool),
+                   opd=np.zeros(X.size))
+    ir = trace(rb, _relay_surfaces(gA, gB, image_distance), _WL,
+               output_filter='last').image_rays
+    ok = (np.asarray(ir.alive) & np.isfinite(np.asarray(ir.x))
+          & np.isfinite(np.asarray(ir.y)))
+    xx, yy, ww = np.asarray(ir.x)[ok], np.asarray(ir.y)[ok], wq[ok]
+    cx = float((xx * ww).sum() / ww.sum())
+    cy = float((yy * ww).sum() / ww.sum())
+    r2 = float((((xx - cx) ** 2 + (yy - cy) ** 2) * ww).sum() / ww.sum())
+    return float(np.sqrt(r2))
+
+
 def _gauss_env(n=_N, dx=_DX, w=_W_IN):
     x = (np.arange(n) - n // 2) * dx
     return np.exp(-(x[None, :] ** 2 + x[:, None] ** 2) / w ** 2
@@ -225,9 +249,15 @@ def _spot(field, dx_out, centre_abs):
 # ===========================================================================
 
 def test_tilted_carrier_eikonal_and_gradient_are_analytic():
-    """``W = S_R(rho) + L u + M v`` about ``(x0, y0)``, with the gradient the
-    exact derivative -- checked against the closed form and against a finite
-    difference of ``W`` itself."""
+    """The EXACT displaced-point-source eikonal about ``(x0, y0)``, with the
+    gradient its exact derivative -- checked against the closed form and
+    against a finite difference of ``W`` itself.
+
+    UPDATED 2026-07-30 (niche C5).  This used to pin ``W = S_R(rho) + L u +
+    M v`` -- an on-axis sphere with a linear ramp ADDED, which is not a
+    solution of the eikonal equation.  See ``TiltedCarrier`` and
+    ``tests/unit/test_niche_c5_exact_tilted_reference.py`` for the
+    replacement and the measurement that forced it."""
     n, dx, R = 64, 20e-6, -30e-3
     L, M, x0, y0 = 0.046, -0.017, 1.3e-4, -2.1e-4
     ax = (np.arange(n) - n / 2) * dx
@@ -235,9 +265,20 @@ def test_tilted_carrier_eikonal_and_gradient_are_analytic():
     spec = la.TiltedCarrier(R, L, M, x0, y0)
     W, grad, wfn = _compute_carrier(spec, None, _WL, dx, X, Y)
     u, v = X - x0, Y - y0
-    ref = -(np.sqrt(u ** 2 + v ** 2 + R * R) - abs(R)) + L * u + M * v
+    N = np.sqrt(1.0 - L * L - M * M)
+    ref = -(np.sqrt((u + R * L / N) ** 2 + (v + R * M / N) ** 2 + R * R)
+            - abs(R) / N)
     np.testing.assert_allclose(W, ref, rtol=0, atol=1e-18)
     assert abs(wfn(np.array([x0]), np.array([y0]))[0]) < 1e-18   # W(x0,y0)=0
+    # the chief ray leaves (x0, y0) along EXACTLY (L, M)
+    _g0 = grad(np.array([x0]), np.array([y0]))
+    np.testing.assert_allclose(_g0[0], L, rtol=1e-14)
+    np.testing.assert_allclose(_g0[1], M, rtol=1e-14)
+    # fail-before: the superseded sphere-plus-ramp form is a DIFFERENT
+    # function -- 0.078 waves over this (deliberately small, 1.28 mm) grid,
+    # and 2.5 waves within one beam radius on design 121's last coarse leg
+    _old = -(np.sqrt(u ** 2 + v ** 2 + R * R) - abs(R)) + L * u + M * v
+    assert np.abs(W - _old).max() / _WL == pytest.approx(0.0775, rel=0.05)
     h = 1e-9
     xq, yq = np.array([3e-4]), np.array([-1e-4])
     gx, gy = grad(xq, yq)
@@ -278,7 +319,11 @@ def test_tilted_carrier_beats_the_equivalent_ndarray_wavefront():
     _, grad_n, _ = _compute_carrier(np.asarray(W), None, _WL, dx, X, Y)
     xq = np.array([0.37 * dx, 4.5 * dx])          # deliberately off-lattice
     yq = np.zeros_like(xq)
-    exact = 0.046 - xq / np.sqrt(xq ** 2 + R * R)
+    # niche C5: the exact congruence's own gradient (its source projection
+    # sits at -R L / N), not the superseded sphere-plus-ramp one
+    _N = np.sqrt(1.0 - 0.046 ** 2)
+    _uu = xq + R * 0.046 / _N
+    exact = -_uu / np.sqrt(_uu ** 2 + R * R)
     np.testing.assert_allclose(grad_a(xq, yq)[0], exact, rtol=1e-12)
     assert np.abs(grad_n(xq, yq)[0] - exact).max() > 1e-5
 
@@ -509,10 +554,21 @@ def test_tilted_relay_lands_on_the_exact_ray_trace(_relay, _runs):
     pushed the chief ray through the lumped paraxial group ABCD and landed
     +0.1214 um from the exact trace.  Since niche C3 (2026-07-30) it TRACES
     the chief ray through each group, so it now EQUALS the exact trace
-    (measured residual 0.0, i.e. the two agree to the last bit), and the
-    measured wave centroid is 0.014 um from it instead of 0.107 um -- a
-    7.7x closer landing judged by a diffraction calculation that shares no
-    code with either predictor.
+    (measured residual 0.0, i.e. the two agree to the last bit).
+
+    UPDATED 2026-07-30 (niche C5).  The judge here is the CHIEF RAY, and for
+    an aberrated off-axis spot the intensity centroid is NOT on the chief ray
+    -- it sits at the energy-weighted RAY CENTROID.  On this relay a 2-D
+    exact ray trace puts that centroid **0.279 um** off the chief ray (the
+    meridional-only ``_exact_ray_centroid`` says 0.209 um) and reads a
+    geometric rms spot radius of 1.469 um at 46 mrad against 0.419 um on
+    axis: the relay really is comatic off axis.  Pre-C5 the chain's tilted
+    carrier reference was an on-axis sphere plus a linear ramp, which is not
+    a wavefront, and it SUPPRESSED that coma -- the wave centroid landed
+    0.014 um from the chief ray, i.e. 0.195 um from the truth.  With the
+    exact congruence it lands 0.116 um from the chief ray and **0.093 um from
+    the ray centroid**, i.e. twice as close to the right answer.  So the
+    number this test used to celebrate was an artefact of the reference.
     """
     tol = 0.30e-6
     x_meas, _, _, _ = _spot(_runs['tilted'].field, _DXO, _relay['x_exact'])
@@ -532,19 +588,42 @@ def test_tilted_relay_lands_on_the_exact_ray_trace(_relay, _runs):
     x_abcd = _relay['st']['x_img_abcd']
     assert abs(x_abcd - _relay['x_exact']) == pytest.approx(0.1214e-6,
                                                             rel=0.05)
-    assert abs(x_meas - _relay['x_exact']) < 0.2 * abs(x_abcd - x_meas)
+    # ... and, judged against the RAY CENTROID rather than the chief ray, the
+    # wave lands within half the coma offset.  (niche C5: this replaces an
+    # ``< 0.2 * |x_abcd - x_meas|`` chief-ray pin, which the pre-C5 reference
+    # passed only by erasing the relay's own coma -- see the docstring.)
+    assert abs(x_meas - _relay['x_ray_centroid'])         < 0.5 * abs(_relay['x_ray_centroid'] - _relay['x_exact'])
 
 
 def test_tilted_relay_reaches_the_on_axis_diffraction_limit(_relay, _runs):
-    """Same relay, same beam, 46 mrad off axis: the spot must be the SAME
-    diffraction-limited spot the on-axis run makes."""
+    """Same relay, same beam, 46 mrad off axis: the spot must be the on-axis
+    diffraction spot BROADENED BY THIS RELAY'S OWN OFF-AXIS COMA, and by no
+    more than that.
+
+    UPDATED 2026-07-30 (niche C5).  Two uncorrected N-BK7 singlets are not
+    diffraction-limited at 46 mrad: an exact skew ray trace of the same
+    Gaussian bundle reads a geometric rms spot radius of **1.469 um** off
+    axis against 0.419 um on axis.  Folded into the 18.8 um on-axis FWHM in
+    quadrature that predicts ``sqrt(18.8^2 + (2.355*1.469)^2) = 19.12 um``.
+    The chain now measures **19.20 um**; pre-C5 it measured 18.80 um --
+    EXACTLY the on-axis width, because the sphere-plus-ramp carrier reference
+    was suppressing the coma.  This test therefore pins the geometric
+    prediction, not equality with the on-axis spot."""
     _, fwhm_t, ee_t, _ = _spot(_runs['tilted'].field, _DXO, _relay['x_exact'])
     _, fwhm_0, ee_0, _ = _spot(_runs['on_axis'].field, _DXO, 0.0)
-    assert fwhm_t == pytest.approx(fwhm_0, abs=1.5 * _DXO)
+    rms_geo = _exact_ray_rms_radius(_relay['gA'], _relay['gB'], _TILT,
+                                    _relay['st']['fd'])
+    rms_ax = _exact_ray_rms_radius(_relay['gA'], _relay['gB'], 0.0,
+                                   _relay['st']['fd'])
+    assert rms_geo / rms_ax == pytest.approx(3.51, rel=0.10)
+    fwhm_pred = np.sqrt(fwhm_0 ** 2 + (2.3548 * rms_geo) ** 2)
+    assert fwhm_t == pytest.approx(fwhm_pred, abs=1.5 * _DXO), (
+        fwhm_t, fwhm_pred, fwhm_0)
+    assert fwhm_t > fwhm_0 - 0.5 * _DXO
     assert ee_t == pytest.approx(ee_0, abs=0.01)
     pk_t = float(np.abs(np.asarray(_runs['tilted'].field)).max() ** 2)
     pk_0 = float(np.abs(np.asarray(_runs['on_axis'].field)).max() ** 2)
-    assert pk_t / pk_0 > 0.99
+    assert 0.98 < pk_t / pk_0 < 1.0
     # and it is the ABCD/Gaussian diffraction width, not just "same as x"
     w_exit = _runs['tilted'].stages[1]['w']
     na = w_exit / abs(_relay['st']['R_B'])

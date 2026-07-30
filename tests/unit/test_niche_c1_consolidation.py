@@ -459,11 +459,22 @@ def test_a_skew_tilted_congruence_lands_on_the_exact_skew_ray_trace(
 
 def test_the_skew_congruence_reaches_the_on_axis_diffraction_limit(_skew_runs):
     """Same relay, same beam, 51 mrad off axis in a skew direction: the spot
-    must be the SAME spot the on-axis run makes, and carry the same power.
-    Measured: FWHM 19.10 vs 18.95 um, EE6 30.58 vs 30.71 %, window power
-    within 0.15 %."""
+    must be the on-axis spot BROADENED BY THIS RELAY'S OWN COMA and no more,
+    and carry the same power.  Measured: FWHM 19.20 vs 18.95 um, EE6 30.4 vs
+    30.7 %, window power within 0.15 %.
+
+    UPDATED 2026-07-30 (niche C5).  Two uncorrected singlets are not
+    diffraction-limited at 51 mrad: a 2-D exact skew ray trace of this same
+    Gaussian bundle reads a geometric rms spot radius of **1.719 um** off
+    axis against 0.419 um on axis, which in quadrature with the 18.95 um
+    on-axis FWHM predicts 19.38 um.  The measured 19.20 um sits between the
+    two.  Pre-C5 this read 18.95 um -- EXACTLY the on-axis width -- because
+    the tilted carrier reference was an on-axis sphere plus a linear ramp,
+    which is not a wavefront and suppressed the coma.  So the bracket below
+    replaces an equality that only the artefact could satisfy."""
     s, s0 = _skew_runs['spot'], _skew_runs['spot0']
-    assert s['fwhm'] == pytest.approx(s0['fwhm'], abs=4.0 * _S_DXO)
+    assert (s0['fwhm'] - 0.5 * _S_DXO <= s['fwhm']
+            <= s0['fwhm'] + 10.0 * _S_DXO), (s['fwhm'], s0['fwhm'])
     assert s['ee'] == pytest.approx(s0['ee'], abs=0.01)
     assert s['power'] == pytest.approx(s0['power'], rel=0.02)
     # and it is the ABCD/Gaussian width, not merely "the same as on axis"

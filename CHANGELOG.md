@@ -4,6 +4,84 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — the tilted carrier's reference wavefront is now an actual eikonal (`elements/_lens_traced.py`, `propagators/carrier.py`)
+
+`TiltedCarrier` defined its wavefront as an on-axis sphere **plus a linear
+ramp**.  That is not a solution of the eikonal equation.  The exact eikonal of
+the congruence it names -- a point source at signed AXIAL distance `R` whose
+chief ray carries `(L, M)` -- is the same sphere transversely RE-CENTRED on the
+source's own projection, `W = sign(R)(sqrt((u + R L/N)^2 + (v + R M/N)^2 + R^2)
+- |R|/N)` with `N = sqrt(1 - L^2 - M^2)`.  The difference is coma **linear** in
+field angle plus astigmatism quadratic in it: on design 121's fifth leg
+(`R = -24.46 mm`, tilt 54.9 mrad, `w = 3.63 mm`) it is -0.73 waves one beam
+radius along the tilt, **+2.53 against it**, and 15.8 waves at two radii.
+
+This matters because the chain defines its envelope as *field / carrier*, so a
+reference that is not a true wavefront dumps real optical path into the
+"envelope" -- precisely the thing Sziklas-Siegman then transports by a plain
+dilation, which cannot carry it.  Measured in closed form on the leg alone
+(exact congruence; no ray trace, diffraction integral, unwrap or FFT
+derivative), the leg's model error runs 1.0e-5 waves at zero tilt, 0.0134 at
+5.5 mrad, 0.0678 at 27 mrad and **0.1362 at the design's 54.9 mrad** -- and
+back to **1.0e-5** with the exact eikonal, holding to 180 mrad.
+
+Design 121 per order, EE3, at the chain's group-5 exit:
+
+| order | field angle | before | after |
+|---|---|---|---|
+| (0,0) | 0 | 87.99 | **87.99** |
+| (-1,0) | 11.5 mrad | 86.48 | 87.27 |
+| (-2,0) | 23.0 mrad | 83.15 | 85.60 |
+| (-3,0) | 34.5 mrad | 77.02 | 81.95 |
+| (-4,0) | 46.1 mrad | 70.19 | **76.61** |
+| (-4,-2) | 46.1 + 23.0 mrad | 66.24 | **73.66** |
+
+Field-angle spread **21.75 -> 14.33** points.  Split across the leg and the
+element pass at (-4,-2), the leg's share of the loss goes **-20.70 -> -0.96**
+(95 % closed) while the element's goes -3.04 -> **-15.26**: the element's own
+model error was previously MASKED by partial cancellation against the leg's,
+and is now exposed.  Its cause is named -- `preserve_input_phase='remap'`
+launches along `grad(W)` alone and so drops a second-order stationary-phase
+term scaling with `grad a` (2.30 mrad after this fix against 1.46 before) --
+and is NOT fixed here.
+
+The UNTILTED path is byte-identical: `np.array_equal`, max |dE| = **0.0**, over
+7 configurations of design 121's real post-DOE chain (two grids, two
+`ray_subsample`s, 3- and 5-group runs, both readout paths, `final_leg='exact'`)
+and 12 synthetic ones.  The shipped single-beam acceptance is unchanged at
+**3.450 um / EE3 88.8 / EE6 99.6 / EE12 99.8**.  Fail-before switch:
+`TILTED_CARRIER_EXACT_EIKONAL = False` reproduces the previous field bit for
+bit, tilted orders included.
+
+Independently corroborated on a fixture sharing no code with design 121: D1's
+and C1's "the off-axis spot reaches the on-axis diffraction limit" pins were
+asserting that a 46/51 mrad spot through two uncorrected N-BK7 singlets EQUALS
+the on-axis one.  It does not -- an exact skew trace reads geometric rms
+1.469 / 1.719 um off axis against 0.419 on axis, and quadrature with the
+18.8 um on-axis FWHM predicts 19.12 / 19.38 um.  The corrected reference
+measures **19.20 um** in both; the old one measured 18.80 / 18.95, i.e. exactly
+the on-axis width -- it had been ERASING the relay's own coma.  Those pins are
+re-based on the geometric prediction, with fail-before witnesses.
+
+Also measured and REJECTED: the anisotropic effective-distance term
+(`z/(1-L^2)^{3/2}` along the tilt vs `^{1/2}` across) contributes **0.000 EE3
+points**.  Its isotropic part is a re-parametrisation rather than an error --
+`R` is the AXIAL radius, so the shipped `R -> R + z` is already exact -- and the
+anisotropic remainder is ~2e-5 waves, four orders below the effect.  Both
+formulations were implemented and measured identical before this was concluded.
+
+### Fixed — `na_exit`'s amplitude mask was transposed (`elements/_lens_traced.py`)
+
+The significance mask was built `(y, x)` by `np.ix_(_ray_iy, _ray_ix)` but
+ravelled against a launch grid built with `indexing='ij'` -- x along axis 0 --
+so every amplitude was paired with the TRANSPOSED ray.  Rotationally symmetric
+beams are invariant under that swap, which is why it survived; on an asymmetric
+one the two readings exchange outright (measured on a biconic: 0.0338 reported
+against 0.0684 true, and 0.0669 against 0.0340).  Design 121's last group
+reported `na_exit` **0.3633** where the transpose-immune value is **0.2912** --
+25 % overstated -- and `_exit_na_out` feeds the chain's `on_tilt_exact_grid`
+routing, so this was not merely cosmetic.
+
 ### Fixed — the chain's chief ray is TRACED, not linearised (`propagators/carrier.py`)
 
 Under a tilted carrier the chain transferred `(x_c, y_c, L, M)` through each

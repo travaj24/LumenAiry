@@ -1503,22 +1503,81 @@ def _input_tilt_stats(E_in, wavelength, dx):
     return (tilt_rms, coherence_ratio)
 
 
+#: Niche C5 (2026-07-30).  ``True`` -- a tilted congruence is referenced to
+#: the EXACT eikonal of a displaced point source (see :class:`TiltedCarrier`).
+#: ``False`` restores the pre-C5 SPHERE-PLUS-LINEAR-RAMP form
+#: ``S_R(rho) + L*u + M*v`` exactly, in the element AND in
+#: :func:`lumenairy.propagate_traced_carrier_chain` (which reads this same
+#: flag through
+#: :data:`~lumenairy.propagators.carrier.CHAIN_EXACT_TILTED_REFERENCE`, so the
+#: two can never be configured apart -- they only make sense together).  The
+#: fail-before switch for niche C5: flip it to reproduce any pre-C5 tilted
+#: result bit for bit.  It has NO effect on an untilted congruence -- the two
+#: eikonals are the same function when ``L == M == 0`` -- so the on-axis path
+#: is byte-identical either way.
+TILTED_CARRIER_EXACT_EIKONAL = True
+
+
 class TiltedCarrier(NamedTuple):
-    """A SPHERE-PLUS-LINEAR-TILT reference congruence (niche D1, roadmap
-    ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27 P1a).
+    """The exact reference congruence of a POINT SOURCE whose chief ray passes
+    through ``(x0, y0)`` with direction cosines ``(L, M)`` (niche D1, roadmap
+    ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27 P1a; eikonal corrected in
+    niche C5, 2026-07-30).
 
     The eikonal (metres; reference phase ``k0 * W``) is
 
     .. code-block:: text
 
-        W(x, y) = S_R(sqrt(u^2 + v^2)) + L*u + M*v ,   u = x - x0, v = y - y0
-        S_R(rho) = sign(R) * (sqrt(rho^2 + R^2) - |R|)          (EXACT sphere)
+        u = x - x0,  v = y - y0,  N = sqrt(1 - L^2 - M^2)
+        W(x, y) = sign(R) * ( sqrt((u + R L/N)^2 + (v + R M/N)^2 + R^2)
+                              - |R|/N )
 
-    i.e. the exact on-axis point-source sphere of :func:`_compute_carrier`'s
-    scalar branch, transversely centred at ``(x0, y0)`` and carrying a uniform
-    direction-cosine tilt ``(L, M)``.  ``R = +/-inf`` degenerates to the pure
-    tilted PLANE ``W = L*u + M*v`` (the post-DOE order at a pupil), which is
-    exactly what a scalar ``carrier=inf`` cannot express.
+    -- the same exact on-axis point-source sphere
+    ``S_R(rho) = sign(R)(sqrt(rho^2+R^2)-|R|)`` of :func:`_compute_carrier`'s
+    scalar branch, transversely re-centred on the SOURCE's own projection
+    ``(x0 - R L/N, y0 - R M/N)``, plus a constant.  ``R`` is the signed AXIAL
+    distance to that source (``R > 0`` diverging, i.e. behind the plane).
+    ``W(x0, y0) == 0`` and ``grad W(x0, y0) == (L, M)`` exactly.
+    ``R = +/-inf`` degenerates to the pure tilted PLANE ``W = L*u + M*v`` (the
+    post-DOE order at a pupil), which is exactly what a scalar ``carrier=inf``
+    cannot express.  ``L == M == 0`` reduces to ``S_R`` term for term, so an
+    untilted congruence is unaffected.
+
+    **Why not sphere-plus-ramp.**  Through v5.31 this was
+    ``S_R(sqrt(u^2+v^2)) + L u + M v`` -- an on-axis sphere with a linear ramp
+    ADDED.  That is not a solution of the eikonal equation; it differs from
+    the exact form by
+
+    .. code-block:: text
+
+        -(L u + M v)(u^2 + v^2)/(2 R^2)  -  (L u + M v)^2/(2 R)  +  ...
+
+    i.e. COMA linear in the field angle plus ASTIGMATISM quadratic in it.  On
+    design 121's last coarse leg (R = -24.46 mm, tilt 54.9 mrad, beam radius
+    3.63 mm, lambda 1.31 um) that reaches 2.5 waves within one beam radius and
+    2.0 mrad of launch-direction error.
+
+    It is fatal on the CHAIN side, which defines its envelope as the field
+    with this reference divided out and then transports that envelope by a
+    Sziklas-Siegman step: a reference that is not a wavefront dumps the term
+    above into the "envelope", where a plain dilation ``du -> m du`` cannot
+    carry it.  Measured in closed form
+    (``validation/repro_traced_carrier_121/probe_leg_exactness.py``): leg
+    error **0.136 waves rms** before, **1e-5** after, against an untilted
+    control of 1e-5.  End to end that one leg was worth **20.7 EE3 points** at
+    DOE order (-4,-2).
+
+    ``R`` is AXIAL, which is what makes the fix local: a free leg still
+    advances it by the AXIAL gap ``R -> R + z``, the Sziklas-Siegman
+    magnification is still ``(R+z)/R``, and
+    :func:`~lumenairy.propagators.carrier._paraxial_group_r_out`'s Moebius law
+    still returns the paraxial AXIAL image distance.  NOTHING about the
+    transport changes -- only the shape of the reference wavefront.
+
+    Set :data:`TILTED_CARRIER_EXACT_EIKONAL` to ``False`` to restore the
+    pre-C5 form everywhere (element and chain together -- a MIXED pair is
+    measurably worse than either, since the element would then de-chirp with
+    a reference the field is no longer written against).
 
     Why it exists: a post-DOE fan is K comparable-power beams at well-separated
     angles, and ``apply_real_lens_traced``'s entrance->exit map assumes ONE
@@ -1584,9 +1643,29 @@ def _tilted_carrier_parts(spec, X, Y):
         W = L * u + M * v
         return W, np.full_like(W, L), np.full_like(W, M)
     sgn = 1.0 if s > 0.0 else -1.0
-    rho = np.sqrt(u * u + v * v + s * s)
-    W = sgn * (rho - abs(s)) + L * u + M * v
-    return W, sgn * u / rho + L, sgn * v / rho + M
+    if (L == 0.0 and M == 0.0) or not TILTED_CARRIER_EXACT_EIKONAL:
+        # Untilted (the two conventions are the same function there) or the
+        # C5 fail-before switch: the historical sphere-PLUS-RAMP expression,
+        # verbatim, so the on-axis path is byte-identical.
+        rho = np.sqrt(u * u + v * v + s * s)
+        W = sgn * (rho - abs(s)) + L * u + M * v
+        return W, sgn * u / rho + L, sgn * v / rho + M
+    # niche C5: the EXACT displaced-point-source eikonal.  ``s`` is the AXIAL
+    # distance to the source, so the source's transverse projection sits at
+    # ``-s (L, M)/N`` and the sphere radius is ``s`` itself.  Evaluated as
+    # that same on-axis sphere SHIFTED -- never on a grid centred on the
+    # projection, which is metres away for a near-collimated carrier.
+    _N = np.sqrt(1.0 - L * L - M * M) if (L * L + M * M) < 1.0 else 0.0
+    if _N == 0.0:
+        raise ValueError(
+            f"TiltedCarrier: L^2 + M^2 = {L * L + M * M:.6g} >= 1, i.e. "
+            f"(L, M) is not a propagating direction.  L and M are DIRECTION "
+            f"COSINES (sin of the angle), not slopes.")
+    uu = u + s * L / _N
+    vv = v + s * M / _N
+    rho = np.sqrt(uu * uu + vv * vv + s * s)
+    W = sgn * (rho - abs(s) / _N)
+    return W, sgn * uu / rho, sgn * vv / rho
 
 
 def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
@@ -4308,7 +4387,19 @@ def apply_real_lens_traced(
     _dy_eff = dy if dy is not None else dx
     _ray_iy = np.clip(np.rint(xs_in / _dy_eff + E_in.shape[0] / 2).astype(int),
                       0, E_in.shape[0] - 1)
-    _amp = np.abs(E_in)[np.ix_(_ray_iy, _ray_ix)]      # (n_launch, n_launch)
+    # niche C4 (2026-07-30): the ``.T`` is load-bearing.  The launch grid is
+    # ``np.meshgrid(xs_in, xs_in, indexing='ij')`` -- x along axis 0 -- so a
+    # ray's FLAT index is x-major, and that is the order ``final.L`` /
+    # ``final.M`` / ``final.alive`` come back in.  ``np.ix_(_ray_iy, _ray_ix)``
+    # builds a ``(y, x)`` block whose ``.ravel()`` is y-MAJOR, so every
+    # amplitude was paired with the TRANSPOSED ray.  A rotationally symmetric
+    # beam is invariant under that swap, which is why it survived; on an
+    # asymmetric one the two readings exchange outright (measured on a biconic:
+    # 0.0338 reported against 0.0684 true, and 0.0669 against 0.0340).  Design
+    # 121's last group reported ``na_exit`` 0.3633 where the transpose-immune
+    # value is 0.2912 -- 25 % overstated -- and ``_exit_na_out`` feeds the
+    # chain's ``on_tilt_exact_grid`` routing, so this was not merely cosmetic.
+    _amp = np.abs(E_in)[np.ix_(_ray_iy, _ray_ix)].T    # (x, y): x-major ravel
     _sig = (_amp >= np.exp(-4.0) * _amp.max()).ravel() & final.alive
     if _sig.any():
         _na_exit = float(np.sqrt(final.L[_sig] ** 2

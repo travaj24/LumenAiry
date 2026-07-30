@@ -1852,6 +1852,121 @@ def _exact_sphere_eikonal(shape, dx, dy, wavelength, R, centre=(0.0, 0.0)):
     return sgn * (np.sqrt(r2 + R * R) - abs(R))
 
 
+def _exact_tilt_reference():
+    """Is the niche-C5 exact tilted-congruence reference in force?
+
+    ONE flag for the element and the chain
+    (:data:`~lumenairy.elements._lens_traced.TILTED_CARRIER_EXACT_EIKONAL`),
+    read at call time so the two can never be configured apart.  A MIXED pair
+    is worse than either: the chain would write the field against one
+    reference and the element would de-chirp it against the other, leaving the
+    whole coma term in the residual that ``preserve_input_phase='remap'``
+    transports along the wrong rays (measured on the D1 46 mrad relay: the
+    tilted spot's peak falls 1 % below the on-axis one and the image centroid
+    moves 0.12 um, both of which the matched pair holds)."""
+    from ..elements._lens_traced import TILTED_CARRIER_EXACT_EIKONAL
+    return bool(TILTED_CARRIER_EXACT_EIKONAL)
+
+
+def _tilt_exactness_phase(shape, dx, dy, wavelength, R, L, M, sign,
+                          centre=(0.0, 0.0)):
+    """BAND-LIMITED factor ``exp(sign*i*k*D*T(r))`` that upgrades a
+    sphere-PLUS-RAMP tilted carrier to the EXACT displaced-point-source
+    eikonal, or ``None`` when there is nothing to add (niche C5, 2026-07-30).
+
+    With ``u = x - x0``, ``v = y - y0`` and ``N = sqrt(1 - L^2 - M^2)``,
+
+    .. code-block:: text
+
+        W_true = sign(R) ( sqrt((u+RL/N)^2 + (v+RM/N)^2 + R^2) - |R|/N )
+        S      = sign(R) ( sqrt(u^2 + v^2 + R^2) - |R| )
+        D      = W_true - S - (L u + M v)
+               ~ -(Lu+Mv)(u^2+v^2)/(2R^2) - (Lu+Mv)^2/(2R) + ...
+
+    -- COMA linear in the field angle plus ASTIGMATISM quadratic in it.
+    ``W_true`` is the exact wavefront of a point source at signed AXIAL
+    distance ``R`` whose chief ray reaches ``(x0, y0)`` along ``(L, M, N)``:
+    the same on-axis sphere, transversely re-centred on the source's own
+    projection ``(x0 - R L/N, y0 - R M/N)``, plus a constant.
+
+    **Why the chain needs it.**  ``propagate_traced_carrier_chain`` defines
+    its ENVELOPE as the field with the carrier divided out and then transports
+    that envelope by a Sziklas-Siegman step -- a plain dilation ``du -> m du``
+    plus a paraxial Fresnel leg.  A reference that is not a wavefront dumps
+    ``D`` into the "envelope", and ``D`` does not dilate: the exit plane wants
+    ``D(du; R+z)`` while the dilation delivers ``D(du/m; R)``, which to
+    leading order is ``(1/m)`` times it.  Measured in closed form on design
+    121's leg 5 (``validation/repro_traced_carrier_121/
+    probe_leg_exactness.py`` -- an exact congruence, no ray trace, no
+    diffraction integral, no unwrap): the leg's own model error is **0.136
+    waves rms** without this term and **1e-5 waves** with it, against an
+    untilted control of 1e-5 and a 55 mrad tilt; still 1e-5 at 180 mrad.
+    End to end that leg cost **20.7 EE3 points** at DOE order (-4,-2).
+
+    Because ``R`` is the AXIAL distance -- the convention the rest of the
+    machinery is already in (chain A is untilted, a free leg advances ``R`` by
+    the AXIAL gap, and :func:`_paraxial_group_r_out`'s Moebius law returns the
+    paraxial AXIAL image distance) -- NOTHING about the transport changes.
+    The leg distance, the magnification ``(R+z)/R`` and the obliquity piston
+    are all untouched; only the shape of the reference wavefront moves.  (An
+    equivalent formulation carries ``R`` ALONG the chief ray and advances it
+    by ``z/cos(theta)``; measured identical, but it puts the group Moebius law
+    in a different convention from the legs.)
+
+    ``T(r)`` is the same ``cos^2`` roll-off :func:`_sphere_parab_conversion`
+    uses, over ``D``'s OWN band-limit radius: the radius at which ``|dD/dr|``
+    (coma ``3|n|r^2/(2R^2)`` plus astigmatism ``|n|^2 r/|R|``) reaches the
+    grid's Nyquist slope ``lambda/(2 dx)``.  On design 121's coarse grid that
+    is 9.97 mm = 3.2 beam radii, i.e. the far skirt.  The taper is a Nyquist
+    GUARD, not physics, and that is measured rather than argued
+    (``probe_c5_byte_identity.py`` part (c), design 121 order (-4,-2), field
+    energy relative to the shipped taper): removing it ENTIRELY moves the
+    result by **2.3e-5**, widening it 1.5x by the same 2.3e-5 -- so at and
+    above the shipped radius the answer is converged.  HALVING it moves the
+    result by 0.13, so the radius must not be reduced.  It is applied
+    IDENTICALLY on the ``+1`` and ``-1`` calls, so the entrance/exit round
+    trip is exact (to 2e-16) whatever the taper does.
+
+    Returns ``None`` -- and is therefore a strict no-op -- for an untilted
+    congruence (``L == M == 0``), a collimated or degenerate ``R``, or when
+    :data:`~lumenairy.elements._lens_traced.TILTED_CARRIER_EXACT_EIKONAL` is
+    ``False`` (the C5 fail-before switch)."""
+    if not _exact_tilt_reference():
+        return None
+    L = float(L)
+    M = float(M)
+    if (L == 0.0 and M == 0.0) or not np.isfinite(R) or R == 0.0:
+        return None
+    Ny, Nx = int(shape[-2]), int(shape[-1])
+    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx - float(centre[0])
+    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy - float(centre[1])
+    X = x[None, :]
+    Y = y[:, None]
+    sgn = 1.0 if R > 0 else -1.0
+    s = L * L + M * M
+    n_par = np.sqrt(1.0 - s) if s < 1.0 else 0.0
+    if n_par == 0.0:
+        raise ValueError(
+            f"_tilt_exactness_phase: the carrier tilt (L={L!r}, M={M!r}) has "
+            f"L^2 + M^2 = {s:.6g} >= 1, i.e. it is not a propagating "
+            f"direction.  L and M are DIRECTION COSINES, not slopes.")
+    uu = X + R * L / n_par
+    vv = Y + R * M / n_par
+    r2 = X * X + Y * Y
+    D = (sgn * (np.sqrt(uu * uu + vv * vv + R * R) - abs(R) / n_par)
+         - sgn * (np.sqrt(r2 + R * R) - abs(R)) - (L * X + M * Y))
+    # Band limit: solve |dD/dr| = lambda/(2 dx_min) for r, with the leading
+    # coma and astigmatism slopes.  a r^2 + b r - c = 0.
+    n_t = np.sqrt(s)
+    a = 1.5 * n_t / (R * R)
+    b = s / abs(R)
+    c = wavelength / (2.0 * min(float(dx), float(dy)))
+    r_safe = (np.sqrt(b * b + 4.0 * a * c) - b) / (2.0 * a)
+    t = np.clip((np.sqrt(r2) - 0.75 * r_safe) / (0.25 * r_safe), 0.0, 1.0)
+    k = 2.0 * np.pi / wavelength
+    return np.exp(sign * 1j * k * D * np.cos(0.5 * np.pi * t) ** 2)
+
+
 def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
                              centre=(0.0, 0.0)):
     """BAND-LIMITED parabola <-> exact-sphere carrier-convention conversion
@@ -2765,6 +2880,15 @@ def carrier_referenced_exact_focus_readout(
         _rp = _tilt_ramp(E.shape, dx, wavelength, _tL, _tM, _cx, _cy, -1)
         if _rp is not None:
             env = env * _rp
+        # niche C5: sphere + ramp is not a wavefront -- take out the exact
+        # congruence, not a stand-in for it, or what the band-limited
+        # upsample below resamples still carries its coma (1.4 waves at one
+        # beam radius on design 121's last group).  Restored, term for term,
+        # about the fine grid's own origin below.
+        _xf = _tilt_exactness_phase(E.shape, dx, dx, wavelength, R,
+                                    _tL, _tM, -1, centre=(_cx, _cy))
+        if _xf is not None:
+            env = env * _xf
 
     # -- fine grid sizing -----------------------------------------------------
     if dx_fine is None:
@@ -2875,6 +2999,11 @@ def carrier_referenced_exact_focus_readout(
                          0.0, 0.0, +1)
         if _rp is not None:
             E_fine = E_fine * _rp
+        # niche C5: restore the exactness term taken out on the coarse grid.
+        _xf = _tilt_exactness_phase((N_fine, N_fine), dx_fine, dx_fine,
+                                    wavelength, R, _tL, _tM, +1)
+        if _xf is not None:
+            E_fine = E_fine * _xf
 
     # -- exact band-limited ASM Bluestein zoom to the target ------------------
     # The ASM is translation-covariant, so propagating on the chief-ray-centred
@@ -4249,6 +4378,13 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
         _rp = _tilt_ramp(_sh, dx_fine, wavelength, tL, tM, x_c, y_c, +1)
         if _rp is not None:
             E_full = np.asarray(E_full) * _rp
+        # niche C5: the same exactness term the coarse hand-off adds, on the
+        # fine grid -- the element's TiltedCarrier evaluates the exact
+        # congruence here too, so the reference handed to it must be it.
+        _xf = _tilt_exactness_phase(_sh, dx_fine, dx_fine, wavelength, R_in,
+                                    tL, tM, +1, centre=(x_c, y_c))
+        if _xf is not None:
+            E_full = np.asarray(E_full) * _xf
         from ..elements._lens_traced import TiltedCarrier as _TC
         _carrier_arg = _TC(R_in, tL, tM, x_c, y_c)
 
@@ -5678,6 +5814,14 @@ def propagate_traced_carrier_chain(
                              tilt_L, tilt_M, x_c, y_c, +1)
             if _rp is not None:
                 E_full = np.asarray(E_full) * _rp
+            # niche C5: sphere + ramp is not a wavefront -- add the term that
+            # makes the reference the EXACT congruence the element's
+            # TiltedCarrier now evaluates (both read the same flag).
+            _xf = _tilt_exactness_phase(
+                np.shape(E_full), cur_dx, cur_dx, wavelength, R_use,
+                tilt_L, tilt_M, +1, centre=(x_c, y_c))
+            if _xf is not None:
+                E_full = np.asarray(E_full) * _xf
             from ..elements._lens_traced import TiltedCarrier as _TC
             _carrier_arg = _TC(R_use, tilt_L, tilt_M, x_c, y_c)
         E_exit = apply_real_lens_traced(
@@ -5710,6 +5854,14 @@ def propagate_traced_carrier_chain(
                              L_out, M_out, x_c_out, y_c_out, -1)
             if _rp is not None:
                 E_exit = E_exit * _rp
+            # niche C5: divide out the same exactness term the entrance added,
+            # so the STORED envelope is the residual against the EXACT exit
+            # congruence rather than against a sphere-plus-ramp stand-in.
+            _xf = _tilt_exactness_phase(
+                E_exit.shape, cur_dx, cur_dx, wavelength, R_out,
+                L_out, M_out, -1, centre=(x_c_out, y_c_out))
+            if _xf is not None:
+                E_exit = E_exit * _xf
             if _sphere_ref:
                 _cf = _sphere_parab_conversion(
                     E_exit.shape, cur_dx, wavelength, R_out, -1,
@@ -5761,6 +5913,14 @@ def propagate_traced_carrier_chain(
             w_beam=_envelope_amp_radius(env, cur_dx, cur_dx))
         if _cf is not None:
             env = np.asarray(env) * _cf
+    if _tilted:
+        # niche C5: and back off the tilt-exactness term too -- both remaining
+        # paths rebuild the reference as parabola + ramp.  The stored envelope
+        # is in the CHIEF-RAY-TRACKING frame, so the term is centred there.
+        _xf = _tilt_exactness_phase(
+            np.shape(env), cur_dx, cur_dx, wavelength, R, tilt_L, tilt_M, +1)
+        if _xf is not None:
+            env = np.asarray(env) * _xf
     if focus_readout is not None:
         fr = dict(focus_readout)
         if 'dx_out' not in fr or 'N_out' not in fr:
