@@ -1,0 +1,39 @@
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+DOE plane: R = 703642.7361 mm, dx = 51.2334 um, N = 1024, carry_phase=False
+(+0,+0) L,M =   +0.000,  +0.000 mrad  NL=161 clip=3.0 back=5.00mm dxo=0.200um N=61  (2.7s)
+(+0,+0)   chief (x,y) = (+0.000,+0.000) um, centroid offset (+0.000,-0.000) um
+(+0,+0)   live power 100.0000 %, dead rays 13356, exit NA 0.3596
+(+0,+0)   integrand phase step between adjacent launch rays at the patch corner: 0.0408 cycles (max), 0.0262 amplitude-weighted (OK)
+(+0,+0)   FWHM  3.365 um   EE3  89.88  EE6  99.97  EE12 100.00   (about centroid)
+(+0,+0)   FWHM  3.364 um   EE3  90.07  EE6  99.97  EE12 100.00   (about peak)
+
+(-1,+0) L,M =  -11.516,  +0.000 mrad  NL=161 clip=3.0 back=5.00mm dxo=0.200um N=61  (2.6s)
+(-1,+0)   chief (x,y) = (-479.966,+0.000) um, centroid offset (+0.024,-0.000) um
+(-1,+0)   live power 100.0000 %, dead rays 13441, exit NA 0.3616
+(-1,+0)   integrand phase step between adjacent launch rays at the patch corner: 0.0532 cycles (max), 0.0262 amplitude-weighted (OK)
+(-1,+0)   FWHM  3.346 um   EE3  90.04  EE6  99.97  EE12 100.00   (about centroid)
+(-1,+0)   FWHM  3.364 um   EE3  90.19  EE6  99.97  EE12 100.00   (about peak)
+
+(-4,+0) L,M =  -46.063,  +0.000 mrad  NL=161 clip=3.0 back=5.00mm dxo=0.200um N=61  (2.6s)
+(-4,+0)   chief (x,y) = (-1920.246,+0.000) um, centroid offset (-0.169,-0.000) um
+(-4,+0)   live power 100.0000 %, dead rays 13726, exit NA 0.3667
+(-4,+0)   integrand phase step between adjacent launch rays at the patch corner: 0.0659 cycles (max), 0.0261 amplitude-weighted (OK)
+(-4,+0)   FWHM  3.338 um   EE3  90.45  EE6  99.97  EE12 100.00   (about centroid)
+(-4,+0)   FWHM  3.343 um   EE3  90.59  EE6  99.97  EE12 100.00   (about peak)
+
+(-4,-2) L,M =  -46.063, -23.032 mrad  NL=161 clip=3.0 back=5.00mm dxo=0.200um N=61  (2.8s)
+(-4,-2)   chief (x,y) = (-1920.393,-960.197) um, centroid offset (-0.244,-0.122) um
+(-4,-2)   live power 99.9999 %, dead rays 13777, exit NA 0.3674
+(-4,-2)   integrand phase step between adjacent launch rays at the patch corner: 0.0646 cycles (max), 0.0261 amplitude-weighted (OK)
+(-4,-2)   FWHM  3.324 um   EE3  90.14  EE6  99.96  EE12 100.00   (about centroid)
+(-4,-2)   FWHM  3.356 um   EE3  89.91  EE6  99.95  EE12 100.00   (about peak)
+
+ORACLE SUMMARY (about centroid)
+  order      FWHM um   EE3 %   EE6 %   EE12 %
+  (+0,+0)     3.365   89.88   99.97  100.00
+  (-1,+0)     3.346   90.04   99.97  100.00
+  (-4,+0)     3.338   90.45   99.97  100.00
+  (-4,-2)     3.324   90.14   99.96  100.00

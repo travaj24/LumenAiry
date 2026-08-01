@@ -1,0 +1,19 @@
+=== POST-C6 re-measurement, order (-4, -2), set fold ===
+   lib C:\Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/pin_d2e60ca\lumenairy\elements\_lens_traced.py
+       sha256 957f00129f8b467c
+   lib C:\Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/pin_d2e60ca\lumenairy\propagators\carrier.py
+       sha256 2d30f1ed7beb3c7e
+   C6 flag REMAP_STATIONARY_PHASE_LAUNCH = 'ABSENT'  resid degree 'ABSENT'
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+grid: RN=1024 dx=51.2334 um RS=4 NFC=12288 WF=4.0 NOUT=192 DXO=0.100 um
+BASELINE sampling: na_par 0.4049  na_measured 0.5393  na_nyquist 0.4343  exit power above nyquist 7.5134e-04
+BASELINE warnings: {'NYQ': 6}
+
+variant                               EE3%    EE6%   EE12%   Ptile%      relL2  dphi_rms      s
+-----------------------------------------------------------------------------------------------
+BASELINE (shipping defaults)        72.501  92.278  95.636  95.6482  0.000e+00  0.00e+00    197
+
+dEE3 (points) vs baseline, with warnings and exit-nyquist power:

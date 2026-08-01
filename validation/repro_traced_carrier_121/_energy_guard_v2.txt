@@ -1,0 +1,48 @@
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+   lib _lens_traced.py  sha256 adcd1cee14dc7a0a
+   guard band at ray_subsample=4: [0.8900, 1.0500]
+   P/Pin(grid) = exit power / whole-grid input power
+   P/Pin(ap)   = the GUARD's own ratio (aperture-transmitted denominator), recomputed here
+   ENG = did the library's energy self-check WARN?  FLD = fold-caustic warnings.  NYQ = exit-NA undersample warnings.
+
+order (0,0)  w 3.1289 mm  dec 0.000 w  exit chief (+0.0000,+0.0000) mm  ap cuts 3.05e-10
+   [NULL: array_equal=True max|dE|=0.000e+00]
+                        config  ord  P/Pin(grid)   P/Pin(ap)  ENG  FLD  NYQ         g2         g4     amax4  r_rms/mm  core/mm
+------------------------------------------------------------------------------------------------------------------------------
+ C5on  C6off  SHIPPED-minus-C6    -      0.99590     0.99590    .    0    1  4.242e-03  3.606e-11  1.40e-05    0.8422   0.6201   [2s]
+          C5on  C6on   SHIPPED    4      0.99701     0.99701    .    0    1  4.648e-03  1.034e-03  3.30e-01    0.8638   0.6204   [3s]
+      C5off C6off  no-C5 no-C6    -      0.99590     0.99590    .    0    1  4.242e-03  3.606e-11  1.40e-05    0.8422   0.6201   [2s]
+            C5off C6on   no-C5    4      0.99701     0.99701    .    0    1  4.648e-03  1.034e-03  3.30e-01    0.8638   0.6204   [3s]
+      C5on  C6on   fitorder 10    4      1.08514     1.08514 WARN    1    1  9.278e-02  8.917e-02  9.30e-01    2.4192   0.6204   [3s]
+      C5on  C6on   fitorder 14    4      0.99773     0.99773    .    1    1  5.371e-03  1.419e-03  4.05e-01    0.8927   0.6205   [4s]
+      C5on  C6off  fitorder 14    -      1.04593     1.04593    .    1    1  5.427e-02  4.615e-02  9.62e-01    1.8263   0.6201   [2s]
+
+order (-4,0)  w 3.1238 mm  dec 0.966 w  exit chief (-1.9161,+0.0000) mm  ap cuts 9.52e-07
+   [NULL: array_equal=True max|dE|=0.000e+00]
+                        config  ord  P/Pin(grid)   P/Pin(ap)  ENG  FLD  NYQ         g2         g4     amax4  r_rms/mm  core/mm
+------------------------------------------------------------------------------------------------------------------------------
+ C5on  C6off  SHIPPED-minus-C6    -      0.99608     0.99608    .    0    1  4.857e-03  2.831e-08  2.00e-04    0.8500   0.6204   [2s]
+          C5on  C6on   SHIPPED    4      0.99591     0.99591    .    0    1  3.591e-03  2.619e-08  2.70e-04    0.8369   0.6193   [4s]
+      C5off C6off  no-C5 no-C6    -      0.99600     0.99600    .    0    1  4.641e-03  3.443e-08  2.24e-04    0.8477   0.6200   [2s]
+            C5off C6on   no-C5    4      1.01667     1.01667    .    0    1  2.435e-02  2.076e-02  9.95e-01    1.7764   0.6193   [4s]
+      C5on  C6on   fitorder 10    4      0.99591     0.99591    .    0    1  3.591e-03  2.619e-08  2.70e-04    0.8369   0.6193   [4s]
+      C5on  C6on   fitorder 14    4      1.03317     1.03317    .    0    1  4.085e-02  3.726e-02  9.62e-01    1.4699   0.6194   [4s]
+      C5on  C6off  fitorder 14    -      0.99626     0.99626    .    0    1  5.032e-03  1.748e-04  2.47e-01    0.8573   0.6204   [2s]
+
+order (-4,-2)  w 3.1229 mm  dec 1.080 w  exit chief (-1.9151,-0.9575) mm  ap cuts 8.16e-06
+   [NULL: array_equal=True max|dE|=0.000e+00]
+                        config  ord  P/Pin(grid)   P/Pin(ap)  ENG  FLD  NYQ         g2         g4     amax4  r_rms/mm  core/mm
+------------------------------------------------------------------------------------------------------------------------------
+ C5on  C6off  SHIPPED-minus-C6    -      0.99618     0.99618    .    0    1  4.986e-03  2.507e-08  2.26e-04    0.8519   0.6210   [2s]
+          C5on  C6on   SHIPPED    4      0.99601     0.99602    .    0    1  3.578e-03  2.123e-08  2.36e-04    0.8369   0.6195   [4s]
+      C5off C6off  no-C5 no-C6    -      0.99613     0.99614    .    0    1  4.749e-03  3.073e-08  2.36e-04    0.8492   0.6205   [2s]
+            C5off C6on   no-C5    4      0.99862     0.99862    .    0    1  6.183e-03  2.598e-03  6.10e-01    1.0065   0.6195   [3s]
+      C5on  C6on   fitorder 10    4      0.99601     0.99602    .    0    1  3.578e-03  2.123e-08  2.36e-04    0.8369   0.6195   [3s]
+      C5on  C6on   fitorder 14    4      1.48807     1.48808 WARN    0    1  4.956e-01  4.921e-01  9.94e-01    4.8448   0.6195   [4s]
+      C5on  C6off  fitorder 14    -      0.99883     0.99883    .    0    1  7.634e-03  2.649e-03  7.61e-01    0.9428   0.6210   [3s]
+
+ENG legend: WARN = the guard fired.  '.' = did not fire AND the ratio is inside its band (correct silence).
+            MISS = the ratio is OUTSIDE the band but the guard did NOT fire -- a guard defect.

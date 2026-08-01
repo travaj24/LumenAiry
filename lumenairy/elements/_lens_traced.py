@@ -245,9 +245,204 @@ _RAY_DENSITY_CAUSTIC_MAXMIN = 30.0
 #
 # The GAIN side has no discretisation excuse -- ray-tube transport cannot
 # create energy -- so it is a small fixed band (max measured 1.00003).
+#
+# v5.32 (2026-07-31, docs/audits/C6_FIT_GUARD_DECISION_2026_07_31.md S5.1):
+# the GAIN side was MEASURED for tightening and DELIBERATELY LEFT AT 0.050.
+# Recorded because the obvious change is wrong and the reason is not obvious.
+#
+# The band above was calibrated on the P2 battery at N = 512, where the largest
+# ratio anywhere is 1.00003 -- which makes 0.050 look like ~1600x of unused
+# headroom, and makes 0.005 look free.  Re-measured on the SAME battery at the
+# N = 1024 the CI test actually runs (``tests/unit/test_niche_p2_design_battery
+# .py``, ``_N = 1024``, ``_RS = 4``), the ratio per element is:
+#
+#     cell (triplet, w0 1.6 mm, aperture:beam 2.5x)   grp0     grp1     grp2
+#       ray_subsample = 8                            0.99731  1.38446  1.30097
+#       ray_subsample = 4  (the CI value)            0.99933  0.94477  1.04374
+#       ray_subsample = 2                            0.99984  1.00069  1.00793
+#       ray_subsample = 1                            0.99996  0.99996  0.99998
+#
+# So a currently-GREEN battery cell reads **1.04374** at the subsample CI uses,
+# and 0.005 -- or any tolerance below 0.044 -- would warn on it.  That ratio is
+# a real defect (it converges to 1.00000 as ray_subsample -> 1, and the
+# fold-caustic warning already fires on every group of that design), but it is
+# the SAME MAGNITUDE as the defects the audit wanted the band to catch
+# (1.03317, 1.04593).  A scalar power sum therefore cannot separate the two
+# populations on this library at all: the honest conclusion is not "tighten
+# it", it is "this observable is exhausted".
+#
+# Nor would tightening have caught what prompted the review.  The shipped
+# on-axis C6 production call reads 1.000741 while carrying a manufactured lobe
+# at 83 % of peak; the same defect read 1.001058 before a library edit and
+# 0.999371 after, with the lobe unchanged at 3.4e-03 of the input power.
+# TOTAL POWER IS NOT SUFFICIENT -- which is what the halo term below is for.
 _RD_ENERGY_DEFICIT_BASE = 0.080
 _RD_ENERGY_DEFICIT_PER_SUB = 0.010
 _RD_ENERGY_GAIN_TOL = 0.050
+
+
+# ---- v5.32: the HALO-AMPLITUDE term of the ray_density self-check ----------
+#
+# WHY A SECOND TERM AT ALL.  The energy self-check above is a scalar power sum,
+# and the failure mode it was written for -- a fold caustic inflating the
+# capped ``1/sqrt(|det J|)`` amplitude -- is only ONE of the two ways the
+# ray-density path goes wrong.  The other is D1's: the fitted entrance->exit
+# map is Newton-inverted far outside its own data support, the inversion finds
+# a SPURIOUS root, and ``ray_density`` hands that root real amplitude.  That
+# deposits a lobe at a radius no traced ray can reach.  Measured on design
+# 121's last group (docs/audits/ENERGY_CONSERVATION_AUDIT_2026_07_31.md S2.4):
+# a library change moved the total-power signature from 1.001058 (visibly
+# wrong) to 0.999371 (inside every absolute band) while the lobe stayed put at
+# 3.4e-03 of the input power at 77 % of peak.  A criterion on total power alone
+# would have called that fixed.
+#
+# Total power separates a clean field from a ghosted one by the SIZE of the
+# ghost -- 4.7e-03 against a 5e-02 tolerance, 11x inside.  The halo amplitude
+# separates the same two fields by 1.40e-05 against 8.32e-01, a factor of 6e4.
+#
+# WHAT IS MEASURED.  Immediately after the launch lattice is traced -- before
+# any fit-domain restriction, so this reads the OPTICS and not the model -- the
+# exact exit positions of every ALIVE launch ray carrying input amplitude
+# >= ``e^-_RD_HALO_AMP_CONTOUR`` of peak are reduced to an amplitude-weighted
+# exit centroid and a support radius ``r_hull`` (their largest radius about
+# that centroid).  ``e^-9`` is the ``r = 3w`` contour of a Gaussian, whose
+# interior holds 1 - 1.5e-08 of the beam power; on a hard-edged or truncated
+# input it degenerates to the whole traced pupil, which is the conservative
+# thing to do.  Then, on the returned field:
+#
+#     amax_halo = max |E_out| beyond ``_RD_HALO_RADIUS_FACTOR * r_hull``
+#                 of that centroid, over max |E_out|
+#
+# and the check warns when ``amax_halo > _RD_HALO_AMAX_TOL``.  The radius is
+# derived from the prescription and the input, never chosen, and both the hull
+# and the halo are measured about the SAME centroid, so the statistic is
+# invariant to where the beam sits on the grid.
+#
+# AMPLITUDE, NOT POWER, IS THE BOUND.  A power fraction is only as sensitive as
+# the ghost is large; the amplitude ratio is what separates a LOBE from the
+# ray-model's legitimate skirt.  The lobe this catches on design 121 carries
+# 0.34 % of the power but stands at 77 % of the peak.  ``g_halo`` (the power
+# fraction beyond the same radius) is reported in the message for context and
+# is deliberately NOT part of the bar.
+#
+# CALIBRATION -- ``validation/repro_traced_carrier_121/halo_calibration.py``,
+# which forces the tolerance negative so every call prints its own reading and
+# then re-scores the captured field at every radius factor from ONE pass.  The
+# populations are 180 element calls, 177 of which produce a reading (the other
+# three are P2 battery cells the check DECLINES on, per SCOPE (d) below):
+#
+#   CLEAN     the CI-safe P2 design battery (``tests/unit/
+#             test_niche_p2_design_battery.py``: four designs x two beam sizes
+#             x two aperture:beam ratios, every group, at ray_subsample 1, 4
+#             and 8 -- gated in CI against an exact meridional ray oracle), the
+#             synthetic C6 ghost fixtures on their clean branches, and every
+#             design-121 element call whose halo is under its own exact-ray
+#             ceiling (six DOE orders x six groups x three flag configurations).
+#   DEFECTIVE lobes CONFIRMED manufactured against an exact ray trace: design
+#             121's on-axis C6 call (77 % of peak), its (-2,0) and (-3,0) C6
+#             calls (both above the exact-ray g4 ceiling, and both exactly zero
+#             with C6 off), and the fit guard's own regression on two synthetic
+#             fixtures (4.6e-02 and 8.8e-01 of peak).
+#
+# ``amax_halo`` of the WORST clean call and the MILDEST real defect, as the
+# radius factor is swept (this is the whole basis for both constants):
+#
+#     factor    worst CLEAN    mildest DEFECT    separation
+#      1.00      2.270e-04       5.727e-03           25x
+#      1.10      1.046e-04       5.727e-03           55x
+#      1.25      4.622e-05       5.684e-03          123x
+#      1.50      1.246e-05       5.684e-03          456x
+#      2.00      ~1e-16          MISSED (1.4e-04 / 0.0)
+#
+# THE FACTOR 1.25.  The hull is a RAY radius and the returned field is a
+# ray-density field bilinearly upsampled off a coarse lattice, so its amplitude
+# support spills about one coarse cell past the last traced ray; that spill is
+# what the clean column above is measuring, and it dies by 1.25.  Beyond 1.50
+# the bound starts stepping OVER real defects -- at 2.00 both the (-2,0)-class
+# lobe and the synthetic one are missed entirely.  1.25 is the smallest factor
+# that clears the upsample spill by more than an order of magnitude while still
+# reading every measured defect at full amplitude.
+#
+# THE TOLERANCE 1.0e-03 then sits inside a gap of 123x, at 21.6x above the
+# worst clean reading and 5.7x below the mildest real defect.  Every number in
+# this note is a measurement; the full table is in the audit S5.2.
+#
+# WHAT IT FIRES ON TODAY, stated so nobody is surprised.
+#
+#   * design 121's post-DOE RELAY, on the last group of orders (0,0), (-2,0)
+#     and (-3,0) -- 3 of 36 shipped element calls.  All three are true
+#     positives: each carries a lobe above that order's exact-ray halo ceiling
+#     and each is exactly zero with ``REMAP_STATIONARY_PHASE_LAUNCH = False``.
+#     By (d) it does not reach that chain's fine-grid readout leg.
+#   * **niche D6's exact-tilted-leg RETRACE**, in
+#     ``test_the_tilted_exact_leg_conserves_power_like_the_paraxial_one`` and
+#     ``test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle``:
+#     ``amax_halo`` = 6.405e-01 of peak beyond 2.0202 mm against an exact-ray
+#     support of 1.6161 mm, ``g_halo`` = 6.449e-04, on a grid reaching 2.4341
+#     mm from the centroid -- a FULL annulus, not a corner sliver.  That is a
+#     previously unreported manufactured lobe in a green CI fixture, found by
+#     this check on its first run; the fold-caustic warning already fires on
+#     the same call, so the two diagnostics agree on the mechanism.  Those
+#     tests assert spot metrics and stage power and still pass -- the lobe is
+#     outside everything they measure, which is the point.  Recorded, NOT
+#     silenced.
+#
+# It does NOT fire on any group of any P2 battery cell at any subsample (54
+# calls, 51 readings, worst 1.6e-05, three declined under (d)).
+#
+# SCOPE, stated rather than papered over.
+#
+# (a) This bounds the halo at the ELEMENT's own exit plane; where a
+#     manufactured lobe ends up after further propagation is not determined by
+#     it.
+# (b) It cannot see the OTHER half of the defect the audit found -- a
+#     configuration returning materially LESS discretisation deficit than the
+#     same design's ray lattice produces -- because that needs a same-design
+#     reference run the element does not have.
+# (c) It is a halo test, not a conservation test: a field can pass this and
+#     still fail the power band above, and vice versa.  Both fire
+#     independently.
+# (d) **IT DECLINES WHEN THE TRACED EXIT SUPPORT DOES NOT FIT THE GRID**, and
+#     that is not a hypothetical corner case.  The check requires the bound
+#     circle ``_RD_HALO_RADIUS_FACTOR * r_hull`` to lie inside the grid about
+#     the traced exit centroid; otherwise all that is left of the annulus is a
+#     sliver of corners, and the statistic measured there is unreliable in
+#     BOTH directions.  That is measured, not assumed:
+#
+#       * design 121, PRODUCTION readout leg (the last group re-run on the
+#         ``n_fine_cap = 12288`` fine grid): at (0,0) the grid half-width is
+#         6.277 mm and ``r_hull`` is 7.136 mm -- there is no annulus at all;
+#         at (-2,0) it is 7.771 vs 7.827 mm, and the corners-only reading says
+#         4.5e-04 (silent) with the fit guard OFF and 1.4e-03 (warns) with it
+#         ON, on two fields that are BOTH defective at 4 mm (1.63e-02 and
+#         1.48e-02 of peak).  It got the ordering right and the verdict wrong;
+#       * niche D6's exact-tilted-leg retrace (``tests/unit/
+#         test_niche_d6_exact_tilted_leg.py``): a 3.4 mm aperture on a 3.6 mm
+#         grid, ``r_hull`` 1.619 mm against a 1.799 mm half-width, whose
+#         corners-only reading is 0.841 of peak at the grid corner diagonally
+#         opposite the beam, with ``P/Pin`` = 1.00057.
+#
+#     The SAME design-121 groups in the RELAY configuration (the co-moving
+#     1024 grid, ``dx`` 33.2 um, supports 2.993 / 4.817 mm against a 17.0 mm
+#     half-width) give a full annulus and read 0.770 and 5.7e-03 of peak.  So
+#     the check covers the relay and declines on the readout leg, and the D6
+#     retrace reading above is recorded as an OPEN observation rather than
+#     shipped as a warning -- see the audit S7.  A grid whose extent is
+#     comparable to its own exit fan cannot support a halo statement; the
+#     alternative -- tightening ``_RD_HALO_AMP_CONTOUR`` until a hull always
+#     fits -- buys that coverage with false positives on every legitimate
+#     skirt.
+#
+# Warning-only, like the energy check, and suppressed process-wide by setting
+# ``RAY_DENSITY_HALO_CHECK = 'silent'``.
+_RD_HALO_AMP_CONTOUR = 9.0
+_RD_HALO_RADIUS_FACTOR = 1.25
+_RD_HALO_AMAX_TOL = 1.0e-03
+#: Policy for the ray-density HALO self-check: ``'warn'`` (default) or
+#: ``'silent'``.  Never an error -- the returned field's core metrics are
+#: unaffected by a far lobe, so refusing the call would be worse than
+#: reporting it.  See ``_RD_HALO_AMAX_TOL``.
+RAY_DENSITY_HALO_CHECK = 'warn'
 
 
 # Module-level default for ``apply_real_lens_traced(parallel_amp=...)``.  The
@@ -1916,6 +2111,680 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
     return W_full, grad_fn, w_fn
 
 
+# ---------------------------------------------------------------------------
+# niche C6 (2026-07-30): the stationary-phase launch for
+# ``preserve_input_phase='remap'``
+# ---------------------------------------------------------------------------
+#: ``True`` -- ``preserve_input_phase='remap'`` launches its rays along the
+#: TOTAL entrance eikonal ``grad(W + a_fit)`` rather than the carrier's
+#: ``grad(W)`` alone, where ``a_fit`` is a smooth curl-free model of the input
+#: RESIDUAL eikonal (see :func:`_fit_residual_eikonal`).  ``False`` restores the
+#: pre-C6 ``grad(W)``-only launch bit for bit -- the fail-before switch.
+#:
+#: WHY (the derivation).  Write the input as ``E_in = |E_in| exp(i k0 (W + a))``
+#: and let ``V(x, X)`` be the point characteristic of the element (the traced
+#: optical path from entrance point ``x`` to exit point ``X``).  Geometrical
+#: optics gives the exit eikonal as the STATIONARY value
+#:
+#:     Psi(X) = stat_x [ W(x) + a(x) + V(x, X) ]  ==  F(x_*) ,
+#:
+#: and ``dV/dx = -p_in`` (Hamilton), so the stationary point ``x_*`` is the foot
+#: of the ray launched along ``grad(W + a)``.  The shipped 'remap' evaluates the
+#: SAME function ``F`` at the foot ``x_W`` of the ``grad(W)`` ray instead
+#: (``opl_map`` carries ``W + V`` and the transported phasor adds ``a``), and
+#: since ``grad F(x_W) = grad a(x_W)``,
+#:
+#:     Phi_remap - Psi = F(x_W) - F(x_*)
+#:                     = 1/2 * grad a^T H^-1 grad a + O(|grad a|^3),
+#:     H = Hess_x (W + V) ,
+#:
+#: i.e. a second-order term QUADRATIC in the input residual's own ray slope.
+#: That is the whole of the element's residual model error: on design 121's
+#: last group it scales as measured (``grad a`` rms 1.46 -> 2.30 mrad across the
+#: niche-C5 fix, exit wavefront error 0.036 -> 0.089 waves, ratio 2.48 against
+#: the predicted ``(2.30/1.46)^2 = 2.48``).
+#:
+#: Launching along ``grad(W + a_fit)`` puts the Newton foot ON the stationary
+#: point (exactly, to the extent ``a_fit`` models ``a``), leaving only
+#: ``1/2 grad(a - a_fit)^T H^-1 grad(a - a_fit)`` -- quadratic in what the fit
+#: MISSES.  The same augmented map also supplies ``det J`` for
+#: ``amplitude_model='ray_density'``, which is the matching stationary-phase
+#: amplitude, so phase and amplitude stay consistent by construction, and the
+#: transported residual phasor becomes the LEFTOVER ``exp(i k0 (a - a_fit))``.
+#:
+#: MEASURED.  Design 121's post-DOE chain, EE3 % at the group-5 exit against
+#: the exact-ray oracle's ceiling (validation/repro_traced_carrier_121/
+#: probe_c6_chain.py, the instrument the niche-C5 table used):
+#:
+#:   order      ceiling   C5 (this OFF)   C6 ON      recovered
+#:   (0,0)       90.08        87.99       89.21      58 % of 2.09
+#:   (-4,0)      90.78        76.61       88.94      87 % of 14.17
+#:   (-4,-2)     89.78        73.66       88.49      92 % of 16.12
+#:
+#: FIELD-ANGLE SPREAD 14.33 -> 0.72 points, and FWHM 4.008 -> 3.628 um at
+#: (-4,-2).  On the element pass ALONE, scored pointwise against the exact-ray
+#: oracle, the exit wavefront error goes 0.0659 -> 0.0140 waves at (-4,-2)
+#: (Marechal Strehl 0.843 -> 0.992) and 0.0580 -> 0.0144 at (-4,0).  A split
+#: into implementation and model legs (probe_c6_split.py) puts the
+#: IMPLEMENTATION at 0.0008-0.0042 waves at every setting: what is left is the
+#: model's own remainder, not the plumbing.
+#:
+#: NOT BYTE-IDENTICAL, and deliberately so: the on-axis input residual of a
+#: real relay is not zero (``grad a`` rms 0.66 mrad on design 121's last
+#: group), so an UNTILTED chain moves too -- that is the whole point, and it is
+#: why this ships behind its own switch rather than silently.
+REMAP_STATIONARY_PHASE_LAUNCH = True
+
+#: Total polynomial degree of the residual-eikonal potential ``a_fit``.  A
+#: SCALAR POTENTIAL is fitted (by matching its gradient to the measured local
+#: ray slope), never ``L``/``M`` separately, so the model is curl-free -- a
+#: necessary condition for it to be an eikonal at all.  The degree is stepped
+#: DOWN automatically when the bright support cannot constrain it (8 kept
+#: gradient samples per basis term).
+#:
+#: WHY 4.  Measured on design 121's last group at order (-4,-2), the worst
+#: case -- the element pass scored pointwise against the exact-ray oracle, and
+#: the same setting scored END TO END through the whole post-DOE chain:
+#:
+#:   degree  rms grad(a-a_fit)  element WFE (waves)  ghost power  chain EE3 %
+#:     off        --                 0.0659            0.00000       73.66
+#:      2       8.83e-4              0.0388            0.00000       81.95
+#:      3       2.99e-4              0.0074            0.00000       88.66
+#:      4       1.03e-4              0.0140            0.00000       88.49
+#:      5       1.01e-4              0.0144            0.00132       88.49*
+#:      6       8.5e-5               0.0136            0.01255       88.72
+#:
+#: (* interpolated; degree 5 was not run end to end.  Oracle ceiling 89.78.)
+#:
+#: Read it as: everything from degree 3 on lands within 0.25 EE3 points of
+#: everything else END TO END, so the choice is made on GENERALITY.  Degree 4
+#: is where the residual's own content is -- a carrier-referenced relay carries
+#: an r^4-dominant correction (see ``remap_sampling``), and degree 4 spans that
+#: EXACTLY: on a synthetic fixture whose residual IS r^4 the corrected launch
+#: reads 2e-5 waves against 0.021 uncorrected, a factor of 1000, where degree 3
+#: reads 0.014 and removes only a third.  Degree 3 happens to fit design 121's
+#: particular group-5 residual better (90 % of its slope) but cannot represent
+#: the generic case at all.  Degrees 5-6 buy nothing and start self-caustiking
+#: in the 2-3 w skirt.
+#:
+#: KNOWN COST OF THIS CHOICE, measured and NOT fixed: at degree 4 the ON-AXIS
+#: design-121 call gains **0.103 % of the input power** as a far ghost lobe
+#: (exit power 0.9959 -> 0.9970), where degree 3 gains none.  It appears only
+#: on the CONCENTRIC fit branch (hard NaN mask, ``newton_poly_order=6``); the
+#: off-centre branch (weighted, ``_DECENTRED_FIT_POLY_ORDER=10``) is clean at
+#: every order.  It does not move the spot (on-axis EE3 89.21 at degree 4
+#: against 88.87 at degree 3, and the field's second moment inside r < 1 mm
+#: moves by 0.0003 mm) but it IS spurious energy -- 1.03e-03 of Pin as an
+#: annulus at 6.298-7.216 mm exit radius carrying 33 % of the peak amplitude --
+#: so any halo / second-moment metric taken through this path on axis should be
+#: checked against ``REMAP_STATIONARY_PHASE_LAUNCH = False``.
+#:
+#: MECHANISM (2026-07-31), and it is NOT the one first recorded here.  The
+#: original note read this as "the order-6 forward-map fit being unable to
+#: carry a degree-4 launch augmentation".  That is REFUTED: raising the order
+#: on the hard-mask branch makes it 86x WORSE (``newton_poly_order=10`` gains
+#: 8.5 % of the input power).  It is the D1 fold -- see
+#: ``REMAP_STATIONARY_PHASE_FIT_GUARD`` for the mechanism, the sweeps and the
+#: opt-in remedy.
+#:
+#: RESOLVED (2026-07-31): the ELEMENT-vs-oracle column's NON-MONOTONICITY in
+#: the degree (3 reading 0.0074 against degree 4's 0.0140, while the model's
+#: own slope residual keeps improving) is an artefact of the PROBE's 2 %-of-
+#: peak amplitude threshold, not of the fit and not -- as was guessed here --
+#: of the oracle's band-limited representation of ``a``.  Measured
+#: (validation/repro_traced_carrier_121/probe_c6_degree_oracle.py): the
+#: oracle's own upsample factor is converged (4 / 8 / 16 move degree 4 by
+#: 1.8 % and never reorder anything), the scored patch size is irrelevant, and
+#: raising the amplitude threshold to 10 % of peak REVERSES the ordering to
+#: 4 < 6 < 3 -- the order ``grad(a - a_fit)`` predicts -- while dropping
+#: degree 4's reading 6x, 0.0140 -> 0.0024 waves.  The whole penalty lives in
+#: the 2-10 %-of-peak skirt, where degree 4's extra terms are constrained by
+#: the core (``_REMAP_RESID_BRIGHT_FRAC`` = 0.05) and then evaluated outside
+#: it.  On a synthetic fixture with an ANALYTIC oracle the response is
+#: perfectly ordered -- 2.065e-02 (off) -> 1.406e-02 (degrees 2 and 3) ->
+#: 2.344e-05 (degrees 4, 5, 6) -- so nothing is wrong with the fit.  Degree 4
+#: is the best model over the bright core.
+_REMAP_RESID_EIKONAL_DEGREE = 4
+#: Amplitude floor (fraction of peak) for a sample to enter the residual fit.
+_REMAP_RESID_BRIGHT_FRAC = 0.05
+#: Wrapped nearest-neighbour phase step (rad) above which a residual-gradient
+#: sample is REJECTED as (approaching) aliased.  ``pi`` is the fold point; half
+#: of it is the usual safe working limit.
+_REMAP_RESID_MAX_STEP_RAD = 0.5 * np.pi
+#: Minimum kept gradient samples per polynomial term.
+_REMAP_RESID_MIN_SAMPLES_PER_TERM = 8
+#: Radius of the residual-eikonal FIT disc, in units of the measured beam
+#: amplitude radius ``w``.  It is also the RADIAL FREEZE radius (see
+#: :class:`_ResidualEikonal`), i.e. the boundary between where the model
+#: interpolates its data and where it is continued.
+#:
+#: It must COVER the beam.  Shrinking it to 1.5 w on design 121's last group
+#: takes the exit wavefront error from 0.0141 to 0.313 waves -- WORSE than not
+#: correcting at all -- because the 1.5-2 w annulus, where the residual's own
+#: slope is largest (it grows as r^3), is then extrapolated rather than fitted.
+#: (That figure was taken under the earlier multiplicative-window model, where
+#: this radius also set the window; under the radial freeze the failure is
+#: milder but the reason is the same and the setting is not worth revisiting.)
+#: 2.0 w holds 99.97 % of a Gaussian's power and matches the ray-fit disc the
+#: chain already uses (``fit_radius_beam_factor=2.0``); widening it to 2.5 w
+#: moves the design-121 result by 0.00001 waves.
+#:
+#: SAMPLE DISC ONLY (2026-07-31).  This constant used to set the RADIAL FREEZE
+#: circle as well.  It no longer does -- see ``_REMAP_RESID_FREEZE_MARGIN`` for
+#: the defect that separation fixes.  It still sets the polynomial's own
+#: normalisation ``scale`` (the fit is solved in ``r / r_fit``), so the two
+#: cannot simply be merged.
+_REMAP_RESID_FIT_W = 2.0
+
+#: The RADIAL FREEZE circle (see :class:`_ResidualEikonal`) must sit strictly
+#: OUTSIDE the ray-fit disc, by at least this factor.  Existence, not taste:
+#: with the two circles coincident the polynomial forward-map backend and the
+#: spline backend stop describing the same map.
+#:
+#: THE DEFECT.  ``newton_fit='polynomial'`` fits the traced entrance->exit map
+#: with a GLOBAL total-degree Chebyshev whose data support is the ray-fit disc
+#: (D1 weights / D7 order / the concentric hard NaN mask), and EXTRAPOLATES
+#: outside it.  That extrapolation is sound only while the map stays smooth
+#: there -- which is exactly what ``_FIT_DISC_OUTSIDE_WEIGHT_REL``'s safety
+#: argument assumes.  The C6 launch augments every ray by ``grad(a_fit)``, and
+#: ``a_fit``'s radial freeze puts a CURVATURE DISCONTINUITY on its own circle:
+#: with that circle at ``_REMAP_RESID_FIT_W * w`` and the ray-fit disc at
+#: ``fit_radius_beam_factor * w`` -- both 2.0 in the shipped chain -- the map
+#: stops being smooth at precisely the radius where the fit's data stops, so
+#: the extrapolation is invalid from the first pixel outward.
+#:
+#: MEASURED, D7's ghost fixture (weak singlet, 12 mm aperture, beam 5.6 mm off
+#: axis, ``ray_subsample=2``), the two backends' forward maps scored POINTWISE
+#: against the EXACT skew ray trace of the same augmented launch
+#: (``lumenairy.raytrace``, Zemax-validated -- neither interpolant):
+#:
+#:   zone (about the beam)   polynomial      spline
+#:   inside the 2 w disc      0.000 um       0.007 um
+#:   skirt 2-4 w              5.608 um       0.006 um
+#:   entrance aperture rim   15.079 um       0.002 um
+#:
+#: -- against 0.089 um for the SAME polynomial fit with the C6 launch off, i.e.
+#: the augmentation cost the polynomial backend a factor of 170 outside its own
+#: disc while the spline backend was unaffected.  The polynomial backend is the
+#: wrong one, and the returned fields diverged by 3.7e-03 of peak (426 exit
+#: pixels dropped by the entrance-aperture stop, whose hard cut is taken at the
+#: FITTED pullback) against 7.8e-09 before C6.
+#:
+#: IT IS NOT A CONDITIONING LOTTERY.  The response is sharp and it turns at the
+#: predicted radius.  Sweeping the freeze circle with the SAMPLE disc held at
+#: 2.0 w and the ray-fit disc at 2.0 w (max |E| difference between the two
+#: backends, over peak):
+#:
+#:   freeze  1.00 w   1.50 w   1.75 w   2.00 w | 2.25 w   2.50 w   3.00 w
+#:   d       1.7e-03  1.7e-03  3.7e-03  3.7e-03| 2.8e-05  8.6e-06  2.5e-06
+#:
+#: -- a 130x step across the ray-fit disc radius and nowhere else.  Inside it
+#: the fit is forced to represent the kink and rings over its own disc; outside
+#: it the fit never sees the kink and its extrapolation is valid over the whole
+#: skirt that still carries amplitude.
+#:
+#: WHY NOT LARGER.  The freeze is what stops a degree-``d`` polynomial fitted
+#: to the BRIGHT support (the ``_REMAP_RESID_BRIGHT_FRAC`` floor puts a
+#: Gaussian's last sample at 1.73 w) from being extrapolated into a launch
+#: deflection it has no data for.  ``_REMAP_RESID_FREEZE_MAX_W`` caps the reach
+#: at 3.0 w, i.e. ``(3.0/1.73)^4 = 9x`` amplification of the model's own
+#: top-order term, and the margin below is the smallest that clears the ray-fit
+#: disc with room for the fit's own extrapolation to be exact ACROSS it.
+#:
+#: RESIDUAL SCOPE, measured and NOT fixed: a caller whose
+#: ``fit_radius_beam_factor`` exceeds ``_REMAP_RESID_FREEZE_MAX_W`` runs the
+#: cap into the ray-fit disc and the pathology returns.  The structural cure is
+#: the one ``REMAP_STATIONARY_PHASE_FIT_GUARD`` already names -- bound the
+#: Newton inverse to the traced samples' own support -- and it is not attempted
+#: here.
+_REMAP_RESID_FREEZE_MARGIN = 1.25
+#: Hard ceiling on the freeze circle, in beam amplitude radii.  See
+#: ``_REMAP_RESID_FREEZE_MARGIN``.
+_REMAP_RESID_FREEZE_MAX_W = 3.0
+#: Ceiling on the residual-eikonal degree, enforced in
+#: :func:`_fit_residual_eikonal`.  Existence rather than taste: the radial
+#: freeze bounds the model's SLOPE outside the fit disc but a high-degree
+#: polynomial can also self-caustic INSIDE it, where the freeze cannot help.
+#: See ``_REMAP_RESID_EIKONAL_DEGREE`` for the measured table.
+_REMAP_RESID_DEGREE_CAP = 6
+
+#: OPT-IN REMEDY for the C6 ON-AXIS GHOST.  Gives the C6 stationary-phase
+#: launch the D1 WEIGHTED ray-fit restriction (and D7's raised order) even when
+#: the fit disc is CONCENTRIC.  **Default ``False``: the shipped path is the
+#: historical concentric hard NaN mask, byte for byte.**  It is a lever for a
+#: caller who has measured a halo on their own design, not a fix -- see SCOPE.
+#:
+#: THE DEFECT IT ADDRESSES.  ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` states the
+#: precondition under which the concentric hard sample mask is safe: *"the
+#: unconstrained directions of the fit inherit the map's RADIAL SYMMETRY, the
+#: extrapolation outside the disc stays MONOTONE, and the Newton inversion
+#: cannot find a second root."*  ``REMAP_STATIONARY_PHASE_LAUNCH`` augments
+#: every launch direction by ``grad(a_fit)`` of a general (non-radial)
+#: polynomial fitted to the measured input residual, so it DESTROYS that
+#: precondition, and the D1 failure mode returns on the one branch D1 left
+#: alone: design 121's ON-AXIS last-group call (the only CONCENTRIC one in the
+#: fan) returns a spurious ANNULUS at 6.298-7.216 mm exit radius, peaking at
+#: 6.675 mm and 33 % of peak amplitude, carrying 1.03e-03 of the input power --
+#: while the traced congruence puts the whole ILLUMINATED pupil (launch
+#: ``r <= 2 w``) inside 2.36 mm.  It does not move the spot, and the chain's
+#: 19.2 um readout tile cannot see it, so it is invisible to every encircled-
+#: energy metric; it needs a halo / second-moment metric.
+#:
+#: MEASURED, design 121's last group, on-axis call, residual degree 4,
+#: ``ray_subsample=4``, ``fit_radius_beam_factor=2``
+#: (validation/repro_traced_carrier_121/probe_ghost_c6.py + _locate.py).
+#: ``g4`` = returned power beyond 4 mm from the traced exit chief ray over
+#: input power; ``amax4`` = largest |E| there over the peak:
+#:
+#:   restriction  order   P/Pin      g4        amax4   r_rms (mm)
+#:   C6 OFF, mask   6    0.99590   3.6e-11    1.4e-05    0.8422
+#:   mask           6    0.99701   1.03e-03   3.30e-01   0.8638   <- SHIPPED
+#:   mask          10    1.08514   8.92e-02   9.30e-01   2.4192
+#:   mask          14    0.99773   1.42e-03   4.05e-01   0.8927
+#:   weight         6    0.99605   7.45e-05   1.12e-01   0.8388
+#:   weight        10    0.99598   0.00e+00   0.00e+00   0.8371   <- this flag
+#:
+#: This RETRACTS the hypothesis recorded in ``_REMAP_RESID_EIKONAL_DEGREE`` --
+#: "the order-6 forward-map fit [is] unable to carry a degree-4 launch
+#: augmentation".  More terms on the hard-mask branch makes it 86x WORSE (row
+#: 3), which is what an unconstrained extrapolation does and not what an
+#: under-resolved fit does.  The mechanism is the fitted entrance->exit map
+#: being Newton-inverted far outside its own data support, with
+#: ``amplitude_model='ray_density'`` handing the spurious roots real amplitude.
+#:
+#: SCOPE -- WHY THIS IS OPT-IN AND NOT THE DEFAULT.  Every knob on that fit
+#: (restriction method, order, ``fit_radius_beam_factor``,
+#: ``_FIT_DISC_OUTSIDE_WEIGHT_REL``, the residual degree) has clean and dirty
+#: settings with no monotone structure, and the DIRECTION REVERSES between
+#: fixtures.  Measured:
+#:
+#:   * design 121, on axis: weighted+10 is clean (0.00e+00), mask+6 ghosts;
+#:   * design 121, tilted orders: already weighted, so this flag is inert and
+#:     the field is BYTE-IDENTICAL either way -- the C6 recovery cannot move;
+#:   * design 121, on axis, ``fit_radius_beam_factor`` 1.5 / 2.0 ghost, 2.5+
+#:     are clean; on the TILTED order 2.0 is clean and 2.5+ ghost at 1.0e-02;
+#:   * ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` on the tilted order: 1e-8 (shipped)
+#:     reads 2.1e-08, but 1e-10 reads 2.1e-04 and 1e-6 reads 1.7e-03 -- a
+#:     ~1-decade well, not the 4-decades-clear plateau that constant's own note
+#:     claims from its low-NA fixture;
+#:   * residual degree through this flag: clean at 2, 3, 4, 5; degree 6 (the
+#:     ``_REMAP_RESID_DEGREE_CAP``) still reads 9.78e-03;
+#:   * and on a SYNTHETIC singlet built at design 121's own scale (N=1024,
+#:     dx=33 um, w=3.1 mm, R_c=-21 mm, 20 mm aperture) the hard mask is EXACTLY
+#:     clean and this flag INTRODUCES a 4.5e-03 lobe at 61 % of peak
+#:     (validation/repro_traced_carrier_121/probe_ghost_synthetic.py).
+#:
+#: So this is a conditioning lottery, not a mechanism-level cure, and turning
+#: it on by default would trade design 121's on-axis ghost for someone else's.
+#: It also costs accuracy where the hard-mask fit was exact: on the free-leg
+#: fixture of tests/unit/test_niche_c6_stationary_phase_launch.py the C6 exit
+#: error goes 2.34e-05 -> 6.93e-04 waves (the residual model's RADIAL FREEZE
+#: continues ``a`` linearly in r outside the fit disc, so weighting those
+#: samples imports a shape the Chebyshev basis cannot represent).  On design
+#: 121's real on-axis call that cost is 0.01574 -> 0.01629 waves (3.5 %).
+#:
+#: THE STRUCTURAL FIX is not on this axis at all: bound the Newton inverse to
+#: the traced samples' own support, or use a caustic-faithful amplitude model
+#: (``apply_real_lens_gbd`` / ``apply_real_lens_fga``).  Neither is attempted
+#: here.  See docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S3.
+#:
+#: ---------------------------------------------------------------------------
+#: 2026-07-31: MEASURED AT CHAIN LEVEL, AND THE DEFAULT IS CONFIRMED ``False``.
+#: docs/audits/C6_FIT_GUARD_DECISION_2026_07_31.md.  The two claims above that
+#: were element-level inferences are now chain measurements, and ONE OF THEM
+#: WAS WRONG.
+#:
+#: (1) REACH.  The guard acts on a group whose beam decentre is <= the
+#: ``_DECENTRE_GATE_W_FRAC`` gate (0.05 w), NOT on "the on-axis order".
+#: Replaying every group of design 121's post-DOE chain on its own captured
+#: input, guard off vs on (validation/repro_traced_carrier_121/
+#: fitguard_branch_map.py), the decentre in beam radii and the groups the guard
+#: MOVES are:
+#:
+#:   order    grp0    grp1    grp2    grp3    grp4    grp5   groups moved
+#:   (0,0)   0.0000  0.0000  0.0000  0.0000  0.0000  0.0000    all six
+#:   (-1,0)  0.0128  0.0493  0.0623  0.1530  0.1989  0.2406    0 and 1
+#:   (-2,0)  0.0255  0.0986  0.1246  0.3061  0.3978  0.4813    0 only
+#:   (-3,0)  0.0383  0.1480  0.1869  0.4593  0.5968  0.7227    0 only
+#:   (-4,0)  0.0511  0.1974  0.2493  0.6126  0.7960  0.9647    NONE
+#:   (-4,-2) 0.0571  0.2207  0.2788  0.6850  0.8900  1.0791    NONE
+#:
+#: So "byte-identical on every tilted order" holds only for (-4,0) and
+#: (-4,-2), where it is exact (``array_equal`` on all six stages, at
+#: ``ray_subsample`` 4 AND 2).  On (-1,0)/(-2,0)/(-3,0) the guard moves the
+#: FIRST group by 2.2e-04 of peak and that cascades: the chain exit differs by
+#: up to 2.0e-03 of peak.  The conservation and halo metrics do not move with
+#: it -- ``P_out/P_ap`` on the last group agrees to all six printed digits on
+#: all three orders -- but the field is not byte-identical and code that
+#: assumed it was is wrong.
+#:
+#: (2) IT DOES NOT FIX (-2,0) OR (-3,0), which the energy audit left open.
+#: Those orders' last group sits at 0.48 w / 0.72 w, i.e. ALREADY on the
+#: off-centre weighted branch, so the guard is structurally inert exactly where
+#: their lobe is made.  Measured at the last group (``rs`` = 4 / 2):
+#:
+#:   (-2,0)  g4     ship 2.270e-07 / 7.08e-06   guard 2.274e-07 / 2.79e-06
+#:           amax4  ship 5.727e-03 / 5.02e-02   guard 5.749e-03 / 3.23e-02
+#:   (-3,0)  g4     ship 2.234e-07 / 5.69e-07   guard 1.633e-07 / 6.15e-07
+#:           amax4  ship 5.873e-03 / 1.39e-02   guard 5.684e-03 / 9.92e-03
+#:
+#: -- against exact-ray ``g4`` ceilings of 3.0443e-08 and 5.9279e-08 and a
+#: halo-amplitude bound of 1.0e-03.  Both configurations fail on both orders at
+#: both subsamples, and the guard moves the number by less than the quantity's
+#: own conditioning -- at (-3,0) it is 1.37x BETTER on ``g4`` at rs=4 and 1.08x
+#: WORSE at rs=2.  Their lobe is a DIFFERENT defect from the concentric one and
+#: this flag is not its remedy.  With ``REMAP_STATIONARY_PHASE_LAUNCH = False``
+#: both orders are clean (``g4`` 7.75e-09 / 1.92e-08, 0.25x / 0.32x of their
+#: ceilings), so the lobe is C6's and it is made on the WEIGHTED branch.
+#:
+#: (3) WHERE IT DOES WORK IT IS DECISIVE, at both subsamples.  Design 121's
+#: on-axis order, last group, ``P_out/P_ap`` and the halo:
+#:
+#:            rs   guard OFF                    guard ON            C6 OFF
+#:   elem(5)   4   0.999371                     0.995976            0.995901
+#:   elem(5)   2   1.003696  (ABOVE UNITY)      0.999199            0.999189
+#:   g4        4   3.400e-03                    0.000e+00           3.61e-11
+#:   g4        2   4.495e-03                    0.000e+00           4.56e-11
+#:   amax4     4   7.70e-01                     0.000e+00           1.40e-05
+#:   r_rms/mm  4   0.9349                       0.8384              0.8422
+#:
+#: It restores the discretisation deficit floor (0.98x the C6-off reference at
+#: rs=4, 1.01x at rs=2, against 0.15x with the guard off), takes the halo to
+#: EXACTLY zero, and puts the second moment back on the exact-ray reference
+#: (0.8407 mm).  In the PRODUCTION configuration it costs EE3.
+#:
+#: (4) WHY IT IS STILL NOT THE DEFAULT.  The synthetic counter-example this
+#: note already records was RE-MEASURED and it stands, on the current tree:
+#: probe_ghost_synthetic.py's design-121-scale stand-in singlet goes from a
+#: hard-mask field that is EXACTLY clean to a weighted one carrying
+#: ``P/Pin`` = 1.00697 with 8.7e-03 of the input power beyond the exact-ray
+#: exit support at 88 % of peak; the 'medium, finer grid' fixture goes from
+#: 6.9e-06 to 4.6e-02 of peak.  Two of six fixtures regress, and neither is
+#: exotic.  Design 121 itself shows no such regression anywhere -- but a
+#: library default is not answerable to one design.  A caller who has MEASURED
+#: a halo on their own design should turn this on and re-measure; the v5.32
+#: halo self-check (``_RD_HALO_AMAX_TOL``) reports both directions of the trade
+#: automatically, and it fires on design 121's on-axis last group with this
+#: flag off and is silent with it on.
+REMAP_STATIONARY_PHASE_FIT_GUARD = False
+
+
+class _ResidualEikonal(object):
+    """A curl-free polynomial model ``a_fit(x, y)`` of the carrier-de-chirped
+    input residual eikonal (METRES), with an exact analytic gradient and a
+    BOUNDED continuation outside its fit disc.
+
+    ``value`` and ``grad`` are the potential and its true gradient of ONE
+    scalar field -- never a modified gradient -- so the launched bundle is a
+    genuine congruence and the traced ``W + a_fit + OPL`` grid stays an eikonal
+    (its entrance derivative is ``p_out . J``, exactly as on the shipped
+    ``grad(W)`` launch).
+
+    ``scale`` and ``r_fit`` are DIFFERENT radii and both are load-bearing:
+    ``scale`` is the sample disc the coefficients were solved in (it fixes the
+    polynomial's normalisation, so it cannot move after the fit), while
+    ``r_fit`` is the RADIAL FREEZE circle below.  They coincided until
+    2026-07-31; see ``_REMAP_RESID_FREEZE_MARGIN`` for why they must not.
+
+    RADIAL FREEZE.  The fit is constrained by the beam and then EVALUATED over
+    a launch square that can be 5x wider, where a degree-``d`` monomial grows
+    as ``r^d``.  Outside the freeze radius ``r1`` the potential is therefore
+    continued LINEARLY IN ``r`` along each ray from the beam centre,
+
+        a(r, th) = P(r1, th) + (r - r1) * dP/dr(r1, th) ,   r > r1
+
+    which is C^1 across ``r1``, adds EXACTLY ZERO radial curvature outside it
+    (so the continuation cannot focus, and cannot form the ring caustic that a
+    multiplicative window's ``P * grad(window)`` term does), and has a gradient
+    bounded for all ``r`` by the model's own first and second derivatives ON
+    the circle ``r = r1`` -- i.e. by quantities the data constrains.
+
+    The first implementation used a ``cos^2`` window to zero instead.  It was
+    MEASURED and rejected: on design 121's last group the window's own radial
+    curvature focused the 2-3 w annulus into a ring caustic whose ray-density
+    amplitude reached 87 % of the beam peak, worth 4.8 % of the input power
+    (and the failure MOVED WITH the window -- placing it at 3-4 w or 3.5-4.5 w
+    reproduced it, 5.2 % and 5.6 %, which is what identified it).
+    """
+
+    __slots__ = ('coef', 'terms', 'cx', 'cy', 'scale', 'r_fit', 'diag')
+
+    def __init__(self, coef, terms, cx, cy, scale, r_fit, diag=None):
+        self.coef = np.asarray(coef, dtype=np.float64)
+        self.terms = tuple(terms)
+        self.cx = float(cx)
+        self.cy = float(cy)
+        self.scale = float(scale)
+        self.r_fit = float(r_fit)
+        self.diag = dict(diag or {})
+
+    def _poly(self, ex, ey):
+        """``(P, grad P, Hess P)`` in PHYSICAL coordinates about the centre."""
+        s = self.scale
+        u = ex / s
+        v = ey / s
+        P = np.zeros_like(u)
+        Pu = np.zeros_like(u)
+        Pv = np.zeros_like(u)
+        Puu = np.zeros_like(u)
+        Puv = np.zeros_like(u)
+        Pvv = np.zeros_like(u)
+        for c, (i, j) in zip(self.coef, self.terms):
+            if c == 0.0:
+                continue
+            P = P + c * u ** i * v ** j
+            if i >= 1:
+                Pu = Pu + c * i * u ** (i - 1) * v ** j
+            if j >= 1:
+                Pv = Pv + c * j * u ** i * v ** (j - 1)
+            if i >= 2:
+                Puu = Puu + c * i * (i - 1) * u ** (i - 2) * v ** j
+            if i >= 1 and j >= 1:
+                Puv = Puv + c * i * j * u ** (i - 1) * v ** (j - 1)
+            if j >= 2:
+                Pvv = Pvv + c * j * (j - 1) * u ** i * v ** (j - 2)
+        return (P, Pu / s, Pv / s,
+                Puu / (s * s), Puv / (s * s), Pvv / (s * s))
+
+    def _eval(self, xq, yq):
+        ex = np.asarray(xq, dtype=np.float64) - self.cx
+        ey = np.asarray(yq, dtype=np.float64) - self.cy
+        r = np.sqrt(ex * ex + ey * ey)
+        r1 = self.r_fit
+        out = r > r1
+        # evaluate the polynomial at the CLAMPED point (identical to the query
+        # point wherever the freeze is inactive, so the interior is exact)
+        sc = np.where(out, r1 / np.where(r > 0.0, r, 1.0), 1.0)
+        cx_ = ex * sc
+        cy_ = ey * sc
+        P, gx, gy, hxx, hxy, hyy = self._poly(cx_, cy_)
+        # interior
+        a = P
+        ax = gx
+        ay = gy
+        if np.any(out):
+            rs = np.where(r > 0.0, r, 1.0)
+            ux = ex / rs
+            uy = ey / rs
+            b = gx * ux + gy * uy                    # dP/dr on the circle
+            gtx = gx - b * ux                        # tangential part of gP
+            gty = gy - b * uy
+            hux = hxx * ux + hxy * uy                # H . u
+            huy = hxy * ux + hyy * uy
+            uhu = hux * ux + huy * uy
+            htx = hux - uhu * ux                     # tangential part of H.u
+            hty = huy - uhu * uy
+            d = r - r1
+            f = r1 / rs
+            ex_x = f * gtx + b * ux + d * (f * htx + gtx / rs)
+            ex_y = f * gty + b * uy + d * (f * hty + gty / rs)
+            a = np.where(out, P + d * b, a)
+            ax = np.where(out, ex_x, ax)
+            ay = np.where(out, ex_y, ay)
+        return a, ax, ay
+
+    def value(self, xq, yq):
+        return self._eval(xq, yq)[0]
+
+    def grad(self, xq, yq):
+        _a, gx, gy = self._eval(xq, yq)
+        return gx, gy
+
+
+def _fit_residual_eikonal(E_in, W_grid, wavelength, dx, dy, centre, w_beam,
+                          degree=None, stride=1, ray_fit_radius=None):
+    """Fit the curl-free potential ``a_fit`` of the input RESIDUAL eikonal.
+
+    The measured quantity is the residual's own transverse RAY SLOPE, taken as
+    WRAPPED nearest-neighbour phase increments of the carrier-de-chirped field
+    ``E_in * exp(-i k0 W)`` -- no unwrap anywhere (the house 2-D unwrap idiom is
+    worth 1.96 rad on a beam skirt, DIAG_LAST_GROUP_DECENTRE S8.2) and no FFT
+    derivative (worth 400 urad on a field correct to 0.36 urad, same section).
+    Samples are kept only where BOTH pixels of the pair are above
+    ``_REMAP_RESID_BRIGHT_FRAC`` of peak, where the wrapped step is below
+    ``_REMAP_RESID_MAX_STEP_RAD`` (an aliased reading is not a slope), and
+    inside the fit disc ``_REMAP_RESID_FIT_W * w_beam`` about ``centre``.
+    Each sample is POWER-weighted (``|E_a| |E_b|``), which is the weight under
+    which the exit-field error the model removes is itself measured.
+
+    ``ray_fit_radius`` is the radius of the caller's RAY-fit disc measured
+    about the same ``centre`` (``None`` when the caller places no restriction).
+    It does not touch the fit; it only pushes the returned model's RADIAL
+    FREEZE circle clear of that disc, which is what keeps the polynomial and
+    spline ``newton_fit`` backends describing the same map -- see
+    ``_REMAP_RESID_FREEZE_MARGIN``.
+
+    Returns a :class:`_ResidualEikonal` or ``None`` (unmeasurable / too few
+    samples / degenerate fit), in which case the caller keeps the shipped
+    ``grad(W)`` launch.
+    """
+    E = np.asarray(E_in)
+    if E.ndim != 2 or E.size < 9:
+        return None
+    if not (np.isfinite(w_beam) and w_beam > 0.0):
+        return None
+    k0 = 2.0 * np.pi / wavelength
+    ny, nx = E.shape[-2], E.shape[-1]
+    _dy = float(dy) if (dy is not None and np.isfinite(dy) and dy > 0) else dx
+    cx, cy = float(centre[0]), float(centre[1])
+    r_fit = _REMAP_RESID_FIT_W * float(w_beam)
+    # The RADIAL FREEZE circle is NOT the sample disc: it has to clear the
+    # caller's ray-fit disc, or the forward-map fit's extrapolation crosses the
+    # freeze's curvature discontinuity on its very first pixel outside its own
+    # data.  Capped in beam radii so a wide ray-fit disc cannot extrapolate the
+    # model into a launch deflection it has no data for.  See
+    # ``_REMAP_RESID_FREEZE_MARGIN`` for the mechanism and the sweep.
+    r_freeze = r_fit
+    if (ray_fit_radius is not None and np.isfinite(ray_fit_radius)
+            and ray_fit_radius > 0.0):
+        r_freeze = max(r_freeze,
+                       min(_REMAP_RESID_FREEZE_MARGIN * float(ray_fit_radius),
+                           _REMAP_RESID_FREEZE_MAX_W * float(w_beam)))
+    s = max(1, int(stride))
+    xax = (np.arange(nx, dtype=np.float64) - nx / 2) * dx
+    yax = (np.arange(ny, dtype=np.float64) - ny / 2) * _dy
+    mag_pk = float(np.abs(E).max()) if E.size else 0.0
+    if not (np.isfinite(mag_pk) and mag_pk > 0.0):
+        return None
+    thr = _REMAP_RESID_BRIGHT_FRAC * mag_pk
+    _W = None if W_grid is None else np.asarray(W_grid, dtype=np.float64)
+
+    def _pairs(axis):
+        """Adjacent-pixel wrapped residual slope samples along ``axis``.
+
+        DECIMATED by ``s`` in both directions but the differenced pixels are
+        always ADJACENT, so the wrapped increment can never alias for a reason
+        the full-resolution reading would not also have.
+        """
+        n_along = nx if axis == 1 else ny
+        idx = np.arange(0, n_along - 1, s)
+        if idx.size < 2:
+            return None
+        if axis == 1:
+            Ea = E[::s, :][:, idx]
+            Eb = E[::s, :][:, idx + 1]
+            Wa = None if _W is None else _W[::s, :][:, idx]
+            Wb = None if _W is None else _W[::s, :][:, idx + 1]
+            xs = 0.5 * (xax[idx] + xax[idx + 1])
+            ys = yax[::s]
+            Xs = np.broadcast_to(xs[None, :], Ea.shape)
+            Ys = np.broadcast_to(ys[:, None], Ea.shape)
+            h = dx
+        else:
+            Ea = E[idx, :][:, ::s]
+            Eb = E[idx + 1, :][:, ::s]
+            Wa = None if _W is None else _W[idx, :][:, ::s]
+            Wb = None if _W is None else _W[idx + 1, :][:, ::s]
+            ys = 0.5 * (yax[idx] + yax[idx + 1])
+            xs = xax[::s]
+            Xs = np.broadcast_to(xs[None, :], Ea.shape)
+            Ys = np.broadcast_to(ys[:, None], Ea.shape)
+            h = _dy
+        z = Eb * np.conj(Ea)
+        if Wa is not None:
+            z = z * np.exp(-1j * k0 * (Wb - Wa))
+        d = np.angle(z)
+        aa = np.abs(Ea)
+        ab = np.abs(Eb)
+        keep = ((aa > thr) & (ab > thr) & np.isfinite(d)
+                & (np.abs(d) <= _REMAP_RESID_MAX_STEP_RAD)
+                & (((Xs - cx) ** 2 + (Ys - cy) ** 2) <= r_fit * r_fit))
+        if not keep.any():
+            return None
+        return (Xs[keep], Ys[keep], (d[keep] / (k0 * h)),
+                (aa[keep] * ab[keep]))
+
+    px = _pairs(1)
+    py = _pairs(0)
+    if px is None or py is None:
+        return None
+    deg0 = int(_REMAP_RESID_EIKONAL_DEGREE if degree is None else degree)
+    deg0 = min(deg0, int(_REMAP_RESID_DEGREE_CAP))
+    if deg0 < 1:
+        return None
+    n_samp = px[0].size + py[0].size
+    # amplitude-weighted rms of the MEASURED slope (the quantity the shipped
+    # launch drops); reported for the caller's diagnostics.
+    _wall = np.concatenate([px[3], py[3]])
+    _gall = np.concatenate([px[2], py[2]])
+    _wsum = float(_wall.sum())
+    g_rms = (float(np.sqrt((_wall * _gall ** 2).sum() / _wsum))
+             if _wsum > 0 else 0.0)
+    for deg in range(deg0, 0, -1):
+        terms = [(i, d - i) for d in range(1, deg + 1) for i in range(d + 1)]
+        if n_samp < _REMAP_RESID_MIN_SAMPLES_PER_TERM * len(terms):
+            continue
+        nL = px[0].size
+        A = np.zeros((nL + py[0].size, len(terms)), dtype=np.float64)
+        uL = (px[0] - cx) / r_fit
+        vL = (px[1] - cy) / r_fit
+        uM = (py[0] - cx) / r_fit
+        vM = (py[1] - cy) / r_fit
+        for k, (i, j) in enumerate(terms):
+            if i >= 1:
+                A[:nL, k] = i * uL ** (i - 1) * vL ** j / r_fit
+            if j >= 1:
+                A[nL:, k] = j * uM ** i * vM ** (j - 1) / r_fit
+        rhs = np.concatenate([px[2], py[2]])
+        wgt = np.concatenate([px[3], py[3]])
+        coef = _solve_lstsq_thread_safe(A * wgt[:, None], rhs * wgt)
+        if not np.all(np.isfinite(coef)):
+            continue
+        resid = rhs - A @ coef
+        g_res = (float(np.sqrt((wgt * resid ** 2).sum() / _wsum))
+                 if _wsum > 0 else 0.0)
+        return _ResidualEikonal(
+            coef, terms, cx, cy, r_fit, r_freeze,
+            diag={'degree': deg, 'n_terms': len(terms), 'n_samples': n_samp,
+                  'grad_a_rms': g_rms, 'grad_a_residual_rms': g_res,
+                  'w_beam': float(w_beam), 'centre': (cx, cy),
+                  'stride': s, 'r_fit': float(r_fit),
+                  'r_freeze': float(r_freeze),
+                  'ray_fit_radius': (None if ray_fit_radius is None
+                                     else float(ray_fit_radius))})
+    return None
+
+
 def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
                          max_sin=0.5, smooth_sigma_px=4.0,
                          multimode_diagnostic=None):
@@ -2356,6 +3225,7 @@ def apply_real_lens_traced(
     caustic_band: str = 'ludwig',
     caustic_min_area_ratio: float = 1e-6,
     _exit_na_out: Optional[dict] = None,
+    _remap_launch_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -2695,6 +3565,19 @@ def apply_real_lens_traced(
 
         Both ``w_in`` and the disc are referenced to ``beam_centre`` (below),
         so a DECENTRED beam is guarded exactly as an on-axis one is.
+
+        **NOT a soft knob on a real carrier chain (2026-07-31).**  The
+        "flat for 1.5-2.5" reading above is an E4 Strehl on a low-NA singlet.
+        Measured END TO END on design 121's post-DOE chain at order (-4,-2)
+        against the landed niche-C6 launch, raising it 2.0 -> 3.0 costs
+        **-77.5 EE3 points** (87.771 -> 10.290 %, ``P_tile`` -22.2 points) and
+        is the only configuration in that study to raise a fold-caustic
+        warning.  At ELEMENT level the same change puts 1.0-1.1e-02 of the
+        input power beyond 4 mm of the exit chief ray.  Against pinned HEAD --
+        i.e. with the C6 defect open -- the SAME change read **+0.66 EE3
+        points**, so this knob's sign is not stable across that fix.  Treat
+        2.0 as load-bearing on a carrier chain and re-measure before moving it.
+        See docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S1.
     beam_centre : (float, float), optional
         Transverse position ``(x0, y0)`` (metres) of the input beam on the
         wave grid.  ``None`` (default) means: take it from ``carrier`` when
@@ -2828,6 +3711,15 @@ def apply_real_lens_traced(
         that residual is sampled -- it is the accuracy-limiting choice
         of the mode.
 
+        Niche C6 (2026-07-30): the rays are launched along the TOTAL
+        entrance eikonal ``grad(W + a_fit)``, not the carrier's
+        ``grad(W)`` alone, so the entrance pullback lands on the
+        STATIONARY point of ``W + a + V(., X)`` and the second-order
+        term ``1/2 grad a^T H^-1 grad a`` this mode used to drop is
+        carried.  Worth 14.8 EE3 points on design 121's worst DOE
+        order.  See :data:`REMAP_STATIONARY_PHASE_LAUNCH` for the
+        derivation, the measurements and the fail-before switch.
+
         Cost: ``preserve_input_phase=True`` runs the analytic
         apply_real_lens *twice* (once for the input field, once for
         a unit plane-wave reference so we can subtract the analytic
@@ -2902,6 +3794,20 @@ def apply_real_lens_traced(
         the ray-fit lattice.  ``'lattice'`` is kept as the default only for
         byte-compatibility; ``'full'`` is the correct sampling and the
         recommended setting for any carrier-regime chain.
+
+        **The POINT GAIN is gone once niche C6 lands; the CONVERGENCE argument
+        is not (2026-07-31).**  On the worst tilted order of design 121,
+        `(-4,-2)`, end to end against the landed C6 launch, ``'lattice'``
+        measures **+0.0988 EE3 points** -- i.e. marginally BETTER than
+        ``'full'``, against **-17.73 points** for the same substitution on
+        pinned HEAD with the C6 defect open.  That is expected: at HEAD the
+        launch went along ``grad(W)``, so the residual was being SAMPLED at the
+        wrong foot and the sampling resolution mattered enormously; with the
+        stationary-phase launch it is sampled at the right one.  Nothing above
+        is retracted -- the dx-independence measurement is what this default
+        rests on, and it is untouched -- but do NOT expect ``'full'`` to buy
+        EE points on a post-C6 chain.  See
+        docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S1.
 
     sag_dtype : {None, np.float32, np.float64}, default None
         v5.17.0 opt-in geometry dtype, forwarded to the internal
@@ -3070,6 +3976,24 @@ def apply_real_lens_traced(
         :func:`lumenairy.propagators.carrier._fine_trace_group_exit`, whose
         ``on_tilt_exact_grid`` refusal must be sourced from the MEASURED exit
         NA rather than from the chain's paraxial ``w_in/|R_out|``.
+
+    _remap_launch_out : dict, optional
+        PRIVATE diagnostic sink (niche C6).  When given, it is filled with the
+        state of the stationary-phase ray launch: ``engaged`` (whether the
+        residual-eikonal model was built and used), ``flag``
+        (:data:`REMAP_STATIONARY_PHASE_LAUNCH`), ``remap`` (whether
+        ``preserve_input_phase='remap'`` was in force) and, when engaged, the
+        fit's own record -- ``degree``, ``n_terms``, ``n_samples``,
+        ``grad_a_rms`` (amplitude-weighted rms of the MEASURED input-residual
+        ray slope, rad), ``grad_a_residual_rms`` (the part the fit does NOT
+        model, which is what the leftover second-order error scales with),
+        ``grad_a_fit_max_launch`` (the largest slope the model actually adds
+        over the launch square -- the extrapolation diagnostic), ``w_beam``,
+        ``centre``, ``r_fit`` (the SAMPLE disc, which is also the fit's own
+        normalisation), ``r_freeze`` (the radial-freeze circle, which clears
+        the ray-fit disc -- see ``_REMAP_RESID_FREEZE_MARGIN``),
+        ``ray_fit_radius`` and ``stride``.  Nothing in this function reads it
+        back.
 
     Returns
     -------
@@ -3647,6 +4571,14 @@ def apply_real_lens_traced(
     # through near-collimated values (design-121 mid-chain R ~ +7e5 mm).
     _pip_remap_W = _carrier_W if (_pip_remap and _carrier_W is not None) \
         else (0.0 if _pip_remap else None)
+    # niche C6: the smooth part of the input residual eikonal, ``a_fit``.  Built
+    # further down (it needs the measured beam radius / centre) and left None on
+    # every other path, so `` is None`` is the byte-identical gate everywhere it
+    # is consulted.  When it is set, the rays launch along ``grad(W + a_fit)``,
+    # the H6 entrance-eikonal term carries ``W + a_fit``, and what the residual
+    # phasor transports is the LEFTOVER ``exp(i k0 (a - a_fit))`` -- the three
+    # halves of one substitution ``W -> W + a_fit`` of the launch congruence.
+    _resid_eik = None
     # The carrier-de-chirped input residual UNIT PHASOR on the ENTRANCE wave
     # grid, split into float64 real/imag parts for ``map_coordinates``.  Built
     # lazily and cached: both remap sampling paths need it, and it is a full
@@ -3657,6 +4589,25 @@ def apply_real_lens_traced(
         if _pip_res_ri[0] is None:
             _k = 2.0 * np.pi / wavelength
             _r = np.asarray(E_in) * np.exp(-1j * _k * _pip_remap_W)
+            if _resid_eik is not None:
+                # niche C6: de-chirp by ``a_fit`` too, and do it HERE rather
+                # than at the sample points.  The rays already carry ``a_fit``
+                # (launch direction + H6 eikonal + traced OPL), so what is left
+                # to transport pointwise is ``a - a_fit`` either way -- but
+                # this array is what the sampler INTERPOLATES bilinearly, and
+                # removing the modelled part first leaves it the SLOW quantity.
+                # Same discipline as ``remap_sampling='full'``: never resample
+                # the fast phasor.  Row-banded so no second full-grid
+                # coordinate pair is materialised (the N = 8192 fine retrace
+                # leg would pay 1 GiB for it).
+                _ax = (np.arange(N, dtype=np.float64) - N / 2.0) * dx
+                _ay = (np.arange(N, dtype=np.float64) - N / 2.0) * dy
+                _bd = max(1, int(4194304 // max(N, 1)))
+                for _b0 in range(0, N, _bd):
+                    _b1 = min(N, _b0 + _bd)
+                    _r[_b0:_b1] *= np.exp(-1j * _k * _resid_eik.value(
+                        np.broadcast_to(_ax[None, :], (_b1 - _b0, N)),
+                        np.broadcast_to(_ay[_b0:_b1, None], (_b1 - _b0, N))))
             _a = np.abs(_r)
             with np.errstate(divide='ignore', invalid='ignore'):
                 _r = np.where(_a > 0.0, _r / np.maximum(_a, 1e-300),
@@ -4143,6 +5094,57 @@ def apply_real_lens_traced(
                 f"acknowledge.",
                 RuntimeWarning, stacklevel=2)
 
+    # The RAY-fit disc.  Resolved HERE rather than at the fit site below
+    # because niche C6's residual-eikonal freeze has to clear it (see
+    # ``_REMAP_RESID_FREEZE_MARGIN``) and that model is built above the fit.
+    # The restriction itself is applied unchanged further down.
+    _fit_r_geom = (_CARRIER_FIT_RADIUS_FRAC * launch_radius
+                   if _r7_carrier_path else None)
+    _fit_r_max = _fit_r_geom
+    if _beam_fit_radius is not None:
+        _fit_r_max = (_beam_fit_radius if _fit_r_max is None
+                      else min(_fit_r_max, _beam_fit_radius))
+    # ... and its radius measured about the BEAM, which is what the freeze
+    # circle has to clear.  Off centre the disc IS beam-centred with radius
+    # ``_beam_fit_radius`` (the geometric intersection below only trims the
+    # side away from the beam); concentric, the beam sits at the disc centre
+    # and the radius is ``_fit_r_max``.
+    _fit_r_about_beam = (_beam_fit_radius
+                         if (_beam_fit_radius is not None and _beam_decentred)
+                         else _fit_r_max)
+
+    # ---- niche C6: the stationary-phase launch for 'remap' ---------------
+    # Fit the smooth part of the input RESIDUAL eikonal and hand it to the ray
+    # launch, the H6 entrance-eikonal term and the residual de-chirp together.
+    # See :data:`REMAP_STATIONARY_PHASE_LAUNCH` for the derivation.
+    #
+    # GATE.  Only ``preserve_input_phase='remap'`` transports the residual
+    # GEOMETRICALLY, so only there does the launch direction decide where the
+    # residual is sampled; on every other mode the residual is carried by the
+    # analytic wave pair (``True``) or discarded (``False``) and augmenting the
+    # launch would be incoherent.  An ENGAGED carrier is required as well: it is
+    # what makes ``a`` a small residual rather than the input's whole phase (the
+    # ``carrier``-less de-chirp is the identity), and the ``_r7_carrier_path``
+    # test also excludes the per-pixel ``tilt_aware_rays`` launch, which already
+    # carries the input's own slope and would double-count it.
+    if (_pip_remap and REMAP_STATIONARY_PHASE_LAUNCH and _r7_carrier_path
+            and _carrier_grad is not None and _carrier_W_fn is not None):
+        _res_w = _w_in_beam
+        if not (_res_w > 0.0):
+            _res_w = _input_beam_amp_radius(
+                E_in, dx, dy,
+                centre=((_bcx, _bcy) if _beam_decentred else None))
+        _resid_eik = _fit_residual_eikonal(
+            E_in, _carrier_W, wavelength, dx, dy, (_bcx, _bcy), _res_w,
+            stride=max(1, int(sub)), ray_fit_radius=_fit_r_about_beam)
+    if _remap_launch_out is not None:
+        _remap_launch_out.update(
+            {'engaged': _resid_eik is not None,
+             'flag': bool(REMAP_STATIONARY_PHASE_LAUNCH),
+             'remap': bool(_pip_remap)})
+        if _resid_eik is not None:
+            _remap_launch_out.update(_resid_eik.diag)
+
     # ----- Subsampling guardrail --------------------------------------
     # The Newton-inversion step builds a cubic-spline interpolant of the
     # entrance->exit map on a coarse grid and uses bilinear interp to
@@ -4243,6 +5245,24 @@ def apply_real_lens_traced(
         L_in, M_in = _carrier_grad(h_x, h_y)
         L_in = np.asarray(L_in, dtype=np.float64).ravel()
         M_in = np.asarray(M_in, dtype=np.float64).ravel()
+        if _resid_eik is not None:
+            # niche C6: launch along grad(W + a_fit), the TOTAL entrance
+            # eikonal, so the Newton pullback lands on the stationary point of
+            # ``W + a + V(., X)`` instead of ``W + V(., X)``.  grad(eikonal) IS
+            # the transverse direction cosine (|grad S|^2 + (dS/dz)^2 = 1), so
+            # the two gradients ADD with no renormalisation -- the O(|grad a|^2)
+            # correction a normalisation would introduce is precisely the order
+            # this fix exists to carry, and it belongs in the eikonal, not in a
+            # rescaling of it.
+            _gLa, _gMa = _resid_eik.grad(h_x, h_y)
+            _gLa = np.asarray(_gLa, dtype=np.float64).ravel()
+            _gMa = np.asarray(_gMa, dtype=np.float64).ravel()
+            _resid_eik.diag['grad_a_fit_max_launch'] = (
+                float(np.nanmax(np.hypot(_gLa, _gMa))) if _gLa.size else 0.0)
+            if _remap_launch_out is not None:
+                _remap_launch_out.update(_resid_eik.diag)
+            L_in = L_in + _gLa
+            M_in = M_in + _gMa
     else:
         # 4.10: emit a one-time warning when the input field has a
         # measurable transverse tilt and tilt_aware_rays=False.  The
@@ -4364,6 +5384,17 @@ def apply_real_lens_traced(
     # and per-group relay chains, no change for collimated input).
     if _carrier_W_fn is not None:
         final.opd = final.opd + _carrier_W_fn(h_x, h_y)
+    if _resid_eik is not None:
+        # niche C6: the launched congruence's entrance eikonal is W + a_fit, so
+        # the H6 term must carry BOTH halves.  Without ``a_fit`` here the OPL
+        # grid would be ``W + V`` along ``grad(W + a_fit)`` rays, whose entrance
+        # derivative is ``-grad a_fit + p_out . J`` -- i.e. it would carry a
+        # copy of ``-a_fit`` for the low-order Chebyshev fit to represent, and
+        # the ``+a`` the transported phasor adds back would no longer cancel it.
+        # With it the grid's derivative is ``p_out . J`` exactly as on the
+        # shipped launch, so the fit sees the same class of function it always
+        # did.
+        final.opd = final.opd + _resid_eik.value(h_x, h_y)
 
     # ---- v5.25.0 (hammer audit H3): exit-NA Nyquist guard --------------
     # The docstring's critical-sampling rule (dx <= lambda*f/aperture) was
@@ -4469,6 +5500,42 @@ def apply_real_lens_traced(
     i_axis = n_launch // 2
     opl_grid = opl_grid - opl_grid[i_axis, i_axis]
 
+    # ---- v5.32: the EXACT-RAY EXIT SUPPORT for the halo self-check ---------
+    # Taken HERE, between the alive mask and the fit-domain restriction below,
+    # for two reasons: the fit restriction NaNs out samples that are still
+    # perfectly good optics (so reading it after would understate the hull and
+    # over-fire the check), and this is the last point at which ``x_out_grid``
+    # is the exact traced map rather than anything the model fitted.  Cost is
+    # two reductions over the coarse lattice.  See ``_RD_HALO_AMAX_TOL``.
+    #
+    # ``_amp`` is the input amplitude sampled at the launch nodes and is
+    # already in the launch grid's (x, y) x-major layout -- the SAME layout
+    # ``final.x.reshape(n_launch, n_launch)`` produced above (niche C4's
+    # transpose note at ``_amp``).  Pairing it with the wrong one would weight
+    # each ray by its transpose's amplitude, which is invisible on a
+    # rotationally symmetric beam and wrong on every other.
+    _rd_hull_r = None
+    _rd_hull_c = None
+    if _ray_density and RAY_DENSITY_HALO_CHECK != 'silent':
+        _h_ok = np.isfinite(x_out_grid) & np.isfinite(y_out_grid)
+        _h_pk = float(np.max(_amp)) if _amp.size else 0.0
+        if _h_pk > 0.0:
+            _h_ok &= (_amp >= np.exp(-_RD_HALO_AMP_CONTOUR) * _h_pk)
+        if _h_ok.any():
+            _h_w = _amp[_h_ok].astype(np.float64) ** 2
+            _h_wt = float(_h_w.sum())
+            if _h_wt > 0.0:
+                _h_x = x_out_grid[_h_ok]
+                _h_y = y_out_grid[_h_ok]
+                _rd_hull_c = (float((_h_x * _h_w).sum() / _h_wt),
+                              float((_h_y * _h_w).sum() / _h_wt))
+                _rd_hull_r = float(np.sqrt(
+                    (_h_x - _rd_hull_c[0]) ** 2
+                    + (_h_y - _rd_hull_c[1]) ** 2).max())
+                del _h_x, _h_y
+            del _h_w
+        del _h_ok
+
     # R7 / audit F2 (2026-07-21): CARRIER-GATED fit-domain restriction.  When a
     # carrier is set, drop the entrance launch grid's outer margin + corners
     # (the strongly-aberrated / near-vignetting marginal rays) from the fit by
@@ -4516,12 +5583,9 @@ def apply_real_lens_traced(
     # ``_DECENTRED_FIT_POLY_ORDER``.
     _fit_weights = None
     _fit_poly_order = int(newton_poly_order)
-    _fit_r_geom = (_CARRIER_FIT_RADIUS_FRAC * launch_radius
-                   if _r7_carrier_path else None)
-    _fit_r_max = _fit_r_geom
-    if _beam_fit_radius is not None:
-        _fit_r_max = (_beam_fit_radius if _fit_r_max is None
-                      else min(_fit_r_max, _beam_fit_radius))
+    # ``_fit_r_geom`` / ``_fit_r_max`` were resolved at the launch-radius site
+    # above (niche C6's freeze circle has to clear them); the restriction they
+    # drive is applied here, unchanged.
     if _fit_r_max is not None and newton_fit != 'spline':
         _r2_launch = xs_in[:, None] ** 2 + xs_in[None, :] ** 2
         _fit_why = f"r <= {_fit_r_max * 1e3:.4f} mm"
@@ -4540,11 +5604,25 @@ def apply_real_lens_traced(
                     _fit_why += (f" AND r <= {_fit_r_geom * 1e3:.4f} mm")
         else:
             _fit_disc = _r2_launch <= _fit_r_max ** 2
+        # niche C6 follow-up: the C6 launch augments every ray direction by
+        # ``grad(a_fit)`` of a NON-RADIAL polynomial, which destroys the radial
+        # symmetry the concentric hard-mask branch's safety argument rests on
+        # (see ``_FIT_DISC_OUTSIDE_WEIGHT_REL``), so the D1 fold comes back on
+        # axis.  Route a C6-engaged concentric disc through the SAME weighted
+        # restriction the off-centre branch already uses.  The DISC itself is
+        # unchanged (still ``_r2_launch <= _fit_r_max**2`` -- only the
+        # restriction method and the order move), and with the C6 launch
+        # disengaged this is exactly the historical path.  See
+        # ``REMAP_STATIONARY_PHASE_FIT_GUARD`` for the measurements.
+        _c6_fit_guard = (_resid_eik is not None
+                         and REMAP_STATIONARY_PHASE_FIT_GUARD)
         if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
-            if (_beam_fit_radius is not None and _beam_decentred
+            if (_beam_fit_radius is not None
+                    and (_beam_decentred or _c6_fit_guard)
                     and _FIT_DISC_OUTSIDE_WEIGHT_REL > 0.0):
-                # D1: OFF-CENTRE disc -- regularised restriction.  Keep every
-                # traced sample (so the paraxial-magnification stencil, the
+                # D1: OFF-CENTRE disc (or, opt-in, a C6-engaged concentric one)
+                # -- regularised restriction.  Keep every traced
+                # sample (so the paraxial-magnification stencil, the
                 # process-pool knot data and the direct-fit exit hull all stay
                 # intact) and down-weight the out-of-disc ones to a fixed
                 # fraction of the in-disc Gram contribution.
@@ -5734,6 +6812,69 @@ def apply_real_lens_traced(
                     f"grid, or an aperture_diameter wider than the traced "
                     f"pupil.  Lower ray_subsample to check convergence.",
                     RuntimeWarning, stacklevel=2)
+        # ---- v5.32: HALO-AMPLITUDE self-check --------------------------
+        # The power sum above cannot see a lobe deposited outside the traced
+        # pupil (measured: a defect whose total-power signature vanished
+        # while the lobe stayed at 77 % of peak).  This one can.  Radius and
+        # centroid come from the EXACT ray trace of this very call; see
+        # ``_RD_HALO_AMAX_TOL`` for the derivation and the calibration.
+        if _rd_hull_r is not None and _rd_hull_r > 0.0:
+            _hb = _RD_HALO_RADIUS_FACTOR * _rd_hull_r
+            # The annulus has to be a GENUINE annulus about the traced exit
+            # centroid.  Once the bound circle runs off the grid all that is
+            # left of it is a sliver of corners, and the statistic measured
+            # there is unreliable in BOTH directions -- measured, twice (see
+            # SCOPE (d) at ``_RD_HALO_AMAX_TOL``).  Decline rather than report
+            # a number that cannot be trusted either way.
+            _h_edge = min(float(x[-1]) - _rd_hull_c[0],
+                          _rd_hull_c[0] - float(x[0]),
+                          float(x[-1]) - _rd_hull_c[1],
+                          _rd_hull_c[1] - float(x[0]))
+            _h_far = (((x[None, :] - _rd_hull_c[0]) ** 2
+                       + (x[:, None] - _rd_hull_c[1]) ** 2) > _hb ** 2
+                      if _hb <= _h_edge else np.zeros((1, 1), dtype=bool))
+            if _h_far.any():
+                _h_abs = np.abs(E_out)
+                _h_pkE = float(_h_abs.max())
+                if _h_pkE > 0.0:
+                    _h_amax = float(_h_abs[_h_far].max()) / _h_pkE
+                    _h_gpow = (float((_h_abs[_h_far] ** 2).sum()) / _rd_p_in
+                               if _rd_p_in > 0.0 else 0.0)
+                    if _h_amax > _RD_HALO_AMAX_TOL:
+                        import warnings as _rd_hwarn
+                        _rd_hwarn.warn(
+                            f"apply_real_lens_traced: amplitude_model="
+                            f"'ray_density' HALO self-check FAILED -- "
+                            f"amax_halo = {_h_amax:.3e} of peak beyond "
+                            f"{_hb * 1e3:.4f} mm "
+                            f"({_RD_HALO_RADIUS_FACTOR:g} x the exact-ray "
+                            f"exit support radius {_rd_hull_r * 1e3:.4f} mm "
+                            f"about the traced exit centroid "
+                            f"({_rd_hull_c[0] * 1e3:+.4f}, "
+                            f"{_rd_hull_c[1] * 1e3:+.4f}) mm), against a "
+                            f"tolerance of {_RD_HALO_AMAX_TOL:.1e}; that "
+                            f"halo carries g_halo = {_h_gpow:.3e} of the "
+                            f"aperture-transmitted input power, and the grid "
+                            f"reaches {_h_edge * 1e3:.4f} mm from that "
+                            f"centroid.  NO TRACED "
+                            f"RAY OF THIS CALL REACHES THAT RADIUS, so the "
+                            f"light there was manufactured, not merely "
+                            f"misplaced: the usual cause is the fitted "
+                            f"entrance->exit map being Newton-inverted "
+                            f"outside its own data support and the "
+                            f"ray-density amplitude handing the spurious "
+                            f"root real power.  Note the energy self-check "
+                            f"CANNOT see this -- a lobe of a few 1e-3 of the "
+                            f"input power sits well inside its band.  Try a "
+                            f"different fit_radius_beam_factor, "
+                            f"newton_fit='spline', or a caustic-faithful "
+                            f"propagator (apply_real_lens_gbd / "
+                            f"apply_real_lens_fga); set "
+                            f"lumenairy.elements._lens_traced."
+                            f"RAY_DENSITY_HALO_CHECK = 'silent' to suppress.",
+                            RuntimeWarning, stacklevel=2)
+                del _h_abs
+            del _h_far
     if E_out.dtype != target_cdtype:
         E_out = E_out.astype(target_cdtype)
     call_progress(progress, 'real_lens_traced', 1.0, 'done')

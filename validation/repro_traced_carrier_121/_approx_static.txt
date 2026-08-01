@@ -1,0 +1,86 @@
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\propagators\carrier.py:5827: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0515, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 12.71 um but the grid has dx = 51.23 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 12.71 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+  E_exit = apply_real_lens_traced(
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5067: RuntimeWarning: apply_real_lens_traced Newton inversion: 17575/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  return _invert_newton(Xw, Yw, sub_progress=sub_progress)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5153: RuntimeWarning: apply_real_lens_traced Newton inversion: 17575/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5067: RuntimeWarning: apply_real_lens_traced Newton inversion: 15136/65536 pixels (23.1%) did not converge to tol=5.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  return _invert_newton(Xw, Yw, sub_progress=sub_progress)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5153: RuntimeWarning: apply_real_lens_traced Newton inversion: 15136/65536 pixels (23.1%) did not converge to tol=5.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\propagators\carrier.py:5827: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0867, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 7.55 um but the grid has dx = 51.23 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 7.55 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+  E_exit = apply_real_lens_traced(
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5067: RuntimeWarning: apply_real_lens_traced Newton inversion: 3527/65536 pixels (5.4%) did not converge to tol=5.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  return _invert_newton(Xw, Yw, sub_progress=sub_progress)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5153: RuntimeWarning: apply_real_lens_traced Newton inversion: 3527/65536 pixels (5.4%) did not converge to tol=5.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\propagators\carrier.py:5827: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.1672, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 3.92 um but the grid has dx = 44.91 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 3.92 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+  E_exit = apply_real_lens_traced(
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5067: RuntimeWarning: apply_real_lens_traced Newton inversion: 1907/65536 pixels (2.9%) did not converge to tol=4.491e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  return _invert_newton(Xw, Yw, sub_progress=sub_progress)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5153: RuntimeWarning: apply_real_lens_traced Newton inversion: 1907/65536 pixels (2.9%) did not converge to tol=4.491e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\propagators\carrier.py:5827: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.3606, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 1.82 um but the grid has dx = 38.43 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 1.82 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+  E_exit = apply_real_lens_traced(
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5067: RuntimeWarning: apply_real_lens_traced Newton inversion: 24634/65536 pixels (37.6%) did not converge to tol=3.843e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  return _invert_newton(Xw, Yw, sub_progress=sub_progress)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5153: RuntimeWarning: apply_real_lens_traced Newton inversion: 24634/65536 pixels (37.6%) did not converge to tol=3.843e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\propagators\carrier.py:5827: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.3016, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 2.17 um but the grid has dx = 33.21 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 2.17 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+  E_exit = apply_real_lens_traced(
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5067: RuntimeWarning: apply_real_lens_traced Newton inversion: 53895/65536 pixels (82.2%) did not converge to tol=3.321e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  return _invert_newton(Xw, Yw, sub_progress=sub_progress)
+C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\pin_d2e60ca\lumenairy\elements\_lens_traced.py:5153: RuntimeWarning: apply_real_lens_traced Newton inversion: 53895/65536 pixels (82.2%) did not converge to tol=3.321e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget.
+  opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+============================================================================
+A. _sphere_parab_conversion taper: does it reach the beam?
+============================================================================
+plane            dx (um)    w (um)  r_safe mm    0.75r/w  power>0.75r
+leg in R=703642.7mm    51.233    6318.1 207296.3756  24607.425    0.000e+00
+leg in R=703664.8mm    51.234    6319.4 207302.1855  24603.120    0.000e+00
+leg in R=703671.9mm    51.234    6320.6 207303.7945  24598.470    0.000e+00
+leg in R=-263.2mm    51.235    5989.1    77.5376      9.710    0.000e+00
+leg in R=-60.1mm    44.912    4847.4    18.5150      2.865    1.580e-09
+leg in R=-24.5mm    38.432    3621.5     7.9316      1.643    4.969e-03
+leg in R=-7.7mm    33.211    1205.3     2.6253      1.634    5.743e-03
+
+============================================================================
+B. _tilt_exactness_phase band-limit radius: coarse vs fine dx
+============================================================================
+R (mm)              dx (um)  r_safe (mm)  0.75r/w (-) power>0.75r
+703642.736 (coarse)    51.2334 274425.83907    32576.127  0.000e+00
+703642.736 (fine)     1.5081 1656392.05226   196624.482  0.000e+00
+703664.790 (coarse)    51.2339 274433.01782    32570.368  0.000e+00
+703664.790 (fine)     1.5081 1656443.96873   196590.741  0.000e+00
+703671.919 (coarse)    51.2342 274434.78175    32564.169  0.000e+00
+703671.919 (fine)     1.5081 1656460.74881   196554.052  0.000e+00
+-263.194 (coarse)    51.2346    102.64637       12.854  0.000e+00
+-263.194 (fine)      1.5081    619.56549       77.587  0.000e+00
+-60.148 (coarse)    44.9121     25.12205        3.887  1.173e-10
+-60.148 (fine)       1.5081    141.58980       21.907  0.000e+00
+-24.462 (coarse)    38.4324     11.07778        2.294  1.156e-05
+-24.462 (fine)       1.5081     57.58527       11.926  0.000e+00
+
+============================================================================
+C. the exact readout's ASM band limit and evanescent cut
+============================================================================
+   fine grid 12288 x 1.5081 um = 18.532 mm, final distance 7.7058 mm
+   grid Nyquist NA           = 0.4343
+   ASM band-limit mask at NA = 1.2024  -> INERT (above the grid Nyquist)
+   evanescent cut at NA = 1.0 -> INERT (grid Nyquist NA 0.4343 < 1)
+
+============================================================================
+D. _fourier_upsample_crop parity (the half-pixel trap)
+============================================================================
+   the shipped chain forces n_crop = 2*round(win/dx/2) (EVEN) and
+   n_fine = 2**ceil(...) capped by n_fine_cap; the run above used
+   n_fine = 12288.  Parity check on this run's values:
+      N=1024 n_crop=512 n_fine=12288 -> n_crop even: True, N even: True, n_fine even: True
+      N=1024 n_crop=511 n_fine=12288 -> n_crop even: False, N even: True, n_fine even: True
+   -> the half-pixel mis-registration needs an ODD input N or an
+      ODD user-supplied N_fine; neither is reachable from the
+      shipped defaults, so it is LATENT, not active.

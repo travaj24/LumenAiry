@@ -1,0 +1,43 @@
+=== POST-C6 re-measurement, order (-4, -2), set p1 ===
+   lib C:\Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/pin_live_c6\lumenairy\elements\_lens_traced.py
+       sha256 f06da6ab8e15ce2a
+   lib C:\Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/pin_live_c6\lumenairy\propagators\carrier.py
+       sha256 2d30f1ed7beb3c7e
+   C6 flag REMAP_STATIONARY_PHASE_LAUNCH = True  resid degree 4
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+grid: RN=1024 dx=51.2334 um RS=4 NFC=12288 WF=4.0 NOUT=192 DXO=0.100 um
+BASELINE sampling: na_par 0.4052  na_measured 0.5397  na_nyquist 0.4343  exit power above nyquist 7.8996e-04
+BASELINE warnings: {'NYQ': 6}
+  done: NULL identity patch                       
+  done: CONTROL tilt eikonal OFF (C5)             
+  done: CONTROL C6 launch OFF                     
+  done: carrier_reference sphere -> parabola      
+  done: remap_sampling full -> lattice            
+  done: sphere<->parab taper OFF                  
+  done: fit_radius_beam_factor -> 3.0             
+  done: ray_subsample 4 -> 2                      
+
+variant                               EE3%    EE6%   EE12%   Ptile%      relL2  dphi_rms      s
+-----------------------------------------------------------------------------------------------
+BASELINE (shipping defaults)        87.771  98.299  98.734  98.7354  0.000e+00  0.00e+00    337
+NULL identity patch                 87.771  98.299  98.734  98.7354  0.000e+00  1.81e-17    328
+CONTROL tilt eikonal OFF (C5)       67.451  90.902  96.316  96.3180  7.929e-01  1.70e-01    409
+CONTROL C6 launch OFF               72.501  92.278  95.636  95.6482  1.884e+00  2.13e-01    202
+carrier_reference sphere -> parabola  49.278  83.890  92.653  92.7468  1.115e+00  1.73e-01    320
+remap_sampling full -> lattice      87.870  98.415  98.836  98.8381  2.217e-02  8.98e-03    325
+sphere<->parab taper OFF            89.186  98.866  99.230  99.2312  6.649e-02  2.36e-02    332
+fit_radius_beam_factor -> 3.0       10.290  35.299  75.950  76.5106  1.145e+00  6.10e-01    325
+ray_subsample 4 -> 2                88.137  98.804  99.236  99.2370  3.986e-02  1.29e-03    321
+
+dEE3 (points) vs baseline, with warnings and exit-nyquist power:
+  NULL identity patch                         +0.0000  (dEE6  +0.0000, dPtile  +0.00000)  P>nyq 7.8996e-04  warn {'NYQ': 6}
+  CONTROL tilt eikonal OFF (C5)              -20.3195  (dEE6  -7.3971, dPtile  -2.41739)  P>nyq 8.8172e-04  warn {'NYQ': 6}
+  CONTROL C6 launch OFF                      -15.2698  (dEE6  -6.0206, dPtile  -3.08723)  P>nyq 7.5134e-04  warn {'NYQ': 6}
+  carrier_reference sphere -> parabola       -38.4931  (dEE6 -14.4089, dPtile  -5.98861)  P>nyq 7.3234e-04  warn {'NYQ': 6}
+  remap_sampling full -> lattice              +0.0988  (dEE6  +0.1164, dPtile  +0.10268)  P>nyq 8.2971e-04  warn {'NYQ': 6}
+  sphere<->parab taper OFF                    +1.4147  (dEE6  +0.5670, dPtile  +0.49576)  P>nyq 8.3411e-04  warn {'NYQ': 6}
+  fit_radius_beam_factor -> 3.0              -77.4808  (dEE6 -62.9992, dPtile -22.22486)  P>nyq 8.6030e-04  warn {'NYQ': 6, 'FOLD': 3}
+  ray_subsample 4 -> 2                        +0.3664  (dEE6  +0.5058, dPtile  +0.50160)  P>nyq 7.7470e-04  warn {'NYQ': 6}

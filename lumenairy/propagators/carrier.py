@@ -1996,27 +1996,68 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
     representation would be mixed exactly where the amplitude matters.
 
     **The taper's mixed-convention skirt is a MEASURED NULL on design-121
-    (S12), not a residual error budget.**  Audit
-    AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8.6 attributed "the residual 9 %
-    of Strehl beyond r > 1.5 w" partly to this skirt; direct measurement
-    refutes that.  Scaling ``r_safe`` by 1.5 and by INFINITY (T == 1, i.e. the
-    whole-grid swap with no taper at all) reproduces the shipping design-121
-    result to the digit -- at-plane 3.650 um / 87.3 / 99.3 and best focus
-    3.550 um / EE3 89.57 / EE6 99.26 in all three runs.  Two reasons: (i) the
+    ON AXIS -- and a measured 1.41 EE3 POINTS on a tilted congruence.**  Read
+    the two paragraphs below together; the first was validated on axis only and
+    said so nowhere until 2026-07-31.
+
+    *On axis (S12).*  Audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8.6
+    attributed "the residual 9 % of Strehl beyond r > 1.5 w" partly to this
+    skirt; direct measurement refutes that.  Scaling ``r_safe`` by 1.5 and by
+    INFINITY (T == 1, i.e. the whole-grid swap with no taper at all)
+    reproduces the shipping design-121 result to the digit -- **at-plane
+    3.650 um / 87.3 / 99.3 and best focus 3.550 um / EE3 89.57 / EE6 99.26,
+    all of them ON-AXIS metrics** -- in all three runs.  Two reasons: (i) the
     conversion and its inverse are POINTWISE, so ``env = E*exp(-ikS)`` is exact
     at every grid point no matter how the phase slope compares with Nyquist --
     only FFT-based steps that see the RESULT care, and a wider taper makes the
     stored envelope smoother, not rougher; (ii) geometrically the taper barely
-    reaches the beam anyway -- on design-121 the taper onset ``0.75*r_safe``
-    sits at 2.73 w (first entrance), 3.60 w (S21-S22 exit) and 2.07 w (S23-S24
-    exit, the worst), and ``r_safe`` exceeds the whole grid on the fine
-    retrace leg (full conversion, no taper), so at most ~2e-4 of the power ever
-    sees a mixed convention.  The S8.6 skirt was really the
+    reaches the beam on the planes that paragraph looked at -- the onset
+    ``0.75*r_safe`` sits at 2.73 w (first entrance), 3.60 w (S21-S22 exit) and
+    2.07 w (S23-S24 exit), and ``r_safe`` exceeds the whole grid on the fine
+    retrace leg.  The S8.6 skirt was really the
     ``preserve_input_phase='remap'`` ray-lattice alias (see
-    ``apply_real_lens_traced``'s ``remap_sampling``).  The ``r_safe < 2*w``
-    warning is retained as a validity flag for OTHER geometries (a much higher
-    carrier NA or coarser dx can push the onset inside the beam), not as a
-    known design-121 defect.
+    ``apply_real_lens_traced``'s ``remap_sampling``).
+
+    *Off axis (2026-07-31, docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31
+    S2).*  On design 121's WORST DOE order, (-4,-2) at 51.5 mrad, measured end
+    to end through the exact readout against the landed niche-C6 launch:
+
+        r_safe x 0.5     dEE3  -41.62   (EE3 46.15 %, P_tile -23.06, 2 fold
+                                         caustic warnings)
+        r_safe x 1       --     (shipped, EE3 87.771 %)
+        r_safe x 2       dEE3   +1.4147
+        no taper (T==1)  dEE3   +1.4147
+
+    The response is MONOTONE and SATURATING: x2 and T==1 agree to four decimal
+    places in EE3, EE6, ``P_tile`` and ``exit_power_above_nyquist``, i.e. at
+    twice the radius the taper no longer touches anything the result depends
+    on, and the optimum is NO TAPER.  So the taper is not doing something
+    different off axis -- it is doing the SAME thing at a radius that is too
+    small once the congruence is tilted, and the beam pays for the
+    mixed-convention annulus.  The geometry: the onset sits at **1.64 w and
+    1.63 w on the last two planes** with **5.0e-03 and 5.7e-03 of the envelope
+    power beyond it** -- 25x the "~2e-4 of the power ever sees a mixed
+    convention" the on-axis paragraph above concluded from a plane list that
+    omits them.  The "at most ~2e-4" figure is retracted for tilted
+    congruences.
+
+    NOT TAKEN, and why: flipping the default to ``T == 1`` is what design 121
+    measures as optimal at BOTH tilts, but this docstring also records that
+    "the untapered swap breaks a coarse chain", and that configuration was not
+    re-measured in 2026-07-31.  A one-design monotone sweep is not enough to
+    remove a guard whose failure case is documented elsewhere.  Callers who
+    need the 1.4 points on a tilted congruence can measure their own chain with
+    the taper removed; the counter-evidence is a single sentence with no
+    reproduction attached, so it is worth re-deriving before either is trusted.
+
+    ``w_beam`` (optional) enables a warning when the taper reaches into the
+    beam.  **Its threshold tests the ONSET (``0.75*r_safe``), not ``r_safe``
+    (corrected 2026-07-31).**  The previous form, ``r_safe < 2*w_beam``, could
+    not detect the case this function's own warning text describes: design
+    121's last two planes have ``r_safe`` at 2.18 w -- clear of that threshold
+    -- while the taper ONSET is at 1.63 w, well inside the beam, costing the
+    1.41 EE3 points above in silence.  The warning is a validity flag, not a
+    refusal, and nothing about the returned array changed.
     """
     if not np.isfinite(R) or R == 0.0:
         return None
@@ -2035,17 +2076,27 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
     diff = _exact_sphere_eikonal((ny, n), dx, dx, wavelength, R,
                                  centre=centre) - r2 / (2.0 * R)
     r_safe = (abs(R) ** 3 * wavelength / dx) ** (1.0 / 3.0)
-    if w_beam is not None and w_beam > 0.0 and r_safe < 2.0 * w_beam:
+    # 2026-07-31: test the taper ONSET, not r_safe.  The cos^2 roll-off starts
+    # at 0.75*r_safe, so the old ``r_safe < 2*w`` form missed exactly the case
+    # the message describes -- design 121's last two planes sit at r_safe =
+    # 2.18 w (no warning) with the onset at 1.63 w, inside the beam, worth a
+    # measured 1.41 EE3 points on the tilted congruence.  Warning only; the
+    # returned array is unchanged.
+    if (w_beam is not None and w_beam > 0.0
+            and 0.75 * r_safe < 2.0 * w_beam):
         import warnings
         warnings.warn(
-            f"_sphere_parab_conversion: the band-limit radius r_safe="
-            f"{r_safe * 1e3:.3f} mm (= (|R|^3 lambda/dx)^(1/3) at "
+            f"_sphere_parab_conversion: the cos^2 taper ONSET "
+            f"0.75*r_safe={0.75 * r_safe * 1e3:.3f} mm (band-limit radius "
+            f"r_safe={r_safe * 1e3:.3f} mm = (|R|^3 lambda/dx)^(1/3) at "
             f"R={R * 1e3:.3f} mm, dx={dx * 1e6:.3f} um) reaches inside "
             f"2x the beam radius (w={w_beam * 1e3:.3f} mm), so the "
             f"parabola->sphere conversion is tapered off where the beam "
             f"still carries power: the carrier convention is MIXED over the "
-            f"beam skirt.  Refine dx (or lower the carrier NA) if the exit "
-            f"wavefront matters at that radius.",
+            f"beam skirt.  Measured cost on design 121's (-4,-2) congruence, "
+            f"where the onset sits at 1.63 w: 1.41 EE3 points.  Refine dx (it "
+            f"enters as dx^(-1/3), so this is expensive) or lower the carrier "
+            f"NA if the exit wavefront matters at that radius.",
             RuntimeWarning, stacklevel=3)
     t = np.clip((np.sqrt(r2) - 0.75 * r_safe) / (0.25 * r_safe), 0.0, 1.0)
     return np.exp(sign * 1j * k * diff * np.cos(0.5 * np.pi * t) ** 2)

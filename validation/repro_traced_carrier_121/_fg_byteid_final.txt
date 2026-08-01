@@ -1,0 +1,41 @@
+shadow module: HEAD:lumenairy/elements/_lens_traced.py -> C:\Users\Tesla\AppData\Local\Temp\_lens_traced_head_wawvqeje.py
+  HEAD has REMAP_STATIONARY_PHASE_LAUNCH: False (must be False)
+
+=== (a) SYNTHETIC: C6 OFF vs the committed library ===
+  pip='remap' amp=ray_density rs=1       array_equal=True  max|dE| 0.000e+00
+  pip='remap' amp=ray_density rs=4       array_equal=True  max|dE| 0.000e+00
+  pip=True amp=ray_density rs=1          array_equal=True  max|dE| 0.000e+00
+  pip=True amp=ray_density rs=4          array_equal=True  max|dE| 0.000e+00
+  pip=False amp=ray_density rs=1         array_equal=True  max|dE| 0.000e+00
+  pip=False amp=ray_density rs=4         array_equal=True  max|dE| 0.000e+00
+  pip=True amp=screen rs=1               array_equal=True  max|dE| 0.000e+00
+  pip=True amp=screen rs=4               array_equal=True  max|dE| 0.000e+00
+  pip=False amp=screen rs=1              array_equal=True  max|dE| 0.000e+00
+  pip=False amp=screen rs=4              array_equal=True  max|dE| 0.000e+00
+  remap lattice rs=4                     array_equal=True  max|dE| 0.000e+00
+  no carrier, remap rs=4                 array_equal=True  max|dE| 0.000e+00
+
+=== (b) DESIGN 121 post-DOE chain, order (0,0), C6 OFF vs committed ===
+  RN=1024 rs=4 paraxial            shape (1024, 1024) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=2 paraxial            shape (1024, 1024) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=2048 rs=4 paraxial            shape (2048, 2048) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=4, 3 groups           shape (1024, 1024) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=4, 5 groups           shape (1024, 1024) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=4 focus_readout       shape (64, 64) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=4 final_leg=exact     shape (64, 64) complex128  array_equal=True  max|dE| 0.000e+00
+
+=== (c) DESIGN 121 post-DOE chain, order (-4,-2), C6 OFF vs committed ===
+  RN=1024 rs=4 paraxial            shape (1024, 1024) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=2 paraxial            shape (1024, 1024) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=2048 rs=4 paraxial            shape (2048, 2048) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=4, 3 groups           shape (1024, 1024) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=4, 5 groups           shape (1024, 1024) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=4 focus_readout       shape (64, 64) complex128  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=4 final_leg=exact     shape (64, 64) complex128  array_equal=True  max|dE| 0.000e+00
+
+=== (d) the C5 contract still holds with C6 shipped ===
+  RN=1024 rs=4 paraxial            C5 on vs off  array_equal=True  max|dE| 0.000e+00
+  RN=1024 rs=2 paraxial            C5 on vs off  array_equal=True  max|dE| 0.000e+00
+  RN=2048 rs=4 paraxial            C5 on vs off  array_equal=True  max|dE| 0.000e+00
+
+OK

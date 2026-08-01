@@ -4,6 +4,92 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — `remap` now launches at the stationary point of the WHOLE phase (niche C6, `elements/_lens_traced.py`)
+
+`preserve_input_phase='remap'` launched its rays along `grad(W)` -- the
+carrier eikonal's gradient alone -- and evaluated the input residual `a` at
+that ray's foot.  The exit eikonal is a stationary value of `W + a + V`, so
+this dropped a second-order stationary-phase term
+`(1/2) grad a^T H^-1 grad a`: quadratic in `grad a`, verified by prediction
+(across C5, `grad a` rms grew 1.46 -> 2.30 mrad, ratio squared 2.48; the
+measured element wavefront error grew 0.0359 -> 0.0659 waves, ratio 2.48).
+The fix launches along `grad(W + a_fit)` and lets the transported phasor
+carry the leftover `a - a_fit`; the `ray_density` Jacobian follows the
+augmented map automatically.  Design 121 EE3 against the exact-ray oracle:
+(0,0) 87.99 -> **89.21** (oracle 90.08), (-4,0) 70.19 -> **88.94** (90.78),
+(-4,-2) 66.24 -> **88.49** (89.78); field-angle spread **14.33 -> 0.72**
+points.  Fail-before: `REMAP_STATIONARY_PHASE_LAUNCH = False` reproduces the
+prior library bit for bit, tilted orders included (verified per order).
+
+A backend-consistency defect found by the D7 spline-oracle test was fixed
+before shipping: the residual fit's radial-freeze circle sat at exactly the
+polynomial ray-fit disc radius (both 2.0 w), so the map went non-smooth
+precisely where that fit began extrapolating and the two `newton_fit`
+backends diverged 7.8e-09 -> 3.7e-03 of peak.  Scored pointwise against the
+exact skew ray trace the POLYNOMIAL backend was the wrong one (5.6 um in the
+skirt, 15.1 um at the aperture rim, vs the spline's 0.006 / 0.002).
+Separating the freeze circle from the fit disc
+(`_REMAP_RESID_FREEZE_MARGIN = 1.25`) restores agreement to **8.6e-06**.
+
+**KNOWN DEFECT, disclosed not fixed: C6 manufactures energy on axis.**  On
+design 121's last group at order (0,0) the production path returns
+`P_out/P_ap` = 1.000741 against C6-off's 0.995883 -- **+0.486 % of input
+power created**, deposited as a lobe at 4-8 mm carrying 4.7e-03 of Pin at
+83 % of peak amplitude, where the exact ray trace permits 3.6e-10.  Every
+EE-family metric is blind to it (the same field reports +1.691 EE3).
+Mechanism: the corrected launch makes the ray map non-radial and the
+CONCENTRIC fit branch's inverse map extrapolates beyond its data.
+`REMAP_STATIONARY_PHASE_FIT_GUARD = True` removes it outright on (0,0) but
+regresses 2 of 6 synthetic fixtures (one to P/Pin 1.00697), so it stays
+opt-in (`docs/audits/C6_FIT_GUARD_DECISION_2026_07_31.md`).  Per-order /
+tilted use is sound; on-axis halo and second-moment metrics are NOT until
+the structural fix (bounding the Newton inverse to the traced samples'
+support) lands.  Full conservation record in
+`docs/audits/ENERGY_CONSERVATION_AUDIT_2026_07_31.md`.
+
+### Added — halo-amplitude self-check for `ray_density` (niche C7, `elements/_lens_traced.py`)
+
+The scalar energy self-check's observable is EXHAUSTED: its +5 % gain band
+cannot be tightened, because a currently-green CI battery cell legitimately
+reads `P_out/P_ap` = 1.04374 at the N/subsample CI actually runs -- the same
+magnitude as the defects worth catching -- and the C6 backend fix
+demonstrated that a total-power criterion can be satisfied while the defect
+(the lobe) remains.  New observable instead: `amax4`-style HALO AMPLITUDE at
+1.25x the exact-ray exit support, `_RD_HALO_AMAX_TOL = 1.0e-03`, default
+`RAY_DENSITY_HALO_CHECK = 'warn'`.  Calibrated on 180 element calls: worst
+clean 4.6e-05, mildest confirmed defect 5.7e-03 -- 123x separation, and it
+never fires on any P2 battery cell.  On its first full-suite run it flagged
+a real, previously-unknown defect in niche D6's exact-tilted-leg retrace
+fixture (0.641 of peak beyond the exact trace's 1.616 mm support) -- open.
+
+### Changed — the design-121 acceptance is scored AT the metasurface plane (user-approved re-baseline, 2026-08-01)
+
+The recorded acceptance `3.450 um / EE3 88.8 / EE6 99.6` was measured at
+`dz = +10 um` -- 10 um PAST the metasurface plane -- because the pre-C6
+chain's residual aberration pushed its focus downstream (at-plane read
+3.750 / 87.4).  C6 removed that offset; the spot is now sharpest at the
+plane itself.  New acceptance, at `dz = 0`:
+**3.450 um / EE3 90.2 / EE6 99.7 / EE12 99.8**, against the measured
+ideal-field ceiling 3.45-3.55 um / 90.3 / 99.8.  The focus scan now reports
+`BEST-FOCUS[peak]` (max intensity) alongside the historical EE6-selected
+line, because EE6 saturates near 99.7 and mis-selects on its 4th digit.
+
+### Validated — independent Zemax cross-check of the per-order result (`docs/audits/POP_CROSSCHECK_121_2026_07_31.md`)
+
+Zemax's ray-based RMS OPD at the extreme order (-4,-2) reads **0.030 waves**
+tilt-free (Marechal limit 0.071): the design is diffraction-limited at the
+fan corner, corroborating the exact-ray oracle (<= 0.017 waves) and the
+chain (EE3 89.13 vs oracle 89.66, flat across the fan).  Zemax POP reads
+8.8 EE3 points lower at that order and is demonstrably UNCONVERGED there:
+its space-bandwidth product (`dx_mid x dx_img = 53500 um^2 / N`) needs
+N ~ 42000 for a 51.5 mrad order at 0.1 um image pitch against its 8192 cap,
+and its log-domain image shows a ~1e-4 pedestal (true halo ~1e-7) plus a
+rectangular block artefact.  The historical "POP waist 2.737 um" target is
+a POP of the paraxially-EQUIVALENT 4f, not of the real prescription -- now
+labelled as such at its quoting sites.  Three-way beam-profile figures
+(POP | chain | exact-ray oracle, linear + log10, common scale) for six
+orders in `validation/repro_traced_carrier_121/pop_profiles/`.
+
 ### Fixed — the tilted carrier's reference wavefront is now an actual eikonal (`elements/_lens_traced.py`, `propagators/carrier.py`)
 
 `TiltedCarrier` defined its wavefront as an on-axis sphere **plus a linear

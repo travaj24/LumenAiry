@@ -1168,7 +1168,21 @@ def test_off_centre_fit_disc_does_not_ghost_the_exit_field(monkeypatch):
     assert off_p < 10.0 * ref_off_p
     assert rel < 10.0 * ref_rel
 
-    # fail-before: weight 0 outside the disc IS the hard sample mask
+    # fail-before: weight 0 outside the disc IS the hard sample mask.
+    #
+    # niche C6 (2026-07-30): the witness must ALSO be taken on the pre-C6 ray
+    # launch.  This fixture hands ``preserve_input_phase='remap'`` an input
+    # that does NOT carry its carrier's phase (a REAL Gaussian envelope under a
+    # ``TiltedCarrier(R=60 mm)``), so the carrier-de-chirped residual is the
+    # whole sphere and C6's stationary-phase launch correctly launches the
+    # nearly-COLLIMATED congruence the field actually is.  That map is far less
+    # aberrated over the launch square, and the hard-mask fit no longer folds:
+    # measured with C6 on, ``bad_p`` 1.25e-7 against ``ref_off_p`` 1.45e-7 and
+    # ``bad_rel`` 0.00075 -- i.e. the D1 defect this witness reproduces is
+    # ALREADY absent.  The PASS-AFTER half above is unaffected and still runs
+    # on the shipped configuration; only the historical fail-before needs its
+    # historical launch.
+    monkeypatch.setattr(_lt, 'REMAP_STATIONARY_PHASE_LAUNCH', False)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
     bad_p, bad_rel, _ = _ghost_metrics()
     assert bad_p > 1000.0 * ref_off_p, (bad_p, ref_off_p)
@@ -1190,6 +1204,11 @@ def test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive(monkeypatch)
     _, _, msgs = _ghost_metrics()
     assert _folds(msgs) == 0, msgs
 
+    # niche C6: the fail-before witness needs the pre-C6 ray launch as well --
+    # see the note in test_off_centre_fit_disc_does_not_ghost_the_exit_field.
+    # The PASS-AFTER assertion above (no fold on the shipped configuration) is
+    # taken with C6 in force and is unchanged.
+    monkeypatch.setattr(_lt, 'REMAP_STATIONARY_PHASE_LAUNCH', False)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
     _, bad_rel, bad_msgs = _ghost_metrics()
     assert bad_rel > 0.1
