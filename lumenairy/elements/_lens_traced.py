@@ -5741,11 +5741,20 @@ def apply_real_lens_traced(
                 from scipy.spatial import ConvexHull as _CH8
                 _sup_eq = _CH8(np.column_stack(
                     [x_out_grid[_sup_ok], y_out_grid[_sup_ok]])).equations
-            except Exception:
+            except (ImportError, RuntimeError, ValueError):
                 # A degenerate support (collinear / duplicated landings) has
-                # no hull; decline rather than guess.  Qhull raises its own
-                # QhullError subclass of Exception, and a degenerate bound is
+                # no hull; decline rather than guess -- a degenerate bound is
                 # exactly the regime this must not invent an answer in.
+                # NARROWED to the tuple this path can actually raise (the
+                # non-ui broad-except budget, tests/unit/
+                # test_audit_except_budget.py): ``ImportError`` when the
+                # compiled ``scipy.spatial`` qhull extension is absent from a
+                # trimmed install, ``RuntimeError`` because ``QhullError`` is
+                # a documented ``RuntimeError`` subclass (named indirectly:
+                # ``scipy.spatial.QhullError`` is only public from scipy 1.8
+                # and the floor here is 1.7), and ``ValueError`` for the
+                # input rejections (non-finite / wrong ndim) ConvexHull
+                # raises before qhull ever runs.
                 _sup_eq = None
             if _sup_eq is not None:
                 # The feather is measured in EXIT-LATTICE cells, taken from

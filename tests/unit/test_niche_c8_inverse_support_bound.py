@@ -346,11 +346,25 @@ def test_a_degenerate_support_declines_instead_of_raising(monkeypatch, _warm):
     """A support with no interior (collinear or duplicated landings) has no
     hull, and Qhull raises.  The bound must then decline -- return the
     unbounded field -- rather than propagate an exception out of a physics
-    call.  Forced here by making the hull constructor raise."""
+    call.  Forced here by making the hull constructor raise.
+
+    2026-08-01: the stub used to raise a bare ``Exception`` subclass, which
+    only worked because the handler in ``_lens_traced.py`` was a broad
+    ``except Exception``.  That broad clause was NARROWED to
+    ``(ImportError, RuntimeError, ValueError)`` for the non-ui except budget
+    (tests/unit/test_audit_except_budget.py), so the stub now raises the
+    class Qhull ACTUALLY raises -- ``scipy.spatial.QhullError``, a
+    documented ``RuntimeError`` subclass.  That makes this pin more faithful
+    to the failure it models, not less: a synthetic bare-``Exception``
+    stand-in was testing the handler's breadth rather than the declared
+    contract.  (``QhullError`` is only importable from ``scipy.spatial``
+    since scipy 1.8; the package floor is 1.7, hence the fallback.)"""
     import scipy.spatial as _sp
 
-    class _Boom(Exception):
-        pass
+    try:
+        from scipy.spatial import QhullError as _Boom
+    except ImportError:            # pragma: no cover -- scipy 1.7 floor only
+        _Boom = RuntimeError
 
     def _raise(*a, **k):
         raise _Boom('forced degenerate support')

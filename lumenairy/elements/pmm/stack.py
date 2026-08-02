@@ -2082,7 +2082,17 @@ class PMMStack:
                 with _warnings.catch_warnings():
                     _warnings.simplefilter("ignore")   # probe noise is not the user's
                     _o, _R, _T, j2 = clone.solve()
-            except Exception:
+            except (ValueError, NotImplementedError, RuntimeError):
+                # NARROWED to the exception surface a PMM solve can actually
+                # present (the non-ui broad-except budget, tests/unit/
+                # test_audit_except_budget.py): ``ValueError`` for every
+                # segment/grid/incidence validation AND for the eigensolver
+                # (``numpy.linalg.LinAlgError`` is a ValueError subclass),
+                # ``NotImplementedError`` for an unsupported routing, and
+                # ``RuntimeError`` for the four internal invariants that use
+                # it.  ``_StabilizeScanExhausted`` never escapes solve() (it
+                # is consumed by the scan loops in ``pmm/_core.py``).
+                #
                 # SKIP, do not score.  Unlike the re-slice probe (where a
                 # blow-up IS the evidence), perturbing `min_feature` can fail
                 # for reasons unrelated to conditioning, and this guard runs on

@@ -530,11 +530,31 @@ _ASM_COMPLEX_ARRAYS = 2.0
 _ASM_F64_GRID_ARRAYS = 0.7       # dtype-independent frequency-grid transients
 # One-time, N-INDEPENDENT cost of the first ASM call in a fresh process: the
 # lazy import of the FFT backend (pyFFTW / scipy.fft) and its plan
-# infrastructure.  Measured 38.17-38.50 MB at N=64/128/256/512/1024/2048
-# (constant to 4 significant figures across all six grids and both dtypes);
-# rounded up to 40 MiB for headroom.  This term is what made the old
-# estimate a 0.53x UNDER-estimate at N=512 -- at small N it dominates.
-_ASM_FIRST_CALL_FIXED_BYTES = 40 * 1024 * 1024
+# infrastructure.  This term is what made the pre-A-6 estimate a 0.53x
+# UNDER-estimate at N=512 -- at small N it dominates.
+#
+# RE-MEASURED 2026-08-01 (release verification for v5.32.0), same method as
+# the A-6 derivation: fresh interpreter + tracemalloc, N=64..2048 x
+# {complex64, complex128}, fitting ``cold = slope * N^2 + fixed``.  The
+# backend-import cost has GROWN with the dependency stack (numpy 2.4.4 /
+# scipy 1.17.1 / scipy-openblas 0.3.31 on the Windows calibration box) from
+# the 38.17-38.50 MB measured at derivation time to
+#
+#     pair    256 ->  512 :  fixed  52.53 MiB (c128)   52.63 MiB (c64)
+#     pair    512 -> 1024 :  fixed  52.96 MiB (c128)   52.64 MiB (c64)
+#     pair   1024 -> 2048 :  fixed  52.97 MiB (c128)   49.91 MiB (c64)
+#
+# (the N=64/128 pairs read ~40 MiB because the backend import has not yet
+# paid its large-transform workspace there -- the N >= 256 asymptote is the
+# one an estimate must bound).  The 40 MiB constant therefore stopped being
+# a BOUND: est/measured fell to 0.79 (N=256), 0.85 (512), 0.95 (1024) --
+# the A-6 contract is ``>= 1.0``.  Raised to 56 MiB, which restores the
+# documented tightness band: est/measured 1.06-1.08 over the six N >= 256
+# points, both dtypes (the shape term is untouched -- the measured slope is
+# 96.0 B/px at c128 / 48.0 at c64, still under the 101.6 / 52.8 the formula
+# uses).  Fail-safe direction: on CI Linux the cold peak is much smaller
+# still, so the bound only widens there.
+_ASM_FIRST_CALL_FIXED_BYTES = 56 * 1024 * 1024
 # Row-band (sag_chunk_rows) mode: the full-grid float64 lens stack never
 # materialises; the peak is the resident complex fields + FFT plan buffers +
 # band transients.  Calibrated from the c128 chunked anchor (26.3 GB at
@@ -728,19 +748,26 @@ def estimate_asm_memory(n_grid: int,
     plans are resident, the measured per-call peak is just the output field
     -- ``1.00 x N^2 x itemsize`` (measured 1.000-1.008 over
     N = 256..2048) -- so this estimate runs ~6.4x that asymptotically, and
-    more at small N where the fixed import term dominates (16x at N=512
+    more at small N where the fixed import term dominates (20x at N=512
     complex128).  Use ``N * N * np.dtype(complex_dtype).itemsize`` if a
     steady-state per-call transient is what you want.
 
-    Accuracy (measured 2026-07-25, fresh-interpreter ``tracemalloc``,
+    Accuracy (RE-MEASURED 2026-08-01, fresh-interpreter ``tracemalloc``,
     pyFFTW present with the double-buffer ping-pong enabled): est/measured
-    first-call peak = **1.02-1.09** over the eight points
+    first-call peak = **1.06-1.09** over the eight points
     N = 256 / 512 / 1024 / 2048 x {complex64, complex128} -- conservative
-    (a bound) at every one, within 9%.  The pre-A-6 formula read
-    0.53 / 0.96 / 1.22 at N = 512 / 1024 / 2048 complex128: an
-    under-estimate where it mattered most.  On a box with no pyFFTW the
-    plan-buffer and import terms over-predict, which is the fail-safe
-    direction.
+    (a bound) at every one, within 9%.  (At derivation time,
+    2026-07-25, the same band read 1.02-1.09; the dependency stack has
+    since grown the one-time FFT-backend import from ~38 MB to ~53 MiB and
+    ``_ASM_FIRST_CALL_FIXED_BYTES`` was re-calibrated 40 -> 56 MiB to keep
+    the ``>= 1.0`` bound -- see the constant's comment for the fit table.
+    Below N = 256 the ratio is looser, 1.37, because the backend import has
+    not yet paid its large-transform workspace there; the A-6 measured pins
+    sample N = 512 / 1024.)
+    The pre-A-6 formula read 0.53 / 0.96 / 1.22 at N = 512 / 1024 / 2048
+    complex128: an under-estimate where it mattered most.  On a box with no
+    pyFFTW the plan-buffer and import terms over-predict, which is the
+    fail-safe direction.
 
     Raises
     ------

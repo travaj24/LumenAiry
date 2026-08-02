@@ -135,6 +135,28 @@ def test_union_grid_cross_layer_snap_and_own_layer_preserved():
 
 
 def test_stack_slices_consensus():
+    """RECONCILED 2026-08-01 (union-grid audit 2026-07-28, R-1).
+
+    This pin used to assert that a stack with NO recorded taper builder got
+    a ``"...the consensus check was skipped."`` warning -- the old
+    behaviour, where the ENTIRE recipe-free route (hand-added layers and
+    every ``SegmentStackGeometry``-built device, i.e. the documented device
+    route) was silently unprotected against the passive-but-wrong staircase
+    pathology.  ``PMMStack._slices_consensus_check`` now falls back to
+    ``_union_grid_consensus_check``, which needs no recipe: it re-solves
+    with ``min_feature`` perturbed, so the guard is finally REACHABLE
+    there.  That is strictly more coverage than the warning it replaced, so
+    the pin is updated to the stronger contract rather than the code
+    reverted.
+
+    Fail-before witness: on the pre-fix tree the second block below emits
+    the "skipped" warning and ``assert not skipped`` fails; on this tree it
+    emits NOTHING (measured: 0 warnings), because a uniform layer has no
+    cross-layer walls to snap and therefore scores exactly 0 -- a clean
+    stack cannot false-positive.  The same contract is pinned from the
+    covariant side in ``test_audit_w3_entry_validation.py::
+    TestP331CovariantKwargs::test_stabilize_slices_is_honoured``.
+    """
     st = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=10)
     st.add_tapered_grating(0.3e-6, eps_ridge=4.0, eps_groove=1.0,
                            duty_bottom=0.6, duty_top=0.4, n_slices=4)
@@ -142,13 +164,21 @@ def test_stack_slices_consensus():
         warnings.simplefilter("always")
         st.set_source(_WL).solve(stabilize="slices")
     assert not [x for x in w if "PASSIVE-BUT-WRONG" in str(x.message)]
-    # no recorded taper -> the check warns that it was skipped
+    # No recorded taper -> the n_slices probe is impossible, but the guard
+    # must NOT announce that it gave up: it runs the union-grid consensus.
     st2 = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=10)
     st2.add_layer(0.2e-6, eps=2.25)
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        st2.set_source(_WL).solve(stabilize="slices")
-    assert any("skipped" in str(x.message) for x in w)
+        o2, R2, T2, _j2 = st2.set_source(_WL).solve(stabilize="slices")
+    msgs = [str(x.message) for x in w]
+    assert not any("skipped" in m or "no taper builder" in m for m in msgs), (
+        "the recipe-free route must run the union-grid consensus, not skip "
+        f"it; got {msgs}")
+    # A uniform layer has nothing to snap, so the consensus scores 0 and
+    # must stay SILENT rather than cry pathology.
+    assert not any("min_feature` was perturbed" in m for m in msgs), msgs
+    assert np.isfinite(float(np.real(np.sum(R2) + np.sum(T2))))
     with pytest.raises(ValueError, match="stabilize"):
         st2.set_source(_WL).solve(stabilize="bogus")
 
