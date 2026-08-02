@@ -2331,12 +2331,13 @@ _REMAP_RESID_FIT_W = 2.0
 #: top-order term, and the margin below is the smallest that clears the ray-fit
 #: disc with room for the fit's own extrapolation to be exact ACROSS it.
 #:
-#: RESIDUAL SCOPE, measured and NOT fixed: a caller whose
+#: RESIDUAL SCOPE, measured and NOT fixed HERE: a caller whose
 #: ``fit_radius_beam_factor`` exceeds ``_REMAP_RESID_FREEZE_MAX_W`` runs the
-#: cap into the ray-fit disc and the pathology returns.  The structural cure is
-#: the one ``REMAP_STATIONARY_PHASE_FIT_GUARD`` already names -- bound the
-#: Newton inverse to the traced samples' own support -- and it is not attempted
-#: here.
+#: cap into the ray-fit disc and the pathology returns.  The structural cure --
+#: bound the Newton inverse to the traced samples' own support -- SHIPPED as
+#: niche C8; see ``REMAP_INVERSE_SUPPORT_BOUND``.  It does not repair the fit
+#: (the two backends still disagree outside the disc, which is why this margin
+#: stays), but it stops the disagreement being handed amplitude.
 _REMAP_RESID_FREEZE_MARGIN = 1.25
 #: Hard ceiling on the freeze circle, in beam amplitude radii.  See
 #: ``_REMAP_RESID_FREEZE_MARGIN``.
@@ -2428,6 +2429,10 @@ _REMAP_RESID_DEGREE_CAP = 6
 #: (``apply_real_lens_gbd`` / ``apply_real_lens_fga``).  Neither is attempted
 #: here.  See docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S3.
 #:
+#: 2026-08-01: THE FIRST OF THOSE SHIPPED, as ``REMAP_INVERSE_SUPPORT_BOUND``
+#: (niche C8), and it makes this flag REDUNDANT on every case measured -- see
+#: the closing note at the bottom of this docstring.
+#:
 #: ---------------------------------------------------------------------------
 #: 2026-07-31: MEASURED AT CHAIN LEVEL, AND THE DEFAULT IS CONFIRMED ``False``.
 #: docs/audits/C6_FIT_GUARD_DECISION_2026_07_31.md.  The two claims above that
@@ -2506,7 +2511,185 @@ _REMAP_RESID_DEGREE_CAP = 6
 #: halo self-check (``_RD_HALO_AMAX_TOL``) reports both directions of the trade
 #: automatically, and it fires on design 121's on-axis last group with this
 #: flag off and is silent with it on.
+#:
+#: ---------------------------------------------------------------------------
+#: 2026-08-01: SUPERSEDED IN PRACTICE, KEPT ON PURPOSE.
+#: ``REMAP_INVERSE_SUPPORT_BOUND`` (niche C8) reaches the same defect
+#: structurally, and on every case measured it dominates this flag:
+#:
+#:   * design 121 on axis -- C8 matches this guard's conservation result to
+#:     five decimals (``elem(5)`` 0.995971 vs 0.995976, ``g4`` and ``amax4``
+#:     exactly zero on both) while COSTING NO EE, where the guard costs 0.96
+#:     EE3 points and 0.59 EE6 points in the production configuration;
+#:   * the six synthetic fixtures above -- C8 regresses NONE, this guard
+#:     regresses two;
+#:   * (-2,0) and (-3,0) -- C8 repairs them, this guard structurally cannot
+#:     (their lobe is made on the off-centre branch, where it is inert).
+#:
+#: It is NOT removed.  It is a different intervention on a different object --
+#: this one changes the FIT, C8 bounds what is claimed FROM the fit -- so it
+#: remains available for a caller whose defect is the fit's conditioning inside
+#: its own support, which no support bound can reach.  Its default stays
+#: ``False``, and turning it on with C8 also on is measured, not assumed:
+#: docs/audits/C8_INVERSE_SUPPORT_BOUND_2026_08_01.md.
 REMAP_STATIONARY_PHASE_FIT_GUARD = False
+
+#: niche C8 -- BOUND THE NEWTON INVERSE TO THE TRACED SAMPLES' OWN SUPPORT.
+#: An exit pixel outside the region the traced rays actually REACHED gets zero
+#: ray-density amplitude instead of an extrapolated inverse-map value.
+#: ``REMAP_INVERSE_SUPPORT_BOUND = False`` restores the pre-C8 library bit for
+#: bit (the fail-before switch).
+#:
+#: THE DEFECT.  ``newton_fit='polynomial'`` fits the traced entrance->exit map
+#: with a GLOBAL total-degree Chebyshev and EXTRAPOLATES outside its own data;
+#: ``newton_fit='spline'`` extrapolates its bicubic past the last knot.  Either
+#: way the Newton loop is then asked to invert a model where nothing was
+#: measured, and on a map that has lost its radial symmetry that inverse can
+#: land a far exit pixel BACK INSIDE THE BRIGHT BEAM -- whereupon
+#: ``_ray_density_amp_grid`` samples ``|E_in|`` there and hands the pixel real
+#: amplitude.  The energy is not misplaced, it is MANUFACTURED: no ray of the
+#: call reaches that radius.
+#:
+#: ``REMAP_STATIONARY_PHASE_LAUNCH`` (niche C6) is what destroys the symmetry
+#: -- it augments every launch direction by ``grad(a_fit)`` of a non-radial
+#: polynomial -- so C6 is where the defect became visible, on design 121's
+#: on-axis last group: ``P_out/P_ap`` = 1.000741 in the production path against
+#: C6-off's 0.995883, i.e. **+0.486 % of the input power created**, deposited
+#: at 4-8 mm at 83 % of peak where the exact ray trace permits 3.6e-10.  But
+#: the mechanism is NOT C6's: it is the unbounded inverse, and this bound also
+#: repairs two defects C6 has nothing to do with (see (4) and (5) below).
+#:
+#: THE SUPPORT, and why it is defined this way.  The convex hull of the EXIT
+#: landing points of the alive traced rays whose ENTRANCE the stop passes:
+#:
+#:   * taken BEFORE the fit-domain restriction, so it is the exact traced map
+#:     and not something the model fitted (the restriction NaNs samples that
+#:     are perfectly good optics, and reading it after would understate the
+#:     support and cut real light);
+#:   * restricted to the rays the aperture passes because the launch square
+#:     spans 1.5x the aperture RADIUS, so a third of it is blocked light --
+#:     including it would inflate the support with territory no photon reaches.
+#:     This is the SAME criterion ``_ray_density_amp_grid`` already masks on;
+#:   * CONVEX because a lens exit region is (the same argument
+#:     ``inversion_method='fit'`` has always used for its own hull mask -- this
+#:     bound gives the Newton path the containment the direct-fit path had).
+#:     Convexity can only make the bound LOOSER, never tighter, so it cannot
+#:     manufacture a cut.
+#:
+#: THE FEATHER.  ``_SUPPORT_BOUND_FEATHER_CELLS`` -- see there for the
+#: measurement.  The hull is the hull of SAMPLES; the ray map is continuous
+#: between them, so the true support reaches about half an exit-lattice cell
+#: further.  The taper is a raised cosine over a band lying entirely OUTSIDE
+#: the hull, so every pixel with traced data behind it keeps its full
+#: amplitude.
+#:
+#: SCOPE.  ``amplitude_model='ray_density'`` only.  That is not a hedge: it is
+#: the only amplitude in this function DERIVED FROM THE INVERSE MAP.  The
+#: ``'screen'`` amplitude comes from ``apply_real_lens``'s analytic transport
+#: of the input field and never reads ``(xe, ye)``, so there is nothing there
+#: for an extrapolated inverse to corrupt.  The OPL is left alone for the same
+#: reason -- where the taper is zero the amplitude is zero and the phase is
+#: unobservable, and NaN-ing the OPL would hard-cut a mask that is deliberately
+#: smooth.
+#:
+#: MEASURED -- design 121, the diagnostic per-stage chain (``RN=1024``, six
+#: post-DOE groups, ``final_distance=0``, ``final_leg='paraxial'``), last group,
+#: against the exact-ray ceilings of ``ENERGY_CONSERVATION_AUDIT_2026_07_31``:
+#:
+#:   ray_subsample = 4          elem(5)     g4        amax4     r_rms/mm
+#:   (0,0)  C6 off             0.995901   3.61e-11   1.40e-05   0.8422
+#:   (0,0)  C6 on  (pre-C8)    0.999371   3.40e-03   7.70e-01   0.9349
+#:   (0,0)  C6 on  + C8        0.995971   0.00e+00   0.00e+00   0.8385
+#:   (-2,0) C6 on  (pre-C8)    0.996043   2.27e-07   5.73e-03   0.8382
+#:   (-2,0) C6 on  + C8        0.996043   5.37e-09   1.61e-04   0.8382
+#:   (-3,0) C6 on  (pre-C8)    0.995917   2.23e-07   5.87e-03   0.8380
+#:   (-3,0) C6 on  + C8        0.995916   1.31e-08   2.05e-04   0.8379
+#:
+#:   ray_subsample = 2          elem(5)     g4        amax4     end to end
+#:   (0,0)  C6 on  (pre-C8)    1.003696   4.50e-03   9.78e-01   1.003186
+#:   (0,0)  C6 on  + C8        0.999201   0.00e+00   0.00e+00   0.998693
+#:   (-2,0) C6 on  (pre-C8)    0.999195   7.08e-06   5.02e-02   0.998681
+#:   (-2,0) C6 on  + C8        0.999188   5.44e-09   1.58e-04   0.998674
+#:   (-4,-2) C6 OFF (pre-C8)   0.999196   6.32e-06   7.84e-02   0.998661
+#:   (-4,-2) C6 OFF + C8       0.999190   2.63e-08   2.36e-04   0.998655
+#:
+#: Read the columns in order.
+#:
+#: (1) It repairs the on-axis order OUTRIGHT, at both subsamples, on every one
+#:     of the audit's six bounds -- 2/6 -> 6/6 at ``rs=4`` and 0/6 -> 6/6 at
+#:     ``rs=2``.  ``g4`` and ``amax4`` go to EXACTLY zero, not merely under
+#:     bound, and the discretisation deficit floor comes back to 0.98x / 0.99x
+#:     of the C6-off reference from 0.15x / negative.
+#: (2) It matches ``REMAP_STATIONARY_PHASE_FIT_GUARD``'s conservation result on
+#:     that order to five decimals (0.995971 against 0.995976) WITHOUT the
+#:     guard's cost: on ``probe_ghost_synthetic``'s six fixtures the guard
+#:     regresses two (one to ``P/Pin`` = 1.00697 with 3.6e-01 of peak beyond
+#:     3 w) and this bound regresses NONE -- every fixture reproduces the hard-
+#:     mask branch to all printed digits.
+#: (3) It costs no EE.  Design 121 per-order EE3 against the exact-ray oracle
+#:     at the chain's group-5 exit is UNCHANGED to 0.01 points on all three
+#:     scored orders: (0,0) 89.20, (-4,0) 88.98, (-4,-2) 88.53.
+#: (4) It fixes what the fit guard STRUCTURALLY COULD NOT.  (-2,0) and (-3,0)
+#:     make their lobe on the OFF-CENTRE weighted branch, where the guard is
+#:     inert by construction; both fail C3+C4 with the guard on OR off, at both
+#:     subsamples.  Under this bound both pass: ``g4`` 0.18x / 0.22x of their
+#:     exact-ray ceilings and ``amax4`` 6x under its bound.
+#: (5) It fixes a defect C6 has nothing to do with.  At ``rs=2`` on (-4,-2) it
+#:     is C6-OFF that violates the halo criterion (28x / 78x over) -- the
+#:     energy audit's "reversal" -- and the bound takes that row to 0.35x of
+#:     its ceiling as well.  The mechanism was never C6's; C6 only made it
+#:     large enough to see.
+#:
+#: WHAT IT IS NOT.  It does not repair the FIT: outside the hull the fitted map
+#: is still wrong, and inside it the fit's error is untouched (byte-identical
+#: fits, byte-identical Newton, byte-identical OPL).  It bounds what the
+#: library is willing to CLAIM from that fit.  A defect that deposits energy
+#: INSIDE the traced support is invisible to it by construction, exactly as it
+#: is to the v5.32 halo self-check.
+REMAP_INVERSE_SUPPORT_BOUND = True
+
+#: Feather width of the C8 support bound, in EXIT-LATTICE cells -- the median
+#: exit separation of entrance-adjacent traced rays, measured from the samples
+#: themselves rather than from a paraxial magnification, so it tracks the
+#: resolution at which the support is actually known.  0.0 is a hard binary
+#: cut.
+#:
+#: WHAT IT IS *NOT* FOR.  Protecting legitimate light at the boundary is the
+#: PLATEAU's job (see :func:`_support_taper`), and the plateau does it exactly:
+#: the power the bound removes from inside its own support is 0.000e+00 at
+#: EVERY feather including 0.  So the feather is not a safety margin on the
+#: sampling; with the plateau in place it is measurably inert on design 121 --
+#: every metric of every order is identical from 0.0 to 4.0 cells.
+#:
+#: WHAT IT IS FOR: the sharpness of what is left.  On the one fixture measured
+#: where the bound truncates a field carrying real amplitude at its boundary --
+#: niche D6's decentred fixture, where 1.4e-01 of peak sits just outside the
+#: hull -- ``edge jump`` is the largest nearest-neighbour ``|E|`` step, over
+#: the peak, within 6 coarse cells of the hull, and ``dP`` is the power removed
+#: (100 % of it outside the hull of every alive ray, at every feather):
+#:
+#:   feather (cells)   OFF       0.00      0.25      0.50      1.00     2.00     4.00
+#:   edge jump       1.366e-01  3.07e-02  3.07e-02  3.07e-02  2.40e-02 1.93e-02 1.19e-02
+#:   dP / P_in            0     2.62e-03  2.59e-03  2.56e-03  2.48e-03 2.30e-03 2.06e-03
+#:
+#: Read the OFF column first: **the unbounded field's own largest step in that
+#: band is 1.366e-01, so even a HARD cut leaves an edge 4.5x smoother than what
+#: it removed.** The "a binary mask may diffract" worry is real in principle
+#: and does not arise here, because what the mask deletes is jagged
+#: manufactured light and what it leaves is smoother than the original.
+#:
+#: **1.0 is the smallest feather that measurably improves on the hard cut**
+#: (3.07e-02 -> 2.40e-02; 0.25 and 0.5 cells are sub-pixel on this fixture and
+#: change nothing), and it gives up 5 % of the manufactured light removed to
+#: get it.  Wider is a straight trade against the fix: 4.0 cells buys another
+#: 2x of edge for 21 % less manufactured light removed.
+#:
+#: IT DOES NOT WEAKEN THE FIX.  On design 121's on-axis order the manufactured
+#: lobe is removed IDENTICALLY at every feather from 0.0 to 4.0: ``g4`` and
+#: ``amax4`` exactly zero, ``P_out/P_ap`` 0.995976, and the same -1.034e-03 of
+#: input power removed.  The lobe lies wholly outside the hull, so no width of
+#: transition band reaches it.
+_SUPPORT_BOUND_FEATHER_CELLS = 1.0
 
 
 class _ResidualEikonal(object):
@@ -5536,6 +5719,55 @@ def apply_real_lens_traced(
             del _h_w
         del _h_ok
 
+    # ---- niche C8: the EXIT-SUPPORT BOUND on the Newton inverse -----------
+    # Built HERE, from the same exact traced map the halo hull above reads and
+    # BEFORE the fit-domain restriction, for the same two reasons: these are
+    # the positions the rays actually reached, and nothing the model fitted has
+    # touched them yet.  See ``REMAP_INVERSE_SUPPORT_BOUND``.
+    _sup_bound = None
+    if REMAP_INVERSE_SUPPORT_BOUND and _ray_density:
+        _sup_ok = np.isfinite(x_out_grid) & np.isfinite(y_out_grid)
+        if aperture is not None:
+            # Only rays the ENTRANCE STOP passes carry energy, and the
+            # ray-density amplitude already masks on exactly that criterion
+            # (see ``_ray_density_amp_grid``).  Rays launched outside the stop
+            # (the launch square reaches 1.5x the aperture RADIUS) land
+            # further out but are blocked, so including them would inflate the
+            # support with territory no light can reach.
+            _sup_ok &= ((xs_in[:, None] ** 2 + xs_in[None, :] ** 2)
+                        <= (0.5 * aperture) ** 2)
+        if int(_sup_ok.sum()) >= 3:
+            try:
+                from scipy.spatial import ConvexHull as _CH8
+                _sup_eq = _CH8(np.column_stack(
+                    [x_out_grid[_sup_ok], y_out_grid[_sup_ok]])).equations
+            except Exception:
+                # A degenerate support (collinear / duplicated landings) has
+                # no hull; decline rather than guess.  Qhull raises its own
+                # QhullError subclass of Exception, and a degenerate bound is
+                # exactly the regime this must not invent an answer in.
+                _sup_eq = None
+            if _sup_eq is not None:
+                # The feather is measured in EXIT-LATTICE cells, taken from
+                # the traced samples themselves rather than from a paraxial
+                # magnification: the exit spacing of entrance-adjacent rays IS
+                # the resolution at which the support is known.  (The
+                # separate, non-negotiable allowance for the bilinear
+                # upsample's reach is ``_d0`` in :func:`_support_taper`.)
+                with np.errstate(invalid='ignore'):
+                    _sup_step = np.hypot(np.diff(x_out_grid, axis=0),
+                                         np.diff(y_out_grid, axis=0))
+                _sup_step = _sup_step[np.isfinite(_sup_step)]
+                _sup_pitch = (float(np.median(_sup_step))
+                              if _sup_step.size else float(dx * sub))
+                if not (np.isfinite(_sup_pitch) and _sup_pitch > 0.0):
+                    _sup_pitch = float(dx * sub)
+                _sup_bound = (np.ascontiguousarray(_sup_eq[:, :2].T),
+                              np.ascontiguousarray(_sup_eq[:, 2]),
+                              float(_SUPPORT_BOUND_FEATHER_CELLS) * _sup_pitch)
+                del _sup_step
+        del _sup_ok
+
     # R7 / audit F2 (2026-07-21): CARRIER-GATED fit-domain restriction.  When a
     # carrier is set, drop the entrance launch grid's outer margin + corners
     # (the strongly-aberrated / near-vignetting marginal rays) from the fit by
@@ -6214,6 +6446,60 @@ def apply_real_lens_traced(
                                  int(n_total), 0.01 * dx)
         return opl_flat.reshape(Xw.shape)
 
+    def _support_taper(Xg, Yg):
+        """niche C8: 1 inside the traced exit support, 0 beyond it, raised
+        cosine across a feather band of ``_SUPPORT_BOUND_FEATHER_CELLS``
+        exit-lattice cells outside the boundary.
+
+        ``s = max_f (n_f . p + d_f)`` over the hull's facets is the exact
+        signed distance to a convex boundary for a point outside it (Qhull
+        normalises ``equations`` to unit outward normals), and is <= 0 inside.
+
+        THE PLATEAU ``_d0`` IS NOT TASTE, IT IS THE UPSAMPLE.  This taper is
+        evaluated on the COARSE Newton lattice (pitch ``sub * dx`` in the exit
+        plane) and the amplitude is then bilinearly interpolated to the wave
+        grid, so a coarse node OUTSIDE the hull lends its attenuation to wave
+        pixels up to one coarse cell INSIDE it.  ``s`` is 1-Lipschitz, so a
+        pixel with ``s <= 0`` interpolates only from nodes with
+        ``s <= sqrt(2) * sub * dx``; holding the taper at exactly 1 out to
+        there makes the bleed identically zero rather than merely small.
+        MEASURED on niche D6's decentred fixture -- power removed from INSIDE
+        the bound's own support, over the chain input power:
+
+          feather (cells)     0.0        0.5        1.0        2.0        4.0
+          without the plateau 2.211e-04  8.194e-05  3.808e-05  1.207e-05  3.2e-06
+          with it             0          0          0          0          0
+
+        i.e. 1.1 % of what the bound removes on that fixture was legitimate
+        skirt lost to interpolation, and it is now exactly none.  The cost is
+        that the bound sits ``sqrt(2) sub dx`` further out (188 um on design
+        121's last group, 3 % of its 6.3 mm hull), which is measured not to
+        readmit any of the manufactured lobe there.
+        """
+        _A, _b, _f = _sup_bound
+        _d0 = float(np.sqrt(2.0) * sub * dx)
+        _sh = np.asarray(Xg).shape
+        _xg = np.asarray(Xg, dtype=np.float64).ravel()
+        _yg = np.asarray(Yg, dtype=np.float64).ravel()
+        _nf = int(_b.size)
+        _s = np.empty(_xg.size, dtype=np.float64)
+        # Chunked (pixels x facets) product: BLAS does the work, and the chunk
+        # caps the temporary at ~160 MB however many facets the hull has and
+        # however fine the Newton lattice is.  A per-facet Python loop would
+        # be ~50x slower on a large lattice.
+        _cn = max(1, int(2e7 // max(_nf, 1)))
+        for _i in range(0, _xg.size, _cn):
+            _j = min(_i + _cn, _xg.size)
+            _s[_i:_j] = (np.column_stack([_xg[_i:_j], _yg[_i:_j]]) @ _A
+                         + _b).max(axis=1)
+        _s = _s.reshape(_sh) - _d0
+        if _f <= 0.0:
+            return (_s <= 0.0).astype(np.float64)
+        return np.where(_s <= 0.0, 1.0,
+                        np.where(_s >= _f, 0.0,
+                                 0.5 * (1.0 + np.cos(np.pi * _s
+                                                     / max(_f, 1e-300)))))
+
     def _ray_density_amp_grid(Xg, Yg):
         """N12 (P11): geometric ray-density exit amplitude ``|E_in(x_in)| /
         sqrt(|det J|)`` on the exit-position grid ``(Xg, Yg)``.
@@ -6306,6 +6592,13 @@ def apply_real_lens_traced(
         if aperture is not None:
             r_ent2 = (xef * xef + yef * yef).reshape(sh)
             a_rd = np.where(r_ent2 <= (0.5 * aperture) ** 2, a_rd, np.nan)
+        # niche C8: an exit pixel OUTSIDE the region the traced rays actually
+        # reached has no data behind it -- the fitted inverse map there is an
+        # extrapolation, and on a non-radial map it can fold back into the
+        # bright beam and hand that pixel real amplitude.  Taper to zero across
+        # the support boundary instead.  See ``REMAP_INVERSE_SUPPORT_BOUND``.
+        if _sup_bound is not None:
+            a_rd = a_rd * _support_taper(Xg, Yg)
         return a_rd
 
     call_progress(progress, 'real_lens_traced', 0.55,

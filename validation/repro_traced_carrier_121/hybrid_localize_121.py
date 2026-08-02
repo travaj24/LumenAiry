@@ -122,6 +122,14 @@ def rs_spot(x0, y0, amp, ph0, p, q, surfs, back, xc_img, yc_img,
     step_md = float(np.percentile(st, 50)) / (2 * np.pi) if st.size else np.nan
 
     E = np.zeros((n_out, n_out), dtype=np.complex128)
+    Ez = np.zeros((n_out, n_out), dtype=np.complex128)
+    # 2026-08-01 (ORACLE_ENERGY_AND_D6_HALO): the first Rayleigh-Sommerfeld
+    # prefactor ``1/(i lambda)``, which this twin of ``oracle_spot``'s integral
+    # also omitted.  It is a pure constant, so every ratio this function has
+    # ever reported (EE, FWHM, live) is unchanged; what it buys is that ``I``
+    # and ``E`` are now a physical irradiance / field, and ``P_flux`` below is
+    # a real power comparable with the launch flux ``p_all * |h_x h_y|``.
+    c_rs = 1.0 / (1j * LAM)
     chunk = max(1, int(6e7 // max(xe.size, 1)))
     t0 = time.time()
     for j0 in range(0, n_out, chunk):
@@ -129,19 +137,34 @@ def rs_spot(x0, y0, amp, ph0, p, q, surfs, back, xc_img, yc_img,
         dyv = PY[j0:j1, None] - ye[None, :]
         for i, px in enumerate(PX):
             rho = np.sqrt((px - xe)[None, :] ** 2 + dyv ** 2 + back ** 2)
-            E[j0:j1, i] = np.sum((W * back) / (rho * rho)
-                                 * np.exp(1j * (ph[None, :] + K0 * rho)),
-                                 axis=1)
+            ker = np.exp(1j * (ph[None, :] + K0 * rho))
+            E[j0:j1, i] = c_rs * np.sum((W * back) / (rho * rho) * ker, axis=1)
+            Ez[j0:j1, i] = c_rs * np.sum(
+                W * (1.0 / (rho * rho) - 2.0 * back * back / rho ** 4
+                     + 1j * K0 * back * back / rho ** 3) * ker, axis=1)
     I = np.abs(E) ** 2
     tot = float(I.sum())
     Xg, Yg = np.meshgrid(ax, ax)
     cx = float((I * Xg).sum() / tot)
     cy = float((I * Yg).sum() / tot)
     r = np.hypot(Xg - cx, Yg - cy)
+    _cell = abs(hx * hy)
+    _p_launch = p_all * _cell
     out = {'I': I, 'E': E, 'ax': ax, 'centroid': (xc_img + cx, yc_img + cy),
            'live': p_ok / p_all if p_all else 0.0, 'step_w': step_w,
            'step_mx': step_mx, 'step_md': step_md,
-           'n_rays': int(good.sum()), 'time': time.time() - t0}
+           'n_rays': int(good.sum()), 'time': time.time() - t0,
+           # ABSOLUTE energy bookkeeping (2026-08-01).  ``p_all`` is a bare
+           # SUM |E|^2 cos, so the launch-cell area |hx hy| is what turns it
+           # into a flux; ``P_flux`` is the true z-directed image-plane power
+           # and ``P_sq`` the naive SUM |E|^2 dA, which omits kz/k.
+           'P_launch': _p_launch, 'P_live': p_ok * _cell,
+           'P_sq': tot * dx_out * dx_out,
+           'P_flux': float(np.imag(np.conj(E) * Ez).sum()) / K0
+           * dx_out * dx_out,
+           'P_ratio_flux': (float(np.imag(np.conj(E) * Ez).sum()) / K0
+                            * dx_out * dx_out / _p_launch
+                            if _p_launch else np.nan)}
     for rad in (3e-6, 6e-6, 12e-6):
         out[f'ee{int(rad * 1e6)}'] = float(I[r <= rad].sum()) / tot
     nb = int(min(n_out // 2, 12e-6 / dx_out))

@@ -1,0 +1,9 @@
+D6 controls.  REMAP_INVERSE_SUPPORT_BOUND present in this tree: True
+
+=== B.  DECENTRE SWEEP (paraxial leg, C8 OFF).  Same optic, same aperture, same grid; only the carrier decentre moves. ===
+    x0 [mm]   x0/w  r_hull[mm]  bound[mm]  reach[mm]   amax_halo      g_halo  nonzero px  warn
+     0.0000   0.00      1.2576     1.5721     2.9941   0.000e+00   0.000e+00           0 False
+     0.1500   0.25      1.3993     1.7491     2.8502   0.000e+00   0.000e+00           0 False
+     0.3000   0.50      1.5357     1.9197     2.7075   0.000e+00   0.000e+00           0 False
+     0.4500   0.75      1.5817     1.9771     2.5679   0.000e+00   0.000e+00           0 False
+     0.6000   1.00      1.6161     2.0202     2.4341   6.405e-01   6.447e-04        2550  True

@@ -1,0 +1,50 @@
+D6 controls.  REMAP_INVERSE_SUPPORT_BOUND present in this tree: True
+
+=== D.  WHAT THE TWO DEPENDENT GREEN TESTS ACTUALLY SEE ===
+  oracle: FWHM 3.1500 um  EE2 0.716265  EE4 0.991780   P_in 5.654867e-07
+
+  --- lobe PRESENT (C8 off = HEAD) ---
+    exact   FWHM 3.1500 um  EE2 0.703386  EE4 0.987210  peak_off_x +0.0000 um  |centroid| 0.0005 um
+    paraxial FWHM 5.8500 um  EE2 0.105736  EE4 0.290257  peak_off_x -7.2000 um
+    stage power: exact 5.65788415e-07  paraxial 5.65901787e-07  p_ex/p_in 1.00053359  p_ex/p_px 0.99979966
+      PASS  |FWHM_ex/FWHM_orc - 1| < 0.15      measured 0.000000
+      PASS  EE2_ex > 0.90 EE2_orc              measured 0.982020
+      PASS  EE4_ex > 0.97 EE4_orc              measured 0.995392
+      PASS  FWHM_px > 1.70 FWHM_orc            measured 1.857143
+      PASS  EE2_px < 0.25 EE2_orc              measured 0.147621
+      PASS  |peak_off_x_px| > 4 um             measured 7.200000
+      PASS  |peak_off_x_ex| < 0.5 um           measured 0.000000
+      PASS  FWHM_ex < 0.60 FWHM_px             measured 0.538462
+      PASS  EE2_ex > 5 EE2_px                  measured 6.652306
+      PASS  |centroid_ex| < 0.5 um             measured 0.000467
+      PASS  0.95 < p_ex/p_in < 1.02            measured 1.000534
+      PASS  |p_ex/p_px - 1| < 0.02             measured 0.000200
+
+  --- lobe REMOVED (C8 on) ---
+    exact   FWHM 3.1500 um  EE2 0.700104  EE4 0.985879  peak_off_x +0.0000 um  |centroid| 0.0028 um
+    paraxial FWHM 5.5500 um  EE2 0.106224  EE4 0.290626  peak_off_x -7.2000 um
+    stage power: exact 5.63994776e-07  paraxial 5.64018870e-07  p_ex/p_in 0.99736174  p_ex/p_px 0.99995728
+      PASS  |FWHM_ex/FWHM_orc - 1| < 0.15      measured 0.000000
+      PASS  EE2_ex > 0.90 EE2_orc              measured 0.977437
+      PASS  EE4_ex > 0.97 EE4_orc              measured 0.994050
+      PASS  FWHM_px > 1.70 FWHM_orc            measured 1.761905
+      PASS  EE2_px < 0.25 EE2_orc              measured 0.148303
+      PASS  |peak_off_x_px| > 4 um             measured 7.200000
+      PASS  |peak_off_x_ex| < 0.5 um           measured 0.000000
+      PASS  FWHM_ex < 0.60 FWHM_px             measured 0.567568
+      PASS  EE2_ex > 5 EE2_px                  measured 6.590805
+      PASS  |centroid_ex| < 0.5 um             measured 0.002767
+      PASS  0.95 < p_ex/p_in < 1.02            measured 0.997362
+      PASS  |p_ex/p_px - 1| < 0.02             measured 0.000043
+
+  --- the DEFECT'S influence on each asserted quantity ---
+    exact FWHM   3.150000 -> 3.150000 um   delta +0.0000 %
+    exact EE2    0.70338617 -> 0.70010369   delta -0.328248 pts
+    exact EE4    0.98721009 -> 0.98587878   delta -0.133131 pts
+    exact EE6    0.99888421 -> 0.99863578   delta -0.024842 pts
+    paraxial EE2 0.10573569 -> 0.10622431   delta +0.048862 pts
+    paraxial EE4 0.29025693 -> 0.29062643   delta +0.036951 pts
+    paraxial EE6 0.47130683 -> 0.47185917   delta +0.055233 pts
+    paraxial FWHM 5.850000 -> 5.550000 um
+    stage power exact    5.6578841495e-07 -> 5.6399477640e-07   delta -0.317016 %
+    stage power paraxial 5.6590178669e-07 -> 5.6401886999e-07   delta -0.332729 %

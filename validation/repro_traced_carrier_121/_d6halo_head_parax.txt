@@ -1,0 +1,34 @@
+D6 fixture: w=0.600 mm  f=3.000 mm  decentre x0=0.600 mm  aperture=3.400 mm  grid 1024 over 6.000 mm
+halo constants: contour e^-9  factor 1.25  tol 1.0e-03
+REMAP_INVERSE_SUPPORT_BOUND = False   leg=paraxial
+
+1 apply_real_lens_traced calls captured
+
+--- call [0] ---
+  grid N=1024 dx=5.8594 um  (half-width 2.9941 mm), launch 217^2
+  traced exit centroid (+0.5600, -0.0000) mm, grid reach 2.4341 mm
+  alive rays 12849 of 47089; above the e^-9 contour 11580
+  r_hull  (e^-9 gate, = the library's) 1.6161 mm -> bound 2.0202 mm   amax 6.405e-01  g 6.447e-04  pixels 675136
+  r_hull  (ALL alive rays)            1.8115 mm -> bound 2.2644 mm   amax 0.000e+00  g 0.000e+00  pixels 579391
+  library warnings: halo=True  fold=True
+
+=== the warning call is [0] ===
+  [warn] apply_real_lens_traced: amplitude_model='ray_density' detected a fold caustic (det J -> 0 or a sign change) in the ray map.  The single-branch ray-density amplitude is CAPPED there (finite, never inf/nan) but is UNRELIABLE near the fold -- this mode does NOT sum the multi-valued ray branches with the KMAH/Maslov phase.  Use apply_real_lens_gbd or apply_real_lens_fga for caustic-faithful amplitude.
+  [warn] apply_real_lens_traced: amplitude_model='ray_density' HALO self-check FAILED -- amax_halo = 6.405e-01 of peak beyond 2.0202 mm (1.25 x the exact-ray exit support radius 1.6161 mm about the traced exit centroid (+0.5600, -0.0000) mm), against a tolerance of 1.0e-03; that halo carries g_halo = 6.449e-04 of the aperture-transmitted input power, and the grid reaches 2.4341 mm from that centroid.  NO T
+
+  ALIVE TRACED RAYS beyond the halo bound (2.0202 mm): 0 of 12849
+  traced exit map, ALIVE rays: x in [-1.2437, +1.2437] mm, y in [-1.2437, +1.2437] mm; max radius from the OPTICAL AXIS 1.2576 mm (aperture radius 1.7000 mm)
+
+  the BRIGHTEST halo pixel sits at (-1.4297, +0.7031) mm, i.e. 1.5932 mm from the OPTICAL AXIS and 2.1103 mm from the traced exit centroid
+    halo centroid (power-weighted): (-1.5467, +0.1513) mm
+    halo pixels' distance from the OPTICAL AXIS: 1.4607 .. 1.7000 mm (2550 nonzero of 675136)
+
+=== REPLAY of the warning call ===
+  as shipped (ray_density, remap)        -> amax_halo 6.405e-01   g_halo 6.447e-04   peak 1.0813e+00   warns 1   |ray_density/this| at the hot halo pixels = 1.000e+00
+  screen, pip=True  [PULLBACK AMPLITUDE] -> amax_halo 0.000e+00   g_halo 0.000e+00   peak 9.9999e-01   warns 0
+  screen, pip=False [PULLBACK AMPLITUDE] -> amax_halo 0.000e+00   g_halo 0.000e+00   peak 9.9999e-01   warns 0
+  ray_density, pip=True                  -> amax_halo 6.405e-01   g_halo 6.447e-04   peak 1.0813e+00   warns 1   |ray_density/this| at the hot halo pixels = 1.000e+00
+  ray_density, ray_subsample=1           -> amax_halo 0.000e+00   g_halo 0.000e+00   peak 1.0814e+00   warns 0
+  ray_density, fit_radius_beam_factor=1.0 -> amax_halo 3.368e-01   g_halo 2.890e-05   peak 1.0813e+00   warns 1
+  ray_density, fit_radius_beam_factor=3.0 -> amax_halo 0.000e+00   g_halo 0.000e+00   peak 1.0812e+00   warns 0
+  as shipped + C8 support bound          -> amax_halo 0.000e+00   g_halo 0.000e+00   peak 1.0813e+00   warns 0

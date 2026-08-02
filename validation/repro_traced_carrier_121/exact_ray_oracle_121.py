@@ -93,10 +93,38 @@ def _phase_gradient(env, dx):
 def oracle_spot(env_doe, R_doe, dx_doe, groups_post, L, M, *,
                 n_launch=161, clip=3.0, back=5.0e-3, dx_out=0.1e-6,
                 n_out=261, carry_phase=False, trailing=C.TRAILING,
-                verbose=True, prefix=''):
+                verbose=True, prefix='', flux=True):
     """Exact-ray + Rayleigh-Sommerfeld PSF for one DOE order.
 
-    Returns a dict with the image intensity and the spot metrics."""
+    Returns a dict with the image intensity and the spot metrics.
+
+    ABSOLUTE ENERGY (fixed 2026-08-01, ORACLE_ENERGY_AND_D6_HALO).  Until then
+    the RS kernel below omitted its ``1/(i lambda)`` prefactor, so ``I`` was a
+    field intensity times ``1/lambda^2`` = 5.827e11 and NO absolute
+    ``P_out/P_in`` could be read off the oracle (only ratios between its own
+    runs).  The prefactor is now applied, which makes ``I`` a physical
+    irradiance for a launch field ``env_doe`` in sqrt(W)/m, and the returned
+    dict carries the absolute bookkeeping:
+
+    ``launch_power``   SUM |E|^2 cos(theta) h^2 -- the flux the launch lattice
+                       carries.  This ALREADY included the launch-cell area
+                       ``h^2``; the claim in POP_CROSSCHECK_121 S9.2 that it
+                       does not is wrong, and the double-count is in that
+                       audit's own harness (``pop_ours_121.py``), fixed there.
+    ``P_window_sq``    SUM |E_img|^2 dx_out^2 -- by Parseval this is
+                       INT |A(k)|^2 d2k, i.e. it OMITS the obliquity kz/k.
+    ``P_window_flux``  (1/k) Im INT E* dE/dz dA -- the TRUE z-directed power,
+                       INT |A(k)|^2 (kz/k) d2k.  This is the one that must come
+                       back as the launched flux; ``P_window_sq`` overshoots it
+                       by 1/<cos theta> over the beam's own cone, 2.9 % at this
+                       design's exit NA.  Validated against an unaberrated
+                       converging sphere in ``oracleE_rs_control.py``:
+                       P_flux/P_in = 1 to 1.2e-7.
+
+    ``flux=False`` skips the second accumulation (about 40 % of the runtime)
+    and leaves ``P_window_flux`` NaN.  EE / FWHM / centroid are unaffected by
+    the prefactor to within double-precision rounding (measured 4.4e-16
+    relative, ``oracleE_absolute_121.py --null``)."""
     lam = C.LAM
     k = 2.0 * np.pi / lam
     from lumenairy.propagators.carrier import _envelope_amp_radius
@@ -205,9 +233,19 @@ def oracle_spot(env_doe, R_doe, dx_doe, groups_post, L, M, *,
         * np.minimum(_WG[:, 1:], _WG[:, :-1]).ravel() / max(Wj.max(), 1e-300)])
     _wst = _wst[np.isfinite(_wst)]
     step_w = float(np.nanmax(_wst)) / (2 * np.pi) if _wst.size else np.nan
+    # p99.9 as well as the max: a single max is dominated by a handful of rays
+    # at the vignetting edge / ray-map fold where sqrt(J) spikes.  This is the
+    # statistic the campaign's other instruments quote (hybrid_localize's
+    # ``step_w``), so the two are directly comparable.
+    step_w999 = (float(np.percentile(_wst, 99.9)) / (2 * np.pi)
+                 if _wst.size else np.nan)
 
     I = np.zeros((n_out, n_out))
     E = np.zeros((n_out, n_out), dtype=np.complex128)
+    Ez = np.zeros((n_out, n_out), dtype=np.complex128)
+    # first Rayleigh-Sommerfeld prefactor.  |1/(i lambda)| = 1/lambda; the
+    # phase of the constant cancels out of |E|^2 and out of Im(E* dE/dz).
+    c_rs = 1.0 / (1j * lam)
     chunk = max(1, int(6e7 // max(xe.size, 1)))
     t0 = time.time()
     for j0 in range(0, n_out, chunk):
@@ -216,22 +254,37 @@ def oracle_spot(env_doe, R_doe, dx_doe, groups_post, L, M, *,
         for i, px in enumerate(PX):
             dxv = px - xe
             rho = np.sqrt(dxv[None, :] ** 2 + dyv ** 2 + back ** 2)
-            E[j0:j1, i] = np.sum(
-                (Wj * back) / (rho * rho)
-                * np.exp(1j * (ph_exit[None, :] + k * rho)), axis=1)
+            ker = np.exp(1j * (ph_exit[None, :] + k * rho))
+            E[j0:j1, i] = c_rs * np.sum(
+                (Wj * back) / (rho * rho) * ker, axis=1)
+            if flux:
+                # d/dz of  z/rho^2 exp(i k rho)  at fixed transverse offset
+                Ez[j0:j1, i] = c_rs * np.sum(
+                    Wj * (1.0 / (rho * rho)
+                          - 2.0 * back * back / rho ** 4
+                          + 1j * k * back * back / rho ** 3) * ker, axis=1)
     I = np.abs(E) ** 2
     dt = time.time() - t0
+    p_win_sq = float(I.sum()) * dx_out * dx_out
+    p_win_flux = (float(np.imag(np.conj(E) * Ez).sum()) / k * dx_out * dx_out
+                  if flux else float('nan'))
 
     # --- metrics ------------------------------------------------------------
     tot = float(I.sum())
     Xg, Yg = np.meshgrid(ax, ax)
     cx = float((I * Xg).sum() / tot)
     cy = float((I * Yg).sum() / tot)
-    out = {'I': I, 'ax': ax, 'centre': (xc, yc), 'centroid': (cx, cy),
+    out = {'I': I, 'E': E, 'ax': ax, 'centre': (xc, yc), 'centroid': (cx, cy),
            'time': dt, 'w_doe': w, 'launch_power': p_launch,
+           'live_power': p_live,
            'live_frac': p_live / p_launch if p_launch else 0.0,
            'n_dead': int((~good).sum()), 'ray_step_frac': step_frac,
            'ray_step_weighted': step_w,
+           'ray_step_w_p999': step_w999,
+           'P_window_sq': p_win_sq, 'P_window_flux': p_win_flux,
+           'P_ratio_sq': p_win_sq / p_launch if p_launch else np.nan,
+           'P_ratio_flux': p_win_flux / p_launch if p_launch else np.nan,
+           'P_ratio_flux_live': (p_win_flux / p_live if p_live else np.nan),
            'phase_step': max_step, 'na_eff': na_eff}
     for tag, _c in (('cen', (cx, cy)), ('peak', None)):
         if _c is None:
@@ -265,6 +318,12 @@ def oracle_spot(env_doe, R_doe, dx_doe, groups_post, L, M, *,
               f"centroid offset ({cx * 1e6:+.3f},{cy * 1e6:+.3f}) um")
         print(f"{prefix}  live power {out['live_frac'] * 100:.4f} %, dead rays "
               f"{out['n_dead']}, exit NA {na_eff:.4f}")
+        print(f"{prefix}  ABSOLUTE  P_in(launch flux) = {p_launch:.6e}   "
+              f"P_win(flux) = {p_win_flux:.6e}   P_win(|E|^2) = {p_win_sq:.6e}")
+        print(f"{prefix}            P_win(flux)/P_in = "
+              f"{out['P_ratio_flux'] * 100:.4f} %   "
+              f"P_win(|E|^2)/P_in = {out['P_ratio_sq'] * 100:.4f} %  "
+              f"(the second omits the image-plane obliquity kz/k)")
         print(f"{prefix}  integrand phase step between adjacent launch rays "
               f"at the patch corner: {step_frac:.4f} cycles (max), "
               f"{step_w:.4f} amplitude-weighted "

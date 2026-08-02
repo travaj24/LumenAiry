@@ -4,6 +4,52 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — the inverse map may no longer invent light: exit pixels outside the traced support get zero (niche C8, `elements/_lens_traced.py`)
+
+Closes the C6 on-axis energy defect STRUCTURALLY, at the mechanism.  The
+`ray_density` amplitude was evaluated from the fitted INVERSE of the traced
+entrance->exit map even at exit pixels no traced ray ever reached; there the
+fit extrapolates, and its made-up pullbacks land in the bright beam and
+acquire amplitude -- light from nowhere.  `REMAP_INVERSE_SUPPORT_BOUND = True`
+(fail-before `= False`, bit-exact) zeroes ray-density amplitude outside the
+convex hull of the alive traced rays' exit landing points, with a plateau of
+`sqrt(2) sub dx` and a one-exit-cell raised-cosine feather (a plateau-less
+taper bled 3.8e-05 of Pin of LEGITIMATE skirt through the bilinear upsample
+-- measured and fixed pre-ship).  Both `newton_fit` backends share one hull.
+
+Measured: (0,0) production `P_out/P_ap` **1.000741 -> 0.996026** (the C6-off
+class), ghost `g4`/`amax4` **exactly 0**, EE3 unchanged to the last digit on
+every order, the at-plane acceptance unchanged, and -- unlike the opt-in fit
+guard, which it makes redundant AND safe -- **zero regressions across the six
+synthetic fixtures**.  Every measured order/configuration now scores **6/6**
+of the conservation bounds at both subsamples, including two cases the guard
+structurally could not reach and one that fails with C6 off.  100 % of the
+removed power lies outside the convex hull of every alive ray, at every
+feather (three-way partition against the call's own ray bundle).
+
+The same defect class was independently confirmed elsewhere first: the C7
+halo check's very first suite run flagged a 0.641-of-peak lobe beyond the
+exact-ray support in a niche-D6 fixture (ordinary group call, 1.0 w
+decentre; 0 of 12849 alive rays reach the lobe radius; amplitude gain
+2.55e5; diffraction excluded at 1.42e6x below the observed level).  C8 takes
+that lobe to exactly 0 too.  Record:
+`docs/audits/C8_INVERSE_SUPPORT_BOUND_2026_08_01.md` and
+`ORACLE_ENERGY_AND_D6_HALO_2026_08_01.md`.
+
+### Fixed — the exact-ray oracle can now answer ABSOLUTE energy questions (`validation/repro_traced_carrier_121/`)
+
+The Rayleigh-Sommerfeld kernel in `oracle_spot` omitted the `1/(i lambda)`
+prefactor (every intensity `1/lambda^2` too large).  The second defect the
+POP cross-check alleged -- `launch_power` missing the cell area -- was FALSE:
+the double-count was in the POP comparison harness itself, and the
+`lambda^2/h^2` arithmetic closes the discrepancy exactly.  Validated
+absolutely: an unaberrated converging sphere through the same machinery
+returns `P_out/P_in` = **0.99999988**; design 121 converges to
+**P/Pin = 1.0000 on both (0,0) and (-4,-2)**, agreeing with Zemax POP's
+1.00000000 and the 70681-ray pupil trace.  The energy-conservation audit was
+verified UNAFFECTED digit-for-digit (its references are chain-internal
+ratios that never touch the RS kernel).
+
 ### Fixed — `remap` now launches at the stationary point of the WHOLE phase (niche C6, `elements/_lens_traced.py`)
 
 `preserve_input_phase='remap'` launched its rays along `grad(W)` -- the

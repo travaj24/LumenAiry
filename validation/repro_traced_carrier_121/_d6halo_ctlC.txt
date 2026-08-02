@@ -1,0 +1,9 @@
+D6 controls.  REMAP_INVERSE_SUPPORT_BOUND present in this tree: True
+
+=== C.  WHAT DIFFRACTION WOULD PERMIT THERE ===
+  1. The element operator itself.  apply_real_lens_traced builds E_out = amp(pullback) * exp(i k0 opl) and masks it; there is no propagation integral, no FFT and no angular spectrum in it, so it carries NO diffraction at all.  Its exact ray map spans |r| <= 1.2576 mm about the axis.
+  2. The boundary-diffraction (Young) wave.  The shadow edge on the halo's side (-x) is cast by the aperture rim at x = -1.700 mm, where the INCIDENT amplitude is 4.5194e-07 = 4.5195e-07 of peak.
+     A boundary wave cannot exceed the incident amplitude at its own edge, so the physically permitted amplitude beyond that shadow is <= 4.519e-07 of peak.
+     MEASURED lobe: 6.4052e-01 of peak -- 1.417e+06 times the ceiling.
+  3. The incident field AT the halo pixels is 1.8573e-05 of peak, so even a perfect (diffraction-free) screen model would put 1.857e-05 there.  The measured lobe is 3.449e+04 times THAT.
+  4. The numerical control: the same call at ray_subsample=1 (physics identical, discretisation finer) -- see d6halo_probe.py's replay: amax_halo = 0.000e+00 exactly.

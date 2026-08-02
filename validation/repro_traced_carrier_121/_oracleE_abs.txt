@@ -1,0 +1,38 @@
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+DOE plane: R = 703642.7361 mm, dx = 51.2334 um, N = 1024   NL=161 clip=3.0 back=5.0 mm
+DOE-plane grid power SUM|env|^2 dx^2 = 6.825232e-08 (the launch lattice re-quadratures the same field)
+
+=== [ABS] absolute P/Pin, window and launch-density sweeps ===
+
+--- order (+0,+0)  tilt (+0.000,+0.000) mrad ---
+   dxo[um]  Nout halfwin[um]    NL     live%   P_flux/P_in   P_sq/P_in  step p99.9   t[s]
+      0.80    41       16.00   161  100.0000    100.002932    100.5876     0.06900    2.5
+      0.80    81       32.00   161  100.0000    100.003178    100.5879     0.13801    9.8
+      0.80   151       60.00   161  100.0000    100.003286    100.5880     0.25884   36.4
+      0.80   251      100.00   161  100.0000    100.003353    100.5880     0.43129   91.1
+      0.10   261       13.00   161  100.0000    100.002790    100.5874     0.05612  101.0
+      0.80   151       60.00    81  100.0000    100.013539    100.5983     0.51581    7.1
+      0.80   151       60.00   121  100.0000    100.005898    100.5906     0.34393   18.1
+      0.80   151       60.00   201  100.0000    100.002084    100.5868     0.20695   53.5
+      0.80   151       60.00   241  100.0000    100.001424    100.5861     0.17256   76.1
+  back   2.0 mm -> P_flux/P_in = 100.003265 %   P_sq/P_in = 100.5880 %   [36s]
+  back   5.0 mm -> P_flux/P_in = 100.003286 %   P_sq/P_in = 100.5880 %   [36s]
+  back  10.0 mm -> P_flux/P_in = 100.003306 %   P_sq/P_in = 100.5880 %   [38s]
+
+--- order (-4,-2)  tilt (-46.063,-23.032) mrad ---
+   dxo[um]  Nout halfwin[um]    NL     live%   P_flux/P_in   P_sq/P_in  step p99.9   t[s]
+      0.80    41       16.00   161   99.9999    100.029499    100.6145     0.06894    2.3
+      0.80    81       32.00   161   99.9999    100.047357    100.6334     0.13790   10.1
+      0.80   151       60.00   161   99.9999    100.078920    100.6668     0.25854   34.7
+      0.80   251      100.00   161   99.9999    100.131587    100.7226     0.43075   91.0
+      0.10   261       13.00   161   99.9999    100.025787    100.6105     0.05599  106.6
+      0.80   151       60.00    81  100.0000    100.189757    100.7836     0.51501    8.8
+      0.80   151       60.00   121   99.9999    100.092040    100.6806     0.34382   18.0
+      0.80   151       60.00   201   99.9999    100.051384    100.6377     0.20673   52.1
+      0.80   151       60.00   241   99.9999    100.038210    100.6238     0.17245   73.9
+  back   2.0 mm -> P_flux/P_in = 100.400903 %   P_sq/P_in = 101.0078 %   [35s]
+  back   5.0 mm -> P_flux/P_in = 100.078920 %   P_sq/P_in = 100.6668 %   [35s]
+  back  10.0 mm -> P_flux/P_in = 100.025203 %   P_sq/P_in = 100.6099 %   [37s]

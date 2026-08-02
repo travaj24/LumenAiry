@@ -105,18 +105,26 @@ _BASE_KW = dict(wavelength=_WL, amplitude_model='ray_density',
 
 
 def _call(spec, launch=False, guard=False, policy=None, factor=None,
-          tol=None, cx=0.0, cy=0.0, **over):
+          tol=None, cx=0.0, cy=0.0, bound=None, **over):
     """One element call with every halo constant and both C6 flags controlled
-    and restored.  Returns ``(field, [halo warning messages])``."""
+    and restored.  Returns ``(field, [halo warning messages])``.
+
+    ``bound`` controls niche C8's ``REMAP_INVERSE_SUPPORT_BOUND`` (``None``
+    leaves the shipped default).  It exists for ONE test - the fit-guard
+    regression below, whose stimulus is a manufactured lobe that C8 removes at
+    source - and every other test here runs at the shipped default, so this
+    file still scores the shipped path."""
     E = _field(spec['n'], spec['dx'], spec['w'], spec['rc'], spec['alpha'],
                cx=cx, cy=cy)
     presc = _singlet(spec['r1'], spec['r2'], spec['th'], spec['z'], spec['ap'])
     old = (LT.REMAP_STATIONARY_PHASE_LAUNCH,
            LT.REMAP_STATIONARY_PHASE_FIT_GUARD,
            LT.RAY_DENSITY_HALO_CHECK, LT._RD_HALO_RADIUS_FACTOR,
-           LT._RD_HALO_AMAX_TOL)
+           LT._RD_HALO_AMAX_TOL, LT.REMAP_INVERSE_SUPPORT_BOUND)
     LT.REMAP_STATIONARY_PHASE_LAUNCH = bool(launch)
     LT.REMAP_STATIONARY_PHASE_FIT_GUARD = bool(guard)
+    if bound is not None:
+        LT.REMAP_INVERSE_SUPPORT_BOUND = bool(bound)
     if policy is not None:
         LT.RAY_DENSITY_HALO_CHECK = policy
     if factor is not None:
@@ -135,7 +143,7 @@ def _call(spec, launch=False, guard=False, policy=None, factor=None,
         (LT.REMAP_STATIONARY_PHASE_LAUNCH,
          LT.REMAP_STATIONARY_PHASE_FIT_GUARD,
          LT.RAY_DENSITY_HALO_CHECK, LT._RD_HALO_RADIUS_FACTOR,
-         LT._RD_HALO_AMAX_TOL) = old
+         LT._RD_HALO_AMAX_TOL, LT.REMAP_INVERSE_SUPPORT_BOUND) = old
     msgs = [str(w.message) for w in wl
             if 'HALO self-check FAILED' in str(w.message)]
     return F, msgs
@@ -229,11 +237,26 @@ def test_fires_on_the_fit_guard_regression(_warm):
     REVERSES on some fixtures -- the hard mask is clean and the weighted branch
     ghosts.  This is one of them, and it is exactly the class of defect the
     energy self-check cannot see.  Both directions are pinned: guard off is
-    silent, guard on warns, and the energy band is quiet in BOTH."""
-    Fa, ma = _call(_GHOST, launch=True, guard=False)
-    Fb, mb = _call(_GHOST, launch=True, guard=True)
+    silent, guard on warns, and the energy band is quiet in BOTH.
+
+    2026-08-01 (niche C8).  The stimulus this test needs -- a manufactured lobe
+    -- is what ``REMAP_INVERSE_SUPPORT_BOUND`` removes AT SOURCE, so the
+    detector correctly reports nothing when it is on.  The check itself is
+    unchanged and no bar is moved: the fires-on-a-lobe arm is now measured with
+    the bound OFF (the library state this check was calibrated in), and the
+    bound ON is asserted as well -- the lobe is gone and the check is silent,
+    which is the outcome that would otherwise have silently replaced a true
+    positive with a green test."""
+    Fa, ma = _call(_GHOST, launch=True, guard=False, bound=False)
+    Fb, mb = _call(_GHOST, launch=True, guard=True, bound=False)
     assert ma == [], ma
     assert mb, 'the halo check missed a confirmed manufactured lobe'
+    # niche C8 removes the lobe, so the SAME call is silent with it on -- and
+    # the field really is quieter, not merely unreported.
+    Fc, mc = _call(_GHOST, launch=True, guard=True, bound=True)
+    assert mc == [], mc
+    assert float(np.abs(Fc).max()) <= float(np.abs(Fb).max()) * (1 + 1e-12)
+    assert float((np.abs(Fc) ** 2).sum()) < float((np.abs(Fb) ** 2).sum())
     # ... and the total-power band would NOT have caught it, which is the
     # whole argument for this check existing.
     p_in = float((np.abs(_field(_GHOST['n'], _GHOST['dx'], _GHOST['w'],

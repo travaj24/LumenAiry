@@ -131,13 +131,19 @@ def main(argv=None):
                          else None)
                      for k, v in r.items() if k not in ('I', 'ax', 'centre',
                                                         'centroid')}
-            # oracle_spot's ``launch_power`` is sum(amp^2 * cos) WITHOUT the
-            # launch-cell area, while its integrand weight carries h^2 -- so
-            # the physical launched power needs the h^2 back.
-            h = 2.0 * a.clip * float(r['w_doe']) / (a.nl - 1)
-            extra['P_launch'] = float(r['launch_power']) * h * h
+            # CORRECTED 2026-08-01 (ORACLE_ENERGY_AND_D6_HALO).  The comment
+            # that used to sit here -- "oracle_spot's ``launch_power`` is
+            # sum(amp^2 cos) WITHOUT the launch-cell area" -- was wrong:
+            # ``oracle_spot`` has always multiplied by ``h * h``.  Doing it
+            # again here divided P_ratio by h^2 = 6.9e-09 and is the whole
+            # reason POP_CROSSCHECK_121 S9.2 reported an "arbitrary" oracle
+            # scale of 3.1e-05.  The other half (the missing RS 1/(i lambda))
+            # is fixed inside ``oracle_spot``; both are needed.
+            extra['P_launch'] = float(r['launch_power'])
             extra['P_window'] = P_win
-            extra['P_ratio'] = P_win / extra['P_launch']
+            extra['P_window_flux'] = float(r['P_window_flux'])
+            extra['P_ratio'] = float(r['P_ratio_flux'])
+            extra['P_ratio_sq'] = float(r['P_ratio_sq'])
             extra['P_doe'] = P_doe
             extra['P_launch_over_doe'] = extra['P_launch'] / P_doe
             extra['live_frac'] = float(r['live_frac'])
