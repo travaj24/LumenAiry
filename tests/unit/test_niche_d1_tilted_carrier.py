@@ -1201,7 +1201,7 @@ def test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive(monkeypatch)
     def _folds(msgs):
         return sum('fold caustic' in m for m in msgs)
 
-    _, _, msgs = _ghost_metrics()
+    _, good_rel, msgs = _ghost_metrics()
     assert _folds(msgs) == 0, msgs
 
     # niche C6: the fail-before witness needs the pre-C6 ray launch as well --
@@ -1211,7 +1211,14 @@ def test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive(monkeypatch)
     monkeypatch.setattr(_lt, 'REMAP_STATIONARY_PHASE_LAUNCH', False)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
     _, bad_rel, bad_msgs = _ghost_metrics()
-    assert bad_rel > 0.1
+    # ENVELOPE, not an absolute pin (2026-08-02): the broken configuration's
+    # ghost magnitude is BLAS-build-dependent -- measured > 0.1 on local
+    # builds and CPython 3.12/3.13 CI, but 0.0283 on 3.11 CI, which failed
+    # the old absolute ``> 0.1`` bar without ever reaching the fold-fires
+    # assertion below (the actual witness).  The platform-robust claim is
+    # comparative: the broken arm is MUCH worse than the shipped one, and
+    # the fold detector fires on it.
+    assert bad_rel > max(5.0 * good_rel, 0.02), (bad_rel, good_rel)
     assert _folds(bad_msgs) >= 1, \
         'the fold detector no longer flags the folded fit -- retune the case'
     assert not hasattr(_lt, '_RAY_DENSITY_SCAN_SUPPORT_REL'), \
