@@ -41,6 +41,7 @@ import numpy as np
 import pytest
 
 import lumenairy as la
+from lumenairy.propagators import carrier as CM
 from lumenairy.propagators.carrier import _exact_sphere_eikonal, _sphere_parab_conversion
 
 _WL = 1.31e-6
@@ -84,14 +85,41 @@ def test_conversion_factor_analytic_and_unit_modulus():
 
 def test_conversion_factor_band_limited_taper():
     """Beyond ``r_safe`` the factor rolls off to identity (1+0j), so the
-    aliasing guard band carries no phase."""
+    aliasing guard band carries no phase.
+
+    2026-08-02 (niche C9): the taper is no longer the shipped behaviour -- the
+    conversion is applied EXACTLY on the whole grid.  The assertion below is
+    unchanged word for word; it is now scored on the FAIL-BEFORE arm
+    (``SPHERE_PARAB_CONVERSION_EXACT = False``), which is the library state it
+    was calibrated in.  The shipped state is asserted alongside rather than
+    instead, so this file still pins BOTH sides of the switch.  Full record:
+    ``docs/audits/D121_FINAL_CLOSURE_2026_08_02.md`` and
+    ``tests/unit/test_niche_c9_sphere_parab_exact_conversion.py``."""
     N, dx, R = 512, 40e-6, -8e-3
     r_safe = (abs(R) ** 3 * _WL / dx) ** (1.0 / 3.0)
     x = (np.arange(N) - N / 2) * dx
     rr = np.sqrt(x[None, :] ** 2 + x[:, None] ** 2)
     assert rr.max() > 1.2 * r_safe, 'test grid must reach past r_safe'
-    f = _sphere_parab_conversion((N, N), dx, _WL, R, +1)
-    np.testing.assert_allclose(f[rr > r_safe], 1.0 + 0.0j, atol=1e-12)
+    _old = CM.SPHERE_PARAB_CONVERSION_EXACT
+    try:
+        CM.SPHERE_PARAB_CONVERSION_EXACT = False
+        f = _sphere_parab_conversion((N, N), dx, _WL, R, +1)
+        np.testing.assert_allclose(f[rr > r_safe], 1.0 + 0.0j, atol=1e-12)
+        # ... and the shipped arm carries the exact phase out there instead.
+        CM.SPHERE_PARAB_CONVERSION_EXACT = True
+        g = _sphere_parab_conversion((N, N), dx, _WL, R, +1)
+        np.testing.assert_allclose(np.abs(g), 1.0, atol=1e-12)
+        assert np.abs(g[rr > r_safe] - 1.0).max() > 0.5, (
+            'the shipped conversion must NOT be identity beyond r_safe')
+        # the two agree exactly inside the old onset, so the change is
+        # confined to the annulus
+        core = rr < 0.75 * r_safe
+        assert core.any()
+        CM.SPHERE_PARAB_CONVERSION_EXACT = False
+        assert np.array_equal(
+            g[core], _sphere_parab_conversion((N, N), dx, _WL, R, +1)[core])
+    finally:
+        CM.SPHERE_PARAB_CONVERSION_EXACT = _old
 
 
 @pytest.mark.parametrize('R', [np.inf, -np.inf, 0.0])
@@ -123,10 +151,16 @@ def test_conversion_guard_tests_the_taper_ONSET_not_r_safe():
     APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S2).
 
     The regime this pins is ``0.375 r_safe < w <= 0.5 r_safe``: warned about
-    now, silent before.  Design 121 sits at ``w = 0.459 r_safe``, inside it."""
+    now, silent before.  Design 121 sits at ``w = 0.459 r_safe``, inside it.
+
+    2026-08-02 (niche C9): the TRIGGER is unchanged and so is everything this
+    test measures; only the message was reworded (there is no taper to have an
+    onset any more), so the ``match`` phrase moved from ``taper ONSET`` to the
+    stable ``band-limit radius`` the sibling test above already uses.  No
+    threshold, radius or assertion changed."""
     N, dx, R = 256, 40e-6, -4e-3
     r_safe = (abs(R) ** 3 * _WL / dx) ** (1.0 / 3.0)
-    with pytest.warns(RuntimeWarning, match='taper ONSET'):
+    with pytest.warns(RuntimeWarning, match='band-limit radius'):
         _sphere_parab_conversion((N, N), dx, _WL, R, +1,
                                  w_beam=0.459 * r_safe)
     # ... and just outside it the guard is still silent, so the threshold

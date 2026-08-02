@@ -1,0 +1,20 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 9717ad88dd959889
+  carrier.py 5a1b0d1021969df1
+config: RN=1024 RS=4 NFC=12288 WF=4.0 NOUT=192 DXO=0.09999999999999999 um  final_leg='exact'
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+
+########## ORDER (-4,-2) ##########
+  BASELINE = v5.32.0 (C9 off, tapered) EE3  87.8342  dEE3  +0.0000  EE6  98.3395  Ptile  98.7384  relL2 0.000e+00  fold 0  P>nyq None  [552s]
+  NULL identity patch              EE3  87.8342  dEE3  +0.0000  EE6  98.3395  Ptile  98.7384  relL2 0.000e+00  fold 0  P>nyq None  [556s]
+  C9 ON (exact conversion, shipped) EE3  89.2353  dEE3  +1.4011  EE6  98.9006  Ptile  99.2280  relL2 5.810e-02  fold 0  P>nyq None  [515s]
+  same via the pre-flag monkeypatch EE3  89.2353  dEE3  +1.4011  EE6  98.9006  Ptile  99.2280  relL2 5.810e-02  fold 0  P>nyq None  [481s]
+variant                               EE3%    EE6%   EE12%   Ptile%      relL2  dphi_rms      s
+-----------------------------------------------------------------------------------------------
+BASELINE = v5.32.0 (C9 off, tapered)  87.834  98.340  98.737  98.7384  0.000e+00  1.79e-17    552
+NULL identity patch                 87.834  98.340  98.737  98.7384  0.000e+00  1.79e-17    556
+C9 ON (exact conversion, shipped)   89.235  98.901  99.227  99.2280  5.810e-02  2.49e-02    515
+same via the pre-flag monkeypatch   89.235  98.901  99.227  99.2280  5.810e-02  2.49e-02    481

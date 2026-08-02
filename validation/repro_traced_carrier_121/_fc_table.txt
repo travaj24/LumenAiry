@@ -1,0 +1,101 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 9717ad88dd959889
+  carrier.py 1a90453a4ef65399
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+
+########## ORDER (+0,+0)   L,M = +0.000,+0.000 mrad ##########
+  arm                                    EE3 %     EE6 %  FWHM um  env step  RS p99.9
+  oracle CARRY=0                       90.0808   99.9459    3.454    0.0000    0.0259   [32s]
+  oracle CARRY=1                       90.7421   99.8955    3.441    0.0049    0.0259   [34s]
+  chain  taper=on   split=parabola     89.2007   99.7849    3.718    3.1355    0.0389   [52s]
+  chain  taper=on   split=exact        89.6615   99.8190    3.657    2.7078    0.0389   [48s]
+  chain  taper=off  split=parabola     90.2821   99.8543    3.579    1.4504    0.0389   [46s]
+  chain  taper=off  split=exact        90.6934   99.8777    3.442    0.0322    0.0389   [48s]
+  DECOMPOSITION (+0,+0):  shipped 89.201 vs true ceiling 90.742  = +1.541 points
+     ceiling correction (oracle carried the DOE residual): +0.661   [old ceiling 90.081]
+     INSTRUMENT (readout split parabola -> exact): +0.461
+     LIBRARY    (conversion taper on -> off):      +1.032
+     RESIDUAL   (chain best vs true ceiling):      +0.049
+
+########## ORDER (-1,+0)   L,M = -11.516,+0.000 mrad ##########
+  arm                                    EE3 %     EE6 %  FWHM um  env step  RS p99.9
+  oracle CARRY=0                       90.2060   99.9490    3.459    0.0000    0.0259   [31s]
+  oracle CARRY=1                       90.7876   99.9000    3.451    0.0049    0.0259   [32s]
+  chain  taper=on   split=parabola     88.4038   99.2369    3.713    3.1392    0.0392   [56s]
+  chain  taper=on   split=exact        88.7417   99.2508    3.700    3.1038    0.0392   [51s]
+  chain  taper=off  split=parabola     89.4820   99.3356    3.586    1.4482    0.0392   [50s]
+  chain  taper=off  split=exact        89.8529   99.3297    3.461    0.0418    0.0392   [51s]
+  DECOMPOSITION (-1,+0):  shipped 88.404 vs true ceiling 90.788  = +2.384 points
+     ceiling correction (oracle carried the DOE residual): +0.582   [old ceiling 90.206]
+     INSTRUMENT (readout split parabola -> exact): +0.338
+     LIBRARY    (conversion taper on -> off):      +1.111
+     RESIDUAL   (chain best vs true ceiling):      +0.935
+
+########## ORDER (-2,+0)   L,M = -23.032,+0.000 mrad ##########
+  arm                                    EE3 %     EE6 %  FWHM um  env step  RS p99.9
+  oracle CARRY=0                       90.4985   99.9557    3.452    0.0000    0.0259   [28s]
+  oracle CARRY=1                       90.8778   99.9100    3.452    0.0049    0.0259   [28s]
+  chain  taper=on   split=parabola     88.6332   99.2792    3.728    3.1380    0.0389   [51s]
+  chain  taper=on   split=exact        89.1019   99.3107    3.669    2.9967    0.0389   [51s]
+  chain  taper=off  split=parabola     89.7328   99.3872    3.585    1.4392    0.0389   [51s]
+  chain  taper=off  split=exact        90.1033   99.3892    3.462    0.0545    0.0389   [50s]
+  DECOMPOSITION (-2,+0):  shipped 88.633 vs true ceiling 90.878  = +2.245 points
+     ceiling correction (oracle carried the DOE residual): +0.379   [old ceiling 90.499]
+     INSTRUMENT (readout split parabola -> exact): +0.469
+     LIBRARY    (conversion taper on -> off):      +1.001
+     RESIDUAL   (chain best vs true ceiling):      +0.775
+
+########## ORDER (-3,+0)   L,M = -34.547,+0.000 mrad ##########
+  arm                                    EE3 %     EE6 %  FWHM um  env step  RS p99.9
+  oracle CARRY=0                       90.7425   99.9611    3.456    0.0000    0.0259   [28s]
+  oracle CARRY=1                       90.9066   99.9202    3.464    0.0049    0.0259   [28s]
+  chain  taper=on   split=parabola     89.2822   99.4243    3.679    3.1405    0.0386   [51s]
+  chain  taper=on   split=exact        89.6608   99.4397    3.637    3.1172    0.0386   [51s]
+  chain  taper=off  split=parabola     90.2906   99.5153    3.550    1.3989    0.0387   [50s]
+  chain  taper=off  split=exact        90.6284   99.5260    3.443    0.0899    0.0387   [54s]
+  DECOMPOSITION (-3,+0):  shipped 89.282 vs true ceiling 90.907  = +1.624 points
+     ceiling correction (oracle carried the DOE residual): +0.164   [old ceiling 90.742]
+     INSTRUMENT (readout split parabola -> exact): +0.379
+     LIBRARY    (conversion taper on -> off):      +0.968
+     RESIDUAL   (chain best vs true ceiling):      +0.278
+
+########## ORDER (-4,+0)   L,M = -46.063,+0.000 mrad ##########
+  arm                                    EE3 %     EE6 %  FWHM um  env step  RS p99.9
+  oracle CARRY=0                       90.7910   99.9564    3.344    0.0000    0.0259   [29s]
+  oracle CARRY=1                       90.9294   99.9206    3.359    0.0049    0.0259   [29s]
+  chain  taper=on   split=parabola     88.9780   99.5655    3.674    3.1414    0.0386   [55s]
+  chain  taper=on   split=exact        89.3854   99.5872    3.629    3.1401    0.0386   [54s]
+  chain  taper=off  split=parabola     90.0332   99.6448    3.541    1.3750    0.0386   [55s]
+  chain  taper=off  split=exact        90.3417   99.6619    3.423    0.1439    0.0386   [54s]
+  DECOMPOSITION (-4,+0):  shipped 88.978 vs true ceiling 90.929  = +1.951 points
+     ceiling correction (oracle carried the DOE residual): +0.138   [old ceiling 90.791]
+     INSTRUMENT (readout split parabola -> exact): +0.407
+     LIBRARY    (conversion taper on -> off):      +0.956
+     RESIDUAL   (chain best vs true ceiling):      +0.588
+
+########## ORDER (-4,-2)   L,M = -46.063,-23.032 mrad ##########
+  arm                                    EE3 %     EE6 %  FWHM um  env step  RS p99.9
+  oracle CARRY=0                       89.7825   99.9394    3.349    0.0000    0.0259   [29s]
+  oracle CARRY=1                       90.0250   99.9080    3.364    0.0049    0.0259   [29s]
+  chain  taper=on   split=parabola     88.5274   99.5476    3.631    3.1411    0.0385   [55s]
+  chain  taper=on   split=exact        88.9036   99.5667    3.596    3.1403    0.0385   [54s]
+  chain  taper=off  split=parabola     89.5381   99.6432    3.507    1.3996    0.0384   [54s]
+  chain  taper=off  split=exact        89.9005   99.6649    3.383    0.1797    0.0384   [54s]
+  DECOMPOSITION (-4,-2):  shipped 88.527 vs true ceiling 90.025  = +1.498 points
+     ceiling correction (oracle carried the DOE residual): +0.242   [old ceiling 89.783]
+     INSTRUMENT (readout split parabola -> exact): +0.376
+     LIBRARY    (conversion taper on -> off):      +0.997
+     RESIDUAL   (chain best vs true ceiling):      +0.125
+
+
+================ SUMMARY (EE3 %) ================
+     ord  orc C0  orc C1    ship  ship+I   off+P   off+E    gap0    gapF
+     0,0  90.081  90.742  89.201  89.661  90.282  90.693   0.880   0.049
+    -1,0  90.206  90.788  88.404  88.742  89.482  89.853   1.802   0.935
+    -2,0  90.499  90.878  88.633  89.102  89.733  90.103   1.865   0.775
+    -3,0  90.742  90.907  89.282  89.661  90.291  90.628   1.460   0.278
+    -4,0  90.791  90.929  88.978  89.385  90.033  90.342   1.813   0.588
+   -4,-2  89.783  90.025  88.527  88.904  89.538  89.900   1.255   0.125

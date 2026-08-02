@@ -1967,11 +1967,81 @@ def _tilt_exactness_phase(shape, dx, dy, wavelength, R, L, M, sign,
     return np.exp(sign * 1j * k * D * np.cos(0.5 * np.pi * t) ** 2)
 
 
+#: Niche C9 (2026-08-02, D121 FINAL CLOSURE).  ``True`` -- the
+#: parabola <-> exact-sphere carrier-convention conversion
+#: (:func:`_sphere_parab_conversion`) is applied EXACTLY, on the whole grid.
+#: ``False`` restores the historical ``cos^2`` band-limit taper bit for bit --
+#: the fail-before switch.
+#:
+#: The taper was a Nyquist GUARD, not physics: beyond
+#: ``r_safe = (|R|^3 lambda/dx)^(1/3)`` the DIFFERENCE term ``S(R) - r^2/2R``
+#: has a phase slope past the grid's own, so the conversion FACTOR is not
+#: representable there.  But the factor is applied POINTWISE, and every
+#: consumer of the product either (a) divides the SAME exact sphere straight
+#: back out -- ``apply_real_lens_traced`` de-chirps against its ``carrier``, so
+#: the entrance conversion and the element's own reference are an identity PAIR
+#: -- or (b) is the matching ``-sign`` call.  The taper breaks that pair: it
+#: leaves ``exp(-i k (S - r^2/2R) (1 - T))``, an ALIASED quartic, in exactly
+#: the annulus where the beam still carries power, and the chain then
+#: Sziklas-Siegman-transports that across the next gap.
+#:
+#: **The counter-evidence on record was a mis-citation.**  This function's
+#: docstring said "the untapered swap breaks a coarse chain", sourced to
+#: ``AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24`` S6.6.  That audit measured the
+#: opposite: *"The taper worked as designed -- stage traces identical to the
+#: whole-grid swap to 4 digits, i.e. the guard band truly carries nothing -- so
+#: the breakage is in-band and intrinsic, not an aliasing artifact."*  What
+#: broke that chain was the CONVERSION ITSELF in the pre-``ray_density`` era
+#: (its "window 77.5 % -> 7.1 %" is the spot walking out of a narrow readout,
+#: which the same paragraph says), and the conversion has been the shipped
+#: default since v5.29.  Re-derived in
+#: ``docs/audits/D121_FINAL_CLOSURE_2026_08_02.md`` S4.
+#:
+#: Measured on design 121 (six post-DOE groups, ``ray_subsample=4``,
+#: ``RN=1024``), EE3 against the exact-ray + Rayleigh-Sommerfeld oracle at the
+#: chain's group-5 exit, read out against the exact eikonal:
+#:
+#: .. code-block:: text
+#:
+#:     order      taper ON   taper OFF   d      oracle (true ceiling)
+#:     (0,0)       89.662     90.693   +1.032        90.742
+#:     (-4,0)      89.385     90.342   +0.957        90.928
+#:     (-4,-2)     88.904     89.900   +0.996        90.023
+#:
+#: and on the PRODUCTION path (``final_leg='exact'``, exact Bluestein readout,
+#: N=2048/NFC=8192/WF=4.0), where the last group's own conversion happens on
+#: the FINE retrace grid and is inert either way, the residual gain is small
+#: but real and in the same direction: BEST-FOCUS[peak] ``dz=0``
+#: **3.450 um / EE3 90.2 -> 3.350 um / EE3 90.3**, peak +0.8 %, no plane of the
+#: +-80 um through-focus scan worse.
+#:
+#: WHERE IT ACTS.  A per-call census on design 121 (13 conversion calls) finds
+#: 9 of them inert -- their onset sits at 3.0-24607 beam radii -- and the whole
+#: effect in the last two: the group-5 EXIT (``R=-24.46 mm``, onset 1.64 w,
+#: which is the re-envelope the 3.3233 mm leg then transports) and the group-6
+#: ENTRANCE (``R=-21.14 mm``, onset 1.42 w).  Turning the taper off on ANY ONE
+#: call is worse than leaving it on (-0.05 to -0.24 points): the calls are a
+#: matched chain and it is their CONSISTENCY that a hand-off needs, which is
+#: why this is a default and not a per-call heuristic.
+#:
+#: The ``w_beam`` warning below is unchanged in trigger and still fires -- with
+#: the conversion exact it is a validity flag for a consumer that FFTs or
+#: RESAMPLES the converted field (the paraxial focus readout), which is the one
+#: place the taper's argument survives; the traced element, which is what the
+#: entrance conversion feeds, is not such a consumer.
+SPHERE_PARAB_CONVERSION_EXACT = True
+
+
 def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
                              centre=(0.0, 0.0)):
-    """BAND-LIMITED parabola <-> exact-sphere carrier-convention conversion
-    factor ``exp(sign*i*k*(S(R) - r^2/(2R)) * T(r))`` on the centred grid, or
-    ``None`` for a collimated/degenerate carrier (nothing to convert).
+    """Parabola <-> exact-sphere carrier-convention conversion factor
+    ``exp(sign*i*k*(S(R) - r^2/(2R)))`` on the centred grid, or ``None`` for a
+    collimated/degenerate carrier (nothing to convert).
+
+    **Since niche C9 (2026-08-02) the conversion is EXACT on the whole grid.**
+    It was historically multiplied by a ``cos^2`` band-limit taper ``T(r)``;
+    :data:`SPHERE_PARAB_CONVERSION_EXACT` = ``False`` restores that bit for
+    bit, and the measured record for the change is on that flag.
 
     The carrier-referenced machinery references the PARAXIAL PARABOLA
     ``r^2/(2R)`` (:func:`_radial_carrier_phase`), while a traced element's ray
@@ -2041,23 +2111,25 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
     omits them.  The "at most ~2e-4" figure is retracted for tilted
     congruences.
 
-    NOT TAKEN, and why: flipping the default to ``T == 1`` is what design 121
-    measures as optimal at BOTH tilts, but this docstring also records that
-    "the untapered swap breaks a coarse chain", and that configuration was not
-    re-measured in 2026-07-31.  A one-design monotone sweep is not enough to
-    remove a guard whose failure case is documented elsewhere.  Callers who
-    need the 1.4 points on a tilted congruence can measure their own chain with
-    the taper removed; the counter-evidence is a single sentence with no
-    reproduction attached, so it is worth re-deriving before either is trusted.
+    TAKEN, 2026-08-02 (niche C9): the default IS now ``T == 1``.  The one thing
+    that stood against it -- "the untapered swap breaks a coarse chain" -- was
+    re-derived and is a **mis-citation of a measurement that says the
+    opposite**; see :data:`SPHERE_PARAB_CONVERSION_EXACT` for the source
+    quotation, the per-call census that localises the effect, the per-order EE3
+    table and the production acceptance.  The 2026-07-31 sweep above is
+    reproduced by that work at the same sign and a comparable magnitude
+    (+1.03 / +0.96 / +1.00 points at (0,0) / (-4,0) / (-4,-2) on the
+    post-C8 tree), and the ``r_safe x 0.5`` cliff is unchanged -- it is the
+    same monotone axis, read at its other end.
 
-    ``w_beam`` (optional) enables a warning when the taper reaches into the
-    beam.  **Its threshold tests the ONSET (``0.75*r_safe``), not ``r_safe``
-    (corrected 2026-07-31).**  The previous form, ``r_safe < 2*w_beam``, could
-    not detect the case this function's own warning text describes: design
-    121's last two planes have ``r_safe`` at 2.18 w -- clear of that threshold
-    -- while the taper ONSET is at 1.63 w, well inside the beam, costing the
-    1.41 EE3 points above in silence.  The warning is a validity flag, not a
-    refusal, and nothing about the returned array changed.
+    ``w_beam`` (optional) enables a warning when the band-limit radius sits
+    inside the beam.  **Its threshold is unchanged from 2026-07-31**
+    (``0.75*r_safe < 2*w_beam``, i.e. ``w > 0.375 r_safe``): the quantity it
+    tests no longer marks a taper onset, but it is the same validity question
+    -- how far inside the beam the conversion factor stops being representable
+    on this grid -- and it is deliberately left at the tighter of the two forms
+    it has had.  The warning is a validity flag, not a refusal, and the
+    returned array does not depend on it.
     """
     if not np.isfinite(R) or R == 0.0:
         return None
@@ -2076,28 +2148,33 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
     diff = _exact_sphere_eikonal((ny, n), dx, dx, wavelength, R,
                                  centre=centre) - r2 / (2.0 * R)
     r_safe = (abs(R) ** 3 * wavelength / dx) ** (1.0 / 3.0)
-    # 2026-07-31: test the taper ONSET, not r_safe.  The cos^2 roll-off starts
-    # at 0.75*r_safe, so the old ``r_safe < 2*w`` form missed exactly the case
-    # the message describes -- design 121's last two planes sit at r_safe =
-    # 2.18 w (no warning) with the onset at 1.63 w, inside the beam, worth a
-    # measured 1.41 EE3 points on the tilted congruence.  Warning only; the
-    # returned array is unchanged.
+    # 2026-07-31 / niche C9 2026-08-02: the trigger is unchanged
+    # (``0.75*r_safe < 2*w``, the tighter of the two forms this guard has had).
+    # It no longer marks a taper onset -- there is no taper -- but it is the
+    # same validity question, and the answer a caller needs is now about their
+    # own downstream step rather than about this array.  Warning only; the
+    # returned array does not depend on it.
     if (w_beam is not None and w_beam > 0.0
             and 0.75 * r_safe < 2.0 * w_beam):
         import warnings
         warnings.warn(
-            f"_sphere_parab_conversion: the cos^2 taper ONSET "
-            f"0.75*r_safe={0.75 * r_safe * 1e3:.3f} mm (band-limit radius "
+            f"_sphere_parab_conversion: the band-limit radius "
             f"r_safe={r_safe * 1e3:.3f} mm = (|R|^3 lambda/dx)^(1/3) at "
-            f"R={R * 1e3:.3f} mm, dx={dx * 1e6:.3f} um) reaches inside "
-            f"2x the beam radius (w={w_beam * 1e3:.3f} mm), so the "
-            f"parabola->sphere conversion is tapered off where the beam "
-            f"still carries power: the carrier convention is MIXED over the "
-            f"beam skirt.  Measured cost on design 121's (-4,-2) congruence, "
-            f"where the onset sits at 1.63 w: 1.41 EE3 points.  Refine dx (it "
-            f"enters as dx^(-1/3), so this is expensive) or lower the carrier "
-            f"NA if the exit wavefront matters at that radius.",
+            f"R={R * 1e3:.3f} mm, dx={dx * 1e6:.3f} um sits at "
+            f"{r_safe / w_beam:.2f}x the beam radius (w="
+            f"{w_beam * 1e3:.3f} mm), i.e. the parabola<->sphere DIFFERENCE "
+            f"term's own phase slope passes this grid's Nyquist slope while "
+            f"the beam still carries power there.  The conversion ITSELF stays "
+            f"exact (SPHERE_PARAB_CONVERSION_EXACT), so no field is falsified "
+            f"and a consumer that de-chirps against the same exact sphere -- "
+            f"apply_real_lens_traced, which is what this conversion feeds -- "
+            f"is unaffected.  A consumer that FFTs or RESAMPLES the CONVERTED "
+            f"field (the PARAXIAL focus readout) will alias beyond that "
+            f"radius.  Refine dx (it enters as dx^(-1/3), so this is "
+            f"expensive) or lower the carrier NA if that path is used.",
             RuntimeWarning, stacklevel=3)
+    if SPHERE_PARAB_CONVERSION_EXACT:
+        return np.exp(sign * 1j * k * diff)
     t = np.clip((np.sqrt(r2) - 0.75 * r_safe) / (0.25 * r_safe), 0.0, 1.0)
     return np.exp(sign * 1j * k * diff * np.cos(0.5 * np.pi * t) ** 2)
 

@@ -2,6 +2,37 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Fixed — the parabola<->sphere carrier conversion is applied EXACTLY: the cos^2 band-limit taper is gone (niche C9, `propagators/carrier.py`)
+
+The final-closure campaign's decomposition of the last ~1.3 EE3 points per
+order between the chain and the exact-ray oracle found ~1.0 point/order in
+ONE library defect: `_sphere_parab_conversion`'s cos^2 taper, engaged at
+group 5's exit re-envelope -- the same site as the -0.96-point leg remnant
+C5 left behind (per-call census; groups 1-5 bit-identical, 99.74 % of the
+effect at the final onset).  The taper's protective role was a MIS-CITATION:
+the audit cited as evidence that removing it breaks a coarse chain
+(AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S6.6) says the opposite, and
+`T == 1` is the saturated end of a monotone axis (`r_safe` x1.0 reproduces
+the shipped taper bit for bit; x1.5/x2/x3 reproduce `T == 1` bit for bit).
+
+`SPHERE_PARAB_CONVERSION_EXACT = True` (3 executable lines; `= False` is the
+fail-before, 52/52 configurations bit-identical to v5.32.0).  Everything
+improves together: acceptance **3.450 -> 3.350 um / EE3 90.2 -> 90.3** at the
+unchanged best-focus plane (no plane of +-80 um worse); tilted production
+readout +1.40 EE3 at (-4,-2); ghost `g4` 3-676x and `amax4` 2-14x smaller;
+`P/Pin` within 4.1e-05; 6/6 conservation bounds on every order.
+
+The remaining chain-vs-oracle residual is 0.05-0.94 points per order --
+REAL against a +-0.005-point instrument band, characterised as a halo
+deficit (FWHM matches the exact trace to 0.02-0.06 um), not discretisation.
+Leading candidate: the element's remap model error (excluded earlier against
+a 2.0-point target that has since moved; not yet verified).  The instrument
+itself accounted for 0.5-1.1 points/order of the ORIGINAL gap (a wrong
+oracle ceiling + a readout launch-phase split), proven by null experiments.
+Full record: `docs/audits/D121_FINAL_CLOSURE_2026_08_02.md`.
+
 ## [5.32.0] — 2026-08-02
 
 ### Changed — the empty deprecation horizon advanced past this release (`lumenairy/_deprecation.py`)
