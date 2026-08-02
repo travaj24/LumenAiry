@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.32.0] — 2026-08-02
 
 ### Fixed — the inverse map may no longer invent light: exit pixels outside the traced support get zero (niche C8, `elements/_lens_traced.py`)
 
