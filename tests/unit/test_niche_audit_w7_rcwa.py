@@ -723,7 +723,38 @@ def test_clean_circular_truncation_agrees_with_rectangular():
     """Recorded non-coverage (``truncation='circular'``), now locked: the two
     order sets converge to the SAME answer (measured |dR0| = 2.9e-05 at M=5
     and 3.1e-05 at M=6, while the rectangular sequence itself still drifts
-    3e-05 between those orders) at 1/3 fewer harmonics, with clean closure."""
+    3e-05 between those orders) at 1/3 fewer harmonics, with clean closure.
+
+    CLOSURE BOUND SPLIT PER ARM 2026-08-01 (release verification for
+    v5.32.0).  The single ``abs(defect) < 1e-11`` gate applied to BOTH arms
+    was knife-edge on the RECTANGULAR control -- the 121-order (242x242)
+    ``zgeev`` + S-matrix cascade, whose closure residual is LAPACK round-off
+    and moves with the BLAS reduction order.  Measured on this box, the
+    identical computation over BLAS thread counts 1 / 2 / 3 / 4 / 6 / 8 /
+    12 / 16 / 24::
+
+        threads |  1        2        3        4        6
+        rect    | +1.13e-11 -5.34e-13 -3.35e-14 +3.55e-14 +3.55e-14
+        circ    | -3.15e-14 -2.42e-14 -1.04e-14 -1.31e-14 -2.78e-15
+        threads |  8        12       16       24
+        rect    | -1.38e-12 -8.99e-15 -7.70e-14 +1.53e-14
+        circ    | +2.09e-14 +3.55e-14 -7.35e-14 +1.84e-14
+
+    i.e. the rectangular arm reaches 1.13e-11 -- ABOVE the old gate -- on
+    the single-threaded path, which is why this pin passed or failed as a
+    function of pytest collection order (whichever earlier test last moved
+    the effective threading).  That is consistent with this file's own
+    header: "eigensolve-level agreement is ~1e-11 relative cross-platform,
+    so no exact / hash pins on solver output".
+
+    Nothing is loosened where this test does its work.  The CIRCULAR arm --
+    the recorded non-coverage being locked -- keeps the original 1e-11 gate
+    and clears it by 136x at every thread count; only the rectangular
+    CONTROL arm moves to 1e-10 (8.8x headroom over its worst measured
+    value).  The physics claim is untouched and is not round-off-sensitive
+    at all: |dR0| reads 2.9247e-05 to five significant figures at every one
+    of the nine thread counts above.
+    """
     S = 48
     xx, yy = np.meshgrid((np.arange(S) + .5) / S, (np.arange(S) + .5) / S,
                          indexing="ij")
@@ -743,8 +774,9 @@ def test_clean_circular_truncation_agrees_with_rectangular():
                       float(R.sum() + T.sum() - 1.0))
     assert out["circular"][0] < out["rectangular"][0]
     assert abs(out["circular"][1] - out["rectangular"][1]) < 2e-4
-    for v in out.values():
-        assert abs(v[2]) < 1e-11
+    # Per-arm closure (see the docstring for the measured thread-count table).
+    assert abs(out["circular"][2]) < 1e-11, out["circular"]
+    assert abs(out["rectangular"][2]) < 1e-10, out["rectangular"]
 
 
 @pytest.mark.parametrize("scale", [1e9, 1e-3])

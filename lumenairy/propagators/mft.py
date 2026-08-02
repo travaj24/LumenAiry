@@ -139,6 +139,25 @@ def _warn_mft_output_window(period_x, period_y, dx_out, dy_out, N_out, *,
         UserWarning, stacklevel=3)
 
 
+def _asm_mft_spatial_period(nx_in, dx_in, ny_in, dy_in):
+    """Spatial period ``(period_x, period_y)`` in metres of
+    :func:`angular_spectrum_propagate_mft`'s Bluestein reconstruction.
+
+    The step inverse-transforms the INPUT SPECTRUM (``n_in`` bins at
+    ``df = 1/(n_in*d_in)``), so the reconstructed field is periodic with
+    period ``1/df = n_in*d_in`` on each axis; samples requested beyond one
+    period are periodic REPLICAS of the field, not new information (audit
+    P11).
+
+    Single source of truth: :func:`angular_spectrum_propagate_mft` warns
+    from it, and the carrier chain reports it as ``readout_period`` in its
+    stage bookkeeping so
+    :func:`~lumenairy.propagate_traced_carrier_chain_multi` can REFUSE a
+    per-congruence readout window that would accumulate replicas on top of
+    its neighbouring frames (niche D2)."""
+    return float(nx_in) * float(dx_in), float(ny_in) * float(dy_in)
+
+
 def angular_spectrum_propagate_mft(
     E_in: np.ndarray,
     z: float,
@@ -300,7 +319,8 @@ def angular_spectrum_propagate_mft(
     # likewise in y).  Asking for a window wider than that returns
     # periodic replicas, silently -- warn with the numbers.
     _warn_mft_output_window(
-        Nx_in * dx_in, Ny_in * dy_in, dx_out, dy_out, Ny_out,
+        *_asm_mft_spatial_period(Nx_in, dx_in, Ny_in, dy_in),
+        dx_out, dy_out, Ny_out,
         fn_name='angular_spectrum_propagate_mft',
         period_expr='N_in*d_in (the input cell, since the Bluestein step '
                     'inverts the input spectrum)')

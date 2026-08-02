@@ -11,9 +11,11 @@
 # propagate_traced_carrier_chain defaults to -- since v5.29 the validated
 # carrier-regime triple (carrier_reference='sphere' +
 # amplitude_model='ray_density' + preserve_input_phase='remap').  Expected
-# at N=2048 / NFC=8192 / WF=4.0: AT-PLANE 3.650 um / 87.1 / 99.3, best focus
-# dz=+5..+10 um -> FWHM 3.550 um / EE3 88.4 / EE6 99.3, ON-AXIS
-# (audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 gate (b)).
+# at N=2048 / NFC=8192 / WF=4.0, best focus -> FWHM 3.450 um / EE3 88.8 /
+# EE6 99.6 / EE12 99.8, ON-AXIS -- the post-S12 SHIPPING-DEFAULT acceptance,
+# equal to the measured ideal-field ceiling for this readout
+# (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24; the earlier
+# 3.550 / 88.4 / 99.3 line was the pre-S12 configuration).
 #
 # Pre-v5.29 this script HARD-CODED AM='ray_density' + PIP='0' as its env
 # DEFAULTS, so a plain run silently measured the intermediate `rd+pip0`
@@ -150,7 +152,17 @@ fw, ee, pk, off = metrics(E0)
 print(f"AT-PLANE: FWHM={fw*1e6:.3f}um EE3={ee[3]*100:.1f}% EE6={ee[6]*100:.1f}% "
       f"EE12={ee[12]*100:.1f}% off=({off[0]*1e6:+.2f},{off[1]*1e6:+.2f})um")
 
-best = (0.0, -1.0, None)
+# BEST-FOCUS CRITERION (niche C6, 2026-07-30).  Historically this scan
+# selected on EE6 alone.  EE6 SATURATES near 99.7 % on a corrected spot, so it
+# discriminates on its 4th digit -- and once C6 removed the residual defocus it
+# picked dz = +10 um (EE6 99.7, EE3 85.3, FWHM 3.650) over dz = 0 (EE6 99.7,
+# EE3 90.2, FWHM 3.450, and the LARGEST peak): a plane 4.9 EE3 points and
+# 0.2 um worse, on an EE6 lead too small to print.  That reading cost a review
+# cycle, so both criteria are reported now.  ``pk`` (max intensity) is the
+# standard definition of best focus and is what the physics means here; the EE6
+# line is kept so the historical acceptance number stays directly comparable.
+best = (0.0, -1.0, None)          # EE6-selected (historical)
+best_pk = (0.0, -1.0, None)       # peak-intensity-selected (physical)
 for dz_um in range(-80, 81, 5):
     if dz_um == 0:
         Ez = E0
@@ -160,14 +172,27 @@ for dz_um in range(-80, 81, 5):
     fw, ee, pk, off = metrics(Ez)
     if ee[6] > best[1]:
         best = (dz_um, ee[6], (fw, ee, pk, off))
+    if pk > best_pk[1]:
+        best_pk = (dz_um, pk, (fw, ee, pk, off))
     print(f"  dz={dz_um:+4d}um: FWHM={fw*1e6:6.3f} EE3={ee[3]*100:5.1f} "
           f"EE6={ee[6]*100:5.1f} EE12={ee[12]*100:5.1f} pk={pk:.3e}",
           flush=True)
+fwp, eep, pkp, offp = best_pk[2]
+print(f"BEST-FOCUS[peak] dz={best_pk[0]:+d}um: FWHM={fwp*1e6:.3f}um "
+      f"EE3={eep[3]*100:.1f}% EE6={eep[6]*100:.1f}% EE12={eep[12]*100:.1f}% "
+      f"pk={pkp:.3e}  <- physical best focus")
 fw, ee, pk, off = best[2]
 print(f"BEST-FOCUS dz={best[0]:+d}um: FWHM={fw*1e6:.3f}um EE3={ee[3]*100:.1f}% "
       f"EE6={ee[6]*100:.1f}% EE12={ee[12]*100:.1f}% "
       f"off=({off[0]*1e6:+.2f},{off[1]*1e6:+.2f})um")
-print("  targets: FWHM 3.223um EE3 91.0% EE6 100.0% (POP waist 2.737um radius;"
-      " ideal-field ceiling through this readout 3.45-3.55um / 90.3 / 99.8)")
+print("  targets: FWHM 3.223um EE3 91.0% EE6 100.0% (Zemax POP waist 2.737um "
+      "radius -- of the paraxially-EQUIVALENT 4f, f1=60.916/f2=41.666, NOT of "
+      "the real prescription (POP_CROSSCHECK_121_2026_07_31.md sec 2); "
+      "ideal-field ceiling through this readout 3.45-3.55um / 90.3 / 99.8)")
 print("  shipping-default acceptance (CREF/AM/PIP unset, N=2048/NFC=8192/"
-      "WF=4.0): best focus 3.550um / 88.4 / 99.3, on-axis")
+      "WF=4.0): AT-PLANE dz=0: 3.450um / 90.2 / 99.7, on-axis")
+print("  (re-baselined 2026-08-01, user-approved: pre-C6 the chain focused "
+      "10um PAST the MS plane -- at-plane read 3.750/87.4 and the recorded "
+      "3.450/88.8/99.6 acceptance was taken at dz=+10um.  That offset was the "
+      "simulator's own residual aberration; niche C6 removed it, so the spot "
+      "is now sharpest AT the metasurface plane and is scored there.)")

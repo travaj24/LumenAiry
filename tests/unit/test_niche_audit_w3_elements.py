@@ -354,7 +354,47 @@ class TestEM6RayDensityEnergySelfCheck:
     def test_fires_when_a_fold_caustic_manufactures_energy(self):
         """A strong biconcave on a grid barely covering its aperture drives the
         capped ``1/sqrt(|det J|)`` amplitude past unity: measured ratio 1.100
-        at ray_subsample=8 (band upper bound 1.050)."""
+        at ray_subsample=8 (band upper bound 1.050).
+
+        2026-08-01 -- NICHE C8 REMOVED THIS TEST'S STIMULUS AT SOURCE, AND THE
+        MEASUREMENT SAYS THAT IS CORRECT.
+
+        PIN WAS: the check fires at the shipped defaults (ratio 1.100385).
+        PIN IS NOW: it fires with ``REMAP_INVERSE_SUPPORT_BOUND = False`` --
+        the library state it was calibrated in, original assertions word for
+        word -- and with the bound ON it is silent because the field really is
+        quieter, which is asserted too.
+
+        THE HYPOTHESIS WAS CHECKED BEFORE IT WAS APPLIED, because this
+        fixture's name claims a FOLD CAUSTIC and C8 must NOT be able to
+        silence one: the bound only ever zeroes amplitude OUTSIDE the convex
+        hull of the alive stop-passing exit landings, whereas a fold lives
+        where the rays ARE.  Measured by
+        ``validation/repro_traced_carrier_121/recon_em6_stimulus.py``:
+
+        * The fixture DOES fold, and the diagnostic still says so.  Central
+          differences on the EXACT traced landing lattice (no fit, no Newton,
+          no upsample) give 32 adjacent-cell det J SIGN CHANGES over the 373
+          stop-passing samples, det J spanning [-4.126e-01, +1.781e+00] with
+          |det J| min/median 0.0489.  The library's fold-caustic warning fires
+          with the bound ON and OFF alike -- asserted below.
+        * But the ENERGY the check was reading was NOT the fold's.  Split the
+          power the bound removes against the call's own exact ray bundle:
+          **100.00 % lies outside the convex hull of every alive ray**, 0.00 %
+          between the stop-passing and all-rays hulls, and **0.00 % inside the
+          support** -- so nothing the rays reach was touched.  The power
+          INSIDE the support is 0.81933 of the aperture-transmitted input with
+          the bound on and off, to every printed digit.
+        * ABSOLUTE ORACLE (raytrace + input field only, no wave model): the
+          alive stop-passing rays carry 0.82619 of the power over the test's
+          own disc -- rays beyond r = 1.145 mm die on the lens surfaces, well
+          inside the 1.500 mm stop.  That is the true ratio ceiling.  The
+          pre-C8 library returned 1.10039 (error +0.274) and the shipped one
+          returns 1.01931 (error +0.193): **BETTER by 30 % of the error**, and
+          the 0.81933 that survives inside the support is 99.17 % of the
+          oracle, i.e. a discretisation DEFICIT, not a gain.
+
+        So the stimulus is gone, the subject is not, and no bar moved."""
         N, ap = 256, 3e-3
         dx = 1.01 * ap / N
         E0, X, Y = _gauss(N, dx, 1.4e-3)
@@ -367,22 +407,57 @@ class TestEM6RayDensityEnergySelfCheck:
                      {'radius': 3e-3, 'glass_before': 'N-BK7',
                       'glass_after': 'air', 'conic': 0.0,
                       'aspheric_coeffs': None}]}
-        with warnings.catch_warnings(record=True) as rec:
-            warnings.simplefilter('always')
-            E = la.apply_real_lens_traced(
-                E0, prescription=presc, wavelength=_WL, dx=dx,
-                amplitude_model='ray_density', ray_subsample=8, n_workers=1,
-                parallel_amp=False, on_undersample='silent',
-                on_aperture_beam='silent')
-        msgs = [str(r.message) for r in rec
-                if 'energy self-check' in str(r.message)]
+
+        def _call(bound):
+            old = _lens_traced.REMAP_INVERSE_SUPPORT_BOUND
+            _lens_traced.REMAP_INVERSE_SUPPORT_BOUND = bool(bound)
+            try:
+                with warnings.catch_warnings(record=True) as rec:
+                    warnings.simplefilter('always')
+                    E = la.apply_real_lens_traced(
+                        E0, prescription=presc, wavelength=_WL, dx=dx,
+                        amplitude_model='ray_density', ray_subsample=8,
+                        n_workers=1, parallel_amp=False,
+                        on_undersample='silent', on_aperture_beam='silent')
+            finally:
+                _lens_traced.REMAP_INVERSE_SUPPORT_BOUND = old
+            texts = [str(r.message) for r in rec]
+            return (np.asarray(E),
+                    [t for t in texts if 'energy self-check' in t],
+                    [t for t in texts if 'fold caustic' in t])
+
         disc = (X ** 2 + Y ** 2) <= (ap / 2) ** 2
-        ratio = (float((np.abs(E) ** 2).sum())
-                 / float((np.abs(E0[disc]) ** 2).sum()))
+        p_ap = float((np.abs(E0[disc]) ** 2).sum())
+
+        # --- the original pin, in the library state it was calibrated in ---
+        E, msgs, folds = _call(False)
+        ratio = float((np.abs(E) ** 2).sum()) / p_ap
         assert msgs, (
             f"energy self-check stayed silent at ratio {ratio:.4f} -- it must "
             f"flag a ray-density field that gained energy.")
         assert 'ray_subsample' in msgs[0] and 'band' in msgs[0]
+
+        # --- niche C8: the manufactured light is gone, so the check is ------
+        # honestly silent -- and the field really is quieter, not merely
+        # unreported.  This is the assertion that stops a true positive being
+        # replaced by a green test.
+        E8, msgs8, folds8 = _call(True)
+        ratio8 = float((np.abs(E8) ** 2).sum()) / p_ap
+        assert msgs8 == [], msgs8
+        assert ratio8 < ratio, (ratio, ratio8)
+        assert ratio8 <= 1.0 + _lens_traced._RD_ENERGY_GAIN_TOL, ratio8
+        assert np.all(np.abs(E8) <= np.abs(E) * (1 + 1e-12)), (
+            'the support bound may only ever LOWER an amplitude')
+        # ... and it is closer to the absolute geometric-transport ceiling,
+        # which no wave model enters (see the docstring: 0.82619).
+        assert abs(ratio8 - 0.82619) < abs(ratio - 0.82619)
+        # --- and the FOLD is still diagnosed, in both states.  C8 must not
+        # be able to silence a det J sign change: it only bounds the inverse
+        # to the traced samples' support, and a fold lives inside it.
+        assert folds, 'the fold-caustic diagnostic stopped firing'
+        assert folds8, (
+            'niche C8 silenced the FOLD diagnostic -- it must only remove '
+            'amplitude outside the traced exit support, where no ray goes')
 
     def test_screen_mode_never_runs_the_check(self):
         """The default amplitude model is untouched (byte-compat)."""

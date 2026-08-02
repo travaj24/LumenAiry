@@ -1,0 +1,113 @@
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+EXACT TRACED EXIT HULL of design 121's LAST GROUP, per DOE order.
+  Launch geometry is the element's own: the captured chain carrier (R, L, M, x0, y0) and input amplitude.
+  Launch lattice 801x801 over the full co-moving grid.
+
+order (0,0)  w 3.1289 mm  dec 0.000 w  exit chief (+0.0000,+0.0000) mm  live 91.85 %
+   exit radius containing 1-eps of the LAUNCHED power:
+     eps   1e-03 ->   2.2879 mm
+     eps   1e-06 ->   2.9009 mm
+     eps   1e-09 ->   3.4440 mm
+     eps   1e-12 ->   8.2619 mm
+   exact-ray prediction of the halo shells (launched power landing beyond N mm):
+     g1 <= 2.4104e-01
+     g2 <= 4.2998e-03
+     g4 <= 3.5641e-10
+     g8 <= 4.5714e-12
+     [finite-radius weight retained 1.000000000 of launched power]
+     r_rms(exact ray) 0.8407 mm   core(<1mm) 0.6185 mm
+   hull of the launch disc r <= 1w ( 3.129 mm): exit max   1.1887 mm   p99.9   1.1883 mm
+   hull of the launch disc r <= 2w ( 6.258 mm): exit max   2.4225 mm   p99.9   2.4214 mm
+   hull of the launch disc r <= 3w ( 9.387 mm): exit max   3.7546 mm   p99.9   3.7529 mm
+   hull of the launch disc r <= 4w (12.516 mm): exit max   5.2602 mm   p99.9   5.2571 mm
+   exit NA: max(amp>=e^-4) 0.2886   grid Nyquist NA 0.0197 (dx 33.211 um)   power above Nyquist 9.6678e-01
+   grid is 14.6x short of lambda/(2 NA_exit)
+   SAMPLING: E_in  nn-step p99.9 3.1276 rad (limit pi = 3.1416)
+
+order (-1,0)  w 3.1292 mm  dec 0.241 w  exit chief (-0.4799,+0.0000) mm  live 91.85 %
+   exit radius containing 1-eps of the LAUNCHED power:
+     eps   1e-03 ->   2.2893 mm
+     eps   1e-06 ->   2.9133 mm
+     eps   1e-09 ->   7.3398 mm
+     eps   1e-12 ->   9.9791 mm
+   exact-ray prediction of the halo shells (launched power landing beyond N mm):
+     g1 <= 2.4125e-01
+     g2 <= 4.3360e-03
+     g4 <= 1.0153e-08
+     g8 <= 2.9408e-10
+     [finite-radius weight retained 1.000000000 of launched power]
+     r_rms(exact ray) 0.8413 mm   core(<1mm) 0.6188 mm
+   hull of the launch disc r <= 1w ( 3.129 mm): exit max   1.1947 mm   p99.9   1.1917 mm
+   hull of the launch disc r <= 2w ( 6.258 mm): exit max   2.4438 mm   p99.9   2.4373 mm
+   hull of the launch disc r <= 3w ( 9.387 mm): exit max   3.8066 mm   p99.9   3.7945 mm
+   hull of the launch disc r <= 4w (12.517 mm): exit max   5.3660 mm   p99.9   5.3418 mm
+   exit NA: max(amp>=e^-4) 0.2918   grid Nyquist NA 0.0197 (dx 33.211 um)   power above Nyquist 9.6680e-01
+   grid is 14.8x short of lambda/(2 NA_exit)
+   SAMPLING: E_in  nn-step p99.9 3.1406 rad (limit pi = 3.1416)
+
+order (-2,0)  w 3.1281 mm  dec 0.482 w  exit chief (-0.9595,+0.0000) mm  live 91.82 %
+   exit radius containing 1-eps of the LAUNCHED power:
+     eps   1e-03 ->   2.2913 mm
+     eps   1e-06 ->   2.9393 mm
+     eps   1e-09 ->   8.2580 mm
+     eps   1e-12 ->   9.1738 mm
+   exact-ray prediction of the halo shells (launched power landing beyond N mm):
+     g1 <= 2.4235e-01
+     g2 <= 4.4240e-03
+     g4 <= 3.0443e-08
+     g8 <= 1.4839e-09
+     [finite-radius weight retained 1.000000000 of launched power]
+     r_rms(exact ray) 0.8427 mm   core(<1mm) 0.6191 mm
+   hull of the launch disc r <= 1w ( 3.128 mm): exit max   1.2019 mm   p99.9   1.1982 mm
+   hull of the launch disc r <= 2w ( 6.256 mm): exit max   2.4699 mm   p99.9   2.4606 mm
+   hull of the launch disc r <= 3w ( 9.384 mm): exit max   3.8653 mm   p99.9   3.8483 mm
+   hull of the launch disc r <= 4w (12.512 mm): exit max   5.4817 mm   p99.9   5.4515 mm
+   exit NA: max(amp>=e^-4) 0.2936   grid Nyquist NA 0.0197 (dx 33.211 um)   power above Nyquist 9.6746e-01
+   grid is 14.9x short of lambda/(2 NA_exit)
+   SAMPLING: E_in  nn-step p99.9 3.1407 rad (limit pi = 3.1416)
+
+order (-4,0)  w 3.1238 mm  dec 0.966 w  exit chief (-1.9161,+0.0000) mm  live 91.70 %
+   exit radius containing 1-eps of the LAUNCHED power:
+     eps   1e-03 ->   2.3099 mm
+     eps   1e-06 ->   3.0027 mm
+     eps   1e-09 ->   9.2100 mm
+     eps   1e-12 ->  10.0904 mm
+   exact-ray prediction of the halo shells (launched power landing beyond N mm):
+     g1 <= 2.4662e-01
+     g2 <= 4.7731e-03
+     g4 <= 7.5559e-08
+     g8 <= 6.2887e-09
+     [finite-radius weight retained 1.000000000 of launched power]
+     r_rms(exact ray) 0.8483 mm   core(<1mm) 0.6202 mm
+   hull of the launch disc r <= 1w ( 3.124 mm): exit max   1.2208 mm   p99.9   1.2181 mm
+   hull of the launch disc r <= 2w ( 6.248 mm): exit max   2.5330 mm   p99.9   2.5201 mm
+   hull of the launch disc r <= 3w ( 9.371 mm): exit max   4.0042 mm   p99.9   3.9789 mm
+   hull of the launch disc r <= 4w (12.495 mm): exit max   5.7574 mm   p99.9   5.7150 mm
+   exit NA: max(amp>=e^-4) 0.2979   grid Nyquist NA 0.0197 (dx 33.211 um)   power above Nyquist 9.6646e-01
+   grid is 15.1x short of lambda/(2 NA_exit)
+   SAMPLING: E_in  nn-step p99.9 3.1409 rad (limit pi = 3.1416)
+
+order (-4,-2)  w 3.1229 mm  dec 1.080 w  exit chief (-1.9151,-0.9575) mm  live 91.66 %
+   exit radius containing 1-eps of the LAUNCHED power:
+     eps   1e-03 ->   2.3136 mm
+     eps   1e-06 ->   3.0157 mm
+     eps   1e-09 ->   9.1624 mm
+     eps   1e-12 ->  11.7446 mm
+   exact-ray prediction of the halo shells (launched power landing beyond N mm):
+     g1 <= 2.4815e-01
+     g2 <= 4.9057e-03
+     g4 <= 7.4639e-08
+     g8 <= 5.7758e-09
+     [finite-radius weight retained 1.000000000 of launched power]
+     r_rms(exact ray) 0.8503 mm   core(<1mm) 0.6206 mm
+   hull of the launch disc r <= 1w ( 3.123 mm): exit max   1.2276 mm   p99.9   1.2239 mm
+   hull of the launch disc r <= 2w ( 6.246 mm): exit max   2.5493 mm   p99.9   2.5377 mm
+   hull of the launch disc r <= 3w ( 9.369 mm): exit max   4.0421 mm   p99.9   4.0157 mm
+   hull of the launch disc r <= 4w (12.492 mm): exit max   5.8326 mm   p99.9   5.7855 mm
+   exit NA: max(amp>=e^-4) 0.3012   grid Nyquist NA 0.0197 (dx 33.211 um)   power above Nyquist 9.6621e-01
+   grid is 15.3x short of lambda/(2 NA_exit)
+   SAMPLING: E_in  nn-step p99.9 3.1343 rad (limit pi = 3.1416)
+

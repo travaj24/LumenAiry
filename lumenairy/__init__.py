@@ -130,6 +130,7 @@ from .elements.lenses import (
     NUMEXPR_AVAILABLE,
     PreparedAnalyticLens,
     PreparedTracedLens,
+    TiltedCarrier,
     apply_aspheric_lens,
     apply_axicon,
     apply_cylindrical_lens,
@@ -205,6 +206,7 @@ from .propagators.propagation import (
     # FFT backend configuration
     PYFFTW_AVAILABLE,
     CarrierReferencedField,
+    TracedCarrierChainMultiResult,
     TracedCarrierChainResult,
     angular_spectrum_propagate,
     angular_spectrum_propagate_mft,
@@ -234,6 +236,7 @@ from .propagators.propagation import (
     get_pyfftw_planner,
     propagate_carrier_referenced,
     propagate_traced_carrier_chain,
+    propagate_traced_carrier_chain_multi,
     rayleigh_sommerfeld_propagate,
     resample_field,
     reset_fft_backend,
@@ -1071,7 +1074,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='6.0',
 )
 
-__version__ = "5.31.0"
+__version__ = "5.32.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1166,6 +1169,7 @@ __all__ = [
     'apply_real_lens_traced_segmented',
     'prepare_real_lens_traced',
     'PreparedTracedLens',
+    'TiltedCarrier',
     'prepare_real_lens',
     'PreparedAnalyticLens',
     'close_worker_pool',
@@ -1305,6 +1309,7 @@ __all__ = [
     # Carrier-referenced ("pilot-beam") Sziklas-Siegman free-space step
     'CarrierReferencedField',
     'TracedCarrierChainResult',
+    'TracedCarrierChainMultiResult',
     'propagate_carrier_referenced',
     'carrier_referenced_reconstruct',
     'carrier_referenced_envelope',
@@ -1313,6 +1318,7 @@ __all__ = [
     'carrier_referenced_focus_readout',
     'carrier_referenced_exact_focus_readout',
     'propagate_traced_carrier_chain',
+    'propagate_traced_carrier_chain_multi',
     'fresnel_propagate_mft',
     'fraunhofer_propagate_mft',
     'angular_spectrum_propagate_mft',

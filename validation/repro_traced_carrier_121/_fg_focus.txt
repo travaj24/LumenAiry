@@ -1,0 +1,40 @@
+config: N=2048 rs=4 nfc=8192 wf=4.0 nout=2048 chain_kwargs={}  (pure library defaults)
+chain done 185s
+AT-PLANE: FWHM=3.450um EE3=90.2% EE6=99.7% EE12=99.8% off=(+0.00,+0.00)um
+  dz= -80um: FWHM=16.950 EE3=  9.3 EE6= 33.1 EE12= 82.1 pk=2.325e+02
+  dz= -75um: FWHM=15.750 EE3= 10.5 EE6= 36.8 EE12= 86.2 pk=2.678e+02
+  dz= -70um: FWHM=14.650 EE3= 11.8 EE6= 40.8 EE12= 89.7 pk=3.097e+02
+  dz= -65um: FWHM=13.750 EE3= 13.4 EE6= 45.3 EE12= 92.8 pk=3.499e+02
+  dz= -60um: FWHM=13.050 EE3= 15.3 EE6= 50.3 EE12= 95.3 pk=3.910e+02
+  dz= -55um: FWHM=12.150 EE3= 17.6 EE6= 55.6 EE12= 97.2 pk=4.493e+02
+  dz= -50um: FWHM=11.050 EE3= 20.7 EE6= 62.2 EE12= 98.5 pk=5.418e+02
+  dz= -45um: FWHM= 9.850 EE3= 24.4 EE6= 69.2 EE12= 99.3 pk=6.745e+02
+  dz= -40um: FWHM= 8.850 EE3= 29.0 EE6= 76.5 EE12= 99.6 pk=8.370e+02
+  dz= -35um: FWHM= 7.950 EE3= 34.9 EE6= 83.6 EE12= 99.7 pk=1.031e+03
+  dz= -30um: FWHM= 6.950 EE3= 42.3 EE6= 89.8 EE12= 99.8 pk=1.298e+03
+  dz= -25um: FWHM= 5.950 EE3= 51.4 EE6= 94.4 EE12= 99.8 pk=1.727e+03
+  dz= -20um: FWHM= 4.950 EE3= 61.4 EE6= 97.4 EE12= 99.8 pk=2.395e+03
+  dz= -15um: FWHM= 4.150 EE3= 71.6 EE6= 98.9 EE12= 99.8 pk=3.295e+03
+  dz= -10um: FWHM= 3.750 EE3= 80.5 EE6= 99.5 EE12= 99.8 pk=4.279e+03
+  dz=  -5um: FWHM= 3.450 EE3= 87.1 EE6= 99.6 EE12= 99.8 pk=5.092e+03
+  dz=  +0um: FWHM= 3.450 EE3= 90.2 EE6= 99.7 EE12= 99.8 pk=5.473e+03
+  dz=  +5um: FWHM= 3.450 EE3= 89.6 EE6= 99.7 EE12= 99.8 pk=5.297e+03
+  dz= +10um: FWHM= 3.650 EE3= 85.3 EE6= 99.7 EE12= 99.8 pk=4.635e+03
+  dz= +15um: FWHM= 4.050 EE3= 78.2 EE6= 99.5 EE12= 99.8 pk=3.719e+03
+  dz= +20um: FWHM= 4.750 EE3= 69.3 EE6= 98.6 EE12= 99.8 pk=2.821e+03
+  dz= +25um: FWHM= 5.550 EE3= 59.9 EE6= 96.6 EE12= 99.8 pk=2.125e+03
+  dz= +30um: FWHM= 6.150 EE3= 51.0 EE6= 93.3 EE12= 99.8 pk=1.670e+03
+  dz= +35um: FWHM= 6.550 EE3= 43.3 EE6= 88.4 EE12= 99.7 pk=1.385e+03
+  dz= +40um: FWHM= 6.950 EE3= 36.9 EE6= 82.5 EE12= 99.5 pk=1.172e+03
+  dz= +45um: FWHM= 7.550 EE3= 31.7 EE6= 76.1 EE12= 99.1 pk=9.738e+02
+  dz= +50um: FWHM= 8.350 EE3= 27.4 EE6= 69.7 EE12= 98.3 pk=7.909e+02
+  dz= +55um: FWHM= 9.250 EE3= 23.7 EE6= 63.8 EE12= 97.2 pk=6.467e+02
+  dz= +60um: FWHM=10.050 EE3= 20.6 EE6= 58.3 EE12= 95.4 pk=5.511e+02
+  dz= +65um: FWHM=10.650 EE3= 17.9 EE6= 53.2 EE12= 93.2 pk=4.891e+02
+  dz= +70um: FWHM=11.150 EE3= 15.8 EE6= 48.5 EE12= 90.5 pk=4.359e+02
+  dz= +75um: FWHM=11.950 EE3= 14.0 EE6= 44.1 EE12= 87.6 pk=3.791e+02
+  dz= +80um: FWHM=13.150 EE3= 12.5 EE6= 40.2 EE12= 84.5 pk=3.234e+02
+BEST-FOCUS[peak] dz=+0um: FWHM=3.450um EE3=90.2% EE6=99.7% EE12=99.8% pk=5.473e+03  <- physical best focus
+BEST-FOCUS dz=+10um: FWHM=3.650um EE3=85.3% EE6=99.7% EE12=99.8% off=(+0.00,+0.00)um
+  targets: FWHM 3.223um EE3 91.0% EE6 100.0% (POP waist 2.737um radius; ideal-field ceiling through this readout 3.45-3.55um / 90.3 / 99.8)
+  shipping-default acceptance (CREF/AM/PIP unset, N=2048/NFC=8192/WF=4.0): best focus 3.450um / 88.8 / 99.6, on-axis

@@ -124,7 +124,7 @@ def _tile_has_offplane_public(tensors):
 def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
                          theta, phi, degree, n_el, grade, n_orders,
                          min_feature=0.0, label="pmm conical (nodal)",
-                         return_modal=False):
+                         return_modal=False, layer_grids="shared"):
     """PURE-NODAL (no projection floor) conical multilayer cascade for
     PATTERNED in-plane stacks -- the fix for
     ``AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12``.
@@ -160,9 +160,13 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
     """
     from ._core import (
         _build_sem_tensor_segments,
+        _interface_smatrix_mortar,
         _n_propagating_orders,
         _pmm_union_grid,
+        _redheffer_star_rect,
+        _sem_cross_mass,
         _sem_fourier_projection,
+        _sem_mass_exact,
         _sem_modes_tensor,
         _tensor3_dict,
     )
@@ -225,50 +229,125 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
     # ---- nodal operators + modes (PUBLIC gauge; DIMENSIONAL kx0/ky0) --------
     kx0_dim = kx0 * k0
     ky0_dim = ky0 * k0
-    layer_mats = [
-        _build_sem_tensor_segments(period, uwidths,
-                                   [_tensor3_dict(e) for e in eps_u],
-                                   degree, n_el, grade)
-        for eps_u in layer_eps_u]
     t_sup = _tensor3_dict(eps_sup * np.eye(3))
     t_sub = _tensor3_dict(eps_sub * np.eye(3))
-    mats_sup = _build_sem_tensor_segments(period, uwidths, [t_sup] * nU,
-                                          degree, n_el, grade)
-    mats_sub = _build_sem_tensor_segments(period, uwidths, [t_sub] * nU,
-                                          degree, n_el, grade)
-    n_glob = mats_sup["n_glob"]
+    nlay = len(segs_layers)
+    if layer_grids == "per-layer":
+        # ---- PER-LAYER grids + interface mortar (audit R-6, conical v2) ----
+        # Identical construction to PMMStack._solve_vertical_perlayer: each
+        # layer's grid = its own walls + its two NEIGHBOURS' (the interface-
+        # conforming window, via _pmm_union_grid over the 3-layer window with
+        # the window-local min_feature), coupled by the exact L2 mortar.  Only
+        # the eigensolve differs (ky0-shifted) -- the mortar is geometry-level
+        # and gauge-free, so it drops in unchanged.
+        grid_of = []
+        for i in range(nlay):
+            js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
+            uw_i, rows_i = _pmm_union_grid(
+                [segs_layers[j] for j in js],
+                (min_feature / period) if min_feature else None)
+            grid_of.append((np.asarray(uw_i, dtype=float),
+                            rows_i[js.index(i)]))
+        mats_by, lmodes = [], []
+        _eig_memo = {}
+        for w_i, eps_row in grid_of:
+            ck = (w_i.tobytes(),
+                  tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_row))
+            hit = _eig_memo.get(ck)
+            if hit is None:
+                m = _build_sem_tensor_segments(
+                    period, w_i, [_tensor3_dict(e) for e in eps_row],
+                    degree, n_el, grade)
+                hit = (m, _sem_modes_tensor(m, k0, kx0_dim, ky0=ky0_dim))
+                _eig_memo[ck] = hit
+            mats_by.append(hit[0])
+            lmodes.append(hit[1])
+        wkeys = [w.tobytes() for w, _r in grid_of]
+        mats_sup = _build_sem_tensor_segments(
+            period, grid_of[0][0], [t_sup] * len(grid_of[0][0]),
+            degree, n_el, grade)
+        mats_sub = _build_sem_tensor_segments(
+            period, grid_of[-1][0], [t_sub] * len(grid_of[-1][0]),
+            degree, n_el, grade)
+        Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0_dim,
+                                                 ky0=ky0_dim)
+        Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0_dim,
+                                                 ky0=ky0_dim)
+        _mass_memo = {}
 
-    Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0_dim,
-                                             ky0=ky0_dim)
-    Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0_dim,
-                                             ky0=ky0_dim)
-    lmodes = []
-    _eig_memo = {}
-    for eps_u, m in zip(layer_eps_u, layer_mats):
-        ck = tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_u)
-        hit = _eig_memo.get(ck)
-        if hit is None:
-            hit = _sem_modes_tensor(m, k0, kx0_dim, ky0=ky0_dim)
-            _eig_memo[ck] = hit
-        lmodes.append(hit)
+        def _mass(i):
+            M = _mass_memo.get(wkeys[i])
+            if M is None:
+                M = _sem_mass_exact(mats_by[i])
+                _mass_memo[wkeys[i]] = M
+            return M
 
-    # ---- symmetric Redheffer cascade (in-plane tensors keep +/-q symmetry) --
-    nlay = len(lmodes)
-    ifc = [_ifc_n(Wsup, Vsup, lmodes[0][0], lmodes[0][1])]
-    for i in range(1, nlay):
-        ifc.append(_ifc_n(lmodes[i - 1][0], lmodes[i - 1][1],
-                          lmodes[i][0], lmodes[i][1]))
-    ifc.append(_ifc_n(lmodes[-1][0], lmodes[-1][1], Wsub, Vsub))
-    S = ifc[0]
-    for i in range(nlay):
-        S = _prop_star_n(S, lmodes[i][2], k0 * layer_specs[i][0])
-        S = _star_n(S, ifc[i + 1])
-    S11, _S12, S21, _S22 = S
+        def _ifc_pl(Wa, Va, Wb, Vb, ia, ib):
+            if ia is None or ib is None or wkeys[ia] == wkeys[ib]:
+                return _ifc_n(Wa, Va, Wb, Vb)
+            return _interface_smatrix_mortar(
+                Wa, Va, Wb, Vb, _mass(ia), _mass(ib),
+                _sem_cross_mass(mats_by[ia], mats_by[ib]))
+
+        S = _ifc_pl(Wsup, Vsup, lmodes[0][0], lmodes[0][1], None, 0)
+        for i in range(nlay):
+            S = _prop_star_n(S, lmodes[i][2], k0 * layer_specs[i][0])
+            if i < nlay - 1:
+                nxt = _ifc_pl(lmodes[i][0], lmodes[i][1],
+                              lmodes[i + 1][0], lmodes[i + 1][1], i, i + 1)
+            else:
+                nxt = _ifc_pl(lmodes[i][0], lmodes[i][1], Wsub, Vsub,
+                              i, None)
+            S = _redheffer_star_rect(S, nxt)
+        S11, _S12, S21, _S22 = S
+        n_glob_sup = mats_sup["n_glob"]
+        n_glob_sub = mats_sub["n_glob"]
+    else:
+        layer_mats = [
+            _build_sem_tensor_segments(period, uwidths,
+                                       [_tensor3_dict(e) for e in eps_u],
+                                       degree, n_el, grade)
+            for eps_u in layer_eps_u]
+        mats_sup = _build_sem_tensor_segments(period, uwidths, [t_sup] * nU,
+                                              degree, n_el, grade)
+        mats_sub = _build_sem_tensor_segments(period, uwidths, [t_sub] * nU,
+                                              degree, n_el, grade)
+        n_glob_sup = n_glob_sub = mats_sup["n_glob"]
+
+        Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0_dim,
+                                                 ky0=ky0_dim)
+        Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0_dim,
+                                                 ky0=ky0_dim)
+        lmodes = []
+        _eig_memo = {}
+        for eps_u, m in zip(layer_eps_u, layer_mats):
+            ck = tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_u)
+            hit = _eig_memo.get(ck)
+            if hit is None:
+                hit = _sem_modes_tensor(m, k0, kx0_dim, ky0=ky0_dim)
+                _eig_memo[ck] = hit
+            lmodes.append(hit)
+
+        # ---- symmetric Redheffer cascade (in-plane +/-q symmetry) ----------
+        ifc = [_ifc_n(Wsup, Vsup, lmodes[0][0], lmodes[0][1])]
+        for i in range(1, nlay):
+            ifc.append(_ifc_n(lmodes[i - 1][0], lmodes[i - 1][1],
+                              lmodes[i][0], lmodes[i][1]))
+        ifc.append(_ifc_n(lmodes[-1][0], lmodes[-1][1], Wsub, Vsub))
+        S = ifc[0]
+        for i in range(nlay):
+            S = _prop_star_n(S, lmodes[i][2], k0 * layer_specs[i][0])
+            S = _star_n(S, ifc[i + 1])
+        S11, _S12, S21, _S22 = S
 
     # ---- conical vector far field (PUBLIC gauge: no conjugations) ----------
-    Tp = _sem_fourier_projection(ox, period, mats_sup)
-    Hsup = np.vstack([Tp @ Wsup[:n_glob, :], Tp @ Wsup[n_glob:, :]])
-    Hsub = np.vstack([Tp @ Wsub[:n_glob, :], Tp @ Wsub[n_glob:, :]])
+    Tp_sup = _sem_fourier_projection(ox, period, mats_sup)
+    Tp_sub = (Tp_sup if mats_sub is mats_sup
+              else _sem_fourier_projection(ox, period, mats_sub))
+    Hsup = np.vstack([Tp_sup @ Wsup[:n_glob_sup, :],
+                      Tp_sup @ Wsup[n_glob_sup:, :]])
+    Hsub = np.vstack([Tp_sub @ Wsub[:n_glob_sub, :],
+                      Tp_sub @ Wsub[n_glob_sub:, :]])
     Nf = len(ox)
     p0 = int(np.where(ox == 0)[0][0])
     delta = (ox == 0).astype(_C)

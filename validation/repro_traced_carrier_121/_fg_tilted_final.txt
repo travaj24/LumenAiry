@@ -1,0 +1,8 @@
+shadow: HEAD:lumenairy/elements/_lens_traced.py -> C:\Users\Tesla\AppData\Local\Temp\_lens_traced_head_8m5otzp5.py
+
+  order (-4, -2)   C6-OFF vs COMMITTED   array_equal=True  max|dE| 0.000e+00
+  order (-4, 0)    C6-OFF vs COMMITTED   array_equal=True  max|dE| 0.000e+00
+  order (-1, 0)    C6-OFF vs COMMITTED   array_equal=True  max|dE| 0.000e+00
+  order (0, 0)     C6-OFF vs COMMITTED   array_equal=True  max|dE| 0.000e+00
+
+OK -- the fail-before restores prior behaviour for TILTED orders

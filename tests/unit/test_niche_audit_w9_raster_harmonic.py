@@ -560,7 +560,41 @@ def test_w9_harmonic_closes_the_sheared_taper_regression():
     better than BOTH ``'hard'`` and ``'area'`` for ``'li'`` TM, where ``'area'``
     alone was worse than ``'hard'``.  Measured
     ``n_x = 64`` hard 1.92e-03 / area 4.79e-03 / harmonic 8.41e-04 (2.3x / 5.7x)
-    and ``n_x = 128`` 9.92e-04 / 2.45e-03 / 1.88e-04 (5.3x / 13.0x)."""
+    and ``n_x = 128`` 9.92e-04 / 2.45e-03 / 1.88e-04 (5.3x / 13.0x).
+
+    TE TOLERANCE RECONCILED 2026-08-01 (release verification for v5.32.0).
+    The closing TE assert used to be ``abs(t_a - t_h) < 1e-9``, an ABSOLUTE
+    machine-precision gate.  That gate is correct on a SINGLE VERTICAL
+    layer -- where it is pinned, in
+    :func:`test_w9_harmonic_equals_area_off_the_inverse_rule_channel`, and
+    where the TE channels agree to 2.2e-15 (measured, ``n_x = 64``) -- but
+    it was inherited here and applied to the SHEARED SIXTEEN-SLICE cascade,
+    which amplifies the same round-off by ~1e6.
+
+    Why the agreement is round-off and not bit-identity, by construction:
+    ``'harmonic'`` paints a cell that IS ``'area'`` bit-for-bit and its
+    y-companion ``eyy`` is bit-identical to that cell (pinned in
+    :func:`test_w9_the_1d_companion_pair_is_harmonic_x_and_area_y`), but
+    the presence of a companion pair routes the layer through
+    ``RCWAStack._li_blocks``'s ``_li_convolutions_2d_tensor`` arm instead
+    of ``_li_convolutions_2d``.  Those two build the SAME ``Cyy`` in a
+    different order (the tensor arm carries an extra operator
+    inverse/re-inverse that cancels analytically for a y-uniform cell), and
+    the library docstring already records the residual as 4.2e-16 -- i.e.
+    NOT bit-identity.  Sixteen such layers cascaded on a sheared staircase
+    turn 4e-16 into ~1e-8.
+
+    MEASURED here, stable to every digit across BLAS thread counts
+    1 / 4 / 16 / default (so this is deterministic amplification, not
+    chaos): ``t_a = 4.746961e-04``, ``t_h = 4.746899e-04``,
+    ``|t_a - t_h| = 6.18e-09``, i.e. **1.30e-05 RELATIVE**; the underlying
+    quad difference is 9.99e-09 and the unsheared single-slice control on
+    the very same cells is 2.2e-15.  The gate below is therefore relative
+    with an absolute ceiling: 1e-3 relative (77x headroom) and 1e-6
+    absolute (162x).  It still catches the failure it exists for -- a
+    companion leaking into the DIRECT-rule channel would move TE by the
+    same order as it moves TM, i.e. 2.3x-13x, which is O(1) relative.
+    """
     ref = _shear_ref("harmonic", "TM")
     e64 = {m: _err(_grating(n_x=64, raster=m, **_SHEAR_KW), "TM", ref)
            for m in _MODES}
@@ -570,12 +604,14 @@ def test_w9_harmonic_closes_the_sheared_taper_regression():
     assert e64["harmonic"] * 2.5 < e64["area"], e64
     assert e128["harmonic"] * 3.0 < e128["hard"], e128
     assert e128["harmonic"] * 5.0 < e128["area"], e128
-    # TE on the very same cells is untouched (== 'area')
+    # TE on the very same cells is untouched to round-off (== 'area' up to
+    # the Cyy assembly order; see the docstring).
     t_a = _err(_grating(n_x=64, raster="area", **_SHEAR_KW), "TE",
                _shear_ref("area", "TE"))
     t_h = _err(_grating(n_x=64, raster="harmonic", **_SHEAR_KW), "TE",
                _shear_ref("area", "TE"))
-    assert abs(t_a - t_h) < 1e-9 * max(1.0, t_a)
+    assert abs(t_a - t_h) < 1e-3 * max(t_a, t_h), (t_a, t_h)
+    assert abs(t_a - t_h) < 1e-6, (t_a, t_h)
 
 
 def test_w9_non_taper_two_material_multiridge():

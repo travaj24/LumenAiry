@@ -658,7 +658,7 @@ class TestDeprecationRemovalSchedule:
                                       version_added='5.25',
                                       version_removed='5.27')
         msg = str(caught[0].message)
-        assert 'will be removed in v5.32' in msg
+        assert 'will be removed in v5.36' in msg
         assert 'rescheduled from v5.27' in msg
 
     def test_all_four_message_builders_route_through_the_registry(self):

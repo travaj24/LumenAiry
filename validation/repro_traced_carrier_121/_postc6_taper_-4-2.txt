@@ -1,0 +1,34 @@
+=== POST-C6 re-measurement, order (-4, -2), set taper ===
+   lib C:\Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/pin_live_c6\lumenairy\elements\_lens_traced.py
+       sha256 f06da6ab8e15ce2a
+   lib C:\Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/pin_live_c6\lumenairy\propagators\carrier.py
+       sha256 2d30f1ed7beb3c7e
+   C6 flag REMAP_STATIONARY_PHASE_LAUNCH = True  resid degree 4
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+grid: RN=1024 dx=51.2334 um RS=4 NFC=12288 WF=4.0 NOUT=192 DXO=0.100 um
+BASELINE sampling: na_par 0.4052  na_measured 0.5397  na_nyquist 0.4343  exit power above nyquist 7.8996e-04
+BASELINE warnings: {'NYQ': 6}
+  done: NULL identity patch                       
+  done: sphere<->parab taper OFF                  
+  done: sphere<->parab r_safe x2                  
+  done: sphere<->parab r_safe x0.5                
+  done: tilt-exactness taper OFF                  
+
+variant                               EE3%    EE6%   EE12%   Ptile%      relL2  dphi_rms      s
+-----------------------------------------------------------------------------------------------
+BASELINE (shipping defaults)        87.771  98.299  98.734  98.7354  0.000e+00  0.00e+00    316
+NULL identity patch                 87.771  98.299  98.734  98.7354  0.000e+00  1.81e-17    313
+sphere<->parab taper OFF            89.186  98.866  99.230  99.2312  6.649e-02  2.36e-02    348
+sphere<->parab r_safe x2            89.186  98.866  99.230  99.2312  6.649e-02  2.36e-02    372
+sphere<->parab r_safe x0.5          46.151  72.853  75.635  75.6742  1.823e+00  1.10e-01    433
+tilt-exactness taper OFF            87.772  98.299  98.735  98.7361  2.830e-03  1.30e-05    307
+
+dEE3 (points) vs baseline, with warnings and exit-nyquist power:
+  NULL identity patch                         +0.0000  (dEE6  +0.0000, dPtile  +0.00000)  P>nyq 7.8996e-04  warn {'NYQ': 6}
+  sphere<->parab taper OFF                    +1.4147  (dEE6  +0.5670, dPtile  +0.49576)  P>nyq 8.3411e-04  warn {'NYQ': 6}
+  sphere<->parab r_safe x2                    +1.4147  (dEE6  +0.5670, dPtile  +0.49575)  P>nyq 8.3409e-04  warn {'NYQ': 6}
+  sphere<->parab r_safe x0.5                 -41.6193  (dEE6 -25.4461, dPtile -23.06118)  P>nyq 7.2901e-04  warn {'NYQ': 6, 'FOLD': 2}
+  tilt-exactness taper OFF                    +0.0008  (dEE6  +0.0008, dPtile  +0.00072)  P>nyq 7.9062e-04  warn {'NYQ': 6}

@@ -53,6 +53,7 @@ singularity.  The pins below lock the measured law so a future "faster
 staircase" claim has to beat a number.
 """
 import os
+import warnings
 
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
@@ -515,12 +516,20 @@ def test_sheared_grating_validation_and_restrictions():
                               shear=0.35)
     with pytest.raises(NotImplementedError):        # ... and the key sweep
         keyed.prepare()
-    # stabilize='slices' has no recipe to re-slice -> it WARNS, not raises
+    # stabilize='slices' has no recipe to re-slice -> since the 2026-07-28
+    # union-grid audit it falls back to the min_feature-perturbation consensus
+    # instead of announcing that it skipped.  A sheared grating is ONE exact
+    # slanted layer with NO z-staircase, so there are no colliding cross-layer
+    # walls and the consensus is a no-op: it must run quietly and not raise.
     st2 = PMMStack(_P, n_substrate=1.5, degree=8, far_field_orders=11)
     st2.add_sheared_grating(_TH, eps_ridge=_ER, eps_groove=_EG, duty=0.45,
                             shear=0.35)
-    with pytest.warns(UserWarning, match="no taper builder recorded"):
+    with warnings.catch_warnings(record=True) as wlist:
+        warnings.simplefilter("always")
         st2.set_source(_WL, angle=_ANG).solve(stabilize="slices")
+    msgs = [str(w.message) for w in wlist]
+    assert not any("no taper builder recorded" in m for m in msgs)
+    assert not any("min_feature` was perturbed" in m for m in msgs)
 
 
 def test_staircase_error_law_is_second_order():

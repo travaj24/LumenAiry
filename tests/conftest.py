@@ -77,6 +77,70 @@ def gaussian_beam(N_small, dx_m, wavelength_m) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
+# FFT dispatch isolation
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def shipped_fft_dispatch():
+    """Run a test from the SHIPPED FFT-dispatch configuration, then restore
+    whatever the process had before.
+
+    Opt-in (NOT autouse): request it from a module's own autouse fixture.
+
+    WHY (release verification 2026-08-01).  The pyFFTW plan-cache pins --
+    ``test_perf_v4_12_0_fft_infra.py::TestAutoPromote`` and
+    ``test_niche_audit_w9_traced_determinism.py::
+    test_auto_promote_still_promotes_when_opted_in`` -- all assert that the
+    FIRST plan built at a key is ``FFTW_ESTIMATE`` and that a cache entry
+    exists at all.  Both of those depend on process-global dispatch state
+    that neither module's own fixture owned:
+
+      * ``USE_PYFFTW`` -- ``False`` (e.g. left behind by any consumer of the
+        UI dock's backend selector, which sets it unconditionally and only
+        re-raises it for ``backend == 'pyfftw'``) makes ``_fft2`` skip the
+        plan cache entirely, so the probed entry is ``None``;
+      * ``FFTW_MIN_SIZE`` -- raised above the test's N has the same effect,
+        and it is the ONE dispatch global ``snapshot_fft_state`` does not
+        carry;
+      * ``_PYFFTW_PLAN_FLAGS`` -- left at ``FFTW_MEASURE`` makes the first
+        plan MEASURE, so "starts at ESTIMATE" fails;
+      * ``PYFFTW_FALLBACK_ON_ERROR`` / ``_PYFFTW_DOUBLE_BUFFER`` /
+        ``_PYFFTW_PLAN_CACHE_SIZE`` -- reachable via ``set_low_memory``.
+
+    Each of those makes the pins pass alone and fail in a full sweep.  This
+    fixture removes the coupling by CONSTRUCTION rather than by chasing the
+    polluter: it forces every one of them to its shipped value, clears the
+    plan cache and the bad-shape blacklist, and restores the caller's state
+    (including ``FFTW_MIN_SIZE``, by hand) on the way out.
+
+    It deliberately does NOT touch libfftw3 *wisdom* -- that is
+    process-global inside the C library, affects bits rather than the plan
+    flags asserted here, and the w9 module already snapshots it.
+    """
+    from lumenairy.propagators import fft_infra as _fi
+
+    state = _fi.snapshot_fft_state()
+    prev_min_size = _fi.FFTW_MIN_SIZE
+    prev_planner = _fi.get_pyfftw_planner()
+    _fi.USE_PYFFTW = _fi.PYFFTW_AVAILABLE     # shipped: on iff importable
+    _fi.USE_SCIPY_FFT = True                  # shipped
+    _fi.PYFFTW_FALLBACK_ON_ERROR = True       # shipped
+    _fi.FFTW_MIN_SIZE = 256                   # shipped
+    if not _fi._PYFFTW_DOUBLE_BUFFER:         # shipped (clears plans on flip)
+        _fi.set_fft_double_buffer(True)
+    _fi.set_fft_plan_cache_size(8)            # shipped
+    _fi.set_pyfftw_planner('FFTW_ESTIMATE')   # shipped; clears the plan cache
+    _fi.reset_fft_backend()                   # + bad shapes, + call counters
+    try:
+        yield
+    finally:
+        _fi.FFTW_MIN_SIZE = prev_min_size
+        _fi.restore_fft_state(state)
+        _fi.set_pyfftw_planner(prev_planner)
+        _fi.reset_fft_backend()
+
+
+# ---------------------------------------------------------------------------
 # Prescription fixtures
 # ---------------------------------------------------------------------------
 

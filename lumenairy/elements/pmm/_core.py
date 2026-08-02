@@ -3372,13 +3372,19 @@ def _pmm_union_grid(layer_segments, min_feature=None):
                     f"({a:.6g}, {b:.6g})" for a, b in merged_pairs[:6])
                 more = ("" if len(merged_pairs) <= 6
                         else f" (+{len(merged_pairs) - 6} more)")
+                # ACCURACY accounting (audit 2026-07-28): the snap MOVES walls,
+                # so report the displacement -- min_feature is an accuracy knob,
+                # not only a cost knob, and the caller cannot otherwise see how
+                # far the solved geometry has drifted from the requested one.
+                max_disp = max(0.5 * abs(b - a) for a, b in merged_pairs)
                 _warnings.warn(
                     f"_pmm_union_grid: snapped {len(merged_pairs)} pair(s) of "
                     f"NEAR-COINCIDENT cross-layer walls closer than "
                     f"min_feature={mf:.3g} (period fractions): {pairs_txt}"
                     f"{more}.  These near-zero-width union elements are the "
                     f"staircase wall-collision pathology (passive-but-wrong / "
-                    f"blow-up); the snap moves each pair to its midpoint.  "
+                    f"blow-up); the snap moves each pair to its midpoint "
+                    f"(max wall displacement {max_disp:.3g} of a period).  "
                     f"Single-layer thin features are never merged.",
                     stacklevel=3)
             keep = out_w
@@ -3394,6 +3400,212 @@ def _pmm_union_grid(layer_segments, min_feature=None):
             row.append(segs[j][1])
         layer_eps_union.append(row)
     return uwidths, layer_eps_union
+
+
+# ===========================================================================
+# PER-LAYER element grids + interface L2 mortar (audit R-6, 2026-07-28)
+# ===========================================================================
+# The shared union grid caps accuracy on tapered stacks: every slice's walls
+# enter ONE global grid, so refining a taper degrades every layer's
+# conditioning (measured: in-plane oblique extinction scattered 91% across
+# degree 6/8/10 on a 2-deg coated-pillar taper) and costs O(n_slices^3.4).
+# The structural fix is to give each layer its OWN element grid -- built from
+# its own walls only, so cross-layer wall collisions cannot form and
+# ``min_feature`` is inert by construction -- and to couple adjacent layers
+# through an exact L2 mortar at the interface: tangential-E continuity is
+# enforced weakly against the LOWER layer's basis and tangential-H continuity
+# against the UPPER layer's (the classic mode-matching pairing).  With
+# identical grids both projections collapse to the identity and the interface
+# reduces ALGEBRAICALLY to :func:`_interface_smatrix` (verified in
+# tests/unit/test_pmm_per_layer_grids.py).
+# See docs/audits/AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md (R-6).
+
+def _lagrange_eval(ref_nodes, xi):
+    """Values of the ``degree+1`` Lagrange basis polynomials on ``ref_nodes``
+    at arbitrary reference points ``xi`` -- barycentric form, exact (returns a
+    unit row) when ``xi`` lands on a node.  ``(len(xi), degree+1)``."""
+    ref = np.asarray(ref_nodes, dtype=float)
+    p1 = ref.size
+    wb = np.ones(p1)
+    for j in range(p1):
+        for k in range(p1):
+            if k != j:
+                wb[j] /= (ref[j] - ref[k])
+    xi = np.atleast_1d(np.asarray(xi, dtype=float))
+    out = np.zeros((xi.size, p1))
+    for r, x in enumerate(xi):
+        diff = x - ref
+        hit = np.abs(diff) < 1e-14
+        if hit.any():
+            out[r, int(np.argmax(hit))] = 1.0
+        else:
+            num = wb / diff
+            out[r] = num / num.sum()
+    return out
+
+
+def _sem_mass_exact(mats):
+    """EXACT assembled global mass matrix of a SEM grid (``(n_glob, n_glob)``,
+    real).  Gauss-Legendre with ``degree+2`` points per element -- exact for
+    the degree-``2p`` integrand -- NOT the lumped GLL diagonal the operators
+    use.  Exactness matters for the mortar identity: on identical grids the
+    cross-mass equals this matrix bit-for-bit-in-quadrature, so the projection
+    ``M^{-1} C`` is the identity to solver round-off."""
+    deg = int(mats["degree"])
+    xg, wg = np.polynomial.legendre.leggauss(deg + 2)
+    Lv = _lagrange_eval(mats["ref_nodes"], xg)          # (nq, p+1)
+    n = int(mats["n_glob"])
+    M = np.zeros((n, n))
+    for e, (xl, xr, _t) in enumerate(mats["elem_bnds"]):
+        J = 0.5 * (xr - xl)
+        Me = (Lv * (wg * J)[:, None]).T @ Lv
+        idx = mats["l2g"][e]
+        M[np.ix_(idx, idx)] += Me
+    return M
+
+
+def _sem_cross_mass(mats_a, mats_b):
+    """Cross-mass ``C[i, j] = INT phi_i^(a)(x) phi_j^(b)(x) dx`` between two
+    SEM grids covering the same period -- exact by Gauss quadrature on the
+    PAIRWISE union of the two element sets.  Near-coincident walls from the
+    two grids appear only in this INTEGRATION mesh (harmless: a thin interval
+    just contributes a small exact integral), never as spectral elements --
+    the decisive difference from the shared union grid."""
+    dega, degb = int(mats_a["degree"]), int(mats_b["degree"])
+    refa, refb = mats_a["ref_nodes"], mats_b["ref_nodes"]
+    bnds_a = [(xl, xr) for xl, xr, _t in mats_a["elem_bnds"]]
+    bnds_b = [(xl, xr) for xl, xr, _t in mats_b["elem_bnds"]]
+    period = max(bnds_a[-1][1], bnds_b[-1][1])
+    cuts = sorted({float(x) for xl, xr in bnds_a for x in (xl, xr)}
+                  | {float(x) for xl, xr in bnds_b for x in (xl, xr)})
+    # dedup float-noise-coincident cuts: pure integration bookkeeping (the
+    # interval between them integrates to ~0 anyway)
+    tol = 1e-12 * period
+    merged = [cuts[0]]
+    for x in cuts[1:]:
+        if x - merged[-1] > tol:
+            merged.append(x)
+    la = np.array([b[0] for b in bnds_a])
+    lb = np.array([b[0] for b in bnds_b])
+    xg, wg = np.polynomial.legendre.leggauss(max(dega, degb) + 2)
+    C = np.zeros((int(mats_a["n_glob"]), int(mats_b["n_glob"])))
+    for u0, u1 in zip(merged[:-1], merged[1:]):
+        mid = 0.5 * (u0 + u1)
+        ea = min(max(int(np.searchsorted(la, mid, side="right") - 1), 0),
+                 len(bnds_a) - 1)
+        eb = min(max(int(np.searchsorted(lb, mid, side="right") - 1), 0),
+                 len(bnds_b) - 1)
+        axl, axr = bnds_a[ea]
+        bxl, bxr = bnds_b[eb]
+        J = 0.5 * (u1 - u0)
+        xphys = mid + J * xg
+        La = _lagrange_eval(refa, (2.0 * xphys - (axl + axr)) / (axr - axl))
+        Lb = _lagrange_eval(refb, (2.0 * xphys - (bxl + bxr)) / (bxr - bxl))
+        Ce = (La * (wg * J)[:, None]).T @ Lb
+        C[np.ix_(mats_a["l2g"][ea], mats_b["l2g"][eb])] += Ce
+    return C
+
+
+def _interface_smatrix_mortar(Wa, Va, Wb, Vb, Ma, Mb, Cab):
+    """Interface S-matrix between symmetric (+/-q) mode sets living on
+    DIFFERENT nodal grids (per-layer element grids, audit R-6).
+
+    Continuity is enforced weakly -- tangential E against grid ``b``'s basis,
+    tangential H against grid ``a``'s (the classic mode-matching pairing, which
+    keeps the system square for ``n_a != n_b``)::
+
+        M_b W_b (cb+ + cb-) = Cab^T W_a (ca+ + ca-)     [n_b eqs]
+        M_a V_a (ca+ - ca-) = Cab   V_b (cb+ - cb-)     [n_a eqs]
+
+    with ``Cab[i, j] = INT phi_i^(a) phi_j^(b)``.  Solving for the outgoing
+    ``(ca-, cb+)`` gives, with ``A = (M_b W_b)^{-1} Cab^T W_a`` and
+    ``B = (M_a V_a)^{-1} Cab V_b``::
+
+        S11 = (I + BA)^{-1} (I - BA)     S12 = 2 (I + BA)^{-1} B
+        S21 = A (I + S11)                S22 = A S12 - I
+
+    On identical grids (``Ma = Mb = Cab`` exact) ``A = Wb^{-1} Wa`` and
+    ``B = (Va)^{-1} Vb``, and the blocks reduce algebraically to
+    :func:`_interface_smatrix`'s (same derivation, associated differently).
+    Fields are 2-component stacked ``[x-block; y-block]`` so every projection
+    applies blockwise via ``kron(I_2, .)``."""
+    bMb = np.kron(np.eye(2), Mb)
+    bMa = np.kron(np.eye(2), Ma)
+    bCba = np.kron(np.eye(2), Cab.T)
+    bCab = np.kron(np.eye(2), Cab)
+    A = np.linalg.solve(bMb @ Wb, bCba @ Wa)
+    B = np.linalg.solve(bMa @ Va, bCab @ Vb)
+    BA = B @ A
+    I_a = np.eye(BA.shape[0], dtype=_C)
+    iba = np.linalg.inv(I_a + BA)
+    S11 = iba @ (I_a - BA)
+    S12 = 2.0 * (iba @ B)
+    S21 = A @ (I_a + S11)
+    S22 = A @ S12 - np.eye(A.shape[0], dtype=_C)
+    return (S11, S12, S21, S22)
+
+
+def _interface_smatrix_general_mortar(Ma, Mb, Mass_a, Mass_b, Cab):
+    """GENERAL (explicit forward/backward) interface S-matrix between mode
+    sets on DIFFERENT nodal grids (audit R-6, slant/OOP extension).
+
+    ``Ma = [[Wf_a, Wb_a], [Vf_a, Vb_a]]`` etc. (rows = 2n field values E over
+    H; cols = forward over backward modes).  Continuity is enforced weakly --
+    tangential E tested on grid ``b``, tangential H on grid ``a`` (the same
+    energy-consistent pairing as :func:`_interface_smatrix_mortar`), giving
+    the square scattering system::
+
+        [ Cba Wb_a   -M_b Wf_b ] [ca-]   [ -Cba Wf_a   M_b Wb_b ] [ca+]
+        [ M_a Vb_a   -Cab Vf_b ] [cb+] = [ -M_a Vf_a   Cab Vb_b ] [cb-]
+
+    with ``Cba = Cab^T`` and every mass/cross applied blockwise over the
+    2-component field stacking.  On identical grids this reduces to the plain
+    continuity of :func:`_interface_smatrix_general` (same equations, solved
+    in the scattering arrangement)."""
+    na2 = Ma.shape[0] // 2          # 2 * n_glob_a  (field rows per E/H block)
+    nb2 = Mb.shape[0] // 2
+    ma = Ma.shape[1] // 2           # forward-mode count of a
+    mb = Mb.shape[1] // 2
+    Wf_a, Wb_a = Ma[:na2, :ma], Ma[:na2, ma:]
+    Vf_a, Vb_a = Ma[na2:, :ma], Ma[na2:, ma:]
+    Wf_b, Wb_b = Mb[:nb2, :mb], Mb[:nb2, mb:]
+    Vf_b, Vb_b = Mb[nb2:, :mb], Mb[nb2:, mb:]
+    bMa = np.kron(np.eye(2), Mass_a)
+    bMb = np.kron(np.eye(2), Mass_b)
+    bCab = np.kron(np.eye(2), Cab)
+    bCba = np.kron(np.eye(2), Cab.T)
+    A = np.block([[bCba @ Wb_a, -(bMb @ Wf_b)],
+                  [bMa @ Vb_a, -(bCab @ Vf_b)]])
+    B = np.block([[-(bCba @ Wf_a), bMb @ Wb_b],
+                  [-(bMa @ Vf_a), bCab @ Vb_b]])
+    X = np.linalg.solve(A, B)
+    S11 = X[:ma, :ma]
+    S12 = X[:ma, ma:]
+    S21 = X[ma:, :ma]
+    S22 = X[ma:, ma:]
+    return (S11, S12, S21, S22)
+
+
+def _redheffer_star_rect(SA, SB):
+    """Redheffer star tolerating RECTANGULAR off-diagonal blocks (adjacent
+    per-layer grids carry different mode counts).  Identity blocks are sized
+    from the INTERIOR dimension (``A22``/``B11``'s square space); algebra is
+    identical to rcwa's ``_redheffer_star``, which sizes its identity from
+    ``A11`` and therefore requires uniform block sizes."""
+    A11, A12, A21, A22 = SA
+    B11, B12, B21, B22 = SB
+    n = A22.shape[0]
+    I = np.eye(n, dtype=_C)
+    if not bool(A22.any()) or not bool(B11.any()):
+        D = I
+        F = I
+    else:
+        D = np.linalg.inv(I - B11 @ A22)
+        F = np.linalg.inv(I - A22 @ B11)
+    return (A11 + A12 @ D @ B11 @ A21,
+            A12 @ D @ B12,
+            B21 @ F @ A21,
+            B22 + B21 @ F @ A22 @ B12)
 
 
 

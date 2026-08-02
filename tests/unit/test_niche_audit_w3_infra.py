@@ -801,12 +801,19 @@ class TestA6EstimateAsmMemory:
     def test_documented_band_vs_steady_state(self):
         """The docstring states the estimate runs ~6.4x the steady-state
         per-call transient asymptotically, and more at small N where the
-        fixed import term dominates (16x at N=512 complex128).  Pin both
-        so the docstring and the formula cannot drift apart."""
+        fixed import term dominates (20x at N=512 complex128).  Pin both
+        so the docstring and the formula cannot drift apart.
+
+        2026-08-01: the small-N ratio moved 16.35 -> 20.35 with the
+        ``_ASM_FIRST_CALL_FIXED_BYTES`` 40 -> 56 MiB re-calibration (the
+        one-time FFT-backend import grew with the dependency stack; see
+        that constant's comment for the re-measured fit).  The asymptotic
+        ratio is unchanged to 0.1% because the shape term did not move.
+        """
         from lumenairy import memory as m
         ratios = {n: m.estimate_asm_memory(n) / (n * n * 16)
                   for n in (512, 1024, 2048, 16384)}
-        assert ratios[512] == pytest.approx(16.35, rel=0.02)
+        assert ratios[512] == pytest.approx(20.35, rel=0.02)
         assert ratios[16384] == pytest.approx(6.35, rel=0.01)
         # Monotonically approaching the asymptote from above.
         assert (ratios[512] > ratios[1024] > ratios[2048]
@@ -819,21 +826,41 @@ class TestA6EstimateAsmMemory:
         method).  Pre-fix est/measured was 0.53 at N=512 and 0.96 at
         N=1024 -- not a bound.  Post-fix: 1.02-1.09 over the eight points
         N=256/512/1024/2048 x {complex64, complex128} on the reference
-        box."""
+        box.
+
+        2026-08-01 (v5.32.0 release verification): this pin FAILED again --
+        0.850 at N=512, 0.951 at N=1024 -- because the dependency stack
+        (numpy 2.4.4 / scipy 1.17.1 / scipy-openblas 0.3.31) grew the
+        one-time FFT-backend import from ~38 MB to ~53 MiB.  Re-measured
+        over the same eight points and raised
+        ``memory._ASM_FIRST_CALL_FIXED_BYTES`` 40 -> 56 MiB; the band is
+        now 1.06-1.09.  The SHAPE term was deliberately NOT touched: the
+        measured per-pixel slope is still 96.0 B/px (complex128) / 48.0
+        (complex64), under the formula's 101.6 / 52.8, so this was a
+        fixed-term drift and the estimator's N-scaling is unaffected."""
         cold, steady, est = _measure_asm_peak(n_grid, dtype)
         ratio = est / cold
         assert ratio >= 1.0, (
             f"A-6: estimate_asm_memory({n_grid}, {dtype!r}) = {est} B does "
             f"NOT bound the measured fresh-interpreter first-call peak "
             f"{cold} B (est/measured = {ratio:.3f}).")
-        # Tightness ceiling is PLATFORM-SCOPED: the 40 MiB first-call
-        # fixed term was calibrated on Windows (this box); on CI Linux
-        # the allocator retains a much smaller cold peak, so the same
-        # estimate reads est/measured = 1.46 (N=1024) to 2.63 (N=512)
-        # there (measured, CI run on e1fd64a) -- still a BOUND, the
-        # fail-safe direction.  The >= 1.0 bound assertion above is the
+        # Tightness ceiling is PLATFORM-SCOPED: the first-call fixed term
+        # is calibrated on Windows (this box); on CI Linux the allocator
+        # retains a much smaller cold peak, so the same estimate read
+        # est/measured = 1.46 (N=1024) to 2.63 (N=512) there (measured, CI
+        # run on e1fd64a, against the 40 MiB fixed term) -- still a BOUND,
+        # the fail-safe direction.  The >= 1.0 bound assertion above is the
         # A-6 contract and runs everywhere (pre-fix 0.53 fails it);
         # cross-platform we only fence absurd looseness.
+        #
+        # 2026-08-01: the fixed term went 40 -> 56 MiB.  On Windows the
+        # band is re-MEASURED at 1.06-1.09, so the 1.35 fence is unchanged.
+        # On Linux it is not re-measured here; PROJECTING the CI-Linux cold
+        # peaks implied by the e1fd64a ratios (26.1 MB at N=512, 101.7 MB
+        # at N=1024) onto the new estimate gives 3.27 / 1.63, so the Linux
+        # fence is raised 4.0 -> 5.0 to keep the same "absurd only" role
+        # instead of turning a documented platform difference into a red
+        # release.  The >= 1.0 contract above is what actually guards A-6.
         import importlib.util
         import sys
         if importlib.util.find_spec('pyfftw') is not None:
@@ -841,11 +868,11 @@ class TestA6EstimateAsmMemory:
                 assert ratio <= 1.35, (
                     f"A-6: estimate has drifted loose (est/measured = "
                     f"{ratio:.3f}); the documented band on the Windows "
-                    f"calibration platform is 1.02-1.09.")
+                    f"calibration platform is 1.06-1.09.")
             else:
-                assert ratio <= 4.0, (
+                assert ratio <= 5.0, (
                     f"A-6: estimate absurdly loose (est/measured = "
-                    f"{ratio:.3f}); CI-Linux measured 1.46-2.63.")
+                    f"{ratio:.3f}); CI-Linux projects 1.63-3.27.")
         # Steady state is ~1 output field; the estimate is not that.
         assert steady == pytest.approx(n_grid * n_grid * 16, rel=0.05)
 

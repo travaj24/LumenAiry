@@ -2,7 +2,448 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.32.0] — 2026-08-02
+
+### Changed — the empty deprecation horizon advanced past this release (`lumenairy/_deprecation.py`)
+
+`NEXT_REMOVAL_VERSION` (and its alias `API_TRANSITION_VERSION`) read `'5.32'`
+and came due with this release — with **nothing scheduled**: both registries
+are empty tombstones because every removal and the one API transition were
+executed early, in v5.30.  Advanced `'5.32' -> '5.36'` per the constant's own
+documented one-line-slip mechanism.  No shim's lifetime changes; banners that
+resolve through the backstop now read `v5.36 (rescheduled from ...)`.
+
+
+### Fixed — the inverse map may no longer invent light: exit pixels outside the traced support get zero (niche C8, `elements/_lens_traced.py`)
+
+Closes the C6 on-axis energy defect STRUCTURALLY, at the mechanism.  The
+`ray_density` amplitude was evaluated from the fitted INVERSE of the traced
+entrance->exit map even at exit pixels no traced ray ever reached; there the
+fit extrapolates, and its made-up pullbacks land in the bright beam and
+acquire amplitude -- light from nowhere.  `REMAP_INVERSE_SUPPORT_BOUND = True`
+(fail-before `= False`, bit-exact) zeroes ray-density amplitude outside the
+convex hull of the alive traced rays' exit landing points, with a plateau of
+`sqrt(2) sub dx` and a one-exit-cell raised-cosine feather (a plateau-less
+taper bled 3.8e-05 of Pin of LEGITIMATE skirt through the bilinear upsample
+-- measured and fixed pre-ship).  Both `newton_fit` backends share one hull.
+
+Measured: (0,0) production `P_out/P_ap` **1.000741 -> 0.996026** (the C6-off
+class), ghost `g4`/`amax4` **exactly 0**, EE3 unchanged to the last digit on
+every order, the at-plane acceptance unchanged, and -- unlike the opt-in fit
+guard, which it makes redundant AND safe -- **zero regressions across the six
+synthetic fixtures**.  Every measured order/configuration now scores **6/6**
+of the conservation bounds at both subsamples, including two cases the guard
+structurally could not reach and one that fails with C6 off.  100 % of the
+removed power lies outside the convex hull of every alive ray, at every
+feather (three-way partition against the call's own ray bundle).
+
+The same defect class was independently confirmed elsewhere first: the C7
+halo check's very first suite run flagged a 0.641-of-peak lobe beyond the
+exact-ray support in a niche-D6 fixture (ordinary group call, 1.0 w
+decentre; 0 of 12849 alive rays reach the lobe radius; amplitude gain
+2.55e5; diffraction excluded at 1.42e6x below the observed level).  C8 takes
+that lobe to exactly 0 too.  Record:
+`docs/audits/C8_INVERSE_SUPPORT_BOUND_2026_08_01.md` and
+`ORACLE_ENERGY_AND_D6_HALO_2026_08_01.md`.
+
+### Fixed — the exact-ray oracle can now answer ABSOLUTE energy questions (`validation/repro_traced_carrier_121/`)
+
+The Rayleigh-Sommerfeld kernel in `oracle_spot` omitted the `1/(i lambda)`
+prefactor (every intensity `1/lambda^2` too large).  The second defect the
+POP cross-check alleged -- `launch_power` missing the cell area -- was FALSE:
+the double-count was in the POP comparison harness itself, and the
+`lambda^2/h^2` arithmetic closes the discrepancy exactly.  Validated
+absolutely: an unaberrated converging sphere through the same machinery
+returns `P_out/P_in` = **0.99999988**; design 121 converges to
+**P/Pin = 1.0000 on both (0,0) and (-4,-2)**, agreeing with Zemax POP's
+1.00000000 and the 70681-ray pupil trace.  The energy-conservation audit was
+verified UNAFFECTED digit-for-digit (its references are chain-internal
+ratios that never touch the RS kernel).
+
+### Fixed — `remap` now launches at the stationary point of the WHOLE phase (niche C6, `elements/_lens_traced.py`)
+
+`preserve_input_phase='remap'` launched its rays along `grad(W)` -- the
+carrier eikonal's gradient alone -- and evaluated the input residual `a` at
+that ray's foot.  The exit eikonal is a stationary value of `W + a + V`, so
+this dropped a second-order stationary-phase term
+`(1/2) grad a^T H^-1 grad a`: quadratic in `grad a`, verified by prediction
+(across C5, `grad a` rms grew 1.46 -> 2.30 mrad, ratio squared 2.48; the
+measured element wavefront error grew 0.0359 -> 0.0659 waves, ratio 2.48).
+The fix launches along `grad(W + a_fit)` and lets the transported phasor
+carry the leftover `a - a_fit`; the `ray_density` Jacobian follows the
+augmented map automatically.  Design 121 EE3 against the exact-ray oracle:
+(0,0) 87.99 -> **89.21** (oracle 90.08), (-4,0) 70.19 -> **88.94** (90.78),
+(-4,-2) 66.24 -> **88.49** (89.78); field-angle spread **14.33 -> 0.72**
+points.  Fail-before: `REMAP_STATIONARY_PHASE_LAUNCH = False` reproduces the
+prior library bit for bit, tilted orders included (verified per order).
+
+A backend-consistency defect found by the D7 spline-oracle test was fixed
+before shipping: the residual fit's radial-freeze circle sat at exactly the
+polynomial ray-fit disc radius (both 2.0 w), so the map went non-smooth
+precisely where that fit began extrapolating and the two `newton_fit`
+backends diverged 7.8e-09 -> 3.7e-03 of peak.  Scored pointwise against the
+exact skew ray trace the POLYNOMIAL backend was the wrong one (5.6 um in the
+skirt, 15.1 um at the aperture rim, vs the spline's 0.006 / 0.002).
+Separating the freeze circle from the fit disc
+(`_REMAP_RESID_FREEZE_MARGIN = 1.25`) restores agreement to **8.6e-06**.
+
+**KNOWN DEFECT, disclosed not fixed: C6 manufactures energy on axis.**  On
+design 121's last group at order (0,0) the production path returns
+`P_out/P_ap` = 1.000741 against C6-off's 0.995883 -- **+0.486 % of input
+power created**, deposited as a lobe at 4-8 mm carrying 4.7e-03 of Pin at
+83 % of peak amplitude, where the exact ray trace permits 3.6e-10.  Every
+EE-family metric is blind to it (the same field reports +1.691 EE3).
+Mechanism: the corrected launch makes the ray map non-radial and the
+CONCENTRIC fit branch's inverse map extrapolates beyond its data.
+`REMAP_STATIONARY_PHASE_FIT_GUARD = True` removes it outright on (0,0) but
+regresses 2 of 6 synthetic fixtures (one to P/Pin 1.00697), so it stays
+opt-in (`docs/audits/C6_FIT_GUARD_DECISION_2026_07_31.md`).  Per-order /
+tilted use is sound; on-axis halo and second-moment metrics are NOT until
+the structural fix (bounding the Newton inverse to the traced samples'
+support) lands.  Full conservation record in
+`docs/audits/ENERGY_CONSERVATION_AUDIT_2026_07_31.md`.
+
+### Added — halo-amplitude self-check for `ray_density` (niche C7, `elements/_lens_traced.py`)
+
+The scalar energy self-check's observable is EXHAUSTED: its +5 % gain band
+cannot be tightened, because a currently-green CI battery cell legitimately
+reads `P_out/P_ap` = 1.04374 at the N/subsample CI actually runs -- the same
+magnitude as the defects worth catching -- and the C6 backend fix
+demonstrated that a total-power criterion can be satisfied while the defect
+(the lobe) remains.  New observable instead: `amax4`-style HALO AMPLITUDE at
+1.25x the exact-ray exit support, `_RD_HALO_AMAX_TOL = 1.0e-03`, default
+`RAY_DENSITY_HALO_CHECK = 'warn'`.  Calibrated on 180 element calls: worst
+clean 4.6e-05, mildest confirmed defect 5.7e-03 -- 123x separation, and it
+never fires on any P2 battery cell.  On its first full-suite run it flagged
+a real, previously-unknown defect in niche D6's exact-tilted-leg retrace
+fixture (0.641 of peak beyond the exact trace's 1.616 mm support) -- open.
+
+### Changed — the design-121 acceptance is scored AT the metasurface plane (user-approved re-baseline, 2026-08-01)
+
+The recorded acceptance `3.450 um / EE3 88.8 / EE6 99.6` was measured at
+`dz = +10 um` -- 10 um PAST the metasurface plane -- because the pre-C6
+chain's residual aberration pushed its focus downstream (at-plane read
+3.750 / 87.4).  C6 removed that offset; the spot is now sharpest at the
+plane itself.  New acceptance, at `dz = 0`:
+**3.450 um / EE3 90.2 / EE6 99.7 / EE12 99.8**, against the measured
+ideal-field ceiling 3.45-3.55 um / 90.3 / 99.8.  The focus scan now reports
+`BEST-FOCUS[peak]` (max intensity) alongside the historical EE6-selected
+line, because EE6 saturates near 99.7 and mis-selects on its 4th digit.
+
+### Validated — independent Zemax cross-check of the per-order result (`docs/audits/POP_CROSSCHECK_121_2026_07_31.md`)
+
+Zemax's ray-based RMS OPD at the extreme order (-4,-2) reads **0.030 waves**
+tilt-free (Marechal limit 0.071): the design is diffraction-limited at the
+fan corner, corroborating the exact-ray oracle (<= 0.017 waves) and the
+chain (EE3 89.13 vs oracle 89.66, flat across the fan).  Zemax POP reads
+8.8 EE3 points lower at that order and is demonstrably UNCONVERGED there:
+its space-bandwidth product (`dx_mid x dx_img = 53500 um^2 / N`) needs
+N ~ 42000 for a 51.5 mrad order at 0.1 um image pitch against its 8192 cap,
+and its log-domain image shows a ~1e-4 pedestal (true halo ~1e-7) plus a
+rectangular block artefact.  The historical "POP waist 2.737 um" target is
+a POP of the paraxially-EQUIVALENT 4f, not of the real prescription -- now
+labelled as such at its quoting sites.  Three-way beam-profile figures
+(POP | chain | exact-ray oracle, linear + log10, common scale) for six
+orders in `validation/repro_traced_carrier_121/pop_profiles/`.
+
+### Fixed — the tilted carrier's reference wavefront is now an actual eikonal (`elements/_lens_traced.py`, `propagators/carrier.py`)
+
+`TiltedCarrier` defined its wavefront as an on-axis sphere **plus a linear
+ramp**.  That is not a solution of the eikonal equation.  The exact eikonal of
+the congruence it names -- a point source at signed AXIAL distance `R` whose
+chief ray carries `(L, M)` -- is the same sphere transversely RE-CENTRED on the
+source's own projection, `W = sign(R)(sqrt((u + R L/N)^2 + (v + R M/N)^2 + R^2)
+- |R|/N)` with `N = sqrt(1 - L^2 - M^2)`.  The difference is coma **linear** in
+field angle plus astigmatism quadratic in it: on design 121's fifth leg
+(`R = -24.46 mm`, tilt 54.9 mrad, `w = 3.63 mm`) it is -0.73 waves one beam
+radius along the tilt, **+2.53 against it**, and 15.8 waves at two radii.
+
+This matters because the chain defines its envelope as *field / carrier*, so a
+reference that is not a true wavefront dumps real optical path into the
+"envelope" -- precisely the thing Sziklas-Siegman then transports by a plain
+dilation, which cannot carry it.  Measured in closed form on the leg alone
+(exact congruence; no ray trace, diffraction integral, unwrap or FFT
+derivative), the leg's model error runs 1.0e-5 waves at zero tilt, 0.0134 at
+5.5 mrad, 0.0678 at 27 mrad and **0.1362 at the design's 54.9 mrad** -- and
+back to **1.0e-5** with the exact eikonal, holding to 180 mrad.
+
+Design 121 per order, EE3, at the chain's group-5 exit:
+
+| order | field angle | before | after |
+|---|---|---|---|
+| (0,0) | 0 | 87.99 | **87.99** |
+| (-1,0) | 11.5 mrad | 86.48 | 87.27 |
+| (-2,0) | 23.0 mrad | 83.15 | 85.60 |
+| (-3,0) | 34.5 mrad | 77.02 | 81.95 |
+| (-4,0) | 46.1 mrad | 70.19 | **76.61** |
+| (-4,-2) | 46.1 + 23.0 mrad | 66.24 | **73.66** |
+
+Field-angle spread **21.75 -> 14.33** points.  Split across the leg and the
+element pass at (-4,-2), the leg's share of the loss goes **-20.70 -> -0.96**
+(95 % closed) while the element's goes -3.04 -> **-15.26**: the element's own
+model error was previously MASKED by partial cancellation against the leg's,
+and is now exposed.  Its cause is named -- `preserve_input_phase='remap'`
+launches along `grad(W)` alone and so drops a second-order stationary-phase
+term scaling with `grad a` (2.30 mrad after this fix against 1.46 before) --
+and is NOT fixed here.
+
+The UNTILTED path is byte-identical: `np.array_equal`, max |dE| = **0.0**, over
+7 configurations of design 121's real post-DOE chain (two grids, two
+`ray_subsample`s, 3- and 5-group runs, both readout paths, `final_leg='exact'`)
+and 12 synthetic ones.  The shipped single-beam acceptance is unchanged at
+**3.450 um / EE3 88.8 / EE6 99.6 / EE12 99.8**.  Fail-before switch:
+`TILTED_CARRIER_EXACT_EIKONAL = False` reproduces the previous field bit for
+bit, tilted orders included.
+
+Independently corroborated on a fixture sharing no code with design 121: D1's
+and C1's "the off-axis spot reaches the on-axis diffraction limit" pins were
+asserting that a 46/51 mrad spot through two uncorrected N-BK7 singlets EQUALS
+the on-axis one.  It does not -- an exact skew trace reads geometric rms
+1.469 / 1.719 um off axis against 0.419 on axis, and quadrature with the
+18.8 um on-axis FWHM predicts 19.12 / 19.38 um.  The corrected reference
+measures **19.20 um** in both; the old one measured 18.80 / 18.95, i.e. exactly
+the on-axis width -- it had been ERASING the relay's own coma.  Those pins are
+re-based on the geometric prediction, with fail-before witnesses.
+
+Also measured and REJECTED: the anisotropic effective-distance term
+(`z/(1-L^2)^{3/2}` along the tilt vs `^{1/2}` across) contributes **0.000 EE3
+points**.  Its isotropic part is a re-parametrisation rather than an error --
+`R` is the AXIAL radius, so the shipped `R -> R + z` is already exact -- and the
+anisotropic remainder is ~2e-5 waves, four orders below the effect.  Both
+formulations were implemented and measured identical before this was concluded.
+
+### Fixed — `na_exit`'s amplitude mask was transposed (`elements/_lens_traced.py`)
+
+The significance mask was built `(y, x)` by `np.ix_(_ray_iy, _ray_ix)` but
+ravelled against a launch grid built with `indexing='ij'` -- x along axis 0 --
+so every amplitude was paired with the TRANSPOSED ray.  Rotationally symmetric
+beams are invariant under that swap, which is why it survived; on an asymmetric
+one the two readings exchange outright (measured on a biconic: 0.0338 reported
+against 0.0684 true, and 0.0669 against 0.0340).  Design 121's last group
+reported `na_exit` **0.3633** where the transpose-immune value is **0.2912** --
+25 % overstated -- and `_exit_na_out` feeds the chain's `on_tilt_exact_grid`
+routing, so this was not merely cosmetic.
+
+### Fixed — the chain's chief ray is TRACED, not linearised (`propagators/carrier.py`)
+
+Under a tilted carrier the chain transferred `(x_c, y_c, L, M)` through each
+group's lumped paraxial ABCD.  That is not a self-consistent convention: this
+module carries angles as DIRECTION COSINES (the free-leg advance
+`z L / cos(theta)` is already exact), while an ABCD ray vector is
+`[height, SLOPE]`.  The obvious repair -- converting cosine to slope and back
+across the ABCD -- was implemented, MEASURED, and **refused**: against an exact
+meridional trace on the D1 two-singlet relay at 46 mrad it lands **+1.1208 um**
+out where the raw-cosine form lands **+0.1214 um**, i.e. 9x worse.  A lumped
+group ABCD is not one convention at all (Snell refracts linearly in SINES,
+free transfer in TANGENTS) and a group of this class is refraction-dominated.
+
+So the predictor is no longer linearised: the chief ray is traced through the
+group's own surfaces with the same engine the tests use as their oracle
+(`_group_chief_transfer`), falling back to the ABCD only if a group cannot be
+traced.  Residual against the exact trace **0.1214 um -> 0.0** (machine
+precision), at ANY angle -- the `z L^3 / 2`-class error cannot arise.  Judged by
+an independent conic ray trace, all five affected closures improved
+(0.0440 / 0.2881 / 0.0037 / 0.00045 / **12.3724** um -> 0.0), and on the D6
+stand-in the predictor now sits ON the Fermat focus where the light actually
+lands, 0.000468 um from the measured spot centroid.  `_chain_chief_ray_at_target`
+uses the same step -- the orchestrator cross-checks the two and raises on a
+mismatch.  An untilted, undecentred ray short-circuits, so the on-axis path is
+byte-identical.
+
+### Added — `on_gap_paraxial`: a guard on the inter-group paraxial transport (`propagators/carrier.py`)
+
+The Sziklas-Siegman inter-group step is exact for the quadratic carrier and
+PARAXIAL for the envelope, and nothing measured that.  The obvious metric --
+the quartic sag phase `phi_sag = k w^4 / (8 |R|^3)`, the "~7 rad on the 121
+final gap" the roadmap quotes -- is **wrong, and a guard built on it would have
+fired hardest on the SAFEST legs**.  A leg does not carry `phi_sag`; it drops
+the CHANGE in it, `k z NA^4 / 8`, which is exactly the Fresnel kernel's own
+defect.  At fixed `phi_sag` = 8 rad the measured cost runs **-2.1 to -65 EE
+points** with leg length alone, and at fixed NA the disagreement FALLS as
+`1/phi_sag`.
+
+Better still, under the shipping `carrier_reference='sphere'` that dropped
+quartic **cancels exactly**: the parabola/sphere conversions bracketing a leg
+contribute `-z (parabola - S)`, and with the Fresnel leg's `z (1 + t^2/2)` the
+total is `z sqrt(1 + t^2)` -- the exact tilted-ray path, to all orders in `t`
+(verified to 2.2e-16).  Measured over NA 0.35-0.45 and `phi_sag` 1-100 rad:
+**0.000 EE points on every row**, against -20 to -33 points for the same legs
+under legacy `'parabola'`.
+
+The guard therefore trips on the DROPPED quartic (`gap_sag_tol`, default
+0.30 rad; 1 EE3 point is crossed at 0.40) and on the gap NA (0.60, the first
+row off the zero-cost floor), with per-leg diagnostics in `stages`.  Design 121
+is SILENT on every shipping leg with **4.08x** margin; under legacy
+`'parabola'` it fires on two, independently corroborated by this library's own
+audit of that legacy triple (best-focus EE6 79.7 % vs 99.3 %).  Note the
+largest drop is the SOURCE leg, not the final gap.  Diagnostic only: fields are
+bitwise identical across every setting, verified by monkeypatching the entire
+added path out.
+
+### Added — design 121 full configuration: tilted carriers and a per-congruence fan (`propagators/carrier.py`, `elements/_lens_traced.py`, `io/prescriptions_zemax.py`)
+
+The traced chain can now carry a **tilted** congruence, so a DOE order is a
+first-class chain input instead of something the caller has to hand-split.
+`TiltedCarrier(R, L, M, x0, y0)` carries sphere + tilt through every hand-off
+with the exact obliquity `1/sqrt(1-L^2-M^2)` (the chief ray advances by
+`z L / cos(theta)`, not `z L`), and
+`propagate_traced_carrier_chain_multi(congruences, groups, ..., recombine='coherent')`
+runs each congruence through the shipped-default chain and recombines on a
+common image grid.  The 32-order design-121 fan now runs end to end and its
+per-frame power reproduces the Dammann design to **3.0e-4** — the v5.28
+scramble was readout **replica aliasing** (a readout window wider than the
+Bluestein reconstruction's spatial period wraps the frame), now sized away by
+`readout_tile='auto'` and refused by `on_replica`.
+
+The exact high-NA final leg carries tilt too (it previously raised
+`NotImplementedError` and forced `final_leg='paraxial'`, capping every
+per-order spot).  `carrier_referenced_exact_focus_readout` references sphere
+AND tilt about the chief ray and takes its crop there, so an off-axis beam
+costs what an on-axis beam of the same radius costs.  On design 121, order
+(-4,-2): FWHM 8.400 -> **4.400 um**, EE3 22.8 -> **64.8 %**.  The single-beam
+acceptance is unchanged at **3.450 um / EE3 88.8 / EE6 99.6 / EE12 99.8**.
+
+Zemax `DGRATING` surfaces are imported (`prescription['diffractives']`) with
+their axial gaps measured to the neighbouring real elements, so the DOE drops
+straight into a `groups` list.  Also new: `decentred_fit_poly_order`, and the
+guards `on_replica`, `on_readout_window`, `on_tilt_exact_grid`,
+`on_na_proximity` and the chain-entry multi-congruence check.
+
+### Fixed — the off-centre ray fit folded, and its polynomial budget was too small (`elements/_lens_traced.py`)
+
+A decentred beam broke the ray-fit disc's core assumption.  The disc is
+retained by a hard sample mask, which is safe only while it is CONCENTRIC with
+the Chebyshev basis's own domain; off centre the fitted map **folds**
+(`d(x_out)/d(x_in)` changes sign), the Newton inverse then sends far exit
+pixels back into the bright beam, and `amplitude_model='ray_density'` gives
+them real amplitude — a spurious lobe carrying **6.8e-3 of input power at 0.75
+of the on-beam peak**.  Replaced by a weighted least-squares restriction
+(`_FIT_DISC_OUTSIDE_WEIGHT_REL`) that keeps every sample and pins the fit's
+free directions to the traced map: ghost power **6.8e-3 -> 2.5e-8**, no sign
+change.  Separately, an off-centre disc of radius `r` about a chief ray `|c|`
+covers the aperture out to `|c| + r`, so the same total degree buys a worse fit
+over more aberrated territory — the OPL residual is **14x** the on-axis one at
+order 6 and recovers 20x at order 10, so the off-centre branch now fits at
+`_DECENTRED_FIT_POLY_ORDER = 10`.  Both engage **only** off centre; the
+concentric path is byte-identical (21 configurations, max |dE| = 0.0).
+
+### Fixed — five consolidation defects from the D1–D7 adversarial verifiers (niche C1)
+
+* **A null decentre flipped the whole ray fit.**  The off-centre branch was
+  selected by `bool(_bcx or _bcy)`, so a numerically tiny beam centre swapped
+  the concentric mask for the weighted solve *and* the raised order — moving
+  the returned field by **8.3e-6 of peak at 1e-9 pixels** of decentre.  Now
+  gated on `max(_DECENTRE_GATE_PIXELS * dx, _DECENTRE_GATE_W_FRAC * w)`.
+* **The DGRATING import re-opened the v5.17.1 no-STOP aperture pollution.**
+  Reproduced at **12.000 -> 100.000 mm (8.33x)** with a dummy reference plane
+  between the DOE and the glass; the fallback now reads the GLASS/MIRROR span
+  only.
+* **The tilted exact-leg guard measured the wrong NA** (the chain's paraxial
+  `w_in/|R_out|`, 0.4780, not the element's measured 0.4052), so it stayed
+  silent on a leg the element itself warned was under-sampled.  Re-armed on the
+  measured NA as a **power budget** — the fraction of exit power above the grid
+  Nyquist NA — calibrated so the demonstrably-converged shipped configuration
+  still passes (it clears by 12.5x; nothing previously accepted is now refused).
+* `_FOCUS_READOUT_KEYS` is now a whitelist — unknown keys raise rather than
+  being silently dropped.
+* A D1 test that asserted a tilted claim through an untilted code path is
+  replaced by a genuinely skew one, scored against an inline exact skew ray
+  trace with three demonstrated fail-before switches.
+
+### Fixed — a DGRATING gap that runs through glass is no longer transported as air (`io/prescriptions_zemax.py`, `propagators/carrier.py`)
+
+`gap_before` / `gap_after` are raw axial thicknesses and the chain transports
+them through **air**, so a grating ruled on a substrate was placed at the wrong
+optical distance (`t - t/n` per glass leg — 1.0 mm for a 3 mm N-BK7 plate) with
+no symptom in the output.  The importer now records a `gap_media` marker and
+warns, and `_normalise_doe_entry` **refuses** such an entry, naming the gap to
+override.  The refusal is at the point of use, not at import: `load_zemax_zmx`
+serves far more than the DOE drop-in and the rest of such a file is correct.
+Design 121 is unaffected (both gaps free space).
+
+### Changed — claim corrections in the traced/carrier notes (niche C2)
+
+Re-measurement of the shipped documentation corrected two claims that were
+**wrong**, not merely loose.  The multi-congruence detector's envelope said its
+score is "set by the finest fringes, i.e. the nearest-neighbour order spacing";
+measured, an 8x8 fan spanning +-23 mrad reads **5.3x above** what that rule
+predicts and 0.8x of an equal-**span** pair, and densifying at fixed span moves
+the score **down**, not up.  Corrected rule: score a fan by its total span,
+derated ~20 %.  And "the decentred figure sits BELOW the on-axis one" holds
+only for the **untilted** baseline (0.90 vs 1.28 urad); against the tilted
+on-axis control — the regime 121's orders are actually in — it sits **1.4x
+above** (0.90 vs 0.64).  Neither changes a conclusion, and both were stated
+without the qualifier.  Also disclosed: D7's raised order can go **inert
+silently** when the fit disc holds fewer than 3 samples per basis term (it
+survives only while `fit_radius_beam_factor * w / (dx * ray_subsample) >~ 7.9`;
+live at the default `ray_subsample=8`, but the documented f/6 example clears by
+only 1.13x and reverts to order 6 at 16), and the `_FIT_DISC_OUTSIDE_WEIGHT_REL`
+plateau is now labelled as evidence from **one** regime (aperture:beam 30:1,
+low NA) — it cannot be extended to design 121's regime by the same method,
+because `newton_fit='spline'`, the fit-domain-free oracle that sweep is scored
+against, fails to converge for **100 %** of pixels there and returns an
+all-zero field.  Full record in
+`docs/audits/ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27.md`.
+
+### Added — PMM per-layer grids: full surface build-out (`elements/pmm/`)
+
+The per-layer surface now covers (each gated in
+`tests/unit/test_pmm_per_layer_grids.py`, 11/11): `retain_internal` ->
+`internal_field` / `layer_absorption` (per-layer partial cascades; fields
+reconstruct on each layer's own machinery and REQUIRE `nx=` -- there is no
+single shared nodal axis; absorption closes ΣA ~= 1-R-T to 5e-3 on
+non-conforming stacks); `solve_vs_wavelength` (window grids, interface
+masses/cross-masses and both Rayleigh projectors hoisted once per sweep;
+<1e-14 vs per-λ solve and vs the shared sweep on conforming stacks;
+dispersive materials and thread-pool semantics preserved); SLANTED layers and
+OUT-OF-PLANE tensors via `_interface_smatrix_general_mortar` (the mixed
+weak-continuity scattering system; E tested on the lower grid, H on the
+upper; <1e-9 vs the shared general cascade on conforming windows); and the
+JAX twin `_pmm_stack_solve_jax_perlayer` (geometry concrete, eps/thickness/
+angle traced; forward <1e-10 vs NumPy, `jax.grad` vs FD to 5e-5).  Still
+shared-grid-only: the covariant uniform-slant route (single-frame by
+construction) and `prepare()` (design sketch + sequencing in
+`docs/audits/ROADMAP_PMM_PER_LAYER_GRIDS_2026_07_28.md`, together with the
+PMM2DStack per-layer extension plan and the remaining quality items).
+
+### Added — PMM per-layer element grids with interface mortar (audit R-6, `elements/pmm/`)
+
+`PMMStack(..., layer_grids='per-layer')` (opt-in; default `'shared'` is
+byte-identical to prior behaviour): each layer's SEM operators are assembled
+on its OWN element grid — its walls plus its two NEIGHBOURS' (the
+interface-conforming window) — and adjacent layers are coupled by an exact L2
+mortar (`_interface_smatrix_mortar`), with rectangular-block Redheffer
+support (`_redheffer_star_rect`).  Removes the shared-union-grid
+wall-collision pathology structurally: MEASURED on the 2-deg coated-pillar
+taper, in-plane oblique degree spread 91% -> 5–6% at the library-DEFAULT
+`min_feature` (inert on this path), the n_slice=4 conditioning re-break
+15.7% -> 4.7%, and 17.8x faster (97.3 s -> 5.5 s per solve pair).  The
+n_slice staircase ladder is now affordable and CONVERGES (ns~6, 0.1–0.4%
+ns6->ns8); the ns=2 values used previously carried 10–30% staircase-geometry
+error at oblique angles.  Conical (`phi != 0`) is covered via the same
+construction in `_conical_nodal_solve` (bit-exact on 2-layer stacks; 1.4–5.8%
+vs the converged shared reference on the audit device; 14–18x faster).
+Known residual: the non-conforming mortar remainder decays spectrally
+(|R+T-1| ~1e-4 at degree 6 -> ~1e-6 at degree 10) — use degree >= 8 for
+deep-null work; publication-grade closure stays with the shared grid, and the
+two paths now cross-check each other (the independent oracle
+`AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md` §7 found missing).
+Not on the per-layer surface (raise loudly): slant, out-of-plane tensors,
+JAX, `stabilize`, `retain_internal`, `prepare()`, `solve_vs_wavelength`.
+Implementation report: `docs/audits/AUDIT_PMM_PER_LAYER_GRIDS_IMPL_2026_07_28.md`.
+
+### Fixed — the staircase guard is reachable on geometry-built stacks (audit R-1, `elements/pmm/stack.py`)
+
+`solve(stabilize='slices')` previously SKIPPED entirely when no taper-builder
+recipe was recorded, leaving every `SegmentStackGeometry`-built stack — the
+documented device route — unprotected against the passive-but-wrong staircase
+pathology.  It now falls back to a union-grid consensus (`min_feature`
+perturbation anchored to a physical ~nm scale), verified to fire on the
+pathological stack and stay silent on clean ones.  The wall-snap warning
+reports its max wall displacement, and `min_feature` is documented as an
+ACCURACY knob (its default, `period * 1e-5`, is ~200x too small for tapered
+stacks whose collision scale is `(thickness/n_slices)*tan(sidewall)`).
+
 
 ## [5.31.0] — 2026-07-27
 
@@ -27,10 +468,10 @@ altogether.
   (`lumenairy/elements/pmm/stack.py:342`, `lumenairy/elements/pmm/stack.py:653`).  The ridge centre is
   `0.5 + shear * (zeta - 0.5)` in period fractions — `shear` *periods* of
   lateral walk from top to bottom about mid-depth, `zeta` sampled per slice by
-  the same `rule` as the duty, wrap-aware (`lumenairy/elements/pmm/stack.py:494`, `lumenairy/elements/pmm/stack.py:710`).
+  the same `rule` as the duty, wrap-aware (`lumenairy/elements/pmm/stack.py:494`, `lumenairy/elements/pmm/stack.py:711`).
   `add_tapered_ridges` walks every tooth rigidly (`center + shear*period*(zeta-0.5)`)
   and keeps its overlap guard on the *sheared* geometry.  Both record `shear` in
-  the taper recipe (`lumenairy/elements/pmm/stack.py:478`, `lumenairy/elements/pmm/stack.py:703`) so `_resliced_clone` /
+  the taper recipe (`lumenairy/elements/pmm/stack.py:470`, `lumenairy/elements/pmm/stack.py:703`) so `_resliced_clone` /
   `solve(stabilize='slices')` replay the sheared structure rather than silently
   re-slicing an unsheared one.
 - **`shear=0` is BIT-identical to the pre-change builder.**  The new wrap-aware

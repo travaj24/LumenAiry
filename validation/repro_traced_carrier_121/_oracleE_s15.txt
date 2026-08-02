@@ -1,0 +1,14 @@
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+DOE plane: R = 703642.7361 mm, dx = 51.2334 um, N = 1024   NL=161 clip=3.0 back=5.0 mm
+DOE-plane grid power SUM|env|^2 dx^2 = 6.825232e-08 (the launch lattice re-quadratures the same field)
+
+=== [S1.5] the energy audit's conservation reference, re-run ===
+      order   live power %    dead   exit NA  step(max)    EE3 %    EE6 %  P_flux/P_in %
+  (+0,+0)        100.0000   13356    0.3596     0.0262    89.88    99.97        99.9804
+  (-1,+0)        100.0000   13441    0.3616     0.0262    90.04    99.97        99.9817
+  (-4,+0)        100.0000   13726    0.3667     0.0261    90.45    99.97        99.9915
+  (-4,-2)         99.9999   13777    0.3674     0.0261    90.14    99.96        99.9963
+  (the last column is NEW; every other column must reproduce ENERGY_CONSERVATION_AUDIT_2026_07_31 S1.5 exactly, because ``live_frac`` is p_live/p_launch -- a ratio of two sums that BOTH carry h^2 and NEITHER touches the RS kernel.)

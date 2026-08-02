@@ -47,12 +47,21 @@ pyfftw_required = pytest.mark.skipif(
 
 
 @pytest.fixture(autouse=True)
-def _isolate_plan_cache():
+def _isolate_plan_cache(shipped_fft_dispatch):
     """Each test gets a fresh plan cache + bad-shape blacklist + call
     counters.  Auto-promote stays in its current default for the
     test; tests that flip it restore it themselves.  Required because
     several tests assert on the exact call count seen at a key and
-    don't want plans from previous tests influencing the count."""
+    don't want plans from previous tests influencing the count.
+
+    2026-08-01: also takes ``shipped_fft_dispatch`` (tests/conftest.py), so
+    the whole DISPATCH configuration -- ``USE_PYFFTW``, ``FFTW_MIN_SIZE``,
+    the planner flag, the fallback/double-buffer/cache-size knobs -- starts
+    at its shipped value too.  ``reset_fft_backend()`` alone only clears the
+    cache contents; it cannot undo an earlier test that turned the pyFFTW
+    path OFF or moved the planner, and either of those makes the
+    ``TestAutoPromote`` probes read ``None``/``FFTW_MEASURE`` and fail in a
+    full sweep while passing in isolation.  See the fixture's docstring."""
     reset_fft_backend()
     prev = get_fft_auto_promote()
     yield

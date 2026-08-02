@@ -173,18 +173,38 @@ def _prep_surfaces(surfs):
     return out
 
 
-def trace_ray(h, surfaces, R_in, aper):
+def trace_ray(h, surfaces, R_in, aper, entrance_eikonal='paraxial'):
     """Exact meridional trace of a ray entering at height ``h`` [m], launched
     along the signed input congruence (slope ``h / R_in``).  Returns
     ``(exit_point, exit_dir, opl)`` with ``opl`` INCLUDING the entrance eikonal
-    ``W_in = h^2 / (2 R_in)``, or ``None`` (vignetted / TIR)."""
+    ``W_in = h^2 / (2 R_in)``, or ``None`` (vignetted / TIR).
+
+    ``entrance_eikonal`` selects the launch wavefront that ``R_in`` denotes:
+
+    * ``'paraxial'`` (default, unchanged): ``W_in = h^2 / (2 R_in)`` -- the
+      PARABOLIC carrier.  Every pre-D5 caller and every pinned number in
+      ``tests/unit/test_niche_p8_capstone.py`` uses this.
+    * ``'sphere'``: ``W_in = sign(R_in) (sqrt(h^2 + R_in^2) - |R_in|)`` -- the
+      EXACT spherical wave from a point source at distance ``R_in``, which is
+      what lumenairy's ``carrier_reference='sphere'`` (the chain default since
+      v5.29, ``carrier._exact_sphere_eikonal``) means by ``r_in``.  The two
+      differ by ``h^4 / (8 R_in^3)``, which is 1.8 rad at the rim of a
+      +-2.5w launch window on a 2 mm conjugate -- i.e. NOT negligible for a
+      small-waist launch, and the reason this option exists.
+    """
     if aper is not None and abs(h) > aper:
         return None
     p = np.array([0.0, h])
     if R_in is not None:
         g = h / R_in
         d = np.array([1.0, g]) / np.hypot(1.0, g)
-        opl = h * h / (2.0 * R_in)                 # entrance eikonal (FIX 1)
+        if entrance_eikonal == 'sphere':
+            opl = np.sign(R_in) * (np.hypot(h, R_in) - abs(R_in))
+        elif entrance_eikonal == 'paraxial':
+            opl = h * h / (2.0 * R_in)             # entrance eikonal (FIX 1)
+        else:
+            raise ValueError("entrance_eikonal must be 'paraxial' or 'sphere', "
+                             f"got {entrance_eikonal!r}")
     else:
         d = np.array([1.0, 0.0])
         opl = 0.0
@@ -232,17 +252,21 @@ def trace_ray(h, surfaces, R_in, aper):
     return p, d, opl
 
 
-def evaluate(job, dz_off_mm=0.0):
-    """Run both oracles and return a metrics dict (SI internally, um out)."""
+def _trace_fan(job, dz_off_mm=0.0):
+    """Trace the Gaussian-apodised meridional fan once.
+
+    Extracted verbatim from :func:`evaluate` (D5) so that
+    :func:`huygens_radial_profile` can share it instead of duplicating the
+    trace.  Returns the raw arrays; no metric convention is applied here.
+    """
     wl = job["wavelength_um"] * 1e-6
-    k = 2 * np.pi / wl
     surfaces = _prep_surfaces(job["surfaces"])
     w0 = job["pop"]["w0_mm"] * 1e-3
     R_in = job.get("R_in_mm")
     R_in = None if R_in in (None, 0) else float(R_in) * 1e-3
     aper = job.get("aperture_mm")
     aper = None if not aper else float(aper) * 1e-3 * 0.5
-    win = float(job.get("window_um", 400.0)) * 1e-6
+    eik = str(job.get("entrance_eikonal", "paraxial"))
     # Job convention: the LAST surface's thickness is the (last-vertex -> image)
     # distance.  The exit vertex plane is thus the sum of the INTERIOR gaps;
     # the image plane is the full sum (+ optional through-focus offset).
@@ -258,7 +282,7 @@ def evaluate(job, dz_off_mm=0.0):
     opl_ex = np.full(hs.size, np.nan)         # OPL to a flat exit plane
     ok = np.zeros(hs.size, dtype=bool)
     for i, h in enumerate(hs):
-        res = trace_ray(h, surfaces, R_in, aper)
+        res = trace_ray(h, surfaces, R_in, aper, entrance_eikonal=eik)
         if res is None:
             continue
         p, d, opl = res
@@ -272,6 +296,79 @@ def evaluate(job, dz_off_mm=0.0):
         ok[i] = True
 
     A_env = np.exp(-hs ** 2 / w0 ** 2)
+    return dict(wl=wl, k=2 * np.pi / wl, w0=w0, R_in=R_in, aper=aper,
+                z_exit=z_exit, z_img=z_img, zrel=z_img - z_exit, hs=hs,
+                Y_img=Y_img, y_ex=y_ex, opl_ex=opl_ex, ok=ok, A_env=A_env)
+
+
+def _ring_huygens_E(fan, rho):
+    """Complex radial field at the image plane from the exit ring integral.
+
+    Extracted verbatim from :func:`evaluate` (D5).  The returned field carries
+    the oracle's internal (arbitrary) scale; :func:`huygens_radial_profile`
+    applies the absolute ``2 pi dh / (i lambda)`` factor.
+    """
+    hs, y_ex, opl_ex, ok = fan['hs'], fan['y_ex'], fan['opl_ex'], fan['ok']
+    mm = ok & np.isfinite(y_ex) & np.isfinite(opl_ex)
+    h, ys, opl, A = hs[mm], y_ex[mm], opl_ex[mm], fan['A_env'][mm]
+    k, zrel = fan['k'], fan['zrel']
+    J = np.abs(np.gradient(ys, h))           # dy_exit/dh (exit ring Jacobian)
+    w_amp = A * np.sqrt(np.clip(h * ys * J, 0.0, None))         # FIX 2
+    E = np.zeros(rho.size, dtype=complex)
+    for i in range(h.size):
+        R0 = np.sqrt(zrel ** 2 + ys[i] ** 2 + rho ** 2)
+        E += w_amp[i] * j0(k * ys[i] * rho / R0) \
+            * np.exp(1j * k * (opl[i] + R0)) / R0
+    return E
+
+
+def huygens_radial_profile(job, dz_off_mm=0.0, rho=None):
+    """ABSOLUTELY-NORMALISED radial intensity of the diffraction spot (D5).
+
+    Returns ``(rho, I)`` with ``rho`` in metres and ``I`` scaled so that
+    ``trapezoid(I * 2 pi rho, rho)`` is the fraction of the LAUNCHED power
+    (``2 pi int A_env^2 h dh`` over the traced fan) that lands inside ``rho``.
+    That makes the profile comparable to a wave solver's readout with NO free
+    scale factor -- encircled-energy FRACTIONS at fixed radii, an FWHM, and a
+    window power are all absolute.
+
+    The continuous form of the ring integral is
+    ``E(rho) = (2 pi / (i lambda)) int E_exit(y) J0(k y rho / R0)
+    exp(i k R0) / R0 * y dy`` and ``E_exit(y) y dy = w_amp dh``, so the code
+    sum is short exactly the constant ``2 pi dh / (i lambda)``.  Applying it
+    makes the profile's own total a MEASUREMENT (it should come back ~1); the
+    D5 gate asserts that, which is what turns the oracle from a shape
+    reference into an absolute one.
+
+    Only valid for a REAL (downstream) image (``zrel > 0``).
+    """
+    fan = _trace_fan(job, dz_off_mm)
+    if fan['zrel'] <= 0.0:
+        raise ValueError('huygens_radial_profile needs a REAL (downstream) '
+                         f'image; zrel = {fan["zrel"]!r} m')
+    if rho is None:
+        rho_max = float(job.get("rho_max_um", 800.0)) * 1e-6
+        rho = np.linspace(0.0, rho_max, int(job.get("n_rho", 2400)))
+    rho = np.asarray(rho, dtype=float)
+    E = _ring_huygens_E(fan, rho)
+    hs, A_env = fan['hs'], fan['A_env']
+    dh = float(hs[1] - hs[0])
+    P_launch = 2.0 * np.pi * float(np.trapezoid(A_env ** 2 * hs, hs))
+    scale = (2.0 * np.pi * dh / fan['wl']) ** 2 / P_launch
+    return rho, np.abs(E) ** 2 * scale
+
+
+def evaluate(job, dz_off_mm=0.0):
+    """Run both oracles and return a metrics dict (SI internally, um out)."""
+    wl = job["wavelength_um"] * 1e-6
+    R_in = job.get("R_in_mm")
+    R_in = None if R_in in (None, 0) else float(R_in) * 1e-3
+    win = float(job.get("window_um", 400.0)) * 1e-6
+    fan = _trace_fan(job, dz_off_mm)
+    w0, z_img, zrel = fan['w0'], fan['z_img'], fan['zrel']
+    hs, Y_img, y_ex, opl_ex, ok = (fan['hs'], fan['Y_img'], fan['y_ex'],
+                                   fan['opl_ex'], fan['ok'])
+    A_env = fan['A_env']
 
     # ---- (a) geometric transverse-aberration spot ------------------------
     m = ok & np.isfinite(Y_img)
@@ -289,7 +386,6 @@ def evaluate(job, dz_off_mm=0.0):
     # kernel CANNOT reach the plane (it radiates only diverging waves outward,
     # blowing the spot up to hundreds of um with most energy outside the
     # window); back-propagate the EXACT exit field with the angular spectrum.
-    zrel = z_img - z_exit
     mm = ok & np.isfinite(y_ex) & np.isfinite(opl_ex)
     n_rays = int(mm.sum())
     if zrel < 0.0:
@@ -300,21 +396,10 @@ def evaluate(job, dz_off_mm=0.0):
         frac_in = float("nan")
         huy_method = "asm_backprop"
     else:
-        h = hs[mm]
-        ys = y_ex[mm]
-        opl = opl_ex[mm]
-        A = A_env[mm]
-        J = np.abs(np.gradient(ys, h))       # dy_exit/dh (exit ring Jacobian)
-        w_amp = A * np.sqrt(np.clip(h * ys * J, 0.0, None))     # FIX 2
         rho_max = float(job.get("rho_max_um", 800.0)) * 1e-6
         n_rho = int(job.get("n_rho", 2400))
         rho = np.linspace(0.0, rho_max, n_rho)
-        E = np.zeros(rho.size, dtype=complex)
-        for i in range(h.size):
-            R0 = np.sqrt(zrel ** 2 + ys[i] ** 2 + rho ** 2)
-            E += w_amp[i] * j0(k * ys[i] * rho / R0) \
-                * np.exp(1j * k * (opl[i] + R0)) / R0
-        Irad = np.abs(E) ** 2
+        Irad = np.abs(_ring_huygens_E(fan, rho)) ** 2
         sel = rho <= win
         P_full = float(np.trapezoid(Irad * rho, rho))
         Pw = float(np.trapezoid((Irad * rho)[sel], rho[sel]))

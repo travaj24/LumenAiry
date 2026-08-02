@@ -21,11 +21,17 @@ scale (N = 28672 requested by the design study).
 >   bug). Shipped as the v5.29 chain default flip (`455be4a`, `a9dc454`).
 >   Design-121 acceptance is now EE6 99.6 / EE3 88.8 / FWHM 3.450 um at the SAME
 >   N=2048 / dx0=1.0 um where this audit measured 69.7%.
-> * Caveats carried forward into
+> * ~~Caveats carried forward into
 >   `ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27.md` §P4: dx-flatness is
 >   published only over N=1024-4096, so the worst row of the matrix below
 >   (dx0=0.25 um / N=8192, EE6 46.5% pre-flip) has never been re-published under
->   the shipped defaults.
+>   the shipped defaults.~~ **CLOSED (niche D5, 2026-07-29).** That row was
+>   re-run under the shipped defaults and reads **EE6 99.580 / EE3 88.832 /
+>   FWHM 3.4265 um / window 99.796%** at best focus -- identical in every digit
+>   to the N=4096 row and in three to the N=2048 acceptance. The full re-run
+>   envelope, the large-N position (N <= 8192 supported; above it a COST
+>   limit, measured) and the .zmx-free CI gate are in
+>   `AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24.md` §0.
 > * The "Validity map" section below is superseded on one point: re-attributing
 >   the DOE fan scramble no longer "needs the F-B fix first" (that prerequisite
 >   is met). It lands on the multi-congruence gap instead — same roadmap, §P1.
@@ -50,6 +56,15 @@ launch power (must be <= ~0.96 after stop losses; > 1.0 is impossible).
 | 4096  | 0.5 um, rs=8 | 4 um      | 4.35 um | 39.8% | 54.6%  | 67.2%  | 77.5%   |
 | 8192  | 0.25 um      | 1 um      | 8.85 um | 19.1% | 46.5%  | 59.2%  | 75.2%   |
 | 28672 | 0.071 um     | 0.29 um   | 7.05 um | 50.0% | 102.3% | 128.2% | 130.8%  |
+
+**POST-FLIP (niche D5, 2026-07-29, shipped defaults, best focus, ray pitch
+held at 4 um on every row):** 1024 -> 3.5537 um / 87.80 / 99.14; 2048 ->
+3.4156 / 88.829 / 99.583; 4096 -> 3.4266 / 88.832 / 99.580; **8192 -> 3.4265 /
+88.832 / 99.580, window 99.796%**. The "~15 EE6 points per octave of dx"
+systematic below is measured at **0.001 points per octave**. Nothing above
+N=8192 is validated -- see `AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24.md`
+§0.2 for the measured cost reason and for the F-A `n_crop > n_fine_cap`
+regime re-measured post-fix (window 99.747% / 98.832% where it read 130.8%).
 
 The 2048 row is the config the 2026-07-21 audit's R9 table was produced at
 (4.05 um / 52.1 / 69.7 / 73.6 -- reproduced here to the decimal).

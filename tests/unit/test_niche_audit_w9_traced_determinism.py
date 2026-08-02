@@ -48,8 +48,19 @@ LAM = 1.31e-6
 
 
 @pytest.fixture(autouse=True)
-def _shipped_fft_planner_state():
+def _shipped_fft_planner_state(shipped_fft_dispatch):
     """Run every test from the SHIPPED planner configuration and restore.
+
+    2026-08-01: also takes ``shipped_fft_dispatch`` (tests/conftest.py).
+    This fixture already owned the planner flag, auto-promote and wisdom;
+    what it did NOT own is the rest of the dispatch configuration --
+    ``USE_PYFFTW``, ``FFTW_MIN_SIZE``, ``PYFFTW_FALLBACK_ON_ERROR``, the
+    double-buffer mode and the plan-cache size.  With the pyFFTW path
+    switched off (or ``FFTW_MIN_SIZE`` raised) by an earlier test in the
+    shard, ``_fft2`` never reaches the plan cache at all and
+    ``test_auto_promote_still_promotes_when_opted_in`` reads ``None`` for
+    every flag -- passing alone, failing in a full sweep.  See that
+    fixture's docstring.
 
     Applies ``_PYFFTW_AUTO_PROMOTE_SHIPPED`` (not a hardcoded ``False``) so
     the byte-identity tests below still fail if the shipped default ever

@@ -130,13 +130,23 @@ class TestP331CovariantKwargs:
             st.solve(retain_internal=True)
 
     def test_stabilize_slices_is_honoured(self):
-        # no taper recipe on a hand-built stack -> the consensus check runs
-        # and WARNS that it was skipped (previously: silently ignored).
+        # No taper recipe on a hand-built stack -> the n_slices probe is
+        # impossible, but the guard must NOT simply announce that it gave up:
+        # since the 2026-07-28 union-grid audit it falls back to the
+        # min_feature-perturbation consensus, which needs no recipe.  That
+        # closes the gap where every SegmentStackGeometry-built stack (the
+        # documented device route) was silently unprotected against the
+        # passive-but-wrong staircase pathology.
         st = _covariant_stack()
         with warnings.catch_warnings(record=True) as wlist:
             warnings.simplefilter("always")
             orders, R, T, jones = st.solve(stabilize="slices")
-        assert any("no taper builder" in str(w.message) for w in wlist)
+        msgs = [str(w.message) for w in wlist]
+        assert not any("no taper builder" in m for m in msgs), (
+            "the guard must run the union-grid consensus, not skip")
+        # This stack has no colliding cross-layer walls, so the consensus is a
+        # no-op: it must stay SILENT rather than cry pathology.
+        assert not any("min_feature` was perturbed" in m for m in msgs)
         assert np.isfinite(R.sum() + T.sum())
 
     def test_plain_covariant_solve_unaffected(self):

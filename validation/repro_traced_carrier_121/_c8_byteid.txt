@@ -1,0 +1,42 @@
+shadow module: HEAD:lumenairy/elements/_lens_traced.py -> C:\Users\Tesla\AppData\Local\Temp\_lens_traced_head_fl4e5zyj.py
+  HEAD has REMAP_INVERSE_SUPPORT_BOUND: False (must be False -- C8 is uncommitted)
+  live default REMAP_INVERSE_SUPPORT_BOUND = True, feather 1 cells
+  every other flag is left at its shipped default (C5 on, C6 on, fit guard off) -- HEAD's own settings.
+
+=== (b) design 121 chain (0,0), bound OFF -- MUST BE IDENTICAL ===
+  RN=1024 rs=4 paraxial            array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=2 paraxial            array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=2048 rs=4 paraxial            array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4, 3 groups           array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4, 5 groups           array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4 focus_readout       array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4 final_leg=exact     array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+
+=== (c) design 121 chain (-4,-2), bound OFF -- MUST BE IDENTICAL ===
+  RN=1024 rs=4 paraxial            array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=2 paraxial            array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=2048 rs=4 paraxial            array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4, 3 groups           array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4, 5 groups           array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4 focus_readout       array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4 final_leg=exact     array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+
+=== (b) design 121 chain (0,0), bound ON -- what moves ===
+  RN=1024 rs=4 paraxial            array_equal=False  max|dE| 1.364e-01 (7.70e-01 of peak)  dP/P -3.40e-03
+  RN=1024 rs=2 paraxial            array_equal=False  max|dE| 1.734e-01 (9.78e-01 of peak)  dP/P -4.48e-03
+  RN=2048 rs=4 paraxial            array_equal=False  max|dE| 1.755e-01 (9.90e-01 of peak)  dP/P -1.05e-02
+  RN=1024 rs=4, 3 groups           array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4, 5 groups           array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4 focus_readout       array_equal=False  max|dE| 2.052e-03 (1.16e-02 of peak)  dP/P -1.93e-03
+  RN=1024 rs=4 final_leg=exact     array_equal=False  max|dE| 3.590e-04 (2.03e-03 of peak)  dP/P -1.85e-05
+
+=== (c) design 121 chain (-4,-2), bound ON -- what moves ===
+  RN=1024 rs=4 paraxial            array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=2 paraxial            array_equal=False  max|dE| 1.683e-05 (9.49e-05 of peak)  dP/P -7.35e-11
+  RN=2048 rs=4 paraxial            array_equal=False  max|dE| 2.589e-06 (1.46e-05 of peak)  dP/P +1.66e-11
+  RN=1024 rs=4, 3 groups           array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4, 5 groups           array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4 focus_readout       array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+  RN=1024 rs=4 final_leg=exact     array_equal=True  max|dE| 0.000e+00 (0.00e+00 of peak)  dP/P +0.00e+00
+
+OK -- the bound OFF is HEAD, bit for bit

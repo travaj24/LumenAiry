@@ -1,0 +1,14 @@
+D6 fixture: w=0.600 mm  f=3.000 mm  decentre x0=0.600 mm  aperture=3.400 mm  grid 1024 over 6.000 mm
+halo constants: contour e^-9  factor 1.25  tol 1.0e-03
+
+1 apply_real_lens_traced calls captured
+
+--- call [0] ---
+  grid N=1024 dx=5.8594 um  (half-width 2.9941 mm), launch 217^2
+  traced exit centroid (+0.5600, -0.0000) mm, grid reach 2.4341 mm
+  alive rays 12849 of 47089; above the e^-9 contour 11580
+  r_hull  (e^-9 gate, = the library's) 1.6161 mm -> bound 2.0202 mm   amax 0.000e+00  g 0.000e+00  pixels 675136
+  r_hull  (ALL alive rays)            1.8115 mm -> bound 2.2644 mm   amax 0.000e+00  g 0.000e+00  pixels 579391
+  library warnings: halo=False  fold=True
+
+NO CALL WARNED -- nothing to diagnose on this leg.

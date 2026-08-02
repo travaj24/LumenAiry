@@ -100,8 +100,8 @@ def test_conversion_none_for_collimated_or_degenerate(R):
 
 
 def test_conversion_warns_when_band_limit_reaches_into_beam():
-    """r_safe < 2w means the conversion is tapered off where the beam still
-    carries power -- a MIXED carrier convention over the skirt; warn."""
+    """The conversion tapered off where the beam still carries power is a MIXED
+    carrier convention over the skirt; warn."""
     N, dx, R = 256, 40e-6, -4e-3
     r_safe = (abs(R) ** 3 * _WL / dx) ** (1.0 / 3.0)
     with pytest.warns(RuntimeWarning, match='band-limit radius'):
@@ -109,6 +109,45 @@ def test_conversion_warns_when_band_limit_reaches_into_beam():
     with warnings.catch_warnings():
         warnings.simplefilter('error')          # no warning when comfortable
         _sphere_parab_conversion((N, N), dx, _WL, R, +1, w_beam=0.1 * r_safe)
+
+
+def test_conversion_guard_tests_the_taper_ONSET_not_r_safe():
+    """2026-07-31: the guard tests ``0.75*r_safe`` (where the cos^2 roll-off
+    STARTS), not ``r_safe``.
+
+    The old ``r_safe < 2*w`` form could not detect the case the warning's own
+    message describes.  Design 121's last two carrier planes sit at
+    ``r_safe = 2.18 w`` -- clear of that threshold, so silent -- while the
+    taper ONSET is at 1.63 w, inside the beam, worth a measured 1.41 EE3
+    points on the (-4,-2) congruence (docs/audits/
+    APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S2).
+
+    The regime this pins is ``0.375 r_safe < w <= 0.5 r_safe``: warned about
+    now, silent before.  Design 121 sits at ``w = 0.459 r_safe``, inside it."""
+    N, dx, R = 256, 40e-6, -4e-3
+    r_safe = (abs(R) ** 3 * _WL / dx) ** (1.0 / 3.0)
+    with pytest.warns(RuntimeWarning, match='taper ONSET'):
+        _sphere_parab_conversion((N, N), dx, _WL, R, +1,
+                                 w_beam=0.459 * r_safe)
+    # ... and just outside it the guard is still silent, so the threshold
+    # moved rather than being removed.
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        _sphere_parab_conversion((N, N), dx, _WL, R, +1,
+                                 w_beam=0.36 * r_safe)
+
+
+def test_conversion_guard_is_warning_only():
+    """The threshold change must not touch the returned factor -- the taper
+    itself is unchanged, only its detection."""
+    N, dx, R = 256, 40e-6, -4e-3
+    r_safe = (abs(R) ** 3 * _WL / dx) ** (1.0 / 3.0)
+    quiet = _sphere_parab_conversion((N, N), dx, _WL, R, +1)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        loud = _sphere_parab_conversion((N, N), dx, _WL, R, +1,
+                                        w_beam=0.459 * r_safe)
+    assert np.array_equal(quiet, loud)
 
 
 # --------------------------------------------------------------------------

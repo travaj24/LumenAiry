@@ -436,3 +436,246 @@ def _pmm_stack_solve_jax(stack):
     T_eff = jnp.stack(rows_T)
     jones = jnp.stack(jcols, axis=1)        # (2,2): columns = incident Ex / Ey
     return jnp.asarray(orders), R_eff, T_eff, jones
+
+def _pmm_stack_solve_jax_perlayer(stack):
+    """The JAX twin of the PER-LAYER all-vertical in-plane branch (audit R-6).
+
+    Geometry is CONCRETE and frozen exactly as in the NumPy per-layer path:
+    the neighbour-window grids, the exact interface masses / cross-masses and
+    the two half-space Rayleigh projectors are NumPy constants; only the
+    eps-dependent operators, eigs, mortar solves, cascade and far field trace.
+    Gradients flow to every traced eps / thickness / half-space index / angle;
+    the wavelength must be concrete (W7 F-E, same as the shared twin)."""
+    import jax.numpy as jnp
+
+    from ...backend import is_jax_array
+    from ..rcwa import _jax_eig_stable, _require_jax_x64
+    from ._core import (
+        _build_sem_tensor_segments,
+        _pmm_union_grid,
+        _sem_cross_mass,
+        _sem_fourier_projection,
+        _sem_mass_exact,
+        _tensor3_dict,
+    )
+    _require_jax_x64("PMMStack.solve")
+    cj = jnp.complex128
+
+    wl = stack._src["wl"]
+    angle = stack._src["angle"]
+    _require_concrete_wavelength(
+        wl, "PMMStack.solve",
+        "PMMStack.solve_vs_wavelength (NumPy) or a loop over concrete "
+        "wavelengths")
+    _grazing_guard_concrete(stack.n_sup, angle)
+    n_sup = jnp.asarray(stack.n_sup, cj)
+    n_sub = jnp.asarray(stack.n_sub, cj)
+    eps_sup = n_sup ** 2
+    eps_sub = n_sub ** 2
+    wl_t = jnp.asarray(wl)
+    k0 = 2.0 * jnp.pi / wl_t
+
+    # ---- frozen PER-LAYER geometry (concrete widths; eps pass through) ----
+    nlay = len(stack._layers)
+    grid_of = []
+    for i in range(nlay):
+        js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
+        uw_i, rows_i = _pmm_union_grid(
+            [stack._layers[j][1] for j in js],
+            stack.min_feature / stack.period)
+        grid_of.append((np.asarray(uw_i, dtype=float), rows_i[js.index(i)]))
+    wkeys = [w.tobytes() for w, _r in grid_of]
+    statics = [_jstack_static(stack.period, w_i, stack.degree, stack.n_el,
+                              stack.grade) for w_i, _r in grid_of]
+    # geometry-only NumPy mats per grid (masses / cross-masses / projectors
+    # ignore eps entirely)
+    _eye3 = np.eye(3)
+    geo_mats = [_build_sem_tensor_segments(
+        stack.period, w_i, [_tensor3_dict(_eye3)] * len(w_i),
+        stack.degree, stack.n_el, stack.grade) for w_i, _r in grid_of]
+    Ms = {}
+    for i in range(nlay):
+        if wkeys[i] not in Ms:
+            Ms[wkeys[i]] = np.kron(np.eye(2), _sem_mass_exact(geo_mats[i]))
+    crosses = {}
+    for i in range(nlay - 1):
+        if wkeys[i] != wkeys[i + 1]:
+            C = _sem_cross_mass(geo_mats[i], geo_mats[i + 1])
+            crosses[i] = (np.kron(np.eye(2), C.T), np.kron(np.eye(2), C))
+
+    # ---- CONCRETE order set (min over the two end grids' capacity) --------
+    n_vals = []
+    for _w, row in grid_of:
+        for e in row:
+            # tracer-safe: use .ndim (attribute access) and never np.asarray
+            # a possibly-traced entry (TracerArrayConversionError)
+            comps = ((e[0, 0], e[1, 1])
+                     if getattr(e, "ndim", 0) == 2 else (e, e))
+            for comp in comps:
+                v = _concrete_index(comp)
+                if v is not None:
+                    n_vals.append(v)
+    for nv in (_concrete_real(stack.n_sup), _concrete_real(stack.n_sub)):
+        if nv is not None:
+            n_vals.append(nv)
+    n_max = max(n_vals) if n_vals else 1.0
+    wl_c = _concrete_real(wl)
+    if wl_c is None:
+        wl_c = float("inf")
+    o0 = _jpmm_order_set(statics[0], stack.period, wl_c, n_max, stack.ffo,
+                         stack.degree, "PMMStack.solve")
+    oN = _jpmm_order_set(statics[-1], stack.period, wl_c, n_max, stack.ffo,
+                         stack.degree, "PMMStack.solve")
+    orders = o0 if len(o0) <= len(oN) else oN
+    N = len(orders)
+    Tp_sup = jnp.asarray(
+        _sem_fourier_projection(np.asarray(orders), stack.period,
+                                geo_mats[0]), cj)
+    Tp_sub = jnp.asarray(
+        _sem_fourier_projection(np.asarray(orders), stack.period,
+                                geo_mats[-1]), cj)
+
+    if is_jax_array(angle) or float(angle) != 0.0:
+        kx0 = jnp.real(n_sup) * jnp.sin(jnp.asarray(angle)) * k0
+    else:
+        kx0 = 0.0
+
+    eig = _jax_eig_stable()
+
+    def _t5(M):
+        M = jnp.asarray(M, cj)
+        if M.ndim == 0:
+            return dict(exx=M, exy=0.0 * M, eyx=0.0 * M, eyy=M, ezz=M)
+        return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
+                    ezz=M[2, 2])
+
+    def _uniform_modes(static_x, eps_x):
+        S0g, Kg, Cwg = _jstack_geo_ops(static_x)
+        S0j = jnp.asarray(S0g, cj)
+        op = jnp.asarray(Kg, cj)
+        if not (isinstance(kx0, float) and kx0 == 0.0):
+            Cwj = jnp.asarray(Cwg, cj)
+            op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
+        Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
+        mu_geo, w_geo = eig(Kx2)
+        return _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp, eps_x)
+
+    Wsup, Vsup, _ls, _qs = _uniform_modes(statics[0], eps_sup)
+    Wsub, Vsub, _lb, _qb = _uniform_modes(statics[-1], eps_sub)
+
+    lmodes = []
+    for i, (thk, _segs, _slant) in enumerate(stack._layers):
+        mats = _jstack_assemble(statics[i], jnp,
+                                [_t5(e) for e in grid_of[i][1]])
+        Wl, Vl, lam, _q = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
+        lmodes.append((Wl, Vl, lam, jnp.asarray(thk)))
+
+    # ---- cascade: plain interface on conforming pairs, mortar otherwise ---
+    def _ismat(Wa, Va, Wb, Vb):
+        a = jnp.linalg.solve(Wb, Wa)
+        b = jnp.linalg.solve(Vb, Va)
+        apb, amb = a + b, a - b
+        iapb = jnp.linalg.inv(apb)
+        return (-iapb @ amb, 2.0 * iapb,
+                0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+
+    def _imort(Wa, Va, Wb, Vb, i):
+        bCba, bCab = crosses[i]
+        bMa = jnp.asarray(Ms[wkeys[i]], cj)
+        bMb = jnp.asarray(Ms[wkeys[i + 1]], cj)
+        A = jnp.linalg.solve(bMb @ Wb, jnp.asarray(bCba, cj) @ Wa)
+        B = jnp.linalg.solve(bMa @ Va, jnp.asarray(bCab, cj) @ Vb)
+        BA = B @ A
+        eye_a = jnp.eye(BA.shape[0], dtype=cj)
+        iba = jnp.linalg.inv(eye_a + BA)
+        S11 = iba @ (eye_a - BA)
+        S12 = 2.0 * (iba @ B)
+        S21 = A @ (eye_a + S11)
+        S22 = A @ S12 - jnp.eye(A.shape[0], dtype=cj)
+        return (S11, S12, S21, S22)
+
+    def _psmat(lam, k0_L):
+        m = lam.shape[0]
+        X = jnp.diag(jnp.exp(-lam * k0_L))
+        Z = jnp.zeros((m, m), cj)
+        return (Z, X, X, Z)
+
+    def _star_rect(SA, SB):
+        A11, A12, A21, A22 = SA
+        B11, B12, B21, B22 = SB
+        m = A22.shape[0]
+        eye = jnp.eye(m, dtype=cj)
+        D = jnp.linalg.inv(eye - B11 @ A22)
+        F = jnp.linalg.inv(eye - A22 @ B11)
+        return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
+                B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+
+    def _ifc(Wa, Va, Wb, Vb, i):
+        # i = the LOWER layer index of an interior interface; None = half-space
+        if i is None or wkeys[i] == wkeys[i + 1]:
+            return _ismat(Wa, Va, Wb, Vb)
+        return _imort(Wa, Va, Wb, Vb, i)
+
+    S = _ismat(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
+    for i, (Wl, Vl, lam, thk) in enumerate(lmodes):
+        S = _star_rect(S, _psmat(lam, k0 * thk))
+        if i == nlay - 1:
+            S = _star_rect(S, _ismat(Wl, Vl, Wsub, Vsub))
+        else:
+            S = _star_rect(S, _ifc(Wl, Vl, lmodes[i + 1][0],
+                                   lmodes[i + 1][1], i))
+    S11, _S12, S21, _S22 = S
+
+    # ---- far field (per-grid projectors; otherwise the shared twin tail) --
+    n0g = statics[0]["n_glob"]
+    nNg = statics[-1]["n_glob"]
+    Gv = 2.0 * np.pi / stack.period
+    Hsup = jnp.vstack([Tp_sup @ Wsup[:n0g, :], Tp_sup @ Wsup[n0g:, :]])
+    Hsub = jnp.vstack([Tp_sub @ Wsub[:nNg, :], Tp_sub @ Wsub[nNg:, :]])
+    orders_j = jnp.asarray(orders)
+    kx = (kx0 + orders_j * Gv) / k0
+
+    def _kzf(eps, kxv):
+        val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
+        return jnp.where(val.imag < 0.0, -val, val)
+
+    kz_sup = _kzf(eps_sup, kx)
+    kz_sub = _kzf(eps_sub, kx)
+    kx0n = kx0 / k0
+    kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
+    safe_r = jnp.where(jnp.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+    safe_t = jnp.where(jnp.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+    mrows, ncols = Hsup.shape
+    if mrows <= ncols:
+        AAH_inv = jnp.linalg.inv(Hsup @ Hsup.conj().T)
+        pinv = Hsup.conj().T @ AAH_inv
+    else:
+        AHA_inv = jnp.linalg.inv(Hsup.conj().T @ Hsup)
+        pinv = AHA_inv @ Hsup.conj().T
+    m0 = int(np.where(np.asarray(orders) == 0)[0][0])
+    rows_R, rows_T, jcols = [], [], []
+    for col in range(2):
+        rhs = jnp.zeros(2 * N, cj).at[(col * N) + m0].set(1.0)
+        cinc = pinv @ rhs
+        r_ord = Hsup @ (S11 @ cinc)
+        t_ord = Hsub @ (S21 @ cinc)
+        rx, ry = r_ord[:N], r_ord[N:]
+        tx, ty = t_ord[:N], t_ord[N:]
+        rz = -(kx * rx) / safe_r
+        tz = -(kx * tx) / safe_t
+        if col == 0:
+            flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2)
+        else:
+            flux_inc = kz_inc
+        Re = jnp.real(kz_sup) * (jnp.abs(rx) ** 2 + jnp.abs(ry) ** 2
+                                 + jnp.abs(rz) ** 2) / flux_inc
+        Te = jnp.real(kz_sub) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
+                                 + jnp.abs(tz) ** 2) / flux_inc
+        rows_R.append(jnp.where(jnp.real(kz_sup) > 0.0, jnp.real(Re), 0.0))
+        rows_T.append(jnp.where(jnp.real(kz_sub) > 0.0, jnp.real(Te), 0.0))
+        jcols.append(jnp.stack([rx[m0], ry[m0]]))
+    R_eff = jnp.stack(rows_R)
+    T_eff = jnp.stack(rows_T)
+    jones = jnp.stack(jcols, axis=1)
+    return jnp.asarray(orders), R_eff, T_eff, jones
+

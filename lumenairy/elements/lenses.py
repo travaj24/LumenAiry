@@ -1006,6 +1006,7 @@ from ._lens_thin import (  # noqa: E402, F401
 # ---------------------------------------------------------------------------
 from ._lens_traced import (  # noqa: E402, F401  # noqa: E402, F401
     PreparedTracedLens,
+    TiltedCarrier,
     apply_real_lens_traced,
     apply_real_lens_traced_multi,
     apply_real_lens_traced_segmented,

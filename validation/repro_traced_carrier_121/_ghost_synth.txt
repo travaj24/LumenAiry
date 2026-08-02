@@ -1,0 +1,29 @@
+fixture                          branch         P/Pin        P>3w        P>5w     amax3w
+----------------------------------------------------------------------------------------
+weak f/70, exit far from focus   C6 off       0.99756   9.514e-10   0.000e+00  3.119e-05
+                                 mask         0.99761   1.919e-08   0.000e+00  1.201e-04
+                                 weighted     0.99761   1.750e-08   0.000e+00  1.184e-04
+                                 [null: array_equal=True]
+weak, 2x residual                C6 off       0.99756   9.514e-10   0.000e+00  3.119e-05
+                                 mask         0.99765   1.307e-07   0.000e+00  2.832e-04
+                                 weighted     0.99765   1.194e-07   0.000e+00  2.795e-04
+                                 [null: array_equal=True]
+medium f/40                      C6 off       0.99724   4.919e-11   0.000e+00  7.133e-06
+                                 mask         0.99730   6.766e-09   0.000e+00  6.678e-05
+                                 weighted     0.99730   5.748e-09   0.000e+00  6.498e-05
+                                 [null: array_equal=True]
+medium, finer grid               C6 off       0.99818   1.631e-10   5.371e-28  1.283e-05
+                                 mask         0.99823   4.265e-08   2.865e-16  1.594e-04
+                                 weighted     0.99827   3.507e-05   3.503e-05  1.017e-01
+                                 [null: array_equal=True]
+collimated carrier (C6 inert)    C6 off       0.99779   7.202e-09   0.000e+00  8.557e-05
+                                 mask         0.99779   7.202e-09   0.000e+00  8.557e-05
+                                 weighted     0.99779   7.202e-09   0.000e+00  8.557e-05
+                                 [null: array_equal=True]
+DESIGN-121 SCALE stand-in        C6 off       0.99827   0.000e+00   0.000e+00  0.000e+00
+                                 mask         0.99828   0.000e+00   0.000e+00  0.000e+00
+                                 weighted     1.00281   4.526e-03   0.000e+00  6.056e-01
+                                 [null: array_equal=True]
+
+P>Nw = returned power beyond N beam radii from the (concentric) chief ray, over input power.
+The DIRECTION of the weighted-vs-mask difference reverses between fixtures -- that is the finding.
