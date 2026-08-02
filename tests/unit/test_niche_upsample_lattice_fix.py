@@ -24,6 +24,7 @@ import numpy as np
 import pytest
 
 import lumenairy as la
+from lumenairy.elements import _lens_traced as LT
 
 _WL = 1.31e-6
 
@@ -127,31 +128,104 @@ def test_remap_requires_ray_density(_setup):
             ray_subsample=8, n_workers=1, preserve_input_phase='remap')
 
 
+#: The rms RELATIVE |E| difference between the two EXACT ray constructions of
+#: the fixture below -- rays along ``grad(W)`` (what ``preserve_input_phase=
+#: False`` builds) versus rays along ``grad(W + a/k0)`` (Fermat's stationary
+#: point of the total entrance eikonal, i.e. the truth).  Pure raytrace plus
+#: closed-form input phase, exit amplitude ``|E_in|/sqrt(|det dX/dp|)`` from
+#: the exact landing map: no fit, no Newton inverse, no coarse lattice, no
+#: upsample, no ``preserve_input_phase`` code path.  Measured 2026-08-01 by
+#: ``validation/repro_traced_carrier_121/recon_remap_residual_oracle.py``;
+#: the worst pointwise value over the same mask is 2.921e-04 of peak.
+_EXACT_REMAP_DAMP_RMS_REL = 3.353e-04
+
+
 def test_remap_carries_injected_residual(_setup):
     """A gentle KNOWN residual multiplied onto the sphere input must appear
     in the 'remap' exit but not the False exit: the difference field's phase
     must correlate with the injected residual (transported), while
-    pip=False discards it entirely."""
+    pip=False discards it entirely.
+
+    2026-08-01 -- NICHE C6 CHANGED THE MECHANISM, AND THE PIN'S PREMISE WAS
+    WRONG PHYSICS.
+
+    PIN WAS: ``np.allclose(|E_false|, |E_remap|)`` -- "the two exits must
+    differ by a PHASE-ONLY factor".  ``REMAP_STATIONARY_PHASE_LAUNCH``
+    (niche C6) launches 'remap' along ``grad(W + a_fit)`` rather than
+    ``grad(W)``, so the ray TUBE differs between the two modes and
+    ``ray_density``'s ``1/sqrt(|det J|)`` follows it -- by design
+    ("the ``ray_density`` Jacobian follows the augmented map automatically").
+
+    THE ORACLE THAT ADJUDICATED, sharing no code with the element's fit,
+    Newton inverse, lattice or upsample: two EXACT skew ray traces of this
+    same fixture, one launched along ``grad(W)`` and one along
+    ``grad(W + a/k0)``, each with the exit amplitude
+    ``|E_in| / sqrt(|det dX/dp|)`` taken from its own exact landing map.
+    They differ in |E| by ``_EXACT_REMAP_DAMP_RMS_REL`` = 3.353e-04 rms
+    relative (worst 2.921e-04 of peak).  **So an amplitude difference is
+    REQUIRED here; a phase-only operator would be the wrong answer.**
+    The library delivers 2.740e-04 rms relative (worst 2.764e-04 of peak) --
+    within 18 % of the exact prediction in rms and 5 % at the worst point --
+    while with ``REMAP_STATIONARY_PHASE_LAUNCH = False`` it delivers
+    1.6e-16, i.e. exactly the phase-only behaviour the old pin asserted.
+
+    PIN IS NOW: the old assertion verbatim on the C6-off arm (fail-before),
+    and on the shipped path the amplitude change must be PRESENT and within a
+    factor of two of the exact-ray prediction -- which fails both if C6 is
+    reverted (0) and if the ray-density amplitude stops tracking the augmented
+    map (wrong magnitude).  The phase assertions are unchanged and still pass
+    at ``std(dphi)/std(inj)`` = 1.0376 (C6 on) / 1.0459 (C6 off).
+
+    NOTE the exact ray trace also prices C6 on this fixture: complex relL2
+    against the true (stationary) construction is 5.554e-03 with C6 on and
+    5.214e-03 with it off -- a 6.5 % cost, because this residual is gentle
+    (the two exact constructions differ by only 3.3e-04 rad of phase, so
+    there is almost nothing for C6 to restore and its degree-4 fit of an
+    ``r^4 x Gaussian`` residual is the larger term).  Both are 31x better
+    than ``pip=False``'s 1.746e-01.  On a fixture where ``grad a`` is large
+    the same oracle scores C6 140x BETTER (see
+    ``test_niche_s12_remap_sampling.py``)."""
     N, dx, R_in, presc, E_in = _setup
     x = (np.arange(N) - N // 2) * dx
     r2 = x[None, :] ** 2 + x[:, None] ** 2
     w = 0.6e-3
     resid = 0.5 * (r2 / w ** 2) ** 2 * np.exp(-r2 / (2 * w * w))  # gentle r^4
     E_res = (E_in * np.exp(1j * resid)).astype(np.complex128)
-    outs = {}
-    for pip in (False, 'remap'):
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            outs[pip] = np.asarray(la.apply_real_lens_traced(
-                E_res, prescription=presc, wavelength=_WL, dx=dx,
-                carrier=R_in, ray_subsample=8, n_workers=1,
-                on_undersample='silent', on_noncollimated='silent',
-                amplitude_model='ray_density', preserve_input_phase=pip))
-    # the two exits must differ by a PHASE-ONLY factor of ~the residual's
-    # magnitude: same |E| (same amplitude model), different phase
+
+    def _call(pip, launch=None):
+        old = LT.REMAP_STATIONARY_PHASE_LAUNCH
+        if launch is not None:
+            LT.REMAP_STATIONARY_PHASE_LAUNCH = bool(launch)
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                return np.asarray(la.apply_real_lens_traced(
+                    E_res, prescription=presc, wavelength=_WL, dx=dx,
+                    carrier=R_in, ray_subsample=8, n_workers=1,
+                    on_undersample='silent', on_noncollimated='silent',
+                    amplitude_model='ray_density', preserve_input_phase=pip))
+        finally:
+            LT.REMAP_STATIONARY_PHASE_LAUNCH = old
+
+    outs = {False: _call(False), 'remap': _call('remap')}
     a_f, a_r = np.abs(outs[False]), np.abs(outs['remap'])
-    assert np.allclose(a_f, a_r, atol=1e-12 + 1e-6 * a_f.max())
-    m = a_f > 0.05 * a_f.max()
+
+    # (a) FAIL-BEFORE: with the C6 launch off, 'remap' really is phase-only,
+    #     to the last bit -- so the amplitude motion below is C6's and nothing
+    #     else's.
+    a_r0 = np.abs(_call('remap', launch=False))
+    assert np.allclose(a_f, a_r0, atol=1e-12 + 1e-6 * a_f.max()), (
+        float(np.abs(a_f - a_r0).max()))
+
+    # (b) the shipped path: the ray tube DOES change, by the amount two exact
+    #     ray traces of the two congruences say it must.
+    msk = a_f > 0.05 * a_f.max()
+    d_rms = float(np.sqrt((a_f[msk] * (a_r[msk] - a_f[msk]) ** 2).sum()
+                          / (a_f[msk] ** 3).sum()))
+    assert d_rms > 0.5 * _EXACT_REMAP_DAMP_RMS_REL, d_rms
+    assert d_rms < 2.0 * _EXACT_REMAP_DAMP_RMS_REL, d_rms
+
+    m = msk
     dphi = np.angle(outs['remap'][m] * np.conj(outs[False][m]))
     # injected residual rms over the same support (entrance~exit for this
     # gentle singlet): the carried phase must be nonzero and of the same

@@ -718,7 +718,38 @@ def test_dx_flatness_alone_is_not_sufficient():
     independent oracle.  A flatness-only gate (which is all the
     shipped ``self_check='dx'`` is, on a coarser metric set) passes it
     silently.  The LEVEL half of :func:`dx_flatness_gate` is what has the
-    teeth."""
+    teeth.
+
+    2026-08-01 -- RE-PRICED AGAINST THE SAME ORACLE AFTER NICHE C6.
+
+    PIN WAS ``FWHM / oracle > 3.0`` (measured 3.6695 / 3.6697 at
+    N = 512 / 1024).  PIN IS NOW ``> 2.5``, measured 2.9541 / 2.9538, plus
+    two new level assertions with far more margin than the FWHM bar ever had.
+
+    WHY IT MOVED: ``REMAP_STATIONARY_PHASE_LAUNCH`` (niche C6) improves even
+    this deliberately-broken configuration -- the broken half is the CARRIER
+    REFERENCE, not the residual transport, so the residual the relay hands
+    between groups is still carried better than it was.  The oracle did NOT
+    move and CANNOT: it is ``validation/oracles/debye_oracle_v3.py``, pure
+    numpy + ``scipy.special.j0`` with no lumenairy in the call, and it reads
+    FWHM 2.743288 um / EE1 33.18 / EE2 82.45 / EE4 101.87 on both sides of
+    the change.  Measured 2026-08-01 by
+    ``validation/repro_traced_carrier_121/recon_d5_oracle.py``:
+
+        configuration        N     FWHM um   /oracle    EE2    window
+        parabola, C6 OFF   1024   10.06708    3.6697   6.189   75.085
+        parabola, C6 ON    1024    8.10312    2.9538   8.772   77.247
+        defaults,  C6 OFF  1024    2.75529    1.0044  63.877   99.883
+        defaults,  C6 ON   1024    2.72274    0.9925  69.539   99.898
+
+    So the broken configuration is LESS wrong (BETTER against the absolute
+    oracle) and the shipped defaults are better too -- and the lesson this
+    test exists for is untouched: the parabola row is still dx-FLAT to
+    1.14e-04 (44x inside the 5e-03 bar) while sitting 2.95x wide of the
+    oracle, delivering 10.6 % of its EE2 and losing 23 % of the launched
+    power out of the readout window.  The two new assertions pin the level
+    failure in the currency that has the teeth rather than leaning on a
+    FWHM bar that a further accuracy improvement could walk through."""
     _need_ram()
     rows = _ladder('parabola', {'carrier_reference': 'parabola'}, None,
                    ((512, 2), (1024, 4)))
@@ -730,7 +761,12 @@ def test_dx_flatness_alone_is_not_sufficient():
         vals = [row[k] for row in rows]
         assert max(vals) - min(vals) < _FLAT_EE_ABS, (k, vals)
     oracle = _oracle()
-    assert rows[-1]['fwhm'] / oracle['fwhm'] > 3.0, (rows, oracle)  # ...and wrong
+    assert rows[-1]['fwhm'] / oracle['fwhm'] > 2.5, (rows, oracle)  # ...and wrong
+    # ... and wrong in the currencies the gate actually scores, with margin:
+    # EE2 is 0.106x the oracle's against a 0.70x gate bar, and the window
+    # power is 77.2 % of launched against a 99.0 % bar.
+    assert rows[-1]['ee2'] < 0.25 * oracle['ee2'], (rows[-1], oracle)
+    assert rows[-1]['window'] < _LEVEL_WINDOW_MIN - 10.0, rows[-1]
 
 
 def test_remap_sampling_has_no_teeth_here():

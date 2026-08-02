@@ -42,6 +42,79 @@ Pins here (all self-contained -- no Zemax, no design-121 assets):
      ``'lattice'`` drifts to 0.5-1.1 rad -- a 180-9000x reduction.
   6. The differences are CONFINED to r > r_alias (the mechanism, not just the
      magnitude).
+
+==========================================================================
+2026-08-01 -- NICHE C6 COLLAPSED THE FULL-vs-LATTICE DIFFERENCE, AND THE
+EXACT RAY TRACE SAYS THE COLLAPSE IS THE FIX, NOT A LOST CAPABILITY.
+==========================================================================
+
+``REMAP_STATIONARY_PHASE_LAUNCH`` (niche C6) launches ``'remap'``'s rays along
+``grad(W + a_fit)`` instead of ``grad(W)``, and adds ``a_fit`` to the traced
+OPL, so the transported phasor carries only the LEFTOVER ``a - a_fit``.  On
+this fixture the injected residual is ``A (r^2/w^2)^2`` -- an exactly
+degree-4 polynomial -- so ``a_fit`` absorbs essentially all of it inside the
+fit disc and there is almost nothing left to sample on any lattice.  The
+aliasing mechanism items 5 and 6 pin is therefore STRUCTURALLY ABSENT, not
+merely small.
+
+MEASURED on this exact fixture (``validation/repro_traced_carrier_121/
+recon_s12_measure.py``), rms phase difference against the ``rs=1`` reference,
+'lattice' / 'full' / and the two modes against EACH OTHER:
+
+    rs        C6 OFF (= pre-C6)              C6 ON (= shipped)
+     2   5.4576e-01 / 6.0518e-05 / 6.7401e-01   1.6340e-02 / 1.6340e-02 / 6.06e-07
+     4   8.3863e-01 / 2.6291e-04 / 9.2267e-01   5.6227e-02 / 5.6227e-02 / 2.69e-06
+     8   1.0888e+00 / 5.9216e-03 / 1.1504e+00   9.1257e-02 / 9.1257e-02 / 1.09e-05
+
+The C6-OFF column reproduces this file's own 2026-07-25 numbers to every
+printed digit, so C6 is the whole of the change.  The two modes now differ by
+6e-07 to 1e-05 rad instead of 0.67 to 1.15 rad -- a collapse of ~6 orders of
+magnitude, matching ``docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31.md``'s
+``remap_sampling`` row on design 121 (full-vs-lattice EE3 -17.73 -> +0.0988,
+the sign flipped).
+
+THE ORACLE THAT ADJUDICATED, and it shares no code with any of it
+(``recon_s12_oracle.py``): an EXACT skew ray trace of this fixture --
+``lumenairy.raytrace`` plus the closed-form input phase, launched along
+``grad(k0 W + a)/k0`` (Fermat's stationary point of the total entrance
+eikonal), exit phase ``k0 (V + W) + a``, exit amplitude
+``|E_in| / sqrt(|det dX/dp|)`` from the exact landing map, scattered onto the
+wave grid.  No forward-map fit, no Newton inverse, no coarse launch lattice,
+no bilinear upsample, no ``remap_sampling`` code path.  VALIDATED on a control
+(``A = 0``, ``preserve_input_phase=False``, ``rs=1``) where the library must
+reproduce it: agreement 1.2671e-03 rad after removing ONE global piston (the
+raw difference is a constant 1.428842 rad with standard deviation 1.27e-03 and
+no radial structure -- an eikonal is defined up to a constant).
+
+    rms phase vs the EXACT ray trace, same pixels for every row:
+
+      rs / mode          C6 OFF (pre-C6)     C6 ON (shipped)
+      1   lattice          1.2538e+00          8.8177e-03
+      2   lattice          1.2532e+00          8.7784e-03
+      2   full             1.2538e+00          8.7785e-03
+      4   lattice          1.1926e+00          8.5979e-03
+      4   full             1.2538e+00          8.5983e-03
+      8   lattice          1.2429e+00          1.0524e-02
+      8   full             1.2538e+00          1.0526e-02
+
+**The shipped library is 140x closer to the exact ray trace than the state
+these pins were written in, and 'full' is no longer distinguishable from
+'lattice' because there is nothing left for either to sample.**  Note what
+that table also says about the ORIGINAL claim: pre-C6, ``'full'`` converged
+to a ``ray_subsample=1`` REFERENCE THAT WAS ITSELF 1.2538 rad from the truth
+-- the "9018x reduction" was convergence to the wrong answer.  Two exact ray
+traces differing only in the launch eikonal (``grad(W)`` vs ``grad(W + a)``)
+are 1.2516 rad apart on this fixture, which is the entire pre-C6 error.
+
+WHAT CHANGED IN THE TESTS.  Items 5 and 6, and the "the knob is live" pin,
+are kept WORD FOR WORD in an arm that sets ``REMAP_STATIONARY_PHASE_LAUNCH =
+False`` -- the library state they were calibrated in, where they are still
+true and still discriminating -- and each grows a second arm pinning the
+shipped behaviour: the two modes agree to 1e-04 rad, are still not
+byte-identical (so the knob has not quietly died), and their residual
+disagreement with the ``rs=1`` reference is IDENTICAL for both modes, i.e.
+it is the C6 launch's own ``ray_subsample`` dependence and not a sampling
+effect.  No tolerance was loosened on any pin that still applies.
 """
 from __future__ import annotations
 
@@ -51,6 +124,7 @@ import numpy as np
 import pytest
 
 import lumenairy as la
+from lumenairy.elements import _lens_traced as LT
 
 _WL = 1.31e-6
 
@@ -97,10 +171,19 @@ def _setup():
     return E, kw, np.sqrt(r2)
 
 
-def _run(E, kw, **over):
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        return np.asarray(la.apply_real_lens_traced(E, **kw, **over))
+def _run(E, kw, launch=None, **over):
+    """One element call.  ``launch`` forces ``REMAP_STATIONARY_PHASE_LAUNCH``
+    (niche C6) and restores it; ``None`` leaves the shipped default, which is
+    what every pin in sections 1-4 runs at."""
+    old = LT.REMAP_STATIONARY_PHASE_LAUNCH
+    if launch is not None:
+        LT.REMAP_STATIONARY_PHASE_LAUNCH = bool(launch)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return np.asarray(la.apply_real_lens_traced(E, **kw, **over))
+    finally:
+        LT.REMAP_STATIONARY_PHASE_LAUNCH = old
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -196,12 +279,34 @@ def test_bad_remap_sampling_raises(_setup):
 
 def test_full_actually_changes_the_result_at_coarse_lattice(_setup):
     """The feature must be LIVE at ray_subsample > 1 (guards against a knob
-    that quietly does nothing)."""
+    that quietly does nothing).
+
+    PIN WAS: ``_rms_phase_diff(lattice, full) > 0.1`` rad at the shipped
+    default.  PIN IS NOW: that bar, verbatim, on the ``REMAP_STATIONARY_PHASE_
+    LAUNCH = False`` arm (measured 9.2267e-01), plus a shipped-default arm
+    that pins the knob still MOVES the field (not byte-identical) while the
+    difference has collapsed to 2.7e-06 rad.
+
+    WHY IT MOVED: niche C6 absorbs this fixture's exactly-degree-4 residual
+    into the launch eikonal ``a_fit``, so the transported phasor is
+    ``a - a_fit ~ 0`` and neither sampling mode has anything left to alias --
+    see the module docstring for the exact-ray-trace adjudication (the shipped
+    library is 140x closer to an exact skew ray trace than the C6-off state
+    this bar was calibrated in)."""
     E, kw, _ = _setup
+    # (a) the original pin, in the library state it was measured in.
+    a0 = _run(E, kw, ray_subsample=4, remap_sampling='lattice', launch=False)
+    b0 = _run(E, kw, ray_subsample=4, remap_sampling='full', launch=False)
+    assert not np.array_equal(a0, b0)
+    assert _rms_phase_diff(a0, b0) > 0.1
+    # (b) the shipped path: still a real knob, but a collapsed one.
     a = _run(E, kw, ray_subsample=4, remap_sampling='lattice')
     b = _run(E, kw, ray_subsample=4, remap_sampling='full')
-    assert not np.array_equal(a, b)
-    assert _rms_phase_diff(a, b) > 0.1
+    assert not np.array_equal(a, b), (
+        'remap_sampling has stopped touching the field entirely -- the knob '
+        'is dead, not merely quiet')
+    d = _rms_phase_diff(a, b)
+    assert 1e-8 < d < 1e-4, d           # measured 2.6853e-06
 
 
 # ===========================================================================
@@ -221,16 +326,44 @@ def test_full_is_ray_subsample_independent(_setup, rs, tol_full, min_lattice):
     0.5458 / 0.8386 / 1.0888 rad for 'lattice' -- a 9018x / 3190x / 184x
     reduction.  Tolerances here are ~3x the measured 'full' values and ~40 %
     of the measured 'lattice' values, so the pin brackets the behaviour
-    without being brittle."""
+    without being brittle.
+
+    2026-08-01 (niche C6).  Those numbers, and the reasoning above them, are
+    kept VERBATIM in arm (a) at ``REMAP_STATIONARY_PHASE_LAUNCH = False`` --
+    the library state they were measured in, where they reproduce to every
+    printed digit.  They do not survive the shipped launch, and the exact ray
+    trace says that is a fix rather than a loss: pre-C6, ``'full'`` was
+    converging to a ``rs=1`` reference that is itself 1.2538 rad from an exact
+    skew ray trace of this fixture, while the shipped library sits at
+    8.6e-03 rad at every ``rs`` and mode (module docstring; oracle in
+    ``validation/repro_traced_carrier_121/recon_s12_oracle.py``).
+
+    PIN IS NOW, on the shipped path (arm b): the two modes must agree with
+    each other to 1e-04 rad and must sit at the SAME distance from the
+    ``rs=1`` reference to within 1 %, because the residual ``rs`` dependence
+    is the C6 launch's own and not a sampling effect.  Measured
+    ``d_lat``/``d_ful`` = 1.6340e-02 / 5.6227e-02 / 9.1257e-02 rad (equal to
+    5 figures) with ``d(lat, ful)`` = 6.06e-07 / 2.69e-06 / 1.09e-05."""
     E, kw, _ = _setup
+    # (a) the original claim, in the library state it was calibrated in.
+    ref0 = _run(E, kw, ray_subsample=1, remap_sampling='lattice', launch=False)
+    lat0 = _run(E, kw, ray_subsample=rs, remap_sampling='lattice', launch=False)
+    ful0 = _run(E, kw, ray_subsample=rs, remap_sampling='full', launch=False)
+    d_lat0 = _rms_phase_diff(ref0, lat0)
+    d_ful0 = _rms_phase_diff(ref0, ful0)
+    assert d_ful0 < tol_full, (d_ful0, d_lat0)
+    assert d_lat0 > min_lattice, (d_lat0, d_ful0)
+    assert d_lat0 > 20.0 * max(d_ful0, 1e-6), (d_lat0, d_ful0)
+    # (b) the shipped path: the aliasing channel is gone, so the two modes
+    #     must be indistinguishable AND equally distant from the reference.
     ref = _run(E, kw, ray_subsample=1, remap_sampling='lattice')
     lat = _run(E, kw, ray_subsample=rs, remap_sampling='lattice')
     ful = _run(E, kw, ray_subsample=rs, remap_sampling='full')
     d_lat = _rms_phase_diff(ref, lat)
     d_ful = _rms_phase_diff(ref, ful)
-    assert d_ful < tol_full, (d_ful, d_lat)
-    assert d_lat > min_lattice, (d_lat, d_ful)
-    assert d_lat > 20.0 * max(d_ful, 1e-6), (d_lat, d_ful)
+    assert _rms_phase_diff(lat, ful) < 1e-4, _rms_phase_diff(lat, ful)
+    assert abs(d_lat - d_ful) < 0.01 * max(d_lat, d_ful), (d_lat, d_ful)
+    assert d_lat < 0.12 and d_ful < 0.12, (d_lat, d_ful)
 
 
 # ===========================================================================
@@ -240,22 +373,49 @@ def test_lattice_error_is_confined_beyond_the_alias_radius(_setup):
     """The 'lattice' error must be an ALIASING signature, i.e. confined to
     ``r > r_alias(h = ray_subsample*dx)`` and absent well inside it -- not a
     broadband offset.  This is what ties the fix to the design-121
-    observation (residual 0.05 rad inside 1 w, 0.97 rad at 1.5-2.0 w)."""
+    observation (residual 0.05 rad inside 1 w, 0.97 rad at 1.5-2.0 w).
+
+    2026-08-01 (niche C6).  PIN WAS: that signature at the shipped default,
+    with ``'full'`` clean on both sides (< 0.02 / < 0.05 rad).  It is kept
+    VERBATIM in arm (a) at ``REMAP_STATIONARY_PHASE_LAUNCH = False``, where it
+    still holds exactly (lattice inner 5.166e-02 / outer 1.896e+00, ratio
+    36.7; full inner 3.920e-05 / outer 8.029e-04).
+
+    PIN IS NOW, on the shipped path (arm b): there is no aliasing signature to
+    find, because the C6 launch absorbs this fixture's degree-4 residual into
+    ``a_fit`` and leaves the transported phasor ~0 -- so the two modes must
+    show the SAME inner and outer deviations (measured lattice 3.6215e-04 /
+    1.1284e-01, full 3.6080e-04 / 1.1284e-01).  What is left in the outer
+    band is the C6 launch's own ``ray_subsample`` dependence, and pinning that
+    the two modes share it is what distinguishes "no aliasing" from "aliasing
+    that both modes now suffer".  Adjudicated by an exact skew ray trace
+    (module docstring): the shipped field is 8.6e-03 rad from it, the C6-off
+    field 1.19-1.25 rad."""
     E, kw, rr = _setup
     rs = 4
     ra = _r_alias(rs * _DX)
     assert _W < ra < 1.6 * _W, ra / _W        # fixture sanity: 1.18 w
+    inner = rr < 0.75 * ra
+    outer = rr > 1.05 * ra
+    # (a) the aliasing signature, in the library state it was measured in.
+    ref0 = _run(E, kw, ray_subsample=1, remap_sampling='lattice', launch=False)
+    lat0 = _run(E, kw, ray_subsample=rs, remap_sampling='lattice', launch=False)
+    ful0 = _run(E, kw, ray_subsample=rs, remap_sampling='full', launch=False)
+    d_in0 = _rms_phase_diff(ref0, lat0, inner)
+    d_out0 = _rms_phase_diff(ref0, lat0, outer)
+    assert d_out0 > 5.0 * max(d_in0, 1e-6), (d_in0, d_out0)
+    assert _rms_phase_diff(ref0, ful0, inner) < 0.02
+    assert _rms_phase_diff(ref0, ful0, outer) < 0.05
+    # (b) the shipped path: no aliasing channel, so the modes cannot differ.
     ref = _run(E, kw, ray_subsample=1, remap_sampling='lattice')
     lat = _run(E, kw, ray_subsample=rs, remap_sampling='lattice')
     ful = _run(E, kw, ray_subsample=rs, remap_sampling='full')
-    inner = rr < 0.75 * ra
-    outer = rr > 1.05 * ra
-    d_in = _rms_phase_diff(ref, lat, inner)
-    d_out = _rms_phase_diff(ref, lat, outer)
-    assert d_out > 5.0 * max(d_in, 1e-6), (d_in, d_out)
-    # and 'full' is clean on BOTH sides
-    assert _rms_phase_diff(ref, ful, inner) < 0.02
-    assert _rms_phase_diff(ref, ful, outer) < 0.05
+    for m in (inner, outer):
+        d_l = _rms_phase_diff(ref, lat, m)
+        d_f = _rms_phase_diff(ref, ful, m)
+        assert abs(d_l - d_f) < 0.01 * max(d_l, d_f, 1e-12), (d_l, d_f)
+    assert _rms_phase_diff(ref, lat, inner) < 0.01
+    assert _rms_phase_diff(ref, ful, inner) < 0.01
 
 
 if __name__ == '__main__':
