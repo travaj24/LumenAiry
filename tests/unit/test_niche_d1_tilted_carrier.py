@@ -1185,8 +1185,15 @@ def test_off_centre_fit_disc_does_not_ghost_the_exit_field(monkeypatch):
     monkeypatch.setattr(_lt, 'REMAP_STATIONARY_PHASE_LAUNCH', False)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
     bad_p, bad_rel, _ = _ghost_metrics()
-    assert bad_p > 1000.0 * ref_off_p, (bad_p, ref_off_p)
-    assert bad_rel > 0.1, bad_rel        # a lobe at >10% of the on-beam peak
+    # ENVELOPE factors, not absolutes (2026-08-02): the broken arm's ghost
+    # magnitude is BLAS-build-dependent.  Measured bad_p / ref_off_p: >1000x
+    # on local + 3.10/3.11/3.12 CI, 365x on 3.13 CI -- the old 1000x bar
+    # failed there while the witness (broken is ORDERS OF MAGNITUDE worse
+    # than the spline oracle's true halo) held resoundingly.  The pass-after
+    # arm above asserts < 10x, so a 50x fail-before floor keeps a clean 5x
+    # separation between the arms on every measured platform.
+    assert bad_p > 50.0 * ref_off_p, (bad_p, ref_off_p)
+    assert bad_rel > max(5.0 * ref_rel, 0.02), (bad_rel, ref_rel)
 
 
 def test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive(monkeypatch):
