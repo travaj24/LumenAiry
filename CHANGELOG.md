@@ -4,6 +4,16 @@ All notable changes to the core library are documented here.
 
 ## [5.32.0] — 2026-08-02
 
+### Changed — the empty deprecation horizon advanced past this release (`lumenairy/_deprecation.py`)
+
+`NEXT_REMOVAL_VERSION` (and its alias `API_TRANSITION_VERSION`) read `'5.32'`
+and came due with this release — with **nothing scheduled**: both registries
+are empty tombstones because every removal and the one API transition were
+executed early, in v5.30.  Advanced `'5.32' -> '5.36'` per the constant's own
+documented one-line-slip mechanism.  No shim's lifetime changes; banners that
+resolve through the backstop now read `v5.36 (rescheduled from ...)`.
+
+
 ### Fixed — the inverse map may no longer invent light: exit pixels outside the traced support get zero (niche C8, `elements/_lens_traced.py`)
 
 Closes the C6 on-axis energy defect STRUCTURALLY, at the mechanism.  The

@@ -129,7 +129,12 @@ __all__ = [
 #: Removal horizon for deprecations whose stated version has shipped.  Set
 #: it to a version the project can realistically hit; bumping it is a
 #: deliberate one-line slip, recorded in the CHANGELOG.
-NEXT_REMOVAL_VERSION = '5.32'
+# v5.32.0 release: the horizon below had come due with NOTHING scheduled
+# (both registries are empty tombstones -- every removal and the one API
+# transition were EXECUTED early, in v5.30).  Advancing it is therefore
+# the documented deliberate one-line slip, slipping no actual removal.
+# Recorded in the CHANGELOG's 5.32.0 block.
+NEXT_REMOVAL_VERSION = '5.36'
 
 #: Re-scheduled horizons: ``{version as written at the shim call site:
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule
