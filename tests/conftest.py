@@ -163,3 +163,93 @@ def doublet_prescription():
         glass1='N-BK7', glass2='N-SF2',
         aperture=5e-3,
     )
+
+
+# ===========================================================================
+# Niche C11 (2026-08-03) -- MODULE-FLAG LEAK GUARD
+# ===========================================================================
+# THE DEFECT THIS KILLS.  Most of this library's physics modes are module-level
+# flags (``TILTED_CARRIER_EXACT_EIKONAL``, ``REMAP_STATIONARY_PHASE_LAUNCH``,
+# ``SPHERE_PARAB_CONVERSION_EXACT``, ...), and dozens of tests legitimately
+# toggle them to reach a fail-before arm.  Every one of those sites is supposed
+# to restore in a ``finally``; a single site that does not leaves the flag
+# dirty for every LATER test in the same process.
+#
+# That failure is invisible in isolation and invisible under a different shard
+# layout -- the leaked state only reaches a victim when pytest-split happens to
+# put the two in the same group.  It presents as a physics-mode-sized delta in
+# an unrelated file (measured: 0.0661 against a 1e-4 bar) or as a
+# ``DID NOT WARN`` in a guard test, on some shards and some Python versions
+# only, which is the most expensive shape of CI failure this project has.
+#
+# The guard snapshots every known flag before each test and restores it after,
+# so a leak cannot cross a test boundary.  Restoring SILENTLY is deliberate:
+# the point is to make the suite order-independent, not to red it.  Set
+# ``LUMEN_TEST_FLAG_LEAK_STRICT=1`` to FAIL the leaking test instead, which is
+# how you find the culprit once you know the class is live.
+#
+# The flag set is DISCOVERED, not enumerated: every module-level scalar
+# (bool / int / float / str / None) whose name is upper-case -- the convention
+# this library uses for its mode flags and calibration constants -- in the two
+# modules that carry physics modes.  A hand-written list is itself a defect
+# surface: it silently stops covering a flag the day someone adds one, which is
+# exactly the class being closed here.
+#
+# Cost: two ``vars()`` scans (~200 names) per test, no imports, no I/O.
+_LEAK_GUARD_MODULES = (
+    'lumenairy.elements._lens_traced',
+    'lumenairy.propagators.carrier',
+)
+_LEAK_GUARD_TYPES = (bool, int, float, str, type(None))
+
+
+def _leak_guard_snapshot():
+    """``{(module, name): (module_object, value)}`` for every module-level
+    scalar mode flag / calibration constant in the physics modules."""
+    import importlib
+    snap = {}
+    for mod_name in _LEAK_GUARD_MODULES:
+        try:
+            mod = importlib.import_module(mod_name)
+        except Exception:
+            continue
+        for n, v in list(vars(mod).items()):
+            if n.startswith('__'):
+                continue
+            # upper-case names only: the library's own convention for a knob.
+            # ``_FOO_BAR`` counts, ``_foo`` and ``SomeClass`` do not.
+            core = n.lstrip('_')
+            if not core or not core.isupper():
+                continue
+            if isinstance(v, _LEAK_GUARD_TYPES):
+                snap[(mod_name, n)] = (mod, v)
+    return snap
+
+
+@pytest.fixture(autouse=True)
+def _module_flag_leak_guard():
+    """Restore every physics-mode flag after each test (niche C11).
+
+    Runs OUTSIDE the test's own fixtures (autouse fixtures are set up first and
+    torn down last), so a ``monkeypatch`` undo has already happened by the time
+    this checks -- what it sees is genuine leakage, not a pending restore.
+    """
+    import os
+    before = _leak_guard_snapshot()
+    yield
+    leaked = []
+    for (mod_name, n), (mod, val) in before.items():
+        now = getattr(mod, n, val)
+        same = now is val
+        if not same:
+            try:
+                same = bool(now == val)
+            except Exception:
+                same = False
+        if not same:
+            leaked.append(f'{mod_name}.{n}: {val!r} -> {now!r}')
+            setattr(mod, n, val)
+    if leaked and os.environ.get('LUMEN_TEST_FLAG_LEAK_STRICT'):
+        raise AssertionError(
+            'this test leaked module-level physics flags to every LATER test '
+            'in the process (niche C11 leak guard): ' + '; '.join(leaked))
