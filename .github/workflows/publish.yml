@@ -55,7 +55,11 @@ jobs:
         python-version: ['3.10', '3.11', '3.12', '3.13']
         # v5.23.0: shard the release verify the same 3 ways as unit-tests.yml's
         # fast gate (pytest-split), so the tag verification is fast too.
-        shard: [1, 2, 3]
+        # v5.32.0 (retag 2): the suite grew to ~10.7k tests / 75-90 min per
+        # version -- 3 shards leave <5 min headroom under the 30-min step cap
+        # even perfectly balanced, and two release attempts timed out on
+        # different shards.  5 shards ~= 15-18 min each: real headroom.
+        shard: [1, 2, 3, 4, 5]
     steps:
       # v5.2.5: fetch full history + tags so the V16
       # verify_changelog_closures step below can resolve PREV_TAG
@@ -154,7 +158,7 @@ jobs:
           # v5.15.0: ``slow`` runs in the unit-tests sharded slow job; excluded here.
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=5 \
-            --splits 3 --group ${{ matrix.shard }} \
+            --splits 5 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations
         # v5.23.0: 40 -> 20 (fast gate now sharded 3 ways across parallel jobs).
