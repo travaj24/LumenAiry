@@ -1,5 +1,11 @@
 # PMM roadmap — post-v5.14 audit (2026-06-10)
 
+> **SUPERSEDED 2026-08-03** by `docs/audits/ROADMAP_PMM_PER_LAYER_GRIDS_2026_07_28.md` §5,
+> which re-verified every item against the code. Five of the seven items have shipped; the
+> two survivors (native 2-D slant; the crossed-anisotropic hybrid-PMM inverse-rule gap left
+> after the v5.21 `fff_nv` work) are carried there as P-1/P-2. The REJECTED list stands.
+> Kept for the audit record; do not plan from it.
+
 The 22-agent accuracy/speed audit (41 findings, 16/16 adversarially confirmed)
 shipped its P1/P2 fixes in v5.14. The remaining CONFIRMED-FEASIBLE items, with
 the audit's effort/value assessments, in recommended order:
