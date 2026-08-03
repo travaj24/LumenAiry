@@ -226,7 +226,12 @@ def _leak_guard_snapshot():
     return snap
 
 
-@pytest.fixture(autouse=True)
+# MODULE scope (2026-08-03): per-TEST restore erased module-scoped
+# fixtures' legitimate flag setup mid-module -- the D4 hand-split test
+# failed on MORE CI shards after the per-test guard landed.  Module
+# scope still kills cross-module order dependence (the leak class)
+# while letting a module's own fixtures mean what they say.
+@pytest.fixture(autouse=True, scope='module')
 def _module_flag_leak_guard():
     """Restore every physics-mode flag after each test (niche C11).
 
