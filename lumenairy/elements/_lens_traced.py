@@ -1572,6 +1572,162 @@ _DECENTRED_FIT_POLY_ORDER = 10
 _DECENTRE_GATE_PIXELS = 0.5
 _DECENTRE_GATE_W_FRAC = 0.05
 
+#: niche C11 (2026-08-03): CHOOSE the decentred beam's ray-fit branch by
+#: MEASURING both candidates instead of predicting the winner from ``|c|/w``.
+#:
+#: WHAT WAS WRONG.  ``_DECENTRE_GATE_W_FRAC`` above is a floor set to kill a
+#: discontinuity at NULL decentre (a branch flip at 1e-9 px), and the note that
+#: sets it says so.  It was never the crossover.  Measured on design 121 at the
+#: shipped ``_REMAP_RESID_EIKONAL_DEGREE = 6`` (`rc_gate_121.py`, EE3
+#: area-exact against the exact-ray CARRY=1 ceiling, per-order residual):
+#:
+#:     last-group |c|/w   0.000   0.241   0.481   0.723   0.965   1.079
+#:     off-centre branch -0.048  +0.028  +0.062  +0.091  +0.141  +0.152
+#:     concentric branch -0.048  -0.099  -0.127  +2.033 +67.312 +79.145
+#:
+#: -- i.e. the branches cross between **0.48 and 0.72 w** on that design, and
+#: 0.05 w is 10-14x below it.  On a synthetic f/3 N-BK7 singlet scored against
+#: the fit-domain-free ``newton_fit='spline'`` oracle the same crossover is at
+#: **0.55 w**, on an f/6 one it is at **0 w**, and on design 121's own six
+#: groups it lands anywhere in **0.46-0.69 w**.  A single constant cannot be
+#: right for all of them, because the crossover is not a property of the
+#: decentre at all -- it is where two DIFFERENT approximations of the same
+#: traced map happen to be equally good, and that depends on how much
+#: aberration the concentric branch's order-``newton_poly_order`` fit leaves
+#: over the beam:
+#:
+#: * the OFF-CENTRE fit's error is FLAT in decentre (its disc is beam-sized and
+#:   beam-centred at every offset; measured 6.2e-7 waves across 0-1.5 w on the
+#:   f/3 singlet, 1.8e-9 on the f/6 one, and monotone 0.028 -> 0.152 EE3 points
+#:   across design 121's fan);
+#: * the CONCENTRIC fit's error GROWS with decentre, because its disc is sized
+#:   from the ORIGIN-referenced second moment ``sqrt(2 c^2 + w^2)`` -- an
+#:   artefact of measuring about the wrong point, not a physical radius -- so
+#:   the same total-degree budget is spread over a disc inflated by
+#:   ``sqrt(1 + 2 (c/w)^2)`` (1.22x at 0.5 w, 1.73x at 1.0 w, 2.35x at 1.5 w).
+#:   That is the P2 aperture:beam cliff re-entering through the back door; see
+#:   ``_FIT_RADIUS_BEAM_FACTOR_DEFAULT``.
+#:
+#: WHAT REPLACES IT.  At the fit site the rays are ALREADY traced, so both
+#: candidates can be BUILT and COMPARED before either is used: fit the OPL each
+#: way and score it against the traced samples themselves, weighted by the
+#: beam's own intensity ``exp(-2 r^2 / w^2)`` about the measured chief ray --
+#: "which polynomial reproduces the traced map where the light is".  Smaller
+#: weighted rms wins; an exact tie keeps the CONCENTRIC (historical) one.
+#:
+#: Cost: ONE extra ``_Cheb2DEvaluator`` OPL fit (the rays, the trace and the
+#: two discs all already exist), and one extra second-moment pass over
+#: ``|E_in|^2``.  Both are taken ONLY above the C1 null gate.
+#:
+#: VALIDATED.  On three synthetic geometries (f/6 and f/3 N-BK7 singlets at
+#: two beam radii) the arbiter's pick agrees with the spline oracle's verdict
+#: on **42 of 42** sweep points, including both sides of the f/3 crossover; on
+#: design 121 it flips group by group at 0.46-0.69 w, reproducing the band the
+#: chain-level arms bracket, and at (-4,0) group 4 it sees the catastrophe
+#: coming as a **18x** margin in the fit residual (0.122 waves concentric
+#: against 0.0068 off-centre) before any field is reconstructed.
+#:
+#: SHIPPED OFF -- OPT-IN for now, and the reason is a measurement, not doubt
+#: about the mechanism.  On design 121 the arbiter improves four of the five
+#: tilted orders (by 0.017 / 0.052 / 0.110 / 0.082 points), takes the
+#: worst-case residual from 0.152 to 0.069 and removes the residual's growth
+#: with field angle -- and makes ONE order, (-1,0), worse by 0.026 points
+#: against a 0.003-0.015 differential floor.  A default that fails a
+#: per-order "improve or hold" bar at one order is a judgement call about a
+#: design, not a library fact, so it is left to an explicit decision rather
+#: than taken silently in a patch release.
+#:
+#: With it ``False`` the whole C11 layer is BYTE-IDENTICAL to the pure
+#: ``_DECENTRE_GATE_W_FRAC`` selector: the arbiter's extra second-moment pass
+#: and its two trial fits are not merely unused, they are never reached (the
+#: gate site tests this flag before measuring the origin-referenced radius, and
+#: the fit site tests it before building any candidate).  Turning it ``True``
+#: is the whole opt-in.
+#:
+#: BELOW the C1 null gate the flag is inert in BOTH states by construction (the
+#: arbiter is gated on ``_beam_decentred``), so every C1 byte-identity contract
+#: holds either way.
+DECENTRED_FIT_ARBITER = False
+
+
+def _decentred_fit_restriction(disc, weighted, base_order, dec_order):
+    """Resolve ONE ray-fit candidate's ``(weights, order)`` from its disc.
+
+    ``weighted`` selects D1's regularised restriction (every sample kept, the
+    out-of-disc ones down-weighted to ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` of the
+    in-disc Gram contribution) over the historical hard NaN mask, and carries
+    D7's order raise with the sample-count step-down that keeps the fit
+    determined.  ``weights is None`` means "hard mask at ``base_order``".
+
+    Factored out so the niche-C11 arbiter SCORES exactly the configuration it
+    would APPLY -- a candidate scored at one order and applied at another is
+    not an arbiter, it is a coin toss.
+    """
+    if not weighted:
+        return None, int(base_order)
+    n_in = int(disc.sum())
+    n_out = int(disc.size) - n_in
+    w_out = (float(np.sqrt(_FIT_DISC_OUTSIDE_WEIGHT_REL * n_in / n_out))
+             if n_out > 0 else 1.0)
+    # D7: give that off-centre fit the terms its region needs -- but never
+    # more terms than the disc can constrain.  The out-of-disc samples carry
+    # ~1e-4 of the weight, so the IN-DISC count is what determines the fit;
+    # require 3 samples per basis term (order 10 -> 66 terms -> 198 samples)
+    # and step the order down until that holds.  Without this the raise could
+    # hand an order-10 fit as few as ``_CARRIER_FIT_MIN_SAMPLES`` = 64
+    # effective rows for 66 unknowns -- an under-determined normal matrix.
+    #
+    # This cap is SILENT and it can zero the raise out entirely: the disc
+    # holds ~pi (frbf w / (dx rs))^2 samples, so order 10 survives only while
+    # frbf*w/(dx*rs) >~ 7.9 coarse pixels.  At the DEFAULT ray_subsample=8
+    # both documented configs clear it (223 samples for the synthetic f/6
+    # example, 1735 for design 121's last group, against 198) -- but the first
+    # clears by only 1.13x and reverts to order 6 at ray_subsample=16, and
+    # design 121 reverts at 32.  See ``decentred_fit_poly_order``.
+    order = int(dec_order)
+    base = int(base_order)
+    while order > base and (order + 1) * (order + 2) * 3 // 2 > n_in:
+        order -= 1
+    return np.where(disc, 1.0, w_out), max(base, order)
+
+
+def _decentred_fit_score(xs_in, opl_grid, weight, disc, weights, order):
+    """Beam-weighted rms of one ray-fit candidate's OPL residual against the
+    TRACED samples, in the OPL's own length units.
+
+    The candidate is built exactly as the fit site would build it (hard NaN
+    mask when ``weights is None``, D1's weighted restriction otherwise), then
+    evaluated on the whole coarse launch lattice and differenced against the
+    UNMASKED traced OPL -- so a fit that is clean only where it was allowed to
+    look is scored on the beam, not on its own domain.
+
+    ``weight`` is the beam's intensity on that lattice; only the OPL is scored
+    because it is the quantity that becomes phase.  Returns ``inf`` when the
+    candidate carries no usable weight, so an inadmissible candidate can never
+    win.  See :data:`DECENTRED_FIT_ARBITER`.
+    """
+    vals = opl_grid if weights is not None else np.where(disc, opl_grid, np.nan)
+    # the launch lattice, indexing='ij' -- axis 0 is X, axis 1 is Y, matching
+    # ``opl_grid`` (see the ``np.meshgrid(..., indexing='ij')`` note at the
+    # launch site).  Materialised rather than broadcast: the evaluator's
+    # combined value+grad kernel wants two arrays of the SAME shape, and a
+    # broadcast pair silently yields a column-rank answer.
+    _X, _Y = np.meshgrid(xs_in, xs_in, indexing='ij')
+    try:
+        ev = _Cheb2DEvaluator(xs_in, xs_in, vals, order=int(order),
+                              weights=weights)
+        pred = np.asarray(ev.ev(_X, _Y))
+    except (np.linalg.LinAlgError, ValueError):
+        return float('inf')
+    ok = np.isfinite(pred) & np.isfinite(opl_grid)
+    w = np.where(ok, weight, 0.0)
+    tot = float(w.sum())
+    if not (tot > 0.0):
+        return float('inf')
+    r = np.where(ok, pred - opl_grid, 0.0)
+    v = float(np.sqrt(float((w * r * r).sum()) / tot))
+    return v if np.isfinite(v) else float('inf')
+
 
 def _input_beam_amp_radius(E_in, dx, dy=None, centre=None):
     """1/e AMPLITUDE radius of ``E_in`` on the centred wave grid, from the
@@ -5316,7 +5472,9 @@ def apply_real_lens_traced(
     _dec_null_floor = _DECENTRE_GATE_PIXELS * min(float(dx), float(dy))
     _beam_decentred = _dec_mag > _dec_null_floor
     _beam_fit_radius = None
+    _beam_fit_radius_conc = None
     _w_in_beam = 0.0
+    _w_in_origin = 0.0
     if _frbf is not None or (on_aperture_beam == 'warn' and aperture is not None):
         _w_in_beam = _input_beam_amp_radius(
             E_in, dx, dy, centre=((_bcx, _bcy) if _beam_decentred else None))
@@ -5328,8 +5486,18 @@ def apply_real_lens_traced(
             # makes the fall-back byte-identical rather than merely close.
             _beam_decentred = False
             _w_in_beam = _input_beam_amp_radius(E_in, dx, dy, centre=None)
+        elif (_beam_decentred and _frbf is not None
+                and DECENTRED_FIT_ARBITER and newton_fit != 'spline'):
+            # niche C11: the arbiter below scores the HISTORICAL concentric
+            # candidate too, and that disc is sized from the ORIGIN-referenced
+            # second moment -- the same number the fall-back above re-measures.
+            # Taken ONLY when the arbiter can actually run, so nothing below
+            # the C1 gate does any extra work.
+            _w_in_origin = _input_beam_amp_radius(E_in, dx, dy, centre=None)
     if _frbf is not None and _w_in_beam > 0.0:
         _beam_fit_radius = min(_frbf * _w_in_beam, launch_radius)
+    if _frbf is not None and _w_in_origin > 0.0:
+        _beam_fit_radius_conc = min(_frbf * _w_in_origin, launch_radius)
     if (on_aperture_beam == 'warn' and aperture is not None
             and _w_in_beam > 0.0 and _beam_fit_radius is None):
         _ap_beam_ratio = float(aperture) / (2.0 * _w_in_beam)
@@ -5362,6 +5530,13 @@ def apply_real_lens_traced(
     if _beam_fit_radius is not None:
         _fit_r_max = (_beam_fit_radius if _fit_r_max is None
                       else min(_fit_r_max, _beam_fit_radius))
+    # niche C11: and the same resolution for the CONCENTRIC candidate, whose
+    # radius comes from the origin-referenced moment.  ``None`` whenever the
+    # arbiter is not going to run (see the gate site above).
+    _fit_r_max_conc = None
+    if _beam_fit_radius_conc is not None:
+        _fit_r_max_conc = (_beam_fit_radius_conc if _fit_r_geom is None
+                           else min(_fit_r_geom, _beam_fit_radius_conc))
     # ... and its radius measured about the BEAM, which is what the freeze
     # circle has to clear.  Off centre the disc IS beam-centred with radius
     # ``_beam_fit_radius`` (the geometric intersection below only trims the
@@ -5905,7 +6080,8 @@ def apply_real_lens_traced(
     if _fit_r_max is not None and newton_fit != 'spline':
         _r2_launch = xs_in[:, None] ** 2 + xs_in[None, :] ** 2
         _fit_why = f"r <= {_fit_r_max * 1e3:.4f} mm"
-        if _beam_fit_radius is not None and _beam_decentred:
+        _off_branch = (_beam_fit_radius is not None and _beam_decentred)
+        if _off_branch:
             # launch grid is indexing='ij': axis 0 is X, axis 1 is Y (see the
             # ``np.meshgrid(..., indexing='ij')`` note at the launch site).
             _fit_disc = (((xs_in[:, None] - _bcx) ** 2
@@ -5932,45 +6108,64 @@ def apply_real_lens_traced(
         # ``REMAP_STATIONARY_PHASE_FIT_GUARD`` for the measurements.
         _c6_fit_guard = (_resid_eik is not None
                          and REMAP_STATIONARY_PHASE_FIT_GUARD)
+        # ---- niche C11: ARBITRATE the branch instead of predicting it ----
+        # The rays are already traced, so both candidates can be built and
+        # scored against the traced OPL before either is used.  Engaged only
+        # ABOVE the C1 null gate (``_off_branch``), so every byte-identity
+        # contract below that gate is untouched.  See
+        # :data:`DECENTRED_FIT_ARBITER`.
+        if (DECENTRED_FIT_ARBITER and _off_branch
+                and _fit_r_max_conc is not None
+                and _w_in_beam > 0.0):
+            _disc_c = _r2_launch <= _fit_r_max_conc ** 2
+            if (int(_disc_c.sum()) >= _CARRIER_FIT_MIN_SAMPLES
+                    and int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES):
+                _wgt = np.exp(-2.0 * (((xs_in[:, None] - _bcx) ** 2
+                                       + (xs_in[None, :] - _bcy) ** 2)
+                                      / (_w_in_beam * _w_in_beam)))
+                _use_w = _FIT_DISC_OUTSIDE_WEIGHT_REL > 0.0
+                _wo, _oo = _decentred_fit_restriction(
+                    _fit_disc, _use_w, newton_poly_order, _dec_order)
+                _wc, _oc = _decentred_fit_restriction(
+                    _disc_c, _use_w and _c6_fit_guard, newton_poly_order,
+                    _dec_order)
+                _s_off = _decentred_fit_score(
+                    xs_in, opl_grid, _wgt, _fit_disc, _wo, _oo)
+                _s_conc = _decentred_fit_score(
+                    xs_in, opl_grid, _wgt, _disc_c, _wc, _oc)
+                # ties -- including two unscoreable candidates -- keep the
+                # historical branch
+                if _s_conc <= _s_off:
+                    # the historical disc reproduces the traced map better
+                    # where the light is -- take it, and with it the radius
+                    # and restriction that were scored
+                    _off_branch = False
+                    _fit_disc = _disc_c
+                    _fit_r_max = _fit_r_max_conc
+                    _fit_why = (f"r <= {_fit_r_max_conc * 1e3:.4f} mm "
+                                f"(C11 arbiter: OPL residual "
+                                f"{_s_conc:.3e} m concentric against "
+                                f"{_s_off:.3e} m off-centre)")
+                else:
+                    _fit_why += (f" (C11 arbiter: OPL residual {_s_off:.3e} m "
+                                 f"off-centre against {_s_conc:.3e} m "
+                                 f"concentric)")
         if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
             if (_beam_fit_radius is not None
-                    and (_beam_decentred or _c6_fit_guard)
+                    and (_off_branch or _c6_fit_guard)
                     and _FIT_DISC_OUTSIDE_WEIGHT_REL > 0.0):
                 # D1: OFF-CENTRE disc (or, opt-in, a C6-engaged concentric one)
                 # -- regularised restriction.  Keep every traced
                 # sample (so the paraxial-magnification stencil, the
                 # process-pool knot data and the direct-fit exit hull all stay
                 # intact) and down-weight the out-of-disc ones to a fixed
-                # fraction of the in-disc Gram contribution.
-                _n_in = int(_fit_disc.sum())
-                _n_out = int(_fit_disc.size) - _n_in
-                _w_out = (float(np.sqrt(_FIT_DISC_OUTSIDE_WEIGHT_REL
-                                        * _n_in / _n_out))
-                          if _n_out > 0 else 1.0)
-                _fit_weights = np.where(_fit_disc, 1.0, _w_out)
-                # D7: and give that off-centre fit the terms its region needs
-                # -- but never more terms than the disc can constrain.  The
-                # out-of-disc samples carry ~1e-4 of the weight, so the
-                # IN-DISC count is what determines the fit; require 3 samples
-                # per basis term (order 10 -> 66 terms -> 198 samples) and
-                # step the order down until that holds.  Without this the
-                # raise could hand an order-10 fit as few as
-                # ``_CARRIER_FIT_MIN_SAMPLES`` = 64 effective rows for 66
-                # unknowns -- an under-determined normal matrix.
-                #
-                # This cap is SILENT and it can zero the raise out entirely:
-                # the disc holds ~pi (frbf w / (dx rs))^2 samples, so order 10
-                # survives only while frbf*w/(dx*rs) >~ 7.9 coarse pixels.  At
-                # the DEFAULT ray_subsample=8 both documented configs clear it
-                # (223 samples for the synthetic f/6 example, 1735 for design
-                # 121's last group, against 198) -- but the first clears by
-                # only 1.13x and reverts to order 6 at ray_subsample=16, and
-                # design 121 reverts at 32.  See ``decentred_fit_poly_order``.
-                while (_dec_order > _fit_poly_order
-                       and (_dec_order + 1) * (_dec_order + 2) * 3 // 2
-                       > _n_in):
-                    _dec_order -= 1
-                _fit_poly_order = max(_fit_poly_order, _dec_order)
+                # fraction of the in-disc Gram contribution; and (D7) give that
+                # fit the terms its region needs, with the sample-count
+                # step-down that keeps it determined.  Both live in
+                # ``_decentred_fit_restriction`` so the niche-C11 arbiter above
+                # scores exactly what is applied here.
+                _fit_weights, _fit_poly_order = _decentred_fit_restriction(
+                    _fit_disc, True, newton_poly_order, _dec_order)
             else:
                 x_out_grid = np.where(_fit_disc, x_out_grid, np.nan)
                 y_out_grid = np.where(_fit_disc, y_out_grid, np.nan)
@@ -5990,7 +6185,7 @@ def apply_real_lens_traced(
                 f"raise fit_radius_beam_factor"
                 + (f" (the beam is {np.hypot(_bcx, _bcy) * 1e3:.4f} mm off "
                    f"the grid centre, so the disc that must hold it sits off "
-                   f"axis too)" if _beam_decentred else "") + ".",
+                   f"axis too)" if _off_branch else "") + ".",
                 RuntimeWarning, stacklevel=2)
 
     # T-P2 (audit perf): optional DIRECT inverse-map fit.  Instead of Newton-

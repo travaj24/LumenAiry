@@ -1,0 +1,45 @@
+[c11_with_arbiter] DECENTRED_FIT_ARBITER=False  RESID_DEG=6  _DECENTRE_GATE_W_FRAC=0.05
+[c11_with_arbiter] lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+[c11_with_arbiter] _lens_traced 83a848749bfddba7  carrier 5a1b0d1021969df1
+config: N=2048 rs=4 nfc=8192 wf=4.0 nout=2048 chain_kwargs={}  (pure library defaults)
+chain done 556s
+AT-PLANE: FWHM=3.350um EE3=90.3% EE6=99.7% EE12=99.8% off=(+0.00,+0.00)um
+  dz= -80um: FWHM=16.550 EE3=  9.5 EE6= 33.7 EE12= 82.8 pk=2.400e+02
+  dz= -75um: FWHM=15.550 EE3= 10.7 EE6= 37.2 EE12= 86.4 pk=2.723e+02
+  dz= -70um: FWHM=14.650 EE3= 12.0 EE6= 41.2 EE12= 89.8 pk=3.090e+02
+  dz= -65um: FWHM=13.650 EE3= 13.6 EE6= 45.7 EE12= 92.8 pk=3.513e+02
+  dz= -60um: FWHM=12.850 EE3= 15.6 EE6= 50.8 EE12= 95.3 pk=4.023e+02
+  dz= -55um: FWHM=11.850 EE3= 18.1 EE6= 56.5 EE12= 97.2 pk=4.678e+02
+  dz= -50um: FWHM=10.850 EE3= 21.1 EE6= 62.8 EE12= 98.5 pk=5.581e+02
+  dz= -45um: FWHM= 9.750 EE3= 24.9 EE6= 69.7 EE12= 99.3 pk=6.849e+02
+  dz= -40um: FWHM= 8.650 EE3= 29.6 EE6= 76.9 EE12= 99.6 pk=8.537e+02
+  dz= -35um: FWHM= 7.650 EE3= 35.5 EE6= 83.9 EE12= 99.7 pk=1.067e+03
+  dz= -30um: FWHM= 6.750 EE3= 42.9 EE6= 90.0 EE12= 99.8 pk=1.348e+03
+  dz= -25um: FWHM= 5.850 EE3= 51.9 EE6= 94.6 EE12= 99.8 pk=1.764e+03
+  dz= -20um: FWHM= 4.950 EE3= 62.0 EE6= 97.5 EE12= 99.8 pk=2.402e+03
+  dz= -15um: FWHM= 4.250 EE3= 72.1 EE6= 99.0 EE12= 99.8 pk=3.287e+03
+  dz= -10um: FWHM= 3.750 EE3= 81.0 EE6= 99.5 EE12= 99.8 pk=4.294e+03
+  dz=  -5um: FWHM= 3.450 EE3= 87.4 EE6= 99.7 EE12= 99.8 pk=5.141e+03
+  dz=  +0um: FWHM= 3.350 EE3= 90.3 EE6= 99.7 EE12= 99.8 pk=5.529e+03
+  dz=  +5um: FWHM= 3.450 EE3= 89.6 EE6= 99.7 EE12= 99.8 pk=5.312e+03
+  dz= +10um: FWHM= 3.650 EE3= 85.2 EE6= 99.7 EE12= 99.8 pk=4.595e+03
+  dz= +15um: FWHM= 4.150 EE3= 77.9 EE6= 99.5 EE12= 99.8 pk=3.655e+03
+  dz= +20um: FWHM= 4.750 EE3= 68.8 EE6= 98.6 EE12= 99.8 pk=2.777e+03
+  dz= +25um: FWHM= 5.450 EE3= 59.3 EE6= 96.5 EE12= 99.8 pk=2.114e+03
+  dz= +30um: FWHM= 6.150 EE3= 50.4 EE6= 93.0 EE12= 99.8 pk=1.667e+03
+  dz= +35um: FWHM= 6.650 EE3= 42.7 EE6= 88.1 EE12= 99.7 pk=1.361e+03
+  dz= +40um: FWHM= 7.150 EE3= 36.4 EE6= 82.1 EE12= 99.5 pk=1.126e+03
+  dz= +45um: FWHM= 7.850 EE3= 31.2 EE6= 75.7 EE12= 99.1 pk=9.320e+02
+  dz= +50um: FWHM= 8.550 EE3= 26.9 EE6= 69.4 EE12= 98.4 pk=7.722e+02
+  dz= +55um: FWHM= 9.250 EE3= 23.2 EE6= 63.4 EE12= 97.1 pk=6.465e+02
+  dz= +60um: FWHM=10.050 EE3= 20.2 EE6= 57.8 EE12= 95.4 pk=5.504e+02
+  dz= +65um: FWHM=10.750 EE3= 17.7 EE6= 52.7 EE12= 93.1 pk=4.770e+02
+  dz= +70um: FWHM=11.450 EE3= 15.6 EE6= 48.0 EE12= 90.5 pk=4.184e+02
+  dz= +75um: FWHM=12.150 EE3= 13.8 EE6= 43.7 EE12= 87.5 pk=3.681e+02
+  dz= +80um: FWHM=13.050 EE3= 12.3 EE6= 39.8 EE12= 84.4 pk=3.226e+02
+BEST-FOCUS[peak] dz=+0um: FWHM=3.350um EE3=90.3% EE6=99.7% EE12=99.8% pk=5.529e+03  <- physical best focus
+BEST-FOCUS dz=+5um: FWHM=3.450um EE3=89.6% EE6=99.7% EE12=99.8% off=(+0.00,+0.00)um
+  targets: FWHM 3.223um EE3 91.0% EE6 100.0% (Zemax POP waist 2.737um radius -- of the paraxially-EQUIVALENT 4f, f1=60.916/f2=41.666, NOT of the real prescription (POP_CROSSCHECK_121_2026_07_31.md sec 2); ideal-field ceiling through this readout 3.45-3.55um / 90.3 / 99.8)
+  shipping-default acceptance (CREF/AM/PIP unset, N=2048/NFC=8192/WF=4.0): AT-PLANE dz=0: 3.350um / 90.3 / 99.7 / 99.8, on-axis
+  (re-baselined 2026-08-02, user-approved, with niche C9+C10: the exact sphere conversion and the r^6 residual term removed ~1 point/order of SIMULATOR error that was inflating the spot; 3.350um matches the exact-ray oracle to 0.02-0.06um.  Prior recorded lines: 3.450/90.2 at-plane post-C6, 3.450/88.8/99.6 at dz=+10um pre-C6.)
+  (re-baselined 2026-08-01, user-approved: pre-C6 the chain focused 10um PAST the MS plane -- at-plane read 3.750/87.4 and the recorded 3.450/88.8/99.6 acceptance was taken at dz=+10um.  That offset was the simulator's own residual aberration; niche C6 removed it, so the spot is now sharpest AT the metasurface plane and is scored there.)

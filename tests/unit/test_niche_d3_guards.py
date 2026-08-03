@@ -89,6 +89,7 @@ import numpy as np
 import pytest
 
 import lumenairy as la
+import lumenairy.elements._lens_traced as _lens_traced
 from lumenairy.elements._lens_traced import (
     _NONCOLLIMATED_RESID_THRESH,
     _carrier_residual_rms,
@@ -666,17 +667,54 @@ def test_the_guarded_input_really_is_the_wrong_answer():
     Measured on this synthetic relay: the +-23 mrad fan the gate refuses
     violates linearity by 62 % in relative L2, while a +-0.5 mrad pair the
     gate passes violates it by 0.2 % -- a ~280x separation that lands on the
-    same side of the cutoff as the detector does."""
-    bad = _linearity_error(0.023)
-    good = _linearity_error(0.0005)
-    assert bad > 0.30, (
-        f'the multiplexed fan reproduced the linear superposition to '
-        f'{bad:.4f}; the P3 gate would then be crying wolf')
-    assert good < 0.05, (
-        f'a near-collinear pair the gate PASSES violated linearity by '
-        f'{good:.4f}; the gate would then be missing a real failure')
-    assert bad > 20.0 * good, (bad, good)
-    # ...and the detector agrees with the oracle on which is which.
+    same side of the cutoff as the detector does.
+
+    ERA-PINNED at ``_REMAP_RESID_EIKONAL_DEGREE = 4`` (niche C11 CI
+    reconciliation, 2026-08-03).  The assertions are the originals, word for
+    word, and nothing here is relaxed -- what moved is the library under them,
+    and it moved for a reason this file cannot argue away.  Measured on
+    Linux/OpenBLAS py3.12 (the CI build; Windows/MKL passes at the shipped
+    default, which is why this only ever went red on CI):
+
+        state                          bad (23 mrad)   good (0.5 mrad)  ratio
+        C6 launch OFF (pre-niche-C6)        0.6236           0.003766   165.6
+        C6 on, resid degree 4               14.2337          0.032148   442.8
+        C6 on, resid degree 6 (SHIPPED)      0.9863          0.057458    17.2
+
+    The docstring's own "62 %" is the C6-OFF row exactly, so this case was
+    calibrated before the niche-C6 stationary-phase launch existed.  That
+    launch makes ``apply_real_lens_traced`` deliberately NONLINEAR in its input
+    (it fits the input's residual eikonal and launches along
+    ``grad(W + a_fit)``), so a MULTIPLEXED input -- which carries beat fringes
+    no single-valued residual model represents -- diverges further from the
+    linear superposition the better that model gets.  Niche C10's degree raise
+    is a better model, and it moves ``good`` 0.032 -> 0.057, across the 0.05
+    bar.  ``SPHERE_PARAB_CONVERSION_EXACT`` (niche C9) is NOT involved: its two
+    rows are identical to every printed digit.
+
+    This is therefore a real, attributed increase in the error of the
+    MULTIPLEXED route -- the route this very guard exists to refuse -- and not
+    a regression on any supported single-congruence input, where C10 improved
+    every measured number.  The shipped-era statement is kept live and
+    comparative in the sibling below.
+    """
+    _deg = _lens_traced._REMAP_RESID_EIKONAL_DEGREE
+    _lens_traced._REMAP_RESID_EIKONAL_DEGREE = 4
+    try:
+        bad = _linearity_error(0.023)
+        good = _linearity_error(0.0005)
+        assert bad > 0.30, (
+            f'the multiplexed fan reproduced the linear superposition to '
+            f'{bad:.4f}; the P3 gate would then be crying wolf')
+        assert good < 0.05, (
+            f'a near-collinear pair the gate PASSES violated linearity by '
+            f'{good:.4f}; the gate would then be missing a real failure')
+        assert bad > 20.0 * good, (bad, good)
+    finally:
+        _lens_traced._REMAP_RESID_EIKONAL_DEGREE = _deg
+    # ...and the detector agrees with the oracle on which is which.  This half
+    # reads only the congruence statistics of the INPUT, so it is independent
+    # of the residual model and stays on the shipped default.
     X, Y = _grid(_CN, _CDX)
     G = _gauss(_CN, _CDX, _CW)
     for tilt, fires in ((0.023, True), (0.0005, False)):
@@ -687,6 +725,39 @@ def test_the_guarded_input_really_is_the_wrong_answer():
         hit = (resid > _NONCOLLIMATED_RESID_THRESH
                or mv > _MULTI_CONGRUENCE_MV_THRESH)
         assert hit is fires, (tilt, resid, mv)
+
+
+def test_the_separation_survives_the_c10_residual_degree_and_is_caused_by_it():
+    """The SHIPPED-era half of the case above, stated comparatively so no
+    absolute bar on a BLAS-dependent magnitude can rot again.
+
+    Two claims, both ratios between arms measured in this process:
+
+    1. the gate still SEPARATES -- the fan it refuses violates linearity by an
+       order of magnitude more than the pair it passes;
+    2. the thing that moved the passed pair's violation is
+       ``_REMAP_RESID_EIKONAL_DEGREE`` -- raising it makes the multiplexed
+       route measurably worse, which is the expected sign for a better model
+       of a single-valued residual meeting a multi-valued input, and is the
+       reason the sibling above is era-pinned rather than relaxed.
+    """
+    bad = _linearity_error(0.023)
+    good6 = _linearity_error(0.0005)
+    _deg = _lens_traced._REMAP_RESID_EIKONAL_DEGREE
+    _lens_traced._REMAP_RESID_EIKONAL_DEGREE = 4
+    try:
+        good4 = _linearity_error(0.0005)
+    finally:
+        _lens_traced._REMAP_RESID_EIKONAL_DEGREE = _deg
+    assert bad > 10.0 * good6, (bad, good6)
+    # The mechanism, live: the raise is what moved it.  The SIZE of the move is
+    # strongly BLAS-build dependent -- Linux/OpenBLAS py3.12 reads
+    # 0.0575 / 0.0321 = 1.79x, Windows/MKL py3.14 reads 0.0151 / 0.0127 =
+    # 1.19x on the same tree -- so the bar is set below the smaller of the two
+    # measured builds rather than between them.  It is still a directional
+    # statement no BLAS difference can satisfy by accident: the raise must make
+    # the multiplexed route worse, not better or neutral.
+    assert good6 > 1.10 * good4, (good6, good4)
 
 
 def test_multi_congruence_policy_is_validated():

@@ -1,0 +1,68 @@
+   lib _lens_traced.py  sha256 34ef5a9d95279b8f
+   shipped gate: pixels=0.5 w_frac=0.05   _DECENTRED_FIT_POLY_ORDER=10  _REMAP_RESID_EIKONAL_DEGREE=6
+
+    order  grp    |c|/w     w mm   ship  ord_c  ord_o  D:opl_c wv  D:opl_o wv       c/o   PICK  cov_c
+-----------------------------------------------------------------------------------------------------
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+   (0, 0)    0   0.0000   6.3181   conc      6      6  4.9313e-08  4.9313e-08     1.000    off  0.998
+   (0, 0)    1   0.0000   6.3186   conc      6      6  2.7733e-08  2.7733e-08     1.000    off  0.999
+   (0, 0)    2   0.0000   6.3187   conc      6      6  5.3018e-04  5.3018e-04     1.000    off  0.999
+   (0, 0)    3   0.0000   5.2654   conc      6      6  8.2023e-05  8.2023e-05     1.000    off  1.000
+   (0, 0)    4   0.0000   4.1512   conc      6      6  4.1357e-05  4.1357e-05     1.000    off  1.000
+   (0, 0)    5   0.0000   3.1337   conc      6      6  9.5415e-04  9.5415e-04     1.000    off  1.000
+          [28s]
+
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+  (-2, 0)    0   0.0255   6.3181   conc      6     10  9.3012e-05  1.8531e-04     0.502   conc  1.000
+  (-2, 0)    1   0.0986   6.3192    off      6     10  9.6039e-05  1.8466e-04     0.520   conc  1.000
+  (-2, 0)    2   0.1246   6.3197    off      6     10  1.7752e-03  7.5469e-03     0.235   conc  1.000
+  (-2, 0)    3   0.3061   5.2655    off      6     10  2.3426e-03  4.2729e-03     0.548   conc  1.000
+  (-2, 0)    4   0.3978   4.1517    off      6     10  6.7859e-03  6.9597e-03     0.975   conc  1.000
+  (-2, 0)    5   0.4814   3.1323    off      6     10  1.7275e-02  7.8001e-03     2.215    off  1.000
+          [31s]
+
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+  (-3, 0)    0   0.0383   6.3181   conc      6     10  1.1107e-04  2.0608e-04     0.539   conc  1.000
+  (-3, 0)    1   0.1480   6.3190    off      6     10  1.0610e-04  2.1200e-04     0.500   conc  1.000
+  (-3, 0)    2   0.1869   6.3194    off      6     10  2.2248e-03  8.1740e-03     0.272   conc  1.000
+  (-3, 0)    3   0.4593   5.2642    off      6     10  2.2861e-03  4.3358e-03     0.527   conc  1.000
+  (-3, 0)    4   0.5968   4.1513    off      6     10  7.4120e-03  6.7429e-03     1.099    off  1.000
+  (-3, 0)    5   0.7227   3.1296    off      6     10  1.8968e-02  7.9713e-03     2.380    off  1.000
+          [31s]
+
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+  (-4, 0)    0   0.0511   6.3181    off      6     10  1.2191e-04  2.1447e-04     0.568   conc  1.000
+  (-4, 0)    1   0.1974   6.3187    off      6     10  1.0673e-04  2.4347e-04     0.438   conc  1.000
+  (-4, 0)    2   0.2493   6.3195    off      6     10  2.8892e-03  1.0071e-02     0.287   conc  1.000
+  (-4, 0)    3   0.6126   5.2628    off      6     10  5.0387e-03  4.7904e-03     1.052    off  1.000
+  (-4, 0)    4   0.7960   4.1510    off      6     10  1.2203e-01  6.7837e-03    17.989    off  1.000
+  (-4, 0)    5   0.9648   3.1262    off      6     10  2.2298e-02  8.7765e-03     2.541    off  1.000
+          [31s]
+
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+ (-4, -2)    0   0.0571   6.3181    off      6     10  1.2310e-04  2.1517e-04     0.572   conc  1.000
+ (-4, -2)    1   0.2207   6.3193    off      6     10  1.0974e-04  2.6769e-04     0.410   conc  1.000
+ (-4, -2)    2   0.2788   6.3205    off      6     10  3.2958e-03  1.1684e-02     0.282   conc  1.000
+ (-4, -2)    3   0.6850   5.2628    off      6     10  3.6183e-02  5.0559e-03     7.157    off  1.000
+ (-4, -2)    4   0.8900   4.1515    off      6     10  7.5403e-02  7.6490e-03     9.858    off  1.000
+ (-4, -2)    5   1.0792   3.1247    off      6     10  3.1165e-02  8.7206e-03     3.574    off  1.000
+          [31s]
+
+D:opl_* = beam-intensity-weighted rms of each candidate fit's OPL residual
+          against the TRACED samples, in waves.  cov_c = fraction of the beam
+          weight the concentric candidate's finite (un-masked) samples cover.

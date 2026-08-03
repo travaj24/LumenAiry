@@ -4,6 +4,41 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added — a measured fit-branch arbiter, shipped OPT-IN (niche C11, `elements/_lens_traced.py`)
+
+The C1 decentre gate's 0.05 w constant was never physics: the measured
+concentric/off-centre fit crossover is 0.55 w on an f/3 singlet, 0 w on an
+f/6, 0.46-0.69 w across design 121's groups -- four closed-form predictors
+were derived and all four refuted cross-design.  `DECENTRED_FIT_ARBITER`
+instead BUILDS BOTH candidate fits at the site and scores them against the
+traced samples, intensity-weighted (42/42 agreement with the fit-free spline
+oracle over three geometries; the (-4,0)-group-4 67-point catastrophe is
+seen at 18x margin before any field is reconstructed).  Default **False**:
+per-order it improves five orders (worst residual 0.152 -> 0.069, spread
+0.200 -> 0.117) but moves (-1,0) by +0.026 -- a bounded near-tie mis-pick
+-- so the default flip is an explicit release decision, not a side effect.
+Flag-off is a no-op, not a fall-back (the scorer is never called), verified
+bit-for-bit 6/6 orders cross-process against pre-C11 hashes.  Also
+measured: C10 made the forced-concentric branch MORE dangerous (19.9 ->
+67.3 points at (-4,0)), strengthening the arbiter's case.  Record:
+`docs/audits/C11_PHYSICAL_DECENTRE_GATE_2026_08_03.md`.
+
+### Fixed — four platform/era test reconciliations (both BLAS builds green)
+
+C9/C10 legitimately moved physics that older pins measured: the D3
+multiplex-guard linearity pin (attributed to C10's degree-6 residual on
+MULTIPLEXED inputs only -- the route the guard exists to refuse; era-pinned
+at degree 4 with a live comparative sibling, and the test's NEXT latent
+failure `bad > 20*good` fixed in the same pass), the D7 hard-mask-ghost pin
+(both builds shrink the ghost -- by 1900x on MKL, 1.9x on OpenBLAS; re-pinned
+0.1x -> 0.8x with both recorded), and C1/C6-guard arms now pin their flags
+explicitly.  The p2_guards dx-stability fixture was adjudicated and NOT
+changed: 10.5x margin, five-figure agreement across builds, all C9/C10/C6
+knob states bit-identical -- the one unexplained CI DID-NOT-WARN is recorded
+as a suspected shard-ordering warning-filter leak with a committed 2-minute
+instrument (`c11_p2dx_recon.py`).  158 tests green on Windows/MKL AND
+Linux/OpenBLAS, identical counts.
+
 ### Fixed — the residual eikonal now carries the r^6 term: the chain matches the exact-ray oracle to ~0.1 EE3 points on every order (niche C10, `elements/_lens_traced.py`)
 
 `_REMAP_RESID_EIKONAL_DEGREE = 4 -> 6` -- one constant.  The final-closure

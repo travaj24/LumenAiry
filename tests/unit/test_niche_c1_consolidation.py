@@ -194,30 +194,51 @@ def test_a_genuine_decentre_still_routes_to_the_weighted_raised_order_path(
     """The gate is a floor, not a retreat: past it, D1's weighted restriction
     and D7's raised order still engage.  Verified two ways -- the returned
     field differs from the concentric arm, and the fit ORDER handed to
-    ``_Cheb2DEvaluator`` is ``_DECENTRED_FIT_POLY_ORDER`` with weights."""
+    ``_Cheb2DEvaluator`` is ``_DECENTRED_FIT_POLY_ORDER`` with weights.
+
+    ERA-PINNED at ``DECENTRED_FIT_ARBITER = False`` (niche C11, 2026-08-03),
+    which is the library state this case was calibrated in and the pure-gate
+    selector's own pin.  Nothing here is relaxed and no threshold moved -- the
+    assertions are the originals, word for word.  What changed under them is
+    the INSTRUMENT: the C11 arbiter builds BOTH candidate fits before choosing,
+    so this spy now collects two trial ``_Cheb2DEvaluator`` builds it was never
+    written to see, and the ``all(...)`` over every build is no longer a
+    statement about the fit the Newton inversion is handed.  The same claim,
+    scoped to the applied fits and run on the SHIPPED default, is
+    ``test_niche_c11::test_the_f6_fixture_still_routes_to_the_weighted_raised_order_path``
+    -- which passes, so the claim itself is intact on this fixture; it is the
+    counting that stopped being valid."""
     _ram_guard()
-    ref = _apply_dec(c, None)
-    got = _apply_dec(c, (c, 0.0))
-    assert not np.array_equal(got, ref)
-    seen = []
-    orig = _Cheb2DEvaluator.__init__
-
-    def spy(self, xs_in, ys_in, values, order=6, xp=None, weights=None):
-        orig(self, xs_in, ys_in, values, order=order, xp=xp, weights=weights)
-        seen.append((int(order), weights is not None))
-
-    _Cheb2DEvaluator.__init__ = spy
+    _arb = _lt.DECENTRED_FIT_ARBITER
+    _lt.DECENTRED_FIT_ARBITER = False
     try:
-        _apply_dec(c, (c, 0.0))
-        assert seen and all(o == _lt._DECENTRED_FIT_POLY_ORDER
-                            for o, _w in seen), seen
-        assert all(w for _o, w in seen), 'the off-centre disc lost its weights'
-        seen.clear()
-        _apply_dec(c, None)
-        assert seen and all(o == 6 for o, _w in seen), seen
-        assert not any(w for _o, w in seen), 'the concentric disc used weights'
+        ref = _apply_dec(c, None)
+        got = _apply_dec(c, (c, 0.0))
+        assert not np.array_equal(got, ref)
+        seen = []
+        orig = _Cheb2DEvaluator.__init__
+
+        def spy(self, xs_in, ys_in, values, order=6, xp=None, weights=None):
+            orig(self, xs_in, ys_in, values, order=order, xp=xp,
+                 weights=weights)
+            seen.append((int(order), weights is not None))
+
+        _Cheb2DEvaluator.__init__ = spy
+        try:
+            _apply_dec(c, (c, 0.0))
+            assert seen and all(o == _lt._DECENTRED_FIT_POLY_ORDER
+                                for o, _w in seen), seen
+            assert all(w for _o, w in seen), \
+                'the off-centre disc lost its weights'
+            seen.clear()
+            _apply_dec(c, None)
+            assert seen and all(o == 6 for o, _w in seen), seen
+            assert not any(w for _o, w in seen), \
+                'the concentric disc used weights'
+        finally:
+            _Cheb2DEvaluator.__init__ = orig
     finally:
-        _Cheb2DEvaluator.__init__ = orig
+        _lt.DECENTRED_FIT_ARBITER = _arb
 
 
 def test_the_gate_is_the_documented_max_of_the_two_floors():
