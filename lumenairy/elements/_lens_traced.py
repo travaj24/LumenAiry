@@ -2244,7 +2244,82 @@ REMAP_STATIONARY_PHASE_LAUNCH = True
 #: perfectly ordered -- 2.065e-02 (off) -> 1.406e-02 (degrees 2 and 3) ->
 #: 2.344e-05 (degrees 4, 5, 6) -- so nothing is wrong with the fit.  Degree 4
 #: is the best model over the bright core.
-_REMAP_RESID_EIKONAL_DEGREE = 4
+#:
+#: ---------------------------------------------------------------------------
+#: 2026-08-02 -- RAISED TO 6.  THE ONLY THING KEEPING IT AT 4 WAS A GHOST THAT
+#: NICHE C8 NOW BOUNDS.  docs/audits/D121_RESIDUAL_CLOSURE_2026_08_02.md.
+#:
+#: The fail-before is this constant: setting it back to ``4`` restores the
+#: v5.32.0 / niche-C9 behaviour exactly, since it is the ONLY thing that
+#: changes (it is read once, at :func:`_fit_residual_eikonal`, and clamped by
+#: ``_REMAP_RESID_DEGREE_CAP``).
+#:
+#: WHAT THE "degrees 5-6 buy nothing and start self-caustiking" line above was
+#: measuring, and why it no longer holds.  Both records of that ghost -- the
+#: ``ghost power`` column here (1.255e-02 at degree 6, order (-4,-2)) and
+#: ``REMAP_STATIONARY_PHASE_FIT_GUARD``'s "degree 6 still reads 9.78e-03" --
+#: predate ``REMAP_INVERSE_SUPPORT_BOUND`` (niche C8, 2026-08-01), whose whole
+#: job is to stop the library CLAIMING amplitude outside the traced ray
+#: support.  The degree-6 ghost is exactly such a claim.  Re-measured on the
+#: post-C9 tree through ``energy_stage_audit_121.py`` (unedited), design 121
+#: order (-4,-2), ``RN=1024``, ``rs=4``, six post-DOE groups:
+#:
+#:   degree  C8   P_out/P_in   g4          amax4      r_rms (mm)
+#:      4    ON    0.993839   8.653e-09   1.147e-04    0.8373
+#:      4    OFF   0.993839   8.653e-09   1.147e-04    0.8373   (C8 inert)
+#:      6    ON    0.993843   9.694e-09   1.117e-04    0.8376
+#:      6    OFF   1.051890   5.818e-02   9.448e-01    2.3601   <- the ghost
+#:
+#: i.e. at degree 4 the support bound is INERT and at degree 6 it is decisive:
+#: with it off the chain MANUFACTURES 5.2 % of the input power and the exit
+#: second moment triples; with it on, degree 6's conservation and halo are
+#: within noise of degree 4's on every order measured ((0,0): both 0.000e+00 /
+#: 0.000e+00; (-1,0): 1.285e-12 -> 2.663e-11; (-2,0): 7.947e-12 -> 7.659e-11 --
+#: all 1e-3 or less of the C3 bound).  **The counter-evidence was real and it
+#: is now bounded, so the reason for 4 is spent.**
+#:
+#: WHAT 6 BUYS, and why it is a FORM argument rather than a resolution one.
+#: A carrier-referenced relay's residual eikonal is r^4-DOMINANT with an r^6
+#: next term; degree 4 spans the first and degree 6 the second, while degree 5
+#: adds only ODD terms a near-radial residual has no use for.  If that is the
+#: mechanism the response must read 4 ~ 5 << 6, and it does.  Design 121, EE3
+#: (area-exact) against the exact-ray oracle's true ceiling, chain readout
+#: split against the exact eikonal -- the residual left, in points:
+#:
+#:   order     deg 3    deg 4     deg 5    deg 6    recovered
+#:   (0,0)     1.577    0.048     0.048   -0.048     +0.096
+#:   (-1,0)    1.815    0.934     0.946    0.029     +0.905
+#:   (-2,0)    1.461    0.774     0.796    0.063     +0.711
+#:   (-3,0)    1.087    0.527     0.554    0.090     +0.438
+#:   (-4,0)    0.999    0.305     0.338    0.141     +0.164
+#:   (-4,-2)   0.967    0.279     0.386    0.152     +0.127
+#:
+#: ``deg 5 - deg 4`` is +0.000/+0.012/+0.022/+0.027/+0.032/+0.107 -- nothing,
+#: or slightly worse, at every order -- while ``deg 6 - deg 5`` is
+#: -0.096/-0.917/-0.732/-0.465/-0.197/-0.234.  The field-angle SPREAD goes
+#: 0.886 -> 0.200 points and every order lands within +-0.16 of the exact-ray
+#: oracle.  That is the C6 derivation closing on itself: what this launch
+#: leaves behind is ``1/2 grad(a - a_fit)^T H^-1 grad(a - a_fit)``, quadratic
+#: in what the fit MISSES, and what degree 4 was missing was the r^6 term.  A
+#: change that were merely "more resolution" would improve through degree 5;
+#: this does not.
+#:
+#: PRODUCTION ACCEPTANCE IS UNCHANGED.  ``focus_scan_121.py`` (unedited, pure
+#: library defaults, N=2048/NFC=8192/WF=4.0), run with the degree pinned both
+#: ways in the same session: BEST-FOCUS[peak] ``dz = 0``,
+#: **3.350 um / EE3 90.3 / EE6 99.7 / EE12 99.8** in BOTH, with the peak
+#: 5.516e+03 -> 5.529e+03 (+0.24 %).  Production re-traces the last group on a
+#: fine grid where much of this is inert; the coarse per-group element calls
+#: that the diagnostic paraxial route and every per-order oracle comparison go
+#: through are where the 0.9 points lived.
+#:
+#: SCOPE, stated rather than implied.  Measured on ONE design at one
+#: wavelength.  What is NOT design-specific is the argument: the ghost that
+#: kept the degree at 4 is bounded by a shipped guard, and the term degree 6
+#: adds is the next RADIAL order of a residual whose form is set by the
+#: carrier reference, not by design 121.  The synthetic r^4 fixture quoted
+#: above is unaffected (degrees 4, 5 and 6 all read 2.344e-05 on it).
+_REMAP_RESID_EIKONAL_DEGREE = 6
 #: Amplitude floor (fraction of peak) for a sample to enter the residual fit.
 _REMAP_RESID_BRIGHT_FRAC = 0.05
 #: Wrapped nearest-neighbour phase step (rad) above which a residual-gradient

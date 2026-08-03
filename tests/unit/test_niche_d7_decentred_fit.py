@@ -468,8 +468,21 @@ def test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order(
         monkeypatch):
     """The extra terms must not have made ``_FIT_DISC_OUTSIDE_WEIGHT_REL``
     redundant OR insufficient: with the weights degenerated back to D1's hard
-    mask the same call folds and ghosts, and with them on it does not."""
+    mask the same call folds and ghosts, and with them on it does not.
+
+    ERA-PINNED to ``_REMAP_RESID_EIKONAL_DEGREE = 4`` (niche C10, 2026-08-02),
+    which is the library state this case was calibrated in.  C10 raised that
+    degree to 6, and a better model of the input residual removes THIS
+    FIXTURE's fold even on the hard mask -- the witness stops witnessing
+    because the thing it witnesses has partly gone away.  The assertions below
+    are kept WORD FOR WORD; the SHIPPED era is scored separately, as a
+    measurement rather than a requirement, in the sibling test below.  Nothing
+    is relaxed, and the guard is still load-bearing where it matters: on
+    design 121's real chain, degenerating this weight from 1e-8 to 1e-4 costs
+    41 EE3 points (docs/audits/D121_RESIDUAL_CLOSURE_2026_08_02.md S5.2).
+    """
     _ram_guard()
+    monkeypatch.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
     good = np.abs(_ghost_apply())
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
     with warnings.catch_warnings(record=True) as rec:
@@ -484,6 +497,37 @@ def test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order(
         f"the hard-mask fail-before stopped failing at the D7 order "
         f"(off-beam {r_bad:.4f} of peak) -- retune the case")
     assert any('fold caustic' in str(m.message) for m in rec)
+
+
+def test_c10_shrinks_this_fixtures_hard_mask_ghost(monkeypatch):
+    """RECORDED, not required: at the SHIPPED residual-eikonal degree the
+    hard-mask arm of the test above ghosts far less than it did at degree 4.
+
+    This is why that test is era-pinned, and it is asserted as a RATIO between
+    the two eras on ONE fixture in ONE process -- with the degree-4 arm's own
+    liveness asserted, so a dead fixture cannot pass it.  It says nothing
+    about whether the restriction is still needed (it is -- see the sibling's
+    docstring); it says the C6 launch's residual model was part of what made
+    this particular fold.
+    """
+    _ram_guard()
+    monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
+    # This test DELIBERATELY builds the halo the v5.32 self-check exists to
+    # report, so its firing here is the fixture working, not a finding -- and
+    # leaving it on would put the campaign's "zero HALO self-check firings
+    # across the niche suites" property at the mercy of a test that asserts
+    # the halo is there.
+    monkeypatch.setattr(_lt, 'RAY_DENSITY_HALO_CHECK', 'silent')
+    with monkeypatch.context() as m:
+        m.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
+        old = np.abs(_ghost_apply())
+    new = np.abs(_ghost_apply())
+    x = (np.arange(_GN) - _GN // 2) * _GDX
+    near = ((x[None, :] - _GXC) ** 2 + x[:, None] ** 2) <= (3 * _GW) ** 2
+    r_old = float(old[~near].max()) / float(old[near].max())
+    r_new = float(new[~near].max()) / float(new[near].max())
+    assert r_old > 0.1, f"the degree-4 arm is not live ({r_old:.4f})"
+    assert r_new < 0.1 * r_old
 
 
 def test_the_off_centre_field_tracks_the_unrestricted_spline_map():

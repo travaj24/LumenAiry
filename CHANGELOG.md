@@ -4,6 +4,33 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — the residual eikonal now carries the r^6 term: the chain matches the exact-ray oracle to ~0.1 EE3 points on every order (niche C10, `elements/_lens_traced.py`)
+
+`_REMAP_RESID_EIKONAL_DEGREE = 4 -> 6` -- one constant.  The final-closure
+residual (0.05-0.94 points/order) was made in the CONVERGING groups 2-4 by
+exactly the second-order stationary-phase term C6's derivation names,
+`(1/2) grad(a - a_fit)^T H^-1 grad(a - a_fit)`: a carrier-referenced relay's
+residual is r^4-dominant with an r^6 next term, and the measured response is
+degree 4 ~= 5 << 6 at every order.  The only reason the degree had stayed at
+4 was a 5.2 %-of-input self-caustic ghost that measurement reproduces exactly
+-- and that niche C8 removed the day AFTER the degree-4 decision was made.
+
+The non-monotone neighbour swing that blocked every physical explanation was
+the METRIC: EE3 scored with a hard binary pixel mask on a 0.4 um lattice
+carries 0.128 points per boundary pixel (+-0.45 points of pure quantisation,
+cancelling between arms at some orders and not others).  Area-exact
+rescoring of the SAME arrays is monotone.
+
+Final chain-vs-oracle residual: -0.048 / 0.029 / 0.063 / 0.090 / 0.141 /
+0.152 points at (0,0)...(-4,-2), spread 0.886 -> 0.200.  Production
+acceptance unchanged (3.350 um / 90.3 / 99.7 / 99.8, digit for digit);
+conservation 6/6 every order; C7 halo check silent; fail-before bit-exact.
+The D7 fold witness is era-pinned at degree 4 (its fixture's fold no longer
+exists under the better model -- the C9 precedent).  Open items and two
+caveats (last-group element pass 0.001-0.005 waves worse, in the noise;
+single-design generality) recorded in
+`docs/audits/D121_RESIDUAL_CLOSURE_2026_08_02.md`.
+
 ### Fixed — the parabola<->sphere carrier conversion is applied EXACTLY: the cos^2 band-limit taper is gone (niche C9, `propagators/carrier.py`)
 
 The final-closure campaign's decomposition of the last ~1.3 EE3 points per

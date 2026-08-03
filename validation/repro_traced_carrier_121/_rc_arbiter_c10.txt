@@ -1,0 +1,12 @@
+
+--- HALF=96 px (patch half-width 3.19 mm), amp threshold 0.02
+   order  dec/w   w(mm)  NAexit  grad a rms   RAYMAP    RESID    TOTAL  Strehl  AMPerr  Ppatch   Pkeep  nn p99
+--------------------------------------------------------------------------------------------------------------
+   (0,0)  0.000  3.1337  0.2780    0.000693  0.00016  0.01499  0.00113  0.9999  0.0029  1.0000  0.9996  0.0010   [59s]
+  (-1,0)  0.241  3.1338  0.2838    0.000813  0.00025  0.01965  0.00570  0.9987  0.0028  1.0000  0.9996  0.0063   [61s]
+ (-4,-2)  1.079  3.1247  0.2955    0.002336  0.00039  0.05810  0.00344  0.9995  0.0327  1.0000  0.9969  0.0061   [62s]
+
+grad a rms = amplitude-weighted rms of the INPUT residual's own transverse direction cosines (rad).  This is the quantity
+             preserve_input_phase='remap' drops: it launches along grad(W) alone and evaluates the residual at THAT ray's foot.
+TOTAL      = unwrap-free equivalent rms wavefront error of the SHIPPED field vs rays launched along grad(W + a), waves.
+Ppatch/Pkeep = fraction of the element's whole-grid exit power inside the patch / inside the measured mask.

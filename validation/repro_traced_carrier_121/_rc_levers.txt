@@ -1,0 +1,29 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 9717ad88dd959889
+  carrier.py 5a1b0d1021969df1
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+
+########## ORDER (-1,+0)   oracle (true ceiling) EE3 = 90.5768 ##########
+             arm  EE3 area  residual  EE6 area  FWHM um        sha
+         shipped   89.6424    0.9344   99.3310    3.461   eef5a64e   [71s]
+     fit order 6   90.6426   -0.0658   99.8758    3.436   e36be6f1   [67s]
+     fit order 8   90.6278   -0.0510   99.8979    3.463   771692db   [67s]
+    fit order 12   90.5939   -0.0171   99.9063    3.456   1a16a8e9   [65s]
+     disc w 1e-4   49.3360   41.2407   72.9419    4.479   28682a4b   [67s]
+     disc w 1e-2    3.6342   86.9425   14.4830      nan   b19d9812   [73s]
+     resid deg 2   88.3859    2.1909   99.5379    3.672   4aaf0565   [62s]
+     resid deg 6   90.5477    0.0290   99.8247    3.446   b2a8b150   [75s]
+
+########## ORDER (-4,-2)   oracle (true ceiling) EE3 = 90.1071 ##########
+             arm  EE3 area  residual  EE6 area  FWHM um        sha
+         shipped   89.8285    0.2786   99.6626    3.383   5e855046   [55s]
+     fit order 6   89.9259    0.1812   99.7426    3.367   dee19d20   [57s]
+     fit order 8   89.7493    0.3578   99.6916    3.353   fc558dc9   [59s]
+    fit order 12   89.9371    0.1700   99.9012    3.393   71b82447   [68s]
+     disc w 1e-4   17.8063   72.3008   45.1149    5.316   4efae503   [65s]
+     disc w 1e-2    4.2368   85.8703   25.1078      nan   12127bcd   [71s]
+     resid deg 2   82.4474    7.6597   98.2813    3.854   30fb86ef   [61s]
+     resid deg 6   89.9554    0.1517   99.8145    3.388   c4b850ea   [83s]

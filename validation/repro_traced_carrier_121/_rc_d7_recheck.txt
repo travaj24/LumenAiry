@@ -1,0 +1,8 @@
+.............................................                            [100%]
+============================== warnings summary ===============================
+tests/unit/test_niche_d7_decentred_fit.py::test_c10_shrinks_this_fixtures_hard_mask_ghost
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\tests\unit\test_niche_d7_decentred_fit.py:400: RuntimeWarning: apply_real_lens_traced: amplitude_model='ray_density' detected a fold caustic (det J -> 0 or a sign change) in the ray map.  The single-branch ray-density amplitude is CAPPED there (finite, never inf/nan) but is UNRELIABLE near the fold -- this mode does NOT sum the multi-valued ray branches with the KMAH/Maslov phase.  Use apply_real_lens_gbd or apply_real_lens_fga for caustic-faithful amplitude.
+    return np.asarray(la.apply_real_lens_traced(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+45 passed, 1 warning in 191.40s (0:03:11)
