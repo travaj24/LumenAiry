@@ -4,6 +4,22 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added — physics-derived fit-branch predictor (niche C12, `elements/_lens_traced.py`, opt-in)
+
+The concentric/off-centre crossover now closes in ONE LINE with no fitted
+constant: each candidate's residual is its own Chebyshev tail's, the tail is
+decentre-free (measured), so the crossover is the concentric disc's inflation
+`rho=sqrt(1+2u^2)` vs the tail's spectral moment.  Predicts all three
+measured crossovers to 0.03 % (arbiter: -4.6 %), build-invariant to 4 digits;
+falls back to the measured arbiter where the expansion is unsupported (121's
+underfilled launch box; 26/26 agreement).  Also PROVEN: the (-1,0) +0.026 is
+irreducible for ANY per-call selector (per-group preferences are
+non-monotone; "improve everywhere" and "keep the gains" are mutually
+exclusive on 121) -- so the default stays False and the flip is an informed
+trade, not a fix away.  C11's "85 % C6-domain" attribution reversed
+(ray-fit branch is the driver).  Bit-identical default, 6/6 orders;
+production acceptance unchanged; both builds green.
+
 ### Added — a measured fit-branch arbiter, shipped OPT-IN (niche C11, `elements/_lens_traced.py`)
 
 The C1 decentre gate's 0.05 w constant was never physics: the measured

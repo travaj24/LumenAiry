@@ -1729,6 +1729,253 @@ def _decentred_fit_score(xs_in, opl_grid, weight, disc, weights, order):
     return v if np.isfinite(v) else float('inf')
 
 
+#: niche C12 (2026-08-03): a FLOOR under the arbiter's beam-intensity score
+#: weight, so the score can see the skirt as well as the core.
+#:
+#: THE BLIND SPOT IT ADDRESSES.  ``_decentred_fit_score`` weights by
+#: ``exp(-2 r^2 / w^2)``, which is ~1e-4 at 2 w and ~1e-8 at 3 w, while the
+#: Newton inversion evaluates the SAME fits over the whole launch square.  A
+#: candidate that is clean on the core and wild on the skirt is therefore
+#: scored as if the skirt did not exist -- niche C11 S10 item 1.  With a floor
+#: ``F`` the weight becomes ``max(exp(-2 r^2 / w^2), F)``.
+#:
+#: SHIPPED 0.0 -- INERT, and the reason is a measurement, not caution.  Swept
+#: on design 121's own captured arbiter inputs (26 arbitrated element calls
+#: across five diffraction orders, ``c12_scorer_sweep.py``):
+#:
+#:   * ``F >= 1e-8`` flips EVERY call to the off-centre branch, on every order.
+#:     The concentric candidate is a HARD NaN MASK, so outside its disc the fit
+#:     is pure extrapolation over a launch square 7.5x the beam; any nonzero
+#:     floor lets that extrapolation dominate the score.  The selector then
+#:     degenerates to "always off-centre", which IS the v5.32 gate on this
+#:     design -- every niche-C11 gain is lost and nothing is bought;
+#:   * restricting the score to the ILLUMINATED SUPPORT instead (weight 0 where
+#:     the beam carries no light) moves no verdict at all: at ``F = 1e-4`` the
+#:     26 picks are the shipped 26;
+#:   * amplitude weighting (``sqrt`` of the intensity) flips two calls at
+#:     (-4,0) and two at (-4,-2) and produces a NON-MONOTONE pattern in
+#:     ``|c|/w`` -- a selector that prefers the off-centre branch at 0.05 w and
+#:     the concentric one at 0.25 w on the same group.
+#:
+#: So the (-1,0) counter-movement niche C11 reports is NOT a weighting defect,
+#: and this knob exists to record that it was tried and priced.  See S4 of
+#: docs/audits/C12_PHYSICS_FIT_SELECTION_2026_08_03.md for the whole sweep and
+#: for the separate, stronger reason no per-call selector can fix it.
+_DECENTRED_FIT_SCORE_FLOOR = 0.0
+
+
+def _decentred_fit_score_weight(xs_in, bcx, bcy, w_beam, floor=None):
+    """The arbiter's score weight: the beam's own intensity on the launch
+    lattice, optionally floored (see ``_DECENTRED_FIT_SCORE_FLOOR``).
+
+    Factored out so the floor has ONE home and so ``floor = 0`` is provably
+    the bare Gaussian rather than a Gaussian plus an added zero.
+    """
+    g = np.exp(-2.0 * (((xs_in[:, None] - bcx) ** 2
+                        + (xs_in[None, :] - bcy) ** 2)
+                       / (w_beam * w_beam)))
+    f = _DECENTRED_FIT_SCORE_FLOOR if floor is None else float(floor)
+    return np.maximum(g, f) if f > 0.0 else g
+
+
+#: niche C12: the total degree at which the traced OPL's own Chebyshev
+#: spectrum is measured on the launch box.  It has to exceed
+#: ``_DECENTRED_FIT_POLY_ORDER`` for the tail beyond the OFF-CENTRE candidate's
+#: own order to be visible at all; 14 gives two even shells of headroom above
+#: 10 and costs 120 basis terms against that candidate's 66.  ``0`` disables
+#: the spectral half of the predictor (it then decides from the measured
+#: candidate residuals alone, which is what it does on an unresolved spectrum
+#: anyway -- see :data:`DECENTRED_FIT_PREDICTOR`).
+_DECENTRED_FIT_SPECTRUM_ORDER = 14
+
+
+def _decentred_fit_spectrum(xs_in, opl_grid, q, orders=(), weight=None):
+    """The traced OPL's degree-shell spectrum on the LAUNCH BOX, plus the
+    spectral TAIL surrogate beyond each requested order.
+
+    ONE unweighted total-degree-``q`` Chebyshev fit of the traced samples.
+    ``S[n]`` is the rms of its coefficients of total degree ``n``; because the
+    basis is degree-graded and normalised to the box, restricting to a
+    concentric sub-domain of relative radius ``s`` scales the degree-``n``
+    contribution by ``s^n``.  That is the entire inflation law.
+
+    ``tails[m]`` is the same fit with every coefficient of total degree
+    ``<= m`` zeroed.  A least-squares fit of total degree ``m`` reproduces a
+    degree-``<= m`` polynomial EXACTLY, so
+
+        (I - Pi_m) W  ==  (I - Pi_m) W_>m
+
+    identically -- each candidate's residual IS the residual of fitting its own
+    spectral tail, and the tail does not move when the beam does.
+
+    Returns ``(S, tails, resid)`` where ``resid`` is the box fit's own rms
+    residual against the traced samples under the SAME ``weight`` the
+    candidates are scored with: the surrogate is only usable while what is
+    left beyond ``q`` is small against what the candidates are being ranked
+    by.  ``(None, {}, inf)`` when the fit cannot be built.
+    """
+    try:
+        ev = _Cheb2DEvaluator(xs_in, xs_in, opl_grid, order=int(q))
+    except (np.linalg.LinAlgError, ValueError):
+        return None, {}, float('inf')
+    co = np.asarray(ev.coeffs, dtype=np.float64).ravel()
+    deg = np.asarray([a + b for a, b in ev._mi], dtype=np.intp)
+    S = np.zeros(int(q) + 1)
+    for n in range(int(q) + 1):
+        sel = deg == n
+        if sel.any():
+            S[n] = float(np.sqrt(float((co[sel] ** 2).sum())))
+    X, Y = np.meshgrid(xs_in, xs_in, indexing='ij')
+    full = np.asarray(ev.ev(X, Y))
+    ok = np.isfinite(full) & np.isfinite(opl_grid)
+    wt = np.where(ok, (1.0 if weight is None else weight), 0.0)
+    tot = float(wt.sum())
+    if tot > 0.0:
+        r = np.where(ok, full - opl_grid, 0.0)
+        resid = float(np.sqrt(float((wt * r * r).sum()) / tot))
+        if not np.isfinite(resid):
+            resid = float('inf')
+    else:
+        resid = float('inf')
+    tails = {}
+    for m in orders:
+        c2 = co.copy()
+        c2[deg <= int(m)] = 0.0
+        ev.coeffs = ev.xp.asarray(c2)
+        tails[int(m)] = np.asarray(ev.ev(X, Y))
+    ev.coeffs = ev.xp.asarray(co)
+    return S, tails, resid
+
+
+def _decentred_fit_spectral_moment(S, m, sigma):
+    """``m_eff``: the spectral first moment of the tail beyond order ``m``,
+    weighted at the beam-disc scale ``sigma``.
+
+    It is exactly ``d log T / d log rho`` at ``rho = 1`` for
+    ``T(s)^2 = sum_{n>m} (S_n s^n)^2``, i.e. the EXPONENT of the concentric
+    candidate's disc-inflation law.  Falls back to ``m + 2`` -- the first shell
+    a total-degree-``m`` fit cannot reach on a map with even symmetry -- when
+    the tail carries no measurable energy.
+    """
+    if S is None:
+        return float(int(m) + 2)
+    S = np.asarray(S, dtype=np.float64)
+    num = den = 0.0
+    for n in range(int(m) + 1, S.size):
+        e = (S[n] * sigma ** n) ** 2
+        num += n * e
+        den += e
+    v = (num / den) if den > 0.0 else float(int(m) + 2)
+    return v if (np.isfinite(v) and v > 0.0) else float(int(m) + 2)
+
+
+def _decentred_fit_crossover(u, e_conc, e_off, m_eff):
+    """The crossover decentre ``u* = |c*| / w`` in closed form.
+
+    The concentric candidate's disc is sized from the ORIGIN-referenced second
+    moment, so it inflates by ``rho = sqrt(1 + 2 u^2)``; the off-centre one's
+    disc and the beam translate together, so its residual is flat in ``u``.
+    With the tail's own exponent ``m_eff`` the concentric residual runs as
+    ``rho^m_eff``, and the two curves cross where
+
+        rho* = rho(u) (E_off / E_conc)^(1/m_eff),   u* = sqrt((rho*^2 - 1) / 2)
+
+    Returns ``0.0`` when the off-centre candidate already wins at zero
+    decentre, and ``inf`` when the concentric one cannot lose (an unscoreable
+    off-centre candidate).  ``nan`` when the inputs cannot support a crossover
+    at all, which callers treat as "no prediction".
+    """
+    if not (np.isfinite(u) and u >= 0.0 and np.isfinite(m_eff) and m_eff > 0.0):
+        return float('nan')
+    if not (np.isfinite(e_conc) and e_conc > 0.0):
+        return 0.0
+    if not np.isfinite(e_off):
+        return float('inf')
+    if e_off <= 0.0:
+        return 0.0
+    rho = float(np.sqrt(1.0 + 2.0 * u * u))
+    try:
+        rstar = rho * float(e_off / e_conc) ** (1.0 / float(m_eff))
+    except (OverflowError, ValueError, ZeroDivisionError):
+        return float('nan')
+    if not np.isfinite(rstar):
+        return float('inf')
+    return float(np.sqrt(max(rstar * rstar - 1.0, 0.0) / 2.0))
+
+
+#: niche C12 (2026-08-03): decide the decentred beam's ray-fit branch from the
+#: lens's OWN spectral tail and the disc-inflation law, instead of comparing
+#: two numbers and taking the smaller.
+#:
+#: WHAT NICHE C11 LEFT.  ``DECENTRED_FIT_ARBITER`` builds both candidates and
+#: keeps the one with the smaller beam-weighted OPL residual.  That is a
+#: measurement, not a model: it cannot say WHY the crossover sits at 0.55 w on
+#: an f/3 singlet and at 0 w on an f/6 one, and it says nothing about any
+#: decentre other than the one in front of it.
+#:
+#: THE DERIVATION (docs/audits/C12_PHYSICS_FIT_SELECTION_2026_08_03.md S2).
+#: The traced OPL is a fixed function of the ENTRANCE position -- moving the
+#: beam moves neither it nor the launch grid.  A total-degree-``m`` fit
+#: reproduces the degree-``<= m`` part exactly, so each candidate's residual is
+#: the residual of fitting ITS OWN spectral tail, identically.  The tail is
+#: decentre-free; the whole ``u``-dependence is therefore geometric:
+#:
+#:   * the CONCENTRIC disc is sized from the ORIGIN-referenced second moment
+#:     ``sqrt(2 c^2 + w^2)``, so it inflates by ``rho = sqrt(1 + 2 u^2)`` and
+#:     the same total-degree budget is spread over a disc ``rho`` times bigger;
+#:   * the OFF-CENTRE disc and the beam translate TOGETHER, so nothing about
+#:     that candidate changes with ``u`` -- its residual is flat.
+#:
+#: Each shell of the tail scales as ``s^n``, so the concentric residual runs as
+#: ``rho^m_eff`` with ``m_eff`` the tail's spectral first moment
+#: (:func:`_decentred_fit_spectral_moment`), and the crossover follows in
+#: closed form (:func:`_decentred_fit_crossover`).  There is no fitted constant
+#: anywhere in it: ``S_n`` is the lens's own measured spectrum, ``sigma`` and
+#: ``rho`` are geometry, and the orders and ``_FIT_DISC_OUTSIDE_WEIGHT_REL``
+#: are library constants.
+#:
+#: VALIDATED, three designs, no tuning.  Predicted crossover against the
+#: fit-domain-free ``newton_fit='spline'`` oracle's own measured one:
+#:
+#:     f/3  N-BK7 singlet, w = 1.0 mm    u* = 0.525   measured 0.545
+#:     f/6  N-BK7 singlet, w = 1.0 mm    u* = 0       measured 0
+#:     f/6  N-BK7 singlet, w = 1.4 mm    u* = 0       measured 0
+#:
+#: -- and the model reproduces each candidate's MEASURED residual to
+#: ``K = 0.61-1.00`` on the two geometries where the residual is truncation- or
+#: leak-limited, with no constant.  ``m_eff`` reads 8.000 on all three (the
+#: first even shell a degree-6 fit cannot reach), and 7.14-8.04 on all 26 of
+#: design 121's arbitrated element calls.
+#:
+#: WHERE THE SPECTRAL HALF FAILS, measured and stated.  The model needs the
+#: traced map to be spectrally RESOLVED on the launch box.  Design 121's groups
+#: are not: their launch square is 47 mm against a 6.3 mm beam (7.5:1) with
+#: ~0.5 % of it carrying no ray at all, and the box expansion does not converge
+#: -- the shells sit flat at ~1e-3 out to degree 20 and the order-14 box fit's
+#: own residual over the beam is 1e-5 m, four decades ABOVE the candidate
+#: residuals it would have to predict.  So the predictor tests that
+#: (``resid <= min(E_conc, E_off)``) and falls back to the MEASURED pair when
+#: the spectrum is unresolved.  On that fall-back the closed form is
+#: algebraically equivalent to niche C11's comparison, and the check below
+#: cannot fire; that is stated rather than hidden.
+#:
+#: THE ARCHITECTURE.  The predictor DECIDES (``u <= u*``); niche C11's raw
+#: comparison always runs as a CHECK; a disagreement raises a ``RuntimeWarning``
+#: naming both score pairs, ``u`` and ``u*``.  It is never silent.
+#:
+#: SHIPPED OFF -- the fail-before is the v5.32 gate, bit for bit, and the
+#: reason is in S5 of the audit: on design 121 no per-call selector can meet a
+#: per-order "improve or hold" bar.  Group 2 is preferred CONCENTRIC by 4.77x
+#: at (-1,0) (``u`` = 0.062) and by 4.24x at (-2,0) (``u`` = 0.125), and the
+#: chain wants OFF-CENTRE at the first and CONCENTRIC at the second -- so no
+#: rule monotone in the margin, in ``u``, or in ``u/u*`` can produce that pair.
+#: The chain-level EE3 is not separable across the six groups (measured: the
+#: mixed patterns ``ccoo`` 0.069 and ``cooo`` 0.067 are WORSE at (-1,0) than
+#: either ``ccco`` 0.055 or ``oooo`` 0.029), and a fit-site selector only ever
+#: chooses per call.
+DECENTRED_FIT_PREDICTOR = False
+
+
 def _input_beam_amp_radius(E_in, dx, dy=None, centre=None):
     """1/e AMPLITUDE radius of ``E_in`` on the centred wave grid, from the
     intensity second moment (``w = sqrt(2 <r^2>)`` -- the same convention as
@@ -5487,7 +5734,8 @@ def apply_real_lens_traced(
             _beam_decentred = False
             _w_in_beam = _input_beam_amp_radius(E_in, dx, dy, centre=None)
         elif (_beam_decentred and _frbf is not None
-                and DECENTRED_FIT_ARBITER and newton_fit != 'spline'):
+                and (DECENTRED_FIT_ARBITER or DECENTRED_FIT_PREDICTOR)
+                and newton_fit != 'spline'):
             # niche C11: the arbiter below scores the HISTORICAL concentric
             # candidate too, and that disc is sized from the ORIGIN-referenced
             # second moment -- the same number the fall-back above re-measures.
@@ -6114,15 +6362,15 @@ def apply_real_lens_traced(
         # ABOVE the C1 null gate (``_off_branch``), so every byte-identity
         # contract below that gate is untouched.  See
         # :data:`DECENTRED_FIT_ARBITER`.
-        if (DECENTRED_FIT_ARBITER and _off_branch
+        if ((DECENTRED_FIT_ARBITER or DECENTRED_FIT_PREDICTOR)
+                and _off_branch
                 and _fit_r_max_conc is not None
                 and _w_in_beam > 0.0):
             _disc_c = _r2_launch <= _fit_r_max_conc ** 2
             if (int(_disc_c.sum()) >= _CARRIER_FIT_MIN_SAMPLES
                     and int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES):
-                _wgt = np.exp(-2.0 * (((xs_in[:, None] - _bcx) ** 2
-                                       + (xs_in[None, :] - _bcy) ** 2)
-                                      / (_w_in_beam * _w_in_beam)))
+                _wgt = _decentred_fit_score_weight(
+                    xs_in, _bcx, _bcy, _w_in_beam)
                 _use_w = _FIT_DISC_OUTSIDE_WEIGHT_REL > 0.0
                 _wo, _oo = _decentred_fit_restriction(
                     _fit_disc, _use_w, newton_poly_order, _dec_order)
@@ -6133,9 +6381,96 @@ def apply_real_lens_traced(
                     xs_in, opl_grid, _wgt, _fit_disc, _wo, _oo)
                 _s_conc = _decentred_fit_score(
                     xs_in, opl_grid, _wgt, _disc_c, _wc, _oc)
-                # ties -- including two unscoreable candidates -- keep the
-                # historical branch
-                if _s_conc <= _s_off:
+                # niche C11's verdict: smaller residual wins, an exact tie --
+                # including two unscoreable candidates -- keeps the historical
+                # branch.  Computed either way, because with the C12 predictor
+                # engaged it is the runtime CHECK.
+                _keep_conc = bool(_s_conc <= _s_off)
+                _why_tag = 'C11 arbiter'
+                # ---- niche C12: the PHYSICS PREDICTOR decides ---------------
+                # ``u <= u*``, with ``u*`` the closed-form crossover of the
+                # lens's own spectral tail under the disc-inflation law.  The
+                # spectral half is used only where it is RESOLVED -- what the
+                # order-``q`` box fit leaves over must be small against the
+                # residuals it would have to rank.  See
+                # :data:`DECENTRED_FIT_PREDICTOR`.
+                if DECENTRED_FIT_PREDICTOR:
+                    _u_dec = (float(_dec_mag / _w_in_beam)
+                              if _w_in_beam > 0.0 else float('nan'))
+                    _R_box = 0.5 * float(xs_in[-1] - xs_in[0])
+                    _sigma = ((float(_beam_fit_radius) / _R_box)
+                              if _R_box > 0.0 else 0.0)
+                    _q = int(_DECENTRED_FIT_SPECTRUM_ORDER)
+                    _S = None
+                    _sp_resid = float('inf')
+                    _tails = {}
+                    if _q > int(_oo):
+                        _S, _tails, _sp_resid = _decentred_fit_spectrum(
+                            xs_in, opl_grid, _q, (int(_oc), int(_oo)),
+                            weight=_wgt)
+                    _m_eff = _decentred_fit_spectral_moment(
+                        _S, int(_oc), _sigma)
+                    # The spectral (model-only) pair, and whether it is usable.
+                    # RESOLUTION TEST.  The surrogate differs from the traced
+                    # map by whatever lies beyond degree ``q``, and the model's
+                    # error is exactly what a degree-``oc`` fit over the
+                    # concentric disc CANNOT absorb of that difference --
+                    # ``(I - Pi)(W - W_q) == (I - Pi)(W - tails[oc])``, one
+                    # more score of the same kind.  The model is used only
+                    # while that gap is below the residuals it would rank; on
+                    # design 121 it never is (S3.4 of the C12 audit), so the
+                    # predictor falls back to the MEASURED pair there.
+                    _m_conc, _m_off = _s_conc, _s_off
+                    _resolved = False
+                    if _tails:
+                        _t_conc = _decentred_fit_score(
+                            xs_in, _tails[int(_oc)], _wgt, _disc_c, _wc, _oc)
+                        _t_off = _decentred_fit_score(
+                            xs_in, _tails[int(_oo)], _wgt, _fit_disc, _wo, _oo)
+                        _sp_gap = _decentred_fit_score(
+                            xs_in, opl_grid - _tails[int(_oc)], _wgt,
+                            _disc_c, _wc, _oc)
+                        _resolved = bool(np.isfinite(_sp_gap)
+                                         and np.isfinite(_sp_resid)
+                                         and _sp_gap <= min(_t_conc, _t_off))
+                        if _resolved:
+                            _m_conc, _m_off = _t_conc, _t_off
+                    _u_star = _decentred_fit_crossover(
+                        _u_dec, _m_conc, _m_off, _m_eff)
+                    if np.isnan(_u_star):
+                        _pred_conc = _keep_conc      # no prediction available
+                    else:
+                        _pred_conc = bool(_u_dec <= _u_star)
+                    _why_tag = (f"C12 predictor: u = {_u_dec:.4f} against "
+                                f"u* = {_u_star:.4f} (m_eff {_m_eff:.2f}, "
+                                f"spectrum "
+                                f"{'resolved' if _resolved else 'UNRESOLVED'})"
+                                f"; C11 arbiter")
+                    if _pred_conc != _keep_conc:
+                        import warnings
+                        warnings.warn(
+                            f"apply_real_lens_traced: the niche-C12 ray-fit "
+                            f"PREDICTOR and the niche-C11 ARBITER disagree on "
+                            f"this call.  The predictor selects the "
+                            f"{'CONCENTRIC' if _pred_conc else 'OFF-CENTRE'} "
+                            f"branch from |c|/w = {_u_dec:.4f} against a "
+                            f"crossover u* = {_u_star:.4f} (spectral exponent "
+                            f"m_eff = {_m_eff:.3f}, spectrum "
+                            f"{'resolved' if _resolved else 'UNRESOLVED'} at "
+                            f"order {_q}, box-fit residual {_sp_resid:.3e} m, "
+                            f"modelled OPL residuals {_m_conc:.3e} m "
+                            f"concentric / {_m_off:.3e} m off-centre); the "
+                            f"arbiter's own measured residuals are "
+                            f"{_s_conc:.3e} m concentric / {_s_off:.3e} m "
+                            f"off-centre and select the "
+                            f"{'CONCENTRIC' if _keep_conc else 'OFF-CENTRE'} "
+                            f"one.  The PREDICTOR's choice is applied.  See "
+                            f"DECENTRED_FIT_PREDICTOR; set it False to fall "
+                            f"back to the arbiter, or also "
+                            f"DECENTRED_FIT_ARBITER False for the v5.32 gate.",
+                            RuntimeWarning, stacklevel=2)
+                    _keep_conc = _pred_conc
+                if _keep_conc:
                     # the historical disc reproduces the traced map better
                     # where the light is -- take it, and with it the radius
                     # and restriction that were scored
@@ -6143,11 +6478,11 @@ def apply_real_lens_traced(
                     _fit_disc = _disc_c
                     _fit_r_max = _fit_r_max_conc
                     _fit_why = (f"r <= {_fit_r_max_conc * 1e3:.4f} mm "
-                                f"(C11 arbiter: OPL residual "
+                                f"({_why_tag}: OPL residual "
                                 f"{_s_conc:.3e} m concentric against "
                                 f"{_s_off:.3e} m off-centre)")
                 else:
-                    _fit_why += (f" (C11 arbiter: OPL residual {_s_off:.3e} m "
+                    _fit_why += (f" ({_why_tag}: OPL residual {_s_off:.3e} m "
                                  f"off-centre against {_s_conc:.3e} m "
                                  f"concentric)")
         if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
