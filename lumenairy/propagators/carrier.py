@@ -6775,6 +6775,181 @@ _MULTI_AUTO_PROBE_TILE = 16
 _MULTI_AUTO_MAX_RESIZE = 2
 
 
+# --------------------------------------------------------------------------
+# Congruence-level process parallelism (niche D8).
+#
+# WHY PROCESSES AND NOT THREADS.  A single congruence is SERIAL BY DESIGN on
+# the shipped path: ``apply_real_lens_traced``'s ``n_workers`` is a documented
+# no-op for the default ``newton_fit='polynomial'`` route (the Newton inversion
+# always runs in-process), and ``parallel_amp`` only doubles the amplitude leg.
+# MEASURED on design 121's post-DOE chain, 2 congruences, N=1024, paraxial
+# leg: serial 318.8 s vs ThreadPoolExecutor(2) 254.3 s = 1.25x, i.e. GIL-bound
+# -- the traced element spends its time in Python-level Newton/Chebyshev work,
+# not in GIL-releasing array kernels.  A 32-order fan therefore ran 32
+# independent jobs on 1 of 20 available threads.
+#
+# WHAT IS AND IS NOT PARALLEL.  Only the per-congruence chain call is
+# distributed.  Every guard, the replica/anti-drift checks, and the
+# accumulation onto the common grid stay in the parent and run in ASCENDING k
+# ORDER exactly as the serial path does, so the complex sum is formed in the
+# same sequence and the result is FP-identical to ``congruence_workers=None``.
+#
+# IPC.  The per-congruence RESULT is the readout TILE (``n_tile^2``, ~16 MB at
+# 1024 px complex128), not the common grid, so the return leg is cheap.  The
+# INPUT field is the expensive direction (1.07 GB at N=8192), and in the fan
+# case every congruence shares ONE array -- so unique input arrays are passed
+# ONCE through the pool initializer and referenced by index, rather than
+# pickled per task.
+_MULTI_WORKER_STATE: dict = {}
+
+
+def _multi_worker_init(fields, groups_k, common):
+    """Pool initializer: receive the (deduplicated) input fields, the
+    per-congruence group lists and the invariant chain kwargs ONCE."""
+    _MULTI_WORKER_STATE['fields'] = fields
+    _MULTI_WORKER_STATE['groups_k'] = groups_k
+    _MULTI_WORKER_STATE['common'] = common
+
+
+def _multi_worker_run(task):
+    """Run ONE congruence's chain in a worker process.
+
+    Returns ``(k, field, stages, warnings)``.  Warnings are captured rather
+    than emitted here -- a worker's ``warnings.warn`` goes to a stream nobody
+    reads -- and replayed by the parent in k order, so the guard messages a
+    serial run would have produced are not silently lost.
+    """
+    import warnings as _w
+    k, fld_idx, carrier, fr = task
+    _S = _MULTI_WORKER_STATE
+    with _w.catch_warnings(record=True) as _caught:
+        _w.simplefilter('always')
+        res = propagate_traced_carrier_chain(
+            _S['fields'][fld_idx], _S['groups_k'][k], r_in=carrier,
+            focus_readout=fr, **_S['common'])
+    msgs = [(str(_x.message), getattr(_x.category, '__name__', 'Warning'))
+            for _x in _caught]
+    return k, np.asarray(res.field), list(res.stages), msgs
+
+
+def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn):
+    """Clamp ``congruence_workers`` to what the box can actually hold.
+
+    Each worker carries a full independent chain working set.  MEASURED on
+    design 121 at N=8192 complex128: ~24 GB resident per chain, i.e. ~22x the
+    1.07 GB input grid, so the per-worker estimate is
+    ``_MULTI_WORKER_GRID_FACTOR * N^2 * 16 B``.  Over-subscribing this is not a
+    slowdown but an OOM, so the clamp is applied by default and reported.
+    """
+    if requested is None:
+        return 1
+    requested = int(requested)
+    if requested < 1:
+        raise ValueError(
+            f"{fn}: congruence_workers must be >= 1 (or None for serial), "
+            f"got {requested!r}.")
+    requested = min(requested, int(K))
+    if requested <= 1:
+        return 1
+    try:
+        from ..memory import get_ram_budget
+
+        import psutil as _ps
+        free_b = min(int(_ps.virtual_memory().available), get_ram_budget())
+    except (ImportError, AttributeError, OSError):
+        return requested
+    n_px = int(np.prod(shape0[-2:])) if len(shape0) >= 2 else 0
+    per_worker_b = _MULTI_WORKER_GRID_FACTOR * n_px * 16.0
+    if per_worker_b <= 0:
+        return requested
+    allowed = int(max(1, (free_b - min_free_gb * 1e9) // per_worker_b))
+    if allowed < requested:
+        import warnings
+        warnings.warn(
+            f"{fn}: congruence_workers={requested} would need "
+            f"~{requested * per_worker_b / 1e9:.1f} GB "
+            f"({per_worker_b / 1e9:.1f} GB per worker at "
+            f"{shape0[-1]}^2 complex128) but only {free_b / 1e9:.1f} GB is "
+            f"available with a {min_free_gb:.0f} GB reserve; running "
+            f"{allowed} worker(s) instead.  Lower congruence_workers, raise "
+            f"the RAM budget, or reduce the grid to use more.",
+            RuntimeWarning, stacklevel=3)
+        return allowed
+    return requested
+
+
+#: Per-worker peak working set as a multiple of the input grid's bytes.
+#: MEASURED 24 GB resident against a 1.07 GB (8192^2 complex128) input on
+#: design 121's 6-group post-DOE chain with the exact final leg.
+_MULTI_WORKER_GRID_FACTOR = 22.0
+
+
+class _MultiPreResult:
+    """The parts of a ``TracedCarrierChainResult`` the orchestrator's PASS-1
+    tail consumes, carried back from a worker process.  ``R``/``dx`` are not
+    reconstructed because the readout path leaves ``R = None`` and the tail
+    reads only ``field`` and ``stages``."""
+
+    __slots__ = ('field', 'stages')
+
+    def __init__(self, field, stages):
+        self.field = field
+        self.stages = stages
+
+
+def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
+                            progress, common, fn):
+    """Compute all K congruence chains in a process pool (niche D8).
+
+    Returns a list indexed by k.  Warnings raised inside workers are replayed
+    here in ASCENDING k so the guard output matches a serial run's ordering.
+    Any worker exception is re-raised with its congruence named.
+    """
+    import warnings
+    from concurrent.futures import ProcessPoolExecutor
+
+    K = len(specs)
+    # Deduplicate the input fields BY IDENTITY: the fan case hands the same
+    # post-DOE envelope to every congruence, so this turns K pickles of a
+    # multi-hundred-MB array into one.
+    uniq, idx_of, fld_idx = [], {}, []
+    for s in specs:
+        key = id(s[0])
+        if key not in idx_of:
+            idx_of[key] = len(uniq)
+            uniq.append(np.asarray(s[0]))
+        fld_idx.append(idx_of[key])
+    tasks = [(k, fld_idx[k], specs[k][1], window(k, n_tile)[3])
+             for k in range(K)]
+    out: list = [None] * K
+    try:
+        with ProcessPoolExecutor(
+                max_workers=int(n_cw), initializer=_multi_worker_init,
+                initargs=(uniq, groups_k, common)) as ex:
+            done = 0
+            for k, field, stages, msgs in ex.map(_multi_worker_run, tasks):
+                out[k] = (field, stages, msgs)
+                done += 1
+                if progress is not None:
+                    progress(done - 1, K, f"{specs[k][3]} [worker]")
+    except Exception as exc:                       # pragma: no cover - env
+        raise RuntimeError(
+            f"{fn}: a congruence worker failed under congruence_workers="
+            f"{n_cw}.  Re-run with congruence_workers=None to reproduce it "
+            f"serially with a clean traceback.  Original error: {exc!r}"
+        ) from exc
+    for k in range(K):
+        if out[k] is None:
+            raise RuntimeError(
+                f"{fn}: congruence {specs[k][3]!r} returned no result from "
+                f"the worker pool.")
+        for text, cat in out[k][2]:
+            warnings.warn(f"[{specs[k][3]}] {text}",
+                          RuntimeWarning if cat == 'RuntimeWarning'
+                          else UserWarning, stacklevel=3)
+    return [_MultiPreResult(out[k][0], out[k][1]) for k in range(K)]
+
+
 def propagate_traced_carrier_chain_multi(
     congruences,
     groups,
@@ -6808,6 +6983,8 @@ def propagate_traced_carrier_chain_multi(
     on_gap_paraxial: str = 'warn',
     gap_sag_tol: float = _GAP_SAG_TOL_DEFAULT,
     progress: Optional[Callable] = None,
+    congruence_workers: Optional[int] = None,
+    congruence_worker_min_free_gb: float = 8.0,
 ) -> TracedCarrierChainMultiResult:
     """Run K INDEPENDENT congruences through one traced lens chain and
     recombine them on a common image grid (niche D2, roadmap
@@ -7047,6 +7224,37 @@ def propagate_traced_carrier_chain_multi(
         ``readout_tile='auto'``'s probe pass calls it too, with ``name``
         suffixed ``' (period probe)'``, so a 2K-run 'auto' call is not
         mistaken for a stalled K-run one.
+    congruence_workers : int, optional
+        Run the K congruence chains in that many worker PROCESSES (niche D8).
+        ``None`` (default) or ``1`` keeps the historical serial loop and is
+        bit-for-bit unchanged.
+
+        The K chains are independent until recombination, so this is the only
+        parallelism the shipped traced path actually has: a SINGLE congruence
+        is serial by design (``apply_real_lens_traced``'s ``n_workers`` is a
+        documented no-op on the default ``newton_fit='polynomial'`` route, and
+        ``parallel_amp`` only doubles the amplitude leg).  MEASURED on design
+        121's post-DOE chain, 2 congruences at N=1024: serial 318.8 s vs
+        ``ThreadPoolExecutor(2)`` 254.3 s = 1.25x, i.e. GIL-bound -- which is
+        why this is processes and not threads.
+
+        Only the chain calls are distributed.  The replica, anti-drift,
+        capture and mem-budget guards, and the accumulation onto the common
+        grid, all stay in the parent and execute in ASCENDING ``k`` exactly as
+        the serial path does, so the complex sum is formed in the same order
+        and the result is FP-identical to the serial run.  Worker warnings are
+        captured and replayed in the parent in ``k`` order, prefixed with the
+        congruence name, rather than being lost to an unread stream.
+
+        Each worker carries a full independent chain working set (MEASURED
+        ~24 GB at N=8192 complex128 on design 121), so the request is clamped
+        to what RAM allows -- see ``congruence_worker_min_free_gb`` -- and the
+        clamp is reported rather than applied silently.  ``readout_tile='auto'``
+        runs its period-probe pass serially regardless; only PASS 1 is
+        distributed.
+    congruence_worker_min_free_gb : float, default 8.0
+        RAM held back from the ``congruence_workers`` clamp, so a fully
+        subscribed pool cannot take the box to the edge.
 
     Returns
     -------
@@ -7293,29 +7501,38 @@ def propagate_traced_carrier_chain_multi(
         fr['centre_out'] = tile_centre
         return mx, my, tile_centre, fr
 
+    # Invariant chain kwargs, spelled ONCE so the serial path and the niche-D8
+    # worker path cannot drift apart (a divergence here would be a silent
+    # physics difference between congruence_workers=None and >1).
+    _common_chain_kwargs = dict(
+        wavelength=wavelength, dx=dx,
+        ray_subsample=ray_subsample, n_workers=n_workers,
+        traced_kwargs=traced_kwargs, final_distance=final_distance,
+        final_leg=final_leg, na_exact_threshold=na_exact_threshold,
+        carrier_reference=carrier_reference,
+        on_multi_congruence=on_multi_congruence,
+        multi_congruence_threshold=multi_congruence_threshold,
+        on_na_proximity=on_na_proximity,
+        na_proximity_frac=na_proximity_frac,
+        on_ram_cap=on_ram_cap, on_rs_fine_clamp=on_rs_fine_clamp,
+        on_tilt_exact_grid=on_tilt_exact_grid,
+        on_decentred_fit=on_decentred_fit,
+        decentre_fit_frac=decentre_fit_frac,
+        on_gap_paraxial=on_gap_paraxial,
+        gap_sag_tol=gap_sag_tol)
+
     def _run(k, fr, quiet=False):
         # ``quiet`` is the 'auto' PERIOD-PROBE pass: it runs the same chain a
         # second time only to read back the Bluestein period, so the D3 entry
         # guards are suppressed there (they would fire twice per congruence,
         # and cost two extra full-grid passes each, for no extra information --
         # the REAL pass below runs them on the identical input).
+        kw = dict(_common_chain_kwargs)
+        if quiet:
+            kw.update(on_multi_congruence='ignore', on_na_proximity='ignore',
+                      on_decentred_fit='ignore', on_gap_paraxial='ignore')
         return propagate_traced_carrier_chain(
-            specs[k][0], groups_k[k], wavelength, dx, r_in=specs[k][1],
-            ray_subsample=ray_subsample, n_workers=n_workers,
-            traced_kwargs=traced_kwargs, final_distance=final_distance,
-            focus_readout=fr, final_leg=final_leg,
-            na_exact_threshold=na_exact_threshold,
-            carrier_reference=carrier_reference,
-            on_multi_congruence=('ignore' if quiet else on_multi_congruence),
-            multi_congruence_threshold=multi_congruence_threshold,
-            on_na_proximity=('ignore' if quiet else on_na_proximity),
-            na_proximity_frac=na_proximity_frac,
-            on_ram_cap=on_ram_cap, on_rs_fine_clamp=on_rs_fine_clamp,
-            on_tilt_exact_grid=on_tilt_exact_grid,
-            on_decentred_fit=('ignore' if quiet else on_decentred_fit),
-            decentre_fit_frac=decentre_fit_frac,
-            on_gap_paraxial=('ignore' if quiet else on_gap_paraxial),
-            gap_sag_tol=gap_sag_tol)
+            specs[k][0], groups_k[k], r_in=specs[k][1], focus_readout=fr, **kw)
 
     def _fit(period):
         """Largest EVEN window (px) that fits inside one spatial period."""
@@ -7405,18 +7622,27 @@ def propagate_traced_carrier_chain_multi(
 
     # ---- PASS 1: the real runs ---------------------------------------------
     resizes_left = _MULTI_AUTO_MAX_RESIZE
+    n_cw = _multi_resolve_workers(congruence_workers, K, shape0,
+                                  congruence_worker_min_free_gb, fn)
     while True:
         acc = None
         acc_i = None
         acc_dtype = None
         infos = []
         restart = False
+        # niche D8: with congruence_workers > 1 the K INDEPENDENT chain calls
+        # are computed up front in a process pool; the guards and the
+        # accumulation below still run serially in ascending k, so the
+        # complex sum is formed in the same order as the serial path.
+        _pre = _multi_parallel_results(
+            n_cw, specs, groups_k, chief, _window, n_tile, progress,
+            _common_chain_kwargs, fn) if n_cw > 1 else None
         for k, (fld, carrier, weight, name, _do) in enumerate(specs):
-            if progress is not None:
+            if _pre is None and progress is not None:
                 progress(k, K, name)
             x_pred, y_pred, L_out, M_out = chief[k]
             mx, my, tile_centre, fr = _window(k, n_tile)
-            res = _run(k, fr)
+            res = _pre[k] if _pre is not None else _run(k, fr)
             # ---- REPLICA GUARD (orchestrator-owned) ------------------------
             # The readout's Bluestein reconstruction is periodic; beyond one
             # period the window holds wrapped copies of THIS congruence's own
