@@ -2739,6 +2739,12 @@ def _check_chain_entry_congruence(env, dx, wavelength, action,
 # Fourier-upsample pad + its inverse transform, then the reconstructed field
 # alongside the exact-sphere phasor, then the Bluestein zoom's own workspace.
 _FINE_GRID_WORK_ARRAYS = 4
+
+#: Default ``focus_readout['n_fine_cap']`` -- the count cap on the exact final
+#: leg's re-trace grid.  Named so the niche-D8 worker clamp can price a
+#: readout the caller did not size explicitly (it must assume the default,
+#: since that is what the readout will actually try to build).
+_FINE_GRID_DEFAULT_CAP = 16384
 # Fraction of the RAM budget the fine grid may claim.  0.5 leaves room for the
 # caller's own field, the OS page cache and the FFT plan scratch.
 _FINE_GRID_RAM_FRAC = 0.5
@@ -6945,7 +6951,8 @@ def _multi_worker_run(task):
     return k, np.asarray(res.field), list(res.stages), msgs
 
 
-def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn):
+def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn,
+                           n_fine_cap=None):
     """Clamp ``congruence_workers`` to what the box can actually hold.
 
     Each worker carries a full independent chain working set.  MEASURED on
@@ -6973,6 +6980,17 @@ def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn):
         return requested
     n_px = int(np.prod(shape0[-2:])) if len(shape0) >= 2 else 0
     per_worker_b = _MULTI_WORKER_GRID_FACTOR * n_px * 16.0
+    # The EXACT final leg's fine grid is a SECOND peak, on top of the chain
+    # working set and live at the same time.  Sizing workers from the chain
+    # alone is how 3 workers each correctly decided they could afford a
+    # 16384^2 fine grid (17.2 GB) and then collectively asked for 123 GB of a
+    # 127 GB box -- MEASURED on design 121's fan, which died with 'Unable to
+    # allocate 4.00 GiB for an array with shape (16384, 16384)' while 97 GB
+    # still read free.  ``_FINE_GRID_WORK_ARRAYS * 16`` B/pixel is the
+    # readout's own model (see ``_memory_bounded_n_fine``).
+    if n_fine_cap:
+        per_worker_b += (_FINE_GRID_WORK_ARRAYS * 16.0
+                         * float(n_fine_cap) ** 2)
     if per_worker_b <= 0:
         return requested
     allowed = int(max(1, (free_b - min_free_gb * 1e9) // per_worker_b))
@@ -7771,8 +7789,15 @@ def propagate_traced_carrier_chain_multi(
 
     # ---- PASS 1: the real runs ---------------------------------------------
     resizes_left = _MULTI_AUTO_MAX_RESIZE
+    # The exact final leg's fine grid is a per-worker peak that lands ON TOP
+    # of the chain working set, so the clamp has to see it.  Only the exact
+    # path builds one; a paraxial readout has no such term.
+    _nfc_for_clamp = (int((output_grid or {}).get('n_fine_cap',
+                                                  _FINE_GRID_DEFAULT_CAP))
+                      if final_leg != 'paraxial' else 0)
     n_cw = _multi_resolve_workers(congruence_workers, K, shape0,
-                                  congruence_worker_min_free_gb, fn)
+                                  congruence_worker_min_free_gb, fn,
+                                  n_fine_cap=_nfc_for_clamp)
     while True:
         acc = None
         acc_i = None

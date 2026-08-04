@@ -264,3 +264,30 @@ def test_ram_budget_division_is_safe_at_degenerate_worker_counts():
         except Exception as exc:                   # pragma: no cover
             raise AssertionError(f"n_workers={n!r} raised {exc!r}")
         assert v['ram_budget'] is None or v['ram_budget'] > 0
+
+
+def test_clamp_prices_the_exact_legs_fine_grid_not_just_the_chain():
+    # The fine grid is a SECOND per-worker peak, live at the same time as the
+    # chain working set.  Pricing the chain alone let 3 workers each correctly
+    # afford a 16384^2 grid and collectively ask for 123 GB of a 127 GB box.
+    chain_only = _multi_resolve_workers(32, 32, (8192, 8192), 8.0, 'fn')
+    with_readout = _multi_resolve_workers(32, 32, (8192, 8192), 8.0, 'fn',
+                                          n_fine_cap=16384)
+    assert with_readout <= chain_only, (
+        "adding the readout's 17 GB fine grid must not INCREASE the worker "
+        f"count ({chain_only} -> {with_readout})")
+
+
+def test_a_paraxial_readout_is_not_charged_for_a_fine_grid():
+    # final_leg='paraxial' builds no fine grid, so n_fine_cap=0 must price
+    # the same as omitting it entirely.
+    assert (_multi_resolve_workers(8, 8, (4096, 4096), 0.0, 'fn', n_fine_cap=0)
+            == _multi_resolve_workers(8, 8, (4096, 4096), 0.0, 'fn'))
+
+
+def test_a_bigger_fine_grid_cap_costs_workers():
+    small = _multi_resolve_workers(32, 32, (4096, 4096), 0.0, 'fn',
+                                   n_fine_cap=4096)
+    big = _multi_resolve_workers(32, 32, (4096, 4096), 0.0, 'fn',
+                                 n_fine_cap=16384)
+    assert big <= small
