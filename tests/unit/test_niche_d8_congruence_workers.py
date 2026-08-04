@@ -22,6 +22,8 @@ import pytest
 
 import lumenairy as la
 from lumenairy.propagators.carrier import (
+    _multi_apply_worker_state,
+    _multi_capture_worker_state,
     _multi_looks_like_spawn_bootstrap,
     _multi_resolve_workers,
     propagate_traced_carrier_chain_multi,
@@ -173,3 +175,72 @@ def test_a_self_referential_cause_chain_terminates():
     a.__cause__ = b
     b.__cause__ = a
     assert not _multi_looks_like_spawn_bootstrap(a)
+
+
+# --------------------------------------------------------------------------
+# Worker state inheritance.  A spawned worker imports lumenairy fresh, so
+# runtime-registered materials and runtime-set behaviour flags do not exist
+# there unless carried across.  The glass case CRASHES (loud); the flag case
+# would silently compute different physics, which is why both are pinned.
+# --------------------------------------------------------------------------
+def test_snapshot_captures_runtime_registered_glass():
+    from lumenairy import glass as g
+    name = '__d8_probe_glass__'
+    g.SELLMEIER_COEFFICIENTS[name] = ((1.0, 0.01), (1.0, 0.01), (1.0, 100.0))
+    g.GLASS_REGISTRY[name] = '__sellmeier__'
+    try:
+        snap = _multi_capture_worker_state()
+        assert name in snap['glass']['SELLMEIER_COEFFICIENTS']
+        assert name in snap['glass']['GLASS_REGISTRY']
+    finally:
+        g.SELLMEIER_COEFFICIENTS.pop(name, None)
+        g.GLASS_REGISTRY.pop(name, None)
+
+
+def test_apply_restores_glass_into_the_SAME_dict_object():
+    from lumenairy import glass as g
+    name = '__d8_probe_glass2__'
+    ident = id(g.GLASS_REGISTRY)
+    _multi_apply_worker_state(
+        {'glass': {'GLASS_REGISTRY': {name: '__sellmeier__'}}})
+    try:
+        assert g.GLASS_REGISTRY.get(name) == '__sellmeier__'
+        # other modules hold this dict BY REFERENCE; rebinding would strand them
+        assert id(g.GLASS_REGISTRY) == ident
+    finally:
+        g.GLASS_REGISTRY.pop(name, None)
+
+
+def test_snapshot_captures_traced_behaviour_flags():
+    from lumenairy.elements import _lens_traced as lt
+    snap = _multi_capture_worker_state()
+    key = 'lumenairy.elements._lens_traced:DECENTRED_FIT_ARBITER'
+    assert key in snap['flags']
+    assert snap['flags'][key] == lt.DECENTRED_FIT_ARBITER
+
+
+def test_apply_round_trips_a_flipped_flag():
+    from lumenairy.elements import _lens_traced as lt
+    key = 'lumenairy.elements._lens_traced:DECENTRED_FIT_ARBITER'
+    original = lt.DECENTRED_FIT_ARBITER
+    try:
+        lt.DECENTRED_FIT_ARBITER = not original
+        snap = _multi_capture_worker_state()
+        assert snap['flags'][key] == (not original)
+        lt.DECENTRED_FIT_ARBITER = original          # worker starts "fresh"
+        _multi_apply_worker_state(snap)
+        assert lt.DECENTRED_FIT_ARBITER == (not original), \
+            "a worker would have run different physics from the parent"
+    finally:
+        lt.DECENTRED_FIT_ARBITER = original
+
+
+def test_snapshot_is_picklable():
+    import pickle
+    snap = _multi_capture_worker_state()
+    assert pickle.loads(pickle.dumps(snap))['flags'] == snap['flags']
+
+
+def test_apply_tolerates_an_empty_or_missing_snapshot():
+    _multi_apply_worker_state(None)
+    _multi_apply_worker_state({})

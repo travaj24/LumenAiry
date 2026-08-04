@@ -6803,9 +6803,108 @@ _MULTI_AUTO_MAX_RESIZE = 2
 _MULTI_WORKER_STATE: dict = {}
 
 
-def _multi_worker_init(fields, groups_k, common):
+#: Modules whose RUNTIME-MUTATED state a worker must inherit.  A spawned
+#: worker imports lumenairy fresh, so anything the caller registered or
+#: switched at run time is absent there unless it is carried across.
+_WORKER_STATE_MODULES = (
+    'lumenairy.glass',
+    'lumenairy.elements._lens_traced',
+    'lumenairy.propagators.carrier',
+    'lumenairy.propagators.asm',
+)
+
+#: Mutable material tables (``lumenairy.glass``) that callers register into at
+#: run time -- design prescriptions routinely add Sellmeier coefficients for
+#: glasses that do not ship with the library.
+_WORKER_STATE_GLASS_TABLES = (
+    'GLASS_REGISTRY', 'SELLMEIER_COEFFICIENTS', 'GLASS_VALIDITY',
+)
+
+_WORKER_STATE_SCALARS = (bool, int, float, str, bytes, type(None))
+
+
+def _multi_capture_worker_state():
+    """Snapshot the runtime-mutated module state workers must inherit.
+
+    TWO CLASSES, and the second is the dangerous one:
+
+    * **Registered materials.**  A caller that adds glasses at run time (every
+      real prescription does) leaves a fresh worker unable to resolve them --
+      ``get_glass_index`` raises and the congruence dies.  Loud, at least.
+    * **Behaviour flags.**  The traced path is steered by module-level
+      switches (``DECENTRED_FIT_ARBITER``, ``TILTED_CARRIER_EXACT_EIKONAL``,
+      ``REMAP_INVERSE_SUPPORT_BOUND``, the era pins...).  A worker that did not
+      inherit them would compute DIFFERENT PHYSICS from the serial path and
+      return a plausible number -- silently.  That is the failure this capture
+      exists to prevent; the glass crash is merely what exposed it.
+
+    Discovery follows the library's own naming convention (upper-case
+    module-level names, ``_FOO`` counting and ``Foo`` not), matching the test
+    suite's leak guard so the two cannot drift.
+    """
+    import importlib
+    flags = {}
+    glass = {}
+    for mod_name in _WORKER_STATE_MODULES:
+        try:
+            mod = importlib.import_module(mod_name)
+        except Exception:                          # pragma: no cover - env
+            continue
+        for n, v in list(vars(mod).items()):
+            core = n.lstrip('_')
+            if not core or not core.isupper() or n.startswith('__'):
+                continue
+            if isinstance(v, _WORKER_STATE_SCALARS):
+                flags[f'{mod_name}:{n}'] = v
+            elif (mod_name == 'lumenairy.glass'
+                  and n in _WORKER_STATE_GLASS_TABLES
+                  and isinstance(v, dict)):
+                glass[n] = dict(v)
+    budget = None
+    try:
+        from ..memory import get_ram_budget
+        budget = int(get_ram_budget())
+    except Exception:                              # pragma: no cover - env
+        pass
+    return {'flags': flags, 'glass': glass, 'ram_budget': budget}
+
+
+def _multi_apply_worker_state(state):
+    """Re-apply :func:`_multi_capture_worker_state`'s snapshot in a worker."""
+    import importlib
+    if not state:
+        return
+    for key, val in state.get('flags', {}).items():
+        mod_name, _, n = key.rpartition(':')
+        try:
+            setattr(importlib.import_module(mod_name), n, val)
+        except Exception:                          # pragma: no cover - env
+            continue
+    if state.get('glass'):
+        try:
+            from .. import glass as _g
+            for name, table in state['glass'].items():
+                tgt = getattr(_g, name, None)
+                if isinstance(tgt, dict):
+                    # UPDATE IN PLACE: other modules hold this dict by
+                    # reference (``from lumenairy import GLASS_REGISTRY``), so
+                    # rebinding the name here would leave them on the old one.
+                    tgt.update(table)
+        except Exception:                          # pragma: no cover - env
+            pass
+    if state.get('ram_budget'):
+        try:
+            from ..memory import set_max_ram
+            set_max_ram(int(state['ram_budget']))
+        except Exception:                          # pragma: no cover - env
+            pass
+
+
+def _multi_worker_init(fields, groups_k, common, state=None):
     """Pool initializer: receive the (deduplicated) input fields, the
-    per-congruence group lists and the invariant chain kwargs ONCE."""
+    per-congruence group lists, the invariant chain kwargs and the caller's
+    runtime module state ONCE."""
+    _multi_apply_worker_state(state)
     _MULTI_WORKER_STATE['fields'] = fields
     _MULTI_WORKER_STATE['groups_k'] = groups_k
     _MULTI_WORKER_STATE['common'] = common
@@ -6947,7 +7046,8 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
     try:
         with ProcessPoolExecutor(
                 max_workers=int(n_cw), initializer=_multi_worker_init,
-                initargs=(uniq, groups_k, common)) as ex:
+                initargs=(uniq, groups_k, common,
+                          _multi_capture_worker_state())) as ex:
             done = 0
             for k, field, stages, msgs in ex.map(_multi_worker_run, tasks):
                 out[k] = (field, stages, msgs)
