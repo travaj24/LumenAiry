@@ -2,6 +2,79 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Added — congruence-level process parallelism for the multi-congruence chain (niche D8, `propagators/carrier.py`)
+
+`propagate_traced_carrier_chain_multi` gains `congruence_workers` (default
+`None` = the historical serial loop, bit-for-bit unchanged) and
+`congruence_worker_min_free_gb` (default 8.0).
+
+**Why this is the only parallelism available.** A SINGLE congruence is serial
+by design on the shipped path: `apply_real_lens_traced`'s `n_workers` is a
+documented no-op for the default `newton_fit='polynomial'` route (the Newton
+inversion always runs in-process), and `parallel_amp` only doubles the
+amplitude leg. MEASURED on design 121's 32-order post-DOE fan at N=8192: the
+whole run held **0.99 cores busy on a 20-thread box** — 32 independent jobs
+walked sequentially. Threads do not fix it: 2 congruences at N=1024, paraxial
+leg, serial 318.8 s vs `ThreadPoolExecutor(2)` 254.3 s = **1.25x, GIL-bound**,
+because the traced element spends its time in Python-level Newton/Chebyshev
+work rather than GIL-releasing kernels. Hence processes.
+
+**What stays serial, and why the answer cannot move.** Only the K chain calls
+are distributed. Every guard (replica, anti-drift chief ray, capture,
+mem-budget) and the accumulation onto the common grid remain in the parent and
+run in ASCENDING `k` exactly as before, so the complex sum is formed in the
+same order. Pinned as `np.array_equal` on the recombined field, not a
+tolerance. Per-congruence records keep input order regardless of completion
+order, and worker warnings are captured and replayed in the parent in `k`
+order, prefixed with the congruence name, rather than being lost to an unread
+stream.
+
+**Cost model.** The per-congruence RESULT is the readout tile (~16 MB at
+1024 px complex128), not the common grid, so the return leg is cheap; the
+INPUT field is the expensive direction (1.07 GB at N=8192) and is deduplicated
+BY IDENTITY and passed once through the pool initializer — the fan case hands
+one shared post-DOE envelope to every congruence, so K pickles become one.
+Each worker still carries a full independent chain working set (MEASURED
+~24 GB at N=8192 complex128 on design 121), so the request is clamped to what
+RAM allows and the clamp is reported as a `RuntimeWarning` rather than applied
+silently. `readout_tile='auto'`'s period-probe pass stays serial; only PASS 1
+is distributed.
+
+### Fixed — niche D8 follow-up: the spawn trap, and worker state inheritance (`propagators/carrier.py`)
+
+Two defects found by putting `congruence_workers` on a real driver (design
+121's 32-order fan); neither is reachable from the test suite, and the second
+is the dangerous one.
+
+**The spawn trap.** On Windows (any `spawn` start method) each worker
+RE-IMPORTS the caller's `__main__`, so a driver that does its work at module
+level re-runs the whole thing per child and multiprocessing refuses during
+bootstrap. The remedy is the CALLER's `if __name__ == '__main__':` guard, so
+the generic "re-run serially to reproduce it" message was actively wrong
+advice. `_multi_looks_like_spawn_bootstrap` now selects a message naming the
+real fix; it matches on message text (multiprocessing raises a bare
+`RuntimeError`, and the condition also surfaces as `BrokenProcessPool`) and
+walks the `__cause__`/`__context__` chain cycle-safely. Pinned on the
+predicate: pytest's own `__main__` IS import-safe and cannot reproduce it.
+
+**Worker state inheritance.** A spawned worker imports lumenairy fresh, so
+NOTHING the caller registered or switched at run time exists there. Two
+classes: runtime-registered MATERIALS (every real prescription adds Sellmeier
+coefficients; a worker without them raises out of `get_glass_index` and the
+congruence dies) and, far worse, the module-level BEHAVIOUR FLAGS that steer
+the traced path (`DECENTRED_FIT_ARBITER`, `TILTED_CARRIER_EXACT_EIKONAL`,
+`REMAP_INVERSE_SUPPORT_BOUND`, the era pins). A worker that did not inherit
+those would compute DIFFERENT PHYSICS from the serial path and return a
+plausible number **silently** — the glass crash is merely what exposed the
+class. `_multi_capture_worker_state` / `_multi_apply_worker_state` snapshot
+both plus the `set_max_ram` budget and re-apply them in the pool initializer.
+Discovery follows the library's own naming convention (upper-case module-level
+names), matching the suite's leak guard so the two cannot drift; glass tables
+are restored with `dict.update` IN PLACE because other modules hold them by
+reference. 18 tests, ruff clean.
+
 ## [5.32.1] — 2026-08-03
 
 ### Fixed — the shared least-squares solver no longer draws arbitrary answers on singular systems (niche C13, `elements/_lens_traced.py`)
