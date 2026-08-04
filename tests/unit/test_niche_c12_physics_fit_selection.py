@@ -185,9 +185,32 @@ def _crossover(predictor, arbiter, presc=_FAST, lo=0.06, hi=1.5, n=11):
 # ===========================================================================
 # 1-3  the switches
 # ===========================================================================
-def test_the_predictor_ships_off_and_is_never_even_computed():
-    """Flag-off is a path NOT TAKEN, not a result discarded."""
+def test_the_predictor_stays_off_and_the_arbiter_ships_on():
+    """5.32.1 flipped the ARBITER on and left THIS flag off, and the split is
+    the whole point of the pin.
+
+    The flip was ordered for both constants.  This one was REVERTED on
+    measurement (`C13_DEGREE6_CONDITIONING_2026_08_03` S11): with it on, 9
+    tests across niches D6 and D7 go red, and all 9 recover with this flag off
+    and the arbiter STILL ON -- so the arbiter is exonerated and the predictor
+    is the whole cause.  On D6's analytic ``K = -n^2`` stand-in it costs EE2
+    0.9819 -> 0.6670 against an inline exact raytrace, because its closed form
+    reads ``u*`` = 1.4161 at ``u`` = 1.0001 while the arbiter's MEASURED
+    residuals on that same call say off-centre is 17,000x better.
+
+    Both flags are pinned here in one place so a future flip of EITHER has to
+    come past it."""
     assert _lt.DECENTRED_FIT_PREDICTOR is False
+    assert _lt.DECENTRED_FIT_ARBITER is True
+
+
+def test_the_predictor_off_is_a_path_not_taken_and_never_even_computed():
+    """ERA-PINNED at ``DECENTRED_FIT_PREDICTOR = False`` -- the v5.32.0 default,
+    now the first rung of the fall-back ladder.  Flag-off is a path NOT TAKEN,
+    not a result discarded.
+
+    The assertion is C12's own, verbatim; only the flag state it is taken in
+    is now set explicitly instead of inherited."""
     seen = []
     orig = _lt._decentred_fit_crossover
 
@@ -203,6 +226,20 @@ def test_the_predictor_ships_off_and_is_never_even_computed():
         assert seen == []
     finally:
         _lt._decentred_fit_crossover = orig
+
+
+def test_the_arbiter_flag_is_a_no_op_while_the_predictor_decides():
+    """WHEREVER the predictor is on it decides alone: the fit site enters the
+    selector block on ``ARBITER or PREDICTOR``, computes the arbiter's measured
+    verdict unconditionally as C12's CHECK, and then lets the predictor
+    overwrite it.  So ``(True, True)`` must be BITWISE ``(True, False)``.
+
+    This is no longer a statement about the SHIPPED pair -- 5.32.1 ships
+    ``(PREDICTOR=False, ARBITER=True)``, so the arbiter decides -- but it is
+    still the invariant that makes the ladder a ladder rather than a 2-by-2,
+    and the opt-in predictor arm rests on it."""
+    c = 0.30 * _W
+    assert np.array_equal(_apply(c, True, True), _apply(c, True, False))
 
 
 def test_the_fail_before_restores_both_earlier_eras_bit_for_bit():
@@ -285,7 +322,27 @@ def test_the_closed_form_and_the_raw_comparison_are_one_decision():
 # 6-7  the spectral tail, on a real traced map
 # ===========================================================================
 def _capture_traced_opl(c, presc=_FAST):
-    """The launch axes and the UNMASKED traced OPL of one element call."""
+    """The launch axes and the UNMASKED traced OPL of one element call.
+
+    ERA-PINNED to the v5.32 GATE (both selector flags ``False``), and it has to
+    be, because this helper indexes the evaluator builds POSITIONALLY --
+    ``seen[2]`` -- and how many builds a call makes is exactly what the
+    selectors change.  This audit's own S4.4 counts them: **3 builds on the
+    pure gate, 5 with the C11 arbiter, 9 with the C12 predictor**, at orders
+    ``10, 6, 14, 6, 10, 6, 6, 6, 6``.  So ``seen[2]`` is the unmasked box fit
+    on the gate and something else entirely on either selector.
+
+    Left inheriting the default, this helper silently handed the spectrum
+    tests a candidate trial fit instead of the traced OPL the moment
+    ``DECENTRED_FIT_ARBITER`` shipped ``True`` -- two of them failed IN FILE
+    ORDER while passing when run alone, which is the signature of exactly this
+    and not of a physics change.  (Verified: the same two failures reproduce
+    with ``LSTSQ_CONDITIONING_STEPDOWN`` off, so niche C13 is not implicated.)
+
+    An index expressed relative to a configuration, evaluated after the
+    configuration moved -- the same defect class niche C14's flag registry
+    exists to close.
+    """
     seen = []
     orig = _Cheb2DEvaluator.__init__
 
@@ -299,9 +356,12 @@ def _capture_traced_opl(c, presc=_FAST):
             raise _Stop()
 
     _Cheb2DEvaluator.__init__ = spy
-    old = (_lt._DECENTRE_GATE_PIXELS, _lt._DECENTRE_GATE_W_FRAC)
+    old = (_lt._DECENTRE_GATE_PIXELS, _lt._DECENTRE_GATE_W_FRAC,
+           _lt.DECENTRED_FIT_PREDICTOR, _lt.DECENTRED_FIT_ARBITER)
     _lt._DECENTRE_GATE_PIXELS = 0.0
     _lt._DECENTRE_GATE_W_FRAC = 0.0
+    _lt.DECENTRED_FIT_PREDICTOR = False
+    _lt.DECENTRED_FIT_ARBITER = False
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -315,7 +375,8 @@ def _capture_traced_opl(c, presc=_FAST):
                 pass
     finally:
         _Cheb2DEvaluator.__init__ = orig
-        _lt._DECENTRE_GATE_PIXELS, _lt._DECENTRE_GATE_W_FRAC = old
+        (_lt._DECENTRE_GATE_PIXELS, _lt._DECENTRE_GATE_W_FRAC,
+         _lt.DECENTRED_FIT_PREDICTOR, _lt.DECENTRED_FIT_ARBITER) = old
     assert len(seen) >= 3
     return seen[0][0], seen[2][1]
 

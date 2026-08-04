@@ -1,0 +1,35 @@
+[c13_with_stepdown] LSTSQ_CONDITIONING_STEPDOWN=True  rcond_min=1.0e-08  resid_margin=1.0e-06  RESID_DEG=6  PREDICTOR=False  ARBITER=True
+[c13_with_stepdown] lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+[c13_with_stepdown] _lens_traced 382f91a65037aad8  carrier 7276dd62d7037465
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 382f91a65037aad8
+  carrier.py 7276dd62d7037465
+shipped _REMAP_RESID_EIKONAL_DEGREE = 6, cap = 6
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:83: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:83: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+
+########## ORDER (+0,+0)   oracle (true ceiling) EE3 = 90.5324 ##########
+   degree  EE3 area  residual  EE6 area  FWHM um        sha
+        6   90.5801   -0.0477   99.9073    3.434   8ecba1ec   [65s]
+
+########## ORDER (-1,+0)   oracle (true ceiling) EE3 = 90.5768 ##########
+   degree  EE3 area  residual  EE6 area  FWHM um        sha
+        6   90.5215    0.0552   99.8748    3.447   e050db96   [81s]
+
+########## ORDER (-2,+0)   oracle (true ceiling) EE3 = 90.6650 ##########
+   degree  EE3 area  residual  EE6 area  FWHM um        sha
+        6   90.6186    0.0464   99.8765    3.446   79f23160   [81s]
+
+########## ORDER (-3,+0)   oracle (true ceiling) EE3 = 90.6961 ##########
+   degree  EE3 area  residual  EE6 area  FWHM um        sha
+        6   90.6586    0.0375   99.8819    3.431   06f13072   [84s]
+
+########## ORDER (-4,+0)   oracle (true ceiling) EE3 = 90.5035 ##########
+   degree  EE3 area  residual  EE6 area  FWHM um        sha
+        6   90.4728    0.0308   99.8982    3.392   6744ad41   [87s]
+
+########## ORDER (-4,-2)   oracle (true ceiling) EE3 = 90.1071 ##########
+   degree  EE3 area  residual  EE6 area  FWHM um        sha
+        6   90.0378    0.0693   99.8838    3.373   cd0b69d7   [91s]

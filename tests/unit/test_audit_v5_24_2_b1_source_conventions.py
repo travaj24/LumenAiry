@@ -1,19 +1,23 @@
 """Audit v5.24.2 B1 / S3-16 -- source-factory convention normalization.
 
-Deprecation-cycle (rule 4) pins for the three convention fixes in
-``lumenairy/sources/core.py``:
+Convention pins (POST-v5.30 REMOVAL) for the three convention fixes in
+``lumenairy/sources/core.py``.  This header used to describe the v5.25
+deprecation-warning phase; v5.30 hard-removed both deprecated spellings, and
+the assertions below were updated to that -- they now assert ``TypeError``,
+not a ``DeprecationWarning``.  (The in-file comment block further down
+already recorded the supersession; only this header was stale.)
 
-1. ``rng=`` alongside deprecated ``seed=`` on the Schell-family
-   factories (CONVENTIONS.md section 3).  ``seed=<int>`` must still work,
-   emit a ``DeprecationWarning`` naming ``rng`` + the v5.27 removal, and
-   reproduce the ``rng=<int>`` stream bit-for-bit.
+1. ``rng=`` on the Schell-family factories (CONVENTIONS.md section 3),
+   which REPLACED ``seed=``.  ``seed=`` was REMOVED in v5.30, so the old
+   spelling must now raise ``TypeError``; ``rng=<int>`` stays deterministic
+   and reproduces its stream bit-for-bit.
 2. Explicit ``normalize=`` on ``create_top_hat_beam`` /
    ``create_annular_beam`` / ``create_bessel_beam`` whose DEFAULT
    reproduces the historical hard-coded convention exactly (top-hat /
    annular = unit power; Bessel = raw).
-3. ``w0=`` (the 1/e^2 intensity radius, canonical) alongside the
-   deprecated ``sigma=`` (field std-dev) on ``create_gaussian_beam``,
-   with ``w0 = sigma * sqrt(2)``.
+3. ``w0=`` (the 1/e^2 intensity radius, canonical) on
+   ``create_gaussian_beam``, which REPLACED ``sigma=`` (field std-dev,
+   ``w0 = sigma * sqrt(2)``); ``sigma=`` was REMOVED in v5.30.
 
 Oracles are independent (analytic waist / power definitions), not the
 code's own output.

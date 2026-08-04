@@ -488,7 +488,18 @@ def test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order(
     redundant OR insufficient: with the weights degenerated back to D1's hard
     mask the same call folds and ghosts, and with them on it does not.
 
-    ERA-PINNED to ``_REMAP_RESID_EIKONAL_DEGREE = 4`` (niche C10, 2026-08-02),
+    ERA-PINNED to ``_REMAP_RESID_EIKONAL_DEGREE = 4`` (niche C10) AND to
+    ``LSTSQ_CONDITIONING_STEPDOWN = False`` (niche C13, 2026-08-03), which
+    together are the library state this case was calibrated in.  On the C13
+    pin specifically: this fixture degenerates the restriction to D1's hard NaN
+    mask, whose normal matrix its own sibling below calls "ill-conditioned BY
+    CONSTRUCTION" -- and that is exactly the solve C13 made stable, so with the
+    step-down on THE FOLD DOES NOT HAPPEN AT ALL and the witness has nothing to
+    witness.  Measured on this fixture at the pinned degree 4, hard mask,
+    off-beam fraction of peak: **0.5213 with the step-down off, 0.0002 with it
+    on**, and the fold-caustic warning goes from 1 to 0.  The cure is asserted
+    directly in ``test_c13_cures_the_hard_mask_fold_at_the_d7_order`` below;
+    what is pinned HERE is unchanged.
     which is the library state this case was calibrated in.  C10 raised that
     degree to 6, and a better model of the input residual removes THIS
     FIXTURE's fold even on the hard mask -- the witness stops witnessing
@@ -501,6 +512,7 @@ def test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order(
     """
     _ram_guard()
     monkeypatch.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
+    monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
     good = np.abs(_ghost_apply())
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
     with warnings.catch_warnings(record=True) as rec:
@@ -556,8 +568,20 @@ def test_the_hard_mask_arm_ghosts_on_every_build(monkeypatch):
     (This was one of the v5.32.1 CI failures at ``5af1edf`` and it PREDATES
     niche C11: driven directly with the flag pinned each way in one process it
     fails identically with ``DECENTRED_FIT_ARBITER`` True and False.)
+
+    ERA-PINNED to ``LSTSQ_CONDITIONING_STEPDOWN = False`` (niche C13,
+    2026-08-03).  The docstring above diagnosed the mechanism one step short of
+    the answer: "whose normal matrix is ill-conditioned BY CONSTRUCTION ... set
+    by which side of the instability that build's LAPACK lands on" IS C13's
+    finding, and C13 removed the instability.  With the step-down on, the
+    degree-4 hard-mask arm no longer ghosts at all (0.5213 -> 0.0002 off-beam),
+    so the four-orders-of-magnitude build spread recorded above is not a
+    property of the library any more -- it is a property of the library BEFORE
+    C13, which is what this arm now pins.  The cure is asserted separately
+    below; the assertions here are unchanged.
     """
     _ram_guard()
+    monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
     # This test DELIBERATELY builds the halo the v5.32 self-check exists to
     # report, so its firing here is the fixture working, not a finding -- and
@@ -579,6 +603,54 @@ def test_the_hard_mask_arm_ghosts_on_every_build(monkeypatch):
     # on this deliberately degenerate fixture rather than NaN or nothing.
     assert np.isfinite(r_new), r_new
     assert float(new.max()) > 0.0
+
+
+def test_c13_cures_the_hard_mask_fold_at_the_d7_order(monkeypatch):
+    """The PASS-AFTER for the two era-pinned witnesses above, asserted rather
+    than only recorded.
+
+    Both of them degenerate the restriction to D1's hard NaN mask and require
+    the result to ghost.  It no longer does, and the reason is niche C13: that
+    hard-mask design matrix is near-singular, the normal equations answered it
+    with a null-space draw, and the draw is what folded the inverse map.  With
+    ``LSTSQ_CONDITIONING_STEPDOWN`` on, the same call is solved by a
+    backward-stable QR and there is no fold to make a ghost from.
+
+    So D1's weighted restriction and C13's stable solve are INDEPENDENT cures
+    for the same defect, and this fixture now shows the second one.  It is a
+    strictly stronger statement than the era-pinned arms make, which is why it
+    is asserted here instead of being folded into them.
+
+    (This says nothing about whether the restriction is still needed -- it is;
+    see the siblings' docstrings and the 41-72 EE3 points it costs on design
+    121 when degenerated there.)
+    """
+    _ram_guard()
+    monkeypatch.setattr(_lt, 'RAY_DENSITY_HALO_CHECK', 'silent')
+    monkeypatch.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
+    monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
+
+    def _offbeam():
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            a = np.abs(_ghost_apply())
+        x = (np.arange(_GN) - _GN // 2) * _GDX
+        near = ((x[None, :] - _GXC) ** 2 + x[:, None] ** 2) <= (3 * _GW) ** 2
+        folds = sum('fold caustic' in str(m.message) for m in rec)
+        return float(a[~near].max()) / float(a[near].max()), folds
+
+    with monkeypatch.context() as m:
+        m.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
+        r_pre, folds_pre = _offbeam()
+    r_post, folds_post = _offbeam()
+
+    # the fail-before is live: the pre-C13 solve ghosts and folds
+    assert r_pre > 0.1, f'the pre-C13 arm stopped ghosting ({r_pre:.4f})'
+    assert folds_pre >= 1, 'the pre-C13 arm stopped folding'
+    # ... and the shipped solve does neither, by a wide margin
+    assert r_post < 0.01, f'C13 no longer removes the ghost ({r_post:.4f})'
+    assert folds_post == 0, 'the fold detector still fires with C13 on'
+    assert r_pre > 100.0 * r_post, (r_pre, r_post)
 
 
 def test_the_off_centre_field_tracks_the_unrestricted_spline_map():

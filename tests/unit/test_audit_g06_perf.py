@@ -127,13 +127,36 @@ def test_s5_8c_default_fftw_threads_capped():
 def test_s5_8f_pyfftw_interfaces_cache_daemon_disabled():
     """S5-8f: loading pyFFTW must NOT spin up the idle
     pyfftw.interfaces.cache keep-alive daemon (the library drives raw FFTW
-    plans only, so the interfaces cache is never populated)."""
+    plans only, so the interfaces cache is never populated).
+
+    AUDIT_CI_TEST_TIME_2026_08_03 §3: the substring probe below used to be
+    ``"pyfftw" in n``, which made this test structurally UNPASSABLE whenever
+    ``pytest-timeout`` was active -- its watchdog thread is named after the
+    node ID it is guarding, and THIS test's own node ID contains the
+    substring ``pyfftw``.  Reproduced as::
+
+        AssertionError: a pyFFTW cache daemon thread is running:
+        ['mainthread', 'pytest_timeout tests/unit/test_audit_g06_perf.py::
+         test_s5_8f_pyfftw_interfaces_cache_daemon_disabled']
+
+    That false-fail is the only thing blocking ``--timeout`` as a hang-guard
+    on the main gate, so the probe now excludes any thread whose name is a
+    pytest-timeout watchdog.  The real daemon this pin is about is created by
+    ``pyfftw.interfaces.cache.enable()`` and is named by pyFFTW itself
+    (``_Cache``'s thread carries ``pyfftw`` / ``fftwcache`` in its name and
+    NEVER carries a node ID), so filtering the watchdog cannot mask it.
+    """
     pytest.importorskip("pyfftw")
     from lumenairy.propagators import fft_infra as fi
     assert fi._ensure_pyfftw_loaded()
     names = [t.name.lower() for t in threading.enumerate()]
-    assert not any("pyfftw" in n or "fftwcache" in n for n in names), (
-        f"a pyFFTW cache daemon thread is running: {names}")
+    # A pytest-timeout watchdog is named ``pytest_timeout <nodeid>``; it is
+    # this harness's own thread, not a pyFFTW daemon.
+    probe = [n for n in names
+             if "pytest_timeout" not in n and "pytest-timeout" not in n]
+    assert not any("pyfftw" in n or "fftwcache" in n for n in probe), (
+        f"a pyFFTW cache daemon thread is running: {probe} "
+        f"(all threads: {names})")
 
 
 # ===========================================================================

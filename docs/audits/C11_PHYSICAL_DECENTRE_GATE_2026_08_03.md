@@ -1,5 +1,7 @@
 # The decentred beam's ray-fit branch: measuring it instead of guessing it
 
+> **DISPOSITION SUPERSEDED (2026-08-03, user-ordered, adjudicated in C13 S11):** `DECENTRED_FIT_ARBITER` ships **True** in v5.32.1 -- the user accepted the (-1,0) +0.026 trade explicitly for the four-order gains and the 67-point trap removal.  `DECENTRED_FIT_PREDICTOR` ships **False**: the ordered predictor flip was REVERTED on evidence (a 17,000x inversion against the analytic tilted-leg oracle; nine of the eleven resulting failures were a real predictor regression, not stale pins).  Statements below describing the arbiter as default-OFF are the historical C11-era record, kept verbatim.
+
 Niche C11, 2026-08-03.  Branch `feat/d121-final-closure`, on top of
 `5af1edf` (the C9 + C10 tree).
 
@@ -1181,7 +1183,96 @@ envelope 0.9535-0.9920 at `ray_subsample=8`, converging to 0.9569-1.0000 at 1),
 and moving a band edge to chase a warning that was never the failure is exactly
 the class of change this campaign has paid for four times.
 
-### 9.5 The state-leak class, and the guard that closes it permanently
+### 9.5 THE D4 FAILURE IS NOT A STATE LEAK -- it is niche C10 at degree 6 on OpenBLAS
+
+**This section replaces a hypothesis that two people held and that was wrong,
+including me.**  The reasoning was: D4's `test_matches_the_manual_hand_split`
+fails on CI, passes in isolation locally, and 0.066 is physics-mode-sized --
+therefore a same-shard test is leaving state dirty.  Every step is sound except
+the second, and the second was never measured: **"passes in isolation" was a
+WINDOWS observation, and "fails" was a LINUX one.**  Comparing isolation on one
+build against a shard on another build and attributing the difference to
+ordering is the whole error.
+
+**D4 run ALONE on Linux/OpenBLAS fails**: `1 failed, 58 passed`,
+`sphere-reference arm: 8.7976e-02 >= 1e-4`.  No other test in the process.
+There is no ordering, no leak, and no shard involved.
+
+| build | sphere arm | parabola arm |
+|---|---|---|
+| Windows / MKL | **5.93e-07** | 3.61e-07 |
+| Linux / OpenBLAS | **8.80e-02** | 2.49e-07 |
+
+(The test's own docstring records 5.3e-7 for the sphere arm -- an MKL number.)
+
+**Attributed, in four steps, each a measurement:**
+
+1. **not `carrier_reference`.**  `parabola` + chain defaults reads 7.75e-02
+   too; the arm that passes differs in its `traced_kwargs`, not its reference;
+2. **not niche C9.**  `SPHERE_PARAB_CONVERSION_EXACT` on and off give
+   8.7976e-02 to five figures -- the flag is inert here;
+3. **it is `preserve_input_phase='remap'`**, the v5.29 validated chain default.
+   `preserve_input_phase=True` on the same `sphere` reference reads 5.56e-07;
+4. **inside `remap`, it is niche C10's degree.**  Sweeping
+   `_REMAP_RESID_EIKONAL_DEGREE` on Linux/OpenBLAS:
+
+| degree | 2 | 3 | 4 | 5 | **6 (SHIPPED)** |
+|---|---|---|---|---|---|
+| rel | 4.85e-07 | 9.67e-07 | 2.15e-06 | 2.36e-06 | **8.80e-02** |
+
+   Degrees 2-5 grow smoothly -- a factor 5 across four degrees, which is a
+   model getting gradually less exact.  **Degree 6 jumps 37,000x.**  That is a
+   CLIFF, and a cliff in a quantity that is smooth on the other build is an
+   ill-conditioned solve falling over, not an approximation error.  Turning the
+   C6 launch off entirely also fixes it (5.42e-07); `REMAP_INVERSE_SUPPORT_BOUND`
+   (niche C8) is inert.
+
+**What this means, stated carefully.**  The D4 case compares two ROUTES to the
+same field -- the DOE-entry chain and the manual hand split.  An 8.8 %
+disagreement says one of them is wrong on that build; it does not by itself say
+which.  What it does say is that **`_REMAP_RESID_EIKONAL_DEGREE = 6` has a
+build-dependent failure mode that degrees 2-5 do not**, on the build CI runs,
+in the shipped default configuration -- and that `_REMAP_RESID_DEGREE_CAP` is
+6, so the shipped default sits exactly at the cap where this appears.
+
+`D121_RESIDUAL_CLOSURE` shipped that degree on measurements taken entirely on
+Windows/MKL (its S6.2 per-order table, its S6.3 acceptance, its S5.3 ghost
+re-measurement).  Nothing in that document is refuted -- degree 6 does close
+the design-121 residual, on MKL -- but its evidence base is one BLAS build, and
+this is the second finding in this campaign (with S9.2) where that mattered.
+
+**NOT re-pinned.**  The D4 assertion is left FAILING on OpenBLAS deliberately.
+It is not a stale calibration or a build-lottery magnitude like S9.2's ghost --
+it is a 148,000x route disagreement in the shipped configuration, and silencing
+it would delete the only automated witness the project has for it.  The
+disposition belongs to whoever owns C10, with these numbers.
+
+**RESOLVED, 2026-08-03 -- and it was not C10.**  See
+`C13_DEGREE6_CONDITIONING_2026_08_03`.  The degree-6 residual-eikonal fit is
+one of the best-conditioned solves in the traced pipeline (`cond(A)` = 4.08e2,
+identical on both builds); the ill-conditioned one is
+`_solve_lstsq_thread_safe` under it, whose normal equations square a
+`cond(A)` = 1.4e10 WEIGHTED design matrix (D1/D7's
+`_FIT_DISC_OUTSIDE_WEIGHT_REL`) into a numerically singular Gram.  Degree 6 is
+the stimulus that moves which null-space draw each build takes, not the defect.
+With a screened QR step-down the two builds read 6.7181e-07 and 6.7186e-07 on
+this case, the sweep is smooth 2..6 on both, and the six recorded degree-6
+hashes of S6.6 (b) reproduce BIT FOR BIT with the step-down off.
+
+Also corrected there: **"Windows / MKL" is a misnomer.**  Both builds are
+scipy-openblas 0.3.31.188.0; they differ in the DYNAMIC_ARCH kernel (Haswell
+against SkylakeX), the Python (3.14.6 / 3.12.3) and the NumPy patch level
+(2.4.4 / 2.4.6).  The two differ only in rounding, which is what makes a
+148,000x disagreement between them a statement about stability rather than
+about BLAS vendors.
+
+**The instrumentation from the leak hypothesis is kept**, because it is cheap
+and it is what made this tractable: the D4 case is now self-reporting (S9.6),
+and the leak guard's widening to `fft_infra` closes a real hole regardless of
+whether it was ever the carrier here.
+
+### 9.6 The leak guard and the self-reporting dump (kept, though the hypothesis was wrong)
+
 
 A second witness arrived on `a6f7875`:
 `test_niche_d4_dgrating::TestDoeChainBookkeeping::test_matches_the_manual_hand_split`
@@ -1225,6 +1316,58 @@ making the suite order-independent whether or not a leaker exists:
 * it is an autouse fixture, so it is set up first and torn down LAST -- after
   a `monkeypatch` undo -- and therefore sees genuine leakage rather than a
   pending restore.
+
+**ROUND TWO: the guard did not fix it, and that is the finding.**  `1d340bb`
+shipped the 62-flag guard ACTIVE and CI failed the same D4 case with the same
+0.066-class delta.  **So the carrier is outside the flag set**, and the guard's
+own stated exclusions become the suspect list.
+
+Two of them are now closed:
+
+* **`fft_infra` was never in the discovered set.**  It holds
+  `DEFAULT_WAVE_PROPAGATOR` -- a PHYSICS MODE (`'asm'` vs anything else changes
+  every propagation in the process) -- alongside `DEFAULT_DY` and the whole
+  pyFFTW dispatch set (`USE_PYFFTW`, `FFTW_MIN_SIZE`, the planner flag, the
+  auto-promote counters).  Discovery scanned the two PHYSICS modules only,
+  which is exactly why a dispatch-global leak walked through it.  The module is
+  now in `_LEAK_GUARD_MODULES`: **62 flags -> 91**.  That `USE_PYFFTW` is
+  reachable is not hypothetical -- `lumenairy/ui/waveoptics_dock.py` clears it
+  unconditionally and `shipped_fft_dispatch` is opt-in.
+* **the introspection cache** (`_TRACED_KWARG_DEFAULTS_CACHE`) is a module-level
+  CONTAINER, which the guard compares nothing about; it is now cleared after
+  every test.
+
+And niche D4 is given the isolation it lacked.  Its `runs` fixture is
+MODULE-scoped, and pytest builds module scope BEFORE function scope -- so the
+function-scoped `shipped_fft_dispatch` could not have protected it even if the
+module had asked for it: the chains are computed before it activates.  The
+fixture body is now also a context manager (`shipped_fft_dispatch_state`,
+reached through the `fft_state_ctx` fixture because `tests/conftest.py` is not
+importable by name), and D4's `runs` is built inside it.
+
+**The D4 case is now SELF-REPORTING**, which is the part that survives being
+wrong about the cause.  `describe_process_state()` is attached to both
+assertion messages and prints, at the moment of failure: every one of the 91
+discovered flags that DIFFERS from its process-start value (a clean run prints
+one line, so a poisoned run is unmissable), the entry counts of all six
+module-level caches the guard cannot compare (`_H_CACHE`, `_FREQ_GRID_CACHE`,
+`_BANDLIMIT_CACHE`, `_PYFFTW_PLAN_CACHE`, `_PYFFTW_BAD_SHAPES`, and the
+introspection cache), the full FFT dispatch and planner state including
+`DEFAULT_WAVE_PROPAGATOR`, the active `warnings.filters`, and every
+`LUMEN*`/`PYFFTW*`/`OMP_*`/`MKL_*`/`NUMBA_*`/`JAX_*` environment variable.
+
+The baseline is captured at conftest IMPORT -- before any test runs -- so it is
+the process's own shipped state rather than a re-derived guess.  **Verified by
+poisoning**: with `USE_PYFFTW`, `DEFAULT_WAVE_PROPAGATOR`, `FFTW_MIN_SIZE` and
+`TILTED_CARRIER_EXACT_EIKONAL` set by hand, the dump names all four and the
+cache entry.  An instrument that stays silent under the condition it exists to
+report is worse than none, so that check is part of the deliverable.
+
+**What this does NOT claim.**  The leaker is still unnamed, and this round's
+two fixes are the two CHEAP candidates, not a diagnosis.  If the next CI run
+fails the same way, the assertion message will contain the answer; if it
+passes, the cause was one of the two closed here and the dump will have cost
+nothing.  Either way the next round does not start from an argument.
 
 **Two PRE-EXISTING failures were surfaced by running the shard end to end**,
 and they are neither this campaign's nor the leak class's:

@@ -209,8 +209,14 @@ def test_a_genuine_decentre_still_routes_to_the_weighted_raised_order_path(
     -- which passes, so the claim itself is intact on this fixture; it is the
     counting that stopped being valid."""
     _ram_guard()
-    _arb = _lt.DECENTRED_FIT_ARBITER
+    # 5.32.1: the era pin needs BOTH flags now.  The selector block is entered
+    # on ``ARBITER or PREDICTOR``, so pinning only the arbiter stopped being an
+    # era pin the moment ``DECENTRED_FIT_PREDICTOR`` shipped ``True`` -- the
+    # spy would collect the predictor's trial builds instead of the arbiter's,
+    # and the count would be wrong for a different reason.
+    _arb = (_lt.DECENTRED_FIT_ARBITER, _lt.DECENTRED_FIT_PREDICTOR)
     _lt.DECENTRED_FIT_ARBITER = False
+    _lt.DECENTRED_FIT_PREDICTOR = False
     try:
         ref = _apply_dec(c, None)
         got = _apply_dec(c, (c, 0.0))
@@ -238,7 +244,7 @@ def test_a_genuine_decentre_still_routes_to_the_weighted_raised_order_path(
         finally:
             _Cheb2DEvaluator.__init__ = orig
     finally:
-        _lt.DECENTRED_FIT_ARBITER = _arb
+        _lt.DECENTRED_FIT_ARBITER, _lt.DECENTRED_FIT_PREDICTOR = _arb
 
 
 def test_the_gate_is_the_documented_max_of_the_two_floors():

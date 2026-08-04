@@ -2,7 +2,57 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.32.1] — 2026-08-03
+
+### Fixed — the shared least-squares solver no longer draws arbitrary answers on singular systems (niche C13, `elements/_lens_traced.py`)
+
+The campaign's residual "CI flakiness" was a real defect one level below every
+hypothesis: `_solve_lstsq_thread_safe` solved ALL traced fits by normal
+equations on a docstring claim that is false for the D1/D7 WEIGHTED fits
+(`cond(A)` 1.4e10 squares past float64; Cholesky then returns an arbitrary
+null-space draw per BLAS build -- fit residual 1.05x optimal on one build,
+14.8-23.0x on another, exit field pixel-speckled).  C10's degree 6 was only
+the messenger (`cond(A)` 4.1e2 there -- one of the BEST-conditioned solves).
+Fix: rcond-screened equilibrated Gram; where singular, Householder-QR
+re-solve kept only if it fits better; ties return historical bits.
+Cross-build agreement 6.8e-2 -> 1.2e-10; degree sweep smooth 2..6 both
+builds; per-order closure reproduced to four decimals on BOTH builds (first
+OpenBLAS measurement of the design-121 table); independently CURES the D1
+fold defect.  Commit gate: 501 tests x 2 builds green.
+
+### Changed — the measured fit-branch arbiter is now the DEFAULT (user-ordered); the C12 predictor stays dormant (regression found)
+
+`DECENTRED_FIT_ARBITER = True`: five orders improve (worst residual 0.152 ->
+0.069), the 67-point wrong-branch trap dies, and the user explicitly accepted
+the proven-irreducible (-1,0) +0.026 trade.  The ordered
+`DECENTRED_FIT_PREDICTOR` flip was REVERTED ON EVIDENCE: adjudicating its 11
+test failures against the analytic tilted-leg oracle exposed a real 17,000x
+inversion -- nine eras-pins that would have been written were a live
+regression.  Predictor ships False with the defect recorded (C13 S11).
+
+### Added — encapsulation + guard integrity (niche C14, both library files)
+
+`_traced_flags.py` registry (presets, not an ordinal era -- the C6-on/C8-off
+corner stays reachable), `TRACED_LAYER_MAP.md` bound to the code by four CI
+tests (one caught a real dangling reference on first run), and UNIT C
+extracted: the three notions of traced exit support are one construction
+(byte-identical over 36 configs incl. the never-probed direct-fit path),
+closing the documented C7/C8 joint blind spot on the relay.  Guard
+integrity: the dx-stability warning is no longer dedup-silenced (a batch
+loop was warned ONCE; now every qualifying call warns via warn_explicit),
+and FOUR silent exits of `_run_chain_dx_self_check` now speak.  Legs: 376 +
+119-strict + 142-WSL green; 32/32 both builds.
+
+### Changed — three external audits assessed and answered (CI test-time, test justification, p2 DID-NOT-WARN)
+
+Per-recommendation responses with counter-measurements where rejected:
+~47 min/push of measured CI savings, a JAX coverage hole closed (nine files
+ran in NO leg), 13 docstring-drift fixes, three defects the audits missed,
+the p2 fixture's 0.87 %-margin route pinned, and the corrupted durations
+mechanism (contention-captured units) documented with the regeneration
+protocol now in the workflows.  Deferred with ledgers: the ~30-duplicate
+dedup cycle, one backwards marker move.  Records: CI_TEST_TIME_RESPONSE,
+TEST_JUSTIFICATION_RESPONSE, P2_DIDNOTWARN_DIAGNOSIS (2026-08-03).
 
 ### Added — physics-derived fit-branch predictor (niche C12, `elements/_lens_traced.py`, opt-in)
 

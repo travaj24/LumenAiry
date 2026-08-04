@@ -49,7 +49,15 @@ Test taxonomy:
     ``__reduce__`` still propagates -- we don't accidentally swallow
     interpreter-control signals.
 
-Total: 8 tests.
+Total: 3 tests (all P2-NEW-F1-2).
+
+2026-08-03 docstring repair.  This said "Total: 8 tests" and listed the
+P2-NEW-F1-1 taxonomy above as a live contract.  Commit 155141b7
+(AUDIT_OPTIMIZE_SECOND_PASS, 2026-07-11) retired that stale
+``DeprecationWarning`` and deleted its 5 tests plus their reset fixture --
+correctly and deliberately -- but left this docstring untouched, so the
+P2-NEW-F1-1 block above describes a warning that no longer exists.  Read
+it as history, not as a contract.
 
 Author: Andrew Traverso -- v4.16.3 / Agent C
 """

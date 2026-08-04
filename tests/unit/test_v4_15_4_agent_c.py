@@ -45,8 +45,6 @@ Author: Andrew Traverso -- v4.15.4 / Agent C
 from __future__ import annotations
 
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -97,32 +95,17 @@ def _read_roadmap_current_state() -> str:
     return body
 
 
-def _pytest_collect_only_count() -> int:
-    """Return the actual ``pytest --collect-only`` count for tests/unit.
-
-    Runs the same pytest binary used to execute this test; the
-    subprocess parses the final ``N tests collected`` summary line.
-    """
-    result = subprocess.run(
-        [sys.executable, '-m', 'pytest', 'tests/unit',
-         '--collect-only', '-q'],
-        cwd=str(_REPO_ROOT),
-        capture_output=True,
-        text=True,
-        encoding='utf-8',
-        timeout=300,
-    )
-    # ``-q`` prints ``N tests collected in T.Ts`` on the last
-    # non-empty line.
-    for line in reversed(result.stdout.splitlines()):
-        line = line.strip()
-        m = re.match(r'(\d+)\s+tests?\s+collected', line)
-        if m is not None:
-            return int(m.group(1))
-    raise AssertionError(
-        f'Could not parse ``N tests collected`` from pytest output: '
-        f'{result.stdout[-2000:]}'
-    )
+# NOTE (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 4).  A
+# ``_pytest_collect_only_count()`` helper used to live here: it shelled out to
+# ``pytest tests/unit --collect-only -q`` (a full-tree collection, i.e. an
+# import of every one of the ~450 unit modules in a fresh interpreter) to read
+# back the suite-wide item count.  It has had NO caller since the v4.16.1
+# rewrite moved the count reconciliation onto the CHANGELOG's own arithmetic,
+# so it was costing nothing -- but leaving it in place invites re-adopting a
+# whole-suite collection subprocess inside a unit test.  Removed rather than
+# revived; if a future pin genuinely needs a collected-item count, prefer ONE
+# subprocess over the files it actually cares about (see
+# ``test_v4_15_2_agent_a.py``) instead of the whole tree.
 
 
 # ---------------------------------------------------------------------------

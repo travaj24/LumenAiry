@@ -186,12 +186,27 @@ class TestDoeLegacyUnitsDeprecationReachability:
     def test_auto_mode_post_rescale_bound_pin_is_SUPERSEDED(self):
         """SUPERSEDES ``test_auto_mode_rejects_post_rescale_nonsense``.
 
-        With ``'auto'`` removed there is no post-rescale bound to test:
-        the mode is rejected before any value is inspected.  ``'um'``
-        deliberately has NO upper bound (the caller stated the unit), so
-        the metre-scale guard that pin exercised now lives only on the
-        ``'SI'`` path -- covered by
-        :meth:`test_si_mode_still_rejects_metre_scale_input` above."""
+        With ``'auto'`` removed there is no post-rescale bound left to
+        measure, so what this pins now is GUARD ORDER: the mode rejection
+        must fire BEFORE any value is inspected.  ``periodx=2.0e7`` is
+        deliberately metre-scale nonsense -- the same input raises the
+        ``'periodx ... exceeds 1 m'`` bound on the ``'SI'`` path (measured
+        2026-08-03), so if the two guards were ever reordered this test
+        would see that message and fail the ``match``.
+
+        That is why it is NOT redundant with
+        :meth:`test_auto_shim_is_removed_and_um_carries_its_documented_values`
+        above, which passes an IN-BOUNDS ``periodx=61.0`` and therefore
+        cannot distinguish the ordering.  ``'um'`` deliberately has NO upper
+        bound (the caller stated the unit), so the metre-scale guard lives
+        only on the ``'SI'`` path -- covered by
+        :meth:`test_si_mode_still_rejects_metre_scale_input` above.
+
+        (2026-08-03: an external audit read the old wording -- "there is no
+        post-rescale bound to test" -- as "this test guards nothing" and
+        recommended deleting it.  It guards the ordering; the wording was
+        the defect.  The ``_is_SUPERSEDED`` suffix in the name is now
+        misleading too, but renaming churns the node id, so it stays.)"""
         with pytest.raises(ValueError, match='REMOVED in v5.30'):
             makedammann2d(periodx=2.0e7, periody=61.0, waveln=1.31,
                           _legacy_units='auto', **self._KW)

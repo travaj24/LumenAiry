@@ -250,12 +250,16 @@ def test_guard_reproduces_the_offcentre_branch_exactly(_warm):
     the arbiter never runs there.  The assertion is the original."""
     E, _X, _Y = _field()
     a = _run(E, True)
-    _arb = LT.DECENTRED_FIT_ARBITER
+    # 5.32.1: both flags, for the reason niche C1's own era pin records -- the
+    # selector block is entered on ``ARBITER or PREDICTOR``, so pinning the
+    # arbiter alone stopped being an era pin when the predictor shipped ``True``.
+    _arb = (LT.DECENTRED_FIT_ARBITER, LT.DECENTRED_FIT_PREDICTOR)
     LT.DECENTRED_FIT_ARBITER = False
+    LT.DECENTRED_FIT_PREDICTOR = False
     try:
         b = _run(E, False, gates=(-1.0, -1.0))
     finally:
-        LT.DECENTRED_FIT_ARBITER = _arb
+        LT.DECENTRED_FIT_ARBITER, LT.DECENTRED_FIT_PREDICTOR = _arb
     assert np.array_equal(a, b), float(np.abs(a - b).max())
 
 

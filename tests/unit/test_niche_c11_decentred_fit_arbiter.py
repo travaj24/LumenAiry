@@ -103,23 +103,34 @@ def _apply(c, tell, arbiter, presc=_SLOW, **kw):
     the decentre the element is TOLD about (``None`` -> the grid origin, i.e.
     the historical concentric arm on the same physical field).
 
-    ``arbiter`` is POSITIONAL and mandatory: the flag ships ``False``, and a
-    test that exercised the arbiter by inheriting the default would silently
-    stop exercising it the moment that default moved -- in either direction.
-    Every arm below states which side it is on."""
+    ``arbiter`` is POSITIONAL and mandatory: a test that exercised the arbiter
+    by inheriting the default would silently stop exercising it the moment that
+    default moved -- in either direction.  Every arm below states which side it
+    is on.  (The default DID move, 5.32.1: it now ships ``True``.  Because this
+    argument was mandatory from the start, not one arm below had to change.)
+
+    ``DECENTRED_FIT_PREDICTOR`` is pinned ``False`` for this WHOLE MODULE, and
+    that is era-pinning rather than convenience: this file is niche C11's, and
+    C11's subject is the arbiter DECIDING.  Under the shipped
+    ``DECENTRED_FIT_PREDICTOR = True`` the arbiter's verdict is computed and
+    then overridden, so every arm here would be measuring C12 instead -- and an
+    ``arbiter=False`` arm would not even be a fail-before, because the
+    predictor enters the same block on its own.  Niche C12's own file owns the
+    shipped pair; this one owns the C11 era."""
     opts = dict(prescription=presc, wavelength=_WL, dx=_DX, ray_subsample=8,
                 n_workers=1, fit_radius_beam_factor=2.0, carrier=np.inf,
                 beam_centre=(0.0, 0.0) if tell is None else tell, **_TKW)
     opts.update(kw)
-    old = _lt.DECENTRED_FIT_ARBITER
+    old = (_lt.DECENTRED_FIT_ARBITER, _lt.DECENTRED_FIT_PREDICTOR)
     _lt.DECENTRED_FIT_ARBITER = bool(arbiter)
+    _lt.DECENTRED_FIT_PREDICTOR = False
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             return np.asarray(la.apply_real_lens_traced(
                 _gauss(_N, _DX, _W, c, 0.0), **opts))
     finally:
-        _lt.DECENTRED_FIT_ARBITER = old
+        _lt.DECENTRED_FIT_ARBITER, _lt.DECENTRED_FIT_PREDICTOR = old
 
 
 def _step(A, B):
@@ -130,16 +141,31 @@ def _step(A, B):
 # ===========================================================================
 # 1 -- the flag, and its fail-before
 # ===========================================================================
-def test_the_arbiter_ships_off_as_an_opt_in():
-    """It is OPT-IN, and that is a decision recorded in the constant's own
-    note: on design 121 it improves four of five tilted orders and makes one
-    worse by 0.026 points, which is a judgement about a design rather than a
-    library fact.
+def test_the_arbiter_ships_on_since_5_32_1():
+    """THE DEFAULT MOVED (5.32.1, 2026-08-03).  C11 shipped this flag OFF
+    because on design 121 it improves four of five tilted orders and makes one
+    worse by 0.026 points -- "a judgement about a design rather than a library
+    fact".  That judgement was made explicitly, and re-measured on BOTH BLAS
+    builds first (`C13_DEGREE6_CONDITIONING_2026_08_03` S10).
 
-    Turning it off must be a NO-OP, not merely a fall-back: with the flag
-    ``False`` the arbiter's scoring function is never called at all, on a call
-    that would otherwise reach it."""
-    assert _lt.DECENTRED_FIT_ARBITER is False
+    It is THE SHIPPED SELECTOR, because ``DECENTRED_FIT_PREDICTOR`` stayed
+    ``False``: the 5.32.1 flip was ordered for both constants and only this one
+    survived the measurement (`C13_DEGREE6_CONDITIONING_2026_08_03` S11 -- the
+    predictor reddened 9 D6/D7 tests, every one of which recovers with the
+    arbiter still on).  The ladder is: arbiter on -> C11 decides; arbiter off
+    -> the v5.32 gate, bit for bit."""
+    assert _lt.DECENTRED_FIT_ARBITER is True
+    assert _lt.DECENTRED_FIT_PREDICTOR is False
+
+
+def test_the_arbiter_off_is_a_path_not_taken():
+    """ERA-PINNED at ``DECENTRED_FIT_ARBITER = False`` -- the v5.32.0 default,
+    now the bottom of the fall-back ladder.  Turning it off must be a NO-OP,
+    not merely a fall-back: with the flag ``False`` the arbiter's scoring
+    function is never called at all, on a call that would otherwise reach it.
+
+    C11's assertions, verbatim; only the flag state they are taken in is now
+    set explicitly rather than inherited from the default."""
     calls = []
     orig = _lt._decentred_fit_score
 

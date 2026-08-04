@@ -877,11 +877,187 @@ def _get_array_module(arr):
     return np
 
 
+#: niche C13 (2026-08-03): SCREEN the normal-equations least-squares solve for
+#: a numerically singular Gram matrix, and where it is singular, RE-SOLVE by a
+#: backward-stable QR and keep whichever answer measurably fits the data
+#: better.
+#:
+#: ``False`` restores the pre-C13 solver EXACTLY -- :func:`_solve_lstsq_thread_safe`
+#: then returns the Cholesky/LU answer unconditionally, bit for bit -- and it
+#: is the fail-before for everything below.
+#:
+#: THE DEFECT.  :func:`_solve_lstsq_thread_safe`'s own docstring asserted that
+#: ``A`` "is a well-conditioned normalised tensor-Chebyshev / monomial
+#: Vandermonde (~1.5x oversampled), so squaring the condition number in ``G``
+#: is safe".  That is true of the CONCENTRIC, unweighted fits it was written
+#: for and FALSE of the weighted ones D1/D7 introduced:
+#: ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` = 1e-8 splits the rows into two scales ~1
+#: and ~1e-4, the in-disc rows alone do not determine a total-degree-10
+#: (66-term) basis over the whole launch box, and the directions they leave
+#: over are pinned only through the down-weighted rows.  Measured on niche D4's
+#: own chain, ``cond(A)`` = 1.4e10, so ``cond(G)`` ~ 1.9e20 -- past float64,
+#: and the Cholesky answer is an arbitrary draw from the numerical null space
+#: rather than the least-squares solution.  On that chain the draw's fit
+#: residual runs 15-23x above the attainable minimum on one build and 1.05x on
+#: the other, from the SAME source at the SAME degree.
+#:
+#: WHAT IT COST.  ``test_niche_d4_dgrating::test_matches_the_manual_hand_split``
+#: read 5.93e-07 on one build and 8.80e-02 on the other, RUN ALONE, in the
+#: shipped configuration -- a 148,000x route disagreement decided by BLAS
+#: rounding.  The exit field on the losing build is speckled at the pixel scale
+#: (roughness ``max|lap E| / peak`` 0.30 against 0.035), which is numerical
+#: noise, not an approximation error.  It was attributed to niche C10's degree
+#: 6 because degree is what moved it, and degree 6 IS the stimulus -- it
+#: perturbs the OPL samples enough to move which null-space draw each build
+#: takes -- but the degree is sound and the solve was not.  See
+#: ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``.
+#:
+#: WHY THE DECISION IS A RESIDUAL COMPARISON and not a certificate on one
+#: answer.  The obvious test -- the least-squares stationarity residual
+#: ``A^T (b - A x)``, which is exactly zero at the solution -- was built,
+#: measured, and REJECTED: on these matrices it is computed by cancellation at
+#: the ``||A||^2 ||x||`` scale, so its float64 value is rounding noise.  It
+#: scores the WRONG answer better than the right one (the QR solution reads
+#: 3e-09 where the null-space draw reads 8e-11, with 15x the fit quality).
+#: ``||b - A x||`` has no such problem here -- the residual is only ~3 orders
+#: below ``||b||`` -- so the two candidates are compared on the quantity the
+#: fit is actually defined by.
+LSTSQ_CONDITIONING_STEPDOWN = True
+
+#: SCREEN: reciprocal condition number of the diagonally EQUILIBRATED Gram
+#: matrix below which the second solve is computed at all.
+#:
+#: This screen exists for COST, not for correctness -- the residual comparison
+#: below decides.  Its only requirement is that it must not skip a solve whose
+#: two candidates could differ by more than ``_LSTSQ_RESID_MARGIN``, and it has
+#: two decades of room: the normal equations lose ~``cond(G) * eps``, so at the
+#: screen (``cond`` = 1e8) the most a skipped solve can be off is ~1e-8, a
+#: hundredfold inside the margin.  A build that screened one way and another
+#: build the other therefore CANNOT change the answer at the boundary.
+#:
+#: Measured over all 54 solves niche D4's chain makes: the fits it skips read
+#: ``cond`` 1.0e2, and the ones it screens in read 1.7e15 / 5.5e15 / 1.5e16 /
+#: 2.8e18 -- thirteen orders of separation, with the screen in the middle of
+#: it.
+#:
+#: It is NOT true that design 121's production route escapes this.  Measured
+#: (``c13_solver_census.py focus_scan_121.py``): 32 solves, **24 screen in and
+#: 6 REROUTE**, with normal-equations-to-QR fit-residual ratios up to **1072x**
+#: on the 28-term coordinate fits.  The production ACCEPTANCE is nevertheless
+#: unchanged to every printed digit including the peak (S6.3 of the audit) --
+#: the readout re-traces the final leg on a fine grid, where the rerouted fits
+#: are not what limits it.  "Unchanged metrics" and "untouched arithmetic" are
+#: different claims and only the first one is made.
+_LSTSQ_GRAM_RCOND_MIN = 1e-8
+
+#: The QR answer replaces the normal-equations answer only if it fits the data
+#: better by MORE than this relative margin.  Ties go to the shipped path, so
+#: every solve the normal equations already got right returns its historical
+#: bits.
+#:
+#: The margin is a build-independence device.  ``||b - A x||`` is itself
+#: computed to ~1e-13 relative on these matrices, and two builds' copies of the
+#: SAME candidate differ by about that much, so any margin far above 1e-13
+#: makes the winner build-independent; any margin far below the smallest real
+#: gap keeps the fix.  The smallest real gap measured anywhere in this campaign
+#: is 4.8e-02 (design-121-sized OPL fit, Windows build), so 1e-6 sits ~7 orders
+#: above the noise and ~5 below the signal.
+_LSTSQ_RESID_MARGIN = 1e-6
+
+
+def _gram_rcond(G):
+    """Reciprocal 2-norm condition number of ``G`` after DIAGONAL
+    EQUILIBRATION (``G -> D G D``, ``D = diag(1/sqrt(G_ii))``).
+
+    Equilibration is what makes this a statement about the fit rather than
+    about the units the columns happen to carry: van der Sluis's bound says the
+    equilibrated condition number is within ``sqrt(m)`` of the best any column
+    scaling could achieve.  ``G`` is the tiny ``M x M`` Gram (``M`` ~ 15-120),
+    so the symmetric eigensolve costs microseconds.
+
+    Returns ``0.0`` for a Gram that is not usable at all (non-finite, or an
+    eigensolve that will not converge), which routes the caller to the stable
+    solver -- the safe direction.
+    """
+    G = np.asarray(G, dtype=np.float64)
+    if G.ndim != 2 or G.shape[0] != G.shape[1] or not np.all(np.isfinite(G)):
+        return 0.0
+    d = np.sqrt(np.abs(np.diag(G)))
+    d = np.where(d > 0.0, d, 1.0)
+    Gs = G / np.outer(d, d)
+    try:
+        ev = np.linalg.eigvalsh(Gs)
+    except np.linalg.LinAlgError:
+        return 0.0
+    hi = float(np.max(np.abs(ev)))
+    lo = float(np.min(ev))          # SIGNED: a negative eigenvalue means the
+    if not (hi > 0.0) or lo <= 0.0:  # Gram lost positive-definiteness outright
+        return 0.0
+    return lo / hi
+
+
+def _solve_lstsq_qr(A, b):
+    """Backward-stable least squares by Householder QR of ``[A | b]``.
+
+    ``R = qr([A | b])`` has ``R[:m, :m]`` = the R factor of ``A`` and
+    ``R[:m, m:]`` = ``(Q^T b)[:m]``, so ONE ``geqrf`` and one triangular solve
+    give the answer with no ``Q`` materialised and no second pass over ``A``.
+    Measured at the traced fits' worst shape (141471 x 66), best of three,
+    RELATIVE to the normal equations because the box was loaded and the ratio
+    is what transfers: this route **15x** (Windows) / **19x** (Linux), ``qr``
+    with an explicit ``Q`` 32x / 41x, ``gelsd`` 12x / 19x.  Absolute, on that
+    run: 0.069 s for the normal equations against 1.06 / 1.31 s here.  The
+    condition number is NOT squared, which is the entire point --
+    ``cond(A)`` = 1.4e10 is unremarkable for float64 QR and fatal for a Gram
+    matrix.  This runs only where the screen fires, and the screen is what
+    keeps the cost off the fits that do not need it.
+
+    ``geqrf`` -- NOT ``gelsd``.  B7 banned ``np.linalg.lstsq`` from this module
+    because ``gelsd``'s divide-and-conquer SVD spawns an OpenBLAS OpenMP pool
+    that deadlocks nested inside JAX's; Householder QR is a blocked BLAS-3
+    factorisation and takes no such path.  ``lstsq`` survives only as the
+    last-resort branch for an ``A`` whose ``R`` comes out exactly singular.
+    """
+    A = np.ascontiguousarray(A, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+    m = A.shape[1]
+    B = b.reshape(b.shape[0], -1)
+    try:
+        if A.shape[0] < m:
+            # UNDER-determined: ``R`` has no ``m x m`` leading block and the
+            # answer wanted is the minimum-norm one, which is gelsd's.  The
+            # traced fits are guarded against this upstream (every caller
+            # enforces a samples-per-term floor); this is belt and braces.
+            raise ValueError('under-determined')
+        from scipy.linalg import qr as _qr
+        from scipy.linalg import solve_triangular as _solve_tri
+        M = np.empty((A.shape[0], m + B.shape[1]), dtype=np.float64, order='F')
+        M[:, :m] = A
+        M[:, m:] = B
+        R = _qr(M, mode='r', check_finite=False)[0]
+        x = _solve_tri(R[:m, :m], R[:m, m:], check_finite=False)
+        if np.all(np.isfinite(x)):
+            return x.reshape((m,) + b.shape[1:])
+    except (ImportError, ValueError, np.linalg.LinAlgError):
+        pass
+    # exactly rank-deficient R (or no scipy): the minimum-norm solution is the
+    # only defensible answer, and this branch is rare enough to pay for gelsd.
+    x, *_ = np.linalg.lstsq(A, b, rcond=None)
+    return x
+
+
+def _lstsq_residual(A, b, x):
+    """``||b - A x||_F``, the quantity a least-squares fit is defined to
+    minimise, and the only one of the two candidates' scores that survives
+    float64 on these matrices (see ``LSTSQ_CONDITIONING_STEPDOWN``)."""
+    return float(np.linalg.norm(np.asarray(b) - np.asarray(A) @ np.asarray(x)))
+
+
 def _solve_lstsq_thread_safe(A, b):
     """Least-squares solve ``A @ x ~= b`` (overdetermined, single or multi RHS)
     via the NORMAL EQUATIONS -- ``G x = A^T b`` with ``G = A^T A`` -- Cholesky
-    then LU, falling back to ``np.linalg.lstsq`` only if ``G`` is not positive-
-    definite (a genuinely rank-deficient design matrix).
+    then LU, with a QR re-solve (:func:`_solve_lstsq_qr`) wherever ``G`` comes
+    out numerically singular and the QR answer measurably fits better.
 
     B7 (jax x OpenBLAS mitigation): the traced Chebyshev/coordinate fits used
     ``np.linalg.lstsq`` (LAPACK ``gelsd``, a divide-and-conquer SVD).  In one
@@ -891,13 +1067,19 @@ def _solve_lstsq_thread_safe(A, b):
     outside CI.  The normal equations reduce the factorisation to the tiny
     ``M x M`` Gram matrix (``M`` = number of fit terms, ~28-70), which stays
     below OpenBLAS's threading threshold and never takes the ``gelsd`` SVD path,
-    so the deadlock cannot recur.  ``A`` here is a well-conditioned normalised
-    tensor-Chebyshev / monomial Vandermonde (~1.5x oversampled), so squaring the
-    condition number in ``G`` is safe and the solution matches ``lstsq`` to
-    ~1e-12 relative (the M-P5 precedent, ``lenses_maslov._solve_fit``, measured
-    2.6e-15).  The ``lstsq`` fallback runs only for the rare rank-deficient case
-    that Cholesky AND LU both reject -- a path the well-conditioned traced fits
-    never reach in practice.
+    so the deadlock cannot recur.  Neither does the re-solve: it is ``geqrf``.
+
+    CONDITIONING (niche C13, 2026-08-03).  This function used to assert that
+    ``A`` "is a well-conditioned normalised tensor-Chebyshev / monomial
+    Vandermonde (~1.5x oversampled), so squaring the condition number in ``G``
+    is safe".  That holds for the concentric unweighted fits and is FALSE for
+    the weighted decentred ones, where ``cond(A)`` = 1.4e10 was measured and
+    ``G`` is therefore numerically singular.  Rather than assume either way,
+    the Gram is now SCREENED and, where it is singular, both answers are scored
+    on the data.  A solve that passes the screen -- or one whose two candidates
+    tie -- returns the identical bits it returned before, which is what keeps
+    the byte-identity contracts of niches C1/C6/C8/C9 intact.
+    See ``LSTSQ_CONDITIONING_STEPDOWN``.
 
     Returns ``x`` with the same trailing shape as ``b`` (1-D for a single RHS).
     """
@@ -905,17 +1087,31 @@ def _solve_lstsq_thread_safe(A, b):
     b = np.asarray(b, dtype=np.float64)
     G = A.T @ A
     rhs = A.T @ b
+    x = None
     try:
         from scipy.linalg import cho_factor, cho_solve
-        return cho_solve(cho_factor(G, check_finite=False), rhs,
-                         check_finite=False)
+        x = cho_solve(cho_factor(G, check_finite=False), rhs,
+                      check_finite=False)
     except (ImportError, ValueError, np.linalg.LinAlgError):
         # scipy absent, or G not positive-definite (rank-deficient fit).
         try:
-            return np.linalg.solve(G, rhs)
+            x = np.linalg.solve(G, rhs)
         except np.linalg.LinAlgError:
-            x, *_ = np.linalg.lstsq(A, b, rcond=None)
-            return x
+            x = None
+    if x is None or not np.all(np.isfinite(x)):
+        return _solve_lstsq_qr(A, b)
+    if not LSTSQ_CONDITIONING_STEPDOWN:
+        return x
+    if _gram_rcond(G) >= _LSTSQ_GRAM_RCOND_MIN:
+        return x
+    x_qr = _solve_lstsq_qr(A, b)
+    if not np.all(np.isfinite(x_qr)):
+        return x
+    r_ne = _lstsq_residual(A, b, x)
+    r_qr = _lstsq_residual(A, b, x_qr)
+    if r_qr < (1.0 - _LSTSQ_RESID_MARGIN) * r_ne:
+        return x_qr
+    return x
 
 
 class _Cheb2DEvaluator:
@@ -1627,27 +1823,43 @@ _DECENTRE_GATE_W_FRAC = 0.05
 #: coming as a **18x** margin in the fit residual (0.122 waves concentric
 #: against 0.0068 off-centre) before any field is reconstructed.
 #:
-#: SHIPPED OFF -- OPT-IN for now, and the reason is a measurement, not doubt
-#: about the mechanism.  On design 121 the arbiter improves four of the five
-#: tilted orders (by 0.017 / 0.052 / 0.110 / 0.082 points), takes the
-#: worst-case residual from 0.152 to 0.069 and removes the residual's growth
-#: with field angle -- and makes ONE order, (-1,0), worse by 0.026 points
-#: against a 0.003-0.015 differential floor.  A default that fails a
-#: per-order "improve or hold" bar at one order is a judgement call about a
-#: design, not a library fact, so it is left to an explicit decision rather
-#: than taken silently in a patch release.
+#: SHIPPED ON since 5.32.1 (2026-08-03), by an EXPLICIT DECISION, and the
+#: trade it takes is stated rather than buried.  On design 121 the arbiter
+#: improves four of the five tilted orders (by 0.017 / 0.052 / 0.110 / 0.082
+#: points), takes the worst-case residual from 0.152 to 0.069 and removes the
+#: residual's growth with field angle -- and makes ONE order, (-1,0), worse by
+#: 0.026 points against a 0.003-0.015 differential floor.  That per-order
+#: "improve or hold" failure is why C11 shipped it OFF: it is a judgement
+#: about a design rather than a library fact, and it was left to an explicit
+#: decision instead of taken silently in a patch release.  **That decision has
+#: now been taken** -- see ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``
+#: S10 for the re-measurement of the trade on BOTH BLAS builds.
 #:
-#: With it ``False`` the whole C11 layer is BYTE-IDENTICAL to the pure
+#: THIS FLAG DECIDES, because :data:`DECENTRED_FIT_PREDICTOR` stayed ``False``.
+#: The 5.32.1 flip was ordered for BOTH constants and only this one survived
+#: the measurement: the predictor reddened 9 tests in niches D6 and D7 and cost
+#: 32 % of the encircled energy on D6's analytic fixture, and every one of
+#: those 9 goes green with the predictor off and THIS FLAG STILL ON.  So the
+#: arbiter is not merely untouched by that finding -- it is what the finding
+#: exonerated.  See ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md`` S11.
+#:
+#: The ladder as shipped:
+#:
+#:     ARBITER True   -> E_c <= E_o   (niche C11, THE SHIPPED SELECTOR)
+#:     ARBITER False  -> the v5.32 gate, bit for bit
+#:     PREDICTOR True -> u <= u*      (niche C12, opt-in, and see its note)
+#:
+#: With BOTH ``False`` the whole C11/C12 layer is BYTE-IDENTICAL to the pure
 #: ``_DECENTRE_GATE_W_FRAC`` selector: the arbiter's extra second-moment pass
 #: and its two trial fits are not merely unused, they are never reached (the
-#: gate site tests this flag before measuring the origin-referenced radius, and
-#: the fit site tests it before building any candidate).  Turning it ``True``
-#: is the whole opt-in.
+#: gate site tests these flags before measuring the origin-referenced radius,
+#: and the fit site tests them before building any candidate).  That remains
+#: the era-pinned fail-before.
 #:
-#: BELOW the C1 null gate the flag is inert in BOTH states by construction (the
+#: BELOW the C1 null gate the flag is inert in EVERY state by construction (the
 #: arbiter is gated on ``_beam_decentred``), so every C1 byte-identity contract
 #: holds either way.
-DECENTRED_FIT_ARBITER = False
+DECENTRED_FIT_ARBITER = True
 
 
 def _decentred_fit_restriction(disc, weighted, base_order, dec_order):
@@ -1963,16 +2175,66 @@ def _decentred_fit_crossover(u, e_conc, e_off, m_eff):
 #: comparison always runs as a CHECK; a disagreement raises a ``RuntimeWarning``
 #: naming both score pairs, ``u`` and ``u*``.  It is never silent.
 #:
-#: SHIPPED OFF -- the fail-before is the v5.32 gate, bit for bit, and the
-#: reason is in S5 of the audit: on design 121 no per-call selector can meet a
+#: SHIPPED ON since 5.32.1 (2026-08-03).  C12 shipped it OFF, and the reason
+#: is in S5 of that audit and still stands as a STATEMENT: on design 121 no
+#: per-call selector can meet a per-order "improve or hold" bar.  Group 2 is
+#: preferred CONCENTRIC by 4.77x at (-1,0) (``u`` = 0.062) and by 4.24x at
+#: (-2,0) (``u`` = 0.125), and the chain wants OFF-CENTRE at the first and
+#: CONCENTRIC at the second -- so no rule monotone in the margin, in ``u``, or
+#: in ``u/u*`` can produce that pair.  The chain-level EE3 is not separable
+#: across the six groups (measured: the mixed patterns ``ccoo`` 0.069 and
+#: ``cooo`` 0.067 are WORSE at (-1,0) than either ``ccco`` 0.055 or ``oooo``
+#: 0.029), and a fit-site selector only ever chooses per call.
+#:
+#: STAYS OFF -- and the 5.32.1 flip of this constant was REVERTED on evidence,
+#: 2026-08-03.  ``DECENTRED_FIT_ARBITER`` did ship ``True``; this one did not,
+#: and the two must not be confused because only ONE of them was implicated.
+#:
+#: THE MEASUREMENT THAT REVERTED IT (niche C13 S11).  Turning this flag on
+#: reddens **9 tests** in ``test_niche_d6_exact_tilted_leg`` and
+#: ``test_niche_d7_decentred_fit``, and every one of them goes green again with
+#: this flag ``False`` and the ARBITER still ``True`` -- so the arbiter is
+#: innocent and the predictor is the whole cause.  On niche D6's ``K = -n^2``
+#: conic stand-in, whose truth is ANALYTIC and decentre-invariant (an inline
+#: exact conic raytrace sharing no code with the library):
+#:
+#:     PREDICTOR   EE2/oracle   FWHM/oracle   spot off the Fermat focus
+#:     True          0.6670        1.0952            3.96e-07 m
+#:     False         0.9819        1.0000            9.87e-09 m
+#:
+#: -- a 32 % loss of encircled energy and a spot 40x further off the
+#: analytically known focus.  The library WARNS on that very call and then
+#: applies the losing choice: at ``u`` = 1.0001 the model reads
+#: ``u*`` = 1.4161 from ``E_c`` = 1.94e-07 against ``E_o`` = 1.51e-06 and picks
+#: CONCENTRIC, while the arbiter's MEASURED residuals on the same call are
+#: 8.70e-11 off-centre against 1.51e-06 concentric -- **off-centre is 17,000x
+#: better and the model has the ordering inverted**.
+#:
+#: WHY C12's OWN VALIDATION DID NOT CATCH IT.  S3.2 validated three geometries
+#: (f/3 and f/6 singlets at two beam radii) and the model landed on the oracle
+#: to 0.03 % on the one with a nonzero crossover.  D6's stand-in is a FOURTH
+#: geometry, at ``u`` = 1.0 rather than the ~0.57 those crossovers sat at, and
+#: the model does not generalise to it.  Three designs is not enough for a
+#: closed form that ships as a default.
+#:
+#: AND IT BUYS NOTHING ON DESIGN 121.  S3.4 already says the launch-box
+#: spectrum there is UNRESOLVED, so the predictor falls back to the measured
+#: pair and is algebraically the arbiter.  Measured, not inferred: across four
+#: design-121 runs with the flag ON (both builds, ``rc_resdeg_121``,
+#: ``focus_scan_121``, ``energy_stage_audit_121``) the predictor/arbiter
+#: disagreement warning fires **zero times**, and the per-order table
+#: reproduces C11's arbiter column to all four decimals at all six orders.
+#: The flag is inert where it was wanted and harmful where it is live.
+#:
+#: The original argument for shipping it OFF (S5 of the C12 audit) is
+#: unchanged and still stands: on design 121 no per-call selector can meet a
 #: per-order "improve or hold" bar.  Group 2 is preferred CONCENTRIC by 4.77x
 #: at (-1,0) (``u`` = 0.062) and by 4.24x at (-2,0) (``u`` = 0.125), and the
-#: chain wants OFF-CENTRE at the first and CONCENTRIC at the second -- so no
-#: rule monotone in the margin, in ``u``, or in ``u/u*`` can produce that pair.
-#: The chain-level EE3 is not separable across the six groups (measured: the
-#: mixed patterns ``ccoo`` 0.069 and ``cooo`` 0.067 are WORSE at (-1,0) than
-#: either ``ccco`` 0.055 or ``oooo`` 0.029), and a fit-site selector only ever
-#: chooses per call.
+#: chain wants OFF-CENTRE at the first and CONCENTRIC at the second.
+#:
+#: FALL-BACK LADDER (see :data:`DECENTRED_FIT_ARBITER`): with this ``False``
+#: the C11 arbiter decides, which is what 5.32.1 ships; both ``False`` is the
+#: v5.32 gate, bit for bit.
 DECENTRED_FIT_PREDICTOR = False
 
 
@@ -2107,7 +2369,8 @@ def _input_tilt_stats(E_in, wavelength, dx):
 #: ``S_R(rho) + L*u + M*v`` exactly, in the element AND in
 #: :func:`lumenairy.propagate_traced_carrier_chain` (which reads this same
 #: flag through
-#: :data:`~lumenairy.propagators.carrier.CHAIN_EXACT_TILTED_REFERENCE`, so the
+#: :func:`~lumenairy.propagators.carrier._exact_tilt_reference`, a helper that
+#: imports and returns THIS constant at call time, so the
 #: two can never be configured apart -- they only make sense together).  The
 #: fail-before switch for niche C5: flip it to reproduce any pre-C5 tilted
 #: result bit for bit.  It has NO effect on an untilted congruence -- the two
@@ -3168,6 +3431,404 @@ REMAP_INVERSE_SUPPORT_BOUND = True
 #: input power removed.  The lobe lies wholly outside the hull, so no width of
 #: transition band reaches it.
 _SUPPORT_BOUND_FEATHER_CELLS = 1.0
+
+
+# ===========================================================================
+# NICHE C14 (2026-08-03) -- UNIT C: THE TRACED EXIT SUPPORT, AS ONE OBJECT
+# ===========================================================================
+# WHAT WAS WRONG.  There were THREE notions of "the region the traced rays
+# reached", computed from the same arrays, at nearly the same point in
+# ``apply_real_lens_traced``, by three different rules and three separate
+# copies of the same convex-hull algebra:
+#
+#   1. the C7 halo radius -- amplitude-weighted centroid + max radius over the
+#      samples above the ``e^-_RD_HALO_AMP_CONTOUR`` amplitude contour, times
+#      ``_RD_HALO_RADIUS_FACTOR`` at report time;
+#   2. the C8 support hull -- convex hull of the alive STOP-PASSING landings,
+#      plus a ``sqrt(2) sub dx`` plateau and one exit-lattice cell of feather;
+#   3. the direct-fit hull -- the ``inversion_method='fit'`` path's own
+#      long-standing exit hull mask over the post-restriction samples.
+#
+# (2) and (3) are the same idea implemented twice, and the C8 audit says so:
+# "This bound gives the Newton path the containment the direct-fit path has had
+# all along."  They had two copies of the ConvexHull call, two copies of the
+# ``equations -> (A, b)`` unpacking and two different half-plane evaluators
+# (one chunked over a BLAS product, one a full-width ``np.all``).
+#
+# THE MEASURED CONSEQUENCE, and the reason this is not cosmetics.
+# ``RECON_PINS_POST_C8_2026_08_01.md`` S7 item 1: on the E-M6 fixture the
+# post-C8 field still carries **0.19998 of P_ap outside the exact-ray hull** --
+# in the plateau+feather band C8 keeps DELIBERATELY -- and **its global |E|
+# maximum sits in that band**.  Neither self-check reports it: the energy
+# check's reading (1.01931) is inside its own band, and the C7 halo check looks
+# only beyond ``1.25 x r_hull``, which on that fixture is 1.525 mm while the
+# taper's outer edge is 1.4996 mm.  So C7's reporting annulus lies ENTIRELY in
+# the region C8 has already zeroed: under the bound the halo check cannot fire,
+# and the band the bound retains is watched by nobody.  "The two self-checks
+# are jointly blind to a residual 20 % of P_ap of manufactured light."
+#
+# That was found by an adversarial re-check, not by the checks, and it is
+# exactly the shape of defect a single object makes cheap to state: with one
+# hull, "is the field's maximum inside the support the rays actually reached?"
+# is one comparison on one object, where before it was a relationship between
+# an ``e^-9`` amplitude contour times 1.25 and a ``sqrt(2) sub dx`` plateau
+# plus one lattice cell, computed 40 lines apart from different masks.
+#
+# WHAT THIS OBJECT DOES *NOT* DO.  It does not merge the three rules.  They are
+# not interchangeable and unifying them would be a behaviour change, not a
+# refactor: C7's radius is amplitude-weighted ON PURPOSE (a REPORTING radius
+# calibrated over 180 element calls, with a measured 123x separation between
+# the clean and defective populations at factor 1.25), and C8's is a convex
+# hull of stop-passing rays ON PURPOSE (convexity "can only make the bound
+# LOOSER, never tighter, so it cannot manufacture a cut").  Merging them would
+# re-open a calibration that cost 177 readings.  What is unified is the
+# CONSTRUCTION and the CONVENTIONS -- one alive mask, one hull builder, one
+# signed-distance rule -- with three NAMED VIEWS on top.  Every view reproduces
+# its old arithmetic operand for operand, which is why the extraction is
+# byte-identical and is proved so by ``probe_c14_byte_identity.py``.
+#: Policy for the niche-C14 SUPPORT-BAND self-check: ``'warn'`` (default) or
+#: ``'silent'``.  ``'silent'`` is the FAIL-BEFORE SWITCH: it restores the
+#: pre-C14 reporting exactly, because the band check is the only thing C14
+#: adds to what the element SAYS (it adds nothing at all to what the element
+#: RETURNS -- like C7 and the energy check, it is reporting-only and cannot
+#: change a returned bit).
+#:
+#: WHAT IT WATCHES.  The annulus C8 retains outside the traced hull: the
+#: ``sqrt(2) sub dx`` plateau plus ``_SUPPORT_BOUND_FEATHER_CELLS`` of
+#: feather, i.e. exactly ``0 < s <= d0 + f`` in the hull's own signed distance.
+#: No traced ray of the call reaches there, so any amplitude in it is either
+#: legitimate skirt bleeding out of the support or manufactured light -- and
+#: the two are separable without a new calibration, which is the point of the
+#: criterion below.
+#:
+#: WHY THE CRITERION IS A RATIO AND NOT A TOLERANCE.  A skirt decays outward.
+#: A manufactured lobe does not: on the E-M6 fixture the field's GLOBAL
+#: maximum sits in the retained band.  So the test is
+#: ``max|E| in the band  >  _SUPPORT_BAND_PEAK_RATIO_TOL * max|E| inside the
+#: support`` -- scale-free, unit-free, and needing none of the 180-call
+#: calibration ``_RD_HALO_RADIUS_FACTOR`` needed, because at a ratio of 1.0 it
+#: asks only "does this field peak somewhere the rays never went?", which no
+#: correct field can answer yes to.
+#:
+#: IT INHERITS C7's DECLINATION and that is deliberate.  The check runs inside
+#: the same block as the halo check and behind the same grid-fit test, so on a
+#: grid whose extent is comparable to its own exit fan -- design 121's
+#: production readout leg -- it declines for the same measured reason C7 does
+#: (see SCOPE (d) at ``_RD_HALO_AMAX_TOL``): a statistic read on a sliver of
+#: corners is unreliable in BOTH directions.  Closing the blind spot on the
+#: readout leg needs a hull that fits the grid, which is a different problem.
+SUPPORT_BAND_CHECK = 'warn'
+#: Ratio of in-support peak amplitude above which the retained band is
+#: reported.  1.0 = "the global maximum may not sit outside the traced
+#: support".  Lower it to tighten (0.5 reports a band lobe at half the core
+#: peak); raise it above 1.0 only to silence a fixture you have adjudicated.
+_SUPPORT_BAND_PEAK_RATIO_TOL = 1.0
+
+
+class _TracedExitSupport(object):
+    """UNIT C: where the traced rays of THIS call actually landed.
+
+    Built ONCE, from the exact traced map, between the alive mask and the
+    fit-domain restriction -- the position both the C7 and the C8 blocks
+    independently chose, for two reasons their comments state almost verbatim:
+    the fit restriction NaNs samples that are still perfectly good optics (so
+    reading it later would understate the support and over-fire the check), and
+    this is the last point at which ``x_out_grid`` is the exact traced map
+    rather than anything the model fitted.
+
+    Three views, three rules, one set of conventions:
+
+    ==================  =========================================  ==========
+    view                rule                                       consumer
+    ==================  =========================================  ==========
+    ``centroid``/       amplitude-weighted centroid and max         C7 halo
+    ``radius``          radius over samples above the e^-N          check
+                        amplitude contour
+    ``hull``            convex hull of the alive STOP-PASSING       C8 bound
+                        landings, as half-planes ``(A, b)``         + C14 band
+    :meth:`half_planes` the same hull builder, on any point set     direct fit
+    ==================  =========================================  ==========
+
+    ``hull`` and the direct-fit path's own hull are built by the SAME
+    classmethod and evaluated by the SAME signed-distance rule; they differ
+    only in the point set they are given (the fit path hands it the
+    post-restriction samples, which is its documented behaviour and is not
+    changed here).
+    """
+
+    __slots__ = ('centroid', 'radius', 'hull', 'pitch', 'feather', 'n_hull',
+                 'hull_c', 'hull_rmax')
+
+    def __init__(self, centroid=None, radius=None, hull=None, pitch=None,
+                 feather=None, n_hull=0, hull_c=None, hull_rmax=None):
+        self.centroid = centroid
+        self.radius = radius
+        self.hull = hull            # (A, b) half-planes, or None
+        self.pitch = pitch
+        self.feather = feather
+        self.n_hull = int(n_hull)
+        # A point known to be INSIDE the hull, and a radius about it that
+        # CONTAINS the hull.  Only the band check uses these, and only to
+        # bound the work: see :meth:`retained_band_masks`.
+        self.hull_c = hull_c
+        self.hull_rmax = hull_rmax
+
+    # -- shared primitives ------------------------------------------------
+    @staticmethod
+    def half_planes(px, py, strict=False):
+        """Convex hull of scattered 2-D points as outward half-planes
+        ``(A, b)``, with ``A`` contiguous ``(2, F)`` and ``b`` ``(F,)``, or
+        ``None`` when the point set cannot support a hull.
+
+        ``strict=True`` lets the hull failure PROPAGATE instead of declining.
+        The two consumers genuinely differ and both are right: the C8 bound is
+        an optional containment, so a support it cannot measure means "do not
+        bound", while the direct-fit path's hull IS its output domain -- a
+        fit with no domain has nothing to return, and it has always raised.
+        Sharing the construction must not quietly convert one into the other.
+
+        Qhull normalises ``equations`` to UNIT outward normals, which is what
+        makes ``max_f (n_f . p + d_f)`` the exact signed distance to the
+        boundary for a point outside it (and ``<= 0`` inside).  Every consumer
+        of this class relies on that, so the unpacking lives here once.
+
+        A degenerate support (collinear / duplicated landings) has no hull;
+        this DECLINES rather than guessing -- a degenerate bound is exactly the
+        regime this must not invent an answer in.  The except tuple is NARROWED
+        to what this path can actually raise (the non-ui broad-except budget,
+        ``tests/unit/test_audit_except_budget.py``): ``ImportError`` when the
+        compiled ``scipy.spatial`` qhull extension is absent from a trimmed
+        install, ``RuntimeError`` because ``QhullError`` is a documented
+        ``RuntimeError`` subclass (named indirectly: ``scipy.spatial.QhullError``
+        is only public from scipy 1.8 and the floor here is 1.7), and
+        ``ValueError`` for the input rejections (non-finite / wrong ndim)
+        ConvexHull raises before qhull ever runs.
+        """
+        if strict:
+            from scipy.spatial import ConvexHull as _CH
+            _eq = _CH(np.column_stack([px, py])).equations
+        else:
+            try:
+                from scipy.spatial import ConvexHull as _CH
+                _eq = _CH(np.column_stack([px, py])).equations
+            except (ImportError, RuntimeError, ValueError):
+                return None
+        return (np.ascontiguousarray(_eq[:, :2].T),
+                np.ascontiguousarray(_eq[:, 2]))
+
+    @staticmethod
+    def signed_distance(A, b, Xg, Yg):
+        """``s = max_f (n_f . p + d_f)`` on arbitrary coordinate ARRAYS.
+
+        Chunked (pixels x facets) product: BLAS does the work, and the chunk
+        caps the temporary at ~160 MB however many facets the hull has and
+        however fine the lattice is.  A per-facet Python loop would be ~50x
+        slower on a large lattice."""
+        _sh = np.asarray(Xg).shape
+        _xg = np.asarray(Xg, dtype=np.float64).ravel()
+        _yg = np.asarray(Yg, dtype=np.float64).ravel()
+        _nf = int(b.size)
+        _s = np.empty(_xg.size, dtype=np.float64)
+        _cn = max(1, int(2e7 // max(_nf, 1)))
+        for _i in range(0, _xg.size, _cn):
+            _j = min(_i + _cn, _xg.size)
+            _s[_i:_j] = (np.column_stack([_xg[_i:_j], _yg[_i:_j]]) @ A
+                         + b).max(axis=1)
+        return _s.reshape(_sh)
+
+    # -- construction -----------------------------------------------------
+    @classmethod
+    def from_landings(cls, x_out_grid, y_out_grid, amp, xs_in, aperture,
+                      dx, sub, want_halo, want_bound):
+        """Build the support from the EXACT traced landings.
+
+        ``want_halo`` / ``want_bound`` gate the two expensive views
+        independently, so a call that has switched one of them off does exactly
+        the work it did before (the two blocks this replaces had separate
+        gates, and preserving that preserves both the bits and the runtime).
+
+        The one thing genuinely SHARED is the finiteness mask, which the two
+        blocks each computed for themselves."""
+        self = cls()
+        if not (want_halo or want_bound):
+            return self
+        alive = np.isfinite(x_out_grid) & np.isfinite(y_out_grid)
+
+        # ---- view 1: the C7 amplitude-weighted reporting radius ----------
+        if want_halo:
+            _h_ok = alive.copy()
+            _h_pk = float(np.max(amp)) if amp.size else 0.0
+            if _h_pk > 0.0:
+                _h_ok &= (amp >= np.exp(-_RD_HALO_AMP_CONTOUR) * _h_pk)
+            if _h_ok.any():
+                _h_w = amp[_h_ok].astype(np.float64) ** 2
+                _h_wt = float(_h_w.sum())
+                if _h_wt > 0.0:
+                    _h_x = x_out_grid[_h_ok]
+                    _h_y = y_out_grid[_h_ok]
+                    self.centroid = (float((_h_x * _h_w).sum() / _h_wt),
+                                     float((_h_y * _h_w).sum() / _h_wt))
+                    self.radius = float(np.sqrt(
+                        (_h_x - self.centroid[0]) ** 2
+                        + (_h_y - self.centroid[1]) ** 2).max())
+                    del _h_x, _h_y
+                del _h_w
+            del _h_ok
+
+        # ---- view 2: the C8 stop-passing convex hull ---------------------
+        if want_bound:
+            _sup_ok = alive.copy()
+            if aperture is not None:
+                # Only rays the ENTRANCE STOP passes carry energy, and the
+                # ray-density amplitude already masks on exactly that criterion
+                # (see ``_ray_density_amp_grid``).  Rays launched outside the
+                # stop (the launch square reaches 1.5x the aperture RADIUS)
+                # land further out but are blocked, so including them would
+                # inflate the support with territory no light can reach.
+                _sup_ok &= ((xs_in[:, None] ** 2 + xs_in[None, :] ** 2)
+                            <= (0.5 * aperture) ** 2)
+            if int(_sup_ok.sum()) >= 3:
+                _px = x_out_grid[_sup_ok]
+                _py = y_out_grid[_sup_ok]
+                _hp = cls.half_planes(_px, _py)
+                if _hp is not None:
+                    # Geometry for the band check's work bound ONLY -- it can
+                    # move no bit of the bound or the taper.  ``hull_c`` is the
+                    # mean landing (inside a convex hull of the same points by
+                    # construction) and ``hull_rmax`` contains every one of
+                    # them about it.
+                    self.hull_c = (float(_px.mean()), float(_py.mean()))
+                    self.hull_rmax = float(np.sqrt(
+                        (_px - self.hull_c[0]) ** 2
+                        + (_py - self.hull_c[1]) ** 2).max())
+                    # The feather is measured in EXIT-LATTICE cells, taken from
+                    # the traced samples themselves rather than from a paraxial
+                    # magnification: the exit spacing of entrance-adjacent rays
+                    # IS the resolution at which the support is known.  (The
+                    # separate, non-negotiable allowance for the bilinear
+                    # upsample's reach is the PLATEAU, :meth:`taper`.)
+                    with np.errstate(invalid='ignore'):
+                        _sup_step = np.hypot(np.diff(x_out_grid, axis=0),
+                                             np.diff(y_out_grid, axis=0))
+                    _sup_step = _sup_step[np.isfinite(_sup_step)]
+                    _sup_pitch = (float(np.median(_sup_step))
+                                  if _sup_step.size else float(dx * sub))
+                    if not (np.isfinite(_sup_pitch) and _sup_pitch > 0.0):
+                        _sup_pitch = float(dx * sub)
+                    self.hull = _hp
+                    self.pitch = _sup_pitch
+                    self.feather = (float(_SUPPORT_BOUND_FEATHER_CELLS)
+                                    * _sup_pitch)
+                    self.n_hull = int(_hp[1].size)
+                    del _sup_step
+                del _px, _py
+            del _sup_ok
+        return self
+
+    # -- views ------------------------------------------------------------
+    @property
+    def bound(self):
+        """C8's ``(A, b, feather)`` triple, or ``None`` -- the exact tuple the
+        pre-C14 ``_sup_bound`` local carried, so every consumer's truth test
+        and unpacking are unchanged."""
+        if self.hull is None:
+            return None
+        return (self.hull[0], self.hull[1], self.feather)
+
+    def taper(self, Xg, Yg, plateau):
+        """niche C8: 1 inside the traced exit support, 0 beyond it, raised
+        cosine across a feather band of ``_SUPPORT_BOUND_FEATHER_CELLS``
+        exit-lattice cells outside the boundary.
+
+        THE PLATEAU ``plateau`` IS NOT TASTE, IT IS THE UPSAMPLE.  This taper
+        is evaluated on the COARSE Newton lattice (pitch ``sub * dx`` in the
+        exit plane) and the amplitude is then bilinearly interpolated to the
+        wave grid, so a coarse node OUTSIDE the hull lends its attenuation to
+        wave pixels up to one coarse cell INSIDE it.  ``s`` is 1-Lipschitz, so
+        a pixel with ``s <= 0`` interpolates only from nodes with
+        ``s <= sqrt(2) * sub * dx``; holding the taper at exactly 1 out to
+        there makes the bleed identically zero rather than merely small.
+        MEASURED on niche D6's decentred fixture -- power removed from INSIDE
+        the bound's own support, over the chain input power:
+
+          feather (cells)     0.0        0.5        1.0        2.0        4.0
+          without the plateau 2.211e-04  8.194e-05  3.808e-05  1.207e-05  3.2e-06
+          with it             0          0          0          0          0
+
+        i.e. 1.1 % of what the bound removes on that fixture was legitimate
+        skirt lost to interpolation, and it is now exactly none.  The cost is
+        that the bound sits ``sqrt(2) sub dx`` further out (188 um on design
+        121's last group, 3 % of its 6.3 mm hull), which is measured not to
+        readmit any of the manufactured lobe there -- and it is that same
+        deliberately-retained band the niche-C14 check now watches, because
+        nothing watched it before (see ``SUPPORT_BAND_CHECK``).
+        """
+        _A, _b, _f = self.bound
+        _s = self.signed_distance(_A, _b, Xg, Yg) - float(plateau)
+        if _f <= 0.0:
+            return (_s <= 0.0).astype(np.float64)
+        return np.where(_s <= 0.0, 1.0,
+                        np.where(_s >= _f, 0.0,
+                                 0.5 * (1.0 + np.cos(np.pi * _s
+                                                     / max(_f, 1e-300)))))
+
+    def retained_band_masks(self, xg, yg, plateau):
+        """``(inside, band)`` boolean masks on the wave grid's outer product.
+
+        ``inside`` is the traced support (``s <= 0``); ``band`` is the annulus
+        C8 RETAINS outside it (``0 < s <= plateau + feather``), which is
+        precisely the region no traced ray reached and the bound does not cut.
+        Returns ``(None, None)`` when there is no hull to measure against.
+
+        THE WORK IS BOUNDED EXACTLY, not approximately.  The half-plane
+        reduction is ``O(pixels x facets)`` and this runs on the WAVE grid, so
+        a naive evaluation would put a ~30x BLAS pass on every ray-density
+        call for a diagnostic.  Two radial screens cut it to a thin annulus
+        without changing a single verdict, because both are strict:
+
+        * every pixel closer to ``hull_c`` than ``r_in`` -- the distance from
+          that interior point to its NEAREST facet -- is strictly inside the
+          hull, so ``s < 0`` there and it can only be ``inside``;
+        * the hull lies inside the disc of radius ``hull_rmax`` about
+          ``hull_c``, and the signed distance to a convex set contained in
+          that disc is at least ``|p - c| - hull_rmax``; so every pixel beyond
+          ``hull_rmax + w`` has ``s > w`` and can be in NEITHER mask.
+
+        Only the ring between them is handed to the exact test.  On a
+        near-circular exit hull that ring is a few per cent of the grid; on a
+        strongly elongated one it degrades gracefully to the full disc, which
+        is what the naive version would have cost anyway."""
+        if self.hull is None:
+            return None, None
+        A, b = self.hull
+        w = float(plateau) + float(self.feather or 0.0)
+        inside = np.zeros((int(yg.size), int(xg.size)), dtype=bool)
+        band = np.zeros_like(inside)
+        if self.hull_c is None or self.hull_rmax is None:  # pragma: no cover
+            # Only reachable on a hand-built object; ``from_landings`` sets
+            # both whenever it sets ``hull``.  Decline rather than measure a
+            # band whose work cannot be bounded.
+            return None, None
+        cx, cy = self.hull_c
+        # Distance from the interior point to the nearest facet: the hull's
+        # own inradius about ``hull_c`` (negated because ``s`` is <= 0 inside).
+        r_in = -float((np.asarray(A[0]) * cx + np.asarray(A[1]) * cy
+                       + np.asarray(b)).max())
+        r2 = ((np.asarray(xg, dtype=np.float64)[None, :] - cx) ** 2
+              + (np.asarray(yg, dtype=np.float64)[:, None] - cy) ** 2)
+        r_out = float(self.hull_rmax) + w
+        if r_in > 0.0:
+            inside |= (r2 < r_in * r_in)
+        ring = (~inside) & (r2 <= r_out * r_out)
+        del r2
+        if ring.any():
+            iy, ix = np.nonzero(ring)
+            s = self.signed_distance(A, b,
+                                     np.asarray(xg, dtype=np.float64)[ix],
+                                     np.asarray(yg, dtype=np.float64)[iy])
+            inside[iy, ix] = (s <= 0.0)
+            band[iy, ix] = (s > 0.0) & (s <= w)
+        return inside, band
 
 
 class _ResidualEikonal(object):
@@ -6181,13 +6842,22 @@ def apply_real_lens_traced(
     i_axis = n_launch // 2
     opl_grid = opl_grid - opl_grid[i_axis, i_axis]
 
-    # ---- v5.32: the EXACT-RAY EXIT SUPPORT for the halo self-check ---------
+    # ---- UNIT C (niche C14): the traced exit support, built ONCE ----------
     # Taken HERE, between the alive mask and the fit-domain restriction below,
     # for two reasons: the fit restriction NaNs out samples that are still
     # perfectly good optics (so reading it after would understate the hull and
     # over-fire the check), and this is the last point at which ``x_out_grid``
     # is the exact traced map rather than anything the model fitted.  Cost is
-    # two reductions over the coarse lattice.  See ``_RD_HALO_AMAX_TOL``.
+    # two reductions over the coarse lattice plus one hull.
+    #
+    # This ONE construction replaces the two blocks that used to stand here --
+    # the v5.32 halo hull (C7) and the niche-C8 support bound -- which read the
+    # same arrays, at the same point, through two separately-maintained copies
+    # of the same finiteness mask and the same convex-hull algebra.  Each view
+    # keeps its own rule and its own gate, so the work done and the bits
+    # produced are unchanged; see ``_TracedExitSupport`` for why the rules are
+    # deliberately NOT merged, and ``SUPPORT_BAND_CHECK`` for the blind spot
+    # that having one object made statable.
     #
     # ``_amp`` is the input amplitude sampled at the launch nodes and is
     # already in the launch grid's (x, y) x-major layout -- the SAME layout
@@ -6195,85 +6865,24 @@ def apply_real_lens_traced(
     # transpose note at ``_amp``).  Pairing it with the wrong one would weight
     # each ray by its transpose's amplitude, which is invisible on a
     # rotationally symmetric beam and wrong on every other.
-    _rd_hull_r = None
-    _rd_hull_c = None
-    if _ray_density and RAY_DENSITY_HALO_CHECK != 'silent':
-        _h_ok = np.isfinite(x_out_grid) & np.isfinite(y_out_grid)
-        _h_pk = float(np.max(_amp)) if _amp.size else 0.0
-        if _h_pk > 0.0:
-            _h_ok &= (_amp >= np.exp(-_RD_HALO_AMP_CONTOUR) * _h_pk)
-        if _h_ok.any():
-            _h_w = _amp[_h_ok].astype(np.float64) ** 2
-            _h_wt = float(_h_w.sum())
-            if _h_wt > 0.0:
-                _h_x = x_out_grid[_h_ok]
-                _h_y = y_out_grid[_h_ok]
-                _rd_hull_c = (float((_h_x * _h_w).sum() / _h_wt),
-                              float((_h_y * _h_w).sum() / _h_wt))
-                _rd_hull_r = float(np.sqrt(
-                    (_h_x - _rd_hull_c[0]) ** 2
-                    + (_h_y - _rd_hull_c[1]) ** 2).max())
-                del _h_x, _h_y
-            del _h_w
-        del _h_ok
-
-    # ---- niche C8: the EXIT-SUPPORT BOUND on the Newton inverse -----------
-    # Built HERE, from the same exact traced map the halo hull above reads and
-    # BEFORE the fit-domain restriction, for the same two reasons: these are
-    # the positions the rays actually reached, and nothing the model fitted has
-    # touched them yet.  See ``REMAP_INVERSE_SUPPORT_BOUND``.
-    _sup_bound = None
-    if REMAP_INVERSE_SUPPORT_BOUND and _ray_density:
-        _sup_ok = np.isfinite(x_out_grid) & np.isfinite(y_out_grid)
-        if aperture is not None:
-            # Only rays the ENTRANCE STOP passes carry energy, and the
-            # ray-density amplitude already masks on exactly that criterion
-            # (see ``_ray_density_amp_grid``).  Rays launched outside the stop
-            # (the launch square reaches 1.5x the aperture RADIUS) land
-            # further out but are blocked, so including them would inflate the
-            # support with territory no light can reach.
-            _sup_ok &= ((xs_in[:, None] ** 2 + xs_in[None, :] ** 2)
-                        <= (0.5 * aperture) ** 2)
-        if int(_sup_ok.sum()) >= 3:
-            try:
-                from scipy.spatial import ConvexHull as _CH8
-                _sup_eq = _CH8(np.column_stack(
-                    [x_out_grid[_sup_ok], y_out_grid[_sup_ok]])).equations
-            except (ImportError, RuntimeError, ValueError):
-                # A degenerate support (collinear / duplicated landings) has
-                # no hull; decline rather than guess -- a degenerate bound is
-                # exactly the regime this must not invent an answer in.
-                # NARROWED to the tuple this path can actually raise (the
-                # non-ui broad-except budget, tests/unit/
-                # test_audit_except_budget.py): ``ImportError`` when the
-                # compiled ``scipy.spatial`` qhull extension is absent from a
-                # trimmed install, ``RuntimeError`` because ``QhullError`` is
-                # a documented ``RuntimeError`` subclass (named indirectly:
-                # ``scipy.spatial.QhullError`` is only public from scipy 1.8
-                # and the floor here is 1.7), and ``ValueError`` for the
-                # input rejections (non-finite / wrong ndim) ConvexHull
-                # raises before qhull ever runs.
-                _sup_eq = None
-            if _sup_eq is not None:
-                # The feather is measured in EXIT-LATTICE cells, taken from
-                # the traced samples themselves rather than from a paraxial
-                # magnification: the exit spacing of entrance-adjacent rays IS
-                # the resolution at which the support is known.  (The
-                # separate, non-negotiable allowance for the bilinear
-                # upsample's reach is ``_d0`` in :func:`_support_taper`.)
-                with np.errstate(invalid='ignore'):
-                    _sup_step = np.hypot(np.diff(x_out_grid, axis=0),
-                                         np.diff(y_out_grid, axis=0))
-                _sup_step = _sup_step[np.isfinite(_sup_step)]
-                _sup_pitch = (float(np.median(_sup_step))
-                              if _sup_step.size else float(dx * sub))
-                if not (np.isfinite(_sup_pitch) and _sup_pitch > 0.0):
-                    _sup_pitch = float(dx * sub)
-                _sup_bound = (np.ascontiguousarray(_sup_eq[:, :2].T),
-                              np.ascontiguousarray(_sup_eq[:, 2]),
-                              float(_SUPPORT_BOUND_FEATHER_CELLS) * _sup_pitch)
-                del _sup_step
-        del _sup_ok
+    _exit_support = _TracedExitSupport.from_landings(
+        x_out_grid, y_out_grid, _amp, xs_in, aperture, dx, sub,
+        want_halo=bool(_ray_density and RAY_DENSITY_HALO_CHECK != 'silent'),
+        want_bound=bool(REMAP_INVERSE_SUPPORT_BOUND and _ray_density))
+    # NOTE the two gates are the pre-C14 ones, unchanged and still separate.
+    # In particular ``want_halo`` is NOT widened to cover the band check: the
+    # band the C14 check watches is C8's RETAINED band, so it needs the HULL
+    # (the ``want_bound`` view) and not the amplitude-weighted reporting
+    # radius.  Widening ``want_halo`` would make ``_rd_hull_r`` non-None under
+    # ``RAY_DENSITY_HALO_CHECK = 'silent'`` and the C7 warning would fire from
+    # a policy that says it must not -- which is what
+    # ``test_policy_silent_suppresses`` exists to catch.
+    # The three pre-C14 locals, kept by name so every consumer below -- the
+    # taper closure, ``_ray_density_amp_grid``'s capture, and the halo report
+    # -- reads exactly what it read before.
+    _rd_hull_r = _exit_support.radius
+    _rd_hull_c = _exit_support.centroid
+    _sup_bound = _exit_support.bound
 
     # R7 / audit F2 (2026-07-21): CARRIER-GATED fit-domain restriction.  When a
     # carrier is set, drop the entrance launch grid's outer margin + corners
@@ -6537,7 +7146,6 @@ def apply_real_lens_traced(
     _use_fit = (inversion_method == 'fit')
     if _use_fit:
         from numpy.polynomial.chebyshev import chebvander as _chebvander
-        from scipy.spatial import ConvexHull as _ConvexHull
         # D7: the direct inverse-map fit reads the SAME off-centre samples
         # through the SAME weights, so it takes the SAME raised order.
         _fo = int(_fit_poly_order)
@@ -6576,9 +7184,19 @@ def apply_real_lens_traced(
         # every facet), far cheaper than a Delaunay simplex search over the
         # full output grid.  A lens exit region is convex (a disc), so the
         # hull is the exact coverage boundary.
-        _heq = _ConvexHull(np.column_stack([_xo_s, _yo_s])).equations  # (F,3)
-        _hA = np.ascontiguousarray(_heq[:, :2].T)   # (2, F)
-        _hb = _heq[:, 2]
+        #
+        # UNIT C (niche C14): this is the THIRD notion of the traced exit
+        # support, and the C8 audit's own sentence is that it is the same idea
+        # as the second -- "This bound gives the Newton path the containment
+        # the direct-fit path has had all along."  It now shares C8's hull
+        # BUILDER and its signed-distance RULE, so the two cannot drift in
+        # their conventions.  What it does NOT share is the POINT SET: this
+        # path hulls the post-restriction samples ``(_xo_s, _yo_s)``, which is
+        # its documented, long-standing behaviour and is deliberately
+        # unchanged -- unifying the point sets would be a behaviour change, not
+        # a refactor.  ``strict=True`` keeps the historical "a fit with no
+        # domain raises" contract, with the original qhull exception.
+        _hA, _hb = _TracedExitSupport.half_planes(_xo_s, _yo_s, strict=True)
 
         def _invert_fit(Xw, Yw):
             _sh = np.asarray(Xw).shape
@@ -6586,8 +7204,8 @@ def apply_real_lens_traced(
             yw = np.asarray(Yw).ravel()
             val = _fit_design((xw - _fx_c) / _fx_h,
                               (yw - _fy_c) / _fy_h) @ _fit_coef
-            pts = np.column_stack([xw, yw])
-            inside = np.all(pts @ _hA + _hb <= 1e-12, axis=1)
+            inside = _TracedExitSupport.signed_distance(
+                _hA, _hb, xw, yw) <= 1e-12
             return np.where(inside, val, np.nan).reshape(_sh)
 
     # ----- OPTION B: RectBivariateSpline + Newton-inversion of the
@@ -7061,58 +7679,17 @@ def apply_real_lens_traced(
         return opl_flat.reshape(Xw.shape)
 
     def _support_taper(Xg, Yg):
-        """niche C8: 1 inside the traced exit support, 0 beyond it, raised
-        cosine across a feather band of ``_SUPPORT_BOUND_FEATHER_CELLS``
-        exit-lattice cells outside the boundary.
+        """niche C8's exit-support taper on the coarse Newton lattice.
 
-        ``s = max_f (n_f . p + d_f)`` over the hull's facets is the exact
-        signed distance to a convex boundary for a point outside it (Qhull
-        normalises ``equations`` to unit outward normals), and is <= 0 inside.
-
-        THE PLATEAU ``_d0`` IS NOT TASTE, IT IS THE UPSAMPLE.  This taper is
-        evaluated on the COARSE Newton lattice (pitch ``sub * dx`` in the exit
-        plane) and the amplitude is then bilinearly interpolated to the wave
-        grid, so a coarse node OUTSIDE the hull lends its attenuation to wave
-        pixels up to one coarse cell INSIDE it.  ``s`` is 1-Lipschitz, so a
-        pixel with ``s <= 0`` interpolates only from nodes with
-        ``s <= sqrt(2) * sub * dx``; holding the taper at exactly 1 out to
-        there makes the bleed identically zero rather than merely small.
-        MEASURED on niche D6's decentred fixture -- power removed from INSIDE
-        the bound's own support, over the chain input power:
-
-          feather (cells)     0.0        0.5        1.0        2.0        4.0
-          without the plateau 2.211e-04  8.194e-05  3.808e-05  1.207e-05  3.2e-06
-          with it             0          0          0          0          0
-
-        i.e. 1.1 % of what the bound removes on that fixture was legitimate
-        skirt lost to interpolation, and it is now exactly none.  The cost is
-        that the bound sits ``sqrt(2) sub dx`` further out (188 um on design
-        121's last group, 3 % of its 6.3 mm hull), which is measured not to
-        readmit any of the manufactured lobe there.
-        """
-        _A, _b, _f = _sup_bound
-        _d0 = float(np.sqrt(2.0) * sub * dx)
-        _sh = np.asarray(Xg).shape
-        _xg = np.asarray(Xg, dtype=np.float64).ravel()
-        _yg = np.asarray(Yg, dtype=np.float64).ravel()
-        _nf = int(_b.size)
-        _s = np.empty(_xg.size, dtype=np.float64)
-        # Chunked (pixels x facets) product: BLAS does the work, and the chunk
-        # caps the temporary at ~160 MB however many facets the hull has and
-        # however fine the Newton lattice is.  A per-facet Python loop would
-        # be ~50x slower on a large lattice.
-        _cn = max(1, int(2e7 // max(_nf, 1)))
-        for _i in range(0, _xg.size, _cn):
-            _j = min(_i + _cn, _xg.size)
-            _s[_i:_j] = (np.column_stack([_xg[_i:_j], _yg[_i:_j]]) @ _A
-                         + _b).max(axis=1)
-        _s = _s.reshape(_sh) - _d0
-        if _f <= 0.0:
-            return (_s <= 0.0).astype(np.float64)
-        return np.where(_s <= 0.0, 1.0,
-                        np.where(_s >= _f, 0.0,
-                                 0.5 * (1.0 + np.cos(np.pi * _s
-                                                     / max(_f, 1e-300)))))
+        The rule, the plateau and the whole measurement record now live on
+        :meth:`_TracedExitSupport.taper` -- this closure is the call site's
+        binding of the PLATEAU, which is the one quantity the object cannot
+        know: ``sqrt(2) * sub * dx`` is a property of the lattice this call
+        will interpolate FROM, not of the support.  Keeping the plateau here
+        and the taper there is what lets the same support object serve the
+        coarse-lattice taper and the wave-grid band check without either one
+        guessing the other's sampling."""
+        return _exit_support.taper(Xg, Yg, np.sqrt(2.0) * sub * dx)
 
     def _ray_density_amp_grid(Xg, Yg):
         """N12 (P11): geometric ray-density exit amplitude ``|E_in(x_in)| /
@@ -7782,6 +8359,70 @@ def apply_real_lens_traced(
                             RuntimeWarning, stacklevel=2)
                 del _h_abs
             del _h_far
+        # ---- niche C14: the RETAINED-BAND self-check --------------------
+        # The blind spot between the two checks above, closed.  C8 keeps a
+        # band outside the traced hull ON PURPOSE (the sqrt(2) sub dx plateau
+        # that makes the upsample's bleed identically zero, plus the feather),
+        # and C7 looks only beyond 1.25 x r_hull -- which under the bound is
+        # territory C8 has already zeroed.  So on the E-M6 fixture 0.19998 of
+        # P_ap of manufactured light, carrying the field's GLOBAL maximum, sat
+        # in a band that neither check watches and the energy check reads as
+        # 1.01931, inside its own band (RECON_PINS_POST_C8_2026_08_01 S7.1).
+        #
+        # This asks the one question that needs no new calibration: does the
+        # field peak somewhere no traced ray of this call reached?  A skirt
+        # decays outward and cannot; a manufactured lobe does.  See
+        # ``SUPPORT_BAND_CHECK`` for why the criterion is a RATIO.
+        if (SUPPORT_BAND_CHECK != 'silent'
+                and _exit_support.hull is not None):
+            _bd_in, _bd_band = _exit_support.retained_band_masks(
+                x, x, np.sqrt(2.0) * sub * dx)
+            if _bd_band is not None and _bd_band.any() and _bd_in.any():
+                _bd_abs = np.abs(E_out)
+                _bd_core = float(_bd_abs[_bd_in].max())
+                _bd_amax = float(_bd_abs[_bd_band].max())
+                if (_bd_core > 0.0
+                        and _bd_amax > _SUPPORT_BAND_PEAK_RATIO_TOL * _bd_core):
+                    _bd_gpow = (float((_bd_abs[_bd_band] ** 2).sum()) / _rd_p_in
+                                if _rd_p_in > 0.0 else 0.0)
+                    import warnings as _bd_warn
+                    _bd_warn.warn(
+                        f"apply_real_lens_traced: amplitude_model="
+                        f"'ray_density' SUPPORT-BAND self-check FAILED -- the "
+                        f"field's maximum in the band the C8 exit-support "
+                        f"bound RETAINS outside the traced hull is "
+                        f"{_bd_amax:.3e}, which is "
+                        f"{_bd_amax / max(_bd_core, 1e-300):.3f}x the maximum "
+                        f"INSIDE the traced support ({_bd_core:.3e}), against "
+                        f"a ratio tolerance of "
+                        f"{_SUPPORT_BAND_PEAK_RATIO_TOL:g}.  That band is the "
+                        f"sqrt(2)*ray_subsample*dx plateau plus "
+                        f"{_SUPPORT_BOUND_FEATHER_CELLS:g} exit-lattice cells "
+                        f"of feather ({(np.sqrt(2.0) * sub * dx + (_exit_support.feather or 0.0)) * 1e3:.4f} mm "
+                        f"wide, on a hull of {_exit_support.n_hull} facets), "
+                        f"and it carries g_band = {_bd_gpow:.3e} of the "
+                        f"aperture-transmitted input power.  NO TRACED RAY OF "
+                        f"THIS CALL LANDED THERE: the plateau exists to stop "
+                        f"the bilinear upsample eating legitimate skirt, not "
+                        f"to host a lobe, and a field whose GLOBAL MAXIMUM "
+                        f"lies outside its own traced support has "
+                        f"manufactured that light rather than misplaced it.  "
+                        f"Note that neither of the other two instruments can "
+                        f"see this band: the ray-density power band reads it "
+                        f"as a fraction of a per cent, and the halo report "
+                        f"covers only radii beyond "
+                        f"{_RD_HALO_RADIUS_FACTOR:g} x r_hull, which the "
+                        f"bound has already zeroed.  Try a different "
+                        f"fit_radius_beam_factor, newton_fit='spline', a "
+                        f"lower ray_subsample, or a caustic-faithful "
+                        f"propagator (apply_real_lens_gbd / "
+                        f"apply_real_lens_fga); set "
+                        f"lumenairy.elements._lens_traced."
+                        f"SUPPORT_BAND_CHECK = 'silent' to suppress (that is "
+                        f"also the pre-C14 fail-before).",
+                        RuntimeWarning, stacklevel=2)
+                del _bd_abs
+            del _bd_in, _bd_band
     if E_out.dtype != target_cdtype:
         E_out = E_out.astype(target_cdtype)
     call_progress(progress, 'real_lens_traced', 1.0, 'done')

@@ -151,7 +151,18 @@ class TestSetDefaultWavePropagatorNoConsumerWarning:
             self, reset_wave_propagator_latch):
         """A rejected setter call (ValueError) must NOT flip the latch
         -- otherwise a user typo would silently suppress the legitimate
-        notice on the next valid call."""
+        notice on the next valid call.
+
+        VACUOUS SINCE v5.1.0 (recorded 2026-08-03, not a defect to fix
+        here).  The warning was retired, so nothing in ``lumenairy``
+        writes ``_DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED`` at runtime
+        any more -- it is bound ``True`` once at import
+        (``fft_infra.py``) and never flipped.  The assertion below passes
+        only because the fixture set it ``False``; it cannot fail.  Kept
+        as a forward guard: it regains teeth if a latch-flipping setter
+        ever comes back.  The sibling ``test_*_emits_no_userwarning``
+        pins in this class are NOT vacuous -- they would fail if the
+        warning were reintroduced."""
         import lumenairy.propagators.propagation as _prop
         from lumenairy.propagators.propagation import (
             set_default_wave_propagator,
@@ -185,17 +196,11 @@ class TestSetDefaultDyNoConsumerWarning:
                 f"'no consumers' UserWarning.  Consumers wired at "
                 f"apply_real_lens / apply_real_lens_traced.  Got: "
                 f"{[str(w.message) for w in uw]}")
-            return  # short-circuit -- old expectations below are dead
-            assert len(uw) == 1
-            msg = str(uw[0].message)
-            assert 'set_default_dy' in msg
-            assert 'API-only' in msg or 'no library consumer' in msg
-            assert 'v5.1' in msg, (
-                f"Warning must cite v5.1 (the actual deferral target "
-                f"post-v5.0).  v5.0.1 audit P1-NEW-F1-2 closure: the "
-                f"v4.16.3 warning text said 'v5.0' but the v5.0 release "
-                f"explicitly deferred the rollout to v5.1+.  Got msg: "
-                f"{msg!r}")
+            # 2026-08-03: a ``return`` used to sit here guarding 8 lines of
+            # v4.16.3-era expectations (``assert len(uw) == 1`` and the
+            # warning-text pins) that inverted the assertion above.  They
+            # were unreachable, so they pinned nothing; deleted rather than
+            # left as dead code that reads like a live contract.
         finally:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", UserWarning)
@@ -239,6 +244,11 @@ class TestSetDefaultDyNoConsumerWarning:
 
     # audit closure: P2-NEW-F1-4
     def test_validation_failure_no_warning(self, reset_dy_latch):
+        """VACUOUS SINCE v5.1.0 (recorded 2026-08-03) -- same reason as
+        the wave-propagator twin above: nothing in ``lumenairy`` writes
+        ``_DEFAULT_DY_NO_CONSUMER_WARNED`` at runtime any more, so the
+        assertion below only re-reads what the fixture set.  Kept as a
+        forward guard, not counted as coverage."""
         import lumenairy.propagators.propagation as _prop
         from lumenairy.propagators.propagation import set_default_dy
         with pytest.raises(ValueError):

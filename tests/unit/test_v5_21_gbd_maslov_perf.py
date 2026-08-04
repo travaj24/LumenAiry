@@ -77,6 +77,13 @@ def test_maslov_focus_roi_equals_full_grid_crop():
 # --------------------------------------------------------------------------
 # #9 GBD FFT-convolution reconstruction for uniform-Q bundles
 # --------------------------------------------------------------------------
+# v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6): the two dense-vs-FFT
+# reconstruction tests are 49.8 s of this file's 64.7 s -- an N=128 dense
+# O(N^4) beamlet sum built solely as the exact reference for the FFT path.
+# The claim (machine-precision identity, <1e-9) is a NumPy numerics identity,
+# not a Python-version contract, so it belongs on the single-Python slow gate
+# rather than 4x on the fast one.
+@pytest.mark.slow
 def test_fft_reconstruct_matches_dense_uniform_Q():
     """FFT-convolution reconstruction is machine-precision identical to the
     dense sum for a uniform-Q, uniform-direction, on-grid free-space bundle --
@@ -117,6 +124,7 @@ def test_fft_reconstruct_matches_dense_uniform_Q():
     assert _relerr(w2, d2) < 1e-9
 
 
+@pytest.mark.slow            # v5.32.1: see the dense-reference note above
 def test_fft_reconstruct_anamorphic_diagonal_Q():
     """Uniform DIAGONAL tensor Q (anamorphic dy != dx) also takes the FFT path
     and matches the dense sum."""

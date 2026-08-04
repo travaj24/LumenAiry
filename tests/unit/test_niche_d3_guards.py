@@ -752,7 +752,34 @@ def test_the_separation_survives_the_c10_residual_degree_and_is_caused_by_it():
     failed the third by 6 %.  The SAME mechanism read on ``bad`` is 14-19x on
     every build measured, so the bar sits at 5x with 3x of headroom on the
     weakest.  Nothing was weakened: the claim moved to where it is large.
+
+    ERA-PINNED to ``LSTSQ_CONDITIONING_STEPDOWN = False`` (niche C13,
+    2026-08-03), and the 3x of headroom above is exactly what C13 consumed.
+    ``bad6`` is a degree-6 linearity error computed through the traced fits,
+    and before C13 those fits were solved through a numerically singular Gram:
+    the degree-6 arm's error was being SUPPRESSED by a lucky null-space draw
+    that differed per build.  Measured on this fixture:
+
+        bad6            step-down OFF      step-down ON
+        Windows            1.2135             3.3113
+        Linux              0.9863             3.3246
+        build spread        23 %               0.4 %
+
+    ``bad4`` barely moves (23.24 -> 22.46, 14.23 -> 10.64), so the ratio this
+    test bars falls to 6.78x / 3.20x purely because the DENOMINATOR became
+    honest.  The mechanism claim is intact and still large; the 5x bar was a
+    pre-C13 calibration.  The shipped era is asserted -- more strongly than
+    this test ever did -- in the sibling below.
     """
+    _step = _lens_traced.LSTSQ_CONDITIONING_STEPDOWN
+    _lens_traced.LSTSQ_CONDITIONING_STEPDOWN = False
+    try:
+        _run_the_era_pinned_body()
+    finally:
+        _lens_traced.LSTSQ_CONDITIONING_STEPDOWN = _step
+
+
+def _run_the_era_pinned_body():
     bad6 = _linearity_error(0.023)
     good6 = _linearity_error(0.0005)
     _deg = _lens_traced._REMAP_RESID_EIKONAL_DEGREE
@@ -765,6 +792,27 @@ def test_the_separation_survives_the_c10_residual_degree_and_is_caused_by_it():
     assert bad6 > 5.0 * good6, (bad6, good6)
     # 2. the residual degree is what moves the multiplexed route (14-19x)
     assert bad4 > 5.0 * bad6, (bad4, bad6)
+
+
+def test_c13_makes_the_d3_separation_build_independent():
+    """The SHIPPED-era statement, and it is strictly stronger than the
+    era-pinned sibling's claim 1.
+
+    Niche C13 gave the traced fits a backward-stable solve, and the degree-6
+    linearity error stopped being a per-build lottery: ``bad6`` reads 3.3113
+    (Windows) against 3.3246 (Linux), a **0.4 %** spread where the pre-C13
+    solver gave 1.2135 against 0.9863 (**23 %**).
+
+    The gate's own separation ``bad6 / good6`` follows it: **80.5x / 17.2x**
+    before, **258.9x / 259.9x** after -- one number on both builds instead of
+    a 4.7x disagreement about it.  That is what a bar can finally be placed on,
+    so this test places one where the sibling could not.
+    """
+    bad6 = _linearity_error(0.023)
+    good6 = _linearity_error(0.0005)
+    # 100x, against 258.9 / 259.9 measured -- and against 17.2 pre-C13 on the
+    # weaker build, so this bar is one C13 alone can carry.
+    assert bad6 > 100.0 * good6, (bad6, good6)
 
 
 def test_multi_congruence_policy_is_validated():

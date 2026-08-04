@@ -1,7 +1,9 @@
 """W3 ORACLE WAVE (2026-07-25) -- the oracle-needing physics questions from
 ``docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md``.
 
-Four independent oracles, each built BEFORE any verdict or fix:
+Four independent oracles (W3-1..W3-4), each built BEFORE any verdict or fix,
+plus the two follow-on sections they spawned (W3-3b and W4, further down the
+file -- roughly a third of it, and previously unmentioned here):
 
 * **W3-1** ``test_w3_t1_*`` -- coordinate-break frame convention
   (``raytrace/world.py`` vs ``intersection.py`` / ``differential.py`` /
@@ -12,6 +14,10 @@ Four independent oracles, each built BEFORE any verdict or fix:
   degeneracy in the asymptotic propagator family.
 * **W3-4** ``test_w3_t4_*`` -- ``elements/polarization.py`` non-finite
   input guards.
+* **W3-3b** ``test_w3_t3b_*`` -- the DEFAULT output waist ``w_o`` of the
+  sigma-integration path (flagged by W3-3, then hit CI).
+* **W4** ``test_w4_*`` -- the three items W3-3b measured but left open
+  (adaptive sigma grid, (2,0) basis oscillation, jax fit estimator).
 
 Each section keeps its own oracle docstring below.
 """

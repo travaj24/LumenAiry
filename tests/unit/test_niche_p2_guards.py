@@ -20,6 +20,9 @@ Three mechanisms, one file:
 """
 from __future__ import annotations
 
+import contextlib
+import logging
+import re
 import warnings
 
 import numpy as np
@@ -184,6 +187,107 @@ def _slow_singlet_chain(N=512, dx=6e-6, w0=0.9e-3, **over):
     return env0, groups, dx, over
 
 
+# ---------------------------------------------------------------------------
+# Margin diagnostics for the two tests that DEMAND the 'NOT dx-STABLE' warning.
+#
+# ``pytest.warns`` is a BINARY instrument: on a miss it reports DID NOT WARN
+# plus the bystander warnings, and never the MARGIN -- which is the one number
+# that separates "the guard stopped detecting" from "the guard fired and the
+# capture lost it".  CI hit exactly that on 5af1edf and adjudicating it took two
+# studies, because the failure carried no margin (see
+# ``docs/audits/P2_DIDNOTWARN_DIAGNOSIS_2026_08_03.md``, which excludes the
+# python/BLAS/numpy, RAM-budget, thread-count, glass-source, warning-registry
+# and dispatch-global axes by measurement, and leaves the margin as the only
+# open discriminator).
+#
+# The guard already LOGS its own ``m1`` / ``m2`` at INFO before deciding.
+# Capture that and attach it to the failure -- the same self-reporting pattern
+# niche D4 adopted -- so the NEXT occurrence names its own cause instead of
+# starting another argument.
+# ---------------------------------------------------------------------------
+_METRIC_RE = re.compile(r"'(\w+)':\s*(?:np\.float64\()?(-?[0-9.eE+-]+)")
+
+
+@contextlib.contextmanager
+def _dx_selfcheck_margin():
+    """Collect ``_run_chain_dx_self_check``'s own INFO line (which carries the
+    two metric dicts it compares)."""
+    lines: list[str] = []
+
+    class _Sink(logging.Handler):
+        def emit(self, record):
+            try:
+                msg = record.getMessage()
+            except Exception:                          # pragma: no cover
+                return
+            if "self_check='dx'" in msg:
+                lines.append(msg)
+
+    log = logging.getLogger('lumenairy.propagators.carrier')
+    sink, prev = _Sink(), log.level
+    log.addHandler(sink)
+    log.setLevel(logging.INFO)
+    try:
+        yield lines
+    finally:
+        log.removeHandler(sink)
+        log.setLevel(prev)
+
+
+def _margin_report(lines, tol, state_dump=None):
+    """Render the guard's OWN comparison as a per-metric margin table."""
+    if not lines:
+        return ('DIAGNOSIS: the guard logged NO self-check line -- it returned '
+                'before comparing anything (empty primary metrics), so the '
+                'chain never reached the warn.  That is a guard-side silent '
+                'pass, not a capture failure.')
+    m = re.search(r'metrics (\{.*\}) vs (\{.*\})\s*$', lines[-1])
+    if m is None:                                      # pragma: no cover
+        return 'guard log line (unparsed): ' + lines[-1]
+    a, b = dict(_METRIC_RE.findall(m.group(1))), dict(_METRIC_RE.findall(m.group(2)))
+    keys = sorted(set(a) & set(b))
+    rows = ["guard self_check='dx' margin (its OWN m1 vs m2, tol %.4g%%):"
+            % (100.0 * tol)]
+    if not keys:
+        rows.append('  NO SHARED METRIC KEYS -- m1 %r vs m2 %r.  The guard '
+                    'compares nothing and returns SILENTLY (a refined run that '
+                    'degenerated reads as dx-stable).' % (sorted(a), sorted(b)))
+    for k in keys:
+        x, y = float(a[k]), float(b[k])
+        rel = abs(x - y) / max(abs(x), abs(y), 1e-300)
+        rows.append('  %-6s %.6g vs %.6g -> %9.4f %%  (%.2fx tol)  %s'
+                    % (k, x, y, 100.0 * rel, (rel / tol) if tol else float('inf'),
+                       'TRIPS' if rel > tol else 'inside'))
+    rows.append('  If every metric TRIPS the guard DID fire and the capture '
+                'lost it (look for a thread leaving warnings.catch_warnings '
+                'mid-block); if none does, the physics moved.')
+    rows.append('  full guard log: ' + lines[-1])
+    if state_dump is not None:
+        try:
+            rows.append(state_dump())
+        except Exception as exc:                       # pragma: no cover
+            rows.append('(process-state dump failed: %r)' % (exc,))
+    return '\n'.join(rows)
+
+
+def _expect_dx_warning(call, tol, state_dump):
+    """``pytest.warns(... 'NOT dx-STABLE')`` with the margin attached to a
+    miss.  Keeps the contract identical; only the failure text grows.
+
+    Only pytest's own ``Failed`` (the DID-NOT-WARN outcome) is decorated -- a
+    genuine exception from the chain propagates untouched, with its traceback,
+    because converting it here would cost more debuggability than the margin
+    buys."""
+    with _dx_selfcheck_margin() as lines:
+        try:
+            with pytest.warns(RuntimeWarning, match='NOT dx-STABLE'):
+                call()
+        except pytest.fail.Exception as exc:
+            raise AssertionError(
+                '%s\n\n%s' % (exc, _margin_report(lines, tol, state_dump))
+            ) from None
+
+
 def test_self_check_rejects_unknown_modes():
     env0, groups, dx, _ = _slow_singlet_chain(N=64, dx=6e-6)
     with pytest.raises(ValueError, match='self_check'):
@@ -229,28 +333,52 @@ def test_self_check_dx_passes_on_a_dx_stable_chain():
                        np.asarray(res_check.field), rtol=1e-12, atol=0.0)
 
 
-def test_self_check_dx_flags_a_non_convergent_chain():
+def test_self_check_dx_flags_a_non_convergent_chain(process_state_dump):
     """The point of the flag: a chain whose INPUT CARRIER is beyond the grid
     Nyquist (a steep diverging conjugate on a coarse grid) is genuinely not
     dx-stable -- refining moves the readout power by ~50% -- and the self-check
     says so instead of returning the number silently.  Measured 2026-07-25 at
     N=768 / dx=4 um / r_in=+3 mm: power 52.5%, peak 50.0% and r50 3.6% apart
-    between dx and dx/sqrt(2)."""
+    between dx and dx/sqrt(2); re-measured 2026-08-03 as 52.4574 / 50.0264 /
+    3.5842 % on Windows/MKL py3.14 and Linux/OpenBLAS py3.13 alike.
+
+    ``final_leg`` is PINNED, and that is load-bearing (see
+    ``docs/audits/P2_DIDNOTWARN_DIAGNOSIS_2026_08_03.md`` S3).  Under the
+    ``'auto'`` default this fixture's measured exit NA is **0.14870 against
+    ``na_exact_threshold`` = 0.15** -- 0.87 % below a routing cliff the library
+    itself warns about ("final_leg='auto' flips between the exact and the
+    PARAXIAL focus readout at that threshold with no other symptom ... a
+    beam-size change of 0.9 % would flip it").  The 52.5 % headline is the
+    PARAXIAL branch's number.  On the EXACT branch the same fixture reads
+    power 8.884 %, peak 4.357 %, r50 0.421 % -- **1.78x** tolerance with the
+    peak metric ALREADY inside it, against 10.49x here.  Both branches still
+    fire on both builds, so nothing is being papered over: the pin removes a
+    coin toss from a test that is not about routing, and it is exactly the
+    remedy the guard's own message recommends.  Pinning also drops the
+    NA-proximity bystander warning from the recorder."""
     env0, groups, dx, _ = _slow_singlet_chain(N=768, dx=4e-6)
-    with pytest.warns(RuntimeWarning, match='NOT dx-STABLE'):
-        la.propagate_traced_carrier_chain(env0, groups, _WL, dx,
-                                          self_check='dx',
-                                          **_chain_kw(r_in=3e-3))
+    _expect_dx_warning(
+        lambda: la.propagate_traced_carrier_chain(
+            env0, groups, _WL, dx, self_check='dx', final_leg='paraxial',
+            **_chain_kw(r_in=3e-3)),
+        0.05, process_state_dump)
 
 
-def test_self_check_tolerance_is_honoured():
+def test_self_check_tolerance_is_honoured(process_state_dump):
     """``self_check_tol`` sets the flag threshold: the dx-stable chain above
-    (0.06% drift) trips a 0.01% tolerance and passes a 5% one."""
+    (0.06% drift) trips a 0.01% tolerance and passes a 5% one.
+
+    Re-measured 2026-08-03 on both builds: peak 0.1052 %, power 0.1019 %,
+    r50 0.0008 % -- two of the three metrics trip at 10.5x and ``r50`` does
+    not.  Unlike its sibling this fixture is clear of the ``final_leg='auto'``
+    cliff (it emits no NA-proximity warning at all), so it needs no routing
+    pin."""
     env0, groups, dx, _ = _slow_singlet_chain()
-    with pytest.warns(RuntimeWarning, match='NOT dx-STABLE'):
-        la.propagate_traced_carrier_chain(
+    _expect_dx_warning(
+        lambda: la.propagate_traced_carrier_chain(
             env0, groups, _WL, dx, self_check='dx', self_check_tol=1e-4,
-            **_chain_kw())
+            **_chain_kw()),
+        1e-4, process_state_dump)
 
 
 # ===========================================================================

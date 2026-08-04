@@ -5,8 +5,12 @@ Bright-2013 (Ta2O5) Sellmeier formulae into a 3-pole template by
 padding the unused slots with dummy ``(B, C) = (0.0, 1.0)``.  The
 ``C = 1.0 um^2`` dummy pole forces ``lam2 - C = 0`` at
 ``lam = 1.0 um``, producing ``0/0 = NaN`` even though
-``B = 0``.  Both materials document validity that includes 1 um:
-TiO2 range 400-5000 nm, Ta2O5 range 350-8000 nm.
+``B = 0``.  Both materials document validity that includes 1 um --
+which is what makes the NaN a real defect rather than an
+out-of-band artefact, and that premise still holds after v5.4.6
+(audit P2-1) TIGHTENED both registry ranges to the cited fits:
+TiO2 430-1530 nm, Ta2O5 500-1000 nm (1 um is mid-band for TiO2 and
+the exact upper endpoint for Ta2O5).
 
 The fix is two-fold:
 
@@ -78,10 +82,12 @@ def test_vis_nir_sweep_no_nan():
     NaN here when users called the accessor with ``np.arange``."""
     lams = np.arange(400e-9, 5000e-9, 100e-9)
     with warnings.catch_warnings():
-        # The DeVore fit's documented validity is 0.43-1.53 um, but
-        # the registry range was relaxed to 0.4-5 um for design-space
-        # exploration -- the test just needs finiteness, so suppress
-        # any extrapolation warnings.
+        # The DeVore fit's documented validity is 0.43-1.53 um and the
+        # registry range now MATCHES it (v5.4.6, audit P2-1, tightened it
+        # -- the old comment here claimed the opposite, that the range had
+        # been "relaxed to 0.4-5 um").  This sweep deliberately runs past
+        # the band because the pin is about finiteness, not accuracy, so
+        # suppress the out-of-range extrapolation warnings.
         warnings.simplefilter('ignore', UserWarning)
         n_tio2 = get_coating_material_index('TiO2', lams)
         n_ta2o5 = get_coating_material_index('Ta2O5', lams)

@@ -1184,6 +1184,31 @@ def test_off_centre_fit_disc_does_not_ghost_the_exit_field(monkeypatch):
     # historical launch.
     monkeypatch.setattr(_lt, 'REMAP_STATIONARY_PHASE_LAUNCH', False)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
+    # 5.32.1: this arm reconstructs the pre-D1 library, so it has to pin
+    # the pre-D1 SOLVER and the pre-D1 SELECTOR as well.  Both moved, and
+    # each of them ALONE is enough to stop this witness reproducing:
+    #
+    #   * ``DECENTRED_FIT_PREDICTOR`` / ``DECENTRED_FIT_ARBITER`` now ship
+    #     ``True``, and the selector reroutes the deliberately broken arm
+    #     to whichever candidate fits the traced map better (measured:
+    #     bad_rel 1.00e-03 against good_rel 7.51e-04, 1.3x, against a
+    #     5x / 0.02 bar);
+    #   * ``LSTSQ_CONDITIONING_STEPDOWN`` (niche C13) now solves the hard
+    #     -mask fit stably instead of through a numerically singular Gram,
+    #     and THE FOLD SIMPLY DOES NOT HAPPEN -- bad_p 2.29e-07 against a
+    #     true halo of 1.30e-07 (1.8x, against a 50x bar), and the fold
+    #     detector goes silent.  That is not this test breaking: D1's
+    #     weighted restriction and C13's stable solve are two INDEPENDENT
+    #     cures for the same defect (D1 removed the near-singularity from
+    #     the design matrix, C13 removed the instability from the solve),
+    #     and either one alone suppresses the ghost.  See
+    #     ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``.
+    #
+    # A fail-before that inherits a default is not a fail-before.  Pin the
+    # era; the assertions below are the originals, unchanged.
+    monkeypatch.setattr(_lt, 'DECENTRED_FIT_PREDICTOR', False)
+    monkeypatch.setattr(_lt, 'DECENTRED_FIT_ARBITER', False)
+    monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
     bad_p, bad_rel, _ = _ghost_metrics()
     # ENVELOPE factors, not absolutes (2026-08-02): the broken arm's ghost
     # magnitude is BLAS-build-dependent.  Measured bad_p / ref_off_p: >1000x
@@ -1217,6 +1242,31 @@ def test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive(monkeypatch)
     # taken with C6 in force and is unchanged.
     monkeypatch.setattr(_lt, 'REMAP_STATIONARY_PHASE_LAUNCH', False)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
+    # 5.32.1: this arm reconstructs the pre-D1 library, so it has to pin
+    # the pre-D1 SOLVER and the pre-D1 SELECTOR as well.  Both moved, and
+    # each of them ALONE is enough to stop this witness reproducing:
+    #
+    #   * ``DECENTRED_FIT_PREDICTOR`` / ``DECENTRED_FIT_ARBITER`` now ship
+    #     ``True``, and the selector reroutes the deliberately broken arm
+    #     to whichever candidate fits the traced map better (measured:
+    #     bad_rel 1.00e-03 against good_rel 7.51e-04, 1.3x, against a
+    #     5x / 0.02 bar);
+    #   * ``LSTSQ_CONDITIONING_STEPDOWN`` (niche C13) now solves the hard
+    #     -mask fit stably instead of through a numerically singular Gram,
+    #     and THE FOLD SIMPLY DOES NOT HAPPEN -- bad_p 2.29e-07 against a
+    #     true halo of 1.30e-07 (1.8x, against a 50x bar), and the fold
+    #     detector goes silent.  That is not this test breaking: D1's
+    #     weighted restriction and C13's stable solve are two INDEPENDENT
+    #     cures for the same defect (D1 removed the near-singularity from
+    #     the design matrix, C13 removed the instability from the solve),
+    #     and either one alone suppresses the ghost.  See
+    #     ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``.
+    #
+    # A fail-before that inherits a default is not a fail-before.  Pin the
+    # era; the assertions below are the originals, unchanged.
+    monkeypatch.setattr(_lt, 'DECENTRED_FIT_PREDICTOR', False)
+    monkeypatch.setattr(_lt, 'DECENTRED_FIT_ARBITER', False)
+    monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
     _, bad_rel, bad_msgs = _ghost_metrics()
     # ENVELOPE, not an absolute pin (2026-08-02): the broken configuration's
     # ghost magnitude is BLAS-build-dependent -- measured > 0.1 on local

@@ -2322,6 +2322,82 @@ def _guard_dispose(action, msg, exc=RuntimeError, stacklevel=3):
         warnings.warn(msg, RuntimeWarning, stacklevel=int(stacklevel) + 1)
 
 
+def _warn_undeduped(msg, stacklevel=3, category=RuntimeWarning):
+    """Emit ``msg`` attributed to ``stacklevel``'s frame, WITHOUT the
+    once-per-location dedup CPython's ``'default'`` filter action applies.
+
+    THE DEFECT THIS EXISTS FOR (niche C14, measured 2026-08-03;
+    ``docs/audits/P2_DIDNOTWARN_DIAGNOSIS_2026_08_03.md`` S4.1).
+    :func:`_run_chain_dx_self_check` warned through ``warnings.warn(...,
+    stacklevel=3)``.  ``stacklevel=3`` attributes the warning to the CALLER of
+    :func:`propagate_traced_carrier_chain`, which is correct for blame and
+    fatal for delivery: under CPython's stock filters an unmatched
+    ``RuntimeWarning`` takes the ``"default"`` action, which is **once per
+    (text, category, module, lineno)** -- and a batch loop calls the chain from
+    ONE line.  ``p2diag_prod_dedup.py`` measured it on the real chain: two
+    non-converged calls from one source line delivered the ``NOT dx-STABLE``
+    flag **once**.  Every later non-converged result in that loop returned
+    unflagged.  For a guard whose whole contract is "a non-converged result is
+    never returned as if it were converged", once-per-process is the wrong
+    delivery contract.
+
+    HOW THIS FIXES IT, AND WHAT IT DELIBERATELY DOES NOT TOUCH.
+    ``warnings.warn_explicit`` consults the ``registry`` mapping it is HANDED
+    for the dedup bookkeeping; passing ``registry=None`` makes it allocate a
+    fresh throwaway dict, so the ``'default'`` action's ``registry[key] = 1``
+    is written where nothing will ever read it and the NEXT qualifying call
+    warns again.  Everything else in the warnings protocol is untouched,
+    which is the point:
+
+    * an ``'ignore'`` filter still returns early -- a caller who has silenced
+      this category KEEPS it silenced (this is why the fix is not
+      ``catch_warnings() + simplefilter('always')``, which would override the
+      caller's own configuration and is process-global and not thread-safe);
+    * an ``'error'`` filter still raises;
+    * ``'once'`` still dedups, because ``'once'`` keys off the module-global
+      ``onceregistry`` rather than the per-module registry passed in here;
+    * only the ``'default'`` action changes, from once-per-caller-line to
+      every-qualifying-call, which is the documented behaviour change.
+
+    The frame resolution reproduces ``warnings.warn``'s own: ``stacklevel``
+    is counted the same way (1 = this helper's caller), and the reported
+    filename/module are taken from that frame's globals exactly as
+    :func:`warnings.warn` derives them, so the emitted location is
+    byte-identical to what the plain ``warn`` printed.
+
+    Used ONLY by the dx self-check today.  The ``on_*`` guard family keeps
+    :func:`_guard_dispose` and its ordinary ``warn``: those fire on a
+    per-CONFIGURATION fault (a bad geometry the caller must fix once), where
+    once-per-location is the right dose.  This one fires on a per-RESULT fault
+    (this particular number is not converged), where suppressing repeats
+    silently drops results."""
+    import sys
+    import warnings
+    try:
+        frame = sys._getframe(int(stacklevel))
+    except ValueError:                                     # pragma: no cover
+        # Shallower stack than the caller assumed: attribute it to this
+        # module rather than losing the warning entirely.
+        warnings.warn(msg, category, stacklevel=2)
+        return
+    g = frame.f_globals
+    lineno = frame.f_lineno
+    module = g.get('__name__', '<unknown>')
+    filename = g.get('__file__')
+    if filename:
+        if filename.lower().endswith('.pyc'):
+            filename = filename[:-1]
+    else:
+        if module == '__main__':
+            try:
+                filename = sys.argv[0]
+            except (AttributeError, IndexError):           # pragma: no cover
+                filename = None
+        if not filename:
+            filename = module
+    warnings.warn_explicit(msg, category, filename, lineno, module, None, g)
+
+
 def _check_guard_action(name, value, fn):
     """Validate one ``on_*`` policy string, raising a ValueError that names the
     knob and the accepted vocabulary."""
@@ -4673,11 +4749,72 @@ def _chain_result_metrics(res):
             'r50': float((j + min(max(frac, 0.0), 1.0)) * dxo)}
 
 
+def _chain_metric_kind(res):
+    """Which BRANCH of :func:`_chain_result_metrics` a result takes.
+
+    ``'envelope'`` when the result still carries a carrier radius (no focus
+    readout: the landing grids differ by a co-moving pitch, so only the
+    physical quantities are comparable), ``'focal'`` after a readout (both runs
+    land on the same ``dx_out``/``N_out`` grid).
+
+    Kept as a SEPARATE one-line predicate rather than folded into
+    :func:`_chain_result_metrics`'s return so that function's signature and its
+    ``%r``-logged dict stay exactly as they are -- ``c11_p2dx_recon.py`` calls
+    it directly and ``test_niche_p2_guards.py`` parses the logged dicts with a
+    numeric regex, and neither should have to change to close a guard hole.
+
+    The two branches share the key ``'power'`` and MEAN DIFFERENT THINGS BY IT
+    (envelope: :func:`_chain_envelope_stats`'s window power; focal:
+    ``sum|E|^2 dx^2`` over the readout grid), so a comparison that mixes them
+    is not a comparison at all.  That is why the self-check refuses a
+    cross-branch pair instead of intersecting the keys and trusting the
+    overlap."""
+    return 'envelope' if getattr(res, 'R', None) is not None else 'focal'
+
+
 def _run_chain_dx_self_check(kw, res, tol):
     """Re-run the chain at ``dx/sqrt(2)`` (extent-preserving) and warn when the
     focal metrics move by more than ``tol`` (relative).  The cheap "is this
-    number dx-stable" flag from the production-readiness plan (P2)."""
+    number dx-stable" flag from the production-readiness plan (P2).
+
+    NICHE C14 (2026-08-03) -- EVERY EXIT FROM THIS FUNCTION NOW SPEAKS.
+    ``docs/audits/P2_DIDNOTWARN_DIAGNOSIS_2026_08_03.md`` S4.2 measured three
+    paths on which a guard that exists to prevent silent passes passed
+    silently.  All three are closed here, and the closing rule is uniform: a
+    self-check that CANNOT COMPARE must say so, because "no warning" is read
+    by every caller as "converged".
+
+      (a) the PRIMARY result carries no comparable metric.
+          ``_chain_result_metrics`` returns ``{}`` whenever the field's total
+          intensity is non-finite or ``<= 0``.  A primary run that degenerated
+          therefore read as dx-stable, and the refined chain was never even
+          run.  Now warns: a degenerate primary is a stronger fault than the
+          one this check was looking for.
+
+      (b) the two runs produce nothing comparable.
+          Either the REFINED run degenerated (``m2`` empty, key intersection
+          empty, ``bad`` stays empty, return -- **after paying for both
+          chains**), or the two runs took different readout branches, whose
+          shared key ``'power'`` names two different quantities (see
+          :func:`_chain_metric_kind`).  Both now warn.
+
+      (c) the readout-less mode is REFUSED rather than run.
+          Without a focus readout the compared quantities -- ``w_env``,
+          ``power``, ``R`` -- are dx-invariant by construction.  Measured on
+          the same beyond-Nyquist fixture that reads 52.5 % through a readout:
+          ``w_env`` 0.0867 %, ``power`` 0.0015 %, ``R`` 0 % -- i.e. the mode
+          was very nearly a no-op that cost 2x runtime and returned a clean
+          bill of health for a chain that is not converged.  It now declines
+          up front, names the remedy (pass a ``focus_readout``), and SKIPS the
+          second chain, so the refusal is cheaper than the false pass it
+          replaces.
+
+    Delivery for all four warnings (the three above plus ``NOT dx-STABLE``)
+    goes through :func:`_warn_undeduped` -- see there for why the plain
+    ``warnings.warn`` silenced every call after the first in a batch loop."""
+    from .._logging import get_logger
     from ..backend import to_numpy
+    _log = get_logger(__name__)
     E_in = np.asarray(to_numpy(kw['E_in']))
     N = int(E_in.shape[-1])
     N2 = int(2 * round(N * np.sqrt(2.0) / 2.0))
@@ -4685,29 +4822,88 @@ def _run_chain_dx_self_check(kw, res, tol):
         N2 = N + 2
     dx0 = float(kw['dx'])
     dx2 = dx0 * N / N2                      # same physical extent N*dx
+    _hdr = "propagate_traced_carrier_chain self_check='dx': "
+    _tail = ("  The returned numbers therefore carry NO convergence evidence "
+             "from this check -- treat them exactly as you would treat an "
+             "unchecked run.")
+
+    # ---- hole (a): the primary result has nothing to compare ---------------
     m1 = _chain_result_metrics(res)
     if not m1:
+        _warn_undeduped(
+            _hdr + f"DECLINED -- the PRIMARY result carries no comparable "
+            f"metric, because its total intensity is not finite or is <= 0 "
+            f"(N={N}, dx={dx0 * 1e6:.4f} um).  That is a degenerate chain "
+            f"result in its own right and a stronger fault than the "
+            f"grid-convergence one this check looks for: inspect the chain "
+            f"before reading anything off the returned field." + _tail)
         return
+
+    # ---- hole (c): the readout-less comparison is dx-invariant -------------
+    _kind1 = _chain_metric_kind(res)
+    if _kind1 == 'envelope':
+        _warn_undeduped(
+            _hdr + "DECLINED -- this chain has NO focus readout, so the only "
+            "grid-comparable quantities are the envelope 1/e^2 radius, the "
+            "window power and the carrier radius, and those are dx-INVARIANT "
+            "by construction: on a fixture that moves 52.5 % through a focus "
+            "readout they move 0.0867 %, 0.0015 % and 0 % respectively.  "
+            "Running the comparison would cost a second full chain (~2x) to "
+            "report 'stable' whatever the truth is, so it is refused rather "
+            "than performed.  Pass a focus_readout=dict(...) to get the "
+            "dx-sensitive comparison (window power, peak intensity and the "
+            "50 %-encircled-energy radius on a fixed output grid), which is "
+            "the configuration this check was calibrated on." + _tail)
+        return
+
     kw2 = dict(kw)
     kw2['E_in'] = _fourier_upsample_crop(E_in, N, N2)
     kw2['dx'] = dx2
     res2 = propagate_traced_carrier_chain(**kw2)
     m2 = _chain_result_metrics(res2)
+    _kind2 = _chain_metric_kind(res2)
+    # Logged BEFORE the decision so that every path below -- including the two
+    # refusals -- leaves the same INFO line the margin instrument reads, and
+    # logged ONCE so it stays the LAST ``self_check='dx'`` record of the call.
+    _log.info(
+        "propagate_traced_carrier_chain self_check='dx': N %d -> %d, "
+        "dx %.6g -> %.6g m, metrics %r vs %r", N, N2, dx0, dx2, m1, m2)
+
+    # ---- hole (b): the two runs are not comparable to each other -----------
+    if _kind2 != _kind1:
+        _warn_undeduped(
+            _hdr + f"DECLINED -- the primary run took the {_kind1!r} metric "
+            f"branch and the refined run took {_kind2!r}, so the two carry no "
+            f"common quantity: they share the key 'power' and mean different "
+            f"things by it (window power about a co-moving envelope vs "
+            f"sum|E|^2 dx^2 on a fixed readout grid).  Refining N={N} -> "
+            f"{N2} changed the chain's own routing, which is itself a "
+            f"convergence failure -- pin final_leg and the focus_readout "
+            f"explicitly so both runs take the same branch." + _tail)
+        return
+    _shared = sorted(set(m1) & set(m2))
+    if not _shared:
+        _warn_undeduped(
+            _hdr + f"DECLINED -- the REFINED run (N={N2}, "
+            f"dx={dx2 * 1e6:.4f} um) carries no metric in common with the "
+            f"primary (N={N}, dx={dx0 * 1e6:.4f} um): primary "
+            f"{sorted(m1)!r} vs refined {sorted(m2)!r}.  The usual cause is a "
+            f"refined run whose total intensity is non-finite or <= 0, i.e. "
+            f"the finer grid DEGENERATED where the coarse one did not -- which "
+            f"is the opposite of convergence.  Both chains were run and "
+            f"neither could be compared." + _tail)
+        return
+
     bad = []
-    for key in sorted(set(m1) & set(m2)):
+    for key in _shared:
         a, b = float(m1[key]), float(m2[key])
         scale = max(abs(a), abs(b), 1e-300)
         rel = abs(a - b) / scale
         if rel > tol:
             bad.append(f'{key}: {a:.6g} (dx={dx0 * 1e6:.4f} um) vs {b:.6g} '
                        f'(dx={dx2 * 1e6:.4f} um), {100.0 * rel:.1f}% apart')
-    from .._logging import get_logger
-    get_logger(__name__).info(
-        "propagate_traced_carrier_chain self_check='dx': N %d -> %d, "
-        "dx %.6g -> %.6g m, metrics %r vs %r", N, N2, dx0, dx2, m1, m2)
     if bad:
-        import warnings
-        warnings.warn(
+        _warn_undeduped(
             f"propagate_traced_carrier_chain self_check='dx': the result is "
             f"NOT dx-STABLE.  Refining the grid from N={N} (dx="
             f"{dx0 * 1e6:.4f} um) to N={N2} (dx={dx2 * 1e6:.4f} um) at the same "
@@ -4716,8 +4912,7 @@ def _run_chain_dx_self_check(kw, res, tol):
             f"not converged, so treat the returned numbers as indicative only "
             f"-- refine until they plateau (or reduce ray_subsample / raise "
             f"the focus_readout window_factor / n_fine_cap, which are the other "
-            f"resolution axes) before quoting absolute EE / FWHM.",
-            RuntimeWarning, stacklevel=3)
+            f"resolution axes) before quoting absolute EE / FWHM.")
 
 
 def propagate_traced_carrier_chain(
@@ -5153,10 +5348,31 @@ def propagate_traced_carrier_chain(
         This is the cheap "is this number dx-stable" flag: the traced chain's
         absolute focal metrics have historically drifted by tens of points under
         grid refinement (audit §1), so a single-grid number carries no
-        convergence evidence on its own.  Compared metrics: after a focus
-        readout (both runs land on the same ``dx_out``/``N_out`` grid) the window
-        power, the peak intensity and the 50%-encircled-energy radius; without a
-        readout the envelope 1/e^2 radius, the power and the carrier radius.
+        convergence evidence on its own.  Compared metrics: the window power,
+        the peak intensity and the 50%-encircled-energy radius, all read on the
+        common ``dx_out``/``N_out`` readout grid.
+
+        **REQUIRES a ``focus_readout`` (niche C14, 2026-08-03).**  Without one
+        the two runs land on different (co-moving-pitch) grids and the only
+        comparable quantities -- the envelope 1/e^2 radius, the power and the
+        carrier radius -- are dx-INVARIANT by construction: measured 0.0867 %,
+        0.0015 % and 0 % on a fixture that moves 52.5 % through a readout
+        (``docs/audits/P2_DIDNOTWARN_DIAGNOSIS_2026_08_03.md`` S4.2c).  The
+        mode used to run that comparison anyway, paying for a second full chain
+        to report "stable" whatever the truth was; it now DECLINES with a
+        ``RuntimeWarning`` naming the remedy, and skips the second run.
+
+        Every path that cannot compare says so.  A degenerate primary result, a
+        refined run that degenerated, and a refinement that changed the chain's
+        own routing each emit a ``RuntimeWarning`` rather than returning
+        silently -- "no warning" from this check means "compared and agreed",
+        never "could not compare".
+
+        The flag is delivered on EVERY qualifying call, not once per caller
+        line: it is emitted through :func:`_warn_undeduped`, which bypasses
+        CPython's ``'default'``-action dedup so a batch loop calling the chain
+        from one source line is told about each non-converged result rather
+        than only the first.  An explicit ``'ignore'`` filter still silences it.
 
         Costs roughly 3x a plain run (the refined run is ~2x the primary), which
         is why it is opt-in.  It is a NECESSARY-not-sufficient test: agreement at

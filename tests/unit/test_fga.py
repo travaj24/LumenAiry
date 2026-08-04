@@ -19,10 +19,19 @@ from lumenairy.propagators import apply_real_lens_fga  # noqa: E402
 from lumenairy.propagators.asm import angular_spectrum_propagate  # noqa: E402
 
 # NOT marked ``slow``: these are heavy (numba JIT + 256^2 swarm sums) but
-# eig-FREE, so they belong in the fast gate -- which is xdist-parallelised
-# (--dist loadfile) and absorbs this file on a single worker in ~7 min -- rather
-# than in the serial, eig-heavy, hardware-sensitive ``slow`` job (which cannot
-# safely take xdist and was already near its time cap).
+# eig-FREE, so they belong in the fast gate -- rather than in the serial,
+# eig-heavy, hardware-sensitive ``slow`` job (which cannot safely take xdist
+# and was already near its time cap).
+#
+# 2026-08-03: the old wording here said the fast gate is "xdist-parallelised
+# (--dist loadfile)" and absorbs this file "on a single worker in ~7 min".
+# Both numbers are stale.  In-process xdist was ABANDONED (a runner has only
+# ~2-4 cores, so it capped the gate at ~1.5x); the gate now duration-balances
+# across three pytest-split shards on their own runners
+# (``--splits 3 --group N --splitting-algorithm least_duration``).  And this
+# file measures 1791.7 s (~30 min) across its 27 ``.test_durations`` entries,
+# which the splitter spreads over those shards rather than landing whole on
+# one worker.
 
 _WL = 0.633e-6
 

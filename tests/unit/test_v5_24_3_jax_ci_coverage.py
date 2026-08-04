@@ -31,19 +31,34 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "unit-tests.yml"
 _TESTS_UNIT = _REPO_ROOT / "tests" / "unit"
 
-# A jax-guard line: ``pytest.importorskip('jax')`` /
-# ``importorskip("jax")`` / ``jax = pytest.importorskip('jax')``.  The
-# small ``.{0,4}`` gap tolerates the quote/paren between token and name
-# and mirrors the selection grep used by the CI job.
-_JAX_GUARD_RE = re.compile(r"importorskip.{0,4}jax")
+# A jax-guard line, in EITHER idiom this suite uses:
+#  * ``pytest.importorskip('jax')`` / ``importorskip("jax")`` /
+#    ``jax = pytest.importorskip('jax')`` -- the ``.{0,4}`` gap tolerates
+#    the quote/paren between token and name;
+#  * ``@pytest.mark.skipif(not _jax_ok(), ...)`` / ``not _HAS_JAX`` /
+#    ``not _JAX_AVAILABLE`` -- v5.32.1, see below.
+# This mirrors the selection grep used by the CI job (case-insensitive).
+_JAX_GUARD_RE = re.compile(r"importorskip.{0,4}jax|skipif\(.{0,40}jax",
+                           re.IGNORECASE)
 
-# Two files that a ``-k jax`` node-id filter would DROP but the
-# guard-based selection covers, so the fix must keep selecting by guard:
+# Files that a ``-k jax`` node-id filter would DROP but the guard-based
+# selection covers, so the fix must keep selecting by guard:
 #  * module-level ``importorskip('jax')`` whose file/test names lack "jax"
 #  * a numpy<->jax parity gate whose function name lacks "jax"
+#  * v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6): files whose jax
+#    tests are guarded by ``skipif(not _jax_ok())`` rather than
+#    ``importorskip``.  Before v5.32.1 the CI grep matched only the
+#    ``importorskip`` idiom, so these files were never selected here AND
+#    their jax tests skipped in the no-jax fast matrix -- they ran in NO CI
+#    leg at all.  They are listed as blind spots so a narrowing of the
+#    selection pattern reds this pin instead of silently reopening the hole.
 _K_JAX_BLIND_SPOTS = (
     "test_v5_10_3_rcwa_2d_autodiff.py",
     "test_v5_18_1_residuals.py",
+    "test_v5_21_maslov_jax_caustic.py",
+    "test_gbd_feature_complete.py",
+    "test_analytic_ray_transfer.py",
+    "test_v5_2_glass_formula3.py",
 )
 
 
@@ -232,4 +247,72 @@ def test_s4_4_jax_guarded_files_exist_and_cover_k_jax_blind_spots() -> None:
         "``importorskip('jax')`` guard (a ``grep`` over tests/unit), so the "
         f"name-independent blind-spot files {list(_K_JAX_BLIND_SPOTS)} are "
         "included.  A ``-k jax`` name filter alone would drop them."
+    )
+
+
+# ---------------------------------------------------------------------------
+# S4-4.3 (v5.32.1) -- the workflow's OWN grep pattern must match both idioms
+# ---------------------------------------------------------------------------
+
+#: ``grep -rlEi --include='*.py' "<pattern>" tests/unit`` inside the job body.
+_GREP_SELECTION_RE = re.compile(
+    r"grep\s+(-[A-Za-z]+)\s+--include='\*\.py'\s+\"([^\"]+)\"\s+tests/unit"
+)
+
+
+def test_s4_4_ci_grep_pattern_matches_every_guard_idiom_in_the_tree() -> None:
+    """Extract the CI job's ACTUAL selection pattern and re-run it here.
+
+    AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6 found a silent coverage hole:
+    the grep matched only ``importorskip('jax')``, while nine files guard
+    their jax tests with ``@pytest.mark.skipif(not _jax_ok(), ...)`` (or
+    ``_HAS_JAX`` / ``_JAX_AVAILABLE``).  Those tests skipped in the no-jax
+    fast matrix and were never selected by this job -- they executed in NO
+    CI leg at all, for releases at a time, while looking green.
+
+    The pins above assert the job *has* a guard-based grep; this one asserts
+    the grep's PATTERN is wide enough, by lifting the literal pattern out of
+    the YAML and matching it against the blind-spot files' real source.  A
+    future edit that narrows the pattern (or drops ``-i``) reds this test
+    with the file it just stopped selecting.
+    """
+    text = _read_workflow()
+    m = _GREP_SELECTION_RE.search(text)
+    assert m is not None, (
+        "could not find the jax-guarded selection grep "
+        "(``grep -rlEi --include='*.py' \"<pattern>\" tests/unit``) in "
+        f"{_WORKFLOW}.  If the selection was restructured, update this pin "
+        "so the pattern stays independently checkable."
+    )
+    flags_txt, pattern = m.group(1), m.group(2)
+    ci_re = re.compile(pattern,
+                       re.IGNORECASE if "i" in flags_txt else 0)
+
+    for name in _K_JAX_BLIND_SPOTS:
+        path = _TESTS_UNIT / name
+        assert path.is_file(), (
+            f"blind-spot file {name} is gone; update _K_JAX_BLIND_SPOTS "
+            "(and confirm its jax coverage moved somewhere that CI runs)."
+        )
+        assert ci_re.search(path.read_text(encoding="utf-8")), (
+            f"the CI job's selection pattern {pattern!r} (flags {flags_txt}) "
+            f"does NOT select {name}, whose jax tests are guarded by a real "
+            "guard idiom.  With the fast matrix installing no jax, a file "
+            "this grep misses runs its jax tests in NO CI leg -- the exact "
+            "S4-4 condition, reopened.  Widen the workflow grep."
+        )
+
+    # Both idioms must be represented in the selected set, so a future
+    # 'simplification' back to a single idiom cannot pass by accident.
+    guarded = set(_scan_jax_guarded_files())
+    importorskip_only = re.compile(r"importorskip.{0,4}jax")
+    skipif_idiom = [
+        name for name in guarded
+        if not importorskip_only.search(
+            (_TESTS_UNIT / name).read_text(encoding="utf-8"))
+    ]
+    assert skipif_idiom, (
+        "no ``skipif(... jax ...)``-guarded file is in the selected set; "
+        "either the suite converted them all to ``importorskip`` (fine -- "
+        "then drop this half of the pin) or the scan pattern narrowed."
     )

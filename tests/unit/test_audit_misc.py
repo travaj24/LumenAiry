@@ -624,25 +624,31 @@ class TestAuditFixesV4_11_1_RayleighSommerfeldVsAsmPhase:
 # ============================================================================
 
 class TestAuditFixesV4_11_1_EvenAsphParmRoundTrip:
-    """Audit round-3 critical finding (`prescriptions.py:469-485`):
-    the Zemax PARM <-> aspheric_coeffs mapping is inconsistent
-    between the loader and the exporter.
+    """Audit round-3 critical finding: the Zemax PARM <-> aspheric_coeffs
+    mapping was inconsistent between the loader and the exporter, so any
+    Zemax-authored EVENASPH file silently lost its alpha_4 coefficient AND
+    had alpha_6, alpha_8, ... mis-labelled by one slot.
 
-    Exporter (``export_zemax_zmx``): ``parm_idx = power//2 - 1``,
-    i.e. PARM 1 = alpha_4, PARM 2 = alpha_6, ...
+    WHAT THIS PINS IS CONVENTION-AGNOSTIC: export a prescription carrying
+    known aspheric coefficients, re-import it, and assert the SAME powers
+    come back with the SAME values.  It does not encode either side's
+    parm-numbering rule, so it survives a change of convention and fails on
+    any loader/exporter disagreement -- which is the whole point.
 
-    Loader (``load_zemax_zmx``): filters ``parm_num >= 2`` (drops
-    PARM 1 = alpha_4 entirely!) and uses ``power = 2*parm_num``,
-    i.e. PARM 2 -> alpha_4 in the loaded dict.  Net effect: any
-    Zemax-authored EVENASPH file silently loses its alpha_4
-    coefficient AND has alpha_6, alpha_8, ... mis-labelled by one
-    slot.
+    2026-08-03 docstring repair.  This class previously prescribed the
+    v4.11.2 rule ``power = 2 + 2*parm_num`` as the fix to land.  That rule
+    was REVERSED in v5.16.1: the live loader ships ``power = 2*parm_num``
+    (``lumenairy/io/prescriptions_zemax.py``, with the reversal rationale in
+    its comment -- the pre-fix mapping shifted every coefficient up one even
+    power and inflated it by ``unit_scale**2``).  Only the prose was stale;
+    the assertions below already matched the shipped convention and pass on
+    it.  The old prose also cited ``prescriptions.py:469-485`` / ``:580-585``
+    -- that module still exists but no longer holds the EVENASPH loader.
 
-    Round-trip test: export a prescription with known aspheric
-    coefficients, re-import, assert the dict matches.  This test is
-    currently expected to FAIL on the released v4.11.x loader; once
-    the loader is fixed (filter ``>=1`` and ``power = 2 + 2*parm_num``)
-    the test will pass.  Pin it now so the fix lands gated.
+    Two coefficients (alpha_4 AND alpha_6) are round-tripped together on
+    purpose: a single-coefficient round trip cannot see a mis-ORDERING
+    between adjacent slots.  ``test_audit_io.py`` carries the single-alpha_4
+    sibling; this one is not redundant with it.
     """
 
     def test_evenasph_export_then_load_preserves_coeffs(self, tmp_path):
@@ -688,15 +694,18 @@ class TestAuditFixesV4_11_1_EvenAsphParmRoundTrip:
             if ac:
                 found = ac
                 break
-        if found is None:
-            pytest.skip(
-                "EVENASPH loader off-by-one bug present "
-                "(aspheric_coeffs absent on every surface after "
-                "round-trip).  This test will activate when "
-                "prescriptions.py:580-585 is fixed to retain PARM 1 "
-                "(alpha_4) and use power = 2 + 2*parm_num.")
-        # Once the loader fix lands, both alpha_4 and alpha_6 should
-        # come back to within numeric tolerance.
+        # 2026-08-03: this was a ``pytest.skip`` ("the fix has not landed
+        # yet") until the fix landed -- which turned it into a green mask: a
+        # loader that dropped aspheric_coeffs outright would SKIP rather than
+        # fail, silently retiring the pin.  The fix shipped in v5.16.1 and
+        # this branch is not taken, so asserting here cannot change today's
+        # outcome; it only stops a future regression hiding behind a skip.
+        assert found is not None, (
+            "aspheric_coeffs absent on EVERY surface after an "
+            "export -> load round-trip: the EVENASPH loader/exporter pair "
+            "has regressed to dropping the coefficients entirely.")
+        # Both alpha_4 and alpha_6 must come back to within numeric
+        # tolerance, on the same power keys they went out on.
         assert 4 in found, (
             f"alpha_4 (key 4) missing from loaded aspheric_coeffs "
             f"{found!r}.  Pre-fix the loader filters parm_num >= 2 "
