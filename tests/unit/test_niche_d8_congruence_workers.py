@@ -244,3 +244,23 @@ def test_snapshot_is_picklable():
 def test_apply_tolerates_an_empty_or_missing_snapshot():
     _multi_apply_worker_state(None)
     _multi_apply_worker_state({})
+
+
+def test_ram_budget_is_divided_among_workers_not_copied():
+    # get_ram_budget() falls back to GLOBAL free memory and feeds both the
+    # readout's fine-grid sizing and the parallel_amp gate, so handing each
+    # worker the whole-box figure is K-fold oversubscription.
+    one = _multi_capture_worker_state(1)['ram_budget']
+    four = _multi_capture_worker_state(4)['ram_budget']
+    assert one is not None and four is not None
+    assert four <= one // 4 + 1, \
+        f"worker budget not divided: {one} -> {four} at 4 workers"
+
+
+def test_ram_budget_division_is_safe_at_degenerate_worker_counts():
+    for n in (0, -3, None):
+        try:
+            v = _multi_capture_worker_state(n if n is not None else 1)
+        except Exception as exc:                   # pragma: no cover
+            raise AssertionError(f"n_workers={n!r} raised {exc!r}")
+        assert v['ram_budget'] is None or v['ram_budget'] > 0

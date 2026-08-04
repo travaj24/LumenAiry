@@ -75,6 +75,20 @@ names), matching the suite's leak guard so the two cannot drift; glass tables
 are restored with `dict.update` IN PLACE because other modules hold them by
 reference. 18 tests, ruff clean.
 
+**Per-worker RAM budget is DIVIDED, not copied.** `get_ram_budget()` falls
+back to psutil's GLOBAL available memory, and it feeds both
+`_memory_bounded_n_fine` (which sizes the exact readout's fine grid to a
+fraction of the budget) and the `parallel_amp_min_free_gb` gate. Carrying the
+whole-box figure into each worker would have K workers each size themselves
+for the whole box — K-fold oversubscription arriving exactly when the exact
+final leg allocates, and worse than the psutil default because pinning it via
+`set_max_ram` also removes the dynamic read that would otherwise shrink as
+siblings allocate. The snapshot now carries `budget // K`, which additionally
+starves `parallel_amp` inside workers (it would otherwise double each
+worker's amplitude working set on top of the oversubscription). Row-banded
+chunking (`sag_chunk_rows`) needs no equivalent: its AUTO rule is grid-size
+driven, so each worker already bands independently of sibling count.
+
 ## [5.32.1] — 2026-08-03
 
 ### Fixed — the shared least-squares solver no longer draws arbitrary answers on singular systems (niche C13, `elements/_lens_traced.py`)

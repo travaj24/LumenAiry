@@ -6823,7 +6823,7 @@ _WORKER_STATE_GLASS_TABLES = (
 _WORKER_STATE_SCALARS = (bool, int, float, str, bytes, type(None))
 
 
-def _multi_capture_worker_state():
+def _multi_capture_worker_state(n_workers=1):
     """Snapshot the runtime-mutated module state workers must inherit.
 
     TWO CLASSES, and the second is the dangerous one:
@@ -6841,6 +6841,11 @@ def _multi_capture_worker_state():
     Discovery follows the library's own naming convention (upper-case
     module-level names, ``_FOO`` counting and ``Foo`` not), matching the test
     suite's leak guard so the two cannot drift.
+
+    ``n_workers`` DIVIDES the RAM budget carried across -- see the comment at
+    the capture site.  Row-banded chunking (``sag_chunk_rows``) needs no such
+    treatment: its AUTO rule is grid-size driven, so each worker already bands
+    independently of how many siblings it has.
     """
     import importlib
     flags = {}
@@ -6860,10 +6865,19 @@ def _multi_capture_worker_state():
                   and n in _WORKER_STATE_GLASS_TABLES
                   and isinstance(v, dict)):
                 glass[n] = dict(v)
+    # RAM BUDGET IS DIVIDED, NOT COPIED.  ``get_ram_budget()`` falls back to
+    # psutil's GLOBAL available memory, and it feeds both the readout's
+    # ``_memory_bounded_n_fine`` (which sizes the fine grid to a FRACTION of
+    # the budget) and the ``parallel_amp_min_free_gb`` gate.  Handing every
+    # worker the whole-box figure would have K workers each size themselves
+    # for the whole box -- K-fold oversubscription, arriving exactly when the
+    # exact final leg allocates.  Pinning budget/K also correctly starves
+    # ``parallel_amp`` inside workers, which would otherwise double each
+    # worker's amplitude working set on top of that.
     budget = None
     try:
         from ..memory import get_ram_budget
-        budget = int(get_ram_budget())
+        budget = int(get_ram_budget() // max(1, int(n_workers)))
     except Exception:                              # pragma: no cover - env
         pass
     return {'flags': flags, 'glass': glass, 'ram_budget': budget}
@@ -7047,7 +7061,7 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
         with ProcessPoolExecutor(
                 max_workers=int(n_cw), initializer=_multi_worker_init,
                 initargs=(uniq, groups_k, common,
-                          _multi_capture_worker_state())) as ex:
+                          _multi_capture_worker_state(n_cw))) as ex:
             done = 0
             for k, field, stages, msgs in ex.map(_multi_worker_run, tasks):
                 out[k] = (field, stages, msgs)
