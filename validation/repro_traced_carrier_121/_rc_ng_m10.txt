@@ -1,0 +1,49 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 9717ad88dd959889
+  carrier.py 5a1b0d1021969df1
+
+########## ORDER (-1,+0) ##########
+   ng  EE3 area   d(EE3)  EE6 area   d(EE6)  FWHM um  env step    rays
+    0   90.5768            99.9008             3.451    0.0049   49942   [29s]
+    1   90.5818  +0.0050   99.9014  +0.0007    3.451    0.0046  282357   [167s]
+        [warn x2] apply_real_lens_traced Newton inversion: 17575/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within
+    2   90.5870  +0.0052   99.9015  +0.0001    3.450    0.0046  296926   [177s]
+        [warn x2] apply_real_lens_traced Newton inversion: 17575/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within
+        [warn x2] apply_real_lens_traced Newton inversion: 14911/65536 pixels (22.8%) did not converge to tol=5.123e-07 m within
+    3   90.3517  -0.2353   99.7721  -0.1294    3.459    0.8614  395174   [235s]
+        [warn x2] apply_real_lens_traced Newton inversion: 17575/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within
+        [warn x2] apply_real_lens_traced Newton inversion: 14911/65536 pixels (22.8%) did not converge to tol=5.123e-07 m within
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.0502, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 3562/65536 pixels (5.4%) did not converge to tol=5.123e-07 m within 1
+    4   90.2755  -0.0762   99.7112  -0.0609    3.455    0.7352  379648   [229s]
+        [warn x2] apply_real_lens_traced Newton inversion: 17575/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within
+        [warn x2] apply_real_lens_traced Newton inversion: 14911/65536 pixels (22.8%) did not converge to tol=5.123e-07 m within
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.0502, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 3562/65536 pixels (5.4%) did not converge to tol=5.123e-07 m within 1
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.1574, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 2113/65536 pixels (3.2%) did not converge to tol=4.491e-07 m within 1
+    5   90.0241  -0.2514   99.5920  -0.1192    3.468    1.0417  312853   [205s]
+        [warn x2] apply_real_lens_traced Newton inversion: 17575/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within
+        [warn x2] apply_real_lens_traced Newton inversion: 14911/65536 pixels (22.8%) did not converge to tol=5.123e-07 m within
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.0502, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 3562/65536 pixels (5.4%) did not converge to tol=5.123e-07 m within 1
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.1574, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 2113/65536 pixels (3.2%) did not converge to tol=4.491e-07 m within 1
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.3077, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 24186/65536 pixels (36.9%) did not converge to tol=3.843e-07 m within
+        [warn x1] _sphere_parab_conversion: the band-limit radius r_safe=7.932 mm = (|R|^3 lambda/dx)^(1/3) at R=-24.462 mm, dx=
+    6   89.6424  -0.3817   99.3310  -0.2610    3.461    0.0418   47089   [56s]
+        [warn x2] apply_real_lens_traced Newton inversion: 17575/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within
+        [warn x2] apply_real_lens_traced Newton inversion: 14911/65536 pixels (22.8%) did not converge to tol=5.123e-07 m within
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.0502, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 3562/65536 pixels (5.4%) did not converge to tol=5.123e-07 m within 1
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.1574, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 2113/65536 pixels (3.2%) did not converge to tol=4.491e-07 m within 1
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.3077, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 24186/65536 pixels (36.9%) did not converge to tol=3.843e-07 m within
+        [warn x1] _sphere_parab_conversion: the band-limit radius r_safe=7.196 mm = (|R|^3 lambda/dx)^(1/3) at R=-21.139 mm, dx=
+        [warn x1] apply_real_lens_traced: the exit beam converges at NA_exit=0.2989, so the exit wavefront needs dx <= lambda/(2
+        [warn x2] apply_real_lens_traced Newton inversion: 51461/65536 pixels (78.5%) did not converge to tol=3.321e-07 m within
+        [warn x1] _sphere_parab_conversion: the band-limit radius r_safe=2.625 mm = (|R|^3 lambda/dx)^(1/3) at R=-7.712 mm, dx=3
+
+saved D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_rc_ng.npz

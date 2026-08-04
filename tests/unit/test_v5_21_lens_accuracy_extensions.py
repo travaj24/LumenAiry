@@ -679,6 +679,10 @@ def test_traced_multibranch_no_shared_edge_double_count():
     assert fid > 0.999
 
 
+# v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6): 25.1 s, pure NumPy --
+# a 2.56M-ray launch grid feeding a direct Rayleigh-Sommerfeld oracle.  The
+# claim is an accuracy envelope against that oracle, not a version contract.
+@pytest.mark.slow
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_traced_multibranch_matches_exact_diffraction_oracle():
     """Mid-annulus intensity profile matches the EXACT decouple-pipeline

@@ -7,8 +7,11 @@ and the direct rule along the tangent.  The ``E_z`` elimination uses the
 direct-rule ``[[eps]]`` (the unbiased pixel route).
 
 Coverage:
-  (a) RATE / correctness on a CONVERGENT P~1.2um metal disk: ``fff_nv`` tracks the
-      analytic-disk reference and lands closer than 2-D ``'li'`` at matched order.
+  (a) RATE / correctness on a CONVERGENT P~1.2um metal disk: ``fff_nv`` tracks
+      the analytic-disk reference and stays in the SAME ACCURACY CLASS as 2-D
+      ``'li'`` at matched order.  (It does not "land closer" -- neither
+      robustly beats the other order-by-order on this staircased disk, which
+      is what the test itself asserts: ``err_nv <= err_li + 6e-3``.)
   (b) SAME-LIMIT on a separable (y-uniform) metal stripe vs ``rcwa_efficiency_1d``.
   (c) NO-BIAS + ENERGY on a lossless dielectric square: every formulation
       conserves energy and shares one converged limit; the v5.14.1

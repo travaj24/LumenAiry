@@ -175,6 +175,10 @@ def test_soft_edge_energy_fraction_straight_edge():
     assert abs(frac - 0.5) < 0.05
 
 
+# v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6): 27.6 s of this file's
+# 40.7 s -- a full ASM oracle plus two GBD focus reconstructions to compare
+# soft-edge vs binary vignetting.  Pure-NumPy comparison, no version contract.
+@pytest.mark.slow
 def test_soft_edge_improves_hard_aperture_focus():
     """Soft-edge aperture lowers the hard-aperture Airy-focus intensity error
     vs binary vignetting."""

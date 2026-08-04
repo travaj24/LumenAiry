@@ -1,0 +1,233 @@
+........................................................................ [ 19%]
+........................................................................ [ 39%]
+........................................................................ [ 59%]
+........................................................................ [ 79%]
+....................................................F................... [ 98%]
+....                                                                     [100%]
+================================== FAILURES ===================================
+_____ test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001C1ECD5E250>
+
+    def test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order(
+            monkeypatch):
+        """The extra terms must not have made ``_FIT_DISC_OUTSIDE_WEIGHT_REL``
+        redundant OR insufficient: with the weights degenerated back to D1's hard
+        mask the same call folds and ghosts, and with them on it does not."""
+        _ram_guard()
+        good = np.abs(_ghost_apply())
+        monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            bad = np.abs(_ghost_apply())
+        x = (np.arange(_GN) - _GN // 2) * _GDX
+        near = ((x[None, :] - _GXC) ** 2 + x[:, None] ** 2) <= (3 * _GW) ** 2
+        r_good = float(good[~near].max()) / float(good[near].max())
+        r_bad = float(bad[~near].max()) / float(bad[near].max())
+        assert r_good < 0.01, r_good
+>       assert r_bad > 0.1, (
+            f"the hard-mask fail-before stopped failing at the D7 order "
+            f"(off-beam {r_bad:.4f} of peak) -- retune the case")
+E       AssertionError: the hard-mask fail-before stopped failing at the D7 order (off-beam 0.0002 of peak) -- retune the case
+E       assert 0.00017549922400138512 > 0.1
+
+tests\unit\test_niche_d7_decentred_fit.py:483: AssertionError
+============================== warnings summary ===============================
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[0]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[4]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[5]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[8]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[9]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_a_pure_input_decentre_is_NOT_in_the_untilted_set_and_why
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=128, dx=40.000 um, semi=2.560 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.440 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[0]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[4]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[5]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[8]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[9]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_a_pure_input_decentre_is_NOT_in_the_untilted_set_and_why
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=128, dx=40.000 um, semi=2.560 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.440 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[0]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[4]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[5]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[8]
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[9]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0797, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 8.22 um but the grid has dx = 40.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 8.22 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[1]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=192, dx=30.000 um, semi=2.880 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.120 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[1]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=192, dx=30.000 um, semi=2.880 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.120 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[1]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0662, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 9.89 um but the grid has dx = 30.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 9.89 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[2]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=128, dx=42.400 um, semi=2.714 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.286 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[2]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=128, dx=42.400 um, semi=2.714 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.286 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[2]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0731, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 8.96 um but the grid has dx = 42.40 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 8.96 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[3]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=128, dx=38.629 um, semi=2.472 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.528 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[3]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=128, dx=38.629 um, semi=2.472 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.528 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[3]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0691, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 9.47 um but the grid has dx = 38.63 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 9.47 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[6]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=35.000 um, semi=2.800 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.200 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[6]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=35.000 um, semi=2.800 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.200 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[6]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0500, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 13.10 um but the grid has dx = 35.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 13.10 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[6]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=26.966 um, semi=2.157 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.843 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[6]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=26.966 um, semi=2.157 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.843 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[6]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.1089, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 6.02 um but the grid has dx = 26.97 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 6.02 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[7]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=37.800 um, semi=3.024 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.976 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[7]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=37.800 um, semi=3.024 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.976 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[7]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0408, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 16.04 um but the grid has dx = 37.80 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 16.04 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[7]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=31.306 um, semi=2.504 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.496 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[7]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=31.306 um, semi=2.504 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.496 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[7]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.1108, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 5.91 um but the grid has dx = 31.31 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 5.91 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[10]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:4583: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=10.000 um, semi=2.560 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.440 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[10]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=10.000 um, semi=2.560 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.440 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[10]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:4583: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0797, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 8.22 um but the grid has dx = 10.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 8.22 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[11]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:4583: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=10.600 um, semi=2.714 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.286 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[11]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=10.600 um, semi=2.714 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+5.286 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[11]
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:4583: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0726, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 9.02 um but the grid has dx = 10.60 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 9.02 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_a_pure_input_decentre_is_NOT_in_the_untilted_set_and_why
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\tests\unit\test_niche_c5_exact_tilted_reference.py:347: RuntimeWarning: propagate_traced_carrier_chain: the tilted carrier's beam edge reaches 1.7211 mm at groups[0] (C5 singlet), within one amplitude radius of the co-moving grid's half-extent (2.5600 mm).  The band-limited chief-ray shift is periodic, so the skirt is wrapping round to the opposite edge; raise N for this order.
+    res = la.propagate_traced_carrier_chain(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_a_pure_input_decentre_is_NOT_in_the_untilted_set_and_why
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.4933, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 1.33 um but the grid has dx = 40.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 1.33 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_a_tilted_run_is_byte_identical_with_the_switch_off
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=42.400 um, semi=3.392 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.608 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_a_tilted_run_is_byte_identical_with_the_switch_off
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=160, dx=42.400 um, semi=3.392 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.608 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=8.00mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_c5_exact_tilted_reference.py::test_a_tilted_run_is_byte_identical_with_the_switch_off
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0792, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 8.27 um but the grid has dx = 42.40 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 8.27 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_untilted_tiltedcarrier_takes_the_scalar_path_byte_identically
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_a_negligible_tilt_reproduces_the_on_axis_exact_leg
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_decentred_carrier_decentre_penalty_envelope
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:4583: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=1.173 um, semi=1.201 mm). Largest is system aperture_diameter with semi_diameter=1.700 mm (+0.499 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=1.70mm.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_untilted_tiltedcarrier_takes_the_scalar_path_byte_identically
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_a_negligible_tilt_reproduces_the_on_axis_exact_leg
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_decentred_carrier_decentre_penalty_envelope
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\_lens_traced.py:5123: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=1.173 um, semi=1.201 mm). Largest is system aperture_diameter with semi_diameter=1.700 mm (+0.499 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=1.70mm.
+    E_analytic = apply_real_lens(
+
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_exact_leg_is_reachable_under_a_tilted_carrier
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_decentred_carrier_decentre_penalty_envelope
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_refusal_can_be_downgraded_and_then_it_is_worse
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_refusal_can_be_downgraded_and_then_it_is_worse
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_tilted_exact_leg_conserves_power_like_the_paraxial_one
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5826: RuntimeWarning: propagate_traced_carrier_chain: at the EXACT final leg (fine retrace) the congruence's chief ray sits 0.6000 mm off the element grid centre = 1.000 beam amplitude radii (w = 0.6000 mm), above decentre_fit_frac=0.5.  A decentred hand-off measurably costs IMAGE quality end to end.  MEASURED on the K=-n^2 conic stand-in, whose truth is decentre-INVARIANT (chain / independent ray-trace + Kirchhoff oracle, EE2 ratio): 0.00 w -> 0.997; 0.25 w -> 1.002; 0.50 w -> 1.005; 0.75 w -> 0.977; 1.00 w -> 0.983; 1.50 w -> 0.923.  And on design 121's post-DOE chain, per order, against an independent skew-ray + Debye oracle that says every order is EQUALLY diffraction-limited (EE3 ~90.7 %): EE3 87.6 % on axis, 86.0 % at (-1,0), 68.1 % at (-4,0), 65.3 % at (-4,-2).  THEREFORE: any per-order spot size, Strehl or encircled energy this run reports is a LOWER BOUND on the design, not the design's performance.  Use an independent ray trace for per-order image quality; the chain's POWER bookkeeping (per-order share, throughput, chief-ray landing) is unaffected and still validated to 3e-4.  NOTE (niche D7, 2026-07-29): the residual is NOT apply_real_lens_traced's off-centre ray fit any more -- that fit now carries 0.90 urad of exit slope at 0.97 w against 1.28 urad on axis UNTILTED (0.64 urad tilted, so the decentred figure is not uniformly the smaller one; either way it is 0.007 um of blur against a 3.5 um FWHM), and it is not the fine-retrace grid, the Newton iteration cap or the readout window either (each moves EE3 by <= 0.01 point).  An earlier revision of this message quoted a 3.7 -> 408 urad exit-slope curve; that was an artefact of the repro script's FFT-derivative slope extraction, which reports 400 urad on a synthetic field built to be right to 0.36 urad by construction.  Pass on_decentred_fit='error' to refuse instead, 'ignore' to silence, or raise decentre_fit_frac if your design tolerates more.
+    E_exit_fine, dx_fine = _fine_trace_group_exit(
+
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_exact_leg_is_reachable_under_a_tilted_carrier
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_decentred_carrier_decentre_penalty_envelope
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_refusal_can_be_downgraded_and_then_it_is_worse
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_refusal_can_be_downgraded_and_then_it_is_worse
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_tilted_exact_leg_conserves_power_like_the_paraxial_one
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:4583: RuntimeWarning: apply_real_lens_traced: amplitude_model='ray_density' detected a fold caustic (det J -> 0 or a sign change) in the ray map.  The single-branch ray-density amplitude is CAPPED there (finite, never inf/nan) but is UNRELIABLE near the fold -- this mode does NOT sum the multi-valued ray branches with the KMAH/Maslov phase.  Use apply_real_lens_gbd or apply_real_lens_fga for caustic-faithful amplitude.
+    E_exit = apply_real_lens_traced(
+
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_tilted_exact_leg_conserves_power_like_the_paraxial_one
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\tests\unit\test_niche_d6_exact_tilted_leg.py:203: RuntimeWarning: propagate_traced_carrier_chain: at groups[0] (D6 fast singlet) the congruence's chief ray sits 0.6000 mm off the element grid centre = 1.000 beam amplitude radii (w = 0.6000 mm), above decentre_fit_frac=0.5.  A decentred hand-off measurably costs IMAGE quality end to end.  MEASURED on the K=-n^2 conic stand-in, whose truth is decentre-INVARIANT (chain / independent ray-trace + Kirchhoff oracle, EE2 ratio): 0.00 w -> 0.997; 0.25 w -> 1.002; 0.50 w -> 1.005; 0.75 w -> 0.977; 1.00 w -> 0.983; 1.50 w -> 0.923.  And on design 121's post-DOE chain, per order, against an independent skew-ray + Debye oracle that says every order is EQUALLY diffraction-limited (EE3 ~90.7 %): EE3 87.6 % on axis, 86.0 % at (-1,0), 68.1 % at (-4,0), 65.3 % at (-4,-2).  THEREFORE: any per-order spot size, Strehl or encircled energy this run reports is a LOWER BOUND on the design, not the design's performance.  Use an independent ray trace for per-order image quality; the chain's POWER bookkeeping (per-order share, throughput, chief-ray landing) is unaffected and still validated to 3e-4.  NOTE (niche D7, 2026-07-29): the residual is NOT apply_real_lens_traced's off-centre ray fit any more -- that fit now carries 0.90 urad of exit slope at 0.97 w against 1.28 urad on axis UNTILTED (0.64 urad tilted, so the decentred figure is not uniformly the smaller one; either way it is 0.007 um of blur against a 3.5 um FWHM), and it is not the fine-retrace grid, the Newton iteration cap or the readout window either (each moves EE3 by <= 0.01 point).  An earlier revision of this message quoted a 3.7 -> 408 urad exit-slope curve; that was an artefact of the repro script's FFT-derivative slope extraction, which reports 400 urad on a synthetic field built to be right to 0.36 urad by construction.  Pass on_decentred_fit='error' to refuse instead, 'ignore' to silence, or raise decentre_fit_frac if your design tolerates more.
+    return la.propagate_traced_carrier_chain(
+
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle
+tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_tilted_exact_leg_conserves_power_like_the_paraxial_one
+  D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\propagators\carrier.py:5955: RuntimeWarning: apply_real_lens_traced: amplitude_model='ray_density' detected a fold caustic (det J -> 0 or a sign change) in the ray map.  The single-branch ray-density amplitude is CAPPED there (finite, never inf/nan) but is UNRELIABLE near the fold -- this mode does NOT sum the multi-valued ray branches with the KMAH/Maslov phase.  Use apply_real_lens_gbd or apply_real_lens_fga for caustic-faithful amplitude.
+    E_exit = apply_real_lens_traced(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/unit/test_niche_d7_decentred_fit.py::test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order
+1 failed, 363 passed, 71 warnings in 1999.32s (0:33:19)

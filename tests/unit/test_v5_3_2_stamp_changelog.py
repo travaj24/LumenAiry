@@ -107,6 +107,20 @@ def test_dry_run_against_current_changelog():
     """
     if not _CHANGELOG.is_file():
         pytest.skip(f'CHANGELOG.md not found at {_CHANGELOG}.')
+    # The dry-run contract: regardless of rc, CHANGELOG.md is NOT modified.
+    # Snapshot the size BEFORE the (single) subprocess and compare after.
+    # (We deliberately don't checksum the whole file -- another process
+    # could legitimately edit it during the run; size is a cheap structural
+    # guard.)
+    #
+    # AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6: this used to run the same
+    # ~20 s subprocess TWICE and capture ``pre_size`` in BETWEEN them, so the
+    # "dry run does not modify" assertion only ever covered the SECOND
+    # invocation -- if the first (cold) run had rewritten the file, the test
+    # would have snapshotted the ALREADY-MODIFIED size and passed.  Taking
+    # the snapshot first covers the invocation that actually matters and
+    # deletes one subprocess: strictly better coverage at half the cost.
+    pre_size = _CHANGELOG.stat().st_size
     result = subprocess.run(
         [sys.executable, str(_SCRIPT), '--quick'],
         capture_output=True, text=True, timeout=180,
@@ -115,17 +129,6 @@ def test_dry_run_against_current_changelog():
         f'stamp_changelog.py --quick (dry-run) returned rc='
         f'{result.returncode}; expected 0/1/2.  '
         f'stdout=\n{result.stdout}\nstderr=\n{result.stderr}')
-    # The dry-run contract: regardless of rc, CHANGELOG.md is NOT
-    # modified.  Snapshot before/after sizes; they must match.
-    # (We deliberately don't checksum the whole file -- another
-    # process could legitimately edit it between subprocess.run
-    # invocations; size is a cheap structural guard.)
-    pre_size = _CHANGELOG.stat().st_size
-    # Re-run to confirm idempotence of the dry-run.
-    subprocess.run(
-        [sys.executable, str(_SCRIPT), '--quick'],
-        capture_output=True, text=True, timeout=180,
-    )
     post_size = _CHANGELOG.stat().st_size
     assert pre_size == post_size, (
         f'Dry-run modified CHANGELOG.md (size {pre_size} -> '

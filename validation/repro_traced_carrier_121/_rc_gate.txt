@@ -1,0 +1,17 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 9717ad88dd959889
+  carrier.py 5a1b0d1021969df1
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+
+   order    oracle     shipped  concentric   offcentre res shippedres concentricres offcentre
+     0,0   90.5324     90.4842     90.4842     90.4842      0.0482      0.0482      0.0482   shas 8db002a1/8db002a1/8db002a1  [197s]
+    -1,0   90.5768     89.6424     90.5290     89.6453      0.9344      0.0478      0.9314   shas eef5a64e/17d0a4e5/4a0d2705  [225s]
+    -2,0   90.6650     89.8910     90.5769     89.8923      0.7740      0.0881      0.7728   shas 41a950e7/9143ef53/243da3f4  [228s]
+    -3,0   90.6961     90.1686     80.9276     90.1697      0.5274      9.7685      0.5263   shas 7db7995c/e970602f/dac48876  [236s]
+    -4,0   90.5035     90.1981     70.5743     90.1981      0.3054     19.9293      0.3054   shas 8a589d3d/a2c6951e/8a589d3d  [237s]
+   -4,-2   90.1071     89.8285     78.8619     89.8285      0.2786     11.2452      0.2786   shas 5e855046/62f21032/5e855046  [199s]
+
+NULL: on axis all three arms must be BYTE-IDENTICAL (zero decentre -> no branch to choose).

@@ -1,0 +1,16 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 9717ad88dd959889
+  carrier.py 5a1b0d1021969df1
+pi = 3.1416
+
+   order                                arm   env p50  env p99.9   env max  RSp99.9 cyc
+     0,0          oracle (env_doe residual)   0.00000    0.00196   0.00272      0.02592
+     0,0      chain taper=on split=parabola   0.00064    0.15852   0.16846      0.03891
+     0,0         chain taper=on split=exact   0.00034    0.12312   0.12383      0.03891
+     0,0     chain taper=off split=parabola   0.00033    0.10406   0.10485      0.03891
+     0,0        chain taper=off split=exact   0.00010    0.00628   0.00636      0.03891
+   -4,-2          oracle (env_doe residual)   0.00000    0.00196   0.00272      0.02590
+   -4,-2      chain taper=on split=parabola   0.00369    0.18117   0.22272      0.03845
+   -4,-2         chain taper=on split=exact   0.00145    0.13388   0.16027      0.03845
+   -4,-2     chain taper=off split=parabola   0.00050    0.10668   0.10927      0.03840
+   -4,-2        chain taper=off split=exact   0.00026    0.01187   0.01556      0.03840

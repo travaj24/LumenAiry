@@ -1,5 +1,12 @@
 # RCWA roadmap — post-v5.14.0 audit (2026-06-10)
 
+> **SUPERSEDED 2026-08-03** by `docs/audits/ROADMAP_PMM_PER_LAYER_GRIDS_2026_07_28.md` §6,
+> which re-verified every remaining item against the code. Of this doc's open items, the
+> `RCWAStack` OOP layers, the even-parity scope extension (incl. the `'li'` tensor fold and
+> default-on), the analytic homogeneous-layer modes, the `fff_nv` rework (Li-2003 `L2·L1`
+> incl. crossed cells) and the GPU-DLL probe have ALL shipped (v5.21 era). Kept for the
+> audit record; do not plan from it.
+
 Companion to `docs/pmm_roadmap_v5_14.md`. Source: the 2026-06-10 RCWA
 accuracy/generalizability/speed audit (46 findings; the verification phase was
 cut short, so every item below that shipped in v5.14.1 was **hand-verified**

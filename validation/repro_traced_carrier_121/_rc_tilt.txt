@@ -1,0 +1,26 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 9717ad88dd959889
+  carrier.py 5a1b0d1021969df1
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+
+L1 = lambda/period = 11.5158 mrad;  tilt applied as (L, M) = (-f*L1, 0)
+
+         f    L mrad    oracle     chain  residual   orc EE6   chn EE6   res EE6  FWHM o  FWHM c
+  ----------------------------------------------------------------------------------------------
+         0   -0.0000   90.5324   90.4842    0.0482   99.8967   99.8790    0.0177   3.441   3.442   [77s]
+    0.0001   -0.0012   90.5324   90.4842    0.0482   99.8967   99.8790    0.0177   3.441   3.442   [83s]
+      0.01   -0.1152   90.5342   90.4850    0.0491   99.8967   99.8790    0.0177   3.455   3.442   [83s]
+      0.05   -0.5758   90.5343   90.4860    0.0483   99.8967   99.8791    0.0176   3.455   3.442   [82s]
+       0.1   -1.1516   90.5349   90.4877    0.0472   99.8968   99.8791    0.0177   3.455   3.441   [87s]
+       0.2   -2.3032   90.5318   90.4850    0.0468   99.8969   99.8790    0.0178   3.454   3.425   [90s]
+      0.35   -4.0305   90.5398   89.8999    0.6399   99.8972   99.5685    0.3287   3.453   3.417   [91s]
+       0.5   -5.7579   90.5457   89.9134    0.6323   99.8978   99.5698    0.3279   3.452   3.420   [93s]
+       0.7   -8.0611   90.5500   89.9372    0.6129   99.8987   99.5746    0.3241   3.451   3.446   [97s]
+         1  -11.5158   90.5768   89.6424    0.9344   99.9008   99.3310    0.5698   3.451   3.461   [100s]
+       1.5  -17.2737   90.6200   89.7557    0.8643   99.9053   99.3558    0.5495   3.451   3.465   [98s]
+         2  -23.0316   90.6650   89.8910    0.7740   99.9106   99.3903    0.5203   3.452   3.462   [98s]
+         3  -34.5474   90.6961   90.1686    0.5274   99.9209   99.5272    0.3937   3.464   3.443   [97s]
+         4  -46.0633   90.5035   90.1981    0.3054   99.9206   99.6673    0.2533   3.359   3.423   [97s]

@@ -91,6 +91,13 @@ def test_maslov_jax_still_differentiable():
     assert np.isfinite(g) and g != 0.0
 
 
+# v5.32.1 marker inversion (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6): this
+# file's THREE pure-NumPy tests are 174.6 s of its 190 s; the jax tests its
+# name advertises are the cheap ones (6.9 + 3.5 s).  Nothing here was marked,
+# so the heavy 92% ran on the 4-Python fast gate.  The claims are byte-identity
+# / equivalence of NumPy integration paths -- not Python-version-sensitive --
+# which is exactly what the single-Python slow gate exists for.
+@pytest.mark.slow
 def test_maslov_integration_method_auto_matches_and_is_fast():
     """integration_method='auto' resolves to the concrete integrator from the
     chart's v2-oscillation count and is byte-identical to it: uniform
@@ -141,6 +148,7 @@ def _folded_rx(mirror_R):
             'aperture_diameter': 8e-3, 'name': 'f'}
 
 
+@pytest.mark.slow            # v5.32.1: see the marker-inversion note above
 def test_maslov_fold_split_matches_manual_chain():
     """apply_real_lens_maslov(fold_split=True) on a folded prescription equals
     the documented manual pattern (split_prescription_at_mirrors + alternate
@@ -181,6 +189,7 @@ def test_maslov_fold_split_matches_manual_chain():
     assert np.max(np.abs(Fc - Ff)) > 1e-2           # focus phase changed it
 
 
+@pytest.mark.slow            # v5.32.1: see the marker-inversion note above
 def test_maslov_fold_split_noop_on_unfolded():
     """fold_split=True reduces to the single-call path on a prescription with
     no fold (byte-identical to fold_split=False)."""

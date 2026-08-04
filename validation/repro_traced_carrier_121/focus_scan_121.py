@@ -190,7 +190,12 @@ print("  targets: FWHM 3.223um EE3 91.0% EE6 100.0% (Zemax POP waist 2.737um "
       "the real prescription (POP_CROSSCHECK_121_2026_07_31.md sec 2); "
       "ideal-field ceiling through this readout 3.45-3.55um / 90.3 / 99.8)")
 print("  shipping-default acceptance (CREF/AM/PIP unset, N=2048/NFC=8192/"
-      "WF=4.0): AT-PLANE dz=0: 3.450um / 90.2 / 99.7, on-axis")
+      "WF=4.0): AT-PLANE dz=0: 3.350um / 90.3 / 99.7 / 99.8, on-axis")
+print("  (re-baselined 2026-08-02, user-approved, with niche C9+C10: the exact "
+      "sphere conversion and the r^6 residual term removed ~1 point/order of "
+      "SIMULATOR error that was inflating the spot; 3.350um matches the "
+      "exact-ray oracle to 0.02-0.06um.  Prior recorded lines: 3.450/90.2 "
+      "at-plane post-C6, 3.450/88.8/99.6 at dz=+10um pre-C6.)")
 print("  (re-baselined 2026-08-01, user-approved: pre-C6 the chain focused "
       "10um PAST the MS plane -- at-plane read 3.750/87.4 and the recorded "
       "3.450/88.8/99.6 acceptance was taken at dz=+10um.  That offset was the "

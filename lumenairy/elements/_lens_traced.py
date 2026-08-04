@@ -877,11 +877,187 @@ def _get_array_module(arr):
     return np
 
 
+#: niche C13 (2026-08-03): SCREEN the normal-equations least-squares solve for
+#: a numerically singular Gram matrix, and where it is singular, RE-SOLVE by a
+#: backward-stable QR and keep whichever answer measurably fits the data
+#: better.
+#:
+#: ``False`` restores the pre-C13 solver EXACTLY -- :func:`_solve_lstsq_thread_safe`
+#: then returns the Cholesky/LU answer unconditionally, bit for bit -- and it
+#: is the fail-before for everything below.
+#:
+#: THE DEFECT.  :func:`_solve_lstsq_thread_safe`'s own docstring asserted that
+#: ``A`` "is a well-conditioned normalised tensor-Chebyshev / monomial
+#: Vandermonde (~1.5x oversampled), so squaring the condition number in ``G``
+#: is safe".  That is true of the CONCENTRIC, unweighted fits it was written
+#: for and FALSE of the weighted ones D1/D7 introduced:
+#: ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` = 1e-8 splits the rows into two scales ~1
+#: and ~1e-4, the in-disc rows alone do not determine a total-degree-10
+#: (66-term) basis over the whole launch box, and the directions they leave
+#: over are pinned only through the down-weighted rows.  Measured on niche D4's
+#: own chain, ``cond(A)`` = 1.4e10, so ``cond(G)`` ~ 1.9e20 -- past float64,
+#: and the Cholesky answer is an arbitrary draw from the numerical null space
+#: rather than the least-squares solution.  On that chain the draw's fit
+#: residual runs 15-23x above the attainable minimum on one build and 1.05x on
+#: the other, from the SAME source at the SAME degree.
+#:
+#: WHAT IT COST.  ``test_niche_d4_dgrating::test_matches_the_manual_hand_split``
+#: read 5.93e-07 on one build and 8.80e-02 on the other, RUN ALONE, in the
+#: shipped configuration -- a 148,000x route disagreement decided by BLAS
+#: rounding.  The exit field on the losing build is speckled at the pixel scale
+#: (roughness ``max|lap E| / peak`` 0.30 against 0.035), which is numerical
+#: noise, not an approximation error.  It was attributed to niche C10's degree
+#: 6 because degree is what moved it, and degree 6 IS the stimulus -- it
+#: perturbs the OPL samples enough to move which null-space draw each build
+#: takes -- but the degree is sound and the solve was not.  See
+#: ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``.
+#:
+#: WHY THE DECISION IS A RESIDUAL COMPARISON and not a certificate on one
+#: answer.  The obvious test -- the least-squares stationarity residual
+#: ``A^T (b - A x)``, which is exactly zero at the solution -- was built,
+#: measured, and REJECTED: on these matrices it is computed by cancellation at
+#: the ``||A||^2 ||x||`` scale, so its float64 value is rounding noise.  It
+#: scores the WRONG answer better than the right one (the QR solution reads
+#: 3e-09 where the null-space draw reads 8e-11, with 15x the fit quality).
+#: ``||b - A x||`` has no such problem here -- the residual is only ~3 orders
+#: below ``||b||`` -- so the two candidates are compared on the quantity the
+#: fit is actually defined by.
+LSTSQ_CONDITIONING_STEPDOWN = True
+
+#: SCREEN: reciprocal condition number of the diagonally EQUILIBRATED Gram
+#: matrix below which the second solve is computed at all.
+#:
+#: This screen exists for COST, not for correctness -- the residual comparison
+#: below decides.  Its only requirement is that it must not skip a solve whose
+#: two candidates could differ by more than ``_LSTSQ_RESID_MARGIN``, and it has
+#: two decades of room: the normal equations lose ~``cond(G) * eps``, so at the
+#: screen (``cond`` = 1e8) the most a skipped solve can be off is ~1e-8, a
+#: hundredfold inside the margin.  A build that screened one way and another
+#: build the other therefore CANNOT change the answer at the boundary.
+#:
+#: Measured over all 54 solves niche D4's chain makes: the fits it skips read
+#: ``cond`` 1.0e2, and the ones it screens in read 1.7e15 / 5.5e15 / 1.5e16 /
+#: 2.8e18 -- thirteen orders of separation, with the screen in the middle of
+#: it.
+#:
+#: It is NOT true that design 121's production route escapes this.  Measured
+#: (``c13_solver_census.py focus_scan_121.py``): 32 solves, **24 screen in and
+#: 6 REROUTE**, with normal-equations-to-QR fit-residual ratios up to **1072x**
+#: on the 28-term coordinate fits.  The production ACCEPTANCE is nevertheless
+#: unchanged to every printed digit including the peak (S6.3 of the audit) --
+#: the readout re-traces the final leg on a fine grid, where the rerouted fits
+#: are not what limits it.  "Unchanged metrics" and "untouched arithmetic" are
+#: different claims and only the first one is made.
+_LSTSQ_GRAM_RCOND_MIN = 1e-8
+
+#: The QR answer replaces the normal-equations answer only if it fits the data
+#: better by MORE than this relative margin.  Ties go to the shipped path, so
+#: every solve the normal equations already got right returns its historical
+#: bits.
+#:
+#: The margin is a build-independence device.  ``||b - A x||`` is itself
+#: computed to ~1e-13 relative on these matrices, and two builds' copies of the
+#: SAME candidate differ by about that much, so any margin far above 1e-13
+#: makes the winner build-independent; any margin far below the smallest real
+#: gap keeps the fix.  The smallest real gap measured anywhere in this campaign
+#: is 4.8e-02 (design-121-sized OPL fit, Windows build), so 1e-6 sits ~7 orders
+#: above the noise and ~5 below the signal.
+_LSTSQ_RESID_MARGIN = 1e-6
+
+
+def _gram_rcond(G):
+    """Reciprocal 2-norm condition number of ``G`` after DIAGONAL
+    EQUILIBRATION (``G -> D G D``, ``D = diag(1/sqrt(G_ii))``).
+
+    Equilibration is what makes this a statement about the fit rather than
+    about the units the columns happen to carry: van der Sluis's bound says the
+    equilibrated condition number is within ``sqrt(m)`` of the best any column
+    scaling could achieve.  ``G`` is the tiny ``M x M`` Gram (``M`` ~ 15-120),
+    so the symmetric eigensolve costs microseconds.
+
+    Returns ``0.0`` for a Gram that is not usable at all (non-finite, or an
+    eigensolve that will not converge), which routes the caller to the stable
+    solver -- the safe direction.
+    """
+    G = np.asarray(G, dtype=np.float64)
+    if G.ndim != 2 or G.shape[0] != G.shape[1] or not np.all(np.isfinite(G)):
+        return 0.0
+    d = np.sqrt(np.abs(np.diag(G)))
+    d = np.where(d > 0.0, d, 1.0)
+    Gs = G / np.outer(d, d)
+    try:
+        ev = np.linalg.eigvalsh(Gs)
+    except np.linalg.LinAlgError:
+        return 0.0
+    hi = float(np.max(np.abs(ev)))
+    lo = float(np.min(ev))          # SIGNED: a negative eigenvalue means the
+    if not (hi > 0.0) or lo <= 0.0:  # Gram lost positive-definiteness outright
+        return 0.0
+    return lo / hi
+
+
+def _solve_lstsq_qr(A, b):
+    """Backward-stable least squares by Householder QR of ``[A | b]``.
+
+    ``R = qr([A | b])`` has ``R[:m, :m]`` = the R factor of ``A`` and
+    ``R[:m, m:]`` = ``(Q^T b)[:m]``, so ONE ``geqrf`` and one triangular solve
+    give the answer with no ``Q`` materialised and no second pass over ``A``.
+    Measured at the traced fits' worst shape (141471 x 66), best of three,
+    RELATIVE to the normal equations because the box was loaded and the ratio
+    is what transfers: this route **15x** (Windows) / **19x** (Linux), ``qr``
+    with an explicit ``Q`` 32x / 41x, ``gelsd`` 12x / 19x.  Absolute, on that
+    run: 0.069 s for the normal equations against 1.06 / 1.31 s here.  The
+    condition number is NOT squared, which is the entire point --
+    ``cond(A)`` = 1.4e10 is unremarkable for float64 QR and fatal for a Gram
+    matrix.  This runs only where the screen fires, and the screen is what
+    keeps the cost off the fits that do not need it.
+
+    ``geqrf`` -- NOT ``gelsd``.  B7 banned ``np.linalg.lstsq`` from this module
+    because ``gelsd``'s divide-and-conquer SVD spawns an OpenBLAS OpenMP pool
+    that deadlocks nested inside JAX's; Householder QR is a blocked BLAS-3
+    factorisation and takes no such path.  ``lstsq`` survives only as the
+    last-resort branch for an ``A`` whose ``R`` comes out exactly singular.
+    """
+    A = np.ascontiguousarray(A, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+    m = A.shape[1]
+    B = b.reshape(b.shape[0], -1)
+    try:
+        if A.shape[0] < m:
+            # UNDER-determined: ``R`` has no ``m x m`` leading block and the
+            # answer wanted is the minimum-norm one, which is gelsd's.  The
+            # traced fits are guarded against this upstream (every caller
+            # enforces a samples-per-term floor); this is belt and braces.
+            raise ValueError('under-determined')
+        from scipy.linalg import qr as _qr
+        from scipy.linalg import solve_triangular as _solve_tri
+        M = np.empty((A.shape[0], m + B.shape[1]), dtype=np.float64, order='F')
+        M[:, :m] = A
+        M[:, m:] = B
+        R = _qr(M, mode='r', check_finite=False)[0]
+        x = _solve_tri(R[:m, :m], R[:m, m:], check_finite=False)
+        if np.all(np.isfinite(x)):
+            return x.reshape((m,) + b.shape[1:])
+    except (ImportError, ValueError, np.linalg.LinAlgError):
+        pass
+    # exactly rank-deficient R (or no scipy): the minimum-norm solution is the
+    # only defensible answer, and this branch is rare enough to pay for gelsd.
+    x, *_ = np.linalg.lstsq(A, b, rcond=None)
+    return x
+
+
+def _lstsq_residual(A, b, x):
+    """``||b - A x||_F``, the quantity a least-squares fit is defined to
+    minimise, and the only one of the two candidates' scores that survives
+    float64 on these matrices (see ``LSTSQ_CONDITIONING_STEPDOWN``)."""
+    return float(np.linalg.norm(np.asarray(b) - np.asarray(A) @ np.asarray(x)))
+
+
 def _solve_lstsq_thread_safe(A, b):
     """Least-squares solve ``A @ x ~= b`` (overdetermined, single or multi RHS)
     via the NORMAL EQUATIONS -- ``G x = A^T b`` with ``G = A^T A`` -- Cholesky
-    then LU, falling back to ``np.linalg.lstsq`` only if ``G`` is not positive-
-    definite (a genuinely rank-deficient design matrix).
+    then LU, with a QR re-solve (:func:`_solve_lstsq_qr`) wherever ``G`` comes
+    out numerically singular and the QR answer measurably fits better.
 
     B7 (jax x OpenBLAS mitigation): the traced Chebyshev/coordinate fits used
     ``np.linalg.lstsq`` (LAPACK ``gelsd``, a divide-and-conquer SVD).  In one
@@ -891,13 +1067,19 @@ def _solve_lstsq_thread_safe(A, b):
     outside CI.  The normal equations reduce the factorisation to the tiny
     ``M x M`` Gram matrix (``M`` = number of fit terms, ~28-70), which stays
     below OpenBLAS's threading threshold and never takes the ``gelsd`` SVD path,
-    so the deadlock cannot recur.  ``A`` here is a well-conditioned normalised
-    tensor-Chebyshev / monomial Vandermonde (~1.5x oversampled), so squaring the
-    condition number in ``G`` is safe and the solution matches ``lstsq`` to
-    ~1e-12 relative (the M-P5 precedent, ``lenses_maslov._solve_fit``, measured
-    2.6e-15).  The ``lstsq`` fallback runs only for the rare rank-deficient case
-    that Cholesky AND LU both reject -- a path the well-conditioned traced fits
-    never reach in practice.
+    so the deadlock cannot recur.  Neither does the re-solve: it is ``geqrf``.
+
+    CONDITIONING (niche C13, 2026-08-03).  This function used to assert that
+    ``A`` "is a well-conditioned normalised tensor-Chebyshev / monomial
+    Vandermonde (~1.5x oversampled), so squaring the condition number in ``G``
+    is safe".  That holds for the concentric unweighted fits and is FALSE for
+    the weighted decentred ones, where ``cond(A)`` = 1.4e10 was measured and
+    ``G`` is therefore numerically singular.  Rather than assume either way,
+    the Gram is now SCREENED and, where it is singular, both answers are scored
+    on the data.  A solve that passes the screen -- or one whose two candidates
+    tie -- returns the identical bits it returned before, which is what keeps
+    the byte-identity contracts of niches C1/C6/C8/C9 intact.
+    See ``LSTSQ_CONDITIONING_STEPDOWN``.
 
     Returns ``x`` with the same trailing shape as ``b`` (1-D for a single RHS).
     """
@@ -905,17 +1087,31 @@ def _solve_lstsq_thread_safe(A, b):
     b = np.asarray(b, dtype=np.float64)
     G = A.T @ A
     rhs = A.T @ b
+    x = None
     try:
         from scipy.linalg import cho_factor, cho_solve
-        return cho_solve(cho_factor(G, check_finite=False), rhs,
-                         check_finite=False)
+        x = cho_solve(cho_factor(G, check_finite=False), rhs,
+                      check_finite=False)
     except (ImportError, ValueError, np.linalg.LinAlgError):
         # scipy absent, or G not positive-definite (rank-deficient fit).
         try:
-            return np.linalg.solve(G, rhs)
+            x = np.linalg.solve(G, rhs)
         except np.linalg.LinAlgError:
-            x, *_ = np.linalg.lstsq(A, b, rcond=None)
-            return x
+            x = None
+    if x is None or not np.all(np.isfinite(x)):
+        return _solve_lstsq_qr(A, b)
+    if not LSTSQ_CONDITIONING_STEPDOWN:
+        return x
+    if _gram_rcond(G) >= _LSTSQ_GRAM_RCOND_MIN:
+        return x
+    x_qr = _solve_lstsq_qr(A, b)
+    if not np.all(np.isfinite(x_qr)):
+        return x
+    r_ne = _lstsq_residual(A, b, x)
+    r_qr = _lstsq_residual(A, b, x_qr)
+    if r_qr < (1.0 - _LSTSQ_RESID_MARGIN) * r_ne:
+        return x_qr
+    return x
 
 
 class _Cheb2DEvaluator:
@@ -1572,6 +1768,475 @@ _DECENTRED_FIT_POLY_ORDER = 10
 _DECENTRE_GATE_PIXELS = 0.5
 _DECENTRE_GATE_W_FRAC = 0.05
 
+#: niche C11 (2026-08-03): CHOOSE the decentred beam's ray-fit branch by
+#: MEASURING both candidates instead of predicting the winner from ``|c|/w``.
+#:
+#: WHAT WAS WRONG.  ``_DECENTRE_GATE_W_FRAC`` above is a floor set to kill a
+#: discontinuity at NULL decentre (a branch flip at 1e-9 px), and the note that
+#: sets it says so.  It was never the crossover.  Measured on design 121 at the
+#: shipped ``_REMAP_RESID_EIKONAL_DEGREE = 6`` (`rc_gate_121.py`, EE3
+#: area-exact against the exact-ray CARRY=1 ceiling, per-order residual):
+#:
+#:     last-group |c|/w   0.000   0.241   0.481   0.723   0.965   1.079
+#:     off-centre branch -0.048  +0.028  +0.062  +0.091  +0.141  +0.152
+#:     concentric branch -0.048  -0.099  -0.127  +2.033 +67.312 +79.145
+#:
+#: -- i.e. the branches cross between **0.48 and 0.72 w** on that design, and
+#: 0.05 w is 10-14x below it.  On a synthetic f/3 N-BK7 singlet scored against
+#: the fit-domain-free ``newton_fit='spline'`` oracle the same crossover is at
+#: **0.55 w**, on an f/6 one it is at **0 w**, and on design 121's own six
+#: groups it lands anywhere in **0.46-0.69 w**.  A single constant cannot be
+#: right for all of them, because the crossover is not a property of the
+#: decentre at all -- it is where two DIFFERENT approximations of the same
+#: traced map happen to be equally good, and that depends on how much
+#: aberration the concentric branch's order-``newton_poly_order`` fit leaves
+#: over the beam:
+#:
+#: * the OFF-CENTRE fit's error is FLAT in decentre (its disc is beam-sized and
+#:   beam-centred at every offset; measured 6.2e-7 waves across 0-1.5 w on the
+#:   f/3 singlet, 1.8e-9 on the f/6 one, and monotone 0.028 -> 0.152 EE3 points
+#:   across design 121's fan);
+#: * the CONCENTRIC fit's error GROWS with decentre, because its disc is sized
+#:   from the ORIGIN-referenced second moment ``sqrt(2 c^2 + w^2)`` -- an
+#:   artefact of measuring about the wrong point, not a physical radius -- so
+#:   the same total-degree budget is spread over a disc inflated by
+#:   ``sqrt(1 + 2 (c/w)^2)`` (1.22x at 0.5 w, 1.73x at 1.0 w, 2.35x at 1.5 w).
+#:   That is the P2 aperture:beam cliff re-entering through the back door; see
+#:   ``_FIT_RADIUS_BEAM_FACTOR_DEFAULT``.
+#:
+#: WHAT REPLACES IT.  At the fit site the rays are ALREADY traced, so both
+#: candidates can be BUILT and COMPARED before either is used: fit the OPL each
+#: way and score it against the traced samples themselves, weighted by the
+#: beam's own intensity ``exp(-2 r^2 / w^2)`` about the measured chief ray --
+#: "which polynomial reproduces the traced map where the light is".  Smaller
+#: weighted rms wins; an exact tie keeps the CONCENTRIC (historical) one.
+#:
+#: Cost: ONE extra ``_Cheb2DEvaluator`` OPL fit (the rays, the trace and the
+#: two discs all already exist), and one extra second-moment pass over
+#: ``|E_in|^2``.  Both are taken ONLY above the C1 null gate.
+#:
+#: VALIDATED.  On three synthetic geometries (f/6 and f/3 N-BK7 singlets at
+#: two beam radii) the arbiter's pick agrees with the spline oracle's verdict
+#: on **42 of 42** sweep points, including both sides of the f/3 crossover; on
+#: design 121 it flips group by group at 0.46-0.69 w, reproducing the band the
+#: chain-level arms bracket, and at (-4,0) group 4 it sees the catastrophe
+#: coming as a **18x** margin in the fit residual (0.122 waves concentric
+#: against 0.0068 off-centre) before any field is reconstructed.
+#:
+#: SHIPPED ON since 5.32.1 (2026-08-03), by an EXPLICIT DECISION, and the
+#: trade it takes is stated rather than buried.  On design 121 the arbiter
+#: improves four of the five tilted orders (by 0.017 / 0.052 / 0.110 / 0.082
+#: points), takes the worst-case residual from 0.152 to 0.069 and removes the
+#: residual's growth with field angle -- and makes ONE order, (-1,0), worse by
+#: 0.026 points against a 0.003-0.015 differential floor.  That per-order
+#: "improve or hold" failure is why C11 shipped it OFF: it is a judgement
+#: about a design rather than a library fact, and it was left to an explicit
+#: decision instead of taken silently in a patch release.  **That decision has
+#: now been taken** -- see ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``
+#: S10 for the re-measurement of the trade on BOTH BLAS builds.
+#:
+#: THIS FLAG DECIDES, because :data:`DECENTRED_FIT_PREDICTOR` stayed ``False``.
+#: The 5.32.1 flip was ordered for BOTH constants and only this one survived
+#: the measurement: the predictor reddened 9 tests in niches D6 and D7 and cost
+#: 32 % of the encircled energy on D6's analytic fixture, and every one of
+#: those 9 goes green with the predictor off and THIS FLAG STILL ON.  So the
+#: arbiter is not merely untouched by that finding -- it is what the finding
+#: exonerated.  See ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md`` S11.
+#:
+#: The ladder as shipped:
+#:
+#:     ARBITER True   -> E_c <= E_o   (niche C11, THE SHIPPED SELECTOR)
+#:     ARBITER False  -> the v5.32 gate, bit for bit
+#:     PREDICTOR True -> u <= u*      (niche C12, opt-in, and see its note)
+#:
+#: With BOTH ``False`` the whole C11/C12 layer is BYTE-IDENTICAL to the pure
+#: ``_DECENTRE_GATE_W_FRAC`` selector: the arbiter's extra second-moment pass
+#: and its two trial fits are not merely unused, they are never reached (the
+#: gate site tests these flags before measuring the origin-referenced radius,
+#: and the fit site tests them before building any candidate).  That remains
+#: the era-pinned fail-before.
+#:
+#: BELOW the C1 null gate the flag is inert in EVERY state by construction (the
+#: arbiter is gated on ``_beam_decentred``), so every C1 byte-identity contract
+#: holds either way.
+DECENTRED_FIT_ARBITER = True
+
+
+def _decentred_fit_restriction(disc, weighted, base_order, dec_order):
+    """Resolve ONE ray-fit candidate's ``(weights, order)`` from its disc.
+
+    ``weighted`` selects D1's regularised restriction (every sample kept, the
+    out-of-disc ones down-weighted to ``_FIT_DISC_OUTSIDE_WEIGHT_REL`` of the
+    in-disc Gram contribution) over the historical hard NaN mask, and carries
+    D7's order raise with the sample-count step-down that keeps the fit
+    determined.  ``weights is None`` means "hard mask at ``base_order``".
+
+    Factored out so the niche-C11 arbiter SCORES exactly the configuration it
+    would APPLY -- a candidate scored at one order and applied at another is
+    not an arbiter, it is a coin toss.
+    """
+    if not weighted:
+        return None, int(base_order)
+    n_in = int(disc.sum())
+    n_out = int(disc.size) - n_in
+    w_out = (float(np.sqrt(_FIT_DISC_OUTSIDE_WEIGHT_REL * n_in / n_out))
+             if n_out > 0 else 1.0)
+    # D7: give that off-centre fit the terms its region needs -- but never
+    # more terms than the disc can constrain.  The out-of-disc samples carry
+    # ~1e-4 of the weight, so the IN-DISC count is what determines the fit;
+    # require 3 samples per basis term (order 10 -> 66 terms -> 198 samples)
+    # and step the order down until that holds.  Without this the raise could
+    # hand an order-10 fit as few as ``_CARRIER_FIT_MIN_SAMPLES`` = 64
+    # effective rows for 66 unknowns -- an under-determined normal matrix.
+    #
+    # This cap is SILENT and it can zero the raise out entirely: the disc
+    # holds ~pi (frbf w / (dx rs))^2 samples, so order 10 survives only while
+    # frbf*w/(dx*rs) >~ 7.9 coarse pixels.  At the DEFAULT ray_subsample=8
+    # both documented configs clear it (223 samples for the synthetic f/6
+    # example, 1735 for design 121's last group, against 198) -- but the first
+    # clears by only 1.13x and reverts to order 6 at ray_subsample=16, and
+    # design 121 reverts at 32.  See ``decentred_fit_poly_order``.
+    order = int(dec_order)
+    base = int(base_order)
+    while order > base and (order + 1) * (order + 2) * 3 // 2 > n_in:
+        order -= 1
+    return np.where(disc, 1.0, w_out), max(base, order)
+
+
+def _decentred_fit_score(xs_in, opl_grid, weight, disc, weights, order):
+    """Beam-weighted rms of one ray-fit candidate's OPL residual against the
+    TRACED samples, in the OPL's own length units.
+
+    The candidate is built exactly as the fit site would build it (hard NaN
+    mask when ``weights is None``, D1's weighted restriction otherwise), then
+    evaluated on the whole coarse launch lattice and differenced against the
+    UNMASKED traced OPL -- so a fit that is clean only where it was allowed to
+    look is scored on the beam, not on its own domain.
+
+    ``weight`` is the beam's intensity on that lattice; only the OPL is scored
+    because it is the quantity that becomes phase.  Returns ``inf`` when the
+    candidate carries no usable weight, so an inadmissible candidate can never
+    win.  See :data:`DECENTRED_FIT_ARBITER`.
+    """
+    vals = opl_grid if weights is not None else np.where(disc, opl_grid, np.nan)
+    # the launch lattice, indexing='ij' -- axis 0 is X, axis 1 is Y, matching
+    # ``opl_grid`` (see the ``np.meshgrid(..., indexing='ij')`` note at the
+    # launch site).  Materialised rather than broadcast: the evaluator's
+    # combined value+grad kernel wants two arrays of the SAME shape, and a
+    # broadcast pair silently yields a column-rank answer.
+    _X, _Y = np.meshgrid(xs_in, xs_in, indexing='ij')
+    try:
+        ev = _Cheb2DEvaluator(xs_in, xs_in, vals, order=int(order),
+                              weights=weights)
+        pred = np.asarray(ev.ev(_X, _Y))
+    except (np.linalg.LinAlgError, ValueError):
+        return float('inf')
+    ok = np.isfinite(pred) & np.isfinite(opl_grid)
+    w = np.where(ok, weight, 0.0)
+    tot = float(w.sum())
+    if not (tot > 0.0):
+        return float('inf')
+    r = np.where(ok, pred - opl_grid, 0.0)
+    v = float(np.sqrt(float((w * r * r).sum()) / tot))
+    return v if np.isfinite(v) else float('inf')
+
+
+#: niche C12 (2026-08-03): a FLOOR under the arbiter's beam-intensity score
+#: weight, so the score can see the skirt as well as the core.
+#:
+#: THE BLIND SPOT IT ADDRESSES.  ``_decentred_fit_score`` weights by
+#: ``exp(-2 r^2 / w^2)``, which is ~1e-4 at 2 w and ~1e-8 at 3 w, while the
+#: Newton inversion evaluates the SAME fits over the whole launch square.  A
+#: candidate that is clean on the core and wild on the skirt is therefore
+#: scored as if the skirt did not exist -- niche C11 S10 item 1.  With a floor
+#: ``F`` the weight becomes ``max(exp(-2 r^2 / w^2), F)``.
+#:
+#: SHIPPED 0.0 -- INERT, and the reason is a measurement, not caution.  Swept
+#: on design 121's own captured arbiter inputs (26 arbitrated element calls
+#: across five diffraction orders, ``c12_scorer_sweep.py``):
+#:
+#:   * ``F >= 1e-8`` flips EVERY call to the off-centre branch, on every order.
+#:     The concentric candidate is a HARD NaN MASK, so outside its disc the fit
+#:     is pure extrapolation over a launch square 7.5x the beam; any nonzero
+#:     floor lets that extrapolation dominate the score.  The selector then
+#:     degenerates to "always off-centre", which IS the v5.32 gate on this
+#:     design -- every niche-C11 gain is lost and nothing is bought;
+#:   * restricting the score to the ILLUMINATED SUPPORT instead (weight 0 where
+#:     the beam carries no light) moves no verdict at all: at ``F = 1e-4`` the
+#:     26 picks are the shipped 26;
+#:   * amplitude weighting (``sqrt`` of the intensity) flips two calls at
+#:     (-4,0) and two at (-4,-2) and produces a NON-MONOTONE pattern in
+#:     ``|c|/w`` -- a selector that prefers the off-centre branch at 0.05 w and
+#:     the concentric one at 0.25 w on the same group.
+#:
+#: So the (-1,0) counter-movement niche C11 reports is NOT a weighting defect,
+#: and this knob exists to record that it was tried and priced.  See S4 of
+#: docs/audits/C12_PHYSICS_FIT_SELECTION_2026_08_03.md for the whole sweep and
+#: for the separate, stronger reason no per-call selector can fix it.
+_DECENTRED_FIT_SCORE_FLOOR = 0.0
+
+
+def _decentred_fit_score_weight(xs_in, bcx, bcy, w_beam, floor=None):
+    """The arbiter's score weight: the beam's own intensity on the launch
+    lattice, optionally floored (see ``_DECENTRED_FIT_SCORE_FLOOR``).
+
+    Factored out so the floor has ONE home and so ``floor = 0`` is provably
+    the bare Gaussian rather than a Gaussian plus an added zero.
+    """
+    g = np.exp(-2.0 * (((xs_in[:, None] - bcx) ** 2
+                        + (xs_in[None, :] - bcy) ** 2)
+                       / (w_beam * w_beam)))
+    f = _DECENTRED_FIT_SCORE_FLOOR if floor is None else float(floor)
+    return np.maximum(g, f) if f > 0.0 else g
+
+
+#: niche C12: the total degree at which the traced OPL's own Chebyshev
+#: spectrum is measured on the launch box.  It has to exceed
+#: ``_DECENTRED_FIT_POLY_ORDER`` for the tail beyond the OFF-CENTRE candidate's
+#: own order to be visible at all; 14 gives two even shells of headroom above
+#: 10 and costs 120 basis terms against that candidate's 66.  ``0`` disables
+#: the spectral half of the predictor (it then decides from the measured
+#: candidate residuals alone, which is what it does on an unresolved spectrum
+#: anyway -- see :data:`DECENTRED_FIT_PREDICTOR`).
+_DECENTRED_FIT_SPECTRUM_ORDER = 14
+
+
+def _decentred_fit_spectrum(xs_in, opl_grid, q, orders=(), weight=None):
+    """The traced OPL's degree-shell spectrum on the LAUNCH BOX, plus the
+    spectral TAIL surrogate beyond each requested order.
+
+    ONE unweighted total-degree-``q`` Chebyshev fit of the traced samples.
+    ``S[n]`` is the rms of its coefficients of total degree ``n``; because the
+    basis is degree-graded and normalised to the box, restricting to a
+    concentric sub-domain of relative radius ``s`` scales the degree-``n``
+    contribution by ``s^n``.  That is the entire inflation law.
+
+    ``tails[m]`` is the same fit with every coefficient of total degree
+    ``<= m`` zeroed.  A least-squares fit of total degree ``m`` reproduces a
+    degree-``<= m`` polynomial EXACTLY, so
+
+        (I - Pi_m) W  ==  (I - Pi_m) W_>m
+
+    identically -- each candidate's residual IS the residual of fitting its own
+    spectral tail, and the tail does not move when the beam does.
+
+    Returns ``(S, tails, resid)`` where ``resid`` is the box fit's own rms
+    residual against the traced samples under the SAME ``weight`` the
+    candidates are scored with: the surrogate is only usable while what is
+    left beyond ``q`` is small against what the candidates are being ranked
+    by.  ``(None, {}, inf)`` when the fit cannot be built.
+    """
+    try:
+        ev = _Cheb2DEvaluator(xs_in, xs_in, opl_grid, order=int(q))
+    except (np.linalg.LinAlgError, ValueError):
+        return None, {}, float('inf')
+    co = np.asarray(ev.coeffs, dtype=np.float64).ravel()
+    deg = np.asarray([a + b for a, b in ev._mi], dtype=np.intp)
+    S = np.zeros(int(q) + 1)
+    for n in range(int(q) + 1):
+        sel = deg == n
+        if sel.any():
+            S[n] = float(np.sqrt(float((co[sel] ** 2).sum())))
+    X, Y = np.meshgrid(xs_in, xs_in, indexing='ij')
+    full = np.asarray(ev.ev(X, Y))
+    ok = np.isfinite(full) & np.isfinite(opl_grid)
+    wt = np.where(ok, (1.0 if weight is None else weight), 0.0)
+    tot = float(wt.sum())
+    if tot > 0.0:
+        r = np.where(ok, full - opl_grid, 0.0)
+        resid = float(np.sqrt(float((wt * r * r).sum()) / tot))
+        if not np.isfinite(resid):
+            resid = float('inf')
+    else:
+        resid = float('inf')
+    tails = {}
+    for m in orders:
+        c2 = co.copy()
+        c2[deg <= int(m)] = 0.0
+        ev.coeffs = ev.xp.asarray(c2)
+        tails[int(m)] = np.asarray(ev.ev(X, Y))
+    ev.coeffs = ev.xp.asarray(co)
+    return S, tails, resid
+
+
+def _decentred_fit_spectral_moment(S, m, sigma):
+    """``m_eff``: the spectral first moment of the tail beyond order ``m``,
+    weighted at the beam-disc scale ``sigma``.
+
+    It is exactly ``d log T / d log rho`` at ``rho = 1`` for
+    ``T(s)^2 = sum_{n>m} (S_n s^n)^2``, i.e. the EXPONENT of the concentric
+    candidate's disc-inflation law.  Falls back to ``m + 2`` -- the first shell
+    a total-degree-``m`` fit cannot reach on a map with even symmetry -- when
+    the tail carries no measurable energy.
+    """
+    if S is None:
+        return float(int(m) + 2)
+    S = np.asarray(S, dtype=np.float64)
+    num = den = 0.0
+    for n in range(int(m) + 1, S.size):
+        e = (S[n] * sigma ** n) ** 2
+        num += n * e
+        den += e
+    v = (num / den) if den > 0.0 else float(int(m) + 2)
+    return v if (np.isfinite(v) and v > 0.0) else float(int(m) + 2)
+
+
+def _decentred_fit_crossover(u, e_conc, e_off, m_eff):
+    """The crossover decentre ``u* = |c*| / w`` in closed form.
+
+    The concentric candidate's disc is sized from the ORIGIN-referenced second
+    moment, so it inflates by ``rho = sqrt(1 + 2 u^2)``; the off-centre one's
+    disc and the beam translate together, so its residual is flat in ``u``.
+    With the tail's own exponent ``m_eff`` the concentric residual runs as
+    ``rho^m_eff``, and the two curves cross where
+
+        rho* = rho(u) (E_off / E_conc)^(1/m_eff),   u* = sqrt((rho*^2 - 1) / 2)
+
+    Returns ``0.0`` when the off-centre candidate already wins at zero
+    decentre, and ``inf`` when the concentric one cannot lose (an unscoreable
+    off-centre candidate).  ``nan`` when the inputs cannot support a crossover
+    at all, which callers treat as "no prediction".
+    """
+    if not (np.isfinite(u) and u >= 0.0 and np.isfinite(m_eff) and m_eff > 0.0):
+        return float('nan')
+    if not (np.isfinite(e_conc) and e_conc > 0.0):
+        return 0.0
+    if not np.isfinite(e_off):
+        return float('inf')
+    if e_off <= 0.0:
+        return 0.0
+    rho = float(np.sqrt(1.0 + 2.0 * u * u))
+    try:
+        rstar = rho * float(e_off / e_conc) ** (1.0 / float(m_eff))
+    except (OverflowError, ValueError, ZeroDivisionError):
+        return float('nan')
+    if not np.isfinite(rstar):
+        return float('inf')
+    return float(np.sqrt(max(rstar * rstar - 1.0, 0.0) / 2.0))
+
+
+#: niche C12 (2026-08-03): decide the decentred beam's ray-fit branch from the
+#: lens's OWN spectral tail and the disc-inflation law, instead of comparing
+#: two numbers and taking the smaller.
+#:
+#: WHAT NICHE C11 LEFT.  ``DECENTRED_FIT_ARBITER`` builds both candidates and
+#: keeps the one with the smaller beam-weighted OPL residual.  That is a
+#: measurement, not a model: it cannot say WHY the crossover sits at 0.55 w on
+#: an f/3 singlet and at 0 w on an f/6 one, and it says nothing about any
+#: decentre other than the one in front of it.
+#:
+#: THE DERIVATION (docs/audits/C12_PHYSICS_FIT_SELECTION_2026_08_03.md S2).
+#: The traced OPL is a fixed function of the ENTRANCE position -- moving the
+#: beam moves neither it nor the launch grid.  A total-degree-``m`` fit
+#: reproduces the degree-``<= m`` part exactly, so each candidate's residual is
+#: the residual of fitting ITS OWN spectral tail, identically.  The tail is
+#: decentre-free; the whole ``u``-dependence is therefore geometric:
+#:
+#:   * the CONCENTRIC disc is sized from the ORIGIN-referenced second moment
+#:     ``sqrt(2 c^2 + w^2)``, so it inflates by ``rho = sqrt(1 + 2 u^2)`` and
+#:     the same total-degree budget is spread over a disc ``rho`` times bigger;
+#:   * the OFF-CENTRE disc and the beam translate TOGETHER, so nothing about
+#:     that candidate changes with ``u`` -- its residual is flat.
+#:
+#: Each shell of the tail scales as ``s^n``, so the concentric residual runs as
+#: ``rho^m_eff`` with ``m_eff`` the tail's spectral first moment
+#: (:func:`_decentred_fit_spectral_moment`), and the crossover follows in
+#: closed form (:func:`_decentred_fit_crossover`).  There is no fitted constant
+#: anywhere in it: ``S_n`` is the lens's own measured spectrum, ``sigma`` and
+#: ``rho`` are geometry, and the orders and ``_FIT_DISC_OUTSIDE_WEIGHT_REL``
+#: are library constants.
+#:
+#: VALIDATED, three designs, no tuning.  Predicted crossover against the
+#: fit-domain-free ``newton_fit='spline'`` oracle's own measured one:
+#:
+#:     f/3  N-BK7 singlet, w = 1.0 mm    u* = 0.525   measured 0.545
+#:     f/6  N-BK7 singlet, w = 1.0 mm    u* = 0       measured 0
+#:     f/6  N-BK7 singlet, w = 1.4 mm    u* = 0       measured 0
+#:
+#: -- and the model reproduces each candidate's MEASURED residual to
+#: ``K = 0.61-1.00`` on the two geometries where the residual is truncation- or
+#: leak-limited, with no constant.  ``m_eff`` reads 8.000 on all three (the
+#: first even shell a degree-6 fit cannot reach), and 7.14-8.04 on all 26 of
+#: design 121's arbitrated element calls.
+#:
+#: WHERE THE SPECTRAL HALF FAILS, measured and stated.  The model needs the
+#: traced map to be spectrally RESOLVED on the launch box.  Design 121's groups
+#: are not: their launch square is 47 mm against a 6.3 mm beam (7.5:1) with
+#: ~0.5 % of it carrying no ray at all, and the box expansion does not converge
+#: -- the shells sit flat at ~1e-3 out to degree 20 and the order-14 box fit's
+#: own residual over the beam is 1e-5 m, four decades ABOVE the candidate
+#: residuals it would have to predict.  So the predictor tests that
+#: (``resid <= min(E_conc, E_off)``) and falls back to the MEASURED pair when
+#: the spectrum is unresolved.  On that fall-back the closed form is
+#: algebraically equivalent to niche C11's comparison, and the check below
+#: cannot fire; that is stated rather than hidden.
+#:
+#: THE ARCHITECTURE.  The predictor DECIDES (``u <= u*``); niche C11's raw
+#: comparison always runs as a CHECK; a disagreement raises a ``RuntimeWarning``
+#: naming both score pairs, ``u`` and ``u*``.  It is never silent.
+#:
+#: SHIPPED ON since 5.32.1 (2026-08-03).  C12 shipped it OFF, and the reason
+#: is in S5 of that audit and still stands as a STATEMENT: on design 121 no
+#: per-call selector can meet a per-order "improve or hold" bar.  Group 2 is
+#: preferred CONCENTRIC by 4.77x at (-1,0) (``u`` = 0.062) and by 4.24x at
+#: (-2,0) (``u`` = 0.125), and the chain wants OFF-CENTRE at the first and
+#: CONCENTRIC at the second -- so no rule monotone in the margin, in ``u``, or
+#: in ``u/u*`` can produce that pair.  The chain-level EE3 is not separable
+#: across the six groups (measured: the mixed patterns ``ccoo`` 0.069 and
+#: ``cooo`` 0.067 are WORSE at (-1,0) than either ``ccco`` 0.055 or ``oooo``
+#: 0.029), and a fit-site selector only ever chooses per call.
+#:
+#: STAYS OFF -- and the 5.32.1 flip of this constant was REVERTED on evidence,
+#: 2026-08-03.  ``DECENTRED_FIT_ARBITER`` did ship ``True``; this one did not,
+#: and the two must not be confused because only ONE of them was implicated.
+#:
+#: THE MEASUREMENT THAT REVERTED IT (niche C13 S11).  Turning this flag on
+#: reddens **9 tests** in ``test_niche_d6_exact_tilted_leg`` and
+#: ``test_niche_d7_decentred_fit``, and every one of them goes green again with
+#: this flag ``False`` and the ARBITER still ``True`` -- so the arbiter is
+#: innocent and the predictor is the whole cause.  On niche D6's ``K = -n^2``
+#: conic stand-in, whose truth is ANALYTIC and decentre-invariant (an inline
+#: exact conic raytrace sharing no code with the library):
+#:
+#:     PREDICTOR   EE2/oracle   FWHM/oracle   spot off the Fermat focus
+#:     True          0.6670        1.0952            3.96e-07 m
+#:     False         0.9819        1.0000            9.87e-09 m
+#:
+#: -- a 32 % loss of encircled energy and a spot 40x further off the
+#: analytically known focus.  The library WARNS on that very call and then
+#: applies the losing choice: at ``u`` = 1.0001 the model reads
+#: ``u*`` = 1.4161 from ``E_c`` = 1.94e-07 against ``E_o`` = 1.51e-06 and picks
+#: CONCENTRIC, while the arbiter's MEASURED residuals on the same call are
+#: 8.70e-11 off-centre against 1.51e-06 concentric -- **off-centre is 17,000x
+#: better and the model has the ordering inverted**.
+#:
+#: WHY C12's OWN VALIDATION DID NOT CATCH IT.  S3.2 validated three geometries
+#: (f/3 and f/6 singlets at two beam radii) and the model landed on the oracle
+#: to 0.03 % on the one with a nonzero crossover.  D6's stand-in is a FOURTH
+#: geometry, at ``u`` = 1.0 rather than the ~0.57 those crossovers sat at, and
+#: the model does not generalise to it.  Three designs is not enough for a
+#: closed form that ships as a default.
+#:
+#: AND IT BUYS NOTHING ON DESIGN 121.  S3.4 already says the launch-box
+#: spectrum there is UNRESOLVED, so the predictor falls back to the measured
+#: pair and is algebraically the arbiter.  Measured, not inferred: across four
+#: design-121 runs with the flag ON (both builds, ``rc_resdeg_121``,
+#: ``focus_scan_121``, ``energy_stage_audit_121``) the predictor/arbiter
+#: disagreement warning fires **zero times**, and the per-order table
+#: reproduces C11's arbiter column to all four decimals at all six orders.
+#: The flag is inert where it was wanted and harmful where it is live.
+#:
+#: The original argument for shipping it OFF (S5 of the C12 audit) is
+#: unchanged and still stands: on design 121 no per-call selector can meet a
+#: per-order "improve or hold" bar.  Group 2 is preferred CONCENTRIC by 4.77x
+#: at (-1,0) (``u`` = 0.062) and by 4.24x at (-2,0) (``u`` = 0.125), and the
+#: chain wants OFF-CENTRE at the first and CONCENTRIC at the second.
+#:
+#: FALL-BACK LADDER (see :data:`DECENTRED_FIT_ARBITER`): with this ``False``
+#: the C11 arbiter decides, which is what 5.32.1 ships; both ``False`` is the
+#: v5.32 gate, bit for bit.
+DECENTRED_FIT_PREDICTOR = False
+
 
 def _input_beam_amp_radius(E_in, dx, dy=None, centre=None):
     """1/e AMPLITUDE radius of ``E_in`` on the centred wave grid, from the
@@ -1704,7 +2369,8 @@ def _input_tilt_stats(E_in, wavelength, dx):
 #: ``S_R(rho) + L*u + M*v`` exactly, in the element AND in
 #: :func:`lumenairy.propagate_traced_carrier_chain` (which reads this same
 #: flag through
-#: :data:`~lumenairy.propagators.carrier.CHAIN_EXACT_TILTED_REFERENCE`, so the
+#: :func:`~lumenairy.propagators.carrier._exact_tilt_reference`, a helper that
+#: imports and returns THIS constant at call time, so the
 #: two can never be configured apart -- they only make sense together).  The
 #: fail-before switch for niche C5: flip it to reproduce any pre-C5 tilted
 #: result bit for bit.  It has NO effect on an untilted congruence -- the two
@@ -2244,7 +2910,82 @@ REMAP_STATIONARY_PHASE_LAUNCH = True
 #: perfectly ordered -- 2.065e-02 (off) -> 1.406e-02 (degrees 2 and 3) ->
 #: 2.344e-05 (degrees 4, 5, 6) -- so nothing is wrong with the fit.  Degree 4
 #: is the best model over the bright core.
-_REMAP_RESID_EIKONAL_DEGREE = 4
+#:
+#: ---------------------------------------------------------------------------
+#: 2026-08-02 -- RAISED TO 6.  THE ONLY THING KEEPING IT AT 4 WAS A GHOST THAT
+#: NICHE C8 NOW BOUNDS.  docs/audits/D121_RESIDUAL_CLOSURE_2026_08_02.md.
+#:
+#: The fail-before is this constant: setting it back to ``4`` restores the
+#: v5.32.0 / niche-C9 behaviour exactly, since it is the ONLY thing that
+#: changes (it is read once, at :func:`_fit_residual_eikonal`, and clamped by
+#: ``_REMAP_RESID_DEGREE_CAP``).
+#:
+#: WHAT THE "degrees 5-6 buy nothing and start self-caustiking" line above was
+#: measuring, and why it no longer holds.  Both records of that ghost -- the
+#: ``ghost power`` column here (1.255e-02 at degree 6, order (-4,-2)) and
+#: ``REMAP_STATIONARY_PHASE_FIT_GUARD``'s "degree 6 still reads 9.78e-03" --
+#: predate ``REMAP_INVERSE_SUPPORT_BOUND`` (niche C8, 2026-08-01), whose whole
+#: job is to stop the library CLAIMING amplitude outside the traced ray
+#: support.  The degree-6 ghost is exactly such a claim.  Re-measured on the
+#: post-C9 tree through ``energy_stage_audit_121.py`` (unedited), design 121
+#: order (-4,-2), ``RN=1024``, ``rs=4``, six post-DOE groups:
+#:
+#:   degree  C8   P_out/P_in   g4          amax4      r_rms (mm)
+#:      4    ON    0.993839   8.653e-09   1.147e-04    0.8373
+#:      4    OFF   0.993839   8.653e-09   1.147e-04    0.8373   (C8 inert)
+#:      6    ON    0.993843   9.694e-09   1.117e-04    0.8376
+#:      6    OFF   1.051890   5.818e-02   9.448e-01    2.3601   <- the ghost
+#:
+#: i.e. at degree 4 the support bound is INERT and at degree 6 it is decisive:
+#: with it off the chain MANUFACTURES 5.2 % of the input power and the exit
+#: second moment triples; with it on, degree 6's conservation and halo are
+#: within noise of degree 4's on every order measured ((0,0): both 0.000e+00 /
+#: 0.000e+00; (-1,0): 1.285e-12 -> 2.663e-11; (-2,0): 7.947e-12 -> 7.659e-11 --
+#: all 1e-3 or less of the C3 bound).  **The counter-evidence was real and it
+#: is now bounded, so the reason for 4 is spent.**
+#:
+#: WHAT 6 BUYS, and why it is a FORM argument rather than a resolution one.
+#: A carrier-referenced relay's residual eikonal is r^4-DOMINANT with an r^6
+#: next term; degree 4 spans the first and degree 6 the second, while degree 5
+#: adds only ODD terms a near-radial residual has no use for.  If that is the
+#: mechanism the response must read 4 ~ 5 << 6, and it does.  Design 121, EE3
+#: (area-exact) against the exact-ray oracle's true ceiling, chain readout
+#: split against the exact eikonal -- the residual left, in points:
+#:
+#:   order     deg 3    deg 4     deg 5    deg 6    recovered
+#:   (0,0)     1.577    0.048     0.048   -0.048     +0.096
+#:   (-1,0)    1.815    0.934     0.946    0.029     +0.905
+#:   (-2,0)    1.461    0.774     0.796    0.063     +0.711
+#:   (-3,0)    1.087    0.527     0.554    0.090     +0.438
+#:   (-4,0)    0.999    0.305     0.338    0.141     +0.164
+#:   (-4,-2)   0.967    0.279     0.386    0.152     +0.127
+#:
+#: ``deg 5 - deg 4`` is +0.000/+0.012/+0.022/+0.027/+0.032/+0.107 -- nothing,
+#: or slightly worse, at every order -- while ``deg 6 - deg 5`` is
+#: -0.096/-0.917/-0.732/-0.465/-0.197/-0.234.  The field-angle SPREAD goes
+#: 0.886 -> 0.200 points and every order lands within +-0.16 of the exact-ray
+#: oracle.  That is the C6 derivation closing on itself: what this launch
+#: leaves behind is ``1/2 grad(a - a_fit)^T H^-1 grad(a - a_fit)``, quadratic
+#: in what the fit MISSES, and what degree 4 was missing was the r^6 term.  A
+#: change that were merely "more resolution" would improve through degree 5;
+#: this does not.
+#:
+#: PRODUCTION ACCEPTANCE IS UNCHANGED.  ``focus_scan_121.py`` (unedited, pure
+#: library defaults, N=2048/NFC=8192/WF=4.0), run with the degree pinned both
+#: ways in the same session: BEST-FOCUS[peak] ``dz = 0``,
+#: **3.350 um / EE3 90.3 / EE6 99.7 / EE12 99.8** in BOTH, with the peak
+#: 5.516e+03 -> 5.529e+03 (+0.24 %).  Production re-traces the last group on a
+#: fine grid where much of this is inert; the coarse per-group element calls
+#: that the diagnostic paraxial route and every per-order oracle comparison go
+#: through are where the 0.9 points lived.
+#:
+#: SCOPE, stated rather than implied.  Measured on ONE design at one
+#: wavelength.  What is NOT design-specific is the argument: the ghost that
+#: kept the degree at 4 is bounded by a shipped guard, and the term degree 6
+#: adds is the next RADIAL order of a residual whose form is set by the
+#: carrier reference, not by design 121.  The synthetic r^4 fixture quoted
+#: above is unaffected (degrees 4, 5 and 6 all read 2.344e-05 on it).
+_REMAP_RESID_EIKONAL_DEGREE = 6
 #: Amplitude floor (fraction of peak) for a sample to enter the residual fit.
 _REMAP_RESID_BRIGHT_FRAC = 0.05
 #: Wrapped nearest-neighbour phase step (rad) above which a residual-gradient
@@ -2690,6 +3431,404 @@ REMAP_INVERSE_SUPPORT_BOUND = True
 #: input power removed.  The lobe lies wholly outside the hull, so no width of
 #: transition band reaches it.
 _SUPPORT_BOUND_FEATHER_CELLS = 1.0
+
+
+# ===========================================================================
+# NICHE C14 (2026-08-03) -- UNIT C: THE TRACED EXIT SUPPORT, AS ONE OBJECT
+# ===========================================================================
+# WHAT WAS WRONG.  There were THREE notions of "the region the traced rays
+# reached", computed from the same arrays, at nearly the same point in
+# ``apply_real_lens_traced``, by three different rules and three separate
+# copies of the same convex-hull algebra:
+#
+#   1. the C7 halo radius -- amplitude-weighted centroid + max radius over the
+#      samples above the ``e^-_RD_HALO_AMP_CONTOUR`` amplitude contour, times
+#      ``_RD_HALO_RADIUS_FACTOR`` at report time;
+#   2. the C8 support hull -- convex hull of the alive STOP-PASSING landings,
+#      plus a ``sqrt(2) sub dx`` plateau and one exit-lattice cell of feather;
+#   3. the direct-fit hull -- the ``inversion_method='fit'`` path's own
+#      long-standing exit hull mask over the post-restriction samples.
+#
+# (2) and (3) are the same idea implemented twice, and the C8 audit says so:
+# "This bound gives the Newton path the containment the direct-fit path has had
+# all along."  They had two copies of the ConvexHull call, two copies of the
+# ``equations -> (A, b)`` unpacking and two different half-plane evaluators
+# (one chunked over a BLAS product, one a full-width ``np.all``).
+#
+# THE MEASURED CONSEQUENCE, and the reason this is not cosmetics.
+# ``RECON_PINS_POST_C8_2026_08_01.md`` S7 item 1: on the E-M6 fixture the
+# post-C8 field still carries **0.19998 of P_ap outside the exact-ray hull** --
+# in the plateau+feather band C8 keeps DELIBERATELY -- and **its global |E|
+# maximum sits in that band**.  Neither self-check reports it: the energy
+# check's reading (1.01931) is inside its own band, and the C7 halo check looks
+# only beyond ``1.25 x r_hull``, which on that fixture is 1.525 mm while the
+# taper's outer edge is 1.4996 mm.  So C7's reporting annulus lies ENTIRELY in
+# the region C8 has already zeroed: under the bound the halo check cannot fire,
+# and the band the bound retains is watched by nobody.  "The two self-checks
+# are jointly blind to a residual 20 % of P_ap of manufactured light."
+#
+# That was found by an adversarial re-check, not by the checks, and it is
+# exactly the shape of defect a single object makes cheap to state: with one
+# hull, "is the field's maximum inside the support the rays actually reached?"
+# is one comparison on one object, where before it was a relationship between
+# an ``e^-9`` amplitude contour times 1.25 and a ``sqrt(2) sub dx`` plateau
+# plus one lattice cell, computed 40 lines apart from different masks.
+#
+# WHAT THIS OBJECT DOES *NOT* DO.  It does not merge the three rules.  They are
+# not interchangeable and unifying them would be a behaviour change, not a
+# refactor: C7's radius is amplitude-weighted ON PURPOSE (a REPORTING radius
+# calibrated over 180 element calls, with a measured 123x separation between
+# the clean and defective populations at factor 1.25), and C8's is a convex
+# hull of stop-passing rays ON PURPOSE (convexity "can only make the bound
+# LOOSER, never tighter, so it cannot manufacture a cut").  Merging them would
+# re-open a calibration that cost 177 readings.  What is unified is the
+# CONSTRUCTION and the CONVENTIONS -- one alive mask, one hull builder, one
+# signed-distance rule -- with three NAMED VIEWS on top.  Every view reproduces
+# its old arithmetic operand for operand, which is why the extraction is
+# byte-identical and is proved so by ``probe_c14_byte_identity.py``.
+#: Policy for the niche-C14 SUPPORT-BAND self-check: ``'warn'`` (default) or
+#: ``'silent'``.  ``'silent'`` is the FAIL-BEFORE SWITCH: it restores the
+#: pre-C14 reporting exactly, because the band check is the only thing C14
+#: adds to what the element SAYS (it adds nothing at all to what the element
+#: RETURNS -- like C7 and the energy check, it is reporting-only and cannot
+#: change a returned bit).
+#:
+#: WHAT IT WATCHES.  The annulus C8 retains outside the traced hull: the
+#: ``sqrt(2) sub dx`` plateau plus ``_SUPPORT_BOUND_FEATHER_CELLS`` of
+#: feather, i.e. exactly ``0 < s <= d0 + f`` in the hull's own signed distance.
+#: No traced ray of the call reaches there, so any amplitude in it is either
+#: legitimate skirt bleeding out of the support or manufactured light -- and
+#: the two are separable without a new calibration, which is the point of the
+#: criterion below.
+#:
+#: WHY THE CRITERION IS A RATIO AND NOT A TOLERANCE.  A skirt decays outward.
+#: A manufactured lobe does not: on the E-M6 fixture the field's GLOBAL
+#: maximum sits in the retained band.  So the test is
+#: ``max|E| in the band  >  _SUPPORT_BAND_PEAK_RATIO_TOL * max|E| inside the
+#: support`` -- scale-free, unit-free, and needing none of the 180-call
+#: calibration ``_RD_HALO_RADIUS_FACTOR`` needed, because at a ratio of 1.0 it
+#: asks only "does this field peak somewhere the rays never went?", which no
+#: correct field can answer yes to.
+#:
+#: IT INHERITS C7's DECLINATION and that is deliberate.  The check runs inside
+#: the same block as the halo check and behind the same grid-fit test, so on a
+#: grid whose extent is comparable to its own exit fan -- design 121's
+#: production readout leg -- it declines for the same measured reason C7 does
+#: (see SCOPE (d) at ``_RD_HALO_AMAX_TOL``): a statistic read on a sliver of
+#: corners is unreliable in BOTH directions.  Closing the blind spot on the
+#: readout leg needs a hull that fits the grid, which is a different problem.
+SUPPORT_BAND_CHECK = 'warn'
+#: Ratio of in-support peak amplitude above which the retained band is
+#: reported.  1.0 = "the global maximum may not sit outside the traced
+#: support".  Lower it to tighten (0.5 reports a band lobe at half the core
+#: peak); raise it above 1.0 only to silence a fixture you have adjudicated.
+_SUPPORT_BAND_PEAK_RATIO_TOL = 1.0
+
+
+class _TracedExitSupport(object):
+    """UNIT C: where the traced rays of THIS call actually landed.
+
+    Built ONCE, from the exact traced map, between the alive mask and the
+    fit-domain restriction -- the position both the C7 and the C8 blocks
+    independently chose, for two reasons their comments state almost verbatim:
+    the fit restriction NaNs samples that are still perfectly good optics (so
+    reading it later would understate the support and over-fire the check), and
+    this is the last point at which ``x_out_grid`` is the exact traced map
+    rather than anything the model fitted.
+
+    Three views, three rules, one set of conventions:
+
+    ==================  =========================================  ==========
+    view                rule                                       consumer
+    ==================  =========================================  ==========
+    ``centroid``/       amplitude-weighted centroid and max         C7 halo
+    ``radius``          radius over samples above the e^-N          check
+                        amplitude contour
+    ``hull``            convex hull of the alive STOP-PASSING       C8 bound
+                        landings, as half-planes ``(A, b)``         + C14 band
+    :meth:`half_planes` the same hull builder, on any point set     direct fit
+    ==================  =========================================  ==========
+
+    ``hull`` and the direct-fit path's own hull are built by the SAME
+    classmethod and evaluated by the SAME signed-distance rule; they differ
+    only in the point set they are given (the fit path hands it the
+    post-restriction samples, which is its documented behaviour and is not
+    changed here).
+    """
+
+    __slots__ = ('centroid', 'radius', 'hull', 'pitch', 'feather', 'n_hull',
+                 'hull_c', 'hull_rmax')
+
+    def __init__(self, centroid=None, radius=None, hull=None, pitch=None,
+                 feather=None, n_hull=0, hull_c=None, hull_rmax=None):
+        self.centroid = centroid
+        self.radius = radius
+        self.hull = hull            # (A, b) half-planes, or None
+        self.pitch = pitch
+        self.feather = feather
+        self.n_hull = int(n_hull)
+        # A point known to be INSIDE the hull, and a radius about it that
+        # CONTAINS the hull.  Only the band check uses these, and only to
+        # bound the work: see :meth:`retained_band_masks`.
+        self.hull_c = hull_c
+        self.hull_rmax = hull_rmax
+
+    # -- shared primitives ------------------------------------------------
+    @staticmethod
+    def half_planes(px, py, strict=False):
+        """Convex hull of scattered 2-D points as outward half-planes
+        ``(A, b)``, with ``A`` contiguous ``(2, F)`` and ``b`` ``(F,)``, or
+        ``None`` when the point set cannot support a hull.
+
+        ``strict=True`` lets the hull failure PROPAGATE instead of declining.
+        The two consumers genuinely differ and both are right: the C8 bound is
+        an optional containment, so a support it cannot measure means "do not
+        bound", while the direct-fit path's hull IS its output domain -- a
+        fit with no domain has nothing to return, and it has always raised.
+        Sharing the construction must not quietly convert one into the other.
+
+        Qhull normalises ``equations`` to UNIT outward normals, which is what
+        makes ``max_f (n_f . p + d_f)`` the exact signed distance to the
+        boundary for a point outside it (and ``<= 0`` inside).  Every consumer
+        of this class relies on that, so the unpacking lives here once.
+
+        A degenerate support (collinear / duplicated landings) has no hull;
+        this DECLINES rather than guessing -- a degenerate bound is exactly the
+        regime this must not invent an answer in.  The except tuple is NARROWED
+        to what this path can actually raise (the non-ui broad-except budget,
+        ``tests/unit/test_audit_except_budget.py``): ``ImportError`` when the
+        compiled ``scipy.spatial`` qhull extension is absent from a trimmed
+        install, ``RuntimeError`` because ``QhullError`` is a documented
+        ``RuntimeError`` subclass (named indirectly: ``scipy.spatial.QhullError``
+        is only public from scipy 1.8 and the floor here is 1.7), and
+        ``ValueError`` for the input rejections (non-finite / wrong ndim)
+        ConvexHull raises before qhull ever runs.
+        """
+        if strict:
+            from scipy.spatial import ConvexHull as _CH
+            _eq = _CH(np.column_stack([px, py])).equations
+        else:
+            try:
+                from scipy.spatial import ConvexHull as _CH
+                _eq = _CH(np.column_stack([px, py])).equations
+            except (ImportError, RuntimeError, ValueError):
+                return None
+        return (np.ascontiguousarray(_eq[:, :2].T),
+                np.ascontiguousarray(_eq[:, 2]))
+
+    @staticmethod
+    def signed_distance(A, b, Xg, Yg):
+        """``s = max_f (n_f . p + d_f)`` on arbitrary coordinate ARRAYS.
+
+        Chunked (pixels x facets) product: BLAS does the work, and the chunk
+        caps the temporary at ~160 MB however many facets the hull has and
+        however fine the lattice is.  A per-facet Python loop would be ~50x
+        slower on a large lattice."""
+        _sh = np.asarray(Xg).shape
+        _xg = np.asarray(Xg, dtype=np.float64).ravel()
+        _yg = np.asarray(Yg, dtype=np.float64).ravel()
+        _nf = int(b.size)
+        _s = np.empty(_xg.size, dtype=np.float64)
+        _cn = max(1, int(2e7 // max(_nf, 1)))
+        for _i in range(0, _xg.size, _cn):
+            _j = min(_i + _cn, _xg.size)
+            _s[_i:_j] = (np.column_stack([_xg[_i:_j], _yg[_i:_j]]) @ A
+                         + b).max(axis=1)
+        return _s.reshape(_sh)
+
+    # -- construction -----------------------------------------------------
+    @classmethod
+    def from_landings(cls, x_out_grid, y_out_grid, amp, xs_in, aperture,
+                      dx, sub, want_halo, want_bound):
+        """Build the support from the EXACT traced landings.
+
+        ``want_halo`` / ``want_bound`` gate the two expensive views
+        independently, so a call that has switched one of them off does exactly
+        the work it did before (the two blocks this replaces had separate
+        gates, and preserving that preserves both the bits and the runtime).
+
+        The one thing genuinely SHARED is the finiteness mask, which the two
+        blocks each computed for themselves."""
+        self = cls()
+        if not (want_halo or want_bound):
+            return self
+        alive = np.isfinite(x_out_grid) & np.isfinite(y_out_grid)
+
+        # ---- view 1: the C7 amplitude-weighted reporting radius ----------
+        if want_halo:
+            _h_ok = alive.copy()
+            _h_pk = float(np.max(amp)) if amp.size else 0.0
+            if _h_pk > 0.0:
+                _h_ok &= (amp >= np.exp(-_RD_HALO_AMP_CONTOUR) * _h_pk)
+            if _h_ok.any():
+                _h_w = amp[_h_ok].astype(np.float64) ** 2
+                _h_wt = float(_h_w.sum())
+                if _h_wt > 0.0:
+                    _h_x = x_out_grid[_h_ok]
+                    _h_y = y_out_grid[_h_ok]
+                    self.centroid = (float((_h_x * _h_w).sum() / _h_wt),
+                                     float((_h_y * _h_w).sum() / _h_wt))
+                    self.radius = float(np.sqrt(
+                        (_h_x - self.centroid[0]) ** 2
+                        + (_h_y - self.centroid[1]) ** 2).max())
+                    del _h_x, _h_y
+                del _h_w
+            del _h_ok
+
+        # ---- view 2: the C8 stop-passing convex hull ---------------------
+        if want_bound:
+            _sup_ok = alive.copy()
+            if aperture is not None:
+                # Only rays the ENTRANCE STOP passes carry energy, and the
+                # ray-density amplitude already masks on exactly that criterion
+                # (see ``_ray_density_amp_grid``).  Rays launched outside the
+                # stop (the launch square reaches 1.5x the aperture RADIUS)
+                # land further out but are blocked, so including them would
+                # inflate the support with territory no light can reach.
+                _sup_ok &= ((xs_in[:, None] ** 2 + xs_in[None, :] ** 2)
+                            <= (0.5 * aperture) ** 2)
+            if int(_sup_ok.sum()) >= 3:
+                _px = x_out_grid[_sup_ok]
+                _py = y_out_grid[_sup_ok]
+                _hp = cls.half_planes(_px, _py)
+                if _hp is not None:
+                    # Geometry for the band check's work bound ONLY -- it can
+                    # move no bit of the bound or the taper.  ``hull_c`` is the
+                    # mean landing (inside a convex hull of the same points by
+                    # construction) and ``hull_rmax`` contains every one of
+                    # them about it.
+                    self.hull_c = (float(_px.mean()), float(_py.mean()))
+                    self.hull_rmax = float(np.sqrt(
+                        (_px - self.hull_c[0]) ** 2
+                        + (_py - self.hull_c[1]) ** 2).max())
+                    # The feather is measured in EXIT-LATTICE cells, taken from
+                    # the traced samples themselves rather than from a paraxial
+                    # magnification: the exit spacing of entrance-adjacent rays
+                    # IS the resolution at which the support is known.  (The
+                    # separate, non-negotiable allowance for the bilinear
+                    # upsample's reach is the PLATEAU, :meth:`taper`.)
+                    with np.errstate(invalid='ignore'):
+                        _sup_step = np.hypot(np.diff(x_out_grid, axis=0),
+                                             np.diff(y_out_grid, axis=0))
+                    _sup_step = _sup_step[np.isfinite(_sup_step)]
+                    _sup_pitch = (float(np.median(_sup_step))
+                                  if _sup_step.size else float(dx * sub))
+                    if not (np.isfinite(_sup_pitch) and _sup_pitch > 0.0):
+                        _sup_pitch = float(dx * sub)
+                    self.hull = _hp
+                    self.pitch = _sup_pitch
+                    self.feather = (float(_SUPPORT_BOUND_FEATHER_CELLS)
+                                    * _sup_pitch)
+                    self.n_hull = int(_hp[1].size)
+                    del _sup_step
+                del _px, _py
+            del _sup_ok
+        return self
+
+    # -- views ------------------------------------------------------------
+    @property
+    def bound(self):
+        """C8's ``(A, b, feather)`` triple, or ``None`` -- the exact tuple the
+        pre-C14 ``_sup_bound`` local carried, so every consumer's truth test
+        and unpacking are unchanged."""
+        if self.hull is None:
+            return None
+        return (self.hull[0], self.hull[1], self.feather)
+
+    def taper(self, Xg, Yg, plateau):
+        """niche C8: 1 inside the traced exit support, 0 beyond it, raised
+        cosine across a feather band of ``_SUPPORT_BOUND_FEATHER_CELLS``
+        exit-lattice cells outside the boundary.
+
+        THE PLATEAU ``plateau`` IS NOT TASTE, IT IS THE UPSAMPLE.  This taper
+        is evaluated on the COARSE Newton lattice (pitch ``sub * dx`` in the
+        exit plane) and the amplitude is then bilinearly interpolated to the
+        wave grid, so a coarse node OUTSIDE the hull lends its attenuation to
+        wave pixels up to one coarse cell INSIDE it.  ``s`` is 1-Lipschitz, so
+        a pixel with ``s <= 0`` interpolates only from nodes with
+        ``s <= sqrt(2) * sub * dx``; holding the taper at exactly 1 out to
+        there makes the bleed identically zero rather than merely small.
+        MEASURED on niche D6's decentred fixture -- power removed from INSIDE
+        the bound's own support, over the chain input power:
+
+          feather (cells)     0.0        0.5        1.0        2.0        4.0
+          without the plateau 2.211e-04  8.194e-05  3.808e-05  1.207e-05  3.2e-06
+          with it             0          0          0          0          0
+
+        i.e. 1.1 % of what the bound removes on that fixture was legitimate
+        skirt lost to interpolation, and it is now exactly none.  The cost is
+        that the bound sits ``sqrt(2) sub dx`` further out (188 um on design
+        121's last group, 3 % of its 6.3 mm hull), which is measured not to
+        readmit any of the manufactured lobe there -- and it is that same
+        deliberately-retained band the niche-C14 check now watches, because
+        nothing watched it before (see ``SUPPORT_BAND_CHECK``).
+        """
+        _A, _b, _f = self.bound
+        _s = self.signed_distance(_A, _b, Xg, Yg) - float(plateau)
+        if _f <= 0.0:
+            return (_s <= 0.0).astype(np.float64)
+        return np.where(_s <= 0.0, 1.0,
+                        np.where(_s >= _f, 0.0,
+                                 0.5 * (1.0 + np.cos(np.pi * _s
+                                                     / max(_f, 1e-300)))))
+
+    def retained_band_masks(self, xg, yg, plateau):
+        """``(inside, band)`` boolean masks on the wave grid's outer product.
+
+        ``inside`` is the traced support (``s <= 0``); ``band`` is the annulus
+        C8 RETAINS outside it (``0 < s <= plateau + feather``), which is
+        precisely the region no traced ray reached and the bound does not cut.
+        Returns ``(None, None)`` when there is no hull to measure against.
+
+        THE WORK IS BOUNDED EXACTLY, not approximately.  The half-plane
+        reduction is ``O(pixels x facets)`` and this runs on the WAVE grid, so
+        a naive evaluation would put a ~30x BLAS pass on every ray-density
+        call for a diagnostic.  Two radial screens cut it to a thin annulus
+        without changing a single verdict, because both are strict:
+
+        * every pixel closer to ``hull_c`` than ``r_in`` -- the distance from
+          that interior point to its NEAREST facet -- is strictly inside the
+          hull, so ``s < 0`` there and it can only be ``inside``;
+        * the hull lies inside the disc of radius ``hull_rmax`` about
+          ``hull_c``, and the signed distance to a convex set contained in
+          that disc is at least ``|p - c| - hull_rmax``; so every pixel beyond
+          ``hull_rmax + w`` has ``s > w`` and can be in NEITHER mask.
+
+        Only the ring between them is handed to the exact test.  On a
+        near-circular exit hull that ring is a few per cent of the grid; on a
+        strongly elongated one it degrades gracefully to the full disc, which
+        is what the naive version would have cost anyway."""
+        if self.hull is None:
+            return None, None
+        A, b = self.hull
+        w = float(plateau) + float(self.feather or 0.0)
+        inside = np.zeros((int(yg.size), int(xg.size)), dtype=bool)
+        band = np.zeros_like(inside)
+        if self.hull_c is None or self.hull_rmax is None:  # pragma: no cover
+            # Only reachable on a hand-built object; ``from_landings`` sets
+            # both whenever it sets ``hull``.  Decline rather than measure a
+            # band whose work cannot be bounded.
+            return None, None
+        cx, cy = self.hull_c
+        # Distance from the interior point to the nearest facet: the hull's
+        # own inradius about ``hull_c`` (negated because ``s`` is <= 0 inside).
+        r_in = -float((np.asarray(A[0]) * cx + np.asarray(A[1]) * cy
+                       + np.asarray(b)).max())
+        r2 = ((np.asarray(xg, dtype=np.float64)[None, :] - cx) ** 2
+              + (np.asarray(yg, dtype=np.float64)[:, None] - cy) ** 2)
+        r_out = float(self.hull_rmax) + w
+        if r_in > 0.0:
+            inside |= (r2 < r_in * r_in)
+        ring = (~inside) & (r2 <= r_out * r_out)
+        del r2
+        if ring.any():
+            iy, ix = np.nonzero(ring)
+            s = self.signed_distance(A, b,
+                                     np.asarray(xg, dtype=np.float64)[ix],
+                                     np.asarray(yg, dtype=np.float64)[iy])
+            inside[iy, ix] = (s <= 0.0)
+            band[iy, ix] = (s > 0.0) & (s <= w)
+        return inside, band
 
 
 class _ResidualEikonal(object):
@@ -5241,7 +6380,9 @@ def apply_real_lens_traced(
     _dec_null_floor = _DECENTRE_GATE_PIXELS * min(float(dx), float(dy))
     _beam_decentred = _dec_mag > _dec_null_floor
     _beam_fit_radius = None
+    _beam_fit_radius_conc = None
     _w_in_beam = 0.0
+    _w_in_origin = 0.0
     if _frbf is not None or (on_aperture_beam == 'warn' and aperture is not None):
         _w_in_beam = _input_beam_amp_radius(
             E_in, dx, dy, centre=((_bcx, _bcy) if _beam_decentred else None))
@@ -5253,8 +6394,19 @@ def apply_real_lens_traced(
             # makes the fall-back byte-identical rather than merely close.
             _beam_decentred = False
             _w_in_beam = _input_beam_amp_radius(E_in, dx, dy, centre=None)
+        elif (_beam_decentred and _frbf is not None
+                and (DECENTRED_FIT_ARBITER or DECENTRED_FIT_PREDICTOR)
+                and newton_fit != 'spline'):
+            # niche C11: the arbiter below scores the HISTORICAL concentric
+            # candidate too, and that disc is sized from the ORIGIN-referenced
+            # second moment -- the same number the fall-back above re-measures.
+            # Taken ONLY when the arbiter can actually run, so nothing below
+            # the C1 gate does any extra work.
+            _w_in_origin = _input_beam_amp_radius(E_in, dx, dy, centre=None)
     if _frbf is not None and _w_in_beam > 0.0:
         _beam_fit_radius = min(_frbf * _w_in_beam, launch_radius)
+    if _frbf is not None and _w_in_origin > 0.0:
+        _beam_fit_radius_conc = min(_frbf * _w_in_origin, launch_radius)
     if (on_aperture_beam == 'warn' and aperture is not None
             and _w_in_beam > 0.0 and _beam_fit_radius is None):
         _ap_beam_ratio = float(aperture) / (2.0 * _w_in_beam)
@@ -5287,6 +6439,13 @@ def apply_real_lens_traced(
     if _beam_fit_radius is not None:
         _fit_r_max = (_beam_fit_radius if _fit_r_max is None
                       else min(_fit_r_max, _beam_fit_radius))
+    # niche C11: and the same resolution for the CONCENTRIC candidate, whose
+    # radius comes from the origin-referenced moment.  ``None`` whenever the
+    # arbiter is not going to run (see the gate site above).
+    _fit_r_max_conc = None
+    if _beam_fit_radius_conc is not None:
+        _fit_r_max_conc = (_beam_fit_radius_conc if _fit_r_geom is None
+                           else min(_fit_r_geom, _beam_fit_radius_conc))
     # ... and its radius measured about the BEAM, which is what the freeze
     # circle has to clear.  Off centre the disc IS beam-centred with radius
     # ``_beam_fit_radius`` (the geometric intersection below only trims the
@@ -5683,13 +6842,22 @@ def apply_real_lens_traced(
     i_axis = n_launch // 2
     opl_grid = opl_grid - opl_grid[i_axis, i_axis]
 
-    # ---- v5.32: the EXACT-RAY EXIT SUPPORT for the halo self-check ---------
+    # ---- UNIT C (niche C14): the traced exit support, built ONCE ----------
     # Taken HERE, between the alive mask and the fit-domain restriction below,
     # for two reasons: the fit restriction NaNs out samples that are still
     # perfectly good optics (so reading it after would understate the hull and
     # over-fire the check), and this is the last point at which ``x_out_grid``
     # is the exact traced map rather than anything the model fitted.  Cost is
-    # two reductions over the coarse lattice.  See ``_RD_HALO_AMAX_TOL``.
+    # two reductions over the coarse lattice plus one hull.
+    #
+    # This ONE construction replaces the two blocks that used to stand here --
+    # the v5.32 halo hull (C7) and the niche-C8 support bound -- which read the
+    # same arrays, at the same point, through two separately-maintained copies
+    # of the same finiteness mask and the same convex-hull algebra.  Each view
+    # keeps its own rule and its own gate, so the work done and the bits
+    # produced are unchanged; see ``_TracedExitSupport`` for why the rules are
+    # deliberately NOT merged, and ``SUPPORT_BAND_CHECK`` for the blind spot
+    # that having one object made statable.
     #
     # ``_amp`` is the input amplitude sampled at the launch nodes and is
     # already in the launch grid's (x, y) x-major layout -- the SAME layout
@@ -5697,85 +6865,24 @@ def apply_real_lens_traced(
     # transpose note at ``_amp``).  Pairing it with the wrong one would weight
     # each ray by its transpose's amplitude, which is invisible on a
     # rotationally symmetric beam and wrong on every other.
-    _rd_hull_r = None
-    _rd_hull_c = None
-    if _ray_density and RAY_DENSITY_HALO_CHECK != 'silent':
-        _h_ok = np.isfinite(x_out_grid) & np.isfinite(y_out_grid)
-        _h_pk = float(np.max(_amp)) if _amp.size else 0.0
-        if _h_pk > 0.0:
-            _h_ok &= (_amp >= np.exp(-_RD_HALO_AMP_CONTOUR) * _h_pk)
-        if _h_ok.any():
-            _h_w = _amp[_h_ok].astype(np.float64) ** 2
-            _h_wt = float(_h_w.sum())
-            if _h_wt > 0.0:
-                _h_x = x_out_grid[_h_ok]
-                _h_y = y_out_grid[_h_ok]
-                _rd_hull_c = (float((_h_x * _h_w).sum() / _h_wt),
-                              float((_h_y * _h_w).sum() / _h_wt))
-                _rd_hull_r = float(np.sqrt(
-                    (_h_x - _rd_hull_c[0]) ** 2
-                    + (_h_y - _rd_hull_c[1]) ** 2).max())
-                del _h_x, _h_y
-            del _h_w
-        del _h_ok
-
-    # ---- niche C8: the EXIT-SUPPORT BOUND on the Newton inverse -----------
-    # Built HERE, from the same exact traced map the halo hull above reads and
-    # BEFORE the fit-domain restriction, for the same two reasons: these are
-    # the positions the rays actually reached, and nothing the model fitted has
-    # touched them yet.  See ``REMAP_INVERSE_SUPPORT_BOUND``.
-    _sup_bound = None
-    if REMAP_INVERSE_SUPPORT_BOUND and _ray_density:
-        _sup_ok = np.isfinite(x_out_grid) & np.isfinite(y_out_grid)
-        if aperture is not None:
-            # Only rays the ENTRANCE STOP passes carry energy, and the
-            # ray-density amplitude already masks on exactly that criterion
-            # (see ``_ray_density_amp_grid``).  Rays launched outside the stop
-            # (the launch square reaches 1.5x the aperture RADIUS) land
-            # further out but are blocked, so including them would inflate the
-            # support with territory no light can reach.
-            _sup_ok &= ((xs_in[:, None] ** 2 + xs_in[None, :] ** 2)
-                        <= (0.5 * aperture) ** 2)
-        if int(_sup_ok.sum()) >= 3:
-            try:
-                from scipy.spatial import ConvexHull as _CH8
-                _sup_eq = _CH8(np.column_stack(
-                    [x_out_grid[_sup_ok], y_out_grid[_sup_ok]])).equations
-            except (ImportError, RuntimeError, ValueError):
-                # A degenerate support (collinear / duplicated landings) has
-                # no hull; decline rather than guess -- a degenerate bound is
-                # exactly the regime this must not invent an answer in.
-                # NARROWED to the tuple this path can actually raise (the
-                # non-ui broad-except budget, tests/unit/
-                # test_audit_except_budget.py): ``ImportError`` when the
-                # compiled ``scipy.spatial`` qhull extension is absent from a
-                # trimmed install, ``RuntimeError`` because ``QhullError`` is
-                # a documented ``RuntimeError`` subclass (named indirectly:
-                # ``scipy.spatial.QhullError`` is only public from scipy 1.8
-                # and the floor here is 1.7), and ``ValueError`` for the
-                # input rejections (non-finite / wrong ndim) ConvexHull
-                # raises before qhull ever runs.
-                _sup_eq = None
-            if _sup_eq is not None:
-                # The feather is measured in EXIT-LATTICE cells, taken from
-                # the traced samples themselves rather than from a paraxial
-                # magnification: the exit spacing of entrance-adjacent rays IS
-                # the resolution at which the support is known.  (The
-                # separate, non-negotiable allowance for the bilinear
-                # upsample's reach is ``_d0`` in :func:`_support_taper`.)
-                with np.errstate(invalid='ignore'):
-                    _sup_step = np.hypot(np.diff(x_out_grid, axis=0),
-                                         np.diff(y_out_grid, axis=0))
-                _sup_step = _sup_step[np.isfinite(_sup_step)]
-                _sup_pitch = (float(np.median(_sup_step))
-                              if _sup_step.size else float(dx * sub))
-                if not (np.isfinite(_sup_pitch) and _sup_pitch > 0.0):
-                    _sup_pitch = float(dx * sub)
-                _sup_bound = (np.ascontiguousarray(_sup_eq[:, :2].T),
-                              np.ascontiguousarray(_sup_eq[:, 2]),
-                              float(_SUPPORT_BOUND_FEATHER_CELLS) * _sup_pitch)
-                del _sup_step
-        del _sup_ok
+    _exit_support = _TracedExitSupport.from_landings(
+        x_out_grid, y_out_grid, _amp, xs_in, aperture, dx, sub,
+        want_halo=bool(_ray_density and RAY_DENSITY_HALO_CHECK != 'silent'),
+        want_bound=bool(REMAP_INVERSE_SUPPORT_BOUND and _ray_density))
+    # NOTE the two gates are the pre-C14 ones, unchanged and still separate.
+    # In particular ``want_halo`` is NOT widened to cover the band check: the
+    # band the C14 check watches is C8's RETAINED band, so it needs the HULL
+    # (the ``want_bound`` view) and not the amplitude-weighted reporting
+    # radius.  Widening ``want_halo`` would make ``_rd_hull_r`` non-None under
+    # ``RAY_DENSITY_HALO_CHECK = 'silent'`` and the C7 warning would fire from
+    # a policy that says it must not -- which is what
+    # ``test_policy_silent_suppresses`` exists to catch.
+    # The three pre-C14 locals, kept by name so every consumer below -- the
+    # taper closure, ``_ray_density_amp_grid``'s capture, and the halo report
+    # -- reads exactly what it read before.
+    _rd_hull_r = _exit_support.radius
+    _rd_hull_c = _exit_support.centroid
+    _sup_bound = _exit_support.bound
 
     # R7 / audit F2 (2026-07-21): CARRIER-GATED fit-domain restriction.  When a
     # carrier is set, drop the entrance launch grid's outer margin + corners
@@ -5830,7 +6937,8 @@ def apply_real_lens_traced(
     if _fit_r_max is not None and newton_fit != 'spline':
         _r2_launch = xs_in[:, None] ** 2 + xs_in[None, :] ** 2
         _fit_why = f"r <= {_fit_r_max * 1e3:.4f} mm"
-        if _beam_fit_radius is not None and _beam_decentred:
+        _off_branch = (_beam_fit_radius is not None and _beam_decentred)
+        if _off_branch:
             # launch grid is indexing='ij': axis 0 is X, axis 1 is Y (see the
             # ``np.meshgrid(..., indexing='ij')`` note at the launch site).
             _fit_disc = (((xs_in[:, None] - _bcx) ** 2
@@ -5857,45 +6965,151 @@ def apply_real_lens_traced(
         # ``REMAP_STATIONARY_PHASE_FIT_GUARD`` for the measurements.
         _c6_fit_guard = (_resid_eik is not None
                          and REMAP_STATIONARY_PHASE_FIT_GUARD)
+        # ---- niche C11: ARBITRATE the branch instead of predicting it ----
+        # The rays are already traced, so both candidates can be built and
+        # scored against the traced OPL before either is used.  Engaged only
+        # ABOVE the C1 null gate (``_off_branch``), so every byte-identity
+        # contract below that gate is untouched.  See
+        # :data:`DECENTRED_FIT_ARBITER`.
+        if ((DECENTRED_FIT_ARBITER or DECENTRED_FIT_PREDICTOR)
+                and _off_branch
+                and _fit_r_max_conc is not None
+                and _w_in_beam > 0.0):
+            _disc_c = _r2_launch <= _fit_r_max_conc ** 2
+            if (int(_disc_c.sum()) >= _CARRIER_FIT_MIN_SAMPLES
+                    and int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES):
+                _wgt = _decentred_fit_score_weight(
+                    xs_in, _bcx, _bcy, _w_in_beam)
+                _use_w = _FIT_DISC_OUTSIDE_WEIGHT_REL > 0.0
+                _wo, _oo = _decentred_fit_restriction(
+                    _fit_disc, _use_w, newton_poly_order, _dec_order)
+                _wc, _oc = _decentred_fit_restriction(
+                    _disc_c, _use_w and _c6_fit_guard, newton_poly_order,
+                    _dec_order)
+                _s_off = _decentred_fit_score(
+                    xs_in, opl_grid, _wgt, _fit_disc, _wo, _oo)
+                _s_conc = _decentred_fit_score(
+                    xs_in, opl_grid, _wgt, _disc_c, _wc, _oc)
+                # niche C11's verdict: smaller residual wins, an exact tie --
+                # including two unscoreable candidates -- keeps the historical
+                # branch.  Computed either way, because with the C12 predictor
+                # engaged it is the runtime CHECK.
+                _keep_conc = bool(_s_conc <= _s_off)
+                _why_tag = 'C11 arbiter'
+                # ---- niche C12: the PHYSICS PREDICTOR decides ---------------
+                # ``u <= u*``, with ``u*`` the closed-form crossover of the
+                # lens's own spectral tail under the disc-inflation law.  The
+                # spectral half is used only where it is RESOLVED -- what the
+                # order-``q`` box fit leaves over must be small against the
+                # residuals it would have to rank.  See
+                # :data:`DECENTRED_FIT_PREDICTOR`.
+                if DECENTRED_FIT_PREDICTOR:
+                    _u_dec = (float(_dec_mag / _w_in_beam)
+                              if _w_in_beam > 0.0 else float('nan'))
+                    _R_box = 0.5 * float(xs_in[-1] - xs_in[0])
+                    _sigma = ((float(_beam_fit_radius) / _R_box)
+                              if _R_box > 0.0 else 0.0)
+                    _q = int(_DECENTRED_FIT_SPECTRUM_ORDER)
+                    _S = None
+                    _sp_resid = float('inf')
+                    _tails = {}
+                    if _q > int(_oo):
+                        _S, _tails, _sp_resid = _decentred_fit_spectrum(
+                            xs_in, opl_grid, _q, (int(_oc), int(_oo)),
+                            weight=_wgt)
+                    _m_eff = _decentred_fit_spectral_moment(
+                        _S, int(_oc), _sigma)
+                    # The spectral (model-only) pair, and whether it is usable.
+                    # RESOLUTION TEST.  The surrogate differs from the traced
+                    # map by whatever lies beyond degree ``q``, and the model's
+                    # error is exactly what a degree-``oc`` fit over the
+                    # concentric disc CANNOT absorb of that difference --
+                    # ``(I - Pi)(W - W_q) == (I - Pi)(W - tails[oc])``, one
+                    # more score of the same kind.  The model is used only
+                    # while that gap is below the residuals it would rank; on
+                    # design 121 it never is (S3.4 of the C12 audit), so the
+                    # predictor falls back to the MEASURED pair there.
+                    _m_conc, _m_off = _s_conc, _s_off
+                    _resolved = False
+                    if _tails:
+                        _t_conc = _decentred_fit_score(
+                            xs_in, _tails[int(_oc)], _wgt, _disc_c, _wc, _oc)
+                        _t_off = _decentred_fit_score(
+                            xs_in, _tails[int(_oo)], _wgt, _fit_disc, _wo, _oo)
+                        _sp_gap = _decentred_fit_score(
+                            xs_in, opl_grid - _tails[int(_oc)], _wgt,
+                            _disc_c, _wc, _oc)
+                        _resolved = bool(np.isfinite(_sp_gap)
+                                         and np.isfinite(_sp_resid)
+                                         and _sp_gap <= min(_t_conc, _t_off))
+                        if _resolved:
+                            _m_conc, _m_off = _t_conc, _t_off
+                    _u_star = _decentred_fit_crossover(
+                        _u_dec, _m_conc, _m_off, _m_eff)
+                    if np.isnan(_u_star):
+                        _pred_conc = _keep_conc      # no prediction available
+                    else:
+                        _pred_conc = bool(_u_dec <= _u_star)
+                    _why_tag = (f"C12 predictor: u = {_u_dec:.4f} against "
+                                f"u* = {_u_star:.4f} (m_eff {_m_eff:.2f}, "
+                                f"spectrum "
+                                f"{'resolved' if _resolved else 'UNRESOLVED'})"
+                                f"; C11 arbiter")
+                    if _pred_conc != _keep_conc:
+                        import warnings
+                        warnings.warn(
+                            f"apply_real_lens_traced: the niche-C12 ray-fit "
+                            f"PREDICTOR and the niche-C11 ARBITER disagree on "
+                            f"this call.  The predictor selects the "
+                            f"{'CONCENTRIC' if _pred_conc else 'OFF-CENTRE'} "
+                            f"branch from |c|/w = {_u_dec:.4f} against a "
+                            f"crossover u* = {_u_star:.4f} (spectral exponent "
+                            f"m_eff = {_m_eff:.3f}, spectrum "
+                            f"{'resolved' if _resolved else 'UNRESOLVED'} at "
+                            f"order {_q}, box-fit residual {_sp_resid:.3e} m, "
+                            f"modelled OPL residuals {_m_conc:.3e} m "
+                            f"concentric / {_m_off:.3e} m off-centre); the "
+                            f"arbiter's own measured residuals are "
+                            f"{_s_conc:.3e} m concentric / {_s_off:.3e} m "
+                            f"off-centre and select the "
+                            f"{'CONCENTRIC' if _keep_conc else 'OFF-CENTRE'} "
+                            f"one.  The PREDICTOR's choice is applied.  See "
+                            f"DECENTRED_FIT_PREDICTOR; set it False to fall "
+                            f"back to the arbiter, or also "
+                            f"DECENTRED_FIT_ARBITER False for the v5.32 gate.",
+                            RuntimeWarning, stacklevel=2)
+                    _keep_conc = _pred_conc
+                if _keep_conc:
+                    # the historical disc reproduces the traced map better
+                    # where the light is -- take it, and with it the radius
+                    # and restriction that were scored
+                    _off_branch = False
+                    _fit_disc = _disc_c
+                    _fit_r_max = _fit_r_max_conc
+                    _fit_why = (f"r <= {_fit_r_max_conc * 1e3:.4f} mm "
+                                f"({_why_tag}: OPL residual "
+                                f"{_s_conc:.3e} m concentric against "
+                                f"{_s_off:.3e} m off-centre)")
+                else:
+                    _fit_why += (f" ({_why_tag}: OPL residual {_s_off:.3e} m "
+                                 f"off-centre against {_s_conc:.3e} m "
+                                 f"concentric)")
         if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
             if (_beam_fit_radius is not None
-                    and (_beam_decentred or _c6_fit_guard)
+                    and (_off_branch or _c6_fit_guard)
                     and _FIT_DISC_OUTSIDE_WEIGHT_REL > 0.0):
                 # D1: OFF-CENTRE disc (or, opt-in, a C6-engaged concentric one)
                 # -- regularised restriction.  Keep every traced
                 # sample (so the paraxial-magnification stencil, the
                 # process-pool knot data and the direct-fit exit hull all stay
                 # intact) and down-weight the out-of-disc ones to a fixed
-                # fraction of the in-disc Gram contribution.
-                _n_in = int(_fit_disc.sum())
-                _n_out = int(_fit_disc.size) - _n_in
-                _w_out = (float(np.sqrt(_FIT_DISC_OUTSIDE_WEIGHT_REL
-                                        * _n_in / _n_out))
-                          if _n_out > 0 else 1.0)
-                _fit_weights = np.where(_fit_disc, 1.0, _w_out)
-                # D7: and give that off-centre fit the terms its region needs
-                # -- but never more terms than the disc can constrain.  The
-                # out-of-disc samples carry ~1e-4 of the weight, so the
-                # IN-DISC count is what determines the fit; require 3 samples
-                # per basis term (order 10 -> 66 terms -> 198 samples) and
-                # step the order down until that holds.  Without this the
-                # raise could hand an order-10 fit as few as
-                # ``_CARRIER_FIT_MIN_SAMPLES`` = 64 effective rows for 66
-                # unknowns -- an under-determined normal matrix.
-                #
-                # This cap is SILENT and it can zero the raise out entirely:
-                # the disc holds ~pi (frbf w / (dx rs))^2 samples, so order 10
-                # survives only while frbf*w/(dx*rs) >~ 7.9 coarse pixels.  At
-                # the DEFAULT ray_subsample=8 both documented configs clear it
-                # (223 samples for the synthetic f/6 example, 1735 for design
-                # 121's last group, against 198) -- but the first clears by
-                # only 1.13x and reverts to order 6 at ray_subsample=16, and
-                # design 121 reverts at 32.  See ``decentred_fit_poly_order``.
-                while (_dec_order > _fit_poly_order
-                       and (_dec_order + 1) * (_dec_order + 2) * 3 // 2
-                       > _n_in):
-                    _dec_order -= 1
-                _fit_poly_order = max(_fit_poly_order, _dec_order)
+                # fraction of the in-disc Gram contribution; and (D7) give that
+                # fit the terms its region needs, with the sample-count
+                # step-down that keeps it determined.  Both live in
+                # ``_decentred_fit_restriction`` so the niche-C11 arbiter above
+                # scores exactly what is applied here.
+                _fit_weights, _fit_poly_order = _decentred_fit_restriction(
+                    _fit_disc, True, newton_poly_order, _dec_order)
             else:
                 x_out_grid = np.where(_fit_disc, x_out_grid, np.nan)
                 y_out_grid = np.where(_fit_disc, y_out_grid, np.nan)
@@ -5915,7 +7129,7 @@ def apply_real_lens_traced(
                 f"raise fit_radius_beam_factor"
                 + (f" (the beam is {np.hypot(_bcx, _bcy) * 1e3:.4f} mm off "
                    f"the grid centre, so the disc that must hold it sits off "
-                   f"axis too)" if _beam_decentred else "") + ".",
+                   f"axis too)" if _off_branch else "") + ".",
                 RuntimeWarning, stacklevel=2)
 
     # T-P2 (audit perf): optional DIRECT inverse-map fit.  Instead of Newton-
@@ -5932,7 +7146,6 @@ def apply_real_lens_traced(
     _use_fit = (inversion_method == 'fit')
     if _use_fit:
         from numpy.polynomial.chebyshev import chebvander as _chebvander
-        from scipy.spatial import ConvexHull as _ConvexHull
         # D7: the direct inverse-map fit reads the SAME off-centre samples
         # through the SAME weights, so it takes the SAME raised order.
         _fo = int(_fit_poly_order)
@@ -5971,9 +7184,19 @@ def apply_real_lens_traced(
         # every facet), far cheaper than a Delaunay simplex search over the
         # full output grid.  A lens exit region is convex (a disc), so the
         # hull is the exact coverage boundary.
-        _heq = _ConvexHull(np.column_stack([_xo_s, _yo_s])).equations  # (F,3)
-        _hA = np.ascontiguousarray(_heq[:, :2].T)   # (2, F)
-        _hb = _heq[:, 2]
+        #
+        # UNIT C (niche C14): this is the THIRD notion of the traced exit
+        # support, and the C8 audit's own sentence is that it is the same idea
+        # as the second -- "This bound gives the Newton path the containment
+        # the direct-fit path has had all along."  It now shares C8's hull
+        # BUILDER and its signed-distance RULE, so the two cannot drift in
+        # their conventions.  What it does NOT share is the POINT SET: this
+        # path hulls the post-restriction samples ``(_xo_s, _yo_s)``, which is
+        # its documented, long-standing behaviour and is deliberately
+        # unchanged -- unifying the point sets would be a behaviour change, not
+        # a refactor.  ``strict=True`` keeps the historical "a fit with no
+        # domain raises" contract, with the original qhull exception.
+        _hA, _hb = _TracedExitSupport.half_planes(_xo_s, _yo_s, strict=True)
 
         def _invert_fit(Xw, Yw):
             _sh = np.asarray(Xw).shape
@@ -5981,8 +7204,8 @@ def apply_real_lens_traced(
             yw = np.asarray(Yw).ravel()
             val = _fit_design((xw - _fx_c) / _fx_h,
                               (yw - _fy_c) / _fy_h) @ _fit_coef
-            pts = np.column_stack([xw, yw])
-            inside = np.all(pts @ _hA + _hb <= 1e-12, axis=1)
+            inside = _TracedExitSupport.signed_distance(
+                _hA, _hb, xw, yw) <= 1e-12
             return np.where(inside, val, np.nan).reshape(_sh)
 
     # ----- OPTION B: RectBivariateSpline + Newton-inversion of the
@@ -6456,58 +7679,17 @@ def apply_real_lens_traced(
         return opl_flat.reshape(Xw.shape)
 
     def _support_taper(Xg, Yg):
-        """niche C8: 1 inside the traced exit support, 0 beyond it, raised
-        cosine across a feather band of ``_SUPPORT_BOUND_FEATHER_CELLS``
-        exit-lattice cells outside the boundary.
+        """niche C8's exit-support taper on the coarse Newton lattice.
 
-        ``s = max_f (n_f . p + d_f)`` over the hull's facets is the exact
-        signed distance to a convex boundary for a point outside it (Qhull
-        normalises ``equations`` to unit outward normals), and is <= 0 inside.
-
-        THE PLATEAU ``_d0`` IS NOT TASTE, IT IS THE UPSAMPLE.  This taper is
-        evaluated on the COARSE Newton lattice (pitch ``sub * dx`` in the exit
-        plane) and the amplitude is then bilinearly interpolated to the wave
-        grid, so a coarse node OUTSIDE the hull lends its attenuation to wave
-        pixels up to one coarse cell INSIDE it.  ``s`` is 1-Lipschitz, so a
-        pixel with ``s <= 0`` interpolates only from nodes with
-        ``s <= sqrt(2) * sub * dx``; holding the taper at exactly 1 out to
-        there makes the bleed identically zero rather than merely small.
-        MEASURED on niche D6's decentred fixture -- power removed from INSIDE
-        the bound's own support, over the chain input power:
-
-          feather (cells)     0.0        0.5        1.0        2.0        4.0
-          without the plateau 2.211e-04  8.194e-05  3.808e-05  1.207e-05  3.2e-06
-          with it             0          0          0          0          0
-
-        i.e. 1.1 % of what the bound removes on that fixture was legitimate
-        skirt lost to interpolation, and it is now exactly none.  The cost is
-        that the bound sits ``sqrt(2) sub dx`` further out (188 um on design
-        121's last group, 3 % of its 6.3 mm hull), which is measured not to
-        readmit any of the manufactured lobe there.
-        """
-        _A, _b, _f = _sup_bound
-        _d0 = float(np.sqrt(2.0) * sub * dx)
-        _sh = np.asarray(Xg).shape
-        _xg = np.asarray(Xg, dtype=np.float64).ravel()
-        _yg = np.asarray(Yg, dtype=np.float64).ravel()
-        _nf = int(_b.size)
-        _s = np.empty(_xg.size, dtype=np.float64)
-        # Chunked (pixels x facets) product: BLAS does the work, and the chunk
-        # caps the temporary at ~160 MB however many facets the hull has and
-        # however fine the Newton lattice is.  A per-facet Python loop would
-        # be ~50x slower on a large lattice.
-        _cn = max(1, int(2e7 // max(_nf, 1)))
-        for _i in range(0, _xg.size, _cn):
-            _j = min(_i + _cn, _xg.size)
-            _s[_i:_j] = (np.column_stack([_xg[_i:_j], _yg[_i:_j]]) @ _A
-                         + _b).max(axis=1)
-        _s = _s.reshape(_sh) - _d0
-        if _f <= 0.0:
-            return (_s <= 0.0).astype(np.float64)
-        return np.where(_s <= 0.0, 1.0,
-                        np.where(_s >= _f, 0.0,
-                                 0.5 * (1.0 + np.cos(np.pi * _s
-                                                     / max(_f, 1e-300)))))
+        The rule, the plateau and the whole measurement record now live on
+        :meth:`_TracedExitSupport.taper` -- this closure is the call site's
+        binding of the PLATEAU, which is the one quantity the object cannot
+        know: ``sqrt(2) * sub * dx`` is a property of the lattice this call
+        will interpolate FROM, not of the support.  Keeping the plateau here
+        and the taper there is what lets the same support object serve the
+        coarse-lattice taper and the wave-grid band check without either one
+        guessing the other's sampling."""
+        return _exit_support.taper(Xg, Yg, np.sqrt(2.0) * sub * dx)
 
     def _ray_density_amp_grid(Xg, Yg):
         """N12 (P11): geometric ray-density exit amplitude ``|E_in(x_in)| /
@@ -7177,6 +8359,70 @@ def apply_real_lens_traced(
                             RuntimeWarning, stacklevel=2)
                 del _h_abs
             del _h_far
+        # ---- niche C14: the RETAINED-BAND self-check --------------------
+        # The blind spot between the two checks above, closed.  C8 keeps a
+        # band outside the traced hull ON PURPOSE (the sqrt(2) sub dx plateau
+        # that makes the upsample's bleed identically zero, plus the feather),
+        # and C7 looks only beyond 1.25 x r_hull -- which under the bound is
+        # territory C8 has already zeroed.  So on the E-M6 fixture 0.19998 of
+        # P_ap of manufactured light, carrying the field's GLOBAL maximum, sat
+        # in a band that neither check watches and the energy check reads as
+        # 1.01931, inside its own band (RECON_PINS_POST_C8_2026_08_01 S7.1).
+        #
+        # This asks the one question that needs no new calibration: does the
+        # field peak somewhere no traced ray of this call reached?  A skirt
+        # decays outward and cannot; a manufactured lobe does.  See
+        # ``SUPPORT_BAND_CHECK`` for why the criterion is a RATIO.
+        if (SUPPORT_BAND_CHECK != 'silent'
+                and _exit_support.hull is not None):
+            _bd_in, _bd_band = _exit_support.retained_band_masks(
+                x, x, np.sqrt(2.0) * sub * dx)
+            if _bd_band is not None and _bd_band.any() and _bd_in.any():
+                _bd_abs = np.abs(E_out)
+                _bd_core = float(_bd_abs[_bd_in].max())
+                _bd_amax = float(_bd_abs[_bd_band].max())
+                if (_bd_core > 0.0
+                        and _bd_amax > _SUPPORT_BAND_PEAK_RATIO_TOL * _bd_core):
+                    _bd_gpow = (float((_bd_abs[_bd_band] ** 2).sum()) / _rd_p_in
+                                if _rd_p_in > 0.0 else 0.0)
+                    import warnings as _bd_warn
+                    _bd_warn.warn(
+                        f"apply_real_lens_traced: amplitude_model="
+                        f"'ray_density' SUPPORT-BAND self-check FAILED -- the "
+                        f"field's maximum in the band the C8 exit-support "
+                        f"bound RETAINS outside the traced hull is "
+                        f"{_bd_amax:.3e}, which is "
+                        f"{_bd_amax / max(_bd_core, 1e-300):.3f}x the maximum "
+                        f"INSIDE the traced support ({_bd_core:.3e}), against "
+                        f"a ratio tolerance of "
+                        f"{_SUPPORT_BAND_PEAK_RATIO_TOL:g}.  That band is the "
+                        f"sqrt(2)*ray_subsample*dx plateau plus "
+                        f"{_SUPPORT_BOUND_FEATHER_CELLS:g} exit-lattice cells "
+                        f"of feather ({(np.sqrt(2.0) * sub * dx + (_exit_support.feather or 0.0)) * 1e3:.4f} mm "
+                        f"wide, on a hull of {_exit_support.n_hull} facets), "
+                        f"and it carries g_band = {_bd_gpow:.3e} of the "
+                        f"aperture-transmitted input power.  NO TRACED RAY OF "
+                        f"THIS CALL LANDED THERE: the plateau exists to stop "
+                        f"the bilinear upsample eating legitimate skirt, not "
+                        f"to host a lobe, and a field whose GLOBAL MAXIMUM "
+                        f"lies outside its own traced support has "
+                        f"manufactured that light rather than misplaced it.  "
+                        f"Note that neither of the other two instruments can "
+                        f"see this band: the ray-density power band reads it "
+                        f"as a fraction of a per cent, and the halo report "
+                        f"covers only radii beyond "
+                        f"{_RD_HALO_RADIUS_FACTOR:g} x r_hull, which the "
+                        f"bound has already zeroed.  Try a different "
+                        f"fit_radius_beam_factor, newton_fit='spline', a "
+                        f"lower ray_subsample, or a caustic-faithful "
+                        f"propagator (apply_real_lens_gbd / "
+                        f"apply_real_lens_fga); set "
+                        f"lumenairy.elements._lens_traced."
+                        f"SUPPORT_BAND_CHECK = 'silent' to suppress (that is "
+                        f"also the pre-C14 fail-before).",
+                        RuntimeWarning, stacklevel=2)
+                del _bd_abs
+            del _bd_in, _bd_band
     if E_out.dtype != target_cdtype:
         E_out = E_out.astype(target_cdtype)
     call_progress(progress, 'real_lens_traced', 1.0, 'done')

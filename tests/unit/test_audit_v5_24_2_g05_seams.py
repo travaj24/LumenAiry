@@ -8,7 +8,9 @@ NumPy path) rather than the code's own expression.
 Findings covered:
   * S1-12  PMM off-plane tile detection relative to tensor scale
   * S1-13  Berreman numpy/JAX forward-backward split ordering aligned
-  * S1-16  BOR mode classifiers share the index-ceiling leg (lockstep)
+  * S1-16  BOR mode classifiers are INTENTIONALLY basis-specific (the nodal
+           classifier must NOT carry the staggered twins' index ceiling);
+           the "lockstep" reading was the abandoned resolution
   * S2-12  fft_backend_for gates pyFFTW on iscomplexobj like _fft2
   * S2-13  JAX system kernel threads dy on propagate steps
   * S3-13  JAX Newton iteration count aligned to the NumPy reference

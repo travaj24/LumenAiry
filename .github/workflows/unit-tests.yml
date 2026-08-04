@@ -101,6 +101,25 @@ jobs:
         # ``.test_durations`` now carries FRESH timings for the whole fast gate
         # (see the job-cap comment), so this split is duration-balanced -- the
         # old "only slow timings, split by count" note no longer applies.
+        #
+        # v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §2) -- HOW TO REGENERATE
+        # ``.test_durations``, because the current file is balanced but not
+        # CONSISTENT.  Its fast-gate half was captured with multi-threaded
+        # BLAS unpinned on a many-core desktop; that inflates eig/BLAS-bound
+        # tests by 1-2 orders of magnitude (measured on this repo: two RCWA
+        # files at 374 s unpinned/24 cores vs ~11 s pinned) while leaving
+        # subprocess-bound tests almost unscaled (stamp_changelog: ~60 s
+        # either way).  pytest-split then splits EVENLY on unevenly-scaled
+        # weights, which is how a shard can be handed far more real work than
+        # its share -- the failure mode behind the two 30-min publish-verify
+        # timeouts.  Regenerate SERIALLY, on an IDLE machine, with
+        # OMP/OPENBLAS/MKL_NUM_THREADS=1 (the env the slow gate already uses),
+        # for BOTH gates, so every entry is on one scale.  Note this job
+        # deliberately does NOT pin BLAS at run time (see the ``slow-tests``
+        # env block for why the slow gate does): §1 of the same audit measured
+        # single-threading to be 2.76x SLOWER on large-eig files and faster on
+        # many-small-solve files, i.e. a blanket pin here is not a free win and
+        # needs a real CI-hardware A/B first.
         run: |
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=5 -v \
@@ -329,9 +348,25 @@ jobs:
         # both of which a ``-k jax`` selection silently drops.  ``-m "not
         # integration and not slow"`` keeps this single unsharded runner within
         # the step cap (the jax-guarded files are a subset of the fast gate).
+        #
+        # v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6 -- COVERAGE HOLE,
+        # not a speed item).  The selection matched ONE guard idiom,
+        # ``importorskip('jax')``.  Nine files guard their jax tests with
+        # ``@pytest.mark.skipif(not _jax_ok(), ...)`` / ``not _HAS_JAX`` /
+        # ``not _JAX_AVAILABLE`` instead -- an equivalent guard that this grep
+        # did NOT see.  Those tests therefore skipped in the no-jax fast matrix
+        # AND were never selected here, i.e. they ran NOWHERE in CI
+        # (test_v5_21_maslov_jax_caustic.py, test_gbd_feature_complete.py,
+        # test_analytic_ray_transfer.py, test_v5_21_lens_accuracy_extensions.py,
+        # test_v5_21_gbd_maslov_perf.py, test_v5_21_delta_audit.py,
+        # test_audit_w6_propagators.py, test_v5_4_6_wave2_p1_parity.py,
+        # test_v5_2_glass_formula3.py -- 77 files selected before, 86 after).
+        # Selection is still by GUARD, never by name.  Pinned (including the
+        # pattern itself, re-run against the tree) by
+        # tests/unit/test_v5_24_3_jax_ci_coverage.py.
         run: |
           mapfile -t jax_files < <(
-            grep -rlE --include='*.py' "importorskip.{0,4}jax" tests/unit | sort
+            grep -rlEi --include='*.py' "importorskip.{0,4}jax|skipif\(.{0,40}jax" tests/unit | sort
           )
           if [ "${#jax_files[@]}" -eq 0 ]; then
             echo "::error::No jax-guarded unit files found -- the S4-4 CI job has nothing to run; the selection grep or the test layout changed."

@@ -500,44 +500,67 @@ class TestChangelogDriftFixes:
         # of each agent file.  Use pytest's collection API rather
         # than re-counting AST nodes so parametrised items are
         # included (matches the CHANGELOG accounting).
+        #
+        # v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 4): this used to
+        # spawn TEN separate ``pytest --collect-only`` subprocesses (one per
+        # agent file), each paying a fresh interpreter + conftest +
+        # ``import lumenairy`` -- ~60 s of the file's ~61 s total, on every
+        # Python of the fast matrix, to learn ten integers.  ONE subprocess
+        # collects all ten files; the per-file counts come from the node-id
+        # lines ``-q`` prints.  The counting is guarded two ways below so the
+        # cheaper form cannot silently mean something different from the old
+        # ``N tests collected`` summary it replaces.
         import subprocess
         import sys
         repo_root = _CHANGELOG_PATH.parent
-        expected = {}
-        for label in ('a', 'b', 'c', 'd', 'e', 'f'):
-            test_file = (repo_root / 'tests' / 'unit'
-                         / f'test_v4_15_1_agent_{label}.py')
-            assert test_file.exists(), (
-                f"Agent {label.upper()} test file is missing: "
-                f"{test_file}")
-            result = subprocess.run(
-                [sys.executable, '-m', 'pytest', str(test_file),
-                 '--collect-only', '-q'],
-                cwd=str(repo_root), capture_output=True, text=True,
-                timeout=60)
-            out = (result.stdout or '') + (result.stderr or '')
-            m_count = re.search(r'(\d+) tests collected', out)
-            assert m_count is not None, (
-                f"pytest --collect-only failed to report a count "
-                f"for {test_file}: {out!r}.")
-            expected[label.upper()] = int(m_count.group(1))
-        # Agent G has 4 files -- sum across them.
-        g_total = 0
-        for suffix in ('abcd', 'application', 'examples',
-                       'matches_system_abcd'):
-            test_file = (repo_root / 'tests' / 'unit'
-                         / f'test_v4_15_1_agent_g_{suffix}.py')
-            assert test_file.exists()
-            result = subprocess.run(
-                [sys.executable, '-m', 'pytest', str(test_file),
-                 '--collect-only', '-q'],
-                cwd=str(repo_root), capture_output=True, text=True,
-                timeout=60)
-            out = (result.stdout or '') + (result.stderr or '')
-            m_count = re.search(r'(\d+) tests collected', out)
-            assert m_count is not None
-            g_total += int(m_count.group(1))
-        expected['G'] = g_total
+        agent_files = {
+            label.upper(): [f'tests/unit/test_v4_15_1_agent_{label}.py']
+            for label in ('a', 'b', 'c', 'd', 'e', 'f')
+        }
+        # Agent G has 4 files -- summed across them.
+        agent_files['G'] = [
+            f'tests/unit/test_v4_15_1_agent_g_{suffix}.py'
+            for suffix in ('abcd', 'application', 'examples',
+                           'matches_system_abcd')
+        ]
+        all_rel = [rel for rels in agent_files.values() for rel in rels]
+        for rel in all_rel:
+            assert (repo_root / rel).exists(), (
+                f"v4.15.1 agent test file is missing: {rel}")
+        result = subprocess.run(
+            [sys.executable, '-m', 'pytest', *all_rel,
+             '--collect-only', '-q', '-p', 'no:cacheprovider'],
+            cwd=str(repo_root), capture_output=True, text=True,
+            timeout=300)
+        out = (result.stdout or '') + (result.stderr or '')
+        m_total = re.search(r'(\d+) tests collected', out)
+        assert m_total is not None, (
+            f"pytest --collect-only failed to report a count for "
+            f"{all_rel}: {out[-2000:]!r}.")
+        # GUARD 1 -- the old per-file form read the ``N tests collected``
+        # summary, which counts items BEFORE ``-m`` deselection; the new form
+        # counts the node-id lines, which are the SELECTED items.  Those two
+        # agree only while nothing here is deselected.  Assert that rather
+        # than assume it, so a future marker on an agent file fails loudly
+        # instead of quietly changing what this test measures.
+        assert 'deselected' not in out, (
+            "pytest deselected items while collecting the v4.15.1 agent "
+            "files, so the printed node-id lines no longer equal the "
+            f"``N tests collected`` count this pin used to read: {out[-2000:]!r}")
+        counted = {}
+        for label, rels in agent_files.items():
+            counted[label] = sum(
+                sum(1 for line in out.splitlines()
+                    if line.strip().startswith(rel + '::'))
+                for rel in rels
+            )
+        # GUARD 2 -- per-file counts must reconstruct pytest's own total.
+        assert sum(counted.values()) == int(m_total.group(1)), (
+            f"per-file node-id counts {counted} sum to "
+            f"{sum(counted.values())} but pytest collected "
+            f"{m_total.group(1)}; the ``-q`` output format changed and this "
+            f"pin is no longer counting what it thinks: {out[-2000:]!r}")
+        expected = counted
 
         # Verify each ``LETTER=N`` in the CHANGELOG is a plausible
         # LOWER BOUND on the actual collected count.  Subsequent

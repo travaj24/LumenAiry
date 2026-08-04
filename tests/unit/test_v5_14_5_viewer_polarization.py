@@ -1,4 +1,9 @@
-"""Optics-viewer support for waveplate + PBS elements (v5.14.5).
+"""Optics-viewer support for waveplate + PBS elements (SHIPPED v5.14.4).
+
+Filename says v5.14.5; the feature actually shipped in **v5.14.4**
+(2026-06-14) -- CHANGELOG's ``[5.14.5]`` holds only the ``_fast_geig``
+folded eigensolve.  Filename left alone deliberately (renaming churns node
+ids and ``.test_durations``); this note is the correction.
 
 The 2-D / 3-D layout views can now render polarization elements (waveplate,
 polarizing beam splitter), which previously had no glyph.  The 2-D path

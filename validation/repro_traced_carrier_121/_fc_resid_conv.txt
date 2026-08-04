@@ -1,0 +1,12 @@
+ORD=0,0    RN=1024  RS=4  oracle    FWHM  3.441 um   EE3 90.7421   EE6 99.8955   EE12 99.9996   sha d3d1c04a8231f248
+ORD=0,0    RN=1024  RS=4  chain     step: envelope max 0.0322 rad | integrand UNWRAPPED p50/p99.9/max 0.0006/1.5626/1.97 | WRAPPED (honest) 0.0004/0.0389/0.0395 cycles    FWHM  3.442 um   EE3 90.6934   EE6 99.8777   EE12 99.9997   sha 8db002a1c1bd58ef 
+ORD=0,0    RN=1024  RS=2  oracle    FWHM  3.442 um   EE3 90.7299   EE6 99.8956   EE12 99.9996   sha 8a7686f69ffc7d69
+ORD=0,0    RN=1024  RS=2  chain     step: envelope max 0.0316 rad | integrand UNWRAPPED p50/p99.9/max 0.0006/1.8707/2.47 | WRAPPED (honest) 0.0004/0.0391/0.0395 cycles    FWHM  3.448 um   EE3 90.5863   EE6 99.8773   EE12 99.9997   sha 69339d594676c4ea 
+ORD=0,0    RN=2048  RS=4  oracle    FWHM  3.434 um   EE3 90.7184   EE6 99.8984   EE12 99.9998   sha 444e03c3c6eb51d3
+ORD=0,0    RN=2048  RS=4  chain     step: envelope max 0.0159 rad | integrand UNWRAPPED p50/p99.9/max 0.0004/1.6657/2.01 | WRAPPED (honest) 0.0002/0.0196/0.0198 cycles    FWHM  3.443 um   EE3 90.5834   EE6 99.8797   EE12 99.9998   sha d4cf22a3d34c6a44 
+ORD=-1,0   RN=1024  RS=4  oracle    FWHM  3.451 um   EE3 90.7876   EE6 99.9000   EE12 99.9996   sha 5dfc3e54e5fad70e
+ORD=-1,0   RN=1024  RS=4  chain     step: envelope max 0.0418 rad | integrand UNWRAPPED p50/p99.9/max 0.0001/1.2807/1.99 | WRAPPED (honest) 0.0001/0.0392/0.0401 cycles    FWHM  3.461 um   EE3 89.8529   EE6 99.3297   EE12 99.9969   sha eef5a64eb2f808a3 
+ORD=-1,0   RN=1024  RS=2  oracle    FWHM  3.451 um   EE3 90.7756   EE6 99.9001   EE12 99.9996   sha 8f160a8888d5fe3c
+ORD=-1,0   RN=1024  RS=2  chain     step: envelope max 0.0412 rad | integrand UNWRAPPED p50/p99.9/max 0.0001/1.1109/1.51 | WRAPPED (honest) 0.0001/0.0393/0.0400 cycles    FWHM  3.466 um   EE3 89.7678   EE6 99.3476   EE12 99.9972   sha 53eca681a29524a6 
+ORD=-1,0   RN=2048  RS=4  oracle    FWHM  3.444 um   EE3 90.7657   EE6 99.9028   EE12 99.9998   sha 578c9e66f77280e9
+ORD=-1,0   RN=2048  RS=4  chain     step: envelope max 0.0204 rad | integrand UNWRAPPED p50/p99.9/max 0.0002/1.0806/1.72 | WRAPPED (honest) 0.0001/0.0197/0.0201 cycles    FWHM  3.468 um   EE3 89.7730   EE6 99.3480   EE12 99.9968   sha fe6e8a7a1dd02734 

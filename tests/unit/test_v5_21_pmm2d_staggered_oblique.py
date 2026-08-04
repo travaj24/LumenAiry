@@ -67,6 +67,13 @@ def test_staggered_oblique_energy(cell, theta):
     assert abs(R.sum() + T.sum() - 1.0) < 1e-4
 
 
+# v5.32.1 marker inversion (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6): the
+# file's only ``slow`` mark was on ``test_stack_pure_multilayer_ab_vs_1d``
+# (correct -- it stays), while THESE two cells were unmarked and measured
+# 53.8 s of the file's 56.1 s: each solves a degree-8 staggered 2-D cell AND a
+# degree-14 exact 1-D pure-PMM oracle.  The anti-mirror tripwire they carry is
+# an orientation/labelling contract, not a Python-version one.
+@pytest.mark.slow
 @pytest.mark.parametrize("theta", [0.0, 0.20])
 def test_staggered_per_order_orientation_vs_1d(theta):
     """Asymmetric stripe: per-order R/T match the EXACT 1-D pure PMM in the

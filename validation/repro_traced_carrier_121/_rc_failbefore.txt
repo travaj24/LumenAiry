@@ -1,0 +1,11 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 34ef5a9d95279b8f
+  carrier.py 5a1b0d1021969df1
+module default degree = 6
+     0,0 8db002a1c1bd58ef 8db002a1c1bd58ef OK
+    -1,0 eef5a64eb2f808a3 eef5a64eb2f808a3 OK
+    -2,0 41a950e7767eb956 41a950e7767eb956 OK
+    -3,0 7db7995c34afbdec 7db7995c34afbdec OK
+    -4,0 8a589d3d7013ade5 8a589d3d7013ade5 OK
+   -4,-2 5e8550468cb6061b 5e8550468cb6061b OK
+FAIL-BEFORE: 6 of 6 bit-identical

@@ -2,6 +2,165 @@
 
 All notable changes to the core library are documented here.
 
+## [5.32.1] — 2026-08-03
+
+### Fixed — the shared least-squares solver no longer draws arbitrary answers on singular systems (niche C13, `elements/_lens_traced.py`)
+
+The campaign's residual "CI flakiness" was a real defect one level below every
+hypothesis: `_solve_lstsq_thread_safe` solved ALL traced fits by normal
+equations on a docstring claim that is false for the D1/D7 WEIGHTED fits
+(`cond(A)` 1.4e10 squares past float64; Cholesky then returns an arbitrary
+null-space draw per BLAS build -- fit residual 1.05x optimal on one build,
+14.8-23.0x on another, exit field pixel-speckled).  C10's degree 6 was only
+the messenger (`cond(A)` 4.1e2 there -- one of the BEST-conditioned solves).
+Fix: rcond-screened equilibrated Gram; where singular, Householder-QR
+re-solve kept only if it fits better; ties return historical bits.
+Cross-build agreement 6.8e-2 -> 1.2e-10; degree sweep smooth 2..6 both
+builds; per-order closure reproduced to four decimals on BOTH builds (first
+OpenBLAS measurement of the design-121 table); independently CURES the D1
+fold defect.  Commit gate: 501 tests x 2 builds green.
+
+### Changed — the measured fit-branch arbiter is now the DEFAULT (user-ordered); the C12 predictor stays dormant (regression found)
+
+`DECENTRED_FIT_ARBITER = True`: five orders improve (worst residual 0.152 ->
+0.069), the 67-point wrong-branch trap dies, and the user explicitly accepted
+the proven-irreducible (-1,0) +0.026 trade.  The ordered
+`DECENTRED_FIT_PREDICTOR` flip was REVERTED ON EVIDENCE: adjudicating its 11
+test failures against the analytic tilted-leg oracle exposed a real 17,000x
+inversion -- nine eras-pins that would have been written were a live
+regression.  Predictor ships False with the defect recorded (C13 S11).
+
+### Added — encapsulation + guard integrity (niche C14, both library files)
+
+`_traced_flags.py` registry (presets, not an ordinal era -- the C6-on/C8-off
+corner stays reachable), `TRACED_LAYER_MAP.md` bound to the code by four CI
+tests (one caught a real dangling reference on first run), and UNIT C
+extracted: the three notions of traced exit support are one construction
+(byte-identical over 36 configs incl. the never-probed direct-fit path),
+closing the documented C7/C8 joint blind spot on the relay.  Guard
+integrity: the dx-stability warning is no longer dedup-silenced (a batch
+loop was warned ONCE; now every qualifying call warns via warn_explicit),
+and FOUR silent exits of `_run_chain_dx_self_check` now speak.  Legs: 376 +
+119-strict + 142-WSL green; 32/32 both builds.
+
+### Changed — three external audits assessed and answered (CI test-time, test justification, p2 DID-NOT-WARN)
+
+Per-recommendation responses with counter-measurements where rejected:
+~47 min/push of measured CI savings, a JAX coverage hole closed (nine files
+ran in NO leg), 13 docstring-drift fixes, three defects the audits missed,
+the p2 fixture's 0.87 %-margin route pinned, and the corrupted durations
+mechanism (contention-captured units) documented with the regeneration
+protocol now in the workflows.  Deferred with ledgers: the ~30-duplicate
+dedup cycle, one backwards marker move.  Records: CI_TEST_TIME_RESPONSE,
+TEST_JUSTIFICATION_RESPONSE, P2_DIDNOTWARN_DIAGNOSIS (2026-08-03).
+
+### Added — physics-derived fit-branch predictor (niche C12, `elements/_lens_traced.py`, opt-in)
+
+The concentric/off-centre crossover now closes in ONE LINE with no fitted
+constant: each candidate's residual is its own Chebyshev tail's, the tail is
+decentre-free (measured), so the crossover is the concentric disc's inflation
+`rho=sqrt(1+2u^2)` vs the tail's spectral moment.  Predicts all three
+measured crossovers to 0.03 % (arbiter: -4.6 %), build-invariant to 4 digits;
+falls back to the measured arbiter where the expansion is unsupported (121's
+underfilled launch box; 26/26 agreement).  Also PROVEN: the (-1,0) +0.026 is
+irreducible for ANY per-call selector (per-group preferences are
+non-monotone; "improve everywhere" and "keep the gains" are mutually
+exclusive on 121) -- so the default stays False and the flip is an informed
+trade, not a fix away.  C11's "85 % C6-domain" attribution reversed
+(ray-fit branch is the driver).  Bit-identical default, 6/6 orders;
+production acceptance unchanged; both builds green.
+
+### Added — a measured fit-branch arbiter, shipped OPT-IN (niche C11, `elements/_lens_traced.py`)
+
+The C1 decentre gate's 0.05 w constant was never physics: the measured
+concentric/off-centre fit crossover is 0.55 w on an f/3 singlet, 0 w on an
+f/6, 0.46-0.69 w across design 121's groups -- four closed-form predictors
+were derived and all four refuted cross-design.  `DECENTRED_FIT_ARBITER`
+instead BUILDS BOTH candidate fits at the site and scores them against the
+traced samples, intensity-weighted (42/42 agreement with the fit-free spline
+oracle over three geometries; the (-4,0)-group-4 67-point catastrophe is
+seen at 18x margin before any field is reconstructed).  Default **False**:
+per-order it improves five orders (worst residual 0.152 -> 0.069, spread
+0.200 -> 0.117) but moves (-1,0) by +0.026 -- a bounded near-tie mis-pick
+-- so the default flip is an explicit release decision, not a side effect.
+Flag-off is a no-op, not a fall-back (the scorer is never called), verified
+bit-for-bit 6/6 orders cross-process against pre-C11 hashes.  Also
+measured: C10 made the forced-concentric branch MORE dangerous (19.9 ->
+67.3 points at (-4,0)), strengthening the arbiter's case.  Record:
+`docs/audits/C11_PHYSICAL_DECENTRE_GATE_2026_08_03.md`.
+
+### Fixed — four platform/era test reconciliations (both BLAS builds green)
+
+C9/C10 legitimately moved physics that older pins measured: the D3
+multiplex-guard linearity pin (attributed to C10's degree-6 residual on
+MULTIPLEXED inputs only -- the route the guard exists to refuse; era-pinned
+at degree 4 with a live comparative sibling, and the test's NEXT latent
+failure `bad > 20*good` fixed in the same pass), the D7 hard-mask-ghost pin
+(both builds shrink the ghost -- by 1900x on MKL, 1.9x on OpenBLAS; re-pinned
+0.1x -> 0.8x with both recorded), and C1/C6-guard arms now pin their flags
+explicitly.  The p2_guards dx-stability fixture was adjudicated and NOT
+changed: 10.5x margin, five-figure agreement across builds, all C9/C10/C6
+knob states bit-identical -- the one unexplained CI DID-NOT-WARN is recorded
+as a suspected shard-ordering warning-filter leak with a committed 2-minute
+instrument (`c11_p2dx_recon.py`).  158 tests green on Windows/MKL AND
+Linux/OpenBLAS, identical counts.
+
+### Fixed — the residual eikonal now carries the r^6 term: the chain matches the exact-ray oracle to ~0.1 EE3 points on every order (niche C10, `elements/_lens_traced.py`)
+
+`_REMAP_RESID_EIKONAL_DEGREE = 4 -> 6` -- one constant.  The final-closure
+residual (0.05-0.94 points/order) was made in the CONVERGING groups 2-4 by
+exactly the second-order stationary-phase term C6's derivation names,
+`(1/2) grad(a - a_fit)^T H^-1 grad(a - a_fit)`: a carrier-referenced relay's
+residual is r^4-dominant with an r^6 next term, and the measured response is
+degree 4 ~= 5 << 6 at every order.  The only reason the degree had stayed at
+4 was a 5.2 %-of-input self-caustic ghost that measurement reproduces exactly
+-- and that niche C8 removed the day AFTER the degree-4 decision was made.
+
+The non-monotone neighbour swing that blocked every physical explanation was
+the METRIC: EE3 scored with a hard binary pixel mask on a 0.4 um lattice
+carries 0.128 points per boundary pixel (+-0.45 points of pure quantisation,
+cancelling between arms at some orders and not others).  Area-exact
+rescoring of the SAME arrays is monotone.
+
+Final chain-vs-oracle residual: -0.048 / 0.029 / 0.063 / 0.090 / 0.141 /
+0.152 points at (0,0)...(-4,-2), spread 0.886 -> 0.200.  Production
+acceptance unchanged (3.350 um / 90.3 / 99.7 / 99.8, digit for digit);
+conservation 6/6 every order; C7 halo check silent; fail-before bit-exact.
+The D7 fold witness is era-pinned at degree 4 (its fixture's fold no longer
+exists under the better model -- the C9 precedent).  Open items and two
+caveats (last-group element pass 0.001-0.005 waves worse, in the noise;
+single-design generality) recorded in
+`docs/audits/D121_RESIDUAL_CLOSURE_2026_08_02.md`.
+
+### Fixed — the parabola<->sphere carrier conversion is applied EXACTLY: the cos^2 band-limit taper is gone (niche C9, `propagators/carrier.py`)
+
+The final-closure campaign's decomposition of the last ~1.3 EE3 points per
+order between the chain and the exact-ray oracle found ~1.0 point/order in
+ONE library defect: `_sphere_parab_conversion`'s cos^2 taper, engaged at
+group 5's exit re-envelope -- the same site as the -0.96-point leg remnant
+C5 left behind (per-call census; groups 1-5 bit-identical, 99.74 % of the
+effect at the final onset).  The taper's protective role was a MIS-CITATION:
+the audit cited as evidence that removing it breaks a coarse chain
+(AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S6.6) says the opposite, and
+`T == 1` is the saturated end of a monotone axis (`r_safe` x1.0 reproduces
+the shipped taper bit for bit; x1.5/x2/x3 reproduce `T == 1` bit for bit).
+
+`SPHERE_PARAB_CONVERSION_EXACT = True` (3 executable lines; `= False` is the
+fail-before, 52/52 configurations bit-identical to v5.32.0).  Everything
+improves together: acceptance **3.450 -> 3.350 um / EE3 90.2 -> 90.3** at the
+unchanged best-focus plane (no plane of +-80 um worse); tilted production
+readout +1.40 EE3 at (-4,-2); ghost `g4` 3-676x and `amax4` 2-14x smaller;
+`P/Pin` within 4.1e-05; 6/6 conservation bounds on every order.
+
+The remaining chain-vs-oracle residual is 0.05-0.94 points per order --
+REAL against a +-0.005-point instrument band, characterised as a halo
+deficit (FWHM matches the exact trace to 0.02-0.06 um), not discretisation.
+Leading candidate: the element's remap model error (excluded earlier against
+a 2.0-point target that has since moved; not yet verified).  The instrument
+itself accounted for 0.5-1.1 points/order of the ORIGINAL gap (a wrong
+oracle ceiling + a readout launch-phase split), proven by null experiments.
+Full record: `docs/audits/D121_FINAL_CLOSURE_2026_08_02.md`.
+
 ## [5.32.0] — 2026-08-02
 
 ### Changed — the empty deprecation horizon advanced past this release (`lumenairy/_deprecation.py`)

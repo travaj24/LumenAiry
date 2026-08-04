@@ -151,9 +151,25 @@ jobs:
       - name: Library import sanity
         run: python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
 
-      - name: Run unit tests (release tag verification, shard ${{ matrix.shard }}/3)
-        # v5.23.0: mirror unit-tests.yml -- this shard runs ~1/3 of the fast gate
-        # serially on its own runner (pytest-split --splits 3 --group).
+      - name: Run unit tests (release tag verification, shard ${{ matrix.shard }}/5)
+        # v5.23.0: mirror unit-tests.yml -- this shard runs a slice of the fast
+        # gate serially on its own runner (pytest-split --splits N --group).
+        # v5.32.0 (retag 2): N went 3 -> 5 here after two release attempts hit
+        # the 30-min step cap; the step/job names and this comment still said
+        # "/3", which is exactly the stale-label drift that made the v5.20.0
+        # cap mismatch hard to see.  Kept in sync with ``--splits`` below.
+        #
+        # NOTE on ``.test_durations`` (AUDIT_CI_TEST_TIME_2026_08_03 §2, and
+        # the two timeouts above): pytest-split balances on the committed
+        # durations, so the split is only as even as those numbers are
+        # CONSISTENT.  The fast-gate half of the current file was captured on
+        # a many-core desktop with multi-threaded BLAS unpinned, which inflates
+        # eig/BLAS-bound tests by 1-2 orders of magnitude while leaving
+        # subprocess-bound tests nearly unscaled -- so the balancer
+        # systematically over-weights the former and under-weights the latter
+        # relative to a 2-4 vCPU runner.  When regenerating, run SERIALLY on an
+        # IDLE machine with OMP/OPENBLAS/MKL_NUM_THREADS=1 (the env the slow
+        # gate already uses) for BOTH gates, so every entry is on one scale.
         run: |
           # v5.15.0: ``slow`` runs in the unit-tests sharded slow job; excluded here.
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \

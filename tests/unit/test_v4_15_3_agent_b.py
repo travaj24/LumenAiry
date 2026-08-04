@@ -12,10 +12,12 @@ return-shape change has had four subsequent releases of exposure.
 ``TestSchellDeprecationWarningStacklevel`` and the two
 ``TestSourceSchellClassmethodSentinel.test_*_default_emits_*`` methods
 have been inverted from "warning fires" assertions to "warning does
-NOT fire" assertions.  The ``_warn_schell_return_kind_default`` helper
-+ ``_RETURN_KIND_UNSET`` sentinel + ``_SchellReturnKindUnsetSentinel``
-subclass are all preserved for back-compat (test pins below import
-them); only the default-path call-site invocations were removed.  The
+NOT fire" assertions.  v5.30 (the W5 shim-removal wave) then removed the
+apparatus ENTIRELY: the ``_warn_schell_return_kind_default`` helper,
+``_RETURN_KIND_UNSET`` and ``_SchellReturnKindUnsetSentinel`` are no
+longer importable, and the pins below assert that removal.  (This
+paragraph used to say they were "preserved for back-compat"; that was
+true only up to v4.16.1.)  The
 ``TestLibraryWideStacklevelSweep`` (5 Source.* legacy-positional
 classmethods) and ``TestReturnKindUnsetSubclassSentinel`` test
 classes are unchanged -- they test orthogonal back-compat surfaces.
@@ -360,9 +362,9 @@ class TestFreeSpaceAnamorphicSAS:
 # tests below were originally written to verify the warning's
 # ``stacklevel`` lands at user code; v4.16.1 inverts them to assert
 # the warning no longer fires on the default path.  The underlying
-# ``_warn_schell_return_kind_default`` helper is preserved (the
-# stacklevel meta-pin elsewhere in the file imports it) -- only the
-# default-path call-site invocations were removed.
+# ``_warn_schell_return_kind_default`` helper was kept importable at
+# v4.16.1 but REMOVED at v5.30 -- see ``test_warn_helper_is_removed``
+# below, which now asserts its absence.
 # ============================================================================
 
 

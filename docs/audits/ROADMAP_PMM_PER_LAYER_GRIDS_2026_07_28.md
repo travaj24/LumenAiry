@@ -3,6 +3,9 @@
 **Date:** 2026-07-28 · **Branch:** `fix/pmm-union-grid-conditioning`
 **Parents:** `AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md` (the defect),
 `AUDIT_PMM_PER_LAYER_GRIDS_IMPL_2026_07_28.md` (the 1-D implementation)
+**Updated 2026-08-03:** §5–§6 make this THE consolidated PMM+RCWA solver roadmap.
+Every item was re-verified against the code on this date; `docs/pmm_roadmap_v5_14.md`
+and `docs/rcwa_roadmap_v5_14.md` are superseded (banners added there).
 
 ---
 
@@ -127,3 +130,57 @@ LC sweep costs ~2.7 s/point at deg 8, beating the shared prepared sweep.
 3. **T3-6 feasibility spike** (days, timeboxed): the first-order-in-`tanφ` covariant taper. If the 2°
    smallness pans out, it obsoletes the staircase entirely for this fab process.
 4. **`prepare()` per-layer** (§3) and the small items (T3-3, T3-5, T3-7) opportunistically.
+
+None of the §5/§6 items below gate this sequence; the research-class ones are unscheduled and the
+rest slot in opportunistically.
+
+---
+
+## 5. Carried-over PMM items from the v5.14 roadmap (verified 2026-08-03)
+
+`docs/pmm_roadmap_v5_14.md` is superseded by this section. Of its seven items, five have shipped
+(JAX cell twin; 1-D homogeneous-region eig share; `PMM2DStack` out-of-plane layers; graded-profile
+helper; the metal-TM "floor" resolved as mutual unconvergence). Its explicitly-REJECTED list (numba,
+GPU modal eig, staggered near-Wood regularization) stands — do not re-litigate. Two items remain:
+
+| id | item | status 2026-08-03 |
+|---|---|---|
+| P-1 | **Native 2-D slant** — Edée & Granet 2024 (josaa-41-9-1803) crossed-slanted coordinate map + Gegenbauer basis | Open, research-grade. Interim: `PMM2DStack.add_tapered_pillar` z-staircase — which the §1 per-layer extension makes laterally exact per slice, and whose small-angle regime the T3-6 covariant-taper spike would treat without slicing. Sequence AFTER §1 and T3-6: their outcomes bound how much a native map is still worth. |
+| P-2 | **Li-1997 mixed inverse rules for the 2-D tensor diagonal slots** (Eqs. 8/9 + 31) | Largely superseded: v5.21 shipped the Li-2003 `L2·L1` full-tensor factorization as `formulation='fff_nv'` in `rcwa_jones_2d` (incl. CROSSED cells) and ported the separable version to the hybrid PMM — the first correct in-plane inverse-rule treatment there. Residual gap: the **crossed anisotropic cell in the hybrid PMM** stays Laurent-floored (~1e-3). The pure 2-D stack has no Fourier floor, so §1 is the strategic answer; treat this as a hybrid-only nicety. |
+
+---
+
+## 6. RCWA — the verified-current roadmap (2026-08-03)
+
+`docs/rcwa_roadmap_v5_14.md` is superseded by this section. Verified against the code on this date.
+Shipped since that doc — recorded here so they are not re-opened:
+
+- **`RCWAStack` out-of-plane layers**: any OOP layer promotes the cascade to the generalized
+  S-matrix, including correct traced OOP stack gradients.
+- **Even-parity fold (LEV-3), full scope**: extended to `RCWAStack.solve` (whole-cascade even
+  sector for normal-incidence jointly centro-symmetric stacks, ~×3–4 — the "backlog A1" fast path)
+  and to `'li'` via the generalized `(P, Q)` cascade fold in `rcwa_jones_2d`; ON by default
+  (`symmetry='auto'`) since v5.21.
+- **Analytic homogeneous-layer modes (LEV-4)**: uniform layers draw from the module-level
+  `_cached_homogeneous_eigenmodes` cache instead of running the eig.
+- **`fff_nv` rework-or-retire (F2)**: RESOLVED as rework (v5.21.2) — Li-2003 `L2·L1` successive
+  full-tensor factorization incl. crossed cells, ported to the hybrid PMM; uniform cells route to
+  `'laurent'`; the closed-form xy-wedge field ships as its cross-check (audit M10, 2026-07-25).
+- **GPU-DLL hygiene**: the `use_gpu` guard probes a trivial device op + `cupy.fft` import and
+  re-raises the friendly RuntimeError naming the missing NVIDIA wheels.
+
+Open items:
+
+| id | item | class |
+|---|---|---|
+| R-1 | **µ / bianisotropic materials** (GAP4) — no magnetic/bianisotropic support anywhere in the module | research |
+| R-2 | **Hex / oblique lattices + parallelogrammic truncation** (GAP6) — `truncation=` today is `'rectangular'`/`'circular'` on a rectangular lattice only; the "parallelogram" in the code is sheared *sidewalls* (GAP1), a different feature | research |
+| R-3 | **Even-parity fold coverage for the two documented exclusions**: OOP (ezz-Schur) cells and `'fff_nv'` cells always take the full 2N solve today | perf, medium |
+| R-4 | **`sigma_px` physical scaling** — the surviving sliver of F2: the smoothed-gradient NV width is pixel-fixed (1.5 px), so the field depends on sampling resolution S. Low impact post-M10 (wedge cross-check exists; uniform cells rerouted); make the width physical if `fff_nv` accuracy work resumes | accuracy, small |
+| R-5 | **K-matrix assembly micro-wins** (LEV-5) — never started; small | perf, P3 |
+
+Two positioning facts that stand: JAX remains the GRADIENT path, not the forward-speed path
+(jit-warm ~1–2.4× wall at equal work; NumPy + `prepare()`/sweeps for forward scans), and the
+per-layer-grids idea of §0–§1 does NOT transfer to RCWA — a global Fourier basis has no lateral
+grid to decouple, so RCWA's accuracy path stays formulation rules (Li). The two solvers serve as
+each other's independent cross-checks on tapered stacks.

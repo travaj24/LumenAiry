@@ -1,4 +1,9 @@
-"""EMT homogenization bridge + Berreman JAX twin (v5.14.5).
+"""EMT homogenization bridge + Berreman JAX twin (SHIPPED v5.14.4).
+
+Filename says v5.14.5; the features actually shipped in **v5.14.4**
+(2026-06-14) -- CHANGELOG's ``[5.14.5]`` holds only the ``_fast_geig``
+folded eigensolve.  The filename is left alone (renaming churns node ids
+and ``.test_durations``); this note is the correction.
 
 * **EMT bridge** (`lumenairy.elements.emt`): a sub-wavelength 1-D grating
   homogenizes (Rytov) to a uniaxial tensor; the EMT + Berreman slab Jones

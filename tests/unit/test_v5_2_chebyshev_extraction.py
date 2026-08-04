@@ -1,6 +1,9 @@
 """v5.2 Shared Chebyshev helpers extraction -- pin tests.
 
-ROADMAP v5.1 item (lines 221-225) called out an inverted-dependency
+The ROADMAP item "Shared Chebyshev helpers extraction" (in the v5.2.0
+shipped list -- cited by TITLE, not by line number, because the old
+"lines 221-225" citation had already rotted onto the unrelated V13/V14
+dispatcher-walker entries) called out an inverted-dependency
 layering bug: ``propagators/asymptotic*.py`` and
 ``elements/lenses_maslov.py`` both imported the three private
 Chebyshev Vandermonde helpers from ``elements/lenses.py``.  Those

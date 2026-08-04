@@ -239,10 +239,27 @@ def test_guard_reproduces_the_offcentre_branch_exactly(_warm):
     the order -- and the two runs must agree BIT FOR BIT.
 
     If this ever fails, the guard has grown a code path of its own and the
-    D1/D7 evidence no longer covers it."""
+    D1/D7 evidence no longer covers it.
+
+    Niche C11 (2026-08-03) added ONE pinned attribute to arm ``b`` and nothing
+    else.  Driving the gates negative now also wakes the C11 ARBITER, which
+    compares both candidates and -- at this NULL decentre, where the two discs
+    are identical and the guard is off in that arm -- correctly prefers the
+    plain concentric one, so the device stops reaching the branch it names.
+    Arm ``a`` is untouched: the guard path has ``_beam_decentred = False``, so
+    the arbiter never runs there.  The assertion is the original."""
     E, _X, _Y = _field()
     a = _run(E, True)
-    b = _run(E, False, gates=(-1.0, -1.0))
+    # 5.32.1: both flags, for the reason niche C1's own era pin records -- the
+    # selector block is entered on ``ARBITER or PREDICTOR``, so pinning the
+    # arbiter alone stopped being an era pin when the predictor shipped ``True``.
+    _arb = (LT.DECENTRED_FIT_ARBITER, LT.DECENTRED_FIT_PREDICTOR)
+    LT.DECENTRED_FIT_ARBITER = False
+    LT.DECENTRED_FIT_PREDICTOR = False
+    try:
+        b = _run(E, False, gates=(-1.0, -1.0))
+    finally:
+        LT.DECENTRED_FIT_ARBITER, LT.DECENTRED_FIT_PREDICTOR = _arb
     assert np.array_equal(a, b), float(np.abs(a - b).max())
 
 

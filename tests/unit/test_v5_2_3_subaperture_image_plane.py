@@ -211,6 +211,12 @@ class TestV5_2_3_MagnificationSpatialExtent:
     pile up at the WRONG image-plane location).
     """
 
+    # v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 6): 16.6 s of this
+    # file's 26.5 s sits in this test and ``ClosedFormStrehl`` below -- two
+    # full asymptotic subaperture propagations each, for what the class
+    # docstrings themselves describe as a "lowest-bar" / deliberately
+    # relaxed check.  Value kept, cost moved off the 4x fast matrix.
+    @pytest.mark.slow
     def test_2x_telephoto_image_extent_larger_than_source(self):
         """Compute the second-moment width of the magnitude profile
         at the image plane and confirm it's larger than the source
@@ -389,6 +395,7 @@ class TestV5_2_3_ClosedFormStrehl:
     location) from the post-v5.2.3 correct state.
     """
 
+    @pytest.mark.slow        # v5.32.1: see the note on the magnification pin
     def test_2x_singlet_waist_scales_with_M(self):
         from lumenairy.propagators.subaperture import (
             propagate_subaperture_asymptotic,

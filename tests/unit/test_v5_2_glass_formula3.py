@@ -16,10 +16,21 @@ Pins:
 
 v5.2 ROADMAP note: the n_d cross-check tolerance for any glass with
 real ingested coefficients is 5e-5 (may relax for BK7-like polynomial
-fits per the V3 v4.16.2 note).  At v5.2 ship, 0 of the 24 stubs have
-real coefficients ingested; the cross-check arm is guarded by
-``if POLYNOMIAL_COEFFICIENTS`` so the test stays green at ship and
-grows teeth as v5.2.1+ adds entries.
+fits per the V3 v4.16.2 note).
+
+STATE AS OF 2026-08-03 (the v5.2 text above described the ship state and
+has been corrected here).  The ingestion COMPLETED: measured in this tree,
+``POLYNOMIAL_COEFFICIENTS`` holds all 24 entries and
+``_POLYNOMIAL_STUB_NAMES`` is EMPTY.  Two consequences worth knowing before
+reading a green run as coverage:
+
+* the cross-check arm guarded by ``if POLYNOMIAL_COEFFICIENTS`` now has
+  full teeth -- it iterates all 24 glasses;
+* the four ``TestPolynomialStubManifest`` tests below iterate or intersect
+  ``_POLYNOMIAL_STUB_NAMES`` and therefore pass VACUOUSLY over an empty
+  set.  They are deliberately retained as forward guards: they regain
+  teeth the moment a glass is re-stubbed.  They are not evidence that the
+  manifest is correct today, because there is no manifest today.
 """
 from __future__ import annotations
 

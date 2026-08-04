@@ -245,6 +245,11 @@ def test_w6_b1_default_is_the_corrected_anchor():
         assert (N + 0.5) * default[2] == pytest.approx(Rbig, rel=1e-14)
 
 
+# v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 3): measured 130.9 s of this
+# file's 138.6 s -- 94% of the file, and the only heavy test in it WITHOUT a
+# ``slow`` mark, while five lighter siblings around it carry one.  A bit-identity
+# claim over a full BORStack solve is precisely the slow gate's remit.
+@pytest.mark.slow
 def test_w6_b1_default_path_is_bit_identical_to_explicit_rbig(anchor):
     """Setting the switch to its own default must change nothing, bit for bit
     -- grids, stencils and a full ``BORStack`` solve."""

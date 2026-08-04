@@ -1,0 +1,115 @@
+[c11_with_arbiter] DECENTRED_FIT_ARBITER=True  RESID_DEG=6  _DECENTRE_GATE_W_FRAC=0.05
+[c11_with_arbiter] lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+[c11_with_arbiter] _lens_traced 83a848749bfddba7  carrier 5a1b0d1021969df1
+   lib _lens_traced.py  sha256 83a848749bfddba7
+   RN=1024 ray_subsample=4  post-DOE groups only, final_distance=0 final_leg='paraxial' (no readout stage)
+   guard band at ray_subsample=4: [0.8900, 1.0500]
+
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+=== order (0, 0)  config ship (C5=True, C6=True, GUARD=False)  [24s] ===
+ grp    dx/um   ap/mm       clip         P_in        P_out      elem leg_after-1  ENG  FLD  NYQ      chain P
+------------------------------------------------------------------------------------------------------------
+   0   51.234  29.969  9.613e-10 6.825232e-08 6.824181e-08  0.999846   0.00e+00    0    0    0 6.824181e-08
+   1   51.234  30.733  2.952e-12 6.824181e-08 6.824095e-08  0.999987  -3.33e-16    0    0    0 6.824095e-08
+   2   51.235  31.502  6.635e-13 6.824095e-08 6.821258e-08  0.999584  -3.33e-16    0    0    1 6.821258e-08
+   3   44.912  31.766  3.162e-11 6.821258e-08 6.818149e-08  0.999544   2.22e-16    0    0    1 6.818149e-08
+   4   38.432  27.176  1.696e-13 6.818149e-08 6.814154e-08  0.999414   2.22e-16    0    0    1 6.814154e-08
+   5   33.211  20.397  1.554e-14 6.814154e-08 6.786434e-08  0.995932        nan    0    0    1 6.786434e-08
+  END TO END  P_out(last)/P_in(first) = 0.994315
+    = prod(elem) 0.994315 x prod(1-clip) 1.000000 x prod(leg) 1.000000  [check 0.994315]
+    aperture-clipped (legitimate) total: 9.967e-10
+    HALO at last-group exit (about traced exit chief +0.0000,+0.0000 mm): g1 2.374e-01 g2 3.734e-03 g4 0.000e+00 g8 0.000e+00
+        amax4 0.000e+00  r_rms 0.8383 mm  core 0.6204 mm
+    [chain warn x2] apply_real_lens_traced Newton inversion: 17559/65536 pixels (26.8%) did not converge to tol=5.123e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 14911/65536 pixels (22.8%) did not converge to tol=5.123e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 5062/65536 pixels (7.7%) did not converge to tol=5.123e-07 m within 1
+    [chain warn x2] apply_real_lens_traced Newton inversion: 13095/65536 pixels (20.0%) did not converge to tol=3.843e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 55947/65536 pixels (85.4%) did not converge to tol=3.321e-07 m within
+    [chain warn x1] _sphere_parab_conversion: the band-limit radius r_safe=7.196 mm = (|R|^3 lambda/dx)^(1/3) at R=-21.139 mm, dx=
+
+
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+=== order (-1, 0)  config ship (C5=True, C6=True, GUARD=False)  [25s] ===
+ grp    dx/um   ap/mm       clip         P_in        P_out      elem leg_after-1  ENG  FLD  NYQ      chain P
+------------------------------------------------------------------------------------------------------------
+   0   51.234  29.969  2.662e-09 6.825232e-08 6.823550e-08  0.999753   6.66e-16    0    0    0 6.823550e-08
+   1   51.234  30.733  8.828e-11 6.823550e-08 6.821747e-08  0.999736   6.66e-16    0    0    0 6.821747e-08
+   2   51.235  31.502  1.961e-11 6.821747e-08 6.819009e-08  0.999599   6.66e-16    0    0    1 6.819009e-08
+   3   44.912  31.766  1.081e-09 6.819009e-08 6.815911e-08  0.999546   8.88e-16    0    0    1 6.815911e-08
+   4   38.432  27.176  3.789e-10 6.815911e-08 6.811916e-08  0.999414   1.11e-15    0    0    1 6.811916e-08
+   5   33.211  20.397  6.268e-12 6.811916e-08 6.784714e-08  0.996007        nan    0    0    1 6.784714e-08
+  END TO END  P_out(last)/P_in(first) = 0.994063
+    = prod(elem) 0.994063 x prod(1-clip) 1.000000 x prod(leg) 1.000000  [check 0.994063]
+    aperture-clipped (legitimate) total: 4.235e-09
+    HALO at last-group exit (about traced exit chief -0.4799,+0.0000 mm): g1 2.388e-01 g2 3.798e-03 g4 1.962e-11 g8 0.000e+00
+        amax4 1.716e-05  r_rms 0.8384 mm  core 0.6195 mm
+    [chain warn x2] apply_real_lens_traced Newton inversion: 17500/65536 pixels (26.7%) did not converge to tol=5.123e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 14911/65536 pixels (22.8%) did not converge to tol=5.123e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 5019/65536 pixels (7.7%) did not converge to tol=5.123e-07 m within 1
+    [chain warn x2] apply_real_lens_traced Newton inversion: 12564/65536 pixels (19.2%) did not converge to tol=3.843e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 53367/65536 pixels (81.4%) did not converge to tol=3.321e-07 m within
+    [chain warn x1] _sphere_parab_conversion: the band-limit radius r_safe=7.196 mm = (|R|^3 lambda/dx)^(1/3) at R=-21.139 mm, dx=
+
+
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+=== order (-2, 0)  config ship (C5=True, C6=True, GUARD=False)  [25s] ===
+ grp    dx/um   ap/mm       clip         P_in        P_out      elem leg_after-1  ENG  FLD  NYQ      chain P
+------------------------------------------------------------------------------------------------------------
+   0   51.234  29.969  1.820e-09 6.825232e-08 6.822815e-08  0.999646   6.66e-16    0    0    1 6.822815e-08
+   1   51.234  30.733  3.357e-10 6.822815e-08 6.821885e-08  0.999864   2.22e-16    0    0    1 6.821885e-08
+   2   51.235  31.502  9.600e-11 6.821885e-08 6.819216e-08  0.999609   6.66e-16    0    0    1 6.819216e-08
+   3   44.912  31.766  3.470e-09 6.819216e-08 6.816107e-08  0.999544   6.66e-16    0    0    1 6.816107e-08
+   4   38.432  27.176  5.445e-11 6.816107e-08 6.812127e-08  0.999416   8.88e-16    0    0    1 6.812127e-08
+   5   33.211  20.397  1.757e-11 6.812127e-08 6.785181e-08  0.996044        nan    0    0    1 6.785181e-08
+  END TO END  P_out(last)/P_in(first) = 0.994132
+    = prod(elem) 0.994132 x prod(1-clip) 1.000000 x prod(leg) 1.000000  [check 0.994132]
+    aperture-clipped (legitimate) total: 5.794e-09
+    HALO at last-group exit (about traced exit chief -0.9595,+0.0000 mm): g1 2.388e-01 g2 3.779e-03 g4 6.783e-11 g8 0.000e+00
+        amax4 3.213e-05  r_rms 0.8382 mm  core 0.6194 mm
+    [chain warn x2] apply_real_lens_traced Newton inversion: 17447/65536 pixels (26.6%) did not converge to tol=5.123e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 14911/65536 pixels (22.8%) did not converge to tol=5.123e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 5048/65536 pixels (7.7%) did not converge to tol=5.123e-07 m within 1
+    [chain warn x2] apply_real_lens_traced Newton inversion: 24154/65536 pixels (36.9%) did not converge to tol=3.843e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 54574/65536 pixels (83.3%) did not converge to tol=3.321e-07 m within
+    [chain warn x1] _sphere_parab_conversion: the band-limit radius r_safe=7.196 mm = (|R|^3 lambda/dx)^(1/3) at R=-21.139 mm, dx=
+
+
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 51.5393 mm / gap_after 0.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_d121_common.py:78: UserWarning: D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_real_lens_traced, which propagate the surface as flat.  Run the orders explicitly: put {'doe': rx['diffractives'][k]} in propagate_traced_carrier_chain's groups list (its gap_before 0.0000 mm / gap_after 7.0000 mm are then bookkept for you -- give the group that FOLLOWS the last DOE entry gap_before=0, since gap_after already carries that leg), one order per congruence via propagate_traced_carrier_chain_multi.
+  rx = la.load_zemax_zmx(ZMX)
+=== order (-4, -2)  config ship (C5=True, C6=True, GUARD=False)  [25s] ===
+ grp    dx/um   ap/mm       clip         P_in        P_out      elem leg_after-1  ENG  FLD  NYQ      chain P
+------------------------------------------------------------------------------------------------------------
+   0   51.234  29.969  6.994e-09 6.825232e-08 6.822615e-08  0.999617   6.66e-16    0    0    1 6.822615e-08
+   1   51.234  30.733  4.043e-09 6.822615e-08 6.819850e-08  0.999595   4.44e-16    0    0    1 6.819850e-08
+   2   51.235  31.502  3.529e-09 6.819850e-08 6.817203e-08  0.999612   6.66e-16    0    0    1 6.817203e-08
+   3   44.912  31.766  2.075e-08 6.817203e-08 6.814105e-08  0.999546   1.11e-15    0    0    1 6.814105e-08
+   4   38.432  27.176  1.865e-08 6.814105e-08 6.810088e-08  0.999411   1.11e-15    0    0    1 6.810088e-08
+   5   33.211  20.397  1.324e-05 6.810088e-08 6.783091e-08  0.996049        nan    0    0    1 6.783091e-08
+  END TO END  P_out(last)/P_in(first) = 0.993826
+    = prod(elem) 0.993839 x prod(1-clip) 0.999987 x prod(leg) 1.000000  [check 0.993826]
+    aperture-clipped (legitimate) total: 1.329e-05
+    HALO at last-group exit (about traced exit chief -1.9151,-0.9575 mm): g1 2.383e-01 g2 3.738e-03 g4 9.114e-09 g8 0.000e+00
+        amax4 1.116e-04  r_rms 0.8375 mm  core 0.6193 mm
+    [chain warn x2] apply_real_lens_traced Newton inversion: 17233/65536 pixels (26.3%) did not converge to tol=5.123e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 15136/65536 pixels (23.1%) did not converge to tol=5.123e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 5060/65536 pixels (7.7%) did not converge to tol=5.123e-07 m within 1
+    [chain warn x2] apply_real_lens_traced Newton inversion: 1973/65536 pixels (3.0%) did not converge to tol=4.491e-07 m within 1
+    [chain warn x2] apply_real_lens_traced Newton inversion: 24082/65536 pixels (36.7%) did not converge to tol=3.843e-07 m within
+    [chain warn x2] apply_real_lens_traced Newton inversion: 54637/65536 pixels (83.4%) did not converge to tol=3.321e-07 m within
+
+

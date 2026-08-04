@@ -207,6 +207,12 @@ def test_w6_1_cell_smatrix_conserves_power(kx0, qz2):
         assert v < 1e-10, f"lossless flux violated by {v:.3e}"
 
 
+# v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 §4/chunk 3): this file carried ZERO
+# ``slow`` marks despite measuring 197 s pinned -- the exact class the slow
+# gate exists for.  These six cells (a vector mode solve against a 2-D FD
+# oracle) plus the structured-diffraction convergence test below are the bulk
+# of it; the remaining ~65 contract/validation tests stay on the fast gate.
+@pytest.mark.slow
 @pytest.mark.parametrize("kx0", [0.0, 0.37, 1.1])
 @pytest.mark.parametrize("ky0", [0.0, PI])
 def test_w6_1_layer_modes_recall_vs_fd_oracle(kx0, ky0):
@@ -727,6 +733,8 @@ def test_clean_eyz_layer_finder_stays_gated():
                                         (100.0, 130.0), ky0=PI, n_scan=10)
 
 
+@pytest.mark.slow            # v5.32.1: see the w6_1 note above (heaviest test
+                             # in the file; a non-convergence demonstration)
 def test_clean_structured_diffraction_still_warns_and_does_not_converge():
     """The module's documented NEGATIVE RESULT is a basis problem, not the
     conditioning problem W6-2 fixed: with the stable reformulation in place a

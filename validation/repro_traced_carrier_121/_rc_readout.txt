@@ -1,0 +1,30 @@
+lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+  _lens_traced.py 9717ad88dd959889
+  carrier.py 5a1b0d1021969df1
+readout lattice dx_out 0.4 um  n_out 61  window +-12.0 um   RN=1024 rs=4 CLIP=3.0
+
+########## ORDER (+0,+0) ##########
+  oracle EE3  90.7421  EE6  99.8955  FWHM  3.441  centroid (+0.0000,-0.0000) um  peak (+0.0000,+0.0000) um  sha d3d1c04a8231f248  [28s]
+  chain  EE3  90.6934  EE6  99.8777  FWHM  3.442  centroid (+0.0000,+0.0000) um  peak (+0.0000,+0.0000) um  sha 8db002a1c1bd58ef  [43s]
+
+########## ORDER (-1,+0) ##########
+  oracle EE3  90.7876  EE6  99.9000  FWHM  3.451  centroid (+0.0243,-0.0000) um  peak (+0.0582,+0.0000) um  sha 5dfc3e54e5fad70e  [28s]
+  chain  EE3  89.8529  EE6  99.3297  FWHM  3.461  centroid (+0.0128,+0.0000) um  peak (+0.0599,+0.0001) um  sha eef5a64eb2f808a3  [49s]
+
+########## ORDER (-2,+0) ##########
+  oracle EE3  90.8778  EE6  99.9100  FWHM  3.452  centroid (+0.0228,-0.0000) um  peak (+0.0718,+0.0000) um  sha 1da343f21b1614e4  [27s]
+  chain  EE3  90.1033  EE6  99.3892  FWHM  3.462  centroid (+0.0038,+0.0000) um  peak (+0.0676,+0.0001) um  sha 41a950e7767eb956  [50s]
+
+########## ORDER (-3,+0) ##########
+  oracle EE3  90.9066  EE6  99.9202  FWHM  3.464  centroid (-0.0317,-0.0000) um  peak (-0.0063,+0.0000) um  sha 69d00ca5997a4c28  [27s]
+  chain  EE3  90.6284  EE6  99.5260  FWHM  3.443  centroid (-0.0588,+0.0000) um  peak (-0.0150,+0.0001) um  sha 7db7995c34afbdec  [50s]
+
+########## ORDER (-4,+0) ##########
+  oracle EE3  90.9294  EE6  99.9206  FWHM  3.359  centroid (-0.1693,-0.0000) um  peak (-0.2340,+0.0000) um  sha c4050769c50bc937  [27s]
+  chain  EE3  90.3417  EE6  99.6619  FWHM  3.423  centroid (-0.1978,+0.0000) um  peak (-0.2200,+0.0001) um  sha 8a589d3d7013ade5  [49s]
+
+########## ORDER (-4,-2) ##########
+  oracle EE3  90.0250  EE6  99.9080  FWHM  3.364  centroid (-0.2442,-0.1222) um  peak (-0.3667,-0.1852) um  sha dbed7a1b2f30eebb  [27s]
+  chain  EE3  89.9005  EE6  99.6649  FWHM  3.383  centroid (-0.2656,-0.1277) um  peak (-0.3427,-0.1706) um  sha 5e8550468cb6061b  [50s]
+
+saved D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_rc_readout_0.4um_61.npz

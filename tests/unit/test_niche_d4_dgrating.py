@@ -624,7 +624,29 @@ def _rel(a, b):
 
 
 @pytest.fixture(scope='module')
-def runs():
+def _shipped_fft_for_this_module(fft_state_ctx):
+    """Compute this module's chains from the SHIPPED FFT-dispatch state
+    (niche C11, 2026-08-03).
+
+    ``runs`` below is MODULE-scoped, and pytest builds module scope before
+    function scope -- so the function-scoped ``shipped_fft_dispatch`` fixture
+    cannot protect it: the chains would already have been computed by the time
+    it activated.  ``shipped_fft_dispatch_state`` is the same body as a context
+    manager, usable here.
+
+    WHY THIS MODULE.  ``test_matches_the_manual_hand_split`` fails on CI with a
+    0.066 relative delta while passing in isolation and under this box's shard
+    layout -- an order-dependence whose carrier is process-global state, not
+    physics.  ``fft_infra`` holds both a physics mode
+    (``DEFAULT_WAVE_PROPAGATOR``) and the pyFFTW dispatch set, and
+    ``lumenairy/ui/waveoptics_dock.py`` clears ``USE_PYFFTW`` unconditionally.
+    """
+    with fft_state_ctx():
+        yield
+
+
+@pytest.fixture(scope='module')
+def runs(_shipped_fft_for_this_module):
     """Every chain run this module needs, computed once (~2.5 s each)."""
     pre = [{'prescription': G1, 'gap_before': G0}]
     post = [{'prescription': G2, 'gap_before': D2}]
@@ -747,7 +769,7 @@ class TestDoeChainBookkeeping:
             "a 1-ulp gap change is invisible here, so bitwise is not the "
             "meaningful claim this test says it is")
 
-    def test_matches_the_manual_hand_split(self, runs):
+    def test_matches_the_manual_hand_split(self, runs, process_state_dump):
         """(b) The binding equivalence for a DEFLECTED order: the DOE entry
         reproduces the two-chain hand split (chain to the DOE plane, re-seed
         a TiltedCarrier by hand, chain onward) that design 121's fan runner
@@ -755,12 +777,37 @@ class TestDoeChainBookkeeping:
 
         The two differ only in what the HAND SPLIT does extra, and both terms
         are on its side of the ledger: it transports the leg in two pieces
-        instead of one (measured 3.1e-8 under ``carrier_reference=
+        instead of one (measured **1.14e-10** under ``carrier_reference=
         'parabola'``, where that is the only difference), and under the
         shipped ``'sphere'`` default it additionally converts the envelope to
-        the parabola reference and back at the split plane (5.3e-7)."""
-        assert _rel(runs['doe_par'].field, runs['manual_par'].field) < 1e-6
-        assert _rel(runs['doe'].field, runs['manual'].field) < 1e-4
+        the parabola reference and back at the split plane (**6.72e-7**).
+
+        THOSE TWO NUMBERS ARE POST-C13 and both builds now agree on them to
+        five figures.  The line previously recorded here -- 3.1e-8 and 5.3e-7 --
+        was taken while ``_solve_lstsq_thread_safe`` was solving the weighted
+        traced fits through a numerically singular Gram matrix, so it was
+        measuring the solver's null-space draw and not the split.  The
+        two-piece transport term in particular was over-stated by 270x: it is
+        1.14e-10, i.e. essentially exact.  See
+        ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``, and
+        ``C11_PHYSICAL_DECENTRE_GATE_2026_08_03`` S9.5 for how this test came
+        to be the witness for it (it read 8.80e-02 on Linux/OpenBLAS, run
+        ALONE, against 5.93e-07 on Windows)."""
+        r_par = _rel(runs['doe_par'].field, runs['manual_par'].field)
+        r_sph = _rel(runs['doe'].field, runs['manual'].field)
+        # SELF-REPORTING (niche C11): this case failed on CI and passed in
+        # isolation, so the failure names the victim and never the poisoner.
+        # Dump every process-global the physics depends on WITH the numbers,
+        # so the next CI failure identifies the poisoned state instead of
+        # costing another bisect round.  (The carrier turned out to be the
+        # BUILD, not process state -- C13 -- but the dump is cheap and the
+        # class it guards is real.)
+        assert r_par < 1e-6, (
+            f'parabola-reference arm: {r_par:.4e} >= 1e-6'
+            + process_state_dump())
+        assert r_sph < 1e-4, (
+            f'sphere-reference arm: {r_sph:.4e} >= 1e-4'
+            + process_state_dump())
 
     def test_chief_ray_matches_an_exact_meridional_raytrace(self, runs):
         """Independent oracle for what the bookkeeping actually claims: the
