@@ -80,6 +80,7 @@ from ..rcwa._core import _project_efficiency  # shared flux-projection (S1-9/S1-
 # solves (no pseudo-inverse, no weighting).
 from ._core import (
     _forward_branch_flip,
+    _guarded_lstsq,
     _interface_smatrix,
     _propagation_smatrix,
     _redheffer_star,
@@ -1049,7 +1050,8 @@ def pmm_efficiency_2d_staggered(
             einc_sq = 1.0 + (kt / kz_inc0) ** 2
     delta = ((order_x == 0) & (order_y == 0)).astype(_C)
     rhs = np.concatenate([ex0 * delta, ey0 * delta])         # (2 Nfo,)
-    cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)        # (2 q^2,)
+    cinc = _guarded_lstsq(                                   # (2 q^2,)
+        Hsup, rhs, "pmm 2-D staggered far-field Rayleigh projection")
 
     r_ord = Hsup @ (S11 @ cinc)                              # (2 Nfo,)
     t_ord = Hsub @ (S21 @ cinc)

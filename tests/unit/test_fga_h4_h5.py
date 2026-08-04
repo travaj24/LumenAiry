@@ -286,6 +286,17 @@ def test_c2_env_budget_override(monkeypatch):
     unparseable / non-positive one is ignored with a warning (never silently
     disables the guard)."""
     monkeypatch.delenv('LUMENAIRY_MEM_BUDGET_MB', raising=False)
+    # DETERMINISM (2026-08-04): the auto-default reads LIVE available RAM by
+    # documented design, so two live reads on a busy box differ and the old
+    # ``approx(auto)`` comparisons raced the machine's memory (failed in a
+    # full-suite sweep with concurrent workers allocating GBs; the test, not
+    # the library, was wrong).  Pin the RAM source so ``auto`` is a constant
+    # and the assertions test the CONTRACT: invalid env -> warn + fall back
+    # to the auto value, never silently disable.
+    import psutil
+    _vm = psutil.virtual_memory()
+    _pinned = type(_vm)(*_vm)          # freeze a snapshot
+    monkeypatch.setattr(psutil, 'virtual_memory', lambda: _pinned)
     auto = fga._default_mem_budget_mb()
     assert auto >= fga._DEFAULT_MEM_BUDGET_FLOOR_MB
     monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', '4096')

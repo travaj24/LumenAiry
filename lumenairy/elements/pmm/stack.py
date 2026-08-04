@@ -30,6 +30,7 @@ from ._core import (
     _cov_layer_4n,
     _cov_split,
     _freeze_cached,
+    _guarded_lstsq,
     _half_M_sym_metric,
     _interface_smatrix,
     _interface_smatrix_general_mortar,
@@ -1602,7 +1603,8 @@ class PMMStack:
             for col in range(2):
                 rhs = np.zeros(2 * N, dtype=_C)
                 rhs[(col * N) + m0] = 1.0
-                ci, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+                ci = _guarded_lstsq(
+                    Hsup, rhs, "PMMStack internal-field Rayleigh projection")
                 cinc_cols.append(ci)
             self._internal["cinc"] = np.stack(cinc_cols, axis=1)
             self._internal["R_tot"] = R_eff.sum(axis=1)
@@ -1811,7 +1813,8 @@ class PMMStack:
             for col in range(2):
                 rhs = np.zeros(2 * N, dtype=_C)
                 rhs[(col * N) + m0] = 1.0
-                ci, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+                ci = _guarded_lstsq(
+                    Hsup, rhs, "PMMStack internal-field Rayleigh projection")
                 cinc_cols.append(ci)
             self._internal["cinc"] = np.stack(cinc_cols, axis=1)
             self._internal["R_tot"] = R_eff.sum(axis=1)

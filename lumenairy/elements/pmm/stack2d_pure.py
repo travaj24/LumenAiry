@@ -79,6 +79,7 @@ import numpy as np
 from ..rcwa._core import _project_efficiency  # shared flux-projection (S1-9/S1-10)
 from ._core import (
     PerOrderAmplitudesMixin,
+    _guarded_lstsq,
     _interface_smatrix,
     _propagation_smatrix,
     _redheffer_star,
@@ -347,7 +348,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             long_inc = kx0 * ex0 + ky0 * ey0
             einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
             rhs = np.concatenate([ex0 * delta, ey0 * delta])
-            cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+            cinc = _guarded_lstsq(
+                Hsup, rhs, "PMM2DStackPure far-field Rayleigh projection")
             cinc_cols.append(cinc)
             r_ord = Hsup @ (S11 @ cinc)
             t_ord = Hsub @ (S21 @ cinc)

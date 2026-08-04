@@ -48,7 +48,17 @@ from ..rcwa import (
 # Incidence-medium guard shared with the 2-D PMM paths (twod.py / stack2d.py):
 # the rcwa guard expects the INTERNAL exp(+i w t) eps convention, so PUBLIC-
 # convention callers pass np.conj(eps_sup) (mirrors twod_staggered's bridge).
-from ..rcwa._core import _require_propagating_incidence
+#
+# M1 / N-2 (2026-08-04): ONE conditioning guard for both solvers.  Defined in
+# rcwa/_core.py beside the ``cond ~1e13`` docstring that motivated it, imported
+# here rather than forked -- the duplication-kills rule, and a forked threshold
+# is a forked contract.  See ``INTERFACE_CONDITIONING_GUARD`` there and
+# ``docs/audits/PMM_M1_CONDITIONING_2026_08_04.md``.
+from ..rcwa._core import (
+    _ConditioningError,
+    _guarded_inverse,
+    _require_propagating_incidence,
+)
 
 _C = np.complex128
 
@@ -472,6 +482,94 @@ def _equil_scale(A):
 
 
 
+#: BAR for the Rayleigh-projection least squares (M1 / N-2, and the instrument
+#: T3-3's fail-before is measured with).  The RELATIVE RESIDUAL
+#: ``||H c - rhs|| / ||rhs||`` above which the incident-field decomposition is
+#: declared a draw rather than a solve.
+#:
+#: WHY ``rcond=None`` was not already a guard.  NumPy reads ``rcond=None`` as
+#: ``eps * max(M, N)`` -- a cutoff at the float64 NOISE FLOOR -- so on a
+#: projector built past the grid's nodal capacity (more Rayleigh orders than
+#: the grid carries: see the ``cap`` clamp in the four per-layer paths) the
+#: deciding singular values sit AT that floor and which ones survive is settled
+#: by the last bits of the SVD, i.e. by the BLAS build.
+#:
+#: WHY THE RESIDUAL AND NOT ``rcond(H)``, WHICH WAS TRIED FIRST AND IS WRONG.
+#: Measured on the audit staircase at ``far_field_orders`` 5..77 (M1 audit S3):
+#: ``rcond(Hsup)`` reads **7.8e-17** on a projection whose answer is right to
+#: nine digits (shared grid, ffo 41, numerical rank 73 of 82) and **7.1e-17**
+#: on one whose answer is wrong -- the two populations OVERLAP, and a screen on
+#: ``rcond`` refuses good solves and passes bad ones.  ``Hsup``'s small
+#: singular values are the high-order Fourier projections of a nodal basis
+#: aliasing against each other; that is expected and harmless while the
+#: incident plane wave still lies in the range.  What fails is exactly when it
+#: stops lying in the range, and the residual is the direct measurement of
+#: that.  Separation on the same sweep: every solve that returns a correct
+#: answer reads ``relres`` <= 1.9e-12 (typical 1e-15..1e-14); the first broken
+#: one reads 6.5e-07 (``|R+T-1|`` = 1.13) and the next 2.0e-03 (``|R+T-1|`` =
+#: 1.9e7, ``J00`` = 113 for a passive stack).  Five and a half orders of gap
+#: with 1e-9 in it.
+#:
+#: ``||c||`` inflation is the same story told less portably -- 1.2e3 -> 3.0e7
+#: -> 2.6e11 across those three -- but its scale is basis-normalisation
+#: dependent (3.8 on a different stack's healthy solve), so it is reported in
+#: the error text and not used as the bar.  C13 reached the same conclusion
+#: about ``||x||`` for a different reason.
+_LSTSQ_RESID_BAR = 1e-9
+
+
+def _guarded_lstsq(A, b, site, hint=None):
+    """``lstsq(A, b, rcond=None)`` scored on its own equations.
+
+    Adds ONE matvec (``O(mn)``, against the ``gelsd`` SVD's ``O(mn^2)``): the
+    relative residual ``||A x - b|| / ||b||``.  A projection that represents
+    the incident field returns the identical bits it returned before; one that
+    does not raises :class:`_ConditioningError` instead of reporting a
+    build-dependent minimum-norm draw.  ``INTERFACE_CONDITIONING_GUARD = False``
+    restores the pre-M1 behaviour exactly.
+    """
+    from ..rcwa import _core as _rc
+    x, _res, rank, s = np.linalg.lstsq(A, b, rcond=None)
+    if not _rc.INTERFACE_CONDITIONING_GUARD:
+        return x
+    A = np.asarray(A)
+    b = np.asarray(b)
+    # A NaN/inf material index reached the solve: a propagation defect, which
+    # ``_check_energy`` diagnoses far more precisely downstream.  Stand aside.
+    if not (np.all(np.isfinite(A)) and np.all(np.isfinite(b))):
+        return x
+    # FIRST condition: a minimum-norm draw REQUIRES a null space to draw from.
+    # A full-rank projector cannot be returning one, whatever its residual --
+    # and that is what separates the 2-D staggered basis (rank 200 of 200,
+    # rcond 6.9e-03, residual 2.1e-07: a METHOD representation error, and the
+    # answer is right) from the over-capacity 1-D projection (rank 78 of 122,
+    # rcond 7.1e-17, residual 6.5e-07: an actual draw, and the answer is 10%
+    # wrong).  The residual alone put those two on the same side of every bar.
+    if int(rank) >= min(A.shape):
+        return x
+    nb = float(np.linalg.norm(b))
+    r = float(np.linalg.norm(A @ x - b))
+    relres = (r / nb) if nb > 0.0 else r
+    # SECOND condition: rank deficiency alone is not enough either -- the
+    # shared grid at far_field_orders 41 is rank 73 of 82 and right to nine
+    # digits, because the incident field still lies in the range.  Both
+    # conditions together separate all four families measured.
+    if not np.isfinite(relres) or relres <= _LSTSQ_RESID_BAR:
+        return x
+    s = np.asarray(s, dtype=float)
+    rc = float(s[-1] / s[0]) if s.size and s[0] > 0.0 else 0.0
+    raise _ConditioningError(
+        f"{site}: the incident field is not representable on this grid -- the "
+        f"Rayleigh projection is rank-deficient (numerical rank {int(rank)} of "
+        f"{min(A.shape)}) AND leaves a relative residual {relres:.2e} against "
+        f"a {_LSTSQ_RESID_BAR:.0e} bar (reciprocal condition {rc:.2e}, ||c|| = "
+        f"{float(np.linalg.norm(x)):.3e}).  The decomposition it would return "
+        f"is a minimum-norm draw from a null space and is BLAS-build "
+        f"dependent, so it is refused rather than reported.  "
+        + (hint or "Lower far_field_orders, or raise degree / "
+                   "elements_per_region so the grid carries the orders."))
+
+
 def _safe_inv(A):
     """``inv(A)`` with symmetric Jacobi equilibration when ``A`` is element-size
     ill-scaled.  Equilibration is the EXACT identity ``inv(A) = D inv(D A D) D``
@@ -812,10 +910,17 @@ def _sem_fourier_projection(orders, period, mats):
 # ===========================================================================
 
 def _interface_smatrix(Wa, Va, Wb, Vb):
+    # ``a + b`` is inverted EXPLICITLY (S12 = 2 (a+b)^-1) and takes the shared
+    # M1 screen-and-refuse guard, the same one RCWA's twin takes.  This is the
+    # SHARED-grid path -- i.e. the per-layer path's own oracle -- so it is the
+    # last place that may draw a build-dependent answer.
     a = np.linalg.solve(Wb, Wa)
     b = np.linalg.solve(Vb, Va)
     apb, amb = a + b, a - b
-    iapb = np.linalg.inv(apb)
+    iapb = _guarded_inverse(apb, "pmm interface mode-match (a+b)",
+                            hint="Raise degree / elements_per_region, or move "
+                                 "off the exact wavelength / angle "
+                                 "coincidence.")
     return (-iapb @ amb, 2.0 * iapb,
             0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
 
@@ -898,7 +1003,8 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     for col in range(2):                        # 0 = incident Ex, 1 = incident Ey
         rhs = np.zeros(2 * N, dtype=_C)
         rhs[(col * N) + m0] = 1.0               # order-0 unit Ex (col 0) / Ey (col 1)
-        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+        cinc = _guarded_lstsq(Hsup, rhs,
+                              "pmm far-field Rayleigh projection")
         r_ord = Hsup @ (S11 @ cinc)
         t_ord = Hsub @ (S21 @ cinc)
         rx, ry = r_ord[:N], r_ord[N:]
@@ -1188,7 +1294,8 @@ def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
     Hsup = Tp @ Wsup
     Hsub = Tp @ Wsub
     delta0 = (orders == 0).astype(_C)
-    cinc, *_ = np.linalg.lstsq(Hsup, delta0, rcond=None)
+    cinc = _guarded_lstsq(Hsup, delta0,
+                          "pmm far-field Rayleigh projection")
     r_ord = Hsup @ (S11 @ cinc)
     t_ord = Hsub @ (S21 @ cinc)
 
@@ -3533,11 +3640,22 @@ def _interface_smatrix_mortar(Wa, Va, Wb, Vb, Ma, Mb, Cab):
     bMa = np.kron(np.eye(2), Ma)
     bCba = np.kron(np.eye(2), Cab.T)
     bCab = np.kron(np.eye(2), Cab)
+    # CONDITIONING (M1 / N-2).  The two ``solve``s stay ``solve``s: LAPACK
+    # ``gesv`` is BACKWARD stable, so its residual is ~eps whatever the
+    # conditioning and a residual screen on them would measure nothing -- the
+    # damage they can do shows up downstream, in ``BA``, and is caught where it
+    # becomes an EXPLICIT inverse.  ``I + BA`` is that inverse, and it carries
+    # the compounded exposure of both solves, so ONE guard here covers the
+    # function.  Measured (audit staircase, per-layer, degree 6/8/10, classical
+    # and conical, 2-norm cond): ``M_b W_b`` 3.4e+02 - 3.8e+06, ``M_a V_a``
+    # 7.3e+05 - 2.1e+07, ``I + BA`` 1.3e+01 - 6.8e+03.  ``M_a V_a`` is the
+    # worst of the three and is still nine orders from a float64 problem.
     A = np.linalg.solve(bMb @ Wb, bCba @ Wa)
     B = np.linalg.solve(bMa @ Va, bCab @ Vb)
     BA = B @ A
     I_a = np.eye(BA.shape[0], dtype=_C)
-    iba = np.linalg.inv(I_a + BA)
+    iba = _guarded_inverse(I_a + BA, "pmm mortar interface (I + BA)",
+                           hint="Raise degree, or use layer_grids='shared'.")
     S11 = iba @ (I_a - BA)
     S12 = 2.0 * (iba @ B)
     S21 = A @ (I_a + S11)
@@ -3600,8 +3718,15 @@ def _redheffer_star_rect(SA, SB):
         D = I
         F = I
     else:
-        D = np.linalg.inv(I - B11 @ A22)
-        F = np.linalg.inv(I - A22 @ B11)
+        # M1 / N-2: the star denominators, which the RCWA census identified as
+        # the DOMINANT conditioning site of a cascade (cond 2.4e31 where the
+        # interface behind it read 3.1e16).  Same guard, same thresholds.
+        D = _guarded_inverse(I - B11 @ A22,
+                             "pmm per-layer star (I - B11 A22)",
+                             hint="Raise degree, or use layer_grids='shared'.")
+        F = _guarded_inverse(I - A22 @ B11,
+                             "pmm per-layer star (I - A22 B11)",
+                             hint="Raise degree, or use layer_grids='shared'.")
     return (A11 + A12 @ D @ B11 @ A21,
             A12 @ D @ B12,
             B21 @ F @ A21,
@@ -3944,7 +4069,8 @@ def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
     Hsup = Tp @ Wf_s
     Hsub = Tp @ Wf_b
     delta0 = (orders == 0).astype(_C)
-    cinc, *_ = np.linalg.lstsq(Hsup, delta0, rcond=None)
+    cinc = _guarded_lstsq(Hsup, delta0,
+                          "pmm far-field Rayleigh projection")
     r_ord = Hsup @ (S11 @ cinc)
     t_ord = Hsub @ (S21 @ cinc)
 

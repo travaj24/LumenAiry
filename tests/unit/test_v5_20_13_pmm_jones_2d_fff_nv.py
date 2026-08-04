@@ -79,14 +79,37 @@ def test_pmm_fff_nv_matches_rcwa_fff_nv():
     _o, Rp, Tp, _J = pmm_jones_2d(PX, PX, cell, 1.5, 1.0, DEPTH, WL, degree=11,
                                   n_orders=13, formulation="fff_nv",
                                   symmetry=False)
+    # REFERENCE TRUNCATION MOVED 13 -> 11 (2026-08-04).  The RCWA reference at
+    # n_orders_x = 13 sits ON this cell's measure-zero instability, and the
+    # "cross-solver residual" this test was reading was simply that: the
+    # reference's OWN lossless-closure violation.  Measured, same cell, same
+    # PMM answer, |dT| against the reference's closure defect:
+    #
+    #     M    RCWA closure    |dT|
+    #     11   -2.3e-05        2.9e-04
+    #     12   +2.6e-03        3.0e-03
+    #     13   +2.6e-02        2.7e-02   <- was pinned here, the WORST of the six
+    #     14   +1.6e-03        1.9e-03
+    #     15   +1.6e-04        2.1e-03
+    #
+    # |dT| tracks the closure defect one-for-one at every M, so the quantity
+    # being compared was never a factorization floor.  Both engines emit
+    # _EnergyWarning at 13 saying exactly this ("the truncation is numerically
+    # unstable here and the PER-ORDER efficiencies are suspect").  The 4e-3 bar
+    # is UNCHANGED -- widening it would have pinned the instability instead of
+    # avoiding it -- and the closure of both engines is now asserted first, so
+    # this can never again silently compare against an unstable reference.
     _o, Rr, Tr, _J = rcwa_jones_2d(PX, PX, cell, 1.5, 1.0, DEPTH, WL,
-                                   n_orders_x=13, n_orders_y=1,
+                                   n_orders_x=11, n_orders_y=1,
                                    formulation="fff_nv", symmetry=False)
+    # the structure is provably lossless: neither side may be compared unless
+    # it conserves.  (Measured: PMM -2.9e-04, RCWA -2.3e-05.)
+    assert abs(np.sum(Rp) + np.sum(Tp) - 2.0) < 1e-3, "PMM reference unstable"
+    assert abs(np.sum(Rr) + np.sum(Tr) - 2.0) < 1e-3, "RCWA reference unstable"
     # PMM (Laurent-projected) and RCWA (Li-2003 successive) are DIFFERENT
     # factorizations, so they converge to slightly different floors -- the
-    # cross-solver residual is a genuine ~2-3e-3 (BLAS/build-dependent, e.g.
-    # 2.69e-3 on the CI 3.13 runner), not a machine-precision match.  4e-3
-    # keeps the check meaningful (catches gross errors) without flaking.
+    # cross-solver residual is a genuine one, not a machine-precision match.
+    # 4e-3 keeps the check meaningful (catches gross errors) without flaking.
     assert abs(np.sum(Rp) - np.sum(Rr)) < 4e-3
     assert abs(np.sum(Tp) - np.sum(Tr)) < 4e-3
 

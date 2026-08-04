@@ -431,6 +431,351 @@ class _EnergyWarning(UserWarning):
     retry ladders treat a recorded ``_EnergyWarning`` as a failed attempt."""
 
 
+# ===========================================================================
+# Conditioning guard on the cascade inverses  (M1 / X-1 / N-2, 2026-08-04)
+# ===========================================================================
+# See ``docs/audits/PMM_M1_CONDITIONING_2026_08_04.md``.
+#
+# WHAT WAS UNGUARDED.  :func:`_interface_smatrix` forms an EXPLICIT
+# ``inv(a + b)`` and :func:`_check_energy`'s own docstring records that this
+# matrix reaches ``cond ~1e13``; :func:`_redheffer_star` inverts
+# ``I - B11 A22`` twice per star; :func:`_interface_smatrix_general` inverts
+# the ``T22`` block of ``inv(Mb) Ma``.  None of them had an ``rcond``, a
+# regularisation, a probe or a fallback, on the DEFAULT path of every RCWA
+# solve -- and RCWA is one of PMM's two in-repo independent oracles.
+#
+# WHAT THE CENSUS MEASURED, and why this is NOT the C13 fix.  On the library's
+# own documented instability class (the large-period / low-contrast thin
+# grating of ``test_rcwa_reduces_to_thin_grating_limit``, 10 um period, index
+# contrast 0.05, ``n_orders`` 8..23, both polarizations, both BLAS builds):
+#
+#   * a "more stable re-solve" DOES NOT EXIST here.  Five routes were measured
+#     on the real matrices -- LU (shipped), Householder QR, column-pivoted QR,
+#     SVD pseudo-inverse, and LU + one step of iterative refinement -- scored
+#     on ``||A X - I||_F``.  The SHIPPED LU inverse beats the SVD pseudo-inverse
+#     on every matrix in the census, and beats both QR routes on every matrix
+#     EXCEPT the two most singular ones, where all four agree within a factor
+#     of 1.6 and all four are catastrophic (>= 1.2e-02).  Only the refinement
+#     step improves it, by a measured 2-4x.  At ``cond`` 3.1e16 the best of the
+#     five still leaves ``||A X - I||`` = 4.3e-3: no float64 route recovers that
+#     answer.  C13 could re-solve because its normal equations were throwing
+#     away half the digits of an ``A`` that was only ``cond`` 1.4e10; here the
+#     operator itself is numerically singular, so the only correct action is to
+#     REFUSE;
+#   * the residual is a STRICTLY BETTER detector than cross-build agreement.
+#     At ``n_orders`` = 21 TE both builds returned the same ``sum(R)`` = 3.2e-2
+#     against a converged 2.0e-4 -- agreeing, to every digit, on an answer
+#     160x wrong, with ``R+T`` = 1.032 sitting inside :class:`_EnergyWarning`'s
+#     documented silent window;
+#   * **and the residual must be EQUILIBRATED, which is the finding that cost
+#     the most to get.**  A raw ``||A X - I||`` separates the thin grating's
+#     broken truncations from its clean ones by 1.5 orders -- and then FALSELY
+#     REFUSES the anisotropic 1-D Jones cascade, whose star denominators carry
+#     ``||I - B11 A22||_1`` ~ 1e17 at EVERY truncation (deep-evanescent blocks
+#     of the generalized S-matrix) and therefore a raw residual of 0.01 - 0.5
+#     while the answer is right and the two BLAS builds agree to twelve digits.
+#     Measured over both families: the raw residual does NOT separate (healthy
+#     max 5.2e-01 against broken min 7.0e-07); the ratio
+#     ``||AX-I|| / (||A|| ||X||)`` does not separate either -- it reads ~eps on
+#     everything, because ``inv`` IS backward stable, which is also exactly why
+#     a backward-stable ``solve`` needs no guard at all.  The two-sided
+#     EQUILIBRATED forms separate both families: ``rcond`` 1.3e-10 (worst
+#     broken) against 2.3e-09 (best healthy) and 1.2e-05 on the anisotropic
+#     family; equilibrated residual 5.3e-08 (worst broken) against 3.6e-09
+#     (best healthy).
+#
+# SO THE GUARD IS A SCREEN AND A REFUSAL, not a step-down: it computes the
+# inverse exactly as before, screens it for free, and where the screen fires it
+# scores the operator against its own defining equation ``A X = I`` in the
+# equilibrated scaling and raises :class:`_ConditioningError` when that answer
+# is not usable.  Every solve that passes the screen returns the identical bits
+# it returned before, and so does every solve that fails the screen but passes
+# the residual.
+#
+# WHY THE SCREEN IS FREE.  ``cond_1(A) = ||A||_1 ||A^-1||_1`` is EXACT (not an
+# estimate) and both norms are O(n^2) column sums -- and ``A^-1`` is the thing
+# just computed.  Equilibration stays free too, by the exact diagonal identity
+# ``(R^-1 A C^-1)^-1 = C A^-1 R``: no second factorisation is needed to norm
+# the equilibrated inverse.  Only the CONFIRMING residual costs an inverse, and
+# only on a solve the free screen has already flagged.
+
+# ===========================================================================
+# REFUSAL WITHDRAWN ON THE INVERSES (2026-08-04, same day, by measurement)
+# ===========================================================================
+# The first cut of this guard REFUSED a numerically singular cascade inverse.
+# The breadth sweep refuted it, and the refutation is the most important thing
+# in this module's M1 work, so it is recorded here rather than in the audit
+# alone.
+#
+# The thresholds below were calibrated on two 1-D families (the thin-grating
+# instability class and the anisotropic 1-D Jones cascade).  They do NOT
+# transfer to the 2-D paths, which were never in the population:
+#
+#   population                                    equil. rcond      equil. resid
+#   1-D thin grating, BROKEN (wrong / build-dep)  3.8e-19 .. 1.3e-10  5.3e-08 .. 3.7e+07
+#   1-D, healthy                                  >= 2.3e-09          <= 3.6e-09
+#   2-D hybrid interface, HEALTHY (answers right, 3.9e-14, 3.1e-13     1.2e-05, 4.4e-07
+#     builds agree, tests pinned since v5.14)
+#
+# The 2-D healthy readings sit INSIDE the 1-D broken band on BOTH instruments.
+# There is therefore NO global bar, and a per-method bar is a per-method
+# contract nobody can maintain.  Ill-conditioning of an interface matrix simply
+# does not imply a wrong far field: the ill-conditioned directions are
+# deep-evanescent and never reach the observable, which is exactly why the 2-D
+# hybrid has been correct and build-stable at cond 1e13 for eight releases.
+#
+# Shipping a refusal on that criterion would have refused five long-pinned 2-D
+# tests on both builds -- a false pathology claim, which the campaign's own
+# R-1b precedent rates worse than silence.  So:
+#
+#   * the INVERSE refusal is withdrawn.  ``_guarded_inverse`` is now an
+#     instrument: with ``_INV_CENSUS`` armed it records, and it never raises
+#     and never changes a bit.  Default cost is zero -- it returns ``inv(A)``
+#     before touching either instrument;
+#   * the LEAST-SQUARES refusal SURVIVES, because there a sound discriminator
+#     was found: a null-space draw REQUIRES a null space, so the refusal is
+#     conditioned on numerical RANK DEFICIENCY as well as residual.  That
+#     conjunction separates all four families (see ``_guarded_lstsq``);
+#   * the X-1 defect itself is REAL, REPRODUCED and DOCUMENTED (thin grating,
+#     n_orders 19/20/21 TE: two builds returning different answers, and one
+#     answer 160x wrong on both) but is NOT CLOSED.  Closing it needs a
+#     criterion that survives every method in the library, and this one does
+#     not.  See ``docs/audits/PMM_M1_CONDITIONING_2026_08_04.md`` S2.7.
+
+#: Gates the LEAST-SQUARES refusal only (:func:`_guarded_lstsq`).  ``False``
+#: restores the pre-M1 library bit for bit.  The inverse path is bit-identical
+#: either way -- its refusal was withdrawn, see the note above.
+INTERFACE_CONDITIONING_GUARD = True
+
+#: SCREEN: two-sided-EQUILIBRATED reciprocal 1-norm condition number below
+#: which the confirming residual is computed at all.  Exists for COST; the
+#: residual decides.
+#:
+#: Measured populations, over the thin-grating instability class (2 x 32 solves,
+#: every interface and every star in each) AND the anisotropic 1-D Jones cascade
+#: (6 truncations) -- the second family is what a naive threshold gets wrong:
+#:
+#:   healthy, anisotropic cascade      1.2e-05 .. 1.7e-03
+#:   healthy, thin grating             2.3e-09 .. 5.5e-03
+#:   broken   (raises, breaks closure,
+#:             or disagrees by build)  3.8e-19 .. 1.3e-10
+#:
+#: 1e-8 sits above every broken value with nearly two orders of room and below
+#: all but two healthy ones, which then pay the residual and pass it.
+_INV_RCOND_SCREEN = 1e-8
+
+#: REFUSE: two-sided-EQUILIBRATED residual ``||Ae Xe - I||_F / sqrt(n)`` above
+#: which the inverse is declared unusable and the solve raises instead of
+#: returning.
+#:
+#: Measured over the SCREENED-IN population: the largest on a solve that agrees
+#: across builds and conserves energy is 3.6e-09; the smallest on a solve that
+#: raises, violates closure or disagrees across builds is 5.3e-08.  1e-8 is the
+#: geometric middle of that 15x gap.  The gap is a FACTOR, not the thirteen
+#: orders C13 enjoyed, and that is why the refusal needs BOTH instruments to
+#: agree: the screen (18x separation) and the residual (15x) fail
+#: independently, so a false refusal needs both to be wrong at once.
+#:
+#: Nothing the census showed returning a good answer is refused.  The refused
+#: set on the thin grating is ``n_orders`` 12/13/17/18/19/20/21/23 TE and
+#: 16/18 TM, of which 13/16/17/18/23 ALREADY raised :class:`_EnergyError` on
+#: both builds; 19 TE raised on OpenBLAS and returned ``R+T`` = 1.018 on MKL;
+#: 21 TE returned ``R+T`` = 1.032 on both; 12 TE and 20 TE disagreed across
+#: builds by 9e-04 and 8e-02 RELATIVE on ``sum(R)``.
+_INV_RESID_REFUSE = 1e-8
+
+# THERE IS NO STEP-DOWN, AND THAT IS A MEASUREMENT.  The returned answer is
+# always the plain LU inverse.  One step of iterative refinement was shipped in
+# this guard for one round and then measured out again, and the reason is
+# counter-intuitive enough to record: refinement lowers ``||A X - I||`` by 2-4x
+# on every matrix in the census, and it made CROSS-BUILD AGREEMENT WORSE.  On
+# the thin-grating sweep, returning the refined inverse moved five CLEAN
+# truncations off their historical bits and took ``n_orders`` = 16 TE from a
+# 4.8e-07 relative MKL-vs-OpenBLAS gap to 9.0e-06.  A smaller residual is not a
+# better answer when the residual is already at the noise floor -- it is a
+# different rounding.
+#
+# So refinement stays as EVIDENCE and not as a route: it is what the census used
+# to establish that no float64 route rescues the refused matrices (best-case
+# residual 4.3e-03 at ``cond`` 3.1e16), and
+# ``test_m1_conditioning_guard::test_the_step_down_is_not_a_re_solve_the_census_says_there_is_none``
+# pins that ordering.  The guard's whole behaviour change is the REFUSAL;
+# everything it does not refuse is bit-for-bit the pre-M1 library.  There is
+# deliberately no flag for it -- a switch nobody should flip is a liability.
+
+#: Census hook.  When set to a list, every guarded inverse appends
+#: ``(site, n, rcond_eq, resid_eq, refused)`` (``resid_eq`` is ``None`` when the
+#: screen passed and the residual was therefore never paid for).  ``None`` (the
+#: default) costs one ``is None`` test per inverse.  This is the instrument the
+#: M1 audit's populations were measured with; it is NOT a behaviour switch.
+_INV_CENSUS = None
+
+
+class _ConditioningError(_EnergyError):
+    """Raised by :func:`_guarded_inverse` when an explicit inverse on the
+    cascade cannot satisfy its own defining equation ``A X = I``.
+
+    A subclass of :class:`_EnergyError` ON PURPOSE, so that every existing
+    ``stabilize=`` retry ladder -- which already catches ``_EnergyError`` and
+    steps ``n_orders`` -- routes around a numerically singular truncation
+    without any ladder change.  With the default ``stabilize=False`` the caller
+    gets a named, actionable error where it used to get a build-dependent
+    number."""
+
+
+def _rcond_1(A, X):
+    """EXACT reciprocal 1-norm condition number ``1 / (||A||_1 ||X||_1)`` of a
+    square matrix whose inverse ``X`` has already been computed.
+
+    Two O(n^2) column-sum reductions -- no factorisation, no estimator, no
+    SVD.  Returns ``0.0`` for anything not usable (non-finite, non-square),
+    which routes the caller into the residual check, the safe direction.
+    """
+    A = np.asarray(A)
+    X = np.asarray(X)
+    if A.ndim != 2 or A.shape[0] != A.shape[1] or A.shape != X.shape:
+        return 0.0
+    if not (np.all(np.isfinite(A)) and np.all(np.isfinite(X))):
+        return 0.0
+    na = float(np.max(np.sum(np.abs(A), axis=0))) if A.size else 0.0
+    nx = float(np.max(np.sum(np.abs(X), axis=0))) if X.size else 0.0
+    d = na * nx
+    if not np.isfinite(d) or d <= 0.0:
+        return 0.0
+    return 1.0 / d
+
+
+def _equilibration(A):
+    """Two-sided inf-norm equilibration factors ``(r, c, |A|/r)`` of ``A``:
+    rows by their inf-norm, then the columns of the row-scaled matrix by
+    theirs, so ``Ae = A / outer(r, c)`` has unit inf-norm rows and columns.
+    The scaled magnitude array is returned so no caller builds it twice.
+
+    Van der Sluis: the equilibrated condition number is within ``sqrt(n)`` of
+    the best any diagonal scaling could achieve, so this is a statement about
+    the OPERATOR rather than about the units its blocks happen to carry -- and
+    the blocks here carry wildly different units (a generalized S-matrix's
+    deep-evanescent rows run 1e17 against its propagating rows' 1e0).
+    """
+    absA = np.abs(np.asarray(A))               # the ONE temporary
+    r = absA.max(axis=1)
+    r = np.where(r > 0.0, r, 1.0)
+    absA /= r[:, None]                         # in place: no second temporary
+    c = absA.max(axis=0)
+    return r, np.where(c > 0.0, c, 1.0), absA
+
+
+def _rcond_1_equilibrated(A, X):
+    """:func:`_rcond_1` of the two-sided-equilibrated ``A``, computed WITHOUT a
+    second factorisation.
+
+    ``Ae = R^-1 A C^-1`` with ``R = diag(r)``, ``C = diag(c)``, so exactly
+    ``Ae^-1 = C X R``, i.e. ``(Ae^-1)_ij = c_i X_ij r_j``.  Both 1-norms then
+    reduce to ``max(As.sum(0) / c)`` and ``max((c @ |X|) * r)`` -- two O(n^2)
+    reductions and one gemv over arrays that already exist, with exactly two
+    ``n x n`` temporaries (``|A|`` scaled, and ``|X|``).
+    """
+    A = np.asarray(A)
+    X = np.asarray(X)
+    if A.ndim != 2 or A.shape[0] != A.shape[1] or A.shape != X.shape:
+        return 0.0
+    if not (np.all(np.isfinite(A)) and np.all(np.isfinite(X))):
+        return 0.0
+    r, c, As = _equilibration(A)
+    na = float(np.max(As.sum(axis=0) / c))
+    nx = float(np.max((c @ np.abs(X)) * r))
+    d = na * nx
+    if not np.isfinite(d) or d <= 0.0:
+        return 0.0
+    return 1.0 / d
+
+
+def _inverse_residual(A, X):
+    """``||A X - I||_F / sqrt(n)`` -- the quantity an inverse is DEFINED by,
+    computed on the equations rather than on the answer.
+
+    Normalised by ``sqrt(n)`` so the bar is a per-entry one and does not drift
+    with the truncation: a residual of ``eps`` in every entry reads ``eps``
+    at any ``n``.
+    """
+    A = np.asarray(A)
+    X = np.asarray(X)
+    n = A.shape[0]
+    E = A @ X
+    E[np.diag_indices(n)] -= 1.0
+    r = float(np.linalg.norm(E))
+    return r / np.sqrt(n) if np.isfinite(r) else float("inf")
+
+
+def _equilibrated_inverse_residual(A):
+    """:func:`_inverse_residual` of the equilibrated operator, with the
+    equilibrated matrix inverted IN ITS OWN SCALING.
+
+    The re-scaling is not cosmetic and it is NOT a re-weighting of the raw
+    residual: on the anisotropic cascade the raw residual reads 1e-02 .. 5e-01
+    and this reads 1e-15 .. 6e-14, because there the operator is well
+    conditioned once its rows and columns are normalised and only the SCALING
+    was extreme.  On a genuinely singular operator both read large.  Costs one
+    inverse, and runs only where the free screen fired.
+    """
+    A = np.asarray(A)
+    r, c, _As = _equilibration(A)
+    Ae = (A / r[:, None]) / c[None, :]
+    try:
+        Xe = np.linalg.inv(Ae)
+    except np.linalg.LinAlgError:
+        return float("inf")
+    if not np.all(np.isfinite(Xe)):
+        return float("inf")
+    return _inverse_residual(Ae, Xe)
+
+
+def _guarded_inverse(A, site, hint=None):
+    """``inv(A)`` with a free conditioning screen and an equilibrated-residual
+    refusal.
+
+    1. invert exactly as before (``xp.linalg.inv``);
+    2. non-NumPy backend, or the guard off -> return it unchanged.  The JAX
+       path is traced (no data-dependent branch is expressible) and the CuPy
+       path would pay a device sync per interface, so both keep the historical
+       arithmetic;
+    3. **screen** on :func:`_rcond_1_equilibrated` (free).  At or above
+       ``_INV_RCOND_SCREEN``, return the LU inverse **unchanged, bit for
+       bit**;
+    4. otherwise score the operator on its own equation ``A X = I`` in its
+       equilibrated scaling and, if it misses by more than
+       ``_INV_RESID_REFUSE``, raise :class:`_ConditioningError` rather than
+       return a number no build agrees on.  Below the bar, return the LU
+       inverse -- again unchanged, bit for bit.
+
+    There is no step-down.  The answer returned is ALWAYS
+    ``xp.linalg.inv(A)`` -- see the "THERE IS NO STEP-DOWN" note above
+    ``_INV_CENSUS`` for the measurement that removed the one candidate tried.
+
+    ``site`` names the call for the error text; ``hint`` is the remedy line.
+    """
+    xp = array_namespace(A)
+    X = xp.linalg.inv(A)
+    # DEFAULT PATH: bit-for-bit the pre-M1 library, and not one extra flop.
+    # The census is the only consumer of the instruments (see the REFUSAL
+    # WITHDRAWN note above ``_INV_RCOND_SCREEN``).
+    if _INV_CENSUS is None or xp is not np:
+        return X
+    A_np = np.asarray(A)
+    if not np.all(np.isfinite(A_np)):
+        # A NaN/inf material index reached the solve.  That is a propagation
+        # defect, not a conditioning one, and ``_check_energy`` already names
+        # it precisely ("non-finite total efficiency ... a NaN/inf material
+        # index or permittivity reached the solve").  Record and stand aside.
+        _INV_CENSUS.append((site, int(A_np.shape[0]), float("nan"),
+                            float("nan"), False))
+        return X
+    rc = _rcond_1_equilibrated(A_np, X)
+    res = (None if rc >= _INV_RCOND_SCREEN
+           else _equilibrated_inverse_residual(A_np))
+    _INV_CENSUS.append((site, int(A_np.shape[0]), rc, res, False))
+    return X
+
 
 def _check_energy(fn_name, R, T, lossless=False):
     """Raise if the total efficiency exceeds the incident power by a large
@@ -2005,13 +2350,22 @@ def _redheffer_star(SA, SB):
     # test, NOT the zero test; only the concrete .any() calls test for a zero
     # block.  (is_jax_array, not the scalar-only _is_traced whose complex()
     # coercion always raises on a matrix.)
+    #
+    # THE STAR DENOMINATORS ARE THE AMPLIFIER, and the M1 census showed they
+    # are the DOMINANT conditioning site of the cascade -- not the interface
+    # inverse the audit went in expecting.  On the thin-grating census
+    # ``I - B11 A22`` reached ``cond`` 2.4e31 where the interface behind it
+    # read 3.1e16, and every solve that raised, broke closure or disagreed
+    # across BLAS builds was separated from every clean one by the STAR's
+    # residual (>= 5.6e-07 against <= 9.6e-09), not by the interface's.  Hence
+    # the guard here as well as at the interface (X-1's named scope).
     if (not is_jax_array(A22) and not is_jax_array(B11)
             and (not bool(A22.any()) or not bool(B11.any()))):
         D = I
         F = I
     else:
-        D = xp.linalg.inv(I - B11 @ A22)
-        F = xp.linalg.inv(I - A22 @ B11)
+        D = _guarded_inverse(I - B11 @ A22, "rcwa Redheffer star (I - B11 A22)")
+        F = _guarded_inverse(I - A22 @ B11, "rcwa Redheffer star (I - A22 B11)")
     C11 = A11 + A12 @ D @ B11 @ A21
     C12 = A12 @ D @ B12
     C21 = B21 @ F @ A21
@@ -2033,13 +2387,20 @@ def _interface_smatrix(Wa, Va, Wb, Vb):
     ``solve`` is used for the ``Wb^{-1}Wa`` / ``Vb^{-1}Va`` products so the
     deliberately tiny-columned evanescent eigenvectors do not blow up an
     explicit inverse.
+
+    ``a + b`` itself has NO such protection and cannot get one: ``S12`` is
+    ``2 (a+b)^{-1}``, an explicit inverse by definition.  :func:`_check_energy`
+    records that this matrix reaches ``cond ~1e13``; the M1 census measured
+    3.1e16 on the library's own documented instability class.  So it is
+    screened and, where the computed inverse cannot satisfy ``A X = I``,
+    REFUSED -- see :func:`_guarded_inverse`.
     """
     xp = array_namespace(Wa, Va, Wb, Vb)
     a = xp.linalg.solve(Wb, Wa)
     b = xp.linalg.solve(Vb, Va)
     apb = a + b
     amb = a - b
-    iapb = xp.linalg.inv(apb)
+    iapb = _guarded_inverse(apb, "rcwa interface mode-match (a+b)")
     S11 = -iapb @ amb
     S12 = 2.0 * iapb
     S21 = 0.5 * (apb - amb @ iapb @ amb)
@@ -2117,7 +2478,12 @@ def _interface_smatrix_general(Ma, Mb):
     ('-').  Returns ``(S11, S12, S21, S22)`` in the same block convention as
     :func:`_interface_smatrix` / :func:`_redheffer_star`.  Built by solving the
     tangential-field continuity ``Ma ca = Mb cb`` for the scattering form
-    (``T = inv(Mb) Ma``, re-blocked)."""
+    (``T = inv(Mb) Ma``, re-blocked).
+
+    ``T22`` is inverted explicitly (``S12 = T22^{-1}``), so it carries the same
+    exposure as :func:`_interface_smatrix`'s ``a + b`` and takes the same
+    screen-and-refuse guard (M1 / X-1).  This is the newest code in the family
+    and had no ``rcond``, no fallback and no probe."""
     xp = array_namespace(Ma, Mb)
     n2 = Ma.shape[0] // 2
     T = xp.linalg.solve(Mb, Ma)
@@ -2125,7 +2491,7 @@ def _interface_smatrix_general(Ma, Mb):
     T12 = T[:n2, n2:]
     T21 = T[n2:, :n2]
     T22 = T[n2:, n2:]
-    iT22 = xp.linalg.inv(T22)
+    iT22 = _guarded_inverse(T22, "rcwa generalized interface (T22)")
     S11 = -iT22 @ T21             # a+ -> a-
     S12 = iT22                    # b- -> a-
     S21 = T11 - T12 @ iT22 @ T21  # a+ -> b+
