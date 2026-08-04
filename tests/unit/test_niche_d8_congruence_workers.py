@@ -22,6 +22,7 @@ import pytest
 
 import lumenairy as la
 from lumenairy.propagators.carrier import (
+    _multi_looks_like_spawn_bootstrap,
     _multi_resolve_workers,
     propagate_traced_carrier_chain_multi,
 )
@@ -134,3 +135,41 @@ def test_zero_or_negative_workers_is_refused():
         _multi_resolve_workers(0, 4, (128, 128), 0.0, 'fn')
     with pytest.raises(ValueError, match='congruence_workers'):
         _multi_resolve_workers(-2, 4, (128, 128), 0.0, 'fn')
+
+
+# --------------------------------------------------------------------------
+# The spawn trap: a driver whose __main__ is not import-safe.  pytest's own
+# __main__ IS import-safe, so this class of failure cannot be reproduced by
+# calling the orchestrator here -- it is pinned on the PREDICATE that selects
+# the actionable message, which is the part that regressed in review.
+# --------------------------------------------------------------------------
+def test_spawn_bootstrap_is_recognised_from_the_multiprocessing_message():
+    exc = RuntimeError(
+        "\n        An attempt has been made to start a new process before the\n"
+        "        current process has finished its bootstrapping phase.\n")
+    assert _multi_looks_like_spawn_bootstrap(exc)
+
+
+def test_spawn_bootstrap_is_recognised_through_a_cause_chain():
+    inner = RuntimeError('... Safe importing of main module ...')
+    outer = OSError('worker died')
+    outer.__cause__ = inner
+    assert _multi_looks_like_spawn_bootstrap(outer)
+
+
+def test_freeze_support_wording_is_recognised():
+    assert _multi_looks_like_spawn_bootstrap(
+        RuntimeError('you have forgotten to use freeze_support()'))
+
+
+def test_an_ordinary_worker_error_is_not_mistaken_for_the_spawn_trap():
+    assert not _multi_looks_like_spawn_bootstrap(
+        ValueError('prescription surfaces[0] radius must be finite'))
+
+
+def test_a_self_referential_cause_chain_terminates():
+    a = RuntimeError('a')
+    b = RuntimeError('b')
+    a.__cause__ = b
+    b.__cause__ = a
+    assert not _multi_looks_like_spawn_bootstrap(a)

@@ -6852,9 +6852,9 @@ def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn):
     if requested <= 1:
         return 1
     try:
-        from ..memory import get_ram_budget
-
         import psutil as _ps
+
+        from ..memory import get_ram_budget
         free_b = min(int(_ps.virtual_memory().available), get_ram_budget())
     except (ImportError, AttributeError, OSError):
         return requested
@@ -6882,6 +6882,28 @@ def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn):
 #: MEASURED 24 GB resident against a 1.07 GB (8192^2 complex128) input on
 #: design 121's 6-group post-DOE chain with the exact final leg.
 _MULTI_WORKER_GRID_FACTOR = 22.0
+
+
+def _multi_looks_like_spawn_bootstrap(exc):
+    """Is ``exc`` the 'spawn re-imported a non-import-safe __main__' failure?
+
+    Matched on the message rather than the type: multiprocessing raises a bare
+    ``RuntimeError`` for it, and the same condition surfaces as a
+    ``BrokenProcessPool`` once the child dies during bootstrap.  The remedy is
+    the CALLER's ``if __name__ == '__main__':`` guard, so the message this
+    predicate selects has to say that instead of the generic 'reproduce it
+    serially' advice, which would send the user in the wrong direction.
+    """
+    seen, cur = set(), exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        text = str(cur)
+        if ('bootstrapping phase' in text
+                or 'freeze_support' in text
+                or 'Safe importing of main module' in text):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
 
 
 class _MultiPreResult:
@@ -6933,6 +6955,19 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
                 if progress is not None:
                     progress(done - 1, K, f"{specs[k][3]} [worker]")
     except Exception as exc:                       # pragma: no cover - env
+        if _multi_looks_like_spawn_bootstrap(exc):
+            raise RuntimeError(
+                f"{fn}: congruence_workers={n_cw} needs the CALLING script to "
+                f"be import-safe, and this one is not.  On Windows (and any "
+                f"'spawn' start method) each worker RE-IMPORTS the __main__ "
+                f"module, so a driver that does its work at module level runs "
+                f"the whole thing again in every child -- which is the error "
+                f"multiprocessing raised.  Fix the CALLER, not this call: put "
+                f"the work behind\n\n    if __name__ == '__main__':\n        "
+                f"...\n\nor keep __main__ a thin shim that runpy's the science "
+                f"script under another run_name.  congruence_workers=None "
+                f"(serial) needs no guard and is the fallback if the driver "
+                f"cannot be changed.  Original error: {exc!r}") from exc
         raise RuntimeError(
             f"{fn}: a congruence worker failed under congruence_workers="
             f"{n_cw}.  Re-run with congruence_workers=None to reproduce it "
