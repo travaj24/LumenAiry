@@ -4,6 +4,65 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added/Fixed — PMM per-layer roadmap campaign M1-M5 (`elements/pmm/**`, `elements/rcwa/**`)
+
+Five missions off `docs/audits/PMM_PER_LAYER_CAMPAIGN_PLAN_2026_08_04.md`
+(which itself refuted 8 roadmap claims against the tree):
+
+* **M1 conditioning**: the RCWA Redheffer-star denominators (cond to 2.4e31,
+  the true build-dependence site -- NOT the plan's named inverses) are
+  screened; PMM lstsq refuses only on rank-deficiency AND residual (either
+  alone false-positives); the conical per-layer order cap is computed from
+  the window grid (was 2.7x over-stated, feeding a rank-deficient solve
+  that both builds agreed on 160x wrong INSIDE the energy window).  Worst
+  cross-build disagreement on returned solves 8.3e-2 -> 1.8e-6; 0 bits
+  moved on clean solves.  The plan's inverse REFUSAL was withdrawn on
+  evidence: ill-conditioned interface directions are deep-evanescent and
+  never reach the far field, so no global bar exists -- a correct 2-D path
+  sits inside the 1-D broken band on both instruments.  X-1 remains OPEN,
+  pinned by a test designed to FAIL when truly fixed.
+* **M2 window contract**: five verbatim window constructions -> one helper
+  (`_perlayer_window_grids`, bit-identical at 0.0 incl. the JAX gradient);
+  `PMMStack(window_halfwidth=)` degenerates to the shared union grid
+  bit-for-bit at full width; the v5.32.0 "min_feature inert by
+  construction" claim was WRONG (live above the default; walls move up to
+  0.7 nm at 1.5 nm) -- replaced by a predictive rule, 24/24 correct across
+  two devices; stationarity ns 8..12 <= 0.33%, degree 6..16 <= 0.59%,
+  RCWA agreement 0.15%.
+* **THE SILENT-WRONG MECHANISM (M2/M5)**: a ~1-2 nm cross-layer cell makes
+  the modal forward/backward classification degree-dependent and the
+  cascade returns a UNITARY-BUT-WRONG S-matrix -- R0 scatter -93%..+10x
+  with |R+T-1| <= 1e-6 and every conservation identity blind, DETERMINISTIC
+  on both builds.  Mechanism predicts the full 80-cell discovery table plus
+  12/12 on a second device; the trigger is a thin cell however it arises.
+  The classification instrument ships DISARMED (no bar separates both
+  device families -- calibration and refutation both pinned); RCWA
+  cross-checks are now mandatory on accuracy claims in this regime.
+* **M3 efficiency**: geometry hoisting on the three unhoisted paths +
+  sweep + JAX (bit-identical); `_lagrange_eval` vectorised (bit-identical);
+  both mortar cross-masses are now the EXACT Kronecker-factored form
+  (`np.kron` allocation -> 0 bytes; envelope 3.6e-13); `inv -> solve` at
+  the mortar; measured 1.16-1.50x on layered/sweep cases.  The star
+  `inv -> solve` was REFUSED: ~3% for breaking five bit-exactness pins.
+* **M4 hygiene**: `threadpoolctl`'s BLAS cap is PROCESS-GLOBAL on OpenBLAS
+  (three source comments claiming thread-locality were false): the
+  per-worker caps raced and leaked -- fixed at all six RCWA+PMM sites, sha
+  identical across worker counts and pools, only the nondeterminism
+  removed.  The JAX-parity test was racing the BLAS thread count (NumPy
+  manufactures ~1.8% energy on a lossless cell at 24 threads -- the X-1
+  reproducer); re-pinned per-channel 2-3 orders TIGHTER under a pinned
+  pool.  Eight stale roadmap/doc claims corrected.
+* **M5 feasibility**: non-uniform 2-D segments GO (de Rham residual 9e-15
+  over 80 cases incl. 1e6 aspect; the 2-deg taper drops from eigdim 1.5e7
+  to Nx=12 shared / Nx=6 per-layer); covariant taper derivation validated
+  to 1e-15 but NO for 5.34 (two measured blockers); 5.34 re-scoped.
+* **Gate closure**: scipy dual_annealing cancellation was polled ONLY on a
+  new global best -- a plateau never polled (0 polls in 404 evaluations;
+  hidden five releases by a wall-time bar that passed on faster builds).
+  Fixed by polling in the objective: 1 poll, 1 evaluation; the bar is now
+  the build-invariant evaluation count.
+
+
 ### Added — chief-ray-centred grid origin for the traced element (niche D9, `elements/_lens_traced.py`, `propagators/carrier.py`)
 
 `apply_real_lens_traced` gains `origin=(x0, y0)`: the grid's CENTRE PIXEL sits

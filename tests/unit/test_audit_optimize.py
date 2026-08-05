@@ -632,55 +632,135 @@ class TestAuditFixesV4_13_2_agent_c_C3DualAnnealingCancellation:
             'dual_annealing call still uses inline lambda; expected '
             'callback=_scipy_cb_da')
 
-    def test_dual_annealing_terminates_quickly_when_cancelled(self):
-        """Runtime pin: cancel BEFORE the run starts, then verify
-        the call returns in much less than the full ``maxiter``
-        budget would take."""
+    #: Merit evaluations a CANCELLED ``dual_annealing`` run may cost.
+    #: The refused poll happens before the objective runs, so it costs
+    #: none; the driver's final context evaluation costs exactly one.
+    #: Measured: 1.  The 2 is one evaluation of slack, not a budget.
+    _CANCELLED_EVAL_BUDGET = 2
+
+    def test_dual_annealing_terminates_quickly_when_cancelled(
+            self, monkeypatch):
+        """Runtime pin: a pre-cancelled run costs a CONSTANT number of
+        merit evaluations instead of the full ``maxiter`` budget.
+
+        **v5.33.0 -- this test used to measure the machine, and that hid a
+        real defect.**  The assertion was ``elapsed < 30 s`` on a fresh
+        ``max_iter=200`` run.  Wall time there is dominated by ONE-TIME
+        warm-up (first prescription build, first ``apply_real_lens``), so
+        the bar passed on an idle Windows box and failed on WSL with
+        identical code -- the same absolute-bar-on-a-machine-dependent-
+        magnitude trap as ``_PAR_TOTAL`` in the v5.20.2 PMM-JAX suite.
+
+        What it was hiding: scipy polls ``callback`` from exactly ONE
+        place, ``EnergyState.update_best``, so it fires only when a NEW
+        GLOBAL BEST is found (scipy 1.17.1 ``_dual_annealing.py``
+        197-206; the initial best is assigned in ``reset()`` with no
+        callback).  On a plateau it never fires, so ``_scipy_cb_da`` --
+        the whole v4.13.2 C.3 fix -- was never reached.  MEASURED pre-fix
+        on this exact fixture: **0 polls of ``is_cancelled`` and 404
+        merit evaluations**, i.e. the ENTIRE ``max_iter=200`` budget
+        (uncancelled ``max_iter=1`` costs 6 and ``max_iter=2`` costs 8).
+        The run simply happened to finish inside 30 s on one build.
+
+        The load-bearing bar is now the EVALUATION COUNT, which no
+        machine, load level or BLAS build can move, plus the poll count
+        (the mechanism: pre-fix it was 0).  The wall-clock check is kept
+        only as a hang-catcher, three orders looser than the work implied
+        by the eval budget.
+        """
         import lumenairy
+        import lumenairy.progress as _prog
         from lumenairy import CancellableProgress, StrehlMerit
         from lumenairy.optimize.core import (
             DesignParameterization,
             design_optimize,
         )
-        pres = lumenairy.make_singlet(
-            R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',
-            aperture=12e-3,
-        )
-        param = DesignParameterization(
-            template=pres,
-            free_vars=[('surfaces', 0, 'radius')],
-            bounds=[(30e-3, 100e-3)],
-        )
-        # Pre-cancel: the first callback poll should fire True and
-        # ask dual_annealing to terminate immediately.
-        progress = CancellableProgress()
-        progress.cancel()
-        t0 = time.time()
-        try:
-            design_optimize(
-                parameterization=param,
-                merit_terms=[StrehlMerit(weight=1.0)],
-                wavelength=1.30e-6,
-                N=32, dx=10e-6,
-                method='dual_annealing',
-                max_iter=200,         # generous so 'short' is unambiguous
-                verbose=False,
-                progress=progress,
+
+        stats = {'polls': 0, 'evals': 0}
+        _real_is_cancelled = _prog.is_cancelled
+
+        def _counting_is_cancelled(cb):
+            stats['polls'] += 1
+            return _real_is_cancelled(cb)
+
+        # The driver imports ``is_cancelled`` from the module at CALL
+        # time, so patching the module attribute reaches it.  The
+        # stand-in DELEGATES -- an instrument that answered on its own
+        # would switch off the very cancellation it is measuring.
+        monkeypatch.setattr(_prog, 'is_cancelled', _counting_is_cancelled)
+
+        class _CountingStrehl(StrehlMerit):
+            def evaluate(self, ctx):
+                stats['evals'] += 1
+                return super().evaluate(ctx)
+
+        def _param():
+            pres = lumenairy.make_singlet(
+                R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',
+                aperture=12e-3,
             )
-        except Exception:
-            # Some sub-pipelines may raise on this tiny grid;
-            # cancellation must still have short-circuited.
-            pass
-        dt = time.time() - t0
-        # max_iter=200 would normally take many seconds; cancelled
-        # at the first callback poll must finish in well under
-        # 30 s on any reasonable machine.  Use a generous bound
-        # to keep CI green across hardware.
-        assert dt < 30.0, (
-            f'dual_annealing did NOT honour cancel() in time; '
-            f'elapsed={dt:.1f}s.  Pre-fix the inline lambda '
-            f'callback never returned True so the run consumed '
-            f'the full maxiter budget.')
+            return DesignParameterization(
+                template=pres,
+                free_vars=[('surfaces', 0, 'radius')],
+                bounds=[(30e-3, 100e-3)],
+            )
+
+        def _run(progress, max_iter):
+            stats['polls'] = 0
+            stats['evals'] = 0
+            t0 = time.time()
+            res = None
+            try:
+                res = design_optimize(
+                    parameterization=_param(),
+                    merit_terms=[_CountingStrehl(weight=1.0)],
+                    wavelength=1.30e-6,
+                    N=32, dx=10e-6,
+                    method='dual_annealing',
+                    max_iter=max_iter,
+                    verbose=False,
+                    progress=progress,
+                )
+            except Exception:
+                # Some sub-pipelines may raise on this tiny grid;
+                # cancellation must still have short-circuited.
+                pass
+            return (time.time() - t0, stats['polls'], stats['evals'], res)
+
+        # CONTROL first: an UNCANCELLED run of the same shape on the
+        # smallest budget scipy will take.  It also pays the process
+        # warm-up, so the cancelled run below is timed warm.
+        _, _, evals_ctl, _ = _run(CancellableProgress(), 2)
+
+        cancelled = CancellableProgress()
+        cancelled.cancel()
+        dt, polls, evals, res = _run(cancelled, 200)
+
+        assert polls >= 1, (
+            'is_cancelled was NEVER polled during a cancelled '
+            'dual_annealing run.  scipy only invokes the callback when a '
+            'new global best is found, so the objective must poll too; '
+            'the pre-v5.33.0 reading here was exactly 0.')
+        assert evals < evals_ctl, (
+            f'a CANCELLED max_iter=200 run cost {evals} merit '
+            f'evaluations, which is not fewer than an UNCANCELLED '
+            f'max_iter=2 run ({evals_ctl}).  The cancellation did not '
+            f'short-circuit the search.')
+        assert evals <= self._CANCELLED_EVAL_BUDGET, (
+            f'a cancelled run cost {evals} merit evaluations against a '
+            f'budget of {self._CANCELLED_EVAL_BUDGET} (one refused poll, '
+            f'which costs none, plus the driver\'s final context '
+            f'evaluation).')
+        # The stop is a user stop, not an error: a result still comes back.
+        assert res is not None, (
+            'a cancelled dual_annealing run returned no DesignResult; '
+            'cancellation must not propagate as an exception.')
+        assert res.converged is False
+        # Hang-catcher only.  <= 2 evaluations cannot take minutes unless
+        # something is stuck; this is deliberately NOT a performance bar.
+        assert dt < 180.0, (
+            f'a cancelled dual_annealing run took {dt:.1f}s for {evals} '
+            f'merit evaluation(s) -- something is stuck.')
 
 
 # ============================================================================

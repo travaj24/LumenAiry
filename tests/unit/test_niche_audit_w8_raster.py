@@ -225,10 +225,39 @@ def test_w8_shear_convergence_outlier_vanishes_at_the_coincident_nx():
 
     Against the ``n_x = 1024`` answer the coincident point was off by 1.802e-02
     pre-fix and is off by 1.552e-04 post-fix (the ordinary ``O(1/n_x)``
-    quantisation) -- a 116x improvement AT ``n_x = 128``.  Energy closure is
-    <= 2e-07 in every solve on the authoring host; CI Linux measured 2.20e-5
-    on the 64-slice stack (eigensolve drift), so the sanity gate sits at 1e-4
-    -- still 180x below the pre-fix defect and 10x below the pin bound."""
+    quantisation) -- a 116x improvement AT ``n_x = 128``.
+
+    **v5.33.0 -- the energy-closure sanity gate was an absolute bar on a
+    BLAS-dependent magnitude, and it had already been re-tuned once.**  The
+    history is in the previous wording: <= 2e-07 on the authoring host, then
+    2.20e-5 on CI Linux ("eigensolve drift"), so the gate was set to 1e-4.
+    On the WSL/OpenBLAS build it reads **7.317e-04** on the 64-slice /
+    ``n_x=128`` solve and the gate failed.  The library itself calls this
+    configuration out -- ``RCWAStack.solve`` raises ``_EnergyWarning``
+    ("the truncation is numerically unstable here") on the 64-slice stack on
+    both builds -- so the closure here is a property of the eigensolve, not
+    of the raster fix.
+
+    Re-tuning the constant a second time would repeat the mistake, and the
+    measurement says it is unnecessary: **the SIGNAL is build-independent to
+    five digits while the closure moves 12x** [M]::
+
+        build                closure(64,128)   gap        neigh      gap/neigh
+        Windows/openblas     6.283e-05         1.5516e-04 1.5650e-04 0.991
+        WSL/OpenBLAS         7.317e-04         1.5517e-04 1.5650e-04 0.992
+
+    So the closure error is common-mode between the two solves being
+    differenced and demonstrably does not contaminate ``gap``.  The gate is
+    therefore expressed as what it is actually for -- the closure must be
+    small compared with the DEFECT this test discriminates (1.802e-02
+    pre-fix), so it can neither mimic nor mask it -- which is a fixed
+    physical property of the case rather than a property of the machine."""
+    # 10% of the pre-fix defect: measured worst closure 7.317e-04 clears it
+    # by 2.5x, and a genuinely broken solve (closure at defect scale) is
+    # still caught.
+    prefix_defect = 1.802e-2
+    closure_gate = 0.1 * prefix_defect
+
     def solve(n_slices, n_x):
         st = RCWAStack(_P, n_superstrate=1.0, n_substrate=1.0, n_orders=7)
         st.add_tapered_grating(_D, eps_ridge=4.0, eps_groove=1.0,
@@ -240,10 +269,15 @@ def test_w8_shear_convergence_outlier_vanishes_at_the_coincident_nx():
         i0 = int(np.where(o == 0)[0][0])
         closure = float(np.max(np.abs(np.asarray(R).sum(1)
                                       + np.asarray(T).sum(1) - 1.0)))
-        # measured 1.1e-10 / 3.4e-09 (32 slices) and 4.2e-08 / 2.0e-07 (64)
-        # locally; CI Linux 2.1998e-05 (64 slices) -- gate is a sanity check,
-        # not the signal (pre-fix defect 1.8e-02, pin bound 1e-03)
-        assert closure < 1e-4, closure     # the lossless stack must close
+        # Sanity check, NOT the signal.  Measured on the 64-slice stack:
+        # 2.0e-07 (authoring host), 2.1998e-05 (CI Linux), 6.283e-05
+        # (Windows/scipy-openblas), 7.317e-04 (WSL/OpenBLAS) -- a 3500x
+        # spread on the same code, which is why the bar is comparative.
+        assert closure < closure_gate, (
+            f"closure {closure:.4e} at n_slices={n_slices}, n_x={n_x} is not "
+            f"small against the {prefix_defect:.3e} defect this test "
+            f"discriminates (gate {closure_gate:.3e}); the solve is broken, "
+            f"not merely ill-conditioned")
         return np.array([R[1, i0], R[0, i0], T[1, i0], T[0, i0]])
 
     fine = solve(64, 1024)                      # no coincidence at n_x=1024

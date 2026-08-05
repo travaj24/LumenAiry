@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
+import warnings
 from collections import OrderedDict
 
 import numpy as np
@@ -18,6 +19,7 @@ import numpy as np
 from ...backend import is_jax_array
 from ..rcwa import _interface_smatrix_general
 from ..rcwa._core import (
+    _blas_limit,
     _blas_threads_quiet,
     _require_propagating_incidence,
 )
@@ -37,7 +39,10 @@ from ._core import (
     _interface_smatrix_mortar,
     _kz_forward,
     _layer_modes_metric,
+    _mode_cut_scope,
+    _ModeClassificationWarning,
     _n_propagating_orders,
+    _perlayer_window_grids,
     _pmm_union_grid,
     _propagation_smatrix,
     _propagation_star,
@@ -46,9 +51,9 @@ from ._core import (
     _redheffer_star_rect,
     _resolve_incidence_checked,
     _resolve_order_count,
-    _sem_cross_mass,
+    _sem_cross_mass_cached,
     _sem_fourier_projection,
-    _sem_mass_exact,
+    _sem_mass_exact_cached,
     _sem_modes_tensor,
     _sem_modes_uniform,
     _t3_slant,
@@ -167,7 +172,8 @@ class PMMStack:
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
                  degree=16, elements_per_region=1, grade=True,
                  far_field_orders=21, n_orders=None, factorization="auto",
-                 min_feature=None, layer_grids="shared"):
+                 min_feature=None, layer_grids="shared",
+                 window_halfwidth=1):
         far_field_orders = _resolve_order_count(far_field_orders, n_orders)
         if int(degree) < 2:
             raise ValueError("PMMStack: degree must be >= 2.")
@@ -179,6 +185,23 @@ class PMMStack:
             raise ValueError(
                 "PMMStack: layer_grids must be 'shared' or 'per-layer', got "
                 f"{layer_grids!r}.")
+        try:
+            _hw = int(window_halfwidth)
+        except (TypeError, ValueError):
+            _hw = -1
+        if _hw < 1 or _hw != window_halfwidth:
+            raise ValueError(
+                "PMMStack: window_halfwidth must be an integer >= 1, got "
+                f"{window_halfwidth!r}.  It is the per-layer window's "
+                "neighbour reach (1 = the default +/-1 window); a "
+                "halfwidth-0, own-walls-only grid was MEASURED to leave a "
+                "75-83% degree spread and is not supported.")
+        if _hw != 1 and layer_grids != "per-layer":
+            raise ValueError(
+                f"PMMStack: window_halfwidth={window_halfwidth} has no "
+                "meaning with layer_grids='shared' (the shared path solves "
+                "ONE global union grid -- there is no window).  Pass "
+                "layer_grids='per-layer', or leave window_halfwidth at 1.")
         self.period = float(period)
         # A JAX half-space index stays RAW so its gradient flows (the
         # differentiable dispatch in solve()); _C() would sever the trace.
@@ -222,16 +245,41 @@ class PMMStack:
         self.min_feature = (float(period) * 1e-5 if min_feature is None
                             else float(min_feature))
         # 'per-layer' (audit R-6, 2026-07-28): each layer is assembled on its
-        # OWN element grid (its walls + its two NEIGHBOURS' -- the interface-
-        # conforming window) and adjacent layers are coupled by an exact L2
-        # mortar at the interface.  Cross-layer wall accumulation -- the
-        # tapered-staircase pathology the shared union grid suffers -- cannot
-        # form, and ``min_feature`` acts only window-locally.  Surface:
+        # OWN WINDOW grid (its walls + its ``window_halfwidth`` neighbours' on
+        # each side) and adjacent layers are coupled by an exact L2 mortar at
+        # the interface.  Cross-STACK wall ACCUMULATION -- the O(n_slices)
+        # growth the shared union grid suffers -- cannot form.  Surface:
         # solve() on ALL-VERTICAL IN-PLANE NumPy stacks, classical (phi = 0)
         # AND conical (phi != 0, the patterned nodal cascade); slant / OOP /
         # JAX / stabilize / retain_internal / prepare / solve_vs_wavelength
         # raise with the shared-grid alternative named.
+        #
+        # ``min_feature`` IS NOT RETIRED BY THIS PATH (M2 / N-6, 2026-08-04 --
+        # correcting v5.32.0's "inert by construction"): a window IS a union,
+        # and a tapered staircase's TIGHTEST collisions are between ADJACENT
+        # slices, which every window contains.  MEASURED on the audit-class
+        # 2-deg coated-pillar taper: at the library default the degree ladder
+        # 6..18 reads 0.111000 0.110723 0.110643 0.061668 0.623403 0.623395
+        # 0.061666 -- NOT stationary, energy-clean (|R+T-1| ~ 1e-8) and wrong;
+        # at min_feature >= 0.5 nm it reads 0.110880 ... 0.110476, stationary
+        # and agreeing with the RCWA oracle.  Choose ``min_feature`` on this
+        # path exactly as on the shared one.
         self.layer_grids = layer_grids
+        # T3-1 (M2, 2026-08-04): the per-layer window's neighbour reach.  1 =
+        # the shipped +/-1 window (default; BIT-identical to the pre-M2
+        # library, pinned per site).  2 widens it to +/-2 -- MEASURED on
+        # snap-inert tapers (so the window is the only variable) to move the
+        # answer by 2.7e-4 / 8.9e-5 / 6.9e-6 at degree 6 / 8 / 10, i.e. a
+        # SPECTRALLY DECAYING residual of the same class and size as the
+        # mortar's own non-conforming remainder, at 1.2-2.0x wall time and
+        # 1.5-2.1x peak memory.  It is therefore a DIAGNOSTIC ("does my answer
+        # depend on the window?"), not an accuracy lever, and the default does
+        # not flip.  At ``window_halfwidth >= len(layers) - 1`` every window is the
+        # whole stack and the per-layer path reproduces the SHARED grid
+        # bit-for-bit.  See
+        # docs/audits/PMM_M2_WINDOW_CONTRACT_2026_08_04.md and the contract on
+        # :func:`~lumenairy.elements.pmm._core._perlayer_window_grids`.
+        self.window_halfwidth = _hw
         self._layers = []                          # (thickness, segments)
         self._taper_recipes = []                   # (i0, count, method, kwargs)
         self._src = None
@@ -878,7 +926,8 @@ class PMMStack:
                          far_field_orders=self.ffo,
                          factorization=self.factorization,
                          min_feature=self.min_feature,
-                         layer_grids=self.layer_grids)
+                         layer_grids=self.layer_grids,
+                         window_halfwidth=self.window_halfwidth)
         recipes = sorted(self._taper_recipes, key=lambda r: r[0])
         i = 0
         ri = 0
@@ -909,7 +958,8 @@ class PMMStack:
                          far_field_orders=self.ffo,
                          factorization=self.factorization,
                          min_feature=float(mf),
-                         layer_grids=self.layer_grids)
+                         layer_grids=self.layer_grids,
+                         window_halfwidth=self.window_halfwidth)
         clone._layers = list(self._layers)
         return clone
 
@@ -994,7 +1044,8 @@ class PMMStack:
                 self.grade, max(3, (self.ffo - 1) // 2),
                 min_feature=self.min_feature,
                 label="PMMStack.solve (conical)", return_modal=True,
-                layer_grids=self.layer_grids)
+                layer_grids=self.layer_grids,
+                window_halfwidth=self.window_halfwidth)
             self._modal = modal          # AUDIT_DYNAMETA_CONSUMER_API_GAPS B
             _warn_stack_energy(R_eff, T_eff)
             # stack contract: the 1-D (m,) order array (pmm_jones_1d_segments
@@ -1368,8 +1419,13 @@ class PMMStack:
             return res
 
         # ---- PER-LAYER element grids (audit R-6, 2026-07-28) ---------------
-        # Each layer on its OWN grid + exact L2 mortar at every interface --
-        # no cross-layer wall collisions, min_feature inert by construction.
+        # Each layer on its OWN WINDOW grid (own walls + `window_halfwidth`
+        # neighbours') + exact L2 mortar at every interface -- no cross-STACK
+        # wall accumulation.  ``min_feature`` is NOT inert here (M2 / N-6,
+        # correcting the v5.32.0 claim): the window IS a union, adjacent-slice
+        # collisions are exactly what it contains, and the snap is dormant at
+        # the library default but LIVE and REQUIRED above it -- see the
+        # measured contract on ``_perlayer_window_grids``.
         if self.layer_grids == "per-layer":
             if _oop or any(abs(L[2]) > 1e-12 for L in self._layers):
                 # slant / out-of-plane: the GENERAL forward/backward cascade
@@ -1387,17 +1443,31 @@ class PMMStack:
                         "with layer_grids='per-layer'.")
                 _oopl = [any(self._is_oop(M) for _w, M in L[1])
                          for L in self._layers]
-                return self._solve_general_perlayer(
-                    wl, angle, k0, kx0, eps_sup, eps_sub, _oopl)
+                # T3-4: the classification verdict is a PER-SOLVE statement
+                # (it needs every layer's propagating-mode count), so the
+                # scope wraps the whole solve.  No-op when the guard is off.
+                with _mode_cut_scope(
+                        "PMMStack.solve (layer_grids='per-layer', general)"):
+                    return self._solve_general_perlayer(
+                        wl, angle, k0, kx0, eps_sup, eps_sub, _oopl)
             if stabilize not in (None, False):
                 raise NotImplementedError(
                     "PMMStack.solve(stabilize='slices'): not applicable with "
                     "layer_grids='per-layer' -- the consensus probes perturb "
-                    "the SHARED grid (n_slices re-slice / min_feature), and "
-                    "per-layer grids have no cross-layer walls to perturb.")
-            return self._solve_vertical_perlayer(wl, angle, k0, kx0,
-                                                 eps_sup, eps_sub,
-                                                 retain_internal=retain_internal)
+                    "the ONE SHARED union grid (n_slices re-slice / "
+                    "min_feature) and read the spread across those probes, "
+                    "and there is no shared union grid here: every layer "
+                    "carries its own window grid.  (M4 / N-6, 2026-08-04: "
+                    "this message used to say per-layer grids have 'no "
+                    "cross-layer walls to perturb', which is WRONG -- a "
+                    "window IS a union and contains the adjacent-slice "
+                    "collisions, so min_feature is live here too.  Vary "
+                    "min_feature directly and compare, or run the shared "
+                    "path for the consensus.)")
+            with _mode_cut_scope("PMMStack.solve (layer_grids='per-layer')"):
+                return self._solve_vertical_perlayer(
+                    wl, angle, k0, kx0, eps_sup, eps_sub,
+                    retain_internal=retain_internal)
 
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)
@@ -1621,13 +1691,17 @@ class PMMStack:
     def _solve_vertical_perlayer(self, wl, angle, k0, kx0, eps_sup, eps_sub,
                                  retain_internal=False):
         """ALL-VERTICAL IN-PLANE cascade on PER-LAYER element grids (audit
-        R-6, 2026-07-28): each layer's SEM operators are built from its OWN
-        walls only, adjacent layers are coupled by the exact L2 mortar
+        R-6, 2026-07-28): each layer's SEM operators are built on its own
+        WINDOW grid, adjacent layers are coupled by the exact L2 mortar
         (:func:`_interface_smatrix_mortar`), and the half-spaces are built on
         the grid of the layer they touch (so the two half-space interfaces are
-        plain :func:`_interface_smatrix`).  Cross-layer wall collisions -- the
-        tapered-staircase pathology of the shared union grid -- cannot form,
-        and ``min_feature`` never enters.  Interfaces between IDENTICAL grids
+        plain :func:`_interface_smatrix`).  Cross-STACK wall ACCUMULATION --
+        the shared union grid's O(n_slices) growth -- cannot form; the
+        ADJACENT-slice collision can, and ``min_feature`` is the lever on it
+        here exactly as on the shared path (M2 / N-6 -- this docstring used to
+        say "``min_feature`` never enters", which was wrong; see the measured
+        contract on :func:`_perlayer_window_grids`).  Interfaces between
+        IDENTICAL grids
         (repeated layers) also take the plain interface, so a vertical
         binary-grating stack with common walls reproduces the shared-grid
         answer to solver round-off."""
@@ -1649,14 +1723,9 @@ class PMMStack:
         # grid stays ~an order smaller than the global union and cross-stack
         # wall accumulation cannot form.
         nlay = len(self._layers)
-        grid_of = []                        # (widths, eps_row) per layer
-        for i in range(nlay):
-            js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
-            uw, eps_rows = _pmm_union_grid(
-                [self._layers[j][1] for j in js],
-                self.min_feature / self.period)
-            grid_of.append((np.asarray(uw, dtype=float),
-                            eps_rows[js.index(i)]))
+        grid_of = _perlayer_window_grids(   # (widths, eps_row) per layer
+            [L[1] for L in self._layers], self.min_feature / self.period,
+            self.window_halfwidth)
 
         # ---- per-layer operators + eigs (memoised on the layer fingerprint)
         mats_by, modes_by = [], []
@@ -1694,7 +1763,7 @@ class PMMStack:
             key = wkeys[i]
             M = Ms_by.get(key)
             if M is None:
-                M = _sem_mass_exact(mats_by[i])
+                M = _sem_mass_exact_cached(mats_by[i])
                 Ms_by[key] = M
             return M
 
@@ -1706,7 +1775,7 @@ class PMMStack:
                 return _interface_smatrix(Wa, Va, Wb, Vb)   # construction
             return _interface_smatrix_mortar(
                 Wa, Va, Wb, Vb, _mass(ia), _mass(ib),
-                _sem_cross_mass(mats_by[ia], mats_by[ib]))
+                _sem_cross_mass_cached(mats_by[ia], mats_by[ib]))
 
         # ---- Redheffer cascade: sup -> layers -> sub -----------------------
         ifc = [_ifc(Wsup, Vsup, modes_by[0][0], modes_by[0][1], None, 0)]
@@ -1833,14 +1902,9 @@ class PMMStack:
         period = self.period
         eye3 = np.eye(3)
         nlay = len(self._layers)
-        grid_of = []
-        for i in range(nlay):
-            js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
-            uw_i, rows_i = _pmm_union_grid(
-                [self._layers[j][1] for j in js],
-                self.min_feature / self.period)
-            grid_of.append((np.asarray(uw_i, dtype=float),
-                            rows_i[js.index(i)]))
+        grid_of = _perlayer_window_grids(
+            [L[1] for L in self._layers], self.min_feature / self.period,
+            self.window_halfwidth)
         wkeys = [w.tobytes() for w, _r in grid_of]
 
         mats_by, Mls, lamfs, lambs = [], [], [], []
@@ -1887,7 +1951,7 @@ class PMMStack:
         def _massg(i):
             M = _mass_memo.get(wkeys[i])
             if M is None:
-                M = _sem_mass_exact(mats_by[i])
+                M = _sem_mass_exact_cached(mats_by[i])
                 _mass_memo[wkeys[i]] = M
             return M
 
@@ -1896,7 +1960,7 @@ class PMMStack:
                 return _interface_smatrix_general(Ma_, Mb_)
             return _interface_smatrix_general_mortar(
                 Ma_, Mb_, _massg(ia), _massg(ib),
-                _sem_cross_mass(mats_by[ia], mats_by[ib]))
+                _sem_cross_mass_cached(mats_by[ia], mats_by[ib]))
 
         S = _ifc_g(Msup, Mls[0], None, 0)
         for i in range(nlay):
@@ -2841,7 +2905,21 @@ class PMMStack:
             _require_propagating_incidence(
                 "PMMStack.solve_vs_wavelength", np.conj(_C(eps_sup)),
                 (kx0 / k0) ** 2)
-            with _blas_threads_quiet(blas_per_worker):
+            # The cap is applied ONCE by the caller, around the whole dispatch
+            # below -- NOT here.  Applying a cap is PROCESS-GLOBAL on OpenBLAS
+            # (threadpoolctl calls ``openblas_set_num_threads``); only the
+            # REQUEST is thread-local.  N workers' enter/exit pairs therefore
+            # race on one global and the byte-identity contract below was
+            # false.  Measured and fixed on the RCWA twin first (M4
+            # 2026-08-04, ``PMM_M4_HYGIENE_2026_08_04.md`` S2); this is the
+            # same defect at the PMM site, fixed the same way.
+            # ``_blas_threads_quiet(None)`` clears THIS thread's requested cap
+            # for the duration, so a nested ``solve``'s own limiter finds
+            # nothing to apply and does not re-enter the global one -- which
+            # matters on the SERIAL branch, where this runs on the caller's
+            # thread inside the sweep-level cap.  It clears the REQUEST, not
+            # the applied pool.
+            with _blas_threads_quiet(None):
                 _geo = _uniform_geo_eig(msup, k0, kx0)
                 Wsup, Vsup, _l, _g = _sem_modes_uniform(msup, k0, kx0,
                                                         eps_sup, _geo)
@@ -2888,18 +2966,25 @@ class PMMStack:
 
         _mw = (min(os.cpu_count() or 1, int(wl.size)) if max_workers is None
                else max(1, int(max_workers)))
-        if _mw == 1 or wl.size == 1:
-            for iw, w in enumerate(wl):
-                _store(*_solve_one(iw, w))
-        else:
-            from concurrent.futures import ThreadPoolExecutor
-            # ThreadPoolExecutor.map yields IN INPUT ORDER, so _store runs in
-            # wavelength order (deterministic warnings) and the result is
-            # byte-identical to the serial path regardless of worker count.
-            with ThreadPoolExecutor(max_workers=_mw) as _ex:
-                for res in _ex.map(lambda p: _solve_one(*p),
-                                   list(enumerate(wl))):
-                    _store(*res)
+        # ONE process-wide BLAS cap for the WHOLE sweep, entered on THIS
+        # thread (M4 referral, 2026-08-04).  Byte-identity across worker counts
+        # requires every solve -- serial and threaded -- to run at the SAME
+        # BLAS thread count, and applying the cap is process-global, so it
+        # cannot be done per worker.  One enter/exit per sweep makes the
+        # identity hold BY CONSTRUCTION rather than by assertion.
+        with _blas_threads_quiet(blas_per_worker), _blas_limit():
+            if _mw == 1 or wl.size == 1:
+                for iw, w in enumerate(wl):
+                    _store(*_solve_one(iw, w))
+            else:
+                from concurrent.futures import ThreadPoolExecutor
+                # ThreadPoolExecutor.map yields IN INPUT ORDER, so _store runs
+                # in wavelength order (deterministic warnings) and the result
+                # is byte-identical to the serial path for any worker count.
+                with ThreadPoolExecutor(max_workers=_mw) as _ex:
+                    for res in _ex.map(lambda p: _solve_one(*p),
+                                       list(enumerate(wl))):
+                        _store(*res)
         if jones:
             return orders, R_all, T_all, J_all
         return orders, R_all, T_all
@@ -2918,14 +3003,9 @@ class PMMStack:
         import os as _os
         # ---- hoisted geometry: window grids + masses + cross-masses --------
         nlay = len(self._layers)
-        grid_of = []
-        for i in range(nlay):
-            js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
-            uw_i, rows_i = _pmm_union_grid(
-                [self._layers[j][1] for j in js],
-                self.min_feature / self.period)
-            grid_of.append((np.asarray(uw_i, dtype=float),
-                            rows_i[js.index(i)]))
+        grid_of = _perlayer_window_grids(
+            [L[1] for L in self._layers], self.min_feature / self.period,
+            self.window_halfwidth)
         wkeys = [w.tobytes() for w, _r in grid_of]
         w0_ref = float(wl[0])
         geo_mats_by = [
@@ -2939,14 +3019,14 @@ class PMMStack:
         def _massg(i):
             M = _mass_memo.get(wkeys[i])
             if M is None:
-                M = _sem_mass_exact(geo_mats_by[i])
+                M = _sem_mass_exact_cached(geo_mats_by[i])
                 _mass_memo[wkeys[i]] = M
             return M
 
         cross_of = {}
         for i in range(nlay - 1):
             if wkeys[i] != wkeys[i + 1]:
-                cross_of[i] = _sem_cross_mass(geo_mats_by[i],
+                cross_of[i] = _sem_cross_mass_cached(geo_mats_by[i],
                                               geo_mats_by[i + 1])
 
         def _hs_mats(w):
@@ -3003,7 +3083,22 @@ class PMMStack:
         J_all = np.empty((wl.size, 2, 2), dtype=complex)
         depths = [float(L[0]) for L in self._layers]
 
+        # T3-4 (M3): the classification verdict is per-POINT, but the points
+        # run in WORKER THREADS and this method's contract is that its
+        # warnings come out in wavelength order regardless of worker count.
+        # So the verdict is DEFERRED: each point stashes its message under its
+        # own index (thread-local rows, one writer per key) and the messages
+        # are emitted, in index order, after the map completes.
+        _t34_msgs = {}
+
         def _solve_one(iw, w):
+            sc = _mode_cut_scope(
+                f"PMMStack.solve_vs_wavelength (per-layer, wl={float(w):.6g})",
+                defer=_t34_msgs, key=iw)
+            with sc:
+                return _solve_one_inner(iw, w)
+
+        def _solve_one_inner(iw, w):
             w = float(w)
             k0 = 2.0 * np.pi / w
             if disp_region:
@@ -3016,7 +3111,21 @@ class PMMStack:
             _require_propagating_incidence(
                 "PMMStack.solve_vs_wavelength", np.conj(_C(eps_sup)),
                 (kx0 / k0) ** 2)
-            with _blas_threads_quiet(blas_per_worker):
+            # The cap is applied ONCE by the caller, around the whole dispatch
+            # below -- NOT here.  Applying a cap is PROCESS-GLOBAL on OpenBLAS
+            # (threadpoolctl calls ``openblas_set_num_threads``); only the
+            # REQUEST is thread-local.  N workers' enter/exit pairs therefore
+            # race on one global and the byte-identity contract below was
+            # false.  Measured and fixed on the RCWA twin first (M4
+            # 2026-08-04, ``PMM_M4_HYGIENE_2026_08_04.md`` S2); this is the
+            # same defect at the PMM site, fixed the same way.
+            # ``_blas_threads_quiet(None)`` clears THIS thread's requested cap
+            # for the duration, so a nested ``solve``'s own limiter finds
+            # nothing to apply and does not re-enter the global one -- which
+            # matters on the SERIAL branch, where this runs on the caller's
+            # thread inside the sweep-level cap.  It clears the REQUEST, not
+            # the applied pool.
+            with _blas_threads_quiet(None):
                 Wsup, Vsup, _l, _g = _sem_modes_uniform(
                     msup, k0, kx0, eps_sup, _uniform_geo_eig(msup, k0, kx0))
                 Wsub, Vsub, _l2, _g2 = _sem_modes_uniform(
@@ -3076,15 +3185,25 @@ class PMMStack:
 
         _mw = (min(_os.cpu_count() or 1, int(wl.size)) if max_workers is None
                else max(1, int(max_workers)))
-        if _mw == 1 or wl.size == 1:
-            for iw, w in enumerate(wl):
-                _store(*_solve_one(iw, w))
-        else:
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=_mw) as _ex:
-                for res in _ex.map(lambda pp: _solve_one(*pp),
-                                   list(enumerate(wl))):
-                    _store(*res)
+        # ONE process-wide BLAS cap for the WHOLE sweep, entered on THIS
+        # thread (M4 referral, 2026-08-04).  Byte-identity across worker counts
+        # requires every solve -- serial and threaded -- to run at the SAME
+        # BLAS thread count, and applying the cap is process-global, so it
+        # cannot be done per worker.  One enter/exit per sweep makes the
+        # identity hold BY CONSTRUCTION rather than by assertion.
+        with _blas_threads_quiet(blas_per_worker), _blas_limit():
+            if _mw == 1 or wl.size == 1:
+                for iw, w in enumerate(wl):
+                    _store(*_solve_one(iw, w))
+            else:
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=_mw) as _ex:
+                    for res in _ex.map(lambda pp: _solve_one(*pp),
+                                       list(enumerate(wl))):
+                        _store(*res)
+        for _k in sorted(_t34_msgs):            # deterministic order (T3-4)
+            warnings.warn(_t34_msgs[_k], _ModeClassificationWarning,
+                          stacklevel=2)
         if jones:
             return orders, R_all, T_all, J_all
         return orders, R_all, T_all

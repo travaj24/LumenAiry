@@ -36,6 +36,7 @@ from ..rcwa._core import (
     _propagation_smatrix_general,
     _require_propagating_incidence,
 )
+from ._core import _mode_cut_scoped
 from .twod import (
     _build_axis,
     _cell_to_walls_tile,
@@ -134,10 +135,12 @@ def _tile_has_offplane_public(tensors):
     return False
 
 
+@_mode_cut_scoped("pmm conical (nodal cascade)")
 def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
                          theta, phi, degree, n_el, grade, n_orders,
                          min_feature=0.0, label="pmm conical (nodal)",
-                         return_modal=False, layer_grids="shared"):
+                         return_modal=False, layer_grids="shared",
+                         window_halfwidth=1):
     """PURE-NODAL (no projection floor) conical multilayer cascade for
     PATTERNED in-plane stacks -- the fix for
     ``AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12``.
@@ -176,11 +179,12 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         _guarded_lstsq,
         _interface_smatrix_mortar,
         _n_propagating_orders,
+        _perlayer_window_grids,
         _pmm_union_grid,
         _redheffer_star_rect,
-        _sem_cross_mass,
+        _sem_cross_mass_cached,
         _sem_fourier_projection,
-        _sem_mass_exact,
+        _sem_mass_exact_cached,
         _sem_modes_tensor,
         _tensor3_dict,
     )
@@ -234,14 +238,9 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
     t_sub = _tensor3_dict(eps_sub * np.eye(3))
     grid_of = mats_sup = mats_sub = None
     if per_layer:
-        grid_of = []
-        for i in range(nlay):
-            js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
-            uw_i, rows_i = _pmm_union_grid(
-                [segs_layers[j] for j in js],
-                (min_feature / period) if min_feature else None)
-            grid_of.append((np.asarray(uw_i, dtype=float),
-                            rows_i[js.index(i)]))
+        grid_of = _perlayer_window_grids(
+            segs_layers, (min_feature / period) if min_feature else None,
+            window_halfwidth)
         mats_sup = _build_sem_tensor_segments(
             period, grid_of[0][0], [t_sup] * len(grid_of[0][0]),
             degree, n_el, grade)
@@ -319,7 +318,7 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         def _mass(i):
             M = _mass_memo.get(wkeys[i])
             if M is None:
-                M = _sem_mass_exact(mats_by[i])
+                M = _sem_mass_exact_cached(mats_by[i])
                 _mass_memo[wkeys[i]] = M
             return M
 
@@ -328,7 +327,7 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
                 return _ifc_n(Wa, Va, Wb, Vb)
             return _interface_smatrix_mortar(
                 Wa, Va, Wb, Vb, _mass(ia), _mass(ib),
-                _sem_cross_mass(mats_by[ia], mats_by[ib]))
+                _sem_cross_mass_cached(mats_by[ia], mats_by[ib]))
 
         S = _ifc_pl(Wsup, Vsup, lmodes[0][0], lmodes[0][1], None, 0)
         for i in range(nlay):

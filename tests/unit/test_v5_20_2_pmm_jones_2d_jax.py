@@ -57,6 +57,22 @@ def _jax():
     return jax
 
 
+def _blas_pin(n=1):
+    """Pin the process BLAS pool to ``n`` threads, or ``None`` if it cannot be.
+
+    See the forward-parity test for why this is needed.  ``threadpoolctl`` is
+    an OPTIONAL dependency of this library (it is what
+    ``lumenairy.elements.rcwa.set_blas_threads`` needs too), so the caller must
+    handle ``None`` -- on a build without it, the pinned leg is skipped and only
+    the build-invariant channels are asserted.
+    """
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:
+        return None
+    return threadpool_limits(limits=n, user_api="blas")
+
+
 def _sv(J):
     return np.sort(np.linalg.svd(np.asarray(J), compute_uv=False))
 
@@ -117,62 +133,128 @@ def _cell_jax(jnp, layout, tensors):
 
 
 # ============================ forward parity ================================
-@pytest.mark.parametrize("kind", ["inplane", "oop"])
-def test_pmm_jones_2d_jax_forward_matches_numpy(kind):
-    _jax()
+def _forward_pair(kind, degree=11):
+    """Run both engines on the same cell and return the parity metrics."""
     import jax.numpy as jnp
     lay = _pillar_layout()
     build = _inpl if kind == "inplane" else _uni_oop
-    regs_np = [_iso(np, 1.5), build(np, 1.9)]
-    regs_jx = [_iso(jnp, 1.5), build(jnp, 1.9)]
-    cell_np = _cell_np(lay, regs_np)
-    cell_jx = _cell_jax(jnp, lay, regs_jx)
-
-    # v5.30: forward parity runs at degree 11, not the file default 9.
-    # The two engines take exact-but-DIFFERENT eigen routes, and at
-    # degrees where a near-degenerate mode pair exists they split its
-    # power differently -- measured T-total gap at the clean 30/40 deg
-    # geometry: deg 7 = 1.05e-2, 9 = 5.19e-3, 11 = 6.3e-8, 13 = 4.25e-3
-    # (non-monotone = degeneracy roulette, exactly the conditioning the
-    # module docstring describes).  deg 11 has no near-degenerate pair,
-    # so the bars below measure ALGORITHM agreement with ~5 orders of
-    # headroom instead of pinning the roulette.
-    kw = dict(_KW, degree=11)
+    cell_np = _cell_np(lay, [_iso(np, 1.5), build(np, 1.9)])
+    cell_jx = _cell_jax(jnp, lay, [_iso(jnp, 1.5), build(jnp, 1.9)])
+    kw = dict(_KW, degree=degree)
     o_n, R_n, T_n, J_n = pmm_jones_2d(_P, _P, cell_np, 1.5, 1.0, _DEP, _WL,
                                       **kw)
     o_j, R_j, T_j, J_j = pmm_jones_2d(_P, _P, cell_jx, 1.5, 1.0, _DEP, _WL,
                                       region_layout=lay, **kw)
-    assert np.array_equal(np.asarray(o_j), o_n)
-    # v5.24.4 (audit S5-12 / S4-4): cross-BLAS parity bar.  The numpy side
-    # takes the symmetric eig(P Q) path for this in-plane cell while jax
-    # keeps the generator path (tracing-consistency) -- two exact-but-
-    # DIFFERENT algorithms.  On CI's heterogeneous OpenBLAS kernels the
-    # near-degenerate in-plane modes SPLIT POWER between adjacent
-    # diffraction orders differently run-to-run (measured up to ~9e-3 on
-    # a single order at the degenerate pair, while the SUM over the pair
-    # -- and the total energy -- stays stable to ~1e-4).  v5.25.0 (PR #18
-    # CI): per-order bar widened to 2e-2 (an order-1 algorithm bug gives
-    # O(0.1-1) per-order errors) and the physically-invariant TOTALS are
-    # pinned tight instead -- that is the robust cross-backend contract.
+    R_j, T_j, J_j = np.asarray(R_j), np.asarray(T_j), np.asarray(J_j)
+    return dict(
+        orders_equal=bool(np.array_equal(np.asarray(o_j), o_n)),
+        order_R=float(np.max(np.abs(R_j - R_n))),
+        order_T=float(np.max(np.abs(T_j - T_n))),
+        total_R=abs(float(R_j.sum()) - float(R_n.sum())),
+        total_T=abs(float(T_j.sum()) - float(T_n.sum())),
+        jones=float(np.max(np.abs(J_j - J_n))),
+        sv=float(np.max(np.abs(_sv(J_j) - _sv(J_n)))),
+        closure_np=float(R_n.sum() + T_n.sum()),
+        closure_jx=float(R_j.sum() + T_j.sum()),
+    )
+
+
+@pytest.mark.parametrize("kind", ["inplane", "oop"])
+def test_pmm_jones_2d_jax_forward_matches_numpy(kind):
+    """Forward parity of the JAX twin against NumPy, on TWO legs.
+
+    THE BLAS-THREAD-COUNT FINDING (M4, 2026-08-04) -- why this test is split.
+    The in-plane arm's total-transmission bar had been re-tuned twice (v5.25.0,
+    v5.30) and kept rotting.  Holding the code, the build and the geometry
+    FIXED and varying ONLY the BLAS pool (`OPENBLAS_NUM_THREADS`) on
+    Windows / scipy-openblas 0.3.31 / py3.14 / numpy 2.4.4, degree 11:
+
+        BLAS threads |  1        |  2        |  24
+        -------------+-----------+-----------+-----------
+        order R      | 4.80e-11  | 7.25e-08  | 2.52e-07
+        order T      | 7.11e-06  | 8.04e-03  | 5.41e-03
+        total R      | 5.95e-11  | 9.53e-08  | 2.94e-07
+        total T      | 1.01e-05  | 3.19e-03  | 1.83e-02   <- old 5e-3 bar
+        jones        | 2.47e-10  | 2.05e-07  | 9.87e-07
+        sing. values | 9.04e-11  | 1.55e-07  | 3.20e-07
+
+    So the old ``_PAR_TOTAL`` was an ABSOLUTE bar on a magnitude that the BLAS
+    thread count sets: it passes at 2 threads (a 2-core CI runner) and fails at
+    24, with identical code.  That is the whole "passes CI, fails locally"
+    story, and re-tuning the constant could never fix it.
+
+    WHICH ENGINE MOVES.  The JAX side does not: its lossless energy closure is
+    2.0124975650960613 (1 thread) vs 2.012497565096153 (24) -- 9e-14 apart, and
+    smooth in degree (2.01237 / 2.01239 / 2.01250 / 2.01256 at deg 7/9/11/13).
+    The NumPy side does: 2.0125077 -> 2.0307687 at deg 11, i.e. it manufactures
+    ~1.8% extra energy on a LOSSLESS cell when the pool is 24.  The NumPy arm
+    takes the symmetric ``eig(P Q)`` route for an in-plane cell while the twin
+    keeps the generator route (tracing-consistency), and that route's
+    near-degenerate mode pair is where the thread-dependence enters.  Degree
+    does not rescue it -- deg 9 is thread-stable on THIS build (closure moves
+    1.6e-8) while v5.30 measured deg 9 as the bad one and deg 11 as clean on
+    CI's build.  Chasing a "good" degree is the roulette, not a fix.
+
+    LEG 1 (always) -- the BUILD-INVARIANT channels, at the historical bars.
+    Every channel except total-T is invariant across 1/2/24 threads with >= 3
+    orders of headroom (worst: order-T 8.0e-3 against 2e-2).
+    LEG 2 (when the BLAS pool can be pinned) -- ALGORITHM agreement, which is
+    what this test's name promises.  With one deterministic thread count the
+    two engines agree to ~1e-5 and the bars are TIGHTENED by 2-3 orders, so
+    this leg has strictly more power to catch a real forward-parity defect than
+    the single loose leg it replaces.
+
+    The out-of-plane arm is unaffected (both engines take the generator route):
+    every channel is <= 3.6e-14 at both 1 and 24 threads.
+    """
+    _jax()
+    # --- leg 1: native BLAS pool -------------------------------------------
+    m = _forward_pair(kind)
+    assert m["orders_equal"]
+    # v5.24.4 (audit S5-12 / S4-4) -> v5.25.0 (PR #18 CI): per-order bar 2e-2
+    # (an order-1 algorithm bug gives O(0.1-1) per-order errors), Jones by the
+    # full complex matrix AND its basis-invariant singular values.  These are
+    # the channels the 1/2/24-thread table above shows to be invariant, so they
+    # keep their historical values and are asserted unconditionally.
     _PAR_ORDER = 2e-2
-    # v5.30: total bar 1e-3 -> 5e-3.  The v5.25.0 "totals stable to ~1e-4"
-    # environment claim drifted: measured total drift is now 1.398e-3 on
-    # Windows/py3.14 (deterministic there) and CI Linux STRADDLED the old
-    # 1e-3 bar across two runs with zero PMM code change (green on
-    # 24c7d30, red on bfb6179) -- the bar sat at the real cross-backend
-    # eigensolve floor.  5e-3 remains 4x tighter than the per-order bar
-    # and two orders below an order-1 algorithm bug.
+    assert m["order_R"] < _PAR_ORDER
+    assert m["order_T"] < _PAR_ORDER
+    assert m["jones"] < 2.0 * np.sqrt(_PAR_ORDER)
+    assert m["sv"] < 5e-3
+    # ERA-PIN (M4 2026-08-04).  The v5.30 assertion was, verbatim:
+    #     _PAR_TOTAL = 5e-3
+    #     assert abs(float(np.asarray(R_j).sum()) - float(R_n.sum())) < _PAR_TOTAL
+    #     assert abs(float(np.asarray(T_j).sum()) - float(T_n.sum())) < _PAR_TOTAL
+    # The R half is invariant (2.9e-7 at 24 threads) and is RETAINED at its
+    # original value below.  The T half is the BLAS-thread lottery documented
+    # above and moves to leg 2, where it is deterministic and pinned 5x tighter
+    # than it ever was here.
     _PAR_TOTAL = 5e-3
-    assert np.max(np.abs(np.asarray(R_j) - R_n)) < _PAR_ORDER
-    assert np.max(np.abs(np.asarray(T_j) - T_n)) < _PAR_ORDER
-    assert abs(float(np.asarray(R_j).sum()) - float(R_n.sum())) < _PAR_TOTAL
-    assert abs(float(np.asarray(T_j).sum()) - float(T_n.sum())) < _PAR_TOTAL
-    # Jones is a physical scattering amplitude (gauge-invariant): compare the
-    # full complex matrix AND its basis-invariant singular values.  The
-    # degenerate-pair split affects the per-order Jones entries the same
-    # way; the singular values are the invariant quantity.
-    assert np.max(np.abs(np.asarray(J_j) - J_n)) < 2.0 * np.sqrt(_PAR_ORDER)
-    assert np.max(np.abs(_sv(J_j) - _sv(J_n))) < 5e-3
+    assert m["total_R"] < _PAR_TOTAL
+    # --- leg 2: pinned BLAS pool -> deterministic algorithm agreement -------
+    pin = _blas_pin(1)
+    if pin is None:                 # threadpoolctl absent: leg 1 only
+        return
+    with pin:
+        p = _forward_pair(kind)
+    assert p["orders_equal"]
+    # Measured at 1 thread (both builds), degree 11:
+    #   inplane: order_R 4.8e-11, order_T 7.1e-06, total_R 5.9e-11,
+    #            total_T 1.0e-05, jones 2.5e-10, sv 9.0e-11
+    #   oop    : every channel <= 3.6e-14
+    # Bars sit ~100x above the in-plane numbers -- tight enough that a
+    # per-order or total defect two orders below the leg-1 bars still fails.
+    assert p["order_R"] < 1e-3
+    assert p["order_T"] < 1e-3
+    assert p["total_R"] < 1e-3
+    assert p["total_T"] < 1e-3
+    assert p["jones"] < 1e-3
+    assert p["sv"] < 1e-3
+    # The twin's own lossless energy closure is the independent instrument that
+    # identified NumPy as the moving side: it must not depend on the thread
+    # count.  (Lossless cell, two incident polarizations -> 2.0 up to the
+    # n_orders=3 truncation defect, ~1.3e-2 here.)
+    assert abs(p["closure_jx"] - m["closure_jx"]) < 1e-9
 
 
 # ============================ gradient vs FD ================================

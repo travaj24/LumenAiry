@@ -28,6 +28,17 @@ from numpy.polynomial.legendre import Legendre
 # while a NumPy input falls through to the original (byte-identical) code.
 from ...backend import is_jax_array
 
+# Incidence-medium guard shared with the 2-D PMM paths (twod.py / stack2d.py):
+# the rcwa guard expects the INTERNAL exp(+i w t) eps convention, so PUBLIC-
+# convention callers pass np.conj(eps_sup) (mirrors twod_staggered's bridge).
+#
+# M1 / N-2 (2026-08-04): ONE conditioning guard for both solvers.  Defined in
+# rcwa/_core.py beside the ``cond ~1e13`` docstring that motivated it, imported
+# here rather than forked -- the duplication-kills rule, and a forked threshold
+# is a forked contract.  See ``INTERFACE_CONDITIONING_GUARD`` there and
+# ``docs/audits/PMM_M1_CONDITIONING_2026_08_04.md``.
+from ..rcwa import _core as _rcwa_core
+
 # Reused for the slanted-grating solver: the slant breaks the +/-q field
 # symmetry (like a full-3x3 tensor layer), so it needs the GENERALIZED
 # (explicit forward/backward) S-matrix.  rcwa does NOT import pmm, so this
@@ -44,16 +55,6 @@ from ..rcwa import (
     # collapses the whole star against a propagation S-matrix to row/col scaling.
     _redheffer_star,
 )
-
-# Incidence-medium guard shared with the 2-D PMM paths (twod.py / stack2d.py):
-# the rcwa guard expects the INTERNAL exp(+i w t) eps convention, so PUBLIC-
-# convention callers pass np.conj(eps_sup) (mirrors twod_staggered's bridge).
-#
-# M1 / N-2 (2026-08-04): ONE conditioning guard for both solvers.  Defined in
-# rcwa/_core.py beside the ``cond ~1e13`` docstring that motivated it, imported
-# here rather than forked -- the duplication-kills rule, and a forked threshold
-# is a forked contract.  See ``INTERFACE_CONDITIONING_GUARD`` there and
-# ``docs/audits/PMM_M1_CONDITIONING_2026_08_04.md``.
 from ..rcwa._core import (
     _ConditioningError,
     _guarded_inverse,
@@ -337,12 +338,22 @@ def _gll_nodes_weights(degree: int):
 _LAGRANGE_DREF_CACHE: dict = {}
 _LAGRANGE_DREF_LOCK = threading.Lock()
 
+# Memo for the barycentric WEIGHTS of a nodal set (M3 / N-3 item 2), same key,
+# same policy, same registry enrollment as ``_LAGRANGE_DREF_CACHE`` above: one
+# entry per distinct GLL degree, ``degree + 1`` float64s each (a few hundred
+# bytes for every degree the library can build), returned read-only.
+_LAGRANGE_BARY_CACHE: dict = {}
+_LAGRANGE_BARY_LOCK = threading.Lock()
+
 
 def _clear_pmm_caches() -> None:
     """Clear the PMM module-level caches (enrolled with the library cache
     registry, so the global 'clear all caches' path empties them too)."""
     with _LAGRANGE_DREF_LOCK:
         _LAGRANGE_DREF_CACHE.clear()
+    with _LAGRANGE_BARY_LOCK:
+        _LAGRANGE_BARY_CACHE.clear()
+    _PERLAYER_GEO_CACHE.clear()
     _clear_geo_eig_cache()
 
 
@@ -734,11 +745,384 @@ def _mass_flux_cut(flux, W2, SVt, SVb, n, xp=np):
     decades below the ``1e-9 max|flux|`` term, so the cut is unchanged there.
     (``_build_generator_metric``'s selector is NOT routed here: its flux is a
     plain nodal sum with no ``S0``, hence already dimensionless.)"""
+    return xp.abs(flux) > _mass_flux_threshold(flux, W2, SVt, SVb, n, xp)
+
+
+def _mass_flux_threshold(flux, W2, SVt, SVb, n, xp=np):
+    """The scalar cut :func:`_mass_flux_cut` compares against.
+
+    Split out (M3 / T3-4) so the classification-MARGIN instrument reads the
+    live threshold instead of re-deriving it -- a forked threshold would be a
+    forked contract.  ``_mass_flux_cut`` is the only policy owner and is
+    bit-for-bit what it was."""
     fmax = xp.max(xp.abs(flux))
     fnoise = (xp.max(xp.abs(W2))
               * (xp.max(xp.abs(SVt)) + xp.max(xp.abs(SVb)))
               * (int(n) * float(np.finfo(np.float64).eps)))
-    return xp.abs(flux) > xp.maximum(1e-9 * fmax, fnoise)
+    return xp.maximum(1e-9 * fmax, fnoise)
+
+
+# ===========================================================================
+# T3-4 -- the modal forward/backward CLASSIFICATION margin
+# ===========================================================================
+# See ``docs/audits/PMM_M3_EFFICIENCY_2026_08_04.md`` S5 and the hand-off in
+# ``PMM_M2_WINDOW_CONTRACT_2026_08_04.md`` S5.5.
+#
+# THE DEFECT.  A cross-layer cell at the ~1-2 nm scale on a 700 nm pitch injects
+# modes whose z-Poynting flux sits AT :func:`_mass_flux_cut`'s threshold.  The
+# selector two lines below this comment,
+#
+#     flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+#
+# then takes a mode's PROPAGATION DIRECTION from a different criterion
+# depending on which side of the cut it lands, the count classified propagating
+# moves with ``degree`` instead of staying fixed, the forward set is
+# mis-assembled, and the cascade returns a UNITARY BUT WRONG S-matrix -- up to
+# 466 % wrong at ``|R + T - 1|`` = 4.5e-07 (M2 S5.1-S5.2).  Deterministic on
+# both builds; no conservation identity sees it.
+#
+# WHY THE OBVIOUS INSTRUMENT DOES NOT WORK, and it was measured before this one
+# was written.  M2's census counted modes within a decade of the cut and found
+# the healthy and broken populations OVERLAP (1, 2, 4 near-cut modes on cells
+# that are RIGHT; 6 on one that is wrong; 4 on both) -- a bar there would refuse
+# a correct solve, which is the R-1b failure mode the campaign rates worse than
+# silence.
+#
+# WHAT SEPARATES IS THE CONJUNCTION, which is M1's ``_guarded_lstsq`` lesson
+# (rank AND residual) applied here: proximity to the cut is only dangerous when
+# the cut is LOAD-BEARING.  For each mode the two criteria give a direction:
+# ``flux < 0`` and ``q.imag < 0``.  Where they AGREE, the classification cannot
+# change the answer -- the mode gets the same direction on either side of the
+# cut, however close it sits.  Only a mode that is BOTH near the cut AND
+# disagreeing can flip the answer.  So the instrument is
+#
+#     margin = min over DISAGREEING modes of  max(|flux| / t,  t / |flux|)
+#
+# -- the multiplicative factor by which the cut would have to move before any
+# mode's direction changes; ``+inf`` when no mode disagrees.  It is scale-free
+# (a ratio), constant-free (nothing is fitted into its definition), and free
+# (``flux``, ``q`` and ``t`` are all already computed -- no second eig, no
+# second factorisation).  The BAR on it is calibrated, and the calibration is
+# in the audit document.
+
+#: Census hook (T3-4).  When set to a list, every classical / conical NumPy
+#: modal solve appends one dict of instruments.  ``None`` (the default) costs
+#: one ``is None`` test per eig and not one extra flop.
+_MODE_CUT_CENSUS = None
+
+# ===========================================================================
+# THE WARN GUARD DOES NOT SHIP ARMED, AND THAT IS A MEASUREMENT (M3 / T3-4)
+# ===========================================================================
+# The conjunction below SEPARATES on the family it was calibrated on -- the
+# CLASSICAL (phi = 0) per-layer cascade on M2's coated taper -- where it fires
+# on every silent-wrong cell and on none of the correct ones.  The breadth
+# sweep then refuted it on the CONICAL (phi != 0) cascade, and the refutation
+# is recorded here rather than only in the audit, because it is the reason for
+# the default.
+#
+# Device U, ns = 4, phi = 20 deg, per-layer, degree ladder 6..14 [M]:
+#
+#   min_feature        R0 ladder                              spread over degree
+#   default   0.135182 0.134854 0.134760 0.134727 0.240574    67.8 %   BROKEN
+#   3.0 nm    0.134189 0.133726 0.133579 0.133521 0.133495     0.52 %  CLEAN
+#
+#   and the instruments on those same cells (spread / n_risk / margin):
+#
+#   default   2/2/1.04   2/2/2.72   1/3/1.65   3/5/1.04   5/8/1.22
+#   3.0 nm    0/0/103    0/1/3.93   1/2/1.07   1/2/1.40   2/2/1.06
+#                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ CORRECT
+#
+# The three CLEAN conical cells at degree 10/12/14 read INSIDE the broken band
+# on every instrument -- spread 1-2 against a classical broken 2, margin
+# 1.06-1.40 against a classical broken 1.07-3.27.  A conical cascade carries a
+# genuinely denser flux spectrum (ky0 != 0 breaks the +/-q symmetry
+# differently), and the free instruments do not know that.  There is therefore
+# NO bar that survives both families, and arming this by default would emit a
+# false pathology claim on three correct solves -- the R-1b failure mode the
+# campaign rates worse than silence, and the same shape as M1's withdrawn
+# inverse refusal.
+#
+# So: the INSTRUMENT ships (``_MODE_CUT_CENSUS``, opt-in, zero default cost)
+# and the GUARD ships DISARMED.  Arm it deliberately, on the classical path,
+# where it is calibrated:
+#
+#     from lumenairy.elements.pmm import _core as pc
+#     pc.PMM_MODE_CUT_GUARD = True
+#
+# What would close this: a discriminator that is invariant to the mount.  M2's
+# own lead is the two-degree consensus probe on the propagating-mode count --
+# a detector with NO bar -- which costs a second eig and is therefore an
+# opt-in diagnostic rather than a free guard.  Untested; 1 AC.
+
+#: T3-4 guard, at WARN.  DISARMED by default -- see the block above for the
+#: measurement that disarmed it.  Arming it never changes an answer; the guard
+#: only speaks.
+PMM_MODE_CUT_GUARD = False
+
+#: BAR: the cut-movement factor below which a DISAGREEING mode counts as
+#: at-risk.  Calibrated on the CLASSICAL per-layer family -- see
+#: ``docs/audits/PMM_M3_EFFICIENCY_2026_08_04.md`` S5.  A DECADE is the natural
+#: unit (M2's census used the same one) and on that family the populations sit
+#: far enough either side of it that the exact value is not load-bearing: every
+#: BROKEN solve carries a disagreeing mode within 3.3x of the cut and every
+#: CLEAN one that also shows a layer-count spread carries none within 21x.
+#: It does NOT transfer to the conical family; that is the point of the block
+#: above.
+_MODE_CUT_MARGIN_WARN = 1.0e1
+
+#: Per-solve accumulator for the STACK-LEVEL half of the conjunction.  The
+#: verdict cannot be reached inside one layer's eig -- it needs the whole
+#: stack's propagating-mode counts -- so the per-layer solve paths open a scope
+#: and the verdict is taken on exit.  Thread-local because the threaded
+#: wavelength sweep runs solves concurrently.
+_MODE_CUT_TLS = threading.local()
+
+#: Emitted by the T3-4 guard.  A subclass of ``UserWarning`` so a caller can
+#: promote it to an error with ``warnings.simplefilter('error', ...)``.
+class _ModeClassificationWarning(UserWarning):
+    """The modal forward/backward classification is not robust: a mode whose
+    two direction criteria DISAGREE sits within the calibrated margin of
+    :func:`_mass_flux_cut`'s threshold, so the far field can be unitary and
+    wrong (M3 / T3-4)."""
+
+
+def _mode_cut_margin(flux, q, thr):
+    """``(n_at_risk, margin)`` of one modal set -- see the block comment above.
+
+    ``n_at_risk`` counts modes that are within a DECADE of the cut *and* whose
+    two direction criteria disagree; ``margin`` is the smallest cut-movement
+    factor over the disagreeing modes (``inf`` when none disagree)."""
+    f = np.abs(np.asarray(flux, dtype=float))
+    disagree = (np.asarray(flux) < 0.0) != (np.asarray(q).imag < 0.0)
+    if not bool(disagree.any()):
+        return 0, float("inf")
+    fd = f[disagree]
+    t = float(thr)
+    if not (t > 0.0) or not np.isfinite(t):
+        return int(disagree.sum()), 1.0        # degenerate cut: assume at-risk
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.maximum(fd / t, np.where(fd > 0.0, t / fd, np.inf))
+    ratio = np.where(np.isnan(ratio), 1.0, ratio)
+    return int(np.count_nonzero(ratio < 10.0)), float(np.min(ratio))
+
+
+def _layer_index_bound(mats):
+    """The largest refractive index present on a grid: ``sqrt(max |eps|)`` over
+    the diagonal of every element's tensor.
+
+    This is the PHYSICAL ceiling on a propagating mode's effective index -- a
+    mode with ``q^2 = eps_eff - kx_eff^2`` and a real ``q`` cannot exceed it --
+    and it is read off the operator's own element table, so it needs no
+    argument, no material list and no fitted constant.  Returns ``inf`` when
+    the table is not the ``(xl, xr, tensor)`` form (then the bound is inert)."""
+    best = 0.0
+    for b in mats.get("elem_bnds", ()):
+        if len(b) < 3:
+            return float("inf")
+        t = b[2]
+        if isinstance(t, dict):
+            vals = (t.get("exx"), t.get("eyy"), t.get("ezz"))
+        else:
+            try:
+                vals = np.diag(np.asarray(t, dtype=_C))
+            except (TypeError, ValueError):         # pragma: no cover
+                # the only two ``np.asarray(..., dtype=complex)`` /
+                # ``np.diag`` can raise on an unexpected element payload: a
+                # non-numeric object (TypeError) or a non-1/2-D shape
+                # (ValueError).  Anything else is a real defect and must
+                # propagate -- the budget guard's whole point.
+                return float("inf")
+        for v in vals:
+            if v is None:
+                continue
+            a = float(abs(complex(v)))
+            if a > best:
+                best = a
+    return float(np.sqrt(best)) if best > 0.0 else float("inf")
+
+
+def _grid_is_patterned(mats):
+    """True when a grid's elements do NOT all carry the same permittivity.
+
+    T3-4's stack-level comparison is over PATTERNED layers only: a uniform
+    half-space legitimately supports a different number of propagating modes
+    from a patterned layer, so counting it would manufacture a ``spread`` out
+    of nothing.  Detecting it from the ELEMENT TABLE rather than from the call
+    site is what makes that correct everywhere -- the conical cascade solves
+    its half-spaces through :func:`_sem_modes_tensor`, the same entry point a
+    patterned layer uses, so a call-site label would have mislabelled them."""
+    seen = None
+    for b in mats.get("elem_bnds", ()):
+        if len(b) < 3:
+            return True                     # unknown table: assume patterned
+        t = b[2]
+        if isinstance(t, dict):
+            key = tuple(complex(t.get(k, 0.0) or 0.0)
+                        for k in ("exx", "exy", "eyx", "eyy", "ezz"))
+        else:
+            try:
+                key = tuple(np.asarray(t, dtype=_C).ravel().tolist())
+            except (TypeError, ValueError):         # pragma: no cover
+                # same two, and the same reason: a non-numeric payload or a
+                # ragged one.  "Unknown table -> assume patterned" is the
+                # SAFE direction for the T3-4 instrument (it can only make the
+                # verdict more conservative), but it must not swallow a bug.
+                return True
+        if seen is None:
+            seen = key
+        elif key != seen:
+            return True
+    return False
+
+
+def _mode_q_excess(q, prop, n_bound):
+    """``max |q| among modes classified PROPAGATING`` divided by the layer's
+    physical index ceiling.
+
+    ``> 1`` means the flux cut has called a mode propagating that no
+    propagating mode of this layer can be -- the signature of a spurious
+    high-``|q|`` mode injected by a near-zero-width element.  ``0.0`` when
+    nothing is classified propagating."""
+    if not bool(np.any(prop)) or not np.isfinite(n_bound) or n_bound <= 0.0:
+        return 0.0
+    return float(np.max(np.abs(np.asarray(q)[prop]))) / float(n_bound)
+
+
+def _mode_cut_armed():
+    """True when anything wants the T3-4 instruments computed."""
+    return (_MODE_CUT_CENSUS is not None
+            or getattr(_MODE_CUT_TLS, "rows", None) is not None)
+
+
+class _mode_cut_scope:
+    """Open a per-solve T3-4 accumulator and take the verdict on exit.
+
+    Re-entrant: an inner scope (a nested solve) keeps its own rows and the
+    outer scope's are restored, so a stabilize ladder or a threaded sweep
+    cannot cross-contaminate a verdict.  A no-op when the guard is off AND no
+    census is armed -- then the modal solvers never even build the rows.
+
+    ``defer`` (a dict) + ``key`` divert the verdict's MESSAGE into
+    ``defer[key]`` instead of warning immediately -- the threaded wavelength
+    sweep needs its warnings emitted in wavelength order regardless of worker
+    count, which is a shipped contract of that method."""
+
+    __slots__ = ("label", "_prev", "_own", "_defer", "_key")
+
+    def __init__(self, label, defer=None, key=None):
+        self.label = label
+        self._prev = None
+        self._own = False
+        self._defer = defer
+        self._key = key
+
+    def __enter__(self):
+        if not (PMM_MODE_CUT_GUARD or _MODE_CUT_CENSUS is not None):
+            return self
+        self._prev = getattr(_MODE_CUT_TLS, "rows", None)
+        _MODE_CUT_TLS.rows = []
+        self._own = True
+        return self
+
+    def __exit__(self, *_exc):
+        if not self._own:
+            return False
+        rows = getattr(_MODE_CUT_TLS, "rows", None) or []
+        _MODE_CUT_TLS.rows = self._prev
+        self._own = False
+        if PMM_MODE_CUT_GUARD:
+            msg = _mode_cut_verdict(rows, self.label,
+                                    emit=self._defer is None)
+            if msg is not None and self._defer is not None:
+                self._defer[self._key] = msg
+        return False
+
+
+def _mode_cut_scoped(label):
+    """Decorator form of :class:`_mode_cut_scope`, for solve entry points whose
+    whole body is the scope (``conical._conical_nodal_solve``)."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(*a, **kw):
+            with _mode_cut_scope(label):
+                return fn(*a, **kw)
+        return wrapper
+    return deco
+
+
+def _mode_cut_verdict(rows, label, emit=True):
+    """The T3-4 conjunction, taken once per solve.  Returns the message (or
+    ``None``); warns unless ``emit`` is False.  Never raises, never changes a
+    number.
+
+    BOTH halves are required, and each alone was measured to false-positive:
+
+    * **spread** -- the number of modes classified propagating is not the same
+      on every PATTERNED layer of the stack.  Alone this refuses a perfectly
+      correct stack whose layers genuinely differ (the calibration's F2
+      control: alternating n = 3.48 / 1.45 gratings read 4, 2, 4, 2 and are
+      right, agreeing with RCWA to 1.5 %);
+    * **at-risk** -- some layer carries a mode within
+      :data:`_MODE_CUT_MARGIN_WARN` of the cut whose two direction criteria
+      DISAGREE, i.e. the cut is load-bearing there.  Alone this refuses correct
+      solves too (M2's overlap: near-cut modes are present at degree 6 and 8
+      where the answer is right).
+
+    Together they say: the stack's forward/backward split is not the same
+    everywhere AND at least one place it differs is decided by a coin-flip."""
+    pat = [r for r in rows if r[4]]
+    if len(pat) < 2:
+        return None
+    counts = [r[0] for r in pat]
+    spread = max(counts) - min(counts)
+    if spread <= 0:
+        return None
+    risky = [r for r in pat if r[1] > 0 and r[2] < _MODE_CUT_MARGIN_WARN]
+    if not risky:
+        return None
+    margin = min(r[2] for r in risky)
+    msg = (
+        f"{label}: the modal forward/backward classification is not stable "
+        f"across this stack, and it is being decided at the margin.  The "
+        f"number of modes classified PROPAGATING differs by {spread} between "
+        f"patterned layers ({counts}), and {len(risky)} layer(s) carry a mode "
+        f"whose two direction criteria (z-flux sign vs Im(q)) DISAGREE within "
+        f"a factor {margin:.3g} of the propagating/evanescent cut (bar "
+        f"{_MODE_CUT_MARGIN_WARN:g}).  The cascade can then be UNITARY BUT "
+        f"WRONG -- |R+T-1| stays at round-off while the R/T split is not "
+        f"(measured up to 466% wrong) -- so energy closure will NOT warn you. "
+        f"The cause is a near-zero-width CROSS-LAYER cell: raise min_feature "
+        f"above min(off, |coat - off|) with off = (thickness/n_slices) "
+        f"tan(sidewall).  See docs/audits/"
+        f"PMM_M2_WINDOW_CONTRACT_2026_08_04.md S3.6 and "
+        f"docs/audits/PMM_M3_EFFICIENCY_2026_08_04.md S5.")
+    if emit:
+        warnings.warn(msg, _ModeClassificationWarning, stacklevel=4)
+    return msg
+
+
+def _record_mode_cut(flux, q, thr, prop, mats, site, patterned=None):
+    """Census + per-solve accumulation for the T3-4 instruments.
+
+    Called only when :func:`_mode_cut_armed`, which the callers test first, so
+    the default path is untouched.  The VERDICT is not taken here -- one layer
+    cannot see the stack -- see :class:`_mode_cut_scope`."""
+    n_prop = int(np.count_nonzero(prop))
+    n_risk, margin = _mode_cut_margin(flux, q, thr)
+    if patterned is None:
+        patterned = _grid_is_patterned(mats)
+    rows = getattr(_MODE_CUT_TLS, "rows", None)
+    if rows is not None:
+        rows.append((n_prop, int(n_risk), float(margin), site,
+                     bool(patterned)))
+    if _MODE_CUT_CENSUS is not None:
+        n_bound = _layer_index_bound(mats)
+        _MODE_CUT_CENSUS.append(dict(
+            n_modes=int(np.size(flux)), n_prop=n_prop, n_risk=int(n_risk),
+            margin=float(margin), n_bound=float(n_bound),
+            q_excess=float(_mode_q_excess(q, prop, n_bound)),
+            site=site, patterned=bool(patterned)))
+    return n_risk, margin
 
 
 def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
@@ -1535,8 +1919,15 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
     SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
     flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
                    - np.einsum("in,in->n", W2[n:], SVt))
-    prop = _mass_flux_cut(flux, W2, SVt, SVb, n)      # W7 B2: unit-safe cut
+    thr = _mass_flux_threshold(flux, W2, SVt, SVb, n)
+    prop = np.abs(flux) > thr                        # W7 B2: unit-safe cut
     flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+    # T3-4: the classification margin, when armed.  ``prop`` decides WHICH of
+    # the two direction criteria each mode obeys, so a mode sitting at ``thr``
+    # whose criteria disagree makes the whole forward set degree-dependent.
+    if _mode_cut_armed():
+        _record_mode_cut(flux, q, thr, prop, mats,
+                         "PMM modal solve (patterned layer)")
     q = np.where(flip, -q, q)
     lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
@@ -1660,8 +2051,12 @@ def _sem_modes_uniform(mats, k0, kx0, eps, geo=None):
     SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
     flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
                    - np.einsum("in,in->n", W2[n:], SVt))
-    prop = _mass_flux_cut(flux, W2, SVt, SVb, n)      # W7 B2: unit-safe cut
+    thr = _mass_flux_threshold(flux, W2, SVt, SVb, n)
+    prop = np.abs(flux) > thr                        # W7 B2: unit-safe cut
     flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+    if _mode_cut_armed():
+        _record_mode_cut(flux, q, thr, prop, mats,
+                         "PMM modal solve (uniform half-space)", False)
     q = np.where(flip, -q, q)
     lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
@@ -3517,37 +3912,196 @@ def _pmm_union_grid(layer_segments, min_feature=None):
 # conditioning (measured: in-plane oblique extinction scattered 91% across
 # degree 6/8/10 on a 2-deg coated-pillar taper) and costs O(n_slices^3.4).
 # The structural fix is to give each layer its OWN element grid -- built from
-# its own walls only, so cross-layer wall collisions cannot form and
-# ``min_feature`` is inert by construction -- and to couple adjacent layers
-# through an exact L2 mortar at the interface: tangential-E continuity is
-# enforced weakly against the LOWER layer's basis and tangential-H continuity
-# against the UPPER layer's (the classic mode-matching pairing).  With
-# identical grids both projections collapse to the identity and the interface
-# reduces ALGEBRAICALLY to :func:`_interface_smatrix` (verified in
+# a LOCAL WINDOW of layers (its own walls plus its ``window_halfwidth``
+# neighbours' on each side) rather than the global union, so cross-STACK wall
+# accumulation cannot form -- and to couple adjacent layers through an exact
+# L2 mortar at the interface: tangential-E continuity is enforced weakly
+# against the LOWER layer's basis and tangential-H continuity against the
+# UPPER layer's (the classic mode-matching pairing).  With identical grids
+# both projections collapse to the identity and the interface reduces
+# ALGEBRAICALLY to :func:`_interface_smatrix` (verified in
 # tests/unit/test_pmm_per_layer_grids.py).
-# See docs/audits/AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md (R-6).
+#
+# ``min_feature`` IS NOT INERT HERE (M2 / N-6, corrects the v5.32.0 claim):
+# the window IS a union, of ``2*halfwidth + 1`` layers, and the snap runs on
+# it.  It is DORMANT AT THE LIBRARY DEFAULT and ACTIVE above it -- see
+# :func:`_perlayer_window_grids` for the measured contract.
+# See docs/audits/AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md (R-6)
+# and docs/audits/PMM_M2_WINDOW_CONTRACT_2026_08_04.md (N-4, N-6, T3-1, T3-2).
 
-def _lagrange_eval(ref_nodes, xi):
-    """Values of the ``degree+1`` Lagrange basis polynomials on ``ref_nodes``
-    at arbitrary reference points ``xi`` -- barycentric form, exact (returns a
-    unit row) when ``xi`` lands on a node.  ``(len(xi), degree+1)``."""
-    ref = np.asarray(ref_nodes, dtype=float)
+def _perlayer_window_grids(layer_segments, min_feature_frac, halfwidth=1):
+    """Per-layer WINDOW grids: layer ``i``'s own walls plus those of its
+    ``halfwidth`` neighbours on each side (the interface-conforming
+    enrichment).  Returns ``[(widths_i, eps_row_i), ...]``, one entry per
+    layer, with ``widths_i`` the fractional cell widths of layer ``i``'s grid
+    (summing to 1) and ``eps_row_i`` that layer's permittivity on each cell.
+
+    THE ONE window construction (M2 / N-4).  It was duplicated verbatim at
+    five sites -- ``stack.py`` x3 (classical, general, sweep), ``conical.py``
+    and ``_jax_stack.py`` -- so ``halfwidth`` was five copies of a physics
+    parameter in three files.  Byte-identical to those copies at
+    ``halfwidth = 1`` (pinned per site, tolerance-at-0.0, both builds:
+    tests/unit/test_pmm_m2_window_contract.py).
+
+    ``halfwidth`` (T3-1).  1 (default) = the shipped +/-1 window; 2 widens it
+    to +/-2 neighbours.  MEASURED on 2-deg tapers whose wall collisions are
+    ABOVE the default ``min_feature`` (so the snap is provably inert and the
+    window is the only variable -- measuring this at a snapping
+    ``min_feature`` instead confounds the window with a different merged-pair
+    set, and reads ~1e-2 for that reason).  ``max|dJ|`` of ``halfwidth`` 2 vs
+    1, worst over ns in {3, 6, 8, 12} on two devices, IDENTICAL on both
+    builds::
+
+        degree  6 -> 2.7e-4      degree  8 -> 8.9e-5      degree 10 -> 6.9e-6
+
+    It DECAYS SPECTRALLY, which is what identifies it as a discretisation
+    residual of the same class and size as the mortar's own non-conforming
+    remainder (the shipped suite pins that at 1.10e-4 -> 1.17e-6 over degree
+    6 -> 10).  So ``+/-1`` is not exact; it is converged to the accuracy the
+    mortar already spends, and widening the window buys nothing back.  Cost,
+    interleaved A/B on both builds: 1.2-2.7x wall time, 1.5-2.3x
+    ``tracemalloc`` peak (rising with n_slices).
+    Therefore an opt-in DIAGNOSTIC ("does my answer depend on the window?"),
+    not an accuracy lever, and the default does not flip.
+
+    ``halfwidth >= nlay - 1`` makes every window the whole stack, and the
+    per-layer path then reproduces the SHARED union grid BIT-FOR-BIT
+    (measured 0.0 at ns in {2, 3, 4} x degree {6, 8}).  That is the exact
+    continuity check between the two grid paths and it is pinned.
+
+    ``min_feature_frac`` (N-6) -- THE CONTRACT.  The v5.32.0 CHANGELOG, the
+    implementation report S2 and the ``layer_grids`` docstring all said
+    ``min_feature`` is "inert by construction (there is no global union to
+    snap)".  That is WRONG, and wrong in the dangerous direction: the window
+    IS a union of ``2*halfwidth + 1`` layers, and a tapered staircase's
+    TIGHTEST wall collisions are between ADJACENT slices -- exactly what a
+    window contains.  What the window removes is cross-STACK accumulation,
+    not the adjacent-slice collision.  Measured contract:
+
+    * **Dormant at the library default** (``period * 1e-5``, 7 pm on a 700 nm
+      pitch).  Not because of the ``> 1e-9`` fractional branch test, but
+      because real staircase collisions are ~0.2-5 nm, i.e. ~1e-3 fractional,
+      ~100x the default.  MEASURED: 0 pairs merged and 0.0 nm displacement at
+      every ``n_slice`` in {2, 3, 6, 8, 10, 12}, on BOTH grid paths.
+    * **Active above it, and the per-layer window is NOT less exposed than
+      the shared grid.**  At the shared path's recommended
+      ``min_feature = 1.5 nm``: 4-88 merged pairs and wall moves up to
+      0.696 nm on the per-layer windows, against 2-38 pairs and 0.714 nm on
+      the shared union of the same device.  (The per-layer PAIR count is
+      larger only because each wall pair is re-merged once per window it
+      appears in; the DISPLACEMENT, which is what perturbs the physics, is
+      the same class.)
+    * **Bounded**: displacement <= ``min_feature / 2`` per snapped pair, by
+      construction (a pair merges only when closer than ``min_feature``, and
+      each wall moves to their midpoint).  Pinned.
+    * **It bounds cross-layer INTERIOR pair separations, NOT the minimum cell
+      width.**  A pair is skipped when either wall is the period boundary
+      (``0.0`` / ``1.0``, never dropped) or when both walls belong to one
+      layer (that layer's own intentional thin feature -- a 1 nm liner is
+      never thinned).  So a grid may legitimately retain a cell far thinner
+      than ``min_feature``.
+    * **IT IS THE ACCURACY LEVER HERE TOO -- the per-layer path does NOT
+      retire it.**  MEASURED on the audit-class taper at ns = 2, where the
+      per-layer and shared grids are identical (a 2-layer window is the full
+      union), degree ladder 6..18 on ``R`` of order 0:
+
+        min_feature = default : 0.111000 0.110723 0.110643 0.061668 0.623403
+                                0.623395 0.061666      <- NOT stationary
+        min_feature = 0.5 nm  : 0.110880 0.110607 0.110528 0.110499 0.110486
+                                0.110479 0.110476      <- stationary, and it
+                                                          agrees with RCWA
+                                                          (0.11009 at 141
+                                                          orders, still
+                                                          rising in orders)
+
+      The mechanism is measured, not inferred: the device's adjacent-slice
+      collision leaves a 0.4127 nm cell (``(310/ns) tan(2 deg) - 5 nm``), and
+      that cell injects modes whose z-Poynting flux sits AT
+      :func:`_mass_flux_cut`'s propagating/evanescent threshold.  The count of
+      modes classified propagating then MOVES WITH DEGREE (4, 4, 4, 6, 5, 5 at
+      degree 6..16) instead of staying fixed, the forward set is mis-assembled,
+      and the cascade returns a UNITARY BUT WRONG S-matrix -- ``|R+T-1|`` stays
+      at 1e-8 through the collapse, so energy closure cannot see it.  With the
+      sliver snapped away the same census is 4 modes at every degree and zero
+      modes within a decade of the cut.
+
+      Therefore the snap is KEPT LIVE on this path (contract (i) of the
+      campaign plan's N-6, decided by the measurement above, not by
+      preference): passing ``None`` would leave the per-layer path
+      permanently unable to remove the collision that breaks it.
+    """
+    hw = int(halfwidth)
+    if hw < 1:
+        raise ValueError(
+            f"window_halfwidth must be >= 1, got {halfwidth!r} -- a "
+            "halfwidth-0 window is own-walls-only, which was MEASURED to "
+            "leave a wall-mismatch boundary-layer error in the wall-normal "
+            "Ex channel (75-83% degree spread) and is not a supported mode.")
+    nlay = len(layer_segments)
+    grid_of = []
+    for i in range(nlay):
+        js = [j for j in range(i - hw, i + hw + 1) if 0 <= j < nlay]
+        uw_i, rows_i = _pmm_union_grid([layer_segments[j] for j in js],
+                                       min_feature_frac)
+        grid_of.append((np.asarray(uw_i, dtype=float), rows_i[js.index(i)]))
+    return grid_of
+
+
+def _lagrange_bary_weights(ref):
+    """Barycentric weights ``wb[j] = 1 / prod_{k != j} (x_j - x_k)`` of a nodal
+    set, memoized on the node coordinates.
+
+    M3 / N-3 item 2.  The weights are pure geometry -- one entry per distinct
+    GLL degree -- but the ``O(p^2)`` PYTHON double loop that builds them ran on
+    EVERY :func:`_lagrange_eval` call, and :func:`_sem_cross_mass` calls that
+    twice per union sub-interval (measured: 1408 calls, 704 per solve, on the
+    38-layer audit device).  The arithmetic is kept VERBATIM -- repeated
+    division in the original ``k`` order, NOT ``1 / prod(...)``, which is a
+    different rounding -- so a cache hit and a cache miss return the same bits
+    the pre-M3 library returned.  Returned read-only (cache-poisoning guard,
+    the ``_LAGRANGE_DREF_CACHE`` pattern)."""
+    key = ref.tobytes()
+    with _LAGRANGE_BARY_LOCK:
+        cached = _LAGRANGE_BARY_CACHE.get(key)
+    if cached is not None:
+        return cached
     p1 = ref.size
     wb = np.ones(p1)
     for j in range(p1):
         for k in range(p1):
             if k != j:
                 wb[j] /= (ref[j] - ref[k])
+    wb = _readonly(wb)
+    with _LAGRANGE_BARY_LOCK:
+        _LAGRANGE_BARY_CACHE[key] = wb
+    return wb
+
+
+def _lagrange_eval(ref_nodes, xi):
+    """Values of the ``degree+1`` Lagrange basis polynomials on ``ref_nodes``
+    at arbitrary reference points ``xi`` -- barycentric form, exact (returns a
+    unit row) when ``xi`` lands on a node.  ``(len(xi), degree+1)``.
+
+    M3 / N-3 item 2: the per-point PYTHON loop is gone.  Every operation is
+    the same elementwise one it was (``x - ref``, ``wb / diff``,
+    ``num / num.sum()``), broadcast over the points, so the result is
+    BIT-IDENTICAL to the loop -- pinned at tolerance 0.0 by
+    ``test_pmm_m3_efficiency.py::test_lagrange_eval_is_bit_identical_*``.
+    Node hits are still handled exactly (a unit row at the hit column); the
+    division at a hit point is computed and then overwritten, hence the
+    ``errstate`` -- an exact node hit divides by zero."""
+    ref = np.asarray(ref_nodes, dtype=float)
+    wb = _lagrange_bary_weights(ref)
     xi = np.atleast_1d(np.asarray(xi, dtype=float))
-    out = np.zeros((xi.size, p1))
-    for r, x in enumerate(xi):
-        diff = x - ref
-        hit = np.abs(diff) < 1e-14
-        if hit.any():
-            out[r, int(np.argmax(hit))] = 1.0
-        else:
-            num = wb / diff
-            out[r] = num / num.sum()
+    diff = xi[:, None] - ref[None, :]                  # (nx, p1)
+    hit = np.abs(diff) < 1e-14
+    with np.errstate(divide="ignore", invalid="ignore"):
+        num = wb[None, :] / diff
+        out = num / num.sum(axis=1)[:, None]
+    rows = np.flatnonzero(hit.any(axis=1))
+    if rows.size:
+        out[rows, :] = 0.0
+        out[rows, np.argmax(hit[rows], axis=1)] = 1.0
     return out
 
 
@@ -3613,6 +4167,204 @@ def _sem_cross_mass(mats_a, mats_b):
     return C
 
 
+# ===========================================================================
+# Per-layer GEOMETRY cache (M3 / N-3 item 1 -- "hoist")
+# ===========================================================================
+# ``_sem_mass_exact`` and ``_sem_cross_mass`` read FIVE fields of a ``mats``
+# dict and nothing else: ``degree``, ``ref_nodes``, the ``(xl, xr)`` of every
+# ``elem_bnds`` entry, ``l2g`` and ``n_glob``.  They never touch the third
+# (``eps``) slot of ``elem_bnds`` and never see a wavelength, an angle or a
+# material -- so both are pure functions of GEOMETRY, and on a fixed stack they
+# return the same bytes at every wavelength, angle, LC director and repeat call.
+#
+# Three of the four per-layer paths rebuilt them on EVERY call
+# (``_solve_vertical_perlayer``, ``_solve_general_perlayer``,
+# ``conical._conical_nodal_solve``); only the wavelength sweep and the JAX twin
+# hoisted, and the sweep hoisted per-CALL, so a second sweep paid again.
+# Measured on the 38-layer audit device (cProfile, threads pinned): the two
+# builds are 0.44 s of a 1.4 s solve, and 0.28 s of that is inside
+# ``_lagrange_eval``.
+#
+# THE KEY IS THE CONTENT, NOT THE KNOBS.  It is derived from the five fields
+# themselves rather than from ``(period, degree, n_el, grade, min_feature,
+# window_halfwidth, ...)``, so no future knob can be forgotten from it: two
+# ``mats`` that agree on the fingerprint are inputs on which both functions are
+# provably identical, and two that do not, miss.  Values are frozen read-only
+# (``_freeze_cached`` policy) because the cache hands out the STORED array by
+# identity.
+from ...cache import ByteBudgetedLRU as _ByteBudgetedLRU  # noqa: E402
+
+#: Retained masses / cross-masses.  Entry size is ``n_glob^2`` float64 (12.8 kB
+#: at the audit device's ``n_glob`` = 40, 0.72 MB at a production ``n_glob`` =
+#: 300), and one stack holds ``nlay`` masses + ``nlay - 1`` crosses live, i.e.
+#: the footprint is O(problem), not O(history).  ``max_bytes=None`` = bounded by
+#: the collective ``LUMENAIRY_CACHE_BUDGET_MB`` ceiling only; ``clear_asm_caches``
+#: drains it through the registry, and ``cache_report()`` shows it by name.
+_PERLAYER_GEO_CACHE = _ByteBudgetedLRU("pmm_perlayer_geometry")
+
+
+def _geo_fingerprint(mats):
+    """Exact content fingerprint of the geometry :func:`_sem_mass_exact` and
+    :func:`_sem_cross_mass` consume -- and of nothing else.
+
+    Hashable, exact (raw bytes, no rounding), and cheap: ``O(n_el (degree+1))``
+    bytes, microseconds against the milliseconds the build costs."""
+    eb = np.asarray([(b[0], b[1]) for b in mats["elem_bnds"]], dtype=float)
+    return (int(mats["degree"]), int(mats["n_glob"]),
+            np.asarray(mats["ref_nodes"], dtype=float).tobytes(),
+            eb.tobytes(),
+            np.asarray(mats["l2g"], dtype=np.int64).tobytes())
+
+
+def _sem_mass_exact_cached(mats):
+    """:func:`_sem_mass_exact`, memoized on :func:`_geo_fingerprint`.
+
+    A hit returns the stored (read-only) array by identity; a miss computes the
+    identical bytes the uncached function computes.  Bit-identity either way is
+    pinned by ``test_pmm_m3_efficiency.py``."""
+    key = ("mass", _geo_fingerprint(mats))
+    hit = _PERLAYER_GEO_CACHE.get(key)
+    if hit is not None:
+        return hit
+    M = _freeze_cached(_sem_mass_exact(mats))
+    _PERLAYER_GEO_CACHE.put(key, M)
+    return M
+
+
+def _sem_cross_mass_cached(mats_a, mats_b):
+    """:func:`_sem_cross_mass`, memoized on the two grids' fingerprints."""
+    key = ("cross", _geo_fingerprint(mats_a), _geo_fingerprint(mats_b))
+    hit = _PERLAYER_GEO_CACHE.get(key)
+    if hit is not None:
+        return hit
+    C = _freeze_cached(_sem_cross_mass(mats_a, mats_b))
+    _PERLAYER_GEO_CACHE.put(key, C)
+    return C
+
+
+# ===========================================================================
+# The mortar is SEPARABLE -- and that is an identity, not an approximation
+# (M3 / N-3 items 3 + 4)
+# ===========================================================================
+# Both mortars stack the transverse field 2-componentwise, ``[x-block;
+# y-block]``, and every geometric projection acts on the two components
+# IDENTICALLY and INDEPENDENTLY.  The operator is therefore exactly
+# ``kron(I_2, M)`` for a 1-D mass / cross-mass ``M``, and for any ``X`` with
+# ``2 h`` rows (``h = M.shape[1]``)
+#
+#     (kron(I_2, M) X)[i, j] = sum_{k=0}^{2h-1} kron(I_2, M)[i, k] X[k, j]
+#                            = sum_{k=0}^{h-1}  M[i, k] X[k, j]        (i < m)
+#
+# because every dropped term carries the factor ``kron(I_2, M)[i, k] = 0``
+# EXACTLY (a structural zero of the Kronecker product, not a small number).
+# The blockwise form is thus the SAME sum, term for term, over a shorter
+# index range -- an exact factorisation.  What it is not is bit-identical:
+# BLAS accumulates a length-``2h`` dot product in a different order (and with
+# different blocking) than a length-``h`` one, so the last bits move.  That is
+# why items 3 + 4 ship behind ONE fail-before switch and are validated against
+# an envelope plus the two identity pins, not against tolerance 0.0.
+#
+# WHAT IT BUYS, on the audit device (``n_glob`` = 40, so ``M`` is 40x40 and
+# ``kron(I_2, M)`` is 80x80):
+#   * the 80x80 operator is never MATERIALISED.  Four of them per mortar --
+#     ``kron(I2, Mb)``, ``kron(I2, Ma)``, ``kron(I2, Cab.T)``, ``kron(I2, Cab)``
+#     -- at 51.2 kB each, against the 12.8 kB 1-D blocks that already exist and
+#     are already cached: a 4x collapse of the operator's footprint, and the
+#     ``np.kron`` build itself disappears;
+#   * the product costs ``2 x (m h) h`` scalar multiplies instead of
+#     ``(2m)(2h)(2h)``, i.e. HALF the flops of the dense form.
+#
+# Sizes scale as ``n_glob^2``, so the same factor-4 memory collapse is
+# 2.3 MB -> 0.6 MB per operator at a production ``n_glob`` = 300.  In 2-D
+# (roadmap S1) the same argument applies to the TRANSVERSE cross-mass itself,
+# which factors as ``kron(Cx, Cy)`` of two 1-D cross-masses -- there it is a
+# requirement rather than an optimisation, since the dense 2-D form is
+# ``(n_x n_y)^2``.  This module is 1-D: here the separable axis is the
+# 2-component field stacking, and the 1-D cross-mass is irreducible.
+
+#: Fail-before switch for M3 / N-3 items 3 + 4 (SEPARABLE ``kron(I_2, .)``
+#: application, and ``solve`` in place of the two cascade-denominator inverses).
+#: ``False`` restores the pre-M3 arithmetic VERBATIM, bit for bit -- it is the
+#: control the M3 envelope is measured against, not a supported user knob.
+PMM_MORTAR_SEPARABLE = True
+
+
+def _kron2_apply(M, X, xp=np):
+    """``kron(eye(2), M) @ X`` without materialising the 2x2-block operator.
+
+    ``M`` is ``(m, h)``; ``X`` has ``2 h`` rows; the result has ``2 m`` rows.
+    Exact (see the block comment above): the dropped terms are structural
+    zeros of the Kronecker product.
+
+    The output is preallocated and the halves are written through ``out=``
+    rather than built with ``concatenate((M @ X[:h], M @ X[h:]))``, which
+    would hold both half-products live while the result is allocated.  HONEST
+    NOTE: on the 38-layer audit device the two spellings measure the SAME
+    ``tracemalloc`` peak to 1 kB (39.640 vs 39.639 MB) -- the peak there is
+    set by the eig workspaces, not by this -- so ``out=`` is kept for being
+    strictly fewer allocations, not on a measured peak win.  The 3.8 MB peak
+    regression that was found while measuring this belonged entirely to a
+    retained VIEW in :func:`_interface_smatrix_mortar`, not to the spelling
+    here; see the ``.copy()`` there.  On the JAX path there is no ``out=``
+    and no need for one -- XLA fuses the concatenate."""
+    h = M.shape[1]
+    if xp is not np:                       # traced: let XLA do the fusion
+        return xp.concatenate((M @ X[:h], M @ X[h:]), axis=0)
+    m = M.shape[0]
+    out = np.empty((2 * m,) + X.shape[1:],
+                   dtype=np.result_type(M.dtype, X.dtype))
+    np.matmul(M, X[:h], out=out[:m])
+    np.matmul(M, X[h:], out=out[m:])
+    return out
+
+
+def _guarded_solve(A, B, site, hint=None):
+    """``inv(A) @ B`` by a backward-stable ``solve``, carrying M1's census.
+
+    M1 measured its own conclusion here and it is worth restating: a
+    BACKWARD-STABLE ``solve`` needs no guard -- "the ratio
+    ``||AX-I|| / (||A|| ||X||)`` ... reads ~eps on everything, because ``inv``
+    IS backward stable, which is also exactly why a backward-stable ``solve``
+    needs no guard at all" (``rcwa/_core.py``, the REFUSAL WITHDRAWN note).
+    What M1 does still want from these sites is the INSTRUMENT: with
+    ``_INV_CENSUS`` armed, the equilibrated ``rcond`` / residual of the same
+    operator must keep being recorded under the same ``site`` name, so the M1
+    census populations stay comparable across the M3 change.  So the census
+    branch pays for the explicit inverse it needs (census mode is a
+    measurement mode); the DEFAULT path is the plain ``solve`` and not one
+    extra flop.
+
+    Not placed in ``rcwa/_core.py`` beside :func:`_guarded_inverse` on purpose:
+    it introduces no threshold and no policy -- both live there, unforked and
+    read from there -- and the two call sites it exists for (the per-layer
+    mortar and the RECTANGULAR star) are PMM constructs with no RCWA twin."""
+    X = np.linalg.solve(A, B)
+    if _rcwa_core._INV_CENSUS is None:
+        return X
+    A_np = np.asarray(A)
+    if not np.all(np.isfinite(A_np)):
+        _rcwa_core._INV_CENSUS.append((site, int(A_np.shape[0]),
+                                       float("nan"), float("nan"), False))
+        return X
+    Ainv = np.linalg.inv(A_np)
+    rc = _rcwa_core._rcond_1_equilibrated(A_np, Ainv)
+    res = (None if rc >= _rcwa_core._INV_RCOND_SCREEN
+           else _rcwa_core._equilibrated_inverse_residual(A_np))
+    _rcwa_core._INV_CENSUS.append((site, int(A_np.shape[0]), rc, res, False))
+    return X
+
+
+def _guarded_solve_right(A, X, site, hint=None):
+    """``X @ inv(A)`` -- the RIGHT-hand solve, as ``solve(A.T, X.T).T``.
+
+    ``X inv(A) = (inv(A)^T X^T)^T = (inv(A^T) X^T)^T`` (plain transpose, NOT
+    the conjugate one -- ``inv`` and ``.T`` commute).  Same census contract as
+    :func:`_guarded_solve`, recorded against ``A`` itself so the site's
+    readings stay comparable with M1's."""
+    Y = _guarded_solve(A.T, X.T, site, hint)
+    return Y.T
+
+
 def _interface_smatrix_mortar(Wa, Va, Wb, Vb, Ma, Mb, Cab):
     """Interface S-matrix between symmetric (+/-q) mode sets living on
     DIFFERENT nodal grids (per-layer element grids, audit R-6).
@@ -3635,11 +4387,8 @@ def _interface_smatrix_mortar(Wa, Va, Wb, Vb, Ma, Mb, Cab):
     ``B = (Va)^{-1} Vb``, and the blocks reduce algebraically to
     :func:`_interface_smatrix`'s (same derivation, associated differently).
     Fields are 2-component stacked ``[x-block; y-block]`` so every projection
-    applies blockwise via ``kron(I_2, .)``."""
-    bMb = np.kron(np.eye(2), Mb)
-    bMa = np.kron(np.eye(2), Ma)
-    bCba = np.kron(np.eye(2), Cab.T)
-    bCab = np.kron(np.eye(2), Cab)
+    applies blockwise via ``kron(I_2, .)`` -- applied SEPARABLY, see
+    :func:`_kron2_apply` and :data:`PMM_MORTAR_SEPARABLE`."""
     # CONDITIONING (M1 / N-2).  The two ``solve``s stay ``solve``s: LAPACK
     # ``gesv`` is BACKWARD stable, so its residual is ~eps whatever the
     # conditioning and a residual screen on them would measure nothing -- the
@@ -3650,14 +4399,44 @@ def _interface_smatrix_mortar(Wa, Va, Wb, Vb, Ma, Mb, Cab):
     # and conical, 2-norm cond): ``M_b W_b`` 3.4e+02 - 3.8e+06, ``M_a V_a``
     # 7.3e+05 - 2.1e+07, ``I + BA`` 1.3e+01 - 6.8e+03.  ``M_a V_a`` is the
     # worst of the three and is still nine orders from a float64 problem.
-    A = np.linalg.solve(bMb @ Wb, bCba @ Wa)
-    B = np.linalg.solve(bMa @ Va, bCab @ Vb)
-    BA = B @ A
-    I_a = np.eye(BA.shape[0], dtype=_C)
-    iba = _guarded_inverse(I_a + BA, "pmm mortar interface (I + BA)",
+    # M3 / N-3 item 4 turns that ONE explicit inverse into a solve; the guard
+    # moves with it (:func:`_guarded_solve`), same site name, same instruments.
+    if PMM_MORTAR_SEPARABLE:
+        A = np.linalg.solve(_kron2_apply(Mb, Wb), _kron2_apply(Cab.T, Wa))
+        B = np.linalg.solve(_kron2_apply(Ma, Va), _kron2_apply(Cab, Vb))
+        BA = B @ A
+        I_a = np.eye(BA.shape[0], dtype=_C)
+        # ONE factorisation for both right-hand sides: S11 and S12 are the
+        # same operator applied to ``[I - BA | B]``.
+        X = _guarded_solve(I_a + BA,
+                           np.concatenate((I_a - BA, B), axis=1),
+                           "pmm mortar interface (I + BA)",
                            hint="Raise degree, or use layer_grids='shared'.")
-    S11 = iba @ (I_a - BA)
-    S12 = 2.0 * (iba @ B)
+        nc = I_a.shape[1]
+        # ``.copy()`` IS LOAD-BEARING, and it was found by measurement.  A
+        # SLICE of ``X`` keeps the whole stacked-RHS buffer alive, and the
+        # cascade retains every interface's ``S11`` -- so a view here pinned
+        # 2x the (2n x 2n) block per interface for the life of the solve and
+        # RAISED the ``tracemalloc`` peak by 3.8 MB on the 38-layer device,
+        # against a change whose whole point is to lower it.  ``S12`` is
+        # already a fresh array (the ``2.0 *``).
+        S11 = X[:, :nc].copy()
+        S12 = 2.0 * X[:, nc:]
+        del X
+    else:                       # fail-before: the pre-M3 arithmetic, verbatim
+        bMb = np.kron(np.eye(2), Mb)
+        bMa = np.kron(np.eye(2), Ma)
+        bCba = np.kron(np.eye(2), Cab.T)
+        bCab = np.kron(np.eye(2), Cab)
+        A = np.linalg.solve(bMb @ Wb, bCba @ Wa)
+        B = np.linalg.solve(bMa @ Va, bCab @ Vb)
+        BA = B @ A
+        I_a = np.eye(BA.shape[0], dtype=_C)
+        iba = _guarded_inverse(
+            I_a + BA, "pmm mortar interface (I + BA)",
+            hint="Raise degree, or use layer_grids='shared'.")
+        S11 = iba @ (I_a - BA)
+        S12 = 2.0 * (iba @ B)
     S21 = A @ (I_a + S11)
     S22 = A @ S12 - np.eye(A.shape[0], dtype=_C)
     return (S11, S12, S21, S22)
@@ -3688,14 +4467,21 @@ def _interface_smatrix_general_mortar(Ma, Mb, Mass_a, Mass_b, Cab):
     Vf_a, Vb_a = Ma[na2:, :ma], Ma[na2:, ma:]
     Wf_b, Wb_b = Mb[:nb2, :mb], Mb[:nb2, mb:]
     Vf_b, Vb_b = Mb[nb2:, :mb], Mb[nb2:, mb:]
-    bMa = np.kron(np.eye(2), Mass_a)
-    bMb = np.kron(np.eye(2), Mass_b)
-    bCab = np.kron(np.eye(2), Cab)
-    bCba = np.kron(np.eye(2), Cab.T)
-    A = np.block([[bCba @ Wb_a, -(bMb @ Wf_b)],
-                  [bMa @ Vb_a, -(bCab @ Vf_b)]])
-    B = np.block([[-(bCba @ Wf_a), bMb @ Wb_b],
-                  [-(bMa @ Vf_a), bCab @ Vb_b]])
+    if PMM_MORTAR_SEPARABLE:            # M3 / N-3 item 3 -- exact, see above
+        CbaT, Cb = Cab.T, Cab
+        A = np.block([[_kron2_apply(CbaT, Wb_a), -_kron2_apply(Mass_b, Wf_b)],
+                      [_kron2_apply(Mass_a, Vb_a), -_kron2_apply(Cb, Vf_b)]])
+        B = np.block([[-_kron2_apply(CbaT, Wf_a), _kron2_apply(Mass_b, Wb_b)],
+                      [-_kron2_apply(Mass_a, Vf_a), _kron2_apply(Cb, Vb_b)]])
+    else:                               # fail-before: pre-M3, verbatim
+        bMa = np.kron(np.eye(2), Mass_a)
+        bMb = np.kron(np.eye(2), Mass_b)
+        bCab = np.kron(np.eye(2), Cab)
+        bCba = np.kron(np.eye(2), Cab.T)
+        A = np.block([[bCba @ Wb_a, -(bMb @ Wf_b)],
+                      [bMa @ Vb_a, -(bCab @ Vf_b)]])
+        B = np.block([[-(bCba @ Wf_a), bMb @ Wb_b],
+                      [-(bMa @ Vf_a), bCab @ Vb_b]])
     X = np.linalg.solve(A, B)
     S11 = X[:ma, :ma]
     S12 = X[:ma, ma:]
@@ -3709,7 +4495,33 @@ def _redheffer_star_rect(SA, SB):
     per-layer grids carry different mode counts).  Identity blocks are sized
     from the INTERIOR dimension (``A22``/``B11``'s square space); algebra is
     identical to rcwa's ``_redheffer_star``, which sizes its identity from
-    ``A11`` and therefore requires uniform block sizes."""
+    ``A11`` and therefore requires uniform block sizes.
+
+    THE INVERSES STAY INVERSES HERE, AND THAT IS A MEASUREMENT (M3 / N-3
+    item 4).  The denominators enter only as ``A12 inv(.)`` / ``B21 inv(.)``,
+    so a backward-stable RIGHT solve does suffice algebraically and was
+    implemented -- and it is REFUSED by an identity pin.  On a CONFORMING
+    per-layer stack the mortar is bypassed and this star is the only remaining
+    difference from the shared path, which cascades with RCWA's
+    ``_redheffer_star`` (still an explicit inverse).  Converting one twin and
+    not the other broke five long-pinned bit-exactness contracts --
+    ``test_identical_wall_stack_is_bit_exact_vs_shared``,
+    ``test_two_layer_stack_is_bit_exact_vs_shared``,
+    ``test_conical_per_layer_matches_shared_bit_exact``,
+    ``test_n4_default_solve_is_bit_identical_through_every_dispatch``,
+    ``test_window_halfwidth_covering_the_stack_reproduces_shared_bit_exact``
+    -- at 1e-16..1e-13, i.e. it is a pure rounding move and the pins are
+    doing exactly their job.  Converting BOTH twins would move RCWA's bits,
+    and RCWA is the independent oracle this campaign adjudicates against.
+    The measured prize was ~3 % of a solve.  So: not worth a cross-path
+    identity, and the site keeps M1's guard untouched.  If the shared star is
+    ever converted, convert both in the same change and re-pin together.
+
+    What DOES ship here is free: the pre-M3 expressions evaluated
+    ``A12 @ D`` and ``B21 @ F`` TWICE each (Python's ``@`` is
+    left-associative, so ``A12 @ D @ B11 @ A21`` is
+    ``((A12 @ D) @ B11) @ A21``).  Naming them once removes two dense
+    ``n^3`` products per star and is BIT-IDENTICAL by construction."""
     A11, A12, A21, A22 = SA
     B11, B12, B21, B22 = SB
     n = A22.shape[0]
@@ -3727,10 +4539,12 @@ def _redheffer_star_rect(SA, SB):
         F = _guarded_inverse(I - A22 @ B11,
                              "pmm per-layer star (I - A22 B11)",
                              hint="Raise degree, or use layer_grids='shared'.")
-    return (A11 + A12 @ D @ B11 @ A21,
-            A12 @ D @ B12,
-            B21 @ F @ A21,
-            B22 + B21 @ F @ A22 @ B12)
+    AD = A12 @ D                       # was computed twice
+    BF = B21 @ F                       # was computed twice
+    return (A11 + AD @ B11 @ A21,
+            AD @ B12,
+            BF @ A21,
+            B22 + BF @ A22 @ B12)
 
 
 

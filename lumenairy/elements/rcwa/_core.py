@@ -118,9 +118,29 @@ _MAX_HARMONICS = 5000
 # to a few threads is a MODEST, machine-dependent ~2-3x speedup at moderate N
 # with ZERO numerics change.  Opt-in (None = leave the environment's threading
 # untouched) because the optimum is configuration-dependent and a global
-# thread change shouldn't be forced on the caller.  THREAD-LOCAL: concurrent
-# solves with different caps must not leak each other's setting (the context
-# manager's save/restore would otherwise race on a shared global).
+# thread change shouldn't be forced on the caller.
+#
+# WHAT IS AND IS NOT THREAD-LOCAL (corrected, M4 2026-08-04).  The REQUESTED
+# cap below is thread-local, so two threads can ASK for different caps without
+# overwriting each other's request.  APPLYING it is NOT: :func:`_blas_limit`
+# goes through ``threadpoolctl``, and on OpenBLAS that calls
+# ``openblas_set_num_threads()``, which is PROCESS-GLOBAL.  MEASURED on
+# Windows/OpenBLAS 0.3.31, 24 threads: a worker thread entering
+# ``threadpool_limits(1)`` takes the MAIN thread's reported pool to 1 as well,
+# and the worker's exit restores 24 for everyone -- including siblings that are
+# still inside a solve.
+#
+# CONSEQUENCE, and the rule that follows from it: N concurrent
+# enter/exit pairs on one process-global setting RACE, and a solve whose
+# BLAS thread count changes underneath it returns different last bits (a
+# different GEMM/LAPACK reduction order).  So a caller that needs
+# reproducible results across worker counts must apply the cap ONCE, around
+# the whole parallel section, on the calling thread -- never once per worker.
+# :meth:`RCWAStack.solve_vs_wavelength` does exactly that; see the comment at
+# its dispatch.  The prior text here claimed the save/restore was thread-local
+# and therefore race-free; it is not, and that is what broke the sweep's
+# byte-identity pin (a few ULP in T, ~50-70% of runs, only when
+# ``threadpoolctl`` is installed AND the environment pool is > 1).
 _BLAS_STATE = threading.local()
 
 
@@ -173,9 +193,15 @@ def set_blas_threads(n: Optional[int]) -> None:
     measured optimum is ~2) gives a modest ~2-3x speedup at moderate truncation
     -- machine-dependent, with no change to the numbers.  Pass ``None`` to
     restore the default (untouched) threading.  Has no effect on the JAX path
-    (XLA manages its own threads).  The setting is thread-local, so concurrent
-    solves with different caps don't interfere.  For a scoped cap use
+    (XLA manages its own threads).  For a scoped cap use
     :func:`rcwa_blas_threads`.
+
+    The REQUEST recorded here is thread-local; APPLYING it is not.  On OpenBLAS
+    the underlying ``threadpoolctl`` call is process-global (MEASURED, M4
+    2026-08-04 -- see the ``_BLAS_STATE`` comment above), so two threads that
+    hold DIFFERENT caps at the same time do interfere: whichever exits first
+    restores the pool for both.  Set one cap around a parallel section rather
+    than one cap per worker.
 
     REQUIRES ``threadpoolctl``.  Without it the cap cannot be applied and this
     call is INERT -- it then warns ONCE per process (audit M6 2026-07-25: the
@@ -206,10 +232,14 @@ def rcwa_blas_threads(n: Optional[int]):
 @contextlib.contextmanager
 def _blas_threads_quiet(n: Optional[int]):
     """:func:`rcwa_blas_threads` without the inert-cap warning -- for the
-    LIBRARY's own per-worker caps inside threaded sweeps (audit M6): the user
-    did not request those, so surfacing "your cap is inert" there would turn a
+    LIBRARY's own caps around threaded sweeps (audit M6): the user did not
+    request those, so surfacing "your cap is inert" there would turn a
     diagnostic into noise on an ordinary sweep.  The public setters keep the
-    warning."""
+    warning.
+
+    Use it AROUND a parallel section, on the calling thread -- not inside each
+    worker.  Applying a cap is process-global on OpenBLAS, so per-worker
+    enter/exit pairs race (see the ``_BLAS_STATE`` comment above)."""
     prev = _get_blas_threads()
     _BLAS_STATE.n = None if n is None else max(1, int(n))
     try:
@@ -1825,9 +1855,19 @@ def _layer_Q_matrix(Kx, Ky, EPS, EPS_normal):
 # ``J EPS J = EPS``); if it fails (oblique -> the order set is not flip-closed;
 # a non-centro-symmetric cell; or a uniform layer, whose degenerate eig wants
 # the analytic path) it returns ``None`` and the caller runs the full solve, so
-# the result is always correct.  Opt-in (``symmetry=True``) because the
-# even-basis recursion changes the result at the ~1e-12 level -- physically
-# identical, but not bit-for-bit with the default path.
+# the result is always correct.
+#
+# ON BY DEFAULT (``symmetry='auto'``) since v5.21 -- corrected here (M4, audit
+# S-7, 2026-08-04); this comment said "Opt-in (``symmetry=True``)" five lines
+# above :func:`_symmetry_on`, whose docstring says the opposite, and the
+# resolver is the authority.  ``False`` forces the full solve and is
+# bit-identical to the pre-fold path; the fold changes the result at the
+# ~1e-12 level -- physically identical, but not bit-for-bit -- which is why the
+# opt-OUT exists.  The default is NOT universal across entry points:
+# ``rcwa_efficiency_2d``, ``rcwa_jones_2d``, ``prepare_rcwa_2d`` and
+# ``RCWAStack.solve`` default to ``'auto'``, but ``rcwa_efficiency_2d_shapes``
+# still defaults ``symmetry=False`` and the 1-D core (``oned.py``) has no fold
+# and no ``symmetry`` kwarg at all.
 
 
 def _symmetry_on(symmetry):

@@ -399,18 +399,77 @@ def test_thin_grating_clean_truncations_are_untouched():
 
 def test_the_refusal_reproduces_the_prior_answer_with_the_switch(guard_off):
     """Fail-before, verified PER CONFIGURATION on the geometry that changed:
-    with the guard off, 19 TE returns the pre-M1 Windows/MKL answer -- the
-    non-conserving one -- instead of raising."""
+    with the guard off, 21 TE RETURNS the pre-M1 answer -- the non-conserving
+    one -- instead of raising.
+
+    **v5.33.0 -- THE BARS WERE THREAD-COUNT-DEPENDENT.**  They were absolute:
+    ``sum(R)+sum(T) > 1.03`` and ``sum(R) > 3.0e-2``.  Holding the code, the
+    build and the geometry fixed and varying ONLY ``OPENBLAS_NUM_THREADS``
+    [M, BOTH builds]::
+
+        threads    sum(R)             sum(R)+sum(T) - 1
+              1    3.216567261e-02    +3.195613251e-02   <- bars calibrated here
+        2 / 4 / 24 6.112765047e-03    +5.903262542e-03   <- BOTH bars fail
+
+    Windows/scipy-openblas 0.3.31 and WSL/OpenBLAS agree to TEN DIGITS at each
+    thread count, so this is not a build difference: it is exactly the
+    near-degenerate draw M1's census exists to record, moving with the BLAS
+    reduction order.  The suite pins the pool nowhere, so the test passed run
+    alone (pool 1) and failed inside a breadth sweep (pool > 1).  Same trap as
+    ``_PAR_TOTAL`` in the v5.20.2 PMM-JAX suite and M3's ``worst_rcond``: an
+    absolute bar on a BLAS-dependent magnitude, which no re-tune can fix.
+
+    What IS build- and thread-independent is the COMPARISON against a
+    truncation the census scores clean, solved in the same process on the same
+    pool: the clean solves sit at ``sum(R)`` ~ 2.0e-4 with closure ~1e-13 at
+    every thread count on both builds, while the unguarded solve is 30x-160x
+    that in R and eight-plus orders worse in closure.  The ratio is the claim;
+    the constants never were.
+    """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
+        # THE DEFECT: the guard is off, so this must RETURN, not raise.
         o, R, T = rcwa_efficiency_1d(
             THIN["period"], THIN["n_ridge"], THIN["n_groove"],
             THIN["n_substrate"], THIN["n_superstrate"], THIN["depth"],
             THIN["duty_cycle"], WL, angle=0.0, polarization="te",
             n_orders=21, stabilize=False)
-    # the pre-M1 library reported this, on both builds, without raising
-    assert float(np.sum(R) + np.sum(T)) > 1.03
-    assert float(np.sum(R)) > 3.0e-2         # against a converged ~2.0e-4
+        # THE IN-PROCESS REFERENCE: a truncation the census scores clean, on
+        # the same device, in the same process, on the same BLAS pool -- so
+        # the comparison below cannot drift with either.  M=22 is one of the
+        # clean set pinned by
+        # ``test_thin_grating_clean_truncations_are_untouched``.
+        o_c, R_c, T_c = rcwa_efficiency_1d(
+            THIN["period"], THIN["n_ridge"], THIN["n_groove"],
+            THIN["n_substrate"], THIN["n_superstrate"], THIN["depth"],
+            THIN["duty_cycle"], WL, angle=0.0, polarization="tm",
+            n_orders=22, stabilize=False)
+
+    defect_R = float(np.sum(R))
+    defect_closure = abs(float(np.sum(R) + np.sum(T)) - 1.0)
+    clean_R = float(np.sum(R_c))
+    clean_closure = abs(float(np.sum(R_c) + np.sum(T_c)) - 1.0)
+
+    # (1) it RETURNED -- that is the fail-before content, and reaching this
+    #     line at all is most of the assertion.
+    assert np.isfinite(defect_R) and np.isfinite(defect_closure)
+    # (2) the control really is clean, so the comparison means something.
+    assert clean_closure < 1e-9, (
+        f"the reference truncation is not clean on this build "
+        f"(closure {clean_closure:.3e}); it cannot calibrate the defect")
+    # (3) and what came back is the WRONG answer, by ratio.  Measured
+    #     margins: R ratio 30x (24 threads) to 160x (1 thread) against the
+    #     bar of 10; closure 5.9e-3 to 3.2e-2 against 1e-3.
+    assert defect_R > 10.0 * clean_R, (
+        f"unguarded 21 TE returned sum(R)={defect_R:.6e}, not >10x the "
+        f"clean truncation's {clean_R:.6e} -- the pre-M1 defect is not "
+        f"being reproduced with the guard off")
+    assert defect_closure > 1.0e-3, (
+        f"unguarded 21 TE closed to {defect_closure:.6e}; the pre-M1 answer "
+        f"is NON-conserving (measured 5.9e-3 at pool>1, 3.2e-2 at pool 1)")
+    assert defect_closure > 1.0e6 * max(clean_closure, 1e-15), (
+        f"unguarded closure {defect_closure:.3e} is not orders above the "
+        f"clean truncation's {clean_closure:.3e}")
 
 
 # ---------------------------------------------------------------------------
