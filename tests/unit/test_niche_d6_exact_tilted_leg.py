@@ -710,7 +710,11 @@ def test_refusal_when_the_fine_grid_cannot_sample_the_widened_window():
     with pytest.raises(RuntimeError) as e:
         _run_chain(car, final_leg='exact', n_fine_cap=256)
     msg = str(e.value)
-    for token in ('chief ray', 'axis-centred window', 'n_fine_cap=256',
+    # niche D9: the window itself is no longer widened by the chief-ray offset
+    # (the retrace grid is centred on it), so the refusal now names the
+    # CHIEF-RAY-CENTRED window -- a genuine n_fine_cap / NA shortfall rather
+    # than a tilt tax.  It still has to fire, and still has to say why.
+    for token in ('chief ray', 'chief-ray-centred window', 'n_fine_cap=256',
                   'Nyquist', 'on_tilt_exact_grid', "final_leg='paraxial'"):
         assert token in msg, f"refusal message is missing {token!r}:\n{msg}"
 
@@ -745,11 +749,19 @@ def test_the_refusal_can_be_downgraded_and_then_it_is_worse():
 def test_refusal_when_the_chief_ray_does_not_fit_the_grid():
     """A decentre the co-moving grid cannot hold is a hard error naming the
     window it would have needed -- never a wrapped-round, plausible-looking
-    field."""
+    field.
+
+    niche D9 NARROWED this to the COARSE hand-off, which is where the
+    band-limited chief-ray shift (and therefore the wrap-round it guards
+    against) still lives.  The EXACT final leg no longer shifts anything: its
+    retrace grid is CENTRED on the chief ray, so an offset the axis-centred
+    grid could not hold now costs nothing at all there.  ``final_leg='paraxial'``
+    routes the same decentre through the coarse path, where the guard remains
+    exactly as load-bearing as it was."""
     _ram_guard()
     car = la.TiltedCarrier(np.inf, 0.0, 0.0, 2.6e-3, 0.0)
     with pytest.raises(ValueError) as e:
-        _run_chain(car, final_leg='exact')
+        _run_chain(car, final_leg='paraxial')
     msg = str(e.value)
     assert ('chief' in msg.lower()) or ('does not fit' in msg)
 

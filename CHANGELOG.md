@@ -4,6 +4,82 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added — chief-ray-centred grid origin for the traced element (niche D9, `elements/_lens_traced.py`, `propagators/carrier.py`)
+
+`apply_real_lens_traced` gains `origin=(x0, y0)`: the grid's CENTRE PIXEL sits
+at that transverse point in the element's own (optical-axis) frame, so index
+`(i, j)` denotes `(x0 + (j - N/2) dx, y0 + (i - N/2) dy)`. The element, its
+aperture and the ray launch do not move — only the wave/output grid does.
+
+**Why.** A tilted congruence's beam sits at its chief ray, so the pre-D9
+`_fine_trace_group_exit` had to size ONE axis-centred grid spanning both:
+`2*max(|x_c|,|y_c|) + window_factor*w`, where the beam alone needs
+`window_factor*w`. MEASURED on design 121's order (-4,-2): chief ray 3.02 mm
+off axis against an entrance beam radius 3.12 mm grew the window
+12.50 → 18.54 mm (1.48x linear, 2.2x memory), forced `n_fine` to 16384
+(17.2 GB at four complex128 work arrays) where ~12288 would have done, AND
+forced the chain grid to satisfy `N*cur_dx >= 18.54 mm` at the last group —
+which is what drove N=8192 and its ~24 GB working set. The tilted retrace
+window is now exactly the on-axis `window_factor * w`, and it no longer moves
+when the chief-ray offset does.
+
+**Safety.** `origin=(0, 0)` is BYTE-IDENTICAL to omitting it (`np.array_equal`
+across sampling / fit-domain / inversion-backend configurations, plus the
+default screen path). The equivalence oracle — the same physical beam traced
+on a large axis-centred grid and on a quarter-area chief-ray-centred one —
+agrees to **2.7e-9 max / 2.9e-10 rms of the peak amplitude** over all shared
+pixels; the remaining residual is the small grid's own input truncation and
+scales with the window (1.7e-3 / 1.9e-6 / 2.7e-9 / 5.9e-10 at 2.6 / 3.7 / 5.1 /
+6.4 beam radii of half-window), not with the plumbing.
+
+**Refusals.** `origin != (0, 0)` raises `NotImplementedError` unless
+`amplitude_model='ray_density'` AND `preserve_input_phase='remap'` — the
+validated carrier regime the chain uses. The reason is the analytic
+`apply_real_lens` amplitude leg, which has no origin of its own and therefore
+builds the element's sag and masks about the wrong transverse point. Only on
+that path is it reduced to its ZERO SET (the ray-density swap divides its
+modulus out), which makes the residual coupling measurable — and it IS measured
+per call, against `ORIGIN_AMP_SUPPORT_CHECK` (default `'error'`). Also refused:
+`caustic='multibranch'`/`'uniform'` (a different, axis-centred branch-finder)
+and `on_noncollimated='delegate'` (returns `apply_real_lens(E_in)` directly).
+
+**Measured for the record:** for a prescription whose only mask is an entrance
+`aperture_diameter`, the analytic leg has NO exact zeros at all (min |E| =
+6.3e-06, not 0.0) — the ASM through glass fills the shadow in — so the coupling
+is identically absent there. It appears only for a mask on the EXIT plane (a
+last-surface `clear_aperture`, or a stop there), where it deletes 1.3e-04 % /
+0.134 % / 0.583 % of the exit power at `clear_aperture` 1.20 / 0.90 / 0.80 mm
+on the D9 fixture.
+
+**Caller-side consequences.** `_fine_trace_group_exit` now returns the exit
+field on a CHIEF-RAY-CENTRED grid and states that frame through a new
+`grid_origin_out` sink; `propagate_traced_carrier_chain` reads it and converts
+the exact readout's `centre` and `centre_out` into that frame TOGETHER (the ASM
+is translation-covariant, so the difference — and hence the absolute output
+position — is unchanged), reporting `centre_out` absolute as before. The tilted
+leg no longer band-limit-shifts the envelope, and the four reference-phase
+builders take `centre=(0, 0)`; the `TiltedCarrier` keeps its `(x0, y0)`.
+`_check_tilt_fits` goes with the shift it guarded on that path, and remains on
+the coarse hand-off (and on the fall-back below) where the shift still happens.
+
+A tilted leg whose `traced_kwargs` override the validated configuration
+(`amplitude_model`, `preserve_input_phase`, `caustic`, or
+`on_noncollimated='delegate'`) keeps the D6 AXIS-CENTRED hand-off — window,
+envelope shift, decentred reference phases and all — rather than hard-failing
+on the element's refusal. `_check_decentred_fit`'s message now says "off the
+OPTICAL AXIS" instead of "off the element grid centre": the quantity it
+measures is unchanged (`hypot(x_c, y_c)` in absolute coordinates, and the
+ray-fit disc it is about sits in the axis-centred LAUNCH grid, which the origin
+does not move), but on the D9 path the grid centre IS the chief ray, so the old
+phrasing named the wrong reference at one of its two call sites.
+
+**Scope.** The relief is on the FINAL leg. Upstream coarse groups still
+band-limit-shift the envelope onto an axis-centred grid and still require
+`hypot(x_c, y_c) + w < N*cur_dx/2`, so whether a chain's `N` can actually drop
+depends on those groups too.
+
+Tests: `tests/unit/test_niche_d9_grid_origin.py`.
+
 ### Added — congruence-level process parallelism for the multi-congruence chain (niche D8, `propagators/carrier.py`)
 
 `propagate_traced_carrier_chain_multi` gains `congruence_workers` (default

@@ -4014,7 +4014,14 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
     _guard_dispose(
         action,
         f"propagate_traced_carrier_chain: at {where} the congruence's chief "
-        f"ray sits {reach * 1e3:.4f} mm off the element grid centre = "
+        # niche D9: "off the OPTICAL AXIS", not "off the element grid centre".
+        # ``reach`` was always hypot(x_c, y_c) with the chief ray in ABSOLUTE
+        # coordinates, and on the exact final leg the grid centre now IS the
+        # chief ray -- so the old phrasing named the wrong reference at one of
+        # the two call sites.  What the guard measures is unchanged: the ray
+        # fit's disc is off-centre in the AXIS-centred launch grid, which the
+        # origin does not move.
+        f"ray sits {reach * 1e3:.4f} mm off the OPTICAL AXIS = "
         f"{ratio:.3f} beam amplitude radii (w = {w * 1e3:.4f} mm), above "
         f"decentre_fit_frac={float(frac)}.  A decentred hand-off measurably "
         f"costs IMAGE quality end to end.  MEASURED on the K=-n^2 conic "
@@ -4317,7 +4324,7 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                            on_tilt_exact_grid='error',
                            on_decentred_fit='warn',
                            decentre_fit_frac=_DECENTRE_FIT_FRAC_DEFAULT,
-                           na_diag_out=None):
+                           na_diag_out=None, grid_origin_out=None):
     """Re-trace a HIGH-NA group on a grid that Nyquist-samples its EXIT sphere
     (R9).  The co-moving grid is sized for the group ENTRANCE curvature, so on a
     strongly-focusing group the (much steeper) exit wavefront ALIASES -- the
@@ -4407,28 +4414,40 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     both default to the on-axis case, which short-circuits to the
     byte-identical historical path.  ``env`` arrives in the chain's
     CHIEF-RAY-TRACKING frame (the beam sits on the grid centre), so the crop
-    above is ALREADY chief-ray-centred in absolute terms -- what the tilted
-    case adds is that the ELEMENT must see the beam at its true transverse
-    position, and ``apply_real_lens_traced`` builds its grid symmetrically
-    about the optical axis.  The retrace window is therefore widened to
-    ``2*max(|x_c|, |y_c|) + window_factor*w`` so ONE axis-centred grid holds
-    both the axis and the displaced beam, the envelope is band-limit-shifted
-    onto that grid, and the reconstruction uses the DECENTRED sphere + tilt
-    ramp with a matching :class:`~lumenairy.TiltedCarrier` -- exactly the
-    hand-off :func:`propagate_traced_carrier_chain` already performs on its
-    coarse legs.  Measured on design 121's extreme order (-4,-2) at N=1024:
-    the chief ray is 3.373 mm off axis against an entrance beam radius
-    3.126 mm, so the window grows 12.50 -> 18.54 mm (1.48x) and the fine
-    grid has to grow with it to keep the same ``dx_fine``.
+    above is ALREADY chief-ray-centred in absolute terms; the reconstruction
+    uses the sphere + tilt ramp about that centre with a matching
+    :class:`~lumenairy.TiltedCarrier`.
 
-    That growth is the tilted leg's whole cost, and it is REFUSED rather
-    than absorbed when it cannot be paid: if the capped ``dx_fine`` ends up
-    coarser than the exit sphere's Nyquist pitch, the on-axis path warns
-    (F-D above) but the tilted path routes through ``on_tilt_exact_grid``
-    (default ``'error'``), naming the chief-ray offset, the beam radius, the
-    window, the required ``n_fine`` and the ``n_fine_cap`` that bound it.
-    Silently returning a leg whose outer NA has been discarded is exactly
-    the plausible-looking wrong answer this campaign exists to prevent.
+    **niche D9: the RETRACE GRID IS CHIEF-RAY-CENTRED.**  The D6 build had to
+    put the beam at its true transverse position on an AXIS-centred grid,
+    because ``apply_real_lens_traced`` built its grid symmetrically about the
+    optical axis; one grid then had to span the axis AND the displaced beam,
+    i.e. ``2*max(|x_c|, |y_c|) + window_factor*w``.  Measured on design 121's
+    extreme order (-4,-2): a chief ray 3.02 mm off axis against an entrance
+    beam radius 3.12 mm grew the window 12.50 -> 18.54 mm (1.48x linear,
+    2.2x memory) and forced ``n_fine`` 12288 -> 16384 (17.2 GB at four
+    complex128 work arrays) AND the chain grid to satisfy ``N*cur_dx >=
+    18.54 mm`` at the last group, which is what drove N=8192 and its ~24 GB
+    working set.  ``apply_real_lens_traced`` now takes an ``origin``, so the
+    retrace grid is centred on the chief ray, the envelope is NOT shifted at
+    all, and the window is exactly the on-axis ``window_factor * w``.  Both
+    terms above collapse.
+
+    **The RETURNED grid is centred on ``centre``, not on the optical axis.**
+    ``E_exit_fine[i, j]`` is the field at ``(x_c + (j - n/2) dx_fine,
+    y_c + (i - n/2) dx_fine)``.  The caller
+    (:func:`propagate_traced_carrier_chain`) converts the exact readout's
+    ``centre`` / ``centre_out`` into that frame and back; on the untilted path
+    the two frames coincide and nothing changes.
+
+    If the capped ``dx_fine`` ends up coarser than the exit sphere's Nyquist
+    pitch, the on-axis path warns (F-D above) but the tilted path routes
+    through ``on_tilt_exact_grid`` (default ``'error'``), naming the chief-ray
+    offset, the beam radius, the window, the required ``n_fine`` and the
+    ``n_fine_cap`` that bound it.  Silently returning a leg whose outer NA has
+    been discarded is exactly the plausible-looking wrong answer this campaign
+    exists to prevent.  Post-D9 that refusal reports a genuine NA / cap
+    shortfall rather than a tilt tax, since the window no longer carries one.
 
     ``on_tilt_exact_grid`` fires from TWO tests (niche C1 item 4), because D6's
     single test measured the wrong NA:
@@ -4460,29 +4479,87 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     x_c, y_c = float(centre[0]), float(centre[1])
     tL, tM = float(tilt[0]), float(tilt[1])
     _tilted = bool(x_c or y_c or tL or tM)
+    # ---- niche D9: can this leg use a CHIEF-RAY-CENTRED element grid? -------
+    # ``apply_real_lens_traced(origin=...)`` is implemented only for the
+    # validated carrier regime (see its ``origin`` entry for why the analytic
+    # amplitude leg forces that restriction), which is exactly what the chain's
+    # own ``base_kw`` selects.  A caller who overrides ``amplitude_model`` /
+    # ``preserve_input_phase`` / ``caustic`` / ``on_noncollimated`` via
+    # ``traced_kwargs`` keeps the D6 AXIS-CENTRED hand-off instead of getting a
+    # hard failure on a configuration that worked before.  The test MIRRORS the
+    # element's precondition; if the two ever drift, the element raises rather
+    # than returning something wrong.
+    _origin_ok = (
+        _tilted
+        and call_kw.get('amplitude_model') == 'ray_density'
+        and call_kw.get('preserve_input_phase') == 'remap'
+        and call_kw.get('caustic') in (None, 'single')
+        and call_kw.get('on_noncollimated') != 'delegate')
+    # The frame split, in one place: ``_org`` is where the ELEMENT's grid centre
+    # sits, ``_ctr`` is where the chief ray sits ON that grid.  They are
+    # complementary -- exactly one of them carries ``(x_c, y_c)`` -- and every
+    # consumer below reads them rather than ``x_c`` / ``y_c`` directly, so the
+    # two hand-offs cannot half-apply.
+    _org = (x_c, y_c) if _origin_ok else (0.0, 0.0)
+    _ctr = (0.0, 0.0) if _origin_ok else (x_c, y_c)
+    if grid_origin_out is not None:
+        # The RETURNED field's frame, stated rather than inferred: its centre
+        # pixel is at ``origin``, and the chief ray sits at ``chief_on_grid``
+        # on it.  The caller needs both to hand the field on (see the
+        # "RETURNED grid" note in the docstring); recomputing ``_origin_ok``
+        # there from ``call_kw`` would be a second copy of this decision.
+        grid_origin_out.update({'origin': tuple(_org),
+                                'chief_on_grid': tuple(_ctr)})
     if not _tilted:
         win = min(window_factor * w, N * cur_dx) if w > 0 else N * cur_dx
     else:
-        # niche D6: ONE axis-centred window holding the optical axis AND the
-        # chief-ray-displaced beam.  ``w`` is measured in the TRACKING frame,
-        # where the beam is centred, so it is the beam's own radius.
+        # niche D9: with the retrace grid CHIEF-RAY-CENTRED it must hold the
+        # BEAM and nothing else -- the same window the on-axis path takes.
+        # ``w`` is measured in the TRACKING frame, where the beam is centred,
+        # so it IS the beam's own radius, and the beam stays on the grid centre
+        # all the way through.  The D6 window
+        # ``2*max(|x_c|,|y_c|) + window_factor*w`` existed only because the
+        # element built its grid symmetrically about the optical axis and so had
+        # to span the axis AND the displaced beam; measured on design 121's
+        # order (-4,-2) that cost 12.50 -> 18.54 mm (1.48x linear, 2.2x memory)
+        # on a leg already at 17 GB, and it is now zero.  ``_origin_ok`` False
+        # keeps the D6 window, because that leg still gets the D6 hand-off.
         _reach = max(abs(x_c), abs(y_c))
         _win_beam = window_factor * w if w > 0 else N * cur_dx
-        _win_want = 2.0 * _reach + _win_beam
+        _win_want = _win_beam if _origin_ok else (2.0 * _reach + _win_beam)
         win = min(_win_want, N * cur_dx)
         if _win_want > N * cur_dx * (1.0 + 1e-12):
+            # RE-DERIVED against the smaller requirement: on the D9 path the
+            # grid no longer has to reach the axis, only to hold the beam.  A
+            # co-moving grid that cannot do even that is refused rather than
+            # silently clamped (the on-axis path's ``min`` above), because a
+            # tilted congruence arrives here with a decentred-fit budget
+            # already spent.
+            if _origin_ok:
+                _need = (f"a chief-ray-centred retrace window of "
+                         f"{_win_want * 1e3:.4f} mm (= window_factor="
+                         f"{window_factor} x beam radius {w * 1e3:.4f} mm) to "
+                         f"hold the tilted congruence's beam")
+                _why = (f"The grid is centred on the chief ray "
+                        f"({x_c * 1e3:+.4f}, {y_c * 1e3:+.4f}) mm, so the "
+                        f"offset itself costs nothing here -- this is the beam "
+                        f"alone not fitting.")
+            else:
+                _need = (f"an axis-centred retrace window of "
+                         f"{_win_want * 1e3:.4f} mm (= 2 x chief-ray offset "
+                         f"{_reach * 1e3:.4f} mm + window_factor="
+                         f"{window_factor} x beam radius {w * 1e3:.4f} mm) to "
+                         f"hold BOTH the optical axis and the tilted "
+                         f"congruence's beam")
+                _why = ("The element traces the beam at its PHYSICAL "
+                        "position, so the grid must span both.")
             raise ValueError(
                 f"_fine_trace_group_exit: the EXACT high-NA final leg needs "
-                f"an axis-centred retrace window of {_win_want * 1e3:.4f} mm "
-                f"(= 2 x chief-ray offset {_reach * 1e3:.4f} mm + "
-                f"window_factor={window_factor} x beam radius "
-                f"{w * 1e3:.4f} mm) to hold BOTH the optical axis and the "
-                f"tilted congruence's beam, but the co-moving grid spans only "
+                f"{_need}, but the co-moving grid spans only "
                 f"{N * cur_dx * 1e3:.4f} mm (N={N} x dx="
-                f"{cur_dx * 1e6:.4f} um).  The element traces the beam at its "
-                f"PHYSICAL position, so the grid must span both.  Raise the "
-                f"chain's N, shrink window_factor via the focus_readout dict, "
-                f"or run this order with final_leg='paraxial'.")
+                f"{cur_dx * 1e6:.4f} um).  {_why}  Raise the chain's N, shrink "
+                f"window_factor via the focus_readout dict, or run this order "
+                f"with final_leg='paraxial'.")
     n_crop = int(2 * round((win / cur_dx) / 2))
     n_crop = int(min(max(n_crop, 2), N))
     win = n_crop * cur_dx
@@ -4505,21 +4582,25 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     nyquist_dx = wavelength / (2.0 * na)
     if dx_fine > nyquist_dx and _tilted:
         # niche D6: the SAME shortfall the F-D warning covers, but on the
-        # tilted leg it is the tilt itself that bought it (the window had to
-        # grow by 2*chief-ray offset), so it is reported as a refusal naming
-        # the tilt-specific quantities rather than as a warning the caller
-        # would have to attribute.  Downgrade with on_tilt_exact_grid='warn'
-        # to accept a leg whose outer NA is discarded.
+        # tilted leg it is reported as a refusal naming the tilt-specific
+        # quantities rather than as a warning the caller would have to
+        # attribute.  Downgrade with on_tilt_exact_grid='warn' to accept a leg
+        # whose outer NA is discarded.  niche D9: the window is no longer
+        # inflated by the offset (the grid is chief-ray-centred), so what this
+        # now reports is a leg that could not be sampled even at the ON-AXIS
+        # window -- i.e. a genuine n_fine_cap / NA shortfall, not a tilt tax.
         _n_need = int(2 ** int(np.ceil(np.log2(max(win / nyquist_dx, 2.0)))))
         _guard_dispose(
             on_tilt_exact_grid,
             f"_fine_trace_group_exit: the EXACT high-NA final leg cannot be "
-            f"sampled for this TILTED congruence.  Holding both the optical "
-            f"axis and a chief ray {max(abs(x_c), abs(y_c)) * 1e3:.4f} mm off "
-            f"it needs an axis-centred window of {win * 1e3:.4f} mm "
+            f"sampled for this TILTED congruence, whose chief ray is "
+            f"{max(abs(x_c), abs(y_c)) * 1e3:.4f} mm off axis.  Its "
+            f"{'chief-ray-centred' if _origin_ok else 'axis-centred'} window "
+            f"of {win * 1e3:.4f} mm "
             f"(entrance beam radius {w * 1e3:.4f} mm, window_factor="
             f"{window_factor}) -- {win / max(window_factor * w, 1e-300):.3f}x "
-            f"the on-axis window -- so merely NYQUIST-sampling the exit sphere "
+            f"the on-axis window -- means merely NYQUIST-sampling the exit "
+            f"sphere "
             f"at NA={na:.4f} needs n_fine={_n_need} (the 3x-oversampled target "
             f"is {n_fine_req}), but n_fine_cap={n_fine_cap} (and the RAM "
             f"budget) allow only {n_fine}, giving dx_fine="
@@ -4563,36 +4644,63 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                 E_full = np.asarray(E_full) * _cf
         _carrier_arg = R_in
     else:
-        # niche D6 -- leave the chief-ray-tracking frame for the element, on
-        # the FINE grid, exactly as the chain's coarse hand-off does on the
-        # co-moving one: band-limit-shift the (smooth) envelope to its true
-        # transverse position, reconstruct against the DECENTRED sphere, and
-        # impose the tilt ramp referenced to the same chief ray.
-        _check_tilt_fits(env, cur_dx, x_c, y_c,
-                         'the EXACT final leg (fine retrace)')
+        # niche D9 -- hand the element a CHIEF-RAY-CENTRED grid instead of
+        # moving the beam onto an axis-centred one.  Three things follow, and
+        # they must be applied TOGETHER or the decentre is counted twice:
+        #
+        #   1. NO ``_shift_envelope``.  The D6 build band-limit-shifted the
+        #      (tracking-frame, already centred) envelope by ``(x_c, y_c)`` so
+        #      it would land at its true transverse position on an axis-centred
+        #      grid.  With ``origin=(x_c, y_c)`` the grid centre ALREADY is that
+        #      position, so keeping the shift would displace the beam by
+        #      2*(x_c, y_c).  This is the single highest-risk line of the
+        #      change; it is deleted, not disabled.
+        #   2. ALL FOUR reference-phase builders drop their ``centre``.  Each
+        #      builds ``(arange - n/2)*dx - centre`` internally, i.e. the
+        #      chief-ray offset measured on an axis-centred grid; on the
+        #      chief-ray-centred grid that offset is zero.  One convention for
+        #      all four -- a mixed pair is precisely the coma/astigmatism error
+        #      niche C5 exists to remove.
+        #   3. The :class:`TiltedCarrier` KEEPS ``(x_c, y_c)``.  Grid PLACEMENT
+        #      moved to ``origin``; the CONGRUENCE's position did not.  The
+        #      element evaluates the carrier on absolute ``X`` / ``Y`` (which
+        #      carry the origin) and subtracts ``carrier.x0`` itself, so
+        #      removing the offset here too would double-subtract -- a defect
+        #      that is exactly right at the grid centre and wrong in the wings.
+        #
+        # ``_check_tilt_fits`` goes WITH the shift it guarded: it asked whether
+        # the beam still fitted after being moved ``|(x_c, y_c)|`` off the grid
+        # centre, so on the D9 path -- where nothing is moved -- there is
+        # nothing to guard and the window test above carries the whole "does it
+        # fit" question.  It is still run on the D6 fall-back.
+        if not _origin_ok:
+            _check_tilt_fits(env, cur_dx, x_c, y_c,
+                             'the EXACT final leg (fine retrace)')
         _check_decentred_fit(w, x_c, y_c,
                              'the EXACT final leg (fine retrace)',
                              on_decentred_fit, decentre_fit_frac)
         env_f = _fourier_upsample_crop(
-            _shift_envelope(env, x_c, y_c, cur_dx), n_crop, n_fine)
+            env if _origin_ok else _shift_envelope(env, x_c, y_c, cur_dx),
+            n_crop, n_fine)
         _sh = (n_fine, n_fine)
         _ph = _radial_carrier_phase(_sh, dx_fine, dx_fine, wavelength, R_in,
-                                    +1, centre=(x_c, y_c)) \
+                                    +1, centre=_ctr) \
             if np.isfinite(R_in) else None
         E_full = env_f if _ph is None else np.asarray(env_f) * _ph
         if sphere_reference:
             _cf = _sphere_parab_conversion(_sh, dx_fine, wavelength, R_in, +1,
-                                           w_beam=w, centre=(x_c, y_c))
+                                           w_beam=w, centre=_ctr)
             if _cf is not None:
                 E_full = np.asarray(E_full) * _cf
-        _rp = _tilt_ramp(_sh, dx_fine, wavelength, tL, tM, x_c, y_c, +1)
+        _rp = _tilt_ramp(_sh, dx_fine, wavelength, tL, tM, _ctr[0], _ctr[1],
+                         +1)
         if _rp is not None:
             E_full = np.asarray(E_full) * _rp
         # niche C5: the same exactness term the coarse hand-off adds, on the
         # fine grid -- the element's TiltedCarrier evaluates the exact
         # congruence here too, so the reference handed to it must be it.
         _xf = _tilt_exactness_phase(_sh, dx_fine, dx_fine, wavelength, R_in,
-                                    tL, tM, +1, centre=(x_c, y_c))
+                                    tL, tM, +1, centre=_ctr)
         if _xf is not None:
             E_full = np.asarray(E_full) * _xf
         from ..elements._lens_traced import TiltedCarrier as _TC
@@ -4665,7 +4773,7 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     E_exit = apply_real_lens_traced(
         E_full, prescription=presc, wavelength=wavelength, dx=dx_fine,
         carrier=_carrier_arg, ray_subsample=rs_fine, n_workers=n_workers,
-        _exit_na_out=_na_diag, **call_kw)
+        origin=_org, _exit_na_out=_na_diag, **call_kw)
     # ---- niche C1 item 4: the DECISIVE tilted-leg sampling test -------------
     # The pre-check above is sized from ``na_exit``, which is the CHAIN's
     # PARAXIAL exit NA ``w_in / |R_out|``.  That is not the element's own exit
@@ -6045,6 +6153,7 @@ def propagate_traced_carrier_chain(
                     "propagate_traced_carrier_chain: focus_readout must supply "
                     "'dx_out' and 'N_out'.")
             _na_diag: dict = {}
+            _grid_org: dict = {}
             E_exit_fine, dx_fine = _fine_trace_group_exit(
                 env, R_use, cur_dx, presc, wavelength, ray_subsample, n_workers,
                 call_kw, R_out, na_exit,
@@ -6060,7 +6169,7 @@ def propagate_traced_carrier_chain(
                 on_tilt_exact_grid=on_tilt_exact_grid,
                 on_decentred_fit=on_decentred_fit,
                 decentre_fit_frac=decentre_fit_frac,
-                na_diag_out=_na_diag)
+                na_diag_out=_na_diag, grid_origin_out=_grid_org)
             w_stage, p_stage = _chain_envelope_stats(E_exit_fine, dx_fine)
             stages.append({
                 'name': _name, 'R_in': R_use, 'R_out': R_out, 'dx': dx_fine,
@@ -6085,10 +6194,17 @@ def propagate_traced_carrier_chain(
                 # niche D6: the EXIT congruence -- the same closure the coarse
                 # path uses (``(x_c, L)`` is an ordinary paraxial ray through
                 # the group's air-to-air ABCD; the sphere follows the Moebius
-                # law ``R_out`` already carries).  ``E_exit_fine`` is on an
-                # AXIS-CENTRED grid (the element traced it there), so the
-                # readout is told where the beam actually is and takes its own
-                # window about that point; ``centre_out`` stays absolute.
+                # law ``R_out`` already carries).
+                #
+                # niche D9 FRAME BOOKKEEPING.  ``E_exit_fine`` no longer comes
+                # back on an axis-centred grid: its centre pixel sits at the
+                # ENTRANCE chief ray ``(x_c, y_c)``.  The readout takes
+                # ``centre`` (where the beam is ON ITS INPUT GRID) and
+                # ``centre_out`` (where to place the output window) and forms
+                # ``centre_out - centre`` for the ASM, which is translation-
+                # covariant -- so shifting BOTH by the grid origin leaves that
+                # difference, and hence the ABSOLUTE output position, exactly
+                # unchanged.  Shifting only one of them would move the answer.
                 _A, _B, _C, _D = _group_abcd(presc, wavelength)
                 # niche C3: EXACT chief-ray trace through this group (see
                 # ``_group_chief_transfer``); the exact leg's spot lands on
@@ -6096,15 +6212,28 @@ def propagate_traced_carrier_chain(
                 _xco, _yco, _Lco, _Mco = _group_chief_transfer(
                     presc, (_A, _B, _C, _D), x_c, y_c, tilt_L, tilt_M,
                     wavelength, _fn)
-                exact_kw['centre'] = (_xco, _yco)
+                # ``_gox, _goy`` is where the RETURNED field's centre pixel
+                # sits, taken from the leg itself rather than assumed: it is
+                # (x_c, y_c) on the D9 path and (0, 0) on the D6 fall-back
+                # (a caller who overrode amplitude_model via traced_kwargs),
+                # and the arithmetic below is then correct for both with no
+                # second copy of that decision here.
+                _gox, _goy = (float(v) for v in
+                              _grid_org.get('origin', (0.0, 0.0)))
+                _co_abs = tuple(float(v) for v in
+                                exact_kw.get('centre_out', (0.0, 0.0)))
+                exact_kw['centre'] = (_xco - _gox, _yco - _goy)
+                exact_kw['centre_out'] = (_co_abs[0] - _gox, _co_abs[1] - _goy)
                 exact_kw['tilt'] = (_Lco, _Mco)
                 stages[-1].update({
                     'L_out': exact_kw['tilt'][0], 'M_out': exact_kw['tilt'][1],
                     'x_c_out': _xco, 'y_c_out': _yco})
                 # the exact-leg exit power lives on the beam, not the axis:
-                # measure the stage envelope about the chief ray too.
+                # measure the stage envelope about the chief ray too -- in the
+                # returned field's OWN (chief-ray-centred) frame.
                 stages[-1]['w'] = _envelope_amp_radius(
-                    E_exit_fine, dx_fine, dx_fine, centre=(_xco, _yco))
+                    E_exit_fine, dx_fine, dx_fine,
+                    centre=(_xco - _gox, _yco - _goy))
             _pd = {}
             field = carrier_referenced_exact_focus_readout(
                 E_exit_fine, R_out, final_distance, wavelength, dx_fine,
@@ -6119,8 +6248,9 @@ def propagate_traced_carrier_chain(
                     'L': exact_kw['tilt'][0], 'M': exact_kw['tilt'][1],
                     'x_c': _xco + exact_kw['tilt'][0] * final_distance * _obf,
                     'y_c': _yco + exact_kw['tilt'][1] * final_distance * _obf,
-                    'centre_out': tuple(float(v) for v in exact_kw.get(
-                        'centre_out', (0.0, 0.0))),
+                    # niche D9: report the ABSOLUTE window centre, not the
+                    # chief-ray-frame value handed to the readout.
+                    'centre_out': _co_abs,
                     'dx': float(fr['dx_out']), 'exact_final': True,
                     'readout_period': _pd.get('period')})
             return TracedCarrierChainResult(

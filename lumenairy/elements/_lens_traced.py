@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import importlib.util as _importlib_util
 import threading
-from typing import Any, Dict, NamedTuple, Optional
+from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
 
@@ -443,6 +443,54 @@ _RD_HALO_AMAX_TOL = 1.0e-03
 #: unaffected by a far lobe, so refusing the call would be worse than
 #: reporting it.  See ``_RD_HALO_AMAX_TOL``.
 RAY_DENSITY_HALO_CHECK = 'warn'
+
+
+# ---- niche D9: the analytic amplitude leg under a decentred grid ORIGIN -----
+# ``apply_real_lens_traced(origin=...)`` decentres the WAVE grid only (see the
+# ``origin`` docstring entry).  Everything the traced leg owns -- the ray
+# launch, the Newton inverse, the ray-density amplitude, the residual transport
+# -- is carried in the element's absolute (optical-axis) frame and therefore
+# moves with the origin exactly.  The ANALYTIC amplitude leg does not: it is one
+# ``apply_real_lens`` call, which has no origin of its own and builds the
+# element's sag, its ``aperture_diameter`` mask, the per-surface
+# ``clear_aperture`` masks and the stop symmetrically about ITS OWN grid centre.
+#
+# Under ``amplitude_model='ray_density'`` + ``preserve_input_phase='remap'``
+# that leg enters the returned field through EXACTLY ONE quantity: the ZERO SET
+# of ``amp = |apply_real_lens(E_in)|``.  The proof is mechanical --
+# ``preserve_input_phase='remap'`` sets ``preserve_input_phase = False``, so the
+# assembly builds ``E_out = amp * exp(i k0 opl)`` with ``amp`` REAL and
+# non-negative, and the ray-density swap then divides its own modulus out
+# (``_unit = E_out / |E_out|``, zero where ``|E_out| == 0``) and multiplies the
+# ray-tube magnitude back in.  So a wrong analytic ENVELOPE shape is discarded;
+# only a wrong analytic MASK can reach the answer, and only by deleting light.
+#
+# That is a checkable statement, so it is CHECKED rather than assumed: after the
+# swap, the power the analytic zero set removes from the ray-density amplitude
+# is measured directly and the call REFUSES above ``_ORIGIN_AMP_SUPPORT_TOL``.
+# Set this to ``'warn'`` to accept the deletion, ``'silent'`` to skip the two
+# reductions entirely (do not: the failure it catches is a beam quietly clipped
+# by a stop the analytic leg placed at the wrong transverse position).
+#
+# MEASURED (2026-08-04, decentred singlet fixture, chief ray 0.233 mm off axis
+# against a 0.25 mm beam): the zero set is EMPTY -- and the coupling therefore
+# identically absent -- whenever every analytic mask is followed by a
+# propagation, which covers the ordinary case of a prescription carrying only an
+# entrance ``aperture_diameter``: the ASM through glass fills the shadow back in
+# and ``min |E_analytic|`` reads 6.3e-06, not 0.0, over the whole grid.  What
+# does produce exact zeros is a mask that lands on the EXIT PLANE itself -- a
+# ``clear_aperture`` on the LAST surface, or a stop there.  On that fixture such
+# a mask deletes 1.3e-04 % of the ray-density exit power at
+# ``clear_aperture`` = 1.20 mm, 0.13 % at 0.90 mm and 0.58 % at 0.80 mm, i.e.
+# real beam, quietly, and the refusal is what stands between that and a
+# plausible-looking result.
+ORIGIN_AMP_SUPPORT_CHECK = 'error'
+#: Fraction of the ray-density exit power the axis-centred analytic amplitude
+#: leg's zero set may delete before ``ORIGIN_AMP_SUPPORT_CHECK`` fires.  Not a
+#: tuned tolerance -- the intended value is exactly zero, and this is only the
+#: allowance for an analytic envelope that has UNDERFLOWED to 0.0 in a far
+#: skirt where the ray-density amplitude is itself ~1e-30 of peak.
+_ORIGIN_AMP_SUPPORT_TOL = 1.0e-09
 
 
 # Module-level default for ``apply_real_lens_traced(parallel_amp=...)``.  The
@@ -1384,6 +1432,16 @@ def _cheb_deriv_vand_2d(u, max_k, xp=None):
 def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
     """Compute the analytic per-surface sag-phase-screen sum for a lens.
 
+    NOT ORIGIN-AWARE, and deliberately so (niche D9): it builds
+    ``x = (arange(N) - N/2) * dx`` and evaluates the element's sag on it, i.e.
+    it assumes the grid is centred on the optical axis.  It is reached ONLY from
+    the two ``fast_analytic_phase and preserve_input_phase`` branches of
+    :func:`apply_real_lens_traced`, and ``preserve_input_phase='remap'`` -- the
+    only mode in which a non-zero ``origin`` is accepted -- sets
+    ``preserve_input_phase = False`` before either is tested.  So it is dead on
+    every path that can carry an origin.  (An engaged carrier also forces
+    ``fast_analytic_phase = False`` independently.)
+
     Returns the *geometric* component of the phase a plane wave would
     acquire after passing through the lens -- equivalent to
     ``np.angle(apply_real_lens(ones, ...))`` except that the ASM
@@ -2238,7 +2296,8 @@ def _decentred_fit_crossover(u, e_conc, e_off, m_eff):
 DECENTRED_FIT_PREDICTOR = False
 
 
-def _input_beam_amp_radius(E_in, dx, dy=None, centre=None):
+def _input_beam_amp_radius(E_in, dx, dy=None, centre=None,
+                           origin=(0.0, 0.0)):
     """1/e AMPLITUDE radius of ``E_in`` on the centred wave grid, from the
     intensity second moment (``w = sqrt(2 <r^2>)`` -- the same convention as
     :func:`lumenairy.propagators.carrier._envelope_amp_radius`, so the chain's
@@ -2252,6 +2311,15 @@ def _input_beam_amp_radius(E_in, dx, dy=None, centre=None):
     P2 aperture:beam guard that is SIZED from this number silently stops
     guarding as the decentre grows.  ``None`` / ``(0, 0)`` leaves the grid
     arrays untouched (byte-identical default).
+
+    ``origin=(x0, y0)`` (niche D9) states that the grid's CENTRE pixel sits at
+    that transverse point in the element's absolute (optical-axis) frame, so it
+    is ADDED to the grid axes BEFORE ``centre`` is subtracted -- ``centre`` is
+    quoted in the absolute frame (a ``TiltedCarrier``'s chief-ray position),
+    while the axes are grid-relative.  Getting this wrong does not raise: the
+    moment is then taken about ``centre - origin``, so the P2 aperture:beam
+    guard this number sizes silently stops guarding.  ``(0, 0)`` leaves the
+    axes untouched (byte-identical default).
 
     Returns ``0.0`` for an empty / zero / non-finite field (callers treat that
     as "unmeasurable" and skip the beam-relative guard).
@@ -2267,6 +2335,11 @@ def _input_beam_amp_radius(E_in, dx, dy=None, centre=None):
     _dy = float(dy) if (dy is not None and np.isfinite(dy) and dy > 0) else dx
     xg = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yg = (np.arange(Ny, dtype=np.float64) - Ny / 2) * _dy
+    if origin is not None and (origin[0] or origin[1]):
+        # niche D9: grid axis -> ABSOLUTE transverse coordinate, before the
+        # (absolute) ``centre`` is subtracted below.
+        xg = xg + float(origin[0])
+        yg = yg + float(origin[1])
     if centre is not None:
         _cx, _cy = float(centre[0]), float(centre[1])
         if _cx:
@@ -2529,7 +2602,8 @@ def _tilted_carrier_parts(spec, X, Y):
     return W, sgn * uu / rho, sgn * vv / rho
 
 
-def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
+def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
+                     origin=(0.0, 0.0)):
     """Build the carrier reference wavefront ``W(x, y)`` (length units;
     reference phase = ``k0 * W``) and a callable giving its transverse
     gradient -- the ray direction cosines ``L = dW/dx``, ``M = dW/dy``.
@@ -2563,8 +2637,21 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
     referenced to the carrier congruence by ADDING ``W(x_in)`` at the
     entrance plane; omitting it collapsed every diverging-input trace to
     the collimated focal plane.
+
+    ``origin=(x0, y0)`` (niche D9) is the ABSOLUTE transverse position of the
+    grid's CENTRE pixel.  ``X`` / ``Y`` already carry it (the caller builds
+    them), and ``grad_fn`` / ``w_fn`` are always queried at ABSOLUTE positions
+    (ray-launch heights on the axis-centred launch grid), so the two branches
+    that go back to grid INDICES -- the ndarray-wavefront lookup and the
+    ``'auto'`` fit's sample coordinates -- are the only ones that need it.  A
+    :class:`TiltedCarrier` needs nothing: it states its own chief-ray position
+    in the same absolute frame and subtracts it from ``X`` / ``Y`` itself, so
+    the origin must NOT also be removed from ``carrier.x0`` (that
+    double-subtraction is exactly right at the grid centre and wrong in the
+    wings -- the failure has no symptom at the beam peak).
     """
     N = X.shape[0]
+    _org_x, _org_y = float(origin[0]), float(origin[1])
     if isinstance(carrier, TiltedCarrier):
         # niche D1: exact sphere + uniform tilt about (x0, y0), evaluated
         # ANALYTICALLY everywhere (grid, ray-launch heights, H6 eikonal).
@@ -2588,14 +2675,16 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
                 f"{X.shape}")
         gWy, gWx = np.gradient(W_full, dx, dx)
 
+        # niche D9: ABSOLUTE query position -> grid index.  ``- 0.0`` is the
+        # exact IEEE identity, so the on-axis lookup is unchanged bit for bit.
         def grad_fn(xq, yq):
-            fx = np.clip(xq / dx + N / 2.0, 0, N - 1).astype(np.int64)
-            fy = np.clip(yq / dx + N / 2.0, 0, N - 1).astype(np.int64)
+            fx = np.clip((xq - _org_x) / dx + N / 2.0, 0, N - 1).astype(np.int64)
+            fy = np.clip((yq - _org_y) / dx + N / 2.0, 0, N - 1).astype(np.int64)
             return gWx[fy, fx], gWy[fy, fx]
 
         def w_fn(xq, yq):
-            fx = np.clip(xq / dx + N / 2.0, 0, N - 1).astype(np.int64)
-            fy = np.clip(yq / dx + N / 2.0, 0, N - 1).astype(np.int64)
+            fx = np.clip((xq - _org_x) / dx + N / 2.0, 0, N - 1).astype(np.int64)
+            fy = np.clip((yq - _org_y) / dx + N / 2.0, 0, N - 1).astype(np.int64)
             return W_full[fy, fx]
 
         return W_full, grad_fn, w_fn
@@ -2657,9 +2746,16 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
             del _core_ok
         mxx = core[:, 1:] & core[:, :-1]
         myy = core[1:, :] & core[:-1, :]
-        # sample coords at the increment midpoints
+        # sample coords at the increment midpoints.  niche D9: the two axes
+        # separate once the grid centre is off axis (``x0 != y0`` breaks the
+        # shared-vector structure, not merely the offset); ``yax is xax`` on
+        # axis, so the meshgrid call is byte-identical there.
         xax = (np.arange(N) - N / 2.0) * dx
-        Xg, Yg = np.meshgrid(xax, xax, indexing='xy')
+        yax = xax
+        if _org_x or _org_y:
+            yax = xax + _org_y
+            xax = xax + _org_x
+        Xg, Yg = np.meshgrid(xax, yax, indexing='xy')
         xL = 0.5 * (Xg[:, 1:] + Xg[:, :-1])[mxx]
         yL = Yg[:, 1:][mxx]
         Lv = Lx[mxx]
@@ -3954,7 +4050,8 @@ class _ResidualEikonal(object):
 
 
 def _fit_residual_eikonal(E_in, W_grid, wavelength, dx, dy, centre, w_beam,
-                          degree=None, stride=1, ray_fit_radius=None):
+                          degree=None, stride=1, ray_fit_radius=None,
+                          origin=(0.0, 0.0)):
     """Fit the curl-free potential ``a_fit`` of the input RESIDUAL eikonal.
 
     The measured quantity is the residual's own transverse RAY SLOPE, taken as
@@ -3975,6 +4072,14 @@ def _fit_residual_eikonal(E_in, W_grid, wavelength, dx, dy, centre, w_beam,
     FREEZE circle clear of that disc, which is what keeps the polynomial and
     spline ``newton_fit`` backends describing the same map -- see
     ``_REMAP_RESID_FREEZE_MARGIN``.
+
+    ``origin=(x0, y0)`` (niche D9) is the ABSOLUTE transverse position of the
+    grid's CENTRE pixel; the returned model is expressed in that ABSOLUTE frame
+    (its ``centre`` and the launch heights it is later evaluated at both are),
+    so the sample coordinates must carry it.  Omitting it does not raise: the
+    fit disc lands ``|origin|`` away from the beam, keeps ~no samples, and this
+    returns ``None`` -- which the caller reads as "unmeasurable, keep the
+    shipped ``grad(W)`` launch", i.e. SILENT feature disablement.
 
     Returns a :class:`_ResidualEikonal` or ``None`` (unmeasurable / too few
     samples / degenerate fit), in which case the caller keeps the shipped
@@ -4005,6 +4110,11 @@ def _fit_residual_eikonal(E_in, W_grid, wavelength, dx, dy, centre, w_beam,
     s = max(1, int(stride))
     xax = (np.arange(nx, dtype=np.float64) - nx / 2) * dx
     yax = (np.arange(ny, dtype=np.float64) - ny / 2) * _dy
+    if origin is not None and (origin[0] or origin[1]):
+        # niche D9: grid axis -> ABSOLUTE transverse coordinate (``centre``,
+        # ``r_fit`` and every later query of the model are absolute).
+        xax = xax + float(origin[0])
+        yax = yax + float(origin[1])
     mag_pk = float(np.abs(E).max()) if E.size else 0.0
     if not (np.isfinite(mag_pk) and mag_pk > 0.0):
         return None
@@ -4109,7 +4219,7 @@ def _fit_residual_eikonal(E_in, W_grid, wavelength, dx, dy, centre, w_beam,
 
 def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
                          max_sin=0.5, smooth_sigma_px=4.0,
-                         multimode_diagnostic=None):
+                         multimode_diagnostic=None, origin=(0.0, 0.0)):
     """Extract ``(L, M)`` direction cosines for each entrance ray from
     the local phase gradient of ``E_in``.
 
@@ -4291,8 +4401,10 @@ def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
     # bilinear sample).  Launch positions outside the E_in grid
     # (|x| > N*dx/2) fall back to zero tilt (edge -- no information).
     from scipy.ndimage import map_coordinates
-    pix_x = entrance_x / dx + N_x / 2.0
-    pix_y = entrance_y / dx + N_y / 2.0
+    # niche D9: ``entrance_x/y`` are ABSOLUTE launch heights while the pixel
+    # index is grid-relative, so the grid's centre position is removed first.
+    pix_x = (entrance_x - float(origin[0])) / dx + N_x / 2.0
+    pix_y = (entrance_y - float(origin[1])) / dx + N_y / 2.0
     coords = np.vstack([pix_y.ravel(), pix_x.ravel()])
     L = map_coordinates(L_grid, coords, order=1,
                         mode='constant', cval=0.0).reshape(entrance_x.shape)
@@ -4343,6 +4455,11 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
                            tilt_smooth_sigma_px=4.0):
     """Alternative to the Newton-based forward-map inversion in
     :func:`apply_real_lens_traced`.
+
+    NOT ORIGIN-AWARE (niche D9): it builds its own axis-centred grid.  It is
+    reached only from ``inversion_method='backward_trace'``, which
+    ``amplitude_model='ray_density'`` already refuses, and ``'ray_density'`` is
+    a precondition for a non-zero ``origin`` -- so it is unreachable with one.
 
     **Validation** (2026-04-18):
 
@@ -4546,6 +4663,7 @@ def apply_real_lens_traced(
     caustic_ray_subsample: int = 2,
     caustic_band: str = 'ludwig',
     caustic_min_area_ratio: float = 1e-6,
+    origin: Tuple[float, float] = (0.0, 0.0),
     _exit_na_out: Optional[dict] = None,
     _remap_launch_out: Optional[dict] = None,
 ) -> np.ndarray:
@@ -5285,6 +5403,55 @@ def apply_real_lens_traced(
     caustic_min_area_ratio : float, default 1e-6
         ``caustic='multibranch'`` degenerate-triangle skip threshold (mapped /
         launch area) -- the caustic set where ART is undefined.
+    origin : (float, float), default (0, 0)
+        Transverse position ``(x0, y0)`` (m) of the WAVE GRID's CENTRE PIXEL in
+        the element's own (optical-axis) coordinate system -- niche D9.  Grid
+        index ``(i, j)`` then denotes the physical point
+        ``(x0 + (j - N/2) dx, y0 + (i - N/2) dy)``; the element, its aperture
+        and the ray launch stay where they are.  The default is short-circuited
+        everywhere, so the on-axis path is BYTE-IDENTICAL (pinned by
+        ``tests/unit/test_niche_d9_grid_origin.py``).
+
+        **Why.**  A tilted congruence's beam sits at its chief ray, not on the
+        axis, so an axis-centred grid has to span BOTH -- a window of
+        ``2*max(|x_c|,|y_c|) + window_factor*w`` where the beam itself needs
+        only ``window_factor*w``.  On design 121's order (-4,-2) that is
+        12.50 -> 18.54 mm, i.e. 1.48x the linear size and 2.2x the memory, on a
+        leg already at 17 GB.  Centring the grid on the chief ray collapses the
+        first term entirely.  :func:`~lumenairy.propagators.carrier._fine_trace_group_exit`
+        is the caller that does this.
+
+        **What moves and what does not.**  Everything the traced leg owns is
+        carried in the ABSOLUTE frame and therefore needs the origin exactly
+        once, at the grid <-> coordinate boundary: the ``X`` / ``Y`` wave-grid
+        meshes, the three entrance-coordinate -> ``E_in``-pixel conversions
+        (the ray-density ``|E_in|`` sample and both ``remap_sampling='full'``
+        residual samples), the exit-NA guard's launch-height -> pixel map, the
+        C6 de-chirp grid, the carrier grid, and the beam-radius / residual-
+        eikonal measurements.  What must NOT get it: the ray LAUNCH grid
+        ``xs_in`` (already absolute -- and keeping it axis-centred is what
+        preserves the odd-``n_launch`` on-axis piston reference
+        ``opl_grid -= opl_grid[i_axis, i_axis]``), the Newton ``bound`` and
+        out-of-domain disc, the entrance-stop test on ``(x_e, y_e)``, the
+        exit-support hull built from traced landings, and a
+        :class:`TiltedCarrier`'s ``(x0, y0)`` -- the carrier states the
+        CONGRUENCE's position and subtracts it from the (already absolute)
+        ``X`` / ``Y`` itself, so removing the origin from it too would
+        double-count (a defect that is exactly right at the grid centre and
+        wrong in the wings).
+
+        **Restricted to the validated carrier regime.**  ``origin != (0, 0)``
+        raises :class:`NotImplementedError` unless
+        ``amplitude_model='ray_density'`` AND ``preserve_input_phase='remap'``.
+        That is not caution for its own sake: only on that path is the analytic
+        ``apply_real_lens`` amplitude leg -- which has NO origin of its own, and
+        so places the element's sag and masks about the wrong transverse point
+        -- reduced to its ZERO SET (the ray-density swap divides its modulus
+        out), and only there can that residual coupling be measured and refused
+        (see :data:`ORIGIN_AMP_SUPPORT_CHECK`).  On the ``'screen'`` amplitude
+        leg, or with ``preserve_input_phase=True``, the analytic envelope IS the
+        answer's magnitude and a decentred grid would silently return an
+        on-axis element's diffraction pattern.
     _exit_na_out : dict, optional
         PRIVATE diagnostic sink (niche C1 item 4).  When given, it is filled
         with the exit-NA measurement this function already makes for its own
@@ -5492,6 +5659,74 @@ def apply_real_lens_traced(
                 f"Pass newton_amp_mask_rel=0.0 (or drop the argument), or use "
                 f"amplitude_model='screen' if you need the mask.")
         newton_amp_mask_rel = 0.0
+
+    # ---- niche D9: the CHIEF-RAY-CENTRED wave grid ------------------------
+    # ``origin`` moves the grid, not the element.  Resolved here -- above every
+    # coordinate site and above the multibranch dispatch -- so a configuration
+    # this cannot carry is refused before any work is done.  See the ``origin``
+    # docstring entry for what does and does not take the shift.
+    try:
+        _org_x, _org_y = (float(_v) for _v in origin)
+    except (TypeError, ValueError):
+        raise ValueError(
+            "apply_real_lens_traced: origin must be a 2-sequence (x0, y0) in "
+            f"metres (got {origin!r}).")
+    if not (np.isfinite(_org_x) and np.isfinite(_org_y)):
+        raise ValueError(
+            f"apply_real_lens_traced: origin must be finite (got {origin!r}).")
+    _origin_set = bool(_org_x or _org_y)
+    if _origin_set:
+        # THE REFUSAL IS THE FEATURE.  A decentred grid is only representable
+        # here because the ray-density magnitude swap makes the axis-centred
+        # analytic amplitude leg contribute nothing but its zero set; on every
+        # other amplitude/phase path that leg IS the answer's magnitude, and it
+        # would return an ON-AXIS element's diffraction pattern for an OFF-AXIS
+        # beam -- correct-looking, wrong, and with no symptom to catch it by.
+        if not (_ray_density and _pip_remap):
+            raise NotImplementedError(
+                f"apply_real_lens_traced: origin={origin!r} (a grid whose "
+                f"centre pixel is off the optical axis) is implemented ONLY "
+                f"for amplitude_model='ray_density' with "
+                f"preserve_input_phase='remap' -- the carrier-regime "
+                f"configuration the chain's exact final leg uses.  This call "
+                f"has amplitude_model={amplitude_model!r} and "
+                f"preserve_input_phase="
+                f"{'remap' if _pip_remap else preserve_input_phase!r}.  The "
+                f"reason is the ANALYTIC amplitude leg: apply_real_lens has no "
+                f"origin of its own, so it builds the element's sag, its "
+                f"aperture_diameter / clear_aperture masks and its stop about "
+                f"the GRID centre, which under a decentred origin is not the "
+                f"optical axis.  Only under 'ray_density' + 'remap' does that "
+                f"leg reduce to its ZERO SET (the exit magnitude is replaced by "
+                f"the ray-tube amplitude |E_in|/sqrt|det J|), which is a "
+                f"coupling this function can and does MEASURE and refuse -- see "
+                f"ORIGIN_AMP_SUPPORT_CHECK.  Under 'screen', or with "
+                f"preserve_input_phase=True, the analytic envelope is the "
+                f"returned magnitude and there is nothing to check: the call "
+                f"would silently return an on-axis element's diffraction "
+                f"pattern.  Keep origin=(0, 0) and size the grid to hold both "
+                f"the axis and the beam, or switch to the ray-density remap "
+                f"configuration.")
+        if _mb_family:
+            raise NotImplementedError(
+                f"apply_real_lens_traced: origin={origin!r} is not supported "
+                f"with caustic={caustic!r}: that route hands the whole call to "
+                f"the multibranch / uniform branch-finder, which builds its own "
+                f"axis-centred grids and knows nothing about the origin.  Pass "
+                f"caustic=None for the decentred single-branch path.")
+        if on_noncollimated == 'delegate':
+            raise NotImplementedError(
+                f"apply_real_lens_traced: origin={origin!r} is not supported "
+                f"with on_noncollimated='delegate': the fallback returns "
+                f"apply_real_lens(E_in) directly, and that model has no origin "
+                f"-- it would place the element about the grid centre and "
+                f"return an on-axis result without a word.  Use "
+                f"on_noncollimated='warn' (the default) or 'off'.")
+        if ORIGIN_AMP_SUPPORT_CHECK not in ('error', 'warn', 'silent'):
+            raise ValueError(
+                "apply_real_lens_traced: ORIGIN_AMP_SUPPORT_CHECK must be "
+                f"'error', 'warn' or 'silent' (got "
+                f"{ORIGIN_AMP_SUPPORT_CHECK!r}).")
 
     # v5.1.0 (default-knob resolver rollout): resolve ``wave_propagator``
     # / ``dy`` from the library-wide defaults when callers leave them
@@ -5717,6 +5952,18 @@ def apply_real_lens_traced(
                     )
 
     x = (np.arange(N) - N / 2) * dx
+    # ---- niche D9: the wave grid's two PHYSICAL axes ----------------------
+    # ``x`` is the x (column) axis and ``_y_ax`` the y (row) axis, both in the
+    # element's absolute frame.  On axis they are THE SAME OBJECT, so every
+    # consumer below -- ``np.meshgrid(x, _y_ax)``, the row-band aperture term,
+    # the halo edge test, the support-band masks -- is byte-identical to the
+    # single-vector form it replaces.  Off axis they genuinely separate: with
+    # ``x0 != y0`` the shared-vector structure breaks, not merely the offset,
+    # which is why the split is made once here rather than at each site.
+    _y_ax = x
+    if _origin_set:
+        _y_ax = (np.arange(N) - N / 2) * dy + _org_y
+        x = x + _org_x
     # Opt-in row-band (chunked) FINAL ASSEMBLY: when ``sag_chunk_rows`` is set
     # (and the standard sub>1 Newton path is active), the OPL upsample +
     # delta-phase + exit-field assembly run in row bands, so the full-grid
@@ -5752,7 +5999,7 @@ def apply_real_lens_traced(
     if _chunk_assembly:
         X = Y = None
     else:
-        X, Y = np.meshgrid(x, x)
+        X, Y = np.meshgrid(x, _y_ax)
     # OPL coarse->fine spline order; resolved for real once the carrier engage
     # test has run (see the R7 note at its assignment).  Initialised here so
     # the row-band assembly can never read it unbound.
@@ -5794,12 +6041,21 @@ def apply_real_lens_traced(
         _carrier_src = 'auto'
     if _carrier_src is not None:
         if X is None:
+            # (chunked-assembly path only, which niche D9's origin can never
+            # reach -- ray-density forces ``_chunk_assembly`` off -- but the
+            # axes are split here too so the two constructions cannot drift.)
             _cx = (np.arange(E_in.shape[0]) - E_in.shape[0] / 2) * dx
-            _CX, _CY = np.meshgrid(_cx, _cx)
+            _cy = _cx
+            if _origin_set:
+                _cy = (np.arange(E_in.shape[0]) - E_in.shape[0] / 2) * dy \
+                    + _org_y
+                _cx = _cx + _org_x
+            _CX, _CY = np.meshgrid(_cx, _cy)
         else:
             _CX, _CY = X, Y
         _cW, _cGrad, _cWfn = _compute_carrier(
-            _carrier_src, E_in, wavelength, dx, _CX, _CY)
+            _carrier_src, E_in, wavelength, dx, _CX, _CY,
+            origin=(_org_x, _org_y))
         del _CX, _CY
         # Engage the carrier machinery only when the carrier eikonal is
         # NON-TRIVIAL over the bright support.  A (near-)collimated input --
@@ -5922,8 +6178,16 @@ def apply_real_lens_traced(
                 # the fast phasor.  Row-banded so no second full-grid
                 # coordinate pair is materialised (the N = 8192 fine retrace
                 # leg would pay 1 GiB for it).
+                # niche D9: ``_resid_eik`` is a model in the element's ABSOLUTE
+                # frame (it was fitted there), so the grid it is evaluated on
+                # must be absolute too.  Mixing the frames here would leave a
+                # residual ``a(x) - a_fit(x - origin)`` that breaks the C6
+                # cancellation with NO amplitude symptom.
                 _ax = (np.arange(N, dtype=np.float64) - N / 2.0) * dx
                 _ay = (np.arange(N, dtype=np.float64) - N / 2.0) * dy
+                if _origin_set:
+                    _ax = _ax + _org_x
+                    _ay = _ay + _org_y
                 _bd = max(1, int(4194304 // max(N, 1)))
                 for _b0 in range(0, N, _bd):
                     _b1 = min(N, _b0 + _bd)
@@ -6312,7 +6576,14 @@ def apply_real_lens_traced(
     if aperture is not None:
         launch_radius = 0.5 * aperture * 1.50
     else:
-        launch_radius = 0.5 * N * dx
+        # niche D9: the apertureless branch is GRID-EXTENT-derived, and the
+        # launch grid stays AXIS-centred (that is what keeps the odd-n_launch
+        # on-axis piston reference exact), so a decentred grid whose far corner
+        # sits at |origin| + N*dx/2 would be launched over only part of itself
+        # -- Newton would then hand those pixels NaN and the beam would be
+        # quietly clipped.  Reach far enough to cover the moved grid.  Exactly
+        # the historical value at origin=(0, 0).
+        launch_radius = 0.5 * N * dx + float(np.hypot(_org_x, _org_y))
 
     # ----- P2 aperture:beam cliff guard (audit
     # AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4) -------------------
@@ -6385,7 +6656,8 @@ def apply_real_lens_traced(
     _w_in_origin = 0.0
     if _frbf is not None or (on_aperture_beam == 'warn' and aperture is not None):
         _w_in_beam = _input_beam_amp_radius(
-            E_in, dx, dy, centre=((_bcx, _bcy) if _beam_decentred else None))
+            E_in, dx, dy, centre=((_bcx, _bcy) if _beam_decentred else None),
+            origin=(_org_x, _org_y))
         if (_beam_decentred and _w_in_beam > 0.0
                 and _dec_mag <= _DECENTRE_GATE_W_FRAC * _w_in_beam):
             # A disc this nearly concentric reaches no further into the
@@ -6393,7 +6665,8 @@ def apply_real_lens_traced(
             # path -- INCLUDING its origin-referenced radius, which is what
             # makes the fall-back byte-identical rather than merely close.
             _beam_decentred = False
-            _w_in_beam = _input_beam_amp_radius(E_in, dx, dy, centre=None)
+            _w_in_beam = _input_beam_amp_radius(E_in, dx, dy, centre=None,
+                                                origin=(_org_x, _org_y))
         elif (_beam_decentred and _frbf is not None
                 and (DECENTRED_FIT_ARBITER or DECENTRED_FIT_PREDICTOR)
                 and newton_fit != 'spline'):
@@ -6402,7 +6675,8 @@ def apply_real_lens_traced(
             # second moment -- the same number the fall-back above re-measures.
             # Taken ONLY when the arbiter can actually run, so nothing below
             # the C1 gate does any extra work.
-            _w_in_origin = _input_beam_amp_radius(E_in, dx, dy, centre=None)
+            _w_in_origin = _input_beam_amp_radius(E_in, dx, dy, centre=None,
+                                                  origin=(_org_x, _org_y))
     if _frbf is not None and _w_in_beam > 0.0:
         _beam_fit_radius = min(_frbf * _w_in_beam, launch_radius)
     if _frbf is not None and _w_in_origin > 0.0:
@@ -6475,10 +6749,12 @@ def apply_real_lens_traced(
         if not (_res_w > 0.0):
             _res_w = _input_beam_amp_radius(
                 E_in, dx, dy,
-                centre=((_bcx, _bcy) if _beam_decentred else None))
+                centre=((_bcx, _bcy) if _beam_decentred else None),
+                origin=(_org_x, _org_y))
         _resid_eik = _fit_residual_eikonal(
             E_in, _carrier_W, wavelength, dx, dy, (_bcx, _bcy), _res_w,
-            stride=max(1, int(sub)), ray_fit_radius=_fit_r_about_beam)
+            stride=max(1, int(sub)), ray_fit_radius=_fit_r_about_beam,
+            origin=(_org_x, _org_y))
     if _remap_launch_out is not None:
         _remap_launch_out.update(
             {'engaged': _resid_eik is not None,
@@ -6576,7 +6852,8 @@ def apply_real_lens_traced(
     # lens its actual per-ray OPL instead of a plane-wave-reference
     # OPL map.  See :func:`_sample_local_tilts` for the extraction.
     if _tilt_aware_launch:
-        L_in, M_in = _sample_local_tilts(E_in, wavelength, dx, Xs_in, Ys_in)
+        L_in, M_in = _sample_local_tilts(E_in, wavelength, dx, Xs_in, Ys_in,
+                                         origin=(_org_x, _org_y))
         L_in = L_in.ravel()
         M_in = M_in.ravel()
     elif _carrier_grad is not None:
@@ -6755,11 +7032,20 @@ def apply_real_lens_traced(
     # Deliberately NOT an error even under on_undersample='error': the
     # returned field's core metrics remain valid; only far-halo moments
     # degrade -- erroring would break legitimate coarse-dx workflows.
-    _ray_ix = np.clip(np.rint(xs_in / dx + E_in.shape[1] / 2).astype(int),
-                      0, E_in.shape[1] - 1)
+    # niche D9: ``xs_in`` are ABSOLUTE launch heights (the launch grid stays
+    # axis-centred) while these are grid indices, so the grid's own centre
+    # position comes off first.  The ``np.clip`` makes a missing origin SILENT
+    # -- every launch node would saturate to the same grid corner -- and this is
+    # not diagnostic-only: ``_amp`` below feeds the MEASURED ``na_exit``, the
+    # ``_exit_na_out`` sink the chain's ``on_tilt_exact_grid`` refusal reads
+    # (default 'error'), and the C7 halo self-check's support radius.
+    _ray_ix = np.clip(
+        np.rint((xs_in - _org_x) / dx + E_in.shape[1] / 2).astype(int),
+        0, E_in.shape[1] - 1)
     _dy_eff = dy if dy is not None else dx
-    _ray_iy = np.clip(np.rint(xs_in / _dy_eff + E_in.shape[0] / 2).astype(int),
-                      0, E_in.shape[0] - 1)
+    _ray_iy = np.clip(
+        np.rint((xs_in - _org_y) / _dy_eff + E_in.shape[0] / 2).astype(int),
+        0, E_in.shape[0] - 1)
     # niche C4 (2026-07-30): the ``.T`` is load-bearing.  The launch grid is
     # ``np.meshgrid(xs_in, xs_in, indexing='ij')`` -- x along axis 0 -- so a
     # ray's FLAT index is x-major, and that is the order ``final.L`` /
@@ -7725,8 +8011,15 @@ def apply_real_lens_traced(
         # the input grid contribute zero amplitude.
         from scipy.ndimage import map_coordinates as _mc
         _absin = np.abs(np.asarray(E_in)).astype(np.float64)
-        _col = xef / dx + N / 2.0
-        _row = yef / dy + N / 2.0
+        # niche D9, entrance-coordinate -> E_in pixel index, copy 1 of 3 (the
+        # other two are the remap_sampling='full' samplers below).  ``xef`` /
+        # ``yef`` are ABSOLUTE entrance positions; the index is grid-relative.
+        # NOTE the asymmetry of the two lines -- ``_col`` is built from x and
+        # ``_row`` from y, and they are consumed in the (row, col) order
+        # ``map_coordinates`` wants; a mechanical edit that pairs ``_org_x``
+        # with the row would put the shift on the wrong axis silently.
+        _col = (xef - _org_x) / dx + N / 2.0
+        _row = (yef - _org_y) / dy + N / 2.0
         a_in = _mc(_absin, np.vstack([_row, _col]), order=1,
                    mode='constant', cval=0.0).reshape(sh)
         # preserve_input_phase='remap': sample the carrier-de-chirped input
@@ -7867,8 +8160,7 @@ def apply_real_lens_traced(
         # grid from the 1-D subsampled vector is element-identical to
         # ``X[::sub, ::sub]`` (meshgrid(x,x) is x[j]/x[i] replicated).
         if X is None:
-            _x_c = x[::sub]
-            Xs, Ys = np.meshgrid(_x_c, _x_c)
+            Xs, Ys = np.meshgrid(x[::sub], _y_ax[::sub])
         else:
             Xs = X[::sub, ::sub]
             Ys = Y[::sub, ::sub]
@@ -7992,7 +8284,7 @@ def apply_real_lens_traced(
     elif _use_fit:
         # T-P2: full-grid inverse-map fit (no Newton, no amp mask).
         if X is None:
-            X, Y = np.meshgrid(x, x)
+            X, Y = np.meshgrid(x, _y_ax)
         opl_map = _invert_fit(X, Y)
     else:
         mask_full = _build_newton_mask(amp)
@@ -8063,8 +8355,9 @@ def apply_real_lens_traced(
                 _xe_c, _ye_c = _rd_entrance_coarse[0]
                 _xe_f = _mc_rd(_xe_c, _coords_rd, order=1, mode='nearest')
                 _ye_f = _mc_rd(_ye_c, _coords_rd, order=1, mode='nearest')
-                _pz = _pip_sample_residual(_ye_f / dy + N / 2.0,
-                                           _xe_f / dx + N / 2.0,
+                # niche D9 copy 2 of 3: (row from y, col from x).
+                _pz = _pip_sample_residual((_ye_f - _org_y) / dy + N / 2.0,
+                                           (_xe_f - _org_x) / dx + N / 2.0,
                                            _xe_f.shape)
                 del _xe_c, _ye_c, _xe_f, _ye_f
                 _pa = np.abs(_pz)
@@ -8084,8 +8377,10 @@ def apply_real_lens_traced(
                 # coordinates.  Reproduce the legacy expression (including its
                 # un-normalised phasor) so remap_sampling is a no-op here.
                 _xe_c, _ye_c = _rd_entrance_coarse[0]
+                # niche D9 copy 3 of 3: (row from y, col from x).
                 _rd_resid_map = _pip_sample_residual(
-                    _ye_c / dy + N / 2.0, _xe_c / dx + N / 2.0, _xe_c.shape)
+                    (_ye_c - _org_y) / dy + N / 2.0,
+                    (_xe_c - _org_x) / dx + N / 2.0, _xe_c.shape)
                 del _xe_c, _ye_c
         # Release the cached entrance-grid residual pair (2 float64 N^2
         # arrays -- 1 GiB at the N = 8192 fine retrace leg): it is only ever
@@ -8198,7 +8493,7 @@ def apply_real_lens_traced(
                 band = amp[r0:r1] * pe_b
             band = np.where(valid_b, band, target_cdtype.type(0))
             if r_ap_sq is not None:
-                h_b = x[None, :] ** 2 + x[r0:r1, None] ** 2
+                h_b = x[None, :] ** 2 + _y_ax[r0:r1, None] ** 2
                 band = np.where(h_b <= r_ap_sq, band,
                                 target_cdtype.type(0))
             E_out[r0:r1] = band
@@ -8252,6 +8547,51 @@ def apply_real_lens_traced(
             _unit = np.divide(E_out, _absE,
                               out=np.zeros_like(E_out), where=_absE > 0)
         _ard = np.where(np.isfinite(ard_map), ard_map, 0.0)
+        # ---- niche D9: the analytic amplitude leg's ZERO SET, measured -------
+        # ``amp`` is the ONE thing an axis-centred ``apply_real_lens`` still
+        # contributes here, and it contributes only where it is exactly 0 (the
+        # swap above divides its modulus out).  Under a decentred ``origin``
+        # that leg placed the element's sag, its aperture / clear_aperture
+        # masks and its stop about the wrong transverse point, so its zeros are
+        # in the wrong place -- harmlessly, IF they do not overlap the beam.
+        # That is measurable, so it is measured rather than assumed.  See
+        # ``ORIGIN_AMP_SUPPORT_CHECK``.
+        if _origin_set and ORIGIN_AMP_SUPPORT_CHECK != 'silent':
+            _oa_w = _ard * _ard
+            _oa_tot = float(_oa_w.sum())
+            _oa_cut = float(_oa_w[amp <= 0.0].sum()) if _oa_tot > 0.0 else 0.0
+            _oa_frac = (_oa_cut / _oa_tot) if _oa_tot > 0.0 else 0.0
+            del _oa_w
+            if _oa_frac > _ORIGIN_AMP_SUPPORT_TOL:
+                _oa_msg = (
+                    f"apply_real_lens_traced: origin=({_org_x * 1e3:+.4f}, "
+                    f"{_org_y * 1e3:+.4f}) mm decentres the WAVE GRID, but the "
+                    f"analytic amplitude leg (apply_real_lens) has no origin "
+                    f"and built this element -- its sag, its "
+                    f"aperture_diameter / clear_aperture masks and its stop -- "
+                    f"about the GRID centre, which is not the optical axis "
+                    f"here.  That leg reaches the returned field ONLY through "
+                    f"its zero set, and its zeros are deleting "
+                    f"{_oa_frac * 100:.6f} % of the ray-density exit power "
+                    f"(tolerance {_ORIGIN_AMP_SUPPORT_TOL * 100:.1e} %, i.e. "
+                    f"the intended value is zero).  The light removed is real "
+                    f"beam clipped by a stop placed at the wrong transverse "
+                    f"position, NOT physical vignetting -- the physical "
+                    f"entrance stop is applied separately, on absolute "
+                    f"entrance coordinates.  Remedies: shrink the grid (or "
+                    f"raise window_factor's beam multiple) so the decentred "
+                    f"window stays clear of the analytic leg's masks; widen or "
+                    f"drop aperture_diameter / the per-surface clear_aperture "
+                    f"on the prescription handed to this call (the ray leg "
+                    f"already enforces the true stop); or keep origin=(0, 0) "
+                    f"and pay for the axis-centred window.  Set "
+                    f"lumenairy.elements._lens_traced.ORIGIN_AMP_SUPPORT_CHECK "
+                    f"= 'warn' to accept the deletion, 'silent' to stop "
+                    f"measuring it.")
+                if ORIGIN_AMP_SUPPORT_CHECK == 'error':
+                    raise NotImplementedError(_oa_msg)
+                import warnings as _oa_warn
+                _oa_warn.warn(_oa_msg, RuntimeWarning, stacklevel=2)
         E_out = _ard * _unit
         # preserve_input_phase='remap': multiply the geometrically-transported
         # input-residual phasor onto the k0*opl exit phase (audit S6.7).  Unit
@@ -8310,12 +8650,17 @@ def apply_real_lens_traced(
             # there is unreliable in BOTH directions -- measured, twice (see
             # SCOPE (d) at ``_RD_HALO_AMAX_TOL``).  Decline rather than report
             # a number that cannot be trusted either way.
+            # niche D9: the y half of this edge test compared the y centroid
+            # against the X axis's extent.  On a square axis-centred grid the
+            # two axes are the SAME vector, so it was invisible; with the grid
+            # centre off axis they separate and it would be a real defect.
+            # ``_y_ax is x`` on axis, so this is byte-identical there.
             _h_edge = min(float(x[-1]) - _rd_hull_c[0],
                           _rd_hull_c[0] - float(x[0]),
-                          float(x[-1]) - _rd_hull_c[1],
-                          _rd_hull_c[1] - float(x[0]))
+                          float(_y_ax[-1]) - _rd_hull_c[1],
+                          _rd_hull_c[1] - float(_y_ax[0]))
             _h_far = (((x[None, :] - _rd_hull_c[0]) ** 2
-                       + (x[:, None] - _rd_hull_c[1]) ** 2) > _hb ** 2
+                       + (_y_ax[:, None] - _rd_hull_c[1]) ** 2) > _hb ** 2
                       if _hb <= _h_edge else np.zeros((1, 1), dtype=bool))
             if _h_far.any():
                 _h_abs = np.abs(E_out)
@@ -8376,7 +8721,7 @@ def apply_real_lens_traced(
         if (SUPPORT_BAND_CHECK != 'silent'
                 and _exit_support.hull is not None):
             _bd_in, _bd_band = _exit_support.retained_band_masks(
-                x, x, np.sqrt(2.0) * sub * dx)
+                x, _y_ax, np.sqrt(2.0) * sub * dx)
             if _bd_band is not None and _bd_band.any() and _bd_in.any():
                 _bd_abs = np.abs(E_out)
                 _bd_core = float(_bd_abs[_bd_in].max())
