@@ -6989,7 +6989,13 @@ def _multi_capture_worker_state(n_workers=1):
     for mod_name in _WORKER_STATE_MODULES:
         try:
             mod = importlib.import_module(mod_name)
-        except Exception:                          # pragma: no cover - env
+        except ImportError:                        # pragma: no cover - env
+            # The ONLY reason a first-party name in ``_WORKER_STATE_MODULES``
+            # is missing is a trimmed / partially installed tree.  Anything
+            # else a module body raises on import is a real defect and must
+            # surface here rather than be quietly skipped -- a skipped module
+            # is exactly the silent-different-physics failure this capture
+            # exists to prevent.
             continue
         for n, v in list(vars(mod).items()):
             core = n.lstrip('_')
@@ -7014,7 +7020,13 @@ def _multi_capture_worker_state(n_workers=1):
     try:
         from ..memory import get_ram_budget
         budget = int(get_ram_budget() // max(1, int(n_workers)))
-    except Exception:                              # pragma: no cover - env
+    except (ImportError, OSError, RuntimeError):   # pragma: no cover - env
+        # ImportError: trimmed install.  OSError / RuntimeError: psutil's
+        # system-memory probe under ``get_ram_budget`` failing at the platform
+        # layer (a /proc/meminfo read, a Win32 call).  Leaving ``budget=None``
+        # means "worker inherits auto-detection", which is the pre-D8
+        # behaviour -- degraded, not wrong.  A TypeError/ValueError from
+        # ``int(n_workers)`` is a CALLER bug and is deliberately not caught.
         pass
     return {'flags': flags, 'glass': glass, 'ram_budget': budget}
 
@@ -7036,7 +7048,16 @@ def _multi_unpicklable_glass(state):
         for name, val in table.items():
             try:
                 pickle.dumps(val)
-            except Exception:
+            except (pickle.PickleError, AttributeError, TypeError,
+                    ValueError, RecursionError):
+                # The whole documented refusal surface of ``pickle.dumps``:
+                # PicklingError for a lambda or closure (the model-glass case
+                # this exists for), AttributeError for a local object on the
+                # CPythons that report it that way, TypeError for a C object
+                # that cannot be reduced (locks, generators, modules),
+                # ValueError for ctypes-with-pointers, RecursionError for a
+                # self-referential table.  Anything outside that set is not a
+                # picklability verdict and must surface.
                 bad.add(str(name))
     return bad
 
@@ -7050,7 +7071,12 @@ def _multi_apply_worker_state(state):
         mod_name, _, n = key.rpartition(':')
         try:
             setattr(importlib.import_module(mod_name), n, val)
-        except Exception:                          # pragma: no cover - env
+        except (ImportError, ValueError, AttributeError):  # pragma: no cover - env
+            # ImportError: the module is absent in this worker (trimmed
+            # install).  ValueError: a malformed key with no ':' separator
+            # leaves an empty module name, which ``import_module`` rejects.
+            # AttributeError: the target refuses assignment.  Each is a flag
+            # that cannot be re-applied, so it is skipped as before.
             continue
     if state.get('glass'):
         try:
@@ -7062,13 +7088,24 @@ def _multi_apply_worker_state(state):
                     # reference (``from lumenairy import GLASS_REGISTRY``), so
                     # rebinding the name here would leave them on the old one.
                     tgt.update(table)
-        except Exception:                          # pragma: no cover - env
+        except (ImportError, AttributeError, TypeError, ValueError):  # pragma: no cover - env
+            # ImportError: trimmed install.  AttributeError: a snapshot whose
+            # 'glass' entry is not a mapping (``.items()``).  TypeError /
+            # ValueError: ``dict.update`` handed a non-mapping or a malformed
+            # pair sequence.  All three mean "these materials do not reach
+            # this worker", which surfaces loudly and immediately as a
+            # ``get_glass_index`` failure on the first chain call.
             pass
     if state.get('ram_budget'):
         try:
             from ..memory import set_max_ram
             set_max_ram(int(state['ram_budget']))
-        except Exception:                          # pragma: no cover - env
+        except (ImportError, TypeError, ValueError):  # pragma: no cover - env
+            # ImportError: trimmed install.  TypeError / ValueError: a
+            # snapshot carrying a non-numeric budget, or a negative one --
+            # ``set_max_ram`` rejects <= 0 with ValueError, and the truthiness
+            # test above lets a negative through.  The worker then runs on
+            # auto-detection: the pre-D8 behaviour, not a wrong answer.
             pass
 
 
@@ -7212,6 +7249,7 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
     """
     import warnings
     from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import as_completed as _as_completed
 
     K = len(specs)
     # The snapshot crosses a process boundary, so it must PICKLE.  A caller who
@@ -7249,30 +7287,93 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
     tasks = [(k, fld_idx[k], specs[k][1], window(k, n_tile)[3])
              for k in range(K)]
     out: list = [None] * K
+    # SPAWN, EXPLICITLY -- never the platform default.  On Linux/macOS
+    # ProcessPoolExecutor would FORK, and forking a process that has already
+    # touched GNU OpenMP is undefined: libgomp's runtime does not survive it
+    # and the child dies (or deadlocks) before running a single task.  Every
+    # traced call goes through BLAS/OpenMP, so the fork path is unusable here
+    # by construction -- not flaky, broken.  Spawn also makes the start method
+    # UNIFORM across platforms, so the caller's ``if __name__ == '__main__':``
+    # requirement (and the bootstrap detection below) means the same thing
+    # everywhere.
+    #
+    # Both imports are resolved BEFORE the try: ``_pickle`` is named in the
+    # except clause, which is evaluated at raise time, so binding it inside
+    # the guarded block would turn any early failure into a NameError.
+    import multiprocessing as _mp
+    import pickle as _pickle
+    _ctx = _mp.get_context('spawn')
+    # The failure is carried as a VALUE and re-raised after the pool has been
+    # torn down, so the two sources -- a worker's own exception and the pool's
+    # own -- converge on one message site without one wrapping the other.
+    failure = None
     try:
-        # SPAWN, EXPLICITLY -- never the platform default.  On Linux/macOS
-        # ProcessPoolExecutor would FORK, and forking a process that has
-        # already touched GNU OpenMP is undefined: libgomp's runtime does not
-        # survive it and the child dies (or deadlocks) before running a single
-        # task.  Every traced call goes through BLAS/OpenMP, so the fork path
-        # is unusable here by construction -- not flaky, broken.  Spawn also
-        # makes the start method UNIFORM across platforms, so the caller's
-        # ``if __name__ == '__main__':`` requirement (and the bootstrap
-        # detection below) means the same thing everywhere.
-        import multiprocessing as _mp
-        _ctx = _mp.get_context('spawn')
         with ProcessPoolExecutor(
                 max_workers=int(n_cw), mp_context=_ctx,
                 initializer=_multi_worker_init,
                 initargs=(uniq, groups_k, common, _state)) as ex:
+            # SUBMIT, NOT ``ex.map``.  A worker runs the whole traced chain,
+            # so it can raise anything the library raises -- a set that cannot
+            # be enumerated -- and ``map`` RE-RAISES it into this frame, which
+            # is what forced a broad ``except`` here when D8 was written.
+            # ``Future.exception()`` returns that same object as a VALUE, so
+            # the untypeable half of the failure surface is handled WITHOUT
+            # catching anything, and the clause below only has to name the
+            # pool's own modes, which are typeable.
+            #
+            # AS_COMPLETED, NOT SUBMISSION ORDER.  Consuming futures in the
+            # order they were submitted re-creates ``map``'s HEAD-OF-LINE
+            # BLOCKING: ``futs[0].exception()`` waits on congruence 0 even when
+            # 1..K-1 finished long ago, so nothing is reported -- no progress,
+            # and no FAILURE -- until the slowest-so-far congruence lands.
+            # MEASURED on design 121's 32-order fan: the counter sat at 5/32
+            # for over two hours while the workers had in fact burned ~10 500
+            # CPU-seconds EACH and one had already died of MemoryError; the
+            # error only surfaced once the straggler ahead of it completed.
+            # Draining by completion makes both progress and failure prompt.
+            #
+            # DETERMINISM IS UNAFFECTED.  Results are stored into ``out[k]`` by
+            # the congruence's own index and the caller accumulates in
+            # ASCENDING k, so the complex sum is formed in the same order
+            # whatever sequence the workers finish in.  Only the ORDER OF THE
+            # ``progress`` CALLBACK changes -- it now reports completions as
+            # they happen, which is what it was always meant to convey.
+            futs = [ex.submit(_multi_worker_run, t) for t in tasks]
             done = 0
-            for k, field, stages, msgs in ex.map(_multi_worker_run, tasks):
+            for fut in _as_completed(futs):
+                failure = fut.exception()
+                if failure is not None:
+                    # ``map``'s iterator cancels the pending futures when it is
+                    # torn down; without the same cancel here the ``with`` exit
+                    # would block on every straggler before the failure is
+                    # reported.
+                    for _f in futs:
+                        _f.cancel()
+                    break
+                k, field, stages, msgs = fut.result()
                 out[k] = (field, stages, msgs)
-                done += 1
                 if progress is not None:
-                    progress(done - 1, K, f"{specs[k][3]} [worker]")
-    except Exception as exc:                       # pragma: no cover - env
-        if _multi_looks_like_spawn_bootstrap(exc):
+                    progress(done, K, f"{specs[k][3]} [worker]")
+                done += 1
+    except (RuntimeError, OSError, MemoryError, ValueError, TypeError,  # pragma: no cover - env
+            AttributeError, _pickle.PickleError) as exc:
+        # The POOL's own raisable modes, all of them parent-side.
+        #   RuntimeError  -- BrokenProcessPool (a child that died, including
+        #                    the spawn-bootstrap trap) and submission after
+        #                    shutdown; BrokenExecutor derives from it.
+        #   OSError       -- the process launch itself failing (handle/fd
+        #                    exhaustion, a resource limit).
+        #   ValueError    -- the executor rejecting max_workers; on Windows
+        #                    that includes the hard 61-worker cap.
+        #   PickleError / TypeError / AttributeError -- pickling the
+        #                    initializer payload, which ``Process.start()``
+        #                    performs in THIS process under spawn.
+        #   MemoryError   -- that same payload not fitting.
+        # A worker's own exception never arrives here; it is read as a value
+        # in the loop above.
+        failure = exc
+    if failure is not None:
+        if _multi_looks_like_spawn_bootstrap(failure):
             raise RuntimeError(
                 f"{fn}: congruence_workers={n_cw} needs the CALLING script to "
                 f"be import-safe, and this one is not.  On Windows (and any "
@@ -7284,12 +7385,12 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
                 f"...\n\nor keep __main__ a thin shim that runpy's the science "
                 f"script under another run_name.  congruence_workers=None "
                 f"(serial) needs no guard and is the fallback if the driver "
-                f"cannot be changed.  Original error: {exc!r}") from exc
+                f"cannot be changed.  Original error: {failure!r}") from failure
         raise RuntimeError(
             f"{fn}: a congruence worker failed under congruence_workers="
             f"{n_cw}.  Re-run with congruence_workers=None to reproduce it "
-            f"serially with a clean traceback.  Original error: {exc!r}"
-        ) from exc
+            f"serially with a clean traceback.  Original error: {failure!r}"
+        ) from failure
     for k in range(K):
         if out[k] is None:
             raise RuntimeError(

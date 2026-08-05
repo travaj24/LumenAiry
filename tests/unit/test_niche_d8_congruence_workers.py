@@ -347,3 +347,47 @@ def test_unpicklable_glass_degrades_to_serial_and_says_so():
             "the serial fallback must reproduce the serial result exactly"
     finally:
         g.GLASS_REGISTRY.pop(name, None)
+
+
+# --------------------------------------------------------------------------
+# Draining by COMPLETION, not submission order.  Consuming futures in
+# submission order re-creates map()'s head-of-line blocking: futs[0].exception()
+# waits on congruence 0 even when the rest finished long ago, so neither
+# progress NOR a failure is reported until the straggler ahead of them lands.
+# MEASURED on design 121's fan: the counter sat at 5/32 for over two hours
+# while a worker had already died of MemoryError.
+# --------------------------------------------------------------------------
+def test_futures_are_drained_by_completion_not_submission_order():
+    import inspect
+
+    from lumenairy.propagators import carrier as c
+    src = inspect.getsource(c._multi_parallel_results)
+    assert '_as_completed(futs)' in src, \
+        "the pool must drain by completion; submission order head-of-line blocks"
+    assert 'for done, fut in enumerate(futs)' not in src, \
+        "submission-order consumption reintroduces head-of-line blocking"
+
+
+def test_progress_fires_once_per_congruence_under_workers():
+    seen = []
+    propagate_traced_carrier_chain_multi(
+        _congruences(), [{'prescription': _presc(), 'gap_before': 5.0e-3}],
+        _WL, _DX,
+        output_grid=dict(dx_out=2.0e-6, N_out=128),
+        readout_tile=64, on_replica='ignore', on_readout_clip='ignore',
+        final_distance=30.0e-3, ray_subsample=4, final_leg='paraxial',
+        on_multi_congruence='ignore', on_na_proximity='ignore',
+        on_decentred_fit='ignore', on_gap_paraxial='ignore',
+        on_tilt_exact_grid='ignore',
+        congruence_workers=2,
+        progress=lambda k, K, nm: seen.append((k, K, nm)))
+    assert len(seen) == 3, f"expected one progress call per congruence, got {seen}"
+    # the index is a COMPLETION counter, so it must still enumerate 0..K-1 once
+    assert sorted(s[0] for s in seen) == [0, 1, 2]
+    assert all(s[1] == 3 for s in seen)
+
+
+def test_completion_order_draining_still_gives_the_serial_field():
+    # The whole safety property: workers may finish in any order, but the
+    # parent accumulates in ascending k, so the answer cannot move.
+    assert np.array_equal(_run(2).field, _run(None).field)
