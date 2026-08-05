@@ -291,3 +291,59 @@ def test_a_bigger_fine_grid_cap_costs_workers():
     big = _multi_resolve_workers(32, 32, (4096, 4096), 0.0, 'fn',
                                  n_fine_cap=16384)
     assert big <= small
+
+
+# --------------------------------------------------------------------------
+# Two defects found by running D8 on Linux/WSL, neither reachable from the
+# Windows-only path this file was first written against.
+# --------------------------------------------------------------------------
+def test_pool_uses_spawn_never_the_platform_default_fork():
+    # On Linux/macOS ProcessPoolExecutor defaults to FORK, and forking a
+    # process that has already touched GNU OpenMP is undefined -- libgomp does
+    # not survive it and the child dies before running a task. Every traced
+    # call goes through BLAS/OpenMP, so the fork path is broken by
+    # construction. Pin the explicit spawn context at the source.
+    import inspect
+
+    from lumenairy.propagators import carrier as c
+    src = inspect.getsource(c._multi_parallel_results)
+    assert "get_context('spawn')" in src, \
+        "the pool must pin spawn explicitly; the platform default forks"
+    assert 'mp_context=' in src, "spawn context must be passed to the pool"
+
+
+def test_a_callable_model_glass_is_detected_as_unpicklable():
+    from lumenairy.propagators.carrier import _multi_unpicklable_glass
+    state = {'glass': {'GLASS_REGISTRY': {
+        'BK7': '__sellmeier__',
+        '__model__': lambda wl: 1.5,          # a lambda does not pickle
+    }}}
+    bad = _multi_unpicklable_glass(state)
+    assert bad == {'__model__'}, f"expected the lambda to be named, got {bad}"
+
+
+def test_a_clean_glass_snapshot_reports_nothing_unpicklable():
+    from lumenairy.propagators.carrier import (
+        _multi_capture_worker_state,
+        _multi_unpicklable_glass,
+    )
+    assert _multi_unpicklable_glass(_multi_capture_worker_state(1)) == set()
+    assert _multi_unpicklable_glass(None) == set()
+    assert _multi_unpicklable_glass({}) == set()
+
+
+def test_unpicklable_glass_degrades_to_serial_and_says_so():
+    # Correctness first: congruence_workers is a throughput knob, so a
+    # material that cannot cross the boundary must cost the SPEED-UP, not the
+    # run. The result has to match the serial answer exactly.
+    from lumenairy import glass as g
+    name = '__d8_unpicklable_probe__'
+    g.GLASS_REGISTRY[name] = lambda wl: 1.5
+    try:
+        with pytest.warns(RuntimeWarning, match='cannot be pickled'):
+            par = _run(2)
+        ser = _run(None)
+        assert np.array_equal(par.field, ser.field), \
+            "the serial fallback must reproduce the serial result exactly"
+    finally:
+        g.GLASS_REGISTRY.pop(name, None)

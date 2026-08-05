@@ -7019,6 +7019,28 @@ def _multi_capture_worker_state(n_workers=1):
     return {'flags': flags, 'glass': glass, 'ram_budget': budget}
 
 
+def _multi_unpicklable_glass(state):
+    """Names in the captured glass tables that cannot cross to a worker.
+
+    ``GLASS_REGISTRY`` maps a material name to its dispersion source, which for
+    a MODEL glass is a CALLABLE -- and a lambda or closure does not pickle, so
+    the whole snapshot fails to reach the pool initializer.  Returns the set of
+    offending names (empty when the snapshot is clean) so the caller can name
+    them instead of surfacing a bare ``PicklingError`` from the pool.
+    """
+    import pickle
+    bad = set()
+    for table in (state or {}).get('glass', {}).values():
+        if not isinstance(table, dict):
+            continue
+        for name, val in table.items():
+            try:
+                pickle.dumps(val)
+            except Exception:
+                bad.add(str(name))
+    return bad
+
+
 def _multi_apply_worker_state(state):
     """Re-apply :func:`_multi_capture_worker_state`'s snapshot in a worker."""
     import importlib
@@ -7192,6 +7214,28 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
     from concurrent.futures import ProcessPoolExecutor
 
     K = len(specs)
+    # The snapshot crosses a process boundary, so it must PICKLE.  A caller who
+    # registered a MODEL glass (a callable / lambda in GLASS_REGISTRY) produces
+    # a snapshot that cannot -- and the failure would otherwise land as an
+    # opaque pool error only after the initializer has been handed the data.
+    # Check here, name the offenders, and fall back to SERIAL: this is a
+    # throughput knob, so degrading it always beats failing a run that would
+    # have been correct.
+    _state = _multi_capture_worker_state(n_cw)
+    _bad = _multi_unpicklable_glass(_state)
+    if _bad:
+        warnings.warn(
+            f"{fn}: congruence_workers={n_cw} needs the caller's registered "
+            f"materials to cross a process boundary, but "
+            f"{len(_bad)} entr{'y' if len(_bad) == 1 else 'ies'} in the glass "
+            f"registry cannot be pickled: {sorted(_bad)[:6]}"
+            f"{' ...' if len(_bad) > 6 else ''}.  These are typically MODEL "
+            f"glasses registered as a lambda or a closure.  Running SERIALLY "
+            f"instead (identical result, no speed-up).  To use workers, "
+            f"register such a material as a module-level function (picklable "
+            f"by reference) rather than a lambda.",
+            RuntimeWarning, stacklevel=3)
+        return None
     # Deduplicate the input fields BY IDENTITY: the fan case hands the same
     # post-DOE envelope to every congruence, so this turns K pickles of a
     # multi-hundred-MB array into one.
@@ -7206,10 +7250,21 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
              for k in range(K)]
     out: list = [None] * K
     try:
+        # SPAWN, EXPLICITLY -- never the platform default.  On Linux/macOS
+        # ProcessPoolExecutor would FORK, and forking a process that has
+        # already touched GNU OpenMP is undefined: libgomp's runtime does not
+        # survive it and the child dies (or deadlocks) before running a single
+        # task.  Every traced call goes through BLAS/OpenMP, so the fork path
+        # is unusable here by construction -- not flaky, broken.  Spawn also
+        # makes the start method UNIFORM across platforms, so the caller's
+        # ``if __name__ == '__main__':`` requirement (and the bootstrap
+        # detection below) means the same thing everywhere.
+        import multiprocessing as _mp
+        _ctx = _mp.get_context('spawn')
         with ProcessPoolExecutor(
-                max_workers=int(n_cw), initializer=_multi_worker_init,
-                initargs=(uniq, groups_k, common,
-                          _multi_capture_worker_state(n_cw))) as ex:
+                max_workers=int(n_cw), mp_context=_ctx,
+                initializer=_multi_worker_init,
+                initargs=(uniq, groups_k, common, _state)) as ex:
             done = 0
             for k, field, stages, msgs in ex.map(_multi_worker_run, tasks):
                 out[k] = (field, stages, msgs)

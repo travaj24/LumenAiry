@@ -165,6 +165,25 @@ worker's amplitude working set on top of the oversubscription). Row-banded
 chunking (`sag_chunk_rows`) needs no equivalent: its AUTO rule is grid-size
 driven, so each worker already bands independently of sibling count.
 
+**Two defects found by running D8 on Linux, neither reachable from the
+platform it was first written on.** (a) `ProcessPoolExecutor` was taking the
+PLATFORM DEFAULT start method, which on Linux/macOS is **fork** — and forking a
+process that has already touched GNU OpenMP is undefined: libgomp does not
+survive it and the child dies before running a task. Every traced call goes
+through BLAS/OpenMP, so `congruence_workers > 1` was broken outright on Linux,
+not flaky. The pool now pins `mp_context=get_context('spawn')`, which also
+makes the start method UNIFORM, so the caller's `__main__`-guard requirement
+and the bootstrap detection mean the same thing on every platform. (b) The
+worker snapshot copied `GLASS_REGISTRY` verbatim into `initargs`, but a MODEL
+glass is registered as a CALLABLE and a lambda or closure does not pickle — so
+the whole snapshot failed to reach the initializer, breaking the feature for
+any caller with a model glass. `_multi_unpicklable_glass` now detects that
+before the pool is built, names the offending materials, and falls back to
+SERIAL with a `RuntimeWarning`: `congruence_workers` is a throughput knob, so
+degrading the speed-up always beats failing a run that would have been
+correct. Pinned by a test asserting the fallback reproduces the serial field
+under `np.array_equal`.
+
 ## [5.32.1] — 2026-08-03
 
 ### Fixed — the shared least-squares solver no longer draws arbitrary answers on singular systems (niche C13, `elements/_lens_traced.py`)
