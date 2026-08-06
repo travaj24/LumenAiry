@@ -120,9 +120,17 @@ def test_r9_exact_leg_focuses_highna_sphere(w, R):
     dx_out = w0 / 8.0
     N_out = 1024
 
+    # D3 (2026-08-06): the PARAXIAL arm is the deliberate fail-before
+    # reference and is read on the same wide common grid as the exact arm so
+    # the two EE numbers are comparable.  Its Bluestein period is ~12 um
+    # against a 178 um window, but every metric taken from it (EE inside
+    # 2 w0 = 2.8 um, and the peak) sits well inside +/- period/2, so the
+    # replicas in the outer window are not read.  Waived here, not silenced
+    # globally; the default refusal is pinned in
+    # test_niche_tight_focus_readout.
     E_par = np.asarray(carrier_referenced_focus_readout(
         carrier_referenced_envelope(E, R, _WL, dx), R, zf, _WL, dx,
-        dx_out=dx_out, N_out=N_out))
+        dx_out=dx_out, N_out=N_out, on_replica='ignore'))
     E_ex = np.asarray(carrier_referenced_exact_focus_readout(
         E, R, zf, _WL, dx, dx_out=dx_out, N_out=N_out))
     assert np.isfinite(E_ex).all()

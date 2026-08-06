@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import importlib.util as _importlib_util
 import threading
+import time as _time
 from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
@@ -590,7 +591,9 @@ def _newton_invert_chunk(args):
 
     v5.29.1 (audit E-H2): the cap used to be the module constant
     ``_NEWTON_MAX_ITERS``, which made ``newton_max_iters`` INERT on the
-    pool path (>=200k points with ``newton_fit='spline'``) -- the caller's
+    pool path (then: >=200k points with ``newton_fit='spline'``; since
+    v5.30.1 / v5.32.2 the pool serves EITHER fit, above the two-tier
+    200k-cold / 8k-warm size gate) -- the caller's
     cap was honoured by the serial closure only, so the OPL (pool) and the
     ray-density amplitude (always serial) could come from DIFFERENT Newton
     solutions.  The resolved cap now travels in the pickled payload;
@@ -738,6 +741,98 @@ _POOL_MIN_PIXELS = 200_000
 # (65k points) runs serial forever, even though only the FIRST one is cold.
 _POOL_MIN_PIXELS_WARM = 8_000
 
+# ---- SECOND-CALL PROMOTION (v5.32.2, adversarial review D1) ---------------
+# The two-tier threshold above was UNREACHABLE as first shipped.  ``warm`` was
+# derived from ``_PERSISTENT_POOL is not None``, but the pool is created at
+# exactly one site -- ``_get_persistent_worker_pool``, called DOWNSTREAM of the
+# gate that consults it -- so only a call that had already cleared the 200k
+# COLD bar could ever warm the process.  A process whose calls all sit in the
+# 8k-200k band therefore never warmed, and every group of the design-121 chain
+# the split was written for (65 536 Newton points/group at ray_subsample=4)
+# still ran serial.  Measured on a fresh process, N=512/rs=2/3 groups, 4
+# workers: pool created False, pool-dispatch events 0.  The mechanism was
+# right; its trigger was unreachable.
+#
+# The reachability fix is a fact about the WORKLOAD, not about the pool:
+# remember that this process has already run a pool-SIZED Newton inversion
+# serially.  The FIRST sub-cold-bar call runs serial (so a genuine one-shot
+# never pays a spawn it cannot amortise -- cold 16k is 1.62x SLOWER pooled);
+# the SECOND such call may create the pool, and every call after it is warm.
+# A process that reaches that line twice is a chain / sweep, not a one-shot.
+#
+# ---- ...AND A COST GATE, because POINT COUNT IS NOT COST ------------------
+# Reachability alone is not enough, and shipping it alone would have made the
+# motivating workload SLOWER.  ``_POOL_MIN_PIXELS_WARM`` is a POINT count, but
+# what the pool actually competes against is the WALL TIME of the serial
+# Newton step -- and at a fixed 65 536 points that varies by 20x with the fit
+# backend, because the polynomial fit's Chebyshev evaluator has a numba
+# ``prange`` kernel (``@njit(parallel=True)``, see
+# ``_get_cheb2d_val_grad_numba``) and is therefore ALREADY multicore
+# in-process, while ``RectBivariateSpline.ev`` is single-threaded and does not
+# release the GIL.  Measured here, 65 536 Newton points per call, steady state
+# (24 cores, numba 0.65.1 using 24 threads):
+#
+#   backend                        serial Newton   share of the group's wall
+#   polynomial + numba (DEFAULT)      0.048 s               1.5 %
+#   spline                            0.553 s              13.1 %
+#   polynomial, numba unavailable     0.95  s              17.3 %
+#
+# Against that, the measured per-DISPATCH pool overhead is ~0.22 s at 8
+# workers (payload pickling + IPC round trip), so pooling the DEFAULT path at
+# this size is a ~5x net LOSS per call.  End-to-end, 121-shape chain (N=1024,
+# ray_subsample=4, polynomial, 8 workers, 3 interleaved reps, quiet box,
+# min wall):
+#
+#    6 groups   serial-Newton 19.363 s   pooled-every-group 20.673 s  (+6.8%)
+#   12 groups   serial-Newton 45.806 s   pooled-every-group 48.215 s  (+5.3%)
+#
+# The gap GROWS with group count, so it is a per-dispatch cost, not a one-off
+# spawn that more groups amortise.  In the two regimes where the Newton step
+# is genuinely expensive the same pool wins -- numba-unavailable, 6 groups:
+# 32.787 s serial vs 27.231 s pooled (1.20x), with the Newton step itself
+# going 5.685 s -> 0.803 s.
+#
+# So the promotion is gated on the MEASURED serial time of the deferred call,
+# not on its point count.  This self-calibrates: it needs no backend sniffing,
+# no numba probe and no per-machine table, and it automatically follows any
+# future change that makes either fit faster or slower.
+#
+# THRESHOLD.  A dispatch can save at most ``t (1 - 1/n_workers)`` and costs
+# ~0.22 s, so at 8 workers the break-even is 0.22/0.875 = 0.25 s of serial
+# Newton.  0.35 s carries a 1.4x margin over that while sitting 6.4x above the
+# default path's steady-state 0.055 s -- both sides comfortable.  Measured
+# per-group deferred Newton times at 65 536 points, same chain, 8 workers:
+#
+#   polynomial + numba   0.637, 0.055, 0.048, 0.051, 0.055, 0.049   -> serial
+#   spline               0.534, 0.545, 0.547, 0.580, 0.612, 0.619   -> pooled
+#   polynomial, no numba 1.028, 1.011, 0.978, 1.099, 1.250, 1.173   -> pooled
+#
+# With very few workers the break-even rises (``1 - 1/n`` shrinks) and this
+# single constant is optimistic there; the pool is only a modest win at n=2
+# anyway, so it is not worth a second knob.
+_POOL_PROMOTE_MIN_SECONDS = 0.35
+
+# ...and note the FIRST column of that table.  0.637 s against a 0.048 s
+# steady state: the first Newton inversion in a process pays one-time warm-up
+# (numba compiles / loads the cached ``prange`` kernel on first call), which
+# is exactly 13x the recurring cost the pool would actually be competing
+# against.  Deciding on that sample promotes on an artifact -- measured: it
+# pooled all 5 remaining groups of a 6-group 121-shape chain and cost 6.8%.
+# So the estimator is the MINIMUM over at least TWO deferred inversions: the
+# warm-up sample is outvoted by the first steady-state one, and taking the min
+# (rather than the mean) keeps the rule conservative -- it under-promotes on a
+# heterogeneous sweep rather than over-promoting.
+_POOL_PROMOTE_MIN_SAMPLES = 2
+
+# Pending promotion state, per worker count (a pool built for a different
+# count would be torn down and rebuilt, amortising nothing):
+#   _POOL_DEFERRED_NWORKERS  the count, or None when nothing is pending
+#   _POOL_DEFERRED_SECONDS   MINIMUM deferred serial Newton time seen at it
+#   _POOL_DEFERRED_COUNT     how many deferred inversions have been timed
+_POOL_DEFERRED_NWORKERS = None
+_POOL_DEFERRED_SECONDS = 0.0
+_POOL_DEFERRED_COUNT = 0
+
 
 _PERSISTENT_POOL = None
 _PERSISTENT_POOL_NWORKERS = None
@@ -813,6 +908,64 @@ def _get_persistent_worker_pool(n_workers):
     return _PERSISTENT_POOL
 
 
+def _note_pool_deferral(n_workers, seconds) -> None:
+    """Record that a POOL-SIZED Newton inversion just ran serially, and how
+    long it took.
+
+    Called from ``_invert_newton_parallel`` on every call that cleared
+    ``_POOL_MIN_PIXELS_WARM`` but not ``_POOL_MIN_PIXELS`` (i.e. a call a
+    live pool would have served, but that was not worth a cold spawn on its
+    own).  ``seconds`` is the measurement the cost gate needs: point count
+    alone does not say whether the pool can beat the in-process path, since
+    the default polynomial fit evaluates through a numba ``prange`` kernel
+    that already uses every core.
+
+    Keeps the MINIMUM deferral at each worker count, and how many have been
+    seen.  The minimum is the steady-state estimate: the first inversion in a
+    process carries one-time numba warm-up (measured 0.637 s against a
+    0.048 s steady state), so a rule that trusted the first or the largest
+    sample would promote on a compile it is not going to pay again.
+    Recording a DIFFERENT worker count RESTARTS the measurement rather than
+    stacking, so a caller that alternates worker counts never promotes on a
+    count it will not reuse.
+    """
+    global _POOL_DEFERRED_NWORKERS, _POOL_DEFERRED_SECONDS
+    global _POOL_DEFERRED_COUNT
+    with _PERSISTENT_POOL_LOCK:
+        if _POOL_DEFERRED_NWORKERS != int(n_workers):
+            _POOL_DEFERRED_NWORKERS = int(n_workers)
+            _POOL_DEFERRED_SECONDS = float(seconds)
+            _POOL_DEFERRED_COUNT = 1
+        else:
+            _POOL_DEFERRED_SECONDS = min(_POOL_DEFERRED_SECONDS,
+                                         float(seconds))
+            _POOL_DEFERRED_COUNT += 1
+
+
+def _pool_reuse_is_likely(n_workers) -> bool:
+    """True when this process has already deferred a pool-sized Newton
+    inversion at this worker count AND that inversion was expensive enough
+    to be worth pooling (see :func:`_note_pool_deferral` and
+    ``_POOL_PROMOTE_MIN_SECONDS``).
+
+    The first half is the "has been asked" flag the two-tier threshold needs,
+    as distinct from "is alive": ``_PERSISTENT_POOL is not None`` can only
+    become true downstream of the gate that reads it, so on its own it can
+    never promote a process whose calls all sit below the cold bar.  The
+    second half is what keeps the reachability fix from being a slowdown on
+    the default path, where 65 536 Newton points cost 0.048 s against a
+    ~0.22 s per-dispatch pool overhead.
+
+    Needs ``_POOL_PROMOTE_MIN_SAMPLES`` measurements before it will say yes,
+    so the first (warm-up-inflated) inversion cannot decide on its own.
+    """
+    with _PERSISTENT_POOL_LOCK:
+        return (_POOL_DEFERRED_NWORKERS is not None
+                and _POOL_DEFERRED_NWORKERS == int(n_workers)
+                and _POOL_DEFERRED_COUNT >= _POOL_PROMOTE_MIN_SAMPLES
+                and _POOL_DEFERRED_SECONDS >= _POOL_PROMOTE_MIN_SECONDS)
+
+
 def close_worker_pool() -> None:
     """Shut down the module-level worker pool used by
     :func:`apply_real_lens_traced`.
@@ -820,14 +973,27 @@ def close_worker_pool() -> None:
     Safe to call multiple times.  Called automatically at interpreter
     exit; only call explicitly when you want to free the workers
     before a long-running serial step (e.g. plotting, I/O).
+
+    Also clears any pending second-call promotion (see
+    ``_POOL_DEFERRED_NWORKERS``), so this is the one entry point that
+    returns the process to a genuinely COLD state -- which is what the name
+    promises, what the pool tests need between scenarios, and the right
+    back-off after the pool-infrastructure fallback in
+    ``_invert_newton_parallel`` closes a pool that just broke (a pool that
+    failed should not be rebuilt on the very next 65k call).
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
+    global _POOL_DEFERRED_NWORKERS, _POOL_DEFERRED_SECONDS
+    global _POOL_DEFERRED_COUNT
     # v5.30 (audit E-L2): take the SAME lock the constructor takes.  This
     # function mutates the pool globals, so running it concurrently with
     # ``_get_persistent_worker_pool`` could shut down a pool that had just
     # been handed to a caller, or clear ``_PERSISTENT_POOL`` between the
     # constructor's assignment and its return.
     with _PERSISTENT_POOL_LOCK:
+        _POOL_DEFERRED_NWORKERS = None
+        _POOL_DEFERRED_SECONDS = 0.0
+        _POOL_DEFERRED_COUNT = 0
         if _PERSISTENT_POOL is not None:
             try:
                 _PERSISTENT_POOL.shutdown(wait=True)
@@ -4696,6 +4862,7 @@ def apply_real_lens_traced(
     on_noncollimated: str = 'warn',
     fit_radius_beam_factor: Optional[float] = None,
     on_aperture_beam: str = 'warn',
+    on_fit_domain_basis: str = 'warn',
     beam_centre: Optional[Any] = None,
     decentred_fit_poly_order: Optional[int] = None,
     parallel_amp: Optional[bool] = None,
@@ -4894,8 +5061,20 @@ def apply_real_lens_traced(
 
            Still in-process for ``use_gpu=True``: shipping CuPy device
            arrays through a ``ProcessPoolExecutor`` would host-copy them.
-           The pool also only engages above ``_POOL_MIN_PIXELS`` Newton
-           points, so coarse ``ray_subsample`` stays serial by design.
+
+           The size gate is TWO-TIER (v5.30.2) plus a second-call
+           promotion (v5.32.2, review D1).  A cold process needs
+           ``_POOL_MIN_PIXELS`` (200 000) Newton points before the pool is
+           worth a spawn -- at 16 384 a cold pool measured 1.62x SLOWER --
+           so a genuine one-shot call stays serial.  Once a pool is live,
+           or once this process has already run ONE sub-cold-bar inversion
+           serially (i.e. it is a chain or a sweep, not a one-shot), the
+           bar drops to ``_POOL_MIN_PIXELS_WARM`` (8 000).  A multi-group
+           chain therefore runs group 1 serial and pools every group after
+           it; before the promotion existed the warm bar was unreachable
+           from a cold process and every group of a design-121-class chain
+           (65 536 points/group at ``ray_subsample=4``) ran serial.  Coarse
+           ``ray_subsample`` below the warm bar stays serial by design.
     tilt_aware_rays : bool, default False
         If True, each ray's initial direction ``(L, M)`` is derived
         from the local phase gradient of ``E_in`` at the entrance
@@ -5012,8 +5191,10 @@ def apply_real_lens_traced(
         Newton iteration cap; ``None`` (default) uses the module default
         (12).  Honoured by BOTH the serial and the process-pool inversion
         paths since v5.29.1 (audit E-H2 -- the pool worker previously
-        hard-coded 12, making this knob inert whenever the pool engaged, i.e.
-        >=200k Newton points with ``newton_fit='spline'`` on the CPU path).
+        hard-coded 12, making this knob inert whenever the pool engaged; at
+        that time that meant >=200k Newton points with ``newton_fit='spline'``
+        on the CPU path, whereas the pool now serves EITHER fit above a
+        two-tier size gate -- see ``n_workers``).
         When more than 1% of pixels are still unconverged at the cap, both
         paths emit the same ``RuntimeWarning`` (suppressed by
         ``on_undersample='silent'``).
@@ -5129,6 +5310,35 @@ def apply_real_lens_traced(
         aberrated the surfaces are out at the aperture edge (a gently-corrected
         group tolerates 6x), so this is a *possible-cliff* flag, not a
         diagnosis.
+
+        FIX D5 (2026-08-06): "no ``fit_radius_beam_factor`` restriction is
+        active" now means what it says.  The suppression used to key on the
+        knob being PASSED, so on a basis that cannot apply the restriction an
+        inert knob silenced the warning about the very failure it had stopped
+        preventing.  See ``on_fit_domain_basis``.
+    on_fit_domain_basis : {'warn', 'error', 'silent'}, default 'warn'
+        What to do when the RESOLVED ``newton_fit`` basis cannot honour a
+        fit-domain restriction the caller asked for.  The restriction is
+        implemented as least-squares WEIGHTS or as a hard NaN mask, and
+        neither has a home on ``newton_fit='spline'``'s
+        ``RectBivariateSpline`` (it takes no weights, and one NaN in its data
+        array makes ``.ev()`` return NaN at the grid CENTRE) -- so
+        ``fit_radius_beam_factor``, ``decentred_fit_poly_order`` and the
+        niche-C11/C12 branch selection are INERT there.
+
+        Usually harmless: a local interpolant does not spread marginal-ray
+        error into the beam the way a global polynomial does (measured
+        pointwise against an exact skew ray trace, 0.006 / 0.002 um in the
+        skirt / at the rim against the polynomial's 5.608 / 15.079).  But NOT
+        a safe substitute past the aperture:beam cliff -- on the E4 corrected
+        relay with the beam held fixed and only the aperture grown, the
+        polynomial basis degrades to exit-wavefront Strehl 0.042 and
+        ``fit_radius_beam_factor=2.0`` recovers it to 0.999, while the spline
+        basis returns an ALL-ZERO exit field the knob cannot rescue.  So the
+        inertness is ANNOUNCED rather than assumed benign.  ``'warn'``
+        (default) names which knob is inert; ``'error'`` refuses the
+        combination; ``'silent'`` acknowledges it -- which is what a caller
+        deliberately using spline as a FIT-DOMAIN-FREE reference should pass.
     decentred_fit_poly_order : int, optional
         Minimum tensor-Chebyshev total degree for the ray fit WHEN THAT FIT'S
         DISC IS OFF CENTRE (niche D7).  ``None`` (default) uses
@@ -5555,19 +5765,30 @@ def apply_real_lens_traced(
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
-    # ``newton_fit='auto'`` (the default since v5.30.2) resolves by backend:
-    # SPLINE on CPU, POLYNOMIAL on GPU.  Measured on multi-group chains against
-    # the ray oracle the two are indistinguishable in ACCURACY (differences sit
-    # in the 4th-5th significant figure and SWAP DIRECTION with ray_subsample),
-    # so the default is chosen on SPEED: spline is faster serially in 3 of 4
-    # measured configurations and parallelises better once the Newton pool
-    # engages -- 1.29-1.31x at 8 workers vs polynomial's 1.10-1.13x, because a
-    # larger share of its runtime is poolable.  GPU stays polynomial: the
-    # spline path is SciPy RectBivariateSpline, which has no GPU backend.
-    if newton_fit == 'auto':
-        newton_fit = 'polynomial' if use_gpu else 'spline'
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced', input_kind='field')
+    # ``newton_fit='auto'`` resolves to POLYNOMIAL.  Spline was tried as the CPU
+    # default (v5.30.2) on the grounds that the two fits are indistinguishable in
+    # accuracy -- differences sit in the 4th-5th significant figure and swap
+    # direction with ray_subsample -- while spline parallelises better
+    # (1.29-1.31x at 8 workers vs 1.10-1.13x).  REVERTED: the spline path gates
+    # OFF the ray-fit-radius restriction (see the ``newton_fit != 'spline'``
+    # guards below), i.e. ``fit_radius_beam_factor`` silently stops applying.
+    # That restriction is not optional for real designs: design 121's post-DOE
+    # groups carry 20-32 mm apertures against a sub-mm beam (~75x), far past the
+    # 1.5x aperture:beam cliff at which the traced OPL fit is corrupted by
+    # marginal rays the beam never occupies -- measured to return a NON-FINITE
+    # exit field without it.  Selecting a fit backend must not silently disable
+    # an accuracy guard, so the modest parallel speed-up does not justify it.
+    # 15 tests across niche c6 / c11 / c12 (the stationary-phase fit guard, the
+    # decentred-fit arbiter and physics fit selection) also exercise machinery
+    # that only runs on the polynomial path.
+    # Spline remains fully supported as an EXPLICIT choice.
+    # The delegate branch reports the CALLER's request, not the resolved
+    # value, so an all-default call never reports newton_fit as discarded.
+    _newton_fit_requested = newton_fit
+    if newton_fit == 'auto':
+        newton_fit = 'polynomial'
 
     # ---- Enum membership guards (v5.29.1; audit E-M3 / E-M4) ------------
     # Both knobs used to be read by EQUALITY against one value, so every
@@ -6335,7 +6556,7 @@ def apply_real_lens_traced(
                         ('tilt_aware_rays', tilt_aware_rays),
                         ('fit_radius_beam_factor', fit_radius_beam_factor),
                         ('inversion_method', inversion_method),
-                        ('newton_fit', newton_fit),
+                        ('newton_fit', _newton_fit_requested),
                         ('newton_max_iters', newton_max_iters),
                         ('newton_poly_order', newton_poly_order),
                         ('decentred_fit_poly_order', decentred_fit_poly_order),
@@ -6724,6 +6945,86 @@ def apply_real_lens_traced(
     _dec_mag = float(np.hypot(_bcx, _bcy))
     _dec_null_floor = _DECENTRE_GATE_PIXELS * min(float(dx), float(dy))
     _beam_decentred = _dec_mag > _dec_null_floor
+    # ---- fix D5 (2026-08-06): can the RESOLVED fit basis honour a fit-domain
+    # restriction at all?  Named ONCE here; every gate below reads this flag
+    # instead of re-spelling ``newton_fit != 'spline'``, so a future basis
+    # cannot pick up half of them.
+    #
+    # WHY THE SPLINE BASIS CANNOT, as a fact about the code rather than a
+    # preference.  The restriction has exactly two implementations and neither
+    # has a home on ``RectBivariateSpline``:
+    #   * D1's REGULARISED form is least-squares WEIGHTS (``_fit_weights``),
+    #     consumed only by ``_Cheb2DEvaluator(..., weights=...)``.
+    #     ``RectBivariateSpline.__init__(x, y, z, bbox, kx, ky, s, maxit)``
+    #     takes no weights.
+    #   * the historical form is a hard NaN mask outside the disc.  A single
+    #     non-finite sample anywhere in a ``RectBivariateSpline``'s data array
+    #     propagates through its banded solve: measured, one NaN corner on a
+    #     21x21 lattice makes ``.ev()`` return NaN AT THE GRID CENTRE.  So
+    #     masking would not restrict the fit, it would destroy it.
+    # And the MECHANISM the restriction exists to control -- a GLOBAL
+    # total-degree least-squares fit whose every coefficient sees every
+    # sample, extrapolating outside its own data support -- is a property of
+    # that basis, not of the data.  The library's own pointwise scoring
+    # against an exact skew ray trace (see ``_REMAP_RESID_FREEZE_MARGIN``)
+    # measures it: polynomial 5.608 / 15.079 um in the skirt / at the
+    # aperture rim, spline 0.006 / 0.002 um.
+    # The C11 arbiter and the C12 predictor CHOOSE BETWEEN TWO DISCS, so with
+    # no disc there is nothing for them to arbitrate; they are gated on the
+    # same flag for that reason and not as a separate judgement.
+    #
+    # WHAT IS *NOT* CLAIMED: that the spline basis is safe past the
+    # aperture:beam cliff.  Measured on the E4 corrected relay (beam w = 2 mm
+    # FIXED, only the aperture grown, N=1536): at a 4 mm aperture both bases
+    # give exit-wavefront Strehl 0.998; at 6-10 mm the polynomial basis
+    # degrades to 0.042 and ``fit_radius_beam_factor=2.0`` recovers it to
+    # 0.999, while the spline basis returns an ALL-ZERO exit field and the
+    # knob cannot rescue it because this flag excludes it.  That is why the
+    # guard below is emitted rather than the inertness being left silent, and
+    # it is the same finding that put ``newton_fit='auto'`` back on POLYNOMIAL.
+    _fit_domain_basis_ok = (newton_fit != 'spline')
+    _fit_domain_inert = []
+    if not _fit_domain_basis_ok:
+        if _frbf is not None:
+            _fit_domain_inert.append(
+                f'fit_radius_beam_factor={_frbf!r} (the beam-relative ray-fit '
+                f'disc, and with it the aperture:beam cliff remedy)')
+        if decentred_fit_poly_order is not None:
+            _fit_domain_inert.append(
+                f'decentred_fit_poly_order={decentred_fit_poly_order!r} (the '
+                f'niche-D7 order raise, which applies only to the weighted '
+                f'off-centre fit)')
+        if _beam_decentred and (DECENTRED_FIT_ARBITER
+                                or DECENTRED_FIT_PREDICTOR):
+            _fit_domain_inert.append(
+                f'DECENTRED_FIT_ARBITER={DECENTRED_FIT_ARBITER!r} / '
+                f'DECENTRED_FIT_PREDICTOR={DECENTRED_FIT_PREDICTOR!r} (the '
+                f'niche-C11/C12 ray-fit branch selection, which chooses '
+                f'between two fit DISCS)')
+    if _fit_domain_inert and on_fit_domain_basis != 'silent':
+        _fdb_msg = (
+            f"apply_real_lens_traced: newton_fit={newton_fit!r} cannot honour "
+            f"the fit-domain restriction(s) requested here -- "
+            + '; '.join(_fit_domain_inert) + ".  They are INERT on this "
+            "basis (a local bicubic takes no least-squares weights, and a "
+            "NaN-masked data array makes RectBivariateSpline return NaN "
+            "everywhere rather than a restricted fit), so this call runs "
+            "with NO ray-fit-domain guard at all.  That is usually harmless "
+            "-- a local interpolant does not spread marginal-ray error into "
+            "the beam the way a global polynomial does -- but it is NOT a "
+            "safe substitute past the aperture:beam cliff: measured on the "
+            "E4 corrected relay (beam fixed, aperture grown) the polynomial "
+            "basis degrades to exit-wavefront Strehl 0.042 and "
+            "fit_radius_beam_factor=2.0 recovers it to 0.999, while the "
+            "spline basis returns an ALL-ZERO exit field that this knob "
+            "cannot rescue.  Use newton_fit='polynomial' (what 'auto' "
+            "resolves to) if you need the restriction; pass "
+            "on_fit_domain_basis='silent' to acknowledge, or 'error' to "
+            "make the combination fatal.")
+        if on_fit_domain_basis == 'error':
+            raise ValueError(_fdb_msg)
+        import warnings
+        warnings.warn(_fdb_msg, RuntimeWarning, stacklevel=2)
     _beam_fit_radius = None
     _beam_fit_radius_conc = None
     _w_in_beam = 0.0
@@ -6743,7 +7044,7 @@ def apply_real_lens_traced(
                                                 origin=(_org_x, _org_y))
         elif (_beam_decentred and _frbf is not None
                 and (DECENTRED_FIT_ARBITER or DECENTRED_FIT_PREDICTOR)
-                and newton_fit != 'spline'):
+                and _fit_domain_basis_ok):
             # niche C11: the arbiter below scores the HISTORICAL concentric
             # candidate too, and that disc is sized from the ORIGIN-referenced
             # second moment -- the same number the fall-back above re-measures.
@@ -6755,8 +7056,14 @@ def apply_real_lens_traced(
         _beam_fit_radius = min(_frbf * _w_in_beam, launch_radius)
     if _frbf is not None and _w_in_origin > 0.0:
         _beam_fit_radius_conc = min(_frbf * _w_in_origin, launch_radius)
+    # fix D5: the cliff guard is skipped when a ray-fit disc will be applied,
+    # because the disc IS the remedy.  On a basis that cannot apply it the
+    # remedy is not in force, so the guard must stay reachable -- otherwise an
+    # INERT ``fit_radius_beam_factor`` silences the warning about the very
+    # failure it has stopped preventing.
     if (on_aperture_beam == 'warn' and aperture is not None
-            and _w_in_beam > 0.0 and _beam_fit_radius is None):
+            and _w_in_beam > 0.0
+            and (_beam_fit_radius is None or not _fit_domain_basis_ok)):
         _ap_beam_ratio = float(aperture) / (2.0 * _w_in_beam)
         if _ap_beam_ratio > _APERTURE_BEAM_WARN_RATIO:
             import warnings
@@ -7294,7 +7601,7 @@ def apply_real_lens_traced(
     # ``_fit_r_geom`` / ``_fit_r_max`` were resolved at the launch-radius site
     # above (niche C6's freeze circle has to clear them); the restriction they
     # drive is applied here, unchanged.
-    if _fit_r_max is not None and newton_fit != 'spline':
+    if _fit_r_max is not None and _fit_domain_basis_ok:
         _r2_launch = xs_in[:, None] ** 2 + xs_in[None, :] ** 2
         _fit_why = f"r <= {_fit_r_max * 1e3:.4f} mm"
         _off_branch = (_beam_fit_radius is not None and _beam_decentred)
@@ -7728,7 +8035,8 @@ def apply_real_lens_traced(
     # v5.29.1 (audit E-H2): carry the RESOLVED cap into the pickled worker
     # payload.  ``_newton_invert_chunk`` used to hard-code
     # ``_NEWTON_MAX_ITERS``, so ``newton_max_iters`` was inert whenever the
-    # process pool engaged (>=200k points, newton_fit='spline', CPU) -- and
+    # process pool engaged (then >=200k points, newton_fit='spline', CPU;
+    # now either fit, above the two-tier cold/warm gate) -- and
     # the ray-density amplitude leg, which always runs the SERIAL closure,
     # could then be built from a different Newton solution than the OPL.
     _spline_data['newton_max_iters'] = int(MAX_NEWTON_ITERS)
@@ -7968,8 +8276,31 @@ def apply_real_lens_traced(
         # measured cold/warm tables at _POOL_MIN_PIXELS.
         _pool_is_warm = (_PERSISTENT_POOL is not None
                          and _PERSISTENT_POOL_NWORKERS == n_cpu)
-        _min_px = _POOL_MIN_PIXELS_WARM if _pool_is_warm else _POOL_MIN_PIXELS
+        # ...and a process that has ALREADY deferred a pool-sized inversion,
+        # and MEASURED it to be slow enough to be worth pooling, is a chain or
+        # a sweep whose remaining calls will repay the spawn.  Without this
+        # second arm the warm bar is unreachable from a cold process (review
+        # D1): ``_pool_is_warm`` can only become true downstream of this very
+        # gate, so a 6-group chain at 65 536 points/group ran every group
+        # serial.  Without the MEASUREMENT inside it, fixing that reachability
+        # made the same chain 5-7% SLOWER, because at 65 536 points the
+        # default fit's numba prange kernel beats an 8-worker dispatch.  See
+        # the block at ``_POOL_PROMOTE_MIN_SECONDS``.
+        _pool_promoted = _pool_reuse_is_likely(n_cpu)
+        _min_px = (_POOL_MIN_PIXELS_WARM if (_pool_is_warm or _pool_promoted)
+                   else _POOL_MIN_PIXELS)
         if n_cpu <= 1 or n_total < _min_px:
+            # Serial for this call.  If a LIVE pool would have served it, TIME
+            # it and remember the deferral, so the next one can be promoted on
+            # evidence.  Guarded on the warm bar, not on ``_min_px``: sub-8k
+            # calls never justify a pool at any temperature, so they must not
+            # arm the promotion (and must not pay for the clock).
+            if n_cpu > 1 and n_total >= _POOL_MIN_PIXELS_WARM:
+                _t_defer = _time.perf_counter()
+                _opl = _invert_newton(Xw, Yw, sub_progress=sub_progress)
+                _note_pool_deferral(n_cpu,
+                                    _time.perf_counter() - _t_defer)
+                return _opl
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
 
         if sub_progress is not None:

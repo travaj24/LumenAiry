@@ -674,20 +674,29 @@ def runs(_shipped_fft_for_this_module):
                                {'traced_kwargs': {
                                    'amplitude_model': 'screen',
                                    'preserve_input_phase': True}})):
-            a = chain(_env0(), pre, LAM, DX0, r_in=np.inf, ray_subsample=4,
-                      final_distance=D1, final_leg='paraxial',
-                      carrier_reference=cref, **tk)
-            env_a = carrier_referenced_envelope(a.field, a.R, LAM, a.dx)
-            b = chain(env_a,
-                      [{'prescription': G2, 'gap_before': TDOE + D2}], LAM,
-                      a.dx, r_in=la.TiltedCarrier(a.R, dL, 0.0, 0.0, 0.0),
-                      ray_subsample=4, final_distance=FD,
-                      final_leg='paraxial', carrier_reference=cref, **tk)
-            out['manual' + tag] = b
-            out['doe' + tag] = (
-                out['split_a'] if not tag else
-                _run(pre + [{'doe': DOE, 'order': m}] + post,
-                     carrier_reference=cref, **tk))
+            # ``_fr`` = the same pair under gap_kernel='fresnel'.  The hand
+            # split transports the leg in TWO pieces where the DOE entry
+            # transports it in one, and only the PARAXIAL kernel composes
+            # across that split (proof in test_niche_exact_gap_kernel), so the
+            # bookkeeping equivalence is measured under the composing kernel
+            # and the default-kernel pair is kept alongside to price the
+            # composition term.  See test_matches_the_manual_hand_split.
+            for ktag, gk in (('', 'auto'), ('_fr', 'fresnel')):
+                a = chain(_env0(), pre, LAM, DX0, r_in=np.inf, ray_subsample=4,
+                          final_distance=D1, final_leg='paraxial',
+                          carrier_reference=cref, gap_kernel=gk, **tk)
+                env_a = carrier_referenced_envelope(a.field, a.R, LAM, a.dx)
+                b = chain(env_a,
+                          [{'prescription': G2, 'gap_before': TDOE + D2}], LAM,
+                          a.dx, r_in=la.TiltedCarrier(a.R, dL, 0.0, 0.0, 0.0),
+                          ray_subsample=4, final_distance=FD,
+                          final_leg='paraxial', carrier_reference=cref,
+                          gap_kernel=gk, **tk)
+                out['manual' + tag + ktag] = b
+                out['doe' + tag + ktag] = (
+                    out['split_a'] if (not tag and not ktag) else
+                    _run(pre + [{'doe': DOE, 'order': m}] + post,
+                         carrier_reference=cref, gap_kernel=gk, **tk))
     return out
 
 
@@ -793,8 +802,20 @@ class TestDoeChainBookkeeping:
         ``C11_PHYSICAL_DECENTRE_GATE_2026_08_03`` S9.5 for how this test came
         to be the witness for it (it read 8.80e-02 on Linux/OpenBLAS, run
         ALONE, against 5.93e-07 on Windows)."""
-        r_par = _rel(runs['doe_par'].field, runs['manual_par'].field)
-        r_sph = _rel(runs['doe'].field, runs['manual'].field)
+        # MEASURED UNDER gap_kernel='fresnel' (2026-08-06).  The hand split
+        # transports the leg in two pieces where the DOE entry transports it in
+        # one, and a Sziklas-Siegman split composes EXACTLY only for the
+        # paraxial kernel -- proved in
+        # ``test_niche_exact_gap_kernel::test_the_paraxial_kernel_composes_...``
+        # and its companion theorem that no non-paraxial kernel can.  Under the
+        # shipping ``gap_kernel='auto'`` (exact) the two-piece term grows from
+        # 1.14e-10 to 1.95e-04 and would swamp the bookkeeping claim this test
+        # exists to make, so the equivalence is measured on the composing
+        # kernel -- which keeps the ORIGINAL tight bars and the original
+        # numbers -- and the default-kernel pair is then priced against the
+        # correction the exact kernel applies, below.
+        r_par = _rel(runs['doe_par_fr'].field, runs['manual_par_fr'].field)
+        r_sph = _rel(runs['doe_fr'].field, runs['manual_fr'].field)
         # SELF-REPORTING (niche C11): this case failed on CI and passed in
         # isolation, so the failure names the victim and never the poisoner.
         # Dump every process-global the physics depends on WITH the numbers,
@@ -807,6 +828,21 @@ class TestDoeChainBookkeeping:
             + process_state_dump())
         assert r_sph < 1e-4, (
             f'sphere-reference arm: {r_sph:.4e} >= 1e-4'
+            + process_state_dump())
+        # The SHIPPING default still has to be accounted for, comparatively:
+        # what the hand split adds on top of the bookkeeping is the
+        # composition residual, and it must stay below the non-paraxial
+        # correction the exact kernel applies to the SAME chain.  A constant
+        # here would just be a re-baseline; this ratio cannot erode.
+        d_par = _rel(runs['doe_par'].field, runs['manual_par'].field)
+        phys_par = _rel(runs['doe_par'].field, runs['doe_par_fr'].field)
+        assert phys_par > 0.0, (
+            'the exact and paraxial kernels are indistinguishable on this '
+            'chain, so the bound below has no scale' + process_state_dump())
+        assert d_par < phys_par, (
+            f'parabola-reference arm, DEFAULT kernel: the hand-split residual '
+            f'{d_par:.4e} exceeds the exact-vs-paraxial correction '
+            f'{phys_par:.4e} on the same chain (ratio {d_par / phys_par:.3f})'
             + process_state_dump())
 
     def test_chief_ray_matches_an_exact_meridional_raytrace(self, runs):
@@ -1083,23 +1119,71 @@ class TestSplitLegPathDependence:
     def test_split_is_inert_when_the_split_plane_is_clear_of_the_focus(self,
                                                                        R):
         """Including R = -3 to -45 mm, where the carrier's focus is INSIDE
-        the leg -- crossing the focus is not what breaks the split."""
+        the leg -- crossing the focus is not what breaks the split.
+
+        KERNEL-SPLIT (2026-08-06).  "Nearly inert" is a property of the
+        PARAXIAL kernel, not of the transport, and this test used to assume the
+        default was paraxial.  Split ``z`` into ``z1 + z2``: leg 2 runs on the
+        magnified co-moving grid (pitch ``m1*dx``), so the same FFT bin is a
+        factor ``m1`` lower physical frequency there, and the composed phase is
+        ``phi(z_eff1, q) + phi(z_eff2, q/m1)``.  The reduced distances
+        telescope exactly (``z_eff1 + z_eff2/m1^2 == z_eff``), so a kernel
+        whose only ``q`` dependence is ``q^2`` composes -- and, by Cauchy's
+        equation, ONLY such a kernel can.  Composition and non-paraxiality are
+        mutually exclusive here; the exact kernel's ``z*q^4`` term is not a
+        function of ``z*q^2``.  Full derivation and its numerical proof:
+        ``tests/unit/test_niche_exact_gap_kernel.py``, "COMPOSITION ACROSS A
+        SPLIT LEG".
+
+        So the identity is asserted where it is a THEOREM (``'fresnel'``, at
+        the original ``< 1e-9`` bar), and the shipping default gets the
+        comparative bound instead: the ambiguity from WHERE the leg is split
+        must stay below the non-paraxial correction the exact kernel applies to
+        the same leg.  Measured ratios 2026-08-06: 0.000 (inf), 0.000 (703.6),
+        0.132 (-0.2), 0.554 (-0.045), 0.229 (-0.030), 0.042 (-0.010), 0.004
+        (-0.003)."""
         env, dx = self._env()
         z1, z2 = self.LEG_1, self.LEG_2
+
+        def _pair(kernel):
+            one = propagate_carrier_referenced(env, R, z1 + z2, LAM, dx,
+                                               gap_kernel=kernel)
+            b1 = propagate_carrier_referenced(env, R, z1, LAM, dx,
+                                              gap_kernel=kernel)
+            two = propagate_carrier_referenced(b1.env, b1.R, z2, LAM, b1.dx,
+                                               gap_kernel=kernel)
+            return one, two
+
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            one = propagate_carrier_referenced(env, R, z1 + z2, LAM, dx)
-            b1 = propagate_carrier_referenced(env, R, z1, LAM, dx)
-            two = propagate_carrier_referenced(b1.env, b1.R, z2, LAM, b1.dx)
+            one, two = _pair('fresnel')
+            one_x, two_x = _pair('exact')
         assert one.dx == pytest.approx(two.dx, rel=1e-12), (
             f"co-moving pitch must telescope: {one.dx} vs {two.dx}")
+        assert one_x.dx == pytest.approx(one.dx, rel=1e-12), (
+            "the co-moving pitch must not depend on the kernel")
         a, b = np.asarray(one.env), np.asarray(two.env)
         scale = float(np.max(np.abs(a)))
         err = float(np.max(np.abs(a - b))) / scale
-        assert err < 1e-9, f"R={R}: split leg differs by {err:.3e}"
+        assert err < 1e-9, f"R={R}: paraxial split leg differs by {err:.3e}"
         # ... and NOT bitwise -- which is exactly why the chain defers the
         # DOE's transport instead of splitting there.
         assert not np.array_equal(a, b)
+        # The shipping default: composition is provably unavailable, so the
+        # bar is the correction the kernel buys on this same leg.  Comparative,
+        # so it cannot be quietly re-baselined into a bigger constant.
+        ax, bx = np.asarray(one_x.env), np.asarray(two_x.env)
+        sx = float(np.max(np.abs(ax)))
+        resid = float(np.max(np.abs(ax - bx))) / sx
+        physics = float(np.max(np.abs(ax - a))) / sx
+        assert physics > 0.0, (
+            f"R={R}: the exact and paraxial kernels are indistinguishable on "
+            f"this leg, so the bound below has no scale")
+        assert resid < physics, (
+            f"R={R}: exact-kernel split residual {resid:.3e} exceeds the "
+            f"exact-vs-paraxial correction {physics:.3e} on the same leg "
+            f"(ratio {resid / physics:.3f}) -- the composition ambiguity is "
+            f"then costing more than the non-paraxial kernel buys")
 
     @pytest.mark.parametrize('R,min_ratio', [(-0.051, 3.0),
                                              (-0.05155, 30.0),
@@ -1160,7 +1244,12 @@ class TestDoeMultiOrders:
             warnings.simplefilter('ignore')
             res = la.propagate_traced_carrier_chain_multi(
                 congruences, groups, LAM, DX0,
-                output_grid={'dx_out': 4e-6, 'N_out': 256},
+                # D3 (2026-08-06): waived.  Every assertion below reads
+                # CHIEF-RAY placement / power bookkeeping, never a field value
+                # in the outer window, and the window has exceeded one
+                # Bluestein period here since the file was written.
+                output_grid={'dx_out': 4e-6, 'N_out': 256,
+                             'on_replica': 'ignore'},
                 final_distance=FD, ray_subsample=4, final_leg='paraxial',
                 readout_tile=64, on_readout_clip='ignore')
         cx = [c['chief_ray'][0] for c in res.congruences]
@@ -1208,7 +1297,12 @@ class TestDoeMultiOrders:
                 warnings.simplefilter('always')
                 res = la.propagate_traced_carrier_chain_multi(
                     [{'field': env, 'name': 'c0'}], groups(amp), LAM, DX0,
-                    output_grid={'dx_out': 2e-6, 'N_out': 256},
+                    # D3 (2026-08-06): waived -- this test reads power
+                    # bookkeeping (throughput / power_exit) and the
+                    # readout-clip warning list, not field values in the
+                    # outer window.
+                    output_grid={'dx_out': 2e-6, 'N_out': 256,
+                                 'on_replica': 'ignore'},
                     final_distance=FD, ray_subsample=4,
                     final_leg='paraxial', readout_tile=256)
             out[amp] = res.congruences[0]

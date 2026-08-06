@@ -303,7 +303,13 @@ def _through_focus(design, w0, ratio, guard='default', dx_out=0.5e-6,
     R = _exit_carrier_radius(gwg)
     res, _, env0, dx = _run_chain(
         design, w0, ratio, guard, final_distance=-R,
-        focus_readout=dict(dx_out=dx_out, N_out=n_out))
+        # D3 (2026-08-06): the through-focus scan below re-propagates this
+        # field with its own MFT, and every metric it takes (FWHM, EE inside a
+        # few waists) is confined to the core.  The requested window exceeds
+        # one Bluestein period, as it always has; waived rather than shrunk
+        # because n_out also sizes the scan's own transform.
+        focus_readout=dict(dx_out=dx_out, N_out=n_out,
+                           on_replica='ignore'))
     P_in = float((np.abs(env0) ** 2).sum()) * dx * dx
     E0 = np.asarray(res.field)
     w_exit = float(res.stages[-1]['w'])

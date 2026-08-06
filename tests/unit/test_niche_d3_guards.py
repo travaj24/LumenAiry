@@ -531,7 +531,12 @@ def test_entry_stats_survive_a_degenerate_field():
 _CN, _CDX, _CW = 512, 4.0e-6, 300e-6     # 2.048 mm window, fringes ~7 px
 _CFD = 0.05
 _TKW = dict(on_undersample='silent', on_noncollimated='silent')
-_RO = dict(dx_out=1.4e-6, N_out=256)
+# D3 (2026-08-06): ``on_replica='ignore'`` -- this file's fixtures read a
+# 358 um window against a ~77 um Bluestein period, which they always did.
+# Nothing here reads the outer window: every assertion in this file is about
+# a GUARD firing or not firing, not about field values.  Waived at the fixture
+# so the guards under test are the ones this file is about.
+_RO = dict(dx_out=1.4e-6, N_out=256, on_replica='ignore')
 
 
 def _chain(field, *, groups=None, quiet=False, **kw):

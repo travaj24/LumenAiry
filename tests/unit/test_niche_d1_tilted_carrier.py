@@ -447,7 +447,14 @@ def _relay():
 
 
 def _run_chain(relay, field, r_in, centre_abs, n_out=_NO):
-    fr = dict(dx_out=_DXO, N_out=n_out, centre_out=(centre_abs, 0.0))
+    # D3 (2026-08-06): ``on_replica='ignore'`` -- this relay's readout window
+    # is wider than one Bluestein period, as it always has been.  Every metric
+    # this file takes is a CENTROID or a peak position on the core plus power
+    # bookkeeping; the outer window is not read.  Waived here rather than
+    # shrinking _NO, which sets the common grid every placement claim in the
+    # file is expressed on.
+    fr = dict(dx_out=_DXO, N_out=n_out, centre_out=(centre_abs, 0.0),
+              on_replica='ignore')
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         return la.propagate_traced_carrier_chain(
@@ -764,7 +771,8 @@ def test_exact_final_leg_now_runs_for_a_tilted_carrier(_relay, _runs):
             final_leg='exact', traced_kwargs=_TKW,
             on_tilt_exact_grid='warn',
             focus_readout=dict(dx_out=_DXO, N_out=_NO,
-                               centre_out=(_relay['x_exact'], 0.0)))
+                               centre_out=(_relay['x_exact'], 0.0),
+                               on_replica='ignore'))
     assert np.isfinite(np.asarray(res.field)).all()
     assert any(s.get('exact_final') for s in res.stages)
     tgt = res.stages[-1]
@@ -917,7 +925,8 @@ def _offax_focus_centroid(extra_kw, x_c=_OFFAX_XC, r_in=np.inf):
             ray_subsample=8, n_workers=1, final_distance=_OFFAX_FD,
             final_leg='paraxial',
             focus_readout=dict(dx_out=0.5e-6, N_out=1024,
-                               centre_out=(0.0, 0.0)),
+                               centre_out=(0.0, 0.0),
+                               on_replica='ignore'),
             traced_kwargs=dict(_TKW, on_aperture_beam='silent', **extra_kw))
     inten = np.abs(np.asarray(res.field)) ** 2
     axis = (np.arange(1024) - 1024 // 2) * 0.5e-6

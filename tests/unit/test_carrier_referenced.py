@@ -201,16 +201,36 @@ def test_full_field_on_modest_grid_is_aliased():
 # ---------------------------------------------------------------------------
 def test_collimated_reduces_to_fresnel_tf_bit_exact():
     """R = +inf is a collimated carrier: the transform degenerates to m == 1,
-    z_eff == z, and the step is byte-identical to a plain Fresnel TF
-    propagation with the grid unchanged."""
+    z_eff == z, and the step is byte-identical to a plain same-grid TF
+    propagation, grid unchanged.
+
+    WHICH TF depends on ``gap_kernel``, and it did NOT used to (2026-08-06,
+    defect D11a): this branch called ``fresnel_tf_propagate`` unconditionally,
+    so a collimated leg silently ran the PARAXIAL kernel whatever the caller
+    asked for -- measured, exact-vs-fresnel on a collimated leg was exactly
+    0.000e+00.  That was the worst place for it: m == 1 means no frame
+    rescaling, which is the one regime where the exact kernel is genuinely
+    exact.  The degeneracy claim this test exists for is unchanged and is
+    asserted BIT-EXACTLY on both kernels."""
     N = 512
     dx = 4e-6
     env = _gauss_env(N, dx, 30e-6)
-    out = propagate_carrier_referenced(env, np.inf, 5e-3, WL, dx)
+    out = propagate_carrier_referenced(env, np.inf, 5e-3, WL, dx,
+                                       gap_kernel='fresnel')
     ref = fresnel_tf_propagate(env, 5e-3, WL, dx)
     assert out.R == np.inf
     assert out.dx == dx
     assert np.array_equal(np.asarray(out.env), np.asarray(ref))
+    # ... and on the shipping default, the exact same degeneracy onto the
+    # exact kernel (which is what the knob now selects here).
+    from lumenairy.propagators.carrier import _exact_envelope_tf_step
+    out_x = propagate_carrier_referenced(env, np.inf, 5e-3, WL, dx)
+    ref_x = _exact_envelope_tf_step(env, 5e-3, WL, dx, dx)
+    assert out_x.R == np.inf
+    assert out_x.dx == dx
+    assert np.array_equal(np.asarray(out_x.env), np.asarray(ref_x))
+    assert not np.array_equal(np.asarray(out_x.env), np.asarray(ref)), (
+        'the collimated branch is ignoring gap_kernel again')
 
 
 # ---------------------------------------------------------------------------

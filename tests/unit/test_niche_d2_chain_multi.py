@@ -96,15 +96,60 @@ _W_IN = 1.0e-3                 # 1/e amplitude radius
 _GAP = 25e-3
 _TILT = 0.030                  # 30 mrad: OUTSIDE the 0.02 rad residual
 _TKW = dict(on_undersample='silent', on_noncollimated='silent')
-# _TILE must fit inside ONE Bluestein period of each congruence's readout.  The
-# period is N_in * d_in and the co-moving pitch at the hand-off plane scales
-# with the readout standoff, so this constant silently tracks
-# _FOCUS_STANDOFF_ZR: at the old 6.0 zR a 256 tile fitted, at the accuracy
-# optimum 0.8 zR the period is 0.1739 mm and the guard allows <= 124.  Both the
-# hand-placed reference runs and the orchestrated run use this same value, so
-# the tiled-equals-hand-placed comparison is unaffected by the size itself.
-_DXO, _NOUT, _TILE = 1.4e-6, 2048, 120
+# _TILE must fit inside ONE Bluestein period of each congruence's readout.
+#
+# RESTORED 256 (fix D3, 2026-08-06).  It had been cut to 120 because the tile
+# was left to track whatever the shipped standoff happened to give: at 6.0 zR
+# a 256 tile fitted, at 0.8 zR the period was 0.1739 mm and only <= 124 did.
+# That is a 2.1x reduction in the area over which "tiled equals hand-placed"
+# is checked, bought by a default flip -- so it is reversed here, and the tile
+# is PAID FOR instead, with the same physically-justified remedy this file
+# already applies three times below: a wide readout window REQUIRES a long
+# Bluestein leg, so ask for the leg that holds the window rather than shrink
+# the window to whatever leg the accuracy resolver picked.  The tile size is
+# now independent of the shipped default, which is the point.
+_DXO, _NOUT, _TILE = 1.4e-6, 2048, 256
 _RS, _NW = 8, 4
+
+
+_LEG_CAL = {}
+
+
+def _leg_for_window(groups, field, carrier, fd, window, margin=1.3):
+    """Shortest fine-zoom leg whose ONE Bluestein period holds ``window``.
+
+    The reconstruction's period is ``N * d`` of the CO-MOVING grid at the
+    hand-off plane, whose pitch is proportional to the standoff -- so the
+    period is LINEAR in the leg and one calibration point fixes the whole
+    relation.  The constant of proportionality is the chain's grid scaling AT
+    THE FINAL LEG, which is NOT the input grid's: the closed form
+    ``period = _N * _DX * standoff / fd`` (used by the three inline fixtures
+    below) reads 1.73x high on this relay, because the groups rescale the
+    co-moving pitch on the way.  So it is MEASURED once per ``fd`` from the
+    chain's own ``readout_period`` stage report and cached, rather than
+    assumed.
+
+    Note this deliberately couples the LEG to the requested WINDOW, which the
+    library's own resolver refuses to do by default (it would make the
+    propagated field depend on how wide a window it is viewed through,
+    breaking the K=1 contract).  A CALLER that genuinely needs a wide window
+    is exactly who should make that trade, knowingly -- which is what these
+    fixtures do.
+    """
+    key = round(float(fd), 12)
+    if key not in _LEG_CAL:
+        s0 = float(window) * float(fd) / (_N * _DX)      # first guess
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            probe = la.propagate_traced_carrier_chain(
+                field, groups, _WL, _DX, r_in=carrier, ray_subsample=32,
+                n_workers=1, final_distance=fd, traced_kwargs=_TKW,
+                final_leg='paraxial',
+                focus_readout=dict(dx_out=_DXO, N_out=8, standoff=s0,
+                                   on_replica='ignore'))
+        per = float(probe.stages[-1]['readout_period'][0])
+        _LEG_CAL[key] = per / s0                # period per metre of leg
+    return margin * float(window) / _LEG_CAL[key]
 
 
 def _singlet(R1, R2, d, glass, ap, name):
@@ -215,13 +260,26 @@ def _exact_chief_height(gA, gB, tilt, image_distance, d0=0.0):
 def _run_chain(groups, field, carrier, fd, centre, n_out=_NOUT, quiet=True):
     """One INDEPENDENT single-congruence chain run, read out on the common
     grid -- the hand-written form of what the orchestrator does per
-    congruence."""
+    congruence.
+
+    D3 (2026-08-06): the leg is sized for the TILE, not for the whole common
+    grid, so this run is bit-comparable with the orchestrated one inside the
+    tile -- which is the only region any caller of this helper compares.  The
+    common grid is 2.867 mm against a tile-sized period, so the outer part of
+    THIS array carries replicas; ``on_replica='ignore'`` acknowledges that
+    rather than hiding it, and no assertion in this file reads outside the
+    tile.
+    """
     def _go():
         return la.propagate_traced_carrier_chain(
             field, groups, _WL, _DX, r_in=carrier, ray_subsample=_RS,
             n_workers=_NW, final_distance=fd, traced_kwargs=_TKW,
             final_leg='paraxial',
-            focus_readout=dict(dx_out=_DXO, N_out=n_out, centre_out=centre))
+            focus_readout=dict(
+                dx_out=_DXO, N_out=n_out, centre_out=centre,
+                standoff=_leg_for_window(groups, field, carrier, fd,
+                                         _TILE * _DXO),
+                on_replica='ignore'))
     if not quiet:
         return _go()
     with warnings.catch_warnings():
@@ -230,7 +288,13 @@ def _run_chain(groups, field, carrier, fd, centre, n_out=_NOUT, quiet=True):
 
 
 def _run_multi(groups, specs, fd, **kw):
-    kw.setdefault('output_grid', dict(dx_out=_DXO, N_out=_NOUT))
+    # D3: same leg as _run_chain, so the tiled and hand-placed arms are
+    # comparing the same physics rather than two different hand-off planes.
+    kw.setdefault('output_grid',
+                  dict(dx_out=_DXO, N_out=_NOUT,
+                       standoff=_leg_for_window(
+                           groups, specs[0]['field'], specs[0].get('carrier'),
+                           fd, _TILE * _DXO)))
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         return la.propagate_traced_carrier_chain_multi(
@@ -468,7 +532,11 @@ def test_default_refuses_the_periodic_replica_regime(_fan):
         with pytest.raises(RuntimeError, match='spatial period'):
             fn(_fan['specs'][:2], _fan['groups'], _WL, _DX,
                readout_tile=_NOUT, **kw)
-    # ... and 'auto' resolves it, loudly
+    # ... and 'auto' resolves it, loudly.  D3 (2026-08-06): 'auto' sizes the
+    # tile to ONE PERIOD, so the readout's own self-replica guard is silent on
+    # this arm by construction -- which is the composition the two guards are
+    # meant to have, and is asserted by the fact that this call succeeds at
+    # the shipped on_replica default.
     seen = []
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
@@ -551,11 +619,35 @@ def test_k1_keeps_the_requested_field_of_view(_fan):
 
     Now K=1 reproduces the chain over the WHOLE requested grid, and says why
     (a warning naming the period, plus ``capture`` > 1 because the replicas
-    add power) instead of quietly re-sizing."""
+    add power) instead of quietly re-sizing.
+
+    D3 (2026-08-06): the READOUT now has its own SELF-replica guard, and that
+    one is NOT a multiplexing guard -- a spot wrapping onto itself needs no
+    neighbour -- so it fires at K = 1 too and the pure-default call is now
+    REFUSED.  That is deliberate: this window is 24.5x the period, i.e. 96 % of
+    what it returns is copies.  The K = 1 CONTRACT is unchanged and is what
+    this test still pins: the multi at K = 1 must do exactly what the single
+    chain does, refusal included, and with the self-replica guard waived it
+    must return the same field over the same whole window.  Both halves are
+    asserted below.
+    """
     fn = la.propagate_traced_carrier_chain_multi
-    kw = dict(output_grid=dict(dx_out=_DXO, N_out=_NOUT),
+    # the SAME leg the hand-placed reference uses, or the two would be
+    # comparing different hand-off planes rather than the same physics.
+    _leg = _leg_for_window(_fan['groups'], _fan['env'],
+                           _fan['specs'][0]['carrier'], _fan['fd'],
+                           _TILE * _DXO)
+    kw = dict(output_grid=dict(dx_out=_DXO, N_out=_NOUT, standoff=_leg),
               final_distance=_fan['fd'], ray_subsample=_RS, n_workers=_NW,
               traced_kwargs=_TKW, final_leg='paraxial')
+    # (a) the default REFUSES, at K = 1 as at K > 1 ...
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        with pytest.raises(RuntimeError, match='REPLICAS'):
+            fn(_fan['specs'][:1], _fan['groups'], _WL, _DX, **kw)
+    # (b) ... and with the SELF-replica guard waived the historical K = 1
+    #     field-of-view contract holds verbatim.
+    kw['output_grid'] = dict(kw['output_grid'], on_replica='warn')
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         res = fn(_fan['specs'][:1], _fan['groups'], _WL, _DX, **kw)
