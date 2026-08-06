@@ -605,7 +605,11 @@ def _newton_invert_chunk(args):
     inside :func:`apply_real_lens_traced`.
     """
     (knot_data, x_chunk, y_chunk) = args
-    from scipy.interpolate import RectBivariateSpline
+    # Which fit to rebuild.  Payloads written before the polynomial worker
+    # path existed carry no key -- default to 'spline' so they still run.
+    _fit = str(knot_data.get('newton_fit', 'spline'))
+    if _fit != 'polynomial':
+        from scipy.interpolate import RectBivariateSpline
     xs_in = knot_data['xs_in']
     x_out_grid = knot_data['x_out_grid']
     y_out_grid = knot_data['y_out_grid']
@@ -626,9 +630,29 @@ def _newton_invert_chunk(args):
     # the module default so an old pickled payload still runs (audit E-H2).
     max_iters = int(knot_data.get('newton_max_iters', _NEWTON_MAX_ITERS))
 
-    Sx = RectBivariateSpline(xs_in, xs_in, x_out_grid, kx=3, ky=3)
-    Sy = RectBivariateSpline(xs_in, xs_in, y_out_grid, kx=3, ky=3)
-    So = RectBivariateSpline(xs_in, xs_in, opl_grid, kx=3, ky=3)
+    if _fit == 'polynomial':
+        # Rebuild the SAME Chebyshev evaluators the serial path builds, from
+        # the same grids: the fit is a deterministic lstsq on identical data,
+        # so every worker recovers bit-identical coefficients, and evaluation
+        # is elementwise -- hence chunking cannot change the answer.
+        _ord = int(knot_data.get('fit_poly_order', 6))
+        _wts = knot_data.get('fit_weights', None)
+        Sx = _Cheb2DEvaluator(xs_in, xs_in, x_out_grid, order=_ord,
+                              xp=np, weights=_wts)
+        Sy = _Cheb2DEvaluator(xs_in, xs_in, y_out_grid, order=_ord,
+                              xp=np, weights=_wts)
+        So = _Cheb2DEvaluator(xs_in, xs_in, opl_grid, order=_ord,
+                              xp=np, weights=_wts)
+    else:
+        Sx = RectBivariateSpline(xs_in, xs_in, x_out_grid, kx=3, ky=3)
+        Sy = RectBivariateSpline(xs_in, xs_in, y_out_grid, kx=3, ky=3)
+        So = RectBivariateSpline(xs_in, xs_in, opl_grid, kx=3, ky=3)
+    # Mirror the serial path's choice EXACTLY: it prefers the combined
+    # value+gradient when the fit exposes one (the polynomial evaluator does,
+    # RectBivariateSpline does not).  Using a different call here would change
+    # the floating-point operation order and break pool/serial bit-identity.
+    _has_combined = (hasattr(Sx, 'ev_value_and_grad')
+                     and hasattr(Sy, 'ev_value_and_grad'))
 
     xe = x_chunk.copy() * inv_M_x
     ye = y_chunk.copy() * inv_M_y
@@ -641,12 +665,18 @@ def _newton_invert_chunk(args):
         ya = ye[active]
         xw = x_chunk[active]
         yw = y_chunk[active]
-        rx = Sx.ev(xa, ya) - xw
-        ry = Sy.ev(xa, ya) - yw
-        jxx = Sx.ev(xa, ya, dx=1)
-        jxy = Sx.ev(xa, ya, dy=1)
-        jyx = Sy.ev(xa, ya, dx=1)
-        jyy = Sy.ev(xa, ya, dy=1)
+        if _has_combined:
+            fx_val, jxx, jxy = Sx.ev_value_and_grad(xa, ya)
+            fy_val, jyx, jyy = Sy.ev_value_and_grad(xa, ya)
+            rx = fx_val - xw
+            ry = fy_val - yw
+        else:
+            rx = Sx.ev(xa, ya) - xw
+            ry = Sy.ev(xa, ya) - yw
+            jxx = Sx.ev(xa, ya, dx=1)
+            jxy = Sx.ev(xa, ya, dy=1)
+            jyx = Sy.ev(xa, ya, dx=1)
+            jyy = Sy.ev(xa, ya, dy=1)
         det = jxx * jyy - jxy * jyx
         safe = np.abs(det) > 1e-12
         inv_det = np.where(safe, 1.0 / det, 0.0)
@@ -682,6 +712,32 @@ def _newton_invert_chunk(args):
 # explicitly to free the workers early (e.g. after a final optimisation
 # step, before a long-running serial post-process).
 # --------------------------------------------------------------------------
+
+# Minimum Newton points before the process pool is used at all; below this the
+# inversion runs in-process.  Originally a HEURISTIC sized against Windows spawn
+# cost (~200-400 ms per worker).  That rationale weakened once the pool became
+# PERSISTENT (v3.5.5): spawn is then paid once per session rather than per call,
+# leaving only per-chunk pickling.  Module scope so the crossover can be
+# MEASURED rather than assumed.
+_POOL_MIN_PIXELS = 200_000
+# ... and once that pool EXISTS, the spawn is already paid and only per-chunk
+# pickling has to amortise, so the pool pays off far sooner.  MEASURED on a
+# 2-group chain, 8 workers (serial -> pooled):
+#
+#   points     COLD (fresh process)        WARM (pool already alive)
+#    16 384    1.707 -> 2.768  0.62x        0.60 -> 0.50   1.20x
+#    65 536    4.129 -> 4.797  0.86x        2.88 -> 2.35   1.22x
+#   262 144   11.427 -> 9.360  1.22x       10.98 -> 7.17   1.53x
+#     1 024         -                       0.04 -> 0.03   1.14x
+#
+# So the COLD crossover really is ~200k (the shipped value is right, and
+# lowering it outright would make one-shot runs SLOWER -- 16k cold is 1.62x
+# worse pooled).  Warm, the pool wins at every size measured down to 1k.  A
+# multi-group chain calls apply_real_lens_traced once per group, so with a
+# single threshold every group of a design-121-class chain at ray_subsample=4
+# (65k points) runs serial forever, even though only the FIRST one is cold.
+_POOL_MIN_PIXELS_WARM = 8_000
+
 
 _PERSISTENT_POOL = None
 _PERSISTENT_POOL_NWORKERS = None
@@ -4649,7 +4705,7 @@ def apply_real_lens_traced(
     newton_max_iters: Optional[int] = None,
     inversion_method: str = 'newton',
     fast_analytic_phase: bool = False,
-    newton_fit: str = 'polynomial',
+    newton_fit: str = 'auto',
     newton_poly_order: int = 6,
     use_gpu: bool = False,
     amp_use_gpu: bool = False,
@@ -4823,16 +4879,23 @@ def apply_real_lens_traced(
         saturates the machine).
 
         .. note::
-           This knob is currently a **no-op for the default**
-           ``newton_fit='polynomial'`` path: the Newton inversion always
-           runs in-process (serial) for the polynomial fit, because the
-           process worker rebuilds a SciPy spline
-           (``RectBivariateSpline``) rather than the polynomial
-           ``_Cheb2DEvaluator``.  ``n_workers`` only engages the process
-           pool for ``newton_fit='spline'`` on the CPU path
-           (``use_gpu=False``).  Polynomial Newton is cheap at the
-           default subsampling, so the serial path is not a bottleneck
-           in practice.
+           Engages for BOTH ``newton_fit`` backends on the CPU path
+           (``use_gpu=False``) since v5.30.1.  It used to be a silent
+           no-op for the default ``newton_fit='polynomial'``, because the
+           process worker only knew how to rebuild a SciPy spline
+           (``RectBivariateSpline``) and not the polynomial
+           ``_Cheb2DEvaluator``; the effect was that the default
+           configuration lost the pool speed-up with no diagnostic, so
+           whether you got parallel Newton depended on a knob most callers
+           never set.  The worker now rebuilds whichever fit the caller
+           chose, from the same pickled grids, and mirrors the serial
+           path's combined value+gradient evaluation -- so the pool result
+           stays bit-identical to serial for both backends.
+
+           Still in-process for ``use_gpu=True``: shipping CuPy device
+           arrays through a ``ProcessPoolExecutor`` would host-copy them.
+           The pool also only engages above ``_POOL_MIN_PIXELS`` Newton
+           points, so coarse ``ray_subsample`` stays serial by design.
     tilt_aware_rays : bool, default False
         If True, each ray's initial direction ``(L, M)`` is derived
         from the local phase gradient of ``E_in`` at the entrance
@@ -5492,6 +5555,17 @@ def apply_real_lens_traced(
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
+    # ``newton_fit='auto'`` (the default since v5.30.2) resolves by backend:
+    # SPLINE on CPU, POLYNOMIAL on GPU.  Measured on multi-group chains against
+    # the ray oracle the two are indistinguishable in ACCURACY (differences sit
+    # in the 4th-5th significant figure and SWAP DIRECTION with ray_subsample),
+    # so the default is chosen on SPEED: spline is faster serially in 3 of 4
+    # measured configurations and parallelises better once the Newton pool
+    # engages -- 1.29-1.31x at 8 workers vs polynomial's 1.10-1.13x, because a
+    # larger share of its runtime is poolable.  GPU stays polynomial: the
+    # spline path is SciPy RectBivariateSpline, which has no GPU backend.
+    if newton_fit == 'auto':
+        newton_fit = 'polynomial' if use_gpu else 'spline'
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced', input_kind='field')
 
@@ -7637,6 +7711,11 @@ def apply_real_lens_traced(
         'bound': launch_radius * 0.999,
         'inv_M_x': 1.0 / M_x,
         'inv_M_y': 1.0 / M_y,
+        # The worker rebuilds whichever fit the caller chose (both are
+        # supported since v5.30.1), so it needs the polynomial parameters too.
+        'newton_fit': newton_fit,
+        'fit_poly_order': _fit_poly_order,
+        'fit_weights': _fit_weights,
     }
 
     # Bound for the clipped Newton update (stay inside fitted domain)
@@ -7865,10 +7944,6 @@ def apply_real_lens_traced(
     n_cpu = n_workers if n_workers is not None else available_cpus()
     n_cpu = max(1, int(n_cpu))
 
-    # Heuristic: only spin up the pool when the chunk count can actually
-    # fill it AND the work per chunk amortises the startup cost.  On
-    # Windows spawn mode, pool startup is ~200-400 ms per worker.
-    _POOL_MIN_PIXELS = 200_000
 
     def _invert_newton_parallel(Xw, Yw, sub_progress=None):
         """Dispatch ``_invert_newton`` work across a process pool when
@@ -7886,17 +7961,15 @@ def apply_real_lens_traced(
         # ProcessPoolExecutor would host-copy them anyway.  Go direct.
         if use_gpu:
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
-        # Spline-path worker pool is also incompatible with
-        # newton_fit='polynomial' because the worker builds
-        # RectBivariateSpline rather than _Cheb2DEvaluator.  Force
-        # serial for polynomial until a worker-side polynomial path
-        # is added (cheap on Newton-time at subsample=8 anyway).
-        if newton_fit == 'polynomial':
-            return _invert_newton(Xw, Yw, sub_progress=sub_progress)
         x_w_flat = Xw.ravel()
         y_w_flat = Yw.ravel()
         n_total = x_w_flat.size
-        if n_cpu <= 1 or n_total < _POOL_MIN_PIXELS:
+        # A pool that is already up has no spawn left to amortise -- see the
+        # measured cold/warm tables at _POOL_MIN_PIXELS.
+        _pool_is_warm = (_PERSISTENT_POOL is not None
+                         and _PERSISTENT_POOL_NWORKERS == n_cpu)
+        _min_px = _POOL_MIN_PIXELS_WARM if _pool_is_warm else _POOL_MIN_PIXELS
+        if n_cpu <= 1 or n_total < _min_px:
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
 
         if sub_progress is not None:
@@ -9392,7 +9465,7 @@ def prepare_real_lens_traced(
     on_undersample: str = 'error',
     on_noncollimated: str = 'warn',
     inversion_method: str = 'newton',
-    newton_fit: str = 'polynomial',
+    newton_fit: str = 'auto',
     newton_poly_order: int = 6,
     newton_max_iters: Optional[int] = None,
     amp_use_gpu: bool = False,

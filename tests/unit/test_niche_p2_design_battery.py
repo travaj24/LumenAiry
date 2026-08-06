@@ -48,6 +48,8 @@ import warnings
 import numpy as np
 import pytest
 
+from lumenairy.propagators import carrier as C
+
 import lumenairy as la
 from lumenairy import carrier_referenced_envelope
 from lumenairy.glass import get_glass_index
@@ -69,8 +71,9 @@ def _skip_if_low_ram(n=_N):
         pass
 
 
-def _n_of(g):
-    return 1.0 if g in (None, '', 'air', 'AIR') else float(get_glass_index(g, _WL))
+def _n_of(g, wl=_WL):
+    return (1.0 if g in (None, '', 'air', 'AIR')
+            else float(get_glass_index(g, wl)))
 
 
 def _presc(name, radii, thick, glasses, ap):
@@ -125,7 +128,7 @@ def _d_relay(ap):
 # ---------------------------------------------------------------------------
 # Inline exact meridional-raytrace + eikonal oracle (grid-independent truth).
 # ---------------------------------------------------------------------------
-def _system_surfaces(groups_with_gaps):
+def _system_surfaces(groups_with_gaps, wl=_WL):
     surfs = []
     z = 0.0
     for (p, gap) in groups_with_gaps:
@@ -133,8 +136,8 @@ def _system_surfaces(groups_with_gaps):
         th = p['thicknesses']
         for i, s in enumerate(p['surfaces']):
             R_s = s['radius'] if s['radius'] else np.inf
-            surfs.append((z, R_s, _n_of(s['glass_before']),
-                          _n_of(s['glass_after'])))
+            surfs.append((z, R_s, _n_of(s['glass_before'], wl),
+                          _n_of(s['glass_after'], wl)))
             if i < len(p['surfaces']) - 1:
                 z += th[i] if i < len(th) else 0.0
     return surfs, surfs[-1][0]
@@ -175,10 +178,10 @@ def _trace_collimated(x0, surfs):
     return P, u, opl
 
 
-def _oracle_rms(groups_with_gaps, x_max, w0, npts=240):
+def _oracle_rms(groups_with_gaps, x_max, w0, npts=240, wl=_WL):
     """Gaussian-weighted exit-pupil wavefront rms (RADIANS) vs a reference
     sphere on the paraxial image, piston+defocus removed."""
-    surfs, z_last = _system_surfaces(groups_with_gaps)
+    surfs, z_last = _system_surfaces(groups_with_gaps, wl)
     n_final = surfs[-1][3]
     near = _trace_collimated(x_max * 0.999, surfs)
     if near is None:
@@ -214,7 +217,8 @@ def _oracle_rms(groups_with_gaps, x_max, w0, npts=240):
     sw = np.sqrt(wgt)
     coef, *_ = np.linalg.lstsq(A * sw[:, None], W * sw, rcond=None)
     W = W - A @ coef
-    return float(_K0 * np.sqrt(np.sum(wgt * W ** 2) / np.sum(wgt)))
+    return float((2.0 * np.pi / wl)
+                 * np.sqrt(np.sum(wgt * W ** 2) / np.sum(wgt)))
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +239,7 @@ def _launch(ap, w0):
     return np.exp(-(X ** 2 + Y ** 2) / w0 ** 2).astype(np.complex128), dx
 
 
-def _run_chain(design, w0, ratio, guard='default', **kw):
+def _run_chain(design, w0, ratio, guard='default', wl=_WL, **kw):
     ap = ratio * 2.0 * w0
     gwg = design(ap)
     groups = [{'prescription': p, 'gap_before': g} for (p, g) in gwg]
@@ -246,19 +250,20 @@ def _run_chain(design, w0, ratio, guard='default', **kw):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         return la.propagate_traced_carrier_chain(
-            env0, groups, _WL, dx, r_in=np.inf, ray_subsample=_RS, n_workers=1,
+            env0, groups, wl, dx, r_in=np.inf, ray_subsample=_RS, n_workers=1,
             traced_kwargs=tkw, **kw), gwg, env0, dx
 
 
-def _chain_exit_rms(design, w0, ratio, guard='default'):
+def _chain_exit_rms(design, w0, ratio, guard='default', wl=_WL):
     """Exit-wavefront rms (radians) at the last group's exit vertex, referenced
     to the paraxial exit sphere with piston/tilt/defocus removed -- the
     focus-plane-INDEPENDENT fidelity metric."""
-    key = (design.__name__, w0, ratio, guard)
+    key = (design.__name__, w0, ratio, guard, wl)
     if key in _CACHE:
         return _CACHE[key]
-    res, _, _, _ = _run_chain(design, w0, ratio, guard, final_distance=0.0)
-    env = carrier_referenced_envelope(np.asarray(res.field), float(res.R), _WL,
+    res, _, _, _ = _run_chain(design, w0, ratio, guard, wl=wl,
+                              final_distance=0.0)
+    env = carrier_referenced_envelope(np.asarray(res.field), float(res.R), wl,
                                       float(res.dx))
     n = env.shape[0]
     xx = (np.arange(n) - n / 2) * float(res.dx)
@@ -277,14 +282,14 @@ def _chain_exit_rms(design, w0, ratio, guard='default'):
     return out
 
 
-def _exit_carrier_radius(gwg):
+def _exit_carrier_radius(gwg, wl=_WL):
     """Paraxial exit carrier radius of the whole train for a collimated input
     (the geometric focus sits ``-R`` past the last vertex)."""
     R = np.inf
     for (p, g) in gwg:
         if np.isfinite(R):
             R = R + g
-        R = _paraxial_group_r_out(p, R, _WL)
+        R = _paraxial_group_r_out(p, R, wl)
     return float(R)
 
 
@@ -442,3 +447,144 @@ def test_battery_through_focus_relay_cliff_is_a_focal_catastrophe():
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+# ===========================================================================
+# 5. SECOND WAVELENGTH.  The chain must be a general workhorse, not a
+#    1.31 um / design-121 special case.
+# ===========================================================================
+# Everything above runs at _WL = 1.31 um.  A propagator that only ever gets
+# exercised at one wavelength can hide two whole classes of error, because
+# wavelength enters the traced chain through two INDEPENDENT doors:
+#
+#   * the OPTICS: glass indices are dispersive, so at a different wavelength
+#     these are genuinely different systems with different focal lengths and
+#     different amounts of real aberration.  The ray oracle re-derives its own
+#     truth from the same dispersion data, so if the chain's index lookup, its
+#     paraxial R_out bookkeeping, or its ray/eikonal fit were subtly tied to
+#     1.31 um, oracle and chain would part company here and nowhere else.
+#   * the PROPAGATION: k = 2 pi / lambda sets both the carrier phase and the
+#     Nyquist limit of a fixed grid.  At 0.633 um the same dx is ~2.07x coarser
+#     in units of lambda, so the sampling margin genuinely tightens.
+#
+# 0.633 um is chosen deliberately: it is a real HeNe line, it is short enough to
+# move the indices measurably, and it sits far outside the design band, so it
+# also demonstrates the chain degrades honestly rather than silently.
+_WL2 = 0.633e-6
+
+_CELLS_WL2 = [
+    ('singlet', _d_singlet, 0.6e-3, 1.2),
+    ('doublet', _d_doublet, 1.0e-3, 1.2),
+    ('triplet', _d_triplet, 1.6e-3, 1.2),
+    ('relay', _d_relay, 2.0e-3, 1.2),
+]
+
+
+def test_second_wavelength_is_actually_a_different_optical_system():
+    """Guard the premise: if the glasses were non-dispersive (or the index
+    lookup ignored its wavelength argument) the tests below would be a re-run of
+    the 1.31 um battery wearing a different label, and would prove nothing."""
+    moved = False
+    for design in (_d_singlet, _d_doublet, _d_triplet, _d_relay):
+        gwg = design(2.4e-3)
+        for (p, _gap) in gwg:
+            for s in p['surfaces']:
+                for g in (s['glass_before'], s['glass_after']):
+                    if g in (None, '', 'air', 'AIR'):
+                        continue
+                    n1, n2 = _n_of(g, _WL), _n_of(g, _WL2)
+                    assert n1 > 1.0 and n2 > 1.0
+                    if abs(n2 - n1) > 1e-4:
+                        moved = True
+    assert moved, (
+        'no glass index moved between 1.31 um and 0.633 um -- the dispersion '
+        'data or the index lookup is ignoring wavelength, so the '
+        'second-wavelength battery below is vacuous')
+
+
+@pytest.mark.parametrize('name,design,w0,ratio', _CELLS_WL2,
+                         ids=[f'{c[0]}-w{c[2] * 1e3:g}mm-ap{c[3]:g}x-633nm'
+                              for c in _CELLS_WL2])
+def test_battery_wavefront_matches_ray_oracle_at_second_wavelength(
+        name, design, w0, ratio):
+    """The SAME agreement criterion as the 1.31 um battery, at 0.633 um.
+
+    This is the test that says ``apply_real_lens_traced`` is a general
+    propagator: the oracle independently re-traces the dispersed system, and the
+    chain has to land on it with no wavelength-specific tuning anywhere.
+
+    Tolerance is deliberately the identical ``max(0.15 rad, 0.35 x rms_oracle)``
+    used at 1.31 um -- an absolute floor plus a fraction of however much real
+    aberration the system has at THIS wavelength.  Note the oracle values are
+    much larger here (a 1.31 um design run at 0.633 um is heavily aberrated),
+    which is the honest physics, not a failure.
+    """
+    _skip_if_low_ram()
+    ap = ratio * 2.0 * w0
+    orc = _oracle_rms(design(ap), 1.5 * w0, w0, wl=_WL2)
+    assert orc is not None, 'oracle trace failed at 0.633 um'
+    rms = _chain_exit_rms(design, w0, ratio, wl=_WL2)
+    tol = max(0.15, 0.35 * orc)
+    assert abs(rms - orc) <= tol, (
+        f'{name} @633nm w0={w0 * 1e3:g}mm ap={ratio:g}x: chain exit rms '
+        f'{rms:.4f} rad vs oracle {orc:.4f} rad (tolerance {tol:.4f})')
+
+
+def test_shorter_wavelength_reports_more_aberration_on_the_same_glass():
+    """Direction-of-effect check that does not depend on either tolerance: the
+    same physical singlet, measured in waves, must be WORSE at 0.633 um than at
+    1.31 um -- both because the index is higher and because a wave is smaller.
+    A chain that normalised this away would be hiding real wavefront error."""
+    ap = 1.2 * 2.0 * 0.6e-3
+    o_ir = _oracle_rms(_d_singlet(ap), 1.5 * 0.6e-3, 0.6e-3, wl=_WL)
+    o_vis = _oracle_rms(_d_singlet(ap), 1.5 * 0.6e-3, 0.6e-3, wl=_WL2)
+    assert o_ir is not None and o_vis is not None
+    assert o_vis > o_ir, (
+        f'oracle: 633nm {o_vis:.4f} rad should exceed 1310nm {o_ir:.4f} rad')
+    c_ir = _chain_exit_rms(_d_singlet, 0.6e-3, 1.2, wl=_WL)
+    c_vis = _chain_exit_rms(_d_singlet, 0.6e-3, 1.2, wl=_WL2)
+    assert c_vis > c_ir, (
+        f'chain: 633nm {c_vis:.4f} rad should exceed 1310nm {c_ir:.4f} rad')
+
+
+# ===========================================================================
+# 6. GUARD CALIBRATION across designs AND wavelengths.
+# ===========================================================================
+# The three gap-guard thresholds (_GAP_SAG_TOL_DEFAULT, _GAP_NA_TOL,
+# _GAP_ENV_PHI_TOL_DEFAULT) were originally calibrated on design 121 alone.  A
+# threshold calibrated on ONE system is indistinguishable from a threshold
+# fitted to that system's quirks.  This pins the other half of the calibration:
+# healthy, well-behaved systems must sit comfortably UNDER every threshold, on
+# more than one design and in more than one wavelength band -- otherwise the
+# guards emit false positives on ordinary optics and users learn to silence
+# them, which is worse than not having them.
+#
+# Measured 2026-08-05 across triplet + relay x {1310 nm, 633 nm} (6 gap legs):
+#   gap_na              max 0.1009  vs threshold 0.60  ->   6x headroom
+#   gap_env_phi_drop    max 0.0028  vs threshold 0.30  -> 107x headroom
+#   gap_env_theta       max 0.0256 rad
+# The 633 nm legs show the larger phi_drop, as they must: the frame-dropped
+# term is k |z_eff| theta^4 / 8 and k is 2.07x larger there.
+@pytest.mark.parametrize('wl,band', [(_WL, '1310nm'), (_WL2, '633nm')])
+def test_gap_guard_thresholds_have_headroom_on_healthy_designs(wl, band):
+    _skip_if_low_ram()
+    seen = 0
+    for design, w0 in ((_d_triplet, 1.6e-3), (_d_relay, 2.0e-3)):
+        res, _, _, _ = _run_chain(design, w0, 1.2, wl=wl, final_distance=0.0,
+                                  on_gap_paraxial='warn', on_gap_frame='warn')
+        for s in [st for st in res.stages if 'gap_env_theta' in st]:
+            seen += 1
+            na = float(s.get('gap_na') or 0.0)
+            phi = float(s.get('gap_env_phi_drop') or 0.0)
+            th = float(s['gap_env_theta'])
+            # the observable must actually have been measured, not defaulted
+            assert th > 0.0, (
+                f'{design.__name__} @{band}: gap_env_theta is exactly 0 -- the '
+                'frame observable was skipped, so this calibration is vacuous')
+            assert na < 0.5 * C._GAP_NA_TOL, (
+                f'{design.__name__} @{band}: healthy leg gap_na={na:.4f} has '
+                f'less than 2x headroom under _GAP_NA_TOL={C._GAP_NA_TOL}')
+            assert phi < 0.5 * C._GAP_ENV_PHI_TOL_DEFAULT, (
+                f'{design.__name__} @{band}: healthy leg phi_drop={phi:.4f} has '
+                f'less than 2x headroom under the frame tolerance')
+    assert seen >= 3, f'expected >=3 gap legs to calibrate on, saw {seen}'

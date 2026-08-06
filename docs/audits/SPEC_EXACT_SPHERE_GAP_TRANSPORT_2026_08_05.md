@@ -1,5 +1,106 @@
 # Exact sphere-referenced gap transport — specification
 
+> ## IMPLEMENTER RESPONSE (2026-08-05) — read before acting on this document
+>
+> **Stages 0 and 1 are IMPLEMENTED** (in a corrected form, below). **Stages 2-4
+> (M1, the exact sphere transport) are DECLINED for now**, on the spec's own
+> stated discipline: measure before building. Full record:
+> `AUDIT_GAP_FRAME_OBSERVABLE_2026_08_05.md`.
+>
+> **Several load-bearing claims in this document did not survive verification.**
+> They are listed here rather than silently worked around, because two of them
+> invert the document's motivation:
+>
+> 1. **§4 "No guard covers B" — FALSE.** `_check_gap_paraxial` has **two** arms.
+>    Arm A is the dropped hand-off quartic (only reachable under legacy
+>    `'parabola'`, correctly described here). **Arm B trips on the gap NA and is
+>    explicitly the frame/envelope-transport residual**, calibrated against an
+>    *independent* band-limited Matsushima ASM written inline in
+>    `test_niche_c3_gap_paraxial_guard.py` — NA 0.20→0.90, 0.000 EE points to
+>    0.45. Niche C3 shipped that guard on 2026-07-30 **in direct response to the
+>    very roadmap-P7 sentence §4 quotes as unfulfilled** (3 days after P7, 6 days
+>    before this spec). The "4.08x margin" §4 cites *is arm B's own number*
+>    (and is 4.06, vs the code's 4.1).
+> 2. **§8's cost motivation — INVERTS at the repo's own converged grid.** §8
+>    picks N=8192; `AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24.md` §0.1-0.2
+>    records N=2048→8192 agreeing to **four significant figures** ("Measured
+>    accuracy return. Zero.") and states "nothing above [N≤8192] is
+>    recommended". At the converged N=2048 the measured 104 s/run × 32 runs =
+>    **0.92 h vs ~2.5 h**, i.e. the chain is **2.7× FASTER**, not slower. It
+>    loses only at the one grid the repo tells consumers not to use.
+>    *(Denominator confirmed by the spec author 2026-08-05: an exact-ASM run at
+>    N=28672 did complete in ~2.5 h, with physical inaccuracies that were being
+>    addressed separately. An earlier draft of this response wrongly inferred
+>    from `AUDIT_TRACED_CARRIER_CHAIN_2026_07_21.md`:13 — which documents a
+>    **traced** run at that grid forming no focus — that §8's figure was not an
+>    ASM run at all. That inference was unfounded; the two runs are distinct and
+>    §8's denominator is sound. This makes the inversion FIRMER, not weaker.)*
+>    The supporting BPM/"F/1.6" argument is separately **withdrawn** by
+>    `docs/audit_asm_thinlens_focus_2026_07_18.md` ("it was wrong"; the beam runs
+>    f/26-f/44, max NA 0.152).
+>
+>    **The structural half of §8 stands, and is the part worth designing
+>    against.** Chain cost is **O(N_beams)** (the traced element model cannot
+>    carry a multi-valued field, so each congruence is a separate pass); exact
+>    ASM is **O(1) in beam count** (one multiplexed pass). So there is a real
+>    crossover: at the converged grid it sits near **~86 beams serial**
+>    (2.5 h ÷ 104 s), or ~700 with 8 `congruence_workers` (niche D8,
+>    process-parallel, FP-identical to serial; ~1.5 GB/worker at N=2048 by the
+>    measured 22·N²·16 B model). At 32 orders the chain has headroom; well past
+>    that, ASM wins outright. **M1 does not change this** — the N-fold cost is in
+>    the elements, not the gaps, so exact gap transport leaves it untouched. The
+>    lever for large beam counts is parallelism now, and a multiplexing element
+>    model later; neither is this spec.
+> 3. **§5 "exact by construction" — OVERSTATED, and the error parameter matters.**
+>    Free-space propagation is exactly diagonal between *planes*; between
+>    *concentric spheres* the exact diagonal basis is multipole
+>    (`h_l(kr₂)/h_l(kr₁)`), **not** `exp(ikz√(1-s²))`. M1's exactness therefore
+>    rests entirely on the sphere↔plane-wave projection, which is a
+>    stationary-phase/Debye step. Its error is governed by the **Fresnel number
+>    N = w²/(λ|R|), O(1/N)** — *not* O(1/kR). On 121's worst gap 1/N = 2.5e-3
+>    vs 1/(kR) = 8.5e-6, ~300× larger. Critically **N = NA·(w/λ) shrinks for
+>    small intermediate beams**, so M1 may be *worse* than Sziklas-Siegman in
+>    precisely the short-conjugate/fast-intermediate regime §7.1(b) names as its
+>    acceptance case. Stage 3 must budget M1's own Debye+resampling error; the
+>    spec sets no allowance for it.
+> 4. **§8 contradicts §5.** §8 calls the gaps "where ASM is exact and cheap";
+>    §5 rejects M3 *because* full-field ASM on a gap forces λ/(2NA) sampling and
+>    "IS the fixed-grid ASM run". Both cannot hold.
+> 5. **§2/§4 minor:** "verified to 2.2e-16" is unsupported (recorded residuals
+>    are 1.8e-03→4.9e-05 rad; likely a transcription of `2.2e-04`); "0.000 EE
+>    points across NA 0.35-0.45" merges two different sweeps (the 0.000 rows are
+>    a *phi_sag* sweep; arm B's NA rows are 0.20/0.30/0.45 — "0.35" appears
+>    nowhere); and C9 is **not** a null on a tilted congruence (+1.4011 EE3
+>    points, `carrier.py` states this directly), so §2's "must not be
+>    re-litigated" understates its own scope.
+> 6. **§4's second roadmap quotation** ("...is the principled generalisation and
+>    is not implemented") is **not verbatim anywhere**; the nearest real passages
+>    carry a qualifier the spec drops.
+>
+> **What survived, and was worth building:** the spec's Stage-0 instinct is
+> right for a narrower reason than it argues. Arm B's trip variable is the
+> *carrier's* geometry (`w/|R|`), a **proxy** for the quantity the frame's
+> validity actually rests on — the *envelope's* residual angular content. Those
+> track for a slowly-varying envelope and **diverge** for one carrying real
+> non-spherical content. Measured: a carrier-mismatched envelope leaves arm B's
+> proxy at NA 0.0067 (silent) while the envelope's own spread is 0.22 rad → a
+> 73 rad implied frame drop. That blind spot is real, and is now instrumented
+> and guarded (arm C).
+>
+> **Also corrected during implementation** (both found by adversarial review of
+> the *implementation*, not of the spec): a **collimated leg (R=inf) previously
+> took no gap arm at all** — the guard was gated on `isfinite(R)`, exactly
+> backwards for the frame arm since `z_eff = z` is maximal there, and roadmap P8
+> calls "a fast final group after a collimated space" the most common relay
+> architecture; and arm C was initially given the *shared* `on_gap_paraxial`
+> knob, so silencing an uncalibrated tripwire would have silenced two calibrated
+> arms — it now has its own `on_gap_frame`, as §6 originally asked.
+>
+> **Pre-existing defect found, not fixed:** `tests/unit/test_niche_d3_guards.py`
+> :171 documents its "aberrated" fixture as "~8 rad p-v" but the literal yields
+> **6.2e-08 rad**, so the P3 evidence row it supports is vacuous. Flagged for
+> the owner.
+
 Consumer-authored spec, written against **v5.32.1 + niches D8/D9**. Requested
 because the inter-group transport is the last *structurally* paraxial step in
 the carrier chain, and because its validation is **single-design**.

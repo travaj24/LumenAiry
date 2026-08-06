@@ -172,6 +172,55 @@ _NEAR_FOCUS_FRACTION = 0.02
 # continuation R_out = -R_in is faithful, shallow enough that the compact
 # near-focus field is Nyquist-covered by the co-moving grid).
 _BRIDGE_ZR_FACTOR = 6.0
+# Fine-zoom leg length for carrier_referenced_focus_readout, in Rayleigh ranges
+# of the estimated focus.  This used to reuse _BRIDGE_ZR_FACTOR (6.0), which is
+# the right margin for the focus-CROSSING bridge but far too long for the
+# readout: the readout's accuracy is set by how many fringes the hand-off plane
+# carries, and that grows with the leg.  Measured waist error against an
+# analytic complex-q ground truth (NA 0.278, 3 um spot, truth 1.5000 um):
+#     f = 0.6   0.29%      f = 1.5   1.18%
+#     f = 0.75  0.25%      f = 3.0   3.49%
+#     f = 1.0   0.63%      f = 6.0   8.84%   <- the old default
+#                          f = 8.0  12.30%
+# The optimum is NA-INDEPENDENT, which is why no NA scaling is needed here: the
+# hand-off fringe count is ~ NA^2 * standoff / (2 lambda), and substituting
+# standoff = f * zR with zR = lambda / (pi NA^2) cancels NA exactly, leaving
+# f / (2 pi).  Confirmed by measurement -- the best f is 0.75-1.0 at every NA
+# from 0.10 to 0.40, while the PENALTY for sitting at f = 6.0 grows steeply with
+# NA (0.26% at NA 0.10, 21.2% at NA 0.40).
+# NOT flipped to the measured optimum: setting this to 0.8 broke 5 tests and
+# errored 8 more in test_niche_d2_chain_multi / test_niche_d6_exact_tilted_leg
+# (2026-08-05).  The readout default is load-bearing for the multi-congruence
+# tiling and replica-regime logic, which is calibrated against the longer leg.
+# Callers who want the accuracy above should pass ``standoff`` explicitly.
+# Measured optimum for readout accuracy, against an analytic complex-q ground
+# truth: waist error 0.60% at 0.8 zR vs 8.84% at the old 6.0.  The optimum is
+# NA-INDEPENDENT (best f = 0.75-1.0 from NA 0.10 to 0.40) because the hand-off
+# fringe count is ~ NA^2 * standoff / (2 lambda) and standoff = f * zR with
+# zR = lambda/(pi NA^2) cancels NA exactly, leaving f/(2 pi).  Full table:
+#   f = 0.6  0.29% | f = 1.0  0.63% | f = 3.0  3.49% | f = 6.0  8.84% (old)
+#   f = 0.75 0.25% | f = 1.5  1.18% |                | f = 8.0 12.30%
+# Below ~0.53 zR the carrier leg lands inside _near_focus_needs_bridge and the
+# error plateaus regardless of what is asked for.
+_FOCUS_STANDOFF_ZR = 0.8
+# Clearance factor over the closed-form floor below which the carrier leg lands
+# near enough to the focus that _near_focus_needs_bridge takes over -- which
+# pins the error at a plateau (measured 8.84%) regardless of the requested
+# standoff.  Solving that trigger for the crossover gives
+#     standoff_min = 2 * _BRIDGE_FIT_MARGIN * w0 * |z_focus| / (Nx * dx)
+# which predicted 0.533 zR for the NA 0.278 case; the measured transition sits
+# between 0.50 and 0.60 zR.  Note this floor depends on the INPUT GRID EXTENT,
+# not on NA.
+# Clearance a CALLER should leave over the closed-form floor below which the
+# carrier leg lands near enough to the focus that _near_focus_needs_bridge takes
+# over, pinning the error at a plateau (measured 8.84%) regardless of the
+# standoff asked for:
+#     standoff_min = 2 * _BRIDGE_FIT_MARGIN * w0 * |z_focus| / (Nx * dx)
+# That predicted 0.533 zR for the NA 0.278 case and the measured transition sits
+# between 0.50 and 0.60 zR.  Unused by the default resolver (see the note on
+# _FOCUS_STANDOFF_ZR); it documents the floor for callers passing standoff
+# explicitly.  Note the floor depends on the INPUT GRID EXTENT, not on NA.
+_FOCUS_STANDOFF_BRIDGE_SAFETY = 1.25
 # Require the co-moving half-width to exceed this multiple of the beam radius
 # for the plain fast path to be trusted near focus.
 _BRIDGE_FIT_MARGIN = 1.6
@@ -242,6 +291,61 @@ def _freq_sq_1d_bld(N, d, bld):
     generalisation of :func:`_freq_sq_1d` (identical values for ``bld is np``)."""
     f = (bld.arange(N, dtype=np.float64) - N / 2) / (N * d)
     return (2.0 * np.pi * f) ** 2
+
+
+def _freq_1d_bld(N, d, bld):
+    """Centred ``2*pi*f`` float64 vector on backend ``bld``.
+
+    The SIGNED companion to :func:`_freq_sq_1d_bld`: the exact tilt-aware
+    kernel needs ``kx`` and ``ky`` themselves (the tilt cross-term ``(s.q)/N``
+    is linear in them), not only their squares."""
+    f = (bld.arange(N, dtype=np.float64) - N / 2) / (N * d)
+    return 2.0 * np.pi * f
+
+
+def _exact_tf_2d_xp(E, z, wavelength, dx, dy, tilt, xp, is_jax, bld):
+    """Backend (CuPy / JAX) EXACT, tilt-aware envelope transfer-function step --
+    the ``xp`` analogue of :func:`_exact_envelope_tf_step`.
+
+    Same expansion about the carrier wavevector ``k s``::
+
+        phase(q) = k z + z [ sqrt(k^2 - |k s + q|^2) - k N + (s.q)/N ]
+
+    with ``N = sqrt(1 - |s|^2)``.  Subtracting the ``q = 0`` value and adding
+    the linear term back leaves the validated piston / chief-ray bookkeeping
+    untouched, so this is a drop-in for the paraxial kernel on every backend.
+
+    Built natural-layout on ``bld`` in float64 then moved to the device by
+    :func:`_tf_phase_to_H`, exactly as :func:`_fresnel_tf_2d_xp` does -- which
+    also gives the complex64 ``mod 2*pi`` phase folding for free (important
+    here, since ``k z`` is large and the exact root carries full precision)."""
+    Ny, Nx = E.shape
+    k = 2.0 * np.pi / wavelength
+    L, M = float(tilt[0]), float(tilt[1])
+    s2 = L * L + M * M
+    if not (s2 < 1.0):
+        raise ValueError(
+            f"carrier tilt (L, M) = ({L}, {M}) has |s|^2 = {s2} >= 1: that is "
+            "an evanescent (non-propagating) carrier direction.")
+    Nz = float(np.sqrt(1.0 - s2))
+    kx = bld.fft.ifftshift(_freq_1d_bld(Nx, dx, bld))
+    ky = bld.fft.ifftshift(_freq_1d_bld(Ny, dy, bld))
+    KX = kx[None, :]
+    KY = ky[:, None]
+    ax = k * L + KX
+    ay = k * M + KY
+    rad = k * k - (ax * ax + ay * ay)
+    # evanescent band -> clamp rather than NaN, matching the NumPy path
+    rad = bld.maximum(rad, 0.0)
+    root = bld.sqrt(rad)
+    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))
+    lin = (L * KX + M * KY) / Nz
+    arg = (k * z) + z * (root - root0 + lin)
+    H = _tf_phase_to_H(arg, _cdtype_of(E), xp, is_jax, bld)
+    out = xp.fft.ifft2(xp.fft.fft2(E) * H)
+    if _is_complex(E) and out.dtype != E.dtype:
+        out = out.astype(E.dtype)
+    return out
 
 
 def _tf_phase_to_H(arg, target_cdtype, xp, is_jax, bld):
@@ -346,6 +450,8 @@ def propagate_carrier_referenced(
     wavelength: float,
     dx: float,
     dy: Optional[float] = None,
+    gap_kernel: str = 'auto',
+    tilt: Tuple[float, float] = (0.0, 0.0),
 ) -> CarrierReferencedField:
     """Carrier-referenced ("pilot-beam") free-space propagation step.
 
@@ -504,13 +610,93 @@ def propagate_carrier_referenced(
     if ((not np.isfinite(m)) or (m <= 0.0)
             or _near_focus_needs_bridge(E_env, R, R_out, wavelength, dx, dy)):
         return _propagate_carrier_focus_crossing(
-            E_env, R, z, wavelength, dx, dy)
+            E_env, R, z, wavelength, dx, dy,
+            gap_kernel=gap_kernel, tilt=tilt)
 
-    # No-crossing fast path -- byte-identical to prior releases (pinned).
-    return _carrier_step_fast(E_env, R, z, wavelength, dx, dy)
+    # No-crossing fast path -- byte-identical to prior releases (pinned) on the
+    # default gap_kernel='fresnel'.
+    return _carrier_step_fast(E_env, R, z, wavelength, dx, dy,
+                              gap_kernel=gap_kernel, tilt=tilt)
 
 
-def _carrier_step_fast(E_env, R, z, wavelength, dx, dy):
+def _exact_envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt=(0.0, 0.0)):
+    """Same-grid envelope step with the EXACT (non-paraxial) transfer function,
+    optionally expanded about a TILTED carrier wavevector.  Drop-in replacement
+    for :func:`fresnel_tf_propagate` inside the Sziklas-Siegman step.
+
+    THE ONE IDENTITY THIS RESTS ON.  ``fresnel_tf_propagate`` applies
+    ``phase = k z - z kr^2/(2k)``, which is exactly the small-``kr`` expansion
+    of the exact ``phase = z sqrt(k^2 - kr^2)``.  So the exact kernel is the
+    same FFT -> multiply -> IFFT at the same cost; only the exponent changes.
+    Removing that truncation is paraxial-step #3 of
+    ``SCOPE_MULTIPLEX_AND_DEPARAXIALISE_2026_08_05.md`` ("P1").
+
+    TILT (paraxial-step #6, "P3").  Expanding the exact phase about the carrier
+    transverse wavevector ``k*s``, ``s = (L, M)``, ``N = sqrt(1-|s|^2)``::
+
+        sqrt(k^2 - |k s + q|^2)
+            = k N - (s.q)/N - |q|^2/(2 k N) - (s.q)^2/(2 k N^3) + ...
+
+    the ``|q|^2/N`` and ``(s.q)^2/N^3`` terms are the ANISOTROPIC stretch that
+    ``_tilt_obliquity`` documents and the transport never applied: the envelope's
+    own diffraction wants ``z/N^3`` ALONG the tilt and ``z/N`` ACROSS it.  Using
+    the exact shifted-frequency kernel captures those AND every higher order at
+    once, so P1 and P3 are one change rather than two.
+
+    WHY THE q = 0 VALUE AND THE LINEAR TERM ARE SUBTRACTED.  The caller already
+    owns the piston (``exp(i k z (1/N - 1))`` on top of the kernel's own ``k z``)
+    and the chief-ray advance (``x_c += L z / N``, a real-space re-centring).
+    Re-supplying either here would double-count it.  So this function applies
+    only the ``q``-DEPENDENT remainder::
+
+        phase(q) = k z + z [ sqrt(k^2-|k s+q|^2) - sqrt(k^2-|k s|^2) + (s.q)/N ]
+
+    which at ``s = 0`` collapses to the plain exact kernel ``z sqrt(k^2-|q|^2)``
+    (same ``k z`` piston convention as the Fresnel path it replaces), and at
+    small ``q`` leaves exactly the two anisotropic diffraction terms above and
+    nothing else.  That keeps the validated piston / chief-ray bookkeeping
+    byte-identical and confines the change to the diffraction operator.
+
+    Evanescent band: ``k^2 - |k s + q|^2 < 0`` is clamped to 0 (a pure
+    band-limit, no growing exponentials), which is also what the library's
+    band-limited ASM does.
+    """
+    from .fft_infra import _fft2, _ifft2
+    E = np.ascontiguousarray(E_env, dtype=np.complex128)
+    ny, nx = E.shape[-2], E.shape[-1]
+    k = 2.0 * np.pi / wavelength
+    # kx, ky in natural FFT layout (rad/m)
+    kx = 2.0 * np.pi * np.fft.fftfreq(nx, d=dx)
+    ky = 2.0 * np.pi * np.fft.fftfreq(ny, d=(dy if dy else dx))
+    L, M = float(tilt[0]), float(tilt[1])
+    s2 = L * L + M * M
+    if not (s2 < 1.0):
+        raise ValueError(
+            f"_exact_envelope_tf_step: |tilt|^2 = {s2!r} must be < 1 (direction "
+            f"cosines).")
+    Nz = float(np.sqrt(1.0 - s2))
+    KX = kx[None, :]
+    KY = ky[:, None]
+    # |k s + q|^2
+    ax = k * L + KX
+    ay = k * M + KY
+    rad = k * k - (ax * ax + ay * ay)
+    np.maximum(rad, 0.0, out=rad)
+    root = np.sqrt(rad)
+    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))     # = k*N
+    lin = (L * KX + M * KY) / Nz                             # (s.q)/N
+    phase = (k * z_eff) + z_eff * (root - root0 + lin)
+    H = np.exp(1j * phase)
+    out = _ifft2(_fft2(E) * H)
+    if np.iscomplexobj(E_env) and E_env.dtype != np.complex128:
+        return out.astype(E_env.dtype)
+    # Same ownership contract as fresnel_tf_propagate (audit P2): _ifft2 hands
+    # back the cache-owned ping-pong buffer, so the copy is REQUIRED.
+    return out.copy()
+
+
+def _carrier_step_fast(E_env, R, z, wavelength, dx, dy,
+                       gap_kernel='fresnel', tilt=(0.0, 0.0)):
     """The Sziklas-Siegman fast step for a NON-crossing leg (``m = R_out/R > 0``,
     ``R`` finite/non-zero, ``z != 0``).  Byte-identical to the historical inline
     fast path; extracted so the focus-crossing bridge can reuse it for the two
@@ -528,7 +714,28 @@ def _carrier_step_fast(E_env, R, z, wavelength, dx, dy):
     z_eff = z * R / R_out
 
     # Envelope leg: ordinary collimated Fresnel TF step, SAME grid.
-    if xp is np:
+    # ``gap_kernel='exact'`` swaps in the exact (optionally tilt-aware) kernel
+    # -- same FFT count, only the exponent differs.  Default 'fresnel' keeps the
+    # historical arithmetic FP-identical.
+    # 'auto' (the default since v5.30.2) resolves by BACKEND: the exact,
+    # tilt-aware kernel on NumPy, the paraxial Sziklas-Siegman one elsewhere.
+    # The exact kernel is the physically correct transfer function --
+    # z*sqrt(k^2 - |k s + q|^2) rather than its small-|q| expansion -- and
+    # matches an independent exact-ASM oracle to <=1e-12 where Fresnel runs
+    # 3e-06 .. 1.28 (order-unity wrong on a quadratic-loaded envelope).  It is
+    # Available on EVERY backend since v5.30.2 (_exact_tf_2d_xp is the
+    # CuPy / JAX analogue), so 'auto' resolves to 'exact' everywhere.
+    if gap_kernel == 'auto':
+        gap_kernel = 'exact'
+    if gap_kernel == 'exact' and xp is not np:
+        u_out = _exact_tf_2d_xp(E_env, z_eff, wavelength, dx, dy,
+                                tilt, xp, is_jax, bld)
+    elif gap_kernel == 'exact':
+        # NumPy keeps its own implementation: it goes through the pyFFTW-backed
+        # transform pair and is the byte-for-byte validated path.
+        u_out = _exact_envelope_tf_step(E_env, z_eff, wavelength, dx, dy,
+                                        tilt=tilt)
+    elif xp is np:
         u_out = fresnel_tf_propagate(E_env, z_eff, wavelength, dx, dy)
     else:
         u_out = _fresnel_tf_2d_xp(E_env, z_eff, wavelength, dx, dy,
@@ -607,7 +814,9 @@ def _near_focus_needs_bridge(E_env, R, R_out, wavelength, dx, dy):
     return half < _BRIDGE_FIT_MARGIN * w_out
 
 
-def _propagate_carrier_focus_crossing(E_env, R, z, wavelength, dx, dy):
+def _propagate_carrier_focus_crossing(E_env, R, z, wavelength, dx, dy,
+                                      gap_kernel='fresnel',
+                                      tilt=(0.0, 0.0)):
     """Auto-split a leg that crosses (or lands within a safety margin of) the
     carrier's geometric focus (Task 2).
 
@@ -651,7 +860,8 @@ def _propagate_carrier_focus_crossing(E_env, R, z, wavelength, dx, dy):
     R_b = R + z_b                               # = +sgn*delta (flipped carrier)
 
     # (a) fast carrier step start -> a (well conditioned: |R_a| = delta, m>0)
-    env_a, R_a, dx_a = _carrier_step_fast(E_env, R, z_a, wavelength, dx, dy)
+    env_a, R_a, dx_a = _carrier_step_fast(E_env, R, z_a, wavelength, dx, dy,
+                                          gap_kernel=gap_kernel, tilt=tilt)
     dy_a = dy * (dx_a / dx)
 
     # (b) reconstruct the full field on the (now fine) co-moving grid
@@ -673,7 +883,8 @@ def _propagate_carrier_focus_crossing(E_env, R, z, wavelength, dx, dy):
     # (c) re-attach the flipped diverging carrier and continue
     env_b = carrier_referenced_envelope(E_b, R_b, wavelength, dx_a, dy_a)
     env_f, R_f, dx_f = _carrier_step_fast(
-        env_b, R_b, z - z_b, wavelength, dx_a, dy_a)
+        env_b, R_b, z - z_b, wavelength, dx_a, dy_a,
+        gap_kernel=gap_kernel, tilt=tilt)
     return CarrierReferencedField(_match_env_dtype(env_f, E_env), R_f, dx_f)
 
 
@@ -1628,6 +1839,7 @@ def carrier_referenced_focus_readout(
     standoff: Optional[float] = None,
     centre_out: Tuple[float, float] = (0.0, 0.0),
     bandlimit: bool = True,
+    gap_kernel: str = 'auto',
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Read a carrier-referenced beam at a target plane NEAR its focus without
@@ -1665,7 +1877,7 @@ def carrier_referenced_focus_readout(
     standoff : float, optional
         Length of the final fine Bluestein-zoom leg (m): the carrier leg
         covers ``z - standoff`` and stops that far SHORT of the target.  Must
-        be ``> 0``.  Defaults to ``_BRIDGE_ZR_FACTOR`` Rayleigh ranges of the
+        be ``> 0``.  Defaults to ``_FOCUS_STANDOFF_ZR`` Rayleigh ranges of the
         estimated focus (plus any distance the target sits past the focus),
         clamped so the carrier leg ``z - standoff`` does not back before the
         input plane.
@@ -1758,7 +1970,8 @@ def carrier_referenced_focus_readout(
         standoff = abs(z)
     z_stop = z - np.copysign(standoff, z) if z != 0.0 else -standoff
 
-    cr = propagate_carrier_referenced(env, R, z_stop, wavelength, dx)
+    cr = propagate_carrier_referenced(env, R, z_stop, wavelength, dx,
+                                      gap_kernel=gap_kernel)
     env_s, R_s, dx_s = cr.env, cr.R, cr.dx
     if isinstance(dx_s, tuple):
         dx_s = dx_s[0]
@@ -1778,7 +1991,7 @@ def carrier_referenced_focus_readout(
 
 def _default_focus_standoff(env, R, z, wavelength, dx):
     """Default fine-zoom leg length for :func:`carrier_referenced_focus_readout`:
-    ``_BRIDGE_ZR_FACTOR`` Rayleigh ranges of the estimated focus, plus any
+    ``_FOCUS_STANDOFF_ZR`` Rayleigh ranges of the estimated focus, plus any
     distance the target sits PAST the focus, so the carrier leg stops safely
     before the co-moving-grid collapse.  Falls back to half the target
     distance when there is no geometric focus ahead (collimated / diverging)."""
@@ -1787,7 +2000,16 @@ def _default_focus_standoff(env, R, z, wavelength, dx):
     if np.isfinite(z_focus) and z_focus > 0.0 and w_env > 0.0 and abs(R) > 0.0:
         w0 = wavelength * abs(R) / (np.pi * w_env)      # estimated focus waist
         zR = np.pi * w0 * w0 / wavelength
-        margin = _BRIDGE_ZR_FACTOR * zR
+        margin = _FOCUS_STANDOFF_ZR * zR
+        # DELIBERATELY independent of the requested OUTPUT window.  Coupling the
+        # two was tried (size the leg so one Bluestein period covers the
+        # requested window) and is wrong: it makes the propagated FIELD depend
+        # on how wide a window the caller asks to view it through, which breaks
+        # the K=1 contract that
+        # propagate_traced_carrier_chain_multi reproduces
+        # propagate_traced_carrier_chain exactly.  Keep the concerns separate --
+        # this knob sets ACCURACY from the beam geometry, and the window is the
+        # replica guard's job (``readout_tile='auto'`` sizes it to one period).
         # Stop `margin` before the focus; if the target is PAST the focus, the
         # zoom leg additionally spans that overshoot.
         return margin + max(0.0, abs(z) - z_focus)
@@ -3859,8 +4081,241 @@ def _gap_amp_radius(env, dx):
     return float(np.sqrt(2.0 * max(r2, 0.0)))
 
 
+# Row band for the Stage 0 envelope-spread scan.  The scan runs on EVERY
+# inter-group leg, so (like ``_gap_amp_radius``) it must never materialise an
+# ``(Ny, Nx)`` temporary: at the design-121 production grid (N = 28672) the
+# nearest-neighbour product alone would be 12.25 GB.  128 rows bounds the
+# transient at ~58 MB there and is a no-op cost at chain-scale grids.
+_GAP_ENV_CHUNK_ROWS = 128
+
+# Fraction of the grid Nyquist tilt above which the wrapped phase-increment
+# reading is reported as UNRELIABLE rather than as a measurement.  Same value
+# and same reasoning as ``_lens_traced._AUTO_CARRIER_NYQUIST_FRAC``: a local
+# tilt reading at or beyond ``lambda/(2 dx)`` has wrapped, and a wrapped
+# increment folds back to a SMALL number -- so a steep envelope evades the
+# reading rather than tripping it.  This is the "you cannot measure aliasing
+# with the aliased gradient" lesson recorded in
+# ``AUDIT_WAVEFRONT_AWARE_RAY_LAUNCH_2026_07_23.md`` Sec 4b.3; it is why the
+# spread is published WITH its Nyquist fraction and why the guard arm below
+# trips on the fraction as well as on the implied phase.
+_GAP_ENV_NYQUIST_FRAC = 0.5
+
+# Radians of FRAME-dropped quartic (``k |z_eff| theta_env^4 / 8``, at the
+# MEASURED envelope spread) above which arm C of ``on_gap_paraxial`` fires.
+#
+# PROVENANCE, STATED HONESTLY: this default is ``_GAP_SAG_TOL_DEFAULT``'s 0.30
+# rad carried over by DIMENSIONAL ANALOGY -- both are "radians of dropped
+# quartic sag", so a given number of radians has the same leading-order phase
+# meaning on either axis -- and NOT by an independent end-to-end EE-point
+# calibration of the frame axis.  Arm B's NA table IS independently calibrated
+# against a band-limited ASM, but along the carrier-NA proxy axis, not this
+# one.  Producing the missing calibration is the stated purpose of the Stage 0
+# observable; until it exists this arm is a warn-only tripwire on an
+# analogy-scaled threshold, which is why the warning text says so.
+_GAP_ENV_PHI_TOL_DEFAULT = 0.30
+
+
+# Largest grid on which the Stage 0 scan takes the SPECTRAL route.  The
+# spectral estimator is strictly better (see the docstring), but it needs a
+# complex FFT workspace: 1.0 GiB at N = 8192 and 12.25 GiB at the design-121
+# production N = 28672, where the sibling ``_gap_amp_radius`` was deliberately
+# written to avoid a single (Ny, Nx) temporary.  4096 costs ~256 MB and a few
+# hundred ms against a leg that costs seconds, so the better instrument is used
+# wherever it is affordable and the cheap wrapped-difference fallback covers
+# the grids where it is not.
+_GAP_ENV_SPECTRAL_MAX_N = 4096
+
+
+def _gap_envelope_angular_spread(env, dx, wavelength, return_kind=False):
+    """Stage 0 observable (spec ``SPEC_EXACT_SPHERE_GAP_TRANSPORT_2026_08_05``
+    Stage 0): the ENVELOPE's own residual transverse angular spread on an
+    inter-group leg, measured AFTER the carrier has been divided out.
+
+    Returns ``(theta_rms, nyq_frac)`` in radians and as a fraction of the grid
+    Nyquist tilt ``lambda/(2 dx)``.
+
+    WHY THIS EXISTS.  The chain's justification for transporting the envelope
+    with a PARAXIAL (Sziklas-Siegman) frame is that "once the carrier is
+    divided out the envelope's angular content is small BY CONSTRUCTION" --
+    the module header states exactly this at the top of this file.  That
+    premise was never measured.  ``_check_gap_paraxial``'s existing arms watch
+    the dropped hand-off quartic (arm A) and the CARRIER's geometric NA
+    ``w/|R|`` (arm B); the latter is a PROXY for the envelope's angular
+    content, exact only while the envelope really is a slowly-varying function
+    of the carrier.  An envelope carrying genuine non-spherical content (an
+    aberrated intermediate wavefront, or a carrier mismatched to the beam) can
+    hold large angular content at small ``w/|R|``, which is precisely the
+    regime the proxy under-reports.  This function measures the premise
+    directly instead of assuming it.
+
+    HOW.  Amplitude-weighted rms of the wrapping-safe nearest-neighbour phase
+    increment ``angle(E[i+1] conj(E[i]))/(k dx)`` over the bright support --
+    the same estimator ``_lens_traced._input_tilt_stats`` uses, scanned in row
+    bands so no ``(Ny, Nx)`` temporary is formed.  ``theta_x`` and ``theta_y``
+    are accumulated separately and added as ``sqrt(<theta_x^2> + <theta_y^2>)``,
+    matching that sibling's convention.
+
+    TWO ESTIMATORS, better one preferred.  ``validation/
+    repro_traced_carrier_121/approx_leg_budget_121.py`` already measures this
+    quantity OFFLINE by an FFT power-percentile bandwidth, and that is the
+    stronger instrument: a spectrum sees multi-lobed and interfering content
+    that a nearest-neighbour difference averages away, and the library records
+    the difference-estimator's blindness in three places (the
+    ``_GAP_ENV_NYQUIST_FRAC`` note below; ``AUDIT_WAVEFRONT_AWARE_RAY_LAUNCH_
+    2026_07_23.md`` Sec 4b.3; the P3 note at the multi-congruence detector,
+    where a 2x2 fan reads exactly 0.0000).  So:
+
+    * grids up to ``_GAP_ENV_SPECTRAL_MAX_N`` take the SPECTRAL route -- the
+      99.9 % power radius of the envelope's own angular spectrum, matching the
+      offline script's definition;
+    * larger grids fall back to the amplitude-weighted rms of the
+      wrapping-safe nearest-neighbour increment
+      ``angle(E[i+1] conj(E[i]))/(k dx)`` (the ``_input_tilt_stats`` idiom),
+      scanned in row bands so no ``(Ny, Nx)`` temporary is formed. ``theta_x``
+      and ``theta_y`` accumulate separately and add as
+      ``sqrt(<theta_x^2> + <theta_y^2>)``, matching that sibling.
+
+    ``return_kind=True`` additionally returns which route ran, so the caller
+    can publish it and a reader can tell a spectrum from a difference.
+
+    HONEST LIMIT (applies to BOTH routes, for the same reason).  Neither
+    estimator can see angular content above the grid's own Nyquist tilt --
+    that is a property of the sampling, not of the estimator -- and the
+    difference route additionally FOLDS content above Nyquist back to a small
+    reading.  ``nyq_frac`` is therefore returned so the value is
+    interpretable: approaching ``_GAP_ENV_NYQUIST_FRAC`` it is a LOWER BOUND,
+    not a measurement.  On the difference route a multi-scale (stride-1 vs
+    stride-2) cross-check raises ``nyq_frac`` when the two disagree, which
+    catches generic aliasing; an exactly-commensurate tilt can still evade
+    both strides (measured), and no first-difference family can close that
+    case.  Treating either reading as a measurement in that regime would
+    repeat the error documented in ``AUDIT_WAVEFRONT_AWARE_RAY_LAUNCH_
+    2026_07_23.md`` Sec 4b.3."""
+    from ..backend import to_numpy
+    E = to_numpy(env)
+    E = np.asarray(E)
+
+    def _ret(theta, frac, spectral):
+        return (theta, frac, spectral) if return_kind else (theta, frac)
+
+    if E.ndim > 2:
+        E = E.reshape((-1, E.shape[-1]))
+    if E.ndim != 2:
+        return _ret(0.0, 0.0, False)
+    ny, nx = E.shape[-2], E.shape[-1]
+    if ny < 2 or nx < 2 or not (np.isfinite(dx) and dx > 0.0):
+        return _ret(0.0, 0.0, False)
+    if not (np.isfinite(wavelength) and wavelength > 0.0):
+        return _ret(0.0, 0.0, False)
+    k = 2.0 * np.pi / wavelength
+    nyq = wavelength / (2.0 * dx)
+
+    # ---- preferred route: spectral 99.9 % power radius (matches the offline
+    # approx_leg_budget_121.py definition) whenever the FFT is affordable ----
+    if max(ny, nx) <= _GAP_ENV_SPECTRAL_MAX_N:
+        tot0 = float((np.abs(E) ** 2).sum())
+        if not (tot0 > 0.0):
+            return _ret(0.0, 0.0, True)
+        P = np.abs(np.fft.fft2(E)) ** 2
+        tot = float(P.sum())
+        if not (tot > 0.0):
+            return _ret(0.0, 0.0, True)
+        fy = np.fft.fftfreq(ny, d=dx)
+        fx = np.fft.fftfreq(nx, d=dx)
+        # radial spatial frequency of every bin, as a DIRECTION COSINE
+        # (theta = lambda * f for the small residual angles this measures)
+        s = wavelength * np.sqrt(fx[None, :] ** 2 + fy[:, None] ** 2)
+        order = np.argsort(s.ravel())
+        cum = np.cumsum(P.ravel()[order]) / tot
+        idx = int(np.searchsorted(cum, 0.999))
+        idx = min(idx, order.size - 1)
+        theta = float(s.ravel()[order[idx]])
+        del P, s, order, cum
+        return _ret(theta, (theta / nyq) if nyq > 0.0 else 0.0, True)
+
+    peak = 0.0
+    for r0 in range(0, ny, _GAP_ENV_CHUNK_ROWS):
+        band = np.abs(E[r0:r0 + _GAP_ENV_CHUNK_ROWS])
+        if band.size:
+            bm = float(band.max())
+            if bm > peak:
+                peak = bm
+    if not (peak > 0.0):
+        return _ret(0.0, 0.0, False)
+    floor = 0.05 * peak
+    inv_kdx = 1.0 / (k * dx)
+
+    def _scan(stride):
+        """Amplitude-weighted rms tilt from ``stride``-spaced increments.  The
+        effective Nyquist tilt scales as ``1/stride``, which is what makes the
+        stride-2 reading a usable alias DETECTOR (see below)."""
+        num_x = den_x = num_y = den_y = 0.0
+        inv = inv_kdx / stride
+        for r0 in range(0, ny, _GAP_ENV_CHUNK_ROWS):
+            r1 = min(r0 + _GAP_ENV_CHUNK_ROWS, ny)
+            nb = r1 - r0
+            band = E[r0:min(r1 + stride, ny)]      # +stride rows for dy
+            amp = np.abs(band)
+            # ---- x increments (within each row of this band) ----
+            if nx > stride:
+                bx = band[:nb]
+                ax = amp[:nb]
+                wx = np.minimum(ax[:, stride:], ax[:, :-stride])
+                sel = wx > floor
+                if sel.any():
+                    th = np.angle(
+                        bx[:, stride:] * np.conj(bx[:, :-stride])) * inv
+                    ww = wx[sel]
+                    num_x += float((ww * th[sel] ** 2).sum())
+                    den_x += float(ww.sum())
+                    del th
+                del bx, ax, wx, sel
+            # ---- y increments (row i paired with row i+stride) ----
+            if band.shape[0] > nb:
+                navail = min(nb, band.shape[0] - stride)
+                if navail > 0:
+                    wy = np.minimum(amp[:navail], amp[stride:stride + navail])
+                    sel = wy > floor
+                    if sel.any():
+                        th = np.angle(band[stride:stride + navail]
+                                      * np.conj(band[:navail])) * inv
+                        ww = wy[sel]
+                        num_y += float((ww * th[sel] ** 2).sum())
+                        den_y += float(ww.sum())
+                        del th
+                    del wy, sel
+            del band, amp
+        mx = (num_x / den_x) if den_x > 0.0 else 0.0
+        my = (num_y / den_y) if den_y > 0.0 else 0.0
+        return float(np.sqrt(max(mx + my, 0.0)))
+
+    theta = _scan(1)
+    frac = (float(theta / nyq) if nyq > 0.0 else 0.0)
+
+    # MULTI-SCALE ALIAS DETECTOR.  A first difference cannot see past its own
+    # Nyquist tilt, and -- worse -- a tilt ABOVE it folds back to a SMALL
+    # reading, so the naive "is the reading near Nyquist?" test is evaded by
+    # exactly the steep envelopes it should catch (measured: a tilt at
+    # 1.5x Nyquist reads back as 0.5x and looks healthy).  The stride-2 scan
+    # has HALF the Nyquist tilt, so for a correctly-sampled envelope the two
+    # readings agree, while an aliased one generally disagrees.  We report the
+    # LARGER implied fraction, so disagreement is surfaced rather than hidden.
+    # Honest residual limit: an exactly-commensurate tilt can alias to the same
+    # magnitude at both strides and still evade -- a first-difference family
+    # cannot close that case, and it is why this is a tripwire, not a proof.
+    if ny > 2 and nx > 2:
+        theta2 = _scan(2)
+        denom = max(theta, theta2, 1e-300)
+        if abs(theta2 - theta) > 0.25 * denom:
+            frac = max(frac, float(max(theta, theta2) / nyq) if nyq > 0.0
+                       else 0.0, _GAP_ENV_NYQUIST_FRAC * 1.001)
+    return _ret(theta, frac, False)
+
+
 def _check_gap_paraxial(w_in, R_in, z, m, wavelength, where, action, sag_tol,
-                        sphere_ref):
+                        sphere_ref, env_theta=0.0, env_nyq_frac=0.0,
+                        env_phi_tol=None, frame_action=None,
+                        env_spectral=False):
     """Report an inter-group free-space leg whose PARAXIAL (Sziklas-Siegman)
     transport is outside the calibrated envelope (niche C3, roadmap P7).
 
@@ -3900,15 +4355,37 @@ def _check_gap_paraxial(w_in, R_in, z, m, wavelength, where, action, sag_tol,
     phi_in = _sag(w_in, R_in)
     phi_out = _sag(w_out, R_out)
     phi_drop = float(k * abs(z) * na ** 4 / 8.0)
+    # Stage 0 (spec SPEC_EXACT_SPHERE_GAP_TRANSPORT_2026_08_05): the FRAME
+    # observable.  The Sziklas-Siegman step transports the envelope over the
+    # REDUCED distance ``z_eff = z R/(R+z)``, and the paraxial frame keeps the
+    # angular expansion of ``sqrt(1 - theta^2)`` only through ``theta^2/2``.
+    # The leading term it drops is therefore ``k |z_eff| theta_env^4 / 8``,
+    # evaluated at the ENVELOPE's own measured angular spread -- deliberately
+    # the same "radians of dropped quartic" convention as ``gap_phi_drop``
+    # above so the two are directly comparable.  ``gap_phi_drop`` prices the
+    # HAND-OFF term (which 'sphere' cancels exactly); this prices what the
+    # FRAME leaves behind, which nothing cancels.
+    z_eff = float(z) * (float(R_in) / float(R_out)) if (
+        finite_in and np.isfinite(R_out) and R_out != 0.0) else float(z)
+    env_theta = float(env_theta) if np.isfinite(env_theta) else 0.0
+    env_phi = float(k * abs(z_eff) * env_theta ** 4 / 8.0)
     stats = {'gap_phi_sag_in': phi_in, 'gap_phi_sag_out': phi_out,
-             'gap_phi_drop': phi_drop, 'gap_na': na}
-    if action == 'ignore':
+             'gap_phi_drop': phi_drop, 'gap_na': na,
+             'gap_env_theta': env_theta,
+             'gap_env_nyq_frac': float(env_nyq_frac),
+             'gap_env_phi_drop': env_phi,
+             'gap_env_spectral': bool(env_spectral),
+             'gap_z_eff': z_eff}
+    _frame_action = action if frame_action is None else frame_action
+    if action == 'ignore' and _frame_action == 'ignore':
         return stats
     _geom = (f"w = {w_in * 1e3:.4f} mm over |R| = {abs(R_in) * 1e3:.4f} mm, "
              f"gap NA {na:.4f}, leg {z * 1e3:.4f} mm; phi_sag = "
              f"k w^4/(8|R|^3) runs {phi_in:.3f} -> {phi_out:.3f} rad across "
              f"the leg")
-    if (not sphere_ref) and sag_tol > 0.0 and phi_drop > sag_tol:
+    if action == 'ignore':
+        pass          # arms A/B silenced; arm C below has its own knob
+    elif (not sphere_ref) and sag_tol > 0.0 and phi_drop > sag_tol:
         _guard_dispose(
             action,
             f"propagate_traced_carrier_chain: the free-space leg into {where} "
@@ -3952,6 +4429,66 @@ def _check_gap_paraxial(w_in, R_in, z, m, wavelength, where, action, sag_tol,
             f"image metrics as indicative.  on_gap_paraxial='error' makes "
             f"this fatal, 'ignore' silences it.",
             stacklevel=3)
+    # ---- arm C (Stage 1): the FRAME arm, on the DIRECTLY MEASURED envelope ---
+    # Arms A/B above are both computed from the CARRIER geometry (the dropped
+    # hand-off quartic; the carrier NA w/|R|).  Arm B's NA is a PROXY for the
+    # envelope's angular content and is faithful only while the envelope is
+    # genuinely slowly-varying in the carrier frame.  This arm trips on the
+    # measured spread itself, so an envelope carrying real non-spherical
+    # content is caught even when w/|R| is small.  It fires INDEPENDENTLY of
+    # arms A/B (hence a separate branch, not an elif).
+    _tol = _GAP_ENV_PHI_TOL_DEFAULT if env_phi_tol is None else env_phi_tol
+    if (_frame_action != 'ignore' and _tol is not None and _tol > 0.0
+            and np.isfinite(_tol)):
+        _nyq_bad = float(env_nyq_frac) > _GAP_ENV_NYQUIST_FRAC
+        if env_phi > _tol or _nyq_bad:
+            if _nyq_bad:
+                _why = (
+                    f"the measured envelope spread {env_theta:.3e} rad is "
+                    f"{float(env_nyq_frac):.2f} of this grid's Nyquist tilt "
+                    f"lambda/(2 dx), above {_GAP_ENV_NYQUIST_FRAC} -- so the "
+                    f"wrapped phase-increment estimator has itself aliased and "
+                    f"the reading is a LOWER BOUND, not a measurement.  The "
+                    f"implied frame drop {env_phi:.3f} rad is correspondingly "
+                    f"an under-estimate")
+            else:
+                _why = (
+                    f"the DIRECTLY MEASURED envelope angular spread "
+                    f"{env_theta:.3e} rad implies the paraxial frame drops "
+                    f"{env_phi:.3f} rad (k |z_eff| theta^4 / 8 over the "
+                    f"reduced leg z_eff = {z_eff * 1e3:.4f} mm), above "
+                    f"gap_env_phi_tol={_tol}")
+            _guard_dispose(
+                _frame_action,
+                f"propagate_traced_carrier_chain: the free-space leg into "
+                f"{where} is outside the SZIKLAS-SIEGMAN FRAME's validity: "
+                f"{_why}.  ({_geom}.)  This is a DIFFERENT axis from the two "
+                f"arms above: those are computed from the carrier geometry "
+                f"(dropped hand-off quartic; carrier NA {na:.4f}), and "
+                f"carrier_reference='sphere' cancels the hand-off term "
+                f"exactly, but NOTHING cancels the frame term -- the "
+                f"Sziklas-Siegman scaling is derived from the PARAXIAL wave "
+                f"equation, so its validity rests on the ENVELOPE's own "
+                f"angular content being small, which is what this arm "
+                f"measures rather than assumes.  Note the carrier-NA proxy can "
+                f"read small here while this arm trips (an aberrated "
+                f"intermediate wavefront, or a carrier mismatched to the "
+                f"beam).  REMEDIES: (1) re-reference the carrier closer to the "
+                f"beam so the envelope carries less residual angle; (2) split "
+                f"the leg around an explicit exact ASM step; (3) treat the "
+                f"returned image metrics as indicative.  THRESHOLD CAVEAT: "
+                f"gap_env_phi_tol's default inherits gap_sag_tol's 0.30 rad by "
+                f"DIMENSIONAL ANALOGY (same radians-of-dropped-quartic "
+                f"convention), NOT by an independent end-to-end calibration -- "
+                f"gathering that calibration is exactly what this observable "
+                f"exists for.  Read stages[i]['gap_env_theta'] / "
+                f"['gap_env_phi_drop'] to price your own design.  "
+                f"on_gap_frame='error' makes this fatal, 'ignore' silences it "
+                f"-- NOTE this is arm C's OWN knob, deliberately separate from "
+                f"on_gap_paraxial so silencing an uncalibrated frame tripwire "
+                f"does not also silence the two calibrated carrier-geometry "
+                f"arms.",
+                stacklevel=3)
     return stats
 
 
@@ -5057,6 +5594,9 @@ def propagate_traced_carrier_chain(
     decentre_fit_frac: float = _DECENTRE_FIT_FRAC_DEFAULT,
     on_gap_paraxial: str = 'warn',
     gap_sag_tol: float = _GAP_SAG_TOL_DEFAULT,
+    gap_env_phi_tol: float = _GAP_ENV_PHI_TOL_DEFAULT,
+    on_gap_frame: str = 'warn',
+    gap_kernel: str = 'auto',
 ) -> TracedCarrierChainResult:
     """Propagate a beam ENVELOPE through a chain of real (traced) lens groups on
     a co-moving carrier-referenced grid (audit F4.1).
@@ -5725,6 +6265,40 @@ def propagate_traced_carrier_chain(
         3 um / 2.92-diffraction-radii convention, no refocus) is crossed at
         ~0.40 rad; 0.30 keeps the default one step conservative of that.  ``0``
         disables that trip; the gap-NA trip is unaffected.
+    gap_env_phi_tol : float, default 0.30
+        Radians of FRAME-dropped quartic above which ``on_gap_paraxial``'s
+        THIRD arm (arm C) fires.  Spec
+        ``SPEC_EXACT_SPHERE_GAP_TRANSPORT_2026_08_05`` Stages 0-1.
+
+        Arms A and B are both computed from the CARRIER geometry -- the dropped
+        hand-off quartic, and the carrier NA ``w/|R|``.  Arm B's NA is a PROXY
+        for the envelope's angular content, faithful only while the envelope is
+        genuinely slowly-varying in the carrier frame.  Arm C instead measures
+        the envelope's residual angular spread DIRECTLY
+        (:func:`_gap_envelope_angular_spread`) and trips on the leading term
+        the paraxial Sziklas-Siegman frame drops,
+        ``k |z_eff| theta_env^4 / 8`` over the reduced leg -- so an envelope
+        carrying real non-spherical content (an aberrated intermediate
+        wavefront, a carrier mismatched to the beam) is caught even at small
+        ``w/|R|``.  It also fires when the measured spread exceeds
+        ``_GAP_ENV_NYQUIST_FRAC`` of the grid Nyquist tilt, because past that
+        point the wrapped-increment estimator has aliased and its reading is a
+        lower bound rather than a measurement.
+
+        THRESHOLD PROVENANCE (stated plainly): this default is ``gap_sag_tol``'s
+        0.30 rad carried across by DIMENSIONAL ANALOGY -- both are radians of
+        dropped quartic -- and is NOT an independent end-to-end calibration of
+        the frame axis.  Arm B's NA table is independently ASM-calibrated, but
+        along the proxy axis, not this one.  Producing the missing frame-axis
+        calibration is the stated purpose of this observable; until then arm C
+        is a warn-only tripwire and says so in its message.  ``0`` disables the
+        trip while leaving the diagnostic published.
+
+        Every leg publishes, in ``stages[i]`` (whether or not anything fires):
+        ``gap_env_theta`` (measured envelope spread, rad), ``gap_env_nyq_frac``
+        (that spread / the grid Nyquist tilt -- read this before trusting the
+        value), ``gap_env_phi_drop`` (the implied frame-dropped quartic, rad)
+        and ``gap_z_eff`` (the reduced transport distance, m).
 
     Returns
     -------
@@ -5749,10 +6323,21 @@ def propagate_traced_carrier_chain(
     _check_guard_action('on_tilt_exact_grid', on_tilt_exact_grid, _fn)
     _check_guard_action('on_decentred_fit', on_decentred_fit, _fn)
     _check_guard_action('on_gap_paraxial', on_gap_paraxial, _fn)
+    _check_guard_action('on_gap_frame', on_gap_frame, _fn)
+    if gap_kernel not in ('auto', 'fresnel', 'exact'):
+        raise ValueError(
+            f"{_fn}: gap_kernel must be 'fresnel' (default, the paraxial "
+            f"Sziklas-Siegman kernel) or 'exact' (the non-paraxial, "
+            f"tilt-aware kernel), got {gap_kernel!r}.")
     if not (np.isfinite(gap_sag_tol) and gap_sag_tol >= 0.0):
         raise ValueError(
             f"{_fn}: gap_sag_tol must be a finite non-negative number of "
             f"radians of dropped quartic sag, got {gap_sag_tol!r}.")
+    if not (np.isfinite(gap_env_phi_tol) and gap_env_phi_tol >= 0.0):
+        raise ValueError(
+            f"{_fn}: gap_env_phi_tol must be a finite non-negative number of "
+            f"radians of FRAME-dropped quartic (k |z_eff| theta_env^4 / 8 at "
+            f"the measured envelope spread), got {gap_env_phi_tol!r}.")
     # niche C1 item 5: ``focus_readout`` had no key whitelist, so a typo was
     # silently accepted and the caller kept the DEFAULT -- e.g.
     # ``'on_readout_windo'`` left ``on_readout_window`` at the hard ``'error'``
@@ -6021,18 +6606,46 @@ def propagate_traced_carrier_chain(
             # from the magnification the step returns.  Read-only.
             _w_gap = _gap_amp_radius(env, cur_dx)
             _R_gap = float(R) if np.isscalar(R) or np.ndim(R) == 0 else R
-            cr = propagate_carrier_referenced(env, R, gap, wavelength, cur_dx)
+            # Stage 0: measure the ENVELOPE's own angular spread on the leg,
+            # before transporting it (the guard needs the entering state).
+            # Skipped entirely when the diagnostic is off so 'ignore' stays
+            # free.
+            if on_gap_paraxial == 'ignore' and on_gap_frame == 'ignore':
+                _env_theta = _env_nyq = 0.0
+                _env_spec = False
+            else:
+                (_env_theta, _env_nyq,
+                 _env_spec) = _gap_envelope_angular_spread(
+                    env, cur_dx, wavelength, return_kind=True)
+            cr = propagate_carrier_referenced(
+                env, R, gap, wavelength, cur_dx, gap_kernel=gap_kernel,
+                tilt=((tilt_L, tilt_M) if _tilted else (0.0, 0.0)))
             env, R, cur_dx = cr.env, cr.R, cr.dx
             if isinstance(cur_dx, tuple):
                 cur_dx = cur_dx[0]
             if isinstance(R, tuple):
                 R = R[0]
-            if np.isscalar(_R_gap) and np.isfinite(_R_gap) and _R_gap != 0.0:
+            # A COLLIMATED leg (R = inf) previously took no arm at all: the
+            # whole guard was gated on ``isfinite(R)``.  That is the WRONG way
+            # round for the frame arm -- with no co-moving reduction
+            # ``z_eff = z``, its largest possible value, so the frame-dropped
+            # term ``k |z_eff| theta^4 / 8`` is MAXIMAL on exactly the legs
+            # that were unguarded, and roadmap P8 names "a fast final group
+            # after a collimated space" as the most common relay architecture.
+            # Arms A/B self-silence there (phi_drop = 0, na = 0), so it is safe
+            # to call the guard for any scalar R and let each arm decide.
+            if np.isscalar(_R_gap) or np.ndim(_R_gap) == 0:
+                _Rf = float(_R_gap)
+                _m_gap = ((_Rf + gap) / _Rf
+                          if (np.isfinite(_Rf) and _Rf != 0.0) else 1.0)
                 _gap_diag = _check_gap_paraxial(
-                    _w_gap, _R_gap, gap, (_R_gap + gap) / _R_gap, wavelength,
+                    _w_gap, _Rf, gap, _m_gap, wavelength,
                     f"groups[{gi}] ({presc.get('name', f'group{gi}')})"
                     if isinstance(presc, dict) else f"groups[{gi}]",
-                    on_gap_paraxial, gap_sag_tol, _sphere_ref)
+                    on_gap_paraxial, gap_sag_tol, _sphere_ref,
+                    env_theta=_env_theta, env_nyq_frac=_env_nyq,
+                    env_phi_tol=gap_env_phi_tol,
+                    frame_action=on_gap_frame, env_spectral=_env_spec)
         if _tilted and _own != 0.0:
             # The chief ray advances by the EXACT geometric
             # ``gap * (L, M)/cos(theta)`` and the frame picks up the exact
@@ -6462,8 +7075,10 @@ def propagate_traced_carrier_chain(
         return TracedCarrierChainResult(field, None, _dxo, stages)
 
     if final_distance != 0.0:
-        cr = propagate_carrier_referenced(env, R, final_distance, wavelength,
-                                          cur_dx)
+        cr = propagate_carrier_referenced(
+            env, R, final_distance, wavelength, cur_dx,
+            gap_kernel=gap_kernel,
+            tilt=((tilt_L, tilt_M) if _tilted else (0.0, 0.0)))
         env, R, cur_dx = cr.env, cr.R, cr.dx
         if isinstance(cur_dx, tuple):
             cur_dx = cur_dx[0]
@@ -7435,6 +8050,9 @@ def propagate_traced_carrier_chain_multi(
     decentre_fit_frac: float = _DECENTRE_FIT_FRAC_DEFAULT,
     on_gap_paraxial: str = 'warn',
     gap_sag_tol: float = _GAP_SAG_TOL_DEFAULT,
+    gap_env_phi_tol: float = _GAP_ENV_PHI_TOL_DEFAULT,
+    on_gap_frame: str = 'warn',
+    gap_kernel: str = 'auto',
     progress: Optional[Callable] = None,
     congruence_workers: Optional[int] = None,
     congruence_worker_min_free_gb: float = 8.0,
@@ -7814,6 +8432,12 @@ def propagate_traced_carrier_chain_multi(
     _check_guard_action('on_tilt_exact_grid', on_tilt_exact_grid, fn)
     _check_guard_action('on_decentred_fit', on_decentred_fit, fn)
     _check_guard_action('on_gap_paraxial', on_gap_paraxial, fn)
+    _check_guard_action('on_gap_frame', on_gap_frame, fn)
+    if gap_kernel not in ('auto', 'fresnel', 'exact'):
+        raise ValueError(
+            f"{fn}: gap_kernel must be 'fresnel' (default, the paraxial "
+            f"Sziklas-Siegman kernel) or 'exact' (the non-paraxial, "
+            f"tilt-aware kernel), got {gap_kernel!r}.")
     if not (np.isfinite(decentre_fit_frac) and decentre_fit_frac >= 0.0):
         raise ValueError(
             f"{fn}: decentre_fit_frac must be a finite non-negative number of "
@@ -7822,6 +8446,11 @@ def propagate_traced_carrier_chain_multi(
         raise ValueError(
             f"{fn}: gap_sag_tol must be a finite non-negative number of "
             f"radians of dropped quartic sag, got {gap_sag_tol!r}.")
+    if not (np.isfinite(gap_env_phi_tol) and gap_env_phi_tol >= 0.0):
+        raise ValueError(
+            f"{fn}: gap_env_phi_tol must be a finite non-negative number of "
+            f"radians of FRAME-dropped quartic (k |z_eff| theta_env^4 / 8 at "
+            f"the measured envelope spread), got {gap_env_phi_tol!r}.")
     readout_capture_tol = float(readout_capture_tol)
     if not (np.isfinite(readout_capture_tol) and readout_capture_tol > 0.0):
         raise ValueError(
@@ -7972,7 +8601,10 @@ def propagate_traced_carrier_chain_multi(
         on_decentred_fit=on_decentred_fit,
         decentre_fit_frac=decentre_fit_frac,
         on_gap_paraxial=on_gap_paraxial,
-        gap_sag_tol=gap_sag_tol)
+        gap_sag_tol=gap_sag_tol,
+        gap_env_phi_tol=gap_env_phi_tol,
+        on_gap_frame=on_gap_frame,
+        gap_kernel=gap_kernel)
 
     def _run(k, fr, quiet=False):
         # ``quiet`` is the 'auto' PERIOD-PROBE pass: it runs the same chain a

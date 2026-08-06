@@ -96,7 +96,14 @@ _W_IN = 1.0e-3                 # 1/e amplitude radius
 _GAP = 25e-3
 _TILT = 0.030                  # 30 mrad: OUTSIDE the 0.02 rad residual
 _TKW = dict(on_undersample='silent', on_noncollimated='silent')
-_DXO, _NOUT, _TILE = 1.4e-6, 2048, 256
+# _TILE must fit inside ONE Bluestein period of each congruence's readout.  The
+# period is N_in * d_in and the co-moving pitch at the hand-off plane scales
+# with the readout standoff, so this constant silently tracks
+# _FOCUS_STANDOFF_ZR: at the old 6.0 zR a 256 tile fitted, at the accuracy
+# optimum 0.8 zR the period is 0.1739 mm and the guard allows <= 124.  Both the
+# hand-placed reference runs and the orchestrated run use this same value, so
+# the tiled-equals-hand-placed comparison is unaffected by the size itself.
+_DXO, _NOUT, _TILE = 1.4e-6, 2048, 120
 _RS, _NW = 8, 4
 
 
@@ -803,7 +810,18 @@ def _conjugate():
     specs = [{'field': env, 'name': f'a{s:+d}',
               'carrier': la.TiltedCarrier(np.inf, s * _T_INT, 0.0)}
              for s in (-1, +1)]
-    og = dict(dx_out=_DXO_I, N_out=_NOUT_I)
+    # A WIDE readout window physically requires a LONGER Bluestein leg: the
+    # reconstruction's spatial period is N_in * d_in and the co-moving pitch at
+    # the hand-off plane scales with the standoff, so
+    #     period = _N * _DX * standoff / z_focus.
+    # The shipped default sizes the standoff for READOUT ACCURACY (0.8 zR), which
+    # gives a 171.7 um period -- ample for a spot, far too small for the +-150 um
+    # fringe analysis these tests do.  So invert the relation and ask for the
+    # shortest leg that still holds the requested window (30% margin).
+    # Downgrading the replica guard instead is NOT a valid alternative here: it
+    # was measured to corrupt the recombined power by 2.4%.
+    _need = 1.3 * (_NOUT_I * _DXO_I) * fd / (_N * _DX)
+    og = dict(dx_out=_DXO_I, N_out=_NOUT_I, standoff=_need)
     kw = dict(output_grid=og, final_distance=fd, ray_subsample=_RS,
               n_workers=_NW, traced_kwargs=_TKW, final_leg='paraxial')
     with warnings.catch_warnings():
@@ -905,11 +923,15 @@ def test_per_emitter_array_images_onto_the_exact_ray_trace():
               'carrier': la.TiltedCarrier(np.inf, 0.0, 0.0, sx * s, sy * s)}
              for i, (sx, sy) in enumerate(layout)]
     dxo, nout, tile = 1.0e-6, 2048, 1024
+    # same window-vs-leg relation as the conjugate fixture above: a 1.024 mm
+    # tile needs a period at least that wide, so ask for the leg that gives it
+    _need = 1.3 * (tile * dxo) * fd / (_N * _DX)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = la.propagate_traced_carrier_chain_multi(
             specs, groups, _WL, _DX,
-            output_grid=dict(dx_out=dxo, N_out=nout), readout_tile=tile,
+            output_grid=dict(dx_out=dxo, N_out=nout, standoff=_need),
+            readout_tile=tile,
             final_distance=fd, ray_subsample=_RS, n_workers=_NW,
             traced_kwargs=_TKW, final_leg='paraxial')
 
@@ -1164,7 +1186,17 @@ def test_result_grid_convention_is_the_readout_convention():
         res = la.propagate_traced_carrier_chain_multi(
             [{'field': env, 'carrier': la.TiltedCarrier(np.inf, tilt, 0.0)}],
             groups, _WL, 40e-6,
-            output_grid=dict(dx_out=0.5e-6, N_out=512, centre_out=cen),
+            # This measures the intensity CENTROID, which is wing-sensitive: if
+            # the 256 um readout window exceeds one Bluestein period the outer
+            # window fills with replicas and the centroid walks (measured 58.8 um
+            # at the 0.8 zR accuracy standoff).  At K = 1 the replica guard is
+            # deliberately permissive -- it is a MULTIPLEXING guard and warns
+            # rather than raising -- so nothing refuses the run for us here.
+            # period = N * dx * standoff / z_focus, so ask for the leg that
+            # holds the requested window (30% margin), as the wide-window
+            # fixtures above do.
+            output_grid=dict(dx_out=0.5e-6, N_out=512, centre_out=cen,
+                             standoff=1.3 * (512 * 0.5e-6) * fd / (256 * 40e-6)),
             final_distance=fd, ray_subsample=8, n_workers=1,
             traced_kwargs=_TKW, final_leg='paraxial')
     assert res.centre == cen

@@ -4,6 +4,162 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+
+### Fixed -- `n_workers` was a silent no-op on the default Newton fit
+
+The Newton process pool only knew how to rebuild a `RectBivariateSpline`, so
+`_invert_newton_parallel` force-returned the serial path whenever
+`newton_fit='polynomial'` -- which is the DEFAULT.  Measured before the fix:
+`n_workers` 1 / 4 / 8 gave 11.2 / 11.3 / 11.4 s (0.98-0.99x), i.e. the knob did
+nothing at all and said nothing about it.  Whether you got parallel Newton thus
+depended on a knob about FIT ACCURACY that most callers never set.
+
+The worker now rebuilds whichever fit the caller chose from the same pickled
+grids (payload carries `newton_fit`, `fit_poly_order`, `fit_weights`; payloads
+without the key still default to spline), and mirrors the serial path's combined
+value+gradient evaluation so the floating-point order matches.  Measured after:
+polynomial 1.15x at 4 workers, spline 1.25x / 1.52x at 4 / 8 -- and pool output
+is BIT-IDENTICAL to serial for both backends, asserted by test.
+
+Also corrected the `n_workers` docstring, which documented the no-op as
+intentional ("Polynomial Newton is cheap ... not a bottleneck in practice").
+
+### Measured -- a tight focus does not need a huge propagation grid
+
+A 3 um spot needs NA 0.278, which appears to force `dx <= lambda/(2 NA)` on the
+converging wavefront and -- after the co-moving frame's measured 25.6x pitch
+expansion -- a ~32768 grid (~105 GB, unreachable).  That reasoning does not
+apply to a CARRIER-REFERENCED field: the steep converging phase is carried
+analytically by `exp(i k S(r; R))`, not stored on the grid, so what the grid
+holds is a smooth envelope.  Measured: the readout of a 3 um focus is identical
+(relL2 = 0.0) whether the envelope rides on N=1024 or N=4096, including N=1024
+whose dx violates the pupil Nyquist limit by 2.5x, and the recovered 1/e^2
+waist matches the analytic complex-q ground truth to 1.8%.
+
+What actually governs tight-focus accuracy, now pinned by test:
+
+* LONGITUDINAL readout placement dominates.  At NA 0.278 the Rayleigh range is
+  5.4 um, so a 3 um defocus widens the spot ~30%, and the growth follows
+  `sqrt(1+(dz/zR)^2)` to <1% near focus.
+* the `standoff` knob is NOT purely defensive -- it sets accuracy.  The readout
+  runs a carrier leg to `z - standoff` then a fine Bluestein zoom over
+  `standoff`, and the bias scales with that second leg.  Measured waist error at
+  the nominal plane (analytic truth 1.5000 um): 0.60% at `1 zR`, 1.12% at
+  `1.5 zR`, 3.33% at `3 zR`, **8.74% at the shipped `_BRIDGE_ZR_FACTOR = 6.0`**,
+  15.58% at `10 zR`.  It degrades again below `1 zR` (8.74% at `0.5 zR`), which
+  is the co-moving-grid collapse the helper exists to prevent -- so ~1-1.5 zR is
+  the sweet spot, and a tight-focus budget must PIN standoff rather than inherit
+  it.  This fully explains the ~2.3 um apparent focal shift first observed at the
+  default standoff; it is not an independent defect.
+  The trade-off is window width: shorter standoff shrinks the Bluestein
+  transform period (`N_in * d_in`), so `N_out * dx_out` must shrink with it.
+  Clean configuration for a 3 um spot: `standoff = zR`, `dx_out = 0.05 um`,
+  `N_out = 128` -> 6.40 um window inside a 9.83 um period, waist accurate to
+  **0.10%**, no replica warning.  The default `6 zR` with `N_out = 512` gives a
+  wider 25.6 um window but 6.43% waist error.  Choose by whether the budget
+  needs core accuracy or halo reach.
+  Not changed: `_BRIDGE_ZR_FACTOR` itself, since the optimal factor is likely
+  NA-dependent and the default's conservatism may be load-bearing elsewhere.
+* the readout WINDOW, for wing metrics only.  `N_out * dx_out` beyond the
+  Bluestein/MFT period `N_in * d_in` fills the outer window with periodic
+  replicas: second-moment / r^2-weighted widths then read 88 um against a
+  1.53 um waist while the core 1/e^2 width still looks perfect.  The core is
+  robust to readout pitch (<3% from 0.05 um to 0.4 um).
+
+
+### Added -- non-paraxial, tilt-aware gap kernel (`gap_kernel='exact'`)
+
+`propagate_traced_carrier_chain`, `propagate_traced_carrier_chain_multi` and
+`propagate_carrier_referenced` accept `gap_kernel='exact'`, replacing the
+envelope leg's paraxial Sziklas-Siegman transfer function
+`k z - z |q|^2/(2k)` with the exact `z sqrt(k^2 - |k s + q|^2)`, expanded about
+the carrier wavevector so the validated piston / chief-ray bookkeeping is
+untouched.  This removes TWO errors at once -- they are one change because they
+are two terms of a single expansion:
+
+* the non-paraxial angular content (higher orders in `|q|^2`), and
+* the ANISOTROPIC tilt stretch: effective distance `z/N^3` ALONG the tilt vs
+  `z/N` ACROSS it, `N = sqrt(1-|s|^2)`.  The paraxial kernel is isotropic and
+  tilt-blind, so it applied plain `z` on both axes and could not represent this
+  at all (at direction cosine 0.35 the along-tilt distance is 22% longer).
+
+Verified against an independent plain-numpy exact-ASM oracle: relL2 <= 1e-12
+for the exact kernel versus 3e-06 .. 1.28 for the paraxial one, i.e. 7-12 orders
+of magnitude, and on a quadratic-loaded case the paraxial kernel is 128% wrong.
+The anisotropic coefficients are confirmed to be exactly `1/N^3` and `1/N` by
+window-shrinking convergence of the kernel's own fitted phase.
+Threaded through the inter-group legs, the trailing-distance leg, and both
+carrier legs of the focus-crossing split.
+
+`gap_kernel='fresnel'` remains the default and is byte-identical to prior
+releases (asserted at both the step and the chain level).  On design 121's
+pre-DOE chain the two kernels differ by only 2.3e-08 relL2 -- that chain is
+low-NA and untilted, which is exactly why single-design validation could not
+have caught either error.  Overhead is nil (measured -21% .. +0%, i.e. noise).
+NumPy path only; other backends raise `NotImplementedError`.
+
+### Added -- second-wavelength design battery and cross-design guard calibration
+
+The design battery ran only at 1.31 um, so a wavelength-specific error had
+nowhere to show.  It now also runs singlet/doublet/triplet/relay at 0.633 um
+against the same independent ray oracle, with the identical
+`max(0.15 rad, 0.35 x rms_oracle)` criterion, plus a premise guard asserting the
+glass indices actually move between the bands (otherwise the new cells would be
+a relabelled re-run) and a direction-of-effect check that the shorter wavelength
+reports MORE aberration in waves.  The oracle, `_run_chain` and
+`_chain_exit_rms` are now wavelength-parameterised; their result cache key
+carries the wavelength, which it previously could not.
+
+The three gap-guard thresholds were calibrated on design 121 alone.  Measured
+across triplet + relay x {1310 nm, 633 nm} (6 gap legs), healthy systems sit
+6x under `_GAP_NA_TOL` and 107x under the frame tolerance, now pinned by test.
+The 633 nm legs show the larger frame drop, as they must, since that term
+carries `k`.
+
+### Added/Fixed — gap-transport FRAME observable + arm C (`propagators/carrier.py`)
+
+Response to `docs/audits/SPEC_EXACT_SPHERE_GAP_TRANSPORT_2026_08_05.md`
+Stages 0-1.  Full record incl. the spec claims that did not survive
+verification: `docs/audits/AUDIT_GAP_FRAME_OBSERVABLE_2026_08_05.md`.
+
+* **New Stage 0 observable** `_gap_envelope_angular_spread`, published on every
+  inter-group leg in `stages[i]`: `gap_env_theta` (the ENVELOPE's own residual
+  angular spread after carrier removal), `gap_env_nyq_frac`,
+  `gap_env_phi_drop` (implied frame-dropped quartic `k|z_eff|θ⁴/8`, same
+  convention as the existing `gap_phi_drop`), `gap_z_eff`, `gap_env_spectral`.
+  The chain's paraxial-frame justification rests on that spread being small;
+  nothing measured it at runtime.  Spectral (99.9 % power-radius) estimator on
+  grids ≤ 4096, memory-bounded wrapped-difference fallback above, with a
+  multi-scale alias cross-check and the Nyquist fraction published so the
+  reading is interpretable rather than falsely confident.
+* **New arm C of the gap guard**, on its **own** knob `on_gap_frame` (`'warn'`)
+  with `gap_env_phi_tol` (0.30 rad; `0` = report-without-tripping).  Arms A/B
+  trip on the *carrier's* geometry (dropped hand-off quartic; carrier NA
+  `w/|R|`); arm B's NA is only a PROXY for the envelope's angular content.
+  Measured blind spot now covered: a carrier-mismatched envelope leaves arm B at
+  NA 0.0067 (silent) while the measured envelope spread is 0.22 rad → 73 rad
+  implied frame drop, and arm C fires.  Threshold provenance is stated in the
+  warning itself — carried from `gap_sag_tol` by dimensional analogy, **not** an
+  independent frame-axis calibration.
+* **Fixed: a COLLIMATED inter-group leg (`R = inf`) previously took no gap arm
+  at all** — the guard was gated on `isfinite(R)`, which is backwards for the
+  frame arm since `z_eff = z` (its largest value) there, and roadmap P8 names
+  "a fast final group after a collimated space" as the most common relay
+  architecture.  Arms A/B self-silence on such a leg, so the change is inert
+  for them.
+* Healthy relays measure 1.9e-04 – 8.8e-04 rad of frame drop (~3 orders under
+  the threshold); `test_niche_d5_dx_flatness_gate` + the 17-case
+  `test_niche_p2_design_battery` pass with **zero** frame warnings.  New tests:
+  `tests/unit/test_niche_gap_frame_observable.py` (12).
+* **NOT implemented: the spec's M1 (exact sphere-referenced transport, Stages
+  2-4)** — declined pending the measurement Stage 0 now enables, per the spec's
+  own staging.  Reasons in the audit §4: the "B is unpriced" premise is
+  substantially false (arm B is ASM-calibrated; `approx_leg_budget_121.py`
+  already measures the envelope-spectrum axis); M1's exactness rests on a Debye
+  step whose error is O(1/N) in the Fresnel number and *degrades* in the
+  short-conjugate regime it targets; and no design is yet named where
+  Sziklas-Siegman actually fails.
+
 ### Added/Fixed — PMM per-layer roadmap campaign M1-M5 (`elements/pmm/**`, `elements/rcwa/**`)
 
 Five missions off `docs/audits/PMM_PER_LAYER_CAMPAIGN_PLAN_2026_08_04.md`

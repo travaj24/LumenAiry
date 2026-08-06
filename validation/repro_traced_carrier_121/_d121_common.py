@@ -131,10 +131,16 @@ def order_table(period, n_per=128):
     return mx, my, A[my + cy, mx + cx]
 
 
-def chain_a(n=1024, dx0=None, rs=4, nw=8, cache=True):
-    """Source envelope -> DOE plane.  Returns ``(env, R, dx, P_in)``."""
+def chain_a(n=1024, dx0=None, rs=4, nw=8, cache=True, final_leg='exact'):
+    """Source envelope -> DOE plane.  Returns ``(env, R, dx, P_in)``.
+
+    ``final_leg`` is part of the CACHE KEY.  It used to be hard-coded
+    ``'paraxial'`` and absent from the filename, so switching the leg silently
+    returned the previously-cached paraxial field and looked like a no-op.
+    """
     dx0 = float(dx0 if dx0 is not None else 1.0e-6 * 2048 / n)
-    fn = os.path.join(_HERE, f'_chainA_{n}_{dx0 * 1e9:.0f}nm_rs{rs}.npz')
+    fn = os.path.join(
+        _HERE, f'_chainA_{n}_{dx0 * 1e9:.0f}nm_rs{rs}_{final_leg}.npz')
     if cache and os.path.exists(fn):
         d = np.load(fn)
         return d['env'], float(d['R']), float(d['dx']), float(d['P_in'])
@@ -148,7 +154,7 @@ def chain_a(n=1024, dx0=None, rs=4, nw=8, cache=True):
     P_in = float(np.sum(np.abs(env0) ** 2)) * dx0 * dx0
     res = la.propagate_traced_carrier_chain(
         env0, pre, LAM, dx0, r_in=R1, ray_subsample=rs, n_workers=nw,
-        final_distance=gap_to_doe, final_leg='paraxial')
+        final_distance=gap_to_doe, final_leg=final_leg)
     env = carrier_referenced_envelope(res.field, res.R, LAM, res.dx)
     if cache:
         np.savez_compressed(fn, env=env, R=float(res.R), dx=float(res.dx),
