@@ -1147,6 +1147,355 @@ def close_worker_pool() -> None:
                 pass
             _PERSISTENT_POOL = None
             _PERSISTENT_POOL_NWORKERS = None
+    _reset_newton_pool_resource_state()
+
+
+# ---------------------------------------------------------------------------
+# Newton pool RESOURCE clamp (docs/audits/FIX_POOL_MEMORY_2026_08_06.md)
+#
+# ``_invert_newton_parallel`` used to submit ``n_workers`` chunks with NO memory
+# accounting of any kind, while the fine grid those chunks come from is sized by
+# ``carrier._memory_bounded_n_fine`` with a SINGLE-PROCESS cost model.  The other
+# process pool in this library already has the clamp -- see
+# ``carrier._multi_resolve_workers``, whose comment records the identical failure
+# being fixed there -- and this is the same treatment for the Newton pool.
+#
+# MEASURED on this box (Ryzen 9 5950X, 137.4 GB, python 3.14.6, numpy 2.4.4,
+# numba present) by running ``_newton_invert_chunk`` in a FRESH interpreter --
+# exactly what a spawn worker is -- and reading ``psutil`` ``peak_pagefile``
+# (Windows peak commit charge).  Fit-grid edge 531 (design 121's own), chunk
+# swept 4x:
+#
+#     chunk points     peak commit        marginal
+#        2 097 152     2.288 GB              --
+#        4 194 304     2.849 GB       267.42 B/pt
+#        8 388 608     3.970 GB       267.13 B/pt
+#       16 777 216     6.211 GB       267.16 B/pt
+#
+# i.e. DEAD linear at 267.2 B per Newton point (0.1 % spread over a 8x range),
+# on a 1.728 GB intercept.  267 B/point is ~33 float64 temporaries per point,
+# which is what the Newton loop actually holds live (xa/ya/xw/yw, the six
+# Jacobian entries, rx/ry/det/inv_det/dxe/dye/xa_new/ya_new/res, the numba
+# kernel's u_flat/v_flat/f/fx/fy for each of two evaluators, plus the chunk).
+#
+# The intercept is a per-PROCESS import cost, not physics: bare python commits
+# 0.012 GB, ``import numpy`` 0.831 GB, ``import lumenairy.elements._lens_traced``
+# 1.65 GB, and the numba Chebyshev kernel's JIT adds ~0.07 GB on first call.
+# Eight workers therefore commit ~14 GB before touching a single Newton point.
+#
+# Fit-grid axis, at a fixed 2 097 152-point chunk (the Chebyshev lstsq builds an
+# (n_fit, 28) design matrix and SciPy/LAPACK copies it):
+#
+#     fit edge   fit points     peak commit    marginal
+#         531       281 961       2.288 GB        --
+#        1024     1 048 576       2.626 GB    440.3 B/pt
+#        2048     4 194 304       5.274 GB    841.8 B/pt
+#
+# superlinear, so the shipped constant is the LARGER measured slope.
+#
+# The resulting model over-predicts every measured point by 5-15 %, which is the
+# direction a resource clamp has to err in.
+# ---------------------------------------------------------------------------
+
+#: Per-worker peak commit at zero work: interpreter + numpy + lumenairy import
+#: + the numba Chebyshev JIT.  MEASURED 1.728 GB intercept of the 4-point chunk
+#: sweep above.
+_NEWTON_WORKER_BASE_BYTES = 1.75e9
+#: Per-worker peak commit per NEWTON POINT in the chunk it receives.  MEASURED
+#: 267.2 B/pt, 0.1 % spread across a 8x chunk range.
+_NEWTON_WORKER_BYTES_PER_POINT = 268.0
+#: Per-worker peak commit per point of the pickled ray-fit grid the worker
+#: re-fits (``n_launch**2``).  MEASURED 440-842 B/pt; the larger is shipped.
+_NEWTON_WORKER_FIT_BYTES_PER_POINT = 850.0
+#: Fraction of AVAILABLE memory the whole pool may claim.  Same 0.5 the fine
+#: grid's own ceiling uses (``carrier._FINE_GRID_RAM_FRAC``), so the two clamps
+#: that meet on the exact final leg speak the same language.
+_NEWTON_POOL_RAM_FRAC = 0.5
+#: ...on top of which this much is always left for the OS and for the PARENT's
+#: own remaining growth (its fine grid, its band assembly).  Same RESERVE idiom
+#: ``_multi_resolve_workers`` uses (``congruence_worker_min_free_gb``, 8 GB),
+#: scaled to this pool: that one guards ~24 GB chain workers, these are ~2 GB
+#: Newton workers, and an 8 GB reserve there would refuse a 2-worker Newton
+#: dispatch on any box under ~20 GB -- a clamp that binds where nothing is
+#: wrong is how a resource guard gets turned off.
+_NEWTON_POOL_MIN_FREE_GB = 2.0
+
+#: ``__main__`` guard verdicts, keyed by resolved script path (an AST parse per
+#: path, not per Newton dispatch), and the one-shot warning ledger.
+#:
+#: Both are guarded by ``_MAIN_GUARD_LOCK`` and cleared together by
+#: ``_reset_newton_pool_resource_state``.  The lock is not decorative:
+#: ``apply_real_lens_traced`` runs on a ThreadPoolExecutor whenever
+#: ``parallel_amp`` is on, so two threads can reach the resolver at once, and
+#: the warning ledger's "have we said this yet" is a read-modify-write whose
+#: whole contract is that it fires EXACTLY once.
+_MAIN_GUARD_CACHE: Dict[str, bool] = {}
+_MAIN_GUARD_WARNED: set = set()
+_MAIN_GUARD_LOCK = threading.Lock()
+
+
+def _reset_newton_pool_resource_state() -> None:
+    """Forget the cached ``__main__``-guard verdict and its one-shot warning.
+
+    ``close_worker_pool`` is the documented "return this process to a cold
+    state" entry point, so it has to clear this too -- otherwise a test (or a
+    driver) that swaps ``sys.modules['__main__']`` would keep answering from
+    the previous program's verdict, and the once-per-process warning could
+    never fire again for a genuinely new one.
+
+    Also the module's ``register_cache_clearer`` entry point, so
+    ``clear_all_registered_caches`` (and ``lumenairy_context(
+    clear_caches_on_exit=True)``) reach it like any other cache.
+    """
+    with _MAIN_GUARD_LOCK:
+        _MAIN_GUARD_CACHE.clear()
+        _MAIN_GUARD_WARNED.clear()
+
+
+try:
+    from .._cache_registry import (
+        register_cache_clearer as _register_cache_clearer,
+    )
+    _register_cache_clearer('lens_traced_main_guard',
+                            _reset_newton_pool_resource_state)
+except ImportError:  # pragma: no cover - registry always present in-tree
+    pass
+
+
+def _is_main_guard_test(node) -> bool:
+    """Is ``node`` the test of an ``if __name__ == '__main__':`` guard?
+
+    Accepts every spelling that actually protects a spawn child: ``==`` either
+    way round, ``in ('__main__', '__mp_main__')``, and the ``__mp_main__``
+    name multiprocessing itself uses for the re-executed module.
+    """
+    import ast
+    saw_name = False
+    saw_main = False
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Name) and sub.id == '__name__':
+            saw_name = True
+        elif isinstance(sub, ast.Constant) and sub.value in ('__main__',
+                                                             '__mp_main__'):
+            saw_main = True
+    return saw_name and saw_main
+
+
+def _script_has_main_guard(path: str) -> bool:
+    """Does the module at ``path`` have a TOP-LEVEL ``__name__`` guard?
+
+    Top-level only, deliberately: a guard nested inside a function does not
+    protect the module body, and the failure this predicate exists to catch is
+    exactly "the module body re-runs".  A file that cannot be read or parsed
+    returns ``True`` (= "cannot prove it is unguarded"), which preserves the
+    historical pool behaviour rather than silently serialising a caller we know
+    nothing about.
+    """
+    import ast
+    with _MAIN_GUARD_LOCK:
+        cached = _MAIN_GUARD_CACHE.get(path)
+    if cached is not None:
+        return cached
+    ok = True
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as fh:
+            tree = ast.parse(fh.read(), filename=path)
+    except (OSError, ValueError, SyntaxError, MemoryError, RecursionError):
+        ok = True
+    else:
+        ok = any(isinstance(st, ast.If) and _is_main_guard_test(st.test)
+                 for st in tree.body)
+    # The parse happens OUTSIDE the lock (it is pure, and two threads racing it
+    # recompute the same verdict rather than serialising on file I/O); only the
+    # publish is guarded.
+    with _MAIN_GUARD_LOCK:
+        _MAIN_GUARD_CACHE[path] = ok
+    return ok
+
+
+def _spawn_reexecuted_main_script() -> Optional[str]:
+    """Path of this process's ``__main__`` when a ``spawn`` worker would
+    RE-EXECUTE its whole module body, else ``None``.
+
+    This mirrors ``multiprocessing.spawn.get_preparation_data`` +
+    ``_fixup_main_from_{name,path}`` rather than guessing:
+
+      * ``__main__.__spec__.name`` set and equal to ``__main__`` or ending in
+        ``.__main__`` (``python -m pytest``, ``pytest``) -- the child returns
+        early, NOTHING is re-run;
+      * ``__spec__.name`` set otherwise (``python -m yourscript``) -- the child
+        ``runpy.run_module``s it;
+      * no ``__spec__``, ``__file__`` set (``python yourscript.py``,
+        ``runpy.run_path(..., run_name='__main__')``) -- the child
+        ``runpy.run_path``s it;
+      * frozen / embedded / no ``__file__`` / ``ipython`` -- nothing is re-run.
+
+    A module the child re-runs is only a PROBLEM when its body is unguarded, so
+    the guard check is applied here and a guarded script returns ``None``.
+    """
+    import os
+    import sys
+    main_module = sys.modules.get('__main__')
+    if main_module is None:
+        return None
+    if getattr(sys, 'frozen', False):
+        return None
+    spec_name = getattr(getattr(main_module, '__spec__', None), 'name', None)
+    if spec_name is not None:
+        # _fixup_main_from_name's early return: a package's own __main__ is
+        # already import-safe by construction.
+        if spec_name == '__main__' or spec_name.endswith('.__main__'):
+            return None
+    path = getattr(main_module, '__file__', None)
+    if not path:
+        return None
+    try:
+        base = os.path.splitext(os.path.basename(path))[0]
+    except (TypeError, ValueError):
+        return None
+    if base == 'ipython':          # multiprocessing's own carve-out
+        return None
+    if path.lower().endswith('.exe'):
+        return None
+    return None if _script_has_main_guard(path) else path
+
+
+def _newton_worker_bytes(chunk_points, fit_points) -> float:
+    """Peak commit ONE Newton pool worker takes for a chunk of
+    ``chunk_points`` points against a ``fit_points``-point ray-fit grid.
+
+    The measured law is at the top of this section.  Every term is a MEASURED
+    slope or intercept, not an allowance.
+    """
+    return (_NEWTON_WORKER_BASE_BYTES
+            + _NEWTON_WORKER_BYTES_PER_POINT * max(float(chunk_points), 0.0)
+            + _NEWTON_WORKER_FIT_BYTES_PER_POINT * max(float(fit_points), 0.0))
+
+
+def _newton_resolve_workers(requested, n_total, fit_points,
+                            fn='apply_real_lens_traced', min_pool_points=None,
+                            _free_b=None) -> int:
+    """Clamp the Newton pool's worker count to what this box can hold.
+
+    Two rules, in order, and both of them can only ever LOWER the count -- the
+    pool path is bit-identical to the serial path (see
+    :func:`_newton_invert_chunk` and
+    ``tests/unit/test_niche_newton_pool_both_fits.py``), so this is a pure
+    resource decision that cannot move a number.
+
+    1. **The caller's ``__main__`` must not be re-executed.**  ``spawn``
+       workers re-run an unguarded ``__main__`` module body IN FULL before
+       serving their chunk, so each worker pays the caller's WHOLE program, not
+       a 1/K slice of a Newton grid.  MEASURED on design 121's acceptance
+       (``validation/repro_traced_carrier_121/focus_scan_121.py``, which has no
+       guard): 22.1 GB committed per worker x 8 = ~177 GB, taking a
+       227.5 GB-commit box to 205.7 GB and 0.0 GB free, against an intrinsic
+       1.9 GB/worker for the chunk it was actually given -- an 11.5x overhead
+       that no chunk-sized model can see.  There is no worker count that makes
+       that acceptable (the caller's side effects run K extra times too), so
+       this rule returns SERIAL, not a smaller pool.
+    2. **The pool must fit AVAILABLE memory**, at ``_NEWTON_POOL_RAM_FRAC`` of
+       it with a ``_NEWTON_POOL_MIN_FREE_GB`` reserve for the parent's own
+       remaining growth -- the parent is mid-``apply_real_lens_traced`` and its
+       fine grid / band assembly is still ahead of it.
+
+    Composes with, and is deliberately UPSTREAM of, the V5 cost-class gate in
+    ``_invert_newton_parallel``: this bounds the CEILING (how many workers may
+    ever run) while the cost gate decides whether to dispatch at all.  Running
+    it first is what keeps the promotion evidence keyed by the worker count
+    that would actually be used.
+
+    ``min_pool_points`` is the other half of that composition.  Because the
+    clamp runs first it also sees calls the SIZE gate is about to answer
+    serially at any worker count, and announcing a cap on a dispatch that will
+    never happen is noise that trains a reader to ignore the warning -- observed
+    on ``test_fga.py``'s 384-point dispatcher probe, where a 24-CPU default and
+    a 1125^2 ray-fit grid produced a perfectly correct 24 -> 20 clamp for a
+    16-points-per-chunk call that then ran in-process.  Pass the pool's own
+    lower size bar and the clamp still CLAMPS below it (the count feeds the
+    gate) but stays SILENT.
+
+    ``_free_b`` overrides the live memory read (tests only).
+    """
+    requested = int(requested)
+    if requested <= 1:
+        return 1
+    unguarded = _spawn_reexecuted_main_script()
+    if unguarded is not None:
+        # Claim the "say it once" token under the lock: the whole contract of
+        # this warning is that a 6-group chain does not emit six copies of a
+        # paragraph, and ``if x not in s: s.add(x)`` is a torn RMW without it.
+        with _MAIN_GUARD_LOCK:
+            _first = unguarded not in _MAIN_GUARD_WARNED
+            _MAIN_GUARD_WARNED.add(unguarded)
+        if _first:
+            import warnings
+            warnings.warn(
+                f"{fn}: running the Newton inversion SERIAL instead of on "
+                f"{requested} workers, because this process's __main__ "
+                f"({unguarded}) has no top-level `if __name__ == "
+                f"'__main__':` guard.  multiprocessing's spawn workers "
+                f"RE-EXECUTE the whole __main__ module body before serving "
+                f"their chunk, so each worker would re-run your entire "
+                f"program: MEASURED on design 121, 22.1 GB committed per "
+                f"worker (~177 GB across 8) against 1.9 GB of actual chunk, "
+                f"which took a 227.5 GB-commit box to 0.0 GB free.  Wrap the "
+                f"top-level code of that file in the guard to get the pool "
+                f"back -- the serial result is bit-identical either way, so "
+                f"nothing but wall time changes here.",
+                RuntimeWarning, stacklevel=3)
+        return 1
+    if _free_b is None:
+        try:
+            import psutil as _ps
+
+            from ..memory import get_ram_budget
+            _free_b = min(int(_ps.virtual_memory().available),
+                          int(get_ram_budget()))
+        except (ImportError, AttributeError, OSError, ValueError):
+            # No memory oracle -> historical behaviour (the caller's
+            # n_workers), exactly as _multi_resolve_workers does.
+            return requested
+    free_b = float(_free_b)
+    if not np.isfinite(free_b):
+        return requested
+    per_worker_b = _newton_worker_bytes(
+        float(n_total) / float(requested), fit_points)
+    if per_worker_b <= 0:
+        return requested
+    budget_b = (_NEWTON_POOL_RAM_FRAC * free_b
+                - _NEWTON_POOL_MIN_FREE_GB * 1e9)
+    allowed = int(max(1, budget_b // per_worker_b))
+    if allowed >= requested:
+        return requested
+    # Re-price at the count we will actually run: fewer workers means BIGGER
+    # chunks, so the per-worker cost is not the one priced above.  Shrink until
+    # the projection holds (bounded: at most ``requested`` steps).
+    while allowed > 1:
+        pw = _newton_worker_bytes(float(n_total) / float(allowed), fit_points)
+        if pw * allowed <= budget_b:
+            break
+        allowed -= 1
+    if min_pool_points is not None and n_total < int(min_pool_points):
+        # Clamped, but this call cannot reach the pool at ANY worker count --
+        # see ``min_pool_points`` above.  Return the count, say nothing.
+        return allowed
+    import warnings
+    warnings.warn(
+        f"{fn}: the Newton process pool asked for {requested} workers, which "
+        f"projects to ~{requested * per_worker_b / 1e9:.1f} GB "
+        f"({per_worker_b / 1e9:.2f} GB per worker at "
+        f"{int(n_total) // int(requested)} Newton points/chunk and a "
+        f"{int(fit_points)}-point ray-fit grid), but only "
+        f"{free_b / 1e9:.1f} GB is available and this pool may claim "
+        f"{_NEWTON_POOL_RAM_FRAC:.0%} of it less a "
+        f"{_NEWTON_POOL_MIN_FREE_GB:.0f} GB reserve = "
+        f"{budget_b / 1e9:.1f} GB; running {allowed} worker(s) instead.  The "
+        f"result is UNCHANGED (the pool path is bit-identical to serial); "
+        f"only the wall time is.  Lower n_workers, raise the RAM budget "
+        f"(lumenairy.set_max_ram), or free memory to use more.",
+        RuntimeWarning, stacklevel=3)
+    return allowed
 
 
 # Sibling-module imports (created separately in this package) ----------------
@@ -8451,8 +8800,12 @@ def apply_real_lens_traced(
     # If the user pinned half the cores via taskset (or the container
     # has a CPU quota) we'll see the restricted count here, whereas
     # os.cpu_count() would still return the raw logical total.
-    n_cpu = n_workers if n_workers is not None else available_cpus()
-    n_cpu = max(1, int(n_cpu))
+    _n_cpu_req = n_workers if n_workers is not None else available_cpus()
+    _n_cpu_req = max(1, int(_n_cpu_req))
+    # Points in the ray-fit grid each worker re-fits from the pickled payload
+    # (``n_launch**2``); one of the two terms the per-worker memory model
+    # prices.  See ``_newton_worker_bytes``.
+    _fit_points = int(np.size(_spline_data['opl_grid']))
 
 
     def _invert_newton_parallel(Xw, Yw, sub_progress=None):
@@ -8474,6 +8827,14 @@ def apply_real_lens_traced(
         x_w_flat = Xw.ravel()
         y_w_flat = Yw.ravel()
         n_total = x_w_flat.size
+        # RESOURCE CEILING, resolved before the COST gate below and composing
+        # with it: this bounds how many workers may ever run (measured
+        # per-worker commit vs available RAM, plus the unguarded-__main__
+        # refusal), the cost gate then decides whether to dispatch at all.
+        # Upstream on purpose -- the promotion evidence is keyed by worker
+        # count, so it has to be keyed by the count we would actually use.
+        n_cpu = _newton_resolve_workers(_n_cpu_req, n_total, _fit_points,
+                                        min_pool_points=_POOL_MIN_PIXELS_WARM)
         # A pool that is already up has no spawn left to amortise -- see the
         # measured cold/warm tables at _POOL_MIN_PIXELS.
         _pool_is_warm = (_PERSISTENT_POOL is not None

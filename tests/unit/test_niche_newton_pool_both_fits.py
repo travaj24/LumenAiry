@@ -78,6 +78,17 @@ def _skip_if_low_ram():
             pytest.skip('insufficient free RAM for the pool test')
     except ImportError:
         pass
+    # PREMISE (FIX_POOL_MEMORY_2026_08_06): every dispatch-count assertion in
+    # this file assumes the RESOURCE clamp added to _invert_newton_parallel
+    # does not bind, because the clamp legitimately answers a pool-sized call
+    # with fewer workers -- or with serial -- on a box that cannot hold the
+    # pool.  Ask the shipped resolver rather than guessing a GB threshold, so
+    # this guard tracks the model instead of drifting from it.  The fit-grid
+    # term is priced at the largest grid these shapes build (a few hundred
+    # squared); over-estimating it only makes the guard stricter.
+    if LT._newton_resolve_workers(_NW, (_N // _RS) ** 2, 600 * 600) < _NW:
+        pytest.skip('the Newton pool resource clamp binds on this box, so the '
+                    'dispatch-count assertions would be testing the clamp')
 
 
 def _doublet(ap):
