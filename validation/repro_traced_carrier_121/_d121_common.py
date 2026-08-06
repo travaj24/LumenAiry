@@ -195,11 +195,12 @@ _CHAIN_A_SCHEMA = 2
 
 
 def _numba_available():
-    try:
-        import numba  # noqa: F401
-        return True
-    except ImportError:
-        return False
+    # Read the LIBRARY's own gate, not a re-derived `import numba` probe:
+    # the two disagree in the numba/numpy ABI-mismatch case (find_spec sees
+    # the package, import fails), and it is the gate that selects the code
+    # path whose output this cache stores (verifier round 2, V7 caveat).
+    from lumenairy.elements import _lens_traced
+    return bool(_lens_traced._NUMBA_AVAILABLE)
 
 
 def _sha256_file(path):

@@ -1164,6 +1164,34 @@ def _envelope_amp_radius(E_env, dx, dy, centre=(0.0, 0.0)):
     return float(np.sqrt(2.0 * max(r2, 0.0)))
 
 
+def _envelope_amp_centroid(E_env, dx, dy):
+    """Intensity centroid ``(xc, yc)`` of the envelope on the centred grid,
+    SNAPPED to exactly ``(0.0, 0.0)`` when both components are sub-pixel.
+
+    Verifier round 2 (2026-08-06, sibling of V3): the standoff resolver and
+    the near-focus bridge gate measured the beam about the GRID ORIGIN, so a
+    decentred beam read ``sqrt(2 x_c^2 + w^2)`` -- 2.34x too wide at a 1.5 w
+    decentre -- and resolved a 6.3x shorter leg (hence a 6.3x shorter
+    Bluestein period).  Measuring about the centroid fixes that; the
+    sub-pixel snap keeps every effectively-centred call on the exact
+    ``centre == (0.0, 0.0)`` short-circuit of
+    :func:`_envelope_amp_radius`, so the on-axis universe stays
+    byte-identical.  Returns ``(0.0, 0.0)`` for an empty field."""
+    from ..backend import to_numpy
+    I = np.abs(to_numpy(E_env)) ** 2
+    tot = float(I.sum())
+    if not (tot > 0.0):
+        return (0.0, 0.0)
+    Ny, Nx = I.shape[-2], I.shape[-1]
+    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    xc = float((I.sum(axis=-2) * x).sum()) / tot
+    yc = float((I.sum(axis=-1) * y).sum()) / tot
+    if abs(xc) < 0.5 * dx and abs(yc) < 0.5 * dy:
+        return (0.0, 0.0)
+    return (xc, yc)
+
+
 def _near_focus_needs_bridge(E_env, R, R_out, wavelength, dx, dy):
     """Same-sign (``m>0``) guard: is the landing so close to the geometric focus
     that the shrunken co-moving grid can no longer hold the diffraction-limited
@@ -1171,14 +1199,19 @@ def _near_focus_needs_bridge(E_env, R, R_out, wavelength, dx, dy):
     comfortably away from focus, so the fast path stays byte-identical."""
     if abs(R_out) >= _NEAR_FOCUS_FRACTION * abs(R):
         return False
-    w_in = _envelope_amp_radius(E_env, dx, dy)
+    _cen = _envelope_amp_centroid(E_env, dx, dy)
+    w_in = _envelope_amp_radius(E_env, dx, dy, centre=_cen)
     if not (w_in > 0.0):
         return False
     Nx = E_env.shape[-1]
     w0 = wavelength * abs(R) / (np.pi * w_in)          # est. focus waist
     w_geom = w_in * abs(R_out) / abs(R)                # geometric beam at R_out
     w_out = max(w_geom, w0)                             # diffraction floor
-    half = 0.5 * Nx * dx * abs(R_out) / abs(R)          # co-moving half-width
+    # Beam-centre-to-nearest-edge, not grid half-width: a decentred beam has
+    # less room on one side, and both the co-moving grid and the decentre
+    # scale by the same |R_out/R| (verifier round 2, sibling of V3).
+    half_in = 0.5 * Nx * dx - max(abs(_cen[0]), abs(_cen[1]))
+    half = max(half_in, 0.0) * abs(R_out) / abs(R)      # co-moving half-width
     return half < _BRIDGE_FIT_MARGIN * w_out
 
 
@@ -2435,15 +2468,23 @@ def _default_focus_standoff(env, R, z, wavelength, dx):
     ahead (collimated / diverging), where the carrier step cannot collapse.
     """
     z_focus = np.inf if not np.isfinite(R) else -R
-    w_env = _envelope_amp_radius(env, dx, dx)
+    _cen = _envelope_amp_centroid(env, dx, dx)
+    w_env = _envelope_amp_radius(env, dx, dx, centre=_cen)
     if np.isfinite(z_focus) and z_focus > 0.0 and w_env > 0.0 and abs(R) > 0.0:
         w0 = wavelength * abs(R) / (np.pi * w_env)      # estimated focus waist
         zR = np.pi * w0 * w0 / wavelength
-        # ``ext``: the INPUT GRID HALF-WIDTH in beam radii -- the invariant the
-        # leg length has to follow.  The narrow axis governs, because the
-        # containment margin is set by whichever direction clips first.
+        # ``ext``: the BEAM-CENTRE-TO-NEAREST-EDGE distance in beam radii --
+        # the invariant the leg length has to follow.  The narrow axis
+        # governs, because the containment margin is set by whichever
+        # direction clips first; a decentred beam clips at the NEAR edge
+        # first, so the decentre comes off the half-width (verifier round 2,
+        # sibling of V3: measuring about the origin read the beam 2.34x too
+        # wide at 1.5 w decentre and resolved a 6.3x-short leg).
         _sh = np.shape(env)
-        half = 0.5 * min(int(_sh[-1]), int(_sh[-2])) * float(dx)
+        half = (0.5 * min(int(_sh[-1]), int(_sh[-2])) * float(dx)
+                - max(abs(_cen[0]), abs(_cen[1])))
+        if not (half > 0.0):
+            half = float(dx)                            # beam at/off the edge
         ext = half / w_env
         # margin(f) = ext f / sqrt(1+f^2) saturates at ``ext``; ask for
         # _FOCUS_STANDOFF_MARGIN where the grid can give it and for the
