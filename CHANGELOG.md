@@ -4,6 +4,120 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.33.0] — 2026-08-06
+
+### Capstone — design 121 end-to-end, exact everywhere, 8.1 h for the full fan
+
+The full 32-order design-121 fan with the exact final leg on every order
+projects to 8.12 h (measured 3-order subset, 0.3% per-order spread) against
+the prior ~24 h; acceptance banner byte-identical (AT-PLANE dz=0: 3.350um /
+90.3 / 99.7 / 99.8).  The paraxial-era field-angle collapse is GONE: EE3 at
+the extreme order (-4,-2) reads 90.1% against the independent skew-ray+Debye
+oracle's 90.7% (was 65.3%).  The Sziklas–Siegman co-moving frame — the one
+structurally paraxial element — is quantified on the real chain: 4.1e-3 (rss)
+to 7.9e-3 (coherent) over the 8 calibrated steps, with the final SS step not
+taken at all (`final_leg='exact'` replaces it).  Full record with per-stage
+wall times, memory, and the open source-leg item (m = 23.9 outside the
+calibration span) in `docs/audits/CAPSTONE_D121_2026_08_06.md`.
+
+### Fixed — Newton pool spawn safety and memory accounting (capstone OOM)
+
+Shipped `n_workers=8` put the design-121 acceptance run on an OOM trajectory
+(205.7 of 227.5 GB commit): each spawned Newton worker RE-EXECUTED the
+caller's unguarded script (CPython spawn runs `__mp_main__` via runpy), so 8
+workers cost 22.1 GB each against 1.92 GB intrinsic chunk need.  Two arms
+shipped: an unguarded `__main__` now routes SERIAL unconditionally (no worker
+count makes re-running the caller acceptable — its side effects would run K
+extra times too), and guarded contexts get a measured memory cap (per-worker
+1.75 GB + 268 B/chunk-point + 850 B/fit-point against half of available RAM,
+re-priced at the allowed count, single warning when binding).  Stage B at
+`n_workers=8` now completes: 346.6 s, 21.4 GB peak, banner intact.  Pool
+bit-identity is additionally ledgered as CONDITIONAL on the worker
+inheriting the parent's numba availability (payload pins no backend flag;
+5.2e-14 divergence when it flips) — an open item, not silently absorbed.
+
+### Fixed — PMM/RCWA cross-configuration test failures: the axis was BLAS thread count
+
+Five deterministic failures blamed on "cross-build" divergence were pinned to
+the BLAS THREAD COUNT (both mounts run OpenBLAS; failures match cross-mount
+to 9 significant figures).  The T3-4 silent-wrong guard gained channel A: a
+near-cut PROPAGATING mode whose forward `q` grows is a passive-layer
+impossibility and fires on ANY row including half-spaces — the old
+patterned-only conjunction structurally missed a 411%-wrong substrate case
+(guard still ships disarmed pending the conical false positive).  The
+sweep-vs-per-wavelength contract test now asserts exact equality within a
+consistent BLAS regime (the old atol compared a capped sweep against an
+uncapped solve — 18x apart through Redheffer amplification — while missing a
+real injected 1e-13 error the new test catches).  Window-contract and
+wrong-cell tests select per-configuration instead of hard-coding one
+build's facts.  NOTE: the WSL proxy venv had no `threadpoolctl`, so every
+BLAS cap in the library was inert there — cap behaviour was unvalidatable on
+that mount until 2026-08-06.
+
+### Fixed — traced-exact review remediation (D1–D11) and adversarial verify waves (V1–V9)
+
+An adversarial review of the exact-chain campaign, two fix waves, and two
+independent re-verification rounds (`docs/audits/REVIEW_TRACED_EXACT_*`,
+`FIX_*`, `VERIFY_*` 2026-08-05/06).  Physics/library outcomes:
+
+* **Focus standoff is a derived law, not a constant** — the leg is the
+  shortest that clears a containment margin (halo clipping measured as
+  0.34*exp(-margin^2)), with a calibrated small-extent branch minimising
+  clipping against leg error; both prior constants (6.0 zR, 0.8 zR) beaten
+  on geomean AND worst-case over a 54-cell (NA x extent) matrix; resolver is
+  decentre-aware (measures about the beam centroid, containment to the
+  NEAREST edge; a 1.5w-decentred beam previously read 2.34x too wide and got
+  a 6.3x-short leg).
+* **Replica guards are centre-aware and REFUSE** — the Bluestein faithful
+  zone is centred on the transform origin, so `2*|centre_out| + window <=
+  period` per axis; both public focus readouts now raise (`on_replica`)
+  instead of returning bit-identical ghost peaks (measured 1.05e5x wrong
+  with zero warnings pre-fix; the chain's chief-ray geometry sits 3.28
+  periods off-axis and was exposed).  The same condition fixed in
+  `mft.py`'s window warning for all three MFT propagators.
+* **Strict mode-string validation** — `gap_kernel` typos/None/case-variants
+  silently selected Fresnel at every entry point; now raise naming the valid
+  set.  Same treatment for `final_leg`/`carrier_reference` (validated up
+  front) and `on_fit_domain_basis` ('warn'/'error'/'silent' + aliases); the
+  remaining ungated knobs are ledgered in a shrink-only registry backed by a
+  witness test so no new ungated knob can ship.
+* **Collimated legs ran paraxial and dropped `tilt`** whatever the knob said
+  (`R = inf` bypassed the kernel choice at exactly the magnification where
+  the exact kernel is exact); fixed via a single kernel-choice funnel.
+  Astigmatic carriers now REFUSE `gap_kernel='exact'` (cannot be honoured;
+  was a silent downgrade), and `'fresnel'`+`tilt` warns naming the drop.
+* **Split-vs-single composition is a theorem, not a bug** — composition
+  across a z-split plus non-paraxiality are mutually exclusive in the
+  Sziklas–Siegman frame (Cauchy's equation forces the paraxial phase); the
+  exact kernel is confirmed 2.0–6.8x closer to an independent oracle INSIDE
+  scaled steps, and composition tests pin the fresnel identity at original
+  bars with a comparative bound for exact.
+* **Odd-N frequency grids** were order-unity wrong in four TF builders
+  (exact + fresnel 2-D, axis TF, axis ASM); fixed against `np.fft.fftfreq`
+  semantics with even-N proven bit-identical.
+* **Newton pool promotion is measured, not assumed** — the warm tier was
+  unreachable (gate read the pool before creation); naive reachability
+  measured +5–7% SLOWER on the default path (the numba Chebyshev evaluator
+  already saturates all cores; Newton is 1.5% of a 121 group's wall), so the
+  shipped policy is a cost-gated second-call promotion keyed by (workers,
+  fit-backend cost class, point-size band) with bit-identity asserted.
+* **The 121 chain cache key** went from 4 to 21 components including a
+  content hash of the entire library source (the only thing that catches a
+  default flip within one version — the exact failure that shipped), stored
+  in-npz and checked on load; numba availability is keyed from the
+  library's own gate.
+
+### Changed — `newton_fit='auto'` resolves to polynomial (spline flip reverted pre-release)
+
+The briefly-attempted spline CPU default silently disabled the ray-fit-radius
+restriction (`fit_radius_beam_factor`), which is mandatory for real designs
+(121's post-DOE groups: 20–32 mm apertures against a sub-mm beam; without it
+the exit field goes NON-FINITE).  Reverted before any release; spline remains
+an explicit choice, and the fit-domain gates now ANNOUNCE when a basis cannot
+honour them (`on_fit_domain_basis`) instead of no-opping silently — including
+the live bug where an inert `fit_radius_beam_factor` also suppressed the
+aperture:beam cliff warning about the very failure it had stopped preventing.
+
 
 ### Fixed -- `n_workers` was a silent no-op on the default Newton fit
 
