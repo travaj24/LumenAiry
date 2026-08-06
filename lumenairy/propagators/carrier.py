@@ -250,6 +250,82 @@ _FOCUS_STANDOFF_MARGIN = 2.0 * _BRIDGE_FIT_MARGIN
 # wide a window it is viewed through.  The optimum is a broad plateau, not a
 # calibrated point.
 _FOCUS_STANDOFF_WAIST_GROWTH = 2.0
+#
+# ---------------------------------------------------------------------------
+# THE SMALL-EXTENT BRANCH (defects V1 / V2, VERIFY_D1_D11 2026-08-06)
+# ---------------------------------------------------------------------------
+# Everything above describes the branch where the margin ``M`` is REACHABLE.
+# It is not reachable below ``ext = M/sat = 3.695``, and there the law shipped
+# above degenerates: ``m_req = sat*ext`` makes ``f = f_cap = sqrt(3)`` EXACTLY,
+# for every extent and every NA.  So the "derived, extent-following" law was,
+# under 3.695 beam radii of grid, one more CONSTANT multiple of the Rayleigh
+# range -- 1.732 instead of 0.8 or 6.0 -- and it sat in a contiguous 9-cell
+# band (NA >= 0.10, ext 1.5-2.0 on a 6 NA x 9 ext matrix) where it was worse
+# than BOTH constants it replaced, by up to 5.1x against 0.8 zR and 3.9x
+# against 6.0 zR, and where its worst cell (1.62e-1 at NA 0.05 / ext 1.5) lost
+# to 6.0 zR's worst (1.26e-1) by 1.28x.
+#
+# The cap's own justification is what fails: "past ``growth`` the margin buys
+# nothing" is true of the margin's DERIVATIVE, not of the ERROR.  ``C`` is
+# exponential in ``margin^2``, and ``margin`` keeps creeping toward its
+# asymptote ``ext``, so the clipping term keeps falling long after the
+# geometric gain looks flat.  Measured at ext 2.0: margin 1.732 at f_cap
+# (C = 1.7e-2) against margin 1.973 at f = 6 (C = 7.0e-3) -- a 2.4x accuracy
+# gain from a cap the module had declared worthless.  Below the threshold the
+# clipping floor ``C(ext) = C0 exp(-ext^2)`` is NOT small, so the leg cannot be
+# chosen by "shortest that clears M" (nothing clears M): it has to TRADE the
+# residual clipping against the hand-off model error ``L``.
+#
+# ``L`` is therefore now calibrated rather than only assumed monotone.  Fitted
+# on 245 points where the clipping term is negligible by construction
+# (margin >= 2.9 -> C <= 8e-5) and the Bluestein period comfortably covers the
+# scoring window, over 7 NA x 5 extents x 9 legs, against the same exact
+# discrete paraxial oracle:
+#
+#     L(f, NA) ~ 0.155 * NA^3 * f^1.6          [2]
+#
+# (log-residual rms 0.60, i.e. a 1.8x band; it is a FIT, not a derivation, and
+# is used only to locate a broad minimum.)  Confirmation that [2] has the right
+# variables: at NA 0.45 the measured L is IDENTICAL to 3 digits at ext 6, 10
+# and 16 for every f -- it depends on the leg and the NA and not on the grid,
+# exactly as the decomposition claims.
+#
+# The sub-threshold leg is then the minimiser of ``C(margin(f)) + L(f, NA)``
+# over ``f`` in ``[f_cap, f_asym]``, where:
+#   * the FLOOR is the previously shipped ``f_cap``, so the resolver can only
+#     ever LENGTHEN the leg here.  Shortening would walk it into the two
+#     regimes this branch has to stay out of -- the near-focus bridge (a
+#     different code path, see below) and a Bluestein period so short that the
+#     readout's own replica guard refuses the caller's window;
+#   * the CEILING is where the margin has reached 99 % of its reachable
+#     asymptote (``f_asym = 0.99/sqrt(1-0.99^2) = 7.02``); past it no leg
+#     length can buy more containment on this grid, and only ``L`` grows.
+#
+# AND THE RESOLVER NOW ASKS WHICH CODE PATH ITS LEG WILL TAKE.  A leg short
+# enough to trip ``_near_focus_needs_bridge`` does not run this transport at
+# all: it runs the through-waist ASM bridge, whose error is set by how well the
+# near-focus grid Nyquist-samples the compact waist and NOT by ``C``.  At low
+# NA that bridge is measurably the better route (ext 1.5 / NA 0.10: 1.9e-2
+# through the bridge against 4.1e-2 for the best fast-path leg), which is
+# exactly why 0.8 zR beat the shipped law in part of the losing band -- 0.8 zR
+# happened to land inside the bridge there.  So when the leg at ``f_cap``
+# already routes through the bridge, the trade above does not apply and the
+# resolver leaves it alone.  This is measurement, not preference: extending
+# those cells anyway was measured to make NA 0.10 / ext 1.5 1.9x WORSE.
+#
+# Measured after (6 NA x 9 ext, 6 w0 window, relL2 of |F| vs the oracle; full
+# matrix in docs/audits/FIX_V1_V8_2026_08_06.md):
+#     geomean  4.20e-3 -> 2.68e-3     worst  1.62e-1 -> 9.12e-2
+#     against 0.8 zR   1.79e-2 / 1.07e+0   and 6.0 zR   1.47e-2 / 1.26e-1
+# -- so the worst-case half of the headline, which V1 refuted, now holds on the
+# EXTENDED grid too, and the 9-cell "worse than both" band drops to 7 cells
+# whose worst loss is 1.8x (was 5.1x).  What remains is disclosed in the fix
+# doc, not smoothed over.
+_FOCUS_STANDOFF_CLIP_COEFF = 0.34          # C0 in C = C0 exp(-margin^2)
+_FOCUS_STANDOFF_LEG_ERR_COEFF = 0.155      # A  in [2]
+_FOCUS_STANDOFF_LEG_ERR_NA_POW = 3.0       # NA exponent in [2]
+_FOCUS_STANDOFF_LEG_ERR_F_POW = 1.6        # f  exponent in [2]
+_FOCUS_STANDOFF_ASYMPTOTE_FRAC = 0.99      # margin ceiling as a fraction of ext
 
 
 # ===========================================================================
@@ -494,6 +570,89 @@ def _check_gap_kernel(value, fn):
     return value
 
 
+def _warn_paraxial_kernel_drops_tilt(gap_kernel, tilt, R_carrier, fn):
+    """Announce that a non-zero ``tilt`` is INERT under a paraxial gap kernel
+    -- residual V8, VERIFY_D1_D11 2026-08-06.
+
+    THE MEASUREMENT.  ``tilt`` was accepted and silently discarded under
+    ``gap_kernel='fresnel'`` on every carrier path: at ``R = inf``, ``-0.2``
+    and ``+0.5`` the returned field was BIT-IDENTICAL with and without a
+    non-zero tilt, with zero warnings.  That is the same accept-and-ignore
+    class as D11a (a collimated leg silently paraxial) and D11b (an astigmatic
+    carrier silently paraxial), and D11b's adjudication was explicitly
+    "REFUSE, do not downgrade".
+
+    WHY THIS ONE WARNS RATHER THAN REFUSES, AND WHY THE FRESNEL PATH IS NOT
+    TAUGHT THE TILT INSTEAD.  Both alternatives were considered against what
+    the paraxial transfer function can actually represent.  Expanding the
+    exact kernel about the carrier wavevector ``k s`` (see
+    :func:`_exact_envelope_tf_step`) and keeping terms to ``O(q^2)``::
+
+        phase(q) = k z - z [ |q|^2/(2 k N) + (s.q)^2/(2 k N^3) ] + O(q^4)
+
+    with ``N = sqrt(1-|s|^2)`` -- so a tilt IS representable at paraxial
+    order, as an ANISOTROPIC dilation of the propagation distance
+    (``z/N`` across the tilt, ``z/N^3`` along it).  Teaching it to the fresnel
+    arm is therefore cheap.  It is also the wrong thing to do: ``'fresnel'``
+    exists precisely as the LEGACY paraxial kernel, is documented as such on
+    every entry point, and is pinned FP-identical to prior releases by the
+    carrier suites.  Giving it a tilt term would silently change the one
+    kernel whose contract is "what the library did before", i.e. it would buy
+    correctness for a knob at the price of the reproducibility the knob's
+    value exists for.  A caller who wants the tilt honoured has a one-word
+    remedy (``gap_kernel='auto'``, which resolves to the exact kernel on every
+    backend and carries the tilt to all orders); a caller who wants the legacy
+    arithmetic keeps it.  Refusing would remove the second option outright and
+    would hard-break any tilted chain that pins ``'fresnel'`` for a
+    reproduction, so the announcement is a ``RuntimeWarning`` -- but it is
+    UNCONDITIONAL, names both knobs, and states the consequence, which is what
+    the silence cost.
+
+    Scope: the ASTIGMATIC path is included, because it forces the per-axis
+    paraxial kernel whatever ``gap_kernel`` says (``'exact'`` is already
+    refused there) and never receives ``tilt`` at all.
+    """
+    try:
+        tL, tM = float(tilt[0]), float(tilt[1])
+    except (TypeError, IndexError, ValueError):
+        return
+    if tL == 0.0 and tM == 0.0:
+        return
+    # ``astig`` mirrors _parse_carrier's own test, but must NEVER raise here:
+    # this runs BEFORE the carrier is parsed, so a malformed R_carrier has to
+    # reach _parse_carrier's own clean ValueError rather than die in a warning.
+    astig = False
+    if isinstance(R_carrier, (tuple, list, np.ndarray)):
+        try:
+            _a = np.asarray(R_carrier, dtype=np.float64).ravel()
+            astig = (_a.size == 2 and float(_a[0]) != float(_a[1]))
+        except (TypeError, ValueError):
+            astig = False
+    if gap_kernel != 'fresnel' and not astig:
+        return
+    why = ("gap_kernel='fresnel' selects the LEGACY PARAXIAL "
+           "(Sziklas-Siegman) kernel" if gap_kernel == 'fresnel' else
+           "an ASTIGMATIC carrier forces the separable per-axis PARAXIAL "
+           "kernel (the exact kernel does not separate)")
+    import warnings
+    warnings.warn(
+        f"{fn}: tilt=({tL!r}, {tM!r}) is NON-ZERO but INERT on this call -- "
+        f"{why}, and that kernel has no tilt term.  The leg will be "
+        f"propagated exactly as if tilt were (0, 0): the tilt's anisotropic "
+        f"diffraction stretch (z/sqrt(1-|s|^2) across the tilt, "
+        f"z/(1-|s|^2)^1.5 along it) and every higher order are DROPPED.  "
+        f"Measured on a collimated 5 mm leg, exact-vs-fresnel relL2 5.3e-04 "
+        f"at tilt (0.03, -0.02) and 5.9e-03 at (0.12, 0.00), against "
+        f"exactly 0.000e+00 difference between fresnel-with-tilt and "
+        f"fresnel-without.  Pass gap_kernel='auto' (or 'exact') to have the "
+        f"tilt carried to all orders, or tilt=(0, 0) to say you meant the "
+        f"paraxial leg.  NOTE: the chief-ray transverse advance and the "
+        f"obliquity piston are bookkept by the CALLER (the chain applies "
+        f"both), so they are unaffected -- what is lost is the envelope's own "
+        f"tilt-dependent diffraction.",
+        RuntimeWarning, stacklevel=3)
+
+
 def _envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt, gap_kernel,
                       xp, is_jax, bld):
     """Apply the RESOLVED gap kernel ('exact' or 'fresnel' -- never 'auto') to
@@ -637,6 +796,28 @@ def propagate_carrier_referenced(
         Input grid pitch in x (m).
     dy : float, optional
         Input grid pitch in y (m).  Defaults to ``dx``.
+    gap_kernel : {'auto', 'exact', 'fresnel'}, default 'auto'
+        Envelope transfer function for the leg.  ``'auto'`` resolves to
+        ``'exact'`` on every backend: the non-paraxial, tilt-aware kernel
+        ``z sqrt(k^2 - |k s + q|^2)`` expanded about the carrier wavevector.
+        ``'fresnel'`` selects the LEGACY paraxial (Sziklas-Siegman) kernel --
+        its small-``|q|`` expansion -- and is pinned FP-identical to prior
+        releases.  Case-sensitive and strictly validated: an unrecognised
+        value RAISES rather than falling back (defect D4).  ``'exact'`` is
+        REFUSED for an astigmatic carrier, which has no separable exact kernel
+        (defect D11b).
+    tilt : (float, float), default (0, 0)
+        Direction cosines ``(L, M)`` of the carrier's uniform tilt.  Referenced
+        out with the carrier, so this is the tilt the DIFFRACTION operator is
+        expanded about -- it supplies the anisotropic stretch (``z/N`` across
+        the tilt, ``z/N^3`` along it, ``N = sqrt(1-|s|^2)``) and every higher
+        order.  The chief-ray transverse advance and the obliquity piston are
+        the CALLER's bookkeeping and are deliberately not applied here (see
+        :func:`_exact_envelope_tf_step`).  Only the EXACT kernel can carry a
+        tilt: under ``gap_kernel='fresnel'`` (and on the astigmatic path,
+        which has no exact kernel) a non-zero ``tilt`` is inert and now says so
+        with a ``RuntimeWarning`` (residual V8) instead of being silently
+        discarded.
 
     Returns
     -------
@@ -706,6 +887,9 @@ def propagate_carrier_referenced(
     # so a bad value is refused even on the legs that never build a kernel at
     # all (z == 0, the collimated R == inf branch, the astigmatic path).
     _check_gap_kernel(gap_kernel, 'propagate_carrier_referenced')
+    # V8 (2026-08-06): ANNOUNCE the one remaining accept-and-ignore pair.
+    _warn_paraxial_kernel_drops_tilt(gap_kernel, tilt, R_carrier,
+                                     'propagate_carrier_referenced')
 
     # Parse a possibly-astigmatic carrier.  A 2-tuple (R_x, R_y) with
     # DISTINCT radii routes to the separable astigmatic transform; equal
@@ -2068,21 +2252,35 @@ def carrier_referenced_focus_readout(
         beam radii, not a fixed multiple of the Rayleigh range (see
         :data:`_FOCUS_STANDOFF_MARGIN`) -- plus any distance the target sits
         past the focus, clamped so the carrier leg ``z - standoff`` does not
-        back before the input plane.
+        back before the input plane.  On a grid too narrow to reach that
+        margin at any leg length (below ~3.7 beam radii of half-extent) the
+        default instead MINIMISES the measured error model -- residual halo
+        clipping against hand-off leg error -- over the leg length, so it
+        still follows the extent there rather than collapsing to a constant
+        (defects V1 / V2; see :func:`_small_extent_focus_standoff_f`).
     centre_out : (float, float), optional
         Physical ``(x, y)`` centre of the output grid (m).  Default on-axis.
     bandlimit : bool, default True
         Band-limit the ASM transfer function (Matsushima-Shimobaba).
     on_replica : {'error', 'warn', 'ignore'}, default 'error'
-        What to do when ``N_out * dx_out`` exceeds one Bluestein period of
-        the final zoom, i.e. when the outer window is filled with periodic
-        REPLICAS of the spot rather than signal.  The default REFUSES,
-        because the core of the spot is unharmed by replicas -- a width or a
-        peak still reads correctly while every wing-weighted metric is
-        silently wrong.  The period scales with ``standoff``; the error
-        message quotes both the largest safe ``N_out`` and the standoff that
-        would cover the window asked for.  See :func:`_check_readout_replica`
-        for the derivation and the measured degradation.
+        What to do when the requested readout reaches OUTSIDE one Bluestein
+        period of the final zoom, i.e. when part of the window is filled with
+        periodic REPLICAS of the spot rather than signal.  The condition is
+        per axis (defect V3, 2026-08-06)::
+
+            2 * |centre_out| + N_out * dx_out  <=  period
+
+        -- the faithful zone is centred on the FIELD's own origin, not on
+        ``centre_out``, so pushing the window off axis SPENDS the period
+        rather than carrying it along.  The default REFUSES, because the core
+        of the spot is unharmed by replicas -- a width or a peak still reads
+        correctly while every wing-weighted metric is silently wrong, and a
+        window a full period off axis returns a full-amplitude GHOST spot.
+        The period scales with ``standoff``; the error message quotes the
+        measured overshoot, the largest safe ``N_out`` at this ``centre_out``,
+        and the standoff that would cover the window asked for.  See
+        :func:`_check_readout_replica` for the derivation and the measured
+        degradation.
 
     Returns
     -------
@@ -2200,9 +2398,14 @@ def carrier_referenced_focus_readout(
     _win = int(N_out) * float(dx_out)
     _pmin = min(_period)
     _need = standoff * _win / _pmin if _pmin > 0.0 else float('inf')
+    # V3: this readout forwards ``centre_out`` VERBATIM to the Bluestein step
+    # below, so the offset the guard must weigh is the argument itself.  (When
+    # the caller is propagate_traced_carrier_chain's tilted path, the argument
+    # it passes is ALREADY the chief-ray-referenced residual, so the guard
+    # still sees the offset that actually reaches the transform.)
     _check_readout_replica(
         'carrier_referenced_focus_readout', _period, dx_out, N_out,
-        on_replica,
+        on_replica, centre_out=centre_out,
         remedy=(f", or pass standoff >= {_need:.6e} m (currently "
                 f"{standoff:.6e} m -- the period is LINEAR in it, so this "
                 f"buys window at the price of hand-off accuracy)"),
@@ -2215,11 +2418,18 @@ def carrier_referenced_focus_readout(
 def _default_focus_standoff(env, R, z, wavelength, dx):
     """Default fine-zoom leg length for :func:`carrier_referenced_focus_readout`.
 
-    The SHORTEST leg whose hand-off plane still holds the beam to the
-    containment margin ``_FOCUS_STANDOFF_MARGIN``, capped at the plane where
-    the beam has grown by ``_FOCUS_STANDOFF_WAIST_GROWTH``, plus any distance
-    the target sits PAST the focus.  See the derivation and the measured
-    (NA x grid-extent) matrix at ``_FOCUS_STANDOFF_MARGIN``.
+    Two branches, split at the extent where the containment margin
+    ``_FOCUS_STANDOFF_MARGIN`` stops being reachable:
+
+    * ``ext >= M/sat`` -- the SHORTEST leg whose hand-off plane still holds the
+      beam to that margin.  Unchanged; see the derivation and the measured
+      (NA x grid-extent) matrix at ``_FOCUS_STANDOFF_MARGIN``.
+    * ``ext <  M/sat`` -- no leg reaches the margin, so the closed form above
+      degenerates to the CONSTANT ``f = f_cap`` (defects V1 / V2).  The leg is
+      instead chosen by trading residual halo clipping against hand-off leg
+      error; see :func:`_small_extent_focus_standoff_f`.
+
+    Plus, on both branches, any distance the target sits PAST the focus.
 
     Falls back to half the target distance when there is no geometric focus
     ahead (collimated / diverging), where the carrier step cannot collapse.
@@ -2244,6 +2454,15 @@ def _default_focus_standoff(env, R, z, wavelength, dx):
         # m_req <= sat*ext < ext by construction, so the root is real and
         # f <= f_cap; no clamp is needed and none is hidden here.
         f = m_req / np.sqrt(ext * ext - m_req * m_req)
+        if ext < _FOCUS_STANDOFF_MARGIN / sat:
+            # SUB-THRESHOLD (defects V1 / V2): the margin ``_FOCUS_STANDOFF_
+            # MARGIN`` is unreachable on this grid and the expression above has
+            # collapsed to the CONSTANT ``f == f_cap``.  Trade the residual
+            # clipping against the hand-off leg error instead -- see the
+            # derivation, the calibration of [2] and the measured after-matrix
+            # at ``_FOCUS_STANDOFF_LEG_ERR_COEFF``.
+            f = _small_extent_focus_standoff_f(
+                env, R, z, wavelength, dx, ext, f, w_env, zR)
         # DELIBERATELY independent of the requested OUTPUT window.  Coupling the
         # two was tried (size the leg so one Bluestein period covers the
         # requested window) and is wrong: it makes the propagated FIELD depend
@@ -2263,10 +2482,71 @@ def _default_focus_standoff(env, R, z, wavelength, dx):
     return 0.5 * abs(z) if z != 0.0 else 0.0
 
 
+def _small_extent_focus_standoff_f(env, R, z, wavelength, dx, ext, f_floor,
+                                   w_env, zR):
+    """The leg factor ``f = standoff / zR`` on a grid too narrow to reach
+    ``_FOCUS_STANDOFF_MARGIN`` -- defects V1 / V2, 2026-08-06.
+
+    Returns ``f_floor`` (the previously shipped ``f_cap``) or something LONGER;
+    never shorter.  Two decisions, in order:
+
+    1. **Which code path will this leg take?**  A leg short enough to trip
+       :func:`_near_focus_needs_bridge` is not transported by the
+       Sziklas-Siegman step at all -- it runs the through-waist ASM bridge,
+       whose error is set by how well the near-focus grid samples the compact
+       waist, NOT by the halo clipping ``C`` this function trades against.  At
+       low NA that bridge is measurably the better route, so if the leg at
+       ``f_floor`` already routes through it, leave it there.  Extending those
+       cells anyway was measured to cost 1.9x (NA 0.10 / ext 1.5: 1.91e-2
+       through the bridge, 4.09e-2 at the extended leg).
+    2. **Otherwise, minimise the measured error model** ``C(margin(f)) +
+       L(f, NA)`` over ``f in [f_floor, f_asym]``, with ``C = C0 exp(-m^2)``,
+       ``m = ext f/sqrt(1+f^2)`` and ``L = A NA^3 f^1.6`` (calibration and its
+       1.8x fit band documented at ``_FOCUS_STANDOFF_LEG_ERR_COEFF``).  The
+       ceiling ``f_asym`` is where ``m`` has reached
+       ``_FOCUS_STANDOFF_ASYMPTOTE_FRAC`` of its reachable limit ``ext``:
+       beyond it no leg buys containment and only ``L`` grows.
+
+    The minimum is located by a 256-point geometric scan rather than a root
+    find because the objective is a broad, single-minimum curve in ``f`` and
+    the scan cannot fail to bracket, diverge or need a derivative; the cost is
+    a few microseconds against a readout that runs FFTs on the whole grid.
+    """
+    NA = w_env / abs(R) if (np.isfinite(R) and abs(R) > 0.0) else 0.0
+    if not (np.isfinite(NA) and NA > 0.0 and np.isfinite(zR) and zR > 0.0):
+        return f_floor
+    frac = float(_FOCUS_STANDOFF_ASYMPTOTE_FRAC)
+    if not (0.0 < frac < 1.0):
+        return f_floor
+    f_hi = frac / np.sqrt(1.0 - frac * frac)
+    if not (f_hi > f_floor):
+        return f_floor
+    # (1) reproduce the readout's OWN leg arithmetic for the floor leg, so the
+    # bridge predicate is asked about exactly the step that would run.
+    z_focus = -R
+    s0 = f_floor * zR + max(0.0, abs(z) - z_focus)
+    if z != 0.0:
+        s0 = min(s0, abs(z))
+        z_stop = z - np.copysign(s0, z)
+    else:
+        z_stop = -s0
+    if _near_focus_needs_bridge(env, R, R + z_stop, wavelength, dx, dx):
+        return f_floor
+    # (2) the trade.
+    fs = np.geomspace(f_floor, f_hi, 256)
+    m = ext * fs / np.sqrt(1.0 + fs * fs)
+    err = (_FOCUS_STANDOFF_CLIP_COEFF * np.exp(-m * m)
+           + _FOCUS_STANDOFF_LEG_ERR_COEFF
+           * NA ** _FOCUS_STANDOFF_LEG_ERR_NA_POW
+           * fs ** _FOCUS_STANDOFF_LEG_ERR_F_POW)
+    return float(fs[int(np.argmin(err))])
+
+
 def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
-                           remedy='', stacklevel=3):
-    """REFUSE (or, opt-in, warn about) a readout window wider than one
-    Bluestein period -- fix D3, 2026-08-06.
+                           centre_out=(0.0, 0.0), remedy='', stacklevel=3):
+    """REFUSE (or, opt-in, warn about) a readout window that reaches outside
+    one Bluestein period OF THE FIELD'S OWN ORIGIN -- fix D3, 2026-08-06;
+    geometry corrected for ``centre_out`` (defect V3), 2026-08-06.
 
     Both public focus readouts finish with
     :func:`~lumenairy.propagators.mft.angular_spectrum_propagate_mft`, whose
@@ -2278,6 +2558,48 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
     :func:`carrier_referenced_exact_focus_readout` it is the fine crop grid,
     so the period is ``window_factor`` beam radii.  Either way, samples beyond
     one period are periodic REPLICAS of the field, not new information.
+
+    THE FAITHFUL ZONE IS CENTRED ON THE FIELD'S OWN ORIGIN, NOT ON
+    ``centre_out`` (defect V3, VERIFY_D1_D11 2026-08-06).  The Bluestein
+    reconstruction is periodic in the ABSOLUTE output coordinate ``u`` of the
+    grid it is handed: ``E(u + p) == E(u)`` identically.  Only the interval
+    ``|u| <= p/2`` about that grid's own origin carries signal; every sample
+    outside it is a literal copy.  A window is therefore faithful iff its
+    OUTER EDGE stays inside that interval, i.e. per axis
+
+        2 |centre_out| + N_out * dx_out  <=  period                      [V3]
+
+    -- NOT ``N_out * dx_out <= period``, which is [V3] specialised to
+    ``centre_out == 0`` and which this guard shipped for every offset.
+    Measured on the paraxial readout (NA 0.10, half-extent 3, default
+    standoff, period 33.0797 um) with a window of 0.7698 periods -- silent
+    under the old condition at EVERY offset:
+
+        centre_out    peak |F|        peak |truth|     relL2
+          0.00 p      1.570252e+02    1.570727e+02     5.26e-04
+          0.25 p      1.569911e+02    1.570386e+02     5.51e-04
+          0.50 p      3.758130e+01    3.755931e+01     6.60e-01
+          1.00 p      1.570252e+02    1.499920e-03     1.02e+00
+
+    At one full period off axis the readout returned a peak BIT-IDENTICAL to
+    the on-axis one (1.570252e+02 both) where the truth is 1.5e-03 -- a
+    full-amplitude GHOST SPOT, ratio 1.05e5, with zero warnings.  That is
+    precisely the failure this guard exists for, reproduced with the guard
+    installed.  The offset enters with a factor TWO because the window is
+    symmetric about ``centre_out``: pushing the centre out by ``c`` pushes the
+    far edge out by ``c`` as well as consuming ``c`` of the near side.
+
+    ``centre_out`` here is the offset IN THE FRAME THE BLUESTEIN STEP IS
+    HANDED, which is not always the caller's argument:
+    :func:`carrier_referenced_focus_readout` forwards it verbatim, but
+    :func:`carrier_referenced_exact_focus_readout` re-references it to the
+    chief ray (``centre_out - centre``) and so passes the RESIDUAL, and
+    :func:`propagate_traced_carrier_chain` re-references it to the chief ray's
+    landing point before calling the paraxial readout.  Each caller passes the
+    offset it actually uses, so the guard sees the true geometry on every
+    path -- including a chain whose chief ray walks millimetres while the
+    caller leaves ``centre_out`` on the optical axis, which is exactly the
+    configuration that makes the residual large.
 
     WHY THIS IS AN ERROR AND NOT A WARNING.  The failure is a
     plausible-looking wrong answer, exactly the class this module's other
@@ -2301,6 +2623,33 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
     wrapping onto ITSELF needs no neighbour, so this guard fires at every
     ``K`` including one.
 
+    WHY THE BAR SITS EXACTLY AT ONE PERIOD AND IS NOT SOFTENED (residual V6,
+    VERIFY_D1_D11 2026-08-06).  The guard is GEOMETRY-ONLY and deliberately
+    amplitude-blind, and just past the bar the measured error is still small.
+    On-axis, guard waived, against the exact discrete paraxial oracle:
+
+        NA 0.10, ext 3.0 (period 10.392 w0)   NA 0.278, ext 6.0 (7.566 w0)
+          0.98  p   relL2 6.3928e-04            0.98  p   1.3500e-03
+          1.00+ p   relL2 6.5295e-04            1.10  p   1.3501e-03
+          1.10  p   relL2 7.0013e-04            1.50  p   1.7804e-02
+          1.50  p   relL2 1.1888e-03            2.00  p   1.0000e+00
+          2.00  p   relL2 9.9999e-01
+
+    so the refusal fires where the answer is still correct to four significant
+    figures.  That is INTENTIONAL, for one reason that no threshold tuning can
+    replace: at exactly one period every returned sample is a DISTINCT sample
+    of the field; past it, some returned samples are literal aliases of others
+    -- ``E(u + p) == E(u)`` identically, independent of the field, the NA, the
+    standoff and the window.  One period is therefore the only bar this guard
+    can state CORRECTLY-BY-CONSTRUCTION.  Any looser bar would be a bet on the
+    halo being weak out there, which is exactly the bet whose failure the
+    ladder above ends in (relL2 1.0 by two periods, i.e. a 750x degradation
+    over the same span in which the first 10% cost 7%).  What the guard CAN
+    do -- and now does -- is quote the measured overshoot (how many samples
+    per edge are aliases, and by what factor the span exceeds the period) so a
+    caller who judges the halo negligible can make that call knowingly with
+    ``on_replica='warn'`` rather than have the library make it for them.
+
     ``remedy`` is appended verbatim so each caller can name the knob that
     actually moves ITS period.  The refusal is a ``RuntimeError``, matching
     the multi-congruence chain's own replica guard: the two are the same
@@ -2316,28 +2665,62 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
         return
     if not (np.isfinite(px) and px > 0.0 and np.isfinite(py) and py > 0.0):
         return
+    try:
+        c0, c1 = float(centre_out[0]), float(centre_out[1])
+    except (TypeError, IndexError, ValueError):
+        c0 = c1 = 0.0
+    if not (np.isfinite(c0) and np.isfinite(c1)):
+        c0 = c1 = 0.0
+    cx, cy = abs(c0), abs(c1)
     n = int(N_out)
     win = n * float(dx_out)
+    # [V3]: the window's OUTER EDGE against the half-period about the field's
+    # own origin, per axis.  ``2*|c|`` because the window is symmetric about
+    # ``centre_out``: the offset consumes half-period on one side AND pushes
+    # the far edge out by the same amount.
+    span_x = 2.0 * cx + win
+    span_y = 2.0 * cy + win
     tol = 1.0 + 1e-9
-    ratio = max(win / px, win / py)
+    ratio = max(span_x / px, span_y / py)
     if not (ratio > tol):
         return
     p_min = min(px, py)
-    n_safe = int(np.floor(p_min / float(dx_out)))
+    c_max = max(cx, cy)
+    # Largest N_out that still fits AT THIS OFFSET.  Negative / zero means the
+    # offset alone has already left the faithful zone: no window is safe there.
+    n_safe = int(np.floor(max(p_min - 2.0 * c_max, 0.0) / float(dx_out)))
+    # V6: the measured margin, so a caller can judge the refusal rather than
+    # only obey it.  ``n_alias`` is how many samples PER EDGE are provably
+    # aliases of samples already returned.
+    n_alias = max(n - n_safe, 0)
+    over = max(span_x - px, span_y - py, 0.0)
     _guard_dispose(
         on_replica,
-        f"{fn}: the requested readout window N_out*dx_out = {n} * "
-        f"{float(dx_out):.6e} = {win:.6e} m exceeds one Bluestein period -- "
+        f"{fn}: the requested readout REACHES OUTSIDE one Bluestein period -- "
         f"the spatial period of the discrete transform -- "
-        f"({px:.6e} x {py:.6e} m) by {ratio:.4g}x.  Everything beyond "
-        f"+/-period/2 of centre_out is filled with PERIODIC REPLICAS of the "
-        f"field, not new information: the spot CORE is unaffected -- so a "
+        f"({px:.6e} x {py:.6e} m).  Window N_out*dx_out = {n} * "
+        f"{float(dx_out):.6e} = {win:.6e} m centred at centre_out = "
+        f"({c0:.6e}, {c1:.6e}) m spans "
+        f"2*|centre_out| + N_out*dx_out = ({span_x:.6e} x {span_y:.6e} m), "
+        f"i.e. {ratio:.4g}x the period ({over:.6e} m over, about "
+        f"{n_alias} sample(s) per edge that are literal ALIASES of samples "
+        f"already in the window).  THE FAITHFUL ZONE IS CENTRED ON THE "
+        f"FIELD'S OWN ORIGIN, NOT ON centre_out: the reconstruction obeys "
+        f"E(u + period) == E(u) in ABSOLUTE output coordinates, so moving "
+        f"centre_out does not move the zone -- it spends it.  Everything "
+        f"outside +/-period/2 OF THE ORIGIN is filled with PERIODIC REPLICAS "
+        f"of the field, not new information: the spot CORE is unaffected -- so a "
         f"width or a peak still looks right -- while second-moment / "
         f"r^2-weighted / large-radius encircled-energy / centroid metrics "
         f"read wildly wrong (measured relL2 3.6e-3 -> 3.5e-1 -> 4.9 at "
-        f"0.9 / 1.5 / 4 periods against an exact focal-plane oracle).  "
-        f"Reduce the window to N_out <= {n_safe} at this dx_out (or lower "
-        f"dx_out at fixed N_out)"
+        f"0.9 / 1.5 / 4 periods against an exact focal-plane oracle, and a "
+        f"window one full period off axis returned a peak bit-identical to "
+        f"the on-axis one where the truth was 1e5 times smaller).  "
+        + (f"Reduce the window to N_out <= {n_safe} at this dx_out (or lower "
+           f"dx_out at fixed N_out)" if n_safe > 0 else
+           f"|centre_out| = {c_max:.6e} m alone already exceeds half the "
+           f"period, so NO window is faithful at this offset: bring "
+           f"centre_out inside +/-{0.5 * p_min:.6e} m of the field origin")
         + (remedy or "") +
         ".  on_replica='warn' accepts the replicas with a RuntimeWarning, "
         "'ignore' silences the check entirely.",
@@ -3509,14 +3892,21 @@ def carrier_referenced_exact_focus_readout(
         rather than report a non-converged result.  ``'ignore'`` degrades
         silently.
     on_replica : {'error', 'warn', 'ignore'}, default 'error'
-        What to do when ``N_out * dx_out`` exceeds one Bluestein period of
-        the final zoom.  On THIS path the period is the fine crop window
-        itself (``N_fine * dx_fine = window_factor`` beam radii, clamped by
-        what the input grid can hold), so the knob that moves it is
-        ``window_factor``.  Default REFUSES: replicas leave the spot core --
-        and therefore FWHM, peak and Strehl -- looking correct while every
-        wing-weighted metric is silently wrong.  See
-        :func:`_check_readout_replica`.
+        What to do when the requested readout reaches OUTSIDE one Bluestein
+        period of the final zoom -- per axis (defect V3, 2026-08-06)::
+
+            2 * |centre_out - centre| + N_out * dx_out  <=  period
+
+        On THIS path the period is the fine crop window itself
+        (``N_fine * dx_fine = window_factor`` beam radii, clamped by what the
+        input grid can hold), so the knob that moves it is ``window_factor``;
+        and because the fine grid is centred on the congruence's CHIEF RAY
+        (``centre``), the offset that spends period is the RESIDUAL
+        ``centre_out - centre`` -- a decentred congruence read out on its own
+        chief ray costs none of it, however far off axis it sits.  Default
+        REFUSES: replicas leave the spot core -- and therefore FWHM, peak and
+        Strehl -- looking correct while every wing-weighted metric is silently
+        wrong.  See :func:`_check_readout_replica`.
     centre : (float, float), default (0, 0)
         Transverse position ``(x0, y0)`` (m) of the congruence's CHIEF RAY on
         the input grid -- niche D6.  Everything the readout references to "the
@@ -3792,15 +4182,28 @@ def carrier_referenced_exact_focus_readout(
     # win = window_factor beam radii, clamped by the input grid), so the knob
     # that moves it is ``window_factor`` -- not ``standoff``, which this
     # readout does not have.
-    _check_readout_replica(
-        'carrier_referenced_exact_focus_readout', _period, dx_out, N_out,
-        on_replica,
-        remedy=(f", or raise window_factor (currently {float(window_factor)}"
-                f" beam radii -> a {min(_period):.6e} m fine crop window, "
-                f"which IS the period here) if the input grid can hold it"),
-        stacklevel=2)
+    # V3: the fine grid is centred ON THE CHIEF RAY, so the offset that reaches
+    # the Bluestein step is the RESIDUAL ``centre_out - centre`` (``_co``), not
+    # the caller's absolute ``centre_out``.  Resolve it BEFORE the guard so the
+    # guard weighs the geometry the transform actually sees: a decentred
+    # congruence read out ON its own chief ray has residual 0 and is faithful
+    # however far off axis it sits, while one read out on the optical axis
+    # spends |centre| of its own period and must be told so.
     _co = ((float(centre_out[0]) - _cx, float(centre_out[1]) - _cy) if _dec
            else centre_out)
+    _check_readout_replica(
+        'carrier_referenced_exact_focus_readout', _period, dx_out, N_out,
+        on_replica, centre_out=_co,
+        remedy=(f", or raise window_factor (currently {float(window_factor)}"
+                f" beam radii -> a {min(_period):.6e} m fine crop window, "
+                f"which IS the period here) if the input grid can hold it"
+                + (f".  NOTE: this readout's fine grid is centred on the "
+                   f"congruence's chief ray at ({_cx:.6e}, {_cy:.6e}) m, so "
+                   f"the offset weighed above is the RESIDUAL centre_out - "
+                   f"centre = ({_co[0]:.6e}, {_co[1]:.6e}) m; centring the "
+                   f"window on the chief ray costs no period at all"
+                   if _dec else "")),
+        stacklevel=2)
     return angular_spectrum_propagate_mft(
         E_fine, z, wavelength, dx_fine, dx_out, int(N_out),
         centre_out=_co, bandlimit=bandlimit)
@@ -9011,8 +9414,17 @@ def propagate_traced_carrier_chain_multi(
             specs[k][0], groups_k[k], r_in=specs[k][1], focus_readout=fr, **kw)
 
     def _fit(period):
-        """Largest EVEN window (px) that fits inside one spatial period."""
-        return max(2, min(N_out, int(2 * int(np.floor(period
+        """Largest EVEN window (px) that fits inside one spatial period,
+        INCLUDING the lattice-snap offset (defect V3, 2026-08-06).
+
+        The per-congruence window is snapped onto the common lattice, so its
+        centre sits up to ``dx_out/2`` from the chief ray on each axis; the
+        readout's own replica guard weighs ``2*|offset| + n*dx_out`` against
+        the period, not ``n*dx_out`` alone.  One pixel of headroom covers
+        ``2 * dx_out/2`` exactly, so a window sized here can never be refused
+        downstream for the snap alone."""
+        avail = float(period) - float(dx_out)
+        return max(2, min(N_out, int(2 * int(np.floor(max(avail, 0.0)
                                                       / (2.0 * dx_out))))))
 
     # ---- memory guard: the orchestrator's OWN arrays -----------------------

@@ -474,17 +474,33 @@ def test_the_default_leg_beats_both_constants_at_a_truncated_pupil():
 def test_the_resolved_leg_holds_the_beam_at_the_hand_off_plane():
     """The INVARIANT the resolver is built on, as an identity rather than a
     numeric pin: at every grid extent the co-moving half-width at the stop
-    plane must be ``_FOCUS_STANDOFF_MARGIN`` beam radii (or, on a grid too
-    narrow to reach that, the capped fraction of what it can reach).
+    plane must be ``_FOCUS_STANDOFF_MARGIN`` beam radii wherever that is
+    REACHABLE, and on a narrower grid it must sit between the old capped
+    fraction (the floor -- the leg is never shortened) and the asymptote
+    fraction (the ceiling -- past which no leg buys containment).
 
-    This is the gate against reverting to a constant multiple of ``zR``: a
-    constant satisfies it at exactly one extent.
+    REBASED 2026-08-06 for defects V1 / V2.  The identity used to be
+    ``margin == min(M, sat*ext)`` at EVERY extent.  That looks
+    extent-following and is: ``sat*ext`` moves with the grid.  What it hid is
+    that BELOW ``ext = M/sat`` the same expression makes the LEG factor
+    ``f = sat*ext / sqrt(ext^2 - (sat*ext)^2) = sqrt(3)`` -- identically
+    constant, for every extent and every NA.  That constant sat on a
+    contiguous band where the law lost to both constants it replaced.  So the
+    sub-threshold half of the identity is now an INEQUALITY (the branch
+    minimises measured clipping against measured leg error inside it), and the
+    non-constancy is asserted on ``f``, where the defect actually lived,
+    rather than only on the margin.
     """
-    from lumenairy.propagators.carrier import _FOCUS_STANDOFF_MARGIN, _FOCUS_STANDOFF_WAIST_GROWTH
+    from lumenairy.propagators.carrier import (
+        _FOCUS_STANDOFF_ASYMPTOTE_FRAC,
+        _FOCUS_STANDOFF_MARGIN,
+        _FOCUS_STANDOFF_WAIST_GROWTH,
+    )
     f_cap = np.sqrt(_FOCUS_STANDOFF_WAIST_GROWTH ** 2 - 1.0)
     sat = f_cap / np.sqrt(1.0 + f_cap ** 2)
     seen = []
-    for ext in (1.5, 2.0, 3.0, 4.0, 6.0, 10.0):
+    sub = []
+    for ext in (1.5, 1.8, 2.0, 2.2, 2.5, 3.0, 4.0, 6.0, 10.0):
         n = 2048
         env, dx = _pupil(n, ext)
         w_env = np.sqrt(2.0) * np.sqrt(
@@ -500,13 +516,35 @@ def test_the_resolved_leg_holds_the_beam_at_the_hand_off_plane():
         f = _default_standoff(n, ext) / zr_meas
         # half-width at the stop plane, in beam radii there
         margin = ext_meas * f / np.sqrt(1.0 + f * f)
-        want = min(_FOCUS_STANDOFF_MARGIN, sat * ext_meas)
-        assert abs(margin - want) < 1e-6 * max(want, 1.0), (
-            f'ext={ext} (measured {ext_meas:.4f}): hand-off containment '
-            f'margin {margin:.6f} != the required {want:.6f}')
+        if ext_meas >= _FOCUS_STANDOFF_MARGIN / sat:
+            # M is reachable: the identity is unchanged and exact.
+            assert abs(margin - _FOCUS_STANDOFF_MARGIN) < 1e-6, (
+                f'ext={ext} (measured {ext_meas:.4f}): hand-off containment '
+                f'margin {margin:.6f} != the required '
+                f'{_FOCUS_STANDOFF_MARGIN:.6f}')
+        else:
+            lo = sat * ext_meas
+            hi = _FOCUS_STANDOFF_ASYMPTOTE_FRAC * ext_meas
+            assert lo - 1e-9 <= margin <= hi + 1e-9, (
+                f'ext={ext} (measured {ext_meas:.4f}): sub-threshold margin '
+                f'{margin:.6f} outside [{lo:.6f}, {hi:.6f}]')
+            sub.append((ext_meas, f))
         seen.append(f)
     # ... and it is genuinely NOT a constant: the resolved factor spans the
     # cap at a narrow grid down to a short leg at a wide one.
     assert max(seen) / min(seen) > 4.0, (
         f'the resolved standoff factors {seen} barely move with the grid '
         f'extent -- the resolver has collapsed back to a constant')
+    # ... INCLUDING inside the sub-threshold branch, which is where the
+    # collapse actually was (defect V2).  EVERY entry here used to be exactly
+    # sqrt(3) -- that is the fail-before, and it is what this asserts against.
+    # The spread is modest at THIS fixture's NA 0.278 (the leg error term grows
+    # as NA^3, so a fast beam cannot afford much extra leg); the wide-spread
+    # case is pinned at NA 0.15 in
+    # tests/unit/test_fix_v1_v8_readout_guard_and_standoff.py.
+    assert len(sub) >= 4
+    assert sum(1 for _e, f in sub if abs(f - f_cap) > 1e-6) >= 2, (
+        f'the sub-threshold standoff factors {sub} are all the old constant '
+        f'{f_cap:.6f} -- the small-grid branch is a constant in disguise again')
+    assert max(f for _e, f in sub) / min(f for _e, f in sub) > 1.2, (
+        f'the sub-threshold standoff factors {sub} barely follow the extent')

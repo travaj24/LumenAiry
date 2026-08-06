@@ -36,6 +36,18 @@ the behaviour the two-tier split was written to remove.  Each warm-tier test
 starts from ``close_worker_pool()`` (the one entry point that returns the
 process to a genuinely cold state) and asserts the DISPATCH COUNT, so it cannot
 pass by accident on a process some earlier test happened to warm.
+
+The promotion is gated on a MEASUREMENT rather than a point count, because at
+65 536 points the serial Newton step costs 0.048 s on the default backend and
+0.553 s on spline -- so reachability alone measured 5-7% SLOWER.  Finding V5
+then showed that measurement was stored as a bare wall time against a worker
+count: two spline inversions armed the gate and the next four POLYNOMIAL ones
+at the same size all dispatched, re-admitting exactly that regression, and a
+7x size drop did the same.  The last block below is that finding -- the
+evidence is now keyed by (worker count, fit backend, point-count band), and
+each of those three legs has a state-machine test replaying the verifier's own
+measured numbers plus an end-to-end chain test with the cost bar neutralised
+(so the assertion is about the KEY, not about the host's throughput).
 """
 import numpy as np
 import pytest
@@ -207,6 +219,17 @@ def test_the_warm_tier_shape_straddles_the_two_bars():
         f'{LT._POOL_MIN_PIXELS_WARM} and the cold bar {LT._POOL_MIN_PIXELS}')
 
 
+# The point count every state-machine test below records its samples at, and
+# asks its questions at, unless it is deliberately testing the SIZE axis.
+# 65 536 is design 121's per-group Newton count at ray_subsample=4.
+_PTS = 65_536
+# The cost class the default path lands in on a numba box.  Spelled through the
+# library helper rather than hard-coded, so a rename cannot make these tests
+# quietly compare two labels that are both wrong.
+_CLS_POLY = LT._newton_cost_class('polynomial')
+_CLS_SPLINE = LT._newton_cost_class('spline')
+
+
 def test_promotion_state_machine():
     """The "has been asked" flag, exercised directly -- no chain, no timing.
 
@@ -218,30 +241,30 @@ def test_promotion_state_machine():
     slow = 10.0 * LT._POOL_PROMOTE_MIN_SECONDS + 1.0
     ns = LT._POOL_PROMOTE_MIN_SAMPLES
     try:
-        assert LT._pool_reuse_is_likely(4) is False, (
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is False, (
             'a cold process must not report a pending promotion')
-        LT._note_pool_deferral(4, slow)
-        assert LT._pool_reuse_is_likely(4) is False, (
+        LT._note_pool_deferral(4, _CLS_SPLINE, _PTS, slow)
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is False, (
             'ONE deferred call must not promote: the first Newton inversion '
             'in a process carries one-time numba warm-up (measured 0.637 s '
             'against a 0.048 s steady state), so it is not evidence about the '
             'work the pool would actually take over')
         for _ in range(ns - 1):
-            LT._note_pool_deferral(4, slow)
-        assert LT._pool_reuse_is_likely(4) is True, (
+            LT._note_pool_deferral(4, _CLS_SPLINE, _PTS, slow)
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is True, (
             f'{ns} deferred pool-sized calls must arm the promotion')
         # promotion is per worker count: a pool built for a different count
         # would be torn down and rebuilt, so it amortises nothing
-        assert LT._pool_reuse_is_likely(8) is False
+        assert LT._pool_reuse_is_likely(8, _CLS_SPLINE, _PTS) is False
         for _ in range(ns):
-            LT._note_pool_deferral(8, slow)
-        assert LT._pool_reuse_is_likely(8) is True
-        assert LT._pool_reuse_is_likely(4) is False, (
+            LT._note_pool_deferral(8, _CLS_SPLINE, _PTS, slow)
+        assert LT._pool_reuse_is_likely(8, _CLS_SPLINE, _PTS) is True
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is False, (
             'recording a new worker count must RESTART the measurement, not '
             'stack alongside the old one')
         # close_worker_pool is the documented "return to cold" entry point
         LT.close_worker_pool()
-        assert LT._pool_reuse_is_likely(8) is False, (
+        assert LT._pool_reuse_is_likely(8, _CLS_SPLINE, _PTS) is False, (
             'close_worker_pool left a promotion armed, so the process is not '
             'actually cold afterwards')
     finally:
@@ -265,24 +288,185 @@ def test_the_cost_gate_rejects_a_cheap_newton_step():
     ns = LT._POOL_PROMOTE_MIN_SAMPLES
     try:
         for _ in range(ns + 1):
-            LT._note_pool_deferral(4, lo)
-        assert LT._pool_reuse_is_likely(4) is False, (
+            LT._note_pool_deferral(4, _CLS_SPLINE, _PTS, lo)
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is False, (
             'a Newton step below the cost bar must NOT promote however often '
             'it repeats: the pool would cost more per dispatch than the step '
             'it replaces')
         LT.close_worker_pool()
         for _ in range(ns):
-            LT._note_pool_deferral(4, hi)
-        assert LT._pool_reuse_is_likely(4) is True
+            LT._note_pool_deferral(4, _CLS_SPLINE, _PTS, hi)
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is True
         # the estimator is the MINIMUM, so one cheap sample withdraws the
         # promotion -- deliberately conservative, since over-promoting costs
         # every remaining call while under-promoting costs only the win
-        LT._note_pool_deferral(4, lo)
-        assert LT._pool_reuse_is_likely(4) is False, (
+        LT._note_pool_deferral(4, _CLS_SPLINE, _PTS, lo)
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is False, (
             'the promotion must track the MINIMUM deferred time; taking the '
             'max or the first sample promotes on numba warm-up')
     finally:
         LT.close_worker_pool()
+
+
+# ---------------------------------------------------------------------------
+# FINDING V5 -- the cost gate's evidence must be keyed by what determines cost
+#
+# The gate above shipped storing a BARE WALL TIME against a worker count: no
+# fit backend, no point count.  Verified on the shipped gate, 4 workers, one
+# process per block:
+#
+#   2 SPLINE groups at  65 536 pts  -> 0 dispatches, armed at 0.504 s
+#   then 4 POLYNOMIAL groups
+#        at the SAME    65 536 pts  -> 4 dispatches   (that step is 0.048 s,
+#                                                      7.3x UNDER the bar)
+#   2 SPLINE groups at 116 281 pts  -> 0 dispatches, armed at 1.036 s
+#   then 4 groups at    16 384 pts  -> 4 dispatches   (~0.15 s, under the bar
+#                                                      AND under one dispatch)
+#
+# i.e. the +5-7% regression the cost gate was written to reject, re-admitted
+# for any process that touches two backends or two grid sizes -- and a
+# mixed-backend process is a shipped idiom (spline is the fit-domain-free
+# oracle in test_niche_d7 / c6 / c8 and the C11/C12 validation scripts).
+# ---------------------------------------------------------------------------
+
+def test_the_cost_class_separates_the_three_measured_backends():
+    """The label the evidence is keyed by must actually separate the three
+    regimes the measurement table distinguishes (0.048 / 0.553 / 0.95 s at a
+    FIXED 65 536 points).  Two of them are both ``newton_fit='polynomial'``,
+    so keying on ``newton_fit`` alone would merge a 20x cost difference."""
+    orig = LT._NUMBA_AVAILABLE
+    try:
+        LT._NUMBA_AVAILABLE = True
+        poly_numba = LT._newton_cost_class('polynomial')
+        spline = LT._newton_cost_class('spline')
+        LT._NUMBA_AVAILABLE = False
+        poly_plain = LT._newton_cost_class('polynomial')
+    finally:
+        LT._NUMBA_AVAILABLE = orig
+    assert len({poly_numba, spline, poly_plain}) == 3, (
+        f'cost classes {poly_numba!r} / {spline!r} / {poly_plain!r} do not '
+        f'separate the three measured regimes; a sample from one would '
+        f'promote another')
+    # numba availability is read at CALL time, not baked in at import, so a
+    # process that loses the kernel lands in its own bucket instead of
+    # inheriting the fast path's 0.048 s measurement
+    expected = poly_numba if orig else poly_plain
+    assert LT._newton_cost_class('polynomial') == expected
+    # an unknown backend gets a bucket of its own rather than inheriting one
+    assert LT._newton_cost_class('some_future_fit') not in (
+        poly_numba, spline, poly_plain)
+
+
+def test_a_spline_measurement_does_not_promote_the_polynomial_path():
+    """FAIL-BEFORE (V5), state-machine half -- replayed with the verifier's own
+    measured numbers so the assertion is arithmetic, not throughput.
+
+    Two spline inversions at 0.504 s clear the 0.35 s bar.  The polynomial
+    inversion that follows them, at the SAME 65 536 points, costs 0.048 s --
+    so pooling it is a ~4.6x loss against the ~0.22 s dispatch.  Pre-fix the
+    stored 0.504 s answered for it."""
+    LT.close_worker_pool()
+    try:
+        for _ in range(LT._POOL_PROMOTE_MIN_SAMPLES):
+            LT._note_pool_deferral(4, _CLS_SPLINE, _PTS, 0.504)
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is True, (
+            'the spline measurement must still arm its OWN class')
+        assert LT._pool_reuse_is_likely(4, _CLS_POLY, _PTS) is False, (
+            "a spline inversion's wall time promoted the polynomial path at "
+            "the same point count; that path measures 0.048 s, 7.3x under "
+            "the bar, and pooling it costs 5-7% (the regression the cost "
+            "gate exists to reject)")
+        # ...and the polynomial class then has to earn it from scratch: its
+        # own cheap samples never arm, however many arrive
+        for _ in range(LT._POOL_PROMOTE_MIN_SAMPLES + 2):
+            LT._note_pool_deferral(4, _CLS_POLY, _PTS, 0.048)
+        assert LT._pool_reuse_is_likely(4, _CLS_POLY, _PTS) is False
+        # and recording the polynomial samples must not leave the spline
+        # class armed on a bucket it no longer owns
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, _PTS) is False, (
+            'the pending measurement must belong to exactly one cost class')
+    finally:
+        LT.close_worker_pool()
+
+
+def test_a_large_measurement_does_not_promote_a_much_smaller_call():
+    """FAIL-BEFORE (V5), size half -- again with the verifier's numbers.
+
+    1.036 s measured at 116 281 points says nothing about a 16 384-point call
+    (7.1x fewer points, ~0.15 s, under BOTH the 0.35 s bar and the ~0.22 s
+    dispatch cost).  The warm band spans 8 000-200 000 points, a 25x range, so
+    "a pool-sized inversion was slow" is not a fact about every call in it."""
+    LT.close_worker_pool()
+    big, small = 116_281, 16_384
+    r = LT._POOL_PROMOTE_SIZE_RATIO
+    inside = 1.0 + 0.5 * (r - 1.0)          # strictly inside the band
+    try:
+        for _ in range(LT._POOL_PROMOTE_MIN_SAMPLES):
+            LT._note_pool_deferral(4, _CLS_SPLINE, big, 1.036)
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, big) is True
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, small) is False, (
+            f'a measurement taken at {big} points promoted a {small}-point '
+            f'call ({big / small:.1f}x smaller), extrapolating a wall time '
+            f'down without a size term')
+        # the band is symmetric: a measurement does not answer for a call
+        # several times LARGER either
+        assert LT._pool_reuse_is_likely(
+            4, _CLS_SPLINE, int(big * (r + 1.0))) is False
+        # inside the band the sample IS reused, scaled to the query size --
+        # otherwise the fix would just be "never promote"
+        assert LT._pool_reuse_is_likely(
+            4, _CLS_SPLINE, int(big / inside)) is True
+    finally:
+        LT.close_worker_pool()
+
+
+def test_within_the_band_the_estimate_follows_the_point_count():
+    """The band is not a second on/off switch: inside it the recorded sample
+    is SCALED to the query size before it meets the bar.  So a sample that
+    only just clears the bar stops clearing it once the call shrinks, even
+    though both sizes are in the same band.
+
+    Both the size probe and the margin are derived from the shipped ratio, so
+    this stays a test of the RULE rather than of the constant."""
+    LT.close_worker_pool()
+    r = LT._POOL_PROMOTE_SIZE_RATIO
+    assert r > 1.0
+    f = 1.0 + 0.5 * (r - 1.0)               # strictly inside the band
+    pts = 100_000
+    # clears the bar by (1+f)/2 at ``pts``, which is less than f -- so the
+    # same sample lands BELOW the bar once scaled down to pts / f
+    secs = 0.5 * (1.0 + f) * LT._POOL_PROMOTE_MIN_SECONDS
+    try:
+        for _ in range(LT._POOL_PROMOTE_MIN_SAMPLES):
+            LT._note_pool_deferral(4, _CLS_SPLINE, pts, secs)
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE, pts) is True
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE,
+                                        int(pts / f)) is False, (
+            'the recorded sample must be scaled to the query point count, '
+            'not applied flat across the whole band')
+        assert LT._pool_reuse_is_likely(4, _CLS_SPLINE,
+                                        int(pts * f)) is True
+    finally:
+        LT.close_worker_pool()
+
+
+def test_the_size_band_is_a_bounded_extrapolation():
+    """Pin the bound itself.  Linear-in-points is a reasonable LOCAL model of
+    the Newton step and a terrible 25x one (there is a fixed per-call
+    fit/setup cost), so the scaling is only ever applied inside a factor of
+    ``_POOL_PROMOTE_SIZE_RATIO``.  A ratio of 1 would make every size change
+    re-measure (safe but wasteful); a huge one restores the defect."""
+    assert 1.0 < LT._POOL_PROMOTE_SIZE_RATIO <= 4.0, (
+        f'_POOL_PROMOTE_SIZE_RATIO={LT._POOL_PROMOTE_SIZE_RATIO} is outside '
+        'the range docs/audits/FIX_V4_V5_2026_08_06.md justifies')
+    r = LT._POOL_PROMOTE_SIZE_RATIO
+    assert LT._pool_size_band_ok(1000, 1000) is True
+    assert LT._pool_size_band_ok(int(1000 * r * 0.99), 1000) is True
+    assert LT._pool_size_band_ok(int(1000 * r * 1.01) + 1, 1000) is False
+    assert LT._pool_size_band_ok(1000, int(1000 * r * 1.01) + 1) is False
+    # a cold record (anchor 0) can never satisfy the band, so it cannot be
+    # mistaken for "any size matches"
+    assert LT._pool_size_band_ok(1000, 0) is False
 
 
 def test_the_cost_gate_default_is_a_real_bar():
@@ -341,6 +525,69 @@ def test_a_cold_multi_group_chain_reaches_the_warm_tier():
         f'call now pays a cold spawn.')
 
 
+def test_a_spline_chain_does_not_promote_a_following_polynomial_chain():
+    """END-TO-END fail-before for V5, on the sequence the verifier ran.
+
+    The COST BAR is neutralised here (``_DispatchSpy`` default 0.0), which is
+    what makes this a test of the KEYING rather than of the host's Newton
+    throughput: with the bar at zero every deferral counts as "worth
+    pooling", so the ONLY thing that can keep the polynomial groups off the
+    pool is the fact that the evidence on record belongs to a different cost
+    class.  Pre-fix, all of them dispatched on the spline phase's wall time;
+    now the polynomial phase re-measures from scratch like any cold class,
+    and only pools once it has its OWN ``_POOL_PROMOTE_MIN_SAMPLES``.
+
+    At the SHIPPED bar the polynomial phase makes ZERO dispatches (its step is
+    0.048 s against a 0.35 s bar) -- that arm is a timing statement about the
+    box, so it lives in docs/audits/FIX_V4_V5_2026_08_06.md as a measurement,
+    not here as an assertion."""
+    _skip_if_low_ram()
+    ns = LT._POOL_PROMOTE_MIN_SAMPLES
+    n_poly = ns + 2
+    kw = dict(n=_N_WARM, rs=_RS_WARM)
+    with _DispatchSpy() as spy:
+        _run('spline', _NW, n_groups=ns, **kw)
+        n_spline = spy.n
+        f = _run('polynomial', _NW, n_groups=n_poly, **kw)
+        n_poly_disp = spy.n - n_spline
+    assert np.isfinite(f).all()
+    assert n_spline == 0, (
+        f'the {ns} arming spline groups made {n_spline} dispatches; they are '
+        f'supposed to MEASURE, not pool')
+    assert n_poly_disp == n_poly - ns, (
+        f'{n_poly_disp} of {n_poly} polynomial groups dispatched at the same '
+        f'{(_N_WARM // _RS_WARM) ** 2} points after a SPLINE measurement '
+        f'armed the gate; expected {n_poly - ns} (the polynomial class must '
+        f'earn its own promotion).  {n_poly} means the spline wall time is '
+        f'still answering for a backend that is 10x cheaper -- the +5-7% '
+        f'regression the cost gate exists to reject.')
+
+
+def test_a_large_chain_does_not_promote_a_following_small_chain():
+    """END-TO-END fail-before for V5's size half, same backend throughout so
+    only the point count changes: 65 536 points, then 16 384 (4x fewer, both
+    inside the 8k-200k warm band).  Cost bar neutralised for the same reason
+    as above."""
+    _skip_if_low_ram()
+    ns = LT._POOL_PROMOTE_MIN_SAMPLES
+    n_small = ns + 2
+    with _DispatchSpy() as spy:
+        _run('polynomial', _NW, n=_N_WARM, rs=_RS_WARM, n_groups=ns)
+        n_big = spy.n
+        f = _run('polynomial', _NW, n=256, rs=2, n_groups=n_small)
+        n_small_disp = spy.n - n_big
+    assert np.isfinite(f).all()
+    assert (256 // 2) ** 2 >= LT._POOL_MIN_PIXELS_WARM, (
+        'the small phase dropped below the warm bar, so it would run serial '
+        'for a reason that has nothing to do with the size band')
+    assert n_big == 0
+    assert n_small_disp == n_small - ns, (
+        f'{n_small_disp} of {n_small} groups at {(256 // 2) ** 2} points '
+        f'dispatched on a measurement taken at {(_N_WARM // _RS_WARM) ** 2} '
+        f'points; expected {n_small - ns} (the smaller size band must earn '
+        f'its own promotion)')
+
+
 def test_a_single_sub_cold_bar_call_does_not_create_a_pool():
     """The other half of the policy, and the reason the fix is a promotion
     rather than simply lowering ``_POOL_MIN_PIXELS``.
@@ -397,7 +644,7 @@ def test_the_gate_consults_the_promotion_flag_not_only_the_live_pool():
     src = inspect.getsource(LT.apply_real_lens_traced)
     i = src.find('def _invert_newton_parallel')
     assert i != -1, 'could not locate _invert_newton_parallel'
-    body = src[i:i + 3600]
+    body = src[i:i + 6000]
     assert '_pool_reuse_is_likely' in body, (
         'the warm gate no longer consults the promotion flag: '
         '_PERSISTENT_POOL is not None can only become true downstream of this '
@@ -405,6 +652,20 @@ def test_the_gate_consults_the_promotion_flag_not_only_the_live_pool():
     assert '_note_pool_deferral' in body, (
         'nothing arms the promotion any more, so the second call cannot be '
         'promoted')
+    # ...and the evidence must be keyed by what determines cost (V5).  Both
+    # helpers take the cost class and the point count as REQUIRED arguments,
+    # so a call site cannot be backend- or size-blind by omission -- but a
+    # refactor could still pass a constant, so pin that the gate derives the
+    # class from the resolved newton_fit and hands over this call's own size.
+    assert '_newton_cost_class(newton_fit)' in body, (
+        'the promotion gate no longer derives a cost class from the resolved '
+        'newton_fit: a spline measurement would promote the 10x cheaper '
+        'polynomial path again (finding V5)')
+    for _call in ('_pool_reuse_is_likely(n_cpu, _cost_class, n_total)',
+                  '_note_pool_deferral(n_cpu, _cost_class, n_total,'):
+        assert _call in body, (
+            f'{_call!r} is gone: the deferral evidence is no longer keyed by '
+            f'this call\'s own backend and point count')
 
 
 @pytest.mark.parametrize('fit', ['polynomial', 'spline'])

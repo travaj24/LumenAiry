@@ -491,7 +491,9 @@ def test_tiles_avoid_the_periodic_replica_regime(_fan, _multi2_tiled):
         run = _run_chain(_fan['groups'], _fan['env'],
                          _fan['specs'][0]['carrier'], _fan['fd'], (0.0, 0.0),
                          quiet=False)
-    assert any('exceeds one spatial period' in str(w.message) for w in rec)
+    # matcher pins the stable REPLICAS token, not the sentence prose -- the
+    # V3-mft fix (2026-08-06) reworded the geometry half of the message
+    assert any('PERIODIC REPLICAS' in str(w.message) for w in rec)
     # ... and it REPORTS the period, so an accumulating caller can act on it
     # without depending on a warning that any upstream filterwarnings()
     # silences (this is what the orchestrator's guard reads).

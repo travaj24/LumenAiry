@@ -824,13 +824,76 @@ _POOL_PROMOTE_MIN_SECONDS = 0.35
 # heterogeneous sweep rather than over-promoting.
 _POOL_PROMOTE_MIN_SAMPLES = 2
 
-# Pending promotion state, per worker count (a pool built for a different
-# count would be torn down and rebuilt, amortising nothing):
-#   _POOL_DEFERRED_NWORKERS  the count, or None when nothing is pending
-#   _POOL_DEFERRED_SECONDS   MINIMUM deferred serial Newton time seen at it
+# ---- V5 (2026-08-06): THE EVIDENCE MUST BE KEYED BY WHAT DETERMINES COST --
+# As first shipped, that measurement was a BARE WALL TIME recorded against a
+# worker count.  It carried no record of WHICH fit backend produced it and no
+# point count, and ``_pool_reuse_is_likely`` then applied it to EVERY later
+# inversion at that worker count that cleared the warm bar.  Both blind spots
+# re-admit exactly the +5-7% regression the gate above exists to reject.
+# Measured on the shipped gate, 4 workers, one process per block:
+#
+#   2 SPLINE groups at  65 536 pts -> 0 dispatches, armed at 0.504 s
+#   then 4 POLYNOMIAL groups
+#        at the SAME    65 536 pts -> 4 dispatches -- yet that step measures
+#                                     0.048 s, 7.3x UNDER the 0.35 s bar and
+#                                     ~4.6x cheaper than one dispatch
+#
+#   2 SPLINE groups at 116 281 pts -> 0 dispatches, armed at 1.036 s
+#   then 4 groups at    16 384 pts -> 4 dispatches -- 7.1x fewer points, so
+#                                     ~0.15 s, under the bar AND under the
+#                                     ~0.22 s dispatch cost
+#
+# Mixed-backend processes are a SHIPPED idiom rather than a hypothetical:
+# spline is used deliberately as the fit-domain-free oracle in ``test_niche_d7``,
+# ``c6``, ``c8`` and the C11/C12 validation scripts (see the D5 adjudication at
+# ``_fit_domain_basis_ok``), so a spline reading arming the default polynomial
+# path is a thing this library's own test suite does.
+#
+# The pending measurement is therefore keyed by a COST CLASS -- the triple
+# (worker count, fit backend, point-count band) -- and re-armed from scratch
+# whenever any leg of it changes:
+#
+#   * WORKER COUNT.  Unchanged rationale: a pool built for a different count
+#     is torn down and rebuilt, so it amortises nothing.
+#   * FIT BACKEND.  The 20x spread in the table above is measured at FIXED
+#     size, so it is a property of the backend, not of the work.  A sample
+#     from one backend is not evidence about another.  ``_newton_cost_class``
+#     also separates polynomial-with-numba from polynomial-without, which is
+#     the other 20x edge of that same table (0.048 s vs 0.95 s).
+#   * POINT COUNT.  The warm band spans 8 000 - 200 000 points -- a 25x range
+#     -- and the serial step's cost scales with points.  A sample is reused
+#     only for a query within ``_POOL_PROMOTE_SIZE_RATIO`` of its OWN size,
+#     and inside that band it is scaled linearly to the query size before it
+#     is compared against the bar.  The band is what bounds the
+#     extrapolation: proportionality is a reasonable local model and a
+#     terrible 25x one, so it is only ever applied over a factor of two.
+#
+# Cost of being wrong is asymmetric, which is why re-arming is the response to
+# a mismatch rather than widening the key: a bucket that has to re-measure
+# loses only the win on two calls, while a bucket that promotes on someone
+# else's measurement taxes every remaining call in the process.
+#
+# 2.0: at the band edge the scaled estimate is exact only if the step is
+# perfectly proportional to point count, which is not claimed -- there is a
+# fixed per-call fit/setup cost, so a call twice the size takes somewhat less
+# than twice as long and the scaled estimate is OPTIMISTIC there.  The bar's
+# own 1.4x margin over the measured break-even absorbs that; what it must not
+# absorb, and no longer has to, is the 7.3x and 7.1x errors above.
+_POOL_PROMOTE_SIZE_RATIO = 2.0
+
+# Pending promotion state, per COST CLASS (above).
+#   _POOL_DEFERRED_NWORKERS  worker count, or None when nothing is pending
+#   _POOL_DEFERRED_CLASS     fit-backend cost class, or None
+#   _POOL_DEFERRED_SECONDS   deferred serial Newton time of the cheapest
+#                            (PER POINT) sample recorded in this bucket
+#   _POOL_DEFERRED_POINTS    that same sample's Newton point count.  The pair
+#                            (_SECONDS, _POINTS) is ONE measurement, and
+#                            _POINTS is also the size band's anchor.
 #   _POOL_DEFERRED_COUNT     how many deferred inversions have been timed
 _POOL_DEFERRED_NWORKERS = None
+_POOL_DEFERRED_CLASS = None
 _POOL_DEFERRED_SECONDS = 0.0
+_POOL_DEFERRED_POINTS = 0
 _POOL_DEFERRED_COUNT = 0
 
 
@@ -908,9 +971,56 @@ def _get_persistent_worker_pool(n_workers):
     return _PERSISTENT_POOL
 
 
-def _note_pool_deferral(n_workers, seconds) -> None:
-    """Record that a POOL-SIZED Newton inversion just ran serially, and how
-    long it took.
+def _newton_cost_class(newton_fit) -> str:
+    """Label the machinery that decides what one serial Newton step COSTS.
+
+    Two inversions belong to the same class only if a wall-clock measurement
+    of one is evidence about the other.  Measured at a FIXED 65 536 points,
+    24 cores (see the block at ``_POOL_PROMOTE_SIZE_RATIO``):
+
+        ``'polynomial+numba'``   0.048 s   (``@njit(parallel=True)`` Chebyshev
+                                            evaluator -- already multicore)
+        ``'spline'``             0.553 s   (``RectBivariateSpline.ev``, single
+                                            threaded, does not release the GIL)
+        ``'polynomial'``         0.95  s   (same Chebyshev evaluator, pure-xp
+                                            fallback, numba unavailable)
+
+    a 20x spread at identical size, against a ~0.22 s per-dispatch pool
+    overhead -- so the backend, not the point count, is what decides whether
+    the pool can win.  ``_NUMBA_AVAILABLE`` is read at CALL time rather than
+    baked in at import, so a process that neutralises it lands in a different
+    bucket instead of inheriting the fast path's measurement.
+
+    An unrecognised ``newton_fit`` returns its own name, so a future backend
+    starts in a bucket of its own rather than silently inheriting one.
+    """
+    fit = str(newton_fit)
+    if fit == 'polynomial':
+        return 'polynomial+numba' if _NUMBA_AVAILABLE else 'polynomial'
+    return fit
+
+
+def _pool_size_band_ok(n_points, anchor_points) -> bool:
+    """True when ``n_points`` is close enough to the point count a recorded
+    measurement was taken at for that measurement to be scaled onto it.
+
+    Symmetric ratio bound: within ``_POOL_PROMOTE_SIZE_RATIO`` in EITHER
+    direction.  Symmetry matters -- the shipped defect fired in the shrinking
+    direction (a 116 281-point sample promoting 16 384-point calls) but the
+    growing direction is the one that would over-promote a genuinely cheap
+    call the next time a chain steps its ray_subsample down.
+    """
+    a = float(n_points)
+    b = float(anchor_points)
+    if not (a > 0.0 and b > 0.0):
+        return False
+    return max(a, b) <= _POOL_PROMOTE_SIZE_RATIO * min(a, b)
+
+
+def _note_pool_deferral(n_workers, cost_class, n_points, seconds) -> None:
+    """Record that a POOL-SIZED Newton inversion just ran serially: at what
+    worker count, on which fit backend, over how many points, and how long it
+    took.
 
     Called from ``_invert_newton_parallel`` on every call that cleared
     ``_POOL_MIN_PIXELS_WARM`` but not ``_POOL_MIN_PIXELS`` (i.e. a call a
@@ -920,50 +1030,83 @@ def _note_pool_deferral(n_workers, seconds) -> None:
     the default polynomial fit evaluates through a numba ``prange`` kernel
     that already uses every core.
 
-    Keeps the MINIMUM deferral at each worker count, and how many have been
-    seen.  The minimum is the steady-state estimate: the first inversion in a
-    process carries one-time numba warm-up (measured 0.637 s against a
-    0.048 s steady state), so a rule that trusted the first or the largest
-    sample would promote on a compile it is not going to pay again.
-    Recording a DIFFERENT worker count RESTARTS the measurement rather than
-    stacking, so a caller that alternates worker counts never promotes on a
-    count it will not reuse.
+    Keeps ONE sample per cost class -- the cheapest PER POINT seen in it --
+    together with the point count it was taken at, plus how many samples the
+    class has collected.  Cheapest-per-point is the steady-state estimate: the
+    first inversion in a process carries one-time numba warm-up (measured
+    0.637 s against a 0.048 s steady state), so a rule that trusted the first
+    or the largest sample would promote on a compile it is not going to pay
+    again.  Keeping the sample's own size alongside it is what lets
+    :func:`_pool_reuse_is_likely` scale it onto a differently-sized call
+    instead of pretending point count does not enter the cost.
+
+    Recording a DIFFERENT cost class -- a different worker count, a different
+    fit backend, or a point count outside ``_POOL_PROMOTE_SIZE_RATIO`` of the
+    sample on record -- RESTARTS the measurement rather than stacking, so no
+    bucket can ever promote on another bucket's evidence (V5).
     """
     global _POOL_DEFERRED_NWORKERS, _POOL_DEFERRED_SECONDS
-    global _POOL_DEFERRED_COUNT
+    global _POOL_DEFERRED_COUNT, _POOL_DEFERRED_CLASS, _POOL_DEFERRED_POINTS
+    n_workers = int(n_workers)
+    cost_class = str(cost_class)
+    n_points = int(n_points)
+    seconds = float(seconds)
     with _PERSISTENT_POOL_LOCK:
-        if _POOL_DEFERRED_NWORKERS != int(n_workers):
-            _POOL_DEFERRED_NWORKERS = int(n_workers)
-            _POOL_DEFERRED_SECONDS = float(seconds)
+        _same_bucket = (_POOL_DEFERRED_NWORKERS == n_workers
+                        and _POOL_DEFERRED_CLASS == cost_class
+                        and _pool_size_band_ok(n_points,
+                                               _POOL_DEFERRED_POINTS))
+        if not _same_bucket:
+            _POOL_DEFERRED_NWORKERS = n_workers
+            _POOL_DEFERRED_CLASS = cost_class
+            _POOL_DEFERRED_SECONDS = seconds
+            _POOL_DEFERRED_POINTS = n_points
             _POOL_DEFERRED_COUNT = 1
         else:
-            _POOL_DEFERRED_SECONDS = min(_POOL_DEFERRED_SECONDS,
-                                         float(seconds))
+            # cross-multiplied so the comparison needs no division and cannot
+            # divide by a zero point count
+            if (seconds * _POOL_DEFERRED_POINTS
+                    < _POOL_DEFERRED_SECONDS * n_points):
+                _POOL_DEFERRED_SECONDS = seconds
+                _POOL_DEFERRED_POINTS = n_points
             _POOL_DEFERRED_COUNT += 1
 
 
-def _pool_reuse_is_likely(n_workers) -> bool:
-    """True when this process has already deferred a pool-sized Newton
-    inversion at this worker count AND that inversion was expensive enough
-    to be worth pooling (see :func:`_note_pool_deferral` and
+def _pool_reuse_is_likely(n_workers, cost_class, n_points) -> bool:
+    """True when this process has already deferred pool-sized Newton
+    inversions IN THIS CALL'S OWN COST CLASS, and those inversions were
+    expensive enough that pooling one of this size would pay (see
+    :func:`_note_pool_deferral`, :func:`_newton_cost_class` and
     ``_POOL_PROMOTE_MIN_SECONDS``).
 
-    The first half is the "has been asked" flag the two-tier threshold needs,
-    as distinct from "is alive": ``_PERSISTENT_POOL is not None`` can only
-    become true downstream of the gate that reads it, so on its own it can
-    never promote a process whose calls all sit below the cold bar.  The
-    second half is what keeps the reachability fix from being a slowdown on
-    the default path, where 65 536 Newton points cost 0.048 s against a
-    ~0.22 s per-dispatch pool overhead.
+    The "has been asked" half is the flag the two-tier threshold needs, as
+    distinct from "is alive": ``_PERSISTENT_POOL is not None`` can only become
+    true downstream of the gate that reads it, so on its own it can never
+    promote a process whose calls all sit below the cold bar.  The COST half
+    is what keeps the reachability fix from being a slowdown on the default
+    path, where 65 536 Newton points cost 0.048 s against a ~0.22 s
+    per-dispatch pool overhead.  The CLASS half (V5) is what stops one of
+    those two facts being carried across to a call the measurement says
+    nothing about.
 
-    Needs ``_POOL_PROMOTE_MIN_SAMPLES`` measurements before it will say yes,
-    so the first (warm-up-inflated) inversion cannot decide on its own.
+    Needs ``_POOL_PROMOTE_MIN_SAMPLES`` measurements in the class before it
+    will say yes, so the first (warm-up-inflated) inversion cannot decide on
+    its own.
     """
     with _PERSISTENT_POOL_LOCK:
-        return (_POOL_DEFERRED_NWORKERS is not None
-                and _POOL_DEFERRED_NWORKERS == int(n_workers)
-                and _POOL_DEFERRED_COUNT >= _POOL_PROMOTE_MIN_SAMPLES
-                and _POOL_DEFERRED_SECONDS >= _POOL_PROMOTE_MIN_SECONDS)
+        if (_POOL_DEFERRED_NWORKERS is None
+                or _POOL_DEFERRED_NWORKERS != int(n_workers)
+                or _POOL_DEFERRED_CLASS != str(cost_class)
+                or _POOL_DEFERRED_COUNT < _POOL_PROMOTE_MIN_SAMPLES):
+            return False
+        if not _pool_size_band_ok(int(n_points), _POOL_DEFERRED_POINTS):
+            return False
+        # Scale the recorded sample onto THIS call's size.  The band check
+        # above bounds that extrapolation to a factor of
+        # _POOL_PROMOTE_SIZE_RATIO, so it is a local model, never a 25x one.
+        _est = (_POOL_DEFERRED_SECONDS * float(n_points)
+                / float(_POOL_DEFERRED_POINTS))
+        return bool(_est >= _POOL_PROMOTE_MIN_SECONDS)
 
 
 def close_worker_pool() -> None:
@@ -984,7 +1127,7 @@ def close_worker_pool() -> None:
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
     global _POOL_DEFERRED_NWORKERS, _POOL_DEFERRED_SECONDS
-    global _POOL_DEFERRED_COUNT
+    global _POOL_DEFERRED_COUNT, _POOL_DEFERRED_CLASS, _POOL_DEFERRED_POINTS
     # v5.30 (audit E-L2): take the SAME lock the constructor takes.  This
     # function mutates the pool globals, so running it concurrently with
     # ``_get_persistent_worker_pool`` could shut down a pool that had just
@@ -992,7 +1135,9 @@ def close_worker_pool() -> None:
     # constructor's assignment and its return.
     with _PERSISTENT_POOL_LOCK:
         _POOL_DEFERRED_NWORKERS = None
+        _POOL_DEFERRED_CLASS = None
         _POOL_DEFERRED_SECONDS = 0.0
+        _POOL_DEFERRED_POINTS = 0
         _POOL_DEFERRED_COUNT = 0
         if _PERSISTENT_POOL is not None:
             try:
@@ -5067,14 +5212,28 @@ def apply_real_lens_traced(
            ``_POOL_MIN_PIXELS`` (200 000) Newton points before the pool is
            worth a spawn -- at 16 384 a cold pool measured 1.62x SLOWER --
            so a genuine one-shot call stays serial.  Once a pool is live,
-           or once this process has already run ONE sub-cold-bar inversion
-           serially (i.e. it is a chain or a sweep, not a one-shot), the
-           bar drops to ``_POOL_MIN_PIXELS_WARM`` (8 000).  A multi-group
-           chain therefore runs group 1 serial and pools every group after
-           it; before the promotion existed the warm bar was unreachable
-           from a cold process and every group of a design-121-class chain
-           (65 536 points/group at ``ray_subsample=4``) ran serial.  Coarse
-           ``ray_subsample`` below the warm bar stays serial by design.
+           or once this process has already run sub-cold-bar inversions
+           serially (i.e. it is a chain or a sweep, not a one-shot) AND
+           TIMED them above ``_POOL_PROMOTE_MIN_SECONDS``, the bar drops to
+           ``_POOL_MIN_PIXELS_WARM`` (8 000).  A multi-group chain
+           therefore runs its first ``_POOL_PROMOTE_MIN_SAMPLES`` groups
+           serial and pools every group after them; before the promotion
+           existed the warm bar was unreachable from a cold process and
+           every group of a design-121-class chain (65 536 points/group at
+           ``ray_subsample=4``) ran serial.  Coarse ``ray_subsample`` below
+           the warm bar stays serial by design.
+
+           The promotion is COST-gated, not size-gated: at 65 536 points
+           the serial Newton step measures 0.048 s on the default
+           polynomial+numba path against a ~0.22 s per-dispatch pool
+           overhead, so that path deliberately keeps running in-process
+           (its Chebyshev evaluator is already an ``@njit(parallel=True)``
+           kernel using every core), while spline (0.553 s) and
+           polynomial-without-numba (0.95 s) promote and win.  The timing
+           evidence is kept per COST CLASS -- worker count, fit backend and
+           a point-count band -- so a measurement taken on one backend or
+           at one grid size never promotes calls it says nothing about
+           (finding V5).
     tilt_aware_rays : bool, default False
         If True, each ray's initial direction ``(L, M)`` is derived
         from the local phase gradient of ``E_in`` at the entrance
@@ -5339,6 +5498,13 @@ def apply_real_lens_traced(
         (default) names which knob is inert; ``'error'`` refuses the
         combination; ``'silent'`` acknowledges it -- which is what a caller
         deliberately using spline as a FIT-DOMAIN-FREE reference should pass.
+        ``'ignore'`` and ``'off'`` are accepted ALIASES for ``'silent'``
+        (``lumenairy.propagators.carrier``'s ``on_*`` knobs spell suppression
+        ``'ignore'``, this signature's siblings spell it ``'silent'``).
+        Validated at entry since v5.32.2 (finding V4): any other value raises
+        ``ValueError``.  Before that gate every unrecognised value -- including
+        ``'Error'`` and ``'ignore'`` -- silently selected ``'warn'``, so a
+        caller asking for a fatal got a warning and a returned field.
     decentred_fit_poly_order : int, optional
         Minimum tensor-Chebyshev total degree for the ray fit WHEN THAT FIT'S
         DISC IS OFF CENTRE (niche D7).  ``None`` (default) uses
@@ -5824,6 +5990,42 @@ def apply_real_lens_traced(
             f"inversion), 'fit' (scattered Chebyshev inverse-map fit) or "
             f"'backward_trace' (experimental direct backward trace).  "
             f"Pre-v5.29.1 any unrecognised value silently ran Newton.")
+
+    # ``on_fit_domain_basis`` (finding V4, 2026-08-06).  Added by the D5 fix,
+    # and the only string mode knob in this file that shipped with NO
+    # membership gate: 'Error', 'ignore', None, 1 and '' all fell through to
+    # the warn branch at ``_fit_domain_inert``, so a caller who asked for the
+    # combination to be FATAL got a RuntimeWarning and a returned field --
+    # and, per the D5 measurement, that field can be ALL ZERO past the
+    # aperture:beam cliff.  Exactly the defect class the two guards above
+    # close, shipped in the commit that closed them.
+    #
+    # THE VALID SET, decided here rather than left implicit:
+    #   'warn'   (default) name which knob is inert and continue
+    #   'error'  raise where the announcement would have fired
+    #   'silent' acknowledge -- what a caller deliberately using spline as a
+    #            FIT-DOMAIN-FREE reference passes
+    # 'ignore' and 'off' are accepted ALIASES for 'silent'.  Not indulgence:
+    # 'ignore' is the vocabulary EVERY ``on_*`` knob in
+    # ``lumenairy/propagators/carrier.py`` uses for suppression
+    # (``_check_guard_action``: 'error' / 'warn' / 'ignore'), and this
+    # signature's own siblings spell it 'silent' (``on_undersample``,
+    # ``on_aperture_beam``), so a caller has two house styles to guess
+    # between for one knob.  Before this gate 'ignore' was accepted AND
+    # INERT -- the worst of the three possible outcomes.  ``on_noncollimated``
+    # above resolves the same collision the same way (``_NONCOL_ALIASES``).
+    _FDB_ALIASES = {'ignore': 'silent', 'off': 'silent'}
+    if isinstance(on_fit_domain_basis, str):
+        on_fit_domain_basis = _FDB_ALIASES.get(on_fit_domain_basis,
+                                               on_fit_domain_basis)
+    if on_fit_domain_basis not in ('warn', 'error', 'silent'):
+        raise ValueError(
+            f"apply_real_lens_traced: on_fit_domain_basis="
+            f"{on_fit_domain_basis!r} is not a valid policy.  Choose from "
+            f"'warn' (default), 'error', 'silent' ('ignore' / 'off' are "
+            f"accepted aliases for 'silent').  Pre-v5.32.2 any unrecognised "
+            f"value silently selected 'warn', so a caller asking for 'error' "
+            f"got a warning and a returned field instead of a refusal.")
 
     # ---- N12 (P11): opt-in ray-density (Jacobian) amplitude model -------
     # ``amplitude_model='screen'`` (default) is byte-identical to prior
@@ -8286,7 +8488,15 @@ def apply_real_lens_traced(
         # made the same chain 5-7% SLOWER, because at 65 536 points the
         # default fit's numba prange kernel beats an 8-worker dispatch.  See
         # the block at ``_POOL_PROMOTE_MIN_SECONDS``.
-        _pool_promoted = _pool_reuse_is_likely(n_cpu)
+        #
+        # The measurement is asked for, and recorded against, this call's own
+        # COST CLASS -- (worker count, fit backend, point-count band).  A bare
+        # wall time keyed on the worker count alone let two expensive SPLINE
+        # inversions promote four CHEAP polynomial ones at the same size, and
+        # let two 116k inversions promote 16k ones: both re-admit the 5-7%
+        # regression above.  See ``_POOL_PROMOTE_SIZE_RATIO`` (finding V5).
+        _cost_class = _newton_cost_class(newton_fit)
+        _pool_promoted = _pool_reuse_is_likely(n_cpu, _cost_class, n_total)
         _min_px = (_POOL_MIN_PIXELS_WARM if (_pool_is_warm or _pool_promoted)
                    else _POOL_MIN_PIXELS)
         if n_cpu <= 1 or n_total < _min_px:
@@ -8298,7 +8508,7 @@ def apply_real_lens_traced(
             if n_cpu > 1 and n_total >= _POOL_MIN_PIXELS_WARM:
                 _t_defer = _time.perf_counter()
                 _opl = _invert_newton(Xw, Yw, sub_progress=sub_progress)
-                _note_pool_deferral(n_cpu,
+                _note_pool_deferral(n_cpu, _cost_class, n_total,
                                     _time.perf_counter() - _t_defer)
                 return _opl
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
