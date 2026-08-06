@@ -451,9 +451,34 @@ def test_the_star_keeps_its_inverse_because_a_solve_breaks_a_shipped_identity():
 
     A conforming per-layer stack must equal the shared-grid stack BIT FOR BIT
     (five suites pin it).  Rebuilding the star with the backward-stable RIGHT
-    solve -- which is algebraically identical -- moves the answer off those
-    bits, so the conversion is refused until the shared twin moves with it."""
+    solve -- which is algebraically identical -- can move the answer off those
+    bits, and where it does the conversion is refused until the shared twin
+    moves with it.
+
+    WHICH BLOCK IT MOVES, AND WHETHER IT MOVES ONE AT ALL, IS A PER-BUILD
+    FACT, and the first draft asserted it as a universal one
+    (``assert moved > 0.0`` on the R block alone).  Measured 2026-08-05, max
+    |difference| against the shared twin:
+
+        build / BLAS threads        R block      Jones block
+        Windows OpenBLAS-Haswell N  5.551e-17    2.001e-16
+        Windows OpenBLAS-Haswell 1  5.551e-17    8.327e-17
+        WSL OpenBLAS-SkylakeX    N  0.0          5.551e-17   <- the failure
+        WSL OpenBLAS-SkylakeX    1  1.388e-17    5.551e-17
+
+    -- so the substitution IS separable from the inverse on every build; the
+    R block merely happened to coincide on one of them.  This reads the max
+    over both blocks for that reason, and still treats an exact coincidence as
+    a PASS: where ``solve`` emits the inverse's bits the identity survives,
+    which is not a failure of anything.  Pinned on every build: the shipped
+    identity holds; the experiment really ran; the substitution can only touch
+    the last bits; and where it does touch them, byte-identity -- the thing
+    five suites assert at tolerance 0.0 -- is broken, which is the refusal's
+    whole justification."""
+    calls = [0]
+
     def star_solve(SA, SB):
+        calls[0] += 1
         A11, A12, A21, A22 = SA
         B11, B12, B21, B22 = SB
         n = A22.shape[0]
@@ -486,10 +511,31 @@ def test_the_star_keeps_its_inverse_because_a_solve_breaks_a_shipped_identity():
         alt = full(conforming("per-layer"))
     finally:
         PS._redheffer_star_rect = old
-    moved = maxdiff(alt[1], base_sh[1])
-    assert moved > 0.0, "the solve was expected to move the bits"
-    assert moved < 1e-9, ("and to move ONLY the bits -- if this is large the "
-                          "refusal reasoning is wrong and the star is buggy")
+    # the experiment was actually PERFORMED.  This is the half a bits-moved
+    # count cannot stand in for: a substitution that was never reached would
+    # also "move nothing", and would look like a pass.
+    assert calls[0] >= 3, (
+        f"the substituted star ran {calls[0]} times on a 4-layer stack: the "
+        f"fail-before switch did not take, so nothing was demonstrated")
+    moved_R = maxdiff(alt[1], base_sh[1])
+    moved_J = maxdiff(alt[3], base_sh[3])
+    moved = max(moved_R, moved_J)
+    assert moved < 1e-9, (
+        f"the solve moved more than the last bits (R {moved_R:.3e}, J "
+        f"{moved_J:.3e}) -- if this is large the refusal reasoning is wrong "
+        f"and the star is buggy")
+    if moved > 0.0:
+        # this build separates the two paths: the byte-identity that five
+        # suites assert at tolerance 0.0 is BROKEN by the substitution, which
+        # is exactly the recorded reason for keeping the explicit inverse.
+        assert (moved_R, moved_J) != (0.0, 0.0)
+        assert moved <= 64.0 * np.finfo(float).eps, (
+            f"R {moved_R:.3e}, J {moved_J:.3e}: an algebraically identical "
+            f"substitution must not move more than solver round-off")
+    else:
+        # this build does not: `solve` returned the inverse's bits everywhere,
+        # so the identity survives the substitution untouched.
+        assert moved_R == 0.0 and moved_J == 0.0
 
 
 # ===========================================================================
@@ -504,23 +550,109 @@ def _t34_warnings(fn):
                  if isinstance(w.message, PC._ModeClassificationWarning)]
 
 
-@pytest.mark.parametrize("ns,degree,rel_min", [(2, 12, 0.40),
-                                               (2, 16, 4.0),
-                                               (6, 10, 4.0)])
-def test_t34_guard_fires_on_the_silent_wrong_cells(ns, degree, rel_min,
-                                                  t34_armed):
-    """The cells M2 S5 measured as UNITARY BUT WRONG.  Each is checked to be
-    genuinely wrong FIRST (against the RCWA-anchored reference value) and to
-    have passed energy closure, so this pins the guard on a real defect and
-    documents that conservation is blind to it."""
-    ref = {2: 0.1100920, 6: 0.1111090}[ns]          # RCWA, 141 orders
-    (r0, close), warns = _t34_warnings(
-        lambda: solve0(build(ns, degree=degree), quiet=False))
-    assert abs(r0 / ref - 1.0) > rel_min, "the cell is supposed to be WRONG"
-    assert close < 1e-6, "and conservation is supposed to be blind to it"
-    assert warns, "the T3-4 guard must speak where conservation cannot"
-    msg = str(warns[0].message)
-    assert "UNITARY BUT WRONG" in msg and "min_feature" in msg
+#: The candidate family the wrong-cell scan below partitions.  The DEVICE and
+#: the DEFECT are build-independent -- M2's threshold rule says the library
+#: default leaves a 0.4127 nm (ns = 2) / 1.8042 nm (ns = 6) cross-layer sliver,
+#: and the degree ladder collapses somewhere above degree 8 on both -- but
+#: WHICH degree collapses is not: it is decided by whether a round-off-flux
+#: mode lands above or below the classification cut, i.e. by BLAS reduction
+#: order.  So the cells are SCANNED and partitioned per build, never listed.
+_T34_FAMILY = [(ns, deg) for ns in (2, 6) for deg in (10, 12, 14, 16)]
+_T34_WIDEN = [(ns, deg) for ns in (2, 6) for deg in (18, 20)]
+_T34_REF = {2: 0.1100920, 6: 0.1111090}             # RCWA, 141 orders
+_T34_WRONG_REL = 0.05                               # 5 %: see the docstring
+
+
+def _t34_scan(cells):
+    """``[(ns, degree, rel_error, closure, fired)]`` over ``cells``."""
+    out = []
+    for ns, degree in cells:
+        (r0, close), warns = _t34_warnings(
+            lambda: solve0(build(ns, degree=degree), quiet=False))
+        out.append((ns, degree, abs(r0 / _T34_REF[ns] - 1.0), close,
+                    bool(warns), warns))
+    return out
+
+
+def test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build(t34_armed):
+    """The cells M2 S5 measured as UNITARY BUT WRONG -- SCANNED, not listed
+    (PMM_FOURNAME_ADJUDICATION_2026_08_05 S3).
+
+    The previous form hard-coded ``(ns, degree, rel_min)`` triples.  Two of
+    the three then failed on a second build for OPPOSITE reasons: ``(2, 12)``
+    classifies CORRECTLY at N BLAS threads (rel 0.0047, so "the cell is
+    supposed to be WRONG" is false there), and ``(6, 10)`` is wrong on both
+    (0.5683670, 411 %) but the guard's stack-level ``spread`` half reads 1 at
+    one thread and 0 at N -- the SAME wrong answer, with the guard speaking on
+    one mount and silent on the other.  A list of wrong cells is therefore a
+    per-build fact asserted as a universal one.
+
+    What IS universal: this family contains silent-wrong cells on every build,
+    and the guard must speak on all of them.  So the scan partitions the
+    family on THIS build by the RCWA-anchored reference and asserts
+
+      (a) the family really does contain a wrong cell here (widening the scan
+          if the primary range does not -- never skipping);
+      (b) conservation is blind to every one of them;
+      (c) the guard fires on every one of them.
+
+    The 5 % partition bar is not a calibration: the two populations are three
+    decades apart (correct cells 0.03-0.9 %, wrong cells 42-466 %) on both
+    builds and at 1 and N BLAS threads."""
+    rows = _t34_scan(_T34_FAMILY)
+    wrong = [r for r in rows if r[2] > _T34_WRONG_REL]
+    if not wrong:                        # (a) WIDEN, do not skip
+        rows += _t34_scan(_T34_WIDEN)
+        wrong = [r for r in rows if r[2] > _T34_WRONG_REL]
+    assert wrong, (
+        "no silent-wrong cell in the scanned family on this build -- the "
+        "sliver defect the T3-4 guard exists to find has stopped reproducing "
+        "on the audit-class device.  If it was FIXED, re-pin this against the "
+        "fix; if the family merely moved, widen _T34_WIDEN further.  "
+        f"scanned: {[(r[0], r[1], round(r[2], 4)) for r in rows]}")
+    # the partition really is a partition, not a bar sitting inside one cloud
+    right = [r for r in rows if r[2] <= _T34_WRONG_REL]
+    assert min(r[2] for r in wrong) > 20.0 * max(
+        (r[2] for r in right), default=0.0), (
+        f"the 5% partition is inside the population, not between two: "
+        f"wrong {[round(r[2], 4) for r in wrong]} vs right "
+        f"{[round(r[2], 4) for r in right]}")
+    for ns, degree, rel, close, fired, warns in wrong:
+        assert close < 1e-5, (                       # (b)
+            f"ns={ns} deg={degree}: rel={rel:.4g} wrong but |R+T-1|="
+            f"{close:.3e} -- conservation is supposed to be blind to this")
+        assert fired, (                              # (c)
+            f"ns={ns} deg={degree}: rel={rel:.4g} WRONG and the T3-4 guard "
+            f"stayed silent -- it must speak where conservation cannot")
+        msg = str(warns[0].message)
+        assert "UNITARY BUT WRONG" in msg and "min_feature" in msg
+
+
+def test_t34_guard_is_silent_on_the_cured_ladder(t34_armed):
+    """The FALSE-POSITIVE control for the scan above, and the one control that
+    is build-independent by construction: raise ``min_feature`` above M2's
+    threshold ``min(off, |coat - off|)`` and there is no sliver left to
+    misclassify, so every rung is right and the guard must say nothing at any
+    degree.
+
+      ns = 2: off = 5.4127 nm, coat 5 nm -> threshold 0.4127 nm, cured at 0.5
+      ns = 6: off = 1.8042 nm, coat 5 nm -> threshold 1.8042 nm, cured at 3.0
+
+    (0.5 nm is deliberately NOT used at ns = 6: it is BELOW that threshold, so
+    it cures nothing and those cells belong to the scan above, not here.)"""
+    for ns, mf in ((2, 0.5 * NM), (6, 3.0 * NM)):
+        for degree in (6, 8, 10, 12, 14, 16):
+            (r0, close), warns = _t34_warnings(
+                lambda: solve0(build(ns, degree=degree, min_feature=mf),
+                               quiet=False))
+            rel = abs(r0 / _T34_REF[ns] - 1.0)
+            assert rel < 0.02, (
+                f"ns={ns} deg={degree} mf={mf / NM} nm: rel={rel:.4g} -- the "
+                f"cured ladder is supposed to be RIGHT, so this control has "
+                f"stopped being a control")
+            assert not warns, (
+                f"ns={ns} deg={degree} mf={mf / NM} nm: FALSE POSITIVE on a "
+                f"cured cell (rel={rel:.4g}) -- {warns[0].message}")
 
 
 @pytest.mark.parametrize("ns,degree,mf", [(2, 8, None), (2, 6, None),

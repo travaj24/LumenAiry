@@ -853,6 +853,30 @@ _MODE_CUT_CENSUS = None
 # own lead is the two-degree consensus probe on the propagating-mode count --
 # a detector with NO bar -- which costs a second eig and is therefore an
 # opt-in diagnostic rather than a free guard.  Untested; 1 AC.
+#
+# ---------------------------------------------------------------------------
+# UPDATE 2026-08-05 (PMM_FOURNAME_ADJUDICATION_2026_08_05).  HALF of that is
+# now closed, and the reason the other half is not is unchanged.
+#
+# The ``spread`` half of the conjunction was measured to be a COIN FLIP, not a
+# property of the device: on the M3 cell ns = 6, degree = 10 -- 411 % wrong at
+# |R+T-1| = 5.0e-07 -- the SAME wrong answer (0.5683670) reads spread = 1 at
+# one BLAS thread and spread = 0 at N, because whether a round-off-flux mode
+# lands above or below the cut depends on the reduction order.  The guard
+# therefore spoke on that cell on one mount and was SILENT on the other.
+#
+# The replacement is a PHYSICAL invariant rather than a second statistic:
+# :func:`_mode_cut_growth` asks whether the cut has put a GROWING mode in the
+# forward set, which a passive layer cannot have at any thread count.  It reads
+# >= 1 on every silent-wrong cell of the classical family on BOTH mounts and 0
+# on every cured cell on both.  It is channel A of :func:`_mode_cut_verdict`;
+# the old conjunction is retained as channel B so nothing goes quiet.
+#
+# The CONICAL false positive below is NOT closed by it: those three correct
+# cells carry a growing forward mode too (1-3 of them, at 1.07-2.87 x the cut).
+# So the default stays DISARMED, for the same reason and now on a second
+# instrument.  The remaining lead is still the consensus probe.
+# ---------------------------------------------------------------------------
 
 #: T3-4 guard, at WARN.  DISARMED by default -- see the block above for the
 #: measurement that disarmed it.  Arming it never changes an answer; the guard
@@ -869,6 +893,17 @@ PMM_MODE_CUT_GUARD = False
 #: It does NOT transfer to the conical family; that is the point of the block
 #: above.
 _MODE_CUT_MARGIN_WARN = 1.0e1
+
+#: BAR: how imaginary a FORWARD mode's ``q`` has to be before it counts as
+#: GROWING rather than as round-off on a real ``q``.  Measured on this family
+#: (both builds, 1 and N BLAS threads), the two populations are six decades
+#: apart: a genuinely propagating mode carries ``|Im q| / |q| <= 5e-10``, while
+#: a misclassified evanescent one carries ``1.0`` exactly (its ``q`` is PURELY
+#: imaginary).  Any bar in ``[1e-8, 1e-3]`` gives the identical verdict on
+#: every cell in ``PMM_FOURNAME_ADJUDICATION_2026_08_05.md`` S4; ``1e-6`` is
+#: the middle of that plateau, so this is a ratio with three decades of
+#: headroom on each side and not a fitted constant.
+_MODE_GROWTH_REL = 1.0e-6
 
 #: Per-solve accumulator for the STACK-LEVEL half of the conjunction.  The
 #: verdict cannot be reached inside one layer's eig -- it needs the whole
@@ -904,6 +939,80 @@ def _mode_cut_margin(flux, q, thr):
         ratio = np.maximum(fd / t, np.where(fd > 0.0, t / fd, np.inf))
     ratio = np.where(np.isnan(ratio), 1.0, ratio)
     return int(np.count_nonzero(ratio < 10.0)), float(np.min(ratio))
+
+
+def _mode_cut_ratio(flux, thr):
+    """Per-mode cut-movement factor ``max(|flux|/t, t/|flux|)`` -- the
+    multiplicative distance from :func:`_mass_flux_cut`'s threshold.  ``inf``
+    where the cut is degenerate or the flux is exactly zero."""
+    af = np.abs(np.asarray(flux, dtype=float))
+    t = float(thr)
+    if not (t > 0.0) or not np.isfinite(t):
+        return np.full(af.shape, np.inf)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.maximum(af / t, np.where(af > 0.0, t / af, np.inf))
+    return np.where(np.isnan(ratio), 1.0, ratio)
+
+
+def _mode_cut_growth(flux, q, thr, prop):
+    """``(n_growing, worst_cut_ratio)`` -- the MOUNT-INVARIANT half of T3-4.
+
+    THE INVARIANT.  A forward mode of a PASSIVE layer may not grow along +z.
+    The selector two lines below :func:`_mass_flux_threshold`'s call site,
+
+        flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+
+    enforces that for every mode it calls EVANESCENT -- after the flip such a
+    mode always has ``Im(q) >= 0`` -- but NOT for the ones it calls
+    PROPAGATING, whose direction it takes from the flux sign instead.  A
+    genuinely propagating mode has a real ``q``, so the two rules agree there
+    and nothing can go wrong.  A mode that is really EVANESCENT (``q`` purely
+    imaginary, zero z-power) but whose round-off flux crosses the cut is
+    handed the flux rule, and when the flux sign happens to point against
+    ``Im(q)`` the mode is FLIPPED INTO A GROWING ONE and put in the forward
+    set.  The cascade then returns a UNITARY BUT WRONG S-matrix.
+
+    That is a physical contradiction, not a tolerance question, so it is what
+    this instrument measures::
+
+        n_growing = # modes with   prop
+                                   AND within _MODE_CUT_MARGIN_WARN of the cut
+                                   AND Im(q_forward) < -_MODE_GROWTH_REL |q|
+
+    WHY EACH CONJUNCT IS THERE, and none of them is free:
+
+    * ``prop`` -- an evanescent-classified mode is repaired by the ``Im(q)``
+      rule by construction and can never grow;
+    * ``within the cut's decade`` -- this is what makes the statistic safe on
+      a GAIN medium, where a forward mode legitimately grows: an amplifying
+      mode carries REAL power and sits ~1e8 x the cut (measured on this
+      family), while every pathological mode measured sits at 1.00-3.47 x it.
+      Without this conjunct the instrument would refuse every gain stack;
+    * ``Im(q) < -rel |q|`` -- a ratio, so it is scale- and unit-free.
+
+    UNLIKE the stack-level ``spread`` (see :func:`_mode_cut_verdict`) this is
+    not a coin flip: ``spread`` asks whether the propagating COUNT is the same
+    on every layer, and whether a round-off-flux mode lands one side of the cut
+    or the other is decided by BLAS reduction order.  Measured on the M3 cell
+    ``ns = 6, degree = 10`` (411 % wrong, ``|R+T-1| = 5e-07``): ``spread`` reads
+    1 at one BLAS thread and 0 at N -- the SAME wrong answer, 0.5683670, with
+    the guard speaking on one and silent on the other -- while ``n_growing``
+    reads >= 1 in both.  See ``PMM_FOURNAME_ADJUDICATION_2026_08_05.md``.
+
+    Free: ``flux``, ``q``, ``thr`` and ``prop`` are all already computed."""
+    prop = np.asarray(prop, dtype=bool)
+    q = np.asarray(q)
+    if not bool(prop.any()):
+        return 0, float("inf")
+    ratio = _mode_cut_ratio(flux, thr)
+    # the forward q the selector will hand downstream, for the prop modes
+    qf = np.where(np.asarray(flux) < 0.0, -q, q)
+    aq = np.abs(qf)
+    grow = (prop & (ratio < _MODE_CUT_MARGIN_WARN)
+            & (qf.imag < -_MODE_GROWTH_REL * aq))
+    if not bool(grow.any()):
+        return 0, float("inf")
+    return int(np.count_nonzero(grow)), float(np.min(ratio[grow]))
 
 
 def _layer_index_bound(mats):
@@ -1051,11 +1160,24 @@ def _mode_cut_scoped(label):
 
 
 def _mode_cut_verdict(rows, label, emit=True):
-    """The T3-4 conjunction, taken once per solve.  Returns the message (or
+    """The T3-4 verdict, taken once per solve.  Returns the message (or
     ``None``); warns unless ``emit`` is False.  Never raises, never changes a
     number.
 
-    BOTH halves are required, and each alone was measured to false-positive:
+    TWO INDEPENDENT CHANNELS, and they answer different questions.
+
+    **A -- the physical invariant (mount-invariant).**  Any layer or half-space
+    carries a mode the cut has put in the forward set that GROWS along +z
+    (:func:`_mode_cut_growth`).  One such mode is already a contradiction, so
+    this channel needs no stack-level partner and no second bar.  It is the
+    channel that survives a change of BLAS reduction order, and it is the one
+    that catches the ``ns = 6, degree = 10`` cell channel B misses at N BLAS
+    threads (PMM_FOURNAME_ADJUDICATION_2026_08_05 S4).
+
+    **B -- the original conjunction (RETAINED, build-fragile).**  Kept so no
+    cell the calibrated guard used to speak on goes quiet, and because it is
+    what the M3 audit's calibration table is written against.  BOTH halves are
+    required, and each alone was measured to false-positive:
 
     * **spread** -- the number of modes classified propagating is not the same
       on every PATTERNED layer of the stack.  Alone this refuses a perfectly
@@ -1069,33 +1191,57 @@ def _mode_cut_verdict(rows, label, emit=True):
       where the answer is right).
 
     Together they say: the stack's forward/backward split is not the same
-    everywhere AND at least one place it differs is decided by a coin-flip."""
+    everywhere AND at least one place it differs is decided by a coin-flip.
+
+    EITHER channel is sufficient to speak.  ``A`` scores EVERY row, patterned
+    or not -- the ``ns = 6, degree = 10`` cell's growing mode lives in the
+    SUBSTRATE half-space, which is solved on the same sliver-bearing nodal grid
+    as the patterned layers -- while ``B`` is a comparison BETWEEN patterned
+    layers and therefore cannot look at a half-space at all."""
+    grow_rows = [r for r in rows if len(r) > 5 and r[5] > 0]
+    n_grow = sum(r[5] for r in grow_rows)
+    where = ["patterned" if r[4] else "half-space" for r in grow_rows]
+    grow_ratio = min([r[6] for r in grow_rows], default=float("inf"))
+
+    spread, counts, risky, margin = 0, [], [], float("inf")
     pat = [r for r in rows if r[4]]
-    if len(pat) < 2:
+    if len(pat) >= 2:
+        counts = [r[0] for r in pat]
+        spread = max(counts) - min(counts)
+        if spread > 0:
+            risky = [r for r in pat if r[1] > 0 and r[2] < _MODE_CUT_MARGIN_WARN]
+            if risky:
+                margin = min(r[2] for r in risky)
+    fired_b = bool(risky)
+    if not grow_rows and not fired_b:
         return None
-    counts = [r[0] for r in pat]
-    spread = max(counts) - min(counts)
-    if spread <= 0:
-        return None
-    risky = [r for r in pat if r[1] > 0 and r[2] < _MODE_CUT_MARGIN_WARN]
-    if not risky:
-        return None
-    margin = min(r[2] for r in risky)
-    msg = (
-        f"{label}: the modal forward/backward classification is not stable "
-        f"across this stack, and it is being decided at the margin.  The "
-        f"number of modes classified PROPAGATING differs by {spread} between "
-        f"patterned layers ({counts}), and {len(risky)} layer(s) carry a mode "
-        f"whose two direction criteria (z-flux sign vs Im(q)) DISAGREE within "
-        f"a factor {margin:.3g} of the propagating/evanescent cut (bar "
-        f"{_MODE_CUT_MARGIN_WARN:g}).  The cascade can then be UNITARY BUT "
-        f"WRONG -- |R+T-1| stays at round-off while the R/T split is not "
-        f"(measured up to 466% wrong) -- so energy closure will NOT warn you. "
-        f"The cause is a near-zero-width CROSS-LAYER cell: raise min_feature "
-        f"above min(off, |coat - off|) with off = (thickness/n_slices) "
-        f"tan(sidewall).  See docs/audits/"
-        f"PMM_M2_WINDOW_CONTRACT_2026_08_04.md S3.6 and "
-        f"docs/audits/PMM_M3_EFFICIENCY_2026_08_04.md S5.")
+
+    head = f"{label}: "
+    if grow_rows:
+        head += (
+            f"the modal forward/backward classification put {n_grow} "
+            f"GROWING mode(s) in the FORWARD set on {len(grow_rows)} "
+            f"{'/'.join(sorted(set(where)))} row(s) -- a forward mode of a "
+            f"passive layer cannot grow along +z, and each of these was "
+            f"classified PROPAGATING on a z-flux that sits within a factor "
+            f"{grow_ratio:.3g} of the propagating/evanescent cut (bar "
+            f"{_MODE_CUT_MARGIN_WARN:g}), i.e. on round-off.  ")
+    if fired_b:
+        head += (
+            f"The number of modes classified PROPAGATING also differs by "
+            f"{spread} between patterned layers ({counts}), and {len(risky)} "
+            f"layer(s) carry a mode whose two direction criteria (z-flux sign "
+            f"vs Im(q)) DISAGREE within a factor {margin:.3g} of the cut.  ")
+    msg = head + (
+        "The cascade can then be UNITARY BUT "
+        "WRONG -- |R+T-1| stays at round-off while the R/T split is not "
+        "(measured up to 466% wrong) -- so energy closure will NOT warn you. "
+        "The cause is a near-zero-width CROSS-LAYER cell: raise min_feature "
+        "above min(off, |coat - off|) with off = (thickness/n_slices) "
+        "tan(sidewall).  See docs/audits/"
+        "PMM_M2_WINDOW_CONTRACT_2026_08_04.md S3.6, "
+        "docs/audits/PMM_M3_EFFICIENCY_2026_08_04.md S5 and "
+        "docs/audits/PMM_FOURNAME_ADJUDICATION_2026_08_05.md S4.")
     if emit:
         warnings.warn(msg, _ModeClassificationWarning, stacklevel=4)
     return msg
@@ -1109,18 +1255,20 @@ def _record_mode_cut(flux, q, thr, prop, mats, site, patterned=None):
     cannot see the stack -- see :class:`_mode_cut_scope`."""
     n_prop = int(np.count_nonzero(prop))
     n_risk, margin = _mode_cut_margin(flux, q, thr)
+    n_grow, grow_ratio = _mode_cut_growth(flux, q, thr, prop)
     if patterned is None:
         patterned = _grid_is_patterned(mats)
     rows = getattr(_MODE_CUT_TLS, "rows", None)
     if rows is not None:
         rows.append((n_prop, int(n_risk), float(margin), site,
-                     bool(patterned)))
+                     bool(patterned), int(n_grow), float(grow_ratio)))
     if _MODE_CUT_CENSUS is not None:
         n_bound = _layer_index_bound(mats)
         _MODE_CUT_CENSUS.append(dict(
             n_modes=int(np.size(flux)), n_prop=n_prop, n_risk=int(n_risk),
             margin=float(margin), n_bound=float(n_bound),
             q_excess=float(_mode_q_excess(q, prop, n_bound)),
+            n_grow=int(n_grow), grow_ratio=float(grow_ratio),
             site=site, patterned=bool(patterned)))
     return n_risk, margin
 

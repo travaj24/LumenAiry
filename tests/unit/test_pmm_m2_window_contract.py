@@ -40,6 +40,7 @@ import numpy as np
 import pytest
 
 from lumenairy.elements.pmm import PMMStack
+from lumenairy.elements.pmm import _core as PC
 from lumenairy.elements.pmm._core import (
     _perlayer_window_grids,
     _pmm_union_grid,
@@ -489,40 +490,101 @@ def _mk(layers, degree, hw):
     return st
 
 
+def _solve_screened(st):
+    """``((solve0 tuple), n_growing)`` -- the answer plus the SHIPPED T3-4
+    growth instrument's reading over the whole solve, read off the census
+    (``_MODE_CUT_CENSUS``) rather than re-derived, so this screen scores the
+    instrument the library ships and cannot drift from it.
+
+    ``n_growing > 0`` means the flux cut put a mode that GROWS along +z into
+    the forward set of some layer or half-space -- a physical contradiction,
+    hence a solve whose modal classification is decided by round-off.  See
+    ``_core._mode_cut_growth``."""
+    PC._MODE_CUT_CENSUS = []
+    try:
+        out = solve0(st)
+        rows = list(PC._MODE_CUT_CENSUS)
+    finally:
+        PC._MODE_CUT_CENSUS = None
+    return out, sum(int(r["n_grow"]) for r in rows)
+
+
 def test_halfwidth_2_moves_the_answer_only_inside_the_mortar_band():
-    # T3-1, CONFOUND-CONTROLLED.  Measuring halfwidth on the coated device at
+    # T3-1, CONFOUND-CONTROLLED, and SCREENED (2026-08-05).
+    #
+    # Confound 1 (M2).  Measuring halfwidth on the coated device at
     # min_feature = 3.0 nm is NOT a window measurement: a +/-2 window holds
     # FIVE layers, so it snaps a different pair set than a +/-1 window and the
     # geometry changes too.  The tell was that max|dJ| read 1.169e-02 at BOTH
     # degree 6 and degree 8 -- a discretisation effect decays with degree, a
-    # geometry difference does not.
+    # geometry difference does not.  So the devices below are run where the
+    # snap is PROVABLY inert (asserted).
     #
-    # Run instead where the snap is PROVABLY inert (asserted below), so the
-    # window is the only variable.  The envelope then behaves the way a
-    # discretisation residual must: it DECAYS SPECTRALLY with degree, which is
-    # the comparative form the repo prefers over an absolute bar.
+    # Confound 2 (PMM_FOURNAME_ADJUDICATION_2026_08_05 S2), and it is the
+    # OPPOSITE of what "the snap is inert" sounds like.  Inert at the library
+    # default means the device's tightest cross-layer separation SURVIVES:
+    # 3.6085 nm on the uncoated ns = 3 device (harmless) but 1.3532 nm on the
+    # 25 nm coat at ns = 8, which is a sliver, so THAT device carries the
+    # silent-wrong classification defect T3-4 exists to find.  A cell whose
+    # classification flips between the halfwidth-1 and halfwidth-2 runs
+    # measures the flip, not the window: it read |dJ| = 6.710e-01 at degree 8
+    # (N BLAS threads) and 1.375e+00 at degree 12 (1 thread) -- O(1), the
+    # silent-wrong magnitude, not a tolerance miss.
     #
-    # Measured, both builds, max over the healthy cells of two devices:
-    #     degree 6 -> 2.7e-4     degree 8 -> 8.9e-5     degree 10 -> 6.9e-6
-    for layers in (_uncoated_layers(3), _fatcoat_layers(8)):
+    # So each cell is SCREENED with the shipped instrument first and the
+    # contract is asserted on the sound ones.  The unsound cells are not
+    # ignored: they are exactly the coverage
+    # ``test_pmm_m3_efficiency.py::test_t34_guard_fires_on_...`` pins.
+    #
+    # The contract is then COMPARATIVE, with no absolute bar to calibrate:
+    # the window residual must be a fraction of the DEGREE-REFINEMENT residual
+    # at the same rung, and must decay spectrally.  Measured on the uncoated
+    # device, IDENTICAL to five digits at 1 and at N BLAS threads:
+    #
+    #   degree   |dJ| window   |dJ| degree->degree+2   ratio
+    #   6        1.2977e-04    1.2317e-03             0.105
+    #   8        3.1232e-05    4.8489e-04             0.064
+    #   10       6.3825e-06    2.3257e-04             0.027
+    full_ladders, screened = 0, []
+    for name, layers in (("uncoated ns=3", _uncoated_layers(3)),
+                         ("25 nm coat ns=8", _fatcoat_layers(8))):
         segs = [s for _t, s in layers]
         for hw in (1, 2):
             merged, _d = _snap_report(segs, (PERIOD * 1e-5) / PERIOD, hw)
             assert merged == 0, "the snap must be inert for this measurement"
+        got = {}
+        for deg in (6, 8, 10, 12):
+            for hw in ((1,) if deg == 12 else (1, 2)):
+                got[(deg, hw)] = _solve_screened(_mk(layers, deg, hw))
         dJs = []
         for deg in (6, 8, 10):
-            a = solve0(_mk(layers, deg, 1))
-            b = solve0(_mk(layers, deg, 2))
+            (a, ga), (b, gb) = got[(deg, 1)], got[(deg, 2)]
+            (c, gc) = got[(deg + 2, 1)]
+            if ga or gb or gc:
+                screened.append((name, deg, ga, gb, gc))
+                continue
             m = np.isin(a[4], b[4])
             mb = np.isin(b[4], a[4])
             dJ = float(np.max(np.abs(a[3] - b[3])))
             dR = float(np.max(np.abs(a[5][:, m] - b[5][:, mb])))
-            assert dJ < 3e-4, f"deg={deg}: |dJ| = {dJ:.3e}"
-            assert dR < 3e-4, f"deg={deg}: |dR| = {dR:.3e}"
+            dJ_deg = float(np.max(np.abs(a[3] - c[3])))
+            assert dJ < 0.5 * dJ_deg, (
+                f"{name} deg={deg}: the window moved the answer by "
+                f"{dJ:.3e}, which is NOT inside the discretisation's own "
+                f"residual band ({dJ_deg:.3e} from degree {deg} to {deg + 2})")
+            assert dR < 0.5 * dJ_deg, f"{name} deg={deg}: |dR| = {dR:.3e}"
             dJs.append(dJ)
-        # the window residual is a DISCRETISATION residual: it must decay
-        assert dJs[1] < dJs[0] and dJs[2] < dJs[1], (
-            f"window residual did not decay with degree: {dJs}")
+        if len(dJs) == 3:
+            # the window residual is a DISCRETISATION residual: it must decay
+            assert dJs[1] < dJs[0] and dJs[2] < dJs[1], (
+                f"{name}: window residual did not decay with degree: {dJs}")
+            full_ladders += 1
+    assert full_ladders >= 1, (
+        "every cell of both devices was screened out as classification-"
+        "unsound, so T3-1 was not measured at all.  Add a device whose "
+        "cross-layer separations are all above the sliver scale (the "
+        "uncoated ns = 3 taper is one) rather than relaxing the screen.  "
+        f"screened: {screened}")
 
 
 # ======================================================================= T3-2
