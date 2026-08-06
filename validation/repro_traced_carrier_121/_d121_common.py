@@ -34,12 +34,10 @@ _ROOT = os.environ.get(
 sys.path.insert(0, os.path.join(_ROOT, "Lumenairy"))
 sys.path.insert(0, os.path.join(_ROOT, "Reverse_Symmetric_ASM"))
 
-import lumenairy as la                                        # noqa: E402
-from lumenairy import (GLASS_REGISTRY, GLASS_VALIDITY,        # noqa: E402
-                       SELLMEIER_COEFFICIENTS)
-from lumenairy.propagators.carrier import (                   # noqa: E402
-    carrier_referenced_envelope)
-from lumenairy.raytrace import Surface                        # noqa: E402
+import lumenairy as la  # noqa: E402
+from lumenairy import GLASS_REGISTRY, GLASS_VALIDITY, SELLMEIER_COEFFICIENTS  # noqa: E402
+from lumenairy.propagators.carrier import carrier_referenced_envelope  # noqa: E402
+from lumenairy.raytrace import Surface  # noqa: E402
 from lumenairy.raytrace.seidel import system_abcd_prescription  # noqa: E402
 from lumenairy.raytrace.trace import surfaces_from_prescription  # noqa: E402
 
@@ -77,8 +75,9 @@ def _register_glasses():
 
 
 _register_glasses()
-import copy                                                    # noqa: E402
-import tx_design_study_sim as sim                              # noqa: E402
+import copy  # noqa: E402
+
+import tx_design_study_sim as sim  # noqa: E402
 
 
 def geometry():
@@ -195,6 +194,14 @@ def order_table(period, n_per=128):
 _CHAIN_A_SCHEMA = 2
 
 
+def _numba_available():
+    try:
+        import numba  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def _sha256_file(path):
     h = hashlib.sha256()
     with open(path, 'rb') as fh:
@@ -265,6 +272,10 @@ def _chain_a_key(n, dx0, rs, nw, final_leg):
         'LAM': repr(LAM), 'W0': repr(W0), 'OBJ_GAP': repr(OBJ_GAP),
         'Z1': repr(Z1), 'FRAME_PITCH': repr(FRAME_PITCH),
         'DOE_ELEM': int(DOE_ELEM), 'ORDERS': list(ORDERS),
+        # verifier V7: numba availability perturbs the chain at ~5e-12
+        # (the Chebyshev evaluator falls back to NumPy without it), so a
+        # cache written on one runtime must not serve the other.
+        'numba_available': _numba_available(),
     }
     blob = json.dumps(key, sort_keys=True, separators=(',', ':'))
     return key, hashlib.sha256(blob.encode('ascii')).hexdigest()
