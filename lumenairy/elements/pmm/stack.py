@@ -2725,13 +2725,37 @@ class PMMStack:
         modal eigs + S-matrix cascade rerun.  The per-layer generalized eig
         dominates the cost, and the per-wavelength solves are INDEPENDENT and
         release the GIL inside LAPACK, so they run on a bounded THREAD POOL
-        (``max_workers=None`` picks ``min(cpu, n_wl)``; each worker pins its BLAS
-        pool to ``blas_per_worker`` so the product stays within the core count).
-        Results are stored BY INDEX -> BYTE-IDENTICAL to a serial sweep regardless
-        of worker count (``max_workers=1`` forces serial).  Within each wavelength
-        the per-layer eig is DEDUPED across identical layers (an ABAB Bragg stack
-        eigs each distinct layer once, mirroring :meth:`solve`).  Bit-identical to
-        per-wavelength :meth:`solve` on the propagating orders.
+        (``max_workers=None`` picks ``min(cpu, n_wl)``; the BLAS pool is capped
+        to ``blas_per_worker`` ONCE around the whole dispatch -- not per worker,
+        which would race -- so ``max_workers * blas_per_worker`` stays within
+        the core count).  Results are stored BY INDEX -> BYTE-IDENTICAL to a
+        serial sweep regardless of worker count (``max_workers=1`` forces
+        serial).  Within each wavelength the per-layer eig is DEDUPED across
+        identical layers (an ABAB Bragg stack eigs each distinct layer once,
+        mirroring :meth:`solve`).
+
+        BIT-IDENTITY WITH :meth:`solve`, and its ONE precondition (measured,
+        fifth-name referral 2026-08-05).  The sweep runs the SAME arithmetic as
+        a per-wavelength :meth:`solve` -- MEASURED bit-exact (max |dR| = |dT| =
+        0.0 on every propagating order of a 5-slice tapered staircase and a
+        two-layer vertical stack, 5 wavelengths x 2 polarizations) -- PROVIDED
+        both run at the SAME BLAS THREAD COUNT.  That proviso is not automatic:
+        this method caps the BLAS pool to ``blas_per_worker`` (default 1) while
+        a bare :meth:`solve` runs at the environment's pool, so on a many-core
+        box with ``threadpoolctl`` installed the two run DIFFERENT LAPACK
+        reduction orders.  The eigenVALUES are unaffected; the eigenVECTORS of
+        the patterned layers move by ~1e-16 relative, and the Redheffer cascade
+        amplifies that by ~1e8, landing at ~2e-9 absolute in the efficiencies
+        (MEASURED, Windows/OpenBLAS 0.3.31 Haswell, 24 threads).  That is
+        round-off, not a defect -- the modal forward/backward classification is
+        IDENTICAL between the two regimes (mode-cut census: zero growing
+        forward modes, cut margins 47x-1e8x above the bar) -- but it is not
+        bit-identity.  To compare bit-for-bit against a bare :meth:`solve`,
+        pass ``blas_per_worker=None`` so the sweep leaves the environment's
+        threading untouched.  Pinned by
+        ``tests/unit/test_v5_13_0_pmm_tapered.py::test_sweep_matches_perwavelength``,
+        which asserts the equality in BOTH regimes; see
+        ``docs/audits/PMM_FIFTHNAME_TAPERED_SWEEP_2026_08_05.md``.
 
         ALL-VERTICAL IN-PLANE stacks only (the symmetric ``+/-q`` cascade -- which
         is what the tapered/vertical builders produce); for SLANTED or
@@ -2752,8 +2776,14 @@ class PMMStack:
             ``min(cpu, n_wl)``; ``1`` = serial).  Output is byte-identical to
             serial for any value.
         blas_per_worker : int, optional
-            BLAS threads each worker pins (default 1, so ``max_workers *
-            blas_per_worker`` stays within the core count).
+            BLAS threads the sweep pins, applied ONCE around the whole dispatch
+            (default 1, so ``max_workers * blas_per_worker`` stays within the
+            core count).  ``None`` leaves the environment's threading UNTOUCHED
+            -- the setting under which this sweep is bit-identical to a bare
+            per-wavelength :meth:`solve` (see the bit-identity note above).
+            Any fixed value keeps the sweep self-consistent and byte-identical
+            across worker counts; only the comparison against an UNCAPPED
+            :meth:`solve` is affected.
 
         DISPERSIVE materials (device-geometry roadmap item 5, 2026-06-10):
         any segment eps / region index added as a ``wl -> value`` callable is
