@@ -42,3 +42,4 @@ output/
 *.dat
 *.log
 doe_cache/
+bash.exe.stackdump
