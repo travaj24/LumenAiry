@@ -64,9 +64,10 @@ from lumenairy.elements._lens_traced_uniform import (
     apply_real_lens_traced_uniform,
 )
 from lumenairy.elements.lenses_maslov import _fold_airy_eval, uniform_fold_airy
-from lumenairy.glass import GLASS_REGISTRY
 
-GLASS_REGISTRY['_K4CAU'] = lambda wl: 1.5168     # dispersionless model glass
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_K4CAU': lambda wl: 1.5168}   # dispersionless
 
 _WL = 1.31e-6
 _ROOT = pathlib.Path(__file__).resolve().parents[2] / 'validation' / 'oracles'

@@ -43,6 +43,14 @@ from lumenairy.propagators.propagation import (
 WL = 1.31e-6
 K = 2.0 * np.pi / WL
 
+# Dispersionless model glass for the traced hand-off test.  Declared, not
+# registered: the test body used to write it straight into GLASS_REGISTRY with
+# no teardown, leaking an unpicklable lambda into every LATER test in the
+# process.  Registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+_N_HANDOFF_GLASS = 1.5168
+MODULE_GLASSES = {'_CARRIER_HANDOFF_GLASS': lambda wl: _N_HANDOFF_GLASS}
+
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -361,10 +369,8 @@ def test_traced_handoff_focuses_at_abcd_image():
     to ``apply_real_lens_traced(carrier=R)``, focuses the diverging beam at the
     ABCD image plane (H6 makes the carrier reference exact).  Independent
     oracle: ABCD Gaussian q-trace through the singlet."""
-    n_glass = 1.5168
+    n_glass = _N_HANDOFF_GLASS
     R1s, R2s, tc = 51.68e-3, -51.68e-3, 5e-3
-    from lumenairy.glass import GLASS_REGISTRY
-    GLASS_REGISTRY['_CARRIER_HANDOFF_GLASS'] = lambda wl: n_glass
     # aperture metadata fits the N*dx/2 = 3.07 mm grid (the 1 mm-waist beam is
     # tiny inside it) so the traced call stays warning-free
     presc = {

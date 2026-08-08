@@ -42,8 +42,8 @@ import numpy as np
 import pytest
 
 from lumenairy.propagators.carrier import (
-    _exact_envelope_tf_step,
     _carrier_step_fast,
+    _exact_envelope_tf_step,
     propagate_carrier_referenced,
 )
 from lumenairy.propagators.fresnel import fresnel_tf_propagate
@@ -309,6 +309,7 @@ def test_auto_resolves_to_exact_on_every_backend():
     """The default is 'auto'.  If it ever resolves to 'fresnel' on a backend,
     that backend silently returns to paraxial gap transport."""
     import inspect
+
     from lumenairy.propagators import carrier as C
     src = inspect.getsource(C._carrier_step_fast)
     assert "gap_kernel = 'exact'" in src, (

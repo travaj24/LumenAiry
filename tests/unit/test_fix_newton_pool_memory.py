@@ -583,15 +583,15 @@ def _cheb_backend_note():
 
     A spawn worker rebuilds the fit in a fresh interpreter, so pool/serial
     identity needs the parent and the worker to land on the SAME backend.
-    Nothing in the pickled payload pins that, and the parent's answer is
-    process state a long test session can change -- so when the serial arm
-    below disagrees, this is the first thing to read."""
+    Since v5.32.3 the payload PINS it (``cheb_backend``) so they always do;
+    this note is what a residual mismatch would have to be read against."""
     try:
         kern = LT._get_cheb2d_val_grad_numba()
     except Exception as exc:                       # pragma: no cover - defensive
         kern = f'<raised {type(exc).__name__}>'
     return (f'parent _NUMBA_AVAILABLE={LT._NUMBA_AVAILABLE!r}, '
-            f'cheb kernel={"present" if callable(kern) else kern!r}')
+            f'cheb kernel={"present" if callable(kern) else kern!r}, '
+            f"resolved backend={LT._resolved_cheb_backend('polynomial')!r}")
 
 
 @pytest.mark.slow
@@ -611,28 +611,27 @@ def test_a_capped_pool_is_bit_identical_to_serial(monkeypatch):
         this comparison.
 
     2.  THE LIBRARY'S CONTRACT (serial == pool), which
-        ``test_niche_newton_pool_both_fits.py`` also asserts.  It is NOT
-        unconditional, and this fix's sweep is what showed it:
+        ``test_niche_newton_pool_both_fits.py`` also asserts.  Also
+        unconditional SINCE v5.32.3 (docs/audits/FIX_CI_POOL_2026_08_06.md),
+        and it was not before:
 
             MEASURED, one process, same shape, N=1024/rs=2 --
               parent _NUMBA_AVAILABLE=True   -> serial == pool, max|delta| 0
               parent _NUMBA_AVAILABLE=False  -> DIFFER,  max|delta| 5.167e-14
 
-        The worker rebuilds ``_Cheb2DEvaluator`` in a fresh interpreter and
-        takes the njit Chebyshev kernel if numba imports THERE; the payload
-        carries ``newton_fit`` / ``fit_poly_order`` / ``fit_weights`` /
-        ``newton_max_iters`` but no backend flag.  So a parent that has resolved
-        a different evaluator than its workers runs a different floating-point
-        ORDER, and the two paths part company in the last bits (1.8e-12 observed
-        on the full-tree sweep).  That is a PRE-EXISTING gap in the payload --
-        the same class as audit E-H2's ``newton_max_iters`` -- not something the
-        resource clamp can cause or cure, and fixing it means touching the
-        numerical path, which a resource-safety change must not do.
+        The worker rebuilds ``_Cheb2DEvaluator`` in a fresh interpreter and used
+        to take the njit Chebyshev kernel if numba imported THERE, while the
+        payload carried ``newton_fit`` / ``fit_poly_order`` / ``fit_weights`` /
+        ``newton_max_iters`` but no backend flag -- so a parent that resolved a
+        different evaluator than its workers ran a different floating-point
+        ORDER and the two parted company in the last bits (1.8e-12 on the
+        full-tree sweep, 1.358e-11 on CI).  The payload now pins
+        ``cheb_backend`` and the worker honours it (or refuses the chunk), so
+        the condition is gone and arm 2 asserts rather than skips.
 
-        So arm 2 is checked against the UNCAPPED pool first.  If serial already
-        disagrees with a pool the clamp never touched, this process cannot
-        honour the library's contract at all and the test says so precisely
-        instead of blaming the clamp.
+        The UNCAPPED pool is still measured first, because it localises a
+        failure: a break there is the library's identity contract, a break in
+        the capped-vs-serial line below is the clamp.
 
     The clamp is forced to land on 2 by pinning BOTH inputs: available memory
     (frozen psutil snapshot) and the per-worker cost, so the assertion is
@@ -682,19 +681,17 @@ def test_a_capped_pool_is_bit_identical_to_serial(monkeypatch):
         f'{np.abs(capped - uncapped).max():.3e}.  Worker count must be a speed '
         f'knob only, so this is the clamp being wrong, not the backend.')
 
-    # (2) THE LIBRARY'S CONTRACT -- conditional on parent/worker backend.
+    # (2) THE LIBRARY'S CONTRACT -- unconditional since the v5.32.3 pin.
     with _WidthSpy() as spy_s:
         serial = _run(1)
         assert spy_s.widths == [], 'the n_workers=1 reference used a pool'
-    if not np.array_equal(serial, uncapped):
-        pytest.skip(
-            f'this process cannot honour the library serial==pool contract: '
-            f'an UNCAPPED 4-worker pool already differs from serial by '
-            f'{np.abs(uncapped - serial).max():.3e}, so the clamp is not '
-            f'involved.  Pre-existing: the worker re-derives the Chebyshev fit '
-            f'in a fresh interpreter and the payload pins no backend '
-            f'({_cheb_backend_note()}).  See '
-            f'docs/audits/FIX_POOL_MEMORY_2026_08_06.md sec 8.')
+    assert np.array_equal(serial, uncapped), (
+        f'an UNCAPPED 4-worker pool differs from serial by '
+        f'{np.abs(uncapped - serial).max():.3e}, so the clamp is not involved: '
+        f'this is the library serial==pool contract.  Until v5.32.3 that was '
+        f'conditional on the parent and its workers resolving the same '
+        f'Chebyshev evaluator; the payload now pins it ({_cheb_backend_note()})'
+        f'.  See docs/audits/FIX_CI_POOL_2026_08_06.md.')
     assert np.array_equal(serial, capped), (
         f'serial matches an uncapped pool but not the CAPPED one, max|delta| = '
         f'{np.abs(capped - serial).max():.3e} -- that is the clamp, and only '
@@ -705,15 +702,30 @@ def test_a_capped_pool_is_bit_identical_to_serial(monkeypatch):
 # mechanism pins -- a refactor must not be able to drop the clamp silently
 # ---------------------------------------------------------------------------
 
+def _dispatch_closure_source():
+    """Source of the ``_invert_newton_parallel`` closure, bounded by the NEXT
+    closure rather than by a character count.
+
+    A fixed ``src[i:i + 6000]`` window was what this test used, and it broke on
+    the very next change to the dispatcher -- the v5.32.3 backend pin added
+    comments ahead of the pool call and pushed
+    ``_get_persistent_worker_pool(n_cpu)`` past 6000 characters, failing a
+    wiring pin whose subject had not moved.  A structural bound cannot rot that
+    way, and it strictly widens what the pin covers.
+    """
+    src = inspect.getsource(LT.apply_real_lens_traced)
+    i = src.find('def _invert_newton_parallel')
+    assert i != -1, 'could not locate _invert_newton_parallel'
+    j = src.find('\n    def ', i + 1)          # next closure at the same indent
+    return src[i:] if j == -1 else src[i:j]
+
+
 def test_the_dispatch_path_consults_the_resolver():
     """Pin the WIRING the way the sibling tests pin theirs.  Bit-identity
     cannot notice a missing clamp (an unclamped pool returns the same numbers,
     right up until it does not return at all), so the only durable guard is
     that the dispatch path still asks."""
-    src = inspect.getsource(LT.apply_real_lens_traced)
-    i = src.find('def _invert_newton_parallel')
-    assert i != -1
-    body = src[i:i + 6000]
+    body = _dispatch_closure_source()
     assert '_newton_resolve_workers(_n_cpu_req, n_total, _fit_points' in body, (
         'the Newton dispatch no longer resolves a memory-clamped worker count; '
         'this is the defect the design-121 capstone measured at 205.7 / '
@@ -742,3 +754,280 @@ def test_the_fine_grid_ceiling_is_still_single_process():
     from lumenairy.propagators import carrier as C
     sig = inspect.signature(C._memory_bounded_n_fine)
     assert 'n_workers' not in sig.parameters
+
+
+# ---------------------------------------------------------------------------
+# v5.32.3 (docs/audits/FIX_CI_POOL_2026_08_06.md) -- the two follow-ups this
+# file's own sec 8 left open, closed here because both are pool-payload facts:
+#
+#   * sec 8.1  serial == pool was CONDITIONAL on the parent and its spawn
+#              workers resolving the same Chebyshev evaluator.  The payload now
+#              pins ``cheb_backend``.
+#   * the cap notice had no policy surface, so a physics-guard suppression test
+#     broke on a 12 GB CI runner and passed on a 128 GB box.  ``on_pool_memory``
+#     is that surface.
+#
+# Everything below is arithmetic, source inspection or a direct call to
+# ``_newton_invert_chunk``: no test here spawns a pool.
+# ---------------------------------------------------------------------------
+
+def _fit_payload(order=6, n=25):
+    """A minimal, REAL ``_newton_invert_chunk`` payload over a smooth map, so
+    the worker's own gates can be driven without running a lens."""
+    xs = np.linspace(-1e-3, 1e-3, n)
+    X, Y = np.meshgrid(xs, xs, indexing='ij')
+    return {
+        'xs_in': xs,
+        'x_out_grid': 0.9 * X + 3.0e2 * X * (X ** 2 + Y ** 2),
+        'y_out_grid': 0.9 * Y + 3.0e2 * Y * (X ** 2 + Y ** 2),
+        'opl_grid': 1.0e-3 + 5.0e2 * (X ** 2 + Y ** 2),
+        'launch_radius': 1.0e-3,
+        'dx': 1.0e-5,
+        'bound': 0.999e-3,
+        'inv_M_x': 1.0 / 0.9,
+        'inv_M_y': 1.0 / 0.9,
+        'newton_fit': 'polynomial',
+        'fit_poly_order': order,
+        'fit_weights': None,
+        'newton_max_iters': 12,
+    }
+
+
+def _chunk_pts(m=64):
+    r = np.linspace(-4e-4, 4e-4, m)
+    Xw, Yw = np.meshgrid(r, r, indexing='ij')
+    return Xw.ravel().copy(), Yw.ravel().copy()
+
+
+def test_the_two_evaluator_backends_are_not_bit_identical():
+    """THE PREMISE, measured rather than assumed.
+
+    The pin is only worth its complexity if the two branches of
+    ``_Cheb2DEvaluator.ev_value_and_grad`` really do differ.  They compute one
+    polynomial two ways -- an njit Chebyshev recurrence and a pure-xp
+    Vandermonde contraction -- so they agree to ~1e-16 RELATIVE and not bit for
+    bit.  If a future change ever made them identical this test fails, and
+    whoever sees it can retire the pin deliberately instead of finding out from
+    a 1e-11 CI failure.
+    """
+    if LT._resolved_cheb_backend() != 'numba':
+        pytest.skip('no numba kernel in this process: there is only one branch')
+    p = _fit_payload()
+    xa, ya = _chunk_pts(48)
+    ev_nb = LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'],
+                                order=6, xp=np, backend='numba')
+    ev_np = LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'],
+                                order=6, xp=np, backend='numpy')
+    f_nb, _, _ = ev_nb.ev_value_and_grad(xa, ya)
+    f_np, _, _ = ev_np.ev_value_and_grad(xa, ya)
+    assert np.allclose(f_nb, f_np, rtol=1e-12, atol=0.0), (
+        'the two evaluator backends disagree by more than rounding; that is a '
+        'bug in one of them, not the ordering difference this pin is about')
+    assert not np.array_equal(f_nb, f_np), (
+        'the numba and pure-NumPy Chebyshev evaluators are now bit-identical.  '
+        'If that is deliberate, the cheb_backend pin can be retired -- but '
+        'retire it on purpose, with this test as the evidence')
+
+
+def test_the_evaluator_honours_a_pinned_backend():
+    """The pin has to actually select the branch, not merely be carried."""
+    p = _fit_payload()
+    xa, ya = _chunk_pts(16)
+    seen = []
+    orig = LT._get_cheb2d_val_grad_numba
+
+    def _spy():
+        k = orig()
+        seen.append(k is not None)
+        return k
+
+    LT._get_cheb2d_val_grad_numba = _spy
+    try:
+        LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'], order=6,
+                            xp=np, backend='numpy').ev_value_and_grad(xa, ya)
+        assert seen == [], (
+            "backend='numpy' still consulted the numba kernel getter, so the "
+            "pin does not decide the branch")
+        LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'], order=6,
+                            xp=np, backend='numba').ev_value_and_grad(xa, ya)
+        assert seen, "backend='numba' did not resolve the kernel"
+    finally:
+        LT._get_cheb2d_val_grad_numba = orig
+    # and an unknown pin is refused rather than silently meaning 'auto'
+    with pytest.raises(ValueError, match='backend'):
+        LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'], order=6,
+                            xp=np, backend='numexpr')
+
+
+def test_the_worker_answers_in_the_pinned_order_not_its_own():
+    """FAIL-BEFORE, run through the real worker entry point.
+
+    ``_newton_invert_chunk`` IS the spawn worker's body, so calling it with two
+    payloads that differ only in ``cheb_backend`` reproduces the parent/worker
+    split without a pool: pre-fix both payloads took whatever branch the
+    process had, which is exactly why a parent on the other branch disagreed
+    with them.
+    """
+    if LT._resolved_cheb_backend() != 'numba':
+        pytest.skip('no numba kernel in this process: there is only one branch')
+    p = _fit_payload()
+    xa, ya = _chunk_pts(64)
+    opl_nb, _ = LT._newton_invert_chunk((dict(p, cheb_backend='numba'), xa, ya))
+    opl_np, _ = LT._newton_invert_chunk((dict(p, cheb_backend='numpy'), xa, ya))
+    # A payload with NO key keeps the historical behaviour: resolve locally.
+    # In this process that is numba, so it must reproduce the numba pin.
+    opl_old, _ = LT._newton_invert_chunk((dict(p), xa, ya))
+    assert np.array_equal(opl_old, opl_nb), (
+        'a payload written before the pin existed no longer behaves as it did; '
+        'the compatibility default must be "resolve locally", not "numpy"')
+    assert not np.array_equal(opl_nb, opl_np), (
+        'the two pins produced identical OPL, so this call is not sensitive to '
+        'the backend and proves nothing about the pin')
+    assert np.allclose(opl_nb, opl_np, rtol=1e-11, atol=0.0)
+
+
+def test_a_worker_that_cannot_honour_the_pin_refuses_the_chunk():
+    """A worker cannot conjure the parent's backend.  Answering in the other
+    floating-point order would be silently wrong -- the pool's entire safety
+    argument is bit-identity -- so it raises, and the parent runs the chunk
+    itself.  Emulated by making the kernel getter unavailable INSIDE the worker
+    call, which is what a fresh interpreter without numba does."""
+    p = dict(_fit_payload(), cheb_backend='numba')
+    xa, ya = _chunk_pts(16)
+    orig = LT._get_cheb2d_val_grad_numba
+    LT._get_cheb2d_val_grad_numba = lambda: None
+    try:
+        with pytest.raises(LT.NewtonWorkerBackendUnavailable):
+            LT._newton_invert_chunk((p, xa, ya))
+        # ...but a payload pinned to 'numpy' is served happily by the same
+        # worker: the refusal is about the pin it cannot honour, not about numba
+        out, _ = LT._newton_invert_chunk(
+            (dict(p, cheb_backend='numpy'), xa, ya))
+        assert np.isfinite(out).any()
+    finally:
+        LT._get_cheb2d_val_grad_numba = orig
+    # the refusal must survive the pool's own except-clause ordering: it is a
+    # RuntimeError subclass, so a refactor that drops the specific handler still
+    # falls back to serial rather than propagating
+    assert issubclass(LT.NewtonWorkerBackendUnavailable, RuntimeError)
+
+
+def test_the_dispatch_path_pins_the_backend_and_handles_the_refusal():
+    """Wiring pin, same reasoning as ``test_the_dispatch_path_consults_the_
+    resolver``: bit-identity cannot notice a MISSING pin on a box where the
+    parent and its workers happen to agree -- which is every dev box that has
+    numba -- so the only durable guard is that the dispatch path still pins."""
+    body = _dispatch_closure_source()
+    assert ("_spline_data['cheb_backend'] = _resolved_cheb_backend(newton_fit)"
+            in body), (
+        'the Newton payload no longer pins the parent-resolved Chebyshev '
+        'backend: serial == pool goes back to being conditional on the workers '
+        'resolving the same evaluator (FIX_POOL_MEMORY sec 8.1)')
+    assert 'except NewtonWorkerBackendUnavailable' in body, (
+        'a worker refusal is no longer handled specifically, so it would be '
+        'absorbed by the pool-infrastructure clause with no diagnostic')
+    assert body.index('except NewtonWorkerBackendUnavailable') < body.index(
+        'except (BrokenProcessPool'), (
+        'the generic pool-infrastructure handler now shadows the backend '
+        'refusal, so the specific remedy is never printed')
+    # the payload is pinned BEFORE the chunks are built from it
+    assert body.index("_spline_data['cheb_backend']") < body.index(
+        'args_list = ['), (
+        'the backend is pinned after the payload has already been chunked')
+    wsrc = inspect.getsource(LT._newton_invert_chunk)
+    assert "knot_data.get('cheb_backend', None)" in wsrc, (
+        'the worker no longer reads the pin')
+    assert 'backend=_backend' in wsrc, (
+        'the worker reads the pin but does not pass it to the evaluator')
+
+
+def test_the_backend_refusal_latch_says_it_once_and_close_rearms_it():
+    """The refusal is a fact about this process's workers, so a 6-group chain
+    must not print the paragraph six times -- and ``close_worker_pool`` (which
+    tears those workers down) must re-arm it, exactly as it re-arms the
+    unguarded-``__main__`` warning."""
+    LT.close_worker_pool()
+    assert LT._note_pool_backend_refusal() is True
+    assert LT._note_pool_backend_refusal() is False
+    assert LT._POOL_BACKEND_REFUSED is True
+    LT.close_worker_pool()
+    assert LT._POOL_BACKEND_REFUSED is False
+    assert LT._note_pool_backend_refusal() is True
+    LT.close_worker_pool()
+
+
+def test_the_cap_notice_has_a_policy_knob_that_only_moves_the_report():
+    """``on_pool_memory``: the cap fires on a 12 GB CI runner and never on a
+    128 GB workstation, so a test that asserts "this policy leaves no warnings"
+    was passing locally and failing on CI for a reason that had nothing to do
+    with the guard under test.  The knob is the routing every other guard in
+    this signature already has.
+
+    Both halves matter: the notice must be suppressible, and suppressing it
+    must not change the CLAMP -- a knob that quietly restored the unclamped
+    worker count would re-open the OOM this whole file exists for.
+    """
+    free_b = 12.0e9
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        loud = LT._newton_resolve_workers(_D121_NW, _D121_POINTS, _D121_FIT,
+                                          _free_b=free_b)
+    caps = [w for w in rec if 'Newton process pool asked for' in str(w.message)]
+    assert len(caps) == 1, f'expected exactly one cap notice, got {len(caps)}'
+    assert loud < _D121_NW, 'the premise is wrong: the clamp did not bind'
+
+    for action in ('silent', 'ignore', 'off'):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            quiet = LT._newton_resolve_workers(
+                _D121_NW, _D121_POINTS, _D121_FIT, on_pool_memory=action,
+                _free_b=free_b)
+        assert quiet == loud, (
+            f'on_pool_memory={action!r} changed the clamped worker count '
+            f'{loud} -> {quiet}; it may only change what is REPORTED')
+
+
+def test_the_cap_knob_is_gated_at_entry_not_inside_the_warning_branch():
+    """The D5 house rule (``_KNOWN_UNGATED``), applied to the knob this fix
+    adds.  ``on_undersample`` is in that ledger precisely because its
+    validation sits inside the branch that only runs when the condition trips;
+    the memory cap has the same shape (it binds on a small box and never on a
+    big one), so validating it there would mean the knob is checked on CI and
+    not on a workstation.  Assert both the resolver-level gate and the
+    signature default."""
+    sig = inspect.signature(la.apply_real_lens_traced)
+    assert sig.parameters['on_pool_memory'].default == 'warn'
+    assert LT._traced_kwarg_defaults()['on_pool_memory'] == 'warn', (
+        'the chain-forwarded default drifted from the signature default')
+    # abundant memory: the warning branch is unreachable, and junk STILL raises
+    for bad in ('zzz', 'Silent', None, 1):
+        with pytest.raises(ValueError, match='on_pool_memory'):
+            LT._newton_resolve_workers(_D121_NW, _D121_POINTS, _D121_FIT,
+                                       on_pool_memory=bad, _free_b=400e9)
+    # ...and the entry gate is in apply_real_lens_traced itself, unconditional
+    body = inspect.getsource(la.apply_real_lens_traced)
+    assert 'on_pool_memory = _pool_memory_policy(on_pool_memory)' in body
+
+
+def test_the_unguarded_main_refusal_is_not_routed_through_the_knob(
+        tmp_path, monkeypatch):
+    """The line this fix draws, pinned so it is a decision and not an accident.
+
+    Rule 1 is not a resource notice: an unguarded ``__main__`` makes every
+    spawn worker re-run the caller's whole program, side effects included, and
+    there is no worker count at which that is acceptable.  So
+    ``on_pool_memory='silent'`` must NOT silence it -- a caller who quietened
+    the cap has not asked to be told nothing about correctness."""
+    script = tmp_path / 'runner_no_guard_knob.py'
+    script.write_text('print("no guard here")\n')
+    _fake_main(monkeypatch, script)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        got = LT._newton_resolve_workers(_D121_NW, _D121_POINTS, _D121_FIT,
+                                         on_pool_memory='silent',
+                                         _free_b=400e9)
+    assert got == 1, 'the unguarded-__main__ rule stopped returning serial'
+    assert [w for w in rec if '__main__' in str(w.message)], (
+        "on_pool_memory='silent' silenced the unguarded-__main__ refusal; "
+        "that is a correctness hazard (the caller's side effects run K extra "
+        'times), not a resource notice')

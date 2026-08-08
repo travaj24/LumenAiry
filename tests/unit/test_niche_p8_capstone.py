@@ -31,14 +31,15 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.glass import GLASS_REGISTRY
 
 _WL = 1.31e-6
 _WL_VIS = 0.633e-6
 _NA = 1.5168        # crown-class model glass
 _NB = 1.6200        # flint-class model glass
-GLASS_REGISTRY['_P8A'] = lambda wl: _NA
-GLASS_REGISTRY['_P8B'] = lambda wl: _NB
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_P8A': lambda wl: _NA,
+                  '_P8B': lambda wl: _NB}
 
 _ORACLE_PATH = (pathlib.Path(__file__).resolve().parents[2]
                 / 'validation' / 'oracles' / 'debye_oracle_v3.py')

@@ -32,14 +32,15 @@ from lumenairy.elements.lenses_gbd import (
     _GBD_AUTO_HUSIMI_THRESH,
     _input_angular_spread,
 )
-from lumenairy.glass import GLASS_REGISTRY
 
 _WL = 1.31e-6
 _N_GLASS = 1.5168
 _R1, _R2, _TC = 51.68e-3, -51.68e-3, 5e-3
 _F_PLANE = 49.163e-3            # collimated focus (BFL), dual-oracle number
 
-GLASS_REGISTRY['_H7_FIX_GLASS'] = lambda wl: _N_GLASS
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_H7_FIX_GLASS': lambda wl: _N_GLASS}
 
 # GBD test config: N/dx resolve the diverging fringe pitch (lambda*R/r);
 # bpa keeps the beamlet frame overlapping while bounding the count/runtime.
@@ -233,7 +234,7 @@ def test_h7_angular_spread_detector_separates_collimated_from_diverging():
 # negative biconcave (converging input).  Independent oracle: general
 # multi-surface ABCD Gaussian q-trace.
 # ===========================================================================
-GLASS_REGISTRY['_H7_FIX_162'] = lambda wl: 1.62
+MODULE_GLASSES['_H7_FIX_162'] = lambda wl: 1.62   # declared above
 
 
 def _lens_abcd_multi(surfaces, thicknesses, n_of):

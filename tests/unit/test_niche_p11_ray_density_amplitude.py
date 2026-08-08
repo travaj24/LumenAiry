@@ -45,11 +45,12 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.glass import GLASS_REGISTRY
 
-GLASS_REGISTRY['_P11A'] = lambda wl: 1.5168
-GLASS_REGISTRY['_P11SLOW'] = lambda wl: 1.5168
-GLASS_REGISTRY['_P11CAU'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_P11A': lambda wl: 1.5168,
+                  '_P11SLOW': lambda wl: 1.5168,
+                  '_P11CAU': lambda wl: 1.5168}
 
 _WL = 1.31e-6
 _Z_IMG = 49.162e-3     # f/5 singlet paraxial image distance (exit vertex -> image)

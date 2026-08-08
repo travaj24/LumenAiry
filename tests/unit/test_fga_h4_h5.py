@@ -42,11 +42,16 @@ from lumenairy.propagators.fga import apply_real_lens_fga, fga_memory_estimate
 
 WL = 1.31e-6
 
+# Dispersionless model glass (fixed index 1.5168), as the hammer oracle used.
+# Declared, not registered: the module-scoped `presc` fixture used to write it
+# straight into GLASS_REGISTRY and never remove it, leaking an unpicklable
+# lambda into every LATER test in the process.  Registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'ZF': lambda wl: 1.5168}
+
 
 @pytest.fixture(scope="module")
 def presc():
-    # dispersionless model glass (fixed index 1.5168), as the hammer oracle used.
-    GLASS_REGISTRY['ZF'] = lambda wl: 1.5168
     return {'wavelength': WL, 'aperture_diameter': 24e-3, 'surfaces': [
         {'radius': 51.68e-3, 'thickness': 5e-3, 'glass_before': 'air',
          'glass_after': 'ZF', 'semi_diameter': 12e-3},

@@ -603,6 +603,16 @@ def _newton_invert_chunk(args):
     path emits (pre-fix the pool was silent, and the advice in that very
     message did nothing on this path).
 
+    v5.32.3 (FIX_CI_POOL): so does the parent's Chebyshev EVALUATOR BACKEND
+    (``cheb_backend``), for the same reason and with the same fallback for
+    payloads that predate the key.  A worker that resolved a different branch
+    of ``_Cheb2DEvaluator.ev_value_and_grad`` than the parent ran the same
+    mathematics in a different floating-point order, which cost the pool its
+    bit-identity to serial (MEASURED 5.167e-14 locally, 1.358e-11 on CI).  A
+    worker that cannot honour a pinned ``'numba'`` raises
+    :class:`NewtonWorkerBackendUnavailable` rather than substituting the other
+    order.
+
     Lives at module scope so ``ProcessPoolExecutor`` can pickle it on
     Windows (spawn) workers.  The caller is ``_invert_newton_parallel``
     inside :func:`apply_real_lens_traced`.
@@ -640,12 +650,30 @@ def _newton_invert_chunk(args):
         # is elementwise -- hence chunking cannot change the answer.
         _ord = int(knot_data.get('fit_poly_order', 6))
         _wts = knot_data.get('fit_weights', None)
+        # ...and it must EVALUATE in the parent's floating-point order, which
+        # the payload pins (v5.32.3).  ``None`` -- payloads written before the
+        # pin existed, mirroring the ``newton_fit`` / ``newton_max_iters``
+        # tolerance above -- keeps the historical "resolve it here" behaviour.
+        _backend = knot_data.get('cheb_backend', None)
+        if _backend is not None and _backend not in ('numba', 'numpy'):
+            _backend = None
+        if _backend == 'numba' and _get_cheb2d_val_grad_numba() is None:
+            # The parent evaluated through the numba kernel and this worker
+            # cannot.  Answering with the pure-xp branch would be a DIFFERENT
+            # floating-point order, i.e. a silently different result from the
+            # serial path this pool promises to be bit-identical to -- so
+            # refuse, and let the parent run the chunk itself.
+            raise NewtonWorkerBackendUnavailable(
+                "the Newton pool payload pins the numba Chebyshev kernel (the "
+                "parent evaluated with it), but this worker cannot load it: "
+                f"_NUMBA_AVAILABLE={_NUMBA_AVAILABLE!r}.  Refusing the chunk "
+                "rather than answering in a different floating-point order.")
         Sx = _Cheb2DEvaluator(xs_in, xs_in, x_out_grid, order=_ord,
-                              xp=np, weights=_wts)
+                              xp=np, weights=_wts, backend=_backend)
         Sy = _Cheb2DEvaluator(xs_in, xs_in, y_out_grid, order=_ord,
-                              xp=np, weights=_wts)
+                              xp=np, weights=_wts, backend=_backend)
         So = _Cheb2DEvaluator(xs_in, xs_in, opl_grid, order=_ord,
-                              xp=np, weights=_wts)
+                              xp=np, weights=_wts, backend=_backend)
     else:
         Sx = RectBivariateSpline(xs_in, xs_in, x_out_grid, kx=3, ky=3)
         Sy = RectBivariateSpline(xs_in, xs_in, y_out_grid, kx=3, ky=3)
@@ -1220,6 +1248,43 @@ _NEWTON_POOL_RAM_FRAC = 0.5
 #: wrong is how a resource guard gets turned off.
 _NEWTON_POOL_MIN_FREE_GB = 2.0
 
+#: ``on_pool_memory`` vocabulary.  ``'warn'`` (default) announces a binding
+#: memory cap; ``'silent'`` clamps identically and says nothing.  'ignore' /
+#: 'off' are accepted ALIASES for 'silent' -- the same two-house-style
+#: collision ``_NONCOL_ALIASES`` and ``_FDB_ALIASES`` resolve the same way
+#: ('ignore' is what every ``on_*`` knob in ``propagators/carrier.py`` spells,
+#: 'silent' is what this signature's own siblings spell).
+#:
+#: There is deliberately no ``'error'``: the clamp exists because the box
+#: cannot hold the pool, and raising there would turn a run that COMPLETES with
+#: a bit-identical answer into one that does not.  ``on_aperture_beam`` is the
+#: sibling precedent for a two-value warn/silent knob.
+_POOL_MEM_ALIASES = {'ignore': 'silent', 'off': 'silent'}
+_POOL_MEM_ACTIONS = ('warn', 'silent')
+
+
+def _pool_memory_policy(action) -> str:
+    """Canonicalise an ``on_pool_memory`` value; raise on anything else.
+
+    Kept beside the constants (and applied at the TOP of
+    :func:`_newton_resolve_workers`, not inside the branch that warns) so a
+    junk value cannot behave as 'warn' on the boxes where the clamp never binds
+    and only surface on the one where it does -- which is precisely the
+    ``on_undersample`` shape the D5 ``_KNOWN_UNGATED`` ledger records.
+    """
+    if isinstance(action, str):
+        action = _POOL_MEM_ALIASES.get(action, action)
+    if action not in _POOL_MEM_ACTIONS:
+        raise ValueError(
+            f"apply_real_lens_traced: on_pool_memory={action!r} is not a "
+            f"valid policy.  Choose from 'warn' (default) or 'silent' "
+            f"('ignore' / 'off' are accepted aliases for 'silent').  The knob "
+            f"only decides whether a BINDING Newton-pool memory cap is "
+            f"announced; the cap itself always applies, and the pool path is "
+            f"bit-identical to serial either way.")
+    return action
+
+
 #: ``__main__`` guard verdicts, keyed by resolved script path (an AST parse per
 #: path, not per Newton dispatch), and the one-shot warning ledger.
 #:
@@ -1233,6 +1298,37 @@ _MAIN_GUARD_CACHE: Dict[str, bool] = {}
 _MAIN_GUARD_WARNED: set = set()
 _MAIN_GUARD_LOCK = threading.Lock()
 
+#: Set once a Newton pool worker has REFUSED a chunk because it could not
+#: provide the Chebyshev evaluator backend the payload pinned
+#: (:class:`NewtonWorkerBackendUnavailable`).  That is a property of this
+#: process's workers, not of one call, so every later dispatch in the process
+#: goes straight to the (bit-identical) serial path instead of re-paying a
+#: round trip to learn the same thing.  Cleared by ``close_worker_pool``, which
+#: is the documented "return to a cold state" entry point -- and the right
+#: re-arm, since it also tears the workers down.
+#:
+#: Guarded by ``_MAIN_GUARD_LOCK`` (the same lock as the warn-once ledger it
+#: sits beside, and for the same reason: ``parallel_amp`` runs this path on a
+#: ThreadPoolExecutor).
+_POOL_BACKEND_REFUSED = False
+
+
+def _note_pool_backend_refusal() -> bool:
+    """Latch "the workers cannot honour the pinned evaluator backend" and
+    report whether THIS is the first time it has been seen in this process.
+
+    Module level rather than a closure so the read-modify-write happens under
+    ``_MAIN_GUARD_LOCK`` in one place (``parallel_amp`` runs the dispatcher on
+    a ThreadPoolExecutor, and ``if not flag: flag = True`` is a torn RMW whose
+    whole contract is "say it exactly once"), and so the latch is testable
+    without driving a real pool.
+    """
+    global _POOL_BACKEND_REFUSED
+    with _MAIN_GUARD_LOCK:
+        first = not _POOL_BACKEND_REFUSED
+        _POOL_BACKEND_REFUSED = True
+    return first
+
 
 def _reset_newton_pool_resource_state() -> None:
     """Forget the cached ``__main__``-guard verdict and its one-shot warning.
@@ -1243,13 +1339,19 @@ def _reset_newton_pool_resource_state() -> None:
     the previous program's verdict, and the once-per-process warning could
     never fire again for a genuinely new one.
 
+    Also clears the worker-backend refusal latch (``_POOL_BACKEND_REFUSED``):
+    the workers that refused are gone by the time this returns, so the next
+    dispatch is entitled to ask a fresh set.
+
     Also the module's ``register_cache_clearer`` entry point, so
     ``clear_all_registered_caches`` (and ``lumenairy_context(
     clear_caches_on_exit=True)``) reach it like any other cache.
     """
+    global _POOL_BACKEND_REFUSED
     with _MAIN_GUARD_LOCK:
         _MAIN_GUARD_CACHE.clear()
         _MAIN_GUARD_WARNED.clear()
+        _POOL_BACKEND_REFUSED = False
 
 
 try:
@@ -1374,7 +1476,7 @@ def _newton_worker_bytes(chunk_points, fit_points) -> float:
 
 def _newton_resolve_workers(requested, n_total, fit_points,
                             fn='apply_real_lens_traced', min_pool_points=None,
-                            _free_b=None) -> int:
+                            on_pool_memory='warn', _free_b=None) -> int:
     """Clamp the Newton pool's worker count to what this box can hold.
 
     Two rules, in order, and both of them can only ever LOWER the count -- the
@@ -1415,8 +1517,19 @@ def _newton_resolve_workers(requested, n_total, fit_points,
     lower size bar and the clamp still CLAMPS below it (the count feeds the
     gate) but stays SILENT.
 
+    ``on_pool_memory`` is rule 2's POLICY knob, routed here from
+    :func:`apply_real_lens_traced`'s signature exactly the way ``on_undersample``
+    / ``on_aperture_beam`` route their guards (v5.32.3, FIX_CI_POOL).  ``'warn'``
+    (default) emits the notice; ``'silent'`` clamps exactly the same way and
+    says nothing -- it changes what is REPORTED, never what is run, because the
+    clamp is the thing keeping the box alive.  Rule 1 is deliberately NOT
+    routed through it: an unguarded ``__main__`` re-runs the caller's side
+    effects K extra times, which is a correctness hazard rather than a resource
+    notice, and there is no worker count at which it is acceptable.
+
     ``_free_b`` overrides the live memory read (tests only).
     """
+    on_pool_memory = _pool_memory_policy(on_pool_memory)
     requested = int(requested)
     if requested <= 1:
         return 1
@@ -1479,6 +1592,10 @@ def _newton_resolve_workers(requested, n_total, fit_points,
     if min_pool_points is not None and n_total < int(min_pool_points):
         # Clamped, but this call cannot reach the pool at ANY worker count --
         # see ``min_pool_points`` above.  Return the count, say nothing.
+        return allowed
+    if on_pool_memory == 'silent':
+        # The caller has acknowledged the clamp (``on_pool_memory='silent'``).
+        # Same count, same run -- only the notice is suppressed.
         return allowed
     import warnings
     warnings.warn(
@@ -1622,6 +1739,69 @@ def _get_cheb2d_val_grad_numba():
 
     _NUMBA_KERNELS["cheb2d"] = _cheb2d_val_grad_numba
     return _cheb2d_val_grad_numba
+
+
+# ---------------------------------------------------------------------------
+# THE CHEBYSHEV EVALUATOR'S BACKEND IS A RESOLVED DECISION, AND IT MUST TRAVEL
+# (docs/audits/FIX_CI_POOL_2026_08_06.md; closes FIX_POOL_MEMORY sec 8.1)
+#
+# ``_Cheb2DEvaluator.ev_value_and_grad`` has two implementations of ONE
+# formula: an ``@njit(parallel=True, fastmath=True)`` Chebyshev recurrence and a
+# pure-xp Vandermonde contraction.  They agree to ~1e-16 relative, not bit for
+# bit -- different summation order over the 28 basis terms.  A Newton pool
+# worker rebuilds the evaluator in a FRESH interpreter, so whichever branch IT
+# resolves is the branch the pooled OPL comes from, and the pickled payload
+# carried ``newton_fit`` / ``fit_poly_order`` / ``fit_weights`` /
+# ``newton_max_iters`` but NO backend flag.  A parent whose resolution differs
+# from its workers' therefore returned a DIFFERENT answer from the serial path:
+# MEASURED here, N=1024 / ray_subsample=2, both directions of the split,
+# max|delta| 5.167e-14; on CI (ubuntu, py3.10) 1.358e-11.
+#
+# This is the same class of gap as audit E-H2's ``newton_max_iters``: a decision
+# the parent RESOLVES and the worker re-derives from its own process state.  The
+# parent's resolution is genuinely process state and not merely environment --
+# ``_NUMBA_KERNELS['cheb2d']`` caches a permanent ``None`` once ``_load_numba``
+# has failed once -- so a worker CANNOT infer it, and the flag has to be pinned.
+# ---------------------------------------------------------------------------
+
+def _resolved_cheb_backend(newton_fit='polynomial'):
+    """Name the Chebyshev evaluator branch THIS process actually takes.
+
+    ``'numba'`` iff numba is importable here AND the kernel compiles/loads;
+    ``'numpy'`` otherwise.  Resolves through the same getter
+    ``ev_value_and_grad`` uses, so it reports the branch that WILL run rather
+    than the branch the environment suggests -- the two differ in a process
+    whose first ``_load_numba()`` failed (the ``None`` is cached forever).
+
+    Returns ``None`` for any fit that has no Chebyshev evaluator.
+    ``newton_fit='spline'`` rebuilds a ``RectBivariateSpline`` in the worker,
+    which has no backend split to pin -- and asking anyway would compile the
+    numba kernel in a process that is never going to evaluate it, purely to
+    describe a payload.
+    """
+    if str(newton_fit) != 'polynomial':
+        return None
+    if not _NUMBA_AVAILABLE:
+        return 'numpy'
+    return 'numba' if _get_cheb2d_val_grad_numba() is not None else 'numpy'
+
+
+class NewtonWorkerBackendUnavailable(RuntimeError):
+    """A Newton pool worker cannot provide the evaluator backend the payload
+    pins, so it refuses the chunk instead of answering in a different
+    floating-point order.
+
+    Raised INSIDE ``_newton_invert_chunk`` and handled by
+    ``_invert_newton_parallel``, which falls back to the (bit-identical to the
+    parent) in-process serial path and says so once.  A worker cannot conjure
+    the parent's backend, and quietly substituting the other one is exactly the
+    silent-wrong outcome this pin exists to remove.
+
+    Derives from ``RuntimeError`` on purpose: the pool-infrastructure ``except``
+    in ``_invert_newton_parallel`` already catches that and falls back to
+    serial, so a refactor that drops the specific handler loses the diagnostic
+    but keeps the SAFE behaviour rather than propagating a hard failure.
+    """
 
 
 def _get_array_module(arr):
@@ -1929,12 +2109,25 @@ class _Cheb2DEvaluator:
     """
 
     __slots__ = ('order', 'coeffs', 'xmin', 'xmax', 'ymin', 'ymax',
-                 '_mi', '_K1', '_K2', 'xp')
+                 '_mi', '_K1', '_K2', 'xp', 'backend')
 
-    def __init__(self, xs_in, ys_in, values, order=6, xp=None, weights=None):
+    def __init__(self, xs_in, ys_in, values, order=6, xp=None, weights=None,
+                 backend=None):
         if xp is None:
             xp = _get_array_module(values)
         self.xp = xp
+        # v5.32.3 (FIX_CI_POOL): PINNED evaluation backend, or None = "resolve
+        # it from this process's own numba availability" (the historical
+        # behaviour).  The two backends are the SAME mathematics in a different
+        # floating-point ORDER, so an evaluator rebuilt in a Newton pool worker
+        # must take the branch the PARENT took or the pool stops being
+        # bit-identical to serial.  See ``_resolved_cheb_backend``.
+        if backend is not None and backend not in ('numba', 'numpy'):
+            raise ValueError(
+                f"_Cheb2DEvaluator: backend={backend!r} is not a valid "
+                f"evaluation backend.  Choose 'numba', 'numpy', or None "
+                f"(resolve from this process's numba availability).")
+        self.backend = backend
         # The fit itself (a tiny lstsq -- typically a few hundred rows
         # by 28-70 terms) is always performed on CPU via NumPy, even
         # when xp=cupy.  Three reasons:
@@ -2071,8 +2264,24 @@ class _Cheb2DEvaluator:
 
         # Numba fastpath on the NumPy backend (kernel compiled lazily on first
         # use; None when numba is unavailable -> fall through to the pure-xp path)
-        _cheb_kernel = (_get_cheb2d_val_grad_numba()
-                        if xp is np and _NUMBA_AVAILABLE else None)
+        #
+        # ``self.backend`` PINS that choice when it is not None (v5.32.3): a
+        # Newton pool worker rebuilds this evaluator in a fresh interpreter, and
+        # if it resolved a different branch than the parent did the same
+        # mathematics would run in a different floating-point order and the pool
+        # would stop being bit-identical to serial (FIX_POOL_MEMORY sec 8.1,
+        # MEASURED 5.167e-14 on this file's own 262 144-point chain, 1.358e-11
+        # on CI's).  ``'numba'`` still resolves through the getter, so a worker
+        # that CANNOT provide the kernel gets ``None`` here and the caller --
+        # ``_newton_invert_chunk`` -- refuses rather than silently substituting
+        # the other order.
+        if self.backend == 'numpy':
+            _cheb_kernel = None
+        elif self.backend == 'numba':
+            _cheb_kernel = _get_cheb2d_val_grad_numba() if xp is np else None
+        else:
+            _cheb_kernel = (_get_cheb2d_val_grad_numba()
+                            if xp is np and _NUMBA_AVAILABLE else None)
         if _cheb_kernel is not None:
             u_flat = np.ascontiguousarray(u.ravel(), dtype=np.float64)
             v_flat = np.ascontiguousarray(v.ravel(), dtype=np.float64)
@@ -5357,6 +5566,7 @@ def apply_real_lens_traced(
     fit_radius_beam_factor: Optional[float] = None,
     on_aperture_beam: str = 'warn',
     on_fit_domain_basis: str = 'warn',
+    on_pool_memory: str = 'warn',
     beam_centre: Optional[Any] = None,
     decentred_fit_poly_order: Optional[int] = None,
     parallel_amp: Optional[bool] = None,
@@ -5854,6 +6064,33 @@ def apply_real_lens_traced(
         ``ValueError``.  Before that gate every unrecognised value -- including
         ``'Error'`` and ``'ignore'`` -- silently selected ``'warn'``, so a
         caller asking for a fatal got a warning and a returned field.
+    on_pool_memory : {'warn', 'silent'}, default 'warn'
+        Policy for the Newton process pool's MEMORY CAP notice (v5.32.3).
+        When the pool this call asked for does not fit the box -- the projected
+        per-worker commit against ``_NEWTON_POOL_RAM_FRAC`` of available memory
+        less a ``_NEWTON_POOL_MIN_FREE_GB`` reserve -- the clamp lowers
+        ``n_workers`` and, by default, emits one ``RuntimeWarning`` naming what
+        was asked for, what a worker costs, what the box has and what will run.
+        ``'silent'`` clamps identically and says nothing; ``'ignore'`` and
+        ``'off'`` are accepted ALIASES for it (same two-house-style collision
+        ``on_fit_domain_basis`` resolves the same way).  Validated at entry:
+        any other value raises ``ValueError``.
+
+        This knob changes what is REPORTED, never what is run: the pool path is
+        bit-identical to serial at every worker count, so a clamped dispatch
+        returns the same numbers as an unclamped one and only the wall time
+        moves.  There is deliberately no ``'error'`` -- the clamp is what keeps
+        an under-provisioned box completing at all.
+
+        Pass ``'silent'`` when a test or a harness asserts on the ABSENCE of
+        warnings from a physics guard: the cap is a resource notice whose firing
+        depends on the box's free RAM, so leaving it routed through the default
+        makes such an assertion pass on a 256 GB workstation and fail on a
+        12 GB CI runner (which is exactly how it was found -- FIX_CI_POOL).
+        The unguarded-``__main__`` refusal is NOT routed through this knob: it
+        reports that spawn workers would re-run the caller's whole program,
+        side effects included, which is a correctness hazard rather than a
+        resource notice.
     decentred_fit_poly_order : int, optional
         Minimum tensor-Chebyshev total degree for the ray fit WHEN THAT FIT'S
         DISC IS OFF CENTRE (niche D7).  ``None`` (default) uses
@@ -6375,6 +6612,16 @@ def apply_real_lens_traced(
             f"accepted aliases for 'silent').  Pre-v5.32.2 any unrecognised "
             f"value silently selected 'warn', so a caller asking for 'error' "
             f"got a warning and a returned field instead of a refusal.")
+
+    # ``on_pool_memory`` (v5.32.3, FIX_CI_POOL).  Gated HERE, unconditionally,
+    # like its siblings above and unlike ``on_undersample`` -- whose validation
+    # sits inside the branch that only runs when the undersampling condition
+    # trips, so junk behaves as 'warn' on every well-sampled call (the D5
+    # ``_KNOWN_UNGATED`` ledger).  The Newton pool's memory cap has exactly
+    # that shape: it binds on a 12 GB CI runner and never on a 256 GB
+    # workstation, so a gate inside the warning branch would validate the knob
+    # on one box and not the other.
+    on_pool_memory = _pool_memory_policy(on_pool_memory)
 
     # ---- N12 (P11): opt-in ray-density (Jacobian) amplitude model -------
     # ``amplitude_model='screen'`` (default) is byte-identical to prior
@@ -8834,7 +9081,14 @@ def apply_real_lens_traced(
         # Upstream on purpose -- the promotion evidence is keyed by worker
         # count, so it has to be keyed by the count we would actually use.
         n_cpu = _newton_resolve_workers(_n_cpu_req, n_total, _fit_points,
-                                        min_pool_points=_POOL_MIN_PIXELS_WARM)
+                                        min_pool_points=_POOL_MIN_PIXELS_WARM,
+                                        on_pool_memory=on_pool_memory)
+        # A worker in THIS process has already refused a chunk because it could
+        # not provide the pinned Chebyshev backend (v5.32.3).  That is a
+        # property of the workers, not of one call, so stop asking: the serial
+        # path is bit-identical and does not pay a round trip to be told again.
+        if _POOL_BACKEND_REFUSED:
+            n_cpu = 1
         # A pool that is already up has no spawn left to amortise -- see the
         # measured cold/warm tables at _POOL_MIN_PIXELS.
         _pool_is_warm = (_PERSISTENT_POOL is not None
@@ -8878,6 +9132,17 @@ def apply_real_lens_traced(
             sub_progress(0.0,
                          f'newton pool: {n_total} pts across '
                          f'{n_cpu} workers')
+        # PIN THE PARENT'S EVALUATOR BACKEND into the payload (v5.32.3,
+        # FIX_CI_POOL).  Resolved HERE rather than where ``_spline_data`` is
+        # built, for two reasons: only a dispatch needs it (so a call that never
+        # pools does not force a numba compile just to describe itself), and it
+        # must be the branch in force at DISPATCH time.  The value is what
+        # ``_Cheb2DEvaluator.ev_value_and_grad`` would take in this process, so
+        # the worker reproduces the parent's floating-point ORDER instead of
+        # re-deriving it from its own numba availability -- without this the
+        # pool is only CONDITIONALLY bit-identical to serial (measured
+        # 5.167e-14 locally / 1.358e-11 on CI when the two sides split).
+        _spline_data['cheb_backend'] = _resolved_cheb_backend(newton_fit)
         # Split indices into roughly-equal chunks.  ``np.array_split``
         # handles the n_total % n_cpu != 0 case cleanly.
         chunk_idx = np.array_split(np.arange(n_total), n_cpu)
@@ -8906,6 +9171,33 @@ def apply_real_lens_traced(
                     sub_progress(
                         frac,
                         f'newton chunk {done}/{len(args_list)} done')
+        except NewtonWorkerBackendUnavailable:
+            # The worker could not provide the Chebyshev backend the payload
+            # pinned and refused rather than answering in a different
+            # floating-point order (v5.32.3).  Run the chunk here, where the
+            # parent's own backend IS the pinned one -- which is what makes
+            # this fallback bit-identical rather than merely close -- and say
+            # so ONCE per process: a chain would otherwise repeat a paragraph
+            # per group about a fact that cannot change under it.
+            if _note_pool_backend_refusal():
+                import warnings
+                warnings.warn(
+                    f"apply_real_lens_traced: running the Newton inversion "
+                    f"SERIAL instead of on {n_cpu} workers, because this "
+                    f"process evaluates the Chebyshev fit through the numba "
+                    f"kernel and its spawn workers cannot load numba.  The "
+                    f"two evaluate the same polynomial in a different "
+                    f"floating-point order, so a worker that substituted the "
+                    f"pure-NumPy branch would return a DIFFERENT answer from "
+                    f"the serial path (measured 5.2e-14 to 1.4e-11 of the "
+                    f"field) -- the pool's whole safety argument is that it is "
+                    f"bit-identical.  Install numba where the workers can "
+                    f"import it, or pass newton_fit='spline' (whose worker "
+                    f"has no backend split), to get the pool back; the serial "
+                    f"result is bit-identical either way, so nothing but wall "
+                    f"time changes here.",
+                    RuntimeWarning, stacklevel=3)
+            return _invert_newton(Xw, Yw, sub_progress=sub_progress)
         except (BrokenProcessPool, RuntimeError, OSError, EOFError):
             # POOL-INFRASTRUCTURE failures only (v5.30, audit E-L3):
             # ``BrokenProcessPool`` (a worker died / spawn was blocked by

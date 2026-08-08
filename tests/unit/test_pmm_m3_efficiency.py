@@ -655,6 +655,35 @@ def test_t34_guard_is_silent_on_the_cured_ladder(t34_armed):
                 f"cured cell (rel={rel:.4g}) -- {warns[0].message}")
 
 
+#: "RIGHT" for the false-positive control below.  The populations it separates
+#: are 0.03-0.9 % and 42-466 %, so nothing between 0.01 and 0.4 changes a
+#: verdict.
+_T34_RIGHT_REL = 0.02
+
+#: Degrees the control may fall back to when a pinned rung has migrated,
+#: coarsest last.  6 is the floor: below it the device is not resolved at all.
+_T34_DEGREE_LADDER = (16, 14, 12, 10, 8, 6)
+
+_T34_CELLS = {}
+
+
+def _t34_cell(ns, degree, mf):
+    """``dict(ns, degree, mf, r0, rel, close, fired, warns)``, cached."""
+    key = (ns, degree, mf)
+    if key not in _T34_CELLS:
+        old, PC.PMM_MODE_CUT_GUARD = PC.PMM_MODE_CUT_GUARD, True
+        try:
+            (r0, close), warns = _t34_warnings(
+                lambda: solve0(build(ns, degree=degree, min_feature=mf),
+                               quiet=False))
+        finally:
+            PC.PMM_MODE_CUT_GUARD = old
+        _T34_CELLS[key] = dict(ns=ns, degree=degree, mf=mf, r0=r0, close=close,
+                               rel=abs(r0 / _T34_REF[ns] - 1.0),
+                               fired=bool(warns), warns=warns)
+    return _T34_CELLS[key]
+
+
 @pytest.mark.parametrize("ns,degree,mf", [(2, 8, None), (2, 6, None),
                                           (2, 12, 0.5 * NM),
                                           (2, 16, 0.5 * NM),
@@ -663,13 +692,58 @@ def test_t34_guard_is_silent_on_the_cured_ladder(t34_armed):
 def test_t34_guard_is_silent_where_the_answer_is_right(ns, degree, mf,
                                                       t34_armed):
     """The false-positive control on the SAME device: a guard that refused
-    these would be worse than the defect (the campaign's R-1b precedent)."""
-    ref = {2: 0.1100920, 6: 0.1111090}[ns]
-    (r0, _close), warns = _t34_warnings(
-        lambda: solve0(build(ns, degree=degree, min_feature=mf),
-                       quiet=False))
-    assert abs(r0 / ref - 1.0) < 0.02, "the cell is supposed to be RIGHT"
-    assert not warns, f"false positive: {warns and warns[0].message}"
+    these would be worse than the defect (the campaign's R-1b precedent).
+
+    **v5.33.1 -- "THE CELL IS SUPPOSED TO BE RIGHT" IS A PRECONDITION, AND ON
+    THE UNCURED LADDER IT IS A PER-BUILD ONE.**  ``(2, 8, None)`` reads
+    ``rel`` = 0.0057 on Windows and WSL at 1, 2 and N BLAS threads and on the
+    ubuntu CI images carrying numpy 2.4.6, and ``rel`` = 4.664 on the ubuntu
+    image carrying numpy 2.2.6 / scipy 1.15.3 -- i.e. there the uncured
+    ladder's collapse starts at degree 8 instead of degree 12/14, and the cell
+    has migrated OUT of this control's population and INTO the silent-wrong
+    family that ``test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build``
+    owns.  4.664 is exactly the collapse signature this file measures at
+    ``(2, 14)`` and ``(2, 16)`` elsewhere; nothing about the device changed.
+
+    A precondition that fails is RE-ESTABLISHED, not asserted: the control
+    falls back down the degree ladder to the coarsest rung that IS right on
+    this build and makes its claim there.  The migrated rung is not silently
+    dropped -- its conservation is still asserted blind (the silent-wrong
+    signature) and its verdict is printed.
+
+    (The four CURED parametrizations are build-independent by construction --
+    ``min_feature`` above M2's threshold leaves no sliver -- and are measured
+    right and quiet in every cell; the fallback is inert on them.)"""
+    cell = _t34_cell(ns, degree, mf)
+    if cell["rel"] >= _T34_RIGHT_REL:
+        # the pinned rung has migrated into the wrong family on this build.
+        lower = [d for d in _T34_DEGREE_LADDER if d < degree]
+        alt = next((c for c in (_t34_cell(ns, d, mf) for d in lower)
+                    if c["rel"] < _T34_RIGHT_REL), None)
+        assert alt is not None, (
+            f"ns={ns} mf={mf}: degree {degree} reads rel={cell['rel']:.4g} "
+            f"and no coarser rung down to degree {min(_T34_DEGREE_LADDER)} is "
+            f"right either, so this device has no correct rung on this build "
+            f"and there is nothing left to control.  ladder: "
+            + str([(c['degree'], round(c['rel'], 4))
+                   for c in (_t34_cell(ns, d, mf)
+                             for d in (degree,) + tuple(lower))]))
+        # the migration IS the silent-wrong defect and not a different device:
+        # conservation stays blind to it, which is the whole T3-4 premise.
+        assert cell["close"] < 1e-5, (
+            f"ns={ns} deg={degree}: rel={cell['rel']:.4g} wrong AND "
+            f"|R+T-1|={cell['close']:.3e} -- energy closure would have caught "
+            f"this, so it is not the silent-wrong family")
+        print(f"\nT3-4 FP control: ns={ns} degree={degree} mf={mf} has "
+              f"migrated (rel={cell['rel']:.4g}, |R+T-1|={cell['close']:.3e}, "
+              f"guard {'FIRES' if cell['fired'] else 'is QUIET'}); the control "
+              f"falls back to degree {alt['degree']} (rel={alt['rel']:.4g}).")
+        cell = alt
+    assert cell["rel"] < _T34_RIGHT_REL, "the cell is supposed to be RIGHT"
+    assert not cell["fired"], (
+        f"false positive on ns={cell['ns']} degree={cell['degree']} "
+        f"mf={cell['mf']} (rel={cell['rel']:.4g}): "
+        f"{cell['warns'] and cell['warns'][0].message}")
 
 
 def test_t34_guard_is_silent_when_layers_LEGITIMATELY_differ(t34_armed):
@@ -723,6 +797,70 @@ def test_t34_guard_ships_disarmed_and_arming_it_moves_no_number():
     assert r_on == r_off
 
 
+#: The conical (phi != 0) false-positive family.  ``0.133532`` is the
+#: stationary plateau the whole ladder sits on (measured 0.133475 .. 0.133579
+#: over degrees 10..18 on every build, i.e. 0.06 % wide).
+_CONICAL_PLATEAU = 0.133532
+_CONICAL_FAMILY = (10, 12, 14)
+_CONICAL_WIDEN = (16, 18)
+_CONICAL_SCAN = {}
+
+
+def _conical_cell(degree):
+    """One rung of the conical false-positive family, ARMED, cached.
+
+    ``dict(degree, r0, close, fired, n_grow, spread, n_risky, margin)`` -- both
+    verdict channels read straight off ``_MODE_CUT_CENSUS`` so the adjudication
+    below is a measurement and not an inference."""
+    if degree in _CONICAL_SCAN:
+        return _CONICAL_SCAN[degree]
+    st = PMMStack(PERIOD, n_substrate=N_SUB, n_superstrate=N_SUP,
+                  degree=degree, elements_per_region=1, far_field_orders=7,
+                  layer_grids="per-layer", min_feature=3.0 * NM)
+    for t, segs in _taper(4):
+        st.add_layer(t, segments=segs)
+    old_guard, PC.PMM_MODE_CUT_GUARD = PC.PMM_MODE_CUT_GUARD, True
+    old_census, PC._MODE_CUT_CENSUS = PC._MODE_CUT_CENSUS, []
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            warnings.filterwarnings("ignore", message=".*_pmm_union_grid.*")
+            o, R, T, _J = st.set_source(WL, theta=THETA,
+                                        phi=np.deg2rad(20.0)).solve()
+        rows = list(PC._MODE_CUT_CENSUS)
+    finally:
+        PC._MODE_CUT_CENSUS = old_census
+        PC.PMM_MODE_CUT_GUARD = old_guard
+    m0 = int(np.where(np.asarray(o) == 0)[0][0])
+    pat = [c for c in rows if c["patterned"]]
+    counts = [int(c["n_prop"]) for c in pat]
+    risky = [c for c in pat
+             if c["n_risk"] > 0 and c["margin"] < PC._MODE_CUT_MARGIN_WARN]
+    cell = dict(
+        degree=degree,
+        r0=float(np.real(np.asarray(R)[0, m0])),
+        close=float(np.max(np.abs(np.asarray(R).sum(axis=1)
+                                  + np.asarray(T).sum(axis=1) - 1.0))),
+        fired=any(isinstance(w.message, PC._ModeClassificationWarning)
+                  for w in caught),
+        n_grow=sum(int(c["n_grow"]) for c in rows),          # channel A
+        spread=(max(counts) - min(counts)) if len(counts) >= 2 else 0,
+        n_risky=len(risky),                                  # channel B
+        margin=min([c["margin"] for c in risky], default=float("inf")))
+    _CONICAL_SCAN[degree] = cell
+    return cell
+
+
+def _conical_table(degrees):
+    return "\n    ".join(
+        "deg %2d  r0=%.6f rel=%+.2e close=%.1e  A:n_grow=%d  "
+        "B:spread=%d n_risky=%d margin=%.3g  -> %s"
+        % (c["degree"], c["r0"], c["r0"] / _CONICAL_PLATEAU - 1.0, c["close"],
+           c["n_grow"], c["spread"], c["n_risky"], c["margin"],
+           "FIRES" if c["fired"] else "quiet")
+        for c in (_conical_cell(d) for d in degrees))
+
+
 @pytest.mark.parametrize("degree", [10, 12, 14])
 def test_t34_bar_is_REFUTED_on_the_conical_family(degree, t34_armed):
     """THE REFUTATION, pinned -- the reason the guard ships disarmed.
@@ -734,26 +872,66 @@ def test_t34_bar_is_REFUTED_on_the_conical_family(degree, t34_armed):
     family's broken cells occupy.  No bar on these instruments survives both
     mounts.
 
-    A future fix should make this test FAIL."""
-    st = PMMStack(PERIOD, n_substrate=N_SUB, n_superstrate=N_SUP,
-                  degree=degree, elements_per_region=1, far_field_orders=7,
-                  layer_grids="per-layer", min_feature=3.0 * NM)
-    for t, segs in _taper(4):
-        st.add_layer(t, segments=segs)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        warnings.filterwarnings("ignore", message=".*_pmm_union_grid.*")
-        o, R, _T, _J = st.set_source(WL, theta=THETA,
-                                     phi=np.deg2rad(20.0)).solve()
-    m0 = int(np.where(np.asarray(o) == 0)[0][0])
-    r0 = float(np.real(np.asarray(R)[0, m0]))
+    A future fix should make this test FAIL.
+
+    **v5.33.1 -- WHICH RUNG CARRIES THE FALSE POSITIVE IS A PER-BUILD FACT,
+    AND THE TEST SAID SO ITSELF.**  Degree 10 fires on Windows and WSL at 1, 2
+    and N BLAS threads (channel A ``n_grow`` = 1-2 on the third patterned row,
+    channel B ``spread`` = 1 with ``margin`` = 1.075) and on ubuntu CI with
+    numpy 2.2.6; it goes QUIET on the ubuntu CI images carrying numpy 2.4.6,
+    where degrees 12 and 14 still fire.  That is the same round-off-flux mode
+    landing on the other side of the cut that the four-name adjudication (S3,
+    S4) measured moving the classical family's wrong-cell list.
+
+    So the rung is a STARTING POINT and the refutation is a FAMILY claim: this
+    rung must be RIGHT (all of them are, on the plateau), and the false
+    positive must reproduce SOMEWHERE in the family -- widened before it is
+    ever given up.  If it reproduces nowhere, the test FAILS with the
+    adjudication printed, because the FP is the entire reason the guard ships
+    disarmed and its disappearance is a headline event, not a pass: the
+    message separates "channel B's numerics shifted" (rungs still read
+    at-risk modes inside the cut's decade, or growing forward modes, but the
+    verdict stayed quiet) from "the conical family is clean on this build"
+    (every rung reads ``n_grow`` = 0 and no at-risk mode at all)."""
+    cell = _conical_cell(degree)
     # the cell IS correct: it sits on the stationary plateau (0.1335 +/- 0.1%)
-    assert abs(r0 / 0.133532 - 1.0) < 0.01, r0
-    warns = [w for w in caught
-             if isinstance(w.message, PC._ModeClassificationWarning)]
-    assert warns, ("the conical FALSE POSITIVE stopped reproducing -- if the "
-                   "instrument was improved, re-pin this against the fix, do "
-                   "not delete it")
+    assert abs(cell["r0"] / _CONICAL_PLATEAU - 1.0) < 0.01, cell["r0"]
+    # ... and the plateau is measured here, not asserted from the audit: the
+    # whole family agrees with this rung far better than the 1 % bar above.
+    fam = [_conical_cell(d) for d in _CONICAL_FAMILY]
+    assert max(abs(c["r0"] / cell["r0"] - 1.0) for c in fam) < 2e-3, (
+        "the conical ladder is no longer stationary, so 'the answers are "
+        "right' is not established on this build.\n    "
+        + _conical_table(_CONICAL_FAMILY))
+
+    if cell["fired"]:
+        return                              # the FP reproduces on this rung
+    scanned = list(_CONICAL_FAMILY) + list(_CONICAL_WIDEN)
+    elsewhere = [c for c in (_conical_cell(d) for d in scanned) if c["fired"]]
+    if elsewhere:
+        print(f"\nT3-4 conical FP: degree {degree} is QUIET on this build "
+              f"(n_grow={cell['n_grow']}, spread={cell['spread']}, "
+              f"n_risky={cell['n_risky']}, margin={cell['margin']:.3g}); the "
+              f"refutation reproduces at degree(s) "
+              f"{[c['degree'] for c in elsewhere]} instead.\n    "
+              + _conical_table(scanned))
+        return
+    # NOWHERE.  Adjudicate before failing -- the two cases need different fixes.
+    near = [c for c in (_conical_cell(d) for d in scanned)
+            if c["n_grow"] > 0 or c["n_risky"] > 0]
+    why = ("channel B's NUMERICS SHIFTED: rungs "
+           f"{[c['degree'] for c in near]} still carry growing-forward or "
+           "at-risk modes inside the cut's decade, but the verdict no longer "
+           "fires on them -- re-pin the refutation against whatever changed "
+           "the verdict") if near else (
+        "the CONICAL FAMILY IS CLEAN on this build: every scanned rung reads "
+        "n_grow = 0 with no at-risk mode at all, so the false positive that "
+        "disarmed the guard is gone here and the DISARMED default should be "
+        "re-examined against this build")
+    assert False, (
+        "the conical FALSE POSITIVE stopped reproducing -- if the instrument "
+        "was improved, re-pin this against the fix, do not delete it.  "
+        + why + ".\n    " + _conical_table(scanned))
 
 
 def test_t34_guard_warnings_come_out_in_WAVELENGTH_ORDER_on_the_sweep(

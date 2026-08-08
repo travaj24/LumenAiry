@@ -33,7 +33,6 @@ import pytest
 import lumenairy as la
 from lumenairy.elements._lens_traced import apply_real_lens_traced
 from lumenairy.elements.lenses_gbd import apply_real_lens_gbd
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.propagators.gbd import (
     decompose_field_to_beamlets,
     frame_completeness,
@@ -41,7 +40,9 @@ from lumenairy.propagators.gbd import (
 
 _WL = 1.31e-6
 _N_GLASS = 1.5168
-GLASS_REGISTRY['_P4_GLASS'] = lambda wl: _N_GLASS
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_P4_GLASS': lambda wl: _N_GLASS}
 _k = 2 * np.pi / _WL
 
 # Fast config that exhibits the reconvergence loss (naive ~0.87) and its close

@@ -32,11 +32,12 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.glass import GLASS_REGISTRY
 
 _WL = 1.31e-6
 K = 2 * np.pi / _WL
-GLASS_REGISTRY['_P3A'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_P3A': lambda wl: 1.5168}
 
 # ---- lumenairy-free geometric spot oracle (decenter / tilt) ---------------
 _ORACLE_PATH = (pathlib.Path(__file__).resolve().parents[2]

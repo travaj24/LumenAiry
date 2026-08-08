@@ -35,7 +35,6 @@ import warnings
 import numpy as np
 import pytest
 
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.raytrace import differential as D
 from lumenairy.raytrace import (
     ray_transfer_jacobian,
@@ -44,7 +43,9 @@ from lumenairy.raytrace import (
 )
 
 LAM = 1.31e-6
-GLASS_REGISTRY['ZF_R4'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'ZF_R4': lambda wl: 1.5168}
 
 
 # --------------------------------------------------------------------------

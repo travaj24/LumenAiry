@@ -876,6 +876,23 @@ _MODE_CUT_CENSUS = None
 # cells carry a growing forward mode too (1-3 of them, at 1.07-2.87 x the cut).
 # So the default stays DISARMED, for the same reason and now on a second
 # instrument.  The remaining lead is still the consensus probe.
+#
+# ---------------------------------------------------------------------------
+# UPDATE 2026-08-06 (FIX_UNION_GRID_2THREAD_2026_08_06).  Channel A's invariant
+# is now also a REPAIR -- :func:`_forward_growth_flip` -- so the condition this
+# guard warns about is FIXED at the classification site rather than merely
+# reported.  Two consequences a reader needs:
+#
+# * the census and the verdict deliberately still read the RAW ``prop``/``q``
+#   (see :func:`_record_mode_cut`'s call sites), i.e. they report what the bare
+#   selector WOULD have done.  So channel A still fires on cells the repair has
+#   since made correct, and every calibration table in the M3 audit still
+#   reads as written.  That is intentional: the instrument measures the
+#   diagnosis, not the treatment;
+# * which makes the DISARMED default less urgent rather than more.  The
+#   conical false positive is unchanged and arming is still gated on the
+#   consensus probe, but a growing forward mode is no longer a wrong answer
+#   waiting to happen -- it is a repaired one that the instrument still names.
 # ---------------------------------------------------------------------------
 
 #: T3-4 guard, at WARN.  DISARMED by default -- see the block above for the
@@ -1013,6 +1030,92 @@ def _mode_cut_growth(flux, q, thr, prop):
     if not bool(grow.any()):
         return 0, float("inf")
     return int(np.count_nonzero(grow)), float(np.min(ratio[grow]))
+
+
+#: FAIL-BEFORE SWITCH for :func:`_forward_growth_flip` (2026-08-06,
+#: ``docs/audits/FIX_UNION_GRID_2THREAD_2026_08_06.md``).  ``False`` restores
+#: the pre-fix selector -- the bare ``where(prop, flux < 0, Im q < 0)`` -- bit
+#: for bit on every path that routes through it.  It is a switch and not a
+#: policy: the repair is a no-op wherever ``_mode_cut_growth`` reads 0, which
+#: is every healthy solve measured.
+PMM_FORWARD_GROWTH_REPAIR = True
+
+
+def _forward_growth_flip(flux, q, thr, prop, xp=np):
+    """The forward/backward selector, with the ROUND-OFF BAND repaired.
+
+    THE DEFECT THIS CLOSES (T3-4, on a new axis).  The historical selector is
+
+        flip = where(prop, flux < 0, Im(q) < 0)
+
+    and :func:`_mode_cut_growth` documents why its ``prop`` branch is unsafe:
+    an EVANESCENT mode carries exactly zero z-power, so the ``flux`` the cut
+    scores it on is round-off, and when that round-off crosses
+    :func:`_mass_flux_threshold` the mode's DIRECTION is taken from the SIGN of
+    that same round-off.  Half the time the sign points against ``Im(q)`` and a
+    GROWING mode enters the forward set.  The cascade is then mis-assembled.
+
+    Measured on the union-grid conical staircase of
+    ``test_m1_conditioning_guard.py`` (six 60 nm slices, 4 nm wall shift,
+    theta 0.15, phi 0.6, degree 6), code and geometry FIXED, varying only
+    ``OPENBLAS_NUM_THREADS``::
+
+        threads  n_growing  J00                          |R+T-1|
+        1        1          -0.17117932 +0.00906676j     6.654e-06
+        2        8          -0.27216039 -0.09244619j     2.135e+01
+        24       1          -0.17117932 +0.00906676j     6.651e-06
+
+    The eigenvalues are the SAME to 1e-10 in all three cells -- the union grid
+    carries DOUBLE roots ``q^2`` whose LAPACK splitting is ~1e-10 and whose
+    ``sqrt`` therefore lands one member of each pair at ``Im(q) < 0`` -- and
+    only WHICH member's round-off flux crosses the cut moves.  A 1.4e-01 move
+    in a Jones entry decided by the BLAS reduction order.
+
+    THE REPAIR, and it is the SAME INVARIANT the T3-4 guard's channel A
+    detects on, applied to the classification instead of only to the verdict:
+    a forward mode of a passive layer may not grow along +z.  So for the modes
+    where the flux rule is provably round-off --
+
+        prop  AND  |flux| < _MODE_CUT_MARGIN_WARN * thr
+              AND  Im(q_forward) < -_MODE_GROWTH_REL |q|
+
+    -- the direction is taken from ``Im(q)`` instead, which is the rule the
+    EVANESCENT branch already uses and which cannot produce a growing forward
+    mode by construction.  The mask is BIT-IDENTICAL to
+    :func:`_mode_cut_growth`'s ``grow`` (same three conjuncts, same two bars),
+    so the instrument and the repair can never disagree about which modes are
+    affected -- and every conjunct is load-bearing for exactly the reasons
+    recorded there:
+
+    * ``prop`` -- the evanescent branch is already safe;
+    * ``within the cut's decade`` -- what keeps this safe on a GAIN medium,
+      where a forward mode legitimately grows: an amplifying mode carries REAL
+      power and sits ~1e8 x the cut, so it is never touched;
+    * ``Im(q) < -rel |q|`` -- a scale-free ratio; a genuinely propagating mode
+      reads ``|Im q| / |q| <= 5e-10`` and is never touched.
+
+    NULL FLOOR.  Where nothing grows -- every healthy solve measured, on both
+    mounts at every thread count -- ``bad`` is empty and the returned ``flip``
+    is the historical array bit for bit.  ``_record_mode_cut`` is deliberately
+    still called on the RAW ``prop``/``q``, so the census and the T3-4 verdict
+    keep measuring the DIAGNOSIS (what the bare selector would have done) and
+    not the repaired state.
+
+    ``xp`` selects the array module, so the JAX twins share the policy: every
+    operation here is elementwise, so nothing about it is data-dependent
+    control flow and it traces."""
+    flip = xp.where(prop, flux < 0.0, q.imag < 0.0)
+    if not PMM_FORWARD_GROWTH_REPAIR:
+        return flip
+    qf = xp.where(flip, -q, q)
+    # ``_mode_cut_ratio``'s ``ratio < _MODE_CUT_MARGIN_WARN`` without the
+    # division: under ``prop`` we have |flux| > thr, so the ratio IS
+    # |flux| / thr.  A degenerate cut (thr <= 0 or non-finite) gives lim <= 0
+    # and matches ``_mode_cut_ratio``'s ``inf`` -- nothing is near it.
+    lim = xp.where(xp.isfinite(thr), _MODE_CUT_MARGIN_WARN * thr, 0.0)
+    bad = (prop & (xp.abs(flux) < lim)
+           & (qf.imag < -_MODE_GROWTH_REL * xp.abs(qf)))
+    return xp.where(bad, q.imag < 0.0, flip)
 
 
 def _layer_index_bound(mats):
@@ -2069,10 +2172,12 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
                    - np.einsum("in,in->n", W2[n:], SVt))
     thr = _mass_flux_threshold(flux, W2, SVt, SVb, n)
     prop = np.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+    flip = _forward_growth_flip(flux, q, thr, prop)
     # T3-4: the classification margin, when armed.  ``prop`` decides WHICH of
     # the two direction criteria each mode obeys, so a mode sitting at ``thr``
     # whose criteria disagree makes the whole forward set degree-dependent.
+    # NB the census reads the RAW ``prop``/``q`` -- the DIAGNOSIS, not the
+    # repaired state -- so the instruments stay what they were calibrated as.
     if _mode_cut_armed():
         _record_mode_cut(flux, q, thr, prop, mats,
                          "PMM modal solve (patterned layer)")
@@ -2201,7 +2306,7 @@ def _sem_modes_uniform(mats, k0, kx0, eps, geo=None):
                    - np.einsum("in,in->n", W2[n:], SVt))
     thr = _mass_flux_threshold(flux, W2, SVt, SVb, n)
     prop = np.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+    flip = _forward_growth_flip(flux, q, thr, prop)
     if _mode_cut_armed():
         _record_mode_cut(flux, q, thr, prop, mats,
                          "PMM modal solve (uniform half-space)", False)
@@ -3590,8 +3695,11 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
     flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
                     - jnp.einsum("in,in->n", W2[n:], SVt))
-    prop = _mass_flux_cut(flux, W2, SVt, SVb, n, jnp)  # W7 B2: unit-safe cut
-    flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
+    # the NumPy twin's selector, verbatim policy (``_forward_growth_flip``):
+    # elementwise throughout, so it traces.
+    thr = _mass_flux_threshold(flux, W2, SVt, SVb, n, jnp)
+    prop = jnp.abs(flux) > thr                        # W7 B2: unit-safe cut
+    flip = _forward_growth_flip(flux, q, thr, prop, jnp)
     q = jnp.where(flip, -q, q)
     lam = -1j * q
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
@@ -3649,8 +3757,9 @@ def _jpmm_sem_modes_uniform(mats, jnp, eig, k0, kx0, eps, geo=None):
     SVb = S0 @ jnp.conj(V0[n:])
     flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
                     - jnp.einsum("in,in->n", W2[n:], SVt))
-    prop = _mass_flux_cut(flux, W2, SVt, SVb, n, jnp)  # W7 B2: unit-safe cut
-    flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
+    thr = _mass_flux_threshold(flux, W2, SVt, SVb, n, jnp)
+    prop = jnp.abs(flux) > thr                        # W7 B2: unit-safe cut
+    flip = _forward_growth_flip(flux, q, thr, prop, jnp)
     q = jnp.where(flip, -q, q)
     lam = -1j * q
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
@@ -6245,8 +6354,10 @@ __all__ = [
     "_resolve_incidence",
     "_resolve_incidence_checked",
     "_forward_branch_flip",
+    "_forward_growth_flip",
     "_freeze_cached",
     "_mass_flux_cut",
+    "_mass_flux_threshold",
     "_STABILIZE_MAX_SCAN",
     "_MIN_PLATEAU",
     "_PASSIVE_TOL",

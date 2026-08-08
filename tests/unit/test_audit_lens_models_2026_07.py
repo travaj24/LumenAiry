@@ -933,11 +933,11 @@ def test_c1_prepared_scalar_carrier_delegate_screen_not_garbage():
 
 # Constant-index glass for the C1 diverging-input ABCD oracle (independent
 # of the traced implementation; same singlet as the H6 hammer test).
-from lumenairy.glass import GLASS_REGISTRY as _C1_GLASS_REG  # noqa: E402
-
 _C1_N_GLASS = 1.5168
 _C1_R1, _C1_R2, _C1_TC = 51.68e-3, -51.68e-3, 5e-3
-_C1_GLASS_REG.setdefault('_C1_ABCD_GLASS', lambda wl: _C1_N_GLASS)
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_C1_ABCD_GLASS': lambda wl: _C1_N_GLASS}
 
 
 def _c1_singlet():

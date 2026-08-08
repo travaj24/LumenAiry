@@ -107,6 +107,92 @@ def solve0(st, theta_deg=8.0):
     return (float(np.real(R[0, m0])), float(np.real(R[1, m0])), close, J, o, R)
 
 
+# --------------------------------------------------------------------------
+# THE FORWARD-GROWTH REPAIR, and why three tests in this file are re-pinned
+#
+# ``docs/audits/FIX_UNION_GRID_2THREAD_2026_08_06.md``.  M2's collapse and the
+# T3-4 silent-wrong family were both the SAME defect: an EVANESCENT mode
+# carries exactly zero z-power, so the ``flux`` the propagating/evanescent cut
+# scores it on is round-off; when a near-zero-width cross-layer cell pushes
+# that round-off across the cut, the mode's DIRECTION is taken from the SIGN
+# of the round-off, and half the time a GROWING mode enters the forward set.
+# ``_core._forward_growth_flip`` now hands exactly those modes back to the
+# ``Im(q)`` rule -- the same three-conjunct mask ``_mode_cut_growth`` already
+# detected on -- so the forward set can no longer grow.
+#
+# CONSEQUENCE FOR THIS FILE.  The three tests below pinned "below the
+# ``min_feature`` threshold the degree ladder COLLAPSES" as a fail-before.
+# That collapse is now CURED at the library default, so those assertions had
+# to move -- and their own messages said so ("this test must be re-pinned
+# against the fix, not relaxed").  Every one of them is re-pinned the same
+# way, and NO bar is weakened:
+#
+#   * the original collapse assertions are kept VERBATIM, scored with the
+#     library's fail-before switch OFF -- the defect is still reproduced;
+#   * the CURE is then asserted with the switch on, which is a new claim;
+#   * the above-threshold cells are additionally asserted BIT-IDENTICAL with
+#     the switch either way (tolerance 0.0) -- a null control that did not
+#     exist here before;
+#   * and the repaired ladder is scored against an INDEPENDENT reference
+#     (RCWA, 141 orders) rather than only against itself, because
+#     stationarity alone never proved correctness.
+# --------------------------------------------------------------------------
+
+#: The M3 suite's RCWA anchor for this device (141 orders), by ``n_slice`` --
+#: the independent oracle that separates "stationary" from "right".
+RCWA_R0 = {2: 0.1100920, 6: 0.1111090}
+
+#: The below-threshold cells: ``(ns, min_feature)`` with ``min_feature`` under
+#: M2's ``min(off, |coat - off|)`` rule, so the pre-repair library collapses on
+#: them.  A FAMILY and not a cell, for the reason the four-name adjudication
+#: records: WHICH cell collapses is a per-build, per-thread-count fact.
+BELOW_THRESHOLD = ((2, None), (3, 0.5 * NM), (6, 1.5 * NM))
+
+#: The above-threshold (cured) cells.  ``min_feature`` is over the rule's
+#: threshold, so no sliver survives and the repair has nothing to repair.
+ABOVE_THRESHOLD = ((2, 0.5 * NM), (3, 1.5 * NM), (6, 3.0 * NM))
+
+_LADDER_DEGREES = (6, 8, 10, 12, 14)
+
+
+@pytest.fixture
+def growth_repair_off():
+    """The library's fail-before switch for ``_forward_growth_flip``, restored
+    on the way out.  ``False`` is the pre-fix selector, bit for bit."""
+    prev = PC.PMM_FORWARD_GROWTH_REPAIR
+    PC.PMM_FORWARD_GROWTH_REPAIR = False
+    try:
+        yield
+    finally:
+        PC.PMM_FORWARD_GROWTH_REPAIR = prev
+
+
+def spread(v):
+    """Peak-to-peak of a degree ladder, relative to its own mean."""
+    v = np.asarray(v, dtype=float)
+    return float((v.max() - v.min()) / abs(v.mean()))
+
+
+#: Ladder cache, keyed by ``(ns, min_feature, degrees, repair_flag)``.  The
+#: three re-pinned tests below each score the SAME ladders with the switch off
+#: and on, so without this the file re-solves every cell four or five times.
+#: The repair flag is part of the key because it is exactly what the answer
+#: depends on -- a cache that ignored it would silently fake the null control.
+_LADDER_CACHE = {}
+
+
+def coated_ladder(ns, mf, degrees=_LADDER_DEGREES):
+    """Order-0 reflectance over the degree ladder on the coated taper."""
+    key = (ns, mf, degrees, bool(PC.PMM_FORWARD_GROWTH_REPAIR))
+    hit = _LADDER_CACHE.get(key)
+    if hit is None:
+        hit = np.array([solve0(build(ns, degree=d, min_feature=mf))[0]
+                        for d in degrees], dtype=float)
+        hit.flags.writeable = False
+        _LADDER_CACHE[key] = hit
+    return hit
+
+
 def _snap_report(layer_segments, mf_frac, halfwidth=1):
     """(merged pair count, max wall displacement as a period fraction) over
     every window -- parsed from the routine's own warning, so the test scores
@@ -327,72 +413,175 @@ def test_min_feature_bounds_pairs_not_the_minimum_cell_width():
             f"the 5 nm single-layer coat was thinned: {widths_nm}")
 
 
-def test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too():
-    # N-6, the DECISIVE measurement, with the library default as the
-    # fail-before.  On the audit-class taper at ns = 2 the per-layer and
-    # shared grids are IDENTICAL (a 2-layer window is the full union), so this
-    # is a statement about the discretisation, not about the mortar.
-    #
-    # At the default the 0.4127 nm adjacent-slice collision survives, and the
-    # degree ladder is NOT stationary: it holds ~0.1106 to degree 10 and then
-    # jumps to 0.0617 / 0.6234 -- while |R+T-1| stays ~1e-7, so ENERGY CLOSURE
-    # CANNOT SEE IT (only order 0 propagates here, which makes R + T = 1
-    # nearly tautological -- the standing caution).
-    #
-    # Snapping the collision away makes the same ladder stationary to 4e-4
-    # relative across degree 6..14.
-    degs = (6, 8, 10, 12, 14)
-    broken = [solve0(build(2, degree=d))[0] for d in degs]
-    fixed = [solve0(build(2, degree=d, min_feature=0.5e-9))[0] for d in degs]
+def test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too(
+        growth_repair_off):
+    """N-6, THE DECISIVE MEASUREMENT -- re-pinned against the fix.
 
-    def spread(v):
-        v = np.asarray(v, dtype=float)
-        return float((v.max() - v.min()) / abs(v.mean()))
+    On the audit-class taper at ns = 2 the per-layer and shared grids are
+    IDENTICAL (a 2-layer window is the full union), so this is a statement
+    about the discretisation, not about the mortar.  At the library default
+    the 0.4127 nm adjacent-slice collision survives, and BEFORE the
+    forward-growth repair the degree ladder was not stationary: it held
+    ~0.1106 to degree 10 and then jumped to 0.0617 / 0.6234, while
+    ``|R+T-1|`` stayed ~1e-7 so ENERGY CLOSURE COULD NOT SEE IT (only order 0
+    propagates here, which makes R + T = 1 nearly tautological -- the standing
+    caution).
 
-    # fail-before: the default is NOT stationary (measured spread ~1.4)
-    assert spread(broken) > 0.5, (
-        "the library-default ladder is expected to COLLAPSE on this device "
-        "(the M2 fail-before).  If this now passes, the underlying "
-        "sliver-mode defect has been fixed and this test must be re-pinned "
-        "against the fix, not relaxed.")
-    # and it is energy-clean while wrong -- the reason nothing caught it
-    assert max(solve0(build(2, degree=d))[2] for d in (12, 14)) < 1e-5
-    # after: stationary
-    assert spread(fixed) < 5e-3
-    assert all(abs(v - fixed[-1]) < 1e-3 for v in fixed)
+    **2026-08-06 -- THE COLLAPSE WAS THREAD-COUNT-DEPENDENT, AND IS NOW
+    FIXED.**  This test was referred as a tenth name: run standalone at
+    ``OPENBLAS_NUM_THREADS=2`` the ``spread(broken) > 0.5`` assertion read
+    ``3.615e-03``.  That is not a tolerance miss -- it is the same coin flip
+    the campaign hunts, one level down.  Holding code and geometry fixed and
+    varying ONLY the pool [M, Windows + WSL], with the repair OFF::
+
+        cell                       1 thread   2 threads
+        ns=2 default (this one)    2.7605     0.0036153   <- migrated
+        ns=3 min_feature 0.5 nm    2.6345     2.8101
+        ns=6 min_feature 1.5 nm    2.2490     1.9665
+
+    WHICH below-threshold cell collapses is a per-build fact; THAT the family
+    contains one is not.  So the fail-before is scored over the FAMILY.
+
+    What is asserted, all of it measured on both mounts at 1 and 2 threads:
+
+      (1) with the switch OFF the defect still reproduces somewhere in the
+          below-threshold family (the original bar, 0.5, verbatim);
+      (2) conservation is blind to it -- the reason nothing caught it;
+      (3) with the switch ON every one of those ladders is stationary;
+      (4) and the repaired ladder is RIGHT, not merely stationary: it agrees
+          with the CURED ladder and with the independent RCWA reference, which
+          stationarity alone never proved;
+      (5) the above-threshold cells are BIT-IDENTICAL either way -- the null
+          floor, and the proof the repair is not a global re-tune.
+    """
+    # ---- (1) THE DEFECT, on the switch, over the family ------------------
+    off = {cell: spread(coated_ladder(*cell)) for cell in BELOW_THRESHOLD}
+    collapsed = {c: s for c, s in off.items() if s > 0.5}
+    assert collapsed, (
+        "no below-threshold ladder COLLAPSES on this build with the "
+        "forward-growth repair switched OFF.  The M2 fail-before is supposed "
+        "to reproduce with the switch off on every build -- if the pre-repair "
+        "defect has stopped manifesting entirely, re-pin this against "
+        f"whatever changed rather than relaxing it.  spreads: "
+        f"{ {k: round(v, 5) for k, v in off.items()} }")
+    # (2) ... and it is energy-clean while wrong, which is why nothing caught
+    #     it.  Scored on a cell that ACTUALLY collapsed on this build.
+    ns_bad, mf_bad = max(collapsed, key=collapsed.get)
+    assert max(solve0(build(ns_bad, degree=d, min_feature=mf_bad))[2]
+               for d in (12, 14)) < 1e-5
+
+    # ---- (3) THE FIX ------------------------------------------------------
+    PC.PMM_FORWARD_GROWTH_REPAIR = True          # the fixture owns the restore
+    on = {cell: spread(coated_ladder(*cell)) for cell in BELOW_THRESHOLD}
+    for cell, s in on.items():
+        assert s < 1e-2, (                       # measured worst 4.24e-03
+            f"ns={cell[0]} min_feature={cell[1]}: the ladder still spreads "
+            f"{s:.4g} with the forward-growth repair on (it spread "
+            f"{off[cell]:.4g} with it off) -- the repair has stopped curing "
+            f"the collapse this test exists to pin")
+    # (4) RIGHT, not merely stationary: against the cured ladder on the same
+    #     device AND against the RCWA anchor the M3 suite carries.  Measured
+    #     1.1e-03 / 7.1e-03 against the cure and 8.2e-03 / 8.8e-03 against
+    #     RCWA, at 1 and 2 threads on both mounts; with the repair OFF the
+    #     same numbers are 4.6 and 5.0 -- three decades apart, so the 5 %
+    #     bar (M3's own partition) is not a calibration.
+    # (``cure_bar`` is each cell's OWN pre-existing bar: 5e-3 is this test's
+    # historical ns=2 one, 2e-2 the sibling's ns=6 one.  Neither is relaxed;
+    # they are simply not interchangeable -- the ns=6 cured ladder has always
+    # spread 5.9e-03, which is over the ns=2 bar and under its own.)
+    for ns, mf_cure, cure_bar in ((2, 0.5 * NM, 5e-3), (6, 3.0 * NM, 2e-2)):
+        uncured, cured = coated_ladder(ns, None), coated_ladder(ns, mf_cure)
+        rel_cure = float(np.max(np.abs(uncured / cured - 1.0)))
+        rel_rcwa = float(np.max(np.abs(uncured / RCWA_R0[ns] - 1.0)))
+        assert rel_cure < 0.05, (
+            f"ns={ns}: the repaired default ladder disagrees with the CURED "
+            f"ladder by {rel_cure:.4g} -- it is stationary on the wrong "
+            f"answer, which is the failure mode stationarity cannot see")
+        assert rel_rcwa < 0.05, (
+            f"ns={ns}: the repaired default ladder reads {uncured[-1]:.6f} "
+            f"against the RCWA reference {RCWA_R0[ns]:.6f} "
+            f"({rel_rcwa:.4g} out) -- the independent oracle disagrees")
+        # the cured ladder's OWN stationarity, each on its own historical bar
+        assert spread(cured) < cure_bar
+        assert all(abs(v - cured[-1]) < 1e-3 for v in cured)
+
+    # ---- (5) THE NULL FLOOR: cured cells do not move a bit ----------------
+    for ns, mf in ABOVE_THRESHOLD:
+        PC.PMM_FORWARD_GROWTH_REPAIR = True
+        a = coated_ladder(ns, mf)
+        PC.PMM_FORWARD_GROWTH_REPAIR = False
+        b = coated_ladder(ns, mf)
+        PC.PMM_FORWARD_GROWTH_REPAIR = True
+        assert float(np.max(np.abs(a - b))) == 0.0, (
+            f"ns={ns} min_feature={mf}: an ABOVE-threshold cell moved when "
+            f"the forward-growth repair was switched -- the repair is only "
+            f"allowed to touch solves that put a growing mode in the forward "
+            f"set, and a cured cell has none")
 
 
-def test_min_feature_threshold_rule_predicts_stationarity():
-    # N-6, the QUANTITATIVE form of the contract, and the reason it is a rule
-    # and not a heuristic.  Inside a +/-1 window the only cross-layer walls
-    # are ADJACENT slices', so for a staircased taper with a conformal coat
-    # ``c`` and per-slice offset ``off = (thickness/ns) tan(sidewall)`` the
-    # window's cross-layer separations are EXACTLY ``{off, |c - off|}``.  The
-    # contract is therefore
-    #
-    #     min_feature  >  min(off, |c - off|)
-    #
-    # and below that threshold the degree ladder collapses.  MEASURED to
-    # predict stationary-vs-collapse correctly on every cell of
-    # ns x min_feature = {2, 3, 6, 8} x {0.5, 1.5, 3.0} nm.  Two ns values are
-    # pinned here (one each side of the 1.5 nm bar) to keep the suite quick;
-    # the full 4 x 3 matrix is in the M2 audit.
-    degs = (6, 8, 10, 12, 14)
+def test_min_feature_threshold_rule_predicts_stationarity(growth_repair_off):
+    """N-6, the QUANTITATIVE form of the contract, and the reason it is a rule
+    and not a heuristic.
 
-    def spread(ns, mf):
-        v = np.asarray([solve0(build(ns, degree=d, min_feature=mf))[0]
-                        for d in degs], dtype=float)
-        return float((v.max() - v.min()) / abs(v.mean()))
+    Inside a +/-1 window the only cross-layer walls are ADJACENT slices', so
+    for a staircased taper with a conformal coat ``c`` and per-slice offset
+    ``off = (thickness/ns) tan(sidewall)`` the window's cross-layer
+    separations are EXACTLY ``{off, |c - off|}``.  The contract is
 
+        min_feature  >  min(off, |c - off|)
+
+    and below that threshold the PRE-REPAIR degree ladder collapses.  MEASURED
+    to predict stationary-vs-collapse correctly on every cell of
+    ns x min_feature = {2, 3, 6, 8} x {0.5, 1.5, 3.0} nm.  Two ns values are
+    pinned here (one each side of the 1.5 nm bar) to keep the suite quick; the
+    full 4 x 3 matrix is in the M2 audit.
+
+    **2026-08-06.**  The rule is now a statement about the library WITHOUT the
+    forward-growth repair, so its four assertions are scored with the switch
+    off -- verbatim, same cells, same bars.  What the repair adds is the other
+    half: the threshold is no longer an ACCURACY CLIFF, because the
+    below-threshold cells are stationary too once the forward set cannot grow.
+    The cells these two ns values name do NOT migrate with the thread count
+    (measured 2.63/2.81 and 2.25/1.97 at 1/2 threads, both mounts), which is
+    why they can stay pinned while the ns=2 cell in the sibling above cannot.
+    """
+    # ---- the rule, on the pre-repair library (switch off via the fixture) --
     # ns = 3: off = 3.6085, |c - off| = 1.3915 nm -> threshold 1.3915 nm
-    assert spread(3, 0.5e-9) > 0.1, "0.5 nm is BELOW the ns=3 threshold"
-    assert spread(3, 1.5e-9) < 1e-2, "1.5 nm is ABOVE the ns=3 threshold"
+    assert spread(coated_ladder(3, 0.5e-9)) > 0.1, \
+        "0.5 nm is BELOW the ns=3 threshold"
+    assert spread(coated_ladder(3, 1.5e-9)) < 1e-2, \
+        "1.5 nm is ABOVE the ns=3 threshold"
     # ns = 6: off = 1.8042, |c - off| = 3.1958 nm -> threshold 1.8042 nm
-    assert spread(6, 1.5e-9) > 0.1, "1.5 nm is BELOW the ns=6 threshold"
-    assert spread(6, 3.0e-9) < 2e-2, "3.0 nm is ABOVE the ns=6 threshold"
+    assert spread(coated_ladder(6, 1.5e-9)) > 0.1, \
+        "1.5 nm is BELOW the ns=6 threshold"
+    assert spread(coated_ladder(6, 3.0e-9)) < 2e-2, \
+        "3.0 nm is ABOVE the ns=6 threshold"
+
+    # ---- and what the repair changes: the cliff, not the rule --------------
+    PC.PMM_FORWARD_GROWTH_REPAIR = True          # the fixture owns the restore
+    # the ABOVE-threshold side is untouched, bit for bit: there is no sliver
+    # left, so there is no growing mode to repair.
+    for ns, mf in ((3, 1.5e-9), (6, 3.0e-9)):
+        a = coated_ladder(ns, mf)
+        PC.PMM_FORWARD_GROWTH_REPAIR = False
+        b = coated_ladder(ns, mf)
+        PC.PMM_FORWARD_GROWTH_REPAIR = True
+        assert float(np.max(np.abs(a - b))) == 0.0, (
+            f"ns={ns} min_feature={mf}: an above-threshold cell moved when "
+            f"the repair was switched")
+    # the BELOW-threshold side no longer collapses (measured 3.79e-03 and
+    # 4.24e-03 against the 0.1 the rule predicts without the repair -- a
+    # 25x-fold separation, at every thread count on both mounts).
+    for ns, mf in ((3, 0.5e-9), (6, 1.5e-9)):
+        s = spread(coated_ladder(ns, mf))
+        assert s < 1e-2, (
+            f"ns={ns} min_feature={mf}: still spreads {s:.4g} with the "
+            f"forward-growth repair on -- below the min_feature threshold is "
+            f"supposed to have stopped being an accuracy cliff")
 
 
-def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper():
+def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper(
+        growth_repair_off):
     # N-6, the GENERAL form -- and the answer to M5's escalation
     # (docs/audits/PMM_M5_2D_FEASIBILITY_2026_08_04.md S4), which reported the
     # same silent-wrong scatter on the SIMPLEST member of the class: one
@@ -410,11 +599,18 @@ def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper():
     # monotone n_slice trend (checked against RCWA in the M2 audit S9).
     degs = (8, 10, 12, 14, 16)
 
+    cache = {}
+
     def spread_u(ns, mf):
-        v = np.asarray([solve0(_mk(_uncoated_layers(ns), d, 1)
-                                if mf is None else
-                                _mk_mf(_uncoated_layers(ns), d, mf))[0]
-                        for d in degs], dtype=float)
+        # cached on the repair flag too -- see ``_LADDER_CACHE``
+        key = (ns, mf, bool(PC.PMM_FORWARD_GROWTH_REPAIR))
+        v = cache.get(key)
+        if v is None:
+            v = np.asarray([solve0(_mk(_uncoated_layers(ns), d, 1)
+                                    if mf is None else
+                                    _mk_mf(_uncoated_layers(ns), d, mf))[0]
+                            for d in degs], dtype=float)
+            cache[key] = v
         return float((v.max() - v.min()) / abs(v.mean())), v
 
     # ns = 6, off = 1.804 nm: 1.5 nm is BELOW the threshold, 3.0 nm above it
@@ -442,6 +638,30 @@ def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper():
     assert (max(last) - min(last)) / abs(np.mean(last)) < 2e-2, (
         f"cured n_slice values spread too far -- the snap may be flattening "
         f"the taper rather than removing a collision: {last}")
+
+    # ---- 2026-08-06: the same re-pin as the two siblings ------------------
+    # Everything above is the rule on the PRE-REPAIR library (the fixture
+    # holds the switch off) and is unchanged, cells and bars.  What the
+    # forward-growth repair adds, on the SIMPLEST member of the class -- one
+    # region, lossless, no coat, so the collapse can never be blamed on a
+    # coat/offset resonance:
+    PC.PMM_FORWARD_GROWTH_REPAIR = True          # the fixture owns the restore
+    # (a) the cured cells do not move a bit -- the null floor.
+    for ns, mf in ((6, 3.0e-9), (12, 1.5e-9)):
+        _s_on, v_on = spread_u(ns, mf)
+        PC.PMM_FORWARD_GROWTH_REPAIR = False
+        _s_off, v_off = spread_u(ns, mf)
+        PC.PMM_FORWARD_GROWTH_REPAIR = True
+        assert float(np.max(np.abs(np.asarray(v_on)
+                                   - np.asarray(v_off)))) == 0.0, (
+            f"uncoated ns={ns} min_feature={mf}: a cured cell moved when the "
+            f"forward-growth repair was switched")
+    # (b) the BELOW-threshold cell stops collapsing (measured 4.06e-03 with
+    #     the repair on against 1.34 with it off, both thread counts).
+    s_lo_on, _v = spread_u(6, 1.5e-9)
+    assert s_lo_on < 1e-2, (
+        f"uncoated ns=6 at 1.5 nm still spreads {s_lo_on:.4g} with the "
+        f"forward-growth repair on (it spread {s_lo:.4g} with it off)")
 
 
 def _mk_mf(layers, degree, mf):
@@ -648,3 +868,135 @@ def test_conforming_and_untapered_stacks_are_immune_to_both_knobs():
     for kw in (dict(window_halfwidth=2), dict(min_feature=3.0e-9)):
         got = solve0(mk2(**kw))
         assert float(np.max(np.abs(base[3] - got[3]))) == 0.0, kw
+
+
+# ===========================================================================
+# THE NINTH NAME -- the union grid answered differently at 2 BLAS threads
+# docs/audits/FIX_UNION_GRID_2THREAD_2026_08_06.md
+# ===========================================================================
+
+#: The M1 audit staircase (``test_m1_conditioning_guard.py``): six lossless
+#: 60 nm slices whose walls shift 4 nm per slice, solved CONICALLY.  It is the
+#: device the ninth name was referred on -- the SHARED (union) grid returned
+#: ``J00`` = -0.27216-0.09245j with ``|R+T-1|`` = 21.35 at
+#: ``OPENBLAS_NUM_THREADS=2`` and -0.17118+0.00907j with ``|R+T-1|`` =
+#: 6.65e-06 at 1 and at 24, on BOTH mounts.
+_STAIR_WL = 700e-9
+_STAIR_PERIOD = 1.0e-6
+_STAIR = [(60e-9, [(0.5 - 0.35 / 2 - 0.002 * i, 1.0 + 0j),
+                   (0.35 + 0.004 * i, 4.0 + 0j),
+                   (0.5 - 0.35 / 2 - 0.002 * i, 1.0 + 0j)])
+          for i in range(6)]
+
+
+def _stair_solve(grids, ffo=7, degree=6):
+    st = PMMStack(_STAIR_PERIOD, n_substrate=1.5, n_superstrate=1.0,
+                  degree=degree, far_field_orders=ffo, layer_grids=grids)
+    for t, segs in _STAIR:
+        st.add_layer(t, segments=segs)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        o, R, T, J = st.set_source(_STAIR_WL, theta=0.15, phi=0.6).solve()
+    R, T = np.asarray(R), np.asarray(T)
+    return (complex(np.asarray(J)[0, 0]),
+            float(np.max(np.abs(R.sum(axis=1) + T.sum(axis=1) - 1.0))))
+
+
+def test_the_forward_set_cannot_grow_on_the_union_grid_conical_staircase():
+    """THE NINTH NAME, pinned as an INVARIANT rather than as a number.
+
+    The referred defect: this device's SHARED (union) grid returned a
+    completely different answer at ``OPENBLAS_NUM_THREADS=2`` -- ``J00``
+    moving 1.4e-01 and ``|R+T-1|`` going from 6.65e-06 to 21.35 -- at every
+    truncation, on both mounts, with the per-layer path unaffected.
+
+    The cause is NOT a null-space draw (the ``Hsup`` least squares that M1's
+    ``_guarded_lstsq`` watches) and not conditioning.  It is the modal
+    forward/backward CLASSIFICATION.  The union grid carries exactly-double
+    roots ``q^2``; LAPACK splits each into a pair ~1e-10 apart whose ``sqrt``
+    lands one member at ``Im(q) < 0``; both members are EVANESCENT and so
+    carry exactly zero z-power, which means the ``flux`` the cut scores them
+    on is pure round-off.  Whichever member's round-off happens to cross the
+    cut is handed the FLUX-SIGN direction rule, and when that sign points
+    against ``Im(q)`` a GROWING mode enters the forward set.  Measured on the
+    substrate half-space row of this device, repair off::
+
+        threads  n_growing (whole solve)  J00                       |R+T-1|
+        1        1                        -0.17117932+0.00906676j   6.654e-06
+        2        8                        -0.27216039-0.09244619j   2.135e+01
+        24       1                        -0.17117932+0.00906676j   6.651e-06
+
+    A test cannot vary the BLAS pool in-process, so what is pinned here is the
+    INVARIANT the repair restores, which is thread-count-independent by
+    construction and is checked on every modal row of the solve:
+
+      (a) the RAW selector puts at least one growing mode in the forward set
+          on this device -- the defect still reproduces (fail-before);
+      (b) the REPAIRED selector puts none, on any row (the fix);
+      (c) and the observable follows: the union grid agrees with the
+          per-layer path, which is the cross-path oracle that was TRUE at 1
+          thread and FALSE at 2 before the fix.
+    """
+    seen = []
+    orig = PC._record_mode_cut
+
+    def spy(flux, q, thr, prop, mats, site, patterned=None):
+        seen.append((np.asarray(flux).copy(), np.asarray(q).copy(),
+                     float(thr), np.asarray(prop).copy(), site))
+        return orig(flux, q, thr, prop, mats, site, patterned)
+
+    PC._record_mode_cut = spy
+    PC._MODE_CUT_CENSUS = []
+    try:
+        j_union, close_union = _stair_solve("shared")
+    finally:
+        PC._MODE_CUT_CENSUS = None
+        PC._record_mode_cut = orig
+    assert seen, "the census spy never saw a modal solve: nothing was measured"
+
+    def grown(flip_fn):
+        """Modes the given selector leaves GROWING in the forward set, over
+        every row of the solve -- scored with the SHIPPED bars."""
+        total = 0
+        for flux, q, thr, prop, _site in seen:
+            flip = flip_fn(flux, q, thr, prop)
+            qf = np.where(flip, -q, q)
+            near = np.abs(flux) < PC._MODE_CUT_MARGIN_WARN * thr
+            total += int(np.count_nonzero(
+                prop & near
+                & (qf.imag < -PC._MODE_GROWTH_REL * np.abs(qf))))
+        return total
+
+    raw = grown(lambda f, q, t, p: np.where(p, f < 0.0, q.imag < 0.0))
+    fixed = grown(lambda f, q, t, p: PC._forward_growth_flip(f, q, t, p))
+    # (a) the defect still reproduces: the raw selector grows something here
+    assert raw >= 1, (
+        "the RAW selector puts NO growing mode in the forward set on the M1 "
+        "audit staircase, so the ninth name no longer reproduces on this "
+        "build and this test has stopped being a fail-before.  Re-pin it "
+        "against whatever changed rather than deleting it.")
+    # (b) THE FIX: a forward mode of a passive layer cannot grow along +z
+    assert fixed == 0, (
+        f"the repaired selector STILL leaves {fixed} growing mode(s) in the "
+        f"forward set (raw: {raw}) -- _forward_growth_flip is supposed to "
+        f"make that impossible by construction")
+    # ... and the instrument agrees with the raw count, so the guard and the
+    # repair can never disagree about which modes are affected.
+    assert raw == sum(PC._mode_cut_growth(f, q, t, p)[0]
+                      for f, q, t, p, _s in seen)
+
+    # (c) the observable: the two grid paths now agree.  Measured 3.89e-04
+    #     relative at 1, 2 and 24 threads on both mounts; before the fix the
+    #     same comparison read 8.36e-01 at 2 threads -- a 2150x separation,
+    #     so the 1e-2 bar is not a calibration.  (The residual 3.89e-04 is
+    #     the mortar's own non-conforming band, which M2 owns.)
+    j_pl, close_pl = _stair_solve("per-layer")
+    rel = abs(j_union - j_pl) / abs(j_pl)
+    assert rel < 1e-2, (
+        f"the union grid returns J00={j_union!r} and the per-layer path "
+        f"{j_pl!r} ({rel:.3g} relative) on the same device -- the two grid "
+        f"paths have stopped agreeing, which is the ninth name's observable")
+    assert close_union < 1e-3, (
+        f"the union-grid conical staircase closes at {close_union:.3e}: the "
+        f"forward set is mis-assembled again (it read 21.35 at two BLAS "
+        f"threads before the forward-growth repair)")

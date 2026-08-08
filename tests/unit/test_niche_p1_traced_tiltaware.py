@@ -43,14 +43,15 @@ import pytest
 
 import lumenairy as la
 from lumenairy.elements import _lens_traced as LT
-from lumenairy.glass import GLASS_REGISTRY
 
 _WL = 1.31e-6
 _N_GLASS = 1.5168
 _R1, _R2, _TC = 51.68e-3, -51.68e-3, 5e-3
 _F_PLANE = 49.163e-3            # collimated focus (BFL), dual-oracle number
 
-GLASS_REGISTRY['_N5_FIX_GLASS'] = lambda wl: _N_GLASS
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_N5_FIX_GLASS': lambda wl: _N_GLASS}
 
 
 def _singlet():

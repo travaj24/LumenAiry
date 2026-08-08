@@ -45,7 +45,6 @@ import pytest
 
 import lumenairy as la
 from lumenairy.elements._lens_traced import _solve_lstsq_thread_safe
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.memory import available_memory_bytes
 from lumenairy.propagators.gbd import (
     BeamletBundle,
@@ -54,7 +53,9 @@ from lumenairy.propagators.gbd import (
     _reconstruct_windowed,
 )
 
-GLASS_REGISTRY['_R3A'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_R3A': lambda wl: 1.5168}
 _WL = 1.31e-6
 
 

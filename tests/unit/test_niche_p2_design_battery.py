@@ -48,11 +48,10 @@ import warnings
 import numpy as np
 import pytest
 
-from lumenairy.propagators import carrier as C
-
 import lumenairy as la
 from lumenairy import carrier_referenced_envelope
 from lumenairy.glass import get_glass_index
+from lumenairy.propagators import carrier as C
 from lumenairy.propagators.carrier import _paraxial_group_r_out
 from lumenairy.propagators.mft import angular_spectrum_propagate_mft
 

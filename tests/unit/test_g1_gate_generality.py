@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.propagators.fga import (
     _ABERRATION_MAX_RAD,
     _input_marginal_slope,
@@ -33,8 +32,12 @@ from lumenairy.propagators.fga import (
 from lumenairy.raytrace import surfaces_from_prescription
 
 _WL = 1.31e-6
-for _n, _v in {'_G1_1p5168': 1.5168, '_G1_1p62': 1.62, '_G1_1p70': 1.70}.items():
-    GLASS_REGISTRY[_n] = (lambda vv: (lambda wl: vv))(_v)
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {
+    _n: (lambda vv: (lambda wl: vv))(_v)
+    for _n, _v in {'_G1_1p5168': 1.5168, '_G1_1p62': 1.62,
+                   '_G1_1p70': 1.70}.items()}
 
 
 def _gauss(N, dx, w0, R_in=None):

@@ -20,6 +20,20 @@ change it, and the worker mirrors the serial path's choice of the combined
 value+gradient call (using separate ``.ev`` calls instead would reorder the
 floating-point work and break identity).
 
+...and, since v5.32.3, the worker also mirrors the parent's choice of
+IMPLEMENTATION of that call.  ``_Cheb2DEvaluator.ev_value_and_grad`` has two --
+an ``@njit`` Chebyshev recurrence and a pure-xp Vandermonde contraction -- and
+the worker used to pick between them from its own numba availability, in a
+fresh interpreter, with nothing in the payload to say which one the parent had
+taken.  ``test_pool_result_is_bit_identical_to_serial[polynomial]`` FAILED on
+CI (ubuntu, py3.10) at ``max|delta| = 1.358e-11`` for exactly that reason, and
+FIX_POOL_MEMORY sec 8.1 had ledgered the mechanism as a known conditional
+before the pin closed it.  The payload now carries ``cheb_backend``; a worker
+that cannot honour a pinned ``'numba'`` refuses the chunk (and the parent runs
+it, where the pinned backend IS the local one) rather than answering in the
+other order.  So the assertions here are unconditional, which is the only form
+in which "bit-identical" means anything.
+
 The COLD-tier tests below deliberately size the grid past ``_POOL_MIN_PIXELS``
 so the pool engages on the very first call -- below that threshold everything
 used to run serial and a pool/serial comparison would be vacuously true.
@@ -731,3 +745,20 @@ def test_worker_payload_carries_what_the_polynomial_fit_needs():
     assert 'ev_value_and_grad' in wsrc, (
         'worker does not use the combined value+gradient call, so its '
         'floating-point order differs from serial')
+    # ...and, since v5.32.3, the parent's resolved EVALUATOR BACKEND.  Mirroring
+    # the call is not enough: ``ev_value_and_grad`` has two implementations of
+    # one formula (njit Chebyshev recurrence / pure-xp Vandermonde) and the
+    # worker used to pick between them from its OWN numba availability.  A
+    # parent on the other branch then disagreed with its own pool -- MEASURED
+    # 5.167e-14 on this file's shape, 1.358e-11 on CI, which is what
+    # ``test_pool_result_is_bit_identical_to_serial[polynomial]`` failed by.
+    assert "'cheb_backend':" in src or "'cheb_backend'] =" in src, (
+        'the worker payload no longer pins the parent-resolved Chebyshev '
+        'backend, so pool/serial bit-identity is conditional again on the '
+        "workers happening to resolve the parent's evaluator")
+    assert "get('cheb_backend'" in wsrc, (
+        'the worker ignores the pinned backend and re-derives its own')
+    assert 'NewtonWorkerBackendUnavailable' in wsrc, (
+        'a worker that cannot honour a pinned numba backend must REFUSE the '
+        'chunk; substituting the other floating-point order is the silent '
+        'wrong answer this pin exists to prevent')

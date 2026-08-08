@@ -42,10 +42,11 @@ from scipy.ndimage import map_coordinates
 
 import lumenairy as la
 from lumenairy.elements._lens_real import _apply_displaced_remap_2d
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.memory import available_memory_bytes
 
-GLASS_REGISTRY['_K3A'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_K3A': lambda wl: 1.5168}
 _WL = 1.31e-6
 
 

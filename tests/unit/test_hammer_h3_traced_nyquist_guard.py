@@ -14,6 +14,28 @@ direction cosines (amplitude-aware: rays with >= e^-4 of peak input
 amplitude) and warns when dx > lambda/(2*NA_exit).  It deliberately
 never raises (core metrics remain valid); ``on_undersample='silent'``
 suppresses it.
+
+RESOURCE NOTICES ARE NOT PHYSICS GUARDS (v5.32.3, FIX_CI_POOL)
+--------------------------------------------------------------
+The two suppression tests below assert that a policy leaves NO
+``RuntimeWarning`` at all, which is the strong form and the one worth
+keeping: it also catches a NEW guard that fires when it was told not to.
+That form only survives if every warning this call can emit is routed
+through a policy knob -- and when the Newton pool's memory clamp shipped,
+its cap notice was not.  On CI's ~12 GB runners the clamp legitimately
+answered a 4-worker request with 2 and said so, and a physics-guard
+suppression test failed on a resource notice that had nothing to do with
+H3 (all four python lanes, shard 1).  On the 128-256 GB dev boxes it
+never fired, so the same test passed locally.
+
+The remedy is the knob, not a weaker assertion: ``on_pool_memory='silent'``
+below suppresses the cap notice through its OWN policy surface, exactly
+as ``on_undersample`` and ``on_aperture_beam`` suppress theirs.  That
+makes these tests deterministic across box RAM -- they pass on a 12 GB
+runner and on a 256 GB workstation for the SAME reason, rather than
+passing on one by luck.  ``test_the_pool_cap_notice_is_silenced_by_its_own
+_knob`` pins that with the box's free memory frozen at 12 GB, so the CI
+condition is reproduced here rather than waited for.
 """
 from __future__ import annotations
 
@@ -23,11 +45,13 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.glass import GLASS_REGISTRY
+from lumenairy.elements import _lens_traced as LT
 
 _WL = 1.31e-6
 
-GLASS_REGISTRY['_H3_FIX_GLASS'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_H3_FIX_GLASS': lambda wl: 1.5168}
 
 
 def _singlet_f5():
@@ -75,9 +99,13 @@ def test_h3_guard_silent_on_benign_slow_beam():
         # (24 mm aperture, 1 mm beam = 24x) and the new warn-only cliff flag
         # legitimately fires there.  This test is about the H3 NA_exit guard,
         # so silence the unrelated flag rather than weaken the 'error' filter.
+        # ``on_pool_memory``: same reasoning, one layer down -- see the module
+        # docstring.  Whether the Newton pool's memory clamp binds is a fact
+        # about the RUNNER, not about this lens.
         la.apply_real_lens_traced(E0, prescription=_singlet_f5(),
                                   wavelength=_WL, dx=8e-6,
-                                  on_aperture_beam='silent')
+                                  on_aperture_beam='silent',
+                                  on_pool_memory='silent')
 
 
 def test_h3_guard_suppressed_by_silent_policy():
@@ -87,10 +115,97 @@ def test_h3_guard_suppressed_by_silent_policy():
         # ``on_aperture_beam='silent'``: see the note in
         # test_h3_guard_silent_on_benign_slow_beam (this fixture's 24 mm
         # aperture is 2.5x the 5 mm beam, so the v5.29 cliff flag also fires).
+        # ``on_pool_memory='silent'``: the Newton pool's memory clamp is a
+        # RESOURCE notice whose firing depends on the box's free RAM (measured:
+        # it fires on CI's 12 GB runners and never on the 128 GB dev box), so a
+        # blanket zero-warning assertion is only deterministic once it is
+        # routed through its own knob.  See the module docstring.
         la.apply_real_lens_traced(E0, prescription=_singlet_f5(),
                                   wavelength=_WL, dx=12e-6,
                                   on_undersample='silent',
-                                  on_aperture_beam='silent')
+                                  on_aperture_beam='silent',
+                                  on_pool_memory='silent')
+
+
+def _pin_available_ram(monkeypatch, free_b):
+    """Freeze ``psutil.virtual_memory().available`` (and the library RAM
+    budget the clamp mins against) so the Newton pool's memory cap decision is
+    arithmetic on a pinned box rather than a race with this one.
+
+    Pinned-snapshot idiom, as in ``test_fix_newton_pool_memory.py`` /
+    ``test_fga_h4_h5.py::test_c2_env_budget_override``.
+    """
+    import psutil
+
+    from lumenairy import memory as _mem
+    vm = psutil.virtual_memory()
+    monkeypatch.setattr(psutil, 'virtual_memory',
+                        lambda: vm._replace(available=int(free_b)))
+    monkeypatch.setattr(_mem, 'get_ram_budget', lambda: float(free_b))
+
+
+def test_the_pool_cap_notice_is_silenced_by_its_own_knob(monkeypatch):
+    """FAIL-BEFORE for the CI break, reproduced on THIS box.
+
+    CI's ubuntu runners have ~12 GB available, where a 4-worker Newton
+    dispatch against this fixture's ray-fit grid does not fit the budget and
+    the clamp correctly runs 2 workers instead -- emitting a ``RuntimeWarning``
+    that broke ``test_h3_guard_suppressed_by_silent_policy`` on all four python
+    lanes.  Before the ``on_pool_memory`` knob there was no way to suppress it
+    from the call, so the suppression test's contract held only on a big box.
+
+    Both halves are asserted, because the knob is only worth having if the
+    notice it silences would otherwise fire:
+
+      1. at the pinned 12 GB the DEFAULT policy still announces the cap (if
+         this stops holding, the emulation has gone vacuous and half 2 proves
+         nothing);
+      2. ``on_pool_memory='silent'`` leaves the very same call warning-free.
+
+    The clamp itself is unchanged in both halves -- it is a resource decision
+    on a path documented and tested to be bit-identical to serial, so the knob
+    moves the REPORT and never the numbers.
+    """
+    _pin_available_ram(monkeypatch, 12.0e9)
+    LT.close_worker_pool()
+    E0 = _gauss(1024, 12e-6, 5e-3)
+    kw = dict(prescription=_singlet_f5(), wavelength=_WL, dx=12e-6,
+              n_workers=4, on_undersample='silent', on_aperture_beam='silent')
+
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        la.apply_real_lens_traced(E0, **kw)
+    caps = [w for w in rec
+            if issubclass(w.category, RuntimeWarning)
+            and 'Newton process pool asked for' in str(w.message)]
+    assert caps, (
+        'the pinned 12 GB box did not make the Newton pool memory clamp bind, '
+        'so this test cannot show that the knob silences anything.  Re-derive '
+        'the pin from _newton_worker_bytes rather than deleting the assertion')
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', RuntimeWarning)
+        la.apply_real_lens_traced(E0, on_pool_memory='silent', **kw)
+    LT.close_worker_pool()
+
+
+def test_the_cap_knob_refuses_junk_at_entry():
+    """House rule (finding V4 / D5): a string mode knob on this signature
+    refuses an unknown value at ENTRY, rather than falling through to whichever
+    branch the equality test happens to miss.  Gated at entry specifically --
+    the cap only binds on a small box, so a gate inside the warning branch
+    would validate this knob on CI and not on a workstation."""
+    with pytest.raises(ValueError, match='on_pool_memory'):
+        la.apply_real_lens_traced(_gauss(64, 12e-6, 5e-3),
+                                  prescription=_singlet_f5(),
+                                  wavelength=_WL, dx=12e-6,
+                                  on_pool_memory='zzz_not_a_policy')
+    # ...and the carrier-house spelling of suppression is honoured, not
+    # accepted-and-inert (the collision on_fit_domain_basis resolves the same
+    # way): 'ignore' / 'off' mean 'silent'.
+    for alias in ('ignore', 'off', 'silent'):
+        assert LT._pool_memory_policy(alias) == 'silent'
+    assert LT._pool_memory_policy('warn') == 'warn'
 
 
 if __name__ == '__main__':

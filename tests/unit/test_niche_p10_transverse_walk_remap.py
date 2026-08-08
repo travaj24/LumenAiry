@@ -50,11 +50,12 @@ from lumenairy.elements._lens_real import (
     _apply_displaced_remap,
     _build_displaced_ray_map,
 )
-from lumenairy.glass import GLASS_REGISTRY
 
 _WL = 1.31e-6
 K = 2 * np.pi / _WL
-GLASS_REGISTRY['_P10A'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_P10A': lambda wl: 1.5168}
 _Z_IMG = 49.162e-3     # paraxial image distance (exit vertex -> image)
 
 # ---- lumenairy-free geometric spot oracle (decenter / tilt) ---------------

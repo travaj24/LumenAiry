@@ -744,47 +744,65 @@ def test_the_separation_survives_the_c10_residual_degree_and_is_caused_by_it():
        ``_REMAP_RESID_EIKONAL_DEGREE``, which is the reason the sibling above
        is era-pinned rather than relaxed.
 
-    **Claim 2 is measured on the REFUSED fan, not the passed pair, and that is
-    the whole point of this revision.**  Both quantities carry the same
-    mechanism, but not with the same signal-to-noise across BLAS builds:
+    **Claim 2 is measured on the REFUSED fan, not the passed pair.**  Both
+    quantities carry the same mechanism, but not with the same
+    signal-to-noise: the degree moves ``good`` by 0.99x-1.79x depending on the
+    build (0.9928x here, on BOTH builds, to four figures), and there is no bar
+    inside that spread which is both meaningful and safe.  The same mechanism
+    read on ``bad`` is 15x-29x, so that is where the claim is made.  Nothing
+    was weakened by putting it there: the claim moved to where it is large.
 
-        deg 4 -> deg 6         Windows/MKL   WSL/OpenBLAS   CI/OpenBLAS
-        good (0.5 mrad)          1.19x          1.79x          1.04x
-        bad  (23 mrad)          19.2x          14.4x            --
+    NO LONGER ERA-PINNED (CI reconciliation, 2026-08-06; see
+    ``docs/audits/FIX_CI_D3_2026_08_06.md``).  This body used to run with
+    ``LSTSQ_CONDITIONING_STEPDOWN = False`` -- the PRE-C13 solver -- because
+    C13 had moved the shipped-era ratio to 6.78x (Windows) / 3.20x (Linux) and
+    the 5x bar of the day no longer fitted it.  That pin put the assertion
+    inside the very null-space lottery niche C13 exists to remove, and GitHub
+    CI then drew a ticket no dev box had drawn::
 
-    A bar on ``good`` has to live inside a 1.04-1.79x spread and there is no
-    value that is both meaningful and safe -- a 1.10x bar passed two builds and
-    failed the third by 6 %.  The SAME mechanism read on ``bad`` is 14-19x on
-    every build measured, so the bar sits at 5x with 3x of headroom on the
-    weakest.  Nothing was weakened: the claim moved to where it is large.
+        ubuntu-latest, era-pinned      bad4       bad6      bad4/bad6
+        CI py3.11 / numpy 2.4.6      21.0394    21.4420      0.98x  <- FAILED
+        CI py3.10 / numpy 2.2.6         --         --         --    (passed)
+        Windows, 24 threads          15.6984     1.1206     14.01x
+        WSL, 1 thread                21.9670     0.6631     33.13x
+        WSL, 2 threads               21.4269     0.6631     32.31x
 
-    ERA-PINNED to ``LSTSQ_CONDITIONING_STEPDOWN = False`` (niche C13,
-    2026-08-03), and the 3x of headroom above is exactly what C13 consumed.
-    ``bad6`` is a degree-6 linearity error computed through the traced fits,
-    and before C13 those fits were solved through a numerically singular Gram:
-    the degree-6 arm's error was being SUPPRESSED by a lucky null-space draw
-    that differed per build.  Measured on this fixture:
+    Nothing about the runner was special.  Instrumented on this fixture, the
+    era-pinned body makes **35 least-squares solves of which 30 have an
+    equilibrated Gram rcond of exactly 0.0** -- positive-definiteness lost
+    outright -- and the normal-equations answer it then returns fits the data
+    up to **1.10e6x (Windows) / 4.22e6x (WSL)** worse than the backward-stable
+    one.  ``LSTSQ_CONDITIONING_STEPDOWN``'s own note names the consequence:
+    "the Cholesky answer is an arbitrary draw from the numerical null space
+    rather than the least-squares solution".  Every arm of the era-pinned body
+    was such a draw, so no ratio between two of them is a property of this
+    library, and no bar on one can be made to hold.
 
-        bad6            step-down OFF      step-down ON
-        Windows            1.2135             3.3113
-        Linux              0.9863             3.3246
-        build spread        23 %               0.4 %
+    With the step-down ON -- the shipped solver -- the same census reads a
+    worst normal-equations-to-QR fit-residual ratio of **1.0000008**, i.e. the
+    fits ARE the least-squares solution, and the mechanism reads::
 
-    ``bad4`` barely moves (23.24 -> 22.46, 14.23 -> 10.64), so the ratio this
-    test bars falls to 6.78x / 3.20x purely because the DENOMINATOR became
-    honest.  The mechanism claim is intact and still large; the 5x bar was a
-    pre-C13 calibration.  The shipped era is asserted -- more strongly than
-    this test ever did -- in the sibling below.
+        shipped solver                 bad4       bad6      bad4/bad6
+        Windows, 24 threads          19.0846     1.2606     15.14x
+        WSL, 1 thread                21.0315     0.7305     28.79x
+        WSL, 2 threads               21.5216     0.7305     29.46x
+
+    The bar is 2.0x.  It clears every number ever measured for this quantity
+    in the SHIPPED solver -- the 15x-29x above, and the 6.78x / 3.20x recorded
+    on the 2026-08-03 tree in ``C13_DEGREE6_CONDITIONING_2026_08_03.md``
+    S11.8 -- with 1.6x of headroom on the weakest of them.  What it replaces
+    is not a stronger bar but a bar on a quantity that is not a property of
+    the library at all.
+
+    The attribution does not rest on that magnitude either.  Its FAIL-BEFORE
+    is EXACT and is asserted separately in
+    ``test_the_residual_degree_moves_the_multiplexed_route_only_through_c6``:
+    the degree is read in exactly one place, under niche C6's
+    stationary-phase launch, and with that launch off the two degrees return
+    the byte-identical field -- so this ratio reads exactly 1.0.
+
+    Claim 1's stronger shipped-era form is the sibling below.
     """
-    _step = _lens_traced.LSTSQ_CONDITIONING_STEPDOWN
-    _lens_traced.LSTSQ_CONDITIONING_STEPDOWN = False
-    try:
-        _run_the_era_pinned_body()
-    finally:
-        _lens_traced.LSTSQ_CONDITIONING_STEPDOWN = _step
-
-
-def _run_the_era_pinned_body():
     bad6 = _linearity_error(0.023)
     good6 = _linearity_error(0.0005)
     _deg = _lens_traced._REMAP_RESID_EIKONAL_DEGREE
@@ -793,15 +811,78 @@ def _run_the_era_pinned_body():
         bad4 = _linearity_error(0.023)
     finally:
         _lens_traced._REMAP_RESID_EIKONAL_DEGREE = _deg
-    # 1. the gate still separates (measured 17x-92x across builds)
+    # 1. the gate still separates (measured 62x / 108x on the two builds here,
+    #    259x on the 2026-08-03 tree, 17x pre-C13 on the weaker build)
     assert bad6 > 5.0 * good6, (bad6, good6)
-    # 2. the residual degree is what moves the multiplexed route (14-19x)
-    assert bad4 > 5.0 * bad6, (bad4, bad6)
+    # 2. the residual degree is what moves the multiplexed route (15x-29x
+    #    here, 3.20x-6.78x on the 2026-08-03 tree)
+    assert bad4 > 2.0 * bad6, (bad4, bad6)
+
+
+def _mux_fan(tilt):
+    """The MULTIPLEXED 2x2 fan at half-angle ``tilt`` -- the numerator arm of
+    ``_linearity_error``, without its four single-order reference legs."""
+    X, Y = _grid(_CN, _CDX)
+    G = _gauss(_CN, _CDX, _CW)
+    return sum(G * np.exp(1j * _K0 * tilt * (sx * X + sy * Y))
+               for sx in (-1, 1) for sy in (-1, 1))
+
+
+def _mux_chain_field(tilt, *, degree, launch):
+    """One chain call on that fan with the residual-eikonal degree and niche
+    C6's stationary-phase launch both pinned.  Restores both flags."""
+    _deg = _lens_traced._REMAP_RESID_EIKONAL_DEGREE
+    _lch = _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH
+    _lens_traced._REMAP_RESID_EIKONAL_DEGREE = degree
+    _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = launch
+    try:
+        return _chain(_mux_fan(tilt), quiet=True, focus_readout=None,
+                      on_multi_congruence='ignore').field
+    finally:
+        _lens_traced._REMAP_RESID_EIKONAL_DEGREE = _deg
+        _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = _lch
+
+
+def test_the_residual_degree_moves_the_multiplexed_route_only_through_c6():
+    """FAIL-BEFORE for claim 2 above, and it is EXACT rather than statistical.
+
+    ``_REMAP_RESID_EIKONAL_DEGREE`` is read in exactly ONE place: the
+    ``_fit_residual_eikonal`` call in ``apply_real_lens_traced``'s "niche C6"
+    block, guarded by ``if _pip_remap and REMAP_STATIONARY_PHASE_LAUNCH and
+    ...``.  So the attribution splits into two statements, and neither is a
+    magnitude a BLAS build can move by very much:
+
+    * with the C6 launch OFF the degree is INERT -- the two degrees return the
+      same float64 words, ``max|E6 - E4| = 0.0`` exactly, on Windows and on
+      WSL.  That is the fail-before: the ratio the sibling above bars at 2.0x
+      reads exactly 1.0 in this state, whatever the arithmetic does;
+    * with it ON the degree moves the multiplexed answer by MORE THAN THE
+      ANSWER'S OWN NORM -- ``||E6 - E4|| / ||E6||`` measured **39.83**
+      (Windows) and **43.88** (WSL).  The bar here is 1.0, i.e. 40x inside
+      the weaker of the two.
+
+    Byte-identity is not a tolerance, so this half of "and is caused by it"
+    cannot rot the way the era-pinned magnitude did.  It is also the cheap
+    half: four chain calls, no linear-superposition reference legs."""
+    off6 = _mux_chain_field(0.023, degree=6, launch=False)
+    off4 = _mux_chain_field(0.023, degree=4, launch=False)
+    assert np.array_equal(off6, off4), (
+        f'the residual degree is not inert without the C6 launch '
+        f'(max|E6 - E4| = {float(np.max(np.abs(off6 - off4))):.3e}), so it is '
+        f'read somewhere this test does not know about')
+    on6 = _mux_chain_field(0.023, degree=6, launch=True)
+    on4 = _mux_chain_field(0.023, degree=4, launch=True)
+    ref = float(np.linalg.norm(on6))
+    assert ref > 0.0 and np.all(np.isfinite(on6))
+    moved = float(np.linalg.norm(on6 - on4)) / ref
+    assert moved > 1.0, (
+        f'the residual degree stopped moving the multiplexed route '
+        f'({moved:.4f} of the degree-6 answer\'s own norm)')
 
 
 def test_c13_makes_the_d3_separation_build_independent():
     """The SHIPPED-era statement, and it is strictly stronger than the
-    era-pinned sibling's claim 1.
+    sibling's claim 1.
 
     Niche C13 gave the traced fits a backward-stable solve, and the degree-6
     linearity error stopped being a per-build lottery: ``bad6`` reads 3.3113
@@ -812,11 +893,68 @@ def test_c13_makes_the_d3_separation_build_independent():
     before, **258.9x / 259.9x** after -- one number on both builds instead of
     a 4.7x disagreement about it.  That is what a bar can finally be placed on,
     so this test places one where the sibling could not.
+
+    RESOLVED 2026-08-08 by pinning the niche-C6 stationary-phase launch OFF
+    across both arms -- the CONDITION moved, the 100.0x bar did not.  Full
+    evidence in ``docs/audits/FIX_C13_BUILD_SPREAD_2026_08_06.md``; the short
+    version is that with that launch ENGAGED this fixture cannot measure a
+    solver property at all.
+
+    WHY IT HAD TO MOVE.  ``REMAP_STATIONARY_PHASE_LAUNCH`` fits a
+    SINGLE-VALUED residual eikonal to the input.  A 2x2 order fan does not
+    have one, and on the 23 mrad arm the fit explains NONE of its own data at
+    EVERY degree 1-6 (weighted residual / data rms 0.965-1.034, against
+    0.0011-0.0080 on a single congruence at the same tilt) and returns a model
+    whose gradient reaches **|grad a| = 974**.  That gradient IS a transverse
+    direction cosine -- the C6 block adds it straight to ``(L_in, M_in)``
+    because eikonal gradients are additive -- so it is two to three orders
+    past its physical maximum of 1, and it is inadmissible over the BEAM
+    (still a direction cosine only inside 0.71 w) rather than merely in the
+    skirt.  Perturbing ONLY that fit's coefficients by a relative 1e-12 -- the
+    size of the Windows-vs-WSL difference in the same fit -- inside ONE build
+    moves ``|mux|`` by 163x and the exit piston to any value on the circle.
+    The gain is 1e12, four of the five draws measured fail this bar, and the
+    Windows green was luck.  C13 cannot help: its own census on this tree
+    reads a worst normal-equations-to-QR fit ratio of 1.0000008, i.e. the
+    solves already ARE the least-squares solution.
+
+    WHAT IS MEASURED NOW, and it is strictly stronger than what was here
+    before -- both arms bit-identical on both builds, and a real FAIL-BEFORE:
+
+        C6 launch OFF          bad (23 mrad)   good (0.5 mrad)      ratio
+        C13 ON,  Windows          0.7471793430    0.0021082610    354.4055x
+        C13 ON,  WSL              0.7471793430    0.0021082610    354.4055x
+        C13 OFF, Windows          0.7471798029    0.0021276352    351.1785x
+        C13 OFF, WSL              0.7471813752    0.0037359567    199.9973x
+
+    With the step-down ON the two builds agree to every printed digit on BOTH
+    arms and the ratio is one number, 354.4055x.  With it OFF ``good`` alone
+    moves 76 % across the builds and the ratio disagrees by 1.76x -- so this
+    test now has the fail-before its name always claimed and never had, and
+    the 100.0x bar sits 3.54x inside the measured value.
+
+    The library defect the move exposes -- the C6 launch augmentation is
+    UNBOUNDED, and ``_REMAP_RESID_DEGREE_CAP``'s static 6 is all that stands
+    between it and a non-physical launch direction -- is recorded as OPEN for
+    the C6 owner in that audit S4, together with the three remedies measured
+    and why none of them is shippable here (the two magnitude bounds move the
+    single-congruence legs by 2.7-3.2x, and one of them lands the sibling
+    ``..._only_through_c6``'s bar at 0.9996 against 1.0).
     """
-    bad6 = _linearity_error(0.023)
-    good6 = _linearity_error(0.0005)
-    # 100x, against 258.9 / 259.9 measured -- and against 17.2 pre-C13 on the
-    # weaker build, so this bar is one C13 alone can carry.
+    # The C6 launch is what puts this fixture in a 1e12-gain lottery (above).
+    # Pinned OFF for BOTH arms so the bar reads the solver, not the amplifier;
+    # the sibling ``..._only_through_c6`` is what pins C6's own effect, and it
+    # does so BYTE-IDENTICALLY rather than with a magnitude.
+    _lch = _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH
+    _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = False
+    try:
+        bad6 = _linearity_error(0.023)
+        good6 = _linearity_error(0.0005)
+    finally:
+        _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = _lch
+    # 100x, unchanged, against 354.4055x measured IDENTICALLY on both builds
+    # -- and against 199.9973x on the weaker build with the C13 step-down off,
+    # which is the fail-before this bar exists to carry.
     assert bad6 > 100.0 * good6, (bad6, good6)
 
 

@@ -72,7 +72,6 @@ from lumenairy.elements.lenses_gbd import (
     _input_angular_spread,
     _prune_zero_beamlets,
 )
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.propagators.gbd import (
     apply_prescription_persurface_to_beamlets,
     decompose_field_to_beamlets,
@@ -89,7 +88,9 @@ from lumenairy.raytrace.surface import (
     _surface_sag_xy,
 )
 
-GLASS_REGISTRY['_P9A'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_P9A': lambda wl: 1.5168}
 _Z_IMG = 49.162e-3   # paraxial image distance (exit vertex -> image) of the singlet
 
 

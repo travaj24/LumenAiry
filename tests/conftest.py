@@ -326,6 +326,229 @@ def _module_flag_leak_guard():
 
 
 # ===========================================================================
+# GLASS-REGISTRY LEAK GUARD (2026-08-06)
+# ===========================================================================
+# THE DEFECT THIS KILLS.  ``lumenairy.glass`` keeps its material tables --
+# ``GLASS_REGISTRY``, ``SELLMEIER_COEFFICIENTS``, ``GLASS_VALIDITY`` -- as
+# process-global dicts, and ~30 test modules need a dispersionless MODEL glass
+# so their oracle is a closed-form number rather than a Sellmeier fit.  Every
+# one of them used to write that glass straight into ``GLASS_REGISTRY`` AT
+# MODULE SCOPE::
+#
+#     GLASS_REGISTRY['_G1CACHE'] = lambda wl: 1.5168     # never removed
+#
+# pytest imports every selected test module during COLLECTION, before the first
+# test runs, so one such line poisons the tables for the whole session -- and a
+# lambda does not pickle.  ``tests/unit/test_niche_d8_congruence_workers.py``
+# asserts that a CLEAN worker-state snapshot has nothing unpicklable in it
+# (a model glass cannot cross a process boundary, so the parallel path must
+# degrade to serial and say so).  That assertion is right; what it was handed
+# was not clean, so ``test_snapshot_is_picklable`` and
+# ``test_a_clean_glass_snapshot_reports_nothing_unpicklable`` passed alone and
+# failed in the full-suite order -- the same shape as the ``USE_PYFFTW`` leak
+# fixed in 5.32.1, and the same class the niche C11 flag guard above closes for
+# scalar mode flags.
+#
+# THE FIX IS OWNERSHIP, NOT DETECTION.  A module that needs a model glass
+# declares it and does not register it::
+#
+#     MODULE_GLASSES = {'_G1CACHE': lambda wl: 1.5168}
+#
+# ``_module_glass_registry_guard`` below installs those entries for the length
+# of that module and removes them afterwards, so the glass exists exactly where
+# it is used and nowhere else.  The guard ALSO restores any mutation a test
+# body or fixture made and forgot to undo, which is the same defect one scope
+# down.
+#
+# Deliberately ONE shared fixture keyed off a module-level name rather than 30
+# copies of a per-module fixture: a copied fixture is a copied defect surface,
+# and the next module to need a model glass should have to write one dict entry
+# and get the cleanup for free.  Restoring SILENTLY matches the flag guard --
+# the goal is an order-independent suite, not a red one.  Set
+# ``LUMEN_TEST_GLASS_LEAK_STRICT=1`` to FAIL the leaking module instead.
+_GLASS_TABLE_NAMES = ('GLASS_REGISTRY', 'SELLMEIER_COEFFICIENTS',
+                      'GLASS_VALIDITY')
+
+
+def _glass_tables():
+    """``[(name, dict)]`` for every runtime-mutable material table.
+
+    Fetched live, never cached: other modules hold these dicts BY REFERENCE
+    (``from lumenairy.glass import GLASS_REGISTRY``), so the objects must be
+    mutated in place and never rebound.
+    """
+    from lumenairy import glass as _g
+    out = []
+    for n in _GLASS_TABLE_NAMES:
+        t = getattr(_g, n, None)
+        if isinstance(t, dict):
+            out.append((n, t))
+    return out
+
+
+def _glass_snapshot():
+    """``{table_name: {key: value}}`` -- a shallow copy, so the recorded values
+    are the SAME objects and identity is a valid "was this rebound?" test."""
+    return {n: dict(t) for n, t in _glass_tables()}
+
+
+def _glass_owner(val):
+    """Best-effort "who defined this?" for a registry value.
+
+    A model glass is a callable, so ``__module__`` names the test module that
+    created it exactly.  Catalogue entries are strings/tuples and have none.
+    """
+    return getattr(val, '__module__', None) or '<not a callable>'
+
+
+def _is_library_user_fixed(val):
+    """True for a ``('__user__', '__fixed__', '__fixed__')`` dispatch entry.
+
+    THE ONE THING THESE GUARDS MUST NOT TOUCH.  ``raytrace.surfaces_from_
+    elements`` registers a content-derived ``__spherical_<n>`` /
+    ``__aspheric_<n>`` pseudo-glass for every numeric ``n_lens`` it is handed
+    (``lumenairy/raytrace/trace.py:1502,1531``), and for those names
+    ``glass._glass_cache`` is the AUTHORITATIVE value store rather than a cache
+    -- ``glass._clear_glass_caches`` says so at ``lumenairy/glass.py:1716-1731``
+    and deliberately preserves exactly this set for exactly this reason.
+    Deleting the registry row would strand the cached ``_FixedIndex`` and make
+    the next ``get_glass_index`` raise "flagged as user-fixed but has no
+    _glass_cache entry".
+
+    The growth is bounded and intentional by design (same content -> same name,
+    audit P3-61), so it is library behaviour a test guard has no business
+    reverting.  ``tests/unit/test_audit_p1_glass_registration.py`` sweeps ~200
+    indices to PIN that behaviour and is what surfaced the need for this
+    carve-out.
+    """
+    try:
+        from lumenairy.glass import _USER_FIXED_SENTINEL
+    except ImportError:                               # pragma: no cover - env
+        return False
+    return val == _USER_FIXED_SENTINEL
+
+
+def _glass_restore(before):
+    """Put the material tables back to ``before`` IN PLACE.
+
+    Returns one description per difference, so a caller can report what leaked.
+    """
+    leaked = []
+    for name, table in _glass_tables():
+        prev = before.get(name)
+        if prev is None:                              # pragma: no cover - env
+            continue
+        for k in [k for k in table if k not in prev]:
+            if _is_library_user_fixed(table[k]):
+                continue                              # library-owned; see above
+            leaked.append(f'{name}[{k!r}] ADDED by {_glass_owner(table[k])}')
+            del table[k]
+        for k, v in prev.items():
+            if k not in table:
+                leaked.append(f'{name}[{k!r}] REMOVED')
+                table[k] = v
+            elif table[k] is not v:
+                leaked.append(f'{name}[{k!r}] REBOUND')
+                table[k] = v
+    return leaked
+
+
+@pytest.fixture(autouse=True, scope='module')
+def _module_glass_registry_guard(request):
+    """Install ``MODULE_GLASSES`` for this module; undo every table mutation.
+
+    MODULE scope, matching :func:`_module_flag_leak_guard`: the registrations
+    have to outlive a module's own module-scoped chain fixtures (which build
+    prescriptions naming the model glass), and autouse fixtures at a given
+    scope are set up before the non-autouse ones, so the glass exists before
+    anything can look it up.
+    """
+    import os
+    declared = dict(getattr(request.module, 'MODULE_GLASSES', None) or {})
+    before = _glass_snapshot()
+    if declared:
+        from lumenairy import glass as _g
+        _g.GLASS_REGISTRY.update(declared)            # in place; see above
+    yield
+    leaked = _glass_restore(before)
+    stray = [d for d in leaked
+             if not any(d.startswith(f'GLASS_REGISTRY[{k!r}] ADDED')
+                        for k in declared)]
+    if stray and os.environ.get('LUMEN_TEST_GLASS_LEAK_STRICT'):
+        raise AssertionError(
+            'this module leaked lumenairy.glass table entries to every LATER '
+            'test in the process (glass-registry leak guard); declare model '
+            'glasses in a module-level MODULE_GLASSES dict instead of writing '
+            'them into GLASS_REGISTRY: ' + '; '.join(stray))
+
+
+#: The material tables as SHIPPED, captured at conftest import -- pytest loads
+#: this conftest before it imports a single test module, so this is the only
+#: baseline that predates collection.
+_PRISTINE_GLASS = _glass_snapshot()
+
+
+def pytest_collection_modifyitems(session, config, items):
+    """Strip IMPORT-TIME glass registrations -- the one leak the module guard
+    structurally cannot catch.
+
+    pytest imports EVERY selected test module during collection, before any
+    fixture exists, so a module-scope ``GLASS_REGISTRY[...] = ...`` is already
+    in the tables when the first module guard takes its snapshot.  That guard
+    would then treat the pollution as part of the shipped baseline and preserve
+    it for the whole session -- which is exactly the state that broke niche D8.
+    This hook runs at the first moment all imports are done, diffs against the
+    pre-collection baseline, and removes what a test module added.
+
+    Removing rather than merely reporting is the point: it makes the NEXT
+    module to register at import scope fail ITS OWN tests (its model glass is
+    gone by the time they run) instead of silently failing an unrelated
+    module's picklability assertion three thousand tests later.  Entries that
+    are picklable AND not attributable to a test module are left alone and only
+    reported -- those would be the library lazily loading a catalogue, which is
+    not this hook's business.
+    """
+    import os
+    import pickle
+    import warnings
+    offenders, removed = [], []
+    for name, table in _glass_tables():
+        prev = _PRISTINE_GLASS.get(name, {})
+        for k in [k for k in table if k not in prev]:
+            val = table[k]
+            if _is_library_user_fixed(val):
+                continue                              # library-owned; see above
+            owner = _glass_owner(val)
+            try:
+                pickle.dumps(val)
+                picklable = True
+            except Exception:
+                picklable = False
+            ours = owner.startswith('tests.') or not picklable
+            offenders.append(f'{name}[{k!r}] from {owner}'
+                             f'{"" if picklable else " -- UNPICKLABLE"}'
+                             f'{"" if ours else " (left in place)"}')
+            if ours:
+                del table[k]
+                removed.append(f'{name}[{k!r}]')
+    if not offenders:
+        return
+    msg = ('IMPORT-TIME glass-table pollution detected after collection: '
+           + '; '.join(offenders)
+           + '. Declare model glasses in a module-level MODULE_GLASSES dict '
+             '(tests/conftest.py::_module_glass_registry_guard registers and '
+             'removes them per module) instead of writing them into '
+             'GLASS_REGISTRY at module scope.'
+           + (f' REMOVED: {", ".join(removed)}.' if removed else ''))
+    if os.environ.get('LUMEN_TEST_GLASS_LEAK_STRICT'):
+        raise pytest.UsageError(msg)
+    warnings.warn(msg, stacklevel=1)
+    tr = config.pluginmanager.get_plugin('terminalreporter')
+    if tr is not None:                                # pragma: no cover - env
+        tr.write_line(msg, red=True, bold=True)
+
+
+# ===========================================================================
 # Niche C11 -- PROCESS-STATE DUMP for order-dependent failures
 # ===========================================================================
 #: The shipped baseline, captured at conftest import -- before any test runs.
