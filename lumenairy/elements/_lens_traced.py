@@ -613,6 +613,17 @@ def _newton_invert_chunk(args):
     :class:`NewtonWorkerBackendUnavailable` rather than substituting the other
     order.
 
+    v5.33.0 (FIX_POOL_REBUILD): and so does the parent's BUILT Chebyshev FIT
+    (``cheb_fit``), which retires the polynomial re-fit above entirely.
+    Rebuilding it here re-ran ``_solve_lstsq_thread_safe`` -- a BLAS reduction
+    over a ~78 000-row design matrix -- in a fresh interpreter, and OpenBLAS
+    reduces in a thread-count-dependent order, so a worker whose BLAS width
+    differed from its parent's recovered DIFFERENT coefficients on identical
+    data (MEASURED max|dc| 4.6e-15, which the Newton convergence threshold
+    amplifies to 1.370e-11 of the field -- CI's 1.341e-11 / 1.358e-11).  The
+    worker now EVALUATES the parent's coefficients and fits nothing; payloads
+    with no ``cheb_fit`` key keep the historical rebuild.
+
     Lives at module scope so ``ProcessPoolExecutor`` can pickle it on
     Windows (spawn) workers.  The caller is ``_invert_newton_parallel``
     inside :func:`apply_real_lens_traced`.
@@ -644,16 +655,13 @@ def _newton_invert_chunk(args):
     max_iters = int(knot_data.get('newton_max_iters', _NEWTON_MAX_ITERS))
 
     if _fit == 'polynomial':
-        # Rebuild the SAME Chebyshev evaluators the serial path builds, from
-        # the same grids: the fit is a deterministic lstsq on identical data,
-        # so every worker recovers bit-identical coefficients, and evaluation
-        # is elementwise -- hence chunking cannot change the answer.
         _ord = int(knot_data.get('fit_poly_order', 6))
         _wts = knot_data.get('fit_weights', None)
-        # ...and it must EVALUATE in the parent's floating-point order, which
-        # the payload pins (v5.32.3).  ``None`` -- payloads written before the
-        # pin existed, mirroring the ``newton_fit`` / ``newton_max_iters``
-        # tolerance above -- keeps the historical "resolve it here" behaviour.
+        # The evaluator must EVALUATE in the parent's floating-point order,
+        # which the payload pins (v5.32.3).  ``None`` -- payloads written
+        # before the pin existed, mirroring the ``newton_fit`` /
+        # ``newton_max_iters`` tolerance above -- keeps the historical
+        # "resolve it here" behaviour.
         _backend = knot_data.get('cheb_backend', None)
         if _backend is not None and _backend not in ('numba', 'numpy'):
             _backend = None
@@ -668,12 +676,35 @@ def _newton_invert_chunk(args):
                 "parent evaluated with it), but this worker cannot load it: "
                 f"_NUMBA_AVAILABLE={_NUMBA_AVAILABLE!r}.  Refusing the chunk "
                 "rather than answering in a different floating-point order.")
-        Sx = _Cheb2DEvaluator(xs_in, xs_in, x_out_grid, order=_ord,
-                              xp=np, weights=_wts, backend=_backend)
-        Sy = _Cheb2DEvaluator(xs_in, xs_in, y_out_grid, order=_ord,
-                              xp=np, weights=_wts, backend=_backend)
-        So = _Cheb2DEvaluator(xs_in, xs_in, opl_grid, order=_ord,
-                              xp=np, weights=_wts, backend=_backend)
+        # v5.33.0 (FIX_POOL_REBUILD): EVALUATE THE PARENT'S FIT, do not re-fit.
+        # The payload ships the built coefficients, so the worker's polynomial
+        # is the parent's by construction -- no least-squares solve here, and
+        # therefore no dependence on this interpreter's BLAS thread regime.
+        # See the measurement block at ``_cheb_fit_state``: a rebuild under a
+        # different BLAS width moved the field by up to 1.370e-11, which is the
+        # 1.341e-11 / 1.358e-11 that
+        # ``test_pool_result_is_bit_identical_to_serial[polynomial]`` failed by
+        # on all four CI python lanes AFTER the backend pin had shipped.
+        _fit_state = knot_data.get('cheb_fit', None)
+        if _fit_state is not None:
+            Sx = _Cheb2DEvaluator.from_state(_fit_state['x_out'], xp=np,
+                                             backend=_backend)
+            Sy = _Cheb2DEvaluator.from_state(_fit_state['y_out'], xp=np,
+                                             backend=_backend)
+            So = _Cheb2DEvaluator.from_state(_fit_state['opl'], xp=np,
+                                             backend=_backend)
+        else:
+            # No shipped fit: a payload written before this key existed, the
+            # same tolerance ``newton_fit`` / ``newton_max_iters`` /
+            # ``cheb_backend`` get above.  Re-fit from the grids, which is what
+            # this worker always did -- and which is bit-identical to the
+            # parent only while the two share a BLAS regime.
+            Sx = _Cheb2DEvaluator(xs_in, xs_in, x_out_grid, order=_ord,
+                                  xp=np, weights=_wts, backend=_backend)
+            Sy = _Cheb2DEvaluator(xs_in, xs_in, y_out_grid, order=_ord,
+                                  xp=np, weights=_wts, backend=_backend)
+            So = _Cheb2DEvaluator(xs_in, xs_in, opl_grid, order=_ord,
+                                  xp=np, weights=_wts, backend=_backend)
     else:
         Sx = RectBivariateSpline(xs_in, xs_in, x_out_grid, kx=3, ky=3)
         Sy = RectBivariateSpline(xs_in, xs_in, y_out_grid, kx=3, ky=3)
@@ -1786,6 +1817,121 @@ def _resolved_cheb_backend(newton_fit='polynomial'):
     return 'numba' if _get_cheb2d_val_grad_numba() is not None else 'numpy'
 
 
+def _validated_cheb_backend(backend):
+    """Return ``backend`` if it names a real Chebyshev evaluation branch.
+
+    ``None`` means "resolve it from this process's numba availability" (the
+    historical behaviour).  Anything else is refused rather than silently
+    treated as ``None``, because a typo'd pin that quietly meant "auto" would
+    reintroduce exactly the split the pin exists to close.
+    """
+    if backend is not None and backend not in ('numba', 'numpy'):
+        raise ValueError(
+            f"_Cheb2DEvaluator: backend={backend!r} is not a valid "
+            f"evaluation backend.  Choose 'numba', 'numpy', or None "
+            f"(resolve from this process's numba availability).")
+    return backend
+
+
+# ---------------------------------------------------------------------------
+# ...AND SO IS THE FIT ITSELF (docs/audits/FIX_POOL_REBUILD_2026_08_08.md)
+#
+# Pinning ``cheb_backend`` made the two sides EVALUATE in the same order.  It
+# did not make them evaluate the same POLYNOMIAL.  ``_newton_invert_chunk``
+# still called ``_Cheb2DEvaluator(...)``, i.e. it re-ran the least-squares fit
+# from the pickled grids, and that fit is a BLAS reduction:
+# ``_solve_lstsq_thread_safe`` forms ``G = A^T A`` and ``A^T b`` over a
+# ~78 000-row design matrix, which OpenBLAS reduces in a thread-count-dependent
+# order.  Two processes on the same data therefore recover coefficients that
+# differ in the last bits whenever their BLAS regimes differ -- and a worker's
+# regime is NOT guaranteed to be its parent's: ``threadpoolctl``'s cap is
+# PROCESS-GLOBAL on OpenBLAS, so a long-lived pytest parent that has been
+# through a capped section runs at a different width from a freshly spawned
+# worker, which always starts at the environment default.
+#
+# MEASURED here (Windows 11, py3.14.6, numpy 2.4.4 / scipy-openblas 0.3.31,
+# 24 cores), the traced doublet's own 77 841-point OPL fit, coefficients from
+# ``A^T A`` at BLAS width W against width 24:
+#
+#     W = 1     NOT bit-identical, max|dc| 4.596e-15
+#     W = 2     NOT bit-identical, max|dc| 4.243e-15
+#     W = 4     NOT bit-identical, max|dc| 5.484e-15
+#     W = 8     NOT bit-identical, max|dc| 8.766e-16
+#     same W    bit-identical, 30/30 rebuilds, and parent == spawned worker
+#
+# and end-to-end on this file's own contract shape (N=1024, ray_subsample=2,
+# 262 144 Newton points, 4 chunks, serial vs pool with the WORKER body under a
+# BLAS cap the parent does not have):
+#
+#     worker BLAS width 1     max|dfield| 1.830e-12
+#     worker BLAS width 2     max|dfield| 1.062e-11
+#     worker BLAS width 4     max|dfield| 1.370e-11   <- CI: 1.341e-11/1.358e-11
+#     worker BLAS width 8     max|dfield| 1.198e-12
+#     real spawn pool, same regime as the parent   0.000e+00  (why it passes here)
+#
+# The amplification is the Newton loop's ``res < tol`` threshold: a coefficient
+# perturbation of 1e-15 relative moves a handful of the 262 144 points across
+# the convergence line, which changes their iteration count and so their OPL by
+# ~1e-18 m; at 1.31 um that is 2*pi/lambda * 1e-18 ~ 1e-11 of a unit-amplitude
+# field.  The polynomial fit is the ONLY BLAS in that worker, which is why
+# ``[spline]`` -- whose worker rebuilds a single-threaded FITPACK
+# ``RectBivariateSpline`` -- passed in every lane it ran in.
+#
+# The remedy is not to make the least-squares solve reproducible across BLAS
+# regimes (it is a library's reduction order, not ours to fix); it is to stop
+# solving it twice.  The parent SHIPS its built fit -- 28 coefficients and two
+# 28-entry index vectors per evaluator, ~700 bytes against the ~1.9 MB of grids
+# the payload already carries -- and the worker EVALUATES it.  Bit-identity
+# then holds by construction, for every BLAS regime, present and future.
+# ---------------------------------------------------------------------------
+
+def _cheb_fit_state(ev):
+    """Picklable state of an ALREADY-BUILT :class:`_Cheb2DEvaluator`.
+
+    Everything the evaluator needs to evaluate, and nothing it needed to FIT:
+    no design matrix, no sample grid, no weights.  Reconstructed by
+    :meth:`_Cheb2DEvaluator.from_state`.
+
+    ``backend`` is deliberately absent -- it is a fact about the process that
+    will evaluate, not about the fit, and it travels separately as the
+    payload's ``cheb_backend`` (see :func:`_resolved_cheb_backend`).
+    """
+    _xp = getattr(ev, 'xp', np)
+
+    def _host(a):
+        # CuPy evaluators are unreachable from the pool (the GPU path returns
+        # in-process before dispatch), but three 28-element arrays are cheap
+        # insurance against that ever changing silently.
+        return np.asarray(_xp.asnumpy(a) if _xp is not np else a)
+
+    return {
+        'order': int(ev.order),
+        'mi': [(int(kx), int(ky)) for (kx, ky) in ev._mi],
+        'coeffs': np.asarray(_host(ev.coeffs), dtype=np.float64),
+        'K1': np.asarray(_host(ev._K1), dtype=np.int64),
+        'K2': np.asarray(_host(ev._K2), dtype=np.int64),
+        'xmin': float(ev.xmin), 'xmax': float(ev.xmax),
+        'ymin': float(ev.ymin), 'ymax': float(ev.ymax),
+    }
+
+
+def _cheb_fit_payload(Sx, Sy, So, newton_fit='polynomial'):
+    """The parent's three BUILT Chebyshev fits, ready to pickle.
+
+    Returns ``None`` for any fit that has no Chebyshev evaluator -- i.e. for
+    ``newton_fit='spline'``, whose worker rebuilds a ``RectBivariateSpline``
+    through FITPACK.  That rebuild is single-threaded and takes no BLAS path,
+    so it has no thread-regime axis to close; ``[spline]`` passed on CI in
+    every lane it ran in while ``[polynomial]`` failed in all four, which is
+    the measurement behind leaving it alone.
+    """
+    if str(newton_fit) != 'polynomial':
+        return None
+    return {'x_out': _cheb_fit_state(Sx),
+            'y_out': _cheb_fit_state(Sy),
+            'opl': _cheb_fit_state(So)}
+
+
 class NewtonWorkerBackendUnavailable(RuntimeError):
     """A Newton pool worker cannot provide the evaluator backend the payload
     pins, so it refuses the chunk instead of answering in a different
@@ -2122,12 +2268,7 @@ class _Cheb2DEvaluator:
         # floating-point ORDER, so an evaluator rebuilt in a Newton pool worker
         # must take the branch the PARENT took or the pool stops being
         # bit-identical to serial.  See ``_resolved_cheb_backend``.
-        if backend is not None and backend not in ('numba', 'numpy'):
-            raise ValueError(
-                f"_Cheb2DEvaluator: backend={backend!r} is not a valid "
-                f"evaluation backend.  Choose 'numba', 'numpy', or None "
-                f"(resolve from this process's numba availability).")
-        self.backend = backend
+        self.backend = _validated_cheb_backend(backend)
         # The fit itself (a tiny lstsq -- typically a few hundred rows
         # by 28-70 terms) is always performed on CPU via NumPy, even
         # when xp=cupy.  Three reasons:
@@ -2205,6 +2346,58 @@ class _Cheb2DEvaluator:
         self.coeffs = xp.asarray(c_np, dtype=xp.float64)
         self._K1 = xp.asarray(K1_np, dtype=xp.int64)
         self._K2 = xp.asarray(K2_np, dtype=xp.int64)
+
+    # ----------------------------------------------------------------
+    # v5.33.0 (FIX_POOL_REBUILD): construct from an ALREADY-BUILT fit.
+    #
+    # ``__init__`` RUNS the least-squares fit.  A Newton pool worker used to
+    # call it, which meant every worker re-solved the same normal equations in
+    # its own interpreter -- and that solve is a BLAS reduction whose ORDER
+    # depends on the BLAS thread regime, so a worker whose regime differed from
+    # its parent's recovered coefficients that differ in the last bits.  See
+    # ``_cheb_fit_state`` for the measurement.  This entry point takes the
+    # parent's coefficients and does no arithmetic at all.
+    # ----------------------------------------------------------------
+    @classmethod
+    def from_state(cls, state, xp=None, backend=None):
+        """Rebuild an evaluator from :func:`_cheb_fit_state` output.
+
+        NO fit is performed: the coefficients are the caller's.  This is what
+        makes a Newton pool worker's evaluator bit-identical to the parent's by
+        CONSTRUCTION rather than by the least-squares solve happening to be
+        reproducible across two processes' BLAS.
+
+        ``backend`` is the pinned evaluation branch (see
+        ``ev_value_and_grad``); it is a property of where the evaluator RUNS,
+        not of the fit, so it is passed here rather than carried in ``state``.
+        """
+        if xp is None:
+            xp = np
+        self = cls.__new__(cls)
+        self.xp = xp
+        self.backend = _validated_cheb_backend(backend)
+        self.order = int(state['order'])
+        self._mi = [(int(kx), int(ky)) for (kx, ky) in state['mi']]
+        self.xmin = float(state['xmin'])
+        self.xmax = float(state['xmax'])
+        self.ymin = float(state['ymin'])
+        self.ymax = float(state['ymax'])
+        c_np = np.asarray(state['coeffs'], dtype=np.float64)
+        K1_np = np.asarray(state['K1'], dtype=np.int64)
+        K2_np = np.asarray(state['K2'], dtype=np.int64)
+        # A truncated or mismatched payload must fail HERE, loudly, rather than
+        # broadcast its way to a plausible-looking wrong field: the whole point
+        # of shipping the fit is that the worker's answer is the parent's.
+        if not (c_np.ndim == 1 and c_np.shape == K1_np.shape
+                == K2_np.shape == (len(self._mi),)):
+            raise ValueError(
+                f"_Cheb2DEvaluator.from_state: inconsistent fit state -- "
+                f"coeffs {c_np.shape}, K1 {K1_np.shape}, K2 {K2_np.shape}, "
+                f"{len(self._mi)} multi-indices; all four must agree.")
+        self.coeffs = xp.asarray(c_np, dtype=xp.float64)
+        self._K1 = xp.asarray(K1_np, dtype=xp.int64)
+        self._K2 = xp.asarray(K2_np, dtype=xp.int64)
+        return self
 
     def _to_u(self, x):
         return (2.0 * x - (self.xmin + self.xmax)) / \
@@ -9143,6 +9336,23 @@ def apply_real_lens_traced(
         # pool is only CONDITIONALLY bit-identical to serial (measured
         # 5.167e-14 locally / 1.358e-11 on CI when the two sides split).
         _spline_data['cheb_backend'] = _resolved_cheb_backend(newton_fit)
+        # ...AND SHIP THE PARENT'S BUILT FIT (v5.33.0, FIX_POOL_REBUILD).
+        # Pinning the backend made the two sides evaluate in the same ORDER; it
+        # did not stop the worker RE-FITTING the polynomial from the pickled
+        # grids.  That re-fit is a BLAS reduction (``A^T A`` over ~78 000 rows),
+        # and OpenBLAS's reduction order depends on the thread width -- which a
+        # spawn worker does not inherit, because ``threadpoolctl``'s cap is
+        # process-global and a fresh interpreter starts at the environment
+        # default.  Measured: a worker at a different BLAS width moved the
+        # field by up to 1.370e-11, i.e. exactly the 1.341e-11 / 1.358e-11 that
+        # ``test_pool_result_is_bit_identical_to_serial[polynomial]`` kept
+        # failing by on CI after the backend pin shipped.  ``Sx``/``Sy``/``So``
+        # here are the very objects the SERIAL closure evaluates, so shipping
+        # their coefficients makes pool == serial true by construction rather
+        # than by two least-squares solves agreeing.  ~700 bytes against the
+        # ~1.9 MB of grids the payload already carries; ``None`` on the spline
+        # path, whose FITPACK rebuild is single-threaded and BLAS-free.
+        _spline_data['cheb_fit'] = _cheb_fit_payload(Sx, Sy, So, newton_fit)
         # Split indices into roughly-equal chunks.  ``np.array_split``
         # handles the n_total % n_cpu != 0 case cleanly.
         chunk_idx = np.array_split(np.arange(n_total), n_cpu)

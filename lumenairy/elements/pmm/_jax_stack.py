@@ -33,9 +33,11 @@ import numpy as np
 from ._core import (
     _forward_growth_flip,
     _gll_nodes_weights,
+    _jeps_is_passive,
     _jpmm_fourier_projection,
     _jpmm_order_set,
     _jpmm_sem_modes_tensor,
+    _jtensor_is_passive,
     _kz_forward,
     _l2g_periodic,
     _lagrange_derivative_matrix,
@@ -129,7 +131,11 @@ def _jstack_assemble(static, jnp, t_cells):
         conv["one"] = conv["one"].at[ii, jj].add(Cl)
         conv["inv_ezz"] = conv["inv_ezz"].at[ii, jj].add(iez * Cl)
     return dict(mass=mass, stiff=stiff, conv=conv, S0=mass["one"],
-                n_glob=n_glob)
+                n_glob=n_glob,
+                # see :func:`_core._jpmm_assemble_tensor` -- the traced
+                # assembler carries the passivity verdict of the tensors it
+                # consumed, because it has no concrete element table.
+                passive=_jtensor_is_passive(list(t_cells), jnp))
 
 
 def _jstack_geo_ops(static):
@@ -179,7 +185,8 @@ def _jstack_modes_uniform(S0, mu, w, jnp, eps):
                     - jnp.einsum("in,in->n", W2[n:], SVt))
     thr = _mass_flux_threshold(flux, W2, SVt, SVb, n, jnp)
     prop = jnp.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = _forward_growth_flip(flux, q, thr, prop, jnp)
+    flip = _forward_growth_flip(flux, q, thr, prop, jnp,
+                                _jeps_is_passive(eps, jnp))
     q = jnp.where(flip, -q, q)
     lam = -1j * q
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)

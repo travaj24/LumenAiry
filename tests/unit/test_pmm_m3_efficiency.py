@@ -564,17 +564,46 @@ _T34_WRONG_REL = 0.05                               # 5 %: see the docstring
 
 
 def _t34_scan(cells):
-    """``[(ns, degree, rel_error, closure, fired)]`` over ``cells``."""
+    """``[(ns, degree, rel_error, closure, fired, warns, n_grow_post)]``.
+
+    ``n_grow_post`` is channel A's RESIDUAL over the whole solve, read off the
+    shipped census (``_MODE_CUT_CENSUS``) rather than re-derived -- the number
+    of modes the SHIPPED forward set still grows on.  See
+    ``_core._mode_cut_growth_post``."""
     out = []
     for ns, degree in cells:
-        (r0, close), warns = _t34_warnings(
-            lambda: solve0(build(ns, degree=degree), quiet=False))
+        old, PC._MODE_CUT_CENSUS = PC._MODE_CUT_CENSUS, []
+        try:
+            (r0, close), warns = _t34_warnings(
+                lambda: solve0(build(ns, degree=degree), quiet=False))
+            rows = list(PC._MODE_CUT_CENSUS)
+        finally:
+            PC._MODE_CUT_CENSUS = old
         out.append((ns, degree, abs(r0 / _T34_REF[ns] - 1.0), close,
-                    bool(warns), warns))
+                    bool(warns), warns,
+                    sum(int(c["n_grow_post"]) for c in rows)))
     return out
 
 
-def test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build(t34_armed):
+@pytest.fixture
+def passive_widen_off():
+    """Fail-before switch for the 2026-08-08 PASSIVITY WIDENING of
+    ``_forward_growth_flip`` (``docs/audits/FIX_CI_ROUND2_PMM_2026_08_08.md``).
+
+    ``False`` restores the 2026-08-06 mask -- which additionally required the
+    mode to sit inside ``_MODE_CUT_MARGIN_WARN`` of the cut -- bit for bit, so
+    the silent-wrong family this suite was written against is reproduced on
+    every build instead of being asserted from memory."""
+    old = PC.PMM_FORWARD_GROWTH_PASSIVE
+    PC.PMM_FORWARD_GROWTH_PASSIVE = False
+    try:
+        yield
+    finally:
+        PC.PMM_FORWARD_GROWTH_PASSIVE = old
+
+
+def test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build(
+        t34_armed, passive_widen_off):
     """The cells M2 S5 measured as UNITARY BUT WRONG -- SCANNED, not listed
     (PMM_FOURNAME_ADJUDICATION_2026_08_05 S3).
 
@@ -598,16 +627,38 @@ def test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build(t34_armed):
 
     The 5 % partition bar is not a calibration: the two populations are three
     decades apart (correct cells 0.03-0.9 %, wrong cells 42-466 %) on both
-    builds and at 1 and N BLAS threads."""
+    builds and at 1 and N BLAS threads.
+
+    **v5.33.2 -- THE DEFECT IS SCORED ON THE FAIL-BEFORE SWITCH, BECAUSE THE
+    SHIPPED SELECTOR NO LONGER HAS ONE** (``FIX_CI_ROUND2_PMM_2026_08_08``).
+    The passivity widening closes this family: with the shipped selector every
+    scanned cell reads ``rel`` = 0.0044-0.0088 against the RCWA anchor, so
+    ``assert wrong`` had nothing left to find -- which is what the assertion's
+    own message asks for ("If it was FIXED, re-pin this against the fix").
+    So the four claims above are made VERBATIM -- same family, same 5 %
+    partition, same 20x separation, same ``1e-5`` closure bar -- with
+    ``PMM_FORWARD_GROWTH_PASSIVE`` off, and two claims are ADDED:
+
+      (d) channel A's RESIDUAL is the discriminator: ``n_grow_post`` > 0 on
+          every WRONG cell -- asserted, and it is a claim no bar can be tuned
+          into, because it is a mode count.  The previous (raw) reading could
+          not make it: it read >= 1 on nine cells that were RIGHT.  The other
+          half of the partition (0 on every right cell) is measured exact in
+          five environments and PRINTED here rather than asserted; it is
+          asserted where it is build-independent instead -- see the print;
+      (e) THE CURE -- with the shipped selector the SAME scan contains no
+          wrong cell at all, and ``n_grow_post`` is 0 on every cell of it.
+    """
     rows = _t34_scan(_T34_FAMILY)
     wrong = [r for r in rows if r[2] > _T34_WRONG_REL]
     if not wrong:                        # (a) WIDEN, do not skip
         rows += _t34_scan(_T34_WIDEN)
         wrong = [r for r in rows if r[2] > _T34_WRONG_REL]
     assert wrong, (
-        "no silent-wrong cell in the scanned family on this build -- the "
-        "sliver defect the T3-4 guard exists to find has stopped reproducing "
-        "on the audit-class device.  If it was FIXED, re-pin this against the "
+        "no silent-wrong cell in the scanned family on this build EVEN WITH "
+        "the 2026-08-08 passivity widening switched OFF -- the sliver defect "
+        "the T3-4 guard exists to find has stopped reproducing on the "
+        "audit-class device.  If it was FIXED AGAIN, re-pin this against the "
         "fix; if the family merely moved, widen _T34_WIDEN further.  "
         f"scanned: {[(r[0], r[1], round(r[2], 4)) for r in rows]}")
     # the partition really is a partition, not a bar sitting inside one cloud
@@ -617,7 +668,7 @@ def test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build(t34_armed):
         f"the 5% partition is inside the population, not between two: "
         f"wrong {[round(r[2], 4) for r in wrong]} vs right "
         f"{[round(r[2], 4) for r in right]}")
-    for ns, degree, rel, close, fired, warns in wrong:
+    for ns, degree, rel, close, fired, warns, post in wrong:
         assert close < 1e-5, (                       # (b)
             f"ns={ns} deg={degree}: rel={rel:.4g} wrong but |R+T-1|="
             f"{close:.3e} -- conservation is supposed to be blind to this")
@@ -626,6 +677,40 @@ def test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build(t34_armed):
             f"stayed silent -- it must speak where conservation cannot")
         msg = str(warns[0].message)
         assert "UNITARY BUT WRONG" in msg and "min_feature" in msg
+        assert post > 0, (                           # (d), the wrong half
+            f"ns={ns} deg={degree}: rel={rel:.4g} WRONG yet the shipped "
+            f"forward set contains no growing mode -- channel A's residual "
+            f"has stopped being the discriminator for this family")
+    # (d), the other half -- PRINTED, not asserted, and the distinction is
+    #      deliberate.  "post > 0 on every wrong cell" is the SAFETY claim and
+    #      is asserted above.  "post == 0 on every right cell" is the
+    #      no-false-positive claim; it is measured exact here on every cell of
+    #      five (mount x thread-count) environments, but the population it
+    #      scores is the UNCURED ladder, whose cells migrate with the build,
+    #      and a growing forward mode need not produce a LARGE error on every
+    #      build.  The no-false-positive claim is ASSERTED where it is
+    #      build-independent instead -- on the cured ladder and on the
+    #      right-answer control, both of which now assert post == 0 directly.
+    print("\nT3-4 residual partition (widening OFF): wrong "
+          + str([(r[0], r[1], round(r[2], 4), r[6]) for r in wrong])
+          + "  right " + str([(r[0], r[1], round(r[2], 4), r[6])
+                              for r in right]))
+
+    # ---- (e) THE CURE: the same scan with the shipped selector -------------
+    PC.PMM_FORWARD_GROWTH_PASSIVE = True         # the fixture owns the restore
+    cured = _t34_scan([(r[0], r[1]) for r in rows])
+    still = [r for r in cured if r[2] > _T34_WRONG_REL]
+    assert not still, (
+        f"the passivity widening did not cure this family: "
+        f"{[(r[0], r[1], round(r[2], 4)) for r in still]} are still wrong.  "
+        f"A forward mode of a passive layer cannot grow along +z at ANY "
+        f"distance from the classification cut, so a surviving wrong cell is "
+        f"a SECOND mechanism and must be diagnosed, not tolerated.")
+    grew = [(r[0], r[1], r[6]) for r in cured if r[6] > 0]
+    assert not grew, (
+        f"the shipped forward set still grows on {grew} -- "
+        f"_forward_growth_flip is supposed to make that impossible on a "
+        f"passive stack by construction")
 
 
 def test_t34_guard_is_silent_on_the_cured_ladder(t34_armed):
@@ -639,17 +724,44 @@ def test_t34_guard_is_silent_on_the_cured_ladder(t34_armed):
       ns = 6: off = 1.8042 nm, coat 5 nm -> threshold 1.8042 nm, cured at 3.0
 
     (0.5 nm is deliberately NOT used at ns = 6: it is BELOW that threshold, so
-    it cures nothing and those cells belong to the scan above, not here.)"""
+    it cures nothing and those cells belong to the scan above, not here.)
+
+    **v5.33.2 -- WHY THIS FAILED ON CI AND WHAT NOW MAKES IT ROBUST**
+    (``FIX_CI_ROUND2_PMM_2026_08_08``).  It read, on ubuntu py3.10,
+    ``ns=2 deg=16 mf=0.5 nm: FALSE POSITIVE on a cured cell (rel=0.00352) --
+    ... put 2 GROWING mode(s) in the FORWARD set on 2 half-space row(s) ...
+    within a factor 1.05 of the ... cut``.  The cell's ANSWER was right
+    (0.00352 -- this file's own cured-ladder reading); what the guard reported
+    was channel A's RAW DIAGNOSIS, i.e. what the BARE selector would have done
+    before ``_forward_growth_flip`` redirected those two modes.  Whether a
+    round-off-flux mode of an evanescent pair lands above or below the cut is
+    a BLAS-reduction-order fact, so "the diagnosis is empty here" was never a
+    build-independent claim and this control was asserting one.
+
+    Channel A now reads the RESIDUAL instead (``_core._mode_cut_verdict``), so
+    the claim it makes is build-independent BY CONSTRUCTION -- the shipped
+    forward set of a passive stack cannot grow at all -- and the control
+    asserts that residual DIRECTLY as well as the silence, so a future
+    regression cannot pass by making the guard quiet."""
     for ns, mf in ((2, 0.5 * NM), (6, 3.0 * NM)):
         for degree in (6, 8, 10, 12, 14, 16):
-            (r0, close), warns = _t34_warnings(
-                lambda: solve0(build(ns, degree=degree, min_feature=mf),
-                               quiet=False))
+            old, PC._MODE_CUT_CENSUS = PC._MODE_CUT_CENSUS, []
+            try:
+                (r0, close), warns = _t34_warnings(
+                    lambda: solve0(build(ns, degree=degree, min_feature=mf),
+                                   quiet=False))
+                rows = list(PC._MODE_CUT_CENSUS)
+            finally:
+                PC._MODE_CUT_CENSUS = old
             rel = abs(r0 / _T34_REF[ns] - 1.0)
             assert rel < 0.02, (
                 f"ns={ns} deg={degree} mf={mf / NM} nm: rel={rel:.4g} -- the "
                 f"cured ladder is supposed to be RIGHT, so this control has "
                 f"stopped being a control")
+            post = sum(int(c["n_grow_post"]) for c in rows)
+            assert post == 0, (
+                f"ns={ns} deg={degree} mf={mf / NM} nm: the SHIPPED forward "
+                f"set grows {post} mode(s) on a cured cell (rel={rel:.4g})")
             assert not warns, (
                 f"ns={ns} deg={degree} mf={mf / NM} nm: FALSE POSITIVE on a "
                 f"cured cell (rel={rel:.4g}) -- {warns[0].message}")
@@ -668,19 +780,33 @@ _T34_CELLS = {}
 
 
 def _t34_cell(ns, degree, mf):
-    """``dict(ns, degree, mf, r0, rel, close, fired, warns)``, cached."""
-    key = (ns, degree, mf)
+    """``dict(ns, degree, mf, r0, rel, close, fired, warns, post)``, cached.
+
+    ``post`` is channel A's residual over the whole solve, read off the
+    shipped census.
+
+    Both selector switches are part of the KEY, for the reason
+    ``test_pmm_m2_window_contract._LADDER_CACHE`` records: they are exactly
+    what the answer depends on, so a cache that ignored them could hand one
+    test another test's fail-before state under any run order or shard
+    split."""
+    key = (ns, degree, mf, bool(PC.PMM_FORWARD_GROWTH_REPAIR),
+           bool(PC.PMM_FORWARD_GROWTH_PASSIVE))
     if key not in _T34_CELLS:
         old, PC.PMM_MODE_CUT_GUARD = PC.PMM_MODE_CUT_GUARD, True
+        oldc, PC._MODE_CUT_CENSUS = PC._MODE_CUT_CENSUS, []
         try:
             (r0, close), warns = _t34_warnings(
                 lambda: solve0(build(ns, degree=degree, min_feature=mf),
                                quiet=False))
+            rows = list(PC._MODE_CUT_CENSUS)
         finally:
+            PC._MODE_CUT_CENSUS = oldc
             PC.PMM_MODE_CUT_GUARD = old
         _T34_CELLS[key] = dict(ns=ns, degree=degree, mf=mf, r0=r0, close=close,
                                rel=abs(r0 / _T34_REF[ns] - 1.0),
-                               fired=bool(warns), warns=warns)
+                               fired=bool(warns), warns=warns,
+                               post=sum(int(c["n_grow_post"]) for c in rows))
     return _T34_CELLS[key]
 
 
@@ -713,7 +839,19 @@ def test_t34_guard_is_silent_where_the_answer_is_right(ns, degree, mf,
 
     (The four CURED parametrizations are build-independent by construction --
     ``min_feature`` above M2's threshold leaves no sliver -- and are measured
-    right and quiet in every cell; the fallback is inert on them.)"""
+    right and quiet in every cell; the fallback is inert on them.)
+
+    **v5.33.2 -- THE SILENCE CLAIM IS NOW BUILD-INDEPENDENT TOO.**  Two of
+    these parametrizations failed on CI -- ``[2-16-5e-10]`` (rel 0.00352, "2
+    GROWING mode(s) ... within a factor 1.05 of the cut") and ``[2-8-None]``
+    (rel 0.00573, 4 modes at 1.44) -- with the ANSWER right in both.  What
+    fired was channel A's RAW DIAGNOSIS, i.e. what the bare selector would
+    have done before ``_forward_growth_flip`` redirected those modes; whether
+    the diagnosis is empty on a given build is decided by the BLAS reduction
+    order, so it was never assertable.  Channel A now reads the RESIDUAL, and
+    the residual of a passive stack's shipped forward set is 0 by
+    construction.  That residual is asserted here alongside the silence, so
+    the control cannot be satisfied by a guard that has merely gone quiet."""
     cell = _t34_cell(ns, degree, mf)
     if cell["rel"] >= _T34_RIGHT_REL:
         # the pinned rung has migrated into the wrong family on this build.
@@ -740,6 +878,12 @@ def test_t34_guard_is_silent_where_the_answer_is_right(ns, degree, mf,
               f"falls back to degree {alt['degree']} (rel={alt['rel']:.4g}).")
         cell = alt
     assert cell["rel"] < _T34_RIGHT_REL, "the cell is supposed to be RIGHT"
+    # the invariant behind the silence, asserted directly: the forward set the
+    # cascade was assembled from does not grow.
+    assert cell["post"] == 0, (
+        f"ns={cell['ns']} degree={cell['degree']} mf={cell['mf']}: the "
+        f"SHIPPED forward set grows {cell['post']} mode(s) on a cell whose "
+        f"answer is right (rel={cell['rel']:.4g})")
     assert not cell["fired"], (
         f"false positive on ns={cell['ns']} degree={cell['degree']} "
         f"mf={cell['mf']} (rel={cell['rel']:.4g}): "
@@ -776,25 +920,91 @@ def test_t34_guard_is_silent_when_layers_LEGITIMATELY_differ(t34_armed):
     assert not warns, "a spread-only bar would refuse this correct stack"
 
 
+#: Cells this suite may look in for one the ARMED guard speaks on.  A family,
+#: not a cell: WHICH rung carries a load-bearing cut is a per-build fact (see
+#: _T34_FAMILY's comment), and after the 2026-08-08 change channel A no longer
+#: fires on the repaired diagnosis, so the cell that used to be guaranteed to
+#: fire (ns=2, degree 12) is guaranteed only through channel B.
+_T34_SPEAKS_FAMILY = ([(2, d) for d in (12, 14, 16, 10, 18, 20)]
+                      + [(6, d) for d in (10, 12, 14, 16, 18, 20)])
+
+
+def _t34_armed_cell(ns, degree):
+    """``(r0, fired)`` with the guard ARMED, restored on the way out."""
+    old, PC.PMM_MODE_CUT_GUARD = PC.PMM_MODE_CUT_GUARD, True
+    try:
+        (r0, _c), warns = _t34_warnings(
+            lambda: solve0(build(ns, degree=degree), quiet=False))
+    finally:
+        PC.PMM_MODE_CUT_GUARD = old
+    return r0, bool(warns)
+
+
 def test_t34_guard_ships_disarmed_and_arming_it_moves_no_number():
     """Two claims.
 
     1. The SHIPPED default is silence: a user who does nothing sees no T3-4
        warning even on a cell the guard would flag.
     2. Arming it changes nothing but the warning -- the returned number is
-       ``==``, not merely close.  The guard only speaks."""
-    assert PC.PMM_MODE_CUT_GUARD is False,         "T3-4 ships DISARMED; see the refutation in _core.py"
-    (r_off, _c), warns_off = _t34_warnings(
-        lambda: solve0(build(2, degree=12), quiet=False))
-    assert not warns_off
-    PC.PMM_MODE_CUT_GUARD = True
+       ``==``, not merely close.  The guard only speaks.
+
+    **v5.33.2 -- THE CELL IS FOUND, NOT LISTED.**  This pinned ``(ns=2,
+    degree=12)``, which fires on this dev box through channel B.  Whether any
+    GIVEN rung carries a load-bearing cut is the per-build fact the four-name
+    adjudication measured, and since 2026-08-08 channel A speaks only about
+    the RESIDUAL (which is 0 on a passive stack with the repair on), the
+    pinned rung's firing rests on channel B alone -- exactly the build-fragile
+    half.  So the family is scanned for a rung the guard speaks on and the two
+    claims are made there; the fail-before switch is the backstop, because
+    with the passivity widening off the family provably still contains a cell
+    whose forward set grows, and channel A cannot be quiet on one of those.
+    Failing (rather than skipping) when NOTHING speaks anywhere is deliberate:
+    a guard that has gone completely silent on its own calibration family is a
+    headline event."""
+    assert PC.PMM_MODE_CUT_GUARD is False, \
+        "T3-4 ships DISARMED; see the refutation in _core.py"
+    scanned, hit = [], None
+    widen0 = PC.PMM_FORWARD_GROWTH_PASSIVE
     try:
-        (r_on, _c2), warns_on = _t34_warnings(
-            lambda: solve0(build(2, degree=12), quiet=False))
+        for widen in (True, False):
+            PC.PMM_FORWARD_GROWTH_PASSIVE = widen
+            for ns, degree in _T34_SPEAKS_FAMILY:
+                _r, fired = _t34_armed_cell(ns, degree)
+                scanned.append((ns, degree, widen, fired))
+                if fired:
+                    hit = (ns, degree, widen)
+                    break
+            if hit is not None:
+                break
+        assert hit is not None, (
+            "the ARMED T3-4 guard speaks on NO cell of its own calibration "
+            "family, with the passivity widening on OR off -- both channels "
+            "have gone silent and there is nothing left for this test to "
+            f"measure.  scanned (ns, degree, widen, fired): {scanned}")
+        ns, degree, widen = hit
+        PC.PMM_FORWARD_GROWTH_PASSIVE = widen   # the cell fires in THIS state
+        if not widen:
+            print(f"\nT3-4 disarmed/arming pin: no rung of the family speaks "
+                  f"with the shipped selector, so the claim is made on "
+                  f"ns={ns} degree={degree} with PMM_FORWARD_GROWTH_PASSIVE "
+                  f"off (the fail-before state).  scanned: {scanned}")
+        # 1. the shipped default is silence ON THAT CELL
+        (r_off, _c), warns_off = _t34_warnings(
+            lambda: solve0(build(ns, degree=degree), quiet=False))
+        assert not warns_off, (
+            f"ns={ns} degree={degree}: the DISARMED guard emitted "
+            f"{warns_off[0].message}")
+        # 2. arming it changes nothing but the warning
+        PC.PMM_MODE_CUT_GUARD = True
+        try:
+            (r_on, _c2), warns_on = _t34_warnings(
+                lambda: solve0(build(ns, degree=degree), quiet=False))
+        finally:
+            PC.PMM_MODE_CUT_GUARD = False
+        assert warns_on
+        assert r_on == r_off
     finally:
-        PC.PMM_MODE_CUT_GUARD = False
-    assert warns_on
-    assert r_on == r_off
+        PC.PMM_FORWARD_GROWTH_PASSIVE = widen0
 
 
 #: The conical (phi != 0) false-positive family.  ``0.133532`` is the
@@ -812,8 +1022,11 @@ def _conical_cell(degree):
     ``dict(degree, r0, close, fired, n_grow, spread, n_risky, margin)`` -- both
     verdict channels read straight off ``_MODE_CUT_CENSUS`` so the adjudication
     below is a measurement and not an inference."""
-    if degree in _CONICAL_SCAN:
-        return _CONICAL_SCAN[degree]
+    # both selector switches in the key -- see ``_t34_cell``
+    key = (degree, bool(PC.PMM_FORWARD_GROWTH_REPAIR),
+           bool(PC.PMM_FORWARD_GROWTH_PASSIVE))
+    if key in _CONICAL_SCAN:
+        return _CONICAL_SCAN[key]
     st = PMMStack(PERIOD, n_substrate=N_SUB, n_superstrate=N_SUP,
                   degree=degree, elements_per_region=1, far_field_orders=7,
                   layer_grids="per-layer", min_feature=3.0 * NM)
@@ -847,7 +1060,7 @@ def _conical_cell(degree):
         spread=(max(counts) - min(counts)) if len(counts) >= 2 else 0,
         n_risky=len(risky),                                  # channel B
         margin=min([c["margin"] for c in risky], default=float("inf")))
-    _CONICAL_SCAN[degree] = cell
+    _CONICAL_SCAN[key] = cell
     return cell
 
 
@@ -962,7 +1175,28 @@ def test_t34_guard_warnings_come_out_in_WAVELENGTH_ORDER_on_the_sweep(
 
     m1, R1, T1 = run(1)
     m4, R4, T4 = run(4)
-    assert m1, "the fixture must actually trip the guard"
+    if not m1:
+        # v5.33.2: the shipped selector no longer leaves this device with a
+        # growing forward mode, so whether the guard speaks here at all rests
+        # on channel B -- the build-fragile half.  The ORDERING contract is
+        # what this test owns and it needs a device that speaks; the
+        # fail-before switch provides one on every build (with the passivity
+        # widening off the sliver family provably still grows, and channel A
+        # cannot be quiet on that).  Everything asserted below is unchanged.
+        widen0 = PC.PMM_FORWARD_GROWTH_PASSIVE
+        PC.PMM_FORWARD_GROWTH_PASSIVE = False
+        try:
+            m1, R1, T1 = run(1)
+            m4, R4, T4 = run(4)
+        finally:
+            PC.PMM_FORWARD_GROWTH_PASSIVE = widen0
+        print("\nT3-4 sweep-ordering pin: the guard is silent on this device "
+              "with the shipped selector, so the ordering contract is "
+              "measured with PMM_FORWARD_GROWTH_PASSIVE off.")
+    assert m1, (
+        "the fixture must actually trip the guard -- it is silent with the "
+        "passivity widening ON and OFF, so there is no warning stream left "
+        "to check the ORDER of")
     got = [float(m.split("wl=")[1].split(")")[0]) for m in m1]
     assert got == sorted(got), f"warnings out of wavelength order: {got}"
     assert m4 == m1, "worker count changed the warning stream"

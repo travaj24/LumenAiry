@@ -158,13 +158,18 @@ _LADDER_DEGREES = (6, 8, 10, 12, 14)
 @pytest.fixture
 def growth_repair_off():
     """The library's fail-before switch for ``_forward_growth_flip``, restored
-    on the way out.  ``False`` is the pre-fix selector, bit for bit."""
-    prev = PC.PMM_FORWARD_GROWTH_REPAIR
+    on the way out.  ``False`` is the pre-fix selector, bit for bit.
+
+    Both switches are saved and restored: ``PMM_FORWARD_GROWTH_PASSIVE`` (the
+    2026-08-08 widening) is toggled by the tests below as well, and a test that
+    left it off would silently change the next one's ladder."""
+    prev = (PC.PMM_FORWARD_GROWTH_REPAIR, PC.PMM_FORWARD_GROWTH_PASSIVE)
     PC.PMM_FORWARD_GROWTH_REPAIR = False
     try:
         yield
     finally:
-        PC.PMM_FORWARD_GROWTH_REPAIR = prev
+        (PC.PMM_FORWARD_GROWTH_REPAIR,
+         PC.PMM_FORWARD_GROWTH_PASSIVE) = prev
 
 
 def spread(v):
@@ -173,17 +178,19 @@ def spread(v):
     return float((v.max() - v.min()) / abs(v.mean()))
 
 
-#: Ladder cache, keyed by ``(ns, min_feature, degrees, repair_flag)``.  The
-#: three re-pinned tests below each score the SAME ladders with the switch off
-#: and on, so without this the file re-solves every cell four or five times.
-#: The repair flag is part of the key because it is exactly what the answer
-#: depends on -- a cache that ignored it would silently fake the null control.
+#: Ladder cache, keyed by ``(ns, min_feature, degrees, repair_flag,
+#: passive_flag)``.  The three re-pinned tests below each score the SAME
+#: ladders with the switches off and on, so without this the file re-solves
+#: every cell four or five times.  BOTH switches are part of the key because
+#: they are exactly what the answer depends on -- a cache that ignored either
+#: would silently fake the null control.
 _LADDER_CACHE = {}
 
 
 def coated_ladder(ns, mf, degrees=_LADDER_DEGREES):
     """Order-0 reflectance over the degree ladder on the coated taper."""
-    key = (ns, mf, degrees, bool(PC.PMM_FORWARD_GROWTH_REPAIR))
+    key = (ns, mf, degrees, bool(PC.PMM_FORWARD_GROWTH_REPAIR),
+           bool(PC.PMM_FORWARD_GROWTH_PASSIVE))
     hit = _LADDER_CACHE.get(key)
     if hit is None:
         hit = np.array([solve0(build(ns, degree=d, min_feature=mf))[0]
@@ -452,7 +459,11 @@ def test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too(
           with the CURED ladder and with the independent RCWA reference, which
           stationarity alone never proved;
       (5) the above-threshold cells are BIT-IDENTICAL either way -- the null
-          floor, and the proof the repair is not a global re-tune.
+          floor, and the proof the repair is not a global re-tune;
+      (6) 2026-08-08 -- and the repair's REACH is a fail-before of its own:
+          the 2026-08-06 mask still leaves this device collapsing two rungs
+          further up the SAME ladder, which is the mechanism that failed
+          this test on CI.  See the section itself.
     """
     # ---- (1) THE DEFECT, on the switch, over the family ------------------
     off = {cell: spread(coated_ladder(*cell)) for cell in BELOW_THRESHOLD}
@@ -517,6 +528,68 @@ def test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too(
             f"the forward-growth repair was switched -- the repair is only "
             f"allowed to touch solves that put a growing mode in the forward "
             f"set, and a cured cell has none")
+
+    # ---- (6) THE REACH, 2026-08-08 (FIX_CI_ROUND2_PMM_2026_08_08) ---------
+    # WHY THIS SECTION EXISTS.  (3) above failed on ubuntu CI -- "the ladder
+    # still spreads 0.4888 / 2.761 with the forward-growth repair on" -- while
+    # passing on both mounts at all three thread counts.  The 2026-08-06 mask
+    # additionally required the growing mode to sit inside a DECADE of the
+    # classification cut, and that conjunct was there for gain media, not for
+    # the physics; on CI's round-off the survivors sat further out and were
+    # left growing.
+    #
+    # WHICH RUNG CARRIES A SURVIVOR IS A PER-POOL FACT, and this section was
+    # written asserting it was not.  Measured on THIS box, ns = 2, library
+    # default, degrees (10, 12, 14, 18, 20), passivity widening OFF:
+    #
+    #     OPENBLAS_NUM_THREADS   spread     survivors
+    #     1                      3.75       degrees 18 (2 modes) and 20 (4)
+    #     2                      2.15       degree 20 only
+    #     24                     5.047e-04  NONE -- the 2026-08-06 mask
+    #                                       already covers this pool's
+    #
+    # -- the same migration the four-name adjudication measured, one level
+    # down.  So the fail-before half is ADJUDICATED (printed when the pool
+    # does not carry it) and the CURE half is asserted unconditionally.  The
+    # guaranteed fail-before for the widening lives in
+    # ``test_pmm_m3_efficiency.py::test_t34_guard_fires_on_every_silent_wrong_
+    # cell_of_this_build``, which scans BOTH n_slice families and widens its
+    # degree set until it finds one -- and which passed at every thread count
+    # here, including 24, where this ladder alone carries nothing.
+    _REACH = (10, 12, 14, 18, 20)
+    PC.PMM_FORWARD_GROWTH_REPAIR = True
+    PC.PMM_FORWARD_GROWTH_PASSIVE = False
+    try:
+        s_narrow = spread(coated_ladder(2, None, _REACH))
+    finally:
+        PC.PMM_FORWARD_GROWTH_PASSIVE = True
+    s_wide = spread(coated_ladder(2, None, _REACH))
+    if s_narrow > 0.5:
+        print(f"\nM2 reach: the 2026-08-06 mask leaves the ns=2 ladder over "
+              f"degrees {_REACH} COLLAPSED on this pool (spread "
+              f"{s_narrow:.4g}) and the widening cures it to {s_wide:.4g} -- "
+              f"the CI-B mechanism, reproduced on this build.")
+    else:
+        print(f"\nM2 reach: the 2026-08-06 mask leaves the ns=2 ladder over "
+              f"degrees {_REACH} stationary on this pool (spread "
+              f"{s_narrow:.4g}), i.e. no beyond-decade survivor lands here -- "
+              f"the widening is inert on this cell and its fail-before is "
+              f"carried by the M3 wrong-cell scan instead.")
+    # the CURE side is assertable on every pool, survivor or not: the ladder
+    # the library actually SHIPS must be stationary AND right.  Where the pool
+    # carried a survivor this is the cure (measured 3.75 -> 3.73e-03); where it
+    # did not it is a plain stationarity claim on two extra rungs.
+    assert s_wide < 1e-2, (
+        f"the shipped ns=2 ladder spreads {s_wide:.4g} over degrees {_REACH} "
+        f"(the 2026-08-06 mask spread {s_narrow:.4g} on the same rungs) -- a "
+        f"forward mode of a passive layer cannot grow along +z at ANY "
+        f"distance from the cut, so a surviving collapse is a SECOND "
+        f"mechanism and must be diagnosed, not tolerated")
+    rel_reach = float(np.max(np.abs(coated_ladder(2, None, _REACH)
+                                    / RCWA_R0[2] - 1.0)))
+    assert rel_reach < 0.05, (
+        f"the widened ns=2 ladder over degrees {_REACH} reads {rel_reach:.4g} "
+        f"from the RCWA reference -- stationary on the wrong answer")
 
 
 def test_min_feature_threshold_rule_predicts_stationarity(growth_repair_off):
@@ -603,7 +676,8 @@ def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper(
 
     def spread_u(ns, mf):
         # cached on the repair flag too -- see ``_LADDER_CACHE``
-        key = (ns, mf, bool(PC.PMM_FORWARD_GROWTH_REPAIR))
+        key = (ns, mf, bool(PC.PMM_FORWARD_GROWTH_REPAIR),
+               bool(PC.PMM_FORWARD_GROWTH_PASSIVE))
         v = cache.get(key)
         if v is None:
             v = np.asarray([solve0(_mk(_uncoated_layers(ns), d, 1)
@@ -902,6 +976,73 @@ def _stair_solve(grids, ffo=7, degree=6):
             float(np.max(np.abs(R.sum(axis=1) + T.sum(axis=1) - 1.0))))
 
 
+def test_the_passivity_widening_is_a_null_floor_and_an_invariant():
+    """The 2026-08-08 widening's two CONTRACTS, pinned on the selector itself
+    over 400 random modal spectra -- no device, no BLAS, no environment.
+
+    ``docs/audits/FIX_CI_ROUND2_PMM_2026_08_08.md`` S1.3.
+
+      (1) THE NULL FLOOR.  With ``passive`` False -- a gain medium, an
+          off-diagonal tensor, an unknown element payload -- the shipped
+          selector is BIT-IDENTICAL to the 2026-08-06 mask.  Compared against
+          a VERBATIM re-implementation of that mask, at tolerance 0.0, not by
+          ``array_equal`` on the answer.  Measured 0 differing trials of 400.
+      (2) THE INVARIANT.  With ``passive`` True the returned forward set
+          CANNOT contain a growing mode, at any distance from the cut.
+          Measured 0 of 400 -- while the same spectra leave one under the
+          2026-08-06 mask in 399 of 400, which is what makes (2) a measurement
+          rather than a tautology about the generator.
+
+    Random spectra are the right instrument here precisely because the CI
+    failures were about round-off landing where the dev box's does not: this
+    samples the whole (flux, q, thr) plane instead of one build's corner of it.
+    """
+    rng = np.random.default_rng(7)
+
+    def mask_2026_08_06(flux, q, thr, prop):
+        """VERBATIM re-implementation of the shipped 2026-08-06 selector."""
+        flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+        qf = np.where(flip, -q, q)
+        lim = np.where(np.isfinite(thr), PC._MODE_CUT_MARGIN_WARN * thr, 0.0)
+        bad = (prop & (np.abs(flux) < lim)
+               & (qf.imag < -PC._MODE_GROWTH_REL * np.abs(qf)))
+        return np.where(bad, q.imag < 0.0, flip)
+
+    def grows(flip, q):
+        qf = np.where(flip, -q, q)
+        return bool((qf.imag < -PC._MODE_GROWTH_REL * np.abs(qf)).any())
+
+    n_diff, n_grew_wide, n_grew_narrow = 0, 0, 0
+    for _trial in range(400):
+        n = 40
+        flux = rng.standard_normal(n) * 10.0 ** rng.integers(-20, 2, n)
+        q = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+        m = rng.random(n) < 0.5
+        # a purely-imaginary q is the pathological population: zero z-power,
+        # so its flux is round-off wherever the cut happens to sit.
+        q[m] = 1j * rng.standard_normal(int(m.sum()))
+        thr = float(10.0 ** rng.integers(-20, -2))
+        prop = np.abs(flux) > thr
+        narrow = PC._forward_growth_flip(flux, q, thr, prop, np, False)
+        wide = PC._forward_growth_flip(flux, q, thr, prop, np, True)
+        if not np.array_equal(narrow, mask_2026_08_06(flux, q, thr, prop)):
+            n_diff += 1
+        n_grew_wide += grows(wide, q)
+        n_grew_narrow += grows(narrow, q)
+    assert n_diff == 0, (                        # (1)
+        f"{n_diff} of 400 spectra: the selector with passivity NOT PROVEN is "
+        f"no longer bit-identical to the 2026-08-06 mask, so the widening has "
+        f"stopped being a null floor for gain / off-diagonal / unknown grids")
+    assert n_grew_wide == 0, (                   # (2)
+        f"{n_grew_wide} of 400 spectra leave a GROWING mode in the forward "
+        f"set with passive=True -- the invariant is supposed to hold by "
+        f"construction there")
+    assert n_grew_narrow > 100, (                # (2) is not a tautology
+        f"only {n_grew_narrow} of 400 spectra grow under the 2026-08-06 mask "
+        f"(measured 399), so this generator no longer reaches the population "
+        f"the widening exists for and the claim above proves nothing")
+
+
 def test_the_forward_set_cannot_grow_on_the_union_grid_conical_staircase():
     """THE NINTH NAME, pinned as an INVARIANT rather than as a number.
 
@@ -936,14 +1077,26 @@ def test_the_forward_set_cannot_grow_on_the_union_grid_conical_staircase():
       (c) and the observable follows: the union grid agrees with the
           per-layer path, which is the cross-path oracle that was TRUE at 1
           thread and FALSE at 2 before the fix.
+
+    **2026-08-08 (FIX_CI_ROUND2_PMM_2026_08_08).**  (b) is now scored WITHOUT
+    the ``|flux| < 10 thr`` conjunct the 2026-08-06 form carried, i.e. against
+    the invariant itself -- "no forward mode of a passive layer grows", at ANY
+    distance from the cut -- because the cut's decade was measured to be the
+    thing that let two cells through (M2's ns=2 ladder at degrees 18 and 20,
+    where survivors sit at 15.8-23.6 x the cut).  The bar is REMOVED from the
+    claim, not moved: this is the strictly stronger statement.  The RAW count
+    (a) keeps the old conjunct so it still means what it meant.
     """
     seen = []
     orig = PC._record_mode_cut
 
-    def spy(flux, q, thr, prop, mats, site, patterned=None):
+    def spy(flux, q, thr, prop, mats, site, patterned=None,
+            flip=None, passive=None):
         seen.append((np.asarray(flux).copy(), np.asarray(q).copy(),
-                     float(thr), np.asarray(prop).copy(), site))
-        return orig(flux, q, thr, prop, mats, site, patterned)
+                     float(thr), np.asarray(prop).copy(), site,
+                     PC._grid_is_passive(mats) if passive is None else passive))
+        return orig(flux, q, thr, prop, mats, site, patterned,
+                    flip=flip, passive=passive)
 
     PC._record_mode_cut = spy
     PC._MODE_CUT_CENSUS = []
@@ -953,37 +1106,53 @@ def test_the_forward_set_cannot_grow_on_the_union_grid_conical_staircase():
         PC._MODE_CUT_CENSUS = None
         PC._record_mode_cut = orig
     assert seen, "the census spy never saw a modal solve: nothing was measured"
+    # the device is lossless, so every row must be recognised PASSIVE -- if it
+    # is not, the widened branch never runs and (b) below proves nothing.
+    assert all(row[5] for row in seen), (
+        "a row of this lossless staircase was not recognised as PASSIVE, so "
+        "_forward_growth_flip's widened branch was never exercised: "
+        f"{[(r[4], r[5]) for r in seen]}")
 
-    def grown(flip_fn):
+    def grown(flip_fn, near_only):
         """Modes the given selector leaves GROWING in the forward set, over
-        every row of the solve -- scored with the SHIPPED bars."""
+        every row of the solve.  ``near_only`` restores the 2026-08-06
+        conjunct (used for the RAW count, which is what that reading meant)."""
         total = 0
-        for flux, q, thr, prop, _site in seen:
+        for flux, q, thr, prop, _site, _pas in seen:
             flip = flip_fn(flux, q, thr, prop)
             qf = np.where(flip, -q, q)
-            near = np.abs(flux) < PC._MODE_CUT_MARGIN_WARN * thr
-            total += int(np.count_nonzero(
-                prop & near
-                & (qf.imag < -PC._MODE_GROWTH_REL * np.abs(qf))))
+            bad = prop & (qf.imag < -PC._MODE_GROWTH_REL * np.abs(qf))
+            if near_only:
+                bad = bad & (np.abs(flux) < PC._MODE_CUT_MARGIN_WARN * thr)
+            total += int(np.count_nonzero(bad))
         return total
 
-    raw = grown(lambda f, q, t, p: np.where(p, f < 0.0, q.imag < 0.0))
-    fixed = grown(lambda f, q, t, p: PC._forward_growth_flip(f, q, t, p))
+    raw = grown(lambda f, q, t, p: np.where(p, f < 0.0, q.imag < 0.0), True)
+    fixed = grown(
+        lambda f, q, t, p: PC._forward_growth_flip(f, q, t, p, np, True), False)
     # (a) the defect still reproduces: the raw selector grows something here
     assert raw >= 1, (
         "the RAW selector puts NO growing mode in the forward set on the M1 "
         "audit staircase, so the ninth name no longer reproduces on this "
         "build and this test has stopped being a fail-before.  Re-pin it "
         "against whatever changed rather than deleting it.")
-    # (b) THE FIX: a forward mode of a passive layer cannot grow along +z
+    # (b) THE FIX: a forward mode of a passive layer cannot grow along +z --
+    #     anywhere, not merely inside the cut's decade.
     assert fixed == 0, (
         f"the repaired selector STILL leaves {fixed} growing mode(s) in the "
         f"forward set (raw: {raw}) -- _forward_growth_flip is supposed to "
         f"make that impossible by construction")
-    # ... and the instrument agrees with the raw count, so the guard and the
-    # repair can never disagree about which modes are affected.
+    # ... and the instrument agrees with the raw count, so the guard's
+    # DIAGNOSIS channel and the 2026-08-06 mask can never disagree about which
+    # modes are affected.
     assert raw == sum(PC._mode_cut_growth(f, q, t, p)[0]
-                      for f, q, t, p, _s in seen)
+                      for f, q, t, p, _s, _pas in seen)
+    # ... and the RESIDUAL instrument the guard now speaks on agrees with (b):
+    # what the shipped selector leaves is what _mode_cut_growth_post reports.
+    assert 0 == sum(
+        PC._mode_cut_growth_post(
+            f, q, PC._forward_growth_flip(f, q, t, p, np, True))
+        for f, q, t, p, _s, _pas in seen)
 
     # (c) the observable: the two grid paths now agree.  Measured 3.89e-04
     #     relative at 1, 2 and 24 threads on both mounts; before the fix the

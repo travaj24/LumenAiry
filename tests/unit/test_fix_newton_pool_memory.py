@@ -1031,3 +1031,383 @@ def test_the_unguarded_main_refusal_is_not_routed_through_the_knob(
         "on_pool_memory='silent' silenced the unguarded-__main__ refusal; "
         "that is a correctness hazard (the caller's side effects run K extra "
         'times), not a resource notice')
+
+
+# ---------------------------------------------------------------------------
+# v5.33.0 (docs/audits/FIX_POOL_REBUILD_2026_08_08.md) -- THE SECOND HALF.
+#
+# The ``cheb_backend`` pin above made the parent and its workers EVALUATE in
+# the same floating-point order.  ``test_pool_result_is_bit_identical_to_
+# serial[polynomial]`` went on failing on CI afterwards, at 1.341e-11 /
+# 1.358e-11, in ALL FOUR python lanes -- because the worker was still REBUILDING
+# the fit.  ``_Cheb2DEvaluator.__init__`` runs ``_solve_lstsq_thread_safe``,
+# i.e. ``A^T A`` and ``A^T b`` over a ~78 000-row design matrix, and OpenBLAS
+# reduces those in a thread-count-dependent order.  A spawn worker does not
+# inherit its parent's BLAS width (``threadpoolctl``'s cap is process-global, so
+# a long-lived pytest parent that has been through a capped section is not at
+# the environment default a fresh interpreter starts at), so the two recovered
+# DIFFERENT coefficients from identical data.
+#
+# The parent now SHIPS its built fit and the worker evaluates it.  The tests
+# below are the premise, the fail-before, the wiring, and one real spawned
+# worker.
+# ---------------------------------------------------------------------------
+
+# ~78 000 rows: the traced doublet's own ray-fit grid at this file's N=1024 /
+# ray_subsample=2 shape.  Big enough that OpenBLAS threads the reduction, which
+# is the whole phenomenon -- a 25x25 toy grid is single-threaded on every build
+# and would make the premise test vacuously green.
+_BLAS_FIT_N = 279
+
+
+def _blas_widths():
+    """BLAS caps to compare a fit rebuild across, or ``()`` when this build
+    cannot be capped at all."""
+    try:
+        from threadpoolctl import threadpool_info, threadpool_limits  # noqa: F401
+    except ImportError:
+        return ()
+    return (1, 2, 4, None)
+
+
+def _blas_payload(n=_BLAS_FIT_N):
+    """``_fit_payload`` with an OPL map that is NOT exactly representable in
+    the order-6 basis.
+
+    The toy payload's OPL is a paraboloid, which an order-6 total-degree fit
+    reproduces exactly -- every coefficient above degree 2 comes out at ~0, so
+    a reduction-order difference has nothing to show up in.  A degree-6 radial
+    term makes the residual real and the coefficients O(1), which is the regime
+    the traced doublet's own fit is in.
+    """
+    p = _fit_payload(order=6, n=n)
+    xs = p['xs_in']
+    X, Y = np.meshgrid(xs, xs, indexing='ij')
+    r2 = X ** 2 + Y ** 2
+    p['opl_grid'] = (1.0e-3 + 5.0e2 * r2 + 2.1e8 * r2 * r2
+                     + 3.0e2 * X * r2 - 7.7e10 * r2 ** 3)
+    return p
+
+
+def _rebuild_coeffs(p, width):
+    """Re-FIT the OPL evaluator from the payload's grids under a BLAS cap."""
+    from threadpoolctl import threadpool_limits
+    with threadpool_limits(limits=width):
+        return np.asarray(
+            LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'],
+                                order=int(p['fit_poly_order']), xp=np,
+                                backend='numpy').coeffs)
+
+
+def _shipped_payload(p):
+    """``p`` plus the built fit the dispatch site now ships, PICKLE-ROUND-
+    TRIPPED, because that is what a real worker receives."""
+    import pickle
+    evs = [LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p[k], xp=np,
+                               order=int(p['fit_poly_order']))
+           for k in ('x_out_grid', 'y_out_grid', 'opl_grid')]
+    q = dict(p)
+    q['cheb_fit'] = LT._cheb_fit_payload(*evs, newton_fit='polynomial')
+    return pickle.loads(pickle.dumps(q))
+
+
+def test_a_rebuilt_fit_is_not_blas_width_stable():
+    """THE PREMISE, measured rather than argued -- and the FAIL-BEFORE.
+
+    If ``A^T A`` were reduced identically at every thread width there would be
+    nothing here to fix and shipping the fit would be dead weight.  MEASURED on
+    the traced doublet's own 77 841-point OPL fit (Windows 11, py3.14.6,
+    numpy 2.4.4 / scipy-openblas 0.3.31, 24 cores), coefficients at BLAS width
+    W against the process default: 4.596e-15 / 4.243e-15 / 5.484e-15 /
+    8.766e-16 at W = 1 / 2 / 4 / 8, while 30/30 rebuilds at a FIXED width are
+    bit-identical and so is a real spawned worker at that same width.  So this
+    is the width and nothing else.  Full table in
+    docs/audits/FIX_POOL_REBUILD_2026_08_08.md sec 2.
+
+    A build whose BLAS cannot be capped, or is single-threaded on this shape,
+    skips -- on such a build a worker that re-fits was already safe, which is
+    exactly why the contract passed on some boxes and failed on CI.
+    """
+    widths = _blas_widths()
+    if not widths:
+        pytest.skip('threadpoolctl absent: this build cannot vary BLAS width')
+    p = _blas_payload()
+    ref = _rebuild_coeffs(p, None)
+    deltas = {w: float(np.abs(ref - _rebuild_coeffs(p, w)).max())
+              for w in widths if w is not None}
+    # whatever it does, it must do it REPEATABLY at a fixed width, or the
+    # measurement below is noise rather than a reduction-order fact
+    assert np.array_equal(ref, _rebuild_coeffs(p, None)), (
+        'the fit is not even reproducible in ONE process at ONE BLAS width; '
+        'that is a different (and worse) defect than the one this fix closes')
+    if not any(d > 0.0 for d in deltas.values()):
+        pytest.skip(
+            f'this BLAS reduces identically at every width tried ({deltas}), '
+            f'so a worker that re-fits was already safe here.  The shipped '
+            f'fit is still the durable answer -- see the sibling tests -- but '
+            f'this box cannot witness the defect')
+    assert max(deltas.values()) < 1e-12, (
+        f'coefficients moved by {max(deltas.values()):.3e} across BLAS widths; '
+        f'that is far beyond a reduction-order difference and means one of '
+        f'these solves is wrong, not merely ordered differently')
+
+
+def test_the_worker_evaluates_the_shipped_fit_and_never_re_fits():
+    """The mechanism, at the worker's own entry point.
+
+    ``_newton_invert_chunk`` IS the spawn worker's body.  With the fit shipped
+    it must not reach the least-squares solver at all -- not "reach it and get
+    the same answer", because whether it gets the same answer is precisely the
+    thing that depends on a BLAS regime it does not control.  The keyless arm
+    is the FAIL-BEFORE: that is the old worker, and it solves three times.
+    """
+    p = _fit_payload(n=64)
+    xa, ya = _chunk_pts(24)
+    calls = []
+    orig = LT._solve_lstsq_thread_safe
+
+    def _spy(A, b):
+        calls.append(np.shape(A))
+        return orig(A, b)
+
+    LT._solve_lstsq_thread_safe = _spy
+    try:
+        shipped = _shipped_payload(p)
+        n_before = len(calls)          # the parent's own three, built above
+        opl_ship, _ = LT._newton_invert_chunk((shipped, xa, ya))
+        assert len(calls) == n_before, (
+            f'the worker ran {len(calls) - n_before} least-squares solves on a '
+            f'payload that already carries the fit; it must EVALUATE the '
+            f"parent's coefficients, not re-derive them")
+        # ...and the historical payload still behaves as it did: three solves,
+        # one per evaluator.  This is the pre-fix worker, and the reason CI
+        # failed.
+        old = dict(p)
+        old.pop('cheb_fit', None)
+        n_before = len(calls)
+        opl_old, _ = LT._newton_invert_chunk((old, xa, ya))
+        assert len(calls) - n_before == 3, (
+            f'a payload with no cheb_fit key ran {len(calls) - n_before} '
+            f'solves; the backwards-compatible path must still rebuild all '
+            f'three evaluators (see the newton_fit / newton_max_iters '
+            f'tolerances beside it)')
+    finally:
+        LT._solve_lstsq_thread_safe = orig
+    # same numbers, both ways, on a box where the two BLAS regimes agree
+    assert np.allclose(np.nan_to_num(opl_ship), np.nan_to_num(opl_old),
+                       rtol=0.0, atol=1e-12)
+
+
+def test_the_shipped_fit_is_evaluated_identically_at_any_blas_width():
+    """THE CONTRACT, unconditional: the answer a worker returns may not depend
+    on the BLAS width its interpreter happened to start at.
+
+    Pre-fix this is the CI failure, measured end-to-end on the contract's own
+    shape at 1.370e-11 for a worker at width 4 against a parent at width 24 --
+    i.e. the 1.341e-11 / 1.358e-11 that
+    ``test_pool_result_is_bit_identical_to_serial[polynomial]`` reported.  Here
+    it is asserted at the worker entry point, where it costs milliseconds.
+    """
+    widths = _blas_widths()
+    if not widths:
+        pytest.skip('threadpoolctl absent: this build cannot vary BLAS width')
+    from threadpoolctl import threadpool_limits
+    p = _shipped_payload(_blas_payload())
+    xa, ya = _chunk_pts(48)
+    ref = None
+    for w in widths:
+        with threadpool_limits(limits=w):
+            opl, _ = LT._newton_invert_chunk((p, xa, ya))
+        if ref is None:
+            ref = opl
+            continue
+        assert np.array_equal(np.nan_to_num(ref), np.nan_to_num(opl)), (
+            f'the worker answered differently at BLAS width {w}, max|delta| = '
+            f'{np.abs(np.nan_to_num(opl - ref)).max():.3e}.  The shipped fit '
+            f'is supposed to remove every BLAS-dependent step from this path')
+
+
+def test_from_state_reproduces_the_parents_evaluator_bitwise():
+    """The round trip that the whole fix rests on: state -> pickle -> evaluator
+    must give BYTE-IDENTICAL evaluation to the object it came from, and must
+    perform no fit of its own."""
+    import pickle
+    p = _fit_payload(n=64)
+    xa, ya = _chunk_pts(32)
+    parent = LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'],
+                                 order=6, xp=np, backend='numpy')
+    state = pickle.loads(pickle.dumps(LT._cheb_fit_state(parent)))
+    calls = []
+    orig = LT._solve_lstsq_thread_safe
+    LT._solve_lstsq_thread_safe = lambda A, b: calls.append(1) or orig(A, b)
+    try:
+        child = LT._Cheb2DEvaluator.from_state(state, xp=np, backend='numpy')
+    finally:
+        LT._solve_lstsq_thread_safe = orig
+    assert calls == [], 'from_state ran a least-squares solve'
+    assert np.array_equal(np.asarray(parent.coeffs), np.asarray(child.coeffs))
+    for a, b in zip(parent.ev_value_and_grad(xa, ya),
+                    child.ev_value_and_grad(xa, ya)):
+        assert np.array_equal(a, b), 'from_state does not evaluate identically'
+    # the backend is a fact about WHERE it runs, so it is passed in rather than
+    # carried in the state -- and it is validated on this path too
+    assert 'backend' not in state
+    with pytest.raises(ValueError, match='backend'):
+        LT._Cheb2DEvaluator.from_state(state, xp=np, backend='numexpr')
+
+
+def test_the_shipped_state_carries_the_fit_and_not_the_grids():
+    """What travels, and what does not.
+
+    The state is coefficients + multi-indices + the normalisation domain: the
+    things an EVALUATION needs.  It must not re-ship the sample grids -- the
+    payload already carries those for the spline path, and the per-worker
+    memory model (``_newton_worker_bytes``) prices exactly one copy of them.
+    A regression that shipped a second copy would silently move the clamp.
+    """
+    p = _blas_payload()
+    ev = LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'], order=6,
+                             xp=np)
+    state = LT._cheb_fit_state(ev)
+    assert set(state) == {'order', 'mi', 'coeffs', 'K1', 'K2',
+                          'xmin', 'xmax', 'ymin', 'ymax'}
+    n_terms = len(state['mi'])
+    assert state['coeffs'].shape == state['K1'].shape == (n_terms,)
+    import pickle
+    n_bytes = len(pickle.dumps(
+        LT._cheb_fit_payload(ev, ev, ev, newton_fit='polynomial')))
+    grid_bytes = p['opl_grid'].nbytes
+    assert n_bytes < 16_384 and n_bytes < grid_bytes / 20, (
+        f'the shipped fit is {n_bytes} B against {grid_bytes} B of ONE grid '
+        f'the payload already carries; it is meant to be free')
+    # spline has no Chebyshev fit to ship: its worker rebuilds a single-threaded
+    # FITPACK spline, which has no BLAS width to disagree about (and is why
+    # [spline] passed on CI in every lane it ran in)
+    assert LT._cheb_fit_payload(ev, ev, ev, newton_fit='spline') is None
+
+
+def test_a_truncated_fit_state_is_refused_not_broadcast():
+    """A payload that lost a coefficient must fail loudly.  Silent broadcasting
+    would produce a plausible field from the wrong polynomial, which is the
+    exact failure class this whole file is about."""
+    p = _fit_payload(n=48)
+    ev = LT._Cheb2DEvaluator(p['xs_in'], p['xs_in'], p['opl_grid'], order=6,
+                             xp=np)
+    good = LT._cheb_fit_state(ev)
+    for key in ('coeffs', 'K1', 'K2'):
+        bad = dict(good)
+        bad[key] = np.asarray(good[key])[:-1]
+        with pytest.raises(ValueError, match='inconsistent fit state'):
+            LT._Cheb2DEvaluator.from_state(bad, xp=np)
+
+
+def test_the_dispatch_path_ships_the_built_fit():
+    """Wiring pin, same reasoning as its two siblings above: on a box whose
+    parent and workers share a BLAS regime, bit-identity cannot notice that the
+    fit stopped travelling -- which is every box this defect did not reproduce
+    on.  So pin that the dispatch still ships it, from the SERIAL closure's own
+    evaluators, before the payload is chunked."""
+    body = _dispatch_closure_source()
+    assert ("_spline_data['cheb_fit'] = _cheb_fit_payload(Sx, Sy, So, "
+            'newton_fit)' in body), (
+        "the Newton payload no longer ships the parent's built Chebyshev fit, "
+        'so every worker re-solves the least squares in its own interpreter '
+        'and pool == serial is conditional on the two sharing a BLAS width')
+    assert body.index("_spline_data['cheb_fit']") < body.index('args_list = ['), (
+        'the fit is attached after the payload has already been chunked')
+    wsrc = inspect.getsource(LT._newton_invert_chunk)
+    assert "knot_data.get('cheb_fit', None)" in wsrc, (
+        'the worker no longer reads the shipped fit')
+    assert '_Cheb2DEvaluator.from_state(' in wsrc, (
+        'the worker reads the shipped fit but does not construct from it')
+    # ...and the keyless tolerance stays, exactly as it does for newton_fit,
+    # newton_max_iters and cheb_backend
+    assert '_Cheb2DEvaluator(xs_in, xs_in, x_out_grid' in wsrc, (
+        'the historical rebuild path is gone, so a payload written before this '
+        'key existed can no longer run')
+
+
+_PROBE = '''
+import multiprocessing as mp, pickle, sys
+from concurrent.futures import ProcessPoolExecutor
+import numpy as np
+from lumenairy.elements import _lens_traced as LT
+from threadpoolctl import threadpool_limits
+
+
+def probe(payload):
+    """Runs in the SPAWNED worker."""
+    n = []
+    orig = LT._solve_lstsq_thread_safe
+    LT._solve_lstsq_thread_safe = lambda A, b: n.append(1) or orig(A, b)
+    try:
+        ev = LT._Cheb2DEvaluator.from_state(payload['cheb_fit']['opl'], xp=np,
+                                            backend='numpy')
+        n_ship = len(n)
+        refit = LT._Cheb2DEvaluator(payload['xs_in'], payload['xs_in'],
+                                    payload['opl_grid'], order=6, xp=np,
+                                    backend='numpy')
+    finally:
+        LT._solve_lstsq_thread_safe = orig
+    return (np.asarray(ev.coeffs), np.asarray(refit.coeffs), n_ship)
+
+
+def main():
+    xs = np.linspace(-1e-3, 1e-3, 279)
+    X, Y = np.meshgrid(xs, xs, indexing='ij')
+    r2 = X ** 2 + Y ** 2
+    g = 1.0e-3 + 5.0e2 * r2 + 2.1e8 * r2 * r2 + 3.0e2 * X * r2
+    # The PARENT fits under a BLAS cap the freshly spawned child will not have
+    # -- process-global on OpenBLAS, and exactly the asymmetry CI hits.
+    with threadpool_limits(limits=1):
+        ev = LT._Cheb2DEvaluator(xs, xs, g, order=6, xp=np, backend='numpy')
+    payload = {'xs_in': xs, 'opl_grid': g,
+               'cheb_fit': {'opl': LT._cheb_fit_state(ev)}}
+    with ProcessPoolExecutor(max_workers=1,
+                             mp_context=mp.get_context('spawn')) as ex:
+        c_ship, c_refit, n_solves = ex.submit(probe, payload).result()
+    parent = np.asarray(ev.coeffs)
+    print('SHIPPED_IDENTICAL', bool(np.array_equal(parent, c_ship)))
+    print('WORKER_SOLVES', n_solves)
+    print('REFIT_IDENTICAL', bool(np.array_equal(parent, c_refit)))
+    print('REFIT_DELTA', '%.3e' % float(np.abs(parent - c_refit).max()))
+
+
+if __name__ == '__main__':
+    main()
+'''
+
+
+@pytest.mark.slow
+def test_a_real_spawned_worker_uses_the_parents_fit(tmp_path):
+    """The probe the emulations stand in for: a REAL spawned worker, with the
+    parent's fit built under a BLAS cap the child does not inherit.
+
+    Two assertions, both unconditional:
+      * the worker's evaluator holds the parent's coefficients, bit for bit;
+      * it ran ZERO least-squares solves to get them.
+
+    The third line it prints -- whether the child's own REBUILD matches -- is
+    the fail-before, reported rather than asserted: on a box whose BLAS reduces
+    identically at every width it legitimately matches, and that is the box
+    this defect never reproduced on.
+    """
+    pytest.importorskip('threadpoolctl')
+    script = tmp_path / 'probe_fit.py'
+    script.write_text(_PROBE)
+    out = subprocess.run([sys.executable, str(script)], capture_output=True,
+                         text=True, timeout=600)
+    assert out.returncode == 0, out.stderr + out.stdout
+    got = {}
+    for ln in out.stdout.splitlines():
+        parts = ln.split(' ', 1)
+        if len(parts) == 2 and parts[0].isupper():
+            got[parts[0]] = parts[1].strip()
+    assert got.get('SHIPPED_IDENTICAL') == 'True', (
+        f'a spawned worker built from the shipped state does not hold the '
+        f"parent's coefficients: {out.stdout}")
+    assert got.get('WORKER_SOLVES') == '0', (
+        f'the worker ran a least-squares solve to construct from a state that '
+        f'already carries the answer: {out.stdout}')
+    print(f'  [probe] worker re-fit matches parent: '
+          f'{got.get("REFIT_IDENTICAL")} (delta {got.get("REFIT_DELTA")})')

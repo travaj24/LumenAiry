@@ -893,6 +893,29 @@ _MODE_CUT_CENSUS = None
 #   conical false positive is unchanged and arming is still gated on the
 #   consensus probe, but a growing forward mode is no longer a wrong answer
 #   waiting to happen -- it is a repaired one that the instrument still names.
+#
+# ---------------------------------------------------------------------------
+# UPDATE 2026-08-08 (FIX_CI_ROUND2_PMM_2026_08_08).  The first bullet above was
+# WRONG, and ubuntu CI proved it: "the instrument still names it" is a FALSE
+# ALARM once the repair exists.  On two images the armed guard reported
+# "2 / 4 GROWING mode(s) in the FORWARD set ... within a factor 1.05 / 1.44 of
+# the cut" on cells whose ANSWER was right (rel 0.0035 / 0.0057 against the
+# RCWA anchor) -- because the repair had redirected exactly those modes, and
+# the verdict was reading the pre-repair state.  Whether the pre-repair state
+# is empty is a BLAS-reduction-order fact, so the old reading could not be
+# asserted anywhere.  TWO changes, both measured in this file's docstrings:
+#
+# * :func:`_mode_cut_verdict` channel A now reads the RESIDUAL
+#   (:func:`_mode_cut_growth_post`) -- what the SHIPPED forward set still
+#   grows.  On the classical family that partitions the cells EXACTLY by the
+#   RCWA-anchored error, which the raw reading never did;
+# * :func:`_forward_growth_flip` drops the cut's decade on a PROVABLY PASSIVE
+#   layer, where a growing forward mode is a contradiction at any distance.
+#   That closes the two cells `FIX_UNION_GRID_2THREAD_2026_08_06` S9 item 3
+#   left open (ns=2, degrees 18 and 20, survivors at 15.8-23.6 x the cut).
+#
+# The CENSUS still carries the raw ``n_grow`` next to ``n_grow_post``, so every
+# calibration table in the M3 audit still reads as written.
 # ---------------------------------------------------------------------------
 
 #: T3-4 guard, at WARN.  DISARMED by default -- see the block above for the
@@ -1032,6 +1055,125 @@ def _mode_cut_growth(flux, q, thr, prop):
     return int(np.count_nonzero(grow)), float(np.min(ratio[grow]))
 
 
+def _tensor_is_passive(t):
+    """True when ONE element's permittivity tensor is PROVABLY PASSIVE.
+
+    "Provably" is the whole contract: this returns False whenever passivity
+    cannot be established from the element table, and False is the CONSERVATIVE
+    answer -- it costs :func:`_forward_growth_flip` its widened branch and
+    leaves that call bit-identical to the 2026-08-06 selector.  So a payload
+    this function does not understand can never widen anything.
+
+    The sufficient condition accepted here is DIAGONAL + LOSSY-OR-LOSSLESS::
+
+        exy = eyx = exz = ezx = eyz = ezy = 0   (exactly)
+        Im(exx), Im(eyy), Im(ezz)  >=  0
+
+    in the library's PUBLIC sign convention -- ``Im(n) >= 0`` is lossy and
+    ``Im(n) < 0`` is GAIN, the convention
+    :func:`_require_propagating_incidence` already refuses a gain superstrate
+    under (see its message).  Measured on the shipped assemblers: a segment
+    handed ``eps = (3.48+0j)**2`` reaches ``elem_bnds`` as ``exx = eyy = ezz =
+    12.1104+0j`` with zero off-diagonals, and one handed ``(2-0.1j)**2``
+    reaches it as ``3.99-0.4j`` -- i.e. the PUBLIC sign survives assembly, so
+    the test is on the number the user typed.
+
+    A tensor with a nonzero off-diagonal is NOT accepted even when it is
+    passive: the exact statement there is that the anti-Hermitian part
+    ``(eps - eps^H) / 2i`` is positive semi-definite, and a 3x3 eigen-solve per
+    element is neither free nor traceable.  Those layers keep the narrow mask,
+    which is what they had before this function existed.  Exactly zero is
+    lossless and therefore passive: no tolerance is introduced, so nothing here
+    is calibrated."""
+    if isinstance(t, dict):
+        for k in ("exy", "eyx", "exz", "ezx", "eyz", "ezy"):
+            v = t.get(k)
+            if v is not None and complex(v) != 0.0:
+                return False
+        diag = (t.get("exx"), t.get("eyy"), t.get("ezz"))
+    else:
+        try:
+            a = np.asarray(t, dtype=_C)
+        except (TypeError, ValueError):          # pragma: no cover - payload
+            return False
+        if a.ndim == 0:
+            diag = (complex(a),)
+        elif a.ndim == 2 and a.shape[0] == a.shape[1] == 3:
+            if float(np.max(np.abs(a - np.diag(np.diag(a))))) != 0.0:
+                return False
+            diag = tuple(complex(v) for v in np.diag(a))
+        else:
+            return False
+    for v in diag:
+        if v is None or float(np.imag(complex(v))) < 0.0:
+            return False
+    return True
+
+
+def _grid_is_passive(mats):
+    """True when EVERY element of a grid is provably passive
+    (:func:`_tensor_is_passive`).  Memoized on the ``mats`` dict, which is
+    built once per grid and is not part of :func:`_geo_fingerprint` (that key
+    reads five named fields), so the memo cannot leak into a cache key.
+
+    An absent or short element table returns False -- unknown means NOT PROVEN,
+    which is the direction that leaves the selector unchanged."""
+    hit = mats.get("_pmm_grid_passive")
+    if hit is not None:
+        return hit
+    bnds = mats.get("elem_bnds", ())
+    val = bool(bnds)
+    for b in bnds:
+        if len(b) < 3 or not _tensor_is_passive(b[2]):
+            val = False
+            break
+    try:
+        mats["_pmm_grid_passive"] = val
+    except TypeError:                            # pragma: no cover - non-dict
+        pass
+    return val
+
+
+def _eps_is_passive(eps):
+    """:func:`_tensor_is_passive` for the SCALAR permittivity a uniform
+    half-space is solved on.  Concrete values only: a traced ``eps`` cannot be
+    resolved to a Python bool and answers False (the narrow mask)."""
+    try:
+        return bool(float(np.imag(complex(eps))) >= 0.0)
+    except (TypeError, ValueError):              # pragma: no cover - payload
+        return False
+
+
+def _jeps_is_passive(eps, jnp):
+    """:func:`_eps_is_passive` as a TRACED 0-d boolean, so the JAX twins get
+    the same widening on a traced ``eps`` instead of silently falling back to
+    the narrow mask.  ``_forward_growth_flip`` only ever combines this with
+    ``|`` , which is elementwise, so nothing here introduces control flow."""
+    return jnp.all(jnp.imag(jnp.asarray(eps)) >= 0.0)
+
+
+def _jtensor_is_passive(tensors, jnp):
+    """:func:`_tensor_is_passive` over an iterable of (possibly TRACED) tensor
+    dicts, as a 0-d boolean.  Same sufficient condition as the NumPy twin --
+    diagonal, and every diagonal entry lossy-or-lossless -- so the two paths
+    accept exactly the same media and the parity claim survives the widening.
+    A missing diagonal key is NOT PROVEN and answers a concrete False."""
+    ok = jnp.asarray(True)
+    for t in tensors:
+        if not isinstance(t, dict):              # pragma: no cover - payload
+            return jnp.asarray(False)
+        for k in ("exy", "eyx", "exz", "ezx", "eyz", "ezy"):
+            v = t.get(k)
+            if v is not None:
+                ok = ok & jnp.all(jnp.asarray(v) == 0)
+        for k in ("exx", "eyy", "ezz"):
+            v = t.get(k)
+            if v is None:                        # pragma: no cover - payload
+                return jnp.asarray(False)
+            ok = ok & jnp.all(jnp.imag(jnp.asarray(v)) >= 0.0)
+    return ok
+
+
 #: FAIL-BEFORE SWITCH for :func:`_forward_growth_flip` (2026-08-06,
 #: ``docs/audits/FIX_UNION_GRID_2THREAD_2026_08_06.md``).  ``False`` restores
 #: the pre-fix selector -- the bare ``where(prop, flux < 0, Im q < 0)`` -- bit
@@ -1040,8 +1182,15 @@ def _mode_cut_growth(flux, q, thr, prop):
 #: is every healthy solve measured.
 PMM_FORWARD_GROWTH_REPAIR = True
 
+#: FAIL-BEFORE SWITCH for the PASSIVITY WIDENING of that repair (2026-08-08,
+#: ``docs/audits/FIX_CI_ROUND2_PMM_2026_08_08.md``).  ``False`` restores the
+#: 2026-08-06 mask -- the one that also required the mode to sit inside
+#: :data:`_MODE_CUT_MARGIN_WARN` of the cut -- bit for bit, so the two
+#: switches together reproduce either shipped selector exactly.
+PMM_FORWARD_GROWTH_PASSIVE = True
 
-def _forward_growth_flip(flux, q, thr, prop, xp=np):
+
+def _forward_growth_flip(flux, q, thr, prop, xp=np, passive=False):
     """The forward/backward selector, with the ROUND-OFF BAND repaired.
 
     THE DEFECT THIS CLOSES (T3-4, on a new axis).  The historical selector is
@@ -1097,25 +1246,104 @@ def _forward_growth_flip(flux, q, thr, prop, xp=np):
     NULL FLOOR.  Where nothing grows -- every healthy solve measured, on both
     mounts at every thread count -- ``bad`` is empty and the returned ``flip``
     is the historical array bit for bit.  ``_record_mode_cut`` is deliberately
-    still called on the RAW ``prop``/``q``, so the census and the T3-4 verdict
-    keep measuring the DIAGNOSIS (what the bare selector would have done) and
-    not the repaired state.
+    still called on the RAW ``prop``/``q``, so the census keeps measuring the
+    DIAGNOSIS (what the bare selector would have done) alongside the RESIDUAL
+    (:func:`_mode_cut_growth_post`, what survives the treatment).
 
     ``xp`` selects the array module, so the JAX twins share the policy: every
     operation here is elementwise, so nothing about it is data-dependent
-    control flow and it traces."""
+    control flow and it traces.
+
+    ---------------------------------------------------------------------
+    2026-08-08 -- ``passive``, AND WHY THE CUT'S DECADE WAS NEVER THE
+    INVARIANT (``docs/audits/FIX_CI_ROUND2_PMM_2026_08_08.md``)
+    ---------------------------------------------------------------------
+    The ``within the cut's decade`` conjunct is NOT part of the physics.  It
+    is there for exactly one reason -- a GAIN medium, where a forward mode
+    legitimately grows -- and it buys that safety by capping the repair's
+    REACH at :data:`_MODE_CUT_MARGIN_WARN`.  Modes past the cap are left
+    growing in the forward set even though the invariant says they cannot
+    exist.
+
+    That cap is measurable and it bites.  On the M2 coated taper at
+    ``n_slice`` = 2, library default, per-layer grids [M, Windows 1 thread],
+    instrumenting the flip itself::
+
+        degree  R0 (shipped)  raw grow  STILL growing after the repair (cut ratio)
+        12      0.1106127     8         0
+        14      0.1105995     4         0
+        16      0.1105928     7         0
+        18      0.0616661     8         2   at 23.6 x the cut
+        20      0.6233873     6         4   at 15.8 / 17.1 x the cut
+
+    -- i.e. the two cells ``FIX_UNION_GRID_2THREAD_2026_08_06`` S9 left open
+    as "not fully closed by classification alone at high degree" are the SAME
+    mechanism, one factor of 1.6-2.4 outside the bar.  Every mode the widened
+    mask touches was measured with ``|Im q| / |q| = 1.0`` EXACTLY -- ``q``
+    purely imaginary, so it carries exactly zero z-power and its flux is
+    round-off no matter how many multiples of the cut that round-off happens
+    to reach.  The cut ratio was never the discriminator; the six-decade
+    ``Im(q)/|q|`` separation always was.
+
+    So the gain exemption is stated DIRECTLY instead of being approximated by
+    a distance: ``passive`` (from :func:`_grid_is_passive` /
+    :func:`_eps_is_passive`, read off the operator's own element table) says
+    the layer cannot amplify, and on such a layer a growing forward mode is a
+    contradiction at ANY distance from the cut.  Where passivity is not
+    PROVEN -- a gain medium, an off-diagonal tensor, an unknown or empty
+    element payload -- ``passive`` is False and this function is bit-identical
+    to the 2026-08-06 selector.
+
+    ``passive`` may be a Python bool OR a 0-d array (the JAX twins pass a
+    TRACED one from :func:`_jeps_is_passive` / :func:`_jtensor_is_passive`, so
+    they widen on the same media the NumPy path does and the parity claim
+    survives).  ``near | passive`` is elementwise either way, so nothing here
+    is data-dependent control flow and it traces.
+
+    No constant is added: ``near | passive`` either widens the mask to the
+    whole ``grow`` set or leaves it exactly where it was."""
     flip = xp.where(prop, flux < 0.0, q.imag < 0.0)
     if not PMM_FORWARD_GROWTH_REPAIR:
         return flip
     qf = xp.where(flip, -q, q)
+    grow = qf.imag < -_MODE_GROWTH_REL * xp.abs(qf)
     # ``_mode_cut_ratio``'s ``ratio < _MODE_CUT_MARGIN_WARN`` without the
     # division: under ``prop`` we have |flux| > thr, so the ratio IS
     # |flux| / thr.  A degenerate cut (thr <= 0 or non-finite) gives lim <= 0
     # and matches ``_mode_cut_ratio``'s ``inf`` -- nothing is near it.
     lim = xp.where(xp.isfinite(thr), _MODE_CUT_MARGIN_WARN * thr, 0.0)
-    bad = (prop & (xp.abs(flux) < lim)
-           & (qf.imag < -_MODE_GROWTH_REL * xp.abs(qf)))
+    near = xp.abs(flux) < lim
+    if not PMM_FORWARD_GROWTH_PASSIVE:
+        passive = False
+    # ``near | passive``: a Python ``False`` leaves ``near`` untouched (and the
+    # whole expression bit-identical to the 2026-08-06 mask), a Python ``True``
+    # or a traced 0-d boolean promotes it to all-True.  Elementwise, so it
+    # traces.
+    bad = prop & grow & (near | passive)
     return xp.where(bad, q.imag < 0.0, flip)
+
+
+def _mode_cut_growth_post(flux, q, flip):
+    """``n_growing`` in the forward set the selector ACTUALLY handed
+    downstream -- the RESIDUAL, i.e. what :func:`_forward_growth_flip` could
+    NOT redirect.
+
+    :func:`_mode_cut_growth` measures the DIAGNOSIS (what the bare selector
+    would have done) and is what the M3 calibration tables are written
+    against; this measures the TREATMENT's outcome on the same modes, with the
+    same scale-free ``Im(q_forward) < -_MODE_GROWTH_REL |q|`` test and no
+    distance-from-the-cut conjunct at all -- a mode that still grows in the
+    forward set is a contradiction wherever its flux sits.
+
+    On a PASSIVE grid with the repair on this is 0 by construction (the mask
+    covers every growing forward mode there), which is exactly why it is worth
+    recording: it is the live check that the construction holds, and it is the
+    number that separates "the raw selector would have gone wrong here and the
+    library caught it" from "the forward set is still wrong"."""
+    q = np.asarray(q)
+    qf = np.where(np.asarray(flip, dtype=bool), -q, q)
+    bad = qf.imag < -_MODE_GROWTH_REL * np.abs(qf)
+    return int(np.count_nonzero(bad))
 
 
 def _layer_index_bound(mats):
@@ -1269,13 +1497,43 @@ def _mode_cut_verdict(rows, label, emit=True):
 
     TWO INDEPENDENT CHANNELS, and they answer different questions.
 
-    **A -- the physical invariant (mount-invariant).**  Any layer or half-space
-    carries a mode the cut has put in the forward set that GROWS along +z
-    (:func:`_mode_cut_growth`).  One such mode is already a contradiction, so
-    this channel needs no stack-level partner and no second bar.  It is the
-    channel that survives a change of BLAS reduction order, and it is the one
-    that catches the ``ns = 6, degree = 10`` cell channel B misses at N BLAS
-    threads (PMM_FOURNAME_ADJUDICATION_2026_08_05 S4).
+    **A -- the physical invariant (mount-invariant).**  The SHIPPED forward set
+    -- the one the cascade was actually assembled from -- carries a mode that
+    GROWS along +z (:func:`_mode_cut_growth_post`).  One such mode is already a
+    contradiction, so this channel needs no stack-level partner and no second
+    bar.  It is the channel that survives a change of BLAS reduction order, and
+    it is the one that catches the ``ns = 6, degree = 10`` cell channel B
+    misses at N BLAS threads (PMM_FOURNAME_ADJUDICATION_2026_08_05 S4).
+
+    **A reads the RESIDUAL, not the DIAGNOSIS** (2026-08-08,
+    ``FIX_CI_ROUND2_PMM_2026_08_08.md``).  Until then it read
+    :func:`_mode_cut_growth` on the RAW ``prop``/``q`` -- what the BARE
+    selector would have done -- which was right while the repair did not exist
+    and became a FALSE ALARM once it did: the repair redirects those modes, so
+    the answer is right and the guard was still telling the reader it might be
+    "UNITARY BUT WRONG".  Measured on the M2 coated taper, guard armed,
+    per-layer, library default [M, Windows 1 thread] -- ``rel`` against the
+    RCWA 141-order anchor, ``raw`` = the diagnosis, ``post`` = the residual::
+
+        cell            rel        raw  post   RAW-channel A   RESIDUAL-channel A
+        ns=2 deg 12     0.0047      8    0     FIRES (wrong)   quiet
+        ns=2 deg 14     0.0046      4    0     FIRES (wrong)   quiet
+        ns=2 deg 16     0.0046      7    0     FIRES (wrong)   quiet
+        ns=2 deg 18     0.4399      8    2     FIRES           FIRES
+        ns=2 deg 20     4.6624      6    4     FIRES           FIRES
+        ns=6 deg 10..20 0.0044-0.0050  1-7  0  FIRES (wrong)   quiet
+        cured ladders   0.0004-0.0072  0    0  quiet           quiet
+
+    (that column is measured with the passivity widening OFF, i.e. the
+    2026-08-06 selector, so that both populations are present).  The residual
+    partitions this family EXACTLY: ``post > 0`` on precisely the cells with
+    ``rel > 0.05`` and on no other, while the raw reading false-positives on
+    nine of them.  That is the mount-invariant discriminator the block comment
+    above has been asking for, and it costs nothing new -- it is the same
+    ``Im(q_forward) < -_MODE_GROWTH_REL |q|`` test, applied to the forward set
+    the solve actually used.  The census still carries BOTH (``n_grow`` and
+    ``n_grow_post``), so every calibration table written against the diagnosis
+    still reads as written.
 
     **B -- the original conjunction (RETAINED, build-fragile).**  Kept so no
     cell the calibrated guard used to speak on goes quiet, and because it is
@@ -1301,10 +1559,23 @@ def _mode_cut_verdict(rows, label, emit=True):
     SUBSTRATE half-space, which is solved on the same sliver-bearing nodal grid
     as the patterned layers -- while ``B`` is a comparison BETWEEN patterned
     layers and therefore cannot look at a half-space at all."""
-    grow_rows = [r for r in rows if len(r) > 5 and r[5] > 0]
-    n_grow = sum(r[5] for r in grow_rows)
+    # ``r[8]`` is the row's PASSIVITY.  The invariant channel A tests -- a
+    # forward mode of a passive layer cannot grow along +z -- simply does not
+    # apply to a gain layer, where a forward mode legitimately grows, so the
+    # channel is gated on it.  That is a stricter and more honest gain
+    # exemption than the ``within the cut's decade`` conjunct it replaces (see
+    # :func:`_forward_growth_flip`): it names the physics instead of
+    # approximating it by a distance, and it cannot be walked through by a
+    # build whose round-off puts the mode further out.
+    grow_rows = [r for r in rows if len(r) > 8 and r[8] and r[7] > 0]
+    n_grow = sum(r[7] for r in grow_rows)
     where = ["patterned" if r[4] else "half-space" for r in grow_rows]
-    grow_ratio = min([r[6] for r in grow_rows], default=float("inf"))
+    grow_ratio = min([r[6] for r in grow_rows
+                      if np.isfinite(r[6])], default=float("inf"))
+    # rows where the BARE selector would have grown something and the shipped
+    # one did not: reported (never fired on) so the reader can see the repair
+    # working when the verdict speaks for another reason.
+    rep_rows = [r for r in rows if len(r) > 8 and r[5] > 0 and r[7] == 0]
 
     spread, counts, risky, margin = 0, [], [], float("inf")
     pat = [r for r in rows if r[4]]
@@ -1326,15 +1597,25 @@ def _mode_cut_verdict(rows, label, emit=True):
             f"GROWING mode(s) in the FORWARD set on {len(grow_rows)} "
             f"{'/'.join(sorted(set(where)))} row(s) -- a forward mode of a "
             f"passive layer cannot grow along +z, and each of these was "
-            f"classified PROPAGATING on a z-flux that sits within a factor "
-            f"{grow_ratio:.3g} of the propagating/evanescent cut (bar "
-            f"{_MODE_CUT_MARGIN_WARN:g}), i.e. on round-off.  ")
+            f"classified PROPAGATING on a z-flux the cut cannot resolve"
+            + (f" (the nearest sits within a factor {grow_ratio:.3g} of the "
+               f"propagating/evanescent cut, bar {_MODE_CUT_MARGIN_WARN:g})"
+               if np.isfinite(grow_ratio) else "")
+            + ".  This count is taken on the SHIPPED forward set, so where "
+              "_forward_growth_flip is enabled these are the modes it could "
+              "NOT redirect.  ")
     if fired_b:
         head += (
             f"The number of modes classified PROPAGATING also differs by "
             f"{spread} between patterned layers ({counts}), and {len(risky)} "
             f"layer(s) carry a mode whose two direction criteria (z-flux sign "
             f"vs Im(q)) DISAGREE within a factor {margin:.3g} of the cut.  ")
+    if rep_rows:
+        head += (
+            f"({sum(r[5] for r in rep_rows)} further mode(s) on "
+            f"{len(rep_rows)} row(s) WOULD have grown under the bare selector "
+            f"and were redirected by _forward_growth_flip; those do not "
+            f"affect the returned answer.)  ")
     msg = head + (
         "The cascade can then be UNITARY BUT "
         "WRONG -- |R+T-1| stays at round-off while the R/T split is not "
@@ -1350,21 +1631,36 @@ def _mode_cut_verdict(rows, label, emit=True):
     return msg
 
 
-def _record_mode_cut(flux, q, thr, prop, mats, site, patterned=None):
+def _record_mode_cut(flux, q, thr, prop, mats, site, patterned=None,
+                     flip=None, passive=None):
     """Census + per-solve accumulation for the T3-4 instruments.
 
     Called only when :func:`_mode_cut_armed`, which the callers test first, so
     the default path is untouched.  The VERDICT is not taken here -- one layer
-    cannot see the stack -- see :class:`_mode_cut_scope`."""
+    cannot see the stack -- see :class:`_mode_cut_scope`.
+
+    ``flip`` is the selector array the call site actually used, so
+    ``n_grow_post`` (:func:`_mode_cut_growth_post`) measures the SHIPPED
+    forward set and not a re-derivation of it; ``passive`` records whether the
+    invariant even applies to this row.  Both default to the pre-2026-08-08
+    behaviour when a caller does not supply them (``n_grow_post`` then repeats
+    the raw diagnosis, which is what the bare selector would leave)."""
     n_prop = int(np.count_nonzero(prop))
     n_risk, margin = _mode_cut_margin(flux, q, thr)
     n_grow, grow_ratio = _mode_cut_growth(flux, q, thr, prop)
+    if flip is None:
+        flip = np.where(np.asarray(prop, dtype=bool),
+                        np.asarray(flux) < 0.0, np.asarray(q).imag < 0.0)
+    n_post = _mode_cut_growth_post(flux, q, flip)
     if patterned is None:
         patterned = _grid_is_patterned(mats)
+    if passive is None:
+        passive = _grid_is_passive(mats)
     rows = getattr(_MODE_CUT_TLS, "rows", None)
     if rows is not None:
         rows.append((n_prop, int(n_risk), float(margin), site,
-                     bool(patterned), int(n_grow), float(grow_ratio)))
+                     bool(patterned), int(n_grow), float(grow_ratio),
+                     int(n_post), bool(passive)))
     if _MODE_CUT_CENSUS is not None:
         n_bound = _layer_index_bound(mats)
         _MODE_CUT_CENSUS.append(dict(
@@ -1372,6 +1668,7 @@ def _record_mode_cut(flux, q, thr, prop, mats, site, patterned=None):
             margin=float(margin), n_bound=float(n_bound),
             q_excess=float(_mode_q_excess(q, prop, n_bound)),
             n_grow=int(n_grow), grow_ratio=float(grow_ratio),
+            n_grow_post=int(n_post), passive=bool(passive),
             site=site, patterned=bool(patterned)))
     return n_risk, margin
 
@@ -2172,15 +2469,18 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
                    - np.einsum("in,in->n", W2[n:], SVt))
     thr = _mass_flux_threshold(flux, W2, SVt, SVb, n)
     prop = np.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = _forward_growth_flip(flux, q, thr, prop)
+    passive = _grid_is_passive(mats)
+    flip = _forward_growth_flip(flux, q, thr, prop, np, passive)
     # T3-4: the classification margin, when armed.  ``prop`` decides WHICH of
     # the two direction criteria each mode obeys, so a mode sitting at ``thr``
     # whose criteria disagree makes the whole forward set degree-dependent.
-    # NB the census reads the RAW ``prop``/``q`` -- the DIAGNOSIS, not the
-    # repaired state -- so the instruments stay what they were calibrated as.
+    # NB the census reads the RAW ``prop``/``q`` for the DIAGNOSIS -- so the
+    # instruments stay what they were calibrated as -- and additionally the
+    # SHIPPED ``flip`` for the RESIDUAL (``n_grow_post``).
     if _mode_cut_armed():
         _record_mode_cut(flux, q, thr, prop, mats,
-                         "PMM modal solve (patterned layer)")
+                         "PMM modal solve (patterned layer)",
+                         flip=flip, passive=passive)
     q = np.where(flip, -q, q)
     lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
@@ -2306,10 +2606,14 @@ def _sem_modes_uniform(mats, k0, kx0, eps, geo=None):
                    - np.einsum("in,in->n", W2[n:], SVt))
     thr = _mass_flux_threshold(flux, W2, SVt, SVb, n)
     prop = np.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = _forward_growth_flip(flux, q, thr, prop)
+    # a uniform half-space's medium is the SCALAR ``eps`` argument, not the
+    # grid it is discretised on (that grid is a patterned layer's).
+    passive = _eps_is_passive(eps)
+    flip = _forward_growth_flip(flux, q, thr, prop, np, passive)
     if _mode_cut_armed():
         _record_mode_cut(flux, q, thr, prop, mats,
-                         "PMM modal solve (uniform half-space)", False)
+                         "PMM modal solve (uniform half-space)", False,
+                         flip=flip, passive=passive)
     q = np.where(flip, -q, q)
     lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
@@ -3627,7 +3931,11 @@ def _jpmm_assemble_tensor(static, jnp, t_ridge, t_groove, dyn=None):
         conv["one"] = conv["one"].at[ii, jj].add(Cl)
         conv["inv_ezz"] = conv["inv_ezz"].at[ii, jj].add(iez * Cl)
     return dict(mass=mass, stiff=stiff, conv=conv, S0=mass["one"],
-                n_glob=n_glob)
+                n_glob=n_glob,
+                # the NumPy twin reads passivity off ``elem_bnds``; the traced
+                # assembler has no element table, so it carries the same
+                # verdict forward from the tensors it just consumed.
+                passive=_jtensor_is_passive(t_of, jnp))
 
 
 
@@ -3699,7 +4007,8 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     # elementwise throughout, so it traces.
     thr = _mass_flux_threshold(flux, W2, SVt, SVb, n, jnp)
     prop = jnp.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = _forward_growth_flip(flux, q, thr, prop, jnp)
+    flip = _forward_growth_flip(flux, q, thr, prop, jnp,
+                                mats.get("passive", False))
     q = jnp.where(flip, -q, q)
     lam = -1j * q
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
@@ -3759,7 +4068,8 @@ def _jpmm_sem_modes_uniform(mats, jnp, eig, k0, kx0, eps, geo=None):
                     - jnp.einsum("in,in->n", W2[n:], SVt))
     thr = _mass_flux_threshold(flux, W2, SVt, SVb, n, jnp)
     prop = jnp.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = _forward_growth_flip(flux, q, thr, prop, jnp)
+    flip = _forward_growth_flip(flux, q, thr, prop, jnp,
+                                _jeps_is_passive(eps, jnp))
     q = jnp.where(flip, -q, q)
     lam = -1j * q
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
@@ -6355,6 +6665,12 @@ __all__ = [
     "_resolve_incidence_checked",
     "_forward_branch_flip",
     "_forward_growth_flip",
+    "_tensor_is_passive",
+    "_grid_is_passive",
+    "_eps_is_passive",
+    "_jeps_is_passive",
+    "_jtensor_is_passive",
+    "_mode_cut_growth_post",
     "_freeze_cached",
     "_mass_flux_cut",
     "_mass_flux_threshold",

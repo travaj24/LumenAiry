@@ -11,16 +11,19 @@ Before v5.30.1 the pool only knew how to rebuild a ``RectBivariateSpline``, so
     about FIT ACCURACY, not about parallelism, and that most callers never set.
     Choosing the default fit silently cost the pool speed-up.
 
-The fix teaches the worker to rebuild whichever fit the caller chose, from the
-same pickled grids.  The thing that makes it safe -- and the thing this file
-guards -- is that it must remain BIT-IDENTICAL to serial for both backends: the
-Chebyshev fit is a deterministic lstsq on identical data so every worker
-recovers the same coefficients, evaluation is elementwise so chunking cannot
-change it, and the worker mirrors the serial path's choice of the combined
-value+gradient call (using separate ``.ev`` calls instead would reorder the
-floating-point work and break identity).
+The fix teaches the worker to serve whichever fit the caller chose.  The thing
+that makes it safe -- and the thing this file guards -- is that it must remain
+BIT-IDENTICAL to serial for both backends: evaluation is elementwise so
+chunking cannot change it, and the worker mirrors the serial path's choice of
+the combined value+gradient call (using separate ``.ev`` calls instead would
+reorder the floating-point work and break identity).
 
-...and, since v5.32.3, the worker also mirrors the parent's choice of
+This list used to have a third item -- "the Chebyshev fit is a deterministic
+lstsq on identical data so every worker recovers the same coefficients" -- and
+that sentence was itself a defect, stated as a safety argument.  It is the
+second of the two below.
+
+Since v5.32.3, the worker also mirrors the parent's choice of
 IMPLEMENTATION of that call.  ``_Cheb2DEvaluator.ev_value_and_grad`` has two --
 an ``@njit`` Chebyshev recurrence and a pure-xp Vandermonde contraction -- and
 the worker used to pick between them from its own numba availability, in a
@@ -31,8 +34,24 @@ FIX_POOL_MEMORY sec 8.1 had ledgered the mechanism as a known conditional
 before the pin closed it.  The payload now carries ``cheb_backend``; a worker
 that cannot honour a pinned ``'numba'`` refuses the chunk (and the parent runs
 it, where the pinned backend IS the local one) rather than answering in the
-other order.  So the assertions here are unconditional, which is the only form
-in which "bit-identical" means anything.
+other order.
+
+That pin was necessary and NOT SUFFICIENT.  ``[polynomial]`` went on failing on
+CI at 1.341e-11 / 1.358e-11 in ALL FOUR python lanes afterwards, because the
+worker was still REBUILDING the fit -- and building one runs
+``_solve_lstsq_thread_safe``, i.e. ``A^T A`` over a ~78 000-row design matrix,
+which OpenBLAS reduces in a THREAD-COUNT-DEPENDENT order.  Two processes on
+byte-identical data therefore recover coefficients differing in the last bits
+whenever their BLAS widths differ (MEASURED max|dc| 4.6e-15 -> 1.370e-11 of the
+field, i.e. CI's number), and a spawn worker does not inherit its parent's
+width: ``threadpoolctl``'s cap is process-global on OpenBLAS, so a long-lived
+parent that has passed through a capped section is not at the environment
+default a fresh interpreter starts at.  Since v5.33.0 the parent SHIPS its
+built coefficients and the worker evaluates them, so there is no second solve
+left to agree with.  See docs/audits/FIX_POOL_REBUILD_2026_08_08.md.
+
+So the assertions here are unconditional, which is the only form in which
+"bit-identical" means anything.
 
 The COLD-tier tests below deliberately size the grid past ``_POOL_MIN_PIXELS``
 so the pool engages on the very first call -- below that threshold everything
@@ -762,3 +781,23 @@ def test_worker_payload_carries_what_the_polynomial_fit_needs():
         'a worker that cannot honour a pinned numba backend must REFUSE the '
         'chunk; substituting the other floating-point order is the silent '
         'wrong answer this pin exists to prevent')
+    # ...and, since v5.33.0, the parent's BUILT FIT.  Pinning the backend made
+    # the two sides evaluate in the same ORDER; it did not stop the worker
+    # RE-FITTING the polynomial from these grids, and that re-fit runs
+    # ``_solve_lstsq_thread_safe`` -- ``A^T A`` over ~78 000 rows -- whose BLAS
+    # reduction order depends on the thread width a fresh interpreter happens
+    # to start at.  MEASURED: a worker at a different BLAS width moved the
+    # field by up to 1.370e-11, which is the 1.341e-11 / 1.358e-11 this file's
+    # own ``test_pool_result_is_bit_identical_to_serial[polynomial]`` kept
+    # failing by on all four CI python lanes AFTER the backend pin shipped.
+    # See docs/audits/FIX_POOL_REBUILD_2026_08_08.md.
+    assert "'cheb_fit'] =" in src or "'cheb_fit':" in src, (
+        "the worker payload no longer ships the parent's BUILT Chebyshev fit, "
+        'so every worker re-solves the least squares in its own interpreter '
+        'and pool/serial bit-identity is conditional on the two processes '
+        'sharing a BLAS thread regime')
+    assert "get('cheb_fit'" in wsrc, (
+        'the worker ignores the shipped fit and re-fits from the grids')
+    assert 'from_state' in wsrc, (
+        'the worker no longer constructs its evaluators from the shipped '
+        'coefficients; a rebuild is a least-squares solve, not an evaluation')
