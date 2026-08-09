@@ -34,6 +34,7 @@ offset is ``(310/ns) tan(2 deg)`` nm, so at ``ns = 2`` a ridge wall lands
 ``5.4127 - 5.000 = 0.4127 nm`` from a neighbouring slice's coat wall, which
 is the audit's 0.41 nm pair.
 """
+import contextlib
 import warnings
 
 import numpy as np
@@ -154,6 +155,16 @@ ABOVE_THRESHOLD = ((2, 0.5 * NM), (3, 1.5 * NM), (6, 3.0 * NM))
 
 _LADDER_DEGREES = (6, 8, 10, 12, 14)
 
+#: The ABOVE-threshold pair ``test_min_feature_threshold_rule_predicts_
+#: stationarity`` pins ITS null floor on -- one cell each side of the 1.5 nm
+#: bar, and a subset of :data:`ABOVE_THRESHOLD` (same ladders, same cache).
+_RULE_CURED = ((3, 1.5e-9), (6, 3.0e-9))
+
+#: ... and the CURED pair, degrees and device of the SINGLE-REGION uncoated
+#: taper, which pins its own.  A different DEVICE, so a different ladder.
+_UNCOATED_CURED = ((6, 3.0e-9), (12, 1.5e-9))
+_UNCOATED_DEGREES = (8, 10, 12, 14, 16)
+
 
 @pytest.fixture
 def growth_repair_off():
@@ -178,26 +189,202 @@ def spread(v):
     return float((v.max() - v.min()) / abs(v.mean()))
 
 
+#: The near-cut FAULT INJECTOR's scale (see :func:`near_cut_injector`), and
+#: part of :data:`_LADDER_CACHE`'s key -- a cache that ignored it would serve an
+#: un-injected ladder to an injected measurement, which is the same mistake as
+#: ignoring the two switches.
+_CUT_SCALE = 1.0
+
+
+@contextlib.contextmanager
+def near_cut_injector(scale):
+    """``FIX_CI_ROUND2_PMM_2026_08_08`` S6's NEAR-CUT INJECTOR, in-tree.
+
+    ``_core._mass_flux_threshold`` scaled by ``scale`` < 1, which pulls the
+    propagating/evanescent cut DOWN under evanescent modes whose ROUND-OFF flux
+    sits just below it.  Those modes are then classified PROPAGATING on
+    round-off and handed the flux-SIGN direction rule -- which is exactly the CI
+    runner's condition, produced on a build whose own round-off does not do it.
+
+    It emulates the RUNNER, not the physics.  Nothing about the geometry, the
+    materials, the operator or the eigenvalues changes: only where the cut lands
+    relative to a spectrum of round-off fluxes, which is the one thing an
+    OpenBLAS kernel is entitled to move."""
+    global _CUT_SCALE
+    orig, prev = PC._mass_flux_threshold, _CUT_SCALE
+
+    def scaled(flux, W2, SVt, SVb, n, xp=np):
+        return orig(flux, W2, SVt, SVb, n, xp) * scale
+
+    PC._mass_flux_threshold = scaled
+    _CUT_SCALE = float(scale)
+    try:
+        yield
+    finally:
+        PC._mass_flux_threshold = orig
+        _CUT_SCALE = prev
+
+
 #: Ladder cache, keyed by ``(ns, min_feature, degrees, repair_flag,
-#: passive_flag)``.  The three re-pinned tests below each score the SAME
-#: ladders with the switches off and on, so without this the file re-solves
-#: every cell four or five times.  BOTH switches are part of the key because
-#: they are exactly what the answer depends on -- a cache that ignored either
-#: would silently fake the null control.
+#: passive_flag, injector_scale)``.  The three re-pinned tests below each score
+#: the SAME ladders with the switches off and on, so without this the file
+#: re-solves every cell four or five times.  BOTH switches are part of the key
+#: because they are exactly what the answer depends on -- a cache that ignored
+#: either would silently fake the null control.
 _LADDER_CACHE = {}
+
+
+def _coated_stack(ns, mf, degree):
+    """The audit-class COATED taper -- the device of the N-6 sections."""
+    return build(ns, degree=degree, min_feature=mf)
+
+
+def _uncoated_stack(ns, mf, degree):
+    """The SINGLE-REGION uncoated taper -- M5's device, no conformal coat, so
+    the window's only cross-layer separation is the per-slice offset itself.
+    Reproduces ``test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper``'s
+    own two builders exactly, ``min_feature`` present or not."""
+    layers = _uncoated_layers(ns)
+    return _mk(layers, degree, 1) if mf is None else _mk_mf(layers, degree, mf)
+
+
+def _ladder_rec(ns, mf, degrees=_LADDER_DEGREES, mk=None):
+    """``(R0 ladder, raw n_grow, n_grow_post, non-passive rows)`` per rung on
+    the device ``mk`` builds (default: the coated taper), with the T3-4 census
+    armed.
+
+    The three census columns are read off ``_MODE_CUT_CENSUS`` rather than
+    re-derived, so what the null control below conditions on is the SHIPPED
+    instrument and cannot drift from it:
+
+    * ``n_grow`` -- the RAW DIAGNOSIS, what the bare selector would have done.
+      ``_record_mode_cut`` is deliberately called on the pre-repair
+      ``prop``/``q`` (``FIX_UNION_GRID_2THREAD_2026_08_06`` S4), so this column
+      does NOT move with the switch, which is what makes it a switch-independent
+      thing to condition on.  Asserted, not assumed, in
+      :func:`_score_null_control`.
+    * ``n_grow_post`` -- the RESIDUAL, what the selector the solve ACTUALLY used
+      left growing in the forward set.
+    * the non-passive row count -- the invariant "a forward mode of a passive
+      layer may not grow" only applies where passivity is PROVEN, so a claim
+      about the residual has to know this device's rows are.
+
+    Arming the census changes no number: it decides only whether the
+    instruments are computed."""
+    mk = mk or _coated_stack
+    key = (ns, mf, degrees, bool(PC.PMM_FORWARD_GROWTH_REPAIR),
+           bool(PC.PMM_FORWARD_GROWTH_PASSIVE), _CUT_SCALE, mk.__name__)
+    hit = _LADDER_CACHE.get(key)
+    if hit is None:
+        r0, raw, post, nonpas = [], [], [], []
+        for d in degrees:
+            PC._MODE_CUT_CENSUS = []
+            try:
+                v = solve0(mk(ns, mf, d))[0]
+                rows = list(PC._MODE_CUT_CENSUS)
+            finally:
+                PC._MODE_CUT_CENSUS = None
+            r0.append(v)
+            raw.append(sum(int(r["n_grow"]) for r in rows))
+            post.append(sum(int(r["n_grow_post"]) for r in rows))
+            nonpas.append(sum(0 if r["passive"] else 1 for r in rows))
+        hit = (np.array(r0, dtype=float), np.array(raw, dtype=int),
+               np.array(post, dtype=int), np.array(nonpas, dtype=int))
+        for arr in hit:
+            arr.flags.writeable = False
+        _LADDER_CACHE[key] = hit
+    return hit
 
 
 def coated_ladder(ns, mf, degrees=_LADDER_DEGREES):
     """Order-0 reflectance over the degree ladder on the coated taper."""
-    key = (ns, mf, degrees, bool(PC.PMM_FORWARD_GROWTH_REPAIR),
-           bool(PC.PMM_FORWARD_GROWTH_PASSIVE))
-    hit = _LADDER_CACHE.get(key)
-    if hit is None:
-        hit = np.array([solve0(build(ns, degree=d, min_feature=mf))[0]
-                        for d in degrees], dtype=float)
-        hit.flags.writeable = False
-        _LADDER_CACHE[key] = hit
-    return hit
+    return _ladder_rec(ns, mf, degrees)[0]
+
+
+def _score_null_control(cells, refs, degrees=_LADDER_DEGREES, mk=None):
+    """N-6's NULL CONTROL, CONDITIONED ON THE INSTRUMENT.  Returns its table.
+
+    Shared by all THREE of this file's forward-growth null controls -- section
+    (5) of the accuracy-lever test, the threshold-rule test's above-threshold
+    pair, and the uncoated taper's cured pair (``mk`` selects the device).
+
+    ``docs/audits/FIX_M2_NULL_CONTROL_2026_08_09.md``.  The claim this replaces
+    conditioned on the ``min_feature`` THRESHOLD -- a fact about the GEOMETRY --
+    while the repair conditions on the CENSUS, a fact about one runner's
+    round-off.  Those are not the same set, and on the ubuntu py3.10 runner they
+    came apart: an ABOVE-threshold cell still produced a near-cut growing mode,
+    the repair redirected it (correctly -- the invariant applies wherever such a
+    mode appears, cured geometry or not), and the test called the move a
+    violation.
+
+    So the null is re-stated where it was always true, on the instrument:
+
+    * a rung whose census reads ZERO raw growing modes has NOTHING in the
+      repair's mask, so the two selectors are the SAME ARRAY and the answer must
+      be BIT-IDENTICAL, tolerance 0.0.  That is the true null, and on a build
+      where every cured rung reads zero -- every one measured on this box and in
+      WSL -- it is the original assertion on every cell, verbatim;
+    * a rung that DOES read one may move, and then owes the two claims that make
+      the move right: the shipped forward set no longer grows
+      (``n_grow_post == 0``, a mode count, which no bar can be tuned into), and
+      the answer ended CLOSER-OR-EQUAL to the reference in ``refs``.
+
+    ``refs`` maps a cell to its reference value (a scalar, a per-rung array, or
+    ``None`` where the test has no independent one).  Nothing here is a
+    tolerance."""
+    table = []
+    for cell in cells:
+        ns, mf = cell
+        PC.PMM_FORWARD_GROWTH_REPAIR = True
+        on, raw_on, post_on, nonpas = _ladder_rec(ns, mf, degrees, mk)
+        PC.PMM_FORWARD_GROWTH_REPAIR = False
+        off, raw_off, _post_off, _np_off = _ladder_rec(ns, mf, degrees, mk)
+        PC.PMM_FORWARD_GROWTH_REPAIR = True
+        assert list(raw_on) == list(raw_off), (
+            f"ns={ns} min_feature={mf}: the RAW census moved with the "
+            f"forward-growth switch ({list(raw_off)} -> {list(raw_on)}).  It is "
+            f"supposed to be the pre-repair DIAGNOSIS on both settings "
+            f"(_record_mode_cut is called with the raw prop/q by design), which "
+            f"is the whole reason this control can condition on it")
+        assert not int(np.sum(nonpas)), (
+            f"ns={ns} min_feature={mf}: {int(np.sum(nonpas))} modal row(s) of "
+            f"this lossless taper were NOT recognised PASSIVE, so the invariant "
+            f"the moved-rung claims below rest on -- a forward mode of a passive "
+            f"layer cannot grow along +z -- does not apply and they prove "
+            f"nothing")
+        ref = refs.get(cell)
+        for i, deg in enumerate(degrees):
+            moved = float(abs(float(on[i]) - float(off[i])))
+            table.append((ns, mf, deg, int(raw_on[i]), int(post_on[i]),
+                          float(off[i]), float(on[i]), moved))
+            if not int(raw_on[i]):
+                assert moved == 0.0, (
+                    f"ns={ns} min_feature={mf} degree={deg}: a cell whose "
+                    f"census reads ZERO raw growing modes moved {moved:.4g} "
+                    f"when the forward-growth repair was switched.  With "
+                    f"nothing in its mask the repair returns the historical "
+                    f"selector's array bit for bit, so this is not a "
+                    f"round-off question -- something outside the mask moved "
+                    f"the answer")
+                continue
+            assert int(post_on[i]) == 0, (
+                f"ns={ns} min_feature={mf} degree={deg}: the census reads "
+                f"{int(raw_on[i])} raw growing mode(s) here, so the repair was "
+                f"entitled to redirect them -- but the SHIPPED forward set "
+                f"still grows {int(post_on[i])}.  A forward mode of a passive "
+                f"layer cannot grow along +z at any distance from the cut, so "
+                f"a survivor is a SECOND mechanism and must be diagnosed")
+            if ref is None:
+                continue
+            r = float(np.asarray(ref).reshape(-1)[i] if np.ndim(ref) else ref)
+            d_on, d_off = abs(float(on[i]) - r), abs(float(off[i]) - r)
+            assert d_on <= d_off, (
+                f"ns={ns} min_feature={mf} degree={deg}: redirecting "
+                f"{int(raw_on[i])} growing mode(s) moved this rung AWAY from "
+                f"the reference {r:.7f} ({d_off:.4g} -> {d_on:.4g}).  The "
+                f"repair is allowed to move an answer that carries a growing "
+                f"forward mode, but only towards the right one")
+    return table
 
 
 def _snap_report(layer_segments, mf_frac, halfwidth=1):
@@ -458,8 +645,12 @@ def test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too(
       (4) and the repaired ladder is RIGHT, not merely stationary: it agrees
           with the CURED ladder and with the independent RCWA reference, which
           stationarity alone never proved;
-      (5) the above-threshold cells are BIT-IDENTICAL either way -- the null
-          floor, and the proof the repair is not a global re-tune;
+      (5) the null floor on the above-threshold cells, conditioned on the
+          CENSUS rather than on the min_feature threshold (2026-08-09): a cured
+          rung the census reads ZERO raw growing modes on is BIT-IDENTICAL
+          either way -- the proof the repair is not a global re-tune -- while
+          one that does carry a growing mode may move, and then must end with
+          none growing and no further from the RCWA anchor.  See the section;
       (6) 2026-08-08 -- and the repair's REACH is a fail-before of its own:
           the 2026-08-06 mask still leaves this device collapsing two rungs
           further up the SAME ladder, which is the mechanism that failed
@@ -516,18 +707,32 @@ def test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too(
         assert spread(cured) < cure_bar
         assert all(abs(v - cured[-1]) < 1e-3 for v in cured)
 
-    # ---- (5) THE NULL FLOOR: cured cells do not move a bit ----------------
-    for ns, mf in ABOVE_THRESHOLD:
-        PC.PMM_FORWARD_GROWTH_REPAIR = True
-        a = coated_ladder(ns, mf)
-        PC.PMM_FORWARD_GROWTH_REPAIR = False
-        b = coated_ladder(ns, mf)
-        PC.PMM_FORWARD_GROWTH_REPAIR = True
-        assert float(np.max(np.abs(a - b))) == 0.0, (
-            f"ns={ns} min_feature={mf}: an ABOVE-threshold cell moved when "
-            f"the forward-growth repair was switched -- the repair is only "
-            f"allowed to touch solves that put a growing mode in the forward "
-            f"set, and a cured cell has none")
+    # ---- (5) THE NULL FLOOR, ON THE INSTRUMENT (2026-08-09) ---------------
+    # WHY THIS SECTION MOVED (FIX_M2_NULL_CONTROL_2026_08_09).  It read "an
+    # ABOVE-threshold cell moved when the forward-growth repair was switched"
+    # on the ubuntu py3.10 shard of main -- rung 4 of the ns=2 / 0.5 nm ladder
+    # moving 0.04886 -- while the IDENTICAL tree was green on branch CI and on
+    # both mounts at every thread count.  The axis was the runner's OpenBLAS
+    # kernel, and the mismatch was in the control's own premise: it
+    # conditioned on the min_feature THRESHOLD, which is a fact about the
+    # GEOMETRY, while the repair conditions on the CENSUS -- near-cut growing
+    # modes -- which is a fact about one build's round-off.  An above-threshold
+    # cell whose round-off flux happens to cross the cut still carries one, and
+    # redirecting it is CORRECT: the invariant holds wherever such a mode
+    # appears, cured geometry or not.
+    #
+    # So the null is re-stated where it was always true, on the instrument, and
+    # nothing is relaxed -- on a build whose cured ladder reads zero raw
+    # growing modes everywhere (every rung measured here and in WSL) this is
+    # the ORIGINAL bit-identity assertion, on every cell.  The reference for
+    # the moved half is the RCWA anchor this test already carries.  The
+    # fail-before is
+    # ``test_the_null_control_conditions_on_the_census_not_the_threshold``,
+    # which drives a cured cell into carrying a growing mode with the near-cut
+    # injector and reproduces the CI failure's magnitude to four figures.
+    _score_null_control(
+        ABOVE_THRESHOLD,
+        {(ns, mf): RCWA_R0.get(ns) for ns, mf in ABOVE_THRESHOLD})
 
     # ---- (6) THE REACH, 2026-08-08 (FIX_CI_ROUND2_PMM_2026_08_08) ---------
     # WHY THIS SECTION EXISTS.  (3) above failed on ubuntu CI -- "the ladder
@@ -592,6 +797,179 @@ def test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too(
         f"from the RCWA reference -- stationary on the wrong answer")
 
 
+#: Near-cut injector scales tried, in order, by the three fail-befores below.
+#: 1/3 is ``FIX_CI_ROUND2_PMM_2026_08_08`` S6's own scale and is the one that
+#: carries the CI condition on the COATED device in all five (mount x
+#: thread-count) cells measured.  The two decades below it are there because
+#: WHICH rung a cut position lands on migrates with the pool, and because the
+#: UNCOATED taper is measurably harder to drive into the condition -- it needs
+#: 1e-4, i.e. its spectrum has no round-off-flux mode within four decades of
+#: where the cut sits.  That difference is a finding, not a calibration: the
+#: single-region device has no coat/offset collision to inject them.
+_INJECTOR_SCALES = (1.0 / 3.0, 1.0e-2, 1.0e-4)
+
+
+def _injected_null_control(cells, degrees, mk, original_msg, match):
+    """Shared body of the three injector-driven fail-befores.  Returns
+    ``(table, scale)``.
+
+    ``docs/audits/FIX_M2_NULL_CONTROL_2026_08_09.md``.  A test cannot change
+    the runner's OpenBLAS kernel, but it CAN put the cut where that kernel's
+    round-off put it.  So: walk :data:`_INJECTOR_SCALES` until one puts a raw
+    growing mode on one of THESE cells, score the reconditioned control there,
+    and pin the ORIGINAL premise FAILING on the same table.
+
+      (a) the reconditioned control passes under the injector, and for the
+          RIGHT REASON -- every rung it lets move carries a raw growing mode,
+          ends with none growing, and ends no further from the cured answer;
+      (b) ``original_msg`` -- the caller's own pre-2026-08-09 assertion, made
+          VERBATIM on that same table -- FAILS;
+      (c) the null half is not vacuous: rungs whose census reads ZERO are still
+          scored BIT-IDENTICAL, and (c) is decided on the CENSUS reading, not
+          on "did it move".  Those come apart at a deep scale, where a rung can
+          carry a growing mode and still not move.
+
+    The SCAN is repair-ON only -- ``n_grow`` is the pre-repair diagnosis and
+    does not move with the switch -- so a scale that carries nothing costs one
+    ladder, not two.  The reference is each cell's UN-INJECTED shipped ladder:
+    the answer the library gives when the cut sits where this build's own
+    round-off puts it, which is the only reference that exists for all three
+    devices (``RCWA_R0`` covers two ``n_slice`` of one of them).
+
+    Nothing about the geometry or the physics is injected -- the eigenvalues,
+    the operator and the materials are untouched.  Only the cut moves, which is
+    the one thing a BLAS kernel is entitled to move."""
+    PC.PMM_FORWARD_GROWTH_REPAIR = True
+    refs = {c: _ladder_rec(c[0], c[1], degrees, mk)[0] for c in cells}
+    used, table = None, None
+    for scale in _INJECTOR_SCALES:
+        with near_cut_injector(scale):
+            PC.PMM_FORWARD_GROWTH_REPAIR = True
+            if not any(int(np.sum(_ladder_rec(c[0], c[1], degrees, mk)[1]))
+                       for c in cells):
+                continue
+            # (a) the reconditioned control, scored under the injector
+            used, table = scale, _score_null_control(cells, refs, degrees, mk)
+        break
+    assert used is not None, (
+        f"no near-cut injector scale in "
+        f"{tuple(float(f'{s:.4g}') for s in _INJECTOR_SCALES)} put a growing "
+        f"mode on ANY rung of {list(cells)} on this build, so the 2026-08-09 "
+        f"CI condition is not reproduced here and this test has stopped being "
+        f"a fail-before.  Widen the scale ladder rather than deleting it -- "
+        f"the condition is a CUT POSITION and every build has one.")
+
+    moved = [r for r in table if r[7] > 0.0]
+    # the rungs the control scored on its BIT-IDENTITY branch -- the census
+    # reading, which is what the branch is chosen on, NOT "did it move"
+    nulls = [r for r in table if r[3] == 0]
+    print(f"\nM2 null control [{mk.__name__}], near-cut injector at {used:.4g}:"
+          f" {len(moved)} of {len(table)} cured rungs moved, "
+          f"{len(nulls)} scored bit-identical -- "
+          + ", ".join(f"ns={r[0]} deg={r[2]} raw={r[3]} post={r[4]} "
+                      f"{r[5]:.7f} -> {r[6]:.7f} (moved {r[7]:.4g})"
+                      for r in moved))
+
+    # (b) THE FAIL-BEFORE: the caller's original claim, verbatim, same table.
+    with pytest.raises(AssertionError, match=match):
+        for cell in cells:
+            rows = [r for r in table if (r[0], r[1]) == cell]
+            a = np.asarray([r[6] for r in rows], dtype=float)
+            b = np.asarray([r[5] for r in rows], dtype=float)
+            assert float(np.max(np.abs(a - b))) == 0.0, original_msg(*cell)
+
+    # ... and it failed for the reason the fix names: every rung that moved
+    # was carrying a growing mode the repair was entitled to redirect, and it
+    # ended with none.  (Both are already asserted inside the scorer; restated
+    # here so the fail-before is pinned to its DIAGNOSIS and not merely to the
+    # fact that something moved.)
+    assert all(r[3] > 0 and r[4] == 0 for r in moved), (
+        f"a cured rung moved without carrying a raw growing mode, or ended "
+        f"still growing: {[(r[0], r[2], r[3], r[4]) for r in moved]}")
+
+    # (c) the null half is not vacuous -- the injector does not put a growing
+    #     mode on EVERY cured rung, so the bit-identity claim was really scored
+    #     on some of them.
+    assert nulls, (
+        f"the injector at {used:.4g} put a growing mode on every one of the "
+        f"{len(table)} cured rungs, so the BIT-IDENTITY half of the control "
+        f"was never exercised and (a) proves only that nothing raised.  Use a "
+        f"shallower scale -- the point of this test is that the two branches "
+        f"COEXIST on one ladder")
+    assert all(r[7] == 0.0 for r in nulls), (
+        f"a rung whose census reads zero moved: "
+        f"{[(r[0], r[2], r[7]) for r in nulls if r[7]]}")
+    return table, used
+
+
+def test_the_null_control_conditions_on_the_census_not_the_threshold(
+        growth_repair_off):
+    """THE 2026-08-09 CI FAILURE, REPRODUCED ON THIS BUILD -- and the
+    fail-before for section (5) of the test above.
+
+    ``docs/audits/FIX_M2_NULL_CONTROL_2026_08_09.md``.
+
+    ``test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too`` failed
+    on the ubuntu py3.10 shard of main with
+
+        ns=2 min_feature=5e-10: an ABOVE-threshold cell moved when the
+        forward-growth repair was switched
+
+    rung 4 of that ladder moving 0.04886, on a tree that was green on branch CI
+    and on both mounts at every thread count.  A test cannot change the runner's
+    OpenBLAS kernel, but it CAN put the cut where that kernel's round-off put
+    it: ``_mass_flux_threshold`` scaled by 1/3 (``FIX_CI_ROUND2`` S6's near-cut
+    injector) drives a CURED cell into carrying a near-cut growing mode on this
+    box, and the resulting move is the CI number to four figures --
+
+        [M, Windows, 1 thread]  ns=2, min_feature 0.5 nm, degree 12
+        repair OFF  0.0616396      repair ON  0.1104990    moved  4.886e-02
+
+    -- so the CI failure is not a mystery about ubuntu, it is what happens
+    whenever the cut lands one notch lower than it does here.  WHICH rung
+    carries it migrates with the pool, exactly as everything else in this family
+    does, so this test SCANS rather than naming one:
+
+        mount / OPENBLAS_NUM_THREADS   rung(s) moved at scale 1/3
+        Windows 1                      ns=2 deg 12, ns=3 deg 10
+        Windows 2                      ns=3 deg 12
+        Windows 24                     ns=2 deg 12 + 14, ns=3 deg 10 + 14
+        WSL 1                          ns=2 deg 12, ns=3 deg 10
+        WSL 2                          ns=3 deg 12
+
+    What is asserted:
+
+      (a) the RECONDITIONED control passes under the injector, and passes for
+          the RIGHT REASON -- every rung it lets move carries a raw growing
+          mode, ends with none growing, and ends no further from the cured
+          answer;
+      (b) the ORIGINAL control -- bit-identity on every above-threshold rung --
+          is re-run VERBATIM on that same table and FAILS.  That is the
+          fail-before, and it is the CI failure itself;
+      (c) the null half is not vacuous: the injector leaves rungs whose census
+          reads ZERO, and those are still scored BIT-IDENTICAL.
+
+    (c) is scored on the CENSUS reading and not on "did it move", and the
+    difference is not pedantry -- at a deep injector scale every rung carries a
+    growing mode while some still do not move (measured: scale 1e-3, ns=2
+    degree 6, raw 2, moved 0.0), and a rung like that was scored by the
+    moved-rung branch, not by the bit-identity one.  The first draft of (c)
+    partitioned on the movement and would have called that rung a null.
+
+    Nothing about the geometry or the physics is injected -- the eigenvalues,
+    the operator and the materials are untouched.  Only the cut moves, which is
+    the one thing a BLAS kernel is entitled to move.
+    """
+    _injected_null_control(
+        ABOVE_THRESHOLD, _LADDER_DEGREES, _coated_stack,
+        lambda ns, mf: (
+            f"ns={ns} min_feature={mf}: an ABOVE-threshold cell moved when "
+            f"the forward-growth repair was switched -- the repair is only "
+            f"allowed to touch solves that put a growing mode in the forward "
+            f"set, and a cured cell has none"),
+        "ABOVE-threshold cell moved")
+
+
 def test_min_feature_threshold_rule_predicts_stationarity(growth_repair_off):
     """N-6, the QUANTITATIVE form of the contract, and the reason it is a rule
     and not a heuristic.
@@ -634,14 +1012,19 @@ def test_min_feature_threshold_rule_predicts_stationarity(growth_repair_off):
     PC.PMM_FORWARD_GROWTH_REPAIR = True          # the fixture owns the restore
     # the ABOVE-threshold side is untouched, bit for bit: there is no sliver
     # left, so there is no growing mode to repair.
-    for ns, mf in ((3, 1.5e-9), (6, 3.0e-9)):
-        a = coated_ladder(ns, mf)
-        PC.PMM_FORWARD_GROWTH_REPAIR = False
-        b = coated_ladder(ns, mf)
-        PC.PMM_FORWARD_GROWTH_REPAIR = True
-        assert float(np.max(np.abs(a - b))) == 0.0, (
-            f"ns={ns} min_feature={mf}: an above-threshold cell moved when "
-            f"the repair was switched")
+    #
+    # 2026-08-09 (FIX_M2_NULL_CONTROL_2026_08_09): scored through the shared
+    # census-conditioned scorer, for the reason its sibling's section (5) was
+    # re-stated.  "There is no growing mode to repair" is a claim about the
+    # CENSUS, and this test was asserting it as a claim about the min_feature
+    # THRESHOLD; the two come apart on a runner whose round-off puts a
+    # near-cut mode on a cured cell (the referred failure), and this test
+    # carried the identical premise on a different pair of cells.  On every
+    # build measured both cells read ZERO raw growing modes on every rung, so
+    # the assertion below IS the bit-identity one above, verbatim.  Its
+    # fail-before is the test immediately following.
+    _score_null_control(_RULE_CURED,
+                        {c: RCWA_R0.get(c[0]) for c in _RULE_CURED})
     # the BELOW-threshold side no longer collapses (measured 3.79e-03 and
     # 4.24e-03 against the 0.1 the rule predicts without the repair -- a
     # 25x-fold separation, at every thread count on both mounts).
@@ -651,6 +1034,41 @@ def test_min_feature_threshold_rule_predicts_stationarity(growth_repair_off):
             f"ns={ns} min_feature={mf}: still spreads {s:.4g} with the "
             f"forward-growth repair on -- below the min_feature threshold is "
             f"supposed to have stopped being an accuracy cliff")
+
+
+def test_the_threshold_rule_null_control_conditions_on_the_census_too(
+        growth_repair_off):
+    """The fail-before for ``test_min_feature_threshold_rule_predicts_
+    stationarity``'s own null floor.
+
+    ``docs/audits/FIX_M2_NULL_CONTROL_2026_08_09.md`` S7.  That test asserted
+    bit-identity on ITS above-threshold pair with the same premise the referred
+    CI failure refuted -- "there is no growing mode to repair" stated as a fact
+    about the min_feature THRESHOLD rather than about the CENSUS.  It had not
+    failed on any runner; it carried the identical exposure.
+
+    Driven with the near-cut injector at ``FIX_CI_ROUND2`` S6's own 1/3, the
+    exposure is real on this device, and it is the ``ns = 3`` cell that carries
+    it (this test's pair does not include ``ns = 2``, so it is a DIFFERENT rung
+    from the one CI found):
+
+        mount / OPENBLAS_NUM_THREADS   rung(s) moved at scale 1/3
+        Windows 1                      ns=3 deg 10  (raw 1, 0.6594 -> 0.1112)
+        Windows 2                      ns=3 deg 12
+        Windows 24                     ns=3 deg 10 + 14
+        WSL 1                          ns=3 deg 10
+        WSL 2                          ns=3 deg 12
+
+    Everything else is the sibling's: (a) the reconditioned control passes for
+    the right reason, (b) this test's ORIGINAL assertion -- "an above-threshold
+    cell moved when the repair was switched" -- is re-run VERBATIM on the same
+    table and fails, (c) the null half is not vacuous.
+    """
+    _injected_null_control(
+        _RULE_CURED, _LADDER_DEGREES, _coated_stack,
+        lambda ns, mf: (f"ns={ns} min_feature={mf}: an above-threshold cell "
+                        f"moved when the repair was switched"),
+        "above-threshold cell moved")
 
 
 def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper(
@@ -670,21 +1088,15 @@ def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper(
     # cure the collapse by DELETING THE TAPER.  It does not: the cured ladders
     # land within 0.3% of the undisturbed ns=3 value and keep the correct
     # monotone n_slice trend (checked against RCWA in the M2 audit S9).
-    degs = (8, 10, 12, 14, 16)
-
-    cache = {}
+    degs = _UNCOATED_DEGREES
 
     def spread_u(ns, mf):
-        # cached on the repair flag too -- see ``_LADDER_CACHE``
-        key = (ns, mf, bool(PC.PMM_FORWARD_GROWTH_REPAIR),
-               bool(PC.PMM_FORWARD_GROWTH_PASSIVE))
-        v = cache.get(key)
-        if v is None:
-            v = np.asarray([solve0(_mk(_uncoated_layers(ns), d, 1)
-                                    if mf is None else
-                                    _mk_mf(_uncoated_layers(ns), d, mf))[0]
-                            for d in degs], dtype=float)
-            cache[key] = v
+        # 2026-08-09: the local cache this test carried is now ``_LADDER_CACHE``
+        # via ``_ladder_rec`` -- the SAME builders and the same degrees, plus
+        # the census columns the re-pointed null control below reads.  The key
+        # gains the device and the injector scale; it already carried both
+        # switches, which is what a repair-vs-no-repair comparison needs.
+        v = _ladder_rec(ns, mf, degs, _uncoated_stack)[0]
         return float((v.max() - v.min()) / abs(v.mean())), v
 
     # ns = 6, off = 1.804 nm: 1.5 nm is BELOW the threshold, 3.0 nm above it
@@ -721,21 +1133,65 @@ def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper(
     # coat/offset resonance:
     PC.PMM_FORWARD_GROWTH_REPAIR = True          # the fixture owns the restore
     # (a) the cured cells do not move a bit -- the null floor.
-    for ns, mf in ((6, 3.0e-9), (12, 1.5e-9)):
-        _s_on, v_on = spread_u(ns, mf)
-        PC.PMM_FORWARD_GROWTH_REPAIR = False
-        _s_off, v_off = spread_u(ns, mf)
-        PC.PMM_FORWARD_GROWTH_REPAIR = True
-        assert float(np.max(np.abs(np.asarray(v_on)
-                                   - np.asarray(v_off)))) == 0.0, (
-            f"uncoated ns={ns} min_feature={mf}: a cured cell moved when the "
-            f"forward-growth repair was switched")
+    #
+    # 2026-08-09 (FIX_M2_NULL_CONTROL_2026_08_09): scored through the shared
+    # census-conditioned scorer, the same re-statement its two siblings got.
+    # "A cured cell has no growing mode" is a claim about the CENSUS and was
+    # being asserted as a claim about the min_feature threshold.  On every
+    # build measured both cells read ZERO raw growing modes on every rung, so
+    # this IS the bit-identity assertion it replaces, verbatim.  There is no
+    # independent reference on this device -- it has no RCWA anchor in this
+    # file -- so the moved half is scored on ``n_grow_post`` alone, which is
+    # the claim that does not need one.  Fail-before: the test below.
+    _score_null_control(_UNCOATED_CURED, {c: None for c in _UNCOATED_CURED},
+                        degs, _uncoated_stack)
     # (b) the BELOW-threshold cell stops collapsing (measured 4.06e-03 with
     #     the repair on against 1.34 with it off, both thread counts).
     s_lo_on, _v = spread_u(6, 1.5e-9)
     assert s_lo_on < 1e-2, (
         f"uncoated ns=6 at 1.5 nm still spreads {s_lo_on:.4g} with the "
         f"forward-growth repair on (it spread {s_lo:.4g} with it off)")
+
+
+def test_the_uncoated_null_control_conditions_on_the_census_too(
+        growth_repair_off):
+    """The fail-before for the SINGLE-REGION uncoated taper's null floor --
+    and the measurement that says that device was the least exposed of the
+    three.
+
+    ``docs/audits/FIX_M2_NULL_CONTROL_2026_08_09.md`` S7.  Same premise, same
+    re-statement: "a cured cell has no growing mode" is a claim about the
+    census, not about the min_feature threshold.
+
+    WHAT IS DIFFERENT HERE, and it is worth the measurement.  The coated device
+    reaches the CI condition at ``FIX_CI_ROUND2`` S6's own 1/3 scale.  This one
+    does NOT -- not at 1/3, not at 1e-1, 3e-2, 1e-2, 3e-3, 1e-3 or 3e-4.  It
+    takes **1e-4**, i.e. the cut has to fall four decades before any mode's
+    round-off flux crosses it [M, Windows 1 thread, cells (6, 3 nm) and
+    (12, 1.5 nm), degrees 8..16]::
+
+        scale     rungs with a raw growing mode   moved
+        1         0 / 10                          0
+        1/3       0 / 10                          0
+        1e-2      0 / 10                          0
+        1e-3      0 / 10                          0
+        1e-4      3 / 10                          3  (ns=6 deg 10 + 16,
+                                                      ns=12 deg 10)
+
+    That is what a single region with no conformal coat buys: there is no
+    coat/offset collision to inject near-zero-width cross-layer cells, so the
+    spectrum has no round-off-flux mode anywhere near the cut.  It is a
+    statement about THIS device, not a bar, and it is why the scale ladder has
+    to reach 1e-4 -- the fail-before still exists here, it is simply four
+    decades further away.
+
+    The three claims are the sibling's, unchanged.
+    """
+    _injected_null_control(
+        _UNCOATED_CURED, _UNCOATED_DEGREES, _uncoated_stack,
+        lambda ns, mf: (f"uncoated ns={ns} min_feature={mf}: a cured cell "
+                        f"moved when the forward-growth repair was switched"),
+        "a cured cell moved")
 
 
 def _mk_mf(layers, degree, mf):
