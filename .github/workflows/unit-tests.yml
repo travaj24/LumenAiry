@@ -424,7 +424,7 @@ jobs:
         shell: bash
         run: |
           if [ -f jax_unit_output.txt ]; then
-            grep -E "^FAILED |^ERROR |error |Error:|INTERNALERROR|Timeout" jax_unit_output.txt \
+            grep -E "^FAILED |^ERROR |^error |^Error:|INTERNALERROR|Timeout" jax_unit_output.txt \
               | head -n 20 \
               | while IFS= read -r line; do
                   echo "::error::${line}"
