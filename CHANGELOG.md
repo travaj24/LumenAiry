@@ -4,6 +4,22 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.33.1] — 2026-08-09
+
+### Fixed — census-conditioned forward-growth null controls (the v5.33.0 publish gate)
+
+v5.33.0's publish was correctly refused by its verify shard: the M2
+null controls asserted "above-threshold cells never move under the
+forward-growth repair", but which cells carry near-cut growing modes is
+a per-runner-kernel round-off fact — the repair redirecting one (ending
+n_grow_post = 0, closer to the RCWA anchor) is correct wherever it
+appears.  All three null controls now partition rung-by-rung on the
+census (raw = 0 → bit-identical, verbatim original assertion; raw > 0
+→ must end repaired and closer-or-equal to the reference), with the CI
+failure reproduced via an in-tree near-cut injector and pinned as a
+permanent fail-before.  v5.33.0 remains a source-only tag; this is the
+PyPI release of the same library content (test-only delta).
+
 ## [5.33.0] — 2026-08-06
 
 ### Capstone — design 121 end-to-end, exact everywhere, 8.1 h for the full fan
