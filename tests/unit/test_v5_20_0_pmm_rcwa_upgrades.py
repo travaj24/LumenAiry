@@ -116,24 +116,89 @@ def test_stack_repeated_layer_dedup_is_transparent():
 def test_stack_sweep_geom_cache_is_transparent_and_reused():
     """F4 part 2: a wavelength sweep reuses the wl-independent per-layer build
     (one geom-cache entry per unique layer, shared across all wavelengths) and
-    is bit-identical to per-wavelength fresh solves."""
+    is bit-identical to a CACHE-COLD solve of the same wavelength.
+
+    **THE BIT-IDENTITY WAS COMPARED ACROSS A BLAS THREAD-COUNT BOUNDARY THE
+    SWEEP ITSELF INTRODUCES (2026-08-08).**  The reference was a bare
+    ``solve()``, which runs at the ambient BLAS thread count; but
+    ``solve_vs_wavelength`` wraps the WHOLE dispatch in
+    ``_blas_threads_quiet(blas_per_worker) + _blas_limit()`` with
+    ``blas_per_worker=1`` by design -- byte-identity across worker counts
+    needs every solve at the SAME BLAS thread count, and applying a cap is
+    process-global on OpenBLAS.  So the sweep solved at ONE thread and the
+    reference at N, and ``np.array_equal`` was reading the OpenBLAS reduction
+    order, not the cache.  Measured on the three sweep wavelengths, Windows,
+    ``OPENBLAS_NUM_THREADS=2`` [absolute max over R and T]::
+
+        reference                                array_equal   |dR| / |dT|
+        bare solve(), AMBIENT threads             False         5.2e-14 / 1.2e-14
+        bare solve(), under the sweep's own cap   True          0 / 0
+        cache-COLD one-wavelength sweep           True          0 / 0
+
+    which is why it passed at ``OPENBLAS_NUM_THREADS=1`` (there is no boundary
+    there: 1 == 1) and failed at 2 and at the default.  The cache was never
+    implicated -- the cold-sweep row is the cache's OWN control and it is
+    bit-exact at every thread count.
+
+    So the bit claims below are made where they are TRUE BY CONSTRUCTION --
+    same code path, same cap, the cache the only difference -- and the
+    cross-boundary comparison is kept as what it actually is: the same physics
+    to a reduction-order residual, asserted at 1e-9 (the file's own dedup bar).
+    The residual is 5.2e-14 at 2 threads and 2.6e-13 at 24, so 1e-9 is nearly
+    four decades of headroom while a poisoned cache reads 7.4e-03 -- the
+    control keeps its teeth.  (``rtol=atol=1e-12`` is what the same disease got
+    in ``test_v5_14_0_pmm2d_stack::test_sweep_matches_per_wavelength`` under
+    audit S5-12; on THIS near-singular cell -- the stack warns ``max R+T =
+    1.03`` at its own truncation -- 1e-12 would sit only 4x over the 24-thread
+    residual, which is not headroom.)"""
+    from lumenairy.elements.rcwa._core import _blas_limit, _blas_threads_quiet
     P, DEP = 0.6e-6, 0.25e-6
     S = 6
     cell = np.full((S, S), 1.0 + 0j)
     cell[1:4, 1:4] = 6.0
     wls = np.array([0.50e-6, 0.55e-6, 0.60e-6])
-    st = la.PMM2DStack(period_x=P, period_y=P, n_substrate=1.5,
-                       n_superstrate=1.0, degree=9, n_orders=3)
-    st.add_layer(DEP, eps_cell=cell)
+
+    def _fresh():
+        st = la.PMM2DStack(period_x=P, period_y=P, n_substrate=1.5,
+                           n_superstrate=1.0, degree=9, n_orders=3)
+        st.add_layer(DEP, eps_cell=cell)
+        return st
+
+    st = _fresh()
     o, R, T = st.solve_vs_wavelength(wls)[:3]
     assert len(st._geom_cache) == 1        # one unique layer, built once
     for i, w in enumerate(wls):
-        ref = la.PMM2DStack(period_x=P, period_y=P, n_substrate=1.5,
-                            n_superstrate=1.0, degree=9, n_orders=3)
-        ref.add_layer(DEP, eps_cell=cell)
-        ref.set_source(float(w))
-        _o1, R1, T1, _j = ref.solve()
-        assert np.array_equal(R[i], R1) and np.array_equal(T[i], T1)
+        # (a) THE CACHE CONTROL: the same wavelength through the same code
+        # path on a stack whose cache is COLD.  Sweep-of-3 (entry built once,
+        # reused twice) vs sweep-of-1 (entry built here) -- the cache is the
+        # only difference, so this one is bit-exact or the cache is not
+        # transparent.
+        cold = _fresh()
+        _o1, R1, T1 = cold.solve_vs_wavelength([float(w)])[:3]
+        assert len(cold._geom_cache) == 1
+        assert np.array_equal(R[i], R1[0]) and np.array_equal(T[i], T1[0]), (
+            f"wl={w:.3e}: the cached sweep differs from a cache-cold solve of "
+            f"the same wavelength at the same BLAS thread count -- the "
+            f"geom-cache entry is NOT transparent (max |dR| "
+            f"{np.max(np.abs(R[i] - R1[0])):.3e})")
+        # (b) ... and a bare solve() run under the cap the sweep applies is
+        # the same bits too, which is what makes (c) below a thread-count
+        # statement and not a physics one.
+        capped = _fresh()
+        capped.set_source(float(w))
+        with _blas_threads_quiet(1), _blas_limit(), _blas_threads_quiet(None):
+            _o2, R2, T2, _j2 = capped.solve()
+        assert np.array_equal(R[i], R2) and np.array_equal(T[i], T2), (
+            f"wl={w:.3e}: the sweep differs from a bare solve() AT THE SWEEP'S "
+            f"OWN BLAS thread count -- that is a sweep/solve divergence, not a "
+            f"reduction-order one (max |dR| {np.max(np.abs(R[i] - R2)):.3e})")
+        # (c) the cross-boundary comparison, at its honest strength: a bare
+        # solve() at the AMBIENT thread count is the same physics, and the
+        # sweep's internal cap does not move it.
+        amb = _fresh()
+        amb.set_source(float(w))
+        _o3, R3, T3, _j3 = amb.solve()
+        assert np.max(np.abs(R[i] - R3)) < 1e-9 and np.max(np.abs(T[i] - T3)) < 1e-9
 
 
 # --------------------------------------------------------------------------- #
