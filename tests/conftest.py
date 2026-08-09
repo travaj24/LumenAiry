@@ -257,7 +257,29 @@ _LEAK_GUARD_MODULES = (
     'lumenairy.propagators.carrier',
     'lumenairy.propagators.fft_infra',
 )
-_LEAK_GUARD_TYPES = (bool, int, float, str, type(None))
+#
+# ``type`` and ``np.dtype`` are in the type filter for a REASON
+# (2026-08-09, docs/audits/FIX_STEERING_FAMILY_2026_08_09.md).  The
+# scalar-only filter silently EXCLUDED the two dtype steering knobs
+# ``fft_infra.DEFAULT_REAL_DTYPE`` and ``fft_infra.DEFAULT_COMPLEX_DTYPE``
+# -- they ship as the numpy scalar TYPES ``np.float64`` / ``np.complex128``
+# (``isinstance(np.float64, (bool, int, float, str, NoneType))`` is False),
+# and ``set_default_real_dtype`` normalises them to ``np.dtype`` INSTANCES,
+# which is a third class the filter also missed.  So a test that called
+# ``set_default_real_dtype(np.float32)`` and forgot to put it back handed
+# every LATER test in the process a float32 OPL accumulator, and the guard
+# whose whole job is to stop exactly that never looked.  Both spellings
+# are listed because either can be the value in flight: the SHIPPED value
+# is a type, every value that has been through a setter is a dtype.
+#
+# This does NOT make the guard trigger-happy about the type-vs-dtype
+# SPELLING: the comparison below falls back to ``==``, and
+# ``np.dtype('float64') == np.float64`` is True, so the benign
+# renormalisation a save/restore round-trip performs is tolerated while a
+# real float32/complex64 leak is caught and reverted.  Measured against
+# the three guarded modules, adding these two admits the two dtype knobs
+# and nothing else.
+_LEAK_GUARD_TYPES = (bool, int, float, str, type(None), type, np.dtype)
 
 
 def _leak_guard_snapshot():

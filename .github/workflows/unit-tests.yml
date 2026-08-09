@@ -176,7 +176,7 @@ jobs:
           # admin-level log access.  Print first 10 FAILED lines + any
           # ERROR lines + the final "X failed, Y passed" summary line.
           if [ -f unit_test_output.txt ]; then
-            grep -E "^FAILED |^ERROR |error |Error:" unit_test_output.txt \
+            grep -E "^FAILED |^ERROR |^error |^Error:" unit_test_output.txt \
               | head -n 20 \
               | while IFS= read -r line; do
                   echo "::error::${line}"
