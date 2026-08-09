@@ -113,11 +113,22 @@ def test_astig_machinery_reduces_to_scalar():
     """The raw separable astigmatic machinery (NOT short-circuited) with
     ``R_x == R_y`` reproduces the scalar path to ~1e-11 -- proving the
     coordinate-wise transform reduces correctly, not merely that equal radii
-    are routed away."""
+    are routed away.
+
+    The scalar reference is taken with ``gap_kernel='fresnel'``, deliberately
+    (2026-08-06, defect D11b).  The astigmatic transform is SEPARABLE -- a 1-D
+    Sziklas-Siegman step per axis -- and the exact kernel
+    ``sqrt(k^2 - qx^2 - qy^2)`` does NOT separate into an x part and a y part;
+    only its paraxial expansion does.  So the astigmatic path is paraxial by
+    construction (``propagate_carrier_referenced`` now REFUSES an explicit
+    ``gap_kernel='exact'`` there rather than silently downgrading), and this
+    reduction can only be asserted against the paraxial scalar step.  Against
+    the shipping exact default the two differ by 6.0e-06 -- which is the
+    non-paraxial correction, not a defect in the reduction."""
     N, dx = 512, 4e-6
     env = _gauss_env(N, dx, 40e-6)
     R, z = 30e-3, 40e-3
-    ref = propagate_carrier_referenced(env, R, z, WL, dx)
+    ref = propagate_carrier_referenced(env, R, z, WL, dx, gap_kernel='fresnel')
     out = _propagate_carrier_astigmatic(env, R, R, z, WL, dx, dx)
     scale = np.max(np.abs(np.asarray(ref.env)))
     assert np.max(np.abs(np.asarray(out.env) - np.asarray(ref.env))) / scale < 1e-9

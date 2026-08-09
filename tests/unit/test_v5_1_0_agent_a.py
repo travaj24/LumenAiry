@@ -28,7 +28,10 @@ Author: LumenAiry v5.1.0 Agent A.
 """
 from __future__ import annotations
 
+import contextlib
+import re
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -38,39 +41,120 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
+def _function_source(func):
+    """Return ``func``'s source text, read FRESH from disk and located
+    BY NAME rather than by the code object's line number.
+
+    Do not replace this with ``inspect.getsource``.  ``getsource``
+    slices the file at ``func.__code__.co_firstlineno``, which is baked
+    in when the module is IMPORTED, but ``inspect.findsource`` calls
+    ``linecache.checkcache`` first and therefore RE-READS the file
+    whenever its ``(size, mtime)`` has moved.  Those two facts disagree
+    the moment the module's file is edited after the process imported
+    it -- routine on a dev box, where a sibling agent editing
+    ``lumenairy/elements/_lens_traced.py`` (an ~8 kLOC file whose
+    ``_geometric_lens_phase`` sits around line 2550) while a serial
+    full-suite preflight is running shifts every line below the edit.
+    ``getsource`` then hands back a DIFFERENT function's body, and a
+    source-text pin fails with no library defect, no steering-global
+    leak and no test-order dependence -- then passes again the instant
+    the tree settles, which is the most expensive shape of false
+    failure this suite produces.  That is the adjudicated cause of the
+    2026-08-09 sighting of
+    ``test_geometric_lens_phase_honours_real_dtype``; see
+    ``docs/audits/FIX_STEERING_FAMILY_2026_08_09.md``.
+
+    Finding the ``def`` by name and slicing to the next line at or
+    below its indentation removes the line-number dependence entirely:
+    the answer becomes a property of the file on disk, whatever that
+    file currently is.  ``tests/unit/test_v5_1_0_agent_f_split.py``
+    (``test_prescriptions_shell_is_thin``) reads from disk for the same
+    class of reason.
+    """
+    import inspect
+    path = inspect.getsourcefile(func)
+    assert path, f"no source file for {func!r}"
+    lines = Path(path).read_text(encoding='utf-8').splitlines()
+    name = func.__name__
+    pat = re.compile(r'^(\s*)def\s+' + re.escape(name) + r'\s*\(')
+    start = indent = None
+    for i, line in enumerate(lines):
+        m = pat.match(line)
+        if m is not None:
+            assert start is None, (
+                f"{name!r} is defined more than once in {path}; this "
+                f"helper cannot tell which one the caller means.")
+            start, indent = i, len(m.group(1))
+    assert start is not None, (
+        f"could not find 'def {name}(' in {path} -- the function was "
+        f"renamed or moved to another module; update the pin.")
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        stripped = lines[j].strip()
+        if not stripped:
+            continue
+        if len(lines[j]) - len(lines[j].lstrip()) <= indent:
+            end = j
+            break
+    return '\n'.join(lines[start:end]) + '\n'
+
+
+# ---------------------------------------------------------------------------
+# Steering-global save/restore.
+#
+# These restore the ``fft_infra`` module attribute DIRECTLY instead of
+# calling ``set_default_*(get_default_*())``.  ``fft_infra`` is the single
+# source of truth -- ``propagation`` deletes its import-time bindings and
+# forwards through ``__getattr__`` (see ``_LIVE_FORWARD_NAMES`` there) --
+# so one ``setattr`` restores every view of the knob.
+#
+# The reason not to round-trip through the public setter is specific and
+# measured: ``set_default_real_dtype`` / ``set_default_complex_dtype``
+# normalise their argument through ``np.dtype(...)``, while the SHIPPED
+# values are the numpy scalar TYPES ``np.float64`` / ``np.complex128``.
+# So ``set_default_real_dtype(get_default_real_dtype())`` -- a no-op by
+# intent -- rewrites ``DEFAULT_REAL_DTYPE`` from ``np.float64`` to
+# ``np.dtype('float64')``.  The two compare equal and behave identically,
+# so nothing breaks today, but the "restore" left the process in a state
+# it did not find it in, which a state-diff harness reports as a leak and
+# which any future ``is``-comparison would trip over.  Saving and
+# restoring the attribute itself is exact.
+# ---------------------------------------------------------------------------
+
+
+@contextlib.contextmanager
+def _restored(attr):
+    """Save and restore one ``fft_infra`` steering knob EXACTLY.
+
+    Restores on the exception path too, so a failing assertion inside
+    the ``with`` body still cannot hand the knob to the next test.
+    """
+    from lumenairy.propagators import fft_infra as _fft
+    original = getattr(_fft, attr)
+    try:
+        yield original
+    finally:
+        setattr(_fft, attr, original)
+
+
 @pytest.fixture
 def restore_default_wave_propagator():
     """Save / restore ``DEFAULT_WAVE_PROPAGATOR`` so a test that
     changes the library-wide default does not leak into other tests."""
-    from lumenairy.propagators.propagation import (
-        get_default_wave_propagator,
-        set_default_wave_propagator,
-    )
-    original = get_default_wave_propagator()
-    yield
-    set_default_wave_propagator(original)
+    with _restored('DEFAULT_WAVE_PROPAGATOR'):
+        yield
 
 
 @pytest.fixture
 def restore_default_dy():
-    from lumenairy.propagators.propagation import (
-        get_default_dy,
-        set_default_dy,
-    )
-    original = get_default_dy()
-    yield
-    set_default_dy(original)
+    with _restored('DEFAULT_DY'):
+        yield
 
 
 @pytest.fixture
 def restore_default_real_dtype():
-    from lumenairy.propagators.propagation import (
-        get_default_real_dtype,
-        set_default_real_dtype,
-    )
-    original = get_default_real_dtype()
-    yield
-    set_default_real_dtype(original)
+    with _restored('DEFAULT_REAL_DTYPE'):
+        yield
 
 
 def _minimal_prescription(aperture_diameter=5e-5):
@@ -540,11 +624,22 @@ class TestSetDefaultRealDtypeSteersGeometricLensPhase:
         """Source-level pin: the consumer wiring at
         ``_lens_traced.py`` must include a
         ``get_default_real_dtype`` call inside the
-        ``_geometric_lens_phase`` body."""
-        import inspect
+        ``_geometric_lens_phase`` body.
 
+        Reads the source via :func:`_function_source` (fresh disk read,
+        located by name) rather than ``inspect.getsource``.  See that
+        helper's docstring: ``getsource`` slices at the import-time line
+        number against a possibly-newer file, so it fails this pin
+        whenever the tree is edited mid-run -- a false failure that
+        looks exactly like a steering-global leak and is not one.
+        """
         from lumenairy.elements import _lens_traced as _lt
-        src = inspect.getsource(_lt._geometric_lens_phase)
+        src = _function_source(_lt._geometric_lens_phase)
+        # Guard the guard: if the extraction ever grabs the wrong block,
+        # the marker assertion below must not be what tells us.
+        assert src.lstrip().startswith('def _geometric_lens_phase('), (
+            "_function_source did not return _geometric_lens_phase's own "
+            "body; the pin below would be reading unrelated text.")
         assert 'get_default_real_dtype' in src, (
             "v5.1.0 wiring regression: _geometric_lens_phase no "
             "longer reads get_default_real_dtype.  Restore the "
@@ -636,6 +731,80 @@ class TestSettersNoLongerEmitNoConsumerUserWarning:
                 f"{[str(w.message) for w in no_consumer]}")
         finally:
             _prop._DEFAULT_DY_NO_CONSUMER_WARNED = True
+
+
+# ============================================================================
+# The save/restore contract itself -- this file steers PROCESS-GLOBAL knobs.
+# ============================================================================
+
+
+class TestSteeringKnobSaveRestoreIsExact:
+    """Every test above steers a process-global knob, so the restore has
+    to be exact or this file becomes a polluter of whatever runs next.
+
+    The bar is IDENTITY, not equality (2026-08-09,
+    ``docs/audits/FIX_STEERING_FAMILY_2026_08_09.md``).  The original
+    fixtures restored by calling ``set_default_real_dtype(
+    get_default_real_dtype())``, which looks like a no-op and is not:
+    the setter normalises through ``np.dtype(...)``, so the shipped
+    ``np.float64`` (a numpy scalar TYPE) came back as
+    ``np.dtype('float64')`` (a dtype INSTANCE).  Equal, interchangeable
+    in every ``np.zeros(..., dtype=...)`` call, and still a change this
+    file made to the process and did not undo -- a per-test state-diff
+    harness reported it as a leak from
+    ``test_geometric_lens_phase_honours_real_dtype``.  Pin identity so
+    the round-trip cannot quietly come back.
+    """
+
+    @pytest.mark.parametrize('attr,steered', [
+        ('DEFAULT_WAVE_PROPAGATOR', 'fresnel'),
+        ('DEFAULT_DY', 5e-6),
+        ('DEFAULT_REAL_DTYPE', np.float32),
+        ('DEFAULT_COMPLEX_DTYPE', np.complex64),
+    ])
+    def test_restored_puts_the_knob_back_identically(self, attr, steered):
+        from lumenairy.propagators import fft_infra as _fft
+
+        before = getattr(_fft, attr)
+        with _restored(attr):
+            setattr(_fft, attr, steered)
+            assert getattr(_fft, attr) is steered, (
+                f"{attr}: the steer itself did not take.")
+        after = getattr(_fft, attr)
+        assert after is before, (
+            f"{attr}: _restored() did not put the knob back IDENTICALLY "
+            f"({before!r} -> {after!r}).  Restore the module attribute "
+            f"directly; do NOT round-trip through the public setter, "
+            f"which renormalises dtype knobs.")
+
+    def test_restored_puts_the_knob_back_when_the_body_raises(self):
+        """A failing assertion inside a steering test must not leak."""
+        from lumenairy.propagators import fft_infra as _fft
+
+        before = _fft.DEFAULT_REAL_DTYPE
+        with pytest.raises(RuntimeError):
+            with _restored('DEFAULT_REAL_DTYPE'):
+                _fft.DEFAULT_REAL_DTYPE = np.float32
+                raise RuntimeError('simulated test failure')
+        assert _fft.DEFAULT_REAL_DTYPE is before, (
+            "_restored() leaked the real-dtype knob on the exception "
+            "path; a red steering test would then red every later test "
+            "that reads it.")
+
+    def test_propagation_view_follows_the_fft_infra_attribute(self):
+        """The restore targets ``fft_infra`` only.  That is complete
+        because ``propagation`` deletes its import-time bindings and
+        forwards through ``__getattr__`` -- pin that, so a future
+        re-binding there cannot make the restores half-effective."""
+        from lumenairy.propagators import fft_infra as _fft
+        from lumenairy.propagators import propagation as _prop
+
+        for attr in ('DEFAULT_WAVE_PROPAGATOR', 'DEFAULT_DY',
+                     'DEFAULT_REAL_DTYPE', 'DEFAULT_COMPLEX_DTYPE'):
+            assert getattr(_prop, attr) is getattr(_fft, attr), (
+                f"propagation.{attr} no longer forwards to fft_infra; "
+                f"the save/restore fixtures in this file would leave a "
+                f"stale second copy behind.")
 
 
 if __name__ == '__main__':

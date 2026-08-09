@@ -509,7 +509,7 @@ def test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle():
     THE FAIL-BEFORE RATIO MOVED, 2026-07-30 (niche C3), and this is the reason
     so the next reader is not surprised again.  The paraxial leg used to read
     **3.19x** the oracle FWHM (EE2 6.5 % against 71.9 %); it now reads
-    **1.857x** (EE2 10.6 % against 71.6 %).  Nothing about the paraxial
+    **1.476x** (EE2 15.6 % against 71.6 %; it read 1.857x / 10.6 % before _FOCUS_STANDOFF_ZR was retuned to the accuracy optimum).  Nothing about the paraxial
     readout changed -- its wavefront is still ~200 rad wrong at this exit NA.
     What changed is the chief-ray PREDICTOR that places its spot: it is an
     exact trace now instead of a lumped paraxial ABCD, so the paraxial leg's
@@ -520,7 +520,7 @@ def test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle():
 
     Because the FWHM bar had to come down, the discrimination is carried by
     two measurements that did NOT weaken, both on the shipped window: the
-    paraxial leg keeps 14.8 % of the oracle's EE2 (pinned below 25 %), and its
+    paraxial leg keeps 21.7 % of the oracle's EE2 (pinned below 25 %), and its
     brightest pixel sits at the window EDGE while the exact leg's sits at the
     centre.  On a +/-38 um window -- measured, not asserted, since this test
     deliberately keeps the shipped readout -- the paraxial peak is 8.25 um
@@ -561,13 +561,22 @@ def test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle():
     # the two discriminators that did NOT weaken with the predictor fix
     assert m_px['ee'][2.0] < 0.25 * orc['ee'][2.0], (
         f"paraxial EE2 {m_px['ee'][2.0]:.4f} against the oracle's "
-        f"{orc['ee'][2.0]:.4f} (measured ratio 0.148)")
+        f"{orc['ee'][2.0]:.4f} (measured ratio 0.217)")
     assert abs(m_px['peak_off'][0]) > 4.0e-6, (
         f"the paraxial leg's brightest pixel is {m_px['peak_off'][0] * 1e6:+.3f}"
         f" um off the Fermat focus -- it used to be on the window edge")
     assert abs(m_ex['peak_off'][0]) < 0.5e-6
-    assert m_ex['fwhm'] < 0.60 * m_px['fwhm']
-    assert m_ex['ee'][2.0] > 5.0 * m_px['ee'][2.0]
+    # RE-BASELINED 2026-08-05 when _FOCUS_STANDOFF_ZR moved 6.0 -> 0.8 zR (the
+    # measured readout-accuracy optimum).  That change IMPROVED the paraxial
+    # leg -- FWHM 1.857x -> 1.476x the oracle, EE2 14.8% -> 21.7% of it -- so
+    # these two CONTRAST margins, which were sized against the worse baseline,
+    # had to widen.  The exact leg is unchanged and still lands exactly on the
+    # oracle (FWHM ratio 1.0000, EE2 98.2% of it), so the discrimination is as
+    # decisive as before: the paraxial leg is still 48% too wide, keeps under a
+    # quarter of the oracle's EE2, and puts its brightest pixel 6.3 um off the
+    # Fermat focus.  Measured: FWHM ratio 0.6774, EE2 ratio 4.517.
+    assert m_ex['fwhm'] < 0.75 * m_px['fwhm']
+    assert m_ex['ee'][2.0] > 4.0 * m_px['ee'][2.0]
     # the spot lands on the FERMAT focus, i.e. where the physics puts it
     assert float(np.hypot(*m_ex['centroid'])) < 0.5e-6
 
@@ -710,7 +719,11 @@ def test_refusal_when_the_fine_grid_cannot_sample_the_widened_window():
     with pytest.raises(RuntimeError) as e:
         _run_chain(car, final_leg='exact', n_fine_cap=256)
     msg = str(e.value)
-    for token in ('chief ray', 'axis-centred window', 'n_fine_cap=256',
+    # niche D9: the window itself is no longer widened by the chief-ray offset
+    # (the retrace grid is centred on it), so the refusal now names the
+    # CHIEF-RAY-CENTRED window -- a genuine n_fine_cap / NA shortfall rather
+    # than a tilt tax.  It still has to fire, and still has to say why.
+    for token in ('chief ray', 'chief-ray-centred window', 'n_fine_cap=256',
                   'Nyquist', 'on_tilt_exact_grid', "final_leg='paraxial'"):
         assert token in msg, f"refusal message is missing {token!r}:\n{msg}"
 
@@ -745,11 +758,19 @@ def test_the_refusal_can_be_downgraded_and_then_it_is_worse():
 def test_refusal_when_the_chief_ray_does_not_fit_the_grid():
     """A decentre the co-moving grid cannot hold is a hard error naming the
     window it would have needed -- never a wrapped-round, plausible-looking
-    field."""
+    field.
+
+    niche D9 NARROWED this to the COARSE hand-off, which is where the
+    band-limited chief-ray shift (and therefore the wrap-round it guards
+    against) still lives.  The EXACT final leg no longer shifts anything: its
+    retrace grid is CENTRED on the chief ray, so an offset the axis-centred
+    grid could not hold now costs nothing at all there.  ``final_leg='paraxial'``
+    routes the same decentre through the coarse path, where the guard remains
+    exactly as load-bearing as it was."""
     _ram_guard()
     car = la.TiltedCarrier(np.inf, 0.0, 0.0, 2.6e-3, 0.0)
     with pytest.raises(ValueError) as e:
-        _run_chain(car, final_leg='exact')
+        _run_chain(car, final_leg='paraxial')
     msg = str(e.value)
     assert ('chief' in msg.lower()) or ('does not fit' in msg)
 

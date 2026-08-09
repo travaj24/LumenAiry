@@ -2,6 +2,517 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+## [5.33.0] — 2026-08-06
+
+### Capstone — design 121 end-to-end, exact everywhere, 8.1 h for the full fan
+
+The full 32-order design-121 fan with the exact final leg on every order
+projects to 8.12 h (measured 3-order subset, 0.3% per-order spread) against
+the prior ~24 h; acceptance banner byte-identical (AT-PLANE dz=0: 3.350um /
+90.3 / 99.7 / 99.8).  The paraxial-era field-angle collapse is GONE: EE3 at
+the extreme order (-4,-2) reads 90.1% against the independent skew-ray+Debye
+oracle's 90.7% (was 65.3%).  The Sziklas–Siegman co-moving frame — the one
+structurally paraxial element — is quantified on the real chain: 4.1e-3 (rss)
+to 7.9e-3 (coherent) over the 8 calibrated steps, with the final SS step not
+taken at all (`final_leg='exact'` replaces it).  Full record with per-stage
+wall times, memory, and the open source-leg item (m = 23.9 outside the
+calibration span) in `docs/audits/CAPSTONE_D121_2026_08_06.md`.
+
+### Fixed — Newton pool spawn safety and memory accounting (capstone OOM)
+
+Shipped `n_workers=8` put the design-121 acceptance run on an OOM trajectory
+(205.7 of 227.5 GB commit): each spawned Newton worker RE-EXECUTED the
+caller's unguarded script (CPython spawn runs `__mp_main__` via runpy), so 8
+workers cost 22.1 GB each against 1.92 GB intrinsic chunk need.  Two arms
+shipped: an unguarded `__main__` now routes SERIAL unconditionally (no worker
+count makes re-running the caller acceptable — its side effects would run K
+extra times too), and guarded contexts get a measured memory cap (per-worker
+1.75 GB + 268 B/chunk-point + 850 B/fit-point against half of available RAM,
+re-priced at the allowed count, single warning when binding).  Stage B at
+`n_workers=8` now completes: 346.6 s, 21.4 GB peak, banner intact.  Pool
+bit-identity is additionally ledgered as CONDITIONAL on the worker
+inheriting the parent's numba availability (payload pins no backend flag;
+5.2e-14 divergence when it flips) — an open item, not silently absorbed.
+
+### Fixed — PMM/RCWA cross-configuration test failures: the axis was BLAS thread count
+
+Five deterministic failures blamed on "cross-build" divergence were pinned to
+the BLAS THREAD COUNT (both mounts run OpenBLAS; failures match cross-mount
+to 9 significant figures).  The T3-4 silent-wrong guard gained channel A: a
+near-cut PROPAGATING mode whose forward `q` grows is a passive-layer
+impossibility and fires on ANY row including half-spaces — the old
+patterned-only conjunction structurally missed a 411%-wrong substrate case
+(guard still ships disarmed pending the conical false positive).  The
+sweep-vs-per-wavelength contract test now asserts exact equality within a
+consistent BLAS regime (the old atol compared a capped sweep against an
+uncapped solve — 18x apart through Redheffer amplification — while missing a
+real injected 1e-13 error the new test catches).  Window-contract and
+wrong-cell tests select per-configuration instead of hard-coding one
+build's facts.  NOTE: the WSL proxy venv had no `threadpoolctl`, so every
+BLAS cap in the library was inert there — cap behaviour was unvalidatable on
+that mount until 2026-08-06.
+
+### Fixed — traced-exact review remediation (D1–D11) and adversarial verify waves (V1–V9)
+
+An adversarial review of the exact-chain campaign, two fix waves, and two
+independent re-verification rounds (`docs/audits/REVIEW_TRACED_EXACT_*`,
+`FIX_*`, `VERIFY_*` 2026-08-05/06).  Physics/library outcomes:
+
+* **Focus standoff is a derived law, not a constant** — the leg is the
+  shortest that clears a containment margin (halo clipping measured as
+  0.34*exp(-margin^2)), with a calibrated small-extent branch minimising
+  clipping against leg error; both prior constants (6.0 zR, 0.8 zR) beaten
+  on geomean AND worst-case over a 54-cell (NA x extent) matrix; resolver is
+  decentre-aware (measures about the beam centroid, containment to the
+  NEAREST edge; a 1.5w-decentred beam previously read 2.34x too wide and got
+  a 6.3x-short leg).
+* **Replica guards are centre-aware and REFUSE** — the Bluestein faithful
+  zone is centred on the transform origin, so `2*|centre_out| + window <=
+  period` per axis; both public focus readouts now raise (`on_replica`)
+  instead of returning bit-identical ghost peaks (measured 1.05e5x wrong
+  with zero warnings pre-fix; the chain's chief-ray geometry sits 3.28
+  periods off-axis and was exposed).  The same condition fixed in
+  `mft.py`'s window warning for all three MFT propagators.
+* **Strict mode-string validation** — `gap_kernel` typos/None/case-variants
+  silently selected Fresnel at every entry point; now raise naming the valid
+  set.  Same treatment for `final_leg`/`carrier_reference` (validated up
+  front) and `on_fit_domain_basis` ('warn'/'error'/'silent' + aliases); the
+  remaining ungated knobs are ledgered in a shrink-only registry backed by a
+  witness test so no new ungated knob can ship.
+* **Collimated legs ran paraxial and dropped `tilt`** whatever the knob said
+  (`R = inf` bypassed the kernel choice at exactly the magnification where
+  the exact kernel is exact); fixed via a single kernel-choice funnel.
+  Astigmatic carriers now REFUSE `gap_kernel='exact'` (cannot be honoured;
+  was a silent downgrade), and `'fresnel'`+`tilt` warns naming the drop.
+* **Split-vs-single composition is a theorem, not a bug** — composition
+  across a z-split plus non-paraxiality are mutually exclusive in the
+  Sziklas–Siegman frame (Cauchy's equation forces the paraxial phase); the
+  exact kernel is confirmed 2.0–6.8x closer to an independent oracle INSIDE
+  scaled steps, and composition tests pin the fresnel identity at original
+  bars with a comparative bound for exact.
+* **Odd-N frequency grids** were order-unity wrong in four TF builders
+  (exact + fresnel 2-D, axis TF, axis ASM); fixed against `np.fft.fftfreq`
+  semantics with even-N proven bit-identical.
+* **Newton pool promotion is measured, not assumed** — the warm tier was
+  unreachable (gate read the pool before creation); naive reachability
+  measured +5–7% SLOWER on the default path (the numba Chebyshev evaluator
+  already saturates all cores; Newton is 1.5% of a 121 group's wall), so the
+  shipped policy is a cost-gated second-call promotion keyed by (workers,
+  fit-backend cost class, point-size band) with bit-identity asserted.
+* **The 121 chain cache key** went from 4 to 21 components including a
+  content hash of the entire library source (the only thing that catches a
+  default flip within one version — the exact failure that shipped), stored
+  in-npz and checked on load; numba availability is keyed from the
+  library's own gate.
+
+### Changed — `newton_fit='auto'` resolves to polynomial (spline flip reverted pre-release)
+
+The briefly-attempted spline CPU default silently disabled the ray-fit-radius
+restriction (`fit_radius_beam_factor`), which is mandatory for real designs
+(121's post-DOE groups: 20–32 mm apertures against a sub-mm beam; without it
+the exit field goes NON-FINITE).  Reverted before any release; spline remains
+an explicit choice, and the fit-domain gates now ANNOUNCE when a basis cannot
+honour them (`on_fit_domain_basis`) instead of no-opping silently — including
+the live bug where an inert `fit_radius_beam_factor` also suppressed the
+aperture:beam cliff warning about the very failure it had stopped preventing.
+
+
+### Fixed -- `n_workers` was a silent no-op on the default Newton fit
+
+The Newton process pool only knew how to rebuild a `RectBivariateSpline`, so
+`_invert_newton_parallel` force-returned the serial path whenever
+`newton_fit='polynomial'` -- which is the DEFAULT.  Measured before the fix:
+`n_workers` 1 / 4 / 8 gave 11.2 / 11.3 / 11.4 s (0.98-0.99x), i.e. the knob did
+nothing at all and said nothing about it.  Whether you got parallel Newton thus
+depended on a knob about FIT ACCURACY that most callers never set.
+
+The worker now rebuilds whichever fit the caller chose from the same pickled
+grids (payload carries `newton_fit`, `fit_poly_order`, `fit_weights`; payloads
+without the key still default to spline), and mirrors the serial path's combined
+value+gradient evaluation so the floating-point order matches.  Measured after:
+polynomial 1.15x at 4 workers, spline 1.25x / 1.52x at 4 / 8 -- and pool output
+is BIT-IDENTICAL to serial for both backends, asserted by test.
+
+Also corrected the `n_workers` docstring, which documented the no-op as
+intentional ("Polynomial Newton is cheap ... not a bottleneck in practice").
+
+### Measured -- a tight focus does not need a huge propagation grid
+
+A 3 um spot needs NA 0.278, which appears to force `dx <= lambda/(2 NA)` on the
+converging wavefront and -- after the co-moving frame's measured 25.6x pitch
+expansion -- a ~32768 grid (~105 GB, unreachable).  That reasoning does not
+apply to a CARRIER-REFERENCED field: the steep converging phase is carried
+analytically by `exp(i k S(r; R))`, not stored on the grid, so what the grid
+holds is a smooth envelope.  Measured: the readout of a 3 um focus is identical
+(relL2 = 0.0) whether the envelope rides on N=1024 or N=4096, including N=1024
+whose dx violates the pupil Nyquist limit by 2.5x, and the recovered 1/e^2
+waist matches the analytic complex-q ground truth to 1.8%.
+
+What actually governs tight-focus accuracy, now pinned by test:
+
+* LONGITUDINAL readout placement dominates.  At NA 0.278 the Rayleigh range is
+  5.4 um, so a 3 um defocus widens the spot ~30%, and the growth follows
+  `sqrt(1+(dz/zR)^2)` to <1% near focus.
+* the `standoff` knob is NOT purely defensive -- it sets accuracy.  The readout
+  runs a carrier leg to `z - standoff` then a fine Bluestein zoom over
+  `standoff`, and the bias scales with that second leg.  Measured waist error at
+  the nominal plane (analytic truth 1.5000 um): 0.60% at `1 zR`, 1.12% at
+  `1.5 zR`, 3.33% at `3 zR`, **8.74% at the shipped `_BRIDGE_ZR_FACTOR = 6.0`**,
+  15.58% at `10 zR`.  It degrades again below `1 zR` (8.74% at `0.5 zR`), which
+  is the co-moving-grid collapse the helper exists to prevent -- so ~1-1.5 zR is
+  the sweet spot, and a tight-focus budget must PIN standoff rather than inherit
+  it.  This fully explains the ~2.3 um apparent focal shift first observed at the
+  default standoff; it is not an independent defect.
+  The trade-off is window width: shorter standoff shrinks the Bluestein
+  transform period (`N_in * d_in`), so `N_out * dx_out` must shrink with it.
+  Clean configuration for a 3 um spot: `standoff = zR`, `dx_out = 0.05 um`,
+  `N_out = 128` -> 6.40 um window inside a 9.83 um period, waist accurate to
+  **0.10%**, no replica warning.  The default `6 zR` with `N_out = 512` gives a
+  wider 25.6 um window but 6.43% waist error.  Choose by whether the budget
+  needs core accuracy or halo reach.
+  Not changed: `_BRIDGE_ZR_FACTOR` itself, since the optimal factor is likely
+  NA-dependent and the default's conservatism may be load-bearing elsewhere.
+* the readout WINDOW, for wing metrics only.  `N_out * dx_out` beyond the
+  Bluestein/MFT period `N_in * d_in` fills the outer window with periodic
+  replicas: second-moment / r^2-weighted widths then read 88 um against a
+  1.53 um waist while the core 1/e^2 width still looks perfect.  The core is
+  robust to readout pitch (<3% from 0.05 um to 0.4 um).
+
+
+### Added -- non-paraxial, tilt-aware gap kernel (`gap_kernel='exact'`)
+
+`propagate_traced_carrier_chain`, `propagate_traced_carrier_chain_multi` and
+`propagate_carrier_referenced` accept `gap_kernel='exact'`, replacing the
+envelope leg's paraxial Sziklas-Siegman transfer function
+`k z - z |q|^2/(2k)` with the exact `z sqrt(k^2 - |k s + q|^2)`, expanded about
+the carrier wavevector so the validated piston / chief-ray bookkeeping is
+untouched.  This removes TWO errors at once -- they are one change because they
+are two terms of a single expansion:
+
+* the non-paraxial angular content (higher orders in `|q|^2`), and
+* the ANISOTROPIC tilt stretch: effective distance `z/N^3` ALONG the tilt vs
+  `z/N` ACROSS it, `N = sqrt(1-|s|^2)`.  The paraxial kernel is isotropic and
+  tilt-blind, so it applied plain `z` on both axes and could not represent this
+  at all (at direction cosine 0.35 the along-tilt distance is 22% longer).
+
+Verified against an independent plain-numpy exact-ASM oracle: relL2 <= 1e-12
+for the exact kernel versus 3e-06 .. 1.28 for the paraxial one, i.e. 7-12 orders
+of magnitude, and on a quadratic-loaded case the paraxial kernel is 128% wrong.
+The anisotropic coefficients are confirmed to be exactly `1/N^3` and `1/N` by
+window-shrinking convergence of the kernel's own fitted phase.
+Threaded through the inter-group legs, the trailing-distance leg, and both
+carrier legs of the focus-crossing split.
+
+`gap_kernel='fresnel'` remains the default and is byte-identical to prior
+releases (asserted at both the step and the chain level).  On design 121's
+pre-DOE chain the two kernels differ by only 2.3e-08 relL2 -- that chain is
+low-NA and untilted, which is exactly why single-design validation could not
+have caught either error.  Overhead is nil (measured -21% .. +0%, i.e. noise).
+NumPy path only; other backends raise `NotImplementedError`.
+
+### Added -- second-wavelength design battery and cross-design guard calibration
+
+The design battery ran only at 1.31 um, so a wavelength-specific error had
+nowhere to show.  It now also runs singlet/doublet/triplet/relay at 0.633 um
+against the same independent ray oracle, with the identical
+`max(0.15 rad, 0.35 x rms_oracle)` criterion, plus a premise guard asserting the
+glass indices actually move between the bands (otherwise the new cells would be
+a relabelled re-run) and a direction-of-effect check that the shorter wavelength
+reports MORE aberration in waves.  The oracle, `_run_chain` and
+`_chain_exit_rms` are now wavelength-parameterised; their result cache key
+carries the wavelength, which it previously could not.
+
+The three gap-guard thresholds were calibrated on design 121 alone.  Measured
+across triplet + relay x {1310 nm, 633 nm} (6 gap legs), healthy systems sit
+6x under `_GAP_NA_TOL` and 107x under the frame tolerance, now pinned by test.
+The 633 nm legs show the larger frame drop, as they must, since that term
+carries `k`.
+
+### Added/Fixed — gap-transport FRAME observable + arm C (`propagators/carrier.py`)
+
+Response to `docs/audits/SPEC_EXACT_SPHERE_GAP_TRANSPORT_2026_08_05.md`
+Stages 0-1.  Full record incl. the spec claims that did not survive
+verification: `docs/audits/AUDIT_GAP_FRAME_OBSERVABLE_2026_08_05.md`.
+
+* **New Stage 0 observable** `_gap_envelope_angular_spread`, published on every
+  inter-group leg in `stages[i]`: `gap_env_theta` (the ENVELOPE's own residual
+  angular spread after carrier removal), `gap_env_nyq_frac`,
+  `gap_env_phi_drop` (implied frame-dropped quartic `k|z_eff|θ⁴/8`, same
+  convention as the existing `gap_phi_drop`), `gap_z_eff`, `gap_env_spectral`.
+  The chain's paraxial-frame justification rests on that spread being small;
+  nothing measured it at runtime.  Spectral (99.9 % power-radius) estimator on
+  grids ≤ 4096, memory-bounded wrapped-difference fallback above, with a
+  multi-scale alias cross-check and the Nyquist fraction published so the
+  reading is interpretable rather than falsely confident.
+* **New arm C of the gap guard**, on its **own** knob `on_gap_frame` (`'warn'`)
+  with `gap_env_phi_tol` (0.30 rad; `0` = report-without-tripping).  Arms A/B
+  trip on the *carrier's* geometry (dropped hand-off quartic; carrier NA
+  `w/|R|`); arm B's NA is only a PROXY for the envelope's angular content.
+  Measured blind spot now covered: a carrier-mismatched envelope leaves arm B at
+  NA 0.0067 (silent) while the measured envelope spread is 0.22 rad → 73 rad
+  implied frame drop, and arm C fires.  Threshold provenance is stated in the
+  warning itself — carried from `gap_sag_tol` by dimensional analogy, **not** an
+  independent frame-axis calibration.
+* **Fixed: a COLLIMATED inter-group leg (`R = inf`) previously took no gap arm
+  at all** — the guard was gated on `isfinite(R)`, which is backwards for the
+  frame arm since `z_eff = z` (its largest value) there, and roadmap P8 names
+  "a fast final group after a collimated space" as the most common relay
+  architecture.  Arms A/B self-silence on such a leg, so the change is inert
+  for them.
+* Healthy relays measure 1.9e-04 – 8.8e-04 rad of frame drop (~3 orders under
+  the threshold); `test_niche_d5_dx_flatness_gate` + the 17-case
+  `test_niche_p2_design_battery` pass with **zero** frame warnings.  New tests:
+  `tests/unit/test_niche_gap_frame_observable.py` (12).
+* **NOT implemented: the spec's M1 (exact sphere-referenced transport, Stages
+  2-4)** — declined pending the measurement Stage 0 now enables, per the spec's
+  own staging.  Reasons in the audit §4: the "B is unpriced" premise is
+  substantially false (arm B is ASM-calibrated; `approx_leg_budget_121.py`
+  already measures the envelope-spectrum axis); M1's exactness rests on a Debye
+  step whose error is O(1/N) in the Fresnel number and *degrades* in the
+  short-conjugate regime it targets; and no design is yet named where
+  Sziklas-Siegman actually fails.
+
+### Added/Fixed — PMM per-layer roadmap campaign M1-M5 (`elements/pmm/**`, `elements/rcwa/**`)
+
+Five missions off `docs/audits/PMM_PER_LAYER_CAMPAIGN_PLAN_2026_08_04.md`
+(which itself refuted 8 roadmap claims against the tree):
+
+* **M1 conditioning**: the RCWA Redheffer-star denominators (cond to 2.4e31,
+  the true build-dependence site -- NOT the plan's named inverses) are
+  screened; PMM lstsq refuses only on rank-deficiency AND residual (either
+  alone false-positives); the conical per-layer order cap is computed from
+  the window grid (was 2.7x over-stated, feeding a rank-deficient solve
+  that both builds agreed on 160x wrong INSIDE the energy window).  Worst
+  cross-build disagreement on returned solves 8.3e-2 -> 1.8e-6; 0 bits
+  moved on clean solves.  The plan's inverse REFUSAL was withdrawn on
+  evidence: ill-conditioned interface directions are deep-evanescent and
+  never reach the far field, so no global bar exists -- a correct 2-D path
+  sits inside the 1-D broken band on both instruments.  X-1 remains OPEN,
+  pinned by a test designed to FAIL when truly fixed.
+* **M2 window contract**: five verbatim window constructions -> one helper
+  (`_perlayer_window_grids`, bit-identical at 0.0 incl. the JAX gradient);
+  `PMMStack(window_halfwidth=)` degenerates to the shared union grid
+  bit-for-bit at full width; the v5.32.0 "min_feature inert by
+  construction" claim was WRONG (live above the default; walls move up to
+  0.7 nm at 1.5 nm) -- replaced by a predictive rule, 24/24 correct across
+  two devices; stationarity ns 8..12 <= 0.33%, degree 6..16 <= 0.59%,
+  RCWA agreement 0.15%.
+* **THE SILENT-WRONG MECHANISM (M2/M5)**: a ~1-2 nm cross-layer cell makes
+  the modal forward/backward classification degree-dependent and the
+  cascade returns a UNITARY-BUT-WRONG S-matrix -- R0 scatter -93%..+10x
+  with |R+T-1| <= 1e-6 and every conservation identity blind, DETERMINISTIC
+  on both builds.  Mechanism predicts the full 80-cell discovery table plus
+  12/12 on a second device; the trigger is a thin cell however it arises.
+  The classification instrument ships DISARMED (no bar separates both
+  device families -- calibration and refutation both pinned); RCWA
+  cross-checks are now mandatory on accuracy claims in this regime.
+* **M3 efficiency**: geometry hoisting on the three unhoisted paths +
+  sweep + JAX (bit-identical); `_lagrange_eval` vectorised (bit-identical);
+  both mortar cross-masses are now the EXACT Kronecker-factored form
+  (`np.kron` allocation -> 0 bytes; envelope 3.6e-13); `inv -> solve` at
+  the mortar; measured 1.16-1.50x on layered/sweep cases.  The star
+  `inv -> solve` was REFUSED: ~3% for breaking five bit-exactness pins.
+* **M4 hygiene**: `threadpoolctl`'s BLAS cap is PROCESS-GLOBAL on OpenBLAS
+  (three source comments claiming thread-locality were false): the
+  per-worker caps raced and leaked -- fixed at all six RCWA+PMM sites, sha
+  identical across worker counts and pools, only the nondeterminism
+  removed.  The JAX-parity test was racing the BLAS thread count (NumPy
+  manufactures ~1.8% energy on a lossless cell at 24 threads -- the X-1
+  reproducer); re-pinned per-channel 2-3 orders TIGHTER under a pinned
+  pool.  Eight stale roadmap/doc claims corrected.
+* **M5 feasibility**: non-uniform 2-D segments GO (de Rham residual 9e-15
+  over 80 cases incl. 1e6 aspect; the 2-deg taper drops from eigdim 1.5e7
+  to Nx=12 shared / Nx=6 per-layer); covariant taper derivation validated
+  to 1e-15 but NO for 5.34 (two measured blockers); 5.34 re-scoped.
+* **Gate closure**: scipy dual_annealing cancellation was polled ONLY on a
+  new global best -- a plateau never polled (0 polls in 404 evaluations;
+  hidden five releases by a wall-time bar that passed on faster builds).
+  Fixed by polling in the objective: 1 poll, 1 evaluation; the bar is now
+  the build-invariant evaluation count.
+
+
+### Added — chief-ray-centred grid origin for the traced element (niche D9, `elements/_lens_traced.py`, `propagators/carrier.py`)
+
+`apply_real_lens_traced` gains `origin=(x0, y0)`: the grid's CENTRE PIXEL sits
+at that transverse point in the element's own (optical-axis) frame, so index
+`(i, j)` denotes `(x0 + (j - N/2) dx, y0 + (i - N/2) dy)`. The element, its
+aperture and the ray launch do not move — only the wave/output grid does.
+
+**Why.** A tilted congruence's beam sits at its chief ray, so the pre-D9
+`_fine_trace_group_exit` had to size ONE axis-centred grid spanning both:
+`2*max(|x_c|,|y_c|) + window_factor*w`, where the beam alone needs
+`window_factor*w`. MEASURED on design 121's order (-4,-2): chief ray 3.02 mm
+off axis against an entrance beam radius 3.12 mm grew the window
+12.50 → 18.54 mm (1.48x linear, 2.2x memory), forced `n_fine` to 16384
+(17.2 GB at four complex128 work arrays) where ~12288 would have done, AND
+forced the chain grid to satisfy `N*cur_dx >= 18.54 mm` at the last group —
+which is what drove N=8192 and its ~24 GB working set. The tilted retrace
+window is now exactly the on-axis `window_factor * w`, and it no longer moves
+when the chief-ray offset does.
+
+**Safety.** `origin=(0, 0)` is BYTE-IDENTICAL to omitting it (`np.array_equal`
+across sampling / fit-domain / inversion-backend configurations, plus the
+default screen path). The equivalence oracle — the same physical beam traced
+on a large axis-centred grid and on a quarter-area chief-ray-centred one —
+agrees to **2.7e-9 max / 2.9e-10 rms of the peak amplitude** over all shared
+pixels; the remaining residual is the small grid's own input truncation and
+scales with the window (1.7e-3 / 1.9e-6 / 2.7e-9 / 5.9e-10 at 2.6 / 3.7 / 5.1 /
+6.4 beam radii of half-window), not with the plumbing.
+
+**Refusals.** `origin != (0, 0)` raises `NotImplementedError` unless
+`amplitude_model='ray_density'` AND `preserve_input_phase='remap'` — the
+validated carrier regime the chain uses. The reason is the analytic
+`apply_real_lens` amplitude leg, which has no origin of its own and therefore
+builds the element's sag and masks about the wrong transverse point. Only on
+that path is it reduced to its ZERO SET (the ray-density swap divides its
+modulus out), which makes the residual coupling measurable — and it IS measured
+per call, against `ORIGIN_AMP_SUPPORT_CHECK` (default `'error'`). Also refused:
+`caustic='multibranch'`/`'uniform'` (a different, axis-centred branch-finder)
+and `on_noncollimated='delegate'` (returns `apply_real_lens(E_in)` directly).
+
+**Measured for the record:** for a prescription whose only mask is an entrance
+`aperture_diameter`, the analytic leg has NO exact zeros at all (min |E| =
+6.3e-06, not 0.0) — the ASM through glass fills the shadow in — so the coupling
+is identically absent there. It appears only for a mask on the EXIT plane (a
+last-surface `clear_aperture`, or a stop there), where it deletes 1.3e-04 % /
+0.134 % / 0.583 % of the exit power at `clear_aperture` 1.20 / 0.90 / 0.80 mm
+on the D9 fixture.
+
+**Caller-side consequences.** `_fine_trace_group_exit` now returns the exit
+field on a CHIEF-RAY-CENTRED grid and states that frame through a new
+`grid_origin_out` sink; `propagate_traced_carrier_chain` reads it and converts
+the exact readout's `centre` and `centre_out` into that frame TOGETHER (the ASM
+is translation-covariant, so the difference — and hence the absolute output
+position — is unchanged), reporting `centre_out` absolute as before. The tilted
+leg no longer band-limit-shifts the envelope, and the four reference-phase
+builders take `centre=(0, 0)`; the `TiltedCarrier` keeps its `(x0, y0)`.
+`_check_tilt_fits` goes with the shift it guarded on that path, and remains on
+the coarse hand-off (and on the fall-back below) where the shift still happens.
+
+A tilted leg whose `traced_kwargs` override the validated configuration
+(`amplitude_model`, `preserve_input_phase`, `caustic`, or
+`on_noncollimated='delegate'`) keeps the D6 AXIS-CENTRED hand-off — window,
+envelope shift, decentred reference phases and all — rather than hard-failing
+on the element's refusal. `_check_decentred_fit`'s message now says "off the
+OPTICAL AXIS" instead of "off the element grid centre": the quantity it
+measures is unchanged (`hypot(x_c, y_c)` in absolute coordinates, and the
+ray-fit disc it is about sits in the axis-centred LAUNCH grid, which the origin
+does not move), but on the D9 path the grid centre IS the chief ray, so the old
+phrasing named the wrong reference at one of its two call sites.
+
+**Scope.** The relief is on the FINAL leg. Upstream coarse groups still
+band-limit-shift the envelope onto an axis-centred grid and still require
+`hypot(x_c, y_c) + w < N*cur_dx/2`, so whether a chain's `N` can actually drop
+depends on those groups too.
+
+Tests: `tests/unit/test_niche_d9_grid_origin.py`.
+
+### Added — congruence-level process parallelism for the multi-congruence chain (niche D8, `propagators/carrier.py`)
+
+`propagate_traced_carrier_chain_multi` gains `congruence_workers` (default
+`None` = the historical serial loop, bit-for-bit unchanged) and
+`congruence_worker_min_free_gb` (default 8.0).
+
+**Why this is the only parallelism available.** A SINGLE congruence is serial
+by design on the shipped path: `apply_real_lens_traced`'s `n_workers` is a
+documented no-op for the default `newton_fit='polynomial'` route (the Newton
+inversion always runs in-process), and `parallel_amp` only doubles the
+amplitude leg. MEASURED on design 121's 32-order post-DOE fan at N=8192: the
+whole run held **0.99 cores busy on a 20-thread box** — 32 independent jobs
+walked sequentially. Threads do not fix it: 2 congruences at N=1024, paraxial
+leg, serial 318.8 s vs `ThreadPoolExecutor(2)` 254.3 s = **1.25x, GIL-bound**,
+because the traced element spends its time in Python-level Newton/Chebyshev
+work rather than GIL-releasing kernels. Hence processes.
+
+**What stays serial, and why the answer cannot move.** Only the K chain calls
+are distributed. Every guard (replica, anti-drift chief ray, capture,
+mem-budget) and the accumulation onto the common grid remain in the parent and
+run in ASCENDING `k` exactly as before, so the complex sum is formed in the
+same order. Pinned as `np.array_equal` on the recombined field, not a
+tolerance. Per-congruence records keep input order regardless of completion
+order, and worker warnings are captured and replayed in the parent in `k`
+order, prefixed with the congruence name, rather than being lost to an unread
+stream.
+
+**Cost model.** The per-congruence RESULT is the readout tile (~16 MB at
+1024 px complex128), not the common grid, so the return leg is cheap; the
+INPUT field is the expensive direction (1.07 GB at N=8192) and is deduplicated
+BY IDENTITY and passed once through the pool initializer — the fan case hands
+one shared post-DOE envelope to every congruence, so K pickles become one.
+Each worker still carries a full independent chain working set (MEASURED
+~24 GB at N=8192 complex128 on design 121), so the request is clamped to what
+RAM allows and the clamp is reported as a `RuntimeWarning` rather than applied
+silently. `readout_tile='auto'`'s period-probe pass stays serial; only PASS 1
+is distributed.
+
+### Fixed — niche D8 follow-up: the spawn trap, and worker state inheritance (`propagators/carrier.py`)
+
+Two defects found by putting `congruence_workers` on a real driver (design
+121's 32-order fan); neither is reachable from the test suite, and the second
+is the dangerous one.
+
+**The spawn trap.** On Windows (any `spawn` start method) each worker
+RE-IMPORTS the caller's `__main__`, so a driver that does its work at module
+level re-runs the whole thing per child and multiprocessing refuses during
+bootstrap. The remedy is the CALLER's `if __name__ == '__main__':` guard, so
+the generic "re-run serially to reproduce it" message was actively wrong
+advice. `_multi_looks_like_spawn_bootstrap` now selects a message naming the
+real fix; it matches on message text (multiprocessing raises a bare
+`RuntimeError`, and the condition also surfaces as `BrokenProcessPool`) and
+walks the `__cause__`/`__context__` chain cycle-safely. Pinned on the
+predicate: pytest's own `__main__` IS import-safe and cannot reproduce it.
+
+**Worker state inheritance.** A spawned worker imports lumenairy fresh, so
+NOTHING the caller registered or switched at run time exists there. Two
+classes: runtime-registered MATERIALS (every real prescription adds Sellmeier
+coefficients; a worker without them raises out of `get_glass_index` and the
+congruence dies) and, far worse, the module-level BEHAVIOUR FLAGS that steer
+the traced path (`DECENTRED_FIT_ARBITER`, `TILTED_CARRIER_EXACT_EIKONAL`,
+`REMAP_INVERSE_SUPPORT_BOUND`, the era pins). A worker that did not inherit
+those would compute DIFFERENT PHYSICS from the serial path and return a
+plausible number **silently** — the glass crash is merely what exposed the
+class. `_multi_capture_worker_state` / `_multi_apply_worker_state` snapshot
+both plus the `set_max_ram` budget and re-apply them in the pool initializer.
+Discovery follows the library's own naming convention (upper-case module-level
+names), matching the suite's leak guard so the two cannot drift; glass tables
+are restored with `dict.update` IN PLACE because other modules hold them by
+reference. 18 tests, ruff clean.
+
+**Per-worker RAM budget is DIVIDED, not copied.** `get_ram_budget()` falls
+back to psutil's GLOBAL available memory, and it feeds both
+`_memory_bounded_n_fine` (which sizes the exact readout's fine grid to a
+fraction of the budget) and the `parallel_amp_min_free_gb` gate. Carrying the
+whole-box figure into each worker would have K workers each size themselves
+for the whole box — K-fold oversubscription arriving exactly when the exact
+final leg allocates, and worse than the psutil default because pinning it via
+`set_max_ram` also removes the dynamic read that would otherwise shrink as
+siblings allocate. The snapshot now carries `budget // K`, which additionally
+starves `parallel_amp` inside workers (it would otherwise double each
+worker's amplitude working set on top of the oversubscription). Row-banded
+chunking (`sag_chunk_rows`) needs no equivalent: its AUTO rule is grid-size
+driven, so each worker already bands independently of sibling count.
+
+**Two defects found by running D8 on Linux, neither reachable from the
+platform it was first written on.** (a) `ProcessPoolExecutor` was taking the
+PLATFORM DEFAULT start method, which on Linux/macOS is **fork** — and forking a
+process that has already touched GNU OpenMP is undefined: libgomp does not
+survive it and the child dies before running a task. Every traced call goes
+through BLAS/OpenMP, so `congruence_workers > 1` was broken outright on Linux,
+not flaky. The pool now pins `mp_context=get_context('spawn')`, which also
+makes the start method UNIFORM, so the caller's `__main__`-guard requirement
+and the bootstrap detection mean the same thing on every platform. (b) The
+worker snapshot copied `GLASS_REGISTRY` verbatim into `initargs`, but a MODEL
+glass is registered as a CALLABLE and a lambda or closure does not pickle — so
+the whole snapshot failed to reach the initializer, breaking the feature for
+any caller with a model glass. `_multi_unpicklable_glass` now detects that
+before the pool is built, names the offending materials, and falls back to
+SERIAL with a `RuntimeWarning`: `congruence_workers` is a throughput knob, so
+degrading the speed-up always beats failing a run that would have been
+correct. Pinned by a test asserting the fallback reproduces the serial field
+under `np.array_equal`.
+
 ## [5.32.1] — 2026-08-03
 
 ### Fixed — the shared least-squares solver no longer draws arbitrary answers on singular systems (niche C13, `elements/_lens_traced.py`)

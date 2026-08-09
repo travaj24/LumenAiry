@@ -367,8 +367,16 @@ def _run(N, rs, tag='defaults', chain_kwargs=None, traced_kwargs=None):
     env, dx, R1, P_in = _launch(N)
     groups, _w_c, _w_last, f4 = _stand_in()
     kw = dict(r_in=R1, ray_subsample=rs, n_workers=1, final_distance=f4,
+              # D3 (2026-08-06): the PARAXIAL arm of this ladder reads a
+              # window wider than one Bluestein period (the exact arm's period
+              # is the fine crop window and is far larger).  The gate this file
+              # measures is a dx-flatness ladder read from the CORE, so the
+              # replicas in the outer window are not read.  Waived here rather
+              # than shrinking _NOUT, which would move every rung of the
+              # ladder this file is calibrated on.
               focus_readout={'dx_out': _DXO, 'N_out': _NOUT,
-                             'n_fine_cap': _NFC, 'window_factor': _WFAC},
+                             'n_fine_cap': _NFC, 'window_factor': _WFAC,
+                             'on_replica': 'ignore'},
               final_leg='auto')
     if chain_kwargs:
         kw.update(chain_kwargs)

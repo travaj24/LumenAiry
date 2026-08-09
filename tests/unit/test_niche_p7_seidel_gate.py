@@ -53,8 +53,12 @@ from lumenairy.raytrace import seidel_coefficients, surfaces_from_prescription
 
 _WL = 1.31e-6
 K = 2.0 * np.pi / _WL
-for _n, _v in {'_P7_1p5168': 1.5168, '_P7_1p62': 1.62, '_P7_1p70': 1.70}.items():
-    GLASS_REGISTRY.setdefault(_n, (lambda vv: (lambda wl: vv))(_v))
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {
+    _n: (lambda vv: (lambda wl: vv))(_v)
+    for _n, _v in {'_P7_1p5168': 1.5168, '_P7_1p62': 1.62,
+                   '_P7_1p70': 1.70}.items()}
 
 # ---- lumenairy-free oracle (installed, out of default pytest collection) ---
 _ORACLE_PATH = (pathlib.Path(__file__).resolve().parents[2]

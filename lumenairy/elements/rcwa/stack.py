@@ -17,6 +17,7 @@ from ...backend import (
 )
 from ._core import (
     _C,
+    _blas_limit,
     _blas_threads_quiet,
     _cached_homogeneous_eigenmodes,
     _cell_lossless,
@@ -2375,10 +2376,18 @@ class RCWAStack:
         The per-wavelength solves are INDEPENDENT (each on a private clone of
         the stack) and NumPy releases the GIL inside LAPACK, so they run on a
         bounded thread pool: ``max_workers=None`` (default) picks
-        ``min(cpu_count, n_wl)`` on the NumPy backend and 1 on GPU/JAX; each
-        worker pins its BLAS pool to ``blas_per_worker`` threads so the product
-        stays within the core count.  Results are stored by index, so the output
-        is BYTE-IDENTICAL to a serial sweep regardless of worker count.  Pass
+        ``min(cpu_count, n_wl)`` on the NumPy backend and 1 on GPU/JAX.  The
+        BLAS pool is capped to ``blas_per_worker`` threads so the product stays
+        within the core count -- ONCE, around the whole sweep, on the calling
+        thread, because applying a cap is process-global on OpenBLAS and
+        per-worker caps race (M4 2026-08-04; the cap therefore applies to the
+        serial path identically, which is what makes the two comparable).
+
+        Results are stored by index, so completion order is irrelevant and the
+        output is BYTE-IDENTICAL to a serial sweep regardless of worker count.
+        That identity holds because every solve in both paths runs at the same
+        BLAS thread count; it is pinned by
+        ``tests/unit/test_v5_20_8_rcwa_threaded_sweep.py``.  Pass
         ``max_workers=1`` to force the serial path.
 
         Returns
@@ -2433,8 +2442,20 @@ class RCWAStack:
             sub.n_substrate = base_nb(w) if callable(base_nb) else base_nb
             sub._source = dict(base_src, wavelength=w)
             try:
-                # the BLAS cap is THREAD-LOCAL, so each worker sets its own.
-                with _blas_threads_quiet(blas_per_worker):
+                # The cap is applied ONCE by the caller, around the whole
+                # dispatch below -- NOT here (applying it per worker races; it
+                # is process-global on OpenBLAS).  ``_blas_threads_quiet(None)``
+                # clears THIS thread's requested cap for the duration, so
+                # ``solve``'s own ``@_with_blas_limit`` finds nothing to apply
+                # and does not re-enter the global limiter.  Without it the
+                # SERIAL path (which runs here on the caller's thread, where
+                # the sweep-level request is set) would nest one enter/exit per
+                # wavelength inside the sweep-level one -- harmless while
+                # single-threaded, but it is the same pattern, and it makes
+                # "exactly one cap application per sweep" an invariant that can
+                # be pinned by a test on any machine.  The cap already in force
+                # is unaffected: this clears the REQUEST, not the applied pool.
+                with _blas_threads_quiet(None):
                     return i, sub.solve(stabilize=stabilize)
             except _EnergyError:
                 return i, None
@@ -2464,15 +2485,37 @@ class RCWAStack:
             max_workers = (1 if (self.use_gpu or _jax_any)
                            else min(os.cpu_count() or 1, int(wl_arr.size)))
         max_workers = max(1, int(max_workers))
-        if max_workers == 1 or wl_arr.size == 1:
-            for i, w in enumerate(wl_arr):
-                _store(*_solve_one(i, w))
-        else:
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=max_workers) as _ex:
-                for i, res in _ex.map(lambda iw: _solve_one(*iw),
-                                      list(enumerate(wl_arr))):
-                    _store(i, res)
+        # ONE process-wide BLAS cap for the WHOLE sweep, entered on THIS thread
+        # (M4 2026-08-04).  Byte-identity across worker counts requires every
+        # solve -- serial and threaded -- to run at the SAME BLAS thread count,
+        # and applying the cap is process-global on OpenBLAS (see
+        # ``_core._BLAS_STATE``).  The previous code entered
+        # ``_blas_threads_quiet(blas_per_worker)`` INSIDE each worker: N
+        # concurrent enter/exit pairs on one global setting, so the first
+        # worker to finish restored the environment's pool (24 here) while its
+        # siblings were still inside ``solve``.  MEASURED on Windows/OpenBLAS
+        # 0.3.31 x 24 threads, the 12-point 5x5-order sweep of
+        # ``test_v5_20_8_rcwa_threaded_sweep``: max |T_threaded - T_serial| =
+        # 5.9e-15 / 1.9e-15 / 0.0 / 0.0 over four consecutive runs (R and the
+        # Jones matrix stayed bit-exact), i.e. a few ULP from a changed
+        # GEMM/LAPACK reduction order, nondeterministically on ~50-70% of runs.
+        # The race needs BOTH ``threadpoolctl`` installed AND an environment
+        # pool > 1, which is why it never reproduced on the 2-core CI runner or
+        # on the WSL build (no ``threadpoolctl`` there -> the cap is inert and
+        # both paths run at the environment default).  With the cap hoisted
+        # there is exactly one enter/exit per sweep and the workers' nested
+        # ``solve`` calls see ``_get_blas_threads() is None`` on their own
+        # thread-local state -> no nested limit, no race.
+        with _blas_threads_quiet(blas_per_worker), _blas_limit():
+            if max_workers == 1 or wl_arr.size == 1:
+                for i, w in enumerate(wl_arr):
+                    _store(*_solve_one(i, w))
+            else:
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=max_workers) as _ex:
+                    for i, res in _ex.map(lambda iw: _solve_one(*iw),
+                                          list(enumerate(wl_arr))):
+                        _store(i, res)
         if n_unstable:
             warnings.warn(
                 f"RCWAStack.solve_vs_wavelength: {n_unstable} of "

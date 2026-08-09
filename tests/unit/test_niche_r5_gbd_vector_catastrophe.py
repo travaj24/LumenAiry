@@ -53,7 +53,6 @@ from lumenairy.elements._lens_traced_uniform import (
     _count_interior_turning_points,
     apply_real_lens_traced_uniform,
 )
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.propagators.gbd import (
     _fresnel_jones_matrix_per_beamlet,
     _vector_prescription_mixed_fields,
@@ -62,8 +61,10 @@ from lumenairy.propagators.gbd import (
 )
 
 _WL = 1.31e-6
-GLASS_REGISTRY['_R5_GLASS'] = lambda wl: 1.5168
-GLASS_REGISTRY['_R5_162'] = lambda wl: 1.62
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_R5_GLASS': lambda wl: 1.5168,
+                  '_R5_162': lambda wl: 1.62}
 
 # Compact config: reconstruct at the EXIT vertex (z_image=0.0) where the beamlets
 # are still compact, so the windowed reconstruct is fast and power is well-posed.

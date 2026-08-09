@@ -62,8 +62,35 @@ shared-grid alternative named (`test_unsupported_combinations_raise`). The defau
 | speed | real stack, deg 8, θ8, peak+null pair | shared **97.3 s** → per-layer **5.5 s**: **17.8×** |
 
 The headline: **the pathological stack is degree-convergent at the library-default `min_feature`** —
-`min_feature` is inert by construction on this path (there is no global union to snap) — and the
+~~`min_feature` is inert by construction on this path (there is no global union to snap)~~ — and the
 n_slice ladder is now affordable (seconds per point instead of minutes-to-hours).
+
+> **CORRECTION S-4 (M4, 2026-08-04): `min_feature` is NOT "inert by construction" here.** The premise
+> "there is no global union to snap" is false: the per-layer window grids ARE built by calling the
+> same snapping routine on a `2*halfwidth + 1`-layer union. `_perlayer_window_grids` passes
+> `min_feature / period` straight into `_pmm_union_grid` (`lumenairy/elements/pmm/_core.py:3599-3606`),
+> and `_pmm_union_grid` enters the snap branch whenever `min_feature > tol = 1e-9`
+> (`_core.py:3448, 3460`). It merges nothing **at the library default** (7 pm) — which is what was
+> measured, and what makes the headline above still true — but it is LIVE, and it merges exactly the
+> pairs that matter: the tapered staircase's worst collisions are between **adjacent** slices
+> (per-slice offset 5.41 nm vs a 5.00 nm coat, parent audit §4.4), and adjacent slices are precisely
+> what a 3-layer window contains. A user who carries over the shared path's recommended
+> `min_feature = 1.5 nm` therefore gets **window-local snapping that moves real walls by up to
+> 0.75 nm**, with the same warning text, on a path this report documented as immune — and the parent
+> audit measured a 0.75 nm wall move as a ~16% change in device ER (§6.2).
+>
+> Correct statement: ***dormant at the library default, and the intended lever for T3-2.***
+> Note also that the snap warning fires up to `nlay` times per solve on this path.
+>
+> The contract is now written correctly in code: `_core.py` (the `_perlayer_window_grids`
+> docstring and the comment above it, campaign item N-6), the `PMMStack` constructor comment and
+> the `_solve_vertical_perlayer` docstring (both corrected by M2 — see
+> `docs/audits/PMM_M2_WINDOW_CONTRACT_2026_08_04.md`), and the `stabilize='slices'` raise text
+> (corrected by M4; it told users "per-layer grids have no cross-layer walls to perturb", which is
+> the immunity claim restated as a user-facing message). The `stabilize='slices'` REFUSAL itself is
+> correct and unchanged — the consensus probes perturb the one shared union grid, and there is no
+> shared union grid on this path — only its stated reason was wrong.
+> See `docs/audits/PMM_M4_HYGIENE_2026_08_04.md` §3.
 
 ---
 

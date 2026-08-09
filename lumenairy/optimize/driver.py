@@ -64,6 +64,18 @@ _MINIMIZE_METHODS_SUPPORTING_BOUNDS = frozenset({
     'slsqp', 'trust-constr',
 })
 
+
+class _DualAnnealingCancelled(Exception):
+    """Raised from the ``dual_annealing`` objective on ``progress.cancel()``.
+
+    PRIVATE and never escapes ``design_optimize``: it is caught at the
+    dispatch site, which converts it into a normal ``DesignResult`` built
+    on the best point seen.  It exists because scipy's ``dual_annealing``
+    polls its ``callback`` only when a new global best is found, so the
+    callback cannot be relied on to observe a cancellation -- see the
+    measured note at the dispatch site.
+    """
+
 # =========================================================================
 # Wave-propagator registry
 # =========================================================================
@@ -1345,27 +1357,73 @@ def design_optimize(parameterization: Any,
             if bounds is None:
                 raise ValueError(
                     'dual_annealing requires bounds for all variables.')
+            # v5.33.0: THE CALLBACK ALONE CANNOT CANCEL THIS METHOD.
+            # scipy invokes ``callback`` from exactly one place --
+            # ``EnergyState.update_best`` -- so it fires ONLY when a new
+            # GLOBAL BEST is found (scipy 1.17.1
+            # ``_dual_annealing.py`` lines 197-206; the initial best is
+            # assigned in ``reset()`` without a callback).  A run that
+            # plateaus therefore never polls it, and the v4.13.2 named
+            # callback below was never reached at all.  MEASURED on the
+            # v4.13.2 regression test's own fixture (py3.14 / scipy
+            # 1.17.1), progress pre-cancelled: **0 polls of
+            # ``is_cancelled`` and 404 merit evaluations**, against 6 for
+            # an uncancelled ``max_iter=1`` and 8 for ``max_iter=2`` --
+            # i.e. the cancelled run consumed the ENTIRE
+            # ``max_iter=200`` budget.  Same reading on both builds.
+            #
+            # ``_scipy_cb_da`` is KEPT (it still stops the run promptly
+            # whenever a new best IS found, which is the cheaper exit),
+            # and the poll is ALSO made in the OBJECTIVE, which every
+            # scipy method calls on every evaluation and which no
+            # plateau can skip.  Cancellation is then honoured within
+            # ONE merit evaluation regardless of the search's progress.
+            _da_best: List[Any] = [
+                float('inf'), np.asarray(x0, dtype=np.float64)]
+
+            def _da_merit(x):
+                if is_cancelled(progress):
+                    raise _DualAnnealingCancelled
+                _v = merit_fn(x)
+                if np.isfinite(_v) and float(_v) < _da_best[0]:
+                    _da_best[0] = float(_v)
+                    _da_best[1] = np.asarray(x, dtype=np.float64).copy()
+                return _v
+
             # S4-18: ``seed`` user-controllable; forward the analytic
             # jacobian to the L-BFGS-B local polish via
             # ``minimizer_kwargs`` when available (scipy >= 1.8 spelling).
-            if final_jac is not None:
-                try:
+            try:
+                if final_jac is not None:
+                    try:
+                        res = so.dual_annealing(
+                            _da_merit, bounds, maxiter=max_iter, seed=seed,
+                            callback=_scipy_cb_da,
+                            minimizer_kwargs={'jac': final_jac})
+                    except TypeError:
+                        # Older scipy spelled the local-search override
+                        # differently (``local_search_options``); fall back
+                        # to the no-jac call rather than fail.
+                        res = so.dual_annealing(
+                            _da_merit, bounds, maxiter=max_iter, seed=seed,
+                            callback=_scipy_cb_da)
+                else:
                     res = so.dual_annealing(
-                        merit_fn, bounds, maxiter=max_iter, seed=seed,
-                        callback=_scipy_cb_da,
-                        minimizer_kwargs={'jac': final_jac})
-                except TypeError:
-                    # Older scipy spelled the local-search override
-                    # differently (``local_search_options``); fall back
-                    # to the no-jac call rather than fail.
-                    res = so.dual_annealing(
-                        merit_fn, bounds, maxiter=max_iter, seed=seed,
+                        _da_merit, bounds, maxiter=max_iter, seed=seed,
                         callback=_scipy_cb_da)
-            else:
-                res = so.dual_annealing(
-                    merit_fn, bounds, maxiter=max_iter, seed=seed,
-                    callback=_scipy_cb_da)
-            x_opt = res.x
+                x_opt = res.x
+            except _DualAnnealingCancelled:
+                # Cancelled inside the objective.  Return the BEST POINT
+                # SEEN rather than raising: ``progress.cancel()`` is a
+                # user stop, not an error, and every other method's
+                # cancellation path returns a result too.  A run stopped
+                # before its first evaluation keeps ``x0``, which is the
+                # honest answer for "nothing was searched".
+                x_opt = _da_best[1]
+                res = so.OptimizeResult(
+                    x=x_opt, fun=float(_da_best[0]), success=False,
+                    nit=iter_count[0], nfev=call_count[0],
+                    message='Stop early due to user cancellation')
         elif method == 'newton':
             # v4.16 (ROADMAP #12): Hessian / Newton-step.  For small
             # (<30 free var) problems an FD-Hessian-based Newton step

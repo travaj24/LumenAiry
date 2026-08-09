@@ -899,10 +899,10 @@ def test_fga_anamorphic_grid_matches_asm():
 # prescription AWAY from 'phase_screen' even at low NA (and warns when forced).
 _WL_H2 = 1.31e-6           # dual-oracle wavelength (docs/audit_real_lens_hammer)
 
-from lumenairy.glass import GLASS_REGISTRY  # noqa: E402
-
-# dispersionless model glass n=1.5168 (matches the dual-oracle build convention)
-GLASS_REGISTRY.setdefault('_GATE_N1p5168', lambda wl: 1.5168)
+# dispersionless model glass n=1.5168 (matches the dual-oracle build convention).
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_GATE_N1p5168': lambda wl: 1.5168}
 
 
 def _biconvex(R, semi, t=5e-3, glass='_GATE_N1p5168'):

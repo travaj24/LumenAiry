@@ -1009,7 +1009,12 @@ def test_the_focus_readout_whitelist_is_exactly_what_the_chain_consumes():
               'standoff': 1e-4, 'bandlimit': True, 'window_factor': 6.0,
               'n_fine_cap': 512, 'max_fine_launch_points': 512,
               'ram_budget': None, 'dx_fine': None, 'N_fine': None,
-              'on_readout_window': 'ignore', 'readout_window_tol': 1e-3}
+              'on_readout_window': 'ignore', 'readout_window_tol': 1e-3,
+              # D3 (2026-08-06): the readouts' own replica guard reaches the
+              # chain through the same whitelist.  'ignore' here because this
+              # fixture's window is wider than one period and the subject of
+              # the test is the WHITELIST, not the guard.
+              'on_replica': 'ignore'}
     assert set(sample) == _FOCUS_READOUT_KEYS
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')

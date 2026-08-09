@@ -42,11 +42,16 @@ from lumenairy.propagators.fga import apply_real_lens_fga, fga_memory_estimate
 
 WL = 1.31e-6
 
+# Dispersionless model glass (fixed index 1.5168), as the hammer oracle used.
+# Declared, not registered: the module-scoped `presc` fixture used to write it
+# straight into GLASS_REGISTRY and never remove it, leaking an unpicklable
+# lambda into every LATER test in the process.  Registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'ZF': lambda wl: 1.5168}
+
 
 @pytest.fixture(scope="module")
 def presc():
-    # dispersionless model glass (fixed index 1.5168), as the hammer oracle used.
-    GLASS_REGISTRY['ZF'] = lambda wl: 1.5168
     return {'wavelength': WL, 'aperture_diameter': 24e-3, 'surfaces': [
         {'radius': 51.68e-3, 'thickness': 5e-3, 'glass_before': 'air',
          'glass_after': 'ZF', 'semi_diameter': 12e-3},
@@ -286,6 +291,17 @@ def test_c2_env_budget_override(monkeypatch):
     unparseable / non-positive one is ignored with a warning (never silently
     disables the guard)."""
     monkeypatch.delenv('LUMENAIRY_MEM_BUDGET_MB', raising=False)
+    # DETERMINISM (2026-08-04): the auto-default reads LIVE available RAM by
+    # documented design, so two live reads on a busy box differ and the old
+    # ``approx(auto)`` comparisons raced the machine's memory (failed in a
+    # full-suite sweep with concurrent workers allocating GBs; the test, not
+    # the library, was wrong).  Pin the RAM source so ``auto`` is a constant
+    # and the assertions test the CONTRACT: invalid env -> warn + fall back
+    # to the auto value, never silently disable.
+    import psutil
+    _vm = psutil.virtual_memory()
+    _pinned = type(_vm)(*_vm)          # freeze a snapshot
+    monkeypatch.setattr(psutil, 'virtual_memory', lambda: _pinned)
     auto = fga._default_mem_budget_mb()
     assert auto >= fga._DEFAULT_MEM_BUDGET_FLOOR_MB
     monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', '4096')

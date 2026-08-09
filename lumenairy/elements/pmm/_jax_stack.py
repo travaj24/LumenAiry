@@ -31,14 +31,17 @@ from __future__ import annotations
 import numpy as np
 
 from ._core import (
+    _forward_growth_flip,
     _gll_nodes_weights,
+    _jeps_is_passive,
     _jpmm_fourier_projection,
     _jpmm_order_set,
     _jpmm_sem_modes_tensor,
+    _jtensor_is_passive,
     _kz_forward,
     _l2g_periodic,
     _lagrange_derivative_matrix,
-    _mass_flux_cut,
+    _mass_flux_threshold,
     _pmm_union_grid,
     _require_concrete_wavelength,
     _segment_elem_bnds,
@@ -128,7 +131,11 @@ def _jstack_assemble(static, jnp, t_cells):
         conv["one"] = conv["one"].at[ii, jj].add(Cl)
         conv["inv_ezz"] = conv["inv_ezz"].at[ii, jj].add(iez * Cl)
     return dict(mass=mass, stiff=stiff, conv=conv, S0=mass["one"],
-                n_glob=n_glob)
+                n_glob=n_glob,
+                # see :func:`_core._jpmm_assemble_tensor` -- the traced
+                # assembler carries the passivity verdict of the tensors it
+                # consumed, because it has no concrete element table.
+                passive=_jtensor_is_passive(list(t_cells), jnp))
 
 
 def _jstack_geo_ops(static):
@@ -176,8 +183,10 @@ def _jstack_modes_uniform(S0, mu, w, jnp, eps):
     SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
     flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
                     - jnp.einsum("in,in->n", W2[n:], SVt))
-    prop = _mass_flux_cut(flux, W2, SVt, SVb, n, jnp)  # W7 B2: unit-safe cut
-    flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
+    thr = _mass_flux_threshold(flux, W2, SVt, SVb, n, jnp)
+    prop = jnp.abs(flux) > thr                        # W7 B2: unit-safe cut
+    flip = _forward_growth_flip(flux, q, thr, prop, jnp,
+                                _jeps_is_passive(eps, jnp))
     q = jnp.where(flip, -q, q)
     lam = -1j * q
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
@@ -451,11 +460,13 @@ def _pmm_stack_solve_jax_perlayer(stack):
     from ...backend import is_jax_array
     from ..rcwa import _jax_eig_stable, _require_jax_x64
     from ._core import (
+        PMM_MORTAR_SEPARABLE,
         _build_sem_tensor_segments,
-        _pmm_union_grid,
-        _sem_cross_mass,
+        _kron2_apply,
+        _perlayer_window_grids,
+        _sem_cross_mass_cached,
         _sem_fourier_projection,
-        _sem_mass_exact,
+        _sem_mass_exact_cached,
         _tensor3_dict,
     )
     _require_jax_x64("PMMStack.solve")
@@ -477,13 +488,9 @@ def _pmm_stack_solve_jax_perlayer(stack):
 
     # ---- frozen PER-LAYER geometry (concrete widths; eps pass through) ----
     nlay = len(stack._layers)
-    grid_of = []
-    for i in range(nlay):
-        js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
-        uw_i, rows_i = _pmm_union_grid(
-            [stack._layers[j][1] for j in js],
-            stack.min_feature / stack.period)
-        grid_of.append((np.asarray(uw_i, dtype=float), rows_i[js.index(i)]))
+    grid_of = _perlayer_window_grids(
+        [L[1] for L in stack._layers], stack.min_feature / stack.period,
+        stack.window_halfwidth)
     wkeys = [w.tobytes() for w, _r in grid_of]
     statics = [_jstack_static(stack.period, w_i, stack.degree, stack.n_el,
                               stack.grade) for w_i, _r in grid_of]
@@ -493,15 +500,31 @@ def _pmm_stack_solve_jax_perlayer(stack):
     geo_mats = [_build_sem_tensor_segments(
         stack.period, w_i, [_tensor3_dict(_eye3)] * len(w_i),
         stack.degree, stack.n_el, stack.grade) for w_i, _r in grid_of]
+    # M3 / N-3 items 1 + 3: the 1-D blocks are stored (and CACHED across
+    # traces by ``_sem_*_cached``) and applied SEPARABLY -- the twin no longer
+    # materialises four ``kron(I_2, .)`` operators per mortar, which were 4x
+    # the bytes and 2x the flops of the blockwise form (see the exactness
+    # argument above ``_kron2_apply`` in ``_core.py``).
+    #
+    # The fail-before switch reaches HERE TOO.  It is read once at TRACE time
+    # (a Python bool, never a traced value), so the traced graph is one arm or
+    # the other and nothing data-dependent is branched on.  Measured: without
+    # this gate the switch was NumPy-only and the JAX twin moved 5.6e-17 with
+    # items 3+4 nominally OFF -- a fail-before that does not fail before is
+    # worse than none.
+    _sep = bool(PMM_MORTAR_SEPARABLE)
+    _eye2 = np.eye(2)
     Ms = {}
     for i in range(nlay):
         if wkeys[i] not in Ms:
-            Ms[wkeys[i]] = np.kron(np.eye(2), _sem_mass_exact(geo_mats[i]))
+            M = _sem_mass_exact_cached(geo_mats[i])
+            Ms[wkeys[i]] = M if _sep else np.kron(_eye2, M)
     crosses = {}
     for i in range(nlay - 1):
         if wkeys[i] != wkeys[i + 1]:
-            C = _sem_cross_mass(geo_mats[i], geo_mats[i + 1])
-            crosses[i] = (np.kron(np.eye(2), C.T), np.kron(np.eye(2), C))
+            C = _sem_cross_mass_cached(geo_mats[i], geo_mats[i + 1])
+            crosses[i] = ((C.T, C) if _sep
+                          else (np.kron(_eye2, C.T), np.kron(_eye2, C)))
 
     # ---- CONCRETE order set (min over the two end grids' capacity) --------
     n_vals = []
@@ -580,16 +603,30 @@ def _pmm_stack_solve_jax_perlayer(stack):
                 0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
 
     def _imort(Wa, Va, Wb, Vb, i):
-        bCba, bCab = crosses[i]
-        bMa = jnp.asarray(Ms[wkeys[i]], cj)
-        bMb = jnp.asarray(Ms[wkeys[i + 1]], cj)
-        A = jnp.linalg.solve(bMb @ Wb, jnp.asarray(bCba, cj) @ Wa)
-        B = jnp.linalg.solve(bMa @ Va, jnp.asarray(bCab, cj) @ Vb)
-        BA = B @ A
-        eye_a = jnp.eye(BA.shape[0], dtype=cj)
-        iba = jnp.linalg.inv(eye_a + BA)
-        S11 = iba @ (eye_a - BA)
-        S12 = 2.0 * (iba @ B)
+        Cba, Cab = crosses[i]
+        Ma = jnp.asarray(Ms[wkeys[i]], cj)
+        Mb = jnp.asarray(Ms[wkeys[i + 1]], cj)
+        if _sep:
+            A = jnp.linalg.solve(_kron2_apply(Mb, Wb, jnp),
+                                 _kron2_apply(jnp.asarray(Cba, cj), Wa, jnp))
+            B = jnp.linalg.solve(_kron2_apply(Ma, Va, jnp),
+                                 _kron2_apply(jnp.asarray(Cab, cj), Vb, jnp))
+            BA = B @ A
+            eye_a = jnp.eye(BA.shape[0], dtype=cj)
+            # one factorisation, both right-hand sides (the NumPy twin's shape)
+            X = jnp.linalg.solve(eye_a + BA,
+                                 jnp.concatenate((eye_a - BA, B), axis=1))
+            nc = eye_a.shape[1]
+            S11 = X[:, :nc]
+            S12 = 2.0 * X[:, nc:]
+        else:                       # fail-before: the pre-M3 traced arithmetic
+            A = jnp.linalg.solve(Mb @ Wb, jnp.asarray(Cba, cj) @ Wa)
+            B = jnp.linalg.solve(Ma @ Va, jnp.asarray(Cab, cj) @ Vb)
+            BA = B @ A
+            eye_a = jnp.eye(BA.shape[0], dtype=cj)
+            iba = jnp.linalg.inv(eye_a + BA)
+            S11 = iba @ (eye_a - BA)
+            S12 = 2.0 * (iba @ B)
         S21 = A @ (eye_a + S11)
         S22 = A @ S12 - jnp.eye(A.shape[0], dtype=cj)
         return (S11, S12, S21, S22)
@@ -601,14 +638,18 @@ def _pmm_stack_solve_jax_perlayer(stack):
         return (Z, X, X, Z)
 
     def _star_rect(SA, SB):
+        # The inverses stay inverses, mirroring the NumPy twin -- see
+        # ``_redheffer_star_rect``'s docstring for the identity pin that
+        # refused the solve.  The common subexpressions are named once (the
+        # bit-identical half of M3 / N-3 item 4).
         A11, A12, A21, A22 = SA
         B11, B12, B21, B22 = SB
         m = A22.shape[0]
         eye = jnp.eye(m, dtype=cj)
-        D = jnp.linalg.inv(eye - B11 @ A22)
-        F = jnp.linalg.inv(eye - A22 @ B11)
-        return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
-                B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+        AD = A12 @ jnp.linalg.inv(eye - B11 @ A22)
+        BF = B21 @ jnp.linalg.inv(eye - A22 @ B11)
+        return (A11 + AD @ B11 @ A21, AD @ B12,
+                BF @ A21, B22 + BF @ A22 @ B12)
 
     def _ifc(Wa, Va, Wb, Vb, i):
         # i = the LOWER layer index of an interior interface; None = half-space

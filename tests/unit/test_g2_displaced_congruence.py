@@ -29,8 +29,10 @@ from lumenairy.glass import GLASS_REGISTRY
 
 _WL = 1.31e-6
 K = 2 * np.pi / _WL
-GLASS_REGISTRY['_G2_A'] = lambda wl: 1.5168
-GLASS_REGISTRY['_G2_B'] = lambda wl: 1.6200
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_G2_A': lambda wl: 1.5168,
+                  '_G2_B': lambda wl: 1.6200}
 
 
 # ---------------------------------------------------------------------------

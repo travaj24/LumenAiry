@@ -34,7 +34,6 @@ import warnings
 import numpy as np
 import pytest
 
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.propagators import fga
 from lumenairy.propagators.fga import (
     _adaptive_momentum_nodes,
@@ -46,7 +45,9 @@ from lumenairy.propagators.fga import (
 WL = 0.633e-6
 _K = 2.0 * np.pi / WL
 
-GLASS_REGISTRY['_P5_GLASS'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_P5_GLASS': lambda wl: 1.5168}
 
 
 def _flat_presc(N, dx):

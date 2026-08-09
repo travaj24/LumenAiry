@@ -49,10 +49,11 @@ from lumenairy.elements._lens_real import (
     _displaced_cos_grid_key,
     _get_displaced_cos_grid,
 )
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.memory import available_memory_bytes
 
-GLASS_REGISTRY['_R1A'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_R1A': lambda wl: 1.5168}
 _WL = 1.31e-6
 _MB = 1024 * 1024
 _RMAX = 5e-3

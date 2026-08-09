@@ -89,13 +89,19 @@ def _validate_mft_output_grid(dx_out, dy_out, N_out, *, fn_name):
 
 
 def _warn_mft_output_window(period_x, period_y, dx_out, dy_out, N_out, *,
-                            fn_name, period_expr):
-    """Warn when the requested output window exceeds one spatial period of
-    the discrete transform, i.e. when the extra samples are periodic
-    REPLICAS rather than new information (audit P11).
+                            fn_name, period_expr,
+                            centre_x=0.0, centre_y=0.0):
+    """Warn when the requested output window leaves the faithful zone of
+    the discrete transform, i.e. when some samples are periodic REPLICAS
+    rather than new information (audit P11; centre-blindness fixed with
+    verifier finding V3, 2026-08-06).
 
     A discrete transform of ``N`` samples reconstructs a field that is
-    periodic in the output coordinate; sampling beyond one period wraps.
+    periodic in the ABSOLUTE output coordinate, so the faithful zone is
+    centred on the transform's origin -- NOT on ``centre_out``.  A window
+    of width ``W`` centred at offset ``c`` therefore fits iff
+    ``2*|c| + W <= period`` per axis: the offset spends the period budget
+    at weight two, because the window is symmetric about ``c``.
     The period differs per kernel and this helper takes it as an argument:
 
     * ASM-MFT Bluestein-inverts the SPECTRUM (``N_in`` bins at
@@ -107,35 +113,41 @@ def _warn_mft_output_window(period_x, period_y, dx_out, dy_out, N_out, *,
     lambda=633 nm, z=0.5 mm, a narrow Gaussian): at a 4x-period window
     the centre-row profile shows three equal lobes separated by exactly
     the predicted period, at 1x and 2x it shows one.  The natural /
-    same-grid calls land exactly ON one period, so the strict ``>``
-    comparison leaves them silent.
+    same-grid calls land exactly ON one period at zero offset, so the
+    strict ``>`` comparison leaves them silent.
     """
     n = int(N_out)
-    win_x = n * float(dx_out)
-    win_y = n * float(dy_out)
     tol = 1.0 + 1e-9
     bad = []
-    if win_x > float(period_x) * tol:
-        bad.append(('x', win_x, float(period_x), float(dx_out)))
-    if win_y > float(period_y) * tol:
-        bad.append(('y', win_y, float(period_y), float(dy_out)))
+    for ax, d_out, period, c in (('x', float(dx_out), float(period_x),
+                                  abs(float(centre_x))),
+                                 ('y', float(dy_out), float(period_y),
+                                  abs(float(centre_y)))):
+        win = n * d_out
+        if 2.0 * c + win > period * tol:
+            bad.append((ax, win, period, d_out, c))
     if not bad:
         return
     detail = '; '.join(
-        f'{ax}: window N_out*d{ax}_out = {n} * {d:.6e} = {w:.6e} m '
-        f'vs period {p:.6e} m ({w / p:.4g}x)'
-        for ax, w, p, d in bad)
-    axes = ' and '.join(ax for ax, _w, _p, _d in bad)
-    raw = ', '.join(f'{p:.6e}' for _ax, _w, p, _d in bad)
+        f'{ax}: 2*|centre_out_{ax}| + N_out*d{ax}_out = '
+        f'2 * {c:.6e} + {n} * {d:.6e} = {2.0 * c + w:.6e} m '
+        f'vs period {p:.6e} m ({(2.0 * c + w) / p:.4g}x)'
+        for ax, w, p, d, c in bad)
+    axes = ' and '.join(ax for ax, _w, _p, _d, _c in bad)
+    raw = ', '.join(f'{p:.6e}' for _ax, _w, p, _d, _c in bad)
     warnings.warn(
-        f"{fn_name}: the requested output window exceeds one spatial period "
+        f"{fn_name}: the requested output window leaves the faithful zone "
         f"of the discrete transform on {axes} -- {detail}.  The period is "
-        f"{period_expr} (= {raw} m here); samples beyond +/-period/2 of "
-        f"centre_out are PERIODIC REPLICAS of the field, not new "
+        f"{period_expr} (= {raw} m here) and the reconstruction is "
+        f"periodic in the ABSOLUTE output coordinate, so the faithful "
+        f"zone is centred on the transform origin, not on centre_out; an "
+        f"off-origin window spends the period budget at weight two.  "
+        f"Samples outside it are PERIODIC REPLICAS of the field, not new "
         f"information, so a broad or structured field will alias into the "
-        f"outer part of the window.  Reduce N_out*d_out below the period, "
-        f"or use a propagator whose natural grid already spans the region "
-        f"you need.",
+        f"outer part of the window.  Reduce N_out*d_out or |centre_out| "
+        f"until 2*|centre_out| + N_out*d_out <= period, or use a "
+        f"propagator whose natural grid already spans the region you "
+        f"need.",
         UserWarning, stacklevel=3)
 
 
@@ -323,7 +335,8 @@ def angular_spectrum_propagate_mft(
         dx_out, dy_out, Ny_out,
         fn_name='angular_spectrum_propagate_mft',
         period_expr='N_in*d_in (the input cell, since the Bluestein step '
-                    'inverts the input spectrum)')
+                    'inverts the input spectrum)',
+        centre_x=xc, centre_y=yc)
 
     # ----- 1) Build ASM transfer function H(fx, fy) on the input freq grid --
     # Same construction as angular_spectrum_propagate (centred convention,
@@ -758,7 +771,8 @@ def fresnel_propagate_mft(
         dx_out, dy_out, Ny_out,
         fn_name='fresnel_propagate_mft',
         period_expr='lambda*|z|/d_in (the transform is of the input '
-                    'field, not its spectrum)')
+                    'field, not its spectrum)',
+        centre_x=xc, centre_y=yc)
 
     # ----- coordinate grids (numpy for chirp construction) ------------------
     n_x = np.arange(Nx_in, dtype=np.float64)
@@ -956,7 +970,8 @@ def fraunhofer_propagate_mft(
         dx_out, dy_out, Ny_out,
         fn_name='fraunhofer_propagate_mft',
         period_expr='lambda*|z|/d_in (the transform is of the input '
-                    'field, not its spectrum)')
+                    'field, not its spectrum)',
+        centre_x=xc, centre_y=yc)
 
     # PK-3: the input-plane index grids were removed with the Fraunhofer
     # (no input quadratic phase) simplification; only the OUTPUT index grids

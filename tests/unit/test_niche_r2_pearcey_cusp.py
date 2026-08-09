@@ -81,10 +81,11 @@ from lumenairy.elements._lens_traced_uniform import (
     apply_real_lens_traced_uniform,
 )
 from lumenairy.elements.lenses_maslov import pearcey
-from lumenairy.glass import GLASS_REGISTRY
 
 # dispersionless model glass (matches the caustic_fold_ref / K4 singlet index)
-GLASS_REGISTRY['_K4CAU'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_K4CAU': lambda wl: 1.5168}
 
 _WL = 1.31e-6
 _K = 2.0 * np.pi / _WL

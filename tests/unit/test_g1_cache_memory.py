@@ -17,11 +17,12 @@ from lumenairy.elements._lens_traced import (
     PreparedTracedLens,
     prepare_real_lens_traced,
 )
-from lumenairy.glass import GLASS_REGISTRY
 from lumenairy.propagators import fga as _fga
 
 _WL = 1.31e-6
-GLASS_REGISTRY['_G1CACHE'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_G1CACHE': lambda wl: 1.5168}
 
 
 def _singlet(semi=6e-3):

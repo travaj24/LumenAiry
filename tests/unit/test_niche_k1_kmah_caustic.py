@@ -86,10 +86,11 @@ from lumenairy.elements._lens_traced_multibranch import (
     apply_real_lens_traced_multibranch,
     ludwig_fold,
 )
-from lumenairy.glass import GLASS_REGISTRY
 
-GLASS_REGISTRY['_K1A'] = lambda wl: 1.5168     # dispersionless model glass
-GLASS_REGISTRY['_K1CAU'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_K1A': lambda wl: 1.5168,     # dispersionless
+                  '_K1CAU': lambda wl: 1.5168}
 
 _WL = 1.31e-6
 _LAM633 = 0.633e-6

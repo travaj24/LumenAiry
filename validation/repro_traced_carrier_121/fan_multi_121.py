@@ -215,7 +215,7 @@ print(f"\nconfig: N={N} dx0={dx0 * 1e6:.4f} um rs={RS} nw={NW}")
 t0 = time.time()
 pre = la.propagate_traced_carrier_chain(
     env0, groups_pre, lam, dx0, r_in=R1, ray_subsample=RS, n_workers=NW,
-    final_distance=gap_to_doe, final_leg='paraxial')
+    final_distance=gap_to_doe)
 env_doe = carrier_referenced_envelope(pre.field, pre.R, lam, pre.dx)
 P_doe = float(np.sum(np.abs(env_doe) ** 2)) * pre.dx * pre.dx
 print(f"chain A done {time.time() - t0:.0f}s: R_doe = {pre.R * 1e3:.4f} mm, "
@@ -297,12 +297,17 @@ for m_, n_, a in zip(mx, my, amps):
                                     float(m_) * lam / DOE_PERIOD,
                                     float(n_) * lam / DOE_PERIOD)})
 
-# LEG selects the final leg (niche D6).  'paraxial' is the historical default
-# for this runner; 'auto'/'exact' take the EXACT high-NA final leg, which since
-# D6 carries a tilted congruence -- at the cost of an axis-centred retrace
-# window that has to hold the optical axis AND the chief-ray-displaced beam
-# (measured 1.48x wider on the extreme 121 order), so NFC has to grow with it.
-LEG = os.environ.get('LEG', 'paraxial')
+# LEG selects the final leg (niche D6).  'auto' resolves to the EXACT
+# high-NA final leg at 121's na_exit = 0.405 and has been this runner's
+# default since the 2026-08-06 capstone: the paraxial-era extreme order read
+# EE3 65.3% where exact reads 90.1% against the skew-ray+Debye oracle
+# (docs/audits/CAPSTONE_D121_2026_08_06.md).  'paraxial' remains available
+# by env for the historical comparison ONLY -- it is not a valid acceptance
+# configuration.  The exact leg carries a tilted congruence at the cost of
+# an axis-centred retrace window that has to hold the optical axis AND the
+# chief-ray-displaced beam (measured 1.48x wider on the extreme 121 order),
+# so NFC has to grow with it.
+LEG = os.environ.get('LEG', 'auto')
 NFC = int(os.environ.get('NFC', '16384'))
 WF = float(os.environ.get('WF', '4.0'))
 _og = dict(dx_out=DXO, N_out=NOUT)

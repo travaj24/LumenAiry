@@ -29,6 +29,7 @@ import warnings
 import numpy as np
 
 from ..rcwa._core import (
+    _blas_limit,
     _blas_threads_quiet,
     _grazing_safe_wavelength,
     _interface_smatrix_general,
@@ -1139,7 +1140,14 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             sub._internal = None
             sub._layers = self._materialized_layers(w, base)
             sub.set_source(w, theta=theta, phi=phi, angle=angle)
-            with _blas_threads_quiet(blas_per_worker):
+            # The cap is applied ONCE by the caller around the whole
+            # dispatch below -- NOT here.  Applying a cap is PROCESS-GLOBAL on
+            # OpenBLAS; only the REQUEST is thread-local, so N workers'
+            # enter/exit pairs raced on one global (M4 referral, 2026-08-04,
+            # ``PMM_M4_HYGIENE_2026_08_04.md`` S2.6).  Clearing the request
+            # here keeps a nested ``solve`` from re-entering the global
+            # limiter on the serial branch.
+            with _blas_threads_quiet(None):
                 o, R1, T1, j1 = sub.solve()
             return i, o, R1, np.asarray(T1), np.asarray(j1)
 
@@ -1151,15 +1159,20 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         _mw = (1 if _jax_any else
                (min(os.cpu_count() or 1, int(wlv.size)) if max_workers is None
                 else max(1, int(max_workers))))
-        if _mw == 1 or wlv.size == 1:
-            for i, w in enumerate(wlv):
-                results[i] = _solve_one(i, w)
-        else:
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=_mw) as _ex:
-                for res in _ex.map(lambda p: _solve_one(*p),
-                                   list(enumerate(wlv))):
-                    results[res[0]] = res
+        # ONE process-wide BLAS cap for the WHOLE sweep, on THIS thread
+        # (M4 referral, 2026-08-04): byte-identity across worker counts needs
+        # every solve, serial and threaded, at the SAME BLAS thread count, and
+        # applying the cap is process-global so it cannot be done per worker.
+        with _blas_threads_quiet(blas_per_worker), _blas_limit():
+            if _mw == 1 or wlv.size == 1:
+                for i, w in enumerate(wlv):
+                    results[i] = _solve_one(i, w)
+            else:
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=_mw) as _ex:
+                    for res in _ex.map(lambda p: _solve_one(*p),
+                                       list(enumerate(wlv))):
+                        results[res[0]] = res
         orders = results[0][1]
         R = np.stack([r[2] for r in results])
         T = np.stack([r[3] for r in results])

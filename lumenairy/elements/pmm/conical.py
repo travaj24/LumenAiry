@@ -36,6 +36,7 @@ from ..rcwa._core import (
     _propagation_smatrix_general,
     _require_propagating_incidence,
 )
+from ._core import _mode_cut_scoped
 from .twod import (
     _build_axis,
     _cell_to_walls_tile,
@@ -52,6 +53,19 @@ from .twod_jones import _require_nonzero_ezz, _tensor_layer_modes
 _C = complex
 
 __all__ = ["pmm_jones_1d_conical", "pmm_jones_1d_conical_tensor"]
+
+#: T3-3 fail-before switch (M1, 2026-08-04).  ``False`` restores the pre-M1
+#: arithmetic bit for bit: the conical far-field order cap computed from the
+#: FULL-UNION cell count on BOTH grid paths, including the per-layer one whose
+#: half-spaces live on the (much smaller) three-layer window grids.
+#:
+#: Measured on the audit staircase (6 slices, 4 nm wall shift, degree 6,
+#: ``elements_per_region`` 1): the union grid has 13 cells and carries
+#: ``n_glob`` = 78, while the END WINDOW grids have 5 cells and carry 30 -- so
+#: the shipped cap allowed 77 far-field orders on a projector built over 30
+#: nodes, which supports 29.  ``False`` here is how the audit's before-numbers
+#: were produced; see ``docs/audits/PMM_M1_CONDITIONING_2026_08_04.md`` S4.
+PMM_CONICAL_PERLAYER_ORDER_CAP = True
 
 
 def _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv, kx0, ky0,
@@ -121,10 +135,12 @@ def _tile_has_offplane_public(tensors):
     return False
 
 
+@_mode_cut_scoped("pmm conical (nodal cascade)")
 def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
                          theta, phi, degree, n_el, grade, n_orders,
                          min_feature=0.0, label="pmm conical (nodal)",
-                         return_modal=False, layer_grids="shared"):
+                         return_modal=False, layer_grids="shared",
+                         window_halfwidth=1):
     """PURE-NODAL (no projection floor) conical multilayer cascade for
     PATTERNED in-plane stacks -- the fix for
     ``AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12``.
@@ -160,13 +176,15 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
     """
     from ._core import (
         _build_sem_tensor_segments,
+        _guarded_lstsq,
         _interface_smatrix_mortar,
         _n_propagating_orders,
+        _perlayer_window_grids,
         _pmm_union_grid,
         _redheffer_star_rect,
-        _sem_cross_mass,
+        _sem_cross_mass_cached,
         _sem_fourier_projection,
-        _sem_mass_exact,
+        _sem_mass_exact_cached,
         _sem_modes_tensor,
         _tensor3_dict,
     )
@@ -197,9 +215,46 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         segs_layers, (min_feature / period) if min_feature else None)
     nU = len(uwidths)
 
-    # far-field order budget: capped by the union grid's nodal capacity, and
-    # the grid must resolve every propagating order (classical-path parity).
-    cap = (nU * n_el * degree - 1) // 2
+    nlay = len(segs_layers)
+    # ---- PER-LAYER window grids, built BEFORE the far-field budget ---------
+    # T3-3 (M1, 2026-08-04).  This block used to sit AFTER the order cap, and
+    # the cap was computed from ``nU`` -- the FULL-UNION cell count -- on both
+    # paths.  On the per-layer path the half-spaces live on the WINDOW grids,
+    # whose cell count is a fraction of ``nU`` (~nU/6 on the audit device), so
+    # the cap OVER-STATED the nodal capacity, the ``m_prop > cap`` raise could
+    # not fire, and ``_sem_fourier_projection`` then built a projector with
+    # more Rayleigh orders than the grid has nodes.  ``Hsup`` went rank
+    # deficient and the least squares below returned a build-dependent
+    # null-space draw -- silently, because a null-space component of ``cinc``
+    # is invisible to ``Hsup`` and so leaves R + T = 1 intact.
+    #
+    # Every sibling per-layer path already clamps to the WINDOW half-spaces and
+    # raises: ``PMMStack._solve_vertical_perlayer`` (stack.py, ``cap =
+    # min(n0, nN)`` from ``mats_sup/sub["n_glob"]``), the per-layer sweep
+    # ``_solve_vs_wavelength_perlayer``, and the JAX twin (min over the two end
+    # grids' capacity).  Conical was the only outlier.
+    per_layer = layer_grids == "per-layer"
+    t_sup = _tensor3_dict(eps_sup * np.eye(3))
+    t_sub = _tensor3_dict(eps_sub * np.eye(3))
+    grid_of = mats_sup = mats_sub = None
+    if per_layer:
+        grid_of = _perlayer_window_grids(
+            segs_layers, (min_feature / period) if min_feature else None,
+            window_halfwidth)
+        mats_sup = _build_sem_tensor_segments(
+            period, grid_of[0][0], [t_sup] * len(grid_of[0][0]),
+            degree, n_el, grade)
+        mats_sub = _build_sem_tensor_segments(
+            period, grid_of[-1][0], [t_sub] * len(grid_of[-1][0]),
+            degree, n_el, grade)
+
+    # far-field order budget: capped by the nodal capacity of the grids the
+    # HALF-SPACES actually live on, and the grid must resolve every propagating
+    # order (classical-path parity).
+    if per_layer and PMM_CONICAL_PERLAYER_ORDER_CAP:
+        cap = (min(int(mats_sup["n_glob"]), int(mats_sub["n_glob"])) - 1) // 2
+    else:
+        cap = (nU * n_el * degree - 1) // 2
     n_orders = max(1, min(int(n_orders), cap))
     _idx = [float(np.real(np.sqrt(eps_sup))), float(np.real(np.sqrt(eps_sub)))]
     for eps_u in layer_eps_u:
@@ -229,10 +284,7 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
     # ---- nodal operators + modes (PUBLIC gauge; DIMENSIONAL kx0/ky0) --------
     kx0_dim = kx0 * k0
     ky0_dim = ky0 * k0
-    t_sup = _tensor3_dict(eps_sup * np.eye(3))
-    t_sub = _tensor3_dict(eps_sub * np.eye(3))
-    nlay = len(segs_layers)
-    if layer_grids == "per-layer":
+    if per_layer:
         # ---- PER-LAYER grids + interface mortar (audit R-6, conical v2) ----
         # Identical construction to PMMStack._solve_vertical_perlayer: each
         # layer's grid = its own walls + its two NEIGHBOURS' (the interface-
@@ -240,14 +292,8 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         # the window-local min_feature), coupled by the exact L2 mortar.  Only
         # the eigensolve differs (ky0-shifted) -- the mortar is geometry-level
         # and gauge-free, so it drops in unchanged.
-        grid_of = []
-        for i in range(nlay):
-            js = [j for j in (i - 1, i, i + 1) if 0 <= j < nlay]
-            uw_i, rows_i = _pmm_union_grid(
-                [segs_layers[j] for j in js],
-                (min_feature / period) if min_feature else None)
-            grid_of.append((np.asarray(uw_i, dtype=float),
-                            rows_i[js.index(i)]))
+        # ``grid_of`` / ``mats_sup`` / ``mats_sub`` were built ABOVE, because
+        # the far-field order cap has to be derived from them (T3-3).
         mats_by, lmodes = [], []
         _eig_memo = {}
         for w_i, eps_row in grid_of:
@@ -263,12 +309,6 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
             mats_by.append(hit[0])
             lmodes.append(hit[1])
         wkeys = [w.tobytes() for w, _r in grid_of]
-        mats_sup = _build_sem_tensor_segments(
-            period, grid_of[0][0], [t_sup] * len(grid_of[0][0]),
-            degree, n_el, grade)
-        mats_sub = _build_sem_tensor_segments(
-            period, grid_of[-1][0], [t_sub] * len(grid_of[-1][0]),
-            degree, n_el, grade)
         Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0_dim,
                                                  ky0=ky0_dim)
         Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0_dim,
@@ -278,7 +318,7 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         def _mass(i):
             M = _mass_memo.get(wkeys[i])
             if M is None:
-                M = _sem_mass_exact(mats_by[i])
+                M = _sem_mass_exact_cached(mats_by[i])
                 _mass_memo[wkeys[i]] = M
             return M
 
@@ -287,7 +327,7 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
                 return _ifc_n(Wa, Va, Wb, Vb)
             return _interface_smatrix_mortar(
                 Wa, Va, Wb, Vb, _mass(ia), _mass(ib),
-                _sem_cross_mass(mats_by[ia], mats_by[ib]))
+                _sem_cross_mass_cached(mats_by[ia], mats_by[ib]))
 
         S = _ifc_pl(Wsup, Vsup, lmodes[0][0], lmodes[0][1], None, 0)
         for i in range(nlay):
@@ -370,7 +410,8 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         long_inc = (kx0 * ex0 + ky0 * ey0)
         einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
         rhs = np.concatenate([ex0 * delta, ey0 * delta])
-        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+        cinc = _guarded_lstsq(
+            Hsup, rhs, "pmm conical far-field Rayleigh projection")
         r = Hsup @ (S11 @ cinc)
         t = Hsub @ (S21 @ cinc)
         rx, ry = r[:Nf], r[Nf:]

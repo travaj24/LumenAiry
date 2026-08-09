@@ -43,10 +43,11 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.glass import GLASS_REGISTRY
 
 _WL = 1.31e-6
-GLASS_REGISTRY['_H2_DISP_GLASS'] = lambda wl: 1.5168
+# Model glass for THIS module only: registered and removed by
+# tests/conftest.py::_module_glass_registry_guard.
+MODULE_GLASSES = {'_H2_DISP_GLASS': lambda wl: 1.5168}
 _G = '_H2_DISP_GLASS'
 
 

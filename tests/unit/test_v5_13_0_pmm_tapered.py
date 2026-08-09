@@ -9,6 +9,11 @@ the new PMMStack energy tripwire warns on the many-interface cascade instability
 """
 import os
 
+# A BEST-EFFORT request only: OpenBLAS reads these at LIBRARY LOAD time, so the
+# setdefault below is inert whenever anything (conftest, another test module)
+# has already imported numpy -- which is the normal case under pytest.  Nothing
+# here may assume a single-threaded BLAS; ``test_sweep_matches_perwavelength``
+# controls its own threading explicitly instead (see its docstring).
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
@@ -16,7 +21,7 @@ import numpy as np
 import pytest
 
 from lumenairy.elements.pmm import PMMStack
-from lumenairy.elements.pmm.stack import _warn_stack_energy
+from lumenairy.elements.pmm.stack import _blas_limit, _blas_threads_quiet, _warn_stack_energy
 
 _P = 0.8e-6
 _WL = 0.55e-6
@@ -68,32 +73,109 @@ def test_energy_tripwire_warns_on_gain():
         _warn_stack_energy(np.array([[0.9, 0.5]]), np.array([[0.8, 0.2]]))
 
 
+def _sweep_wls():
+    return np.linspace(0.5e-6, 0.7e-6, 5)
+
+
+def _sweep_stack(tapered):
+    st = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=12)
+    if tapered:
+        st.add_tapered_grating(_TH, eps_ridge=_ER, eps_groove=_EG,
+                               duty_bottom=0.6, duty_top=0.35, n_slices=5)
+    else:
+        st.add_layer(0.15e-6, segments=[(0.25, _EG), (0.5, _ER), (0.25, _EG)])
+        st.add_layer(0.15e-6, eps=2.25)
+    return st
+
+
+def _reference_solves(tapered, wls, cap):
+    """Per-wavelength ``solve()`` results run in the SAME BLAS regime that
+    ``solve_vs_wavelength(blas_per_worker=cap)`` imposes on itself.
+
+    Deliberately the library's OWN limiter pair rather than threadpoolctl
+    directly, so the regime MATCHES BY CONSTRUCTION on every mount: where the
+    cap can be applied both sides get it, and where ``threadpoolctl`` is absent
+    ``_blas_limit()`` degrades to a null context for both sides alike.
+    ``cap=None`` is the environment's untouched threading."""
+    with _blas_threads_quiet(cap), _blas_limit():
+        return [_sweep_stack(tapered).set_source(float(w), angle=0.0).solve()[:3]
+                for w in wls]
+
+
+def _max_gap(orders, R, T, refs):
+    """max |sweep - per-wavelength| over the COMMON propagating orders."""
+    gap = 0.0
+    for iw, (o1, R1, T1) in enumerate(refs):
+        for m in o1:
+            if m in orders:
+                js = int(np.where(orders == m)[0][0])
+                j1 = int(np.where(o1 == m)[0][0])
+                gap = max(gap, float(np.max(np.abs(R[iw, :, js] - R1[:, j1]))),
+                          float(np.max(np.abs(T[iw, :, js] - T1[:, j1]))))
+    return gap
+
+
 def test_sweep_matches_perwavelength():
     """PMMStack.solve_vs_wavelength (reusing the geometry-only SEM assembly)
     reproduces per-wavelength solve() on the propagating orders, for a tapered
-    staircase and a plain vertical stack."""
-    wls = np.linspace(0.5e-6, 0.7e-6, 5)
+    staircase and a plain vertical stack.
 
-    def _build(tapered):
-        st = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=12)
-        if tapered:
-            st.add_tapered_grating(_TH, eps_ridge=_ER, eps_groove=_EG,
-                                   duty_bottom=0.6, duty_top=0.35, n_slices=5)
-        else:
-            st.add_layer(0.15e-6, segments=[(0.25, _EG), (0.5, _ER), (0.25, _EG)])
-            st.add_layer(0.15e-6, eps=2.25)
-        return st
+    BIT-EXACT, and asserted in BOTH BLAS threading regimes -- which is the whole
+    point of this test's shape (fifth-name referral 2026-08-05,
+    ``docs/audits/PMM_FIFTHNAME_TAPERED_SWEEP_2026_08_05.md``).  The sweep caps
+    the BLAS pool to ``blas_per_worker`` (default 1) around its dispatch while a
+    bare ``solve()`` runs at the environment's pool, so on a many-core box with
+    ``threadpoolctl`` installed the two take DIFFERENT LAPACK reduction orders:
+    the patterned layers' eigenVECTORS move ~1e-16 relative and the Redheffer
+    cascade amplifies that by ~1e8, to ~2e-9 absolute in the efficiencies.  The
+    predecessor of this test compared the capped sweep against an UNCAPPED
+    solve() at ``atol=1e-10`` and so failed at N BLAS threads and passed at 1 --
+    an apples-to-oranges comparison, not a library defect.
+
+    The repair is to compare LIKE WITH LIKE, which then needs no tolerance at
+    all: in each regime the two paths agree to the LAST BIT.  Nothing here is a
+    numeric bar calibrated on one configuration."""
+    wls = _sweep_wls()
 
     for tapered in (True, False):
-        o_sw, R_sw, T_sw = _build(tapered).solve_vs_wavelength(wls, angle=0.0)
-        assert R_sw.shape == (len(wls), 2, len(o_sw))
-        for iw, w in enumerate(wls):
-            o1, R1, T1, _ = _build(tapered).set_source(float(w), angle=0.0).solve()
-            for m in o1:                          # compare on the common orders
-                if m in o_sw:
-                    js, j1 = int(np.where(o_sw == m)[0][0]), int(np.where(o1 == m)[0][0])
-                    assert np.allclose(R_sw[iw, :, js], R1[:, j1], rtol=0, atol=1e-10)
-                    assert np.allclose(T_sw[iw, :, js], T1[:, j1], rtol=0, atol=1e-10)
+        # Regime A -- the SHIPPED DEFAULT (sweep pins BLAS to 1).
+        o_cap, R_cap, T_cap = _sweep_stack(tapered).solve_vs_wavelength(
+            wls, angle=0.0)
+        ref_cap = _reference_solves(tapered, wls, 1)
+        # Regime B -- cap disabled, so the sweep inherits the environment's
+        # threading exactly as a bare solve() does.  Serial: with no cap, N
+        # workers would oversubscribe the BLAS pool.
+        o_amb, R_amb, T_amb = _sweep_stack(tapered).solve_vs_wavelength(
+            wls, angle=0.0, max_workers=1, blas_per_worker=None)
+        ref_amb = _reference_solves(tapered, wls, None)
+
+        assert R_cap.shape == (len(wls), 2, len(o_cap))
+        assert np.array_equal(o_amb, o_cap)
+
+        for tag, orders, R, T, refs in (
+                ("blas_per_worker=1 (default)", o_cap, R_cap, T_cap, ref_cap),
+                ("blas_per_worker=None", o_amb, R_amb, T_amb, ref_amb)):
+            gap = _max_gap(orders, R, T, refs)
+            assert gap == 0.0, (
+                f"tapered={tapered}, {tag}: the assemble-once sweep and "
+                f"per-wavelength solve() ran the same arithmetic in the same "
+                f"BLAS regime but differ by {gap:.3e} -- that is an "
+                f"ALGORITHMIC divergence, not round-off.")
+
+        # And the DEFAULT sweep's residual disagreement with an UNCAPPED
+        # solve() is attributable ENTIRELY to the BLAS reduction order: it is
+        # no larger than the disagreement solve() has with ITSELF across the
+        # two regimes.  Self-calibrating -- zero on a mount where the cap is
+        # inert, and it fails the moment the sweep contributes error of its own.
+        blas_only = max(
+            (max(float(np.max(np.abs(a[1] - b[1]))),
+                 float(np.max(np.abs(a[2] - b[2]))))
+             for a, b in zip(ref_cap, ref_amb)), default=0.0)
+        sweep_gap = _max_gap(o_cap, R_cap, T_cap, ref_amb)
+        assert sweep_gap <= blas_only, (
+            f"tapered={tapered}: capped sweep vs uncapped solve() differs by "
+            f"{sweep_gap:.3e}, MORE than solve()'s own cross-regime spread "
+            f"{blas_only:.3e} -- the excess is the sweep's own error.")
 
 
 def test_sweep_rejects_slanted_and_validates():
