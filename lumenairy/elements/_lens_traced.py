@@ -5288,8 +5288,36 @@ class _ResidualEikonal(object):
                     need_v.add(j - 2)
         # ONE np.power per distinct exponent -- the same call the old loop made
         # per term per accumulator, so the same bits.
-        UP = {p: u ** p for p in sorted(need_u)}
-        VP = {q: v ** q for q in sorted(need_v)}
+        #
+        # ...except exponents 0 and 1, which are pure waste and are elided
+        # (FIX_PERF_ROUND2_2026_08_10 item 4b).  ``u ** 0`` is a whole extra
+        # full-grid array of ONES whose only use is a multiply by exactly 1.0,
+        # and ``u ** 1`` is a whole extra full-grid COPY of ``u``.  On the
+        # shipped degree-6 list that is 12 of 27 terms carrying a redundant
+        # full-array multiply in ``P`` alone, plus two allocations per axis.
+        # BIT-IDENTICAL: multiplying a float64 by exactly 1.0 is exact for
+        # every finite operand and preserves inf, nan and the sign of zero;
+        # ``np.power(x, 1)`` returns ``x``'s bits.  MEASURED 1.18x (512x8192
+        # band) and 1.31x (256x16384 band) on the value path, byte-identical
+        # against the pre-elision loop.
+        UP = {p: (u if p == 1 else u ** p) for p in sorted(need_u) if p}
+        VP = {q: (v if q == 1 else v ** q) for q in sorted(need_v) if q}
+
+        def _mul(scale, p, q, _U=UP, _V=VP):
+            """``scale * u**p * v**q`` with the exponent-0 factors elided.
+
+            Left-to-right association is preserved exactly: the shipped
+            expression was ``((scale) * UP[p]) * VP[q]``, and dropping a factor
+            that is identically 1.0 cannot move a bit.  The tables come in as
+            DEFAULT ARGUMENTS rather than as closure cells so that the
+            end-of-function ``del UP, VP`` still frees them."""
+            if p and q:
+                return scale * _U[p] * _V[q]
+            if p:
+                return scale * _U[p]
+            if q:
+                return scale * _V[q]
+            return scale
         # ``np.zeros_like(u)`` on the shipped float64 path; the explicit dtype
         # only matters for a lower-precision ``ex`` (where the old loop's
         # ``P = P + <float64 term>`` upcast on its first iteration anyway, so
@@ -5307,19 +5335,19 @@ class _ResidualEikonal(object):
         for c, (i, j) in zip(coef, terms):
             if c == 0.0:
                 continue
-            P += c * UP[i] * VP[j]
+            P += _mul(c, i, j)
             if i >= 1:
-                Pu += c * i * UP[i - 1] * VP[j]
+                Pu += _mul(c * i, i - 1, j)
             if j >= 1:
-                Pv += c * j * UP[i] * VP[j - 1]
+                Pv += _mul(c * j, i, j - 1)
             if hess:
                 if i >= 2:
-                    Puu += c * i * (i - 1) * UP[i - 2] * VP[j]
+                    Puu += _mul(c * i * (i - 1), i - 2, j)
                 if i >= 1 and j >= 1:
-                    Puv += c * i * j * UP[i - 1] * VP[j - 1]
+                    Puv += _mul(c * i * j, i - 1, j - 1)
                 if j >= 2:
-                    Pvv += c * j * (j - 1) * UP[i] * VP[j - 2]
-        del UP, VP
+                    Pvv += _mul(c * j * (j - 1), i, j - 2)
+        del UP, VP, _mul
         if not hess:
             return (P, Pu / s, Pv / s, None, None, None)
         return (P, Pu / s, Pv / s,

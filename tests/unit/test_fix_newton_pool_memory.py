@@ -1326,8 +1326,13 @@ def test_the_dispatch_path_ships_the_built_fit():
         "the Newton payload no longer ships the parent's built Chebyshev fit, "
         'so every worker re-solves the least squares in its own interpreter '
         'and pool == serial is conditional on the two sharing a BLAS width')
-    assert body.index("_spline_data['cheb_fit']") < body.index('args_list = ['), (
-        'the fit is attached after the payload has already been chunked')
+    # Same anchor move as its sibling above: the payload's contents are frozen
+    # for the wire by ``_newton_payload_blob`` since FIX_PERF_ROUND2 item 3,
+    # not by the old ``args_list`` comprehension.
+    assert body.index("_spline_data['cheb_fit']") < body.index(
+        '_newton_payload_blob(_spline_data)'), (
+        'the fit is attached after the payload has already been serialised '
+        'for the workers')
     wsrc = inspect.getsource(LT._newton_invert_chunk)
     assert "knot_data.get('cheb_fit', None)" in wsrc, (
         'the worker no longer reads the shipped fit')

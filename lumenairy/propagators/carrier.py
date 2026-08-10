@@ -3201,8 +3201,10 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     ``FIX_PERF_ROUND2_2026_08_10.md`` sec 2, which reports the relative L2 of
     this function's own output at the shipped shapes and the end-to-end
     readout-field delta.  A caller that needs the historical pocketfft bits can
-    pin them with ``set_use_pyfftw(False)`` + ``set_use_scipy_fft(False)``,
-    which routes the dispatcher back to ``numpy.fft``.
+    pin them by setting ``fft_infra.USE_PYFFTW = False`` and
+    ``fft_infra.USE_SCIPY_FFT = False``, which routes the dispatcher back to
+    ``numpy.fft`` -- and which is this change's own fail-before switch
+    (``test_niche_perf_round2_2026_08_10.py`` requires BYTE-identity there).
 
     BUFFER OWNERSHIP.  ``_fft2`` / ``_ifft2`` may hand back one of the plan
     cache's ping-pong workspaces (see their docstrings).  Both results here are
