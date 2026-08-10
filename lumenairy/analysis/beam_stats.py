@@ -64,11 +64,43 @@ _MESHGRID_CACHE: "OrderedDict[tuple, tuple]" = OrderedDict()
 _MESHGRID_CACHE_SIZE = 8
 _MESHGRID_LOCK = threading.Lock()
 
+# v5.33.3 BYTE CAPS (VERIFY_PERF_BRANCH_2026_08_10 sec 5, class B).  The count
+# cap above was the ONLY bound, and ONE entry is a TUPLE OF TWO full ``(Ny,
+# Nx)`` float64 grids -- i.e. it scales with the CALLER's grid, not with
+# anything this module controls.  At ``N = 16384`` one entry is 2 x 2.147 GB
+# and eight of them are **34.4 GB**, retained in a module global for as long
+# as the process lives.  That is the same ``np.meshgrid`` full-grid
+# materialisation ``_lens_traced``'s exit assembly was rewritten to stop
+# building, kept here deliberately -- so it gets the same bound the library
+# already applies to every other grid-sized cache
+# (``fft_infra._H_CACHE_MAX_BYTES_PER_ENTRY`` / ``_MAX_TOTAL_BYTES``, and
+# ``_bluestein._H_FFT_CACHE_*`` since v5.33.2).
+#
+# The numbers are those caches', deliberately.  This is a cache: no accuracy
+# consequence either way, the grid is rebuilt on the next miss, and the whole
+# win it exists for (a 21-plane through-focus scan reusing one build) happens
+# at grid sizes three orders under the cap -- 2 x 1024^2 float64 is 16.8 MB.
+# The cap binds at ``Ny * Nx >= 1.25e8``, i.e. N >= 11181 square.
+_MESHGRID_CACHE_MAX_BYTES_PER_ENTRY = 2 * 1024 * 1024 * 1024   # 2 GB
+_MESHGRID_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
+
+
+def _meshgrid_entry_bytes(entry) -> int:
+    """Bytes one cache entry (the ``(X, Y)`` tuple) retains."""
+    return int(sum(int(getattr(a, 'nbytes', 0)) for a in entry))
+
 
 def clear_meshgrid_cache() -> None:
     """Drop every cached centred coordinate grid (S5-8e)."""
     with _MESHGRID_LOCK:
         _MESHGRID_CACHE.clear()
+
+
+def meshgrid_cache_bytes() -> int:
+    """Total bytes currently retained by the centred-grid cache."""
+    with _MESHGRID_LOCK:
+        return int(sum(_meshgrid_entry_bytes(v)
+                       for v in _MESHGRID_CACHE.values()))
 
 
 # Enroll with the central cache-clearer registry (late-binding lambda, mirroring
@@ -106,11 +138,21 @@ def _centered_meshgrid(xp, Ny, Nx, dx, dy):
         x = (np.arange(Nx) - Nx / 2) * dx
         y = (np.arange(Ny) - Ny / 2) * dy
         grid = tuple(np.meshgrid(x, y))
+        # Size test FIRST -- an over-cap entry is never inserted, so the cap
+        # avoids the retention instead of converting it into an eviction.
+        if _meshgrid_entry_bytes(grid) > int(_MESHGRID_CACHE_MAX_BYTES_PER_ENTRY):
+            return grid
         with _MESHGRID_LOCK:
             _MESHGRID_CACHE[key] = grid
             _MESHGRID_CACHE.move_to_end(key)
-            while len(_MESHGRID_CACHE) > _MESHGRID_CACHE_SIZE:
-                _MESHGRID_CACHE.popitem(last=False)
+            total = sum(_meshgrid_entry_bytes(v)
+                        for v in _MESHGRID_CACHE.values())
+            while (len(_MESHGRID_CACHE) > _MESHGRID_CACHE_SIZE
+                   or total > int(_MESHGRID_CACHE_MAX_TOTAL_BYTES)):
+                if len(_MESHGRID_CACHE) <= 1:
+                    break
+                _, dropped = _MESHGRID_CACHE.popitem(last=False)
+                total -= _meshgrid_entry_bytes(dropped)
         return grid
     x = (xp.arange(Nx) - Nx / 2) * dx
     y = (xp.arange(Ny) - Ny / 2) * dy

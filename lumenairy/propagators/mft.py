@@ -183,6 +183,7 @@ def angular_spectrum_propagate_mft(
     centre_out: Tuple[float, float] = (0.0, 0.0),
     bandlimit: bool = True,
     use_gpu: bool = False,
+    _bluestein_separable: bool = False,
 ) -> np.ndarray:
     """Exact Angular Spectrum Method propagation onto an arbitrary
     user-specified output grid.
@@ -265,6 +266,21 @@ def angular_spectrum_propagate_mft(
         ``N_in * d_in``; beyond that the extra samples are periodic
         REPLICAS, not new information (v5.30, audit P11).  The same-grid
         call sits exactly on one period and is silent.
+
+    Other Parameters
+    ----------------
+    _bluestein_separable : bool, default False
+        PRIVATE (v5.33.2, audit ``AUDIT_TRACED_MEMORY_2026_08_09`` row 6).
+        Evaluate the Bluestein step as two 1-D chirp-Z passes instead of one
+        2-D convolution: the same sum, ``(N_in x L)`` working arrays instead
+        of ``L^2``, MEASURED 61-70 % lower transform peak and 2.4-6.7x faster,
+        at a cost of round-off-class difference (rel L2 <= 9.1e-16, power
+        ratio 1.000000000000) because the association order changes.  NOT
+        byte-identical, hence private and default-off here; the exact-readout
+        consumer
+        (:func:`~lumenairy.propagators.carrier.carrier_referenced_exact_focus_readout`)
+        turns it on through its own default-ON module flag.  Ignored on
+        non-NumPy backends.  Not part of the public contract.
 
     See also
     --------
@@ -456,6 +472,7 @@ def angular_spectrum_propagate_mft(
         k_centre_out_y=kc_y,
         sign=+1, xp=xp, fft2=fft2, ifft2=ifft2,
         target_cdtype=target_cdtype,
+        separable=bool(_bluestein_separable),
     )
 
     norm = target_cdtype.type(1.0 / (Nx_in * Ny_in))

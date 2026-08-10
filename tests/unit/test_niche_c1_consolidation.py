@@ -1004,12 +1004,19 @@ def test_the_focus_readout_whitelist_is_exactly_what_the_chain_consumes():
     assert _FOCUS_READOUT_KEYS == (
         {'dx_out', 'N_out', 'centre_out'} | set(_OUTPUT_GRID_PASSTHROUGH))
     assert {'on_readout_window', 'readout_window_tol', 'window_factor',
-            'n_fine_cap', 'bandlimit', 'standoff'} <= _FOCUS_READOUT_KEYS
+            'n_fine_cap', 'on_n_fine_cap', 'bandlimit',
+            'standoff'} <= _FOCUS_READOUT_KEYS
     sample = {'dx_out': 0.2e-6, 'N_out': 64, 'centre_out': (0.0, 0.0),
               'standoff': 1e-4, 'bandlimit': True, 'window_factor': 6.0,
               'n_fine_cap': 512, 'max_fine_launch_points': 512,
               'ram_budget': None, 'dx_fine': None, 'N_fine': None,
               'on_readout_window': 'ignore', 'readout_window_tol': 1e-3,
+              # v5.33.2 (AUDIT_TRACED_MEMORY_2026_08_09 row 10): ``n_fine_cap``
+              # now caps the exact READOUT's internal grid too, so its
+              # disposition knob reaches the chain through the same whitelist.
+              # This fixture's final leg is paraxial, so the key is DROPPED by
+              # ``_par_kw`` -- which is the other half of the contract.
+              'on_n_fine_cap': 'warn',
               # D3 (2026-08-06): the readouts' own replica guard reaches the
               # chain through the same whitelist.  'ignore' here because this
               # fixture's window is wider than one period and the subject of

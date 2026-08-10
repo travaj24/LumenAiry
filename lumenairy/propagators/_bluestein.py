@@ -74,6 +74,31 @@ _H_FFT_CACHE_MAXSIZE = 16
 _H_FFT_CACHE_LOCK = threading.Lock()
 _H_FFT_CACHE_HITS = 0
 
+# v5.33.2 BYTE CAPS (audit AUDIT_TRACED_MEMORY_2026_08_09 row 7).  The count
+# cap above was the ONLY bound, and one entry is ``L^2`` complex128 with
+# ``L = next_fast_len(N_in + N_out - 1)`` -- i.e. it scales with the CALLER's
+# grid, not with anything this module controls.  MEASURED at design 121's
+# shipped readout shapes: ``N_fine`` 8192 / ``N_out`` 1024 -> ``L`` = 9216 ->
+# **1.359 GB per entry, 21.7 GB across the 16**; at ``window_factor`` 7 the
+# same geometry gives ``L`` = 17424 -> 4.858 GB per entry and **77.7 GB**.
+#
+# And on a fan that memory buys nothing.  The key carries ``alpha =
+# dx_out/(N_in*dx_in)``, and ``dx_in = dx_fine`` differs per congruence (C-2
+# measured per-order readout periods 4734.6..4738.3 um, a 0.08 % spread), so
+# every order writes a NEW entry and hits NONE: ``hits = 0`` measured after a
+# full production order, and reproduced directly with two orders whose alpha
+# differs in the 5th digit (2 entries, 0 hits).
+#
+# ``fft_infra._H_CACHE`` -- the ASM transfer-function cache two files away --
+# has carried exactly these two caps since 3.2.14.1, with a comment recording
+# the identical lesson ("At N=32768 each H is 16 GB complex128; without this
+# cap, an 8-entry cache can hold up to 128 GB").  The numbers here are that
+# cache's, deliberately: this is bringing a sibling cache up to a standard the
+# library already sets, not inventing a new policy.  A cache is a cache -- no
+# accuracy consequence either way, the entry is recomputed on the next miss.
+_H_FFT_CACHE_MAX_BYTES_PER_ENTRY = 2 * 1024 * 1024 * 1024   # 2 GB
+_H_FFT_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
+
 
 def _clear_h_fft_cache() -> None:
     """Drop every cached Bluestein chirp-kernel FFT."""
@@ -83,11 +108,128 @@ def _clear_h_fft_cache() -> None:
         _H_FFT_CACHE_HITS = 0
 
 
+def _h_fft_cache_bytes() -> int:
+    """Total bytes currently retained by the chirp-kernel FFT cache."""
+    with _H_FFT_CACHE_LOCK:
+        return int(sum(int(v.nbytes) for v in _H_FFT_CACHE.values()))
+
+
+def _h_fft_cache_store(cache_key, H_FFT) -> None:
+    """Store one chirp-kernel FFT under the count AND byte bounds.
+
+    Mirrors ``fft_infra._h_cache_store``: an entry larger than
+    ``_H_FFT_CACHE_MAX_BYTES_PER_ENTRY`` is NOT stored at all (the transform
+    still returns it -- only the retention is skipped), and after any store the
+    oldest entries are evicted until both the count and the total-bytes bounds
+    hold.  The globals are read at call time so a caller may retune them.
+
+    One deliberate difference from the sibling: eviction stops at ONE entry.
+    ``_h_cache_store`` will empty itself if a caller retunes the total cap
+    below a single entry's size, which turns the cache into pure overhead (it
+    stores, then immediately drops what it stored).  With the shipped caps
+    (2 GiB/entry inside 8 GiB total) neither can reach that state.
+
+    v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D3): the size test reads
+    ``H_FFT.nbytes`` and runs BEFORE the ``np.copy``, exactly as the sibling's
+    ``_entry_bytes(H)`` does.  The first cut copied first and rejected second,
+    which converted the retention the cap exists to avoid into an equally
+    large TRANSIENT for an entry that is thrown away one line later -- 4.86 GB
+    at the ``window_factor = 7`` geometry (``L = 17424``) the cap's own comment
+    works through, allocated on the run whose peak is the thing being
+    defended.  MEASURED with ``tracemalloc`` at a 1 B per-entry cap: retained
+    +0.000 MB either way, traced peak +67.109 MB before / +0.000 MB after.
+    """
+    if int(getattr(H_FFT, 'nbytes', 0)) > int(_H_FFT_CACHE_MAX_BYTES_PER_ENTRY):
+        return
+    H = np.copy(H_FFT)
+    with _H_FFT_CACHE_LOCK:
+        _H_FFT_CACHE[cache_key] = H
+        total = sum(int(v.nbytes) for v in _H_FFT_CACHE.values())
+        while (len(_H_FFT_CACHE) > int(_H_FFT_CACHE_MAXSIZE)
+               or total > int(_H_FFT_CACHE_MAX_TOTAL_BYTES)):
+            if len(_H_FFT_CACHE) <= 1:
+                break
+            _, dropped = _H_FFT_CACHE.popitem(last=False)
+            total -= int(dropped.nbytes)
+
+
 try:
     from .._cache_registry import register_cache_clearer as _register_cache_clearer
     _register_cache_clearer('bluestein_h_fft', _clear_h_fft_cache)
 except ImportError:
     pass
+
+
+def _fft_1d(a, axis=-1, inverse=False):
+    """1-D FFT along ``axis`` through the library's own NumPy-side dispatch.
+
+    Mirrors ``fft_infra._scipy_or_numpy_fft2``'s choice (SciPy's threaded
+    pocketfft when ``USE_SCIPY_FFT``, NumPy otherwise) so the separable
+    Bluestein path honours the same backend switches as every other
+    transform.  pyFFTW is not consulted: its cached plans are 2-D and a
+    1-D plan family would double the resident workspace this module's
+    separable path exists to remove.
+    """
+    from . import fft_infra as _fi
+    if _fi.USE_SCIPY_FFT and _fi.SCIPY_FFT_AVAILABLE:
+        fn = _fi._scipy_fft.ifft if inverse else _fi._scipy_fft.fft
+        return fn(a, axis=axis, workers=_fi.SCIPY_FFT_WORKERS)
+    fn = np.fft.ifft if inverse else np.fft.fft
+    return fn(a, axis=axis)
+
+
+def _bluestein_axis_1d(A, alpha, N_out, sign, target_cdtype, axis):
+    """One chirp-Z pass along ``axis``: ``N_in -> N_out`` at rate ``alpha``.
+
+    ``sum_n A[..., n] * exp(sign*2*pi*j*alpha*n*k)`` for ``k`` in
+    ``[0, N_out)``, by the same Bluestein identity :func:`_bluestein_2d`
+    uses -- pre-chirp, circular convolution with the folded kernel on
+    ``L = next_fast_len(N_in + N_out - 1)``, post-chirp.  Chirp signals are
+    built in float64 and cast to ``target_cdtype`` before multiplication,
+    exactly as the 2-D primitive does (this is what keeps the float32 path's
+    chirp phase from losing precision at large indices).
+
+    The largest array here is ``(rest x L)`` rather than ``(L x L)``, which
+    is the whole point: see :func:`_bluestein_2d`'s ``separable`` parameter.
+    """
+    A = np.moveaxis(A, axis, -1)
+    n_in = int(A.shape[-1])
+    N_out = int(N_out)
+    alpha = float(alpha)
+
+    n = np.arange(n_in, dtype=np.float64)
+    k = np.arange(N_out, dtype=np.float64)
+    pre = np.exp(1j * sign * np.pi * alpha * n * n).astype(target_cdtype,
+                                                           copy=False)
+    post = np.exp(1j * sign * np.pi * alpha * k * k).astype(target_cdtype,
+                                                            copy=False)
+    L = int(next_fast_len(int(n_in + N_out - 1)))
+    m_idx = np.arange(L, dtype=np.int64)
+    m_signed = np.where(m_idx < N_out, m_idx, m_idx - L).astype(np.float64)
+    h = np.exp(-1j * sign * np.pi * alpha * m_signed
+               * m_signed).astype(target_cdtype, copy=False)
+
+    g = np.zeros(A.shape[:-1] + (L,), dtype=target_cdtype)
+    g[..., :n_in] = A * pre
+    G = _fft_1d(g, axis=-1)
+    del g
+    # in-place: the kernel product is where a second (rest x L) array would
+    # otherwise appear, and (rest x L) is the whole point of this route.
+    G *= _fft_1d(h)
+    out = _fft_1d(G, axis=-1, inverse=True)[..., :N_out]
+    del G
+    out = out * post
+    if out.dtype != target_cdtype:
+        out = out.astype(target_cdtype)
+    return np.moveaxis(out, -1, axis)
+
+
+def _bluestein_2d_separable(E, alpha_x, alpha_y, N_out_y, N_out_x, *,
+                            sign, target_cdtype):
+    """:func:`_bluestein_2d` as two 1-D chirp-Z passes.  NumPy only."""
+    F = _bluestein_axis_1d(E, alpha_x, N_out_x, sign, target_cdtype, -1)
+    F = _bluestein_axis_1d(F, alpha_y, N_out_y, sign, target_cdtype, -2)
+    return F
 
 
 def _bluestein_2d(
@@ -102,6 +244,7 @@ def _bluestein_2d(
     fft2,
     ifft2,
     target_cdtype=None,
+    separable: bool = False,
 ):
     """2-D Bluestein chirp-Z transform.
 
@@ -143,6 +286,37 @@ def _bluestein_2d(
         ``None``.  Chirp signals are computed in float64 for accuracy
         and cast to ``target_cdtype`` before multiplication; this
         avoids float32 chirp-phase precision loss at large indices.
+    separable : bool, default False
+        Evaluate the SAME sum as two 1-D chirp-Z passes (v5.33.2, audit
+        ``AUDIT_TRACED_MEMORY_2026_08_09`` row 6) instead of one 2-D
+        convolution.  NumPy backends only -- with any other ``xp`` this is
+        ignored and the 2-D path runs, because the 1-D transforms would have
+        to be dispatched through a caller-supplied ``fft2`` that only does
+        two axes at once.
+
+        WHY IT EXISTS.  The 2-D path pads BOTH axes to
+        ``L = next_fast_len(N_in + N_out - 1)``, so every working array is
+        ``L^2`` -- and the transform is EXACTLY separable, which the code
+        already knows (it builds the kernel as ``h_y[:, None] * h_x[None, :]``).
+        Two 1-D passes give the same sum with a largest array of
+        ``(N_in x L)``, and they also drop the ``L^2`` chirp-kernel cache
+        entry: two length-``L`` vectors (0.15 MB) replace a 1.359 GB array at
+        design 121's shipped readout shape.  MEASURED on a tapered beam:
+
+        ======================  ==========  ==========  =========  =========
+        N_in / N_out (L)        2-D peak    sep. peak   rel L2     time
+        ======================  ==========  ==========  =========  =========
+        2048 / 256   (L=2304)   0.854 GB    0.255 GB    8.6e-16    0.15x
+        4096 / 1024  (L=5120)   3.412 GB    1.343 GB    9.1e-16    0.42x
+        ======================  ==========  ==========  =========  =========
+
+        ACCURACY: **not byte-identical** -- it is a different association
+        order for the same sum, so the difference is round-off:
+        ``rel L2 <= 9.1e-16``, ``max|delta|/max|F| 1.2e-15``, power ratio
+        1.000000000000.  Callers that pin bits must leave this False; that is
+        why it is opt-in here and why the one shipped consumer
+        (:func:`~lumenairy.propagators.carrier.carrier_referenced_exact_focus_readout`)
+        carries its own default-ON switch with the 2-D path one flag away.
 
     Returns
     -------
@@ -188,6 +362,15 @@ def _bluestein_2d(
             f"float64 precision limit (1e15-1e16).  Reduce N or alpha, "
             f"or fall back to a regular FFT propagator.",
             RuntimeWarning, stacklevel=2)
+
+    # ----- 0) separable route (v5.33.2) --------------------------------------
+    # Same sum, two 1-D passes, ``(N_in x L)`` instead of ``L^2``.  Taken
+    # AFTER the precision guard above so both routes warn identically, and
+    # only on NumPy (see the ``separable`` docstring entry).
+    if separable and xp is np:
+        return _bluestein_2d_separable(
+            E, alpha_x, alpha_y, N_out_y, N_out_x,
+            sign=sign, target_cdtype=target_cdtype)
 
     # ----- 1) Bluestein chirp signals (computed in float64 for accuracy) -----
     # Pre / post / kernel use the identity
@@ -279,10 +462,7 @@ def _bluestein_2d(
         h_2d = h_y[:, None] * h_x[None, :]
         H_FFT = fft2(h_2d)
         if cache_key is not None:
-            with _H_FFT_CACHE_LOCK:
-                _H_FFT_CACHE[cache_key] = np.copy(H_FFT)
-                while len(_H_FFT_CACHE) > _H_FFT_CACHE_MAXSIZE:
-                    _H_FFT_CACHE.popitem(last=False)
+            _h_fft_cache_store(cache_key, H_FFT)
     CONV  = ifft2(G_FFT * H_FFT)
 
     # ----- 6) Extract the first (N_out_y, N_out_x) block and apply post-chirp -----
@@ -313,6 +493,7 @@ def _bluestein_centred_2d(
     fft2,
     ifft2,
     target_cdtype=None,
+    separable: bool = False,
 ):
     """2-D Bluestein with centred input AND output index conventions.
 
@@ -350,8 +531,10 @@ def _bluestein_centred_2d(
         output centre.
     sign : int
         ``+1`` (inverse FT) or ``-1`` (forward FT).
-    xp, fft2, ifft2, target_cdtype
-        Same as :func:`_bluestein_2d`.
+    xp, fft2, ifft2, target_cdtype, separable
+        Same as :func:`_bluestein_2d`.  The centring corrections are
+        themselves separable (a pre-chirp in ``n``, a post-chirp in ``k`` and
+        a constant), so ``separable`` changes only the core primitive.
 
     Returns
     -------
@@ -414,7 +597,7 @@ def _bluestein_centred_2d(
     F_core = _bluestein_2d(
         E_mod, alpha_x, alpha_y, N_out_y, N_out_x,
         sign=sign, xp=xp, fft2=fft2, ifft2=ifft2,
-        target_cdtype=target_cdtype,
+        target_cdtype=target_cdtype, separable=separable,
     )
     F = F_core * (post_y[:, None] * post_x[None, :]) * const_c
     return F

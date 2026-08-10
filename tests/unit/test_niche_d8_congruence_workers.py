@@ -17,11 +17,20 @@ The fixtures here are deliberately tiny (a single thin-ish group, N=128) so the
 file runs in seconds: the property under test is scheduling equivalence, which
 is grid-size independent.  The physics is pinned elsewhere (niche D2/D6).
 """
+import warnings
+
 import numpy as np
 import pytest
 
 import lumenairy as la
 from lumenairy.propagators.carrier import (
+    _FINE_GRID_BASE_BYTES,
+    _FINE_GRID_MIN,
+    _FINE_GRID_RAM_FRAC,
+    _FINE_GRID_WORK_ARRAYS,
+    _fine_grid_ceiling,
+    _fine_grid_peak_bytes,
+    _memory_bounded_n_fine,
     _multi_apply_worker_state,
     _multi_capture_worker_state,
     _multi_looks_like_spawn_bootstrap,
@@ -291,6 +300,170 @@ def test_a_bigger_fine_grid_cap_costs_workers():
     big = _multi_resolve_workers(32, 32, (4096, 4096), 0.0, 'fn',
                                  n_fine_cap=16384)
     assert big <= small
+
+
+# --------------------------------------------------------------------------
+# v5.33.3 (docs/audits/FIX_PERF_PARALLEL_2026_08_10.md sec 3) -- ONE cost
+# model, and it is calibrated.
+# --------------------------------------------------------------------------
+# The failure this section exists for is a DISAGREEMENT, not a wrong number:
+# this clamp and ``_memory_bounded_n_fine`` each carried their own copy of the
+# per-grid arithmetic and drifted 4.59x apart (AUDIT_TRACED_SPEED_2026_08_09
+# sec 3.3), which is what let six workers be approved where one fitted.  Both
+# now call ``_fine_grid_peak_bytes`` / ``_fine_grid_ceiling``.
+
+#: MEASURED peak RSS on perf/traced-hotpath, sampled at 1 Hz with everything
+#: pinned (RN=1024 RS=4 NW=1 NOUT=8192 TILE=1024 WF=4.0 LEG=auto, an explicit
+#: ram_budget so the grid is the one asked for).  ``(label, n_fine, bytes)``.
+#: The CHILD rows are the ones this clamp actually has to bound -- they are a
+#: congruence worker's own peak, which is what an OOM is measured against, and
+#: they are only observable at k > 1.  Kept here so a future re-tune has to
+#: face them instead of re-deriving from a census.
+#:
+#: UNITS.  ``kladder_121.py`` reports its peaks in GiB under a field named
+#: ``peak_*_gb``; every byte value below is that number times 2**30.  Reading
+#: one of them as decimal GB is what made an independent verification report a
+#: 1.540x model/measured ratio at 4096 where the true ratio was 1.434
+#: (VERIFY_PERF_BRANCH_2026_08_10 D4) -- so the conversion is stated here and
+#: the raw GiB is carried in each label.
+#:
+#: v5.33.3 rows (docs/audits/FIX_VERIFY_PERF_2026_08_10.md sec 4): three fresh
+#: runs at 4096 and 8192, and -- new -- the 4096 WORKER CHILD, which nobody had
+#: measured and which is the SMALLEST peak in the set, i.e. the one the 1.5x
+#: bar is actually decided by.  At the pre-fix (20, 4.5 GB) the model read
+#: 1.476x that row.
+#:
+#: v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2) -- the
+#: ROWS BELOW ARE RE-MEASURED, and the v5.33.3 values they replace are carried
+#: in the comment column so the direction of each move is legible.  Every
+#: v5.33.3 row was taken BEFORE the round-2 items landed; round 2 moved this
+#: leg's footprint in both directions (-8.6 GB of coords transient at 16384,
+#: +1.05 GB of resident plan buffers everywhere), and the re-measurement is the
+#: only way to know which won at each grid.  It did not win the same way twice:
+#: the 4096 CHILD fell 2.6 % and the 8192 k=3 CHILD rose 2.9 %, which took the
+#: shipped (22, 2.6 GB) model UNDER that row at 0.995x -- an envelope that is
+#: not an upper bound, which is the OOM side of the trade.
+#:
+#: The set is seven rows where v5.33.3 had eleven: the dropped rows were
+#: re-runs and k-variants that all sat INSIDE the ones kept here.  Both ends
+#: (4096, 16384), both readings at the binding grid (whole process and worker
+#: child at two different k) and a reproducibility pair at 4096 are covered.
+_MEASURED_PEAK_BYTES = (
+    ('4096, 2 orders, whole process (6.574 GiB)', 4096, 7.059e9),        # 7.123
+    ('4096, 2 orders, whole process, re-run (6.603 GiB)', 4096, 7.090e9),  # 7.120
+    ('4096, 2 orders, largest CHILD at k=2 (6.296 GiB)', 4096, 6.760e9),  # 6.937
+    ('8192, 2 orders, whole process (22.927 GiB)', 8192, 24.618e9),      # 23.968
+    ('8192, 6 orders, largest CHILD at k=2 (24.377 GiB)', 8192, 26.175e9),  # 26.001
+    ('8192, 6 orders, largest CHILD at k=3 (24.901 GiB)', 8192, 26.737e9),  # 25.985
+    ('16384, 2 orders, whole process (81.887 GiB)', 16384, 87.925e9),    # 84.589
+)
+
+#: MEASURED peak of a PARAXIAL congruence worker -- ``(label, n_px, bytes)``.
+#: ``final_leg='paraxial'`` builds no fine grid, so nothing in
+#: ``_MEASURED_PEAK_BYTES`` constrains it, and until v5.33.3 it was priced with
+#: the exact leg's design-121-class floor anyway (VERIFY D5: 21 approved
+#: workers -> 1 on a 16 GB-free box).  Row 1 is the design-121 fan's own
+#: paraxial worker with the shipped tiled readout; the rest are one-process-
+#: per-point stand-ins that separate the floor from the input-grid term.
+_MEASURED_PARAXIAL_PEAK_BYTES = (
+    ('design-121 fan, largest CHILD at k=2 (1.093 GiB)', 1024 * 1024, 1.174e9),
+    ('stand-in worker, 128^2 input', 128 * 128, 0.435e9),
+    ('stand-in worker, 256^2 input', 256 * 256, 0.470e9),
+    ('stand-in worker, 512^2 input', 512 * 512, 0.571e9),
+    ('stand-in worker, 1024^2 input', 1024 * 1024, 0.951e9),
+)
+
+
+def test_the_cost_model_is_an_upper_bound_on_the_measured_peak():
+    """Under-pricing a worker is an OOM; over-pricing costs one worker.  The
+    model must therefore sit ABOVE every measured point -- and not by so much
+    that it is useless, which is what the 1.5x ceiling pins.  (The loosest
+    point is the SMALLEST grid, where the fixed floor dominates by
+    construction; that is the price of having a floor at all.)"""
+    for label, n_fine, meas in _MEASURED_PEAK_BYTES:
+        model = _fine_grid_peak_bytes(n_fine, n_px=1024 * 1024)
+        assert model >= meas, (
+            f"{label}: model {model / 1e9:.2f} GB UNDER the measured "
+            f"{meas / 1e9:.2f} GB -- the clamp would approve workers that "
+            f"do not fit")
+        assert model <= 1.5 * meas, (
+            f"{label}: model {model / 1e9:.2f} GB is "
+            f"{model / meas:.2f}x the measured peak; re-derive the constants "
+            f"(FIX_VERIFY_PERF_2026_08_10.md sec 4) rather than widening "
+            f"this bound")
+
+
+def test_the_cost_model_bounds_a_paraxial_worker_too():
+    """The same contract on the leg that builds no fine grid.  Only the LOWER
+    bound is a hard requirement here: a floor over-prices a small worker by
+    construction (2.3x at a 128^2 input), and that is the honest shape of a
+    floor rather than a modelling error -- but it must still bound the real
+    design-121 paraxial worker tightly, which is what row 1 pins at 1.17x."""
+    for label, n_px, meas in _MEASURED_PARAXIAL_PEAK_BYTES:
+        model = _fine_grid_peak_bytes(0, n_px=n_px)
+        assert model >= meas, (
+            f"{label}: paraxial model {model / 1e9:.3f} GB UNDER the measured "
+            f"{meas / 1e9:.3f} GB")
+    d121 = _MEASURED_PARAXIAL_PEAK_BYTES[0]
+    assert _fine_grid_peak_bytes(0, n_px=d121[1]) <= 1.5 * d121[2], (
+        "the paraxial floor has drifted away from the worker it was measured "
+        "on; re-measure it rather than widening this bound")
+
+
+def test_the_worker_clamp_and_the_grid_clamp_share_one_model():
+    """The worker price IS ``_fine_grid_peak_bytes``, not a second copy of it.
+
+    Pinned on the SOURCE rather than on an approved worker count: the count is
+    a function of live free memory, so asserting one would be a test that
+    passes or fails on what else the box is doing -- and a flaky guard test is
+    worse than none.  What has to hold is structural: one model, called."""
+    import inspect
+
+    body = inspect.getsource(_multi_resolve_workers)
+    assert '_fine_grid_peak_bytes(' in body, (
+        "the worker clamp must CALL the shared model")
+    assert '_FINE_GRID_WORK_ARRAYS' not in body, (
+        "the worker clamp is re-spelling the grid arithmetic instead of "
+        "calling _fine_grid_peak_bytes -- that is exactly how it and "
+        "_memory_bounded_n_fine drifted 4.59x apart")
+    # ... and the model it calls is the one the readout's own guard reports
+    assert '_fine_grid_peak_bytes(' in inspect.getsource(_memory_bounded_n_fine)
+
+
+def test_the_grid_ceiling_is_the_pure_form_of_the_ram_clamp():
+    """``_fine_grid_ceiling`` is what a caller uses to PROVE, before running,
+    that the clamp cannot bind.  If it disagreed with the clamp by one power
+    of two the proof would be worthless."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        for gb in (0.5, 2, 8, 32, 128, 512):
+            b = gb * 1e9
+            ceil = _fine_grid_ceiling(b)
+            assert _memory_bounded_n_fine(1 << 20, 'probe', ram_budget=b) \
+                == ceil
+            # the defining property: any request at or below the ceiling is
+            # returned untouched, so ceiling >= n_fine_cap PROVES no bind
+            assert _memory_bounded_n_fine(ceil, 'probe', ram_budget=b) == ceil
+    assert _fine_grid_ceiling(float('inf')) >= (1 << 20)
+
+
+def test_the_grid_ceiling_does_not_charge_the_process_floor():
+    """The floor is charged where k MULTIPLIES it, not to every caller of the
+    ceiling.  Charging it in both places would double-count the reserve and
+    collapse a small box to ``_FINE_GRID_MIN`` for a budget that holds a real
+    grid -- and this is the guard every unit-scale caller in the library
+    goes through."""
+    assert _FINE_GRID_BASE_BYTES > 0, "the floor is meant to be measured"
+    small = 4 * _FINE_GRID_BASE_BYTES        # a box the floor alone would sink
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        n = _memory_bounded_n_fine(1 << 20, 'probe', ram_budget=small)
+    assert n > _FINE_GRID_MIN, (
+        "the ceiling is charging the per-process floor; that belongs in "
+        "_fine_grid_peak_bytes only")
+    # and it really is the frac rule, unchanged
+    assert n == 2 ** int(np.floor(np.log2(np.sqrt(
+        _FINE_GRID_RAM_FRAC * small / (_FINE_GRID_WORK_ARRAYS * 16)))))
 
 
 # --------------------------------------------------------------------------

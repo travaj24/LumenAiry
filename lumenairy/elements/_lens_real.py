@@ -58,6 +58,55 @@ def _ensure_numexpr_loaded():
     return _ne is not None
 
 
+def _drop_numexpr_out_retention():
+    """Drop numexpr's per-thread reference to the last ``out=`` array.
+
+    v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D2).  ``numexpr.evaluate`` is
+    implemented as ``validate`` + ``re_evaluate``, and ``validate`` parks the
+    whole kwargs dict -- ``out`` INCLUDED -- in
+    ``numexpr.necompiler._numexpr_last`` so the replay has something to read.
+    That reference is thread-local and lives until the next ``evaluate`` on
+    the same thread, which on the traced route means "until the chain ends":
+    ``apply_real_lens`` is the last numexpr caller in the element, so the
+    field it returns stays reachable through numexpr long after the caller
+    has ``del``'d its only name for it.
+
+    MEASURED before this drain (weakref taken at the ``del`` line in
+    ``apply_real_lens_traced``): ``E_analytic`` -- a full-grid complex128,
+    4.295 GB at ``n_fine = 16384`` -- was STILL ALIVE at the element's
+    return, at the fine leg's return AND at the end of the chain, on the
+    ray_density + remap + lattice route design 121 ships.  Eleven other
+    ``del`` sites freed correctly; this one did not, and the frame census
+    could not see it because the census sums ``f_locals`` and the NAME is
+    gone.
+
+    Called immediately after every ``out=`` evaluate here, so the retention
+    never outlives the statement that created it.  Safe by construction:
+    ``evaluate`` is ``validate`` + ``re_evaluate`` and consumes the record
+    inside its own call, so clearing it afterwards cannot disturb a
+    computation in flight, and the library never calls ``re_evaluate``
+    itself (a later user call to it now raises instead of silently replaying
+    into a buffer this library owns -- which is the correct outcome, since
+    the "previous evaluate" it would replay is an internal phase screen).
+
+    ``.clear()`` and not ``del _numexpr_last.l``: since numexpr 2.11 the
+    record is a ``ContextDict`` whose payload lives in a ``contextvars``
+    ContextVar, so dropping the thread-local ATTRIBUTE leaves the array
+    reachable through the context (MEASURED: the weakref probe still read
+    STILL ALIVE, with the referrer still the same 4-key kwargs dict).
+    ``.clear()`` empties the ContextVar, and it is also correct for the
+    plain dict older numexpr used.  Best-effort: a numexpr whose internals
+    move again simply leaves the reference where it was.
+    """
+    try:
+        from numexpr import necompiler as _nc
+        rec = getattr(_nc._numexpr_last, 'l', None)
+        if rec is not None:
+            rec.clear()
+    except (ImportError, AttributeError, TypeError):  # pragma: no cover - numexpr detail
+        pass
+
+
 # Minimum field size at which the numexpr phase-screen path beats the straight
 # numpy multiply: the expression-compile + thread-dispatch overhead is fixed
 # while the benefit scales with the array size.  This is the ONLY live copy of
@@ -2840,6 +2889,7 @@ def apply_real_lens(
                     _ne.evaluate('Eb * exp(-1j * k0 * opd_b)',
                                  local_dict={'Eb': Eb, 'k0': k0, 'opd_b': opd_b},
                                  out=Eb)
+                    _drop_numexpr_out_retention()
                 else:
                     ph = np.exp(-1j * k0 * opd_b)
                     if ph.dtype != E.dtype:
@@ -2967,6 +3017,7 @@ def apply_real_lens(
                         local_dict={'_Eb': _Eb, 'k0': k0, '_opd': opd},
                         out=_Eb,
                     )
+                    _drop_numexpr_out_retention()
                 else:
                     ph = xp.exp(-1j * k0 * opd)
                     if ph.dtype != E.dtype:
@@ -3309,6 +3360,9 @@ def apply_real_lens(
                 local_dict={'E': E, 'k0': k0, 'opd': opd},
                 out=E,
             )
+            # ...and drop numexpr's own reference to E, which otherwise
+            # outlives every ``del`` the caller writes (D2).
+            _drop_numexpr_out_retention()
         else:
             # Fallback for GPU (xp is cp) or small CPU arrays: compute
             # exp() in the array backend's precision, then cast back

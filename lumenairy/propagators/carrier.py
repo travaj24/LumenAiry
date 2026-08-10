@@ -3182,7 +3182,37 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     left to an incidental ``AssertionError``/broadcast error.  Both library
     call sites clamp ``n_crop`` to the grid, so this is a contract guard,
     not a behaviour change.
+
+    FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 1; AUDIT_TRACED_SPEED sec 5,
+    row 5 of its ranked table).  The transform pair below used to be RAW
+    ``np.fft.fft2`` / ``np.fft.ifft2``, i.e. single-threaded pocketfft, on the
+    one shape in the whole chain where it matters -- this function runs TWICE
+    per exact final leg at the FINE grid (retrace + readout), which is
+    8192-16384 square.  Every other transform in the library goes through the
+    :func:`_fft2` / :func:`_ifft2` dispatcher (pyFFTW with a cached plan and
+    ``FFTW_THREADS`` threads, scipy.fft next, numpy last), so this site was the
+    only large FFT paying a single core.  MEASURED on the design-121 fan order
+    at ``n_fine_cap=8192``: the raw-pocketfft leaves under this function were
+    2.51 % of the order's wall and the whole function 3.69 %.
+
+    ACCURACY.  This is NOT bit-identical -- pyFFTW and pocketfft are different
+    implementations of the same transform and differ at FFT round-off.  The
+    deviation is BOUNDED and MEASURED rather than asserted: see
+    ``FIX_PERF_ROUND2_2026_08_10.md`` sec 2, which reports the relative L2 of
+    this function's own output at the shipped shapes and the end-to-end
+    readout-field delta.  A caller that needs the historical pocketfft bits can
+    pin them by setting ``fft_infra.USE_PYFFTW = False`` and
+    ``fft_infra.USE_SCIPY_FFT = False``, which routes the dispatcher back to
+    ``numpy.fft`` -- and which is this change's own fail-before switch
+    (``test_niche_perf_round2_2026_08_10.py`` requires BYTE-identity there).
+
+    BUFFER OWNERSHIP.  ``_fft2`` / ``_ifft2`` may hand back one of the plan
+    cache's ping-pong workspaces (see their docstrings).  Both results here are
+    consumed by ``np.fft.fftshift``, which is ``np.roll`` and therefore always
+    allocates a fresh array, so nothing this function returns aliases a
+    workspace and no defensive copy is needed.
     """
+    from .fft_infra import _fft2, _ifft2
     env = np.asarray(env)
     n = env.shape[-1]
     n_crop = int(n_crop)
@@ -3200,7 +3230,17 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     if n_fine == n_crop:
         out = ec
     else:
-        F = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(ec)))
+        # DTYPE PARITY with the raw ``np.fft`` this replaced: numpy's FFT is
+        # double-only and returns complex128 for EVERY input dtype, while the
+        # dispatcher's pyFFTW / scipy backends preserve complex64.  Promote
+        # here so a non-complex128 caller keeps the historical output dtype
+        # instead of silently acquiring a narrower one (the shipped chain is
+        # complex128, where ``asarray`` is a no-op and no copy is made).
+        _ecs = np.fft.ifftshift(ec)
+        if _ecs.dtype != np.complex128:
+            _ecs = _ecs.astype(np.complex128)
+        F = np.fft.fftshift(_fft2(_ecs))
+        del _ecs
         if n_fine > n_crop:
             # Zero-pad the spectrum (exact band-limited upsample).
             pad = np.zeros((n_fine, n_fine), dtype=np.complex128)
@@ -3211,7 +3251,7 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
             # band-limited downsample -- k-space low-pass truncation).
             o = n_crop // 2 - n_fine // 2
             pad = F[o:o + n_fine, o:o + n_fine]
-        out = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(pad)))
+        out = np.fft.fftshift(_ifft2(np.fft.ifftshift(pad)))
         # Same value-preserving scale in both directions: numpy's ifft2
         # normalises by 1/(output size)^2, so re-gridding from n_crop to
         # n_fine samples over the SAME window needs (n_fine/n_crop)^2 to
@@ -3245,7 +3285,12 @@ def _crop_about_centre(env, dx, x0, y0, n_crop, where):
     from it; the user-visible guard for the same failure is that function's
     ``on_readout_window``, which measures the power the bound actually
     truncates.  An earlier revision described THIS raise as the protection,
-    which it was not -- the clamp was silent."""
+    which it was not -- the clamp was silent.
+
+    FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 4a): the sub-pixel shift this
+    delegates to :func:`_shift_envelope` now goes through the library's own
+    ``_fft2`` / ``_ifft2`` dispatcher, for exactly the reason
+    :func:`_fourier_upsample_crop` does -- see the note there."""
     e = np.asarray(env)
     n = e.shape[-1]
     n_crop = int(n_crop)
@@ -3708,22 +3753,387 @@ def _check_chain_entry_congruence(env, dx, wavelength, action,
 # MemoryError mid-propagation -- or worse, swaps for minutes.  These constants
 # turn that into a bounded, ANNOUNCED degradation.
 #
-# Peak working set is ~4 arrays of the fine grid at complex128: the
-# Fourier-upsample pad + its inverse transform, then the reconstructed field
-# alongside the exact-sphere phasor, then the Bluestein zoom's own workspace.
-_FINE_GRID_WORK_ARRAYS = 4
+# Peak working set, in complex128 arrays OF THE FINE GRID.
+#
+# v5.33.2 (docs/audits/AUDIT_TRACED_MEMORY_2026_08_09.md sec 2.3, 2.5 and
+# row 9): this was 4 -- "the Fourier-upsample pad + its inverse transform,
+# then the reconstructed field alongside the exact-sphere phasor, then the
+# Bluestein zoom's own workspace" -- and that model is 4.0x OPTIMISTIC.  The
+# leg does not hold four arrays.  MEASURED by a live big-ndarray census walked
+# from ``sys._current_frames()`` at the peak plateau of one design-121 order
+# (``RN=1024, RS=4, NFC=16384, WF=4.0, TILE=1024, DXO=0.2 um``, exact final
+# leg, serial Newton, ``set_max_ram(105)`` so the grid choice is
+# deterministic), at ``n_fine = 16384`` where one complex128 grid is 4.295 GB:
+#
+#   6 x 4.295 GB  complex128 (16384,16384)  _fine_trace_group_exit:
+#                   env_f, E_full, _ph, _cf, _rp, _xf
+#   5 x 4.295 GB  complex128 / float64      apply_real_lens_traced:
+#                   _unit, E_out, _coords, E_analytic, _rd_resid_map
+#  10 x 2.147 GB  float64   (16384,16384)   apply_real_lens_traced:
+#                   _pip_remap_W, _ard, _absE, _nan_rd, _a_rd, ard_map,
+#                   amp, _mag0, Y, X
+#   1 x 0.268 GB  bool      (16384,16384)   apply_real_lens_traced: valid
+#   --------------------------------------------------------------------
+#   69.26 GB owned across 23 live full-grid arrays
+#     = 69.26 / 4.295 = 16.1 complex128-equivalents IN FRAMES ALONE
+#      (21.9 including the resident pyFFTW plan buffers; 23.0 against the
+#       thread-free peak RSS of 98.85 GB, and 25.7 against the 110.55 GB
+#       instrumented peak the census itself was taken inside -- the audit's
+#       sec 4.5 observer artefact, which is why the frame-live count and not
+#       an RSS ratio is what this constant carries).
+#
+# The consequence of the old 4 is the point, and it is measured: with
+# ``frac = 0.5`` the 4-array model approves ``n_fine = 16384`` whenever
+# ~34.4 GB is free, and the run then touches 98.85 GB -- 2.9x -- leaving a
+# 137.4 GB box with 18.4 GB.  It also let ``_multi_resolve_workers`` approve
+# SIX congruence workers (~484 GB) on a 128 GB box at that cap
+# (AUDIT_TRACED_SPEED_2026_08_09.md sec 3.3).  The model being optimistic was
+# the only reason the single-order run completed; that is the absence of a
+# safety margin, not the presence of one.
+#
+# 16 was the FRAME-LIVE census rounded to an integer, deliberately NOT the
+# 21.9 that includes the plan buffers (those are process-global and shared
+# across the legs, so charging them per fine grid would double-count when two
+# grids of different size are sized in the same process).  Whoever re-measures
+# this: the census method is in the audit's sec 1 -- measure from OUTSIDE the
+# process, an in-process sampler thread inflates peak working set by up to
+# 2.5x on this workload.
+#
+# v5.33.3 (docs/audits/FIX_PERF_PARALLEL_2026_08_10.md sec 3) -- 16 -> 20,
+# RE-DERIVED FROM A SCALING MEASUREMENT rather than from a census, because a
+# census counts arrays at ONE grid and cannot separate what scales from what
+# does not.  Peak RSS of a design-121 order was sampled at 1 Hz over the whole
+# process at THREE fine grids on this branch, everything else pinned
+# (``RN=1024 RS=4 NW=1 DXO=0.2 um NOUT=8192 TILE=1024 WF=4.0 LEG=auto``,
+# ``ram_budget=inf`` so the grid choice is the one asked for):
+#
+#     n_fine    peak RSS      implied count at zero intercept
+#      4096      7.123 GB              26.5
+#      8192     23.968 GB              22.3
+#     16384     84.589 GB              19.7
+#
+# The count FALLS with the grid, which is the signature of a fixed cost, not
+# of a smaller array set; a straight line in ``n_fine ** 2`` fits all three to
+# within 3.5 % and gives slope 305.9 B/px = **19.1 complex128-equivalents**
+# and intercept **2.6 GB**.  Pairwise slopes are 18.8 / 19.2 / 20.9, so 20 is
+# the round-up, and ``_FINE_GRID_BASE_BYTES`` carries the intercept.
+#
+# The direction matters: the shipped 16 was 1.20x OPTIMISTIC on the term that
+# grows, which is the dangerous side of the trade -- ``_multi_resolve_workers``
+# priced a NFC=8192 worker at 17.55 GB against a MEASURED 24.97 GB and
+# approved FIVE workers on a box that holds three or four
+# (AUDIT_TRACED_SPEED_2026_08_09 sec 3.4).
+#
+# v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D4): 20 was the round-up of a
+# THREE-POINT, TWO-ORDER, WHOLE-PROCESS fit.  It is not the envelope the
+# clamp needs.  A congruence WORKER's own peak -- the quantity an OOM is
+# measured against, and the only one observable at k > 1 -- sits ABOVE that
+# line at 8192 (26.0 GB against the two-order 23.97), because a process's
+# leg-local caches grow with the orders it runs.  Bounding the child from a
+# 19.1-slope line therefore forced the INTERCEPT up (2.3 -> 4.5 GB), and an
+# intercept is exactly the wrong lever: it over-prices the small end, where
+# the whole peak IS the intercept.  At (20, 4.5 GB) the model read 1.476x the
+# 4096 worker child measured below -- inside the 1.5x bar this file's test
+# declares by 1.6 %, i.e. not reproducible.
+#
+# So the split is re-derived as what it actually is: a constrained UPPER-BOUND
+# ENVELOPE over EVERY measured point (whole-process AND worker-child,
+# two-order AND six-order, three grids), not a decomposition of where the
+# bytes go.  Slope 22 and floor 2.6 GB is the pair that minimises the worst
+# ratio subject to (a) bounding all eleven measured points, (b) keeping at
+# least 2 % of margin over the 8192 worker child -- the row the clamp is
+# actually decided by -- and (c) not pushing the 16384 price past what this
+# box's own pre-flight will approve for one worker.  The floor is the
+# three-grid fit's measured 2.3 GB intercept rounded up, and still clears the
+# 1.75 GB interpreter-plus-import commit the Newton pool measured
+# independently (``_lens_traced._NEWTON_WORKER_BASE_BYTES``).  Measured rows
+# and ratios: ``tests/unit/test_niche_d8_congruence_workers.py``'s
+# ``_MEASURED_PEAK_BYTES``; worst ratio 1.279 (was 1.476, on the 4096 child),
+# tightest bound 1.023 on the 8192 child (was 1.013).
+#
+# A steeper slope prices the small end better still (23 / 2.0 GB reads 1.232
+# worst) but takes ``n_fine = 16384`` from 97.5 GB to 101.2 GB per worker,
+# which is where the runners' pre-flight stops approving a SINGLE 16384 worker
+# on a ~105 GB-free box.  That trade was made deliberately and this is the
+# note that says so.
+#
+# v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2): 22 -> 24,
+# and the floor 2.6 -> 1.8 GB.  RE-MEASURED, not re-derived: every point the
+# (22, 2.6 GB) envelope was fitted to was taken BEFORE the round-2 items
+# landed, and round 2 moved this leg's footprint in BOTH directions -- it
+# removed a measured 8.6 GB coords transient at n_fine = 16384
+# (FIX_PERF_ROUND2 sec 3.2b) and it added ~1.05 GB of resident pyFFTW plan
+# buffers by routing two more call sites through the dispatcher (its sec 7.3).
+# Re-measured on the FINAL tree, same harness, same configuration:
+#
+#     n_fine   what                                was          now
+#      4096    2 orders, whole process           7.123 GB     7.059 GB
+#      4096    2 orders, whole process, re-run   7.120 GB     7.090 GB
+#      4096    2 orders, largest CHILD k=2       6.937 GB     6.760 GB
+#      8192    2 orders, whole process          23.968 GB    24.618 GB
+#      8192    6 orders, largest CHILD k=2      26.001 GB    26.175 GB
+#      8192    6 orders, largest CHILD k=3      25.985 GB    26.737 GB
+#     16384    2 orders, whole process          84.589 GB    87.925 GB
+#
+# **The shipped (22, 2.6 GB) split is UNDER the 8192 k=3 worker child on this
+# tree -- 26.591 modelled against 26.737 measured, 0.995x.**  It is not a loose
+# upper bound any more; it is not an upper bound.  That is the OOM side of the
+# trade, and it is why this moved rather than being left alone.
+#
+# The set did not move one way, which is what forced BOTH constants: the
+# small-end child FELL 2.6 % while the binding 8192 child ROSE 2.9 %.  A
+# 22-slope cannot absorb that pair -- bounding the k=3 child with 2 % of margin
+# at slope 22 needs a 2.9 GB floor, and that floor prices the 4096 child at
+# 1.35x, outside the 1.3x bar.  The feasible region starts at slope 23, and
+# (24, 1.8 GB) is the integer pair in it that minimises the worst ratio:
+# **worst 1.274, tightest 1.045**, an upper bound at all seven points.
+#
+# The floor is no longer carrying the child excess, and it is smaller for a
+# MEASURED reason: a least-squares line through the four whole-process points
+# now reads slope 320.5 B/px = 20.03 complex128-equivalents and intercept
+# 2.102 GB, i.e. a per-process floor of 2.102 - 0.369 = **1.733 GB** once the
+# ``_MULTI_WORKER_GRID_FACTOR`` term for that measurement's own 1024^2 input is
+# removed.  1.8 GB is that rounded up, and it still clears the 1.75 GB
+# interpreter-plus-import commit the Newton pool measured independently
+# (``_lens_traced._NEWTON_WORKER_BASE_BYTES``) -- by 50 MB, which is thin and
+# is stated rather than hidden.
+#
+# WHAT THE 16384 PRICE COSTS NOW, since the previous re-derivation refused a
+# steeper slope to protect it: 105.2 GB per worker, which this box's own
+# pre-flight does NOT approve out of ~94 GB free.  That constraint is
+# deliberately dropped, because the pre-flight no longer REFUSES an explicit
+# intent it cannot approve -- it warns and proceeds
+# (``validation/repro_traced_carrier_121/_grid_intent.py``).  Buying a cheaper
+# 16384 price with an envelope that under-prices a worker child is the trade
+# that was available and it is the wrong one: under-pricing is an OOM,
+# over-pricing is a warning an operator reads.
+#
+# ENVELOPE: measured on design 121's post-DOE chain with the EXACT final leg,
+# a 1024^2 input and the shipped separable-Bluestein readout, on this branch.
+# It is a property of that leg's array traffic and it has now moved on EVERY
+# round that touched the fine leg (items #6/#7, then round 2), so re-measure it
+# after any such change rather than trusting this number across one.
+# ``tests/unit/test_niche_p2_guards.py``'s cap ladder is ARITHMETIC on this
+# constant and asserts it first: re-derive the ladder when this moves.
+_FINE_GRID_WORK_ARRAYS = 24
 
 #: Default ``focus_readout['n_fine_cap']`` -- the count cap on the exact final
 #: leg's re-trace grid.  Named so the niche-D8 worker clamp can price a
 #: readout the caller did not size explicitly (it must assume the default,
 #: since that is what the readout will actually try to build).
 _FINE_GRID_DEFAULT_CAP = 16384
+
+# ---------------------------------------------------------------------------
+# Exact-readout Bluestein route (v5.33.2, AUDIT_TRACED_MEMORY_2026_08_09 row 6)
+# ---------------------------------------------------------------------------
+# The exact readout's final step is a band-limited ASM Bluestein zoom, and the
+# shipped 2-D primitive pads BOTH axes to ``L = next_fast_len(N_in + N_out -
+# 1)``, so every working array is ``L^2``.  MEASURED on the design-121
+# production order that step is a +10.604 GB transient and its chirp-kernel
+# cache entry is 1.359 GB with ZERO hits across a fan.  The transform is
+# exactly separable, and taking it as two 1-D chirp-Z passes measured
+# **61-70 % less transform peak and 2.4-6.7x faster** at rel L2 <= 9.1e-16 --
+# round-off class, but NOT byte-identical (a different association order for
+# the same sum).
+#
+# So it ships ON, with the shipped 2-D path exactly one flag away:
+#
+#     lumenairy.propagators.carrier._EXACT_READOUT_SEPARABLE_BLUESTEIN = False
+#
+# reverts this readout to the pre-v5.33.2 transform, which is the fail-before
+# switch every acceptance comparison in
+# ``docs/audits/FIX_PERF_CACHES_BLUESTEIN_2026_08_09.md`` is taken against.
+# ``_SHIPPED`` is the immutable source-declared default (the
+# ``_PYFFTW_AUTO_PROMOTE_SHIPPED`` pattern), so a pin can assert the shipped
+# contract without depending on what the current process last set.
+#
+# The flag is deliberately NOT plumbed into the other MFT propagators: their
+# consumers include byte-identity pins, and nothing measured says the win is
+# needed there.  ``angular_spectrum_propagate_mft``'s ``_bluestein_separable``
+# is private and default-off for the same reason.
+_EXACT_READOUT_SEPARABLE_BLUESTEIN_SHIPPED = True
+_EXACT_READOUT_SEPARABLE_BLUESTEIN = _EXACT_READOUT_SEPARABLE_BLUESTEIN_SHIPPED
 # Fraction of the RAM budget the fine grid may claim.  0.5 leaves room for the
 # caller's own field, the OS page cache and the FFT plan scratch.
 _FINE_GRID_RAM_FRAC = 0.5
 # Never degrade below this (a grid this small is useless but the caller asked
 # for a readout, so return something rather than raising).
 _FINE_GRID_MIN = 64
+
+# ---------------------------------------------------------------------------
+# The per-PROCESS floor that is NOT proportional to the fine grid
+# (docs/audits/FIX_PERF_PARALLEL_2026_08_10.md sec 3)
+# ---------------------------------------------------------------------------
+# ``_FINE_GRID_WORK_ARRAYS`` prices the part of the peak that scales with
+# ``n_fine ** 2``.  A process that runs one congruence also pays a FIXED cost
+# that no grid term can see -- the interpreter and the import graph, the
+# coarse-chain working set that is live across the exact leg, and the
+# process-global FFT/chirp caches the leg leaves behind.  Charging that to the
+# grid term makes the model wrong in both directions at once: too heavy at
+# small ``n_fine`` and too light at large ``n_fine``, which is exactly the
+# shape of the 4.59x mis-pricing AUDIT_TRACED_SPEED_2026_08_09 sec 3.3 found.
+#
+# MEASURED THREE TIMES.  The three-grid fit above intercepts at 2.635 GB,
+# less the 0.369 GB the ``_MULTI_WORKER_GRID_FACTOR`` term already charges for
+# that measurement's own 1024^2 input = 2.3 GB -- but that fit is over runs of
+# TWO orders in the PARENT.  A real congruence WORKER, which is what this
+# constant is for, was then sampled directly at k > 1 (six orders, NFC 8192):
+# largest single child **24.21 / 24.20 GiB = 26.0 GB**, i.e. above the
+# two-order line.  The difference is the leg's own process-global caches,
+# which grow with the number of orders a process runs.
+#
+# The first cut carried that difference entirely in this constant (4.5 GB),
+# which bought a bounded child at the price of a 1.476x over-price at
+# ``n_fine = 4096`` -- outside the 1.5x bar once the 4096 WORKER CHILD was
+# measured (6.94 GB; VERIFY_PERF_BRANCH_2026_08_10 D4).  The slope carries it
+# now (see ``_FINE_GRID_WORK_ARRAYS``), and this constant is back to the
+# process floor it names.  What is in it: the interpreter-plus-import commit,
+# the order table and chain-A output the process carries across chain B, and
+# the process-global FFT plan / chirp caches the leg leaves behind (byte-capped
+# since item #6, so they saturate rather than grow without bound).
+#
+# v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2): 2.6 ->
+# **1.8 GB**, re-measured on the final round-2 tree together with the slope.
+# The floor is MEASURED, not chosen: a least-squares line through the four
+# whole-process peaks (two at 4096, one at 8192, one at 16384) intercepts at
+# 2.102 GB, and removing the 0.369 GB the ``_MULTI_WORKER_GRID_FACTOR`` term
+# already charges for that measurement's own 1024^2 input leaves **1.733 GB**.
+# 1.8 GB is that rounded up.  It clears the 1.75 GB the Newton pool measured
+# independently for the interpreter plus the lumenairy import graph
+# (``_lens_traced._NEWTON_WORKER_BASE_BYTES``) by 50 MB -- thin, and said
+# plainly rather than rounded away, because two independent measurements of
+# the same physical quantity landing 3 % apart is the check working, not a
+# coincidence to lean on.
+#
+# NOTE the two errors point OPPOSITE ways and both are wanted: per-worker
+# peaks do NOT co-occur, so ``k * per_worker`` over-states the tree peak
+# (MEASURED at k=3: 72.6 GB of tree against 78.0 GB of summed child peaks),
+# while a single worker's own peak is what an OOM is measured against.
+# Bounding the child and over-stating the tree is the safe side of both.
+#
+# WHERE IT IS SPENT, and where it is NOT.  It is charged by
+# :func:`_fine_grid_peak_bytes` ON THE EXACT-LEG PATH ONLY, i.e. by
+# ``_multi_resolve_workers`` for a worker that will build a fine grid (k
+# copies of the floor exist at once, so k-way over-subscription is exactly the
+# failure it prevents) and by any harness that asks what such a run will cost.
+# It is deliberately NOT charged by :func:`_fine_grid_ceiling`: that rule
+# prices one process's GRID against ``_FINE_GRID_RAM_FRAC`` of the budget, and
+# the remaining fraction IS the allowance for this floor -- a measured claim
+# rather than a hope, since frac = 0.5 leaves ``budget/2`` for a 1.8 GB floor
+# and therefore covers it for any budget above ~3.6 GB.
+#
+# ENVELOPE: this is a design-121-CLASS congruence process WITH THE EXACT FINAL
+# LEG, not a universal python floor.  A caller whose non-grid working set is
+# bigger (a larger input grid is priced separately; a larger CACHE is not)
+# will exceed it.  ``final_leg='paraxial'`` is priced by
+# ``_PARAXIAL_BASE_BYTES`` below, because it was measured and it is different.
+_FINE_GRID_BASE_BYTES = 1.8e9
+
+# The PARAXIAL leg's own floor (VERIFY_PERF_BRANCH_2026_08_10 D5).
+# ---------------------------------------------------------------------------
+# ``_FINE_GRID_BASE_BYTES``'s envelope note says in as many words that it is a
+# design-121-class EXACT-leg figure.  The first cut charged it to every worker
+# anyway, including ``final_leg='paraxial'`` workers, whose whole point is
+# that no fine grid is built: on a box with 16 GB free that took a paraxial
+# multi-congruence run from 21 approved workers to ONE, on the strength of a
+# floor measured on a six-order exact-leg congruence.  A throughput
+# regression, not a wrong answer -- but exactly the shape the envelope note
+# exists to prevent.
+#
+# So the paraxial leg gets its own floor, and it is MEASURED, not assumed, on
+# BOTH ends of the range this clamp sees.
+#
+#   (a) a real design-121 PARAXIAL WORKER -- ``kladder_121.py`` at ``CW=2``,
+#       ``LEG=paraxial``, ``RN=1024 NOUT=8192 TILE=128 DXO=0.2 um``, i.e. the
+#       shipped tiled readout.  Largest single child **1.093 GiB = 1.174 GB**
+#       (whole process at k=1, which additionally holds the 8192^2 common-grid
+#       accumulator: 2.300 GiB = 2.470 GB).  Against a 0.369 GB grid term
+#       that is an implied floor of **0.805 GB**.
+#   (b) a fresh interpreter per point (one process = one worker) running the
+#       traced chain once at ``final_leg='paraxial'``, peak read BOTH as
+#       Windows' exact ``peak_wset`` and as a 20 Hz RSS sample:
+#
+#           N_in     peak     grid term    implied floor
+#            128    0.435 GB    0.006 GB       0.429 GB
+#            256    0.470 GB    0.023 GB       0.447 GB
+#            512    0.571 GB    0.092 GB       0.478 GB
+#           1024    0.951 GB    0.369 GB       0.582 GB
+#
+# 1.0 GB is (a) rounded up.  It bounds every point above -- 1.17x on the
+# design-121 worker, 1.44x at N=1024 on (b), 2.3x at N=128 where a floor
+# dominates by construction -- and it is 4.5x under the exact leg's, which is
+# the whole point.  It is deliberately NOT smaller: the same (b) measurement
+# puts the EXACT leg on the same stand-in at 0.51-1.68 GB, so the two legs'
+# floors are genuinely different quantities and this one is not merely the
+# interpreter.
+#
+# ENVELOPE, and it is narrower than the exact leg's: the paraxial readout's
+# cost scales with ``N_out``, which NO term in this model prices (the exact
+# leg's ``n_fine`` term dominates its readout, so the question never arose).
+# MEASURED on the same fan with the readout NOT tiled (``TILE=none``, so the
+# readout runs on the full 8192^2 common grid), a paraxial worker peaked at
+# **11.221 GB** -- ten times this floor, all of it the untiled readout.  The
+# shipped runners tile the readout (``readout_tile``), which is what keeps a
+# paraxial worker inside this floor; a caller who reads out an untiled
+# multi-thousand-pixel window will exceed it, and should size that window
+# itself.
+_PARAXIAL_BASE_BYTES = 1.0e9
+
+
+def _fine_grid_peak_bytes(n_fine, n_px=0, n_work=None):
+    """Peak working set one congruence holds, in bytes.
+
+    ONE model, two consumers: :func:`_multi_resolve_workers` prices a
+    congruence worker with it, and a harness that wants to know whether the
+    box can afford ``k`` of them calls it directly rather than re-deriving the
+    arithmetic (which is how the two clamps drifted apart before).
+
+    ``n_fine`` is the fine grid the exact final leg will run on -- pass 0 for
+    ``final_leg='paraxial'``, which builds no fine grid and therefore pays
+    ``_PARAXIAL_BASE_BYTES`` instead of the exact leg's much larger floor
+    (both MEASURED; see the two constants).  ``n_px`` is the INPUT grid's
+    pixel count, priced at ``_MULTI_WORKER_GRID_FACTOR`` on both paths.
+    """
+    n_work = _FINE_GRID_WORK_ARRAYS if n_work is None else float(n_work)
+    n_fine = float(n_fine)
+    base = _FINE_GRID_BASE_BYTES if n_fine > 0 else _PARAXIAL_BASE_BYTES
+    return (float(n_work) * 16.0 * n_fine ** 2
+            + _MULTI_WORKER_GRID_FACTOR * float(n_px) * 16.0
+            + base)
+
+
+def _fine_grid_ceiling(budget, n_work=None, frac=None):
+    """Largest fine grid the RAM clamp will approve for ``budget`` bytes.
+
+    The rule :func:`_memory_bounded_n_fine` applies, as a PURE FUNCTION of the
+    budget, so a caller can prove BEFORE a run that the clamp will not bind --
+    ``_fine_grid_ceiling(b) >= n_fine_cap`` means every request is honoured
+    exactly, because the leg asks for ``min(n_fine_req, n_fine_cap)``.  A
+    production runner that needs the grid it configured has no other way to
+    establish that without running the leg first and reading a warning it may
+    already have filtered.
+
+    ONLY the grid term is priced here, deliberately: ``frac`` IS this rule's
+    allowance for everything that is not the fine grid -- the interpreter, the
+    caller's own field, the FFT scratch -- so charging
+    ``_FINE_GRID_BASE_BYTES`` on top would count the same floor twice and, on
+    a small box, would refuse every grid down to ``_FINE_GRID_MIN`` for a
+    budget that comfortably holds one.  The per-PROCESS floor is priced where
+    it is multiplied instead: :func:`_multi_resolve_workers`, where k copies
+    of it exist at once.
+    """
+    n_work = _FINE_GRID_WORK_ARRAYS if n_work is None else float(n_work)
+    frac = _FINE_GRID_RAM_FRAC if frac is None else float(frac)
+    budget = float(budget)
+    if not np.isfinite(budget):
+        return 1 << 30                 # no ceiling; any request is honoured
+    allow = frac * max(budget, 0.0)
+    per_grid = float(n_work) * 16.0
+    n_max = int(np.floor(np.sqrt(max(allow, 0.0) / per_grid)))
+    # keep the power-of-two structure the FFT path wants
+    if n_max >= 2:
+        n_max = int(2 ** int(np.floor(np.log2(n_max))))
+    return max(n_max, _FINE_GRID_MIN)
 
 
 def _memory_bounded_n_fine(n_req, label, *, ram_budget=None,
@@ -3753,15 +4163,7 @@ def _memory_bounded_n_fine(n_req, label, *, ram_budget=None,
     budget = float(get_ram_budget() if ram_budget is None else ram_budget)
     if not np.isfinite(budget):
         return n_req
-    if not (budget > 0.0):
-        budget = 0.0
-    allow = frac * budget
-    per_grid = float(n_work) * 16.0
-    n_max = int(np.floor(np.sqrt(max(allow, 0.0) / per_grid)))
-    # keep the power-of-two structure the FFT path wants
-    if n_max >= 2:
-        n_max = int(2 ** int(np.floor(np.log2(n_max))))
-    n_max = max(n_max, _FINE_GRID_MIN)
+    n_max = _fine_grid_ceiling(budget, n_work=n_work, frac=frac)
     if n_req <= n_max:
         return n_req
     extra_msg = ''
@@ -3778,10 +4180,13 @@ def _memory_bounded_n_fine(n_req, label, *, ram_budget=None,
     _guard_dispose(
         on_ram_cap,
         f"{label}: the fine grid is MEMORY-LIMITED to {n_max}x{n_max} "
-        f"({format_bytes(n_work * n_max * n_max * 16)} peak working set).  The "
+        f"({format_bytes(_fine_grid_peak_bytes(n_max, n_work=n_work))} "
+        f"modelled process peak).  The "
         f"un-degraded requirement was {n_req}x{n_req} "
-        f"({format_bytes(n_work * n_req * n_req * 16)} at {n_work} complex128 "
-        f"working arrays), which exceeds {frac:.0%} of the "
+        f"({format_bytes(_fine_grid_peak_bytes(n_req, n_work=n_work))} at "
+        f"{n_work} complex128 work arrays plus a "
+        f"{format_bytes(_FINE_GRID_BASE_BYTES)} measured process floor), "
+        f"whose grid term alone exceeds {frac:.0%} of the "
         f"{format_bytes(int(budget))} RAM budget.  The result is a "
         f"RESOLUTION-LIMITED (non-converged) readout: the sampling below is "
         f"coarser than the physics asked for.{extra_msg}  Raise the budget "
@@ -3804,6 +4209,8 @@ def carrier_referenced_exact_focus_readout(
     N_out: int,
     dx_fine: Optional[float] = None,
     N_fine: Optional[int] = None,
+    n_fine_cap: Optional[int] = None,
+    on_n_fine_cap: str = 'warn',
     window_factor: float = 7.0,
     centre_out: Tuple[float, float] = (0.0, 0.0),
     bandlimit: bool = True,
@@ -3867,13 +4274,40 @@ def carrier_referenced_exact_focus_readout(
         of two that spans ``window_factor`` amplitude-radii of the beam at
         ``dx_fine``.
 
-        Either way the value is capped to the RAM budget (see ``ram_budget``):
-        the physics-driven default can demand 32768^2 complex128 = 16 GiB per
-        working array (measured, design-121 class), which used to die with a
-        ``MemoryError`` mid-propagation.  When the cap binds, a
-        ``RuntimeWarning`` names the un-degraded requirement and the result is
-        flagged as resolution-limited rather than silently returned as if it
-        were the requested resolution.
+        Either way the value is capped to ``n_fine_cap`` (a COUNT cap) and then
+        to the RAM budget (see ``ram_budget``): the physics-driven default can
+        demand 32768^2 complex128 = 16 GiB per working array (measured,
+        design-121 class), which used to die with a ``MemoryError``
+        mid-propagation.  When either cap binds, a ``RuntimeWarning`` names the
+        un-degraded requirement and the result is flagged as
+        resolution-limited rather than silently returned as if it were the
+        requested resolution.
+    n_fine_cap : int, optional
+        COUNT cap on the internal fine grid, in pixels per side -- the same cap
+        :func:`_fine_trace_group_exit` applies to the pre-readout re-trace,
+        applied BEFORE the ``ram_budget`` clamp.  Default ``None`` = no count
+        cap (the pre-v5.33.2 behaviour, byte-identical).
+
+        v5.33.2, audit ``AUDIT_TRACED_MEMORY_2026_08_09`` row 10 -- one of that
+        audit's two UNSAFE rows.  This grid's size is quadratic in
+        ``window_factor`` (its window is ``window_factor * w_exit``) and until
+        now NOTHING bounded it but the RAM clamp, whose cost model was 4.0x
+        optimistic.  MEASURED on the design-121 production order: ``wf = 4``
+        gives ``N_fine`` 8192 (4.295 GB/array) and ``wf = 7`` gives 16384 --
+        4x the memory for the same physics.  ``propagate_traced_carrier_chain``
+        forwards its ``focus_readout['n_fine_cap']`` (default 16384) here, so
+        the production path is bound by the number that already bounds its
+        re-trace leg; a DIRECT caller who passes nothing keeps the uncapped
+        behaviour.
+    on_n_fine_cap : {'warn', 'error', 'ignore'}, default 'warn'
+        Disposition when ``n_fine_cap`` BINDS.  ``'warn'`` degrades and
+        announces (naming the un-degraded requirement, the resulting
+        ``dx_fine`` against the exit sphere's Nyquist pitch, and the memory
+        either grid costs at the MEASURED work-array count); ``'error'``
+        raises a ``MemoryError`` so an unattended batch run fails loudly
+        instead of reporting a metric computed on a grid coarser than the
+        physics asked for; ``'ignore'`` caps silently.  Mirrors
+        ``on_ram_cap``, which disposes of the RAM clamp immediately below it.
     window_factor : float, default 7.0
         Fine-grid physical span in units of the beam amplitude radius
         (``_envelope_amp_radius``).  7 holds the beam to <1e-6 truncation.
@@ -3917,8 +4351,11 @@ def carrier_referenced_exact_focus_readout(
         AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4).  Default ``None`` =
         :func:`lumenairy.get_ram_budget` (which honours
         :func:`lumenairy.set_max_ram`).  ``N_fine`` is capped so the fine grid's
-        peak working set (4 complex128 arrays) stays within 50% of it; when the
-        cap binds a ``RuntimeWarning`` states that the readout is
+        peak working set (``_FINE_GRID_WORK_ARRAYS`` = 24 complex128 arrays,
+        the MEASURED envelope -- see that constant, and do not re-type the
+        number here: this docstring read 16 for two re-measurements after the
+        constant moved) stays within 50% of it; when
+        the cap binds a ``RuntimeWarning`` states that the readout is
         resolution-limited and what the un-degraded requirement was.  Pass
         ``float('inf')`` to disable the cap (pre-v5.29 behaviour: a hard
         ``MemoryError`` when the physics asks for more than the box has).
@@ -4013,6 +4450,19 @@ def carrier_referenced_exact_focus_readout(
         ``readout_period`` in its stages and
         :func:`propagate_traced_carrier_chain_multi` refuses a per-congruence
         window that exceeds it (niche D2).  Not part of the public contract.
+
+    Notes
+    -----
+    v5.33.2: the final Bluestein zoom runs SEPARABLY by default (two 1-D
+    chirp-Z passes rather than one 2-D convolution padded to ``L^2`` on both
+    axes) -- MEASURED 61-70 % less transform peak and 2.4-6.7x faster, at a
+    round-off-class difference (rel L2 <= 9.1e-16, power ratio
+    1.000000000000) because the association order of the same sum changes.
+    Everything the readout REPORTS is unchanged: the Bluestein period, the
+    replica guard and its chief-ray-residual (V3) semantics are computed
+    before the transform and are untouched by the route.  Set
+    ``lumenairy.propagators.carrier._EXACT_READOUT_SEPARABLE_BLUESTEIN =
+    False`` for the pre-v5.33.2 transform.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_full, 'carrier_referenced_exact_focus_readout',
@@ -4037,6 +4487,14 @@ def carrier_referenced_exact_focus_readout(
     # cannot ride all the way through the fine trace before being noticed.
     _check_guard_action('on_replica', on_replica,
                         'carrier_referenced_exact_focus_readout')
+    _check_guard_action('on_n_fine_cap', on_n_fine_cap,
+                        'carrier_referenced_exact_focus_readout')
+    if n_fine_cap is not None:
+        n_fine_cap = int(n_fine_cap)
+        if n_fine_cap < 2:
+            raise ValueError(
+                "carrier_referenced_exact_focus_readout: n_fine_cap must be "
+                f">= 2 (or None for no count cap), got {n_fine_cap!r}.")
     if not (np.isfinite(readout_window_tol) and readout_window_tol >= 0.0):
         raise ValueError(
             "carrier_referenced_exact_focus_readout: readout_window_tol must "
@@ -4169,12 +4627,70 @@ def carrier_referenced_exact_focus_readout(
     if N_fine is None:
         N_fine = int(2 ** int(np.ceil(np.log2(max(win / dx_fine, n_crop)))))
     N_fine = int(N_fine)
+    _na_ny = (min(max(w_amp / abs(R), 0.02), 0.95)
+              if (np.isfinite(R) and R != 0.0 and w_amp > 0.0) else 0.1)
+    # v5.33.2 (AUDIT_TRACED_MEMORY_2026_08_09 row 10, one of the audit's two
+    # UNSAFE rows): the COUNT cap the re-trace leg has always honoured, applied
+    # here too and BEFORE the RAM clamp -- the same order as
+    # ``_fine_trace_group_exit`` (``min(n_fine_req, n_fine_cap)`` then
+    # ``_memory_bounded_n_fine``).
+    #
+    # Until now this grid had no count cap at all.  Its sizing is quadratic in
+    # ``window_factor`` (the window is ``window_factor * w_exit``), so the ONLY
+    # thing between it and an OOM was the RAM clamp -- whose cost model was
+    # itself 4.0x optimistic (see ``_FINE_GRID_WORK_ARRAYS``).  MEASURED on the
+    # design-121 production order: ``wf = 4`` lands N_fine = 8192 (4.295 GB per
+    # working array) and ``wf = 7`` lands 16384, i.e. 4x the readout's memory
+    # for the same physics, with nothing bounding it.  The exposure was latent
+    # rather than realised at the two configurations the audit measured, which
+    # is an argument for capping the dimension, not for assuming it is safe.
+    #
+    # Default None = NO count cap, i.e. byte-identical to every pre-v5.33.2
+    # direct call.  ``propagate_traced_carrier_chain`` forwards its
+    # ``focus_readout['n_fine_cap']`` (default 16384) so the PRODUCTION path --
+    # the one the audit measured -- is bound by the same number that already
+    # bounds its re-trace leg.
+    if n_fine_cap is not None and N_fine > n_fine_cap:
+        _dxc = win / float(n_fine_cap)
+        _ny_dx = wavelength / (2.0 * _na_ny)
+        _guard_dispose(
+            on_n_fine_cap,
+            f"carrier_referenced_exact_focus_readout: the readout's internal "
+            f"fine grid is COUNT-LIMITED to {n_fine_cap}x{n_fine_cap} by "
+            f"n_fine_cap.  The un-degraded requirement was "
+            f"{N_fine}x{N_fine} -- the {win * 1e3:.4f} mm window "
+            f"(window_factor={float(window_factor)} x exit beam radius "
+            f"{w_amp * 1e6:.4f} um) at "
+            f"dx_fine={win / float(N_fine) * 1e6:.4f} um -- so "
+            f"the readout runs at dx_fine={_dxc * 1e6:.4f} um instead"
+            + (f", COARSER than the exit sphere's Nyquist pitch "
+               f"lambda/(2*NA)={_ny_dx * 1e6:.4f} um at NA={_na_ny:.4f}: every "
+               f"spatial frequency above NA={wavelength / (2.0 * _dxc):.4f} is "
+               f"silently DISCARDED (the bandlimit masks the aliased corner), "
+               f"so the returned spot is RESOLUTION-LIMITED (non-converged) "
+               f"and its peak, FWHM and encircled energy are all computed on a "
+               f"grid coarser than the physics asked for"
+               if _dxc > _ny_dx else
+               f", which still Nyquist-samples the sphere "
+               f"(lambda/(2*NA)={_ny_dx * 1e6:.4f} um at NA={_na_ny:.4f}), so "
+               f"this costs window sampling margin rather than NA")
+            + f".  Memory: the un-degraded grid is "
+              f"{_FINE_GRID_WORK_ARRAYS * N_fine * N_fine * 16 / 1e9:.1f} GB of "
+              f"peak working set at {_FINE_GRID_WORK_ARRAYS} complex128 work "
+              f"arrays (MEASURED count), the capped one "
+              f"{_FINE_GRID_WORK_ARRAYS * n_fine_cap * n_fine_cap * 16 / 1e9:.1f}"
+              f" GB.  Remedies: raise n_fine_cap to {N_fine} (RAM permitting); "
+              f"shrink window_factor (currently {float(window_factor)}); or "
+              f"pass n_fine_cap=None for no count cap and let the RAM budget "
+              f"alone decide.  Pass on_n_fine_cap='error' to make this fatal "
+              f"in batch production, 'ignore' to accept the capped grid "
+              f"silently.",
+            exc=MemoryError, stacklevel=2)
+        N_fine = int(n_fine_cap)
     # P2 memory budget: cap the fine grid to what the RAM budget can hold and
     # SAY SO (the pre-v5.29 path died with a MemoryError at 32768^2 = 16 GiB per
     # array).  The Nyquist consequence of the coarser dx_fine is spelled out in
     # the warning, mirroring the F-D message in _fine_trace_group_exit.
-    _na_ny = (min(max(w_amp / abs(R), 0.02), 0.95)
-              if (np.isfinite(R) and R != 0.0 and w_amp > 0.0) else 0.1)
     N_fine = _memory_bounded_n_fine(
         N_fine, 'carrier_referenced_exact_focus_readout', ram_budget=ram_budget,
         window=win, nyquist_dx=wavelength / (2.0 * _na_ny),
@@ -4247,7 +4763,8 @@ def carrier_referenced_exact_focus_readout(
         stacklevel=2)
     return angular_spectrum_propagate_mft(
         E_fine, z, wavelength, dx_fine, dx_out, int(N_out),
-        centre_out=_co, bandlimit=bandlimit)
+        centre_out=_co, bandlimit=bandlimit,
+        _bluestein_separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN))
 
 
 # ===========================================================================
@@ -4591,16 +5108,41 @@ def _shift_envelope(env, sx, sy, dx):
     Exact for any band-limited envelope (the chain's envelopes are exactly
     that -- the carrier holds all the fast phase), and sub-pixel by
     construction, so the chief-ray offset is never quantised to the grid.
-    Periodic: callers must check the beam still fits (``_check_tilt_fits``)."""
+    Periodic: callers must check the beam still fits (``_check_tilt_fits``).
+
+    FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 4a).  The transform pair was
+    RAW ``np.fft``, i.e. single-threaded pocketfft, and it runs on the exact
+    leg's FINE grid through :func:`_crop_about_centre` -- MEASURED at 1.37 % of
+    a design-121 fan order's wall at ``n_fine_cap=8192``, which made it the
+    second-largest raw-``np.fft`` site after
+    :func:`_fourier_upsample_crop`.  Same dispatcher, same accuracy statement
+    (bounded at FFT round-off, NOT bit-identical -- see that function's note
+    and ``FIX_PERF_ROUND2_2026_08_10.md`` sec 5), and the same dtype-parity
+    promotion so a non-complex128 caller keeps the complex128 numpy's
+    double-only FFT always returned.
+
+    BUFFER OWNERSHIP: ``_fft2``'s result is consumed by the ``* ramp``
+    multiply (a fresh array) before any other FFT is issued, and ``_ifft2``'s
+    is handed to ``astype``/returned -- so the return value can alias a plan
+    workspace only when ``e`` is already complex128 AND ``astype(copy=False)``
+    elects not to copy.  It is copied explicitly for that case: this function's
+    callers hold the result across further transforms at the same shape."""
     e = np.asarray(env)
     if sx == 0.0 and sy == 0.0:
         return e.copy()
+    from .fft_infra import _fft2, _ifft2
     ny, nx = e.shape[-2], e.shape[-1]
     fx = np.fft.fftfreq(nx, d=dx)
     fy = np.fft.fftfreq(ny, d=dx)
     ramp = np.exp(-2j * np.pi * (fx[None, :] * sx + fy[:, None] * sy))
-    out = np.fft.ifft2(np.fft.fft2(e) * ramp)
-    return out.astype(e.dtype, copy=False) if np.iscomplexobj(e) else out
+    _e = e if e.dtype == np.complex128 else np.asarray(e, dtype=np.complex128)
+    out = _ifft2(_fft2(_e) * ramp)
+    if np.iscomplexobj(e):
+        # ``astype(copy=False)`` would return the dispatcher's own ping-pong
+        # workspace unchanged when the dtypes already match; copy so the
+        # caller owns its array (see BUFFER OWNERSHIP above).
+        return np.array(out, dtype=e.dtype, copy=True)
+    return np.array(out, copy=True)
 
 
 def _tilt_ramp(shape, dx, wavelength, L, M, x0, y0, sign):
@@ -6667,6 +7209,14 @@ def propagate_traced_carrier_chain(
           ``RuntimeWarning`` fires (F-D) with the discarded-NA magnitude.
           Raise this (RAM permitting) to resolve the full NA, or shrink
           ``window_factor`` instead.
+
+          v5.33.2 (audit AUDIT_TRACED_MEMORY_2026_08_09 row 10): this cap is
+          now forwarded to the EXACT READOUT's own internal fine grid as well
+          -- previously the chain bounded the re-trace leg and left the
+          readout's grid (whose window is quadratic in ``window_factor``)
+          bounded only by the RAM clamp.  Both grids therefore cap at the same
+          number, and ``on_n_fine_cap`` ({'warn', 'error', 'ignore'}, default
+          ``'warn'``) disposes of the readout-side bind.
         * ``max_fine_launch_points`` (int, default 4096) -- independent
           backstop on the re-trace's Newton/Chebyshev ray-fit grid size,
           in case the physical-pitch-preserving ``ray_subsample`` (F-C)
@@ -7606,7 +8156,16 @@ def propagate_traced_carrier_chain(
                 'dx_out', 'N_out', 'dx_fine', 'N_fine', 'window_factor',
                 'centre_out', 'bandlimit', 'ram_budget',
                 'on_readout_window', 'readout_window_tol',
-                'on_replica') if kk in fr}
+                'on_replica', 'on_n_fine_cap') if kk in fr}
+            # v5.33.2 (AUDIT_TRACED_MEMORY_2026_08_09 row 10): the readout's
+            # own fine grid gets the SAME count cap the re-trace leg above was
+            # just given -- eleven keys used to reach it and this was not one of
+            # them, so the chain bounded the leg's grid and left the readout's
+            # bounded only by the RAM clamp.  Passed explicitly (not via the
+            # ``if kk in fr`` comprehension) so the DEFAULT 16384 travels too:
+            # a focus_readout that names no cap still caps both grids at the
+            # same number, which is what makes the pair consistent.
+            exact_kw['n_fine_cap'] = int(fr.get('n_fine_cap', 16384))
             if _tilted:
                 # niche D6: the EXIT congruence -- the same closure the coarse
                 # path uses (``(x_c, L)`` is an ordinary paraxial ray through
@@ -7825,9 +8384,10 @@ def propagate_traced_carrier_chain(
                 "propagate_traced_carrier_chain: focus_readout must supply "
                 "'dx_out' and 'N_out'.")
         # Only the PARAXIAL readout's own kwargs: a caller who supplies the
-        # exact-path keys (``n_fine_cap`` / ``window_factor`` /
-        # ``max_fine_launch_points`` / ``dx_fine`` / ``N_fine`` /
-        # ``ram_budget``) and whose final leg then turns out to be low-NA used
+        # exact-path keys (``n_fine_cap`` / ``on_n_fine_cap`` /
+        # ``window_factor`` / ``max_fine_launch_points`` / ``dx_fine`` /
+        # ``N_fine`` / ``ram_budget``) and whose final leg then turns out to be
+        # low-NA used
         # to get a bare ``TypeError`` from here.  The exact-only keys are
         # inapplicable on this path, so drop them rather than crash.
         _par_kw = {kk: fr[kk] for kk in (
@@ -8042,7 +8602,14 @@ _CONGRUENCE_KEYS = frozenset({'field', 'carrier', 'weight', 'name',
 # ``centre_out`` are OWNED by the orchestrator (they define the common grid
 # and the per-congruence tile), so they are not forwarded from output_grid.
 _OUTPUT_GRID_PASSTHROUGH = ('standoff', 'bandlimit', 'window_factor',
-                            'n_fine_cap', 'max_fine_launch_points',
+                            'n_fine_cap',
+                            # v5.33.2: ``n_fine_cap`` now caps the READOUT's
+                            # internal grid as well as the re-trace leg's
+                            # (AUDIT_TRACED_MEMORY_2026_08_09 row 10), so its
+                            # disposition knob has to be reachable from the
+                            # same entry points the cap itself is.
+                            'on_n_fine_cap',
+                            'max_fine_launch_points',
                             'ram_budget', 'dx_fine', 'N_fine',
                             # niche C1 item 5: the readout-window guard's own
                             # message prescribes ``on_readout_window='warn'``
@@ -8593,18 +9160,26 @@ def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn,
     except (ImportError, AttributeError, OSError):
         return requested
     n_px = int(np.prod(shape0[-2:])) if len(shape0) >= 2 else 0
-    per_worker_b = _MULTI_WORKER_GRID_FACTOR * n_px * 16.0
     # The EXACT final leg's fine grid is a SECOND peak, on top of the chain
     # working set and live at the same time.  Sizing workers from the chain
     # alone is how 3 workers each correctly decided they could afford a
     # 16384^2 fine grid (17.2 GB) and then collectively asked for 123 GB of a
     # 127 GB box -- MEASURED on design 121's fan, which died with 'Unable to
     # allocate 4.00 GiB for an array with shape (16384, 16384)' while 97 GB
-    # still read free.  ``_FINE_GRID_WORK_ARRAYS * 16`` B/pixel is the
-    # readout's own model (see ``_memory_bounded_n_fine``).
-    if n_fine_cap:
-        per_worker_b += (_FINE_GRID_WORK_ARRAYS * 16.0
-                         * float(n_fine_cap) ** 2)
+    # still read free.
+    #
+    # ``_fine_grid_peak_bytes`` is the readout's OWN model (grid term + the
+    # per-process floor), called rather than re-spelled: pricing a worker with
+    # a second copy of the arithmetic is how this clamp and
+    # ``_memory_bounded_n_fine`` came to disagree by 4.59x once already
+    # (AUDIT_TRACED_SPEED_2026_08_09 sec 3.3).  ``n_fine_cap`` falsy =
+    # ``final_leg='paraxial'``, which builds no fine grid and is therefore
+    # priced with the MEASURED paraxial floor rather than the exact leg's --
+    # v5.33.3, VERIFY_PERF_BRANCH_2026_08_10 D5: charging the exact leg's
+    # design-121-class floor to a paraxial worker took a 16 GB-free box from
+    # 21 approved workers to one, against a paraxial worker MEASURED at
+    # 0.44-1.17 GB (1.17 being the design-121 fan's own, at k=2).
+    per_worker_b = _fine_grid_peak_bytes(int(n_fine_cap or 0), n_px=n_px)
     if per_worker_b <= 0:
         return requested
     allowed = int(max(1, (free_b - min_free_gb * 1e9) // per_worker_b))

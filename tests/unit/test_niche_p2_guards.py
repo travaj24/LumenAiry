@@ -29,9 +29,58 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.propagators.carrier import _FINE_GRID_MIN, _memory_bounded_n_fine
+from lumenairy.propagators.carrier import (
+    _FINE_GRID_MIN,
+    _FINE_GRID_WORK_ARRAYS,
+    _memory_bounded_n_fine,
+)
 
 _WL = 1.31e-6
+
+# ---------------------------------------------------------------------------
+# The cap ladder is ARITHMETIC ON ``_FINE_GRID_WORK_ARRAYS``, so it moves every
+# time that constant is re-measured:
+#
+#     cap(budget) = 2 ** floor(log2(floor(sqrt(
+#                       _FINE_GRID_RAM_FRAC * budget
+#                       / (_FINE_GRID_WORK_ARRAYS * 16)))))
+#
+# It has gone stale once already, silently: v5.33.2 re-measured the constant
+# from 4 to 16 complex128-equivalents (docs/audits/
+# FIX_PERF_CACHES_BLUESTEIN_2026_08_09.md sec 2.1) and left the ladder below
+# at its 4-array values, so this file was RED on the branch that shipped it
+# and said nothing about the guard it exists to pin.  The count is asserted
+# FIRST now, with the formula in the message, so the next re-measurement fails
+# with instructions instead of an unexplained 512 != 1024.
+#
+# v5.33.3 (docs/audits/FIX_VERIFY_PERF_2026_08_10.md sec 4): the constant moved
+# 20 -> 22 when the slope/floor split was re-derived as an upper-bound envelope
+# over the WORKER-CHILD peaks as well as the whole-process ones.  Every rung of
+# the ladder below was RE-DERIVED at 22 and every one is UNCHANGED -- the six
+# budgets sit far from a power-of-two boundary (e.g. 136 GiB gives
+# sqrt(0.5 * 146.03e9 / 352) = 14401 -> 8192, against 14846 -> 8192 at 20).
+# That is a fact about these six budgets, not a licence to skip the
+# re-derivation next time.
+#
+# v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2): 22 -> 24,
+# on a re-measurement of every peak on the final round-2 tree -- at 22 the
+# model came in UNDER the 8192 k=3 worker child (0.995x), i.e. it had stopped
+# being an upper bound.  The ladder was RE-DERIVED at 24, rung by rung, and
+# every one is again UNCHANGED: 136 GiB gives sqrt(0.5 * 146.03e9 / 384) =
+# 13789 -> 8192, and the other five sit at least 1.3x clear of their nearest
+# power-of-two boundary.  Two consecutive re-derivations that changed nothing
+# is exactly how a stale ladder gets shipped, so this assertion is what stops
+# the third one being skipped -- the rungs surviving is the OUTPUT of the
+# re-derivation, not a reason to omit it.
+_LADDER_WORK_ARRAYS = 24
+_LADDER = ((0.25, 512), (1, 1024), (4, 2048), (16, 4096), (34, 4096),
+           (136, 8192))
+_LADDER_WHY = (
+    "the cap ladder in this file was hand-computed at "
+    "_FINE_GRID_WORK_ARRAYS = %d and the shipped constant is now %d.  "
+    "Re-derive it: cap = 2**floor(log2(floor(sqrt(0.5 * budget / "
+    "(n_work * 16))))), and update _LADDER_WORK_ARRAYS with it."
+    % (_LADDER_WORK_ARRAYS, _FINE_GRID_WORK_ARRAYS))
 
 
 def _singlet(R1, R2, d, glass, ap, name='s'):
@@ -60,15 +109,14 @@ def _converging_field(N=1024, dx=2.0e-6, w=120e-6, R=-260e-6):
 # ===========================================================================
 def test_memory_cap_is_monotone_power_of_two_and_floored():
     """The cap grows with the budget, stays a power of two, never exceeds the
-    request, and never degrades below the floor.  Measured 2026-07-25 at 4
-    complex128 working arrays: 0.25 GB -> 1024, 1 GB -> 2048, 4 GB -> 4096,
-    16 GB -> 8192, 34 GB -> 16384 (the audit box, where the physics wanted
-    32768 = 64 GiB peak and the process died), 136 GB -> 32768."""
+    request, and never degrades below the floor.  The ladder is hand-computed
+    at the SHIPPED work-array count (see ``_LADDER`` above for the formula and
+    for why it is asserted rather than assumed)."""
+    assert _FINE_GRID_WORK_ARRAYS == _LADDER_WORK_ARRAYS, _LADDER_WHY
     prev = 0
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        for gb, expect in ((0.25, 1024), (1, 2048), (4, 4096), (16, 8192),
-                           (34, 16384), (136, 32768)):
+        for gb, expect in _LADDER:
             n = _memory_bounded_n_fine(1 << 20, 'probe',
                                        ram_budget=gb * 1024 ** 3)
             assert n == expect, (gb, n, expect)
@@ -89,11 +137,12 @@ def test_memory_cap_warning_names_the_undegraded_requirement():
     memory-limited, (b) the capped size, (c) the un-degraded requirement, and
     (d) that the result is resolution-limited / non-converged -- the whole
     point being that the degraded number is never silent."""
+    assert _FINE_GRID_WORK_ARRAYS == _LADDER_WORK_ARRAYS, _LADDER_WHY
     with pytest.warns(RuntimeWarning) as rec:
         n = _memory_bounded_n_fine(8192, 'probe', ram_budget=64 * 1024 ** 2)
-    assert n == 512
+    assert n == 256
     msg = ' '.join(str(rec[0].message).split())
-    for frag in ('MEMORY-LIMITED', '512x512', '8192x8192',
+    for frag in ('MEMORY-LIMITED', '256x256', '8192x8192',
                  'RESOLUTION-LIMITED', 'set_max_ram'):
         assert frag in msg, (frag, msg)
 

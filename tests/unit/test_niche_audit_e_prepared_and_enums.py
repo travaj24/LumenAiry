@@ -39,6 +39,7 @@ a docstring below is a MEASURED pre-fix / post-fix pair):
 from __future__ import annotations
 
 import copy
+import pickle
 import warnings
 
 import numpy as np
@@ -102,6 +103,49 @@ def restore_globals():
 _POOL_N = 512          # 512^2 = 262144 >= the module's 200k pool threshold
 _POOL_DX = 15e-6
 
+# THE WIRE SHAPE THIS SECTION READS, and why it needs a memo.
+#
+# E-H2's mechanism pin is "the RESOLVED cap travels in the pickled payload", so
+# the spy below has to read the cap out of what the parent actually submits.
+# That arg tuple has had two shapes:
+#
+#   historical            ``(knot_data, x_chunk, y_chunk)``
+#   FIX_PERF_ROUND2 item 3 ``(payload_key, blob_or_None, x_chunk, y_chunk)``
+#
+# In the second shape the payload is pickled ONCE per dispatch instead of once
+# per chunk, and ``blob is None`` means "the live workers already hold these
+# exact bytes under this key" -- the KEY alone crosses the wire.  The cap is
+# still in the pickled payload (that is exactly what the digest is taken over),
+# but a key-only dispatch does not RE-SHIP it, and the key that stands for a
+# given payload outlives any one ``_pool_run`` because the pool and the
+# parent's residency belief are module-global.  So the key -> cap memo has to
+# be module-global too; a per-run dict would go blind on the second dispatch of
+# an already-resident payload.  Only the cap is memoised, never the payload, so
+# this holds bytes rather than the ~2 MB of fit grids.
+_CAP_BY_PAYLOAD_KEY: dict = {}
+
+
+def _submitted_cap(args):
+    """The ``newton_max_iters`` in the payload one ``submit`` call ships.
+
+    Accepts both wire shapes above so this section pins the CAP, not the
+    packaging.  A key-only dispatch for a key whose bytes were never seen
+    returns a self-describing sentinel rather than raising, so a residency
+    regression shows up as a failure in the one test that asserts on caps
+    instead of an ERROR in every test the fixture feeds."""
+    head = args[0]
+    if isinstance(head, dict):
+        # Historical shape: the payload dict rode in every chunk's tuple.
+        return head.get('newton_max_iters', '<missing>')
+    key, blob = head, args[1]
+    assert isinstance(key, str) and key, f'unexpected payload key {key!r}'
+    if blob is not None:
+        assert isinstance(blob, (bytes, bytearray)), (
+            f'payload blob should be pickled bytes, got {type(blob).__name__}')
+        _CAP_BY_PAYLOAD_KEY[key] = pickle.loads(blob).get(
+            'newton_max_iters', '<missing>')
+    return _CAP_BY_PAYLOAD_KEY.get(key, f'<key-only, bytes unseen: {key}>')
+
 
 def _pool_run(iters, n_workers=None):
     """One ``newton_fit='spline'`` call big enough to engage the process pool.
@@ -120,7 +164,7 @@ def _pool_run(iters, n_workers=None):
             self._inner = inner
 
         def submit(self, fn, args, *a, **kw):
-            seen['caps'].append(args[0].get('newton_max_iters', '<missing>'))
+            seen['caps'].append(_submitted_cap(args))
             return self._inner.submit(fn, args, *a, **kw)
 
         def __getattr__(self, name):
@@ -270,6 +314,51 @@ def test_h2_worker_reads_the_cap_and_stays_backward_compatible():
     # No key -> the historical module default (12), byte-identical.
     assert np.array_equal(opl_default, opl_12)
     assert LT._NEWTON_MAX_ITERS == 12
+
+
+def test_h2_cap_reader_tracks_every_wire_shape_the_worker_accepts():
+    """Guard on the READER the pool pins above depend on.
+
+    ``_submitted_cap`` has to decode whatever ``_invert_newton_parallel``
+    submits; when FIX_PERF_ROUND2 item 3 replaced the embedded payload with
+    ``(key, blob_or_None, ...)`` the old reader called ``.get`` on the digest
+    STRING and every ``_pool_runs`` consumer died in setup.  This test fails
+    instead, by name, if the wire shape moves again -- and it needs no pool, so
+    it runs on a one-core box too.  Every shape here is one ``_newton_invert_
+    chunk`` accepts, and the blob is built by the library's own producer."""
+    n = 21
+    xs = np.linspace(-1e-3, 1e-3, n)
+    Xi, Yi = np.meshgrid(xs, xs, indexing='ij')
+    payload = {
+        'xs_in': xs,
+        'x_out_grid': Xi * (1.0 + 4.0e4 * (Xi ** 2 + Yi ** 2)),
+        'y_out_grid': Yi * (1.0 + 4.0e4 * (Xi ** 2 + Yi ** 2)),
+        'opl_grid': (Xi ** 2 + Yi ** 2) * 1.0e3,
+        'launch_radius': 1e-3, 'dx': 1e-7, 'bound': 0.999e-3,
+        'inv_M_x': 1.0, 'inv_M_y': 1.0, 'newton_max_iters': 7,
+    }
+    xq = np.array([6e-4, -6e-4, 3e-4])
+    yq = np.array([0.0, 2e-4, -3e-4])
+    key, blob = LT._newton_payload_blob(payload)
+    # Historical shape -- the payload dict itself.
+    assert _submitted_cap((payload, xq, yq)) == 7
+    # Round-2 shape, bytes attached: read out of the PICKLED payload.
+    assert _submitted_cap((key, blob, xq, yq)) == 7
+    # ...and the same bytes are what the worker runs, at that same cap.
+    assert LT._newton_invert_chunk((key, blob, xq.copy(), yq.copy()))[0].shape \
+        == xq.shape
+    # Key-only re-send: answered from the memo the blob above populated, which
+    # is the case a per-run cache would miss.
+    assert _submitted_cap((key, None, xq, yq)) == 7
+    # A key whose bytes were never seen degrades to a sentinel, not a raise:
+    # the fixture must not turn a residency regression into five setup ERRORs.
+    unseen = _submitted_cap(('00' * 16, None, xq, yq))
+    assert isinstance(unseen, str) and unseen.startswith('<key-only')
+    # A payload with no cap key at all (a pre-5.29.1 pickle) reads as missing
+    # rather than silently as the module default.
+    bare = {k: v for k, v in payload.items() if k != 'newton_max_iters'}
+    assert _submitted_cap((bare, xq, yq)) == '<missing>'
+    assert _submitted_cap(LT._newton_payload_blob(bare) + (xq, yq)) == '<missing>'
 
 
 # ===========================================================================

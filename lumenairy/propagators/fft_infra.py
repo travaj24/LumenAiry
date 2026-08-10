@@ -775,11 +775,14 @@ def set_fft_plan_cache_size(n: int) -> None:
 def get_fft_plan_cache_size() -> int:
     """Return the current maximum number of resident pyFFTW plans.
 
-    Each resident plan key holds a two-buffer ping-pong of aligned
+    Each resident plan key holds up to a two-buffer ping-pong of aligned
     full-grid workspaces, so this bounds the persistent FFT memory:
-    ``min(#distinct keys, size) * 2 * N*N*itemsize`` bytes.  The
-    estimator (:func:`lumenairy.estimate_sim_memory`) reads it to size
-    the ASM-step plan-buffer term."""
+    ``min(#distinct keys, size) * n_bufs * N*N*itemsize`` bytes, with
+    ``n_bufs`` 2 or 1 per :func:`_plan_entry_n_bufs` (v5.33.2: 1 above
+    :func:`get_fft_plan_max_bytes_per_buffer`, or whenever
+    :func:`set_fft_double_buffer` is off).  The estimator
+    (:func:`lumenairy.estimate_sim_memory`) reads both to size the ASM-step
+    plan-buffer term."""
     return int(_PYFFTW_PLAN_CACHE_SIZE)
 
 
@@ -791,6 +794,107 @@ def get_fft_plan_cache_size() -> int:
 # ``buf.copy()`` so results stay private -- byte-identical values, ~one extra
 # array copy per FFT (~1-3% of a large transform).
 _PYFFTW_DOUBLE_BUFFER = True
+
+# v5.33.2 PER-KEY BYTE CAP on the ping-pong (audit
+# AUDIT_TRACED_MEMORY_2026_08_09 rows 2 and 5.4).  ``_PYFFTW_DOUBLE_BUFFER``
+# above is an all-or-nothing process switch, and the plan cache had no byte
+# bound of any kind -- 8 KEYS, each holding TWO full-grid aligned workspaces,
+# priced only in KEYS.  MEASURED retained after ONE design-121 order:
+#
+#     fwd+inv @ 16384^2   17.18 GB
+#     fwd+inv @  9216^2    5.44 GB
+#     fwd     @  8192^2    2.15 GB
+#     ------------------  -------
+#                         24.77 GB, of which the SECOND buffer of each key
+#                         is 12.4 GB
+#
+# on a run whose thread-free peak was 98.85 GB of a 137.4 GB box.  This cap
+# bounds the RESIDENT bytes of ONE key: above it the entry is built with a
+# single buffer and the dispatchers hand back ``buf.copy()`` instead of the
+# live workspace -- exactly what ``set_fft_double_buffer(False)`` does
+# globally, which the library's own ``set_low_memory()`` classes in its SAFE
+# set ("all byte-identical to a default run -- memory/speed trade only").  The
+# VALUES are unchanged; the cost is one array copy per FFT, and only at the
+# shapes where the second buffer is worth gigabytes.
+#
+# The cap is PER WORKSPACE, which is ``_H_CACHE_MAX_BYTES_PER_ENTRY``'s
+# semantic (that cap bounds one ARRAY, and one workspace is the array here).
+#
+# 2 GB is where the MEASURED trade turns, and the trade is not the one this
+# module's v5.16.2 comment records.  That comment prices the single-buffer
+# copy at "~1-3% of a large transform"; measured on this box (complex128,
+# warm plan, best of 5):
+#
+#     N = 4096  (0.268 GB/buffer)   fft2 184 ms -> 160 ms    (no copy: still
+#                                                             double-buffered)
+#     N = 8192  (1.074 GB/buffer)   fft2 597 ms -> 985 ms    +388 ms, 1.65x
+#
+# i.e. the copy costs ~65 % of the transform at N = 8192, not 1-3 % -- it is a
+# ~2.8 GB/s first-touch page-fault cost, so it scales with the buffer and is
+# the SAME order as the FFT itself at every large shape.  A cap that bound at
+# 8192 would therefore tax the most common large shape in this library 1.65x
+# to buy 1.07 GB.  A cap of 2 GB binds at **N >= 11181** (11180^2 x 16 =
+# 1.99988e9, 11181^2 x 16 = 2.00024e9), i.e. in practice the 16384^2 family,
+# where the design-121 order does ~3 transforms and pays ~1.6 s of a ~900 s
+# order (0.2 %) -- 3 x the MEASURED +524.2 ms at 16384 -- to give back 8.59 GB
+# of a 98.85 GB peak (8.7 %).  Decimal 2e9 rather than 2 GiB deliberately:
+# 8192^2 complex128 is EXACTLY 1 GiB, so a power-of-two threshold would decide
+# a common shape on the direction of a ``<=``.  (2 GiB would instead bind at
+# N >= 11586, which is where this comment's own earlier binding figure came
+# from; the constant is decimal, so 11181 is the one that is true.  The cost
+# line likewise read "~4.5 s ... (0.5 %)" against the 1.6 s / 0.2 % its own
+# measured table gives -- both corrected v5.33.3,
+# VERIFY_PERF_BRANCH_2026_08_10 D6.)
+#
+# On the production order, with the separable readout (row 6) removing the
+# 9216^2 plans from existence entirely, the resident plan buffers go
+# 24.77 GB -> 10.74 GB:
+#
+#     fwd+inv @ 16384   17.18 GB -> 8.59 GB   (capped, single workspace)
+#     fwd+inv @  9216    5.44 GB -> 0.00 GB   (never planned -- separable)
+#     fwd     @  8192    2.15 GB -> 2.15 GB   (under the cap, ping-pong kept)
+_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER = 2_000_000_000   # 2 GB
+
+
+def _plan_entry_n_bufs(shape_t, dt) -> int:
+    """How many workspaces one plan key at ``(shape_t, dt)`` may hold.
+
+    ``2`` (the v4.12 ping-pong) only when the double buffer is enabled AND one
+    workspace fits ``_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER``; ``1`` otherwise.
+    Single source of truth for the build site and for the dispatchers'
+    copy-or-not decision, so the two can never disagree -- a single-buffer
+    entry whose caller believed it was double-buffered would hand out a
+    workspace the next call at that key overwrites, which is a wrong ANSWER,
+    not a memory regression.
+    """
+    if not _PYFFTW_DOUBLE_BUFFER:
+        return 1
+    nbytes = int(np.dtype(dt).itemsize)
+    for s in shape_t:
+        nbytes *= int(s)
+    return 2 if float(nbytes) <= float(_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER) else 1
+
+
+def set_fft_plan_max_bytes_per_buffer(nbytes) -> None:
+    """Set the byte cap on ONE resident pyFFTW workspace (default 2 GB).
+
+    A plan key whose workspace exceeds this is built with a SINGLE workspace
+    instead of the two-buffer ping-pong, halving its resident cost in exchange
+    for one array copy per FFT at that shape -- byte-identical values either
+    way (the same trade :func:`set_fft_double_buffer` makes globally, and in
+    the same "safe set" :func:`lumenairy.set_low_memory` documents).  Pass
+    ``float('inf')`` for the pre-v5.33.2 behaviour (ping-pong at every shape).
+    Clears the plan cache so every resident entry matches the new bound."""
+    global _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER
+    _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER = (
+        float('inf') if nbytes == float('inf') else max(0, int(nbytes)))
+    with _PYFFTW_PLAN_LOCK:
+        _PYFFTW_PLAN_CACHE.clear()
+
+
+def get_fft_plan_max_bytes_per_buffer():
+    """Return the byte cap on one resident pyFFTW workspace."""
+    return _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER
 
 
 def set_fft_double_buffer(enabled: bool) -> None:
@@ -891,6 +995,11 @@ _FFT_STATE_KEYS = (
     'PYFFTW_FALLBACK_ON_ERROR',      # set_fft_fallback
     '_PYFFTW_DOUBLE_BUFFER',         # set_fft_double_buffer (v5.16.2)
     '_PYFFTW_PLAN_CACHE_SIZE',       # set_fft_plan_cache_size
+    # v5.33.2: the per-key byte cap on the ping-pong.  A worker that missed
+    # it would rebuild double-buffered plans at the very shapes the parent
+    # capped -- the same "~2x the FFT workspace the parent's knobs were set
+    # to prevent" the P3-54 note above records.
+    '_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER',   # set_fft_plan_max_bytes_per_buffer
     '_H_CACHE_SIZE', '_FREQ_GRID_CACHE_SIZE', '_BANDLIMIT_CACHE_SIZE',
     '_H_CACHE_MAX_BYTES_PER_ENTRY', '_H_CACHE_MAX_TOTAL_BYTES',
     # ^ the five set_asm_cache_size bounds
@@ -904,6 +1013,7 @@ _FFT_STATE_KEYS = (
 # also callable in a warm process.  v5.17.1 (audit P3-54).
 _FFT_STATE_SETTER_KEYS = frozenset((
     '_PYFFTW_DOUBLE_BUFFER', '_PYFFTW_PLAN_CACHE_SIZE',
+    '_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER',
     '_H_CACHE_SIZE', '_FREQ_GRID_CACHE_SIZE', '_BANDLIMIT_CACHE_SIZE',
     '_H_CACHE_MAX_BYTES_PER_ENTRY', '_H_CACHE_MAX_TOTAL_BYTES',
 ))
@@ -960,6 +1070,13 @@ def restore_fft_state(state: dict) -> None:
             set_fft_double_buffer(bool(state['_PYFFTW_DOUBLE_BUFFER']))
     if '_PYFFTW_PLAN_CACHE_SIZE' in state:
         set_fft_plan_cache_size(state['_PYFFTW_PLAN_CACHE_SIZE'])
+    if '_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER' in state:
+        # Same "only when it actually changes" rule as the ping-pong flip:
+        # the setter clears the plan cache.
+        if (state['_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER']
+                != g['_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER']):
+            set_fft_plan_max_bytes_per_buffer(
+                state['_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER'])
     if any(k in state for k in ('_H_CACHE_SIZE', '_FREQ_GRID_CACHE_SIZE',
                                 '_BANDLIMIT_CACHE_SIZE',
                                 '_H_CACHE_MAX_BYTES_PER_ENTRY',
@@ -997,6 +1114,12 @@ def _build_plan_entry(direction, shape_t, dt, threads, flag):
     results stay private (byte-identical values; ~one extra copy per
     FFT).
 
+    v5.33.2: the same single-buffer entry is built, per key, whenever the
+    ping-pong would exceed :data:`_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER` -- see
+    :func:`_plan_entry_n_bufs`.  The dispatchers read the entry's buffer
+    COUNT (not the global switch) to decide whether to copy, so a
+    byte-capped key and a globally-disabled one behave identically.
+
     Note: on ``flag = 'FFTW_MEASURE'`` (or stronger), the pyFFTW
     constructor runs the planner against the supplied buffer, which
     overwrites its contents.  That's fine here because the buffers
@@ -1009,7 +1132,7 @@ def _build_plan_entry(direction, shape_t, dt, threads, flag):
         axes = (len(shape_t) - 2, len(shape_t) - 1)
     direction_flag = 'FFTW_FORWARD' if direction == 'fwd' else 'FFTW_BACKWARD'
 
-    n_bufs = 2 if _PYFFTW_DOUBLE_BUFFER else 1
+    n_bufs = _plan_entry_n_bufs(shape_t, dt)
     bufs = [pyfftw.empty_aligned(shape_t, dtype=dt) for _ in range(n_bufs)]
     plans = [
         pyfftw.FFTW(
@@ -1080,6 +1203,13 @@ def _get_or_make_plan(direction, shape, dtype, threads):
     the current call -- the wrapper can return ``buf`` directly
     instead of paying for a ``.copy()``.
 
+    v5.33.2: an entry may hold ONE workspace instead of two -- when
+    :func:`set_fft_double_buffer` disabled the ping-pong globally, or when
+    this key's two workspaces would exceed
+    :data:`_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER`.  The returned ``n_bufs`` is what
+    the caller must branch on: with one workspace the very next call at this
+    key overwrites it, so the caller MUST return ``buf.copy()``.
+
     Returns
     -------
     plan : pyfftw.FFTW
@@ -1097,6 +1227,10 @@ def _get_or_make_plan(direction, shape, dtype, threads):
         Per-key lock; serialises concurrent execution at this key.
         Two threads at the same key still don't get to interleave on
         the same slot.
+    n_bufs : int
+        Number of workspaces this entry holds (2 = ping-pong, 1 = single
+        buffer).  ``1`` means the paragraph above does NOT apply: the next
+        call at this key overwrites ``buf``, so the caller must copy.
 
     Notes
     -----
@@ -1171,7 +1305,8 @@ def _get_or_make_plan(direction, shape, dtype, threads):
                 _nb = len(entry['bufs'])
                 slot = entry['idx'] % _nb
                 entry['idx'] = (slot + 1) % _nb
-                return entry['plans'][slot], entry['bufs'][slot], entry['lock']
+                return (entry['plans'][slot], entry['bufs'][slot],
+                        entry['lock'], _nb)
             # Buffer mutated under us (rare; defensive); fall through
             # and rebuild.
             del _PYFFTW_PLAN_CACHE[key]
@@ -1191,7 +1326,8 @@ def _get_or_make_plan(direction, shape, dtype, threads):
         _nb = len(new_entry['bufs'])
         slot = new_entry['idx'] % _nb
         new_entry['idx'] = (slot + 1) % _nb
-    return new_entry['plans'][slot], new_entry['bufs'][slot], new_entry['lock']
+    return (new_entry['plans'][slot], new_entry['bufs'][slot],
+            new_entry['lock'], _nb)
 
 
 # ----------------------------------------------------------------------------
@@ -1916,7 +2052,7 @@ def _fft2(x):
             and shape not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
-            plan, buf, lock = _get_or_make_plan('fwd', shape, x.dtype, threads)
+            plan, buf, lock, _nbufs = _get_or_make_plan('fwd', shape, x.dtype, threads)
             # Hold the lock across copy-in and execute so a
             # concurrent ``_fft2`` / ``_ifft2`` caller at the same
             # key can't race on this slot's buffer.  The ping-pong
@@ -1927,10 +2063,15 @@ def _fft2(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Single-buffer mode (set_fft_double_buffer(False)):
-                # privatise the result so the next call at this key
-                # can't clobber the caller's reference.
-                return buf if _PYFFTW_DOUBLE_BUFFER else buf.copy()
+                # Single-buffer mode -- set_fft_double_buffer(False), or
+                # this key's ping-pong exceeding
+                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER (v5.33.2).  Privatise the
+                # result so the next call at this key can't clobber the
+                # caller's reference.  Branching on the ENTRY's buffer count
+                # rather than on the global switch is what makes the byte cap
+                # safe: a capped key hands back a copy even while the global
+                # ping-pong is on.
+                return buf if _nbufs > 1 else buf.copy()
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             # pyFFTW failure modes: RuntimeError (planner internal
@@ -1972,14 +2113,19 @@ def _ifft2(x):
             and shape not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
-            plan, buf, lock = _get_or_make_plan('inv', shape, x.dtype, threads)
+            plan, buf, lock, _nbufs = _get_or_make_plan('inv', shape, x.dtype, threads)
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Single-buffer mode (set_fft_double_buffer(False)):
-                # privatise the result so the next call at this key
-                # can't clobber the caller's reference.
-                return buf if _PYFFTW_DOUBLE_BUFFER else buf.copy()
+                # Single-buffer mode -- set_fft_double_buffer(False), or
+                # this key's ping-pong exceeding
+                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER (v5.33.2).  Privatise the
+                # result so the next call at this key can't clobber the
+                # caller's reference.  Branching on the ENTRY's buffer count
+                # rather than on the global switch is what makes the byte cap
+                # safe: a capped key hands back a copy even while the global
+                # ping-pong is on.
+                return buf if _nbufs > 1 else buf.copy()
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             # Same pyFFTW failure spectrum as ``_fft2``; see comment
@@ -2010,15 +2156,20 @@ def _fft2_nd(x):
             and shape not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
-            plan, buf, lock = _get_or_make_plan(
+            plan, buf, lock, _nbufs = _get_or_make_plan(
                 'fwd', shape, x.dtype, threads)
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Single-buffer mode (set_fft_double_buffer(False)):
-                # privatise the result so the next call at this key
-                # can't clobber the caller's reference.
-                return buf if _PYFFTW_DOUBLE_BUFFER else buf.copy()
+                # Single-buffer mode -- set_fft_double_buffer(False), or
+                # this key's ping-pong exceeding
+                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER (v5.33.2).  Privatise the
+                # result so the next call at this key can't clobber the
+                # caller's reference.  Branching on the ENTRY's buffer count
+                # rather than on the global switch is what makes the byte cap
+                # safe: a capped key hands back a copy even while the global
+                # ping-pong is on.
+                return buf if _nbufs > 1 else buf.copy()
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
@@ -2044,15 +2195,20 @@ def _ifft2_nd(x):
             and shape not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
-            plan, buf, lock = _get_or_make_plan(
+            plan, buf, lock, _nbufs = _get_or_make_plan(
                 'inv', shape, x.dtype, threads)
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Single-buffer mode (set_fft_double_buffer(False)):
-                # privatise the result so the next call at this key
-                # can't clobber the caller's reference.
-                return buf if _PYFFTW_DOUBLE_BUFFER else buf.copy()
+                # Single-buffer mode -- set_fft_double_buffer(False), or
+                # this key's ping-pong exceeding
+                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER (v5.33.2).  Privatise the
+                # result so the next call at this key can't clobber the
+                # caller's reference.  Branching on the ENTRY's buffer count
+                # rather than on the global switch is what makes the byte cap
+                # safe: a capped key hands back a copy even while the global
+                # ping-pong is on.
+                return buf if _nbufs > 1 else buf.copy()
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             if not PYFFTW_FALLBACK_ON_ERROR:

@@ -577,6 +577,110 @@ def _prescription_has_field_frame(prescription) -> bool:
     return False
 
 
+# --------------------------------------------------------------------------
+# Newton-pool PAYLOAD RESIDENCY (FIX_PERF_ROUND2_2026_08_10 item 3;
+# AUDIT_TRACED_SPEED_2026_08_09 sec 6.2 / ranked row 10).
+#
+# THE DEFECT.  ``_invert_newton_parallel`` builds one arg tuple per chunk and
+# puts ``_spline_data`` -- the five ray-fit grids plus the pinned backend and
+# the built Chebyshev coefficients -- inside EVERY one of them.  The executor
+# therefore pickles the same payload once per chunk.  MEASURED (audit sec 6.2,
+# design 121's largest fit grid, 531^2 = 11.28 MB): a bare 8-worker round trip
+# is 1.5 ms and the same round trip WITH the payload is 173.1 ms, i.e. the
+# payload is 99.2 % of the dispatch constant -- and ``FIX_D1_POOL``'s ~0.22 s
+# constant is now identified rather than merely observed.
+#
+# THE FIX, in two independent halves.
+#   1. The parent pickles the payload ONCE (``pickle.dumps``) instead of
+#      letting the executor do it n_cpu times.  What crosses the wire is a
+#      ``bytes`` object, whose own pickling is a memcpy.
+#   2. Workers KEEP the last payload they were given, keyed by a content
+#      digest of that blob.  A later dispatch whose payload digests the same
+#      sends the KEY ALONE -- nothing else crosses.
+#
+# WHY THE KEY IS A CONTENT DIGEST AND NOT AN IDENTITY OR A COUNTER.  The
+# payload dict is REBUILT per ``apply_real_lens_traced`` call but MUTATED per
+# dispatch (``cheb_backend`` and ``cheb_fit`` are stamped in immediately before
+# every dispatch).  Keying on ``id()`` or on a per-call counter would therefore
+# let a worker answer from a payload whose pinned backend or built fit had
+# since changed -- a silently different floating-point order, which is the
+# exact failure class the backend pin and the shipped-fit change exist to
+# remove (v5.32.3 / v5.33.0).  A digest of the wire bytes cannot do that: any
+# change to any field changes the key.
+#
+# WHY RESIDENCY IS NEVER LOAD-BEARING FOR CORRECTNESS.  The parent tracks which
+# key it BELIEVES the live workers hold, but ``ProcessPoolExecutor`` gives no
+# guarantee that every worker took a chunk from a given dispatch (a fast worker
+# can take two while another takes none).  A worker asked for a key it does not
+# have raises :class:`NewtonPayloadNotResident`, and the parent re-submits that
+# chunk WITH the blob.  The worst case is therefore today's behaviour, and the
+# belief can only cost a re-submit, never a wrong answer.
+#
+# MEMORY.  A worker holds at most ONE payload: the registry is cleared before
+# every insert, so the per-worker resident cost is bounded by the largest
+# payload (11.28 MB on design 121), which is what a chunk held for its own
+# duration anyway.  The pool initializer clears it at worker start.
+_WORKER_PAYLOADS: dict = {}
+
+
+class NewtonPayloadNotResident(RuntimeError):
+    """A Newton pool worker was sent a payload KEY it does not hold.
+
+    Expected and benign: the parent's residency belief is an optimisation, not
+    a guarantee (see the block above).  ``_invert_newton_parallel`` catches it
+    and re-submits that chunk with the payload attached, so the answer is
+    unchanged and only a round trip is spent.
+    """
+
+
+def _newton_pool_init():
+    """``ProcessPoolExecutor`` initializer: start every worker with an EMPTY
+    payload registry.
+
+    A freshly spawned worker imports this module and gets an empty dict
+    anyway, so this is belt-and-braces -- it matters only if a worker process
+    is ever reused across two pools in one interpreter, where a stale key
+    would otherwise survive.  Cheap, and it makes the residency mechanism
+    explicit at the pool's construction site rather than implicit in module
+    import order."""
+    _WORKER_PAYLOADS.clear()
+
+
+def _newton_worker_payload(key, blob):
+    """Worker side of the residency protocol: store-and-return, or look up.
+
+    ``blob is None`` means the parent believes this worker already holds
+    ``key``; if it does not, refuse loudly rather than guessing."""
+    if blob is not None:
+        import pickle
+        data = pickle.loads(blob)
+        # At most ONE resident payload per worker -- see MEMORY above.
+        _WORKER_PAYLOADS.clear()
+        _WORKER_PAYLOADS[key] = data
+        return data
+    try:
+        return _WORKER_PAYLOADS[key]
+    except KeyError:
+        raise NewtonPayloadNotResident(
+            f"Newton pool worker was asked for payload key {key!r}, which it "
+            f"does not hold (resident: {sorted(_WORKER_PAYLOADS)}).  The "
+            f"parent re-submits this chunk with the payload attached; nothing "
+            f"about the ANSWER changes.") from None
+
+
+def _newton_payload_blob(knot_data):
+    """Parent side: ``(key, blob)`` for one dispatch.
+
+    ONE ``pickle.dumps`` of the payload, whatever the worker count -- the
+    executor then pickles a ``bytes``, not the dict, once per chunk.  The key
+    is a 128-bit digest of those exact bytes, so it changes whenever any field
+    of the payload changes (see the block above for why that matters)."""
+    import hashlib
+    import pickle
+    blob = pickle.dumps(knot_data, protocol=pickle.HIGHEST_PROTOCOL)
+    return hashlib.blake2b(blob, digest_size=16).hexdigest(), blob
+
+
 def _newton_invert_chunk(args):
     """Module-level worker for ``apply_real_lens_traced`` Newton inversion.
 
@@ -627,7 +731,18 @@ def _newton_invert_chunk(args):
     Lives at module scope so ``ProcessPoolExecutor`` can pickle it on
     Windows (spawn) workers.  The caller is ``_invert_newton_parallel``
     inside :func:`apply_real_lens_traced`.
+
+    ARG SHAPE (FIX_PERF_ROUND2_2026_08_10 item 3).  ``args`` is either the
+    historical ``(knot_data, x_chunk, y_chunk)`` -- still accepted, and what a
+    direct caller or an old pickled payload uses -- or the four-element
+    ``(payload_key, blob_or_None, x_chunk, y_chunk)`` the pool now sends, where
+    ``blob`` is ``pickle.dumps(knot_data)`` and ``None`` means "you already
+    have this key".  See ``_newton_worker_payload``.
     """
+    if len(args) == 4:
+        (_pkey, _blob, x_chunk, y_chunk) = args
+        knot_data = _newton_worker_payload(_pkey, _blob)
+        args = (knot_data, x_chunk, y_chunk)
     (knot_data, x_chunk, y_chunk) = args
     # Which fit to rebuild.  Payloads written before the polynomial worker
     # path existed carry no key -- default to 'spline' so they still run.
@@ -958,6 +1073,12 @@ _POOL_DEFERRED_COUNT = 0
 
 _PERSISTENT_POOL = None
 _PERSISTENT_POOL_NWORKERS = None
+# The payload key the parent BELIEVES every live worker of the current pool
+# holds, or None.  Reset on every pool construction and on close_worker_pool,
+# because a new pool means new (empty) workers.  Never load-bearing: a worker
+# that disagrees raises NewtonPayloadNotResident and gets the blob.  See the
+# PAYLOAD RESIDENCY block above _newton_invert_chunk.
+_POOL_RESIDENT_PAYLOAD_KEY = None
 # v5.30 (audit E-L2): the lock is built AT MODULE SCOPE.  It used to be a lazy
 # ``None`` that ``_get_persistent_worker_pool`` created on first use -- the
 # classic broken double-checked-locking shape, since the ``if
@@ -987,7 +1108,7 @@ def _get_persistent_worker_pool(n_workers):
     interpreter exit.
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
-    global _PERSISTENT_POOL_ATEXIT_REGISTERED
+    global _PERSISTENT_POOL_ATEXIT_REGISTERED, _POOL_RESIDENT_PAYLOAD_KEY
     with _PERSISTENT_POOL_LOCK:
         if _PERSISTENT_POOL is not None:
             if _PERSISTENT_POOL_NWORKERS == n_workers:
@@ -1018,8 +1139,14 @@ def _get_persistent_worker_pool(n_workers):
         _PERSISTENT_POOL = ProcessPoolExecutor(
             max_workers=int(n_workers),
             mp_context=_spawn_ctx,
+            # FIX_PERF_ROUND2_2026_08_10 item 3: every worker starts with an
+            # EMPTY payload registry.  See the PAYLOAD RESIDENCY block above
+            # ``_newton_invert_chunk``.
+            initializer=_newton_pool_init,
         )
         _PERSISTENT_POOL_NWORKERS = int(n_workers)
+        # A new pool means new, empty workers: nothing is resident.
+        _POOL_RESIDENT_PAYLOAD_KEY = None
         # Register the atexit handler exactly once per PROCESS, not once per
         # pool creation (v5.30, audit E-L1 -- the guard is the module-level
         # flag, checked under the same lock that guards the pool globals).
@@ -1187,12 +1314,15 @@ def close_worker_pool() -> None:
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
     global _POOL_DEFERRED_NWORKERS, _POOL_DEFERRED_SECONDS
     global _POOL_DEFERRED_COUNT, _POOL_DEFERRED_CLASS, _POOL_DEFERRED_POINTS
+    global _POOL_RESIDENT_PAYLOAD_KEY
     # v5.30 (audit E-L2): take the SAME lock the constructor takes.  This
     # function mutates the pool globals, so running it concurrently with
     # ``_get_persistent_worker_pool`` could shut down a pool that had just
     # been handed to a caller, or clear ``_PERSISTENT_POOL`` between the
     # constructor's assignment and its return.
     with _PERSISTENT_POOL_LOCK:
+        # The workers this belief was about are going away.
+        _POOL_RESIDENT_PAYLOAD_KEY = None
         _POOL_DEFERRED_NWORKERS = None
         _POOL_DEFERRED_CLASS = None
         _POOL_DEFERRED_SECONDS = 0.0
@@ -5094,35 +5224,138 @@ class _ResidualEikonal(object):
         self.r_fit = float(r_fit)
         self.diag = dict(diag or {})
 
-    def _poly(self, ex, ey):
-        """``(P, grad P, Hess P)`` in PHYSICAL coordinates about the centre."""
+    def _poly(self, ex, ey, hess=True):
+        """``(P, grad P, Hess P)`` in PHYSICAL coordinates about the centre.
+
+        ``hess=False`` returns ``(P, Pu/s, Pv/s, None, None, None)`` -- the
+        VALUE and its gradient only.  The three Hessian slots are ``None``
+        rather than a stale interior Hessian so a consumer that reads them
+        anyway fails loudly instead of silently using the wrong thing; the
+        only caller that asks for it is :meth:`_eval` on its value-only path,
+        where the Hessian feeds nothing (see ``value``).
+
+        PERFORMANCE (AUDIT_TRACED_SPEED_2026_08_09 sec 2, item 1;
+        FIX_PERF_POLY_LOCALS_2026_08_09).  This method was MEASURED at 57.8 %
+        of one design-121 fan order's wall (py-spy cross-check 59.1 %), all of
+        it reached through ``_pip_residual_ri -> value -> _eval``.  The cost
+        was structural, not algorithmic: the loop recomputed ``u ** i`` and
+        ``v ** j`` FROM SCRATCH for every one of the six accumulators of every
+        term, and numpy has no fast path for integer exponents above 2, so
+        each of those is a libm ``pow()`` per element.  At degree 6 (27 terms)
+        that is ~130 whole-array ``pow`` passes where 14 DISTINCT exponents
+        exist.
+
+        The fix is to issue one ``np.power`` per distinct exponent and index
+        the result.  It is BIT-IDENTICAL, not "identical to round-off": the
+        same ``np.power`` calls on the same operands produce the same bits,
+        the operand ORDER inside each term is unchanged (``(c*i) * u^p * v^q``
+        associates left to right exactly as before), and ``x += y`` rounds
+        identically to ``x = x + y``.  Pinned by
+        ``test_niche_perf_poly_locals.py``, which keeps a verbatim copy of the
+        pre-change implementation as its reference and asserts
+        ``np.array_equal`` on the real design-121 term list at degree 6.
+
+        The power table costs ``degree + 1`` arrays per axis where the old
+        loop held six accumulators; on the shipped consumer that is a wash,
+        because the row band is bounded (``_pip_residual_ri`` bands at 4.19
+        Mpt) and the value-only path below drops three accumulators and the
+        whole freeze-gradient temporary chain.
+        """
         s = self.scale
         u = ex / s
         v = ey / s
-        P = np.zeros_like(u)
-        Pu = np.zeros_like(u)
-        Pv = np.zeros_like(u)
-        Puu = np.zeros_like(u)
-        Puv = np.zeros_like(u)
-        Pvv = np.zeros_like(u)
-        for c, (i, j) in zip(self.coef, self.terms):
+        coef = self.coef
+        terms = self.terms
+        # Which exponents the term list actually indexes.  Built from the
+        # SKIPPED-ZERO term set (the loop below skips ``c == 0`` exactly as it
+        # always did), so a sparse or low-degree fit builds a smaller table --
+        # and ``hess=False`` never builds the exponents only the Hessian reads.
+        need_u = set()
+        need_v = set()
+        for c, (i, j) in zip(coef, terms):
             if c == 0.0:
                 continue
-            P = P + c * u ** i * v ** j
+            need_u.add(i)
+            need_v.add(j)
             if i >= 1:
-                Pu = Pu + c * i * u ** (i - 1) * v ** j
+                need_u.add(i - 1)
             if j >= 1:
-                Pv = Pv + c * j * u ** i * v ** (j - 1)
-            if i >= 2:
-                Puu = Puu + c * i * (i - 1) * u ** (i - 2) * v ** j
-            if i >= 1 and j >= 1:
-                Puv = Puv + c * i * j * u ** (i - 1) * v ** (j - 1)
-            if j >= 2:
-                Pvv = Pvv + c * j * (j - 1) * u ** i * v ** (j - 2)
+                need_v.add(j - 1)
+            if hess:
+                if i >= 2:
+                    need_u.add(i - 2)
+                if j >= 2:
+                    need_v.add(j - 2)
+        # ONE np.power per distinct exponent -- the same call the old loop made
+        # per term per accumulator, so the same bits.
+        #
+        # ...except exponents 0 and 1, which are pure waste and are elided
+        # (FIX_PERF_ROUND2_2026_08_10 item 4b).  ``u ** 0`` is a whole extra
+        # full-grid array of ONES whose only use is a multiply by exactly 1.0,
+        # and ``u ** 1`` is a whole extra full-grid COPY of ``u``.  On the
+        # shipped degree-6 list that is 12 of 27 terms carrying a redundant
+        # full-array multiply in ``P`` alone, plus two allocations per axis.
+        # BIT-IDENTICAL: multiplying a float64 by exactly 1.0 is exact for
+        # every finite operand and preserves inf, nan and the sign of zero;
+        # ``np.power(x, 1)`` returns ``x``'s bits.  MEASURED 1.18x (512x8192
+        # band) and 1.31x (256x16384 band) on the value path, byte-identical
+        # against the pre-elision loop.
+        UP = {p: (u if p == 1 else u ** p) for p in sorted(need_u) if p}
+        VP = {q: (v if q == 1 else v ** q) for q in sorted(need_v) if q}
+
+        def _mul(scale, p, q, _U=UP, _V=VP):
+            """``scale * u**p * v**q`` with the exponent-0 factors elided.
+
+            Left-to-right association is preserved exactly: the shipped
+            expression was ``((scale) * UP[p]) * VP[q]``, and dropping a factor
+            that is identically 1.0 cannot move a bit.  The tables come in as
+            DEFAULT ARGUMENTS rather than as closure cells so that the
+            end-of-function ``del UP, VP`` still frees them."""
+            if p and q:
+                return scale * _U[p] * _V[q]
+            if p:
+                return scale * _U[p]
+            if q:
+                return scale * _V[q]
+            return scale
+        # ``np.zeros_like(u)`` on the shipped float64 path; the explicit dtype
+        # only matters for a lower-precision ``ex`` (where the old loop's
+        # ``P = P + <float64 term>`` upcast on its first iteration anyway, so
+        # the values are the same either way -- in-place accumulation just
+        # cannot rely on that upcast).
+        _dt = np.result_type(u, coef) if len(terms) else np.result_type(u)
+        P = np.zeros_like(u, dtype=_dt)
+        Pu = np.zeros_like(u, dtype=_dt)
+        Pv = np.zeros_like(u, dtype=_dt)
+        Puu = Puv = Pvv = None
+        if hess:
+            Puu = np.zeros_like(u, dtype=_dt)
+            Puv = np.zeros_like(u, dtype=_dt)
+            Pvv = np.zeros_like(u, dtype=_dt)
+        for c, (i, j) in zip(coef, terms):
+            if c == 0.0:
+                continue
+            P += _mul(c, i, j)
+            if i >= 1:
+                Pu += _mul(c * i, i - 1, j)
+            if j >= 1:
+                Pv += _mul(c * j, i, j - 1)
+            if hess:
+                if i >= 2:
+                    Puu += _mul(c * i * (i - 1), i - 2, j)
+                if i >= 1 and j >= 1:
+                    Puv += _mul(c * i * j, i - 1, j - 1)
+                if j >= 2:
+                    Pvv += _mul(c * j * (j - 1), i, j - 2)
+        del UP, VP, _mul
+        if not hess:
+            return (P, Pu / s, Pv / s, None, None, None)
         return (P, Pu / s, Pv / s,
                 Puu / (s * s), Puv / (s * s), Pvv / (s * s))
 
-    def _eval(self, xq, yq):
+    def _eval(self, xq, yq, need_grad=True):
+        """``(a, da/dx, da/dy)``.  With ``need_grad=False`` the two gradient
+        slots are ``None`` and NO Hessian is built -- see ``value``."""
         ex = np.asarray(xq, dtype=np.float64) - self.cx
         ey = np.asarray(yq, dtype=np.float64) - self.cy
         r = np.sqrt(ex * ex + ey * ey)
@@ -5133,34 +5366,45 @@ class _ResidualEikonal(object):
         sc = np.where(out, r1 / np.where(r > 0.0, r, 1.0), 1.0)
         cx_ = ex * sc
         cy_ = ey * sc
-        P, gx, gy, hxx, hxy, hyy = self._poly(cx_, cy_)
+        # The Hessian is the FROZEN GRADIENT's business alone (it enters
+        # ``ex_x`` / ``ex_y`` and nothing else), so a value-only query never
+        # builds it: three of _poly's six accumulators, and the whole
+        # tangential-Hessian temporary chain below, are dead on that path.
+        P, gx, gy, hxx, hxy, hyy = self._poly(cx_, cy_, hess=need_grad)
         # interior
         a = P
-        ax = gx
-        ay = gy
+        ax = gx if need_grad else None
+        ay = gy if need_grad else None
         if np.any(out):
             rs = np.where(r > 0.0, r, 1.0)
             ux = ex / rs
             uy = ey / rs
             b = gx * ux + gy * uy                    # dP/dr on the circle
-            gtx = gx - b * ux                        # tangential part of gP
-            gty = gy - b * uy
-            hux = hxx * ux + hxy * uy                # H . u
-            huy = hxy * ux + hyy * uy
-            uhu = hux * ux + huy * uy
-            htx = hux - uhu * ux                     # tangential part of H.u
-            hty = huy - uhu * uy
             d = r - r1
-            f = r1 / rs
-            ex_x = f * gtx + b * ux + d * (f * htx + gtx / rs)
-            ex_y = f * gty + b * uy + d * (f * hty + gty / rs)
             a = np.where(out, P + d * b, a)
-            ax = np.where(out, ex_x, ax)
-            ay = np.where(out, ex_y, ay)
+            if need_grad:
+                gtx = gx - b * ux                    # tangential part of gP
+                gty = gy - b * uy
+                hux = hxx * ux + hxy * uy            # H . u
+                huy = hxy * ux + hyy * uy
+                uhu = hux * ux + huy * uy
+                htx = hux - uhu * ux                 # tangential part of H.u
+                hty = huy - uhu * uy
+                f = r1 / rs
+                ex_x = f * gtx + b * ux + d * (f * htx + gtx / rs)
+                ex_y = f * gty + b * uy + d * (f * hty + gty / rs)
+                ax = np.where(out, ex_x, ax)
+                ay = np.where(out, ex_y, ay)
         return a, ax, ay
 
     def value(self, xq, yq):
-        return self._eval(xq, yq)[0]
+        # HOT PATH (57.8 % of a design-121 fan order -- see ``_poly``).  The
+        # value needs ``P`` and, outside the radial freeze, ``dP/dr`` on the
+        # circle; it never reads the frozen GRADIENT, so it never needs the
+        # Hessian that gradient is built from.  Bit-identical to taking [0] of
+        # the full evaluation -- ``a`` is computed by the same expressions from
+        # the same operands.
+        return self._eval(xq, yq, need_grad=False)[0]
 
     def grad(self, xq, yq):
         _a, gx, gy = self._eval(xq, yq)
@@ -7285,7 +7529,22 @@ def apply_real_lens_traced(
     if _chunk_assembly:
         X = Y = None
     else:
-        X, Y = np.meshgrid(x, _y_ax)
+        # BROADCAST, not meshgrid (AUDIT_TRACED_MEMORY_2026_08_09 sec 5.2 /
+        # row 5; FIX_PERF_POLY_LOCALS_2026_08_09).  ``np.meshgrid`` MATERIALISES
+        # two full 2-D float64 arrays -- 2 x 2.147 GB at the n_fine = 16384
+        # retrace leg, held for the whole call (the memory census caught both
+        # of them live at the peak plateau).  ``np.broadcast_to`` returns
+        # zero-copy read-only views with the SAME element values, so every
+        # consumer here -- ``X[::sub, ::sub]``, ``X[mask_full]``,
+        # ``X ** 2 + Y ** 2``, ``.ravel()`` inside the Newton / fit inverters,
+        # ``_compute_carrier`` -- reads exactly the same numbers and the
+        # results are bitwise identical (pinned by
+        # test_niche_perf_poly_locals.py).  Nothing writes through X or Y: the
+        # sub > 1 path already handed those consumers the STRIDED VIEW
+        # ``X[::sub, ::sub]``, so a write would have corrupted X long before
+        # this change.
+        X = np.broadcast_to(x[None, :], (N, N))
+        Y = np.broadcast_to(_y_ax[:, None], (N, N))
     # OPL coarse->fine spline order; resolved for real once the carrier engage
     # test has run (see the R7 note at its assignment).  Initialised here so
     # the row-band assembly can never read it unbound.
@@ -7357,6 +7616,13 @@ def apply_real_lens_traced(
         _pk0 = float(_mag0.max()) if _mag0.size else 0.0
         if _pk0 > 0:
             _bright0 = _mag0 > 0.05 * _pk0
+            # FREE AT LAST USE (AUDIT_TRACED_MEMORY_2026_08_09 sec 2.3/2.4:
+            # ``_mag0`` was caught LIVE in this frame at the peak plateau).
+            # It is a full-grid float array -- 2.147 GB at n_fine = 16384 --
+            # whose only two readers are the peak above and this bright mask,
+            # yet it stayed bound for the whole call, including the ~794 s the
+            # element spends below.  Pure lifetime; no value changes.
+            del _mag0
             # NaN-safe peak WITHOUT np.nanmax's "All-NaN slice encountered"
             # RuntimeWarning: an all-NaN eikonal (a user-supplied ndarray
             # carrier with NaN holes -- the collimated scalar case is now
@@ -7371,8 +7637,10 @@ def apply_real_lens_traced(
                 del _cWb, _fin0
             else:
                 _peakW = 0.0
+            del _bright0          # full-grid bool, 0.27 GB at n_fine=16384
         else:
             _peakW = 0.0
+            del _mag0
         _engage = (_peakW * _k0) > _TILT_EIKONAL_MIN_RAD
         if _engage:
             _carrier_W, _carrier_grad, _carrier_W_fn = _cW, _cGrad, _cWfn
@@ -9258,6 +9526,7 @@ def apply_real_lens_traced(
         tolerance, same out-of-domain NaN policy, and the same
         unconverged-pixel warning; see :func:`_newton_invert_chunk`).
         """
+        global _POOL_RESIDENT_PAYLOAD_KEY
         # GPU path must stay in-process: the worker function
         # ``_newton_invert_chunk`` rebuilds SciPy splines per worker
         # (CPU-only), and shipping CuPy device arrays through a
@@ -9353,13 +9622,20 @@ def apply_real_lens_traced(
         # ~1.9 MB of grids the payload already carries; ``None`` on the spline
         # path, whose FITPACK rebuild is single-threaded and BLAS-free.
         _spline_data['cheb_fit'] = _cheb_fit_payload(Sx, Sy, So, newton_fit)
+        # PAYLOAD, PICKLED ONCE (FIX_PERF_ROUND2_2026_08_10 item 3).  The
+        # payload used to be embedded in every chunk's arg tuple, so the
+        # executor pickled it n_cpu times -- 99.2 % of the measured 0.173 s
+        # 8-worker dispatch constant.  One ``dumps`` here, and the KEY ALONE
+        # when the live workers already hold these exact bytes.  See the
+        # PAYLOAD RESIDENCY block above ``_newton_invert_chunk`` for why the
+        # key is a content digest and why residency can never be wrong.
+        _pkey, _pblob = _newton_payload_blob(_spline_data)
         # Split indices into roughly-equal chunks.  ``np.array_split``
         # handles the n_total % n_cpu != 0 case cleanly.
         chunk_idx = np.array_split(np.arange(n_total), n_cpu)
-        args_list = [
-            (_spline_data, x_w_flat[c].copy(), y_w_flat[c].copy())
-            for c in chunk_idx]
-        results = [None] * len(args_list)
+        _chunks = [(x_w_flat[c].copy(), y_w_flat[c].copy())
+                   for c in chunk_idx]
+        results = [None] * len(_chunks)
 
         # Use the module-level persistent ProcessPool to amortise
         # Windows-spawn startup cost across repeated apply_real_lens_traced
@@ -9368,19 +9644,42 @@ def apply_real_lens_traced(
         # details.
         try:
             ex = _get_persistent_worker_pool(n_cpu)
+            # Read the belief AFTER the pool call: that call may have torn the
+            # old pool down and built a fresh (empty) one, which resets it.
+            _send = (None if _POOL_RESIDENT_PAYLOAD_KEY == _pkey else _pblob)
             future_to_idx = {
-                ex.submit(_newton_invert_chunk, a): i
-                for i, a in enumerate(args_list)}
+                ex.submit(_newton_invert_chunk, (_pkey, _send, _xc, _yc)): i
+                for i, (_xc, _yc) in enumerate(_chunks)}
             done = 0
+            _missed = []
             for fut in as_completed(future_to_idx):
                 i = future_to_idx[fut]
-                results[i] = fut.result()
+                try:
+                    results[i] = fut.result()
+                except NewtonPayloadNotResident:
+                    # This worker never received these bytes (the executor
+                    # does not promise a chunk per worker).  Collect and
+                    # re-send WITH the payload below -- worst case is the
+                    # pre-change behaviour for that one chunk.
+                    _missed.append(i)
                 done += 1
                 if sub_progress is not None:
-                    frac = min(done / max(len(args_list), 1), 0.99)
+                    frac = min(done / max(len(_chunks), 1), 0.99)
                     sub_progress(
                         frac,
-                        f'newton chunk {done}/{len(args_list)} done')
+                        f'newton chunk {done}/{len(_chunks)} done')
+            if _missed:
+                _retry = {
+                    ex.submit(_newton_invert_chunk,
+                              (_pkey, _pblob, _chunks[i][0],
+                               _chunks[i][1])): i
+                    for i in _missed}
+                for fut in as_completed(_retry):
+                    results[_retry[fut]] = fut.result()
+            # Every chunk answered, so at least the workers that ran one hold
+            # these bytes.  Optimistic for a worker that ran none -- which the
+            # miss path above absorbs on the next dispatch.
+            _POOL_RESIDENT_PAYLOAD_KEY = _pkey
         except NewtonWorkerBackendUnavailable:
             # The worker could not provide the Chebyshev backend the payload
             # pinned and refused rather than answering in a different
@@ -9691,6 +9990,25 @@ def apply_real_lens_traced(
         # whole, so order-3 is exactly band-decomposable -- the fix restores
         # bit-equality rather than trading it.
         _opl_up_order = 3 if _r7_carrier_path else 1
+        # NaN-PASS GUARD (FIX_PERF_ROUND2_2026_08_10 item 2;
+        # AUDIT_TRACED_SPEED_2026_08_09 ranked row 6).  The upsample runs a
+        # SECOND full-grid ``map_coordinates`` purely to carry the coarse OPL's
+        # NaN mask to the wave grid.  When ``opl_coarse`` carries no NaN at all
+        # -- no Newton amp mask, and no ray leaving the fit domain -- that pass
+        # interpolates an ALL-ZERO array, so ``nan_full`` is identically 0,
+        # ``nan_full > 0.5`` is identically False, and the ``np.where`` that
+        # consumes it is the IDENTITY.  Skipping it is therefore bit-identical
+        # BY CONSTRUCTION, not to a tolerance.  The test on the small coarse
+        # lattice (95^2 - 531^2 here) is free next to the N^2 output it saves.
+        #
+        # MEASURED on the design-121 fan order at ``n_fine_cap=8192``: the two
+        # order-1 NaN passes (this one and the ray-density one below) were
+        # 2.43 % of the order's wall; the whole ``map_coordinates`` bucket was
+        # 9.87 %, the profile's #2 site.  Whether the guard FIRES is a property
+        # of the ray-fit hull, which the audit explicitly left unmeasured
+        # (its sec 11 item 5) -- ``FIX_PERF_ROUND2_2026_08_10.md`` sec 3
+        # measures it per call site.
+        _opl_has_nan = bool(np.isnan(opl_coarse).any())
         if _chunk_assembly:
             # Row-band path: defer the upsample into the Step-3 band loop
             # (map_coordinates is pointwise in the OUTPUT at any order -- the
@@ -9700,7 +10018,11 @@ def apply_real_lens_traced(
             # (2, N, N) coords stack, opl_map and nan_full never allocate.
             _opl_coarse_clean = np.where(
                 np.isnan(opl_coarse), 0.0, opl_coarse)
-            _nan_coarse = np.isnan(opl_coarse).astype(np.float64)
+            # ``None`` when the coarse OPL is NaN-free -- the band loop then
+            # skips its own per-band NaN pass, exactly as the whole-grid
+            # branch does, and for the same by-construction reason.
+            _nan_coarse = (np.isnan(opl_coarse).astype(np.float64)
+                           if _opl_has_nan else None)
             opl_map = None
         else:
             # v5.16.2 (memory root-cause): build the (2, N, N) coordinate
@@ -9709,7 +10031,26 @@ def apply_real_lens_traced(
             # with ii/jj held throughout -- ~4 extra full-grid float64
             # (~34 GB at N=32768) at the upsample peak.  Same coords,
             # same map_coordinates inputs -> byte-identical outputs.
-            ii, jj = np.indices((N, N), dtype=np.float64)
+            # FIX_PERF_ROUND2_2026_08_10 item 2 (the coords half).  The stack is
+            # built STRAIGHT INTO its final buffer instead of through
+            # ``np.indices`` + a two-element ``np.array`` list build.  The old
+            # form materialised the (2, N, N) index pair (4.295 GB at
+            # n_fine = 16384), then TWO more full-grid quotients, then the
+            # (2, N, N) result -- a ~12.9 GB transient peak for a 4.295 GB
+            # answer.  BIT-IDENTICAL: ``np.indices(..., float64)`` holds exact
+            # integer-valued float64s, so ``arange(N, float64) / sub`` is the
+            # same IEEE division of the same two operands, broadcast into the
+            # same rows/columns (``ii[r, c] = r``, ``jj[r, c] = c``).
+            #
+            # The audit's OTHER option here -- caching the stack ACROSS calls
+            # (its ranked row 7, 1.10-1.19x on a synthetic upsample) -- is
+            # deliberately NOT taken: on the real order this whole build
+            # MEASURES 0.30 % of the wall (profile leaf ``:9833``), while a
+            # live cache would retain 4.295 GB of full-grid float64 at
+            # n_fine = 16384 for the rest of the order, against a branch whose
+            # companion item just FREED 34.9 GB of exactly this shape.  The
+            # measurement is in ``FIX_PERF_ROUND2_2026_08_10.md`` sec 3.2.
+            #
             # Coarse sample u sits at FINE index u*sub (the ``X[::sub]``
             # lattice), so the exact mapping is ii/sub for ANY sub.  The
             # previous ``ii * Ns / N`` (Ns = ceil(N/sub)) equals ii/sub only
@@ -9719,9 +10060,11 @@ def apply_real_lens_traced(
             # diagonal focus walk (audit
             # AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24; the F-C fine-retrace
             # rescale routinely produces non-divisor ray_subsample values).
-            # Bit-identical whenever sub | N.
-            _coords = np.array([ii / sub, jj / sub])
-            del ii, jj
+            _idx_ax = np.arange(N, dtype=np.float64) / sub
+            _coords = np.empty((2, N, N), dtype=np.float64)
+            _coords[0] = _idx_ax[:, None]
+            _coords[1] = _idx_ax[None, :]
+            del _idx_ax
             # R7 / audit F2 (2026-07-21): CUBIC (order-3) OPL upsample when a
             # carrier is set.  The Newton OPL is solved on the COARSE grid
             # (spacing sub*dx) and interpolated to the wave grid; LINEAR
@@ -9744,24 +10087,40 @@ def apply_real_lens_traced(
                 prefilter=(_opl_up_order > 1))
             # Propagate NaN mask (order-1 keeps the ray-domain boundary crisp;
             # any cubic bleed of the 0-fill into a valid pixel adjacent to NaN
-            # is masked out here).
-            nan_coarse = np.isnan(opl_coarse).astype(np.float64)
-            nan_full = map_coordinates(
-                nan_coarse, _coords, order=1, mode='nearest')
+            # is masked out here).  Skipped outright when there is no NaN to
+            # propagate -- see the guard's derivation at ``_opl_has_nan``.
+            if _opl_has_nan:
+                nan_coarse = np.isnan(opl_coarse).astype(np.float64)
+                nan_full = map_coordinates(
+                    nan_coarse, _coords, order=1, mode='nearest')
+            else:
+                nan_full = None
             # K3 (N15 perf): hand the coordinate stack to the ray-density
             # upsample (identical ``Ns``) rather than let it rebuild
             # ``np.indices`` + a second (2, N, N) float64 array.  For the
             # screen path (no ray-density), free it now exactly as before.
             if _ray_density:
                 _rd_upsample_coords = (_coords, Ns)
-            else:
-                del _coords
-            opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
+            # Drop the LOCAL name unconditionally.  On the ray-density path
+            # the stash owns the array from here (both are released at
+            # ``_rd_upsample_coords = None`` below); leaving ``_coords`` bound
+            # kept the (2, N, N) float64 stack -- 4.295 GB at n_fine = 16384 --
+            # alive for the WHOLE remaining call, long after the ray-density
+            # upsample had freed its own alias.  The memory census caught it
+            # live in this frame at the peak plateau
+            # (AUDIT_TRACED_MEMORY_2026_08_09 sec 2.3).  Pure lifetime; the
+            # screen path deleted it here already.
+            del _coords
+            if nan_full is not None:
+                opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
             del nan_full
     elif _use_fit:
         # T-P2: full-grid inverse-map fit (no Newton, no amp mask).
         if X is None:
-            X, Y = np.meshgrid(x, _y_ax)
+            # Broadcast views, as at the primary X/Y build above -- same
+            # elements, no 2 x N^2 float64 materialisation.
+            X = np.broadcast_to(x[None, :], (N, N))
+            Y = np.broadcast_to(_y_ax[:, None], (N, N))
         opl_map = _invert_fit(X, Y)
     else:
         mask_full = _build_newton_mask(amp)
@@ -9797,15 +10156,27 @@ def apply_real_lens_traced(
                     and _rd_upsample_coords[1] == Ns_rd):
                 _coords_rd = _rd_upsample_coords[0]
             else:
-                ii_rd, jj_rd = np.indices((N, N), dtype=np.float64)
                 # ii/sub, not ii*Ns/N: exact for any sub (see the OPL
-                # upsample above -- same lattice, same walk bug otherwise).
-                _coords_rd = np.array([ii_rd / sub, jj_rd / sub])
-                del ii_rd, jj_rd
+                # upsample above -- same lattice, same walk bug otherwise),
+                # and built straight into its buffer for the same reason and
+                # with the same bit-identity argument.
+                _idx_rd = np.arange(N, dtype=np.float64) / sub
+                _coords_rd = np.empty((2, N, N), dtype=np.float64)
+                _coords_rd[0] = _idx_rd[:, None]
+                _coords_rd[1] = _idx_rd[None, :]
+                del _idx_rd
             _a_rd = _mc_rd(np.where(np.isnan(ard_coarse), 0.0, ard_coarse),
                            _coords_rd, order=1, mode='nearest')
-            _nan_rd = _mc_rd(np.isnan(ard_coarse).astype(np.float64),
-                             _coords_rd, order=1, mode='nearest')
+            # Same NaN-pass guard as the OPL upsample above, on this array's
+            # OWN NaN census (the ray-density amplitude and the OPL come from
+            # the same Newton solve but are masked separately, so neither
+            # census stands in for the other).  Bit-identical by construction:
+            # with no NaN in ``ard_coarse`` the second interpolation returns
+            # identically 0 and the ``np.where`` below is the identity.
+            _rd_has_nan = bool(np.isnan(ard_coarse).any())
+            _nan_rd = (_mc_rd(np.isnan(ard_coarse).astype(np.float64),
+                              _coords_rd, order=1, mode='nearest')
+                       if _rd_has_nan else None)
             # 'remap': upsample the entrance-pulled residual phasor with the
             # SAME coordinate stack, then renormalise to unit modulus (the
             # bilinear interp of a unit phasor has |z| <= 1; where |z| ~ 0
@@ -9843,7 +10214,14 @@ def apply_real_lens_traced(
                 del _pz, _pa
             del _coords_rd
             _rd_upsample_coords = None
-            ard_map = np.where(_nan_rd > 0.5, np.nan, _a_rd)
+            ard_map = (np.where(_nan_rd > 0.5, np.nan, _a_rd)
+                       if _nan_rd is not None else _a_rd)
+            # Both upsampled halves are consumed by that one ``where``; they
+            # were held to the end of the call.  2 x 2.147 GB at
+            # n_fine = 16384 (census sec 2.3).  Pure lifetime.  On the skipped
+            # branch ``ard_map`` IS ``_a_rd`` (the ``where`` was the identity),
+            # so only the name is dropped -- the array is the return path's.
+            del _nan_rd, _a_rd
         else:
             ard_map = _ray_density_amp_grid(X, Y)
             if _pip_remap and _rd_resid_coarse[0] is not None:
@@ -9950,11 +10328,17 @@ def apply_real_lens_traced(
                                     order=_opl_up_order, mode='nearest',
                                     prefilter=(_opl_up_order > 1))
             # NaN mask stays order-1 (crisp ray-domain boundary), exactly as
-            # the whole-grid path does.
-            nan_b = map_coordinates(_nan_coarse, coords_b,
-                                    order=1, mode='nearest')
+            # the whole-grid path does -- including its NaN-pass guard, so the
+            # banded and whole-grid routes stay element-identical to each
+            # other as well as to their pre-guard selves.
+            if _nan_coarse is not None:
+                nan_b = map_coordinates(_nan_coarse, coords_b,
+                                        order=1, mode='nearest')
+            else:
+                nan_b = None
             del ii_b, jj_b, coords_b
-            opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
+            if nan_b is not None:
+                opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
             valid_b = np.isfinite(opl_b)
             if preserve_input_phase:
                 dp_b = np.where(
@@ -10001,8 +10385,16 @@ def apply_real_lens_traced(
             phase_exp = phase_exp.astype(target_cdtype)
         E_out = amp * phase_exp
         del phase_exp
+    # ...and the analytic field itself.  The assembly above is its LAST reader
+    # on BOTH branches (``preserve_input_phase='remap'`` sets the flag False at
+    # its normalisation, so the remap path arrives here through the ``amp``
+    # branch, and the ray-density swap below divides the screen modulus out and
+    # reads ``amp``, never ``E_analytic``).  4.295 GB complex128 at
+    # n_fine = 16384, held to the end of the call.  Pure lifetime.
+    del E_analytic
     # Zero outside the exit-pupil (ray-coverage) region
     E_out = np.where(valid, E_out, target_cdtype.type(0))
+    del valid                  # full-grid bool, 0.268 GB at n_fine=16384
     # And outside the entrance aperture (defensive: in practice the
     # ray-coverage region is a subset of the entrance aperture, so
     # this is a no-op except in pathological configurations)
@@ -10023,7 +10415,9 @@ def apply_real_lens_traced(
         with np.errstate(divide='ignore', invalid='ignore'):
             _unit = np.divide(E_out, _absE,
                               out=np.zeros_like(E_out), where=_absE > 0)
+        del _absE              # consumed by the divide; 2.147 GB float64
         _ard = np.where(np.isfinite(ard_map), ard_map, 0.0)
+        ard_map = None         # consumed by the where; 2.147 GB float64
         # ---- niche D9: the analytic amplitude leg's ZERO SET, measured -------
         # ``amp`` is the ONE thing an axis-centred ``apply_real_lens`` still
         # contributes here, and it contributes only where it is exactly 0 (the
@@ -10070,11 +10464,16 @@ def apply_real_lens_traced(
                 import warnings as _oa_warn
                 _oa_warn.warn(_oa_msg, RuntimeWarning, stacklevel=2)
         E_out = _ard * _unit
+        # The ray-density magnitude and the unit phasor are consumed by that
+        # one multiply -- 2.147 + 4.295 GB at n_fine = 16384, both caught live
+        # in the census (sec 2.3) while the readout was building its own grids.
+        del _ard, _unit
         # preserve_input_phase='remap': multiply the geometrically-transported
         # input-residual phasor onto the k0*opl exit phase (audit S6.7).  Unit
         # modulus by construction, identity where the pullback is undefined.
         if _rd_resid_map is not None:
             E_out = E_out * _rd_resid_map.astype(E_out.dtype, copy=False)
+            _rd_resid_map = None       # consumed; 4.295 GB complex128
         # ---- v5.30 (audit E-M6): post-hoc ENERGY SELF-CHECK ------------------
         # Two N^2 reductions, negligible against the trace + Newton stages.
         # Reference = the input power the element ADMITS (inside the entrance

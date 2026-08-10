@@ -930,10 +930,23 @@ def test_the_dispatch_path_pins_the_backend_and_handles_the_refusal():
         'except (BrokenProcessPool'), (
         'the generic pool-infrastructure handler now shadows the backend '
         'refusal, so the specific remedy is never printed')
-    # the payload is pinned BEFORE the chunks are built from it
+    # The payload is pinned BEFORE it is FROZEN for the wire.  Pre-2026-08-10
+    # the freeze was ``args_list = [...]`` (the dict embedded in every chunk
+    # tuple); since FIX_PERF_ROUND2 item 3 it is the single
+    # ``_newton_payload_blob`` call, whose bytes AND content digest are what
+    # every worker then answers from -- so a stamp landing after it would be
+    # invisible to the pool in exactly the way this pin exists to prevent.
+    assert '_newton_payload_blob(_spline_data)' in body, (
+        'the dispatch no longer freezes the payload through '
+        '_newton_payload_blob, so this ordering pin has lost its anchor')
     assert body.index("_spline_data['cheb_backend']") < body.index(
-        'args_list = ['), (
-        'the backend is pinned after the payload has already been chunked')
+        '_newton_payload_blob(_spline_data)'), (
+        'the backend is pinned after the payload has already been serialised '
+        'for the workers')
+    assert body.index("_spline_data['cheb_fit']") < body.index(
+        '_newton_payload_blob(_spline_data)'), (
+        'the built fit is stamped after the payload has already been '
+        'serialised for the workers')
     wsrc = inspect.getsource(LT._newton_invert_chunk)
     assert "knot_data.get('cheb_backend', None)" in wsrc, (
         'the worker no longer reads the pin')
@@ -1313,8 +1326,13 @@ def test_the_dispatch_path_ships_the_built_fit():
         "the Newton payload no longer ships the parent's built Chebyshev fit, "
         'so every worker re-solves the least squares in its own interpreter '
         'and pool == serial is conditional on the two sharing a BLAS width')
-    assert body.index("_spline_data['cheb_fit']") < body.index('args_list = ['), (
-        'the fit is attached after the payload has already been chunked')
+    # Same anchor move as its sibling above: the payload's contents are frozen
+    # for the wire by ``_newton_payload_blob`` since FIX_PERF_ROUND2 item 3,
+    # not by the old ``args_list`` comprehension.
+    assert body.index("_spline_data['cheb_fit']") < body.index(
+        '_newton_payload_blob(_spline_data)'), (
+        'the fit is attached after the payload has already been serialised '
+        'for the workers')
     wsrc = inspect.getsource(LT._newton_invert_chunk)
     assert "knot_data.get('cheb_fit', None)" in wsrc, (
         'the worker no longer reads the shipped fit')
