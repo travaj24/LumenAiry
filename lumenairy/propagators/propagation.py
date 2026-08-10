@@ -276,6 +276,7 @@ _LIVE_FORWARD_NAMES = frozenset({
     # ``propagation._PYFFTW_DOUBLE_BUFFER`` track the current value
     # (V14 walker requirement; caught by the release verify gate).
     '_PYFFTW_DOUBLE_BUFFER',
+    '_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER',
     '_PYFFTW_BAD_SHAPES',
     '_H_CACHE_SIZE',
     '_FREQ_GRID_CACHE_SIZE',

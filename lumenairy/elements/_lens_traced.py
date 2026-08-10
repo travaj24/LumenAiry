@@ -577,6 +577,110 @@ def _prescription_has_field_frame(prescription) -> bool:
     return False
 
 
+# --------------------------------------------------------------------------
+# Newton-pool PAYLOAD RESIDENCY (FIX_PERF_ROUND2_2026_08_10 item 3;
+# AUDIT_TRACED_SPEED_2026_08_09 sec 6.2 / ranked row 10).
+#
+# THE DEFECT.  ``_invert_newton_parallel`` builds one arg tuple per chunk and
+# puts ``_spline_data`` -- the five ray-fit grids plus the pinned backend and
+# the built Chebyshev coefficients -- inside EVERY one of them.  The executor
+# therefore pickles the same payload once per chunk.  MEASURED (audit sec 6.2,
+# design 121's largest fit grid, 531^2 = 11.28 MB): a bare 8-worker round trip
+# is 1.5 ms and the same round trip WITH the payload is 173.1 ms, i.e. the
+# payload is 99.2 % of the dispatch constant -- and ``FIX_D1_POOL``'s ~0.22 s
+# constant is now identified rather than merely observed.
+#
+# THE FIX, in two independent halves.
+#   1. The parent pickles the payload ONCE (``pickle.dumps``) instead of
+#      letting the executor do it n_cpu times.  What crosses the wire is a
+#      ``bytes`` object, whose own pickling is a memcpy.
+#   2. Workers KEEP the last payload they were given, keyed by a content
+#      digest of that blob.  A later dispatch whose payload digests the same
+#      sends the KEY ALONE -- nothing else crosses.
+#
+# WHY THE KEY IS A CONTENT DIGEST AND NOT AN IDENTITY OR A COUNTER.  The
+# payload dict is REBUILT per ``apply_real_lens_traced`` call but MUTATED per
+# dispatch (``cheb_backend`` and ``cheb_fit`` are stamped in immediately before
+# every dispatch).  Keying on ``id()`` or on a per-call counter would therefore
+# let a worker answer from a payload whose pinned backend or built fit had
+# since changed -- a silently different floating-point order, which is the
+# exact failure class the backend pin and the shipped-fit change exist to
+# remove (v5.32.3 / v5.33.0).  A digest of the wire bytes cannot do that: any
+# change to any field changes the key.
+#
+# WHY RESIDENCY IS NEVER LOAD-BEARING FOR CORRECTNESS.  The parent tracks which
+# key it BELIEVES the live workers hold, but ``ProcessPoolExecutor`` gives no
+# guarantee that every worker took a chunk from a given dispatch (a fast worker
+# can take two while another takes none).  A worker asked for a key it does not
+# have raises :class:`NewtonPayloadNotResident`, and the parent re-submits that
+# chunk WITH the blob.  The worst case is therefore today's behaviour, and the
+# belief can only cost a re-submit, never a wrong answer.
+#
+# MEMORY.  A worker holds at most ONE payload: the registry is cleared before
+# every insert, so the per-worker resident cost is bounded by the largest
+# payload (11.28 MB on design 121), which is what a chunk held for its own
+# duration anyway.  The pool initializer clears it at worker start.
+_WORKER_PAYLOADS: dict = {}
+
+
+class NewtonPayloadNotResident(RuntimeError):
+    """A Newton pool worker was sent a payload KEY it does not hold.
+
+    Expected and benign: the parent's residency belief is an optimisation, not
+    a guarantee (see the block above).  ``_invert_newton_parallel`` catches it
+    and re-submits that chunk with the payload attached, so the answer is
+    unchanged and only a round trip is spent.
+    """
+
+
+def _newton_pool_init():
+    """``ProcessPoolExecutor`` initializer: start every worker with an EMPTY
+    payload registry.
+
+    A freshly spawned worker imports this module and gets an empty dict
+    anyway, so this is belt-and-braces -- it matters only if a worker process
+    is ever reused across two pools in one interpreter, where a stale key
+    would otherwise survive.  Cheap, and it makes the residency mechanism
+    explicit at the pool's construction site rather than implicit in module
+    import order."""
+    _WORKER_PAYLOADS.clear()
+
+
+def _newton_worker_payload(key, blob):
+    """Worker side of the residency protocol: store-and-return, or look up.
+
+    ``blob is None`` means the parent believes this worker already holds
+    ``key``; if it does not, refuse loudly rather than guessing."""
+    if blob is not None:
+        import pickle
+        data = pickle.loads(blob)
+        # At most ONE resident payload per worker -- see MEMORY above.
+        _WORKER_PAYLOADS.clear()
+        _WORKER_PAYLOADS[key] = data
+        return data
+    try:
+        return _WORKER_PAYLOADS[key]
+    except KeyError:
+        raise NewtonPayloadNotResident(
+            f"Newton pool worker was asked for payload key {key!r}, which it "
+            f"does not hold (resident: {sorted(_WORKER_PAYLOADS)}).  The "
+            f"parent re-submits this chunk with the payload attached; nothing "
+            f"about the ANSWER changes.") from None
+
+
+def _newton_payload_blob(knot_data):
+    """Parent side: ``(key, blob)`` for one dispatch.
+
+    ONE ``pickle.dumps`` of the payload, whatever the worker count -- the
+    executor then pickles a ``bytes``, not the dict, once per chunk.  The key
+    is a 128-bit digest of those exact bytes, so it changes whenever any field
+    of the payload changes (see the block above for why that matters)."""
+    import hashlib
+    import pickle
+    blob = pickle.dumps(knot_data, protocol=pickle.HIGHEST_PROTOCOL)
+    return hashlib.blake2b(blob, digest_size=16).hexdigest(), blob
+
+
 def _newton_invert_chunk(args):
     """Module-level worker for ``apply_real_lens_traced`` Newton inversion.
 
@@ -627,7 +731,18 @@ def _newton_invert_chunk(args):
     Lives at module scope so ``ProcessPoolExecutor`` can pickle it on
     Windows (spawn) workers.  The caller is ``_invert_newton_parallel``
     inside :func:`apply_real_lens_traced`.
+
+    ARG SHAPE (FIX_PERF_ROUND2_2026_08_10 item 3).  ``args`` is either the
+    historical ``(knot_data, x_chunk, y_chunk)`` -- still accepted, and what a
+    direct caller or an old pickled payload uses -- or the four-element
+    ``(payload_key, blob_or_None, x_chunk, y_chunk)`` the pool now sends, where
+    ``blob`` is ``pickle.dumps(knot_data)`` and ``None`` means "you already
+    have this key".  See ``_newton_payload_for_worker``.
     """
+    if len(args) == 4:
+        (_pkey, _blob, x_chunk, y_chunk) = args
+        knot_data = _newton_worker_payload(_pkey, _blob)
+        args = (knot_data, x_chunk, y_chunk)
     (knot_data, x_chunk, y_chunk) = args
     # Which fit to rebuild.  Payloads written before the polynomial worker
     # path existed carry no key -- default to 'spline' so they still run.
@@ -958,6 +1073,12 @@ _POOL_DEFERRED_COUNT = 0
 
 _PERSISTENT_POOL = None
 _PERSISTENT_POOL_NWORKERS = None
+# The payload key the parent BELIEVES every live worker of the current pool
+# holds, or None.  Reset on every pool construction and on close_worker_pool,
+# because a new pool means new (empty) workers.  Never load-bearing: a worker
+# that disagrees raises NewtonPayloadNotResident and gets the blob.  See the
+# PAYLOAD RESIDENCY block above _newton_invert_chunk.
+_POOL_RESIDENT_PAYLOAD_KEY = None
 # v5.30 (audit E-L2): the lock is built AT MODULE SCOPE.  It used to be a lazy
 # ``None`` that ``_get_persistent_worker_pool`` created on first use -- the
 # classic broken double-checked-locking shape, since the ``if
@@ -987,7 +1108,7 @@ def _get_persistent_worker_pool(n_workers):
     interpreter exit.
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
-    global _PERSISTENT_POOL_ATEXIT_REGISTERED
+    global _PERSISTENT_POOL_ATEXIT_REGISTERED, _POOL_RESIDENT_PAYLOAD_KEY
     with _PERSISTENT_POOL_LOCK:
         if _PERSISTENT_POOL is not None:
             if _PERSISTENT_POOL_NWORKERS == n_workers:
@@ -1018,8 +1139,14 @@ def _get_persistent_worker_pool(n_workers):
         _PERSISTENT_POOL = ProcessPoolExecutor(
             max_workers=int(n_workers),
             mp_context=_spawn_ctx,
+            # FIX_PERF_ROUND2_2026_08_10 item 3: every worker starts with an
+            # EMPTY payload registry.  See the PAYLOAD RESIDENCY block above
+            # ``_newton_invert_chunk``.
+            initializer=_newton_pool_init,
         )
         _PERSISTENT_POOL_NWORKERS = int(n_workers)
+        # A new pool means new, empty workers: nothing is resident.
+        _POOL_RESIDENT_PAYLOAD_KEY = None
         # Register the atexit handler exactly once per PROCESS, not once per
         # pool creation (v5.30, audit E-L1 -- the guard is the module-level
         # flag, checked under the same lock that guards the pool globals).
@@ -1187,12 +1314,15 @@ def close_worker_pool() -> None:
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
     global _POOL_DEFERRED_NWORKERS, _POOL_DEFERRED_SECONDS
     global _POOL_DEFERRED_COUNT, _POOL_DEFERRED_CLASS, _POOL_DEFERRED_POINTS
+    global _POOL_RESIDENT_PAYLOAD_KEY
     # v5.30 (audit E-L2): take the SAME lock the constructor takes.  This
     # function mutates the pool globals, so running it concurrently with
     # ``_get_persistent_worker_pool`` could shut down a pool that had just
     # been handed to a caller, or clear ``_PERSISTENT_POOL`` between the
     # constructor's assignment and its return.
     with _PERSISTENT_POOL_LOCK:
+        # The workers this belief was about are going away.
+        _POOL_RESIDENT_PAYLOAD_KEY = None
         _POOL_DEFERRED_NWORKERS = None
         _POOL_DEFERRED_CLASS = None
         _POOL_DEFERRED_SECONDS = 0.0
@@ -9368,6 +9498,7 @@ def apply_real_lens_traced(
         tolerance, same out-of-domain NaN policy, and the same
         unconverged-pixel warning; see :func:`_newton_invert_chunk`).
         """
+        global _POOL_RESIDENT_PAYLOAD_KEY
         # GPU path must stay in-process: the worker function
         # ``_newton_invert_chunk`` rebuilds SciPy splines per worker
         # (CPU-only), and shipping CuPy device arrays through a
@@ -9463,13 +9594,20 @@ def apply_real_lens_traced(
         # ~1.9 MB of grids the payload already carries; ``None`` on the spline
         # path, whose FITPACK rebuild is single-threaded and BLAS-free.
         _spline_data['cheb_fit'] = _cheb_fit_payload(Sx, Sy, So, newton_fit)
+        # PAYLOAD, PICKLED ONCE (FIX_PERF_ROUND2_2026_08_10 item 3).  The
+        # payload used to be embedded in every chunk's arg tuple, so the
+        # executor pickled it n_cpu times -- 99.2 % of the measured 0.173 s
+        # 8-worker dispatch constant.  One ``dumps`` here, and the KEY ALONE
+        # when the live workers already hold these exact bytes.  See the
+        # PAYLOAD RESIDENCY block above ``_newton_invert_chunk`` for why the
+        # key is a content digest and why residency can never be wrong.
+        _pkey, _pblob = _newton_payload_blob(_spline_data)
         # Split indices into roughly-equal chunks.  ``np.array_split``
         # handles the n_total % n_cpu != 0 case cleanly.
         chunk_idx = np.array_split(np.arange(n_total), n_cpu)
-        args_list = [
-            (_spline_data, x_w_flat[c].copy(), y_w_flat[c].copy())
-            for c in chunk_idx]
-        results = [None] * len(args_list)
+        _chunks = [(x_w_flat[c].copy(), y_w_flat[c].copy())
+                   for c in chunk_idx]
+        results = [None] * len(_chunks)
 
         # Use the module-level persistent ProcessPool to amortise
         # Windows-spawn startup cost across repeated apply_real_lens_traced
@@ -9478,19 +9616,42 @@ def apply_real_lens_traced(
         # details.
         try:
             ex = _get_persistent_worker_pool(n_cpu)
+            # Read the belief AFTER the pool call: that call may have torn the
+            # old pool down and built a fresh (empty) one, which resets it.
+            _send = (None if _POOL_RESIDENT_PAYLOAD_KEY == _pkey else _pblob)
             future_to_idx = {
-                ex.submit(_newton_invert_chunk, a): i
-                for i, a in enumerate(args_list)}
+                ex.submit(_newton_invert_chunk, (_pkey, _send, _xc, _yc)): i
+                for i, (_xc, _yc) in enumerate(_chunks)}
             done = 0
+            _missed = []
             for fut in as_completed(future_to_idx):
                 i = future_to_idx[fut]
-                results[i] = fut.result()
+                try:
+                    results[i] = fut.result()
+                except NewtonPayloadNotResident:
+                    # This worker never received these bytes (the executor
+                    # does not promise a chunk per worker).  Collect and
+                    # re-send WITH the payload below -- worst case is the
+                    # pre-change behaviour for that one chunk.
+                    _missed.append(i)
                 done += 1
                 if sub_progress is not None:
-                    frac = min(done / max(len(args_list), 1), 0.99)
+                    frac = min(done / max(len(_chunks), 1), 0.99)
                     sub_progress(
                         frac,
-                        f'newton chunk {done}/{len(args_list)} done')
+                        f'newton chunk {done}/{len(_chunks)} done')
+            if _missed:
+                _retry = {
+                    ex.submit(_newton_invert_chunk,
+                              (_pkey, _pblob, _chunks[i][0],
+                               _chunks[i][1])): i
+                    for i in _missed}
+                for fut in as_completed(_retry):
+                    results[_retry[fut]] = fut.result()
+            # Every chunk answered, so at least the workers that ran one hold
+            # these bytes.  Optimistic for a worker that ran none -- which the
+            # miss path above absorbs on the next dispatch.
+            _POOL_RESIDENT_PAYLOAD_KEY = _pkey
         except NewtonWorkerBackendUnavailable:
             # The worker could not provide the Chebyshev backend the payload
             # pinned and refused rather than answering in a different
@@ -9801,6 +9962,25 @@ def apply_real_lens_traced(
         # whole, so order-3 is exactly band-decomposable -- the fix restores
         # bit-equality rather than trading it.
         _opl_up_order = 3 if _r7_carrier_path else 1
+        # NaN-PASS GUARD (FIX_PERF_ROUND2_2026_08_10 item 2;
+        # AUDIT_TRACED_SPEED_2026_08_09 ranked row 6).  The upsample runs a
+        # SECOND full-grid ``map_coordinates`` purely to carry the coarse OPL's
+        # NaN mask to the wave grid.  When ``opl_coarse`` carries no NaN at all
+        # -- no Newton amp mask, and no ray leaving the fit domain -- that pass
+        # interpolates an ALL-ZERO array, so ``nan_full`` is identically 0,
+        # ``nan_full > 0.5`` is identically False, and the ``np.where`` that
+        # consumes it is the IDENTITY.  Skipping it is therefore bit-identical
+        # BY CONSTRUCTION, not to a tolerance.  The test on the small coarse
+        # lattice (95^2 - 531^2 here) is free next to the N^2 output it saves.
+        #
+        # MEASURED on the design-121 fan order at ``n_fine_cap=8192``: the two
+        # order-1 NaN passes (this one and the ray-density one below) were
+        # 2.43 % of the order's wall; the whole ``map_coordinates`` bucket was
+        # 9.87 %, the profile's #2 site.  Whether the guard FIRES is a property
+        # of the ray-fit hull, which the audit explicitly left unmeasured
+        # (its sec 11 item 5) -- ``FIX_PERF_ROUND2_2026_08_10.md`` sec 3
+        # measures it per call site.
+        _opl_has_nan = bool(np.isnan(opl_coarse).any())
         if _chunk_assembly:
             # Row-band path: defer the upsample into the Step-3 band loop
             # (map_coordinates is pointwise in the OUTPUT at any order -- the
@@ -9810,7 +9990,11 @@ def apply_real_lens_traced(
             # (2, N, N) coords stack, opl_map and nan_full never allocate.
             _opl_coarse_clean = np.where(
                 np.isnan(opl_coarse), 0.0, opl_coarse)
-            _nan_coarse = np.isnan(opl_coarse).astype(np.float64)
+            # ``None`` when the coarse OPL is NaN-free -- the band loop then
+            # skips its own per-band NaN pass, exactly as the whole-grid
+            # branch does, and for the same by-construction reason.
+            _nan_coarse = (np.isnan(opl_coarse).astype(np.float64)
+                           if _opl_has_nan else None)
             opl_map = None
         else:
             # v5.16.2 (memory root-cause): build the (2, N, N) coordinate
@@ -9819,7 +10003,26 @@ def apply_real_lens_traced(
             # with ii/jj held throughout -- ~4 extra full-grid float64
             # (~34 GB at N=32768) at the upsample peak.  Same coords,
             # same map_coordinates inputs -> byte-identical outputs.
-            ii, jj = np.indices((N, N), dtype=np.float64)
+            # FIX_PERF_ROUND2_2026_08_10 item 2 (the coords half).  The stack is
+            # built STRAIGHT INTO its final buffer instead of through
+            # ``np.indices`` + a two-element ``np.array`` list build.  The old
+            # form materialised the (2, N, N) index pair (4.295 GB at
+            # n_fine = 16384), then TWO more full-grid quotients, then the
+            # (2, N, N) result -- a ~12.9 GB transient peak for a 4.295 GB
+            # answer.  BIT-IDENTICAL: ``np.indices(..., float64)`` holds exact
+            # integer-valued float64s, so ``arange(N, float64) / sub`` is the
+            # same IEEE division of the same two operands, broadcast into the
+            # same rows/columns (``ii[r, c] = r``, ``jj[r, c] = c``).
+            #
+            # The audit's OTHER option here -- caching the stack ACROSS calls
+            # (its ranked row 7, 1.10-1.19x on a synthetic upsample) -- is
+            # deliberately NOT taken: on the real order this whole build
+            # MEASURES 0.30 % of the wall (profile leaf ``:9833``), while a
+            # live cache would retain 4.295 GB of full-grid float64 at
+            # n_fine = 16384 for the rest of the order, against a branch whose
+            # companion item just FREED 34.9 GB of exactly this shape.  The
+            # measurement is in ``FIX_PERF_ROUND2_2026_08_10.md`` sec 3.2.
+            #
             # Coarse sample u sits at FINE index u*sub (the ``X[::sub]``
             # lattice), so the exact mapping is ii/sub for ANY sub.  The
             # previous ``ii * Ns / N`` (Ns = ceil(N/sub)) equals ii/sub only
@@ -9829,9 +10032,11 @@ def apply_real_lens_traced(
             # diagonal focus walk (audit
             # AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24; the F-C fine-retrace
             # rescale routinely produces non-divisor ray_subsample values).
-            # Bit-identical whenever sub | N.
-            _coords = np.array([ii / sub, jj / sub])
-            del ii, jj
+            _idx_ax = np.arange(N, dtype=np.float64) / sub
+            _coords = np.empty((2, N, N), dtype=np.float64)
+            _coords[0] = _idx_ax[:, None]
+            _coords[1] = _idx_ax[None, :]
+            del _idx_ax
             # R7 / audit F2 (2026-07-21): CUBIC (order-3) OPL upsample when a
             # carrier is set.  The Newton OPL is solved on the COARSE grid
             # (spacing sub*dx) and interpolated to the wave grid; LINEAR
@@ -9854,10 +10059,14 @@ def apply_real_lens_traced(
                 prefilter=(_opl_up_order > 1))
             # Propagate NaN mask (order-1 keeps the ray-domain boundary crisp;
             # any cubic bleed of the 0-fill into a valid pixel adjacent to NaN
-            # is masked out here).
-            nan_coarse = np.isnan(opl_coarse).astype(np.float64)
-            nan_full = map_coordinates(
-                nan_coarse, _coords, order=1, mode='nearest')
+            # is masked out here).  Skipped outright when there is no NaN to
+            # propagate -- see the guard's derivation at ``_opl_has_nan``.
+            if _opl_has_nan:
+                nan_coarse = np.isnan(opl_coarse).astype(np.float64)
+                nan_full = map_coordinates(
+                    nan_coarse, _coords, order=1, mode='nearest')
+            else:
+                nan_full = None
             # K3 (N15 perf): hand the coordinate stack to the ray-density
             # upsample (identical ``Ns``) rather than let it rebuild
             # ``np.indices`` + a second (2, N, N) float64 array.  For the
@@ -9874,7 +10083,8 @@ def apply_real_lens_traced(
             # (AUDIT_TRACED_MEMORY_2026_08_09 sec 2.3).  Pure lifetime; the
             # screen path deleted it here already.
             del _coords
-            opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
+            if nan_full is not None:
+                opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
             del nan_full
     elif _use_fit:
         # T-P2: full-grid inverse-map fit (no Newton, no amp mask).
@@ -9918,15 +10128,27 @@ def apply_real_lens_traced(
                     and _rd_upsample_coords[1] == Ns_rd):
                 _coords_rd = _rd_upsample_coords[0]
             else:
-                ii_rd, jj_rd = np.indices((N, N), dtype=np.float64)
                 # ii/sub, not ii*Ns/N: exact for any sub (see the OPL
-                # upsample above -- same lattice, same walk bug otherwise).
-                _coords_rd = np.array([ii_rd / sub, jj_rd / sub])
-                del ii_rd, jj_rd
+                # upsample above -- same lattice, same walk bug otherwise),
+                # and built straight into its buffer for the same reason and
+                # with the same bit-identity argument.
+                _idx_rd = np.arange(N, dtype=np.float64) / sub
+                _coords_rd = np.empty((2, N, N), dtype=np.float64)
+                _coords_rd[0] = _idx_rd[:, None]
+                _coords_rd[1] = _idx_rd[None, :]
+                del _idx_rd
             _a_rd = _mc_rd(np.where(np.isnan(ard_coarse), 0.0, ard_coarse),
                            _coords_rd, order=1, mode='nearest')
-            _nan_rd = _mc_rd(np.isnan(ard_coarse).astype(np.float64),
-                             _coords_rd, order=1, mode='nearest')
+            # Same NaN-pass guard as the OPL upsample above, on this array's
+            # OWN NaN census (the ray-density amplitude and the OPL come from
+            # the same Newton solve but are masked separately, so neither
+            # census stands in for the other).  Bit-identical by construction:
+            # with no NaN in ``ard_coarse`` the second interpolation returns
+            # identically 0 and the ``np.where`` below is the identity.
+            _rd_has_nan = bool(np.isnan(ard_coarse).any())
+            _nan_rd = (_mc_rd(np.isnan(ard_coarse).astype(np.float64),
+                              _coords_rd, order=1, mode='nearest')
+                       if _rd_has_nan else None)
             # 'remap': upsample the entrance-pulled residual phasor with the
             # SAME coordinate stack, then renormalise to unit modulus (the
             # bilinear interp of a unit phasor has |z| <= 1; where |z| ~ 0
@@ -9964,10 +10186,13 @@ def apply_real_lens_traced(
                 del _pz, _pa
             del _coords_rd
             _rd_upsample_coords = None
-            ard_map = np.where(_nan_rd > 0.5, np.nan, _a_rd)
+            ard_map = (np.where(_nan_rd > 0.5, np.nan, _a_rd)
+                       if _nan_rd is not None else _a_rd)
             # Both upsampled halves are consumed by that one ``where``; they
             # were held to the end of the call.  2 x 2.147 GB at
-            # n_fine = 16384 (census sec 2.3).  Pure lifetime.
+            # n_fine = 16384 (census sec 2.3).  Pure lifetime.  On the skipped
+            # branch ``ard_map`` IS ``_a_rd`` (the ``where`` was the identity),
+            # so only the name is dropped -- the array is the return path's.
             del _nan_rd, _a_rd
         else:
             ard_map = _ray_density_amp_grid(X, Y)
@@ -10075,11 +10300,17 @@ def apply_real_lens_traced(
                                     order=_opl_up_order, mode='nearest',
                                     prefilter=(_opl_up_order > 1))
             # NaN mask stays order-1 (crisp ray-domain boundary), exactly as
-            # the whole-grid path does.
-            nan_b = map_coordinates(_nan_coarse, coords_b,
-                                    order=1, mode='nearest')
+            # the whole-grid path does -- including its NaN-pass guard, so the
+            # banded and whole-grid routes stay element-identical to each
+            # other as well as to their pre-guard selves.
+            if _nan_coarse is not None:
+                nan_b = map_coordinates(_nan_coarse, coords_b,
+                                        order=1, mode='nearest')
+            else:
+                nan_b = None
             del ii_b, jj_b, coords_b
-            opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
+            if nan_b is not None:
+                opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
             valid_b = np.isfinite(opl_b)
             if preserve_input_phase:
                 dp_b = np.where(

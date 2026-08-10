@@ -275,12 +275,18 @@ def test_the_drain_actually_releases_the_out_array():
     wr = weakref.ref(out)
     del out
     gc.collect()
-    assert wr() is not None, (
-        'numexpr no longer retains out=; this test has nothing to prove')
+    # Whether numexpr retains out= is a LIBRARY-VERSION fact (>=2.11
+    # ContextDict retains; some CI builds do not).  The load-bearing
+    # invariant is unconditional: AFTER the drain nothing retains.  The
+    # release demonstration runs only where the retention exists.
+    retained = wr() is not None
     LR._drop_numexpr_out_retention()
     gc.collect()
     assert wr() is None, (
-        'the drain did not release numexpr\'s reference to the out= array')
+        'the drain did not release numexpr\'s reference to the out= array'
+        if retained else
+        'no retention on this numexpr build, yet the array is somehow '
+        'alive after the drain -- a new retention path')
 
 
 # ===========================================================================

@@ -3182,7 +3182,35 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     left to an incidental ``AssertionError``/broadcast error.  Both library
     call sites clamp ``n_crop`` to the grid, so this is a contract guard,
     not a behaviour change.
+
+    FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 1; AUDIT_TRACED_SPEED sec 5,
+    row 5 of its ranked table).  The transform pair below used to be RAW
+    ``np.fft.fft2`` / ``np.fft.ifft2``, i.e. single-threaded pocketfft, on the
+    one shape in the whole chain where it matters -- this function runs TWICE
+    per exact final leg at the FINE grid (retrace + readout), which is
+    8192-16384 square.  Every other transform in the library goes through the
+    :func:`_fft2` / :func:`_ifft2` dispatcher (pyFFTW with a cached plan and
+    ``FFTW_THREADS`` threads, scipy.fft next, numpy last), so this site was the
+    only large FFT paying a single core.  MEASURED on the design-121 fan order
+    at ``n_fine_cap=8192``: the raw-pocketfft leaves under this function were
+    2.51 % of the order's wall and the whole function 3.69 %.
+
+    ACCURACY.  This is NOT bit-identical -- pyFFTW and pocketfft are different
+    implementations of the same transform and differ at FFT round-off.  The
+    deviation is BOUNDED and MEASURED rather than asserted: see
+    ``FIX_PERF_ROUND2_2026_08_10.md`` sec 2, which reports the relative L2 of
+    this function's own output at the shipped shapes and the end-to-end
+    readout-field delta.  A caller that needs the historical pocketfft bits can
+    pin them with ``set_use_pyfftw(False)`` + ``set_use_scipy_fft(False)``,
+    which routes the dispatcher back to ``numpy.fft``.
+
+    BUFFER OWNERSHIP.  ``_fft2`` / ``_ifft2`` may hand back one of the plan
+    cache's ping-pong workspaces (see their docstrings).  Both results here are
+    consumed by ``np.fft.fftshift``, which is ``np.roll`` and therefore always
+    allocates a fresh array, so nothing this function returns aliases a
+    workspace and no defensive copy is needed.
     """
+    from .fft_infra import _fft2, _ifft2
     env = np.asarray(env)
     n = env.shape[-1]
     n_crop = int(n_crop)
@@ -3200,7 +3228,17 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     if n_fine == n_crop:
         out = ec
     else:
-        F = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(ec)))
+        # DTYPE PARITY with the raw ``np.fft`` this replaced: numpy's FFT is
+        # double-only and returns complex128 for EVERY input dtype, while the
+        # dispatcher's pyFFTW / scipy backends preserve complex64.  Promote
+        # here so a non-complex128 caller keeps the historical output dtype
+        # instead of silently acquiring a narrower one (the shipped chain is
+        # complex128, where ``asarray`` is a no-op and no copy is made).
+        _ecs = np.fft.ifftshift(ec)
+        if _ecs.dtype != np.complex128:
+            _ecs = _ecs.astype(np.complex128)
+        F = np.fft.fftshift(_fft2(_ecs))
+        del _ecs
         if n_fine > n_crop:
             # Zero-pad the spectrum (exact band-limited upsample).
             pad = np.zeros((n_fine, n_fine), dtype=np.complex128)
@@ -3211,7 +3249,7 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
             # band-limited downsample -- k-space low-pass truncation).
             o = n_crop // 2 - n_fine // 2
             pad = F[o:o + n_fine, o:o + n_fine]
-        out = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(pad)))
+        out = np.fft.fftshift(_ifft2(np.fft.ifftshift(pad)))
         # Same value-preserving scale in both directions: numpy's ifft2
         # normalises by 1/(output size)^2, so re-gridding from n_crop to
         # n_fine samples over the SAME window needs (n_fine/n_crop)^2 to
@@ -3245,7 +3283,12 @@ def _crop_about_centre(env, dx, x0, y0, n_crop, where):
     from it; the user-visible guard for the same failure is that function's
     ``on_readout_window``, which measures the power the bound actually
     truncates.  An earlier revision described THIS raise as the protection,
-    which it was not -- the clamp was silent."""
+    which it was not -- the clamp was silent.
+
+    FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 4a): the sub-pixel shift this
+    delegates to :func:`_shift_envelope` now goes through the library's own
+    ``_fft2`` / ``_ifft2`` dispatcher, for exactly the reason
+    :func:`_fourier_upsample_crop` does -- see the note there."""
     e = np.asarray(env)
     n = e.shape[-1]
     n_crop = int(n_crop)
@@ -5002,16 +5045,41 @@ def _shift_envelope(env, sx, sy, dx):
     Exact for any band-limited envelope (the chain's envelopes are exactly
     that -- the carrier holds all the fast phase), and sub-pixel by
     construction, so the chief-ray offset is never quantised to the grid.
-    Periodic: callers must check the beam still fits (``_check_tilt_fits``)."""
+    Periodic: callers must check the beam still fits (``_check_tilt_fits``).
+
+    FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 4a).  The transform pair was
+    RAW ``np.fft``, i.e. single-threaded pocketfft, and it runs on the exact
+    leg's FINE grid through :func:`_crop_about_centre` -- MEASURED at 1.37 % of
+    a design-121 fan order's wall at ``n_fine_cap=8192``, which made it the
+    second-largest raw-``np.fft`` site after
+    :func:`_fourier_upsample_crop`.  Same dispatcher, same accuracy statement
+    (bounded at FFT round-off, NOT bit-identical -- see that function's note
+    and ``FIX_PERF_ROUND2_2026_08_10.md`` sec 5), and the same dtype-parity
+    promotion so a non-complex128 caller keeps the complex128 numpy's
+    double-only FFT always returned.
+
+    BUFFER OWNERSHIP: ``_fft2``'s result is consumed by the ``* ramp``
+    multiply (a fresh array) before any other FFT is issued, and ``_ifft2``'s
+    is handed to ``astype``/returned -- so the return value can alias a plan
+    workspace only when ``e`` is already complex128 AND ``astype(copy=False)``
+    elects not to copy.  It is copied explicitly for that case: this function's
+    callers hold the result across further transforms at the same shape."""
     e = np.asarray(env)
     if sx == 0.0 and sy == 0.0:
         return e.copy()
+    from .fft_infra import _fft2, _ifft2
     ny, nx = e.shape[-2], e.shape[-1]
     fx = np.fft.fftfreq(nx, d=dx)
     fy = np.fft.fftfreq(ny, d=dx)
     ramp = np.exp(-2j * np.pi * (fx[None, :] * sx + fy[:, None] * sy))
-    out = np.fft.ifft2(np.fft.fft2(e) * ramp)
-    return out.astype(e.dtype, copy=False) if np.iscomplexobj(e) else out
+    _e = e if e.dtype == np.complex128 else np.asarray(e, dtype=np.complex128)
+    out = _ifft2(_fft2(_e) * ramp)
+    if np.iscomplexobj(e):
+        # ``astype(copy=False)`` would return the dispatcher's own ping-pong
+        # workspace unchanged when the dtypes already match; copy so the
+        # caller owns its array (see BUFFER OWNERSHIP above).
+        return np.array(out, dtype=e.dtype, copy=True)
+    return np.array(out, copy=True)
 
 
 def _tilt_ramp(shape, dx, wavelength, L, M, x0, y0, sign):
