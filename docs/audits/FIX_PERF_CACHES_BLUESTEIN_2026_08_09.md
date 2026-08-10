@@ -50,7 +50,8 @@ measurement confound and is called out wherever it matters (5.2).
 > `n_fine_cap = 16384` where it used to approve **6** -- and the measured
 > per-order peak is 98.85 GB, so six of them was ~484 GB on a 128 GB box.
 > (b) By the same arithmetic, `_memory_bounded_n_fine` now needs **137.4 GB of
-> budget** to approve `n_fine = 16384` (it used to need 34.4 GB), so on a
+> budget** to approve `n_fine = 16384` (it used to need 34.4 GB; at the
+> re-measured `n_work = 22` it is **189.0 GB** -- see sec 2.4), so on a
 > 137.4 GB box design 121's shipped `NFC = 16384` will be CLAMPED to 8192 and
 > announce `RESOLUTION-LIMITED (non-converged)` unless the operator raises the
 > budget deliberately.  That is exactly the audit's finding -- "the model being
@@ -179,6 +180,7 @@ ran at 256 -- the two halves of one `n_fine_cap` disagreeing, silently.
 
 With `frac = 0.5` unchanged and `n_work = 16`, approving `n_fine = 16384`
 needs `16 * 16 B * 16384^2 / 0.5` = **137.4 GB of budget** (it needed 34.4 GB).
+(**SUPERSEDED**: that figure is the `_FINE_GRID_WORK_ARRAYS = 16` model this document ships.  The constant has since been re-measured twice -- 20 in `FIX_PERF_PARALLEL_2026_08_10.md` sec 3.2, then **22** in `FIX_VERIFY_PERF_2026_08_10.md` sec 4 -- and the budget `n_fine = 16384` needs is now **189.0 GB**, not 137.4.  The conclusion is unchanged and stronger: the shipped `NFC = 16384` is further out of reach on this box, not nearer.)
 On the 137.4 GB box the audit measured, the shipped `NFC = 16384` therefore
 degrades to 8192 with the `RESOLUTION-LIMITED (non-converged)` warning, and
 audit sec 2.5 measured what that costs: `dx_fine` 1.5243 um against a
@@ -504,7 +506,12 @@ paraxial `_par_kw` drop path, since that fixture's final leg is paraxial.  No
    16-array model it now demands 137.4 GB of budget for `n_fine = 16384`
    against a MEASURED whole-process peak of 98.85 GB -- conservative by ~1.4x.
    Whether the fraction should move with the calibrated count is a separate
-   question and needs its own measurement.
+   question and needs its own measurement.  **CLOSED, partly**:
+   `FIX_PERF_PARALLEL_2026_08_10.md` sec 3.2 answers "not `frac`, the term
+   that scales", and `FIX_VERIFY_PERF_2026_08_10.md` sec 4 re-derives that
+   term again over the worker-child peaks (22 arrays + a 2.6 GB floor ->
+   189.0 GB of budget for 16384, against a re-measured 84.6 GB peak).  `frac`
+   itself is still 0.5 and still not independently derived.
 5. **The plan-cache byte cap is a per-WORKSPACE bound, not a total-bytes one.**
    `_H_CACHE` has both; a total bound here would evict plans and cause
    re-planning churn, which is a different trade and was not measured.

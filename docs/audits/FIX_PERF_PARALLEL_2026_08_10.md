@@ -21,11 +21,15 @@ Three things ship here, and they are one thing:
    for `ADJUDICATION_NFC_8192_2026_08_10.md`'s headline finding: on this box
    the shipped `NFC=16384` ALREADY RAN AT 8192, silently.
 3. **The clamp's cost model is re-derived from measurement.**  Not `frac`:
-   the term that scales.  `_FINE_GRID_WORK_ARRAYS` was 16 and is measurably
-   **19.1**, and there is a **2.3 GB** per-process floor the model did not
-   have at all.  The shipped model was therefore 1.20x OPTIMISTIC on the term
-   that grows -- it priced an `NFC=8192` congruence worker at 17.55 GB against
-   a measured 24.0 GB and approved FIVE workers where four fit.
+   the term that scales.  `_FINE_GRID_WORK_ARRAYS` was 16 against a measured
+   two-order slope of **19.1**, and there is a per-process floor the model did
+   not have at all.  The shipped model was therefore 1.20x OPTIMISTIC on the
+   term that grows -- it priced an `NFC=8192` congruence worker at 17.55 GB
+   against a measured 24.0 GB and approved FIVE workers where three fit.
+   **The split shipped here is (22, 2.6 GB), re-derived 2026-08-10 over the
+   worker-CHILD peaks as well as the whole-process ones** -- see sec 3.2-3.4
+   and `FIX_VERIFY_PERF_2026_08_10.md` sec 4.  A `paraxial` worker, which
+   builds no fine grid, pays its own measured 1.0 GB floor instead.
 
 And then the thing all three exist for: **the k-ladder, measured.**
 
@@ -140,6 +144,9 @@ GRID INTENT -- design-121 fan, 32 orders, NFC=16384 CW=1
   congruence workers   : 1
   clamp ceiling        : 8192  (the largest grid a 104.94 GB budget approves;
                                 16384 needs 171.8 GB of budget)
+                                [transcript taken at n_work=20; at the shipped
+                                 22 the same line reads 189.0 GB -- the verdict
+                                 and the exit code are unchanged]
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 REFUSED -- design-121 fan, 32 orders, NFC=16384 CW=1
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -147,7 +154,7 @@ REFUSED -- design-121 fan, 32 orders, NFC=16384 CW=1
   * this run would have produced a 8192x8192 answer wearing a 16384 label ...
   Remedies:
     RAMB=inf   -- disable the clamp, having read that one order peaks at ...
-    RAMB=<GB>  -- pin the budget (>= 171.8)
+    RAMB=<GB>  -- pin the budget (>= 171.8; 189.0 at the shipped n_work=22)
     NFC=8192   -- ask for the grid the box can hold
 ```
 
@@ -244,10 +251,21 @@ right at both ends.  A straight line in `n_fine^2` fits all three to within
 
 ### 3.2 What was set, and why not `frac`
 
+> **RE-DERIVED 2026-08-10** (`FIX_VERIFY_PERF_2026_08_10.md` sec 4).  This
+> section, 3.3, 3.4 and the sec 4.2 transcript were first written against
+> `_FINE_GRID_BASE_BYTES = 2.3e9`, which is not what the commit shipped
+> (4.5e9); and the 4.5e9 split was then found to read **1.476x** a
+> newly-measured `n_fine = 4096` worker child, i.e. outside this branch's own
+> 1.5x bound.  The split below is the one in the tree, re-derived as a
+> constrained upper-bound envelope over EVERY measured point -- whole-process
+> AND worker-child, two-order AND six-order, three grids.  Every figure in
+> 3.2-3.4 has been regenerated against it.
+
 | constant | was | now | why |
 |---|---|---|---|
-| `_FINE_GRID_WORK_ARRAYS` | 16 | **20** | the measured slope is 19.1; 20 is the round-up, so the grid term is an upper bound at every measured point |
-| `_FINE_GRID_BASE_BYTES` | (did not exist) | **2.3 GB** | the measured intercept 2.635 GB less the 0.369 GB the `_MULTI_WORKER_GRID_FACTOR` term already charges for that measurement's own 1024^2 input |
+| `_FINE_GRID_WORK_ARRAYS` | 16 | **22** | the two-order whole-process slope is 19.1, but a worker CHILD sits above that line at 8192 (26.0 GB vs 23.97), so the ENVELOPE's slope is not the fit's.  22 is the slope that minimises the worst model/measured ratio subject to keeping >= 2 % of margin over that child AND not pushing the 16384 price past what the runners' pre-flight approves for one worker on this box |
+| `_FINE_GRID_BASE_BYTES` | (did not exist) | **2.6 GB** | the per-process floor, EXACT leg: the measured intercept (2.635 GB less the 0.369 GB the `_MULTI_WORKER_GRID_FACTOR` term already charges for that measurement's own 1024^2 input = 2.3 GB) rounded up, and still clear of the ~1.75 GB interpreter-plus-import commit the Newton pool measured independently |
+| `_PARAXIAL_BASE_BYTES` | (did not exist) | **1.0 GB** | `final_leg='paraxial'` builds no fine grid and MEASURES 0.44-1.17 GB per worker; charging it the exact leg's floor took a 16 GB-free box from 21 approved workers to one (`FIX_VERIFY_PERF` sec 5) |
 | `_FINE_GRID_RAM_FRAC` | 0.5 | **0.5** | unchanged -- see below |
 
 **`frac` was NOT moved, and that is a decision with a reason, not an
@@ -258,8 +276,8 @@ two clamps that meet on the exact final leg must speak the same language" --
 and `_lens_traced.py`'s pool internals are outside this change's scope.  More
 to the point, `frac = 0.5` now has a MEASURED justification it did not have
 before: the rule prices the GRID against half the budget, and the other half
-has to cover the process floor, which is now known to be 2.3 GB.  Half a
-budget covers a 2.3 GB floor for any budget above ~4.6 GB, so the reserve is
+has to cover the process floor, which is now known to be 2.6 GB.  Half a
+budget covers a 2.6 GB floor for any budget above ~5.2 GB, so the reserve is
 sufficient rather than merely cautious -- that is the statement the old `frac`
 could not make.
 
@@ -270,41 +288,77 @@ charged by `_fine_grid_ceiling`: that rule prices ONE process's grid against
 `frac * budget`, the remaining fraction IS the allowance for the floor, and
 charging it twice would refuse every grid down to `_FINE_GRID_MIN` on a box
 whose budget comfortably holds one.  The floor is also a design-121-CLASS
-figure, not a universal python floor, and the ceiling is called by everything.
+figure, not a universal python floor, and the ceiling is called by everything
+-- which is also why the EXACT leg's floor is not charged to a `paraxial`
+worker (`_PARAXIAL_BASE_BYTES`, sec 3.2).
 
 ### 3.3 The model against the measurement
 
-`_fine_grid_peak_bytes(n, n_px=1024^2)` with (20, 2.3 GB):
+`_fine_grid_peak_bytes(n, n_px=1024^2)` with (22, 2.6 GB).  All eleven
+measured points, in bytes (`kladder_121.py` reports GiB under a `_gb` name;
+every row here is that value x 2^30 -- reading one as decimal GB is what
+produced the 1.540x claim of `VERIFY_PERF_BRANCH` D4):
 
-| `n_fine` | measured | model | model / measured |
+| `n_fine` | measured | what it is | model | model / measured |
+|---|---|---|---|---|
+| 4096 | 7.123 GB | 2 orders, whole process | 8.875 GB | **1.246** |
+| 4096 | 7.120 GB | 2 orders, whole process, re-run | 8.875 GB | **1.246** |
+| 4096 | **6.937 GB** | 2 orders, largest CHILD at k=2 | 8.875 GB | **1.279** |
+| 8192 | 23.968 GB | 2 orders, whole process | 26.591 GB | **1.109** |
+| 8192 | 24.443 GB | 2 orders, whole process, re-run | 26.591 GB | **1.088** |
+| 8192 | 25.331 GB | 6 orders, whole process | 26.591 GB | **1.050** |
+| 8192 | 25.951 GB | 2 orders, largest CHILD at k=3 | 26.591 GB | **1.025** |
+| 8192 | **26.001 GB** | 6 orders, largest CHILD at k=2 | 26.591 GB | **1.023** |
+| 8192 | 25.985 GB | 6 orders, largest CHILD at k=3 | 26.591 GB | **1.023** |
+| 8192 | 25.772 GB | 6 orders, largest CHILD at k=4->3 | 26.591 GB | **1.032** |
+| 16384 | 84.589 GB | 2 orders, whole process | 97.458 GB | **1.152** |
+
+An upper bound at all eleven, worst ratio **1.279** (the pre-fix (20, 4.5 GB)
+split read **1.476** on the 4096 child, 1.6 % inside its own bar).  Tightest
+where it matters: 1.023 on the largest child, which is the row the worker
+clamp is actually decided by, and which the pre-fix split cleared by only
+1.3 %.  Under-pricing is an OOM; over-pricing is only a lost worker.
+
+A steeper slope prices the small end better still -- (23, 2.0 GB) reads 1.232
+worst -- but takes `n_fine = 16384` from 97.5 to 101.2 GB per worker, which is
+where the runners' pre-flight stops approving a SINGLE 16384 worker on a
+~105 GB-free box.  (22, 2.6 GB) is the choice that keeps that configuration
+approvable; the trade is recorded at the constant.
+
+The PARAXIAL leg, same model with `n_fine = 0`:
+
+| input | measured worker | model | ratio |
 |---|---|---|---|
-| 4096 | 7.123 GB | 8.038 GB | **1.128** |
-| 8192 | 23.968 GB | 24.144 GB | **1.007** |
-| 16384 | 84.589 GB | 88.568 GB | **1.047** |
-
-A tight upper bound at all three, which is the property a worker clamp needs:
-under-pricing is an OOM, over-pricing is only a lost worker.
+| 1024^2, design-121 fan, largest CHILD at k=2 | 1.174 GB | 1.369 GB | **1.166** |
+| 1024^2, one-process stand-in | 0.951 GB | 1.369 GB | 1.440 |
+| 512^2, stand-in | 0.571 GB | 1.092 GB | 1.913 |
+| 256^2, stand-in | 0.470 GB | 1.023 GB | 2.177 |
+| 128^2, stand-in | 0.435 GB | 1.006 GB | 2.312 |
 
 ### 3.4 What the clamp now approves
 
 ```
 box budget 105.06 GB          ceiling = 8192
-  n= 4096 -> 4096      clamp needs   10.7 GB of budget
-  n= 8192 -> 8192      clamp needs   42.9 GB of budget
-  n=12288 -> 8192      clamp needs   96.6 GB of budget
-  n=16384 -> 8192      clamp needs  171.8 GB of budget
+  n= 4096 -> 4096      clamp needs   11.8 GB of budget
+  n= 8192 -> 8192      clamp needs   47.2 GB of budget
+  n=12288 -> 8192      clamp needs  106.3 GB of budget
+  n=16384 -> 8192      clamp needs  189.0 GB of budget
 
 D8 worker clamp, fan shape (1024^2, K=32, 8 GB reserve, 105.1 GB free):
-  NFC= 8192  per-worker MODEL 24.14 GB  requested 2/3/4/6/8/32 -> 2/3/4/4/4/4
-  NFC=16384  per-worker MODEL 88.57 GB  requested 2/3/4/6/8/32 -> 1/1/1/1/1/1
+  NFC= 8192  per-worker MODEL  26.59 GB  requested 2/3/4/6/8/32 -> 2/3/3/3/3/3
+  NFC=16384  per-worker MODEL  97.46 GB  requested 2/3/4/6/8/32 -> 1/1/1/1/1/1
+
+  paraxial leg, same fan shape (no fine grid):
+  1024^2 in per-worker MODEL   1.37 GB  requested 2/3/4/6/8/32 -> 2/3/4/6/8/32
 ```
 
-The `NFC=8192` row moved from 5 to **4**, and section 4 measures whether 4 is
-right.  `16384` stays at 1, now for a measured reason: one order really does
-peak at 84.6 GB.
+The `NFC=8192` row moved from 5 to **3**, and section 4 measures k = 1..4
+directly: 3 is what the box holds and the clamp's own refusal of a fourth
+worker (sec 4.2) is reproduced there.  `16384` stays at 1, now for a measured
+reason: one order really does peak at 84.6 GB.
 
 **`16384` still needs an explicit budget on this box, and should.**  The clamp
-demands 171.8 GB where the run measurably peaks at 84.6 GB -- a 2.03x margin
+demands 189.0 GB where the run measurably peaks at 84.6 GB -- a 2.23x margin
 against the shipped model's 1.62x, i.e. this change made the DEFAULT more
 conservative, not less.  That is the correct direction here: 84.6 GB is 80 %
 of everything currently free on this box, and a default that hands 80 % of
@@ -312,6 +366,12 @@ free memory to one leg without being asked is the same class of decision as
 the one that made the clamp approve six workers.  What was wrong was never the
 conservatism -- it was that the refusal was silent.  It is now an exit code
 with four named remedies (sec 2.3).
+
+(For the record of what moved when: at `_FINE_GRID_WORK_ARRAYS = 16` this line
+read **137.4 GB**, at 20 it read **171.8 GB**, and at the shipped 22 it reads
+**189.0 GB**.  `FIX_PERF_CACHES_BLUESTEIN_2026_08_09.md` and
+`ADJUDICATION_NFC_8192_2026_08_10.md` still quote the 16-array 137.4 and are
+annotated accordingly.)
 
 ---
 
@@ -356,6 +416,14 @@ propagate_traced_carrier_chain_multi: congruence_workers=4 would need
 ~96.6 GB (24.1 GB per worker at 1024^2 complex128) but only 104.2 GB is
 available with a 8 GB reserve; running 3 worker(s) instead.
 ```
+
+**That transcript is a real run's output at `_FINE_GRID_BASE_BYTES = 2.3e9`,
+which is not the value the commit shipped and not the value in the tree
+today.**  It is kept verbatim rather than re-typed, because it is evidence.
+Re-evaluated at the shipped (22, 2.6 GB) the same clamp says `4 x 26.591 =
+106.4 GB` against the same `104.2 - 8 = 96.2 GB`, so it still returns **3** --
+the arithmetic in the message moves, the decision does not.  (At the commit's
+own 4.5 GB it read `4 x 26.344 = 105.4 GB`, also 3.)
 
 so that arm is an unplanned REPRODUCIBILITY check on k=3 rather than a fourth
 point: 427.0 s against 422.6 s, **1.0 % apart**, with identical output hashes.
@@ -403,8 +471,8 @@ post-run grid check.
 
 | `n_fine_cap` | model per worker | clamp's k | measured basis |
 |---|---|---|---|
-| **8192** | 26.34 GB | **3** | largest child 26.0 GB; 3 workers held a 72.6 GB tree with 32.5 GB still free |
-| **16384** | 90.77 GB | **1** | one order peaks at 84.6 GB; two would need ~170 GB against 137.4 GB of physical memory |
+| **8192** | 26.59 GB | **3** | largest child 26.0 GB; 3 workers held a 72.6 GB tree with 32.5 GB still free |
+| **16384** | 97.46 GB | **1** | one order peaks at 84.6 GB; two would need ~170 GB against 137.4 GB of physical memory |
 
 The runners' pre-flight, which additionally prices the parent's common-grid
 accumulator, agrees at both caps:
@@ -498,8 +566,8 @@ test_niche_p2_guards.py + test_niche_d8_congruence_workers.py
 fan_multi_121.py     guard=True        work arrays 20  base 4.5 GB  frac 0.50
 focus_scan_121.py    guard=True        budget 104.42 GB -> ceiling 8192
 kladder_121.py       guard=True        D8 clamp NFC=8192, requested 8 -> 3
-  model( 8192) 26.344 GB vs measured 25.996 -> 1.013
-  model(16384) 90.768 GB vs measured 84.589 -> 1.073
+  model( 8192) 26.591 GB vs measured 25.996 -> 1.023
+  model(16384) 97.458 GB vs measured 84.589 -> 1.152
 ```
 
 i.e. the guard predicate, the constants and the clamp's choice are the same on
@@ -522,12 +590,17 @@ both builds.
    than merely a sufficient one is a question about the Newton pool's copy of
    the same constant, and that file is out of scope here.  The consequence is
    live: `NFC=16384` needs an explicit `RAMB` on any box under 172 GB.
-4. **The 2.3 GB / 4.5 GB floor is a design-121-class figure.**  It was
-   measured on this leg, this input shape and this branch, and it grew by 1.8x
-   between a two-order and a six-order process because the leg's caches grow
-   with the orders a process runs.  A 32-order-per-worker run may exceed it;
-   the caches are byte-capped since item #6, so it should saturate, but that
-   was not measured here.
+4. **The 2.6 GB floor is a design-121-class EXACT-LEG figure.**  It was
+   measured on this leg, this input shape and this branch.  A process's peak
+   grows with the number of orders it runs (the leg's caches do), which is why
+   the SLOPE and not the floor carries that excess in the re-derived split;
+   a 32-order-per-worker run may still exceed the envelope.  The caches are
+   byte-capped since item #6, so it should saturate, but that was not measured
+   here.  `final_leg='paraxial'` has its own MEASURED floor
+   (`_PARAXIAL_BASE_BYTES` = 1.0 GB) and its own, narrower envelope: nothing
+   in this model prices the paraxial readout's `N_out`, and an UNTILED
+   readout at `N_out = 8192` measured 11.2 GB per worker
+   (`FIX_VERIFY_PERF_2026_08_10.md` sec 5).
 5. **Peak RSS is sampled at 1 Hz.**  A sub-second allocation transient is
    invisible to it.  Every plateau reported here lasts tens of seconds.
 6. **Nothing was done about the efficiency roll-off.**  63.5 % at k=3 is

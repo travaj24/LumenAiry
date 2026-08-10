@@ -747,8 +747,10 @@ def estimate_asm_memory(n_grid: int,
     It is deliberately NOT the steady-state figure.  Once H and the pyFFTW
     plans are resident, the measured per-call peak is just the output field
     -- ``1.00 x N^2 x itemsize`` (measured 1.000-1.008 over
-    N = 256..2048) -- so this estimate runs ~6.4x that asymptotically, and
-    more at small N where the fixed import term dominates (20x at N=512
+    N = 256..2048) -- so this estimate runs ~6.4x that at the shapes where a
+    plan key still holds TWO workspaces, ~4.4x once the v5.33.2 per-key byte
+    cap drops it to one (N >= 11181 at complex128, ``plan_cache_keys=2``),
+    and more at small N where the fixed import term dominates (20x at N=512
     complex128).  Use ``N * N * np.dtype(complex_dtype).itemsize`` if a
     steady-state per-call transient is what you want.
 
@@ -795,9 +797,24 @@ def estimate_asm_memory(n_grid: int,
     # over-predicting by a full grid per key at exactly the sizes where a
     # grid is gigabytes.  Unchanged at every N the A-6 pins sample (two
     # complex128 buffers at N = 1024 are 33.5 MB, three orders under the cap).
+    #
+    # v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D1): the dtype handed to the
+    # predicate is the CALLER's, not a re-spelled one.  The first cut built
+    # ``np.dtype(f'c{2 * cb}')`` -- but ``cb`` is ALREADY the complex
+    # itemsize, so that asked for a dtype of twice the element size and the
+    # workspace was priced at 2x.  It failed differently on each platform,
+    # which is why no pin saw it: ``'c32'`` is ``complex256`` on Linux (a
+    # silent 43 % UNDER-estimate at N=8192/complex128, because a 2.147 GB
+    # phantom workspace fails the 2 GB cap the true 1.074 GB one passes),
+    # and a ``TypeError`` on MSVC that the except below swallowed into
+    # ``n_bufs = 2`` -- a no-op for complex128 and, via the perfectly valid
+    # ``'c16'``, a 9.66 GB UNDER-estimate for complex64 at N=12288 on
+    # Windows too.  ``_plan_entry_n_bufs`` reads only ``.itemsize``, so
+    # passing ``complex_dtype`` straight through is both correct and
+    # incapable of raising for any dtype ``_as_complex_itemsize`` accepted.
     try:
         from .propagators.fft_infra import _plan_entry_n_bufs
-        n_bufs = int(_plan_entry_n_bufs((N, N), np.dtype(f'c{2 * cb}')))
+        n_bufs = int(_plan_entry_n_bufs((N, N), np.dtype(complex_dtype)))
     except (ImportError, TypeError, ValueError):
         n_bufs = 2
     plan_bufs = keys * n_bufs * cb * npix

@@ -52,7 +52,16 @@ _WL = 1.31e-6
 # and said nothing about the guard it exists to pin.  The count is asserted
 # FIRST now, with the formula in the message, so the next re-measurement fails
 # with instructions instead of an unexplained 512 != 1024.
-_LADDER_WORK_ARRAYS = 20
+#
+# v5.33.3 (docs/audits/FIX_VERIFY_PERF_2026_08_10.md sec 4): the constant moved
+# 20 -> 22 when the slope/floor split was re-derived as an upper-bound envelope
+# over the WORKER-CHILD peaks as well as the whole-process ones.  Every rung of
+# the ladder below was RE-DERIVED at 22 and every one is UNCHANGED -- the six
+# budgets sit far from a power-of-two boundary (e.g. 136 GiB gives
+# sqrt(0.5 * 146.03e9 / 352) = 14401 -> 8192, against 14846 -> 8192 at 20).
+# That is a fact about these six budgets, not a licence to skip the
+# re-derivation next time.
+_LADDER_WORK_ARRAYS = 22
 _LADDER = ((0.25, 512), (1, 1024), (4, 2048), (16, 4096), (34, 4096),
            (136, 8192))
 _LADDER_WHY = (

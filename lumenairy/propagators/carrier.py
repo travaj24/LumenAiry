@@ -3777,15 +3777,49 @@ def _check_chain_entry_congruence(env, dx, wavelength, action,
 # grows, which is the dangerous side of the trade -- ``_multi_resolve_workers``
 # priced a NFC=8192 worker at 17.55 GB against a MEASURED 24.97 GB and
 # approved FIVE workers on a box that holds three or four
-# (AUDIT_TRACED_SPEED_2026_08_09 sec 3.4).  At (20, 2.3 GB) the model is a
-# tight UPPER bound on all three measured points (1.17x / 1.02x / 1.05x).
+# (AUDIT_TRACED_SPEED_2026_08_09 sec 3.4).
+#
+# v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D4): 20 was the round-up of a
+# THREE-POINT, TWO-ORDER, WHOLE-PROCESS fit.  It is not the envelope the
+# clamp needs.  A congruence WORKER's own peak -- the quantity an OOM is
+# measured against, and the only one observable at k > 1 -- sits ABOVE that
+# line at 8192 (26.0 GB against the two-order 23.97), because a process's
+# leg-local caches grow with the orders it runs.  Bounding the child from a
+# 19.1-slope line therefore forced the INTERCEPT up (2.3 -> 4.5 GB), and an
+# intercept is exactly the wrong lever: it over-prices the small end, where
+# the whole peak IS the intercept.  At (20, 4.5 GB) the model read 1.476x the
+# 4096 worker child measured below -- inside the 1.5x bar this file's test
+# declares by 1.6 %, i.e. not reproducible.
+#
+# So the split is re-derived as what it actually is: a constrained UPPER-BOUND
+# ENVELOPE over EVERY measured point (whole-process AND worker-child,
+# two-order AND six-order, three grids), not a decomposition of where the
+# bytes go.  Slope 22 and floor 2.6 GB is the pair that minimises the worst
+# ratio subject to (a) bounding all eleven measured points, (b) keeping at
+# least 2 % of margin over the 8192 worker child -- the row the clamp is
+# actually decided by -- and (c) not pushing the 16384 price past what this
+# box's own pre-flight will approve for one worker.  The floor is the
+# three-grid fit's measured 2.3 GB intercept rounded up, and still clears the
+# 1.75 GB interpreter-plus-import commit the Newton pool measured
+# independently (``_lens_traced._NEWTON_WORKER_BASE_BYTES``).  Measured rows
+# and ratios: ``tests/unit/test_niche_d8_congruence_workers.py``'s
+# ``_MEASURED_PEAK_BYTES``; worst ratio 1.279 (was 1.476, on the 4096 child),
+# tightest bound 1.023 on the 8192 child (was 1.013).
+#
+# A steeper slope prices the small end better still (23 / 2.0 GB reads 1.232
+# worst) but takes ``n_fine = 16384`` from 97.5 GB to 101.2 GB per worker,
+# which is where the runners' pre-flight stops approving a SINGLE 16384 worker
+# on a ~105 GB-free box.  That trade was made deliberately and this is the
+# note that says so.
 #
 # ENVELOPE: measured on design 121's post-DOE chain with the EXACT final leg,
 # a 1024^2 input and the shipped separable-Bluestein readout, on this branch.
 # It is a property of that leg's array traffic and it moved once already when
 # items #6/#7 changed the footprint, so re-measure it after any change to the
-# fine leg rather than trusting this number across one.
-_FINE_GRID_WORK_ARRAYS = 20
+# fine leg rather than trusting this number across one.  ``tests/unit/
+# test_niche_p2_guards.py``'s cap ladder is ARITHMETIC on this constant and
+# asserts it first: re-derive the ladder when this moves.
+_FINE_GRID_WORK_ARRAYS = 22
 
 #: Default ``focus_readout['n_fine_cap']`` -- the count cap on the exact final
 #: leg's re-trace grid.  Named so the niche-D8 worker clamp can price a
@@ -3843,29 +3877,27 @@ _FINE_GRID_MIN = 64
 # small ``n_fine`` and too light at large ``n_fine``, which is exactly the
 # shape of the 4.59x mis-pricing AUDIT_TRACED_SPEED_2026_08_09 sec 3.3 found.
 #
-# MEASURED TWICE, and the SECOND measurement is the one this carries.
+# MEASURED THREE TIMES.  The three-grid fit above intercepts at 2.635 GB,
+# less the 0.369 GB the ``_MULTI_WORKER_GRID_FACTOR`` term already charges for
+# that measurement's own 1024^2 input = 2.3 GB -- but that fit is over runs of
+# TWO orders in the PARENT.  A real congruence WORKER, which is what this
+# constant is for, was then sampled directly at k > 1 (six orders, NFC 8192):
+# largest single child **24.21 / 24.20 GiB = 26.0 GB**, i.e. above the
+# two-order line.  The difference is the leg's own process-global caches,
+# which grow with the number of orders a process runs.
 #
-#   (a) the INTERCEPT of the three-grid fit above is 2.635 GB, less the
-#       0.369 GB the ``_MULTI_WORKER_GRID_FACTOR`` term already charges for
-#       that measurement's own 1024^2 input = 2.3 GB.  That fit is over runs
-#       of TWO orders.
-#   (b) a real congruence WORKER, which is what this constant is for, was then
-#       sampled directly: the k-ladder's k=2 and k=3 arms (six orders, NFC
-#       8192) put the largest single child at **24.21 and 24.20 GiB = 26.0
-#       GB**, against a 21.47 GB grid term and a 0.37 GB chain term -- a floor
-#       of **4.16 GB**, nearly twice (a).  The difference is the leg's own
-#       process-global caches, which grow with the number of orders a process
-#       runs and which a two-order calibration therefore under-samples.
-#
-# 4.5 GB is (b) rounded up.  It bounds the largest measured child (1.014x) and
-# every whole-process peak measured on this branch (1.04x at six orders / 8192,
-# 1.073x at 16384, 1.44x at 4096 where the floor dominates by construction).
-# What is in it: the interpreter and the lumenairy import graph (~1.7 GB of
-# commit by the Newton pool's own independent measurement,
-# ``_NEWTON_WORKER_BASE_BYTES``), the order table and chain-A output the
-# process carries across chain B, and the process-global FFT plan / chirp
-# caches the leg leaves behind (byte-capped since item #6, so they saturate
-# rather than grow without bound).
+# The first cut carried that difference entirely in this constant (4.5 GB),
+# which bought a bounded child at the price of a 1.476x over-price at
+# ``n_fine = 4096`` -- outside the 1.5x bar once the 4096 WORKER CHILD was
+# measured (6.94 GB; VERIFY_PERF_BRANCH_2026_08_10 D4).  The slope carries it
+# now (see ``_FINE_GRID_WORK_ARRAYS``), and this constant is back to the
+# process floor it names: **2.0 GB**, which still clears the ~1.75 GB the
+# Newton pool measured independently for the interpreter plus the lumenairy
+# import graph (``_lens_traced._NEWTON_WORKER_BASE_BYTES``).  What is in it:
+# that import commit, the order table and chain-A output the process carries
+# across chain B, and the process-global FFT plan / chirp caches the leg
+# leaves behind (byte-capped since item #6, so they saturate rather than grow
+# without bound).
 #
 # NOTE the two errors point OPPOSITE ways and both are wanted: per-worker
 # peaks do NOT co-occur, so ``k * per_worker`` over-states the tree peak
@@ -3874,23 +3906,76 @@ _FINE_GRID_MIN = 64
 # Bounding the child and over-stating the tree is the safe side of both.
 #
 # WHERE IT IS SPENT, and where it is NOT.  It is charged by
-# :func:`_fine_grid_peak_bytes`, i.e. by ``_multi_resolve_workers`` (k copies
-# of the floor exist at once, so k-way over-subscription is exactly the
-# failure it prevents) and by any harness that asks what a run will cost.  It
-# is deliberately NOT charged by :func:`_fine_grid_ceiling`: that rule prices
-# one process's GRID against ``_FINE_GRID_RAM_FRAC`` of the budget, and the
-# remaining fraction IS the allowance for this floor -- now a measured claim
-# rather than a hope, since frac = 0.5 leaves ``budget/2`` for a 2.3 GB floor
-# and therefore covers it for any budget above ~4.6 GB.
+# :func:`_fine_grid_peak_bytes` ON THE EXACT-LEG PATH ONLY, i.e. by
+# ``_multi_resolve_workers`` for a worker that will build a fine grid (k
+# copies of the floor exist at once, so k-way over-subscription is exactly the
+# failure it prevents) and by any harness that asks what such a run will cost.
+# It is deliberately NOT charged by :func:`_fine_grid_ceiling`: that rule
+# prices one process's GRID against ``_FINE_GRID_RAM_FRAC`` of the budget, and
+# the remaining fraction IS the allowance for this floor -- a measured claim
+# rather than a hope, since frac = 0.5 leaves ``budget/2`` for a 2.6 GB floor
+# and therefore covers it for any budget above ~5.2 GB.
 #
-# ENVELOPE: this is a design-121-CLASS congruence process, not a universal
-# python floor.  A caller whose non-grid working set is bigger (a larger input
-# grid is priced separately; a larger CACHE is not) will exceed it.
-_FINE_GRID_BASE_BYTES = 4.5e9
+# ENVELOPE: this is a design-121-CLASS congruence process WITH THE EXACT FINAL
+# LEG, not a universal python floor.  A caller whose non-grid working set is
+# bigger (a larger input grid is priced separately; a larger CACHE is not)
+# will exceed it.  ``final_leg='paraxial'`` is priced by
+# ``_PARAXIAL_BASE_BYTES`` below, because it was measured and it is different.
+_FINE_GRID_BASE_BYTES = 2.6e9
+
+# The PARAXIAL leg's own floor (VERIFY_PERF_BRANCH_2026_08_10 D5).
+# ---------------------------------------------------------------------------
+# ``_FINE_GRID_BASE_BYTES``'s envelope note says in as many words that it is a
+# design-121-class EXACT-leg figure.  The first cut charged it to every worker
+# anyway, including ``final_leg='paraxial'`` workers, whose whole point is
+# that no fine grid is built: on a box with 16 GB free that took a paraxial
+# multi-congruence run from 21 approved workers to ONE, on the strength of a
+# floor measured on a six-order exact-leg congruence.  A throughput
+# regression, not a wrong answer -- but exactly the shape the envelope note
+# exists to prevent.
+#
+# So the paraxial leg gets its own floor, and it is MEASURED, not assumed, on
+# BOTH ends of the range this clamp sees.
+#
+#   (a) a real design-121 PARAXIAL WORKER -- ``kladder_121.py`` at ``CW=2``,
+#       ``LEG=paraxial``, ``RN=1024 NOUT=8192 TILE=128 DXO=0.2 um``, i.e. the
+#       shipped tiled readout.  Largest single child **1.093 GiB = 1.174 GB**
+#       (whole process at k=1, which additionally holds the 8192^2 common-grid
+#       accumulator: 2.300 GiB = 2.470 GB).  Against a 0.369 GB grid term
+#       that is an implied floor of **0.805 GB**.
+#   (b) a fresh interpreter per point (one process = one worker) running the
+#       traced chain once at ``final_leg='paraxial'``, peak read BOTH as
+#       Windows' exact ``peak_wset`` and as a 20 Hz RSS sample:
+#
+#           N_in     peak     grid term    implied floor
+#            128    0.435 GB    0.006 GB       0.429 GB
+#            256    0.470 GB    0.023 GB       0.447 GB
+#            512    0.571 GB    0.092 GB       0.478 GB
+#           1024    0.951 GB    0.369 GB       0.582 GB
+#
+# 1.0 GB is (a) rounded up.  It bounds every point above -- 1.17x on the
+# design-121 worker, 1.44x at N=1024 on (b), 2.3x at N=128 where a floor
+# dominates by construction -- and it is 4.5x under the exact leg's, which is
+# the whole point.  It is deliberately NOT smaller: the same (b) measurement
+# puts the EXACT leg on the same stand-in at 0.51-1.68 GB, so the two legs'
+# floors are genuinely different quantities and this one is not merely the
+# interpreter.
+#
+# ENVELOPE, and it is narrower than the exact leg's: the paraxial readout's
+# cost scales with ``N_out``, which NO term in this model prices (the exact
+# leg's ``n_fine`` term dominates its readout, so the question never arose).
+# MEASURED on the same fan with the readout NOT tiled (``TILE=none``, so the
+# readout runs on the full 8192^2 common grid), a paraxial worker peaked at
+# **11.221 GB** -- ten times this floor, all of it the untiled readout.  The
+# shipped runners tile the readout (``readout_tile``), which is what keeps a
+# paraxial worker inside this floor; a caller who reads out an untiled
+# multi-thousand-pixel window will exceed it, and should size that window
+# itself.
+_PARAXIAL_BASE_BYTES = 1.0e9
 
 
 def _fine_grid_peak_bytes(n_fine, n_px=0, n_work=None):
-    """Peak working set one exact-final-leg congruence holds, in bytes.
+    """Peak working set one congruence holds, in bytes.
 
     ONE model, two consumers: :func:`_multi_resolve_workers` prices a
     congruence worker with it, and a harness that wants to know whether the
@@ -3898,13 +3983,17 @@ def _fine_grid_peak_bytes(n_fine, n_px=0, n_work=None):
     arithmetic (which is how the two clamps drifted apart before).
 
     ``n_fine`` is the fine grid the exact final leg will run on -- pass 0 for
-    ``final_leg='paraxial'``, which builds no fine grid.  ``n_px`` is the
-    INPUT grid's pixel count, priced at ``_MULTI_WORKER_GRID_FACTOR``.
+    ``final_leg='paraxial'``, which builds no fine grid and therefore pays
+    ``_PARAXIAL_BASE_BYTES`` instead of the exact leg's much larger floor
+    (both MEASURED; see the two constants).  ``n_px`` is the INPUT grid's
+    pixel count, priced at ``_MULTI_WORKER_GRID_FACTOR`` on both paths.
     """
     n_work = _FINE_GRID_WORK_ARRAYS if n_work is None else float(n_work)
-    return (float(n_work) * 16.0 * float(n_fine) ** 2
+    n_fine = float(n_fine)
+    base = _FINE_GRID_BASE_BYTES if n_fine > 0 else _PARAXIAL_BASE_BYTES
+    return (float(n_work) * 16.0 * n_fine ** 2
             + _MULTI_WORKER_GRID_FACTOR * float(n_px) * 16.0
-            + _FINE_GRID_BASE_BYTES)
+            + base)
 
 
 def _fine_grid_ceiling(budget, n_work=None, frac=None):
@@ -4156,8 +4245,10 @@ def carrier_referenced_exact_focus_readout(
         AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4).  Default ``None`` =
         :func:`lumenairy.get_ram_budget` (which honours
         :func:`lumenairy.set_max_ram`).  ``N_fine`` is capped so the fine grid's
-        peak working set (``_FINE_GRID_WORK_ARRAYS`` = 16 complex128 arrays,
-        the MEASURED census -- see that constant) stays within 50% of it; when
+        peak working set (``_FINE_GRID_WORK_ARRAYS`` = 22 complex128 arrays,
+        the MEASURED envelope -- see that constant, and do not re-type the
+        number here: this docstring read 16 for two re-measurements after the
+        constant moved) stays within 50% of it; when
         the cap binds a ``RuntimeWarning`` states that the readout is
         resolution-limited and what the un-degraded requirement was.  Pass
         ``float('inf')`` to disable the cap (pre-v5.29 behaviour: a hard
@@ -8951,8 +9042,12 @@ def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn,
     # a second copy of the arithmetic is how this clamp and
     # ``_memory_bounded_n_fine`` came to disagree by 4.59x once already
     # (AUDIT_TRACED_SPEED_2026_08_09 sec 3.3).  ``n_fine_cap`` falsy =
-    # ``final_leg='paraxial'``, which builds no fine grid but still pays the
-    # floor.
+    # ``final_leg='paraxial'``, which builds no fine grid and is therefore
+    # priced with the MEASURED paraxial floor rather than the exact leg's --
+    # v5.33.3, VERIFY_PERF_BRANCH_2026_08_10 D5: charging the exact leg's
+    # design-121-class floor to a paraxial worker took a 16 GB-free box from
+    # 21 approved workers to one, against a paraxial worker MEASURED at
+    # 0.44-1.17 GB (1.17 being the design-121 fan's own, at k=2).
     per_worker_b = _fine_grid_peak_bytes(int(n_fine_cap or 0), n_px=n_px)
     if per_worker_b <= 0:
         return requested

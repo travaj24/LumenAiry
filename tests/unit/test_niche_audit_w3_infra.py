@@ -809,15 +809,38 @@ class TestA6EstimateAsmMemory:
         one-time FFT-backend import grew with the dependency stack; see
         that constant's comment for the re-measured fit).  The asymptotic
         ratio is unchanged to 0.1% because the shape term did not move.
+
+        2026-08-10 (docs/audits/FIX_VERIFY_PERF_2026_08_10.md sec 1): the
+        LARGE-N ratio moved 6.35 -> 4.36, and this test was already RED on
+        Linux before that -- it is the one pin the D1 dtype defect reached.
+        v5.33.2 capped a plan key at ONE resident workspace above 2e9 bytes,
+        so at N = 16384 complex128 the plan-buffer term really is
+        ``keys x 1 x 16 B x N^2``, not ``keys x 2``.  The estimator was
+        supposed to read that predicate and mis-built the dtype, which on
+        Linux (where ``np.dtype('c32')`` IS complex256) happened to give the
+        right ANSWER here for the wrong reason -- 4.364, i.e. this
+        assertion failed -- while on Windows the ``TypeError`` was swallowed
+        into ``n_bufs = 2`` and it read 6.364 and passed.  Both arms now
+        read 4.364.  The asymptote below is correspondingly the shape term
+        alone plus ONE workspace per key.
         """
         from lumenairy import memory as m
         ratios = {n: m.estimate_asm_memory(n) / (n * n * 16)
                   for n in (512, 1024, 2048, 16384)}
         assert ratios[512] == pytest.approx(20.35, rel=0.02)
-        assert ratios[16384] == pytest.approx(6.35, rel=0.01)
-        # Monotonically approaching the asymptote from above.
+        assert ratios[16384] == pytest.approx(4.36, rel=0.01)
+        # Monotonically approaching the asymptote from above.  The asymptote
+        # is DERIVED, not a magic 101.6: it is the shape term plus the plan
+        # buffers a key at THIS shape actually holds, which is 2 below the
+        # v5.33.2 cap and 1 above it (69.6 B/px rather than 101.6 at 16384).
+        import numpy as _np
+
+        from lumenairy.propagators.fft_infra import _plan_entry_n_bufs
+        nb = int(_plan_entry_n_bufs((16384, 16384), _np.dtype('complex128')))
+        asym = (m._ASM_COMPLEX_ARRAYS * 16 + m._ASM_F64_GRID_ARRAYS * 8
+                + 2 * nb * 16) / 16
         assert (ratios[512] > ratios[1024] > ratios[2048]
-                > ratios[16384] > 101.6 / 16 - 1e-6)
+                > ratios[16384] > asym - 1e-6)
 
     @pytest.mark.parametrize('n_grid,dtype', [(512, 'complex128'),
                                               (1024, 'complex128')])

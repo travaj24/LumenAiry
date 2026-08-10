@@ -29,7 +29,8 @@ fan orders, or not?**
 >
 > **The most actionable finding is separate from all of that: on this 128 GB
 > box the shipped `n_fine_cap=16384` ALREADY runs at 8192, silently.**  The
-> honest clamp needs 137.4 GB of budget to approve `n_fine=16384` and
+> honest clamp needs 137.4 GB of budget to approve `n_fine=16384` (189.0 GB
+> at the re-measured `_FINE_GRID_WORK_ARRAYS = 22`; see sec 2.1) and
 > `get_ram_budget()` returns 102.9 GB, so without an explicit `ram_budget`
 > override the "reference" setting degrades with a warning that a production
 > log will swallow.  Every arm-B row in this document required that override
@@ -77,6 +78,7 @@ OTEG=warn (see 2.3)
 `FIX_PERF_CACHES_BLUESTEIN_2026_08_09.md` sec 2.4 prices the honest clamp:
 with `_FINE_GRID_WORK_ARRAYS = 16` and `_FINE_GRID_RAM_FRAC = 0.5`, approving
 `n_fine = 16384` needs `16 * 16 B * 16384^2 / 0.5` = **137.4 GB of budget**.
+(**SUPERSEDED**: that figure is the `_FINE_GRID_WORK_ARRAYS = 16` model this document ships.  The constant has since been re-measured twice -- 20 in `FIX_PERF_PARALLEL_2026_08_10.md` sec 3.2, then **22** in `FIX_VERIFY_PERF_2026_08_10.md` sec 4 -- and the budget `n_fine = 16384` needs is now **189.0 GB**, not 137.4.  The conclusion is unchanged and stronger: the shipped `NFC = 16384` is further out of reach on this box, not nearer.)
 This box reports `get_ram_budget() = 102.9 GB`.  Measured directly, before any
 chain was run:
 
@@ -464,7 +466,8 @@ Reasons, in order:
    projection because of the `_poly` power-cache in this commit.
 
 **RAM needed to hold 16384 honestly: 137.4 GB of `get_ram_budget()`** (16 work
-arrays x 16 B x 16384^2 / 0.5).  This box has 102.9 GB, so the setting must be
+arrays x 16 B x 16384^2 / 0.5; **189.0 GB** at the re-measured 22 arrays --
+`FIX_VERIFY_PERF_2026_08_10.md` sec 4).  This box has 102.9 GB, so the setting must be
 made reachable one of two ways:
 
 * `output_grid={'ram_budget': float('inf')}` (used here -- targeted, affects

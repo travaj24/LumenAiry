@@ -171,6 +171,24 @@ def zernike_polynomial(
 
 _ZERNIKE_BASIS_CACHE: "OrderedDict[Any, Tuple[np.ndarray, np.ndarray]]" = OrderedDict()
 _ZERNIKE_BASIS_CACHE_MAXSIZE = 32
+
+# v5.33.3 BYTE CAPS (VERIFY_PERF_BRANCH_2026_08_10 sec 5, class B).  The count
+# cap above was the ONLY bound, and one entry is an ``(n_modes, Npix)``
+# float64 basis matrix plus its mask -- it scales with the CALLER's pupil AND
+# with the mode count, neither of which this module controls.  36 modes on a
+# 4096^2 pupil is **4.8 GB in a single entry**, and 32 of those is a number
+# with no upper bound worth writing down.  Same policy, same constants, as
+# ``fft_infra._H_CACHE`` (since 3.2.14.1) and ``_bluestein._H_FFT_CACHE``
+# (since v5.33.2): bring a sibling cache up to the standard the library
+# already sets rather than invent a new one.
+#
+# A cache is a cache: an entry that does not fit is simply not retained, the
+# caller still gets the basis it asked for, and the next call rebuilds it.
+# The cap binds at ``n_modes * Npix >= 2.5e8`` (36 modes on a 2634^2 pupil);
+# every pin in the suite is orders under it.
+_ZERNIKE_BASIS_CACHE_MAX_BYTES_PER_ENTRY = 2 * 1024 * 1024 * 1024   # 2 GB
+_ZERNIKE_BASIS_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
+
 # v4.14.2 (P1-NEW-2 / Agent C): thread-safety lock for
 # ``_ZERNIKE_BASIS_CACHE``.  Without this two threads racing through
 # :func:`zernike_basis_matrix` could see a torn OrderedDict (``get`` ->
@@ -180,6 +198,18 @@ _ZERNIKE_BASIS_CACHE_MAXSIZE = 32
 # matrix_build``) is pure-CPU numpy and re-entrant so it runs OUTSIDE
 # the lock -- only the OrderedDict ops need guarding.
 _ZERNIKE_BASIS_CACHE_LOCK = threading.Lock()
+
+
+def _zernike_entry_bytes(entry) -> int:
+    """Bytes one cache entry (the ``(basis, mask)`` tuple) retains."""
+    return int(sum(int(getattr(a, 'nbytes', 0)) for a in entry))
+
+
+def zernike_basis_cache_bytes() -> int:
+    """Total bytes currently retained by the Zernike basis cache."""
+    with _ZERNIKE_BASIS_CACHE_LOCK:
+        return int(sum(_zernike_entry_bytes(v)
+                       for v in _ZERNIKE_BASIS_CACHE.values()))
 
 
 def _zernike_basis_cache_key(
@@ -349,11 +379,24 @@ def zernike_basis_matrix(
     basis.setflags(write=False)
     pupil_mask.setflags(write=False)
 
+    # v5.33.3: size test FIRST -- an entry over the per-entry byte cap is not
+    # retained at all (the caller still gets it; only the retention is
+    # skipped), exactly as ``fft_infra._h_cache_store`` decides.
+    if _zernike_entry_bytes((basis, pupil_mask)) > \
+            int(_ZERNIKE_BASIS_CACHE_MAX_BYTES_PER_ENTRY):
+        return basis, pupil_mask
+
     with _ZERNIKE_BASIS_CACHE_LOCK:
         _ZERNIKE_BASIS_CACHE[key] = (basis, pupil_mask)
-        # Evict LRU entries until we're at or below the cap.
-        while len(_ZERNIKE_BASIS_CACHE) > _ZERNIKE_BASIS_CACHE_MAXSIZE:
-            _ZERNIKE_BASIS_CACHE.popitem(last=False)
+        # Evict LRU entries until we're at or below BOTH caps.
+        total = sum(_zernike_entry_bytes(v)
+                    for v in _ZERNIKE_BASIS_CACHE.values())
+        while (len(_ZERNIKE_BASIS_CACHE) > _ZERNIKE_BASIS_CACHE_MAXSIZE
+               or total > int(_ZERNIKE_BASIS_CACHE_MAX_TOTAL_BYTES)):
+            if len(_ZERNIKE_BASIS_CACHE) <= 1:
+                break
+            _, dropped = _ZERNIKE_BASIS_CACHE.popitem(last=False)
+            total -= _zernike_entry_bytes(dropped)
     return basis, pupil_mask
 
 

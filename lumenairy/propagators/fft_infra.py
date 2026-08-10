@@ -833,12 +833,18 @@ _PYFFTW_DOUBLE_BUFFER = True
 # ~2.8 GB/s first-touch page-fault cost, so it scales with the buffer and is
 # the SAME order as the FFT itself at every large shape.  A cap that bound at
 # 8192 would therefore tax the most common large shape in this library 1.65x
-# to buy 1.07 GB.  A cap of 2 GB binds at 11586^2 and above, i.e. in practice
-# the 16384^2 family, where the design-121 order does ~3 transforms and pays
-# ~4.5 s of a ~900 s order (0.5 %) to give back 8.59 GB of a 98.85 GB peak
-# (8.7 %).  Decimal 2e9 rather than 2 GiB deliberately: 8192^2 complex128 is
-# EXACTLY 1 GiB and 11585^2 is ~2.147 GB, so a power-of-two threshold would
-# decide a common shape on the direction of a ``<=``.
+# to buy 1.07 GB.  A cap of 2 GB binds at **N >= 11181** (11180^2 x 16 =
+# 1.99988e9, 11181^2 x 16 = 2.00024e9), i.e. in practice the 16384^2 family,
+# where the design-121 order does ~3 transforms and pays ~1.6 s of a ~900 s
+# order (0.2 %) -- 3 x the MEASURED +524.2 ms at 16384 -- to give back 8.59 GB
+# of a 98.85 GB peak (8.7 %).  Decimal 2e9 rather than 2 GiB deliberately:
+# 8192^2 complex128 is EXACTLY 1 GiB, so a power-of-two threshold would decide
+# a common shape on the direction of a ``<=``.  (2 GiB would instead bind at
+# N >= 11586, which is where this comment's own earlier binding figure came
+# from; the constant is decimal, so 11181 is the one that is true.  The cost
+# line likewise read "~4.5 s ... (0.5 %)" against the 1.6 s / 0.2 % its own
+# measured table gives -- both corrected v5.33.3,
+# VERIFY_PERF_BRANCH_2026_08_10 D6.)
 #
 # On the production order, with the separable readout (row 6) removing the
 # 9216^2 plans from existence entirely, the resident plan buffers go

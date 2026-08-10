@@ -128,11 +128,20 @@ def _h_fft_cache_store(cache_key, H_FFT) -> None:
     below a single entry's size, which turns the cache into pure overhead (it
     stores, then immediately drops what it stored).  With the shipped caps
     (2 GiB/entry inside 8 GiB total) neither can reach that state.
+
+    v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D3): the size test reads
+    ``H_FFT.nbytes`` and runs BEFORE the ``np.copy``, exactly as the sibling's
+    ``_entry_bytes(H)`` does.  The first cut copied first and rejected second,
+    which converted the retention the cap exists to avoid into an equally
+    large TRANSIENT for an entry that is thrown away one line later -- 4.86 GB
+    at the ``window_factor = 7`` geometry (``L = 17424``) the cap's own comment
+    works through, allocated on the run whose peak is the thing being
+    defended.  MEASURED with ``tracemalloc`` at a 1 B per-entry cap: retained
+    +0.000 MB either way, traced peak +67.109 MB before / +0.000 MB after.
     """
-    H = np.copy(H_FFT)
-    nb = int(H.nbytes)
-    if nb > int(_H_FFT_CACHE_MAX_BYTES_PER_ENTRY):
+    if int(getattr(H_FFT, 'nbytes', 0)) > int(_H_FFT_CACHE_MAX_BYTES_PER_ENTRY):
         return
+    H = np.copy(H_FFT)
     with _H_FFT_CACHE_LOCK:
         _H_FFT_CACHE[cache_key] = H
         total = sum(int(v.nbytes) for v in _H_FFT_CACHE.values())

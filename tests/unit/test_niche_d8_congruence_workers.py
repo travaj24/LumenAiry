@@ -319,13 +319,46 @@ def test_a_bigger_fine_grid_cap_costs_workers():
 #: congruence worker's own peak, which is what an OOM is measured against, and
 #: they are only observable at k > 1.  Kept here so a future re-tune has to
 #: face them instead of re-deriving from a census.
+#:
+#: UNITS.  ``kladder_121.py`` reports its peaks in GiB under a field named
+#: ``peak_*_gb``; every byte value below is that number times 2**30.  Reading
+#: one of them as decimal GB is what made an independent verification report a
+#: 1.540x model/measured ratio at 4096 where the true ratio was 1.434
+#: (VERIFY_PERF_BRANCH_2026_08_10 D4) -- so the conversion is stated here and
+#: the raw GiB is carried in each label.
+#:
+#: v5.33.3 rows (docs/audits/FIX_VERIFY_PERF_2026_08_10.md sec 4): three fresh
+#: runs at 4096 and 8192, and -- new -- the 4096 WORKER CHILD, which nobody had
+#: measured and which is the SMALLEST peak in the set, i.e. the one the 1.5x
+#: bar is actually decided by.  At the pre-fix (20, 4.5 GB) the model read
+#: 1.476x that row.
 _MEASURED_PEAK_BYTES = (
-    ('4096, 2 orders, whole process', 4096, 7.123e9),
-    ('8192, 2 orders, whole process', 8192, 23.968e9),
+    ('4096, 2 orders, whole process (6.634 GiB)', 4096, 7.123e9),
+    ('4096, 2 orders, whole process, re-run (6.631 GiB)', 4096, 7.120e9),
+    ('4096, 2 orders, largest CHILD at k=2 (6.461 GiB)', 4096, 6.937e9),
+    ('8192, 2 orders, whole process (22.322 GiB)', 8192, 23.968e9),
+    ('8192, 2 orders, whole process, re-run (22.764 GiB)', 8192, 24.443e9),
     ('8192, 6 orders, whole process', 8192, 25.331e9),
+    ('8192, 2 orders, largest CHILD at k=3 (24.169 GiB)', 8192, 25.951e9),
     ('8192, 6 orders, largest CHILD at k=2', 8192, 25.996e9),
     ('8192, 6 orders, largest CHILD at k=3', 8192, 25.985e9),
-    ('16384, 2 orders, whole process', 16384, 84.589e9),
+    ('8192, 6 orders, largest CHILD at k=4->3 (24.002 GiB)', 8192, 25.772e9),
+    ('16384, 2 orders, whole process (78.780 GiB)', 16384, 84.589e9),
+)
+
+#: MEASURED peak of a PARAXIAL congruence worker -- ``(label, n_px, bytes)``.
+#: ``final_leg='paraxial'`` builds no fine grid, so nothing in
+#: ``_MEASURED_PEAK_BYTES`` constrains it, and until v5.33.3 it was priced with
+#: the exact leg's design-121-class floor anyway (VERIFY D5: 21 approved
+#: workers -> 1 on a 16 GB-free box).  Row 1 is the design-121 fan's own
+#: paraxial worker with the shipped tiled readout; the rest are one-process-
+#: per-point stand-ins that separate the floor from the input-grid term.
+_MEASURED_PARAXIAL_PEAK_BYTES = (
+    ('design-121 fan, largest CHILD at k=2 (1.093 GiB)', 1024 * 1024, 1.174e9),
+    ('stand-in worker, 128^2 input', 128 * 128, 0.435e9),
+    ('stand-in worker, 256^2 input', 256 * 256, 0.470e9),
+    ('stand-in worker, 512^2 input', 512 * 512, 0.571e9),
+    ('stand-in worker, 1024^2 input', 1024 * 1024, 0.951e9),
 )
 
 
@@ -344,8 +377,25 @@ def test_the_cost_model_is_an_upper_bound_on_the_measured_peak():
         assert model <= 1.5 * meas, (
             f"{label}: model {model / 1e9:.2f} GB is "
             f"{model / meas:.2f}x the measured peak; re-derive the constants "
-            f"(FIX_PERF_PARALLEL_2026_08_10.md sec 3) rather than widening "
+            f"(FIX_VERIFY_PERF_2026_08_10.md sec 4) rather than widening "
             f"this bound")
+
+
+def test_the_cost_model_bounds_a_paraxial_worker_too():
+    """The same contract on the leg that builds no fine grid.  Only the LOWER
+    bound is a hard requirement here: a floor over-prices a small worker by
+    construction (2.3x at a 128^2 input), and that is the honest shape of a
+    floor rather than a modelling error -- but it must still bound the real
+    design-121 paraxial worker tightly, which is what row 1 pins at 1.17x."""
+    for label, n_px, meas in _MEASURED_PARAXIAL_PEAK_BYTES:
+        model = _fine_grid_peak_bytes(0, n_px=n_px)
+        assert model >= meas, (
+            f"{label}: paraxial model {model / 1e9:.3f} GB UNDER the measured "
+            f"{meas / 1e9:.3f} GB")
+    d121 = _MEASURED_PARAXIAL_PEAK_BYTES[0]
+    assert _fine_grid_peak_bytes(0, n_px=d121[1]) <= 1.5 * d121[2], (
+        "the paraxial floor has drifted away from the worker it was measured "
+        "on; re-measure it rather than widening this bound")
 
 
 def test_the_worker_clamp_and_the_grid_clamp_share_one_model():
