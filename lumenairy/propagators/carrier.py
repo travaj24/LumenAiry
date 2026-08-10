@@ -3746,14 +3746,46 @@ def _check_chain_entry_congruence(env, dx, wavelength, action,
 # the only reason the single-order run completed; that is the absence of a
 # safety margin, not the presence of one.
 #
-# 16 is the FRAME-LIVE census rounded to an integer, deliberately NOT the
+# 16 was the FRAME-LIVE census rounded to an integer, deliberately NOT the
 # 21.9 that includes the plan buffers (those are process-global and shared
 # across the legs, so charging them per fine grid would double-count when two
 # grids of different size are sized in the same process).  Whoever re-measures
 # this: the census method is in the audit's sec 1 -- measure from OUTSIDE the
 # process, an in-process sampler thread inflates peak working set by up to
 # 2.5x on this workload.
-_FINE_GRID_WORK_ARRAYS = 16
+#
+# v5.33.3 (docs/audits/FIX_PERF_PARALLEL_2026_08_10.md sec 3) -- 16 -> 20,
+# RE-DERIVED FROM A SCALING MEASUREMENT rather than from a census, because a
+# census counts arrays at ONE grid and cannot separate what scales from what
+# does not.  Peak RSS of a design-121 order was sampled at 1 Hz over the whole
+# process at THREE fine grids on this branch, everything else pinned
+# (``RN=1024 RS=4 NW=1 DXO=0.2 um NOUT=8192 TILE=1024 WF=4.0 LEG=auto``,
+# ``ram_budget=inf`` so the grid choice is the one asked for):
+#
+#     n_fine    peak RSS      implied count at zero intercept
+#      4096      7.123 GB              26.5
+#      8192     23.968 GB              22.3
+#     16384     84.589 GB              19.7
+#
+# The count FALLS with the grid, which is the signature of a fixed cost, not
+# of a smaller array set; a straight line in ``n_fine ** 2`` fits all three to
+# within 3.5 % and gives slope 305.9 B/px = **19.1 complex128-equivalents**
+# and intercept **2.6 GB**.  Pairwise slopes are 18.8 / 19.2 / 20.9, so 20 is
+# the round-up, and ``_FINE_GRID_BASE_BYTES`` carries the intercept.
+#
+# The direction matters: the shipped 16 was 1.20x OPTIMISTIC on the term that
+# grows, which is the dangerous side of the trade -- ``_multi_resolve_workers``
+# priced a NFC=8192 worker at 17.55 GB against a MEASURED 24.97 GB and
+# approved FIVE workers on a box that holds three or four
+# (AUDIT_TRACED_SPEED_2026_08_09 sec 3.4).  At (20, 2.3 GB) the model is a
+# tight UPPER bound on all three measured points (1.17x / 1.02x / 1.05x).
+#
+# ENVELOPE: measured on design 121's post-DOE chain with the EXACT final leg,
+# a 1024^2 input and the shipped separable-Bluestein readout, on this branch.
+# It is a property of that leg's array traffic and it moved once already when
+# items #6/#7 changed the footprint, so re-measure it after any change to the
+# fine leg rather than trusting this number across one.
+_FINE_GRID_WORK_ARRAYS = 20
 
 #: Default ``focus_readout['n_fine_cap']`` -- the count cap on the exact final
 #: leg's re-trace grid.  Named so the niche-D8 worker clamp can price a
@@ -3798,6 +3830,116 @@ _FINE_GRID_RAM_FRAC = 0.5
 # for a readout, so return something rather than raising).
 _FINE_GRID_MIN = 64
 
+# ---------------------------------------------------------------------------
+# The per-PROCESS floor that is NOT proportional to the fine grid
+# (docs/audits/FIX_PERF_PARALLEL_2026_08_10.md sec 3)
+# ---------------------------------------------------------------------------
+# ``_FINE_GRID_WORK_ARRAYS`` prices the part of the peak that scales with
+# ``n_fine ** 2``.  A process that runs one congruence also pays a FIXED cost
+# that no grid term can see -- the interpreter and the import graph, the
+# coarse-chain working set that is live across the exact leg, and the
+# process-global FFT/chirp caches the leg leaves behind.  Charging that to the
+# grid term makes the model wrong in both directions at once: too heavy at
+# small ``n_fine`` and too light at large ``n_fine``, which is exactly the
+# shape of the 4.59x mis-pricing AUDIT_TRACED_SPEED_2026_08_09 sec 3.3 found.
+#
+# MEASURED TWICE, and the SECOND measurement is the one this carries.
+#
+#   (a) the INTERCEPT of the three-grid fit above is 2.635 GB, less the
+#       0.369 GB the ``_MULTI_WORKER_GRID_FACTOR`` term already charges for
+#       that measurement's own 1024^2 input = 2.3 GB.  That fit is over runs
+#       of TWO orders.
+#   (b) a real congruence WORKER, which is what this constant is for, was then
+#       sampled directly: the k-ladder's k=2 and k=3 arms (six orders, NFC
+#       8192) put the largest single child at **24.21 and 24.20 GiB = 26.0
+#       GB**, against a 21.47 GB grid term and a 0.37 GB chain term -- a floor
+#       of **4.16 GB**, nearly twice (a).  The difference is the leg's own
+#       process-global caches, which grow with the number of orders a process
+#       runs and which a two-order calibration therefore under-samples.
+#
+# 4.5 GB is (b) rounded up.  It bounds the largest measured child (1.014x) and
+# every whole-process peak measured on this branch (1.04x at six orders / 8192,
+# 1.073x at 16384, 1.44x at 4096 where the floor dominates by construction).
+# What is in it: the interpreter and the lumenairy import graph (~1.7 GB of
+# commit by the Newton pool's own independent measurement,
+# ``_NEWTON_WORKER_BASE_BYTES``), the order table and chain-A output the
+# process carries across chain B, and the process-global FFT plan / chirp
+# caches the leg leaves behind (byte-capped since item #6, so they saturate
+# rather than grow without bound).
+#
+# NOTE the two errors point OPPOSITE ways and both are wanted: per-worker
+# peaks do NOT co-occur, so ``k * per_worker`` over-states the tree peak
+# (MEASURED at k=3: 72.6 GB of tree against 78.0 GB of summed child peaks),
+# while a single worker's own peak is what an OOM is measured against.
+# Bounding the child and over-stating the tree is the safe side of both.
+#
+# WHERE IT IS SPENT, and where it is NOT.  It is charged by
+# :func:`_fine_grid_peak_bytes`, i.e. by ``_multi_resolve_workers`` (k copies
+# of the floor exist at once, so k-way over-subscription is exactly the
+# failure it prevents) and by any harness that asks what a run will cost.  It
+# is deliberately NOT charged by :func:`_fine_grid_ceiling`: that rule prices
+# one process's GRID against ``_FINE_GRID_RAM_FRAC`` of the budget, and the
+# remaining fraction IS the allowance for this floor -- now a measured claim
+# rather than a hope, since frac = 0.5 leaves ``budget/2`` for a 2.3 GB floor
+# and therefore covers it for any budget above ~4.6 GB.
+#
+# ENVELOPE: this is a design-121-CLASS congruence process, not a universal
+# python floor.  A caller whose non-grid working set is bigger (a larger input
+# grid is priced separately; a larger CACHE is not) will exceed it.
+_FINE_GRID_BASE_BYTES = 4.5e9
+
+
+def _fine_grid_peak_bytes(n_fine, n_px=0, n_work=None):
+    """Peak working set one exact-final-leg congruence holds, in bytes.
+
+    ONE model, two consumers: :func:`_multi_resolve_workers` prices a
+    congruence worker with it, and a harness that wants to know whether the
+    box can afford ``k`` of them calls it directly rather than re-deriving the
+    arithmetic (which is how the two clamps drifted apart before).
+
+    ``n_fine`` is the fine grid the exact final leg will run on -- pass 0 for
+    ``final_leg='paraxial'``, which builds no fine grid.  ``n_px`` is the
+    INPUT grid's pixel count, priced at ``_MULTI_WORKER_GRID_FACTOR``.
+    """
+    n_work = _FINE_GRID_WORK_ARRAYS if n_work is None else float(n_work)
+    return (float(n_work) * 16.0 * float(n_fine) ** 2
+            + _MULTI_WORKER_GRID_FACTOR * float(n_px) * 16.0
+            + _FINE_GRID_BASE_BYTES)
+
+
+def _fine_grid_ceiling(budget, n_work=None, frac=None):
+    """Largest fine grid the RAM clamp will approve for ``budget`` bytes.
+
+    The rule :func:`_memory_bounded_n_fine` applies, as a PURE FUNCTION of the
+    budget, so a caller can prove BEFORE a run that the clamp will not bind --
+    ``_fine_grid_ceiling(b) >= n_fine_cap`` means every request is honoured
+    exactly, because the leg asks for ``min(n_fine_req, n_fine_cap)``.  A
+    production runner that needs the grid it configured has no other way to
+    establish that without running the leg first and reading a warning it may
+    already have filtered.
+
+    ONLY the grid term is priced here, deliberately: ``frac`` IS this rule's
+    allowance for everything that is not the fine grid -- the interpreter, the
+    caller's own field, the FFT scratch -- so charging
+    ``_FINE_GRID_BASE_BYTES`` on top would count the same floor twice and, on
+    a small box, would refuse every grid down to ``_FINE_GRID_MIN`` for a
+    budget that comfortably holds one.  The per-PROCESS floor is priced where
+    it is multiplied instead: :func:`_multi_resolve_workers`, where k copies
+    of it exist at once.
+    """
+    n_work = _FINE_GRID_WORK_ARRAYS if n_work is None else float(n_work)
+    frac = _FINE_GRID_RAM_FRAC if frac is None else float(frac)
+    budget = float(budget)
+    if not np.isfinite(budget):
+        return 1 << 30                 # no ceiling; any request is honoured
+    allow = frac * max(budget, 0.0)
+    per_grid = float(n_work) * 16.0
+    n_max = int(np.floor(np.sqrt(max(allow, 0.0) / per_grid)))
+    # keep the power-of-two structure the FFT path wants
+    if n_max >= 2:
+        n_max = int(2 ** int(np.floor(np.log2(n_max))))
+    return max(n_max, _FINE_GRID_MIN)
+
 
 def _memory_bounded_n_fine(n_req, label, *, ram_budget=None,
                            n_work=_FINE_GRID_WORK_ARRAYS,
@@ -3826,15 +3968,7 @@ def _memory_bounded_n_fine(n_req, label, *, ram_budget=None,
     budget = float(get_ram_budget() if ram_budget is None else ram_budget)
     if not np.isfinite(budget):
         return n_req
-    if not (budget > 0.0):
-        budget = 0.0
-    allow = frac * budget
-    per_grid = float(n_work) * 16.0
-    n_max = int(np.floor(np.sqrt(max(allow, 0.0) / per_grid)))
-    # keep the power-of-two structure the FFT path wants
-    if n_max >= 2:
-        n_max = int(2 ** int(np.floor(np.log2(n_max))))
-    n_max = max(n_max, _FINE_GRID_MIN)
+    n_max = _fine_grid_ceiling(budget, n_work=n_work, frac=frac)
     if n_req <= n_max:
         return n_req
     extra_msg = ''
@@ -3851,10 +3985,13 @@ def _memory_bounded_n_fine(n_req, label, *, ram_budget=None,
     _guard_dispose(
         on_ram_cap,
         f"{label}: the fine grid is MEMORY-LIMITED to {n_max}x{n_max} "
-        f"({format_bytes(n_work * n_max * n_max * 16)} peak working set).  The "
+        f"({format_bytes(_fine_grid_peak_bytes(n_max, n_work=n_work))} "
+        f"modelled process peak).  The "
         f"un-degraded requirement was {n_req}x{n_req} "
-        f"({format_bytes(n_work * n_req * n_req * 16)} at {n_work} complex128 "
-        f"working arrays), which exceeds {frac:.0%} of the "
+        f"({format_bytes(_fine_grid_peak_bytes(n_req, n_work=n_work))} at "
+        f"{n_work} complex128 work arrays plus a "
+        f"{format_bytes(_FINE_GRID_BASE_BYTES)} measured process floor), "
+        f"whose grid term alone exceeds {frac:.0%} of the "
         f"{format_bytes(int(budget))} RAM budget.  The result is a "
         f"RESOLUTION-LIMITED (non-converged) readout: the sampling below is "
         f"coarser than the physics asked for.{extra_msg}  Raise the budget "
@@ -8801,18 +8938,22 @@ def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn,
     except (ImportError, AttributeError, OSError):
         return requested
     n_px = int(np.prod(shape0[-2:])) if len(shape0) >= 2 else 0
-    per_worker_b = _MULTI_WORKER_GRID_FACTOR * n_px * 16.0
     # The EXACT final leg's fine grid is a SECOND peak, on top of the chain
     # working set and live at the same time.  Sizing workers from the chain
     # alone is how 3 workers each correctly decided they could afford a
     # 16384^2 fine grid (17.2 GB) and then collectively asked for 123 GB of a
     # 127 GB box -- MEASURED on design 121's fan, which died with 'Unable to
     # allocate 4.00 GiB for an array with shape (16384, 16384)' while 97 GB
-    # still read free.  ``_FINE_GRID_WORK_ARRAYS * 16`` B/pixel is the
-    # readout's own model (see ``_memory_bounded_n_fine``).
-    if n_fine_cap:
-        per_worker_b += (_FINE_GRID_WORK_ARRAYS * 16.0
-                         * float(n_fine_cap) ** 2)
+    # still read free.
+    #
+    # ``_fine_grid_peak_bytes`` is the readout's OWN model (grid term + the
+    # per-process floor), called rather than re-spelled: pricing a worker with
+    # a second copy of the arithmetic is how this clamp and
+    # ``_memory_bounded_n_fine`` came to disagree by 4.59x once already
+    # (AUDIT_TRACED_SPEED_2026_08_09 sec 3.3).  ``n_fine_cap`` falsy =
+    # ``final_leg='paraxial'``, which builds no fine grid but still pays the
+    # floor.
+    per_worker_b = _fine_grid_peak_bytes(int(n_fine_cap or 0), n_px=n_px)
     if per_worker_b <= 0:
         return requested
     allowed = int(max(1, (free_b - min_free_gb * 1e9) // per_worker_b))

@@ -17,11 +17,20 @@ The fixtures here are deliberately tiny (a single thin-ish group, N=128) so the
 file runs in seconds: the property under test is scheduling equivalence, which
 is grid-size independent.  The physics is pinned elsewhere (niche D2/D6).
 """
+import warnings
+
 import numpy as np
 import pytest
 
 import lumenairy as la
 from lumenairy.propagators.carrier import (
+    _FINE_GRID_BASE_BYTES,
+    _FINE_GRID_MIN,
+    _FINE_GRID_RAM_FRAC,
+    _FINE_GRID_WORK_ARRAYS,
+    _fine_grid_ceiling,
+    _fine_grid_peak_bytes,
+    _memory_bounded_n_fine,
     _multi_apply_worker_state,
     _multi_capture_worker_state,
     _multi_looks_like_spawn_bootstrap,
@@ -291,6 +300,108 @@ def test_a_bigger_fine_grid_cap_costs_workers():
     big = _multi_resolve_workers(32, 32, (4096, 4096), 0.0, 'fn',
                                  n_fine_cap=16384)
     assert big <= small
+
+
+# --------------------------------------------------------------------------
+# v5.33.3 (docs/audits/FIX_PERF_PARALLEL_2026_08_10.md sec 3) -- ONE cost
+# model, and it is calibrated.
+# --------------------------------------------------------------------------
+# The failure this section exists for is a DISAGREEMENT, not a wrong number:
+# this clamp and ``_memory_bounded_n_fine`` each carried their own copy of the
+# per-grid arithmetic and drifted 4.59x apart (AUDIT_TRACED_SPEED_2026_08_09
+# sec 3.3), which is what let six workers be approved where one fitted.  Both
+# now call ``_fine_grid_peak_bytes`` / ``_fine_grid_ceiling``.
+
+#: MEASURED peak RSS on perf/traced-hotpath, sampled at 1 Hz with everything
+#: pinned (RN=1024 RS=4 NW=1 NOUT=8192 TILE=1024 WF=4.0 LEG=auto, an explicit
+#: ram_budget so the grid is the one asked for).  ``(label, n_fine, bytes)``.
+#: The CHILD rows are the ones this clamp actually has to bound -- they are a
+#: congruence worker's own peak, which is what an OOM is measured against, and
+#: they are only observable at k > 1.  Kept here so a future re-tune has to
+#: face them instead of re-deriving from a census.
+_MEASURED_PEAK_BYTES = (
+    ('4096, 2 orders, whole process', 4096, 7.123e9),
+    ('8192, 2 orders, whole process', 8192, 23.968e9),
+    ('8192, 6 orders, whole process', 8192, 25.331e9),
+    ('8192, 6 orders, largest CHILD at k=2', 8192, 25.996e9),
+    ('8192, 6 orders, largest CHILD at k=3', 8192, 25.985e9),
+    ('16384, 2 orders, whole process', 16384, 84.589e9),
+)
+
+
+def test_the_cost_model_is_an_upper_bound_on_the_measured_peak():
+    """Under-pricing a worker is an OOM; over-pricing costs one worker.  The
+    model must therefore sit ABOVE every measured point -- and not by so much
+    that it is useless, which is what the 1.5x ceiling pins.  (The loosest
+    point is the SMALLEST grid, where the fixed floor dominates by
+    construction; that is the price of having a floor at all.)"""
+    for label, n_fine, meas in _MEASURED_PEAK_BYTES:
+        model = _fine_grid_peak_bytes(n_fine, n_px=1024 * 1024)
+        assert model >= meas, (
+            f"{label}: model {model / 1e9:.2f} GB UNDER the measured "
+            f"{meas / 1e9:.2f} GB -- the clamp would approve workers that "
+            f"do not fit")
+        assert model <= 1.5 * meas, (
+            f"{label}: model {model / 1e9:.2f} GB is "
+            f"{model / meas:.2f}x the measured peak; re-derive the constants "
+            f"(FIX_PERF_PARALLEL_2026_08_10.md sec 3) rather than widening "
+            f"this bound")
+
+
+def test_the_worker_clamp_and_the_grid_clamp_share_one_model():
+    """The worker price IS ``_fine_grid_peak_bytes``, not a second copy of it.
+
+    Pinned on the SOURCE rather than on an approved worker count: the count is
+    a function of live free memory, so asserting one would be a test that
+    passes or fails on what else the box is doing -- and a flaky guard test is
+    worse than none.  What has to hold is structural: one model, called."""
+    import inspect
+
+    body = inspect.getsource(_multi_resolve_workers)
+    assert '_fine_grid_peak_bytes(' in body, (
+        "the worker clamp must CALL the shared model")
+    assert '_FINE_GRID_WORK_ARRAYS' not in body, (
+        "the worker clamp is re-spelling the grid arithmetic instead of "
+        "calling _fine_grid_peak_bytes -- that is exactly how it and "
+        "_memory_bounded_n_fine drifted 4.59x apart")
+    # ... and the model it calls is the one the readout's own guard reports
+    assert '_fine_grid_peak_bytes(' in inspect.getsource(_memory_bounded_n_fine)
+
+
+def test_the_grid_ceiling_is_the_pure_form_of_the_ram_clamp():
+    """``_fine_grid_ceiling`` is what a caller uses to PROVE, before running,
+    that the clamp cannot bind.  If it disagreed with the clamp by one power
+    of two the proof would be worthless."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        for gb in (0.5, 2, 8, 32, 128, 512):
+            b = gb * 1e9
+            ceil = _fine_grid_ceiling(b)
+            assert _memory_bounded_n_fine(1 << 20, 'probe', ram_budget=b) \
+                == ceil
+            # the defining property: any request at or below the ceiling is
+            # returned untouched, so ceiling >= n_fine_cap PROVES no bind
+            assert _memory_bounded_n_fine(ceil, 'probe', ram_budget=b) == ceil
+    assert _fine_grid_ceiling(float('inf')) >= (1 << 20)
+
+
+def test_the_grid_ceiling_does_not_charge_the_process_floor():
+    """The floor is charged where k MULTIPLIES it, not to every caller of the
+    ceiling.  Charging it in both places would double-count the reserve and
+    collapse a small box to ``_FINE_GRID_MIN`` for a budget that holds a real
+    grid -- and this is the guard every unit-scale caller in the library
+    goes through."""
+    assert _FINE_GRID_BASE_BYTES > 0, "the floor is meant to be measured"
+    small = 4 * _FINE_GRID_BASE_BYTES        # a box the floor alone would sink
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        n = _memory_bounded_n_fine(1 << 20, 'probe', ram_budget=small)
+    assert n > _FINE_GRID_MIN, (
+        "the ceiling is charging the per-process floor; that belongs in "
+        "_fine_grid_peak_bytes only")
+    # and it really is the frac rule, unchanged
+    assert n == 2 ** int(np.floor(np.log2(np.sqrt(
+        _FINE_GRID_RAM_FRAC * small / (_FINE_GRID_WORK_ARRAYS * 16)))))
 
 
 # --------------------------------------------------------------------------
