@@ -332,18 +332,30 @@ def test_a_bigger_fine_grid_cap_costs_workers():
 #: measured and which is the SMALLEST peak in the set, i.e. the one the 1.5x
 #: bar is actually decided by.  At the pre-fix (20, 4.5 GB) the model read
 #: 1.476x that row.
+#:
+#: v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2) -- the
+#: ROWS BELOW ARE RE-MEASURED, and the v5.33.3 values they replace are carried
+#: in the comment column so the direction of each move is legible.  Every
+#: v5.33.3 row was taken BEFORE the round-2 items landed; round 2 moved this
+#: leg's footprint in both directions (-8.6 GB of coords transient at 16384,
+#: +1.05 GB of resident plan buffers everywhere), and the re-measurement is the
+#: only way to know which won at each grid.  It did not win the same way twice:
+#: the 4096 CHILD fell 2.6 % and the 8192 k=3 CHILD rose 2.9 %, which took the
+#: shipped (22, 2.6 GB) model UNDER that row at 0.995x -- an envelope that is
+#: not an upper bound, which is the OOM side of the trade.
+#:
+#: The set is seven rows where v5.33.3 had eleven: the dropped rows were
+#: re-runs and k-variants that all sat INSIDE the ones kept here.  Both ends
+#: (4096, 16384), both readings at the binding grid (whole process and worker
+#: child at two different k) and a reproducibility pair at 4096 are covered.
 _MEASURED_PEAK_BYTES = (
-    ('4096, 2 orders, whole process (6.634 GiB)', 4096, 7.123e9),
-    ('4096, 2 orders, whole process, re-run (6.631 GiB)', 4096, 7.120e9),
-    ('4096, 2 orders, largest CHILD at k=2 (6.461 GiB)', 4096, 6.937e9),
-    ('8192, 2 orders, whole process (22.322 GiB)', 8192, 23.968e9),
-    ('8192, 2 orders, whole process, re-run (22.764 GiB)', 8192, 24.443e9),
-    ('8192, 6 orders, whole process', 8192, 25.331e9),
-    ('8192, 2 orders, largest CHILD at k=3 (24.169 GiB)', 8192, 25.951e9),
-    ('8192, 6 orders, largest CHILD at k=2', 8192, 25.996e9),
-    ('8192, 6 orders, largest CHILD at k=3', 8192, 25.985e9),
-    ('8192, 6 orders, largest CHILD at k=4->3 (24.002 GiB)', 8192, 25.772e9),
-    ('16384, 2 orders, whole process (78.780 GiB)', 16384, 84.589e9),
+    ('4096, 2 orders, whole process (6.574 GiB)', 4096, 7.059e9),        # 7.123
+    ('4096, 2 orders, whole process, re-run (6.603 GiB)', 4096, 7.090e9),  # 7.120
+    ('4096, 2 orders, largest CHILD at k=2 (6.296 GiB)', 4096, 6.760e9),  # 6.937
+    ('8192, 2 orders, whole process (22.927 GiB)', 8192, 24.618e9),      # 23.968
+    ('8192, 6 orders, largest CHILD at k=2 (24.377 GiB)', 8192, 26.175e9),  # 26.001
+    ('8192, 6 orders, largest CHILD at k=3 (24.901 GiB)', 8192, 26.737e9),  # 25.985
+    ('16384, 2 orders, whole process (81.887 GiB)', 16384, 87.925e9),    # 84.589
 )
 
 #: MEASURED peak of a PARAXIAL congruence worker -- ``(label, n_px, bytes)``.

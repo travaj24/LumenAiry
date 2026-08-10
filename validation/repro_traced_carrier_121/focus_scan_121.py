@@ -30,9 +30,15 @@
 # PowerShell reminder: `$env:AM=''` UNSETS the variable.
 #   RAMB=auto|inf|<GB>     -> the fine grid's RAM-budget INTENT.  The NFC this
 #                             runner asks for is PROVEN reachable before the
-#                             chain starts and asserted afterwards; a box that
-#                             cannot hold it exits 2 instead of quietly
+#                             chain starts and asserted afterwards; a budget
+#                             that would DEGRADE it exits 2 instead of quietly
 #                             reporting a spot measured on half the grid.
+#   ONBOX=warn|error       -> what to do when the modelled peak exceeds FREE
+#                             memory (the box half of that pre-flight, which
+#                             is an upper-bound envelope and therefore a
+#                             judgement).  'warn' (default) proceeds at the
+#                             requested grid, loudly; 'error' refuses.  The
+#                             GRID is never the thing that gives way.
 #
 # IMPORT-SAFE: the body is behind ``if __name__ == '__main__':``.  This runner
 # passes n_workers=8, and ``_lens_traced._script_has_main_guard`` forces the

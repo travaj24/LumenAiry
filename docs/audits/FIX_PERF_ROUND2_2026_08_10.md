@@ -140,6 +140,17 @@ exactly what it was built to do -- but it means **the fan's shipped default is
 not runnable on tesla-ryzen**, which is a finding this document records and
 does not resolve.
 
+> **RESOLVED 2026-08-10 by `FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md`**, in both
+> halves.  (a) The peak this refusal was priced against was measured BEFORE
+> this round removed the 8.6 GB coords transient; re-measured on the final
+> tree, `n_fine = 16384` peaks LOWER than the model that refused it.  (b) The
+> box half of the pre-flight now WARNS and proceeds on an explicit intent
+> instead of refusing, because the model is an upper-bound envelope and not a
+> prediction -- `ONBOX=error` restores the refusal.  `NFC=16384` was run on
+> this box under exactly that path, which is where the re-measurement comes
+> from.  The CLAMP half is unchanged and still refuses: a run never silently
+> gets a smaller grid than it named.
+
 The confirmation arm is therefore **12288**, the largest grid the guard
 approves.  It answers the question the 16384 arm was for -- does the profile's
 SHAPE hold at a larger grid:

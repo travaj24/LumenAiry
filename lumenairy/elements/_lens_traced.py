@@ -737,7 +737,7 @@ def _newton_invert_chunk(args):
     direct caller or an old pickled payload uses -- or the four-element
     ``(payload_key, blob_or_None, x_chunk, y_chunk)`` the pool now sends, where
     ``blob`` is ``pickle.dumps(knot_data)`` and ``None`` means "you already
-    have this key".  See ``_newton_payload_for_worker``.
+    have this key".  See ``_newton_worker_payload``.
     """
     if len(args) == 4:
         (_pkey, _blob, x_chunk, y_chunk) = args

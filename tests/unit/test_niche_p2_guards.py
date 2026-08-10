@@ -61,7 +61,18 @@ _WL = 1.31e-6
 # sqrt(0.5 * 146.03e9 / 352) = 14401 -> 8192, against 14846 -> 8192 at 20).
 # That is a fact about these six budgets, not a licence to skip the
 # re-derivation next time.
-_LADDER_WORK_ARRAYS = 22
+#
+# v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2): 22 -> 24,
+# on a re-measurement of every peak on the final round-2 tree -- at 22 the
+# model came in UNDER the 8192 k=3 worker child (0.995x), i.e. it had stopped
+# being an upper bound.  The ladder was RE-DERIVED at 24, rung by rung, and
+# every one is again UNCHANGED: 136 GiB gives sqrt(0.5 * 146.03e9 / 384) =
+# 13789 -> 8192, and the other five sit at least 1.3x clear of their nearest
+# power-of-two boundary.  Two consecutive re-derivations that changed nothing
+# is exactly how a stale ladder gets shipped, so this assertion is what stops
+# the third one being skipped -- the rungs surviving is the OUTPUT of the
+# re-derivation, not a reason to omit it.
+_LADDER_WORK_ARRAYS = 24
 _LADDER = ((0.25, 512), (1, 1024), (4, 2048), (16, 4096), (34, 4096),
            (136, 8192))
 _LADDER_WHY = (

@@ -28,16 +28,28 @@
 #   RAMB  -- the fine grid's RAM-budget INTENT: 'auto' (the box's own
 #            get_ram_budget(), which each congruence worker sees DIVIDED by
 #            CW), 'inf' (clamp off), or a number of GB.
+#   ONBOX -- 'warn' (default) | 'error': what to do when the modelled peak
+#            exceeds FREE memory.  'warn' proceeds at the requested grid after
+#            a loud RuntimeWarning; 'error' refuses (exit 2), which is what an
+#            unattended batch wants.  Neither disposes of a binding CLAMP or
+#            of a run modelled above TOTAL physical memory -- both of those
+#            still refuse.  See _grid_intent.py.
 #
 # THE GRID OF RECORD IS ASSERTED, NOT ASSUMED.  ADJUDICATION_NFC_8192 sec 2.1:
 # on a 137 GB box this runner's own NFC=16384 default silently ran at 8192 --
 # the RAM clamp degraded it, said so in a warning, and the acceptance banner
 # passed anyway.  ``_grid_intent.preflight`` now PROVES before chain B that the
-# clamp cannot bind and that the box can hold CW workers, and refuses (exit 2)
-# if it cannot; ``assert_no_grid_degradation`` re-checks it afterwards against
-# the warnings the run actually raised, the workers' included.  Exit 2 = this
-# box cannot do what you asked; exit 3 = the pre-flight said it could and it
-# did not.
+# clamp cannot bind, and refuses (exit 2) if it would;
+# ``assert_no_grid_degradation`` re-checks it afterwards against the warnings
+# the run actually raised, the workers' included.  Exit 2 = this run will not
+# happen as asked; exit 3 = the pre-flight said it could and it did not.
+#
+# The BOX half of that pre-flight is a judgement, not a proof -- the memory
+# model is an upper-bound envelope -- so since 2026-08-10 it WARNS and proceeds
+# on an explicit intent rather than refusing (ONBOX above,
+# docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 3).  What never
+# becomes a warning is the grid itself: this runner gets the NFC it was
+# configured with or it refuses.
 #
 # IMPORT-SAFE: everything below the constants is behind
 # ``if __name__ == '__main__':``.  Under spawn every congruence worker

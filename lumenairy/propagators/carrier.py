@@ -3857,14 +3857,65 @@ def _check_chain_entry_congruence(env, dx, wavelength, action,
 # on a ~105 GB-free box.  That trade was made deliberately and this is the
 # note that says so.
 #
+# v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2): 22 -> 24,
+# and the floor 2.6 -> 1.8 GB.  RE-MEASURED, not re-derived: every point the
+# (22, 2.6 GB) envelope was fitted to was taken BEFORE the round-2 items
+# landed, and round 2 moved this leg's footprint in BOTH directions -- it
+# removed a measured 8.6 GB coords transient at n_fine = 16384
+# (FIX_PERF_ROUND2 sec 3.2b) and it added ~1.05 GB of resident pyFFTW plan
+# buffers by routing two more call sites through the dispatcher (its sec 7.3).
+# Re-measured on the FINAL tree, same harness, same configuration:
+#
+#     n_fine   what                                was          now
+#      4096    2 orders, whole process           7.123 GB     7.059 GB
+#      4096    2 orders, whole process, re-run   7.120 GB     7.090 GB
+#      4096    2 orders, largest CHILD k=2       6.937 GB     6.760 GB
+#      8192    2 orders, whole process          23.968 GB    24.618 GB
+#      8192    6 orders, largest CHILD k=2      26.001 GB    26.175 GB
+#      8192    6 orders, largest CHILD k=3      25.985 GB    26.737 GB
+#     16384    2 orders, whole process          84.589 GB    87.925 GB
+#
+# **The shipped (22, 2.6 GB) split is UNDER the 8192 k=3 worker child on this
+# tree -- 26.591 modelled against 26.737 measured, 0.995x.**  It is not a loose
+# upper bound any more; it is not an upper bound.  That is the OOM side of the
+# trade, and it is why this moved rather than being left alone.
+#
+# The set did not move one way, which is what forced BOTH constants: the
+# small-end child FELL 2.6 % while the binding 8192 child ROSE 2.9 %.  A
+# 22-slope cannot absorb that pair -- bounding the k=3 child with 2 % of margin
+# at slope 22 needs a 2.9 GB floor, and that floor prices the 4096 child at
+# 1.35x, outside the 1.3x bar.  The feasible region starts at slope 23, and
+# (24, 1.8 GB) is the integer pair in it that minimises the worst ratio:
+# **worst 1.274, tightest 1.045**, an upper bound at all seven points.
+#
+# The floor is no longer carrying the child excess, and it is smaller for a
+# MEASURED reason: a least-squares line through the four whole-process points
+# now reads slope 320.5 B/px = 20.03 complex128-equivalents and intercept
+# 2.102 GB, i.e. a per-process floor of 2.102 - 0.369 = **1.733 GB** once the
+# ``_MULTI_WORKER_GRID_FACTOR`` term for that measurement's own 1024^2 input is
+# removed.  1.8 GB is that rounded up, and it still clears the 1.75 GB
+# interpreter-plus-import commit the Newton pool measured independently
+# (``_lens_traced._NEWTON_WORKER_BASE_BYTES``) -- by 50 MB, which is thin and
+# is stated rather than hidden.
+#
+# WHAT THE 16384 PRICE COSTS NOW, since the previous re-derivation refused a
+# steeper slope to protect it: 105.2 GB per worker, which this box's own
+# pre-flight does NOT approve out of ~94 GB free.  That constraint is
+# deliberately dropped, because the pre-flight no longer REFUSES an explicit
+# intent it cannot approve -- it warns and proceeds
+# (``validation/repro_traced_carrier_121/_grid_intent.py``).  Buying a cheaper
+# 16384 price with an envelope that under-prices a worker child is the trade
+# that was available and it is the wrong one: under-pricing is an OOM,
+# over-pricing is a warning an operator reads.
+#
 # ENVELOPE: measured on design 121's post-DOE chain with the EXACT final leg,
 # a 1024^2 input and the shipped separable-Bluestein readout, on this branch.
-# It is a property of that leg's array traffic and it moved once already when
-# items #6/#7 changed the footprint, so re-measure it after any change to the
-# fine leg rather than trusting this number across one.  ``tests/unit/
-# test_niche_p2_guards.py``'s cap ladder is ARITHMETIC on this constant and
-# asserts it first: re-derive the ladder when this moves.
-_FINE_GRID_WORK_ARRAYS = 22
+# It is a property of that leg's array traffic and it has now moved on EVERY
+# round that touched the fine leg (items #6/#7, then round 2), so re-measure it
+# after any such change rather than trusting this number across one.
+# ``tests/unit/test_niche_p2_guards.py``'s cap ladder is ARITHMETIC on this
+# constant and asserts it first: re-derive the ladder when this moves.
+_FINE_GRID_WORK_ARRAYS = 24
 
 #: Default ``focus_readout['n_fine_cap']`` -- the count cap on the exact final
 #: leg's re-trace grid.  Named so the niche-D8 worker clamp can price a
@@ -3936,13 +3987,23 @@ _FINE_GRID_MIN = 64
 # ``n_fine = 4096`` -- outside the 1.5x bar once the 4096 WORKER CHILD was
 # measured (6.94 GB; VERIFY_PERF_BRANCH_2026_08_10 D4).  The slope carries it
 # now (see ``_FINE_GRID_WORK_ARRAYS``), and this constant is back to the
-# process floor it names: **2.0 GB**, which still clears the ~1.75 GB the
-# Newton pool measured independently for the interpreter plus the lumenairy
-# import graph (``_lens_traced._NEWTON_WORKER_BASE_BYTES``).  What is in it:
-# that import commit, the order table and chain-A output the process carries
-# across chain B, and the process-global FFT plan / chirp caches the leg
-# leaves behind (byte-capped since item #6, so they saturate rather than grow
-# without bound).
+# process floor it names.  What is in it: the interpreter-plus-import commit,
+# the order table and chain-A output the process carries across chain B, and
+# the process-global FFT plan / chirp caches the leg leaves behind (byte-capped
+# since item #6, so they saturate rather than grow without bound).
+#
+# v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2): 2.6 ->
+# **1.8 GB**, re-measured on the final round-2 tree together with the slope.
+# The floor is MEASURED, not chosen: a least-squares line through the four
+# whole-process peaks (two at 4096, one at 8192, one at 16384) intercepts at
+# 2.102 GB, and removing the 0.369 GB the ``_MULTI_WORKER_GRID_FACTOR`` term
+# already charges for that measurement's own 1024^2 input leaves **1.733 GB**.
+# 1.8 GB is that rounded up.  It clears the 1.75 GB the Newton pool measured
+# independently for the interpreter plus the lumenairy import graph
+# (``_lens_traced._NEWTON_WORKER_BASE_BYTES``) by 50 MB -- thin, and said
+# plainly rather than rounded away, because two independent measurements of
+# the same physical quantity landing 3 % apart is the check working, not a
+# coincidence to lean on.
 #
 # NOTE the two errors point OPPOSITE ways and both are wanted: per-worker
 # peaks do NOT co-occur, so ``k * per_worker`` over-states the tree peak
@@ -3958,15 +4019,15 @@ _FINE_GRID_MIN = 64
 # It is deliberately NOT charged by :func:`_fine_grid_ceiling`: that rule
 # prices one process's GRID against ``_FINE_GRID_RAM_FRAC`` of the budget, and
 # the remaining fraction IS the allowance for this floor -- a measured claim
-# rather than a hope, since frac = 0.5 leaves ``budget/2`` for a 2.6 GB floor
-# and therefore covers it for any budget above ~5.2 GB.
+# rather than a hope, since frac = 0.5 leaves ``budget/2`` for a 1.8 GB floor
+# and therefore covers it for any budget above ~3.6 GB.
 #
 # ENVELOPE: this is a design-121-CLASS congruence process WITH THE EXACT FINAL
 # LEG, not a universal python floor.  A caller whose non-grid working set is
 # bigger (a larger input grid is priced separately; a larger CACHE is not)
 # will exceed it.  ``final_leg='paraxial'`` is priced by
 # ``_PARAXIAL_BASE_BYTES`` below, because it was measured and it is different.
-_FINE_GRID_BASE_BYTES = 2.6e9
+_FINE_GRID_BASE_BYTES = 1.8e9
 
 # The PARAXIAL leg's own floor (VERIFY_PERF_BRANCH_2026_08_10 D5).
 # ---------------------------------------------------------------------------
@@ -4290,7 +4351,7 @@ def carrier_referenced_exact_focus_readout(
         AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4).  Default ``None`` =
         :func:`lumenairy.get_ram_budget` (which honours
         :func:`lumenairy.set_max_ram`).  ``N_fine`` is capped so the fine grid's
-        peak working set (``_FINE_GRID_WORK_ARRAYS`` = 22 complex128 arrays,
+        peak working set (``_FINE_GRID_WORK_ARRAYS`` = 24 complex128 arrays,
         the MEASURED envelope -- see that constant, and do not re-type the
         number here: this docstring read 16 for two re-measurements after the
         constant moved) stays within 50% of it; when
