@@ -3708,16 +3708,89 @@ def _check_chain_entry_congruence(env, dx, wavelength, action,
 # MemoryError mid-propagation -- or worse, swaps for minutes.  These constants
 # turn that into a bounded, ANNOUNCED degradation.
 #
-# Peak working set is ~4 arrays of the fine grid at complex128: the
-# Fourier-upsample pad + its inverse transform, then the reconstructed field
-# alongside the exact-sphere phasor, then the Bluestein zoom's own workspace.
-_FINE_GRID_WORK_ARRAYS = 4
+# Peak working set, in complex128 arrays OF THE FINE GRID.
+#
+# v5.33.2 (docs/audits/AUDIT_TRACED_MEMORY_2026_08_09.md sec 2.3, 2.5 and
+# row 9): this was 4 -- "the Fourier-upsample pad + its inverse transform,
+# then the reconstructed field alongside the exact-sphere phasor, then the
+# Bluestein zoom's own workspace" -- and that model is 4.0x OPTIMISTIC.  The
+# leg does not hold four arrays.  MEASURED by a live big-ndarray census walked
+# from ``sys._current_frames()`` at the peak plateau of one design-121 order
+# (``RN=1024, RS=4, NFC=16384, WF=4.0, TILE=1024, DXO=0.2 um``, exact final
+# leg, serial Newton, ``set_max_ram(105)`` so the grid choice is
+# deterministic), at ``n_fine = 16384`` where one complex128 grid is 4.295 GB:
+#
+#   6 x 4.295 GB  complex128 (16384,16384)  _fine_trace_group_exit:
+#                   env_f, E_full, _ph, _cf, _rp, _xf
+#   5 x 4.295 GB  complex128 / float64      apply_real_lens_traced:
+#                   _unit, E_out, _coords, E_analytic, _rd_resid_map
+#  10 x 2.147 GB  float64   (16384,16384)   apply_real_lens_traced:
+#                   _pip_remap_W, _ard, _absE, _nan_rd, _a_rd, ard_map,
+#                   amp, _mag0, Y, X
+#   1 x 0.268 GB  bool      (16384,16384)   apply_real_lens_traced: valid
+#   --------------------------------------------------------------------
+#   69.26 GB owned across 23 live full-grid arrays
+#     = 69.26 / 4.295 = 16.1 complex128-equivalents IN FRAMES ALONE
+#      (21.9 including the resident pyFFTW plan buffers; 23.0 against the
+#       thread-free peak RSS of 98.85 GB, and 25.7 against the 110.55 GB
+#       instrumented peak the census itself was taken inside -- the audit's
+#       sec 4.5 observer artefact, which is why the frame-live count and not
+#       an RSS ratio is what this constant carries).
+#
+# The consequence of the old 4 is the point, and it is measured: with
+# ``frac = 0.5`` the 4-array model approves ``n_fine = 16384`` whenever
+# ~34.4 GB is free, and the run then touches 98.85 GB -- 2.9x -- leaving a
+# 137.4 GB box with 18.4 GB.  It also let ``_multi_resolve_workers`` approve
+# SIX congruence workers (~484 GB) on a 128 GB box at that cap
+# (AUDIT_TRACED_SPEED_2026_08_09.md sec 3.3).  The model being optimistic was
+# the only reason the single-order run completed; that is the absence of a
+# safety margin, not the presence of one.
+#
+# 16 is the FRAME-LIVE census rounded to an integer, deliberately NOT the
+# 21.9 that includes the plan buffers (those are process-global and shared
+# across the legs, so charging them per fine grid would double-count when two
+# grids of different size are sized in the same process).  Whoever re-measures
+# this: the census method is in the audit's sec 1 -- measure from OUTSIDE the
+# process, an in-process sampler thread inflates peak working set by up to
+# 2.5x on this workload.
+_FINE_GRID_WORK_ARRAYS = 16
 
 #: Default ``focus_readout['n_fine_cap']`` -- the count cap on the exact final
 #: leg's re-trace grid.  Named so the niche-D8 worker clamp can price a
 #: readout the caller did not size explicitly (it must assume the default,
 #: since that is what the readout will actually try to build).
 _FINE_GRID_DEFAULT_CAP = 16384
+
+# ---------------------------------------------------------------------------
+# Exact-readout Bluestein route (v5.33.2, AUDIT_TRACED_MEMORY_2026_08_09 row 6)
+# ---------------------------------------------------------------------------
+# The exact readout's final step is a band-limited ASM Bluestein zoom, and the
+# shipped 2-D primitive pads BOTH axes to ``L = next_fast_len(N_in + N_out -
+# 1)``, so every working array is ``L^2``.  MEASURED on the design-121
+# production order that step is a +10.604 GB transient and its chirp-kernel
+# cache entry is 1.359 GB with ZERO hits across a fan.  The transform is
+# exactly separable, and taking it as two 1-D chirp-Z passes measured
+# **61-70 % less transform peak and 2.4-6.7x faster** at rel L2 <= 9.1e-16 --
+# round-off class, but NOT byte-identical (a different association order for
+# the same sum).
+#
+# So it ships ON, with the shipped 2-D path exactly one flag away:
+#
+#     lumenairy.propagators.carrier._EXACT_READOUT_SEPARABLE_BLUESTEIN = False
+#
+# reverts this readout to the pre-v5.33.2 transform, which is the fail-before
+# switch every acceptance comparison in
+# ``docs/audits/FIX_PERF_CACHES_BLUESTEIN_2026_08_09.md`` is taken against.
+# ``_SHIPPED`` is the immutable source-declared default (the
+# ``_PYFFTW_AUTO_PROMOTE_SHIPPED`` pattern), so a pin can assert the shipped
+# contract without depending on what the current process last set.
+#
+# The flag is deliberately NOT plumbed into the other MFT propagators: their
+# consumers include byte-identity pins, and nothing measured says the win is
+# needed there.  ``angular_spectrum_propagate_mft``'s ``_bluestein_separable``
+# is private and default-off for the same reason.
+_EXACT_READOUT_SEPARABLE_BLUESTEIN_SHIPPED = True
+_EXACT_READOUT_SEPARABLE_BLUESTEIN = _EXACT_READOUT_SEPARABLE_BLUESTEIN_SHIPPED
 # Fraction of the RAM budget the fine grid may claim.  0.5 leaves room for the
 # caller's own field, the OS page cache and the FFT plan scratch.
 _FINE_GRID_RAM_FRAC = 0.5
@@ -3804,6 +3877,8 @@ def carrier_referenced_exact_focus_readout(
     N_out: int,
     dx_fine: Optional[float] = None,
     N_fine: Optional[int] = None,
+    n_fine_cap: Optional[int] = None,
+    on_n_fine_cap: str = 'warn',
     window_factor: float = 7.0,
     centre_out: Tuple[float, float] = (0.0, 0.0),
     bandlimit: bool = True,
@@ -3867,13 +3942,40 @@ def carrier_referenced_exact_focus_readout(
         of two that spans ``window_factor`` amplitude-radii of the beam at
         ``dx_fine``.
 
-        Either way the value is capped to the RAM budget (see ``ram_budget``):
-        the physics-driven default can demand 32768^2 complex128 = 16 GiB per
-        working array (measured, design-121 class), which used to die with a
-        ``MemoryError`` mid-propagation.  When the cap binds, a
-        ``RuntimeWarning`` names the un-degraded requirement and the result is
-        flagged as resolution-limited rather than silently returned as if it
-        were the requested resolution.
+        Either way the value is capped to ``n_fine_cap`` (a COUNT cap) and then
+        to the RAM budget (see ``ram_budget``): the physics-driven default can
+        demand 32768^2 complex128 = 16 GiB per working array (measured,
+        design-121 class), which used to die with a ``MemoryError``
+        mid-propagation.  When either cap binds, a ``RuntimeWarning`` names the
+        un-degraded requirement and the result is flagged as
+        resolution-limited rather than silently returned as if it were the
+        requested resolution.
+    n_fine_cap : int, optional
+        COUNT cap on the internal fine grid, in pixels per side -- the same cap
+        :func:`_fine_trace_group_exit` applies to the pre-readout re-trace,
+        applied BEFORE the ``ram_budget`` clamp.  Default ``None`` = no count
+        cap (the pre-v5.33.2 behaviour, byte-identical).
+
+        v5.33.2, audit ``AUDIT_TRACED_MEMORY_2026_08_09`` row 10 -- one of that
+        audit's two UNSAFE rows.  This grid's size is quadratic in
+        ``window_factor`` (its window is ``window_factor * w_exit``) and until
+        now NOTHING bounded it but the RAM clamp, whose cost model was 4.0x
+        optimistic.  MEASURED on the design-121 production order: ``wf = 4``
+        gives ``N_fine`` 8192 (4.295 GB/array) and ``wf = 7`` gives 16384 --
+        4x the memory for the same physics.  ``propagate_traced_carrier_chain``
+        forwards its ``focus_readout['n_fine_cap']`` (default 16384) here, so
+        the production path is bound by the number that already bounds its
+        re-trace leg; a DIRECT caller who passes nothing keeps the uncapped
+        behaviour.
+    on_n_fine_cap : {'warn', 'error', 'ignore'}, default 'warn'
+        Disposition when ``n_fine_cap`` BINDS.  ``'warn'`` degrades and
+        announces (naming the un-degraded requirement, the resulting
+        ``dx_fine`` against the exit sphere's Nyquist pitch, and the memory
+        either grid costs at the MEASURED work-array count); ``'error'``
+        raises a ``MemoryError`` so an unattended batch run fails loudly
+        instead of reporting a metric computed on a grid coarser than the
+        physics asked for; ``'ignore'`` caps silently.  Mirrors
+        ``on_ram_cap``, which disposes of the RAM clamp immediately below it.
     window_factor : float, default 7.0
         Fine-grid physical span in units of the beam amplitude radius
         (``_envelope_amp_radius``).  7 holds the beam to <1e-6 truncation.
@@ -3917,8 +4019,9 @@ def carrier_referenced_exact_focus_readout(
         AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4).  Default ``None`` =
         :func:`lumenairy.get_ram_budget` (which honours
         :func:`lumenairy.set_max_ram`).  ``N_fine`` is capped so the fine grid's
-        peak working set (4 complex128 arrays) stays within 50% of it; when the
-        cap binds a ``RuntimeWarning`` states that the readout is
+        peak working set (``_FINE_GRID_WORK_ARRAYS`` = 16 complex128 arrays,
+        the MEASURED census -- see that constant) stays within 50% of it; when
+        the cap binds a ``RuntimeWarning`` states that the readout is
         resolution-limited and what the un-degraded requirement was.  Pass
         ``float('inf')`` to disable the cap (pre-v5.29 behaviour: a hard
         ``MemoryError`` when the physics asks for more than the box has).
@@ -4013,6 +4116,19 @@ def carrier_referenced_exact_focus_readout(
         ``readout_period`` in its stages and
         :func:`propagate_traced_carrier_chain_multi` refuses a per-congruence
         window that exceeds it (niche D2).  Not part of the public contract.
+
+    Notes
+    -----
+    v5.33.2: the final Bluestein zoom runs SEPARABLY by default (two 1-D
+    chirp-Z passes rather than one 2-D convolution padded to ``L^2`` on both
+    axes) -- MEASURED 61-70 % less transform peak and 2.4-6.7x faster, at a
+    round-off-class difference (rel L2 <= 9.1e-16, power ratio
+    1.000000000000) because the association order of the same sum changes.
+    Everything the readout REPORTS is unchanged: the Bluestein period, the
+    replica guard and its chief-ray-residual (V3) semantics are computed
+    before the transform and are untouched by the route.  Set
+    ``lumenairy.propagators.carrier._EXACT_READOUT_SEPARABLE_BLUESTEIN =
+    False`` for the pre-v5.33.2 transform.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_full, 'carrier_referenced_exact_focus_readout',
@@ -4037,6 +4153,14 @@ def carrier_referenced_exact_focus_readout(
     # cannot ride all the way through the fine trace before being noticed.
     _check_guard_action('on_replica', on_replica,
                         'carrier_referenced_exact_focus_readout')
+    _check_guard_action('on_n_fine_cap', on_n_fine_cap,
+                        'carrier_referenced_exact_focus_readout')
+    if n_fine_cap is not None:
+        n_fine_cap = int(n_fine_cap)
+        if n_fine_cap < 2:
+            raise ValueError(
+                "carrier_referenced_exact_focus_readout: n_fine_cap must be "
+                f">= 2 (or None for no count cap), got {n_fine_cap!r}.")
     if not (np.isfinite(readout_window_tol) and readout_window_tol >= 0.0):
         raise ValueError(
             "carrier_referenced_exact_focus_readout: readout_window_tol must "
@@ -4169,12 +4293,70 @@ def carrier_referenced_exact_focus_readout(
     if N_fine is None:
         N_fine = int(2 ** int(np.ceil(np.log2(max(win / dx_fine, n_crop)))))
     N_fine = int(N_fine)
+    _na_ny = (min(max(w_amp / abs(R), 0.02), 0.95)
+              if (np.isfinite(R) and R != 0.0 and w_amp > 0.0) else 0.1)
+    # v5.33.2 (AUDIT_TRACED_MEMORY_2026_08_09 row 10, one of the audit's two
+    # UNSAFE rows): the COUNT cap the re-trace leg has always honoured, applied
+    # here too and BEFORE the RAM clamp -- the same order as
+    # ``_fine_trace_group_exit`` (``min(n_fine_req, n_fine_cap)`` then
+    # ``_memory_bounded_n_fine``).
+    #
+    # Until now this grid had no count cap at all.  Its sizing is quadratic in
+    # ``window_factor`` (the window is ``window_factor * w_exit``), so the ONLY
+    # thing between it and an OOM was the RAM clamp -- whose cost model was
+    # itself 4.0x optimistic (see ``_FINE_GRID_WORK_ARRAYS``).  MEASURED on the
+    # design-121 production order: ``wf = 4`` lands N_fine = 8192 (4.295 GB per
+    # working array) and ``wf = 7`` lands 16384, i.e. 4x the readout's memory
+    # for the same physics, with nothing bounding it.  The exposure was latent
+    # rather than realised at the two configurations the audit measured, which
+    # is an argument for capping the dimension, not for assuming it is safe.
+    #
+    # Default None = NO count cap, i.e. byte-identical to every pre-v5.33.2
+    # direct call.  ``propagate_traced_carrier_chain`` forwards its
+    # ``focus_readout['n_fine_cap']`` (default 16384) so the PRODUCTION path --
+    # the one the audit measured -- is bound by the same number that already
+    # bounds its re-trace leg.
+    if n_fine_cap is not None and N_fine > n_fine_cap:
+        _dxc = win / float(n_fine_cap)
+        _ny_dx = wavelength / (2.0 * _na_ny)
+        _guard_dispose(
+            on_n_fine_cap,
+            f"carrier_referenced_exact_focus_readout: the readout's internal "
+            f"fine grid is COUNT-LIMITED to {n_fine_cap}x{n_fine_cap} by "
+            f"n_fine_cap.  The un-degraded requirement was "
+            f"{N_fine}x{N_fine} -- the {win * 1e3:.4f} mm window "
+            f"(window_factor={float(window_factor)} x exit beam radius "
+            f"{w_amp * 1e6:.4f} um) at "
+            f"dx_fine={win / float(N_fine) * 1e6:.4f} um -- so "
+            f"the readout runs at dx_fine={_dxc * 1e6:.4f} um instead"
+            + (f", COARSER than the exit sphere's Nyquist pitch "
+               f"lambda/(2*NA)={_ny_dx * 1e6:.4f} um at NA={_na_ny:.4f}: every "
+               f"spatial frequency above NA={wavelength / (2.0 * _dxc):.4f} is "
+               f"silently DISCARDED (the bandlimit masks the aliased corner), "
+               f"so the returned spot is RESOLUTION-LIMITED (non-converged) "
+               f"and its peak, FWHM and encircled energy are all computed on a "
+               f"grid coarser than the physics asked for"
+               if _dxc > _ny_dx else
+               f", which still Nyquist-samples the sphere "
+               f"(lambda/(2*NA)={_ny_dx * 1e6:.4f} um at NA={_na_ny:.4f}), so "
+               f"this costs window sampling margin rather than NA")
+            + f".  Memory: the un-degraded grid is "
+              f"{_FINE_GRID_WORK_ARRAYS * N_fine * N_fine * 16 / 1e9:.1f} GB of "
+              f"peak working set at {_FINE_GRID_WORK_ARRAYS} complex128 work "
+              f"arrays (MEASURED count), the capped one "
+              f"{_FINE_GRID_WORK_ARRAYS * n_fine_cap * n_fine_cap * 16 / 1e9:.1f}"
+              f" GB.  Remedies: raise n_fine_cap to {N_fine} (RAM permitting); "
+              f"shrink window_factor (currently {float(window_factor)}); or "
+              f"pass n_fine_cap=None for no count cap and let the RAM budget "
+              f"alone decide.  Pass on_n_fine_cap='error' to make this fatal "
+              f"in batch production, 'ignore' to accept the capped grid "
+              f"silently.",
+            exc=MemoryError, stacklevel=2)
+        N_fine = int(n_fine_cap)
     # P2 memory budget: cap the fine grid to what the RAM budget can hold and
     # SAY SO (the pre-v5.29 path died with a MemoryError at 32768^2 = 16 GiB per
     # array).  The Nyquist consequence of the coarser dx_fine is spelled out in
     # the warning, mirroring the F-D message in _fine_trace_group_exit.
-    _na_ny = (min(max(w_amp / abs(R), 0.02), 0.95)
-              if (np.isfinite(R) and R != 0.0 and w_amp > 0.0) else 0.1)
     N_fine = _memory_bounded_n_fine(
         N_fine, 'carrier_referenced_exact_focus_readout', ram_budget=ram_budget,
         window=win, nyquist_dx=wavelength / (2.0 * _na_ny),
@@ -4247,7 +4429,8 @@ def carrier_referenced_exact_focus_readout(
         stacklevel=2)
     return angular_spectrum_propagate_mft(
         E_fine, z, wavelength, dx_fine, dx_out, int(N_out),
-        centre_out=_co, bandlimit=bandlimit)
+        centre_out=_co, bandlimit=bandlimit,
+        _bluestein_separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN))
 
 
 # ===========================================================================
@@ -6667,6 +6850,14 @@ def propagate_traced_carrier_chain(
           ``RuntimeWarning`` fires (F-D) with the discarded-NA magnitude.
           Raise this (RAM permitting) to resolve the full NA, or shrink
           ``window_factor`` instead.
+
+          v5.33.2 (audit AUDIT_TRACED_MEMORY_2026_08_09 row 10): this cap is
+          now forwarded to the EXACT READOUT's own internal fine grid as well
+          -- previously the chain bounded the re-trace leg and left the
+          readout's grid (whose window is quadratic in ``window_factor``)
+          bounded only by the RAM clamp.  Both grids therefore cap at the same
+          number, and ``on_n_fine_cap`` ({'warn', 'error', 'ignore'}, default
+          ``'warn'``) disposes of the readout-side bind.
         * ``max_fine_launch_points`` (int, default 4096) -- independent
           backstop on the re-trace's Newton/Chebyshev ray-fit grid size,
           in case the physical-pitch-preserving ``ray_subsample`` (F-C)
@@ -7606,7 +7797,16 @@ def propagate_traced_carrier_chain(
                 'dx_out', 'N_out', 'dx_fine', 'N_fine', 'window_factor',
                 'centre_out', 'bandlimit', 'ram_budget',
                 'on_readout_window', 'readout_window_tol',
-                'on_replica') if kk in fr}
+                'on_replica', 'on_n_fine_cap') if kk in fr}
+            # v5.33.2 (AUDIT_TRACED_MEMORY_2026_08_09 row 10): the readout's
+            # own fine grid gets the SAME count cap the re-trace leg above was
+            # just given -- eleven keys used to reach it and this was not one of
+            # them, so the chain bounded the leg's grid and left the readout's
+            # bounded only by the RAM clamp.  Passed explicitly (not via the
+            # ``if kk in fr`` comprehension) so the DEFAULT 16384 travels too:
+            # a focus_readout that names no cap still caps both grids at the
+            # same number, which is what makes the pair consistent.
+            exact_kw['n_fine_cap'] = int(fr.get('n_fine_cap', 16384))
             if _tilted:
                 # niche D6: the EXIT congruence -- the same closure the coarse
                 # path uses (``(x_c, L)`` is an ordinary paraxial ray through
@@ -7825,9 +8025,10 @@ def propagate_traced_carrier_chain(
                 "propagate_traced_carrier_chain: focus_readout must supply "
                 "'dx_out' and 'N_out'.")
         # Only the PARAXIAL readout's own kwargs: a caller who supplies the
-        # exact-path keys (``n_fine_cap`` / ``window_factor`` /
-        # ``max_fine_launch_points`` / ``dx_fine`` / ``N_fine`` /
-        # ``ram_budget``) and whose final leg then turns out to be low-NA used
+        # exact-path keys (``n_fine_cap`` / ``on_n_fine_cap`` /
+        # ``window_factor`` / ``max_fine_launch_points`` / ``dx_fine`` /
+        # ``N_fine`` / ``ram_budget``) and whose final leg then turns out to be
+        # low-NA used
         # to get a bare ``TypeError`` from here.  The exact-only keys are
         # inapplicable on this path, so drop them rather than crash.
         _par_kw = {kk: fr[kk] for kk in (
@@ -8042,7 +8243,14 @@ _CONGRUENCE_KEYS = frozenset({'field', 'carrier', 'weight', 'name',
 # ``centre_out`` are OWNED by the orchestrator (they define the common grid
 # and the per-congruence tile), so they are not forwarded from output_grid.
 _OUTPUT_GRID_PASSTHROUGH = ('standoff', 'bandlimit', 'window_factor',
-                            'n_fine_cap', 'max_fine_launch_points',
+                            'n_fine_cap',
+                            # v5.33.2: ``n_fine_cap`` now caps the READOUT's
+                            # internal grid as well as the re-trace leg's
+                            # (AUDIT_TRACED_MEMORY_2026_08_09 row 10), so its
+                            # disposition knob has to be reachable from the
+                            # same entry points the cap itself is.
+                            'on_n_fine_cap',
+                            'max_fine_launch_points',
                             'ram_budget', 'dx_fine', 'N_fine',
                             # niche C1 item 5: the readout-window guard's own
                             # message prescribes ``on_readout_window='warn'``

@@ -5094,35 +5094,110 @@ class _ResidualEikonal(object):
         self.r_fit = float(r_fit)
         self.diag = dict(diag or {})
 
-    def _poly(self, ex, ey):
-        """``(P, grad P, Hess P)`` in PHYSICAL coordinates about the centre."""
+    def _poly(self, ex, ey, hess=True):
+        """``(P, grad P, Hess P)`` in PHYSICAL coordinates about the centre.
+
+        ``hess=False`` returns ``(P, Pu/s, Pv/s, None, None, None)`` -- the
+        VALUE and its gradient only.  The three Hessian slots are ``None``
+        rather than a stale interior Hessian so a consumer that reads them
+        anyway fails loudly instead of silently using the wrong thing; the
+        only caller that asks for it is :meth:`_eval` on its value-only path,
+        where the Hessian feeds nothing (see ``value``).
+
+        PERFORMANCE (AUDIT_TRACED_SPEED_2026_08_09 sec 2, item 1;
+        FIX_PERF_POLY_LOCALS_2026_08_09).  This method was MEASURED at 57.8 %
+        of one design-121 fan order's wall (py-spy cross-check 59.1 %), all of
+        it reached through ``_pip_residual_ri -> value -> _eval``.  The cost
+        was structural, not algorithmic: the loop recomputed ``u ** i`` and
+        ``v ** j`` FROM SCRATCH for every one of the six accumulators of every
+        term, and numpy has no fast path for integer exponents above 2, so
+        each of those is a libm ``pow()`` per element.  At degree 6 (27 terms)
+        that is ~130 whole-array ``pow`` passes where 14 DISTINCT exponents
+        exist.
+
+        The fix is to issue one ``np.power`` per distinct exponent and index
+        the result.  It is BIT-IDENTICAL, not "identical to round-off": the
+        same ``np.power`` calls on the same operands produce the same bits,
+        the operand ORDER inside each term is unchanged (``(c*i) * u^p * v^q``
+        associates left to right exactly as before), and ``x += y`` rounds
+        identically to ``x = x + y``.  Pinned by
+        ``test_niche_perf_poly_locals.py``, which keeps a verbatim copy of the
+        pre-change implementation as its reference and asserts
+        ``np.array_equal`` on the real design-121 term list at degree 6.
+
+        The power table costs ``degree + 1`` arrays per axis where the old
+        loop held six accumulators; on the shipped consumer that is a wash,
+        because the row band is bounded (``_pip_residual_ri`` bands at 4.19
+        Mpt) and the value-only path below drops three accumulators and the
+        whole freeze-gradient temporary chain.
+        """
         s = self.scale
         u = ex / s
         v = ey / s
-        P = np.zeros_like(u)
-        Pu = np.zeros_like(u)
-        Pv = np.zeros_like(u)
-        Puu = np.zeros_like(u)
-        Puv = np.zeros_like(u)
-        Pvv = np.zeros_like(u)
-        for c, (i, j) in zip(self.coef, self.terms):
+        coef = self.coef
+        terms = self.terms
+        # Which exponents the term list actually indexes.  Built from the
+        # SKIPPED-ZERO term set (the loop below skips ``c == 0`` exactly as it
+        # always did), so a sparse or low-degree fit builds a smaller table --
+        # and ``hess=False`` never builds the exponents only the Hessian reads.
+        need_u = set()
+        need_v = set()
+        for c, (i, j) in zip(coef, terms):
             if c == 0.0:
                 continue
-            P = P + c * u ** i * v ** j
+            need_u.add(i)
+            need_v.add(j)
             if i >= 1:
-                Pu = Pu + c * i * u ** (i - 1) * v ** j
+                need_u.add(i - 1)
             if j >= 1:
-                Pv = Pv + c * j * u ** i * v ** (j - 1)
-            if i >= 2:
-                Puu = Puu + c * i * (i - 1) * u ** (i - 2) * v ** j
-            if i >= 1 and j >= 1:
-                Puv = Puv + c * i * j * u ** (i - 1) * v ** (j - 1)
-            if j >= 2:
-                Pvv = Pvv + c * j * (j - 1) * u ** i * v ** (j - 2)
+                need_v.add(j - 1)
+            if hess:
+                if i >= 2:
+                    need_u.add(i - 2)
+                if j >= 2:
+                    need_v.add(j - 2)
+        # ONE np.power per distinct exponent -- the same call the old loop made
+        # per term per accumulator, so the same bits.
+        UP = {p: u ** p for p in sorted(need_u)}
+        VP = {q: v ** q for q in sorted(need_v)}
+        # ``np.zeros_like(u)`` on the shipped float64 path; the explicit dtype
+        # only matters for a lower-precision ``ex`` (where the old loop's
+        # ``P = P + <float64 term>`` upcast on its first iteration anyway, so
+        # the values are the same either way -- in-place accumulation just
+        # cannot rely on that upcast).
+        _dt = np.result_type(u, coef) if len(terms) else np.result_type(u)
+        P = np.zeros_like(u, dtype=_dt)
+        Pu = np.zeros_like(u, dtype=_dt)
+        Pv = np.zeros_like(u, dtype=_dt)
+        Puu = Puv = Pvv = None
+        if hess:
+            Puu = np.zeros_like(u, dtype=_dt)
+            Puv = np.zeros_like(u, dtype=_dt)
+            Pvv = np.zeros_like(u, dtype=_dt)
+        for c, (i, j) in zip(coef, terms):
+            if c == 0.0:
+                continue
+            P += c * UP[i] * VP[j]
+            if i >= 1:
+                Pu += c * i * UP[i - 1] * VP[j]
+            if j >= 1:
+                Pv += c * j * UP[i] * VP[j - 1]
+            if hess:
+                if i >= 2:
+                    Puu += c * i * (i - 1) * UP[i - 2] * VP[j]
+                if i >= 1 and j >= 1:
+                    Puv += c * i * j * UP[i - 1] * VP[j - 1]
+                if j >= 2:
+                    Pvv += c * j * (j - 1) * UP[i] * VP[j - 2]
+        del UP, VP
+        if not hess:
+            return (P, Pu / s, Pv / s, None, None, None)
         return (P, Pu / s, Pv / s,
                 Puu / (s * s), Puv / (s * s), Pvv / (s * s))
 
-    def _eval(self, xq, yq):
+    def _eval(self, xq, yq, need_grad=True):
+        """``(a, da/dx, da/dy)``.  With ``need_grad=False`` the two gradient
+        slots are ``None`` and NO Hessian is built -- see ``value``."""
         ex = np.asarray(xq, dtype=np.float64) - self.cx
         ey = np.asarray(yq, dtype=np.float64) - self.cy
         r = np.sqrt(ex * ex + ey * ey)
@@ -5133,34 +5208,45 @@ class _ResidualEikonal(object):
         sc = np.where(out, r1 / np.where(r > 0.0, r, 1.0), 1.0)
         cx_ = ex * sc
         cy_ = ey * sc
-        P, gx, gy, hxx, hxy, hyy = self._poly(cx_, cy_)
+        # The Hessian is the FROZEN GRADIENT's business alone (it enters
+        # ``ex_x`` / ``ex_y`` and nothing else), so a value-only query never
+        # builds it: three of _poly's six accumulators, and the whole
+        # tangential-Hessian temporary chain below, are dead on that path.
+        P, gx, gy, hxx, hxy, hyy = self._poly(cx_, cy_, hess=need_grad)
         # interior
         a = P
-        ax = gx
-        ay = gy
+        ax = gx if need_grad else None
+        ay = gy if need_grad else None
         if np.any(out):
             rs = np.where(r > 0.0, r, 1.0)
             ux = ex / rs
             uy = ey / rs
             b = gx * ux + gy * uy                    # dP/dr on the circle
-            gtx = gx - b * ux                        # tangential part of gP
-            gty = gy - b * uy
-            hux = hxx * ux + hxy * uy                # H . u
-            huy = hxy * ux + hyy * uy
-            uhu = hux * ux + huy * uy
-            htx = hux - uhu * ux                     # tangential part of H.u
-            hty = huy - uhu * uy
             d = r - r1
-            f = r1 / rs
-            ex_x = f * gtx + b * ux + d * (f * htx + gtx / rs)
-            ex_y = f * gty + b * uy + d * (f * hty + gty / rs)
             a = np.where(out, P + d * b, a)
-            ax = np.where(out, ex_x, ax)
-            ay = np.where(out, ex_y, ay)
+            if need_grad:
+                gtx = gx - b * ux                    # tangential part of gP
+                gty = gy - b * uy
+                hux = hxx * ux + hxy * uy            # H . u
+                huy = hxy * ux + hyy * uy
+                uhu = hux * ux + huy * uy
+                htx = hux - uhu * ux                 # tangential part of H.u
+                hty = huy - uhu * uy
+                f = r1 / rs
+                ex_x = f * gtx + b * ux + d * (f * htx + gtx / rs)
+                ex_y = f * gty + b * uy + d * (f * hty + gty / rs)
+                ax = np.where(out, ex_x, ax)
+                ay = np.where(out, ex_y, ay)
         return a, ax, ay
 
     def value(self, xq, yq):
-        return self._eval(xq, yq)[0]
+        # HOT PATH (57.8 % of a design-121 fan order -- see ``_poly``).  The
+        # value needs ``P`` and, outside the radial freeze, ``dP/dr`` on the
+        # circle; it never reads the frozen GRADIENT, so it never needs the
+        # Hessian that gradient is built from.  Bit-identical to taking [0] of
+        # the full evaluation -- ``a`` is computed by the same expressions from
+        # the same operands.
+        return self._eval(xq, yq, need_grad=False)[0]
 
     def grad(self, xq, yq):
         _a, gx, gy = self._eval(xq, yq)
@@ -7285,7 +7371,22 @@ def apply_real_lens_traced(
     if _chunk_assembly:
         X = Y = None
     else:
-        X, Y = np.meshgrid(x, _y_ax)
+        # BROADCAST, not meshgrid (AUDIT_TRACED_MEMORY_2026_08_09 sec 5.2 /
+        # row 5; FIX_PERF_POLY_LOCALS_2026_08_09).  ``np.meshgrid`` MATERIALISES
+        # two full 2-D float64 arrays -- 2 x 2.147 GB at the n_fine = 16384
+        # retrace leg, held for the whole call (the memory census caught both
+        # of them live at the peak plateau).  ``np.broadcast_to`` returns
+        # zero-copy read-only views with the SAME element values, so every
+        # consumer here -- ``X[::sub, ::sub]``, ``X[mask_full]``,
+        # ``X ** 2 + Y ** 2``, ``.ravel()`` inside the Newton / fit inverters,
+        # ``_compute_carrier`` -- reads exactly the same numbers and the
+        # results are bitwise identical (pinned by
+        # test_niche_perf_poly_locals.py).  Nothing writes through X or Y: the
+        # sub > 1 path already handed those consumers the STRIDED VIEW
+        # ``X[::sub, ::sub]``, so a write would have corrupted X long before
+        # this change.
+        X = np.broadcast_to(x[None, :], (N, N))
+        Y = np.broadcast_to(_y_ax[:, None], (N, N))
     # OPL coarse->fine spline order; resolved for real once the carrier engage
     # test has run (see the R7 note at its assignment).  Initialised here so
     # the row-band assembly can never read it unbound.
@@ -7357,6 +7458,13 @@ def apply_real_lens_traced(
         _pk0 = float(_mag0.max()) if _mag0.size else 0.0
         if _pk0 > 0:
             _bright0 = _mag0 > 0.05 * _pk0
+            # FREE AT LAST USE (AUDIT_TRACED_MEMORY_2026_08_09 sec 2.3/2.4:
+            # ``_mag0`` was caught LIVE in this frame at the peak plateau).
+            # It is a full-grid float array -- 2.147 GB at n_fine = 16384 --
+            # whose only two readers are the peak above and this bright mask,
+            # yet it stayed bound for the whole call, including the ~794 s the
+            # element spends below.  Pure lifetime; no value changes.
+            del _mag0
             # NaN-safe peak WITHOUT np.nanmax's "All-NaN slice encountered"
             # RuntimeWarning: an all-NaN eikonal (a user-supplied ndarray
             # carrier with NaN holes -- the collimated scalar case is now
@@ -7371,8 +7479,10 @@ def apply_real_lens_traced(
                 del _cWb, _fin0
             else:
                 _peakW = 0.0
+            del _bright0          # full-grid bool, 0.27 GB at n_fine=16384
         else:
             _peakW = 0.0
+            del _mag0
         _engage = (_peakW * _k0) > _TILT_EIKONAL_MIN_RAD
         if _engage:
             _carrier_W, _carrier_grad, _carrier_W_fn = _cW, _cGrad, _cWfn
@@ -9754,14 +9864,25 @@ def apply_real_lens_traced(
             # screen path (no ray-density), free it now exactly as before.
             if _ray_density:
                 _rd_upsample_coords = (_coords, Ns)
-            else:
-                del _coords
+            # Drop the LOCAL name unconditionally.  On the ray-density path
+            # the stash owns the array from here (both are released at
+            # ``_rd_upsample_coords = None`` below); leaving ``_coords`` bound
+            # kept the (2, N, N) float64 stack -- 4.295 GB at n_fine = 16384 --
+            # alive for the WHOLE remaining call, long after the ray-density
+            # upsample had freed its own alias.  The memory census caught it
+            # live in this frame at the peak plateau
+            # (AUDIT_TRACED_MEMORY_2026_08_09 sec 2.3).  Pure lifetime; the
+            # screen path deleted it here already.
+            del _coords
             opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
             del nan_full
     elif _use_fit:
         # T-P2: full-grid inverse-map fit (no Newton, no amp mask).
         if X is None:
-            X, Y = np.meshgrid(x, _y_ax)
+            # Broadcast views, as at the primary X/Y build above -- same
+            # elements, no 2 x N^2 float64 materialisation.
+            X = np.broadcast_to(x[None, :], (N, N))
+            Y = np.broadcast_to(_y_ax[:, None], (N, N))
         opl_map = _invert_fit(X, Y)
     else:
         mask_full = _build_newton_mask(amp)
@@ -9844,6 +9965,10 @@ def apply_real_lens_traced(
             del _coords_rd
             _rd_upsample_coords = None
             ard_map = np.where(_nan_rd > 0.5, np.nan, _a_rd)
+            # Both upsampled halves are consumed by that one ``where``; they
+            # were held to the end of the call.  2 x 2.147 GB at
+            # n_fine = 16384 (census sec 2.3).  Pure lifetime.
+            del _nan_rd, _a_rd
         else:
             ard_map = _ray_density_amp_grid(X, Y)
             if _pip_remap and _rd_resid_coarse[0] is not None:
@@ -10001,8 +10126,16 @@ def apply_real_lens_traced(
             phase_exp = phase_exp.astype(target_cdtype)
         E_out = amp * phase_exp
         del phase_exp
+    # ...and the analytic field itself.  The assembly above is its LAST reader
+    # on BOTH branches (``preserve_input_phase='remap'`` sets the flag False at
+    # its normalisation, so the remap path arrives here through the ``amp``
+    # branch, and the ray-density swap below divides the screen modulus out and
+    # reads ``amp``, never ``E_analytic``).  4.295 GB complex128 at
+    # n_fine = 16384, held to the end of the call.  Pure lifetime.
+    del E_analytic
     # Zero outside the exit-pupil (ray-coverage) region
     E_out = np.where(valid, E_out, target_cdtype.type(0))
+    del valid                  # full-grid bool, 0.268 GB at n_fine=16384
     # And outside the entrance aperture (defensive: in practice the
     # ray-coverage region is a subset of the entrance aperture, so
     # this is a no-op except in pathological configurations)
@@ -10023,7 +10156,9 @@ def apply_real_lens_traced(
         with np.errstate(divide='ignore', invalid='ignore'):
             _unit = np.divide(E_out, _absE,
                               out=np.zeros_like(E_out), where=_absE > 0)
+        del _absE              # consumed by the divide; 2.147 GB float64
         _ard = np.where(np.isfinite(ard_map), ard_map, 0.0)
+        ard_map = None         # consumed by the where; 2.147 GB float64
         # ---- niche D9: the analytic amplitude leg's ZERO SET, measured -------
         # ``amp`` is the ONE thing an axis-centred ``apply_real_lens`` still
         # contributes here, and it contributes only where it is exactly 0 (the
@@ -10070,11 +10205,16 @@ def apply_real_lens_traced(
                 import warnings as _oa_warn
                 _oa_warn.warn(_oa_msg, RuntimeWarning, stacklevel=2)
         E_out = _ard * _unit
+        # The ray-density magnitude and the unit phasor are consumed by that
+        # one multiply -- 2.147 + 4.295 GB at n_fine = 16384, both caught live
+        # in the census (sec 2.3) while the readout was building its own grids.
+        del _ard, _unit
         # preserve_input_phase='remap': multiply the geometrically-transported
         # input-residual phasor onto the k0*opl exit phase (audit S6.7).  Unit
         # modulus by construction, identity where the pullback is undefined.
         if _rd_resid_map is not None:
             E_out = E_out * _rd_resid_map.astype(E_out.dtype, copy=False)
+            _rd_resid_map = None       # consumed; 4.295 GB complex128
         # ---- v5.30 (audit E-M6): post-hoc ENERGY SELF-CHECK ------------------
         # Two N^2 reductions, negligible against the trace + Newton stages.
         # Reference = the input power the element ADMITS (inside the entrance

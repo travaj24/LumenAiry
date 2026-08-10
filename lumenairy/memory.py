@@ -788,7 +788,19 @@ def estimate_asm_memory(n_grid: int,
     cb = _as_complex_itemsize(complex_dtype)
     work = _ASM_COMPLEX_ARRAYS * cb * npix
     grids = _ASM_F64_GRID_ARRAYS * 8 * npix
-    plan_bufs = keys * 2 * cb * npix
+    # v5.33.2: a plan key holds TWO aligned workspaces only while the
+    # ping-pong is on AND both fit the per-key byte cap
+    # (``fft_infra._plan_entry_n_bufs``); above the cap it holds one and the
+    # dispatcher copies.  Reading the same predicate keeps this estimate from
+    # over-predicting by a full grid per key at exactly the sizes where a
+    # grid is gigabytes.  Unchanged at every N the A-6 pins sample (two
+    # complex128 buffers at N = 1024 are 33.5 MB, three orders under the cap).
+    try:
+        from .propagators.fft_infra import _plan_entry_n_bufs
+        n_bufs = int(_plan_entry_n_bufs((N, N), np.dtype(f'c{2 * cb}')))
+    except (ImportError, TypeError, ValueError):
+        n_bufs = 2
+    plan_bufs = keys * n_bufs * cb * npix
     return int(work + grids + plan_bufs + _ASM_FIRST_CALL_FIXED_BYTES)
 
 
