@@ -4,6 +4,55 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.34.0] — 2026-08-10
+
+### Performance — the traced-path campaign (audit-driven, adversarially verified)
+
+Design 121 end-to-end: the 32-order fan drops from ~8.1 h (v5.33) to
+**~35 min** at the sweep setting (`n_fine_cap=8192`, `congruence_workers`
+auto-selecting k=3, spot quality identical to full resolution) and
+**~4.2 h** at the full-resolution record setting — with every change
+byte-identical or bounded at <= 5e-16 against the shipped physics.
+
+* `_ResidualEikonal._poly`: one power per distinct exponent +
+  Hessian-free `value()` — 3.78x on what was 57.8% of an order's wall;
+  `np.array_equal` against the previous implementation.
+* Lifetime hygiene in the fine trace: 12 consumed full-grid locals freed
+  at last use (one genuine alias leak), a numexpr `out=` retention broken
+  — the freed set is measured at exactly -16.25 full-grid equivalents
+  (-34.9 GB at n_fine=16384), exit fields sha256-identical.
+* Exact-readout separable Bluestein (default ON, shipped path behind a
+  fail-before switch): readout peak -72%, 1.74x faster, rel L2 ~1e-15,
+  acceptance banner digits identical.
+* FFT hygiene: `_fourier_upsample_crop` and `_shift_envelope` routed
+  through the dispatcher (1.7-2.0x per site); Newton pool payload ships
+  once per worker (6.8x on the dispatch constant); allocation-free
+  coords build (-8.6 GB transient); `_H_FFT_CACHE`, meshgrid and Zernike
+  caches byte-capped; pyFFTW double buffer capped per workspace with the
+  copy-decision hazard closed.
+* Memory truthfulness: the public `estimate_asm_memory` dtype bug fixed
+  (under-predicted 43% on Linux); the fine-grid model re-derived twice on
+  measurements (final envelope (24 arrays, 1.8 GB), an upper bound at all
+  seven measured points incl. per-worker children — the interim model had
+  drifted 0.5% onto the OOM side); the exact readout gains the
+  `n_fine_cap` it never had.
+* Parallel fan: `__main__` guards on the d121 runners (the unguarded
+  refusal previously HUNG), worker auto-dispatch prices orders honestly
+  (chooses k=3 at 8192, k=1 at 16384 on a 128 GB box), per-order outputs
+  bit-identical across k.
+* Resolution governance: full 32x2-order dual-run adjudication — 8192
+  degrades POWER BOOKKEEPING on 16/32 orders (<= 3.5e-4; FWHM/EE
+  identical on all 32), so 16384 remains the record default,
+  convergence-proven (`exit_power_above_nyquist = 0.000` on all 32).
+  Record runs on boxes where the honest model exceeds free RAM proceed
+  via the new `on_box_budget='warn'` path (one prominent warning naming
+  modeled/free/measured; physically-impossible allocations still refuse;
+  silent grid shrink remains structurally impossible).
+
+Full evidence chain in docs/audits/: AUDIT_TRACED_SPEED / AUDIT_TRACED_
+MEMORY, FIX_PERF_* (5), ADJUDICATION_NFC_8192, VERIFY_PERF_BRANCH,
+FIX_VERIFY_PERF, FIX_H2_DLASCL, FIX_CLAMP_RECAL_OVERRIDE.
+
 ## [5.33.1] — 2026-08-09
 
 ### Fixed — census-conditioned forward-growth null controls (the v5.33.0 publish gate)
