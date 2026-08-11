@@ -47,6 +47,25 @@ from .carrier import (
     propagate_traced_carrier_chain,
     propagate_traced_carrier_chain_multi,
 )
+
+# Field-aggregation primitives (PROBE_SUM_AT_APERTURE_2026_08_11 arm B,
+# productized).  Depends on .carrier and .mft only -- no cycle.
+from .carrier_field import (
+    CARRIER_FIELD_SCHEMA,
+    AggregateLedger,
+    AggregateResult,
+    CarrierField,
+    CarrierSpec,
+    FieldGrid,
+    FieldLedgerRow,
+    NyquistReport,
+    ReReferenceReport,
+    aggregate,
+    carrier_difference_nyquist,
+    load_carrier_field_zarr,
+    re_reference,
+    save_carrier_field_zarr,
+)
 from .dispatch import (
     ASM_FAMILY,
     VALID_METHODS,
@@ -148,6 +167,21 @@ __all__ = [
     'carrier_referenced_exact_focus_readout',
     'propagate_traced_carrier_chain',
     'propagate_traced_carrier_chain_multi',
+    # field aggregation (carrier_field)
+    'CarrierSpec',
+    'FieldGrid',
+    'CarrierField',
+    'NyquistReport',
+    'ReReferenceReport',
+    'FieldLedgerRow',
+    'AggregateLedger',
+    'AggregateResult',
+    'carrier_difference_nyquist',
+    're_reference',
+    'aggregate',
+    'save_carrier_field_zarr',
+    'load_carrier_field_zarr',
+    'CARRIER_FIELD_SCHEMA',
     'BeamletBundle',
     'apply_real_lens_fga',
     'apply_real_lens_fga_vector',
