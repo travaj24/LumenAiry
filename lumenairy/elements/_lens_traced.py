@@ -8764,9 +8764,61 @@ def apply_real_lens_traced(
         opl_grid = np.where(alive_grid, opl_grid, np.nan)
 
     # Reference OPL to on-axis (center of the entrance grid is an
-    # exact sample because n_launch is odd)
+    # exact sample because n_launch is odd).
+    #
+    # ---- FIX_TILT_QUADRATIC_OPL_2026_08_11: this is CONDITIONING, not the
+    # ---- physics, so the removed constant is RE-APPLIED at assembly.
+    #
+    # The subtraction has to happen: ``opl_grid`` is an ABSOLUTE optical path
+    # (metres -- 1e-2 for a design-121 group) whose interesting variation
+    # across the beam is 1e-8..1e-9, so fitting the raw values with a
+    # Chebyshev / spline would spend the whole double-precision mantissa on a
+    # constant.  What was WRONG is that the constant was then dropped: every
+    # branch below builds the exit phase from ``k0 * opl_map`` alone, so the
+    # returned field's absolute phase was referenced to
+    #
+    #     Lam(0) = W(0, 0) + a_fit(0, 0) + P(0, 0)
+    #
+    # -- the entrance eikonal of the launched congruence at the LAUNCH-LATTICE
+    # AXIS (the H6 / niche-C6 terms added to ``final.opd`` above) plus the
+    # geometric path of the ray launched there.  On an UNTILTED, UNDECENTRED
+    # congruence the axis IS the chief ray, so this only cost an unobservable
+    # global phase -- which is why it survived.  Under a
+    # :class:`TiltedCarrier` the axis is NOT the chief ray, and BOTH pieces
+    # become functions of the tilt:
+    #
+    #     W(0, 0)  = -theta^2 * z_c + O(theta^4)        (z_c = the chief ray's
+    #                                                    axial lever at entry)
+    #     P(0, 0)  =  P_0 + theta^2 * T_g + O(theta^4)  (the axis ray's own
+    #                                                    obliquity through the
+    #                                                    group)
+    #
+    # so the element silently subtracted a pure TILT-QUADRATIC piston from the
+    # chief ray of every tilted congruence.  Measured on design 121's first
+    # post-DOE group (``validation/repro_traced_carrier_121/tqopl_mechanism.py``)
+    # ``-k0 * [Lam_theta(0) - Lam_0(0)]`` reproduces the observed chief-ray
+    # piston deficit to 1e-5 RELATIVE over a 66x span in tilt -- i.e. it is the
+    # whole of the 4.8 %/group deficit
+    # ``docs/audits/PROBE_CHAIN_LADDER_PISTON_2026_08_11.md`` S3.7 names, and
+    # it does not converge with the grid, the ray lattice, or any fit lever
+    # because it is a missing TERM.
+    #
+    # Precision of the re-application: ``k0 * Lam(0)`` is ~5e+04 rad for a
+    # design-121 group, so the phasor carries ~1e-11 rad of round-off -- seven
+    # decades under the lambda/100 = 6.3e-02 rad bar the consumers state, and
+    # the SMALL ``k0 * opl_map`` keeps its own full precision because the two
+    # are combined by a phasor MULTIPLY, never by adding the constant back into
+    # the fitted map.
+    #
+    # A dead axis ray (NaN) already made ``opl_grid`` all-NaN and the returned
+    # field identically zero before this change; the piston falls back to 0.0
+    # there so the degenerate path keeps its pre-fix behaviour exactly.
     i_axis = n_launch // 2
-    opl_grid = opl_grid - opl_grid[i_axis, i_axis]
+    _opl_ref = opl_grid[i_axis, i_axis]
+    opl_grid = opl_grid - _opl_ref       # UNCHANGED -- byte-identical
+    _opl_piston = float(_opl_ref)
+    if not np.isfinite(_opl_piston):
+        _opl_piston = 0.0
 
     # ---- UNIT C (niche C14): the traced exit support, built ONCE ----------
     # Taken HERE, between the alive mask and the fit-domain restriction below,
@@ -10283,6 +10335,29 @@ def apply_real_lens_traced(
     # E_in.dtype, but the ``* np.exp(1j * ...)`` multiply here would
     # silently upcast to complex128 unless we cast the exp() result.
     target_cdtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
+    # ---- FIX_TILT_QUADRATIC_OPL_2026_08_11: restore the ABSOLUTE OPL --------
+    # ``opl_grid`` (and therefore ``opl_map``) was referenced to the axis
+    # launch ray purely to condition the fits -- see the long note at
+    # ``_opl_piston``.  Put that constant back, as a unit phasor multiplied
+    # onto the exit phase, so the returned field carries the element's true
+    # accumulated optical path and a chain can compose legs on an ABSOLUTE
+    # piston (the contract ``propagate_traced_carrier_chain`` documents in
+    # four places and, before this, did not meet).
+    #
+    # Multiplied onto ``phase_exp`` rather than added into ``opl_map``: the
+    # constant is ~5e+04 rad and the map is ~1e-03 rad, so adding would round
+    # the map at 1e-11 rad for no reason, and the multiply also threads the
+    # piston through the ray-density magnitude swap for free (that swap keeps
+    # ``E_out``'s UNIT PHASOR and replaces only its modulus).
+    #
+    # NOT applied on the experimental ``inversion_method='backward_trace'``
+    # route: that path builds its own map in :func:`_opl_by_backward_trace`,
+    # with its own on-axis reference and its own reversed sign convention, so
+    # the FORWARD trace's constant is not the one it dropped.  It keeps the
+    # pre-fix (piston-free) behaviour, which is what its opt-in status is for.
+    _opl_piston_phasor = None
+    if _opl_piston != 0.0 and inversion_method != 'backward_trace':
+        _opl_piston_phasor = np.exp(1j * (k0 * _opl_piston))
     if return_screen:
         # T-P1 (prepared-traced): the entire traced leg -- ray trace, fits,
         # Newton inversion, phase_analytic_lens, opl_map, and the valid /
@@ -10346,6 +10421,8 @@ def apply_real_lens_traced(
             else:
                 dp_b = np.where(valid_b, k0 * opl_b, 0.0)
             pe_b = np.exp(1j * dp_b)
+            if _opl_piston_phasor is not None:
+                pe_b *= _opl_piston_phasor      # absolute-OPL piston (in place)
             if pe_b.dtype != target_cdtype:
                 pe_b = pe_b.astype(target_cdtype)
             if preserve_input_phase:
@@ -10372,6 +10449,8 @@ def apply_real_lens_traced(
         del opl_map
         phase_exp = np.exp(1j * delta_phase)
         del delta_phase
+        if _opl_piston_phasor is not None:
+            phase_exp *= _opl_piston_phasor     # absolute-OPL piston (in place)
         if phase_exp.dtype != target_cdtype:
             phase_exp = phase_exp.astype(target_cdtype)
         E_out = E_analytic * phase_exp
@@ -10381,6 +10460,8 @@ def apply_real_lens_traced(
         del opl_map
         phase_exp = np.exp(1j * phase)
         del phase
+        if _opl_piston_phasor is not None:
+            phase_exp *= _opl_piston_phasor     # absolute-OPL piston (in place)
         if phase_exp.dtype != target_cdtype:
             phase_exp = phase_exp.astype(target_cdtype)
         E_out = amp * phase_exp
