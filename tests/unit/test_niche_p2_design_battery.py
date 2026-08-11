@@ -253,6 +253,54 @@ def _run_chain(design, w0, ratio, guard='default', wl=_WL, **kw):
             traced_kwargs=tkw, **kw), gwg, env0, dx
 
 
+def _wavefront_rms(env, dx_out):
+    """Amplitude-weighted exit-wavefront rms (RADIANS) of a carrier-referenced
+    envelope, with piston, tilt and defocus removed.
+
+    INVARIANT, and it is the point of the function: the returned number does
+    NOT move when ``env`` is multiplied by a global unit phasor.  Pinned by
+    ``test_wavefront_rms_is_invariant_under_a_global_piston``.
+    """
+    n = env.shape[0]
+    xx = (np.arange(n) - n / 2) * float(dx_out)
+    XX, YY = np.meshgrid(xx, xx)
+    amp = np.abs(env)
+    mask = amp > 0.10 * amp.max()
+    w = amp[mask] ** 2
+    ph = np.angle(env)[mask]
+    # ---- PISTON REFERENCE (docs/audits/FIX_PR29_BLAST_2026_08_11.md S1) ----
+    # ``ph`` is a CIRCULAR variable read off a wrapped ``np.angle``; the linear
+    # least-squares below is not.  Its piston COLUMN can slide the model, but
+    # nothing in it can undo a +-2 pi branch jump in the DATA -- so before this
+    # reference the metric was piston-invariant only by LUCK: whichever global
+    # phase the element happened to return had to leave the beam's phase
+    # cluster clear of the +-pi cut.  ``apply_real_lens_traced`` now returns an
+    # ABSOLUTE optical path (docs/audits/FIX_TILT_QUADRATIC_OPL_2026_08_11.md),
+    # i.e. the global phase is the element's own ``k0 * OPL`` (~5e+04 rad),
+    # whose value mod 2 pi is arbitrary as far as a WAVEFRONT metric is
+    # concerned.  Two cells duly landed on the cut (the triplet at 98.6 % of
+    # its masked pixels within 0.35 rad of +-pi) and the fit returned noise.
+    #
+    # De-rotate the amplitude-weighted CIRCULAR MEAN first.  The circular mean
+    # is equivariant -- ``ph -> ph + c`` gives ``mu -> mu + c`` -- so
+    # ``ph - mu``, and therefore every number below, is EXACTLY invariant under
+    # ``env -> env * exp(1j c)``, which is what this docstring always claimed.
+    #
+    # Measured across all 12 battery cells at v5.34.0 vs this branch: the
+    # de-rotated rms is unchanged to <= 1.3e-16 relative on 8 cells and
+    # <= 3e-08 on 3 more; the 12th (the relay at 2.5x, sitting on the cliff
+    # shoulder) moves 1.5e-03, which is FFT non-commutativity through the
+    # transport legs, not physics.
+    mu = np.angle(np.sum(w * np.exp(1j * ph)))
+    ph = np.angle(np.exp(1j * (ph - mu)))
+    A = np.stack([np.ones(int(mask.sum())), XX[mask], YY[mask],
+                  XX[mask] ** 2 + YY[mask] ** 2], 1)
+    sw = np.sqrt(w)
+    coef, *_ = np.linalg.lstsq(A * sw[:, None], ph * sw, rcond=None)
+    resid = np.angle(np.exp(1j * (ph - A @ coef)))
+    return float(np.sqrt(np.sum(w * resid ** 2) / np.sum(w)))
+
+
 def _chain_exit_rms(design, w0, ratio, guard='default', wl=_WL):
     """Exit-wavefront rms (radians) at the last group's exit vertex, referenced
     to the paraxial exit sphere with piston/tilt/defocus removed -- the
@@ -264,19 +312,7 @@ def _chain_exit_rms(design, w0, ratio, guard='default', wl=_WL):
                               final_distance=0.0)
     env = carrier_referenced_envelope(np.asarray(res.field), float(res.R), wl,
                                       float(res.dx))
-    n = env.shape[0]
-    xx = (np.arange(n) - n / 2) * float(res.dx)
-    XX, YY = np.meshgrid(xx, xx)
-    amp = np.abs(env)
-    mask = amp > 0.10 * amp.max()
-    ph = np.angle(env)
-    w = amp[mask] ** 2
-    A = np.stack([np.ones(int(mask.sum())), XX[mask], YY[mask],
-                  XX[mask] ** 2 + YY[mask] ** 2], 1)
-    coef, *_ = np.linalg.lstsq(A * np.sqrt(w)[:, None], ph[mask] * np.sqrt(w),
-                               rcond=None)
-    resid = np.angle(np.exp(1j * (ph[mask] - A @ coef)))
-    out = float(np.sqrt(np.sum(w * resid ** 2) / np.sum(w)))
+    out = _wavefront_rms(env, float(res.dx))
     _CACHE[key] = out
     return out
 
@@ -342,6 +378,46 @@ def _through_focus(design, w0, ratio, guard='default', dx_out=0.5e-6,
 
 
 # ===========================================================================
+# 0. The metric itself.  Everything below scores the chain with
+#    ``_wavefront_rms``; if that number can move without the WAVEFRONT moving,
+#    every row in the battery is measuring the wrong thing.
+# ===========================================================================
+def test_wavefront_rms_is_invariant_under_a_global_piston():
+    """A global unit phasor is not a wavefront error -- it is the reference
+    the metric is supposed to remove -- so ``_wavefront_rms`` must return the
+    same number for ``env`` and for ``env * exp(1j c)`` at every ``c``.
+
+    This is not hypothetical bookkeeping.  ``apply_real_lens_traced`` now
+    returns an ABSOLUTE optical path (FIX_TILT_QUADRATIC_OPL_2026_08_11), so
+    the exit field carries the element's own ``k0 * OPL`` -- tens of thousands
+    of radians whose residue mod 2 pi is, to a wavefront metric, arbitrary.
+    A linear least-squares run directly on wrapped ``np.angle`` output cannot
+    absorb that: its piston column moves the MODEL, but the +-pi branch cut
+    has already folded the DATA.  Measured with the pre-fix construction, this
+    fixture's rms swings 0.2384 -> 1.3922 rad across the 17-point piston sweep
+    below (a 5.8x spread on a quantity that must not move at all) -- the same
+    failure that made two battery cells and the E4 7 mm cell report fiction.
+    With the circular-mean reference the sweep is flat to 3.9e-16 rad.  The
+    oracle here is exactness itself: the answer cannot depend on ``c``.
+    """
+    n, dxo, w0 = 256, 5.0e-6, 3.0e-4
+    xx = (np.arange(n) - n / 2) * dxo
+    XX, YY = np.meshgrid(xx, xx)
+    u = (XX ** 2 + YY ** 2) / w0 ** 2
+    # Gaussian amplitude + a real, sizeable spherical aberration, so the
+    # residual genuinely spans more than one 2 pi branch.
+    env = np.exp(-u) * np.exp(1j * 0.9 * u ** 2)
+    base = _wavefront_rms(env, dxo)
+    assert base > 0.2, f'fixture is too flat to test wrapping ({base:.4f})'
+    vals = [_wavefront_rms(env * np.exp(1j * c), dxo)
+            for c in np.linspace(0.0, 2.0 * np.pi, 17)]
+    assert max(vals) - min(vals) < 1e-9, (
+        f'wavefront rms is piston-DEPENDENT: {min(vals):.6f} to '
+        f'{max(vals):.6f} rad over a 2 pi global-phase sweep (base '
+        f'{base:.6f})')
+
+
+# ===========================================================================
 # 1. Wavefront: the chain tracks the ray oracle across the whole battery.
 # ===========================================================================
 _CELLS = [
@@ -364,13 +440,23 @@ def test_battery_wavefront_matches_ray_oracle(name, design, w0, ratio):
     fast singlet, whose 0.79 rad of real spherical aberration the chain must
     REPRODUCE rather than flatter.
 
-    Measured 2026-07-25 (rms rad, oracle -> chain):
+    Measured 2026-08-11 (rms rad, oracle -> chain).  These are the
+    PISTON-INVARIANT values: they were re-measured at v5.34.0 and on the
+    absolute-OPL branch and agree to <= 1.3e-16 relative on 8 of the 12 cells
+    and <= 3e-08 on 3 more, so the column below is a property of the chain and
+    not of whatever global phase the element happens to return.  Four cells
+    move against the 2026-07-25 record (singlet w1.2 0.946 -> 0.840 and
+    1.018 -> 0.921; triplet 0.028 -> 0.031 and 0.046 -> 0.038): those old
+    numbers were read off wrapped ``np.angle`` output without a piston
+    reference, so they were contaminated by branch-cut folding -- see
+    ``_wavefront_rms`` and docs/audits/FIX_PR29_BLAST_2026_08_11.md S1.
+
     singlet w0.6 1.2x 0.049 -> 0.025 | 2.5x 0.049 -> 0.054
-    singlet w1.2 1.2x 0.795 -> 0.946 | 2.5x 0.795 -> 1.018
+    singlet w1.2 1.2x 0.795 -> 0.840 | 2.5x 0.795 -> 0.921
     doublet w1.0 1.2x 0.001 -> 0.003 | 2.5x 0.001 -> 0.009
     doublet w2.0 1.2x 0.009 -> 0.016 | 2.5x 0.009 -> 0.041
-    triplet w1.6 1.2x 0.032 -> 0.028 | 2.5x 0.032 -> 0.046
-    relay   w2.0 1.2x 0.003 -> 0.019 | 2.5x 0.003 -> 0.100
+    triplet w1.6 1.2x 0.032 -> 0.031 | 2.5x 0.032 -> 0.038
+    relay   w2.0 1.2x 0.003 -> 0.021 | 2.5x 0.003 -> 0.100
     """
     _skip_if_low_ram()
     ap = ratio * 2.0 * w0
@@ -395,8 +481,11 @@ def test_battery_cliff_cells_need_the_guard(name, design, w0):
     (1.82 rad rms = pi/sqrt(3), a uniformly random wrapped phase), and the
     default beam-relative fit domain is what keeps them physical.
 
-    Measured 2026-07-25 (rms rad, guard off -> on): singlet 1.824 -> 1.018,
-    relay 1.822 -> 0.100."""
+    Measured 2026-08-11 with the piston-invariant metric (rms rad, guard
+    off -> on): singlet 1.7978 -> 0.9213 (0.512 of the un-guarded value,
+    against a 0.7 bar), relay 1.8030 -> 0.1000 (0.056).  The un-guarded values
+    sit at pi/sqrt(3) = 1.8138 to within 1 %, which is what a UNIFORMLY RANDOM
+    wrapped phase reads -- the property that identifies the cliff."""
     _skip_if_low_ram()
     off = _chain_exit_rms(design, w0, 2.5, guard=None)
     on = _chain_exit_rms(design, w0, 2.5)
