@@ -1,0 +1,113 @@
+{
+ "n_fine": 4096,
+ "rows": [
+  {
+   "a_fit_terms": 27,
+   "arms": {
+    "incumbent": {
+     "amp_core_rel_rms": 0.016338145425794835,
+     "amp_skirt_rel_rms": Infinity,
+     "n_all": 1024,
+     "n_core": 506,
+     "n_finite": 1024,
+     "n_skirt": 518,
+     "opl_all_max_waves": 227.6153573460261,
+     "opl_all_rms_waves": 23.70724851480147,
+     "opl_core_max_waves": 0.015267495957532653,
+     "opl_core_rms_waves": 0.0059819746905922745,
+     "opl_skirt_max_waves": 227.6153573460261,
+     "opl_skirt_rms_waves": 33.3323738306735,
+     "seconds": 28.443551799980924
+    },
+    "map": {
+     "amp_core_rel_rms": 1.996513036424876e-05,
+     "amp_skirt_rel_rms": Infinity,
+     "n_all": 1024,
+     "n_core": 506,
+     "n_finite": 1024,
+     "n_skirt": 518,
+     "opl_all_max_waves": 227.61591849701486,
+     "opl_all_rms_waves": 15.548953910301204,
+     "opl_core_max_waves": 0.003679117125872288,
+     "opl_core_rms_waves": 0.0011947098453248882,
+     "opl_skirt_max_waves": 227.61591849701486,
+     "opl_skirt_rms_waves": 21.861817978896017,
+     "seconds": 31.075407899916172
+    }
+   },
+   "dx": 3.0648e-06,
+   "n_core": 506,
+   "n_fine": 4096,
+   "n_oracle_valid": 1024,
+   "n_probe": 1024,
+   "n_skirt": 518,
+   "opl_ref_m": 0.02276400538703757,
+   "oracle_resid_max_m": 2.2079425200240586e-17,
+   "oracle_seconds": 3.9861545998137444,
+   "order": [
+    -4,
+    -2
+   ],
+   "probe_centre_mm": [
+    -0.3014794948154567,
+    -0.14362057619172597
+   ],
+   "probe_r_out_mm": 5.64903936,
+   "support_radius_mm": 9.92180342484876
+  },
+  {
+   "a_fit_terms": 27,
+   "arms": {
+    "incumbent": {
+     "amp_core_rel_rms": 0.0007499277611286669,
+     "amp_skirt_rel_rms": Infinity,
+     "n_all": 1024,
+     "n_core": 608,
+     "n_finite": 1024,
+     "n_skirt": 416,
+     "opl_all_max_waves": 0.5930131653790943,
+     "opl_all_rms_waves": 0.1305093830876313,
+     "opl_core_max_waves": 0.020498434191817523,
+     "opl_core_rms_waves": 0.010776990347680255,
+     "opl_skirt_max_waves": 0.5930131653790943,
+     "opl_skirt_rms_waves": 0.2043450406819733,
+     "seconds": 25.258749599801376
+    },
+    "map": {
+     "amp_core_rel_rms": 1.898373956683364e-07,
+     "amp_skirt_rel_rms": 4.908109476301282e-06,
+     "n_all": 864,
+     "n_core": 608,
+     "n_finite": 864,
+     "n_skirt": 256,
+     "opl_all_max_waves": 0.0001275950991005763,
+     "opl_all_rms_waves": 2.212146847940749e-05,
+     "opl_core_max_waves": 4.348790912961583e-06,
+     "opl_core_rms_waves": 1.668170633529488e-06,
+     "opl_skirt_max_waves": 0.0001275950991005763,
+     "opl_skirt_rms_waves": 4.0558337391215694e-05,
+     "seconds": 25.425110399955884
+    }
+   },
+   "dx": 3.0648e-06,
+   "n_core": 608,
+   "n_fine": 4096,
+   "n_oracle_valid": 1024,
+   "n_probe": 1024,
+   "n_skirt": 416,
+   "opl_ref_m": 0.022764005366185204,
+   "oracle_resid_max_m": 1.939479807224432e-18,
+   "oracle_seconds": 4.178174300119281,
+   "order": [
+    0,
+    0
+   ],
+   "probe_centre_mm": [
+    0.0,
+    0.0
+   ],
+   "probe_r_out_mm": 5.64903936,
+   "support_radius_mm": 9.53443986776093
+  }
+ ]
+}

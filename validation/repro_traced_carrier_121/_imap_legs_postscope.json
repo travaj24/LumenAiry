@@ -1,0 +1,136 @@
+{
+ "legs": [
+  {
+   "N": 1024,
+   "amplitude_model": "ray_density",
+   "core_amp_rel_rms": 0.0,
+   "core_phase_max_waves": 1.3554153029823205e-17,
+   "core_phase_rms_waves": 2.130012644191616e-18,
+   "dx": 5.123386449216365e-05,
+   "guards": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "max_abs_dE_over_peak": 0.0,
+   "n_call": 0,
+   "n_core": 95568,
+   "off_seconds": 3.525160999968648,
+   "on_seconds": 4.328638899838552,
+   "peak_off": 0.03280737185435388,
+   "power_ratio_on_over_off": 1.0,
+   "preserve_input_phase": "remap",
+   "ray_subsample": 4,
+   "remap_sampling": "full"
+  },
+  {
+   "N": 1024,
+   "amplitude_model": "ray_density",
+   "core_amp_rel_rms": 0.0,
+   "core_phase_max_waves": 1.3594566047492354e-17,
+   "core_phase_rms_waves": 2.155083660046676e-18,
+   "dx": 5.123422854238465e-05,
+   "guards": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "max_abs_dE_over_peak": 0.0,
+   "n_call": 1,
+   "n_core": 95605,
+   "off_seconds": 4.29094190010801,
+   "on_seconds": 4.306695999810472,
+   "peak_off": 0.03279324666741003,
+   "power_ratio_on_over_off": 1.0,
+   "preserve_input_phase": "remap",
+   "ray_subsample": 4,
+   "remap_sampling": "full"
+  },
+  {
+   "N": 1024,
+   "amplitude_model": "ray_density",
+   "core_amp_rel_rms": 0.0,
+   "core_phase_max_waves": 1.3862738035107818e-17,
+   "core_phase_rms_waves": 2.1076353816839107e-18,
+   "dx": 5.123459259150458e-05,
+   "guards": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "max_abs_dE_over_peak": 0.0,
+   "n_call": 2,
+   "n_core": 85841,
+   "off_seconds": 4.500156000023708,
+   "on_seconds": 3.6211218000389636,
+   "peak_off": 0.034774317203646626,
+   "power_ratio_on_over_off": 1.0,
+   "preserve_input_phase": "remap",
+   "ray_subsample": 4,
+   "remap_sampling": "full"
+  },
+  {
+   "N": 1024,
+   "amplitude_model": "ray_density",
+   "core_amp_rel_rms": 0.0,
+   "core_phase_max_waves": 1.3841891797167946e-17,
+   "core_phase_rms_waves": 2.063996571906695e-18,
+   "dx": 4.491214694528516e-05,
+   "guards": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "max_abs_dE_over_peak": 0.0,
+   "n_call": 3,
+   "n_core": 73221,
+   "off_seconds": 7.195263599976897,
+   "on_seconds": 4.790530500002205,
+   "peak_off": 0.04321399481414036,
+   "power_ratio_on_over_off": 1.0,
+   "preserve_input_phase": "remap",
+   "ray_subsample": 4,
+   "remap_sampling": "full"
+  },
+  {
+   "N": 1024,
+   "amplitude_model": "ray_density",
+   "core_amp_rel_rms": 0.0,
+   "core_phase_max_waves": 1.3602362897969481e-17,
+   "core_phase_rms_waves": 2.1029987610086615e-18,
+   "dx": 3.84323908567419e-05,
+   "guards": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "max_abs_dE_over_peak": 0.0,
+   "n_call": 4,
+   "n_core": 55819,
+   "off_seconds": 3.727679899893701,
+   "on_seconds": 3.674707400146872,
+   "peak_off": 0.05783865998345433,
+   "power_ratio_on_over_off": 1.0,
+   "preserve_input_phase": "remap",
+   "ray_subsample": 4,
+   "remap_sampling": "full"
+  },
+  {
+   "N": 1024,
+   "amplitude_model": "ray_density",
+   "core_amp_rel_rms": 0.0,
+   "core_phase_max_waves": 1.2449753547622324e-17,
+   "core_phase_rms_waves": 2.0316461426854087e-18,
+   "dx": 3.321124650389652e-05,
+   "guards": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "max_abs_dE_over_peak": 0.0,
+   "n_call": 5,
+   "n_core": 7983,
+   "off_seconds": 4.9856388999614865,
+   "on_seconds": 3.9089341000653803,
+   "peak_off": 0.1765522768579424,
+   "power_ratio_on_over_off": 1.0,
+   "preserve_input_phase": "remap",
+   "ray_subsample": 4,
+   "remap_sampling": "full"
+  }
+ ]
+}

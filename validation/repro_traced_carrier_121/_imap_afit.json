@@ -1,0 +1,324 @@
+{
+ "R_ent_mm": -21.139185452405258,
+ "chain_seconds": 19.30669500003569,
+ "exit_displacement": {
+  "mean_grad_rad": [
+   0.0025404641575949415,
+   0.001096074108560607
+  ],
+  "n_rays": 16237,
+  "no_afit_exit_shift_max_um": 210.29058712812045,
+  "no_afit_opl_max_waves": 50.83315437529554,
+  "tilt_only_exit_shift_max_um": 193.68742436435153,
+  "tilt_only_opl_max_waves": 48.545474210325516
+ },
+ "fits": [
+  {
+   "call": 0,
+   "centre_mm": [
+    -0.32287121262391766,
+    -0.16143560631195883
+   ],
+   "degree_terms": 27,
+   "diag_grad_max": 0.00015683773182349783,
+   "fit_disc": {
+    "grad_max_rad": 0.00014528179138337133,
+    "n": 42986,
+    "nontilt_max_rad": 0.0001441303131242743,
+    "nontilt_rms_rad": 3.271353694475779e-05,
+    "src_shift_from_nontilt_mm": 0.003046797418447274,
+    "src_shift_from_tilt_mm": 4.7979602168399816e-05,
+    "tilt_mag_rad": 2.269699666357797e-06,
+    "tilt_mean_rad": [
+     -1.6119045922264368e-06,
+     -1.5979049286562768e-06
+    ]
+   },
+   "launch_square": {
+    "grad_max_rad": 0.00014570211145766842,
+    "n": 52441,
+    "nontilt_max_rad": 0.00014499903028627193,
+    "nontilt_rms_rad": 5.474769717754882e-05,
+    "src_shift_from_nontilt_mm": 0.003065161391640429,
+    "src_shift_from_tilt_mm": 3.8923105773696144e-05,
+    "tilt_mag_rad": 1.8412774636625082e-06,
+    "tilt_mean_rad": [
+     -7.697790290105109e-07,
+     -1.6726454928307654e-06
+    ]
+   },
+   "r_fit_mm": 15.792030753172016,
+   "scale_mm": 12.633624602537614,
+   "union_pupil": {
+    "grad_max_rad": 2.291769407131581e-05,
+    "n": 16237,
+    "nontilt_max_rad": 2.2597981967029392e-05,
+    "nontilt_rms_rad": 1.1578919687496823e-05,
+    "src_shift_from_nontilt_mm": 0.000477702931651144,
+    "src_shift_from_tilt_mm": 1.832465191910044e-05,
+    "tilt_mag_rad": 8.668570489794073e-07,
+    "tilt_mean_rad": [
+     -7.601913103184529e-07,
+     -4.1659370504317554e-07
+    ]
+   }
+  },
+  {
+   "call": 1,
+   "centre_mm": [
+    -1.2472690952722312,
+    -0.6236345476361156
+   ],
+   "degree_terms": 27,
+   "diag_grad_max": 0.00011329513141765805,
+   "fit_disc": {
+    "grad_max_rad": 0.00011290768952877127,
+    "n": 42192,
+    "nontilt_max_rad": 0.00011073461185176396,
+    "nontilt_rms_rad": 3.0334251722262895e-05,
+    "src_shift_from_nontilt_mm": 0.002340839495934551,
+    "src_shift_from_tilt_mm": 7.585715444903965e-05,
+    "tilt_mag_rad": 3.588461562051743e-06,
+    "tilt_mean_rad": [
+     2.1814285177727503e-06,
+     2.849285174244694e-06
+    ]
+   },
+   "launch_square": {
+    "grad_max_rad": 0.0001132953855051702,
+    "n": 52441,
+    "nontilt_max_rad": 0.00011451696983775637,
+    "nontilt_rms_rad": 5.4370044909977676e-05,
+    "src_shift_from_nontilt_mm": 0.0024207954628478307,
+    "src_shift_from_tilt_mm": 0.0002126813353996597,
+    "tilt_mag_rad": 1.0060999553578372e-05,
+    "tilt_mean_rad": [
+     8.007280060818626e-06,
+     6.0915661405520874e-06
+    ]
+   },
+   "r_fit_mm": 15.794976826498878,
+   "scale_mm": 12.635981461199105,
+   "union_pupil": {
+    "grad_max_rad": 1.9785498299286678e-05,
+    "n": 16237,
+    "nontilt_max_rad": 2.0398762990544718e-05,
+    "nontilt_rms_rad": 1.0755235073356542e-05,
+    "src_shift_from_nontilt_mm": 0.00043121323385678567,
+    "src_shift_from_tilt_mm": 4.928308400161888e-05,
+    "tilt_mag_rad": 2.331361542410394e-06,
+    "tilt_mean_rad": [
+     -2.1271381210797804e-06,
+     -9.542169854280273e-07
+    ]
+   }
+  },
+  {
+   "call": 2,
+   "centre_mm": [
+    -1.5759830503562873,
+    -0.7879915251781436
+   ],
+   "degree_terms": 27,
+   "diag_grad_max": 0.00011186576883632952,
+   "fit_disc": {
+    "grad_max_rad": 0.00011080760393630611,
+    "n": 41819,
+    "nontilt_max_rad": 0.000110325813383928,
+    "nontilt_rms_rad": 2.6897433922159296e-05,
+    "src_shift_from_nontilt_mm": 0.0023321978293103078,
+    "src_shift_from_tilt_mm": 1.700154176189848e-05,
+    "tilt_mag_rad": 8.042666450028241e-07,
+    "tilt_mean_rad": [
+     4.0895858120782655e-08,
+     8.032262228367943e-07
+    ]
+   },
+   "launch_square": {
+    "grad_max_rad": 0.00011186582988115568,
+    "n": 52441,
+    "nontilt_max_rad": 0.00011670613919807398,
+    "nontilt_rms_rad": 4.997728003630215e-05,
+    "src_shift_from_nontilt_mm": 0.0024670727199423083,
+    "src_shift_from_tilt_mm": 0.00014456257176062798,
+    "tilt_mag_rad": 6.838606534112192e-06,
+    "tilt_mean_rad": [
+     5.805532708120853e-06,
+     3.6141844589534883e-06
+    ]
+   },
+   "r_fit_mm": 15.798002966434206,
+   "scale_mm": 12.638402373147363,
+   "union_pupil": {
+    "grad_max_rad": 2.1793601802675347e-05,
+    "n": 16237,
+    "nontilt_max_rad": 1.9457282741156693e-05,
+    "nontilt_rms_rad": 1.1243417553083564e-05,
+    "src_shift_from_nontilt_mm": 0.00041131110826519545,
+    "src_shift_from_tilt_mm": 6.923944135642467e-05,
+    "tilt_mag_rad": 3.275407253146855e-06,
+    "tilt_mean_rad": [
+     -2.9558406154986193e-06,
+     -1.4111339163012732e-06
+    ]
+   }
+  },
+  {
+   "call": 3,
+   "centre_mm": [
+    -3.224557678871708,
+    -1.612278839435854
+   ],
+   "degree_terms": 27,
+   "diag_grad_max": 0.012285771777652537,
+   "fit_disc": {
+    "grad_max_rad": 0.012274997655618977,
+    "n": 29800,
+    "nontilt_max_rad": 0.0123494529695554,
+    "nontilt_rms_rad": 0.0056362613660513585,
+    "src_shift_from_nontilt_mm": 0.2610573765591884,
+    "src_shift_from_tilt_mm": 0.004337689893735097,
+    "tilt_mag_rad": 0.00020519664314887527,
+    "tilt_mean_rad": [
+     0.00020231516446146555,
+     3.4267135691461006e-05
+    ]
+   },
+   "launch_square": {
+    "grad_max_rad": 0.012285769085485333,
+    "n": 52441,
+    "nontilt_max_rad": 0.014175976224758182,
+    "nontilt_rms_rad": 0.008573395188445375,
+    "src_shift_from_nontilt_mm": 0.29966859038405097,
+    "src_shift_from_tilt_mm": 0.05113741820841779,
+    "tilt_mag_rad": 0.0024190817722638067,
+    "tilt_mean_rad": [
+     0.0021603767954920567,
+     0.0010884524437927785
+    ]
+   },
+   "r_fit_mm": 13.154248566472921,
+   "scale_mm": 10.523398853178337,
+   "union_pupil": {
+    "grad_max_rad": 0.01159350564263431,
+    "n": 16237,
+    "nontilt_max_rad": 0.009783196975932287,
+    "nontilt_rms_rad": 0.003358759365946061,
+    "src_shift_from_nontilt_mm": 0.2068088151916429,
+    "src_shift_from_tilt_mm": 0.0390448580054723,
+    "tilt_mag_rad": 0.0018470370153751451,
+    "tilt_mean_rad": [
+     0.0016513509595882262,
+     0.0008273969690740769
+    ]
+   }
+  },
+  {
+   "call": 4,
+   "centre_mm": [
+    -3.304709951515407,
+    -1.6523549757577034
+   ],
+   "degree_terms": 27,
+   "diag_grad_max": 0.012079804661423587,
+   "fit_disc": {
+    "grad_max_rad": 0.012077486029127869,
+    "n": 18777,
+    "nontilt_max_rad": 0.012042640805707095,
+    "nontilt_rms_rad": 0.005339247257699014,
+    "src_shift_from_nontilt_mm": 0.2545716173285454,
+    "src_shift_from_tilt_mm": 0.004576623949566489,
+    "tilt_mag_rad": 0.00021649954109493615,
+    "tilt_mean_rad": [
+     0.00019205146222693817,
+     9.99414185951595e-05
+    ]
+   },
+   "launch_square": {
+    "grad_max_rad": 0.012079804772315244,
+    "n": 52441,
+    "nontilt_max_rad": 0.01295088666896439,
+    "nontilt_rms_rad": 0.009404651453433128,
+    "src_shift_from_nontilt_mm": 0.2737711950683212,
+    "src_shift_from_tilt_mm": 0.053176455953535484,
+    "tilt_mag_rad": 0.0025155394976434614,
+    "tilt_mean_rad": [
+     0.0022475059202592533,
+     0.001129892075644363
+    ]
+   },
+   "r_fit_mm": 10.376383026620669,
+   "scale_mm": 8.301106421296534,
+   "union_pupil": {
+    "grad_max_rad": 0.012027484720794443,
+    "n": 16237,
+    "nontilt_max_rad": 0.011262177490516513,
+    "nontilt_rms_rad": 0.005423993295849007,
+    "src_shift_from_nontilt_mm": 0.2380732585699326,
+    "src_shift_from_tilt_mm": 0.06626937700178584,
+    "tilt_mag_rad": 0.0031349068369257143,
+    "tilt_mean_rad": [
+     0.0028019892535899684,
+     0.001405879475264477
+    ]
+   }
+  },
+  {
+   "call": 5,
+   "centre_mm": [
+    -3.0162407775310007,
+    -1.5081203887655004
+   ],
+   "degree_terms": 27,
+   "diag_grad_max": 0.03257023531286471,
+   "fit_disc": {
+    "grad_max_rad": 0.032525393477808875,
+    "n": 10641,
+    "nontilt_max_rad": 0.026757163579644794,
+    "nontilt_rms_rad": 0.009510612628273392,
+    "src_shift_from_nontilt_mm": 0.565624643090455,
+    "src_shift_from_tilt_mm": 0.12211753339916051,
+    "tilt_mag_rad": 0.005776832493101845,
+    "tilt_mean_rad": [
+     0.005166984652037287,
+     0.0025834208443396116
+    ]
+   },
+   "launch_square": {
+    "grad_max_rad": 0.032570227465181525,
+    "n": 52441,
+    "nontilt_max_rad": 0.02418295145577626,
+    "nontilt_rms_rad": 0.012836663549317359,
+    "src_shift_from_nontilt_mm": 0.5112078956101681,
+    "src_shift_from_tilt_mm": 0.17737515682903873,
+    "tilt_mag_rad": 0.008390822684648743,
+    "tilt_mean_rad": [
+     0.007553792543446767,
+     0.0036532346674945427
+    ]
+   },
+   "r_fit_mm": 7.8098765226430125,
+   "scale_mm": 6.247901218114411,
+   "union_pupil": {
+    "grad_max_rad": 0.021753328368703608,
+    "n": 16237,
+    "nontilt_max_rad": 0.019546120079023007,
+    "nontilt_rms_rad": 0.006806644780888904,
+    "src_shift_from_nontilt_mm": 0.4131890572254494,
+    "src_shift_from_tilt_mm": 0.058488487937369445,
+    "tilt_mag_rad": 0.0027668278926383377,
+    "tilt_mean_rad": [
+     0.0025404641575949415,
+     0.001096074108560607
+    ]
+   }
+  }
+ ],
+ "launch_radius_mm": 15.297432143278696,
+ "n_fits": 6,
+ "order": [
+  -4,
+  -2
+ ],
+ "r_union_mm": 9.648970107533069
+}

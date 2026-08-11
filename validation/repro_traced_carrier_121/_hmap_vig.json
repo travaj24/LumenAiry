@@ -1,0 +1,28 @@
+{
+ "vig": {
+  "Hx": 0.0819142703097758,
+  "Hy": 0.03714951228633401,
+  "aperture_diameter": 0.02039657619103826,
+  "exit_radius_max": 0.004892962805912711,
+  "launch_radius_shipped": 0.015297432143278696,
+  "margin_frac_vs_launch_disc": 0.3692424965733493,
+  "margin_frac_vs_semi_aperture": 0.12415848627254163,
+  "margin_vs_semi_aperture": 0.0012662040125109367,
+  "n_angle_nodes": 25,
+  "n_dead": 0,
+  "n_pupil_rays": 7213,
+  "n_rays_total": 180325,
+  "r_union": 0.009648970107533069,
+  "semi_aperture": 0.01019828809551913,
+  "surface_hit_max": [
+   0.008932084083008194,
+   0.006715096537960471,
+   0.00469060729486657
+  ],
+  "surface_semi_diameters": [
+   Infinity,
+   Infinity,
+   Infinity
+  ]
+ }
+}

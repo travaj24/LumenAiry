@@ -8285,10 +8285,33 @@ def propagate_traced_carrier_chain(
                 E_full = np.asarray(E_full) * _xf
             from ..elements._lens_traced import TiltedCarrier as _TC
             _carrier_arg = _TC(R_use, tilt_L, tilt_M, x_c, y_c)
+        # ---- niche C15 SCOPING, and it is STRUCTURAL, not numeric ----------
+        # This is the ORDINARY chain leg, whose output is an INTERMEDIATE: the
+        # legs after it re-fit the niche-C6 residual eikonal, re-run the
+        # niche-C11 decentred-fit arbiter, re-measure the beam radius that
+        # sizes the ray-fit disc, and re-reference the carrier -- all on THIS
+        # field.  The inverse-characteristic evaluator's evidence
+        # (docs/audits/BUILD_INVERSE_MAP_2026_08_11.md) is entirely about the
+        # accuracy of ONE element's returned map at the ray landings; it says
+        # nothing about what a skirt-level change to an intermediate does to
+        # six downstream model FITS, and the per-leg decomposition of S5
+        # measures exactly that change (max |dE| 1.2-5.9 % of peak, almost all
+        # of it outside the 1/e^2 core) without being able to say which arm is
+        # right.  So the evaluator is scoped to the leg whose output nothing
+        # re-fits: the FINE RETRACE in ``_fine_trace_group_exit``, which is
+        # also the leg it was sized and guarded on.
+        #
+        # NOT A THRESHOLD.  The criterion is which call site this is --
+        # terminal readout leg versus intermediate -- so it cannot be tuned,
+        # and it does not read ``ray_subsample``, ``n_fine`` or any number.
+        # ``setdefault`` keeps an explicit caller override reachable through
+        # ``traced_kwargs``.
+        _leg_kw = dict(call_kw)
+        _leg_kw.setdefault('inverse_map', False)
         E_exit = apply_real_lens_traced(
             E_full, prescription=presc, wavelength=wavelength, dx=cur_dx,
             carrier=_carrier_arg, ray_subsample=ray_subsample,
-            n_workers=n_workers, **call_kw)
+            n_workers=n_workers, **_leg_kw)
         E_exit = np.asarray(E_exit)
         if not _tilted:
             if _sphere_ref:
@@ -8942,6 +8965,7 @@ _MULTI_WORKER_STATE: dict = {}
 _WORKER_STATE_MODULES = (
     'lumenairy.glass',
     'lumenairy.elements._lens_traced',
+    'lumenairy.elements._lens_imap',
     'lumenairy.propagators.carrier',
     'lumenairy.propagators.asm',
 )

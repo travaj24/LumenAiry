@@ -254,6 +254,7 @@ def doublet_prescription():
 # ``USE_PYFFTW`` unconditionally, and ``shipped_fft_dispatch`` is opt-in.
 _LEAK_GUARD_MODULES = (
     'lumenairy.elements._lens_traced',
+    'lumenairy.elements._lens_imap',
     'lumenairy.propagators.carrier',
     'lumenairy.propagators.fft_infra',
 )
