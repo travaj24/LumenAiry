@@ -63,6 +63,73 @@
     ]
    },
    {
+    "max_waves": 0.9749954007046914,
+    "r1": true,
+    "rms_waves": 0.25848004998212015,
+    "surfaces": []
+   },
+   {
+    "max_waves": 1.1841186520699936,
+    "r1": true,
+    "rms_waves": 0.30898694447018205,
+    "surfaces": [
+     0
+    ]
+   },
+   {
+    "max_waves": 0.9919672538093537,
+    "r1": true,
+    "rms_waves": 0.26097839292453084,
+    "surfaces": [
+     1
+    ]
+   },
+   {
+    "max_waves": 0.26653416023690374,
+    "r1": true,
+    "rms_waves": 0.0758565777873926,
+    "surfaces": [
+     2
+    ]
+   },
+   {
+    "max_waves": 1.2012629851318932,
+    "r1": true,
+    "rms_waves": 0.31207911410416794,
+    "surfaces": [
+     0,
+     1
+    ]
+   },
+   {
+    "max_waves": 0.057371737583645985,
+    "r1": true,
+    "rms_waves": 0.014045883092826006,
+    "surfaces": [
+     0,
+     2
+    ]
+   },
+   {
+    "max_waves": 0.24956713419124177,
+    "r1": true,
+    "rms_waves": 0.07148981446892365,
+    "surfaces": [
+     1,
+     2
+    ]
+   },
+   {
+    "max_waves": 0.040229846605540576,
+    "r1": true,
+    "rms_waves": 0.012398361707247792,
+    "surfaces": [
+     0,
+     1,
+     2
+    ]
+   },
+   {
     "rms_waves": 0.291191231802946,
     "tangent_facet": true,
     "translate": false

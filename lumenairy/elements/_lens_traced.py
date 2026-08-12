@@ -7931,10 +7931,38 @@ def apply_real_lens_traced(
                 # caller asked for a carrier-referenced ray-density field and
                 # would otherwise receive an analytic screen field with no
                 # diagnostic).
+                # v5.35.0 (BUILD_R1_WIRING S4): the carrier is the ONE
+                # traced-only argument the analytic model CAN honour -- it
+                # drives the screen-obliquity + R1 corrections, which is the
+                # whole reason those exist.  Forward it, but only when the
+                # F1 statistic says it describes the field BETTER THAN
+                # NOTHING: this branch fires precisely because the residual
+                # after removing the carrier is large, and a carrier that
+                # points the wrong way is worse than none (the correction's
+                # cross term 2 p0 . q flips sign -- the same "wrong by twice
+                # the term" signature the refutation used).  ``_resid`` is
+                # that residual; the raw input tilt is the same statistic
+                # with NO carrier removed, i.e. exactly the q = 0 arm.  So
+                # the comparison is measured, not assumed, and it reuses the
+                # guard's own estimator rather than inventing a second one.
+                _fwd_carrier = None
+                if carrier is not None and _carrier_W is not None:
+                    if _input_tilt is None:
+                        try:
+                            _input_tilt = _input_tilt_stats(E_in, wavelength,
+                                                            dx)
+                        except (ValueError, RuntimeError,
+                                FloatingPointError):
+                            _input_tilt = None
+                    _raw = (_input_tilt[0] if _input_tilt is not None
+                            else 0.0)
+                    if _resid < _raw:
+                        _fwd_carrier = carrier
                 _tdef = _traced_kwarg_defaults()
                 _dropped = [
                     f'{_k}={_v!r}' for _k, _v in (
-                        ('carrier', carrier),
+                        ('carrier', carrier if _fwd_carrier is None else
+                         _tdef.get('carrier')),
                         ('amplitude_model', amplitude_model),
                         ('preserve_input_phase',
                          'remap' if _pip_remap else preserve_input_phase),
@@ -7954,17 +7982,29 @@ def apply_real_lens_traced(
                         # notion of a reusable screen and returns a FIELD
                         ('return_screen', return_screen),
                     ) if _kwarg_differs_from_default(_v, _tdef.get(_k))]
-                if _dropped:
+                if _dropped or carrier is not None:
                     import warnings
+                    _kept = (
+                        "  carrier= IS forwarded (it drives the analytic "
+                        "model's screen-obliquity + R1 corrections)."
+                        if _fwd_carrier is not None else
+                        ("  carrier= is NOT forwarded: removing it does not "
+                         "reduce the input's angular spread, so it does not "
+                         "describe this field and the angular correction "
+                         "would be driven by the wrong ray angle."
+                         if carrier is not None else ''))
+                    _drop_txt = (
+                        f"The analytic model has no ray-trace leg, so these "
+                        f"traced-only arguments are DISCARDED: "
+                        f"{', '.join(_dropped)}." if _dropped else
+                        "The analytic model has no ray-trace leg.")
                     warnings.warn(
                         f"apply_real_lens_traced: on_noncollimated="
                         f"'delegate' is handing this call to "
                         f"apply_real_lens (input residual angular spread "
                         f"{_resid:.3f} rad > "
-                        f"{_NONCOLLIMATED_RESID_THRESH} rad).  The analytic "
-                        f"model has no ray-trace leg, so these "
-                        f"traced-only arguments are DISCARDED: "
-                        f"{', '.join(_dropped)}.  Pass carrier= and keep "
+                        f"{_NONCOLLIMATED_RESID_THRESH} rad).  "
+                        f"{_drop_txt}{_kept}  Keep "
                         f"on_noncollimated='warn' if you need them "
                         f"honoured, or call apply_real_lens directly to "
                         f"make the model choice explicit.",
@@ -7981,6 +8021,7 @@ def apply_real_lens_traced(
                     use_gpu=amp_use_gpu, wave_propagator=wave_propagator,
                     sag_dtype=sag_dtype,
                     sag_chunk_rows=_sag_chunk_rows_raw,
+                    carrier=_fwd_carrier,
                     progress=progress)
             else:  # 'warn'
                 import warnings

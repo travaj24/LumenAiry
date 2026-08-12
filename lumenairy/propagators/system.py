@@ -831,6 +831,19 @@ def propagate_through_system(E_in: np.ndarray,
                                 use_gpu=use_gpu)
 
         elif elem['type'] == 'real_lens':
+            # v5.35.0 (BUILD_R1_WIRING S4): ``carrier`` (+ its two policy
+            # keys) join the forwarded set.  A chain element that states the
+            # beam's congruence could previously do so only on the
+            # ``'real_lens_traced'`` sibling; on this one the key was accepted
+            # by the dict and DROPPED IN SILENCE -- the same class v5.31's
+            # W9-11 closed for the traced element -- which made the analytic
+            # angular correction unreachable through the chain API.
+            _rl_kw = {}
+            if elem.get('carrier') is not None:
+                _rl_kw['carrier'] = elem['carrier']
+            for _k in ('screen_obliquity', 'on_screen_obliquity'):
+                if _k in elem:
+                    _rl_kw[_k] = elem[_k]
             E = apply_real_lens(
                 E, prescription=elem['prescription'], wavelength=wavelength,
                 dx=current_dx, dy=current_dy,
@@ -840,6 +853,7 @@ def propagate_through_system(E_in: np.ndarray,
                 absorption=elem.get('absorption', False),
                 progress=(lambda stage, frac, msg='': sub_cb(frac, msg))
                         if progress is not None else None,
+                **_rl_kw,
             )
 
         elif elem['type'] == 'real_lens_traced':
