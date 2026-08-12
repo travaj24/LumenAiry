@@ -830,7 +830,7 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
                       det_j_grid=None,
                       *, wavelength, launch_radius, weights=None,
                       census_amp=None,
-                      exit_degree=None, parity_invert=None,
+                      exit_degree=None, parity_invert=None, parity_tag=None,
                       parity_factor=None, cache=True, caller=None,
                       guard_record=None):
     """Fit the inverse characteristic from ONE congruence's traced landings.
@@ -875,6 +875,18 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
         element's own ``_invert_newton``.  Required for G8; without it the
         build refuses, because a comparative bar with nothing to compare to is
         not a bar.
+    parity_tag : hashable, optional
+        Whatever identifies WHICH incumbent ``parity_invert`` is.  It enters
+        the cache key, and it must, because G8's verdict is a property of the
+        PAIR (model, incumbent) while everything else in the key describes the
+        model alone.  Two calls that build the same model against different
+        incumbents can reach opposite verdicts; without this tag the second
+        would inherit the first's acceptance from the cache and the returned
+        field would depend on the ORDER the calls were made in.  MEASURED on
+        the niche-C6 fixture once the fit domain was made basis-independent:
+        spline-then-polynomial gave a backend spread of 1.0600e-02 and
+        polynomial-then-spline gave 0.0, from the same two calls.  ``None`` is
+        accepted (and hashed as such) for callers with a single incumbent.
 
     Returns
     -------
@@ -915,11 +927,18 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
     key = None
     if cache:
         key = _imap_key(xs_in, XO, YO, OP, DJ, W, degree, launch_radius,
-                        wavelength, extra=(pf,))
+                        wavelength, extra=(pf, repr(parity_tag)))
         hit = _cache_get(key)
         if hit is not None:
-            rec['cached'] = True
+            # ORDER MATTERS: ``hit.guards`` is the ORIGINAL build's record and
+            # it carries that build's ``cached = False``, so setting the flag
+            # first meant every cache hit reported itself as a fresh build.
+            # A diagnostic that cannot tell you it came from the cache is how
+            # a cache defect stays invisible -- this one hid an acceptance
+            # being carried across ``newton_fit`` backends (see
+            # ``parity_tag``).  No returned bit changes either way.
             rec.update(hit.guards)
+            rec['cached'] = True
             rec['refused'] = None
             return hit
     rec['cached'] = False

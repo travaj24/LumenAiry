@@ -8353,6 +8353,65 @@ def apply_real_lens_traced(
     # guard below is emitted rather than the inertness being left silent, and
     # it is the same finding that put ``newton_fit='auto'`` back on POLYNOMIAL.
     _fit_domain_basis_ok = (newton_fit != 'spline')
+    # ---- FIX FIT-DOMAIN SYMMETRY (2026-08-12): the DOMAIN is not the
+    # INTERPOLANT.  ``_fit_domain_basis_ok`` above answers exactly one
+    # question -- "can THIS BASIS restrict ITS OWN forward fit to the
+    # requested region?" -- and D5's adjudication of it stands unchanged.
+    # What it must NOT answer is the different question "is there a requested
+    # region at all?", because the region is a property of the BEAM and the
+    # traced samples, and OTHER consumers can honour it even where the
+    # interpolant cannot.
+    #
+    # Conflating the two leaked: the inverse-characteristic model
+    # (:mod:`lumenairy.elements._lens_imap`) is a GLOBAL total-degree
+    # Chebyshev in EXIT coordinates, i.e. exactly the mechanism the
+    # restriction exists to control, and it needs the domain for the same
+    # reason the forward polynomial fit does (measured: unrestricted, its
+    # held-out OPL error inside the beam is 4.5258e-01 waves against
+    # 1.9965e-05 restricted -- BUILD_INVERSE_MAP_2026_08_11 S6.5b).  But it
+    # inherited its sample set from whatever the FORWARD fit's restriction
+    # had left behind, so on the spline basis it silently received the whole
+    # launch square while on the polynomial basis it received the disc.  The
+    # two bases therefore described DIFFERENT MAPS, which broke the shipped
+    # backend-symmetry guard
+    # ``test_niche_c6::test_the_two_newton_fit_backends_still_describe_the_same_map``
+    # (measured 1.0600e-02 against its 5e-04 bar; on this fixture the
+    # polynomial arm ENGAGED the model on 2 809 disc samples while the spline
+    # arm handed it 32 761 launch-square samples and G8 refused the build).
+    #
+    # So the domain is resolved BASIS-INDEPENDENTLY whenever a consumer that
+    # can honour it is going to run, and each consumer honours it iff it can:
+    #
+    #   consumer                         honours the domain?
+    #   forward fit, polynomial basis    YES -- NaN mask or D1 weights
+    #   forward fit, spline basis        NO  -- D5, unchanged and re-pinned
+    #   the inverse-map model            YES -- ALWAYS, on either basis
+    #
+    # WHY NOT THE OTHER WAY ROUND (i.e. make the spline forward fit honour it
+    # too).  ``RectBivariateSpline`` needs a full NaN-free tensor grid, so the
+    # only expressible restriction is a rectangular SUB-LATTICE -- and no
+    # rectangle equals a disc.  MEASURED on niche C6's own 181 x 181 lattice:
+    # the disc holds 2 809 of 32 761 nodes; the largest sub-lattice that stays
+    # inside it holds 1 849 and DROPS 960 disc samples, and the best-overlap
+    # sub-lattice still misses by 504 nodes (252 kept that the disc excludes,
+    # 252 dropped that it includes).  A sub-lattice restriction would
+    # therefore leave the two bases handing the model DIFFERENT sample sets
+    # again -- it cannot fix this defect even in principle -- while
+    # additionally moving every spline consumer.  The alternative "mask and
+    # fill" keeps the rectangle but fabricates data outside the disc, which is
+    # not a restriction at all.  Both are refuted in
+    # FIX_FIT_DOMAIN_SYMMETRY_2026_08_12 S2.
+    _imap_domain_gate = (sub > 1 and inversion_method == 'newton'
+                         and not _chunk_assembly and not use_gpu)
+    #: True when a fit domain must be resolved even though the resolved basis
+    #: cannot apply it to its own forward fit.  Scoped to the calls that
+    #: actually build the model, so no spline call that does not build one
+    #: moves a single bit.
+    _fit_domain_for_model = (not _fit_domain_basis_ok
+                             and _IMAP.imap_enabled(inverse_map)
+                             and _imap_domain_gate)
+    #: The domain is REQUESTED (by any consumer) when either can use it.
+    _fit_domain_wanted = _fit_domain_basis_ok or _fit_domain_for_model
     _fit_domain_inert = []
     if not _fit_domain_basis_ok:
         if _frbf is not None:
@@ -8372,14 +8431,28 @@ def apply_real_lens_traced(
                 f'niche-C11/C12 ray-fit branch selection, which chooses '
                 f'between two fit DISCS)')
     if _fit_domain_inert and on_fit_domain_basis != 'silent':
+        # SCOPE, and it is narrower than it used to be.  The announcement is
+        # about the FORWARD FIT only.  When the inverse-characteristic model
+        # is going to be built on this call it resolves and applies the SAME
+        # domain regardless of basis (fix FIT-DOMAIN SYMMETRY 2026-08-12), so
+        # saying "no ray-fit-domain guard at all" would be false there.
+        _fdb_scope = (
+            "the element's FORWARD fit.  The inverse-characteristic model "
+            "IS built on this call and it applies the same domain on either "
+            "basis, so the restriction is not wholly inert -- what it does "
+            "not reach is the RectBivariateSpline forward fit and the Newton "
+            "inversion that reads it"
+            if _fit_domain_for_model else
+            "this call, which therefore runs with NO ray-fit-domain guard at "
+            "all")
         _fdb_msg = (
             f"apply_real_lens_traced: newton_fit={newton_fit!r} cannot honour "
             f"the fit-domain restriction(s) requested here -- "
             + '; '.join(_fit_domain_inert) + ".  They are INERT on this "
             "basis (a local bicubic takes no least-squares weights, and a "
             "NaN-masked data array makes RectBivariateSpline return NaN "
-            "everywhere rather than a restricted fit), so this call runs "
-            "with NO ray-fit-domain guard at all.  That is usually harmless "
+            "everywhere rather than a restricted fit) for " + _fdb_scope +
+            ".  That is usually harmless "
             "-- a local interpolant does not spread marginal-ray error into "
             "the beam the way a global polynomial does -- but it is NOT a "
             "safe substitute past the aperture:beam cliff: measured on the "
@@ -8414,7 +8487,7 @@ def apply_real_lens_traced(
                                                 origin=(_org_x, _org_y))
         elif (_beam_decentred and _frbf is not None
                 and (DECENTRED_FIT_ARBITER or DECENTRED_FIT_PREDICTOR)
-                and _fit_domain_basis_ok):
+                and _fit_domain_wanted):
             # niche C11: the arbiter below scores the HISTORICAL concentric
             # candidate too, and that disc is sized from the ORIGIN-referenced
             # second moment -- the same number the fall-back above re-measures.
@@ -9032,10 +9105,17 @@ def apply_real_lens_traced(
     # ``_DECENTRED_FIT_POLY_ORDER``.
     _fit_weights = None
     _fit_poly_order = int(newton_poly_order)
+    # FIX FIT-DOMAIN SYMMETRY (2026-08-12): the inverse-map model's copy of the
+    # SAME restriction, resolved here on either basis and consumed only at the
+    # ``build_inverse_map`` call site.  ``None`` everywhere means "the forward
+    # arrays already carry it" -- which is the polynomial path, so that path
+    # is byte-identical by construction rather than by re-derivation.
+    _imap_xo = _imap_yo = _imap_op = None
+    _imap_weights = None
     # ``_fit_r_geom`` / ``_fit_r_max`` were resolved at the launch-radius site
     # above (niche C6's freeze circle has to clear them); the restriction they
     # drive is applied here, unchanged.
-    if _fit_r_max is not None and _fit_domain_basis_ok:
+    if _fit_r_max is not None and _fit_domain_wanted:
         _r2_launch = xs_in[:, None] ** 2 + xs_in[None, :] ** 2
         _fit_why = f"r <= {_fit_r_max * 1e3:.4f} mm"
         _off_branch = (_beam_fit_radius is not None and _beam_decentred)
@@ -9196,6 +9276,13 @@ def apply_real_lens_traced(
                                  f"off-centre against {_s_conc:.3e} m "
                                  f"concentric)")
         if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
+            # The restriction is built ONCE and then routed on
+            # ``_fit_domain_basis_ok``: to the forward arrays when this basis
+            # can honour it (byte-identical to the shipped path), and
+            # otherwise to the inverse-map model's own copies.  Reaching here
+            # at all means SOME consumer asked for it (``_fit_domain_wanted``),
+            # so exactly one of the two destinations is taken and the domain
+            # is never resolved and then dropped.
             if (_beam_fit_radius is not None
                     and (_off_branch or _c6_fit_guard)
                     and _FIT_DISC_OUTSIDE_WEIGHT_REL > 0.0):
@@ -9209,12 +9296,24 @@ def apply_real_lens_traced(
                 # step-down that keeps it determined.  Both live in
                 # ``_decentred_fit_restriction`` so the niche-C11 arbiter above
                 # scores exactly what is applied here.
-                _fit_weights, _fit_poly_order = _decentred_fit_restriction(
+                _w_res, _o_res = _decentred_fit_restriction(
                     _fit_disc, True, newton_poly_order, _dec_order)
-            else:
+                if _fit_domain_basis_ok:
+                    _fit_weights, _fit_poly_order = _w_res, _o_res
+                else:
+                    # the model's copy; the D7 ORDER raise is a property of the
+                    # element's own degree-``newton_poly_order`` fit and has no
+                    # meaning for a degree-14 exit model, so only the WEIGHTS
+                    # travel.
+                    _imap_weights = _w_res
+            elif _fit_domain_basis_ok:
                 x_out_grid = np.where(_fit_disc, x_out_grid, np.nan)
                 y_out_grid = np.where(_fit_disc, y_out_grid, np.nan)
                 opl_grid = np.where(_fit_disc, opl_grid, np.nan)
+            else:
+                _imap_xo = np.where(_fit_disc, x_out_grid, np.nan)
+                _imap_yo = np.where(_fit_disc, y_out_grid, np.nan)
+                _imap_op = np.where(_fit_disc, opl_grid, np.nan)
         elif _beam_fit_radius is not None and on_aperture_beam == 'warn':
             import warnings
             warnings.warn(
@@ -10154,8 +10253,9 @@ def apply_real_lens_traced(
     #                           kernel is a CPU numba/NumPy pair;
     _imap = None
     _imap_rec = {'engaged': False}
-    _imap_gate = (sub > 1 and inversion_method == 'newton'
-                  and not _chunk_assembly and not use_gpu)
+    # resolved once, at the fit-domain site above, so the domain the model is
+    # given and the gate that decides whether to build it cannot disagree.
+    _imap_gate = _imap_domain_gate
     if _IMAP.imap_enabled(inverse_map) and _imap_gate:
         def _imap_incumbent(_xq, _yq):
             """G8's arm B: the INCUMBENT inversion, which is this element's
@@ -10168,10 +10268,30 @@ def apply_real_lens_traced(
         # (``_IMAP_DETJ_SOURCE``), which is what keeps its amplitude
         # independent of ``newton_fit`` -- see that constant's note, and the
         # shipped guard it exists to honour.
+        #
+        # THE SAMPLE SET IS THE SAME ON EITHER BASIS (fix FIT-DOMAIN SYMMETRY
+        # 2026-08-12).  On the polynomial basis the forward arrays already
+        # carry the restriction and the ``_imap_*`` copies are ``None``, so
+        # this is verbatim the shipped call; on the spline basis -- which
+        # cannot restrict its own bicubic -- the copies carry the SAME disc
+        # and the SAME D1 weights, resolved from the SAME basis-independent
+        # beam radius.  Without this the two backends described different
+        # maps and the shipped c6 backend-symmetry guard was right to say so.
         _imap = _IMAP.build_inverse_map(
-            xs_in, x_out_grid, y_out_grid, opl_grid,
+            xs_in,
+            x_out_grid if _imap_xo is None else _imap_xo,
+            y_out_grid if _imap_yo is None else _imap_yo,
+            opl_grid if _imap_op is None else _imap_op,
             wavelength=wavelength, launch_radius=launch_radius,
-            weights=_fit_weights, parity_invert=_imap_incumbent,
+            weights=(_fit_weights if _imap_weights is None
+                     else _imap_weights),
+            parity_invert=_imap_incumbent,
+            # WHICH incumbent this is.  The model is now identical on either
+            # basis, so without this the two bases COLLIDE in the build cache
+            # and the second call inherits the first's G8 verdict -- an
+            # acceptance decided by call order.  See ``parity_tag``.
+            parity_tag=(str(newton_fit), int(_fit_poly_order),
+                        _fit_weights is None, int(MAX_NEWTON_ITERS)),
             caller='apply_real_lens_traced', guard_record=_imap_rec)
         if _imap is None:
             _IMAP.report_refusal(_imap_rec, 'apply_real_lens_traced')
