@@ -1,0 +1,49 @@
+{
+ "guard": {
+  "rows": [
+   {
+    "estimate_waves": null,
+    "fires_off": false,
+    "fires_on": false,
+    "group": 0,
+    "tilt_mrad": 51.50028010566478
+   },
+   {
+    "estimate_waves": null,
+    "fires_off": false,
+    "fires_on": false,
+    "group": 1,
+    "tilt_mrad": 51.50028010566478
+   },
+   {
+    "estimate_waves": null,
+    "fires_off": false,
+    "fires_on": false,
+    "group": 2,
+    "tilt_mrad": 51.50028010566478
+   },
+   {
+    "estimate_waves": null,
+    "fires_off": false,
+    "fires_on": false,
+    "group": 3,
+    "tilt_mrad": 46.68749250483747
+   },
+   {
+    "estimate_waves": null,
+    "fires_off": false,
+    "fires_on": false,
+    "group": 4,
+    "tilt_mrad": 7.3848475778607545
+   },
+   {
+    "estimate_waves": 0.2391,
+    "fires_off": true,
+    "fires_on": true,
+    "group": 5,
+    "tilt_mrad": 54.865810377163285
+   }
+  ],
+  "tol_waves": 0.05
+ }
+}

@@ -1863,6 +1863,228 @@ def _check_no_silent_fold_drop(prescription: dict,
         f"fold'.")
 
 
+# ---------------------------------------------------------------------------
+# SCREEN OBLIQUITY -- the closed-form angular correction to the sag screen.
+# ---------------------------------------------------------------------------
+# The default screen imprints ``(n2 - n1) * sag(x, y)`` on the surface's VERTEX
+# PLANE.  The angular-spectrum steps between screens carry the angular optical
+# path of the GAPS exactly (a plane-parallel plate is machine-exact at every
+# tilt -- BUILD_ANGLE_AWARE_LENS_2026_08_11 S2), so the only angle-blind piece
+# left is the sag screen itself: it applies the same OPD however obliquely the
+# ray crosses the sag.  That is the ``~ sag * theta**2`` bound this function's
+# own docstring has always quoted, and it is the ONLY term corrected here.
+#
+# THE AXIAL-TRANSLATION IDENTITY (derived in
+# ``docs/audits/BUILD_SCREEN_OBLIQUITY_2026_08_11.md`` S2; exact, no expansion).
+# Take a PLANE facet with unit normal ``nu``, media ``n1 -> n2``, sitting a
+# height ``s`` above the vertex plane, between fixed reference planes.  Moving
+# it down onto the vertex plane leaves the exit ray direction unchanged (a
+# plane refracts identically wherever it sits along its own normal) and changes
+# the EXIT-REFERENCED eikonal by exactly
+#
+#     Lam(facet at height s) = Lam(facet at height 0) + s * (pz1 - pz2)        (2)
+#
+# with ``pz1 = n1 cos(alpha_in)`` and ``pz2 = n2 cos(alpha_out)`` the AXIAL
+# components of the optical momentum before / after refraction, both measured
+# to the Z-AXIS (not to the facet normal).  Proof: split the "facet at height
+# s" system into [n1 slab of thickness s] + [facet at height 0 over the
+# remaining thickness] + [remove an n2 slab of thickness s]; the middle system
+# is translation-invariant so its total eikonal minus ``p_out . x_out`` is
+# constant, and the two slabs contribute
+# ``n1 s / cos a1 - p_in s tan a1 = s n1 cos a1`` and ``-s n2 cos a2``.
+#
+# So the eikonal-exact screen OPD (convention ``exp(-i k0 OPD)``) is
+#
+#     OPD_i(x, y) = (pz2 - pz1) * sag_i(x, y)                                  (3)
+#
+# -- equation (1) of the ``surface_model='displaced'`` block above, now derived
+# rather than back-projected, and EXACT for a locally planar facet.  ``pz2``
+# comes from exact vector Snell at the local facet normal
+# ``nu = (-grad sag, 1)/sqrt(1 + |grad sag|^2)``.
+#
+# WHAT IS APPLIED HERE is (3) MINUS its carrier-free value, so the correction
+#
+#     dOPD_i = [ (pz2 - pz1)|_{p0 + q} - (pz2 - pz1)|_{p0} ] * sag_i           (4)
+#
+# * is EXACTLY zero for a plane-parallel plate (``sag == 0``) at every tilt;
+# * is EXACTLY zero for a carrier-free call (``q == 0``) -- the byte-null;
+# * leaves the model's documented NORMAL-INCIDENCE accuracy ceiling untouched
+#   (that is the ``slant_correction`` / ``surface_model='displaced'`` axis);
+# * to leading order equals ``sag * (n2-n1)/(2 n1 n2) * (|p0+q|^2 - |p0|^2)``,
+#   i.e. ``(n-1) sag theta^2 / 2n`` for a collimated air-side surface -- the
+#   docstring's ``sag * theta**2`` bound with its exact prefactor.
+#
+# ``q`` is the carrier's local transverse momentum (its eikonal gradient, i.e.
+# the direction cosines) and ``p0`` is the carrier-free momentum the screen
+# model itself accumulates, ``-sum_{j<i} (n2-n1) grad sag_j``, evaluated at the
+# same field point.  Both are closed form: NO ray trace, NO map, NO cache.
+#
+# MEASURED next-order residual (exact-ray oracle, common-mode controlled at the
+# exit plane; docs/audits/BUILD_SCREEN_OBLIQUITY_2026_08_11.md S3-S4):
+# 100-700x reduction on single curved surfaces up to sigma = 0.155, 30x on a
+# cemented doublet, 2.9x on design 121's fast SK2/SF57 doublet at 54.9 mrad.
+# The floor is a DIFFERENT defect, named in S5: the screen's momentum kick
+# ``-(n2-n1) grad sag`` is itself angle-blind, and that DEFLECTION error is not
+# a sag-screen term at all (it enters only through the subsequent propagation).
+# Nothing here claims to fix it; the guard's residual budget accounts for it.
+
+_VALID_SCREEN_OBLIQUITY = ('auto', True, False)
+_VALID_SCREEN_OBLIQUITY_POLICY = ('warn', 'error', 'silent')
+# Documented tolerance for the guard: lambda/20 of piston-and-tilt-free
+# wavefront error.  Below it the screen's angle-blindness is inside the
+# analytic model's own normal-incidence ceiling on every element measured in
+# the campaign; above it the traced path is the shipped answer.
+_SCREEN_OBLIQUITY_TOL_WAVES = 0.05
+# With the correction applied, the leftover is the deflection defect above.
+# Worst measured ratio (residual / uncorrected) across the campaign's powered
+# cases: 0.351 on design 121 group 5 (the others are 0.001-0.033).  Rounded UP
+# from the worst for the guard's budget, not fitted to the set.
+_SCREEN_OBLIQUITY_RESIDUAL_FRAC = 0.40
+
+
+def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny):
+    """``(L, M)`` direction-cosine grids for the input congruence ``carrier``.
+
+    Uses the traced path's own carrier vocabulary
+    (:func:`~._lens_traced._compute_carrier`): a :class:`TiltedCarrier`, a
+    signed scalar conjugate, ``'auto'`` (a fit of ``E_in``), or an explicit
+    wavefront ndarray.  A congruence whose direction cosines are CONSTANT over
+    the grid (a collimated tilt) collapses to two floats, so the correction
+    costs no full-grid momentum arrays in the common case."""
+    from ._lens_traced import TiltedCarrier, _compute_carrier
+    if (isinstance(carrier, TiltedCarrier)
+            and not np.isfinite(float(carrier.R))):
+        # A collimated tilt has constant direction cosines everywhere, so take
+        # them analytically -- ``_compute_carrier`` would build three full-grid
+        # float64 arrays (~1.6 GB at N = 8192) to return two numbers.
+        return float(carrier.L), float(carrier.M)
+    xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    Xg, Yg = np.meshgrid(xax, yax)
+    _W, grad_fn, _w = _compute_carrier(carrier, E_in, wavelength, dx, Xg, Yg)
+    L, M = grad_fn(Xg, Yg)
+    L = np.asarray(L, dtype=np.float64)
+    M = np.asarray(M, dtype=np.float64)
+    if L.ndim and float(np.ptp(L)) == 0.0 and float(np.ptp(M)) == 0.0:
+        return float(L.flat[0]), float(M.flat[0])
+    return L, M
+
+
+def _facet_axial_momenta(px, py, gx, gy, n1, n2, xp, inv=None):
+    """``(pz2 - pz1, ok)`` -- the change in the AXIAL optical-momentum
+    component across exact vector refraction at the local facet whose unit
+    normal is ``nu = (-grad sag, 1) / sqrt(1 + |grad sag|**2)``, plus a mask
+    that is False where the ray is evanescent in ``n1`` or totally internally
+    reflected at the facet (there the correction is dropped rather than
+    clamped -- a clamped cosine is a wrong OPD, and the shipped screen is the
+    safe neutral).  ``inv = nu_z`` may be passed in when the caller is
+    evaluating both arms on the same facet."""
+    if inv is None:
+        inv = 1.0 / xp.sqrt(1.0 + gx * gx + gy * gy)
+    p_sq = px * px + py * py
+    ok_in = p_sq < n1 * n1
+    pz1 = xp.sqrt(xp.maximum(n1 * n1 - p_sq, 0.0))
+    a_dot = (-gx * px - gy * py + pz1) * inv        # (n1 d_in) . nu
+    b_sq = n2 * n2 - n1 * n1 + a_dot * a_dot
+    ok = ok_in & (b_sq > 0.0)
+    b = xp.sqrt(xp.maximum(b_sq, 0.0))
+    return (b - a_dot) * inv, ok
+
+
+def _screen_obliquity_delta(sag, gx, gy, p0x, p0y, qx, qy, n1, n2, xp):
+    """Equation (4): the ANGULAR part of the exact thin-facet screen OPD.
+
+    Zero wherever ``sag`` is zero, wherever the carrier momentum is zero, and
+    wherever either arm's refraction is non-propagating."""
+    inv = 1.0 / xp.sqrt(1.0 + gx * gx + gy * gy)     # nu_z, shared by both arms
+    dz_a, ok_a = _facet_axial_momenta(p0x + qx, p0y + qy, gx, gy, n1, n2, xp,
+                                      inv)
+    dz_b, ok_b = _facet_axial_momenta(p0x, p0y, gx, gy, n1, n2, xp, inv)
+    d = (dz_a - dz_b) * sag
+    ok = ok_a & ok_b
+    # The all-propagating case is the overwhelmingly common one; test it with
+    # one reduction rather than paying a full-grid select every surface.
+    if bool(xp.all(ok)) and bool(xp.all(xp.isfinite(d))):
+        return d
+    return xp.where(ok & xp.isfinite(d), d, xp.zeros((), dtype=d.dtype))
+
+
+def _screen_obliquity_pupil_radius(prescription, Nx, Ny, dx, dy):
+    """The disc the guard scores its wavefront estimate over: the declared
+    aperture, else the widest per-surface semi-diameter, else the grid's
+    inscribed radius."""
+    ap = prescription.get('aperture_diameter')
+    if ap:
+        return float(ap) / 2.0
+    semis = [s.get('semi_diameter') for s in (prescription.get('surfaces') or [])
+             if isinstance(s, dict) and s.get('semi_diameter')]
+    if semis:
+        return max(float(v) for v in semis)
+    return 0.5 * min(Nx * dx, Ny * dy)
+
+
+def _screen_obliquity_rms_waves(field, X, Y, r_pupil, wavelength, xp):
+    """Piston-and-tilt-free rms of ``field`` [m] over the pupil disc, in waves.
+
+    Solved through the 3x3 normal equations on scaled coordinates rather than
+    a least-squares factorisation of an ``(N**2, 3)`` design matrix, so the
+    estimator costs three grid reductions instead of a dense solve."""
+    m = (X * X + Y * Y) <= r_pupil * r_pupil
+    n = float(xp.count_nonzero(m))
+    if n < 4.0 or r_pupil <= 0.0:
+        return 0.0
+    u = xp.where(m, X / r_pupil, 0.0)
+    v = xp.where(m, Y / r_pupil, 0.0)
+    f = xp.where(m, field, 0.0)
+    basis = (xp.where(m, xp.ones((), dtype=u.dtype), 0.0), u, v)
+    A = np.array([[float(xp.sum(bi * bj)) for bj in basis] for bi in basis])
+    b = np.array([float(xp.sum(bi * f)) for bi in basis])
+    try:
+        c = np.linalg.solve(A, b)
+    except np.linalg.LinAlgError:
+        c = np.zeros(3)
+    res = f - (c[0] * basis[0] + c[1] * u + c[2] * v)
+    return float(np.sqrt(float(xp.sum(res * res)) / n)) / float(wavelength)
+
+
+def _check_screen_obliquity_support(*, carrier, screen_obliquity,
+                                    on_screen_obliquity, surface_model,
+                                    displaced_mode):
+    """Validate the screen-obliquity kwarg combination.  Returns True when the
+    correction is to be APPLIED."""
+    if on_screen_obliquity not in _VALID_SCREEN_OBLIQUITY_POLICY:
+        raise ValueError(
+            f"apply_real_lens: on_screen_obliquity must be "
+            f"{list(_VALID_SCREEN_OBLIQUITY_POLICY)}, got "
+            f"{on_screen_obliquity!r}.")
+    if not any(screen_obliquity is v for v in _VALID_SCREEN_OBLIQUITY):
+        raise ValueError(
+            f"apply_real_lens: screen_obliquity must be 'auto', True or "
+            f"False, got {screen_obliquity!r}.")
+    if carrier is None:
+        if screen_obliquity is True:
+            raise ValueError(
+                "apply_real_lens: screen_obliquity=True needs carrier= -- the "
+                "correction is the DIFFERENCE between the screen OPD at the "
+                "carrier's local ray angle and at normal incidence, so with "
+                "no carrier there is no angle and the correction is "
+                "identically zero.  Pass carrier=TiltedCarrier(...) (or a "
+                "signed conjugate distance / 'auto' / an explicit wavefront), "
+                "or drop screen_obliquity.")
+        return False
+    if surface_model != 'thin':
+        raise ValueError(
+            f"apply_real_lens: carrier= is only supported with the default "
+            f"surface_model='thin' screen; got surface_model="
+            f"{surface_model!r} (displaced_mode={displaced_mode!r}).  The "
+            f"'displaced' path is ALREADY angle-aware -- it launches its "
+            f"obliquity fan along conjugate= and modifies the same per-surface "
+            f"sag OPD with true ray cosines -- so applying the screen-"
+            f"obliquity correction on top would double-count it.  Use "
+            f"conjugate= there instead.")
+    return screen_obliquity is not False
+
+
 _VALID_SURFACE_MODELS = ('thin', 'displaced')
 
 
@@ -2041,6 +2263,9 @@ def apply_real_lens(
     conjugate: Any = None,
     displaced_mode: str = 'screen',
     displaced_obliquity: str = 'auto',
+    carrier: Any = None,
+    screen_obliquity: Any = 'auto',
+    on_screen_obliquity: str = 'warn',
 ) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
@@ -2103,6 +2328,18 @@ def apply_real_lens(
     When ``sag * theta**2`` is not negligible against the target OPD
     tolerance, use :func:`apply_real_lens_traced` (per-pixel ray-traced
     OPL) or ``slant_correction=True`` (partial obliquity correction).
+
+    v5.35.0 makes that bound BOTH correctable and measurable when the caller
+    can state the input congruence: pass ``carrier=`` and the exact angular
+    part of the thin-facet screen OPD is applied in closed form
+    (``screen_obliquity``), while the same expression is read as an error
+    estimator that warns when the angle-blindness exceeds lambda/20
+    (``on_screen_obliquity``).  Note what is NOT in that bound: the
+    angular-spectrum steps between the screens carry the GAPS' angular
+    optical path EXACTLY -- a plane-parallel plate is machine-exact at every
+    tilt -- so the obliquity piston/tilt of the glass thicknesses is not
+    missing and must not be added
+    (``docs/audits/BUILD_ANGLE_AWARE_LENS_2026_08_11.md``).
 
     Optional opt-in features add further physical realism:
 
@@ -2453,6 +2690,66 @@ def apply_real_lens(
         the documented walk-off-limited peer.  See
         ``docs/audit_real_lens_displaced_2026_07_19.md`` (P3 screen limit + P10
         remap fix).
+    carrier : TiltedCarrier / float / 'auto' / ndarray / None, default None
+        The INPUT CONGRUENCE, in the same vocabulary
+        :func:`apply_real_lens_traced` takes: a
+        :class:`~lumenairy.TiltedCarrier`, a signed on-axis conjugate distance
+        [m], ``'auto'`` (a low-order fit of ``E_in``'s own phase), or an
+        explicit wavefront array [m].  Supplying it (v5.35.0) does two things
+        and nothing else:
+
+        1. enables the **screen-obliquity correction** -- the closed-form
+           angular part of the exact thin-facet screen OPD (see
+           ``screen_obliquity``), and
+        2. enables the **screen-obliquity accuracy guard** (see
+           ``on_screen_obliquity``), which fires even with the correction
+           switched off.
+
+        The wave field still carries its own phase; ``carrier`` only states
+        the local ray angle at which the sag screens are crossed.  Only
+        supported with the default ``surface_model='thin'`` -- the
+        ``'displaced'`` path is already angle-aware through ``conjugate=``,
+        and stacking the two would double-count.  With ``carrier=None``
+        (the default) every byte of this function's output is unchanged from
+        pre-5.35 releases.
+    screen_obliquity : {'auto', True, False}, default 'auto'
+        Whether to APPLY the screen-obliquity correction.  ``'auto'`` applies
+        it whenever a ``carrier`` is supplied; ``False`` computes the guard's
+        estimate but leaves the screens alone; ``True`` requires a
+        ``carrier``.
+
+        Each surface is modelled as a thin screen on its VERTEX plane, so the
+        shipped ``(n2-n1)*sag`` OPD is the OPD of a ray crossing the sag at
+        NORMAL incidence.  The exact eikonal cost of a locally planar facet
+        sitting a height ``sag`` above that plane is ``(n2 cos(alpha_out) -
+        n1 cos(alpha_in)) * sag`` with the angles taken to the Z-AXIS (the
+        axial-translation identity, derived in the module comment); the
+        correction applied here is that MINUS its normal-incidence value, so
+        it is identically zero for a plane-parallel plate at every tilt,
+        identically zero without a carrier, and leaves whichever screen you
+        selected (paraxial / ``slant_correction`` / ``'displaced'``) as the
+        zero-angle behaviour.  It is closed form -- per-surface sag gradients
+        and the carrier's own direction cosines, no ray trace, no fit and no
+        cache -- but it is not free: it adds a sag gradient and ~20 full-grid
+        float operations per POWERED surface (flat faces are skipped by a
+        single reduction), which measured **2.2x / 2.9x / 3.6x** the
+        carrier-free call wall-clock at N = 512 / 1024 / 2048 on a
+        three-surface cemented element.  It also routes the surface loop to
+        the whole-grid path (the row-banded sag path carries no gradient
+        halo), so peak memory is that of the unbanded path plus three float
+        geometry grids -- four more for a non-collimated carrier, whose
+        direction cosines are a field rather than two numbers.
+    on_screen_obliquity : {'warn', 'error', 'silent'}, default 'warn'
+        Policy for the accuracy guard.  With a ``carrier`` supplied, the same
+        closed form is read as an ERROR ESTIMATOR: the piston-and-tilt-free
+        rms of the summed correction over the pupil IS the wavefront error
+        the angle-blind screens carry at those ray angles.  When it exceeds
+        the documented tolerance (0.05 waves = lambda/20; and with the
+        correction applied, when 40% of it still does -- the budgeted
+        next-order residual) the guard emits a ``RuntimeWarning`` naming the
+        number and recommending :func:`apply_real_lens_traced`.  ``'error'``
+        raises instead; ``'silent'`` suppresses.  Carrier-free calls are
+        always silent -- there is no angle to estimate against.
 
     Returns
     -------
@@ -2536,6 +2833,17 @@ def apply_real_lens(
         displaced_mode=displaced_mode,
         displaced_obliquity=displaced_obliquity,
     )
+    # v5.35.0: the screen-obliquity correction + its accuracy guard.  Reached
+    # ONLY through the new ``carrier=`` keyword, so every pre-5.35 call site is
+    # structurally bit-unchanged (BUILD_SCREEN_OBLIQUITY_2026_08_11 S6).
+    _obl_apply = _check_screen_obliquity_support(
+        carrier=carrier,
+        screen_obliquity=screen_obliquity,
+        on_screen_obliquity=on_screen_obliquity,
+        surface_model=surface_model,
+        displaced_mode=displaced_mode,
+    )
+    _obl_active = carrier is not None
 
     # v4.13.0 audit P1-A: explicit mirror-in-surfaces guard.  The
     # shared ``_check_no_silent_fold_drop`` only inspects the
@@ -2746,6 +3054,24 @@ def apply_real_lens(
             h_sq_axis = X ** 2 + Y ** 2
         return X, Y, h_sq_axis
 
+    # ---- screen obliquity: the carrier's momentum field + the accumulators.
+    # ``_obl_q*`` are the carrier's direction cosines (floats for a collimated
+    # tilt -- the common case -- so no full-grid momentum arrays are needed);
+    # ``_obl_p0*`` is the carrier-free momentum the screen model itself
+    # accumulates; ``_obl_total`` is the summed correction the guard scores.
+    _obl_qx = _obl_qy = 0.0
+    _obl_p0x = _obl_p0y = 0.0
+    _obl_total = None
+    if _obl_active:
+        _obl_qx, _obl_qy = _screen_obliquity_angle_field(
+            carrier, E_in, wavelength, dx, dy, Nx, Ny)
+        if xp is not np:
+            _obl_qx = xp.asarray(_obl_qx)
+            _obl_qy = xp.asarray(_obl_qy)
+        if on_screen_obliquity != 'silent':
+            # only the guard reads the accumulated correction field
+            _obl_total = xp.zeros((Ny, Nx), dtype=_sag_real)
+
     # Preserve the caller's complex dtype (complex128 or complex64).
     # The numexpr ``out=E`` path below evaluates the phase screen
     # expression in complex128 internally and casts to E.dtype at
@@ -2854,7 +3180,7 @@ def apply_real_lens(
         _narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and not slant_correction and not fresnel
-            and not surface_frame and not _displaced
+            and not surface_frame and not _displaced and not _obl_active
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -2926,7 +3252,7 @@ def apply_real_lens(
         _slant_narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and (slant_correction or fresnel)
-            and not surface_frame
+            and not surface_frame and not _obl_active
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -3331,6 +3657,34 @@ def apply_real_lens(
             opd = (n2r * cos_tt_safe - n1r * cos_ti_safe) * sag
         else:
             opd = (n2r - n1r) * sag
+        # ---- Screen obliquity (v5.35.0) -------------------------------
+        # The angular part of the exact thin-facet screen OPD, equation (4)
+        # of the module-level derivation.  Added ON TOP of whichever screen
+        # the caller selected, because it is a DIFFERENCE against that
+        # screen's own normal-incidence value: the paraxial / slant /
+        # displaced choice sets the zero-angle behaviour and this sets how
+        # it changes with the carrier's local ray angle.  Zero for a plane
+        # plate, zero for a zero carrier.
+        if _obl_active and bool(xp.any(sag)):
+            # (a FLAT surface -- a plate face, a cemented plano, a stop -- has
+            # nothing to correct and nothing to deflect, so one reduction skips
+            # the whole block including the gradient.)
+            _sag_ok = sag
+            if bool(xp.any(xp.isnan(sag))):
+                _sag_ok = xp.where(xp.isnan(sag), 0.0, sag)
+            _og_y, _og_x = xp.gradient(_sag_ok, dy, dx)
+            _d_obl = _screen_obliquity_delta(
+                _sag_ok, _og_x, _og_y, _obl_p0x, _obl_p0y,
+                _obl_qx, _obl_qy, n1r, n2r, xp)
+            if _obl_total is not None:
+                _obl_total += _d_obl
+            if _obl_apply:
+                opd = opd + _d_obl
+            # the screen model's OWN carrier-free momentum, accumulated at
+            # this field point for the next surface's local ray angle
+            _obl_p0x = _obl_p0x - (n2r - n1r) * _og_x
+            _obl_p0y = _obl_p0y - (n2r - n1r) * _og_y
+            del _og_x, _og_y, _sag_ok, _d_obl
         # 4.11.2: mask the NaN sentinel returned by surface_sag_general
         # for points outside the conic domain (norm >= 0.9999, i.e. where
         # the surface is not defined for hyperbolic / oblate conics) and
@@ -3582,6 +3936,46 @@ def apply_real_lens(
                     corr_map = corr_map + float(c) * rho_map_sq ** (p // 2)
                 corr_map = xp.where(rho_map_sq <= 1.0, corr_map, 0.0)
                 E = E * xp.exp(+1j * k0 * corr_map)
+
+    # ---- THE SCREEN-OBLIQUITY ACCURACY GUARD (v5.35.0) ----------------
+    # The same closed form, read as an ERROR ESTIMATOR: the piston-and-
+    # tilt-free rms of the summed correction over the pupil is exactly the
+    # wavefront error the angle-blind screen carries at this carrier angle
+    # (the prescription's sag x the carrier's angle, per surface).  Silent
+    # for carrier-free calls (nothing to estimate) and for small-angle
+    # calls (the estimate falls under the documented tolerance).
+    if _obl_active and on_screen_obliquity != 'silent':
+        X, Y, h_sq_axis = _ensure_full_grids()
+        _r_pup = _screen_obliquity_pupil_radius(prescription, Nx, Ny, dx, dy)
+        _est = _screen_obliquity_rms_waves(
+            _obl_total, X, Y, _r_pup, wavelength, xp)
+        _budget = _est * (_SCREEN_OBLIQUITY_RESIDUAL_FRAC if _obl_apply
+                          else 1.0)
+        if _budget > _SCREEN_OBLIQUITY_TOL_WAVES:
+            _how = ('applied, but its own next-order residual (the screen\'s '
+                    'angle-blind DEFLECTION term, which no sag screen can '
+                    'carry) is budgeted at %.1f%% of that'
+                    % (100.0 * _SCREEN_OBLIQUITY_RESIDUAL_FRAC)
+                    if _obl_apply else
+                    'NOT applied (screen_obliquity=False), so the whole term '
+                    'is in your wavefront')
+            _msg = (
+                f"apply_real_lens: this prescription's per-surface sag "
+                f"screens are angle-blind by an estimated {_est:.4f} waves "
+                f"rms (piston/tilt-free, over a {_r_pup * 1e3:.3f} mm pupil) "
+                f"at the supplied carrier's local ray angles, which exceeds "
+                f"the {_SCREEN_OBLIQUITY_TOL_WAVES:g}-wave tolerance; the "
+                f"closed-form correction is {_how}, leaving "
+                f"~{_budget:.4f} waves.  A thin screen collapses the finite "
+                f"ray traverse through the sag onto one plane, so this grows "
+                f"as sag * theta**2 with fast surfaces and large field "
+                f"angles.  Use apply_real_lens_traced (per-pixel ray-traced "
+                f"OPL, carrier-aware) if that is outside your OPD budget, or "
+                f"pass on_screen_obliquity='silent' to acknowledge.")
+            if on_screen_obliquity == 'error':
+                raise ValueError(_msg)
+            import warnings
+            warnings.warn(_msg, RuntimeWarning, stacklevel=2)
 
     call_progress(progress, 'apply_real_lens', 1.0, 'done')
     return E

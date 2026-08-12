@@ -1,0 +1,37 @@
+{
+ "fieldb": {
+  "R_mm": 19.599999999999998,
+  "aperture_mm": 3.0,
+  "dx_um": 4.0,
+  "floor_rms_waves": 0.001585425422249743,
+  "glass": "N-SSK2",
+  "n": 1536,
+  "r_probe_mm": 0.7,
+  "rows": [
+   {
+    "blind_rms_waves": 0.0015561232100375396,
+    "obliquity_rms_waves": 0.0014848603211654445,
+    "recovery": 1.0479929915671542,
+    "tilt_mrad": 20.0
+   },
+   {
+    "blind_rms_waves": 0.00206194395596255,
+    "obliquity_rms_waves": 0.0014949006187792765,
+    "recovery": 1.379318417599102,
+    "tilt_mrad": 50.0
+   },
+   {
+    "blind_rms_waves": 0.004481585000641831,
+    "obliquity_rms_waves": 0.0015665740838078143,
+    "recovery": 2.860755228216598,
+    "tilt_mrad": 100.0
+   },
+   {
+    "blind_rms_waves": 0.23858567768510122,
+    "obliquity_rms_waves": 0.23246168102112436,
+    "recovery": 1.0263441124450114,
+    "tilt_mrad": 150.0
+   }
+  ]
+ }
+}

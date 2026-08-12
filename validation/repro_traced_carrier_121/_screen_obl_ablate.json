@@ -1,0 +1,77 @@
+{
+ "ablate": {
+  "group": 5,
+  "radius_mm": 3.0,
+  "rows": [
+   {
+    "max_waves": 0.9749954007046914,
+    "rms_waves": 0.25848004998212015,
+    "surfaces": []
+   },
+   {
+    "max_waves": 1.1841186520699936,
+    "rms_waves": 0.30898694447018205,
+    "surfaces": [
+     0
+    ]
+   },
+   {
+    "max_waves": 1.0128395772820002,
+    "rms_waves": 0.26577772156774737,
+    "surfaces": [
+     1
+    ]
+   },
+   {
+    "max_waves": 0.14557933006640775,
+    "rms_waves": 0.04233303625727572,
+    "surfaces": [
+     2
+    ]
+   },
+   {
+    "max_waves": 1.2222944758773762,
+    "rms_waves": 0.31721897091435863,
+    "surfaces": [
+     0,
+     1
+    ]
+   },
+   {
+    "max_waves": 0.32521869780685386,
+    "rms_waves": 0.08148436770202673,
+    "surfaces": [
+     0,
+     2
+    ]
+   },
+   {
+    "max_waves": 0.15372474146310147,
+    "rms_waves": 0.04558598356050942,
+    "surfaces": [
+     1,
+     2
+    ]
+   },
+   {
+    "max_waves": 0.3633990400137389,
+    "rms_waves": 0.09069154299429392,
+    "surfaces": [
+     0,
+     1,
+     2
+    ]
+   },
+   {
+    "rms_waves": 0.291191231802946,
+    "tangent_facet": true,
+    "translate": false
+   },
+   {
+    "rms_waves": 0.0003724239173905565,
+    "tangent_facet": true,
+    "translate": true
+   }
+  ]
+ }
+}
