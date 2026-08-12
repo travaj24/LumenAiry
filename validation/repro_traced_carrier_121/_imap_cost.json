@@ -1,0 +1,883 @@
+{
+ "build": {
+  "cold_bytes": 63360,
+  "cold_rays": 1573230,
+  "cold_seconds_6x5_deg10": 1.1304482000414282,
+  "rows": [
+   {
+    "bytes": 43200,
+    "deg": 8,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 0.5721580000827089,
+    "n_terms": 45,
+    "nodes": 30,
+    "nx": 6,
+    "ny": 5,
+    "rays_traced": 1573230,
+    "total_seconds": 1.010829500039108,
+    "trace_seconds": 0.4381937999278307
+   },
+   {
+    "bytes": 63360,
+    "deg": 10,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 0.947839199914597,
+    "n_terms": 66,
+    "nodes": 30,
+    "nx": 6,
+    "ny": 5,
+    "rays_traced": 0,
+    "total_seconds": 0.9483649999601766,
+    "trace_seconds": 5.819997750222683e-05
+   },
+   {
+    "bytes": 87360,
+    "deg": 12,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 1.5063483000267297,
+    "n_terms": 91,
+    "nodes": 30,
+    "nx": 6,
+    "ny": 5,
+    "rays_traced": 0,
+    "total_seconds": 1.5069526999723166,
+    "trace_seconds": 5.5999960750341415e-05
+   },
+   {
+    "bytes": 60480,
+    "deg": 8,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 0.6535893999971449,
+    "n_terms": 45,
+    "nodes": 42,
+    "nx": 7,
+    "ny": 6,
+    "rays_traced": 1992758,
+    "total_seconds": 1.1543819999787956,
+    "trace_seconds": 0.5004226999590173
+   },
+   {
+    "bytes": 88704,
+    "deg": 10,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 1.3189497999846935,
+    "n_terms": 66,
+    "nodes": 42,
+    "nx": 7,
+    "ny": 6,
+    "rays_traced": 0,
+    "total_seconds": 1.3194695999845862,
+    "trace_seconds": 7.27999722585082e-05
+   },
+   {
+    "bytes": 122304,
+    "deg": 12,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 2.2163987000240013,
+    "n_terms": 91,
+    "nodes": 42,
+    "nx": 7,
+    "ny": 6,
+    "rays_traced": 0,
+    "total_seconds": 2.217027200036682,
+    "trace_seconds": 7.349997758865356e-05
+   },
+   {
+    "bytes": 80640,
+    "deg": 8,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 0.9693882999708876,
+    "n_terms": 45,
+    "nodes": 56,
+    "nx": 8,
+    "ny": 7,
+    "rays_traced": 2622050,
+    "total_seconds": 1.5244049999164417,
+    "trace_seconds": 0.5546095999889076
+   },
+   {
+    "bytes": 118272,
+    "deg": 10,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 1.6099937999388203,
+    "n_terms": 66,
+    "nodes": 56,
+    "nx": 8,
+    "ny": 7,
+    "rays_traced": 0,
+    "total_seconds": 1.6105816999915987,
+    "trace_seconds": 9.089999366551638e-05
+   },
+   {
+    "bytes": 163072,
+    "deg": 12,
+    "fit_samples_per_node": 16237,
+    "fit_seconds": 2.4948131000855938,
+    "n_terms": 91,
+    "nodes": 56,
+    "nx": 8,
+    "ny": 7,
+    "rays_traced": 0,
+    "total_seconds": 2.495658400002867,
+    "trace_seconds": 9.93999419733882e-05
+   }
+  ]
+ },
+ "build_parity": {
+  "rows": [
+   {
+    "bytes": 88704,
+    "cold_seconds": 2.023643699940294,
+    "deg": 10,
+    "fit_seconds": 1.4033379999455065,
+    "n_terms": 66,
+    "node_resid_opl_waves": 0.0023110737189532974,
+    "node_resid_xin_nm": 2.359588973863125,
+    "nodes": 42,
+    "nx": 7,
+    "ny": 6,
+    "rays": 2202522,
+    "trace_seconds": 0.6125691999914125
+   },
+   {
+    "bytes": 163072,
+    "cold_seconds": 3.687692799954675,
+    "deg": 12,
+    "fit_seconds": 2.8731051000067964,
+    "n_terms": 91,
+    "node_resid_opl_waves": 0.0002480610686115541,
+    "node_resid_xin_nm": 0.297137699861727,
+    "nodes": 56,
+    "nx": 8,
+    "ny": 7,
+    "rays": 2936696,
+    "trace_seconds": 0.8048269998980686
+   },
+   {
+    "bytes": 276480,
+    "cold_seconds": 5.998671000008471,
+    "deg": 14,
+    "fit_seconds": 5.035277900053188,
+    "n_terms": 120,
+    "node_resid_opl_waves": 2.6851125224880847e-05,
+    "node_resid_xin_nm": 0.029987195018787993,
+    "nodes": 72,
+    "nx": 9,
+    "ny": 8,
+    "rays": 3775752,
+    "trace_seconds": 0.9512482000282034
+   },
+   {
+    "bytes": 345600,
+    "cold_seconds": 7.320142099983059,
+    "deg": 14,
+    "fit_seconds": 6.269985100021586,
+    "n_terms": 120,
+    "node_resid_opl_waves": 2.685116759980545e-05,
+    "node_resid_xin_nm": 0.029987212366022753,
+    "nodes": 90,
+    "nx": 10,
+    "ny": 9,
+    "rays": 4719690,
+    "trace_seconds": 1.033891799976118
+   }
+  ]
+ },
+ "evalcost": {
+  "deg": 10,
+  "map_coordinates_order1_seconds": 1.7637406999710947,
+  "map_coordinates_order3_seconds": 3.4984619999304414,
+  "n_channels": 4,
+  "n_pixels": 67108864,
+  "n_terms": 66,
+  "numba_all": [
+   0.9894608999602497,
+   1.0435624999227002,
+   1.0716257999883965
+  ],
+  "numba_seconds": 0.9894608999602497,
+  "numpy_chunked_seconds": 38.356146799982525,
+  "reps": 3
+ },
+ "evalcost_ladder": {
+  "n_pixels": 67108864,
+  "rows": [
+   {
+    "all": [
+     0.6508258000249043,
+     0.6010289000114426,
+     0.6414164999732748
+    ],
+    "deg": 8,
+    "n_channels": 3,
+    "n_terms": 45,
+    "seconds": 0.6010289000114426
+   },
+   {
+    "all": [
+     0.8335252999095246,
+     0.8227666000602767,
+     0.8063587000360712
+    ],
+    "deg": 8,
+    "n_channels": 4,
+    "n_terms": 45,
+    "seconds": 0.8063587000360712
+   },
+   {
+    "all": [
+     1.07206999999471,
+     0.9908710999879986,
+     0.8659980999073014
+    ],
+    "deg": 10,
+    "n_channels": 3,
+    "n_terms": 66,
+    "seconds": 0.8659980999073014
+   },
+   {
+    "all": [
+     1.1623160000890493,
+     1.1478312000399455,
+     1.144411800079979
+    ],
+    "deg": 10,
+    "n_channels": 4,
+    "n_terms": 66,
+    "seconds": 1.144411800079979
+   },
+   {
+    "all": [
+     1.4926026000175625,
+     1.2438343999674544,
+     1.1280924000311643
+    ],
+    "deg": 12,
+    "n_channels": 3,
+    "n_terms": 91,
+    "seconds": 1.1280924000311643
+   },
+   {
+    "all": [
+     1.6226629000157118,
+     1.9012684999033809,
+     1.5806335000088438
+    ],
+    "deg": 12,
+    "n_channels": 4,
+    "n_terms": 91,
+    "seconds": 1.5806335000088438
+   },
+   {
+    "all": [
+     1.6278773000231013,
+     1.6857853000983596,
+     1.54642310005147
+    ],
+    "deg": 14,
+    "n_channels": 3,
+    "n_terms": 120,
+    "seconds": 1.54642310005147
+   },
+   {
+    "all": [
+     2.025045400019735,
+     2.3714460999472067,
+     1.9101769999833778
+    ],
+    "deg": 14,
+    "n_channels": 4,
+    "n_terms": 120,
+    "seconds": 1.9101769999833778
+   }
+  ]
+ },
+ "fitorder": {
+  "coarse_grid": 95,
+  "coarse_points": 9025,
+  "dx": 1.5324e-06,
+  "element_seconds": 91.36349269992206,
+  "fits": [
+   {
+    "n_samples": 52441,
+    "order": 10,
+    "weighted": true
+   },
+   {
+    "n_samples": 52441,
+    "order": 6,
+    "weighted": false
+   },
+   {
+    "n_samples": 52441,
+    "order": 10,
+    "weighted": true
+   },
+   {
+    "n_samples": 52441,
+    "order": 10,
+    "weighted": true
+   },
+   {
+    "n_samples": 52441,
+    "order": 10,
+    "weighted": true
+   }
+  ],
+  "n_fine": 8192,
+  "n_launch": 229,
+  "n_pixels": 67108864,
+  "order": [
+   -4,
+   -2
+  ],
+  "ray_subsample": 87,
+  "resolved_order": 10,
+  "window_mm": 12.5534208
+ },
+ "mapcoords": {
+  "calls": [
+   {
+    "in_shape": [
+     95,
+     95
+    ],
+    "order": 3,
+    "out_points": 67108864,
+    "seconds": 4.03541899996344
+   },
+   {
+    "in_shape": [
+     95,
+     95
+    ],
+    "order": 1,
+    "out_points": 67108864,
+    "seconds": 2.3962531000142917
+   },
+   {
+    "in_shape": [
+     8192,
+     8192
+    ],
+    "order": 1,
+    "out_points": 9025,
+    "seconds": 0.0015030000358819962
+   },
+   {
+    "in_shape": [
+     95,
+     95
+    ],
+    "order": 1,
+    "out_points": 67108864,
+    "seconds": 1.874585899990052
+   },
+   {
+    "in_shape": [
+     95,
+     95
+    ],
+    "order": 1,
+    "out_points": 67108864,
+    "seconds": 2.3156573000596836
+   },
+   {
+    "in_shape": [
+     95,
+     95
+    ],
+    "order": 1,
+    "out_points": 67108864,
+    "seconds": 1.837680900003761
+   },
+   {
+    "in_shape": [
+     95,
+     95
+    ],
+    "order": 1,
+    "out_points": 67108864,
+    "seconds": 2.3073285000864416
+   },
+   {
+    "in_shape": [
+     8192,
+     8192
+    ],
+    "order": 1,
+    "out_points": 67108864,
+    "seconds": 1.6115813000360504
+   },
+   {
+    "in_shape": [
+     8192,
+     8192
+    ],
+    "order": 1,
+    "out_points": 67108864,
+    "seconds": 1.50633760006167
+   }
+  ],
+  "coarse_grid": 95,
+  "coarse_points": 9025,
+  "dx": 1.5324e-06,
+  "element_seconds": 114.70421220001299,
+  "full_grid_calls": 8,
+  "full_grid_seconds": 17.88484360021539,
+  "n_fine": 8192,
+  "n_launch": 229,
+  "n_pixels": 67108864,
+  "order": [
+   -4,
+   -2
+  ],
+  "peak_wset_gb": 20.350840832,
+  "ray_subsample": 87,
+  "total_seconds": 17.886346600251272,
+  "window_mm": 12.5534208
+ },
+ "newtonpp": {
+  "projected_seconds_at_67e6": 25.437006065505557,
+  "rows": [
+   {
+    "iters_mean": 2.4232686980609417,
+    "n": 9025,
+    "seconds": 0.4277846000622958,
+    "us_per_point": 47.39995568557294
+   },
+   {
+    "iters_mean": 2.39227,
+    "n": 100000,
+    "seconds": 0.037909099948592484,
+    "us_per_point": 0.37909099948592484
+   },
+   {
+    "iters_mean": 2.387947,
+    "n": 1000000,
+    "seconds": 0.6052306001074612,
+    "us_per_point": 0.6052306001074612
+   }
+  ],
+  "us_per_point_best": 0.37909099948592484
+ },
+ "newtonsite": {
+  "coarse_grid": 95,
+  "coarse_points": 9025,
+  "dx": 1.5324e-06,
+  "element_seconds": 96.87282299995422,
+  "field_shape": [
+   8192,
+   8192
+  ],
+  "lumenairy_version": "5.34.0",
+  "n_fine": 8192,
+  "n_launch": 229,
+  "n_pixels": 67108864,
+  "newton_calls": [
+   {
+    "iters": 12,
+    "n_total": 9025,
+    "remaining_last": 596,
+    "seconds_between_records": 0.005709500052034855,
+    "t0": 1046818.8068427,
+    "t1": 1046818.8125522
+   },
+   {
+    "iters": 12,
+    "n_total": 9025,
+    "remaining_last": 596,
+    "seconds_between_records": 0.00437970005441457,
+    "t0": 1046824.3842586,
+    "t1": 1046824.3886383
+   }
+  ],
+  "newton_points_total": 18050,
+  "newton_seconds_between_first_and_last_record": 0.010089200106449425,
+  "order": [
+   -4,
+   -2
+  ],
+  "peak_wset_gb": 20.471447552,
+  "ray_subsample": 87,
+  "window_mm": 12.5534208
+ },
+ "profile": {
+  "coarse_grid": 95,
+  "coarse_points": 9025,
+  "dx": 1.5324e-06,
+  "n_fine": 8192,
+  "n_launch": 229,
+  "n_pixels": 67108864,
+  "order": [
+   -4,
+   -2
+  ],
+  "peak_wset_gb": 20.35871744,
+  "profiled_wall": 92.92520699999295,
+  "ray_subsample": 87,
+  "top": [
+   {
+    "cumtime": 15.2494337,
+    "file": "~",
+    "line": 0,
+    "name": "<built-in method scipy.ndimage._nd_image.geometric_transform>",
+    "ncalls": 9,
+    "tottime": 15.2494337
+   },
+   {
+    "cumtime": 25.3913866,
+    "file": "_lens_traced.py",
+    "line": 5227,
+    "name": "_poly",
+    "ncalls": 18,
+    "tottime": 13.4101879
+   },
+   {
+    "cumtime": 11.7174574,
+    "file": "_lens_traced.py",
+    "line": 5306,
+    "name": "_mul",
+    "ncalls": 1287,
+    "tottime": 11.7174574
+   },
+   {
+    "cumtime": 92.87284600000001,
+    "file": "_lens_traced.py",
+    "line": 5985,
+    "name": "apply_real_lens_traced",
+    "ncalls": 1,
+    "tottime": 9.4467215
+   },
+   {
+    "cumtime": 7.020125200000001,
+    "file": "_lens_traced.py",
+    "line": 4963,
+    "name": "signed_distance",
+    "ncalls": 2,
+    "tottime": 5.8927643000000005
+   },
+   {
+    "cumtime": 33.876422600000005,
+    "file": "_lens_traced.py",
+    "line": 7720,
+    "name": "_pip_residual_ri",
+    "ncalls": 1,
+    "tottime": 5.1071836
+   },
+   {
+    "cumtime": 6.0280252,
+    "file": "_lens_traced.py",
+    "line": 3615,
+    "name": "_carrier_residual_rms",
+    "ncalls": 1,
+    "tottime": 4.0620806
+   },
+   {
+    "cumtime": 3.9102633000000004,
+    "file": "lenses.py",
+    "line": 180,
+    "name": "surface_sag_general",
+    "ncalls": 48,
+    "tottime": 3.6568455
+   },
+   {
+    "cumtime": 28.302795800000002,
+    "file": "_lens_traced.py",
+    "line": 5356,
+    "name": "_eval",
+    "ncalls": 18,
+    "tottime": 2.9104464
+   },
+   {
+    "cumtime": 1.8471038000000002,
+    "file": "_lens_traced.py",
+    "line": 3807,
+    "name": "_tilted_carrier_parts",
+    "ncalls": 3,
+    "tottime": 1.847101
+   },
+   {
+    "cumtime": 1.8134618,
+    "file": "_function_base_impl.py",
+    "line": 1682,
+    "name": "angle",
+    "ncalls": 4,
+    "tottime": 1.8134534000000002
+   },
+   {
+    "cumtime": 1.7521497000000001,
+    "file": "~",
+    "line": 0,
+    "name": "<method 'reduce' of 'numpy.ufunc' objects>",
+    "ncalls": 483,
+    "tottime": 1.7521497000000001
+   },
+   {
+    "cumtime": 1.7356867,
+    "file": "numeric.py",
+    "line": 1230,
+    "name": "roll",
+    "ncalls": 12,
+    "tottime": 1.7355852
+   },
+   {
+    "cumtime": 1.6801961,
+    "file": "fft_infra.py",
+    "line": 2091,
+    "name": "_ifft2",
+    "ncalls": 2,
+    "tottime": 1.6786111000000001
+   },
+   {
+    "cumtime": 1.9479710000000001,
+    "file": "asm.py",
+    "line": 278,
+    "name": "_get_asm_H_natural",
+    "ncalls": 2,
+    "tottime": 1.6108897000000002
+   },
+   {
+    "cumtime": 15.0616344,
+    "file": "_lens_real.py",
+    "line": 2021,
+    "name": "apply_real_lens",
+    "ncalls": 1,
+    "tottime": 1.5142725000000001
+   },
+   {
+    "cumtime": 1.8955215,
+    "file": "fft_infra.py",
+    "line": 1994,
+    "name": "_fft2",
+    "ncalls": 2,
+    "tottime": 1.4835878
+   },
+   {
+    "cumtime": 8.9829273,
+    "file": "asm.py",
+    "line": 473,
+    "name": "angular_spectrum_propagate",
+    "ncalls": 2,
+    "tottime": 0.8636319
+   },
+   {
+    "cumtime": 0.7897971,
+    "file": "necompiler.py",
+    "line": 993,
+    "name": "re_evaluate",
+    "ncalls": 50,
+    "tottime": 0.789437
+   },
+   {
+    "cumtime": 0.7662577,
+    "file": "numeric.py",
+    "line": 97,
+    "name": "zeros_like",
+    "ncalls": 113,
+    "tottime": 0.7660245
+   },
+   {
+    "cumtime": 0.7930648,
+    "file": "_lens_traced.py",
+    "line": 3547,
+    "name": "_input_beam_amp_radius",
+    "ncalls": 2,
+    "tottime": 0.6221349
+   },
+   {
+    "cumtime": 37.5108023,
+    "file": "_lens_traced.py",
+    "line": 7760,
+    "name": "_pip_sample_residual",
+    "ncalls": 1,
+    "tottime": 0.44000300000000003
+   },
+   {
+    "cumtime": 7.5487184,
+    "file": "_lens_traced.py",
+    "line": 5119,
+    "name": "retained_band_masks",
+    "ncalls": 1,
+    "tottime": 0.3888378
+   },
+   {
+    "cumtime": 0.3729371,
+    "file": "~",
+    "line": 0,
+    "name": "<method 'astype' of 'numpy.ndarray' objects>",
+    "ncalls": 24,
+    "tottime": 0.3729371
+   },
+   {
+    "cumtime": 0.20552420000000002,
+    "file": "_decomp_qr.py",
+    "line": 13,
+    "name": "safecall",
+    "ncalls": 5,
+    "tottime": 0.20546550000000002
+   },
+   {
+    "cumtime": 28.489087100000003,
+    "file": "_lens_traced.py",
+    "line": 5400,
+    "name": "value",
+    "ncalls": 17,
+    "tottime": 0.1988743
+   },
+   {
+    "cumtime": 0.1767527,
+    "file": "shape_base.py",
+    "line": 218,
+    "name": "vstack",
+    "ncalls": 2,
+    "tottime": 0.1767184
+   },
+   {
+    "cumtime": 0.17230700000000002,
+    "file": "~",
+    "line": 0,
+    "name": "<method 'copy' of 'numpy.ndarray' objects>",
+    "ncalls": 43,
+    "tottime": 0.17230700000000002
+   },
+   {
+    "cumtime": 0.2612705,
+    "file": "_lens_traced.py",
+    "line": 9808,
+    "name": "_ray_density_amp_grid",
+    "ncalls": 1,
+    "tottime": 0.1624693
+   },
+   {
+    "cumtime": 0.1969139,
+    "file": "_lens_traced.py",
+    "line": 5414,
+    "name": "_fit_residual_eikonal",
+    "ncalls": 1,
+    "tottime": 0.1607797
+   },
+   {
+    "cumtime": 0.1588313,
+    "file": "~",
+    "line": 0,
+    "name": "<built-in method nt.stat>",
+    "ncalls": 4249,
+    "tottime": 0.1588313
+   },
+   {
+    "cumtime": 0.1558358,
+    "file": "~",
+    "line": 0,
+    "name": "<built-in method _io.open_code>",
+    "ncalls": 809,
+    "tottime": 0.1558358
+   },
+   {
+    "cumtime": 0.13743460000000002,
+    "file": "~",
+    "line": 0,
+    "name": "<method 'nonzero' of 'numpy.ndarray' objects>",
+    "ncalls": 1,
+    "tottime": 0.13743460000000002
+   },
+   {
+    "cumtime": 0.47142750000000005,
+    "file": "_lens_traced.py",
+    "line": 2390,
+    "name": "__init__",
+    "ncalls": 5,
+    "tottime": 0.13179870000000002
+   },
+   {
+    "cumtime": 0.11826640000000001,
+    "file": "~",
+    "line": 0,
+    "name": "<built-in method marshal.loads>",
+    "ncalls": 809,
+    "tottime": 0.11826640000000001
+   },
+   {
+    "cumtime": 0.0817544,
+    "file": "models.py",
+    "line": 1,
+    "name": "<module>",
+    "ncalls": 1,
+    "tottime": 0.0808659
+   },
+   {
+    "cumtime": 1.9235882000000002,
+    "file": "_lens_traced.py",
+    "line": 3853,
+    "name": "_compute_carrier",
+    "ncalls": 1,
+    "tottime": 0.078198
+   },
+   {
+    "cumtime": 0.0761657,
+    "file": "~",
+    "line": 0,
+    "name": "<built-in method _io.open>",
+    "ncalls": 1149,
+    "tottime": 0.0591285
+   },
+   {
+    "cumtime": 0.060275300000000004,
+    "file": "<frozen importlib._bootstrap_external>",
+    "line": 101,
+    "name": "_path_join",
+    "ncalls": 10194,
+    "tottime": 0.0423122
+   },
+   {
+    "cumtime": 1.8513141000000002,
+    "file": "~",
+    "line": 0,
+    "name": "<built-in method builtins.exec>",
+    "ncalls": 940,
+    "tottime": 0.040898800000000006
+   },
+   {
+    "cumtime": 0.046391,
+    "file": "ffi.py",
+    "line": 210,
+    "name": "__call__",
+    "ncalls": 899,
+    "tottime": 0.0397556
+   },
+   {
+    "cumtime": 0.3272166,
+    "file": "_lens_traced.py",
+    "line": 2276,
+    "name": "_solve_lstsq_thread_safe",
+    "ncalls": 6,
+    "tottime": 0.0371958
+   },
+   {
+    "cumtime": 0.037348400000000004,
+    "file": "_shape_base_impl.py",
+    "line": 625,
+    "name": "column_stack",
+    "ncalls": 92,
+    "tottime": 0.0368652
+   },
+   {
+    "cumtime": 0.0355233,
+    "file": "~",
+    "line": 0,
+    "name": "<built-in method _imp.create_dynamic>",
+    "ncalls": 45,
+    "tottime": 0.035256
+   },
+   {
+    "cumtime": 0.0394072,
+    "file": "_twodim_base_impl.py",
+    "line": 510,
+    "name": "triu",
+    "ncalls": 5,
+    "tottime": 0.0325324
+   }
+  ],
+  "window_mm": 12.5534208
+ }
+}

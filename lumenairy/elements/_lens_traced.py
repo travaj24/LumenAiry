@@ -25,6 +25,13 @@ from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
 
+# The inverse-characteristic per-pixel evaluator.  Imported as a MODULE, not
+# by name: its flags are read at CALL time (house rule -- see
+# ``_traced_flags``), so a monkeypatch of ``_lens_imap.TRACED_INVERSE_MAP``
+# reaches this file's read sites.  No import cycle: ``_lens_imap`` reaches back
+# into this module only from inside function bodies.
+from . import _lens_imap as _IMAP
+
 # Optional CuPy backend (lazy).
 CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
 cp = None
@@ -5116,6 +5123,66 @@ class _TracedExitSupport(object):
                                  0.5 * (1.0 + np.cos(np.pi * _s
                                                      / max(_f, 1e-300)))))
 
+    def taper_grid(self, xg, yg, plateau):
+        """:meth:`taper` on the OUTER PRODUCT of two axes, with the work
+        bounded by the same two strict radial screens
+        :meth:`retained_band_masks` uses.
+
+        BIT-IDENTICAL to ``taper(X, Y, plateau)`` on the same grid, and the
+        argument is the one written out there: every pixel closer to
+        ``hull_c`` than the inradius ``r_in`` has ``s < 0``, so its taper is
+        exactly 1; every pixel beyond ``hull_rmax + plateau + feather`` has
+        ``s > plateau + feather``, so its taper is exactly 0.  Only the ring
+        between them reaches the exact half-plane reduction.
+
+        WHY IT EXISTS.  The taper's natural home is the COARSE Newton lattice
+        (9 025 points at design 121's retrace), where ``O(pixels x facets)`` is
+        free.  The inverse-characteristic path has no coarse lattice, so it
+        asks for the taper on the WAVE grid -- 6.71e+07 pixels x ~150 facets is
+        a 10^10-MAC BLAS pass, MEASURED at 5.9 s per call on a 1.7e+07-pixel
+        grid, which would have eaten half of what that path saves.  The ring is
+        a few per cent of the grid on a near-circular exit hull.
+
+        Falls back to the dense form when the screens are unavailable (a
+        hand-built object, or a hull whose interior point was not recorded).
+        """
+        if self.bound is None:
+            return None
+        _A, _b, _f = self.bound
+        xg = np.asarray(xg, dtype=np.float64)
+        yg = np.asarray(yg, dtype=np.float64)
+        if self.hull_c is None or self.hull_rmax is None:  # pragma: no cover
+            return self.taper(np.broadcast_to(xg[None, :],
+                                              (yg.size, xg.size)),
+                              np.broadcast_to(yg[:, None],
+                                              (yg.size, xg.size)), plateau)
+        cx, cy = self.hull_c
+        pl = float(plateau)
+        w = pl + float(_f or 0.0)
+        r_in = -float((np.asarray(_A[0]) * cx + np.asarray(_A[1]) * cy
+                       + np.asarray(_b)).max())
+        out = np.zeros((int(yg.size), int(xg.size)), dtype=np.float64)
+        r2 = (xg[None, :] - cx) ** 2 + (yg[:, None] - cy) ** 2
+        done = np.zeros(out.shape, dtype=bool)
+        if r_in + pl > 0.0:
+            done = r2 < (r_in + pl) ** 2
+            out[done] = 1.0
+        r_out = float(self.hull_rmax) + w
+        ring = (~done) & (r2 <= r_out * r_out)
+        del r2, done
+        if ring.any():
+            iy, ix = np.nonzero(ring)
+            _s = self.signed_distance(_A, _b, xg[ix], yg[iy]) - pl
+            if _f <= 0.0:
+                out[iy, ix] = (_s <= 0.0).astype(np.float64)
+            else:
+                out[iy, ix] = np.where(
+                    _s <= 0.0, 1.0,
+                    np.where(_s >= _f, 0.0,
+                             0.5 * (1.0 + np.cos(np.pi * _s
+                                                 / max(_f, 1e-300)))))
+        return out
+
     def retained_band_masks(self, xg, yg, plateau):
         """``(inside, band)`` boolean masks on the wave grid's outer product.
 
@@ -6028,8 +6095,10 @@ def apply_real_lens_traced(
     caustic_band: str = 'ludwig',
     caustic_min_area_ratio: float = 1e-6,
     origin: Tuple[float, float] = (0.0, 0.0),
+    inverse_map: Optional[bool] = None,
     _exit_na_out: Optional[dict] = None,
     _remap_launch_out: Optional[dict] = None,
+    _imap_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -6342,6 +6411,33 @@ def apply_real_lens_traced(
         trace through the reversed prescription.  ``amplitude_model=
         'ray_density'`` requires ``'newton'``.  v5.29.1 (audit E-M4): an
         unrecognised value now raises instead of silently running Newton.
+    inverse_map : bool, optional
+        Per-call override of the module gate
+        ``lumenairy.elements._lens_imap.TRACED_INVERSE_MAP``; ``None``
+        (default) follows it, and it ships ``True``.
+
+        WHAT IT SELECTS.  At ``ray_subsample > 1`` the shipped path Newtons the
+        COARSE lattice ``X[::sub, ::sub]`` and interpolates that answer to the
+        wave grid -- the OPL (order 3), its NaN mask, the ray-density
+        amplitude, its NaN mask, and the ``remap_sampling='full'`` entrance
+        pull-back.  With the map engaged, an exit-coordinate Chebyshev model
+        fitted from the landings THIS call already traced supplies all of them
+        EXACTLY, per pixel, in one pass.  MEASURED on design 121's last group
+        at ``n_fine = 8192``: those six full-grid ``map_coordinates`` calls are
+        14.767 s of a 96.9 s element; the map's evaluation is 1.910 s and its
+        build ~0.2 s, and it needs no extra rays.
+
+        The map is used only when every guard passes -- one congruence, an
+        unfolded Jacobian, a live ray set, a landing hull it can be honest
+        about, a degree that reaches the bar, and PARITY with the very Newton
+        path it replaces on held-out ray samples.  A guard that fires keeps the
+        shipped path unchanged and reports why (``INVERSE_MAP_GUARD``).
+        ``False`` is the SHIPPED DEFAULT and the fail-before, and it is
+        byte-identical to the pre-feature library; see that flag's own note
+        for the design-121 banner measurement that decided it.  Ignored at ``ray_subsample == 1`` (there is no coarse lattice
+        to replace), with ``inversion_method != 'newton'``, with
+        ``use_gpu=True``, and on the row-band assembly path (which exists
+        precisely so a full-grid float64 is never materialised).
     newton_max_iters : int, optional
         Newton iteration cap; ``None`` (default) uses the module default
         (12).  Honoured by BOTH the serial and the process-pool inversion
@@ -7005,6 +7101,20 @@ def apply_real_lens_traced(
             f"'warn' (default), 'delegate', 'off' ('silent' / 'ignore' are "
             f"accepted aliases for 'off').  Pre-v5.29.1 any unrecognised "
             f"value silently selected 'warn'.")
+    # ``inverse_map`` is a per-call override of the module gate
+    # ``_lens_imap.TRACED_INVERSE_MAP``: None follows the flag, True/False
+    # force it for this call.  Validated HERE, unconditionally, rather than at
+    # the build site -- a junk value must not behave as "follow the flag" on
+    # the calls where the map never engages and only surface on the one where
+    # it does.
+    if inverse_map is not None and not isinstance(inverse_map, (bool, np.bool_)):
+        raise ValueError(
+            f"apply_real_lens_traced: inverse_map={inverse_map!r} is not a "
+            f"valid setting.  Pass None (default: follow "
+            f"lumenairy.elements._lens_imap.TRACED_INVERSE_MAP), True to "
+            f"force the inverse-characteristic per-pixel evaluator on for "
+            f"this call, or False to force the shipped coarse-Newton + "
+            f"upsample path.")
     if inversion_method not in ('newton', 'fit', 'backward_trace'):
         raise ValueError(
             f"apply_real_lens_traced: inversion_method="
@@ -7815,6 +7925,7 @@ def apply_real_lens_traced(
                         ('tilt_aware_rays', tilt_aware_rays),
                         ('fit_radius_beam_factor', fit_radius_beam_factor),
                         ('inversion_method', inversion_method),
+                        ('inverse_map', inverse_map),
                         ('newton_fit', _newton_fit_requested),
                         ('newton_max_iters', newton_max_iters),
                         ('newton_poly_order', newton_poly_order),
@@ -8847,6 +8958,18 @@ def apply_real_lens_traced(
         x_out_grid, y_out_grid, _amp, xs_in, aperture, dx, sub,
         want_halo=bool(_ray_density and RAY_DENSITY_HALO_CHECK != 'silent'),
         want_bound=bool(REMAP_INVERSE_SUPPORT_BOUND and _ray_density))
+    # ---- niche C15 (S6.5b, REFUTED -- kept as a note, not as code) --------
+    # The obvious cure for the remaining ``newton_fit`` coupling was to build
+    # the inverse-characteristic model from THESE arrays -- the pre-restriction
+    # landings, the same ones ``from_landings`` is handed -- unweighted, so its
+    # sample set is the traced rays and nothing the basis can reach.  It was
+    # implemented and MEASURED, and the model's own G8 refused it: on design
+    # 121's fixture the unweighted launch-square fit reads 4.5257e-01 waves of
+    # held-out OPL error inside the beam against the restricted model's
+    # 1.9965e-05, i.e. 4.4 decades worse and 2.3e+04x outside parity.  A
+    # degree-14 exit-coordinate fit cannot span a launch square that reaches
+    # ~5x past the beam; the fit-domain restriction is not an inconvenience it
+    # inherits, it is load-bearing.  See BUILD_INVERSE_MAP_2026_08_11 S6.5b.
     # NOTE the two gates are the pre-C14 ones, unchanged and still separate.
     # In particular ``want_halo`` is NOT widened to cover the band check: the
     # band the C14 check watches is C8's RETAINED band, so it needs the HULL
@@ -9792,7 +9915,7 @@ def apply_real_lens_traced(
                                  int(n_total), 0.01 * dx)
         return opl_flat.reshape(Xw.shape)
 
-    def _support_taper(Xg, Yg):
+    def _support_taper(Xg, Yg, _axes=None):
         """niche C8's exit-support taper on the coarse Newton lattice.
 
         The rule, the plateau and the whole measurement record now live on
@@ -9802,10 +9925,25 @@ def apply_real_lens_traced(
         will interpolate FROM, not of the support.  Keeping the plateau here
         and the taper there is what lets the same support object serve the
         coarse-lattice taper and the wave-grid band check without either one
-        guessing the other's sampling."""
+        guessing the other's sampling.
+
+        ``_axes`` (internal) names the two 1-D axes whose outer product
+        ``Xg`` / ``Yg`` ARE, which lets the radially-screened
+        :meth:`_TracedExitSupport.taper_grid` bound the half-plane reduction.
+        Only the inverse-characteristic path passes it: that path asks for the
+        taper on the WAVE grid rather than on the coarse lattice, where the
+        dense form is a 10^10-MAC BLAS pass (measured 5.9 s at 1.7e+07
+        pixels).  The two forms are bit-identical -- the screens are strict --
+        and the coarse lattice keeps the dense one because at 9 025 points it
+        is free."""
+        if _axes is not None:
+            _t = _exit_support.taper_grid(_axes[0], _axes[1],
+                                          np.sqrt(2.0) * sub * dx)
+            if _t is not None:
+                return _t
         return _exit_support.taper(Xg, Yg, np.sqrt(2.0) * sub * dx)
 
-    def _ray_density_amp_grid(Xg, Yg):
+    def _ray_density_amp_grid(Xg, Yg, _pre=None):
         """N12 (P11): geometric ray-density exit amplitude ``|E_in(x_in)| /
         sqrt(|det J|)`` on the exit-position grid ``(Xg, Yg)``.
 
@@ -9818,14 +9956,28 @@ def apply_real_lens_traced(
         oracle uses), and ``|E_in|`` is bilinearly sampled at the entrance.  NaN
         where the ray map is out of domain.  ``|det J|`` is floored at a caustic
         (never inf/nan) and the fold is flagged in ``_rd_fold_detected``.
+
+        ``_pre`` (internal) supplies ``(opl, xe, ye, det_j)`` already solved --
+        the inverse-characteristic path's exact per-pixel answer instead of
+        Newton on a coarse lattice.  EVERYTHING BELOW THE INVERSION IS SHARED:
+        the caustic floor, the fold census, the entrance aperture stop, the
+        niche-C8 support taper, the ``remap_sampling`` branches.  That sharing
+        is the point -- one physics, two sources for the entrance point -- and
+        with ``_pre=None`` this closure is byte-identical to the shipped one.
         """
-        opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+        if _pre is None:
+            opl_f, xe_g, ye_g = _invert_newton(Xg, Yg, _want_entrance=True)
+            _det_pre = None
+        else:
+            opl_f, xe_g, ye_g, _det_pre = _pre
         sh = np.asarray(Xg).shape
         invalid = ~np.isfinite(np.asarray(opl_f))
         xef = np.asarray(xe_g, dtype=np.float64).ravel()
         yef = np.asarray(ye_g, dtype=np.float64).ravel()
         # Forward-map Jacobian J = d(x_out,y_out)/d(x_in,y_in) at the entrance.
-        if _has_combined_fits:
+        if _det_pre is not None:
+            jxx = jxy = jyx = jyy = None
+        elif _has_combined_fits:
             _fx, jxx, jxy = Sx.ev_value_and_grad(xef, yef)
             _fy, jyx, jyy = Sy.ev_value_and_grad(xef, yef)
         else:
@@ -9833,8 +9985,10 @@ def apply_real_lens_traced(
             jxy = np.asarray(Sx.ev(xef, yef, dy=1))
             jyx = np.asarray(Sy.ev(xef, yef, dx=1))
             jyy = np.asarray(Sy.ev(xef, yef, dy=1))
-        det_j = (np.asarray(jxx) * np.asarray(jyy)
-                 - np.asarray(jxy) * np.asarray(jyx)).reshape(sh)
+        det_j = (np.asarray(_det_pre, dtype=np.float64).reshape(sh)
+                 if _det_pre is not None
+                 else (np.asarray(jxx) * np.asarray(jyy)
+                       - np.asarray(jxy) * np.asarray(jyx)).reshape(sh))
         # |E_in| at the entrance (bilinear); rays whose entrance falls outside
         # the input grid contribute zero amplitude.
         from scipy.ndimage import map_coordinates as _mc
@@ -9867,8 +10021,15 @@ def apply_real_lens_traced(
                 # content, so on a lattice of pitch ``ray_subsample*dx`` it
                 # exceeds Nyquist beyond a finite radius and the phasor
                 # aliases in the beam SKIRT.
+                # The copy exists because ``xef`` / ``yef`` are views into
+                # Newton's own working arrays, which the caller may reuse.  On
+                # the ``_pre`` path they are views into the inverse map's
+                # full-grid outputs, which live to the end of the call -- so
+                # aliasing them is safe and saves 2 x N^2 float64 (1.07 GB at
+                # n_fine = 8192, 4.29 GB at 16384).
                 _rd_entrance_coarse[0] = (
-                    xef.reshape(sh).copy(), yef.reshape(sh).copy())
+                    (xef.reshape(sh), yef.reshape(sh)) if _pre is not None
+                    else (xef.reshape(sh).copy(), yef.reshape(sh).copy()))
             else:
                 _rd_resid_coarse[0] = _pip_sample_residual(_row, _col, sh)
         absdet = np.abs(det_j)
@@ -9910,7 +10071,8 @@ def apply_real_lens_traced(
         # bright beam and hand that pixel real amplitude.  Taper to zero across
         # the support boundary instead.  See ``REMAP_INVERSE_SUPPORT_BOUND``.
         if _sup_bound is not None:
-            a_rd = a_rd * _support_taper(Xg, Yg)
+            a_rd = a_rd * _support_taper(
+                Xg, Yg, _axes=((x, _y_ax) if _pre is not None else None))
         return a_rd
 
     call_progress(progress, 'real_lens_traced', 0.55,
@@ -9969,6 +10131,56 @@ def apply_real_lens_traced(
     # ``(_coords, Ns)`` by the OPL sub>1 branch; ``None`` means build a fresh
     # one.  Bounded to this call (freed after the ray-density upsample); no cache.
     _rd_upsample_coords = None
+
+    # ---- THE INVERSE CHARACTERISTIC (per-pixel exact inversion) -----------
+    # See :mod:`lumenairy.elements._lens_imap`.  The map is fitted from the
+    # landings THIS call already traced, so it describes this congruence
+    # exactly -- including the niche-C6 ``a_fit`` launch augmentation, which is
+    # 87 % pupil-varying aberration on design 121's last group and which no
+    # source-labelled shared map can represent (measured: 48.5 waves against a
+    # 1.11e-04-wave bar; the module header carries the table).
+    #
+    # THE GATE, and every clause of it is a refusal rather than a workaround:
+    #   sub > 1                 at sub == 1 there IS no coarse lattice and no
+    #                           upsample to replace -- the Newton already runs
+    #                           per pixel and the map would only add error;
+    #   inversion_method newton the 'fit' path is already a per-pixel exit
+    #                           polynomial, and 'backward_trace' has no
+    #                           forward fits to build a map from;
+    #   not _chunk_assembly     the band path exists to never materialise a
+    #                           full-grid float64; handing it one would undo
+    #                           the memory fix it is;
+    #   not use_gpu             the fits live on the device and the map's
+    #                           kernel is a CPU numba/NumPy pair;
+    _imap = None
+    _imap_rec = {'engaged': False}
+    _imap_gate = (sub > 1 and inversion_method == 'newton'
+                  and not _chunk_assembly and not use_gpu)
+    if _IMAP.imap_enabled(inverse_map) and _imap_gate:
+        def _imap_incumbent(_xq, _yq):
+            """G8's arm B: the INCUMBENT inversion, which is this element's
+            own Newton on this element's own forward fits.  Not a
+            reproduction of it -- the function itself."""
+            _o, _xe, _ye = _invert_newton(_xq, _yq, _want_entrance=True)
+            return _xe, _ye, _o
+
+        # NO Jacobian is passed.  The model derives its own from TRACED data
+        # (``_IMAP_DETJ_SOURCE``), which is what keeps its amplitude
+        # independent of ``newton_fit`` -- see that constant's note, and the
+        # shipped guard it exists to honour.
+        _imap = _IMAP.build_inverse_map(
+            xs_in, x_out_grid, y_out_grid, opl_grid,
+            wavelength=wavelength, launch_radius=launch_radius,
+            weights=_fit_weights, parity_invert=_imap_incumbent,
+            caller='apply_real_lens_traced', guard_record=_imap_rec)
+        if _imap is None:
+            _IMAP.report_refusal(_imap_rec, 'apply_real_lens_traced')
+        else:
+            _imap_rec['engaged'] = True
+    if _imap_out is not None:
+        _imap_out.update(_imap_rec)
+        _imap_out['gate_open'] = bool(_imap_gate)
+
     # Dispatch the OPL inversion to Newton (default) or the experimental
     # backward-trace alternative.  Both produce a wave-grid OPL map
     # with the same axis convention (on-axis referenced to zero, NaN
@@ -9982,6 +10194,85 @@ def apply_real_lens_traced(
         opl_map = _opl_by_backward_trace(
             E_analytic, lens_prescription, wavelength, dx,
             N_grid=N, ray_subsample=sub)
+    elif _imap is not None:
+        # ---- the inverse characteristic, evaluated at EVERY exit pixel -----
+        # This replaces the whole coarse-lattice chain below it: the Newton on
+        # ``X[::sub, ::sub]``, the order-3 OPL upsample, the order-1 NaN pass,
+        # and (on the ray-density branch) the two amplitude upsamples and the
+        # two entrance-coordinate upsamples.  MEASURED on design 121's last
+        # group at n_fine = 8192: those six full-grid ``map_coordinates`` calls
+        # are 14.767 s of a 96.9 s element; one 4-channel degree-14 evaluation
+        # over the same 6.71e+07 pixels is 1.910 s.
+        #
+        # The entrance coordinates and ``det J`` are kept for the ray-density
+        # branch below, which then does exactly what it always did -- the
+        # caustic floor, the fold census, the entrance aperture stop, the C8
+        # taper -- on an EXACT per-pixel inversion instead of an interpolated
+        # one.
+        if X is None:                                    # pragma: no cover
+            X = np.broadcast_to(x[None, :], (N, N))
+            Y = np.broadcast_to(_y_ax[:, None], (N, N))
+        # The Newton loop's own 0.55 -> 0.88 progress slice belongs to a loop
+        # that is not running; drive the same slice from here so a caller's
+        # bar does not sit still through the one full-grid pass of the call.
+        call_progress(progress, 'real_lens_traced', 0.60,
+                      'inverse map: evaluating %d exit pixels' % (N * N,))
+        _im_xin = np.empty((N, N), dtype=np.float64)
+        _im_yin = np.empty((N, N), dtype=np.float64)
+        opl_map = np.empty((N, N), dtype=np.float64)
+        _im_chans = [_im_xin, _im_yin, opl_map]
+        _im_ids = [_IMAP.InverseCharacteristic.CH_X_IN,
+                   _IMAP.InverseCharacteristic.CH_Y_IN,
+                   _IMAP.InverseCharacteristic.CH_OPL]
+        if _ray_density:
+            _im_detj = np.empty((N, N), dtype=np.float64)
+            _im_chans.append(_im_detj)
+            _im_ids.append(_IMAP.InverseCharacteristic.CH_DET_J)
+        else:
+            _im_detj = None
+        _imap.eval_into(X, Y, _im_chans, channels=_im_ids)
+        # THE DOMAIN, and it is not optional.  Outside the convex hull of the
+        # ray landings there is no ray and the degree-14 model extrapolates --
+        # measured at 1.1e+04 waves one plateau out (proto S5.1).  Inside it,
+        # the entrance-radius rule is ``_invert_newton``'s own out-of-domain
+        # test verbatim, applied to the exact entrance point instead of to a
+        # Newton iterate that was clipped to the boundary and then failed it.
+        # THE RELAXATION IS THE BAND NICHE C8 RETAINS, and it is load-bearing.
+        # The exit-support taper holds the amplitude at exactly 1 out to
+        # ``sqrt(2) * sub * dx`` beyond the landing hull and then feathers over
+        # one exit-lattice cell, so the element EMITS a ring outside the hull
+        # at full amplitude.  ``valid = np.isfinite(opl_map)`` gates the PHASE
+        # correction and not the amplitude, so NaN-ing that ring would not
+        # truncate it -- it would hand it the IDENTITY phase.  MEASURED on the
+        # shipping banner: cutting at ``s <= 0`` moved FWHM 3.350 -> 3.550 um
+        # and EE3 90.3 -> 89.7 %.  Model exactly the support the element emits.
+        _im_relax = (np.sqrt(2.0) * sub * dx
+                     + float(_exit_support.feather
+                             if _exit_support.feather is not None
+                             else _SUPPORT_BOUND_FEATHER_CELLS * sub * dx))
+        _im_ok = _imap.domain_mask(X, Y, _im_xin, _im_yin, axes=(x, _y_ax),
+                                   relax=_im_relax)
+        if not _im_ok.all():
+            _im_bad = ~_im_ok
+            opl_map = np.where(_im_ok, opl_map, np.nan)
+            # ...and park the out-of-domain ENTRANCE coordinates on the origin.
+            # They are extrapolations of a degree-14 polynomial; every consumer
+            # of them (the |E_in| sampler, the residual sampler, the entrance
+            # aperture stop) is masked to NaN by ``opl_map`` a few lines later,
+            # so their VALUE cannot reach the field -- but leaving 1e+04-mm
+            # coordinates in an array that gets divided by ``dx`` and handed to
+            # ``map_coordinates`` is how a masked-off quantity becomes a
+            # not-masked-off performance cliff.  Zero is inside the grid and
+            # costs one pass.
+            np.copyto(_im_xin, 0.0, where=_im_bad)
+            np.copyto(_im_yin, 0.0, where=_im_bad)
+            del _im_bad
+        _imap_rec['n_out_of_domain'] = int(_im_ok.size - _im_ok.sum())
+        if _imap_out is not None:
+            _imap_out['n_out_of_domain'] = _imap_rec['n_out_of_domain']
+        call_progress(progress, 'real_lens_traced', 0.88,
+                      'inverse map: %d pixels outside the landing hull'
+                      % (_imap_rec['n_out_of_domain'],))
     elif sub > 1:
         # Evaluate Newton on sub-sampled output grid.  On the chunked-
         # assembly path the full X/Y meshgrids were never built; the coarse
@@ -10194,7 +10485,41 @@ def apply_real_lens_traced(
     # for ray-density, so X/Y exist here.
     ard_map = None
     if _ray_density:
-        if sub > 1:
+        if _imap is not None:
+            # The inverse characteristic already solved the inversion at every
+            # exit pixel, so there is no second Newton, no coarse amplitude
+            # lattice and no upsample: the amplitude closure runs ONCE, at full
+            # resolution, on the exact entrance points the OPL was taken at.
+            # Everything it does below the inversion -- the caustic floor, the
+            # fold census, the |E_in| sample, the entrance aperture stop, the
+            # niche-C8 support taper -- is the shipped code, unchanged.
+            ard_map = _ray_density_amp_grid(
+                X, Y, _pre=(opl_map, _im_xin, _im_yin, _im_detj))
+            if _pip_remap and _rd_resid_coarse[0] is not None:
+                # remap_sampling='lattice': the closure sampled the residual at
+                # the entrance points, and those points are now the wave grid's
+                # own -- there is nothing coarse left to upsample.
+                _rd_resid_map = _rd_resid_coarse[0]
+            elif _pip_full and _rd_entrance_coarse[0] is not None:
+                # S12 (remap_sampling='full'): sample the residual phasor at
+                # full wave-grid resolution, exactly as the upsampled path
+                # does -- the ONLY difference is that the entrance pullback it
+                # is sampled at is EXACT rather than bilinearly upsampled from
+                # a ``sub*dx``-pitch lattice.  The renormalisation is kept
+                # because ``_pip_sample_residual`` itself interpolates the unit
+                # phasor on the INPUT grid (|z| <= 1 off-node); it is that
+                # interpolation, not the pullback's, that it corrects.
+                _xe_f, _ye_f = _rd_entrance_coarse[0]
+                # niche D9 copy 2 of 3: (row from y, col from x).
+                _pz = _pip_sample_residual((_ye_f - _org_y) / dy + N / 2.0,
+                                           (_xe_f - _org_x) / dx + N / 2.0,
+                                           _xe_f.shape)
+                _pa = np.abs(_pz)
+                _rd_resid_map = np.where(
+                    _pa > 1e-6, _pz / np.maximum(_pa, 1e-300), 1.0 + 0.0j)
+                del _pz, _pa
+            _im_detj = None
+        elif sub > 1:
             Xs_rd = X[::sub, ::sub]
             Ys_rd = Y[::sub, ::sub]
             ard_coarse = _ray_density_amp_grid(Xs_rd, Ys_rd)
@@ -10306,6 +10631,15 @@ def apply_real_lens_traced(
                 "the KMAH/Maslov phase.  Use apply_real_lens_gbd or "
                 "apply_real_lens_fga for caustic-faithful amplitude.",
                 RuntimeWarning, stacklevel=2)
+    if _imap is not None:
+        # The inverse map's full-grid channels are consumed by here: the OPL is
+        # ``opl_map``, the amplitude is ``ard_map``, and the entrance pullback
+        # went into ``_rd_resid_map`` (whose own alias was just cleared).  Drop
+        # the local names -- 2 x N^2 float64 is 1.07 GB at n_fine = 8192 and
+        # 4.29 GB at 16384, and holding them to the end of the call would put
+        # the peak back where the memory census took it out.
+        _im_xin = _im_yin = _im_detj = None
+        del _im_xin, _im_yin, _im_detj
     call_progress(progress, 'real_lens_traced', 0.90,
                   'assembling exit field')
 
@@ -10439,6 +10773,30 @@ def apply_real_lens_traced(
             E_out = E_out.astype(target_cdtype)
         call_progress(progress, 'real_lens_traced', 1.0, 'done')
         return E_out
+    # ---- PRIVATE DIAGNOSTIC PROBE (niche C15's independent oracle) ---------
+    # A caller that passes ``_imap_out`` carrying ``probe_rc = (rows, cols)``
+    # gets the FINALISED ``opl_map`` -- and ``ard_map`` where one was built --
+    # sampled at exactly those pixels, in the same dict.  Same contract as
+    # ``_exit_na_out``: private, opt-in, pure-diagnostic, nothing reads it
+    # back, and it retains only the M sampled values, never a full-grid array,
+    # so a call that does not ask pays one dict lookup and keeps every bit and
+    # every byte.
+    #
+    # WHY IT EXISTS.  Deciding which INVERSION is faithful needs the map each
+    # arm actually built, and the returned field carries it only through the
+    # amplitude model, the piston phasor and the residual transport -- three
+    # stages that are common to both arms and would only add noise to the
+    # comparison.  Taken HERE because this is the one point every non-chunked
+    # branch converges on with ``opl_map`` final.
+    if _imap_out is not None and _imap_out.get('probe_rc') is not None:
+        _p_r = np.asarray(_imap_out['probe_rc'][0], dtype=np.intp)
+        _p_c = np.asarray(_imap_out['probe_rc'][1], dtype=np.intp)
+        _imap_out['probe_opl'] = np.asarray(opl_map)[_p_r, _p_c].copy()
+        _imap_out['probe_ard'] = (None if ard_map is None else
+                                  np.asarray(ard_map)[_p_r, _p_c].copy())
+        _imap_out['probe_opl_piston'] = float(_opl_piston)
+        del _p_r, _p_c
+
     valid = np.isfinite(opl_map)
     # v5.16.2: free each full-grid intermediate as soon as its consumer is
     # built (delta_phase/phase after phase_exp; phase_exp after E_out;
@@ -11361,6 +11719,7 @@ def prepare_real_lens_traced(
     progress: Optional[Any] = None,
     amplitude_model: str = 'screen',
     fit_radius_beam_factor: Optional[float] = None,
+    inverse_map: Optional[bool] = None,
 ) -> PreparedTracedLens:
     """Precompute the input-independent traced-lens screen for reuse (T-P1).
 
@@ -11489,7 +11848,7 @@ def prepare_real_lens_traced(
         use_gpu=use_gpu, amp_use_gpu=amp_use_gpu,
         wave_propagator=wave_propagator, sag_dtype=sag_dtype,
         sag_chunk_rows=sag_chunk_rows, n_workers=n_workers, progress=progress,
-        return_screen=True)
+        inverse_map=inverse_map, return_screen=True)
     return PreparedTracedLens(
         screen=screen, prescription=prescription, wavelength=wavelength,
         dx=dx, bandlimit=bandlimit, amp_use_gpu=amp_use_gpu,

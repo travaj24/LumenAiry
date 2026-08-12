@@ -1,0 +1,152 @@
+{
+ "tag": "n1024_dx2_o-1_0_g1rs1ts0p1",
+ "N": 1024,
+ "dx0": 2e-06,
+ "order": [
+  -1,
+  0
+ ],
+ "rs": 1,
+ "nw": 1,
+ "perturb": {
+  "kind": "none",
+  "eps": 1e-12,
+  "seed": 1
+ },
+ "traced_kwargs": {},
+ "n_groups_b": 1,
+ "final_distance_b": 0.0,
+ "x0": 0.0,
+ "lumenairy_version": "5.34.0",
+ "window_launch_m": 0.002048,
+ "doe_period_m": 0.00011375662596454582,
+ "amp_re": -0.06342747120964629,
+ "amp_im": -0.15382246152219006,
+ "tilt_L": -0.001151581271765465,
+ "tilt_M": 0.0,
+ "tilt_scale": 0.1,
+ "chain_a": {
+  "cold": false,
+  "wall_s": 0.11,
+  "R_doe": 703.642736069825,
+  "dx_doe": 5.1233354810950025e-05,
+  "P_in": 6.83065822012291e-08,
+  "P_doe": 6.829993042999956e-08,
+  "frac_in": 0.9999026188836394,
+  "warn_n": 0,
+  "warn_counts": {
+   "raw": {},
+   "unique": {}
+  },
+  "newton": [],
+  "undersample": [],
+  "messages": [],
+  "c6_calls": 0,
+  "c6": []
+ },
+ "chain_b": {
+  "wall_s": 18.68,
+  "R_ap": 703.6647904201881,
+  "dx_ap": 5.123386449216365e-05,
+  "n_ap": 1024,
+  "window_ap_m": 0.052463477239975576,
+  "L": -0.001151581271765465,
+  "M": 0.0,
+  "x_c": -2.5397386222303035e-05,
+  "y_c": 0.0,
+  "warn_n": 2,
+  "warn_counts": {
+   "raw": {
+    "newton_nonconv": 2
+   },
+   "unique": {
+    "newton_nonconv": 1
+   }
+  },
+  "newton": [
+   {
+    "bad": 277557,
+    "tot": 1048576,
+    "pct": 26.5,
+    "tol": 5.123e-07,
+    "iters": 12
+   }
+  ],
+  "undersample": [],
+  "messages": [
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 277557/1048576 pixels (26.5%) did not converge to tol=5.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 277557/1048576 pixels (26.5%) did not converge to tol=5.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   }
+  ],
+  "c6_calls": 1,
+  "c6": [
+   {
+    "engaged": true,
+    "flag": true,
+    "remap": true,
+    "degree": 6,
+    "n_terms": 27,
+    "n_samples": 282116,
+    "grad_a_rms": 3.864923868579449e-06,
+    "grad_a_residual_rms": 3.379826714151554e-08,
+    "w_beam": 0.006314730879527782,
+    "centre": "(-8.061074247414214e-06, 0.0)",
+    "stride": 1,
+    "r_fit": 0.012629461759055565,
+    "r_freeze": 0.014047902078886971,
+    "ray_fit_radius": 0.011238321663109577,
+    "grad_a_fit_max_launch": 3.402413988241684e-05
+   }
+  ]
+ },
+ "aperture": {
+  "power": 6.829890311499296e-08,
+  "w_amp": 0.006314789625124986,
+  "peak": 0.03283535541834588,
+  "piston_w": 0.4144820405893309,
+  "piston_w_absacc": 25.98142424485451,
+  "piston_c": 0.44138416353821136,
+  "amp_c": 0.03283535541834588
+ },
+ "field_sha256": "7e16ad61ed4ca8203e9ecf8cc108b74d4759e3fe380b93de4c554f035518d8a2",
+ "env_sha256": "f807570ae7724d4cba5e63a80508e1b1b57a7922cc82387889f667116a238941",
+ "stages": [
+  {
+   "name": "Lens S14-S15",
+   "R_in": 703.6497360698249,
+   "R_out": 703.6647904201881,
+   "dx": 5.123386449216365e-05,
+   "w": 0.00631483245571608,
+   "power": 6.829890311499293e-08,
+   "gap_phi_sag_in": 2.73636840660476e-12,
+   "gap_phi_sag_out": 2.7363956286279037e-12,
+   "gap_phi_drop": 2.7222023143762734e-17,
+   "gap_na": 8.974307437210276e-06,
+   "gap_env_theta": 0.00012485000052412905,
+   "gap_env_nyq_frac": 0.009765625,
+   "gap_env_phi_drop": 1.0196861003110307e-12,
+   "gap_env_spectral": 1.0,
+   "gap_z_eff": 0.006999930363080539,
+   "L_out": -0.001151581271765465,
+   "M_out": 0.0,
+   "x_c_out": -2.5397386222303035e-05,
+   "y_c_out": 0.0
+  },
+  {
+   "name": "<target>",
+   "target": 1.0,
+   "L": -0.001151581271765465,
+   "M": 0.0,
+   "x_c": -2.5397386222303035e-05,
+   "y_c": 0.0,
+   "dx": 5.123386449216365e-05
+  }
+ ],
+ "wall_s": 22.11,
+ "pid": 29444
+}

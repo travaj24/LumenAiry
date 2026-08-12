@@ -82,6 +82,8 @@ absence of a carrier); those are called out in S2.2.
 | 29 | C13 | `_LSTSQ_RESID_MARGIN` | `_lens_traced` | `1e-6` | -- | 5.32.1 |
 | 30 | C14 | `SUPPORT_BAND_CHECK` | `_lens_traced` | `'warn'` | `'silent'` | 5.32.1 |
 | 31 | C14 | `_SUPPORT_BAND_PEAK_RATIO_TOL` | `_lens_traced` | `1.0` | -- | 5.32.1 |
+| 32 | IMAP | `TRACED_INVERSE_MAP` | `_lens_imap` | `False` | `False` | 5.35.0 |
+| 33 | IMAP | `INVERSE_MAP_GUARD` | `_lens_imap` | `'warn'` | `'silent'` | 5.35.0 |
 
 **`5.32.1` is a SOURCE-ONLY era.**  `pyproject.toml` and `lumenairy/__init__.py`
 both still read `5.32.0`; `CHANGELOG.md` has no `5.32.1` header (C9-C12 sit under
@@ -90,8 +92,9 @@ because the source docstrings already use it.
 
 ### S2.1 The era presets
 
-`_TRACED_ERA_FLAGS` expresses three points on the sequence — `v5.31` (before the
-D1-D7 / C1-C8 campaign), `v5.32` (v5.32.0 as released), `v5.32.1` (this tree).
+`_TRACED_ERA_FLAGS` expresses four points on the sequence — `v5.31` (before the
+D1-D7 / C1-C8 campaign), `v5.32` (v5.32.0 as released), `v5.32.1` (the C9-C14 tree) and
+`v5.34` (after the inverse characteristic landed).
 **They are presets, not a replacement for the flags**, and the reason is in
 `ARCH_TRACED_ENCAPSULATION` S5.2: the flags are a *lattice*, not a timeline.
 The most-cited comparison in the campaign — `REMAP_STATIONARY_PHASE_LAUNCH=True`

@@ -1,0 +1,124 @@
+ARM A -- shipped per-order path (one exact leg per order)
+    order   wall_s  retrace  readout  FWHM_um   EE3_%   EE6_%  EE12_%        power      peak(x,y)um
+   (0, 0)    137.2    111.2     11.9    3.400  90.741  99.897  99.995 1.872766e-09 ( +0.00, +0.00)
+  (-2, 0)    142.8    104.4     18.4    3.400  90.634  99.861  99.994 1.873554e-09 ( +0.20, +0.00)
+ (-4, -2)    134.9    101.2     17.8    3.800  90.071  99.851  99.986 1.879423e-09 ( -0.40, -0.20)
+
+ARM B [_sumap_Bc_m2_p0.npz]  summed orders [(-2, 0)]   dx_c 0.6146 um  N_c 16384  (window 10.0696 mm)
+  t_reref 51.1s  t_resample 27.8s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)   19.400   0.293   0.986   3.381 4.502627e-15  0.0000024  1.000e+00  1.000e+00  -0.33450 1.64e+00
+  (-2, 0)    3.400  90.635  99.861  99.995 1.873556e-09  1.0000007  1.983e+00  3.174e-04  -2.88136 2.64e-05
+ (-4, -2)    1.800   0.119   0.427   1.627 2.169853e-20  0.0000000  1.000e+00  1.000e+00  -1.50806 1.81e+00
+
+ARM B [_sumap_Bc_m4_m2.npz]  summed orders [(-4, -2)]   dx_c 0.6146 um  N_c 16384  (window 10.0696 mm)
+  t_reref 52.3s  t_resample 28.0s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)    2.200   0.120   0.497   1.619 1.133924e-19  0.0000000  1.000e+00  1.000e+00  +1.10153 1.77e+00
+  (-2, 0)    1.800   0.219   0.657   1.867 8.131282e-20  0.0000000  1.000e+00  1.000e+00  +1.19314 1.75e+00
+ (-4, -2)    3.800  90.070  99.850  99.986 1.879422e-09  0.9999995  2.995e-02  1.405e-03  -0.02991 9.34e-05
+
+ARM B [_sumap_Bc_p0_p0.npz]  summed orders [(0, 0)]   dx_c 0.6146 um  N_c 16384  (window 10.0696 mm)
+  t_reref 24.4s  t_resample 37.1s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)    3.400  90.741  99.897  99.995 1.872766e-09  1.0000000  3.008e-01  1.233e-05  -0.30199 1.57e-06
+  (-2, 0)    3.000   0.434   1.620   6.103 4.244025e-15  0.0000023  1.000e+00  1.000e+00  +1.96061 1.60e+00
+ (-4, -2)    1.400   0.129   0.471   1.839 9.391120e-20  0.0000000  1.000e+00  1.000e+00  +0.50289 1.82e+00
+
+ARM B [_sumap_Bc_p0_p0_m2_p0_m4_m2.npz]  summed orders [(0, 0), (-2, 0), (-4, -2)]   dx_c 0.6146 um  N_c 16384  (window 10.0696 mm)
+  t_reref 170.1s  t_resample 127.2s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)    3.400  90.742  99.897  99.995 1.872792e-09  1.0000143  3.009e-01  1.552e-03  -0.30199 7.91e-05
+  (-2, 0)    3.400  90.635  99.861  99.994 1.873561e-09  1.0000035  1.983e+00  1.489e-03  -2.88136 7.92e-05
+ (-4, -2)    3.800  90.070  99.850  99.986 1.879422e-09  0.9999996  2.995e-02  1.405e-03  -0.02991 9.34e-05
+  INTER-FRAME PISTON: ['-0.301993', '-2.881360', '-0.029914']  spread +2.851e+00 rad
+
+ARM B [_sumap_Bc_p0_p0_m2_p0_m4_m2_dxc1229.npz]  summed orders [(0, 0), (-2, 0), (-4, -2)]   dx_c 1.2292 um  N_c 8192  (window 10.0696 mm)
+  t_reref 50.6s  t_resample 39.4s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)    3.400  90.742  99.897  99.995 1.872794e-09  1.0000150  3.009e-01  1.793e-03  -0.30199 7.86e-05
+  (-2, 0)    3.400  90.634  99.861  99.994 1.873558e-09  1.0000020  1.983e+00  1.612e-03  -2.88136 1.28e-04
+ (-4, -2)    3.800  90.070  99.850  99.986 1.879422e-09  0.9999995  2.994e-02  1.385e-03  -0.02991 9.15e-05
+  INTER-FRAME PISTON: ['-0.301993', '-2.881360', '-0.029914']  spread +2.851e+00 rad
+
+ARM B [_sumap_Bf_m2_p0.npz]  summed orders [(-2, 0)]   dx_c 0.6146 um  N_c 16384  (window 10.0696 mm)
+  t_reref 51.1s  t_resample 27.8s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)   19.800   0.513   1.508   4.275 1.796764e-16  0.0000001  1.000e+00  1.000e+00  -0.31810 1.18e+00
+  (-2, 0)    3.400  90.635  99.862  99.994 1.873576e-09  1.0000118  1.983e+00  3.178e-03  -2.88136 4.92e-04
+ (-4, -2)    2.600   0.213   0.554   1.529 1.059477e-20  0.0000000  1.000e+00  1.000e+00  -1.51312 1.69e+00
+
+ARM B [_sumap_Bf_m4_m2.npz]  summed orders [(-4, -2)]   dx_c 0.6146 um  N_c 16384  (window 10.0696 mm)
+  t_reref 52.3s  t_resample 28.0s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)   23.000   0.499   1.710   5.753 5.715234e-19  0.0000000  1.000e+00  1.000e+00  +1.10020 1.78e+00
+  (-2, 0)   41.000   0.468   1.822   6.675 7.261909e-18  0.0000000  1.000e+00  1.000e+00  +1.19366 1.79e+00
+ (-4, -2)    3.800  90.071  99.850  99.986 1.879456e-09  1.0000180  3.023e-02  4.393e-03  -0.02991 5.93e-04
+
+ARM B [_sumap_Bf_p0_p0.npz]  summed orders [(0, 0)]   dx_c 0.6146 um  N_c 16384  (window 10.0696 mm)
+  t_reref 34.0s  t_resample 50.5s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)    3.400  90.740  99.897  99.995 1.872766e-09  1.0000001  3.008e-01  7.456e-04  -0.30199 9.02e-05
+  (-2, 0)    2.200   0.321   0.956   3.315 2.548944e-17  0.0000000  1.000e+00  1.000e+00  +2.24222 1.23e+00
+ (-4, -2)    1.800   0.141   0.487   1.209 6.129503e-22  0.0000000  1.000e+00  1.000e+00  +0.50087 1.41e+00
+
+ARM B [_sumap_Bf_p0_p0_dxc1229.npz]  summed orders [(0, 0)]   dx_c 1.2292 um  N_c 8192  (window 10.0696 mm)
+  t_reref 7.3s  t_resample 14.9s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)    3.400  90.740  99.897  99.995 1.872766e-09  1.0000001  3.008e-01  7.456e-04  -0.30199 9.02e-05
+  (-2, 0)    2.200   0.321   0.956   3.315 2.548980e-17  0.0000000  1.000e+00  1.000e+00  +2.24222 1.23e+00
+ (-4, -2)    1.800   0.142   0.488   1.207 6.134890e-22  0.0000000  1.000e+00  1.000e+00  +0.50087 1.40e+00
+
+ARM B [_sumap_Bf_p0_p0_m2_p0_m4_m2.npz]  summed orders [(0, 0), (-2, 0), (-4, -2)]   dx_c 0.6146 um  N_c 16384  (window 10.0696 mm)
+  t_reref 170.1s  t_resample 127.2s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)    3.400  90.741  99.897  99.995 1.872786e-09  1.0000108  3.008e-01  8.074e-04  -0.30199 9.48e-05
+  (-2, 0)    3.400  90.635  99.862  99.994 1.873579e-09  1.0000132  1.983e+00  3.181e-03  -2.88136 4.93e-04
+ (-4, -2)    3.800  90.071  99.850  99.986 1.879456e-09  1.0000180  3.023e-02  4.393e-03  -0.02991 5.93e-04
+  INTER-FRAME PISTON: ['-0.301992', '-2.881360', '-0.029913']  spread +2.851e+00 rad
+
+ARM B [_sumap_Bf_p0_p0_m2_p0_m4_m2_dxc1229.npz]  summed orders [(0, 0), (-2, 0), (-4, -2)]   dx_c 1.2292 um  N_c 8192  (window 10.0696 mm)
+  t_reref 50.6s  t_resample 39.4s
+    frame  FWHM_um   EE3_%   EE6_%  EE12_%        power      P/P_A      relL2 relL2_pist    piston   ph_rms
+   (0, 0)    3.400  90.741  99.897  99.995 1.872786e-09  1.0000108  3.008e-01  8.074e-04  -0.30199 9.48e-05
+  (-2, 0)    3.400  90.635  99.862  99.994 1.873579e-09  1.0000132  1.983e+00  3.181e-03  -2.88136 4.93e-04
+ (-4, -2)    3.800  90.071  99.850  99.986 1.879456e-09  1.0000180  3.023e-02  4.393e-03  -0.02991 5.93e-04
+  INTER-FRAME PISTON: ['-0.301992', '-2.881360', '-0.029913']  spread +2.851e+00 rad
+
+ARM B CROSSTALK [leg=full] -- power in frame i from a SINGLE-ORDER sum j
+  (arm A cannot show this at all: its frame i is order i's own
+   tile and nothing else, so its off-diagonal is 0 by
+   construction, not by physics.)
+   frame i \ order j          (0, 0)         (-2, 0)        (-4, -2)
+              (0, 0)    1.872766e-09    1.796764e-16    5.715234e-19
+             (-2, 0)    2.548944e-17    1.873576e-09    7.261909e-18
+            (-4, -2)    6.129503e-22    1.059477e-20    1.879456e-09
+   ratio to diagonal
+              (0, 0)       1.000e+00       9.594e-08       3.052e-10
+             (-2, 0)       1.360e-08       1.000e+00       3.876e-09
+            (-4, -2)       3.261e-13       5.637e-12       1.000e+00
+
+ARM B LINEARITY [_sumap_Bf_p0_p0_m2_p0_m4_m2.npz]: || sum_j B_j - B_all || / || B_all ||
+   frame    (0, 0): 2.337e-16
+   frame   (-2, 0): 2.441e-16
+   frame  (-4, -2): 2.262e-16
+
+ARM B CROSSTALK [leg=crop] -- power in frame i from a SINGLE-ORDER sum j
+  (arm A cannot show this at all: its frame i is order i's own
+   tile and nothing else, so its off-diagonal is 0 by
+   construction, not by physics.)
+   frame i \ order j          (0, 0)         (-2, 0)        (-4, -2)
+              (0, 0)    1.872766e-09    4.502627e-15    1.133924e-19
+             (-2, 0)    4.244025e-15    1.873556e-09    8.131282e-20
+            (-4, -2)    9.391120e-20    2.169853e-20    1.879422e-09
+   ratio to diagonal
+              (0, 0)       1.000e+00       2.404e-06       6.055e-11
+             (-2, 0)       2.265e-06       1.000e+00       4.340e-11
+            (-4, -2)       4.997e-11       1.155e-11       1.000e+00
+
+ARM B LINEARITY [_sumap_Bc_p0_p0_m2_p0_m4_m2.npz]: || sum_j B_j - B_all || / || B_all ||
+   frame    (0, 0): 2.755e-16
+   frame   (-2, 0): 3.459e-16
+   frame  (-4, -2): 3.725e-16
+
+wrote D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_sumap_score.json

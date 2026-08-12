@@ -43,3 +43,5 @@ output/
 *.log
 doe_cache/
 bash.exe.stackdump
+validation/repro_traced_carrier_121/_*.npy
+validation/repro_traced_carrier_121/_probe_ladder/

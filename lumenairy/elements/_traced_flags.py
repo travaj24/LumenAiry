@@ -60,6 +60,7 @@ import threading
 
 _LT = 'lumenairy.elements._lens_traced'
 _CM = 'lumenairy.propagators.carrier'
+_IM = 'lumenairy.elements._lens_imap'
 
 #: Era names, oldest first.  ``v5.31`` is the library BEFORE the D1-D7 / C1-C8
 #: campaign, ``v5.32`` is v5.32.0 as released, ``v5.32.1`` is the current tree
@@ -78,7 +79,16 @@ _CM = 'lumenairy.propagators.carrier'
 #: at their shipped values.  Their ``fail_before`` is still recorded (it is
 #: what the regression tests force) but it names a pre-5.28 library, not an
 #: era below.
-ERAS = ('v5.31', 'v5.32', 'v5.32.1')
+#:
+#: ``v5.34`` is the tree AFTER the inverse-characteristic per-pixel
+#: evaluator landed.  It is the first era to carry a flag from a module
+#: other than the two above, and the reason it exists at all is that
+#: ``TRACED_INVERSE_MAP`` is NOT inert at the older eras -- a flag that
+#: changes a returned bit has to be given a value in every era, or an
+#: era arm quietly runs the NEW code and reports it as the old library.
+#: (Contrast ``_REMAP_RESID_EIKONAL_DEGREE``, which IS inert at ``v5.31``
+#: because C6 is off there, and is therefore correctly absent.)
+ERAS = ('v5.31', 'v5.32', 'v5.32.1', 'v5.34')
 
 #: Sentinel: this flag's fail-before is NOT a value of this flag (it is a
 #: kwarg, or the absence of a carrier), so the era table cannot express it and
@@ -245,6 +255,21 @@ _TRACED_ERA_FLAGS = (
             'reported.  1.0 = "the global maximum may not sit outside the '
             'traced support", which needs no calibration because no correct '
             'field can answer yes'),
+    # ---- the inverse characteristic (UNIT D) -------------------------------
+    _f(_IM, 'TRACED_INVERSE_MAP', 'IMAP', False,
+       {'v5.31': False, 'v5.32': False, 'v5.32.1': False, 'v5.34': False},
+       note='SHIPS OFF, and scoped by carrier.py to the terminal fine retrace.  "Setting it False restores the shipped '
+            'coarse-Newton + map_coordinates upsample chain BIT FOR '
+            'BIT."  Valued at EVERY era, not just its own: it changes a '
+            'returned bit, so leaving it alone in an older preset would '
+            'run the new evaluator and label the result v5.31.  Its own '
+            'note carries the measurement that decided the default'),
+    _f(_IM, 'INVERSE_MAP_GUARD', 'IMAP', 'silent',
+       {'v5.34': 'warn'}, note='REPORTING-ONLY: it selects what a REFUSED '
+            'build says, and a refused build keeps the shipped path '
+            'whatever this holds, so it cannot change a returned bit.  '
+            'Absent from the older eras because TRACED_INVERSE_MAP is '
+            'False there, which makes it inert'),
     # ---- chain side --------------------------------------------------------
     _f(_CM, 'SPHERE_PARAB_CONVERSION_EXACT', 'C9', False,
        {'v5.32': False, 'v5.32.1': True},

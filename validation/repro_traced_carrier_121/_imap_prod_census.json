@@ -1,0 +1,146 @@
+{
+ "census": [
+  {
+   "arms": {
+    "off": {
+     "build_seconds": null,
+     "calls": [
+      {
+       "in_shape": [
+        95,
+        95
+       ],
+       "order": 3,
+       "out_points": 67108864,
+       "seconds": 6.090449900133535
+      },
+      {
+       "in_shape": [
+        95,
+        95
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 3.024007099913433
+      },
+      {
+       "in_shape": [
+        8192,
+        8192
+       ],
+       "order": 1,
+       "out_points": 9025,
+       "seconds": 0.0020667000208050013
+      },
+      {
+       "in_shape": [
+        95,
+        95
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 2.942455800017342
+      },
+      {
+       "in_shape": [
+        95,
+        95
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 2.9983202000148594
+      },
+      {
+       "in_shape": [
+        95,
+        95
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 3.1143801999278367
+      },
+      {
+       "in_shape": [
+        95,
+        95
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 3.1471228001173586
+      },
+      {
+       "in_shape": [
+        8192,
+        8192
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 2.617650399915874
+      },
+      {
+       "in_shape": [
+        8192,
+        8192
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 2.7902679999824613
+      }
+     ],
+     "element_seconds": 179.564108800143,
+     "engaged": false,
+     "full_grid_calls": 8,
+     "full_grid_seconds": 26.7246544000227,
+     "map_coordinates_total_s": 26.726721100043505,
+     "refused": null
+    },
+    "on": {
+     "build_seconds": 1.536019500112161,
+     "calls": [
+      {
+       "in_shape": [
+        8192,
+        8192
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 2.631234599975869
+      },
+      {
+       "in_shape": [
+        8192,
+        8192
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 3.046545499935746
+      },
+      {
+       "in_shape": [
+        8192,
+        8192
+       ],
+       "order": 1,
+       "out_points": 67108864,
+       "seconds": 3.3097934001125395
+      }
+     ],
+     "element_seconds": 180.9352939000819,
+     "engaged": true,
+     "full_grid_calls": 3,
+     "full_grid_seconds": 8.987573500024155,
+     "map_coordinates_total_s": 8.987573500024155,
+     "refused": null
+    }
+   },
+   "bucket_saving_seconds": 16.201061399886385,
+   "n_fine": 8192,
+   "n_pixels": 67108864,
+   "order": [
+    -4,
+    -2
+   ]
+  }
+ ],
+ "n_fine": 8192
+}

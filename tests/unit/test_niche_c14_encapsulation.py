@@ -26,6 +26,7 @@ import numpy as np
 import pytest
 
 import lumenairy as la
+from lumenairy.elements import _lens_imap as IM
 from lumenairy.elements import _lens_traced as LT
 from lumenairy.elements import _traced_flags as TF
 from lumenairy.propagators import carrier as CM
@@ -121,7 +122,7 @@ def test_the_layer_map_table_names_only_identifiers_that_exist():
     the map itself records four instances of."""
     rows = _layer_map_rows()
     assert len(rows) >= 29, f'the switch table did not parse: {len(rows)} rows'
-    mods = {'_lens_traced': LT, 'carrier': CM}
+    mods = {'_lens_traced': LT, 'carrier': CM, '_lens_imap': IM}
     bad = []
     for ident, (mod_key, _shipped, _fb) in sorted(rows.items()):
         mod = mods.get(mod_key)
@@ -137,7 +138,7 @@ def test_the_layer_map_shipped_column_matches_the_library():
     state their real values.  A shipped default that moves without the table
     moving is the harness trap S7 item 1 in documentation form."""
     rows = _layer_map_rows()
-    mods = {'_lens_traced': LT, 'carrier': CM}
+    mods = {'_lens_traced': LT, 'carrier': CM, '_lens_imap': IM}
     bad = []
     for ident, (mod_key, shipped, _fb) in sorted(rows.items()):
         mod = mods.get(mod_key)

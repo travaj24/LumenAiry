@@ -1,0 +1,15 @@
+{
+ "ampctl": {
+  "cheb_grad_order10_amp_rel_max": 1.578585986245681e-06,
+  "cheb_grad_order10_amp_rel_rms": 1.6713792346079395e-07,
+  "lattice_pitch_um": 134.18800125683006,
+  "n": 1258,
+  "np_gradient_amp_rel_max": 3.166027963706165e-05,
+  "np_gradient_amp_rel_rms": 2.1076459020209933e-05,
+  "order": [
+   -4,
+   -2
+  ],
+  "stencil_h_um": 5.0
+ }
+}
