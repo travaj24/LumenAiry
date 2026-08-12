@@ -25,6 +25,7 @@ Sources: ``docs/audits/BUILD_INVERSE_MAP_2026_08_11.md``,
 """
 from __future__ import annotations
 
+import threading
 import warnings
 
 import numpy as np
@@ -414,6 +415,62 @@ def test_a_repeated_identical_call_hits_the_cache():
     assert info0['size'] == 1 and info0['hits'] == 0
     assert info1['hits'] == 1
     assert np.array_equal(e0, e1), 'a cache hit changed the answer'
+
+
+def test_the_cache_containers_stay_consistent_under_threads():
+    """The defect the companion lock closes, exercised rather than asserted.
+
+    ``_cache_get`` and ``_cache_put`` do read-modify-write sequences ACROSS
+    three containers -- the map dict, the LRU order list, the counters -- so
+    an unlocked interleave can leave a key in one and not the other: past the
+    capacity bound one way, a dropped live entry the other.  Hammer both from
+    several threads and demand the invariant that the lock exists to hold."""
+    IM.inverse_map_cache_clear()
+    n_thread, n_op = 8, 400
+    keys = ['k%02d' % i for i in range(3 * max(1, IM._IMAP_CACHE_SIZE))]
+
+    def worker(seed):
+        rng = np.random.default_rng(seed)
+        for _ in range(n_op):
+            k = keys[int(rng.integers(len(keys)))]
+            if IM._cache_get(k) is None:
+                IM._cache_put(k, k)
+
+    threads = [threading.Thread(target=worker, args=(i,))
+               for i in range(n_thread)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    with IM._IMAP_LOCK:
+        assert set(IM._IMAP_CACHE) == set(IM._IMAP_CACHE_ORDER), (
+            'the dict and the LRU order list disagree -- the exact torn '
+            'read-modify-write the lock exists to prevent')
+        assert len(IM._IMAP_CACHE_ORDER) == len(set(IM._IMAP_CACHE_ORDER))
+        assert len(IM._IMAP_CACHE) <= IM._IMAP_CACHE_SIZE, (
+            'the capacity bound leaked')
+    info = IM.inverse_map_cache_info()
+    assert info['hits'] + info['misses'] == n_thread * n_op, (
+        'the counters are pinned EXACT under contention -- they live inside '
+        'the same critical section the container invariant already needs')
+    IM.inverse_map_cache_clear()
+
+
+def test_the_cache_is_enrolled_with_the_central_registry():
+    """v4.16.0's contract: a module owning a cache hands its clearer to the
+    registry, so the library-wide drain reaches it.  Before this fix
+    ``inverse_map_cache_clear`` existed and was never registered -- the exact
+    sibling gap the registry was written to retire."""
+    from lumenairy import _cache_registry as REG
+    assert 'inverse_map' in REG.list_registered_cache_clearers()
+    IM.inverse_map_cache_clear()
+    with IM._IMAP_LOCK:
+        IM._IMAP_CACHE['sentinel'] = 'sentinel'
+        IM._IMAP_CACHE_ORDER.append('sentinel')
+        IM._IMAP_CACHE_STATS['hits'] = 11
+    REG.clear_all_registered_caches()
+    assert IM.inverse_map_cache_info() == {
+        'size': 0, 'capacity': IM._IMAP_CACHE_SIZE, 'hits': 0, 'misses': 0}
 
 
 # ===========================================================================

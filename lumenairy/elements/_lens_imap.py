@@ -79,6 +79,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util as _ilu
+import threading
 import warnings
 from typing import Dict
 
@@ -663,6 +664,48 @@ _IMAP_CACHE: Dict[str, InverseCharacteristic] = {}
 _IMAP_CACHE_ORDER: list = []
 _IMAP_CACHE_STATS = {'hits': 0, 'misses': 0}
 
+#: THE COMPANION LOCK for :data:`_IMAP_CACHE`, and the granularity is a
+#: decision rather than a default.
+#:
+#: WHAT IT GUARDS, and why it is ONE lock and not three.  The cache is three
+#: containers -- the map dict, the LRU order list and the hit/miss counters --
+#: and the invariant worth protecting is that they AGREE.  Both accessors do
+#: non-atomic read-modify-write sequences ACROSS them (``_cache_get`` removes
+#: and re-appends a key while bumping a counter; ``_cache_put`` inserts, then
+#: appends, then evicts from both in a loop), so interleaving two threads can
+#: leave a key in ``_IMAP_CACHE`` that is no longer in ``_IMAP_CACHE_ORDER``
+#: -- which leaks past the capacity bound -- or the reverse, which drops a
+#: live entry.  A finer lock cannot express that invariant, because the
+#: invariant is precisely the relationship BETWEEN the containers.
+#:
+#: WHAT IT DELIBERATELY DOES NOT GUARD: the BUILD.  ``build_inverse_map``
+#: takes the lock for the lookup, releases it, and takes it again for the
+#: store; the ~0.2 s least-squares fit in between runs unlocked.  Two threads
+#: missing on the same key therefore both build, and the second store wins --
+#: which is harmless BY CONSTRUCTION here, because the key is a SHA-256 over
+#: every array and scalar the map depends on, so two maps under one key are
+#: the same map.  Holding the lock across the build would serialise seconds of
+#: numerical work to protect an invariant that cannot be violated.
+#:
+#: A PLAIN ``Lock``, not an ``RLock``, and that is the library's rule rather
+#: than this module's preference: ``test_v4_14_2_dispatcher_pin_cache_locks``
+#: requires cache locks to be ``threading.Lock`` "so the with-block discipline
+#: is uniform across the library".  Re-entrancy was considered and is not
+#: needed -- no region holding this lock calls any other function that takes
+#: it.  The three accessors touch only the three containers, and
+#: :func:`inverse_map_cache_clear` is reached from the registry and from
+#: callers, never from inside a critical section.  A non-re-entrant lock also
+#: turns any future violation of that into an immediate deadlock at the call
+#: site instead of a silently nested one, which is the better failure.
+#:
+#: THE COUNTERS ARE EXACT UNDER CONTENTION, and that is a choice too.  They
+#: live inside the same critical section the container invariant already
+#: requires, so exactness is free -- and it is pinned:
+#: ``test_niche_c15_inverse_map::test_a_repeated_identical_call_hits_the_cache``
+#: asserts ``hits == 1`` on the nose.  Approximate counters would have made a
+#: shipped test flaky to buy nothing.
+_IMAP_LOCK = threading.Lock()
+
 
 def _imap_key(xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
               degree, launch_radius, wavelength, extra=()):
@@ -697,41 +740,80 @@ def _imap_key(xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
 
 
 def _cache_get(key):
-    hit = _IMAP_CACHE.get(key)
-    if hit is not None:
-        _IMAP_CACHE_STATS['hits'] += 1
-        try:
-            _IMAP_CACHE_ORDER.remove(key)
-        except ValueError:                                # pragma: no cover
-            pass
-        _IMAP_CACHE_ORDER.append(key)
-    else:
-        _IMAP_CACHE_STATS['misses'] += 1
-    return hit
+    with _IMAP_LOCK:
+        hit = _IMAP_CACHE.get(key)
+        if hit is not None:
+            _IMAP_CACHE_STATS['hits'] += 1
+            try:
+                _IMAP_CACHE_ORDER.remove(key)
+            except ValueError:                            # pragma: no cover
+                pass
+            _IMAP_CACHE_ORDER.append(key)
+        else:
+            _IMAP_CACHE_STATS['misses'] += 1
+        return hit
 
 
 def _cache_put(key, imap):
-    _IMAP_CACHE[key] = imap
-    _IMAP_CACHE_ORDER.append(key)
-    while len(_IMAP_CACHE_ORDER) > max(0, int(_IMAP_CACHE_SIZE)):
-        old = _IMAP_CACHE_ORDER.pop(0)
-        _IMAP_CACHE.pop(old, None)
+    with _IMAP_LOCK:
+        _IMAP_CACHE[key] = imap
+        _IMAP_CACHE_ORDER.append(key)
+        while len(_IMAP_CACHE_ORDER) > max(0, int(_IMAP_CACHE_SIZE)):
+            old = _IMAP_CACHE_ORDER.pop(0)
+            _IMAP_CACHE.pop(old, None)
 
 
 def inverse_map_cache_clear():
-    """Drop every cached inverse map (and the hit/miss counters)."""
-    _IMAP_CACHE.clear()
-    del _IMAP_CACHE_ORDER[:]
-    _IMAP_CACHE_STATS['hits'] = 0
-    _IMAP_CACHE_STATS['misses'] = 0
+    """Drop every cached inverse map (and the hit/miss counters).
+
+    This is the function handed to the central cache registry below, so
+    ``lumenairy.clear_all_registered_caches`` and
+    ``lumenairy_context(clear_caches_on_exit=True)`` drain this cache like any
+    other.  Before v5.35 it existed but was never enrolled, which is exactly
+    the sibling gap the v4.16.0 registry was written to retire.
+    """
+    with _IMAP_LOCK:
+        _IMAP_CACHE.clear()
+        del _IMAP_CACHE_ORDER[:]
+        _IMAP_CACHE_STATS['hits'] = 0
+        _IMAP_CACHE_STATS['misses'] = 0
 
 
 def inverse_map_cache_info():
     """``{'size', 'capacity', 'hits', 'misses'}`` -- for a runner's provenance
-    banner, and for the tests that pin the key discipline."""
-    return {'size': len(_IMAP_CACHE), 'capacity': int(_IMAP_CACHE_SIZE),
-            'hits': int(_IMAP_CACHE_STATS['hits']),
-            'misses': int(_IMAP_CACHE_STATS['misses'])}
+    banner, and for the tests that pin the key discipline.
+
+    Read under the lock: the four fields are reported as ONE consistent
+    snapshot, not four independent reads that a concurrent eviction can
+    straddle."""
+    with _IMAP_LOCK:
+        return {'size': len(_IMAP_CACHE), 'capacity': int(_IMAP_CACHE_SIZE),
+                'hits': int(_IMAP_CACHE_STATS['hits']),
+                'misses': int(_IMAP_CACHE_STATS['misses'])}
+
+
+# ---- central cache-registry enrollment -----------------------------------
+# The v4.16.0 contract: a module owning a cache hands its clearer to the
+# registry, so the library-wide drain reaches it.  Prior art and identical
+# shape: ``_lens_traced.py``'s ``_register_cache_clearer(
+# 'lens_traced_main_guard', ...)``.  The indirection through ``_sys.modules``
+# is the registry's own convention -- it keeps the registration bound to the
+# module ATTRIBUTE rather than to the function object captured at import, so a
+# test that monkeypatches ``inverse_map_cache_clear`` is still the thing the
+# registry calls.
+try:
+    import sys as _sys
+
+    from .._cache_registry import (
+        register_cache_clearer as _register_cache_clearer,
+    )
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'inverse_map',
+        lambda: getattr(_this_mod, 'inverse_map_cache_clear')(),
+    )
+except ImportError:  # pragma: no cover - registry always present in-tree
+    pass
 
 
 # ---------------------------------------------------------------------------
