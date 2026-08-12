@@ -194,6 +194,82 @@ def _oracle_strehl(groups_with_gaps, x_max, w0, npts=300):
 _STREHL_CACHE = {}
 
 
+def _wavefront_rms(env, dx_out):
+    """Amplitude-weighted exit-wavefront rms (RADIANS) of a carrier-referenced
+    envelope, with piston, tilt and defocus removed.  (The same construction as
+    ``tests/unit/test_niche_p2_design_battery.py::_wavefront_rms``; both files
+    keep their own copy, as they already do for the ray oracle.)
+
+    INVARIANT, and it is the point of the function: the returned number does
+    NOT move when ``env`` is multiplied by a global unit phasor.  Pinned by
+    ``test_wavefront_rms_is_invariant_under_a_global_piston``.
+    """
+    n = env.shape[0]
+    xx = (np.arange(n) - n / 2) * float(dx_out)
+    XX, YY = np.meshgrid(xx, xx)
+    amp = np.abs(env)
+    mask = amp > 0.10 * amp.max()
+    w = amp[mask] ** 2
+    ph = np.angle(env)[mask]
+    # ---- PISTON REFERENCE (docs/audits/FIX_PR29_BLAST_2026_08_11.md S1) ----
+    # ``ph`` is a CIRCULAR variable read off a wrapped ``np.angle``; the linear
+    # least-squares below is not.  Its piston COLUMN can slide the model, but
+    # nothing in it can undo a +-2 pi branch jump in the DATA -- so before this
+    # reference the Strehl was piston-invariant only by LUCK: whichever global
+    # phase the element happened to return had to leave the beam's phase
+    # cluster clear of the +-pi cut.  ``apply_real_lens_traced`` now returns an
+    # ABSOLUTE optical path (docs/audits/FIX_TILT_QUADRATIC_OPL_2026_08_11.md),
+    # i.e. the global phase is the element's own ``k0 * OPL`` (~5e+04 rad),
+    # whose value mod 2 pi is arbitrary as far as a WAVEFRONT metric is
+    # concerned.  The un-guarded 7 mm cell duly landed on the cut and reported
+    # Strehl 0.332 for a focus that had not changed.
+    #
+    # De-rotate the amplitude-weighted CIRCULAR MEAN first.  The circular mean
+    # is equivariant -- ``ph -> ph + c`` gives ``mu -> mu + c`` -- so
+    # ``ph - mu``, and therefore the rms, is EXACTLY invariant under
+    # ``env -> env * exp(1j c)``.
+    mu = np.angle(np.sum(w * np.exp(1j * ph)))
+    ph = np.angle(np.exp(1j * (ph - mu)))
+    A = np.stack([np.ones(int(mask.sum())), XX[mask], YY[mask],
+                  XX[mask] ** 2 + YY[mask] ** 2], 1)
+    sw = np.sqrt(w)
+    coef, *_ = np.linalg.lstsq(A * sw[:, None], ph * sw, rcond=None)
+    resid = np.angle(np.exp(1j * (ph - A @ coef)))
+    return float(np.sqrt(np.sum(w * resid ** 2) / np.sum(w)))
+
+
+# ===========================================================================
+# 0. The metric itself.  Every Strehl below is exp(-rms^2) of ``_wavefront_rms``;
+#    if that number can move without the WAVEFRONT moving, every row is fiction.
+#    (Kept here, next to the function it pins, rather than with the optics
+#    sections below -- it touches no optics and no library call.)
+# ===========================================================================
+def test_wavefront_rms_is_invariant_under_a_global_piston():
+    """A global unit phasor is not a wavefront error -- it is the reference the
+    metric is supposed to remove -- so ``_wavefront_rms`` must return the same
+    number for ``env`` and for ``env * exp(1j c)`` at every ``c``.
+
+    Every Strehl in this file is ``exp(-rms^2)`` of that number, so a
+    piston-dependent rms makes every row here fiction.  Measured with the
+    pre-reference construction this fixture's rms swings 0.2384 -> 1.3922 rad
+    across the sweep below (Strehl 0.944 -> 0.144 on an UNCHANGED wavefront);
+    with the circular-mean reference it is flat to 3.9e-16 rad.
+    """
+    n, dxo, w0 = 256, 5.0e-6, 3.0e-4
+    xx = (np.arange(n) - n / 2) * dxo
+    XX, YY = np.meshgrid(xx, xx)
+    u = (XX ** 2 + YY ** 2) / w0 ** 2
+    env = np.exp(-u) * np.exp(1j * 0.9 * u ** 2)
+    base = _wavefront_rms(env, dxo)
+    assert base > 0.2, f'fixture is too flat to test wrapping ({base:.4f})'
+    vals = [_wavefront_rms(env * np.exp(1j * c), dxo)
+            for c in np.linspace(0.0, 2.0 * np.pi, 17)]
+    assert max(vals) - min(vals) < 1e-9, (
+        f'wavefront rms is piston-DEPENDENT: {min(vals):.6f} to '
+        f'{max(vals):.6f} rad over a 2 pi global-phase sweep (base '
+        f'{base:.6f})')
+
+
 def _chain_strehl(ap, N=1536, dx=7e-6, guard='default'):
     """Exit-wavefront Strehl of the 2-group relay at group aperture ``ap``.
 
@@ -217,18 +293,7 @@ def _chain_strehl(ap, N=1536, dx=7e-6, guard='default'):
             env0, _groups(ap), _WL, dx, r_in=np.inf, ray_subsample=4, n_workers=1,
             traced_kwargs=tkw, final_distance=0.0)
     env = carrier_referenced_envelope(np.asarray(res.field), float(res.R), _WL, float(res.dx))
-    dxo = float(res.dx)
-    n = env.shape[0]
-    xx = (np.arange(n) - n / 2) * dxo
-    XX, YY = np.meshgrid(xx, xx)
-    amp = np.abs(env)
-    mask = amp > 0.10 * amp.max()
-    ph = np.angle(env)
-    w = amp[mask] ** 2
-    A = np.stack([np.ones(int(mask.sum())), XX[mask], YY[mask], (XX[mask] ** 2 + YY[mask] ** 2)], 1)
-    coef, *_ = np.linalg.lstsq(A * np.sqrt(w)[:, None], ph[mask] * np.sqrt(w), rcond=None)
-    resid = np.angle(np.exp(1j * (ph[mask] - A @ coef)))
-    rms = np.sqrt(np.sum(w * resid ** 2) / np.sum(w))
+    rms = _wavefront_rms(env, float(res.dx))
     out = float(np.exp(-rms ** 2))
     _STREHL_CACHE[key] = out
     return out
@@ -261,7 +326,9 @@ def test_e4_chain_diffraction_limited_at_matched_aperture():
     """With the group aperture matched to the beam (6 mm = 1.5x beam diameter),
     the plain sphere-only carrier chain reproduces the corrected relay to the
     diffraction limit (exit-wavefront Strehl > 0.9) -- i.e. the chain does NOT
-    fail corrected relays.  (Measured ~0.997 at the audit date.)"""
+    fail corrected relays.  (Measured 0.99974 on 2026-08-11 with the
+    piston-invariant metric, and the same at v5.34.0; ~0.997 at the audit
+    date.)"""
     _skip_if_low_ram(1536)
     st = _chain_strehl(6e-3)
     assert st > 0.9, (
@@ -280,7 +347,8 @@ def test_e4_oversized_aperture_corrupts_fit_without_guard():
     into the traced OPL fit and collapses the focus (Strehl << the
     matched-aperture value) -- the artifact that originally masqueraded as a
     'chain fails corrected relays' result.  Beam is unchanged; only the
-    aperture grows.  Measured 2026-07-25: 0.998 (6 mm) -> 0.039 (10 mm)."""
+    aperture grows.  Measured 2026-08-11 with the piston-invariant metric, and
+    identical at v5.34.0: 0.99400 (6 mm) -> 0.03873 (10 mm)."""
     _skip_if_low_ram(1536)
     st_matched = _chain_strehl(6e-3, guard=None)
     st_oversized = _chain_strehl(10e-3, guard=None)
@@ -301,8 +369,19 @@ def test_e4_cliff_guard_recovers_oversized_aperture(ap_mm):
     every aperture from 1.75x to 2.5x the beam diameter comes back to
     diffraction-limited instead of collapsing.
 
-    Measured 2026-07-25 (Strehl, guard off -> guard on):
-    7 mm 0.105 -> 0.9995, 8 mm 0.042 -> 0.9995, 10 mm 0.039 -> 0.9995.
+    Measured 2026-08-11 (PISTON-INVARIANT Strehl -- see ``_wavefront_rms`` --
+    re-measured at v5.34.0 and on the absolute-OPL branch and IDENTICAL to all
+    five printed digits on both, guard off -> guard on):
+    7 mm 0.1260 -> 0.99890, 8 mm 0.0477 -> 0.99862, 10 mm 0.0387 -> 0.99858.
+    Ratios 7.93x / 20.9x / 25.8x against the 5.0x bar below, i.e. 1.59x of
+    headroom at the tightest (7 mm) cell.
+
+    HEADROOM NOTE: the DENOMINATOR of that ratio is a collapsed fit -- a
+    near-uniform random wrapped phase -- so it is the least reproducible number
+    in this file (0.105 on 2026-07-25 with the pre-reference metric, 0.126
+    invariant today).  The bar is stated on the ratio anyway because the claim
+    under test is a RECOVERY, and the numerator is pinned independently by the
+    ``> 0.9`` assertion above.
 
     KNOWN-GOOD ENVELOPE: aperture:beam-diameter ratios 1.0-2.5x on this fast
     (f/4.5) singlet-led relay; the guard's own recovery is flat for
@@ -319,9 +398,10 @@ def test_e4_cliff_guard_recovers_oversized_aperture(ap_mm):
 
 def test_e4_cliff_guard_leaves_precliff_apertures_alone():
     """The guard must not disturb the PRE-cliff (aperture <= 1.5x beam
-    diameter) results it was not needed for.  Measured 2026-07-25: 4 mm
-    0.9986 -> 0.9986, 5 mm 0.9997 -> 0.9996, 6 mm 0.9978 -> 0.9993 (the 6 mm
-    cell improves slightly -- it already sat on the cliff's shoulder)."""
+    diameter) results it was not needed for.  Measured 2026-08-11 with the
+    piston-invariant metric, and identical at v5.34.0 (guard off -> on):
+    4 mm 0.99830 -> 0.99831, 5 mm 0.99934 -> 0.99956, 6 mm 0.99400 -> 0.99974
+    (the 6 mm cell improves -- it already sat on the cliff's shoulder)."""
     _skip_if_low_ram(1536)
     for ap_mm in (4.0, 5.0, 6.0):
         off = _chain_strehl(ap_mm * 1e-3, guard=None)

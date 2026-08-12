@@ -2822,7 +2822,12 @@ def _exact_sphere_eikonal(shape, dx, dy, wavelength, R, centre=(0.0, 0.0)):
     Y, X = np.meshgrid(y, x, indexing='ij')
     r2 = X * X + Y * Y
     sgn = 1.0 if R > 0 else -1.0
-    return sgn * (np.sqrt(r2 + R * R) - abs(R))
+    # Rationalized form of sgn*(sqrt(r2 + R^2) - |R|): algebraically
+    # identical, but the subtraction form loses k0*eps*|R| radians to
+    # catastrophic cancellation where r2 << R^2 -- measured as the ENTIRE
+    # floor of the CarrierField re-reference round trip (2.05e-11 ->
+    # 3.73e-13 at |R| = 50 mm, and the residual stops scaling with |R|).
+    return sgn * (r2 / (np.sqrt(r2 + R * R) + abs(R)))
 
 
 def _exact_tilt_reference():
