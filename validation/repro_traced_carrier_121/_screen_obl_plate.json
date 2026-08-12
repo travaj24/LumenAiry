@@ -1,0 +1,36 @@
+{
+ "plate": {
+  "rows": [
+   {
+    "byte_identical": true,
+    "corr_minus_shipped_m": 0.0,
+    "shipped_angular_rms_waves": 0.0,
+    "tilt_mrad": 0.0
+   },
+   {
+    "byte_identical": true,
+    "corr_minus_shipped_m": 0.0,
+    "shipped_angular_rms_waves": 1.4125652774752884e-26,
+    "tilt_mrad": 10.0
+   },
+   {
+    "byte_identical": true,
+    "corr_minus_shipped_m": 0.0,
+    "shipped_angular_rms_waves": 1.4125652774752884e-26,
+    "tilt_mrad": 20.0
+   },
+   {
+    "byte_identical": true,
+    "corr_minus_shipped_m": 0.0,
+    "shipped_angular_rms_waves": 1.4125652774752884e-26,
+    "tilt_mrad": 41.5
+   },
+   {
+    "byte_identical": true,
+    "corr_minus_shipped_m": 0.0,
+    "shipped_angular_rms_waves": 1.4125652774752884e-26,
+    "tilt_mrad": 100.0
+   }
+  ]
+ }
+}

@@ -1,0 +1,52 @@
+{
+ "max_tilt": {
+  "blind": {
+   "angular_max_waves": 1.0513780722648636,
+   "angular_rms_waves": 0.37859279811993096,
+   "raw_tilt_rms_waves": 0.2420310166129686,
+   "raw_zero_rms_waves": 0.28842678718972514
+  },
+  "dx_um": 12.0,
+  "group": 5,
+  "n": 512,
+  "n_mask": 49061,
+  "obliquity": {
+   "angular_max_waves": 1.0008494296504375,
+   "angular_rms_waves": 0.3779505073853323,
+   "raw_tilt_rms_waves": 0.24092961414486336,
+   "raw_zero_rms_waves": 0.28842678718972514
+  },
+  "order": [
+   -4,
+   -2
+  ],
+  "r_probe_mm": 1.5,
+  "tilt_mrad": 54.865810377163285,
+  "w_mm": 2.5
+ },
+ "refutation": {
+  "blind": {
+   "angular_max_waves": 1.3248025305870523,
+   "angular_rms_waves": 0.3841963666346086,
+   "raw_tilt_rms_waves": 0.2527589930056782,
+   "raw_zero_rms_waves": 0.28842678718972514
+  },
+  "dx_um": 12.0,
+  "group": 5,
+  "n": 512,
+  "n_mask": 49061,
+  "obliquity": {
+   "angular_max_waves": 1.1290572780469488,
+   "angular_rms_waves": 0.37743223076375754,
+   "raw_tilt_rms_waves": 0.24491849578774333,
+   "raw_zero_rms_waves": 0.28842678718972514
+  },
+  "order": [
+   -4,
+   1
+  ],
+  "r_probe_mm": 1.5,
+  "tilt_mrad": 50.519316380847634,
+  "w_mm": 2.5
+ }
+}
