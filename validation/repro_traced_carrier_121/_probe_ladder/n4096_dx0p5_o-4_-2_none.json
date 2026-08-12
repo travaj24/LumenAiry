@@ -1,0 +1,484 @@
+{
+ "tag": "n4096_dx0p5_o-4_-2_none",
+ "N": 4096,
+ "dx0": 5e-07,
+ "order": [
+  -4,
+  -2
+ ],
+ "rs": 4,
+ "nw": 1,
+ "perturb": {
+  "kind": "none",
+  "eps": 1e-12,
+  "seed": 1
+ },
+ "traced_kwargs": {},
+ "lumenairy_version": "5.34.0",
+ "window_launch_m": 0.002048,
+ "doe_period_m": 0.00011375662596454582,
+ "amp_re": -0.07503823882537655,
+ "amp_im": 0.14863700444100564,
+ "tilt_L": -0.0460632508706186,
+ "tilt_M": -0.0230316254353093,
+ "chain_a": {
+  "cold": false,
+  "wall_s": 0.83,
+  "R_doe": 703.642736069825,
+  "dx_doe": 1.2808338702737506e-05,
+  "P_in": 6.830658220122914e-08,
+  "P_doe": 6.830049016412882e-08,
+  "frac_in": 0.9999108133227576,
+  "warn_n": 0,
+  "warn_counts": {
+   "raw": {},
+   "unique": {}
+  },
+  "newton": [],
+  "undersample": [],
+  "messages": [],
+  "c6_calls": 0,
+  "c6": []
+ },
+ "chain_b": {
+  "wall_s": 538.49,
+  "R_ap": -0.0077124254602782,
+  "dx_ap": 8.30281162597413e-06,
+  "n_ap": 4096,
+  "window_ap_m": 0.03400831641999004,
+  "L": -0.0006871912839565426,
+  "M": -0.0003435956419782713,
+  "x_c": -0.001915097939205574,
+  "y_c": -0.000957548969602787,
+  "warn_n": 21,
+  "warn_counts": {
+   "raw": {
+    "undersampled_exit": 6,
+    "newton_nonconv": 12,
+    "decentred_fit": 3
+   },
+   "unique": {
+    "undersampled_exit": 5,
+    "newton_nonconv": 6,
+    "decentred_fit": 3
+   }
+  },
+  "newton": [
+   {
+    "bad": 277360,
+    "tot": 1048576,
+    "pct": 26.5,
+    "tol": 1.281e-07,
+    "iters": 12
+   },
+   {
+    "bad": 240375,
+    "tot": 1048576,
+    "pct": 22.9,
+    "tol": 1.281e-07,
+    "iters": 12
+   },
+   {
+    "bad": 80974,
+    "tot": 1048576,
+    "pct": 7.7,
+    "tol": 1.281e-07,
+    "iters": 12
+   },
+   {
+    "bad": 32602,
+    "tot": 1048576,
+    "pct": 3.1,
+    "tol": 1.123e-07,
+    "iters": 12
+   },
+   {
+    "bad": 385902,
+    "tot": 1048576,
+    "pct": 36.8,
+    "tol": 9.608e-08,
+    "iters": 12
+   },
+   {
+    "bad": 874847,
+    "tot": 1048576,
+    "pct": 83.4,
+    "tol": 8.303e-08,
+    "iters": 12
+   }
+  ],
+  "undersample": [
+   {
+    "na_exit": 0.0515,
+    "dx_need_um": 12.71,
+    "dx_have_um": 12.81,
+    "ratio": 1.00786782061369
+   },
+   {
+    "na_exit": 0.0866,
+    "dx_need_um": 7.56,
+    "dx_have_um": 12.81,
+    "ratio": 1.6944444444444446
+   },
+   {
+    "na_exit": 0.1619,
+    "dx_need_um": 4.05,
+    "dx_have_um": 11.23,
+    "ratio": 2.77283950617284
+   },
+   {
+    "na_exit": 0.3564,
+    "dx_need_um": 1.84,
+    "dx_have_um": 9.61,
+    "ratio": 5.2228260869565215
+   },
+   {
+    "na_exit": 0.2973,
+    "dx_need_um": 2.2,
+    "dx_have_um": 8.3,
+    "ratio": 3.772727272727273
+   }
+  ],
+  "messages": [
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced: the exit beam converges at NA_exit=0.0515, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 12.71 um but the grid has dx = 12.81 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 12.71 um) for halo-faithfu"
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 277360/1048576 pixels (26.5%) did not converge to tol=1.281e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 277360/1048576 pixels (26.5%) did not converge to tol=1.281e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced: the exit beam converges at NA_exit=0.0515, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 12.71 um but the grid has dx = 12.81 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 12.71 um) for halo-faithfu"
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 240375/1048576 pixels (22.9%) did not converge to tol=1.281e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 240375/1048576 pixels (22.9%) did not converge to tol=1.281e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced: the exit beam converges at NA_exit=0.0866, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 7.56 um but the grid has dx = 12.81 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 7.56 um) for halo-faithful "
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 80974/1048576 pixels (7.7%) did not converge to tol=1.281e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 80974/1048576 pixels (7.7%) did not converge to tol=1.281e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "propagate_traced_carrier_chain: at groups[3] (Lens S21-S22) the congruence's chief ray sits 3.6052 mm off the OPTICAL AXIS = 0.686 beam amplitude radii (w = 5.2571 mm), above decentre_fit_frac=0.5.  A decentred hand-off measurably costs IMAGE quality end to end.  MEASURED on the K=-n^2 conic stand-in, whose truth is decentre-INVARIANT (chain / independent ray-trace + Kirchhoff oracle, EE2 ratio): "
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced: the exit beam converges at NA_exit=0.1619, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 4.05 um but the grid has dx = 11.23 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 4.05 um) for halo-faithful "
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 32602/1048576 pixels (3.1%) did not converge to tol=1.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 32602/1048576 pixels (3.1%) did not converge to tol=1.123e-07 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "propagate_traced_carrier_chain: at groups[4] (Lens S23-S24) the congruence's chief ray sits 3.6948 mm off the OPTICAL AXIS = 0.891 beam amplitude radii (w = 4.1460 mm), above decentre_fit_frac=0.5.  A decentred hand-off measurably costs IMAGE quality end to end.  MEASURED on the K=-n^2 conic stand-in, whose truth is decentre-INVARIANT (chain / independent ray-trace + Kirchhoff oracle, EE2 ratio): "
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced: the exit beam converges at NA_exit=0.3564, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 1.84 um but the grid has dx = 9.61 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 1.84 um) for halo-faithful r"
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 385902/1048576 pixels (36.8%) did not converge to tol=9.608e-08 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 385902/1048576 pixels (36.8%) did not converge to tol=9.608e-08 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "propagate_traced_carrier_chain: at groups[5] (Lens S25-S27) the congruence's chief ray sits 3.3723 mm off the OPTICAL AXIS = 1.081 beam amplitude radii (w = 3.1196 mm), above decentre_fit_frac=0.5.  A decentred hand-off measurably costs IMAGE quality end to end.  MEASURED on the K=-n^2 conic stand-in, whose truth is decentre-INVARIANT (chain / independent ray-trace + Kirchhoff oracle, EE2 ratio): "
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced: the exit beam converges at NA_exit=0.2973, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 2.20 um but the grid has dx = 8.30 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 2.20 um) for halo-faithful r"
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 874847/1048576 pixels (83.4%) did not converge to tol=8.303e-08 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   },
+   {
+    "cat": "RuntimeWarning",
+    "msg": "apply_real_lens_traced Newton inversion: 874847/1048576 pixels (83.4%) did not converge to tol=8.303e-08 m within 12 iterations.  Affected pixels keep their last Newton value, which may carry residual error.  Increase newton_max_iters if this matters for your tolerance budget."
+   }
+  ],
+  "c6_calls": 6,
+  "c6": [
+   {
+    "engaged": true,
+    "flag": true,
+    "remap": true,
+    "degree": 6,
+    "n_terms": 27,
+    "n_samples": 282759,
+    "grad_a_rms": 3.944928577242252e-06,
+    "grad_a_residual_rms": 8.783750459631697e-07,
+    "w_beam": 0.006314700506957497,
+    "centre": "(-0.0003228712126239177, -0.00016143560631195884)",
+    "stride": 4,
+    "r_fit": 0.012629401013914994,
+    "r_freeze": 0.015786751267393744,
+    "ray_fit_radius": 0.012629401013914994,
+    "grad_a_fit_max_launch": 0.00011352958062801235
+   },
+   {
+    "engaged": true,
+    "flag": true,
+    "remap": true,
+    "degree": 6,
+    "n_terms": 27,
+    "n_samples": 282707,
+    "grad_a_rms": 3.8862560943478575e-06,
+    "grad_a_residual_rms": 4.3207283462323386e-07,
+    "w_beam": 0.006314812518402184,
+    "centre": "(-0.0012472690952722311, -0.0006236345476361156)",
+    "stride": 4,
+    "r_fit": 0.012629625036804369,
+    "r_freeze": 0.01578703129600546,
+    "ray_fit_radius": 0.012629625036804369,
+    "grad_a_fit_max_launch": 0.0001150433474580424
+   },
+   {
+    "engaged": true,
+    "flag": true,
+    "remap": true,
+    "degree": 6,
+    "n_terms": 27,
+    "n_samples": 282725,
+    "grad_a_rms": 3.880140693032421e-06,
+    "grad_a_residual_rms": 1.7907843606462674e-07,
+    "w_beam": 0.006314887192836206,
+    "centre": "(-0.0015759830503562873, -0.0007879915251781436)",
+    "stride": 4,
+    "r_fit": 0.012629774385672412,
+    "r_freeze": 0.015787217982090516,
+    "ray_fit_radius": 0.012629774385672412,
+    "grad_a_fit_max_launch": 0.00011475595166421353
+   },
+   {
+    "engaged": true,
+    "flag": true,
+    "remap": true,
+    "degree": 6,
+    "n_terms": 27,
+    "n_samples": 259817,
+    "grad_a_rms": 0.0003197025738490001,
+    "grad_a_residual_rms": 1.252132667475271e-06,
+    "w_beam": 0.0052571121174836135,
+    "centre": "(-0.0032245576788717083, -0.0016122788394358541)",
+    "stride": 4,
+    "r_fit": 0.010514224234967227,
+    "r_freeze": 0.013142780293709034,
+    "ray_fit_radius": 0.010514224234967227,
+    "grad_a_fit_max_launch": 0.012224632860758347
+   },
+   {
+    "engaged": true,
+    "flag": true,
+    "remap": true,
+    "degree": 6,
+    "n_terms": 27,
+    "n_samples": 222192,
+    "grad_a_rms": 0.0002760101539665399,
+    "grad_a_residual_rms": 3.917710337942628e-06,
+    "w_beam": 0.004146026015273164,
+    "centre": "(-0.0033047099515154067, -0.0016523549757577033)",
+    "stride": 4,
+    "r_fit": 0.008292052030546329,
+    "r_freeze": 0.010365065038182911,
+    "ray_fit_radius": 0.008292052030546329,
+    "grad_a_fit_max_launch": 0.012059708448457636
+   },
+   {
+    "engaged": true,
+    "flag": true,
+    "remap": true,
+    "degree": 6,
+    "n_terms": 27,
+    "n_samples": 168050,
+    "grad_a_rms": 0.0016459103726761425,
+    "grad_a_residual_rms": 9.494345160553053e-06,
+    "w_beam": 0.0031196428926525454,
+    "centre": "(-0.003016240777531001, -0.0015081203887655004)",
+    "stride": 4,
+    "r_fit": 0.006239285785305091,
+    "r_freeze": 0.007799107231631363,
+    "ray_fit_radius": 0.006239285785305091,
+    "grad_a_fit_max_launch": 0.03322185289672611
+   }
+  ]
+ },
+ "aperture": {
+  "power": 6.82732338910749e-08,
+  "w_amp": 0.0011803216709444545,
+  "peak": 0.17753122201471935,
+  "piston_w": 1.055548186376445,
+  "piston_w_absacc": 702.827420241522,
+  "piston_c": 0.678145624743489,
+  "amp_c": 0.1775074422125978
+ },
+ "field_sha256": "ddd2f0b453c080c63f3e6bbaa19b85b81b033ce65be150aefa6ac50624118aaf",
+ "env_sha256": "75b5308139aa12202449d32438d8d4a77625288e907f174c0eb6e418accb4a3f",
+ "stages": [
+  {
+   "name": "Lens S14-S15",
+   "R_in": 703.6497360698249,
+   "R_out": 703.6647904201881,
+   "dx": 1.2808466123040912e-05,
+   "w": 0.006314791185302691,
+   "power": 6.829852293285042e-08,
+   "gap_phi_sag_in": 2.736333833786663e-12,
+   "gap_phi_sag_out": 2.7363610554658686e-12,
+   "gap_phi_drop": 2.7221679205405587e-17,
+   "gap_na": 8.974279090463558e-06,
+   "gap_env_theta": 0.00012485000052412905,
+   "gap_env_nyq_frac": 0.00244140625,
+   "gap_env_phi_drop": 1.0196861003110307e-12,
+   "gap_env_spectral": 1.0,
+   "gap_z_eff": 0.006999930363080539,
+   "L_out": -0.0460632508706186,
+   "M_out": -0.0230316254353093,
+   "x_c_out": -0.0010166468005408614,
+   "y_c_out": -0.0005083234002704307
+  },
+  {
+   "name": "Lens S16-S17",
+   "R_in": 703.6697904201881,
+   "R_out": 703.6719186699763,
+   "dx": 1.2808557135596162e-05,
+   "w": 0.006314866478507307,
+   "power": 6.829711900786192e-08,
+   "gap_phi_sag_in": 2.7362777128065912e-12,
+   "gap_phi_sag_out": 2.736297155854972e-12,
+   "gap_phi_drop": 1.9443048380839426e-17,
+   "gap_na": 8.974162756787615e-06,
+   "gap_env_theta": 0.0001248487584999246,
+   "gap_env_nyq_frac": 0.0024414062500000004,
+   "gap_env_phi_drop": 7.283203024492541e-13,
+   "gap_env_spectral": 1.0,
+   "gap_z_eff": 0.004999964471972024,
+   "L_out": -0.0460632508706186,
+   "M_out": -0.0230316254353093,
+   "x_c_out": -0.0013453607556249175,
+   "y_c_out": -0.0006726803778124588
+  },
+  {
+   "name": "Lens S18-S20",
+   "R_in": 703.6769186699763,
+   "R_out": -0.2631941843927877,
+   "dx": 1.2808648147876145e-05,
+   "w": 0.0059843198272345735,
+   "power": 6.829534879404313e-08,
+   "gap_phi_sag_in": 2.736323937202705e-12,
+   "gap_phi_sag_out": 2.7363433803825793e-12,
+   "gap_phi_drop": 1.944317987262219e-17,
+   "gap_na": 8.974177929635565e-06,
+   "gap_env_theta": 0.0001248478713738876,
+   "gap_env_nyq_frac": 0.0024414062499999996,
+   "gap_env_phi_drop": 7.282996020950465e-13,
+   "gap_env_spectral": 1.0,
+   "gap_z_eff": 0.0049999644723319235,
+   "L_out": -0.04175856277593141,
+   "M_out": -0.020879281387965704,
+   "x_c_out": -0.001866814948372994,
+   "y_c_out": -0.000933407474186497
+  },
+  {
+   "name": "Lens S21-S22",
+   "R_in": -0.23071552415454136,
+   "R_out": -0.0601479794157136,
+   "dx": 1.122803673632129e-05,
+   "w": 0.0048463654522243015,
+   "power": 6.829339953943921e-08,
+   "gap_phi_sag_in": 0.042122481960766164,
+   "gap_phi_sag_out": 0.03692448800375048,
+   "gap_phi_drop": 0.005197993957015693,
+   "gap_na": 0.022730279166055925,
+   "gap_env_theta": 0.003918286352145145,
+   "gap_env_nyq_frac": 0.07662282630114853,
+   "gap_env_phi_drop": 5.236014596581124e-06,
+   "gap_env_spectral": 1.0,
+   "gap_z_eff": 0.03705079891307976,
+   "L_out": -0.006605208475028527,
+   "M_out": -0.0033026042375142637,
+   "x_c_out": -0.0032473888857301476,
+   "y_c_out": -0.0016236944428650738
+  },
+  {
+   "name": "Lens S23-S24",
+   "R_in": -0.05147005457040713,
+   "R_out": -0.02446247952797172,
+   "dx": 9.608097714185474e-06,
+   "w": 0.0036199944613689887,
+   "power": 6.829085778320745e-08,
+   "gap_phi_sag_in": 1.5161411442016957,
+   "gap_phi_sag_out": 1.2973979872067651,
+   "gap_phi_drop": 0.2187431569949301,
+   "gap_na": 0.0805239371786759,
+   "gap_env_theta": 0.0034727648021559685,
+   "gap_env_nyq_frac": 0.059530275992688175,
+   "gap_env_phi_drop": 8.843055862042706e-07,
+   "gap_env_spectral": 1.0,
+   "gap_z_eff": 0.010141035390832968,
+   "L_out": 0.04907347265758019,
+   "M_out": 0.024536736328790096,
+   "x_c_out": -0.0031795723788272568,
+   "y_c_out": -0.0015897861894136284
+  },
+  {
+   "name": "Lens S25-S27",
+   "R_in": -0.021139185452405257,
+   "R_out": -0.0077124254602782,
+   "dx": 8.30281162597413e-06,
+   "w": 0.001180017756508584,
+   "power": 6.82732338910749e-08,
+   "gap_phi_sag_in": 7.019564161289027,
+   "gap_phi_sag_out": 6.065937364643335,
+   "gap_phi_drop": 0.9536267966456919,
+   "gap_na": 0.14791007993327787,
+   "gap_env_theta": 0.013224262654160943,
+   "gap_env_nyq_frac": 0.19398474470111768,
+   "gap_env_phi_drop": 7.051563986432924e-05,
+   "gap_env_spectral": 1.0,
+   "gap_z_eff": 0.0038457495664632755,
+   "L_out": -0.0006871912839565426,
+   "M_out": -0.0003435956419782713,
+   "x_c_out": -0.001915097939205574,
+   "y_c_out": -0.000957548969602787
+  },
+  {
+   "name": "<target>",
+   "target": 1.0,
+   "L": -0.0006871912839565426,
+   "M": -0.0003435956419782713,
+   "x_c": -0.001915097939205574,
+   "y_c": -0.000957548969602787,
+   "dx": 8.30281162597413e-06
+  }
+ ],
+ "wall_s": 544.87,
+ "pid": 44596
+}

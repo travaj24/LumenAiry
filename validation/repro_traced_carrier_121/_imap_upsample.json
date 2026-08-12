@@ -1,0 +1,105 @@
+{
+ "upsample": {
+  "dx_um": 1.5324,
+  "n_fine": 8192,
+  "order": [
+   -4,
+   -2
+  ],
+  "rows": [
+   {
+    "coarse_grid": 95,
+    "coarse_pitch_um": 133.3188,
+    "coarse_unconverged": 60,
+    "fine_points": 281054,
+    "fit_order": 6,
+    "newton_fine_points": 1048576,
+    "newton_fine_seconds": 0.6228752000024542,
+    "newton_iters_mean": 2.6616907119750977,
+    "newton_us_per_point": 0.5940200805687468,
+    "profile": [
+     {
+      "max_waves": 4.104022041629869e-05,
+      "n": 46134,
+      "r_hi_w": 0.5,
+      "r_lo_w": 0.0,
+      "rms_waves": 1.4367210378030375e-05
+     },
+     {
+      "max_waves": 4.4180792929967766e-05,
+      "n": 82679,
+      "r_hi_w": 1.0,
+      "r_lo_w": 0.5,
+      "rms_waves": 1.7148797155264222e-05
+     },
+     {
+      "max_waves": 4.025776743348558e-05,
+      "n": 91935,
+      "r_hi_w": 1.5,
+      "r_lo_w": 1.0,
+      "rms_waves": 1.2408653648419166e-05
+     },
+     {
+      "max_waves": 1.6743998575269272e-05,
+      "n": 60306,
+      "r_hi_w": 2.0,
+      "r_lo_w": 1.5,
+      "rms_waves": 5.4285208132079235e-06
+     }
+    ],
+    "stride": 8,
+    "support_plateau_um": 188.5412550793062,
+    "support_radius_mm": 6.1953483121925474,
+    "upsample_max_waves": 4.4180792929967766e-05,
+    "upsample_rms_waves": 1.330726672843673e-05
+   },
+   {
+    "coarse_grid": 95,
+    "coarse_pitch_um": 133.3188,
+    "coarse_unconverged": 38,
+    "fine_points": 281054,
+    "fit_order": 10,
+    "newton_fine_points": 1048576,
+    "newton_fine_seconds": 0.7161181999836117,
+    "newton_iters_mean": 2.7288894653320312,
+    "newton_us_per_point": 0.6829435348354451,
+    "profile": [
+     {
+      "max_waves": 4.116122995880382e-05,
+      "n": 46134,
+      "r_hi_w": 0.5,
+      "r_lo_w": 0.0,
+      "rms_waves": 1.4405427803619425e-05
+     },
+     {
+      "max_waves": 4.443938325893097e-05,
+      "n": 82679,
+      "r_hi_w": 1.0,
+      "r_lo_w": 0.5,
+      "rms_waves": 1.719494496886307e-05
+     },
+     {
+      "max_waves": 4.031638784480966e-05,
+      "n": 91935,
+      "r_hi_w": 1.5,
+      "r_lo_w": 1.0,
+      "rms_waves": 1.2435097531584443e-05
+     },
+     {
+      "max_waves": 1.670017495793036e-05,
+      "n": 60306,
+      "r_hi_w": 2.0,
+      "r_lo_w": 1.5,
+      "rms_waves": 5.54895922768784e-06
+     }
+    ],
+    "stride": 8,
+    "support_plateau_um": 188.5412550793062,
+    "support_radius_mm": 6.1953483121925474,
+    "upsample_max_waves": 4.443938325893097e-05,
+    "upsample_rms_waves": 1.3350230896291613e-05
+   }
+  ],
+  "sub": 87
+ }
+}
