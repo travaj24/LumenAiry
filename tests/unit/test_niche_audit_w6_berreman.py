@@ -636,41 +636,216 @@ def test_o7_split_fwd_bwd_matches_the_jax_twin_on_physical_tensors():
     assert worst < 1e-11, f"numpy/JAX mode partition drift {worst:.3e}"
 
 
+def _o7_general_draws(n):
+    """The DEGENERATE-fallback family: GENERAL complex ``Delta`` inputs (the
+    unreachable-but-latent bianisotropic class the S1-13 fix was written for),
+    at ``|Kx|, |Ky| <= 2``.  ~19% of draws do NOT flag exactly two modes
+    forward (measured 57 of 300)."""
+    rng = np.random.default_rng(7)
+    for it in range(n):
+        e = (rng.normal(size=(3, 3)) * 3
+             + 1j * rng.normal(size=(3, 3)) * 3).astype(complex)
+        if it % 3 == 0:
+            e = e + e.T
+        yield e, rng.uniform(-2, 2), rng.uniform(-2, 2)
+
+
+def _o7_legacy_decay_modes(e, Kx, Ky):
+    """The PRE-S1-13 numpy partition: rank by DECAY (``argsort(Re gam)``)
+    instead of by the forward FLAG.  This is the fork the S1-13 fix removed --
+    the defect the claim below has to keep catching."""
+    D = B._berreman_delta(np.asarray(e, dtype=complex), Kx, Ky)
+    gam, Psi = np.linalg.eig(D)
+    order = np.argsort(gam.real)
+    f, b = order[:2], order[2:]
+    return (Psi[:2, f], Psi[2:, f], -gam[f],
+            Psi[:2, b], Psi[2:, b], -gam[b])
+
+
+def _o7_degenerate_score(eig, n=300, rule_modes=None):
+    """``dict(hits, corr, rule, elem)`` for the degenerate branch.
+
+    ``rule`` is the RULE arm: the JAX twin is handed NUMPY's OWN raw
+    decomposition, so both implementations partition the same spectrum in the
+    same raw order and the element-wise comparison is the pure
+    rule-equality claim -- portable by construction, no LAPACK left in it.
+    ``elem`` is the SHIPPED stack, element-wise, restricted to the draws where
+    the two ``eig`` backends returned the raw spectrum in the same order
+    (``corr``); off that class the partition is a function of the raw order in
+    this branch, so nothing element-wise is well posed.  ``rule_modes``
+    replaces the twin arm with an injected partition rule.
+    """
+    import jax.numpy as jnp
+
+    from lumenairy.elements._berreman_jax import _layer_modes_jax
+    hits = corr = diff = 0
+    worst_rule = worst_elem = 0.0
+    for e, Kx, Ky in _o7_general_draws(n):
+        if _n_forward(e, Kx, Ky) == 2:
+            continue
+        hits += 1
+        ej = jnp.asarray(e, jnp.complex128)
+        D = B._berreman_delta(np.asarray(e, dtype=complex), Kx, Ky)
+        gn, Pn = np.linalg.eig(D)
+        gj = np.asarray(eig(jnp.asarray(D, jnp.complex128))[0])
+        scale = max(1.0, float(np.max(np.abs(gn))))
+        # PRECONDITION, per draw: both backends solved the same eigenproblem.
+        # Compared by POWER SUMS, not by sorting -- this family puts modes at
+        # ``Re(gam) = +-0`` where a lexicographic sort ties, which is where
+        # this file's spurious 0.74 drift came from.  Measured 0.0 on both
+        # mounts; the bar only separates "same spectrum, different
+        # bookkeeping" from "different spectrum", an O(1) event.
+        gap = max(abs(complex(np.sum(gn ** k) - np.sum(gj ** k))) / scale ** k
+                  for k in (1, 2, 3, 4))
+        assert gap < 1e-7, (
+            f"numpy and JAX returned DIFFERENT Berreman spectra (worst "
+            f"relative power-sum gap {gap:.3e}): this is not a partition "
+            f"question at all, one of the two eigensolves is wrong")
+
+        def _numpy_order_eig(_A, gam=gn, Psi=Pn):
+            return jnp.asarray(gam), jnp.asarray(Psi)
+
+        mn = B._layer_modes(e, Kx, Ky)
+        mr = (rule_modes(e, Kx, Ky) if rule_modes is not None
+              else _layer_modes_jax(ej, Kx, Ky, jnp, _numpy_order_eig))
+        this = max(float(np.max(np.abs(a - np.asarray(b))))
+                   for a, b in zip(mn, mr))
+        worst_rule = max(worst_rule, this)
+        diff += int(this > 1e-11)
+        if float(np.max(np.abs(gn - gj))) / scale < 1e-11:
+            corr += 1
+            mj = _layer_modes_jax(ej, Kx, Ky, jnp, eig)
+            for a, b in zip(mn, mj):
+                worst_elem = max(worst_elem,
+                                 float(np.max(np.abs(a - np.asarray(b)))))
+    return dict(hits=hits, corr=corr, diff=diff, rule=worst_rule,
+                elem=worst_elem)
+
+
 def test_o7_split_fwd_bwd_matches_the_jax_twin_in_the_degenerate_fallback():
     """ORACLE 7 (S1-13, the DEGENERATE branch).  The S1-13 fix aligned the two
     backends specifically for inputs where NOT exactly two modes flag forward --
     numpy used to rank by decay while JAX kept flag-then-index order.  Physical
     symmetric media almost always give 2 + 2, so this drives the branch with
     GENERAL complex ``Delta`` inputs (the unreachable-but-latent bianisotropic
-    class the fix was written for), where ~21% of draws land there
-    (measured 8493 / 40000).  Both the hit count and element-wise agreement are
-    pinned: measured worst 0.0 over the hits."""
+    class the fix was written for), where ~19% of draws land there (measured
+    57 of 300).
+
+    2026-08-12 (``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md`` S5).  This was
+    an element-wise comparison across the two ``eig`` backends at exact
+    bit-identity (``worst 0.0``) on GENERAL complex ``Delta`` -- i.e. on
+    exactly the inputs where two LAPACKs are MOST likely to differ in raw
+    order.  It is the sibling of the pin that read 1.146 on a runner
+    (``FIX_RUNNER_PINS_2026_08_12`` S4), with the luck still holding.
+
+    ADJUDICATED, and the treatment is NOT its sibling's.  Pin 2's physical
+    family could be re-stated on partition-INVARIANT observables because a
+    column re-ordering there leaves the partition alone.  Here it does not:
+    when the flag count is not two, the partition is decided by a STABLE
+    argsort over the raw order, so the raw order IS part of the partition --
+    measured, a ``[1,0,3,2]`` permutation moves the invariants by 1.6007 (on
+    both mounts) against 5.618e-15 for the physical family.  That is the
+    branch's definition, not a defect, so invariants are the wrong object and
+    the claim is split differently:
+
+    * the PRECONDITION, per draw -- both backends solved the same
+      eigenproblem, by power sums rather than by sorting (measured 0.0);
+    * the RULE, on EVERY draw -- hand the JAX twin numpy's OWN raw
+      decomposition, so both implementations partition the same spectrum in
+      the same order.  What remains is purely "do the two rules agree", with
+      no LAPACK left in it: measured EXACTLY 0.0 on both mounts;
+    * the COLUMN ORDER, on the draws where the shipped backends returned the
+      raw spectrum in the same order -- the original element-wise comparison,
+      verbatim (measured 1.049e-13, tol 1e-11, 57 of 57 draws on both mounts;
+      the residual is the two ``Delta`` assemblies, not the partition).
+
+    The fail-before below drives both directions."""
+    _jax()
+    from lumenairy.elements.rcwa import _jax_eig_stable
+    r = _o7_degenerate_score(_jax_eig_stable())
+    assert r["hits"] >= 20, (
+        f"the degenerate n_forward != 2 branch was reached only {r['hits']} "
+        f"times -- the S1-13 twin-agreement claim is no longer exercised")
+    assert r["rule"] < 1e-11, (
+        f"numpy/JAX RULE drift in the degenerate branch: {r['rule']:.3e}.  "
+        f"Both sides were handed the SAME raw decomposition, so this is the "
+        f"two partition rules disagreeing -- the S1-13 fork, back")
+    assert r["corr"] > 0, (
+        f"none of the {r['hits']} degenerate draws had the two eig backends "
+        f"in raw-order correspondence, so the column-order claim below is "
+        f"vacuous on this build")
+    print(f"\nO7 degenerate: {r['corr']} of {r['hits']} draws in raw-order "
+          f"correspondence; rule {r['rule']:.3e}, elementwise over the "
+          f"correspondence class {r['elem']:.3e}")
+    assert r["elem"] < 1e-11, (
+        f"numpy/JAX partition drift in the degenerate branch: "
+        f"{r['elem']:.3e} on draws where both eig backends returned the raw "
+        f"spectrum in the SAME order")
+
+
+def test_o7_degenerate_claim_survives_a_reorder_and_still_catches_a_rule_fork():
+    """THE FAIL-BEFORE for the degenerate-branch claim, driven both ways
+    (``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md`` S5).
+
+    (a) A raw-order PERMUTATION on the ``eig`` the twin is HANDED -- what a
+        different LAPACK build is entitled to return, and what the sibling
+        pin's runner reading was.  It must knock the ELEMENT-WISE comparison
+        over (measured 1.521e+01, and the correspondence class empties from 57
+        to 0) and leave the RULE claim exactly where it was (0.0), because the
+        rule claim is stated on a decomposition both sides share.  Note this
+        is the OPPOSITE of the physical family's behaviour, where the
+        partition invariants were the thing that did not move -- here they
+        move by 1.6007, which is why they are not used.
+
+    (b) The PRE-S1-13 decay ranking, the fork the fix removed.  The RULE claim
+        must fire on it: measured worst 4.736e+01 over 41 of the 57 degenerate
+        draws.  Without this the restructure would have traded a
+        runner-fragile pin for a vacuous one."""
     _jax()
     import jax.numpy as jnp
 
-    from lumenairy.elements._berreman_jax import _layer_modes_jax
     from lumenairy.elements.rcwa import _jax_eig_stable
     eig = _jax_eig_stable()
-    rng = np.random.default_rng(7)
-    hits, worst = 0, 0.0
-    for it in range(300):
-        e = (rng.normal(size=(3, 3)) * 3
-             + 1j * rng.normal(size=(3, 3)) * 3).astype(complex)
-        if it % 3 == 0:
-            e = e + e.T
-        Kx, Ky = rng.uniform(-2, 2), rng.uniform(-2, 2)
-        if _n_forward(e, Kx, Ky) == 2:
-            continue
-        hits += 1
-        mn = B._layer_modes(e, Kx, Ky)
-        mj = _layer_modes_jax(jnp.asarray(e, jnp.complex128), Kx, Ky, jnp, eig)
-        for a, b in zip(mn, mj):
-            worst = max(worst, float(np.max(np.abs(a - np.asarray(b)))))
-    assert hits >= 20, (
-        f"the degenerate n_forward != 2 branch was reached only {hits} times -- "
-        f"the S1-13 twin-agreement claim is no longer exercised")
-    assert worst < 1e-11, (
-        f"numpy/JAX partition drift in the degenerate branch: {worst:.3e}")
+    base = _o7_degenerate_score(eig)
+
+    def eig_reordered(A):
+        lam, V = eig(A)
+        p = jnp.asarray([1, 0, 3, 2])
+        return lam[p], V[:, p]
+
+    # (a) the reorder empties the correspondence class and breaks element-wise
+    ra = _o7_degenerate_score(eig_reordered)
+    assert ra["corr"] < base["corr"], (
+        f"the reorder injector left {ra['corr']} of {base['corr']} draws in "
+        f"raw-order correspondence, so it did not reproduce the CI condition")
+    assert abs(ra["rule"] - base["rule"]) < 1e-11, (
+        f"a pure column re-ordering of the SHIPPED eig moved the rule claim "
+        f"{base['rule']:.3e} -> {ra['rule']:.3e}; it is not supposed to see it")
+    with pytest.raises(AssertionError, match="partition drift"):
+        # the original claim, verbatim, on the injected arm
+        from lumenairy.elements._berreman_jax import _layer_modes_jax
+        worst = 0.0
+        for e, Kx, Ky in _o7_general_draws(300):
+            if _n_forward(e, Kx, Ky) == 2:
+                continue
+            mn = B._layer_modes(e, Kx, Ky)
+            mj = _layer_modes_jax(jnp.asarray(e, jnp.complex128), Kx, Ky,
+                                  jnp, eig_reordered)
+            for a, b in zip(mn, mj):
+                worst = max(worst, float(np.max(np.abs(a - np.asarray(b)))))
+        assert worst < 1e-11, (
+            f"numpy/JAX partition drift in the degenerate branch: {worst:.3e}")
+
+    # (b) the pre-S1-13 decay ranking must break the RULE claim
+    legacy = _o7_degenerate_score(eig, rule_modes=_o7_legacy_decay_modes)
+    assert legacy["rule"] > 1e-2, (
+        f"the PRE-S1-13 decay ranking reads {legacy['rule']:.3e} against the "
+        f"shipped rule -- the claim no longer catches the fork it exists for")
+    assert legacy["diff"] >= 20, (
+        f"the legacy rule differs on only {legacy['diff']} of the "
+        f"{legacy['hits']} degenerate draws, so the bar is being carried by a "
+        f"handful of them")
+    assert base["diff"] == 0                    # the shipped rules never fork
 
 
 def test_o7b_gain_layer_matches_the_scalar_tmm_exactly():

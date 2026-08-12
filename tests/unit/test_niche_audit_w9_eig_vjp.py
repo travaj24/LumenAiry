@@ -311,10 +311,128 @@ def test_pmm1d_near_normal_angle_gradient_is_linear_in_theta(theta, bound):
 def test_pmm1d_off_normal_angle_gradient_no_regression():
     """The already-clean off-normal gradient must not move.  Measured
     |AD - FD| / |FD| = 8.2e-06 (FD truncation dominated) both pre- and
-    post-fix."""
+    post-fix.
+
+    2026-08-12 (``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md`` S3).  This read
+    ``nan`` on WSL py3.12 / jax 0.10.2 -- and ONLY there -- until the
+    incident-amplitude projection stopped going through ``jnp.linalg.lstsq``.
+    The projection matrix carries a structurally repeated singular value, the
+    SVD gradient divides by the square difference of two singular values with
+    a guard on the diagonal only, and whether that difference underflows to
+    zero is a per-LAPACK round-off fact.  Post-fix, both mounts read
+    0.0363046947 against a Richardson-extrapolated FD oracle of the same
+    (3.5e-11 [W] / 2.2e-11 [M] relative).  See the fail-before below."""
     ad = float(jax.grad(_pmm1)(jnp.asarray(0.3)))
     fd = _central(_pmm1, 0.3, 3e-4)
     assert abs(ad - fd) < 1e-4 * abs(fd)       # measured 8.2e-06 (12x)
+
+
+def test_the_lstsq_projection_route_is_refuted_on_a_degenerate_projection(
+        monkeypatch):
+    """THE FAIL-BEFORE for the 2026-08-12 projection fix, driven both ways
+    (``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md`` S3).
+
+    The defect is NOT the eig VJP this file is about: ``_EIG_TAU_REL`` at
+    1e-12 / 1e-10 / 1e-8 / 1e-6 all still gave ``nan``.  It is
+    :func:`~lumenairy.elements.pmm._core._jpmm_min_norm_projection`'s
+    predecessor -- ``jnp.linalg.lstsq``, whose gradient is the SVD JVP and so
+    carries ``1 / (s_i^2 - s_j^2)`` with only the DIAGONAL guarded.
+
+    Three claims, none of which depends on reproducing one build's round-off:
+
+    (a) EXPOSURE, read off the SHIPPED projection.  ``Hsup`` is not
+        incidentally degenerate: 3 of its 21 singular values sit on
+        ``1 / sqrt(n_glob)`` (measured cluster spread 3.6e-16 [M] /
+        1.4e-16 [W]), so the minimum relative gap is round-off -- 8.0e-16 [M] /
+        1.3e-16 [W] at theta = 0.3, 2.0e-14 / 1.9e-14 at 0.29.  The
+        normal-incidence branch (a python-literal ``kx0 = 0.0``) carries no
+        such cluster: 5.4e-04 on both mounts, six decades away, which is why
+        the defect is OBLIQUE-only;
+
+    (b) MECHANISM, deterministic on every build.  On an EXACTLY degenerate
+        projection of the same shape (all 420 off-diagonal ``s_i^2 - s_j^2``
+        identically 0) the pre-fix route's gradient is not finite and the
+        shipped route's is -- and is RIGHT, against a central difference of
+        the same loss along a fixed direction;
+
+    (c) FORWARD NULLITY.  The two routes are the same map: they return the
+        same minimum-norm solution on the degenerate injector (measured
+        7.3e-15 on |x| ~ 1) and on the live oblique projection (3e-15), so the
+        fix changes the GRADIENT and not the answer.
+    """
+    from lumenairy.elements.pmm import _core as pmm
+
+    seen = {}
+    _real = pmm._jpmm_min_norm_projection
+
+    def _capture(A, b, xp):
+        seen.setdefault("A", A)
+        seen.setdefault("b", b)
+        return _real(A, b, xp)
+
+    monkeypatch.setattr(pmm, "_jpmm_min_norm_projection", _capture)
+
+    def _live(theta):
+        """The projection the SHIPPED solve builds, PRIMAL only (so it is a
+        concrete array and not a tracer)."""
+        seen.clear()
+        float(_pmm1(theta))
+        return np.asarray(seen["A"]), np.asarray(seen["b"])
+
+    def _rel_gap(A):
+        s = np.sort(np.linalg.svd(A, compute_uv=False))[::-1]
+        return float(np.min(np.abs(np.diff(s))) / s[0]), s
+
+    # ---- (a) exposure, on the shipped object ------------------------------
+    A03, b03 = _live(jnp.asarray(0.3))
+    gap, s = _rel_gap(A03)
+    n_glob = A03.shape[1]
+    tie = 1.0 / np.sqrt(n_glob)
+    assert gap < 1e-10, f"no repeated singular value: min rel gap {gap:.3e}"
+    assert abs(s[int(np.argmin(np.abs(np.diff(s))))] - tie) < 1e-12
+    assert int(np.sum(np.abs(s - tie) < 1e-12)) >= 3        # measured 3 of 21
+    gap29, _s29 = _rel_gap(_live(jnp.asarray(0.29))[0])
+    assert gap29 < 1e-10                                    # measured 2.0e-14
+    assert _rel_gap(_live(0.0)[0])[0] > 1e-6                # measured 5.4e-04
+
+    # ---- (b) the mechanism, on an EXACTLY degenerate projection -----------
+    m, n = A03.shape
+    A_deg = jnp.asarray(0.7 * np.eye(m, n), _CJ)
+    sd = np.asarray(jnp.linalg.svd(A_deg, full_matrices=False,
+                                   compute_uv=False))
+    off = ~np.eye(len(sd), dtype=bool)
+    assert int(np.sum(np.subtract.outer(sd ** 2, sd ** 2)[off] == 0.0)) == \
+        int(off.sum()), "the injector is not exactly degenerate on this build"
+    rng = np.random.default_rng(1013)
+    bd = jnp.asarray(rng.normal(size=m) + 1j * rng.normal(size=m), _CJ)
+    Dd = jnp.asarray(rng.normal(size=(m, n))
+                     + 1j * rng.normal(size=(m, n)), _CJ)
+
+    def _loss(t):
+        x = pmm._jpmm_min_norm_projection(A_deg + t * Dd, bd, jnp)
+        return jnp.sum(jnp.abs(x) ** 2)
+
+    ad = float(jax.grad(_loss)(jnp.asarray(0.0)))
+    fd = _central(_loss, 0.0, 1e-6)
+    assert np.isfinite(ad)
+    assert abs(ad - fd) < 1e-6 * abs(fd)        # finite AND right
+    x_fix = np.asarray(pmm._jpmm_min_norm_projection(A_deg, bd, jnp))
+    x_live_fix = np.asarray(
+        pmm._jpmm_min_norm_projection(jnp.asarray(A03), jnp.asarray(b03), jnp))
+
+    monkeypatch.setattr(pmm, "PMM_JAX_MINNORM_PROJECTION", False)
+    assert not np.isfinite(float(jax.grad(_loss)(jnp.asarray(0.0)))), (
+        "the pre-fix lstsq route returned a finite gradient on an EXACTLY "
+        "degenerate projection -- the injector no longer reaches the defect, "
+        "so this fail-before is vacuous")
+
+    # ---- (c) forward nullity ---------------------------------------------
+    x_pre = np.asarray(pmm._jpmm_min_norm_projection(A_deg, bd, jnp))
+    x_live_pre = np.asarray(
+        pmm._jpmm_min_norm_projection(jnp.asarray(A03), jnp.asarray(b03), jnp))
+    assert np.max(np.abs(x_fix - x_pre)) < 1e-13 * np.max(np.abs(x_fix))
+    assert np.max(np.abs(x_live_fix - x_live_pre)) \
+        < 1e-13 * np.max(np.abs(x_live_fix))
 
 
 @pytest.mark.parametrize("name,x0,h,bound", [

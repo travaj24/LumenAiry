@@ -212,27 +212,105 @@ def test_stack_dispersive_materials():
 # GAP1: sheared sidewalls
 # --------------------------------------------------------------------------- #
 
+#: RELATIVE energy-closure envelope for the sheared staircase
+#: (``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md`` S4, and the S9 watch item of
+#: ``FIX_RUNNER_PINS_2026_08_12`` that named it).  The claim is that a LOSSLESS
+#: staircase closes, so the residual is scored against the total it is a
+#: residual OF -- never as an absolute number on a magnitude a different BLAS
+#: is entitled to move.  Measured relative closure, both mounts, IDENTICAL at
+#: ``OPENBLAS_NUM_THREADS`` 1 / 2 / 4 / 8 (so the axis is the build, not the
+#: reduction width):
+#:
+#:     arm            [M] Windows py3.14      [W] WSL py3.12
+#:     vertical       2.665e-15               2.998e-15
+#:     shear +0.3     3.337e-13               1.192e-11
+#:     shear -0.3     4.684e-13               1.663e-13
+#:     CI ubuntu      2.25e-8   (the 4.5e-8 absolute its old comment recorded)
+#:
+#: 1e-6 is 44x above the worst reading any build has produced and 13x below the
+#: smallest defect proved to fire on it (a 1e-5 loss injection reads 1.34e-5,
+#: identical to seven figures on both mounts -- see the fail-before below).
+#: The old absolute 1e-7 sat 2.2x above the CI reading, which is the lucky-pin
+#: shape this campaign has now treated five times.
+_SHEAR_ENERGY_REL = 1e-6
+
+
+def _shear_stack(shear, eps_ridge=4.0):
+    st = RCWAStack(1.0e-6, n_superstrate=1.0, n_substrate=1.45, n_orders=6)
+    st.add_tapered_grating(0.4e-6, eps_ridge=eps_ridge, eps_groove=1.0,
+                           duty_bottom=0.5, n_slices=8, shear=shear)
+    return st.set_source(_WL).solve().efficiencies()
+
+
+def _shear_closure(R, T):
+    """``|R + T - 2| / |R + T|`` -- the closure defect scored against the total
+    it is a defect of (two polarization rows, each conserving 1)."""
+    tot = float(np.asarray(R).sum() + np.asarray(T).sum())
+    return abs(tot - 2.0) / abs(tot)
+
+
 def test_tapered_grating_shear():
-    def build(shear):
-        st = RCWAStack(1.0e-6, n_superstrate=1.0, n_substrate=1.45,
-                       n_orders=6)
-        st.add_tapered_grating(0.4e-6, eps_ridge=4.0, eps_groove=1.0,
-                               duty_bottom=0.5, n_slices=8, shear=shear)
-        return st.set_source(_WL).solve().efficiencies()
+    build = _shear_stack
     o, R0, T0 = build(0.0)
     o, Rs, Ts = build(0.3)
     ip1 = int(np.where(np.asarray(o) == 1)[0][0])
     im1 = int(np.where(np.asarray(o) == -1)[0][0])
-    # lossless staircase conserves energy with or without shear (1e-7: one
-    # CI runner's BLAS closes this 8-slice staircase at 4.5e-8)
-    assert abs(float(R0.sum() + T0.sum()) - 2.0) < 1e-7
-    assert abs(float(Rs.sum() + Ts.sum()) - 2.0) < 1e-7
+    # lossless staircase conserves energy with or without shear -- RELATIVE,
+    # see _SHEAR_ENERGY_REL for the both-mount / all-thread-width calibration
+    for arm, R, T in (("vertical", R0, T0), ("shear +0.3", Rs, Ts)):
+        rel = _shear_closure(R, T)
+        assert rel < _SHEAR_ENERGY_REL, (
+            f"{arm} arm: lossless staircase closed to {rel:.3e} relative")
     # the vertical grating is +/-1 symmetric; the sheared one is NOT
     assert abs(float(T0[0, ip1] - T0[0, im1])) < 1e-12
     assert abs(float(Ts[0, ip1] - Ts[0, im1])) > 1e-2
     # mirror shear mirrors the asymmetry
     o, Rm, Tm = build(-0.3)
     assert abs(float(Tm[0, im1]) - float(Ts[0, ip1])) < 1e-12
+
+
+def test_tapered_grating_shear_energy_envelope_still_sees_a_lossy_ridge():
+    """THE FAIL-BEFORE for the relative energy envelope
+    (``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md`` S4).
+
+    ADJUDICATION FIRST, because it decides how tight the bar may be.  Energy
+    closure on a LOSSLESS cell is the campaign's known-weak instrument (the
+    'lossless trap': a lossless cascade auto-balances power even when the
+    per-order split is wrong).  Measured here, it does not even see
+    under-resolution -- ``n_orders`` 2 / 4 / 6 / 10 all close to 5.0e-12 or
+    better [M] and 4.9e-11 or better [W] -- so this assertion never was the
+    discriminator between a resolved and an unresolved staircase.  The
+    per-order +/-1 symmetry claims above it are.  What it IS for is a GROSS
+    flux defect, and a bar sitting 2.2x above a BLAS-dependent round-off
+    reading cannot deliver that without eventually crying wolf.
+
+    So the injector is a real, controllable flux defect: a LOSSY ridge, which
+    makes ``R + T < 2`` by the absorbed fraction.  Its readings are
+    build-independent to seven figures, which is exactly what the round-off
+    they replace is not:
+
+        Im(eps_ridge)   relative closure [M]   [W]
+        1e-6            1.340145e-06           1.340145e-06
+        1e-5            1.340149e-05           1.340149e-05
+        1e-4            1.340187e-04           1.340187e-04
+
+    Three claims: the shipped lossless arm passes with room to spare, the
+    injected arm at 1e-5 breaks the envelope (13x over it), and the ladder is
+    LINEAR in the injected loss -- so the bar's position is a physical
+    threshold and not a coincidence of one cell."""
+    rel_clean = _shear_closure(*_shear_stack(0.3)[1:])
+    assert rel_clean < 0.1 * _SHEAR_ENERGY_REL   # measured <= 1.2e-11
+
+    ladder = [(k, _shear_closure(*_shear_stack(0.3, eps_ridge=4.0 + 1j * k)[1:]))
+              for k in (1e-6, 1e-5, 1e-4)]
+    assert ladder[1][1] > _SHEAR_ENERGY_REL, (
+        f"a 1e-5 lossy ridge closed to {ladder[1][1]:.3e} relative, inside the "
+        f"envelope {_SHEAR_ENERGY_REL:.0e} -- the tripwire has no teeth")
+    for (k0, r0), (k1, r1) in zip(ladder, ladder[1:]):
+        assert abs(r1 / r0 - k1 / k0) < 1e-3 * (k1 / k0), (
+            f"absorptance is not linear in Im(eps) between {k0:.0e} and "
+            f"{k1:.0e} ({r0:.3e} -> {r1:.3e}): the injector is not measuring "
+            f"the loss it injects")
 
 
 # --------------------------------------------------------------------------- #
