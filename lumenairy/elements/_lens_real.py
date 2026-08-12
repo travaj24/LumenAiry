@@ -1942,8 +1942,39 @@ _SCREEN_OBLIQUITY_TOL_WAVES = 0.05
 _SCREEN_OBLIQUITY_RESIDUAL_FRAC = 0.40
 
 
-def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny):
-    """``(L, M)`` direction-cosine grids for the input congruence ``carrier``.
+def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny,
+                                  n_medium=1.0):
+    """Transverse OPTICAL MOMENTUM ``(qx, qy) = n1 * (L, M)`` for the input
+    congruence ``carrier``, in the medium the carrier propagates in.
+
+    THE UNITS ARE THE WHOLE POINT (VERIFY_ARCHITECTURE P1-1).  A carrier's
+    ``(L, M)`` are DIRECTION COSINES of a UNIT ray vector -- ``L^2 + M^2 +
+    N^2 = 1``.  Its consumer :func:`_facet_axial_momenta` closes the momentum
+    triangle on the OPTICAL momentum ``p = n * d``, i.e. ``pz = sqrt(n1^2 -
+    |p_t|^2)`` and ``|p_t| < n1`` for a propagating ray.  Those are not the
+    same vector unless ``n1 == 1``.  Feeding a bare direction cosine in is a
+    silent factor-``n1`` error in the transverse momentum, and it is silent
+    precisely because every prescription the campaign shipped starts in air,
+    where the two coincide.
+
+    The companion accumulator ``_obl_p0*`` in :func:`apply_real_lens` IS a
+    true optical momentum (it accumulates ``-(n2 - n1) * grad sag``), so the
+    two terms that get added together were in different units.
+
+    Measured on an immersed R = 19.6 mm N-SSK2 singlet at 54.9 mrad,
+    exit-plane rms waves against an exact vector-Snell trace:
+
+    .. code-block:: text
+
+        first medium   blind      shipped q=L    correct q=n1*L
+        air            0.010922   0.000033       0.000033     (n1 = 1: same)
+        N-BK7          0.002765   0.001238       0.000006     2.2x -> 474x
+        N-SF57         0.006510   0.003704       0.000012     1.8x -> 548x
+
+    ``n_medium`` is the index of ``surfaces[0]['glass_before']``: the
+    transverse optical momentum is conserved across the stack (the facet
+    kicks are what ``_obl_p0*`` accumulates), so this is measured once at
+    the medium the carrier is actually defined in and carried forward.
 
     Uses the traced path's own carrier vocabulary
     (:func:`~._lens_traced._compute_carrier`): a :class:`TiltedCarrier`, a
@@ -1952,19 +1983,20 @@ def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny):
     the grid (a collimated tilt) collapses to two floats, so the correction
     costs no full-grid momentum arrays in the common case."""
     from ._lens_traced import TiltedCarrier, _compute_carrier
+    n1 = float(n_medium)
     if (isinstance(carrier, TiltedCarrier)
             and not np.isfinite(float(carrier.R))):
         # A collimated tilt has constant direction cosines everywhere, so take
         # them analytically -- ``_compute_carrier`` would build three full-grid
         # float64 arrays (~1.6 GB at N = 8192) to return two numbers.
-        return float(carrier.L), float(carrier.M)
+        return n1 * float(carrier.L), n1 * float(carrier.M)
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(xax, yax)
     _W, grad_fn, _w = _compute_carrier(carrier, E_in, wavelength, dx, Xg, Yg)
     L, M = grad_fn(Xg, Yg)
-    L = np.asarray(L, dtype=np.float64)
-    M = np.asarray(M, dtype=np.float64)
+    L = np.asarray(L, dtype=np.float64) * n1
+    M = np.asarray(M, dtype=np.float64) * n1
     if L.ndim and float(np.ptp(L)) == 0.0 and float(np.ptp(M)) == 0.0:
         return float(L.flat[0]), float(M.flat[0])
     return L, M
@@ -3063,8 +3095,15 @@ def apply_real_lens(
     _obl_p0x = _obl_p0y = 0.0
     _obl_total = None
     if _obl_active:
+        # The carrier's direction cosines become a transverse OPTICAL
+        # momentum in the FIRST medium -- the units _facet_axial_momenta and
+        # the ``_obl_p0*`` accumulator both work in.  Identity for a
+        # prescription starting in air; a factor n1 for an immersed one.
+        _obl_n_first = float(get_glass_index(surfaces[0]['glass_before'],
+                                             wavelength)) if surfaces else 1.0
         _obl_qx, _obl_qy = _screen_obliquity_angle_field(
-            carrier, E_in, wavelength, dx, dy, Nx, Ny)
+            carrier, E_in, wavelength, dx, dy, Nx, Ny,
+            n_medium=_obl_n_first)
         if xp is not np:
             _obl_qx = xp.asarray(_obl_qx)
             _obl_qy = xp.asarray(_obl_qy)
