@@ -506,3 +506,40 @@ is the point of the fix.  Consequences:
 4. **`_opl_piston` is not surfaced as a diagnostic.**  It could be added to the
    `_exit_na_out`-style private sinks if a consumer needs to audit the per-group
    piston without differencing two runs.
+
+---
+
+## 8. WHAT CI FOUND -- S6.2's OWED SWEEP, CLOSED
+
+**2026-08-11, appended after PR 29's GitHub CI run.**  S6.2 recorded that the
+two full `tests/unit` sweeps were reaped by the session harness at 54 % / 56 %
+and that "a clean full-sweep run on an unshared box is the one verification
+item this branch still owes".  CI was that sweep.  It reported **three
+failures**, all in files this document's verification set never reached:
+
+```text
+tests/unit/test_niche_p2_design_battery.py::test_battery_wavefront_matches_ray_oracle[singlet-w1.2mm-ap1.2x]
+tests/unit/test_niche_p2_design_battery.py::test_battery_wavefront_matches_ray_oracle[triplet-w1.6mm-ap1.2x]
+tests/unit/test_niche_e4_corrected_relay_oracle.py::test_e4_cliff_guard_recovers_oversized_aperture[7.0]
+```
+
+**Adjudicated in `docs/audits/FIX_PR29_BLAST_2026_08_11.md`: all three are TEST
+defects, not fix defects, and no library file was touched to close them.**  Both
+files scored the chain with a linear least-squares run directly on wrapped
+`np.angle` output, which a piston column cannot make piston-invariant once the
+`+-pi` branch cut has folded the data.  The absolute OPL this fix restores is
+~5e+04 rad per group, so its residue mod `2 pi` is arbitrary to a wavefront
+metric, and three cells' phase clusters landed on the cut.
+
+The identity property S4.4 claims for untilted, undecentred congruences was
+verified directly on the field rather than inferred: on the P2 triplet cell,
+`E_branch / E_v5.34.0` is a constant unit phasor -- `abs()` = 1 to 1.3e-08 and
+`arg()` = `-2.171265841566` rad to 2.3e-08 rad max over 97 571 masked pixels.
+With a piston-invariant metric, `v5.34.0` and this branch return the same
+wavefront on **24 of 24** P2 and E4 cells (8 of them bit-identical).  A fourth
+node, `[triplet-w1.6mm-ap2.5x]`, fails the same way on this box and CI did not
+report it -- the failing SET is interpreter-dependent, which is itself the
+signature of a metric that depends on the last digits of a mantissa.
+
+Post-adjudication green, both mounts: 36 + 36 (the two files) and 143 + 143
+(this fix's own guard plus c3/c5/c9/d2/d6) -- 358 outcomes, 0 failed, 0 skipped.
