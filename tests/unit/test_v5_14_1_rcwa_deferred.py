@@ -212,13 +212,70 @@ def test_stack_dispersive_materials():
 # GAP1: sheared sidewalls
 # --------------------------------------------------------------------------- #
 
+#: Relative bar for the two SYMMETRY residuals of the sheared grating, scored
+#: against the diffraction order each is a symmetry OF rather than against an
+#: absolute number (``FIX_RUNNER_PINS_2026_08_12`` S6).  Both residuals are
+#: round-off magnitudes out of a 13x13 cascade through an 8-slice staircase, so
+#: they move with the BLAS reduction order, while the order itself is O(0.3):
+#: the absolute ``1e-12`` this pair carried was a bar calibrated on one runner,
+#: and CI grazed it at 1.4306e-12 on the ubuntu py3.12 and py3.13 shards
+#: (``|0.33449837513783104 - 0.3344983751392616|``).  Measured worst residual,
+#: relative to the order:
+#:
+#:     mount / runner              vertical sym    mirror shear    relative
+#:     Windows py3.14 OpenBLAS     0.0             4.4498e-13      1.3303e-12
+#:     WSL py3.12 OpenBLAS         5.5511e-17      1.5654e-14      4.6799e-14
+#:     CI ubuntu py3.12 / py3.13   --              1.4306e-12      4.2777e-12
+#:
+#: (Both mounts read identically at OPENBLAS_NUM_THREADS 1 / 2 / default, so
+#: the axis here is the LAPACK build, not the reduction width.)  1e-9 is an
+#: ENVELOPE over all three with 234x headroom above the worst, and it sits
+#: 5.0e6x BELOW the smallest shear error the check has to be able to see: one
+#: ``n_x = 256`` raster pixel, ``d(shear) = 3.9e-3``, already moves this order
+#: by 1.6753e-03 = 5.0e-3 relative (identical on both mounts).
+_SHEAR_SYM_REL = 1e-9
+
+
+def _shear_build(shear):
+    st = RCWAStack(1.0e-6, n_superstrate=1.0, n_substrate=1.45, n_orders=6)
+    st.add_tapered_grating(0.4e-6, eps_ridge=4.0, eps_groove=1.0,
+                           duty_bottom=0.5, n_slices=8, shear=shear)
+    return st.set_source(_WL).solve().efficiencies()
+
+
+def test_tapered_grating_shear_relative_envelope_still_sees_one_raster_pixel():
+    """THE FAIL-BEFORE for the relative envelope above.
+
+    ``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S6.  Re-deriving an absolute
+    bar as a relative one is only safe if the relative one still sees the
+    defect class the absolute one was there for, so the smallest shear error
+    the builder can even represent is injected: ONE ``n_x = 256`` raster pixel,
+    ``d(shear) = 1/256``.  Anything smaller does not move a pixel under
+    ``raster='hard'`` and is not a distinguishable geometry at all (measured:
+    ``d(shear)`` of 1e-9 through 1e-4 leave the answer bit-identical), so this
+    is the true floor of the check's job.
+
+    It reads 1.6753e-03 = 5.0e-3 relative, identical on both mounts -- 5.0e6x
+    above the envelope, and 1.2e9x above this box's round-off residual.  The
+    band between "round-off" and "a real shear error" is nine decades wide,
+    which is why the bar never needed to be absolute."""
+    o, _Rs, Ts = _shear_build(0.3)
+    ip1 = int(np.where(np.asarray(o) == 1)[0][0])
+    im1 = int(np.where(np.asarray(o) == -1)[0][0])
+    o, _Rm, Tm = _shear_build(-(0.3 + 1.0 / 256.0))
+    mir = abs(float(Tm[0, im1]) - float(Ts[0, ip1]))
+    rel = mir / abs(float(Ts[0, ip1]))
+    assert rel > 1e-3, (
+        f'one raster pixel of shear error moves the mirrored order by only '
+        f'{rel:.4e} relative (measured 5.0e-3), so the {_SHEAR_SYM_REL:g} '
+        f'envelope would not separate it from round-off')
+    with pytest.raises(AssertionError, match='mirror the asymmetry'):
+        assert mir < _SHEAR_SYM_REL * abs(float(Ts[0, ip1])), (
+            'mirroring the shear must mirror the asymmetry exactly')
+
+
 def test_tapered_grating_shear():
-    def build(shear):
-        st = RCWAStack(1.0e-6, n_superstrate=1.0, n_substrate=1.45,
-                       n_orders=6)
-        st.add_tapered_grating(0.4e-6, eps_ridge=4.0, eps_groove=1.0,
-                               duty_bottom=0.5, n_slices=8, shear=shear)
-        return st.set_source(_WL).solve().efficiencies()
+    build = _shear_build
     o, R0, T0 = build(0.0)
     o, Rs, Ts = build(0.3)
     ip1 = int(np.where(np.asarray(o) == 1)[0][0])
@@ -227,12 +284,26 @@ def test_tapered_grating_shear():
     # CI runner's BLAS closes this 8-slice staircase at 4.5e-8)
     assert abs(float(R0.sum() + T0.sum()) - 2.0) < 1e-7
     assert abs(float(Rs.sum() + Ts.sum()) - 2.0) < 1e-7
-    # the vertical grating is +/-1 symmetric; the sheared one is NOT
-    assert abs(float(T0[0, ip1] - T0[0, im1])) < 1e-12
+    # the vertical grating is +/-1 symmetric; the sheared one is NOT.  Both
+    # symmetry claims are scored RELATIVE to the order they are about
+    # (_SHEAR_SYM_REL) -- see that constant for the cross-runner table.
+    sym0 = abs(float(T0[0, ip1] - T0[0, im1]))
+    assert sym0 < _SHEAR_SYM_REL * abs(float(T0[0, ip1])), (
+        f'the UNSHEARED grating is +/-1 symmetric by construction, but the '
+        f'residual {sym0:.4e} is {sym0 / abs(float(T0[0, ip1])):.4e} of the '
+        f'order itself ({float(T0[0, ip1]):.6f}), above the {_SHEAR_SYM_REL:g} '
+        f'relative envelope')
     assert abs(float(Ts[0, ip1] - Ts[0, im1])) > 1e-2
     # mirror shear mirrors the asymmetry
     o, Rm, Tm = build(-0.3)
-    assert abs(float(Tm[0, im1]) - float(Ts[0, ip1])) < 1e-12
+    mir = abs(float(Tm[0, im1]) - float(Ts[0, ip1]))
+    assert mir < _SHEAR_SYM_REL * abs(float(Ts[0, ip1])), (
+        f'mirroring the shear must mirror the asymmetry exactly, but '
+        f'T(-shear)[-1] and T(+shear)[+1] differ by {mir:.4e} = '
+        f'{mir / abs(float(Ts[0, ip1])):.4e} of the order '
+        f'({float(Ts[0, ip1]):.6f}), above the {_SHEAR_SYM_REL:g} relative '
+        f'envelope.  One n_x raster pixel of shear error reads 5.0e-3 '
+        f'relative, so a residual in this band is round-off, not geometry')
 
 
 # --------------------------------------------------------------------------- #

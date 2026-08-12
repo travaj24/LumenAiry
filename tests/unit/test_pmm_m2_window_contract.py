@@ -387,6 +387,95 @@ def _score_null_control(cells, refs, degrees=_LADDER_DEGREES, mk=None):
     return table
 
 
+def _uncured_below_threshold(ns, mf, layers, degrees, mk, off_nm):
+    """The threshold rule's NOT-CURED half, CONDITIONED ON THE CENSUS.
+    Returns ``(spread, ladder)``.
+
+    ``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S5, and the third instance of
+    ``FIX_M2_NULL_CONTROL_2026_08_09``'s finding.  ``"1.5 nm should NOT cure
+    ns = 6"`` was asserted as a fact about the min_feature THRESHOLD -- the
+    GEOMETRY -- by measuring the degree-ladder SPREAD.  But the spread only
+    collapses when the near-cut collision actually FIRES, and whether a mode
+    lands across the cut is a fact about one build's round-off.  The two came
+    apart on the ubuntu py3.12 shard of main, which read the un-snapped cell at
+    0.00406 -- bit-for-bit the value this file already pins for the same cell
+    with the forward-growth REPAIR ON, i.e. the runner's pre-repair answer is
+    the shipped answer, because its round-off never produced the growing mode
+    the repair exists to redirect.  Nothing was silently wrong there; the
+    premise was.
+
+    So the half is re-stated on the two things that are true build by build:
+
+    * the GEOMETRY premise, asserted rather than commented -- ``min_feature``
+      below the per-slice offset must leave the window UNSNAPPED, read off the
+      shipped snap accounting (``_snap_report``), which is deterministic and
+      carries no BLAS dependence at all;
+    * the MECHANISM, where the instrument says it is armed -- a ladder that
+      reads a raw growing mode must scatter (> 0.1, measured 1.34).  Where the
+      census reads ZERO on every rung there is no collision to leave uncured
+      and the spread says nothing about the rule, so instead of skipping, the
+      in-tree near-cut injector is walked down ``_INJECTOR_SCALES`` until the
+      cell arms -- the mechanism must be REACHABLE on every build, and if no
+      scale reaches it the test FAILS rather than passing quietly.
+
+    Measured (repair off, this device, ns = 6 / 1.5 nm, degrees 8-16):
+
+        mount / OPENBLAS_NUM_THREADS   raw census      spread
+        Windows py3.14 default         [0,0,1,2,3]     1.33841
+        WSL py3.12 1                   [0,0,1,1,1]     1.33841
+        WSL py3.12 default             [0,0,1,2,3]     1.33841
+        any mount, cut injector x3     [0,0,0,0,0]     0.00406   <- the runner
+    """
+    merged, _disp = _snap_report([s for _t, s in layers], mf / PERIOD,
+                                 halfwidth=1)
+    assert not merged, (
+        f"ns={ns}: min_feature={mf * 1e9:.1f} nm is supposed to be BELOW this "
+        f"cell's only cross-layer separation (off={off_nm:.3f} nm), so the "
+        f"window must come back UNSNAPPED -- but the shipped accounting "
+        f"merged {merged} pair(s).  The cell is mislabelled and every claim "
+        f"below is about a different geometry than the one named")
+    v, raw, _post, _nonpas = _ladder_rec(ns, mf, degrees, mk)
+    sp = spread(v)
+    if int(np.sum(raw)):
+        assert sp > 0.1, (
+            f"ns={ns} min_feature={mf * 1e9:.1f} nm (off={off_nm:.3f} nm): the "
+            f"census reads {list(int(x) for x in raw)} raw growing mode(s) "
+            f"over degrees {tuple(degrees)}, so the near-cut collision the "
+            f"un-snapped window admits DID fire -- and the degree ladder must "
+            f"scatter with it, but it spreads only {sp:.3g} (measured 1.34).  "
+            f"A collision that fires without moving the answer is a second "
+            f"mechanism and must be diagnosed")
+        return sp, v
+    # The instrument reads ZERO everywhere: this build's round-off put no mode
+    # across the cut, so there is no collapse here to leave uncured.  WIDEN,
+    # do not skip -- the same move the null controls make.
+    for scale in _INJECTOR_SCALES:
+        with near_cut_injector(scale):
+            v2, raw2, _p2, _n2 = _ladder_rec(ns, mf, degrees, mk)
+            if not int(np.sum(raw2)):
+                continue
+            sp2 = spread(v2)
+            assert sp2 > 0.1, (
+                f"ns={ns} min_feature={mf * 1e9:.1f} nm: with the near-cut "
+                f"injector at {scale:.4g} the census reads "
+                f"{list(int(x) for x in raw2)}, so the collision the "
+                f"un-snapped window admits is REACHABLE on this build -- but "
+                f"the ladder still spreads only {sp2:.3g}.  The threshold "
+                f"rule's premise is that an un-snapped window ADMITS the "
+                f"collapse; this build says it does not")
+            return sp, v
+    assert False, (
+        f"ns={ns} min_feature={mf * 1e9:.1f} nm (off={off_nm:.3f} nm): the "
+        f"census reads zero raw growing modes on every rung of "
+        f"{tuple(degrees)} on the shipped build AND at every near-cut "
+        f"injector scale in "
+        f"{tuple(float(f'{s:.4g}') for s in _INJECTOR_SCALES)}, so the "
+        f"collision an un-snapped window is supposed to admit is not "
+        f"reachable here at all.  Either the mode-cut instrument is dead (the "
+        f"same reading either way) or the rule itself is refuted on this "
+        f"device -- widen the scale ladder and adjudicate; do not delete this")
+
+
 def _snap_report(layer_segments, mf_frac, halfwidth=1):
     """(merged pair count, max wall displacement as a period fraction) over
     every window -- parsed from the routine's own warning, so the test scores
@@ -1099,10 +1188,20 @@ def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper(
         v = _ladder_rec(ns, mf, degs, _uncoated_stack)[0]
         return float((v.max() - v.min()) / abs(v.mean())), v
 
-    # ns = 6, off = 1.804 nm: 1.5 nm is BELOW the threshold, 3.0 nm above it
-    s_lo, _ = spread_u(6, 1.5e-9)
+    # ns = 6, off = 1.804 nm: 1.5 nm is BELOW the threshold, 3.0 nm above it.
+    #
+    # 2026-08-12 (FIX_RUNNER_PINS_2026_08_12 S5): the NOT-CURED half goes
+    # through the census-conditioned helper, for the reason the three null
+    # controls in this file already did.  "1.5 nm does not cure ns=6" was being
+    # measured as a SPREAD, but the spread only collapses where the near-cut
+    # collision fires, which is a fact about the build's round-off and not
+    # about the min_feature threshold; the ubuntu py3.12 shard read this cell
+    # at 0.00406.  The helper asserts the geometric premise (the window really
+    # is unsnapped) plus the mechanism where the instrument says it is armed,
+    # and probes with the near-cut injector where it is not.
+    s_lo, _ = _uncured_below_threshold(6, 1.5e-9, _uncoated_layers(6), degs,
+                                       _uncoated_stack, 1.804)
     s_hi, v_hi = spread_u(6, 3.0e-9)
-    assert s_lo > 0.1, f"1.5 nm should NOT cure ns=6 (off=1.804 nm): {s_lo:.3g}"
     assert s_hi < 2e-2, f"3.0 nm should cure ns=6: {s_hi:.3g}"
     # ns = 12, off = 0.902 nm: 1.5 nm is already above the threshold
     s12, _v12 = spread_u(12, 1.5e-9)
@@ -1151,6 +1250,74 @@ def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper(
     assert s_lo_on < 1e-2, (
         f"uncoated ns=6 at 1.5 nm still spreads {s_lo_on:.4g} with the "
         f"forward-growth repair on (it spread {s_lo:.4g} with it off)")
+
+
+def test_the_threshold_rules_NOT_CURED_half_conditions_on_the_census_too(
+        growth_repair_off):
+    """The fail-before for ``test_threshold_rule_holds_on_a_SINGLE_REGION_
+    uncoated_taper``'s own NOT-CURED half.
+
+    ``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S5.  Its two SIBLING null
+    controls were re-stated on the census in ``FIX_M2_NULL_CONTROL_2026_08_09``;
+    this half kept the identical premise on the SAME cell -- "1.5 nm does not
+    cure ns=6" measured as a degree-ladder SPREAD -- and it is the one the
+    ubuntu py3.12 shard of main actually failed, at 0.00406.
+
+    The injector runs the OTHER WAY here, and that is the point.  The null
+    controls need a mode PUSHED across the cut, so they scale the threshold
+    DOWN; this claim needs the runner that has NO mode near the cut, so it
+    scales UP and DISARMS the collision on a build whose own round-off arms it.
+    It is still the runner being emulated and not the physics -- the geometry,
+    the materials, the operator and the eigenvalues are untouched, and only
+    where the cut lands moves, which is the one thing an OpenBLAS kernel is
+    entitled to move.
+
+    The emulation is EXACT, not merely qualitative: at x3 the cell reads
+    0.00406 on both mounts, which is the CI assertion message's number to all
+    four of its figures, and its census goes to all-zero::
+
+        mount / OPENBLAS_NUM_THREADS   cut x1                cut x3
+        Windows py3.14 default         [0,0,1,2,3]  1.33841  [0,0,0,0,0]  0.00406
+        WSL py3.12 1                   [0,0,1,1,1]  1.33841  [0,0,0,0,0]  0.00406
+        WSL py3.12 default             [0,0,1,2,3]  1.33841  [0,0,0,0,0]  0.00406
+
+    (x10, x1e2, x1e4 and x1e6 all read 0.00406 too: once the near-cut mode is
+    back under the cut there is nothing further for a higher cut to change.)
+
+    Three claims, the siblings':
+
+    (a) the RECONDITIONED half passes under the injector, and passes for the
+        right reason -- it reaches its probe branch and the probe finds the
+        collision reachable;
+    (b) the ORIGINAL assertion, verbatim, on the SAME reading, FAILS;
+    (c) the probe branch is not vacuous -- the disarmed reading really is the
+        cured-looking one, so (a) is not passing on an armed ladder.
+    """
+    cell, off_nm = (6, 1.5e-9), 1.804
+    layers = _uncoated_layers(cell[0])
+    with near_cut_injector(3.0):
+        _v, raw, _p, _n = _ladder_rec(cell[0], cell[1], _UNCOATED_DEGREES,
+                                      _uncoated_stack)
+        assert not int(np.sum(raw)), (
+            f"the near-cut injector at 3.0 did not DISARM this cell -- it "
+            f"still reads {list(int(x) for x in raw)} raw growing mode(s), so "
+            f"the 2026-08-12 CI condition is not reproduced here and this "
+            f"test has stopped being a fail-before.  Raise the scale rather "
+            f"than deleting it: the condition is a CUT POSITION and every "
+            f"build has one")
+        # (a) the reconditioned half, under the runner's condition
+        s_lo, _ladder = _uncured_below_threshold(
+            cell[0], cell[1], layers, _UNCOATED_DEGREES, _uncoated_stack,
+            off_nm)
+        # (c) ... and it really is the disarmed, cured-looking reading
+        assert s_lo < 1e-2, (
+            f"the disarmed cell spreads {s_lo:.4g}, which is not the "
+            f"cured-looking reading the runner saw (0.00406), so (a) proved "
+            f"only that nothing raised")
+        # (b) THE FAIL-BEFORE: the original claim, verbatim, same reading
+        with pytest.raises(AssertionError, match="should NOT cure"):
+            assert s_lo > 0.1, (
+                f"1.5 nm should NOT cure ns=6 (off=1.804 nm): {s_lo:.3g}")
 
 
 def test_the_uncoated_null_control_conditions_on_the_census_too(

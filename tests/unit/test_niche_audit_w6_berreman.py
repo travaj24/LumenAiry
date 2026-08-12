@@ -603,24 +603,11 @@ def _n_forward(eps, Kx, Ky):
                         np.where(gam.real > tol, False, gam.imag > 0.0)).sum())
 
 
-def test_o7_split_fwd_bwd_matches_the_jax_twin_on_physical_tensors():
-    """ORACLE 7 (S1-13 re-verified, physical media).  ``_split_fwd_bwd`` and
-    ``_berreman_jax._layer_modes_jax`` must produce the SAME partition
-    ELEMENT-WISE (not merely the same SET -- an earlier sorted comparison of
-    ours reported a spurious 0.74 drift purely from ordering ties at
-    ``Re(gam) = +-0``).  Over 400 triple-rotated biaxial tensors, half lossy,
-    every fifth gyrotropic, at ``|Kx|,|Ky| <= 1.4`` (i.e. reaching the
-    evanescent regime) the measured worst block difference is 1.1e-14
-    (tol 1e-11)."""
-    _jax()
-    import jax.numpy as jnp
-
-    from lumenairy.elements._berreman_jax import _layer_modes_jax
-    from lumenairy.elements.rcwa import _jax_eig_stable
-    eig = _jax_eig_stable()
+def _o7_draws(n):
+    """The O7 tensor family: triple-rotated biaxial, half lossy, every fifth
+    gyrotropic, ``|Kx|, |Ky| <= 1.4`` so the evanescent regime is reached."""
     rng = np.random.default_rng(7)
-    worst = 0.0
-    for it in range(400):
+    for it in range(n):
         e = np.diag(rng.uniform(1.5, 4.0, 3)).astype(complex)
         for axis in ('x', 'y', 'z'):
             e = _rot(e, axis, rng.uniform(0, np.pi))
@@ -628,12 +615,222 @@ def test_o7_split_fwd_bwd_matches_the_jax_twin_on_physical_tensors():
             e = e + 1j * np.diag(rng.uniform(0, 0.3, 3))
         if it % 5 == 0:
             e = e + np.array([[0, 0.3j, 0], [-0.3j, 0, 0], [0, 0, 0]])
-        Kx, Ky = rng.uniform(-1.4, 1.4), rng.uniform(-1.4, 1.4)
+        yield e, rng.uniform(-1.4, 1.4), rng.uniform(-1.4, 1.4)
+
+
+def _o7_partition_invariants(W, V, lam):
+    """``(sum lam, sum lam^2, orthonormal projector of the 4x2 modal block)``
+    for one half of a Berreman partition.
+
+    Every entry is invariant under any invertible RIGHT-mixing of the two
+    columns -- permutation, scaling, in-subspace rotation -- which is the whole
+    gauge freedom two ``eig`` backends can differ by at a FIXED partition.  The
+    two power sums determine the forward eigenvalue MULTISET uniquely without
+    sorting it (the sort is what tied at ``Re(gam) = +-0`` and produced the
+    spurious 0.74 drift the docstring below records), and the projector fixes
+    the SUBSPACE those modes span.  Together they say "the same modes are on
+    the same side", which is the entire physical content of a partition: the
+    cascade contracts over the column order and never sees it.
+    """
+    Mb = np.vstack([np.asarray(W), np.asarray(V)])           # 4x2
+    lam = np.asarray(lam)
+    Q, _R = np.linalg.qr(Mb)
+    return complex(lam.sum()), complex((lam ** 2).sum()), Q @ Q.conj().T
+
+
+def _o7_score(eig, n=400):
+    """``(worst elementwise, worst invariant, correspondence count, n)`` over
+    the O7 family, comparing ``_split_fwd_bwd`` against the JAX twin.
+
+    The element-wise comparison is CONDITIONED on the two backends returning
+    the same eigenproblem in the same RAW ORDER; where they do not, only the
+    partition-invariant observables are meaningful.  See the test below.
+    """
+    import jax.numpy as jnp
+
+    from lumenairy.elements._berreman_jax import _layer_modes_jax
+    worst_elem, worst_inv, corr = 0.0, 0.0, 0
+    total = 0
+    for e, Kx, Ky in _o7_draws(n):
+        total += 1
+        D = B._berreman_delta(np.asarray(e, dtype=complex), Kx, Ky)
+        gn, _Pn = np.linalg.eig(D)
+        gj = np.asarray(eig(jnp.asarray(D, jnp.complex128))[0])
+        scale = max(1.0, float(np.max(np.abs(gn))))
+        # PRECONDITION: both backends solved the same eigenproblem.  Without
+        # this the invariants below compare two different spectra and prove
+        # nothing, so it is asserted per draw rather than assumed.  The bar is
+        # deliberately looser than the claims (measured 0.0 on both mounts):
+        # its job is only to separate "same spectrum, different bookkeeping"
+        # from "different spectrum", and the second is an O(1) event.  The
+        # multiset is compared by POWER SUMS, not by sorting: this family puts
+        # several modes at ``Re(gam) = +-0``, and a lexicographic sort of that
+        # ties -- which is the very artefact this file's 0.74 drift came from.
+        set_gap = max(abs(complex(np.sum(gn ** k) - np.sum(gj ** k)))
+                      / scale ** k for k in (1, 2, 3, 4))
+        assert set_gap < 1e-7, (
+            f"numpy and JAX returned DIFFERENT Berreman spectra (worst "
+            f"relative power-sum gap {set_gap:.3e}): this is not a partition "
+            f"question at all, one of the two eigensolves is wrong")
         mn = B._layer_modes(e, Kx, Ky)
         mj = _layer_modes_jax(jnp.asarray(e, jnp.complex128), Kx, Ky, jnp, eig)
-        for a, b in zip(mn, mj):
-            worst = max(worst, float(np.max(np.abs(a - np.asarray(b)))))
-    assert worst < 1e-11, f"numpy/JAX mode partition drift {worst:.3e}"
+        for half in (0, 3):
+            an = _o7_partition_invariants(*mn[half:half + 3])
+            aj = _o7_partition_invariants(*(np.asarray(b)
+                                            for b in mj[half:half + 3]))
+            worst_inv = max(worst_inv,
+                            abs(an[0] - aj[0]) / scale,
+                            abs(an[1] - aj[1]) / scale ** 2,
+                            float(np.max(np.abs(an[2] - aj[2]))))
+        if float(np.max(np.abs(gn - gj))) / scale < 1e-11:
+            corr += 1
+            for a, b in zip(mn, mj):
+                worst_elem = max(worst_elem,
+                                 float(np.max(np.abs(a - np.asarray(b)))))
+    return worst_elem, worst_inv, corr, total
+
+
+def test_o7_split_fwd_bwd_matches_the_jax_twin_on_physical_tensors():
+    """ORACLE 7 (S1-13 re-verified, physical media).  ``_split_fwd_bwd`` and
+    ``_berreman_jax._layer_modes_jax`` must put the SAME modes on the SAME
+    side -- and, where the question is well posed, in the same column order
+    (not merely the same SET: an earlier SORTED comparison of ours reported a
+    spurious 0.74 drift purely from ordering ties at ``Re(gam) = +-0``).
+
+    2026-08-12 (``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S4).  The
+    element-wise form of this alone read 1.146 on the ubuntu py3.12 JAX job of
+    main while measuring 1.1e-14 on both mounts.  ADJUDICATED, and it is not
+    the silent-wrong class it looks like: both partition rules are the same
+    stable flag-argsort, which keeps each group in the RAW ORDER ``eig``
+    returned it in, so the two agree element-wise only while the two ``eig``
+    backends also agree on that order.  On both mounts they do -- numpy's and
+    jaxlib's LAPACK return the Berreman 4x4 spectrum BIT-IDENTICALLY, raw-order
+    gap exactly 0.0 over all 400 draws -- but nothing makes that portable, and
+    an eigenvalue ORDER is not physics: the cascade contracts over the column
+    order and never sees it.
+
+    So the claim is split at the point where it stops being well posed:
+
+    * the PRECONDITION, per draw -- both backends solved the same eigenproblem
+      (the spectra agree as MULTISETS, compared by power sums rather than by
+      sorting, since sorting is what tied in the first place; measured 0.0);
+    * the PARTITION, on every draw -- the partition-INVARIANT observables of
+      each half agree: the two eigenvalue power sums, which fix the forward
+      multiset without sorting it, and the orthonormal projector, which fixes
+      the subspace those modes span (measured worst 5.6e-15, tol 1e-11).
+      This is the whole physical content of "same partition";
+    * the COLUMN ORDER, on the draws where the two backends returned the raw
+      spectrum in the same order -- the original element-wise comparison,
+      verbatim (measured worst 1.2e-14, tol 1e-11, 400 of 400 draws on both
+      mounts).
+
+    The fail-before is the test below, which shows the restructured claim still
+    fires on a real partition disagreement and does NOT fire on a mere
+    re-ordering."""
+    _jax()
+    from lumenairy.elements.rcwa import _jax_eig_stable
+    worst_elem, worst_inv, corr, total = _o7_score(_jax_eig_stable())
+    assert worst_inv < 1e-11, (
+        f"numpy/JAX PARTITION drift {worst_inv:.3e}: the two twins put "
+        f"different modes on the same side, or span different subspaces with "
+        f"them.  This is a physics disagreement, not a gauge one")
+    print(f"\nO7 partition: {corr} of {total} draws in raw-order "
+          f"correspondence; worst invariant {worst_inv:.3e}, worst "
+          f"elementwise over the correspondence class {worst_elem:.3e}")
+    assert worst_elem < 1e-11, (
+        f"numpy/JAX mode partition drift {worst_elem:.3e} on draws where both "
+        f"eig backends returned the raw spectrum in the SAME order -- there "
+        f"the stable flag-argsort must reproduce the column order too")
+
+
+def test_o7_partition_claim_survives_a_reorder_and_still_catches_a_side_flip():
+    """THE FAIL-BEFORE for the O7 partition claim, driven both ways.
+
+    ``FIX_RUNNER_PINS_2026_08_12`` S4.  Two injectors on the ``eig`` the JAX
+    twin is HANDED -- ``_layer_modes_jax`` takes it as a parameter, so nothing
+    is monkeypatched and both arms are the shipped partition rule:
+
+    (a) a raw-order PERMUTATION, which is what a different LAPACK build is
+        entitled to return and what the CI job's 1.146 was.  It must knock the
+        element-wise comparison over (measured 1.566, the same O(1) the runner
+        read) and leave the partition invariants where they were (5.618e-15
+        injected against 5.618e-15 shipped -- not merely small, the same
+        reading, because the invariants cannot see a column swap);
+
+    (b) a genuine SIDE FLIP -- one eigenvalue nudged across the classifier cut,
+        so a mode really does change half-space.  The restructured claim MUST
+        fail on it (measured invariant drift 1.826), or the restructure traded
+        a runner-fragile pin for a vacuous one.
+
+    Only the cut position and the column order are injected; the geometry, the
+    materials, the operator and the eigenvalues are the shipped ones."""
+    _jax()
+    import jax.numpy as jnp
+
+    from lumenairy.elements.rcwa import _jax_eig_stable
+    eig = _jax_eig_stable()
+    base_elem, base_inv, corr, total = _o7_score(eig, n=80)
+    assert corr == total, (
+        f"only {corr} of {total} draws have the two eig backends in raw-order "
+        f"correspondence on this build, so injector (a) has nothing to "
+        f"disturb and this fail-before is vacuous")
+
+    def eig_reordered(A):
+        lam, V = eig(A)
+        p = jnp.asarray([1, 0, 3, 2])
+        return lam[p], V[:, p]
+
+    def eig_side_flip(A):
+        """Push the FORWARD mode nearest the cut across it: a REAL
+        disagreement about which half-space a mode belongs to, not a gauge
+        difference.  The nudge is 3e-9 of the spectrum scale -- above the
+        classifier's own ``1e-9`` cut, so the flag really flips, and 33x below
+        the same-eigenproblem precondition, so the two backends are still
+        solving the same problem."""
+        lam, V = eig(A)
+        sc = jnp.maximum(jnp.max(jnp.abs(lam)), 1.0)
+        re, im = jnp.real(lam), jnp.imag(lam)
+        tol = 1e-9 * sc
+        is_fwd = jnp.where(re < -tol, True, jnp.where(re > tol, False, im > 0))
+        k = jnp.argmin(jnp.where(is_fwd, jnp.abs(re), jnp.inf))
+        return lam.at[k].add(3e-9 * sc), V
+
+    # (a) a re-ordering breaks the ELEMENT-WISE claim ...
+    from lumenairy.elements._berreman_jax import _layer_modes_jax
+    ra_elem, ra_inv, ra_corr, _ = _o7_score(eig_reordered, n=80)
+    assert ra_corr < total, (
+        f"the reorder injector left all {ra_corr} draws in raw-order "
+        f"correspondence, so it did not reproduce the CI condition")
+    assert ra_elem < 1e-11, (
+        f"element-wise drift {ra_elem:.3e} on draws the reorder injector left "
+        f"IN correspondence -- those are draws it could not disturb (an "
+        f"eigenvalue tie), so they must still agree column by column")
+    with pytest.raises(AssertionError, match="mode partition drift"):
+        # the original claim, verbatim, on the injected arm
+        worst = 0.0
+        for e, Kx, Ky in _o7_draws(80):
+            mn = B._layer_modes(e, Kx, Ky)
+            mj = _layer_modes_jax(jnp.asarray(e, jnp.complex128), Kx, Ky,
+                                  jnp, eig_reordered)
+            for a, b in zip(mn, mj):
+                worst = max(worst, float(np.max(np.abs(a - np.asarray(b)))))
+        assert worst < 1e-11, f"numpy/JAX mode partition drift {worst:.3e}"
+    # ... and leaves the PARTITION invariants where they were.  Not merely
+    # "still small": the same reading, to the bar the claim itself uses.  (It
+    # is bit-identical on both mounts -- 5.618e-15 either way -- but the QR
+    # behind the projector is entitled to an ulp under a column swap, so the
+    # assertion is a bar rather than an ``==``.)
+    assert abs(ra_inv - base_inv) < 1e-11, (
+        f"a pure column re-ordering moved the partition invariants "
+        f"{base_inv:.4e} -> {ra_inv:.4e}.  They are supposed to be blind to "
+        f"it by construction, so one of them is not actually invariant")
+
+    # (b) a real side flip still breaks the RESTRUCTURED claim.
+    _fe, sf_inv, _c, _t = _o7_score(eig_side_flip, n=80)
+    assert sf_inv > 1e-2, (
+        f"pushing a mode across the classifier cut moved the partition "
+        f"invariants by only {sf_inv:.3e} (measured 1.826): the restructured "
+        f"claim would not catch a real partition disagreement")
 
 
 def test_o7_split_fwd_bwd_matches_the_jax_twin_in_the_degenerate_fallback():

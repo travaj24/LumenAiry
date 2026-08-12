@@ -2537,27 +2537,102 @@ def test_w4_t1_adaptive_default_beats_the_old_flat_64():
         f'{e_ad:.4e} (measured 2.81e-2)')
 
 
+#: The two designs' merit values frozen on 74cf31b at the PRE-W4-T1 flat-64
+#: default, kept only as an ORDER-OF-MAGNITUDE anchor (see the scope guard
+#: below): the escape hatch's fidelity is scored between two LIVE arms, not
+#: against these decimals.
+_W4T1_FROZEN_64 = ((51.5e-3, 9.0968975e-14), (60.0e-3, 7.1975598e-14))
+
+
+def _score_w4_t1_escape_hatch(n_explicit=64):
+    """Score the ``sigma_grid_n`` escape hatch on both validation designs.
+
+    Split out so the fail-before below can drive the SAME three claims with
+    the value a ladder-rounding regression would deliver instead of 64.
+    """
+    for R1, want in _W4T1_FROZEN_64:
+        hatch = _tensor_w4(R1, ((0, 0), (2, 0)), n_explicit)
+        capped = _tensor_w4(R1, ((0, 0), (2, 0)), None, 64)
+        adaptive = _tensor_w4(R1, ((0, 0), (2, 0)))
+        assert capped.sigma_grid_n == 64, (
+            f'R1={R1}: the ADAPTIVE arm capped at sigma_grid_n_max=64 must '
+            f'land on 64 -- it landed on {capped.sigma_grid_n}, so it is no '
+            f'longer a stand-in for the pre-W4-T1 flat default')
+        assert hatch.sigma_grid_n == n_explicit, (
+            f'R1={R1}: sigma_grid_n={n_explicit} came back as '
+            f'{hatch.sigma_grid_n} -- an explicit request must be honoured '
+            f'VERBATIM, not rounded onto the cost ladder or clamped')
+        # (1) THE CLAIM, between two LIVE arms in one process.
+        assert np.array_equal(np.asarray(hatch.L), np.asarray(capped.L)), (
+            f'R1={R1}: the explicit escape hatch and the adaptive default '
+            f'clamped to the same n=64 grid disagree.  Both resolve to the '
+            f'identical sigma grid and then run the identical quadrature, so '
+            f'this is an exact-arithmetic identity in one process -- worst '
+            f'element {float(np.max(np.abs(np.asarray(hatch.L) - np.asarray(capped.L)))):.4e}')
+        got = abs(complex(hatch.L[1, 0])) ** 2
+        # (2) SEPARATION, also live: the hatch is not the adaptive default.
+        sep = abs(got - abs(complex(adaptive.L[1, 0])) ** 2) / got
+        assert sep > 1e-2, (
+            f'R1={R1}: the escape hatch no longer separates from the adaptive '
+            f'default (relative separation {sep:.4e}, measured 2.9e-2 at '
+            f'R1=51.5 / 2.8e-1 at R1=60 with n_default '
+            f'{adaptive.sigma_grid_n}).  Either the default stopped being '
+            f'adaptive or the hatch stopped being flat 64')
+        # (3) ORDER-OF-MAGNITUDE sanity against the frozen anchor.
+        assert 0.5 * want < got < 2.0 * want, (
+            f'R1={R1}: sigma_grid_n=64 gives {got:.10e}, more than a factor '
+            f'of two from the pre-W4-T1 default {want:.7e} -- that is a gross '
+            f'change in the escape hatch, not runner arithmetic')
+
+
 def test_w4_t1_explicit_sigma_grid_n_64_is_the_pre_fix_default_bit_for_bit():
     """SCOPE GUARD.  ``sigma_grid_n=64`` must reproduce the pre-W4-T1
     default -- that is the escape hatch for the optimiser loop the old
-    default was tuned for.  Checked against the merit values frozen on
-    74cf31b at the old default (9.0968975e-14 / 7.1975598e-14).
-    Tolerance rel 1e-2, NOT the frozen decimals' 1e-8: those values are
-    Windows-frozen chirp integrals with a MEASURED 3.1e-3 cross-platform
-    drift (CI Linux reads 9.0687538911e-14 for the first -- the exact
-    drift already documented on the sibling t3b merit pins at 865e922;
-    this pin initially repeated that mistake and broke CI on 1664c92).
-    Within-process escape-hatch fidelity at the frozen decimals'
-    precision was verified at authoring on the fixing box; the
-    cross-platform pin only needs to separate n=64 from the adaptive
-    default, which differs by 2.9e-2 (R1=51.5) / 2.8e-1 (R1=60)."""
-    for R1, want in ((51.5e-3, 9.0968975e-14), (60.0e-3, 7.1975598e-14)):
-        res = _tensor_w4(R1, ((0, 0), (2, 0)), 64)
-        assert res.sigma_grid_n == 64
-        got = abs(complex(res.L[1, 0])) ** 2
-        assert abs(got - want) < 1e-2 * want, (
-            f'R1={R1}: sigma_grid_n=64 gives {got:.10e}, the pre-W4-T1 '
-            f'default was {want:.7e} -- the explicit path must not move')
+    default was tuned for.
+
+    2026-08-12 (``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S3).  This was
+    scored against the merit values frozen on 74cf31b (9.0968975e-14 /
+    7.1975598e-14) at rel 1e-2, and CI read 8.9003897385e-14 -- a 2.2e-2 drift
+    that broke five runner jobs.  The docstring already recorded a 3.1e-3
+    cross-platform drift and a tighter version of this same pin already broke
+    CI once at 1664c92, so the number was never the claim; it was a proxy for
+    one.  What ``n = 64`` measures is a DIFFERENCE of chirp quadratures on a
+    grid that under-resolves the chirp by design -- against the converged
+    n >= 512 answer it is itself off by 3.9e-2 (R1=51.5) / 3.2e-1 (R1=60), so a
+    1e-2 cross-runner bar sat well inside the quantity's own aliasing noise,
+    and CI's reading is in fact the CLOSER of the two to the truth
+    (8.9004e-14 against a converged 8.756e-14 / 8.774e-14, vs this box's
+    9.0969e-14).  It is a legitimate alternative evaluation, not a defect.
+
+    So the claim -- "the explicit path IS the old flat-64 path" -- is scored
+    where it is exact: between two arms measured in the SAME process.  The
+    adaptive default clamped by ``sigma_grid_n_max=64`` resolves to the same
+    ``n_grid = 64`` and then runs the identical quadrature, so the two must
+    agree BIT FOR BIT on any runner, and both mounts measure exactly that
+    (worst element 0.0, Windows py3.14 and WSL py3.12).  Runner arithmetic
+    cancels between them; the frozen decimals survive only as a factor-of-two
+    sanity anchor.  The fail-before is the test below."""
+    _score_w4_t1_escape_hatch(64)
+
+
+def test_w4_t1_escape_hatch_scope_guard_catches_a_non_verbatim_explicit_n():
+    """THE FAIL-BEFORE for the scope guard above.
+
+    ``FIX_RUNNER_PINS_2026_08_12`` S3.  Restructuring a pin onto two live arms
+    is only safe if the restructured pin still fires on the defect it exists
+    for, and the defect here is precise: the explicit ``sigma_grid_n``
+    stopping being honoured VERBATIM.  The most likely form is the tidy-up
+    that puts the caller's value on the cost ladder like the adaptive default
+    -- 64 is already a rung, so the regression only shows on a request BETWEEN
+    rungs, and the guard has to catch it there.
+
+    Driven by asking for the value such a regression would deliver (96, the
+    next rung) and scoring the SAME three claims: the arm equality fails first
+    and by construction, because the hatch is then not on the pre-fix grid at
+    all.  Nothing is monkeypatched -- the injected value goes in through the
+    public parameter, so both arms are the shipped code."""
+    with pytest.raises(AssertionError, match='disagree'):
+        _score_w4_t1_escape_hatch(96)
 
 
 def test_w4_t1_cap_truncation_warns_with_both_numbers():
