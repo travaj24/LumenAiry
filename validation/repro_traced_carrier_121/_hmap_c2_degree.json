@@ -1,0 +1,40 @@
+{
+ "degree": {
+  "group": 5,
+  "radius_mm": 3.0,
+  "rows": [
+   {
+    "degree": 4,
+    "refused": true
+   },
+   {
+    "degree": 6,
+    "err_max_waves": 0.00041281553690673096,
+    "kB": 1.53125,
+    "refused": false,
+    "seconds": 0.005716199986636639
+   },
+   {
+    "degree": 8,
+    "err_max_waves": 9.997720253240007e-06,
+    "kB": 2.53125,
+    "refused": false,
+    "seconds": 0.008366400143131614
+   },
+   {
+    "degree": 10,
+    "err_max_waves": 1.6594879146499632e-07,
+    "kB": 3.78125,
+    "refused": false,
+    "seconds": 0.015478800050914288
+   },
+   {
+    "degree": 12,
+    "err_max_waves": 5.664552879054252e-09,
+    "kB": 5.28125,
+    "refused": false,
+    "seconds": 0.017240399960428476
+   }
+  ]
+ }
+}

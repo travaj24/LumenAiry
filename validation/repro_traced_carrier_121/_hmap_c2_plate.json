@@ -1,0 +1,47 @@
+{
+ "plate": {
+  "N": 256,
+  "dx_um": 20.0,
+  "glass": "N-BK7",
+  "n": 1.5035829054102239,
+  "rows": [
+   {
+    "L": 0.0,
+    "aware_vs_closed_waves": -7.275957614183426e-12,
+    "blind_vs_closed_waves": -7.275957614183426e-12,
+    "entrance_ray_diff_waves": 0.0,
+    "exit_exact_diff_waves": 0.0,
+    "m": 0,
+    "tilt_mrad": 0.0
+   },
+   {
+    "L": 0.010234374999999999,
+    "aware_vs_closed_waves": -0.3246284080851183,
+    "blind_vs_closed_waves": -7.275957614183426e-12,
+    "entrance_ray_diff_waves": 0.6753715919213789,
+    "exit_exact_diff_waves": -0.6753559465570872,
+    "m": 40,
+    "tilt_mrad": 10.234374999999998
+   },
+   {
+    "L": 0.020724609374999998,
+    "aware_vs_closed_waves": -0.2302559364179615,
+    "blind_vs_closed_waves": 0.0,
+    "entrance_ray_diff_waves": 2.7697440635868316,
+    "exit_exact_diff_waves": -2.7694809470017048,
+    "m": 81,
+    "tilt_mrad": 20.724609374999996
+   },
+   {
+    "L": 0.032749999999999994,
+    "aware_vs_closed_waves": -0.08197354719959549,
+    "blind_vs_closed_waves": -3.637978807091713e-12,
+    "entrance_ray_diff_waves": 6.918026452803636,
+    "exit_exact_diff_waves": -6.916385214700783,
+    "m": 128,
+    "tilt_mrad": 32.74999999999999
+   }
+  ],
+  "thickness_mm": 25.4
+ }
+}

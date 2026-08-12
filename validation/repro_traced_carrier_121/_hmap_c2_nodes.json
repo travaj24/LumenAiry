@@ -1,0 +1,80 @@
+{
+ "nodes": {
+  "blind_resid_waves": 8.573677473901842,
+  "rows": [
+   {
+    "nodes": [
+     1,
+     1
+    ],
+    "refused": true
+   },
+   {
+    "err_max_waves": 1.5020803437545208e-05,
+    "kB": 47.53125,
+    "nodes": [
+     3,
+     3
+    ],
+    "rays": 24010,
+    "refused": false,
+    "seconds": 0.04307490005157888
+   },
+   {
+    "err_max_waves": 1.4060860724267735e-08,
+    "kB": 84.5,
+    "nodes": [
+     4,
+     4
+    ],
+    "rays": 40817,
+    "refused": false,
+    "seconds": 0.04607899999246001
+   },
+   {
+    "err_max_waves": 1.4611900271169146e-09,
+    "kB": 105.625,
+    "nodes": [
+     5,
+     4
+    ],
+    "rays": 50421,
+    "refused": false,
+    "seconds": 0.05356889986433089
+   },
+   {
+    "err_max_waves": 3.043951912816084e-10,
+    "kB": 158.4375,
+    "nodes": [
+     6,
+     5
+    ],
+    "rays": 74431,
+    "refused": false,
+    "seconds": 0.0649397000670433
+   },
+   {
+    "err_max_waves": 3.046421886753879e-10,
+    "kB": 184.84375,
+    "nodes": [
+     7,
+     5
+    ],
+    "rays": 86436,
+    "refused": false,
+    "seconds": 0.07304659998044372
+   },
+   {
+    "err_max_waves": 3.0228860094408586e-10,
+    "kB": 427.78125,
+    "nodes": [
+     9,
+     9
+    ],
+    "rays": 196882,
+    "refused": false,
+    "seconds": 0.661912800045684
+   }
+  ]
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "field": {
+  "aware": {
+   "angular_max_waves": 0.9937691615654094,
+   "angular_rms_waves": 0.4068752170956165,
+   "raw_tilt_rms_waves": 0.2878516763866366,
+   "raw_zero_rms_waves": 0.2894766551426516
+  },
+  "blind": {
+   "angular_max_waves": 1.092122114710267,
+   "angular_rms_waves": 0.3744674015102432,
+   "raw_tilt_rms_waves": 0.23507160689268133,
+   "raw_zero_rms_waves": 0.2894766551426516
+  },
+  "dx_um": 12.0,
+  "group": 5,
+  "n": 512,
+  "n_mask": 49061,
+  "order": [
+   -4,
+   1
+  ],
+  "r_probe_mm": 1.5,
+  "seconds": {
+   "tilt": {
+    "aware": 0.17576920008286834,
+    "blind": 0.06596560007892549,
+    "traced": 0.2738861998077482
+   },
+   "zero": {
+    "aware": 0.06786379986442626,
+    "blind": 0.8098525002133101,
+    "traced": 0.8246625999454409
+   }
+  },
+  "tilt_mrad": 50.519316380847634,
+  "w_mm": 2.5
+ }
+}
