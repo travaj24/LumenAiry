@@ -27,10 +27,13 @@ THREE RULES, NOT ONE
 1. **Envelope rule.**  Round-trip and OPL residuals are asserted against
    BARS, and where the bar is set by float64 rather than by the code the bar
    is DERIVED (``k0 * eps * |R|``) and the derivation is asserted too.
-2. **Fingerprint rule.**  ``test_round_trip_floor_is_the_eikonal_cancellation``
-   pins the SHAPE of the residual (linear in ``|R|``), because a residual that
-   is merely small can go wrong silently while one whose scaling law is
-   pinned cannot.
+2. **Fingerprint rule.**
+   ``test_round_trip_floor_is_the_resample_not_the_eikonal`` pins the SHAPE of
+   the residual, because a residual that is merely small can go wrong silently
+   while one whose scaling law is pinned cannot.  It now pins TWO shapes at
+   once -- the shipped round trip is FLAT in ``|R|`` (it is the resample), and
+   the pre-rationalization sphere eikonal, monkeypatched back in as a live
+   degraded arm, is LINEAR in ``|R|`` at ``k0 * eps * |R|``.
 3. **Comparative rule.**  ``test_nyquist_guard_*`` shows the refusal is
    load-bearing: the same call with the guard disabled returns a populated,
    credible-looking field that is WRONG by O(1), while the adequate grid is
@@ -44,6 +47,7 @@ import warnings
 import numpy as np
 import pytest
 
+from lumenairy.propagators import carrier_field as _carrier_field
 from lumenairy.propagators.carrier_field import (
     CARRIER_FIELD_SCHEMA,
     CarrierField,
@@ -80,19 +84,55 @@ def _rel_l2(a, b):
                  / np.linalg.norm(np.asarray(b)))
 
 
-def _eikonal_floor_rad(R):
-    """The residual a round trip through the LIBRARY's own
-    ``_exact_sphere_eikonal`` cannot beat.
+def _old_eikonal_floor_rad(R):
+    """The residual a round trip through the PRE-RATIONALIZATION sphere
+    eikonal cannot beat -- i.e. the floor of the DEGRADED arm below, no
+    longer of anything the library ships.
 
-    That routine evaluates ``sqrt(r^2 + R^2) - |R|``, which for ``r << |R|``
-    is a catastrophic cancellation: the result inherits the ulp of
-    ``sqrt(r^2+R^2)``, i.e. an ABSOLUTE error of ``eps * |R|`` metres,
-    independent of ``r``.  In phase that is ``k0 * eps * |R|`` radians.
-    MEASURED and attributed in BUILD_CARRIER_FIELD_2026_08_11 S5 (replacing
-    the expression with the algebraically identical, cancellation-free
-    ``r^2 / (sqrt(r^2+R^2) + |R|)`` collapses the residual to the resample's
-    own 3.7e-13 at every radius tested)."""
+    ``sqrt(r^2 + R^2) - |R|`` is, for ``r << |R|``, a catastrophic
+    cancellation: the result inherits the ulp of ``sqrt(r^2+R^2)``, i.e. an
+    ABSOLUTE error of ``eps * |R|`` metres, independent of ``r``.  In phase
+    that is ``k0 * eps * |R|`` radians.  MEASURED and attributed in
+    BUILD_CARRIER_FIELD_2026_08_11 S5; the algebraically identical,
+    cancellation-free ``r^2 / (sqrt(r^2+R^2) + |R|)`` that replaced it (main,
+    ``lumenairy/propagators/carrier.py``) collapses the residual to the
+    resample's own 3.7e-13 at every radius tested."""
     return 2.0 * math.pi * EPS * abs(float(R)) / LAM
+
+
+def _subtraction_form_sphere_eikonal(shape, dx, dy, wavelength, R,
+                                     centre=(0.0, 0.0)):
+    """``_exact_sphere_eikonal`` AS IT STOOD before the rationalization --
+    verbatim except for the final expression.
+
+    Kept here as a live reference implementation rather than as a stored
+    number so that the comparison below is two arms of the SAME round trip,
+    on the same machine, in the same process: nothing in it can drift with
+    the platform, the BLAS or the numpy build."""
+    Ny, Nx = int(shape[-2]), int(shape[-1])
+    if not np.isfinite(R) or R == 0.0:
+        return np.zeros((Ny, Nx), dtype=np.float64)
+    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    if centre != (0.0, 0.0):
+        x = x - float(centre[0])
+        y = y - float(centre[1])
+    Y, X = np.meshgrid(y, x, indexing='ij')
+    r2 = X * X + Y * Y
+    sgn = 1.0 if R > 0 else -1.0
+    return sgn * (np.sqrt(r2 + R * R) - abs(R))
+
+
+def _round_trip_rel(R, dx, w):
+    """A -> B -> A on a smooth Gaussian, carrier CHANGED (the sphere is
+    re-centred), grids differing in pitch at equal extent.  Returns the
+    envelope's relative L2 residual."""
+    N = 1024
+    fA = _gauss_field(N, dx, w, R)
+    gB = FieldGrid((1536, 1536), N * dx / 1536)
+    carB = CarrierSpec(R=R, centre=(3 * dx, -dx))
+    fA2 = re_reference(re_reference(fA, carB, gB), fA.carrier, fA.grid)
+    return _rel_l2(fA2.envelope, fA.envelope)
 
 
 # ---------------------------------------------------------------------------
@@ -246,41 +286,112 @@ def test_round_trip_envelope_is_exact_to_1e_12():
     assert _rel_l2(fA2.full_field(), fA.full_field()) <= 1e-12
 
 
-def test_round_trip_floor_is_the_eikonal_cancellation():
-    """FINGERPRINT RULE.  The residual is not merely small, it is
-    ``~k0 * eps * |R|`` -- an absolute phase error set by the library's
-    ``sqrt(r^2+R^2) - |R|``, independent of how big the carrier DIFFERENCE
-    is and linear in the sphere radius.
+# The SHIPPED round trip's own floor: the band-limited resample, and nothing
+# else.  MEASURED 3.714 / 3.808 / 3.730e-13 across the |R| ladder below on
+# Windows py3.14 / numpy 2.4.4 and Linux py3.12 / numpy 2.4.6 -- the two mounts
+# agree to five figures.  The bar is an ENVELOPE over both with ~5x headroom,
+# not a fit to either, and it still sits 5.4x under the pre-fix arm's residual
+# at the top of the ladder.
+_ROUND_TRIP_FLOOR = 2.0e-12
 
-    Pinning the law rather than the number is what makes this a guard: a
-    future change that reintroduces a genuine algebraic defect would move the
-    residual off this line long before it moved it above a loose bar."""
-    prev = None
-    for R, dx, w in ((-5.0e-4, 0.3e-6, 20e-6), (-5.0e-3, 1.0e-6, 60e-6),
-                     (-5.0e-2, 2.0e-6, 90e-6)):
-        N = 1024
-        fA = _gauss_field(N, dx, w, R)
-        gB = FieldGrid((1536, 1536), N * dx / 1536)
-        carB = CarrierSpec(R=R, centre=(3 * dx, -dx))
-        fA2 = re_reference(re_reference(fA, carB, gB), fA.carrier, fA.grid)
-        rel = _rel_l2(fA2.envelope, fA.envelope)
-        floor = _eikonal_floor_rad(R)
-        # the residual sits UNDER the predicted floor and within a decade of
-        # it -- it is that mechanism and not a coincidence
-        assert rel <= floor, f"|R|={abs(R):.3e}: {rel:.3e} > {floor:.3e}"
-        assert rel >= 0.05 * floor, f"|R|={abs(R):.3e}: {rel:.3e} << floor"
-        if prev is not None:
-            # a decade in |R| is a decade in the residual (the law is linear,
-            # not, say, quadratic or flat)
-            assert 3.0 < rel / prev < 30.0
-        prev = rel
+# ``(R, dx, w, separates)``.  ``separates`` records whether the pre-fix
+# cancellation is RESOLVABLE at that radius: its floor is ``k0 * eps * |R|``,
+# so it falls with ``|R|`` until it disappears under the resample floor.  At
+# |R| = 0.5 mm the predicted cancellation is 5.3e-13 against a 3.7e-13
+# resample -- they have crossed, and the two arms are no longer separable.
+# That crossover is itself a pin: it locates exactly where the old defect
+# stopped mattering.
+_EIKONAL_LADDER = ((-5.0e-4, 0.3e-6, 20e-6, False),
+                   (-5.0e-3, 1.0e-6, 60e-6, True),
+                   (-5.0e-2, 2.0e-6, 90e-6, True))
+
+
+def test_round_trip_floor_is_the_resample_not_the_eikonal(monkeypatch):
+    """FINGERPRINT RULE, INVERTED -- and this inversion is the POINT.
+
+    This test used to assert that the round-trip residual WAS the library's
+    own ``sqrt(r^2+R^2) - |R|`` cancellation: ``~k0 * eps * |R|``, linear in
+    the sphere radius.  That demonstration won.  The rationalized eikonal
+    ``sgn * r^2 / (sqrt(r^2+R^2) + |R|)`` shipped in
+    ``lumenairy/propagators/carrier.py`` (PR 29), so BOTH the shipped floor
+    and any comparison against it now read the improved number and the old
+    assertion is vacuously ~1.
+
+    So the demonstration is turned around.  The degraded arm is now the
+    thing that has to be CONSTRUCTED -- ``_subtraction_form_sphere_eikonal``,
+    monkeypatched over the module binding ``re_reference`` actually calls --
+    and the claims are:
+
+    * the SHIPPED round trip is FLAT in ``|R|`` and sits at
+      ``_ROUND_TRIP_FLOOR``, i.e. it is the resample and the analytic phasor
+      costs nothing (the envelope rule, both-mount headroom);
+    * the PRE-FIX form still exhibits its fingerprint -- residual under, and
+      within a decade of, ``k0 * eps * |R|``, and rising with ``|R|``;
+    * where that cancellation is above the resample floor at all, the
+      pre-fix form is at least 3x WORSE than shipped (measured 5.8x at
+      |R| = 5 mm, 55x at 50 mm).
+
+    A regression to the subtraction form therefore fails here on three
+    independent counts, and a NEW algebraic defect fails the flatness and
+    envelope claims regardless of which form it is written in."""
+    shipped, old = [], []
+    for R, dx, w, separates in _EIKONAL_LADDER:
+        monkeypatch.setattr(_carrier_field, '_exact_sphere_eikonal',
+                            _subtraction_form_sphere_eikonal)
+        rel_old = _round_trip_rel(R, dx, w)
+        monkeypatch.undo()
+        rel_ship = _round_trip_rel(R, dx, w)
+
+        floor = _old_eikonal_floor_rad(R)
+        assert rel_ship <= _ROUND_TRIP_FLOOR, (
+            f"|R|={abs(R):.3e}: shipped round trip {rel_ship:.3e} > the "
+            f"resample floor bar {_ROUND_TRIP_FLOOR:.3e}")
+        # the DEGRADED arm still shows the cancellation fingerprint: under
+        # the predicted floor and within a decade of it, so the number is
+        # that mechanism and not a coincidence
+        assert rel_old <= floor, (
+            f"|R|={abs(R):.3e}: pre-fix {rel_old:.3e} > {floor:.3e}")
+        assert rel_old >= 0.05 * floor, (
+            f"|R|={abs(R):.3e}: pre-fix {rel_old:.3e} << floor {floor:.3e}")
+        if separates:
+            assert rel_old >= 3.0 * rel_ship, (
+                f"|R|={abs(R):.3e}: the pre-fix eikonal is only "
+                f"{rel_old / rel_ship:.2f}x worse than shipped "
+                f"({rel_old:.3e} vs {rel_ship:.3e}) -- the rationalization "
+                f"has stopped paying, or the shipped form has regressed")
+        else:
+            assert rel_old < 3.0 * rel_ship, (
+                f"|R|={abs(R):.3e}: the two arms separate by "
+                f"{rel_old / rel_ship:.2f}x, but at this radius the "
+                f"predicted cancellation {floor:.3e} is AT the resample "
+                f"floor -- they must not be resolvable here")
+        shipped.append(rel_ship)
+        old.append(rel_old)
+
+    # SHAPE, not size.  Over a 100x span in |R| the shipped residual is flat
+    # (measured 1.03x end to end) because it is the resample; the pre-fix one
+    # rises with |R| (measured 47x) because it is the cancellation.
+    assert max(shipped) / min(shipped) <= 2.0, (
+        f"the shipped floor is not flat in |R|: {shipped} -- a residual that "
+        f"scales with the sphere radius is the cancellation signature")
+    assert max(old) / min(old) >= 10.0, (
+        f"the pre-fix arm did not scale with |R|: {old} -- the degraded arm "
+        f"is no longer reproducing the defect it is here to represent")
 
 
 def test_round_trip_with_no_carrier_change_is_the_bare_resample():
-    """Control for the test above: with the carrier UNCHANGED the analytic
-    phasor is skipped entirely and the residual drops two decades, to the
-    band-limited resample's own floor.  That isolates which half of the
-    operation each number belongs to."""
+    """Control for the test above, and the reason its bar is called a
+    RESAMPLE floor: with the carrier UNCHANGED the analytic phasor is skipped
+    entirely, so this number is the band-limited resample and nothing else.
+
+    Before the eikonal was rationalized this sat two decades BELOW the
+    carrier-changed round trip, which is how the cancellation was isolated.
+    It no longer does -- the two agree to ~1 % (3.693e-13 here against the
+    3.730e-13 the carrier-changed arm reads at the same radius), which is the
+    positive statement that the analytic phasor now costs nothing.  The
+    assertion against the OLD form's floor is kept because it is still true
+    and still bites: two decades of headroom under ``k0 * eps * |R|`` is a
+    bar the subtraction form could not meet at this radius."""
     N, dx, w, R = 1024, 2.0e-6, 90e-6, -5.0e-2
     fA = _gauss_field(N, dx, w, R)
     gB = FieldGrid((1536, 1536), N * dx / 1536)
@@ -288,7 +399,11 @@ def test_round_trip_with_no_carrier_change_is_the_bare_resample():
     assert fA2.provenance['re_reference']['resampled'] is True
     rel = _rel_l2(fA2.envelope, fA.envelope)
     assert rel <= 1e-12
-    assert rel < 0.1 * _eikonal_floor_rad(R)
+    assert rel < 0.1 * _old_eikonal_floor_rad(R)
+    # ...and it is the SAME floor the carrier-CHANGED round trip now reads,
+    # which is what "the floor is the resample" means operationally.
+    assert rel <= _ROUND_TRIP_FLOOR
+    assert _round_trip_rel(R, dx, w) <= 2.0 * rel
 
 
 def test_re_reference_onto_the_same_lattice_is_bit_exact():
