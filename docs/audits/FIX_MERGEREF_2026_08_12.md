@@ -1,244 +1,220 @@
-# FIX -- merge-ref CI red on `feat/inverse-map`
+# FIX -- merge-ref CI red on `feat/carrier-field`
 
-**2026-08-12.  Branch `feat/inverse-map` merged locally with `origin/main` @
-`80e2da10`.  NO file changed in this worktree except this note.
+**2026-08-12.  Branch `feat/carrier-field` merged locally with `origin/main`
+@ `80e2da10` (PR 29: the tilt-quadratic piston fix + the rationalized sphere
+eikonal).  ONE test file changed
+(`tests/unit/test_carrier_field.py`); no library file was touched.
 `CHANGELOG.md` was not touched.  No `git commit`, no `git push`, no `gh`.**
+
+CI builds the MERGE REF (branch + `main`), not the branch tip, so a branch
+that was green on its own tip can be red on the ref.  This note records what
+was red, what the adjudication was, and what changed.
 
 ---
 
 ## 0. VERDICT
 
-> **The MERGE is clean -- and the CI red is REAL, but it is not the
-> merge's.**
+> **ONE real failure, and it was a test that WON.**
+> `test_round_trip_floor_is_the_eikonal_cancellation` asserted that the
+> `CarrierField` round-trip residual IS the library's
+> `sqrt(r^2+R^2) - |R|` catastrophic cancellation -- linear in `|R|` at
+> `k0 * eps * |R|`.  `main` then shipped the rationalized form
+> (`a185cfc`), the cancellation disappeared, and the test's own scaling
+> assertion went vacuous: both radii read the resample floor and the ratio
+> that had to exceed 3.0 came back **1.025**.  The demonstration was
+> obsolete because it had succeeded.  It is now INVERTED -- the pre-fix
+> expression is monkeypatched back in as a live degraded arm and must be at
+> least 3x worse than shipped.
 >
-> This branch is the one of the three that is not behind PR 29: it was cut
-> from `a185cfc`, a commit INSIDE PR 29, so it already carries both the
-> tilt-quadratic OPL piston fix (`63e6905`) and the rationalized sphere
-> eikonal (`a185cfc`).  The merge with `main` adds only the p2/e4 test
-> commit (`6ba17cd`) and two documents -- **zero library files** -- and
-> everything it adds is green.
->
-> The full fast gate then found **three failures with ONE root cause, in
-> the branch's own new module** `lumenairy/elements/_lens_imap.py`: its
-> module-level LRU cache `_IMAP_CACHE` has no companion lock and is not
-> enrolled with the central cache registry.  These are library-code
-> defects that are red on the branch tip as well as on the merge ref.
->
-> **STOPPED AND REPORTED, NOT FIXED.**  The remediation is a concurrency
-> contract for a new module -- lock granularity, whether the hit/miss
-> counters are exact under contention, whether the clearer is registered or
-> exempted -- which is the branch author's design decision, not a merge-ref
-> repair.  Section 3 gives the exact defect, the exact remediation the pin
-> itself specifies, and the two lines of prior art.
+> **The second reported failure,
+> `test_w4_t1_explicit_sigma_grid_n_64_is_the_pre_fix_default_bit_for_bit`,
+> is NOT reachable from this merge and was NOT re-pinned.**  Swapping the
+> pre-merge `carrier.py` and `_lens_traced.py` back into the merged tree
+> reproduces both pinned merit values **bit for bit**.  Weakening a pin that
+> the change under test cannot move would have destroyed a guard to silence
+> a symptom whose cause is elsewhere.
 
 ---
 
 ## 1. MERGE
 
-`git merge origin/main`: **clean, zero conflicts.**  What it actually adds:
-
-| path | delta |
-| --- | --- |
-| `docs/audits/FIX_PR29_BLAST_2026_08_11.md` | new |
-| `docs/audits/FIX_TILT_QUADRATIC_OPL_2026_08_11.md` | +37 |
-| `tests/unit/test_niche_e4_corrected_relay_oracle.py` | +118 |
-| `tests/unit/test_niche_p2_design_battery.py` | +127 |
-
-Zero library files, because the merge base is already inside PR 29.
-
-### 1.1 The seam that could have been a silent gap, and was not
-
-PR 29 captures `_opl_piston` at the OPL-referencing site and re-applies it as
-a unit phasor at THREE exit-phase assembly sites in
-`apply_real_lens_traced`.  This branch adds +381 lines to that same function
--- exactly the shape of change that can acquire a fourth assembly site the
-piston never reaches, which would be a silent global-phase defect invisible
-to every single-element test.
-
-It does not.  On the merged tree the evaluator replaces the INVERSION step
-that produces `opl_map` and then feeds the same three assembly sites, all of
-which carry `_opl_piston_phasor` (lines 10758, 10810, 10821).  The branch
-even records the constant in its own probe channel
-(`_imap_out['probe_opl_piston']`, line 10797) -- it was developed on top of
-the piston fix, not merged against it.  `TRACED_INVERSE_MAP` also ships
-`False` and `propagate_traced_carrier_chain` scopes it off for intermediate
-legs, so the default path is byte-identical to shipped either way.
+`git merge origin/main` on `feat/carrier-field`: **clean, zero conflicts.**
+The branch is purely additive (`carrier_field.py`, `validation/pipeline/`,
+two test files, +34 lines of re-export in `propagators/__init__.py`); PR 29
+touches `propagators/carrier.py` and `elements/_lens_traced.py`.  Disjoint.
 
 ---
 
-## 2. WHAT WAS RUN
+## 2. FAILURE 1 -- the eikonal-cancellation fingerprint
 
-No failure name was available (no `gh`), so the candidate set was built from
-what the merge changes and what the branch touches -- and then, because that
-came back green, the WHOLE fast gate was run to settle whether the red was
-an environment axis or a test outside the sweep set.  It was the latter.
+### 2.1 What broke
 
-| suite | mount | result |
-| --- | --- | --- |
-| p2 + e4 (the two files the merge adds) | Windows py3.14 | 36 passed |
-| c15 + c14 + p2 + e4 + tqopl + w3 oracles | WSL py3.12 | 276 passed, 3 skipped, 0 failed |
-| **full fast gate**, `-m "not integration and not slow"` | Windows py3.14 | **4 failed, 11389 passed, 74 skipped, 235 deselected** (3 h 12 m) -- 3 in section 3, 1 in section 3.4 |
-
-`test_niche_c14_encapsulation.py::test_the_newest_era_reproduces_the_live_shipped_values`
-is the one that could have caught an era-registry collision -- the branch
-adds a fourth era `v5.34` to `_traced_flags.ERAS` plus two flags from a
-third module.  PR 29 does not touch `_traced_flags.py`, so there is no
-collision, and it passes.
-
-**No `xfail` and no `skip` was added by this work.**
-`ruff check lumenairy/ tests/unit/` -- all checks passed.
-
----
-
-## 3. THE REAL DEFECT -- `_IMAP_CACHE` has neither a lock nor an enrollment
-
-Three failing outcomes, one cause:
-
-```text
-tests/unit/test_v4_14_2_dispatcher_pin_cache_locks.py::
-    test_cache_has_companion_lock[lumenairy.elements._lens_imap-_IMAP_CACHE]
-tests/unit/test_v4_16_1_dispatcher_pin_cache_registry_enrollment.py::
-    test_every_cache_owning_module_enrolls_with_registry
-tests/unit/test_audit_w4_glass_registry_meshgrid.py::
-    TestP242WalkerCaseInsensitive::test_main_meta_pin_passes_with_broadened_filter
-```
-
-The third is a META-pin that simply calls the second, so it is the same
-finding reported twice.
-
-### 3.1 Why the pins are right
-
-`lumenairy/elements/_lens_imap.py` declares a hand-rolled LRU at module
-level (line 662):
+`carrier.py::_exact_sphere_eikonal` at `755ad99`:
 
 ```python
-_IMAP_CACHE: Dict[str, InverseCharacteristic] = {}
-_IMAP_CACHE_ORDER: list = []
-_IMAP_CACHE_STATS = {'hits': 0, 'misses': 0}
+return sgn * (np.sqrt(r2 + R * R) - abs(R))
 ```
 
-and both accessors perform NON-ATOMIC read-modify-write sequences across two
-containers:
-
-* `_cache_get` -- `get`, then `_IMAP_CACHE_ORDER.remove(key)`, then
-  `append(key)`, plus a `+= 1` on the stats dict;
-* `_cache_put` -- `__setitem__`, then `append`, then a `while` loop doing
-  `pop(0)` on the order list and `pop(old)` on the dict.
-
-Interleave two threads and the two containers can disagree: a key evicted
-from `_IMAP_CACHE_ORDER` but still in `_IMAP_CACHE` leaks past the capacity
-bound, and the reverse drops a live entry.  `threading` is not imported in
-the module at all, and there is no `_IMAP_LOCK` / `_IMAP_CACHE_LOCK`.
-
-This is not hypothetical for this branch specifically: `apply_real_lens_traced`
-takes `n_workers`, and the branch's own change to
-`lumenairy/propagators/carrier.py` adds `'lumenairy.elements._lens_imap'` to
-`_WORKER_STATE_MODULES`, i.e. it deliberately enrolls this module in the
-multi-worker state path.
-
-Separately, `inverse_map_cache_clear()` already exists (line 719) and does
-the right thing, but is never handed to the central registry, so
-`lumenairy`'s global cache-clear does not drain it -- the exact leak the
-v4.16.0 enrollment pin was written for.
-
-### 3.2 The remediation, as the pins themselves specify
-
-Either (1) add the lock and the enrollment:
+and on `main` after `a185cfc`:
 
 ```python
-import threading
-_IMAP_LOCK = threading.RLock()      # name must match the pin's expected set
-# ... wrap the bodies of _cache_get / _cache_put / inverse_map_cache_clear
-
-try:
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
-    import sys as _sys
-    _this_mod = _sys.modules[__name__]
-    _register_cache_clearer(
-        'inverse_map_cache',
-        lambda: getattr(_this_mod, 'inverse_map_cache_clear')(),
-    )
-except ImportError:
-    pass
+return sgn * (r2 / (np.sqrt(r2 + R * R) + abs(R)))
 ```
 
-The pin accepts `_IMAP_LOCK` or `_IMAP_CACHE_LOCK`; prior art for the
-enrollment block is `lumenairy/elements/_lens_traced.py:1527`
-(`_register_cache_clearer('lens_traced_main_guard', ...)`).
+Algebraically identical; in float64 the first loses `eps * |R|` metres to
+catastrophic cancellation wherever `r << |R|`, i.e. `k0 * eps * |R|` radians
+of absolute phase.  `CarrierSpec.phasor_on` calls that routine, so the whole
+A -> B -> A round trip inherited it.
 
-Or (2) add `('lumenairy/elements/_lens_imap.py', '_IMAP_CACHE')` to
-`_CACHE_REGISTRY_EXEMPTIONS` with a cited rationale, and the pair to
-`_SHARED_LOCK_MAPPING` if one lock is meant to guard it together with a
-sibling cache.
-
-**Option (2) is NOT recommended on the evidence above** -- the cache is
-mutable, capacity-bounded, and explicitly enrolled in the multi-worker state
-path, so it is neither a build-once singleton nor transitively drained.
-
-### 3.3 The fourth failure is NOT this branch's, and not the merge's
+The test walked a 100x ladder in `|R|` and asserted the residual rose with
+it (`assert 3.0 < rel / prev < 30.0`).  With the cancellation gone the
+residual is FLAT, so:
 
 ```text
-tests/unit/test_v5_14_1_device_geometry.py::test_pmm2d_stack_dispersive_sweep
-AssertionError: assert np.float64(4.562322741819003e-16) == 0.0
+assert 3.0 < (3.807555044383519e-13 / 3.7143446087575964e-13)
 ```
 
-A strict byte-identity pin (`np.max(np.abs(a - b)) == 0.0`) between two arms
-of a PMM2D dispersive sweep, reading one ulp.  Nothing about it touches the
-traced path, the inverse map, or anything PR 29 changed.
+### 2.2 Measured, both mounts
 
-**Reproduced identically on the merge BASE** -- worktree `C:/tmp/lum_base`
-at `755ad99`, i.e. plain `main` before PR 29 -- on **both** mounts (Windows
-py3.14 / numpy 2.4.4 and WSL py3.12 / numpy 2.4.6).  It is therefore
-pre-existing on `main` in this local environment and attributable to the
-numpy/BLAS build, not to any of the three branches or to the merge.  Out of
-scope here; recorded so it is not re-diagnosed later.
+Round-trip relative L2 of the envelope, shipped arm vs the pre-fix
+expression monkeypatched over the module binding `re_reference` actually
+calls.  Windows py3.14 / numpy 2.4.4 and Linux py3.12 / numpy 2.4.6 agree to
+five figures; the Windows column is quoted.
 
-### 3.4 Why this note stops here
+| `\|R\|` (m) | `dx` (m) | shipped | pre-fix | ratio | `k0*eps*\|R\|` |
+| --- | --- | --- | --- | --- | --- |
+| 5.0e-04 | 3.0e-07 | 3.714e-13 | 4.343e-13 | 1.17 | 5.325e-13 |
+| 5.0e-03 | 1.0e-06 | 3.808e-13 | 2.199e-12 | 5.78 | 5.325e-12 |
+| 5.0e-02 | 2.0e-06 | 3.730e-13 | 2.050e-11 | 54.95 | 5.325e-11 |
 
-The choice between those options, the lock's granularity, and whether the
-hit/miss counters must be exact under contention are design decisions about
-a module this work did not author and was not asked to change.  The rule
-followed throughout this campaign is that a merge-ref repair may re-pin a
-stale TEST, but a real defect in LIBRARY code is reported, not quietly
-patched.  Nothing in this worktree was modified.
+Bare resample, carrier UNCHANGED, same top radius: **3.693e-13**.  That is
+the shipped column, to 1 %: the analytic phasor now costs nothing.
 
-**These three outcomes are red on the branch tip as well as on the merge
-ref** -- they are not caused by, and cannot be fixed by, the merge.
+### 2.3 The fix
+
+`test_round_trip_floor_is_the_eikonal_cancellation` ->
+`test_round_trip_floor_is_the_resample_not_the_eikonal`.  The name was
+asserting something that had become false, which is the failure class this
+repo classifies as silent-wrong; it is renamed rather than patched in place.
+
+The pre-fix routine is carried in the test file as
+`_subtraction_form_sphere_eikonal` -- verbatim except for its last line --
+and installed with `monkeypatch.setattr(carrier_field,
+'_exact_sphere_eikonal', ...)`.  It is a LIVE reference implementation, not
+a stored number, so both arms are the same round trip in the same process
+and nothing in the comparison can drift with the platform, the BLAS or the
+numpy build.
+
+Four claims, all of which a regression to the subtraction form violates:
+
+1. **Envelope rule.**  The shipped residual is under `_ROUND_TRIP_FLOOR =
+   2.0e-12` at every radius -- an envelope over both mounts with 5.2x
+   headroom above the worst measured 3.808e-13, not a fit to either.
+2. **Fingerprint, moved onto the degraded arm.**  The pre-fix residual is
+   under `k0 * eps * |R|` and within a decade of it, so it is that mechanism
+   and not a coincidence.  This is the ORIGINAL fingerprint rule, relocated
+   to where it is still true.
+3. **Separation.**  Where the cancellation is above the resample floor at
+   all (`|R| >= 5 mm`), the pre-fix arm is at least 3x worse.
+4. **Shape.**  Over the 100x span the shipped residual is flat (`max/min <=
+   2.0`; measured 1.03) because it is the resample, and the pre-fix one
+   rises (`max/min >= 10.0`; measured 47).
+
+The `|R| = 0.5 mm` row is pinned in the OTHER direction: the predicted
+cancellation there (5.3e-13) has fallen to the resample floor (3.7e-13), so
+the two arms must NOT be resolvable, and the test asserts `pre-fix < 3x
+shipped`.  That locates the crossover -- exactly where the old defect
+stopped mattering -- instead of quietly dropping the row.
+
+### 2.4 Fail-before
+
+Restoring the subtraction form to `carrier.py` in the merged worktree fails
+the new test on two independent counts:
+
+```text
+AssertionError: |R|=5.000e-03: shipped round trip 2.199e-12 > the resample
+                floor bar 2.000e-12
+```
+
+and, had the envelope bar been looser, claim 3 as well (both arms become the
+same expression, so the ratio is 1.0).  It also fails the sibling control's
+new cross-check (below).  `carrier.py` was restored with `git checkout --`
+immediately; the worktree carries no library modification.
+
+### 2.5 Sibling control, same cause
+
+`test_round_trip_with_no_carrier_change_is_the_bare_resample` still PASSED,
+but its docstring claimed the carrier-unchanged residual "drops two decades"
+below the carrier-changed one.  Post-rationalization it does not -- they
+agree to 1 % (3.693e-13 vs 3.730e-13).  The docstring is corrected to state
+the new truth, the assertion against the OLD form's floor is kept (still
+true, still biting), and two lines are added pinning the agreement.  A true
+assertion under a false explanation is how the next reader gets misled.
 
 ---
 
-## 4. THE W4-T1 ERA PIN
+## 3. FAILURE 2 -- the W4-T1 era pin: ADJUDICATED, NOT RE-PINNED
 
-`test_w4_t1_explicit_sigma_grid_n_64_is_the_pre_fix_default_bit_for_bit`
-passes here, inside the 276.  The full adjudication is in the sibling
-`docs/audits/FIX_MERGEREF_2026_08_12.md` on `feat/carrier-field`.  Summary:
+`tests/unit/test_niche_audit_w3_oracles.py::test_w4_t1_explicit_sigma_grid_n_64_is_the_pre_fix_default_bit_for_bit`
+compares a LIVE arm (`|L[1,0]|^2` from `aberration_tensor` at
+`sigma_grid_n=64`) against two STORED constants (9.0968975e-14 /
+7.1975598e-14) at rel 1e-2.
 
-* it compares a live `aberration_tensor` value against Windows-frozen
-  decimals at rel `1e-2`;
-* its own docstring records a GitHub-runner drift of `3.1e-3` on that value,
-  i.e. **3.2x headroom**, and that a tighter earlier version already broke
-  CI once on that axis (`1664c92`);
-* both local mounts, Linux py3.12 included, read the frozen value to
-  `2.2e-9`, so the excursion belongs to the runner's numpy/BLAS build, not
-  to Linux;
-* `asymptotic*` has no dependency on either file PR 29 changes, and the
-  values are bit-identical with the pre-merge sources swapped in.
+`FIX_TILT_QUADRATIC_OPL_2026_08_11` declares that PR 29 moves intensity
+bytes at float non-commutativity level.  The house rule is that era pins
+comparing two live arms survive that, and that a stored-constant pin at 1e-2
+is six decades above it either way -- so if this one is red, something
+specific broke.  Four measurements say nothing did:
 
-A recurrence should be treated as that known fragility, not a new defect.
-Nothing was re-pinned.
+1. **No dependency.**  `lumenairy/propagators/asymptotic*.py` -- the entire
+   path behind `fit_canonical_polynomials` and `aberration_tensor` -- makes
+   no import of and no call into `propagators/carrier.py` or
+   `elements/_lens_traced.py`, the only two library files PR 29 touches.
+   (`grep` for `_lens_traced|apply_real_lens_traced|_exact_sphere_eikonal|
+   propagators.carrier` across the six `asymptotic*` modules: empty.)
+2. **Bit identity under source swap.**  Both pre-merge files copied back
+   into the merged tree, both values re-measured:
+   `9.096897522969563e-14` / `7.197559771149873e-14` -- **identical to the
+   last bit** to the merged tree's own values.  The merge does not move this
+   number at all, not even at the non-commutativity level the fix doc
+   declares.
+3. **Not platform- or BLAS-fragile here.**  Windows py3.14 / numpy 2.4.4 and
+   Linux py3.12 / numpy 2.4.6 agree to 4e-10 relative, and the value is
+   byte-stable across `OMP/OPENBLAS/MKL_NUM_THREADS` = 1 / 4 / 8 / 16 /
+   unpinned.
+4. **Green, in every order tried.**  Alone; in its own 179-test file on both
+   mounts; and in one process AFTER the three test files PR 29 adds or
+   modifies (`test_fix_tilt_quadratic_opl.py`,
+   `test_niche_e4_corrected_relay_oracle.py`,
+   `test_niche_p2_design_battery.py`) -- 222 passed -- which is the
+   cross-file-state leak a pytest-split shard reshuffle could expose.
+   `pytest-randomly` is not in the `dev` extra, so CI order is deterministic.
+
+**Adjudication: the merge cannot reach this pin, so there is nothing in the
+merge to re-pin against, and the assertion was left exactly as it is.**  The
+pin retains only 3.2x headroom over the 3.1e-3 GitHub-runner drift its own
+docstring records, which is thin -- but that is a pre-existing property of
+the pin, unchanged by and unrelated to this merge, and widening it here
+would be tuning a guard to a symptom whose cause was not found.
 
 ---
 
-## 5. GREEN
+## 4. GREEN
 
-Merged worktree.  No library change, no test change, no `CHANGELOG` entry.
+Merged worktree, both mounts, no `xfail`, no `skip` added.
 
 | suite | Windows py3.14 / numpy 2.4.4 | WSL py3.12 / numpy 2.4.6 |
 | --- | --- | --- |
-| p2 + e4 (the files the merge adds) | 36 passed | included below |
-| c15 + c14 + p2 + e4 + tqopl + w3 oracles | -- | 276 passed, 3 skipped |
-| full fast gate | 11389 passed, 74 skipped, 235 deselected, 4 failed | -- |
+| `test_carrier_field.py` (alone) | 34 passed | 34 passed |
+| `test_carrier_field.py` + `test_pipeline.py` | 74 passed | 74 passed (*) |
+| `test_niche_audit_w3_oracles.py` | 179 passed | 176 passed, 3 skipped (JAX absent) (*) |
+| PR-29 files + w3 oracles, one process | 222 passed | -- |
 
-Of the four: **three are the one real `_IMAP_CACHE` defect** (section 3), and
-one (`test_pmm2d_stack_dispersive_sweep`) is pre-existing on the merge base
-`755ad99` on both mounts (section 3.3).
+(*) the WSL figures come from a single combined invocation of all three
+files: **250 passed, 3 skipped**.
+
+`ruff check lumenairy/ tests/unit/` -- all checks passed.
+
+Documentation of the numbers behind the bars:
+`docs/audits/BUILD_CARRIER_FIELD_2026_08_11.md` S5 (the original
+attribution) and section 2.2 above (the post-fix two-arm ladder).

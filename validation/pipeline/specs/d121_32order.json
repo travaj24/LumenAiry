@@ -1,0 +1,74 @@
+{
+ "schema": 1,
+ "name": "d121_32order",
+ "workdir": "../_work/d121_32order",
+ "wavelength": 1.31e-06,
+ "notes": "The design-121 32-order Dammann fan through the staged pipeline, end to end: the DOE's own order table -> 32 independent traced chains to the fine-retrace exit -> one common carrier -> one leg plan -> 32 Bluestein zooms. ray_subsample=1 is this pipeline's default and is the configuration PROBE_CHAIN_LADDER_PISTON S2.4 recommends for an aggregating consumer: rs=4 throws away 6.5e-03 of the aperture power, 160x the campaign's 4e-05 energy bar, and no affordable grid refinement recovers it as cheaply. n_fine_cap=8192 is the affordable grid of record (ADJUDICATION_NFC_8192); the pre-flight PROVES the RAM clamp cannot bind and the runner asserts the grid it got. n_common=8192 at 1.2292 um is a 10.07 mm window, which holds all 32 chief rays (-1.915..+1.436 mm in x) plus their 2.64 mm support with 0.48 mm to spare -- the tightest beam is the same (-4,-2) the probe measured. capture_reference_tile keeps each chain's own shipped-path tile, which is what the per-frame comparison is scored against. LEG MODE: 'crop' is the like-for-like variant against the shipped per-order path and is what the run of record used. BUILD_PIPELINE_2026_08_11 S6.4 then MEASURED that at 32 orders the 4.74 mm crop cuts the fan's own neighbours mid-aperture and their diffraction lands in the frame: worst |P/P_shipped - 1| = 2.384e-04 against the campaign's 4e-05 bar, with every ratio ABOVE 1. On the same summed field and the same frames the 'full' leg -- the architecture as specified, which truncates nothing -- reads 2.641e-05 and holds every bar. Set leg.mode='full' for a FILLED fan; 'crop' is right only for a sparse subset.",
+ "coherent_sum": false,
+ "decompose": {
+  "kind": "design121_doe",
+  "params": {
+   "orders": "all",
+   "cell_pixels": 128,
+   "chain_a": {
+    "n": 1024,
+    "ray_subsample": 1,
+    "n_workers": 1,
+    "final_leg": "exact"
+   }
+  }
+ },
+ "chain": {
+  "kind": "traced",
+  "plane": "fine_retrace_exit",
+  "ray_subsample": 1,
+  "n_workers": 1,
+  "n_fine_cap": 8192,
+  "window_factor": 4.0,
+  "final_leg": "auto",
+  "ram_budget": "inf",
+  "on_box_budget": "warn",
+  "capture_reference_tile": true,
+  "params": {}
+ },
+ "aggregate": {
+  "dx_common": 1.2292e-06,
+  "n_common": 8192,
+  "origin": [
+   0.0,
+   0.0
+  ],
+  "reference_beam": null,
+  "include": "all",
+  "weights": "decompose",
+  "batch_size": 8,
+  "support_frac": 0.99999,
+  "nyquist_margin": 1.0,
+  "on_nyquist": "error",
+  "on_window": "warn",
+  "bandlimit": false
+ },
+ "leg": {
+  "mode": "crop",
+  "distance": 0.0077058,
+  "n_fine_cap": 8192,
+  "window_factor": 4.0,
+  "ram_budget": "inf",
+  "on_replica": "warn",
+  "on_readout_window": "warn",
+  "on_ram_cap": "error",
+  "on_n_fine_cap": "error"
+ },
+ "readout": {
+  "dx_out": 2e-07,
+  "n_out": 1024,
+  "frames": "all",
+  "save_frames": true,
+  "metrics": true,
+  "ee_radii": [
+   3e-06,
+   6e-06,
+   1.2e-05
+  ]
+ }
+}

@@ -1,0 +1,62 @@
+{
+ "schema": 1,
+ "name": "d121_3order_probe",
+ "workdir": "../_work/d121_3order_probe",
+ "wavelength": 1.31e-06,
+ "notes": "PROBE_SUM_AT_APERTURE_2026_08_11 arm B, re-run through the staged pipeline. Consumes the probe's ARCHIVED arm-A artifacts byte for byte (decompose='sumap_cache' + chain='cached_aperture'), so nothing upstream of the seam can differ and the S1.2 hazard -- a library edit moving a chain's absolute phase -- cannot contaminate the comparison. chain.ray_subsample=4 and n_fine_cap=8192 are what the ARCHIVE was produced with, not this pipeline's rs=1 default; they are stated so the artifact key is honest. Common grid dx_c=1.2292 um / N_c=8192 is the probe's configuration of record (S3, pitch-converged in S8.1). Score the intensity columns; the piston columns are pre-FIX_TILT_QUADRATIC_OPL.",
+ "coherent_sum": false,
+ "decompose": {
+  "kind": "sumap_cache",
+  "params": {
+   "cache_dir": "D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/validation/repro_traced_carrier_121",
+   "orders": [[0, 0], [-2, 0], [-4, -2]],
+   "nfc": 8192
+  }
+ },
+ "chain": {
+  "kind": "cached_aperture",
+  "plane": "fine_retrace_exit",
+  "ray_subsample": 4,
+  "n_workers": 1,
+  "n_fine_cap": 8192,
+  "window_factor": 4.0,
+  "final_leg": "auto",
+  "ram_budget": "inf",
+  "on_box_budget": "warn",
+  "capture_reference_tile": true,
+  "params": {}
+ },
+ "aggregate": {
+  "dx_common": 1.2292e-06,
+  "n_common": 8192,
+  "origin": [0.0, 0.0],
+  "reference_beam": "p0_p0",
+  "include": "all",
+  "weights": "decompose",
+  "batch_size": 8,
+  "support_frac": 0.99999,
+  "nyquist_margin": 1.0,
+  "on_nyquist": "error",
+  "on_window": "warn",
+  "bandlimit": false
+ },
+ "leg": {
+  "mode": "crop",
+  "distance": 0.0077058,
+  "n_fine_cap": 8192,
+  "window_factor": 4.0,
+  "ram_budget": "inf",
+  "on_replica": "warn",
+  "on_readout_window": "warn",
+  "on_ram_cap": "error",
+  "on_n_fine_cap": "error"
+ },
+ "readout": {
+  "dx_out": 2e-07,
+  "n_out": 1024,
+  "frames": "all",
+  "save_frames": true,
+  "metrics": true,
+  "ee_radii": [3e-06, 6e-06, 1.2e-05]
+ }
+}
