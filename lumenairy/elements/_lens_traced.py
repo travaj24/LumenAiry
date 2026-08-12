@@ -6430,11 +6430,13 @@ def apply_real_lens_traced(
         The map is used only when every guard passes -- one congruence, an
         unfolded Jacobian, a live ray set, a landing hull it can be honest
         about, a degree that reaches the bar, and PARITY with the very Newton
-        path it replaces on held-out ray samples.  A guard that fires keeps the
+        path it replaces at OFF-LATTICE probe points, against ground truth
+        from the element's own trace there.  A guard that fires keeps the
         shipped path unchanged and reports why (``INVERSE_MAP_GUARD``).
-        ``False`` is the SHIPPED DEFAULT and the fail-before, and it is
-        byte-identical to the pre-feature library; see that flag's own note
-        for the design-121 banner measurement that decided it.  Ignored at ``ray_subsample == 1`` (there is no coarse lattice
+        ``False`` is the FAIL-BEFORE, and it is byte-identical to the
+        pre-feature library; see that flag's own note for the exact-trace
+        oracle and the design-121 banner measurement that decided the
+        default.  Ignored at ``ray_subsample == 1`` (there is no coarse lattice
         to replace), with ``inversion_method != 'newton'``, with
         ``use_gpu=True``, and on the row-band assembly path (which exists
         precisely so a full-grid float64 is never materialised).
@@ -10264,6 +10266,78 @@ def apply_real_lens_traced(
             _o, _xe, _ye = _invert_newton(_xq, _yq, _want_entrance=True)
             return _xe, _ye, _o
 
+        def _imap_probe_trace(_px, _py):
+            """G8's GROUND TRUTH: this element's own trace of this element's
+            own launch congruence, at entrance points that are NOT launch
+            nodes.
+
+            WHY THE GUARD NEEDS IT.  G8 used to score both arms at held-out
+            LAUNCH NODES.  ``newton_fit='spline'`` builds its
+            ``RectBivariateSpline`` with the default ``s = 0``, so the
+            incumbent reproduces every launch node EXACTLY -- the held-out ones
+            included, because they were held out of the MODEL only -- and its
+            measured "error" there was the Newton loop's leftover residual
+            rather than its accuracy (34.5x better at its own knots than
+            between them; ``docs/audits/FIX_G8_PROBE_2026_08_12.md`` S2).  Exit
+            pixels are never launch nodes, so the acceptance bar has to be
+            measured where they DO fall, against truth neither arm defines.
+
+            Every term is the one the lattice trace used, in the same order and
+            from the same objects: the launch directions
+            (``grad(W + a_fit)`` under niche C6), the exit-vertex correction,
+            the H6 carrier eikonal, the C6 residual eikonal and the SAME
+            on-axis reference ``_opl_ref``.  It is pinned to reproduce
+            ``x_out_grid`` / ``y_out_grid`` / ``opl_grid`` when handed the
+            launch lattice itself.
+            """
+            _px = np.asarray(_px, dtype=np.float64).ravel()
+            _py = np.asarray(_py, dtype=np.float64).ravel()
+            if _px.size == 0:
+                _e = np.empty(0, dtype=np.float64)
+                return _e, _e.copy(), _e.copy()
+            if _tilt_aware_launch:
+                _pL, _pM = _sample_local_tilts(
+                    E_in, wavelength, dx, _px, _py,
+                    origin=(_org_x, _org_y))
+                _pL = np.asarray(_pL, dtype=np.float64).ravel()
+                _pM = np.asarray(_pM, dtype=np.float64).ravel()
+            elif _carrier_grad is not None:
+                _pL, _pM = _carrier_grad(_px, _py)
+                _pL = np.asarray(_pL, dtype=np.float64).ravel()
+                _pM = np.asarray(_pM, dtype=np.float64).ravel()
+                if _resid_eik is not None:
+                    # the C6 launch augmentation.  ``.diag`` is NOT touched
+                    # here: the launch diagnostic belongs to the lattice trace,
+                    # and a probe that overwrote it would report itself.
+                    _aL, _aM = _resid_eik.grad(_px, _py)
+                    _pL = _pL + np.asarray(_aL, dtype=np.float64).ravel()
+                    _pM = _pM + np.asarray(_aM, dtype=np.float64).ravel()
+            else:
+                _pL = np.zeros_like(_px)
+                _pM = np.zeros_like(_px)
+            _pfin = trace(_make_bundle(x=_px.copy(), y=_py.copy(),
+                                       L=_pL, M=_pM, wavelength=wavelength),
+                          surfaces, wavelength,
+                          output_filter='last').image_rays
+            with np.errstate(divide='ignore', invalid='ignore'):
+                _pt = np.where(_pfin.alive & (np.abs(_pfin.N) > 1e-30),
+                               -_pfin.z / _pfin.N, 0.0)
+            _pox = _pfin.x + _pfin.L * _pt
+            _poy = _pfin.y + _pfin.M * _pt
+            _pop = _pfin.opd + n_exit * _pt
+            if _carrier_W_fn is not None:
+                _pop = _pop + _carrier_W_fn(_px, _py)
+            if _resid_eik is not None:
+                _pop = _pop + _resid_eik.value(_px, _py)
+            # the SAME on-axis reference the lattice OPL carries, so the model
+            # channel, the incumbent and this truth are on one convention.
+            _pop = _pop - _opl_ref
+            if not _pfin.alive.all():
+                _pox = np.where(_pfin.alive, _pox, np.nan)
+                _poy = np.where(_pfin.alive, _poy, np.nan)
+                _pop = np.where(_pfin.alive, _pop, np.nan)
+            return _pox, _poy, _pop
+
         # NO Jacobian is passed.  The model derives its own from TRACED data
         # (``_IMAP_DETJ_SOURCE``), which is what keeps its amplitude
         # independent of ``newton_fit`` -- see that constant's note, and the
@@ -10286,6 +10360,10 @@ def apply_real_lens_traced(
             weights=(_fit_weights if _imap_weights is None
                      else _imap_weights),
             parity_invert=_imap_incumbent,
+            # G8's ground truth, which is neither arm's: the element's own
+            # trace at OFF-LATTICE entrance points.  The guard picks the
+            # points; this only supplies the congruence.
+            probe_trace=_imap_probe_trace,
             # WHICH incumbent this is.  The model is now identical on either
             # basis, so without this the two bases COLLIDE in the build cache
             # and the second call inherits the first's G8 verdict -- an

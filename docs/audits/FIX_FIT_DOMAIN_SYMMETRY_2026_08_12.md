@@ -466,9 +466,9 @@ No `xfail`, no `skip`, no `CHANGELOG` entry, and no acceptance line edited.
 
 ## 9. WHAT IS NOT CLOSED
 
-1. **G8's held-out probe (S6).**  Localised, measured, specified; not fixed.
-   It blocks the default flip and it is a false-refusal defect on its own
-   merits.
+1. **G8's held-out probe (S6).**  Localised, measured, specified; not fixed
+   *here*.  **CLOSED in the following pass -- see S11 and
+   `docs/audits/FIX_G8_PROBE_2026_08_12.md`.**
 2. **The 34.5x / 1.0x probe-bias figures are from ONE fixture** (niche C6's
    free leg).  The mechanism is basis-level (`s=0` interpolates) and does not
    depend on the prescription, but the SIZE of the bias does, and a guard
@@ -525,3 +525,29 @@ Every probe inserts the REPOSITORY ROOT at `sys.path[0]` before importing
 directory as `sys.path[0]`, and this repo is installed, so without the insert
 every one of these measurements silently scores the INSTALLED tree instead of
 the working one.  It cost two false "no change" readings during this fix.
+
+---
+
+## 11. S6 IS CLOSED -- and so is the default
+
+Written after the fact, so this document does not stay stale about its own
+open item.  The full record is
+`docs/audits/FIX_G8_PROBE_2026_08_12.md`; the three lines that matter here:
+
+* **S6's false refusal is fixed at the PROBE, not at the bar.**  G8 now scores
+  both arms at OFF-LATTICE points -- one ray per launch cell, placed inside it
+  by the R2 low-discrepancy sequence -- with truth from the element's own
+  trace there (a new `probe_trace` argument, pinned BIT-IDENTICAL to the
+  lattice trace when handed the lattice).  `_IMAP_PARITY_FACTOR` is still 1.0,
+  still a ratio, still all three channels.
+* **S7's acceptance item (1) is now MET at the level of the verdict too.**
+  The c6 backend spread with the flag on went `1.0600e-02 -> 0.000000e+00`;
+  both bases ENGAGE and return the same bytes.  The 1.0x / 34.5x probe-bias
+  table in S6.3 is what the fix acts on, and it is reproduced on design 121:
+  the re-architected probe reads the polynomial arm's numbers to three digits
+  (6.667e-03 w against the node probe's 6.736e-03 on order (-4,-2)), i.e. the
+  bar moved only where the incumbent was exact by construction.
+* **`TRACED_INVERSE_MAP` now defaults to `True`.**  S7's statement that item
+  (5) "is not run" is superseded; the guard was satisfied rather than
+  weakened, and it still refuses -- the S6.5b pre-restriction model at 622x
+  and the exit-degree-8 underfit at 2.17x on design 121's order (-4,-2).

@@ -242,10 +242,19 @@ if __name__ == '__main__':
           "the real prescription (POP_CROSSCHECK_121_2026_07_31.md sec 2); "
           "ideal-field ceiling through this readout 3.45-3.55um / 90.3 / 99.8)")
     print("  shipping-default acceptance (CREF/AM/PIP unset, N=2048/NFC=8192/"
-          "WF=4.0): AT-PLANE dz=0: 3.350um / 90.3 / 99.7 / 99.8, on-axis")
+          "WF=4.0): AT-PLANE dz=0: 3.450um / 90.3 / 99.8 / 99.9, on-axis, "
+          "pk 5.486e+03")
+    print("  (re-baselined 2026-08-12, user-approved, with the inverse-map "
+          "default: an exact-trace Newton oracle proved the prior terminal-leg "
+          "hand-off carried 6e-3..1.1e-2 waves core wavefront + up to 1.6% core "
+          "amplitude error that SHARPENED the spot below the ideal-field "
+          "ceiling; 3.450um sits ON the ceiling (3.45-3.55) on all four "
+          "numbers.  Oracle case: BUILD_INVERSE_MAP S6 + FIX_G8_PROBE.  Prior "
+          "recorded line: 3.350/90.3/99.7/99.8 = the flattered reading, "
+          "reproducible with ARM_IMAP=0.)")
     print("  (re-baselined 2026-08-02, user-approved, with niche C9+C10: the exact "
           "sphere conversion and the r^6 residual term removed ~1 point/order of "
-          "SIMULATOR error that was inflating the spot; 3.350um matches the "
+          "SIMULATOR error that was inflating the spot; 3.350um matched the "
           "exact-ray oracle to 0.02-0.06um.  Prior recorded lines: 3.450/90.2 "
           "at-plane post-C6, 3.450/88.8/99.6 at dz=+10um pre-C6.)")
     print("  (re-baselined 2026-08-01, user-approved: pre-C6 the chain focused "
