@@ -4,6 +4,25 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.35.1] — 2026-08-13
+
+### Fixed — the 33 GB unpriced map build (v5.35.0's publish gate), and two more
+
+v5.35.0's publish was correctly refused by its verify shard: the
+inverse-map build (new-by-default) could hold 3-4 full copies of a
+5.5 GB degree-14 design matrix with no memory pricing -- 33 GB peak,
+fatal on 7 GB CI runners.  Row-blocked bit-identically (34.7 -> 6.2 GB
+on the killer test) plus the new GRAM guard: the build prices itself
+against the RAM budget and refuses byte-identically to the incumbent
+path when it cannot fit.  Also: the subsample scaling-law test misread
+a physics COLLAPSE as a failure -- the map flattens exit-phase error
+to 0.006 nm at every ray_subsample (21-349 nm without it); the law is
+now pinned on the path it describes and the collapse as its own claim.
+And screen_obliquity's validator used identity for the 'auto' string,
+rejecting any caller-built value (env vars, config files); now
+equality for the string, identity for the booleans.  v5.35.0 remains a
+source-only tag; this is the PyPI release of the 5.35 content.
+
 ## [5.35.0] — 2026-08-13
 
 ### The field-summation architecture — coherent multi-beam optics, delivered whole
