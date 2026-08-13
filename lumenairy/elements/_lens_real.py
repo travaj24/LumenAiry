@@ -2194,6 +2194,73 @@ def _screen_drift_opd(sag, gx, gy, p0x, p0y, n1, n2, ux, uy, dx, dy, xp):
     return xp.where(xp.isfinite(d), d, xp.zeros((), dtype=d.dtype))
 
 
+def _screen_drift_opd_rows(sag_h, gx_h, gy_h, p0x_h, p0y_h, n1, n2, ux_b, uy_b,
+                           dx, dy, xp, lo, hi):
+    """Row-banded :func:`_screen_drift_opd` (v5.35.3).
+
+    Equation (7) is the GRADIENT of the coefficient error, so a band cannot be
+    evaluated from the band alone: ``e_err`` has to exist one row EITHER SIDE
+    of the band for ``xp.gradient``'s central differences to match the
+    whole-grid stencil.  The caller therefore passes ``sag_h`` / ``gx_h`` /
+    ``gy_h`` / ``p0x_h`` / ``p0y_h`` already widened to rows
+    ``[max(0, r0-1) : min(Ny, r1+1)]``, and ``lo:hi`` selects the band inside
+    that halo.  Rows 0 and ``Ny-1`` keep their natural one-sided stencil
+    because the halo is clipped at the true array edge -- exactly what the
+    whole-grid ``xp.gradient`` does there.
+
+    ``ux_b`` / ``uy_b`` are the drift at the BAND rows only (the multiply is
+    pointwise).  Byte-identical to :func:`_screen_drift_opd` restricted to the
+    band: the interior reduction is elementwise-equivalent (``where`` over an
+    all-true mask is the identity), so a defect in one band cannot change
+    another band's arithmetic."""
+    e_err = _screen_coeff_error(sag_h, gx_h, gy_h, p0x_h, p0y_h, n1, n2, xp)
+    ey, ex = xp.gradient(e_err, dy, dx)
+    d = -(ux_b * ex[lo:hi] + uy_b * ey[lo:hi])
+    if bool(xp.all(xp.isfinite(d))):
+        return d
+    return xp.where(xp.isfinite(d), d, xp.zeros((), dtype=d.dtype))
+
+
+def _screen_obliquity_row_evaluator(carrier, dx, dy, Nx, Ny, n_medium=1.0):
+    """A ``rows(r0, r1) -> (qx_band, qy_band)`` callable for the carrier
+    momentum field, or ``None`` when this carrier has no closed form that can
+    be evaluated a row-band at a time (v5.35.3).
+
+    :func:`_screen_obliquity_angle_field` builds two full-grid ``(Ny, Nx)``
+    float64 momentum arrays for a non-collimated carrier -- 2 grids that the
+    row-banded sag path otherwise never needs (+17 GB at N = 32768).  A
+    :class:`~._lens_traced.TiltedCarrier` is ANALYTIC in ``(x, y)``
+    (:func:`~._lens_traced._tilted_carrier_parts` is pointwise: no reduction,
+    no grid lookup, no finite difference), so its rows can be evaluated on
+    demand from the same axis vectors.
+
+    The returned band is byte-identical to the corresponding row slice of the
+    whole-grid field: the y axis is rebuilt as ``arange(r0, r1) - Ny/2``, which
+    is exactly ``(arange(Ny) - Ny/2)[r0:r1]`` in IEEE terms, and the SAME
+    ``_tilted_carrier_parts`` -> ``asarray(float64) * n1`` chain runs on it.
+
+    Returns ``None`` for the collimated (``R = inf``) tilt -- the caller's
+    two-float fast path already costs nothing -- and for the ndarray / 'auto'
+    / scalar-conjugate carriers, whose ``_compute_carrier`` set-up is itself
+    whole-grid; those keep the materialised field and are simply sliced."""
+    from ._lens_traced import TiltedCarrier, _tilted_carrier_parts
+    if not isinstance(carrier, TiltedCarrier):
+        return None
+    if not np.isfinite(float(carrier.R)):
+        return None
+    n1 = float(n_medium)
+    xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+
+    def rows(r0, r1):
+        yax = (np.arange(r0, r1, dtype=np.float64) - Ny / 2) * dy
+        Xg, Yg = np.meshgrid(xax, yax)
+        _W, L, M = _tilted_carrier_parts(carrier, Xg, Yg)
+        return (np.asarray(L, dtype=np.float64) * n1,
+                np.asarray(M, dtype=np.float64) * n1)
+
+    return rows
+
+
 def _screen_obliquity_pupil_radius(prescription, Nx, Ny, dx, dy):
     """The disc the guard scores its wavefront estimate over: the declared
     aperture, else the widest per-surface semi-diameter, else the grid's
@@ -3260,6 +3327,12 @@ def apply_real_lens(
     _obl_drift_live = False
     _obl_q_zero = True
     _obl_total = None
+    _obl_n_first = 1.0
+    # v5.35.3: the row-band evaluator for the carrier momentum field.  Not
+    # None => ``_obl_qx`` / ``_obl_qy`` are NOT materialised; bands come from
+    # the closed form and ``_obl_q_whole()`` builds the full field only if a
+    # surface actually falls through to the whole-grid path.
+    _obl_q_rows_fn = None
     if _obl_active:
         # The carrier's direction cosines become a transverse OPTICAL
         # momentum in the FIRST medium -- the units _facet_axial_momenta and
@@ -3267,20 +3340,291 @@ def apply_real_lens(
         # prescription starting in air; a factor n1 for an immersed one.
         _obl_n_first = float(get_glass_index(surfaces[0]['glass_before'],
                                              wavelength)) if surfaces else 1.0
-        _obl_qx, _obl_qy = _screen_obliquity_angle_field(
-            carrier, E_in, wavelength, dx, dy, Nx, Ny,
-            n_medium=_obl_n_first)
-        if xp is not np:
-            _obl_qx = xp.asarray(_obl_qx)
-            _obl_qy = xp.asarray(_obl_qy)
-        # A zero-angle carrier has no drift to accumulate, so R1 is skipped
-        # STRUCTURALLY rather than by cancellation -- the byte-null of
-        # ``test_zero_angle_carrier_is_byte_identical`` is not a tolerance.
-        _obl_q_zero = (bool(xp.all(_obl_qx == 0.0))
-                       and bool(xp.all(_obl_qy == 0.0)))
+        if _chunk_grids:
+            _obl_q_rows_fn = _screen_obliquity_row_evaluator(
+                carrier, dx, dy, Nx, Ny, n_medium=_obl_n_first)
+        if _obl_q_rows_fn is None:
+            _obl_qx, _obl_qy = _screen_obliquity_angle_field(
+                carrier, E_in, wavelength, dx, dy, Nx, Ny,
+                n_medium=_obl_n_first)
+            if xp is not np:
+                _obl_qx = xp.asarray(_obl_qx)
+                _obl_qy = xp.asarray(_obl_qy)
+            # A zero-angle carrier has no drift to accumulate, so R1 is skipped
+            # STRUCTURALLY rather than by cancellation -- the byte-null of
+            # ``test_zero_angle_carrier_is_byte_identical`` is not a tolerance.
+            _obl_q_zero = (bool(xp.all(_obl_qx == 0.0))
+                           and bool(xp.all(_obl_qy == 0.0)))
+        else:
+            # Same reduction, band-wise, short-circuiting on the first
+            # non-zero band -- a real tilt exits after one band, and only a
+            # genuinely zero field pays the full scan.
+            _obl_q_zero = True
+            _cr_q = int(sag_chunk_rows)
+            _qb_x = _qb_y = None
+            for _qr0 in range(0, Ny, _cr_q):
+                _qb_x, _qb_y = _obl_q_rows_fn(_qr0, min(Ny, _qr0 + _cr_q))
+                if not (bool(xp.all(_qb_x == 0.0))
+                        and bool(xp.all(_qb_y == 0.0))):
+                    _obl_q_zero = False
+                    break
+            del _qb_x, _qb_y
         if on_screen_obliquity != 'silent':
             # only the guard reads the accumulated correction field
             _obl_total = xp.zeros((Ny, Nx), dtype=_sag_real)
+
+    # ---- screen obliquity: the row-band (halo) machinery (v5.35.3) --------
+    # Everything below is a band-wise restatement of the whole-grid obliquity
+    # block; the arithmetic per element is the SAME expression, so the banded
+    # result is byte-identical (tests/unit/test_obl_banded_halo.py).
+    #
+    # Two pieces of per-surface bookkeeping keep that claim true:
+    #
+    # * ``_obl_p0_src`` -- ``p0`` AS OF THE START of the surface.  Every band
+    #   must read the same source the whole-grid block reads, and that is not
+    #   automatic: while ``p0`` is still the scalar seed ``0.0``, promoting it
+    #   to a full grid at band 0 would make bands 1..n read a float32 ARRAY of
+    #   zeros where band 0 (and the whole grid) read a PYTHON float.  Under
+    #   NEP 50 that changes the momentum-triangle arithmetic in
+    #   ``_facet_axial_momenta`` from float64 to float32 -- measured 5e-6 of
+    #   field error at ``sag_dtype='float32'``, invisible at the float64
+    #   default.  So a scalar source is written into a FRESH destination.
+    # * ``_obl_p0_pending`` -- when the source IS a grid the write is in place,
+    #   but held back ONE band: the next band's R1 halo still has to read row
+    #   ``r0-1`` at its pre-surface value.
+    _obl_p0_src = None
+    _obl_p0_dst = None
+    _obl_p0_pending = None
+
+    def _obl_band_of(v, r0, r1):
+        """``v`` restricted to rows ``[r0:r1)`` -- scalars pass through."""
+        return v[r0:r1] if getattr(v, 'ndim', 0) else v
+
+    def _obl_q_bands(r0, r1):
+        """``(qx, qy)`` for rows ``[r0:r1)``."""
+        if _obl_q_rows_fn is not None:
+            return _obl_q_rows_fn(r0, r1)
+        return (_obl_band_of(_obl_qx, r0, r1), _obl_band_of(_obl_qy, r0, r1))
+
+    def _obl_q_whole():
+        """``(qx, qy)`` on the whole grid, materialising the row-evaluated
+        field the first time a surface falls through to the whole-grid path."""
+        nonlocal _obl_qx, _obl_qy, _obl_q_rows_fn
+        if _obl_q_rows_fn is not None:
+            _obl_qx, _obl_qy = _screen_obliquity_angle_field(
+                carrier, E_in, wavelength, dx, dy, Nx, Ny,
+                n_medium=_obl_n_first)
+            _obl_q_rows_fn = None
+        return _obl_qx, _obl_qy
+
+    def _obl_accum_band(acc, band, r0, r1):
+        """``acc = acc + band`` over rows ``[r0:r1)``, promoting the scalar
+        seed to full-grid STORAGE exactly once (the accumulators are genuinely
+        full-grid state -- only the transients are banded).  The promotion
+        fills with the OLD scalar, which is what the rows this loop has not
+        reached yet still hold."""
+        if getattr(acc, 'ndim', 0):
+            new = acc[r0:r1] + band
+            if new.dtype != acc.dtype:
+                acc = acc.astype(new.dtype)
+            acc[r0:r1] = new
+            return acc
+        if getattr(band, 'ndim', 0) == 0:
+            return acc + band                  # all-scalar: unchanged
+        new = acc + band
+        acc = xp.full((Ny, Nx), acc, dtype=new.dtype)
+        acc[r0:r1] = new
+        return acc
+
+    def _obl_flush_p0():
+        """Commit the deferred in-place ``_obl_p0*`` band write."""
+        nonlocal _obl_p0_pending
+        if _obl_p0_pending is not None:
+            _pr0, _pr1, _px, _py = _obl_p0_pending
+            _obl_p0x[_pr0:_pr1] = _px
+            _obl_p0y[_pr0:_pr1] = _py
+            _obl_p0_pending = None
+
+    def _obl_begin_surface():
+        """Pin the momentum source every band of this surface reads."""
+        nonlocal _obl_p0_src, _obl_p0_dst, _obl_p0_pending
+        _obl_p0_src = (_obl_p0x, _obl_p0y)
+        _obl_p0_dst = None
+        _obl_p0_pending = None
+
+    def _obl_end_surface():
+        """Commit the surface's momentum accumulation."""
+        nonlocal _obl_p0x, _obl_p0y, _obl_p0_src, _obl_p0_dst
+        _obl_flush_p0()
+        if _obl_p0_dst is not None:
+            _obl_p0x, _obl_p0y = _obl_p0_dst
+            _obl_p0_dst = None
+        _obl_p0_src = None
+
+    def _obl_halo_rows():
+        """Sag-halo width the banded obliquity block needs: 1 row for the sag
+        gradient itself, 2 when the R1 drift term is live (it takes a SECOND
+        gradient, of ``e_err``, which is built from the first)."""
+        return 2 if (_obl_apply and _obl_drift_live) else 1
+
+    def _obl_any_sag(R, kc, asph, cr):
+        """``bool(xp.any(sag))`` for a plain conic+aspheric surface, band-wise.
+
+        The whole-grid block is skipped entirely for a FLAT face (a plate, a
+        cemented plano, a stop), and that skip is observable -- it is what
+        keeps ``_obl_p0*`` a pair of floats through a leading plate.  Reproduce
+        the reduction without materialising the grid; a powered surface
+        short-circuits on the first band."""
+        for _r0 in range(0, Ny, cr):
+            _r1 = min(Ny, _r0 + cr)
+            _s = _surface_sag_general(
+                _x_sq[None, :] + _y_sq[_r0:_r1, None], R, kc, asph)
+            if bool(xp.any(_s)):
+                return True
+        return False
+
+    def _obl_band_delta(sag_h, _h0, _h1, r0, r1, n1r, n2r, grad_h=None):
+        """The whole-grid obliquity block for rows ``[r0:r1)``.
+
+        ``sag_h`` is the surface sag on the halo rows ``[_h0:_h1)``;
+        ``grad_h`` is ``xp.gradient(sag_h, dy, dx)`` when the caller already
+        took it on the SAME array (the slant path does) -- it is recomputed on
+        the NaN-zeroed copy when the conic domain edge put NaNs in the band,
+        exactly as the whole-grid block does.
+
+        Updates ``_obl_total`` and stages the ``_obl_p0*`` accumulation;
+        returns the correction to add to this band's ``opd``, or None when the
+        correction is estimator-only (``screen_obliquity=False``)."""
+        nonlocal _obl_p0x, _obl_p0y, _obl_p0_src, _obl_p0_dst, _obl_p0_pending
+        _src_x, _src_y = _obl_p0_src
+        _lo = r0 - _h0
+        _hi = _lo + (r1 - r0)
+        _ok_h = sag_h
+        if bool(xp.any(xp.isnan(sag_h))):
+            _ok_h = xp.where(xp.isnan(sag_h), 0.0, sag_h)
+            grad_h = None
+        if grad_h is None:
+            _gy_h, _gx_h = xp.gradient(_ok_h, dy, dx)
+        else:
+            _gy_h, _gx_h = grad_h
+        _gx_b = _gx_h[_lo:_hi]
+        _gy_b = _gy_h[_lo:_hi]
+        _qx_b, _qy_b = _obl_q_bands(r0, r1)
+        _d = _screen_obliquity_delta(
+            _ok_h[_lo:_hi], _gx_b, _gy_b,
+            _obl_band_of(_src_x, r0, r1), _obl_band_of(_src_y, r0, r1),
+            _qx_b, _qy_b, n1r, n2r, xp)
+        if _obl_total is not None:
+            _obl_total[r0:r1] += _d
+        _out = None
+        if _obl_apply:
+            _out = _d
+            if _obl_drift_live:
+                # R1 (equation 7) on a 1-row halo INSIDE the sag halo: e_err
+                # is pointwise but its gradient is not, so the band has to see
+                # one row either side.  ``p0`` is read at its PRE-surface value
+                # -- guaranteed by the pinned source + deferred write below.
+                _e0 = max(0, r0 - 1)
+                _e1 = min(Ny, r1 + 1)
+                _el = _e0 - _h0
+                _eh = _el + (_e1 - _e0)
+                _out = _out + _screen_drift_opd_rows(
+                    _ok_h[_el:_eh], _gx_h[_el:_eh], _gy_h[_el:_eh],
+                    _obl_band_of(_src_x, _e0, _e1),
+                    _obl_band_of(_src_y, _e0, _e1),
+                    n1r, n2r,
+                    _obl_band_of(_obl_ux, r0, r1),
+                    _obl_band_of(_obl_uy, r0, r1),
+                    dx, dy, xp, r0 - _e0, r0 - _e0 + (r1 - r0))
+        # the screen model's OWN carrier-free momentum, accumulated at this
+        # field point for the next surface's local ray angle
+        _new_x = _obl_band_of(_src_x, r0, r1) - (n2r - n1r) * _gx_b
+        _new_y = _obl_band_of(_src_y, r0, r1) - (n2r - n1r) * _gy_b
+        if getattr(_src_x, 'ndim', 0) == 0:
+            # scalar source -> fresh destination, so every band still reads
+            # the scalar (see the _obl_p0_src note above).
+            if _obl_p0_dst is None:
+                _obl_p0_dst = (xp.empty((Ny, Nx), dtype=_new_x.dtype),
+                               xp.empty((Ny, Nx), dtype=_new_y.dtype))
+            _obl_p0_dst[0][r0:r1] = _new_x
+            _obl_p0_dst[1][r0:r1] = _new_y
+        else:
+            _obl_flush_p0()
+            if _new_x.dtype != _obl_p0x.dtype:
+                _obl_p0x = _obl_p0x.astype(_new_x.dtype)
+                _obl_p0y = _obl_p0y.astype(_new_y.dtype)
+                _obl_p0_src = (_obl_p0x, _obl_p0y)
+            _obl_p0_pending = (r0, r1, _new_x, _new_y)
+        return _out
+
+    def _obl_gap_advance(i_surf, n2r):
+        """Advance the carrier's ray drift across the gap behind surface
+        ``i_surf`` (equation 6).
+
+        Factored out of the whole-grid surface body so the two row-banded
+        paths reach it too -- pre-v5.35.3 they ``continue``d past it, which is
+        precisely why ``carrier=`` had to disqualify them."""
+        nonlocal _obl_ux, _obl_uy, _obl_drift_live
+        _t_gap = float(thicknesses[i_surf])
+        _n_gap = n2r
+        if _split_mode:
+            _t_gap, _n_gap = _t_gap / n2r, 1.0
+        _band_gap = _chunk_grids and (
+            getattr(_obl_p0x, 'ndim', 0) or _obl_q_rows_fn is not None
+            or getattr(_obl_qx, 'ndim', 0))
+        if _band_gap:
+            _cr = int(sag_chunk_rows)
+            # Pin the drift source: ``_obl_accum_band`` may promote the scalar
+            # seed to a grid at band 0, and the ``_pbx`` read below must keep
+            # seeing the SAME object every band (same reason as _obl_p0_src).
+            _ux_src, _uy_src = _obl_ux, _obl_uy
+            for r0 in range(0, Ny, _cr):
+                r1 = min(Ny, r0 + _cr)
+                _p0x_b = _obl_band_of(_obl_p0x, r0, r1)
+                _p0y_b = _obl_band_of(_obl_p0y, r0, r1)
+                _pbx, _pby = _p0x_b, _p0y_b
+                if _obl_drift_live and getattr(_obl_p0x, 'ndim', 0):
+                    # the carrier-free ray is at ``x - U``, and the element
+                    # re-images its own drift -- read p0 there, not here.  The
+                    # gradient takes the same 1-row halo (clipped at the true
+                    # edges, so rows 0 / Ny-1 keep the one-sided stencil).
+                    _e0 = max(0, r0 - 1)
+                    _e1 = min(Ny, r1 + 1)
+                    _el = r0 - _e0
+                    _eh = _el + (r1 - r0)
+                    _ux_b = _obl_band_of(_ux_src, r0, r1)
+                    _uy_b = _obl_band_of(_uy_src, r0, r1)
+                    _gp_y, _gp_x = xp.gradient(_obl_p0x[_e0:_e1], dy, dx)
+                    _pbx = _p0x_b - (_ux_b * _gp_x[_el:_eh]
+                                     + _uy_b * _gp_y[_el:_eh])
+                    _gp_y, _gp_x = xp.gradient(_obl_p0y[_e0:_e1], dy, dx)
+                    _pby = _p0y_b - (_ux_b * _gp_x[_el:_eh]
+                                     + _uy_b * _gp_y[_el:_eh])
+                    del _gp_y, _gp_x
+                _qx_b, _qy_b = _obl_q_bands(r0, r1)
+                _du_x, _du_y = _screen_drift_step(
+                    _p0x_b, _p0y_b, _pbx, _pby, _qx_b, _qy_b,
+                    _t_gap, _n_gap, xp)
+                _obl_ux = _obl_accum_band(_obl_ux, _du_x, r0, r1)
+                _obl_uy = _obl_accum_band(_obl_uy, _du_y, r0, r1)
+                del _pbx, _pby, _du_x, _du_y
+        else:
+            _qx, _qy = _obl_q_whole()
+            _pbx, _pby = _obl_p0x, _obl_p0y
+            if _obl_drift_live and getattr(_obl_p0x, 'ndim', 0):
+                _gp_y, _gp_x = xp.gradient(_obl_p0x, dy, dx)
+                _pbx = _obl_p0x - (_obl_ux * _gp_x + _obl_uy * _gp_y)
+                _gp_y, _gp_x = xp.gradient(_obl_p0y, dy, dx)
+                _pby = _obl_p0y - (_obl_ux * _gp_x + _obl_uy * _gp_y)
+                del _gp_y, _gp_x
+            _du_x, _du_y = _screen_drift_step(
+                _obl_p0x, _obl_p0y, _pbx, _pby, _qx, _qy,
+                _t_gap, _n_gap, xp)
+            _obl_ux = _obl_ux + _du_x
+            _obl_uy = _obl_uy + _du_y
+            del _pbx, _pby, _du_x, _du_y
+        if not _obl_q_zero and _t_gap != 0.0:
+            _obl_drift_live = True
 
     # Preserve the caller's complex dtype (complex128 or complex64).
     # The numexpr ``out=E`` path below evaluates the phase screen
@@ -3387,10 +3731,15 @@ def apply_real_lens(
         # (complex128-internal) path the whole grid uses, so this is
         # byte-identical (test_chunked_sag_byte_identical).  Any deviation
         # from the narrow case falls through to the whole-grid path below.
+        #
+        # v5.35.3: ``carrier=`` (the angle-true screen) no longer disqualifies
+        # the band -- the obliquity block's two gradients are taken on a
+        # 1-/2-row halo, so its per-band arithmetic is the whole-grid
+        # arithmetic element for element (test_obl_banded_halo.py).
         _narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and not slant_correction and not fresnel
-            and not surface_frame and not _displaced and not _obl_active
+            and not surface_frame and not _displaced
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -3412,12 +3761,34 @@ def apply_real_lens(
             cr = int(sag_chunk_rows)
             _use_ne = (NUMEXPR_AVAILABLE and E.size >= _NUMEXPR_MIN_SIZE
                        and _ensure_numexpr_loaded())
+            # The whole-grid block is gated on ``bool(xp.any(sag))``; evaluate
+            # that reduction band-wise so a FLAT face still skips (and still
+            # leaves ``_obl_p0*`` a pair of floats) without a full-grid sag.
+            _obl_here = _obl_active and _obl_any_sag(R, kc, asph, cr)
+            _hw = _obl_halo_rows() if _obl_here else 0
+            if _obl_here:
+                _obl_begin_surface()
             for r0 in range(0, Ny, cr):
                 r1 = min(Ny, r0 + cr)
-                _h_b = (_x_sq[None, :] + _y_sq[r0:r1, None]
-                        if h_sq_axis is None else h_sq_axis[r0:r1])
-                sag_b = _surface_sag_general(_h_b, R, kc, asph)
+                if _obl_here:
+                    # sag on a halo: the obliquity gradients need one row
+                    # either side (two when the R1 drift term is live).
+                    _h0 = max(0, r0 - _hw)
+                    _h1 = min(Ny, r1 + _hw)
+                    _lo = r0 - _h0
+                    sag_h = _surface_sag_general(
+                        _x_sq[None, :] + _y_sq[_h0:_h1, None], R, kc, asph)
+                    sag_b = sag_h[_lo:_lo + (r1 - r0)]
+                else:
+                    _h_b = (_x_sq[None, :] + _y_sq[r0:r1, None]
+                            if h_sq_axis is None else h_sq_axis[r0:r1])
+                    sag_b = _surface_sag_general(_h_b, R, kc, asph)
                 opd_b = (n2r - n1r) * sag_b
+                if _obl_here:
+                    _d_b = _obl_band_delta(sag_h, _h0, _h1, r0, r1, n1r, n2r)
+                    if _d_b is not None:
+                        opd_b = opd_b + _d_b
+                    del _d_b, sag_h
                 if bool(np.any(np.isnan(opd_b))):
                     opd_b = np.where(np.isnan(opd_b), 0.0, opd_b)
                 if _use_ne:
@@ -3432,6 +3803,10 @@ def apply_real_lens(
                         ph = ph.astype(E.dtype)
                     E[r0:r1] = E[r0:r1] * ph
                 del sag_b, opd_b
+            if _obl_here:
+                _obl_end_surface()
+            if i < len(surfaces) - 1 and _obl_active and _obl_apply:
+                _obl_gap_advance(i, n2r)
             if i < len(surfaces) - 1:
                 E = _propagate_through_glass(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
@@ -3459,10 +3834,14 @@ def apply_real_lens(
         # decenter / tilt / form-error / biconic / freeform / surface-frame
         # slant/fresnel surfaces fall through to the whole-grid path (their
         # full grids are unavoidable anyway).
+        # v5.35.3: ``carrier=`` no longer disqualifies this band either -- the
+        # obliquity block rides the SAME halo (widened to 2 rows when the R1
+        # drift term is live) and the sag gradient is shared with the
+        # refraction pipeline when no NaN sentinel forces a rebuild.
         _slant_narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and (slant_correction or fresnel)
-            and not surface_frame and not _obl_active
+            and not surface_frame
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -3490,6 +3869,10 @@ def apply_real_lens(
             else:
                 E_out = E
             _refr_clamped = False
+            _obl_here = _obl_active and _obl_any_sag(R, kc, asph, cr)
+            _hw = max(1, _obl_halo_rows()) if _obl_here else 1
+            if _obl_here:
+                _obl_begin_surface()
             for r0 in range(0, Ny, cr):
                 r1 = min(Ny, r0 + cr)
                 # 1-row halo so central-difference gradients on the band match
@@ -3497,9 +3880,14 @@ def apply_real_lens(
                 # edges (rows 0 and Ny-1) keep their one-sided stencil in the
                 # first / last band.  ``sag_halo`` built from the axis vectors
                 # is byte-identical to slicing the full-grid sag
-                # (_surface_sag_general is pointwise in h_sq).
-                _h0 = max(0, r0 - 1)
-                _h1 = min(Ny, r1 + 1)
+                # (_surface_sag_general is pointwise in h_sq).  v5.35.3: the
+                # halo widens to 2 rows when the R1 drift term is live (it
+                # differentiates a quantity that is itself a gradient); the
+                # band's OWN gradient rows are unchanged either way, since
+                # np.gradient's interior stencil does not know how far the
+                # array extends.
+                _h0 = max(0, r0 - _hw)
+                _h1 = min(Ny, r1 + _hw)
                 h_sq_halo = _x_sq[None, :] + _y_sq[_h0:_h1, None]
                 sag_halo = _surface_sag_general(h_sq_halo, R, kc, asph)
                 _lo = r0 - _h0
@@ -3536,6 +3924,18 @@ def apply_real_lens(
                            - n1r * cos_ti_safe) * sag_b
                 else:
                     opd = (n2r - n1r) * sag_b
+                if _obl_here:
+                    # v5.35.3: equation (4) (+ R1) on this band.  The sag
+                    # gradient is handed over rather than retaken -- the
+                    # obliquity block differentiates the SAME halo array
+                    # unless a NaN sentinel forces the zeroed rebuild, which
+                    # is exactly the whole-grid rule.
+                    _d_b = _obl_band_delta(
+                        sag_halo, _h0, _h1, r0, r1, n1r, n2r,
+                        grad_h=(_dsag_dy_h, _dsag_dx_h))
+                    if _d_b is not None:
+                        opd = opd + _d_b
+                    del _d_b
                 if bool(xp.any(xp.isnan(opd))):
                     opd = xp.where(xp.isnan(opd), 0.0, opd)
                 if (xp is np and NUMEXPR_AVAILABLE
@@ -3592,6 +3992,8 @@ def apply_real_lens(
                                          xp.zeros((), dtype=_band.dtype))
                 E_out[r0:r1] = _band
             E = E_out
+            if _obl_here:
+                _obl_end_surface()
             if _refr_clamped:
                 import warnings
                 warnings.warn(
@@ -3604,6 +4006,8 @@ def apply_real_lens(
                     "surface profile.",
                     RuntimeWarning, stacklevel=2,
                 )
+            if i < len(surfaces) - 1 and _obl_active and _obl_apply:
+                _obl_gap_advance(i, n2r)
             if i < len(surfaces) - 1:
                 E = _propagate_through_glass(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
@@ -3883,9 +4287,12 @@ def apply_real_lens(
             if bool(xp.any(xp.isnan(sag))):
                 _sag_ok = xp.where(xp.isnan(sag), 0.0, sag)
             _og_y, _og_x = xp.gradient(_sag_ok, dy, dx)
+            # v5.35.3: materialise the carrier momentum field if the banded
+            # row-evaluator was in use and THIS surface fell through here.
+            _q_wx, _q_wy = _obl_q_whole()
             _d_obl = _screen_obliquity_delta(
                 _sag_ok, _og_x, _og_y, _obl_p0x, _obl_p0y,
-                _obl_qx, _obl_qy, n1r, n2r, xp)
+                _q_wx, _q_wy, n1r, n2r, xp)
             if _obl_total is not None:
                 # The ESTIMATOR scores equation (4) alone, which is the size
                 # of the defect the blind screen carries (measured 7.5 % low
@@ -4028,27 +4435,10 @@ def apply_real_lens(
             # the carrier's ray, and a later powered surface reads that drift.
             # The gap geometry follows the model's own propagation, so the
             # 'split' factorisation drifts through its reduced distance.
-            _t_gap = float(thicknesses[i])
-            _n_gap = n2r
-            if _split_mode:
-                _t_gap, _n_gap = _t_gap / n2r, 1.0
-            _pbx, _pby = _obl_p0x, _obl_p0y
-            if _obl_drift_live and getattr(_obl_p0x, 'ndim', 0):
-                # the carrier-free ray is at ``x - U``, and the element
-                # re-images its own drift -- read p0 there, not here.
-                _gp_y, _gp_x = xp.gradient(_obl_p0x, dy, dx)
-                _pbx = _obl_p0x - (_obl_ux * _gp_x + _obl_uy * _gp_y)
-                _gp_y, _gp_x = xp.gradient(_obl_p0y, dy, dx)
-                _pby = _obl_p0y - (_obl_ux * _gp_x + _obl_uy * _gp_y)
-                del _gp_y, _gp_x
-            _du_x, _du_y = _screen_drift_step(
-                _obl_p0x, _obl_p0y, _pbx, _pby, _obl_qx, _obl_qy,
-                _t_gap, _n_gap, xp)
-            _obl_ux = _obl_ux + _du_x
-            _obl_uy = _obl_uy + _du_y
-            del _pbx, _pby, _du_x, _du_y
-            if not _obl_q_zero and _t_gap != 0.0:
-                _obl_drift_live = True
+            # v5.35.3: the body is ``_obl_gap_advance`` so the two row-banded
+            # surface paths reach the identical step (banded internally when
+            # sag_chunk_rows is live; byte-identical either way).
+            _obl_gap_advance(i, n2r)
         if i < len(surfaces) - 1:
             if _split_mode:
                 # P2 candidate (b): the internal gap is propagated as the
@@ -4062,6 +4452,16 @@ def apply_real_lens(
                 E = _propagate_through_glass(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
                     dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
+
+    # v5.35.3: the screen-obliquity momentum / drift / carrier accumulators are
+    # per-surface state and are DEAD once the loop ends.  Drop them here so the
+    # guard's own pupil temporaries (and the Seidel block's) do not stack on
+    # top of up to six persistent full-grid arrays -- a pure lifetime change,
+    # no arithmetic reads them again.  ``_obl_total`` is the one the guard
+    # scores, so it survives.
+    if _obl_active:
+        _obl_p0x = _obl_p0y = _obl_ux = _obl_uy = None
+        _obl_qx = _obl_qy = None
 
     # ----- Seidel correction ------------------------------------------
     # Apply a ray-trace-derived radial phase correction that captures
