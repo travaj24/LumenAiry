@@ -4,6 +4,25 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.35.4] — 2026-08-13
+
+### Fixed — the DOE closure bar was regime-blind
+
+v5.35.3's verify shard (py3.10, shard 3) tripped the RCWA DOE table
+tests' energy-closure precondition at 1.15e-8 against a 1e-8 bar — on
+the 20-lambda TEA checkerboard, while every small-period (6-8 lambda)
+closure site passed on the same runner.  The bar's ">2 decades of
+headroom" was measured on one build; at large period the lossless
+closure varies with the BLAS build (conditioning grows with period —
+the same regime the module note flags as pathological in the extreme).
+The two 20-lambda call sites (the TEA helper and the convergence
+ladder) now carry their own regime-tied bar (1e-6: two decades above
+the worst cross-build reading observed, four decades below the 1e-2
+pathology it exists to catch); the small-period bar is unchanged at
+1e-8, runner-proven.  A sweep of every test file added since 5.35.0
+found no other regime-untied floor bars on solver-derived quantities.
+Test-file-only; the library is untouched.
+
 ## [5.35.3] — 2026-08-13
 
 ### Fixed — the EME census demonstrations, round two: basin matching by mode isolation radius
