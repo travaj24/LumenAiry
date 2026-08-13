@@ -144,10 +144,9 @@ def _sag_grad(surf, x, y):
     return sag, 2.0 * x * dsag, 2.0 * y * dsag
 
 
-def _corr_at(surfaces, idx, i, x, y, qx, qy, form):
-    """The angular correction at surface ``i``, as a closed-form function of
-    the field-plane coordinate alone -- the carrier-free momentum ``p0`` is the
-    grid-local accumulation of the preceding screens' own deflections."""
+def _p0_at(surfaces, idx, i, x, y):
+    """The screen model's own carrier-free transverse momentum at surface
+    ``i``, accumulated grid-locally (which is what the library does)."""
     p0x = np.zeros_like(x)
     p0y = np.zeros_like(y)
     for j in range(i):
@@ -155,16 +154,77 @@ def _corr_at(surfaces, idx, i, x, y, qx, qy, form):
         _s, gxj, gyj = _sag_grad(surfaces[j], x, y)
         p0x = p0x - (n2j - n1j) * gxj
         p0y = p0y - (n2j - n1j) * gyj
+    return p0x, p0y
+
+
+# ---------------------------------------------------------------------------
+# R1 -- the angle-blind momentum kick, seen through the carrier's ray DRIFT
+# ---------------------------------------------------------------------------
+_R1_HH = 2.0e-7
+
+
+def coeff_error(surfaces, idx, i, x, y):
+    """``E_i = [(n2-n1) - dz(p0)] * sag_i`` -- the CARRIER-FREE error of the
+    shipped screen's coefficient.  Its gradient is the screen's angle-blind
+    deflection error (the exact tangent facet kicks by ``-dz grad sag``, the
+    screen by ``-(n2-n1) grad sag``)."""
+    p0x, p0y = _p0_at(surfaces, idx, i, x, y)
     n1, n2 = idx[i]
     sag, gx, gy = _sag_grad(surfaces[i], x, y)
-    return delta_opd(qx, qy, p0x, p0y, sag, gx, gy, n1, n2, form=form)
+    _z1, z2 = _pz_out(p0x, p0y, gx, gy, n1, n2)
+    return ((n2 - n1) - (z2 - _z1)) * sag
+
+
+def carrier_drift(surfaces, idx, thick, i, x, y, qx, qy):
+    """``U_i`` -- the transverse displacement the carrier adds to the ray by
+    the time it reaches surface ``i``, over the gaps BEFORE it.  The
+    carrier-free arm's momentum is read at ITS own position ``x - U`` (the
+    element re-images its own drift)."""
+    ux = np.zeros_like(x)
+    uy = np.zeros_like(y)
+    for j in range(i):
+        _n1, n2 = idx[j]
+        p0x, p0y = _p0_at(surfaces, idx, j + 1, x, y)
+        b0x, b0y = _p0_at(surfaces, idx, j + 1, x - ux, y - uy)
+        t = float(thick[j])
+        pax, pay = p0x + qx, p0y + qy
+        pza = np.sqrt(np.maximum(n2 ** 2 - pax ** 2 - pay ** 2, 1e-300))
+        pzb = np.sqrt(np.maximum(n2 ** 2 - b0x ** 2 - b0y ** 2, 1e-300))
+        ux = ux + t * (pax / pza - b0x / pzb)
+        uy = uy + t * (pay / pza - b0y / pzb)
+    return ux, uy
+
+
+def r1_opd(surfaces, idx, thick, i, x, y, qx, qy):
+    """``-U_i . grad E_i`` -- the R1 screen term.  Identically zero at surface
+    0 (no gap in front of it), for a zero carrier, and for a plate."""
+    ux, uy = carrier_drift(surfaces, idx, thick, i, x, y, qx, qy)
+    h = _R1_HH
+    ex = (coeff_error(surfaces, idx, i, x + h, y)
+          - coeff_error(surfaces, idx, i, x - h, y)) / (2.0 * h)
+    ey = (coeff_error(surfaces, idx, i, x, y + h)
+          - coeff_error(surfaces, idx, i, x, y - h)) / (2.0 * h)
+    return -(ux * ex + uy * ey)
+
+
+def _corr_at(surfaces, idx, i, x, y, qx, qy, form, thick=None, r1=False):
+    """The angular correction at surface ``i``, as a closed-form function of
+    the field-plane coordinate alone -- the carrier-free momentum ``p0`` is the
+    grid-local accumulation of the preceding screens' own deflections."""
+    p0x, p0y = _p0_at(surfaces, idx, i, x, y)
+    n1, n2 = idx[i]
+    sag, gx, gy = _sag_grad(surfaces[i], x, y)
+    d = delta_opd(qx, qy, p0x, p0y, sag, gx, gy, n1, n2, form=form)
+    if r1:
+        d = d + r1_opd(surfaces, idx, thick, i, x, y, qx, qy)
+    return d
 
 
 # ---------------------------------------------------------------------------
 # THE SCREEN MODEL AS A RAY SYSTEM (S6's fictitious Hamiltonian trace)
 # ---------------------------------------------------------------------------
 def screen_trace(prescription, wavelength, x0, y0, L, M, correction=None,
-                 form='snell', p0_mode='grid'):
+                 form='snell', p0_mode='grid', r1=False):
     """Trace apply_real_lens's OWN model -- zero-thickness sag screens with
     homogeneous ASM slabs between them -- as a Hamiltonian ray system.
 
@@ -212,15 +272,18 @@ def screen_trace(prescription, wavelength, x0, y0, L, M, correction=None,
             else:
                 pax, pay = px - qx, py - qy  # the true model momentum
             d = delta_opd(qx, qy, pax, pay, sag, gx, gy, n1, n2, form=form)
+            if r1:
+                d = d + r1_opd(surfaces, idx, thick, i, x, y, qx, qy)
             opd = opd + d
             # The correction is a closed-form function of (x, y) alone, so its
             # gradient (the momentum kick the WAVE gets for free from the phase
             # screen) is a central difference of that function.
             hh = 1e-7
-            dxp = _corr_at(surfaces, idx, i, x + hh, y, qx, qy, form)
-            dxm = _corr_at(surfaces, idx, i, x - hh, y, qx, qy, form)
-            dyp = _corr_at(surfaces, idx, i, x, y + hh, qx, qy, form)
-            dym = _corr_at(surfaces, idx, i, x, y - hh, qx, qy, form)
+            kw = dict(thick=thick, r1=r1)
+            dxp = _corr_at(surfaces, idx, i, x + hh, y, qx, qy, form, **kw)
+            dxm = _corr_at(surfaces, idx, i, x - hh, y, qx, qy, form, **kw)
+            dyp = _corr_at(surfaces, idx, i, x, y + hh, qx, qy, form, **kw)
+            dym = _corr_at(surfaces, idx, i, x, y - hh, qx, qy, form, **kw)
             gopdx = gopdx + (dxp - dxm) / (2.0 * hh)
             gopdy = gopdy + (dyp - dym) / (2.0 * hh)
         Lam = Lam - opd
@@ -260,7 +323,7 @@ def exact_trace(prescription, wavelength, x0, y0, L, M):
 # the exit-referenced model error, and its ANGULAR part
 # ---------------------------------------------------------------------------
 def model_error(prescription, wavelength, x0, y0, L, M, correction=None,
-                form='snell', p0_mode='grid'):
+                form='snell', p0_mode='grid', r1=False):
     """``Lam_model - Lam_exact`` at the EXACT ray's exit point.
 
     Both arms start from the same entrance point with the same direction.  The
@@ -272,13 +335,13 @@ def model_error(prescription, wavelength, x0, y0, L, M, correction=None,
     xe, ye, Le, alive = exact_trace(prescription, wavelength, x0, y0, L, M)
     xm, ym, Lm, pxm, pym = screen_trace(prescription, wavelength, x0, y0, L, M,
                                         correction=correction, form=form,
-                                        p0_mode=p0_mode)
+                                        p0_mode=p0_mode, r1=r1)
     Lm_at_e = Lm + pxm * (xe - xm) + pym * (ye - ym)
     return Lm_at_e - Le, alive
 
 
 def angular_error(prescription, wavelength, x0, y0, L, M, correction=None,
-                  form='snell', p0_mode='grid'):
+                  form='snell', p0_mode='grid', r1=False):
     """The COMMON-MODE-controlled angular error, in waves.
 
     ``D(theta) - D(0)`` with ``D = Lam_model - Lam_exact`` at the exit plane,
@@ -286,9 +349,11 @@ def angular_error(prescription, wavelength, x0, y0, L, M, correction=None,
     which is everything that separates the two models at normal incidence, the
     model's documented accuracy ceiling -- cancels."""
     d_t, a1 = model_error(prescription, wavelength, x0, y0, L, M,
-                          correction=correction, form=form, p0_mode=p0_mode)
+                          correction=correction, form=form, p0_mode=p0_mode,
+                          r1=r1)
     d_0, a0 = model_error(prescription, wavelength, x0, y0, 0.0, 0.0,
-                          correction=correction, form=form, p0_mode=p0_mode)
+                          correction=correction, form=form, p0_mode=p0_mode,
+                          r1=r1)
     ok = a1 & a0 & np.isfinite(d_t) & np.isfinite(d_0)
     d = (d_t - d_0)[ok]
     px, py = np.ravel(x0)[ok], np.ravel(y0)[ok]
@@ -325,7 +390,7 @@ def mode_plate(verbose=True):
         L = float(tilt)
         _x, _y, Lb, _px, _py = screen_trace(presc, LAM, px, py, L, 0.0)
         _x, _y, Lc, _px, _py = screen_trace(presc, LAM, px, py, L, 0.0,
-                                            correction='obliquity')
+                                            correction='obliquity', r1=True)
         dmax = float(np.abs(Lc - Lb).max())
         same = bool(np.array_equal(Lb.view(np.uint8), Lc.view(np.uint8)))
         # and against the exact rays
@@ -363,6 +428,8 @@ def mode_sphere(verbose=True):
             e_ship = angular_error(presc, LAM, px, py, tilt, 0.0)
             e_ex = angular_error(presc, LAM, px, py, tilt, 0.0,
                                  correction='obliquity', form='snell')
+            e_r1 = angular_error(presc, LAM, px, py, tilt, 0.0,
+                                 correction='obliquity', form='snell', r1=True)
             e_w = angular_error(presc, LAM, px, py, tilt, 0.0,
                                 correction='obliquity', form='full')
             e_q = angular_error(presc, LAM, px, py, tilt, 0.0,
@@ -375,16 +442,17 @@ def mode_sphere(verbose=True):
                          'shipped_rms': e_ship['rms'],
                          'shipped_max': e_ship['max'],
                          'snell_rms': e_ex['rms'], 'snell_max': e_ex['max'],
+                         'r1_rms': e_r1['rms'],
                          'walk_rms': e_w['rms'],
                          'quad_rms': e_q['rms'], 'nowalk_rms': e_nc['rms'],
                          'scale_pred_waves': pred})
             if verbose:
                 print('  %-7s R=%+7.1f mm sag(3mm)=%8.1f um  %6.2f mrad:  '
-                      'SHIPPED %9.5f w rms  ->  snell %9.6f  walk %9.6f  '
-                      'quad %9.5f  nowalk %9.5f'
+                      'SHIPPED %9.5f w rms  ->  snell %9.6f  +R1 %9.6f  '
+                      'walk %9.6f  quad %9.5f  nowalk %9.5f'
                       '   [scale (n-1)sag th^2/2n = %7.4f w]'
                       % (glass, R * 1e3, sag * 1e6, tilt * 1e3,
-                         e_ship['rms'], e_ex['rms'], e_w['rms'],
+                         e_ship['rms'], e_ex['rms'], e_r1['rms'], e_w['rms'],
                          e_q['rms'], e_nc['rms'], pred))
     return {'rows': rows}
 
@@ -409,6 +477,8 @@ def mode_d121(verbose=True):
             e_ship = angular_error(presc, LAM, px, py, L, M)
             e_ex = angular_error(presc, LAM, px, py, L, M,
                                  correction='obliquity', form='snell')
+            e_r1 = angular_error(presc, LAM, px, py, L, M,
+                                 correction='obliquity', form='snell', r1=True)
             e_w = angular_error(presc, LAM, px, py, L, M,
                                 correction='obliquity', form='full')
             e_q = angular_error(presc, LAM, px, py, L, M,
@@ -423,16 +493,17 @@ def mode_d121(verbose=True):
                    'tilt_mrad': float(np.hypot(L, M) * 1e3),
                    'shipped_rms': e_ship['rms'], 'shipped_max': e_ship['max'],
                    'snell_rms': e_ex['rms'], 'snell_max': e_ex['max'],
+                   'r1_rms': e_r1['rms'], 'r1_max': e_r1['max'],
                    'walk_rms': e_w['rms'],
                    'quad_rms': e_q['rms'], 'nowalk_rms': e_nc['rms'],
                    'modelp0_rms': e_true['rms']}
             out.append(row)
             if verbose:
                 print('  group %d r=%.1f mm %6.2f mrad:  SHIPPED %9.5f w rms  '
-                      '->  snell %9.6f  (model-p0 %9.6f)  walk %9.5f  '
-                      'quad %9.5f  nowalk %9.5f'
+                      '->  snell %9.6f  ->  +R1 %9.6f  (model-p0 %9.6f)  '
+                      'walk %9.5f  quad %9.5f  nowalk %9.5f'
                       % (gi, rad * 1e3, row['tilt_mrad'], e_ship['rms'],
-                         e_ex['rms'], e_true['rms'], e_w['rms'],
+                         e_ex['rms'], e_r1['rms'], e_true['rms'], e_w['rms'],
                          e_q['rms'], e_nc['rms']))
     return {'rows': out}
 
@@ -473,6 +544,18 @@ def mode_ablate(gi=5, rad=3e-3, verbose=True):
                      'max_waves': e['max']})
         if verbose:
             print('  correction at surfaces %-12s: %9.5f w rms  %9.5f w max'
+                  % (str(sub) if sub else '(none)', e['rms'], e['max']))
+    _ALLOW_SURF = None
+    # ...and with R1 on top (the drift term is a per-surface screen too, so it
+    # follows the same ablation switch).
+    for sub in subsets:
+        _ALLOW_SURF = sub
+        e = angular_error(presc, LAM, px, py, L, M, correction='obliquity',
+                          form='snell', r1=True)
+        rows.append({'surfaces': list(sub), 'r1': True,
+                     'rms_waves': e['rms'], 'max_waves': e['max']})
+        if verbose:
+            print('  correction+R1 at surfaces %-9s: %9.5f w rms  %9.5f w max'
                   % (str(sub) if sub else '(none)', e['rms'], e['max']))
     _ALLOW_SURF = None
     # the TANGENT-FACET arm: exact refraction at the local tangent plane on the

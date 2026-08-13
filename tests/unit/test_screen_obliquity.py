@@ -119,21 +119,92 @@ def _exact_eikonal(presc, x0, y0, L, M):
             np.asarray(fin.alive, dtype=bool))
 
 
-def _screen_eikonal(presc, x0, y0, L, M, corrected):
+def _p0_at(presc, idx, i, x, y):
+    """The screen model's own carrier-free momentum at surface ``i``,
+    accumulated GRID-LOCALLY (which is what the library does)."""
+    p0x, p0y = np.zeros_like(x), np.zeros_like(y)
+    for j in range(i):
+        n1, n2 = idx[j]
+        _s, ds = _sag_and_dsag(x ** 2 + y ** 2, presc['surfaces'][j]['radius'])
+        p0x = p0x - (n2 - n1) * 2.0 * x * ds
+        p0y = p0y - (n2 - n1) * 2.0 * y * ds
+    return p0x, p0y
+
+
+def _coeff_error_at(presc, idx, i, x, y):
+    """The shipped ``_screen_coeff_error`` evaluated at scattered points."""
+    from lumenairy.elements._lens_real import _screen_coeff_error
+    p0x, p0y = _p0_at(presc, idx, i, x, y)
+    n1, n2 = idx[i]
+    sag, ds = _sag_and_dsag(x ** 2 + y ** 2, presc['surfaces'][i]['radius'])
+    return _screen_coeff_error(sag, 2.0 * x * ds, 2.0 * y * ds,
+                               p0x, p0y, n1, n2, np)
+
+
+def _drift_at(presc, idx, i, x, y, qx, qy):
+    """``U_i`` from the shipped ``_screen_drift_step``, accumulated over the
+    gaps before surface ``i`` with the carrier-free arm read at its OWN
+    position (the drift feedback)."""
+    from lumenairy.elements._lens_real import _screen_drift_step
+    ux, uy = np.zeros_like(x), np.zeros_like(y)
+    for j in range(i):
+        p0x, p0y = _p0_at(presc, idx, j + 1, x, y)
+        b0x, b0y = _p0_at(presc, idx, j + 1, x - ux, y - uy)
+        dux, duy = _screen_drift_step(p0x, p0y, b0x, b0y, qx, qy,
+                                      float(presc['thicknesses'][j]),
+                                      idx[j][1], np)
+        ux, uy = ux + dux, uy + duy
+    return ux, uy
+
+
+def _r1_at(presc, idx, i, x, y, qx, qy, h=2e-7):
+    """``-U . grad E`` at scattered points -- the R1 term, built from the
+    shipped ``_screen_coeff_error`` / ``_screen_drift_step``."""
+    ux, uy = _drift_at(presc, idx, i, x, y, qx, qy)
+    ex = (_coeff_error_at(presc, idx, i, x + h, y)
+          - _coeff_error_at(presc, idx, i, x - h, y)) / (2.0 * h)
+    ey = (_coeff_error_at(presc, idx, i, x, y + h)
+          - _coeff_error_at(presc, idx, i, x, y - h)) / (2.0 * h)
+    return -(ux * ex + uy * ey)
+
+
+def _corr_at(presc, idx, i, x, y, L, M, corrected, r1):
+    """The total per-surface correction as a closed-form function of the field
+    point -- what the library's phase screen imprints at (x, y)."""
+    from lumenairy.elements._lens_real import _screen_obliquity_delta
+    p0x, p0y = _p0_at(presc, idx, i, x, y)
+    n1, n2 = idx[i]
+    sag, ds = _sag_and_dsag(x ** 2 + y ** 2, presc['surfaces'][i]['radius'])
+    d = _screen_obliquity_delta(sag, 2.0 * x * ds, 2.0 * y * ds,
+                                p0x, p0y, L, M, n1, n2, np)
+    if corrected == -1:                    # the SIGN control for equation (4)
+        d = -d
+    if r1:
+        r = _r1_at(presc, idx, i, x, y, L, M)
+        d = d + (-r if r1 == -1 else r)    # the SIGN control for R1
+    return d
+
+
+def _screen_eikonal(presc, x0, y0, L, M, corrected, r1=False):
     """``apply_real_lens``'s OWN model traced as a Hamiltonian ray system:
     zero-thickness sag screens (``Lam -= OPD``, ``p -= grad OPD``) separated by
     homogeneous slabs (``x += t p / pz``, ``Lam += t n^2 / pz``, the Legendre
     transform of the ASM kernel).  ``corrected`` adds the library's own closed
     form so the test exercises the shipped expression, not a copy of it;
-    ``corrected=-1`` SUBTRACTS it (the sign control)."""
-    from lumenairy.elements._lens_real import _screen_obliquity_delta
+    ``corrected=-1`` SUBTRACTS it (the sign control).  ``r1`` adds the shipped
+    drift term on top (``r1=-1`` subtracts it -- its own sign control).
+
+    The correction is a closed-form function of (x, y) alone, so the momentum
+    kick the wave gets from the phase screen is a central difference of that
+    function -- taken here rather than assumed, because R1 is exactly the term
+    that lives in the difference between a screen's VALUE and its GRADIENT."""
     surfaces, thick = presc['surfaces'], presc['thicknesses']
     idx = [(float(get_glass_index(s['glass_before'], LAM)),
             float(get_glass_index(s['glass_after'], LAM))) for s in surfaces]
     x, y = x0.copy(), y0.copy()
     px, py = np.full_like(x, L), np.full_like(y, M)
     lam_e = L * x + M * y
-    p0x, p0y = np.zeros_like(x), np.zeros_like(y)
+    hh = 1e-7
     for i, surf in enumerate(surfaces):
         n1, n2 = idx[i]
         sag, dsag = _sag_and_dsag(x ** 2 + y ** 2, surf['radius'])
@@ -141,18 +212,15 @@ def _screen_eikonal(presc, x0, y0, L, M, corrected):
         opd = (n2 - n1) * sag
         gox, goy = (n2 - n1) * gx, (n2 - n1) * gy
         if corrected:
-            d = _screen_obliquity_delta(sag, gx, gy, p0x, p0y, L, M,
-                                        n1, n2, np)
-            if corrected == -1:            # the SIGN control
-                d = -d
-            opd = opd + d
-            # the screen's gradient leg through the sag factor (the momentum
-            # factors vary on the pupil scale, the sag on the surface scale)
-            fac = np.where(sag == 0.0, 0.0, d / np.where(sag == 0.0, 1.0, sag))
-            gox, goy = gox + fac * gx, goy + fac * gy
+            a = (presc, idx, i)
+            kw = dict(corrected=corrected, r1=r1)
+            opd = opd + _corr_at(*a, x, y, L, M, **kw)
+            gox = gox + (_corr_at(*a, x + hh, y, L, M, **kw)
+                         - _corr_at(*a, x - hh, y, L, M, **kw)) / (2.0 * hh)
+            goy = goy + (_corr_at(*a, x, y + hh, L, M, **kw)
+                         - _corr_at(*a, x, y - hh, L, M, **kw)) / (2.0 * hh)
         lam_e = lam_e - opd
         px, py = px - gox, py - goy
-        p0x, p0y = p0x - (n2 - n1) * gx, p0y - (n2 - n1) * gy
         if i < len(surfaces) - 1:
             t = float(thick[i])
             pz = np.sqrt(np.maximum(n2 ** 2 - px ** 2 - py ** 2, 1e-300))
@@ -161,7 +229,7 @@ def _screen_eikonal(presc, x0, y0, L, M, corrected):
     return x, y, lam_e, px, py
 
 
-def _angular_error_waves(presc, r_pupil, L, M, corrected, n=41):
+def _angular_error_waves(presc, r_pupil, L, M, corrected, n=41, r1=False):
     """The COMMON-MODE-controlled exit-plane angular error of the screen model,
     piston and tilt removed, in waves.  ``D(theta) - D(0)`` with
     ``D = Lam_model - Lam_exact`` referenced at the EXACT ray's exit point --
@@ -175,7 +243,7 @@ def _angular_error_waves(presc, r_pupil, L, M, corrected, n=41):
     for (l_, m_) in ((L, M), (0.0, 0.0)):
         xe, ye, le, alive = _exact_eikonal(presc, x0, y0, l_, m_)
         xm, ym, lm, pxm, pym = _screen_eikonal(presc, x0, y0, l_, m_,
-                                               corrected)
+                                               corrected, r1=r1)
         assert alive.all()
         d.append(lm + pxm * (xe - xm) + pym * (ye - ym) - le)
     g = d[0] - d[1]
@@ -324,6 +392,144 @@ def test_correction_is_zero_for_zero_sag_at_any_angle():
 
 
 # ---------------------------------------------------------------------------
+# (c2) R1 -- THE ANGLE-BLIND MOMENTUM KICK, SEEN THROUGH THE RAY DRIFT
+# ---------------------------------------------------------------------------
+# Equation (4) fixes the screen's OPD VALUE.  The screen also has to DEFLECT,
+# and it kicks by ``-(n2-n1) grad sag`` where the exact tangent facet kicks by
+# ``-dz grad sag``; the difference is the carrier-free field
+# ``E = [(n2-n1) - dz(p0)] sag``, and the carrier moves the point at which the
+# ray samples it by the drift ``U``.  That advection is 0.081 of the 0.087
+# waves equation (4) leaves on design 121 group 5, and ``-U . grad E`` removes
+# it.  R1 is identically zero wherever there is no drift, which is every
+# single-facet fixture in this file -- so nothing above moved.
+
+
+def _doublet(R1=25e-3, R2=-25e-3, glass='N-SSK2', thickness=4e-3,
+             aperture=6e-3):
+    """A BICONVEX element: two powered faces with a gap between them, which is
+    the smallest prescription in which a drift can exist at all (surface 0
+    never has one, and a plano exit face has no coefficient error to carry)."""
+    return {'name': 'biconvex', 'aperture_diameter': aperture,
+            'thicknesses': [thickness], 'surfaces': [
+                {'radius': R1, 'conic': 0.0, 'aspheric_coeffs': None,
+                 'glass_before': 'air', 'glass_after': glass},
+                {'radius': R2, 'conic': 0.0, 'aspheric_coeffs': None,
+                 'glass_before': glass, 'glass_after': 'air'}]}
+
+
+@pytest.mark.parametrize('tilt,floor', [(0.05487, 3.0), (0.09, 2.0),
+                                        (0.15, 1.5)])
+def test_r1_beats_the_sag_obliquity_correction_alone(tilt, floor):
+    """The decisive R1 control: against exact rays, adding the drift term must
+    cut what equation (4) leaves.  Measured on this fixture at 3 mm:
+    0.0201 -> 0.0055 w (54.9 mrad), 0.0335 -> 0.0131 (90), 0.0583 -> 0.0347
+    (150).  Design 121 group 5 -- the campaign's binding case, which needs the
+    local .zmx -- goes 0.090692 -> 0.012398 waves, 7.3x."""
+    presc = _doublet()
+    eq4 = _angular_error_waves(presc, 3e-3, tilt, 0.0, corrected=True)
+    both = _angular_error_waves(presc, 3e-3, tilt, 0.0, corrected=True,
+                                r1=True)
+    assert both * floor < eq4, (
+        f'equation (4) alone {eq4:.6f} w rms -> with R1 {both:.6f} w rms '
+        f'({eq4 / max(both, 1e-30):.2f}x, wanted >= {floor}x)')
+
+
+def test_the_r1_sign_is_load_bearing():
+    """The same control equation (4) carries: NEGATING the drift term must
+    make the exit-plane angular error WORSE than leaving it out, which is what
+    separates a term that cancels a defect from one that merely has the right
+    size."""
+    presc = _doublet()
+    eq4 = _angular_error_waves(presc, 3e-3, 0.09, 0.0, corrected=True)
+    both = _angular_error_waves(presc, 3e-3, 0.09, 0.0, corrected=True,
+                                r1=True)
+    flipped = _angular_error_waves(presc, 3e-3, 0.09, 0.0, corrected=True,
+                                   r1=-1)
+    assert both < eq4
+    assert flipped > eq4, (
+        f'negated R1 {flipped:.6f} w must be worse than no R1 {eq4:.6f} w')
+
+
+def test_r1_is_exactly_zero_where_there_is_no_drift():
+    """Structural, not numerical: the drift is zero at surface 0 (no gap in
+    front of it) and a zero-angle carrier never accumulates one, so
+    ``_screen_drift_step`` must return EXACT zeros -- the byte-null is not a
+    tolerance."""
+    from lumenairy.elements._lens_real import _screen_drift_step
+    p0x = np.array([0.0, 0.03, -0.12])
+    p0y = np.array([0.0, -0.02, 0.05])
+    dux, duy = _screen_drift_step(p0x, p0y, p0x, p0y, 0.0, 0.0, 4e-3, 1.6, np)
+    assert np.array_equal(np.asarray(dux), np.zeros(3))
+    assert np.array_equal(np.asarray(duy), np.zeros(3))
+
+
+def test_the_drift_is_the_carriers_own_transverse_walk():
+    """One gap, no accumulated screen momentum: the drift must be exactly the
+    carrier's own walk ``t * q / sqrt(n^2 - |q|^2)``, which is the analytic
+    plate walk-off -- the quantity a plate MUST impart and the screen must not
+    touch."""
+    from lumenairy.elements._lens_real import _screen_drift_step
+    q, t, n = 0.0549, 25.4e-3, 1.5036
+    dux, duy = _screen_drift_step(0.0, 0.0, 0.0, 0.0, q, 0.0, t, n, np)
+    assert abs(float(dux) - t * q / np.sqrt(n ** 2 - q ** 2)) < 1e-18
+    assert float(duy) == 0.0
+
+
+def test_r1_is_zero_on_a_plate_at_every_tilt():
+    """A plate's faces have no coefficient error to carry (``sag == 0``), so
+    the drift the gap accumulates has nothing to act on.  Asserted on the
+    shipped expression rather than only through the field byte-null."""
+    from lumenairy.elements._lens_real import _screen_drift_opd
+    N, d = 32, 20e-6
+    x = (np.arange(N) - N / 2) * d
+    X, Y = np.meshgrid(x, x)
+    zero = np.zeros_like(X)
+    for ux in (1e-4, 1e-3):
+        got = _screen_drift_opd(zero, zero, zero, 0.0, 0.0, 1.0, 1.5036,
+                                ux, 0.5 * ux, d, d, np)
+        assert np.array_equal(np.asarray(got), zero)
+
+
+def test_the_coefficient_error_is_the_kick_the_screen_fails_to_impart():
+    """``E`` is built to be the potential of the angle-blind kick error, so at
+    a facet whose slope is the only thing varying it must reproduce
+    ``[(n2-n1) - dz] * sag`` exactly -- and be identically zero at zero slope,
+    where the shipped screen's kick is already right."""
+    from lumenairy.elements._lens_real import (
+        _facet_axial_momenta,
+        _screen_coeff_error,
+    )
+    n1, n2, sag = 1.0, 1.6, 2.0e-4
+    flat = _screen_coeff_error(sag, 0.0, 0.0, 0.0, 0.0, n1, n2, np)
+    assert abs(float(flat)) < 1e-18
+    for gx in (0.05, 0.155, 0.25):
+        got = _screen_coeff_error(sag, gx, 0.0, 0.0, 0.0, n1, n2, np)
+        dz, _ok = _facet_axial_momenta(0.0, 0.0, gx, 0.0, n1, n2, np)
+        assert abs(float(got) - ((n2 - n1) - float(dz)) * sag) < 1e-22
+        assert float(got) > 0.0        # the blind screen OVER-deflects
+
+
+def test_r1_does_not_move_a_single_facet_element():
+    """The whole single-facet ladder of section (c) is untouched by R1: the
+    first surface has no gap in front of it and the plano exit face has no
+    coefficient error, so the field must be byte-identical to the
+    equation-(4)-only library."""
+    N, dx = 256, 25e-6
+    presc = _singlet()
+    E = _field(N, dx, L=0.0549, w=1.2e-3)
+    car = la.TiltedCarrier(float('inf'), 0.0549, 0.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        got = apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
+                              carrier=car)
+    a = _angular_error_waves(presc, 1.5e-3, 0.0549, 0.0, corrected=True)
+    b = _angular_error_waves(presc, 1.5e-3, 0.0549, 0.0, corrected=True,
+                             r1=True)
+    assert a == b
+    assert np.all(np.isfinite(got))
+
+
+# ---------------------------------------------------------------------------
 # (d) THE GUARD
 # ---------------------------------------------------------------------------
 _GUARD_N, _GUARD_DX = 256, 25e-6
@@ -332,9 +538,9 @@ _GUARD_N, _GUARD_DX = 256, 25e-6
 def _steep_case():
     """A fast surface at a large carrier angle: sag 0.42 mm over a 5 mm
     pupil, 90 mrad.  The estimator reads 0.129 waves rms there, so the guard
-    fires with the correction ON (budgeted residual 0.051 w) as well as OFF.
+    fires with the correction OFF -- the whole term is in the wavefront.
 
-    Design 121's own group 5 -- the campaign's binding case -- reads 0.26
+    Design 121's own group 5 -- the campaign's binding case -- reads 0.24
     waves and fires the same way; it is not used here because a unit test
     must not depend on the local .zmx.  See
     ``validation/repro_traced_carrier_121/screen_obliquity_derive.py guard``.
@@ -343,11 +549,56 @@ def _steep_case():
             la.TiltedCarrier(float('inf'), 0.09, 0.0))
 
 
-def test_guard_fires_on_the_steep_large_angle_case():
+def _out_of_envelope_case():
+    """A case the correction genuinely CANNOT rescue: an R = +/-12 mm
+    biconvex N-SSK2 element (|grad sag| = 0.25 at 3 mm, both faces powered) at
+    120 mrad.  Measured against exact rays at a 3 mm pupil, the exit-plane
+    angular error is 0.399 w blind and 0.395 w corrected -- 8x over the
+    lambda/20 tolerance either way -- so the guard MUST fire with the
+    correction on.  The estimator reads 1.009 waves, i.e. a budgeted residual
+    of 0.101 w, and the truth is 0.395 w: the estimator under-reads a case
+    this far outside the envelope, and still fires.
+
+    This is the fixture the recalibrated residual budget moved the ON-branch
+    onto; see ``docs/audits/BUILD_R1_WIRING_2026_08_12.md`` S3."""
+    presc = {'name': 'biconvex', 'aperture_diameter': 6e-3,
+             'thicknesses': [6e-3], 'surfaces': [
+                 {'radius': 12e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+                  'glass_before': 'air', 'glass_after': 'N-SSK2'},
+                 {'radius': -12e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+                  'glass_before': 'N-SSK2', 'glass_after': 'air'}]}
+    return presc, la.TiltedCarrier(float('inf'), 0.12, 0.0)
+
+
+def test_guard_fires_with_the_correction_ON_when_it_cannot_rescue_the_call():
+    """The ON-branch: an element whose corrected residual really is outside
+    the tolerance must still warn."""
     N, dx = _GUARD_N, _GUARD_DX
-    presc, car = _steep_case()
+    presc, car = _out_of_envelope_case()
     E = _field(N, dx, w=1.5e-3)
     with pytest.warns(RuntimeWarning, match='angle-blind'):
+        apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
+                        carrier=car)
+
+
+def test_the_guard_does_not_warn_about_a_call_the_correction_fixed():
+    """The adjudication of the v5.35.0-era ON-branch pin (this fixture used to
+    fire because the residual budget was 40 % of the estimate, calibrated
+    before R1).  Against exact rays the corrected residual on this fixture is
+    0.0014 waves -- 36x INSIDE the lambda/20 tolerance -- so a warning here was
+    a false alarm, and silence is the correct behaviour.  Both halves are
+    asserted, so neither a re-loosened budget nor a regressed correction can
+    pass: the measurement is the reason, not the tolerance."""
+    presc, car = _steep_case()
+    fixed = _angular_error_waves(presc, 2.5e-3, 0.09, 0.0, corrected=True,
+                                 r1=True)
+    from lumenairy.elements._lens_real import _SCREEN_OBLIQUITY_TOL_WAVES
+    assert fixed < _SCREEN_OBLIQUITY_TOL_WAVES / 10.0, (
+        f'the fixture is no longer inside the tolerance: {fixed:.6f} w')
+    N, dx = _GUARD_N, _GUARD_DX
+    E = _field(N, dx, w=1.5e-3)
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', RuntimeWarning)
         apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
                         carrier=car)
 
@@ -397,7 +648,7 @@ def test_guard_is_silent_on_a_plane_plate_at_a_large_angle():
 
 def test_guard_policies():
     N, dx = _GUARD_N, _GUARD_DX
-    presc, car = _steep_case()
+    presc, car = _out_of_envelope_case()
     E = _field(N, dx, w=1.5e-3)
     kw = dict(prescription=presc, wavelength=LAM, dx=dx, carrier=car)
     with pytest.raises(ValueError, match='angle-blind'):
@@ -671,3 +922,74 @@ def test_an_immersed_element_actually_moves_when_the_carrier_is_given():
                                                        0.0))
     assert np.all(np.isfinite(got))
     assert not np.array_equal(base.view(np.uint8), got.view(np.uint8))
+
+
+# ---------------------------------------------------------------------------
+# (i) CONSUMER REACHABILITY -- the wiring
+# ---------------------------------------------------------------------------
+# VERIFY_ARCHITECTURE F5/P2-9: the correction was reachable ONLY by calling
+# ``apply_real_lens(carrier=...)`` by hand.  Every packaged consumer that HAS a
+# congruence to state now forwards it; the ones that do not are adjudicated in
+# docs/audits/BUILD_R1_WIRING_2026_08_12.md S4.
+
+
+def test_the_system_chain_forwards_a_real_lens_elements_carrier():
+    """A ``'real_lens'`` chain element could state ``carrier`` (the dict takes
+    any key) and it was DROPPED IN SILENCE -- the same class v5.31's W9-11
+    closed for the traced sibling.  The chain answer must now be the carriered
+    one, byte for byte."""
+    from lumenairy.propagators.system import propagate_through_system
+    N, dx = 256, 20e-6
+    presc = _singlet()
+    car = la.TiltedCarrier(float('inf'), 0.0549, 0.0)
+    E = _field(N, dx, L=0.0549, w=1.2e-3)
+    elem = {'type': 'real_lens', 'prescription': presc}
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        blind = propagate_through_system(E, [dict(elem)], wavelength=LAM,
+                                         dx=dx)
+        got = propagate_through_system(
+            E, [dict(elem, carrier=car, on_screen_obliquity='silent')],
+            wavelength=LAM, dx=dx)
+        want = apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
+                               carrier=car, on_screen_obliquity='silent')
+    blind = blind[0] if isinstance(blind, tuple) else blind
+    got = got[0] if isinstance(got, tuple) else got
+    assert np.array_equal(got.view(np.uint8), want.view(np.uint8))
+    assert not np.array_equal(got.view(np.uint8), blind.view(np.uint8))
+
+
+def test_the_jones_wrapper_forwards_one_carrier_to_both_components():
+    """``JonesField.apply_real_lens`` has an explicit signature, so before this
+    the correction was unreachable from every polarized consumer.  Ex and Ey
+    share one congruence, so one carrier is the right surface -- and each
+    component must come out byte-identical to the scalar call."""
+    N, dx = 256, 20e-6
+    presc = _singlet()
+    car = la.TiltedCarrier(float('inf'), 0.0549, 0.0)
+    E = _field(N, dx, L=0.0549, w=1.2e-3)
+    jf = la.JonesField(E.copy(), 0.35 * E.copy(), dx=dx, dy=dx)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        jf.apply_real_lens(presc, LAM, carrier=car,
+                           on_screen_obliquity='silent')
+        wx = apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
+                             dy=dx, carrier=car,
+                             on_screen_obliquity='silent')
+        wy = apply_real_lens(0.35 * E, prescription=presc, wavelength=LAM,
+                             dx=dx, dy=dx, carrier=car,
+                             on_screen_obliquity='silent')
+    assert np.array_equal(jf.Ex.view(np.uint8), wx.view(np.uint8))
+    assert np.array_equal(jf.Ey.view(np.uint8), wy.view(np.uint8))
+
+
+def test_the_jones_wrapper_is_byte_identical_without_a_carrier():
+    """The new keywords default to the pre-5.35 behaviour exactly."""
+    N, dx = 128, 20e-6
+    presc = _singlet()
+    E = _field(N, dx, L=0.02, w=0.8e-3)
+    a = la.JonesField(E.copy(), 0.5 * E.copy(), dx=dx, dy=dx)
+    a.apply_real_lens(presc, LAM)
+    want = apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
+                           dy=dx)
+    assert np.array_equal(a.Ex.view(np.uint8), want.view(np.uint8))

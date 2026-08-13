@@ -1919,14 +1919,56 @@ def _check_no_silent_fold_drop(prescription: dict,
 # model itself accumulates, ``-sum_{j<i} (n2-n1) grad sag_j``, evaluated at the
 # same field point.  Both are closed form: NO ray trace, NO map, NO cache.
 #
-# MEASURED next-order residual (exact-ray oracle, common-mode controlled at the
-# exit plane; docs/audits/BUILD_SCREEN_OBLIQUITY_2026_08_11.md S3-S4):
-# 100-700x reduction on single curved surfaces up to sigma = 0.155, 30x on a
-# cemented doublet, 2.9x on design 121's fast SK2/SF57 doublet at 54.9 mrad.
-# The floor is a DIFFERENT defect, named in S5: the screen's momentum kick
-# ``-(n2-n1) grad sag`` is itself angle-blind, and that DEFLECTION error is not
-# a sag-screen term at all (it enters only through the subsequent propagation).
-# Nothing here claims to fix it; the guard's residual budget accounts for it.
+# R1 -- THE ANGLE-BLIND MOMENTUM KICK, AND THE DRIFT IT IS SEEN THROUGH
+# (v5.35.0; derived and measured in
+# ``docs/audits/BUILD_R1_WIRING_2026_08_12.md`` S1).
+#
+# Equation (4) fixes the screen's OPD VALUE.  The screen also has to DEFLECT:
+# it kicks the field by ``-grad OPD = -(n2 - n1) grad sag``, while the exact
+# tangent facet kicks by ``-dz grad sag`` with ``dz = pz2 - pz1`` the SAME
+# exact vector-Snell quantity equation (3) is built from.  The kick is
+# therefore wrong by ``-Lam grad sag``, ``Lam = (n2 - n1) - dz``, and that
+# error is angle-dependent because ``dz`` is.
+#
+# Writing the exit-plane model error as ``D = dLam - p . dx`` (the eikonal
+# difference plus the landing error carried back at the exit momentum, which
+# is exactly how the exact-ray oracle scores it) splits the defect into an OPD
+# channel and a DEFLECTION channel.  Measured on design 121 group 5, 3 mm
+# pupil, 54.9 mrad: the deflection channel alone is 0.0125 w, and the OPD
+# channel carries 0.0814 w of the corrected screen's 0.0870 w residual.  The
+# OPD channel is the deflection defect seen through the ray DRIFT: the
+# carrier-free screen error
+#
+#     E_i(x) = [ (n2 - n1) - dz(p0_i) ] * sag_i(x)                          (5)
+#
+# (whose gradient IS the angle-blind kick error above) is sampled where the
+# ray actually crosses surface i, and the carrier moves that crossing by
+#
+#     U_i = sum_{j<i} t_j [ (p0 + q)/pz_a - p0/pz_b ]_j                     (6)
+#
+# -- the transverse drift the carrier adds over the gaps BEFORE surface i.
+# A carrier-free error sampled at a carrier-shifted point is an ANGULAR error,
+# and it is the term that bounded equation (4) at 2.9x on the fastest
+# elements.  Cancelling it costs one more screen term
+#
+#     dOPD_R1,i(x) = - U_i . grad E_i(x)                                    (7)
+#
+# which is IDENTICALLY ZERO without a carrier (``U == 0``), identically zero
+# for a plate (``sag == 0`` so ``E == 0``), and needs no ray trace: ``U``
+# accumulates on the grid beside ``p0``.  ``p0`` is read at the CARRIER-FREE
+# ray's own position when the drift is advanced (``p0 - (U . grad) p0``) --
+# the element re-images its own drift, worth 14 % of the term on design 121
+# group 5.
+#
+# MEASURED (exact-ray oracle, common-mode controlled at the exit plane;
+# docs/audits/BUILD_R1_WIRING_2026_08_12.md S2): with (7), design 121 group 5
+# goes 0.25848 -> 0.01905 waves rms (13.6x, against 2.9x for (4) alone), and
+# the single-facet gains of S3.2 are unchanged (a lone facet has no gap in
+# front of it, so ``U == 0`` and (7) is exactly zero there).  What is left is
+# the deflection channel proper -- ``sag grad dz`` acting through the gaps
+# AFTER the surface -- which is NOT the gradient of any scalar and so cannot
+# be carried by a screen of the form ``f(x, y) sag(x, y)``; it is 0.0125 w on
+# that element and it is what the guard's residual budget accounts for.
 
 _VALID_SCREEN_OBLIQUITY = ('auto', True, False)
 _VALID_SCREEN_OBLIQUITY_POLICY = ('warn', 'error', 'silent')
@@ -1935,11 +1977,21 @@ _VALID_SCREEN_OBLIQUITY_POLICY = ('warn', 'error', 'silent')
 # analytic model's own normal-incidence ceiling on every element measured in
 # the campaign; above it the traced path is the shipped answer.
 _SCREEN_OBLIQUITY_TOL_WAVES = 0.05
-# With the correction applied, the leftover is the deflection defect above.
-# Worst measured ratio (residual / uncorrected) across the campaign's powered
-# cases: 0.351 on design 121 group 5 (the others are 0.001-0.033).  Rounded UP
-# from the worst for the guard's budget, not fitted to the set.
-_SCREEN_OBLIQUITY_RESIDUAL_FRAC = 0.40
+# With the correction applied (equation 4 AND the R1 term, equation 7), the
+# leftover is the DEFLECTION CHANNEL PROPER -- ``sag grad dz`` acting through
+# the gaps after the surface, which is not the gradient of any scalar and so
+# cannot be carried by a screen at all.  Worst measured ratio
+# (residual / uncorrected) across the campaign's powered cases: 0.048 on
+# design 121 group 5 (the binding case) and 0.055 on group 4, where the error
+# is 0.0005 waves and the ratio is not meaningful; the single facets read
+# 0.001-0.007 and R1 is exactly zero on them.  Rounded UP to 0.10, which keeps
+# a 2x margin over the worst -- the leftover is now a term that has NOT been
+# measured on a decentred / tilted / freeform element.  (Pre-R1 this was 0.40,
+# from a worst of 0.351 on the same group.)
+_SCREEN_OBLIQUITY_RESIDUAL_FRAC = 0.10
+# Floor on ``pz**2`` inside the drift step, so a marginally-propagating pixel
+# cannot divide by zero before its ``ok`` mask zeroes it.
+_SCREEN_DRIFT_MIN_PZ_SQ = 1e-12
 
 
 def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny,
@@ -2039,6 +2091,70 @@ def _screen_obliquity_delta(sag, gx, gy, p0x, p0y, qx, qy, n1, n2, xp):
     if bool(xp.all(ok)) and bool(xp.all(xp.isfinite(d))):
         return d
     return xp.where(ok & xp.isfinite(d), d, xp.zeros((), dtype=d.dtype))
+
+
+def _screen_coeff_error(sag, gx, gy, p0x, p0y, n1, n2, xp):
+    """Equation (5): ``E = [(n2 - n1) - dz(p0)] * sag`` -- the CARRIER-FREE
+    error of the shipped screen's own coefficient, in metres of OPD.
+
+    Its GRADIENT is the screen's angle-blind deflection error: the shipped
+    screen kicks the field by ``-(n2 - n1) grad sag`` where the exact tangent
+    facet kicks by ``-dz grad sag``, so ``-grad E`` is (to the order in which
+    ``dz`` varies slowly across the sag) the transverse momentum the screen
+    fails to impart.  R1 is that error carried over the carrier's own ray
+    drift; see the module-level derivation.
+
+    Carrier-free by construction -- it does NOT read ``q`` -- which is why the
+    R1 term it feeds vanishes identically when the drift does."""
+    dz_b, ok = _facet_axial_momenta(p0x, p0y, gx, gy, n1, n2, xp)
+    e = ((n2 - n1) - dz_b) * sag
+    if bool(xp.all(ok)) and bool(xp.all(xp.isfinite(e))):
+        return e
+    return xp.where(ok & xp.isfinite(e), e, xp.zeros((), dtype=e.dtype))
+
+
+def _screen_drift_step(p0x, p0y, pbx, pby, qx, qy, t, n_gap, xp):
+    """Equation (6), one gap: the transverse displacement a homogeneous gap
+    ADDS to the carrier's ray relative to the carrier-free ray,
+    ``t * (p_a/pz_a - p_b/pz_b)``.
+
+    ``(p0x, p0y)`` is the screen model's own accumulated transverse momentum
+    at the field point and ``(pbx, pby)`` the same quantity at the
+    CARRIER-FREE ray's own position (``p0`` shifted back by the drift so far);
+    they differ only once a drift exists, and that feedback -- the element
+    re-imaging its own drift -- is worth 14 % of the term on design 121 group
+    5.  ``q`` is the carrier's transverse optical momentum, in the same units
+    (see :func:`_screen_obliquity_angle_field`).
+
+    Pixels where either arm is evanescent in the gap take a ZERO step rather
+    than a clamped one, matching :func:`_screen_obliquity_delta`: a clamped
+    cosine is a wrong drift, and no drift is the safe neutral."""
+    n_sq = n_gap * n_gap
+    pax, pay = p0x + qx, p0y + qy
+    s_a = pax * pax + pay * pay
+    s_b = pbx * pbx + pby * pby
+    ok = (s_a < n_sq) & (s_b < n_sq)
+    pza = xp.sqrt(xp.maximum(n_sq - s_a, _SCREEN_DRIFT_MIN_PZ_SQ))
+    pzb = xp.sqrt(xp.maximum(n_sq - s_b, _SCREEN_DRIFT_MIN_PZ_SQ))
+    zero = xp.zeros((), dtype=xp.asarray(pza).dtype)
+    dux = xp.where(ok, t * (pax / pza - pbx / pzb), zero)
+    duy = xp.where(ok, t * (pay / pza - pby / pzb), zero)
+    return dux, duy
+
+
+def _screen_drift_opd(sag, gx, gy, p0x, p0y, n1, n2, ux, uy, dx, dy, xp):
+    """Equation (7): ``-U . grad E`` -- the R1 screen term.
+
+    Zero wherever the sag is zero (a plate has no coefficient error to carry),
+    zero wherever the drift is zero (no carrier, or the first surface, which
+    has no gap in front of it), and zero wherever either arm's refraction is
+    non-propagating."""
+    e_err = _screen_coeff_error(sag, gx, gy, p0x, p0y, n1, n2, xp)
+    ey, ex = xp.gradient(e_err, dy, dx)
+    d = -(ux * ex + uy * ey)
+    if bool(xp.all(xp.isfinite(d))):
+        return d
+    return xp.where(xp.isfinite(d), d, xp.zeros((), dtype=d.dtype))
 
 
 def _screen_obliquity_pupil_radius(prescription, Nx, Ny, dx, dy):
@@ -3091,8 +3207,14 @@ def apply_real_lens(
     # tilt -- the common case -- so no full-grid momentum arrays are needed);
     # ``_obl_p0*`` is the carrier-free momentum the screen model itself
     # accumulates; ``_obl_total`` is the summed correction the guard scores.
+    # ``_obl_u*`` is the carrier-induced ray DRIFT (equation 6) the R1 term
+    # reads; it stays a plain float 0.0 until a gap actually moves the ray, so
+    # a leading plate costs nothing and a zero-angle carrier never allocates.
     _obl_qx = _obl_qy = 0.0
     _obl_p0x = _obl_p0y = 0.0
+    _obl_ux = _obl_uy = 0.0
+    _obl_drift_live = False
+    _obl_q_zero = True
     _obl_total = None
     if _obl_active:
         # The carrier's direction cosines become a transverse OPTICAL
@@ -3107,6 +3229,11 @@ def apply_real_lens(
         if xp is not np:
             _obl_qx = xp.asarray(_obl_qx)
             _obl_qy = xp.asarray(_obl_qy)
+        # A zero-angle carrier has no drift to accumulate, so R1 is skipped
+        # STRUCTURALLY rather than by cancellation -- the byte-null of
+        # ``test_zero_angle_carrier_is_byte_identical`` is not a tolerance.
+        _obl_q_zero = (bool(xp.all(_obl_qx == 0.0))
+                       and bool(xp.all(_obl_qy == 0.0)))
         if on_screen_obliquity != 'silent':
             # only the guard reads the accumulated correction field
             _obl_total = xp.zeros((Ny, Nx), dtype=_sag_real)
@@ -3716,8 +3843,23 @@ def apply_real_lens(
                 _sag_ok, _og_x, _og_y, _obl_p0x, _obl_p0y,
                 _obl_qx, _obl_qy, n1r, n2r, xp)
             if _obl_total is not None:
+                # The ESTIMATOR scores equation (4) alone, which is the size
+                # of the defect the blind screen carries (measured 7.5 % low
+                # against the exact-ray truth on design 121 group 5).  R1 is a
+                # SECOND correction to the SAME defect and partially cancels
+                # the first, so adding its magnitude in would double-count:
+                # scoring the sum reads 0.395 waves against a 0.258-wave truth.
                 _obl_total += _d_obl
             if _obl_apply:
+                if _obl_drift_live:
+                    # R1 (equation 7): the angle-blind kick error carried over
+                    # the drift the carrier has accumulated getting here.
+                    # Skipped entirely at zero drift -- surface 0 always, and
+                    # every surface for a zero-angle carrier -- so it can
+                    # neither cost nor perturb those calls.
+                    _d_obl = _d_obl + _screen_drift_opd(
+                        _sag_ok, _og_x, _og_y, _obl_p0x, _obl_p0y, n1r, n2r,
+                        _obl_ux, _obl_uy, dx, dy, xp)
                 opd = opd + _d_obl
             # the screen model's OWN carrier-free momentum, accumulated at
             # this field point for the next surface's local ray angle
@@ -3832,6 +3974,37 @@ def apply_real_lens(
         # Dispatch (asm / sas / fresnel / rayleigh_sommerfeld) + bulk
         # absorption is factored into ``_propagate_through_glass`` so the
         # row-band (chunked) path above reuses the identical implementation.
+        if i < len(surfaces) - 1 and _obl_active and _obl_apply:
+            # ---- Advance the carrier's ray drift across this gap (eq. 6) --
+            # Only when the correction is being APPLIED: the guard's estimator
+            # scores equation (4) alone, so a ``screen_obliquity=False`` call
+            # never reads the drift and must not pay for it.
+            # Runs for EVERY gap, powered surface or not: a plate face has no
+            # coefficient error of its own but the gap behind it still moves
+            # the carrier's ray, and a later powered surface reads that drift.
+            # The gap geometry follows the model's own propagation, so the
+            # 'split' factorisation drifts through its reduced distance.
+            _t_gap = float(thicknesses[i])
+            _n_gap = n2r
+            if _split_mode:
+                _t_gap, _n_gap = _t_gap / n2r, 1.0
+            _pbx, _pby = _obl_p0x, _obl_p0y
+            if _obl_drift_live and getattr(_obl_p0x, 'ndim', 0):
+                # the carrier-free ray is at ``x - U``, and the element
+                # re-images its own drift -- read p0 there, not here.
+                _gp_y, _gp_x = xp.gradient(_obl_p0x, dy, dx)
+                _pbx = _obl_p0x - (_obl_ux * _gp_x + _obl_uy * _gp_y)
+                _gp_y, _gp_x = xp.gradient(_obl_p0y, dy, dx)
+                _pby = _obl_p0y - (_obl_ux * _gp_x + _obl_uy * _gp_y)
+                del _gp_y, _gp_x
+            _du_x, _du_y = _screen_drift_step(
+                _obl_p0x, _obl_p0y, _pbx, _pby, _obl_qx, _obl_qy,
+                _t_gap, _n_gap, xp)
+            _obl_ux = _obl_ux + _du_x
+            _obl_uy = _obl_uy + _du_y
+            del _pbx, _pby, _du_x, _du_y
+            if not _obl_q_zero and _t_gap != 0.0:
+                _obl_drift_live = True
         if i < len(surfaces) - 1:
             if _split_mode:
                 # P2 candidate (b): the internal gap is propagated as the
@@ -3991,9 +4164,10 @@ def apply_real_lens(
         _budget = _est * (_SCREEN_OBLIQUITY_RESIDUAL_FRAC if _obl_apply
                           else 1.0)
         if _budget > _SCREEN_OBLIQUITY_TOL_WAVES:
-            _how = ('applied, but its own next-order residual (the screen\'s '
-                    'angle-blind DEFLECTION term, which no sag screen can '
-                    'carry) is budgeted at %.1f%% of that'
+            _how = ('applied (the sag-obliquity term AND the R1 drift term), '
+                    'but its own next-order residual (the DEFLECTION channel '
+                    'proper, which is not the gradient of any scalar and so '
+                    'no screen can carry) is budgeted at %.1f%% of that'
                     % (100.0 * _SCREEN_OBLIQUITY_RESIDUAL_FRAC)
                     if _obl_apply else
                     'NOT applied (screen_obliquity=False), so the whole term '
