@@ -1,0 +1,100 @@
+{
+ "schema": 1,
+ "name": "d121_3order_ab_rcwa",
+ "workdir": "../_work/d121_3order_ab_rcwa",
+ "wavelength": 1.31e-06,
+ "notes": "A/B ARM B (RCWA).  Byte-identical to specs/d121_3order_ab_scalar.json except for decompose.kind and decompose.params: the 32 complex order amplitudes come from a RIGOROUS 2-D crossed-grating RCWA solve of the reconstructed etched cell instead of the DFT of the ideal thin-element transmittance.  n_orders = 6 is the CEILING, not a choice -- the design-121 cell (113.76 um = 86.8 wavelength period, 0.889 um features) trips the solver's energy guard at every truncation from 7 upward, on both plate mountings and in every formulation/truncation set tried, so the table is NOT converged and the rung-to-rung movement (M 5->6: worst per-order d|a| 0.026, d_arg 0.686 rad) is the dominant uncertainty on every weight.  n_theta = n_phi = 1 collapses the angle grid deliberately: the angle-resolved sweep at the highest CLEANLY-solving truncation measured 4.5e-04 relative efficiency variation and 2.4e-04 rad phase variation across the beam's whole cone, four decades below the truncation uncertainty, while an angle grid at n_orders = 6 mixes truncations.  STRUCTURE ASSUMPTIONS (material, relief depth, mounting) are NOT recorded in the design tree and are stated in docs/audits/BUILD_RCWA_DOE_TABLE_2026_08_12.md and in doe_rcwa_table's module docstring.",
+ "coherent_sum": false,
+ "decompose": {
+  "kind": "design121_doe_rcwa",
+  "params": {
+   "orders": [
+    [
+     0,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -4,
+     -2
+    ]
+   ],
+   "cell_pixels": 128,
+   "n_doe": 1.446804,
+   "relief_sign": 1,
+   "mount": "relief_first",
+   "n_orders": 6,
+   "n_theta": 1,
+   "n_phi": 1,
+   "theta_max": 0.0005,
+   "beam_theta_rms": 4.75e-05,
+   "averaging": "coherent",
+   "formulation": "laurent",
+   "truncation": "rectangular",
+   "max_workers": 6,
+   "blas_per_worker": 1,
+   "chain_a": {
+    "n": 1024,
+    "ray_subsample": 1,
+    "n_workers": 1,
+    "final_leg": "exact"
+   }
+  }
+ },
+ "chain": {
+  "kind": "traced",
+  "plane": "fine_retrace_exit",
+  "ray_subsample": 1,
+  "n_workers": 1,
+  "n_fine_cap": 8192,
+  "window_factor": 4.0,
+  "final_leg": "auto",
+  "ram_budget": "inf",
+  "on_box_budget": "warn",
+  "capture_reference_tile": true,
+  "params": {}
+ },
+ "aggregate": {
+  "dx_common": 1.2292e-06,
+  "n_common": 8192,
+  "origin": [
+   0.0,
+   0.0
+  ],
+  "reference_beam": null,
+  "include": "all",
+  "weights": "decompose",
+  "batch_size": 8,
+  "support_frac": 0.99999,
+  "nyquist_margin": 1.0,
+  "on_nyquist": "error",
+  "on_window": "warn",
+  "bandlimit": false
+ },
+ "leg": {
+  "mode": "crop",
+  "distance": 0.0077058,
+  "n_fine_cap": 8192,
+  "window_factor": 4.0,
+  "ram_budget": "inf",
+  "on_replica": "warn",
+  "on_readout_window": "warn",
+  "on_ram_cap": "error",
+  "on_n_fine_cap": "error"
+ },
+ "readout": {
+  "dx_out": 2e-07,
+  "n_out": 1024,
+  "frames": "all",
+  "save_frames": true,
+  "metrics": true,
+  "ee_radii": [
+   3e-06,
+   6e-06,
+   1.2e-05
+  ]
+ }
+}
