@@ -187,6 +187,31 @@ from .glass import (
 
 # â”€â”€ Backend / runtime helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .memory import available_cpus
+
+# -- Field-aggregation primitives (carrier_field) ------------------------
+# The carrier-field value types and their two verbs are public on
+# ``lumenairy.propagators`` (and on ``lumenairy.propagators.carrier_field``)
+# but landed without a top-level re-export.  That is the v4.14.0 audit
+# P1-NEW-4 sibling gap, which the v4.16.0 ``__all__``-symmetry walker
+# generalises to every name; the walker is what caught it.
+# ``re_reference`` and ``aggregate`` are the verbs -- everything else is a
+# value type or the on-disk schema constant.
+from .propagators.carrier_field import (
+    CARRIER_FIELD_SCHEMA,
+    AggregateLedger,
+    AggregateResult,
+    CarrierField,
+    CarrierSpec,
+    FieldGrid,
+    FieldLedgerRow,
+    NyquistReport,
+    ReReferenceReport,
+    aggregate,
+    carrier_difference_nyquist,
+    load_carrier_field_zarr,
+    re_reference,
+    save_carrier_field_zarr,
+)
 from .propagators.propagation import (
     CUPY_AVAILABLE,
     # Precision configuration (complex64 vs complex128)
@@ -1319,6 +1344,23 @@ __all__ = [
     'carrier_referenced_exact_focus_readout',
     'propagate_traced_carrier_chain',
     'propagate_traced_carrier_chain_multi',
+
+    # Field-aggregation primitives (carrier_field).  Same order as
+    # ``lumenairy.propagators.__all__`` so the two lists read alike.
+    'CarrierSpec',
+    'FieldGrid',
+    'CarrierField',
+    'NyquistReport',
+    'ReReferenceReport',
+    'FieldLedgerRow',
+    'AggregateLedger',
+    'AggregateResult',
+    'carrier_difference_nyquist',
+    're_reference',
+    'aggregate',
+    'save_carrier_field_zarr',
+    'load_carrier_field_zarr',
+    'CARRIER_FIELD_SCHEMA',
     'fresnel_propagate_mft',
     'fraunhofer_propagate_mft',
     'angular_spectrum_propagate_mft',

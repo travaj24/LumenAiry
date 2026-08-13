@@ -716,6 +716,43 @@ def _chunk_files(zpath):
     return sorted(out)
 
 
+def _hole_the_checkpoint(path):
+    """Punch a hole in WHICHEVER container ``save_field`` produced, in the way
+    that container hides it, and return the container's name.
+
+    ``save_field`` dispatches on ``have_zarr()``, and ``zarr`` is an optional
+    extra keyed on ``python_version >= "3.11"`` (pyproject: zarr v3 itself
+    requires 3.11+), so the Python 3.10 leg of CI legitimately checkpoints to
+    ``.npz`` and has NO chunk files at all.  A test that can only hole a Zarr
+    store therefore stops testing on that leg instead of failing -- which is
+    how this arm met the runner.
+
+    The defect is the same in both containers and so is the hole: a container
+    that is PRESENT, VALID, and returns an array of exactly the right shape
+    and dtype whose content is short.  Zarr does it by deleting a chunk file
+    (the reader substitutes ``fill_value``); the npz does it by writing a
+    block of the envelope back as zeros.  Either way the power on disk no
+    longer matches the ``power_field`` the metadata recorded, which is the
+    number the resume gate compares."""
+    if os.path.isdir(path):
+        chunks = _chunk_files(path)
+        assert chunks, f'{path} is a store directory but holds no chunks'
+        os.remove(chunks[len(chunks) // 2])
+        return 'zarr'
+    npz = path + '.npz'
+    assert os.path.exists(npz), (
+        f'no checkpoint container at {path} or {npz} -- save_field produced '
+        f'a third format this test does not know how to hole')
+    with np.load(npz, allow_pickle=False) as d:
+        env = np.array(d['envelope'])
+        meta = np.array(d['meta'])
+    ny = env.shape[-2]
+    lo = ny // 2
+    env[lo:lo + max(1, ny // 8), :] = 0.0
+    np.savez_compressed(npz, envelope=env, meta=meta)
+    return 'npz'
+
+
 def _chain_meta_payload(wd, key='a'):
     with open(os.path.join(str(wd), 'chains', f'{key}.json'),
               encoding='cp1252') as fh:
@@ -738,10 +775,16 @@ def test_the_stored_power_matches_the_power_on_disk(tmp_path):
 
 
 def test_a_partial_field_checkpoint_is_rejected_not_resumed(tmp_path):
-    """FAIL-BEFORE: punch one chunk out of a completed store.
+    """FAIL-BEFORE: punch a hole in a completed checkpoint.
 
     ``field_exists`` said yes and the stage printed RESUMED.  The content
-    check must say no, and the beam must be recomputed."""
+    check must say no, and the beam must be recomputed.
+
+    Run against WHICHEVER container this interpreter's ``save_field``
+    produced -- see ``_hole_the_checkpoint``.  The claim is about the resume
+    GATE, which is container-independent (``field_is_complete`` reads both),
+    so pinning it to the Zarr store would have retired the arm on every
+    Python where the zarr extra does not resolve."""
     beams = [_beam_cfg('a', (0.0, 0.0)), _beam_cfg('b', (3e-5, 0.0))]
     _CHAIN_CALLS.clear()
     _run(tmp_path / 'wd', beams)
@@ -749,12 +792,11 @@ def test_a_partial_field_checkpoint_is_rejected_not_resumed(tmp_path):
 
     fz = os.path.join(str(tmp_path / 'wd'), 'chains', 'a.zarr')
     stored = _chain_meta_payload(tmp_path / 'wd')['power_field']
-    chunks = _chunk_files(fz)
-    assert chunks, 'no chunk files to remove -- the fixture is not a zarr store'
-    os.remove(chunks[len(chunks) // 2])
+    container = _hole_the_checkpoint(fz)
+    assert container in ('zarr', 'npz'), container
 
     # presence still says yes -- that is the whole defect
-    assert PA.field_exists(fz)
+    assert PA.field_exists(fz), container
     # ... and the power off the holed store is not the stored power
     holed = PA.field_power_on_disk(fz)
     assert holed != pytest.approx(stored, rel=1e-9)
@@ -863,16 +905,30 @@ def test_an_interrupted_field_write_leaves_the_previous_artifact_intact(
 
     import lumenairy.propagators.carrier_field as _cf
 
+    reached = []
+
     def _boom(*a, **kw):
+        reached.append(1)
         raise KeyboardInterrupt('simulated taskkill mid-write')
 
+    # ``save_field`` dispatches its PAYLOAD write on ``have_zarr()``, and the
+    # zarr extra is keyed on ``python_version >= "3.11"``, so the 3.10 leg of
+    # CI takes the npz writer and the zarr writer is never called.  Inject at
+    # BOTH payload writers, and assert below that the injection was actually
+    # reached -- otherwise this arm passes vacuously the moment the dispatch
+    # grows a branch, which is exactly how it met the runner.
     monkeypatch.setattr(_cf, 'save_carrier_field_zarr', _boom)
+    monkeypatch.setattr(PA, '_save_field_npz', _boom)
     g = FieldGrid((32, 32), 1e-6)
     victim = CarrierField(np.ones((32, 32), dtype=np.complex128), g,
                           CarrierSpec(R=-1.0), LAM)
     with pytest.raises(KeyboardInterrupt):
         PA.save_field(fz, victim, {'k': 1})
     monkeypatch.undo()
+    assert reached, (
+        'the interrupt was never injected -- save_field wrote the payload '
+        'through neither save_carrier_field_zarr nor _save_field_npz, so '
+        'this test proved nothing about the atomic path')
 
     assert PA.field_power_on_disk(fz) == good, (
         'the interrupted write destroyed the previous good artifact')

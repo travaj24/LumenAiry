@@ -257,13 +257,15 @@ _TRACED_ERA_FLAGS = (
             'field can answer yes'),
     # ---- the inverse characteristic (UNIT D) -------------------------------
     _f(_IM, 'TRACED_INVERSE_MAP', 'IMAP', False,
-       {'v5.31': False, 'v5.32': False, 'v5.32.1': False, 'v5.34': False},
-       note='SHIPS OFF, and scoped by carrier.py to the terminal fine retrace.  "Setting it False restores the shipped '
+       {'v5.31': False, 'v5.32': False, 'v5.32.1': False, 'v5.34': True},
+       note='SHIPS ON at its own era, and scoped by carrier.py to the '
+            'terminal fine retrace.  "Setting it False restores the shipped '
             'coarse-Newton + map_coordinates upsample chain BIT FOR '
             'BIT."  Valued at EVERY era, not just its own: it changes a '
             'returned bit, so leaving it alone in an older preset would '
             'run the new evaluator and label the result v5.31.  Its own '
-            'note carries the measurement that decided the default'),
+            'note carries the exact-trace oracle that decided the accuracy '
+            'case and the off-lattice G8 probe that unblocked the default'),
     _f(_IM, 'INVERSE_MAP_GUARD', 'IMAP', 'silent',
        {'v5.34': 'warn'}, note='REPORTING-ONLY: it selects what a REFUSED '
             'build says, and a refused build keeps the shipped path '
