@@ -376,12 +376,40 @@ def test_the_spline_fit_takes_no_fit_disc_so_d7_cannot_touch_it():
 
 def test_the_decentred_path_really_did_change():
     """The complement of the pins above -- otherwise they would pass on a
-    no-op."""
+    no-op.
+
+    SCORED ON BOTH PATHS (2026-08-13), and the two statements are different
+    because the inverse-characteristic model (``TRACED_INVERSE_MAP``, shipped
+    ``True`` since ``FIX_G8_PROBE_2026_08_12``) supersedes the object this
+    test is about.  ``decentred_fit_poly_order`` is a property of the
+    element's own degree-``newton_poly_order`` FORWARD fit, and fix D5
+    deliberately does not hand the D7 order raise to the degree-14 EXIT model
+    -- ``_lens_traced.py`` :9366-9370, "only the WEIGHTS travel" -- so with
+    that model supplying the OPL, the entrance coordinates and ``det J`` per
+    pixel, the returned field cannot depend on the forward fit's ORDER at all.
+
+    Measured on this fixture: ``max|a - b|`` is **3.925e-01** of a 0.999998
+    peak on the forward path (4e+07x the 1e-8 bar) and **exactly 0.0** with
+    the model engaged.  Both are asserted.  The forward arm is the complement
+    the concentric pins above need, kept word for word; the default arm is the
+    STRONGER statement -- exact byte identity, not a tolerance -- and it is
+    what keeps those pins non-vacuous at the shipped default too, since a
+    ``0.0`` that is asserted cannot quietly become "small".
+
+    This is the adjudication ``FIX_G8_PROBE`` S6.2 already made twice, for
+    ``c6_fit_guard::test_guard_raises_the_fit_order_like_d7`` and for
+    ``c6::test_the_two_newton_fit_backends_still_describe_the_same_map``:
+    both arms kept, each measured where it is real."""
     _ram_guard()
-    a = _apply(_X0)
-    b = _apply(_X0, pre_d7=True)
+    a = _apply(_X0, inverse_map=False)
+    b = _apply(_X0, pre_d7=True, inverse_map=False)
     scale = float(np.max(np.abs(a)))
     assert np.max(np.abs(a - b)) > 1e-8 * scale
+    # ... and with the model engaged the forward fit's ORDER does not reach
+    # the returned field at all
+    am = _apply(_X0)
+    bm = _apply(_X0, pre_d7=True)
+    assert np.array_equal(am, bm), float(np.max(np.abs(am - bm)))
 
 
 # ===========================================================================
@@ -627,13 +655,41 @@ def test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order(
     the least-squares answer (residual ratio 1.000003 against QR); with the
     mask degenerated they return one that fits 3.7e+04 times worse.  That is
     what "the regularisation is load-bearing" means, stated so that no build
-    can pass it by landing on the lucky side of the instability."""
+    can pass it by landing on the lucky side of the instability.
+
+    SCOPED TO THE FORWARD PATH (``inverse_map=False``, 2026-08-13), which is
+    where every object in this test lives: the weighted restriction, the
+    least-squares solve it conditions, and the fold that solve puts in the
+    returned field are all properties of the element's own FORWARD fit.  With
+    the inverse-characteristic model engaged (``TRACED_INVERSE_MAP``, shipped
+    ``True`` since ``FIX_G8_PROBE_2026_08_12``) BOTH halves of the pin go
+    inert, and both were measured on this fixture at the pinned era:
+
+    * the good arm's census GROWS from 6 solves to 8.  The two extra rows are
+      the model's own total-degree-14 exit fit, ``(203401, 120)`` --
+      ``(14+1)(14+2)/2 = 120`` terms -- at ``rcond = 1.797e-14``, and
+      ``_worst_draw`` takes the MAX over the census, so ``ratio_good`` reads
+      **1.029199** (the model's fit) instead of **1.000003** (the weighted
+      restriction's, which is the number this test names).  The claim would be
+      scored against a solve it is not about.  NOTE it is only ill-conditioned
+      HERE, in this fixture's era pin: with the SHIPPED
+      ``LSTSQ_CONDITIONING_STEPDOWN = True`` that same model fit returns
+      ``1.000000`` (VERIFY_FINAL_2026_08_12 S6.3c).
+    * the fail-before goes inert too, which is why filtering the census by
+      shape is NOT a sufficient fix: with the model on, ``folds_bad`` reads
+      **0** where the assertion below needs ``>= 1``, and the hard mask's
+      off-beam ratio reads **0.000000** against **0.000175** on the forward
+      path.  The fold is in the fitted forward map, and the model does not
+      read the fitted forward map.
+
+    Nothing is relaxed: every assertion below is unchanged, and each one is
+    measured on the path where the mechanism it names is real."""
     _ram_guard()
     monkeypatch.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
     monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
-    good, _f_good, rows_good = _solve_census()
+    good, _f_good, rows_good = _solve_census(inverse_map=False)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
-    bad, folds_bad, rows_bad = _solve_census()
+    bad, folds_bad, rows_bad = _solve_census(inverse_map=False)
     r_good = _offbeam_ratio(good)
     r_bad = _offbeam_ratio(bad)
     rc_good, ratio_good = _worst_draw(rows_good)
@@ -794,7 +850,25 @@ def test_c13_cures_the_hard_mask_fold_at_the_d7_order(monkeypatch):
     matrix, it stops trusting the normal equations); pre-C13 the returned fit
     misses the least-squares residual by 3.7e+04x, and with C13 on it reads
     1.000000.  The fold and ghost assertions on the POST arm are unchanged,
-    because those are the arm where the answer is stable to nine figures."""
+    because those are the arm where the answer is stable to nine figures.
+
+    SCOPED TO THE FORWARD PATH (``inverse_map=False``, 2026-08-13), for the
+    same reason as the sibling above and with the same measurements: the
+    hard-mask design matrix, the draw the normal equations answer it with, and
+    the fold that draw puts in the fitted forward map are all objects of the
+    element's own FORWARD fit, and the inverse-characteristic model does not
+    read that map.  With the model engaged (``TRACED_INVERSE_MAP``, shipped
+    ``True`` since ``FIX_G8_PROBE_2026_08_12``) this test fails on
+    ``folds_pre >= 1``, which reads **0** -- a FIELD-level assertion, so
+    filtering the solve census by shape cannot rescue it.  Measured on this
+    fixture: ``folds_pre`` 1 -> 0 and ``r_pre`` 0.000175 -> 0.000000 across
+    the flag, while ``ratio_pre`` stays 68546.42 either way (the forward
+    draws are still MADE, they just no longer reach the returned field), and
+    the post arm's census grows from 6 solves to 8 with the model's own
+    ``(1137, 120)`` degree-14 exit fits.
+
+    Nothing is relaxed: every assertion below is unchanged, and each one is
+    measured on the path where the mechanism it names is real."""
     _ram_guard()
     monkeypatch.setattr(_lt, 'RAY_DENSITY_HALO_CHECK', 'silent')
     monkeypatch.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
@@ -802,8 +876,8 @@ def test_c13_cures_the_hard_mask_fold_at_the_d7_order(monkeypatch):
 
     with monkeypatch.context() as m:
         m.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
-        a_pre, folds_pre, rows_pre = _solve_census()
-    a_post, folds_post, rows_post = _solve_census()
+        a_pre, folds_pre, rows_pre = _solve_census(inverse_map=False)
+    a_post, folds_post, rows_post = _solve_census(inverse_map=False)
     r_pre, r_post = _offbeam_ratio(a_pre), _offbeam_ratio(a_post)
     rc_pre, ratio_pre = _worst_draw(rows_pre)
     rc_post, ratio_post = _worst_draw(rows_post)

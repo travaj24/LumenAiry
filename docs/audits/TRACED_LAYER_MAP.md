@@ -85,16 +85,27 @@ absence of a carrier); those are called out in S2.2.
 | 32 | IMAP | `TRACED_INVERSE_MAP` | `_lens_imap` | `True` | `False` | 5.35.0 |
 | 33 | IMAP | `INVERSE_MAP_GUARD` | `_lens_imap` | `'warn'` | `'silent'` | 5.35.0 |
 
-**`5.32.1` is a SOURCE-ONLY era.**  `pyproject.toml` and `lumenairy/__init__.py`
-both still read `5.32.0`; `CHANGELOG.md` has no `5.32.1` header (C9-C12 sit under
-`[Unreleased]`) and C13/C14 are not in the CHANGELOG at all.  The name is used
-because the source docstrings already use it.
+**`5.32.1` AND `v5.34` ARE SOURCE-ONLY ERA NAMES, and neither reproduces the
+release it resembles.**  `CHANGELOG.md` has no `5.32.1` header (C9-C12 sit under
+`[Unreleased]`) and C13/C14 are not in the CHANGELOG at all.  `v5.34` is the
+same kind of name, and the point is checkable: `lumenairy/elements/_lens_imap.py`
+-- the module whose flags that era exists to carry -- **does not exist at tag
+`v5.34.0`**, where `ERAS` reads `('v5.31', 'v5.32', 'v5.32.1')`.  So
+`traced_era('v5.34')` is the development tree AFTER the inverse characteristic
+landed, i.e. the tree that ships as **5.35.0** -- which is what the `since`
+column of rows 32-33 says.  Both names are used because the source docstrings
+already use them.  A further consequence, stated so it is not mistaken for a
+defect: `ERAS[-1]` is pinned to reproduce the LIVE shipped defaults, so its
+entries move when a default moves (`TRACED_INVERSE_MAP` went `False` -> `True`
+under this name).  The newest era is a coordinate on the current source, not a
+fixed coordinate across commits; cite it with the file hash, never alone.
 
 ### S2.1 The era presets
 
 `_TRACED_ERA_FLAGS` expresses four points on the sequence — `v5.31` (before the
 D1-D7 / C1-C8 campaign), `v5.32` (v5.32.0 as released), `v5.32.1` (the C9-C14 tree) and
-`v5.34` (after the inverse characteristic landed).
+`v5.34` (after the inverse characteristic landed; the 5.35.0 tree -- see the
+source-only note above).
 **They are presets, not a replacement for the flags**, and the reason is in
 `ARCH_TRACED_ENCAPSULATION` S5.2: the flags are a *lattice*, not a timeline.
 The most-cited comparison in the campaign — `REMAP_STATIONARY_PHASE_LAUNCH=True`

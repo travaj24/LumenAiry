@@ -253,8 +253,14 @@ def decompose_design121_doe_rcwa(params, spec: PipelineSpec) -> DecomposeResult:
     relief_sign : {+1, -1}
         Pillars (+1, default) or pits (-1).
     n_orders : int
-        RCWA truncation per side per axis (default 12; the convergence ladder
-        and its chosen headroom are in the build note).
+        RCWA truncation per side per axis.  DEFAULT 6, AND IT IS A CEILING
+        RATHER THAN A CHOICE: on the design-121 cell the solver's own energy
+        guard refuses every truncation from 7 upward, on both mountings and in
+        every formulation tried, so 6 is the highest rung that solves and it is
+        NOT converged.  The ladder, and the rung-to-rung movement that is the
+        dominant uncertainty on every weight this module returns, are in
+        ``docs/audits/BUILD_RCWA_DOE_TABLE_2026_08_12.md``; the same statement
+        sits at the default's own site (:154).
     theta_max, n_theta, n_phi : float, int, int
         The incident-angle grid: Chebyshev in polar angle over
         ``[0, theta_max]``, uniform in azimuth.

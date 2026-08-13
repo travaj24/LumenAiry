@@ -1980,14 +1980,51 @@ _SCREEN_OBLIQUITY_TOL_WAVES = 0.05
 # With the correction applied (equation 4 AND the R1 term, equation 7), the
 # leftover is the DEFLECTION CHANNEL PROPER -- ``sag grad dz`` acting through
 # the gaps after the surface, which is not the gradient of any scalar and so
-# cannot be carried by a screen at all.  Worst measured ratio
-# (residual / uncorrected) across the campaign's powered cases: 0.048 on
-# design 121 group 5 (the binding case) and 0.055 on group 4, where the error
-# is 0.0005 waves and the ratio is not meaningful; the single facets read
-# 0.001-0.007 and R1 is exactly zero on them.  Rounded UP to 0.10, which keeps
-# a 2x margin over the worst -- the leftover is now a term that has NOT been
-# measured on a decentred / tilted / freeform element.  (Pre-R1 this was 0.40,
-# from a worst of 0.351 on the same group.)
+# cannot be carried by a screen at all.  Measured ratios (residual /
+# uncorrected) across the campaign's powered cases, re-derived exactly from
+# ``_screen_obl_d121.json`` rather than from its printed 5-decimal digits
+# (FIX_FINAL_WAVE_2026_08_13 S4.2):
+#
+#   design 121 group 5   r = 1 / 2 / 3 mm   0.040260 / 0.043894 / 0.047966
+#   design 121 group 4   r = 1 / 2 / 3 mm   0.037474 / 0.050153 / 0.055224
+#   design 121 group 2   r = 1 / 2 / 3 mm   0.041997 / 0.035100 / 0.029664
+#   design 121 group 3   r = 1 / 2 / 3 mm   0.001773 / 0.001930 / 0.002033
+#   single spherical surfaces, 10-100 mrad, N-BK7 / N-SF11, R = +-25/50 mm
+#                                           0.0012 - 0.0064
+#   plates (groups 0, 1)                    exactly 0 (sag == 0, so E == 0)
+#
+# so the WORST is 0.055224 (group 4 at 3 mm) and the worst that is materially
+# large is 0.047966 (group 5 at 3 mm -- the binding case; group 4's absolute
+# error is 0.00048896 waves, 102x inside the tolerance, which is why its ratio
+# is not the one to design to).  0.10 therefore keeps 1.81x over the worst
+# ratio measured anywhere and 2.09x over the binding case.  (Pre-R1 this was
+# 0.40, from a worst of 0.351 on the same group.)
+#
+# THE CONSTANT IS BOUNDED ON BOTH SIDES, which is what makes it a choice rather
+# than a one-sided margin.  The guard fires on ``estimate * FRAC > TOL``, so
+# each shipped fixture's estimate names a FRAC at which its disposition flips:
+#
+#   _out_of_envelope_case  estimate 1.00880 w  -> must fire:  FRAC > 0.0496
+#   design 121 group 5     estimate 0.23910 w  -> must not:   FRAC < 0.2091
+#   _steep_case            estimate 0.12860 w  -> must not:   FRAC < 0.3888
+#
+# Every disposition the suite pins is therefore unchanged for any FRAC in
+# (0.0496, 0.2091), a 4.2x-wide window, and 0.10 sits essentially at its
+# geometric centre (sqrt(0.0496 * 0.2091) = 0.1018).  Raising it to 0.15 would
+# buy 2.72x over the worst measured ratio and cost margin the other way (the
+# design-of-record false alarm would sit 1.39x away instead of 2.09x); it was
+# derived and NOT taken, because no value inside the window addresses the
+# actual open item, which is:
+#
+# WHAT IS NOT BOUNDED.  Every case above is a ROTATIONALLY SYMMETRIC surface.
+# The leftover has NOT been measured on a decentred / tilted / biconic /
+# freeform element, and that -- not the size of the margin -- is the reason to
+# prefer :func:`apply_real_lens_traced` on one.  What IS settled is that the
+# number is not an arithmetic accident: the whole ladder reproduces to every
+# printed digit, and `_screen_obl_d121.json` / `_screen_obl_sphere.json`
+# reproduce with zero numeric difference, across Windows/MKL/py3.14/numpy
+# 2.4.4 and WSL/OpenBLAS/py3.12/numpy 2.4.6 at 1, 2 and 8 threads (6
+# configurations).
 _SCREEN_OBLIQUITY_RESIDUAL_FRAC = 0.10
 # Floor on ``pz**2`` inside the drift step, so a marginally-propagating pixel
 # cannot divide by zero before its ``ok`` mask zeroes it.
@@ -2893,8 +2930,10 @@ def apply_real_lens(
         rms of the summed correction over the pupil IS the wavefront error
         the angle-blind screens carry at those ray angles.  When it exceeds
         the documented tolerance (0.05 waves = lambda/20; and with the
-        correction applied, when 40% of it still does -- the budgeted
-        next-order residual) the guard emits a ``RuntimeWarning`` naming the
+        correction applied, when 10% of it still does -- the budgeted
+        next-order residual, ``_SCREEN_OBLIQUITY_RESIDUAL_FRAC``, which the
+        R1 entrance-curvature term took from 0.40 to 0.10) the guard emits a
+        ``RuntimeWarning`` naming the
         number and recommending :func:`apply_real_lens_traced`.  ``'error'``
         raises instead; ``'silent'`` suppresses.  Carrier-free calls are
         always silent -- there is no angle to estimate against.

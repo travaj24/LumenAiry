@@ -165,12 +165,37 @@ def test_the_pool_cap_notice_is_silenced_by_its_own_knob(monkeypatch):
     The clamp itself is unchanged in both halves -- it is a resource decision
     on a path documented and tested to be bit-identical to serial, so the knob
     moves the REPORT and never the numbers.
+
+    2026-08-13 -- BOTH HALVES ARE SCORED WITH ``inverse_map=False``, AND THE
+    RE-DERIVATION THE ASSERTION MESSAGE BELOW ASKS FOR WAS TRIED FIRST AND
+    CANNOT WORK.  The clamp prices a PER-PIXEL NEWTON INVERSION.  With the
+    inverse-characteristic model engaged (``TRACED_INVERSE_MAP``, shipped
+    ``True`` since ``FIX_G8_PROBE_2026_08_12``) there is no per-pixel Newton
+    to dispatch -- the model evaluates the exit polynomial directly -- so the
+    pool decision is never taken and ``_newton_worker_bytes`` is never called.
+    Measured on this fixture over a pinned-RAM ladder 12 / 8 / 6 / 4 / 3 / 2 /
+    1 GB:
+
+        arm                clamp priced a worker?   cap warnings
+        inverse_map=False  yes, every rung          1 at every rung
+                           (1.871 GB per worker, 4096 Newton points/chunk,
+                            140625-point ray-fit grid)
+        SHIPPED default    NEVER, at any rung       0 at every rung
+
+    So no value of the pinned box can make the notice fire on the shipped
+    path, and lowering the pin would only make the FORWARD arm's emulation of
+    CI less faithful.  The 12 GB pin is kept exactly as CI's runners have it,
+    on the arm where the pool exists.  The shipped path is not left unstated:
+    the third block below ASSERTS that it prices no worker at all, which is
+    both the reason for the scoping and a real contract -- if a future build
+    reintroduces a per-pixel Newton dispatch behind the model, this fails.
     """
     _pin_available_ram(monkeypatch, 12.0e9)
     LT.close_worker_pool()
     E0 = _gauss(1024, 12e-6, 5e-3)
     kw = dict(prescription=_singlet_f5(), wavelength=_WL, dx=12e-6,
-              n_workers=4, on_undersample='silent', on_aperture_beam='silent')
+              n_workers=4, inverse_map=False,
+              on_undersample='silent', on_aperture_beam='silent')
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
@@ -186,6 +211,30 @@ def test_the_pool_cap_notice_is_silenced_by_its_own_knob(monkeypatch):
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
         la.apply_real_lens_traced(E0, on_pool_memory='silent', **kw)
+    LT.close_worker_pool()
+
+    # ... and on the SHIPPED path the same call at the same pinned 12 GB never
+    # reaches the pool decision at all, because the model replaces the
+    # per-pixel Newton the clamp exists to price.
+    priced = []
+    _orig_wb = LT._newton_worker_bytes
+
+    def _spy(chunk_points, fit_points):
+        priced.append((float(chunk_points), float(fit_points)))
+        return _orig_wb(chunk_points, fit_points)
+
+    monkeypatch.setattr(LT, '_newton_worker_bytes', _spy)
+    kw_map = {k: v for k, v in kw.items() if k != 'inverse_map'}
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        la.apply_real_lens_traced(E0, **kw_map)
+    assert not priced, (
+        'the shipped path priced a Newton pool worker, so it now HAS a '
+        'per-pixel Newton dispatch and the two halves above should be scored '
+        'on it rather than on inverse_map=False', priced)
+    assert not [w for w in rec
+                if issubclass(w.category, RuntimeWarning)
+                and 'Newton process pool asked for' in str(w.message)]
     LT.close_worker_pool()
 
 

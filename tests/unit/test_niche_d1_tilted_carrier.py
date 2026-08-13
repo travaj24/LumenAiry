@@ -1037,7 +1037,50 @@ def test_tilted_carrier_supplies_the_beam_centre_by_default():
     """A TiltedCarrier already STATES the chief-ray position, so the element
     takes the beam centre from it -- the chain needs no extra plumbing, and a
     direct ``apply_real_lens_traced`` call with a decentred TiltedCarrier is
-    guarded too.  An explicit ``beam_centre`` still wins."""
+    guarded too.  An explicit ``beam_centre`` still wins.
+
+    THE "DIFFERENT COMPUTATION" ARM IS READ UPSTREAM (2026-08-13), and that is
+    why this test still runs AT THE SHIPPED DEFAULT rather than being scoped
+    out of it like the five siblings of ``FIX_G8_PROBE_2026_08_12`` S6.1/S6.2.
+
+    It used to be read off the RETURNED FIELD (``max|derived - origin| >
+    1e-6 * scale``).  That reading is a shadow of the difference, not the
+    difference, and the inverse-characteristic model (``TRACED_INVERSE_MAP``,
+    shipped ``True`` since ``FIX_G8_PROBE_2026_08_12``) supersedes it: with the
+    model supplying the OPL, the entrance coordinates and ``det J`` per pixel,
+    the returned field stops depending on which disc the FORWARD fit was
+    restricted to.  Measured on this fixture: ``max|derived - origin|`` reads
+    **2.715e-03** of a 0.9855 peak on the forward path and **4.155e-08** of a
+    1.0206 peak with the model engaged -- a 65 000x collapse, landing 25x
+    UNDER the 1e-6 bar.  No returned bit is wrong; the observable moved.
+
+    So the difference is now asserted where it is MADE.  The beam centre
+    resolves a ray-fit disc, and the element names that disc's centre in
+    millimetres in its own announcement (``_lens_traced.py`` :9190, :9392):
+    the derived and explicit arms both resolve a restriction about
+    ``(1.2000, 0.0000) mm`` -- the carrier's chief-ray position, to four
+    decimals -- and the origin arm resolves none at all, because its
+    origin-referenced second moment ``sqrt(2 x_c^2 + w^2)`` (the very failure
+    niche D1 exists to fix, pinned in
+    ``test_beam_radius_is_measured_about_the_beam_not_the_grid_origin``) sizes
+    a disc that covers the whole launch square.  That announcement is resolved
+    ABOVE the model and is byte-identical under both settings of the flag, so
+    the pin cannot go inert again the way the field reading did.  It is also
+    strictly more specific than "the two fields differ": it names the number
+    the carrier supplied.
+
+    ``on_aperture_beam`` moves ``'silent' -> 'warn'`` to read it, which changes
+    no returned bit: ``_w_in_beam`` is measured whenever
+    ``fit_radius_beam_factor is not None`` (:8537), so the knob only decides
+    whether the resolution is reported.  Measured, not assumed -- the two
+    dispositions return BYTE-IDENTICAL fields on both arms
+    (``np.array_equal`` True, max abs diff 0.000e+00), and the message count
+    is exactly one on the derived and explicit arms and zero on the origin
+    arm.
+
+    NOTHING IS DELETED: the original field assertion is kept word for word on
+    the forward path, where it is real.
+    """
     n, dx, w = 256, 20e-6, 3e-4
     x_c = 1.2e-3
     x = (np.arange(n) - n // 2) * dx
@@ -1048,20 +1091,46 @@ def test_tilted_carrier_supplies_the_beam_centre_by_default():
               n_workers=1, fit_radius_beam_factor=2.0,
               amplitude_model='ray_density', newton_amp_mask_rel=0.0,
               on_undersample='silent', on_noncollimated='silent',
-              on_aperture_beam='silent')
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        tc = la.TiltedCarrier(np.inf, 0.0, 0.0, x_c, 0.0)
-        derived = np.asarray(la.apply_real_lens_traced(env, carrier=tc, **kw))
-        explicit = np.asarray(la.apply_real_lens_traced(
-            env, carrier=tc, beam_centre=(x_c, 0.0), **kw))
-        origin = np.asarray(la.apply_real_lens_traced(
-            env, carrier=tc, beam_centre=(0.0, 0.0), **kw))
+              on_aperture_beam='warn')
+    tc = la.TiltedCarrier(np.inf, 0.0, 0.0, x_c, 0.0)
+
+    def _run(**extra):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            out = np.asarray(la.apply_real_lens_traced(
+                env, carrier=tc, **kw, **extra))
+        return out, [str(m.message) for m in rec
+                     if 'ray-fit domain' in str(m.message)]
+
+    derived, m_derived = _run()
+    explicit, m_explicit = _run(beam_centre=(x_c, 0.0))
+    _origin, m_origin = _run(beam_centre=(0.0, 0.0))
     scale = float(np.max(np.abs(derived)))
     assert scale > 0.0
     assert np.max(np.abs(derived - explicit)) <= 1e-10 * scale
-    # and the origin-referenced guard really is a DIFFERENT computation
-    assert np.max(np.abs(derived - origin)) > 1e-6 * scale
+    # ... and the disc the element resolved is the CARRIER's chief ray, named
+    # to four decimals by the element itself
+    assert m_derived, (
+        'the element resolved no ray-fit domain to report.  This fixture '
+        'reads the announcement of an ABANDONED off-axis disc (41 coarse '
+        'samples against the 64 an order-6 fit needs); if the disc now holds '
+        'enough samples the restriction is applied silently and there is '
+        'nothing to read -- raise ray_subsample until it is short again, do '
+        'not weaken the arm')
+    assert '|r - (1.2000, 0.0000) mm|' in m_derived[0], m_derived[0]
+    assert '1.2000 mm off the grid centre' in m_derived[0], m_derived[0]
+    assert m_explicit == m_derived
+    # and the origin-referenced guard really is a DIFFERENT computation: it
+    # resolves no off-axis disc at all
+    assert not m_origin, m_origin
+    # On the FORWARD path, where the fit domain still reaches the returned
+    # field, the same difference is visible there too -- the original
+    # assertion, word for word.
+    d_fwd, _ = _run(inverse_map=False)
+    o_fwd, _ = _run(beam_centre=(0.0, 0.0), inverse_map=False)
+    s_fwd = float(np.max(np.abs(d_fwd)))
+    assert s_fwd > 0.0
+    assert np.max(np.abs(d_fwd - o_fwd)) > 1e-6 * s_fwd
 
 
 def test_on_axis_beam_centre_is_inert():

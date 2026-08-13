@@ -776,10 +776,12 @@ def test_the_map_is_registered_as_a_traced_layer_flag():
 # THE CACHE KEY COVERS THE ACCEPTANCE DECISION, NOT ONLY THE FIT
 # ===========================================================================
 # G8 is a COMPARATIVE bar -- the map is accepted only if it beats the
-# INCUMBENT on held-out samples -- and the incumbent was the half of that bar
-# the key did not hash.  So a map built against a weak incumbent was served to
-# a call with a strong one, bypassing the single guard that decides whether
-# the map may be used at all.  Production-reachable on this very element:
+# INCUMBENT at OFF-LATTICE probe points (the held-out NODE probe it used
+# before FIX_G8_PROBE_2026_08_12 is retired) -- and the incumbent was the half
+# of that bar the key did not hash.  So a map built against a weak incumbent
+# was served to a call with a strong one, bypassing the single guard that
+# decides whether the map may be used at all.  Production-reachable on this
+# very element:
 # ``newton_max_iters`` 2 -> 40, ``newton_poly_order`` 6 -> 8 and
 # ``newton_fit`` 'polynomial' -> 'spline' each change ``_invert_newton``, and
 # none of them changed the key (VERIFY_ARCHITECTURE P0-5).
