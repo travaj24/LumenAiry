@@ -368,8 +368,14 @@ def apply_thin_lens(
         # ``phi = -sign(f) * k * (sqrt(r**2 + f**2) - |f|)``, which is
         # byte-identical to the historical form for f > 0 (IEEE negation
         # of an exact subtraction) and correctly DIVERGES for f < 0.
+        # RATIONALIZED: sqrt(f^2 + r^2) - |f| == r^2 / (sqrt(f^2+r^2) + |f|).
+        # Algebraically identical; the subtraction loses eps*|f| metres --
+        # k*eps*|f| radians -- to catastrophic cancellation wherever
+        # r^2 << f^2, which is the whole of any normal pupil.  Same fix, and
+        # the same reason, as a185cfc in propagators/carrier.py.
         lens_phase = xp.exp(
-            -1j * np.sign(f) * k * (xp.sqrt(f ** 2 + r_sq) - abs(f)))
+            -1j * np.sign(f) * k
+            * (r_sq / (xp.sqrt(f ** 2 + r_sq) + abs(f))))
 
     elif lens_model == 'aplanatic':
         # 4.10: replacing the outside-aperture region with 0+0j inside
@@ -395,7 +401,8 @@ def apply_thin_lens(
         # factor a pure phase mask must not apply (see docstring).
         r_over_f_sq = r_sq / f ** 2
         valid = r_over_f_sq < 1.0
-        phase = np.sign(f) * k * (xp.sqrt(f ** 2 + r_sq) - abs(f))
+        # RATIONALIZED -- see the 'nonparaxial' branch above.
+        phase = np.sign(f) * k * (r_sq / (xp.sqrt(f ** 2 + r_sq) + abs(f)))
         # v4.14.1 (audit P2-6): dtype-aware unit-phase sentinel so the
         # ``xp.where`` doesn't pin lens_phase to complex128 via the
         # ``1.0 + 0.0j`` complex128 literal (matches v4.13.2 canonical
@@ -452,7 +459,11 @@ def apply_thin_lens(
             # Exact signed spherical-wave phase S(R); 0 for R = +/-inf.
             if np.isinf(R):
                 return None                      # contributes nothing
-            return np.sign(R) * k * (xp.sqrt(r_sq + R ** 2) - abs(R))
+            # RATIONALIZED -- see the 'nonparaxial' branch above.  It matters
+            # more here than anywhere else in this function: the caller
+            # differences TWO of these (S_out - S_in), so the subtraction
+            # form would compound two independent k*eps*|R| cancellations.
+            return np.sign(R) * k * (r_sq / (xp.sqrt(r_sq + R ** 2) + abs(R)))
 
         S_out = _sphere_phase(R_out)
         S_in = _sphere_phase(R_in)

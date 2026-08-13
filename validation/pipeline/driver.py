@@ -277,10 +277,21 @@ def stage_chains(state: RunState, force=False):
                                          'payload': beam.payload})
         fz, fj, fr = _chain_paths(state, beam.key)
         meta = None if force else A.read_json(fj, key)
-        if meta is not None and A.field_exists(fz):
-            per_beam[beam.key] = {**meta, 'resumed': True, 'key': digest}
-            done += 1
-            continue
+        if meta is not None:
+            # CONTENT, not presence.  The stored power is compared against
+            # the power re-integrated off the checkpoint; a partial store
+            # reads as zeros in the missing block and would otherwise resume
+            # as if it were whole (VERIFY_ARCHITECTURE P0-3).
+            ok, why = A.field_is_complete(fz, meta.get('power_field'))
+            if ok:
+                per_beam[beam.key] = {**meta, 'resumed': True,
+                                      'key': digest,
+                                      'resume_check': why}
+                done += 1
+                continue
+            if A.field_exists(fz):
+                state.log(f"  [chains] {beam.label} ({beam.key}) checkpoint "
+                          f"REJECTED and will be recomputed: {why}")
         state.log(f"  [chains] {beam.label} ({beam.key}) ...")
         t0 = time.perf_counter()
         out = runner(beam, ensure_context(state), spec)
@@ -293,7 +304,7 @@ def stage_chains(state: RunState, force=False):
         m['peak_wset_gb'], m['peak_commit_gb'] = A.peak_rss_gb()
         m['has_reference_tile'] = out.reference_tile is not None
         if out.reference_tile is not None:
-            np.save(fr, np.asarray(out.reference_tile))
+            A.save_npy_atomic(fr, out.reference_tile)
             m['reference_tile_power'] = float(
                 (np.abs(out.reference_tile) ** 2).sum()) * \
                 float(spec.readout.dx_out) ** 2
@@ -365,10 +376,17 @@ def stage_aggregate(state: RunState, force=False):
     state.cache['agg_tag'] = tag
     state.cache['agg_include'] = inc
     hit = None if force else A.read_json(fj, key)
-    if hit is not None and A.field_exists(fz):
-        state.log(f"  [aggregate] RESUMED {tag} ({len(inc)} beam(s))")
-        state.report['aggregate'] = {'resumed': True, **hit}
-        return
+    if hit is not None:
+        # Content, not presence -- see stage_chains (P0-3).  The ledger
+        # already records the summed field's own power.
+        ok, why = A.field_is_complete(fz, hit.get('summed_power'))
+        if ok:
+            state.log(f"  [aggregate] RESUMED {tag} ({len(inc)} beam(s))")
+            state.report['aggregate'] = {'resumed': True, **hit}
+            return
+        if A.field_exists(fz):
+            state.log(f"  [aggregate] checkpoint REJECTED and will be "
+                      f"recomputed: {why}")
 
     # THE COMMON CARRIER.  One sphere for the whole fan, taken from a NAMED
     # beam rather than averaged, because at a shared back aperture the

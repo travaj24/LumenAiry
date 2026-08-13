@@ -99,10 +99,29 @@ def _h_inv(z=_Z, R=_RC):
 
 def _carrier_WLM(x, y, s=_RC):
     """Exact on-axis point-source sphere -- the same closed form
-    ``_compute_carrier`` uses for a scalar conjugate."""
+    ``_compute_carrier`` uses for a scalar conjugate.
+
+    "The same closed form" is the whole point of this helper and it is a
+    LOAD-BEARING claim, not a convenience: ``test_pure_congruence_input_is_
+    inert_to_rounding`` builds its input as ``exp(i k0 W)`` from here and then
+    asserts the element finds no residual in it.  An input built from a
+    DIFFERENT arithmetic route than the element's own is not that congruence,
+    and the difference shows up as a residual the element then models.
+
+    So this tracks the library form exactly.  It was
+    ``sgn * (rho - abs(s))`` until 2026-08-12, when ``_compute_carrier`` was
+    rationalized to ``sgn * r^2 / (rho + |s|)`` to close the
+    ``sqrt(r^2+R^2) - |R|`` cancellation class.  The two differ by up to
+    6.586e-18 m here (eps*|R| = 1.332e-17 m), whose GRID GRADIENT is 4.01e-13
+    -- and the congruence test's ``grad_a_rms`` duly read 1.338e-13 against a
+    floor of 3.459e-17 until this helper followed.  The subtraction form is
+    the WORSE of the two (a 60-digit oracle puts it at k0*eps*|R| rad, ~951x
+    the rationalized form on the campaign's own fixture), so following it is
+    also the more accurate oracle."""
     sgn = 1.0 if s > 0 else -1.0
-    rho = np.sqrt(x * x + y * y + s * s)
-    return sgn * (rho - abs(s)), sgn * x / rho, sgn * y / rho
+    r2 = x * x + y * y
+    rho = np.sqrt(r2 + s * s)
+    return sgn * (r2 / (rho + abs(s))), sgn * x / rho, sgn * y / rho
 
 
 def _resid_aLM(x, y, alpha=_ALPHA, w=_W):
@@ -343,7 +362,32 @@ def test_pure_congruence_input_is_inert_to_rounding(_warm):
         field.
 
     So the pin is on ENERGY, where a boundary flip cannot masquerade as a
-    change: 9 orders below the effect the mode exists to correct."""
+    change: 9 orders below the effect the mode exists to correct.
+
+    AND THE SLOPE BARS ARE NOT ABSOLUTE (re-stated 2026-08-12).  They used to
+    be ``grad_a_rms < 1e-14`` and ``grad_a_fit_max_launch < 1e-12``: absolute
+    floors on a ROUNDING RESIDUE, i.e. on a magnitude a different BLAS, a
+    different libm or a different summation order is entitled to move, and
+    which carries no scale of its own.  They are now scored two ways that do
+    carry one:
+
+      * against the FLOAT64 CEILING the reconstruction cannot beat.  The
+        de-chirp rebuilds ``exp(i k0 W)`` by a different route than the input
+        did, so its eikonal error is ~``eps * |W|`` metres; spread over one
+        pixel that is at most ``eps * max|W| / dx`` in SLOPE units, which is
+        3.400e-15 here (max|W| = 3.828e-04 m).  The fit smooths it further
+        and the measured value is 3.459e-17, 98x under.  No BLAS can move a
+        bound set by the mantissa.
+      * against the SAME quantity on the deliberately NON-congruent fixture
+        measured in the same process, which is what "inert" is inert compared
+        to: 3.459e-17 / 6.261e-04 = 5.5e-14 and 8.330e-16 / 1.737e-02 =
+        4.8e-14, against a 1e-11 bar.
+
+    Both arms have a live fail-before, and it is the one that actually
+    happened: with the fixture built from the pre-2026-08-12 subtraction-form
+    sphere (see ``_carrier_WLM``) the readings are 1.338e-13 and 4.786e-12 --
+    39x over the float64 ceiling and, as ratios, 2.14e-10 and 2.76e-10
+    against the 1e-11 bar."""
     ax = (np.arange(_N) - _N // 2) * _DX
     X, Y = np.meshgrid(ax, ax)
     W, _l, _m = _carrier_WLM(X, Y)
@@ -353,8 +397,25 @@ def test_pure_congruence_input_is_inert_to_rounding(_warm):
     a = _run(E, False)
     b = _run(E, True, out=out)
     assert out['engaged'] is True
-    assert out['grad_a_rms'] < 1e-14, out['grad_a_rms']
-    assert out['grad_a_fit_max_launch'] < 1e-12, out
+
+    # the control: the same diagnostics on an input that DOES carry a
+    # residual, measured in this process so no cross-build number is involved
+    ctl = {}
+    _run(_field()[0], True, out=ctl)
+    assert ctl['grad_a_rms'] > 0.0 and ctl['grad_a_fit_max_launch'] > 0.0
+
+    # (a) the float64 ceiling on rebuilding exp(i k0 W) by another route
+    ceiling = float(np.finfo(np.float64).eps * np.abs(W).max() / _DX)
+    assert out['grad_a_rms'] <= ceiling, (
+        f"grad_a_rms {out['grad_a_rms']:.4e} is above the float64 "
+        f"reconstruction ceiling eps*max|W|/dx = {ceiling:.4e}: the input is "
+        f"not the congruence the element is referencing")
+    # (b) inert COMPARED TO an input that is not a pure congruence
+    assert out['grad_a_rms'] <= 1e-11 * ctl['grad_a_rms'], (
+        out['grad_a_rms'], ctl['grad_a_rms'])
+    assert (out['grad_a_fit_max_launch']
+            <= 1e-11 * ctl['grad_a_fit_max_launch']), (
+        out['grad_a_fit_max_launch'], ctl['grad_a_fit_max_launch'])
     d2 = float((np.abs(a - b) ** 2).sum())
     p = float((np.abs(a) ** 2).sum())
     assert d2 / p < 1e-9, d2 / p

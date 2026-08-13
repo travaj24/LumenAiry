@@ -2931,8 +2931,24 @@ def _tilt_exactness_phase(shape, dx, dy, wavelength, R, L, M, sign,
     uu = X + R * L / n_par
     vv = Y + R * M / n_par
     r2 = X * X + Y * Y
-    D = (sgn * (np.sqrt(uu * uu + vv * vv + R * R) - abs(R) / n_par)
-         - sgn * (np.sqrt(r2 + R * R) - abs(R)) - (L * X + M * Y))
+    # RATIONALIZED, both terms.  a185cfc removed ``sqrt(r^2+R^2) - |R|`` from
+    # _exact_sphere_eikonal but not from here, so ANY nonzero tilt put the
+    # whole k0*eps*|R| cancellation floor straight back into the carrier the
+    # rationalization had just cleaned (VERIFY_ARCHITECTURE B14/P2-7:
+    # measured 2.11e-11 rad at |R| = 50 mm, indistinguishable from the
+    # pre-fix column, while the untilted path read 6.3e-17).
+    #
+    #   sgn*(A - B) == sgn*(A^2 - B^2)/(A + B),   A, B > 0
+    #
+    # For the tilted sphere the difference of squares collapses ANALYTICALLY:
+    # with n^2 = 1 - L^2 - M^2 the R^2/n^2 terms cancel against R^2 exactly,
+    # so A^2 - B^2 = r^2 + 2R(LX + MY)/n carries no large term at all.  The
+    # second sphere is the same identity with L = M = 0.
+    A_t = np.sqrt(uu * uu + vv * vv + R * R)
+    A_0 = np.sqrt(r2 + R * R)
+    ramp = L * X + M * Y
+    D = (sgn * ((r2 + 2.0 * R * ramp / n_par) / (A_t + abs(R) / n_par))
+         - sgn * (r2 / (A_0 + abs(R))) - ramp)
     # Band limit: solve |dD/dr| = lambda/(2 dx_min) for r, with the leading
     # coma and astigmatism slopes.  a r^2 + b r - c = 0.
     n_t = np.sqrt(s)

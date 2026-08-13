@@ -31,6 +31,8 @@ calibrated inequality with >= 10x headroom over the measured value -- never an
 equality.  The only ``==`` here is the primal-vs-``jnp.linalg.eig`` bit-identity
 (same process, same call, so exact equality is well defined).
 """
+import functools
+
 import numpy as np
 import pytest
 
@@ -39,9 +41,59 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp  # noqa: E402
 from jax.scipy.linalg import expm  # noqa: E402
 
+from lumenairy.elements.rcwa import _core as _rc  # noqa: E402
 from lumenairy.elements.rcwa._core import _EIG_TAU_REL, _jax_eig_stable  # noqa: E402
 
 _CJ = jnp.complex128
+
+
+def _degenerate_splitting_eig(tau_rel, splitting):
+    """A LIVE copy of ``_jax_eig_stable``'s custom-VJP ``eig``, verbatim except
+    for two injected knobs, for the fail-before below.
+
+    ``FIX_RUNNER_PINS_2026_08_12`` S7.  It is a reference IMPLEMENTATION rather
+    than a stored number, so both arms are the same round trip in the same
+    process and nothing in the comparison can drift with the platform.
+
+    * ``splitting`` scales ``D = lam_j - lam_i`` for pairs that are ALREADY
+      degenerate (``|D| < 1e-9`` of the spectrum scale).  Well-separated pairs
+      are left alone, so the physical part of the gradient -- everything the
+      clean and sweep arms measure -- is untouched.  What it emulates is a
+      LAPACK build that resolves a symmetry-enforced degeneracy more exactly
+      than this one does, which is the runner, not the physics: the splitting
+      of an exactly degenerate pair is pure round-off and nothing else.
+    * ``tau_rel`` is the spectrum-relative floor, ``0`` for the unfloored arm.
+    """
+    @functools.partial(jax.custom_vjp, nondiff_argnums=(1, 2))
+    def _eig(A, tau=tau_rel, split=splitting):
+        lam, V = jnp.linalg.eig(A)
+        return lam, V
+
+    def _fwd(A, tau, split):
+        lam, V = jnp.linalg.eig(A)
+        return (lam, V), (lam, V)
+
+    def _bwd(tau, split, res, cot):
+        lam, V = res
+        lam_bar, V_bar = cot
+        raw = lam[None, :] - lam[:, None]
+        n = lam.shape[0]
+        offdiag = 1.0 - jnp.eye(n, dtype=raw.dtype)
+        scale = jnp.max(jnp.abs(lam))
+        scale = jnp.where(scale > 0, scale, 1.0)
+        D = jnp.where(jnp.abs(raw) < 1e-9 * scale, raw * split, raw)
+        floor = (tau * scale) ** 2
+        denom = jnp.abs(D) ** 2 + floor
+        F = jnp.where(offdiag != 0, D / jnp.where(denom == 0, 1.0, denom), 0.0)
+        Vinv = jnp.linalg.inv(V)
+        VinvH = jnp.conj(Vinv).T
+        VH = jnp.conj(V).T
+        Mmat = VH @ jnp.conj(V_bar)
+        inner = jnp.diag(jnp.conj(lam_bar)) + F * Mmat
+        return (jnp.conj(VinvH @ inner @ VH),)
+
+    _eig.defvjp(_fwd, _bwd)
+    return _eig
 
 # ---------------------------------------------------------------- probes ---
 
@@ -311,10 +363,128 @@ def test_pmm1d_near_normal_angle_gradient_is_linear_in_theta(theta, bound):
 def test_pmm1d_off_normal_angle_gradient_no_regression():
     """The already-clean off-normal gradient must not move.  Measured
     |AD - FD| / |FD| = 8.2e-06 (FD truncation dominated) both pre- and
-    post-fix."""
+    post-fix.
+
+    2026-08-12 (``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md`` S3).  This read
+    ``nan`` on WSL py3.12 / jax 0.10.2 -- and ONLY there -- until the
+    incident-amplitude projection stopped going through ``jnp.linalg.lstsq``.
+    The projection matrix carries a structurally repeated singular value, the
+    SVD gradient divides by the square difference of two singular values with
+    a guard on the diagonal only, and whether that difference underflows to
+    zero is a per-LAPACK round-off fact.  Post-fix, both mounts read
+    0.0363046947 against a Richardson-extrapolated FD oracle of the same
+    (3.5e-11 [W] / 2.2e-11 [M] relative).  See the fail-before below."""
     ad = float(jax.grad(_pmm1)(jnp.asarray(0.3)))
     fd = _central(_pmm1, 0.3, 3e-4)
     assert abs(ad - fd) < 1e-4 * abs(fd)       # measured 8.2e-06 (12x)
+
+
+def test_the_lstsq_projection_route_is_refuted_on_a_degenerate_projection(
+        monkeypatch):
+    """THE FAIL-BEFORE for the 2026-08-12 projection fix, driven both ways
+    (``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md`` S3).
+
+    The defect is NOT the eig VJP this file is about: ``_EIG_TAU_REL`` at
+    1e-12 / 1e-10 / 1e-8 / 1e-6 all still gave ``nan``.  It is
+    :func:`~lumenairy.elements.pmm._core._jpmm_min_norm_projection`'s
+    predecessor -- ``jnp.linalg.lstsq``, whose gradient is the SVD JVP and so
+    carries ``1 / (s_i^2 - s_j^2)`` with only the DIAGONAL guarded.
+
+    Three claims, none of which depends on reproducing one build's round-off:
+
+    (a) EXPOSURE, read off the SHIPPED projection.  ``Hsup`` is not
+        incidentally degenerate: 3 of its 21 singular values sit on
+        ``1 / sqrt(n_glob)`` (measured cluster spread 3.6e-16 [M] /
+        1.4e-16 [W]), so the minimum relative gap is round-off -- 8.0e-16 [M] /
+        1.3e-16 [W] at theta = 0.3, 2.0e-14 / 1.9e-14 at 0.29.  The
+        normal-incidence branch (a python-literal ``kx0 = 0.0``) carries no
+        such cluster: 5.4e-04 on both mounts, six decades away, which is why
+        the defect is OBLIQUE-only;
+
+    (b) MECHANISM, deterministic on every build.  On an EXACTLY degenerate
+        projection of the same shape (all 420 off-diagonal ``s_i^2 - s_j^2``
+        identically 0) the pre-fix route's gradient is not finite and the
+        shipped route's is -- and is RIGHT, against a central difference of
+        the same loss along a fixed direction;
+
+    (c) FORWARD NULLITY.  The two routes are the same map: they return the
+        same minimum-norm solution on the degenerate injector (measured
+        7.3e-15 on |x| ~ 1) and on the live oblique projection (3e-15), so the
+        fix changes the GRADIENT and not the answer.
+    """
+    from lumenairy.elements.pmm import _core as pmm
+
+    seen = {}
+    _real = pmm._jpmm_min_norm_projection
+
+    def _capture(A, b, xp):
+        seen.setdefault("A", A)
+        seen.setdefault("b", b)
+        return _real(A, b, xp)
+
+    monkeypatch.setattr(pmm, "_jpmm_min_norm_projection", _capture)
+
+    def _live(theta):
+        """The projection the SHIPPED solve builds, PRIMAL only (so it is a
+        concrete array and not a tracer)."""
+        seen.clear()
+        float(_pmm1(theta))
+        return np.asarray(seen["A"]), np.asarray(seen["b"])
+
+    def _rel_gap(A):
+        s = np.sort(np.linalg.svd(A, compute_uv=False))[::-1]
+        return float(np.min(np.abs(np.diff(s))) / s[0]), s
+
+    # ---- (a) exposure, on the shipped object ------------------------------
+    A03, b03 = _live(jnp.asarray(0.3))
+    gap, s = _rel_gap(A03)
+    n_glob = A03.shape[1]
+    tie = 1.0 / np.sqrt(n_glob)
+    assert gap < 1e-10, f"no repeated singular value: min rel gap {gap:.3e}"
+    assert abs(s[int(np.argmin(np.abs(np.diff(s))))] - tie) < 1e-12
+    assert int(np.sum(np.abs(s - tie) < 1e-12)) >= 3        # measured 3 of 21
+    gap29, _s29 = _rel_gap(_live(jnp.asarray(0.29))[0])
+    assert gap29 < 1e-10                                    # measured 2.0e-14
+    assert _rel_gap(_live(0.0)[0])[0] > 1e-6                # measured 5.4e-04
+
+    # ---- (b) the mechanism, on an EXACTLY degenerate projection -----------
+    m, n = A03.shape
+    A_deg = jnp.asarray(0.7 * np.eye(m, n), _CJ)
+    sd = np.asarray(jnp.linalg.svd(A_deg, full_matrices=False,
+                                   compute_uv=False))
+    off = ~np.eye(len(sd), dtype=bool)
+    assert int(np.sum(np.subtract.outer(sd ** 2, sd ** 2)[off] == 0.0)) == \
+        int(off.sum()), "the injector is not exactly degenerate on this build"
+    rng = np.random.default_rng(1013)
+    bd = jnp.asarray(rng.normal(size=m) + 1j * rng.normal(size=m), _CJ)
+    Dd = jnp.asarray(rng.normal(size=(m, n))
+                     + 1j * rng.normal(size=(m, n)), _CJ)
+
+    def _loss(t):
+        x = pmm._jpmm_min_norm_projection(A_deg + t * Dd, bd, jnp)
+        return jnp.sum(jnp.abs(x) ** 2)
+
+    ad = float(jax.grad(_loss)(jnp.asarray(0.0)))
+    fd = _central(_loss, 0.0, 1e-6)
+    assert np.isfinite(ad)
+    assert abs(ad - fd) < 1e-6 * abs(fd)        # finite AND right
+    x_fix = np.asarray(pmm._jpmm_min_norm_projection(A_deg, bd, jnp))
+    x_live_fix = np.asarray(
+        pmm._jpmm_min_norm_projection(jnp.asarray(A03), jnp.asarray(b03), jnp))
+
+    monkeypatch.setattr(pmm, "PMM_JAX_MINNORM_PROJECTION", False)
+    assert not np.isfinite(float(jax.grad(_loss)(jnp.asarray(0.0)))), (
+        "the pre-fix lstsq route returned a finite gradient on an EXACTLY "
+        "degenerate projection -- the injector no longer reaches the defect, "
+        "so this fail-before is vacuous")
+
+    # ---- (c) forward nullity ---------------------------------------------
+    x_pre = np.asarray(pmm._jpmm_min_norm_projection(A_deg, bd, jnp))
+    x_live_pre = np.asarray(
+        pmm._jpmm_min_norm_projection(jnp.asarray(A03), jnp.asarray(b03), jnp))
+    assert np.max(np.abs(x_fix - x_pre)) < 1e-13 * np.max(np.abs(x_fix))
+    assert np.max(np.abs(x_live_fix - x_live_pre)) \
+        < 1e-13 * np.max(np.abs(x_live_fix))
 
 
 @pytest.mark.parametrize("name,x0,h,bound", [
@@ -336,22 +506,172 @@ def test_pmm1d_design_gradients_at_exactly_normal_incidence_are_clean(
     assert abs(ad - fd) < bound * abs(fd)
 
 
-@pytest.mark.parametrize("pol,bound", [("te", 1e-2), ("tm", 5e-1)])
-def test_pmm1d_angle_gradient_at_exactly_zero_stays_bounded(pol, bound):
-    """Characterisation fence for the KNOWN LIMIT (see the module docstring).
+#: The exactly-degenerate point's two RATIO bars, both between arms measured
+#: in one process on the running build (``FIX_RUNNER_PINS_2026_08_12`` S7).
+#:
+#: ``_THETA0_DEFECT_RATIO`` -- how far above the CLEAN near-normal gradient the
+#: wrong value at exactly zero must sit for the defect to count as still
+#: present.  ``AD(theta)`` is exactly linear in theta just off normal (the
+#: sibling test pins that), so the correct value at theta = 0 is 0 and the
+#: clean ``AD(1e-6)`` is the scale a fixed eig-VJP would return something near.
+#: Measured 4.4e3 (TE) / 1.6e5 (TM), i.e. 44x / 1580x headroom.
+#:
+#: ``_THETA0_ENVELOPE_RATIO`` -- how far above the observable's OWN physical
+#: gradient scale the wrong value may sit before it counts as blown up.
+#: Measured 2.5e-2 (TE) / 1.33 (TM), i.e. 1200x / 22x headroom, and the
+#: injected blow-up in the fail-before reads 3.6e2 / 1.9e4.
+_THETA0_DEFECT_RATIO = 100.0
+_THETA0_ENVELOPE_RATIO = 30.0
+
+
+def _theta0_scores(f):
+    """``(AD at exactly 0, FD at 0, |AD| at a clean 1e-6, max |AD| over a
+    physical sweep)`` for a one-argument angle loss.
+
+    Every number is measured in ONE process on the running build, so the
+    ratios taken from them carry no runner arithmetic at all.
+    """
+    ad0 = float(jax.grad(f)(jnp.asarray(0.0)))
+    fd0 = _central(f, 0.0, 1e-6)
+    clean = abs(float(jax.grad(f)(jnp.asarray(1e-6))))
+    sweep = max(abs(float(jax.grad(f)(jnp.asarray(t))))
+                for t in (0.05, 0.1, 0.2, 0.3, 0.5))
+    return ad0, fd0, clean, sweep
+
+
+def _score_theta0_defect(f, name):
+    """Score the OPEN eig-VJP degeneracy defect at exactly normal incidence.
+    Returns the four measurements.  Split out so the fail-before below can run
+    the identical claims against a solver that does NOT carry the defect."""
+    ad0, fd0, clean, sweep = _theta0_scores(f)
+    # (0) the SYMMETRY oracle: the true derivative is zero.  1e-6 sits ~1e5
+    # above float64's own floor for this difference quotient
+    # (eps * R / h ~ 7e-12) and ~1e5 below the wrong value; measured 2.8e-11.
+    assert abs(fd0) < 1e-6, (
+        f"{name}: d(sum R)/d(theta) is forced to ZERO at normal incidence by "
+        f"mirror symmetry, but the finite difference reads {fd0:.4e} -- the "
+        f"fixture is not symmetric and nothing below means what it says")
+    assert np.isfinite(ad0), (
+        f"{name}: AD at exactly normal incidence returned {ad0!r}.  The "
+        f"spectrum-relative floor exists to keep this FINITE")
+    # (1) THE DEFECT, still present.  A future fix should make this fail.
+    assert abs(ad0) > _THETA0_DEFECT_RATIO * clean, (
+        f"{name}: AD at exactly normal incidence is {ad0:.4e}, only "
+        f"{abs(ad0) / max(clean, 1e-300):.4g}x the clean AD at 1e-6 rad "
+        f"({clean:.4e}), so the eigenvector-VJP degeneracy no longer corrupts "
+        f"it.  That is the KNOWN LIMIT being CLOSED -- re-pin this test "
+        f"against the fix (and drop the theta >= 1e-8 advice from the module "
+        f"docstring); do not loosen the ratio")
+    # (2) THE ENVELOPE: bounded, comparatively.  Not blown up.
+    assert abs(ad0) < _THETA0_ENVELOPE_RATIO * sweep, (
+        f"{name}: AD at exactly normal incidence is {ad0:.4e}, "
+        f"{abs(ad0) / sweep:.4g}x the largest gradient this observable "
+        f"attains anywhere on a physical angle sweep ({sweep:.4e}).  The "
+        f"wrong value is allowed to be wrong; it is not allowed to be "
+        f"UNBOUNDED, which is what an unfloored 1/D on a degenerate pair does")
+    return ad0, fd0, clean, sweep
+
+
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_pmm1d_angle_gradient_at_exactly_zero_is_an_OPEN_defect(pol):
+    """The KNOWN LIMIT (see the module docstring), pinned as a DEFECT.
+    A future fix should make this test fail.
 
     Mirror symmetry forces ``d(sum R)/d(theta) = 0`` at exactly normal
     incidence, but the exactly degenerate +/-m pair makes the eig
-    non-differentiable there, so AD returns a finite WRONG value: measured
-    -2.221e-03 (TE) and +9.663e-02 (TM).  This is NOT a correctness pin -- it
-    fences the value from BLOWING UP, which is exactly what removing the
-    relative floor would do (unfloored 1/D on rounding noise gave -1.709e-02
-    for TE, 7.7x worse).  Use ``theta >= 1e-8`` rad if the angle derivative
-    itself is the objective."""
-    ad = float(jax.grad(lambda a: _pmm1(a, pol=pol))(jnp.asarray(0.0)))
-    fd = _central(lambda a: _pmm1(a, pol=pol), 0.0, 1e-6)
-    assert abs(fd) < 1e-6                       # the symmetry statement
-    assert np.isfinite(ad) and abs(ad) < bound
+    non-differentiable there, so AD returns a finite WRONG value.  This has
+    never been a correctness pin; it fences the value.
+
+    2026-08-12 (``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S7).  It fenced
+    it with an ABSOLUTE bar -- 1e-2 (TE) -- and the ubuntu py3.12 JAX job read
+    0.026644.  That bar could not have held, because the fenced quantity is
+    pure round-off garbage whose MAGNITUDE is a per-build fact:
+
+        build                                TE AD(0)
+        authoring box (2026-07-27)          -2.221e-03
+        Windows py3.14 / numpy 2.4.4        +7.793e-03
+        CI ubuntu py3.12                    -2.664e-02
+
+    -- a decade of spread and a sign flip, on a bar with 1.28x headroom.
+    ADJUDICATED with the floor's own knob: the floored value is INSENSITIVE to
+    the degenerate pair's numerical splitting (shrinking it by 1e-8 in a live
+    copy of the VJP moves AD(0) from 7.792836e-03 to 7.793047e-03), so it is
+    not a ``1/D`` reading at all -- it is the eigenvector JUMP, and which
+    direction ``V`` jumps is exactly what a LAPACK build is entitled to
+    choose.  The same probe shows what the floor IS for: with the floor
+    removed, that 1e-8 shrink takes AD(0) to -1.12e+06.
+
+    So both halves are re-stated as RATIOS between arms measured in the same
+    process (see ``_THETA0_DEFECT_RATIO`` / ``_THETA0_ENVELOPE_RATIO``):
+    the value must still be WRONG by orders against the clean near-normal
+    gradient, and must still be BOUNDED against the observable's own physical
+    gradient scale.  Both are invariant to the splitting the runners disagree
+    about.
+
+    (Correction to the pre-2026-08-12 docstring, which recorded the unfloored
+    value as 7.7x WORSE: on this build it is 2.28x BETTER -- floored
+    +7.793e-03 against unfloored -3.411e-03.  Which of the two is larger at an
+    exact degeneracy is not a property the floor controls; the boundedness
+    under a shrinking splitting is.)
+
+    Use ``theta >= 1e-8`` rad if the angle derivative itself is the objective.
+    """
+    _score_theta0_defect(lambda a: _pmm1(a, pol=pol), f"pmm1d {pol}")
+
+
+def test_the_theta0_defect_pin_fires_when_the_defect_is_absent_or_unbounded():
+    """THE FAIL-BEFORE for the defect pin above, driven in BOTH directions.
+
+    ``FIX_RUNNER_PINS_2026_08_12`` S7.
+
+    (a) DEFECT ABSENT -- the same claims are scored against ``rcwa1d``, which
+        solves the identical grating with ANALYTIC homogeneous half-space
+        modes and therefore has no degeneracy at normal incidence (its
+        theta = 0 gradient is machine-zero, 1.1e-13, pinned by the control
+        test below).  That is what "the eig-VJP degeneracy was fixed" looks
+        like from outside, and the pin must FAIL on it, telling the reader to
+        re-pin rather than passing quietly.
+
+    (b) VALUE UNBOUNDED -- a LIVE copy of the library's eig VJP, verbatim
+        except for two knobs, installed over ``_JAX_EIG_STABLE`` so the whole
+        solve runs through it.  The knobs shrink the numerical splitting of
+        pairs that are ALREADY degenerate (``|D| < 1e-9`` of the spectrum
+        scale -- the well-separated pairs, and hence the physical part of the
+        gradient, are untouched) and drop the floor.  A LAPACK build that
+        resolves a symmetry-enforced degeneracy more exactly is precisely what
+        this emulates; it is the runner, not the physics.  Measured with the
+        floor OFF and the splitting shrunk by 1e-4 / 1e-8::
+
+            splitting x    AD(0) TE       AD(0)/sweep TE   AD(0)/sweep TM
+            1              -3.411e-03     1.1e-02          6.1e-01
+            1e-4           -1.120e+02     3.6e+02          1.9e+04
+            1e-8           -1.120e+06     3.6e+06          1.9e+08
+
+        The clean and sweep arms read 1.7541e-06 / 3.1315e-01 in every row,
+        i.e. the injector really is targeted.  With the floor ON the same
+        1e-8 shrink leaves AD(0) at 7.793047e-03 -- which is both the fail-
+        before for the envelope and the measurement that says the floor is
+        load-bearing.
+    """
+    # (a) the defect, absent
+    with pytest.raises(AssertionError, match="re-pin this test"):
+        _score_theta0_defect(lambda a: _rcwa1(a, pol="te"), "rcwa1d te")
+
+    # (b) the value, unbounded
+    orig = _rc._JAX_EIG_STABLE
+    try:
+        _rc._JAX_EIG_STABLE = _degenerate_splitting_eig(tau_rel=0.0,
+                                                        splitting=1e-4)
+        with pytest.raises(AssertionError, match="UNBOUNDED"):
+            _score_theta0_defect(lambda a: _pmm1(a, pol="te"),
+                                 "pmm1d te [unfloored, splitting x 1e-4]")
+        # ... and the SHIPPED floor holds the same injection bounded
+        _rc._JAX_EIG_STABLE = _degenerate_splitting_eig(tau_rel=_EIG_TAU_REL,
+                                                        splitting=1e-8)
+        _score_theta0_defect(lambda a: _pmm1(a, pol="te"),
+                             "pmm1d te [floored, splitting x 1e-8]")
+    finally:
+        _rc._JAX_EIG_STABLE = orig
 
 
 # ================================================== sweep clean-map fences ==

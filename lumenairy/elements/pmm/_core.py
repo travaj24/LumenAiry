@@ -3575,6 +3575,87 @@ def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
     return Acoef, lam, q, invop
 
 
+#: FAIL-BEFORE SWITCH for the incident-amplitude projection fix (2026-08-12,
+#: ``docs/audits/FIX_JAX_NAN_PINS_2026_08_12.md``).  ``False`` restores
+#: ``jnp.linalg.lstsq`` on the scalar 1-D JAX path bit for bit -- the
+#: SVD-gradient route this replaces -- so the pre-fix behaviour (a NaN or a
+#: silently wrong ``d/d(angle)``) can be driven from a test without patching
+#: the library.  It is a switch and not a policy: the forward answers agree to
+#: 3e-15 relative, and only the GRADIENT changes.
+PMM_JAX_MINNORM_PROJECTION = True
+
+
+def _jpmm_min_norm_projection(A, b, jnp):
+    """Minimum-norm solve of ``A x = b`` with a FINITE, CORRECT ``jax.grad``.
+
+    THE DEFECT THIS CLOSES.  The incident-amplitude projection
+    ``c_inc = lstsq(Hsup, delta0)`` is the only place the differentiable 1-D
+    PMM still went through ``jnp.linalg.lstsq``, whose gradient is the SVD
+    JVP -- and that JVP carries the factor
+
+        F_ij = 1 / (s_i^2 - s_j^2)
+
+    with a guard on the DIAGONAL only (``jax/_src/lax/linalg.py``
+    ``_svd_jvp_rule``; the "1 where ``s_diffs`` is 0" expression next to it is
+    commented out in the shipped source, leaving a plain ``eye``).  ``Hsup``
+    is not incidentally degenerate, it is STRUCTURALLY degenerate: the uniform
+    superstrate's nodal modes project onto the Rayleigh orders with a repeated
+    singular value ``1 / sqrt(n_glob)`` -- 3 of the 21 singular values sit on
+    it -- at every OBLIQUE angle probed, on both mounts (measured
+    0.20412414523193 = ``1 / sqrt(24)`` at degree 12; the python-literal
+    ``kx0 = 0.0`` branch carries no such cluster, six decades away).  Its
+    numerical SPLITTING is pure round-off, so ``F`` is decided by the LAPACK
+    build:
+
+        theta   splitting [ulp of s^2]      F_max        d(sum R)/d(theta)
+        [W]     0.30    1                   1.44e+17     nan
+        [M]     0.30    9                   1.60e+16     finite
+        [W]     0.31    24                  6.00e+15     finite
+        [M]     0.40    4066                3.54e+13     finite
+
+    At one ulp the backward pass returns ``nan`` (``FloatingPointError:
+    invalid value (nan) encountered in add`` under ``jax_debug_nans``, traced
+    to this call).  Where it stays finite it happens to be right -- the
+    contaminated directions are the ones the cascade contracts away, so the
+    pre- and post-fix gradients agree to <= 1.6e-14 relative across a theta
+    ladder -- but nothing makes that portable, and a gradient that exists
+    should not be decided by which side of an ulp a repeated eigenvalue lands.
+
+    THE REPAIR is the closed form the sibling twins already use for the SAME
+    ``Hsup``: :func:`_jpmm_jones_solve` and ``_jax_stack``'s stacked-Jones
+    solve both replaced this exact call in v5.18 with the min-norm
+    pseudo-inverse and recorded WHY ("jnp.linalg.lstsq's VJP NaNs on the
+    underdetermined stacked Hsup").  The scalar twin was simply never
+    converted -- the campaign's standing multi-copy disease, one copy behind.
+
+        underdetermined (m <= n):  x = A^H (A A^H)^-1 b     (min-norm)
+        overdetermined  (m >  n):  x = (A^H A)^-1 A^H b     (least-squares)
+
+    Both are the SAME MAP ``lstsq`` computes on a full-rank ``A`` -- measured
+    forward gap 1.5e-14 on ``|x| = 4.9``, i.e. 3e-15 relative -- and neither
+    decomposes the map into pieces (singular vectors) that are individually
+    non-differentiable at a repeated singular value.  ``inv`` differentiates
+    through ``-A^-1 dA A^-1``: no singular-value differences anywhere, finite
+    for any invertible Gram, however degenerate its spectrum.
+
+    The Gram costs one squaring of the condition number, which is why the
+    branch is on the SHAPE and not a preference: ``cond(Hsup) = 5.196`` on the
+    probed surface, so ``cond(Hsup Hsup^H) = 27``.  The shape is CONCRETE (the
+    order count is static per trace), so the branch is host control flow and
+    traces.
+
+    NumPy is untouched: the NumPy path keeps ``_guarded_lstsq`` (which owns the
+    M1 conditioning guard) and stays byte-identical."""
+    if not PMM_JAX_MINNORM_PROJECTION:
+        return jnp.linalg.lstsq(A, b, rcond=None)[0]
+    mrows, ncols = A.shape
+    if mrows <= ncols:
+        pinv = A.conj().T @ jnp.linalg.inv(A @ A.conj().T)
+    else:
+        pinv = jnp.linalg.inv(A.conj().T @ A) @ A.conj().T
+    return pinv @ b
+
+
 
 def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
                 eps_sup, eps_sub, depth, wl, polarization, dyn=None, kx0=0.0):
@@ -3650,7 +3731,11 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
     Hsup = Tp @ Wsup
     Hsub = Tp @ Wsub
     delta0 = jnp.asarray((orders == 0).astype(_C))
-    cinc = jnp.linalg.lstsq(Hsup, delta0, rcond=None)[0]
+    # ``jnp.linalg.lstsq``'s SVD gradient is unusable on the STRUCTURALLY
+    # degenerate Hsup (repeated singular value 1/sqrt(n_glob)) -- see
+    # :func:`_jpmm_min_norm_projection`, and the same replacement in the Jones
+    # twin below and in ``_jax_stack``.
+    cinc = _jpmm_min_norm_projection(Hsup, delta0, jnp)
     r_ord = Hsup @ (S11 @ cinc)
     t_ord = Hsub @ (S21 @ cinc)
 

@@ -688,11 +688,352 @@ def test_window_guard_disposition_is_a_knob():
 
 def test_nyquist_margin_is_honoured():
     fA, carB, ok, bad = _guard_fixture()
-    # ok.dx = 4 um against a 13.1 um bound -> 3.3x of margin, so 2x passes
-    # and 4x does not
+    # ok.dx = 4 um against a 10.4 um band-inclusive bound -> 2.6x of margin,
+    # so 2x passes and 4x does not
     re_reference(fA, carB, ok, nyquist_margin=2.0)
     with pytest.raises(ValueError, match='required margin 4.00x'):
         re_reference(fA, carB, ok, nyquist_margin=4.0)
+
+
+# ---------------------------------------------------------------------------
+# (e2) THE ENVELOPE'S OWN BAND -- the term the ramp-only guard was short of
+# ---------------------------------------------------------------------------
+def _round_trip_through(f, carB, Nc, N=1024, dx=2.0e-6):
+    """A -> common(Nc) -> A with the guard silenced, so the ANSWER can be
+    measured independently of what the guard thinks of it."""
+    gC = FieldGrid((Nc, Nc), N * dx / Nc)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        out = re_reference(re_reference(f, carB, gC, on_nyquist='ignore',
+                                        on_window='ignore'),
+                           f.carrier, f.grid, on_nyquist='ignore',
+                           on_window='ignore')
+    return _rel_l2(out.envelope, f.envelope)
+
+
+def test_the_guard_does_not_accept_a_wrong_answer_at_its_own_default():
+    """FAIL-BEFORE, FILLED IN.  The ramp-only bound cut at margin 1.00 while
+    the correctness cliff sat at 1.15-1.28, and the shipped default landed in
+    the gap: at 12.800 um -- reported margin 1.0234 -- ``re_reference`` with
+    EVERY argument at its library default raised nothing, warned nothing,
+    reported ``binding_term='ramp'`` and ``power_lost=-5.3e-23``, and the
+    round trip was 38 % wrong.  Aliasing conserves power, so the energy
+    ledger could not see it either.
+
+    The whole doc-era fail-before table probed only 3.3x inside (4.0 um) and
+    1.2x outside (16.0 um) and STRADDLED the gap.  This walks it.
+    """
+    fA, carB, _ok, _bad = _guard_fixture()
+    accepted_and_wrong = []
+    for Nc in (512, 400, 320, 256, 200, 176, 160, 152, 128):
+        gC = FieldGrid((Nc, Nc), 1024 * 2.0e-6 / Nc)
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('error')
+                re_reference(fA, carB, gC, on_window='ignore')
+            accepted = True
+        except (ValueError, RuntimeWarning):
+            accepted = False
+        if accepted and _round_trip_through(fA, carB, Nc) > 1e-8:
+            accepted_and_wrong.append(Nc)
+    assert not accepted_and_wrong, (
+        f"the DEFAULT call accepted a round trip worse than 1e-8 at "
+        f"N_c = {accepted_and_wrong}")
+
+    # ... and specifically the P0-1 headline row
+    g128 = FieldGrid((160, 160), 1024 * 2.0e-6 / 160)     # 12.800 um
+    assert _round_trip_through(fA, carB, 160) > 0.3       # 38 % wrong
+    with pytest.raises(ValueError, match='cannot hold the carrier difference'):
+        re_reference(fA, carB, g128, on_window='ignore')
+
+
+def test_the_guard_bounds_the_envelope_band_not_only_the_ramp():
+    """The pitch and the ramp are FROZEN; only the beam width moves.
+
+    Pre-fix the reported margin stayed at 1.023 for every width while the
+    round trip climbed from 0.38 to 1.0055 -- the guard's verdict could not
+    move because the quantity that was changing was not in it.  The margin
+    must now track the beam."""
+    N, dx, R = 1024, 2.0e-6, -0.5
+    carB = CarrierSpec(R=R, tilt=(0.05, 0.0))
+    gC = FieldGrid((160, 160), N * dx / 160)
+    margins, bands = [], []
+    for w in (200e-6, 100e-6, 50e-6, 20e-6, 10e-6):
+        f = _gauss_field(N, dx, w, R)
+        rep = carrier_difference_nyquist(f.carrier, carB, LAM,
+                                         f.support_radius(),
+                                         dx_target=gC.dx,
+                                         env_band=f.band_slope())
+        margins.append(rep.margin)
+        bands.append(rep.env_band)
+        # every one of these round trips is wrong, so every one must refuse
+        assert _round_trip_through(f, carB, 160) > 0.3
+        with pytest.raises(ValueError, match='cannot hold'):
+            re_reference(f, carB, gC, on_window='ignore')
+    # the band is measured off the envelope and scales as lambda / w
+    for b, w in zip(bands, (200e-6, 100e-6, 50e-6, 20e-6, 10e-6)):
+        assert b == pytest.approx(2.45 * LAM / (math.pi * w), rel=0.06), (
+            f"the measured band {b:.6f} at w = {w * 1e6:.0f} um is not the "
+            f"enclosed-power band of a Gaussian")
+    # ... and the margin follows it DOWN, monotonically
+    assert margins == sorted(margins, reverse=True)
+    assert margins[0] / margins[-1] > 4.0, margins
+
+
+def test_the_band_headroom_is_calibrated_against_the_measured_cliff():
+    """ENVELOPE RULE, in the coordinate the boundary is actually flat in.
+
+    Bisected over beam widths and ramps, the round-trip cliff sits at a
+    CONSTANT number of measured-band units (1.67-2.09 over the matrix in
+    FIX_VERIFY_ARCH S1) and at a wildly varying ``nyquist_margin``
+    (1.087-4.478, a 4.12x spread).  That is why the fix is a term and not a
+    default: no margin can express a boundary that moves 4x with the beam.
+
+    This pins both halves -- the shipped headroom is above every measured
+    cliff, and the ramp-only coordinate is NOT usable as a boundary."""
+    N, dx, R = 1024, 2.0e-6, -0.5
+    cliffs_band, cliffs_margin = [], []
+    for w in (200e-6, 50e-6):
+        for ramp in (0.05, 0.02):
+            f = _gauss_field(N, dx, w, R)
+            carB = CarrierSpec(R=R, tilt=(ramp, 0.0))
+            band = f.band_slope()
+            rep0 = carrier_difference_nyquist(f.carrier, carB, LAM,
+                                              f.support_radius())
+            # coarsest N_c whose round trip is still clean
+            lo, hi = 96.0, 900.0                  # lo dirty, hi clean
+            for _ in range(16):
+                mid = 0.5 * (lo + hi)
+                if _round_trip_through(f, carB, int(round(mid))) > 1e-8:
+                    lo = mid
+                else:
+                    hi = mid
+            dxc = N * dx / int(round(hi))
+            head = LAM / (2.0 * dxc) - rep0.ramp_max
+            cliffs_band.append(head / band)
+            cliffs_margin.append(rep0.dx_ramp_bare / dxc)
+    assert max(cliffs_band) <= _carrier_field._BAND_HEADROOM, (
+        f"the shipped band headroom {_carrier_field._BAND_HEADROOM} is BELOW a measured "
+        f"cliff at {max(cliffs_band):.3f} band units -- it must bound every "
+        f"one of {[round(c, 3) for c in cliffs_band]}")
+    assert max(cliffs_band) / min(cliffs_band) < 1.6, (
+        f"the cliff is not constant in band units: {cliffs_band}")
+    assert max(cliffs_margin) / min(cliffs_margin) > 2.0, (
+        f"the cliff should NOT be constant in the ramp-only margin "
+        f"coordinate -- if it were, a margin default would have been the "
+        f"right fix.  Measured spread: {cliffs_margin}")
+
+
+def test_a_nan_sample_cannot_silently_disable_the_guard():
+    """A support radius of 0 collapses every maximum-over-the-disc onto the
+    chief ray, where a CONCENTRIC sphere-difference ramp vanishes identically
+    -- so returning 0.0 for an unmeasurable field turned the guard OFF at
+    exactly the moment it was most needed.  ``nan > 0.0`` is False, which is
+    how one NaN got through the ``tot > 0.0`` test."""
+    g = FieldGrid((256, 256), 2.0e-6)
+    x, y = g.axes()
+    r2 = x[None, :] ** 2 + y[:, None] ** 2
+    clean = np.exp(-r2 / 50e-6 ** 2).astype(np.complex128)
+    cA = CarrierSpec(R=-1e-3)
+
+    # the clean field measures a real radius
+    assert CarrierField(clean, g, cA, LAM).support_radius() > 0.0
+
+    for label, env in (('one NaN', 'nan'), ('all NaN', 'allnan'),
+                       ('one +inf', 'inf')):
+        e = clean.copy()
+        if env == 'nan':
+            e[0, 0] = np.nan
+        elif env == 'allnan':
+            e[:] = np.nan
+        else:
+            e[0, 0] = np.inf
+        f = CarrierField(e, g, cA, LAM)
+        with pytest.raises(ValueError, match='is not finite'):
+            f.support_radius()
+        with pytest.raises(ValueError, match='is not finite'):
+            re_reference(f, CarrierSpec(R=-1.0), g, on_window='ignore')
+
+    # a genuinely EMPTY field is NOT the same thing and is not refused: the
+    # re-reference of zeros is zeros, which is right at any pitch
+    fz = CarrierField(np.zeros_like(clean), g, cA, LAM)
+    assert fz.support_radius() == 0.0
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        out = re_reference(fz, CarrierSpec(R=-1.0), g, on_window='ignore')
+    assert not np.any(out.envelope)
+
+
+def test_band_slope_can_be_supplied_like_the_support_radius():
+    """The measurement is an fft2, so it has the same escape hatch the
+    support-radius measurement has -- and passing 0.0 reproduces the
+    (unsafe) ramp-only arithmetic exactly, which is what makes the term's
+    contribution measurable rather than asserted."""
+    fA, carB, ok, _bad = _guard_fixture()
+    band = fA.band_slope()
+    assert band > 0.0
+    rep_with = carrier_difference_nyquist(fA.carrier, carB, LAM,
+                                          fA.support_radius(),
+                                          env_band=band)
+    rep_without = carrier_difference_nyquist(fA.carrier, carB, LAM,
+                                             fA.support_radius())
+    assert rep_without.dx_ramp == rep_with.dx_ramp_bare
+    assert rep_with.dx_ramp < rep_without.dx_ramp
+    assert rep_with.band_term == pytest.approx(_carrier_field._BAND_HEADROOM * band)
+    # the override is honoured end to end
+    g = FieldGrid((160, 160), 1024 * 2.0e-6 / 160)
+    with pytest.raises(ValueError, match='cannot hold'):
+        re_reference(fA, carB, g, on_window='ignore')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        re_reference(fA, carB, g, band_slope=0.0, on_window='ignore')
+    with pytest.raises(ValueError, match='env_band must be'):
+        carrier_difference_nyquist(fA.carrier, carB, LAM, 1e-3,
+                                   env_band=float('nan'))
+
+
+# ---------------------------------------------------------------------------
+# The cancellation class, where the SUITE could not see it
+# ---------------------------------------------------------------------------
+def test_eikonal_at_is_rationalized_on_both_of_its_sphere_branches():
+    """``CarrierSpec.eikonal_at`` had NO coverage of either sphere branch --
+    only the ``R = +/-inf`` early return was tested -- and both branches
+    carried the pre-a185cfc ``sqrt(r^2+R^2) - |R|`` subtraction.  So the
+    module's point diagnostic disagreed with its OWN whole-grid phasor
+    (:meth:`phasor_on`, which goes through the rationalized
+    ``_exact_sphere_eikonal``) by exactly the ``k0*eps*|R|`` floor that fix
+    had just removed.
+
+    Oracle: the same closed form evaluated in exact integer-scaled rational
+    arithmetic via ``math.fsum``-free ``Fraction``, so the comparison is
+    float64-against-mathematics and not one float form against another."""
+    from fractions import Fraction as F
+
+    def exact_plain(u, v, R):
+        """sign(R)*(sqrt(u^2+v^2+R^2) - |R|) to 200 bits."""
+        import decimal
+        with decimal.localcontext() as ctx:
+            ctx.prec = 60
+            D = decimal.Decimal
+            s = (D(u) * D(u) + D(v) * D(v) + D(R) * D(R)).sqrt()
+            return float((s - abs(D(R))) * (1 if R > 0 else -1))
+
+    k0 = 2.0 * math.pi / LAM
+    ratios = []
+    for R in (-0.05, -0.2, -1.0, 5.0):
+        c = CarrierSpec(R=R)
+        us = np.array([0.0, 1e-5, 1e-4, 5e-4, 1e-3, 2e-3])
+        vs = np.array([0.0, -2e-5, 3e-4, 1e-4, -8e-4, 5e-4])
+        got = np.asarray(c.eikonal_at(us, vs), dtype=np.float64)
+        want = [exact_plain(float(us[i]), float(vs[i]), R)
+                for i in range(us.size)]
+        err = max(abs(float(got[i]) - want[i]) for i in range(us.size)) * k0
+        # THE BAR IS DERIVED, and the derivation is the finding.  A
+        # rationalized eikonal's error is a few ulps of the ANSWER
+        # (k0*eps*|W|); the subtraction form's is a few ulps of |R|
+        # (k0*eps*|R|), independent of how small the answer is.  Over this
+        # ladder |R| / |W| runs from ~30 to ~4e5, so the two bars are not
+        # the same statement.
+        bar = 8.0 * k0 * EPS * max(abs(v) for v in want)
+        floor = k0 * EPS * abs(R)
+        assert err <= bar, (
+            f"R={R}: eikonal_at is off by {err:.3e} rad, above "
+            f"{bar:.3e} = 8 ulp of the eikonal itself -- the plain branch "
+            f"is not evaluating a cancellation-free form")
+        assert err < 0.5 * floor, (
+            f"R={R}: eikonal_at ({err:.3e} rad) is not beating the "
+            f"subtraction form's floor {floor:.3e}")
+        ratios.append(err / floor)
+    # FINGERPRINT: the residual tracks the ANSWER, so as |R| grows (and the
+    # eikonal shrinks) it must fall AWAY from the |R|-proportional floor.
+    assert ratios[0] > 20.0 * ratios[-1], (
+        f"the residual is not decoupling from |R|: err/(k0 eps |R|) = "
+        f"{[f'{r:.2e}' for r in ratios]} -- a flat ratio is the signature of "
+        f"the subtraction form")
+
+    # ... and the point diagnostic must AGREE with the whole-grid phasor it
+    # is supposed to describe
+    for R in (-0.05, -1.0):
+        c = CarrierSpec(R=R)
+        g = FieldGrid((16, 16), 4e-5)
+        x, y = g.axes()
+        ph = c.phasor_on(g, LAM, sign=+1)
+        for iy in (7, 8, 9):
+            for ix in (7, 8, 9):
+                want = np.angle(np.exp(1j * k0 * float(
+                    c.eikonal_at(x[ix], y[iy]))))
+                d = abs(float(np.angle(ph[iy, ix])) - want)
+                d = min(d, abs(d - 2 * math.pi))
+                assert d < 1e-13, (
+                    f"R={R} at ({ix},{iy}): eikonal_at and phasor_on "
+                    f"disagree by {d:.3e} rad")
+
+
+_TILTED_LADDER = ((-5.0e-3, (1.0e-3, -5.0e-4)),
+                  (-5.0e-2, (1.0e-3, -5.0e-4)),
+                  (-2.0e-1, (5.0e-2, 2.0e-2)))
+
+
+def test_a_tilted_carrier_does_not_reinstate_the_cancellation_floor():
+    """THE SIBLING THE LADDER COULD NOT SEE.
+
+    ``_EIKONAL_LADDER`` above monkeypatches ``_exact_sphere_eikonal`` and its
+    fixtures are UNTILTED, so it is blind to the SECOND copy of the same
+    subtraction: ``_tilt_exactness_phase`` in ``propagators/carrier.py``
+    carried two of them, and any nonzero tilt put the whole ``k0*eps*|R|``
+    floor back into a carrier the rationalization had just cleaned (measured
+    2.11e-11 rad at |R| = 50 mm against 6.3e-17 untilted).
+
+    Oracle: the exact tilted eikonal in 60-digit decimal arithmetic."""
+    import decimal
+
+    def exact_tilted(x, y, R, L, M):
+        with decimal.localcontext() as ctx:
+            ctx.prec = 60
+            D = decimal.Decimal
+            n = (D(1) - D(L) * D(L) - D(M) * D(M)).sqrt()
+            uu = D(x) + D(R) * D(L) / n
+            vv = D(y) + D(R) * D(M) / n
+            s = (uu * uu + vv * vv + D(R) * D(R)).sqrt()
+            return float((s - abs(D(R)) / n) * (1 if R > 0 else -1))
+
+    k0 = 2.0 * math.pi / LAM
+    for R, (L, M) in _TILTED_LADDER:
+        c = CarrierSpec(R=R, tilt=(L, M))
+        assert c._uses_exact_tilt(), (
+            "this ladder is meaningless unless the exact-tilt branch is live")
+        xs = np.array([0.0, 1e-5, 1e-4, 5e-4, 1e-3])
+        ys = np.array([0.0, -2e-5, 3e-4, 1e-4, -8e-4])
+        got = np.asarray(c.eikonal_at(xs, ys), dtype=np.float64)
+        want = [exact_tilted(float(xs[i]), float(ys[i]), R, L, M)
+                for i in range(xs.size)]
+        err = max(abs(float(got[i]) - want[i]) for i in range(xs.size)) * k0
+        # same derived bar as the untilted branch: a few ulps of the ANSWER,
+        # not of |R|
+        bar = 8.0 * k0 * EPS * max(abs(v) for v in want)
+        floor = k0 * EPS * abs(R)
+        assert err <= bar, (
+            f"R={R}, tilt=({L},{M}): the TILTED eikonal is off by "
+            f"{err:.3e} rad, above {bar:.3e} = 8 ulp of the eikonal itself.  "
+            f"A tilt must not reinstate the cancellation.")
+        assert err < 0.5 * floor, (
+            f"R={R}, tilt=({L},{M}): {err:.3e} rad is not beating the "
+            f"subtraction form's floor {floor:.3e}")
+
+    # the whole-grid builder too: a tilted round trip at a LARGE |R|, which
+    # is where the old floor was resolvable (the shipped tilted round trip
+    # sits at |R| = 5e-4 m, where k0*eps*|R| is under the 1e-12 bar)
+    for R in (-5.0e-2, -2.0e-1):
+        N, dx, w = 1024, 1.0e-6, 60e-6
+        fA = _gauss_field(N, dx, w, R, tilt=(1.0e-3, -5.0e-4))
+        gB = FieldGrid((1536, 1536), N * dx / 1536)
+        carB = CarrierSpec(R=R, centre=(3 * dx, -dx), tilt=(1.0e-3, -5.0e-4))
+        out = re_reference(re_reference(fA, carB, gB), fA.carrier, fA.grid)
+        rel = _rel_l2(out.envelope, fA.envelope)
+        assert rel <= _ROUND_TRIP_FLOOR, (
+            f"|R|={abs(R):.3e} WITH TILT: round trip {rel:.3e} > the resample "
+            f"floor bar {_ROUND_TRIP_FLOOR:.3e} -- the tilted carrier is "
+            f"carrying an eikonal cancellation the untilted one is not")
 
 
 # ---------------------------------------------------------------------------

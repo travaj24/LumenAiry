@@ -39,16 +39,30 @@ THREE THINGS THE PROBE PROVED THAT THIS MODULE ENCODES
    :func:`carrier_difference_nyquist`, which COMPUTES that from the two
    carriers rather than taking it on faith.
 
-3. **The ramp and the beam's own angular band do NOT add.**  Adding them
-   costs a factor of 4 in grid and is the natural mistake: the ramp is a
-   DIFFERENCE between two spheres, while a beam's absolute angular band is
-   set by how far its own sphere is sampled from its OWN centre and does not
-   move with the chief ray.  The binding pitch is therefore the ``min`` of
-   the two bounds, not ``lambda/(2*(ramp + NA))``.  Measured on design 121:
-   the probe ran the whole aggregation at dx = 1.2292 um, which is 1.5x
-   INSIDE ``lambda/(2*(ramp + NA))``; if that were the operative bound the
+3. **The ramp and the beam's own CARRIER band do NOT add -- but the
+   ENVELOPE's band does.**  These are two different quantities and getting
+   them the right way round is the whole of the sampling argument.
+
+   The CARRIER NA does not add.  Adding it costs a factor of 4 in grid and
+   is the natural mistake: the ramp is a DIFFERENCE between two spheres,
+   while a beam's absolute angular band is set by how far its own sphere is
+   sampled from its OWN centre and does not move with the chief ray.  The
+   binding pitch is therefore the ``min`` of the two bounds, not
+   ``lambda/(2*(ramp + NA_carrier))``.  Measured on design 121: the probe
+   ran the whole aggregation at dx = 1.2292 um, which is 1.5x INSIDE
+   ``lambda/(2*(ramp + NA_carrier))``; if that were the operative bound the
    extreme order would have aliased and moved.  It did not (probe S8.1: two
    pitches 2x apart agree to every printed digit).
+
+   The ENVELOPE's band does add, to each bound separately.  A re-reference
+   returns ``resample(env) * exp(i k0 (C_src - C_dst))`` -- a PRODUCT, whose
+   band is the sum of its factors' -- so a lattice that holds the ramp but
+   not ``ramp + band`` aliases the envelope's skirt into the answer.  Left
+   out, that is a 38 %-wrong round trip accepted at the guard's own default
+   (VERIFY_ARCHITECTURE P0-1/P0-2), and it is invisible to an energy ledger
+   because aliasing conserves power.  :func:`carrier_difference_nyquist`
+   takes the band MEASURED off the envelope (:meth:`CarrierField.band_slope`)
+   and adds ``_BAND_HEADROOM`` times it to both bounds.
 
 PISTON IS EXPLICIT, AND THAT IS THE POINT
 -----------------------------------------
@@ -164,6 +178,42 @@ _RADIAL_CHUNK_ROWS = 256
 #: the whole disc is swept.  32 x 256 = 8192 evaluations of a closed form.
 _NYQUIST_N_RADII = 32
 _NYQUIST_N_ANGLES = 256
+
+#: Multiplier applied to the MEASURED envelope band before it is added to
+#: the carrier-difference ramp in :func:`carrier_difference_nyquist`.
+#:
+#: WHY THERE IS A MULTIPLIER AT ALL.  ``_enclosed_band_radius`` measures an
+#: enclosed-POWER radius in the spectral domain, the same statistic
+#: :data:`SUPPORT_POWER_FRACTION` sizes the support disc with.  An
+#: enclosed-power radius is the right ROBUST statistic -- it degrades
+#: gracefully on a hard-edged envelope where an amplitude-threshold band
+#: would run out to the source Nyquist -- but it deliberately excludes a
+#: skirt, and for a re-reference it is the SKIRT that aliases.  The
+#: multiplier converts the robust statistic into the operative bound, and
+#: its value is MEASURED rather than chosen.
+#:
+#: HOW IT WAS DERIVED (docs/audits/FIX_VERIFY_ARCH_2026_08_12.md S1).  The
+#: round-trip cliff was bisected over 24 fixtures -- beam widths 25..200 um,
+#: ramps 0.02..0.10 rad, finite-R and collimated carriers.  Expressed as
+#: ``(lambda/2dx - ramp) / band``, the cliff sits at 1.666..2.092, a 1.26x
+#: spread over the whole matrix.  Expressed instead as a ``nyquist_margin``
+#: on the ramp-only bound -- the coordinate the guard used to cut in -- the
+#: SAME cliff runs 1.087..4.478, a 4.12x spread, which is the proof that no
+#: choice of margin default can express this boundary and that the missing
+#: BAND TERM is what the guard was short by.
+#:
+#: 2.5 is the measured worst case (2.092) plus 1.20x headroom.  The upper
+#: end is set by over-refusal: 3.0 starts refusing pitches measured clean at
+#: 3.4e-10 relative.  Verified in both directions -- see the fail-before /
+#: fix-after tables in that document.
+_BAND_HEADROOM = 2.5
+
+#: Enclosed-power fraction used to size the SPECTRAL band radius.  The same
+#: number as :data:`SUPPORT_POWER_FRACTION`, and deliberately so: the band
+#: is the support radius' conjugate, measured the same way over the same
+#: fraction, so one policy constant governs both halves of the sampling
+#: argument.
+BAND_POWER_FRACTION = SUPPORT_POWER_FRACTION
 
 
 # ---------------------------------------------------------------------------
@@ -328,13 +378,29 @@ class CarrierSpec:
             # the whole of it.
             return L * u + M * v + self.piston
         sgn = 1.0 if R > 0 else -1.0
+        # RATIONALIZED, both branches.  ``sqrt(r^2 + R^2) - |R|`` loses
+        # ``eps*|R|`` metres -- ``k0*eps*|R|`` radians -- to catastrophic
+        # cancellation wherever ``r^2 << R^2``, which is the whole of a
+        # normal pupil.  a185cfc removed that from ``_exact_sphere_eikonal``
+        # (the whole-grid builder :meth:`phasor_on` uses) but not from here,
+        # so this diagnostic disagreed with the module's own phasor by
+        # exactly the floor the fix had just removed.
+        #
+        #   sgn*(A - B) == sgn*(A^2 - B^2)/(A + B),  A, B > 0
+        #
+        # For the exact-tilt branch A = sqrt(uu^2 + vv^2 + R^2), B = |R|/n,
+        # and A^2 - B^2 collapses ANALYTICALLY: the R^2/n^2 terms cancel
+        # against R^2 (because n^2 = 1 - L^2 - M^2), leaving
+        # ``u^2 + v^2 + 2R(uL + vM)/n`` with no large term in it at all.
         if self._uses_exact_tilt():
             n = math.sqrt(1.0 - L * L - M * M)
             uu = u + R * L / n
             vv = v + R * M / n
-            return sgn * (np.sqrt(uu * uu + vv * vv + R * R)
-                          - abs(R) / n) + self.piston
-        return (sgn * (np.sqrt(u * u + v * v + R * R) - abs(R))
+            num = u * u + v * v + 2.0 * R * (u * L + v * M) / n
+            den = np.sqrt(uu * uu + vv * vv + R * R) + abs(R) / n
+            return sgn * (num / den) + self.piston
+        r2 = u * u + v * v
+        return (sgn * (r2 / (np.sqrt(r2 + R * R) + abs(R)))
                 + L * u + M * v + self.piston)
 
     def gradient_at(self, x, y):
@@ -674,6 +740,20 @@ class CarrierField:
         return _enclosed_power_radius(self.envelope, self.dx, self.dy,
                                       (cx, cy), float(frac))
 
+    def band_slope(self, frac=BAND_POWER_FRACTION) -> float:
+        """The ENVELOPE's own angular half-band in SLOPE units (dimensionless
+        direction cosine), enclosing ``frac`` of its spectral power.
+
+        The conjugate of :meth:`support_radius`, measured the same way over
+        the same fraction, and the term
+        :func:`carrier_difference_nyquist` adds to the ramp.  Costs one
+        ``fft2`` of the envelope, which is why :func:`re_reference` takes a
+        ``band_slope=`` override for a caller moving a fan of like fields --
+        the same escape hatch ``support_radius=`` provides, for the same
+        reason."""
+        return _enclosed_band_radius(self.envelope, self.dx, self.dy,
+                                     self.wavelength, float(frac))
+
     # -- construction -----------------------------------------------------
     @classmethod
     def from_full_field(cls, E, grid, carrier, wavelength, provenance=None):
@@ -702,18 +782,41 @@ class CarrierField:
 # ---------------------------------------------------------------------------
 # Radial reductions (memory-bounded)
 # ---------------------------------------------------------------------------
-def _enclosed_power_radius(env, dx, dy, centre, frac):
+def _enclosed_power_radius(env, dx, dy, centre, frac, *,
+                           x_axis=None, y_axis=None):
     """Radius about ``centre`` (GRID frame, m) enclosing ``frac`` of the
     power, from a radial histogram accumulated one row-block at a time.
+
+    ``x_axis`` / ``y_axis`` override the implied centred lattice.  They exist
+    so :func:`_enclosed_band_radius` can run the SAME reduction over an
+    unshifted FFT's ``fftfreq`` axes -- one statistic, one implementation,
+    and no full-size ``fftshift`` copy of a design-121 spectrum.
 
     Returns the OUTER edge of the first bin at which the cumulative fraction
     reaches ``frac``, so it is an upper bound on the true radius by at most
     one bin (``min(dx, dy)``) -- the conservative direction for a bound that
-    is used to SIZE a grid."""
+    is used to SIZE a grid.
+
+    A NON-FINITE sample RAISES.  It used to fall through the ``tot > 0.0``
+    test -- ``nan > 0.0`` is ``False`` -- and return 0.0, which is not a
+    conservative failure but the LEAST conservative one available: a support
+    radius of zero collapses every maximum-over-the-disc in this module to
+    the chief ray alone, where a concentric sphere-difference ramp is
+    identically zero, so the Nyquist guard SILENTLY ACCEPTED calls it
+    correctly refuses on the same field when clean (VERIFY_ARCHITECTURE
+    P1-3).  A guard whose own input is NaN has to say so."""
     env = np.asarray(env)
     ny, nx = env.shape[-2], env.shape[-1]
-    x = (np.arange(nx, dtype=np.float64) - nx / 2) * dx - float(centre[0])
-    y = (np.arange(ny, dtype=np.float64) - ny / 2) * dy - float(centre[1])
+    if x_axis is None:
+        x = (np.arange(nx, dtype=np.float64) - nx / 2) * dx
+    else:
+        x = np.asarray(x_axis, dtype=np.float64)
+    if y_axis is None:
+        y = (np.arange(ny, dtype=np.float64) - ny / 2) * dy
+    else:
+        y = np.asarray(y_axis, dtype=np.float64)
+    x = x - float(centre[0])
+    y = y - float(centre[1])
     step = min(float(dx), float(dy))
     r_max = float(np.hypot(np.abs(x).max(), np.abs(y).max()))
     nb = int(math.ceil(r_max / step)) + 1
@@ -728,12 +831,65 @@ def _enclosed_power_radius(env, dx, dy, centre, frac):
                             minlength=nb + 1)
         del blk, rr, idx
     tot = float(hist.sum())
-    if not (tot > 0.0):
+    if not math.isfinite(tot):
+        raise ValueError(
+            f"_enclosed_power_radius: the field is not finite -- its total "
+            f"power reduces to {tot!r} -- so no support radius can be "
+            f"measured from it.  This is refused rather than reported as "
+            f"0.0 (the old behaviour, because 'nan > 0.0' is False): a zero "
+            f"support radius collapses every maximum-over-the-disc in this "
+            f"module onto the chief ray, where a concentric "
+            f"sphere-difference ramp vanishes identically, so a single NaN "
+            f"sample would DISABLE the Nyquist guard rather than trip it.  "
+            f"Find the NaN/inf in the envelope first "
+            f"(np.isfinite(env).all()); it will also propagate across the "
+            f"whole array through the band-limited resample.")
+    if tot == 0.0:
+        # A genuinely EMPTY field.  Zero is the honest radius here and it is
+        # not a hole in the guard: re_reference of an all-zero envelope
+        # returns an all-zero envelope, which is the right answer at any
+        # pitch.  Distinguished from the NaN case above deliberately.
         return 0.0
     cum = np.cumsum(hist) / tot
     j = int(np.searchsorted(cum, float(frac), side='left'))
     j = min(j, nb)
     return float((j + 1) * step)
+
+
+def _enclosed_band_radius(env, dx, dy, wavelength, frac):
+    """The envelope's OWN angular half-band, in SLOPE (direction-cosine)
+    units -- i.e. the radius in spatial frequency enclosing ``frac`` of the
+    envelope's spectral power, times ``wavelength``.
+
+    This is the term :func:`carrier_difference_nyquist` was missing.  A
+    re-reference returns ``resample(env) * exp(i k0 (C_src - C_dst))``: the
+    product's band is the envelope's band CONVOLVED with the ramp, so the
+    target lattice has to carry ``ramp + band``, not ``ramp`` alone.
+    (Distinct from the carrier NA term the module docstring rebuts, which
+    genuinely does NOT add -- see :func:`carrier_difference_nyquist`.)
+
+    Measured, not assumed, for the same reason the support radius is: the
+    envelope of a traced order is not a Gaussian and its band is not a fixed
+    multiple of anything.  It is the SAME reduction
+    (:func:`_enclosed_power_radius`) run over the spectrum's own ``fftfreq``
+    axes -- one statistic, one implementation.
+
+    NOT ``fftshift``ed: at design-121 scale the spectrum is already a 1.07 GB
+    transient on top of the envelope, and centring it would cost another
+    copy for nothing.  Passing the frequency axes in reaches the same bins in
+    a different order, and a histogram does not care about order."""
+    env = np.asarray(env)
+    ny, nx = env.shape[-2], env.shape[-1]
+    fx = np.fft.fftfreq(nx, d=float(dx))
+    fy = np.fft.fftfreq(ny, d=float(dy))
+    spec = np.fft.fft2(env)
+    try:
+        r_f = _enclosed_power_radius(
+            spec, 1.0 / (nx * float(dx)), 1.0 / (ny * float(dy)),
+            (0.0, 0.0), float(frac), x_axis=fx, y_axis=fy)
+    finally:
+        del spec
+    return float(wavelength) * r_f
 
 
 def _power_in_window(env, dx, dy, centre, radius):
@@ -765,16 +921,19 @@ class NyquistReport(NamedTuple):
     can be argued with rather than merely obeyed."""
 
     ramp_max: float             #: max |grad C_src - grad C_dst| over the disc
-    dx_ramp: float              #: lambda / (2 * ramp_max) -- the ENVELOPE
+    dx_ramp: float              #: lambda / (2*(ramp_max + band)) -- ENVELOPE
     na_src_max: float           #: max |grad C_src| over the disc
-    dx_reconstruct: float       #: lambda / (2 * na_src_max) -- the FULL field
+    dx_reconstruct: float       #: lambda / (2*(na_src_max + band)) -- FULL
     na_dst_max: float           #: max |grad C_dst| over the disc -- DIAGNOSTIC
     dx_dst_ref: float           #: lambda / (2 * na_dst_max) -- NOT a bound
     dx_binding: float           #: min(dx_ramp, dx_reconstruct)
     binding_term: str           #: 'ramp' or 'reconstruct'
     support_radius: float       #: the disc the maxima were taken over
-    dx_sum_bound: float         #: lambda/(2*(ramp+NA)) -- NOT operative
+    dx_sum_bound: float         #: lambda/(2*(ramp+NA_carrier)) -- NOT operative
     margin: float               #: dx_binding / dx_target
+    env_band: float             #: MEASURED envelope half-band, slope units
+    band_term: float            #: _BAND_HEADROOM * env_band -- what is ADDED
+    dx_ramp_bare: float         #: lambda/(2*ramp_max) -- band-free, DIAGNOSTIC
 
 
 def _max_over_disc(fn, centre, radius):
@@ -794,38 +953,61 @@ def _max_over_disc(fn, centre, radius):
 
 def carrier_difference_nyquist(src_carrier, dst_carrier, wavelength,
                                support_radius, dx_target=None,
-                               support_centre=None) -> NyquistReport:
+                               support_centre=None,
+                               env_band=0.0) -> NyquistReport:
     """The pitch a grid needs to carry the DIFFERENCE between two carriers.
 
     THE ARITHMETIC (this is the probe's S3 census, computed rather than
-    quoted).  TWO quantities bind, and one plausible-looking third does not.
+    quoted).  TWO quantities bind, one of them carries a third term that
+    genuinely ADDS to it, and one plausible-looking fourth does not.
 
     **(b) The ramp -- what the RE-REFERENCED ENVELOPE carries.**
     Re-referencing multiplies the envelope by ``exp(i k0 (C_src - C_dst))``,
     whose local spatial frequency is ``|grad C_src - grad C_dst| / lambda``.
-    Maximised over the disc the field actually occupies:
+    Maximised over the disc the field actually occupies, and ADDED TO THE
+    ENVELOPE'S OWN BAND, because the product of two signals has the sum of
+    their bands:
 
     .. code-block:: text
 
-        dx_ramp = lambda / (2 * max|grad C_src - grad C_dst|)
+        dx_ramp = lambda / (2 * (max|grad C_src - grad C_dst| + band))
 
     **(c) The source band -- what the RECONSTRUCTED FULL FIELD carries.**
     The full field is ``env * exp(i k0 C_src)`` whatever it is referenced
-    to, so its own local frequency is ``|grad C_src| / lambda``.  Any
-    consumer that reconstructs (an exact final leg, an FFT, a plot) needs:
+    to, so its own local frequency is ``|grad C_src| / lambda``, again
+    convolved with the envelope's band.  Any consumer that reconstructs (an
+    exact final leg, an FFT, a plot) needs:
 
     .. code-block:: text
 
-        dx_reconstruct = lambda / (2 * max|grad C_src|)
+        dx_reconstruct = lambda / (2 * (max|grad C_src| + band))
 
-    **These do NOT add**, and that is the finding, not a simplification.  The
-    ramp is a DIFFERENCE of two spheres; a beam's absolute angular band is
-    set by how far its own sphere is sampled from its OWN centre and does not
-    move with the chief ray.  ``dx_sum_bound`` = ``lambda/(2*(ramp + NA))``
-    is reported so the mistake is visible, and it is NOT what binds:
-    PROBE_SUM_AT_APERTURE S8.1 ran design 121 at a pitch 1.5x INSIDE that
-    bound and the extreme order did not move (two pitches 2x apart agree to
-    every printed digit).
+    **THE ENVELOPE BAND ADDS.  THE CARRIER'S NA DOES NOT.**  These are two
+    different quantities and the module used to name only the second.
+
+    * ``band`` is the ENVELOPE's own angular content -- what a 10 um waist
+      carries that a 200 um waist does not.  It is a genuine signal riding
+      on the same lattice as the ramp, so the two convolve and the pitch
+      must hold their SUM.  Measured by :func:`_enclosed_band_radius` and
+      supplied as ``env_band``; ``_BAND_HEADROOM * env_band`` is what is
+      actually added (see that constant for the calibration).
+    * ``max|grad C_src|`` (and its ``dx_sum_bound`` = ``lambda/(2*(ramp +
+      NA_carrier))``) is the CARRIER's absolute angular band, and it does
+      NOT add to the ramp.  The ramp is a DIFFERENCE of two spheres; a
+      beam's absolute carrier band is set by how far its own sphere is
+      sampled from its OWN centre and does not move with the chief ray.
+      ``dx_sum_bound`` is reported so the mistake stays visible, and it is
+      NOT what binds: PROBE_SUM_AT_APERTURE S8.1 ran design 121 at a pitch
+      1.5x INSIDE that bound and the extreme order did not move (two pitches
+      2x apart agree to every printed digit).
+
+    Leaving ``band`` out is what let the guard accept a **38 %-wrong**
+    round trip at its own default (VERIFY_ARCHITECTURE P0-1/P0-2): with the
+    pitch and the ramp both frozen at an ACCEPTED margin of 1.023, shrinking
+    the beam 200 -> 10 um drove the round trip to rel L2 1.0055 while the
+    reported margin never moved.  ``env_band`` defaults to 0.0 so the
+    arithmetic of a caller who has no field in hand is unchanged, but
+    :func:`re_reference` and :func:`aggregate` always measure and pass it.
 
     **What is NOT a bound: the destination carrier's own band.**
     ``max|grad C_dst|`` over the SOURCE's support is large whenever the two
@@ -865,6 +1047,11 @@ def carrier_difference_nyquist(src_carrier, dst_carrier, wavelength,
     support_centre : (float, float), optional
         Centre of that disc in ABSOLUTE coordinates.  Defaults to the SOURCE
         carrier's chief ray, which is where a source field's support sits.
+    env_band : float
+        The ENVELOPE's own angular half-band in slope units, MEASURED (see
+        :meth:`CarrierField.band_slope`).  Default 0.0 reproduces the
+        band-free arithmetic for a caller reasoning about two carriers with
+        no field in hand; every call this module makes itself supplies it.
     """
     lam = float(wavelength)
     c0 = tuple(support_centre if support_centre is not None
@@ -890,7 +1077,18 @@ def carrier_difference_nyquist(src_carrier, dst_carrier, wavelength,
     def _pitch(slope):
         return float('inf') if slope <= 0.0 else lam / (2.0 * slope)
 
-    dx_ramp, dx_src, dx_dst = _pitch(ramp_max), _pitch(na_src), _pitch(na_dst)
+    band = float(env_band)
+    if not (band >= 0.0 and math.isfinite(band)):
+        raise ValueError(
+            f"carrier_difference_nyquist: env_band must be a finite "
+            f"non-negative slope (direction-cosine units), got {env_band!r}.")
+    band_term = _BAND_HEADROOM * band
+    # The band convolves with BOTH signals the target lattice has to hold --
+    # the re-referenced envelope (ramp) and the reconstructed full field
+    # (na_src) -- because both are that same envelope times a phasor.
+    dx_ramp = _pitch(ramp_max + band_term)
+    dx_src = _pitch(na_src + band_term)
+    dx_dst = _pitch(na_dst)
     cands = (('ramp', dx_ramp), ('reconstruct', dx_src))
     binding_term, dx_binding = min(cands, key=lambda kv: kv[1])
     return NyquistReport(
@@ -901,7 +1099,9 @@ def carrier_difference_nyquist(src_carrier, dst_carrier, wavelength,
         support_radius=float(support_radius),
         dx_sum_bound=_pitch(ramp_max + max(na_src, na_dst)),
         margin=(float('inf') if dx_target is None
-                else dx_binding / float(dx_target)))
+                else dx_binding / float(dx_target)),
+        env_band=band, band_term=band_term,
+        dx_ramp_bare=_pitch(ramp_max))
 
 
 # ---------------------------------------------------------------------------
@@ -926,6 +1126,7 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
                  target_grid: FieldGrid, *,
                  support_frac: float = SUPPORT_POWER_FRACTION,
                  support_radius: Optional[float] = None,
+                 band_slope: Optional[float] = None,
                  nyquist_margin: float = 1.0,
                  on_nyquist: str = 'error',
                  on_window: str = 'warn',
@@ -987,11 +1188,25 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
         Skip the measurement and use this radius (m).  Provided because the
         measurement is a full pass over the array and a caller
         re-referencing a fan of like fields already knows the answer.
+    band_slope : float, optional
+        Skip the measurement and use this envelope half-band (slope units).
+        Same escape hatch as ``support_radius`` and for the same reason --
+        the measurement is an ``fft2`` (see :meth:`CarrierField.band_slope`).
+        Passing 0.0 REMOVES the band term, which is the pre-fix arithmetic
+        and is not recommended: it is what let the guard accept a 38 %-wrong
+        answer at its own default.
     nyquist_margin : float
-        Required ratio ``dx_binding / target_grid.dx``.  1.0 = bare Nyquist.
-        The campaign's own habit is 2.0; the default is left at bare Nyquist
-        so the guard refuses only what is genuinely unrepresentable, and a
-        caller who wants the margin asks for it.
+        Required ratio ``dx_binding / target_grid.dx``.  1.0 = bare Nyquist
+        OF THE FULL SIGNAL -- ramp plus the measured envelope band, not the
+        ramp alone.  Left at 1.0 deliberately: the refusal boundary this
+        guard was short of is NOT expressible as a margin.  Bisected over 24
+        fixtures the correctness cliff spans 4.12x in this coordinate
+        (1.087..4.478) and only 1.26x once the band term is in the bound, so
+        a margin bump would have been a fixture-fitted constant where a
+        missing physical term was the actual defect
+        (docs/audits/FIX_VERIFY_ARCH_2026_08_12.md S1).  A caller who wants
+        belt and braces on top still asks for it; the campaign's own habit
+        is 2.0.
     on_nyquist : {'error', 'warn', 'ignore'}
         Disposition when the target grid cannot hold the carrier difference.
         Default ``'error'``: an aliased ramp is a PLAUSIBLE-LOOKING WRONG
@@ -1053,11 +1268,21 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
         r_sup = field.support_radius(support_frac)
     else:
         r_sup = float(support_radius)
+    # ---- the ENVELOPE's own band, which convolves with the ramp ---------
+    # Skipped for a strict identity: nothing is resampled and no ramp is
+    # applied, so there is no product whose band could exceed either
+    # factor's -- and an fft2 of a design-121 aperture is not free.
+    if band_slope is not None:
+        b_env = float(band_slope)
+    elif identity:
+        b_env = 0.0
+    else:
+        b_env = field.band_slope()
 
     # ---- (e) THE NYQUIST GUARD -----------------------------------------
     dx_t = max(target_grid.dx, target_grid.dy)
     rep = carrier_difference_nyquist(src, to_carrier, lam, r_sup,
-                                     dx_target=dx_t)
+                                     dx_target=dx_t, env_band=b_env)
     if not identity and rep.dx_binding < float(nyquist_margin) * dx_t:
         _guard_dispose(
             on_nyquist,
@@ -1074,10 +1299,17 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
             f"{rep.ramp_max:.6f} rad -> dx <= {rep.dx_ramp * 1e6:.4f} um; and "
             f"the source band the RECONSTRUCTED FULL FIELD carries, "
             f"|grad C_src| = {rep.na_src_max:.6f} -> dx <= "
-            f"{rep.dx_reconstruct * 1e6:.4f} um.  These do NOT add -- the ramp "
-            f"is a DIFFERENCE of two spheres while a beam's absolute band does "
-            f"not move with its chief ray -- so the binding pitch is their "
-            f"MINIMUM, not lambda/(2*(ramp+NA)) = "
+            f"{rep.dx_reconstruct * 1e6:.4f} um.  BOTH already include this "
+            f"envelope's OWN measured half-band {rep.env_band:.6f} rad "
+            f"({_BAND_HEADROOM:.2f}x headroom -> {rep.band_term:.6f} added), "
+            f"which convolves with each of them because both signals are that "
+            f"envelope times a phasor -- without it the ramp bound alone would "
+            f"read {rep.dx_ramp_bare * 1e6:.4f} um and this call would have "
+            f"been accepted with an aliased answer.  The two bounds do NOT add "
+            f"to EACH OTHER -- the ramp is a DIFFERENCE of two spheres while a "
+            f"beam's absolute CARRIER band does not move with its chief ray -- "
+            f"so the binding pitch is their MINIMUM, not "
+            f"lambda/(2*(ramp+NA_carrier)) = "
             f"{rep.dx_sum_bound * 1e6:.4f} um; and the target carrier's own "
             f"band over this support ({rep.na_dst_max:.6f} -> "
             f"{rep.dx_dst_ref * 1e6:.4f} um) is not a bound at all, because "
@@ -1248,6 +1480,7 @@ class AggregateResult(NamedTuple):
 def aggregate(fields: Sequence[CarrierField], common_carrier: CarrierSpec,
               grid: FieldGrid, *, weights: Optional[Iterable] = None,
               support_frac: float = SUPPORT_POWER_FRACTION,
+              band_slope: Optional[float] = None,
               nyquist_margin: float = 1.0,
               on_nyquist: str = 'error',
               on_window: str = 'warn',
@@ -1283,6 +1516,13 @@ def aggregate(fields: Sequence[CarrierField], common_carrier: CarrierSpec,
     weights : iterable of complex, optional
         Per-field complex weight (e.g. a Dammann table's own amplitudes).
         Default 1 for every field.
+    band_slope : float, optional
+        Envelope half-band (slope units) applied to EVERY field instead of
+        measuring each one.  Each field genuinely has its own band, so the
+        default measures; this is the fan-of-like-fields escape hatch the
+        ``support_radius`` argument of :func:`re_reference` provides, and it
+        saves one ``fft2`` per field.  A caller who supplies it owes the fan
+        a bound that covers its narrowest beam.
 
     Returns
     -------
@@ -1315,6 +1555,7 @@ def aggregate(fields: Sequence[CarrierField], common_carrier: CarrierSpec,
     for i, (f, w) in enumerate(zip(fields, ws)):
         rr = re_reference(f, common_carrier, grid,
                           support_frac=support_frac,
+                          band_slope=band_slope,
                           nyquist_margin=nyquist_margin,
                           on_nyquist=on_nyquist, on_window=on_window,
                           bandlimit=bandlimit)
