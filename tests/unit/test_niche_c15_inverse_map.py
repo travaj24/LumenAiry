@@ -2,22 +2,30 @@
 
 WHAT THIS FILE IS FOR, in three sentences.  The feature replaces the traced
 element's coarse-Newton-lattice-plus-``map_coordinates``-upsample chain with one
-exact polynomial evaluation per exit pixel.  It ships OFF and SCOPED (see that
+exact polynomial evaluation per exit pixel.  It ships ON and SCOPED (see that
 flag's own note: the exact-trace oracle decided the accuracy case in its
-favour, one shipped guard blocks the default), so the tests that matter are
-the ones that pin the FAIL-BEFORE (``TRACED_INVERSE_MAP = False``
+favour, and the one guard that blocked the default -- G8, whose probe sat on
+the launch lattice -- was re-architected onto off-lattice points rather than
+weakened), so the tests that matter are the ones that pin the FAIL-BEFORE
+(``TRACED_INVERSE_MAP = False``
 must leave the call indistinguishable from the pre-feature library, and must
 not even attempt a build) and the REFUSAL (a guard that fires must keep the
 shipped path, not a degraded one).  The accuracy tests are comparative
-by construction -- the bar is the incumbent Newton path on the same held-out ray
-samples against the same exact ray truth, never an absolute wave tolerance,
+by construction -- the bar is the incumbent Newton path at the same
+OFF-LATTICE probe points against the same exact ray truth, never an absolute
+wave tolerance,
 because the incumbent on design 121's last group is 90x tighter than
 ``lambda/100`` and an absolute bar at that tolerance would have admitted a 24x
-regression.  The rest pin the two optimisations the path needed to be worth
+regression.  The probe points are off the lattice because at the lattice an
+``s = 0`` spline incumbent is exact by construction and the bar is decided by
+which interpolant the caller asked for.  The rest pin the two optimisations
+the path needed to be worth
 having: the radially-screened hull tests, which must be BIT-identical to the
 dense ones they replace, and the numba/NumPy evaluator pair.
 
 Sources: ``docs/audits/BUILD_INVERSE_MAP_2026_08_11.md``,
+         ``docs/audits/FIX_G8_PROBE_2026_08_12.md`` (the off-lattice probe,
+         the default flip, and the fail-befores that keep the guard a guard),
          ``docs/audits/PROTO_INVERSE_MAP_2026_08_11.md`` (S3.1 the exit-degree
          ladder, S3.4 the parity framing, S4.3 the upsample census, S5.1 the
          1.1e+04-wave extrapolation outside the landing hull),
@@ -156,16 +164,28 @@ def test_the_switch_is_live(_on, _off):
 # ===========================================================================
 # 2.  G8 -- THE COMPARATIVE BAR, WHICH IS THE ONE THAT MATTERS
 # ===========================================================================
-def test_the_map_beats_the_incumbent_on_held_out_ray_samples(_on):
-    """The bar is PARITY with the Newton path the map replaces, measured on
-    samples EXCLUDED from the map's own fit and scored against the exact ray
-    trace -- and the incumbent's forward fit DID see those samples, so the
-    comparison is biased against the map.  ``lambda/100`` is not the bar: the
-    incumbent delivers lambda/9 000 on design 121's last group, so an absolute
-    bar at lambda/100 would have admitted a 24x regression (proto S3.4)."""
+def test_the_map_beats_the_incumbent_at_off_lattice_probe_points(_on):
+    """The bar is PARITY with the Newton path the map replaces, measured where
+    the evaluation actually happens.
+
+    ``lambda/100`` is not the bar: the incumbent delivers lambda/9 000 on
+    design 121's last group, so an absolute bar at lambda/100 would have
+    admitted a 24x regression (proto S3.4).
+
+    AND THE PROBE POINTS ARE NOT LAUNCH NODES, which is the correction
+    ``FIX_G8_PROBE_2026_08_12`` made.  Scored at nodes, an ``s = 0``
+    ``RectBivariateSpline`` incumbent is exact by construction -- it
+    reproduces every node it was built on, including the ones held out of the
+    MODEL -- so its measured "error" there was the Newton loop's leftover
+    residual and the guard read it as 34.5x more accurate than it is anywhere
+    an exit pixel can land.  Truth at the probe points comes from the element's
+    own trace THERE, which neither arm has seen.
+    """
     g = _on[1]
-    assert g['n_parity'] >= 32
+    assert g['n_parity'] >= IM._IMAP_PROBE_MIN
+    assert g['n_probe_traced'] >= IM._IMAP_PROBE_MIN
     assert g['parity_map_opl_waves'] <= g['parity_incumbent_opl_waves']
+    assert g['parity_map_opl_rms_waves'] <= g['parity_incumbent_opl_rms_waves']
     assert g['parity_map_pos_m'] <= g['parity_incumbent_pos_m']
 
 
@@ -185,18 +205,211 @@ def test_a_parity_failure_refuses_and_keeps_the_shipped_bits(_off):
     assert any('inverse-characteristic' in m and 'G8' in m for m in msgs)
 
 
-def test_a_degree_too_low_to_reach_parity_refuses(_off):
+@pytest.mark.parametrize('degree', [4, 6])
+def test_a_degree_too_low_to_reach_parity_refuses(_off, degree):
     """G7 -- exit-degree adequacy, read straight off the least-squares
     residual.  Degree 4 is 2.15 waves on the proto's ladder; it must not be
-    allowed to ship a plausible-looking answer."""
+    allowed to ship a plausible-looking answer.
+
+    DEGREE 6 IS THE ONE THAT MATTERS, and it is here because the re-architected
+    probe has to be shown firing at the KNEE and not only on absurdities.  On
+    this fixture the ladder reads (off-lattice probe, 910 points)::
+
+        degree   map OPL      map position   verdict
+         4       1.14e-03 w   3.82e-08 m     REFUSE  (57x / 118x)
+         6       1.20e-05 w   4.80e-10 m     REFUSE  (0.60x / 1.49x)
+         8       1.48e-07 w   6.51e-12 m     ENGAGE
+        14       6.08e-12 w   3.39e-17 m     ENGAGE  (shipped)
+
+    Degree 6 already WINS the OPL channel at 0.60x and is still refused,
+    because it loses the ENTRANCE POSITION channel at 1.49x -- which is the
+    envelope rule doing its job: the ray-density amplitude and the C8 taper
+    both read the entrance coordinates, so a model may not buy OPL with them.
+    (The knee sits lower here than on design 121 because this fixture is a
+    short singlet whose exit map a degree-8 polynomial spans easily; on design
+    121's decentred order (-4,-2) degree 8 is refused at 2.17x.)
+    """
     old = IM._IMAP_EXIT_DEGREE
     try:
-        IM._IMAP_EXIT_DEGREE = 4
+        IM._IMAP_EXIT_DEGREE = degree
         E, rec, _m = _call(flag=True)
     finally:
         IM._IMAP_EXIT_DEGREE = old
     assert rec['refused'] in ('G7', 'G8')
     assert np.array_equal(E, _off[0])
+
+
+# ===========================================================================
+# 2A. THE PROBE -- WHERE G8 ASKS ITS QUESTION (FIX_G8_PROBE_2026_08_12)
+#
+# The guard's QUESTION was always right ("is this model at least as good as
+# the path it replaces?") and its PROBE POINTS were wrong: launch nodes, where
+# an interpolating incumbent is exact by construction.  These pin the three
+# properties the replacement rests on -- the points are off-lattice, the truth
+# is the element's own congruence, and without that truth the guard refuses
+# rather than falling back to the degenerate probe.
+# ===========================================================================
+def _capture_build(**over):
+    """One flag-on element call, with everything ``build_inverse_map`` was
+    handed captured verbatim -- including the ``probe_trace`` closure, which is
+    the object under test in two of the cases below."""
+    cap = {}
+    orig = IM.build_inverse_map
+
+    def wrapper(xs_in, XO, YO, OP, *a, **kw):
+        cap['args'] = (xs_in, XO, YO, OP) + a
+        cap['kw'] = dict(kw)
+        cap['xs'] = np.asarray(xs_in).copy()
+        cap['XO'] = np.asarray(XO).copy()
+        cap['YO'] = np.asarray(YO).copy()
+        cap['OP'] = np.asarray(OP).copy()
+        cap['imap'] = orig(xs_in, XO, YO, OP, *a, **kw)
+        return cap['imap']
+
+    IM.build_inverse_map = wrapper
+    try:
+        cap['out'], cap['rec'], cap['msgs'] = _call(flag=True, **over)
+    finally:
+        IM.build_inverse_map = orig
+    return cap
+
+
+@pytest.fixture(scope='module')
+def _cap():
+    return _capture_build()
+
+
+def test_the_probe_points_are_off_the_launch_lattice():
+    """The whole correction, as a property of the point chooser.
+
+    Every probe sits strictly INSIDE a launch cell -- never on a node, never
+    on a cell edge -- because a node is exactly where an ``s = 0`` spline
+    incumbent has no error to measure.  The cell must also be wholly inside
+    the census region, so no probe is scored where one of the arms is
+    extrapolating.
+    """
+    n = 41
+    xs = np.linspace(-1.0, 1.0, n)
+    census = (xs[:, None] ** 2 + xs[None, :] ** 2) <= 0.55 ** 2
+    px, py = IM._probe_entrance_points(xs, census)
+    assert px.size >= IM._IMAP_PROBE_MIN
+    assert px.size == py.size
+    h = float(xs[1] - xs[0])
+    for a in (px, py):
+        # distance to the nearest lattice node, in cells
+        frac = np.abs((a - xs[0]) / h - np.rint((a - xs[0]) / h))
+        assert frac.min() > 0.0, (
+            'a probe landed ON a launch node, which is the degenerate point '
+            'the off-lattice probe exists to avoid')
+    # ...and inside the census, by construction: the enclosing cell's four
+    # corners must all be census nodes.
+    ci = np.floor((px - xs[0]) / h).astype(int)
+    cj = np.floor((py - xs[0]) / h).astype(int)
+    assert census[ci, cj].all() and census[ci + 1, cj + 1].all()
+    assert census[ci + 1, cj].all() and census[ci, cj + 1].all()
+    # deterministic: no seed, no randomness, same answer twice
+    qx, qy = IM._probe_entrance_points(xs, census)
+    assert np.array_equal(px, qx) and np.array_equal(py, qy)
+
+
+def test_the_probe_budget_is_a_stride_not_a_truncation():
+    """A budget that took the FIRST N cells would probe one corner of the
+    beam.  The stride keeps the probe set spread over the whole census region
+    while bounding the extra rays -- so the count lands under the budget and
+    the extent does not shrink."""
+    n = 301
+    xs = np.linspace(-1.0, 1.0, n)
+    census = np.ones((n, n), dtype=bool)
+    px, py = IM._probe_entrance_points(xs, census)
+    assert (n - 1) ** 2 > IM._IMAP_PROBE_MAX, 'fixture no longer over budget'
+    assert IM._IMAP_PROBE_MIN <= px.size <= IM._IMAP_PROBE_MAX
+    span = float(xs[-1] - xs[0])
+    for a in (px, py):
+        assert float(a.max() - a.min()) > 0.90 * span, (
+            'the probe budget truncated the probe set instead of striding it')
+        # ...and it is CENTRED: the leftover cells are split between the two
+        # edges, not all left at the far one.
+        assert abs(float(a.min() - xs[0]) - float(xs[-1] - a.max())) < 4.0 * (
+            span / (n - 1))
+
+
+def test_the_probe_trace_is_the_element_s_own_lattice_trace(_cap):
+    """G8's ground truth must be the SAME congruence that is on trial.
+
+    Hand the probe trace the launch lattice itself and it has to reproduce the
+    element's own ``x_out_grid`` / ``y_out_grid`` / ``opl_grid`` -- the launch
+    directions (``grad(W + a_fit)`` where niche C6 is engaged), the
+    exit-vertex correction, the H6 carrier eikonal and the on-axis OPL
+    reference all included.  Measured BIT-IDENTICAL, which is the assertion
+    here: a probe trace that merely agrees closely would be a second model of
+    the element rather than the element.
+    """
+    probe = _cap['kw'].get('probe_trace')
+    assert callable(probe), 'the element stopped supplying G8 its ground truth'
+    xs = _cap['xs']
+    X, Y = np.meshgrid(xs, xs, indexing='ij')
+    qx, qy, qo = probe(X.ravel(), Y.ravel())
+    m = np.isfinite(_cap['XO'].ravel())
+    assert m.sum() > 100
+    for got, want in ((qx, _cap['XO']), (qy, _cap['YO']), (qo, _cap['OP'])):
+        assert np.array_equal(got[m], want.ravel()[m]), (
+            'the probe trace no longer reproduces the element\'s own lattice '
+            'landings, so G8 would be scoring both arms against a DIFFERENT '
+            'congruence from the one they model')
+
+
+def test_the_guard_refuses_without_off_lattice_ground_truth(_cap):
+    """A comparative bar with no honest truth to compare against is not a bar.
+
+    The old probe's fallback was the launch lattice, and that is exactly what
+    must NOT happen: on an interpolating incumbent it decides the bar in the
+    incumbent's favour by construction.  So a build with no ``probe_trace``
+    REFUSES -- the same posture as a build with no ``parity_invert``.
+    """
+    for drop in ('probe_trace', 'parity_invert'):
+        rec = {}
+        kw = dict(_cap['kw'])
+        kw[drop] = None
+        kw['cache'] = False
+        kw['guard_record'] = rec
+        assert IM.build_inverse_map(*_cap['args'], **kw) is None
+        assert rec['refused'] == 'G8', (drop, rec)
+
+
+def test_the_guard_scores_the_coefficients_that_ship(_cap):
+    """Arm A is the OBJECT THE CALLER GETS, re-derived from outside the guard.
+
+    The old probe could not say this: it had to refit the model without the
+    nodes it then scored it at, so the arm on trial was a different polynomial
+    from the one that shipped.  An off-lattice probe withholds nothing, so the
+    number in the record must be reproducible by evaluating the RETURNED model
+    at the probe points -- which is what this recomputes, independently, from
+    the point chooser and the element's own trace.
+    """
+    imap = _cap['imap']
+    assert imap is not None and _cap['rec']['engaged'] is True
+    # the census the guard scores on, rebuilt from what the builder was handed
+    xs, XO, YO, OP = _cap['args'][:4]
+    good = np.isfinite(XO) & np.isfinite(YO) & np.isfinite(OP)
+    good &= np.isfinite(IM._detj_landing_stencil(xs, XO, YO))
+    W = _cap['kw'].get('weights')
+    if W is not None:
+        sub = good & (W >= 0.5 * float(W[good].max()))
+        if int(sub.sum()) >= 16:
+            good = sub
+    px, py = IM._probe_entrance_points(xs, good)
+    qx, qy, qo = _cap['kw']['probe_trace'](px, py)
+    ch = [np.empty(qx.shape) for _ in range(3)]
+    imap.eval_into(qx, qy, ch,
+                   channels=[IM.InverseCharacteristic.CH_X_IN,
+                             IM.InverseCharacteristic.CH_Y_IN,
+                             IM.InverseCharacteristic.CH_OPL])
+    e_pos = float(np.nanmax(np.maximum(np.abs(ch[0] - px),
+                                       np.abs(ch[1] - py))))
+    e_opl = float(np.nanmax(np.abs(ch[2] - qo)) / _WL)
+    assert e_pos == pytest.approx(_cap['rec']['parity_map_pos_m'], rel=1e-9)
+    assert e_opl == pytest.approx(_cap['rec']['parity_map_opl_waves'],
+                                  rel=1e-9)
 
 
 def test_a_folded_jacobian_refuses(_off):
@@ -486,6 +699,61 @@ def test_the_gate_closes_where_there_is_nothing_to_replace(over, why):
     assert rec['engaged'] is False
 
 
+def test_an_ordinary_chain_leg_is_scoped_out_even_on_the_shipped_default():
+    """S5 SCOPING, and it is what makes the default flip a ONE-LEG change.
+
+    ``carrier.py``'s ordinary chain-leg call site passes ``inverse_map=False``
+    through ``setdefault``, so every INTERMEDIATE leg keeps the shipped path
+    whatever ``TRACED_INVERSE_MAP`` holds.  That is structural, not numeric:
+    an intermediate's output is re-fitted downstream (the C6 residual eikonal,
+    the C11 arbiter, the beam radius that sizes the ray-fit disc, the carrier
+    reference), and the evaluator's evidence is about one element's returned
+    map, not about what a skirt-level change to an intermediate does to six
+    downstream fits.
+
+    With the flag defaulting to ``True`` this stops being a note and becomes
+    the difference between changing one leg and changing the whole chain, so
+    it is asserted at the call site: every element call the chain makes must
+    carry ``inverse_map=False``, explicitly.
+    """
+    from lumenairy import elements as EL
+    seen = []
+    real = EL.apply_real_lens_traced
+
+    def spy(*a, **kw):
+        seen.append(kw.get('inverse_map', '<absent>'))
+        return real(*a, **kw)
+
+    presc = {'name': 'c15_relay', 'aperture_diameter': 9e-3,
+             'surfaces': [_surf(0.060, 'air', 'N-BK7'),
+                          _surf(-0.060, 'N-BK7', 'air')],
+             'thicknesses': [3e-3]}
+    groups = [{'prescription': presc, 'gap_before': 20e-3},
+              {'prescription': presc, 'gap_before': 10e-3}]
+    n, dx, w = 256, 30e-6, 2.2e-3
+    ax = (np.arange(n) - n // 2) * dx
+    X, Y = np.meshgrid(ax, ax)
+    env = np.exp(-(X ** 2 + Y ** 2) / w ** 2).astype(np.complex128)
+    old = IM.TRACED_INVERSE_MAP
+    EL.apply_real_lens_traced = spy
+    try:
+        IM.TRACED_INVERSE_MAP = True
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            la.propagate_traced_carrier_chain(
+                env, groups, _WL, dx, r_in=60e-3, ray_subsample=8,
+                n_workers=1, final_distance=8e-3, final_leg='paraxial',
+                traced_kwargs=dict(on_undersample='silent',
+                                   on_noncollimated='silent'))
+    finally:
+        EL.apply_real_lens_traced = real
+        IM.TRACED_INVERSE_MAP = old
+    assert len(seen) >= 2, seen
+    assert all(v is False for v in seen), (
+        'an ordinary chain leg no longer scopes the inverse-characteristic '
+        f'evaluator out: {seen}')
+
+
 def test_the_map_is_registered_as_a_traced_layer_flag():
     """A switch that changes a returned bit and is not in the registry is a
     switch with no discoverable fail-before (niche C14)."""
@@ -494,6 +762,16 @@ def test_the_map_is_registered_as_a_traced_layer_flag():
     assert {'TRACED_INVERSE_MAP', 'INVERSE_MAP_GUARD'} <= names
     with TF.traced_era('v5.31'):
         assert IM.TRACED_INVERSE_MAP is False
+<<<<<<< HEAD
+    assert IM.TRACED_INVERSE_MAP is True, (
+        'the evaluator SHIPS ON.  The exact-trace oracle decided the ACCURACY '
+        'case in its favour (BUILD_INVERSE_MAP S6) and the one guard that '
+        'blocked the flip -- G8, whose held-out probe sat ON the launch '
+        'lattice where an s=0 spline incumbent is exact by construction -- '
+        'was re-architected onto off-lattice probe points rather than '
+        'weakened (FIX_G8_PROBE_2026_08_12).  The era table must move with '
+        'the default or every era arm silently means something else.')
+=======
     assert IM.TRACED_INVERSE_MAP is False, (
         'the evaluator SHIPS OFF -- the exact-trace oracle decided the '
         'ACCURACY case in its favour (S6), but the default flip is blocked '
@@ -704,3 +982,4 @@ def test_the_cache_key_moves_with_the_det_j_source_and_the_census():
         IM._IMAP_DETJ_SOURCE = old
     assert IM._imap_key(*args, 14, 1e-3, _WL,
                         census_amp=np.ones((9, 9))) != k0
+>>>>>>> origin/main

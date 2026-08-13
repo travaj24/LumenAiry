@@ -82,7 +82,7 @@ absence of a carrier); those are called out in S2.2.
 | 29 | C13 | `_LSTSQ_RESID_MARGIN` | `_lens_traced` | `1e-6` | -- | 5.32.1 |
 | 30 | C14 | `SUPPORT_BAND_CHECK` | `_lens_traced` | `'warn'` | `'silent'` | 5.32.1 |
 | 31 | C14 | `_SUPPORT_BAND_PEAK_RATIO_TOL` | `_lens_traced` | `1.0` | -- | 5.32.1 |
-| 32 | IMAP | `TRACED_INVERSE_MAP` | `_lens_imap` | `False` | `False` | 5.35.0 |
+| 32 | IMAP | `TRACED_INVERSE_MAP` | `_lens_imap` | `True` | `False` | 5.35.0 |
 | 33 | IMAP | `INVERSE_MAP_GUARD` | `_lens_imap` | `'warn'` | `'silent'` | 5.35.0 |
 
 **`5.32.1` is a SOURCE-ONLY era.**  `pyproject.toml` and `lumenairy/__init__.py`

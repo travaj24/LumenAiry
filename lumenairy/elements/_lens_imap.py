@@ -64,9 +64,13 @@ THE BAR IS PARITY, NOT ``lambda/100``.  On this group the shipped path already
 delivers 1.11e-04 waves (forward fit + Newton 6.65e-05, cubic upsample
 4.44e-05) = lambda/9 000.  Sizing this map to ``lambda/100 with 3x margin``
 would have shipped a **24x silent regression** (proto S3.4).  Guard G8 below is
-therefore COMPARATIVE -- the map must beat, on the same held-out samples
-against the same exact ray truth, the very Newton path it replaces -- and it is
-the guard that matters.
+therefore COMPARATIVE -- the map must beat, at OFF-LATTICE probe points against
+exact traced ray truth, the very Newton path it replaces -- and it is the guard
+that matters.  Its probe points are off the launch lattice for a measured
+reason: at the lattice an ``s = 0`` interpolating incumbent is exact by
+construction, so a node probe scored the SPLINE backend's incumbent 34.5x
+better than it is anywhere an exit pixel can land, and refused a model that was
+3.0x better in production (``docs/audits/FIX_G8_PROBE_2026_08_12.md``).
 
 Everything here is gated on :data:`TRACED_INVERSE_MAP`, which ships ``True``
 and is SCOPED by ``carrier.py`` to the terminal fine retrace.  Setting it
@@ -109,8 +113,9 @@ __all__ = [
 #: the returned field is byte-identical to the pre-feature library.  It is the
 #: switch the regression tests force.
 #:
-#: **THE ACCURACY CASE IS DECIDED AND IT FAVOURS THE MODEL; THE DEFAULT IS
-#: BLOCKED ON ONE SHIPPED GUARD.**  Turning it on
+#: **THE ACCURACY CASE IS DECIDED AND IT FAVOURS THE MODEL, AND THE ONE GUARD
+#: THAT BLOCKED THE DEFAULT IS NOW SATISFIED RATHER THAN WEAKENED.**  The
+#: default is ``True``.  Turning it on
 #: MOVES design 121's shipping acceptance banner -- FWHM 3.350 -> 3.450 um,
 #: peak 5.529e+03 -> 5.486e+03, with EE3 unchanged at 90.3 % and EE6 / EE12
 #: each 0.1 point BETTER.  An INDEPENDENT ORACLE decided which of the two is
@@ -132,43 +137,47 @@ __all__ = [
 #: the exact trace on every statistic.  So the recorded 3.350 um was FLATTERED
 #: by the path this replaces, and 3.450 um is the faithful reading.  The
 #: banner is a user-approved acceptance number and its own history records two
-#: re-baselines; this build reports the numbers and does NOT re-baseline it.
+#: re-baselines; the library reports the numbers and does not edit that line
+#: itself.
 #:
-#: **WHAT BLOCKS THE FLIP -- one coupling left, and it is not ``det J``.**
+#: **WHAT BLOCKED THE FLIP, AND HOW EACH PIECE CLOSED.**
 #: ``tests/unit/test_niche_c6_stationary_phase_launch.py::
 #: test_the_two_newton_fit_backends_still_describe_the_same_map`` asserts that
 #: ``newton_fit`` is an INTERPOLANT choice and that the polynomial and spline
-#: backends return the same field to 5e-04.
+#: backends return the same field to 5e-04.  Three couplings broke it and all
+#: three are closed at the mechanism; none of them was closed by loosening a
+#: bar.
 #:
-#: The FIRST coupling was the ``det J`` channel, taken from the polynomial
-#: forward fit.  That is FIXED: :data:`_IMAP_DETJ_SOURCE` now derives it from
-#: traced data alone, and the fix is also an improvement -- raced against the
-#: exact-trace oracle's amplitude column, ``'analytic_inverse'`` reads
-#: 1.90e-07 / 2.00e-05 relative on the two orders against the incumbent's
-#: 7.50e-04 / 1.63e-02.
+#: 1. **The ``det J`` channel**, taken from the polynomial forward fit.  FIXED:
+#:    :data:`_IMAP_DETJ_SOURCE` derives it from traced data alone, and the fix
+#:    is also an improvement -- raced against the exact-trace oracle's
+#:    amplitude column, ``'analytic_inverse'`` reads 1.90e-07 / 2.00e-05
+#:    relative on the two orders against the incumbent's 7.50e-04 / 1.63e-02.
+#: 2. **The FIT DOMAIN**, via ``_fit_domain_basis_ok = (newton_fit !=
+#:    'spline')``: the element applied its ray-fit-domain restriction on the
+#:    polynomial basis and abandoned it on the spline basis, so the two
+#:    backends handed this model DIFFERENT sample sets -- a disc versus the
+#:    whole launch square.  FIXED by ``FIX_FIT_DOMAIN_SYMMETRY_2026_08_12``:
+#:    the domain is resolved basis-independently and each consumer honours it
+#:    iff it can, and the model is then identical to every printed digit on
+#:    either basis.
+#: 3. **G8's own PROBE**, which is the one that survived the first two and is
+#:    the reason this flag shipped ``False`` for a day.  The guard scored both
+#:    arms at held-out LAUNCH NODES; ``RectBivariateSpline(s=0)`` INTERPOLATES,
+#:    so on the spline basis the incumbent reproduced those nodes exactly and
+#:    its measured error there was the Newton residual rather than its
+#:    accuracy.  MEASURED: 34.5x better at its own knots than between them,
+#:    against 1.0x for the polynomial incumbent, and the guard refused a model
+#:    that is 3.0x better than it in production.  FIXED by moving the probe to
+#:    where the evaluation happens -- off-lattice points, truth from the
+#:    element's own trace there (:data:`_IMAP_PROBE_MAX`).  The bar did not
+#:    move: it is still parity, still a ratio, still all three channels.
 #:
-#: The SECOND coupling remains and is named here rather than worked around:
-#: ``_fit_domain_basis_ok = (newton_fit != 'spline')``.  The element applies
-#: its ray-fit-domain restriction for the polynomial basis (as a NaN mask, or
-#: as niche-D1 weights) and ABANDONS it for the spline basis (fix D5: that
-#: basis cannot express it).  So the two backends hand this model DIFFERENT
-#: sample sets -- a disc versus the whole launch square -- which moves its exit
-#: normalisation box, its landing hull and its coefficients together.  The
-#: incumbent absorbs that difference (its forward fit is in ENTRANCE
-#: coordinates on a fixed lattice and its Newton only ever evaluates inside the
-#: launch disc); a degree-14 fit in EXIT coordinates does not, and MEASURED it
-#: amplifies it about 20x -- 1.06e-02 against the incumbent's <5e-04 on that
-#: fixture.
-#:
-#: THE FIX, specified: build the model from the PRE-RESTRICTION landings --
-#: the same arrays ``_TracedExitSupport.from_landings`` is given, before the
-#: fit-domain restriction touches them -- and unweighted, so its sample set is
-#: the traced rays and nothing else.  It is a small edit (stash three
-#: ``n_launch^2`` copies, ~1.2 MB) but it changes the model's fit domain on
-#: EVERY call, so it needs the oracle race, the banner and the full suite
-#: re-run behind it before it can be trusted.  That is not done here, and a
-#: shipped guard is not weakened to buy the flip, so the default stays
-#: ``False``.
+#: With all three closed the c6 guard reads a backend spread of **exactly
+#: 0.0** with this flag on -- not "inside 5e-04", the same bytes -- and both
+#: backends ENGAGE.  The guard still refuses what it should: an exit-degree-8
+#: underfit is refused on both bases, and so is the whole-launch-square
+#: unweighted model of ``BUILD_INVERSE_MAP`` S6.5b.
 #:
 #: **SCOPING.**  ``carrier.py``'s ordinary chain-leg call site passes
 #: ``inverse_map=False``: the evaluator runs on the terminal FINE RETRACE
@@ -184,7 +193,7 @@ __all__ = [
 #: entrance coordinates, the OPL and ``det J`` on the wave grid come from --
 #: an exact per-pixel model of the traced map instead of a cubic/bilinear
 #: interpolation of a 95 x 95 sample of it.
-TRACED_INVERSE_MAP = False
+TRACED_INVERSE_MAP = True
 
 #: What a refused build does.  ``'warn'`` (shipped) reports which guard
 #: refused, with its measured number, and falls back to the shipped path;
@@ -216,21 +225,73 @@ _IMAP_GUARD_ACTIONS = ('warn', 'silent', 'error')
 #: needs more degree, not less.
 _IMAP_EXIT_DEGREE = 14
 
-#: G8's comparative bar.  The map's held-out error must be at most this factor
-#: times the incumbent's on the SAME samples against the SAME exact ray truth.
+#: G8's comparative bar.  The map's error at the off-lattice probe points must
+#: be at most this factor times the incumbent's, on the SAME points against
+#: the SAME exact ray truth.
 #: 1.0 = "parity or better".  It is deliberately not a tolerance in waves: an
 #: absolute ``lambda/100`` bar would have admitted a 24x regression on design
 #: 121 (proto S3.4), because the incumbent is 90x tighter than lambda/100.
+#:
+#: THE ENVELOPE RULE: all three channels (OPL max, OPL rms, entrance-position
+#: max) must hold at this factor, each of them a worst case over the same
+#: probe set.  A model that is typically better and occasionally worse is not
+#: at parity, and neither is one that wins on OPL while losing entrance
+#: position -- the channel the ray-density amplitude and the C8 taper read.
+#: MEASURED: on the niche-C15 fixture an exit-degree-6 model WINS the OPL
+#: channel at 0.60x and is refused anyway, at 1.49x on position.
 _IMAP_PARITY_FACTOR = 1.0
 
-#: Held-out fraction pattern for G8.  Samples with ``i % 3 == 1 and j % 3 == 1``
-#: on the launch lattice -- 1/9 of them, spatially spread -- are EXCLUDED from
-#: the scoring fit, scored against the exact ray data, and then the shipped
-#: coefficients are refitted on everything.  The incumbent's forward fit sees
-#: those samples (it always fits the whole lattice), so the comparison is
-#: BIASED AGAINST the map, which is the direction an acceptance bar should err.
-_IMAP_HOLDOUT_MOD = 3
-_IMAP_HOLDOUT_PHASE = 1
+#: G8's PROBE BUDGET -- how many OFF-LATTICE rays the guard is allowed to
+#: trace, and the floor below which it refuses rather than decides on too few.
+#:
+#: WHY THERE ARE OFF-LATTICE RAYS AT ALL.  The first G8 held out 1/9 of the
+#: LAUNCH NODES (``i % 3 == 1 and j % 3 == 1``), held them out of the model
+#: only, and scored both arms there.  That probe is DEGENERATE against an
+#: interpolating incumbent and it produced a measured FALSE REFUSAL:
+#: ``newton_fit='spline'`` builds ``RectBivariateSpline`` with the default
+#: ``s = 0``, so the incumbent reproduces every launch node EXACTLY -- the
+#: held-out ones included, because they were never held out of IT.  Its "error"
+#: at those points is the Newton loop's leftover residual, not its accuracy.
+#: MEASURED on the niche-C6 fixture, arm B scored at its own knots and between
+#: them (``FIX_G8_PROBE_2026_08_12`` S2)::
+#:
+#:     incumbent basis   at NODES (what G8 scored)   BETWEEN nodes   ratio
+#:     polynomial        2.3051e-09 m                2.3752e-09 m    1.0
+#:     spline            3.7035e-12 m                1.2786e-10 m    34.5
+#:
+#: A 462x spread in "the incumbent's accuracy" between two interpolants the
+#: library elsewhere guarantees describe the SAME map is not a difference in
+#: accuracy, it is a difference in the PROBE -- and the model, which is 3.0x
+#: BETTER than that incumbent in entrance position and 3.0x better in OPL at
+#: the points where exit pixels actually fall, was refused by 15 % on a number
+#: arm B only achieves at its own knots.
+#:
+#: So the probe moved to where the evaluation happens: points that are NOT
+#: launch nodes, with truth from the element's OWN trace at those points.
+#: Neither arm has data there -- the model fitted the lattice, the incumbent's
+#: forward fit / bicubic was BUILT on the lattice -- so the comparison is
+#: symmetric by construction rather than by a bias argument.
+#:
+#: THE BUDGET.  One probe ray per selected launch CELL, so the cost is a
+#: fraction of a trace the element has already paid for: 1 024 rays against
+#: design 121's 52 441 (2.0 %) and the C6 fixture's 32 761 (3.1 %).  The floor
+#: is the same 32 the node probe used -- a comparative bar decided on fewer
+#: samples than that is decided by one ray.
+_IMAP_PROBE_MAX = 1024
+_IMAP_PROBE_MIN = 32
+
+#: The plastic number ``rho`` (the real root of ``x^3 = x + 1``).  ``(1/rho,
+#: 1/rho^2)`` generates the R2 low-discrepancy sequence, which is what places
+#: G8's probe INSIDE each selected launch cell.
+#:
+#: WHY NOT THE CELL CENTRE.  A bicubic interpolant's error is MAXIMAL at the
+#: cell centre and zero at the corners, so centre-probing would read the
+#: incumbent's worst case and hand the model an easier bar than production.
+#: Exit pixels land uniformly, so the honest offset distribution is uniform
+#: over the cell -- and R2 gives that deterministically, with no seed, no
+#: randomness and nothing to tune.  It is also IDENTICAL on both ``newton_fit``
+#: backends, so the two bases are compared at literally the same points.
+_IMAP_PROBE_R2 = 1.324717957244746
 
 #: G7: least-squares samples per free coefficient below which the fit is
 #: refused as under-determined.  At degree 14 (120 terms) this asks for 480
@@ -422,6 +483,59 @@ def _td_design_grad(ux, uy, degree, terms):
     Dy = _cheb_dvander(uy, degree)
     return (Dx[:, terms[:, 0]] * Vy[:, terms[:, 1]],
             Vx[:, terms[:, 0]] * Dy[:, terms[:, 1]])
+
+
+def _probe_entrance_points(xs_in, census):
+    """G8's OFF-LATTICE probe points, in ENTRANCE coordinates.
+
+    One point per selected launch CELL ``[i, i+1] x [j, j+1]``, placed inside
+    it by the R2 low-discrepancy sequence (:data:`_IMAP_PROBE_R2`).  A cell is
+    eligible only when all FOUR of its corners are in ``census`` -- the same
+    region G2, G7 and G8 are scored on -- so no probe sits on the boundary of
+    the region the guard is judging, and every probe is surrounded by traced
+    rays rather than extrapolated ones.
+
+    Deterministic and basis-free: it reads the launch lattice and a boolean
+    mask, both of which are the same on either ``newton_fit`` backend, so the
+    two backends are compared at bit-identical points.
+
+    Returns ``(px, py)``, empty arrays when no cell is eligible.
+    """
+    xs_in = np.asarray(xs_in, dtype=np.float64)
+    cen = np.asarray(census, dtype=bool)
+    n = xs_in.size
+    if n < 2 or cen.shape != (n, n):
+        return np.empty(0), np.empty(0)
+    cell = cen[:-1, :-1] & cen[1:, :-1] & cen[:-1, 1:] & cen[1:, 1:]
+    n_cell = int(cell.sum())
+    if n_cell == 0:
+        return np.empty(0), np.empty(0)
+    # STRIDE, not a random subset: it bounds the trace cost while keeping the
+    # probe set spatially spread and reproducible.  ``ceil(sqrt(...))`` in both
+    # axes, so the retained count lands just under the budget.
+    stride = 1
+    if n_cell > _IMAP_PROBE_MAX:
+        stride = int(np.ceil(np.sqrt(n_cell / float(_IMAP_PROBE_MAX))))
+    take = np.zeros_like(cell)
+    # the leftover is split between the two edges rather than left all at the
+    # far one, so a strided probe set stays CENTRED on the census region.
+    off = ((cell.shape[0] - 1) % stride) // 2
+    take[off::stride, off::stride] = True
+    sel = cell & take
+    if int(sel.sum()) < _IMAP_PROBE_MIN and stride > 1:
+        sel = cell                       # a census the stride cannot sample
+    ci, cj = np.nonzero(sel)
+    if ci.size > _IMAP_PROBE_MAX:        # ...and the budget still holds
+        step = int(np.ceil(ci.size / float(_IMAP_PROBE_MAX)))
+        ci, cj = ci[::step], cj[::step]
+    k = np.arange(ci.size, dtype=np.float64)
+    a1 = 1.0 / _IMAP_PROBE_R2
+    a2 = a1 * a1
+    u = np.mod(0.5 + a1 * k, 1.0)
+    v = np.mod(0.5 + a2 * k, 1.0)
+    px = xs_in[ci] + u * (xs_in[ci + 1] - xs_in[ci])
+    py = xs_in[cj] + v * (xs_in[cj + 1] - xs_in[cj])
+    return px, py
 
 
 def _detj_landing_stencil(xs_in, x_out_grid, y_out_grid):
@@ -858,10 +972,17 @@ def _imap_key(xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
     h.update(str(_ver).encode('ascii', 'replace'))
     h.update(repr((int(degree), float(launch_radius), float(wavelength),
                    bool(TRACED_INVERSE_MAP), str(INVERSE_MAP_GUARD),
+<<<<<<< HEAD
+                   float(_IMAP_PARITY_FACTOR), int(_IMAP_PROBE_MAX),
+                   int(_IMAP_PROBE_MIN), float(_IMAP_PROBE_R2),
+                   float(_IMAP_MIN_SAMPLES_PER_TERM),
+                   float(_IMAP_DETJ_MAXMIN))).encode('ascii'))
+=======
                    float(_IMAP_PARITY_FACTOR), int(_IMAP_HOLDOUT_MOD),
                    int(_IMAP_HOLDOUT_PHASE), float(_IMAP_MIN_SAMPLES_PER_TERM),
                    float(_IMAP_DETJ_MAXMIN),
                    str(_IMAP_DETJ_SOURCE))).encode('ascii'))
+>>>>>>> origin/main
     h.update(repr(tuple(extra)).encode('ascii', 'replace'))
     h.update(b'|incumbent|')
     h.update(incumbent_fp)
@@ -967,7 +1088,8 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
                       det_j_grid=None,
                       *, wavelength, launch_radius, weights=None,
                       census_amp=None,
-                      exit_degree=None, parity_invert=None,
+                      exit_degree=None, parity_invert=None, parity_tag=None,
+                      probe_trace=None,
                       parity_factor=None, cache=True, caller=None,
                       guard_record=None):
     """Fit the inverse characteristic from ONE congruence's traced landings.
@@ -1012,6 +1134,30 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
         element's own ``_invert_newton``.  Required for G8; without it the
         build refuses, because a comparative bar with nothing to compare to is
         not a bar.
+    parity_tag : hashable, optional
+        Whatever identifies WHICH incumbent ``parity_invert`` is.  It enters
+        the cache key, and it must, because G8's verdict is a property of the
+        PAIR (model, incumbent) while everything else in the key describes the
+        model alone.  Two calls that build the same model against different
+        incumbents can reach opposite verdicts; without this tag the second
+        would inherit the first's acceptance from the cache and the returned
+        field would depend on the ORDER the calls were made in.  MEASURED on
+        the niche-C6 fixture once the fit domain was made basis-independent:
+        spline-then-polynomial gave a backend spread of 1.0600e-02 and
+        polynomial-then-spline gave 0.0, from the same two calls.  ``None`` is
+        accepted (and hashed as such) for callers with a single incumbent.
+    probe_trace : callable, optional
+        ``f(x_in, y_in) -> (x_out, y_out, opl)`` -- the element's OWN trace of
+        the SAME launch congruence at ARBITRARY entrance points, on the same
+        exit-vertex plane and the same on-axis OPL reference ``opl_grid``
+        carries.  Required for G8, because it is the only ground truth in the
+        build that neither arm defines: the model fitted the launch lattice and
+        the incumbent's forward fit / bicubic was BUILT on it, so a probe AT
+        the lattice cannot separate them (see :data:`_IMAP_PROBE_MAX` for the
+        34.5x measurement that retired the node probe).  The guard chooses the
+        points -- one per launch cell, inside the census region -- so the
+        element supplies the trace and nothing else.  Costs ~2-3 % of the ray
+        trace the element has already done.
 
     Returns
     -------
@@ -1054,6 +1200,19 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
         # The incumbent is fingerprinted BY EVALUATION, because it is a
         # closure over this element's forward fits and half of G8's bar.
         key = _imap_key(xs_in, XO, YO, OP, DJ, W, degree, launch_radius,
+<<<<<<< HEAD
+                        wavelength, extra=(pf, repr(parity_tag)))
+        hit = _cache_get(key)
+        if hit is not None:
+            # ORDER MATTERS: ``hit.guards`` is the ORIGINAL build's record and
+            # it carries that build's ``cached = False``, so setting the flag
+            # first meant every cache hit reported itself as a fresh build.
+            # A diagnostic that cannot tell you it came from the cache is how
+            # a cache defect stays invisible -- this one hid an acceptance
+            # being carried across ``newton_fit`` backends (see
+            # ``parity_tag``).  No returned bit changes either way.
+            rec.update(hit.guards)
+=======
                         wavelength, extra=(pf,),
                         incumbent_fp=_incumbent_fingerprint(parity_invert,
                                                             XO, YO),
@@ -1066,6 +1225,7 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
             # every hit reported itself as a miss -- which is the channel
             # that hid the stale-key defects above from every probe that
             # asked the record instead of the counters.
+>>>>>>> origin/main
             rec['cached'] = True
             rec['refused'] = None
             return hit
@@ -1192,7 +1352,6 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
                            % (n_good, P, degree,
                               _IMAP_MIN_SAMPLES_PER_TERM))
 
-    gi, gj = np.nonzero(good)
     ux = (XO[good] - ex_c[0]) / ex_h[0]
     uy = (YO[good] - ex_c[1]) / ex_h[1]
     # Channels 0-2 are RAW TRACED DATA: the launch heights the rays started
@@ -1206,70 +1365,110 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
 
     from ._lens_traced import _solve_lstsq_thread_safe
 
-    def _solve(rows=None):
-        """Weighted least squares over a row subset.
+    def _solve():
+        """Weighted least squares over every retained sample.
 
-        Expressed as a row WEIGHT rather than a fancy-index slice on purpose:
-        ``A`` is ``(n_samples, n_terms)`` -- 50 MB at design 121's lattice and
-        135 MB at a 375-node one -- and ``A[mask]`` would copy it once per
-        solve on top of the weighted temporary.  Zeroing a row contributes
-        nothing to ``A^T A`` or ``A^T b``, so the two forms give the same
-        normal equations.
+        There is ONE solve now.  It used to take a row subset as well, because
+        the old node probe had to refit the model without the samples it then
+        scored it at; an off-lattice probe scores the coefficients that ship,
+        so the subset solve had nothing left to do.
         """
-        rw = w
-        if rows is not None:
-            rw = rows.astype(np.float64) if w is None else w * rows
-        if rw is None:
+        if w is None:
             return _solve_lstsq_thread_safe(A, B)
-        return _solve_lstsq_thread_safe(A * rw[:, None], B * rw[:, None])
+        return _solve_lstsq_thread_safe(A * w[:, None], B * w[:, None])
 
-    # ---- G8: PARITY with the incumbent, on HELD-OUT samples ---------------
+    # ---- the shipped coefficients, on EVERY retained sample ---------------
+    # Solved BEFORE G8 now, because G8 scores the coefficients that SHIP.  The
+    # old probe had to refit on a subset (it scored the model at nodes it had
+    # withheld from it); an off-lattice probe withholds nothing, so the arm on
+    # trial is the object the caller will actually evaluate.
+    coef = _solve()
+
+    # ---- G8: PARITY with the incumbent, at OFF-LATTICE probe points --------
+    # THE QUESTION IS UNCHANGED -- "is this model at least as good as the path
+    # it replaces?" -- and the PROBE POINTS are what moved.  See
+    # :data:`_IMAP_PROBE_MAX` for the measurement that forced it: a launch-node
+    # probe is degenerate against an ``s = 0`` spline incumbent, which
+    # reproduces every node exactly and therefore scores 34.5x better at its
+    # own knots than anywhere an exit pixel can land.
     if parity_invert is None:
         return _guard_fail(rec, 'G8',
                            'no incumbent inversion was supplied, so the '
                            'comparative bar cannot be measured')
-    hold = ((gi % _IMAP_HOLDOUT_MOD == _IMAP_HOLDOUT_PHASE)
-            & (gj % _IMAP_HOLDOUT_MOD == _IMAP_HOLDOUT_PHASE))
-    keep = ~hold
-    n_hold = int(hold.sum())
-    rec['n_holdout'] = n_hold
-    if n_hold < 32 or int(keep.sum()) < _IMAP_MIN_SAMPLES_PER_TERM * P:
+    if probe_trace is None:
         return _guard_fail(rec, 'G8',
-                           'the held-out parity probe would leave %d probe '
-                           'samples and %d fit samples, too few to decide'
-                           % (n_hold, int(keep.sum())))
-    coef_h = _solve(keep)
-    pred = A[hold] @ coef_h
-    truth = B[hold]
-    xq = XO[good][hold]
-    yq = YO[good][hold]
+                           'no off-lattice probe trace was supplied, so the '
+                           'comparative bar has no ground truth the incumbent '
+                           'does not define')
+    lam = float(wavelength)
+    ppx, ppy = _probe_entrance_points(xs_in, sig)
+    rec['n_probe_requested'] = int(ppx.size)
+    if ppx.size < _IMAP_PROBE_MIN:
+        return _guard_fail(rec, 'G8',
+                           'only %d launch cells lie wholly inside the census '
+                           'region, too few off-lattice probes to decide'
+                           % int(ppx.size))
+    with warnings.catch_warnings():
+        # Same reason as the incumbent call below: a probe must not add a
+        # warning to a call the shipped path never emits one on.
+        warnings.simplefilter('ignore', RuntimeWarning)
+        pt = probe_trace(ppx, ppy)
+    t_xo = np.asarray(pt[0], dtype=np.float64).ravel()
+    t_yo = np.asarray(pt[1], dtype=np.float64).ravel()
+    t_op = np.asarray(pt[2], dtype=np.float64).ravel()
+    if not (t_xo.size == t_yo.size == t_op.size == ppx.size):
+        return _guard_fail(rec, 'G8',
+                           'the probe trace returned %d/%d/%d landings for %d '
+                           'probe rays' % (t_xo.size, t_yo.size, t_op.size,
+                                           int(ppx.size)))
+    live = np.isfinite(t_xo) & np.isfinite(t_yo) & np.isfinite(t_op)
+    # A probe whose landing falls outside the model's own exit box is a probe
+    # the model would refuse to answer for in production (G6), so scoring it
+    # would compare an extrapolation against a Newton that has the whole
+    # forward fit available.  Screen it out rather than let it decide the bar.
+    with np.errstate(invalid='ignore'):
+        pux = (t_xo - ex_c[0]) / ex_h[0]
+        puy = (t_yo - ex_c[1]) / ex_h[1]
+        live &= (np.abs(pux) <= 1.0) & (np.abs(puy) <= 1.0)
+    n_live = int(live.sum())
+    rec['n_probe_traced'] = n_live
+    if n_live < _IMAP_PROBE_MIN:
+        return _guard_fail(rec, 'G8',
+                           'only %d of %d probe rays landed inside the '
+                           'model\'s own exit box, too few to decide'
+                           % (n_live, int(ppx.size)))
+    ppx, ppy = ppx[live], ppy[live]
+    t_xo, t_yo, t_op = t_xo[live], t_yo[live], t_op[live]
+    # TRUTH is the element's own trace at these entrance points: at exit
+    # ``(t_xo, t_yo)`` the entrance coordinate IS ``(ppx, ppy)`` and the OPL IS
+    # ``t_op``, on the same on-axis reference ``opl_grid`` carries.  Neither arm
+    # has seen it.
+    truth = np.stack([ppx, ppy, t_op], axis=1)
+    A_p = _td_design(pux[live], puy[live], degree, terms)
+    pred = A_p @ coef
     with warnings.catch_warnings():
         # The incumbent's own unconverged-Newton report belongs to the CALL,
         # not to this probe: firing it here would add a warning the shipped
         # path never emits at these points, which is itself a behaviour change.
         warnings.simplefilter('ignore', RuntimeWarning)
-        inc = parity_invert(xq, yq)
+        inc = parity_invert(t_xo, t_yo)
     inc_x = np.asarray(inc[0], dtype=np.float64).ravel()
     inc_y = np.asarray(inc[1], dtype=np.float64).ravel()
     inc_o = np.asarray(inc[2], dtype=np.float64).ravel()
 
-    lam = float(wavelength)
     fin = np.isfinite(inc_o) & np.isfinite(inc_x) & np.isfinite(inc_y)
-    # THE SCORING SET is the constrained region, for the reason G2's census is
-    # taken there: outside the ray-fit disc BOTH arms are extrapolating their
-    # own weighted fit, the input amplitude is ~zero so nothing that happens
-    # there can reach the returned field, and a max-over-samples comparison of
-    # two extrapolations decides the bar by coin flip.  The full-set numbers
-    # are recorded alongside so the choice is visible rather than implied.
-    core = fin & sig[good][hold]
-    if int(core.sum()) < 32:
-        core = fin
+    # The probe points are already inside the census region by construction
+    # (``_probe_entrance_points`` takes only cells whose four corners are), so
+    # unlike the node probe there is no second restriction to apply here: the
+    # scoring set IS the finite set.  Both names are kept in the record because
+    # consumers read them.
+    core = fin
     rec['n_parity'] = int(core.sum())
     rec['n_parity_all'] = int(fin.sum())
-    if int(fin.sum()) < 32:
+    if int(fin.sum()) < _IMAP_PROBE_MIN:
         return _guard_fail(rec, 'G8',
                            'the incumbent returned only %d finite answers on '
-                           'the %d probe samples' % (int(fin.sum()), n_hold))
+                           'the %d probe samples' % (int(fin.sum()), n_live))
 
     def _err(px, py, po, m):
         e_opl = np.abs(po - truth[:, 2])[m] / lam
@@ -1297,10 +1496,17 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
     if not np.isfinite(_aa):
         return _guard_fail(rec, 'G8',
                            'the model returned a non-finite OPL on the '
-                           'held-out probe')
+                           'off-lattice probe')
+    # THE ENVELOPE RULE.  All three channels must hold, each of them a WORST
+    # CASE over the same probe set: a model that is typically better and
+    # occasionally worse is not at parity, and neither is one that wins on OPL
+    # while losing entrance position (the channel the ray-density amplitude and
+    # the C8 taper both read).  The bar itself is the incumbent's OWN error at
+    # those points -- the incumbent at its best, not a strawman -- and it stays
+    # a RATIO (:data:`_IMAP_PARITY_FACTOR` = 1.0) rather than a wave tolerance.
     if not (a_opl <= pf * b_opl):
         return _guard_fail(rec, 'G8',
-                           'held-out OPL error %.4e waves against the '
+                           'off-lattice OPL error %.4e waves against the '
                            'incumbent Newton path\'s %.4e on the same samples '
                            '(%.2fx, bar %.2fx)'
                            % (a_opl, b_opl, rec['parity_ratio_opl'], pf))
@@ -1311,19 +1517,16 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
     # be better typically AND better at the extreme.
     if not (a_rms <= pf * b_rms):
         return _guard_fail(rec, 'G8',
-                           'held-out OPL rms %.4e waves against the incumbent '
-                           'Newton path\'s %.4e on the same samples (%.2fx, '
-                           'bar %.2fx)'
+                           'off-lattice OPL rms %.4e waves against the '
+                           'incumbent Newton path\'s %.4e on the same samples '
+                           '(%.2fx, bar %.2fx)'
                            % (a_rms, b_rms, rec['parity_ratio_opl_rms'], pf))
     if not (a_pos <= pf * b_pos):
         return _guard_fail(rec, 'G8',
-                           'held-out entrance-position error %.4e m against '
+                           'off-lattice entrance-position error %.4e m against '
                            'the incumbent Newton path\'s %.4e on the same '
                            'samples (%.2fx, bar %.2fx)'
                            % (a_pos, b_pos, rec['parity_ratio_pos'], pf))
-
-    # ---- the shipped coefficients, on EVERY retained sample ---------------
-    coef = _solve()
 
     # ---- CHANNEL 3, the Jacobian the amplitude consumes -------------------
     # Resolved HERE, after the position channels exist, because one of the two
@@ -1378,9 +1581,10 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
     del _rr
 
     # ---- G7: exit-degree adequacy, from the fit residual (free) -----------
-    # The bar is the incumbent's own held-out number, already measured above:
-    # a model whose OWN residual on the data it fitted is worse than the
-    # incumbent's error on data it did not is not adequate at this degree.
+    # The bar is the incumbent's own off-lattice number, already measured
+    # above: a model whose OWN residual on the data it fitted is worse than the
+    # incumbent's error at points NEITHER of them has is not adequate at this
+    # degree.
     if not (resid_max[2] / lam <= pf * b_opl):
         return _guard_fail(rec, 'G7',
                            'the total-degree-%d exit fit leaves %.4e waves of '

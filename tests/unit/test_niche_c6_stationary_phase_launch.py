@@ -559,20 +559,39 @@ def test_the_two_newton_fit_backends_still_describe_the_same_map(monkeypatch):
     polynomial and the spline read the SAME traced samples and must return the
     same field.  With the freeze circle collapsed back onto the ray-fit disc
     they do not -- which is what niche D7's
-    ``test_the_off_centre_field_tracks_the_unrestricted_spline_map`` caught."""
+    ``test_the_off_centre_field_tracks_the_unrestricted_spline_map`` caught.
+
+    SCORED ON THE FORWARD PATH (``inverse_map=False``), because that is where
+    the freeze circle lives and where its fail-before is observable.  The
+    stronger statement is asserted separately below it: with the
+    inverse-characteristic evaluator engaged -- the shipped default since
+    ``FIX_G8_PROBE_2026_08_12`` -- the two backends do not merely agree to
+    5e-04, they return the SAME BYTES, because the model that produces the
+    returned OPL / entrance / ``det J`` is basis-independent by construction
+    and its acceptance no longer depends on which interpolant the incumbent
+    is.  That also makes the freeze-circle fail-before INERT on the shipped
+    default (both arms come from the same model), which is the map removing
+    the field's dependence on the forward fit, not the defect going away --
+    hence both arms are kept, each measured where it is real.
+    """
     E, _X, _Y = _field()
 
-    def spread():
-        ref = np.abs(_run(E, True, newton_fit='spline'))
-        got = np.abs(_run(E, True))
+    def spread(imap):
+        ref = np.abs(_run(E, True, newton_fit='spline', inverse_map=imap))
+        got = np.abs(_run(E, True, inverse_map=imap))
         scale = float(ref.max())
         assert scale > 0.0
         return float(np.abs(got - ref).max()) / scale
 
-    d_ok = spread()
+    d_map = spread(True)
+    assert d_map == 0.0, (
+        'the two newton_fit backends no longer return byte-identical fields '
+        f'with the inverse map engaged: {d_map}')
+
+    d_ok = spread(False)
     monkeypatch.setattr(LT, '_REMAP_RESID_FREEZE_MARGIN', 1.0)
     monkeypatch.setattr(LT, '_REMAP_RESID_FREEZE_MAX_W', LT._REMAP_RESID_FIT_W)
-    d_bad = spread()
+    d_bad = spread(False)
     assert d_ok < 5.0e-4, d_ok
     assert d_bad > 3.0 * d_ok, (d_ok, d_bad)
 
