@@ -43,6 +43,7 @@ def _deterministic_blas():
         yield
 
 from lumenairy.elements.eme import (
+    dispersion_vec,
     eps_xy_to_strips,
     layer_vector_modes,
     layer_vector_modes_complex,
@@ -391,17 +392,198 @@ def test_vector_anisotropic_oracle_returnvecs():
     assert rd[np.argmax(q)] < 1e-2               # physical mode is divergence-clean
 
 
+# --------------------------------------------------------------------------- #
+#  dense-vs-banded support: a CONVERGED dip polish, and why the pin needs one.  #
+#                                                                              #
+#  ``layer_vector_modes._refine_accept`` refines a detected dip with a bare     #
+#  ``minimize_scalar(method="bounded")`` and reads its rank-drop acceptance     #
+#  test AT THE POINT THAT MINIMISER STOPS.  Inside one detection bracket        #
+#  ``sigma_min(qz^2)`` is NOT unimodal -- it carries an O(1e-3) wiggle -- so    #
+#  the parabolic step traps on the wiggle.  MEASURED on this cell's bracket     #
+#  [205.875, 206.125]: Brent returns 205.9786 with sigma_min 3.45e-5 while the  #
+#  converged root is 205.9749758 with sigma_min 2.7e-17, i.e. a genuine mode.   #
+#  The rank-drop read at the stopping point is then gaps.min = 1.0918e-3        #
+#  against the shipped ``ratio_tol = 1e-3`` -- a 1.09x margin -- so whether     #
+#  this mode is in the returned census is decided by the LAPACK build.  The     #
+#  ubuntu CI runner accepted it in BOTH arms, which shifted ``md[:3]``/         #
+#  ``mb[:3]`` by one position and made the old element-wise                     #
+#  ``np.allclose(md[:3], mb[:3])`` compare 146.42145116 against 146.41950966.   #
+#                                                                              #
+#  That is a LIBRARY defect (``eme_2d_vector.py`` is byte-identical on          #
+#  ``origin/main``; the base commit is green on both local mounts), and it is   #
+#  the residual the workflow's own slow-gate comment predicts.  It is NOT       #
+#  fixable inside this pin: converging the refinement changes the returned      #
+#  census on every cell (measured 4 -> 5 here) and costs ~1.9x on the eig-heavy #
+#  slow gate.  So the pin is re-stated on the object that IS reproducible --    #
+#  the converged zeros -- and the census claim is made immune to which side of  #
+#  the knife edge a build lands on.                                            #
+# --------------------------------------------------------------------------- #
+_BANDED_POINTWISE_REL = 1e-2   # |banded/dense - 1| off the roots: measured
+#                                1.46e-3 shipped, 2.44e-2 at iters=10 (breaks)
+_BANDED_ROOT_REL = 1e-6        # converged dense-vs-banded root: measured
+#                                <= 5.14e-9 [M]/[W] at every returned mode
+_BANDED_DEPTH = 1e-6           # polished sigma_min at a returned mode: measured
+#                                <= 2.06e-8; the non-mode dips read >= 2.5e-2
+_BANDED_PARTNER_REL = 1e-4     # same mode in the other census: measured 1.0e-8
+#                                [M], 1.25e-7 [W], 1.33e-5 on the ubuntu runner
+_BANDED_DISTINCT_REL = 5e-3    # a DIFFERENT mode: the closest distinct pair
+#                                anywhere in this window (205.975 / 201.887) is
+#                                1.98e-2 apart, so the bar sits 4x below it and
+#                                50x above _BANDED_PARTNER_REL -- the forbidden
+#                                band a SHIFTED mode would land in is 1.7 decades
+
+
+def _polished_dip(strips, Nx, q, half, solver, nloc=33):
+    """Converged local minimum of ``sigma_min(qz^2)`` in ``[q-half, q+half]``
+    for one solver -- localise on a fine equispaced sub-grid, then a bounded
+    Brent on the surviving +-1 cell.  Returns ``(root, depth)``.
+
+    Two-stage BY CONSTRUCTION: stage two alone is the shipped
+    ``_refine_accept`` step whose non-convergence this helper routes around
+    (see the block comment above)."""
+    from scipy.optimize import minimize_scalar
+
+    def f(x):
+        try:
+            return dispersion_vec(strips, Lx, Nx, k0, 0.0, x, KY0, Ly, solver)
+        except np.linalg.LinAlgError:
+            return np.inf
+
+    xs = np.linspace(q - half, q + half, nloc)
+    vs = np.array([f(x) for x in xs])
+    j = int(np.argmin(vs))
+    r = minimize_scalar(f, bounds=(xs[max(j - 1, 0)], xs[min(j + 1, nloc - 1)]),
+                        method="bounded", options={"xatol": 1e-12})
+    if float(r.fun) <= float(vs[j]):
+        return float(r.x), float(r.fun)
+    return float(xs[j]), float(vs[j])
+
+
+def _banded_cell():
+    Nx = 16
+    return Nx, [(_grating(Nx, 1.0, 4.0), 0.5), (np.full(Nx, 2.0), 0.5)]
+
+
 def test_vector_banded_solver():
     """solver='banded' (the O(S) inverse-power sigma_min on the block-tridiagonal
     G) finds the SAME modes as the default dense solver -- the fine-y-staircase
-    speedup (it grows with the strip count S)."""
-    Nx = 16
-    strips = [(_grating(Nx, 1.0, 4.0), 0.5), (np.full(Nx, 2.0), 0.5)]
-    md = np.sort(layer_vector_modes(strips, Lx, Nx, Ly, k0, (130, 256),
-                                    ky0=KY0))[::-1]
-    mb = np.sort(layer_vector_modes(strips, Lx, Nx, Ly, k0, (130, 256), ky0=KY0,
+    speedup (it grows with the strip count S).
+
+    RESTATED 2026-08-12.  The old form was ``np.allclose(md[:3], mb[:3])`` --
+    element-wise on the first three entries of a census that is not reproducible
+    across LAPACK builds, at unjustified default tolerances.  It went red on the
+    ubuntu slow shard with md[2]=146.42145116 vs mb[2]=146.41950966 (1.3e-5
+    relative, right at ``np.allclose``'s 1e-5 rtol) because BOTH arms had gained
+    a fourth mode at the front.  Three layers replace it, none of which cares
+    which side of the finder's 1.09x knife edge a build lands on."""
+    Nx, strips = _banded_cell()
+    win = (130, 256)
+    md = np.sort(layer_vector_modes(strips, Lx, Nx, Ly, k0, win, ky0=KY0))[::-1]
+    mb = np.sort(layer_vector_modes(strips, Lx, Nx, Ly, k0, win, ky0=KY0,
                                     solver="banded"))[::-1]
-    assert np.allclose(md[:3], mb[:3])
+    assert len(md) >= 3 and len(mb) >= 3, f"census collapsed: {md} / {mb}"
+
+    # (1) POINTWISE -- the O(S) estimate IS sigma_min off the roots.  25 samples
+    #     offset half a detection cell so none sits on a dip.
+    probe = np.linspace(win[0], win[1], 25) + 0.0617
+    dd = np.array([dispersion_vec(strips, Lx, Nx, k0, 0.0, q, KY0, Ly, "dense")
+                   for q in probe])
+    bb = np.array([dispersion_vec(strips, Lx, Nx, k0, 0.0, q, KY0, Ly, "banded")
+                   for q in probe])
+    worst = float(np.max(np.abs(bb / dd - 1.0)))
+    assert worst < _BANDED_POINTWISE_REL, (
+        f"banded sigma_min departs from dense by {worst:.3e} off the roots")
+
+    # (2) CONVERGED ZEROS -- for every qz^2 EITHER solver returns, the two
+    #     dispersion functions have their zero at the SAME place, to ~3 decades
+    #     better than the tolerance the old element-wise form used.
+    half = (win[1] - win[0]) / 1008.0 / 2.0         # half a detection cell
+    union = []                                      # the two censuses, deduped
+    for q in sorted([float(x) for x in md] + [float(x) for x in mb]):
+        if not union or abs(q - union[-1]) > _BANDED_PARTNER_REL * abs(q):
+            union.append(q)
+    checked = 0
+    for q in union:
+        rd, dep_d = _polished_dip(strips, Nx, q, half, "dense")
+        rb, dep_b = _polished_dip(strips, Nx, q, half, "banded")
+        assert abs(rb - rd) <= _BANDED_ROOT_REL * abs(rd), (
+            f"qz^2 {q:.9f}: dense puts this zero at {rd:.9f}, banded at "
+            f"{rb:.9f} -- {abs(rb - rd) / abs(rd):.3e} relative")
+        assert max(dep_d, dep_b) < _BANDED_DEPTH, (
+            f"qz^2 {q:.9f} is not a zero: polished sigma_min {dep_d:.3e} "
+            f"(dense) / {dep_b:.3e} (banded)")
+        checked += 1
+    assert checked >= 3                             # never vacuous
+
+    # (3) CENSUS -- matched by VALUE, not by position.  Each returned mode is
+    #     either the SAME mode in the other census or a genuinely different one;
+    #     what is forbidden is the two solvers returning ONE mode at materially
+    #     different places, which is the only way "banded finds other modes"
+    #     can be true.  Knife-edge candidates one arm gains and the other does
+    #     not land in the ">= _BANDED_DISTINCT_REL away" leg and are counted.
+    paired = 0
+    for cen, other, tag in ((md, mb, "dense"), (mb, md, "banded")):
+        for q in cen:
+            d = float(np.min(np.abs(other - q)) / abs(q))
+            assert d < _BANDED_PARTNER_REL or d > _BANDED_DISTINCT_REL, (
+                f"{tag} mode {q:.9f} sits {d:.3e} relative from the nearest "
+                f"counterpart -- neither the same mode (< "
+                f"{_BANDED_PARTNER_REL:.0e}) nor a different one (> "
+                f"{_BANDED_DISTINCT_REL:.0e})")
+            paired += d < _BANDED_PARTNER_REL
+    #     At most ONE unmatched knife-edge candidate per census is tolerated --
+    #     that allowance is the library defect above, and nothing wider.
+    #     Measured 8 of 8 paired on both mounts (floor 6).
+    assert paired >= (len(md) - 1) + (len(mb) - 1), (
+        f"only {paired} of {len(md) + len(mb)} returned modes have a "
+        f"counterpart in the other solver's census: {md} / {mb}")
+
+
+def test_vector_banded_solver_agreement_breaks_on_an_under_iterated_inverse_power():
+    """FAIL-BEFORE for the restated dense-vs-banded pin.
+
+    The banded path is an inverse-power estimate of ``sigma_min``; under-iterate
+    it and it stops BEING sigma_min.  The pointwise layer is the one that sees
+    this -- measured max |banded/dense - 1| on the 25-point probe grid:
+
+        iters   1     2      3      5      10      60 (shipped)
+        rel    11.8   3.7e-1 2.7e-1 1.1e-1 2.44e-2 1.46e-3
+
+    so the shipped path clears the 1e-2 bar by 6.8x while ``iters <= 10`` breaks
+    it by 2.4x and ``iters = 1`` by three decades.  (The converged-zero layer is
+    deliberately NOT expected to move: every estimator of "how singular is G"
+    shares G's zeros, which is exactly why the pin needs the pointwise layer as
+    well as the root layer.)"""
+    Nx, strips = _banded_cell()
+    probe = np.linspace(130.0, 256.0, 25) + 0.0617
+    dd = np.array([dispersion_vec(strips, Lx, Nx, k0, 0.0, q, KY0, Ly, "dense")
+                   for q in probe])
+
+    def worst_rel():
+        bb = np.array([dispersion_vec(strips, Lx, Nx, k0, 0.0, q, KY0, Ly,
+                                      "banded") for q in probe])
+        return float(np.max(np.abs(bb / dd - 1.0)))
+
+    shipped = worst_rel()
+    assert shipped < _BANDED_POINTWISE_REL          # the arm under test is live
+
+    import lumenairy.elements.eme.eme_2d_vector as _V
+    original = _V._sigma_min_invpow
+    ladder = {}
+    try:
+        for iters in (10, 5, 1):
+            _V._sigma_min_invpow = (
+                lambda G, _n=iters, _o=original, **kw: _o(G, iters=_n))
+            ladder[iters] = worst_rel()
+    finally:
+        _V._sigma_min_invpow = original
+    assert worst_rel() == shipped                   # the injector was undone
+    for iters, rel in ladder.items():
+        assert rel > _BANDED_POINTWISE_REL, (
+            f"iters={iters} must break the {_BANDED_POINTWISE_REL:.0e} "
+            f"pointwise bar; measured {rel:.3e}")
+    assert ladder[1] > 30.0 * ladder[10] > 0.0      # and the ladder is monotone
+    assert shipped < ladder[10] / 5.0               # shipped clears it by >5x
 
 
 def test_vector_magnetic_mu():

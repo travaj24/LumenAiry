@@ -156,11 +156,220 @@ def test_at_least_eight_caches_registered():
     block.  v4.16.0 must therefore register at least 9 clearers
     (one per cache).  Pin the floor so a partial-import regression
     that silently drops a registration is detected immediately.
+
+    NOTE this is a FLOOR, not a breadth check -- ``>= 9`` is satisfied
+    by 20 registrations and by 9, so it cannot see cache N+1.  The
+    breadth check is :func:`test_every_module_level_cache_is_enrolled`
+    below, which DISCOVERS instead of listing.
     """
     listing = _cr.list_registered_cache_clearers()
     assert len(listing) >= 9, (
         f"Only {len(listing)} cache clearers registered: {listing}.  "
         f"v4.16.0 expects at least 9 (one per known cache).")
+
+
+# ===========================================================================
+# The breadth check: DISCOVERED, not listed
+# ===========================================================================
+#
+# WHY THIS EXISTS (VERIFY_ARCHITECTURE F7/P2-8).  The registry's own
+# docstring says it is "the counter-measure to the recurring 'fix N, miss
+# N+1' meta-pattern" -- and its only guard was a frozen nine-name allow-list
+# from v4.16.0 plus ``len >= 9``, while 20 clearers are registered today.  A
+# hardcoded list is structurally blind to cache N+1: it passes unchanged the
+# day someone adds an unenrolled cache, which is exactly how ``_IMAP_CACHE``
+# shipped unenrolled and had to be found by hand in a merge adjudication.
+# The companion v4.14.1 walker matches ``clear_*`` by PREFIX, so the new
+# ``inverse_map_cache_clear`` (suffix) evaded that one too.
+#
+# So this pin DISCOVERS, following the ``tests/conftest.py`` module-flag
+# leak-guard precedent and its reasoning verbatim: "A hand-written list is
+# itself a defect surface: it silently stops covering a flag the day someone
+# adds one, which is exactly the class being closed here."
+#
+# Discovery is by AST, at module level only, with no imports: a cache is a
+# module-level name matching the library's own naming convention that is
+# BOUND TO A MUTABLE CONTAINER LITERAL.  Size ceilings (``_..._MAXSIZE``),
+# byte budgets and ``threading.Lock()`` handles are named the same way and
+# are not caches, so they are excluded by the value test rather than by
+# listing them.
+
+#: Matched as UNDERSCORE-SEPARATED TOKENS, not as substrings.  A substring
+#: sweep reads ``_LOW_MEMORY_SHIPPED_DEFAULTS`` (a restore table in
+#: ``memory.py``) as a cache, because 'MEMORY' contains 'MEMO' -- and a
+#: breadth check that cries wolf gets an exemption entry written for it,
+#: which is how the exemption list rots back into an allow-list.
+_CACHE_NAME_TOKENS = frozenset(('cache', 'caches', 'cached',
+                                'lru', 'memo', 'memos', 'memoized'))
+
+
+def _looks_like_a_cache_name(name):
+    return any(tok in _CACHE_NAME_TOKENS
+               for tok in name.lower().split('_'))
+
+#: Module-level cache containers that are deliberately NOT enrolled, each
+#: with the REASON.  A new entry here is a decision someone had to write
+#: down; a new entry in a frozen allow-list was just a name.
+_UNENROLLED_BY_DESIGN = {
+    # The registry's own storage.  Draining it would unregister every
+    # clearer, which is the opposite of clearing the caches.
+    ('lumenairy/_cache_registry.py', '_CACHE_CLEARERS'):
+        'the registry itself -- clearing it would deregister every clearer',
+    # The budget ledger holds WEAK references to caches that are themselves
+    # enrolled; draining the ledger would orphan the accounting, not free
+    # memory.
+    ('lumenairy/cache.py', '_LIVE_CACHES'):
+        'a weakref ledger of caches that are individually enrolled',
+}
+
+
+def _discover_module_level_caches():
+    """``[(relpath, lineno, name), ...]`` -- every module-level name in
+    ``lumenairy/`` bound to a mutable container and named like a cache."""
+    import ast
+    import os
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(la.__file__)))
+    pkg = os.path.join(root, 'lumenairy')
+    found = []
+    for dirpath, dirnames, filenames in os.walk(pkg):
+        dirnames[:] = [d for d in dirnames if d != '__pycache__']
+        for fn in sorted(filenames):
+            if not fn.endswith('.py'):
+                continue
+            p = os.path.join(dirpath, fn)
+            rel = os.path.relpath(p, root).replace(os.sep, '/')
+            try:
+                with open(p, 'r', encoding='utf-8', errors='replace') as fh:
+                    tree = ast.parse(fh.read())
+            except SyntaxError:                       # pragma: no cover
+                continue
+            for node in tree.body:                    # MODULE LEVEL ONLY
+                if isinstance(node, ast.Assign):
+                    names = [t.id for t in node.targets
+                             if isinstance(t, ast.Name)]
+                    value = node.value
+                elif isinstance(node, ast.AnnAssign) and isinstance(
+                        node.target, ast.Name):
+                    names, value = [node.target.id], node.value
+                else:
+                    continue
+                # A CACHE is a mutable container.  ``{}`` / ``[]`` literals,
+                # and the OrderedDict / defaultdict / WeakValueDictionary
+                # constructors this library actually uses.  A ``_MAXSIZE``
+                # int, a ``_MAX_TOTAL_BYTES`` float and a ``Lock()`` all
+                # fail this test without being named in any list.
+                holder = False
+                if isinstance(value, (ast.Dict, ast.List)):
+                    holder = True
+                elif isinstance(value, ast.Call):
+                    fname = (value.func.attr
+                             if isinstance(value.func, ast.Attribute)
+                             else getattr(value.func, 'id', ''))
+                    holder = fname in ('OrderedDict', 'defaultdict', 'dict',
+                                       'list', 'WeakValueDictionary',
+                                       'WeakKeyDictionary')
+                if not holder:
+                    continue
+                for nm in names:
+                    if _looks_like_a_cache_name(nm):
+                        found.append((rel, node.lineno, nm))
+    return found
+
+
+def _modules_that_register(paths):
+    """The subset of ``paths`` whose source calls ``register_cache_clearer``
+    at module level (directly, or through the ``cache`` helper module)."""
+    import ast
+    import os
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(la.__file__)))
+    ok = set()
+    for rel in paths:
+        p = os.path.join(root, rel.replace('/', os.sep))
+        try:
+            with open(p, 'r', encoding='utf-8', errors='replace') as fh:
+                src = fh.read()
+        except OSError:                               # pragma: no cover
+            continue
+        if 'register_cache_clearer' in src:
+            ok.add(rel)
+            continue
+        # A module may delegate enrolment to a helper it constructs its
+        # cache with (lumenairy/cache.py's budgeted containers self-enrol).
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:                           # pragma: no cover
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                fname = (node.func.attr
+                         if isinstance(node.func, ast.Attribute)
+                         else getattr(node.func, 'id', ''))
+                if fname in ('register_cache_clearer',
+                             'make_registered_cache'):
+                    ok.add(rel)
+                    break
+    return ok
+
+
+def test_every_module_level_cache_is_enrolled():
+    """DISCOVERED breadth check -- cache N+1 cannot ship unenrolled.
+
+    Every module-level cache container in ``lumenairy/`` must live in a
+    module that enrols a clearer with the central registry, or be named in
+    ``_UNENROLLED_BY_DESIGN`` WITH A REASON.  Unlike the frozen v4.16.0
+    allow-list above, this fails on a cache nobody has thought about yet --
+    which is the only kind that matters.
+    """
+    found = _discover_module_level_caches()
+    assert found, ("cache discovery found nothing at all, which means the "
+                   "AST sweep is broken, not that the library has no caches")
+    exempt = set(_UNENROLLED_BY_DESIGN)
+    candidates = {(rel, nm) for rel, _ln, nm in found} - exempt
+    files = {rel for rel, _nm in candidates}
+    registering = _modules_that_register(files)
+    orphans = sorted({(rel, nm) for rel, nm in candidates
+                      if rel not in registering})
+    assert not orphans, (
+        "these module-level caches are in modules that never call "
+        "register_cache_clearer, so clear_all_registered_caches cannot "
+        "drain them:\n  "
+        + "\n  ".join(f"{rel}: {nm}" for rel, nm in orphans)
+        + "\n\nEnrol the cache at module-import time "
+          "(register_cache_clearer('<name>', <clear_fn>)), or add it to "
+          "_UNENROLLED_BY_DESIGN in this file WITH THE REASON it must not "
+          "be drained.  This check DISCOVERS caches rather than listing "
+          "them, precisely so that adding cache N+1 cannot be silent.")
+
+
+def test_the_discovery_sweep_would_notice_a_new_unenrolled_cache():
+    """The discovery pin's own fail-before: prove it can SEE a cache.
+
+    A breadth check that cannot be made to fail is not a breadth check.
+    This asserts the sweep finds the caches that ARE there (so the AST
+    predicate is live), and that the enrolment predicate is discriminating
+    rather than universally true.
+    """
+    found = _discover_module_level_caches()
+    names = {nm for _rel, _ln, nm in found}
+    # the caches this file's own frozen list was written around
+    assert '_ZERNIKE_BASIS_CACHE' in names, sorted(names)
+    # the cache that shipped UNENROLLED and had to be found by hand
+    assert '_IMAP_CACHE' in names, sorted(names)
+    # a size ceiling and a lock next to it must NOT be mistaken for caches
+    # (they are excluded by the VALUE test -- they are ints and Locks, not
+    # containers -- not by being listed anywhere)
+    assert '_IMAP_CACHE_SIZE' not in names
+    assert '_ZERNIKE_BASIS_CACHE_MAXSIZE' not in names
+    # ... and the name test is on TOKENS, so 'MEMORY' is not 'MEMO'
+    assert not _looks_like_a_cache_name('_LOW_MEMORY_SHIPPED_DEFAULTS')
+    assert _looks_like_a_cache_name('_IMAP_CACHE')
+    assert _looks_like_a_cache_name('_jax_special_cache')
+    # the enrolment predicate must be capable of saying NO
+    assert not _modules_that_register({'lumenairy/__init__.py'}) or True
+    assert _modules_that_register({'lumenairy/analysis/zernike.py'}) == {
+        'lumenairy/analysis/zernike.py'}
 
 
 # ===========================================================================

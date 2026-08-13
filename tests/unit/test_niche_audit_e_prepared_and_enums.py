@@ -590,6 +590,127 @@ def test_l22_delegate_reports_the_discarded_physics_kwargs():
 
 
 # ===========================================================================
+# R1-WIRING -- the delegate branch forwards carrier=, and adjudicates it
+# ===========================================================================
+# VERIFY_ARCHITECTURE F5/P2-9: ZERO ``apply_real_lens`` calls made by the
+# traced path forwarded ``carrier=``, so the screen-obliquity + R1 corrections
+# were inert for every shipped consumer.  The delegate branch is the one site
+# where the analytic model IS the answer (the amp legs subtract their own
+# analytic phase straight back out), so it is the one that must forward -- but
+# it fires precisely BECAUSE the carrier does not describe the field, so the
+# forward is adjudicated by the guard's own F1 statistic: forward only when
+# removing the carrier REDUCES the input's angular spread.
+
+
+def _carriered_noncollimated_field(N=512, dx=4.0e-6, w=0.6e-3, tilt=0.05,
+                                   f_div=0.02):
+    """A tilted beam with a strong DIVERGENT leg on top: the carrier states the
+    tilt, the divergence is the residual.  ``lam/(2 dx) = 0.164 rad`` here, so
+    both the good carrier's residual (0.037) and the reversed carrier's (0.107)
+    are inside the wrapping-safe estimator's unambiguous range."""
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    env = np.exp(-(X ** 2 + Y ** 2) / w ** 2)
+    W = tilt * X + (X ** 2 + Y ** 2) / (2.0 * f_div)
+    return (env * np.exp(1j * (2 * np.pi / _WL) * W)).astype(np.complex128), dx
+
+
+def _delegate_out(E, dx, carrier):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        out = apply_real_lens_traced(
+            E, prescription=_DELEGATE_PRESC, wavelength=_WL, dx=dx,
+            carrier=carrier, on_undersample='silent',
+            on_noncollimated='delegate')
+    return out, [str(w.message) for w in rec]
+
+
+def test_the_delegate_branch_forwards_a_carrier_that_describes_the_field():
+    """The wiring: with a carrier the delegate's answer must be the CARRIERED
+    analytic answer, byte for byte -- not the carrier-free one it used to be.
+    That is the whole of F5: the feature was unreachable from the traced path.
+    """
+    import lumenairy as la
+    E, dx = _carriered_noncollimated_field()
+    car = la.TiltedCarrier(float('inf'), 0.05, 0.0)
+    out, msgs = _delegate_out(E, dx, car)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        want = LT.apply_real_lens(
+            E, prescription=_DELEGATE_PRESC, wavelength=_WL, dx=dx,
+            carrier=car, on_screen_obliquity='silent')
+        blind = LT.apply_real_lens(E, prescription=_DELEGATE_PRESC,
+                                   wavelength=_WL, dx=dx)
+    assert np.array_equal(out.view(np.uint8), want.view(np.uint8))
+    assert not np.array_equal(out.view(np.uint8), blind.view(np.uint8))
+    assert any('IS forwarded' in m for m in msgs), msgs
+
+
+def test_the_delegate_branch_refuses_a_carrier_that_does_not_describe_it():
+    """The adjudication, on the case that makes it necessary: a carrier of the
+    RIGHT size and the WRONG sign.  The correction's cross term ``2 p0 . q``
+    flips with it, so forwarding would be worse than not correcting at all --
+    the same "wrong by twice the term" signature the refutation used.  The
+    discriminator is the guard's OWN statistic (residual with the carrier
+    removed vs the raw input tilt), not a new heuristic, and the refusal is
+    stated in the warning rather than silent."""
+    import lumenairy as la
+    E, dx = _carriered_noncollimated_field()
+    anti = la.TiltedCarrier(float('inf'), -0.05, 0.0)
+    out, msgs = _delegate_out(E, dx, anti)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        blind = LT.apply_real_lens(E, prescription=_DELEGATE_PRESC,
+                                   wavelength=_WL, dx=dx)
+        wrong = LT.apply_real_lens(
+            E, prescription=_DELEGATE_PRESC, wavelength=_WL, dx=dx,
+            carrier=anti, on_screen_obliquity='silent')
+    assert np.array_equal(out.view(np.uint8), blind.view(np.uint8))
+    assert not np.array_equal(out.view(np.uint8), wrong.view(np.uint8))
+    assert any('NOT forwarded' in m for m in msgs), msgs
+    # ...and the statistic that decided it says what the docstring claims
+    Wc, _l, _m = LT._tilted_carrier_parts(anti, *np.meshgrid(
+        (np.arange(E.shape[1]) - E.shape[1] / 2) * dx,
+        (np.arange(E.shape[0]) - E.shape[0] / 2) * dx))
+    assert (LT._carrier_residual_rms(E, Wc, _WL, dx)
+            > LT._input_tilt_stats(E, _WL, dx)[0])
+
+
+def test_the_amp_legs_do_not_forward_the_carrier():
+    """The adjudicated NON-forward, pinned structurally.  The traced exit is
+    ``E_analytic * exp(i(k0 opl_traced - phase_analytic_lens))`` and BOTH
+    factors come from ``apply_real_lens``, so the analytic lens phase -- the
+    correction included -- is subtracted straight back out: forwarding to all
+    the amp legs moves the traced answer by 8.7e-05 waves rms where the
+    correction itself is 4.3e-03 (a 49x cancellation), and forwarding to only
+    the ``E_in`` leg injects the FULL 4.3e-03 into an answer that is already
+    exact.  Zero benefit, an asymmetry hazard, and 2.2-3.6x the analytic wall
+    clock; see docs/audits/BUILD_R1_WIRING_2026_08_12.md S4."""
+    import lumenairy as la
+    seen = []
+    orig = LT.apply_real_lens
+
+    def _spy(*a, **kw):
+        seen.append(kw.get('carrier', '<missing>'))
+        return orig(*a, **kw)
+
+    E, dx = _gauss(N=128, dx=8.0e-6, w=0.25e-3)
+    LT.apply_real_lens = _spy
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            apply_real_lens_traced(
+                E, prescription=_DELEGATE_PRESC, wavelength=_WL, dx=dx,
+                ray_subsample=4, on_undersample='silent',
+                on_noncollimated='off',
+                carrier=la.TiltedCarrier(float('inf'), 0.01, 0.0))
+    finally:
+        LT.apply_real_lens = orig
+    assert seen, 'no amp-leg call was made'
+    assert all(v == '<missing>' for v in seen), seen
+
+
+# ===========================================================================
 # E-M3 / E-M4 / E-M5 -- enum membership guards (house rule: unknown -> raise)
 # ===========================================================================
 @pytest.mark.parametrize('bad', ['WARN', 'junk', 'nope', '', 42, None])

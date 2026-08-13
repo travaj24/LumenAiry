@@ -45,6 +45,52 @@ coefficient sees every sample -- is a property of the polynomial basis.  What
 is NOT claimed is that spline is safe past the cliff: measured on the E4
 corrected relay it returns an ALL-ZERO exit field there, which is precisely
 why the inertness must be announced rather than assumed benign.
+
+WHAT THE BYPASS IS, AFTER 2026-08-12 -- READ THIS BEFORE EDITING (A) OR (B)
+--------------------------------------------------------------------------
+The bypass did NOT retire, and it did not stay what it was either.  It NARROWED
+to exactly one consumer, and the announcement narrowed with it.
+
+``_fit_domain_basis_ok`` used to answer two different questions at once:
+
+  Q1  can THIS BASIS restrict ITS OWN forward fit to the requested region?
+  Q2  is there a requested region at all?
+
+The adjudication above answers Q1, and it stands unchanged: no, not for
+``RectBivariateSpline``, and that is a fact about the code.  But the flag was
+also answering Q2, and Q2 is a property of the BEAM and the traced samples --
+not of the interpolant.  So a SECOND consumer that could honour the region
+never saw one: the inverse-characteristic model
+(``lumenairy.elements._lens_imap``) is a global total-degree Chebyshev in EXIT
+coordinates, i.e. exactly the mechanism the restriction exists to control, and
+it was handed the disc on the polynomial basis and the whole launch square on
+the spline basis.  Measured consequence: the two backends described DIFFERENT
+maps, and the shipped backend-symmetry guard in
+``test_niche_c6_stationary_phase_launch`` read 1.0600e-02 against its 5e-04
+bar.
+
+Since 2026-08-12 the region is resolved BASIS-INDEPENDENTLY whenever a
+consumer that can honour it will run, and each consumer honours it iff it can:
+
+    forward fit, polynomial basis   YES  -- NaN mask or D1 weights
+    forward fit, spline basis       NO   -- the adjudication above, unchanged
+    the inverse-map model           YES  -- always, on either basis
+
+So on the spline basis ``fit_radius_beam_factor`` is inert IF AND ONLY IF the
+model is not being built on that call, which on the shipped default
+(``TRACED_INVERSE_MAP = False``) is every call -- which is why (A) and (B)
+below are unchanged and still pass.  ``test_the_model_gets_the_same_fit_domain
+_on_either_basis`` and its siblings pin the other half, and the announcement
+now names its own scope so it cannot claim "no ray-fit-domain guard at all"
+on a call where the model is applying one.
+
+WHY NOT INSTEAD MAKE THE SPLINE FORWARD FIT HONOUR IT (the route not taken):
+``RectBivariateSpline`` needs a full NaN-free tensor grid, so the only
+restriction it can express is a rectangular SUB-LATTICE, and no rectangle is a
+disc -- pinned in ``test_no_rectangular_sub_lattice_can_express_the_disc``.  A
+sub-lattice restriction would therefore leave the two bases handing the model
+different sample sets ANYWAY, i.e. it cannot fix the defect even in principle,
+while additionally moving every spline consumer.
 """
 from __future__ import annotations
 
@@ -204,9 +250,19 @@ def test_the_arbiter_is_live_on_the_shipped_default_basis():
 def test_the_arbiter_is_announced_when_the_basis_cannot_honour_it():
     """... and on ``newton_fit='spline'`` it really is a no-op -- announced,
     naming the flag, instead of quietly gone.  This is the exact regression
-    the 2026-08-05 default flip shipped."""
-    a, msgs = _apply_c11(True, newton_fit='spline')
-    b, _ = _apply_c11(False, newton_fit='spline')
+    the 2026-08-05 default flip shipped.
+
+    SCOPE, and it moved with the ``TRACED_INVERSE_MAP`` default: "inert" means
+    inert for THE FORWARD FIT AND THE NEWTON INVERSION THAT READS IT, which is
+    what the announcement itself says (fix D5 S3.3).  On a call that also
+    builds the inverse-characteristic model the arbiter is NOT inert -- it
+    selects that model's fit disc on either basis, which is the whole point of
+    the fit-domain symmetry fix and is pinned by
+    ``test_the_model_gets_the_same_fit_domain_on_either_basis``.  So this
+    scores the forward path, with ``inverse_map=False``.
+    """
+    a, msgs = _apply_c11(True, newton_fit='spline', inverse_map=False)
+    b, _ = _apply_c11(False, newton_fit='spline', inverse_map=False)
     assert np.array_equal(a, b), (
         'the arbiter now runs on the spline basis -- if that is intended, the '
         'D5 adjudication has changed and this file must be redone')
@@ -225,11 +281,22 @@ def test_the_arbiter_is_announced_when_the_basis_cannot_honour_it():
 def test_an_inert_fit_domain_knob_is_announced_not_silent(knob, extra):
     """On ``newton_fit='spline'`` the knob really is inert -- and the call
     says so, naming the knob.  Both halves matter: the first is what makes it
-    a real bypass, the second is what stops the next one being silent."""
-    kw = dict(newton_fit='spline', on_aperture_beam='silent', **extra)
+    a real bypass, the second is what stops the next one being silent.
+
+    SCOPE, and it moved with the ``TRACED_INVERSE_MAP`` default: "inert" is
+    now inert for THE FORWARD FIT AND THE NEWTON INVERSION THAT READS IT --
+    exactly what the announcement's own text says (fix D5 S3.3) -- because on
+    a call that builds the inverse-characteristic model the same knob DOES
+    reach it, on either basis.  That half is pinned by
+    ``test_the_disc_is_live_for_the_model_even_where_the_basis_cannot_fit_it``
+    and it is a fix, not a regression; the bypass this test is about is the
+    forward one, so it is measured with ``inverse_map=False``.
+    """
+    kw = dict(newton_fit='spline', on_aperture_beam='silent',
+              inverse_map=False, **extra)
     a, msgs = _apply(**kw)
     b, _ = _apply(newton_fit='spline', on_aperture_beam='silent',
-                  fit_radius_beam_factor=None)
+                  inverse_map=False, fit_radius_beam_factor=None)
     assert np.array_equal(a, b), (
         f'{knob} is no longer inert on the spline basis -- if it now applies, '
         f'the D5 adjudication has changed and this file must be redone')
@@ -474,3 +541,239 @@ def test_an_inert_restriction_no_longer_silences_the_aperture_beam_guard():
     _, msgs_poly = _apply(newton_fit='polynomial',
                           fit_radius_beam_factor=2.0, on_aperture_beam='warn')
     assert not [m for m in msgs_poly if 'aperture:beam ratio' in m]
+
+
+# ===========================================================================
+# FIX FIT-DOMAIN SYMMETRY (2026-08-12)
+#
+# The bypass narrowed to the FORWARD FIT.  These pin the other half: the
+# inverse-characteristic model gets the SAME fit domain on either basis, the
+# route that could not have worked is refuted as a code fact, and the build
+# cache cannot carry one basis's acceptance to the other.
+# ===========================================================================
+def _apply_imap(basis, **kw):
+    """The same call as ``_apply``, with the inverse-characteristic model
+    FORCED ON for this call only (``inverse_map=True`` overrides the module
+    flag), and its guard record returned."""
+    rec = {}
+    kw.setdefault('on_aperture_beam', 'silent')
+    kw.setdefault('on_fit_domain_basis', 'silent')
+    out, msgs = _apply(newton_fit=basis, inverse_map=True, _imap_out=rec, **kw)
+    return out, msgs, rec
+
+
+#: What "the same fit domain" MEANS, in the model's own recorded numbers: the
+#: sample set it fitted, the exit box it normalises in, and -- the one that is
+#: a statement about the ANSWER rather than about the setup -- its own held-out
+#: error.  All three moved together when the domain was basis-dependent
+#: (2 809 disc samples against 32 761 launch-square ones on niche C6's
+#: fixture), which is exactly why the backends stopped describing the same map.
+_SAME_DOMAIN_KEYS = ('n_alive', 'n_fit_samples', 'n_detj_census',
+                     'exit_half_mm', 'exit_centre_mm', 'n_terms',
+                     'parity_map_opl_waves', 'parity_map_pos_m',
+                     'fit_resid_opl_waves', 'fit_resid_x_in_m')
+
+
+@pytest.mark.parametrize('extra', [
+    pytest.param({}, id='concentric'),
+    # ...and OFF AXIS, which is the branch the fix had to reach through the
+    # niche-C11 arbiter: the concentric candidate's radius comes from the
+    # ORIGIN-referenced moment, and that moment used to be measured only on a
+    # basis that could apply the disc -- so on the spline basis there was no
+    # second candidate and the arbiter could not have picked the same branch.
+    pytest.param(dict(cx=0.35e-3, beam_centre=(0.35e-3, 0.0)), id='decentred'),
+])
+def test_the_model_gets_the_same_fit_domain_on_either_basis(extra):
+    """``newton_fit`` is an interpolant choice, so it must not change what the
+    inverse-map model is FITTED TO.
+
+    This is the assertion the D5 bypass used to fail: the polynomial basis
+    applied the ray-fit disc and the spline basis did not, so the model saw a
+    disc on one and the whole launch square on the other.  Everything checked
+    here is the model's OWN record, not a field tolerance -- the sample set,
+    the exit normalisation box, and its own held-out error against the traced
+    landings.
+    """
+    _a, _m, ra = _apply_imap('polynomial', fit_radius_beam_factor=2.0, **extra)
+    _b, _m2, rb = _apply_imap('spline', fit_radius_beam_factor=2.0, **extra)
+    assert ra.get('gate_open') and rb.get('gate_open'), (ra, rb)
+    for k in _SAME_DOMAIN_KEYS:
+        assert k in ra and ra[k] is not None, (k, ra)
+        assert ra[k] == rb[k], (
+            f'the inverse-map model saw a different {k} on the two '
+            f'newton_fit backends ({ra[k]!r} vs {rb[k]!r}) -- the fit domain '
+            f'has become basis-dependent again')
+
+
+def test_the_disc_is_live_for_the_model_even_where_the_basis_cannot_fit_it():
+    """The half of the bypass that DID retire, stated as behaviour.
+
+    On the spline basis ``fit_radius_beam_factor`` cannot reach the forward
+    bicubic -- but it does reach the model, so on a call that builds one the
+    knob is NOT inert.  Both halves are asserted, because "the knob now does
+    something" is only meaningful next to "and it does the RIGHT something":
+    the restricted model must be the same object the polynomial basis builds.
+    """
+    _a, _m, r_on = _apply_imap('spline', fit_radius_beam_factor=2.0)
+    _b, _m2, r_off = _apply_imap('spline', fit_radius_beam_factor=None)
+    assert r_on['n_alive'] < r_off['n_alive'], (
+        'fit_radius_beam_factor no longer restricts the inverse-map model on '
+        'the spline basis -- the fit-domain symmetry fix has been reverted: '
+        f'{r_on["n_alive"]} vs {r_off["n_alive"]} samples')
+    _c, _m3, r_poly = _apply_imap('polynomial', fit_radius_beam_factor=2.0)
+    assert r_on['n_alive'] == r_poly['n_alive']
+
+
+def test_no_rectangular_sub_lattice_can_express_the_disc():
+    """THE ROUTE NOT TAKEN, refuted as arithmetic rather than as an opinion.
+
+    ``RectBivariateSpline`` needs a full NaN-free tensor grid, so the only
+    fit-domain restriction that basis could express is a rectangular
+    SUB-LATTICE of the launch lattice.  No rectangle is a disc: any
+    sub-lattice either keeps launch nodes the disc excludes or drops nodes the
+    disc keeps.  So restricting the spline that way would leave the two bases
+    handing the inverse-map model DIFFERENT sample sets anyway -- it cannot
+    close the defect even in principle, which is why the domain was made
+    basis-independent at the consumer instead.
+    """
+    n = 181
+    xs = np.linspace(-1.0, 1.0, n)
+    R = 0.30
+    disc = (xs[:, None] ** 2 + xs[None, :] ** 2) <= R ** 2
+    assert disc.any() and not disc.all()
+    for half in np.linspace(0.02, 1.0, 40):
+        keep = np.abs(xs) <= half
+        rect = keep[:, None] & keep[None, :]
+        assert not np.array_equal(rect, disc), (
+            'a rectangular sub-lattice reproduced the fit disc exactly -- if '
+            'that is really possible the D5 route adjudication must be redone')
+    # ...and the best one still misses by a wide margin, in both directions.
+    best = None
+    for half in np.linspace(0.02, 1.0, 200):
+        keep = np.abs(xs) <= half
+        rect = keep[:, None] & keep[None, :]
+        sym = int((rect ^ disc).sum())
+        if best is None or sym < best[0]:
+            best = (sym, int((rect & ~disc).sum()), int((disc & ~rect).sum()))
+    assert best[1] > 0 or best[2] > 0
+    assert best[0] > 0.10 * int(disc.sum()), best
+
+
+# ===========================================================================
+# FIX G8 PROBE (2026-08-12)
+#
+# The fit domain was made basis-independent above; what remained basis-
+# dependent was G8's own PROBE.  It scored both arms at held-out LAUNCH NODES,
+# and ``RectBivariateSpline`` is built with ``s = 0``, so on the spline basis
+# the incumbent reproduces every node EXACTLY -- including the ones held out,
+# because they were held out of the MODEL only.  These two pin the mechanism
+# (the probe, not the accuracy, is what differed) and the consequence (with an
+# off-lattice probe the two bases reach the same verdict and the same field).
+# ===========================================================================
+def test_a_node_probe_cannot_measure_an_interpolating_incumbent():
+    """THE FALSE-REFUSAL PROOF, at the level the defect actually lives -- the
+    two BASES, with no element call in the way.
+
+    G8's old probe points were launch nodes, and the two ``newton_fit``
+    backends answer a question asked there in categorically different ways:
+
+      * ``RectBivariateSpline`` is built with the default ``s = 0``, i.e. it
+        INTERPOLATES.  Its error at its own knots is ZERO by construction --
+        not small, zero -- and says nothing at all about its accuracy;
+      * a global least-squares Chebyshev has genuine residual at the same
+        nodes, so its node error IS its production error.
+
+    Exit pixels are never launch nodes.  So a guard scoring both arms at nodes
+    reads one incumbent as infinitely accurate and the other honestly, and the
+    38x spread that produced on niche C6's fixture (3.70e-12 m at the knots
+    against 1.28e-10 m between them, versus 1.0x for the polynomial) is a
+    property of the PROBE, not of either map.  Measured on design 121 the same
+    way: the model the node probe refused is 0.336x the spline incumbent's
+    position error and 0.331x its OPL error in production.
+    """
+    from scipy.interpolate import RectBivariateSpline
+
+    n = 41
+    xs = np.linspace(-1.0, 1.0, n)
+    X, Y = np.meshgrid(xs, xs, indexing='ij')
+
+    def f(x, y):                       # smooth, non-separable, real curvature
+        return np.sin(2.3 * x) * np.cos(1.7 * y) + 0.3 * x * y ** 3
+
+    F = f(X, Y)
+    mids = 0.5 * (xs[:-1] + xs[1:])
+    MX, MY = np.meshgrid(mids, mids, indexing='ij')
+
+    spl = RectBivariateSpline(xs, xs, F)          # s = 0 by default
+    e_node_s = float(np.abs(spl.ev(X, Y) - F).max())
+    e_mid_s = float(np.abs(spl.ev(MX, MY) - f(MX, MY)).max())
+
+    from numpy.polynomial.chebyshev import chebvander
+    deg = 6
+    terms = np.array([[a, b] for a in range(deg + 1)
+                      for b in range(deg + 1 - a)])
+
+    def design(ux, uy):
+        Vx = chebvander(np.ravel(ux), deg)
+        Vy = chebvander(np.ravel(uy), deg)
+        return Vx[:, terms[:, 0]] * Vy[:, terms[:, 1]]
+
+    coef = np.linalg.lstsq(design(X, Y), F.ravel(), rcond=None)[0]
+    e_node_p = float(np.abs(design(X, Y) @ coef - F.ravel()).max())
+    e_mid_p = float(np.abs(design(MX, MY) @ coef
+                           - f(MX, MY).ravel()).max())
+
+    assert e_mid_s > 0.0 and e_node_p > 0.0
+    assert e_node_s < 1e-6 * e_mid_s, (
+        'RectBivariateSpline stopped interpolating its own knots -- if that '
+        f'is really so the node probe was fair after all ({e_node_s:.3e} vs '
+        f'{e_mid_s:.3e})')
+    assert 0.3 < e_mid_p / e_node_p < 3.0, (
+        'the least-squares arm should be equally (in)accurate at its own '
+        f'nodes and between them; measured {e_mid_p / e_node_p:.3f}')
+
+
+def test_both_bases_engage_the_same_model_and_return_the_same_field():
+    """WHAT THE RE-ARCHITECTED GUARD BUYS, stated as the shipped contract.
+
+    ``newton_fit`` is an interpolant choice, so with the fit domain
+    basis-independent (above) and the probe basis-independent (here) the two
+    backends must not merely agree to a tolerance -- they build the same
+    model, engage it on the same verdict, and return the same bytes.  Measured
+    on niche C6's own fixture the backend spread is exactly 0.0 with the map
+    forced on, where it was 1.06e-02 against a 5e-04 bar before.
+    """
+    a, _ma, ra = _apply_imap('polynomial', fit_radius_beam_factor=2.0)
+    b, _mb, rb = _apply_imap('spline', fit_radius_beam_factor=2.0)
+    assert ra['engaged'] is True and rb['engaged'] is True, (
+        'the two newton_fit backends reach different G8 verdicts: '
+        f'{ra.get("refused")!r} vs {rb.get("refused")!r}')
+    assert np.array_equal(a, b), (
+        'both backends engaged the same model and still returned different '
+        f'fields (max |dE| {float(np.abs(a - b).max()):.4e})')
+
+
+def test_a_cached_model_cannot_carry_an_acceptance_across_bases():
+    """The build cache keys on the MODEL; G8's verdict is a property of the
+    PAIR (model, incumbent).
+
+    Once the fit domain is basis-independent the two backends build the SAME
+    model, so without the incumbent in the key the second call would inherit
+    the first's acceptance and the returned field would depend on the ORDER
+    the two calls were made in.  Measured on niche C6's fixture before the tag
+    was added: 1.0600e-02 backend spread one way round and 0.0 the other, from
+    the same two calls.  Neither number is wrong here -- an ORDER-DEPENDENT
+    answer is.
+    """
+    def verdicts(order):
+        v = {}
+        for b in order:
+            _f, _m, r = _apply_imap(b, fit_radius_beam_factor=2.0)
+            v[b] = (bool(r.get('engaged')), r.get('refused'))
+        return v
+
+    fwd = verdicts(('polynomial', 'spline'))
+    rev = verdicts(('spline', 'polynomial'))
+    assert fwd == rev, (
+        'the inverse-map build cache carried one newton_fit backend\'s G8 '
+        f'verdict to the other: {fwd} run one way, {rev} the other')

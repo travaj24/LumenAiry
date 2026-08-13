@@ -65,17 +65,71 @@ def _second_moment_radius(I, dx, crop=None):
 # Bug 1 -- nonparaxial f < 0
 # ---------------------------------------------------------------------------
 
-def test_nonparaxial_f_positive_byte_identical_to_historical():
-    """For f > 0 the corrected form is BYTE-identical to the historical
-    ``exp(1j*k*(f - sqrt(f**2 + r**2)))`` -- no existing converging
-    result changes."""
+def test_nonparaxial_f_positive_matches_the_historical_form_to_its_own_floor():
+    """For f > 0 the corrected form reproduces the historical
+    ``exp(1j*k*(f - sqrt(f**2 + r**2)))`` -- no existing converging result
+    changes -- and where it does NOT, it is because the shipped form is the
+    more accurate of the two.
+
+    THIS TEST USED TO ASSERT BYTE IDENTITY, and that assertion has been
+    RETIRED DELIBERATELY (VERIFY_ARCHITECTURE F10/P2-7, adjudicated
+    2026-08-12).  ``sqrt(f^2 + r^2) - |f|`` is a catastrophic cancellation
+    for ``r << |f|``: it inherits the ulp of the square root, i.e. an
+    absolute error of ``eps*|f|`` metres -- ``k*eps*|f|`` radians -- no
+    matter how small the sag itself is.  The library now evaluates the
+    algebraically identical ``r^2 / (sqrt(f^2+r^2) + |f|)``, the same
+    rationalization commit a185cfc applied to the carrier eikonal.
+
+    Adjudicated against a 60-digit decimal oracle on this fixture
+    (f = 30 mm, N = 256, dx = 8 um, lambda = 1 um):
+
+    .. code-block:: text
+
+        historical subtraction   2.02e-11 rad  (= k*eps*f/2, the floor)
+        shipped rationalized     2.13e-14 rad
+                                 -------------
+                                 951x better
+
+    So byte identity with the historical expression is not a property worth
+    pinning -- it is a pin against the defect.  What IS pinned: the two agree
+    to the historical form's OWN error floor (so nothing observable moved),
+    and the shipped form beats it against the oracle.
+    """
+    import decimal
+
     N, dx, f = 256, 8e-6, 30e-3
     out = _phase_grid(N, dx, f, 'nonparaxial')
     x = (np.arange(N) - N / 2) * dx
     X, Y = np.meshgrid(x, x)
     r_sq = X ** 2 + Y ** 2
     hist = np.exp(1j * _K * (f - np.sqrt(f ** 2 + r_sq)))
-    assert np.array_equal(out, hist)
+
+    # (1) nothing observable moved: the disagreement is at the historical
+    # form's own cancellation floor, not above it
+    floor = _K * float(np.finfo(np.float64).eps) * abs(f)
+    d = np.abs(np.angle(out * np.conj(hist)))
+    assert float(d.max()) <= floor, (
+        f"the shipped nonparaxial phase differs from the historical form by "
+        f"{float(d.max()):.3e} rad, ABOVE that form's own k*eps*|f| = "
+        f"{floor:.3e} floor -- this is a real change, not a rounding one")
+
+    # (2) ... and where they differ, the shipped one is right.  Oracle: the
+    # same closed form in 60-digit decimal arithmetic.
+    with decimal.localcontext() as ctx:
+        ctx.prec = 60
+        D = decimal.Decimal
+        err_hist = err_ship = 0.0
+        for i, j in ((0, 0), (128, 128), (130, 131), (200, 60), (255, 255)):
+            rs = float(r_sq[i, j])
+            exact = float(D(f) - (D(rs) + D(f) * D(f)).sqrt())
+            got_h = f - float(np.sqrt(f ** 2 + rs))
+            got_s = -float(rs / (np.sqrt(f ** 2 + rs) + abs(f)))
+            err_hist = max(err_hist, abs(got_h - exact))
+            err_ship = max(err_ship, abs(got_s - exact))
+    assert err_ship < err_hist / 100.0, (
+        f"the shipped form ({err_ship:.3e} m) is not decisively better than "
+        f"the historical subtraction ({err_hist:.3e} m) against a 60-digit "
+        f"oracle -- the rationalization is not in force")
 
 
 def test_nonparaxial_negative_f_is_exact_conjugate_of_positive():

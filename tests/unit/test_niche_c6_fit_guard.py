@@ -267,10 +267,22 @@ def test_guard_raises_the_fit_order_like_d7(_warm):
     """The remedy is the weighted restriction AND D7's order raise; pinning
     only the first would silently ship a different (and measurably worse)
     configuration.  ``decentred_fit_poly_order`` is what carries the raise, so
-    forcing it back to ``newton_poly_order`` must change the result."""
+    forcing it back to ``newton_poly_order`` must change the result.
+
+    SCORED WITH ``inverse_map=False``, which is where the raise lives.
+    ``decentred_fit_poly_order`` is a property of the element's own
+    degree-``newton_poly_order`` FORWARD fit; fix D5 deliberately does not pass
+    it to the inverse-characteristic model (it has no meaning for a degree-14
+    fit in EXIT coordinates), and with that model engaged -- the shipped
+    default since ``FIX_G8_PROBE_2026_08_12`` -- the returned OPL, entrance
+    coordinates and ``det J`` no longer come from the forward fit at all.  So
+    with the map on the two arms are byte-identical, which is the map working
+    rather than the raise failing: the knob still moves the forward fit, and
+    that is the object this test is about.
+    """
     E, _X, _Y = _field()
-    a = _run(E, True)
-    b = _run(E, True, decentred_fit_poly_order=6)
+    a = _run(E, True, inverse_map=False)
+    b = _run(E, True, decentred_fit_poly_order=6, inverse_map=False)
     assert not np.array_equal(a, b)
 
 

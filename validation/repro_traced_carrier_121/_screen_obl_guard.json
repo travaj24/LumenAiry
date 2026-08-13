@@ -39,7 +39,7 @@
    {
     "estimate_waves": 0.2391,
     "fires_off": true,
-    "fires_on": true,
+    "fires_on": false,
     "group": 5,
     "tilt_mrad": 54.865810377163285
    }

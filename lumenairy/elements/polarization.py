@@ -410,11 +410,23 @@ class JonesField:
         slant_correction: bool = False,
         fresnel: bool = False,
         absorption: bool = False,
+        carrier: Any = None,
+        screen_obliquity: Any = 'auto',
+        on_screen_obliquity: str = 'warn',
     ) -> 'JonesField':
         """Apply a multi-surface real lens to both components.
 
         See :func:`lumenairy.lenses.apply_real_lens` for parameter
         documentation.
+
+        .. versionchanged:: 5.35
+            ``carrier`` / ``screen_obliquity`` / ``on_screen_obliquity`` are
+            exposed and forwarded to BOTH components (BUILD_R1_WIRING S4).
+            Ex and Ey share one congruence -- the same statement the
+            large-tilt basis-rotation note above makes -- so one carrier is
+            the right surface, and without it the angular correction was
+            unreachable from every polarized consumer.  Defaults are the
+            pre-5.35 behaviour exactly.
 
         Warning
         -------
@@ -440,16 +452,22 @@ class JonesField:
                 UserWarning, stacklevel=2)
         # v5.4.6 (audit P2-4): forward dy=self.dy so anamorphic JonesFields
         # (dx != dy) keep the correct y-axis pitch (apply_thin_lens already did).
+        _obl = dict(carrier=carrier, screen_obliquity=screen_obliquity,
+                    on_screen_obliquity=on_screen_obliquity)
         self.Ex = apply_real_lens(
             self.Ex, prescription=prescription, wavelength=wavelength,
             dx=self.dx, dy=self.dy,
             bandlimit=bandlimit, slant_correction=slant_correction,
-            fresnel=fresnel, absorption=absorption)
+            fresnel=fresnel, absorption=absorption, **_obl)
+        # the guard is per-CALL, so silence the second component's copy: it
+        # would report the identical estimate for the identical congruence.
+        _obl['on_screen_obliquity'] = ('silent' if carrier is not None
+                                       else on_screen_obliquity)
         self.Ey = apply_real_lens(
             self.Ey, prescription=prescription, wavelength=wavelength,
             dx=self.dx, dy=self.dy,
             bandlimit=bandlimit, slant_correction=slant_correction,
-            fresnel=fresnel, absorption=absorption)
+            fresnel=fresnel, absorption=absorption, **_obl)
         return self
 
     def apply_mirror(self, wavelength: float, **kwargs: Any) -> 'JonesField':

@@ -482,6 +482,113 @@ def test_no_fold_and_no_ghost_across_the_adversarial_geometries(label, kw):
         assert n_sc == 0, f"{label}: the fitted forward map folds ({n_sc})"
 
 
+# ===========================================================================
+# 3b.  THE SOLVE CENSUS -- the deterministic handle on the hard-mask arm
+# ===========================================================================
+# WHY THE OFF-BEAM MAGNITUDE IS NOT AN ASSERTABLE OBSERVABLE, and what is.
+#
+# The three tests below all degenerate the ray-fit restriction to D1's hard
+# NaN mask.  That leaves the 28-term decentred coordinate fit EXACTLY singular
+# in the normal equations (``_gram_rcond(A^T A) == 0.0`` -- measured, not
+# estimated), so the returned coefficients are a NULL-SPACE DRAW.  The size of
+# the ghost such a draw makes is then decided by the last bits of the data,
+# and that is measurable rather than asserted.  Measured on this fixture,
+# ``LSTSQ_CONDITIONING_STEPDOWN`` off, degree 4, off-beam fraction of peak,
+# nudging the carrier decentre by whole ULPs (1 ULP on 5.6 mm = 8.674e-19 m,
+# i.e. sub-femtometre):
+#
+#     +0 ULP  1.7549e-04      +1 ULP  9.4155e-01      +2 ULP  9.7849e-01
+#     +3 ULP  6.7412e-01      +4 ULP  9.4576e-01        spread 5576x
+#
+# and with ``LSTSQ_CONDITIONING_STEPDOWN`` ON, the same five nudges read
+# 1.7548444178e-04 .. 1.7548444187e-04 -- stable to NINE significant figures.
+# The same experiment run by adding IID noise of 1e-18 m (0.075 of eps*|R|)
+# to the carrier eikonal flips the answer across the 0.1 bar on a change of
+# RNG SEED alone.  The historical bar ``r_old > 0.1`` was therefore a bar on a
+# coin flip: it recorded four build answers spanning four orders of magnitude
+# in the docstrings below, and this branch's `sqrt(r^2+R^2)-|R|`
+# rationalization -- worth 1.21e-17 m on this fixture -- produced a fifth,
+# 1.75e-04, which is under the floor.  The magnitude is now RECORDED
+# everywhere and asserted NOWHERE.
+#
+# What IS deterministic, on every build, is the draw itself.  ``_solve_census``
+# scores each least-squares solve the call makes on the quantity the fit is
+# DEFINED by, against a backward-stable QR answer to the same system:
+#
+#   config                          min rcond     max ||b-Ax||/||b-Ax_qr||
+#   hard mask, pre-C13               0.0e+00           36972.83
+#   hard mask, pre-C13, +1 ULP       0.0e+00          233325.49
+#   hard mask, C13 ON                0.0e+00               1.000000
+#   weighted disc, pre-C13           1.3e-11               1.000003
+#   weighted disc, C13 ON (shipped)  1.3e-11               1.000000
+#
+# Four orders of separation, no ties, and it says exactly what the ghost was
+# always a proxy for: the hard mask makes the solve return an answer that is
+# not the least-squares answer, and EITHER cure -- the weighted disc (D1) or
+# the C13 step-down -- makes it return one that is.
+
+
+def _solve_census(**kw):
+    """One ``_ghost_apply`` with the least-squares solver instrumented.
+
+    Returns ``(field, folds, rows)`` where each row is
+    ``(gram_rcond, ||b - A x_returned|| / ||b - A x_qr||, A.shape)`` for one
+    solve.  The instrument only OBSERVES: it delegates to the shipped solver
+    and returns its answer untouched, then scores it against an independent
+    QR solve of the same system.  A ratio of 1.0 means the shipped path
+    returned the least-squares answer; >> 1 means it returned a null-space
+    draw instead."""
+    rows = []
+    orig = _lt._solve_lstsq_thread_safe
+
+    def _instrumented(A, b):
+        x = orig(A, b)
+        A64 = np.ascontiguousarray(A, dtype=np.float64)
+        b64 = np.asarray(b, dtype=np.float64)
+        r_x = _lt._lstsq_residual(A64, b64, x)
+        r_q = _lt._lstsq_residual(A64, b64, _lt._solve_lstsq_qr(A64, b64))
+        rows.append((_lt._gram_rcond(A64.T @ A64),
+                     (r_x / r_q) if r_q > 0.0 else np.inf, A64.shape))
+        return x
+
+    _lt._solve_lstsq_thread_safe = _instrumented
+    try:
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            a = np.abs(_ghost_apply(**kw))
+    finally:
+        _lt._solve_lstsq_thread_safe = orig
+    folds = sum('fold caustic' in str(w.message) for w in rec)
+    return a, folds, rows
+
+
+def _worst_draw(rows):
+    """``(min rcond, max residual ratio)`` over a census."""
+    assert rows, ('the call made no least-squares solve at all -- the census '
+                  'is instrumenting a function the fit no longer goes through')
+    return (min(r[0] for r in rows), max(r[1] for r in rows))
+
+
+def _offbeam_ratio(a, cx=_GXC, cy=0.0):
+    x = (np.arange(_GN) - _GN // 2) * _GDX
+    near = ((x[None, :] - cx) ** 2 + (x[:, None] - cy) ** 2) <= (3 * _GW) ** 2
+    return float(a[~near].max()) / float(a[near].max())
+
+
+#: A returned fit that misses the least-squares residual by more than this is
+#: a null-space draw, not a fit.  Measured minimum on the arms below is
+#: 3240.5x and the maximum is 233325.5x, so this floor sits 324x under the
+#: smallest draw ever observed here, while the cured arms read 1.000000 and
+#: 1.000003 -- i.e. the bar has three decades of room on BOTH sides and does
+#: not need to know which draw a given build lands on.
+_DRAW_RESID_RATIO = 10.0
+
+#: The cured arms return the QR answer or something that ties with it.  The
+#: library's own tie margin is ``_LSTSQ_RESID_MARGIN`` = 1e-6; 1.001 is three
+#: decades above it and four decades under the smallest draw.
+_CURED_RESID_RATIO = 1.001
+
+
 def test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order(
         monkeypatch):
     """The extra terms must not have made ``_FIT_DISC_OUTSIDE_WEIGHT_REL``
@@ -509,24 +616,51 @@ def test_the_fold_regularisation_is_still_load_bearing_at_the_d7_order(
     is relaxed, and the guard is still load-bearing where it matters: on
     design 121's real chain, degenerating this weight from 1e-8 to 1e-4 costs
     41 EE3 points (docs/audits/D121_RESIDUAL_CLOSURE_2026_08_02.md S5.2).
-    """
+
+    RE-ARMED 2026-08-12 (fix/verify-arch CI reconciliation).  The fail-before
+    used to be ``r_bad > 0.1`` -- the off-beam magnitude of the hard-mask arm.
+    That magnitude is a NULL-SPACE DRAW and is decided at 1e-18 m; see the
+    ULP ladder in section 3b above, where five sub-femtometre nudges of the
+    same fixture read 1.75e-04 / 0.942 / 0.978 / 0.674 / 0.946.  It is now
+    recorded and not asserted, and the load-bearing claim is made where it is
+    deterministic: WITH the weighted restriction the normal equations return
+    the least-squares answer (residual ratio 1.000003 against QR); with the
+    mask degenerated they return one that fits 3.7e+04 times worse.  That is
+    what "the regularisation is load-bearing" means, stated so that no build
+    can pass it by landing on the lucky side of the instability."""
     _ram_guard()
     monkeypatch.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
     monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
-    good = np.abs(_ghost_apply())
+    good, _f_good, rows_good = _solve_census()
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        bad = np.abs(_ghost_apply())
-    x = (np.arange(_GN) - _GN // 2) * _GDX
-    near = ((x[None, :] - _GXC) ** 2 + x[:, None] ** 2) <= (3 * _GW) ** 2
-    r_good = float(good[~near].max()) / float(good[near].max())
-    r_bad = float(bad[~near].max()) / float(bad[near].max())
+    bad, folds_bad, rows_bad = _solve_census()
+    r_good = _offbeam_ratio(good)
+    r_bad = _offbeam_ratio(bad)
+    rc_good, ratio_good = _worst_draw(rows_good)
+    rc_bad, ratio_bad = _worst_draw(rows_bad)
+
+    # the shipped restriction still produces a clean field ...
     assert r_good < 0.01, r_good
-    assert r_bad > 0.1, (
-        f"the hard-mask fail-before stopped failing at the D7 order "
-        f"(off-beam {r_bad:.4f} of peak) -- retune the case")
-    assert any('fold caustic' in str(m.message) for m in rec)
+    # ... and, deterministically, a fit that IS the least-squares fit
+    assert ratio_good <= _CURED_RESID_RATIO, (
+        f"the weighted restriction stopped conditioning the solve: its worst "
+        f"returned fit misses the least-squares residual by {ratio_good:.6f}x "
+        f"(rcond {rc_good:.3e})")
+
+    # degenerate it to D1's hard NaN mask and the same solve goes singular and
+    # answers with a draw.  THIS is the fail-before.
+    assert rc_bad < _lt._LSTSQ_GRAM_RCOND_MIN, (
+        f"the hard mask no longer makes the decentred fit singular "
+        f"(rcond {rc_bad:.3e} >= {_lt._LSTSQ_GRAM_RCOND_MIN:.1e}) -- the "
+        f"restriction has nothing left to regularise, so retune the case")
+    assert ratio_bad > _DRAW_RESID_RATIO, (
+        f"the hard-mask fail-before stopped failing at the D7 order: its "
+        f"worst returned fit misses the least-squares residual by only "
+        f"{ratio_bad:.4f}x (off-beam {r_bad:.4f} of peak) -- retune the case")
+    assert ratio_bad > 100.0 * ratio_good, (ratio_bad, ratio_good)
+    assert folds_bad >= 1, 'the hard-mask arm stopped folding'
+    # r_bad is RECORDED, never bounded -- section 3b.
+    assert np.isfinite(r_bad), r_bad
 
 
 def test_the_hard_mask_arm_ghosts_on_every_build(monkeypatch):
@@ -560,10 +694,24 @@ def test_the_hard_mask_arm_ghosts_on_every_build(monkeypatch):
     so the magnitude is now RECORDED here and asserted nowhere.
 
     What is still asserted is the part that is build-invariant and that the
-    era-pinned sibling above actually depends on: the degree-4 hard-mask arm
-    GHOSTS, on every build (0.35 / 0.997 / ~1.0 against a 0.1 floor).  That is
-    this test's remaining job -- it is the sibling's premise, checked
-    independently of the era pin.
+    era-pinned sibling above actually depends on -- but it is no longer the
+    ghost.  RE-ARMED 2026-08-12 (fix/verify-arch CI reconciliation): the
+    remaining bar ``r_old > 0.1`` was itself a bar on the same unstable
+    magnitude, and a FOURTH build answer has now arrived under it.  This
+    branch's ``sqrt(r^2+R^2) - |R|`` rationalization moves the carrier eikonal
+    by 1.214e-17 m on this fixture (eps*|R| = 1.332e-17 m) and the arm read
+    1.7549e-04.  Bisected to one line, ``_lens_traced._tilted_carrier_parts``
+    line 3848; reverting that line alone restores 5.2129148080e-01 to ten
+    digits, and reverting the sibling ``_compute_carrier`` hunk changes
+    nothing.  Sub-femtometre ULP nudges of the fixture's own decentre
+    reproduce the whole four-order spread IN ONE PROCESS (section 3b).
+
+    So the test name is kept -- it is the ledger entry for this arm -- and
+    what it asserts is the mechanism the ghost was always a proxy for: on
+    every build, the degree-4 hard-mask arm returns a fit that is NOT the
+    least-squares fit.  That is a property of the singular normal equations,
+    not of which side of them a build lands on, and it is the sibling's real
+    premise.
 
     (This was one of the v5.32.1 CI failures at ``5af1edf`` and it PREDATES
     niche C11: driven directly with the flag pinned each way in one process it
@@ -591,18 +739,30 @@ def test_the_hard_mask_arm_ghosts_on_every_build(monkeypatch):
     monkeypatch.setattr(_lt, 'RAY_DENSITY_HALO_CHECK', 'silent')
     with monkeypatch.context() as m:
         m.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
-        old = np.abs(_ghost_apply())
+        old, _folds_old, rows_old = _solve_census()
     new = np.abs(_ghost_apply())
-    x = (np.arange(_GN) - _GN // 2) * _GDX
-    near = ((x[None, :] - _GXC) ** 2 + x[:, None] ** 2) <= (3 * _GW) ** 2
-    r_old = float(old[~near].max()) / float(old[near].max())
-    r_new = float(new[~near].max()) / float(new[near].max())
-    assert r_old > 0.1, f"the degree-4 arm is not live ({r_old:.4f})"
-    # r_new is RECORDED, not bounded -- see the docstring.  The only thing
-    # asserted about it is that the degree-6 arm still returns a usable field
-    # on this deliberately degenerate fixture rather than NaN or nothing.
-    assert np.isfinite(r_new), r_new
-    assert float(new.max()) > 0.0
+    r_old = _offbeam_ratio(old)
+    r_new = _offbeam_ratio(new)
+    rc_old, ratio_old = _worst_draw(rows_old)
+
+    # THE BUILD-INVARIANT PART: the degree-4 hard-mask arm is live because its
+    # normal equations are singular and answer with a draw -- not because the
+    # draw happened to be big on this build.
+    assert rc_old < _lt._LSTSQ_GRAM_RCOND_MIN, (
+        f"the degree-4 hard-mask arm is not live: its worst Gram is no "
+        f"longer singular (rcond {rc_old:.3e}), so there is no instability "
+        f"for the era pin to sit on")
+    assert ratio_old > _DRAW_RESID_RATIO, (
+        f"the degree-4 hard-mask arm is not live: the fit it returns misses "
+        f"the least-squares residual by only {ratio_old:.4f}x, i.e. the "
+        f"normal equations are answering it correctly "
+        f"(off-beam {r_old:.6f} of peak)")
+    # r_old AND r_new are RECORDED, not bounded -- see the docstring and
+    # section 3b.  The only thing asserted about the fields is that the arm
+    # still returns a usable one on this deliberately degenerate fixture
+    # rather than NaN or nothing.
+    assert np.isfinite(r_old) and np.isfinite(r_new), (r_old, r_new)
+    assert float(new.max()) > 0.0 and float(old.max()) > 0.0
 
 
 def test_c13_cures_the_hard_mask_fold_at_the_d7_order(monkeypatch):
@@ -624,33 +784,52 @@ def test_c13_cures_the_hard_mask_fold_at_the_d7_order(monkeypatch):
     (This says nothing about whether the restriction is still needed -- it is;
     see the siblings' docstrings and the 41-72 EE3 points it costs on design
     121 when degenerated there.)
-    """
+
+    RE-ARMED 2026-08-12 (fix/verify-arch CI reconciliation).  The cure used to
+    be scored as ``r_pre > 0.1`` and ``r_pre > 100 r_post`` -- a RATIO OF TWO
+    GHOST MAGNITUDES, one of which is a null-space draw (section 3b).  It is
+    now scored on the thing C13 actually changes, which is deterministic and
+    which the docstring above already names: the SOLVE.  Both arms leave the
+    Gram equally singular (rcond 0.0 either way -- C13 does not condition the
+    matrix, it stops trusting the normal equations); pre-C13 the returned fit
+    misses the least-squares residual by 3.7e+04x, and with C13 on it reads
+    1.000000.  The fold and ghost assertions on the POST arm are unchanged,
+    because those are the arm where the answer is stable to nine figures."""
     _ram_guard()
     monkeypatch.setattr(_lt, 'RAY_DENSITY_HALO_CHECK', 'silent')
     monkeypatch.setattr(_lt, '_REMAP_RESID_EIKONAL_DEGREE', 4)
     monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
 
-    def _offbeam():
-        with warnings.catch_warnings(record=True) as rec:
-            warnings.simplefilter('always')
-            a = np.abs(_ghost_apply())
-        x = (np.arange(_GN) - _GN // 2) * _GDX
-        near = ((x[None, :] - _GXC) ** 2 + x[:, None] ** 2) <= (3 * _GW) ** 2
-        folds = sum('fold caustic' in str(m.message) for m in rec)
-        return float(a[~near].max()) / float(a[near].max()), folds
-
     with monkeypatch.context() as m:
         m.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
-        r_pre, folds_pre = _offbeam()
-    r_post, folds_post = _offbeam()
+        a_pre, folds_pre, rows_pre = _solve_census()
+    a_post, folds_post, rows_post = _solve_census()
+    r_pre, r_post = _offbeam_ratio(a_pre), _offbeam_ratio(a_post)
+    rc_pre, ratio_pre = _worst_draw(rows_pre)
+    rc_post, ratio_post = _worst_draw(rows_post)
 
-    # the fail-before is live: the pre-C13 solve ghosts and folds
-    assert r_pre > 0.1, f'the pre-C13 arm stopped ghosting ({r_pre:.4f})'
+    # the fail-before is live: the pre-C13 solve answers a singular system
+    # with a draw, and the draw folds the fitted forward map
+    assert rc_pre < _lt._LSTSQ_GRAM_RCOND_MIN, (
+        f'the pre-C13 arm is no longer singular (rcond {rc_pre:.3e})')
+    assert ratio_pre > _DRAW_RESID_RATIO, (
+        f'the pre-C13 arm stopped drawing: its returned fit misses the '
+        f'least-squares residual by only {ratio_pre:.4f}x '
+        f'(off-beam {r_pre:.6f} of peak)')
     assert folds_pre >= 1, 'the pre-C13 arm stopped folding'
-    # ... and the shipped solve does neither, by a wide margin
+
+    # ... and the shipped solve returns the least-squares answer to the SAME
+    # singular system, and does neither
+    assert rc_post < _lt._LSTSQ_GRAM_RCOND_MIN, (
+        f'C13 is being credited with conditioning the matrix, which it does '
+        f'not do (rcond {rc_post:.3e}) -- it re-solves, and that is the claim')
+    assert ratio_post <= _CURED_RESID_RATIO, (
+        f'C13 no longer returns the least-squares answer: {ratio_post:.6f}x')
+    assert ratio_pre > 100.0 * ratio_post, (ratio_pre, ratio_post)
     assert r_post < 0.01, f'C13 no longer removes the ghost ({r_post:.4f})'
     assert folds_post == 0, 'the fold detector still fires with C13 on'
-    assert r_pre > 100.0 * r_post, (r_pre, r_post)
+    # r_pre is RECORDED, never bounded -- section 3b.
+    assert np.isfinite(r_pre), r_pre
 
 
 def test_the_off_centre_field_tracks_the_unrestricted_spline_map():
