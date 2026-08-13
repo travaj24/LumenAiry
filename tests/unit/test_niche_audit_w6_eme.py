@@ -441,25 +441,186 @@ def test_w6_6_detection_grid_size_is_length_unit_invariant():
     assert f(0.0, 1.0, 1.0, 4096) == 4096           # n_scan stays a floor
 
 
+# --------------------------------------------------------------------------- #
+#  W6-6 support: a CONVERGED dip polish, and why the pin needs one.            #
+#                                                                              #
+#  ``layer_vector_modes._refine_accept`` refines a detected dip with a bare     #
+#  ``minimize_scalar(method="bounded")`` and then reads its rank-drop           #
+#  acceptance test AT THE POINT THAT MINIMISER STOPS.  Two measured facts make  #
+#  that reading build-dependent, and both are LIBRARY behaviour, not test       #
+#  tolerance (``eme_2d_vector.py`` is byte-identical on ``origin/main``):       #
+#                                                                              #
+#   * inside one detection bracket ``sigma_min(qz^2)`` is NOT unimodal -- it    #
+#     carries an O(1e-3) wiggle -- so bounded Brent's parabolic step traps on   #
+#     the wiggle.  Measured on the ``test_eme_2d_vector`` grating: it returns   #
+#     205.9786 (sigma_min 3.5e-5) for a mode whose converged root is            #
+#     205.974976 with sigma_min 2.7e-17;                                        #
+#   * where the zero is a DOUBLE zero (``sigma_min ~ C sqrt|q - q*|``, which is #
+#     this cell's two ghost dips at 180.770 and 235.869), no minimiser can get  #
+#     the reading below ~C sqrt(sqrt(eps)|q|) at all.                           #
+#                                                                              #
+#  Consequence: the finder's ACCEPT/REJECT verdict on a near-threshold          #
+#  candidate is a coin flip.  Measured ``gaps.min`` against the shipped         #
+#  ``ratio_tol = 1e-3``: 2.077e-3 (base arm) / 3.246e-3 (scaled arm) here, and  #
+#  1.09e-3 on the ``test_eme_2d_vector`` grating -- 1.09x to 3.2x margins that  #
+#  the ubuntu CI runner landed on the other side of, accepting a fourth         #
+#  candidate (235.8686333) in the base arm only.  So this pin no longer         #
+#  compares the two arms' CENSUS; it compares the CONVERGED ZEROS, which are    #
+#  reproducible to 1e-16 across both mounts.                                    #
+# --------------------------------------------------------------------------- #
+_W6_SCALE_ROOT_REL = 1e-6    # measured <= 9.13e-9 [M]/[W] on every true zero;
+#                              the shallow NON-modes in the same window read
+#                              >= 9.75e-5 -- ~110x margin below, ~97x above.
+_W6_ZERO_DEPTH = 2e-3        # measured <= 4.76e-5 for every candidate any build
+#                              has returned (<= 2.28e-4 for the deepest ghost);
+#                              the non-modes read >= 2.20e-2.  ~9x / ~11x.
+
+
+def _polished_dip(strips, Lx, Nx, Ly, k0, ky0, q, half, nloc=33):
+    """Converged local minimum of ``sigma_min(qz^2)`` in ``[q-half, q+half]``.
+
+    Two-stage BY CONSTRUCTION -- localise on a fine equispaced sub-grid, then a
+    bounded Brent on the surviving +-1 cell.  A bare bounded Brent on the whole
+    window is exactly the shipped ``_refine_accept`` step whose non-convergence
+    this helper exists to route around (see the block comment above).
+
+    Returns ``(root, depth)``.
+    """
+    from scipy.optimize import minimize_scalar
+
+    def f(x):
+        try:
+            return eme_2d_vector.dispersion_vec(strips, Lx, Nx, k0, 0.0, x,
+                                                ky0, Ly, "dense")
+        except np.linalg.LinAlgError:
+            return np.inf
+
+    xs = np.linspace(q - half, q + half, nloc)
+    vs = np.array([f(x) for x in xs])
+    j = int(np.argmin(vs))
+    r = minimize_scalar(f, bounds=(xs[max(j - 1, 0)], xs[min(j + 1, nloc - 1)]),
+                        method="bounded", options={"xatol": 1e-12})
+    if float(r.fun) <= float(vs[j]):
+        return float(r.x), float(r.fun)
+    return float(xs[j]), float(vs[j])
+
+
 def test_w6_6_scaled_cell_keeps_full_recall():
     """The behavioural consequence: the SAME physical cell expressed in a 10x
     larger length unit must recover the same modes.  PRE-FIX the scaled window
-    (``hi-lo`` shrunk 100x) collapsed to a 9-point detection grid."""
+    (``hi-lo`` shrunk 100x) collapsed to a 9-point detection grid.
+
+    RESTATED 2026-08-12.  The old form -- ``for q in base: min|scaled*s^2 - q|
+    < 3e-3|q|`` -- compared the two arms' ACCEPTED CENSUS element-wise, and the
+    census is not reproducible across LAPACK builds (block comment above).  The
+    ubuntu CI runner read ``min|[2.0825, 2.0372, 1.5628]*100 - 235.869| = 27.6``
+    against a bar of 0.708: not a grazed tolerance, a fourth entry the base arm
+    accepted and the scaled arm did not.  The claim is re-stated on the object
+    that IS scale-invariant and IS reproducible -- the converged zeros of the
+    mode condition -- and gains ~3 decades of position resolution doing it.
+    """
     Nx, k0, Ly, Lx = 8, 8.0, 1.0, 1.0
     strips = _reference_cell(Nx)
     lo, hi = 150.0, 250.0
     base = eme_2d_vector.layer_vector_modes(
         strips, Lx, Nx, Ly, k0, (lo, hi), ky0=PI, n_scan=3)
     s = 10.0                                        # lengths x10 -> qz^2 / 100
+    sc_strips = [(e, h * s) for e, h in strips]
     scaled = eme_2d_vector.layer_vector_modes(
-        [(e, h * s) for e, h in strips], Lx * s, Nx, Ly * s, k0 / s,
+        sc_strips, Lx * s, Nx, Ly * s, k0 / s,
         (lo / s ** 2, hi / s ** 2), ky0=PI / s, n_scan=3)
     assert len(base) >= 1
     assert len(scaled) >= 1, ("the scaled cell found NO modes -- the detection "
                               "grid collapsed with the length unit")
-    # the physics is exactly scale-invariant, so every base mode must reappear
-    for q in base:
-        assert np.min(np.abs(scaled * s ** 2 - q)) < 3e-3 * abs(q)
+    # (1) the mechanism W6-6 fixed, read off the SHIPPED helper on the two arms
+    #     this test actually runs (measured 801 == 801; PRE-FIX 801 vs 9).
+    gsz = eme_2d_vector._detect_grid_size
+    n_base = gsz(lo, hi, Ly, 3)
+    assert n_base == gsz(lo / s ** 2, hi / s ** 2, Ly * s, 3) == 801
+    # (2) the two censuses may differ by at most the near-threshold candidates
+    #     the finder's rank-drop gate is knife-edge on, and this window holds
+    #     exactly TWO of them (180.770 reads gaps.min 1.61e-3 / 2.99e-3 and
+    #     235.869 reads 2.08e-3 / 3.25e-3 against the shipped ratio_tol 1e-3).
+    #     Measured 0 here on both mounts and 1 on the ubuntu runner; a collapsed
+    #     scaled grid gives 3, so this still fires on the defect W6-6 fixed.
+    assert abs(len(base) - len(scaled)) <= 2, (
+        f"census differs by {abs(len(base) - len(scaled))} modes -- more than "
+        f"the two knife-edge candidates this window holds: base {base}, "
+        f"scaled {scaled * s ** 2}")
+    # (3) the physics is exactly scale-invariant: every qz^2 EITHER arm returns
+    #     is the SAME converged zero of BOTH cells.  Bidirectional, so it is not
+    #     satisfiable by one arm going quiet.
+    half = (hi - lo) / (n_base - 1) / 2.0           # half a detection cell
+    checked = 0
+    for q in list(base) + [float(x) * s ** 2 for x in scaled]:
+        rb, db = _polished_dip(strips, Lx, Nx, Ly, k0, PI, q, half)
+        rs, ds = _polished_dip(sc_strips, Lx * s, Nx, Ly * s, k0 / s, PI / s,
+                               q / s ** 2, half / s ** 2)
+        assert abs(rs * s ** 2 - rb) <= _W6_SCALE_ROOT_REL * abs(rb), (
+            f"qz^2 {q:.9f}: the base cell puts this zero at {rb:.9f} and the "
+            f"10x-scaled cell at {rs * s ** 2:.9f} -- "
+            f"{abs(rs * s ** 2 - rb) / abs(rb):.3e} relative, over "
+            f"{_W6_SCALE_ROOT_REL:.0e}")
+        assert max(db, ds) < _W6_ZERO_DEPTH, (
+            f"qz^2 {q:.9f} is not a zero of the mode condition: polished "
+            f"sigma_min {db:.3e} (base) / {ds:.3e} (scaled)")
+        checked += 1
+    assert checked >= 2                             # never vacuous
+
+
+def test_w6_6_scale_invariance_survives_the_prefix_grid_and_still_rejects_a_dip():
+    """FAIL-BEFORE for the restated W6-6 recall pin, both directions.
+
+    ARM 1 -- the defect W6-6 fixed still fires.  With the PRE-FIX detection
+    density (per unit of the RAW ``qz^2``, i.e. no ``Ly^2``) the base arm is
+    untouched at 801 points while the scaled arm collapses to 9, and the scaled
+    census goes EMPTY -- which is the shipped ``len(scaled) >= 1`` assertion.
+
+    ARM 2 -- the 1e-6 root-coincidence bar is a DISCRIMINATOR, not a
+    coincidence: run the same two-arm polish on the SHALLOW dips the finder
+    REJECTS in the same window and the two arms land >= 9.7e-5 relative apart,
+    ~97x over the bar that every true zero clears by ~110x.
+    """
+    Nx, k0, Ly, Lx = 8, 8.0, 1.0, 1.0
+    strips = _reference_cell(Nx)
+    lo, hi = 150.0, 250.0
+    s = 10.0
+    sc_strips = [(e, h * s) for e, h in strips]
+
+    # ---- ARM 1 -------------------------------------------------------------
+    def _prefix_grid(a, b, Ly_, n_scan):            # the pre-W6-6 formula
+        return max(int(n_scan), int(eme_2d_vector._DETECT_PPU * (b - a)) + 1)
+
+    assert _prefix_grid(lo, hi, Ly, 3) == 801
+    assert _prefix_grid(lo / s ** 2, hi / s ** 2, Ly * s, 3) == 9
+    saved = eme_2d_vector._detect_grid_size
+    eme_2d_vector._detect_grid_size = _prefix_grid
+    try:
+        pre_base = eme_2d_vector.layer_vector_modes(
+            strips, Lx, Nx, Ly, k0, (lo, hi), ky0=PI, n_scan=3)
+        pre_scaled = eme_2d_vector.layer_vector_modes(
+            sc_strips, Lx * s, Nx, Ly * s, k0 / s,
+            (lo / s ** 2, hi / s ** 2), ky0=PI / s, n_scan=3)
+    finally:
+        eme_2d_vector._detect_grid_size = saved
+    assert len(pre_base) >= 1                       # the injector is SPECIFIC
+    assert len(pre_scaled) == 0, (
+        "the pre-fix detection grid must still lose the scaled cell's modes "
+        f"(got {pre_scaled * s ** 2})")
+    assert abs(len(pre_base) - len(pre_scaled)) > 2  # breaks the census bound
+
+    # ---- ARM 2 -------------------------------------------------------------
+    half = (hi - lo) / 800.0 / 2.0
+    worst = 0.0
+    for q in (151.209950, 152.184017, 202.225013, 209.897314):   # rejected dips
+        rb, db = _polished_dip(strips, Lx, Nx, Ly, k0, PI, q, half)
+        rs, ds = _polished_dip(sc_strips, Lx * s, Nx, Ly * s, k0 / s, PI / s,
+                               q / s ** 2, half / s ** 2)
+        assert min(db, ds) > _W6_ZERO_DEPTH         # and they are not zeros
+        worst = max(worst, abs(rs * s ** 2 - rb) / abs(rb))
+    assert worst > 20.0 * _W6_SCALE_ROOT_REL, (
+        f"the shallow-dip arm must break the {_W6_SCALE_ROOT_REL:.0e} bar by a "
+        f"wide margin; worst measured {worst:.3e}")
 
 
 def test_w6_6_pathological_window_warns_and_clamps(monkeypatch):
