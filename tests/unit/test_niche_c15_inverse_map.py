@@ -762,7 +762,6 @@ def test_the_map_is_registered_as_a_traced_layer_flag():
     assert {'TRACED_INVERSE_MAP', 'INVERSE_MAP_GUARD'} <= names
     with TF.traced_era('v5.31'):
         assert IM.TRACED_INVERSE_MAP is False
-<<<<<<< HEAD
     assert IM.TRACED_INVERSE_MAP is True, (
         'the evaluator SHIPS ON.  The exact-trace oracle decided the ACCURACY '
         'case in its favour (BUILD_INVERSE_MAP S6) and the one guard that '
@@ -771,11 +770,6 @@ def test_the_map_is_registered_as_a_traced_layer_flag():
         'was re-architected onto off-lattice probe points rather than '
         'weakened (FIX_G8_PROBE_2026_08_12).  The era table must move with '
         'the default or every era arm silently means something else.')
-=======
-    assert IM.TRACED_INVERSE_MAP is False, (
-        'the evaluator SHIPS OFF -- the exact-trace oracle decided the '
-        'ACCURACY case in its favour (S6), but the default flip is blocked '
-        'by one shipped guard (S6.6)')
 
 
 # ===========================================================================
@@ -818,32 +812,44 @@ def _cold_incumbent_parity(**over):
     return rec.get('parity_incumbent_opl_waves'), rec.get('refused')
 
 
-@pytest.mark.parametrize('knob,value', [
-    ('newton_max_iters', 40),
-    ('newton_poly_order', 8),
-    ('newton_fit', 'spline'),
+@pytest.mark.parametrize('knob,value,names_the_incumbent', [
+    ('newton_max_iters', 40, True),
+    ('newton_poly_order', 8, True),
+    ('newton_fit', 'spline', True),
 ])
-def test_the_cache_key_tracks_the_incumbent_by_content(knob, value):
-    """THE CONTRACT, stated as content rather than as a knob list: the cache
-    may serve a stored map ACROSS a configuration change IF AND ONLY IF the
-    incumbent's answers did not move.
+def test_the_cache_key_tracks_the_incumbent_by_content(knob, value,
+                                                       names_the_incumbent):
+    """THE CONTRACT: the cache may serve a stored map ACROSS a configuration
+    change IF AND ONLY IF NEITHER half of the incumbent's identity moved --
+    neither what it ANSWERS (``incumbent_fp``, a content hash of a strided
+    probe) nor what the caller CALLS it (``parity_tag``, the knob tuple
+    ``_lens_traced`` passes).
 
-    Each knob here changes ``_invert_newton``, i.e. G8's arm B -- but on this
-    element they do not all change its ANSWERS.  Measured (2026-08-12):
+    Both halves are in the key deliberately (the rationale is at the call site
+    in ``build_inverse_map``): a NAME cannot see a closure change, and a
+    few-hundred-point CONTENT probe cannot see a difference that lives only
+    where it did not look.  Measured on this tree (2026-08-12):
 
     .. code-block:: text
 
-        newton_max_iters 2 -> 40    incumbent 1.996204432768027e-05, both
-                                    -- Newton converges inside 2 steps here,
-                                       so a hit is CORRECT
-        newton_poly_order 6 -> 8    1.9962e-05 -> 2.6992e-07  (moves)
-        newton_fit poly -> spline   1.9962e-05 -> 3.2540e-07  (moves, and
-                                    G8 flips from accept to REFUSE)
+        knob                       incumbent answers          parity_tag
+        newton_max_iters 12 -> 40  1.9843e-05, IDENTICAL      MOVES
+        newton_poly_order 6 -> 8   1.9843e-05 -> 2.6687e-07   MOVES
+        newton_fit poly -> spline  1.9843e-05 -> 6.9129e-09   MOVES
 
-    That last row is P0-5 itself: pre-fix the cache served the poly arm's map
-    to the spline arm, engaging a map the shipped comparative bar refuses.
-    So this test does not assert "these three must miss" -- it asks the
-    incumbent what it does, and pins the key to that.
+    THE FIRST ROW IS WHAT THE MERGE CHANGED, and it is worth stating plainly.
+    Its content is bit-identical -- Newton converges long inside the default
+    cap here -- so the content half alone would serve a HIT, and that hit
+    would be correct.  The name half invalidates anyway.  That direction is a
+    cold rebuild of a map that would have been right: COST ONLY.  The opposite
+    direction -- serving a map past a comparative bar it no longer passes --
+    is a WRONG ANSWER (P0-5).  The key errs toward the rebuild, and this test
+    pins the behaviour the shipped key actually has rather than the one it
+    would have with half of it removed.
+
+    The "no false invalidation" direction is not lost: it is armed by the
+    identical-repeat control below, which must HIT.  The ``else`` branch is
+    the arm for any future knob that sits OUTSIDE ``parity_tag``.
     """
     base_parity, _base_refused = _cold_incumbent_parity()
     mod_parity, _mod_refused = _cold_incumbent_parity(**{knob: value})
@@ -855,7 +861,8 @@ def test_the_cache_key_tracks_the_incumbent_by_content(knob, value):
         IM.TRACED_INVERSE_MAP = True
         _e0, _r0, i0 = _cache_probe()
         assert i0['size'] >= 1, 'the map did not build, so nothing is cached'
-        # control: the very same call HITS
+        # control, and the live no-false-invalidation arm: the very same call
+        # moves neither half of the identity, so it HITS
         _e1, r1, i1 = _cache_probe()
         assert i1['hits'] == i0['hits'] + 1, (
             'an identical repeat must hit -- the cache has to work before '
@@ -864,53 +871,107 @@ def test_the_cache_key_tracks_the_incumbent_by_content(knob, value):
             "rec['cached'] must report the hit; it is the channel every "
             "probe of this cache reads")
         _e2, _r2, i2 = _cache_probe(**{knob: value})
-        if incumbent_moved:
+        if incumbent_moved or names_the_incumbent:
+            why = (f'moved the incumbent G8 scores against '
+                   f'({base_parity!r} -> {mod_parity!r})' if incumbent_moved
+                   else f'left the incumbent bit-identical ({base_parity!r}) '
+                        f'but moved parity_tag, which NAMES it')
             assert i2['hits'] == i1['hits'], (
-                f"changing {knob} to {value!r} moved the incumbent G8 scores "
-                f"against ({base_parity!r} -> {mod_parity!r}), but the cache "
-                f"still served the old map (hits {i1['hits']} -> "
-                f"{i2['hits']}) -- G8 has been bypassed")
+                f"changing {knob} to {value!r} {why}, but the cache still "
+                f"served the old map (hits {i1['hits']} -> {i2['hits']}) -- "
+                f"the incumbent is not fully in the key, so G8 can be "
+                f"bypassed")
             assert i2['misses'] == i1['misses'] + 1
         else:
             assert i2['hits'] == i1['hits'] + 1, (
-                f"changing {knob} to {value!r} left the incumbent "
-                f"bit-identical ({base_parity!r}), so G8's verdict cannot "
-                f"differ and the stored map is still the right answer -- "
-                f"missing here would be a false invalidation")
+                f"changing {knob} to {value!r} moved neither what the "
+                f"incumbent answers ({base_parity!r}) nor what the caller "
+                f"calls it, so G8's verdict cannot differ and the stored map "
+                f"is still the right answer -- missing here would be a false "
+                f"invalidation")
     finally:
         IM.TRACED_INVERSE_MAP = old
         IM.inverse_map_cache_clear()
 
 
 def test_a_map_the_guard_would_refuse_is_not_served_from_the_cache():
-    """P0-5 END TO END, on the one knob that flips the verdict.
+    """P0-5 END TO END, in the two directions that are still live once G8
+    scores OFF the launch lattice.
 
-    ``newton_fit='spline'`` gives an incumbent 61x tighter than the
-    polynomial arm's, and against it G8 REFUSES the map.  Pre-fix the poly
-    arm's accepted map was served to the spline arm from the cache, so the
-    element ran with a map its own comparative bar rejects."""
+    HOW THIS TEST CHANGED IN THE MERGE, AND WHY IT HAD TO.  It used to arm
+    itself on ``newton_fit='spline'``: against that incumbent G8 REFUSED, so a
+    cached poly-arm map served to the spline arm engaged a map the shipped bar
+    rejects.  That refusal was a property of the RETIRED probe -- G8 scored on
+    the launch lattice, where an ``s=0`` spline incumbent interpolates its own
+    data exactly and therefore cannot be beaten.  Scored at OFF-LATTICE probe
+    points (FIX_G8_PROBE_2026_08_12) the spline incumbent is ordinary and the
+    model beats it by 2651x, so the knob no longer flips the VERDICT:
+
+    .. code-block:: text
+
+        incumbent        model max-OPL    incumbent max-OPL   G8
+        polynomial, 6    2.6071e-12 wv    1.9843e-05 wv       accept
+        spline,     6    2.6071e-12 wv    6.9129e-09 wv       accept
+
+    The MECHANISM it was pinning is untouched, and is pinned here directly:
+
+    (a) the cache must not serve ACROSS incumbents.  The two arms' G8
+        comparisons differ by 2871x, so a cross-served map reports another
+        incumbent's bar as its own -- a wrong answer whether or not the two
+        verdicts happen to agree.
+    (b) the cache must not serve a map INTO a configuration whose guard
+        REFUSES.  Armed on ``_IMAP_PARITY_FACTOR``, which tightens the bar
+        itself rather than the incumbent: at 1e-9, against a measured ratio of
+        1.3138e-07, G8 refuses -- and the warm cache holding the accepted map
+        must not answer.
+
+    Both arms were confirmed to go RED against the pre-fix key (no
+    ``incumbent_fp``, no ``parity_tag``, no parity factor): (a) returned
+    ``cached=True`` with the POLY incumbent's 1.9843e-05 sitting in the spline
+    arm's record, (b) returned ``cached=True, refused=None``."""
     poly_parity, poly_refused = _cold_incumbent_parity()
-    spl_parity, spl_refused = _cold_incumbent_parity(newton_fit='spline')
+    spl_parity, _spl_refused = _cold_incumbent_parity(newton_fit='spline')
     assert poly_refused is None, (
         'the polynomial arm must ACCEPT the map, or there is nothing to '
         'wrongly serve')
-    assert spl_refused == 'G8', (
-        f'the spline arm must REFUSE on G8 (got {spl_refused!r}); its '
-        f'incumbent is {spl_parity!r} against the poly arm\'s {poly_parity!r}')
+    assert spl_parity != poly_parity, (
+        f'the two incumbents must actually differ for this to test anything '
+        f'(spline {spl_parity!r} vs polynomial {poly_parity!r})')
 
     old = IM.TRACED_INVERSE_MAP
+    old_pf = IM._IMAP_PARITY_FACTOR
     IM.inverse_map_cache_clear()
     try:
         IM.TRACED_INVERSE_MAP = True
+
+        # ---- (a) not ACROSS incumbents ---------------------------------
         _cache_probe()                                   # cache the poly map
         _e, rec, _i = _cache_probe(newton_fit='spline')
         assert rec.get('cached') is not True, (
             'the spline arm was served the polynomial arm\'s cached map')
-        assert rec.get('refused') == 'G8', (
-            f"the spline arm must still be refused by G8 with the cache warm "
-            f"(got refused={rec.get('refused')!r}, cached="
-            f"{rec.get('cached')!r})")
+        assert rec.get('parity_incumbent_opl_waves') == spl_parity, (
+            f"the spline arm's record must carry ITS OWN G8 comparison "
+            f"({spl_parity!r}) and not the polynomial arm's "
+            f"({poly_parity!r}); got "
+            f"{rec.get('parity_incumbent_opl_waves')!r}")
+
+        # ---- (b) not INTO a refusing configuration ---------------------
+        IM.inverse_map_cache_clear()
+        _e0, r0, _i0 = _cache_probe()
+        assert r0.get('refused') is None and r0.get('cached') is False, (
+            f"the wide-bar call must build and be ACCEPTED, or there is no "
+            f"accepted map to wrongly serve (refused={r0.get('refused')!r}, "
+            f"cached={r0.get('cached')!r})")
+        IM._IMAP_PARITY_FACTOR = 1e-9
+        _e1, r1, _i1 = _cache_probe()
+        assert r1.get('cached') is not True, (
+            'the tightened-bar call was served the wide-bar call\'s map')
+        assert r1.get('refused') == 'G8', (
+            f"with the bar at 1e-9 against a measured ratio of ~1.31e-07 the "
+            f"guard must refuse (got refused={r1.get('refused')!r}, "
+            f"cached={r1.get('cached')!r})")
     finally:
+        IM._IMAP_PARITY_FACTOR = old_pf
         IM.TRACED_INVERSE_MAP = old
         IM.inverse_map_cache_clear()
 
@@ -982,4 +1043,3 @@ def test_the_cache_key_moves_with_the_det_j_source_and_the_census():
         IM._IMAP_DETJ_SOURCE = old
     assert IM._imap_key(*args, 14, 1e-3, _WL,
                         census_amp=np.ones((9, 9))) != k0
->>>>>>> origin/main

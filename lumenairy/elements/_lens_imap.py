@@ -970,19 +970,23 @@ def _imap_key(xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
     h.update(b'imap-v2')
     from .. import __version__ as _ver
     h.update(str(_ver).encode('ascii', 'replace'))
+    # MERGE NOTE (G8 probe re-architecture x evaluation-fingerprinted key).
+    # Both branches added scalars to this tuple and the union is taken, with
+    # ONE deletion: ``_IMAP_HOLDOUT_MOD`` / ``_IMAP_HOLDOUT_PHASE`` are gone
+    # because the thing they parameterised is gone -- G8 no longer splits the
+    # launch lattice into fit and held-out halves, it scores at OFF-LATTICE
+    # probe points (FIX_G8_PROBE_2026_08_12), so the probe knobs below are
+    # their replacement and naming the retired ones would be a NameError.
+    # ``_IMAP_DETJ_SOURCE`` is carried over verbatim: it still selects the
+    # Jacobian the amplitude channel consumes, which the probe rework did not
+    # touch (P1 -- a stale hit served a ``det J`` 3.12e-03 relative wrong).
     h.update(repr((int(degree), float(launch_radius), float(wavelength),
                    bool(TRACED_INVERSE_MAP), str(INVERSE_MAP_GUARD),
-<<<<<<< HEAD
                    float(_IMAP_PARITY_FACTOR), int(_IMAP_PROBE_MAX),
                    int(_IMAP_PROBE_MIN), float(_IMAP_PROBE_R2),
                    float(_IMAP_MIN_SAMPLES_PER_TERM),
-                   float(_IMAP_DETJ_MAXMIN))).encode('ascii'))
-=======
-                   float(_IMAP_PARITY_FACTOR), int(_IMAP_HOLDOUT_MOD),
-                   int(_IMAP_HOLDOUT_PHASE), float(_IMAP_MIN_SAMPLES_PER_TERM),
                    float(_IMAP_DETJ_MAXMIN),
                    str(_IMAP_DETJ_SOURCE))).encode('ascii'))
->>>>>>> origin/main
     h.update(repr(tuple(extra)).encode('ascii', 'replace'))
     h.update(b'|incumbent|')
     h.update(incumbent_fp)
@@ -1197,35 +1201,42 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
 
     key = None
     if cache:
-        # The incumbent is fingerprinted BY EVALUATION, because it is a
-        # closure over this element's forward fits and half of G8's bar.
+        # The incumbent is half of G8's bar, so it is half of what the cache
+        # key has to name.  MERGE NOTE: it enters the key TWICE, and NEITHER
+        # entry subsumes the other, so the union keeps both.
+        #
+        #   ``parity_tag``   NAMES which incumbent this is -- the caller's own
+        #                    knob tuple.  It is what separates two builds that
+        #                    a few-hundred-point probe could happen to agree
+        #                    on, and it is free.  Necessary but NOT sufficient.
+        #   ``incumbent_fp`` hashes what the incumbent ANSWERS.  This is the
+        #                    half a name cannot cover (P0-5): the incumbent is
+        #                    a CLOSURE over this element's forward fits, so it
+        #                    can change with no named knob moving at all.
+        #
+        # Consequence, stated because it looks like over-keying and is not: a
+        # knob that moves ``parity_tag`` invalidates even when the incumbent's
+        # ANSWERS are bit-identical.  That direction is a cold rebuild of a map
+        # that would have been correct -- cost only.  The other direction
+        # (serving a map past a comparative bar it no longer passes) is a wrong
+        # answer, so the key errs toward the first.
         key = _imap_key(xs_in, XO, YO, OP, DJ, W, degree, launch_radius,
-<<<<<<< HEAD
-                        wavelength, extra=(pf, repr(parity_tag)))
-        hit = _cache_get(key)
-        if hit is not None:
-            # ORDER MATTERS: ``hit.guards`` is the ORIGINAL build's record and
-            # it carries that build's ``cached = False``, so setting the flag
-            # first meant every cache hit reported itself as a fresh build.
-            # A diagnostic that cannot tell you it came from the cache is how
-            # a cache defect stays invisible -- this one hid an acceptance
-            # being carried across ``newton_fit`` backends (see
-            # ``parity_tag``).  No returned bit changes either way.
-            rec.update(hit.guards)
-=======
-                        wavelength, extra=(pf,),
+                        wavelength, extra=(pf, repr(parity_tag)),
                         incumbent_fp=_incumbent_fingerprint(parity_invert,
                                                             XO, YO),
                         census_amp=census_amp)
         hit = _cache_get(key)
         if hit is not None:
+            # ORDER MATTERS -- update FIRST, set the flag AFTER.  ``hit.guards``
+            # is the ORIGINAL build's record and carries that build's
+            # ``cached = False``, so setting the flag first meant every cache
+            # hit reported itself as a fresh build.  A diagnostic that cannot
+            # tell you it came from the cache is how a cache defect stays
+            # invisible: this one channel hid BOTH an acceptance being carried
+            # across ``newton_fit`` backends (see ``parity_tag``) and the
+            # stale-key defects above, from every probe that asked the record
+            # instead of the counters.  No returned bit changes either way.
             rec.update(hit.guards)
-            # AFTER the update, not before: ``hit.guards`` carries the
-            # BUILDING call's ``cached = False`` and clobbered this flag, so
-            # every hit reported itself as a miss -- which is the channel
-            # that hid the stale-key defects above from every probe that
-            # asked the record instead of the counters.
->>>>>>> origin/main
             rec['cached'] = True
             rec['refused'] = None
             return hit
