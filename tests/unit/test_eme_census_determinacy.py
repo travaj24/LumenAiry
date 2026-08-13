@@ -72,6 +72,7 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "2")
 
 import contextlib
+import inspect
 
 import numpy as np
 import pytest
@@ -136,6 +137,13 @@ _N16_CELL = (205.875, 206.125)  # the detection cell holding _RECOVERED (31 loca
 #: floor and no build can beat it; ours land 3.1e-11 from the zero, 5 decades
 #: inside it, because the candidate falls in the ambiguity band and is polished.
 _BRENT_XFLOOR = float(np.sqrt(np.finfo(float).eps) * _RECOVERED + 1e-7 / 3.0)
+#: The isolation radius must EXCEED the detection cell width by this factor.  A
+#: candidate's minimiser is BOUNDED to the cell that brackets its feature, so a
+#: stop is within one cell width of what it is a stop FOR; if the basin radius
+#: clears that, basin assignment cannot depend on where a build halted.
+#: Measured: cell width 0.25 on all three reference windows against isolation
+#: radii 2.267 (W6) and 2.044 (N16) -- 8x over.
+_ISO_MARGIN = 1.0
 
 
 def _grating(Nx, e_lo=1.0, e_hi=4.0, duty=0.5):
@@ -160,6 +168,16 @@ _N16_NARROW = dict(Lx=1.0, Nx=16, Ly=1.0, k0=8.0, qz2_range=(205.5, 206.5),
                    ky0=PI, n_scan=9)
 
 
+#: ``layer_vector_modes``' own acceptance DEPTH gate, read off its signature so
+#: it cannot drift: a candidate is kept only if ``sigma_min < tol``, whatever
+#: ``ratio_tol`` says.  A stop far enough from a feature reads a ``sigma_min``
+#: over this gate and is then rejected for DEPTH, not for the rank-drop -- at
+#: which point no choice of ``ratio_tol`` can make it accepted and the engineered
+#: tie has no subject.  That is a regime, not a failure, and test 3 says so.
+_ACCEPT_TOL = float(inspect.signature(eme_2d_vector.layer_vector_modes)
+                    .parameters["tol"].default)
+
+
 def _census(cell, **kw):
     return np.sort(eme_2d_vector.layer_vector_modes(_cell(cell["Nx"]),
                                                     **{**cell, **kw}))[::-1]
@@ -175,12 +193,65 @@ def _f16(q):
         return np.inf
 
 
-def _absent(census, qz2, atol=1e-2):
+def _absent(census, qz2, atol):
     """``True`` iff no census entry sits within ``atol`` of ``qz2``.  Written as
     a membership test rather than a length test so a build that finds one MORE
-    dip in the same window cannot turn a content claim into a counting one."""
+    dip in the same window cannot turn a content claim into a counting one.
+
+    ``atol`` is deliberately REQUIRED: every membership question in this module
+    is either about a converged value (bar ``_VALUE_RTOL``) or about something a
+    build's minimiser HALTED at (bar :func:`_isolation_radius`), and the whole
+    2026-08-13 defect was those two being confused."""
     census = np.asarray(census, dtype=float)
     return census.size == 0 or float(np.min(np.abs(census - qz2))) > atol
+
+
+def _detect_cell_width(cell):
+    """Width of the detection cell ``_refine_accept`` is handed -- two steps of
+    the library's OWN detection grid.  ``minimize_scalar(..., bounds=cell)`` is
+    bounded to that interval, so whatever a build's ``sigma_min`` does in the last
+    bits, the stop it returns lies within one cell width of the feature the cell
+    brackets.  The grid size is an integer function of the window with no
+    round-off in it, so this bound is the same on every build."""
+    lo, hi = cell["qz2_range"]
+    n = eme_2d_vector._detect_grid_size(lo, hi, cell["Ly"], cell["n_scan"])
+    return 2.0 * (hi - lo) / (n - 1)
+
+
+def _isolation_radius(cell, census):
+    """Half the smallest gap of ``census`` -- the radius inside which a point can
+    belong to only ONE mode's basin.  THE match radius for anything the PRE-FIX
+    path returned.
+
+    A pre-fix entry sits where that build's bounded minimiser HALTED, and how far
+    that is from the converged zero is a per-build fact with no upper bound
+    anywhere in the library: measured 3.66e-3 [M], 4.5e-3 [W], and **3.99e-4 on
+    the py3.10 verify shard -- 129x ``_BRENT_XFLOOR`` and 1.9x
+    ``_VALUE_RTOL * q``**.  Matching such an entry to a converged value by ANY
+    tolerance of the POLISHER is therefore an assertion about that build's
+    round-off; that is the defect this module exists to remove, and it is what
+    burned the 5.35.2 tag.  Its only true bound is the detection cell.
+
+    The inter-mode gap is PHYSICS: measured 4.534 on W6 and 4.088 on the Nx=16
+    census, four decades above any stopping residual and eight above the
+    x-tolerance floor.  The assertion below is what makes the radius sound rather
+    than merely large -- it demands the basin be wider than the cell a stop is
+    confined to, which is the one thing that has to hold for the assignment to be
+    build-free."""
+    v = np.sort(np.asarray(census, dtype=float).ravel())
+    assert v.size >= 2, (
+        f"an isolation radius needs >= 2 census entries, got {list(v)} -- the "
+        f"window is too narrow for basin matching to mean anything")
+    gap = float(np.min(np.diff(v)))
+    cw = _detect_cell_width(cell)
+    assert 0.5 * gap > _ISO_MARGIN * cw, (
+        f"the census {list(v)} has a smallest gap of {gap:.4e}, so its basin "
+        f"radius {0.5 * gap:.4e} does not clear the detection cell width "
+        f"{cw:.4e} that a minimiser's stop is confined to.  Either two entries "
+        f"have collapsed onto one mode, or a band-edge cusp has been accepted "
+        f"beside a mode -- basin matching cannot adjudicate this and neither "
+        f"should a tolerance")
+    return 0.5 * gap
 
 
 def _reading(cell, qz2):
@@ -202,14 +273,18 @@ def _fd(cell, qz2, ny=48):
 
 
 def _oracle_clean(cell, census, cusps, tag):
-    """UNCONDITIONAL census content, stated against the ORACLES alone.
+    """UNCONDITIONAL census content, stated against the ORACLES alone, and the
+    cell's isolation radius (which it returns, since every caller needs it).
 
     Every entry must be (a) FD-confirmed -- an independent 2-D-FD eigenvalue
     within ``_FD_MODE``, the same test ``verify=True`` applies -- and (b) NOT a
     band-edge cusp, i.e. its ``sigma_min`` must sit ``_STRUCT_MODE`` below the
     structural bound that a cusp saturates.  And every known cusp of the window
-    must be ABSENT.  None of this reads the pre-fix path, so none of it can go
-    per-build."""
+    must be ABSENT -- at the BASIN radius, not at some tolerance: a build that
+    accepted a cusp would report it wherever its minimiser halted, which can be a
+    whole detection cell from the tabulated value.  None of this reads the
+    pre-fix path, so none of it can go per-build."""
+    iso = _isolation_radius(cell, census)
     for v in census:
         ratio, _g = _reading(cell, v)
         assert ratio < _STRUCT_MODE, (
@@ -221,8 +296,10 @@ def _oracle_clean(cell, census, cusps, tag):
             f"{tag}: the census entry {v!r} has no 2-D-FD eigenvalue near it "
             f"(distance {d:.4f}) -- it is spurious")
     for c in cusps:
-        assert _absent(census, c), (
-            f"{tag}: the band-edge cusp {c} is IN the census: {list(census)}")
+        assert _absent(census, c, iso), (
+            f"{tag}: the band-edge cusp {c} is IN the census (an entry within "
+            f"the basin radius {iso:.4f} of it): {list(census)}")
+    return iso
 
 
 # --------------------------------------------------------------------------- #
@@ -272,7 +349,35 @@ def _bracket_ulp(monkeypatch, k):
     monkeypatch.setattr(eme_2d_vector, "minimize_scalar", wrapped)
 
 
+def _stop_offset(monkeypatch, dq):
+    """BUILD EMULATION, coarse arm.  Move where the bounded minimiser HALTS by
+    ``dq``, clamped to its own bracket.
+
+    The ULP nudge above perturbs the minimiser's *input*; this perturbs its
+    *answer* directly, which is the quantity a LAPACK build actually moves and
+    the one the ULP arm moves only by ~1e-6.  The 2026-08-13 py3.10 verify shard
+    halted **3.99e-4** from the converged zero where our mounts halt 3.66e-3 /
+    4.5e-3 away -- three different builds, three different stops, spanning a
+    decade.  ``dq ~ 1e-3`` covers that whole span at once and is 300x above any
+    Brent x-tolerance floor, so every claim in this module is exercised against a
+    stopping point that is nowhere near a converged value.  It is still bounded
+    by the detection cell, which is what :func:`_isolation_radius` relies on."""
+    orig = eme_2d_vector.minimize_scalar
+
+    def wrapped(f, bounds=None, **kw):
+        r = orig(f, bounds=bounds, **kw)
+        lo, hi = bounds
+        r.x = float(min(max(r.x + dq, lo), hi))
+        return r
+
+    monkeypatch.setattr(eme_2d_vector, "minimize_scalar", wrapped)
+
+
 _ULP_ARMS = (1, -1, 4, -4, 16, -16)
+#: Stop-offset rungs, in units of ``qz^2``.  Chosen at the order of the SPREAD of
+#: stopping points across the three builds measured (3.99e-4 .. 4.5e-3), and 4x
+#: inside the 0.25 detection cell so the stop stays in its own bracket.
+_STOP_ARMS = (1e-3, -1e-3, 3e-3, -3e-3)
 #: Widening rungs, walked ONLY when the narrow ladder leaves the pre-fix reading
 #: of every known cusp bit-identical on this build -- i.e. when the emulation has
 #: failed to move the minimiser at all and so has nothing to place a tie against.
@@ -321,7 +426,7 @@ def _prefix_ladder(monkeypatch, cell, arms, **kw):
     return out
 
 
-def _tie_at_the_cut(rows, targets):
+def _tie_at_the_cut(rows, targets, iso):
     """Place a SYNTHETIC NEAR-TIE at the accept/reject cut, and return the arm
     pair that must straddle it.
 
@@ -336,13 +441,21 @@ def _tie_at_the_cut(rows, targets):
     own spread is -- never that there is one, and never which side of a FIXED bar
     it happens to fall on, which is the per-build fact this replaces.
 
+    ``iso`` is the BASIN radius, not a tolerance: the reading belonging to
+    ``t`` was taken wherever this build's minimiser halted for it, which is a
+    whole detection cell's worth of freedom, so the reading is picked by basin
+    and not by proximity to the tabulated value.  Only readings that clear the
+    library's own DEPTH gate count -- a candidate rejected for ``sigma_min >=
+    tol`` cannot be accepted at any ``ratio_tol``, so no tie can be placed on it.
+
     Returns the dict ``{target, k_lo, k_hi, g_lo, g_hi, cut, spread}`` for the
     target with the widest spread, or ``None`` if no target moved at all."""
     best = None
     for t in targets:
         g = {}
         for k, (_q, log) in rows.items():
-            near = [r for r in log if abs(r[0] - t) < 1e-2]
+            near = [r for r in log
+                    if abs(r[0] - t) <= iso and r[1] < _ACCEPT_TOL]
             if near:
                 g[k] = min(near, key=lambda r: abs(r[0] - t))[2]
         if len(g) < 2:
@@ -437,8 +550,9 @@ def test_the_fixed_census_is_nudge_invariant_and_a_tie_at_the_cut_flips_the_pref
     (a) THE FIXED CENSUS, UNCONDITIONALLY.  On the W6 cell it holds every mode
         the MONODROMY oracle confirms (test 1), holds neither band-edge cusp,
         every entry is FD-confirmed and none saturates the structural bound --
-        and it does not move, in size or in value, under the whole ULP ladder.
-        Nothing in this layer reads the pre-fix path.
+        and it does not move, in size, in basin, or in value, under the ULP
+        ladder OR the coarser STOP-OFFSET ladder that moves the minimiser's
+        answer by 1e-3 to 3e-3.  Nothing in this layer reads the pre-fix path.
 
     (b) THE ENGINEERED TIE (the fail-before, deterministic on every build).
         The pre-fix verdict is ``gaps.min() < ratio_tol`` read where bounded
@@ -459,44 +573,98 @@ def test_the_fixed_census_is_nudge_invariant_and_a_tie_at_the_cut_flips_the_pref
     """
     # ---- (a) the FIXED census, against the oracles alone ------------------ #
     clean = _census(_W6)
+    cw = _detect_cell_width(_W6)
+    for q in _MODES_W6:                 # RECALL first, at the cell width (see
+        assert not _absent(clean, q, cw), (            # test 6 for why)
+            f"the fixed census is MISSING the monodromy-confirmed mode {q} -- "
+            f"no entry within a detection cell ({cw:.4f}) of it: {list(clean)}")
+    iso = _oracle_clean(_W6, clean, _CUSPS_W6, "W6 fixed")
     for q in _MODES_W6:
-        assert np.min(np.abs(clean - q)) < _VALUE_RTOL * q, (
-            f"the fixed census is missing the monodromy-confirmed mode {q}: "
-            f"{list(clean)}")
-    _oracle_clean(_W6, clean, _CUSPS_W6, "W6 fixed")
-    for k in _ULP_ARMS:
+        # TWO TIERS, and the distinction is the whole 2026-08-13 lesson.  The
+        # BASIN tier is universal -- it holds however far this build's minimiser
+        # halted.  The VALUE tier is what the fix claims, and is bounded by
+        # ``_CENSUS_BAND``'s LOWER edge: a stop far enough away to matter reads
+        # ``gaps.min`` INSIDE the band and is therefore polished, so a clear
+        # accept can only survive within ~2.4e-5 of the zero here (measured
+        # 1.06e-7 on the E3b' clear-accept emulation).
+        assert not _absent(clean, q, iso), (
+            f"the fixed census has no entry in the BASIN of the "
+            f"monodromy-confirmed mode {q} (radius {iso:.4f}): {list(clean)}")
+        assert not _absent(clean, q, _VALUE_RTOL * q), (
+            f"the fixed census holds the monodromy-confirmed mode {q} but not "
+            f"CONVERGED (nearest entry {abs(clean - q).min():.3e} away, bar "
+            f"{_VALUE_RTOL * q:.3e}): {list(clean)}")
+    for tag, arm, inject in ([(f"{k:+d} ULP", k, _bracket_ulp)
+                              for k in _ULP_ARMS]
+                             + [(f"{d:+.0e} stop", d, _stop_offset)
+                                for d in _STOP_ARMS]):
         with monkeypatch.context() as mp:
-            _bracket_ulp(mp, k)
+            inject(mp, arm)
             q = _census(_W6)
         assert len(q) == len(clean), (
-            f"the fixed census changed size under a {k:+d} ULP bracket nudge: "
+            f"the fixed census changed size under a {tag} nudge: "
             f"{list(q)} vs {list(clean)}")
+        seen = set()
         for v in q:
-            assert np.min(np.abs(clean - v)) < 1e-4 * abs(v), (
-                f"the fixed census moved a mode under a {k:+d} ULP nudge: "
+            j = int(np.argmin(np.abs(clean - v)))
+            # BASIN identity -- the universal half, true however far a build's
+            # minimiser halts from the zero (it cannot leave its own cell).
+            assert abs(clean[j] - v) <= iso, (
+                f"the fixed census moved an entry OUT OF ITS MODE'S BASIN "
+                f"(radius {iso:.4f}) under a {tag} nudge: {list(q)} vs "
+                f"{list(clean)}")
+            seen.add(j)
+            # ... and the VALUE half, which is what the fix actually claims.
+            assert abs(clean[j] - v) < 1e-4 * abs(v), (
+                f"the fixed census moved a mode under a {tag} nudge: "
                 f"{list(q)} vs {list(clean)}")
+        assert len(seen) == len(clean), (
+            f"under a {tag} nudge two fixed entries collapsed onto one mode's "
+            f"basin: {list(q)} vs {list(clean)}")
 
     # ---- (b) the ENGINEERED TIE ------------------------------------------- #
     arms = _ULP_ARMS
     rows = _prefix_ladder(monkeypatch, _W6, arms)
-    tie = _tie_at_the_cut(rows, _CUSPS_W6)
+    tie = _tie_at_the_cut(rows, _CUSPS_W6, iso)
     if tie is None:                       # widen rather than give up (see above)
         arms = _ULP_ARMS_WIDE
         rows = _prefix_ladder(monkeypatch, _W6, arms)
-        tie = _tie_at_the_cut(rows, _CUSPS_W6)
-    assert tie is not None, (
-        f"no rung of the bracket-ULP ladder {arms} moved the pre-fix reading of "
-        f"EITHER known cusp {_CUSPS_W6} on this build, so there is no spread to "
-        f"place a tie inside and this fail-before has no injector.  Widen the "
-        f"ladder rather than deleting it -- the reading is a minimiser's "
-        f"stopping value and every build's has a spread.")
+        tie = _tie_at_the_cut(rows, _CUSPS_W6, iso)
+    if tie is None:
+        # TWO reasons a tie cannot be placed, and only one of them is a defect.
+        # (i) every reading in a cusp basin is over the library's own DEPTH gate,
+        #     so the candidate is rejected for ``sigma_min >= tol`` and NO
+        #     ``ratio_tol`` could accept it -- the pre-fix census has no
+        #     membership here for a nudge to flip.  A regime, adjudicated.
+        # (ii) readings exist under the gate but the ladder never moved one --
+        #     the injector is dead, which IS a defect: widen it.
+        depths = [r[1] for _k, (_q, log) in rows.items() for r in log
+                  if min(abs(r[0] - c) for c in _CUSPS_W6) <= iso]
+        assert depths and min(depths) >= _ACCEPT_TOL, (
+            f"no rung of the bracket-ULP ladder {arms} moved the pre-fix reading "
+            f"of EITHER known cusp {_CUSPS_W6} on this build, so there is no "
+            f"spread to place a tie inside and this fail-before has no injector. "
+            f"Widen the ladder rather than deleting it -- the reading is a "
+            f"minimiser's stopping value and every build's has a spread. "
+            f"(depths seen: {sorted(depths)[:6]}, gate {_ACCEPT_TOL})")
+        print(f"\nEME census tie [injector]: this build's minimiser halts far "
+              f"enough from both W6 cusps that every reading in their basins is "
+              f"over the library's own DEPTH gate (min sigma_min "
+              f"{min(depths):.4e} vs tol {_ACCEPT_TOL:.1e}), so they are refused "
+              f"for depth on every arm and no ratio_tol can accept them.  There "
+              f"is no census membership here to flip; the FIXED path's claims "
+              f"above are unaffected and were all asserted.")
+        return
     cut, target = tie["cut"], tie["target"]
     for k, want in ((tie["k_lo"], True), (tie["k_hi"], False)):
         with monkeypatch.context() as mp:
             _prefix_refine(mp)
             _bracket_ulp(mp, k)
             q = _census(_W6, ratio_tol=cut)
-        got = not _absent(q, target, _VALUE_RTOL * target)
+        # BASIN membership: the pre-fix entry for the cusp sits wherever this
+        # build's minimiser halted for it, up to a detection cell away, so this
+        # is asked at ``iso`` and not at any tolerance on the tabulated value.
+        got = not _absent(q, target, iso)
         assert got is want, (
             f"the engineered tie did not straddle: with ratio_tol = {cut:.6e} "
             f"placed between the {tie['k_lo']:+d} arm's reading "
@@ -510,7 +678,7 @@ def test_the_fixed_census_is_nudge_invariant_and_a_tie_at_the_cut_flips_the_pref
             _bracket_ulp(mp, k)
             q = _census(_W6, ratio_tol=cut)
         for c in _CUSPS_W6:
-            assert _absent(q, c), (
+            assert _absent(q, c, iso), (
                 f"AT THE SAME TIE that flips the pre-fix path, the FIXED census "
                 f"accepted the band-edge cusp {c} on the {k:+d} ULP arm: "
                 f"{list(q)}")
@@ -532,22 +700,39 @@ def test_the_fixed_census_is_nudge_invariant_and_a_tie_at_the_cut_flips_the_pref
     span = (f"{tie['g_lo']:.4e} .. {tie['g_hi']:.4e} ({tie['spread']:.3g}x), "
             f"against the shipped bar 1.0e-03")
     if flips:
+        # PRE-FIX vs PRE-FIX, so the set difference is taken at ``iso`` too: two
+        # arms' stops for the same mode differ by whatever their minimisers did.
         extra = [float(v) for q in flips.values() for v in q
-                 if _absent(base, v, _VALUE_RTOL * abs(v))]
+                 if _absent(base, v, iso)]
         lost = sorted({float(v) for q in flips.values() for v in base
-                       if _absent(q, v, _VALUE_RTOL * abs(v))})
+                       if _absent(q, v, iso)})
+        # WHAT flips is per-build and must not be asserted: on our mounts it is a
+        # band-edge cusp, but a build whose minimiser halts ~3e-3 from a GENUINE
+        # mode has that mode's verdict decided by round-off too (which is exactly
+        # what happened to 205.9749757788 on both mounts).  What IS universal is
+        # that anything a 1-ULP nudge moves in or out had a reading inside the
+        # AMBIGUITY BAND -- i.e. the flip's blast radius is precisely the
+        # population the fix treats, which is the fix's own scope argument.
+        band = tuple(e * 1e-3 for e in eme_2d_vector._CENSUS_BAND)
+        kinds = []
+        for v in extra + lost:
+            g = _reading(_W6, v)[1]
+            assert band[0] <= g <= band[1], (
+                f"a 1-ULP nudge moved {v!r} in or out of the pre-fix census, "
+                f"but its reading {g:.4e} is OUTSIDE the ambiguity band "
+                f"({band[0]:.2e}, {band[1]:.2e}) -- the flip is not round-off "
+                f"near the bar, so it is a sensitivity the fix does not cover")
+            kinds.append("band-edge cusp"
+                         if min(abs(v - c) for c in _CUSPS_W6) <= iso
+                         else "genuine mode, verdict equally round-off-decided")
         print(f"\nEME census tie [live cell]: the shipped bar sits INSIDE this "
               f"build's own spread of the {target} reading ({span}), so the "
               f"live-cell demonstration reproduces here -- {len(flips)} of "
               f"{len(arms)} ULP arms flip the pre-fix census (sizes {sizes} vs "
               f"{len(base)}), gaining {[float(f'{v:.10g}') for v in extra]} and "
-              f"losing {[float(f'{v:.10g}') for v in lost]}.")
-        for v in extra + lost:
-            assert min(abs(v - c) for c in _CUSPS_W6) < _VALUE_RTOL * abs(v), (
-                f"the pre-fix census flipped at the shipped tolerance, but by "
-                f"gaining or losing {v!r}, which is not one of the known "
-                f"band-edge cusps {_CUSPS_W6} -- a 1-ULP nudge moved a genuine "
-                f"mode in or out")
+              f"losing {[float(f'{v:.10g}') for v in lost]}; every one of them "
+              f"read inside the ambiguity band {tuple(f'{b:.2e}' for b in band)}"
+              f" -- {kinds}.")
     else:
         print(f"\nEME census tie [live cell]: the shipped bar sits OUTSIDE this "
               f"build's own spread of the {target} reading ({span}), so no arm "
@@ -621,11 +806,16 @@ def test_the_census_is_byte_identical_where_the_prefix_path_was_unambiguous(
               f"pre-fix path already refused both W6 band-edge cusps, so the "
               f"treatment is a complete no-op here.")
     else:
+        tail = (f"the {len(untreated)} untreated entries come back "
+                f"bit-identical" if untreated else
+                f"NO pre-fix entry landed outside the band on this build (the "
+                f"pre-fix census holds {len(prefix)}), so the bit-identity half "
+                f"has no subject here and the claim rests on the "
+                f"converged-zero half above")
         print(f"\nEME census byte-null: at scale {s} this build's pre-fix path "
               f"decided {len(prefix) - len(untreated)} W6 candidate(s) inside "
               f"the ambiguity band {band}, so the arrays differ by design "
-              f"(fixed {list(fixed)} vs pre-fix {list(prefix)}); the "
-              f"{len(untreated)} untreated entries come back bit-identical.")
+              f"(fixed {list(fixed)} vs pre-fix {list(prefix)}); {tail}.")
 
 
 # =========================================================================== #
@@ -679,8 +869,12 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
     (b) CONTAINMENT, in the form that is universal.  "The fix loses nothing" is
         NOT "the fixed census contains the pre-fix one" -- on a build whose
         pre-fix census holds a cusp, it must not.  The universal statement is
-        that every pre-fix entry is EITHER kept OR refused as a band edge, which
-        is asserted here and holds on any build.
+        that every pre-fix entry is EITHER kept as a converged FD-confirmed mode
+        OR refused as a band edge.  KEPT is decided at the mode ISOLATION radius
+        and not at any tolerance on a converged value: the py3.10 verify shard's
+        pre-fix path halted 3.99e-4 from the zero -- 129x ``_BRENT_XFLOOR``,
+        1.9x ``_VALUE_RTOL * q`` -- so the 5.35.2 form of this arm read a kept
+        mode as dropped and then, correctly, refused to call it a cusp.
 
     (c) THE ENGINEERED TIE (the fail-before, deterministic on every build).  The
         drop itself is per-build: our mounts halt at 205.9786352762 and read
@@ -698,13 +892,28 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
     banded = _census(_N16, solver="banded")
 
     # ---- (a) content, against the oracles alone --------------------------- #
+    # RECALL first, at the CELL WIDTH -- the one membership bound that needs no
+    # census at all (a stop is inside the cell that brackets its feature).  Asked
+    # before the basin machinery so that a build which has LOST the mode says so,
+    # rather than tripping the isolation radius' own precondition downstream.
+    cw = _detect_cell_width(_N16)
     for cen, tag in ((fixed, "dense"), (banded, "banded")):
+        assert not _absent(cen, _RECOVERED, cw), (
+            f"the {tag} census is MISSING the FD-confirmed mode {_RECOVERED} -- "
+            f"no entry within a detection cell ({cw:.4f}) of it: {list(cen)}")
+    iso = _oracle_clean(_N16, fixed, _CUSPS_N16, "N16 fixed")
+    for cen, tag in ((fixed, "dense"), (banded, "banded")):
+        assert not _absent(cen, _RECOVERED, iso), (        # BASIN -- universal
+            f"the {tag} census has no entry in the BASIN of the FD-confirmed "
+            f"mode {_RECOVERED} (radius {iso:.4f}): {list(cen)}")
         assert not _absent(cen, _RECOVERED, _VALUE_RTOL * _RECOVERED), (
-            f"the {tag} census is missing the FD-confirmed mode {_RECOVERED}: "
+            f"the {tag} census holds {_RECOVERED} but not CONVERGED: "
             f"{list(cen)}")
-    _oracle_clean(_N16, fixed, _CUSPS_N16, "N16 fixed")
     got = float(fixed[np.argmin(np.abs(fixed - _RECOVERED))])
     gb = float(banded[np.argmin(np.abs(banded - _RECOVERED))])
+    assert abs(gb - got) <= iso, (                         # BASIN -- universal
+        f"the two solvers put the recovered mode in different basins: "
+        f"{got!r} vs {gb!r}")
     assert abs(gb - got) < _VALUE_RTOL * abs(got), (
         f"the two solvers disagree on the recovered mode: {got!r} vs {gb!r}")
     # It is the CONVERGED zero, not a stopping point.  Stated in the two pieces
@@ -732,16 +941,32 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
         f"of the census ({fd_rest})")
 
     # ---- (b) containment, in its universal form --------------------------- #
+    # KEPT is a BASIN question.  A pre-fix entry sits where that build's bounded
+    # minimiser halted -- 3.66e-3 [M], 4.5e-3 [W], 3.99e-4 on the py3.10 verify
+    # shard -- and nothing in the library bounds that except the detection cell
+    # it is confined to.  Asking it at ``_VALUE_RTOL`` (2.06e-4) is asking about
+    # that build's round-off, and on py3.10 the answer was wrong by 1.9x.
     with monkeypatch.context() as mp:
         _prefix_refine(mp)
         prefix = _census(_N16)
     for q in prefix:
-        if np.min(np.abs(fixed - q)) <= _VALUE_RTOL * abs(q):
+        j = int(np.argmin(np.abs(fixed - q)))
+        if abs(fixed[j] - q) <= iso:
+            # KEPT -- and what it was kept AS has to be a converged, FD-confirmed
+            # mode, not merely the nearest thing in the array.
+            ratio_f, _gf = _reading(_N16, fixed[j])
+            assert ratio_f < _STRUCT_MODE and _fd(_N16, fixed[j]) < _FD_MODE, (
+                f"the pre-fix entry {q!r} was matched to the fixed entry "
+                f"{float(fixed[j])!r}, which is not a converged FD-confirmed "
+                f"mode (sigma_min / bound = {ratio_f:.3e}, FD distance "
+                f"{_fd(_N16, fixed[j]):.4f})")
             continue
         ratio, _g = _reading(_N16, q)
         assert ratio >= eme_2d_vector._STRUCTURAL_SAT, (
-            f"the fix dropped the pre-fix entry {q!r}, which is NOT a band-edge "
-            f"cusp (sigma_min / bound = {ratio:.3e}, FD distance "
+            f"the fix dropped the pre-fix entry {q!r} -- nothing in the fixed "
+            f"census lies within its basin radius {iso:.4f} (nearest "
+            f"{float(fixed[j])!r}, {abs(fixed[j] - q):.4e} away) -- and it is "
+            f"NOT a band-edge cusp (sigma_min / bound = {ratio:.3e}, FD distance "
             f"{_fd(_N16, q):.4f}): {list(fixed)} vs {list(prefix)}")
 
     # ---- (c) the ENGINEERED TIE, on the cell that holds the mode ---------- #
@@ -749,12 +974,12 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
         _prefix_refine(mp)
         with _recorded_readings() as log:
             live = eme_2d_vector.layer_vector_modes(_cell(16), **_N16_NARROW)
-    near = [r for r in log if abs(r[0] - _RECOVERED) < 0.5]
+    near = [r for r in log if abs(r[0] - _RECOVERED) <= iso]
     assert near, (
-        f"the pre-fix path took no acceptance reading within 0.5 of "
-        f"{_RECOVERED} on the narrow cell {_N16_NARROW['qz2_range']}, so the "
-        f"detection stage never offered the candidate and this injector has "
-        f"nothing to place a tie against: {log}")
+        f"the pre-fix path took no acceptance reading inside the basin radius "
+        f"{iso:.4f} of {_RECOVERED} on the narrow cell "
+        f"{_N16_NARROW['qz2_range']}, so the detection stage never offered the "
+        f"candidate and this injector has nothing to place a tie against: {log}")
     g_brent = min(near, key=lambda r: abs(r[0] - _RECOVERED))[2]
     # the reading at the CONVERGED ZERO -- ``x_pol``, not the census entry
     # ``got``: where the fix clear-accepts (a build whose minimiser lands inside
@@ -772,7 +997,7 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
                                                    **_N16_NARROW)
     fix_tie = eme_2d_vector.layer_vector_modes(_cell(16), ratio_tol=cut,
                                                **_N16_NARROW)
-    assert _absent(pre_tie, _RECOVERED), (
+    assert _absent(pre_tie, _RECOVERED, iso), (
         f"with ratio_tol = {cut:.6e} placed between Brent's own reading "
         f"{g_brent:.4e} and the converged zero's {g_pol:.4e}, the PRE-FIX path "
         f"still accepted {_RECOVERED}: {list(pre_tie)} -- it read the rank drop "
@@ -788,7 +1013,7 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
 
     # ---- (d) the live cell at the SHIPPED bar, ADJUDICATED ---------------- #
     halt = min(near, key=lambda r: abs(r[0] - _RECOVERED))[0]
-    if _absent(live, _RECOVERED):
+    if _absent(live, _RECOVERED, iso):
         print(f"\nEME census recall [live cell]: this build's bounded Brent "
               f"halts at {halt:.10f}, reading gaps.min = {g_brent:.4e} OVER the "
               f"shipped 1.0e-03 bar, so the pre-fix path DROPS {_RECOVERED} on "

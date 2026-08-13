@@ -687,3 +687,207 @@ mounts.  The file is ASCII.  No `xfail`, `skip`, deleted test, weakened guard or
   in test 6 (~1 s each) against the module as shipped.
 * `_ULP_ARMS_WIDE` has not been reached on any build measured.  If a build ever
   needs it, the reading's spread is what wants investigating, not the ladder.
+
+---
+
+## 9.  THE MATCH RADIUS WAS ALSO PER-BUILD -- 2026-08-13, second pass
+
+`v5.35.2` shipped S8 and the release verify shard failed again -- same class, one
+level deeper, inside the restructure itself.  Runner **ubuntu py3.10, shard 1**,
+one failure, in the arm S8.1(b) had added:
+
+```
+test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix
+  AssertionError: the fix dropped the pre-fix entry 205.9753746998219, which is
+  NOT a band-edge cusp (sigma_min / bound = 1.100e-05, FD distance 0.075)
+  assert 1.1001481757489883e-05 >= 0.01
+```
+
+**205.9753746998219 is the mode.**  That build's bounded minimiser halted
+**3.99e-4** from the converged zero 205.9749757788 which the fixed census holds.
+The containment arm matched pre-fix entries to fixed entries within
+`_VALUE_RTOL * q = 2.06e-4`; at 1.9x that bar a KEPT mode read as DROPPED, fell
+through to the structural branch, and that branch correctly answered that a
+`sigma_min / bound` of 1.1e-05 is not a cusp.  Every step was right except the
+radius.
+
+### 9.1  Why the radius was the bug, and what replaces it
+
+S8 moved every CLAIM off per-build readings but left the **matching** on one.
+`_VALUE_RTOL` and `_BRENT_XFLOOR` are tolerances on a CONVERGED value; a pre-fix
+entry is not a converged value, it is wherever that build's minimiser stopped:
+
+| build | pre-fix halt, Nx=16 mode | distance from the zero | vs `_VALUE_RTOL q` (2.06e-4) | vs `_BRENT_XFLOOR` (3.10e-6) |
+|---|---|---:|---:|---:|
+| M, Windows py3.14 | 205.9786352762 | 3.66e-3 | 17.8x | 1180x |
+| W, WSL py3.12 | 205.9704915028 | 4.50e-3 | 21.8x | 1450x |
+| **ubuntu py3.10 shard** | **205.9753746998** | **3.99e-4** | **1.9x** | **129x** |
+
+Replaced by the **mode ISOLATION radius** -- half the smallest inter-mode gap of
+the FIXED census, computed at runtime by `_isolation_radius`:
+
+| cell | fixed census gaps | min gap | isolation radius | detection cell width | margin |
+|---|---|---:|---:|---:|---:|
+| W6 (Nx=8) | 47.43, 4.53 | **4.534** | **2.267** | 0.25 | 9.1x |
+| N16 (Nx=16) | 5.82, 4.96, 50.50, 4.09 | **4.088** | **2.044** | 0.25 | 8.2x |
+
+The gap is physics -- four decades above any stopping residual, eight above the
+x-tolerance floor.  The soundness condition is asserted, not assumed:
+`_detect_cell_width` computes the interval `minimize_scalar` is BOUNDED to (two
+steps of the library's own detection grid, an integer function of the window with
+no round-off in it), and `_isolation_radius` refuses to return unless the basin
+radius clears it.  A stop cannot leave its own cell, so if the basin is wider
+than the cell, basin assignment is the same on every build -- and where it is
+not, the guard says so instead of a tolerance quietly guessing.
+
+The containment arm is now: every pre-fix entry is EITHER in the basin of a fixed
+entry -- **and that entry must itself be a converged, FD-confirmed mode**, not
+merely the nearest float in the array -- OR structurally refused
+(`sigma_min / bound >= _STRUCTURAL_SAT`).  Strictly stronger than the 5.35.2
+form, which asserted nothing about what an entry was matched TO.
+
+### 9.2  The class, killed: all 43 assertions classified
+
+**B** = build-free (physics, an oracle, a theorem, or exact code-path identity);
+**D** = derived from THIS build's own measurement; **E** = engineered tie.  Nine
+assertions reference a pre-fix quantity at all; **five** of them referenced one
+*through a universal constant* -- that is the bug pattern, and all five are fixed
+here.  Line numbers are this branch's.
+
+| # | line | assertion | pre-fix? | class | note |
+|---:|---:|---|:---:|:---:|---|
+| 1 | 242 | `_isolation_radius` needs >= 2 entries | | B | precondition |
+| 2 | 247 | basin radius > detection cell width | | B | 9.1x / 8.2x, both measured |
+| 3 | 290 | every fixed entry non-structural | | B | oracle |
+| 4 | 295 | every fixed entry FD-confirmed | | B | oracle |
+| 5 | 299 | no known cusp in the fixed census | | B | **radius 1e-2 -> `iso`** |
+| 6-8 | 505-510 | monodromy separates modes from cusps and controls | | B | 9 decades |
+| 9-12 | 525-539 | the structural bound is a bound, and separates | | B | theorem + 1.4e10 |
+| 13 | 585 | the fixed census holds each W6 mode's BASIN | | B | **added** |
+| 14 | 588 | ... and holds it CONVERGED | | D | `_CENSUS_BAND`'s lower edge bounds a clear accept |
+| 15 | 599 | fixed census size stable on every nudge arm | | B | claim under test |
+| 16 | 607 | fixed entries stay in their basins under nudge | | B | **added** |
+| 17 | 613 | fixed entries move less than `1e-4 * abs(v)` under nudge | | B | claim under test; 4 decades slack, verified to a 6e-2 detector shift |
+| 18 | 616 | basins stay one-to-one under nudge | | B | **added** |
+| 19 | 638 | either the ladder moved a reading, or every reading is over the DEPTH gate | YES | D | **rewritten**: separates "injector dead" (fail, widen) from "no membership exists" (adjudicate) |
+| 20 | 663 | the engineered tie STRADDLES | YES | E | **radius `_VALUE_RTOL` -> `iso`** |
+| 21 | 676 | the fixed census refuses the cusp at the tie | | B | **radius 1e-2 -> `iso`** |
+| 22 | 680 | the fixed census size is stable at the tie | | B | claim under test |
+| 23 | 715 | whatever a nudge flips READ INSIDE the ambiguity band | YES | D | **was "it must be a known cusp" -- a per-build fact** |
+| 24 | 785 | untreated pre-fix entries come back BIT-IDENTICAL | YES | B | exact `==`; code-path identity, not a tolerance |
+| 25 | 793 | any other fixed entry is a converged zero | | B | `_CENSUS_BAND` contract |
+| 26 | 797 | the census is never vacuous | | B | |
+| 27-28 | 842-844 | the polisher is localisation-independent, and deepens | | B | |
+| 29 | 892 | both solvers hold the recovered mode's BASIN | | B | **added** |
+| 30 | 895 | ... and hold it CONVERGED | | D | band lower edge |
+| 31 | 900 | the two solvers agree on the BASIN | | B | **added** |
+| 32 | 903 | ... and agree to `_VALUE_RTOL` | | B | claim under test |
+| 33 | 911 | `_polish_zero`'s own answer is the zero to 1e-6 | | B | test 5 pins its determinism |
+| 34 | 914 | the census entry is that answer to `_BRENT_XFLOOR` | | D | scipy's own x-tolerance |
+| 35 | 919 | `sigma_min` collapses vs `_PREFIX_STOP` | | B | 8 decades |
+| 36-37 | 924-925 | the recovered mode is no worse an FD match | | B | oracle |
+| 38 | 944 | a MATCHED fixed entry is a converged FD-confirmed mode | YES | B | **added** |
+| 39 | 951 | an UNMATCHED pre-fix entry is structurally refused | YES | B | **radius `_VALUE_RTOL` -> `iso`: THE py3.10 FAILURE** |
+| 40 | 964 | the pre-fix path read inside the mode's basin | YES | B | **radius 0.5 (hard-coded) -> `iso`** |
+| 41 | 975 | Brent's reading and the zero's are separated | YES | D | ratio of two readings taken here |
+| 42 | 986 | the pre-fix path DROPS the mode at the engineered cut | YES | E | **radius 1e-2 -> `iso`** |
+| 43 | 991 | the fixed path returns the converged zero at the cut | | D | in-band by construction, so polished |
+
+Two structural changes make the class unrepeatable rather than merely repaired:
+
+* **`_absent(census, qz2, atol)` no longer has a default.**  Every membership
+  question in the file must now say, at the call site, whether it asks about a
+  CONVERGED value (`_VALUE_RTOL`) or about something a minimiser HALTED at
+  (`iso`).  The 5.35.2 defect is unspellable without choosing.
+* **Where both are meaningful, both are asserted, BASIN first.**  Rows 13/14,
+  29/30 and 31/32 are two-tier: the basin tier is universal and cannot fail
+  spuriously; the value tier carries the strength and is bounded by
+  `_CENSUS_BAND`'s LOWER edge (a stop far enough from a zero to matter reads
+  `gaps.min` INSIDE the band and is therefore polished; only a stop within
+  ~2.4e-5 can clear-accept, measured 1.06e-7 on the E3b' emulation).
+
+Row 19 is the third finding of this round, produced by the new emulation arm:
+beyond `|dq| ~ 5e-2` the pre-fix census is EMPTY because every reading in a
+cusp's basin exceeds `layer_vector_modes`' own DEPTH gate (`sigma_min < tol`,
+`tol = 5e-2`, read off the signature by `inspect` so it cannot drift).  No
+`ratio_tol` can accept such a candidate, so there is no membership for a nudge to
+flip -- a regime, not a defect.  It is now separated from "the injector is dead"
+and PRINTED, with the fixed path's claims still fully asserted.
+
+### 9.3  The detector-shifted emulation arm
+
+`_stop_offset(monkeypatch, dq)` moves where the minimiser HALTS by `dq`, clamped
+to its own bracket.  The ULP arm perturbs the minimiser's INPUT and moves its
+answer by ~1e-6; this moves the ANSWER, which is what a LAPACK build actually
+moves and what spans a decade across the three builds measured.  It is used in
+two places: as rungs of test 3's own determinism ladder
+(`_STOP_ARMS = (1e-3, -1e-3, 3e-3, -3e-3)`), and as emulation arm E5.
+
+Run against the **5.35.2** file it reproduces the shard exactly and finds a
+second instance of the class the shard had not reached:
+
+| dq | id | 5.35.2 verdict |
+|---|---|---|
+| -3.3e-3 | test 6 | **FAIL** `the fix dropped the pre-fix entry 205.97533527623273, which is NOT a band-edge cusp (sigma_min / bound = 1.610e-05, FD distance 0.0754)` -- the shard's failure, to 6 digits |
+| -3.3e-3 | test 3 | **FAIL** `the engineered tie did not straddle` -- row 20: the pre-fix entry for the cusp had moved 3.3e-3 from the tabulated value and `_VALUE_RTOL` could not see it |
+| +1.0e-3 | test 6 | **FAIL** on 201.88788249907319 -- the same class on a different mode |
+| +1.0e-3 | test 3 | **FAIL** as above |
+
+Against this branch every arm passes.
+
+### 9.4  Emulations
+
+| emulation | id(s) | what it makes the pre-fix path do | result |
+|---|---|---|---|
+| **E1** ULP ladder shrunk to `(1, 4, -4, 16, -16)` | 3 | live cell INERT: all 5 arms return 3 | **PASS**, inert branch printed; the engineered tie at 1.7934e-03 still straddles |
+| **E2** narrow cell `n_scan` 9 -> 40 | 6 | live cell INERT: pre-fix KEEPS the mode (reads 4.44e-07) | **PASS**, inert branch printed; tie at 8.1061e-08 still drops it pre-fix |
+| **E3b'** `_DETECT_PPU` 8 -> 64 over (200, 210) | 6 | clear-accept build: the fix keeps Brent's stop instead of polishing | **PASS**; tie at 7.7211e-09 |
+| **E4a** global `-1` ULP | 4 | pre-fix ACCEPTS the W6 cusp -- the 2026-08-12 runner's condition | **PASS**, "differ by design" printed; the other 3 entries bit-identical |
+| **E4c** global `-1` ULP | 3 | the CLEAN pre-fix census holds the cusp and all 6 arms LOSE it | **PASS** |
+| **E5** DETECTOR SHIFT, `dq` = +-1e-3, +3e-3, **-3.3e-3**, +-1e-2, +3e-2, -6e-2 | ALL 7 | the minimiser's ANSWER moves by up to 24% of a detection cell -- 150x the py3.10 offset | **PASS on all 8 arms** (56 test runs) |
+| **E5** `dq` = -1e-1 | ALL 7 | 40% of a cell: the FIXED finder itself keeps only 1 of its 5 modes | 6 of 7 pass; test 6 FAILS **correctly**, saying so: `the dense census is MISSING the FD-confirmed mode 205.9749757788 -- no entry within a detection cell (0.2500) of it: [146.421467006905]` |
+
+`dq = -3.3e-3` is the arm that reproduces the shard.  `-6e-2` is past the point
+where the PRE-FIX census is empty, and is what produced the DEPTH-gate
+adjudication of row 19; `-1e-1` is past the point where the LIBRARY works, and
+the test's job there is to say which mode went missing, which it does.
+
+### 9.5  Green -- including the versions never covered locally
+
+Both shard failures came from versions neither mount had ever run: **py3.11**,
+then **py3.10**.  Both are covered now, via `uv`-managed CPython in WSL, together
+with the CI-proxy venv:
+
+| environment | python | numpy / scipy | threads | result |
+|---|---|---|---|---|
+| M, Windows | 3.14.6 | 2.4.4 / 1.17.1 | 1 / 2 / default | **7 passed** (69.2 / 70.3 / 70.2 s) |
+| W, WSL `lumen_venv` | 3.12.3 | 2.4.6 / 1.17.1 | 1 / 2 / default | **7 passed** (67.0 / 66.6 / 66.9 s) |
+| W, WSL `/tmp/venv-py310` (**new**) | **3.10.20** | 2.2.6 / 1.15.3 | 1 | **7 passed** (67.6 s) |
+| W, WSL `/tmp/venv-py311` (**new**) | **3.11.15** | 2.4.6 / 1.17.1 | 1 | **7 passed** (66.4 s) |
+| W, WSL `/tmp/venv-ci` (CI proxy) | 3.12.3 | 2.5.1 / 1.18.0 | 1 | **7 passed** (63.4 s) |
+
+`ruff check lumenairy/ tests/unit/` -- the exact CI command -- clean on both
+mounts.  The file is ASCII.  No `xfail`, `skip`, deleted test, weakened guard or
+`CHANGELOG` entry, and `lumenairy/` is not touched by this round either.
+
+**Version alone does not reproduce it.**  py3.10.20 and py3.11.15 are GREEN
+locally on the *5.35.2* file: what differs on the runners is the LAPACK the
+`numpy` wheel is built against, not the interpreter.  That is why the
+demonstrations must be engineered rather than observed, and why `_stop_offset` --
+which reproduces the shard's reading deterministically on any build -- is worth
+more than any number of version rows.
+
+### 9.6  Open
+
+* `_ISO_MARGIN = 1.0` is the narrowest bar added here, 8.2x / 9.1x measured.  It
+  is a statement about the reference windows, not the library: a caller scanning
+  a window whose modes sit closer together than a detection cell trips the guard,
+  which is the correct answer (basin matching cannot adjudicate there) but is a
+  guard, not a fix.
+* Row 17's `1e-4 |v|` is the one bar in the file still set by measurement rather
+  than derivation.  It is verified out to a 6e-2 detector shift -- 150x the
+  py3.10 offset and 24% of the detection cell -- but it is a fixed-vs-fixed
+  determinism claim, not a fail-before, so its failure would be a real signal.
+* The emulation harness lives in the scratchpad, not the tree.  Its E1 arm names
+  the ULP rungs to drop by hand, which is an M/W-specific choice; the E5 arm's
+  `dq` values are absolute and build-free.
