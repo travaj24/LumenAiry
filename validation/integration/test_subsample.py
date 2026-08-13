@@ -27,6 +27,7 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
 from _harness import Harness
 
 import lumenairy as la
+from lumenairy.elements import _lens_imap as _imap
 
 
 H = Harness('subsample')
@@ -144,8 +145,26 @@ H.run('serial == pool (sub=2)', _pp_match(2))
 H.section('Subsampling error scaling vs coarse-samples-per-aperture')
 
 
-def _err_scaling(sub, band):
-    def _fn():
+# WHOSE error scales, and why this section now names its path
+# (FIX_RUNNER_OOM_2026_08_13).  The claim these three checks make -- that the
+# exit-phase error grows with the coarseness of the LAUNCH LATTICE -- is a
+# property of the coarse-Newton + ``map_coordinates`` UPSAMPLE path, because
+# that path interpolates between traced nodes and the internode distance IS
+# ``ray_subsample``.  v5.35.0 turned the C15 inverse characteristic on by
+# default: it fits ONE global polynomial model of the exit map, which the
+# lattice spacing barely moves, and the measured error collapsed from
+# 21.2 / 86.5 / 348.5 nm to 0.006 nm at every ``sub`` -- so the bands read
+# FAIL against a strictly better answer.
+#
+# Keeping the old bands as the pass condition would have meant asserting that
+# the library must stay wrong by 10-600 nm.  So the scaling law is pinned where
+# it lives (``TRACED_INVERSE_MAP = False``, the module's own documented
+# fail-before switch) and the collapse is pinned as its own claim below.
+def _run_pair(sub, imap_on):
+    old = _imap.TRACED_INVERSE_MAP
+    _imap.inverse_map_cache_clear()
+    try:
+        _imap.TRACED_INVERSE_MAP = bool(imap_on)
         E_ref = la.apply_real_lens_traced(
             E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
             ray_subsample=1, n_workers=1,
@@ -154,21 +173,45 @@ def _err_scaling(sub, band):
             E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
             ray_subsample=sub, n_workers=1,
             min_coarse_samples_per_aperture=0)
-        pd = np.angle(np.exp(1j * (np.angle(E_test) - np.angle(E_ref))))
-        mask = (np.abs(E_ref) > 1e-6) & (np.abs(E_test) > 1e-6)
-        rms_nm = (float(np.sqrt(np.mean(pd[mask] ** 2)))
-                  / (2 * np.pi) * wv * 1e9)
+    finally:
+        _imap.TRACED_INVERSE_MAP = old
+        _imap.inverse_map_cache_clear()
+    pd = np.angle(np.exp(1j * (np.angle(E_test) - np.angle(E_ref))))
+    mask = (np.abs(E_ref) > 1e-6) & (np.abs(E_test) > 1e-6)
+    return (float(np.sqrt(np.mean(pd[mask] ** 2))) / (2 * np.pi) * wv * 1e9)
+
+
+def _err_scaling(sub, band):
+    def _fn():
+        rms_nm = _run_pair(sub, imap_on=False)
         in_band = band[0] <= rms_nm <= band[1]
         return in_band, f'measured {rms_nm:.1f} nm (band {band})'
     return _fn
 
 
-H.run('sub=4: RMS phase err in expected 10-50 nm band',
+H.run('sub=4: upsample-path RMS phase err in expected 10-50 nm band',
       _err_scaling(4, (10, 50)))
-H.run('sub=8: RMS phase err in expected 50-200 nm band',
+H.run('sub=8: upsample-path RMS phase err in expected 50-200 nm band',
       _err_scaling(8, (50, 200)))
-H.run('sub=16: RMS phase err in expected 200-600 nm band',
+H.run('sub=16: upsample-path RMS phase err in expected 200-600 nm band',
       _err_scaling(16, (200, 600)))
+
+
+def _imap_collapses(sub):
+    """The C15 claim, scored the same way and on the same beam: with the map
+    engaged the subsampling error is not merely smaller, it is off this
+    scale.  Measured 0.006 nm at sub = 4, 8 and 16 (against 21.2, 86.5 and
+    348.5 nm for the path above), so a 1 nm bar has ~150x of headroom and
+    still cannot be met by the upsample path at any of the three."""
+    def _fn():
+        rms_nm = _run_pair(sub, imap_on=True)
+        return rms_nm < 1.0, f'measured {rms_nm:.4f} nm (bar < 1 nm)'
+    return _fn
+
+
+H.run('sub=4: inverse map holds the phase to < 1 nm', _imap_collapses(4))
+H.run('sub=8: inverse map holds the phase to < 1 nm', _imap_collapses(8))
+H.run('sub=16: inverse map holds the phase to < 1 nm', _imap_collapses(16))
 
 
 # ---------------------------------------------------------------------

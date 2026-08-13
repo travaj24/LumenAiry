@@ -510,6 +510,13 @@ _ORIGIN_AMP_SUPPORT_TOL = 1.0e-09
 # and is numerically identical (same math, serialised).
 _LENS_PARALLEL_AMP_DEFAULT = True
 
+# Row-block budget (in float64 ENTRIES) for the Chebyshev fit's design-matrix
+# construction in ``_Cheb2DEvaluator.__init__``.  8e6 entries = 64 MB of
+# gather scratch per block, independent of the sample count and the fit order.
+# See ``docs/audits/FIX_RUNNER_OOM_2026_08_13.md``; the sibling constant on the
+# inverse-map side is ``_lens_imap._IMAP_FIT_CHUNK_ENTRIES``.
+_CHEB_FIT_CHUNK_ENTRIES = 8_000_000
+
 
 def set_lens_parallel_amp(enabled: bool) -> None:
     """Set the process-wide default for ``apply_real_lens_traced``'s
@@ -2444,7 +2451,39 @@ class _Cheb2DEvaluator:
         K2_np = np.asarray([m[1] for m in self._mi], dtype=np.int64)
         Tu_np = _cheb_vand_2d(u_np, order, np)
         Tv_np = _cheb_vand_2d(v_np, order, np)
-        A_full = (Tu_np[K1_np] * Tv_np[K2_np]).reshape(n_terms, -1).T
+        # FIX_RUNNER_OOM_2026_08_13.  Built in ROW BLOCKS into a preallocated
+        # buffer.  The one-liner this replaces,
+        # ``(Tu_np[K1_np] * Tv_np[K2_np]).reshape(n_terms, -1).T``, is three
+        # full ``(n_terms, n_samples)`` arrays alive at once -- the two fancy-
+        # index GATHERS and their product -- so a fit that RETURNS a 1.29 GB
+        # design matrix (measured: 2401^2 retained samples at order 6, the
+        # ``test_niche_c1_consolidation`` exit-NA case) transiently claimed
+        # 4.7 GB, three times over in one call.  That is survivable on a 128 GB
+        # dev box and is 2/3 of a CI runner.
+        #
+        # BIT-IDENTICAL, in values AND in what the SOLVE sees.  Every entry is
+        # the same product of the same two Chebyshev values -- elementwise, no
+        # reduction, so no summation order to change.  Layout would be
+        # load-bearing (``_solve_lstsq_thread_safe`` forms ``A.T @ A``, whose
+        # BLAS reduction order depends on it) except that the solver's FIRST
+        # line is ``np.ascontiguousarray(A)``: it always squared a C-contiguous
+        # copy.  Building C-contiguous here hands it exactly that array and
+        # RETIRES the copy -- one 1.29 GB allocation less on the measured case,
+        # and the weighted branch's ``np.ascontiguousarray`` below likewise
+        # becomes a no-op that scales in place.
+        _Tu_f = Tu_np.reshape(order + 1, -1)
+        _Tv_f = Tv_np.reshape(order + 1, -1)
+        _n_flat = _Tu_f.shape[1]
+        A_full = np.empty((_n_flat, n_terms), dtype=np.float64)
+        _step = max(1, _CHEB_FIT_CHUNK_ENTRIES // max(1, n_terms))
+        for _s in range(0, _n_flat, _step):
+            _e = min(_s + _step, _n_flat)
+            # SLICE first, gather second: ``_Tu_f[K1_np][:, s:e]`` would
+            # materialise the full ``(n_terms, n_samples)`` gather this whole
+            # block exists to avoid.
+            np.multiply(_Tu_f[:, _s:_e][K1_np].T, _Tv_f[:, _s:_e][K2_np].T,
+                        out=A_full[_s:_e])
+        del _Tu_f, _Tv_f, Tu_np, Tv_np
         vals_flat = vals_np.ravel()
         finite = np.isfinite(vals_flat)
         if weights is not None:

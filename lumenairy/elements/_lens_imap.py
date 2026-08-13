@@ -343,6 +343,57 @@ _IMAP_DETJ_SOURCES = ('landing_stencil', 'analytic_inverse')
 #: grid never materialises a second full copy of anything.
 _IMAP_EVAL_CHUNK = 4_000_000
 
+#: Row-block budget (in float64 ENTRIES) for the FIT-side design matrices
+#: :func:`_td_design` / :func:`_td_design_grad`.  8e6 entries = 64 MB of
+#: scratch per block, independent of the sample count and the degree.  The
+#: sibling of :data:`_IMAP_EVAL_CHUNK` on the build side; see
+#: ``docs/audits/FIX_RUNNER_OOM_2026_08_13.md``.
+_IMAP_FIT_CHUNK_ENTRIES = 8_000_000
+
+#: GRAM (the memory guard): how many float64 copies of the ``(n_good, P)``
+#: design matrix the build peaks at, AFTER the row-blocking above.
+#:
+#: MEASURED, not assumed (FIX_RUNNER_OOM_2026_08_13, and re-measured against
+#: the shipped code by ``test_fix_runner_oom_2026_08_13.py``): the build holds
+#: ``A`` from :func:`_td_design` for its whole life, and on top of it
+#:
+#:   * the weighted copy ``A * w[:, None]`` inside the least-squares solve,
+#:   * the LAPACK working copy ``_solve_lstsq_thread_safe`` makes of it,
+#:   * and, for ``_IMAP_DETJ_SOURCE = 'analytic_inverse'``, the two gradient
+#:     designs ``_Au`` / ``_Av``.
+#:
+#: Three of those are alive at the same time at the two high-water points, so
+#: the projection is 4x the matrix (3 peers + the retained ``A``) with the
+#: block scratch and the ``(n, 4)`` channel stack rounded into it.
+_IMAP_BUILD_PEAK_COPIES = 4.0
+
+#: ...and how much of the effective RAM budget (``lumenairy.get_ram_budget()``,
+#: i.e. a :func:`lumenairy.set_max_ram` override or psutil's AVAILABLE reading)
+#: that projection is allowed to claim before GRAM refuses the build.
+#:
+#: Half, because the map is never the only thing in the process: the caller
+#: still holds its own field, the traced landings and the OPL grid, and on a
+#: CI runner the test session holds everything it imported.  The guard is
+#: deliberately toothless on ordinary calls -- a 512^2 grid at degree 14
+#: projects to ~0.1 GB, which fits any box this library claims to run on -- and
+#: bites only where the fit is a multi-GB object.  The dev-box behaviour is
+#: therefore UNCHANGED (byte-identical maps); it is a small-box guard.
+_IMAP_BUILD_RAM_FRAC = 0.5
+
+
+def _imap_ram_budget():
+    """The effective RAM budget GRAM prices against, in bytes.
+
+    One indirection on purpose: :func:`lumenairy.memory.get_ram_budget` is the
+    library-wide answer (a :func:`lumenairy.set_max_ram` override, else psutil's
+    AVAILABLE reading, else the documented 4 GB psutil-less fallback), and
+    routing through a named function here is what lets a test pin a box size
+    without reaching into :mod:`psutil`.
+    """
+    from ..memory import get_ram_budget
+    return float(get_ram_budget())
+
+
 #: How many built maps to retain.  The key is a SHA-256 over every array and
 #: scalar the map depends on (see :func:`_imap_key`), so a cached map cannot
 #: describe a different trace -- the chain-A cache discipline of
@@ -450,11 +501,57 @@ def _td_terms(degree):
 
 
 def _td_design(ux, uy, degree, terms):
-    """Column-product Chebyshev design matrix on normalised coordinates."""
+    """Column-product Chebyshev design matrix on normalised coordinates.
+
+    Built in ROW BLOCKS into one preallocated ``(n, P)`` output.
+
+    FIX_RUNNER_OOM_2026_08_13.  The one-liner this replaced,
+    ``Vx[:, terms[:, 0]] * Vy[:, terms[:, 1]]``, is three full ``(n, P)``
+    arrays alive at once -- the two fancy-index GATHERS plus their product --
+    so the transient was 3x the matrix it returns, on top of whatever the
+    caller already holds.  Measured on the ``test_niche_c1_consolidation``
+    exit-NA case (n = 5,764,801 retained samples, degree 14 -> P = 120, i.e.
+    5.53 GB per copy), the whole ``build_inverse_map`` peaked at **32.8 GB**
+    over baseline on a call whose input field is a 2048^2 grid; that is what
+    OOM-killed the v5.35.0 release-verify runner.  Blocking bounds the scratch
+    at ``_IMAP_FIT_CHUNK_ENTRIES`` entries regardless of ``n`` and ``P``.
+
+    BIT-IDENTICAL to the unblocked form: every entry is the same product of
+    the same two Chebyshev values, computed elementwise.  There is no
+    reduction here, so there is no summation order to change.  Pinned by
+    ``tests/unit/test_fix_runner_oom_2026_08_13.py``.
+    """
     from numpy.polynomial.chebyshev import chebvander
-    Vx = chebvander(np.asarray(ux, dtype=np.float64), degree)
-    Vy = chebvander(np.asarray(uy, dtype=np.float64), degree)
-    return Vx[:, terms[:, 0]] * Vy[:, terms[:, 1]]
+    ux = np.asarray(ux, dtype=np.float64)
+    uy = np.asarray(uy, dtype=np.float64)
+    t0 = terms[:, 0]
+    t1 = terms[:, 1]
+    n = int(ux.size)
+    P = int(terms.shape[0])
+    A = np.empty((n, P), dtype=np.float64)
+    for s, e in _fit_row_blocks(n, P):
+        Vx = chebvander(ux[s:e], degree)
+        Vy = chebvander(uy[s:e], degree)
+        np.multiply(Vx[:, t0], Vy[:, t1], out=A[s:e])
+    return A
+
+
+def _fit_row_blocks(n, n_cols):
+    """Row blocks whose per-block scratch stays under
+    :data:`_IMAP_FIT_CHUNK_ENTRIES` entries.
+
+    Yields ``(start, stop)`` covering ``range(n)``.  ``n_cols`` is the widest
+    per-row scratch the caller materialises (the design width ``P``), so the
+    bound is in BYTES of transient rather than in rows -- a degree-14 fit
+    (P = 120) and a degree-6 one (P = 28) then cost the same scratch.
+    """
+    n = int(n)
+    per = max(1, int(n_cols))
+    step = max(1, int(_IMAP_FIT_CHUNK_ENTRIES) // per)
+    if n <= 0:
+        return
+    for s in range(0, n, step):
+        yield s, min(s + step, n)
 
 
 def _cheb_dvander(u, degree):
@@ -475,14 +572,31 @@ def _cheb_dvander(u, degree):
 
 
 def _td_design_grad(ux, uy, degree, terms):
-    """``(dA/du, dA/dv)`` for :func:`_td_design`, analytically."""
+    """``(dA/du, dA/dv)`` for :func:`_td_design`, analytically.
+
+    Row-blocked for the same reason and with the same bit-identity argument as
+    :func:`_td_design` (FIX_RUNNER_OOM_2026_08_13).  The unblocked form held
+    FOUR full ``(n, P)`` gathers plus the two products -- and it ran with the
+    design matrix ``A`` still alive, which is where the 32.8 GB high-water
+    mark was measured.
+    """
     from numpy.polynomial.chebyshev import chebvander
-    Vx = chebvander(np.asarray(ux, dtype=np.float64), degree)
-    Vy = chebvander(np.asarray(uy, dtype=np.float64), degree)
-    Dx = _cheb_dvander(ux, degree)
-    Dy = _cheb_dvander(uy, degree)
-    return (Dx[:, terms[:, 0]] * Vy[:, terms[:, 1]],
-            Vx[:, terms[:, 0]] * Dy[:, terms[:, 1]])
+    ux = np.asarray(ux, dtype=np.float64)
+    uy = np.asarray(uy, dtype=np.float64)
+    t0 = terms[:, 0]
+    t1 = terms[:, 1]
+    n = int(ux.size)
+    P = int(terms.shape[0])
+    Au = np.empty((n, P), dtype=np.float64)
+    Av = np.empty((n, P), dtype=np.float64)
+    for s, e in _fit_row_blocks(n, P):
+        Vx = chebvander(ux[s:e], degree)
+        Vy = chebvander(uy[s:e], degree)
+        Dx = _cheb_dvander(ux[s:e], degree)
+        Dy = _cheb_dvander(uy[s:e], degree)
+        np.multiply(Dx[:, t0], Vy[:, t1], out=Au[s:e])
+        np.multiply(Vx[:, t0], Dy[:, t1], out=Av[s:e])
+    return Au, Av
 
 
 def _probe_entrance_points(xs_in, census):
@@ -1370,6 +1484,46 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
                            'samples/coefficient floor'
                            % (n_good, P, degree,
                               _IMAP_MIN_SAMPLES_PER_TERM))
+
+    # ---- GRAM: the build has to FIT THE BOX it is running on --------------
+    # FIX_RUNNER_OOM_2026_08_13.  Every guard above this line asks whether the
+    # model would be HONEST; this one asks whether building it would survive.
+    # The design matrix is ``n_good x P`` float64 and nothing upstream bounds
+    # either factor: the exit-NA case in ``test_niche_c1_consolidation`` reaches
+    # n_good = 5,764,801 at degree 14 (P = 120), i.e. 5.53 GB PER COPY, and the
+    # v5.35.0 release-verify runner was killed by the kernel partway through it
+    # (twice, same test, both python legs).  The dev box this was developed on
+    # has 128 GB and never saw it.
+    #
+    # Refuse, never degrade: returning None here KEEPS the shipped coarse-
+    # Newton + ``map_coordinates`` upsample path, exactly as G1-G8 do -- the
+    # same outcome as ``TRACED_INVERSE_MAP = False``, which is the documented
+    # fail-before switch for this whole module.
+    #
+    # THE PROJECTION is ``_IMAP_BUILD_PEAK_COPIES`` copies of the design matrix
+    # plus the row-blocking's own scratch -- which does NOT scale with
+    # ``n_good`` (that is the whole point of blocking) but is not zero either:
+    # three blocks' worth of gather buffers at the pinned entry budget.  The
+    # ``min`` is there because a fit smaller than one block never allocates a
+    # block; without it the fixed term would dominate -- and could FALSELY
+    # refuse -- every small build on a small box, the opposite of the point.
+    _ram_b = float(_imap_ram_budget())
+    _need_b = (_IMAP_BUILD_PEAK_COPIES * float(n_good) * float(P) * 8.0
+               + 3.0 * min(float(_IMAP_FIT_CHUNK_ENTRIES),
+                           float(n_good) * float(P)) * 8.0)
+    _budget_b = _IMAP_BUILD_RAM_FRAC * _ram_b
+    rec['build_projected_gb'] = _need_b / 1e9
+    rec['build_budget_gb'] = _budget_b / 1e9
+    if _need_b > _budget_b:
+        return _guard_fail(
+            rec, 'GRAM',
+            'building the total-degree-%d fit over %d retained samples '
+            'projects to ~%.1f GB peak (%d x %d float64 design, %.1f copies) '
+            'against a %.1f GB share of this box\'s %.1f GB budget -- raise '
+            'the budget (lumenairy.set_max_ram), lower exit_degree, or coarsen '
+            'the launch lattice (ray_subsample) to get the map back'
+            % (degree, n_good, _need_b / 1e9, n_good, P,
+               _IMAP_BUILD_PEAK_COPIES, _budget_b / 1e9, _ram_b / 1e9))
 
     ux = (XO[good] - ex_c[0]) / ex_h[0]
     uy = (YO[good] - ex_c[1]) / ex_h[1]
