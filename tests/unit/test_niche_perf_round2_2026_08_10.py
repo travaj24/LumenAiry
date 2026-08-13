@@ -298,7 +298,7 @@ def _field():
     return (amp * np.exp(1j * k0 * (W + a))).astype(np.complex128)
 
 
-def _run_traced(E):
+def _run_traced(E, **over):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         return np.asarray(la.apply_real_lens_traced(
@@ -306,7 +306,7 @@ def _run_traced(E):
             amplitude_model='ray_density', preserve_input_phase='remap',
             remap_sampling='full', ray_subsample=_RS, parallel_amp=False,
             n_workers=1, on_undersample='silent',
-            on_noncollimated='silent', fit_radius_beam_factor=2.0))
+            on_noncollimated='silent', fit_radius_beam_factor=2.0, **over))
 
 
 class _AlwaysAny(np.ndarray):
@@ -358,16 +358,33 @@ def test_nan_pass_guard_is_byte_identical_and_actually_fires():
     """THE pin for item 2.  One design-121-like element call: the exit field
     with the guard ACTIVE must be byte-identical to the same call with the
     guard DEFEATED (which is the pre-change behaviour), and the guard must
-    have saved calls -- otherwise the identity is vacuous."""
+    have saved calls -- otherwise the identity is vacuous.
+
+    2026-08-13 -- ``inverse_map=False``, because the guard's SUBJECT is not
+    on the shipped path any more.  Item 2 is an optimisation INSIDE the
+    coarse-lattice upsample chain (the second, NaN-mask ``map_coordinates``
+    pass over the coarse OPL / ray-density arrays), and since
+    ``FIX_G8_PROBE_2026_08_12`` the inverse-characteristic evaluator replaces
+    that whole chain with one per-pixel evaluation
+    (``_lens_traced.py`` :10455-:10470).  With the model engaged this fixture
+    dispatches 3 ``map_coordinates`` calls whether the guard is defeated or
+    not, so ``cnt_off.n > cnt_on.n`` is not a measurement of the guard -- it
+    is a measurement of which inversion ran.  The guard, and the identity it
+    claims, are unchanged and are measured here where they execute.
+
+    The default arm below is the h3-style contract: the shipped path must
+    price NO coarse NaN pass at all.  If a future build puts the coarse
+    upsample chain back behind the model, this test says so rather than
+    quietly re-covering it."""
     E = _field()
     with _CountingMapCoordinates() as cnt_on:
-        got = _run_traced(E)
+        got = _run_traced(E, inverse_map=False)
     shim = _ForceNaNPass(np)
     real = LT.np
     LT.np = shim
     try:
         with _CountingMapCoordinates() as cnt_off:
-            ref = _run_traced(E)
+            ref = _run_traced(E, inverse_map=False)
     finally:
         LT.np = real
     assert shim.calls > 0, 'the shim never saw an isnan -- path changed'
@@ -381,6 +398,17 @@ def test_nan_pass_guard_is_byte_identical_and_actually_fires():
         f'max|delta| = {np.max(np.abs(got - ref)):.3e}')
     assert np.isfinite(np.abs(got)).all()
     assert float(np.abs(got).max()) > 0.0
+    # ... and the shipped default runs none of that chain: strictly fewer
+    # map_coordinates calls than the guarded incumbent path itself needs.
+    with _CountingMapCoordinates() as cnt_map:
+        out = _run_traced(E)
+    assert cnt_map.n < cnt_on.n, (
+        f'the inverse-characteristic evaluator is no longer replacing the '
+        f'coarse upsample chain on this fixture ({cnt_map.n} '
+        f'map_coordinates calls at the default, {cnt_on.n} with '
+        f'inverse_map=False)')
+    assert np.isfinite(np.abs(out)).all()
+    assert float(np.abs(out).max()) > 0.0
 
 
 def test_the_skipped_nan_pass_is_the_identity_by_construction():

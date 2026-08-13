@@ -172,9 +172,29 @@ def test_the_bound_ships_on_with_a_one_cell_feather():
 def test_with_the_flag_off_the_feather_constant_is_inert(_warm):
     """The OFF state has to be a real switch and not merely a small feather:
     the whole support computation is skipped, so the constant cannot reach the
-    field.  Byte-identical against an absurd feather width."""
-    a, _ = _call(_CLEAN, bound=False, feather=1.0)
-    b, _ = _call(_CLEAN, bound=False, feather=1e6)
+    field.  Byte-identical against an absurd feather width.
+
+    2026-08-13 -- scoped to ``inverse_map=False``, and the reason is a
+    SECOND consumer of the constant that the OFF switch does not reach.  The
+    inverse-characteristic evaluator (shipped on since
+    ``FIX_G8_PROBE_2026_08_12``) relaxes its own domain mask by the support
+    the element emits -- ``sqrt(2) sub dx`` of plateau plus the feather
+    (``_lens_traced.py`` :10507) -- and when there is no MEASURED hull
+    feather to use it falls back to ``_SUPPORT_BOUND_FEATHER_CELLS * sub *
+    dx``.  ``REMAP_INVERSE_SUPPORT_BOUND = False`` is exactly the state that
+    leaves no measured feather (``want_bound`` is False, so the hull is never
+    built), so with the model engaged an absurd constant widens the model's
+    domain instead of the taper's band: measured 7.667e-03 of peak here.
+
+    That is a real coupling and it is recorded as one
+    (``docs/audits/FIX_RELEASE_FIFTEEN_2026_08_13.md`` S2.6), NOT asserted
+    here -- a pin on the coupling would block the fix for it.  It is not
+    reachable from a shipped configuration through this switch: with the
+    bound ON (the default) the relaxation uses the measured hull feather, and
+    the taper's own monotonicity in the constant is pinned by
+    ``test_the_feather_is_monotone_in_its_width``."""
+    a, _ = _call(_CLEAN, bound=False, feather=1.0, inverse_map=False)
+    b, _ = _call(_CLEAN, bound=False, feather=1e6, inverse_map=False)
     assert np.array_equal(a, b)
 
 
@@ -247,17 +267,58 @@ def test_it_never_raises_any_pixel(spec, guard, _warm):
 def test_it_leaves_the_beam_exactly_alone(_warm):
     """Every pixel with traced data behind it keeps its full amplitude: the
     feather band lies entirely OUTSIDE the sample hull.  Pinned BYTE-wise over
-    the region that carries the light."""
-    a, _ = _call(_CLEAN, bound=False)
-    b, _ = _call(_CLEAN, bound=True)
+    the region that carries the light.
+
+    2026-08-13 -- ``r <= 3 w`` is a PROXY for "inside the sample hull", and
+    with the inverse-characteristic evaluator engaged the proxy stops
+    holding: the model's domain mask deliberately keeps a band of
+    ``sqrt(2) sub dx`` plus one feather OUTSIDE the landing hull alive at
+    full amplitude (``_lens_traced.py`` :10499-:10510, "model exactly the
+    support the element emits"), and on THIS fixture that band lands at
+    2.32-2.36 w -- inside the 3 w proxy.  So at the shipped default the bound
+    has real work to do there and the byte-identity above is not the claim
+    the bound makes.
+
+    Arm (a) keeps that claim word for word where the proxy is exact: with the
+    evaluator off, the incumbent Newton inversion is already out of domain on
+    those pixels and the bound changes nothing inside 3 w (measured: 0 of
+    147456 pixels move in the core, and the whole grid moves by 1.167e-11).
+
+    Arm (b) states, at the shipped default, what the bound actually
+    guarantees -- and it is stronger than a byte comparison over a radius:
+    every pixel it moves it drives to EXACTLY zero, all of them lie outside
+    the beam, and the power it removes is manufactured light the model's own
+    support relaxation emitted.  Measured: 16 pixels of 147456, all at
+    2.32-2.36 w, ``|E|`` 6.290e-03 of peak -> exactly 0.0, 3.974e-07 of the
+    power.  That is niche C8 doing its job, not the beam being touched."""
     R = _radii(_CLEAN)
     core = R <= 3.0 * _CLEAN['w']
     assert core.any()
+    # (a) the original pin, where "r <= 3 w" is inside the traced support.
+    a, _ = _call(_CLEAN, bound=False, inverse_map=False)
+    b, _ = _call(_CLEAN, bound=True, inverse_map=False)
     assert np.array_equal(a[core], b[core])
     # and the total power is unmoved at the level a clean call has to be
     pa = float((np.abs(a) ** 2).sum())
     pb = float((np.abs(b) ** 2).sum())
     assert abs(pb - pa) <= 1e-9 * pa, (pa, pb)
+    # (b) the shipped default: a removal, outside the beam, to exactly zero.
+    c, _ = _call(_CLEAN, bound=False)
+    d, _ = _call(_CLEAN, bound=True)
+    moved = np.abs(c - d) > 0.0
+    assert moved.any(), (
+        'the bound has nothing to remove on this fixture with the model '
+        'engaged -- arm (b) is vacuous')
+    assert np.all(d[moved] == 0.0), (
+        'the bound ATTENUATED a pixel instead of removing it: '
+        '%d of %d moved pixels keep amplitude'
+        % (int((np.abs(d[moved]) > 0.0).sum()), int(moved.sum())))
+    assert float((R[moved] / _CLEAN['w']).min()) > 2.0, (
+        'the bound reached inside 2 w: %.3f w'
+        % float((R[moved] / _CLEAN['w']).min()))
+    pc = float((np.abs(c) ** 2).sum())
+    pd = float((np.abs(d) ** 2).sum())
+    assert 0.0 < (pc - pd) <= 1e-5 * pc, (pc, pd)
 
 
 def test_the_screen_amplitude_is_untouched(_warm):

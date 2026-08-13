@@ -327,13 +327,41 @@ def test_row_band_assembly_matches_whole_grid_under_a_carrier():
     and its prefilter are never banded), so the orders can and must match.
     Tolerance is the FP floor (the library is FP-floor reproducible, not
     bit-reproducible, across band decompositions) -- 13 orders below the
-    defect."""
+    defect.
+
+    2026-08-13 -- WHY THIS PIN NAMES ``inverse_map=False``, AND WHY THAT IS
+    THE HONEST SCOPE RATHER THAN A WORKAROUND.
+
+    The claim above is about ONE algorithm evaluated in two decompositions:
+    the OPL upsample's interpolation ORDER must not depend on how the exit
+    field is banded.  Since ``FIX_G8_PROBE_2026_08_12`` the whole-grid path
+    at the shipped default does not run that upsample at all -- the
+    inverse-characteristic evaluator supplies the OPL per exit pixel -- and
+    the band path REFUSES the evaluator BY CONSTRUCTION: ``_imap_domain_gate``
+    (``_lens_traced.py`` :8466) carries ``not _chunk_assembly``, because "the
+    band path exists to never materialise a full-grid float64; handing it one
+    would undo the memory fix it is" (:10311).  So at the shipped default the
+    two sides are two DIFFERENT inversions, measured 2.1886e-02 apart on the
+    carrier arm and 2.4216e-01 on the ``carrier=None`` arm, and no
+    interpolation order is being compared.  With the evaluator off they are
+    the same algorithm again and both arms read EXACTLY 0.0 -- byte identity,
+    not merely the 1e-12 FP floor this pin asks for.
+
+    That structural exclusion is asserted below rather than assumed, so the
+    scoping cannot outlive its reason: if the band path ever opens the gate
+    (or the whole-grid path ever closes it) this test says so.  See
+    ``docs/audits/FIX_RELEASE_FIFTEEN_2026_08_13.md`` S2.2, which also
+    records the consequence the gate has for large N (banding is AUTO-ON at
+    N >= 4096 on the non-ray-density branch, so those calls keep the
+    incumbent coarse-Newton inversion -- the pre-5.35 behaviour, refused
+    rather than degraded)."""
     presc = _singlet(6.0e-3, -6.0e-3, 1.0e-3, 'N-BK7', 1.6e-3)
     N, dx, conj = 256, 4.0e-6, 30.0e-3
     E = _gauss(N, dx, 250e-6, conj, sphere=True)
     kw = dict(prescription=presc, wavelength=_WL, dx=dx, ray_subsample=8,
               carrier=conj, on_undersample='silent', on_noncollimated='off',
-              on_aperture_beam='silent', parallel_amp=False, n_workers=1)
+              on_aperture_beam='silent', parallel_amp=False, n_workers=1,
+              inverse_map=False)
 
     def _rel(a, b):
         return float(np.max(np.abs(a - b)) / max(float(np.max(np.abs(b))),
@@ -349,6 +377,17 @@ def test_row_band_assembly_matches_whole_grid_under_a_carrier():
     w0 = np.asarray(apply_real_lens_traced(E, sag_chunk_rows=0, **kw_nc))
     b0 = np.asarray(apply_real_lens_traced(E, sag_chunk_rows=64, **kw_nc))
     assert np.array_equal(w0, b0)
+    # ... and the reason the scoping is needed, at the SHIPPED default: the
+    # whole-grid call builds the evaluator, the banded call never opens its
+    # gate.  Structural, so it is asserted on the gate itself and not on a
+    # field difference that a fixture change could quieten.
+    kw_d = dict(kw)
+    del kw_d['inverse_map']
+    rec_w, rec_b = {}, {}
+    apply_real_lens_traced(E, sag_chunk_rows=0, _imap_out=rec_w, **kw_d)
+    apply_real_lens_traced(E, sag_chunk_rows=32, _imap_out=rec_b, **kw_d)
+    assert rec_w['gate_open'] and rec_w['engaged'], rec_w
+    assert not rec_b['gate_open'] and not rec_b['engaged'], rec_b
 
 
 # ===========================================================================

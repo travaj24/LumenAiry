@@ -206,6 +206,30 @@ def test_auto_recovers_spherical_R_on_aliased_input(R_in, w, N):
 # validated against the inline meridional oracle on a synthetic singlet.
 # ---------------------------------------------------------------------------
 def test_auto_matches_explicit_endtoend_vs_oracle():
+    """2026-08-13 -- the r4 NON-VACUITY control is scoped to
+    ``inverse_map=False``; everything about ``auto`` itself runs at the
+    shipped default.
+
+    The subject of this test -- ``'auto'`` recovers the same correction as an
+    explicit ``carrier=R`` -- is measured at every shipped default and is
+    untouched: both carrier arms read the SAME numbers with the
+    inverse-characteristic evaluator on and off, to six digits
+    (rms 0.012811 / 0.016434, r4 0.002305 / 0.002400), which the control
+    below asserts rather than assumes.
+
+    What moved is the DEGRADED arm this test uses to prove the ladder is not
+    flat.  ``carrier=None`` references the plane wave, so its forward OPL fit
+    carries the whole spherical term and its 4th-order residual is large --
+    r4 = 0.073648 with the evaluator off.  With it on, the model supplies the
+    OPL per exit pixel from the landings themselves and that residual is
+    repaired 15.1x, to 0.004875, so ``r4_n > 3 * r4_a`` reads 2.03x and is
+    no longer a measurement of the fallback's degradation.  The rms channel
+    is NOT repaired the same way (0.219320 -> 0.191150, still 11.6x above
+    ``auto``) and keeps its control at the shipped default.
+
+    The repair itself is asserted below, so this scoping cannot outlive its
+    reason.  Mechanism and measurements:
+    ``docs/audits/FIX_RELEASE_FIFTEEN_2026_08_13.md`` S2.5."""
     if available_memory_bytes() < 1 * (1 << 30):
         pytest.skip("insufficient free RAM")
     R_in, w, N = 30.0e-3, 1.6e-3, 512
@@ -219,15 +243,18 @@ def test_auto_matches_explicit_endtoend_vs_oracle():
     xe, ph = _oracle_exit_phase(surfs, t_glass, R_in, x_max=0.9 * w)
 
     E_in, x = _spherical_input(N, dx, w, R_in)
-    out = {}
-    for name, kw in (('explicit', {'carrier': R_in}),
-                     ('auto', {'carrier': 'auto'}),
-                     ('none', {'carrier': None})):
+
+    def _metrics(name, imap=None):
+        kw = {'explicit': {'carrier': R_in}, 'auto': {'carrier': 'auto'},
+              'none': {'carrier': None}}[name]
+        if imap is not None:
+            kw = dict(kw, inverse_map=imap)
         eo = apply_real_lens_traced(
             E_in, prescription=rx, wavelength=LAM, dx=dx, ray_subsample=4,
             n_workers=4, parallel_amp=False, on_noncollimated='off', **kw)
-        out[name] = _residual_metrics(eo, x, xe, ph, w)
+        return _residual_metrics(eo, x, xe, ph, w)
 
+    out = {n: _metrics(n) for n in ('explicit', 'auto', 'none')}
     rms_e, r4_e = out['explicit']
     rms_a, r4_a = out['auto']
     rms_n, r4_n = out['none']
@@ -238,8 +265,26 @@ def test_auto_matches_explicit_endtoend_vs_oracle():
     assert abs(rms_a - rms_e) < 0.05, f"auto rms {rms_a:.4f} != explicit {rms_e:.4f}"
     # ... and both are MUCH better than the no-carrier (plane-wave) reference,
     # which is the degraded state 'auto' used to silently fall back to.
-    assert r4_n > 3 * r4_a, out
     assert rms_n > 3 * rms_a, out
+    # The r4 channel of that same control is measured with the
+    # inverse-characteristic evaluator off, where it was calibrated: the
+    # evaluator repairs the plane-wave-referenced fit's 4th-order residual
+    # (see this test's docstring), so at the shipped default the contrast is
+    # 2.03x rather than 30.7x.
+    rms_a0, r4_a0 = _metrics('auto', imap=False)
+    rms_n0, r4_n0 = _metrics('none', imap=False)
+    assert r4_n0 > 3 * r4_a0, (out, rms_a0, r4_a0, rms_n0, r4_n0)
+    assert rms_n0 > 3 * rms_a0, (out, rms_a0, r4_a0, rms_n0, r4_n0)
+    # THE CONTROL for that scoping: the arm the test is ABOUT does not move
+    # with the flag at all, so nothing but the degraded reference was scoped.
+    assert abs(r4_a0 - r4_a) < 1e-6 and abs(rms_a0 - rms_a) < 1e-6, (
+        f"'auto' moved with the evaluator: r4 {r4_a:.6f} -> {r4_a0:.6f}, "
+        f"rms {rms_a:.6f} -> {rms_a0:.6f}")
+    # ... and the repair itself, asserted so the scoping cannot outlive it.
+    assert r4_n < 0.2 * r4_n0, (
+        f"the evaluator no longer repairs the no-carrier r4 residual "
+        f"({r4_n:.6f} at the default vs {r4_n0:.6f} with it off) -- the "
+        f"reason the r4 control is scoped no longer holds")
 
 
 # ---------------------------------------------------------------------------
