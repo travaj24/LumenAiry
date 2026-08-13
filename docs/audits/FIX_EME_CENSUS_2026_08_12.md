@@ -503,3 +503,187 @@ behaviour byte for byte.
   determinant evaluation and was not run; the FD oracle separates those three
   candidates by 27.41 against 0.050, which is decisive on its own, and the same
   classification was confirmed at 40 digits on the Nx=8 and Nx=16 cells.
+
+---
+
+## 8.  THE FAIL-BEFORE DEMONSTRATIONS WERE THEMSELVES PER-BUILD -- 2026-08-13
+
+`tests/unit/test_eme_census_determinacy.py` shipped with 5.35.0/.1 and two of
+its seven ids then FAILED the 5.35.1 verify shard (ubuntu, py3.11), green on
+both mounts at every thread setting:
+
+| id | the assertion | reading on that runner |
+|---|---|---|
+| `..._one_ulp_bracket_nudge_flips_the_prefix_census_but_not_the_fixed_one` | `assert flips` | `[]` -- NO arm of the ULP ladder flips the PRE-FIX census there |
+| `..._dropped_mode_is_recovered_and_the_fd_oracle_confirms_it` | `min abs(prefix - 205.9749757788) > 1e-2` | **3.99e-04** -- the PRE-FIX census already HOLDS the mode there |
+
+Both are this campaign's own pattern (`FIX_CI_M1_T34_2026_08_06`: *"asserts a
+per-build fact as a universal one"*), in its sharpest form.  **The defect fixed
+in S1-S3 is that a near-threshold verdict is decided in the last bits -- so
+whether that defect MANIFESTS is precisely what a build is entitled to decide.**
+A fail-before that asserts the pre-fix defect manifests can therefore only ever
+be a per-build reading, no matter which cell it is run on.  Nothing in S1-S7 is
+retracted: the library is not touched, and the numbers of S1-S5 are what this
+round measures again.
+
+Restructured per the campaign's synthetic-injector precedent -- the `0.7 * eye`
+exactly-degenerate SVD of `test_niche_audit_w9_eig_vjp.py`, the
+`near_cut_injector` of `test_pmm_m2_window_contract.py`, the `o7` side-flip of
+`test_niche_audit_w6_berreman.py`.  Test file only.
+
+### 8.1  The three layers each restructured id now has
+
+**(a) The FIXED path, UNCONDITIONALLY, against the ORACLES.**  Not one assertion
+about the fixed census now reads the pre-fix path.  New helper `_oracle_clean`
+demands of EVERY census entry, on both reference cells: an independent 2-D-FD
+eigenvalue within `1.0` (the same `verify_tol` the library ships), and
+`sigma_min / bound < 1e-3` (not a band edge); and it demands that every known
+cusp of the window is ABSENT.  On top of that the W6 census must hold all three
+MONODROMY-confirmed modes, the Nx=16 census must hold `205.9749757788` on BOTH
+solvers, and neither may move under the ULP ladder.
+
+| cell | entry | `sigma_min / bound` | FD distance | verdict |
+|---|---|---:|---:|---|
+| W6 | 208.2502597917 | 5.59e-08 | 0.0754 | mode |
+| W6 | 203.7161763904 | 4.96e-09 | 0.0754 | mode |
+| W6 | 156.2813757187 | 7.66e-09 | 0.1108 | mode |
+| W6 | *235.8686333682* | **6.59e-01** | **27.54** | cusp -- ABSENT |
+| W6 | *180.7703378418* | **6.02e-01** | **23.02** | cusp -- ABSENT |
+| N16 | 205.9749757788 | 4.77e-13 | **0.0758** | the recovered mode |
+| N16 | 201.8868824991 | 2.67e-08 | 0.0738 | mode |
+| N16 | 151.3854745564 | 2.59e-08 | 0.1744 | mode |
+| N16 | 146.4214663772 | 8.63e-09 | 0.2245 | mode |
+| N16 | 140.5997564561 | 1.40e-08 | 0.1180 | mode |
+| N16 | *233.4775302 / 169.1623919 / 133.7501554* | **5.94e-1 .. 6.60e-1** | -- | cusps -- ABSENT (>= 6.85 away) |
+
+Two-sided by decades on both discriminators, and none of it depends on a build.
+
+**(b) The PRE-FIX demonstration, on an ENGINEERED TIE AT THE CUT.**  `ratio_tol`
+IS the bar the verdict is read against.  What a build decides is where its
+minimiser halts, hence what `gaps.min` READS; what it does not decide is that
+the reading has a spread.  So the bar is placed inside that spread, measured on
+the build itself:
+
+* `_tie_at_the_cut` (test 3) walks the pre-fix path over the ULP ladder with a
+  pass-through instrument on `_mode_reading`, takes the spread of the readings
+  of one band-edge cusp, and sets `ratio_tol` to its GEOMETRIC MEAN.  The arm
+  that read lowest then ACCEPTS the cusp and the arm that read highest REJECTS
+  it, by construction, on any build.  At that same tie the FIXED path refuses it
+  on every arm -- `sigma_min / bound` at that cusp is **6.592e-01 to four digits
+  on all 13 arms and on both mounts**, because the structural bound is a
+  property of `G` and not of where a minimiser stopped.
+* `_prefix_drop_cut` (test 6) uses the nine-decade gap between what Brent's halt
+  reads and what the CONVERGED zero reads, dividing the build's own Brent
+  reading by `sqrt(_CENSUS_BAND[1])` -- DERIVED from the library constant, so the
+  tie lands at the geometric centre of the range in which the fix still
+  polishes.  Pre-fix DROPS the mode there; fixed polishes and returns it.
+
+Measured, in-process, on both mounts (the tie is re-derived per build, so the
+numbers differ and the verdict does not):
+
+| mount | test 3 tie: spread -> `ratio_tol` | pre-fix straddle | test 6 tie: Brent / zero -> `ratio_tol` | pre-fix / fixed |
+|---|---|---|---|---|
+| M (Win py3.14) | 9.5114e-04 .. 2.6048e-03 (2.74x) -> **1.574026e-03** | accepts on `-1`, refuses on `+4` | 1.5112e-03 / 4.31e-12 -> **2.758979e-04** | DROPS / returns 205.97497577878 |
+| W (WSL py3.12) | 9.5114e-04 .. 2.6048e-03 (2.74x) -> **1.574026e-03** | accepts on `-1`, refuses on `+4` | 1.0918e-03 / 4.39e-12 -> **1.993319e-04** | DROPS / returns 205.97497577878 |
+
+The only vacuity condition left is "this build's ladder did not move the reading
+AT ALL", which is guarded by widening (`_ULP_ARMS_WIDE`, out to 1024 ULP) before
+it can fail, and whose failure message says to widen rather than delete.
+
+**(c) The LIVE cell at the SHIPPED `ratio_tol`, ADJUDICATED.**  The original
+demonstrations are kept and measured, and PASS either way with the reading
+printed -- `EME census tie [live cell]` / `EME census recall [live cell]`,
+reproduced-here or inert-here.  Both reproduce on M and W; the runner's readings
+would print the inert branch.
+
+### 8.2  The byte-null id carried the same defect, latent
+
+`..._census_is_byte_identical_where_the_prefix_path_was_unambiguous` asserted
+`np.array_equal(fixed, prefix)`.  That is the same per-build fact with the sign
+reversed: on a build whose pre-fix path ACCEPTS a W6 band-edge cusp -- which
+S1.2 records the 2026-08-12 ubuntu runner doing -- the fixed array MUST differ,
+by refusing it, and the byte-null id would go red FOR THE FIX WORKING.  It
+survived the 5.35.1 shard only because that image's LAPACK happens to refuse the
+cusp too.
+
+Restated as the `_CENSUS_BAND` contract itself, which is what S4 actually claims
+and is universal:
+
+* every pre-fix entry whose reading fell OUTSIDE the ambiguity band comes back
+  BIT-IDENTICAL (the 96.25%-of-candidates claim of S4.1);
+* every entry the fixed path returns that is not one of those is a CONVERGED
+  ZERO -- reading below the band, i.e. the polish's output.
+
+Where the two arrays do come out bit-identical (both mounts, both scales) the
+stronger reading is printed.
+
+### 8.3  What the restructure strengthened, and the one bar it derived
+
+| claim | before | after |
+|---|---|---|
+| fixed census content | membership of `_RECOVERED`, and "one more than pre-fix" | every entry FD-confirmed AND non-structural; every oracle-confirmed mode present; every known cusp absent -- on BOTH cells |
+| "nothing lost" | `for q in prefix: q in fixed` (false on a cusp-accepting build) | every pre-fix entry is EITHER kept OR structurally refused -- universal |
+| the converged zero | `abs(got - 205.9749757788) < 1e-6`, itself a per-build bar | `_polish_zero`'s own answer pinned to `< 1e-6`, AND the census entry pinned to THAT within `_BRENT_XFLOOR` |
+| byte-null | `array_equal(fixed, prefix)` | the two-sided `_CENSUS_BAND` containment contract |
+| the fail-before | asserts the defect manifests | asserts it manifests AT AN ENGINEERED TIE, on every build |
+
+`_BRENT_XFLOOR = sqrt(eps)|x| + xatol/3 = 3.1e-6` is the one new bar, and it is
+DERIVED, not tuned: it is `minimize_scalar(method="bounded")`'s own x-tolerance
+at `_RECOVERED` with the library's shipped `xatol = 1e-7`, i.e. the closest to a
+zero any build's minimiser is ENTITLED to stop, and therefore the universal bar
+on an entry the fix leaves at a clear-accept stopping point (S7.2).  Both mounts
+land **3.1e-11**, five decades inside it, because the candidate falls in the
+ambiguity band and is polished.
+
+### 8.4  Runner emulation -- perturbing TOWARD pre-fix stability
+
+The restructure is only worth anything if it survives the condition it was
+written for.  Six emulations, each perturbing the build so that the pre-fix
+defect STOPS manifesting (or, for the byte-null id, STARTS).  All six PASS, on
+both mounts, in-process:
+
+| emulation | id | what it makes the pre-fix path do | result |
+|---|---|---|---|
+| **E1** ladder shrunk to `(1, 4, -4, 16, -16)`, dropping the one arm whose reading falls under the shipped 1e-3 | 3 | live cell INERT: all 5 arms return 3 | **PASS**, inert branch printed; the engineered tie at **1.793400e-03** still straddles (accepts on `-16`, refuses on `+4`) |
+| **E2** narrow cell `n_scan` 9 -> 40, so Brent halts 1.5e-6 from the zero | 6 | live cell INERT: pre-fix KEEPS the mode (reads 4.44e-07, UNDER the bar) | **PASS**, inert branch printed; the tie at **8.106068e-08** still drops it pre-fix and the fix returns 205.9749757787929 |
+| **E3b'** `_DETECT_PPU` 8 -> 64: a build whose minimiser lands inside `_CENSUS_BAND`'s LOWER edge, so the fix CLEAR-ACCEPTS instead of polishing | 6 | live cell INERT: pre-fix keeps the mode 1.06e-07 from the zero (reads 4.2290e-08) | **PASS** (see below); the tie at **7.721082e-09** still drops it pre-fix |
+| **E4a** global `-1` ULP, the arm on which the pre-fix W6 path ACCEPTS the cusp -- the ubuntu runner's condition | 4 | byte-null arrays DIFFER, by design | **PASS**, "differ by design" branch printed: pre-fix holds 235.86863355073922, the fix refuses it, the other 3 entries come back BIT-IDENTICAL |
+| **E4b** the same at scale 10 | 4 | arrays still bit-identical there | **PASS**, no-op branch printed |
+| **E4c** the same global `-1` ULP under the ladder | 3 | the CLEAN pre-fix census now HOLDS the cusp and all 6 arms LOSE it | **PASS** -- the flip in the other direction, adjudicated by the same branch and asserted to be a known cusp either way |
+
+**E3b' earned its place.**  Its first run FAILED, and correctly: `g_pol` was
+being read at the CENSUS ENTRY, which on a clear-accepting build IS Brent's
+stop, so the separation test compared that stop with itself (`4.2290e-08`
+against `4.2290e-08`).  It is now read at `_polish_zero`'s own answer.  That is
+a bug the restructure would otherwise have shipped to the next friendly runner,
+found by emulating the runner rather than by waiting for it.
+
+`_DETECT_PPU` is a library constant rather than a build property, so E3b' is run
+over a narrowed `(200, 210)` band -- the detection CELL WIDTH, the only quantity
+that matters to it, is identical to the full-band form at 1/12 the cost.
+
+### 8.5  Green
+
+`tests/unit/test_eme_census_determinacy.py`, **7 tests**, at
+`OPENBLAS_NUM_THREADS` 1 / 2 / default on BOTH mounts:
+
+| mount | 1 thread | 2 threads | default |
+|---|---|---|---|
+| M (Windows py3.14, numpy 2.4.4) | **7 passed** (65.6 s) | **7 passed** (66.0 s) | **7 passed** (64.6 s) |
+| W (WSL py3.12, numpy 2.4.6) | **7 passed** (64.1 s) | **7 passed** (64.5 s) | **7 passed** (66.9 s) |
+
+(The three columns are close because the module pins BLAS to one thread at
+RUNTIME with `threadpool_limits`, S6.2 -- that lever is untouched.)
+
+`ruff check lumenairy/ tests/unit/` -- the exact CI command -- clean on both
+mounts.  The file is ASCII.  No `xfail`, `skip`, deleted test, weakened guard or
+`CHANGELOG` entry, and `lumenairy/` is not touched by this round at all.
+
+### 8.6  Open
+
+* The engineered tie is re-derived per build from that build's own readings, so
+  the `ratio_tol` it uses is not a constant and cannot be pinned in a table.
+  Cost is 3 extra W6 censuses in test 3 (~1.5 s each) and 3 narrow-cell censuses
+  in test 6 (~1 s each) against the module as shipped.
+* `_ULP_ARMS_WIDE` has not been reached on any build measured.  If a build ever
+  needs it, the reading's spread is what wants investigating, not the ladder.
