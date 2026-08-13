@@ -8,7 +8,8 @@
 #     the phase difference in waves over the beam core);
 #   * the wall time of each arm, hence the measured per-order saving;
 #   * the map's own guard record -- the G8 parity numbers against the very
-#     Newton path it replaces, measured on held-out ray samples;
+#     Newton path it replaces, measured at OFF-LATTICE probe points (the
+#     held-out NODE probe G8 used before FIX_G8_PROBE_2026_08_12 is retired);
 #   * peak working set.
 #
 # FLAG OFF must be BYTE-IDENTICAL to the branch base.  That is checked here by
@@ -153,7 +154,7 @@ def one_order(order, verbose=True):
                  g.get('bytes', 0) / 1e3, g.get('build_seconds', float('nan')),
                  g.get('n_fit_samples', -1), g.get('n_hull_facets', -1),
                  g.get('det_j_range', float('nan'))))
-        print("  G8 parity (held-out ray samples, %d): map %.4e waves vs "
+        print("  G8 parity (off-lattice probe points, %d): map %.4e waves vs "
               "incumbent Newton %.4e  -> %.4gx"
               % (g.get('n_parity', -1), g.get('parity_map_opl_waves',
                                               float('nan')),

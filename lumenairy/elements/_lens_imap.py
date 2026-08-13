@@ -865,16 +865,24 @@ def _incumbent_fingerprint(parity_invert, x_out_grid, y_out_grid):
 
     WHY THE INCUMBENT IS IN THE KEY AT ALL (VERIFY_ARCHITECTURE P0-5).  G8 is
     a COMPARATIVE bar: it accepts the map only if the map beats the incumbent
-    on held-out samples.  The incumbent is therefore half the acceptance
-    criterion -- and it was the half the key did not hash.  So a map built
-    against a weak incumbent was served to a call with a strong one, and the
-    one guard that decides whether the map may be used AT ALL was bypassed.
-    Production-reachable on the real element: ``newton_max_iters`` 2 -> 40,
-    ``newton_poly_order`` 6 -> 8 and ``newton_fit`` 'polynomial' -> 'spline'
-    each change ``_invert_newton`` and none of them changed the key, so each
-    gave a stale hit -- with a cold-cache control on the same data reading
-    ``refused = G8: held-out OPL error 1.8798e-04 waves against the
-    incumbent's 1.5213e-08``.
+    at OFF-LATTICE probe points (:1521, :1531, :1537).  The incumbent is
+    therefore half the acceptance criterion -- and it was the half the key did
+    not hash.  So a map built against a weak incumbent was served to a call
+    with a strong one, and the one guard that decides whether the map may be
+    used AT ALL was bypassed.  Production-reachable on the real element:
+    ``newton_max_iters`` 2 -> 40, ``newton_poly_order`` 6 -> 8 and
+    ``newton_fit`` 'polynomial' -> 'spline' each change ``_invert_newton`` and
+    none of them changed the key, so each gave a stale hit -- with a
+    cold-cache control on the same data reading ``refused = G8: off-lattice
+    OPL error 1.8798e-04 waves against the incumbent Newton path's
+    1.5213e-08``.
+
+    (The measurement above was first recorded against the HELD-OUT NODE probe
+    that G8 used at the time.  That probe is retired -- it is not in this
+    module and no code path emits a "held-out" string -- and the wording here
+    was a union-merge scar: this docstring landed from the fingerprint branch
+    onto the G8-probe branch's rework unedited.  The numbers are the
+    fingerprint's fail-before and stand; only the probe's NAME was stale.)
 
     WHY A FINGERPRINT AND NOT A PARAMETER LIST.  This module's own doctrine,
     two docstrings up: "a key that names the CONFIGURATION and not the CONTENT

@@ -63,16 +63,32 @@ _CM = 'lumenairy.propagators.carrier'
 _IM = 'lumenairy.elements._lens_imap'
 
 #: Era names, oldest first.  ``v5.31`` is the library BEFORE the D1-D7 / C1-C8
-#: campaign, ``v5.32`` is v5.32.0 as released, ``v5.32.1`` is the current tree
-#: (C9, C10, C11 and C13 on top).  A flag missing from an era carries its
+#: campaign, ``v5.32`` is v5.32.0 as released, ``v5.32.1`` is the C9-C14 tree
+#: and ``v5.34`` is the CURRENT tree.  A flag missing from an era carries its
 #: nearest OLDER value; a flag whose era is not expressible as a value (see
 #: ``fail_before`` being :data:`NOT_A_VALUE`) is simply absent from the table.
 #:
-#: ``v5.32.1`` IS A SOURCE-ONLY ERA at the time of writing: ``pyproject.toml``
-#: and ``lumenairy/__init__.py`` both still say ``5.32.0``, ``CHANGELOG.md``
-#: has no ``5.32.1`` header (C9-C12 sit under ``[Unreleased]``) and C13 is not
-#: in the CHANGELOG at all.  The name is used here because the source
-#: docstrings already use it; it is not a released version.
+#: TWO OF THESE NAMES ARE SOURCE-ONLY ERAS AND NEITHER IS A REPRODUCTION OF
+#: THE RELEASE IT RESEMBLES.  ``v5.32.1`` was never released: ``CHANGELOG.md``
+#: has no ``5.32.1`` header (C9-C12 sit under ``[Unreleased]``) and C13/C14 are
+#: not in the CHANGELOG at all.  ``v5.34`` is the same kind of name and the
+#: point is checkable rather than a matter of taste: ``_lens_imap.py``, the
+#: module whose flags that era exists to carry, DOES NOT EXIST at tag
+#: ``v5.34.0``, and ``ERAS`` at that tag is ``('v5.31', 'v5.32', 'v5.32.1')``.
+#: So ``traced_era('v5.34')`` is not, and never was, released 5.34.0 -- it is
+#: the development tree after the inverse-characteristic evaluator landed,
+#: which is the tree that ships as 5.35.0 (``TRACED_LAYER_MAP`` S2 rows 32-33
+#: date both flags to 5.35.0 for exactly that reason).  Both names are used
+#: because the source docstrings already use them.
+#:
+#: WHAT THAT MEANS FOR THE NEWEST ERA, STATED SO IT IS NOT MISTAKEN FOR A
+#: DEFECT.  ``ERAS[-1]`` is pinned to REPRODUCE THE LIVE SHIPPED DEFAULTS
+#: (``test_the_newest_era_reproduces_the_live_shipped_values``), so its entries
+#: move whenever a default moves -- ``TRACED_INVERSE_MAP`` went ``False`` ->
+#: ``True`` under this name when the default flipped.  The newest era is
+#: therefore a coordinate on the CURRENT SOURCE, not a fixed coordinate across
+#: commits; only the OLDER eras are archaeology.  Cite a run's era name
+#: together with the file hash :func:`traced_flag_state` prints, never alone.
 #:
 #: NOT EVERY LAYER'S ERA IS IN RANGE.  F3, R7/F2 and P2 shipped at 5.28.0 and
 #: 5.29.0 -- BEFORE ``v5.31`` -- so at every era in this table they are already
@@ -80,14 +96,13 @@ _IM = 'lumenairy.elements._lens_imap'
 #: what the regression tests force) but it names a pre-5.28 library, not an
 #: era below.
 #:
-#: ``v5.34`` is the tree AFTER the inverse-characteristic per-pixel
-#: evaluator landed.  It is the first era to carry a flag from a module
-#: other than the two above, and the reason it exists at all is that
-#: ``TRACED_INVERSE_MAP`` is NOT inert at the older eras -- a flag that
-#: changes a returned bit has to be given a value in every era, or an
-#: era arm quietly runs the NEW code and reports it as the old library.
-#: (Contrast ``_REMAP_RESID_EIKONAL_DEGREE``, which IS inert at ``v5.31``
-#: because C6 is off there, and is therefore correctly absent.)
+#: ``v5.34`` is the first era to carry a flag from a module other than the two
+#: above, and the reason it exists at all is that ``TRACED_INVERSE_MAP`` is NOT
+#: inert at the older eras -- a flag that changes a returned bit has to be
+#: given a value in every era, or an era arm quietly runs the NEW code and
+#: reports it as the old library.  (Contrast ``_REMAP_RESID_EIKONAL_DEGREE``,
+#: which IS inert at ``v5.31`` because C6 is off there, and is therefore
+#: correctly absent.)
 ERAS = ('v5.31', 'v5.32', 'v5.32.1', 'v5.34')
 
 #: Sentinel: this flag's fail-before is NOT a value of this flag (it is a

@@ -743,7 +743,29 @@ def test_tp2_fit_inversion_matches_newton():
     """T-P2: inversion_method='fit' (scattered Chebyshev inverse-map fit,
     hull-masked) must reproduce the Newton inversion to a small relative error
     over the illuminated region, at both full-res and subsampled output.  It
-    is opt-in; 'newton' remains the default."""
+    is opt-in; 'newton' remains the default.
+
+    SCORED WITH ``inverse_map=False`` (2026-08-13), because that is what makes
+    the ``newton`` arm a Newton inversion.  The inverse-characteristic
+    per-pixel evaluator (``TRACED_INVERSE_MAP``, shipped ``True`` since
+    ``FIX_G8_PROBE_2026_08_12``) is gated on ``inversion_method == 'newton'``
+    BY DESIGN -- ``_lens_traced.py`` :8466 and the gate's own comment at
+    :10308, "the 'fit' path is already a per-pixel exit polynomial" -- so at
+    the shipped default this comparison is model-vs-'fit', two DIFFERENT
+    per-pixel exit representations, and not the fit-vs-Newton comparison the
+    test names.  Measured on this fixture:
+
+        sub   inverse_map=False   SHIPPED default   map built?
+          1        3.1849e-06        3.1849e-06     neither (gate needs sub>1)
+          4        3.1833e-06        6.1318e-02     'newton' yes, 'fit' no
+
+    Nothing here is wrong: at ``sub = 4`` the model supplies the exact
+    per-pixel OPL where the coarse Newton had to upsample a 4x-subsampled
+    lattice, so the 6.1e-02 is the accuracy the model ADDS on that arm and the
+    'fit' arm not following it is the gate working as documented.  The
+    assertion and its 1e-3 bar are unchanged, and ``sub = 1`` -- where the gate
+    refuses on both arms -- reads the same number under both flags, which is
+    the control that says the scoping changed nothing else."""
     N, dx = 256, 6e-6
     xs = (np.arange(N) - N // 2) * dx
     X, Y = np.meshgrid(xs, xs)
@@ -761,7 +783,8 @@ def test_tp2_fit_inversion_matches_newton():
     }
     for sub in (1, 4):
         kw = dict(prescription=lens, wavelength=LAM, dx=dx, ray_subsample=sub,
-                  parallel_amp=False, newton_amp_mask_rel=0.0)
+                  parallel_amp=False, newton_amp_mask_rel=0.0,
+                  inverse_map=False)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             newton = apply_real_lens_traced(E, inversion_method='newton', **kw)

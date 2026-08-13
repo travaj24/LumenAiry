@@ -757,7 +757,30 @@ def test_dx_flatness_alone_is_not_sufficient():
     oracle, delivering 10.6 % of its EE2 and losing 23 % of the launched
     power out of the readout window.  The two new assertions pin the level
     failure in the currency that has the teeth rather than leaning on a
-    FWHM bar that a further accuracy improvement could walk through."""
+    FWHM bar that a further accuracy improvement could walk through.
+
+    2026-08-13 -- AND A FURTHER ACCURACY IMPROVEMENT WALKED THROUGH IT, EXACTLY
+    AS THAT SENTENCE PREDICTED.  The inverse-characteristic per-pixel
+    evaluator (``TRACED_INVERSE_MAP``, shipped ``True`` since
+    ``FIX_G8_PROBE_2026_08_12``) improves this deliberately-broken
+    configuration again, and the FWHM bar is the ONLY assertion here it
+    reaches.  Measured on this ladder:
+
+        arm                FWHM um 512/1024  spread    /oracle  EE2    window
+        inverse_map=False  7.73940 / 7.74532  7.65e-04  2.8234   9.184  75.721
+        SHIPPED default    5.66997 / 5.66998  1.61e-06  2.0669  18.279  77.949
+
+    So the LESSON is untouched and is now stated where it has teeth.  At the
+    shipped default the broken configuration is dx-FLAT to **1.6e-06** -- 3100x
+    inside the 5e-03 bar, FLATTER than before -- while delivering 0.226 of the
+    oracle's enclosed energy against the gate's 0.70 bar and losing 22 % of the
+    launched power out of the readout window.  A flatness-only gate still
+    passes it silently; :func:`dx_flatness_gate` still refuses it, and that
+    refusal is now asserted directly instead of being approximated by a FWHM
+    ratio.  The FWHM bar itself is KEPT WORD FOR WORD, on the
+    ``inverse_map=False`` arm where the 2.5 was calibrated and where it
+    measures 2.8234 -- read at the ladder's finest rung only, which is the
+    rung the assertion has always used."""
     _need_ram()
     rows = _ladder('parabola', {'carrier_reference': 'parabola'}, None,
                    ((512, 2), (1024, 4)))
@@ -769,12 +792,22 @@ def test_dx_flatness_alone_is_not_sufficient():
         vals = [row[k] for row in rows]
         assert max(vals) - min(vals) < _FLAT_EE_ABS, (k, vals)
     oracle = _oracle()
-    assert rows[-1]['fwhm'] / oracle['fwhm'] > 2.5, (rows, oracle)  # ...and wrong
     # ... and wrong in the currencies the gate actually scores, with margin:
-    # EE2 is 0.106x the oracle's against a 0.70x gate bar, and the window
-    # power is 77.2 % of launched against a 99.0 % bar.
+    # EE2 is 0.226x the oracle's against a 0.70x gate bar, and the window
+    # power is 77.9 % of launched against a 99.0 % bar.
     assert rows[-1]['ee2'] < 0.25 * oracle['ee2'], (rows[-1], oracle)
     assert rows[-1]['window'] < _LEVEL_WINDOW_MIN - 10.0, rows[-1]
+    # ... and the SHIPPED gate refuses it, in its own words and with no bar of
+    # this test's own.  That IS the lesson: flat, and caught by the level half
+    # rather than by the flatness half.
+    bad = dx_flatness_gate(rows, oracle)
+    assert bad, (rows, oracle)
+    assert any('independent oracle' in b for b in bad), bad
+    # The FWHM bar this case was CALIBRATED on, kept word for word on the
+    # forward path -- see the docstring for why it moved there.
+    rows_fwd = _ladder('parabola_fwd', {'carrier_reference': 'parabola'},
+                       {'inverse_map': False}, ((1024, 4),))
+    assert rows_fwd[-1]['fwhm'] / oracle['fwhm'] > 2.5, (rows_fwd, oracle)
 
 
 def test_remap_sampling_has_no_teeth_here():
@@ -830,7 +863,31 @@ def test_the_level_gap_is_the_traced_fit_radius_cliff():
     to represent the whole exit sphere rather than a small residual.  It is
     dx-INDEPENDENT (measured 1.240 / 1.238 / 1.233 rad at N = 1024 / 2048 /
     4096 in the full chain), which is the sharpest statement of why the
-    flatness half of any gate cannot see it."""
+    flatness half of any gate cannot see it.
+
+    2026-08-13 -- THE CLIFF ARMS ARE SCOPED TO THE FORWARD PATH, AND THE
+    SHIPPED DEFAULT GETS ITS OWN ASSERTION.  The cliff is a property of the
+    element's global OPL FIT: it bites because the fit has to represent the
+    whole exit sphere.  The inverse-characteristic per-pixel evaluator
+    (``TRACED_INVERSE_MAP``, shipped ``True`` since
+    ``FIX_G8_PROBE_2026_08_12``) does not read that fit, so on this fixture
+    there is no cliff to restrict.  Re-measured here, same fixture and same
+    estimator:
+
+        arm                         no restriction      frbf = 1.5
+        inverse_map=False              4.428078          0.0873737
+        SHIPPED default                1.234590e-08      1.680842e-11
+        apply_real_lens_gbd (oracle)   0.0308696
+
+    The forward arm reproduces the 2026-07-29 ladder above to EVERY PRINTED
+    DIGIT (4.4281 / 0.0874 / 0.0309), so the three assertions it carries are
+    unchanged and are measured where the cliff is real.  The default arm is a
+    new, strictly stronger statement: with the model engaged the residual is
+    **2.5e+06x smaller than the independent GBD propagator's**, i.e. the cliff
+    that motivates the gate's 0.70 / 0.80 EE tolerances does not occur at all
+    on the shipped path.  It is asserted, not merely recorded, so that a future
+    build in which the model silently stops engaging here brings the cliff back
+    LOUDLY instead of quietly."""
     _need_ram(2.5)
     n = _n_glass()
     w = 0.9665e-3
@@ -854,14 +911,20 @@ def test_the_level_gap_is_the_traced_fit_radius_cliff():
               preserve_input_phase='remap', remap_sampling='full')
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        e_def = resid_at_w(la.apply_real_lens_traced(E_in, **kw))
+        e_def = resid_at_w(la.apply_real_lens_traced(
+            E_in, inverse_map=False, **kw))
         e_fit = resid_at_w(la.apply_real_lens_traced(
-            E_in, fit_radius_beam_factor=1.5, **kw))
+            E_in, fit_radius_beam_factor=1.5, inverse_map=False, **kw))
+        e_map = resid_at_w(la.apply_real_lens_traced(E_in, **kw))
         e_gbd = resid_at_w(la.apply_real_lens_gbd(
             E_in, prescription=presc, wavelength=_WL, dx=dx,
             beamlets_per_aperture=64))
     # GBD reproduces the exact (Fermat) spherical exit wavefront ...
     assert e_gbd < 0.2, (e_gbd, e_def, e_fit)
-    # ... the traced element does not, unless the ray-fit disc is restricted.
+    # ... the traced element's FIT does not, unless the ray-fit disc is
+    # restricted.
     assert e_def > 10 * e_gbd, (e_def, e_gbd)
     assert e_fit < 0.4 * e_def, (e_fit, e_def)
+    # ... and on the SHIPPED path the OPL does not come from that fit, so
+    # there is no cliff to restrict: 1.2e-08 rad against GBD's 3.1e-02.
+    assert e_map < 0.1 * e_gbd, (e_map, e_gbd, e_def)
