@@ -4,6 +4,63 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.35.0] — 2026-08-13
+
+### The field-summation architecture — coherent multi-beam optics, delivered whole
+
+Born from the question "is the chain fundamentally limited?", answered by
+measurement at every step, and adversarially verified five times over.
+
+* **Piston physics restored** — the traced hand-off dropped its
+  launch-axis OPL constant, silently wrong under tilted carriers for the
+  library's whole life (theta^2, geometry-dependent sign, invisible to
+  every intensity metric).  Fixed with the closed form confirmed to six
+  significant figures on a third fixture; inter-order piston now inside
+  lambda/100 (worst lambda/238) — coherent field summation is
+  admissible for the first time.  Plus a 7-site sweep of the
+  sqrt(r^2+R^2)-|R| cancellation (round-trip floors down ~350x).
+* **CarrierField / re_reference / aggregate + the pipeline** — first-class
+  serializable carrier-referenced fields (ROI origins, explicit piston,
+  8.9x Zarr compression), analytic re-referencing with a band-aware
+  Nyquist refusal, coherent aggregation with an energy ledger, and the
+  single-call staged workflow (decompose -> chains -> aggregate -> leg ->
+  readout; resumable, content-verified, atomic).
+* **The inverse-characteristic evaluator is the DEFAULT** — an
+  exact-trace Newton oracle proved the old terminal-leg hand-off carried
+  6e-3..1.1e-2 waves of core wavefront error that sharpened the spot
+  below the ideal-field ceiling.  **The design-121 acceptance is
+  re-baselined (user-approved) to the faithful 3.450 um / 90.3 / 99.8 /
+  99.9**; the old 3.350 reading remains reproducible (ARM_IMAP=0).
+  G8 parity probes where pixels fall; both fit bases byte-identical;
+  the D5 fit-domain asymmetry closed at the consumer.
+* **Angle-true analytic screens** — the exact axial-translation identity
+  (plate byte-identical; conics 156-736x) plus the R1 carrier-drift term
+  (worst group 20.8x, on the perfect-OPD floor), wired reachable from
+  every shipped consumer with a wrong-carrier refusal; the momentum-kick
+  remainder proven un-carryable by any screen (curl argument) and
+  ledgered.  Immersed surfaces use true optical momentum (n1*L).
+* **Deterministic EME 2-D vector census** — band-edge cusps refused
+  structurally (40-digit monodromy oracle: they are not zeros), ambiguous
+  zeros polished 8 decades; the shipped census had one false positive
+  and one missed real mode -- recall 10 -> 11, spurious 1 -> 0.
+* **RCWA DOE table (opt-in)** — rigorous angle x pol order amplitudes
+  for the design-121 Dammann cell; flags a design-stage fabrication risk
+  (the two outermost fan lines under-deliver in the rigorous solve, with
+  stated model uncertainty); scalar design-intent table remains default.
+* **Two features REFUTED before shipping wrong**: the shared-pupil trace
+  map (the trace is 0.003% of the cost) and the angle-aware screen v1
+  (an entrance-referenced double-count -- the closed-form plate control
+  caught it; the naive fix made fields worse).  Their refutation docs
+  ship as the record.
+* **Test infrastructure hardened end-to-end**: runner-axis pins
+  restructured on live arms/invariants/fail-when-fixed shapes; the
+  jax.grad NaN on degenerate spectra fixed via min-norm projection
+  (upstream SVD-JVP guard gap); the wrapped-phase metrics made
+  piston-invariant by construction; glass-registry and cache-registry
+  guards discovery-based; the map-default scoping class closed at its
+  provably complete 21-member list with mechanisms recorded, five files
+  gaining assertions.  Final serial gate: **11,864 passed / 0 failed**.
+
 ## [5.34.0] — 2026-08-10
 
 ### Performance — the traced-path campaign (audit-driven, adversarially verified)
