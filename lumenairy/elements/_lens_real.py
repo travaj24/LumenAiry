@@ -2242,7 +2242,12 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
             f"apply_real_lens: on_screen_obliquity must be "
             f"{list(_VALID_SCREEN_OBLIQUITY_POLICY)}, got "
             f"{on_screen_obliquity!r}.")
-    if not any(screen_obliquity is v for v in _VALID_SCREEN_OBLIQUITY):
+    # Identity for the booleans (so 1/0 do NOT masquerade as True/False), but
+    # EQUALITY for the string: a caller-built 'auto' (os.environ, config file,
+    # f-string) is not the interned literal, so `is` rejected the documented
+    # value.  Tests only ever passed the literal, which is interned and hid it.
+    if not (screen_obliquity is True or screen_obliquity is False
+            or screen_obliquity == 'auto'):
         raise ValueError(
             f"apply_real_lens: screen_obliquity must be 'auto', True or "
             f"False, got {screen_obliquity!r}.")
