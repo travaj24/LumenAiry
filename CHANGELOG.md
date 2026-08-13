@@ -4,6 +4,34 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.35.2] — 2026-08-13
+
+### Fixed — the EME census fix's own demonstrations were per-runner (v5.35.1's publish gate)
+
+v5.35.1's release verify shard (py3.11 ubuntu) failed two tests in
+`test_eme_census_determinacy.py` — not the shipped fix, but its
+fail-before demonstrations, which asserted per-build LAPACK facts:
+that the PRE-fix census flips under a 1-ULP bracket nudge, and that
+the pre-fix path drops the recovered mode.  On that runner both held
+the other way (the pre-fix path happened to be stable), so the tests
+failed *because the old code behaved* — the campaign's
+per-build-fact-asserted-as-universal class, caught in its own fix's
+test file.  A third test carried the same defect sign-reversed
+(`array_equal` against a pre-fix array goes red on a build where the
+fix recovers a cusp).
+
+Restructured per the house pattern: the fixed path's claims are now
+unconditional (every census entry FD-oracle-confirmed and
+non-structural, both known cusps refused, nudge invariance across the
+ULP ladder, and the census-band contract — untreated entries return
+bit-identical, everything else is a converged zero); the pre-fix
+demonstrations run on engineered ties derived from each build's own
+measured spread, so they fire deterministically on every build; live
+cells at the shipped bar print their adjudication and pass either
+way.  Verified with a 6-arm runner emulation and in-process injector
+evidence on both mounts, 3 thread configs each.  Test-file-only
+change; the library is untouched.
+
 ## [5.35.1] — 2026-08-13
 
 ### Fixed — the 33 GB unpriced map build (v5.35.0's publish gate), and two more

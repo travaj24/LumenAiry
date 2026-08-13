@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "5.35.1"
+version = "5.35.2"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
