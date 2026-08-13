@@ -359,7 +359,23 @@ def test_r8_paraxial_r_out_matches_qtrace():
 
 def _manual_chain(env0, groups, R0, dx0, final_distance, focus_readout=None):
     """The ~30-line manual hand-off pattern the orchestrator packages, using the
-    SAME public library calls + the SAME paraxial R_out mechanism."""
+    SAME public library calls + the SAME paraxial R_out mechanism.
+
+    ``inverse_map=False`` is part of the pattern, not a scoping of the test.
+    The orchestrator's ORDINARY chain leg sets exactly this, structurally and
+    for a stated reason (``propagators/carrier.py`` :8305-:8326, niche C15):
+    an intermediate leg's output is re-fitted by every leg after it, and the
+    inverse-characteristic evaluator's evidence is about ONE element's
+    returned map, so the evaluator is scoped to the leg nothing re-fits.  A
+    manual pattern that omits it is not the pattern the orchestrator
+    packages -- it is a different configuration, and it differs by
+    rel = 8.9e-03 (F4.1) / 1.9e-03 (F4.2) instead of the exact 0.0 below.
+    The control is recorded in ``docs/audits/
+    FIX_RELEASE_FIFTEEN_2026_08_13.md`` S2.3: hand the ORCHESTRATOR
+    ``traced_kwargs=dict(inverse_map=True)`` -- its documented ``setdefault``
+    escape hatch -- and it matches this helper's map-ON arm to 0.0 as well,
+    so the leg scoping is the whole of the difference and nothing else moved.
+    """
     env, R, cdx = env0, R0, dx0
     for g in groups:
         presc = g['prescription']
@@ -372,7 +388,8 @@ def _manual_chain(env0, groups, R0, dx0, final_distance, focus_readout=None):
             warnings.simplefilter('ignore', RuntimeWarning)
             E_exit = np.asarray(la.apply_real_lens_traced(
                 E_full, prescription=presc, wavelength=_WL, dx=cdx,
-                carrier=R, ray_subsample=4, n_workers=1, parallel_amp=False))
+                carrier=R, ray_subsample=4, n_workers=1, parallel_amp=False,
+                inverse_map=False))
         R_out = _paraxial_group_r_out(presc, R, _WL)
         env = la.carrier_referenced_envelope(E_exit, R_out, _WL, cdx)
         R = R_out

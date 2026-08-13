@@ -14,6 +14,25 @@ after a few calls at one shape, and MEASURE plans may round differently at
 the ULP level *between calls*.  Byte-equality across separate lens calls is
 therefore only guaranteed with auto-promote off, which the fixture pins
 (matching the production runner configuration).
+
+2026-08-13 -- THE TRACED BYTE-IDENTITY PINS NAME ``inverse_map=False``, AND
+THE SCOPE IS THE CONTRACT'S OWN.  Since ``FIX_G8_PROBE_2026_08_12`` the
+inverse-characteristic evaluator ships on, and ``_imap_domain_gate``
+(``_lens_traced.py`` :8466) excludes the band path BY CONSTRUCTION -- ``not
+_chunk_assembly``, "the band path exists to never materialise a full-grid
+float64; handing it one would undo the memory fix it is" (:10311).  So at
+the shipped default a banded traced call and a whole-grid traced call are
+two DIFFERENT inversions (the incumbent coarse-Newton one and the model),
+not two decompositions of one, and byte-identity is not a claim anyone is
+making about them.  ``sag_chunk_rows``'s claim -- every banded op is
+pointwise, so banding changes no value -- is exactly true of the path the
+gate leaves in place, and that is what these pins measure.  The exclusion
+itself is asserted, at the gate, in
+``test_niche_s10_sibling_patterns.py::
+test_row_band_assembly_matches_whole_grid_under_a_carrier``; the measured
+size of the difference and the consequence for AUTO banding at N >= 4096 are
+in ``docs/audits/FIX_RELEASE_FIFTEEN_2026_08_13.md`` S2.2.  ``apply_real_lens``
+has no evaluator and is unscoped here.
 """
 import numpy as np
 import pytest
@@ -81,10 +100,15 @@ def test_chunked_real_lens_byte_identical(N, dx):
 
 @pytest.mark.parametrize("preserve_input_phase", [True, False])
 def test_chunked_traced_byte_identical(preserve_input_phase):
+    """``inverse_map=False``: the band path refuses the evaluator by
+    construction, so at the shipped default this would compare two different
+    inversions rather than two decompositions of one (module docstring).
+    Measured at the default: 2.19e-02 relative on the carrier arm of the s10
+    sibling pin."""
     N, dx = 1024, 3e-6
     E = _field(N, dx)
     kw = dict(prescription=_presc(), wavelength=LAM, dx=dx,
-              ray_subsample=4, parallel_amp=False,
+              ray_subsample=4, parallel_amp=False, inverse_map=False,
               preserve_input_phase=preserve_input_phase)
     Tw = apply_real_lens_traced(E.copy(), **kw)
     for cr in (N // 8, 111):
@@ -285,7 +309,12 @@ def test_amp_freed_before_assembly_on_preserve_path():
     """P3-09: on the sub>1 preserve_input_phase=True path the full-grid
     |E_analytic| array is dead after the coarse subsample; it must be freed
     (del'd) before the band assembly.  Byte-identity with the whole-grid
-    path must survive the eager free."""
+    path must survive the eager free.
+
+    The free itself -- the claim this test is named for -- is measured on a
+    call at every shipped default; only the byte-identity COMPARISON PAIR
+    carries ``inverse_map=False``, for the reason in the module docstring.
+    (The banded arm is unmoved by the flag either way: its gate is closed.)"""
     import sys
 
     N, dx = 256, 8e-6
@@ -306,7 +335,10 @@ def test_amp_freed_before_assembly_on_preserve_path():
     T_chunk = apply_real_lens_traced(E.copy(), sag_chunk_rows=64, **kw)
     assert seen.get('amp_alive') is False, (
         "full-grid amp still resident at band assembly")
-    T_whole = apply_real_lens_traced(E.copy(), sag_chunk_rows=0, **kw)
+    T_chunk = apply_real_lens_traced(E.copy(), sag_chunk_rows=64,
+                                     inverse_map=False, **kw)
+    T_whole = apply_real_lens_traced(E.copy(), sag_chunk_rows=0,
+                                     inverse_map=False, **kw)
     assert np.array_equal(T_chunk, T_whole)
 
 

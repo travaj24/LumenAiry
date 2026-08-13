@@ -115,6 +115,39 @@ byte-identical (so the knob has not quietly died), and their residual
 disagreement with the ``rs=1`` reference is IDENTICAL for both modes, i.e.
 it is the C6 launch's own ``ray_subsample`` dependence and not a sampling
 effect.  No tolerance was loosened on any pin that still applies.
+
+==========================================================================
+2026-08-13 -- THE C6-OFF ARM NOW NAMES THE INVERSE-CHARACTERISTIC EVALUATOR
+OFF AS WELL, BECAUSE THE MODEL BYPASSES THE LATTICE THIS FILE IS ABOUT.
+==========================================================================
+
+``TRACED_INVERSE_MAP`` ships ``True`` since ``FIX_G8_PROBE_2026_08_12``.  On
+the SHIPPED path (C6 launch on) G8 REFUSES to build on this fixture -- the
+model's off-lattice OPL error is 2.3699e-03 waves against the incumbent
+Newton's 1.7146e-03, i.e. 1.38x on a 1.00x bar -- so every arm (b) below is
+byte-for-byte what it was, and items 1-4 are untouched.
+
+On the C6-OFF arm the forward path is the worse pre-C6 one, G8 accepts, and
+the model then supplies the entrance pullback coordinates and the OPL PER
+EXIT PIXEL.  That is precisely the quantity ``remap_sampling='full'``
+upsamples the coarse lattice to obtain, so with the model engaged the coarse
+lattice is not in the path that reaches the returned field and the aliasing
+these arms measure cannot occur.  Measured on this fixture, arm (a) at
+``rs = 4``:
+
+    quantity                       model OFF        model ON
+    d('lattice', 'full')           9.2267e-01       5.3717e-17
+    d(rs=1 ref, 'lattice')         8.3863e-01       4.4563e-05
+    d(rs=1 ref, 'full')            2.6291e-04       4.4563e-05
+    inner (lattice)                5.166e-02        4.263e-05
+    outer (lattice)                1.896e+00        8.292e-05
+
+The model-OFF column reproduces this file's own 2026-07-25 numbers to every
+printed digit.  ``C6 off + model on`` is a state the library has never
+shipped, so arm (a) names both flags (``_PRE_C6``) and keeps every assertion
+and every tolerance word for word.  The mechanism is itself asserted, not
+merely recorded, in
+``test_full_actually_changes_the_result_at_coarse_lattice`` arm (c).
 """
 from __future__ import annotations
 
@@ -169,6 +202,32 @@ def _setup():
               parallel_amp=False, on_undersample='silent',
               on_noncollimated='silent')
     return E, kw, np.sqrt(r2)
+
+
+#: The library state arms (a) below reproduce, and it is TWO flags, not one.
+#:
+#: ``launch=False`` is niche C6's stationary-phase launch, off -- the state
+#: those arms were calibrated in (2026-07-25) and the reason they exist.
+#:
+#: ``inverse_map=False`` is the inverse-characteristic evaluator, off -- and
+#: it is needed for the SAME reason, measured on this file's own fixture and
+#: recorded in ``docs/audits/FIX_RELEASE_FIFTEEN_2026_08_13.md`` S2.1 and in
+#: the module docstring's table.  With C6's launch off, the
+#: element's forward path is the pre-C6 one, so G8 accepts the model -- and
+#: the model supplies the entrance pullback coordinates and the OPL PER EXIT
+#: PIXEL, which is exactly what ``remap_sampling='full'`` upsamples the coarse
+#: lattice to obtain.  The coarse lattice is then no longer in the path that
+#: reaches the returned field, so the ALIASING these arms measure cannot
+#: occur: the two modes go from 9.2267e-01 rad apart to 5.3717e-17 rad, and
+#: ``'lattice'`` from 8.3863e-01 rad off the ``rs=1`` reference to 4.4563e-05
+#: -- the same distance as ``'full'``, to every digit.
+#:
+#: So the aliasing channel is real, it is still there, and the model bypasses
+#: it; ``C6 off + model on`` is a combination the library has never shipped
+#: (at the shipped default C6 is ON, and on this fixture G8 then REFUSES the
+#: build -- 2.3699e-03 waves against the incumbent's 1.7146e-03, 1.38x on a
+#: 1.00x bar -- so every arm (b) below is byte-for-byte the shipped path).
+_PRE_C6 = dict(launch=False, inverse_map=False)
 
 
 def _run(E, kw, launch=None, **over):
@@ -292,11 +351,18 @@ def test_full_actually_changes_the_result_at_coarse_lattice(_setup):
     ``a - a_fit ~ 0`` and neither sampling mode has anything left to alias --
     see the module docstring for the exact-ray-trace adjudication (the shipped
     library is 140x closer to an exact skew ray trace than the C6-off state
-    this bar was calibrated in)."""
+    this bar was calibrated in).
+
+    2026-08-13 (the inverse-characteristic evaluator's default).  Arm (a)
+    now names the evaluator OFF as well -- see ``_PRE_C6``.  With it on, the
+    model supplies the per-pixel entrance pullback that ``'full'`` exists to
+    compute, so the two modes stop differing at all: 5.3717e-17 rad instead
+    of 9.2267e-01.  Arm (b) is untouched and still runs at every shipped
+    default."""
     E, kw, _ = _setup
     # (a) the original pin, in the library state it was measured in.
-    a0 = _run(E, kw, ray_subsample=4, remap_sampling='lattice', launch=False)
-    b0 = _run(E, kw, ray_subsample=4, remap_sampling='full', launch=False)
+    a0 = _run(E, kw, ray_subsample=4, remap_sampling='lattice', **_PRE_C6)
+    b0 = _run(E, kw, ray_subsample=4, remap_sampling='full', **_PRE_C6)
     assert not np.array_equal(a0, b0)
     assert _rms_phase_diff(a0, b0) > 0.1
     # (b) the shipped path: still a real knob, but a collapsed one.
@@ -307,6 +373,19 @@ def test_full_actually_changes_the_result_at_coarse_lattice(_setup):
         'is dead, not merely quiet')
     d = _rms_phase_diff(a, b)
     assert 1e-8 < d < 1e-4, d           # measured 2.6853e-06
+    # (c) the MECHANISM behind arm (a)'s scoping, asserted rather than only
+    #     recorded: hand the pre-C6 forward path to the inverse-characteristic
+    #     evaluator and the aliasing channel closes, because the model
+    #     supplies per exit pixel what 'full' upsamples the lattice to get.
+    #     If a future build stops engaging the model here, this reads
+    #     9.2267e-01 and says so.
+    am = _run(E, kw, ray_subsample=4, remap_sampling='lattice', launch=False)
+    bm = _run(E, kw, ray_subsample=4, remap_sampling='full', launch=False)
+    assert _rms_phase_diff(am, bm) < 1e-12, (
+        'the inverse-characteristic evaluator is no longer supplying the '
+        'per-pixel entrance pullback on the pre-C6 forward path, so arm (a) '
+        'above is scoped for a reason that no longer holds: '
+        '%.6e rad' % _rms_phase_diff(am, bm))
 
 
 # ===========================================================================
@@ -343,12 +422,18 @@ def test_full_is_ray_subsample_independent(_setup, rs, tol_full, min_lattice):
     ``rs=1`` reference to within 1 %, because the residual ``rs`` dependence
     is the C6 launch's own and not a sampling effect.  Measured
     ``d_lat``/``d_ful`` = 1.6340e-02 / 5.6227e-02 / 9.1257e-02 rad (equal to
-    5 figures) with ``d(lat, ful)`` = 6.06e-07 / 2.69e-06 / 1.09e-05."""
+    5 figures) with ``d(lat, ful)`` = 6.06e-07 / 2.69e-06 / 1.09e-05.
+
+    2026-08-13.  Arm (a) also names the inverse-characteristic evaluator OFF
+    (``_PRE_C6``); with it on, ``'lattice'`` reads 4.1047e-05 / 4.4563e-05 /
+    5.3248e-05 rad -- the SAME numbers as ``'full'``, because the model
+    supplies the per-pixel pullback the coarse lattice was being asked for --
+    and ``d_lat0 > min_lattice`` is unmeasurable.  Arm (b) is unchanged."""
     E, kw, _ = _setup
     # (a) the original claim, in the library state it was calibrated in.
-    ref0 = _run(E, kw, ray_subsample=1, remap_sampling='lattice', launch=False)
-    lat0 = _run(E, kw, ray_subsample=rs, remap_sampling='lattice', launch=False)
-    ful0 = _run(E, kw, ray_subsample=rs, remap_sampling='full', launch=False)
+    ref0 = _run(E, kw, ray_subsample=1, remap_sampling='lattice', **_PRE_C6)
+    lat0 = _run(E, kw, ray_subsample=rs, remap_sampling='lattice', **_PRE_C6)
+    ful0 = _run(E, kw, ray_subsample=rs, remap_sampling='full', **_PRE_C6)
     d_lat0 = _rms_phase_diff(ref0, lat0)
     d_ful0 = _rms_phase_diff(ref0, ful0)
     assert d_ful0 < tol_full, (d_ful0, d_lat0)
@@ -390,7 +475,13 @@ def test_lattice_error_is_confined_beyond_the_alias_radius(_setup):
     the two modes share it is what distinguishes "no aliasing" from "aliasing
     that both modes now suffer".  Adjudicated by an exact skew ray trace
     (module docstring): the shipped field is 8.6e-03 rad from it, the C6-off
-    field 1.19-1.25 rad."""
+    field 1.19-1.25 rad.
+
+    2026-08-13.  Arm (a) also names the inverse-characteristic evaluator OFF
+    (``_PRE_C6``); with it on the signature is 4.2633e-05 inner / 8.2920e-05
+    outer, a ratio of 1.945 against this pin's 5.0, because the model
+    supplies the per-pixel pullback and nothing is sampled off the coarse
+    lattice at all.  Arm (b) is unchanged."""
     E, kw, rr = _setup
     rs = 4
     ra = _r_alias(rs * _DX)
@@ -398,9 +489,9 @@ def test_lattice_error_is_confined_beyond_the_alias_radius(_setup):
     inner = rr < 0.75 * ra
     outer = rr > 1.05 * ra
     # (a) the aliasing signature, in the library state it was measured in.
-    ref0 = _run(E, kw, ray_subsample=1, remap_sampling='lattice', launch=False)
-    lat0 = _run(E, kw, ray_subsample=rs, remap_sampling='lattice', launch=False)
-    ful0 = _run(E, kw, ray_subsample=rs, remap_sampling='full', launch=False)
+    ref0 = _run(E, kw, ray_subsample=1, remap_sampling='lattice', **_PRE_C6)
+    lat0 = _run(E, kw, ray_subsample=rs, remap_sampling='lattice', **_PRE_C6)
+    ful0 = _run(E, kw, ray_subsample=rs, remap_sampling='full', **_PRE_C6)
     d_in0 = _rms_phase_diff(ref0, lat0, inner)
     d_out0 = _rms_phase_diff(ref0, lat0, outer)
     assert d_out0 > 5.0 * max(d_in0, 1e-6), (d_in0, d_out0)

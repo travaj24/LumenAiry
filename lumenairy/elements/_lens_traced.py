@@ -6844,7 +6844,20 @@ def apply_real_lens_traced(
         ``None`` -> AUTO: row-banded (``max(256, N // 16)`` rows per
         band) when ``N >= 4096``, whole-grid below.  ``0`` forces the
         whole-grid path in BOTH stages; a positive int forces that
-        band size.  Byte-identical to the whole-grid path.
+        band size.  Byte-identical to the whole-grid path, WITH ONE
+        NAMED EXCEPTION since v5.35: the band path refuses the
+        inverse-characteristic evaluator by construction (see
+        ``_imap_domain_gate`` and its note below), so on a call the
+        evaluator would otherwise engage -- ``ray_subsample > 1``,
+        ``inversion_method='newton'``, not ``use_gpu``, and the
+        ``'screen'`` amplitude, since ``'ray_density'`` forces the band
+        path off anyway -- banding selects the incumbent coarse-Newton
+        inversion instead.  Byte-identity then holds against the
+        whole-grid path with ``inverse_map=False``, not against the
+        default (measured 2.19e-02 relative on the niche-S10 carrier
+        fixture).  Refused, never degraded: that incumbent is the
+        pre-v5.35 shipped inversion.  Pass ``sag_chunk_rows=0`` on a
+        large-N call to keep the evaluator.
     amplitude_model : {'screen', 'ray_density'}, default 'screen'
         Which model supplies the exit-plane AMPLITUDE (the phase is the
         ray-traced OPL either way).
@@ -7633,7 +7646,13 @@ def apply_real_lens_traced(
     # materialises -- only (chunk_rows x N) bands.  Values are byte-identical
     # to the whole-grid path (map_coordinates order-1 is pointwise in the
     # output; the phase/mask algebra is elementwise) -- pinned by
-    # test_chunked_assembly_byte_identical.  The full X/Y meshgrids are not
+    # test_chunked_assembly_byte_identical.  v5.35: that identity is against
+    # the whole-grid path AT THE SAME INVERSION.  ``_imap_domain_gate`` below
+    # excludes this path from the inverse-characteristic evaluator, so on a
+    # call the evaluator would engage, banding also selects the incumbent
+    # coarse-Newton inversion -- see the ``sag_chunk_rows`` parameter doc and
+    # tests/unit/test_niche_s10_sibling_patterns.py.
+    # The full X/Y meshgrids are not
     # built on this path: the Newton coarse grid comes from the 1-D x
     # subsample and the exit-aperture mask is banded.
     # v5.17.0: sag_chunk_rows=None resolves to AUTO (banded when N >= 4096);
