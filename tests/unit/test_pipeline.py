@@ -692,3 +692,282 @@ def test_the_decompose_artifact_itself_is_keyed_on_the_selection(tmp_path):
     assert PA.stage_key(one, 'decompose')[1] != PA.stage_key(two,
                                                              'decompose')[1]
     assert PA.decompose_lineage_digest(one) == PA.decompose_lineage_digest(two)
+
+
+# ---------------------------------------------------------------------------
+# RESUME INTEGRITY -- presence is not completeness
+# ---------------------------------------------------------------------------
+# A Zarr store with a chunk file missing is a perfectly VALID store: the
+# reader fills the hole with the array's fill_value and hands back an array of
+# the right shape and dtype without a word.  So an `os.path.exists` resume
+# gate accepted a partial checkpoint as whole -- rel L2 7.071e-01 on the
+# summed field, frame power 1.634e-09 -> 4.78e-20 (eleven decades), and a
+# CLEAN energy ledger, because a hole reads as zeros and zeros conserve
+# energy perfectly (VERIFY_ARCHITECTURE P0-3).  The number that catches it was
+# already computed, already stored, and never compared.
+
+
+def _chunk_files(zpath):
+    out = []
+    for root, _d, files in os.walk(zpath):
+        for f in files:
+            if f != 'zarr.json':
+                out.append(os.path.join(root, f))
+    return sorted(out)
+
+
+def _hole_the_checkpoint(path):
+    """Punch a hole in WHICHEVER container ``save_field`` produced, in the way
+    that container hides it, and return the container's name.
+
+    ``save_field`` dispatches on ``have_zarr()``, and ``zarr`` is an optional
+    extra keyed on ``python_version >= "3.11"`` (pyproject: zarr v3 itself
+    requires 3.11+), so the Python 3.10 leg of CI legitimately checkpoints to
+    ``.npz`` and has NO chunk files at all.  A test that can only hole a Zarr
+    store therefore stops testing on that leg instead of failing -- which is
+    how this arm met the runner.
+
+    The defect is the same in both containers and so is the hole: a container
+    that is PRESENT, VALID, and returns an array of exactly the right shape
+    and dtype whose content is short.  Zarr does it by deleting a chunk file
+    (the reader substitutes ``fill_value``); the npz does it by writing a
+    block of the envelope back as zeros.  Either way the power on disk no
+    longer matches the ``power_field`` the metadata recorded, which is the
+    number the resume gate compares."""
+    if os.path.isdir(path):
+        chunks = _chunk_files(path)
+        assert chunks, f'{path} is a store directory but holds no chunks'
+        os.remove(chunks[len(chunks) // 2])
+        return 'zarr'
+    npz = path + '.npz'
+    assert os.path.exists(npz), (
+        f'no checkpoint container at {path} or {npz} -- save_field produced '
+        f'a third format this test does not know how to hole')
+    with np.load(npz, allow_pickle=False) as d:
+        env = np.array(d['envelope'])
+        meta = np.array(d['meta'])
+    ny = env.shape[-2]
+    lo = ny // 2
+    env[lo:lo + max(1, ny // 8), :] = 0.0
+    np.savez_compressed(npz, envelope=env, meta=meta)
+    return 'npz'
+
+
+def _chain_meta_payload(wd, key='a'):
+    with open(os.path.join(str(wd), 'chains', f'{key}.json'),
+              encoding='cp1252') as fh:
+        return json.load(fh)['payload']
+
+
+def test_the_stored_power_matches_the_power_on_disk(tmp_path):
+    """The comparison the resume gate makes, on a healthy run: the metadata's
+    ``power_field`` and the power re-integrated straight off the checkpoint
+    are the same sum of the same doubles."""
+    beams = [_beam_cfg('a', (0.0, 0.0), (0.0, 0.0))]
+    _CHAIN_CALLS.clear()
+    _run(tmp_path / 'wd', beams)
+    fz = os.path.join(str(tmp_path / 'wd'), 'chains', 'a.zarr')
+    stored = _chain_meta_payload(tmp_path / 'wd')['power_field']
+    on_disk = PA.field_power_on_disk(fz)
+    assert on_disk == pytest.approx(stored, rel=1e-15)
+    ok, why = PA.field_is_complete(fz, stored)
+    assert ok, why
+
+
+def test_a_partial_field_checkpoint_is_rejected_not_resumed(tmp_path):
+    """FAIL-BEFORE: punch a hole in a completed checkpoint.
+
+    ``field_exists`` said yes and the stage printed RESUMED.  The content
+    check must say no, and the beam must be recomputed.
+
+    Run against WHICHEVER container this interpreter's ``save_field``
+    produced -- see ``_hole_the_checkpoint``.  The claim is about the resume
+    GATE, which is container-independent (``field_is_complete`` reads both),
+    so pinning it to the Zarr store would have retired the arm on every
+    Python where the zarr extra does not resolve."""
+    beams = [_beam_cfg('a', (0.0, 0.0)), _beam_cfg('b', (3e-5, 0.0))]
+    _CHAIN_CALLS.clear()
+    _run(tmp_path / 'wd', beams)
+    assert _CHAIN_CALLS == {'a': 1, 'b': 1}
+
+    fz = os.path.join(str(tmp_path / 'wd'), 'chains', 'a.zarr')
+    stored = _chain_meta_payload(tmp_path / 'wd')['power_field']
+    container = _hole_the_checkpoint(fz)
+    assert container in ('zarr', 'npz'), container
+
+    # presence still says yes -- that is the whole defect
+    assert PA.field_exists(fz), container
+    # ... and the power off the holed store is not the stored power
+    holed = PA.field_power_on_disk(fz)
+    assert holed != pytest.approx(stored, rel=1e-9)
+    ok, why = PA.field_is_complete(fz, stored)
+    assert not ok
+    assert 'not COMPLETE' in why
+
+    _CHAIN_CALLS.clear()
+    st = _run(tmp_path / 'wd', beams)
+    assert _CHAIN_CALLS.get('a', 0) == 1, (
+        'the beam whose checkpoint was holed must be recomputed')
+    assert _CHAIN_CALLS.get('b', 0) == 0, (
+        'the intact sibling must still resume -- the check is per artifact')
+    assert st.report['chains']['ran'] == 1
+    assert st.report['chains']['resumed'] == 1
+    # ... and the artifact is whole again
+    ok, _why = PA.field_is_complete(
+        fz, _chain_meta_payload(tmp_path / 'wd')['power_field'])
+    assert ok
+
+
+def test_an_older_artifact_without_a_recorded_power_still_resumes(tmp_path):
+    """Backward compatibility: nothing to compare against is reported as
+    'presence only' rather than silently implying a check happened."""
+    beams = [_beam_cfg('a', (0.0, 0.0), (0.0, 0.0))]
+    _CHAIN_CALLS.clear()
+    _run(tmp_path / 'wd', beams)
+    fz = os.path.join(str(tmp_path / 'wd'), 'chains', 'a.zarr')
+    ok, why = PA.field_is_complete(fz, None)
+    assert ok and 'presence only' in why
+
+
+# ---------------------------------------------------------------------------
+# THE READOUT TERMS IN THE CHAINS / DECOMPOSE KEYS
+# ---------------------------------------------------------------------------
+# `decompose` quantises every frame_centre to dx_out, and a chain that
+# captures a reference tile emits one sampled at dx_out on an n_out window.
+# Neither was in the key, so changing dx_out 1.5e-7 -> 2.0e-7 resumed, served
+# the tile produced at the OLD pitch, and moved reference_spot['power'] by
+# exactly (2.0/1.5)**2 (VERIFY_ARCHITECTURE P0-4).
+
+
+def test_a_changed_readout_reruns_a_chain_that_captured_a_tile(tmp_path):
+    """The artifact CONTAINS a readout-sampled product, so the readout is in
+    its key."""
+    beams = [_beam_cfg('a', (0.0, 0.0), (0.0, 0.0))]
+    _CHAIN_CALLS.clear()
+    _run(tmp_path / 'wd', beams, chain={'capture_reference_tile': True})
+    assert _CHAIN_CALLS['a'] == 1
+    _run(tmp_path / 'wd', beams, chain={'capture_reference_tile': True},
+         readout={'dx_out': DX_OUT * 4.0 / 3.0})
+    assert _CHAIN_CALLS['a'] == 2, (
+        'a chain that captured a tile at the old pitch must not serve it at '
+        'a new one')
+    _run(tmp_path / 'wd', beams, chain={'capture_reference_tile': True},
+         readout={'n_out': N_OUT // 2})
+    assert _CHAIN_CALLS['a'] == 3, 'n_out sizes the tile window too'
+
+
+def test_the_readout_terms_are_in_the_keys_that_consume_them(tmp_path):
+    """Directly on the key slices, so the reason is legible without a run."""
+    beams = [_beam_cfg('a', (0.0, 0.0), (0.0, 0.0))]
+    base = P.PipelineSpec.from_dict(_spec_dict(tmp_path / 'wd', beams))
+    moved = P.PipelineSpec.from_dict(
+        _spec_dict(tmp_path / 'wd', beams,
+                   readout={'dx_out': DX_OUT * 4.0 / 3.0}))
+    # decompose quantises frame_centre to dx_out -> always keyed on it
+    assert (PA.stage_key(base, 'decompose')[1]
+            != PA.stage_key(moved, 'decompose')[1])
+    # chains: keyed on the readout only when it captures a readout product
+    tiled = P.PipelineSpec.from_dict(
+        _spec_dict(tmp_path / 'wd', beams,
+                   chain={'capture_reference_tile': True}))
+    tiled_moved = P.PipelineSpec.from_dict(
+        _spec_dict(tmp_path / 'wd', beams,
+                   chain={'capture_reference_tile': True},
+                   readout={'dx_out': DX_OUT * 4.0 / 3.0}))
+    assert (PA.stage_key(tiled, 'chains')[1]
+            != PA.stage_key(tiled_moved, 'chains')[1])
+    assert (PA.stage_key(base, 'chains')[1]
+            == PA.stage_key(moved, 'chains')[1]), (
+        'with no tile the artifact is the aperture field, whose pitch comes '
+        'from n_fine_cap -- the readout cannot reach it, so orphaning 32 '
+        'two-minute chains on a frame change would be a false positive')
+
+
+# ---------------------------------------------------------------------------
+# ATOMIC PAYLOAD WRITES
+# ---------------------------------------------------------------------------
+# ``write_json`` was already atomic; ``save_field`` was not, and
+# ``save_carrier_field_zarr`` deletes the existing group BEFORE it rewrites
+# it.  A kill 0.35 s in therefore left a headless store beside a still
+# key-matching .json, and every later run reported "0 run, N resumed" then
+# died on "missing or was produced by a different configuration".  It never
+# healed, because re-running resumed (VERIFY_ARCHITECTURE P1-2).
+
+
+def test_an_interrupted_field_write_leaves_the_previous_artifact_intact(
+        tmp_path, monkeypatch):
+    beams = [_beam_cfg('a', (0.0, 0.0), (0.0, 0.0))]
+    _CHAIN_CALLS.clear()
+    _run(tmp_path / 'wd', beams)
+    fz = os.path.join(str(tmp_path / 'wd'), 'chains', 'a.zarr')
+    good = PA.field_power_on_disk(fz)
+    assert good and good > 0.0
+
+    import lumenairy.propagators.carrier_field as _cf
+
+    reached = []
+
+    def _boom(*a, **kw):
+        reached.append(1)
+        raise KeyboardInterrupt('simulated taskkill mid-write')
+
+    # ``save_field`` dispatches its PAYLOAD write on ``have_zarr()``, and the
+    # zarr extra is keyed on ``python_version >= "3.11"``, so the 3.10 leg of
+    # CI takes the npz writer and the zarr writer is never called.  Inject at
+    # BOTH payload writers, and assert below that the injection was actually
+    # reached -- otherwise this arm passes vacuously the moment the dispatch
+    # grows a branch, which is exactly how it met the runner.
+    monkeypatch.setattr(_cf, 'save_carrier_field_zarr', _boom)
+    monkeypatch.setattr(PA, '_save_field_npz', _boom)
+    g = FieldGrid((32, 32), 1e-6)
+    victim = CarrierField(np.ones((32, 32), dtype=np.complex128), g,
+                          CarrierSpec(R=-1.0), LAM)
+    with pytest.raises(KeyboardInterrupt):
+        PA.save_field(fz, victim, {'k': 1})
+    monkeypatch.undo()
+    assert reached, (
+        'the interrupt was never injected -- save_field wrote the payload '
+        'through neither save_carrier_field_zarr nor _save_field_npz, so '
+        'this test proved nothing about the atomic path')
+
+    assert PA.field_power_on_disk(fz) == good, (
+        'the interrupted write destroyed the previous good artifact')
+    leftovers = [p for p in os.listdir(os.path.dirname(fz)) if '.tmp-' in p]
+    assert not leftovers, f'temp artifacts survived: {leftovers}'
+
+    # and the run still resumes rather than deadlocking
+    _CHAIN_CALLS.clear()
+    st = _run(tmp_path / 'wd', beams)
+    assert _CHAIN_CALLS.get('a', 0) == 0
+    assert st.report['chains']['resumed'] == 1
+
+
+def test_save_field_replaces_atomically_and_leaves_no_temp(tmp_path):
+    """A successful overwrite goes through a temp path and lands whole."""
+    g = FieldGrid((64, 64), 1e-6)
+    x, y = g.axes()
+    env = np.exp(-((x[None, :] ** 2 + y[:, None] ** 2) / 20e-6 ** 2)
+                 ).astype(np.complex128)
+    f1 = CarrierField(env, g, CarrierSpec(R=-1.0), LAM)
+    f2 = CarrierField(2.0 * env, g, CarrierSpec(R=-1.0), LAM)
+    p = str(tmp_path / 'f.zarr')
+    PA.save_field(p, f1, {'k': 1})
+    assert PA.field_power_on_disk(p) == pytest.approx(f1.power(), rel=1e-15)
+    PA.save_field(p, f2, {'k': 2})
+    assert PA.field_power_on_disk(p) == pytest.approx(f2.power(), rel=1e-15)
+    assert not [q for q in os.listdir(str(tmp_path)) if '.tmp-' in q]
+    assert PA.load_field(p, {'k': 2}) is not None
+    assert PA.load_field(p, {'k': 1}) is None
+
+
+def test_the_reference_tile_is_written_atomically(tmp_path):
+    """``np.save`` in place is the same hazard on the tile the readout stage
+    loads on presence alone."""
+    p = str(tmp_path / 'ref.npy')
+    a = np.arange(64, dtype=np.complex128).reshape(8, 8)
+    PA.save_npy_atomic(p, a)
+    assert np.array_equal(np.load(p), a)
+    b = a * 3.0
+    PA.save_npy_atomic(p, b)
+    assert np.array_equal(np.load(p), b)
+    assert not [q for q in os.listdir(str(tmp_path)) if '.tmp-' in q]

@@ -440,10 +440,27 @@ def test_the_element_eikonal_is_the_exact_congruence():
     # untilted -> the historical decentred sphere, term for term
     W0, g0x, g0y = LT._tilted_carrier_parts(
         TiltedCarrier(R, 0.0, 0.0, x0, y0), xq, yq)
-    rho = np.sqrt((2.0e-3 - x0) ** 2 + (-1.0e-3 - y0) ** 2 + R * R)
-    assert float(W0[0, 0]) == -(rho - abs(R))
-    assert float(g0x[0, 0]) == -(2.0e-3 - x0) / rho
-    assert float(g0y[0, 0]) == -(-1.0e-3 - y0) / rho
+    u0, v0 = 2.0e-3 - x0, -1.0e-3 - y0
+    rho = np.sqrt(u0 ** 2 + v0 ** 2 + R * R)
+    # RATIONALIZED, and exactly equal (VERIFY_ARCHITECTURE F10/P2-7,
+    # adjudicated 2026-08-12).  ``rho - |R|`` is a catastrophic cancellation
+    # -- on this fixture it is off by 5.116e-19 m against a 60-digit decimal
+    # oracle while the rationalized form below is EXACT to all 60 digits --
+    # so an ``==`` against it was pinning the defect, not the physics.
+    assert float(W0[0, 0]) == -((u0 * u0 + v0 * v0) / (rho + abs(R)))
+    assert float(g0x[0, 0]) == -u0 / rho
+    assert float(g0y[0, 0]) == -v0 / rho
+
+    # the oracle arm, so the claim above is asserted and not merely written
+    import decimal
+    with decimal.localcontext() as ctx:
+        ctx.prec = 60
+        D = decimal.Decimal
+        exact = float(-((D(u0) * D(u0) + D(v0) * D(v0)
+                         + D(R) * D(R)).sqrt() - abs(D(R))))
+    assert abs(float(W0[0, 0]) - exact) < abs(-(rho - abs(R)) - exact), (
+        'the shipped untilted eikonal is no better than the subtraction '
+        'form it replaced')
 
 
 def test_a_non_propagating_tilt_is_refused_by_the_element_too():

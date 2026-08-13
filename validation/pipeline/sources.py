@@ -625,3 +625,10 @@ register_decomposer('sumap_cache', decompose_sumap_cache)
 register_decomposer('explicit', decompose_explicit)
 register_chain_runner('traced', run_chain_traced)
 register_chain_runner('cached_aperture', run_chain_cached_aperture)
+
+# 'design121_doe_rcwa' -- the same decomposition with RIGOROUS (RCWA) order
+# amplitudes instead of the thin-element DFT.  Imported HERE, at the bottom,
+# for its registration side effect: that module imports Beam /
+# DecomposeResult / order_tag from this one, so it can only be imported once
+# this module is fully defined.  BUILD_RCWA_DOE_TABLE_2026_08_12.
+from . import doe_rcwa as _doe_rcwa      # noqa: E402,F401

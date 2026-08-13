@@ -41,6 +41,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import time
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -122,13 +123,45 @@ def _stage_slice(spec: PipelineSpec, stage: str) -> Dict[str, Any]:
     Deliberately NOT the whole spec: keying the ``chains`` stage on the
     readout's ``dx_out`` would orphan 32 aperture fields (each a ~2 minute
     chain) every time a frame window changed, which is how a caching layer
-    trains its users to delete it."""
+    trains its users to delete it.
+
+    THE READOUT TERMS, AND WHY THEY ARE HERE NOW (VERIFY_ARCHITECTURE P0-4).
+    That argument is right about the aperture FIELD and wrong about the
+    artifact.  ``decompose`` quantises every beam's ``frame_centre`` to the
+    readout pitch (``sources.py``: ``round(x/dx_out)*dx_out``), and a chain
+    run with ``capture_reference_tile`` also emits ``<k>_ref.npy`` -- a tile
+    sampled at ``dx_out`` on an ``n_out`` window -- plus a
+    ``reference_tile_power`` integrated with ``dx_out**2``.  Those are
+    functions of the readout; the key did not say so.  Measured: changing
+    ``dx_out`` 1.5e-7 -> 2.0e-7 left the chains key, the decompose key and
+    the lineage all equal, the run resumed, ``<k>_ref.npy`` was byte-identical
+    to the tile produced at the OLD pitch and window, and
+    ``reference_spot['power']`` moved by exactly ``(2.0/1.5)**2`` -- the stale
+    tile re-integrated at the new pitch, with ``power_ratio`` following it
+    from 180.644 to 152.931 with no recomputation and no warning.
+
+    The perf intent is preserved exactly where it is sound: the readout terms
+    enter the ``chains`` slice ONLY when that stage actually captures the
+    tile.  With ``capture_reference_tile=False`` the artifact is the aperture
+    field and its aperture-plane meta -- neither of which the readout frame
+    can reach, since ``E_ap`` comes off ``_fine_trace_group_exit`` at a pitch
+    set by ``n_fine_cap``/``ray_subsample`` -- so a readout change still
+    orphans nothing.  A key that is right for one product in an artifact and
+    wrong for another product in the same artifact is not a key."""
     d = spec.to_dict()
     common = {'wavelength': d['wavelength']}
     if stage == 'decompose':
-        return {**common, 'decompose': d['decompose']}
+        # dx_out only: the decomposer quantises frame_centre to the readout
+        # pitch.  n_out cannot reach a beam definition, and over-keying the
+        # stage every chain hangs off is not free.
+        return {**common, 'decompose': d['decompose'],
+                'readout_dx_out': d['readout']['dx_out']}
     if stage == 'chains':
-        return {**common, 'chain': d['chain']}
+        s = {**common, 'chain': d['chain']}
+        if d['chain'].get('capture_reference_tile'):
+            s['readout_dx_out'] = d['readout']['dx_out']
+            s['readout_n_out'] = d['readout']['n_out']
+        return s
     if stage == 'aggregate':
         return {**common, 'aggregate': d['aggregate']}
     if stage == 'leg':
@@ -279,8 +312,96 @@ def _npz_path(path: str) -> str:
 
 
 def field_exists(path: str) -> bool:
-    """Is there a field checkpoint at ``path`` in EITHER container?"""
+    """Is there a field checkpoint at ``path`` in EITHER container?
+
+    A PRESENCE probe, and nothing more.  It is deliberately NOT what a resume
+    gate should ask -- see :func:`field_is_complete`, which is."""
     return os.path.exists(path) or os.path.exists(_npz_path(path))
+
+
+#: Relative tolerance the checkpointed power must reproduce to.  On a healthy
+#: run the stored ``power_field`` and the power re-integrated off the
+#: checkpoint agree to 2.2e-16 (they are the same sum of the same doubles in
+#: the same order), so this is ~5 decades of headroom over the measured
+#: agreement and ~11 decades under the collapse it exists to catch.
+FIELD_POWER_RTOL = 1e-9
+
+
+def field_power_on_disk(path: str, *, name='field') -> Optional[float]:
+    """Integrate ``|envelope|^2 dx dy`` straight off the checkpoint.
+
+    Chunked over row blocks for the Zarr container so a design-121 aperture
+    (8192^2 complex128 = 1.07 GB) is never materialised whole just to be
+    checked.  Returns ``None`` if nothing readable is there."""
+    try:
+        if os.path.exists(path) and have_zarr():
+            import zarr
+            from lumenairy.propagators.carrier_field import (
+                CARRIER_FIELD_SCHEMA, FieldGrid)
+            grp = zarr.open_group(str(path), mode='r')[name]
+            if int(grp.attrs.get('schema', -1)) != CARRIER_FIELD_SCHEMA:
+                return None
+            g = FieldGrid.from_dict(dict(grp.attrs['grid']))
+            arr = grp['envelope']
+            ny = int(arr.shape[-2])
+            tot = 0.0
+            for i0 in range(0, ny, 256):
+                blk = np.asarray(arr[i0:min(i0 + 256, ny)])
+                tot += float((np.abs(blk) ** 2).sum())
+                del blk
+            return tot * float(g.dx) * float(g.dy)
+        if os.path.exists(_npz_path(path)):
+            f = _load_field_npz(path)
+            return float(f.power())
+    except Exception:
+        return None
+    return None
+
+
+def field_is_complete(path: str, expect_power: Optional[float], *,
+                      name='field', rtol: float = FIELD_POWER_RTOL):
+    """Is the checkpoint at ``path`` the WHOLE artifact its metadata claims?
+
+    Returns ``(ok, reason)``.
+
+    WHY THIS IS NOT ``os.path.exists`` (VERIFY_ARCHITECTURE P0-3).  A Zarr
+    store with a chunk file missing is a perfectly valid store: the reader
+    fills the hole with the array's ``fill_value`` and returns an array of
+    the right shape and dtype without a word.  Removing ONE chunk from a
+    completed ``chains/a.zarr`` still printed ``RESUMED``, moved the summed
+    field by rel L2 7.071e-01, collapsed frame power 1.634e-09 -> 4.78e-20
+    (ELEVEN decades) and produced a CLEAN energy ledger -- because a hole
+    reads as zeros and zeros conserve energy perfectly.
+
+    The number that catches it instantly was already computed, already
+    stored, and never compared: ``chains/<k>.json`` records
+    ``power_field``, and on a healthy run that agrees with the power
+    re-integrated off the store to 2.2e-16.  So compare it."""
+    if not field_exists(path):
+        return False, 'no checkpoint at that path'
+    if expect_power is None:
+        # Nothing recorded to compare against -- an artifact written by an
+        # older schema.  Presence is all that can be asked; say so rather
+        # than implying a check happened.
+        return field_exists(path), 'presence only (no recorded power)'
+    got = field_power_on_disk(path, name=name)
+    if got is None:
+        return False, 'checkpoint present but unreadable'
+    exp = float(expect_power)
+    if exp == 0.0:
+        ok = (got == 0.0)
+    else:
+        ok = abs(got - exp) <= abs(exp) * float(rtol)
+    if not ok:
+        return False, (
+            f"the checkpoint integrates to {got:.9e} W but its own metadata "
+            f"records power_field = {exp:.9e} "
+            f"(relative {abs(got - exp) / abs(exp):.3e} > {rtol:.1e}).  The "
+            f"artifact is PRESENT but not COMPLETE -- a Zarr store missing a "
+            f"chunk reads as zeros in that block and returns the right shape "
+            f"without an error, which is how a partial checkpoint resumes as "
+            f"if it were whole.  Delete it and re-run the stage")
+    return True, 'power verified'
 
 
 def _save_field_npz(path: str, field) -> str:
@@ -335,7 +456,20 @@ def save_field(path: str, field, key: Dict[str, Any], *, name='field',
     a bare array cannot, and getting either wrong relocates the field in
     absolute coordinates without changing a single sample of it.  When the
     optional dependency is absent the npz fallback above is used instead, so a
-    run is never blocked by a missing extra."""
+    run is never blocked by a missing extra.
+
+    ATOMIC (VERIFY_ARCHITECTURE P1-2).  The field is written to a sibling
+    TEMP path and renamed over the destination only once it is whole, so an
+    interrupted write leaves either the previous good artifact or the new
+    one, never a headless half of both.  Writing in place used to be a
+    PERMANENT resume deadlock: ``save_carrier_field_zarr`` deletes the
+    existing group BEFORE it rewrites it, so a kill 0.35 s in left an empty
+    ``a.zarr`` beside the previous run's still-key-matching ``a.json``;
+    every subsequent run then reported ``0 run, 5 resumed`` and died on
+    ``the chain checkpoint ... is missing or was produced by a different
+    configuration``, and re-running resumed instead of healing.  Reproduced
+    3/3.  ``write_json`` was already atomic, which is why the doc's "atomic
+    writes" bullet was true of the metadata and false of the payload."""
     prov = dict(field.provenance)
     prov.update(extra_provenance or {})
     prov['pipeline_key'] = key
@@ -343,10 +477,57 @@ def save_field(path: str, field, key: Dict[str, Any], *, name='field',
                               carrier=field.carrier,
                               wavelength=field.wavelength, provenance=prov)
     os.makedirs(os.path.dirname(os.path.abspath(path)) or '.', exist_ok=True)
-    if not have_zarr():
-        return _save_field_npz(path, stamped)
-    from lumenairy.propagators.carrier_field import save_carrier_field_zarr
-    return save_carrier_field_zarr(path, stamped, name=name, overwrite=True)
+    tmp = f"{path}.tmp-{os.getpid()}"
+    _rm_field_paths(tmp)
+    try:
+        if not have_zarr():
+            written = _save_field_npz(tmp, stamped)
+        else:
+            from lumenairy.propagators.carrier_field import (
+                save_carrier_field_zarr)
+            written = save_carrier_field_zarr(tmp, stamped, name=name,
+                                              overwrite=True)
+        # Whole on disk under the temp name; only NOW is the old one at risk.
+        final = _npz_path(path) if written == _npz_path(tmp) else path
+        src = _npz_path(tmp) if written == _npz_path(tmp) else tmp
+        _rm_field_paths(path)
+        os.replace(src, final)
+        return final
+    finally:
+        _rm_field_paths(tmp)
+
+
+def _rm_field_paths(path: str) -> None:
+    """Remove BOTH containers for ``path`` if present, tolerating neither."""
+    for p in (path, _npz_path(path)):
+        try:
+            if os.path.isdir(p):
+                shutil.rmtree(p)
+            elif os.path.exists(p):
+                os.remove(p)
+        except FileNotFoundError:
+            pass
+
+
+def save_npy_atomic(path: str, arr) -> str:
+    """``np.save`` through a temp file and a rename.
+
+    The reference tile is loaded on presence alone by the readout stage, so a
+    torn ``.npy`` is a silently wrong ``power_ratio`` rather than a crash
+    (VERIFY_ARCHITECTURE: overwriting it moved ``power_ratio``
+    180.644 -> 20.072, accepted silently)."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or '.', exist_ok=True)
+    tmp = f"{path}.tmp-{os.getpid()}.npy"
+    try:
+        np.save(tmp, np.asarray(arr))
+        os.replace(tmp, path)
+        return path
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
 def load_field(path: str, key: Dict[str, Any], *, name='field'):
