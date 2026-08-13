@@ -3837,7 +3837,14 @@ def _tilted_carrier_parts(spec, X, Y):
         # C5 fail-before switch: the historical sphere-PLUS-RAMP expression,
         # verbatim, so the on-axis path is byte-identical.
         rho = np.sqrt(u * u + v * v + s * s)
-        W = sgn * (rho - abs(s)) + L * u + M * v
+        # RATIONALIZED: rho - |s| == (u^2+v^2) / (rho + |s|).  Algebraically
+        # identical; the subtraction loses k0*eps*|s| radians to catastrophic
+        # cancellation wherever u^2+v^2 << s^2.  Same fix and same reason as
+        # a185cfc in propagators/carrier.py.  The "byte-identical" claim
+        # above is against the C5 fail-before ARM of this same function,
+        # which is rationalized identically below, so the two conventions
+        # still coincide exactly at L = M = 0.
+        W = sgn * ((u * u + v * v) / (rho + abs(s))) + L * u + M * v
         return W, sgn * u / rho + L, sgn * v / rho + M
     # niche C5: the EXACT displaced-point-source eikonal.  ``s`` is the AXIAL
     # distance to the source, so the source's transverse projection sits at
@@ -3853,7 +3860,12 @@ def _tilted_carrier_parts(spec, X, Y):
     uu = u + s * L / _N
     vv = v + s * M / _N
     rho = np.sqrt(uu * uu + vv * vv + s * s)
-    W = sgn * (rho - abs(s) / _N)
+    # RATIONALIZED -- see the untilted arm above.  The difference of squares
+    # collapses ANALYTICALLY here: with _N^2 = 1 - L^2 - M^2 the s^2/_N^2
+    # terms cancel against s^2 exactly, leaving u^2+v^2+2s(Lu+Mv)/_N, which
+    # carries no large term at all.
+    W = sgn * ((u * u + v * v + 2.0 * s * (L * u + M * v) / _N)
+               / (rho + abs(s) / _N))
     return W, sgn * uu / rho, sgn * vv / rho
 
 
@@ -4116,14 +4128,21 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
         return W_full, grad_fn, w_fn
     _sgn = 1.0 if s > 0.0 else -1.0
     _abs_s = abs(s)
-    W_full = _sgn * (np.sqrt(X ** 2 + Y ** 2 + s * s) - _abs_s)
+    # RATIONALIZED: sqrt(r^2+s^2) - |s| == r^2 / (sqrt(r^2+s^2) + |s|).  Same
+    # fix and same reason as a185cfc in propagators/carrier.py.  This one
+    # feeds the ray launch, the H6 entrance eikonal AND the exp(i k0 W)
+    # reference leg, so the k0*eps*|s| error it used to carry was COHERENT
+    # across all three.
+    _r2_full = X ** 2 + Y ** 2
+    W_full = _sgn * (_r2_full / (np.sqrt(_r2_full + s * s) + _abs_s))
 
     def grad_fn(xq, yq):
         _rho = np.sqrt(xq * xq + yq * yq + s * s)
         return _sgn * xq / _rho, _sgn * yq / _rho
 
     def w_fn(xq, yq):
-        return _sgn * (np.sqrt(xq * xq + yq * yq + s * s) - _abs_s)
+        _r2 = xq * xq + yq * yq
+        return _sgn * (_r2 / (np.sqrt(_r2 + s * s) + _abs_s))
 
     return W_full, grad_fn, w_fn
 

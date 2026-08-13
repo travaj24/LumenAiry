@@ -266,9 +266,44 @@ def test_tilted_carrier_eikonal_and_gradient_are_analytic():
     W, grad, wfn = _compute_carrier(spec, None, _WL, dx, X, Y)
     u, v = X - x0, Y - y0
     N = np.sqrt(1.0 - L * L - M * M)
-    ref = -(np.sqrt((u + R * L / N) ** 2 + (v + R * M / N) ** 2 + R * R)
-            - abs(R) / N)
+    # THE REFERENCE IS RATIONALIZED, and at this tolerance it has to be
+    # (VERIFY_ARCHITECTURE F10/P2-7, adjudicated 2026-08-12).  Written as
+    # ``-(sqrt(uu^2+vv^2+R^2) - |R|/N)`` this reference carries its OWN
+    # catastrophic cancellation -- measured 2.45e-18 m against a 60-digit
+    # decimal oracle, i.e. 2.5x LOOSER than the atol=1e-18 it was policing
+    # with.  The assertion only passed because both sides made the same
+    # error.  The difference of squares collapses analytically (the R^2/N^2
+    # terms cancel against R^2 because N^2 = 1 - L^2 - M^2), so the
+    # cancellation-free reference below is EXACTLY the same function:
+    rho = np.sqrt((u + R * L / N) ** 2 + (v + R * M / N) ** 2 + R * R)
+    ref = -((u * u + v * v + 2.0 * R * (L * u + M * v) / N)
+            / (rho + abs(R) / N))
     np.testing.assert_allclose(W, ref, rtol=0, atol=1e-18)
+
+    # ... and the rationalized reference is the ACCURATE one.  Oracle: the
+    # same closed form in 60-digit decimal arithmetic.  Measured on this
+    # fixture: subtraction 2.453e-18 m, rationalized 6.776e-21 m, 362x.
+    import decimal
+    with decimal.localcontext() as ctx:
+        ctx.prec = 60
+        D = decimal.Decimal
+        Nn = (D(1) - D(L) * D(L) - D(M) * D(M)).sqrt()
+        e_sub = e_rat = 0.0
+        for i, j in ((0, 0), (0, 1), (10, 20), (32, 32), (63, 63), (5, 50)):
+            a = D(float(u[i, j])) + D(R) * D(L) / Nn
+            b = D(float(v[i, j])) + D(R) * D(M) / Nn
+            exact = float(-((a * a + b * b + D(R) * D(R)).sqrt()
+                            - abs(D(R)) / Nn))
+            sub = -(float(rho[i, j]) - abs(R) / N)
+            e_sub = max(e_sub, abs(sub - exact))
+            e_rat = max(e_rat, abs(float(ref[i, j]) - exact))
+    assert e_rat < e_sub / 50.0, (
+        f"the rationalized reference ({e_rat:.3e} m) does not decisively "
+        f"beat the subtraction form ({e_sub:.3e} m) against a 60-digit "
+        f"oracle -- one of the two forms has regressed")
+    assert e_rat < 1e-19, (
+        f"the reference itself is only good to {e_rat:.3e} m, which is not "
+        f"tight enough to police an atol of 1e-18")
     assert abs(wfn(np.array([x0]), np.array([y0]))[0]) < 1e-18   # W(x0,y0)=0
     # the chief ray leaves (x0, y0) along EXACTLY (L, M)
     _g0 = grad(np.array([x0]), np.array([y0]))

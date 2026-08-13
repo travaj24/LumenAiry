@@ -79,6 +79,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util as _ilu
+import math
 import threading
 import warnings
 from typing import Dict
@@ -707,8 +708,129 @@ _IMAP_CACHE_STATS = {'hits': 0, 'misses': 0}
 _IMAP_LOCK = threading.Lock()
 
 
+#: Target number of probe points used to FINGERPRINT the incumbent for the
+#: cache key.  A few hundred evaluations of ``_invert_newton`` against a build
+#: that costs 0.15-0.79 s, i.e. well under a per-cent of the thing being
+#: cached.
+#:
+#: THE PROBE POINTS ARE THE ACTUAL TRACED LANDINGS, subsampled on a stride --
+#: NOT a synthetic lattice inside their bounding box.  Measured while fixing
+#: P0-5: a 5x5 interior lattice does NOT separate ``newton_max_iters`` 2 from
+#: 40, because Newton converges in one or two steps near the axis and the two
+#: incumbents agree there to the last bit.  They diverge exactly where G8
+#: scores and where the map is hardest -- the outer landings -- so the
+#: fingerprint has to look there.  Striding the real landing grid reaches
+#: them by construction and needs no guess about where "hard" is.
+_IMAP_INCUMBENT_PROBE_TARGET = 256
+
+
+#: The exception classes the incumbent probe HASHES instead of raising.
+#:
+#: NARROWED, not broad (``AUDIT_V4_12_1_2026_05_16.md`` L5: NARROW >
+#: WARN-BEFORE-PASS > RE-RAISE > KEEP-AS-IS).  ``parity_invert`` is this
+#: element's own Newton over its own forward fits, so the only ways it can
+#: legitimately refuse a strided probe point are numeric-evaluation failures
+#: of those fits: ``scipy``'s ``RectBivariateSpline.ev`` raises ``ValueError``
+#: off its knot rectangle, the Chebyshev evaluator raises ``ValueError`` /
+#: ``TypeError`` on a shape or dtype it cannot take, and an ``ArithmeticError``
+#: (``FloatingPointError`` under ``np.seterr('raise')``, ``ZeroDivisionError``)
+#: is the same class of refusal.  ``np.linalg.LinAlgError`` is a ``ValueError``
+#: subclass and is covered.
+#:
+#: Everything else -- ``AttributeError``, ``NameError``, ``KeyError``,
+#: ``MemoryError``, ``KeyboardInterrupt`` -- is a DEFECT, not an incumbent
+#: identity, and must propagate.  It costs nothing to let it: the shipped G8
+#: arm calls ``parity_invert`` unguarded a few hundred lines below, so a bug
+#: swallowed here surfaces there anyway, with a worse traceback and after the
+#: cache has already been keyed on ``<raised:...>``.
+_INCUMBENT_PROBE_ERRORS = (ValueError, TypeError, ArithmeticError)
+
+
+def _incumbent_fingerprint(parity_invert, x_out_grid, y_out_grid):
+    """A CONTENT hash of the incumbent inversion, for the cache key.
+
+    WHY THE INCUMBENT IS IN THE KEY AT ALL (VERIFY_ARCHITECTURE P0-5).  G8 is
+    a COMPARATIVE bar: it accepts the map only if the map beats the incumbent
+    on held-out samples.  The incumbent is therefore half the acceptance
+    criterion -- and it was the half the key did not hash.  So a map built
+    against a weak incumbent was served to a call with a strong one, and the
+    one guard that decides whether the map may be used AT ALL was bypassed.
+    Production-reachable on the real element: ``newton_max_iters`` 2 -> 40,
+    ``newton_poly_order`` 6 -> 8 and ``newton_fit`` 'polynomial' -> 'spline'
+    each change ``_invert_newton`` and none of them changed the key, so each
+    gave a stale hit -- with a cold-cache control on the same data reading
+    ``refused = G8: held-out OPL error 1.8798e-04 waves against the
+    incumbent's 1.5213e-08``.
+
+    WHY A FINGERPRINT AND NOT A PARAMETER LIST.  This module's own doctrine,
+    two docstrings up: "a key that names the CONFIGURATION and not the CONTENT
+    is how a cache silently becomes a cache of something else."  Listing
+    ``newton_max_iters``/``newton_poly_order``/``newton_fit`` would cover the
+    three knobs someone thought of today and miss the fourth -- and the
+    incumbent is a CLOSURE over this element's forward fits, so it can change
+    without any named knob changing.  Evaluating it is the only thing that
+    cannot be fooled.
+
+    The probe is a deterministic STRIDE over the traced landings themselves,
+    evaluated with the same RuntimeWarning suppression G8 uses (the
+    incumbent's unconverged-Newton report belongs to the CALL, not to a
+    hashing probe).  A non-finite answer is hashed as such rather than
+    dropped: an incumbent that fails where another succeeds is a DIFFERENT
+    incumbent."""
+    if parity_invert is None:
+        return b'<no-incumbent>'
+    XO = np.asarray(x_out_grid, dtype=np.float64)
+    YO = np.asarray(y_out_grid, dtype=np.float64)
+    fin = np.isfinite(XO) & np.isfinite(YO)
+    n_fin = int(fin.sum())
+    if n_fin == 0:
+        return b'<no-landings>'
+    # Stride the landing GRID (not the flattened finite list) so the probe
+    # keeps its two-dimensional spread and reaches the outer rows and columns
+    # where the incumbent's Newton works hardest.
+    ny, nx = XO.shape[-2], XO.shape[-1]
+    per = max(1, int(math.isqrt(max(1, int(_IMAP_INCUMBENT_PROBE_TARGET)))))
+    si = max(1, ny // per)
+    sj = max(1, nx // per)
+    sub = np.zeros_like(fin)
+    sub[::si, ::sj] = True
+    sel = fin & sub
+    if not sel.any():                                     # pragma: no cover
+        sel = fin
+    PX = XO[sel].ravel()
+    PY = YO[sel].ravel()
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            out = parity_invert(PX, PY)
+    except _INCUMBENT_PROBE_ERRORS as exc:
+        # An incumbent that REFUSES these points is also a distinct
+        # incumbent, so the refusal is hashed rather than raised -- but only
+        # for the numeric-evaluation classes named above.  Anything else is a
+        # defect and propagates: the SHIPPED G8 arm calls ``parity_invert``
+        # bare, so swallowing a real bug here would only move the traceback.
+        return ('<raised:%s>' % type(exc).__name__).encode('ascii', 'replace')
+    h = hashlib.sha256()
+    h.update(b'incumbent-probe-v2')
+    h.update(repr((si, sj, PX.shape, n_fin)).encode('ascii'))
+    h.update(np.ascontiguousarray(PX).tobytes())
+    h.update(np.ascontiguousarray(PY).tobytes())
+    for part in out:
+        a = np.ascontiguousarray(np.asarray(part, dtype=np.float64).ravel())
+        h.update(repr(a.shape).encode('ascii'))
+        # NaN has many bit patterns; canonicalise so the hash is about the
+        # ANSWER and not about which NaN the FPU produced.
+        bad = ~np.isfinite(a)
+        if bad.any():
+            a = a.copy()
+            a[bad] = np.nan
+        h.update(a.tobytes())
+    return h.digest()
+
+
 def _imap_key(xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
-              degree, launch_radius, wavelength, extra=()):
+              degree, launch_radius, wavelength, extra=(),
+              incumbent_fp=b'<not-probed>', census_amp=None):
     """SHA-256 over EVERYTHING the map depends on.
 
     The chain-A cache lesson (``docs/audits/FIX_D4_D6_D7_2026_08_06.md`` D6),
@@ -718,18 +840,33 @@ def _imap_key(xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
     the OPL, the Jacobian, the weights -- plus every scalar that shapes it, plus
     the library version and the flag values that select the branch.  Any edit
     anywhere upstream that moves a single traced ray moves the key.
+
+    ... AND EVERYTHING THE ACCEPTANCE DECISION DEPENDS ON, which is not the
+    same set, and is where three things were missing:
+
+    * ``incumbent_fp`` -- :func:`_incumbent_fingerprint`, G8's arm B hashed by
+      EVALUATION.  Half the comparative bar, and unhashed (P0-5);
+    * ``_IMAP_DETJ_SOURCE`` -- selects the Jacobian the amplitude channel
+      consumes; a stale hit served a ``det J`` 3.12e-03 relative wrong, i.e.
+      1.56e-03 of ray-density amplitude error (P1);
+    * ``census_amp`` -- names WHERE G2, G7 and G8 are scored; a stale hit
+      reported ``n_detj_census`` 1681 where a cold build reads 553 (P2).
     """
     h = hashlib.sha256()
-    h.update(b'imap-v1')
+    h.update(b'imap-v2')
     from .. import __version__ as _ver
     h.update(str(_ver).encode('ascii', 'replace'))
     h.update(repr((int(degree), float(launch_radius), float(wavelength),
                    bool(TRACED_INVERSE_MAP), str(INVERSE_MAP_GUARD),
                    float(_IMAP_PARITY_FACTOR), int(_IMAP_HOLDOUT_MOD),
                    int(_IMAP_HOLDOUT_PHASE), float(_IMAP_MIN_SAMPLES_PER_TERM),
-                   float(_IMAP_DETJ_MAXMIN))).encode('ascii'))
+                   float(_IMAP_DETJ_MAXMIN),
+                   str(_IMAP_DETJ_SOURCE))).encode('ascii'))
     h.update(repr(tuple(extra)).encode('ascii', 'replace'))
-    for arr in (xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights):
+    h.update(b'|incumbent|')
+    h.update(incumbent_fp)
+    for arr in (xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
+                census_amp):
         if arr is None:
             h.update(b'<none>')
             continue
@@ -914,12 +1051,22 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
 
     key = None
     if cache:
+        # The incumbent is fingerprinted BY EVALUATION, because it is a
+        # closure over this element's forward fits and half of G8's bar.
         key = _imap_key(xs_in, XO, YO, OP, DJ, W, degree, launch_radius,
-                        wavelength, extra=(pf,))
+                        wavelength, extra=(pf,),
+                        incumbent_fp=_incumbent_fingerprint(parity_invert,
+                                                            XO, YO),
+                        census_amp=census_amp)
         hit = _cache_get(key)
         if hit is not None:
-            rec['cached'] = True
             rec.update(hit.guards)
+            # AFTER the update, not before: ``hit.guards`` carries the
+            # BUILDING call's ``cached = False`` and clobbered this flag, so
+            # every hit reported itself as a miss -- which is the channel
+            # that hid the stale-key defects above from every probe that
+            # asked the record instead of the counters.
+            rec['cached'] = True
             rec['refused'] = None
             return hit
     rec['cached'] = False

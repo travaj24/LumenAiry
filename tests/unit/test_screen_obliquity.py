@@ -478,3 +478,196 @@ def test_explicit_wavefront_carrier_matches_the_equivalent_tilt():
         b = apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
                             carrier=(tilt * X).astype(np.float64))
     assert np.allclose(np.angle(a * np.conj(b)), 0.0, atol=2e-6)
+
+
+# ---------------------------------------------------------------------------
+# (h) IMMERSED FIRST SURFACE -- the units of q
+# ---------------------------------------------------------------------------
+# Every prescription above starts in AIR, where a carrier's direction cosine
+# and its transverse OPTICAL momentum are numerically the same number.  They
+# are not the same QUANTITY, and the correction consumes the second: it closes
+# the momentum triangle as ``pz = sqrt(n1^2 - |p_t|^2)``.  So an element whose
+# first medium is glass was fed a momentum short by a factor n1, with no
+# refusal and no warning, and the correction delivered 1.8-2.2x where it could
+# deliver 474-548x (VERIFY_ARCHITECTURE P1-1).  Nothing in this file could see
+# it, because nothing in this file was immersed.
+
+
+def _immersed(first='N-BK7', R=19.6e-3, glass='N-SSK2', thickness=4e-3,
+              aperture=3e-3):
+    """The singlet above, but CEMENTED INTO ``first`` on both sides."""
+    return {'name': 'immersed', 'aperture_diameter': aperture,
+            'thicknesses': [thickness], 'surfaces': [
+                {'radius': R, 'conic': 0.0, 'aspheric_coeffs': None,
+                 'glass_before': first, 'glass_after': glass},
+                {'radius': np.inf, 'conic': 0.0, 'aspheric_coeffs': None,
+                 'glass_before': glass, 'glass_after': first}]}
+
+
+def _exact_eikonal_immersed(presc, x0, y0, L, M):
+    """:func:`_exact_eikonal`, with the ENTRANCE medium's index carried into
+    the incident plane wave's own eikonal (``n_in * (L x + M y)``)."""
+    p = {k: v for k, v in presc.items() if k != 'aperture_diameter'}
+    surfs = surfaces_from_prescription(p)
+    n_in = float(get_glass_index(surfs[0].glass_before, LAM))
+    n_exit = float(get_glass_index(surfs[-1].glass_after, LAM))
+    rays = _make_bundle(x=x0, y=y0, L=np.full(x0.size, L),
+                        M=np.full(y0.size, M), wavelength=LAM)
+    fin = trace(rays, surfs, LAM, output_filter='last').image_rays
+    with np.errstate(divide='ignore', invalid='ignore'):
+        t = np.where(fin.alive & (np.abs(fin.N) > 1e-30), -fin.z / fin.N, 0.0)
+    return (fin.x + fin.L * t, fin.y + fin.M * t,
+            n_in * (L * x0 + M * y0) + fin.opd + n_exit * t,
+            np.asarray(fin.alive, dtype=bool))
+
+
+def _screen_eikonal_immersed(presc, x0, y0, L, M, corrected):
+    """:func:`_screen_eikonal` with the entrance medium carried, and with
+    ``q`` taken FROM THE LIBRARY (``_screen_obliquity_angle_field``) rather
+    than hand-written, so this measures the shipped units."""
+    from lumenairy.elements._lens_real import _screen_obliquity_angle_field, _screen_obliquity_delta
+    surfaces, thick = presc['surfaces'], presc['thicknesses']
+    idx = [(float(get_glass_index(s['glass_before'], LAM)),
+            float(get_glass_index(s['glass_after'], LAM))) for s in surfaces]
+    n_in = idx[0][0]
+    qx, qy = _screen_obliquity_angle_field(
+        la.TiltedCarrier(float('inf'), L, M), None, LAM, 1e-5, 1e-5, 8, 8,
+        n_medium=n_in)
+    x, y = x0.copy(), y0.copy()
+    px, py = np.full_like(x, n_in * L), np.full_like(y, n_in * M)
+    lam_e = n_in * (L * x + M * y)
+    p0x, p0y = np.zeros_like(x), np.zeros_like(y)
+    for i, surf in enumerate(surfaces):
+        n1, n2 = idx[i]
+        sag, dsag = _sag_and_dsag(x ** 2 + y ** 2, surf['radius'])
+        gx, gy = 2.0 * x * dsag, 2.0 * y * dsag
+        opd = (n2 - n1) * sag
+        gox, goy = (n2 - n1) * gx, (n2 - n1) * gy
+        if corrected:
+            d = _screen_obliquity_delta(sag, gx, gy, p0x, p0y, qx, qy,
+                                        n1, n2, np)
+            if corrected == -1:
+                d = -d
+            opd = opd + d
+            fac = np.where(sag == 0.0, 0.0, d / np.where(sag == 0.0, 1.0, sag))
+            gox, goy = gox + fac * gx, goy + fac * gy
+        lam_e = lam_e - opd
+        px, py = px - gox, py - goy
+        p0x, p0y = p0x - (n2 - n1) * gx, p0y - (n2 - n1) * gy
+        if i < len(surfaces) - 1:
+            t = float(thick[i])
+            pz = np.sqrt(np.maximum(n2 ** 2 - px ** 2 - py ** 2, 1e-300))
+            x, y = x + t * px / pz, y + t * py / pz
+            lam_e = lam_e + t * n2 ** 2 / pz
+    return x, y, lam_e, px, py
+
+
+def _immersed_error_waves(presc, r_pupil, L, M, corrected, n=41):
+    t = np.linspace(-1.0, 1.0, n)
+    PX, PY = np.meshgrid(r_pupil * t, r_pupil * t, indexing='ij')
+    keep = (PX ** 2 + PY ** 2) <= r_pupil ** 2
+    x0, y0 = PX[keep], PY[keep]
+    d = []
+    for (l_, m_) in ((L, M), (0.0, 0.0)):
+        xe, ye, le, alive = _exact_eikonal_immersed(presc, x0, y0, l_, m_)
+        xm, ym, lm, pxm, pym = _screen_eikonal_immersed(presc, x0, y0, l_, m_,
+                                                        corrected)
+        assert alive.all()
+        d.append(lm + pxm * (xe - xm) + pym * (ye - ym) - le)
+    g = d[0] - d[1]
+    A = np.stack([np.ones_like(x0), x0, y0], axis=1)
+    c, *_ = np.linalg.lstsq(A, g, rcond=None)
+    return float(np.sqrt(((g - A @ c) ** 2).mean())) / LAM
+
+
+def test_the_carrier_momentum_is_optical_not_a_vacuum_direction_cosine():
+    """UNITS.  ``_screen_obliquity_angle_field`` must return ``n1 * (L, M)``.
+
+    Its consumer ``_facet_axial_momenta`` closes ``pz = sqrt(n1^2 - |p_t|^2)``
+    and rejects ``|p_t| >= n1`` as evanescent, and the companion accumulator
+    ``_obl_p0*`` is already a true optical momentum -- so a bare direction
+    cosine was the only term in the sum that was not one."""
+    from lumenairy.elements._lens_real import _screen_obliquity_angle_field
+    L, M = 0.0549, 0.02
+    for glass in ('air', 'N-BK7', 'N-SF57'):
+        n1 = float(get_glass_index(glass, LAM))
+        q = _screen_obliquity_angle_field(
+            la.TiltedCarrier(float('inf'), L, M), None, LAM, 1e-5, 1e-5, 8, 8,
+            n_medium=n1)
+        assert q[0] == pytest.approx(n1 * L, rel=1e-15)
+        assert q[1] == pytest.approx(n1 * M, rel=1e-15)
+    # the default is the vacuum case, so an air-first prescription is
+    # numerically untouched by this
+    q = _screen_obliquity_angle_field(
+        la.TiltedCarrier(float('inf'), L, M), None, LAM, 1e-5, 1e-5, 8, 8)
+    assert q == (L, M)
+
+
+@pytest.mark.parametrize('first', ['N-BK7', 'N-SF57'])
+def test_correction_beats_the_blind_screen_on_an_IMMERSED_element(first):
+    """COMPARATIVE, against exact rays, on the case the campaign never ran.
+
+    With ``q = L`` (the shipped bug) these gains measured 2.1x and 1.7x -- the
+    correction was doing almost nothing.  With the optical momentum they are
+    two to three ORDERS of magnitude, in line with the 466x the same element
+    gets in air."""
+    presc = _immersed(first=first)
+    blind = _immersed_error_waves(presc, 1.2e-3, 0.0549, 0.0, 0)
+    corr = _immersed_error_waves(presc, 1.2e-3, 0.0549, 0.0, 1)
+    assert corr < blind / 100.0, (
+        f"first medium {first}: corrected {corr:.6f} waves against blind "
+        f"{blind:.6f} is only {blind / corr:.1f}x -- the carrier momentum is "
+        f"not being carried in optical units")
+
+
+def test_the_immersed_gain_holds_across_the_angle_ladder():
+    """The shipped bug degraded WITH angle (2.9x at L=0.01 down to 1.8x at
+    L=0.15) because the missing factor multiplies the angle.  The corrected
+    form must not."""
+    presc = _immersed(first='N-BK7')
+    gains = []
+    for L in (0.01, 0.0549, 0.10, 0.15):
+        blind = _immersed_error_waves(presc, 1.2e-3, L, 0.0, 0)
+        corr = _immersed_error_waves(presc, 1.2e-3, L, 0.0, 1)
+        gains.append(blind / corr)
+    assert min(gains) > 100.0, (
+        f"immersed gain collapses across the angle ladder: "
+        f"{[round(g, 1) for g in gains]}")
+
+
+def test_an_air_first_prescription_is_unchanged_by_the_momentum_fix():
+    """n1 = 1 makes the fix an exact identity, so every shipped air-first call
+    site is numerically untouched.  Pinned by construction: the air index IS
+    1.0, and the correction is a pure product with it."""
+    from lumenairy.elements._lens_real import _screen_obliquity_angle_field
+    N, dx = 256, 25e-6
+    E = _field(N, dx, L=0.03, w=1.2e-3)
+    car = la.TiltedCarrier(float('inf'), 0.03, 0.01)
+    for presc in (_singlet(), _plate(), _singlet(R=-30e-3, glass='N-BK7')):
+        n1 = float(get_glass_index(presc['surfaces'][0]['glass_before'], LAM))
+        assert n1 == 1.0
+        with_n = _screen_obliquity_angle_field(
+            car, None, LAM, dx, dx, 8, 8, n_medium=n1)
+        without = _screen_obliquity_angle_field(car, None, LAM, dx, dx, 8, 8)
+        assert with_n == without
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            got = apply_real_lens(E, prescription=presc, wavelength=LAM,
+                                  dx=dx, carrier=car)
+        assert np.all(np.isfinite(got))
+
+
+def test_an_immersed_element_actually_moves_when_the_carrier_is_given():
+    """End to end through ``apply_real_lens``: the immersed prescription runs,
+    the carrier changes the answer, and the field stays finite."""
+    N, dx = 256, 20e-6
+    presc = _immersed(first='N-BK7')
+    E = np.ones((N, N), dtype=np.complex128)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        base = apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx)
+        got = apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
+                              carrier=la.TiltedCarrier(float('inf'), 0.0549,
+                                                       0.0))
+    assert np.all(np.isfinite(got))
+    assert not np.array_equal(base.view(np.uint8), got.view(np.uint8))
