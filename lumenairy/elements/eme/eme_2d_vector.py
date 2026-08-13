@@ -468,6 +468,62 @@ _NULL_KMAX = 6      # max null-space dimension the rank-drop test scans for (a
 _DETECT_PPU = 8     # detection points per unit of the dimensionless (qz Ly)^2
 _DETECT_MAX = 200_000   # hard cap on the detection grid (a pathological window)
 
+# --------------------------------------------------------------------------- #
+#  CENSUS DETERMINACY (2026-08-12).  The accepted mode set must not depend on
+#  the LAPACK build.  Two mechanisms made it depend on it, both localised in
+#  ``_refine_accept``; the treatment is gated on an AMBIGUITY BAND so that the
+#  overwhelming majority of candidates -- decided by decades, not by round-off --
+#  take the unchanged path and the returned census stays BYTE-IDENTICAL.
+#
+#  (1) BOUNDED BRENT ON A NON-UNIMODAL FUNCTION.  ``sigma_min(qz^2)`` is a
+#      min-of-many-smooth-branches, so inside ONE detection cell it carries
+#      ~1e-3-amplitude wiggles at ~2e-3 spacing (measured on the reference
+#      Nx=16 cell: 31 local minima in the single cell [205.875, 206.125]).
+#      ``minimize_scalar(method="bounded")`` is a LOCAL minimiser whose
+#      x-tolerance is floored at ``sqrt(eps)|x| + xatol/3`` (~3.5e-6 at
+#      |qz^2| ~ 236, so ``xatol=1e-7`` buys nothing), and WHICH wiggle it stops
+#      on is decided in the last bits.  Measured on the reference grating: the
+#      genuine mode 205.9749757788 (converged ``sigma_min`` 4.8e-15) is reported
+#      at 205.9786352762 on Windows/py3.14 and at 205.9704915030 on WSL/py3.12 --
+#      3.7e-3 and 4.5e-3 AWAY -- both reading ``gaps.min`` just OVER the bar, so
+#      both mounts DROP a real mode that the ubuntu runners keep.
+#  (2) THE SQRT SINGULARITY AT A STRIP BAND EDGE.  At ``ky_i -> 0`` in any strip
+#      the forward/backward column pair of ``G`` becomes anti-parallel (see
+#      ``_pair_singularity_bound``), so ``sigma_min ~ C sqrt|qz^2 - q_edge|``
+#      -- a genuine zero of ``sigma_min`` with NO mode behind it.  A minimiser
+#      that stops ``dq`` short reads ``C sqrt(dq)``, floored near 4e-4 by (1);
+#      the resulting rank-drop lands 1.09x-3.3x from ``ratio_tol`` and flips
+#      with the build (the ubuntu runners ACCEPT 235.8686333 on the W6 cell;
+#      both our mounts reject it).
+#
+#  Treatment, in the order applied:
+#    * the STRUCTURAL test (physics, not round-off, and free -- the bound falls
+#      out of the ``G`` already built) rejects a band-edge candidate on every
+#      build: ``sigma_min`` SATURATES its own structural bound there;
+#    * a candidate still inside the ambiguity band is POLISHED to a converged
+#      zero and re-read there, so acceptance is decided on the physics of the
+#      zero rather than on where the minimiser happened to halt.
+_CENSUS_BAND = (1e-2, 3e1)   # x ``ratio_tol``: the AMBIGUITY BAND on gaps.min.
+#   Measured on the two reference cells (Nx=8 W6 base + scaled, Nx=16 grating),
+#   in units of ``ratio_tol``: unambiguous ACCEPTS <= 7.5e-4 (13x under the lower
+#   edge), the ambiguous candidates 1.09x .. 5.3x, the next unambiguous REJECT
+#   68.9x (2.3x over the upper edge).  Everything outside the band keeps the
+#   pre-fix code path exactly.
+_STRUCTURAL_SAT = 1e-2       # ``sigma_min >= _STRUCTURAL_SAT * bound`` -> the
+#   rank drop is the band-edge column coalescence, not a mode.  Measured
+#   ``sigma_min / bound``: strip band edges 2.10e-1 .. 6.61e-1 (>= 21x OVER the
+#   bar, at the minimiser's stop AND at the converged edge AND on a restaged
+#   8-strip staircase -- the ratio is scale- and geometry-free), genuine modes
+#   3.4e-14 .. 1.52e-4 (>= 66x UNDER it).
+_POLISH_SUBGRID = 33         # localisation samples across the detection cell (a
+#   16x refinement of the detection grid) -- enough that the argmin lands in the
+#   true zero's basin rather than on a neighbouring wiggle.
+_POLISH_XTOL_REL = 1e-12     # converged-zero bracket width, RELATIVE to |qz^2|:
+#   a tolerance read off the argument's own scale (not an absolute constant), so
+#   the same physical cell converges identically in any length unit.
+_POLISH_MAXIT = 80           # ceiling on the contraction levels (the tolerance,
+#   not this, terminates: 1e-12 relative needs ~28 levels from a 33-point cell)
+
 
 def _detect_grid_size(lo, hi, Ly, n_scan):
     """Number of ``sigma_min`` detection samples for the window ``[lo, hi]``.
@@ -487,6 +543,42 @@ def _detect_grid_size(lo, hi, Ly, n_scan):
             f"it in sub-windows) for full recall.", stacklevel=3)
         dscan = _DETECT_MAX
     return dscan
+
+
+def _polish_zero(f, lo_b, hi_b):
+    """Converge the dip of ``f = sigma_min`` inside ``[lo_b, hi_b]`` to a
+    BUILD-INDEPENDENT location, and return it.
+
+    Two stages, neither of which reads round-off:
+
+    1. **Localise** on a uniform ``_POLISH_SUBGRID`` sub-grid of the SAME
+       detection cell.  The cell is not unimodal (a min-of-branches carries
+       ~1e-3 wiggles), so the deepest sub-grid sample -- not the first descent a
+       local minimiser falls into -- selects the basin.
+    2. **Contract** a 5-point nested bracket (2 new samples per level, the
+       bracket halves) until its width is ``_POLISH_XTOL_REL * max(|x|, 1)``.
+       Termination is on the ARGUMENT's own scale, so it is reached at the same
+       level on every build; the returned point is the bracket centre.
+
+    Deterministic and derivative-free, so it converges the SQRT band-edge cusp
+    (where a parabolic-interpolation minimiser stalls at ``sqrt(eps)|x|``) and a
+    simple V alike: measured 87 evaluations to ``|x - x*| ~ 2e-11`` on both, and
+    identical to 12 digits from a 17-, 33- or 65-point sub-grid."""
+    xs = np.linspace(lo_b, hi_b, _POLISH_SUBGRID)
+    vs = [f(x) for x in xs]
+    i = min(max(int(np.argmin(vs)), 1), _POLISH_SUBGRID - 2)
+    xl, xm, xr = xs[i - 1], xs[i], xs[i + 1]
+    fl, fm, fr = vs[i - 1], vs[i], vs[i + 1]
+    for _ in range(_POLISH_MAXIT):
+        if (xr - xl) <= _POLISH_XTOL_REL * max(abs(xm), 1.0):
+            break
+        xp, xq = 0.5 * (xl + xm), 0.5 * (xm + xr)
+        five_x = (xl, xp, xm, xq, xr)
+        five_f = (fl, f(xp), fm, f(xq), fr)
+        j = min(max(int(np.argmin(five_f)), 1), 3)
+        xl, xm, xr = five_x[j - 1], five_x[j], five_x[j + 1]
+        fl, fm, fr = five_f[j - 1], five_f[j], five_f[j + 1]
+    return xm
 
 
 def _sigma_min_invpow(Geq, iters=60, tol=1e-14):
@@ -549,9 +641,51 @@ def _equilibrated_G(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly):
 def _block_singvals(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly):
     """All singular values (descending) of the equilibrated global block
     ``G(qz^2)``.  ``[-1]`` is ``sigma_min``; a clean rank drop ``s_k << s_{k+1}``
-    among the smallest values marks a k-fold-degenerate mode."""
-    Geq, _cn, _wvk = _equilibrated_G(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly)
-    return svdvals(Geq)
+    among the smallest values marks a k-fold-degenerate mode.  The singular-value
+    view of :func:`_mode_reading`, which the mode-finder uses because it needs
+    the rank-drop and structural readings off the SAME ``G`` build."""
+    return _mode_reading(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly)[0]
+
+
+def _pair_singularity_bound(Geq, wvk):
+    """RIGOROUS upper bound on ``sigma_min(Geq)`` from the FORWARD/BACKWARD column
+    pair that a strip BAND EDGE makes parallel -- the structural (mode-free)
+    singularity of ``G``.
+
+    ``G``'s columns come in per-strip ``(a_{s,i}, b_{s,i})`` pairs carrying the
+    same strip mode ``i`` with propagators ``exp(+i ky h)`` / ``exp(-i ky h)`` and
+    H-parts ``+V`` / ``-V``.  ``V = (C U)/(i ky)`` DIVERGES as ``ky -> 0``, so
+    after the column equilibration the H-part dominates both columns and they
+    become ANTI-PARALLEL: ``G`` is singular at every strip band edge whether or
+    not a layer mode lives there.  With ``a_hat``, ``b_hat`` the (unit-norm,
+    already equilibrated) pair and ``c = |<a_hat, b_hat>|``, the unit coefficient
+    vector ``z = (e_a - e^{i arg} e_b)/sqrt(2)`` gives
+    ``sigma_min <= ||G z|| = sqrt(1 - c)`` -- returned here as ``bound``.
+
+    A candidate whose ``sigma_min`` SATURATES this bound is explained by the
+    basis, not by Maxwell; a genuine mode sits many decades below it (measured
+    two-sided in :func:`layer_vector_modes`).  Cost is ``O(n M S)``, negligible
+    beside the ``O(n^3)`` SVD that produced ``sigma_min``."""
+    S = len(wvk)
+    M = wvk[0][1].shape[0]                        # 2Nx block size
+    cmax = 0.0
+    for r in range(S):
+        A = Geq[:, 2 * M * r:2 * M * r + M]        # a_r columns (forward)
+        B = Geq[:, 2 * M * r + M:2 * M * (r + 1)]  # b_r columns (backward)
+        cmax = max(cmax, float(np.max(np.abs(np.sum(A.conj() * B, axis=0)))))
+    return float(np.sqrt(max(0.0, 1.0 - min(cmax, 1.0))))
+
+
+def _mode_reading(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly):
+    """``(sigma_min, gaps, bound)`` at one candidate ``qz2`` from a SINGLE ``G``
+    build: the singular values (identical to :func:`_block_singvals`), the
+    rank-drop gap ratios, and the structural bound of
+    :func:`_pair_singularity_bound`."""
+    Geq, _cn, wvk = _equilibrated_G(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly)
+    s = svdvals(Geq)
+    sa = s[::-1]                                  # ascending
+    gaps = sa[:_NULL_KMAX] / sa[1:_NULL_KMAX + 1]
+    return s, gaps, _pair_singularity_bound(Geq, wvk)
 
 
 _SOLVERS = ("dense", "banded")
@@ -657,6 +791,24 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     ``< ratio_tol``; deduped within ``merge_rtol``.  (``n_scan`` is retained for
     API compatibility and as a floor on the detection density.)
 
+    CENSUS DETERMINACY (2026-08-12).  The accepted set is BUILD-INDEPENDENT.
+    Bounded Brent is a local minimiser on a function that is not unimodal at the
+    detection-cell scale, so where it halts -- and therefore the acceptance
+    reading of a near-threshold candidate -- used to be decided in the last bits
+    of the LAPACK reduction.  A candidate whose rank-drop lands inside
+    ``_CENSUS_BAND`` (a factor-band around ``ratio_tol``; everything outside it
+    is decided by decades and takes the unchanged path, byte for byte) is
+    adjudicated instead by (a) the STRUCTURAL test -- ``sigma_min`` saturating
+    ``_pair_singularity_bound`` means the rank drop is the strip BAND EDGE where
+    ``G``'s forward/backward column pair goes anti-parallel, not a mode -- and
+    (b) a POLISH of the zero to ``_POLISH_XTOL_REL`` of ``|qz^2|``, with
+    acceptance re-read there.  Consequences on the reference cells: the genuine
+    mode 205.9749757788 that bounded Brent reported 3.7e-3 (Windows) / 4.5e-3
+    (WSL) away, and therefore DROPPED, is now found on every build to ~2e-11;
+    the band-edge cusps 235.8686333 / 233.4775302 / 180.7703378 / 169.1623919 /
+    133.7501554, which some builds ACCEPT as modes, are refused on every build
+    -- the verdict ``verify=True`` already reached independently.
+
     ``return_multiplicity`` : also return the per-mode degeneracy ``k`` (the
     rank-drop location -- 1 non-degenerate, 2 a TE/TM pair, ...).
     ``verify`` : drop any accepted candidate with no 2-D-FD oracle eigenvalue
@@ -708,24 +860,50 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
         BOUNDED Brent (not a 3-point bracket): ``find_peaks`` can return a dip on
         a ``sigma_min`` plateau where the bracketed-Brent precondition
         ``f(mid) < f(ends)`` fails and raises -- a bounded solve on the same
-        interval finds the interior minimum without that requirement."""
+        interval finds the interior minimum without that requirement.
+
+        Brent's answer is kept VERBATIM unless the acceptance reading lands in
+        the ``_CENSUS_BAND`` ambiguity band, where the decision would be made by
+        round-off rather than by physics; see the ``_CENSUS_BAND`` block."""
         r = minimize_scalar(f, bounds=(lo_b, hi_b), method="bounded",
                             options={"xatol": 1e-7})
+        x = r.x
         try:
-            s = _block_singvals(strips, Lx, Nx, k0, kx0, r.x, ky0, Ly)
+            s, gaps, bound = _mode_reading(strips, Lx, Nx, k0, kx0, x, ky0, Ly)
         except np.linalg.LinAlgError:
             return                                    # band edge / overflow (W6)
         # clean rank-drop test, degeneracy-agnostic: a genuine k-fold mode has a
         # sharp GAP s_k << s_{k+1} somewhere in the smallest few singular values
         # (k=1 non-degenerate; k=2 TE/TM pair; k=4 a uniform layer's +-ky x 2-pol;
         # ...), while a spurious dip decays SMOOTHLY (no gap).
-        sa = s[::-1]                                  # ascending
-        gaps = sa[:_NULL_KMAX] / sa[1:_NULL_KMAX + 1]
+        if (_CENSUS_BAND[0] * ratio_tol <= float(gaps.min())
+                <= _CENSUS_BAND[1] * ratio_tol):
+            # AMBIGUOUS: this reading is within a small factor of the bar, i.e.
+            # the accept/reject is decided by where the minimiser halted rather
+            # than by the physics of the zero.  Adjudicate deterministically.
+            if s[-1] >= _STRUCTURAL_SAT * bound:
+                return                                # strip band edge (below)
+            x = _polish_zero(f, lo_b, hi_b)           # converged zero
+            try:
+                s, gaps, bound = _mode_reading(strips, Lx, Nx, k0, kx0, x, ky0,
+                                               Ly)
+            except np.linalg.LinAlgError:
+                return
         if s[-1] < tol and float(gaps.min()) < ratio_tol:
+            # STRUCTURAL rank drop, not a mode: at a strip band edge the
+            # forward/backward column pair of G is anti-parallel, so sigma_min
+            # SATURATES ``_pair_singularity_bound`` for a reason that has nothing
+            # to do with Maxwell.  The library already refuses to evaluate
+            # exactly there (``strip_vector_modes`` raises); this refuses to
+            # report the sqrt cusp beside it, on every build.  ``verify=True``
+            # reaches the same verdict independently -- the FD oracle finds no
+            # eigenvalue within 7.0 .. 27.5 of any such candidate.
+            if s[-1] >= _STRUCTURAL_SAT * bound:
+                return
             if verify and _fd_eig_dist(
-                    strips, Lx, Nx, Ly, k0, kx0, ky0, r.x, vny) > verify_tol:
+                    strips, Lx, Nx, Ly, k0, kx0, ky0, x, vny) > verify_tol:
                 return                                # no FD mode nearby -> spurious
-            found.append((r.x, int(np.argmin(gaps)) + 1))
+            found.append((x, int(np.argmin(gaps)) + 1))
 
     # Backend-invariant candidate detection.  The old strict 3-point grid
     # local-minimum test (d[i]<d[i-1] and d[i]<d[i+1] and d[i]<tol) flakily missed
