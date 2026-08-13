@@ -176,6 +176,23 @@ _GUARD_EXEMPTIONS = frozenset({
     ('lumenairy/propagators/carrier.py',
      'propagate_traced_carrier_chain_multi'),
 
+    # ---- propagators/carrier_field.py --------------------------------------
+    # ``re_reference``'s first positional parameter is NAMED ``field`` --
+    # which is what puts it in the V6 walker's scope -- but it is typed
+    # :class:`CarrierField`: a dataclass of (envelope, grid, carrier,
+    # wavelength, provenance), not a 2-D scalar ndarray.  Routing it
+    # through ``_check_2d_scalar_field`` would reject the only valid input
+    # type, i.e. it would invert the invariant -- the same reason
+    # ``propagate_ensemble`` and ``propagate_traced_carrier_chain_multi``
+    # above are exempt.  The 2-D scalar contract is not lost, it is
+    # enforced one level in and EARLIER: ``CarrierField.__post_init__``
+    # raises on ``envelope.ndim != 2``, casts a real envelope to complex,
+    # and checks the envelope shape against the grid's -- before any verb
+    # can run, and on every CarrierField however it was built.  Symmetric
+    # to ``_normalise_congruence`` guarding each member field of the
+    # K-congruence orchestrator.
+    ('lumenairy/propagators/carrier_field.py', 're_reference'),
+
     # ---- propagators/propagation.py ----------------------------------------
     # ``apply_fresnel_curvature`` takes a 2-D field but is a phase
     # multiplication helper (not a propagator); it is not in the

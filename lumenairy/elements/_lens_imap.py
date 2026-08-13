@@ -724,6 +724,28 @@ _IMAP_LOCK = threading.Lock()
 _IMAP_INCUMBENT_PROBE_TARGET = 256
 
 
+#: The exception classes the incumbent probe HASHES instead of raising.
+#:
+#: NARROWED, not broad (``AUDIT_V4_12_1_2026_05_16.md`` L5: NARROW >
+#: WARN-BEFORE-PASS > RE-RAISE > KEEP-AS-IS).  ``parity_invert`` is this
+#: element's own Newton over its own forward fits, so the only ways it can
+#: legitimately refuse a strided probe point are numeric-evaluation failures
+#: of those fits: ``scipy``'s ``RectBivariateSpline.ev`` raises ``ValueError``
+#: off its knot rectangle, the Chebyshev evaluator raises ``ValueError`` /
+#: ``TypeError`` on a shape or dtype it cannot take, and an ``ArithmeticError``
+#: (``FloatingPointError`` under ``np.seterr('raise')``, ``ZeroDivisionError``)
+#: is the same class of refusal.  ``np.linalg.LinAlgError`` is a ``ValueError``
+#: subclass and is covered.
+#:
+#: Everything else -- ``AttributeError``, ``NameError``, ``KeyError``,
+#: ``MemoryError``, ``KeyboardInterrupt`` -- is a DEFECT, not an incumbent
+#: identity, and must propagate.  It costs nothing to let it: the shipped G8
+#: arm calls ``parity_invert`` unguarded a few hundred lines below, so a bug
+#: swallowed here surfaces there anyway, with a worse traceback and after the
+#: cache has already been keyed on ``<raised:...>``.
+_INCUMBENT_PROBE_ERRORS = (ValueError, TypeError, ArithmeticError)
+
+
 def _incumbent_fingerprint(parity_invert, x_out_grid, y_out_grid):
     """A CONTENT hash of the incumbent inversion, for the cache key.
 
@@ -781,9 +803,12 @@ def _incumbent_fingerprint(parity_invert, x_out_grid, y_out_grid):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', RuntimeWarning)
             out = parity_invert(PX, PY)
-    except Exception as exc:                              # pragma: no cover
-        # An incumbent that RAISES is also a distinct incumbent, and a
-        # hashing probe must never be the thing that breaks a build.
+    except _INCUMBENT_PROBE_ERRORS as exc:
+        # An incumbent that REFUSES these points is also a distinct
+        # incumbent, so the refusal is hashed rather than raised -- but only
+        # for the numeric-evaluation classes named above.  Anything else is a
+        # defect and propagates: the SHIPPED G8 arm calls ``parity_invert``
+        # bare, so swallowing a real bug here would only move the traceback.
         return ('<raised:%s>' % type(exc).__name__).encode('ascii', 'replace')
     h = hashlib.sha256()
     h.update(b'incumbent-probe-v2')

@@ -658,13 +658,27 @@ def test_the_incumbent_fingerprint_is_by_evaluation_not_by_parameter_name():
     c = IM._incumbent_fingerprint(inc(1.0 + 1e-12), XO, YO)
     assert a == b, 'the fingerprint is not deterministic'
     assert a != c, 'a changed incumbent produced the same fingerprint'
-    # no incumbent, and a raising one, are DISTINCT states, not crashes
+    # no incumbent, and one that REFUSES these points, are DISTINCT states,
+    # not crashes.  ``ValueError`` is the refusal scipy's
+    # ``RectBivariateSpline.ev`` raises off its knot rectangle, i.e. the real
+    # way an incumbent declines a strided probe point.
     assert IM._incumbent_fingerprint(None, XO, YO) not in (a, c)
 
     def boom(xq, yq):
-        raise RuntimeError('no')
+        raise ValueError('outside the knot rectangle')
 
     assert IM._incumbent_fingerprint(boom, XO, YO) not in (a, c)
+
+    # ... and the probe is NARROW (AUDIT_V4_12_1 L5): a DEFECT is not an
+    # incumbent identity and must not be hashed into the cache key as one.
+    # It costs nothing to let it out -- the shipped G8 arm calls
+    # ``parity_invert`` unguarded, so a swallowed bug surfaces there anyway,
+    # after the cache has been keyed on ``<raised:...>``.
+    def bug(xq, yq):
+        raise AttributeError("'NoneType' object has no attribute 'ev'")
+
+    with pytest.raises(AttributeError):
+        IM._incumbent_fingerprint(bug, XO, YO)
 
     # and it reaches the key
     args = [np.linspace(-1e-3, 1e-3, 9)] + [np.zeros((9, 9))] * 4 + [None]
