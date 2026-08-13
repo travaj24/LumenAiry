@@ -121,6 +121,76 @@ rungs; the fail-before asks for 96 -- what such a regression would deliver --
 through the public parameter, nothing monkeypatched, and the arm-equality
 claim fires.
 
+### S3.1  Second adjudication -- the SEPARATION arm was still a runner bar
+
+The restructure above was half right.  Arm equality is exact and portable and
+has never moved.  The SEPARATION arm it added -- "the hatch is not the adaptive
+default", `rel > 1e-2` -- went red on three tip jobs (JAX py3.12, unit 3.12
+sh3, 3.13 sh3) at **5.0593e-03**, against 2.9e-2 on both mounts.  A 2.9x
+headroom is not headroom when the quantity itself is a residue.
+
+**Adjudicated: the runner is right again, and for the same reason.**  `sep` is
+the DIFFERENCE OF TWO GRID-ALIASING ERRORS -- one at `n = 64` and one at
+whatever the adaptive default resolved to (256 at R1 = 51.5) -- and at that
+design both arms sit inside the same 3-5 % band around the converged answer.
+The whole ladder there lives in a 5 % window, and the separation is not even
+monotone in `n` [M]:
+
+```text
+R1 = 51.5 mm,  merit = |L(2,0)|^2,  hatch n = 64 -> 9.0968975230e-14
+  n      merit                sep vs 64
+  96     6.6285144129e-14     2.713e-01
+  128    7.7172008847e-14     1.517e-01
+  192    8.6607999749e-14     4.794e-02
+  256    8.8340708759e-14     2.889e-02   <- the adaptive default
+  384    8.8999736339e-14     2.165e-02
+  512    8.7563383293e-14     3.744e-02
+```
+
+A residue of two numbers each entitled to move a couple of percent cannot
+carry a 1 % bar, and pinning it is the disease the branch exists to treat.
+(R1 = 60 was never at risk -- its `n = 64` is 28 % out, so its separation reads
+2.785e-01 -- but the loop scores both designs and the bar has to be right on
+the worse one.)
+
+**The axis is the BUILD, not the reduction width**, so nothing local
+reproduces the runner's 5.06e-3 and the fix must not need it to.  Bit-identical
+at every width [M, `threadpool_limits`]:
+
+```text
+threads      R1 = 51.5, n_def 256                    R1 = 60.0, n_def 192
+1 / 2 / 4 /  merit64 9.0968975230e-14  sep 2.889190e-02   sep 2.784777e-01
+8 / default  (identical to the last digit at every width)
+```
+
+**Re-stated on the two things the bar was really guarding**, each where it is
+exact:
+
+* the default is still **ADAPTIVE** -- asserted on the RESOLVED `n` the
+  shipped result object reports, as an INTEGER: 256 at R1 = 51.5, 192 at
+  R1 = 60.  That is `ceil(4*extent*v_max/lam)` rounded onto the cost ladder,
+  deterministic integer arithmetic, and the two designs clear their rungs by
+  193..256 and 129..192, so no LAPACK build has ever moved one (the sibling
+  `test_w4_t1_default_sigma_grid_n_is_adaptive_and_on_the_ladder` pins the
+  same integers and has never failed on a runner);
+* `sigma_grid_n` is still **LOAD-BEARING** -- two DIFFERENT resolved grids
+  must give two different answers, at a ROUND-OFF bar of `1e-6` rather than an
+  accuracy one.  This is the arm that stops claim (1) from passing on an
+  identity that costs nothing, and it is portable because a default that has
+  gone flat makes the two arms the SAME CALL: the reading is then EXACTLY 0.0,
+  on every build.  1e-6 sits 3.7 decades below the worst live reading
+  (5.06e-3, ubuntu py3.12) and 10 decades above float64 round-off.
+
+**Second fail-before**
+(`test_w4_t1_escape_hatch_scope_guard_catches_a_default_that_went_flat`): the
+first fail-before drives defect (b), the hatch; this one drives defect (a), the
+default, which the separation bar had been carrying silently.  The injection is
+the pre-W4-T1 default written the only way the library still offers it --
+`sigma_grid_n_max=64` through the public parameter -- and the resolved-`n` arm
+raises on it.  The test then measures the load-bearing arm on the same
+injection directly and asserts it is `0.0` exactly, so the round-off bar is
+never asked to separate two things that are merely close.
+
 ---
 
 ## S4.  Pin 2 -- an eigenvalue ORDER was being pinned as a partition
@@ -178,6 +248,90 @@ break the element-wise claim and leave the invariants at the same number; a
 mode nudged 3e-9 of the spectrum scale across the classifier's own 1e-9 cut --
 a real side flip, and 33x inside the same-eigenproblem precondition -- must
 break the restructured claim.
+
+### S4.1  Second adjudication -- the fail-before's own PRECONDITION
+
+The restructured SHIPPED claim was green everywhere.  Its FAIL-BEFORE was not:
+the JAX py3.12 job read
+
+```text
+only 78 of 80 draws have the two eig backends in raw-order correspondence
+```
+
+against its `assert corr == total`.  That precondition is the branch's own
+disease one layer up -- a claim about RAW EIGEN ORDER across two LAPACK builds,
+asserted as if it were a fact -- and it is exactly what S4 above says is not
+portable, written into the test that proves S4.
+
+**Adjudicated, and it is NOT a degeneracy artefact.**  The obvious excuse
+would be that the two runner draws have (near-)degenerate spectra where an
+order is genuinely undefined.  They do not: over the 80-draw family the
+SMALLEST pairwise eigenvalue separation is `8.556e-03` of the spectrum scale,
+and there is no draw below `1e-3`.  Those two draws are two well-separated
+spectra that a different LAPACK simply deflated in a different sequence, which
+is its right -- `zgeev` promises a set, not an order.
+
+**Not reproducible locally, and that is the finding.**  Every width, both
+mounts:
+
+```text
+mount / width                       corr    worst raw-order gap   min pair sep
+Windows py3.14, threadpool 1/2/4/8  80/80   0.0                   8.556e-03
+WSL py3.12, OPENBLAS 1 / 2 / dflt   80/80   0.0                   8.556e-03
+Windows py3.14, 400 draws           400/400 0.0                   8.556e-03
+ubuntu py3.12 (CI)                  78/80   --                    --
+```
+
+So the fix is DERIVED rather than tuned, and the runner's condition is
+EMULATED rather than waited for.
+
+**Re-stated in three moves.**
+
+* the fail-before SELECTS the correspondence class and drives injector (a) on
+  it, and the verbatim re-run of the original claim is restricted to the same
+  class -- without that restriction a runner at 78 of 80 would make the
+  `pytest.raises` pass with the injector having done nothing, i.e. the
+  fail-before would be vacuous in exactly the condition it exists for;
+* the NON-VACUITY floor is the injector's own REACH, not a count.
+  `_o7_reorder_reach` measures, on the SAME backend both sides (a pure gauge
+  experiment, no LAPACK comparison in it), the draws where `[1,0,3,2]`
+  actually changes the twin's modal columns -- a `[f,b,f,b]` raw order is
+  invariant under that swap once the stable flag-argsort has run, so the reach
+  is structural.  Measured 75 of 80 on both mounts, and the assertion is the
+  IDENTITY `disturbed == |class n reach|`, which fires both ways: a shortfall
+  means the element-wise comparison has stopped seeing column order, an excess
+  means it is seeing something a pure column swap should not have moved;
+* the shipped claim gains the floor it never had: `corr > 0`.  With `corr`
+  zero the element-wise half would have passed by measuring nothing.
+
+**The runner is emulated exactly.**  `_o7_score` grew a `reorder` parameter
+that hands the twin named DRAW INDICES in a permuted raw order (indexed by
+draw, not by matrix bytes, so nothing depends on the twin's `Delta` assembly
+being bit-identical to `_berreman_delta`'s).  Two of eighty reproduces the CI
+reading to the digit, and the SHIPPED restructured claim is asserted green on
+it -- which is the adjudication of the 78-of-80 in one assertion instead of a
+paragraph:
+
+```text
+arm                          corr    invariant     elementwise over the class
+shipped                      80/80   2.850e-15     1.158e-14
+partial reorder, 2 of 80     78/80   2.850e-15     1.158e-14
+full reorder                  0/80   2.850e-15     1.493e+00   (75 disturbed)
+side flip (real defect)       0/80   1.999e+00     --
+```
+
+Driving the SAME two-draw injector through the BRANCH-TIP helper reproduces
+the runner exactly and shows where the fault was: the tip's SHIPPED claim
+reads `inv 2.850e-15 / elem 1.158e-14` and is green, and the tip's
+`assert corr == total` raises with the runner's own sentence, "only 78 of 80
+draws have the two eig backends in raw-order correspondence".  The
+restructured claim was never what failed; its precondition was.
+
+The reorder injector's two draws are taken FROM the build's own
+correspondence class and the count is scored against that class
+(`base_corr - 2`), not against 80 -- writing it as `total - 2` would have been
+this fail-before's original mistake in miniature, since on the runner being
+emulated the class does not start full.
 
 ---
 
@@ -253,6 +407,101 @@ so (a) is not passing on an armed ladder.
 Helper teeth, checked directly: driving `_uncured_below_threshold` with an
 ABOVE-threshold `min_feature` (3.0 nm) raises on the geometry premise, and the
 armed branch returns spread 1.3384.
+
+### S5.1  Second adjudication -- the injector's SCALE was frozen too
+
+The reconditioned half was green everywhere.  Its FAIL-BEFORE was red on four
+jobs (unit 3.10 sh1, 3.11 sh2, 3.12 sh2, 3.13 sh2), on the one number it had
+frozen: the near-cut injector at **x3** did not DISARM the cell there.  It left
+`[0,0,0,1,1]` on py3.11 / 3.12 / 3.13 and `[0,0,0,0,1]` on py3.10.
+
+The test's own message already named the treatment -- "Raise the scale rather
+than deleting it: the condition is a CUT POSITION and every build has one" --
+so this is that, done properly.
+
+**Reproduced locally, which the campaign had not managed before.**  x3 is not
+a property of the mount, it is a property of the mount AT A GIVEN REDUCTION
+WIDTH, and the width the earlier table never drove is where it breaks
+[WSL py3.12, `OPENBLAS_NUM_THREADS=4`, uncoated ns = 6 / 1.5 nm, degrees
+8..16, repair off]:
+
+```text
+cut      raw census      spread     n_prop            vs the SHIPPED (repair-on) ladder
+x1       [0,0,1,2,1]     1.93102    28,29,30,30,31    4.5471e+00
+x3       [0,0,0,1,0]     2.13121    28,28,28,29,28    3.7181e+00   <- the CI condition
+x10      [0,0,0,0,0]     0.0040554  28,28,28,28,28    0.0  (BIT-IDENTICAL)
+x1e2     [0,0,0,0,0]     0.0040554  28,28,28,28,28    0.0
+x1e3     [0,0,0,0,0]     0.0040554  28,28,28,28,28    0.0
+x1e4     [0,0,0,0,0]     0.0040554  28,28,28,28,28    0.0
+x1e6     [0,0,0,0,0]     0.0040554  28,28,28,28,28    0.0
+x1e9     [0,0,0,0,0]     0.0040554   0, 0, 0, 0, 0    7.6961e-09   <- past the ceiling
+```
+
+Note the x1 spread there is 1.93102 and not 1.33841: the raw census AND the
+scattered value both move with the reduction width, which is the axis, stated
+again without an injector.
+
+**Re-stated with the scale READ OFF THE INSTRUMENT** (`_first_disarming_scale`,
+`_DISARM_SCALES = (1.0, 3.0) + (W, W^2, W^3, W^4)` with
+`W = _core._MODE_CUT_MARGIN_WARN = 1.0e1`).  The disarming scale is not
+guessed and not tuned: `_mode_cut_growth` counts a mode as growing only while
+it is `prop` AND **within `W` of the cut**, so multiplying the cut by `W`
+provably clears every mode the census is currently reporting.  `W` is on the
+ladder by construction and the test asserts that it is, so the derivation
+moves if the library's constant does.  The walk exists for two reasons and
+neither is a search for a number: to pay the CHEAPEST sufficient rung first
+(x3 composes back to exactly the shipped cut through the reconditioned
+helper's own downward probe, so verifying there costs nothing -- that is where
+this fail-before's 2x speed-up over the frozen-x3 version comes from), and to
+catch the one case the derivation does not cover, a mode further out than `W`
+being pulled INTO the warn window by the raised cut.  The remaining rungs are
+one per such generation.
+
+The ceiling is derived twice and the two derivations MEET:
+
+* `W^4 = 1e4 = 1 / min(_INJECTOR_SCALES)`.  `_uncured_below_threshold` probes
+  BACK DOWN through `_INJECTOR_SCALES` to show the collision is still
+  reachable, and the two injectors compose multiplicatively, so a disarming
+  scale above 1e4 would put the shipped cut outside the probe's own reach.
+  Asserted in the helper, not commented;
+* `1e9 = 1 / 1e-9`, from `_mass_flux_threshold`'s own
+  `max(1e-9 max|flux|, round-off floor)`: at that scale the cut sits AT the
+  strongest mode's flux and NOTHING is propagating.  The table above confirms
+  the derivation exactly -- `n_prop` goes to 0 at x1e9 and nowhere below it.
+
+**And the ceiling has TEETH, because the spread cannot see an over-escalation**
+(x1e9 still reads 0.0040554 to six figures).  The oracle is the SHIPPED
+answer: the disarmed PRE-repair ladder must equal, BIT FOR BIT, the ladder the
+library returns with the forward-growth repair ON.  That is S5's adjudication
+turned into an assertion -- the runner's build never made the growing mode the
+repair exists to redirect, so its pre-repair answer IS the shipped answer --
+and it separates 0.0 from the 7.70e-09 an over-escalation produces.
+
+**And the search itself is falsifiable where it runs green.**  Both mounts are
+ARMED at the shipped cut, so the walk must escalate off its first rung, and
+the rung it leaves must be the SCATTERING one (`sum(raw) > 0` and
+`spread > 0.1`).  A build already in the runner's condition stops at x1 and
+that claim is skipped with it, which is correct: there is nothing to escalate
+away from there.
+
+```text
+mount / width                    walk                          disarmed at
+Windows py3.14 default / 1 thr   x1 [0,0,1,2,3] / [0,0,1,1,1]  x3
+WSL py3.12 OPENBLAS 1 / default  x1 [0,0,1,1,1] / [0,0,1,2,3]  x3
+WSL py3.12 OPENBLAS 2 and 4      x1 [0,0,1,2,1], x3 [0,0,0,1,0]  x10
+```
+
+**A latent cache defect, found and fixed on the way** (`near_cut_injector`).
+`scaled` wraps whatever `_mass_flux_threshold` already is, so nested injectors
+put the cut at the PRODUCT of their scales -- but `_CUT_SCALE`, which is part
+of `_LADDER_CACHE`'s key, was being SET to the inner scale rather than
+composed with the outer one.  That nesting is not hypothetical: the NOT-CURED
+fail-before's upward injector wraps `_uncured_below_threshold`'s downward
+probe.  On a build where the sibling `test_threshold_rule_holds_on_a_SINGLE_
+REGION_uncoated_taper` also reaches that probe branch un-injected -- i.e. on
+exactly the runners this section is about -- the two would have keyed an
+effective cut of `S/3` and an effective cut of `1/3` to the same cache entry
+and served one for the other.  `_CUT_SCALE` now carries the product.
 
 ---
 
@@ -399,6 +648,86 @@ with these five files stashed (28 passed / 1 failed there, same assertion,
 same value).  See S9.
 
 `ruff check` clean on all five files on both mounts (line-length 100, E/F/I).
+
+### S8.0  Second round -- the three arms the runners refused
+
+The tip of this branch (1657b99) was green on both mounts on its own scope and
+red on the runners in three of its five pins, and in every case it was the NEW
+arm -- the fail-before or the precondition the restructure had added, i.e. the
+part that had never met a real LAPACK.  S3.1, S4.1 and S5.1 above adjudicate
+and re-state them.  What is different about this round is that TWO of the
+three now reproduce locally, so they are fixed against a measurement rather
+than against an argument:
+
+| cluster | runner reading | reproduced locally? | how |
+|---|---|---|---|
+| pin 1 separation | `sep 5.0593e-03` vs bar 1e-2 | NO | identical at every thread width on M (2.889190e-02 to the last digit at 1 / 2 / 4 / 8 / default); the axis is the build |
+| pin 2 precondition | `78 of 80` corresponding | NO, then YES by injection | 80/80 at every width on both mounts; the two-draw `reorder` injector reproduces 78 of 80 and makes the TIP raise the runner's own sentence |
+| pin 4 injector scale | census `[0,0,0,1,1]` at cut x3 | YES | WSL py3.12 at `OPENBLAS_NUM_THREADS=4` reads `[0,0,0,1,0]` at x3 -- the tip test fails there with the same assertion, and the fixed one escalates to x10 and passes |
+
+The reduction width is the whole finding for pin 4: the earlier table drove W
+at 1 and default and concluded x3 was safe.  Driven at **2 and 4** it is not.
+x3 leaves `[0,0,0,1,0]` at both, and the branch-tip test fails there with the
+runner's own assertion, verbatim.  2 is the interesting one -- it is the width
+a two-core runner behaves like.
+
+```text
+W, m2 module, branch, by OPENBLAS_NUM_THREADS
+threads   census at x1              x3                   disarms at   result
+1         [0,0,1,1,1]  1.3384       [0,0,0,0,0] 0.00406  x3           20 passed
+2         [0,0,1,2,1]  1.3384       [0,0,0,1,0] 2.1312   x10          20 passed
+4         [0,0,1,2,1]  1.9310       [0,0,0,1,0] 2.1312   x10          20 passed
+default   [0,0,1,2,3]  1.3384       [0,0,0,0,0] 0.00406  x3           20 passed
+M default [0,0,1,2,3]  1.3384       [0,0,0,0,0] 0.00406  x3           20 passed
+M 1 thr   [0,0,1,1,1]  1.3384       [0,0,0,0,0] 0.00406  x3           20 passed
+
+branch TIP at the same widths: FAILS at 2 and at 4, same assertion, same
+[0,0,0,1,0]; passes at 1 and default.  That is the CI failure, at home.
+```
+
+### S8.0.1  Second round -- verification, and what it cost
+
+Module counts, `pytest -q -p no:randomly`, collected = passed everywhere:
+
+| module | tip [M] | here [M] | tip [W] | here [W] |
+|---|---|---|---|---|
+| `test_niche_audit_w3_oracles.py` | 180 | 181 | 180 | 181 |
+| `test_niche_audit_w6_berreman.py` | 429 | 429 | 429 | 429 |
+| `test_pmm_m2_window_contract.py` | 20 | 20 | 20 | 20 |
+| **total** | **629** | **630** | **629** | **630** |
+
+The +1 is pin 1's second fail-before.  Nothing is xfailed or skipped and no id
+is renamed.
+
+Wall cost, `--durations`, one run at a time:
+
+```text
+id                                                    tip [M]   here [M]   tip [W]  here [W]
+test_the_threshold_rules_NOT_CURED_half_...  (pin 4)    1.92 s     0.96 s    1.75 s   0.88 s
+test_w4_t1_explicit_sigma_grid_n_64_...      (pin 1)    5.06 s     5.09 s      --       --
+test_o7_partition_claim_survives_a_reorder_  (pin 2)    2.64 s     4.11 s      --       --
+m2 MODULE TOTAL (OPENBLAS_NUM_THREADS=1)              48.11 s    47.71 s   45.12 s  44.65 s
+w3 + w6 MODULE TOTAL                                  81.42 s    83.46 s      --     99.05 s
+```
+
+Pin 4's fail-before is **half** the tip's cost, and that is the cache-key fix
+in `near_cut_injector` paying for itself: with `_CUT_SCALE` carrying the
+PRODUCT, the reconditioned helper's downward probe composes to
+`3.0 * (1/3) = 1.0` exactly and lands on the un-injected ladder already in
+`_LADDER_CACHE`, where the tip re-solved it.  Pin 2's costs +1.5 s for two
+extra 80-draw passes (the injector's reach, and the runner emulation); pin 1's
+is unchanged.  The m2 module total is flat, and CI's own `.test_durations`
+records it at 39.0 s for 19 ids, so it stays where the shard balancer has it.
+
+**OVERSUBSCRIPTION IS AN AXIS OF ITS OWN, and it is worth recording** because
+it cost hours of this round.  The same m2 module takes **>2 hours** when four
+copies of it run at once on a 24-core box with OpenBLAS uncapped, and **48
+seconds** at `OPENBLAS_NUM_THREADS=1` -- three orders of magnitude, on
+identical code, and the tip behaves identically (an unmodified copy of 1657b99
+was 12 seconds behind the branch after two hours).  These solves are many
+small dense eigenproblems and OpenBLAS busy-waits, so oversubscription burns
+cores without progress.  Cap the width before timing anything in this module,
+and never read a wall clock off a loaded box as evidence about a test.
 
 ### S8.1  Mount / thread-count evidence behind the bars
 

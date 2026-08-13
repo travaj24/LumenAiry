@@ -2537,23 +2537,36 @@ def test_w4_t1_adaptive_default_beats_the_old_flat_64():
         f'{e_ad:.4e} (measured 2.81e-2)')
 
 
-#: The two designs' merit values frozen on 74cf31b at the PRE-W4-T1 flat-64
-#: default, kept only as an ORDER-OF-MAGNITUDE anchor (see the scope guard
-#: below): the escape hatch's fidelity is scored between two LIVE arms, not
-#: against these decimals.
-_W4T1_FROZEN_64 = ((51.5e-3, 9.0968975e-14), (60.0e-3, 7.1975598e-14))
+#: ``(R1, merit frozen on 74cf31b at the PRE-W4-T1 flat-64 default, the n the
+#: ADAPTIVE default resolves to)``.  The decimals are kept only as an
+#: ORDER-OF-MAGNITUDE anchor (see the scope guard below) -- the escape hatch's
+#: fidelity is scored between two LIVE arms, and "the default is still
+#: adaptive" is scored on the RESOLVED n, an integer the shipped result object
+#: reports.  Those integers are the ones
+#: ``test_w4_t1_default_sigma_grid_n_is_adaptive_and_on_the_ladder`` pins;
+#: they come out of ``ceil(4*extent*v_max/lam)`` rounded onto the cost ladder,
+#: and the two designs clear their rungs by 193..256 / 129..192, so no BLAS
+#: build has ever moved one.
+_W4T1_FROZEN_64 = ((51.5e-3, 9.0968975e-14, 256),
+                   (60.0e-3, 7.1975598e-14, 192))
 
 
-def _score_w4_t1_escape_hatch(n_explicit=64):
+def _score_w4_t1_escape_hatch(n_explicit=64, n_max_default=None):
     """Score the ``sigma_grid_n`` escape hatch on both validation designs.
 
-    Split out so the fail-before below can drive the SAME three claims with
-    the value a ladder-rounding regression would deliver instead of 64.
+    Split out so the fail-befores below can drive the SAME four claims with
+    the two defects the guard exists for:
+
+    * ``n_explicit`` -- the value a ladder-rounding regression would deliver
+      instead of the caller's own (the hatch stopping being flat 64);
+    * ``n_max_default`` -- a cap injected into the DEFAULT arm through the
+      public parameter, which is the shape a default that stopped being
+      adaptive takes (``sigma_grid_n_max=64`` IS the pre-W4-T1 flat default).
     """
-    for R1, want in _W4T1_FROZEN_64:
+    for R1, want, n_default in _W4T1_FROZEN_64:
         hatch = _tensor_w4(R1, ((0, 0), (2, 0)), n_explicit)
         capped = _tensor_w4(R1, ((0, 0), (2, 0)), None, 64)
-        adaptive = _tensor_w4(R1, ((0, 0), (2, 0)))
+        adaptive = _tensor_w4(R1, ((0, 0), (2, 0)), None, n_max_default)
         assert capped.sigma_grid_n == 64, (
             f'R1={R1}: the ADAPTIVE arm capped at sigma_grid_n_max=64 must '
             f'land on 64 -- it landed on {capped.sigma_grid_n}, so it is no '
@@ -2569,16 +2582,32 @@ def _score_w4_t1_escape_hatch(n_explicit=64):
             f'identical sigma grid and then run the identical quadrature, so '
             f'this is an exact-arithmetic identity in one process -- worst '
             f'element {float(np.max(np.abs(np.asarray(hatch.L) - np.asarray(capped.L)))):.4e}')
+        # (2) THE DEFAULT IS STILL ADAPTIVE -- on the SHIPPED INSTRUMENT, as
+        # an integer, not as a magnitude.  This is the half of the old
+        # separation bar that was never BLAS-dependent.
+        assert adaptive.sigma_grid_n == n_default, (
+            f'R1={R1}: the DEFAULT sigma grid resolved to '
+            f'{adaptive.sigma_grid_n}, not the {n_default} the chirp formula '
+            f'asks for on this design.  A default that has stopped being '
+            f'adaptive is the defect W4-T1 closes, and the hatch is only an '
+            f'escape hatch while there is something to escape from')
         got = abs(complex(hatch.L[1, 0])) ** 2
-        # (2) SEPARATION, also live: the hatch is not the adaptive default.
+        # (3) ... and the grid is LOAD-BEARING: two DIFFERENT resolved n must
+        # give two different answers.  The bar is a round-off bar, not an
+        # accuracy one, because the SIZE of this separation is a difference of
+        # two grid-aliasing errors and no build owes another one (2.9e-2 [M] /
+        # 5.1e-3 [ubuntu py3.12] at R1=51.5, 2.8e-1 at R1=60).  What is
+        # portable is that it is not ZERO: a flat default makes these two arms
+        # the SAME CALL and the reading is exactly 0.0 on every build.
         sep = abs(got - abs(complex(adaptive.L[1, 0])) ** 2) / got
-        assert sep > 1e-2, (
-            f'R1={R1}: the escape hatch no longer separates from the adaptive '
-            f'default (relative separation {sep:.4e}, measured 2.9e-2 at '
-            f'R1=51.5 / 2.8e-1 at R1=60 with n_default '
-            f'{adaptive.sigma_grid_n}).  Either the default stopped being '
-            f'adaptive or the hatch stopped being flat 64')
-        # (3) ORDER-OF-MAGNITUDE sanity against the frozen anchor.
+        assert sep > 1e-6, (
+            f'R1={R1}: the escape hatch at n={n_explicit} and the adaptive '
+            f'default at n={adaptive.sigma_grid_n} separate by only '
+            f'{sep:.4e}.  Two different sigma grids must give two different '
+            f'answers -- a reading at round-off says sigma_grid_n stopped '
+            f'reaching the quadrature, and then claim (1) above is passing '
+            f'on an identity that costs nothing')
+        # (4) ORDER-OF-MAGNITUDE sanity against the frozen anchor.
         assert 0.5 * want < got < 2.0 * want, (
             f'R1={R1}: sigma_grid_n=64 gives {got:.10e}, more than a factor '
             f'of two from the pre-W4-T1 default {want:.7e} -- that is a gross '
@@ -2611,12 +2640,44 @@ def test_w4_t1_explicit_sigma_grid_n_64_is_the_pre_fix_default_bit_for_bit():
     agree BIT FOR BIT on any runner, and both mounts measure exactly that
     (worst element 0.0, Windows py3.14 and WSL py3.12).  Runner arithmetic
     cancels between them; the frozen decimals survive only as a factor-of-two
-    sanity anchor.  The fail-before is the test below."""
+    sanity anchor.  The fail-before is the test below.
+
+    2026-08-12, SECOND ADJUDICATION (same document, S3.1).  The first
+    restructure kept a SEPARATION bar -- "the hatch is not the adaptive
+    default", rel > 1e-2 -- and that arm was still red on three runner jobs at
+    5.0593e-03 against a local 2.9e-2.  It deserved to be: the separation is a
+    DIFFERENCE OF TWO GRID-ALIASING ERRORS, one at n = 64 and one at the
+    default's n = 256, and at R1 = 51.5 mm both arms sit inside the same 3-5 %
+    band around the converged answer, so the difference is the small residue
+    of two numbers each entitled to move by a couple of percent.  Measured on
+    this box, the whole ladder at R1 = 51.5 lives in 8.63e-14..9.10e-14, and
+    the |64 - n| separation reads 2.71e-1 / 1.52e-1 / 4.79e-2 / 2.89e-2 /
+    2.16e-2 / 3.74e-2 at n = 96 / 128 / 192 / 256 / 384 / 512 -- NON-monotone,
+    because the convergence is oscillatory by construction (a chirp integral:
+    each rung moves the sample phases, not just their density).  A bar on that
+    residue is a bar on runner arithmetic, which is the disease.
+
+    The two things the bar was really guarding are separated and each pinned
+    where it is exact:
+
+    * the default is still ADAPTIVE -- read off the SHIPPED result object as
+      an INTEGER (``sigma_grid_n`` = 256 / 192, the ladder-rounded chirp
+      requirement), which is deterministic integer arithmetic and carries no
+      BLAS dependence.  The rungs clear by 193..256 and 129..192, so nothing a
+      LAPACK build does to the fit can move them;
+    * ``sigma_grid_n`` is still LOAD-BEARING -- two DIFFERENT resolved grids
+      must give two different answers, at a ROUND-OFF bar (1e-6) rather than
+      an accuracy one.  A default that stopped being adaptive makes the two
+      arms the same call and the reading is EXACTLY 0.0 on every build, so the
+      bar sits ~3.7 decades below the worst live reading (5.1e-3, ubuntu
+      py3.12) and 10 decades above float64 round-off.
+
+    Both fail-befores are below."""
     _score_w4_t1_escape_hatch(64)
 
 
 def test_w4_t1_escape_hatch_scope_guard_catches_a_non_verbatim_explicit_n():
-    """THE FAIL-BEFORE for the scope guard above.
+    """THE FAIL-BEFORE for the scope guard above, defect (b): the HATCH.
 
     ``FIX_RUNNER_PINS_2026_08_12`` S3.  Restructuring a pin onto two live arms
     is only safe if the restructured pin still fires on the defect it exists
@@ -2627,12 +2688,52 @@ def test_w4_t1_escape_hatch_scope_guard_catches_a_non_verbatim_explicit_n():
     rungs, and the guard has to catch it there.
 
     Driven by asking for the value such a regression would deliver (96, the
-    next rung) and scoring the SAME three claims: the arm equality fails first
+    next rung) and scoring the SAME four claims: the arm equality fails first
     and by construction, because the hatch is then not on the pre-fix grid at
     all.  Nothing is monkeypatched -- the injected value goes in through the
     public parameter, so both arms are the shipped code."""
     with pytest.raises(AssertionError, match='disagree'):
         _score_w4_t1_escape_hatch(96)
+
+
+def test_w4_t1_escape_hatch_scope_guard_catches_a_default_that_went_flat():
+    """THE FAIL-BEFORE for the scope guard above, defect (a): the DEFAULT.
+
+    ``FIX_RUNNER_PINS_2026_08_12`` S3.1.  The separation bar the runners
+    refuted was carrying two defects at once, and this is the other one: the
+    adaptive default silently reverting to a flat grid, which is the W4-T1
+    defect itself coming back.  It has to keep firing, and the restructured
+    claims must fire on it in a way no runner arithmetic can weaken.
+
+    The injection is the pre-W4-T1 default, written the only way the library
+    still offers it -- ``sigma_grid_n_max=64`` through the public parameter,
+    nothing monkeypatched.  Both restructured claims then fire, and neither is
+    a tolerance question:
+
+    * the RESOLVED n arm reads 64 instead of 256 / 192.  That is an integer
+      comparison, and it is the assertion that raises here;
+    * the LOAD-BEARING arm would read EXACTLY 0.0 -- with a flat default the
+      "hatch" and "default" arms are literally the same call, so the
+      separation is not small, it is absent.  Asserted directly below the
+      raise so the second half is measured and not assumed.
+
+    Between them the guard cannot be satisfied by a default that has stopped
+    depending on the design, on any build."""
+    with pytest.raises(AssertionError, match='stopped being adaptive'):
+        _score_w4_t1_escape_hatch(64, n_max_default=64)
+    # ... and the load-bearing arm really does collapse to zero, not merely
+    # to something small a bar would have to be chosen against.
+    for R1, _want, _n_default in _W4T1_FROZEN_64:
+        hatch = _tensor_w4(R1, ((0, 0), (2, 0)), 64)
+        flat = _tensor_w4(R1, ((0, 0), (2, 0)), None, 64)
+        assert flat.sigma_grid_n == 64
+        got = abs(complex(hatch.L[1, 0])) ** 2
+        sep = abs(got - abs(complex(flat.L[1, 0])) ** 2) / got
+        assert sep == 0.0, (
+            f'R1={R1}: a flat-64 default is supposed to make the two arms the '
+            f'SAME CALL, so their separation is exactly 0.0 -- it read '
+            f'{sep:.4e}, which means the round-off bar in claim (3) is being '
+            f'asked to separate two things that are not identical')
 
 
 def test_w4_t1_cap_truncation_warns_with_both_numbers():

@@ -209,7 +209,17 @@ def near_cut_injector(scale):
     It emulates the RUNNER, not the physics.  Nothing about the geometry, the
     materials, the operator or the eigenvalues changes: only where the cut lands
     relative to a spectrum of round-off fluxes, which is the one thing an
-    OpenBLAS kernel is entitled to move."""
+    OpenBLAS kernel is entitled to move.
+
+    NESTS, and the cache key COMPOSES with it (2026-08-12).  ``scaled`` wraps
+    whatever ``_mass_flux_threshold`` already is, so two nested injectors put
+    the cut at the PRODUCT of their scales -- and :data:`_CUT_SCALE` has to
+    carry that product or :data:`_LADDER_CACHE` keys an inner scale against an
+    effective one and serves the wrong ladder.  That nesting is not
+    hypothetical: :func:`_uncured_below_threshold`'s probe branch walks
+    ``_INJECTOR_SCALES`` DOWNWARD inside the NOT-CURED fail-before's own
+    upward injector, and on a build where the sibling test also reaches that
+    branch un-injected the two would have collided on the same key."""
     global _CUT_SCALE
     orig, prev = PC._mass_flux_threshold, _CUT_SCALE
 
@@ -217,7 +227,7 @@ def near_cut_injector(scale):
         return orig(flux, W2, SVt, SVb, n, xp) * scale
 
     PC._mass_flux_threshold = scaled
-    _CUT_SCALE = float(scale)
+    _CUT_SCALE = prev * float(scale)
     try:
         yield
     finally:
@@ -423,8 +433,13 @@ def _uncured_below_threshold(ns, mf, layers, degrees, mk, off_nm):
         mount / OPENBLAS_NUM_THREADS   raw census      spread
         Windows py3.14 default         [0,0,1,2,3]     1.33841
         WSL py3.12 1                   [0,0,1,1,1]     1.33841
+        WSL py3.12 4                   [0,0,1,2,1]     1.93102
         WSL py3.12 default             [0,0,1,2,3]     1.33841
-        any mount, cut injector x3     [0,0,0,0,0]     0.00406   <- the runner
+        disarmed by the cut injector   [0,0,0,0,0]     0.00406   <- the runner
+
+    (WHICH scale disarms is itself a per-build fact -- x3 on M, x10 on W at
+    four threads -- so the fail-before below SEARCHES for it; see
+    :func:`_first_disarming_scale`.)
     """
     merged, _disp = _snap_report([s for _t, s in layers], mf / PERIOD,
                                  halfwidth=1)
@@ -897,6 +912,113 @@ def test_min_feature_is_the_accuracy_lever_on_the_per_layer_path_too(
 #: single-region device has no coat/offset collision to inject them.
 _INJECTOR_SCALES = (1.0 / 3.0, 1.0e-2, 1.0e-4)
 
+#: The near-cut injector scales the NOT-CURED half's fail-before walks UPWARD,
+#: and the derivation of where it stops.  ``_INJECTOR_SCALES`` scales the cut
+#: DOWN to ARM a build that has no mode across it; this ladder scales it UP to
+#: DISARM a build whose own round-off does, which is the condition the ubuntu
+#: runners are in and this box is not.
+#:
+#: WHERE IT LANDS IS READ OFF THE INSTRUMENT, not searched for.
+#: ``_core._mode_cut_growth`` counts a mode as growing only while it is
+#: ``prop`` AND within ``_MODE_CUT_MARGIN_WARN`` of the cut, so multiplying the
+#: cut by that constant provably puts EVERY mode the census is currently
+#: reporting back under it.  ``W = _MODE_CUT_MARGIN_WARN`` is therefore the
+#: guaranteed rung, and it is on this ladder by construction (asserted in
+#: :func:`_first_disarming_scale`, so it moves if the library's constant does).
+#: The remaining rungs are its geometric continuation, one per GENERATION of
+#: modes a raised cut can pull INTO the warn window from above -- a mode
+#: further out than ``W`` is not counted now and can be once the cut moves --
+#: and the ladder is walked rather than jumped so the cheapest sufficient rung
+#: is the one paid for.
+#:
+#: It STARTS at 1.0 -- the shipped cut, a true no-op that shares
+#: :data:`_LADDER_CACHE`'s un-injected entry -- so the search has to escalate
+#: on any build that is armed, which is the mechanism exercised locally.  3.0
+#: sits ahead of ``W`` because at exactly that scale the reconditioned helper's
+#: downward probe composes back to ``3 * (1/3) = 1.0``, i.e. onto the
+#: un-injected ladder already in the cache: it is the one rung that costs
+#: nothing to verify, and it is what makes this fail-before CHEAPER than the
+#: frozen-x3 version it replaces (0.96 s against 1.92 s, M, one BLAS thread).
+#:
+#: The CEILING is derived twice over, and the two derivations meet exactly:
+#:
+#: * ``W^4 = 1e4 = 1 / min(_INJECTOR_SCALES)``.  The reconditioned helper
+#:   probes BACK DOWN through ``_INJECTOR_SCALES`` to prove the collision is
+#:   still REACHABLE, and those two injectors compose multiplicatively, so a
+#:   disarming scale above 1e4 would put the shipped cut outside the probe's
+#:   own reach and the mechanism claim could no longer be made.  Asserted, not
+#:   commented -- four escalations of ``W`` is also four generations of
+#:   pulled-in modes, which is far more than the mechanism admits;
+#: * ``1e9 = 1 / 1e-9``, from ``_core._mass_flux_threshold``'s own
+#:   ``max(1e-9 max|flux|, round-off floor)``: at that scale the cut sits AT
+#:   the strongest mode's flux and NOTHING is classified propagating, so the
+#:   injector has stopped emulating a build's round-off and started deleting
+#:   the spectrum.  Measured exactly there -- ``n_prop`` reads 0 on every rung
+#:   at x1e9 and nowhere below it.  1e4 is five decades inside it.
+#:
+#: Both are far above what the mechanism needs: ``_mode_cut_growth``'s own
+#: calibration records every pathological mode sitting at 1.00-3.47x the cut
+#: (against ~1e8x for a real amplifying mode), so one decade disarms them --
+#: which is what ``W`` is, and what the ubuntu runners needed.
+_DISARM_SCALES = (1.0, 3.0) + tuple(
+    float(PC._MODE_CUT_MARGIN_WARN) ** k for k in (1, 2, 3, 4))
+
+
+def _first_disarming_scale(ns, mf, degrees, mk):
+    """``(scale, ladder, rows)`` -- the smallest :data:`_DISARM_SCALES` rung
+    whose raw growing-mode census is ALL ZERO on this build, the order-0
+    ladder it reads there, and the table walked to get there
+    (``(scale, raw census, spread)`` per rung).
+
+    ``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S5.1.  The NOT-CURED half's
+    fail-before needs a build with NO mode across the cut -- that is the
+    runner's condition -- and it used a FROZEN scale of 3.0 to produce one.
+    3.0 disarms this cell on both mounts and did NOT on four runner jobs
+    (``[0,0,0,1,1]`` on py3.11 / 3.12 / 3.13, ``[0,0,0,0,1]`` on py3.10), which
+    is the same disease one layer up: a CUT POSITION frozen as a number.  Where
+    the cut has to sit to clear a build's round-off is a fact about that build.
+
+    So the scale is taken from the CENSUS instead of from a constant, and the
+    census -- the shipped instrument -- decides when it is enough.  The
+    guaranteed rung is not guessed: ``_mode_cut_growth`` only counts a mode
+    while it is within ``_MODE_CUT_MARGIN_WARN`` of the cut, so that factor
+    provably clears every mode the census is currently reporting.  The walk
+    exists only to pay the CHEAPEST sufficient rung first (see
+    :data:`_DISARM_SCALES`) and to catch the one thing the derivation does not
+    cover -- a mode further out than the warn window being pulled INTO it by
+    the raised cut.  Every build has a disarming scale (raising the cut can
+    only move modes from propagating to evanescent, and ``n_grow`` counts only
+    propagating ones), so failing to find one inside the derived ceiling is a
+    real finding and is reported as one rather than passed over."""
+    assert _DISARM_SCALES[-1] * min(_INJECTOR_SCALES) <= 1.0, (
+        f"the disarm ladder tops out at {_DISARM_SCALES[-1]:.4g} while the "
+        f"reconditioned helper probes back down by at most "
+        f"{min(_INJECTOR_SCALES):.4g}: the two compose, so at that scale the "
+        f"probe can no longer reach the shipped cut and the mechanism claim "
+        f"below would be unreachable")
+    assert float(PC._MODE_CUT_MARGIN_WARN) in _DISARM_SCALES, (
+        f"the library counts a mode as growing only within "
+        f"{PC._MODE_CUT_MARGIN_WARN:.4g} of the cut, so that factor is the "
+        f"rung this walk is GUARANTEED to disarm at -- and it is not on "
+        f"{tuple(float(f'{s:.4g}') for s in _DISARM_SCALES)}.  The ladder is "
+        f"derived from that constant; if the constant moved, derive it again")
+    rows = []
+    for scale in _DISARM_SCALES:
+        with near_cut_injector(scale):
+            v, raw, _post, _nonpas = _ladder_rec(ns, mf, degrees, mk)
+        rows.append((scale, [int(x) for x in raw], spread(v)))
+        if not int(np.sum(raw)):
+            return scale, v, rows
+    assert False, (
+        f"ns={ns} min_feature={mf * 1e9:.1f} nm: no near-cut injector scale in "
+        f"{tuple(float(f'{s:.4g}') for s in _DISARM_SCALES)} DISARMED this "
+        f"cell -- it still reads a raw growing mode at every rung "
+        f"({rows}).  Raising the cut can only move modes from propagating to "
+        f"evanescent and n_grow counts only propagating ones, so a census that "
+        f"survives four decades of it is a second mechanism and must be "
+        f"diagnosed.  Widen the ladder (and its ceiling derivation with it) "
+        f"rather than deleting this")
+
 
 def _injected_null_control(cells, degrees, mk, original_msg, match):
     """Shared body of the three injector-driven fail-befores.  Returns
@@ -1284,6 +1406,33 @@ def test_the_threshold_rules_NOT_CURED_half_conditions_on_the_census_too(
     (x10, x1e2, x1e4 and x1e6 all read 0.00406 too: once the near-cut mode is
     back under the cut there is nothing further for a higher cut to change.)
 
+    2026-08-12, SECOND ADJUDICATION (same document, S5.1).  x3 was frozen as a
+    NUMBER, and four runner jobs refused it: it left ``[0,0,0,1,1]`` on
+    py3.11 / 3.12 / 3.13 and ``[0,0,0,0,1]`` on py3.10, i.e. the cut had to go
+    HIGHER there than on either mount before that build's round-off flux fell
+    under it.  It REPRODUCES locally at a reduction width the table above
+    never drove -- WSL py3.12 at ``OPENBLAS_NUM_THREADS=4`` reads
+    ``[0,0,1,2,1]`` spread 1.93102 at x1 and ``[0,0,0,1,0]`` spread 2.13121 at
+    x3, i.e. x3 does NOT disarm there either, and x10 does.  So x3 is not a
+    property of the mount, it is a property of the mount at a given width, and
+    it was never anything but a number.
+
+    This test's own message already named the treatment ("Raise the scale
+    rather than deleting it: the condition is a CUT POSITION and every build
+    has one"), so the scale is now SEARCHED -- ``_first_disarming_scale``
+    walks :data:`_DISARM_SCALES` from the shipped cut upward until the SHIPPED
+    census reads all zero, and the ceiling it stops at is derived twice over
+    (from ``_INJECTOR_SCALES``' own reach and from
+    ``_mass_flux_threshold``'s ``1e-9``), not chosen.  Nothing is frozen but
+    the instrument.
+
+    That also makes the search itself falsifiable HERE, where 3.0 works: this
+    box is ARMED at the shipped cut, so the walk must escalate off its first
+    rung, and the rung it leaves must be the SCATTERING one.  A build already
+    in the runner's condition stops at 1.0 and the escalation claim is skipped
+    with it -- there is nothing to escalate away from there, and the three
+    claims below are the whole point on such a build.
+
     Three claims, the siblings':
 
     (a) the RECONDITIONED half passes under the injector, and passes for the
@@ -1295,25 +1444,62 @@ def test_the_threshold_rules_NOT_CURED_half_conditions_on_the_census_too(
     """
     cell, off_nm = (6, 1.5e-9), 1.804
     layers = _uncoated_layers(cell[0])
-    with near_cut_injector(3.0):
-        _v, raw, _p, _n = _ladder_rec(cell[0], cell[1], _UNCOATED_DEGREES,
-                                      _uncoated_stack)
-        assert not int(np.sum(raw)), (
-            f"the near-cut injector at 3.0 did not DISARM this cell -- it "
-            f"still reads {list(int(x) for x in raw)} raw growing mode(s), so "
-            f"the 2026-08-12 CI condition is not reproduced here and this "
-            f"test has stopped being a fail-before.  Raise the scale rather "
-            f"than deleting it: the condition is a CUT POSITION and every "
-            f"build has one")
+    scale, v_off, rows = _first_disarming_scale(
+        cell[0], cell[1], _UNCOATED_DEGREES, _uncoated_stack)
+    print(f"\nM2 NOT-CURED fail-before [uncoated ns={cell[0]} "
+          f"min_feature={cell[1] * 1e9:.1f} nm]: disarmed at cut x{scale:.4g} "
+          "-- " + ", ".join(f"x{s:.4g} raw={r} spread={sp:.5g}"
+                            for s, r, sp in rows))
+    # THE CEILING, with teeth, scored against the SHIPPED answer.  Raising the
+    # cut only emulates a runner while it stays a GAUGE change; pushed far
+    # enough it deletes the spectrum instead, and the SPREAD cannot see that
+    # (at x1e9 -- 1/1e-9, _mass_flux_threshold's own relative floor -- the
+    # census reads n_prop = 0 on every rung and the ladder moves 7.7e-9, while
+    # the spread still reads 0.0040554 to six figures).  So the disarmed
+    # PRE-repair ladder is scored against the ladder the library SHIPS with
+    # the forward-growth repair ON, which is the adjudication in one line: the
+    # runner's build never produced the growing mode the repair exists to
+    # redirect, so its pre-repair answer IS the shipped answer.  Measured
+    # BIT-IDENTICAL (tolerance 0.0) at every disarming rung of the ladder.
+    PC.PMM_FORWARD_GROWTH_REPAIR = True          # the fixture owns the restore
+    v_on = _ladder_rec(cell[0], cell[1], _UNCOATED_DEGREES, _uncoated_stack)[0]
+    PC.PMM_FORWARD_GROWTH_REPAIR = False
+    assert np.array_equal(np.asarray(v_off), np.asarray(v_on)), (
+        f"the ladder disarmed at cut x{scale:.4g} is not the ladder the "
+        f"library ships with the forward-growth repair on: "
+        f"{list(v_off)} against {list(v_on)}.  Disarming the census is "
+        f"supposed to reach the SAME answer by never making the growing mode "
+        f"the repair redirects -- a difference means the raised cut stopped "
+        f"being a gauge change and started deleting propagating modes, and "
+        f"then this is no longer an emulation of any runner")
+    if len(rows) > 1:
+        # This build's own round-off ARMS the cell, so the walk had to
+        # escalate -- and the rung it left behind must be the one that
+        # scatters.  That is the transition the search is looking for, stated
+        # as a claim rather than assumed: a ladder that carries a raw growing
+        # mode and does NOT scatter would mean the census and the collapse
+        # have come apart, which is the premise the whole re-statement rests
+        # on.  (Measured at x1: [0,0,1,2,3] spread 1.33841 on M and on W at
+        # default, [0,0,1,1,1] spread 1.33841 on W at one thread, [0,0,1,2,1]
+        # spread 1.93102 on W at four -- the width that also needs x10 to
+        # disarm and so reproduces the runner.)
+        prev_scale, prev_raw, prev_spread = rows[-2]
+        assert int(np.sum(prev_raw)) and prev_spread > 0.1, (
+            f"the disarm walk escalated past cut x{prev_scale:.4g}, where the "
+            f"census reads {prev_raw} raw growing mode(s), but that ladder "
+            f"spreads only {prev_spread:.4g}.  The search escalates on the "
+            f"CENSUS and the claim below rests on the census and the collapse "
+            f"being the same event; here they are not")
+    with near_cut_injector(scale):
         # (a) the reconditioned half, under the runner's condition
         s_lo, _ladder = _uncured_below_threshold(
             cell[0], cell[1], layers, _UNCOATED_DEGREES, _uncoated_stack,
             off_nm)
         # (c) ... and it really is the disarmed, cured-looking reading
         assert s_lo < 1e-2, (
-            f"the disarmed cell spreads {s_lo:.4g}, which is not the "
-            f"cured-looking reading the runner saw (0.00406), so (a) proved "
-            f"only that nothing raised")
+            f"the disarmed cell (cut x{scale:.4g}) spreads {s_lo:.4g}, which "
+            f"is not the cured-looking reading the runner saw (0.00406), so "
+            f"(a) proved only that nothing raised")
         # (b) THE FAIL-BEFORE: the original claim, verbatim, same reading
         with pytest.raises(AssertionError, match="should NOT cure"):
             assert s_lo > 0.1, (
