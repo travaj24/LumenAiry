@@ -4,6 +4,48 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — the angle-true screen no longer forces the whole grid
+
+v5.35.0's `carrier=` (the angle-true per-surface screen) disqualified
+both row-band sag paths, because the obliquity correction is built out
+of gradients and a band cannot differentiate itself. So passing a
+carrier voided the banded slant credit AND added the obliquity block's
+own whole-grid arrays on top: measured +24.99 float64 grids over the
+banded-slant baseline, ~+215 GB at N=32768, which OOMed a 32k
+angle-aware run.
+
+Both paths are now banded with a halo: 1 row for the sag gradient,
+2 rows when the R1 drift term is live (it differentiates a quantity
+that is itself a gradient), 1 row on the persistent momentum grids for
+the inter-surface re-imaging step. The carrier's momentum field is
+evaluated per band for a `TiltedCarrier` (analytic and pointwise)
+instead of materialising two full grids, and the momentum / drift
+accumulators are released before the accuracy guard runs. The
+flat-face `any(sag)` skip and the zero-carrier `all(q == 0)` skip
+become band scans with a short circuit, so both structural nulls
+survive.
+
+Measured after: **+8.80 grids** with the guard's estimator live,
+**+4.45** with `on_screen_obliquity='silent'` — and the term no longer
+depends on the screen (slant vs paraxial) or on the carrier's curvature.
+Below the N>=4096 auto-band threshold the whole-grid block runs exactly
+as before, and its peaks are identical before and after.
+
+The banded output is **byte-identical** to the whole-grid output —
+field, dtype, guard message and the guard's estimator accumulator —
+pinned across 9600 adversarial configurations and 86 tests
+(`tests/unit/test_obl_banded_halo.py`): NaN-sentinel pixels on band
+boundaries, clear apertures, aperture stops, a leading flat plate, a
+decentered face that falls through mid-prescription, odd N, `dx != dy`,
+band sizes 1 / 3 / N / N+7, complex64 + fresnel promotion, and the
+opt-in float32 geometry dtype. That last one caught a genuine wrong
+answer during the build: promoting the scalar momentum seed to a grid
+at band 0 makes later bands read a float32 array where band 0 and the
+whole grid read a Python float, which under NEP 50 drops the momentum
+triangle from float64 to float32 (5e-6 of field error, invisible at the
+float64 default). The accumulator source is now pinned per surface.
+See `docs/audits/BUILD_OBL_BANDED_HALO_2026_08_13.md`.
+
 ## [5.35.1] — 2026-08-13
 
 ### Fixed — the 33 GB unpriced map build (v5.35.0's publish gate), and two more
