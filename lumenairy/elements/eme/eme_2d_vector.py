@@ -523,6 +523,23 @@ _POLISH_XTOL_REL = 1e-12     # converged-zero bracket width, RELATIVE to |qz^2|:
 #   the same physical cell converges identically in any length unit.
 _POLISH_MAXIT = 80           # ceiling on the contraction levels (the tolerance,
 #   not this, terminates: 1e-12 relative needs ~28 levels from a 33-point cell)
+_POLISH_GUARD = True         # 2026-08-13: adopt the polished point only if it
+#   DEEPENED the zero.  ``_polish_zero`` localises on a sub-grid and then
+#   contracts a 5-point bracket GREEDILY, on a function that is a min-of-branches
+#   -- so a level can present a near-tie between the true basin and a
+#   neighbouring wiggle, and which one wins is a per-build fact.  Until this flag
+#   the step was ONE-WAY: whatever the polish returned replaced Brent's answer,
+#   and if that point read over ``ratio_tol`` (or could not be evaluated at all)
+#   the candidate was discarded even though its pre-polish reading was a clean
+#   accept -- a SILENT, build-dependent recall loss, which is the defect class
+#   this whole block exists to remove.  Measured on the 2026-08-13 ubuntu py3.10
+#   shard: the genuine Nx=16 mode at 201.8868828456 (FD distance 0.074,
+#   ``sigma_min`` 2.7e-15, structural ratio 8.0e-15 -- a mode by every oracle)
+#   was held by the un-treated path at its stop 201.8862661906 and DROPPED here.
+#   Wherever the polish does what it is for -- every cell measured, by 8 to 11
+#   decades -- the guard takes the polished branch and the census is byte-null.
+#   Set False to restore the pre-2026-08-13 body exactly (the fail-before lever
+#   ``test_eme_census_determinacy.py`` uses; not a supported runtime setting).
 
 
 def _detect_grid_size(lo, hi, Ly, n_scan):
@@ -883,12 +900,32 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
             # than by the physics of the zero.  Adjudicate deterministically.
             if s[-1] >= _STRUCTURAL_SAT * bound:
                 return                                # strip band edge (below)
-            x = _polish_zero(f, lo_b, hi_b)           # converged zero
+            # GUARDED IMPROVEMENT (2026-08-13).  The polish is an IMPROVEMENT
+            # step, so it is taken only if it improved something: its point is
+            # adopted iff it is a DEEPER zero than the minimiser's stop.  Before
+            # this guard the step was one-way -- a polish that strayed onto a
+            # neighbouring wiggle of the min-of-branches, or landed somewhere
+            # ``_mode_reading`` could not evaluate, discarded a candidate whose
+            # pre-polish reading was a clean accept, and did so SILENTLY.  That
+            # is a build-dependent RECALL loss of exactly the kind this block
+            # exists to remove: measured on the 2026-08-13 ubuntu py3.10 shard,
+            # the genuine Nx=16 mode at 201.8868828456 (FD distance 0.074,
+            # sigma_min 2.7e-15, structural ratio 8.0e-15 -- a mode by every
+            # oracle) was held by the pre-fix path at its stop 201.8862661906
+            # and DROPPED by this branch, while our mounts keep it.
+            # Wherever the polish does what it is for -- every cell measured, by
+            # 8 to 11 decades -- the guard takes the polished branch and the
+            # returned census is byte-identical.
+            x_p = _polish_zero(f, lo_b, hi_b)          # converged zero
             try:
-                s, gaps, bound = _mode_reading(strips, Lx, Nx, k0, kx0, x, ky0,
-                                               Ly)
+                s_p, gaps_p, bound_p = _mode_reading(strips, Lx, Nx, k0, kx0,
+                                                     x_p, ky0, Ly)
             except np.linalg.LinAlgError:
-                return
+                if not _POLISH_GUARD:
+                    return                            # pre-2026-08-13 behaviour
+                s_p = None                            # unevaluable -> keep Brent
+            if s_p is not None and (not _POLISH_GUARD or s_p[-1] <= s[-1]):
+                x, s, gaps, bound = x_p, s_p, gaps_p, bound_p
         if s[-1] < tol and float(gaps.min()) < ratio_tol:
             # STRUCTURAL rank drop, not a mode: at a strip band edge the
             # forward/backward column pair of G is anti-parallel, so sigma_min

@@ -1027,3 +1027,111 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
               f"converged zero rather than {_VALUE_RTOL * _RECOVERED:.2e}.  The "
               f"drop is inert on this build; the fail-before is carried by the "
               f"engineered tie at ratio_tol = {cut:.6e} above.")
+
+
+# =========================================================================== #
+#  7.  A STRAYING POLISH cannot lose a mode the minimiser already had         #
+# =========================================================================== #
+#: The genuine Nx=16 mode the 2026-08-13 ubuntu py3.10 shard lost, and its
+#: detection cell.  Adjudicated by BOTH oracles before it was believed: the
+#: 40-digit root reads ``sigma_min`` 2.7e-15 with structural ratio 8.0e-15 (a
+#: mode, not a band edge), and the independent 2-D-FD oracle puts an eigenvalue
+#: 0.0738 away at ny=48, 0.0416 at ny=64 and 0.0185 at ny=96 -- CONVERGING on it
+#: as the FD grid refines, which a spurious candidate does not do.
+_MODE201 = 201.88688284563654
+_CELL201 = (201.750, 202.000)
+#: What that shard's un-treated path held instead: its bounded minimiser halted
+#: 6.17e-4 from the zero, where ours halt 3.5e-7 away.  That distance is what
+#: put the reading INSIDE ``_CENSUS_BAND`` there and routed the candidate
+#: through the polish branch at all -- on our mounts it reads 1.99e-7, BELOW the
+#: band, and takes the unchanged path.
+_PY310_STOP = 201.88626619057126
+
+
+def _stray_polish(monkeypatch, delta):
+    """INJECTOR.  Make ``_polish_zero`` return a point ``delta`` off the
+    converged zero.
+
+    This is what its greedy 5-point contraction does when a level presents a
+    near-tie between the true basin and a neighbouring wiggle of the
+    min-of-branches -- and which one wins is a per-build fact.  It is injected
+    rather than reproduced because our own LAPACK does not stray: measured, the
+    contraction survives a per-evaluation jitter of 128 ULP on every reference
+    cell.  The defect it exposes is not the straying, which is allowed; it is
+    that the straying used to be able to DISCARD a candidate."""
+    orig = eme_2d_vector._polish_zero
+
+    def wrapped(f, lo, hi):
+        return float(min(max(orig(f, lo, hi) + delta, lo), hi))
+
+    monkeypatch.setattr(eme_2d_vector, "_polish_zero", wrapped)
+
+
+@pytest.mark.parametrize("delta", [5e-3, -5e-3, 1.2e-2])
+def test_a_straying_polish_cannot_lose_a_mode_the_minimiser_already_had(
+        monkeypatch, delta):
+    """THE 2026-08-13 py3.10 DEFECT, and its guard.
+
+    The polish is an IMPROVEMENT step applied to candidates whose un-treated
+    verdict was round-off.  Until ``_POLISH_GUARD`` the step was ONE-WAY: its
+    point replaced the minimiser's unconditionally, so a polish that strayed --
+    or that landed anywhere ``_mode_reading`` could not evaluate -- discarded a
+    candidate whose pre-polish reading was a clean accept.  Silently, and only
+    on the builds whose round-off strayed.
+
+    Both injectors are applied together because the shard's build had both: the
+    STOP OFFSET is what puts the reading in the band (so the polish branch runs
+    at all), and the STRAY is what the polish then does.  Under that pair:
+
+      * the UN-TREATED path keeps the mode, at its own stop;
+      * the treated path with the guard OFF drops it -- the fail-before, which
+        is the shard's failure reproduced deterministically on any build;
+      * the treated path as shipped keeps it, because a polished point that is
+        not DEEPER than the minimiser's is not adopted.
+
+    The guard is not a tolerance and has no bar to tune: ``sigma_min`` at the
+    polished point either is or is not below ``sigma_min`` at the stop."""
+    strips = _cell(16)
+    got = {}
+    for tag, guard, prefix in (("untreated", True, True),
+                               ("guard OFF", False, False),
+                               ("shipped  ", True, False)):
+        with monkeypatch.context() as mp:
+            if prefix:
+                _prefix_refine(mp)
+            mp.setattr(eme_2d_vector, "_POLISH_GUARD", guard)
+            _stop_offset(mp, _PY310_STOP - _MODE201)
+            _stray_polish(mp, delta)
+            got[tag] = eme_2d_vector.layer_vector_modes(strips, **_N16)
+
+    iso = _isolation_radius(_N16, _census(_N16))
+    held = {t: not _absent(q, _MODE201, iso) for t, q in got.items()}
+
+    # the injector must reach the defect, or this proves nothing
+    assert held["untreated"], (
+        f"the un-treated path does not hold {_MODE201} under a "
+        f"{delta:+.1e} stray, so the treated path cannot LOSE it relative to "
+        f"anything and this fail-before is vacuous: {list(got['untreated'])}")
+    # FAIL-BEFORE: the pre-2026-08-13 body, restored by the flag
+    assert not held["guard OFF"], (
+        f"with _POLISH_GUARD off, a {delta:+.1e} stray no longer drops "
+        f"{_MODE201} -- the injector has stopped reaching the defect the guard "
+        f"exists for: {list(got['guard OFF'])}")
+    # FAIL-AFTER: shipped
+    assert held["shipped  "], (
+        f"a {delta:+.1e} stray of the polish LOST the mode {_MODE201}, which "
+        f"the un-treated path held at its own stop -- the guard did not keep "
+        f"the minimiser's answer: {list(got['shipped  '])}")
+
+    # ... and what it kept is a real reading of that mode, not a placeholder
+    kept = float(got["shipped  "][np.argmin(np.abs(got["shipped  "]
+                                                   - _MODE201))])
+    ratio, gmin = _reading(_N16, kept)
+    assert gmin < 1e-3 and ratio < _STRUCT_MODE, (
+        f"the guard kept {kept!r} for the mode {_MODE201}, but its own reading "
+        f"does not accept it (gaps.min {gmin:.3e}, ratio {ratio:.3e})")
+    assert _fd(_N16, kept) < _FD_MODE, (
+        f"the guard kept {kept!r}, which the FD oracle does not confirm")
+    print(f"\nEME polish guard [stray {delta:+.1e}]: un-treated holds "
+          f"{_MODE201}; guard OFF DROPS it; shipped keeps it at {kept:.10f} "
+          f"(gaps.min {gmin:.3e}, FD {_fd(_N16, kept):.4f}).")

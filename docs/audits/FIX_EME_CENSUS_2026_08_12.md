@@ -891,3 +891,189 @@ more than any number of version rows.
 * The emulation harness lives in the scratchpad, not the tree.  Its E1 arm names
   the ULP rungs to drop by hand, which is an M/W-specific choice; the E5 arm's
   `dq` values are absolute and build-free.
+
+---
+
+## 10.  IT WAS A LIBRARY BUG -- the polish could LOSE a mode.  2026-08-13
+
+Round 3, and this one is not a test defect.  The 5.35.3 main-push CI (ubuntu
+py3.10, shard 2/3) failed the round-2 containment arm:
+
+```
+test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix
+  AssertionError: the fix dropped the pre-fix entry 201.88626619057126 --
+  nothing in the fixed census lies within its basin radius 2.4820
+  (nearest 205.97497...)
+  assert 1.0194755006245763e-05 >= 0.01
+```
+
+The reported basin radius pins the rest: 2.4820 means the FIXED census's
+smallest gap was 4.9640, which is the 146.42 <-> 151.39 gap, so the 4.088 gap
+205.97 <-> 201.89 was **not there** -- the fixed census on that build was
+`{205.975, 151.385, 146.421, 140.600}` and had lost 201.887 entirely, while the
+un-treated path held it at 201.8862661906.
+
+### 10.1  The oracle's verdict at 201.886 -- hypothesis (A)
+
+Adjudicated before anything was changed, and it is decisive:
+
+| probe | reading |
+|---|---|
+| 40-digit root (doc S2) | **201.88688284563654154** |
+| `sigma_min` there | **2.7400e-15** |
+| structural ratio `sigma_min / bound` | **7.9762e-15** -- 12 decades under `_STRUCTURAL_SAT`, so NOT a band edge |
+| 2-D-FD oracle, ny = 48 / 64 / 96 | **0.0738 / 0.0416 / 0.0185** -- CONVERGING as the FD grid refines |
+| `_polish_zero` on its detection cell [201.75, 202.00] | 201.886882845662, `gaps.min` 2.74e-11, would ACCEPT |
+
+A spurious candidate does not have an FD eigenvalue that walks toward it as the
+oracle's own grid refines.  **201.8868828456 is a genuine mode**, so the build
+that lacked it had lost one: hypothesis **(A), real recall loss**.  Not (B) --
+the converged zero's reading is 5.96e-14, nine decades BELOW `_CENSUS_BAND`'s
+lower edge, nowhere near a boundary.  Not (C) -- both oracles confirm it.
+
+The fix therefore belongs in `lumenairy/`, and the round-2 containment arm was
+right: it caught a library bug, which is what it was written to do.
+
+### 10.2  What went wrong -- the polish was a ONE-WAY step
+
+`_refine_accept` treats a candidate whose reading lands in `_CENSUS_BAND` by
+polishing it and re-reading THERE.  Before this round the step was
+unconditional:
+
+```
+x = _polish_zero(f, lo_b, hi_b)
+try:    s, gaps, bound = _mode_reading(..., x, ...)
+except  np.linalg.LinAlgError: return          # <- silent drop
+if s[-1] < tol and gaps.min() < ratio_tol: ...  # <- read at the STRAYED point
+```
+
+so whatever the polish returned REPLACED the minimiser's answer, with no check
+that it was any better.  `_polish_zero` localises on a sub-grid and then
+contracts a 5-point bracket GREEDILY, on a function that is a
+min-of-many-branches; a level can present a near-tie between the true basin and
+a neighbouring wiggle, and which one wins is a per-build fact.  When it strayed,
+a candidate whose pre-polish reading was a **clean accept** was discarded --
+silently, and only on the builds whose round-off strayed.
+
+Two measurements frame it.  On the reference cells the localisation's own margin
+is thin -- the 201.887 cell's two deepest sub-grid samples differ by **5.5%**
+(1.02507e-04 vs 1.08133e-04) -- but our LAPACK never actually strays: the
+contraction returns the same accepted zero under a per-evaluation jitter of 1,
+2, 4, 8, 16, 32, 64 and 128 ULP on all five Nx=16 cells, and a full-census
+jitter sweep to 1024 ULP moves no membership at all.  The straying is a
+different build's privilege; the DEFECT is that straying could discard.
+
+Why our mounts never see it even in principle: on M the minimiser halts 3.5e-7
+from that zero, so its reading is 1.99e-7 -- **below** `_CENSUS_BAND`, taking
+the unchanged path, never entering the polish branch.  The py3.10 build halted
+**6.17e-4** away, reading 5.5e-4, which is INSIDE the band.  That difference is
+what routed the candidate into the branch at all.
+
+### 10.3  The fix -- `_POLISH_GUARD`, an improvement step that must improve
+
+```
+x_p = _polish_zero(f, lo_b, hi_b)
+try:    s_p, gaps_p, bound_p = _mode_reading(..., x_p, ...)
+except  np.linalg.LinAlgError:  s_p = None       # unevaluable -> keep Brent
+if s_p is not None and s_p[-1] <= s[-1]:         # adopt iff DEEPER
+    x, s, gaps, bound = x_p, s_p, gaps_p, bound_p
+```
+
+The polished point is adopted **iff it is a deeper zero than the minimiser's
+stop**.  There is no bar to tune and no tolerance: `sigma_min` at the polished
+point either is or is not below `sigma_min` at the stop.  A polish that strays,
+and a polish that lands somewhere `_mode_reading` cannot evaluate, now both
+degrade to "keep the minimiser's answer and its verdict" instead of discarding
+the candidate.  `_POLISH_GUARD = False` restores the pre-2026-08-13 body exactly
+and is the fail-before lever the test uses; it is not a supported runtime
+setting.
+
+Note what the guard does NOT claim.  It does not repair a strayed polish -- the
+205.975 recovery of S3, which genuinely NEEDS the polish, is still lost when the
+polish strays (its pre-polish reading rejects).  It guarantees only that the
+polish cannot take away what the minimiser already had, which is exactly the
+py3.10 signature.
+
+### 10.4  Byte-null
+
+Same script, same interpreter, same `sys.path`; only `lumenairy/` differs.  The
+returned census is **bit-identical on all seven configurations**, including the
+two the fix was built for and the `verify=True` path:
+
+| configuration | n | verdict |
+|---|---:|---|
+| W6 base (Nx=8) | 3 | **BYTE-NULL** |
+| W6 scaled x10 | 3 | **BYTE-NULL** |
+| N16 dense | 5 | **BYTE-NULL** |
+| N16 banded (`solver="banded"`) | 5 | **BYTE-NULL** |
+| Nx=20 (56, 259) | 16 | **BYTE-NULL** |
+| Nx=16 (0, 256) | 24 | **BYTE-NULL** |
+| Nx=12 verify (`verify=True`) | 13 | **BYTE-NULL** |
+
+`diff` of the full-precision `repr` of every entry: empty.  That is the
+containment argument -- the guard changes behaviour only where the polish fails
+to deepen, which no currently-passing configuration does.
+
+### 10.5  The fail-before, deterministic on any build
+
+`test_a_straying_polish_cannot_lose_a_mode_the_minimiser_already_had`, three
+parametrisations (`delta` = +5e-3, -5e-3, +1.2e-2).  Both injectors are applied
+together because the shard's build had both -- the STOP OFFSET puts the reading
+in the band so the branch runs at all, the STRAY is what the polish then does:
+
+| arm | `_POLISH_GUARD` | holds 201.8868828456? |
+|---|---|---|
+| un-treated (`_prefix_refine`) | -- | **YES**, at its own stop 201.8862658391 |
+| treated, guard OFF | `False` | **NO -- DROPPED** (the shard's failure, reproduced) |
+| treated, as shipped | `True` | **YES**, at 201.8862658391 |
+
+The reproduction lands on 201.8862658391 against the shard's own
+201.8862661906 -- the same stop to 3e-7.  What the guard keeps is then checked
+to be a real reading of that mode, not a placeholder: `gaps.min` under
+`ratio_tol` and FD-confirmed.
+
+### 10.6  Blast radius
+
+Every test file that imports `eme_2d_vector` or any `elements.eme` module was
+enumerated (`grep -rln`) and run: `test_audit_v5_24_2_g03_guards_em`, `test_audit_w4_jax_static_caches`,
+`test_audit_w6_eme`, `test_eme_2d`, `test_eme_2d_vector`,
+`test_eme_census_determinacy`, `test_eme_diffraction`, `test_eme_jax_modes`,
+`test_g08_s4_15_cache_hygiene`, `test_niche_audit_w6_eme`,
+`test_v4_16_0_walker_all_symmetry`, `test_v5_18_1_residuals`,
+`test_v5_21_2_subsystem_audits` -- 13 files.  (`test_niche_audit_w9_eig_vjp`
+also imports an EME symbol but is being worked in the separate consolidation
+branch and was left alone.)
+
+M: **259 passed** (1559.8 s, 1 BLAS thread).  W: still running at hand-off (M's 259 bounds it; the two mounts share the same 13-file set)
+
+### 10.7  Green
+
+| environment | python | numpy / scipy | census file (10 tests) | EME blast radius |
+|---|---|---|---|---|
+| M, Windows | 3.14.6 | 2.4.4 / 1.17.1 | **10 passed** (179.3 s) | **259 passed** (1559.8 s) |
+| W, WSL `lumen_venv` | 3.12.3 | 2.4.6 / 1.17.1 | **10 passed** (421.0 s) | still running at hand-off (M's 259 bounds it; the two mounts share the same 13-file set) |
+| W, `/tmp/venv-py310` | **3.10.20** | 2.2.6 / 1.15.3 | **10 passed** (173.6 s) | -- |
+| W, `/tmp/venv-py311` | **3.11.15** | 2.4.6 / 1.17.1 | **10 passed** (289.1 s) | -- |
+
+py3.10 and py3.11 are the two interpreters the last two shards failed on, and
+the census file now carries 10 ids there rather than 7 -- the three new
+parametrisations are the S10.5 fail-before.
+
+`ruff check lumenairy/ tests/unit/` clean on both mounts; both files ASCII; no
+`xfail`, `skip`, deleted test, weakened guard or `CHANGELOG` entry.
+
+### 10.8  Open
+
+* **The polish's greedy contraction is still greedy.**  The guard makes a stray
+  harmless, not impossible.  A polish that strays still forfeits the RECOVERY it
+  was there to provide (S3's 205.975 case), so a build whose contraction strays
+  loses that mode -- it just no longer loses the ones it already had.  A
+  multi-start polish (contract from the top-k sub-grid samples, keep the
+  deepest) would close that too and is the natural next step; it was not taken
+  here because it is not byte-null and this round had to be.
+* **The 5.5% sub-grid margin on the 201.887 cell** is the narrowest localisation
+  margin measured.  It is a property of that cell's wiggle structure, not of the
+  library, and it is what makes this cell the one that strays first.
+* `_POLISH_GUARD` is a test lever in library namespace.  It follows the
+  `PMM_FORWARD_GROWTH_REPAIR` / `PMM_JAX_MINNORM_PROJECTION` precedent, but it
+  is one more public-ish name that must never be set in anger.
