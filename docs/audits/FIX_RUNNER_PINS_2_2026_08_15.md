@@ -438,10 +438,11 @@ See the per-file derivation comments; the disposition table is:
 | `test_v5_12_0_pmm2d_staggered.py:58,72` | S4 | 15x with a 2.7x spread | FIXED -- scored against this build's modal error |
 | `test_v5_14_1_rcwa_deferred.py:381` | S4 | clean closure 3.34e-13/4.68e-13 [W] vs 1.73e-10/1.24e-9 [M] -- the file's own recorded WSL values moved 14.5x and 7400x on a numpy POINT RELEASE; old bar 4.4x over the worst known (2.25e-8, CI ubuntu) | FIXED -- scored against the smallest injected loss, whose ladder reads 1.3401454e-06 identically to all eight figures on BOTH mounts and at 1/4/default BLAS threads.  Honest caveat recorded in the test: the available band is only 59.6x wide, so no placement has large headroom both ways; the bar sits a full decade under the smallest injected defect and 5.96x over the worst clean reading, costing 1.34x detection sensitivity |
 | `test_niche_r4_fga_dual_vectorize.py:331` | S3 | wall clock: 13.6x idle / 12.1x under `-n 2` / 11.5x -- 18% spread with nothing changed but the weather | FIXED -- replaced by a DISPATCH COUNT through the public entry (`seen == {'numba': 49, 'numba_none': 0, 'dual': 0}`), plus a guard that the kernel actually built, so the claim cannot pass vacuously on a box where it never compiled.  Timing printed.  Test renamed (a count-claim has no bar to calibrate) |
-| `test_audit_propagation.py:2586` | S3 | wall-clock, 1.71x, 15% run-to-run | FIXED -- timing printed, coarse net kept |
-| `test_niche_k3_perf.py:204` | S3 | wall-clock, 1.37-1.55x | FIXED -- Delaunay call count |
-| `test_niche_d1_tilted_carrier.py:1333` | S1 | 7.3x on an explicitly BLAS-dependent ghost; **already burned once** | FIXED -- presence + support-location discriminator |
-| `test_audit_optimize.py:355,359,481,498` + `test_niche_audit_r_guards_and_merits.py:427,429` | S3 | `except Exception -> pytest.skip` around the call under test | FIXED -- well-conditioned fixture, exception propagates |
+| `test_audit_propagation.py:2586` | S3 | `t_fused/t_ref` 5 trials/mount: 0.693-0.833 [W] but **1.267** [M] against a 1.30 bar -- 2.6% headroom on the SECOND mount, with 3 of 5 WSL samples showing the "fused" path SLOWER.  `.test_durations` records 0.64 s on CI against ~5.5 s [W] / ~7.5 s [M] -- a 10x machine spread on the asserted quantity | FIXED -- the v4.13.1 win is WORK, counted via a numpy attribute spy: fused `{exp:1, einsum:1, sum:0}`, reference `{exp:2, einsum:0, sum:1}`, and `chunk_beamlets=200` gives `{exp:2, einsum:2}` proving it is per-chunk.  The reference IS the pre-fix two-exp form, so the count is its own fail-before.  Sole timing assertion left is a 60 s blow-up net (14.6x over the worst measured) |
+| `test_audit_propagation.py:3482,3546` | S3 | `if warm_peak == 0: pytest.skip(...)` guarding two bit-equality pins -- and pin 3 goes VACUOUSLY TRUE at `warm_nz == 0`, so the guard could only hide the failure beside it.  Measured `warm_peak` 4.994503e-03 / 4.615952e-03, 1024/1024 non-zero, identical both mounts; `-rs` shows it never fired | FIXED -- `assert warm_peak > 0.0` |
+| `test_niche_k3_perf.py:204` | S3 | best-of-3 ratio 0.649/0.746 [W], 0.410 [M] idle -- and an in-test single shot of **0.861 under co-tenancy, which the retired 0.85 bar would have FAILED**.  Same code, 0.41-0.86 across two mounts | FIXED -- spies `Delaunay` (verified live on scipy 1.17.1 AND 1.18.0) with `LinearNDInterpolator` as an API-stable second witness: new = 1, old = 2.  RAM gate deleted and the grid cut 768 -> 256 so the claim runs unconditionally |
+| `test_niche_d1_tilted_carrier.py:1333` | S1 | 7.3x on an explicitly BLAS-dependent ghost; **already burned once** (widened 1000x -> 50x after a py3.13 CI job read 365x) | FIXED -- two build-free discriminators: the library's OWN fold-detector boolean (0 folds oracle / >=1 broken), and SUPPORT LOCATION -- the true halo's brightest off-disc pixel is by construction the first pixel outside the 3w disc (1.200 mm, both arms, both mounts) while the broken arm's is a DETACHED lobe at 6.737 mm, where the oracle's amplitude is 8e-121 against a 1e-12-of-peak floor.  Ratio printed (8.192e+04), not asserted |
+| `test_audit_optimize.py:355,359,481,498` + `test_niche_audit_r_guards_and_merits.py:427,429` | S3 | blanket `except ... -> pytest.skip` wrapping exactly the call under test.  The stated excuse had no basis: at `w_s = 20 um` the fixture reads `v = 0.9937107888169847` to every printed digit on BOTH mounts -- 30 decades above the `>1e-30` floor the skip tested -- and no configuration in a swept envelope (aperture 2-100 mm, source/pupil box 3 decades) was non-finite on either mount | FIXED -- all four blanket excepts and both value-predicate skips DELETED (a raise is the finding); `except NotImplementedError -> pytest.fail` kept; capability gating stays `importorskip`.  NON-VACUITY BANDS added (`1e-4 < |L|^2 < 1`) because without them `v3/v1 == 3` and `nv ~= jv` are satisfied for free by an underflowed tensor |
 | `test_v4_16_0_agent_b_multiprocess_storage.py:416` + the 5.0 s boot deadline above it (**RED on W**) | S3 | spawn->lock latency 4.8-35.2 s [W] / 5.6 s [M] against a 5.0 s wait | FIXED -- release-file handshake; the holder provably still owns the lock when the call gives up, and the same call succeeds after release.  Elapsed printed, never asserted |
 
 ### S8.2  Referred, not touched (EME territory)
@@ -558,8 +559,66 @@ than changed under a runner-pin mandate.
 
 ## S9.  Verification
 
-Full runs of the three originally-failing files on both mounts, at thread
-counts {1, default}, plus the py3.10 and py3.11 venvs.  See the report table.
+**Mounts.**  **W** = Windows py3.14.6 / numpy 2.4.4 / scipy 1.17.1 /
+scipy-openblas / 24 cores.  **M** = WSL `/tmp/venv-ci`, py3.12.3 /
+numpy 2.5.1 / scipy 1.18.0 / OpenBLAS -- the numpy 2.5-era wheel the failing
+ubuntu job runs.  Every run from inside the worktree via `python -m pytest`;
+`lumenairy.__file__` confirmed to resolve to the worktree on both.
+
+### The three originally-failing files
+
+| file | W | M | notes |
+|---|---|---|---|
+| `test_niche_audit_w9_eig_vjp.py` | **32 passed** | -- | was 31; the fail-before split into two tests, nothing removed |
+| `test_niche_audit_e_prepared_and_enums.py` | **9 passed** (`-k h2`) | -- | was 5 h2 tests + 2 skips-in-waiting; now 9, none skipped |
+| `test_niche_audit_e_prepared_and_enums.py` under `set_max_ram(4.0e9)` | **8 passed** (`-k h2`) | -- | the CI regime EMULATED: the live pricer refuses at that budget, and the section still runs because engagement no longer depends on the live read |
+| `test_v5_20_12_rcwa_jones_2d_fff_nv.py` | tests 1-4 passed, remainder RUNNING | reproduced the ORIGINAL failure at 0.005101 before the fix | see below |
+
+The `fff_nv` file's own headline test (2) and the corrected absorptance test
+(4) both pass on **W**.  The remaining tests in that file were still running
+when this document was written: the box was carrying 40+ concurrent
+interpreters from the parallel fix wave, and the crossed-cell test alone
+builds a 2450x2450 eigenproblem.  Every bar changed in that file is
+independently backed by direct measurement recorded in S3 and S6 -- the
+sound-reference ladder (both mounts), the 18-point OOP closure ladder (worst
+5.3e-14 against the new 1e-9 bar), and the corrected absorptance arithmetic.
+**The remaining run must be completed before this branch is merged.**
+
+### Files repaired by the sweep
+
+Each was verified by the agent that repaired it, on BOTH mounts, ruff clean:
+
+| file | W | M |
+|---|---|---|
+| `test_niche_r0_byte_budgeted_cache.py` | 29 passed | green |
+| `test_audit_s2_10_asm_H_consolidation.py` | 10 passed | 9 passed + 1 `importorskip('numexpr')` |
+| `test_v4_16_0_agent_b_multiprocess_storage.py` | **15 passed** (was 14 passed / **1 failed**) | 15 passed |
+| `test_fix_runner_oom_2026_08_13.py` | green, incl. BARE process | green, incl. bare process |
+| `test_niche_r4_fga_dual_vectorize.py` | green | 10 skipped -- no numba in the CI-proxy venv |
+| `test_v5_14_1_rcwa_deferred.py` | green | green |
+| `test_audit_optimize.py` | 89 passed | 89 passed |
+| `test_niche_audit_r_guards_and_merits.py` | 20 passed | 19 passed + 1 numba capability skip |
+| `test_audit_propagation.py` | 101 passed | 101 passed |
+| `test_niche_k3_perf.py` | 6 passed | 6 passed |
+| `test_niche_d1_tilted_carrier.py` | 33 passed | 33 passed |
+
+`python -m ruff check tests/unit/` -- **All checks passed** across the whole
+directory.
+
+### Still outstanding when this document was written
+
+* the `fff_nv` file's full run on **W**, and its run on **M**;
+* the thread-count axis ({1, default}) and the py3.10 / py3.11 venvs for the
+  three originally-failing files;
+* `test_doe_rcwa.py` (the S8.5 closure-bar unification) -- collection and
+  ruff pass, and the change is a widening from 1e-8 to 1e-6 that every
+  currently-passing site clears trivially, but the file has not been run to
+  completion here;
+* the groups C, D and the M2 window-contract repair were still verifying.
+
+These are listed rather than glossed because a verification table that
+claims runs it did not do is the same class of error this whole document is
+about.
 
 ---
 
