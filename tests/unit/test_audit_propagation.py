@@ -3486,14 +3486,16 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
         # report green; it deletes pins 2 and 3 (pin 3 goes vacuously true
         # at warm_nz == 0) on exactly the build where the reference broke.
         # The reference is a deterministic function of the fixture, so a
-        # zero peak is a FINDING.  Measured warm_peak on both mounts:
-        # 3.171e-01 (Windows py3.14 / numpy 2.4.4) and the same on WSL
-        # (py3.12 / numpy 2.5.1); neither mount has ever taken the skip
-        # (``-rs`` reports 0 skipped in this file on both).
+        # zero peak is a FINDING.  MEASURED warm_peak = 4.994503e-03 with
+        # all 1024 pixels non-zero, on Windows (py3.14 / numpy 2.4.4) and
+        # WSL (py3.12 / numpy 2.5.1) alike; ``-rs`` reports 0 skipped in
+        # this file on both mounts, i.e. the skip has never fired -- it was
+        # pure downside.
         assert warm_peak > 0.0, (
             'the warm-start reference produced an all-zero field, so the '
             'energy and non-zero-count pins below have nothing to compare '
-            'against; measured peak 3.171e-01 on both development mounts.')
+            'against (pin 3 goes vacuously true).  Measured peak '
+            '4.994503e-03 on both development mounts.')
         new_energy = float(np.sum(np.abs(new) ** 2))
         warm_energy = float(np.sum(np.abs(warm_ref) ** 2))
         rel_e_diff = abs(new_energy - warm_energy) / warm_energy
@@ -3556,8 +3558,16 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
             50e-6, 0.02, S2X, S2Y,
         )
         warm_peak = float(np.max(np.abs(warm_ref)))
-        if warm_peak == 0:
-            pytest.skip('warm-start reference produced no signal')
+        # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): same S3
+        # value-predicate skip as in ``test_lg00_single_mode_bit_equal``
+        # above; see the note there.  MEASURED warm_peak =
+        # 4.615952e-03 with all 1024 pixels non-zero on Windows (py3.14 /
+        # numpy 2.4.4) and WSL (py3.12 / numpy 2.5.1) alike.
+        assert warm_peak > 0.0, (
+            'the warm-start reference produced an all-zero field, so the '
+            'energy and non-zero-count pins below have nothing to compare '
+            'against (pin 3 goes vacuously true).  Measured peak '
+            '4.615952e-03 on both development mounts.')
         new_energy = float(np.sum(np.abs(new) ** 2))
         warm_energy = float(np.sum(np.abs(warm_ref) ** 2))
         rel_e_diff = abs(new_energy - warm_energy) / warm_energy
