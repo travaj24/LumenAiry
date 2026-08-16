@@ -143,10 +143,11 @@ class LayerCache:
         if self.max_bytes is not None:
             return self.max_bytes
         from ...memory import get_ram_budget
-        try:
-            ram = int(get_ram_budget())
-        except Exception:                      # pragma: no cover - psutil-less
-            ram = 0
+        # No try/except: get_ram_budget() carries its own psutil-less
+        # fallback (4 GB) and cannot raise for a missing backend; a broad
+        # handler here would silently convert a REAL failure (e.g. a
+        # refactored import) into a starved cache (exception-budget L5).
+        ram = int(get_ram_budget())
         return max(self.min_budget, int(self.budget_fraction * ram))
 
     @property
