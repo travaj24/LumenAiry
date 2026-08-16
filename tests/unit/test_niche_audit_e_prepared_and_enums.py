@@ -103,6 +103,49 @@ def restore_globals():
 _POOL_N = 512          # 512^2 = 262144 >= the module's 200k pool threshold
 _POOL_DX = 15e-6
 
+# THE PRECONDITION, FORCED RATHER THAN HOPED FOR
+# (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S3, dated 2026-08-15).
+#
+# Every pin in this section is about what travels to a pool WORKER, so they
+# need the pool to ENGAGE.  Engagement is a RESOURCE decision, not a library
+# behaviour: :func:`~lumenairy.elements._lens_traced._newton_resolve_workers`
+# prices the pool at ``_NEWTON_POOL_RAM_FRAC (0.5) * available_bytes -
+# _NEWTON_POOL_MIN_FREE_GB (2 GB)`` against a measured ~1.85 GB per worker on
+# this fixture.  A 2-core / 7 GB CI runner has ~4 GB available, so its budget
+# is ``0.5 * 4 - 2 = 0.0 GB``, it CORRECTLY refuses every worker, and the run
+# falls back to serial -- at which point the spy observations come back empty
+# and the pins below read ``assert 0 >= 1`` and ``set() == {12}``.  That is
+# what the ubuntu runners hit.  Asserting engagement unconditionally asserts
+# the runner's RAM, not the library's behaviour; and the old response (a
+# ``pytest.skip`` when the pool did not engage) meant the ENTIRE E-H2 section
+# silently stopped running on exactly the boxes the release is gated on.
+#
+# The precondition is therefore FORCED, with the pricer's own documented test
+# hook -- ``_newton_resolve_workers(..., _free_b=)``, "overrides the live
+# memory read (tests only)".  Everything else in the pricing law still runs
+# exactly as shipped (rule 1's unguarded-``__main__`` refusal, the per-worker
+# memory model, the re-price-at-the-count-we-will-actually-run loop); only the
+# byte count it is told about becomes deterministic.  Paired with an EXPLICIT
+# worker count -- so the dispatch does not follow ``available_cpus()`` either
+# -- the pool engages identically on a 2-core box and on a 24-core one.
+#
+# Priced with the shipped model at N=512 (262 144 Newton points, 2 workers,
+# 1.85 GB/worker), MEASURED 2026-08-15 on this build:
+#
+#     _free_b     pool budget     workers resolved
+#     64 GB       30.0 GB         2    <- engaged   (_POOL_PRICED_IN_B)
+#      4 GB        0.0 GB         1    <- refused   (_POOL_PRICED_OUT_B,
+#                                          the CI runner's own regime)
+#
+# 64 GB is 2.1x the budget the 2-worker dispatch needs (3.7 GB) with the whole
+# ``_NEWTON_POOL_MIN_FREE_GB`` reserve still subtracted, and 4 GB is the
+# largest round figure that still prices the pool OUT, so both arms sit well
+# inside their regime rather than on a threshold.  Both directions are pinned
+# by ``test_h2_pool_engagement_follows_the_ram_pricing_both_ways``.
+_POOL_WORKERS = 2
+_POOL_PRICED_IN_B = 64e9
+_POOL_PRICED_OUT_B = 4e9
+
 # THE WIRE SHAPE THIS SECTION READS, and why it needs a memo.
 #
 # E-H2's mechanism pin is "the RESOLVED cap travels in the pickled payload", so
@@ -147,17 +190,36 @@ def _submitted_cap(args):
     return _CAP_BY_PAYLOAD_KEY.get(key, f'<key-only, bytes unseen: {key}>')
 
 
-def _pool_run(iters, n_workers=None):
+def _pool_run(iters, n_workers=_POOL_WORKERS, free_b=_POOL_PRICED_IN_B):
     """One ``newton_fit='spline'`` call big enough to engage the process pool.
 
     Wraps the pool factory so the test can PROVE the pool was asked for (the
     whole finding is confined to that path) AND capture the pickled payloads
     the parent submits, which is where the resolved cap now travels.
+
+    ``n_workers`` and ``free_b`` together make ENGAGEMENT deterministic on any
+    box -- see the block above ``_POOL_WORKERS``.  ``free_b`` is fed to the
+    shipped pricer through its own ``_free_b`` test hook, so the pricing law
+    itself is unmodified; pass ``_POOL_PRICED_OUT_B`` to exercise the refusal.
     """
     presc = _singlet(R1=25e-3, R2=-25e-3, d=3e-3, ap=8e-3)
     E, dx = _gauss(N=_POOL_N, dx=_POOL_DX, w=2.0e-3)
-    seen = {'pool': 0, 'caps': []}
+    seen = {'pool': 0, 'caps': [], 'workers': [], 'sizes': []}
     orig = LT._get_persistent_worker_pool
+    orig_resolve = LT._newton_resolve_workers
+
+    def _priced(requested, n_total, fit_points, *a, **kw):
+        """The shipped pricer, told a DETERMINISTIC number of free bytes.
+
+        Also records the two SIZES the pricing model is applied to, so the
+        pricing-law test can re-price exactly what this call priced instead
+        of re-deriving the fit-grid size from the prescription.
+        """
+        kw['_free_b'] = free_b
+        n = orig_resolve(requested, n_total, fit_points, *a, **kw)
+        seen['workers'].append(int(n))
+        seen['sizes'].append((int(n_total), int(fit_points)))
+        return n
 
     class _ExecutorSpy:
         def __init__(self, inner):
@@ -175,6 +237,7 @@ def _pool_run(iters, n_workers=None):
         return _ExecutorSpy(orig(n))
 
     LT._get_persistent_worker_pool = _spy
+    LT._newton_resolve_workers = _priced
     try:
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
@@ -187,16 +250,22 @@ def _pool_run(iters, n_workers=None):
         msgs = [str(w.message) for w in rec]
     finally:
         LT._get_persistent_worker_pool = orig
+        LT._newton_resolve_workers = orig_resolve
     return out, seen, msgs
 
 
 @pytest.fixture(scope='module')
 def _pool_runs():
     """The (expensive) N=512 spline runs this section needs, computed once:
-    a warm-up plus pool/serial at cap 1 and cap 12."""
-    from lumenairy.memory import available_cpus
-    if int(available_cpus()) <= 1:
-        pytest.skip('process-pool Newton path needs >1 usable CPU')
+    a warm-up plus pool/serial at cap 1 and cap 12.
+
+    Engagement is FORCED (``_POOL_WORKERS`` / ``_POOL_PRICED_IN_B``), so this
+    fixture produces the same observations on a 2-core CI runner as on a
+    24-core workstation and there is nothing left for a ``skip`` to hide.  The
+    two skips this replaces -- ``available_cpus() <= 1`` and "the pool did not
+    engage on this box" -- were exactly how the section stopped running on the
+    boxes that gate the release.
+    """
     _pool_run(12)          # warm-up: the FIRST N=512 call in a process differs
                            # from every later one by ~4.4e-14 (FFT plan state in
                            # the analytic amplitude leg), so measure on warm
@@ -206,9 +275,6 @@ def _pool_runs():
     serial_1, seen_serial, msgs_serial = _pool_run(1, n_workers=1)
     serial_12, _, _ = _pool_run(12, n_workers=1)
     LT.close_worker_pool()
-    if seen_1['pool'] < 1 or not seen_1['caps']:
-        pytest.skip('process pool did not engage on this box '
-                    '(spawn blocked?) -- E-H2 pins are path-specific')
     return dict(pool_1=pool_1, pool_12=pool_12, serial_1=serial_1,
                 serial_12=serial_12, seen_1=seen_1, seen_12=seen_12,
                 seen_serial=seen_serial, msgs_1=msgs_1,
@@ -218,19 +284,128 @@ def _pool_runs():
 def test_h2_pool_path_is_actually_engaged(_pool_runs):
     """Fixture guard: the finding only exists on the process-pool path, so the
     pins below are meaningless unless the pool was requested (and NOT requested
-    for the ``n_workers=1`` control)."""
+    for the ``n_workers=1`` control).
+
+    This now holds on ANY box, because the fixture forces the precondition
+    (``_POOL_WORKERS`` / ``_POOL_PRICED_IN_B``) instead of inheriting the
+    runner's core count and free RAM.  2026-08-12 it did not: a 2-core / 7 GB
+    ubuntu runner priced the pool out, fell back to serial, and this read
+    ``assert 0 >= 1``.
+    """
     assert _pool_runs['seen_1']['pool'] >= 1
     assert _pool_runs['seen_12']['pool'] >= 1
     assert _pool_runs['seen_serial']['pool'] == 0
+    # ...and the forced pricing really did resolve the requested workers, so
+    # "engaged" is not being read off a pool that ran with one worker.
+    assert set(_pool_runs['seen_1']['workers']) == {_POOL_WORKERS}
+    assert set(_pool_runs['seen_12']['workers']) == {_POOL_WORKERS}
+    assert set(_pool_runs['seen_serial']['workers']) == {1}
+
+
+def test_h2_the_ram_pricing_law_itself(_pool_runs):
+    """The pricing ARITHMETIC, exercised straight on the shipped function --
+    no lens call, so this arm costs nothing and covers the whole ladder.
+
+    ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S3.  This is what decides
+    whether the section above has a pool to observe, so it is stated as its
+    own claim rather than inferred from the observations.  Priced at the
+    fixture's own size (N=512 -> 262 144 Newton points) with the same fit
+    grid, measured 2026-08-15: ~1.85 GB per worker, so the budget
+    ``0.5 * free - 2 GB`` admits 2 workers from 32 GB up and refuses below
+    ~8 GB.  The 4 GB row is the 2-core / 7 GB CI runner's own regime.
+    """
+    # the exact sizes the fixture's pooled dispatch was priced at
+    sizes = _pool_runs['seen_12']['sizes']
+    assert sizes, 'the pricer was never consulted'
+    n_total, fit_points = sizes[0]
+    assert n_total == _POOL_N * _POOL_N, (n_total, _POOL_N)
+    for free_b, want in ((64e9, _POOL_WORKERS), (32e9, _POOL_WORKERS),
+                         (8e9, 1), (4e9, 1)):
+        got = LT._newton_resolve_workers(
+            _POOL_WORKERS, n_total, fit_points, on_pool_memory='silent',
+            _free_b=free_b)
+        assert got == want, (
+            f'{free_b / 1e9:.0f} GB free priced {got} worker(s), expected '
+            f'{want}; per-worker model says '
+            f'{LT._newton_worker_bytes(n_total / _POOL_WORKERS, fit_points) / 1e9:.2f}'
+            f' GB against a budget of {(0.5 * free_b - 2e9) / 1e9:.1f} GB')
+    # the two arms the section actually uses must land on opposite sides
+    assert LT._newton_resolve_workers(
+        _POOL_WORKERS, n_total, fit_points, on_pool_memory='silent',
+        _free_b=_POOL_PRICED_IN_B) == _POOL_WORKERS
+    assert LT._newton_resolve_workers(
+        _POOL_WORKERS, n_total, fit_points, on_pool_memory='silent',
+        _free_b=_POOL_PRICED_OUT_B) == 1
+
+
+def test_h2_pool_engagement_follows_the_ram_pricing_both_ways(_pool_runs):
+    """The resource decision the fixture above pins DOWN, asserted here as its
+    own claim -- in BOTH directions, on the shipped pricing law.
+
+    ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S3.  Splitting it out is
+    the point: the E-H2 pins are about the PAYLOAD, and they should not double
+    as an accidental (and box-dependent) assertion about RAM.  Here the RAM is
+    the subject, so it is stated twice and deliberately:
+
+    * priced IN (64 GB free -> 30.0 GB of pool budget against 1.85 GB/worker):
+      the pool is built and the payload crosses the wire;
+    * priced OUT (4 GB free -> 0.0 GB of budget, the 2-core/7 GB CI runner's
+      own regime): the pool is REFUSED, no worker is ever asked for, and the
+      call completes serially.
+
+    The refusal is the library being right, so the answer must be unchanged by
+    it -- the pool path is documented bit-identical to serial, and that is
+    asserted here rather than assumed.
+    """
+    # PRICED IN: reuse the fixture's own pooled cap-12 run rather than paying
+    # for a seventh N=512 solve -- it was produced at _POOL_PRICED_IN_B by
+    # construction, and this test is about the OTHER side of the decision.
+    out_in, seen_in = _pool_runs['pool_12'], _pool_runs['seen_12']
+    out_out, seen_out, _ = _pool_run(12, free_b=_POOL_PRICED_OUT_B)
+    LT.close_worker_pool()
+
+    # priced in -> engaged, at the count that was asked for
+    assert seen_in['pool'] >= 1
+    assert set(seen_in['workers']) == {_POOL_WORKERS}
+    assert seen_in['caps'], 'engaged but nothing was submitted'
+
+    # priced out -> refused, before any worker is requested
+    assert set(seen_out['workers']) == {1}, (
+        f"the pricer allowed {sorted(set(seen_out['workers']))} worker(s) on "
+        f"a {_POOL_PRICED_OUT_B / 1e9:.0f} GB budget; the refusal arm is no "
+        f"longer exercising a refusal")
+    assert seen_out['pool'] == 0
+    assert seen_out['caps'] == []
+
+    # ...and refusing cost nothing but wall time.  Same bar, same derivation,
+    # as test_h2_pool_and_serial_share_one_newton_solution: the pool-vs-serial
+    # residual is the ambient 4.4e-14 float floor and 1e-11 sits 250x above it.
+    d = _maxabs(out_in, out_out)
+    assert d < 1e-11, (
+        f'the RAM refusal moved the answer by {d:.3e}; the clamp is a pure '
+        f'resource decision and the pool path is bit-identical to serial')
 
 
 def test_h2_resolved_cap_travels_in_the_pickled_payload(_pool_runs):
     """The mechanism: the ``_spline_data`` payload the parent submits to each
     worker must carry the RESOLVED cap.  Pre-fix the key did not exist and the
     worker used the module constant, which is exactly why the kwarg was
-    inert."""
-    assert set(_pool_runs['seen_1']['caps']) == {1}
-    assert set(_pool_runs['seen_12']['caps']) == {12}
+    inert.
+
+    Stated as a SET, so what is pinned is the INVARIANT -- every payload that
+    crosses the wire carries the resolved cap -- and not a submission COUNT,
+    which is a function of the worker count and the chunking.  The emptiness
+    guard is separate and explicit: an empty observation satisfies nothing,
+    and on 2026-08-12 a serial fallback made this read ``set() == {12}``,
+    which named the wrong defect.  Engagement is forced by the fixture (S3).
+    """
+    for tag, want in (('seen_1', 1), ('seen_12', 12)):
+        caps = _pool_runs[tag]['caps']
+        assert caps, (
+            f'nothing was submitted for {tag}: the pool did not dispatch, so '
+            f'this pin has no payload to read.  The engagement claim lives in '
+            f'test_h2_pool_engagement_follows_the_ram_pricing_both_ways')
+        assert set(caps) == {want}
 
 
 def test_h2_newton_max_iters_is_live_on_the_pool_path(_pool_runs):

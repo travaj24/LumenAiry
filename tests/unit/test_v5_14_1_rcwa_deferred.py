@@ -376,12 +376,60 @@ def test_tapered_grating_shear_energy_envelope_still_sees_a_lossy_ridge():
     Three claims: the shipped lossless arm passes with room to spare, the
     injected arm at 1e-5 breaks the envelope (13x over it), and the ladder is
     LINEAR in the injected loss -- so the bar's position is a physical
-    threshold and not a coincidence of one cell."""
-    rel_clean = _shear_closure(*_shear_stack(0.3)[1:])
-    assert rel_clean < 0.1 * _SHEAR_ENERGY_REL   # measured <= 1.2e-11
+    threshold and not a coincidence of one cell.
 
+    REDERIVED 2026-08-15 (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.1,
+    shape S4).
+    The clean arm used to be scored against ``0.1 * _SHEAR_ENERGY_REL``, i.e.
+    an absolute ``1e-7``.  That silently divided the parent envelope by ten and
+    threw away the calibration the parent was given: ``_SHEAR_ENERGY_REL``
+    sits 44x above the worst reading any build has produced, and ``1e-7`` sits
+    **4.4x** above it -- the same lucky-pin shape the parent comment says this
+    campaign has now treated five times.  It is a bar on a ROUND-OFF magnitude,
+    and that magnitude is the most build-mobile number in this file:
+
+        clean relative closure     shear +0.3     shear -0.3
+        Windows py3.14 / np2.4.4   3.337330e-13   4.684031e-13
+        WSL py3.12 / np2.5.1       1.732742e-10   1.237143e-09
+        (recorded above, WSL       1.192e-11      1.663e-13 )
+        CI ubuntu                  2.25e-8
+
+    -- five decades of spread, and the WSL column moved 14.5x / 7400x on a
+    NumPy POINT RELEASE alone.  Nothing about this build's LAPACK is a
+    property of the shear geometry the test is about.
+
+    So the clean arm is now scored against the ladder's OWN smallest rung,
+    measured in this same process: the ``Im(eps) = 1e-6`` injection, which
+    reads ``1.3401454e-06`` -- IDENTICAL to all eight printed figures on
+    Windows py3.14 / np2.4.4 and WSL py3.12 / np2.5.1, and at
+    ``OPENBLAS_NUM_THREADS`` 1 / 4 / default.  A physical absorptance, not a
+    round-off.  No absolute constant survives in the bar, and a build that
+    moves the ladder carries the bar with it.
+
+    Two-sided, and stated honestly: the separation available here is only
+    ``1.3401454e-06 / 2.25e-8 = 59.6x`` wide -- that is the whole band between
+    the worst clean round-off any build has shown and the smallest defect the
+    ladder injects, and no bar can have large headroom in both directions
+    inside it.  The ``0.1`` factor puts the bar at ``1.3401e-07``: a full
+    DECADE below the smallest injected defect (so the check still says
+    something -- clean and a 1e-6 lossy ridge are unambiguously separated) and
+    **5.96x** above the worst clean reading (2.25e-8, CI ubuntu; 773x above
+    this box's 3.34e-13).  The exact geometric centre of the band would be
+    ``1.74e-07`` = 7.7x / 7.7x, so ``0.1`` is within 30% of the best placement
+    available.  The residual exposure -- a future LAPACK whose lossless closure
+    is another decade worse than CI ubuntu's -- is a property of the band, not
+    of the bar, and it is now visible in the failure message instead of hidden
+    inside a constant."""
     ladder = [(k, _shear_closure(*_shear_stack(0.3, eps_ridge=4.0 + 1j * k)[1:]))
               for k in (1e-6, 1e-5, 1e-4)]
+    rel_clean = _shear_closure(*_shear_stack(0.3)[1:])
+    assert rel_clean < 0.1 * ladder[0][1], (
+        f"the LOSSLESS sheared staircase closed to {rel_clean:.3e} relative, "
+        f"which is not a decade clear of the smallest defect this tripwire "
+        f"injects (Im(eps) = {ladder[0][0]:.0e} reads {ladder[0][1]:.7e} in "
+        f"this same process, bar {0.1 * ladder[0][1]:.3e}) -- either the "
+        f"lossless cell has acquired a real flux defect, or this build's "
+        f"round-off floor has climbed into the band the tripwire needs")
     assert ladder[1][1] > _SHEAR_ENERGY_REL, (
         f"a 1e-5 lossy ridge closed to {ladder[1][1]:.3e} relative, inside the "
         f"envelope {_SHEAR_ENERGY_REL:.0e} -- the tripwire has no teeth")

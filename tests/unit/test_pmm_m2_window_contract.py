@@ -397,9 +397,63 @@ def _score_null_control(cells, refs, degrees=_LADDER_DEGREES, mk=None):
     return table
 
 
-def _uncured_below_threshold(ns, mf, layers, degrees, mk, off_nm):
-    """The threshold rule's NOT-CURED half, CONDITIONED ON THE CENSUS.
-    Returns ``(spread, ladder)``.
+#: The degree-ladder SPREAD that separates a COLLAPSED ladder from a
+#: stationary one.  THIS FILE'S OWN BAR since M2 and NOT moved by the
+#: 2026-08-15 re-statement below: measured 1.23 / 1.34 / 1.76 / 2.28 / 2.38
+#: collapsed against 0.00356 / 0.00406 / 0.00733 cured on both mounts, i.e.
+#: over a decade of margin either side of it.
+_COLLAPSE_SPREAD = 0.1
+
+
+def _reach_probe(ns, mf, degrees, mk):
+    """``scale -> (spread, raw census)`` for one cell, with the cut scaled by
+    ``scale`` RELATIVE TO WHERE IT ALREADY IS.
+
+    ``near_cut_injector`` composes multiplicatively and :data:`_LADDER_CACHE`
+    keys on the product, so a caller that already holds an injector (the
+    NOT-CURED fail-before does) gets the composed cut and its own cache entry.
+    ``scale = 1.0`` is a true no-op that hits the un-injected entry, so the
+    FIRST rung of a reach walk costs no solve on any build."""
+    def probe(scale):
+        with near_cut_injector(scale):
+            v, raw, _post, _nonpas = _ladder_rec(ns, mf, degrees, mk)
+        return float(spread(v)), [int(x) for x in raw]
+    return probe
+
+
+def _collapse_reach(probe, bar=_COLLAPSE_SPREAD, scales=None):
+    """``(hit, rows)`` -- the FIRST rung of the CUT LADDER at which the census
+    is ARMED and the degree ladder has COLLAPSED, or ``(None, rows)`` when no
+    rung reaches it.  ``rows`` is every rung walked, ``(scale, raw census,
+    spread)``.
+
+    THE LADDER IS ``(1.0,) + _INJECTOR_SCALES`` and it starts at 1.0 for a
+    reason: rung one is THE CUT AS THIS BUILD FINDS IT, so a build whose own
+    round-off arms the collision is scored on its OWN reading and pays no extra
+    solve, and the rungs below it are the cut positions a DIFFERENT build's
+    round-off could have put a mode across (``FIX_CI_ROUND2_PMM_2026_08_08``
+    S6's near-cut injector).  Nothing about the geometry, the materials, the
+    operator or the eigenvalues moves along that ladder -- only where the cut
+    lands, which is the one thing an OpenBLAS kernel is entitled to move.
+
+    Both conjuncts are required at the SAME rung and neither is a tolerance
+    dressed up: ``sum(raw)`` is a mode COUNT off the shipped instrument, and
+    the spread bar is :data:`_COLLAPSE_SPREAD`, this file's own since M2.  A
+    rung that scatters without an armed census is not this mechanism and does
+    not count; nor does an armed census whose ladder never moves."""
+    scales = ((1.0,) + _INJECTOR_SCALES) if scales is None else scales
+    rows = []
+    for scale in scales:
+        sp, raw = probe(scale)
+        rows.append((float(scale), [int(x) for x in raw], float(sp)))
+        if sum(rows[-1][1]) and rows[-1][2] > bar:
+            return rows[-1], rows
+    return None, rows
+
+
+def _uncured_below_threshold(ns, mf, layers, degrees, mk, off_nm, probe=None):
+    """The threshold rule's NOT-CURED half, stated as a REACH OVER CUT
+    POSITIONS.  Returns ``(spread at the cut as currently set, rows walked)``.
 
     ``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S5, and the third instance of
     ``FIX_M2_NULL_CONTROL_2026_08_09``'s finding.  ``"1.5 nm should NOT cure
@@ -414,32 +468,68 @@ def _uncured_below_threshold(ns, mf, layers, degrees, mk, off_nm):
     the repair exists to redirect.  Nothing was silently wrong there; the
     premise was.
 
+    **2026-08-15 -- THE SECOND ADJUDICATION, AND IT RETIRES THE CONDITIONAL.**
+    ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.5 (shape S6).  The
+    2026-08-12 form above partitioned on the census AT THE SHIPPED CUT and then
+    asserted the CONDITIONAL *armed => collapsed*.  main CI, new pythons,
+    refuted it on this very cell::
+
+        ns=6 min_feature=1.5nm: census reads [0, 0, 0, 0, 2] raw growing
+        mode(s) over degrees (8..16) ... but it spreads only 0.004055
+
+    and the conditional was never a theorem.  ``_core._mode_cut_growth`` counts
+    a mode that is ``prop``, within ``_MODE_CUT_MARGIN_WARN`` of the cut and
+    growing; NOTHING in that count says how strongly the mode is EXCITED or how
+    far it grows across a 51.7 nm slice, so an armed rung is free to be
+    indistinguishable from a cured one -- which is what two modes on the LAST
+    rung of the runner's ladder were.  ``n_grow`` is NECESSARY for the
+    collapse, never SUFFICIENT for it.
+
+    THE CENSUS IS A PER-BUILD READING THREE TIMES OVER -- mount, thread count
+    and wheel.  Measured on this cell, repair OFF, degrees 8..16, over the cut
+    ladder (2026-08-15; W = Windows py3.14.6 / numpy 2.4.4 at 24 threads,
+    M = WSL py3.12.3 / numpy 2.5.1 at one):
+
+        cut        [W] raw census        spread     [M] raw census       spread
+        x1         [0,0,1,2,3]           1.33841    [0,0,0,3,0]          2.38098
+        x1/3       [0,0,1,4,7]           1.33841    [0,1,0,5,5]          2.38098
+        x1e-2      [11,15,26,42,54]      1.43113    [10,25,24,59,72]     1.35714
+        x1e-4      [26,38,44,55,66]      1.36577    [29,32,42,42,55]     1.42007
+        ---------- and upward, which is the runner's direction --------------
+        x3         [0,0,1,2,3]           1.33841    [0,0,0,1,0]          2.38098
+        x10        [0,0,0,0,0]           0.004055   [0,0,0,0,0]          0.004055
+
+    -- and M does not even agree with what the 2026-08-12 table recorded on the
+    same mount ([0,0,1,1,1] at one thread there, on a numpy 2.4 wheel; the
+    numpy 2.5 wheel the failing job runs reads [0,0,0,3,0] and scatters 2.38
+    where that one scattered 1.34).  No reading here is universal.  What IS
+    universal on both mounts, at every width and every wheel, is that SOMEWHERE
+    on the cut ladder the census arms and the ladder collapses.
+
     So the half is re-stated on the two things that are true build by build:
 
     * the GEOMETRY premise, asserted rather than commented -- ``min_feature``
       below the per-slice offset must leave the window UNSNAPPED, read off the
       shipped snap accounting (``_snap_report``), which is deterministic and
       carries no BLAS dependence at all;
-    * the MECHANISM, where the instrument says it is armed -- a ladder that
-      reads a raw growing mode must scatter (> 0.1, measured 1.34).  Where the
-      census reads ZERO on every rung there is no collision to leave uncured
-      and the spread says nothing about the rule, so instead of skipping, the
-      in-tree near-cut injector is walked down ``_INJECTOR_SCALES`` until the
-      cell arms -- the mechanism must be REACHABLE on every build, and if no
-      scale reaches it the test FAILS rather than passing quietly.
+    * the MECHANISM as an EXISTENCE claim, which names no census reading:
+      somewhere on the cut ladder that STARTS at this build's own cut and walks
+      down ``_INJECTOR_SCALES`` there is a rung whose census is ARMED and whose
+      degree ladder has COLLAPSED (:func:`_collapse_reach`).  A build whose
+      round-off arms the collision -- both mounts, every width measured -- meets
+      it on rung one, where the assertion is the 2026-08-12 one verbatim and
+      costs no extra solve; a build whose round-off does not, or does so
+      harmlessly as the runner's did, escalates until the cut sits where such a
+      build's round-off would have put it.  If NO rung reaches it the test
+      FAILS with its table: an un-snapped window that admits no collapse at any
+      cut position REFUTES the rule, and that is the claim this half exists to
+      make.
 
-    Measured (repair off, this device, ns = 6 / 1.5 nm, degrees 8-16):
-
-        mount / OPENBLAS_NUM_THREADS   raw census      spread
-        Windows py3.14 default         [0,0,1,2,3]     1.33841
-        WSL py3.12 1                   [0,0,1,1,1]     1.33841
-        WSL py3.12 4                   [0,0,1,2,1]     1.93102
-        WSL py3.12 default             [0,0,1,2,3]     1.33841
-        disarmed by the cut injector   [0,0,0,0,0]     0.00406   <- the runner
-
-    (WHICH scale disarms is itself a per-build fact -- x3 on M, x10 on W at
-    four threads -- so the fail-before below SEARCHES for it; see
-    :func:`_first_disarming_scale`.)
+    ``probe`` overrides the measurement for the engineered fail-before
+    (:func:`test_the_NOT_CURED_reach_is_scored_on_a_LADDER_of_cut_positions`),
+    which drives this same decision against the census tables the two mounts
+    and the ubuntu runner ACTUALLY produced -- including the states no build
+    here manifests.  The default measures the device.
     """
     merged, _disp = _snap_report([s for _t, s in layers], mf / PERIOD,
                                  halfwidth=1)
@@ -449,46 +539,28 @@ def _uncured_below_threshold(ns, mf, layers, degrees, mk, off_nm):
         f"window must come back UNSNAPPED -- but the shipped accounting "
         f"merged {merged} pair(s).  The cell is mislabelled and every claim "
         f"below is about a different geometry than the one named")
-    v, raw, _post, _nonpas = _ladder_rec(ns, mf, degrees, mk)
-    sp = spread(v)
-    if int(np.sum(raw)):
-        assert sp > 0.1, (
-            f"ns={ns} min_feature={mf * 1e9:.1f} nm (off={off_nm:.3f} nm): the "
-            f"census reads {list(int(x) for x in raw)} raw growing mode(s) "
-            f"over degrees {tuple(degrees)}, so the near-cut collision the "
-            f"un-snapped window admits DID fire -- and the degree ladder must "
-            f"scatter with it, but it spreads only {sp:.3g} (measured 1.34).  "
-            f"A collision that fires without moving the answer is a second "
-            f"mechanism and must be diagnosed")
-        return sp, v
-    # The instrument reads ZERO everywhere: this build's round-off put no mode
-    # across the cut, so there is no collapse here to leave uncured.  WIDEN,
-    # do not skip -- the same move the null controls make.
-    for scale in _INJECTOR_SCALES:
-        with near_cut_injector(scale):
-            v2, raw2, _p2, _n2 = _ladder_rec(ns, mf, degrees, mk)
-            if not int(np.sum(raw2)):
-                continue
-            sp2 = spread(v2)
-            assert sp2 > 0.1, (
-                f"ns={ns} min_feature={mf * 1e9:.1f} nm: with the near-cut "
-                f"injector at {scale:.4g} the census reads "
-                f"{list(int(x) for x in raw2)}, so the collision the "
-                f"un-snapped window admits is REACHABLE on this build -- but "
-                f"the ladder still spreads only {sp2:.3g}.  The threshold "
-                f"rule's premise is that an un-snapped window ADMITS the "
-                f"collapse; this build says it does not")
-            return sp, v
-    assert False, (
-        f"ns={ns} min_feature={mf * 1e9:.1f} nm (off={off_nm:.3f} nm): the "
-        f"census reads zero raw growing modes on every rung of "
-        f"{tuple(degrees)} on the shipped build AND at every near-cut "
-        f"injector scale in "
-        f"{tuple(float(f'{s:.4g}') for s in _INJECTOR_SCALES)}, so the "
-        f"collision an un-snapped window is supposed to admit is not "
-        f"reachable here at all.  Either the mode-cut instrument is dead (the "
-        f"same reading either way) or the rule itself is refuted on this "
-        f"device -- widen the scale ladder and adjudicate; do not delete this")
+    probe = _reach_probe(ns, mf, degrees, mk) if probe is None else probe
+    hit, rows = _collapse_reach(probe)
+    assert hit is not None, (
+        f"ns={ns} min_feature={mf * 1e9:.1f} nm (off={off_nm:.3f} nm): NO rung "
+        f"of the cut ladder "
+        f"{tuple(float(f'{s:.4g}') for s in (1.0,) + _INJECTOR_SCALES)} "
+        f"both ARMS the census and COLLAPSES the degree ladder over "
+        f"{tuple(degrees)} -- walked "
+        f"{[(float(f'{s:.4g}'), r, float(f'{p:.4g}')) for s, r, p in rows]}.  "
+        f"An un-snapped window is supposed to ADMIT the collision at SOME cut "
+        f"position; this device admits it at none, so either the mode-cut "
+        f"instrument is dead (the same reading at every scale) or the "
+        f"threshold rule itself is refuted here.  Widen the ladder and "
+        f"adjudicate; do not delete this")
+    if hit[0] != 1.0:
+        print(f"\nM2 NOT-CURED reach [{mk.__name__} ns={ns} "
+              f"min_feature={mf * 1e9:.1f} nm]: this build's own cut does NOT "
+              f"collapse this cell, so the collision was reached at cut "
+              f"x{hit[0]:.4g} (census {hit[1]}, spread {hit[2]:.4g}) -- walked "
+              + ", ".join(f"x{s:.4g} raw={r} spread={p:.5g}"
+                          for s, r, p in rows))
+    return rows[0][2], rows
 
 
 def _snap_report(layer_segments, mf_frac, halfwidth=1):
@@ -1321,8 +1393,17 @@ def test_threshold_rule_holds_on_a_SINGLE_REGION_uncoated_taper(
     # at 0.00406.  The helper asserts the geometric premise (the window really
     # is unsnapped) plus the mechanism where the instrument says it is armed,
     # and probes with the near-cut injector where it is not.
-    s_lo, _ = _uncured_below_threshold(6, 1.5e-9, _uncoated_layers(6), degs,
-                                       _uncoated_stack, 1.804)
+    #
+    # 2026-08-15 (FIX_RUNNER_PINS_2_2026_08_15 S8.5, shape S6): that helper
+    # partitioned on the census AT THE SHIPPED CUT and then asserted "armed =>
+    # collapsed".  main CI read [0, 0, 0, 0, 2] with the ladder still at its
+    # cured 0.004055 and failed here -- an armed census is NECESSARY for the
+    # collapse, never SUFFICIENT.  The helper now makes the mechanism claim as
+    # a REACH over a ladder of CUT POSITIONS that starts at this build's own
+    # cut, which names no census reading; see its docstring for the readings
+    # both mounts produce.
+    s_lo, _rows = _uncured_below_threshold(6, 1.5e-9, _uncoated_layers(6),
+                                           degs, _uncoated_stack, 1.804)
     s_hi, v_hi = spread_u(6, 3.0e-9)
     assert s_hi < 2e-2, f"3.0 nm should cure ns=6: {s_hi:.3g}"
     # ns = 12, off = 0.902 nm: 1.5 nm is already above the threshold
@@ -1428,18 +1509,25 @@ def test_the_threshold_rules_NOT_CURED_half_conditions_on_the_census_too(
 
     That also makes the search itself falsifiable HERE, where 3.0 works: this
     box is ARMED at the shipped cut, so the walk must escalate off its first
-    rung, and the rung it leaves must be the SCATTERING one.  A build already
-    in the runner's condition stops at 1.0 and the escalation claim is skipped
-    with it -- there is nothing to escalate away from there, and the three
-    claims below are the whole point on such a build.
+    rung.  A build already in the runner's condition stops at 1.0 and that
+    self-check is skipped with it -- there is nothing to escalate away from
+    there, and the three claims below are the whole point on such a build.
+
+    **2026-08-15** (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.5).  The
+    escalation self-check used to ALSO require the rung the walk left behind to
+    SCATTER, i.e. that an armed census and a collapsed ladder are the same
+    event.  main CI refuted that -- armed on the last rung only, ladder still
+    cured -- and it is the second of the two assertions this round repairs.
+    See the block itself; the scatter claim survives build-free inside (a),
+    which is now a REACH over cut positions rather than a reading at one.
 
     Three claims, the siblings':
 
     (a) the RECONDITIONED half passes under the injector, and passes for the
-        right reason -- it reaches its probe branch and the probe finds the
-        collision reachable;
+        right reason -- from the DISARMED cut it walks back down and finds a
+        cut position where the collision both arms and collapses;
     (b) the ORIGINAL assertion, verbatim, on the SAME reading, FAILS;
-    (c) the probe branch is not vacuous -- the disarmed reading really is the
+    (c) the reach is not vacuous -- the disarmed reading really is the
         cured-looking one, so (a) is not passing on an armed ladder.
     """
     cell, off_nm = (6, 1.5e-9), 1.804
@@ -1474,25 +1562,50 @@ def test_the_threshold_rules_NOT_CURED_half_conditions_on_the_census_too(
         f"then this is no longer an emulation of any runner")
     if len(rows) > 1:
         # This build's own round-off ARMS the cell, so the walk had to
-        # escalate -- and the rung it left behind must be the one that
-        # scatters.  That is the transition the search is looking for, stated
-        # as a claim rather than assumed: a ladder that carries a raw growing
-        # mode and does NOT scatter would mean the census and the collapse
-        # have come apart, which is the premise the whole re-statement rests
-        # on.  (Measured at x1: [0,0,1,2,3] spread 1.33841 on M and on W at
-        # default, [0,0,1,1,1] spread 1.33841 on W at one thread, [0,0,1,2,1]
-        # spread 1.93102 on W at four -- the width that also needs x10 to
-        # disarm and so reproduces the runner.)
+        # escalate off its first rung.
+        #
+        # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md S8.5, shape
+        # S6).  THIS CLAIM USED TO ADD "and the rung it left behind must also
+        # SCATTER", i.e. that the census and the collapse are the same event.
+        # They are not, and this was the SECOND of the two assertions main CI
+        # failed: the runner read [0, 0, 0, 0, 2] at the SHIPPED cut -- armed,
+        # on the last rung only -- with the ladder still at its cured 0.004055,
+        # so the walk escalated off an armed rung that had not collapsed.  An
+        # armed census is NECESSARY for the collapse and never SUFFICIENT
+        # (_mode_cut_growth counts a near-cut growing mode; it says nothing
+        # about how strongly that mode is excited), so the equivalence was a
+        # per-build coincidence of the two mounts, which happen to arm and
+        # collapse together at every width measured:
+        #
+        #     mount / OPENBLAS_NUM_THREADS   cut x1        spread   disarms at
+        #     W py3.14 numpy 2.4.4 / 24      [0,0,1,2,3]   1.33841  x10
+        #     M py3.12 numpy 2.5.1 / 1       [0,0,0,3,0]   2.38098  x5..x10
+        #     M py3.12 numpy 2.4.6 / 1       [0,0,1,1,1]   1.33841  x3
+        #     M py3.12 numpy 2.4.6 / 4       [0,0,1,2,1]   1.93102  x10
+        #     ubuntu, main CI 2026-08-15     [0,0,0,0,2]   0.004055 (armed and
+        #                                                  NOT collapsed)
+        #
+        # So what is asserted here is the STRUCTURAL fact the walk is built on
+        # -- it escalates on the CENSUS, and therefore only ever off an ARMED
+        # rung -- which is a self-check binding this claim to the loop
+        # condition in _first_disarming_scale rather than a reading.  The
+        # SCATTER is adjudicated and printed.  It is not lost: (a) below makes
+        # it build-free, as a REACH over cut positions.
         prev_scale, prev_raw, prev_spread = rows[-2]
-        assert int(np.sum(prev_raw)) and prev_spread > 0.1, (
-            f"the disarm walk escalated past cut x{prev_scale:.4g}, where the "
-            f"census reads {prev_raw} raw growing mode(s), but that ladder "
-            f"spreads only {prev_spread:.4g}.  The search escalates on the "
-            f"CENSUS and the claim below rests on the census and the collapse "
-            f"being the same event; here they are not")
+        assert int(np.sum(prev_raw)), (
+            f"the disarm walk escalated past cut x{prev_scale:.4g}, whose "
+            f"census reads {prev_raw} -- but the walk only continues off a rung "
+            f"the census ARMS, so the search and this claim have come apart")
+        print(f"M2 NOT-CURED fail-before: the last ARMED rung (cut "
+              f"x{prev_scale:.4g}, census {prev_raw}) "
+              + (f"collapses at spread {prev_spread:.5g}, this build's own "
+                 f"reproduction of the mechanism"
+                 if prev_spread > _COLLAPSE_SPREAD else
+                 f"spreads only {prev_spread:.5g} -- armed WITHOUT collapsing, "
+                 f"the runner's 2026-08-15 condition, reproduced here"))
     with near_cut_injector(scale):
         # (a) the reconditioned half, under the runner's condition
-        s_lo, _ladder = _uncured_below_threshold(
+        s_lo, _rows = _uncured_below_threshold(
             cell[0], cell[1], layers, _UNCOATED_DEGREES, _uncoated_stack,
             off_nm)
         # (c) ... and it really is the disarmed, cured-looking reading
@@ -1504,6 +1617,181 @@ def test_the_threshold_rules_NOT_CURED_half_conditions_on_the_census_too(
         with pytest.raises(AssertionError, match="should NOT cure"):
             assert s_lo > 0.1, (
                 f"1.5 nm should NOT cure ns=6 (off=1.804 nm): {s_lo:.3g}")
+
+
+#: The reading MAIN CI produced on 2026-08-15 for the uncoated ns = 6 / 1.5 nm
+#: cell at the SHIPPED cut, degrees 8..16, repair off -- ARMED (two growing
+#: modes, on the last rung only) and NOT COLLAPSED.  It is the state neither
+#: mount produces at any cut position or thread count, and it is the state that
+#: refuted "armed => collapsed".  Verbatim from the failure message:
+#:
+#:     ns=6 min_feature=1.5nm: census reads [0, 0, 0, 0, 2] raw growing
+#:     mode(s) over degrees (8..16) ... spread only 0.004055
+_CI_2026_08_15 = (0.004055, [0, 0, 0, 0, 2])
+
+#: The census tables the NOT-CURED half's REACH is driven against, one per
+#: BUILD, as ``(spread, raw census)`` per rung of the cut ladder
+#: ``(1.0,) + _INJECTOR_SCALES`` -- plus the rung the reach must land on, or
+#: ``None`` where it must refuse.
+#:
+#: The first four are MEASURED (2026-08-15, degrees 8..16, repair off,
+#: uncoated ns = 6 / 1.5 nm).  Rows 1-2 are the two mounts' own readings, which
+#: arm AND collapse at their own cut -- there the reach is the 2026-08-12
+#: assertion verbatim.  Row 3 is the RUNNER: its shipped-cut rung is
+#: :data:`_CI_2026_08_15` and its deeper rungs are M's, which is the numpy 2.5
+#: wheel that job runs.  Row 4 is a build with no near-cut mode at all, the
+#: branch 2026-08-12 added.  Rows 5-6 are REFUTATIONS -- what a threshold rule
+#: that has genuinely stopped holding looks like from here -- and the reach
+#: must FAIL on them rather than pass quietly.
+_REACH_CASES = (
+    ("[W] py3.14 numpy 2.4.4 / 24 threads: armed and collapsed at its own cut",
+     ((1.33841, [0, 0, 1, 2, 3]),), 1.0),
+    ("[M] py3.12 numpy 2.5.1 / 1 thread: same, on a different rung and wheel",
+     ((2.38098, [0, 0, 0, 3, 0]),), 1.0),
+    ("ubuntu main CI 2026-08-15: ARMED at the shipped cut and NOT collapsed",
+     (_CI_2026_08_15, (2.38098, [0, 1, 0, 5, 5])), 1.0 / 3.0),
+    ("a build with no mode near the cut at all (the 2026-08-12 condition)",
+     ((0.004055, [0, 0, 0, 0, 0]), (0.004055, [0, 0, 0, 0, 0]),
+      (1.35714, [10, 25, 24, 59, 72])), 1.0e-2),
+    ("REFUTED: the census arms at every cut position and nothing collapses",
+     ((0.004055, [0, 0, 0, 0, 2]), (0.004055, [0, 1, 0, 5, 5]),
+      (0.004055, [10, 25, 24, 59, 72]), (0.004055, [29, 32, 42, 42, 55])),
+     None),
+    ("REFUTED: the ladder scatters but the census never arms -- not this "
+     "mechanism, so it does not count",
+     ((2.38098, [0, 0, 0, 0, 0]), (2.38098, [0, 0, 0, 0, 0]),
+      (1.35714, [0, 0, 0, 0, 0]), (1.42007, [0, 0, 0, 0, 0])), None),
+)
+
+
+def _canned_probe(readings):
+    """``(probe, seen)`` -- a reach probe that serves a canned per-rung table
+    and ASSERTS that the walk visits the cut ladder IN ORDER, starting at the
+    SHIPPED cut.  So each case pins WHERE the reach looks as well as what it
+    concludes, and a walk that silently reordered or skipped a rung -- or ran
+    past the table it was given -- is a failure and not a pass."""
+    seen = []
+
+    def probe(scale):
+        i = len(seen)
+        assert i < len(readings), (
+            f"the reach asked for rung {i + 1} (cut x{scale:.4g}) of a "
+            f"{len(readings)}-rung table: it walked past the ladder this case "
+            f"describes instead of stopping where the case says it should")
+        want = ((1.0,) + _INJECTOR_SCALES)[i]
+        assert scale == want, (
+            f"the reach asked for cut x{scale:.4g} at rung {i + 1}, but the "
+            f"ladder's rung {i + 1} is x{want:.4g}: the walk must start at the "
+            f"cut THIS BUILD finds (x1, no injector, no extra solve) and step "
+            f"down _INJECTOR_SCALES in order")
+        seen.append(float(scale))
+        return readings[i]
+    return probe, seen
+
+
+def test_the_NOT_CURED_reach_is_scored_on_a_LADDER_of_cut_positions():
+    """THE 2026-08-15 CI FAILURE, AND EVERY OTHER BUILD'S CENSUS, SCORED
+    AGAINST THE SHIPPED DECISION -- the engineered fail-before for
+    :func:`_uncured_below_threshold`.
+
+    ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.5, shape S6 (FIXED-CENSUS
+    READING).  The sibling above emulates the runner by moving the CUT on the
+    real device, which is the right instrument for the states this box's
+    round-off can be driven into.  It cannot reach the state main CI actually
+    read -- ARMED at the shipped cut with the ladder still cured
+    (:data:`_CI_2026_08_15`) -- because at every cut position measured here,
+    from x1e-4 to x3, an armed census on this cell also collapses:
+
+        cut     [W] raw census      spread    [M] raw census      spread
+        x1e-4   [26,38,44,55,66]    1.36577   [29,32,42,42,55]    1.42007
+        x1e-2   [11,15,26,42,54]    1.43113   [10,25,24,59,72]    1.35714
+        x1/3    [0,0,1,4,7]         1.33841   [0,1,0,5,5]         2.38098
+        x1      [0,0,1,2,3]         1.33841   [0,0,0,3,0]         2.38098
+        x3      [0,0,1,2,3]         1.33841   [0,0,0,1,0]         2.38098
+        x5/x10  [0,0,0,0,0]         0.004055  [0,0,0,0,0]         0.004055
+
+    That coincidence of the two mounts is exactly what the retired conditional
+    was pinned on, so the states that DO NOT manifest here are supplied
+    directly: :data:`_REACH_CASES` drives the shipped decision -- geometry
+    premise and all -- against each build's own table through a canned probe.
+    The runner's row is its failure verbatim, and no coverage is lost on any
+    build, because the branch a build cannot reach physically is still scored
+    here.
+
+    What is asserted:
+
+      (a) every MEASURED table reaches the collision, and at the RUNG the case
+          names -- rung one where the build's own cut collapses (both mounts),
+          the first injected rung where it does not (the runner), the third
+          where no mode is near the cut at all (the 2026-08-12 condition);
+      (b) both REFUTATION tables are REFUSED, loudly: a census that arms at
+          every cut position without ever collapsing, and a ladder that
+          scatters without the census ever arming.  Neither is the mechanism,
+          and a reach that accepted either would pass on a device where the
+          threshold rule had stopped holding;
+      (c) the ORIGINAL 2026-08-12 form -- the conditional, verbatim -- is
+          re-run on the runner's own reading and FAILS.  That is the CI
+          failure, pinned in-tree and permanently;
+      (d) the GEOMETRY premise still has teeth and is checked FIRST: an
+          ABOVE-threshold min_feature is refused before any cut is probed at
+          all (the probe raises if it is called).
+
+    No solve runs here: the tables are the measurement, so this is a
+    sub-millisecond test of the decision that consumes them.
+    """
+    layers = _uncoated_layers(6)
+    for name, readings, want in _REACH_CASES:
+        probe, seen = _canned_probe(readings)
+        if want is None:                             # (b)
+            with pytest.raises(AssertionError, match="admits it at none"):
+                _uncured_below_threshold(6, 1.5e-9, layers, _UNCOATED_DEGREES,
+                                         _uncoated_stack, 1.804, probe=probe)
+            assert len(seen) == len(readings), (
+                f"{name}: the reach refused after {len(seen)} of "
+                f"{len(readings)} rungs -- it must exhaust the whole cut "
+                f"ladder before it may call the rule refuted")
+            continue
+        sp, rows = _uncured_below_threshold(                     # (a)
+            6, 1.5e-9, layers, _UNCOATED_DEGREES, _uncoated_stack, 1.804,
+            probe=probe)
+        assert rows[-1][0] == want, (
+            f"{name}: the reach landed on cut x{rows[-1][0]:.4g}, not on the "
+            f"x{want:.4g} this table's collision lives at -- walked "
+            f"{[(float(f'{s:.4g}'), r, float(f'{p:.4g}')) for s, r, p in rows]}")
+        assert sum(rows[-1][1]) and rows[-1][2] > _COLLAPSE_SPREAD, (
+            f"{name}: the reach accepted a rung that is not both ARMED and "
+            f"COLLAPSED: {rows[-1]}")
+        assert sp == readings[0][0], (
+            f"{name}: the spread returned to the caller is {sp:.5g}, not the "
+            f"{readings[0][0]:.5g} this build reads at its OWN cut -- the "
+            f"reach may escalate to make its claim, but what it hands back "
+            f"(and what the caller's cured/not-cured comparisons are made on) "
+            f"must stay the un-injected reading")
+
+    # (c) THE FAIL-BEFORE: the 2026-08-12 conditional, verbatim, on the
+    #     runner's own reading.  "armed => collapsed" is the claim, and the
+    #     runner is the counterexample -- an armed census says a near-cut
+    #     growing mode EXISTS, never that it is excited enough to move the
+    #     answer.
+    sp_ci, raw_ci = _CI_2026_08_15
+    with pytest.raises(AssertionError, match="census reads"):
+        if sum(raw_ci):
+            assert sp_ci > _COLLAPSE_SPREAD, (
+                f"ns=6 min_feature=1.5 nm: the census reads {raw_ci} raw "
+                f"growing mode(s) over degrees {_UNCOATED_DEGREES}, so the "
+                f"near-cut collision the un-snapped window admits DID fire -- "
+                f"and the degree ladder must scatter with it, but it spreads "
+                f"only {sp_ci:.4g}")
+
+    # (d) the geometry premise is checked BEFORE any cut is probed
+    def never(scale):
+        raise AssertionError(
+            f"the reach probed cut x{scale:.4g} on an ABOVE-threshold cell: "
+            f"the geometry premise must be refused before anything is solved")
+
+    with pytest.raises(AssertionError, match="must come back UNSNAPPED"):
+        _uncured_below_threshold(6, 3.0e-9, layers, _UNCOATED_DEGREES,
+                                 _uncoated_stack, 1.804, probe=never)
 
 
 def test_the_uncoated_null_control_conditions_on_the_census_too(

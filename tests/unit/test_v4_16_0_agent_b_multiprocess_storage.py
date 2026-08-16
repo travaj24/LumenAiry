@@ -129,16 +129,32 @@ def _worker_slow_append_h5(path, worker_id, n_planes, sleep_s):
         time.sleep(sleep_s)
 
 
-def _worker_hold_lock(lock_path, hold_s, ready_signal_path):
-    """Worker for B.3: acquire the named lock and sleep, simulating a
-    long-running writer.  Touches ``ready_signal_path`` once the lock
-    is held so the parent can synchronise without polling.
+def _worker_hold_lock(lock_path, ready_signal_path, release_signal_path,
+                      max_hold_s):
+    """Worker for B.3: acquire the named lock and hold it until the PARENT
+    says to let go, simulating a long-running writer.
+
+    Touches ``ready_signal_path`` once the lock is held, then blocks until
+    ``release_signal_path`` appears (or ``max_hold_s`` elapses, a runaway
+    guard so a crashed parent cannot leave this process wedged).
+
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): this used to
+    hold the lock for a fixed ``time.sleep(hold_s)``, which made the whole
+    contention window a wall-clock race against the parent -- see
+    :class:`TestB3LockTimeoutRaises`.  A parent-driven release turns
+    "the lock is still held when the foreground call times out" from a
+    timing hope into a deterministic precondition.
     """
     import filelock
-    with filelock.FileLock(lock_path, timeout=5.0):
+    # Nothing else holds this lock at this point, so the acquire is
+    # uncontended; the timeout is a wedged-runner guard, not a bar.
+    with filelock.FileLock(lock_path, timeout=60.0):
         # Signal we're holding the lock
         Path(ready_signal_path).touch()
-        time.sleep(hold_s)
+        deadline = time.time() + float(max_hold_s)
+        while (time.time() < deadline
+               and not os.path.exists(release_signal_path)):
+            time.sleep(0.02)
 
 
 # ============================================================================
@@ -254,6 +270,24 @@ class TestB2SwmrConcurrentReadDuringWrite:
     concurrently with ``swmr=True`` and see at least one plane while
     the writer is still active."""
 
+    # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): same class
+    # of per-build fragility as B.3, found while fixing it.  The observe
+    # loop (was 20.0 s) and the ``pytest.fail`` join cap (was 30.0 s) were
+    # sized against a spawn boot that measures 20.98 / 23.26 / 35.19 s on
+    # this Windows dev box from inside pytest -- i.e. the observe window
+    # could expire before the writer had even taken the lock, and the
+    # deadlock guard had ~1.3x headroom over a healthy-but-slow boot.
+    # Neither number expresses a contract: the observe loop exits at the
+    # first partial read (``seen_extra`` is explicitly not load-bearing)
+    # or when the writer dies, and the join cap only distinguishes "slow"
+    # from "DEADLOCKED" -- a deadlocked writer never exits at any cap.
+    # Both raised to 180 s (5.1x the slowest observed boot); the healthy
+    # path is unchanged in duration because both loops exit early, and the
+    # observe loop now actually reaches the SWMR partial state it is
+    # meant to demonstrate instead of timing out first.
+    WRITER_OBSERVE_CAP_S = 180.0
+    WRITER_EXIT_CAP_S = 180.0
+
     def test_swmr_concurrent_read_during_write(self, tmp_path):
         import h5py
 
@@ -275,6 +309,9 @@ class TestB2SwmrConcurrentReadDuringWrite:
         # than 10s to spawn + import lumenairy + acquire the filelock
         # under CI load.  The test's actual work is ~1 second; the
         # generous timeouts only kick in under adverse CI conditions.
+        # 2026-08-15: those two numbers now live in
+        # ``WRITER_OBSERVE_CAP_S`` / ``WRITER_EXIT_CAP_S`` above (both
+        # 180 s) -- see the class-level derivation.
         ctx = mp.get_context('spawn')
         writer = ctx.Process(
             target=_worker_slow_append_h5,
@@ -287,7 +324,7 @@ class TestB2SwmrConcurrentReadDuringWrite:
             # until we see >= 2 planes (the seed + at least one new)
             # OR until the writer exits.
             seen_extra = False
-            deadline = time.time() + 20.0
+            deadline = time.time() + self.WRITER_OBSERVE_CAP_S
             while time.time() < deadline and writer.is_alive():
                 try:
                     with h5py.File(path, 'r',
@@ -302,13 +339,14 @@ class TestB2SwmrConcurrentReadDuringWrite:
                     pass
                 time.sleep(0.05)
             # Don't deadlock the test if the writer is stuck.
-            writer.join(timeout=30.0)
+            writer.join(timeout=self.WRITER_EXIT_CAP_S)
             if writer.is_alive():
                 writer.terminate()
                 writer.join(timeout=2.0)
                 pytest.fail(
-                    'Writer process did not exit in 30 seconds; '
-                    'multi-process lock may be deadlocked.'
+                    f'Writer process did not exit in '
+                    f'{self.WRITER_EXIT_CAP_S:.0f} seconds; '
+                    f'multi-process lock may be deadlocked.'
                 )
         finally:
             if writer.is_alive():
@@ -366,11 +404,52 @@ class TestB2SwmrConcurrentReadDuringWrite:
                     reason='filelock not installed')
 class TestB3LockTimeoutRaises:
     """If a holder process is sitting on the lock, a foreground
-    append with a small ``lock_timeout`` must raise ``TimeoutError``."""
+    append with a small ``lock_timeout`` must raise ``TimeoutError``.
+
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md) -- this case
+    used to pin the contract with WALL CLOCK inside a spawned-subprocess
+    test: a holder that slept a fixed 3.0 s, a 5.0 s deadline for the
+    holder to boot, and ``assert elapsed < 2.5`` on the foreground
+    timeout.  Both numbers were per-build facts:
+
+    * measured 2026-08-15 on the Windows dev box (py3.14), the
+      ``spawn`` holder needed 4.84 / 8.18 / 9.66 s to boot and take the
+      lock (fresh interpreter + numpy + module import) -- the 5.0 s
+      precondition deadline FAILED this file outright here, before any
+      contract was even exercised;
+    * ``elapsed < 2.5`` against a 0.5 s ``lock_timeout`` and a 3.0 s
+      holder is a 5x margin on a loaded runner, and when it breaks the
+      failure is indistinguishable from a real contract break.
+
+    The contract itself has no seconds in it: *while another process
+    holds the lock, an append with a small ``lock_timeout`` gives up and
+    raises ``TimeoutError`` naming the lock file, instead of blocking
+    until the holder is done*.  That is now asserted behaviourally, with
+    the contention window held open by a parent-driven release signal
+    (the holder CANNOT let go until this test tells it to, so "the lock
+    was still held when we timed out" is a precondition, not a race),
+    and closed by the two-sided check that the very same call succeeds
+    once the lock is free.  Elapsed time is printed, never asserted.
+    """
+
+    # Precondition waits, not contract bars: the loops below exit the
+    # instant the thing they wait for happens (or the peer dies), so a
+    # generous cap costs nothing on a healthy runner and only bounds a
+    # genuinely wedged one.  Measured 2026-08-15, Windows py3.14 dev box,
+    # spawn -> lock-held latency: 4.84 / 8.18 / 9.66 s standalone, and
+    # 20.98 / 23.26 / 35.19 s when the child is spawned from INSIDE pytest
+    # (the fresh interpreter re-imports this module, hence pytest + numpy
+    # + h5py).  The old 5.0 s deadline sat below every one of those and
+    # failed this file outright here.  180 s is 5.1x the slowest observed
+    # boot; a holder that never takes the lock is still reported (the loop
+    # also breaks the moment the holder dies).
+    HOLDER_BOOT_CAP_S = 180.0
+    HOLDER_EXIT_CAP_S = 60.0
 
     def test_lock_timeout_raises(self, tmp_path):
         from lumenairy.io.storage import (
             _append_lock_path,
+            _h5_list_planes,
             append_plane_h5,
         )
 
@@ -382,22 +461,31 @@ class TestB3LockTimeoutRaises:
         append_plane_h5(path, seed, dx=1e-6, label='seed')
 
         ready_signal = str(tmp_path / 'holder_ready.signal')
+        release_signal = str(tmp_path / 'holder_release.signal')
         ctx = mp.get_context('spawn')
         holder = ctx.Process(
             target=_worker_hold_lock,
-            args=(lock_path, 3.0, ready_signal),
+            args=(lock_path, ready_signal, release_signal,
+                  self.HOLDER_BOOT_CAP_S + self.HOLDER_EXIT_CAP_S),
         )
         holder.start()
         try:
             # Wait for the holder to actually grab the lock.  Don't
-            # race against an unstarted holder.
-            deadline = time.time() + 5.0
-            while (time.time() < deadline
-                   and not os.path.exists(ready_signal)):
+            # race against an unstarted holder.  Exits as soon as the
+            # signal appears OR the holder dies (a dead holder is a real
+            # failure and is reported immediately, not after the cap).
+            t_boot = time.time()
+            while (holder.is_alive()
+                   and not os.path.exists(ready_signal)
+                   and time.time() - t_boot < self.HOLDER_BOOT_CAP_S):
                 time.sleep(0.02)
+            boot_s = time.time() - t_boot
+            print(f'B.3 diagnostic: holder spawn -> lock held in '
+                  f'{boot_s:.2f}s (alive={holder.is_alive()})')
             assert os.path.exists(ready_signal), (
-                'Holder process did not signal lock acquisition '
-                'within 5 seconds.'
+                f'Holder process never signalled lock acquisition '
+                f'(alive={holder.is_alive()}, exitcode={holder.exitcode}, '
+                f'waited {boot_s:.1f}s).'
             )
 
             # Now attempt an append with a small timeout.  Must raise
@@ -411,26 +499,59 @@ class TestB3LockTimeoutRaises:
                                 label='will-timeout',
                                 lock_timeout=0.5)
             elapsed = time.time() - t0
-            # Lock-acquisition wait should be ~0.5s, not the full 3s
-            # the holder is sleeping.
-            assert elapsed < 2.5, (
-                f'TimeoutError raised after {elapsed:.2f}s but '
-                f'lock_timeout was 0.5s -- the timeout is not '
-                f'being honoured.'
-            )
+            print(f'B.3 diagnostic: contended append raised TimeoutError '
+                  f'after {elapsed:.3f}s (lock_timeout=0.5)')
+
+            # BEHAVIOURAL bar #1: the timeout fired WHILE the lock was
+            # still held.  The holder only releases when we touch the
+            # release signal below, so it cannot have finished on its
+            # own -- had the append instead blocked until the lock was
+            # free (lock_timeout ignored / clamped to the 30 s default)
+            # it would have hung here rather than raised, and had it
+            # raised without contention the second half of this test
+            # would not pass.
+            assert not os.path.exists(release_signal), (
+                'test bug: the release signal was sent before the '
+                'contended append was attempted.')
+            assert holder.is_alive(), (
+                f'The lock holder exited (exitcode={holder.exitcode}) '
+                f'before the contended append timed out, so this call '
+                f'was not actually contended -- the TimeoutError does '
+                f'not pin the lock_timeout contract.')
+
             # The error message must point at the lock file so a
             # human admin can recover.
             assert lock_path in str(excinfo.value), (
                 f'TimeoutError message did not reference the lock '
                 f'file path {lock_path!r}: {excinfo.value!r}'
             )
+
+            # BEHAVIOURAL bar #2 (the other side): release the lock and
+            # the IDENTICAL call must now succeed.  This is what makes
+            # bar #1 a contention statement rather than "append always
+            # raises with a small lock_timeout".
+            Path(release_signal).touch()
+            holder.join(timeout=self.HOLDER_EXIT_CAP_S)
+            assert not holder.is_alive(), (
+                'Lock holder did not exit after the release signal; '
+                'the multi-process lock may be wedged.')
+            append_plane_h5(path, plane, dx=1e-6,
+                            label='after-release',
+                            lock_timeout=0.5)
+            planes, _meta = _h5_list_planes(path)
+            assert len(planes) == 2, (
+                f'Expected seed + after-release planes once the lock was '
+                f'free, got {len(planes)} -- the contended append either '
+                f'partially wrote or the released lock did not admit the '
+                f'retry.')
         finally:
             # Let the holder finish gracefully so the next test sees
             # a clean process state.
-            holder.join(timeout=8.0)
+            Path(release_signal).touch()
+            holder.join(timeout=self.HOLDER_EXIT_CAP_S)
             if holder.is_alive():
                 holder.terminate()
-                holder.join(timeout=2.0)
+                holder.join(timeout=5.0)
 
 
 # ============================================================================

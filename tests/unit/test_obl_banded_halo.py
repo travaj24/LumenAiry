@@ -456,22 +456,109 @@ def test_row_evaluator_declines_non_analytic_carriers():
 
 
 # ---------------------------------------------------------------------------
-# 5. the memory claim (generous margin -- the byte-identity tests above carry
-#    the CORRECTNESS claim unconditionally, this one only has to show the
-#    banded path is the leaner one on whatever runner it lands on)
+# 5. the memory claim.  The byte-identity tests above carry the CORRECTNESS
+#    claim unconditionally; this section shows the banded path is the leaner
+#    one -- STRUCTURALLY first (what the fix actually does), and only then as
+#    a loose allocator reading.
 # ---------------------------------------------------------------------------
-def test_banded_peak_is_much_smaller_than_whole_grid():
-    """tracemalloc peak of the banded angle-aware run at N=2048 /
-    sag_chunk_rows=128 against the same call whole-grid.
 
-    No per-build absolute number is asserted -- runners differ in BLAS
-    scratch, FFT planner and allocator behaviour.  What must hold on any of
-    them is the SHAPE of the fix: the whole-grid path holds the sag, its
-    gradient pair, the delta, the R1 gradients and the carrier angle field
-    simultaneously, and the banded path holds one band of each, so the ratio
-    has to sit well under 1.  0.6 is a deliberately loose bar (measured 0.50
-    on the reference box)."""
-    N, dx = 2048, 4.0e-3 / 2048
+#: Widest sag halo the banded obliquity block takes (module docstring: 1 row
+#: for ``gradient(sag)``, 2 when the R1 drift term is live and a gradient OF a
+#: gradient is needed).  A property of the algorithm, not of any runner.
+_OBL_MAX_HALO_ROWS = 2
+
+
+def _sag_call_rows(N, chunk):
+    """Rows handed to ``_surface_sag_general`` on one angle-true run.
+
+    Every sag the model builds passes through this one module-level hook, so
+    spying it reads out DIRECTLY how much of the grid is live at a time."""
+    dx = 4.0e-3 / N
+    E = _field(N, dx)
+    kw = dict(prescription=_biconvex(), wavelength=LAM, dx=dx, carrier=SPHERE,
+              screen_obliquity=True, on_screen_obliquity='warn',
+              slant_correction=True)
+    rows = []
+    real_sag = LR._surface_sag_general
+
+    def spy(h_sq, *a, **k):
+        h = np.asarray(h_sq)
+        if h.ndim == 2:
+            rows.append(int(h.shape[0]))
+        return real_sag(h_sq, *a, **k)
+
+    LR._surface_sag_general = spy
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            apply_real_lens(E.copy(), sag_chunk_rows=chunk, **kw)
+    finally:
+        LR._surface_sag_general = real_sag
+    return rows
+
+
+def test_banded_run_really_processes_the_grid_in_bands():
+    """The STRUCTURAL fact the memory ratio was a proxy for.
+
+    2026-08-15, ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md``.  This
+    replaces a ``tracemalloc`` peak ratio as the load-bearing assertion: a
+    peak is a count of numpy temporaries (array fusion, buffer reuse, FFT
+    planner scratch, allocator behaviour), not a physics quantity, and the
+    two reference builds already disagreed by 8% of its value (0.5002
+    Windows py3.14/np2.4.4, 0.4588 WSL py3.12/np2.5.1) against a 20% margin.
+
+    What the fix DOES is build the sag one row-band at a time.  Spy the one
+    hook every sag goes through and read that off:
+
+        N=512  chunk=64   whole-grid rows {512} x 2 calls
+                          banded rows {64, 65, 66, 68} x 18 calls
+        N=2048 chunk=128  whole-grid rows {2048} x 2 calls
+                          banded rows {128, 129, 130, 132} x 34 calls
+
+    -- identical on both mounts, because it is control flow, not
+    arithmetic.  The widest banded call is ``chunk + 2 * halo`` (the halo
+    rows on both sides), and the call count is one per band per surface plus
+    the one short-circuited ``bool(any(sag))`` probe per surface."""
+    N, chunk = 512, 64
+    whole = _sag_call_rows(N, 0)
+    band = _sag_call_rows(N, chunk)
+    assert whole, "whole-grid angle-aware path built no sag at all"
+    assert max(whole) == N, (
+        f"whole-grid run's widest sag is {max(whole)} rows, not the full "
+        f"{N}: the control it is compared against is not whole-grid")
+    widest = chunk + 2 * _OBL_MAX_HALO_ROWS
+    assert max(band) <= widest, (
+        f"banded run built a {max(band)}-row sag, wider than one band plus "
+        f"its halo ({chunk} + 2 x {_OBL_MAX_HALO_ROWS} = {widest}); the "
+        f"row-banded obliquity path is not engaging (measured max 68)")
+    assert len(band) >= N // chunk, (
+        f"banded run made only {len(band)} sag calls for {N // chunk} bands "
+        f"(measured 18); it is not iterating the grid in bands")
+
+
+def test_banded_peak_is_smaller_than_whole_grid():
+    """tracemalloc peak of the banded angle-aware run against the same call
+    whole-grid -- kept as a LOOSE corroboration of the structural test above,
+    which is what actually pins the fix.
+
+    2026-08-15, ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md``.  Two changes
+    to a bar that was ``< 0.6 x`` at N=2048:
+
+    * N drops 2048 -> 1024.  The old form allocated ~1.1 GB with no RAM
+      guard; the ratio is unchanged by the shrink (0.5004 at
+      N=1024/chunk=64 against 0.5002 at N=2048/chunk=128 on the same box),
+      so the claim costs 271 MB instead of 1082 MB and runs ~4x faster.
+    * the bar goes 0.6 -> 0.9 because 0.6 was too tight for what a peak
+      IS.  Measured at N=1024/chunk=64: 271 MB -> 136 MB, ratio 0.5004
+      (Windows py3.14/np2.4.4) and 279 MB -> 128 MB, ratio 0.4591 (WSL
+      py3.12/np2.5.1); at the old N=2048/chunk=128 the same pair read
+      0.5002 / 0.4588.  The two builds disagree by 8% of the value, so the
+      old 20% margin was ~2.5 build-spreads, not a safety factor.  0.9 is
+      1.80x the worst measurement; in the other direction the failure it
+      must catch is the banded path silently falling back to whole-grid,
+      which lands the ratio at ~1.0 -- 0.9 still refuses that -- while the
+      SHAPE of the fix is asserted exactly by the structural test above."""
+    N, dx = 1024, 4.0e-3 / 1024
     presc = _biconvex()
     E = _field(N, dx)
     kw = dict(prescription=presc, wavelength=LAM, dx=dx, carrier=SPHERE,
@@ -494,8 +581,8 @@ def test_banded_peak_is_much_smaller_than_whole_grid():
         return p
 
     p_whole = peak(0)
-    p_band = peak(128)
-    assert p_band < 0.6 * p_whole, (
-        f"banded peak {p_band / 1e6:.0f} MB is not < 0.6 x whole-grid "
-        f"{p_whole / 1e6:.0f} MB (ratio {p_band / p_whole:.2f}); the "
-        f"row-banded obliquity path may not be engaging")
+    p_band = peak(64)
+    assert p_band < 0.9 * p_whole, (
+        f"banded peak {p_band / 1e6:.0f} MB is not < 0.9 x whole-grid "
+        f"{p_whole / 1e6:.0f} MB (ratio {p_band / p_whole:.2f}, measured "
+        f"0.50 / 0.46); the row-banded obliquity path may not be engaging")

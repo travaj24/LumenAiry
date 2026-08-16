@@ -177,10 +177,57 @@ def test_bor_fundamental_mode_reflectance_pin():
     j = int(np.argmax(q))              # near-axis fundamental = largest q
     assert abs(R[j] - 0.142290) < 1e-4, f"fundamental R = {R[j]:.6f}"
     assert abs(float(np.asarray(res["energy"])[j]) - 1.0) < 1e-9
-    # (i) NO renormalization anywhere: R is literally the sum over ``inc``
-    direct = np.array([float(np.sum(np.abs(S11[np.ix_(inc, [jj])]) ** 2))
+    # (i) NO renormalization anywhere: R is literally the sum over ``inc``,
+    #     recomputed through the SAME elementwise kernel the library uses -- so
+    #     this is an EXACT identity, not a tolerance.
+    #
+    # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md, D5): the
+    # reference here used to be a VECTORIZED recomputation
+    # (``np.abs(S11[np.ix_(inc, [jj])]) ** 2`` on a strided 2-D complex slice)
+    # compared at ``< 1e-15``.  That is NOT the library's arithmetic:
+    # ``bor_stack.solve`` sums a Python list of SCALAR ``abs(...) ** 2``
+    # (``bor_stack.py``, ``R = np.array([np.sum([abs(S11[jp, j]) ** 2 ...``).
+    # So the residual being measured was numpy's SIMD complex-abs loop against
+    # the scalar path -- of order 1 ULP per element over 318 elements, a
+    # quantity that moves with numpy version, compiler and SIMD width and has
+    # nothing to do with the claim.  MEASURED 1.1102e-16 (Win py3.14/np2.4.4) /
+    # 1.6653e-16 (WSL py3.12/np2.5.1): 9.0x / 6.0x of headroom on a 1.5x
+    # cross-build spread.  Recomputing through the library's own kernel makes
+    # the residual EXACTLY 0.0 on both builds (verified), so the claim is
+    # stated as the identity it actually is, with no bar to widen or tighten.
+    direct = np.array([np.sum([abs(S11[jp, jj]) ** 2 for jp in inc])
                        for jj in inc])
-    assert np.max(np.abs(R - direct)) < 1e-15, "R is not the raw modal sum"
+    assert np.array_equal(R, direct), "R is not the raw modal sum"
+    # (i-b) ... and that identity HAS TEETH.  An exact comparison is worthless
+    #     unless a wrong implementation fails it, so inject the two shapes of
+    #     "closed by construction" this gate exists to reject.  Both are
+    #     ENGINEERED here, not measured off a build.
+    #     (a) closure IMPOSED by scaling -- the lossless trap in its purest
+    #         form.  Any such scaling changes the bits, so the identity above
+    #         rejects it without needing a magnitude bar at all.
+    imposed = R / (R + T)
+    assert not np.array_equal(R, imposed)
+    #     (b) the shipped bug's own shape: truncate the near-grazing tail and
+    #         renormalize the survivors back to R + T = 1.  ``q/k0 > 0.052``
+    #         drops exactly the min-q mode of THIS cavity (0.051165, see the
+    #         DELIBERATE UPDATE block), which is what makes the demonstration
+    #         land here at all; assert that it really dropped one, so the
+    #         demonstration cannot quietly become a no-op.
+    out, S21 = res["out"], res["S"][2]
+    keep = (q / k0) > 0.052
+    assert int(np.sum(~keep)) == 1, "the injected truncation dropped no mode"
+    R_cut = np.array([float(np.sum(np.abs(S11[np.ix_(inc[keep], [jj])]) ** 2))
+                      for jj in inc])
+    T_cut = np.array([float(np.sum(np.abs(S21[np.ix_(out[keep], [jj])]) ** 2))
+                      for jj in inc])
+    faked = R_cut / (R_cut + T_cut)          # "closes" energy, wrong answer
+    assert np.max(np.abs(faked + (T_cut / (R_cut + T_cut)) - 1.0)) < 1e-12
+    # MEASURED max|faked - R| = 5.3813e-01, BIT-IDENTICAL on both builds -- 54x
+    # above the 1e-2 bar and ~12 decades above the identity's 0.0, so the
+    # discriminator is not marginal in either direction: it cannot pass by
+    # round-off and it cannot fail by build (it is a physical change, the loss
+    # of a whole propagating order, not an arithmetic one).
+    assert np.max(np.abs(faked - R)) > 1e-2
     # (ii) the set is COMPLETE against the physical criterion, and closure is
     #      therefore earned rather than imposed
     assert R.size == 318 and T.size == 318

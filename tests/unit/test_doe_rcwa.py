@@ -64,20 +64,34 @@ N_GLASS = DT.N_FUSED_SILICA_1310
 # tests is a code defect, not the conditioning.  The 8-level structure is still
 # exercised by every test that does not need a converged solve.
 # ---------------------------------------------------------------------------
-#: Lossless closure |R+T-1| on the BINARY fixtures.  Measured worst 6e-11 over
-#: a 4-period x 3-index x 5-truncation sweep; 1e-8 is >2 decades of headroom.
-#: REGIME-TIED (2026-08-13): that sweep and this bar are for the SMALL-period
-#: fixtures (6-8 lambda).  The v5.35.3 release shard (py3.10 wheel LAPACK)
-#: read 1.15e-8 on the 20-lambda TEA checkerboard while passing every
-#: small-period site on the same run -- closure at large period varies with
-#: the BLAS build (conditioning grows with period; the module note above
-#: names 1e-2-scale pathology in the extreme).  So the 20-lambda fixtures
-#: carry their own bar below: 2 decades over the worst cross-build reading
-#: observed, 4 decades below the pathology it exists to catch.
-BAR_CLOSURE = 1e-8
-#: Lossless closure on the 20-LAMBDA fixtures (the TEA checkerboard and the
-#: convergence ladder).  See the regime note on BAR_CLOSURE.
-BAR_CLOSURE_20L = 1e-6
+#: Lossless closure |R+T-1| on the BINARY fixtures -- ONE bar for every
+#: closure precondition in this file.
+#:
+#: HISTORY, because it is the whole derivation
+#: (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.1, 2026-08-15):
+#:
+#:   authoring sweep (4 period x 3 index x 5 truncation)   worst 6e-11
+#:   v5.35.3 verify shard, py3.10 wheel LAPACK, 20-lambda       1.15e-08
+#:   main CI, new python, 6-lambda ``_tiny_table``              2.556e-08
+#:
+#: 2026-08-13 responded to the middle row by SPLITTING the bar by regime --
+#: 1e-8 kept for the small-period fixtures, 1e-6 for the 20-lambda ones --
+#: on the reasoning that conditioning grows with period and the small-period
+#: sites had passed on that run.  The third row refutes that: a 6-lambda
+#: fixture read 2.556e-08, i.e. WORSE than the 20-lambda reading the split
+#: was built around.  "The small-period sites passed on the run I looked at"
+#: was itself an inference from one build's sampling -- the same mistake,
+#: one level up.  The regime axis is real, but it is not the axis that was
+#: binding; the build axis is, and it moves every one of these sites.
+#:
+#: So the split is retired and all five closure preconditions share this
+#: envelope bar: 39x over the worst reading any build has produced across
+#: three samplings, and 4 decades below the 1e-2-scale pathology the module
+#: note above names (which is what these preconditions exist to catch -- a
+#: mis-built table shows up there, not at 1e-8).  If a future build reads
+#: past this, it is 4 decades from anything physical and wants a
+#: conditioning investigation, not another widening.
+BAR_CLOSURE = 1e-6
 #: Slab amplitude against the analytic Airy form.  Measured ~1e-14 (it is the
 #: same algebra evaluated two ways); 1e-9 is five decades of headroom.
 BAR_SLAB = 1e-9
@@ -305,7 +319,7 @@ def _tea_split_error(n_levels, n_orders=4):
     want = np.array([(m, n) for n in (-1, 0, 1) for m in (-1, 0, 1)])
     r = DT.solve_orders(st, int(n_orders), want=want, on_unstable='raise')
     c = DT.compare_to_scalar(st, want, r['amp'][0], total_T=r['sum_T'][0])
-    assert np.max(np.abs(r['closure'])) < BAR_CLOSURE_20L, (
+    assert np.max(np.abs(r['closure'])) < BAR_CLOSURE, (
         f"R+T-1 = {r['closure']} on the lossless 20-lambda TEA checkerboard "
         f"-- beyond even the large-period cross-build envelope")
     return float(np.max(np.abs(c['d_frac'])) / c['frac_scalar'].max())
@@ -366,7 +380,7 @@ def test_the_convergence_ladder_settles_and_reports_shrinking_deltas():
         f'amplitude movement went {d}')
     assert d[-1] < 0.02, f'last rung still moving by {d[-1]:.4f} in amplitude'
     for r in rows:
-        assert np.max(np.abs(r['closure'])) < BAR_CLOSURE_20L, (
+        assert np.max(np.abs(r['closure'])) < BAR_CLOSURE, (
             f"R+T-1 = {r['closure']} on the lossless 20-lambda ladder fixture")
 
 
