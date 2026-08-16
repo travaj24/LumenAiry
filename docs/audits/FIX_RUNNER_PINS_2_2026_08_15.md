@@ -790,7 +790,9 @@ re-measuring rather than by reading.
 | convection arm bit-identical | identical to 7 digits in all six configurations | **VERIFIED** |
 | both files collect | 43 tests collected in 5.12 s | **VERIFIED** |
 | ruff | `ruff check tests/unit/` clean | **VERIFIED** |
-| whole-file pytest for the ladder file, and the WSL matrix rows | still running when this was written -- the file's degree-40 spectral solves take ~2 GB and minutes each, and a whole-file pass runs over an hour on this box | **NOT COMPLETED HERE** |
+| the changed ladder test itself, W default threads | `1 passed in 867.69s` -- `test_covariant_stack_is_spectral_vs_convection` green on the 2-rung ladder | **VERIFIED** |
+| eig-VJP + pool files on **M** (py3.12 / numpy 2.5.1), default threads | `73 passed in 3233.37s` -- closes the S9 row that listed the WSL matrix as not-run for these two files | **VERIFIED** |
+| whole-file pytest for the ladder file and the M2 file on W, and the remaining WSL rows (ladder, M2, fff_nv) | still running when this was written -- one ladder TEST alone is 14.5 min (degree-40 spectral solves, ~2 GB each), so a whole-file pass is hours | **NOT COMPLETED HERE** |
 
 The last row is the honest gap.  It is a confirmation run, not the evidence:
 the three assertions the branch changes were each evaluated directly, in six
