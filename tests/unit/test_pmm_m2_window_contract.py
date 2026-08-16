@@ -2164,6 +2164,133 @@ def test_the_passivity_widening_is_a_null_floor_and_an_invariant():
         f"the widening exists for and the claim above proves nothing")
 
 
+#: Spectral degrees the staircase scan walks.  ``_stair_solve``'s OTHER knob,
+#: ``ffo``, was measured INERT for this purpose -- 5 / 7 / 9 / 11 give a
+#: bit-identical census on both mounts, because far-field orders shape the
+#: OUTPUT orders, not the per-layer eigenproblem the selector reads.  Degree
+#: does move it, because it changes which double roots ``q^2`` the union grid
+#: carries and therefore where the ~1e-10 LAPACK splitting lands.
+#:
+#: MEASURED 2026-08-16, repair off, union grid, RAW growing modes in the
+#: forward set (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S12):
+#:
+#:     degree                    4    5    6    7    8
+#:     W py3.14 / np2.4.4 / 1    0    0    1    6    3
+#:     M py3.12 / np2.5.1 / 1    0    0    6    6    2
+#:     py3.12 CI shard           -    -    0    -    -
+#:
+#: -- and the SHIPPED selector leaves 0 at every one of those cells on both
+#: mounts.  Degree 6 is the M1 audit's own staircase and stays first so the
+#: documented cell is scored before anything else.
+#: Degrees 4 and 5 were MEASURED and EXCLUDED: they read 0 on BOTH mounts,
+#: so they cost a union-grid solve each and can never contribute the
+#: natural reproduction.  6/7/8 all manifest on both mounts, so the scan
+#: still triples the (b) coverage the single-degree form had.
+_STAIR_SCAN_DEGREES = (6, 7, 8)
+#: ``_stair_solve``'s own default degree, which the observable arm (c)
+#: reuses out of the scan instead of re-solving.  Asserted rather than
+#: assumed so a change to either constant is a failure, not a silent
+#: comparison of two different devices.
+assert _stair_solve.__defaults__[1] in _STAIR_SCAN_DEGREES
+
+
+def _stair_census(degree):
+    """``(rows, J00, closure)`` for one union-grid staircase solve, with the
+    T3-4 census spy armed.  Each row is
+    ``(flux, q, thr, prop, site, passive)`` exactly as the selector saw it."""
+    seen = []
+    orig = PC._record_mode_cut
+
+    def spy(flux, q, thr, prop, mats, site, patterned=None,
+            flip=None, passive=None):
+        seen.append((np.asarray(flux).copy(), np.asarray(q).copy(),
+                     float(thr), np.asarray(prop).copy(), site,
+                     PC._grid_is_passive(mats) if passive is None else passive))
+        return orig(flux, q, thr, prop, mats, site, patterned,
+                    flip=flip, passive=passive)
+
+    PC._record_mode_cut = spy
+    PC._MODE_CUT_CENSUS = []
+    try:
+        j, close = _stair_solve("shared", degree=degree)
+    finally:
+        PC._MODE_CUT_CENSUS = None
+        PC._record_mode_cut = orig
+    return seen, j, close
+
+
+def _forward_grown(rows, flip_fn, near_only):
+    """Modes the given selector leaves GROWING in the forward set, summed over
+    every row.  ``near_only`` restores the 2026-08-06 ``|flux| < 10 thr``
+    conjunct (used for the RAW count, which is what that reading meant)."""
+    total = 0
+    for flux, q, thr, prop, _site, _pas in rows:
+        flip = flip_fn(flux, q, thr, prop)
+        qf = np.where(flip, -q, q)
+        bad = prop & (qf.imag < -PC._MODE_GROWTH_REL * np.abs(qf))
+        if near_only:
+            bad = bad & (np.abs(flux) < PC._MODE_CUT_MARGIN_WARN * thr)
+        total += int(np.count_nonzero(bad))
+    return total
+
+
+def _raw_flip(flux, q, thr, prop):
+    """The historical selector, verbatim: ``where(prop, flux < 0, Im q < 0)``."""
+    return np.where(prop, flux < 0.0, q.imag < 0.0)
+
+
+def _shipped_flip(flux, q, thr, prop):
+    return PC._forward_growth_flip(flux, q, thr, prop, np, True)
+
+
+def _engineer_null_flux_misfiling(rows):
+    """Build the ninth name's input OUT OF THIS BUILD'S OWN modal rows.
+
+    ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S12.  The defect is not a
+    property of a fixture; it is a property of the RULE.  A ``prop``-flagged
+    mode of a lossless layer that carries no z-power is scored on a ``flux``
+    that is pure round-off, and the historical rule takes its DIRECTION from
+    the SIGN of that round-off -- so whenever the sign points against
+    ``Im(q)``, a growing mode enters the forward set.  WHICH member of a
+    double root gets the unlucky sign is exactly what a LAPACK build chooses,
+    which is why the natural manifestation is per-build (see
+    ``_STAIR_SCAN_DEGREES``) and why it cannot be asserted as a universal.
+
+    So the sign is INJECTED rather than waited for.  Everything else is this
+    build's own solve: the real ``q`` spectrum, the real ``prop`` flags, the
+    real ``thr`` from :func:`_mass_flux_threshold`.  Only the round-off flux
+    of the modes that COULD grow is replaced, with a magnitude at half the
+    cut's own warn margin -- i.e. squarely inside the band where the rule is
+    provably reading noise, so both the RAW conjunct and the repair's own
+    ``|flux| < margin * thr`` guard apply.
+
+    Returns EVERY row that carries a candidate, injected -- so the
+    demonstration is as strong as the device allows rather than resting on
+    whichever row happened to come first -- or ``[]`` if this device has no
+    propagating mode that either direction would grow, in which case the
+    mechanism cannot be exercised on it at all and the caller says so.
+    """
+    out = []
+    for flux, q, thr, prop, site, _pas in rows:
+        if not np.isfinite(thr) or thr <= 0.0:
+            continue
+        rel = PC._MODE_GROWTH_REL * np.abs(q)
+        grow_if_kept = q.imag < -rel            # forward = +q already grows
+        grow_if_flipped = (-q).imag < -rel      # forward = -q would grow
+        cand = prop & (grow_if_kept | grow_if_flipped)
+        if not np.any(cand):
+            continue
+        eps = 0.5 * PC._MODE_CUT_MARGIN_WARN * thr
+        # the RAW rule is ``flip = flux < 0`` and ``qf = -q if flip else q``,
+        # so give each candidate the sign that makes the FORWARD pick the
+        # growing one.
+        f = np.array(flux, dtype=float, copy=True)
+        f = np.where(cand & grow_if_kept, eps, f)
+        f = np.where(cand & grow_if_flipped, -eps, f)
+        out.append((f, q, thr, prop, f"injected:{site}", True))
+    return out
+
+
 def test_the_forward_set_cannot_grow_on_the_union_grid_conical_staircase():
     """THE NINTH NAME, pinned as an INVARIANT rather than as a number.
 
@@ -2208,73 +2335,80 @@ def test_the_forward_set_cannot_grow_on_the_union_grid_conical_staircase():
     claim, not moved: this is the strictly stronger statement.  The RAW count
     (a) keeps the old conjunct so it still means what it meant.
     """
-    seen = []
-    orig = PC._record_mode_cut
+    # ---- the SCAN.  Every rung is scored, so (b) is now checked at five
+    #      truncations instead of one; the RAW column is only REPORTED.
+    census, raw_by_deg, obs = {}, {}, {}
+    for deg in _STAIR_SCAN_DEGREES:
+        rows, j_deg, close_deg = _stair_census(deg)
+        obs[deg] = (j_deg, close_deg)
+        assert rows, f"degree {deg}: the census spy never saw a modal solve"
+        # the device is lossless, so every row must be recognised PASSIVE --
+        # if it is not, the widened branch never runs and (b) proves nothing.
+        assert all(r[5] for r in rows), (
+            f"degree {deg}: a row of this lossless staircase was not "
+            f"recognised as PASSIVE, so _forward_growth_flip's widened branch "
+            f"was never exercised: {[(r[4], r[5]) for r in rows]}")
+        census[deg] = rows
+        raw_by_deg[deg] = _forward_grown(rows, _raw_flip, True)
+        # (b) THE FIX, UNCONDITIONAL and at every truncation: a forward mode
+        #     of a passive layer cannot grow along +z -- anywhere, not merely
+        #     inside the cut's decade.
+        fixed = _forward_grown(rows, _shipped_flip, False)
+        assert fixed == 0, (
+            f"degree {deg}: the repaired selector STILL leaves {fixed} "
+            f"growing mode(s) in the forward set (raw: {raw_by_deg[deg]}) -- "
+            f"_forward_growth_flip is supposed to make that impossible by "
+            f"construction")
+        # the instrument agrees with the raw count, so the guard's DIAGNOSIS
+        # channel and the 2026-08-06 mask can never disagree about which modes
+        # are affected ...
+        assert raw_by_deg[deg] == sum(
+            PC._mode_cut_growth(f, q, t, p)[0] for f, q, t, p, _s, _x in rows)
+        # ... and the RESIDUAL instrument agrees with (b).
+        assert 0 == sum(
+            PC._mode_cut_growth_post(
+                f, q, PC._forward_growth_flip(f, q, t, p, np, True))
+            for f, q, t, p, _s, _x in rows)
 
-    def spy(flux, q, thr, prop, mats, site, patterned=None,
-            flip=None, passive=None):
-        seen.append((np.asarray(flux).copy(), np.asarray(q).copy(),
-                     float(thr), np.asarray(prop).copy(), site,
-                     PC._grid_is_passive(mats) if passive is None else passive))
-        return orig(flux, q, thr, prop, mats, site, patterned,
-                    flip=flip, passive=passive)
+    # ---- (a) THE FAIL-BEFORE, stated so it cannot depend on which member of
+    #      a double root this build's round-off happens to put across the cut.
+    #
+    #      The historical form asserted ``raw >= 1`` on ONE truncation of ONE
+    #      device.  A py3.12 CI shard read 0 there and failed -- correctly, in
+    #      the sense that nothing was wrong: that build's eig simply handed the
+    #      unlucky sign to nobody.  The natural manifestation is per-build (see
+    #      the table at _STAIR_SCAN_DEGREES: 1 here, 6 on the other mount, 0 on
+    #      the shard, same degree, same source), so it is REPORTED across the
+    #      scan and ASSERTED only where it is build-free -- on an input this
+    #      build's own solve supplies and this test signs.
+    injected = _engineer_null_flux_misfiling(
+        [r for deg in _STAIR_SCAN_DEGREES for r in census[deg]])
+    assert injected, (
+        "no propagating mode of this staircase would grow in EITHER "
+        "direction, so the round-off band the ninth name lives in does not "
+        "exist on this device at any scanned degree -- the fixture, not the "
+        "selector, has changed")
+    raw_i = _forward_grown(injected, _raw_flip, True)
+    fixed_i = _forward_grown(injected, _shipped_flip, False)
+    assert raw_i >= 1, (
+        f"the RAW selector filed NO growing mode forward even with the "
+        f"round-off flux signed against Im(q) across {len(injected)} of "
+        f"this device's own modal rows -- the injector no longer reaches the "
+        f"defect, so this fail-before is vacuous")
+    assert fixed_i == 0, (
+        f"the repaired selector left {fixed_i} growing mode(s) forward on the "
+        f"injected round-off band -- the repair does not close the ninth name")
 
-    PC._record_mode_cut = spy
-    PC._MODE_CUT_CENSUS = []
-    try:
-        j_union, close_union = _stair_solve("shared")
-    finally:
-        PC._MODE_CUT_CENSUS = None
-        PC._record_mode_cut = orig
-    assert seen, "the census spy never saw a modal solve: nothing was measured"
-    # the device is lossless, so every row must be recognised PASSIVE -- if it
-    # is not, the widened branch never runs and (b) below proves nothing.
-    assert all(row[5] for row in seen), (
-        "a row of this lossless staircase was not recognised as PASSIVE, so "
-        "_forward_growth_flip's widened branch was never exercised: "
-        f"{[(r[4], r[5]) for r in seen]}")
+    # ... and the NATURAL reproduction, reported rather than required.  A
+    # build that shows it at NO degree is a fact about that build's eig, not a
+    # regression; the injected arm above is what keeps the claim alive there.
+    natural = sorted(d for d, n in raw_by_deg.items() if n >= 1)
+    print(f"[forward-set] raw growing modes by degree: {raw_by_deg} -- "
+          f"natural reproduction at degree(s) {natural or 'none'}")
 
-    def grown(flip_fn, near_only):
-        """Modes the given selector leaves GROWING in the forward set, over
-        every row of the solve.  ``near_only`` restores the 2026-08-06
-        conjunct (used for the RAW count, which is what that reading meant)."""
-        total = 0
-        for flux, q, thr, prop, _site, _pas in seen:
-            flip = flip_fn(flux, q, thr, prop)
-            qf = np.where(flip, -q, q)
-            bad = prop & (qf.imag < -PC._MODE_GROWTH_REL * np.abs(qf))
-            if near_only:
-                bad = bad & (np.abs(flux) < PC._MODE_CUT_MARGIN_WARN * thr)
-            total += int(np.count_nonzero(bad))
-        return total
-
-    raw = grown(lambda f, q, t, p: np.where(p, f < 0.0, q.imag < 0.0), True)
-    fixed = grown(
-        lambda f, q, t, p: PC._forward_growth_flip(f, q, t, p, np, True), False)
-    # (a) the defect still reproduces: the raw selector grows something here
-    assert raw >= 1, (
-        "the RAW selector puts NO growing mode in the forward set on the M1 "
-        "audit staircase, so the ninth name no longer reproduces on this "
-        "build and this test has stopped being a fail-before.  Re-pin it "
-        "against whatever changed rather than deleting it.")
-    # (b) THE FIX: a forward mode of a passive layer cannot grow along +z --
-    #     anywhere, not merely inside the cut's decade.
-    assert fixed == 0, (
-        f"the repaired selector STILL leaves {fixed} growing mode(s) in the "
-        f"forward set (raw: {raw}) -- _forward_growth_flip is supposed to "
-        f"make that impossible by construction")
-    # ... and the instrument agrees with the raw count, so the guard's
-    # DIAGNOSIS channel and the 2026-08-06 mask can never disagree about which
-    # modes are affected.
-    assert raw == sum(PC._mode_cut_growth(f, q, t, p)[0]
-                      for f, q, t, p, _s, _pas in seen)
-    # ... and the RESIDUAL instrument the guard now speaks on agrees with (b):
-    # what the shipped selector leaves is what _mode_cut_growth_post reports.
-    assert 0 == sum(
-        PC._mode_cut_growth_post(
-            f, q, PC._forward_growth_flip(f, q, t, p, np, True))
-        for f, q, t, p, _s, _pas in seen)
-
+    # (c) reuses the SCAN's own degree-6 union solve -- ``_stair_solve``'s
+    # default degree IS 6, so re-solving it would be the same numbers twice.
+    j_union, close_union = obs[6]
     # (c) the observable: the two grid paths now agree.  Measured 3.89e-04
     #     relative at 1, 2 and 24 threads on both mounts; before the fix the
     #     same comparison read 8.36e-01 at 2 threads -- a 2150x separation,

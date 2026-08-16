@@ -805,3 +805,71 @@ the `python -m pytest` child it spawned; the oldest orphan had burned 5.5 hours
 of CPU and 3.6 GB before it was found with `Get-Process python | Sort CPU`.
 Every "slow run" diagnosis in S9 was really that.  Check for orphans by CPU
 time before concluding a run is slow.
+
+---
+
+## S12.  The ninth name's fail-before -- the last red on the matrix
+
+`test_pmm_m2_window_contract.py::test_the_forward_set_cannot_grow_on_the_union_grid_conical_staircase`
+failed a py3.12 shard at `assert raw >= 1`:
+
+    the RAW selector puts NO growing mode in the forward set on the M1 audit
+    staircase, so the ninth name no longer reproduces on this build
+
+Shape **S1/S6**, and the same adjudication as the `[0,0,0,0,2]` census
+counterexample in S8.5: **the defect's MANIFESTATION on a fixture is a
+per-build fact.**  The rule under test is
+`flip = where(prop, flux < 0, Im q < 0)`; a `prop`-flagged mode of a lossless
+layer that carries no z-power is scored on a `flux` that is pure round-off, so
+the rule takes its DIRECTION from the SIGN of that round-off.  WHICH member of
+a double root `q^2` gets the unlucky sign is exactly what a LAPACK build
+chooses -- the shipped docstring already records 1 / 8 / 1 growing modes at 1 /
+2 / 24 BLAS threads on ONE box.  A build where NOBODY gets the unlucky sign is
+not a regression; nothing is wrong there.
+
+### What was measured
+
+Union grid, repair off, RAW growing modes in the forward set.  `_stair_solve`'s
+other knob `ffo` was measured **inert** (5 / 7 / 9 / 11 bit-identical), because
+far-field orders shape the OUTPUT orders, not the per-layer eigenproblem:
+
+| degree | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|
+| **W** py3.14 / np2.4.4 / 1 thread | 0 | 0 | **1** | **6** | **3** |
+| **M** py3.12 / np2.5.1 / 1 thread | 0 | 0 | **6** | **6** | **2** |
+| py3.12 CI shard | - | - | **0** | - | - |
+
+The SHIPPED selector leaves **0** at every one of those cells on both mounts.
+Degree 6 -- the M1 audit's own staircase, the only cell the old test scored --
+reads 1 here, 6 there and 0 on the shard: three builds, three answers, same
+source.
+
+### The fix
+
+1. **SCAN.**  The claim is scored over `_STAIR_SCAN_DEGREES = (6, 7, 8)`, so
+   the invariant (b) *"a forward mode of a passive layer cannot grow along
+   +z"* is now asserted at THREE truncations instead of one -- strictly more
+   coverage than the form that failed.  Degrees 4 and 5 were measured and
+   EXCLUDED: they read 0 on both mounts, so they cost a union-grid solve each
+   and can never contribute the reproduction.
+2. **INJECTED FAIL-BEFORE.**  The `raw >= 1` claim no longer waits for the
+   build's round-off to be unlucky; the unlucky sign is INJECTED.
+   `_engineer_null_flux_misfiling` takes this build's OWN modal rows -- real
+   `q` spectrum, real `prop` flags, real `thr` from `_mass_flux_threshold` --
+   and replaces only the round-off flux of the modes that COULD grow, with the
+   sign that makes the forward pick the growing one, at half the cut's warn
+   margin so it sits squarely inside the band where the rule is provably
+   reading noise.  Measured on **W**: 8 rows, `raw = 1`, and on the injected
+   input `raw = 1`, `fixed = 0` -- **defect demonstrated, repair holds**.
+3. **The natural reproduction is REPORTED, not required.**  The per-degree raw
+   counts are printed.  A build that shows it at no degree is a fact about its
+   eig; the injected arm carries the claim there.
+4. **The cured-selector claim got STRONGER on every arm**: `fixed == 0` is
+   asserted at all three scanned degrees AND on the injected input, plus the
+   two instrument-agreement checks (`_mode_cut_growth` vs the raw count,
+   `_mode_cut_growth_post` vs the residual) at every rung.  Nothing was
+   weakened; the only assertion removed is the one that named a per-build
+   number.
+
+The observable (c) -- union grid vs per-layer path, and the closure -- is
+unchanged.
