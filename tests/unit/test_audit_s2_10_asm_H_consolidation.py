@@ -47,20 +47,71 @@ WL = 1.31e-6
 # into the regime where a float32-order phase reduction loses accuracy.
 N, DX, Z = 256, 1e-6, 0.05
 
-# Absolute-error gate.  The pre-fix exp-then-cast path reaches ~3e-8..6e-8
-# (up to one float32 ULP) against the longdouble oracle; the mitigated path
-# is exactly correctly-rounded (0.0).  1e-8 cleanly separates the two.
-# v5.25.0 (PR #18 CI): tolerance corrected for a WINDOWS-longdouble
-# artifact.  The mitigation was developed on Windows, where
-# ``np.longdouble`` IS float64, so the "ground-truth" oracle coincided
-# with the implementation's own f64 reference and the error read 0.0.
-# On Linux CI ``longdouble`` is a genuine 80-bit reference and the
-# mitigated path lands within HALF a float32 ULP of it (measured
-# 2.98e-8 at |H| = 1) -- excellent, but not literally 0.  Bound at
-# 4e-8: comfortably above the mitigated half-ULP (2.98e-8) and safely
-# below the UNmitigated path's full-ULP error (5.96e-8), so a
-# regression to the pre-fix exp-then-cast path still fails.
-TOL = 4e-8
+# ---------------------------------------------------------------------------
+# The error gate is DERIVED IN-BUILD, not a platform constant.
+# ---------------------------------------------------------------------------
+# 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).  This file used to
+# gate on hard-coded ``TOL = 4e-8`` (and ``8e-8`` for the two one-ULP sites),
+# numbers read off ONE CI image.  Both bars sat BELOW the achievable worst
+# case of the very contract they assert:
+#
+#   * the quantity is ``max|H_complex64 - longdouble_oracle|``, a COMPLEX
+#     magnitude.  If a bin's two float32 components each land one rounding
+#     step apart -- entirely legal for two independently-rounded paths -- the
+#     magnitude is ``sqrt(2) * step``, not ``step``;
+#   * at the half-ULP figure this file's own docstrings record (2.98e-8) that
+#     is 4.21e-8 > the old 4e-8 bar, and at the one-ULP figure (5.96e-8) it is
+#     8.43e-8 > the old 8e-8 bar.  Only the accident that no bin happened to
+#     round differently in BOTH components kept the old bars alive; the first
+#     platform whose libm nudged one extra bin would have burned a tag with
+#     the contract fully intact.
+#
+# Fix: derive the envelope from THIS build's oracle.  ``np.spacing`` on the
+# oracle's float32 component magnitudes is the local ULP; half of it is the
+# correctly-rounded error of one path, and ``sqrt(2)`` accounts for both
+# components deviating at once.  No platform constant survives, so the
+# assertion is the CONTRACT ("the mod-2pi f64 fold is bounded at half-to-one
+# f32 ULP on EVERY platform") rather than a transcription of one runner.
+#
+# Measured 2026-08-15 on both mounts (Windows py3.14 / np2.4.4, longdouble
+# nmant 52; WSL py3.12 / np2.5.1, longdouble nmant 63 = genuine 80-bit):
+#   derived bars       : half = 8.429370e-08, full = 1.685874e-07 (identical
+#                        on both mounts -- the envelope saturates at |H| = 1,
+#                        which every propagating-bin grid contains)
+#   every mitigated builder (kernel / square / natural / MFT / tilted): 0.0
+#   pre-fix exp-then-cast: 2.980232e-08
+# Two-sided headroom:
+#   * will not burn a tag -- the largest value ever RECORDED for a mitigated
+#     path anywhere (2.98e-8 half-ULP, 5.96e-8 one-ULP tilted, both from the
+#     PR #18 CI image) sits 2.8x below its bar, and the bar is a mathematical
+#     envelope: a correctly-rounded-to-float32 result CANNOT exceed it, on
+#     any libm, so there is no platform left that can move it;
+#   * still fires -- a builder that reverts to a float32-order phase fold
+#     measures 1.44e-2 here (5 orders over the bar), and even a 2-step
+#     perturbation of a single bin's two components measures 1.33e-7, over
+#     the half-ULP bar.
+# The structural consolidation pins (every builder routes through
+# ``_asm_H_from_kz``) are unchanged and remain the regression guard against a
+# builder quietly re-copying the exp-then-cast path.
+
+
+def _c64_ulp_envelope(oracle):
+    """Derive this build's float32 rounding envelope from ``oracle``.
+
+    Returns ``(bar_half, bar_full)``:
+
+    * ``bar_half`` -- ``sqrt(2) * max(half-ULP)``: the magnitude of a
+      complex64 deviation whose two components are each correctly rounded
+      (i.e. up to one rounding step apart between two independent paths).
+    * ``bar_full`` -- ``2 * bar_half``: the same envelope allowing one FULL
+      extra ULP per component, for the builders that carry an additional
+      float64 rounding into the phase (the tilted carrier) and for the
+      libm-dependent exp-then-cast reference.
+    """
+    step = np.maximum(np.spacing(np.abs(oracle.real).astype(np.float32)),
+                      np.spacing(np.abs(oracle.imag).astype(np.float32)))
+    bar_half = float(np.sqrt(2.0) * 0.5 * float(step.max()))
+    return bar_half, 2.0 * bar_half
 
 
 def _kz_prop_centered(Ny, Nx, dy, dx, wl):
@@ -127,18 +178,21 @@ def test_mitigated_path_bound_is_platform_independent():
     oracle = _c64_longdouble_oracle(kz, prop, Z)
     old = _c64_pre_fix_expcast(kz, prop, Z)
     new = _asm_H_from_kz(kz, prop, Z, np.complex64)
+    bar_half, bar_full = _c64_ulp_envelope(oracle)
     err_old = float(np.max(np.abs(old - oracle)))
     err_new = float(np.max(np.abs(new - oracle)))
-    assert err_new < TOL, (
-        f"mitigated-path c64 err {err_new:.2e} exceeds the platform-"
-        f"independent bound {TOL:.0e}")
+    assert err_new <= bar_half, (
+        f"mitigated-path c64 err {err_new:.2e} exceeds the in-build "
+        f"correctly-rounded envelope {bar_half:.2e}")
     # informational envelope for the libm-dependent path: within ~1 ULP
-    # on every platform observed (1.49e-8 glibc .. 5.96e-8 ucrt) -- if a
-    # platform ever exceeds this, the mitigation decision should be
-    # revisited with that platform's numbers.
-    assert err_old < 8e-8, (
-        f"exp-then-cast err {err_old:.2e} exceeds 1 f32 ULP -- new "
-        f"platform regime; re-evaluate the mitigation analysis")
+    # per component on every platform observed (1.49e-8 glibc .. 5.96e-8
+    # ucrt, 2.98e-8 measured 2026-08-15 on both mounts) -- if a platform
+    # ever exceeds this, the mitigation decision should be revisited with
+    # that platform's numbers.
+    assert err_old <= bar_full, (
+        f"exp-then-cast err {err_old:.2e} exceeds one f32 ULP per "
+        f"component ({bar_full:.2e}) -- new platform regime; "
+        f"re-evaluate the mitigation analysis")
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +207,9 @@ def test_shared_kernel_c64_matches_longdouble_oracle():
     oracle = _c64_longdouble_oracle(kz, prop, Z)
     assert H.dtype == np.complex64
     err = float(np.max(np.abs(H - oracle)))
-    assert err < TOL, f"shared-kernel c64 err {err:.2e} exceeds {TOL:.0e}"
+    bar_half, _ = _c64_ulp_envelope(oracle)
+    assert err <= bar_half, (
+        f"shared-kernel c64 err {err:.2e} exceeds {bar_half:.2e}")
 
 
 def test_build_asm_H_square_c64_matches_longdouble_oracle():
@@ -163,7 +219,8 @@ def test_build_asm_H_square_c64_matches_longdouble_oracle():
     oracle = _c64_longdouble_oracle(kz, prop, Z)
     assert H.dtype == np.complex64
     err = float(np.max(np.abs(H - oracle)))
-    assert err < TOL, f"square c64 err {err:.2e} exceeds {TOL:.0e}"
+    bar_half, _ = _c64_ulp_envelope(oracle)
+    assert err <= bar_half, f"square c64 err {err:.2e} exceeds {bar_half:.2e}"
 
 
 def test_get_asm_H_natural_c64_matches_longdouble_oracle():
@@ -177,7 +234,8 @@ def test_get_asm_H_natural_c64_matches_longdouble_oracle():
     oracle = np.fft.ifftshift(_c64_longdouble_oracle(kz, prop, Z))
     assert H.dtype == np.complex64
     err = float(np.max(np.abs(H - oracle)))
-    assert err < TOL, f"natural c64 err {err:.2e} exceeds {TOL:.0e}"
+    bar_half, _ = _c64_ulp_envelope(oracle)
+    assert err <= bar_half, f"natural c64 err {err:.2e} exceeds {bar_half:.2e}"
 
 
 def test_mft_H_c64_matches_longdouble_oracle():
@@ -191,7 +249,8 @@ def test_mft_H_c64_matches_longdouble_oracle():
     oracle = _c64_longdouble_oracle(kz, prop, Z)
     assert H.dtype == np.complex64
     err = float(np.max(np.abs(H - oracle)))
-    assert err < TOL, f"MFT c64 err {err:.2e} exceeds {TOL:.0e}"
+    bar_half, _ = _c64_ulp_envelope(oracle)
+    assert err <= bar_half, f"MFT c64 err {err:.2e} exceeds {bar_half:.2e}"
 
 
 def test_tilted_H_c64_matches_longdouble_oracle():
@@ -216,14 +275,22 @@ def test_tilted_H_c64_matches_longdouble_oracle():
     prop = kz_sq > 0
     kz = np.where(prop, np.sqrt(np.maximum(kz_sq, 0.0)), 0.0)
     oracle = np.fft.ifftshift(_c64_longdouble_oracle(kz, prop, Z))
+    _, bar_full = _c64_ulp_envelope(oracle)
     assert H.dtype == np.complex64
     err = float(np.max(np.abs(H - oracle)))
     # v5.25.0 (PR #18 CI): the tilted builder folds kz*z + the tilt
     # CARRIER phase -- one extra f64 rounding in the sum before the mod-2pi
     # fold, so its c64 error lands at ONE full float32 ULP (measured
     # 5.96e-8 on Linux 80-bit longdouble) where the carrier-free builders
-    # stay at half a ULP.  Physically equivalent; bound at 1 ULP + margin.
-    assert err < 8e-8, f"tilted c64 err {err:.2e} exceeds 8e-08 (1 f32 ULP)"
+    # stay at half a ULP.  Physically equivalent, so this site uses the
+    # FULL-ULP-per-component envelope derived from its own oracle
+    # (2026-08-15, docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md -- the old
+    # hard-coded 8e-8 was BELOW the sqrt(2)*5.96e-8 = 8.43e-8 that one full
+    # ULP in both components of a single bin already reaches).  Measured
+    # 0.0 on both mounts 2026-08-15 against a derived bar of 1.686e-07.
+    assert err <= bar_full, (
+        f"tilted c64 err {err:.2e} exceeds one f32 ULP per component "
+        f"({bar_full:.2e})")
 
 
 # ---------------------------------------------------------------------------

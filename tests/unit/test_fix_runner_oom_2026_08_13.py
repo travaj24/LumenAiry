@@ -55,14 +55,38 @@ _TKW = dict(on_undersample='silent', on_noncollimated='silent',
 # helpers -- the retired expressions, recomputed here so the pins compare
 # against the thing that shipped rather than against themselves
 # ---------------------------------------------------------------------------
-def _peak(fn, *a, **k):
+def _peak(fn, *a, _warm=None, **k):
     """``(result, peak_bytes)`` for one call.
 
     :mod:`tracemalloc` counts NumPy's allocator too (NumPy registers its own
     tracemalloc domain), so this is a DETERMINISTIC transient measurement --
     not an RSS sample that a garbage collector or an allocator arena can move
     under the test.
+
+    ``_warm`` is an ``(args, kwargs)`` pair for ONE throwaway call on a tiny
+    input, made BEFORE the window opens.  2026-08-15
+    (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S6 + S8.1, shape S4):
+    tracemalloc counts EVERY allocation inside the window, and a module IMPORT
+    is an allocation.
+    The first :class:`~lumenairy.elements._lens_traced._Cheb2DEvaluator` call
+    reaches the array-backend dispatcher, which first-imports ``cupy`` /
+    ``cupyx`` / ``cupy_backends`` / ``cuda`` / ``ml_dtypes`` /
+    ``_cython_3_1_4`` -- MEASURED 7.24 MB of traced heap on this box, more than
+    the whole 5.06 MB margin the forward-fit pin below carries.  Whether that
+    lands inside the window is a per-BUILD, per-ORDER fact (is CuPy installed?
+    did an earlier test already touch the dispatcher?), which is exactly the
+    thing a pin may not depend on: measured cold, the forward-fit window read
+    315.7 MB against its 313.5 MB bar and FAILED on Windows py3.14 / np2.4.4 in
+    a bare process, while the same source read 308.5 MB under ``pytest`` (where
+    ``tests/conftest.py``'s leak guard happens to touch the dispatcher first)
+    and 308.5 MB on WSL py3.12 / np2.5.1 (where CuPy is not installed at all).
+    Warming moves that one-time import cost OUTSIDE the window, so the window
+    measures arrays -- the thing these pins are about -- and reads the same
+    number on every build.
     """
+    if _warm is not None:
+        _wa, _wk = _warm
+        fn(*_wa, **_wk)
     tracemalloc.start()
     try:
         tracemalloc.reset_peak()
@@ -211,8 +235,26 @@ def test_the_exit_design_transient_is_bounded_by_the_matrix_it_returns():
     ux, uy = _uv(n, seed=3)
 
     scratch = 3.0 * IM._IMAP_FIT_CHUNK_ENTRIES * 8
-    _a, pk_new = _peak(IM._td_design, ux, uy, degree, terms)
-    _b, pk_old = _peak(_retired_td_design, ux, uy, degree, terms)
+    # 2026-08-15 (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.1, shape
+    # S4): every window is WARMED, so it measures arrays, not first-imports (see
+    # ``_peak``).  The bars are unchanged -- they are already derived from this
+    # build's chunk constants -- but the MEASUREMENT is now build-free.
+    # Measured warmed, IDENTICAL on Windows py3.14 / np2.4.4 and WSL py3.12 /
+    # np2.5.1: pk_new = 283.406 MB against the 324.000 MB bar (132.000 MB
+    # output + 192.000 MB block scratch), i.e. 12.5% BELOW the bar -- and
+    # 2.15x ABOVE the 132.000 MB output alone, so the window is still holding
+    # the block scratch it claims to and has not collapsed into a trivially
+    # passing measurement.  Two-sided: the pin fails high if blocking regresses
+    # (the retired arm below reads > 2.5x output) and fails low if the excess
+    # ever stopped being a fixed block (the size-independence arm).  Cold, this
+    # site happened to read 283.406 MB too -- it is not contaminated TODAY, but
+    # it is the same window shape as the forward-fit pin that was, and nothing
+    # stops a future first-import from landing in it.
+    _wux, _wuy = _uv(8, seed=3)
+    _warm_td = ((_wux, _wuy, degree, terms), {})
+    _a, pk_new = _peak(IM._td_design, ux, uy, degree, terms, _warm=_warm_td)
+    _b, pk_old = _peak(_retired_td_design, ux, uy, degree, terms,
+                       _warm=_warm_td)
     assert pk_new < out_b + scratch, (
         'blocked design transient %.2f MB against a %.2f MB output + '
         '%.2f MB block scratch'
@@ -225,7 +267,7 @@ def test_the_exit_design_transient_is_bounded_by_the_matrix_it_returns():
     # ...and the excess is FIXED, not proportional: that is what makes the
     # 5.53 GB design of the release-blocker call cost 5.53 GB and not 16.6.
     ux2, uy2 = _uv(2 * n, seed=4)
-    _c, pk_2n = _peak(IM._td_design, ux2, uy2, degree, terms)
+    _c, pk_2n = _peak(IM._td_design, ux2, uy2, degree, terms, _warm=_warm_td)
     excess_1, excess_2 = pk_new - out_b, pk_2n - 2 * out_b
     assert abs(excess_2 - excess_1) < 0.25 * excess_1, (
         'the blocked transient is not size-independent: %.1f MB excess at n, '
@@ -267,8 +309,37 @@ def test_the_forward_fit_transient_is_bounded_by_its_design_matrix():
     out_b = ax.size ** 2 * n_terms * 8
     scratch = (3.0 * LT._CHEB_FIT_CHUNK_ENTRIES * 8
                + 3.0 * ax.size ** 2 * 8)             # + the Tu/Tv/u/v planes
-    _e, pk_new = _peak(LT._Cheb2DEvaluator, ax, ax, vals, order=6)
-    _c, pk_old = _peak(_retired_cheb_coeffs, ax, ax, vals, 6)
+    # 2026-08-15 (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S6 + S8.1,
+    # shape S4): THE site the warm-up exists for.  The two mounts' readings and
+    # the fail-before are the S6 entry that opened this branch.
+    #
+    # The bar is unchanged (313.520 MB = 109.760 MB
+    # design + 203.760 MB scratch, all derived from this build's chunk
+    # constants); what changes is that the window no longer bills this pin for
+    # the array-backend dispatcher's first-import.  Measured:
+    #
+    #     window          Windows py3.14/np2.4.4     WSL py3.12/np2.5.1
+    #     cold (bare)     315.695 MB  -> FAILS       308.457 MB
+    #     warmed          308.456 MB                 308.456 MB
+    #
+    # The cold Windows reading is 2.18 MB OVER the bar, and the 7.24 MB gap
+    # between the two columns is exactly the cupy/cupyx/cuda/ml_dtypes import
+    # -- a fact about which wheels the box has, not about how many arrays the
+    # fit allocates.  Warmed, the two mounts agree to 1 kB.
+    #
+    # Two-sided headroom on the warmed number: 5.064 MB (1.62%) below the
+    # 313.520 MB bar, and 2.81x ABOVE the 109.760 MB design matrix alone -- so
+    # a regression that reintroduced even ONE extra full design copy
+    # (+109.76 MB) fails the bar with 20x the margin, while a collapse to the
+    # bare output would trip the retired-arm fail-before below.  1.62% is thin
+    # in absolute terms but it is now a difference of two DERIVED array sizes
+    # that read identically on both mounts, not a race against an import.
+    _wax = np.linspace(-1.0e-3, 1.0e-3, 8)
+    _wvals = 0.5 * _wax[:, None] ** 2 + 0.25 * _wax[None, :] ** 2
+    _e, pk_new = _peak(LT._Cheb2DEvaluator, ax, ax, vals, order=6,
+                       _warm=((_wax, _wax, _wvals), {'order': 2}))
+    _c, pk_old = _peak(_retired_cheb_coeffs, ax, ax, vals, 6,
+                       _warm=((_wax, _wax, _wvals, 2), {}))
     assert pk_new < out_b + scratch, (
         'forward-fit transient %.2f MB against a %.2f MB design + %.2f MB '
         'scratch' % (pk_new / 1e6, out_b / 1e6, scratch / 1e6))
@@ -345,15 +416,26 @@ def test_the_gram_projection_is_not_smaller_than_what_the_build_allocates():
     P = int(terms.shape[0])
     ux, uy = _uv(n, seed=11)
 
-    def _coexist():
+    def _coexist(uxi=ux, uyi=uy):
         """The build's real high-water shape: the design matrix is ALIVE while
         the gradient pair is built (``_td_design_grad`` runs after the solve,
         with ``A`` still held for the residual report)."""
-        A = IM._td_design(ux, uy, degree, terms)
-        Au, Av = IM._td_design_grad(ux, uy, degree, terms)
+        A = IM._td_design(uxi, uyi, degree, terms)
+        Au, Av = IM._td_design_grad(uxi, uyi, degree, terms)
         return float(A[0, 0] + Au[0, 0] + Av[0, 0])
 
-    _v, pk = _peak(_coexist)
+    # 2026-08-15 (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.1, shape
+    # S4): warmed for the same reason as the two pins above -- an upper bar
+    # measured with tracemalloc must not be able to bill a first-import to the
+    # code under test.  ``_coexist`` takes
+    # its sample vectors as defaulted arguments purely so a tiny warm-up call
+    # can run the identical code path.  Measured warmed, both mounts: 438.678
+    # MB against the guard's 544.000 MB projection (19.4% below) and 2.49x the
+    # 176.000 MB two-copy floor the second arm requires -- unchanged from the
+    # cold reading (438.679 MB), because this path never touches the array
+    # dispatcher; the treatment is prophylactic, not a repair.
+    _wux, _wuy = _uv(8, seed=11)
+    _v, pk = _peak(_coexist, _warm=((_wux, _wuy), {}))
     projected = (IM._IMAP_BUILD_PEAK_COPIES * n * P * 8
                  + 3.0 * IM._IMAP_FIT_CHUNK_ENTRIES * 8)
     assert pk <= projected, (

@@ -236,7 +236,10 @@ def test_eig_vjp_degenerate_edge_cases_stay_finite():
 _ORACLE_SEED = 20260727
 
 
-def _oracle_case(split, n=6, mult=2):
+def _oracle_case(split, n=6, mult=2, eig=None):
+    """``eig`` overrides the shipped custom-VJP eig, so a caller can run the
+    IDENTICAL oracle through an injected variant (see
+    :func:`_degenerate_splitting_eig`) and compare the two in one process."""
     rng = np.random.default_rng(_ORACLE_SEED)
     S = rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n))
     S = S / np.linalg.norm(S) * 3.0
@@ -245,7 +248,7 @@ def _oracle_case(split, n=6, mult=2):
     for j in range(1, mult):
         d[j] = d[0] + j * split
     A = jnp.asarray(S @ np.diag(d) @ np.linalg.inv(S))
-    eig = _jax_eig_stable()
+    eig = _jax_eig_stable() if eig is None else eig
 
     def L_expm(a):
         t = jnp.trace(expm(a) @ X)
@@ -320,12 +323,44 @@ def test_oracle_exact_degeneracy_is_bounded_not_correct(mult):
     true one -- measured 0.16-0.75 relative for EVERY variant (floored,
     unfloored, absolute).  What the relative floor DOES guarantee is that the
     error stays BOUNDED: it caps ``|F|`` at ``1/(2 tau max|lam|)`` instead of
-    dividing by pure rounding noise.  Dropping the floor made the physical
-    probe 7.7x worse (pmm 1-D theta=0: 1.71e-02 vs 2.22e-03), so this bound is
-    a real fence around removing it."""
+    dividing by pure rounding noise.
+
+    2026-08-15 (``FIX_RUNNER_PINS_2_2026_08_15`` S2 sibling sweep).  The
+    boundedness used to rest on the absolute ``err < 5.0`` alone, which is
+    6.7x over the worst variant ever recorded (0.75) -- inside one decade of a
+    per-build quantity, and this file's own headline finding is what that
+    costs.  The load-bearing arm is now COMPARATIVE and measured in this same
+    process: the same exactly-degenerate case, run through a live copy of the
+    VJP with the floor REMOVED and the (already round-off) splitting shrunk by
+    1e-8, is eight decades worse.  Measured 2026-08-15::
+
+        mult   shipped (floored)   unfloored + splitting x 1e-8   ratio
+        2      0.3131 [W] [M]      3.619e+07 [W] 3.619e+07 [M]    1.2e8
+        3      0.4377 [W] [M]      6.192e+07 [W] 4.160e+07 [M]    1.4e8 / 9.5e7
+
+    The shipped readings are IDENTICAL on both mounts (the fixture is a
+    constructed matrix with a fixed seed), so the regime bar below is kept as
+    the O(1) sanity it always was -- the eig route is missing ONE of several
+    comparable terms, so its relative error is O(1) by construction -- while
+    the decades of separation carry the actual claim.
+    """
     err = _oracle_case(0.0, mult=mult)
-    assert err < 5.0
     assert np.isfinite(err)
+    # regime: one missing term among several comparable ones -> O(1), never
+    # a blow-up.  Measured 0.3131 / 0.4377 on both mounts (0.16-0.75 across
+    # all recorded variants); 5.0 is 6.7x the worst of those.
+    assert err < 5.0
+    # ...and the floor is what buys that.  Same case, same process, floor off.
+    unfloored = _oracle_case(
+        0.0, mult=mult,
+        eig=_degenerate_splitting_eig(tau_rel=0.0, splitting=1e-8))
+    assert unfloored > 1e4 * err, (
+        f"removing the spectrum-relative floor left the exactly-degenerate "
+        f"gradient error at {unfloored:.4g} against the floored {err:.4g} -- "
+        f"only {unfloored / err:.4g}x.  The floor is supposed to be the "
+        f"difference between an O(1) wrong answer and dividing by rounding "
+        f"noise (measured ~1e8x); if it is not, either the injector no "
+        f"longer reaches the degenerate block or the floor stopped binding")
 
 
 # ================================================= the reported physical probe
@@ -479,12 +514,34 @@ def test_the_lstsq_projection_route_is_refuted_on_a_degenerate_projection(
         "so this fail-before is vacuous")
 
     # ---- (c) forward nullity ---------------------------------------------
+    # The two routes are DIFFERENT algorithms solving the same least-squares
+    # problem, so "the same answer" can only mean "to the conditioning of the
+    # problem".  The bar is therefore DERIVED here rather than pinned: a
+    # backward-stable solve of a system with condition number ``kappa``
+    # agrees to ~``eps * kappa`` relative, and 1e2 of headroom over that is
+    # the claim (FIX_RUNNER_PINS_2_2026_08_15 S2 sibling sweep).  The frozen
+    # 1e-13 it replaces measured 2.85e-15 [W] / 3.23e-15 [M] on the live
+    # oblique projection -- 35x / 31x, inside one decade of a round-off
+    # quantity.  cond(A03) = 5.196 and cond(A_deg) = 1 on both mounts, so the
+    # derived bars come out at 1.2e-13 and 2.2e-14 and the measured values
+    # sit 42x and 128x under them.
+    _EPS = float(np.finfo(np.float64).eps)
+
+    def _nullity_bar(A):
+        return 1e2 * _EPS * float(np.linalg.cond(np.asarray(A)))
+
     x_pre = np.asarray(pmm._jpmm_min_norm_projection(A_deg, bd, jnp))
     x_live_pre = np.asarray(
         pmm._jpmm_min_norm_projection(jnp.asarray(A03), jnp.asarray(b03), jnp))
-    assert np.max(np.abs(x_fix - x_pre)) < 1e-13 * np.max(np.abs(x_fix))
-    assert np.max(np.abs(x_live_fix - x_live_pre)) \
-        < 1e-13 * np.max(np.abs(x_live_fix))
+    r_deg = np.max(np.abs(x_fix - x_pre)) / np.max(np.abs(x_fix))
+    r_live = np.max(np.abs(x_live_fix - x_live_pre)) / np.max(
+        np.abs(x_live_fix))
+    assert r_deg < _nullity_bar(A_deg), (
+        f"degenerate injector: routes differ by {r_deg:.3e} relative against "
+        f"a conditioning-derived {_nullity_bar(A_deg):.3e}")
+    assert r_live < _nullity_bar(A03), (
+        f"live oblique projection: routes differ by {r_live:.3e} relative "
+        f"against a conditioning-derived {_nullity_bar(A03):.3e}")
 
 
 @pytest.mark.parametrize("name,x0,h,bound", [
@@ -506,70 +563,118 @@ def test_pmm1d_design_gradients_at_exactly_normal_incidence_are_clean(
     assert abs(ad - fd) < bound * abs(fd)
 
 
-#: The exactly-degenerate point's two RATIO bars, both between arms measured
-#: in one process on the running build (``FIX_RUNNER_PINS_2026_08_12`` S7).
+#: How many decades above the truth's own RESOLUTION the value at exactly
+#: normal incidence must sit to count as still WRONG, and how far the finite
+#: difference itself may sit above that resolution before the fixture is
+#: disowned.  ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S2, 2026-08-15.
 #:
-#: ``_THETA0_DEFECT_RATIO`` -- how far above the CLEAN near-normal gradient the
-#: wrong value at exactly zero must sit for the defect to count as still
-#: present.  ``AD(theta)`` is exactly linear in theta just off normal (the
-#: sibling test pins that), so the correct value at theta = 0 is 0 and the
-#: clean ``AD(1e-6)`` is the scale a fixed eig-VJP would return something near.
-#: Measured 4.4e3 (TE) / 1.6e5 (TM), i.e. 44x / 1580x headroom.
+#: WHY THIS IS NOT A MAGNITUDE RATIO ANY MORE.  The 2026-08-12 remediation
+#: replaced an absolute bar with two ratios (``|AD(0)|`` against the clean
+#: near-normal gradient, and against the observable's physical gradient
+#: scale).  Both still carry ``|AD(0)|``, and ``|AD(0)|`` is THE per-build
+#: fact here -- it is the size of the eigenvector JUMP, and which direction
+#: ``V`` jumps inside an exactly degenerate subspace is what a LAPACK build
+#: is entitled to choose:
 #:
-#: ``_THETA0_ENVELOPE_RATIO`` -- how far above the observable's OWN physical
-#: gradient scale the wrong value may sit before it counts as blown up.
-#: Measured 2.5e-2 (TE) / 1.33 (TM), i.e. 1200x / 22x headroom, and the
-#: injected blow-up in the fail-before reads 3.6e2 / 1.9e4.
-_THETA0_DEFECT_RATIO = 100.0
-_THETA0_ENVELOPE_RATIO = 30.0
+#:     build                             TE AD(0)      AD(0)/clean
+#:     authoring box (2026-07-27)       -2.221e-03      1.3e3
+#:     Windows py3.14 / numpy 2.4.4     +7.793e-03      4.4e3
+#:     WSL py3.12 / numpy 2.5.1         +1.506e-02      8.6e3
+#:     CI ubuntu py3.12 (2026-08-12)    -2.664e-02      1.5e4
+#:     CI ubuntu, numpy 2.5-era wheel   +2.910e-05      1.66e1   <- FAILED
+#:
+#: Three decades of spread and two sign flips, against a bar of 100.  The
+#: envelope arm was in the same shape: ``|AD(0)|/sweep`` measured 1.333 [W]
+#: against a bar of 30 (22x headroom) but 0.0179 [M] -- a 75x spread across
+#: two builds of one source.
+#:
+#: THE DISCRIMINATOR IS NOW PRESENCE OF WRONGNESS.  Mirror symmetry forces the
+#: true derivative to be EXACTLY 0 at normal incidence, so the question "is AD
+#: still wrong?" needs no magnitude at all -- only the resolution at which
+#: "zero" can be asserted.  For a function that is EVEN about 0 the central
+#: difference is analytically zero at every step size (all truncation terms
+#: cancel identically), so its whole reading is float64 cancellation and the
+#: resolution is the derived ``eps_mach * |R(0)| / h``.  VERIFIED 2026-08-15:
+#: the FD reading scales as 1/h over three decades of h on both mounts
+#: (TE: 6.9e-13 / 2.1e-11 / 8.3e-10 at h = 1e-5 / 1e-6 / 1e-7) and lands at
+#: 1.38x [W] and 0.46x [M] of the derived floor.
+#:
+#: ``_THETA0_WRONGNESS_FACTOR`` then separates the two regimes by decades in
+#: BOTH directions, measured as ``|AD(0) - FD(0)| / resolution``:
+#:
+#:     still defective   1.9e6 (the failing runner) .. 2.0e10   [5 builds]
+#:     defect FIXED      3.3e-4 (rcwa1d TE) .. 7.9e-5 (TM)      [2 mounts]
+#:
+#: 1e3 sits 3.3 decades below the smallest defective reading ever seen and
+#: 6.5 decades above the largest clean one, so it can neither burn a tag nor
+#: pass quietly on the day the upstream defect is closed.
+_THETA0_WRONGNESS_FACTOR = 1e3
+#: ...and the fixture's own symmetry, checked against the same resolution.
+#: Measured |FD(0)|/resolution = 1.38 / 6.64 [W, te/tm], 0.46 / 0.35 [M];
+#: 1e3 is 150x over the worst of those.
+_THETA0_SYMMETRY_FACTOR = 1e3
+
+
+def _zero_derivative_resolution(f, h):
+    """The finest nonzero derivative a central difference of ``f`` at 0 can be
+    told apart from zero, on THIS build: the float64 cancellation floor
+    ``eps_mach * |f(0)| / h``.
+
+    Exact for this fixture because ``R(theta)`` is EVEN about normal
+    incidence, so ``f(h) - f(-h)`` is analytically zero and carries no
+    truncation term at all -- every bit the quotient returns is round-off.
+    """
+    return float(np.finfo(np.float64).eps) * abs(float(f(jnp.asarray(0.0)))) / h
 
 
 def _theta0_scores(f):
     """``(AD at exactly 0, FD at 0, |AD| at a clean 1e-6, max |AD| over a
-    physical sweep)`` for a one-argument angle loss.
+    physical sweep, the FD's own zero-resolution)`` for an angle loss.
 
-    Every number is measured in ONE process on the running build, so the
-    ratios taken from them carry no runner arithmetic at all.
+    Every number is measured in ONE process on the running build.  ``clean``
+    and ``sweep`` are no longer asserted on -- they are the printed
+    adjudication in the failure message, kept because a reader who trips this
+    pin needs to know how big the wrong value was, not just that it was wrong.
     """
     ad0 = float(jax.grad(f)(jnp.asarray(0.0)))
     fd0 = _central(f, 0.0, 1e-6)
     clean = abs(float(jax.grad(f)(jnp.asarray(1e-6))))
     sweep = max(abs(float(jax.grad(f)(jnp.asarray(t))))
                 for t in (0.05, 0.1, 0.2, 0.3, 0.5))
-    return ad0, fd0, clean, sweep
+    return ad0, fd0, clean, sweep, _zero_derivative_resolution(f, 1e-6)
 
 
 def _score_theta0_defect(f, name):
     """Score the OPEN eig-VJP degeneracy defect at exactly normal incidence.
-    Returns the four measurements.  Split out so the fail-before below can run
-    the identical claims against a solver that does NOT carry the defect."""
-    ad0, fd0, clean, sweep = _theta0_scores(f)
-    # (0) the SYMMETRY oracle: the true derivative is zero.  1e-6 sits ~1e5
-    # above float64's own floor for this difference quotient
-    # (eps * R / h ~ 7e-12) and ~1e5 below the wrong value; measured 2.8e-11.
-    assert abs(fd0) < 1e-6, (
+    Returns the measurements.  Split out so the fail-before below can run the
+    identical claims against a solver that does NOT carry the defect."""
+    ad0, fd0, clean, sweep, res = _theta0_scores(f)
+    # (0) the SYMMETRY oracle: the true derivative is zero, and the FD says so
+    # to within its own derived cancellation floor.
+    assert abs(fd0) < _THETA0_SYMMETRY_FACTOR * res, (
         f"{name}: d(sum R)/d(theta) is forced to ZERO at normal incidence by "
-        f"mirror symmetry, but the finite difference reads {fd0:.4e} -- the "
-        f"fixture is not symmetric and nothing below means what it says")
+        f"mirror symmetry, but the finite difference reads {fd0:.4e} -- "
+        f"{abs(fd0) / res:.4g}x its own float64 cancellation floor "
+        f"({res:.3e}).  The fixture is not symmetric and nothing below means "
+        f"what it says")
     assert np.isfinite(ad0), (
         f"{name}: AD at exactly normal incidence returned {ad0!r}.  The "
         f"spectrum-relative floor exists to keep this FINITE")
-    # (1) THE DEFECT, still present.  A future fix should make this fail.
-    assert abs(ad0) > _THETA0_DEFECT_RATIO * clean, (
-        f"{name}: AD at exactly normal incidence is {ad0:.4e}, only "
-        f"{abs(ad0) / max(clean, 1e-300):.4g}x the clean AD at 1e-6 rad "
-        f"({clean:.4e}), so the eigenvector-VJP degeneracy no longer corrupts "
-        f"it.  That is the KNOWN LIMIT being CLOSED -- re-pin this test "
-        f"against the fix (and drop the theta >= 1e-8 advice from the module "
-        f"docstring); do not loosen the ratio")
-    # (2) THE ENVELOPE: bounded, comparatively.  Not blown up.
-    assert abs(ad0) < _THETA0_ENVELOPE_RATIO * sweep, (
-        f"{name}: AD at exactly normal incidence is {ad0:.4e}, "
-        f"{abs(ad0) / sweep:.4g}x the largest gradient this observable "
-        f"attains anywhere on a physical angle sweep ({sweep:.4e}).  The "
-        f"wrong value is allowed to be wrong; it is not allowed to be "
-        f"UNBOUNDED, which is what an unfloored 1/D on a degenerate pair does")
-    return ad0, fd0, clean, sweep
+    # (1) THE DEFECT, still present: AD disagrees with the truth by decades
+    # more than the truth's own resolution.  A future fix must make this fail.
+    scale = max(res, abs(fd0))
+    assert abs(ad0 - fd0) > _THETA0_WRONGNESS_FACTOR * scale, (
+        f"{name}: AD at exactly normal incidence is {ad0:.4e}, which agrees "
+        f"with the symmetry-forced truth (FD {fd0:.4e}) to within "
+        f"{abs(ad0 - fd0) / scale:.4g}x the resolution at which that truth "
+        f"can be asserted ({scale:.3e}) -- the eigenvector-VJP degeneracy no "
+        f"longer corrupts it.  That is the KNOWN LIMIT being CLOSED: re-pin "
+        f"this test against the fix and drop the theta >= 1e-8 advice from "
+        f"the module docstring.  Do NOT loosen the factor.  "
+        f"[adjudication: |AD(0)| is {abs(ad0) / max(clean, 1e-300):.4g}x the "
+        f"clean AD at 1e-6 rad ({clean:.4e}) and {abs(ad0) / sweep:.4g}x the "
+        f"largest gradient on a physical sweep ({sweep:.4e})]")
+    return ad0, fd0, clean, sweep, res
 
 
 @pytest.mark.parametrize("pol", ["te", "tm"])
@@ -582,31 +687,32 @@ def test_pmm1d_angle_gradient_at_exactly_zero_is_an_OPEN_defect(pol):
     non-differentiable there, so AD returns a finite WRONG value.  This has
     never been a correctness pin; it fences the value.
 
-    2026-08-12 (``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S7).  It fenced
-    it with an ABSOLUTE bar -- 1e-2 (TE) -- and the ubuntu py3.12 JAX job read
+    2026-08-12 (``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S7) fenced it
+    with an ABSOLUTE bar -- 1e-2 (TE) -- and the ubuntu py3.12 JAX job read
     0.026644.  That bar could not have held, because the fenced quantity is
-    pure round-off garbage whose MAGNITUDE is a per-build fact:
+    pure round-off garbage whose MAGNITUDE is a per-build fact.  ADJUDICATED
+    with the floor's own knob: the floored value is INSENSITIVE to the
+    degenerate pair's numerical splitting (shrinking it by 1e-8 in a live copy
+    of the VJP moves AD(0) from 7.792836e-03 to 7.793047e-03), so it is not a
+    ``1/D`` reading at all -- it is the eigenvector JUMP, and which direction
+    ``V`` jumps is exactly what a LAPACK build is entitled to choose.
 
-        build                                TE AD(0)
-        authoring box (2026-07-27)          -2.221e-03
-        Windows py3.14 / numpy 2.4.4        +7.793e-03
-        CI ubuntu py3.12                    -2.664e-02
+    2026-08-15 (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S2).  The
+    2026-08-12 fix restated both halves as RATIOS against arms measured in the
+    same process -- but both ratios still had ``|AD(0)|`` in the numerator, so
+    both still asserted a magnitude the runners disagree about, and a numpy
+    2.5-era ubuntu wheel duly read 16.6x against the bar of 100.  The defect
+    arm is now a discriminator with no magnitude in it at all: AD must
+    DISAGREE with the symmetry-forced truth (exactly 0) by decades more than
+    the resolution at which that truth can be asserted, which is derived from
+    the finite difference's own float64 cancellation floor.  See
+    ``_THETA0_WRONGNESS_FACTOR`` for the two-sided regime separation.
 
-    -- a decade of spread and a sign flip, on a bar with 1.28x headroom.
-    ADJUDICATED with the floor's own knob: the floored value is INSENSITIVE to
-    the degenerate pair's numerical splitting (shrinking it by 1e-8 in a live
-    copy of the VJP moves AD(0) from 7.792836e-03 to 7.793047e-03), so it is
-    not a ``1/D`` reading at all -- it is the eigenvector JUMP, and which
-    direction ``V`` jumps is exactly what a LAPACK build is entitled to
-    choose.  The same probe shows what the floor IS for: with the floor
-    removed, that 1e-8 shrink takes AD(0) to -1.12e+06.
-
-    So both halves are re-stated as RATIOS between arms measured in the same
-    process (see ``_THETA0_DEFECT_RATIO`` / ``_THETA0_ENVELOPE_RATIO``):
-    the value must still be WRONG by orders against the clean near-normal
-    gradient, and must still be BOUNDED against the observable's own physical
-    gradient scale.  Both are invariant to the splitting the runners disagree
-    about.
+    The boundedness half moved out to
+    :func:`test_the_theta0_floor_bounds_the_wrong_value_but_the_unfloored_vjp_does_not`,
+    where it is stated as the MECHANISM it actually is (the floored value does
+    not move when the degenerate pair's splitting is shrunk; the unfloored one
+    scales as 1/splitting) rather than as a ratio against a physical sweep.
 
     (Correction to the pre-2026-08-12 docstring, which recorded the unfloored
     value as 7.7x WORSE: on this build it is 2.28x BETTER -- floored
@@ -619,57 +725,103 @@ def test_pmm1d_angle_gradient_at_exactly_zero_is_an_OPEN_defect(pol):
     _score_theta0_defect(lambda a: _pmm1(a, pol=pol), f"pmm1d {pol}")
 
 
-def test_the_theta0_defect_pin_fires_when_the_defect_is_absent_or_unbounded():
-    """THE FAIL-BEFORE for the defect pin above, driven in BOTH directions.
+def test_the_theta0_defect_pin_fires_when_the_defect_is_absent():
+    """THE FAIL-BEFORE for the defect pin above.
 
-    ``FIX_RUNNER_PINS_2026_08_12`` S7.
+    ``FIX_RUNNER_PINS_2026_08_12`` S7; discriminator restated
+    ``FIX_RUNNER_PINS_2_2026_08_15`` S2.
 
-    (a) DEFECT ABSENT -- the same claims are scored against ``rcwa1d``, which
-        solves the identical grating with ANALYTIC homogeneous half-space
-        modes and therefore has no degeneracy at normal incidence (its
-        theta = 0 gradient is machine-zero, 1.1e-13, pinned by the control
-        test below).  That is what "the eig-VJP degeneracy was fixed" looks
-        like from outside, and the pin must FAIL on it, telling the reader to
-        re-pin rather than passing quietly.
+    The same claims are scored against ``rcwa1d``, which solves the identical
+    grating with ANALYTIC homogeneous half-space modes and therefore has no
+    degeneracy at normal incidence (its theta = 0 gradient is machine-zero,
+    8.9e-14 [W] / 6.5e-14 [M], pinned by the control test below).  That is
+    what "the eig-VJP degeneracy was fixed" looks like from outside, and the
+    pin must FAIL on it, telling the reader to re-pin rather than passing
+    quietly.
 
-    (b) VALUE UNBOUNDED -- a LIVE copy of the library's eig VJP, verbatim
-        except for two knobs, installed over ``_JAX_EIG_STABLE`` so the whole
-        solve runs through it.  The knobs shrink the numerical splitting of
-        pairs that are ALREADY degenerate (``|D| < 1e-9`` of the spectrum
-        scale -- the well-separated pairs, and hence the physical part of the
-        gradient, are untouched) and drop the floor.  A LAPACK build that
-        resolves a symmetry-enforced degeneracy more exactly is precisely what
-        this emulates; it is the runner, not the physics.  Measured with the
-        floor OFF and the splitting shrunk by 1e-4 / 1e-8::
-
-            splitting x    AD(0) TE       AD(0)/sweep TE   AD(0)/sweep TM
-            1              -3.411e-03     1.1e-02          6.1e-01
-            1e-4           -1.120e+02     3.6e+02          1.9e+04
-            1e-8           -1.120e+06     3.6e+06          1.9e+08
-
-        The clean and sweep arms read 1.7541e-06 / 3.1315e-01 in every row,
-        i.e. the injector really is targeted.  With the floor ON the same
-        1e-8 shrink leaves AD(0) at 7.793047e-03 -- which is both the fail-
-        before for the envelope and the measurement that says the floor is
-        load-bearing.
+    This arm is what makes the new discriminator two-sided, and it is
+    MEASURED, not assumed: scored against its own resolution, ``rcwa1d``
+    reads ``|AD(0) - FD(0)| / resolution`` = 1.0 [W] / 1.0 [M] against a bar
+    of 1e3, i.e. it fails by three decades.  The defective ``pmm1d`` arm
+    passes the same bar by three to seven decades in the other direction.
     """
-    # (a) the defect, absent
     with pytest.raises(AssertionError, match="re-pin this test"):
         _score_theta0_defect(lambda a: _rcwa1(a, pol="te"), "rcwa1d te")
 
-    # (b) the value, unbounded
+
+def test_the_theta0_floor_bounds_the_wrong_value_but_the_unfloored_vjp_does_not():
+    """The BOUNDEDNESS half of the known limit, stated as the mechanism it is.
+
+    ``FIX_RUNNER_PINS_2_2026_08_15`` S2.  Until 2026-08-15 this was a ratio
+    of ``|AD(0)|`` to the observable's largest physical gradient, with a bar
+    of 30 -- and TM measured 1.333 on Windows against 0.0179 on WSL, a 75x
+    cross-build spread on a bar with 22x headroom.  The claim it was standing
+    in for is not about how big the wrong value is; it is that the
+    spectrum-relative floor is what keeps ``F = D / (|D|^2 + eps)`` from
+    dividing by pure rounding noise at an exact degeneracy.  That is a LAW,
+    and a law can be measured directly.
+
+    Both arms use a LIVE copy of the library's eig VJP, verbatim except for
+    two knobs (:func:`_degenerate_splitting_eig`), installed over
+    ``_JAX_EIG_STABLE`` so the whole solve runs through it.  The knobs shrink
+    the numerical splitting of pairs that are ALREADY degenerate (``|D| <
+    1e-9`` of the spectrum scale, so the well-separated pairs -- and hence the
+    physical part of the gradient -- are untouched) and optionally drop the
+    floor.  A LAPACK build that resolves a symmetry-enforced degeneracy more
+    exactly is exactly what this emulates.
+
+    * FLOORED, the shipped behaviour: shrinking the splitting by 1e-8 leaves
+      ``AD(0)`` where it was.  Measured relative move 2.73e-05 [W] /
+      2.73e-06 [M] -- the wrong value is the eigenvector JUMP, not a ``1/D``
+      reading, and it is BOUNDED.
+    * UNFLOORED: the same shrink scales ``AD(0)`` by exactly ``1/splitting``.
+      Measured ``|AD(0)| at 1e-8 / |AD(0)| at 1e-4`` = 1.0000e+04 on BOTH
+      mounts, against a bar of 1e3.  That is the whole of "unbounded", and it
+      is exact arithmetic (``F -> 1/conj(D)``), not a calibrated magnitude.
+
+    Neither arm contains an absolute bar or a cross-arm magnitude, so neither
+    can move with the runner.
+    """
     orig = _rc._JAX_EIG_STABLE
     try:
-        _rc._JAX_EIG_STABLE = _degenerate_splitting_eig(tau_rel=0.0,
-                                                        splitting=1e-4)
-        with pytest.raises(AssertionError, match="UNBOUNDED"):
-            _score_theta0_defect(lambda a: _pmm1(a, pol="te"),
-                                 "pmm1d te [unfloored, splitting x 1e-4]")
-        # ... and the SHIPPED floor holds the same injection bounded
-        _rc._JAX_EIG_STABLE = _degenerate_splitting_eig(tau_rel=_EIG_TAU_REL,
-                                                        splitting=1e-8)
-        _score_theta0_defect(lambda a: _pmm1(a, pol="te"),
-                             "pmm1d te [floored, splitting x 1e-8]")
+        # FLOORED: insensitive to the splitting -> bounded.
+        def _floored(split):
+            _rc._JAX_EIG_STABLE = _degenerate_splitting_eig(
+                tau_rel=_EIG_TAU_REL, splitting=split)
+            return float(jax.grad(lambda a: _pmm1(a, pol="te"))(
+                jnp.asarray(0.0)))
+
+        base = _floored(1.0)
+        shrunk = _floored(1e-8)
+        assert abs(base) > 0.0
+        moved = abs(shrunk - base) / abs(base)
+        assert moved < 1e-2, (
+            f"the FLOORED AD(0) moved by {moved:.3e} relative when the "
+            f"degenerate pair's splitting was shrunk by 1e-8 ({base:.6e} -> "
+            f"{shrunk:.6e}).  It is supposed to be insensitive to that "
+            f"splitting -- if it is not, the wrong value IS a 1/D reading "
+            f"and the floor is not doing what this test says it does")
+
+        # UNFLOORED: scales as 1/splitting -> unbounded.
+        def _unfloored(split):
+            _rc._JAX_EIG_STABLE = _degenerate_splitting_eig(tau_rel=0.0,
+                                                            splitting=split)
+            return float(jax.grad(lambda a: _pmm1(a, pol="te"))(
+                jnp.asarray(0.0)))
+
+        u4 = _unfloored(1e-4)
+        u8 = _unfloored(1e-8)
+        blowup = abs(u8) / abs(u4)
+        assert blowup > 1e3, (
+            f"with the floor REMOVED, shrinking an already-degenerate pair's "
+            f"splitting by 1e-4 scaled AD(0) by only {blowup:.4g}x "
+            f"({u4:.4e} -> {u8:.4e}); F = 1/conj(D) makes that scaling exact, "
+            f"so anything but ~1e4 means the injector no longer reaches the "
+            f"degenerate block and this arm is vacuous")
+        # ...and the floored arm really is the same solve, not a different one
+        assert abs(u4) > abs(base), (
+            "the unfloored injection did not even exceed the shipped value; "
+            "the two arms are not exercising the same degeneracy")
     finally:
         _rc._JAX_EIG_STABLE = orig
 

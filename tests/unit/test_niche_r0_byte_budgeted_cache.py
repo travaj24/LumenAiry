@@ -40,9 +40,49 @@ from lumenairy.cache import (
     get_cache_budget_bytes,
     set_cache_budget,
 )
-from lumenairy.memory import available_memory_bytes
 
 _MB = 1024 * 1024
+
+# ---------------------------------------------------------------------------
+# INJECTED memory budget -- 2026-08-15,
+# docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md
+# ---------------------------------------------------------------------------
+# Every auto-budget number in this file used to come from a LIVE psutil read
+# (``lumenairy.cache.available_memory_bytes`` -> ``psutil``), and the auto
+# budget is ``min(512 MB, 10% of available)``.  On a big box the 512 MB cap
+# binds, so the value looks frozen; on a runner with < 5.12 GB available the
+# 10%-FRACTION branch binds and the value tracks free RAM, which drifts
+# between two consecutive reads.  Measured 2026-08-15: consecutive live reads
+# on an IDLE Windows dev box differ by up to 139264 B, and forcing a 10 MB
+# drop between the two reads turns
+# ``get_cache_budget_bytes() == _auto_cache_budget_bytes()`` into
+# ``400000000 != 398951424`` -- a per-build coin flip, not a contract.
+#
+# Fix: INJECT the memory reading (monkeypatch the module's
+# ``available_memory_bytes``) so every budget number is exact arithmetic on a
+# pinned input, and exercise BOTH branches explicitly.  The fraction branch
+# was previously unreachable on any dev box (93 GB available -> cap binds), so
+# this is strictly MORE coverage, not less.
+_PINNED_AVAILABLE_BYTES = 8 * 1024 * _MB     # 8 GiB -> 10% = 819 MB > cap
+_PINNED_AVAILABLE_SMALL = 4 * 1024 * _MB     # 4 GiB -> 10% = 409.6 MB < cap
+_EXPECTED_CAP_BYTES = 512 * _MB              # the library's hard cap
+
+
+def _pin_available_ram(monkeypatch, free_b: int) -> None:
+    """Freeze the available-RAM reading the cache budget is derived from.
+
+    Pinned-snapshot idiom, as in
+    ``test_hammer_h3_traced_nyquist_guard.py::_pin_available_ram`` /
+    ``test_fix_newton_pool_memory.py``.  ``lumenairy.cache`` binds
+    ``available_memory_bytes`` at import, so the cache module's own name is
+    the one that must be patched; ``lumenairy.memory``'s is patched too so a
+    later re-import or a late-bound call site cannot quietly restore the live
+    psutil read without this helper noticing.
+    """
+    from lumenairy import memory as _mem
+    monkeypatch.setattr(cache_mod, 'available_memory_bytes',
+                        lambda: int(free_b))
+    monkeypatch.setattr(_mem, 'available_memory_bytes', lambda: int(free_b))
 
 
 def _mb_array(mb: float = 1.0) -> np.ndarray:
@@ -53,10 +93,20 @@ def _mb_array(mb: float = 1.0) -> np.ndarray:
 
 
 @pytest.fixture(autouse=True)
-def _isolate_cache_state():
+def _isolate_cache_state(monkeypatch):
     """Give each test a clean slate: drop dead caches, drain live ones,
     revert the budget override.  Runs before and after every test so no
-    cross-test contamination of the collective budget / live registry."""
+    cross-test contamination of the collective budget / live registry.
+
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): also pins the
+    available-RAM reading the auto budget is derived from, so no assertion in
+    this file depends on how much RAM the runner happens to have free at the
+    instant it executes.  ``put()`` itself consults
+    ``get_cache_budget_bytes()`` for its hard cap, so the pin makes the whole
+    file's eviction arithmetic deterministic, not just the budget getters.
+    Tests that care about a specific branch re-pin locally.
+    """
+    _pin_available_ram(monkeypatch, _PINNED_AVAILABLE_BYTES)
     gc.collect()
     clear_all_byte_budgeted_caches()
     set_cache_budget(None)
@@ -257,7 +307,15 @@ def test_cache_report_sums_correctly():
     assert rep['total_retained_bytes'] == a.retained_bytes + b.retained_bytes
     assert rep['caches']['rptA']['entries'] == 2
     assert rep['caches']['rptB']['retained_bytes'] == 2 * _MB
+    # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): this used to
+    # compare TWO INDEPENDENT LIVE psutil reads -- ``cache_report()`` does its
+    # own ``get_cache_budget_bytes()`` internally.  Under the injected pin
+    # (autouse fixture) both reads are the same arithmetic on the same input,
+    # so the equality is a real report-vs-getter consistency check instead of
+    # a RAM-drift coin flip.  The exact value is asserted too, so a silent
+    # change of the reported budget cannot hide behind "both sides moved".
     assert rep['budget_bytes'] == get_cache_budget_bytes()
+    assert rep['budget_bytes'] == _EXPECTED_CAP_BYTES
 
 
 def test_cache_report_duplicate_names_not_dropped():
@@ -302,16 +360,54 @@ def test_set_get_cache_budget_roundtrip():
     assert abs(get_cache_budget() - 128.0) < 1e-9
     assert get_cache_budget_bytes() == 128 * _MB
     set_cache_budget(None)  # revert to auto default
-    # Auto default is conservative: <= 512 MB and <= 10% RAM cap.
+    # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): reverting to
+    # auto used to be pinned by comparing two INDEPENDENT live psutil reads
+    # (``get_cache_budget_bytes()`` vs ``_auto_cache_budget_bytes()``).  With
+    # the injected pin both sides evaluate the same arithmetic on the same
+    # input, so the equality now says what it always meant: "clearing the
+    # override restores the auto default", with the exact expected value
+    # spelled out so the assertion cannot pass by both sides drifting alike.
     assert get_cache_budget_bytes() == _auto_cache_budget_bytes()
+    assert get_cache_budget_bytes() == _EXPECTED_CAP_BYTES
 
 
-def test_default_budget_is_conservative():
+@pytest.mark.parametrize(
+    'pinned_available, expect_cap_binds',
+    [
+        pytest.param(_PINNED_AVAILABLE_SMALL, False, id='fraction_branch'),
+        pytest.param(_PINNED_AVAILABLE_BYTES, True, id='cap_branch'),
+    ],
+)
+def test_default_budget_is_conservative(monkeypatch, pinned_available,
+                                        expect_cap_binds):
+    """The auto default is ``min(512 MB, 10% of available)`` -- BOTH
+    branches, on an injected available-RAM value.
+
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).  This used to
+    read ``auto <= int(0.10 * available_memory_bytes()) + 1`` against a
+    SECOND live psutil read; the ``+ 1`` covered ten bytes of drift while a
+    10 MB change in free RAM between the two calls (ordinary on a shared
+    runner, measured to break the equality: 400000000 vs 398951424) burned
+    the build.  Worse, on any box with > 5.12 GB free the 512 MB cap binds,
+    so the fraction branch -- the only one that can move -- was never
+    executed at all.  Injecting the reading makes both branches exact:
+    4 GiB -> int(0.10 * 4294967296) = 429496729 B (fraction binds),
+    8 GiB -> 536870912 B (cap binds).  Two-sided: no runner state can move
+    either number, and a regression in either the fraction, the cap, or the
+    min() that combines them still fails on the exact-value assertions.
+    """
+    _pin_available_ram(monkeypatch, pinned_available)
     set_cache_budget(None)
     auto = get_cache_budget_bytes()
-    assert auto <= 512 * _MB
-    # And it is a small fraction of available RAM (<= 10% + slack).
-    assert auto <= int(0.10 * available_memory_bytes()) + 1
+    frac = int(0.10 * pinned_available)
+    # The branch this parametrisation claims to exercise really is the live
+    # one (otherwise the "both branches covered" claim would be vacuous).
+    assert (frac > _EXPECTED_CAP_BYTES) is expect_cap_binds
+    assert auto == min(_EXPECTED_CAP_BYTES, frac)
+    assert auto == _auto_cache_budget_bytes()
+    # The headline safety property, on both branches.
+    assert auto <= _EXPECTED_CAP_BYTES
+    assert auto <= frac
 
 
 def test_set_cache_budget_rejects_nonpositive():
@@ -422,9 +518,19 @@ def test_get_or_compute_memoizes():
 
 def test_thread_safety_stress_invariant_holds():
     """Concurrent inserts from several threads never breach the byte budget
-    and never raise -- the shared-mutex correctness check."""
-    if available_memory_bytes() < 256 * _MB:
-        pytest.skip("insufficient free RAM for the concurrency stress case")
+    and never raise -- the shared-mutex correctness check.
+
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): the defensive
+    ``available_memory_bytes() < 256 MB -> skip`` guard was removed.  It made
+    the shared-mutex contract silently OPTIONAL on exactly the constrained
+    runner where a locking bug is most likely to show, and it was sized ~35x
+    too large: the case never holds 256 MB.  The cache is capped at 4 MB and
+    each of the 6 threads holds one 0.5 MB array at a time, so the measured
+    peak RSS growth for the whole stress is 5.78 MB (Windows py3.14 /
+    np2.4.4) and 5.89 MB (WSL py3.12 / np2.5.1) -- an allocation any runner
+    that can import numpy already satisfies, so the case now runs
+    unconditionally.
+    """
     budget = 4 * _MB
     c = ByteBudgetedLRU('threads', max_bytes=budget)
     errors = []

@@ -20,7 +20,13 @@ These tests pin:
   breaks / ``per_surface=True`` (which the kernel does not cover).
 * The adaptive-FGA end-to-end output is UNCHANGED (byte-identical-to-tolerance)
   with the kernel vs the forced-dual path.
-* A MEASURED speedup on the ``__mul__``-dominated ray-transfer batch.
+* DISPATCHED WORK on the ``__mul__``-dominated ray-transfer batch -- the public
+  entry reaches the compiled kernel on every momentum of the ``dq_step``
+  lattice and the dual path zero times.  (Through 2026-08-14 this was a
+  wall-clock ratio, ``dual_s / numba_s > 2``; see
+  ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.1, shape S3, for why a
+  ratio of two stopwatches is not a claim a shared runner can keep.  The
+  seconds are still printed.)
 
 The kernel is opt-out-safe: numba unavailable / a build failure / a coordinate
 break all fall through to the pure-NumPy ``_AdrtDual`` implementation, so the
@@ -284,14 +290,42 @@ def test_fga_end_to_end_unchanged_numba_vs_dual():
 
 
 # ==========================================================================
-# PERF -- measured speedup on the __mul__-dominated ray-transfer batch.
+# PERF -- the compiled kernel is what the ray-transfer batch actually runs.
 # ==========================================================================
 @pytest.mark.slow
-def test_measured_speedup_on_ray_transfer_batch():
-    """The numba kernel is measurably faster than the scalar-object dual path on
-    the per-momentum ray-transfer batch that dominated adaptive FGA.  Measured
-    ~12x on the dev box (dq_step lattice, 49 momenta x 1600 rays); the assertion
-    uses a conservative 2x floor to stay robust on a loaded runner."""
+def test_the_ray_transfer_batch_dispatches_the_compiled_kernel(monkeypatch):
+    """The numba kernel -- not the scalar-object dual path -- is what runs the
+    per-momentum ray-transfer batch that dominated adaptive FGA.
+
+    2026-08-15 (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.1, shape
+    S3).  This test used to assert ``dual_s / numba_s > 2.0``.  A ratio of two
+    wall clocks is a PER-BOX fact -- core count, thermal/turbo state, xdist
+    co-tenancy, the numba threading layer's own init -- and on a shared runner
+    nothing bounds it from below.  Measured on ONE box (Windows py3.14),
+    against a docstring that recorded ~12x: **13.6x** idle, **12.1x** under
+    ``pytest-xdist -n 2`` with the box otherwise loaded, and 11.5x on a third
+    reading minutes apart -- an 18% spread with nothing changed but the
+    weather.  The bar was calibrated against a number the test does not
+    control, on hardware the runner does not have.
+
+    Deleting the ratio costs no coverage, because the CORRECTNESS of the fast
+    path is pinned build-free elsewhere in this file:
+    :func:`_assert_dual_numba_match` (numba vs ``_AdrtDual``, 1e-11 relative,
+    plus the identical alive mask) and
+    ``test_numba_is_ulp_identical_to_dual_on_axis`` (bit identity).  What the
+    stopwatch was really standing in for is WORK -- that the kernel is compiled
+    and dispatched AT ALL, rather than silently falling through to the dual
+    implementation while every parity test still passes, which is precisely the
+    regression the parity tests cannot see.  So that is what is asserted here,
+    and the seconds are kept as a diagnostic ``print``.
+
+    The claim is a COUNT, so it has no bar to widen and no headroom to
+    calibrate: over the ``dq_step`` lattice (49 momenta x 1600 rays) the public
+    entry point must reach the compiled kernel 49 times out of 49, the kernel
+    must return a result every time (``None`` is its documented "unavailable /
+    build failed" signal, which would route to the dual path), and the
+    pure-NumPy dual path must be reached ZERO times.  Measured 49 / 0 / 0.
+    """
     pytest.importorskip("numba")
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(_singlet())]
     nqc = 1600
@@ -313,7 +347,44 @@ def test_measured_speedup_on_ray_transfer_batch():
 
     # warm the compile
     _loop(lambda *a: D._adrt_numba(*a))
+    # ...and the compile SUCCEEDED.  ``_ADRT_NUMBA_STATE`` is the module's
+    # tri-state: None = never tried, False = numba missing or the build
+    # failed.  Without this, everything below would still pass on a box where
+    # the kernel never built (the dispatcher would just use the dual path).
+    assert D._ADRT_NUMBA_STATE is True, D._ADRT_NUMBA_STATE
+    assert D._ADRT_NUMBA_KERNEL is not None
 
+    # THE claim: drive the same lattice through the PUBLIC entry point and
+    # count what it dispatches.  Both spies wrap the module globals the
+    # dispatcher resolves at call time, so this counts real dispatch decisions
+    # rather than re-asserting that a directly-called function was called.
+    seen = {'numba': 0, 'numba_none': 0, 'dual': 0}
+    _real_numba, _real_dual = D._adrt_numba, D._adrt_numpy
+
+    def _spy_numba(*a, **k):
+        seen['numba'] += 1
+        out = _real_numba(*a, **k)
+        if out is None:
+            seen['numba_none'] += 1
+        return out
+
+    def _spy_dual(*a, **k):
+        seen['dual'] += 1
+        return _real_dual(*a, **k)
+
+    monkeypatch.setattr(D, '_adrt_numba', _spy_numba)
+    monkeypatch.setattr(D, '_adrt_numpy', _spy_dual)
+    try:
+        _loop(lambda *a: ray_transfer_jacobian_analytic(*a))
+    finally:
+        monkeypatch.undo()
+    assert seen == {'numba': Np, 'numba_none': 0, 'dual': 0}, (
+        f"the composite all-conic batch did not run on the compiled kernel: "
+        f"{seen} over {Np} momenta (expected {Np} kernel dispatches, no "
+        f"None returns, and no fall-through to the _AdrtDual path)")
+
+    # Diagnostics only -- NOT a bar.  See the docstring: the ratio is a
+    # per-box fact.
     reps = 4
     t0 = time.perf_counter()
     for _ in range(reps):
@@ -328,5 +399,3 @@ def test_measured_speedup_on_ray_transfer_batch():
     print(f"\nR4 ray-transfer speedup: dual {dual_s*1e3:.1f} ms/loop, "
           f"numba {numba_s*1e3:.1f} ms/loop -> {speedup:.1f}x "
           f"({Np} momenta x {nqc} rays)")
-    assert speedup > 2.0, (
-        f"expected >2x speedup on the ray-transfer batch, got {speedup:.2f}x")

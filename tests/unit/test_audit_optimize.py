@@ -269,6 +269,45 @@ import numpy as np
 import pytest
 
 # ============================================================================
+# LG-tensor fixture conditioning (2026-08-15,
+# docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md)
+# ----------------------------------------------------------------------------
+# Every LG-tensor pin below used to be wrapped in a blanket
+# ``except Exception: pytest.skip('LG-tensor ... unstable on this runtime')``
+# around THE VERY CALL the test exists to pin.  That is the worst coverage
+# shape in the suite: any per-build numerical failure (a different JAX/XLA
+# lowering, a LAPACK returning non-finite, a dtype-promotion change) turns
+# into a GREEN SKIP on exactly the runner where the bug is real, and it can
+# never burn a tag.  The excuse offered was that "a trivial singlet may not
+# yield a finite LG tensor on every JAX runtime".  MEASURED, it does not:
+#
+#   * ``w_s = _LG_WS = 20 um`` on the fixture singlet gives
+#     ``v = 1 - |L_00|^2 = 0.9937107888169847`` -- O(1), i.e. ~30 decades
+#     above the ``v > 1e-30`` floor the old value-predicate skip tested;
+#   * the coupling itself is ``|L_00|^2 = 6.289211183e-03`` -- 300 decades
+#     above float64 underflow, so the deficit is a real subtraction and the
+#     linearity pin below cannot be satisfied vacuously by ``1 - 0``;
+#   * the analytic gradient ``dv/dw_s = 146.3787806875`` is the LARGEST over
+#     ``w_s`` in [1e-6, 1e-4] (0.8375 / 6.885 / 29.889 / 146.379 / 79.713 /
+#     4.440 at 1 / 5 / 10 / 20 / 50 / 100 um), i.e. the evaluation point is
+#     furthest from a zero-gradient cancellation, and it agrees with a
+#     central finite difference to 2.3e-09 relative;
+#   * the value is INSENSITIVE to the singlet geometry: sweeping the
+#     aperture 2 -> 100 mm at R1 = 60 mm (ap/R1 0.03 -> 1.67) moves it 0 ulp,
+#     and ``source_box_half`` 5e-6 -> 5e-3 / ``pupil_box_half`` 0.005 -> 0.2
+#     move it <= 1e-6 relative.  No configuration in that envelope was
+#     measured non-finite on either mount.
+#
+# Both mounts (Windows py3.14 / numpy 2.4.4 / jax 0.11.0 and WSL py3.12 /
+# numpy 2.5.1) agree to the digits quoted.  So the fixture is well
+# conditioned BY CONSTRUCTION and the skips are gone: a raise is now THE
+# FINDING.  Where a path really is runtime-dependent we gate on the
+# CAPABILITY (``pytest.importorskip('jax')``), never on "this call happened
+# to throw".
+# ============================================================================
+_LG_WS = 20e-6
+
+# ============================================================================
 # C.1 -- make_lg_aberration_merit_jax weighted sum (was pass-only loop)
 # ============================================================================
 
@@ -335,8 +374,10 @@ class TestAuditFixesV4_13_2_agent_c_C1MakeLgAberrationMeritJax:
         merit_w3, _ = self._build_merit(targets={(0, 0): 3.0})
 
         # Use the SAME parameter vector for both evals -- only the
-        # weight differs.  Choose a sane w_s in metres.
-        x = np.array([50e-6])
+        # weight differs.  ``_LG_WS`` is the well-conditioned evaluation
+        # point derived at the top of this module (2026-08-15,
+        # docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).
+        x = np.array([_LG_WS])
         ctx_a = EvaluationContext(
             prescription=pres, wavelength=1.30e-6,
             N=64, dx=10e-6, x=x)
@@ -344,22 +385,28 @@ class TestAuditFixesV4_13_2_agent_c_C1MakeLgAberrationMeritJax:
             prescription=pres, wavelength=1.30e-6,
             N=64, dx=10e-6, x=x)
 
-        try:
-            v1 = float(merit_w1.evaluate(ctx_a))
-            v3 = float(merit_w3.evaluate(ctx_b))
-        except (RuntimeError, ValueError, ZeroDivisionError,
-                np.linalg.LinAlgError) as exc:
-            # Trivial singlet may not yield a finite LG tensor on
-            # every JAX runtime; we still pin the API contract via
-            # the NotImplementedError test above.
-            pytest.skip(f'LG-tensor evaluation unstable on this '
-                        f'singlet: {type(exc).__name__}: {exc}')
-        if not (np.isfinite(v1) and np.isfinite(v3)
-                and v1 > 1e-30):
-            pytest.skip('LG-tensor evaluation returned a non-finite '
-                        'or zero value on this minimal singlet; the '
-                        'NotImplementedError test still pins the '
-                        'contract.')
+        # 2026-08-15 (FIX_RUNNER_PINS_2_2026_08_15.md): NO try/except and no
+        # value-predicate skip here.  A raise, or a non-finite value, IS the
+        # finding -- this call is the whole reason the test exists.
+        v1 = float(merit_w1.evaluate(ctx_a))
+        v3 = float(merit_w3.evaluate(ctx_b))
+        print(f'[C.1] w_s={_LG_WS:.2e} v(w=1)={v1!r} v(w=3)={v3!r} '
+              f'|L_00|^2={1.0 - v1:.9e}')
+        assert np.isfinite(v1) and np.isfinite(v3), (
+            f'the LG-tensor merit must evaluate finitely on the fixture '
+            f'singlet at w_s={_LG_WS}; got v(w=1)={v1}, v(w=3)={v3}')
+        # NON-VACUITY (and the sentinel that the body actually ran): if the
+        # (0, 0) coupling underflowed to exactly 0 the merit would be the
+        # bare weight, and v3/v1 == 3 would hold for FREE without the tensor
+        # ever being computed.  Measured |L_00|^2 = 6.289211183e-03 on both
+        # mounts -> a 1e-4 floor keeps 63x headroom below and the coupling is
+        # bounded by 1 above (measured 6.3e-03, 159x under that ceiling).
+        coupling = 1.0 - v1
+        assert 1e-4 < coupling < 1.0, (
+            f'the (0, 0) LG coupling |L|^2 = {coupling:.6e} is outside the '
+            f'measured well-conditioned band (6.289e-03 on both mounts): the '
+            f'weight-linearity claim below would be vacuous if the tensor '
+            f'underflowed to zero.')
         ratio = v3 / v1
         assert abs(ratio - 3.0) < 1e-6, (
             f'Piston weight failed to scale the merit: v(w=1)={v1}, '
@@ -471,34 +518,97 @@ class TestS3_6NonDiffBuildArgsSlotGuard:
             pres, wavelength=1.30e-6, targets={(0, 0): 1.0},
             build_args=build_args, field_points=[(0.0, 0.0)],
         )
+        # 2026-08-15 (FIX_RUNNER_PINS_2_2026_08_15.md): the blanket
+        # ``except Exception: pytest.skip('LG-tensor gradient unstable on
+        # this runtime')`` that used to sit here deleted this test's ONLY
+        # assertion on any runner where the gradient misbehaved -- i.e. on
+        # exactly the runner worth failing.  The fixture is well conditioned
+        # by construction (see ``_LG_WS`` at the top of this module), so the
+        # call now runs bare; only the NotImplementedError arm is caught,
+        # because tripping the guard is a DIFFERENT and more specific
+        # finding than a numerical blow-up.
         try:
-            g = merit.gradient_at_x(np.array([50e-6]))
+            g = merit.gradient_at_x(np.array([_LG_WS]))
         except NotImplementedError as exc:   # pragma: no cover
             pytest.fail(
                 f"a STATIC float override in the wavelength slot must "
                 f"not trip the non-diff guard: {exc}")
-        except Exception as exc:
-            pytest.skip(f'LG-tensor gradient unstable on this runtime: '
-                        f'{type(exc).__name__}: {exc}')
+        print(f'[S3-6 static-override] w_s={_LG_WS:.2e} grad={g!r}')
         assert g.shape == (1,)
+        assert np.all(np.isfinite(g)), (
+            f'a static override in a non-diff slot must still yield a '
+            f'finite w_s gradient; got {g!r}')
+        # Sentinel / non-vacuity: a gradient of exactly 0 would pass the two
+        # assertions above while proving nothing about differentiability.
+        # Measured with the 1.55 um static override: dv/dw_s = 113.9194933
+        # on both mounts (FD cross-check 8.1e-11 relative), so a 1e-3 floor
+        # carries 1.1e5x headroom.
+        assert abs(float(g[0])) > 1e-3, (
+            f'the w_s gradient collapsed to {float(g[0])!r}; measured '
+            f'113.9194933 on both mounts, so a near-zero value means the '
+            f'trace stopped carrying the tracer, not a design change.')
 
     def test_supported_ws_slot_is_differentiable(self):
         """Positive control: routing x into the ``w_s`` slot (4) must NOT
-        trip the guard; the analytic gradient either succeeds finitely or
-        fails with a numerical (non-guard) error on the minimal singlet."""
+        trip the guard AND must return the RIGHT analytic gradient.
+
+        2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): the old
+        body ended in ``except Exception: pytest.skip('LG-tensor gradient
+        unstable on this runtime')``, so on any runner where the positive
+        control actually broke this test reported GREEN.  The fixture is
+        well conditioned by construction (see ``_LG_WS``), the skip is gone,
+        and the finite-difference cross-check below is the independent
+        oracle the skip used to stand in for -- it pins that the analytic
+        gradient is CORRECT, not merely finite."""
         pytest.importorskip('jax')
+        import lumenairy
+        from lumenairy.optimize.core import EvaluationContext
         merit = self._build_merit_routing_slot(4)   # w_s
         try:
-            g = merit.gradient_at_x(np.array([50e-6]))
+            g = merit.gradient_at_x(np.array([_LG_WS]))
         except NotImplementedError as exc:   # pragma: no cover
             pytest.fail(
                 f"w_s (slot 4) is a supported differentiable input but "
                 f"tripped the non-diff guard: {exc}")
-        except Exception as exc:
-            pytest.skip(f'LG-tensor gradient unstable on this runtime: '
-                        f'{type(exc).__name__}: {exc}')
         assert g.shape == (1,)
         assert np.all(np.isfinite(g))
+
+        # Independent oracle: a central finite difference of the SAME merit.
+        # ``JaxMeritTerm.evaluate`` reads only ``ctx.x`` when ``build_args``
+        # is set (the prescription is a closure constant of the merit), so
+        # the context below only has to be well formed -- it rebuilds the
+        # same singlet ``_build_merit_routing_slot`` used.
+        pres = lumenairy.make_singlet(
+            R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',
+            aperture=12e-3)
+        pres['object_distance'] = 0.0
+
+        def _v(ws):
+            ctx = EvaluationContext(prescription=pres, wavelength=1.30e-6,
+                                    N=64, dx=10e-6, x=np.array([ws]))
+            return float(merit.evaluate(ctx))
+
+        h = _LG_WS * 1e-4
+        fd = (_v(_LG_WS + h) - _v(_LG_WS - h)) / (2.0 * h)
+        rel = abs(float(g[0]) - fd) / max(abs(fd), 1e-300)
+        print(f'[S3-6 w_s slot] w_s={_LG_WS:.2e} grad={float(g[0])!r} '
+              f'fd={fd!r} rel={rel:.3e}')
+        # 2026-08-15 (FIX_RUNNER_PINS_2_2026_08_15.md): measured analytic
+        # 146.3787806875 vs FD 146.3787803468 -> rel 2.33e-09 on Windows
+        # (py3.14 / numpy 2.4.4 / jax 0.11.0) and the same digits on WSL
+        # (py3.12 / numpy 2.5.1).  The 1e-4 bar is a truncation-error
+        # envelope for a 1e-4-relative central step, 4.3e4x above the worst
+        # measured value -- and it is a comparison of two INDEPENDENT
+        # computations of the same derivative, not a magnitude pin.
+        assert rel < 1e-4, (
+            f'the analytic w_s gradient {float(g[0])!r} disagrees with a '
+            f'central finite difference {fd!r} by {rel:.3e} relative '
+            f'(measured 2.33e-09 on both mounts): the supported slot is no '
+            f'longer differentiating what it evaluates.')
+        # Non-vacuity: a zero gradient would satisfy the agreement test.
+        assert abs(float(g[0])) > 1e-3, (
+            f'the w_s gradient collapsed to {float(g[0])!r}; measured '
+            f'146.3787806875 on both mounts.')
 
 
 # ============================================================================

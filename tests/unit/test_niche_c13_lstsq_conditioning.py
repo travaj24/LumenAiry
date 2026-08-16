@@ -120,25 +120,73 @@ class TestTheContract:
             self, healthy, two_scale):
         """(1) The defect is not the Chebyshev basis and not the ORDER -- it is
         the two-scale weighting.  Same construction, same library, one screens
-        clear by six orders and the other fails by seven."""
+        clear by six orders and the other is singular AGAINST FLOAT64 ITSELF.
+
+        2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md, D2): the
+        weighted line was ``rc_t < 1e-14``, a hand-picked absolute on an
+        SVD-derived reciprocal condition number.  MEASURED rc_t = 9.913e-16
+        (Win py3.14/np2.4.4) / 9.595e-16 (WSL py3.12/np2.5.1) -- 10.1x on a
+        number whose whole content is "smaller than round-off", and 3% of
+        cross-build motion in an SVD of a numerically singular Gram is not a
+        bound anyone derived.  A rank threshold in float64 IS ``n * eps``
+        (LAPACK's own default rcond for an n-column problem), so state it that
+        way: with n = 66 the bar is 1.4655e-14 and the measurements clear it by
+        14.8x / 15.3x.  Two-sided: the bar is DERIVED from the fixture's own
+        column count rather than chosen, it cannot be softened by a BLAS build,
+        and a Gram that were merely ill-conditioned rather than singular (rcond
+        anywhere above round-off) fails it.  The ``< _LSTSQ_GRAM_RCOND_MIN``
+        line below still carries the shipped-screen claim with 7 decades."""
         A_h, _ = healthy
         A_t, _ = two_scale
         rc_h = LT._gram_rcond(A_h.T @ A_h)
         rc_t = LT._gram_rcond(A_t.T @ A_t)
         assert rc_h > 1e-4, rc_h
         assert rc_h >= LT._LSTSQ_GRAM_RCOND_MIN
-        assert rc_t < 1e-14, rc_t
+        n_t = A_t.shape[1]
+        assert rc_t < n_t * np.finfo(float).eps, (rc_t, n_t)
         assert rc_t < LT._LSTSQ_GRAM_RCOND_MIN
 
     def test_the_normal_equations_miss_the_minimum_on_the_weighted_fit(
             self, two_scale):
         """(1) The consequence, in the currency a fit is DEFINED by: the
-        normal-equations answer does not minimise ``||b - A x||``, and the gap
-        is not a rounding-level one."""
+        normal-equations answer does not minimise ``||b - A x||``, and it misses
+        by more than float64 can excuse.
+
+        2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md, D1): this was
+        ``r_ne > 10.0 * r_qr`` -- a MAGNITUDE RATIO on a quantity this module's
+        own docstring calls "an arbitrary draw from the numerical null space".
+        MEASURED r_ne / r_qr = 28.435 (Win py3.14/np2.4.4) vs 22.664 (WSL
+        py3.12/np2.5.1): a 25% cross-build spread leaving 2.27x of headroom at
+        worst, with ALL the motion in the numerator (r_qr is bit-identical,
+        1.714987e-09, on both builds).  And the module docstring records the
+        SAME ratio at 1.05x on one BLAS build for the production chain -- so 10x
+        pins a per-build magnitude, not the defect.
+
+        THE BUILD-FREE FORM.  ``r_qr`` is the least-squares MINIMUM, so the
+        normal-equations answer is WRONG iff its residual exceeds that minimum
+        by more than round-off.  The residual NORM of a least-squares problem is
+        conditioned by ``cond(A)`` -- NOT by ``cond(G) = cond(A)^2``, which is
+        what governs the SOLUTION -- so any backward-stable solve lands within
+        ``r_min * (1 + c n eps cond(A))``.  Derive that in-build and assert the
+        Cholesky answer sits outside it: presence-of-wrongness, not
+        size-of-wrongness.  ``cond(A) = 3.783140e+07`` (bit-identical on both
+        builds) and n = 66, so with c = 10 the excusable excess is 5.54e-06 --
+        the bar sits 6 parts per million above the attainable minimum.
+
+        TWO-SIDED.  Above: the measurements clear it by 28.43x / 22.66x, and
+        even the production chain's WORST recorded build (1.05x) would clear it
+        by 1.05x, so no BLAS/LAPACK can turn this into a false failure.  Below:
+        the bar is 1 + 5.5e-06, so a solve that actually REACHED the minimum --
+        the outcome this test denies -- fails it.  The ``excusable`` guard keeps
+        the bound from being defanged should ``cond(A)`` ever drift."""
         A, b = two_scale
         r_ne = _resid(A, b, _normal_equations_answer(A, b))
         r_qr = _resid(A, b, LT._solve_lstsq_qr(A, b))
-        assert r_ne > 10.0 * r_qr, (r_ne, r_qr)
+        n = A.shape[1]
+        excusable = r_qr * (1.0 + 10.0 * n * np.finfo(float).eps
+                            * float(np.linalg.cond(A)))
+        assert excusable < 1.001 * r_qr, excusable      # the bound is still tight
+        assert r_ne > excusable, (r_ne, r_qr, excusable)
 
 
 # ==========================================================================

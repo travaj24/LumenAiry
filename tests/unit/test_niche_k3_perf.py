@@ -15,9 +15,13 @@ Guarded wins
    'remap'``): the amplitude and OPL remaps now share ONE Delaunay
    triangulation via a single 2-column ``LinearNDInterpolator`` instead of
    building two.  This test reconstructs the PRE-K3 two-separate-interp
-   algorithm inline as the oracle and asserts the optimized function is
-   BYTE-IDENTICAL to it, then measures the new path is faster (generous bound,
-   best-of-N -- not a brittle absolute threshold).
+   algorithm inline as the oracle, asserts the optimized function is
+   BYTE-IDENTICAL to it, and pins the win itself as a CALL COUNT (one QHull
+   triangulation against two).  2026-08-15
+   (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): the old wall-clock bar
+   ``t_new < 0.85 * t_old`` and the ``available_memory_bytes`` skip that
+   guarded it are both gone -- see
+   ``test_remap_2d_builds_one_triangulation_not_two``.
 
 2. ``apply_real_lens_traced(amplitude_model='ray_density')``: the ray-density
    amplitude upsample reuses the OPL upsample's coarse->full coordinate stack
@@ -26,9 +30,8 @@ Guarded wins
    by determinism + the two-column ``LinearNDInterpolator`` identity property
    below and the full P11 suite.
 
-All grids are small (N <= 768) so the suite stays well under the RAM/time budget;
-a defensive ``available_memory_bytes`` guard skips the timed case on a
-constrained runner.
+All grids are small (N <= 512) so the suite stays well under the RAM/time
+budget and every claim here runs unconditionally.
 """
 from __future__ import annotations
 
@@ -42,7 +45,6 @@ from scipy.ndimage import map_coordinates
 
 import lumenairy as la
 from lumenairy.elements._lens_real import _apply_displaced_remap_2d
-from lumenairy.memory import available_memory_bytes
 
 # Model glass for THIS module only: registered and removed by
 # tests/conftest.py::_module_glass_registry_guard.
@@ -118,12 +120,6 @@ def _gauss(N, dx, w0):
     return np.exp(-(X ** 2 + Y ** 2) / w0 ** 2).astype(np.complex128)
 
 
-def _time_once(fn):
-    t = time.perf_counter()
-    fn()
-    return time.perf_counter() - t
-
-
 def _singlet(dec=None):
     s0 = {'radius': 51.68e-3, 'thickness': 5e-3, 'glass_before': 'air',
           'glass_after': '_K3A', 'semi_diameter': 6e-3}
@@ -177,19 +173,83 @@ def test_remap_2d_byte_identical_to_pre_k3_two_interp(N):
         f"max abs diff {np.max(np.abs(new - ref)):.3e}")
 
 
-def test_remap_2d_shared_delaunay_is_faster():
-    """The shared-Delaunay remap is measurably faster than the pre-K3
-    two-Delaunay path (best-of-N; generous 0.85x bound, not a brittle absolute
-    threshold).  Measured ~1.6-1.8x in the K3 sweep at N=1024."""
-    if available_memory_bytes() < 2 * (1 << 30):
-        pytest.skip("insufficient free RAM for the timed remap comparison")
-    N, dx = 768, 8e-6
-    E_in = _gauss(N, dx, 3e-3)
-    rmap = _synthetic_ray_map(n_side=221, r_max=3.0e-3, dx=dx)
+def _count_triangulations(fn):
+    """Run ``fn`` and return ``(n_delaunay, n_linearnd)``: how many QHull
+    triangulations were built, and how many ``LinearNDInterpolator``s were
+    constructed, during the call.
 
-    def _best(fn, reps=5):
-        fn()  # warm
-        return min(_time_once(fn) for _ in range(reps))
+    ``scipy.interpolate._interpnd`` holds the ``scipy.spatial._qhull`` MODULE
+    and resolves ``qhull.Delaunay`` by attribute at call time, so wrapping
+    that attribute counts every triangulation an interpolator builds
+    (verified against scipy 1.17.1 and 1.18.0).  The public
+    ``scipy.interpolate.LinearNDInterpolator`` count is carried alongside as
+    a second, API-stable witness of the same claim -- if a future scipy
+    reorganises ``_interpnd`` the Delaunay counter would read 0, and the
+    assertion below on the LinearNDInterpolator count still fails loudly
+    rather than silently passing.
+    """
+    import scipy.interpolate as _si
+    import scipy.interpolate._interpnd as _ipnd
+    import scipy.spatial._qhull as _qh
+
+    counts = {'delaunay': 0, 'linearnd': 0}
+    orig_d = _qh.Delaunay
+    orig_l = _si.LinearNDInterpolator
+
+    class _CountingDelaunay(orig_d):
+        def __init__(self, *a, **kw):
+            counts['delaunay'] += 1
+            super().__init__(*a, **kw)
+
+    class _CountingLinearND(orig_l):
+        def __init__(self, *a, **kw):
+            counts['linearnd'] += 1
+            super().__init__(*a, **kw)
+
+    _ipnd.qhull.Delaunay = _CountingDelaunay
+    _si.LinearNDInterpolator = _CountingLinearND
+    globals()['LinearNDInterpolator'] = _CountingLinearND
+    try:
+        out = fn()
+    finally:
+        _ipnd.qhull.Delaunay = orig_d
+        _si.LinearNDInterpolator = orig_l
+        globals()['LinearNDInterpolator'] = orig_l
+    return counts, out
+
+
+def test_remap_2d_builds_one_triangulation_not_two():
+    """The K3 win is ONE Delaunay triangulation where the pre-K3 path built
+    TWO -- a CALL COUNT, not a clock.
+
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).  This test used
+    to assert ``t_new < 0.85 * t_old``.  That is a per-build wall-clock fact
+    asserted as if it were universal: the numerator shares one QHull
+    triangulation (single-threaded) while the denominator builds two, so the
+    ratio tracks BLAS-parallel work against QHull-serial work and moves with
+    core count.  The module docstring's own ~1.6-1.8x measurement is a ratio
+    of 0.55-0.62, i.e. only 1.37-1.55x headroom under the bar.  MEASURED
+    best-of-3: 0.649 at N=384 / 0.746 at N=256 on Windows (py3.14 /
+    numpy 2.4.4 / scipy 1.17.1) and 0.410 at N=256 on an idle WSL box
+    (py3.12 / numpy 2.5.1 / scipy 1.18.0) -- and, decisively, an in-test
+    single-shot of **0.861 on that same WSL mount while it was co-tenanted
+    with two other pytest jobs**, i.e. the retired ``< 0.85`` bar would have
+    FAILED on that run.  The claim samples 0.41 to 0.86 across two mounts of
+    identical code.  Worse, an ``available_memory_bytes() < 2 GiB ->
+    pytest.skip`` sat above it and deleted the claim entirely on a small
+    runner.
+
+    The invariant is the triangulation count, which no runner can move.  The
+    byte-identity of the two paths is pinned here and at N=384/512 by
+    ``test_remap_2d_byte_identical_to_pre_k3_two_interp``; the timing is
+    printed.  The grid is N=256 / n_side=101 -- 0.56-0.85 s per call on
+    Windows and 1.7-2.7 s on a contended WSL box, two calls total, against
+    the 10.16 s ``.test_durations`` records for the old N=768 best-of-5
+    comparison -- so the claim runs UNCONDITIONALLY and there is no RAM gate
+    left to skip it."""
+    N, dx = 256, 8e-6
+    E_in = _gauss(N, dx, 3e-3)
+    rmap = _synthetic_ray_map(n_side=101, r_max=3.0e-3, dx=dx)
 
     def _new():
         return _apply_displaced_remap_2d(E_in, rmap, _WL, dx, dx)
@@ -197,13 +257,39 @@ def test_remap_2d_shared_delaunay_is_faster():
     def _old():
         return _remap_2d_reference(E_in, rmap, _WL, dx, dx)
 
-    t_new = _best(_new)
-    t_old = _best(_old)
-    # sanity: still byte-identical at this grid
-    assert np.array_equal(_new(), _old())
-    assert t_new < 0.85 * t_old, (
-        f"remap not faster: new {t_new*1e3:.1f} ms vs old {t_old*1e3:.1f} ms "
-        f"(ratio {t_new / t_old:.3f})")
+    t0 = time.perf_counter()
+    c_new, out_new = _count_triangulations(_new)
+    t_new = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    c_old, out_old = _count_triangulations(_old)
+    t_old = time.perf_counter() - t0
+
+    print(f'[K3 win 1] new={c_new} {t_new*1e3:.1f} ms | '
+          f'old={c_old} {t_old*1e3:.1f} ms | ratio {t_new/t_old:.3f} '
+          f'-- timing informational, not asserted')
+
+    # The counting wrappers must have been in force at all (guards against a
+    # future scipy layout silently zeroing both counters).
+    assert c_old['linearnd'] == 2, (
+        f"the pre-K3 reference builds two separate one-column "
+        f"LinearNDInterpolators by construction; counted "
+        f"{c_old['linearnd']} -- the spy is not seeing the constructions, "
+        f"so the count below proves nothing.")
+    assert c_new['linearnd'] == 1, (
+        f"the optimized remap must build ONE two-column "
+        f"LinearNDInterpolator; counted {c_new['linearnd']}.")
+    assert c_old['delaunay'] == 2, (
+        f"pre-K3 = two QHull triangulations of the same scattered points; "
+        f"counted {c_old['delaunay']}.")
+    assert c_new['delaunay'] == 1, (
+        f"K3 win 1 is ONE shared QHull triangulation for the amplitude and "
+        f"OPL remaps; counted {c_new['delaunay']} -- the two-column "
+        f"LinearNDInterpolator has stopped sharing its Delaunay.")
+
+    # ... and the two paths are still the same computation at this grid.
+    assert out_new.shape == out_old.shape and out_new.dtype == out_old.dtype
+    assert np.array_equal(out_new, out_old), (
+        f"max abs diff {np.max(np.abs(out_new - out_old)):.3e}")
 
 
 # ===========================================================================

@@ -1222,32 +1222,61 @@ _GHOST_AP, _GHOST_N, _GHOST_DX = 12e-3, 1024, 20e-6
 _GHOST_W, _GHOST_XC, _GHOST_RIN = 0.40e-3, 5.6e-3, 60e-3
 
 
-def _ghost_metrics(**kw):
-    """(off-beam power / input power, max off-beam amplitude / on-beam peak,
-    warning messages) for one decentred beam through one fast singlet.
+def _ghost_geometry():
+    """``(radius from the beam centre, input envelope, 3w beam-disc mask,
+    input power)`` for the decentred-ghost fixture."""
+    x = (np.arange(_GHOST_N) - _GHOST_N // 2) * _GHOST_DX
+    r2 = (x[None, :] - _GHOST_XC) ** 2 + x[:, None] ** 2
+    env = np.exp(-r2 / _GHOST_W ** 2).astype(np.complex128)
+    return (np.sqrt(r2), env, r2 <= (3 * _GHOST_W) ** 2,
+            float(np.sum(np.abs(env) ** 2)))
+
+
+def _ghost_field(**kw):
+    """``(|E_out|, warning messages)`` for one decentred beam through one fast
+    singlet.  ``kw`` overrides any ``apply_real_lens_traced`` argument -- used
+    for the ``newton_fit='spline'`` oracle.
 
     ``x_c = 5.6 mm`` puts the beam disc wholly outside the aperture-relative
     ``_CARRIER_FIT_RADIUS_FRAC`` disc, i.e. the beam-disc-alone tier."""
-    x = (np.arange(_GHOST_N) - _GHOST_N // 2) * _GHOST_DX
-    env = np.exp(-((x[None, :] - _GHOST_XC) ** 2 + x[:, None] ** 2)
-                 / _GHOST_W ** 2).astype(np.complex128)
-    p_in = float(np.sum(np.abs(env) ** 2))
-    near = ((x[None, :] - _GHOST_XC) ** 2 + x[:, None] ** 2) <= (3 * _GHOST_W) ** 2
+    _, env, _, _ = _ghost_geometry()
+    call = dict(
+        prescription=_singlet(32e-3, -32e-3, 1.6e-3, 'N-BK7',
+                              _GHOST_AP, 'ghost'),
+        wavelength=_WL, dx=_GHOST_DX, ray_subsample=8, n_workers=1,
+        carrier=la.TiltedCarrier(_GHOST_RIN, 0.0, 0.0, _GHOST_XC, 0.0),
+        fit_radius_beam_factor=2.0, amplitude_model='ray_density',
+        preserve_input_phase='remap', remap_sampling='full',
+        on_aperture_beam='silent')
+    call.update(_TKW)
+    call.update(kw)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        out = np.asarray(la.apply_real_lens_traced(
-            env, prescription=_singlet(32e-3, -32e-3, 1.6e-3, 'N-BK7',
-                                       _GHOST_AP, 'ghost'),
-            wavelength=_WL, dx=_GHOST_DX, ray_subsample=8, n_workers=1,
-            carrier=la.TiltedCarrier(_GHOST_RIN, 0.0, 0.0, _GHOST_XC, 0.0),
-            fit_radius_beam_factor=2.0, amplitude_model='ray_density',
-            preserve_input_phase='remap', remap_sampling='full',
-            on_aperture_beam='silent', **_TKW))
-    amp = np.abs(out)
+        out = np.asarray(la.apply_real_lens_traced(env, **call))
+    return np.abs(out), [str(m.message) for m in rec]
+
+
+def _ghost_metrics(**kw):
+    """(off-beam power / input power, max off-beam amplitude / on-beam peak,
+    warning messages)."""
+    _, _, near, p_in = _ghost_geometry()
+    amp, msgs = _ghost_field(**kw)
     peak = float(amp[near].max())
     assert peak > 0.0
     off_p = float(np.sum(amp[~near] ** 2)) / p_in
-    return off_p, float(amp[~near].max()) / peak, [str(m.message) for m in rec]
+    return off_p, float(amp[~near].max()) / peak, msgs
+
+
+def _folds(msgs):
+    """How many 'fold caustic' warnings a run emitted."""
+    return sum('fold caustic' in m for m in msgs)
+
+
+def _off_beam_peak(amp, near, rad):
+    """``(flat index, radius, amplitude)`` of the brightest pixel OUTSIDE the
+    3w beam disc."""
+    j = int(np.argmax(np.where(near, -1.0, amp)))
+    return j, float(rad.ravel()[j]), float(amp.ravel()[j])
 
 
 def test_off_centre_fit_disc_does_not_ghost_the_exit_field(monkeypatch):
@@ -1258,26 +1287,16 @@ def test_off_centre_fit_disc_does_not_ghost_the_exit_field(monkeypatch):
     it shows is the real one."""
     import lumenairy.elements._lens_traced as _lt
 
-    x = (np.arange(_GHOST_N) - _GHOST_N // 2) * _GHOST_DX
-    env = np.exp(-((x[None, :] - _GHOST_XC) ** 2 + x[:, None] ** 2)
-                 / _GHOST_W ** 2).astype(np.complex128)
-    p_in = float(np.sum(np.abs(env) ** 2))
-    near = ((x[None, :] - _GHOST_XC) ** 2 + x[:, None] ** 2) <= (3 * _GHOST_W) ** 2
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        ref = np.abs(np.asarray(la.apply_real_lens_traced(
-            env, prescription=_singlet(32e-3, -32e-3, 1.6e-3, 'N-BK7',
-                                       _GHOST_AP, 'ghost'),
-            wavelength=_WL, dx=_GHOST_DX, ray_subsample=8, n_workers=1,
-            carrier=la.TiltedCarrier(_GHOST_RIN, 0.0, 0.0, _GHOST_XC, 0.0),
-            fit_radius_beam_factor=2.0, amplitude_model='ray_density',
-            preserve_input_phase='remap', remap_sampling='full',
-            newton_fit='spline', on_aperture_beam='silent', **_TKW)))
+    rad, _env, near, p_in = _ghost_geometry()
+    ref, ref_msgs = _ghost_field(newton_fit='spline')
+    ref_peak = float(ref[near].max())
     ref_off_p = float(np.sum(ref[~near] ** 2)) / p_in
-    ref_rel = float(ref[~near].max()) / float(ref[near].max())
+    ref_rel = float(ref[~near].max()) / ref_peak
     assert ref_off_p < 1e-5 and ref_rel < 0.01     # the true halo is nothing
 
-    off_p, rel, _ = _ghost_metrics()
+    good, good_msgs = _ghost_field()
+    off_p = float(np.sum(good[~near] ** 2)) / p_in
+    rel = float(good[~near].max()) / float(good[near].max())
     assert off_p < 10.0 * ref_off_p
     assert rel < 10.0 * ref_rel
 
@@ -1318,19 +1337,90 @@ def test_off_centre_fit_disc_does_not_ghost_the_exit_field(monkeypatch):
     #     ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``.
     #
     # A fail-before that inherits a default is not a fail-before.  Pin the
-    # era; the assertions below are the originals, unchanged.
+    # era; the witness assertions follow.
     monkeypatch.setattr(_lt, 'DECENTRED_FIT_PREDICTOR', False)
     monkeypatch.setattr(_lt, 'DECENTRED_FIT_ARBITER', False)
     monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
-    bad_p, bad_rel, _ = _ghost_metrics()
-    # ENVELOPE factors, not absolutes (2026-08-02): the broken arm's ghost
-    # magnitude is BLAS-build-dependent.  Measured bad_p / ref_off_p: >1000x
-    # on local + 3.10/3.11/3.12 CI, 365x on 3.13 CI -- the old 1000x bar
-    # failed there while the witness (broken is ORDERS OF MAGNITUDE worse
-    # than the spline oracle's true halo) held resoundingly.  The pass-after
-    # arm above asserts < 10x, so a 50x fail-before floor keeps a clean 5x
-    # separation between the arms on every measured platform.
-    assert bad_p > 50.0 * ref_off_p, (bad_p, ref_off_p)
+    bad, bad_msgs = _ghost_field()
+    bad_p = float(np.sum(bad[~near] ** 2)) / p_in
+    bad_rel = float(bad[~near].max()) / float(bad[near].max())
+
+    # ==================================================================
+    # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).
+    #
+    # This site used to read ``assert bad_p > 50.0 * ref_off_p``.  That bar
+    # HAD ALREADY BURNED once: the comment it carried recorded "the broken
+    # arm's ghost magnitude is BLAS-build-dependent -- measured
+    # bad_p / ref_off_p >1000x on local + 3.10/3.11/3.12 CI, 365x on 3.13
+    # CI, the old 1000x bar failed there", and the response was to widen the
+    # ratio 20x.  Widening a per-build magnitude is not a fix: it left a bar
+    # sitting 7.3x above the worst measured platform on a quantity the file
+    # itself calls build-dependent, with no principle setting the number.
+    #
+    # The ghost is a PRESENCE claim, not a magnitude claim.  It is replaced
+    # by two discriminators that do not care how large the lobe comes out on
+    # a given LAPACK:
+    #
+    #   (a) the FOLD DETECTOR -- a boolean the library already emits.  It
+    #       fires on the broken arm and is silent on the spline oracle.
+    #   (b) SUPPORT LOCATION -- WHERE the off-beam power sits.  The oracle's
+    #       halo is a monotonically decaying Gaussian tail ATTACHED to the
+    #       beam, so its brightest off-disc pixel is by construction the
+    #       first pixel outside the 3w disc.  The broken arm's brightest
+    #       off-disc pixel is a DETACHED lobe far outside it, at a radius
+    #       where the oracle's field has no support at all.
+    #
+    # MEASURED, identical to every digit on both mounts (Windows py3.14 /
+    # numpy 2.4.4 and WSL py3.12 / numpy 2.5.1):
+    #
+    #                folds   r(off-beam max)   |E| there   oracle |E| there
+    #   oracle         0        1.200 mm        7.73e-04      7.73e-04
+    #   shipped        0        1.200 mm        4.73e-04      7.73e-04
+    #   broken         1        6.737 mm        4.89e-01      8.15e-121
+    #
+    # 1.200 mm IS 3w (the first pixel outside the disc); the "attached"
+    # bar below allows 10 further pixels (1.400 mm), and the broken arm
+    # sits 4.8x beyond it.  The oracle's amplitude under the ghost is 121
+    # decades down -- 109 decades below the 1e-12 * peak support floor,
+    # while the oracle's own halo maximum is 9 decades ABOVE it, so the
+    # floor cleanly separates "has support" from "has none".
+    # ==================================================================
+    print(f'[D1 ghost] bad_p={bad_p:.6e} ref_off_p={ref_off_p:.6e} '
+          f'ratio={bad_p / ref_off_p:.4g} (informational, not asserted); '
+          f'bad_rel={bad_rel:.6e} ref_rel={ref_rel:.6e}')
+
+    # (a) the fold detector fires on the broken arm, and only on it.
+    assert _folds(ref_msgs) == 0, (
+        f'the spline oracle must not trip the fold detector -- it is the '
+        f'unfolded reference the broken arm is compared against; got '
+        f'{ref_msgs}')
+    assert _folds(bad_msgs) >= 1, (
+        f'the broken (hard-mask, pre-D1/C13) arm must trip the ray-density '
+        f'fold detector; got {bad_msgs}')
+
+    # (b) support location: attached halo vs detached lobe.
+    _, r_ref, _ = _off_beam_peak(ref, near, rad)
+    _, r_good, _ = _off_beam_peak(good, near, rad)
+    j_bad, r_bad, a_bad = _off_beam_peak(bad, near, rad)
+    attached = 3.0 * _GHOST_W + 10.0 * _GHOST_DX      # 1.400 mm
+    assert r_ref <= attached, (
+        f"construction check: the spline oracle's halo must be ATTACHED to "
+        f"the beam (brightest off-disc pixel within 10 px of the 3w edge); "
+        f"got r = {r_ref * 1e3:.3f} mm")
+    assert r_good <= attached, (
+        f"the shipped arm's brightest off-disc pixel must sit on the "
+        f"attached halo like the oracle's; got r = {r_good * 1e3:.3f} mm")
+    assert r_bad > attached, (
+        f"the broken arm's ghost must be a DETACHED lobe (measured "
+        f"6.737 mm against a 1.400 mm bar); got r = {r_bad * 1e3:.3f} mm -- "
+        f"the witness is no longer reproducing the D1 defect.")
+    assert float(ref.ravel()[j_bad]) < 1e-12 * ref_peak, (
+        f"the broken arm's ghost must land where the oracle has NO support: "
+        f"oracle |E| = {float(ref.ravel()[j_bad]):.3e} against peak "
+        f"{ref_peak:.3e} (measured 8.15e-121, i.e. 121 decades down) at "
+        f"r = {r_bad * 1e3:.3f} mm where the broken arm carries "
+        f"{a_bad:.3e}.")
+
     assert bad_rel > max(5.0 * ref_rel, 0.02), (bad_rel, ref_rel)
 
 
@@ -1342,9 +1432,6 @@ def test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive(monkeypatch)
     fit regularised the fold is gone at the source and the same unmasked scan
     is silent -- which is the only acceptable way for that warning to stop."""
     import lumenairy.elements._lens_traced as _lt
-
-    def _folds(msgs):
-        return sum('fold caustic' in m for m in msgs)
 
     _, good_rel, msgs = _ghost_metrics()
     assert _folds(msgs) == 0, msgs

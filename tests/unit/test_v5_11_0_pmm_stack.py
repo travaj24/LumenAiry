@@ -181,7 +181,77 @@ def test_single_slanted_layer_stack_equals_binary(phi_deg, ang_deg):
 def test_covariant_stack_is_spectral_vs_convection():
     """A 2-layer UNIFORM-slant stack: 'auto' uses the covariant generator, which
     converges to the (high-degree convection) truth far faster than convection at
-    matched low degree -- the spectral win in a multilayer stack."""
+    matched low degree -- the spectral win in a multilayer stack.
+
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md S11, D3): the win
+    used to be pinned as ``con_err > 2 * cov_err`` at the single working degree
+    20, with no derivation.  That is one degree, one ratio, one number that
+    moves -- a per-build magnitude asserted as a universal.
+
+    THE AXIS IS THE BLAS REDUCTION WIDTH, NOT THE BUILD, and it is demonstrable
+    on ONE box.  Re-measured 2026-08-15 on this worktree, ``max|R - R_ref|``
+    against the degree-40 convection reference:
+
+        OPENBLAS_NUM_THREADS   cov(12)     cov(16)     cov(20)   3-rung (c)
+        W 1                    1.8649e-05  2.8817e-05  2.8269e-05   2.629x
+        W 2                    1.1312e-04  1.8385e-05  2.6909e-05   0.670x  <-
+        W 4                    3.4646e-05  2.2426e-05  2.5609e-05   2.187x
+        W 8                    4.5775e-05  2.2467e-05  2.7896e-05   1.655x
+        W 24 (default)         5.0443e-05  2.2028e-05  2.2988e-05   1.502x
+        M py3.12 / numpy 2.5.1 5.0443e-05  2.2028e-05  2.2988e-05   1.502x
+
+    The CONVECTION arm is BIT-IDENTICAL in all six -- 2.472227e-04 /
+    1.310336e-04 / 7.576586e-05 -- so every bit of the motion lives in the
+    covariant arm, and the degree-12 rung alone swings 6.07x (1.86e-05 ..
+    1.13e-04) without changing machine, wheel or source.
+
+    WHY: the covariant arm CONVERGES FIRST and then sits in the degree-40
+    reference's own accuracy floor (~2e-05), so what is left there is
+    reference noise, which is exactly what a reduction order moves.  The
+    convection arm is still descending (contracting ~0.55 per step) and stays
+    well above that floor, which is why it does not move at all.  A
+    convergence-RATE test would therefore have pinned the OPPOSITE of the
+    truth: it is the covariant arm that is flat and the convection arm that is
+    still falling.
+
+    WHY THE LADDER STARTS AT 16.  The arrow above is not hypothetical: at TWO
+    BLAS threads claim (c) below is measurably FALSE on the three-rung ladder
+    (margin 0.670x), because degree 12 is where the covariant arm is still in
+    its pre-convergence transient.  Excluding it is a measurement, not a
+    preference.  Degrees 16 and 20 swing only 1.57x and 1.23x over the same
+    six configurations.
+
+    An INDEPENDENT re-measurement the same day, uncapped threads on both
+    mounts, agrees on 16/20 and is worse still at 12: cov = 3.4618e-05 /
+    2.9347e-05 / 2.7033e-05 (Win py3.14/np2.4.4) and 1.7142e-04 / 2.1088e-05 /
+    2.3361e-05 (WSL py3.12/np2.5.1) -- degree 12 alone moving 4.95x BETWEEN
+    MOUNTS, which on a three-rung ladder would put (c) at 0.44x on WSL, i.e.
+    failing.  On the shipped two-rung ladder the same two runs give (b) 4.46x /
+    2.80x (Win) and 6.21x / 3.24x (WSL) and (c) 2.58x / 3.24x -- inside the
+    six-configuration envelope quoted below.  Degrees 16 and 20 are therefore
+    safe on both the thread axis and the interpreter/BLAS axis, and 12 is
+    unsafe on both.
+
+    THE BARS, all measured in the same process against the same reference,
+    none of them a chosen factor, worst case over all six configurations:
+
+      (a) the ladder resolves convergence at all -- the convection arm's error
+          strictly decreases, 1.310336e-04 > 7.576586e-05 (1.73x) on
+          BIT-IDENTICAL numbers, so this rung carries no reduction-order risk;
+      (b) the covariant arm is closer at EVERY matched degree -- worst margins
+          4.55x (deg 16) and 2.68x (deg 20), against 1.34x worst case for the
+          retired ``con_err > 2 * cov_err``;
+      (c) the win is a DEGREE OFFSET, not a constant factor: covariant at the
+          BOTTOM of the ladder still beats convection at the TOP, so four
+          extra degrees do not buy convection the covariant answer.  Worst
+          margin min(con)/max(cov) = 2.629x.
+
+    TWO-SIDED.  Above: the binding margin is 2.629x against a covariant-arm
+    motion of at most 1.57x at the degrees actually used, and every bar is a
+    plain inequality between two numbers this run measured -- there is no
+    magnitude left to widen.  Below: a covariant generator that had lost its
+    advantage fails (b) and (c) outright, and a ladder that had stopped
+    resolving convergence fails (a)."""
     er = _eps_coupled()
     e2 = np.diag([3.0, 2.2, 2.5]).astype(_C)
     phi = np.radians(35.0)
@@ -193,14 +263,24 @@ def test_covariant_stack_is_spectral_vs_convection():
         st.add_layer(0.25e-6, segments=[(0.4, e2), (0.6, GR)], slant_angle=phi)
         return st.set_source(0.633e-6, angle=0.0).solve()
 
+    # 12 excluded: it breaks (c) at 2 BLAS threads (0.670x).  See docstring.
+    ladder = (16, 20)
     o_ref, R_ref, _T, _J = mk(40, "convection")          # converged truth
-    o_v, R_v, _Tv, _Jv = mk(20, "auto")                  # -> covariant
-    o_c, R_c, _Tc, _Jc = mk(20, "convection")
-    cov_err = np.max(np.abs(R_v - R_ref))
-    con_err = np.max(np.abs(R_c - R_ref))
-    assert abs(R_v[0].sum() + _Tv[0].sum() - 1.0) < 1e-3   # energy
-    assert cov_err < con_err                               # covariant closer
-    assert con_err > 2 * cov_err                           # ... by a clear margin
+    cov, con = [], []
+    for deg in ladder:
+        o_v, R_v, Tv, _Jv = mk(deg, "auto")              # -> covariant
+        o_c, R_c, _Tc, _Jc = mk(deg, "convection")
+        cov.append(float(np.max(np.abs(R_v - R_ref))))
+        con.append(float(np.max(np.abs(R_c - R_ref))))
+        if deg == ladder[-1]:
+            assert abs(R_v[0].sum() + Tv[0].sum() - 1.0) < 1e-3     # energy
+    # (a) the ladder really is resolving convergence
+    assert all(a > b for a, b in zip(con[:-1], con[1:])), con
+    # (b) covariant is closer at every matched degree
+    assert all(a < b for a, b in zip(cov, con)), (cov, con)
+    # (c) ... and by a whole degree offset: covariant at the BOTTOM of the
+    #     ladder still beats convection at the TOP
+    assert max(cov) < min(con), (cov, con)
 
 
 def test_covariant_stack_rejects_mixed_and_oop():

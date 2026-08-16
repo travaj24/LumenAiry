@@ -1798,8 +1798,30 @@ def test_w6_a17_endpoint_anchored_does_not_hurt_conditioning():
     ``endpoint_anchored`` docstring claim that "the conditioning hit on
     the least-squares fit is negligible at typical poly_order (4 - 6)".
     Measured: it is not a hit at all, it is a small IMPROVEMENT --
-    cond(A) 7.4005e+15 -> 6.4182e+15 at poly_order 6 (n=8x8) and
-    3.2723e+10 -> 2.9197e+10 at poly_order 4 (n=6x6)."""
+    3.2723e+10 -> 2.9197e+10 at poly_order 4 (n=6x6), and at poly_order 6
+    (n=8x8) the RESOLVED conditioning 6.0556e+10 -> 5.7596e+10.
+
+    2026-08-15, ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` -- this test
+    used to compare ``cond(A) = s[0]/s[-1]`` at poly_order 6 ONLY, with
+    ``conds[True] < 2.0 * conds[False]``.  That is a ratio of two NOISE
+    FLOORS: both condition numbers exceed ``1/eps = 4.5036e+15``, and the
+    sibling ``test_w6_a17_default_canonical_fit_is_rank_deficient`` pins the
+    same matrix as numerically rank-deficient (185 of 210), so ``s[-1]`` is
+    pure SVD rounding and its ratio is bounded by nothing.  It had already
+    drifted 14% across three readings against a bar needing only 103% to
+    trip: recorded 7.4005e+15 -> 6.4182e+15 (0.867); Windows py3.14/np2.4.4
+    7.2911e+15 -> 6.5929e+15 (0.9042); WSL py3.12/np2.5.1 6.8679e+15 ->
+    6.7762e+15 (0.9866).
+
+    The re-measurement shows exactly where the signal stops.  ``s[-1]/s[0]``
+    is 0.618 eps on Windows and 0.656 eps on WSL -- 6% apart, i.e. noise --
+    while EVERY resolved singular value agrees to 5 significant figures on
+    both mounts.  So the conditioning-improvement claim is asserted where the
+    comparison is well-posed (poly_order 4, ``cond`` 3.3e+10, four decades
+    inside double precision) and poly_order 6 asserts only statements that do
+    not touch the null space: equal numerical rank, a clear spectral gap AT
+    that rank, the resolved subspace decades above the SVD noise floor, and
+    the resolved conditioning ratio."""
     from lumenairy._math.chebyshev import chebyshev_vandermonde as _cv
     from lumenairy.elements.lenses import _fit_normaliser
     from lumenairy.raytrace import (
@@ -1809,9 +1831,11 @@ def test_w6_a17_endpoint_anchored_does_not_hurt_conditioning():
     )
     pres = la.make_singlet(51.5e-3, np.inf, 4.1e-3, 'N-BK7', aperture=12e-3)
     pres['object_distance'] = 200e-3
-    conds = {}
-    for anchored in (False, True):
-        n = 8
+    eps = float(np.finfo(np.float64).eps)
+
+    def spectrum(n, poly_order, anchored):
+        """Singular values of the design matrix ``fit_canonical_polynomials``
+        would feed to lstsq, on the ``n x n`` field/pupil grid."""
         i = np.arange(n)
         uf = np.cos(np.pi * (i + 0.5) / n)
         if anchored:
@@ -1829,16 +1853,88 @@ def test_w6_a17_endpoint_anchored_does_not_hurt_conditioning():
                np.asarray(f.L)[al], np.asarray(f.M)[al])
         u = [(v - c) / h for v, (c, h) in
              zip(obs, [_fit_normaliser(v) for v in obs])]
-        mi = _multi_indices_total_degree(4, 6)
+        mi = _multi_indices_total_degree(4, poly_order)
         K = np.asarray(mi, dtype=np.int64)
-        T = [_cv(ui, 6) for ui in u]
+        T = [_cv(ui, poly_order) for ui in u]
         A = (T[0][K[:, 0]] * T[1][K[:, 1]] * T[2][K[:, 2]] * T[3][K[:, 3]]).T
-        s = np.linalg.svd(A, compute_uv=False)
-        conds[anchored] = float(s[0] / s[-1])
-    assert conds[True] < 2.0 * conds[False], (
-        f'endpoint_anchored must not blow up the conditioning: '
-        f'{conds[False]:.4e} -> {conds[True]:.4e} (measured 7.4005e+15 '
-        f'-> 6.4182e+15, an improvement)')
+        A = np.asarray(A, dtype=np.float64)
+        return (np.linalg.svd(A, compute_uv=False),
+                int(np.linalg.matrix_rank(A)), len(mi))
+
+    # ---- poly_order 4 (n=6): a WELL-CONDITIONED comparison -------------
+    # 2026-08-15: cond = 3.2723e+10 -> 2.9197e+10 (ratio 0.8922), FULL rank
+    # 70/70, on BOTH mounts to 5 significant figures -- 4.5 decades inside
+    # 1/eps = 4.5036e+15, so s[-1] here is signal and the ratio is a real
+    # quantity.  Bar 1.05 sits 17.7% above the measured ratio while the
+    # cross-build spread on that ratio is under 0.01%; in the other
+    # direction the "conditioning hit" the docstring disclaims would have to
+    # be a factor >= 2 (the bar this replaces) to be worth flagging, so 1.05
+    # is 1.9x inside the regression it is meant to catch.
+    s4f, rank4f, nb4 = spectrum(6, 4, False)
+    s4t, rank4t, _ = spectrum(6, 4, True)
+    cond4f, cond4t = float(s4f[0] / s4f[-1]), float(s4t[0] / s4t[-1])
+    assert rank4f == nb4 and rank4t == nb4, (
+        f'premise moved: poly_order 4 is no longer full rank '
+        f'({rank4f}/{nb4}, {rank4t}/{nb4}; measured 70/70), so s[-1] is no '
+        f'longer signal and this comparison is no longer well-posed')
+    assert max(cond4f, cond4t) < 1e-3 / eps, (
+        f'premise moved: poly_order 4 conditioning {cond4f:.4e} / '
+        f'{cond4t:.4e} is no longer decades inside 1/eps = {1 / eps:.4e} '
+        f'(measured 3.2723e+10 / 2.9197e+10)')
+    assert cond4t < 1.05 * cond4f, (
+        f'endpoint_anchored must not hurt the conditioning where the '
+        f'comparison is well-posed: {cond4f:.4e} -> {cond4t:.4e} '
+        f'(ratio {cond4t / cond4f:.4f}; measured 0.8922 on both mounts)')
+
+    # ---- poly_order 6 (n=8): the LIBRARY DEFAULT, rank-deficient -------
+    s6f, rank6f, nb6 = spectrum(8, 6, False)
+    s6t, rank6t, _ = spectrum(8, 6, True)
+    # (1) equal numerical rank, and rank-deficient -- measured 185/210 on
+    #     both arms and both mounts.
+    assert rank6f == rank6t < nb6, (
+        f'poly_order 6 rank {rank6f}/{nb6} (plain) vs {rank6t}/{nb6} '
+        f'(anchored); measured 185/210 on both arms and both mounts')
+    # (2) that rank statement is well-posed, not threshold luck: there is a
+    #     clear GAP in the spectrum at the cut.  2026-08-15 measured
+    #     s[rank-1]/s[rank] = 29.42 (plain) / 29.12 (anchored), identical on
+    #     both mounts; numpy's own cut (max(M,N)*eps*s[0] = 9.708e-11) falls
+    #     inside it, and the rank is unchanged from 1x to 10x that
+    #     threshold.  Bar 5.0 -> 5.8x headroom; below ~1.0 the rank would be
+    #     ill-defined, so the bar cannot be tripped from the other side
+    #     without the premise itself dissolving.
+    for tag, s, rk in (('plain', s6f, rank6f), ('anchored', s6t, rank6t)):
+        gap = float(s[rk - 1] / s[rk])
+        assert gap > 5.0, (
+            f'{tag}: no spectral gap at the numerical rank '
+            f'(s[{rk - 1}]/s[{rk}] = {gap:.2f}; measured 29.42 / 29.12), so '
+            f'the rank -- and everything scored against it -- is threshold '
+            f'luck')
+    # (3) the RESOLVED subspace sits decades above the SVD rounding floor,
+    #     which is O(eps * s[0]).  2026-08-15 measured
+    #     s[rank-1]/(eps*s[0]) = 7.437e+04 (plain) / 7.819e+04 (anchored) on
+    #     BOTH mounts; bar 100 -> 743x headroom, and it is 100x above the
+    #     floor itself, so a genuine collapse of the resolved subspace into
+    #     the noise still trips it.  (For contrast, s[-1]/(eps*s[0]) -- the
+    #     old denominator -- is 0.618 on Windows and 0.656 on WSL.)
+    for tag, s, rk in (('plain', s6f, rank6f), ('anchored', s6t, rank6t)):
+        floor = float(s[rk - 1] / (eps * s[0]))
+        assert floor > 100.0, (
+            f'{tag}: the resolved subspace has fallen to the SVD rounding '
+            f'floor (s[{rk - 1}] = {floor:.3e} x eps*s[0]; measured '
+            f'7.437e+04 / 7.819e+04)')
+    # (4) and THAT is where the conditioning-improvement claim is scored at
+    #     the default order: cond over the resolved subspace only.
+    #     2026-08-15 measured 6.0556e+10 -> 5.7596e+10, ratio 0.9511, on
+    #     BOTH mounts to 5 significant figures (the old s[0]/s[-1] ratio
+    #     moved 0.9042 -> 0.9866 between the same two mounts).  Bar 1.05 is
+    #     10% above the measurement against a sub-0.01% cross-build spread,
+    #     and still 1.9x inside the factor-2 hit it is meant to refuse.
+    res6f = float(s6f[0] / s6f[rank6f - 1])
+    res6t = float(s6t[0] / s6t[rank6t - 1])
+    assert res6t < 1.05 * res6f, (
+        f'endpoint_anchored must not hurt the RESOLVED conditioning at the '
+        f'default poly_order 6: {res6f:.4e} -> {res6t:.4e} '
+        f'(ratio {res6t / res6f:.4f}; measured 0.9511 on both mounts)')
 
 
 def test_w6_a17_analytic_v2_gradients_match_finite_differences():

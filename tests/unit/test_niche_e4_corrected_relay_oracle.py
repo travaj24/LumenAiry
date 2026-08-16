@@ -376,12 +376,29 @@ def test_e4_cliff_guard_recovers_oversized_aperture(ap_mm):
     Ratios 7.93x / 20.9x / 25.8x against the 5.0x bar below, i.e. 1.59x of
     headroom at the tightest (7 mm) cell.
 
-    HEADROOM NOTE: the DENOMINATOR of that ratio is a collapsed fit -- a
-    near-uniform random wrapped phase -- so it is the least reproducible number
-    in this file (0.105 on 2026-07-25 with the pre-reference metric, 0.126
-    invariant today).  The bar is stated on the ratio anyway because the claim
-    under test is a RECOVERY, and the numerator is pinned independently by the
-    ``> 0.9`` assertion above.
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md, D4): the second
+    bar used to be the RATIO, ``st_guarded > 5.0 * st_unguarded``.  Its
+    DENOMINATOR is a collapsed fit -- a near-uniform random wrapped phase, this
+    file's own least reproducible number (0.105 on 2026-07-25 with the
+    pre-reference metric, 0.126 today) -- and it comes out of the SAME
+    ill-conditioned traced-OPL least-squares that niche C13 exists for, whose
+    residual is documented to move 20x+ between BLAS builds.  MEASURED at the
+    tightest cell (7 mm): guarded 0.99890, unguarded 0.12604 on BOTH available
+    builds (Win py3.14/np2.4.4 and WSL py3.12/np2.5.1) -- but those two are
+    both OpenBLAS-family, so agreement there is not an independent sample, and
+    the ratio 7.93 left only 1.59x on the 5.0x bar.
+
+    THE FIX is to stop making one bar carry two claims.  The RECOVERY is
+    already pinned, independently and tightly, by ``st_guarded > 0.9`` above
+    (measured 0.99890 / 0.99862 / 0.99858).  What is left to say is that there
+    was something to recover FROM -- a collapse -- and that is a bar on the
+    unguarded arm alone: ``st_unguarded < 0.5``.  MEASURED 0.12604 (7 mm) /
+    0.04768 (8 mm) / 0.03873 (10 mm), i.e. 4.0x / 10.5x / 12.9x of headroom at
+    the tightest cell and better elsewhere.  Two-sided: 0.5 Strehl is nowhere
+    near a diffraction-limited focus, so a fit that had NOT collapsed cannot
+    pass it; and the unguarded number would have to move 4x -- twenty times its
+    entire historical motion -- to fail it spuriously.  Both claims now sit far
+    from their own bars instead of one ratio sitting 1.6x from its.
 
     KNOWN-GOOD ENVELOPE: aperture:beam-diameter ratios 1.0-2.5x on this fast
     (f/4.5) singlet-led relay; the guard's own recovery is flat for
@@ -393,7 +410,11 @@ def test_e4_cliff_guard_recovers_oversized_aperture(ap_mm):
     assert st_guarded > 0.9, (
         f"the cliff guard must restore a near-diffraction-limited focus at a "
         f"{ap_mm} mm aperture (got Strehl {st_guarded:.4f})")
-    assert st_guarded > 5.0 * st_unguarded, (st_guarded, st_unguarded)
+    assert st_unguarded < 0.5, (
+        f"the un-guarded {ap_mm} mm aperture must still COLLAPSE -- otherwise "
+        f"there is no cliff here and the recovery above is vacuous (got Strehl "
+        f"{st_unguarded:.4f}, recovery ratio "
+        f"{st_guarded / st_unguarded:.2f}x)")
 
 
 def test_e4_cliff_guard_leaves_precliff_apertures_alone():

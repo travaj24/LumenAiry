@@ -4,6 +4,70 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed — five more runner-axis pins, and a whole-suite sweep for their class
+
+Five tests across three files went red on the release verify shards and
+main CI over the last four tags while staying green on both local
+mounts.  All five asserted a per-build fact as if it were universal;
+none is a library defect, and `lumenairy/` is untouched.
+
+- **`fff_nv` energy bar** (`test_v5_20_12_rcwa_jones_2d_fff_nv.py`) was
+  policing a conservation law the formulation does not obey: the
+  library's own docstring (audit M5) records that the non-Hermitian
+  normal-vector operator has no finite-truncation energy theorem and
+  violates `R+T=1` by ~1e-2..6e-2 at *every* truncation.  Worse, the
+  test's rigorous 1-D *reference* sat on a poisoned truncation — its
+  own exact closure read 1.7e-2 on one mount and 1.8e-5 on the other.
+  The bar is now regime-tied to the documented envelope, the reference
+  is *searched for* on the running build (first truncation where the
+  1-D energy theorem actually holds), and the surviving reduction
+  claims got stronger: 29x and 40x of margin, up from 2.4x on the
+  Jones arm that was next to fail.
+- **theta=0 eig-VJP defect pin** (`test_niche_audit_w9_eig_vjp.py`)
+  asserted the OPEN defect manifests at >100x the clean gradient; the
+  runner manifested it at 16.6x.  2026-08-12 had already restated this
+  as a ratio — but kept the per-build magnitude in the numerator.  The
+  discriminator is now *presence of wrongness*: AD at exactly normal
+  incidence must disagree with the symmetry-forced truth by decades
+  more than the finite difference's own derived cancellation floor.
+  That separates "still defective" (1.9e6..2.0e10 across five builds)
+  from "fixed" (3.3e-4, the analytic-half-space control) by nine
+  decades, so the pin still fires the day the upstream defect closes.
+  The boundedness half is restated as the mechanism it is (the floored
+  value is insensitive to the degenerate pair's splitting; the
+  unfloored one scales as exactly 1/splitting).
+- **Newton pool engagement pins**
+  (`test_niche_audit_e_prepared_and_enums.py`) asserted a
+  resource-dependent precondition unconditionally: on 2-core/7 GB
+  runners the pool's RAM pricing correctly refuses workers, so the
+  observations came back empty.  Engagement is now forced
+  deterministically through the pricer's own documented `_free_b` test
+  hook plus an explicit worker count, and the pricing decision is
+  asserted separately in both directions (engaged when priced in,
+  refused when priced out, answer unchanged either way).  Two
+  `pytest.skip`s that had been silently removing five tests from the
+  gate on exactly those runners are gone.
+
+A sibling sweep of the three files also found a genuine test defect: the
+`fff_nv` lossy-absorptance comparison reduced the 2-D arms per incident
+polarization but the 1-D reference over both at once, so it was
+comparing `A` against `2A-1` and the assertion collapsed algebraically
+to `Af > Al`, passing on a 0.28% margin.  Corrected, it asserts what its
+docstring claims with an 18.6x margin.
+
+Because the five failures had arrived one tag at a time, the whole of
+`tests/unit` (476 files, ~219k lines) was then swept mechanically for
+the same five shapes — magnitude-ratio defect pins, pre-fix-referencing
+arms, environment-dependent preconditions, floor bars within a decade
+of their measured value, and exact-count observations of
+nondeterministic machinery.  ~1,660 assertion sites were triaged and
+~29 fragile ones repaired under the same doctrine, including one that
+was **already red on a bare-process run** (a `tracemalloc` peak bar
+whose margin was smaller than the CuPy import it accidentally
+measured).  Full classification, cross-build measurements and the
+disposition of every site in
+`docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`.
+
 ## [5.35.4] — 2026-08-13
 
 ### Fixed — the DOE closure bar was regime-blind

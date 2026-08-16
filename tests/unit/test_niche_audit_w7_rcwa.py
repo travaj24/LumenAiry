@@ -238,10 +238,27 @@ def test_w7a_asr_energy_closure_is_preserved():
     9/15/21/31), pre-fix -> post-fix, essentially unmoved:
     eta 0.3  1.71e-06 -> 1.76e-06 ... 8.95e-09 -> 3.57e-09;
     eta 0.9  2.70e-05 -> 2.71e-05 ... 5.17e-08 -> 2.75e-08."""
+    # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).  The uniform
+    # arm's |R+T-1| on a lossless slab is PURE round-off -- it grows with M and
+    # with the LAPACK reduction order, so an absolute constant here is a
+    # per-build fact.  Measured: M=9 1.554e-15 [Windows py3.14/np2.4.4] vs
+    # 4.330e-15 [WSL py3.12/np2.5.1]; M=21 4.530e-14 [W] vs 4.663e-15 [M] --
+    # a 10x cross-build spread on the SAME reading, against which the old
+    # absolute 1e-12 held only 22x.  Score it against THIS build's own
+    # NON-uniform closure instead: c_asr is a TRUNCATION error (physics, not
+    # round-off) and measures 1.755207e-06 on BOTH mounts to 7 digits.  The
+    # claim "the uniform case is decades cleaner" then carries no round-off
+    # constant.  Measured uniform / c_asr: 8.855e-10 (M=9) / 2.581e-08 (M=21)
+    # [W], 2.467e-09 / 2.657e-09 [M].  The bar 1e-4 clears the WORST reading
+    # by 3.9e+03x, and in the other direction it still refuses any uniform
+    # closure that reaches 1.8e-10 -- 4-5 decades above pure round-off but 4
+    # decades below the ASR truncation floor, so real breakage cannot hide.
+    c_asr = abs(_run1d(0.4, 9, eta=0.3)[1])
     for M in (9, 21):
-        assert abs(_run1d(0.4, M, eta=0.0)[1]) < 1e-12      # uniform: exact
+        uni = abs(_run1d(0.4, M, eta=0.0)[1])
+        assert uni < 1e-4 * c_asr, (M, uni, c_asr)      # uniform: exact
     for eta, bar9 in ((0.3, 5e-6), (0.6, 2e-5), (0.9, 6e-5)):
-        c9 = abs(_run1d(0.4, 9, eta=eta)[1])
+        c9 = c_asr if eta == 0.3 else abs(_run1d(0.4, 9, eta=eta)[1])
         c31 = abs(_run1d(0.4, 31, eta=eta)[1])
         assert c9 < bar9, (eta, c9)
         assert c31 < 0.05 * c9, (eta, c9, c31)              # converges

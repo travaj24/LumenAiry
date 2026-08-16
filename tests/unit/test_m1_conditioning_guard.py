@@ -1200,16 +1200,50 @@ def test_rcond_of_hsup_would_have_been_the_wrong_instrument():
 # T3-3: the conical per-layer far-field order cap
 # ---------------------------------------------------------------------------
 
-def test_t3_3_per_layer_cap_clamps_to_the_window_half_spaces():
+@pytest.fixture(scope="module")
+def uncapped_drift():
+    """THIS BUILD's pre-M1 over-capacity drift: ``|J00(61) - J00(7)|`` on the
+    per-layer conical stack with the cap (and the interface guard) switched
+    OFF, i.e. the exact quantity T3-3 removed.
+
+    2026-08-15, ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md``.  This used to
+    be the hard-coded literal ``1.6e-06`` below -- a pre-fix reading from one
+    build, which made ``1e-3 * 1.6e-6`` an ABSOLUTE 1.6e-09 bar wearing a
+    ratio's clothing (exactly what this file's own docstring forbids), and
+    which had since drifted 21x: the same quantity now measures 3.403084e-05
+    on Windows py3.14/np2.4.4 and 3.403086e-05 on WSL py3.12/np2.5.1.  Note
+    what that re-measurement shows: the DEFECT is build-stable to 6 digits
+    (it is a truncation error of the wrong operator, not round-off), so it is
+    a sound denominator -- it is only the STALE LITERAL that was per-build.
+    Computed once per module (two extra solves) so both halves of the T3-3
+    claim are scored against the same in-process reference."""
+    prev_cap = _con.PMM_CONICAL_PERLAYER_ORDER_CAP
+    prev_guard = _rc.INTERFACE_CONDITIONING_GUARD
+    _con.PMM_CONICAL_PERLAYER_ORDER_CAP = False
+    _rc.INTERFACE_CONDITIONING_GUARD = False
+    try:
+        _o7, _R7, _T7, J7 = _solve_conical(7, "per-layer")
+        o61, _R61, _T61, J61 = _solve_conical(61, "per-layer")
+        assert int(np.asarray(o61).shape[0]) == 61, (
+            "premise moved: the pre-M1 arithmetic no longer accepts 61 orders "
+            "over a capacity of 29, so there is nothing to score against")
+        return abs(complex(np.asarray(J61)[0, 0])
+                   - complex(np.asarray(J7)[0, 0]))
+    finally:
+        _con.PMM_CONICAL_PERLAYER_ORDER_CAP = prev_cap
+        _rc.INTERFACE_CONDITIONING_GUARD = prev_guard
+
+
+def test_t3_3_per_layer_cap_clamps_to_the_window_half_spaces(uncapped_drift):
     """The fix: the cap comes from the grids the HALF-SPACES live on, so the
     per-layer answer is STATIONARY in ``far_field_orders`` past the capacity
     instead of degrading.  The union grid has 13 cells (``n_glob`` = 78, cap 77
     orders); the END WINDOW grids have 5 (``n_glob`` = 30, cap 29).
 
-    The spread is scored COMPARATIVELY against what the pre-M1 cap produced on
-    the same stack: the sibling below measures the un-capped 61-order solve
-    drifting 1.6e-06 in ``J00`` while conserving energy, so a stationarity
-    spread three orders under that is the claim."""
+    The spread is scored COMPARATIVELY against what the pre-M1 cap produces on
+    the same stack IN THIS PROCESS (the ``uncapped_drift`` fixture): the
+    un-capped 61-order solve drifts in ``J00`` while conserving energy, so a
+    stationarity spread three orders under that is the claim."""
     ref = None
     spread = 0.0
     for ffo in (7, 21, 31, 41, 61, 77):
@@ -1219,7 +1253,22 @@ def test_t3_3_per_layer_cap_clamps_to_the_window_half_spaces():
             ref = complex(np.asarray(J)[0, 0])
         else:
             spread = max(spread, abs(complex(np.asarray(J)[0, 0]) - ref))
-    assert spread < 1e-3 * 1.6e-6            # the pre-M1 drift, S4 of the audit
+    # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): denominator is
+    # now DERIVED IN-BUILD, so the bar tracks the defect instead of a 2026-08-04
+    # literal.  Measured ``spread`` (cap ON, max over ffo of |J00 - J00(7)|):
+    # 2.843243e-11 Windows py3.14/np2.4.4, 5.249477e-11 WSL py3.12/np2.5.1 --
+    # a 1.85x cross-build spread, because the CAPPED answer is stationary to
+    # round-off and round-off is what differs between LAPACK builds.  Against
+    # the in-build denominator (3.403e-05 on both) those read 8.355e-07 and
+    # 1.543e-06, so the 1e-3 bar clears the worst build by 648x.  In the other
+    # direction it refuses any regression that lets 0.1% of the over-capacity
+    # draw back in -- 3.4e-08, still ~650x above the stationarity floor -- so
+    # neither side is close.
+    assert spread < 1e-3 * uncapped_drift, (
+        f"the capped per-layer answer is not stationary past the capacity: "
+        f"spread {spread:.3e} against the pre-M1 over-capacity drift "
+        f"{uncapped_drift:.3e} measured on this build "
+        f"(ratio {spread / uncapped_drift:.3e}, bar 1e-3)")
 
 
 def test_t3_3_fail_before_reproduces_the_over_capacity_draw(cap_off,
@@ -1254,7 +1303,33 @@ def test_t3_3_fail_before_reproduces_the_over_capacity_draw(cap_off,
     # the SILENT one: closure no worse than the honest solve, answer moved
     assert clos61 < 10.0 * float(np.max(np.abs(
         np.asarray(R7).sum(axis=1) + np.asarray(T7).sum(axis=1) - 1.0)))
-    assert abs(complex(np.asarray(J61)[0, 0]) - good) > 1e-6
+    # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): "moved" needs a
+    # scale, and the only build-free one is the HONEST path's own
+    # truncation-to-truncation variation.  Measure it here, in this process,
+    # from BELOW-capacity solves -- where the cap is provably a no-op
+    # (test_t3_3_switch_is_a_no_op_below_the_capacity pins bit-identity at
+    # ffo 7 / 21 / 29), so this floor is the same with the switch either way.
+    # The old absolute ``> 1e-6`` passed with 34x today, but its rationale was
+    # a 2026-08-04 build reading of the numerator that has since moved 21x;
+    # a constant whose justification has already drifted is a per-build fact.
+    # MEASURED floor = max(|J00(21) - J00(7)|, |J00(29) - J00(7)|):
+    # 2.843243e-11 Windows py3.14/np2.4.4, 5.249477e-11 WSL py3.12/np2.5.1
+    # (round-off-limited, hence the 1.85x cross-build spread).  MEASURED
+    # numerator |J00(61) - J00(7)| = 3.403084e-05 [W] / 3.403086e-05 [M] --
+    # build-stable to 6 digits, because it is the wrong OPERATOR, not noise.
+    # Ratios 1.197e+06 [W] / 6.483e+05 [M]; the 1e3 bar therefore holds with
+    # 648x on the worst build, while in the other direction it cannot be
+    # tripped by round-off (that would need the honest floor to grow 1000x).
+    floor = max(abs(complex(np.asarray(J)[0, 0]) - good)
+                for _o, _R, _T, J in (_solve_conical(21, "per-layer"),
+                                      _solve_conical(29, "per-layer")))
+    d61 = abs(complex(np.asarray(J61)[0, 0]) - good)
+    assert d61 > 1.0e3 * floor, (
+        f"the over-capacity 61-order draw moved J00 by {d61:.3e}, which is "
+        f"not 1000x the honest path's own truncation floor {floor:.3e} on "
+        f"this build: the SILENT half of the defect is no longer reproduced")
+    # and it is the SILENT one -- strictly smaller than the loud 77-order draw
+    assert d61 < abs(complex(np.asarray(J77)[0, 0]) - good)
 
 
 def test_t3_3_switch_is_a_no_op_below_the_capacity(cap_off):

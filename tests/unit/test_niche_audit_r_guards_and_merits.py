@@ -418,16 +418,43 @@ def test_r5_numpy_lg_merit_matches_jax_twin():
             field_points=[(0.0, 0.0)])
         ctx = EvaluationContext(prescription=pres, wavelength=_LG_WL, N=64,
                                dx=10e-6, x=np.array([w_s]))
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                jv = float(merit.evaluate(ctx))
-        except (RuntimeError, ValueError, ZeroDivisionError,
-                np.linalg.LinAlgError) as exc:
-            pytest.skip(f'LG-tensor JAX eval unstable on this runtime: {exc}')
-        if not np.isfinite(jv):
-            pytest.skip('LG-tensor JAX eval returned non-finite.')
+        # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): the
+        # blanket ``except (RuntimeError, ValueError, ZeroDivisionError,
+        # LinAlgError): pytest.skip('LG-tensor JAX eval unstable on this
+        # runtime')`` -- plus a ``not isfinite -> skip`` value predicate --
+        # used to wrap THIS call, the one the test exists to pin.  Any
+        # per-build numerical failure became a GREEN SKIP on exactly the
+        # runner where the twin had diverged.  MEASURED on this fixture
+        # (R1 = 500 mm, ap = 4 mm, N-BK7, lambda = 1.30 um), both mounts
+        # (Windows py3.14 / numpy 2.4.4 / jax 0.11.0 and WSL py3.12 /
+        # numpy 2.5.1) agree to the digits below:
+        #
+        #   w_s      jv (JAX)             |L_00|^2 (JAX)   |nv - jv|
+        #   5e-06    0.9959595148589141   4.040485e-03     4.44e-09
+        #   2e-05    0.9967949408227292   3.205059e-03     2.71e-09
+        #   5e-05    0.9995258463848027   4.741536e-04     1.89e-10
+        #
+        # i.e. O(1) values ~30 decades above any zero/underflow floor and
+        # nowhere near non-finite.  A raise is now THE FINDING.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            jv = float(merit.evaluate(ctx))
         nv = _lg_merit(pres, {(0, 0): 1.0}, w_s=w_s)
+        print(f'[R-5] w_s={w_s:.1e} numpy={nv!r} jax={jv!r} '
+              f'|L_00|^2={1.0 - jv:.9e}')
+        assert np.isfinite(jv) and np.isfinite(nv), (
+            f'R-5: w_s={w_s:.1e}: the LG merits must evaluate finitely; '
+            f'got numpy={nv}, jax={jv}')
+        # NON-VACUITY (and the sentinel that the body ran): both merits are
+        # 1 - |L|^2 ~ 1, so an underflowed coupling would make them agree
+        # for free.  Measured |L_00|^2 = 4.74e-04 .. 4.04e-03 across the
+        # three w_s -> a 1e-5 floor keeps 47x headroom at the smallest.
+        coupling = 1.0 - jv
+        assert 1e-5 < coupling < 1.0, (
+            f'R-5: w_s={w_s:.1e}: the (0, 0) coupling |L|^2 = '
+            f'{coupling:.6e} left the measured well-conditioned band '
+            f'(4.74e-04 .. 4.04e-03); the equality below would be vacuous '
+            f'if the tensor underflowed to zero.')
         assert nv == pytest.approx(jv, rel=1e-6, abs=1e-6), (
             f'R-5: w_s={w_s:.1e}: NumPy merit {nv:.9e} != JAX twin '
             f'{jv:.9e}.  Pre-fix NumPy returned |L|^2 while JAX returned '

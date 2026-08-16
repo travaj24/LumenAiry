@@ -2548,44 +2548,139 @@ def test_fused_no_dirs_path_matches_scalar():
     assert rel <= 1e-12, f"no-dirs path drift: rel = {rel:.3e}"
 
 
+def _count_numpy_calls(fn, names=('exp', 'einsum', 'sum')):
+    """Run ``fn`` with the named ``numpy`` module attributes wrapped in
+    counters and return ``{name: n_calls}``.
+
+    The library resolves ``xp = array_namespace(positions)`` to the ``numpy``
+    MODULE and calls ``xp.exp`` / ``xp.einsum`` by attribute at call time, so
+    a module-attribute wrapper counts them exactly.  Restored in ``finally``.
+    """
+    counts = {k: 0 for k in names}
+    originals = {k: getattr(np, k) for k in names}
+
+    def _make(k, orig):
+        def _wrapped(*a, **kw):
+            counts[k] += 1
+            return orig(*a, **kw)
+        return _wrapped
+
+    for k, orig in originals.items():
+        setattr(np, k, _make(k, orig))
+    try:
+        fn()
+    finally:
+        for k, orig in originals.items():
+            setattr(np, k, orig)
+    return counts
+
+
 @pytest.mark.parametrize('n', [400])
-def test_fused_path_is_faster(n):
-    """Loose sanity check: the fused path must not be slower than the
-    scalar reference.  We don't require a hard speedup multiplier here
-    (numpy thread scheduling makes that flaky in CI); just that fused
-    wallclock <= reference wallclock + 30% margin."""
+def test_fused_path_does_the_fused_work(n):
+    """The v4.13.1 fused path must do the FUSED WORK -- counted, not timed.
+
+    (Renamed 2026-08-15 from ``test_fused_path_is_faster``: it no longer
+    asserts a speed, and a name that claims one is the same per-build
+    overclaim the assertion was.)
+
+    2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).  This test used
+    to assert ``t_fused <= 1.30 * t_ref``: a per-build wall-clock fact
+    asserted as if it were universal.  It compares a chunked broadcast
+    (memory-bandwidth and thread bound) against another chunked broadcast
+    that issues one extra transcendental, so core count, BLAS thread pool,
+    cache size and CI co-tenancy all move it.  MEASURED ratio t_fused/t_ref
+    over five trials per mount:
+
+      Windows py3.14 / numpy 2.4.4:  0.705 0.833 0.740 0.693 0.819
+      WSL     py3.12 / numpy 2.5.1:  1.267 0.780 1.014 1.011 1.104
+
+    -- i.e. the SECOND MOUNT already samples 1.267 against a 1.30 bar, 2.6%
+    of headroom, and 3 of its 5 samples show the "fused" path SLOWER than
+    the reference.  (That mount was co-tenanted with two other multi-core
+    pytest jobs at the time, which is precisely the CI condition the bar has
+    to survive.)  ``.test_durations`` records the whole test at 0.64 s on CI
+    against ~5.5 s on Windows and ~7.5 s on WSL, a ~10x machine spread on
+    the very quantity being asserted.
+
+    The v4.13.1 optimization is not a duration, it is an amount of WORK:
+    ``exp(A) * exp(B) -> exp(A + B)`` (one transcendental pass per chunk
+    instead of two) and ``sum(a_b * phase, -1) -> einsum('mnk,k->mn', ...)``
+    (dropping the largest 3-D intermediate).  Both are call counts, and both
+    are invariant to the runner.  Correctness is already pinned above by
+    ``test_fused_matches_scalar_reference_with_tilt`` (rel <= 1e-12) and
+    ``test_fused_no_dirs_path_matches_scalar``; timing is printed, and the
+    only remaining timing assertion is a blow-up net decades from the
+    measured value."""
     bundle = _make_bundle(n=n, seed=23)
     Ny, Nx, dx, wavelength = 48, 48, 4e-6, 1.0e-6
 
-    # Warm-up to load FFT planners / glass caches.
-    _ = reconstruct_field_from_beamlets(
-        bundle, Ny=Ny, Nx=Nx, dx=dx, centre=(0.0, 0.0),
-        wavelength=wavelength, chunk_beamlets=4096,
-    )
-    _ = _scalar_reference(
-        bundle.positions, bundle.directions, bundle.Q, bundle.amplitude,
-        Ny=Ny, Nx=Nx, dx=dx, centre=(0.0, 0.0), wavelength=wavelength,
-    )
-
-    # Timed pass
-    t0 = time.perf_counter()
-    for _ in range(3):
-        _ = reconstruct_field_from_beamlets(
+    def _fused(chunk=4096):
+        return reconstruct_field_from_beamlets(
             bundle, Ny=Ny, Nx=Nx, dx=dx, centre=(0.0, 0.0),
-            wavelength=wavelength, chunk_beamlets=4096,
+            wavelength=wavelength, chunk_beamlets=chunk,
         )
-    t_fused = time.perf_counter() - t0
-    t0 = time.perf_counter()
-    for _ in range(3):
-        _ = _scalar_reference(
+
+    def _ref():
+        return _scalar_reference(
             bundle.positions, bundle.directions, bundle.Q, bundle.amplitude,
             Ny=Ny, Nx=Nx, dx=dx, centre=(0.0, 0.0), wavelength=wavelength,
         )
+
+    # Warm-up to load FFT planners / glass caches.
+    _ = _fused()
+    _ = _ref()
+
+    # ---- WORK: the fused path halves the transcendental passes ----------
+    # n = 400 <= chunk_beamlets = 4096 and the 512 MB budget admits
+    # 512e6 / (48*48*16) = 13888 columns, so both paths run exactly ONE
+    # chunk.  Measured identically on both mounts (Windows py3.14 /
+    # numpy 2.4.4 and WSL py3.12 / numpy 2.5.1).
+    c_fused = _count_numpy_calls(_fused)
+    c_ref = _count_numpy_calls(_ref)
+    print(f'[v4.13.1 work] fused={c_fused} reference={c_ref}')
+    assert c_fused['exp'] == 1, (
+        f"the fused path must issue ONE exp() per chunk (exp(A)*exp(B) -> "
+        f"exp(A+B)); got {c_fused['exp']} for a single chunk. {c_fused}")
+    assert c_ref['exp'] == 2, (
+        f"the pre-v4.13.1 reference is the two-exp form by construction; "
+        f"got {c_ref['exp']} -- the reference drifted, so the count above "
+        f"is no longer measuring the fusion. {c_ref}")
+    assert c_fused['einsum'] == 1 and c_fused['sum'] == 0, (
+        f"the fused reduction must be the einsum contraction that avoids "
+        f"the (Ny, Nx, chunk) ``a_b * phase`` intermediate; got {c_fused}")
+    # Per-CHUNK, not per-call: forcing two chunks must double the count,
+    # which proves the '1' above is a per-chunk property and not an
+    # accident of this bundle size.
+    c_two = _count_numpy_calls(lambda: _fused(chunk=200))
+    assert c_two['exp'] == 2 and c_two['einsum'] == 2, (
+        f"two chunks of 200 must issue one exp + one einsum EACH; "
+        f"got {c_two}")
+
+    # ---- TIME: printed, never asserted against the reference ------------
+    t0 = time.perf_counter()
+    for _ in range(3):
+        _ = _fused()
+    t_fused = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    for _ in range(3):
+        _ = _ref()
     t_ref = time.perf_counter() - t0
-    # Generous 30% slop to absorb numpy thread-pool variance on shared CI.
-    assert t_fused <= 1.30 * t_ref, (
-        f"fused path slower than reference: fused {t_fused:.3f}s vs "
-        f"reference {t_ref:.3f}s (ratio {t_fused/t_ref:.3f}x)")
+    print(f'[v4.13.1 timing] fused {t_fused:.3f}s vs reference {t_ref:.3f}s '
+          f'(ratio {t_fused / t_ref:.3f}x) -- informational, not asserted')
+    # Coarse blow-up net only (2026-08-15,
+    # docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): 3 fused reconstructions
+    # of a 48x48 grid from 400 beamlets measured 2.24-2.73 s on Windows and
+    # 3.28-4.10 s on WSL, against 0.64 s for the WHOLE test on the CI runner
+    # in ``.test_durations``.  60 s is 14.6x the worst measured sample and
+    # ~90x the CI pace -- it catches an accidental O(N^2), a dropped
+    # chunking or a per-pixel Python loop (all of which cost decades, not
+    # percent) and nothing else.
+    assert t_fused < 60.0, (
+        f"fused reconstruction blew up: {t_fused:.3f}s for 3 passes over a "
+        f"{Ny}x{Nx} grid with {n} beamlets (measured 2.2-4.1 s across both "
+        f"development mounts).  This is a blow-up net, not a speed "
+        f"comparison -- suspect an algorithmic regression, not a busy CI "
+        f"runner.")
 
 
 # ============================================================================
@@ -3384,8 +3479,23 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
             50e-6, 0.02, S2X, S2Y,
         )
         warm_peak = float(np.max(np.abs(warm_ref)))
-        if warm_peak == 0:
-            pytest.skip('warm-start reference produced no signal')
+        # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): this was
+        # ``if warm_peak == 0: pytest.skip('warm-start reference produced no
+        # signal')`` -- the same S3 shape as the LG-tensor skips fixed in
+        # test_audit_optimize.py.  A silent reference is not a reason to
+        # report green; it deletes pins 2 and 3 (pin 3 goes vacuously true
+        # at warm_nz == 0) on exactly the build where the reference broke.
+        # The reference is a deterministic function of the fixture, so a
+        # zero peak is a FINDING.  MEASURED warm_peak = 4.994503e-03 with
+        # all 1024 pixels non-zero, on Windows (py3.14 / numpy 2.4.4) and
+        # WSL (py3.12 / numpy 2.5.1) alike; ``-rs`` reports 0 skipped in
+        # this file on both mounts, i.e. the skip has never fired -- it was
+        # pure downside.
+        assert warm_peak > 0.0, (
+            'the warm-start reference produced an all-zero field, so the '
+            'energy and non-zero-count pins below have nothing to compare '
+            'against (pin 3 goes vacuously true).  Measured peak '
+            '4.994503e-03 on both development mounts.')
         new_energy = float(np.sum(np.abs(new) ** 2))
         warm_energy = float(np.sum(np.abs(warm_ref) ** 2))
         rel_e_diff = abs(new_energy - warm_energy) / warm_energy
@@ -3448,8 +3558,16 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
             50e-6, 0.02, S2X, S2Y,
         )
         warm_peak = float(np.max(np.abs(warm_ref)))
-        if warm_peak == 0:
-            pytest.skip('warm-start reference produced no signal')
+        # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): same S3
+        # value-predicate skip as in ``test_lg00_single_mode_bit_equal``
+        # above; see the note there.  MEASURED warm_peak =
+        # 4.615952e-03 with all 1024 pixels non-zero on Windows (py3.14 /
+        # numpy 2.4.4) and WSL (py3.12 / numpy 2.5.1) alike.
+        assert warm_peak > 0.0, (
+            'the warm-start reference produced an all-zero field, so the '
+            'energy and non-zero-count pins below have nothing to compare '
+            'against (pin 3 goes vacuously true).  Measured peak '
+            '4.615952e-03 on both development mounts.')
         new_energy = float(np.sum(np.abs(new) ** 2))
         warm_energy = float(np.sum(np.abs(warm_ref) ** 2))
         rel_e_diff = abs(new_energy - warm_energy) / warm_energy
