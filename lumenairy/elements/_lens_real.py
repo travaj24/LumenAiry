@@ -2299,6 +2299,150 @@ def _screen_obliquity_rms_waves(field, X, Y, r_pupil, wavelength, xp):
     return float(np.sqrt(float(xp.sum(res * res)) / n)) / float(wavelength)
 
 
+# ---------------------------------------------------------------------------
+# ROUTE 3 -- the per-pixel TANGENT-FACET screen (surface_model='tangent_facet')
+# ---------------------------------------------------------------------------
+# The 'thin' screen imprints ``(n2 - n1) * sag`` on the VERTEX plane: one facet
+# coefficient for the whole pupil, blind both to the local ray angle and to the
+# local facet tilt.  ``carrier=`` repairs its ANGULAR part as a difference
+# against its own zero-angle value (equations 4 and 7 above).  This model
+# replaces the approximation instead of correcting it, and therefore needs no
+# carrier: a steep facet is angle-wrong even at normal arrival.
+#
+# Write the surface, near a pixel, as the plane facet tangent to it where THAT
+# PIXEL'S RAY meets it.  For a plane facet at height ``s`` above the vertex
+# plane, with both sides referenced to that plane, the screen a wave model must
+# imprint is EXACTLY
+#
+#     OPD = dz * s ,      dz = pz2 - pz1 ,                                 (T1)
+#     pz1 = sqrt(n1^2 - |p|^2),   pz2 from exact vector Snell at
+#     nu = (-grad sag, 1) / sqrt(1 + |grad sag|^2).
+#
+# (T1) is not an expansion.  Scored against ``S_in - S_out`` built from exact
+# ray algebra for a tilted plane facet under a plane wave, it is right to 1e-16
+# RELATIVE at every slope (to 0.24), index ratio (including n1 > n2) and skew
+# tried.  It is the axial-translation identity of
+# BUILD_SCREEN_OBLIQUITY_2026_08_11 S2.2, used as the WHOLE screen rather than
+# differenced against its own zero-angle value -- which is what lets it carry
+# the normal-incidence steep-facet error too.
+#
+# Two things a real surface does that a plane facet does not:
+#
+#   1. THE RAY MEETS THE SURFACE, NOT THE VERTEX PLANE.  The pixel's ray rises
+#      to the facet along ``p/pz1``, so the tangent plane belongs at
+#      ``x_h = x + w``, ``w = s p / pz1``.  Taking the facet there and
+#      extrapolating that PLANE back to the pixel's own coordinate cancels at
+#      FIRST order in w -- which is exactly why (T1) is exact for a plane --
+#      and leaves the curvature of the surface across the traverse:
+#
+#          + s (w . grad dz)  -  (dz/2) w^T (grad grad sag) w              (T2)
+#
+#   2. THE RAY IS DISPLACED BY ITS WALK.  It re-crosses the vertex plane at
+#      ``x + W``, ``W = s (p/pz1 - p_out/pz2)``, so the exit eikonal has to be
+#      referenced back to the pixel.  The FIRST order of that referencing is
+#      already inside (T1); the second order is
+#
+#          - (1/2) W . (W . grad) p_out                                    (T3)
+#
+#      Carried to third order this term moves design 121 group 5 by 0.25 %
+#      (0.0028620 -> 0.0028547 waves rms), so the series is truncated here on
+#      a measurement rather than on taste.
+#
+# Every gradient above is a gradient of a GRID field, so the model needs no
+# per-pixel Newton, no analytic sag derivative and no ray trace: it works for a
+# conic, an asphere, a biconic, a Q-freeform, a form-error map and a
+# ``sag_callable`` alike.  (A per-pixel fixed-point intersection was built and
+# measured as the alternative; it reads 0.0028621 waves on design 121 group 5
+# against this form's 0.0032381, i.e. 13 % better for a per-surface Newton and
+# a sag source restriction.  The grid form ships.)
+#
+# WHAT IT DOES NOT DO.  The walk W cannot be REPRESENTED by a vertex-plane
+# screen -- only referenced away -- and (T3) is the second order of that
+# referencing, not a fix.  On design 121 group 5's exit face (slope 0.244,
+# n 1.80 -> 1.00) the walk reaches 140 um across a 3 mm pupil and the tail of
+# that series is what holds the group at 0.0032 waves rms.  Closing it is the
+# transverse-REMAP axis (``surface_model='displaced'``), not this one.
+_TANGENT_FACET_MIN_PZ_SQ = 1e-12
+
+
+def _tangent_facet_screen(sag, gx, gy, px, py, n1, n2, dx, dy, xp):
+    """The route-3 screen at one surface: (T1) + (T2) + (T3), in metres of OPD.
+
+    ``(px, py)`` is the FIELD's own transverse optical momentum at the pixel --
+    the gradient of everything the model has imprinted so far, plus the carrier
+    -- and ``(gx, gy)`` is ``grad sag`` on the same grid.  Returns ``(opd, ok)``
+    with ``ok`` False wherever the ray is evanescent in ``n1`` or totally
+    internally reflected at the facet; there the caller keeps the 'thin' screen,
+    because a clamped cosine is a wrong OPD and the thin screen is the safe
+    neutral (the same convention equation (4) uses)."""
+    inv = 1.0 / xp.sqrt(1.0 + gx * gx + gy * gy)
+    p_sq = px * px + py * py
+    ok = p_sq < n1 * n1
+    pz1 = xp.sqrt(xp.maximum(n1 * n1 - p_sq, _TANGENT_FACET_MIN_PZ_SQ))
+    a_dot = (-gx * px - gy * py + pz1) * inv
+    b_sq = n2 * n2 - n1 * n1 + a_dot * a_dot
+    ok = ok & (b_sq > 0.0)
+    dz = (xp.sqrt(xp.maximum(b_sq, 0.0)) - a_dot) * inv
+    del inv, a_dot, b_sq, p_sq
+    opd = dz * sag
+    # ---- (T2): the facet taken where the ray meets the surface ------------
+    wx = sag * (px / pz1)
+    wy = sag * (py / pz1)
+    _y, _x = xp.gradient(dz, dy, dx)
+    opd += sag * (wx * _x + wy * _y)
+    del _x, _y
+    _y, _x = xp.gradient(gx, dy, dx)             # (d/dy, d/dx) of d(sag)/dx
+    opd -= 0.5 * dz * wx * (wx * _x + wy * _y)
+    del _x, _y
+    _y, _x = xp.gradient(gy, dy, dx)
+    opd -= 0.5 * dz * wy * (wx * _x + wy * _y)
+    del _x, _y
+    # ---- (T3): the second order of the walk's referencing -----------------
+    pz2 = pz1 + dz
+    ox = px - dz * gx
+    oy = py - dz * gy
+    ux = wx - sag * (ox / pz2)
+    uy = wy - sag * (oy / pz2)
+    del wx, wy, pz1, pz2, dz
+    _y, _x = xp.gradient(ox, dy, dx)
+    opd -= 0.5 * ux * (ux * _x + uy * _y)
+    del _x, _y, ox
+    _y, _x = xp.gradient(oy, dy, dx)
+    opd -= 0.5 * uy * (ux * _x + uy * _y)
+    del _x, _y, oy, ux, uy
+    return opd, ok
+
+
+def _tangent_facet_transport(px, py, t, n_gap, dx, dy, xp):
+    """Carry the momentum accumulator across a gap.
+
+    The field that arrives at pixel ``x`` came from pixel ``x - w``,
+    ``w = t p / pz``, so the accumulator has to be RESAMPLED, not left alone:
+    a grid-local accumulation reads the momentum of the wrong ray and is worth
+    0.0335 waves rms on design 121 group 5 against 0.0032 for the transported
+    one.  One Taylor term is enough -- ``p`` is very nearly linear in ``x``
+    across a lens pupil, so the remainder is second order in the gap walk
+    against a THIRD derivative of the sag; emulated on the group-5 fixture it
+    moves the answer from 0.0028621 to 0.0028958 waves rms.
+
+    Scalars pass through unchanged (a leading plate, and every gap before the
+    first powered surface, where the accumulator is still the carrier's two
+    floats)."""
+    if not getattr(px, 'ndim', 0) and not getattr(py, 'ndim', 0):
+        return px, py
+    pz = xp.sqrt(xp.maximum(n_gap * n_gap - px * px - py * py,
+                            _TANGENT_FACET_MIN_PZ_SQ))
+    wx = t * (px / pz)
+    wy = t * (py / pz)
+    del pz
+    _y, _x = xp.gradient(px, dy, dx)
+    nx = px - (wx * _x + wy * _y)
+    del _x, _y
+    _y, _x = xp.gradient(py, dy, dx)
+    ny = py - (wx * _x + wy * _y)
+    return nx, ny
+
+
 def _check_screen_obliquity_support(*, carrier, screen_obliquity,
                                     on_screen_obliquity, surface_model,
                                     displaced_mode):
@@ -2329,6 +2473,23 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
                 "signed conjugate distance / 'auto' / an explicit wavefront), "
                 "or drop screen_obliquity.")
         return False
+    if surface_model == 'tangent_facet':
+        # Route 3 SUPERSEDES equations (4) and (7) rather than composing with
+        # them: it imprints the exact tangent-facet OPD at the field's own
+        # local ray angle, so the angular DIFFERENCE those equations add is
+        # already inside it and adding them again double-counts.  ``carrier=``
+        # is still honoured -- it seeds the momentum accumulator -- so this is
+        # a refusal of the correction, not of the carrier.
+        if screen_obliquity is True:
+            raise ValueError(
+                "apply_real_lens: screen_obliquity=True is not supported with "
+                "surface_model='tangent_facet'.  That model already imprints "
+                "the exact tangent-facet OPD at the local ray angle, so the "
+                "angular correction (equations 4 and 7) is inside it and "
+                "adding it again double-counts.  Drop screen_obliquity, or "
+                "use the default surface_model='thin' to get the correction "
+                "instead of the model.")
+        return False
     if surface_model != 'thin':
         raise ValueError(
             f"apply_real_lens: carrier= is only supported with the default "
@@ -2342,7 +2503,7 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
     return screen_obliquity is not False
 
 
-_VALID_SURFACE_MODELS = ('thin', 'displaced')
+_VALID_SURFACE_MODELS = ('thin', 'displaced', 'tangent_facet')
 
 
 def _check_displaced_support(*, surface_model, slant_correction, fresnel,
@@ -2368,6 +2529,50 @@ def _check_displaced_support(*, surface_model, slant_correction, fresnel,
             f"apply_real_lens: unknown displaced_obliquity "
             f"{displaced_obliquity!r}.  Valid choices: "
             f"{sorted(_VALID_DISPLACED_OBLIQUITY)}.")
+    if surface_model == 'tangent_facet':
+        # Route 3's three keywords are the 'displaced' path's, and they mean
+        # nothing here: this model takes its ray angle from the field's own
+        # accumulated momentum (seeded by carrier=), not from a launched fan.
+        for _name, _val, _default in (('conjugate', conjugate, None),
+                                      ('displaced_mode', displaced_mode,
+                                       'screen'),
+                                      ('displaced_obliquity',
+                                       displaced_obliquity, 'auto')):
+            if _val != _default:
+                raise ValueError(
+                    f"apply_real_lens: {_name}= is only meaningful with "
+                    f"surface_model='displaced'; got {_name}={_val!r} with "
+                    f"surface_model='tangent_facet', which reads its ray "
+                    f"angle from the field's own accumulated momentum "
+                    f"(seed it with carrier=).")
+        # A second angle-aware screen for the same job would double-count.
+        if slant_correction:
+            raise ValueError(
+                "apply_real_lens: slant_correction=True is not supported with "
+                "surface_model='tangent_facet'.  Both replace the paraxial "
+                "facet coefficient (n2-n1) with a refraction-aware one, so "
+                "stacking them double-counts the same physics.  Drop "
+                "slant_correction.")
+        if surface_frame:
+            raise NotImplementedError(
+                "apply_real_lens: surface_frame=True is not supported with "
+                "surface_model='tangent_facet' (the model's momentum "
+                "accumulator is defined on the FIELD grid, and the "
+                "surface-frame path re-expresses the sag on a per-surface "
+                "frame).  Drop surface_frame.")
+        if use_gpu:
+            raise NotImplementedError(
+                "apply_real_lens: use_gpu=True is not supported with "
+                "surface_model='tangent_facet' -- the model is xp-generic but "
+                "no CuPy run has been measured against the ray oracle, and an "
+                "unmeasured accuracy claim is worse than a refusal.")
+        if wave_propagator not in (None, 'asm', 'rayleigh_sommerfeld'):
+            raise NotImplementedError(
+                "apply_real_lens: surface_model='tangent_facet' needs an "
+                "exact angular-spectrum gap (the model's own momentum "
+                "bookkeeping assumes it); got wave_propagator="
+                f"{wave_propagator!r}.")
+        return
     if surface_model == 'thin':
         if conjugate is not None:
             raise ValueError(
@@ -2806,7 +3011,7 @@ def apply_real_lens(
         freeform / clear_aperture / stop surface / fresnel / slant /
         surface-frame, or a non-NumPy backend) fall through to the
         whole-grid path per surface.
-    surface_model : {'thin', 'displaced'}, default 'thin'
+    surface_model : {'thin', 'displaced', 'tangent_facet'}, default 'thin'
         v5.25.1 opt-in refraction-OPD model (hammer audit H2(a)).
 
         ``'thin'`` (default): the paraxial thin-element screen
@@ -2840,6 +3045,46 @@ def apply_real_lens(
         ``freeform_type`` / ``form_error`` / mirror / GPU / non-ASM / fresnel /
         slant / seidel / absorption still raise; use ``apply_real_lens_traced``
         outside that envelope.
+
+        ``'tangent_facet'`` (route 3, opt-in): the PER-PIXEL tangent-facet
+        screen.  Each pixel's OPD is the exact axial-translation identity
+        ``(pz2 - pz1) * sag`` at the facet tangent to the surface where THAT
+        pixel's ray meets it, evaluated at the ray angle the FIELD ITSELF
+        carries -- a momentum accumulator seeded by ``carrier=`` (or by zero),
+        advanced by the gradient of every screen imprinted so far, and
+        resampled across each gap.  Two second-order terms follow from taking
+        the facet at the hit point and from referencing the ray's transverse
+        walk back to the pixel; the full derivation, the term ladder and the
+        oracle numbers are above ``_tangent_facet_screen``.
+
+        Unlike ``carrier=`` on the ``'thin'`` screen -- which corrects only the
+        ANGULAR part, as a difference against the model's own zero-angle value
+        -- this REPLACES the paraxial facet coefficient, so it also repairs the
+        steep-facet error at NORMAL incidence, where the correction is
+        identically zero by construction.  Measured against the shipped exact
+        ray tracer on an R = 12.6 mm N-SSK2 biconvex at 0 mrad: blind and
+        ``carrier``-corrected both 0.00141 waves rms, ``'tangent_facet'``
+        0.00008 (17.6x).  At 100 mrad on an R = 19.6 mm singlet: blind 0.00423,
+        ``carrier`` 0.00050, ``'tangent_facet'`` 0.00017.
+
+        ``carrier=`` is accepted and is what supplies the arrival angle;
+        ``screen_obliquity=True`` and ``slant_correction=True`` are REFUSED as
+        double-counts, and the ``screen_obliquity`` accuracy guard is silent
+        (it estimates the size of a correction this model does not make).
+        ``surface_frame`` / ``use_gpu`` / non-ASM propagators raise -- not
+        because they cannot work but because they have not been measured.
+
+        COST.  This path is WHOLE-GRID ONLY: it differentiates a gradient
+        twice, so an exact row-band would need a 3-row sag halo plus a halo on
+        the persistent accumulator.  That is refused rather than approximated,
+        and the price is real -- warmed ``tracemalloc`` peak, in float64 grids
+        of ``8*N*N`` bytes, as extras over the paraxial no-carrier call of the
+        same N (2026-08-16, biconvex singlet): **+17.8 grids without a carrier
+        and +21.8 with one at N >= 4096** (+10.0 / +14.0 at N = 2048, where the
+        thin baseline is itself whole-grid), against +8.8 for the banded
+        ``carrier=`` path.  Wall clock on the same fixture at N = 4096:
+        2.04 s thin, 13.97 s thin + carrier, 11.08 s tangent_facet,
+        19.07 s tangent_facet + carrier.
     conjugate : {None, float, 'auto', ndarray}, default None
         G2 Task 1 -- the INPUT CONGRUENCE for the ``surface_model='displaced'``
         obliquity fan (same vocabulary as ``apply_real_lens_traced``'s
@@ -3199,6 +3444,13 @@ def apply_real_lens(
     # Bounded by the clear aperture (or the widest per-surface semi-diameter,
     # or the grid half-width), so the fan spans the illuminated pupil.
     _displaced = (surface_model == 'displaced')
+    # v5.36.0 route 3: the per-pixel tangent-facet screen.  Whole-grid only --
+    # the model differentiates a gradient twice (grad grad sag, and grad p_out
+    # where p_out itself carries grad sag), so an exact band would need a
+    # 3-row halo on the sag AND a halo on the persistent accumulator; that is
+    # priced and REFUSED rather than approximated, and the surcharge is stated
+    # in the docstring.  See the derivation above _tangent_facet_screen.
+    _tf_active = (surface_model == 'tangent_facet')
     # P10 (N11): decentered / tilted / freeform (asymmetric) elements route to
     # the 2-D transverse-walk remap -- the DEFAULT (auto obliquity) and also
     # selectable via displaced_mode='remap'; an explicit
@@ -3369,9 +3621,25 @@ def apply_real_lens(
                     _obl_q_zero = False
                     break
             del _qb_x, _qb_y
-        if on_screen_obliquity != 'silent':
+        if on_screen_obliquity != 'silent' and not _tf_active:
             # only the guard reads the accumulated correction field
             _obl_total = xp.zeros((Ny, Nx), dtype=_sag_real)
+
+    # ---- route 3: the tangent-facet model's momentum accumulator ----------
+    # ``(_tf_px, _tf_py)`` is the FIELD's own transverse optical momentum: the
+    # carrier's, minus the gradient of everything imprinted so far, resampled
+    # across each gap.  It stays a pair of plain floats until the first POWERED
+    # surface makes it a field, so a leading plate and every carrier-free call
+    # allocate nothing here.
+    _tf_px = _tf_py = 0.0
+    if _tf_active and carrier is not None:
+        _tf_n_first = float(get_glass_index(surfaces[0]['glass_before'],
+                                            wavelength)) if surfaces else 1.0
+        _tf_px, _tf_py = _screen_obliquity_angle_field(
+            carrier, E_in, wavelength, dx, dy, Nx, Ny, n_medium=_tf_n_first)
+        if xp is not np:
+            _tf_px = xp.asarray(_tf_px)
+            _tf_py = xp.asarray(_tf_py)
 
     # ---- screen obliquity: the row-band (halo) machinery (v5.35.3) --------
     # Everything below is a band-wise restatement of the whole-grid obliquity
@@ -3739,7 +4007,7 @@ def apply_real_lens(
         _narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and not slant_correction and not fresnel
-            and not surface_frame and not _displaced
+            and not surface_frame and not _displaced and not _tf_active
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -3841,7 +4109,7 @@ def apply_real_lens(
         _slant_narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and (slant_correction or fresnel)
-            and not surface_frame
+            and not surface_frame and not _tf_active
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -4271,6 +4539,54 @@ def apply_real_lens(
             opd = (n2r * cos_tt_safe - n1r * cos_ti_safe) * sag
         else:
             opd = (n2r - n1r) * sag
+        # ---- Route 3: the per-pixel tangent-facet screen (v5.36.0) -----
+        # REPLACES the paraxial screen above rather than correcting it: the
+        # OPD is the exact axial-translation identity at the facet tangent to
+        # the surface where THIS PIXEL'S ray meets it, evaluated at the ray
+        # angle the field itself carries.  Derivation + the measured term
+        # ladder are above ``_tangent_facet_screen``.
+        if _tf_active and bool(xp.any(sag)):
+            # A FLAT face -- a plate, a cemented plano, a stop -- has no facet
+            # to tilt and no height to translate, so the identity collapses to
+            # the paraxial screen exactly and one reduction skips the block
+            # (which is also what keeps a plate machine-exact at any tilt, and
+            # what keeps the accumulator a pair of floats through one).
+            _tf_sag = sag
+            if bool(xp.any(xp.isnan(sag))):
+                _tf_sag = xp.where(xp.isnan(sag), 0.0, sag)
+            _tg_y, _tg_x = xp.gradient(_tf_sag, dy, dx)
+            _tf_opd, _tf_ok = _tangent_facet_screen(
+                _tf_sag, _tg_x, _tg_y, _tf_px, _tf_py, n1r, n2r, dx, dy, xp)
+            # Keep the paraxial screen wherever the facet refraction is not
+            # propagating (evanescent input, or TIR at the facet): a clamped
+            # cosine is a wrong OPD and the thin screen is the safe neutral.
+            if not (bool(xp.all(_tf_ok)) and bool(xp.all(xp.isfinite(_tf_opd)))):
+                _tf_opd = xp.where(_tf_ok & xp.isfinite(_tf_opd), _tf_opd, opd)
+            opd = _tf_opd
+            # The field's momentum after this screen IS minus the gradient of
+            # what the screen imprinted -- not the exact facet kick.  (The two
+            # differ by -sag grad dz; the tangent-facet RAY arm uses the exact
+            # kick with this OPD and is therefore NOT a wave model, since a
+            # screen's kick is its own value's gradient.  That inconsistency is
+            # what separates this model from that arm; see the doc.)
+            # ORDERING, not a guard: the NaN-sentinel zeroing the OPD receives
+            # a few lines below is hoisted to HERE, because the accumulator is
+            # persistent.  The OPD's own sentinel costs one annulus for one
+            # surface; a sentinel read into the accumulator would travel to
+            # every later surface and to the whole exit field.  Route 3's own
+            # terms are all proportional to the (already zeroed) ``_tf_sag``,
+            # so the only way ``opd`` can be NaN here is the thin-screen
+            # fallback firing on a pixel that is BOTH non-propagating and
+            # outside the conic domain -- rare, unexercised by any fixture in
+            # this build, and therefore ordered around rather than claimed as
+            # a fixed bug.  The downstream zeroing is left in place and simply
+            # becomes a no-op for this model.
+            if bool(xp.any(xp.isnan(opd))):
+                opd = xp.where(xp.isnan(opd), 0.0, opd)
+            _tk_y, _tk_x = xp.gradient(opd, dy, dx)
+            _tf_px = _tf_px - _tk_x
+            _tf_py = _tf_py - _tk_y
+            del _tg_x, _tg_y, _tk_x, _tk_y, _tf_sag, _tf_ok, _tf_opd
         # ---- Screen obliquity (v5.35.0) -------------------------------
         # The angular part of the exact thin-facet screen OPD, equation (4)
         # of the module-level derivation.  Added ON TOP of whichever screen
@@ -4439,6 +4755,14 @@ def apply_real_lens(
             # surface paths reach the identical step (banded internally when
             # sag_chunk_rows is live; byte-identical either way).
             _obl_gap_advance(i, n2r)
+        if i < len(surfaces) - 1 and _tf_active:
+            # ---- Route 3: resample the momentum accumulator across the gap.
+            # Runs for EVERY gap, powered face or not; a scalar accumulator
+            # (no carrier yet, or a leading plate) passes through untouched.
+            # ``'split'`` is a 'displaced'-only mode, so the physical gap is
+            # always the one the model propagates.
+            _tf_px, _tf_py = _tangent_facet_transport(
+                _tf_px, _tf_py, float(thicknesses[i]), n2r, dx, dy, xp)
         if i < len(surfaces) - 1:
             if _split_mode:
                 # P2 candidate (b): the internal gap is propagated as the
@@ -4459,6 +4783,9 @@ def apply_real_lens(
     # top of up to six persistent full-grid arrays -- a pure lifetime change,
     # no arithmetic reads them again.  ``_obl_total`` is the one the guard
     # scores, so it survives.
+    # Route 3's accumulator is dead here too, and unlike the obliquity ones it
+    # exists without a carrier, so it is released outside that guard.
+    _tf_px = _tf_py = None
     if _obl_active:
         _obl_p0x = _obl_p0y = _obl_ux = _obl_uy = None
         _obl_qx = _obl_qy = None
@@ -4600,7 +4927,12 @@ def apply_real_lens(
     # (the prescription's sag x the carrier's angle, per surface).  Silent
     # for carrier-free calls (nothing to estimate) and for small-angle
     # calls (the estimate falls under the documented tolerance).
-    if _obl_active and on_screen_obliquity != 'silent':
+    # Route 3 has no equation-(4) accumulator to score: its whole OPD IS the
+    # angle-true screen, so the estimator (which measures the SIZE of the
+    # correction the thin screen needs) has nothing to read and would be
+    # meaningless.  The guard is therefore silent for surface_model=
+    # 'tangent_facet' -- stated in the docstring rather than faked.
+    if _obl_active and on_screen_obliquity != 'silent' and not _tf_active:
         X, Y, h_sq_axis = _ensure_full_grids()
         _r_pup = _screen_obliquity_pupil_radius(prescription, Nx, Ny, dx, dy)
         _est = _screen_obliquity_rms_waves(
