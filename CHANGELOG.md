@@ -1,8 +1,64 @@
-# Changelog — lumenairy
+# Changelog -- lumenairy
 
 All notable changes to the core library are documented here.
 
 ## [Unreleased]
+
+### Performance -- the 2-D PMM cascade, restructured and (opt-in) tree-parallel
+
+Evidence: `docs/audits/BUILD_PMM2D_TREE_CASCADE_2026_08_17.md`.  Roadmap item
+#1 off `EXPERIMENT_PMM2D_EIG_RECYCLE_2026_08_16.md` S7 ("the cascade is
+55-61% of an all-distinct solve and rises with basis size").
+
+**Byte-identical, library-wide, no contract change.**  Profiled to the
+operation, a Redheffer star against a layer-PROPAGATION S-matrix -- half the
+stars in every stack solve -- was spending **10.3 zgemm-equivalents on four
+gemms of actual work**, the rest against the literal identity and zero blocks
+the existing shortcut substituted but never skipped.
+
+* `_redheffer_star` gains explicit zero-block branches (`B11 == 0`,
+  `A22 == 0`) and common-subexpression elimination on the general path
+  (12 -> 10 gemm) that leaves the association order untouched.
+* `_interface_smatrix` / `_interface_smatrix_general` hoist the `S22` product
+  they already computed twice (4 -> 3 gemm).
+
+Shared by RCWA, the 1-D PMM stack, EME, Berreman and the 2-D stack.  Pinned
+**432/432 byte-identical, worst disagreement 0.000e+00** against a pristine
+`origin/main` worktree over the shipped 5.36.0 case matrix, for both
+`cascade='monolithic'` and the default `cascade='fast'`.  Interleaved:
+**1.10-1.12x** on all-distinct 2-D PMM stacks, **1.28x** on cascade-dominated
+ones (ABAB, warm re-solve), 1.05x on the out-of-plane path (which is
+eig-dominated, not cascade-dominated).
+
+**`PMM2DStackHybrid(cascade='fused')` -- new, opt-in.**  Routes the star
+against a propagation S-matrix through the diagonal-aware
+`_propagation_star` every other stack path in the library (and this class's
+own JAX twin) has used since RCWA-LEV-2.  Mathematically identical, NOT
+bit-for-bit (zgemm rounds complex products with FMA; a row/column scaling does
+not).  **1.19-1.22x** all-distinct, **1.44-1.54x** cascade-dominated.
+
+**`PMM2DStackHybrid(cascade='tree')` -- new, opt-in.**  Reduces the layer chain
+as a balanced tree (`O(log N)` depth, identical star count) so
+`solve(max_workers=W)` parallelises the cascade itself and not just the
+eigensolves -- which is what breaks the ~1.6x Amdahl cap the 5.36.0 fast
+cascade documented, whose serial term IS the cascade.  `max_workers`
+additionally fans out the distinct interface builds.  Worker counts are
+**byte-identical to each other** inside the threaded contract.
+
+The tree's extra live intermediates (`ceil((N+1)/2)` S-matrices, 449 MB for 40
+layers at `n_orders=8`) are **priced** against
+`lumenairy.memory.get_ram_budget()` read at solve time (25%, overridable with
+`tree_max_bytes=`); over budget the tree refuses and the sequential fused fold
+runs.  `cascade_stats()` reports the decision.
+
+**Recorded limitation.**  Redheffer stability is a PREFIX property -- every
+sequential partial product is anchored to the superstrate, and a tree's
+interior sub-chain products are anchored to nothing.  Measured on a 40-layer
+graded high-contrast scalar taper at conical incidence, the tree's own
+intermediates ran 63x worse-conditioned and 326x larger in norm than the
+sequential fold's, and the answer moved 5.2e-07 (against <=2.5e-11 for
+`'fused'` on the same case).  That is why the tree is a separate explicit
+request and is NOT wired to `max_workers` behind the caller's back.
 
 ### Test hygiene (no library change)
 

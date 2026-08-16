@@ -35,6 +35,8 @@ from ..rcwa._core import (
     _interface_smatrix_general,
     _modes_to_M,
     _propagation_smatrix_general,
+    _propagation_star,
+    _propagation_star_general,
     _require_propagating_incidence,
     _symmetry_on,
 )
@@ -72,6 +74,93 @@ __all__ = ["PMM2DStackHybrid", "PMM2DStack_hybrid", "PMM2DStack"]
 _KEY_SUP = ("__superstrate__",)
 _KEY_SUB = ("__substrate__",)
 
+#: Cascade strategies, ordered by how much they are allowed to move the bits.
+#: Each is a strict superset of the one before it.
+_CASCADES = ("monolithic", "fast", "fused", "tree")
+
+#: Share of :func:`lumenairy.memory.get_ram_budget` the TREE reduction's extra
+#: live intermediates may occupy before it refuses and folds sequentially.
+#: The tree's extra set is a transient working set, not a retained cache, so it
+#: gets a larger share than :class:`LayerCache`'s 5%; the number is a policy
+#: choice, and both sides of the decision are forced by test rather than being
+#: waited on from a big box (TESTING_STANDARDS rule 4).
+_TREE_BUDGET_FRACTION = 0.25
+
+
+def _tree_peak_extra_bytes(n_leaves, block_n):
+    """PEAK extra live bytes the balanced-tree reduction holds over the
+    sequential fold, for ``n_leaves`` layer blocks of ``block_n`` square
+    complex128 S-matrix blocks.
+
+    The sequential fold holds the interface list plus ONE accumulator.  The
+    tree holds the same interface list (the dedup memo owns it either way)
+    plus, at its widest level, ``ceil(n_leaves / 2)`` level-1 results -- the
+    leaves themselves stay lazy through the first pass, so the tree never
+    materialises the ``2 N + 1`` leaf S-matrices.  One S-matrix is four
+    ``block_n x block_n`` complex128 blocks = ``4 * block_n**2 * 16`` bytes.
+    """
+    return int(-(-int(n_leaves) // 2)) * 4 * int(block_n) ** 2 * 16
+
+
+def _star_tree(leaves, max_workers=None, blas_per_worker=1):
+    """Balanced-tree Redheffer reduction of ``leaves`` -- O(log N) depth.
+
+    ``leaves`` is a list of zero-argument THUNKS, each returning one S-matrix
+    4-tuple; the reduction is left-to-right pairwise, so the result is the
+    star product of the leaves in order, merely REASSOCIATED.  The star is
+    associative (it is the composition of the two-port maps the S-matrices
+    represent), so the answer is mathematically identical to the sequential
+    fold; in floating point it differs, and that difference is what
+    ``cascade='tree'`` is opt-in for.
+
+    Leaves stay lazy through the FIRST pass so the tree never holds all
+    ``2N+1`` leaf S-matrices at once: the peak live set is the interface list
+    the sequential path already holds plus ``ceil((N+1)/2)`` level-1 results
+    (see the build doc's memory accounting).
+
+    ``max_workers``: ``None`` reduces serially (the association order alone,
+    no BLAS cap entered).  An INT enters ONE process-wide BLAS cap on THIS
+    thread around the whole reduction and fans each level out over a pool --
+    the same two-contract split as :meth:`PMM2DStackHybrid._layer_mode_sets`,
+    for the same reason (applying a cap is process-global; only the REQUEST
+    is thread-local, so it cannot be done per worker).  Results are collected
+    in INPUT order, so the answer never depends on worker scheduling.
+    """
+    def _force(pair):
+        a, b = pair
+        return a() if b is None else _redheffer_star(a(), b())
+
+    def _join(pair):
+        a, b = pair
+        return a if b is None else _redheffer_star(a, b)
+
+    def _pairs(items):
+        return [(items[i], items[i + 1] if i + 1 < len(items) else None)
+                for i in range(0, len(items), 2)]
+
+    def _run(ex):
+        items = leaves
+        fn = _force
+        while True:
+            pp = _pairs(items)
+            if ex is None or len(pp) == 1:
+                items = [fn(p) for p in pp]
+            else:
+                items = list(ex.map(fn, pp))
+            fn = _join
+            if len(items) == 1:
+                return items[0]
+
+    if max_workers is None or max(1, int(max_workers)) == 1:
+        if max_workers is None:
+            return _run(None)
+        with _blas_threads_quiet(blas_per_worker), _blas_limit():
+            return _run(None)
+    from concurrent.futures import ThreadPoolExecutor
+    with _blas_threads_quiet(blas_per_worker), _blas_limit():
+        with ThreadPoolExecutor(max_workers=int(max_workers)) as ex:
+            return _run(ex)
+
 
 from ...backend import is_jax_array
 
@@ -90,21 +179,50 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         Shared solver knobs, as in :func:`pmm_efficiency_2d_cell` /
         :func:`pmm_jones_2d` (``formulation`` controls the scalar wall-normal
         rule AND the tensor ``E_z`` elimination).
+    cascade : {'fast', 'monolithic', 'fused', 'tree'}, optional
+        Cascade strategy, in increasing order of what it is allowed to move
+        (each a strict superset of the one before):
+
+        * ``'monolithic'`` -- the pre-P2C per-layer build-and-star cascade.
+        * ``'fast'`` (default) -- interface dedup + adjacent identical-run
+          merge.  Bit-for-bit ``'monolithic'`` when no two ADJACENT layers
+          share a modal basis; bounded by the interface-identity residual
+          otherwise.
+        * ``'fused'`` -- additionally uses the diagonal-aware
+          :func:`_propagation_star` for the star against a layer-propagation
+          S-matrix (the form every other stack path in the library, and this
+          class's own JAX twin, already uses).  Mathematically identical, NOT
+          bit-for-bit: the zgemm path rounds its complex products with FMA and
+          the row/column scaling does not.
+        * ``'tree'`` -- ``'fused'`` plus a BALANCED-TREE reduction of the layer
+          chain (``O(log N)`` depth) instead of the sequential fold, so
+          ``solve(max_workers=N)`` parallelises the cascade itself and not just
+          the eigensolves.  The star is associative, so this is a
+          REASSOCIATION; see ``docs/audits/BUILD_PMM2D_TREE_CASCADE_2026_08_17.md``
+          for the derived agreement bar and the memory accounting.
+    cache_max_bytes : int, optional
+        Byte budget for the two priced layer caches (default: read from
+        :func:`lumenairy.memory.get_ram_budget` at query time).
+    tree_max_bytes : int, optional
+        Byte budget for ``cascade='tree'``'s extra live intermediates
+        (default: ``0.25`` of the RAM budget, read at solve time).  When the
+        projected peak exceeds it the tree REFUSES and the sequential fused
+        fold runs instead; :meth:`cascade_stats` reports the decision.
     """
 
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
                  n_substrate=1.0, degree=11, elements_per_strip=1,
                  grade=False, n_orders=11, formulation="li",
                  symmetry="auto", max_nodal_dof=_MAX_NODAL_DOF,
-                 cascade="fast", cache_max_bytes=None):
+                 cascade="fast", cache_max_bytes=None, tree_max_bytes=None):
         if formulation not in ("li", "laurent"):
             raise ValueError(
                 f"PMM2DStackHybrid: formulation must be 'li' or 'laurent', got "
                 f"{formulation!r}")
-        if cascade not in ("fast", "monolithic"):
+        if cascade not in _CASCADES:
             raise ValueError(
-                f"PMM2DStackHybrid: cascade must be 'fast' or 'monolithic', "
-                f"got {cascade!r}")
+                f"PMM2DStackHybrid: cascade must be one of "
+                f"{', '.join(repr(c) for c in _CASCADES)}, got {cascade!r}")
         self.period_x = float(period_x)
         self.period_y = float(period_x if period_y is None else period_y)
         # A JAX half-space index stays RAW so its gradient flows (the
@@ -127,15 +245,46 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # even basis matches it to ~1e-12, not bit-for-bit).
         self.symmetry = _symmetry_on(symmetry)
         self.max_nodal_dof = int(max_nodal_dof)
-        # P2C (2026-08-16): cascade strategy.  'fast' (default) dedups the
-        # per-interface mode-match S-matrices by CONTENT and merges maximal
-        # runs of adjacent layers that share a modal basis into one
-        # propagation; 'monolithic' is the escape hatch that reproduces the
-        # pre-P2C per-layer build-and-star cascade BIT-FOR-BIT.  See
-        # docs/audits/BUILD_PMM2D_CASCADE_2026_08_16.md S3 for the bound.
+        # P2C (2026-08-16) / P2T (2026-08-17): cascade strategy, in increasing
+        # order of what it is allowed to move.  Each is a strict superset of
+        # the one before.
+        #
+        # * ``'monolithic'`` -- the pre-P2C per-layer build-and-star cascade,
+        #   BIT-FOR-BIT ``origin/main``.  The escape hatch.
+        # * ``'fast'`` (the default) -- dedups the per-interface mode-match
+        #   S-matrices by CONTENT and merges maximal runs of adjacent layers
+        #   that share a modal basis into one propagation.  Bit-for-bit
+        #   ``monolithic`` on any stack with no two adjacent layers alike;
+        #   bounded by the interface-identity residual otherwise
+        #   (docs/audits/BUILD_PMM2D_CASCADE_2026_08_16.md S3).
+        # * ``'fused'`` (P2T, opt-in) -- additionally replaces the star against
+        #   a layer-PROPAGATION S-matrix with the diagonal-aware
+        #   :func:`_propagation_star` the rest of the library (RCWAStack, the
+        #   1-D PMMStack, Berreman, and this class's OWN JAX twin) has used
+        #   since RCWA-LEV-2.  Mathematically identical -- it is a row/column
+        #   scaling by ``exp(-lam k0 t)`` instead of ten 2N zgemms against
+        #   literal identity and zero blocks -- but the gemm path rounds its
+        #   complex products with FMA and the scaling does not, so it is NOT
+        #   bit-for-bit.  Measured 29-52x on that one star.
+        # * ``'tree'`` (P2T, opt-in) -- 'fused' plus a BALANCED-TREE reduction
+        #   of the layer chain (O(log N) depth) instead of the sequential
+        #   fold, so ``max_workers`` can parallelise the cascade itself.  The
+        #   star is associative, so this is a REASSOCIATION; the bar is derived
+        #   from the conditioning of this build (build doc S6), which also
+        #   records the measured cost of that reassociation on DEEP graded
+        #   stacks -- Redheffer stability is a PREFIX property, and a tree's
+        #   interior sub-chain products are anchored to nothing.
         self.cascade = cascade
         self._cache_max_bytes = (None if cache_max_bytes is None
                                  else int(cache_max_bytes))
+        # P2T: hard byte budget for the TREE reduction's extra intermediates
+        # (None -> priced from the RAM budget at solve time).  The test hook
+        # for forcing BOTH sides of the refusal gate.
+        self._tree_max_bytes = (None if tree_max_bytes is None
+                                else int(tree_max_bytes))
+        # Last solve's tree decision, read by :meth:`cascade_stats`.
+        self._tree_stats = dict(requested=False, engaged=False, peak_bytes=0,
+                                budget=0, leaves=0, depth=0)
         self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
         self._src = None
         # F4 part 2 (audit): content-keyed cache of the WAVELENGTH-INDEPENDENT
@@ -757,27 +906,52 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         return out
 
     @staticmethod
-    def _interface_memo(dedup):
-        """Interface-S-matrix builder, optionally memoized on the modal-key
-        pair.  A memo hit is BYTE-IDENTICAL to a rebuild (the same W/V bytes
-        through the same LAPACK), so this costs nothing in accuracy; it is the
-        single largest measured saving on repeated-layer stacks, where the
-        interface build was 6.4 ms of a 23 ms per-layer cost at ``n_orders=4``
-        (2026-08-16 measurement, build doc S2)."""
-        if not dedup:
-            return lambda ka, Wa, Va, kb, Wb, Vb: _interface_smatrix(
-                Wa, Va, Wb, Vb)
-        memo = {}
+    def _interface_list(pairs, build, dedup, max_workers=None,
+                        blas_per_worker=1):
+        """Interface S-matrices for ``pairs`` = ``[(content_key, args), ...]``,
+        in order.
 
-        def _ifc(ka, Wa, Va, kb, Wb, Vb):
-            ck = (ka, kb)
-            hit = memo.get(ck)
-            if hit is None:
-                hit = _interface_smatrix(Wa, Va, Wb, Vb)
-                memo[ck] = hit
-            return hit
+        With ``dedup`` each DISTINCT ``content_key`` is built once and shared.
+        A shared entry is BYTE-IDENTICAL to a rebuild (the same ``W``/``V``
+        bytes through the same LAPACK), so the dedup costs nothing in
+        accuracy; it is the single largest measured saving on repeated-layer
+        stacks, where the interface build was 6.4 ms of a 23 ms per-layer cost
+        at ``n_orders=4`` (2026-08-16 measurement, cascade build doc S2).
 
-        return _ifc
+        P2T: the distinct builds are INDEPENDENT (each reads only its own two
+        mode matrices), so ``max_workers`` may fan them out.  The contract is
+        :meth:`_layer_mode_sets`'s: ``None`` is serial with NO BLAS cap
+        entered; an INT enters ONE process-wide cap on THIS thread around BOTH
+        branches, so every int is byte-identical to every other int.  Results
+        are collected BY KEY from a list the pool yields in INPUT order, so
+        the ordering never depends on worker scheduling.
+        """
+        todo = {}
+        for i, (ck, _args) in enumerate(pairs):
+            kk = ck if dedup else i
+            if kk not in todo:
+                todo[kk] = i
+        items = list(todo.items())
+
+        def _one(item):
+            kk, i = item
+            return kk, build(*pairs[i][1])
+
+        if max_workers is None:
+            built = [_one(it) for it in items]
+        else:
+            _mw = max(1, int(max_workers))
+            with _blas_threads_quiet(blas_per_worker), _blas_limit():
+                if _mw == 1 or len(items) <= 1:
+                    built = [_one(it) for it in items]
+                else:
+                    from concurrent.futures import ThreadPoolExecutor
+                    with ThreadPoolExecutor(
+                            max_workers=min(_mw, len(items))) as _ex:
+                        built = list(_ex.map(_one, items))
+        got = dict(built)
+        return [got[ck if dedup else i]
+                for i, (ck, _args) in enumerate(pairs)]
 
     def clear_cache(self):
         """Drop every cached per-layer geometry build and modal eig (the
@@ -787,6 +961,39 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         self._geom_cache.clear()
         self._eig_cache.clear()
         return self
+
+    def tree_budget(self):
+        """Byte budget for the tree reduction's extra live intermediates,
+        priced from the library RAM budget NOW (so :func:`lumenairy.set_max_ram`
+        applies immediately), or the ``tree_max_bytes=`` override."""
+        if self._tree_max_bytes is not None:
+            return self._tree_max_bytes
+        from ...memory import get_ram_budget
+        return int(_TREE_BUDGET_FRACTION * int(get_ram_budget()))
+
+    def _tree_gate(self, n_leaves, block_n):
+        """Decide whether the tree reduction may run, and record the decision.
+
+        REFUSE-NEVER-DEGRADE: when the projected peak extra live set exceeds
+        the budget the tree stands down and the SEQUENTIAL fused fold runs
+        instead -- a different association order, not a worse answer, and the
+        one that costs no extra memory at all.  Both sides are forced by test
+        through ``tree_max_bytes=`` rather than waited on from a big box.
+        """
+        peak = _tree_peak_extra_bytes(n_leaves, block_n)
+        budget = self.tree_budget()
+        ok = peak <= budget
+        self._tree_stats = dict(
+            requested=True, engaged=bool(ok), peak_bytes=int(peak),
+            budget=int(budget), leaves=int(n_leaves),
+            depth=int(max(1, int(np.ceil(np.log2(max(2, n_leaves)))))))
+        return ok
+
+    def cascade_stats(self):
+        """``{'cascade': ..., 'tree': {...}}`` -- the strategy in force and
+        the LAST solve's tree decision (requested / engaged / projected peak
+        extra bytes / budget / leaves / depth)."""
+        return dict(cascade=self.cascade, tree=dict(self._tree_stats))
 
     def cache_stats(self):
         """``{'geom': {...}, 'eig': {...}}`` -- entries / bytes / budget /
@@ -818,18 +1025,24 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             identical-run merge would erase the per-layer indexing); the
             interface dedup still applies, and is byte-identical.
         max_workers : int, optional
-            Threads for the per-layer eigensolve fan-out (P2C).  ``None`` (the
-            default) is the plain serial build with NO BLAS cap entered --
-            bit-for-bit the pre-P2C path.  Passing an INT opts into the
-            threaded contract: one process-wide BLAS cap is entered around the
-            fan-out, and ``max_workers=1, 2, 8, ...`` are byte-identical TO
-            EACH OTHER (they are NOT bit-equal to the ``None`` default unless
-            the ambient BLAS thread count already equals ``blas_per_worker``).
-            Only the DISTINCT modal sets are built, so a stack of repeated
-            layers has nothing to fan out.  Do NOT pass an int from inside
-            another threaded driver: applying a BLAS cap is process-global
-            (M4), and :meth:`solve_vs_wavelength` already holds one cap around
-            a pool of whole solves.
+            Threads for the per-layer eigensolve fan-out (P2C) and, under
+            ``cascade='tree'``, for the interface builds and the tree
+            reduction of the cascade itself (P2T).  ``None`` (the default) is
+            the plain serial build with NO BLAS cap entered -- bit-for-bit the
+            pre-P2C path.  Passing an INT opts into the threaded contract: one
+            process-wide BLAS cap is entered around each fan-out, and
+            ``max_workers=1, 2, 8, ...`` are byte-identical TO EACH OTHER
+            (they are NOT bit-equal to the ``None`` default unless the ambient
+            BLAS thread count already equals ``blas_per_worker``).  Only the
+            DISTINCT modal sets and interfaces are built, so a stack of
+            repeated layers has nothing to fan out.  Under the default
+            ``cascade='fast'`` the strictly SEQUENTIAL Redheffer fold caps the
+            whole solve near 1.6x however many workers are given (the eig is
+            ~40% of a distinct-layer solve); ``cascade='tree'`` is what removes
+            that serial term.  Do NOT pass an int from inside another threaded
+            driver: applying a BLAS cap is process-global (M4), and
+            :meth:`solve_vs_wavelength` already holds one cap around a pool of
+            whole solves.
         blas_per_worker : int, optional
             BLAS threads each layer worker may use (default 1).  Read only
             when ``max_workers`` is not ``None``."""
@@ -854,6 +1067,10 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # kind of per-build fact TESTING_STANDARDS forbids).
         self._geom_cache.new_generation()
         self._eig_cache.new_generation()
+        # P2T: the tree decision is per-solve; clear the previous reading so
+        # cascade_stats() can never serve a stale one.
+        self._tree_stats = dict(requested=False, engaged=False, peak_bytes=0,
+                                budget=0, leaves=0, depth=0)
         if any(L.get("kind") == "disp" for L in self._layers):
             raise ValueError(
                 "PMM2DStackHybrid.solve: the stack holds DISPERSIVE (wl -> value) "
@@ -980,25 +1197,55 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             # the interface-identity residual; see S3 of the build doc.  Merge
             # is off under ``retain_internal`` (the partial cascades are
             # indexed per LAYER) and under ``cascade='monolithic'``.
-            dedup = (self.cascade == "fast")
+            dedup = (self.cascade != "monolithic")
             merge = dedup and not retain_internal
+            # P2T: ``fuse`` swaps the ten-zgemm star against a propagation
+            # S-matrix for the diagonal-aware row/column scaling; ``tree``
+            # additionally reassociates the whole fold as a balanced tree so
+            # ``max_workers`` can parallelise it.  The tree is off under
+            # ``retain_internal`` (the partial cascades are indexed per LAYER
+            # and are built by their own sequential recursions below).
+            fuse = self.cascade in ("fused", "tree")
+            tree = self.cascade == "tree" and not retain_internal
+
+            def _prop_star(S, lam, k0t):
+                return (_propagation_star(S, lam, k0t) if fuse else
+                        _redheffer_star(S, _propagation_smatrix(lam, k0t)))
+
             if not any_oop:
                 # Redheffer cascade: sup | L1 | L2 | ... | Ln | sub (symmetric)
                 nlay = len(modes)
                 seq = self._cascade_sequence(modes, mkeys, merge)
-                _ifc = self._interface_memo(dedup)
-                ifc = [_ifc(_KEY_SUP, Wsup, Vsup, seq[0][0], seq[0][1],
-                            seq[0][2])]
+                pairs = [((_KEY_SUP, seq[0][0]),
+                          (Wsup, Vsup, seq[0][1], seq[0][2]))]
                 for ii in range(1, len(seq)):
-                    ifc.append(_ifc(seq[ii - 1][0], seq[ii - 1][1],
-                                    seq[ii - 1][2], seq[ii][0], seq[ii][1],
-                                    seq[ii][2]))
-                ifc.append(_ifc(seq[-1][0], seq[-1][1], seq[-1][2],
-                                _KEY_SUB, Wsub, Vsub))
-                S = ifc[0]
-                for ii, (_kk, Wl, Vl, lam, t) in enumerate(seq):
-                    S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
-                    S = _redheffer_star(S, ifc[ii + 1])
+                    pairs.append(((seq[ii - 1][0], seq[ii][0]),
+                                  (seq[ii - 1][1], seq[ii - 1][2],
+                                   seq[ii][1], seq[ii][2])))
+                pairs.append(((seq[-1][0], _KEY_SUB),
+                              (seq[-1][1], seq[-1][2], Wsub, Vsub)))
+                if tree:
+                    tree = self._tree_gate(len(seq) + 1, 2 * Nf)
+                ifc = self._interface_list(
+                    pairs, _interface_smatrix, dedup,
+                    max_workers if tree else None, blas_per_worker)
+                if tree:
+                    # Leaves stay LAZY through the first pass: leaf ii is the
+                    # layer block ``ifc[ii] * prop(layer ii)``, forced inside
+                    # the reduction, so the tree never materialises the
+                    # ``2 nlay + 1`` leaf S-matrices at once.
+                    def _leaf(ii, _s=seq, _i=ifc):
+                        _kk, _W, _V, lam, t = _s[ii]
+                        return lambda: _prop_star(_i[ii], lam, k0 * t)
+
+                    leaves = [_leaf(ii) for ii in range(len(seq))]
+                    leaves.append(lambda: ifc[-1])
+                    S = _star_tree(leaves, max_workers, blas_per_worker)
+                else:
+                    S = ifc[0]
+                    for ii, (_kk, Wl, Vl, lam, t) in enumerate(seq):
+                        S = _prop_star(S, lam, k0 * t)
+                        S = _redheffer_star(S, ifc[ii + 1])
                 if retain_internal:
                     # partial cascades for internal-amplitude recovery (backlog
                     # B1, 2026-06-10 -- the 1-D PMMStack / RCWAStack pattern):
@@ -1010,17 +1257,15 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                     S_above[0] = ifc[0]
                     for ii in range(1, nlay):
                         S_above[ii] = _redheffer_star(
-                            _redheffer_star(S_above[ii - 1],
-                                            _propagation_smatrix(
-                                                modes[ii - 1][3],
-                                                k0 * modes[ii - 1][4])),
+                            _prop_star(S_above[ii - 1], modes[ii - 1][3],
+                                       k0 * modes[ii - 1][4]),
                             ifc[ii])
                     S_below_bot = [None] * nlay
                     for ii in range(nlay - 1, -1, -1):
                         below = ifc[ii + 1]
                         for jj in range(ii + 1, nlay):
-                            below = _redheffer_star(below, _propagation_smatrix(
-                                modes[jj][3], k0 * modes[jj][4]))
+                            below = _prop_star(below, modes[jj][3],
+                                               k0 * modes[jj][4])
                             below = _redheffer_star(below, ifc[jj + 1])
                         S_below_bot[ii] = below
                     self._internal = dict(modes=modes, S_above=S_above,
@@ -1055,29 +1300,39 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                     return M, lf, lb, t
 
                 gseq = self._cascade_sequence_general(modes, mkeys, merge)
-                _gifc = {}
-
-                def _ifc_gen(ka, Ma, kb, Mb):
-                    if not dedup:
-                        return _interface_smatrix_general(Ma, Mb)
-                    ck = (ka, kb)
-                    hit = _gifc.get(ck)
-                    if hit is None:
-                        hit = _interface_smatrix_general(Ma, Mb)
-                        _gifc[ck] = hit
-                    return hit
-
-                M_prev, k_prev = _modes_to_M(Wsup, Vsup, Wsup, -Vsup), _KEY_SUP
-                S = None
-                for kk, m in gseq:
-                    Ml, lf, lb, t = _blocks(m, kk)
-                    Si = _ifc_gen(k_prev, M_prev, kk, Ml)
-                    S = Si if S is None else _redheffer_star(S, Si)
-                    S = _redheffer_star(
-                        S, _propagation_smatrix_general(lf, lb, k0 * t))
-                    M_prev, k_prev = Ml, kk
+                blk = [_blocks(m, kk) for kk, m in gseq]
+                Msup = _modes_to_M(Wsup, Vsup, Wsup, -Vsup)
                 Msub = _modes_to_M(Wsub, Vsub, Wsub, -Vsub)
-                S = _redheffer_star(S, _ifc_gen(k_prev, M_prev, _KEY_SUB, Msub))
+                gpairs = [((_KEY_SUP, gseq[0][0]), (Msup, blk[0][0]))]
+                for ii in range(1, len(gseq)):
+                    gpairs.append(((gseq[ii - 1][0], gseq[ii][0]),
+                                   (blk[ii - 1][0], blk[ii][0])))
+                gpairs.append(((gseq[-1][0], _KEY_SUB), (blk[-1][0], Msub)))
+                if tree:
+                    tree = self._tree_gate(len(gseq) + 1, 2 * Nf)
+                gifc = self._interface_list(
+                    gpairs, _interface_smatrix_general, dedup,
+                    max_workers if tree else None, blas_per_worker)
+
+                def _gprop(S, lf, lb, k0t):
+                    return (_propagation_star_general(S, lf, lb, k0t) if fuse
+                            else _redheffer_star(
+                                S, _propagation_smatrix_general(lf, lb, k0t)))
+
+                if tree:
+                    def _gleaf(ii, _b=blk, _i=gifc):
+                        _Ml, lf, lb, t = _b[ii]
+                        return lambda: _gprop(_i[ii], lf, lb, k0 * t)
+
+                    gleaves = [_gleaf(ii) for ii in range(len(gseq))]
+                    gleaves.append(lambda: gifc[-1])
+                    S = _star_tree(gleaves, max_workers, blas_per_worker)
+                else:
+                    S = gifc[0]
+                    for ii in range(len(gseq)):
+                        _Ml, lf, lb, t = blk[ii]
+                        S = _gprop(S, lf, lb, k0 * t)
+                        S = _redheffer_star(S, gifc[ii + 1])
             S11, _S12, S21, _S22 = S
 
         # Jones far field (both incident polarizations).  The even-parity

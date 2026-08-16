@@ -2376,7 +2376,6 @@ def _redheffer_star(SA, SB):
     B11, B12, B21, B22 = SB
     xp = array_namespace(A11, B11)
     n = A11.shape[0]
-    I = xp.eye(n, dtype=_C)
     # Layer-PROPAGATION S-matrices have S11 = S22 = 0 (see _propagation_smatrix),
     # and the recursion stars one at every layer -- so ~half the stars feed a zero
     # A22 or B11 here.  When either is the exact zero block, (I - B11 @ A22) and
@@ -2399,17 +2398,47 @@ def _redheffer_star(SA, SB):
     # across BLAS builds was separated from every clean one by the STAR's
     # residual (>= 5.6e-07 against <= 9.6e-09), not by the interface's.  Hence
     # the guard here as well as at the interface (X-1's named scope).
-    if (not is_jax_array(A22) and not is_jax_array(B11)
-            and (not bool(A22.any()) or not bool(B11.any()))):
-        D = I
-        F = I
-    else:
-        D = _guarded_inverse(I - B11 @ A22, "rcwa Redheffer star (I - B11 A22)")
-        F = _guarded_inverse(I - A22 @ B11, "rcwa Redheffer star (I - A22 B11)")
-    C11 = A11 + A12 @ D @ B11 @ A21
-    C12 = A12 @ D @ B12
-    C21 = B21 @ F @ A21
-    C22 = B22 + B21 @ F @ A22 @ B12
+    # P2T (2026-08-17): the zero-block shortcut above substituted the LITERAL
+    # identity for D/F but then still ran ``A12 @ D``, ``@ B11`` and
+    # ``B21 @ F`` as full 2N zgemms against that identity and against the zero
+    # block -- ten gemms where four carry information.  Profiled on the 2-D PMM
+    # cascade (docs/audits/BUILD_PMM2D_TREE_CASCADE_2026_08_17.md S2), the star
+    # against a propagation S-matrix cost 10.3 / 10.4 / 10.4 gemm-equivalents
+    # at 2N = 162 / 242 / 338 for four gemms of actual work.  The branches
+    # below drop exactly the products whose value is fixed by the zero block:
+    #
+    #   * ``A12 @ I`` (and ``B21 @ I``) is ``A12`` BIT-FOR-BIT -- the only
+    #     non-zero term of the dot product is ``A12[i,j] * (1+0j)``, exact, and
+    #     every other term is an exact ``0`` added to it;
+    #   * ``(...) @ B11`` with ``B11`` the exact zero block is the exact zero
+    #     matrix, and ``A11 + 0`` is ``A11``.
+    #
+    # Byte identity is asserted (not assumed) over the full stack2d case matrix
+    # -- see the build doc S4 -- and the general branch below is pure common
+    # subexpression elimination that leaves the ASSOCIATION ORDER untouched
+    # (``A12 @ D @ B11 @ A21`` is left-associated by ``@``, so hoisting
+    # ``AD = A12 @ D`` is the same three products in the same order), 12 gemm
+    # -> 10.  The JAX guards are unchanged: a traced array can express neither
+    # ``.any()`` nor the branch, so it always takes the general path.
+    _concrete = not is_jax_array(A22) and not is_jax_array(B11)
+    if _concrete and not bool(B11.any()):
+        # D = F = I and B11 == 0 exactly (the LAYER-PROPAGATION shape, half the
+        # stars in every stack solve).
+        if not bool(A22.any()):
+            return (A11, A12 @ B12, B21 @ A21, B22)
+        return (A11, A12 @ B12, B21 @ A21, B22 + (B21 @ A22) @ B12)
+    if _concrete and not bool(A22.any()):
+        # D = F = I and A22 == 0 exactly.
+        return (A11 + (A12 @ B11) @ A21, A12 @ B12, B21 @ A21, B22)
+    I = xp.eye(n, dtype=_C)
+    D = _guarded_inverse(I - B11 @ A22, "rcwa Redheffer star (I - B11 A22)")
+    F = _guarded_inverse(I - A22 @ B11, "rcwa Redheffer star (I - A22 B11)")
+    AD = A12 @ D
+    BF = B21 @ F
+    C11 = A11 + (AD @ B11) @ A21
+    C12 = AD @ B12
+    C21 = BF @ A21
+    C22 = B22 + (BF @ A22) @ B12
     return (C11, C12, C21, C22)
 
 
@@ -2441,10 +2470,15 @@ def _interface_smatrix(Wa, Va, Wb, Vb):
     apb = a + b
     amb = a - b
     iapb = _guarded_inverse(apb, "rcwa interface mode-match (a+b)")
+    # P2T (2026-08-17): ``amb @ iapb`` IS ``S22``, and ``@`` left-associates,
+    # so ``amb @ iapb @ amb`` is ``(amb @ iapb) @ amb`` -- hoisting it is pure
+    # common subexpression elimination at the SAME association order, 4 gemm
+    # -> 3, byte-identical (asserted over the stack2d case matrix, build doc
+    # S4).  Measured 1.08-1.10x on the interface build alone at 2N = 242/338.
+    S22 = amb @ iapb
     S11 = -iapb @ amb
     S12 = 2.0 * iapb
-    S21 = 0.5 * (apb - amb @ iapb @ amb)
-    S22 = amb @ iapb
+    S21 = 0.5 * (apb - S22 @ amb)
     return (S11, S12, S21, S22)
 
 
@@ -2532,10 +2566,13 @@ def _interface_smatrix_general(Ma, Mb):
     T21 = T[n2:, :n2]
     T22 = T[n2:, n2:]
     iT22 = _guarded_inverse(T22, "rcwa generalized interface (T22)")
+    # P2T (2026-08-17): ``T12 @ iT22`` IS ``S22`` and ``@`` left-associates,
+    # so ``T12 @ iT22 @ T21`` is ``(T12 @ iT22) @ T21`` -- the same CSE as in
+    # :func:`_interface_smatrix`, 4 gemm -> 3 at the SAME association order.
+    S22 = T12 @ iT22              # b- -> b+
     S11 = -iT22 @ T21             # a+ -> a-
     S12 = iT22                    # b- -> a-
-    S21 = T11 - T12 @ iT22 @ T21  # a+ -> b+
-    S22 = T12 @ iT22              # b- -> b+
+    S21 = T11 - S22 @ T21         # a+ -> b+
     return (S11, S12, S21, S22)
 
 
