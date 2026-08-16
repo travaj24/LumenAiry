@@ -1342,3 +1342,136 @@ was edited byte-preservingly; everything added is ASCII.)
   unmatched oracle mode.  On builds that match all 16 it costs nothing; on the
   runner that dipped to 9 it would cost seven, which is the right place to spend
   it.
+
+---
+
+## 13.  THE LAST ROUND-2 ASSUMPTION: A NATURAL SEPARATION IS NOT UNIVERSAL
+
+The gating matrix, py3.11 shard 1 (and the eig-heavy slow shard, same test):
+
+```
+test_eme_census_determinacy.py:989
+test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix
+  AssertionError: the pre-fix reading at Brent's halt (9.0333e-09) is not
+  separated from the converged zero's (7.8302e-09), so there is no gap to place
+  a bar inside -- measured separation is 9 decades
+  assert 9.03326947207738e-09 > (10.0 * 7.830161425530708e-09)
+```
+
+Verified, and the diagnosis holds exactly: **on that build's LAPACK the
+minimiser halts at CONVERGED quality.**  Its halt reading and the converged
+zero's reading are **1.15x** apart where M and W measure nine decades (1.51e-3
+against 4.31e-12).  The round-2 `_prefix_drop_cut` derivation places its bar
+strictly between those two readings, so on such a build there is no bar to
+place -- and the vacuity guard did the right thing by refusing to invent one.
+The guard was correct; what was wrong was assuming a build would always supply
+the gap.
+
+That is the last round-2 assumption in the file: the S9 restructure moved every
+CLAIM off per-build readings, and S11 moved the injectors off fixed offsets, but
+this one still required a NATURAL separation to exist.
+
+### 13.1  The unification -- two routes, one contract
+
+The demonstration now measures which route is available and takes it:
+
+| route | condition | halt used | seen on |
+|---|---|---|---|
+| **NATURAL** | `g_halt > _DROP_SEPARATION * g_pol` | this build's own Brent halt | M, W (9 decades) |
+| **FORCED** | otherwise | a halt DERIVED to be in-band and accepted un-treated, injected absolutely by `_force_in_cell` | py3.11 gating shard (1.15x) |
+
+The forced route is not new machinery -- it is exactly `_derive_stop` /
+`_force_in_cell`, built in S11 for the polish-guard fail-before, pointed at the
+narrow cell.  `_derive_stop` requires the halt's reading to lie inside
+`_CENSUS_BAND` (so the polish branch runs) and under `ratio_tol` (so the
+un-treated path accepts it), which is a two-decade window whose LOWER edge is
+`1e-5` -- already 1277x above the py3.11 zero reading of 7.83e-9, so the forced
+halt supplies the separation the build would not.  `_prefix_drop_cut` is
+unchanged; it only turns whichever halt it is given into a bar.
+
+Everything downstream is identical on both routes: the pre-fix path must DROP
+the mode at that bar and the fixed path must polish and return it.  **The
+fixed-path claims are unconditional on either route.**  The route taken is
+PRINTED, with both readings and their ratio, so a log says which world the
+runner was in.
+
+The vacuity guard survives, promoted to the union: it hard-fails only when
+NEITHER route is reachable -- no natural gap AND no rung of the ladder inside
+the band-and-accepted window -- and says to widen the ladder rather than delete
+the arm.
+
+### 13.2  Audit -- is anything else deriving from a natural separation?
+
+Every remaining site in the file that reads a separation, re-checked:
+
+| site | what it compares | build's own halt involved? | verdict |
+|---|---|---|---|
+| `_prefix_drop_cut` caller (S13.1) | halt reading vs converged zero's | **yes** | **the defect; unified** |
+| `assert abs(got - x_pol) <= _BRENT_XFLOOR` | census entry vs the POLISHER's answer | no -- bounded by scipy's own documented x-tolerance | sound (derived) |
+| `assert f_got < f_stop / 1e2` | `sigma_min` at the entry vs at the TABULATED `_PREFIX_STOP` | no -- the reference is a fixed point, build-stable at 3.45e-5 | sound |
+| `_tie_at_the_cut` | the SPREAD of one candidate's readings ACROSS the ULP ladder | no -- a spread across arms, not a halt/zero gap; widened then depth-adjudicated (S9.2 row 19) | sound |
+| `_derive_strays` margin ranking | injected point's reading vs the derived stop's | no -- both are chosen by reading on this build | sound |
+
+So the sub-class is one instance wide, and it is closed.  The invariant the
+whole campaign converged on is now stated in one line at the top of the routing
+block: *which route is available is itself a per-build fact, so it is measured
+rather than assumed.*
+
+### 13.3  Both routes exercised here
+
+The natural route is what this mount takes.  The forced route is exercised by
+emulating the py3.11 condition directly -- an injector that makes the minimiser
+halt AT the polished zero, collapsing the natural gap to ~1x -- and running the
+same test:
+
+**The forced route's crux, measured directly on M** (the narrow cell's
+detection bracket is `(205.875, 206.125)`):
+
+| quantity | value |
+|---|---|
+| converged zero | 205.97497577877948, reading **4.3146e-12** |
+| derived FORCED halt (`_derive_stop`) | 205.97468502372533, reading **1.1819e-04** |
+| separation `g_halt / g_pol` | **2.739e+07** against the required 10 |
+| bar from that halt (`_prefix_drop_cut`) | **2.157916e-05** |
+| pre-fix reads 1.1819e-04 > bar | **DROPS** |
+| that halt is in-band for the fix | **yes** -> polishes |
+| polished reading 4.3146e-12 < bar | **fix KEEPS** |
+
+And on the py3.11 shard's OWN readings (`g_pol = 7.8302e-09`, where its natural
+separation was 1.15x) the same derived halt would give **1.509e+04x** -- four
+decades where the build supplied none.
+
+**End to end**: the NATURAL route runs on M and passes, printing
+`[injector, NATURAL route]: ratio_tol = 2.758979e-04, placed between the halt's
+reading (1.5112e-03) and the converged zero's (4.3146e-12), 3.502e+08x apart`.
+The FORCED route was exercised by an injector that makes the minimiser halt AT
+the polished zero -- collapsing the natural gap to ~1x, which is py3.11's
+condition -- and was still running when the box was handed back (an unrelated
+whole-suite sweep left this process ~2.5% of the CPU).
+
+### 13.4  Green
+
+| environment | python | numpy | status |
+|---|---|---|---|
+| M, Windows | 3.14.6 | 2.4.4 | targeted id **PASS** (NATURAL route); whole file in flight |
+| W, WSL `lumen_venv` | 3.12.3 | 2.4.6 | not started -- box saturated |
+| W, `/tmp/venv-py310` | 3.10.20 | 2.2.6 | not started -- box saturated |
+| W, `/tmp/venv-py311` | 3.11.15 | 2.4.6 | not started -- box saturated |
+
+The forced route's arithmetic is verified numerically above on M, which is the
+claim this round turns on; the four-environment sweep is not yet evidence.
+
+`ruff check lumenairy/ tests/unit/` clean; ASCII; no library change; no `xfail`,
+`skip`, deleted test, weakened guard or `CHANGELOG` entry.
+
+### 13.5  Open
+
+* `_DROP_SEPARATION = 10.0` decides which route runs.  It is not a claim bar --
+  both routes assert the same contract -- so a build near the boundary simply
+  takes the other road.  It is the one number here that is chosen rather than
+  derived, and it is chosen an order of magnitude below the natural route's own
+  margin on the mounts that have it (9 decades).
+* Two rounds' worth of whole-file verification remain unrun on a quiet box: the
+  round-4 py3.11/`lumen_venv` rows and the round-5 whole-file regressions were
+  both killed mid-flight by an unrelated concurrent sweep.  Neither gap is
+  suspected -- the targeted ids passed -- but neither is evidence.

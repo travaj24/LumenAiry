@@ -117,6 +117,13 @@ _FD_MODE = 1.0            # 2-D-FD oracle distance at a mode: measured <= 0.225
 #                           on both reference cells; at a band-edge cusp
 #                           >= 6.85 (30x over), the same bar ``verify=True``
 #                           ships with as ``verify_tol``
+_DROP_SEPARATION = 10.0   # what the NATURAL route needs between the reading
+#                           at this build's own Brent halt and the converged
+#                           zero's.  Measured 9 decades on M/W (1.51e-3 vs
+#                           4.31e-12) but only 1.15x on the 2026-08-16
+#                           py3.11 gating shard, whose minimiser halts at
+#                           CONVERGED quality -- there the drop is shown on
+#                           a FORCED halt instead (S13).
 _VALUE_RTOL = 1e-6        # a census entry vs its converged/oracle value: the
 #                           clear-accept residual of S7.2 (Brent's own stopping
 #                           point is kept where the verdict was unambiguous),
@@ -469,24 +476,30 @@ def _tie_at_the_cut(rows, targets, iso):
     return best if best is not None and best["spread"] > 1.0 else None
 
 
-def _prefix_drop_cut(g_brent):
-    """The engineered cut for the RECALL demonstration, from the one reading the
-    pre-fix path took on this build.
+def _prefix_drop_cut(g_halt):
+    """The engineered cut for the RECALL demonstration, from the reading the
+    pre-fix path takes AT ITS HALT -- whichever route supplied that halt.
 
-    The pre-fix path reads acceptance where bounded Brent halted; the fixed path
-    polishes an in-band candidate to the converged zero and reads it THERE.  The
-    two readings are separated by the physics, not by the build -- measured
-    ``gaps.min`` 1.51e-3 at Brent's stop against 4.31e-12 at the converged zero,
-    nine decades.  A bar placed anywhere strictly between them therefore makes
-    the pre-fix path DROP the mode and the fixed path KEEP it, on every build.
+    The pre-fix path reads acceptance where the minimiser halted; the fixed path
+    polishes an in-band candidate to the converged zero and reads it THERE.  A
+    bar placed strictly between the two readings therefore makes the pre-fix path
+    DROP the mode and the fixed path KEEP it.
+
+    What is NOT universal is that a build's own halt provides that separation.
+    M and W measure 1.51e-3 against 4.31e-12 -- nine decades -- but the
+    2026-08-16 py3.11 gating shard halted at CONVERGED quality, 9.03e-9 against
+    7.83e-9, and no bar fits between them.  The caller therefore measures the
+    separation and, where the natural one is absent, FORCES a halt at a derived
+    in-band point (S13); this function only turns whichever halt it is given into
+    a bar.
 
     ``_CENSUS_BAND[1]`` is the only other constraint: the fixed path only
     polishes while ``gaps.min() <= _CENSUS_BAND[1] * ratio_tol``.  Dividing
-    Brent's own reading by ``sqrt(_CENSUS_BAND[1])`` lands the bar at the
+    that halt's reading by ``sqrt(_CENSUS_BAND[1])`` lands the bar at the
     geometric centre of the usable range ``(1, _CENSUS_BAND[1])`` -- DERIVED from
     the library's own constant, so if that constant moves the tie moves with
     it."""
-    return g_brent / float(np.sqrt(eme_2d_vector._CENSUS_BAND[1]))
+    return g_halt / float(np.sqrt(eme_2d_vector._CENSUS_BAND[1]))
 
 
 # =========================================================================== #
@@ -986,17 +999,56 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
     # ``_CENSUS_BAND``'s lower edge) ``got`` IS Brent's stop, and reading the
     # separation off it would compare that stop with itself.
     _ratio_pol, g_pol = _reading(_N16, x_pol)
-    assert g_brent > 10.0 * g_pol, (
-        f"the pre-fix reading at Brent's halt ({g_brent:.4e}) is not separated "
-        f"from the converged zero's ({g_pol:.4e}), so there is no gap to place "
-        f"a bar inside -- measured separation is 9 decades")
-    cut = _prefix_drop_cut(g_brent)
+    # TWO ROUTES to the same demonstration, and WHICH ONE is available is itself
+    # a per-build fact -- so it is measured here rather than assumed.
+    #
+    #   NATURAL -- this build's minimiser halts far enough from the zero that its
+    #     reading and the converged zero's are decades apart, and a bar placed
+    #     between them drops the mode pre-fix and keeps it fixed.  M and W:
+    #     1.51e-3 against 4.31e-12.
+    #   FORCED  -- this build's minimiser halts at CONVERGED quality, so there is
+    #     no natural gap to place a bar inside: the 2026-08-16 py3.11 gating
+    #     shard read 9.0333e-09 against 7.8302e-09, 1.15x apart, and the vacuity
+    #     guard correctly refused to derive a bar inside a non-gap.  The round-4
+    #     ABSOLUTE injector supplies one instead: force the halt to a point
+    #     DERIVED to be inside the ambiguity band and accepted un-treated -- the
+    #     same machinery ``test_a_straying_polish...`` uses -- and place the bar
+    #     off THAT reading.
+    #
+    # Both routes assert the same contract, and the fixed-path claims are
+    # unconditional on either.  Only if NEITHER is reachable does this hard-fail.
+    forced = None
+    if g_brent > _DROP_SEPARATION * g_pol:
+        route, g_halt = "natural", g_brent
+    else:
+        nb = _cell_bounds(_N16_NARROW, _RECOVERED)
+        st = _derive_stop(_N16_NARROW, _RECOVERED, nb)
+        assert st is not None, (
+            f"this build's minimiser halts at converged quality (reading "
+            f"{g_brent:.4e} against the zero's {g_pol:.4e}, "
+            f"{g_brent / g_pol:.2f}x), so the NATURAL route has no gap to place "
+            f"a bar inside -- and no rung of the ladder over the detection cell "
+            f"{nb} is both inside the ambiguity band and accepted un-treated, "
+            f"so the FORCED route has no halt to inject either.  BOTH routes "
+            f"unreachable; widen the ladder rather than deleting the arm.")
+        forced, route, g_halt = (nb, st["x"]), "forced", st["gapmin"]
+        assert g_halt > _DROP_SEPARATION * g_pol, (
+            f"the derived halt {st['x']!r} reads {g_halt:.4e}, which is not "
+            f"separated from the converged zero's {g_pol:.4e} either -- the "
+            f"ambiguity band's lower edge has come down to the zero's own "
+            f"reading, so neither route can place a bar")
+    cut = _prefix_drop_cut(g_halt)
     with monkeypatch.context() as mp:
         _prefix_refine(mp)
+        if forced is not None:
+            _force_in_cell(mp, forced[0], stop=forced[1])
         pre_tie = eme_2d_vector.layer_vector_modes(_cell(16), ratio_tol=cut,
                                                    **_N16_NARROW)
-    fix_tie = eme_2d_vector.layer_vector_modes(_cell(16), ratio_tol=cut,
-                                               **_N16_NARROW)
+    with monkeypatch.context() as mp:
+        if forced is not None:
+            _force_in_cell(mp, forced[0], stop=forced[1])
+        fix_tie = eme_2d_vector.layer_vector_modes(_cell(16), ratio_tol=cut,
+                                                   **_N16_NARROW)
     assert _absent(pre_tie, _RECOVERED, iso), (
         f"with ratio_tol = {cut:.6e} placed between Brent's own reading "
         f"{g_brent:.4e} and the converged zero's {g_pol:.4e}, the PRE-FIX path "
@@ -1005,11 +1057,15 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
     assert not _absent(fix_tie, _RECOVERED, _VALUE_RTOL * _RECOVERED), (
         f"at the same tie the FIXED path did not return the converged zero "
         f"{_RECOVERED}: {list(fix_tie)}")
-    print(f"\nEME census recall [injector]: ratio_tol = {cut:.6e}, placed "
-          f"between this build's own pre-fix reading at Brent's halt "
-          f"({g_brent:.4e}) and the converged zero's ({g_pol:.4e}).  PRE-FIX "
-          f"DROPS {_RECOVERED} there ({list(pre_tie)}); FIXED polishes and "
-          f"returns it ({list(fix_tie)}).")
+    where = (f"this build's own Brent halt reads {g_brent:.4e}, only "
+             f"{g_brent / g_pol:.2f}x from the zero, so the halt was FORCED to "
+             f"{forced[1]:.10f} by the round-4 absolute injector"
+             if forced is not None else "this build's own Brent halt")
+    print(f"\nEME census recall [injector, {route.upper()} route]: ratio_tol = "
+          f"{cut:.6e}, placed between the halt's reading ({g_halt:.4e}) and the "
+          f"converged zero's ({g_pol:.4e}), {g_halt / g_pol:.4g}x apart -- "
+          f"{where}.  PRE-FIX DROPS {_RECOVERED} there ({list(pre_tie)}); FIXED "
+          f"polishes and returns it ({list(fix_tie)}).")
 
     # ---- (d) the live cell at the SHIPPED bar, ADJUDICATED ---------------- #
     halt = min(near, key=lambda r: abs(r[0] - _RECOVERED))[0]
