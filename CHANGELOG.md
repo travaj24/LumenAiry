@@ -70,6 +70,65 @@ failed at 2, 4 and 8 (reading 8.327e-16) -- the S3/S4 shape.  The
 control now runs under the same cap, so bit-equality holds by
 construction.  Test-side only.
 
+### Added — `surface_model='tangent_facet'`, the per-pixel tangent-facet screen (route 3)
+
+A third analytic-lens surface model, opt-in and default-off.  Instead of
+correcting the paraxial vertex-plane screen `(n2 - n1) * sag`, it
+**replaces** it: each pixel's OPD is the exact axial-translation identity
+`(pz2 - pz1) * sag` at the facet tangent to the surface where THAT pixel's
+ray meets it, evaluated at the ray angle the field itself carries — a
+momentum accumulator seeded by `carrier=`, advanced by the gradient of
+every screen imprinted so far, and resampled across each gap.  Two
+second-order terms follow from taking the facet at the hit point and from
+referencing the ray's transverse walk back to the pixel.  No fitted
+constants; every gradient is a gradient of a grid field, so a conic, an
+asphere, a biconic, a Q-freeform, a form-error map and a `sag_callable`
+are all handled by the same code.
+
+* **The identity is exact, not an expansion.**  Scored against `S_in - S_out`
+  from exact plane-facet ray algebra, the screen is right to **1.7e-13
+  relative** worst-case over slopes to 0.24, index ratios including
+  `n1 > n2`, and tilts to 150 mrad.
+* **It needs no carrier**, which is what separates it from the v5.35.x
+  correction.  A steep facet is angle-wrong at NORMAL incidence too, and
+  the correction — a difference against the model's own zero-angle value —
+  is identically zero there.  Against `apply_real_lens_traced` on an
+  R = 12.6 mm N-SSK2 biconvex at 0 mrad: blind and carrier-corrected both
+  0.00141 waves rms (identical, structurally), `'tangent_facet'` **0.00008
+  (17.6x)**.
+* **And it is better with one.**  At 100 mrad on an R = 19.6 mm singlet:
+  blind 0.00423 → carrier 0.00050 → `'tangent_facet'` **0.00017**.  On
+  design 121's powered groups against exact rays, 3 mm pupil (waves rms):
+  g2 0.016799 → **0.0000046**, g3 0.009908 → **0.0000033**, g4 0.000489 →
+  **0.0000005**, g5 0.258480 → **0.0032381** — 980x to 3,600x over the
+  blind screen, and 6x to 108x over the shipped `carrier=` correction.
+* **Supersedes rather than composes.**  `screen_obliquity=True` and
+  `slant_correction=True` are refused as double-counts; the accuracy guard
+  is silent (it estimates the size of a correction this model does not
+  make).  `surface_frame` / `use_gpu` / non-ASM propagators raise — not
+  because they cannot work, but because they have not been measured.
+* **The default path is byte-identical.**  `surface_model` already defaulted
+  to `'thin'`, so the feature is reachable only through a value that did not
+  exist in 5.35.5; a plane plate is byte-identical to the thin screen at
+  every tilt (`np.array_equal`, six tilts to 200 mrad).
+* **Cost, stated not glossed.**  Whole-grid only — the model differentiates
+  a gradient twice, so an exact row-band would need a 3-row sag halo plus a
+  halo on the persistent accumulator; that is refused rather than
+  approximated.  Warmed `tracemalloc`, float64 grids of `8*N*N` bytes, as
+  extras over the paraxial no-carrier call of the same N at N >= 4096:
+  **+17.8 grids without a carrier, +21.8 with one**, against +8.8 for the
+  banded `carrier=` path.
+* **What it does not claim.**  The tangent-facet RAY arm of
+  `BUILD_R1_WIRING_2026_08_12` reads 0.000372 waves on design 121 group 5
+  and this model reads 0.0032381.  That arm is not a wave model — its kick
+  is not the gradient of its own value — and the gap is the transverse walk
+  a vertex-plane screen can reference away but not represent.  Closing it is
+  the remap axis (`surface_model='displaced'`), not this one.
+
+`docs/audits/BUILD_TANGENT_FACET_2026_08_16.md`;
+`validation/repro_traced_carrier_121/tangent_facet_derive.py`;
+`tests/unit/test_tangent_facet.py` (68 tests).
+
 ## [5.35.5] — 2026-08-16
 
 ### Fixed — the census polish could LOSE a mode (the one real library bug of the train)
