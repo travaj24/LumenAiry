@@ -4,6 +4,90 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- `surface_model='tangent_facet_remap'`: the walk, represented
+
+The REMAP rung of the tangent-facet screens, opt-in and default-off.
+
+`surface_model='tangent_facet'` (5.36.0) imprints its screen on the
+VERTEX plane and Taylor-references the ray's displaced re-crossing back
+to the pixel; its (T3) is the second order of that referencing.  The
+residual it leaves is exactly the transverse walk -- up to 55 um at one
+face across a 3 mm pupil on design 121 group 5 -- which a vertex-plane
+screen can reference away but never represent, and which held that group
+at 0.0032381 waves rms against a 0.001 bar.
+
+This model represents it.  The element becomes SCREEN + COORDINATE
+REMAP: the field is resampled to the walked positions, so the exit
+eikonal is evaluated where the ray actually is.  Three things follow,
+and each is a simplification rather than another term.
+
+**The OPD collapses to one exact line.**  With `s` the facet height at
+the ray's own crossing and `p_out` from exact vector Snell at the facet
+normal there, the screen is `s (n2^2/pz2 - n1^2/pz1)` and the walk is
+`s (p/pz1 - p_out/pz2)`.  `(T1)+(T2)+(T3)` is what that becomes after
+`S_out` is Taylor-referenced back to the pixel and truncated, so the
+remap does not add a term -- it removes a truncation.  For a tilted
+PLANE facet the whole triple (OPD, walk, exit momentum) is exact:
+measured **5.95e-14 relative worst case** over the same 27 cells route 3
+used, against closed-form eikonals with no oracle and no tolerance.
+
+**It is a Lagrangian model, which no screen could be.**  A screen's kick
+is the gradient of its own value; a remap's is the gradient of the
+COMPOSITE, and with `A = I + dW/dx` that equals `A^T p_out` identically,
+so the field's momentum at the new pixel is the EXACT refracted
+momentum.  Verified at 1.5e-15 to 4.6e-14 relative on a plane facet.  On
+a curved facet the remap's residual of that identity is its own
+hit-point truncation, 540x smaller than route 3's screen-kick-vs-exact-
+kick gap on the identical fixture.
+
+**Against exact rays on design 121, 3 mm pupil (waves rms):**
+
+```
+  group      blind    v5.35.5   tangent_facet      REMAP
+  g2      0.016799   0.000498      0.0000046   1.12e-10
+  g3      0.009908   0.000020      0.0000033   5.03e-11
+  g4      0.000489   0.000027      0.0000005   4.17e-12
+  g5      0.258480   0.012398      0.0032381   2.56e-08
+```
+
+Group 5 meets the 0.001-wave bar with **39000x of margin**, and 1 mm /
+2 mm read 2.53e-11 / 1.61e-09.  The remaining 2.56e-08 is the hit-point
+fixed point's truncation and nothing else: driving it to convergence
+with a per-pixel Newton reads 5.67e-12, which is measured and NOT taken
+because that Newton needs an analytic sag off the grid -- the sag-source
+restriction route 3 already refused.
+
+**Caustic safety is a refusal, not a clamp.**  The remap is a ray map
+and must be single-valued, which is exactly `det(I + dW/dx) > 0`.  A
+non-positive, near-zero, or not-invertible-on-this-grid determinant
+RAISES.  Proved on an engineered folding prescription (a corrugated
+facet whose slope amplitude passes `sqrt(pz2/dz)`): the guard fires, and
+with both bars removed the same call returns a NON-FINITE field while
+`x + W(x) = u` genuinely has 4 roots there.
+
+**Energy.**  The resampling carries the derived amplitude Jacobian
+`1/sqrt(det A)` -- forced by `|E_out|^2 d^2u = |E_in|^2 d^2x`, evaluated
+at the source point, the same factor and evaluation point
+`_apply_displaced_remap_2d` uses.  Checked against a dilation whose
+answer is closed form (1.8e-07 relative, which is the cubic spline's own
+floor on that fixture and falls to 7.6e-11 at order 5 -- a wrong Jacobian
+exponent would read 0.2 at every order) and end to end (2.6e-07 of the
+input, against the pure screen it replaces).
+
+`remap_order` (1 / 3 / 5, default 3) is the resampling spline order.
+The field is demodulated by an analytic quadratic eikonal fitted to its
+own momentum before resampling -- a similarity transform, so it changes
+no physics -- because a lens interior runs at a few pixels per fringe;
+without it the interpolation loses 3.4e-03 of the input where with it
+the deficit is 2.6e-07.
+
+Whole-grid only, for route 3's reason and one more (the field itself is
+resampled), and `sag_chunk_rows` is pinned INERT.  A plane plate is
+**byte-identical** to the thin screen at every tilt, and both OFF paths
+(`'thin'`, `'tangent_facet'`) are byte-identical to 5.36.0 across a
+72-arm two-tree comparison.  Everything route 3 refuses this refuses
+too; it is additionally scipy-bound.
+
 ### Test hygiene (no library change)
 
 Evidence: `docs/audits/CHORE_TEST_HYGIENE_2026_08_16.md`.
