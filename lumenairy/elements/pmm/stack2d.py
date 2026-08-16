@@ -46,6 +46,7 @@ from ._core import (
     _redheffer_star,
     _resolve_incidence,
 )
+from ._stack2d_cache import LayerCache
 from .stack import _warn_stack_energy
 from .twod import (
     _C,
@@ -63,6 +64,13 @@ from .twod import (
 from .twod_jones import _require_nonzero_ezz, _tensor_layer_modes
 
 __all__ = ["PMM2DStackHybrid", "PMM2DStack_hybrid", "PMM2DStack"]
+
+# Modal-content-key sentinels for the two half-spaces (P2C).  A solve has
+# exactly one superstrate and one substrate, and the interface memo they key
+# into is per-solve-call, so plain sentinels cannot collide with a layer key
+# (every layer key is a tuple whose head is 'uniform' or 'geom').
+_KEY_SUP = ("__superstrate__",)
+_KEY_SUB = ("__substrate__",)
 
 
 from ...backend import is_jax_array
@@ -87,11 +95,16 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
                  n_substrate=1.0, degree=11, elements_per_strip=1,
                  grade=False, n_orders=11, formulation="li",
-                 symmetry="auto", max_nodal_dof=_MAX_NODAL_DOF):
+                 symmetry="auto", max_nodal_dof=_MAX_NODAL_DOF,
+                 cascade="fast", cache_max_bytes=None):
         if formulation not in ("li", "laurent"):
             raise ValueError(
                 f"PMM2DStackHybrid: formulation must be 'li' or 'laurent', got "
                 f"{formulation!r}")
+        if cascade not in ("fast", "monolithic"):
+            raise ValueError(
+                f"PMM2DStackHybrid: cascade must be 'fast' or 'monolithic', "
+                f"got {cascade!r}")
         self.period_x = float(period_x)
         self.period_y = float(period_x if period_y is None else period_y)
         # A JAX half-space index stays RAW so its gradient flows (the
@@ -114,6 +127,15 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # even basis matches it to ~1e-12, not bit-for-bit).
         self.symmetry = _symmetry_on(symmetry)
         self.max_nodal_dof = int(max_nodal_dof)
+        # P2C (2026-08-16): cascade strategy.  'fast' (default) dedups the
+        # per-interface mode-match S-matrices by CONTENT and merges maximal
+        # runs of adjacent layers that share a modal basis into one
+        # propagation; 'monolithic' is the escape hatch that reproduces the
+        # pre-P2C per-layer build-and-star cascade BIT-FOR-BIT.  See
+        # docs/audits/BUILD_PMM2D_CASCADE_2026_08_16.md S3 for the bound.
+        self.cascade = cascade
+        self._cache_max_bytes = (None if cache_max_bytes is None
+                                 else int(cache_max_bytes))
         self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
         self._src = None
         # F4 part 2 (audit): content-keyed cache of the WAVELENGTH-INDEPENDENT
@@ -122,7 +144,23 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # per layer per wl.  Persists across solve() calls; cleared on add_layer
         # (geometry change).  A dispersive layer's tile changes per wl -> a new
         # content key, so the cache never serves a stale build.
-        self._geom_cache = {}
+        #
+        # P2C (2026-08-16): this was a BARE DICT that grew without bound and
+        # was shared, unlocked, by every ``solve_vs_wavelength`` worker (the
+        # sweep clones with ``copy.copy``).  Measured on the pre-P2C build: a
+        # 12-point dispersive sweep retained 8.41 MB and a 24-point one
+        # 16.82 MB (0.701 MB/entry at ``n_orders=4``, 1.523 at 5, 2.859 at 6)
+        # -- linear in sweep length, i.e. ~0.35/0.76/1.43 GB for a 500-point
+        # sweep -- and ``copy.copy(st)._geom_cache is st._geom_cache`` was
+        # ``True``.  :class:`LayerCache` gives it a lock and a RAM-priced byte
+        # budget with a refuse-never-degrade eviction rule.
+        self._geom_cache = LayerCache(max_bytes=self._cache_max_bytes)
+        # P2C: the wavelength/incidence-DEPENDENT per-layer eigensolve, cached
+        # ACROSS solve() calls (the 1-D ``_PreparedPMMStack._eig_cache``
+        # analogue).  Pre-P2C the mode dedup lived in a per-CALL local dict, so
+        # four successive solve() calls on one object at one source measured a
+        # flat 0.625 / 0.601 / 0.609 / 0.609 s -- zero reuse.
+        self._eig_cache = LayerCache(max_bytes=self._cache_max_bytes)
 
     def _geom_key(self, L):
         """Cache key for the per-layer nodal/projected build.
@@ -174,7 +212,15 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         raises (the 2-D JAX surface is scalar)."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
         self._modal = None      # ... and retained per-order amplitudes (B)
-        self._geom_cache = {}   # F4 part 2: geometry changed -> drop the cache
+        # F4 part 2: geometry changed -> drop the caches.  REBIND rather than
+        # clear() in place: ``_materialized_layers`` builds a probe whose
+        # ``__dict__`` is copied from self and then calls ``add_layer`` on it,
+        # and ``solve_vs_wavelength`` hands workers a shallow clone -- both
+        # share the cache OBJECT, so clearing in place would drain a cache the
+        # parent (or a sibling worker) is still using.  Rebinding touches only
+        # this instance, exactly as the pre-P2C ``= {}`` did.
+        self._geom_cache = LayerCache(max_bytes=self._cache_max_bytes)
+        self._eig_cache = LayerCache(max_bytes=self._cache_max_bytes)
         if is_jax_array(thickness):
             t_store = thickness            # traced: validated only if concrete
             try:
@@ -495,7 +541,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                                  L["el_y"], self.grade)
                 lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
                                              self.period_x, self.period_y)
-                self._geom_cache[gkey] = _freeze_cached((ax, ay, lops))
+                self._geom_cache.put(gkey, _freeze_cached((ax, ay, lops)))
             GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
             GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
             EpsF, EinvF, EpnF = lops["EpsF"], lops["EinvF"], lops["EpnF"]
@@ -513,7 +559,245 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             specs.append(("PQ", P, Q, EpsF))
         return specs, depths
 
-    def solve(self, *, retain_internal=False):
+    # ------------------------------------------------------------------ #
+    # P2C: per-layer modal sets (content-keyed, cached, optionally threaded)
+    # ------------------------------------------------------------------ #
+    def _mode_key(self, L, k0, kx0, ky0, wl):
+        """Content key for layer ``L``'s MODAL solution at this source.
+
+        The modes depend on the layer's geometry/permittivity AND on the
+        source, so the key carries both: everything :meth:`_geom_key` covers
+        (kind / tile bytes / walls / element counts / periods / degree / grade
+        / ``n_orders``) plus ``(wl, k0, kx0, ky0, formulation)``.  Two layers
+        share a key iff their modal sets are computed from identical inputs,
+        so a hit is byte-identical to a recompute (same LAPACK, same bytes).
+
+        A layer whose tile is UNIFORM-VALUED keys as a uniform layer (that is
+        the branch that actually runs: ``_homogeneous_modes`` on the single
+        value), so a patterned-but-constant cell and a genuine film with the
+        same eps correctly share one modal set.
+        """
+        common = (float(wl), float(k0), float(kx0), float(ky0),
+                  float(self.period_x), float(self.period_y),
+                  int(self.n_orders), self.formulation)
+        if L["kind"] == "uniform":
+            eps_i = np.conj(_C(L["eps"]))
+            return ("uniform",
+                    np.asarray(eps_i, dtype=_C).tobytes()) + common
+        tile_i = np.conj(L["tile"])
+        if L["kind"] == "scalar":
+            eps0 = tile_i.flat[0]
+            if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):
+                return ("uniform",
+                        np.asarray(eps0, dtype=_C).tobytes()) + common
+        return ("geom",) + self._geom_key(L) + common
+
+    def _build_layer_modes(self, L, kxv, kyv, ox, oy, kx0, ky0, k0):
+        """Modal set of ONE layer -- the eig-heavy build, thickness-free.
+
+        Returns ``('sym', W, V, lam)`` or, for an out-of-plane tensor layer,
+        ``('gen', Wf, Vf, lf, Wb, Vb, lb)``.  Thickness is applied by the
+        cascade (it enters only the propagation S-matrix), which is what lets
+        two layers of different thickness share one modal set.
+        """
+        if L["kind"] == "uniform":
+            Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv,
+                                                np.conj(_C(L["eps"])))
+            return ("sym", Wl, Vl, lam)
+        tile_i = np.conj(L["tile"])
+        if L["kind"] == "scalar":
+            eps0 = tile_i.flat[0]
+            if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):   # uniform tile
+                Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv, eps0)
+                return ("sym", Wl, Vl, lam)
+        # patterned scalar or tensor -> expensive nodal build + eig
+        gkey = self._geom_key(L)
+        # F4 part 2: reuse the wl-INDEPENDENT (ax, ay, scalar lops) build
+        # across a sweep; only the eig below re-runs per wavelength.
+        gc = self._geom_cache.get(gkey)
+        if gc is not None:
+            ax, ay, lops = gc
+        else:
+            ax = _build_axis(self.period_x, L["xw"], self.degree,
+                             L["el_x"], self.grade)
+            ay = _build_axis(self.period_y, L["yw"], self.degree,
+                             L["el_y"], self.grade)
+            lops = (_scalar_projected_ops(ax, ay, tile_i, ox, oy,
+                                          self.period_x, self.period_y)
+                    if L["kind"] == "scalar" else None)
+            self._geom_cache.put(gkey, _freeze_cached((ax, ay, lops)))
+        if L["kind"] == "scalar":
+            GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
+            GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
+            Wl, Vl, lam = _layer_modes_projected(
+                GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
+                formulation=self.formulation)
+            return ("sym", Wl, Vl, lam)
+        ez_rule = ("li" if self.formulation == "li" else "laurent")
+        out = _tensor_layer_modes(ax, ay, L["xw"], L["yw"], tile_i, k0, kx0,
+                                  ky0, ox, oy, kxv, kyv, ez_rule)
+        return (("gen",) + out if len(out) == 6 else ("sym",) + tuple(out))
+
+    def _layer_mode_sets(self, kxv, kyv, ox, oy, kx0, ky0, k0, wl,
+                         max_workers=None, blas_per_worker=1):
+        """Per-layer ``(modes, mode_keys)`` for this source.
+
+        Every DISTINCT modal key is built at most once per solve, and the
+        result is retained in the instance's priced ``_eig_cache`` so a later
+        solve at the same source (or a sweep point that revisits it) reuses it
+        instead of re-eigging.  ``modes[i]`` is the modal tuple with layer
+        ``i``'s own thickness appended.
+
+        ``max_workers`` selects between two CONTRACTS, and the distinction is
+        load-bearing:
+
+        * ``None`` (the default) -- plain serial build on the caller's thread
+          with NO BLAS cap entered.  Bit-for-bit the pre-P2C path, and safe to
+          call from inside ``solve_vs_wavelength``'s worker pool, which
+          already holds one process-wide cap of its own.
+        * an INT (including ``1``) -- the threaded fan-out contract.  ONE
+          process-wide BLAS cap is entered on THIS thread around BOTH the
+          serial and the pooled branch, so ``max_workers=1``, ``2`` and ``8``
+          are byte-identical TO EACH OTHER.  Entering the cap is what makes
+          that true: applying a cap is PROCESS-GLOBAL (M4, 2026-08-04), only
+          the REQUEST is thread-local, so it cannot be done per worker -- and
+          a serial branch that skipped the cap would run its eigs at a
+          DIFFERENT BLAS thread count than the pooled branch and land on
+          different bits.  (Measured while building this: with
+          ``OPENBLAS_NUM_THREADS=2`` in the environment, an uncapped serial
+          branch and a ``blas_per_worker=1`` pooled branch disagreed on ``R``
+          -- the first version of this method shipped exactly that bug and the
+          byte-identity test caught it.)
+
+        Do NOT pass an int from inside another threaded driver: the cap is
+        process-global and nesting pools both oversubscribes the box and races
+        on it.  Thread the LAYER axis only when ``solve()`` is outermost.
+
+        Results are stored BY KEY from a list the pool yields in INPUT order,
+        so the ordering of the answer never depends on worker scheduling.
+        """
+        keys = [self._mode_key(L, k0, kx0, ky0, wl) for L in self._layers]
+        entries = [None] * len(self._layers)
+        todo = {}                       # distinct missing key -> layer index
+        for i, kk in enumerate(keys):
+            hit = self._eig_cache.get(kk)
+            if hit is not None:
+                entries[i] = hit
+            elif kk not in todo:
+                todo[kk] = i
+        items = list(todo.items())
+
+        def _build(item):
+            kk, i = item
+            return kk, self._build_layer_modes(self._layers[i], kxv, kyv,
+                                               ox, oy, kx0, ky0, k0)
+
+        if max_workers is None:
+            built = [_build(it) for it in items]
+        else:
+            _mw = max(1, int(max_workers))
+            with _blas_threads_quiet(blas_per_worker), _blas_limit():
+                if _mw == 1 or len(items) <= 1:
+                    built = [_build(it) for it in items]
+                else:
+                    from concurrent.futures import ThreadPoolExecutor
+                    with ThreadPoolExecutor(
+                            max_workers=min(_mw, len(items))) as _ex:
+                        built = list(_ex.map(_build, items))
+        for kk, entry in built:
+            self._eig_cache.put(kk, _freeze_cached(entry))
+        got = dict(built)
+        for i, kk in enumerate(keys):
+            if entries[i] is None:
+                entries[i] = got[kk]
+        modes = [e + (L["t"],) for e, L in zip(entries, self._layers)]
+        return modes, keys
+
+    # ------------------------------------------------------------------ #
+    # P2C: cascade sequencing (interface dedup + identical-run merge)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _cascade_sequence(modes, mkeys, merge):
+        """``[(key, W, V, lam, thickness), ...]`` for the symmetric cascade.
+
+        With ``merge=True`` a maximal RUN of adjacent layers sharing a modal
+        key becomes ONE entry whose thickness is the run's sum.  This is an
+        exact physical identity -- adjacent layers with the same modal basis
+        are one thicker layer -- and it removes, per merged layer, one
+        interface build and one Redheffer star whose analytic value is the
+        no-op swap.
+        """
+        if not merge:
+            return [(kk, m[1], m[2], m[3], m[4])
+                    for m, kk in zip(modes, mkeys)]
+        runs = []
+        for m, kk in zip(modes, mkeys):
+            if runs and runs[-1][0] == kk:
+                runs[-1][4] = runs[-1][4] + m[4]
+            else:
+                runs.append([kk, m[1], m[2], m[3], m[4]])
+        return [tuple(r) for r in runs]
+
+    @staticmethod
+    def _cascade_sequence_general(modes, mkeys, merge):
+        """``[(key, mode_tuple), ...]`` for the generalized (OOP) cascade.
+
+        Same merge rule as :meth:`_cascade_sequence`; the merged entry carries
+        the run's summed thickness in the mode tuple's last slot.
+        """
+        if not merge:
+            return list(zip(mkeys, modes))
+        out = []
+        for m, kk in zip(modes, mkeys):
+            if out and out[-1][0] == kk:
+                prev = out[-1][1]
+                out[-1] = (kk, prev[:-1] + (prev[-1] + m[-1],))
+            else:
+                out.append((kk, m))
+        return out
+
+    @staticmethod
+    def _interface_memo(dedup):
+        """Interface-S-matrix builder, optionally memoized on the modal-key
+        pair.  A memo hit is BYTE-IDENTICAL to a rebuild (the same W/V bytes
+        through the same LAPACK), so this costs nothing in accuracy; it is the
+        single largest measured saving on repeated-layer stacks, where the
+        interface build was 6.4 ms of a 23 ms per-layer cost at ``n_orders=4``
+        (2026-08-16 measurement, build doc S2)."""
+        if not dedup:
+            return lambda ka, Wa, Va, kb, Wb, Vb: _interface_smatrix(
+                Wa, Va, Wb, Vb)
+        memo = {}
+
+        def _ifc(ka, Wa, Va, kb, Wb, Vb):
+            ck = (ka, kb)
+            hit = memo.get(ck)
+            if hit is None:
+                hit = _interface_smatrix(Wa, Va, Wb, Vb)
+                memo[ck] = hit
+            return hit
+
+        return _ifc
+
+    def clear_cache(self):
+        """Drop every cached per-layer geometry build and modal eig (the
+        1-D :meth:`_PreparedPMMStack.clear_cache` analogue).  The next solve
+        recomputes them byte-identically; call between sweep stages to release
+        memory without discarding the stack."""
+        self._geom_cache.clear()
+        self._eig_cache.clear()
+        return self
+
+    def cache_stats(self):
+        """``{'geom': {...}, 'eig': {...}}`` -- entries / bytes / budget /
+        hits / misses / refused / evicted for the two priced caches."""
+        return dict(geom=dict(self._geom_cache.stats(),
+                              budget=self._geom_cache.budget()),
+                    eig=dict(self._eig_cache.stats(),
+                             budget=self._eig_cache.budget()))
+
+    def solve(self, *, retain_internal=False, max_workers=None,
+              blas_per_worker=1):
         """Solve the cascade.  Returns ``(orders, R(2, N), T(2, N),
         jones_reflection(2, 2))`` -- row 0 = incident ``E_x``, row 1 =
         incident ``E_y``; Jones in the PUBLIC convention.
@@ -524,7 +808,31 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         jnp twin (``pmm/_jax_stack2d.py``) -- the SCALAR in-plane vertical
         surface, forward-identical to NumPy at ~1e-15 with AD-vs-FD
         validated gradients.  Tensor layers and ``retain_internal`` raise
-        under JAX; x64 required; the eig is CPU-only."""
+        under JAX; x64 required; the eig is CPU-only.
+
+        Parameters
+        ----------
+        retain_internal : bool, optional
+            Retain the partial cascades for :meth:`internal_field` /
+            :meth:`layer_absorption`.  Forces the per-LAYER cascade (the
+            identical-run merge would erase the per-layer indexing); the
+            interface dedup still applies, and is byte-identical.
+        max_workers : int, optional
+            Threads for the per-layer eigensolve fan-out (P2C).  ``None`` (the
+            default) is the plain serial build with NO BLAS cap entered --
+            bit-for-bit the pre-P2C path.  Passing an INT opts into the
+            threaded contract: one process-wide BLAS cap is entered around the
+            fan-out, and ``max_workers=1, 2, 8, ...`` are byte-identical TO
+            EACH OTHER (they are NOT bit-equal to the ``None`` default unless
+            the ambient BLAS thread count already equals ``blas_per_worker``).
+            Only the DISTINCT modal sets are built, so a stack of repeated
+            layers has nothing to fan out.  Do NOT pass an int from inside
+            another threaded driver: applying a BLAS cap is process-global
+            (M4), and :meth:`solve_vs_wavelength` already holds one cap around
+            a pool of whole solves.
+        blas_per_worker : int, optional
+            BLAS threads each layer worker may use (default 1).  Read only
+            when ``max_workers`` is not ``None``."""
         # Invalidate retained internals BEFORE any dispatch/early return
         # (audit P1-04): every solve() supersedes the retained state, so
         # internal_field/layer_absorption can only serve the LAST solve --
@@ -539,6 +847,13 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # through) so a re-solve after add_layer / a dispersive layer swap can
         # never serve a stale projected-eps for a reused index.
         self._epsF_cache = {}
+        # P2C: stamp a new cache generation.  Entries minted from here on are
+        # exempt from eviction until the next solve starts, so a single solve
+        # can never evict a modal set it is about to reuse (the alternative --
+        # sizing the budget against the biggest conceivable stack -- is the
+        # kind of per-build fact TESTING_STANDARDS forbids).
+        self._geom_cache.new_generation()
+        self._eig_cache.new_generation()
         if any(L.get("kind") == "disp" for L in self._layers):
             raise ValueError(
                 "PMM2DStackHybrid.solve: the stack holds DISPERSIVE (wl -> value) "
@@ -641,75 +956,47 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 orders2d, np)
         S11 = S21 = None
         if sym_pairs is None:
-            modes = []
-            _mode_cache = {}
-            for L in self._layers:
-                if L["kind"] == "uniform":
-                    Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv,
-                                                        np.conj(_C(L["eps"])))
-                    modes.append(("sym", Wl, Vl, lam, L["t"]))
-                    continue
-                tile_i = np.conj(L["tile"])
-                if L["kind"] == "scalar":
-                    eps0 = tile_i.flat[0]
-                    if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):  # uniform tile
-                        Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv, eps0)
-                        modes.append(("sym", Wl, Vl, lam, L["t"]))
-                        continue
-                # patterned scalar or tensor -> expensive build + eig; dedup it
-                gkey = self._geom_key(L)
-                hit = _mode_cache.get(gkey)
-                if hit is not None:
-                    modes.append(hit + (L["t"],))
-                    continue
-                # F4 part 2: reuse the wl-independent (ax, ay, scalar lops) build
-                # across the sweep; only the eig below re-runs per wavelength.
-                gc = self._geom_cache.get(gkey)
-                if gc is not None:
-                    ax, ay, lops = gc
-                else:
-                    ax = _build_axis(self.period_x, L["xw"], self.degree,
-                                     L["el_x"], self.grade)
-                    ay = _build_axis(self.period_y, L["yw"], self.degree,
-                                     L["el_y"], self.grade)
-                    lops = (_scalar_projected_ops(ax, ay, tile_i, ox, oy,
-                                                  self.period_x, self.period_y)
-                            if L["kind"] == "scalar" else None)
-                    self._geom_cache[gkey] = _freeze_cached((ax, ay, lops))
-                if L["kind"] == "scalar":
-                    GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
-                    GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
-                    Wl, Vl, lam = _layer_modes_projected(
-                        GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
-                        formulation=self.formulation)
-                    entry = ("sym", Wl, Vl, lam)
-                else:                                   # tensor (full 3x3)
-                    ez_rule = ("li" if self.formulation == "li" else "laurent")
-                    out = _tensor_layer_modes(
-                        ax, ay, L["xw"], L["yw"], tile_i, k0, kx0, ky0, ox, oy,
-                        kxv, kyv, ez_rule)
-                    entry = (("gen",) + out if len(out) == 6
-                             else ("sym",) + tuple(out))
-                _mode_cache[gkey] = entry
-                modes.append(entry + (L["t"],))
+            # P2C: per-layer modal sets, content-keyed and cached ACROSS
+            # solve() calls (see :meth:`_layer_mode_sets`).  ``mkeys[i]`` is
+            # layer i's modal content key -- the cascade below reuses it to
+            # dedup interfaces and to detect adjacent layers that share a
+            # modal basis.
+            modes, mkeys = self._layer_mode_sets(
+                kxv, kyv, ox, oy, kx0, ky0, k0, wl,
+                max_workers, blas_per_worker)
 
             any_oop = any(m[0] == "gen" for m in modes)
             if retain_internal and any_oop:
                 raise NotImplementedError(
                     "PMM2DStackHybrid.solve(retain_internal=True): symmetric "
                     "(in-plane, vertical) cascades only.")
+            # P2C cascade strategy.  ``dedup`` memoizes the per-interface
+            # mode-match S-matrix on the (above, below) modal-key pair: the
+            # same W/V bytes through the same LAPACK give a BYTE-IDENTICAL
+            # result, so this is free accuracy-wise.  ``merge`` additionally
+            # collapses maximal runs of ADJACENT layers sharing a modal key
+            # into ONE propagation of the summed thickness -- exact physics
+            # (identical adjacent layers ARE one thicker layer), bounded by
+            # the interface-identity residual; see S3 of the build doc.  Merge
+            # is off under ``retain_internal`` (the partial cascades are
+            # indexed per LAYER) and under ``cascade='monolithic'``.
+            dedup = (self.cascade == "fast")
+            merge = dedup and not retain_internal
             if not any_oop:
                 # Redheffer cascade: sup | L1 | L2 | ... | Ln | sub (symmetric)
                 nlay = len(modes)
-                ifc = [_interface_smatrix(Wsup, Vsup, modes[0][1], modes[0][2])]
-                for ii in range(1, nlay):
-                    ifc.append(_interface_smatrix(
-                        modes[ii - 1][1], modes[ii - 1][2],
-                        modes[ii][1], modes[ii][2]))
-                ifc.append(_interface_smatrix(modes[-1][1], modes[-1][2],
-                                              Wsub, Vsub))
+                seq = self._cascade_sequence(modes, mkeys, merge)
+                _ifc = self._interface_memo(dedup)
+                ifc = [_ifc(_KEY_SUP, Wsup, Vsup, seq[0][0], seq[0][1],
+                            seq[0][2])]
+                for ii in range(1, len(seq)):
+                    ifc.append(_ifc(seq[ii - 1][0], seq[ii - 1][1],
+                                    seq[ii - 1][2], seq[ii][0], seq[ii][1],
+                                    seq[ii][2]))
+                ifc.append(_ifc(seq[-1][0], seq[-1][1], seq[-1][2],
+                                _KEY_SUB, Wsub, Vsub))
                 S = ifc[0]
-                for ii, (_k, Wl, Vl, lam, t) in enumerate(modes):
+                for ii, (_kk, Wl, Vl, lam, t) in enumerate(seq):
                     S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
                     S = _redheffer_star(S, ifc[ii + 1])
                 if retain_internal:
@@ -747,24 +1034,50 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 # symmetric layers/half-spaces enter as [W, W; V, -V] blocks with
                 # (lam, -lam), the generator layers with their explicit
                 # forward/backward sets (the 1-D PMMStack precedent).
-                def _blocks(m):
+                # P2C: the SAME dedup/merge applies here -- ``_modes_to_M`` and
+                # ``_interface_smatrix_general`` are keyed on the modal content
+                # keys, and adjacent same-key layers merge into one generalized
+                # propagation (identical adjacent layers ARE one thicker layer).
+                _Mmemo = {}
+
+                def _blocks(m, kk):
+                    hit = _Mmemo.get(kk) if dedup else None
                     if m[0] == "sym":
                         _k, W, V, lam, t = m
-                        return _modes_to_M(W, V, W, -V), lam, -lam, t
-                    _k, Wf, Vf, lf, Wb, Vb, lb, t = m
-                    return _modes_to_M(Wf, Vf, Wb, Vb), lf, lb, t
+                        M = hit if hit is not None else _modes_to_M(W, V, W, -V)
+                        lf, lb = lam, -lam
+                    else:
+                        _k, Wf, Vf, lf, Wb, Vb, lb, t = m
+                        M = hit if hit is not None else _modes_to_M(Wf, Vf,
+                                                                    Wb, Vb)
+                    if dedup and hit is None:
+                        _Mmemo[kk] = M
+                    return M, lf, lb, t
 
-                M_prev = _modes_to_M(Wsup, Vsup, Wsup, -Vsup)
+                gseq = self._cascade_sequence_general(modes, mkeys, merge)
+                _gifc = {}
+
+                def _ifc_gen(ka, Ma, kb, Mb):
+                    if not dedup:
+                        return _interface_smatrix_general(Ma, Mb)
+                    ck = (ka, kb)
+                    hit = _gifc.get(ck)
+                    if hit is None:
+                        hit = _interface_smatrix_general(Ma, Mb)
+                        _gifc[ck] = hit
+                    return hit
+
+                M_prev, k_prev = _modes_to_M(Wsup, Vsup, Wsup, -Vsup), _KEY_SUP
                 S = None
-                for m in modes:
-                    Ml, lf, lb, t = _blocks(m)
-                    Si = _interface_smatrix_general(M_prev, Ml)
+                for kk, m in gseq:
+                    Ml, lf, lb, t = _blocks(m, kk)
+                    Si = _ifc_gen(k_prev, M_prev, kk, Ml)
                     S = Si if S is None else _redheffer_star(S, Si)
                     S = _redheffer_star(
                         S, _propagation_smatrix_general(lf, lb, k0 * t))
-                    M_prev = Ml
+                    M_prev, k_prev = Ml, kk
                 Msub = _modes_to_M(Wsub, Vsub, Wsub, -Vsub)
-                S = _redheffer_star(S, _interface_smatrix_general(M_prev, Msub))
+                S = _redheffer_star(S, _ifc_gen(k_prev, M_prev, _KEY_SUB, Msub))
             S11, _S12, S21, _S22 = S
 
         # Jones far field (both incident polarizations).  The even-parity

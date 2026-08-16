@@ -4,6 +4,72 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- `PMM2DStackHybrid` fast cascade, and priced per-layer caches
+
+`cascade='fast'` (the new default; `cascade='monolithic'` is the escape
+hatch, bit-for-bit the previous path) dedups the per-interface
+mode-match S-matrices on the modal-content key pair -- byte-identical,
+same bytes through the same LAPACK -- and collapses maximal runs of
+ADJACENT layers sharing a modal basis into one propagation of the
+summed thickness.  The latter is exact physics (identical adjacent
+layers ARE one thicker layer); a stack with no two adjacent layers
+alike stays bit-for-bit identical, and a mergeable one agrees to a
+bound derived from the interface-identity residual, measured 2.073e-14
+worst over a 360-case matrix ({2,3,5} layers x {normal, oblique,
+conical} x scalar/mixed/tensor/out-of-plane x degrees to 8, both
+polarizations).
+
+The motivating measurement (2026-08-16, docs/audits/
+BUILD_PMM2D_CASCADE_2026_08_16.md): the CASCADE, not the eigensolve,
+was the dominant cost -- on a repeated-layer stack essentially 100% of
+the marginal per-layer cost was interface build + Redheffer star, work
+whose analytic value is the no-op swap (measured
+`max|S_ifc(A,A) - swap|` = 4.9e-15).
+
+`solve(max_workers=N)` fans the DISTINCT per-layer eigensolves over a
+bounded thread pool under one process-wide BLAS cap; worker counts are
+byte-identical to each other.  The `None` default stays uncapped and
+serial (unchanged), because `solve_vs_wavelength` already holds a cap.
+
+Measured (interleaved A/B against origin/main, min over 4 rounds,
+BLAS pinned to 1, 24-core Windows box): 16 identical layers **6.98x**
+(and now O(1) rather than O(N) in the run length -- 2/4/8/16 layers all
+cost what one layer costs); ABAB 16-layer **1.26x**; re-solving one
+object at one source **1.65x** distinct / **4.44x** repeated;
+`max_workers=8` on 8 distinct tapered slices **1.52x**.  All-distinct
+stacks measure **1.00x** -- nothing to dedup or merge, and no
+regression.  (A first, non-interleaved pass credited distinct stacks
+1.36-1.39x; that was box drift, and only the interleaved numbers are
+reported.)
+
+### Fixed -- the 2-D stack's layer caches were unbounded, unpriced and unlocked
+
+`PMM2DStackHybrid._geom_cache` was a bare dict that grew linearly with
+sweep length (measured: 12-point dispersive sweep 8.41 MB, 24-point
+16.82 MB) and was shared, without a lock, by every
+`solve_vs_wavelength` worker (the sweep hands out `copy.copy` shallow
+clones).  Both caches are now `LayerCache`: LRU, thread-safe, and
+priced against `get_ram_budget()` at query time, with entries minted by
+the current solve exempt from eviction and a refuse-never-degrade rule
+(a refusal costs a byte-identical recompute, never an answer).  This is
+audit P3-32's fix, applied to the 2-D twin that never received it.
+New: `clear_cache()`, `cache_stats()`, `cache_max_bytes=`.
+
+A NEW `_eig_cache` retains the modal eigensolves ACROSS `solve()` calls
+(keyed on geometry AND source), which the 2-D path lacked entirely --
+four successive solves on one object at one source previously measured
+a flat 0.625/0.601/0.609/0.609 s.
+
+### Fixed -- a test whose pass/fail depended on the ambient BLAS thread count
+
+`test_v5_14_1_device_geometry.py::test_pmm2d_stack_dispersive_sweep`
+asserted `== 0.0` between a swept point (run under the sweep's
+process-wide 1-thread BLAS cap) and an uncapped control solve.  On
+`origin/main` @40f28ae this passed at `OPENBLAS_NUM_THREADS=1` and
+failed at 2, 4 and 8 (reading 8.327e-16) -- the S3/S4 shape.  The
+control now runs under the same cap, so bit-equality holds by
+construction.  Test-side only.
+
 ## [5.35.5] — 2026-08-16
 
 ### Fixed — the census polish could LOSE a mode (the one real library bug of the train)

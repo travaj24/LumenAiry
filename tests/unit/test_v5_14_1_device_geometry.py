@@ -21,7 +21,7 @@ import lumenairy as la
 from lumenairy.elements.pmm import PMM2DStack, PMMStack
 from lumenairy.elements.pmm._core import _pmm_union_grid
 from lumenairy.elements.rcwa import RCWAStack, rcwa_jones_2d
-from lumenairy.elements.rcwa._core import uniaxial_tensor
+from lumenairy.elements.rcwa._core import _blas_limit, _blas_threads_quiet, uniaxial_tensor
 from lumenairy.elements.segment_geometry import SegmentStackGeometry
 
 _P, _WL = 0.8e-6, 0.633e-6
@@ -237,13 +237,27 @@ def test_pmm2d_stack_dispersive_sweep():
         st.set_source(0.55e-6).solve()
     wls = (0.5e-6, 0.6e-6)
     o, R, T, J = st.solve_vs_wavelength(wls, jones=True)
-    for i, w in enumerate(wls):
-        ctl = PMM2DStack(P, n_substrate=1.5, n_superstrate=1.0, degree=9,
-                         n_orders=4)
-        ctl.add_layer(0.2e-6, eps_cell=cell_at(w))
-        o1, R1, T1, j1 = ctl.set_source(w).solve()
-        assert np.max(np.abs(R[i] - R1)) == 0.0
-        assert np.max(np.abs(J[i] - j1)) == 0.0
+    # The sweep runs every point under ONE process-wide BLAS cap of
+    # ``blas_per_worker`` (=1 by default) threads, because applying a cap is
+    # process-global and byte-identity across worker counts demands it (M4,
+    # 2026-08-04).  The control solve below must therefore run under the SAME
+    # cap or the two land on different BLAS reduction orders and the
+    # bit-equality claim becomes a statement about the ambient
+    # ``OPENBLAS_NUM_THREADS`` -- the S3 environment-dependent-precondition
+    # shape.  Measured on origin/main @40f28ae (2026-08-16, Windows py3.14.6 /
+    # numpy 2.4.4 / scipy-openblas, 24 cores): this assertion PASSED at
+    # ``OPENBLAS_NUM_THREADS=1`` and FAILED at 2, 4 and 8, reading
+    # ``max|R - R1|`` = 8.327e-16 at 2 -- one ULP of a reduction, not a
+    # library difference.  Forcing the precondition (rule 4) keeps the strong
+    # bit-equality claim instead of weakening it to a tolerance.
+    with _blas_threads_quiet(1), _blas_limit():
+        for i, w in enumerate(wls):
+            ctl = PMM2DStack(P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+                             n_orders=4)
+            ctl.add_layer(0.2e-6, eps_cell=cell_at(w))
+            o1, R1, T1, j1 = ctl.set_source(w).solve()
+            assert np.max(np.abs(R[i] - R1)) == 0.0
+            assert np.max(np.abs(J[i] - j1)) == 0.0
 
 
 # =========================================================================== #
