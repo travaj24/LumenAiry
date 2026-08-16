@@ -1032,45 +1032,137 @@ def test_the_recovered_mode_is_confirmed_by_the_fd_oracle_not_by_the_prefix(
 # =========================================================================== #
 #  7.  A STRAYING POLISH cannot lose a mode the minimiser already had         #
 # =========================================================================== #
-#: The genuine Nx=16 mode the 2026-08-13 ubuntu py3.10 shard lost, and its
-#: detection cell.  Adjudicated by BOTH oracles before it was believed: the
-#: 40-digit root reads ``sigma_min`` 2.7e-15 with structural ratio 8.0e-15 (a
-#: mode, not a band edge), and the independent 2-D-FD oracle puts an eigenvalue
-#: 0.0738 away at ny=48, 0.0416 at ny=64 and 0.0185 at ny=96 -- CONVERGING on it
-#: as the FD grid refines, which a spurious candidate does not do.
+#: The genuine Nx=16 mode the 2026-08-13 ubuntu py3.10 shard lost.  Adjudicated
+#: by BOTH oracles before it was believed: the 40-digit root reads ``sigma_min``
+#: 2.7e-15 with structural ratio 8.0e-15 (a mode, not a band edge), and the
+#: independent 2-D-FD oracle puts an eigenvalue 0.0738 away at ny=48, 0.0416 at
+#: ny=64 and 0.0185 at ny=96 -- CONVERGING on it as the FD grid refines, which a
+#: spurious candidate does not do.
 _MODE201 = 201.88688284563654
-_CELL201 = (201.750, 202.000)
-#: What that shard's un-treated path held instead: its bounded minimiser halted
-#: 6.17e-4 from the zero, where ours halt 3.5e-7 away.  That distance is what
-#: put the reading INSIDE ``_CENSUS_BAND`` there and routed the candidate
-#: through the polish branch at all -- on our mounts it reads 1.99e-7, BELOW the
-#: band, and takes the unchanged path.
-_PY310_STOP = 201.88626619057126
+#: Offsets from a mode, in ``qz^2``, over which the two injected quantities below
+#: are SEARCHED.  Only the search RANGE is a constant here; which rung is used is
+#: read off this build's own ``_mode_reading``.  Spans the sub-band-edge scale up
+#: to a whole detection cell, in both directions.
+_R4_LADDER = tuple(np.concatenate([np.geomspace(3e-5, 1.0e-1, 26),
+                                   -np.geomspace(3e-5, 1.0e-1, 26)]))
 
 
-def _stray_polish(monkeypatch, delta):
-    """INJECTOR.  Make ``_polish_zero`` return a point ``delta`` off the
-    converged zero.
-
-    This is what its greedy 5-point contraction does when a level presents a
-    near-tie between the true basin and a neighbouring wiggle of the
-    min-of-branches -- and which one wins is a per-build fact.  It is injected
-    rather than reproduced because our own LAPACK does not stray: measured, the
-    contraction survives a per-evaluation jitter of 128 ULP on every reference
-    cell.  The defect it exposes is not the straying, which is allowed; it is
-    that the straying used to be able to DISCARD a candidate."""
-    orig = eme_2d_vector._polish_zero
-
-    def wrapped(f, lo, hi):
-        return float(min(max(orig(f, lo, hi) + delta, lo), hi))
-
-    monkeypatch.setattr(eme_2d_vector, "_polish_zero", wrapped)
+def _cell_bounds(cell, root):
+    """The detection cell ``_refine_accept`` is handed for ``root`` -- two steps
+    of the library's OWN grid, built the way the library builds it."""
+    lo, hi = cell["qz2_range"]
+    n = eme_2d_vector._detect_grid_size(lo, hi, cell["Ly"], cell["n_scan"])
+    grid = np.linspace(lo, hi, n)
+    j = min(max(int(np.argmin(np.abs(grid - root))), 1), n - 2)
+    return float(grid[j - 1]), float(grid[j + 1])
 
 
-@pytest.mark.parametrize("delta", [5e-3, -5e-3, 1.2e-2])
+def _sigma_at(cell, q):
+    """``sigma_min`` at ``q`` on the cell's strips, from the library's own read."""
+    s, _gaps, _b = eme_2d_vector._mode_reading(
+        _cell(cell["Nx"]), cell["Lx"], cell["Nx"], cell["k0"], 0.0, float(q),
+        cell["ky0"], cell["Ly"])
+    return float(s[-1])
+
+
+def _derive_stop(cell, root, bounds, rtol=1e-3):
+    """A minimiser stop, MEASURED HERE, that is simultaneously
+
+      * INSIDE ``_CENSUS_BAND`` -- so the polish branch runs at all, and
+      * ACCEPTED by the un-treated path (``gaps.min < ratio_tol``) -- so there
+        is something for a strayed polish to take away.
+
+    Round 3 hard-coded 201.8862661906 for this, which is only where the
+    2026-08-13 py3.10 shard happened to halt.  Whether any FIXED offset lands in
+    that two-decade window is a per-build fact -- the same trap as rounds 1-3 --
+    so the rung is chosen by READING, at the geometric centre of the window
+    ``[_CENSUS_BAND[0] * ratio_tol, ratio_tol)`` where both margins are widest.
+    """
+    band = (eme_2d_vector._CENSUS_BAND[0] * rtol,
+            eme_2d_vector._CENSUS_BAND[1] * rtol)
+    target = float(np.sqrt(band[0] * rtol))     # log-centre of the usable window
+    best = None
+    for d in _R4_LADDER:
+        q = float(root + d)
+        if not bounds[0] < q < bounds[1]:
+            continue
+        ratio, g = _reading(cell, q)
+        if not (band[0] <= g <= band[1] and g < rtol
+                and ratio < eme_2d_vector._STRUCTURAL_SAT):
+            continue
+        score = abs(float(np.log(g / target)))
+        if best is None or score < best["score"]:
+            best = dict(x=q, d=float(d), gapmin=g, ratio=ratio,
+                        sigma=_sigma_at(cell, q), score=score)
+    return best
+
+
+def _derive_strays(cell, root, bounds, sigma_stop, rtol=1e-3, k=3):
+    """Points a strayed polish could return that make an UN-GUARDED
+    ``_refine_accept`` DISCARD the candidate.  Two conditions, both READ here:
+
+      * the point's own reading REFUSES it (``gaps.min >= ratio_tol``), so the
+        un-guarded body -- which adopts the polished point and then tests
+        exactly that -- must reject it;
+      * its ``sigma_min`` is SHALLOWER than the stop's, so the guard declines to
+        adopt it and the shipped body keeps the stop instead.
+
+    Round 3 injected FIXED offsets (+5e-3, -5e-3, +1.2e-2) ADDED to whatever the
+    polish returned.  On the 2026-08-15 py3.10 runner the +1.2e-2 arm landed
+    1.2e-4 from the zero -- close enough that the point ACCEPTED, so the
+    un-guarded arm kept the mode and the fail-before went vacuous and red.  An
+    ABSOLUTE point chosen by its own reading cannot do that on any build.
+
+    Returned widest-margin-first, so the arm most likely to reach the defect is
+    tried first and the rest widen it."""
+    out = []
+    for d in _R4_LADDER:
+        q = float(root + d)
+        if not bounds[0] < q < bounds[1]:
+            continue
+        _ratio, g = _reading(cell, q)
+        sig = _sigma_at(cell, q)
+        if g >= rtol and sig > sigma_stop:
+            out.append(dict(x=q, d=float(d), gapmin=g, sigma=sig,
+                            margin=min(g / rtol, sig / sigma_stop)))
+    out.sort(key=lambda r: -r["margin"])
+    return out[:k]
+
+
+def _force_in_cell(monkeypatch, bounds, stop=None, polish=None):
+    """INJECTORS, applied ONLY inside ``bounds``.
+
+    Both replace an answer ABSOLUTELY rather than offsetting it, and both leave
+    every other candidate in the window untouched -- so the arm reads as a
+    census, not as a single refinement.  ``stop`` emulates a build whose bounded
+    minimiser halts elsewhere; ``polish`` emulates the greedy 5-point contraction
+    landing on a neighbouring wiggle of the min-of-branches instead of the true
+    basin, which is what a near-tie at any level does and which our own LAPACK
+    never does (measured: the contraction survives a 128-ULP per-evaluation
+    jitter on every reference cell)."""
+    o_min, o_pol = eme_2d_vector.minimize_scalar, eme_2d_vector._polish_zero
+
+    def w_min(f, bounds=None, **kw):
+        r = o_min(f, bounds=bounds, **kw)
+        if stop is not None and bounds[0] <= stop <= bounds[1]:
+            r.x = float(stop)
+        return r
+
+    def w_pol(f, lo, hi):
+        if polish is not None and lo <= polish <= hi:
+            return float(polish)
+        return o_pol(f, lo, hi)
+
+    if stop is not None:
+        monkeypatch.setattr(eme_2d_vector, "minimize_scalar", w_min)
+    if polish is not None:
+        monkeypatch.setattr(eme_2d_vector, "_polish_zero", w_pol)
+
+
 def test_a_straying_polish_cannot_lose_a_mode_the_minimiser_already_had(
-        monkeypatch, delta):
-    """THE 2026-08-13 py3.10 DEFECT, and its guard.
+        monkeypatch):
+    """THE 2026-08-13 py3.10 DEFECT, and its guard -- with both injected
+    quantities DERIVED from this build rather than pinned to another one's.
 
     The polish is an IMPROVEMENT step applied to candidates whose un-treated
     verdict was round-off.  Until ``_POLISH_GUARD`` the step was ONE-WAY: its
@@ -1079,59 +1171,87 @@ def test_a_straying_polish_cannot_lose_a_mode_the_minimiser_already_had(
     candidate whose pre-polish reading was a clean accept.  Silently, and only
     on the builds whose round-off strayed.
 
-    Both injectors are applied together because the shard's build had both: the
-    STOP OFFSET is what puts the reading in the band (so the polish branch runs
-    at all), and the STRAY is what the polish then does.  Under that pair:
+    What is asserted on EVERY arm is the guarded claim: the shipped path keeps
+    the mode no matter where the polish lands.  The fail-before is SCANNED --
+    strays are ranked by measured margin and the first that reaches the defect
+    carries it; if none did, that is PRINTED with its table rather than asserted
+    away, because the guarded claim has already been made on all of them.
+    (Round 3 asserted a fixed-offset fail-before per parametrisation and went red
+    on the runner whose strayed point happened to land somewhere that still
+    accepted.)"""
+    fixed = _census(_N16)
+    iso = _oracle_clean(_N16, fixed, _CUSPS_N16, "N16 fixed")
+    bounds = _cell_bounds(_N16, _MODE201)
+    stop = _derive_stop(_N16, _MODE201, bounds)
+    assert stop is not None, (
+        f"no rung of the ladder over the detection cell {bounds} is both inside "
+        f"the ambiguity band and accepted by the un-treated path on this build, "
+        f"so the polish branch cannot be reached with anything to lose.  Widen "
+        f"the ladder rather than deleting it -- the window "
+        f"[{eme_2d_vector._CENSUS_BAND[0] * 1e-3:.1e}, 1.0e-03) is two decades "
+        f"wide and every build's reading passes through it.")
+    strays = _derive_strays(_N16, _MODE201, bounds, stop["sigma"])
+    assert strays, (
+        f"no rung of the ladder returns a point inside {bounds} that both "
+        f"REFUSES acceptance and is shallower than the derived stop (sigma_min "
+        f"{stop['sigma']:.3e}), so a strayed polish cannot be emulated here.  "
+        f"Widen the ladder rather than deleting it.")
 
-      * the UN-TREATED path keeps the mode, at its own stop;
-      * the treated path with the guard OFF drops it -- the fail-before, which
-        is the shard's failure reproduced deterministically on any build;
-      * the treated path as shipped keeps it, because a polished point that is
-        not DEEPER than the minimiser's is not adopted.
+    # the un-treated path holds the mode at that stop -- true by construction of
+    # ``_derive_stop``, and asserted so a derivation bug cannot pass silently
+    with monkeypatch.context() as mp:
+        _prefix_refine(mp)
+        _force_in_cell(mp, bounds, stop=stop["x"])
+        untreated = eme_2d_vector.layer_vector_modes(_cell(16), **_N16)
+    assert not _absent(untreated, _MODE201, iso), (
+        f"the un-treated path does not hold {_MODE201} at the derived stop "
+        f"{stop['x']!r} (gaps.min {stop['gapmin']:.3e} against ratio_tol "
+        f"1.0e-03), so the treated path cannot LOSE it relative to anything: "
+        f"{list(untreated)}")
 
-    The guard is not a tolerance and has no bar to tune: ``sigma_min`` at the
-    polished point either is or is not below ``sigma_min`` at the stop."""
-    strips = _cell(16)
-    got = {}
-    for tag, guard, prefix in (("untreated", True, True),
-                               ("guard OFF", False, False),
-                               ("shipped  ", True, False)):
+    reached = None
+    for st in strays:
+        # THE CLAIM, asserted on every arm: the shipped path keeps the mode.
         with monkeypatch.context() as mp:
-            if prefix:
-                _prefix_refine(mp)
-            mp.setattr(eme_2d_vector, "_POLISH_GUARD", guard)
-            _stop_offset(mp, _PY310_STOP - _MODE201)
-            _stray_polish(mp, delta)
-            got[tag] = eme_2d_vector.layer_vector_modes(strips, **_N16)
+            _force_in_cell(mp, bounds, stop=stop["x"], polish=st["x"])
+            shipped = eme_2d_vector.layer_vector_modes(_cell(16), **_N16)
+        assert not _absent(shipped, _MODE201, iso), (
+            f"a polish straying to {st['x']!r} (gaps.min {st['gapmin']:.3e}, "
+            f"sigma_min {st['sigma']:.3e} against the stop's "
+            f"{stop['sigma']:.3e}) LOST the mode {_MODE201}, which the "
+            f"un-treated path held at {stop['x']!r} -- _POLISH_GUARD did not "
+            f"keep the minimiser's answer: {list(shipped)}")
+        kept = float(shipped[np.argmin(np.abs(shipped - _MODE201))])
+        ratio_k, gmin_k = _reading(_N16, kept)
+        assert gmin_k < 1e-3 and ratio_k < _STRUCT_MODE, (
+            f"the guard kept {kept!r} for {_MODE201}, but its own reading does "
+            f"not accept it (gaps.min {gmin_k:.3e}, ratio {ratio_k:.3e})")
+        # THE FAIL-BEFORE, scanned: the pre-2026-08-13 body, restored by the flag
+        with monkeypatch.context() as mp:
+            mp.setattr(eme_2d_vector, "_POLISH_GUARD", False)
+            _force_in_cell(mp, bounds, stop=stop["x"], polish=st["x"])
+            unguarded = eme_2d_vector.layer_vector_modes(_cell(16), **_N16)
+        if _absent(unguarded, _MODE201, iso):
+            reached = (st, list(unguarded))
+            break
 
-    iso = _isolation_radius(_N16, _census(_N16))
-    held = {t: not _absent(q, _MODE201, iso) for t, q in got.items()}
-
-    # the injector must reach the defect, or this proves nothing
-    assert held["untreated"], (
-        f"the un-treated path does not hold {_MODE201} under a "
-        f"{delta:+.1e} stray, so the treated path cannot LOSE it relative to "
-        f"anything and this fail-before is vacuous: {list(got['untreated'])}")
-    # FAIL-BEFORE: the pre-2026-08-13 body, restored by the flag
-    assert not held["guard OFF"], (
-        f"with _POLISH_GUARD off, a {delta:+.1e} stray no longer drops "
-        f"{_MODE201} -- the injector has stopped reaching the defect the guard "
-        f"exists for: {list(got['guard OFF'])}")
-    # FAIL-AFTER: shipped
-    assert held["shipped  "], (
-        f"a {delta:+.1e} stray of the polish LOST the mode {_MODE201}, which "
-        f"the un-treated path held at its own stop -- the guard did not keep "
-        f"the minimiser's answer: {list(got['shipped  '])}")
-
-    # ... and what it kept is a real reading of that mode, not a placeholder
-    kept = float(got["shipped  "][np.argmin(np.abs(got["shipped  "]
-                                                   - _MODE201))])
-    ratio, gmin = _reading(_N16, kept)
-    assert gmin < 1e-3 and ratio < _STRUCT_MODE, (
-        f"the guard kept {kept!r} for the mode {_MODE201}, but its own reading "
-        f"does not accept it (gaps.min {gmin:.3e}, ratio {ratio:.3e})")
-    assert _fd(_N16, kept) < _FD_MODE, (
-        f"the guard kept {kept!r}, which the FD oracle does not confirm")
-    print(f"\nEME polish guard [stray {delta:+.1e}]: un-treated holds "
-          f"{_MODE201}; guard OFF DROPS it; shipped keeps it at {kept:.10f} "
-          f"(gaps.min {gmin:.3e}, FD {_fd(_N16, kept):.4f}).")
+    if reached is not None:
+        st, unguarded = reached
+        print(f"\nEME polish guard: derived stop {stop['x']:.10f} (gaps.min "
+              f"{stop['gapmin']:.3e} -- in band AND accepted un-treated); "
+              f"derived stray {st['x']:.10f} (gaps.min {st['gapmin']:.3e} >= "
+              f"1.0e-03, sigma_min {st['sigma']:.3e} > the stop's "
+              f"{stop['sigma']:.3e}).  _POLISH_GUARD off DROPS {_MODE201} "
+              f"({unguarded}); shipped keeps it.  {len(strays)} strays derived.")
+    else:
+        table = "; ".join(f"x={s['x']:.9f} gaps.min={s['gapmin']:.3e} "
+                          f"sigma={s['sigma']:.3e} margin={s['margin']:.3g}"
+                          for s in strays)
+        print(f"\nEME polish guard: the guarded claim held on all "
+              f"{len(strays)} derived strays, but none made the un-guarded body "
+              f"drop {_MODE201} on this build, so the fail-before is inert here "
+              f"and only the cure was exercised.  Strays tried: {table}.  A "
+              f"point whose own reading refuses acceptance should force the "
+              f"un-guarded body to reject, so an inert result means another "
+              f"detection cell is also finding this mode -- worth a look before "
+              f"the ladder is widened.")

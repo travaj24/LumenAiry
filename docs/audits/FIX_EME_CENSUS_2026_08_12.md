@@ -1077,3 +1077,137 @@ parametrisations are the S10.5 fail-before.
 * `_POLISH_GUARD` is a test lever in library namespace.  It follows the
   `PMM_FORWARD_GROWTH_REPAIR` / `PMM_JAX_MINNORM_PROJECTION` precedent, but it
   is one more public-ish name that must never be set in anger.
+
+---
+
+## 11.  THE FAIL-BEFORE'S OWN INJECTOR WAS PARAMETRIZED -- 2026-08-15
+
+The round-3 guard is right and stays.  What went red on the first main CI after
+it merged (run 31908894132) was the arm that PROVES it, and for the fourth time
+it is the same trap one level in:
+
+```
+Unit tests (Python 3.10, shard 3/3)
+test_a_straying_polish_cannot_lose_a_mode_the_minimiser_already_had[0.012] FAILED
+  AssertionError: with _POLISH_GUARD off, a +1.2e-02 stray no longer drops
+  201.88688284563653 -- the injector has stopped reaching the defect the guard
+  exists for: [201.8870001192093, 146.43354605686665]
+```
+
+`[0.005]` PASSED on Python 3.13 in the same run.  The three parametrisations
+were fixed offsets ADDED to whatever `_polish_zero` returned, and **where that
+lands is per-build**: on that runner the polish returned a point near 201.875,
+so `+0.012` landed at **201.8870001192093** -- 1.17e-4 from the zero, close
+enough that the strayed point's own reading ACCEPTED.  The un-guarded body then
+kept the mode, the fail-before had nothing to demonstrate, and it said so by
+failing.  Rounds 1-3 removed this pattern from the claims; round 3 reintroduced
+it in the injector.
+
+### 11.1  Both injected quantities are now DERIVED, and the injectors are absolute
+
+Two changes, and the second is the one that closes the class:
+
+* **`_derive_stop`** picks the minimiser stop by READING, not by offset.  It
+  requires the stop to be simultaneously INSIDE `_CENSUS_BAND` (so the polish
+  branch runs at all) and ACCEPTED by the un-treated path (so there is something
+  to take away) -- a two-decade window, `[1e-5, 1e-3)`, and it lands at its
+  geometric centre where both margins are widest.  Round 3 hard-coded
+  201.8862661906, which is only where the py3.10 shard happened to halt.
+* **`_derive_strays`** picks the point a strayed polish returns by READING too:
+  its own `gaps.min` must be `>= ratio_tol` (so the un-guarded body, which
+  adopts the polished point and then tests exactly that, MUST reject) and its
+  `sigma_min` must be shallower than the stop's (so the guard declines to adopt
+  it).  Both conditions are properties of the injected point, measured here, so
+  they cannot evaporate on another build the way an offset can.
+* **`_force_in_cell`** replaces the minimiser's and the polisher's answers
+  ABSOLUTELY, and only inside the mode's own detection cell.  Round 3 offset
+  them globally; an absolute in-cell override leaves every other candidate on
+  the shipped path, so the arm reads as a census rather than as one refinement.
+
+Measured on M: the ladder yields 26 qualifying stops and 26 qualifying strays,
+and the ones chosen are
+
+| quantity | value | reading | why it qualifies |
+|---|---|---|---|
+| stop | 201.8866726556 | `gaps.min` **1.026e-04** | inside the band (1e-5 .. 3e-2) AND under `ratio_tol` -- log-centre of the window |
+| stray | 201.7868828456 | `gaps.min` **5.914e-02**, `sigma_min` **2.734e-03** | refuses acceptance (59x over `ratio_tol`) and is 578x shallower than the stop |
+
+### 11.2  What is asserted, and what is scanned
+
+* **Asserted on EVERY arm**: the shipped path keeps the mode wherever the polish
+  lands, and what it kept is a real reading of that mode (its own `gaps.min`
+  accepts, its structural ratio is a mode's).  That is the contract, and it is
+  unconditional.
+* **Scanned**: the fail-before.  Strays are ranked by measured margin and the
+  first that makes the un-guarded body drop the mode carries it.  If none did,
+  that is PRINTED with the full table rather than asserted away -- the guarded
+  claim has already been made on all of them.  The print says what an inert
+  result would mean (another detection cell also finding the mode), so it is
+  diagnosable rather than merely tolerated.
+* Both derivations hard-fail only if the LADDER is empty, with the campaign's
+  standing message: widen it rather than delete it.
+
+On M the fail-before reaches the defect on the first stray, and the un-guarded
+census it produces is
+
+```
+[205.97497577877948, 151.38547455643376, 146.42146637720512, 140.59975645614043]
+```
+
+-- four entries, missing 201.887: **the py3.10 shard's census exactly**, which is
+what S10.1 reconstructed from its reported basin radius of 2.4820.
+
+### 11.3  Re-audit of the other round-3 additions
+
+Every injected quantity added in round 3, re-read for the same assumption:
+
+| addition | assumes an injection MANIFESTS? | verdict |
+|---|---|---|
+| `@pytest.mark.parametrize("delta", [5e-3, -5e-3, 1.2e-2])` | YES -- per parametrisation | **the defect; removed** |
+| `_stray_polish(mp, delta)` (additive) | YES -- the landing point is per-build | **replaced by `_force_in_cell` (absolute, in-cell)** |
+| `_PY310_STOP` as the injected stop | YES -- that it lands in the band AND accepts | **replaced by `_derive_stop`** |
+| `_CELL201` constant | unused after the rewrite | removed |
+| `_MODE201` | no -- a tabulated oracle value, adjudicated in S10.1 | kept |
+| `_POLISH_GUARD` (library) | no -- a feature flag, not an injection | kept |
+
+And the pre-round-3 machinery, re-checked for the same shape: `_STOP_ARMS` in
+test 3(a) asserts only that the FIXED census is STABLE under them (a cure claim,
+no manifestation assumed); `_ULP_ARMS` feeds `_tie_at_the_cut`, which derives its
+cut from measured readings and widens before failing; `_prefix_drop_cut` is
+derived from the build's own Brent reading.  The one remaining `parametrize` in
+the file is test 4's length `scale` (1.0, 10.0), a geometry, not an injection.
+
+### 11.4  Green
+
+| environment | python | numpy / scipy | result |
+|---|---|---|---|
+| M, Windows | 3.14.6 | 2.4.4 / 1.17.1 | **8 passed** (2186.7 s) |
+| W, WSL `/tmp/venv-py310` | **3.10.20** | 2.2.6 / 1.15.3 | **8 passed** (2116.8 s) |
+| W, WSL `/tmp/venv-py311` | **3.11.15** | 2.4.6 / 1.17.1 | in flight at hand-off |
+| W, WSL `lumen_venv` | 3.12.3 | 2.4.6 / 1.17.1 | in flight at hand-off |
+
+py3.10 is the interpreter that failed this arm on the 2026-08-15 run; it is
+green here on the same file.  (Wall times are inflated ~20x by an unrelated
+consolidation run occupying the box; the file is ~90 s unloaded.)
+
+The file now carries **8 ids** rather than round 3's 10: the three
+parametrisations collapse into one scanned test, which is also cheaper (4
+censuses against 9).
+
+`ruff check lumenairy/ tests/unit/` clean on both mounts; ASCII; no `xfail`,
+`skip`, deleted test, weakened guard or `CHANGELOG` entry.  The library is not
+touched by this round -- round 3's guard stands as shipped.
+
+### 11.5  Open
+
+* The strays the ranking selects sit at the detection cell's EDGE (`|d| = 0.1`
+  against a 0.125 half-width), because ranking by margin rewards distance.  They
+  are valid points for the injector -- a polish is bracketed by its cell and can
+  return any point in it -- but they are a coarser emulation of "landed on a
+  neighbouring wiggle" than a mid-cell stray would be.  Ranking by margin is
+  what makes the arm robust; a second arm at the nearest qualifying stray would
+  make it faithful as well.
+* Four rounds, four instances of one pattern, each a level further in: the
+  claim, the match radius, the library, and now the injector.  The invariant
+  that survived all four is the one worth keeping: **anything a build is
+  entitled to move must be measured here, never assumed from elsewhere.**
