@@ -572,17 +572,27 @@ ubuntu job runs.  Every run from inside the worktree via `python -m pytest`;
 | `test_niche_audit_w9_eig_vjp.py` | **32 passed** | -- | was 31; the fail-before split into two tests, nothing removed |
 | `test_niche_audit_e_prepared_and_enums.py` | **9 passed** (`-k h2`) | -- | was 5 h2 tests + 2 skips-in-waiting; now 9, none skipped |
 | `test_niche_audit_e_prepared_and_enums.py` under `set_max_ram(4.0e9)` | **8 passed** (`-k h2`) | -- | the CI regime EMULATED: the live pricer refuses at that budget, and the section still runs because engagement no longer depends on the live read |
-| `test_v5_20_12_rcwa_jones_2d_fff_nv.py` | tests 1-4 passed, remainder RUNNING | reproduced the ORIGINAL failure at 0.005101 before the fix | see below |
+| `test_v5_20_12_rcwa_jones_2d_fff_nv.py` | **9 of 10 green** (see below) | reproduced the ORIGINAL failure at 0.005101 before the fix | |
 
-The `fff_nv` file's own headline test (2) and the corrected absorptance test
-(4) both pass on **W**.  The remaining tests in that file were still running
-when this document was written: the box was carrying 40+ concurrent
-interpreters from the parallel fix wave, and the crossed-cell test alone
-builds a 2450x2450 eigenproblem.  Every bar changed in that file is
-independently backed by direct measurement recorded in S3 and S6 -- the
-sound-reference ladder (both mounts), the 18-point OOP closure ladder (worst
-5.3e-14 against the new 1e-9 bar), and the corrected absorptance arithmetic.
-**The remaining run must be completed before this branch is merged.**
+The `fff_nv` file was verified on **W** in two passes, because the box was
+carrying 40+ concurrent interpreters from the parallel fix wave and the
+crossed-cell test alone builds a 2450x2450 eigenproblem:
+
+* pass 1 (whole file): tests 1-4 green -- which covers the HEADLINE test
+  (2, the sound-reference rework) and the corrected absorptance test (4);
+* pass 2 (`-k`, 2233 s): **7 passed, 3 deselected** -- tests 1, 4, 6, 7, 8,
+  9, 10, which covers the TIGHTENED out-of-plane closure bar (7) and the
+  out-of-plane same-limit test (9).
+
+Union: 9 of the file's 10 tests green after the change.  The tenth is the
+crossed-cell test, whose ONLY change in this branch is the derivation
+comment moved above its assertion -- the assertion itself is byte-identical
+-- and whose readings were measured bit-identical on both mounts (S6).
+
+Every bar changed in that file is additionally backed by direct measurement
+in S3 and S6: the sound-reference ladder (both mounts), the 18-point OOP
+closure ladder (worst 5.3e-14 against the new 1e-9 bar), and the corrected
+absorptance arithmetic.
 
 ### Files repaired by the sweep
 
@@ -607,7 +617,7 @@ directory.
 
 ### Still outstanding when this document was written
 
-* the `fff_nv` file's full run on **W**, and its run on **M**;
+* the `fff_nv` crossed-cell test (comment-only change) and the whole file on **M**;
 * the thread-count axis ({1, default}) and the py3.10 / py3.11 venvs for the
   three originally-failing files;
 * `test_doe_rcwa.py` (the S8.5 closure-bar unification) -- collection and
