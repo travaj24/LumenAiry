@@ -4,6 +4,21 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.36.1] — 2026-08-16
+
+### Fixed — the deprecation horizon came due with nothing scheduled
+
+v5.36.0 shipped and became the very version `NEXT_REMOVAL_VERSION`
+pointed at — with both removal registries still the empty tombstones
+they have been since v5.30 (every scheduled removal and the one API
+transition were executed early).  The release verify shard's schedule
+tests correctly refused; the gating matrix could not see it because it
+runs pre-version-bump.  Applied the module's own documented remedy
+(the v5.32.0 precedent): the deliberate one-line slip to '5.40',
+slipping no actual removal.  The rescheduled-banner test now reads the
+live horizon from the registry instead of pinning it as a literal, so
+a future deliberate slip cannot break it.  No API change.
+
 ## [5.36.0] — 2026-08-16
 
 ### Added -- `PMM2DStackHybrid` fast cascade, and priced per-layer caches

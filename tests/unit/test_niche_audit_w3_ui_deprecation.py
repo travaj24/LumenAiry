@@ -658,7 +658,12 @@ class TestDeprecationRemovalSchedule:
                                       version_added='5.25',
                                       version_removed='5.27')
         msg = str(caught[0].message)
-        assert 'will be removed in v5.36' in msg
+        # The LIVE horizon is read from the registry, not pinned as a
+        # literal: a deliberate horizon slip (v5.36.1 precedent) must not
+        # break this test, whose claim is the ROUTING (live + original
+        # both visible), not the horizon's value -- the schedule-is-future
+        # invariant is asserted by its siblings.
+        assert f'will be removed in v{dep.NEXT_REMOVAL_VERSION}' in msg
         assert 'rescheduled from v5.27' in msg
 
     def test_all_four_message_builders_route_through_the_registry(self):

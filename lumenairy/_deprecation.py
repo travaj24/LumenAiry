@@ -134,7 +134,12 @@ __all__ = [
 # transition were EXECUTED early, in v5.30).  Advancing it is therefore
 # the documented deliberate one-line slip, slipping no actual removal.
 # Recorded in the CHANGELOG's 5.32.0 block.
-NEXT_REMOVAL_VERSION = '5.36'
+# v5.36.1: same situation, same one-line slip -- v5.36.0 shipped and the
+# horizon came due with both registries still empty tombstones.  Caught
+# by the release verify shard (the schedule tests assert the horizon is
+# future); the gating matrix ran pre-version-bump and could not see it.
+# Recorded in the CHANGELOG's 5.36.1 block.
+NEXT_REMOVAL_VERSION = '5.40'
 
 #: Re-scheduled horizons: ``{version as written at the shim call site:
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule
