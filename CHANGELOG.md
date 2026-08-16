@@ -4,6 +4,30 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Test hygiene (no library change)
+
+Evidence: `docs/audits/CHORE_TEST_HYGIENE_2026_08_16.md`.
+
+* `.test_durations` **surgically regenerated**: 217 measured entries added
+  (the new `test_obl_banded_halo`, `test_tangent_facet`,
+  `test_p2c_pmm2d_stack_cascade`, `test_fix_runner_oom_2026_08_13` files and
+  the restructured `test_eme_census_determinacy` ids), 263 stale entries
+  deleted, 11,931 retained byte-for-byte.  Four tests were being priced at
+  pytest-split's 0.58 s fallback average against a real 28-37 s -- the shape
+  that times out a release-verify shard.  5-shard `least_duration` balance
+  max/min 1.048 -> 1.000.
+* `tests/unit/test_p2c_pmm2d_stack_cascade.py`: new section 8 covering
+  **out-of-plane tensor layers** (`eps_xz`/`eps_yz` != 0), which promote the
+  cascade to the generalized S-matrix branch -- a second copy of the P2C
+  dedup/merge that no shipped test reached.  Repeated-OOP-layer dedup is
+  pinned bit-for-bit; the merge against a single explicitly thick layer, and
+  fast-vs-monolithic across normal/oblique/conical incidence, against a bar
+  re-derived from the generalized interface's own identity residual.
+* Swept `tests/` for the "thread-env preamble below an import numpy" defect:
+  0 of 61 files affected (probed per file, both arms).  The per-file guards
+  are inert under pytest for a different reason, already documented in
+  `tests/conftest.py`; no source change is possible or needed.
+
 ## [5.36.1] — 2026-08-16
 
 ### Fixed — the deprecation horizon came due with nothing scheduled

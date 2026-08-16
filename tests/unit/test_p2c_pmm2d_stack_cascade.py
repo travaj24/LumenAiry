@@ -32,6 +32,10 @@ import pytest
 from lumenairy.elements.pmm._core import _interface_smatrix
 from lumenairy.elements.pmm._stack2d_cache import LayerCache, cached_nbytes
 from lumenairy.elements.pmm.stack2d import PMM2DStackHybrid
+from lumenairy.elements.rcwa._core import (
+    _interface_smatrix_general,
+    _modes_to_M,
+)
 
 WL = 1.55e-6
 PX = 0.9e-6
@@ -51,6 +55,9 @@ def _stack(layers, *, theta=0.0, phi=0.0, degree=7, n_orders=4,
     for t, cell in layers:
         if np.isscalar(cell):
             st.add_layer(t, eps=cell)
+        elif np.asarray(cell).ndim == 4:
+            # (Sx, Sy, 3, 3) -- the out-of-plane tensor slot (section 8)
+            st.add_layer(t, eps_tensor_cell=cell)
         else:
             st.add_layer(t, eps_cell=cell)
     st.set_source(WL, theta=theta, phi=phi)
@@ -660,3 +667,317 @@ def test_p2c_retain_internal_keeps_the_per_layer_cascade():
                  cascade="monolithic").solve(retain_internal=True)
     for x, y, nm in zip(r_f[1:], r_m[1:], ("R", "T", "jones")):
         assert np.array_equal(np.asarray(x), np.asarray(y)), nm
+
+
+# ===================================================================== #
+# 8. OUT-OF-PLANE tensor layers -- the GENERALIZED cascade
+#
+# Sections 1-7 above exercise only ``('sym', W, V, lam)`` modal sets, i.e.
+# the Redheffer branch of ``solve()``.  A layer whose permittivity tensor has
+# eps_xz / eps_yz != 0 breaks the ``[W; -V]`` <-> ``-lam`` symmetry and
+# promotes the WHOLE stack to the generalized branch, which carries its OWN
+# copies of the dedup and the merge (``_Mmemo`` / ``_gifc`` /
+# ``_cascade_sequence_general``).  Until this section that second copy of the
+# P2C machinery was never covered: the 5.36.0 oracle matrix ran entirely on
+# the symmetric branch.
+#
+# The contracts mirror section 1 arm for arm:
+#   * distinct-modal-content stacks         -> BIT-FOR-BIT (dedup cannot move
+#                                              a bit: same bytes, same LAPACK)
+#   * mergeable stacks vs monolithic        -> derived bar
+#   * merged run vs one explicitly thick    -> derived bar, independent oracle
+# and the bar is re-derived here from the GENERALIZED interface's own measured
+# identity residual, because the quantity that bounds the merge on this branch
+# is ``_interface_smatrix_general(M, M)``, not ``_interface_smatrix(W,V,W,V)``.
+# ===================================================================== #
+def _uniaxial(eps_o, eps_e, psi, chi):
+    """Uniaxial permittivity with the optic axis TILTED OUT OF THE PLANE.
+
+    ``psi`` is the polar tilt from z and ``chi`` the azimuth, so the axis is
+    ``u = (sin psi cos chi, sin psi sin chi, cos psi)`` and
+
+        eps = eps_o I + (eps_e - eps_o) u u^T
+
+    has ``eps_xz = (eps_e - eps_o) u_x u_z`` and ``eps_yz`` likewise -- both
+    nonzero for any ``psi`` strictly between 0 and 90 deg.  Written this way
+    the tensor is a real crystal orientation rather than an arbitrary matrix,
+    and its ``eps_zz`` is automatically nonzero (which the library requires).
+    """
+    u = np.array([np.sin(psi) * np.cos(chi), np.sin(psi) * np.sin(chi),
+                  np.cos(psi)])
+    return eps_o * np.eye(3) + (eps_e - eps_o) * np.outer(u, u)
+
+
+def _oop_cell(eps_o, eps_e, psi_deg, chi_deg, host, s=6, r=2):
+    """``(s, s, 3, 3)`` pixel grid: a tilted-axis uniaxial pillar in an
+    isotropic host -- the tensor twin of :func:`_cell`."""
+    c = np.zeros((s, s, 3, 3), dtype=complex)
+    c[...] = complex(host) * np.eye(3)
+    c[r:s - r, r:s - r] = _uniaxial(eps_o, eps_e, np.deg2rad(psi_deg),
+                                    np.deg2rad(chi_deg))
+    return c
+
+
+def _oop_modes(st):
+    """``(modes, keys)`` for ``st`` at its own source -- the same kx/ky the
+    solve builds, so the modal keys returned here ARE the cascade's keys."""
+    src = st._src
+    wl = float(src["wavelength"])
+    k0 = 2.0 * np.pi / wl
+    ox = np.arange(-st.n_orders, st.n_orders + 1)
+    order_x = np.tile(ox, len(ox))
+    order_y = np.repeat(ox, len(ox))
+    nre = float(np.real(np.sqrt(np.conj(complex(st.n_sup) ** 2))))
+    kx0 = nre * np.sin(src["theta"]) * np.cos(src["phi"])
+    ky0 = nre * np.sin(src["theta"]) * np.sin(src["phi"])
+    kxv = kx0 + order_x * (wl / st.period_x)
+    kyv = ky0 + order_y * (wl / st.period_y)
+    return st._layer_mode_sets(kxv, kyv, ox, ox, kx0, ky0, k0, wl)
+
+
+def _oop_identity_residual(st):
+    """Generalized twin of :func:`_identity_residual`: the running build's own
+    measured departure of ``_interface_smatrix_general(M, M)`` from the exact
+    no-op swap, for the first OUT-OF-PLANE layer of ``st``.
+
+    ``T = solve(M, M)`` is the identity in exact arithmetic, so the returned
+    S-blocks are ``(0, I, I, 0)`` up to ``~cond(M) eps_mach``.  Like its
+    symmetric sibling this is a conditioning readout, not a tolerance: it
+    re-derives on every build.
+    """
+    modes, _keys = _oop_modes(st)
+    m = next((x for x in modes if x[0] == "gen"), None)
+    assert m is not None, "no out-of-plane ('gen') layer in this stack"
+    _k, Wf, Vf, _lf, Wb, Vb, _lb, _t = m
+    M = _modes_to_M(Wf, Vf, Wb, Vb)
+    S = _interface_smatrix_general(M, M)
+    n = M.shape[0] // 2
+    eye, zero = np.eye(n), np.zeros((n, n))
+    return max(float(np.abs(S[0] - zero).max()),
+               float(np.abs(S[1] - eye).max()),
+               float(np.abs(S[2] - eye).max()),
+               float(np.abs(S[3] - zero).max()))
+
+
+def _oop_merge_bar(st, n_layers):
+    """Derived agreement bar for the GENERALIZED cascade -- same shape as
+    :func:`_merge_bar`, on the generalized residual.  Both sides of it are
+    checked in :func:`test_p2c_oop_merge_bar_has_a_gap_on_both_sides`."""
+    return 1.0e3 * (2 * n_layers + 2) * _oop_identity_residual(st)
+
+
+def _energy_defect(res):
+    """``max_pol |sum_orders R + sum_orders T - 1|``.
+
+    PER-POLARIZATION accounting: sum orders WITHIN a polarization, max over
+    polarizations -- never sum the two (the house convention).
+    """
+    _o, R, T, _J = res
+    return float(np.max(np.abs(np.asarray(R).sum(axis=1)
+                               + np.asarray(T).sum(axis=1) - 1.0)))
+
+
+# tilted-axis uniaxial pillars: two DIFFERENT modal contents, both OOP
+_OOP_A = _oop_cell(4.0, 7.5, 35.0, 25.0, 2.1)
+_OOP_B = _oop_cell(3.2, 6.0, 50.0, -40.0, 2.4)
+
+
+def test_p2c_an_oop_tensor_layer_promotes_the_whole_cascade():
+    """DECISION, before any numbers: the layer really is out-of-plane, its
+    modal set really is the generalized ``'gen'`` form, and ONE such layer
+    promotes a stack whose other layers are symmetric.
+
+    The promotion is asserted through an OBSERVABLE consequence rather than a
+    private flag: ``solve(retain_internal=True)`` is refused exactly when the
+    generalized branch is selected, so the raise IS the branch readout.
+    """
+    assert _OOP_A[3, 3, 0, 2] != 0.0 and _OOP_A[3, 3, 1, 2] != 0.0, (
+        "the fixture tensor has no out-of-plane coupling -- eps_xz/eps_yz "
+        "must both be nonzero for this section to test anything")
+    assert _OOP_A[3, 3, 2, 2] != 0.0, "eps_zz must be nonzero"
+
+    pure = _stack([(0.20e-6, _OOP_A)])
+    kinds = [m[0] for m in _oop_modes(pure)[0]]
+    assert kinds == ["gen"], f"expected a generalized modal set, got {kinds}"
+
+    mixed = _stack([(0.20e-6, _cell(12.0, 2.1)), (0.18e-6, _OOP_A)])
+    kinds = [m[0] for m in _oop_modes(mixed)[0]]
+    assert kinds == ["sym", "gen"], kinds
+    with pytest.raises(NotImplementedError, match="symmetric"):
+        mixed.solve(retain_internal=True)
+
+    # ...and it still solves: finite, non-negative, energy-sane.
+    #
+    # The energy claim is deliberately NOT a bar against 1.0.  This section's
+    # device is the file's own 6x6 / degree-7 cell, and that cell carries a
+    # real truncation defect on the SCALAR branch too -- measured here
+    # 2026-08-16 (this box, n_orders 2/4/6/8 x normal and conical incidence):
+    # scalar-only |R+T-1| = 5.7e-5 .. 2.5e-4, out-of-plane-only 1.5e-6 ..
+    # 6.0e-5.  A number against 1.0 would pin the DISCRETIZATION, not the
+    # cascade (and energy conservation is necessary-not-sufficient anyway).
+    #
+    # The build-free claim is a RATIO against the same device's own scalar
+    # baseline, measured in this test: promoting the stack to the generalized
+    # cascade must not degrade the energy balance beyond what the scalar
+    # branch already loses on the same grid.  Measured mixed/scalar ratio on
+    # that grid: 1.9 .. 2.3.  The bar is 100x -- ~1.6 decades above the
+    # observed ratio, and ~1.7 decades below the O(1) defect a generalized
+    # cascade that had gone wrong would produce.  It is also the arm that a
+    # fast-vs-monolithic comparison structurally CANNOT make: both branches
+    # would be wrong together.
+    res = mixed.solve()
+    _o, R, T, J = res
+    for nm, arr in (("R", R), ("T", T), ("jones", J)):
+        assert np.all(np.isfinite(np.asarray(arr))), f"{nm} is not finite"
+    assert float(np.min(np.asarray(R))) >= 0.0, "negative reflected efficiency"
+    assert float(np.min(np.asarray(T))) >= 0.0, "negative transmitted efficiency"
+
+    baseline = _energy_defect(_stack([(0.20e-6, _cell(12.0, 2.1))]).solve())
+    assert baseline > 0.0, (
+        "the scalar baseline device conserves energy exactly on this build; "
+        "re-derive the ratio bar below against whatever it now measures")
+    got = _energy_defect(res)
+    assert got <= 100.0 * baseline, (
+        f"out-of-plane stack loses {got:.3e} of its energy against a "
+        f"{baseline:.3e} scalar-branch baseline on the same grid "
+        f"(ratio {got / baseline:.1f}, bar 100)")
+
+
+@pytest.mark.parametrize("theta,phi", [(0.0, 0.0), (0.30, 0.0), (0.30, 0.7)])
+def test_p2c_oop_fast_matches_monolithic_across_incidence(theta, phi):
+    """Section 1's incidence sweep, on the generalized branch: a stack that
+    mixes a repeated OOP run (mergeable), a second distinct OOP layer, a
+    uniform film and a patterned scalar layer."""
+    layers = [(0.20e-6, _OOP_A), (0.15e-6, _OOP_A), (0.18e-6, _OOP_B),
+              (0.11e-6, 2.25), (0.13e-6, _cell(12.0, 2.1))]
+    fast = _stack(layers, theta=theta, phi=phi)
+    mono = _stack(layers, theta=theta, phi=phi, cascade="monolithic")
+    d = _maxdiff(fast.solve(), mono.solve())
+    bar = _oop_merge_bar(fast, len(layers))
+    assert d < bar, (
+        f"generalized fast vs monolithic {d:.3e} exceeds derived bar "
+        f"{bar:.3e} (residual {_oop_identity_residual(fast):.3e})")
+
+
+def test_p2c_oop_repeated_layer_dedup_is_bit_for_bit_identical():
+    """REPEATED-OOP-LAYER DEDUP.  ``A-B-A-B`` of two out-of-plane tensor
+    layers: the repeats are NOT adjacent, so nothing merges and the only
+    machinery in play is the dedup -- the modal reuse in ``_layer_mode_sets``,
+    the ``_Mmemo`` field-mode matrices and the ``_gifc`` interface memo (the
+    ``(A,B)`` interface recurs).  Dedup returns the same bytes through the
+    same LAPACK, so this is asserted as EXACT equality, matching
+    :func:`test_p2c_distinct_layer_stacks_are_bit_for_bit_identical`.
+
+    Three claims:
+      1. the DECISION -- 4 layers, 2 distinct modal keys, and
+         ``_build_layer_modes`` is entered exactly TWICE (counted, not timed);
+      2. the merge stays OFF -- the generalized cascade sequence keeps all
+         four entries, because A-B-A-B has no adjacent repeat;
+      3. the CONSEQUENCE -- fast is bit-for-bit the monolithic answer.
+    """
+    layers = [(0.20e-6, _OOP_A), (0.18e-6, _OOP_B),
+              (0.16e-6, _OOP_A), (0.14e-6, _OOP_B)]
+
+    # --- claim 1: distinct keys, and exactly two eigensolves for four layers
+    st = _stack(layers)
+    calls = []
+    real_build = st._build_layer_modes
+
+    def _counting(L, *a, **kw):
+        calls.append(id(L))
+        return real_build(L, *a, **kw)
+
+    st._build_layer_modes = _counting
+    try:
+        modes, keys = _oop_modes(st)
+    finally:
+        del st._build_layer_modes
+    assert [m[0] for m in modes] == ["gen"] * 4, [m[0] for m in modes]
+    assert len(set(keys)) == 2, (
+        f"A-B-A-B produced {len(set(keys))} distinct modal keys; the repeated "
+        f"out-of-plane layer is not being recognised as a repeat")
+    assert keys[0] == keys[2] and keys[1] == keys[3], keys
+    assert len(calls) == 2, (
+        f"{len(calls)} modal builds for 4 layers with 2 distinct keys -- the "
+        f"generalized path is re-eigging a layer it already has")
+
+    # --- claim 2: nothing merges (no ADJACENT repeat)
+    seq = st._cascade_sequence_general(modes, keys, True)
+    assert len(seq) == 4, (
+        f"A-B-A-B collapsed to {len(seq)} cascade entries -- the merge is "
+        f"treating non-adjacent repeats as one run")
+
+    # --- claim 3: exact equality, at normal and at conical incidence
+    for theta, phi in ((0.0, 0.0), (0.30, 0.7)):
+        rf = _stack(layers, theta=theta, phi=phi).solve()
+        rm = _stack(layers, theta=theta, phi=phi,
+                    cascade="monolithic").solve()
+        for x, y, nm in zip(rf[1:], rm[1:], ("R", "T", "jones")):
+            assert np.array_equal(np.asarray(x), np.asarray(y)), (
+                f"{nm} differs at theta={theta}, phi={phi}: max "
+                f"{np.max(np.abs(np.asarray(x) - np.asarray(y))):.3e} -- the "
+                f"generalized interface dedup moved a bit")
+
+
+def test_p2c_oop_merged_run_equals_one_explicitly_thick_layer():
+    """Section 1's merge oracle, on the generalized branch: two ADJACENT
+    identical out-of-plane layers of thickness t1, t2 must give the answer of
+    ONE out-of-plane layer of thickness t1+t2.
+
+    The one-layer stack is again the independent oracle -- it has no run to
+    merge -- and the sequence collapse is asserted separately as a decision.
+    """
+    t1, t2 = 0.22e-6, 0.17e-6
+    two = _stack([(t1, _OOP_A), (t2, _OOP_A)])
+    one = _stack([(t1 + t2, _OOP_A)])
+
+    modes, keys = _oop_modes(two)
+    assert len(two._cascade_sequence_general(modes, keys, True)) == 1, (
+        "two adjacent identical out-of-plane layers did not merge")
+    assert len(two._cascade_sequence_general(modes, keys, False)) == 2, (
+        "the monolithic escape hatch merged anyway")
+
+    d = _maxdiff(two.solve(), one.solve())
+    bar = _oop_merge_bar(two, 2)
+    assert d < bar, (
+        f"merged out-of-plane run {d:.3e} vs single thick layer, bar "
+        f"{bar:.3e} (residual {_oop_identity_residual(two):.3e})")
+
+    # a mergeable run inside a longer stack still tracks its monolithic twin
+    tail = (0.16e-6, _OOP_B)
+    st3 = _stack([(t1, _OOP_A), (t2, _OOP_A), tail])
+    st3m = _stack([(t1, _OOP_A), (t2, _OOP_A), tail], cascade="monolithic")
+    d3 = _maxdiff(st3.solve(), st3m.solve())
+    assert d3 < _oop_merge_bar(st3, 3), d3
+
+
+def test_p2c_oop_merge_bar_has_a_gap_on_both_sides():
+    """TESTING_STANDARDS rule 5 for the NEW bar this section introduces.
+
+    Below: the measured fast-vs-monolithic disagreement on a mergeable
+    out-of-plane stack.  Above: the same stack with the smallest unambiguously
+    physical change to the part of the tensor this section is about -- the
+    OUT-OF-PLANE couplings eps_xz/eps_zx of one pixel of one layer, nudged by
+    1e-6.  Both numbers are measured HERE, on the running build; the bar must
+    sit at least two decades from each.
+    """
+    layers = [(0.20e-6, _OOP_A), (0.15e-6, _OOP_A), (0.18e-6, _OOP_B)]
+    fast = _stack(layers)
+    mono = _stack(layers, cascade="monolithic")
+    noise = _maxdiff(fast.solve(), mono.solve())
+    bar = _oop_merge_bar(fast, len(layers))
+
+    hurt = _OOP_A.copy()
+    hurt[2, 2, 0, 2] += 1e-6            # eps_xz, one pixel
+    hurt[2, 2, 2, 0] += 1e-6            # eps_zx, keeping the tensor symmetric
+    signal = _maxdiff(
+        _stack([(0.20e-6, _OOP_A), (0.15e-6, hurt),
+                (0.18e-6, _OOP_B)]).solve(),
+        mono.solve())
+
+    assert noise < bar, f"noise {noise:.3e} not below bar {bar:.3e}"
+    assert bar * 100.0 < signal, (
+        f"no gap above: bar {bar:.3e}, smallest real out-of-plane signal "
+        f"{signal:.3e} (need >= 2 decades)")
+    assert noise * 100.0 < bar, (
+        f"no gap below: noise {noise:.3e}, bar {bar:.3e} (need >= 2 decades)")
