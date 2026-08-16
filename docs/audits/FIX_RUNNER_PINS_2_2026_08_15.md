@@ -775,3 +775,31 @@ unverified claim in a comment is worse than no comment: it is the thing the
 next reader will calibrate the next bar against.** The `44fe34c` catch and
 this one are the same failure mode twice, and both were found only by
 re-measuring rather than by reading.
+
+### S11.4  Verification status of the close-out
+
+| claim | evidence | status |
+|---|---|---|
+| M2 census table (7 rungs, W, 1 thread) | re-measured through the module's own `_reach_probe`; every rung matches to the digit | **VERIFIED** |
+| M2 reach lands on rung 1.0 | re-measured: `(1.0, [0,0,1,1,1], 1.338409)` | **VERIFIED** |
+| M2 `_REACH_CASES` row 1 | matches the re-measured x1 reading verbatim | **VERIFIED** |
+| M2 `_COLLAPSE_SPREAD` margins (9.3x / 13.6x) | recomputed from the re-measured table | **VERIFIED** |
+| M2 whole file, both mounts, 1 BLAS thread | 21 passed [W] / 21 passed [M], reported by the group before it died | verified by that group, not re-run here |
+| ladder claims (a)(b)(c) on `(16, 20)` | computed directly in SIX configurations (W at 1/2/4/8/24 threads, M numpy 2.5.1) -- all True, worst margins 1.73x / 2.68x / 2.629x | **VERIFIED** |
+| 3-rung ladder is unsafe | (c) measured FALSE at 2 BLAS threads (0.670x) | **VERIFIED** |
+| convection arm bit-identical | identical to 7 digits in all six configurations | **VERIFIED** |
+| both files collect | 43 tests collected in 5.12 s | **VERIFIED** |
+| ruff | `ruff check tests/unit/` clean | **VERIFIED** |
+| whole-file pytest for the ladder file, and the WSL matrix rows | still running when this was written -- the file's degree-40 spectral solves take ~2 GB and minutes each, and a whole-file pass runs over an hour on this box | **NOT COMPLETED HERE** |
+
+The last row is the honest gap.  It is a confirmation run, not the evidence:
+the three assertions the branch changes were each evaluated directly, in six
+configurations, by a probe built from the test module's own fixture.
+
+**One operational note worth carrying forward.**  The earlier "box saturation"
+in S9 was not contention from concurrent agents -- it was FOUR ORPHANED PYTHON
+PROCESSES that survived `TaskStop`.  Stopping a background shell does not kill
+the `python -m pytest` child it spawned; the oldest orphan had burned 5.5 hours
+of CPU and 3.6 GB before it was found with `Get-Process python | Sort CPU`.
+Every "slow run" diagnosis in S9 was really that.  Check for orphans by CPU
+time before concluding a run is slow.
