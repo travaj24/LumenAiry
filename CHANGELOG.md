@@ -4,6 +4,48 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.35.5] — 2026-08-16
+
+### Fixed — the census polish could LOSE a mode (the one real library bug of the train)
+
+`_refine_accept`'s polish was a one-way replacement: whatever
+`_polish_zero` returned displaced the minimiser's answer with no check
+it was better, and the greedy 5-point bracket contraction can stray to
+a neighbouring wiggle — per-build.  On the py3.10 shard's LAPACK that
+silently dropped the true mode at 201.88688 (40-digit oracle sigma_min
+2.7e-15, FD-converging) from the census while every local mount kept
+it.  `_POLISH_GUARD`: the polished point is adopted iff it is a deeper
+zero than the minimiser's stop — no tunable bar.  Byte-null on 7
+configs; the recall containment arm that caught it was doing exactly
+its job.  (`lumenairy/elements/eme/eme_2d_vector.py`; the only library
+change in this release.)
+
+### Fixed — the per-build test class, killed as a class
+
+Five more rounds of the campaign's per-runner taxonomy, ending in a
+whole-suite sweep (476 files, ~1,660 assertion sites triaged, ~30
+repaired) instead of tag-at-a-time discovery.  Highlights: EME
+demonstration injectors derive their stop and stray from the running
+build's own measured geometry; EME oracle matching by basin radius
+(the shipped 0.7 tolerance was looser than half the mode spacing — a
+soundness flaw); the M2 forward-set fail-before engineered via
+null-flux injection (the flip rule reads the SIGN of round-off on
+zero-flux modes — three builds gave three different counts at one
+degree); the fff_nv bar was policing an energy theorem the
+non-Hermitian formulation does not obey, against a reference whose own
+closure swung 990x across builds (searched-for sound reference; claims
+strengthened 2.4x -> 29-40x margin); two `pytest.skip`s that silently
+removed five pool tests from the gate are gone; two tests were found
+already-red that nobody knew about.  The standard is now written down:
+`docs/TESTING_STANDARDS.md`.
+
+### CI
+
+mypy checks as 3.12 (numpy 2.5 stubs use PEP 695 syntax); runtime
+3.10/3.11 support unchanged and still enforced by the test matrix.
+Release rule: the full un-masked main-CI matrix must be green before
+any tag (release-verify fail-fast masks independent failures).
+
 ### Fixed — five more runner-axis pins, and a whole-suite sweep for their class
 
 Five tests across three files went red on the release verify shards and
