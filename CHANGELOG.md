@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.36.0] — 2026-08-16
+
 ### Added -- `PMM2DStackHybrid` fast cascade, and priced per-layer caches
 
 `cascade='fast'` (the new default; `cascade='monolithic'` is the escape
