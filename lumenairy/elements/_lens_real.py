@@ -2443,6 +2443,391 @@ def _tangent_facet_transport(px, py, t, n_gap, dx, dy, xp):
     return nx, ny
 
 
+# ---------------------------------------------------------------------------
+# THE REMAP RUNG -- surface_model='tangent_facet_remap'
+# ---------------------------------------------------------------------------
+# Route 3 (above) leaves ONE residual and names it exactly: the TRANSVERSE WALK.
+# The pixel's ray re-crosses the vertex plane at ``x + W`` rather than at ``x``,
+# and a screen that lives on that plane can only REFERENCE that displacement
+# away -- (T3) is the second order of the referencing series -- never REPRESENT
+# it.  On design 121 group 5 the tail of that series holds the group at 0.0032
+# waves rms against a 0.001 bar.
+#
+# This model represents it.  The element becomes SCREEN + COORDINATE REMAP: the
+# field is resampled to the walked positions, so the exit eikonal is evaluated
+# where the ray actually is.  Three consequences, and each is a simplification
+# rather than another term:
+#
+# 1. THE OPD COLLAPSES TO ONE LINE, AND IT IS EXACT.  Along a ray the eikonal
+#    grows as ``dS = p . dx + pz dz``.  Rising from ``(x, 0)`` to the hit point
+#    ``(x + s q, s)``, ``q = p/pz1``, costs ``p . (s q) + pz1 s = s n1^2/pz1``;
+#    descending to ``(x + W, 0)`` costs ``-s n2^2/pz2``.  So
+#
+#        S_out(x + W) = S_in(x) + s (n1^2/pz1 - n2^2/pz2),
+#
+#    and the screen a wave model must imprint at the pixel, since the value
+#    imprinted THERE is the value carried to ``x + W``, is exactly
+#
+#        OPD = s (n2^2/pz2 - n1^2/pz1) ,                                   (R1)
+#        W   = s (p/pz1 - p_out/pz2) ,                                     (R2)
+#
+#    with ``s`` the facet height AT THE HIT POINT and ``p_out`` from exact
+#    vector Snell at the facet normal THERE.  (T1)+(T2)+(T3) is what (R1)
+#    becomes after ``S_out`` is Taylor-referenced back to ``x`` and truncated;
+#    the identity ``OPD_R1 = (T1) + (T2) - p_out . W`` holds term for term, so
+#    the remap does not add a term -- it removes a truncation.
+#
+# 2. IT IS A LAGRANGIAN MODEL, WHICH NO SCREEN COULD BE.  BUILD_TANGENT_FACET
+#    S0.1 measured the obstruction: a screen's kick is the gradient of its own
+#    value, so the exact facet kick is unreachable and the prize arm's 0.000372
+#    is 25x below what any screen can do.  A remap escapes that, because the
+#    kick is the gradient of the COMPOSITE: with ``A = I + dW/dx``,
+#
+#        grad_x [ S_in - OPD ]  =  A^T p_out ,                             (R3)
+#
+#    identically -- the screen supplies ``A^T p_out`` and the coordinate change
+#    divides ``A^T`` back out, leaving the field's momentum at the new pixel
+#    equal to the EXACT refracted momentum.  Verified as an equality of two
+#    independently computed grids (converging as h^2, the grid-gradient order),
+#    not as a tolerance.
+#
+# 3. THE HIT POINT IS A FIXED POINT, NOT A TAYLOR SERIES.  ``s`` solves
+#    ``s = sag(x + s q)``.  With ``a = grad sag . q`` and
+#    ``b = q^T (grad grad sag) q`` the second-order solution is
+#
+#        s = sag/(1-a) + (b/2) [sag/(1-a)]^2 / (1-a) ,                     (R4)
+#        grad sag |_hit = grad sag + (grad grad sag) (s q) ,               (R5)
+#
+#    which is EXACT for a plane facet (b = 0) -- so the plane-facet identity is
+#    machine-exact with no oracle, measured at 5.95e-14 relative worst case over
+#    the same 27 cells route 3 used.  (R5) is not optional: dropping it costs
+#    6500x on group 5 (1.66e-04 against 2.56e-08 waves rms).
+#
+# MEASURED (bundle arm, design 121, 3 mm pupil, waves rms against exact rays):
+#
+#     group    route 3      REMAP       facet arm (the old prize)
+#     g2      0.0000046   1.12e-10        0.0000196
+#     g3      0.0000033   5.03e-11        0.0000159
+#     g4      0.0000005   4.17e-12        0.0000004
+#     g5      0.0032381   2.56e-08        0.0003724
+#
+# The remaining 2.56e-08 on g5 is the (R4) truncation and nothing else: pushing
+# the fixed point to convergence with a per-pixel Newton reads 5.67e-12.  That
+# Newton needs an analytic sag callable at off-grid points, which is the sag
+# source restriction route 3's S1.6 refused, so the grid form ships here too --
+# at 39000x under the acceptance bar there is nothing to buy.
+#
+# CAUSTIC SAFETY.  A remap is a ray map and must be SINGLE-VALUED: the field at
+# one output pixel has to come from one input pixel.  That is exactly
+# ``det A > 0``.  The guard refuses on a non-positive or near-zero determinant
+# and on a non-convergent inversion, and it never degrades: a folded map is not
+# approximated, it is declined.  Design 121's interior is comfortably clear
+# (det in [0.927, 1.021] on group 5 at 3 mm), which is the design contract for
+# this family; the guard is the proof rather than a hope.
+#
+# THE FIELD RESAMPLING.  The pull-back ``x(u)`` solves ``x + W(x) = u`` by fixed
+# point (``W`` is a contraction exactly while the map is unfolded, so the
+# iteration's convergence and the fold guard are the same statement), and the
+# field is sampled there with ``scipy.ndimage.map_coordinates`` -- the same
+# high-order resampler ``_apply_displaced_remap_2d`` and ``_lens_imap`` use --
+# carrying the energy-conserving amplitude Jacobian ``1/sqrt(det A)`` derived
+# below.  The field is DEMODULATED first by an analytic quadratic eikonal fitted
+# to its own momentum, because a lens-interior field oscillates at a few pixels
+# per fringe and interpolating that directly is what would eat the model's gain;
+# the demodulation is a similarity transform (multiply, resample, divide), so it
+# cannot change the physics, only the interpolation error.
+_TF_REMAP_MIN_DET = 1.0e-4
+_TF_REMAP_MAX_ITERS = 64
+#: Floor on ``1 - grad sag . q``, the rate at which the ray closes on the facet.
+#: It vanishes only when the ray runs ALONG the facet -- the grazing limit the
+#: ``ok`` mask declines anyway -- so this exists to keep the arithmetic finite
+#: until that mask is applied, not to approximate anything.
+_TF_REMAP_MIN_CLOSING = 1.0e-12
+#: Pull-back convergence bar, in PIXELS.  A residual of 1e-9 px moves the
+#: sampled phase by ``k0 |p| * 1e-9 dx`` <= 2 pi * 1e-9 * (dx/lambda) radians --
+#: below 1e-6 rad for any grid coarser than 100 lambda, i.e. far below the
+#: interpolation error it sits inside.
+_TF_REMAP_PULLBACK_TOL_PX = 1.0e-9
+_VALID_REMAP_ORDERS = (1, 3, 5)
+
+
+def _tangent_facet_remap_screen(sag, gx, gy, hxx, hxy, hyx, hyy,
+                                px, py, n1, n2, xp):
+    """The remap rung's screen at one surface: (R1)-(R5), in metres of OPD.
+
+    Returns ``(opd, wx, wy, pox, poy, ok)`` -- the imprinted OPD, the transverse
+    walk ``W`` the field is then remapped by, the EXACT refracted momentum at
+    the walked pixel, and the propagating mask.  Where ``ok`` is False (the ray
+    is evanescent in ``n1``, or the facet totally internally reflects) the
+    caller keeps the 'thin' screen and the walk is zero: a clamped cosine is a
+    wrong OPD and a clamped walk is a wrong position, and the thin screen at the
+    pixel's own coordinate is the safe neutral (the convention route 3 and
+    equation (4) both use).
+
+    ``(hxx, hxy, hyx, hyy)`` is ``grad grad sag`` on the grid, taken by the
+    caller so the two Hessian rows are computed once and shared."""
+    p_sq = px * px + py * py
+    ok = p_sq < n1 * n1
+    pz1 = xp.sqrt(xp.maximum(n1 * n1 - p_sq, _TANGENT_FACET_MIN_PZ_SQ))
+    del p_sq
+    qx = px / pz1
+    qy = py / pz1
+    # ---- (R4): the hit point as a fixed point of s = sag(x + s q) ---------
+    a_lin = gx * qx + gy * qy
+    one_ma = xp.maximum(1.0 - a_lin, _TF_REMAP_MIN_CLOSING)
+    ok = ok & (1.0 - a_lin > 0.0)
+    del a_lin
+    s1 = sag / one_ma
+    b_qq = qx * (qx * hxx + qy * hxy) + qy * (qx * hyx + qy * hyy)
+    s_hit = s1 + 0.5 * b_qq * s1 * s1 / one_ma
+    del s1, b_qq, one_ma
+    # ---- (R5): the facet normal AT the hit point --------------------------
+    wx = s_hit * qx
+    wy = s_hit * qy
+    ghx = gx + (wx * hxx + wy * hxy)
+    ghy = gy + (wx * hyx + wy * hyy)
+    # ---- exact vector Snell at that facet ---------------------------------
+    inv = 1.0 / xp.sqrt(1.0 + ghx * ghx + ghy * ghy)
+    a_dot = (-ghx * px - ghy * py + pz1) * inv
+    b_sq = n2 * n2 - n1 * n1 + a_dot * a_dot
+    ok = ok & (b_sq > 0.0)
+    dz = (xp.sqrt(xp.maximum(b_sq, 0.0)) - a_dot) * inv
+    del inv, a_dot, b_sq
+    pox = px - dz * ghx
+    poy = py - dz * ghy
+    del ghx, ghy
+    pz2 = pz1 + dz
+    del dz
+    # A near-grazing EXIT (pz2 -> 0) makes both (R1) and (R2) diverge.  It is
+    # declined pixel-wise, on the same "safe neutral" convention as TIR above,
+    # rather than left to the fold guard: the guard would refuse the WHOLE call
+    # over one grazing pixel, and a thin screen at that pixel's own coordinate
+    # is a defensible answer where a divergent walk is not.
+    ok = ok & (pz2 > 0.0)
+    pz2 = xp.maximum(pz2, _TANGENT_FACET_MIN_PZ_SQ)
+    # ---- (R1) the screen, (R2) the walk -----------------------------------
+    opd = s_hit * (n2 * n2 / pz2 - n1 * n1 / pz1)
+    wx = wx - s_hit * (pox / pz2)
+    wy = wy - s_hit * (poy / pz2)
+    del pz1, pz2, qx, qy, s_hit
+    return opd, wx, wy, pox, poy, ok
+
+
+def _tf_remap_quadratic_eikonal(px, py, weight, x_ax, y_ax, xp):
+    """Fit ``Phi`` with ``grad Phi ~ (px, py)`` -- the analytic quadratic
+    eikonal used to demodulate the field before it is resampled.
+
+    ``Phi = c0 x + d0 y + (c1/2) x^2 + c2 x y + (d2/2) y^2``, so its gradient is
+    the general LINEAR momentum field; the cross term is shared between the two
+    components, which is the curl-free constraint an eikonal gradient satisfies
+    and is what makes the fit a phase rather than a pair of ramps.  Weighted by
+    ``|E|^2`` so the phase is fitted where the energy is.
+
+    Exact whenever the momentum is linear in ``x`` -- which is the same
+    condition ``_tangent_facet_transport``'s one-term gap transport is exact
+    under, and very nearly true across a lens pupil.  Returns the five
+    coefficients, or ``None`` if the normal equations are singular (an empty or
+    degenerate weight), in which case the caller resamples undemodulated: the
+    demodulation is a similarity transform, so losing it costs interpolation
+    accuracy and nothing else."""
+    w = weight
+    sw = float(xp.sum(w))
+    if not np.isfinite(sw) or sw <= 0.0:
+        return None
+    wx_ = w * x_ax[None, :]
+    wy_ = w * y_ax[:, None]
+    m1 = sw
+    mx = float(xp.sum(wx_))
+    my = float(xp.sum(wy_))
+    mxx = float(xp.sum(wx_ * x_ax[None, :]))
+    mxy = float(xp.sum(wx_ * y_ax[:, None]))
+    myy = float(xp.sum(wy_ * y_ax[:, None]))
+    bpx = float(xp.sum(w * px))
+    bpy = float(xp.sum(w * py))
+    bxpx = float(xp.sum(wx_ * px))
+    bypx = float(xp.sum(wy_ * px))
+    bxpy = float(xp.sum(wx_ * py))
+    bypy = float(xp.sum(wy_ * py))
+    del wx_, wy_
+    # unknowns (c0, c1, c2, d0, d2); rows are d/d(unknown) of the weighted
+    # residual sum over BOTH momentum components.
+    m = np.array([
+        [m1,  mx,  my,  0.0, 0.0],
+        [mx,  mxx, mxy, 0.0, 0.0],
+        [my,  mxy, myy + mxx, mx, mxy],
+        [0.0, 0.0, mx,  m1,  my],
+        [0.0, 0.0, mxy, my,  myy],
+    ], dtype=np.float64)
+    rhs = np.array([bpx, bxpx, bypx + bxpy, bpy, bypy], dtype=np.float64)
+    try:
+        c = np.linalg.solve(m, rhs)
+    except np.linalg.LinAlgError:
+        return None
+    if not np.all(np.isfinite(c)):
+        return None
+    return tuple(float(v) for v in c)
+
+
+def _tf_remap_phi(coef, x, y):
+    """``Phi`` from :func:`_tf_remap_quadratic_eikonal`'s coefficients, at
+    arbitrary (broadcastable) coordinates -- ANALYTIC, so the remodulation at
+    the pulled-back sample point costs no second interpolation and adds no
+    second interpolation error."""
+    c0, c1, c2, d0, d2 = coef
+    return (c0 * x + d0 * y
+            + (0.5 * c1) * x * x + c2 * x * y + (0.5 * d2) * y * y)
+
+
+def _tangent_facet_remap_apply(E, wx, wy, pox, poy, dx, dy, k0, order, xp,
+                               surface_index):
+    """Apply the coordinate remap: resample ``E`` (and the momentum
+    accumulator) from the pixel grid to the walked positions.
+
+    THE AMPLITUDE JACOBIAN, DERIVED.  The remap is a coordinate transform
+    ``u = M(x) = x + W(x)`` of a field, so it must move ENERGY, not values:
+    ``|E_out(u)|^2 d^2u = |E_in(x)|^2 d^2x``.  With
+    ``d^2u = |det A| d^2x``, ``A = dM/dx = I + dW/dx``, that is
+
+        |E_out(u)| = |E_in(x)| / sqrt(|det A(x)|) ,
+
+    the reciprocal square root of the FORWARD determinant evaluated at the
+    SOURCE point -- the same factor and the same evaluation point as
+    ``_apply_displaced_remap_2d``'s ``1/sqrt(|det d(x_out,y_out)/d(x_in,y_in)|)``.
+    It is a derivation, not a normalisation: nothing here is fitted or rescaled
+    to make the power come out, and the power is measured afterwards as a
+    consequence.
+
+    THE FOLD GUARD.  ``det A > 0`` is exactly the statement that ``M`` is
+    single-valued and orientation-preserving -- that the output pixel has ONE
+    source.  Where it is not, the field there is a sum over two or more
+    branches, which no pull-back can represent, so this REFUSES rather than
+    silently returning whichever branch the iteration happened to land on.
+    ``_TF_REMAP_MIN_DET`` puts the bar a little above zero because
+    ``1/sqrt(det)`` is an amplitude GAIN of 100x there: below that the map has
+    compressed the pupil past what the grid can carry, and the answer would be
+    resolution-limited even where it is single-valued.
+
+    Momentum is not a density and carries no Jacobian: the accumulator is
+    resampled with the same coordinates and no factor."""
+    if xp is not np:                                   # pragma: no cover
+        raise NotImplementedError(
+            "apply_real_lens: surface_model='tangent_facet_remap' has no GPU "
+            "path (the pull-back uses scipy.ndimage).")
+    from scipy.ndimage import map_coordinates, spline_filter
+    ny, nx = E.shape
+    # ---- A = I + dW/dx, and its determinant -------------------------------
+    _wx_y, _wx_x = np.gradient(wx, dy, dx)
+    _wy_y, _wy_x = np.gradient(wy, dy, dx)
+    a11 = 1.0 + _wx_x
+    a12 = _wx_y
+    a21 = _wy_x
+    a22 = 1.0 + _wy_y
+    del _wx_x, _wx_y, _wy_x, _wy_y
+    det = a11 * a22 - a12 * a21
+    d_min = float(np.min(det))
+    if not np.isfinite(d_min) or d_min <= _TF_REMAP_MIN_DET:
+        raise ValueError(
+            f"apply_real_lens: surface_model='tangent_facet_remap' REFUSES at "
+            f"surface {surface_index}: the transverse-walk map folds.  "
+            f"min det(I + dW/dx) = {d_min:.6g} <= {_TF_REMAP_MIN_DET:g}, so the "
+            f"map is not single-valued (or is compressed past a 100x amplitude "
+            f"gain) and the field at some exit pixel is a sum over two or more "
+            f"ray branches that a resampling cannot represent.  This model is "
+            f"for caustic-free element interiors; use "
+            f"surface_model='tangent_facet' (which references the walk away "
+            f"instead of representing it), apply_real_lens_traced, or "
+            f"apply_real_lens_maslov (caustic-safe) for this prescription.")
+    # ---- the field's own momentum after the screen: A^T p_out (R3) --------
+    # Used ONLY to fit the demodulating eikonal, so it is built and dropped
+    # here rather than accumulated.
+    ps_x = a11 * pox + a21 * poy
+    ps_y = a12 * pox + a22 * poy
+    del a11, a12, a21, a22
+    x_ax = (np.arange(nx, dtype=np.float64) - nx // 2) * dx
+    y_ax = (np.arange(ny, dtype=np.float64) - ny // 2) * dy
+    w_amp = np.abs(E)
+    w_amp *= w_amp
+    coef = _tf_remap_quadratic_eikonal(ps_x, ps_y, w_amp, x_ax, y_ax, np)
+    del ps_x, ps_y, w_amp
+    # ---- the pull-back x(u): fixed point of x = u - W(x) -------------------
+    # W is a contraction exactly while the map is unfolded, so this iteration
+    # converging and the guard above passing are the same statement; a
+    # non-convergence is therefore also a refusal rather than a truncation.
+    sx = wx / dx
+    sy = wy / dy
+    if order > 1:
+        sx = spline_filter(sx, order=order, output=np.float64)
+        sy = spline_filter(sy, order=order, output=np.float64)
+    iu = np.arange(nx, dtype=np.float64)[None, :] + np.zeros((ny, 1))
+    iv = np.arange(ny, dtype=np.float64)[:, None] + np.zeros((1, nx))
+    ix = iu.copy()
+    iy = iv.copy()
+    _pf = (order == 1)
+    ok_conv = False
+    for _ in range(_TF_REMAP_MAX_ITERS):
+        crd = np.stack([iy.ravel(), ix.ravel()])
+        nix = iu - map_coordinates(sx, crd, order=order, mode='nearest',
+                                   prefilter=_pf).reshape(ny, nx)
+        niy = iv - map_coordinates(sy, crd, order=order, mode='nearest',
+                                   prefilter=_pf).reshape(ny, nx)
+        del crd
+        step = max(float(np.max(np.abs(nix - ix))),
+                   float(np.max(np.abs(niy - iy))))
+        ix, iy = nix, niy
+        if not np.isfinite(step):
+            break
+        if step < _TF_REMAP_PULLBACK_TOL_PX:
+            ok_conv = True
+            break
+    del sx, sy, iu, iv
+    if not ok_conv:
+        raise ValueError(
+            f"apply_real_lens: surface_model='tangent_facet_remap' REFUSES at "
+            f"surface {surface_index}: the pull-back x + W(x) = u did not "
+            f"converge in {_TF_REMAP_MAX_ITERS} iterations (last step "
+            f"{step:.3g} px against a {_TF_REMAP_PULLBACK_TOL_PX:g} px bar).  "
+            f"The walk map is not invertible on this grid.  Same remedies as "
+            f"the fold refusal above.")
+    # ---- resample -----------------------------------------------------------
+    # DEMODULATE by the analytic quadratic eikonal first: a lens-interior field
+    # runs at a few pixels per fringe, and a spline through that is where the
+    # model's accuracy would go.  Phi is analytic, so the remodulation at the
+    # pulled-back point is exact and costs no second interpolation.
+    x_src = x_ax[0] + ix * dx
+    y_src = y_ax[0] + iy * dy
+    jac = 1.0 / np.sqrt(det)
+    del det
+    # SIGN.  The library's field is ``A exp(+i k0 S)`` with ``p = grad S`` --
+    # measured, not assumed: a plane wave ``exp(+i k0 p x)`` propagated through
+    # the library's own ASM moves its centroid by ``+p z`` (+200.3 um against a
+    # +200.0 um geometric prediction at p = 0.05, z = 4 mm), and the accumulator
+    # step ``p -= grad OPD`` matches ``S -= OPD`` under exactly that sign.  So
+    # the demodulation is ``exp(-i k0 Phi)`` and the remodulation ``exp(+i k0
+    # Phi)``; getting this backwards DOUBLES the fringe rate instead of
+    # flattening it, and was caught by the power it destroyed (0.944 against
+    # 0.9999 of the input, on the biconvex fixture at 4 um sampling).
+    f = E * jac if coef is None else (
+        E * (jac * np.exp(-1j * k0 * _tf_remap_phi(
+            coef, x_ax[None, :], y_ax[:, None]))))
+    del jac
+    crd = np.stack([iy.ravel(), ix.ravel()])
+    del ix, iy
+    e_out = map_coordinates(f, crd, order=order, mode='constant',
+                            cval=0.0).reshape(ny, nx)
+    del f
+    if coef is not None:
+        e_out *= np.exp(1j * k0 * _tf_remap_phi(coef, x_src, y_src))
+    del x_src, y_src
+    if e_out.dtype != E.dtype:
+        e_out = e_out.astype(E.dtype)
+    # the momentum accumulator rides the same coordinates, with NO Jacobian
+    px_out = map_coordinates(pox, crd, order=order, mode='nearest'
+                             ).reshape(ny, nx)
+    py_out = map_coordinates(poy, crd, order=order, mode='nearest'
+                             ).reshape(ny, nx)
+    return e_out, px_out, py_out
+
+
 def _check_screen_obliquity_support(*, carrier, screen_obliquity,
                                     on_screen_obliquity, surface_model,
                                     displaced_mode):
@@ -2473,7 +2858,7 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
                 "signed conjugate distance / 'auto' / an explicit wavefront), "
                 "or drop screen_obliquity.")
         return False
-    if surface_model == 'tangent_facet':
+    if surface_model in _TANGENT_FACET_MODELS:
         # Route 3 SUPERSEDES equations (4) and (7) rather than composing with
         # them: it imprints the exact tangent-facet OPD at the field's own
         # local ray angle, so the angular DIFFERENCE those equations add is
@@ -2483,7 +2868,7 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
         if screen_obliquity is True:
             raise ValueError(
                 "apply_real_lens: screen_obliquity=True is not supported with "
-                "surface_model='tangent_facet'.  That model already imprints "
+                f"surface_model={surface_model!r}.  That model already imprints "
                 "the exact tangent-facet OPD at the local ray angle, so the "
                 "angular correction (equations 4 and 7) is inside it and "
                 "adding it again double-counts.  Drop screen_obliquity, or "
@@ -2503,7 +2888,13 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
     return screen_obliquity is not False
 
 
-_VALID_SURFACE_MODELS = ('thin', 'displaced', 'tangent_facet')
+_VALID_SURFACE_MODELS = ('thin', 'displaced', 'tangent_facet',
+                         'tangent_facet_remap')
+#: The two route-3 family members.  They share the momentum accumulator, the
+#: gap transport, the whole-grid-only restriction and every refusal; they differ
+#: only in whether the transverse walk is REFERENCED away (``'tangent_facet'``,
+#: (T1)+(T2)+(T3)) or REPRESENTED (``'tangent_facet_remap'``, (R1)+(R2)).
+_TANGENT_FACET_MODELS = ('tangent_facet', 'tangent_facet_remap')
 
 
 def _check_displaced_support(*, surface_model, slant_correction, fresnel,
@@ -2511,7 +2902,8 @@ def _check_displaced_support(*, surface_model, slant_correction, fresnel,
                              use_gpu, wave_propagator, prescription,
                              conjugate=None, E_shape=None,
                              displaced_mode='screen',
-                             displaced_obliquity='auto'):
+                             displaced_obliquity='auto',
+                             remap_order=3):
     """Validate ``surface_model`` and, for ``'displaced'``, that the requested
     feature set + prescription are within the ray-angle-aware refraction OPD's
     supported envelope.  Raises ``ValueError`` / ``NotImplementedError`` with a
@@ -2529,7 +2921,21 @@ def _check_displaced_support(*, surface_model, slant_correction, fresnel,
             f"apply_real_lens: unknown displaced_obliquity "
             f"{displaced_obliquity!r}.  Valid choices: "
             f"{sorted(_VALID_DISPLACED_OBLIQUITY)}.")
-    if surface_model == 'tangent_facet':
+    if surface_model in _TANGENT_FACET_MODELS:
+        if remap_order not in _VALID_REMAP_ORDERS:
+            raise ValueError(
+                f"apply_real_lens: remap_order must be one of "
+                f"{list(_VALID_REMAP_ORDERS)} (the spline orders "
+                f"scipy.ndimage.map_coordinates offers that this build has "
+                f"measured); got {remap_order!r}.")
+        if surface_model == 'tangent_facet' and remap_order != 3:
+            raise ValueError(
+                f"apply_real_lens: remap_order= is only meaningful with "
+                f"surface_model='tangent_facet_remap' (it is the interpolation "
+                f"order of the transverse-walk resampling); got remap_order="
+                f"{remap_order!r} with surface_model='tangent_facet', which "
+                f"imprints a screen and resamples nothing.  Drop remap_order "
+                f"or pass surface_model='tangent_facet_remap'.")
         # Route 3's three keywords are the 'displaced' path's, and they mean
         # nothing here: this model takes its ray angle from the field's own
         # accumulated momentum (seeded by carrier=), not from a launched fan.
@@ -2542,37 +2948,46 @@ def _check_displaced_support(*, surface_model, slant_correction, fresnel,
                 raise ValueError(
                     f"apply_real_lens: {_name}= is only meaningful with "
                     f"surface_model='displaced'; got {_name}={_val!r} with "
-                    f"surface_model='tangent_facet', which reads its ray "
+                    f"surface_model={surface_model!r}, which reads its ray "
                     f"angle from the field's own accumulated momentum "
                     f"(seed it with carrier=).")
         # A second angle-aware screen for the same job would double-count.
         if slant_correction:
             raise ValueError(
                 "apply_real_lens: slant_correction=True is not supported with "
-                "surface_model='tangent_facet'.  Both replace the paraxial "
+                f"surface_model={surface_model!r}.  Both replace the paraxial "
                 "facet coefficient (n2-n1) with a refraction-aware one, so "
                 "stacking them double-counts the same physics.  Drop "
                 "slant_correction.")
         if surface_frame:
             raise NotImplementedError(
                 "apply_real_lens: surface_frame=True is not supported with "
-                "surface_model='tangent_facet' (the model's momentum "
+                f"surface_model={surface_model!r} (the model's momentum "
                 "accumulator is defined on the FIELD grid, and the "
                 "surface-frame path re-expresses the sag on a per-surface "
                 "frame).  Drop surface_frame.")
         if use_gpu:
             raise NotImplementedError(
                 "apply_real_lens: use_gpu=True is not supported with "
-                "surface_model='tangent_facet' -- the model is xp-generic but "
-                "no CuPy run has been measured against the ray oracle, and an "
-                "unmeasured accuracy claim is worse than a refusal.")
+                f"surface_model={surface_model!r} -- the model is xp-generic "
+                "but no CuPy run has been measured against the ray oracle, and "
+                "an unmeasured accuracy claim is worse than a refusal.  (The "
+                "remap rung is additionally scipy-bound: its pull-back uses "
+                "scipy.ndimage.map_coordinates.)")
         if wave_propagator not in (None, 'asm', 'rayleigh_sommerfeld'):
             raise NotImplementedError(
-                "apply_real_lens: surface_model='tangent_facet' needs an "
+                f"apply_real_lens: surface_model={surface_model!r} needs an "
                 "exact angular-spectrum gap (the model's own momentum "
                 "bookkeeping assumes it); got wave_propagator="
                 f"{wave_propagator!r}.")
         return
+    if remap_order != 3:
+        raise ValueError(
+            f"apply_real_lens: remap_order= is only meaningful with "
+            f"surface_model='tangent_facet_remap' (it is the interpolation "
+            f"order of the transverse-walk resampling); got remap_order="
+            f"{remap_order!r} with surface_model={surface_model!r}.  Drop "
+            f"remap_order or pass surface_model='tangent_facet_remap'.")
     if surface_model == 'thin':
         if conjugate is not None:
             raise ValueError(
@@ -2725,6 +3140,7 @@ def apply_real_lens(
     conjugate: Any = None,
     displaced_mode: str = 'screen',
     displaced_obliquity: str = 'auto',
+    remap_order: int = 3,
     carrier: Any = None,
     screen_obliquity: Any = 'auto',
     on_screen_obliquity: str = 'warn',
@@ -3011,7 +3427,8 @@ def apply_real_lens(
         freeform / clear_aperture / stop surface / fresnel / slant /
         surface-frame, or a non-NumPy backend) fall through to the
         whole-grid path per surface.
-    surface_model : {'thin', 'displaced', 'tangent_facet'}, default 'thin'
+    surface_model : {'thin', 'displaced', 'tangent_facet', \
+'tangent_facet_remap'}, default 'thin'
         v5.25.1 opt-in refraction-OPD model (hammer audit H2(a)).
 
         ``'thin'`` (default): the paraxial thin-element screen
@@ -3085,6 +3502,57 @@ def apply_real_lens(
         ``carrier=`` path.  Wall clock on the same fixture at N = 4096:
         2.04 s thin, 13.97 s thin + carrier, 11.08 s tangent_facet,
         19.07 s tangent_facet + carrier.
+
+        ``'tangent_facet_remap'`` (the REMAP rung, opt-in): the same
+        tangent-facet physics with the transverse walk REPRESENTED instead of
+        referenced away.  ``'tangent_facet'`` imprints its screen on the vertex
+        plane and Taylor-references the ray's displaced re-crossing back to the
+        pixel; this one imprints the screen and then RESAMPLES the field to the
+        walked positions, so the element is a screen PLUS a coordinate remap and
+        the exit eikonal is evaluated where the ray actually is.  The OPD
+        collapses to the exact one-line path difference
+        ``sag_hit * (n2^2/pz2 - n1^2/pz1)`` and the walk is
+        ``sag_hit * (p/pz1 - p_out/pz2)``; the full derivation, the term ladder,
+        the amplitude-Jacobian derivation and the fold guard are above
+        ``_tangent_facet_remap_screen``.
+
+        WHY IT IS NOT JUST ANOTHER TERM.  A vertex-plane screen's kick is the
+        gradient of its own value, which is why no screen can carry the exact
+        facet kick.  A remap's kick is the gradient of the COMPOSITE, and that
+        equals the exact refracted momentum identically -- verified at 1.5e-15
+        to 4.6e-14 relative on a plane facet, where the model has no truncation
+        left.  Against exact rays on design 121's four powered groups at a 3 mm
+        pupil (waves rms): ``'tangent_facet'`` 0.0000046 / 0.0000033 /
+        0.0000005 / 0.0032381 for g2/g3/g4/g5, this model 1.12e-10 / 5.03e-11 /
+        4.17e-12 / 2.56e-08.
+
+        CAUSTIC SAFETY.  A remap is a ray map, so it must be single-valued.
+        ``det(I + dW/dx) > 0`` is exactly that statement, and a non-positive
+        (or near-zero, or non-invertible-on-this-grid) determinant RAISES rather
+        than silently returning one branch of a fold.  Element interiors of this
+        family are caustic-free by design contract -- design 121 group 5 runs at
+        ``det`` in [0.927, 1.021] -- and the guard is the proof.  Near a genuine
+        caustic use ``apply_real_lens_maslov``.
+
+        Everything ``'tangent_facet'`` refuses, this refuses too, for the same
+        reasons; it is additionally scipy-bound (the pull-back uses
+        ``scipy.ndimage.map_coordinates``) and its resampling order is
+        ``remap_order``.  COST: whole-grid only, like route 3, plus the walk
+        fields and the resampling -- see ``remap_order`` and the module note.
+    remap_order : int, default 3
+        Spline order of the transverse-walk resampling, for
+        ``surface_model='tangent_facet_remap'`` only (any other model raises if
+        it is not the default).  One of 1 / 3 / 5 -- the orders
+        ``scipy.ndimage.map_coordinates`` offers that this build has measured.
+        3 is the library's standing high-order resampling choice (the same one
+        ``_apply_displaced_remap_2d`` and ``_lens_imap`` use).  Measured
+        2026-08-16 on the R = 12.6 mm biconvex at 4 um sampling, N = 1536, as a
+        fraction of the peak amplitude: ``|o3 - o1|`` 3.69e-04 and
+        ``|o5 - o3|`` 1.37e-04, for 9.2 / 15.5 / 26.4 s of wall clock.  The
+        order-5 gap is only 2.7x below the order-3 one on that fixture because
+        4 um is close to the exit wavefront's Nyquist there -- the resampling
+        converges with the SAMPLING, not with the order alone, which is the
+        same statement the model's own grid-gradient scan makes.
     conjugate : {None, float, 'auto', ndarray}, default None
         G2 Task 1 -- the INPUT CONGRUENCE for the ``surface_model='displaced'``
         obliquity fan (same vocabulary as ``apply_real_lens_traced``'s
@@ -3336,6 +3804,7 @@ def apply_real_lens(
         E_shape=np.shape(E_in),
         displaced_mode=displaced_mode,
         displaced_obliquity=displaced_obliquity,
+        remap_order=remap_order,
     )
     # v5.35.0: the screen-obliquity correction + its accuracy guard.  Reached
     # ONLY through the new ``carrier=`` keyword, so every pre-5.35 call site is
@@ -3450,7 +3919,13 @@ def apply_real_lens(
     # 3-row halo on the sag AND a halo on the persistent accumulator; that is
     # priced and REFUSED rather than approximated, and the surcharge is stated
     # in the docstring.  See the derivation above _tangent_facet_screen.
-    _tf_active = (surface_model == 'tangent_facet')
+    _tf_active = (surface_model in _TANGENT_FACET_MODELS)
+    # v5.37 the REMAP rung: the walk is REPRESENTED (screen + coordinate remap)
+    # rather than referenced away.  Shares every gate above with route 3 -- the
+    # accumulator, the gap transport, the band exclusions, the guard silence --
+    # and differs only inside the two blocks below.  See the derivation above
+    # ``_tangent_facet_remap_screen``.
+    _tf_remap = (surface_model == 'tangent_facet_remap')
     # P10 (N11): decentered / tilted / freeform (asymmetric) elements route to
     # the 2-D transverse-walk remap -- the DEFAULT (auto obliquity) and also
     # selectable via displaced_mode='remap'; an explicit
@@ -4545,6 +5020,11 @@ def apply_real_lens(
         # the surface where THIS PIXEL'S ray meets it, evaluated at the ray
         # angle the field itself carries.  Derivation + the measured term
         # ladder are above ``_tangent_facet_screen``.
+        # The remap rung's walk fields live from the screen block to the remap
+        # block below; a flat face (or a non-remap model) leaves this False and
+        # the field is never resampled, which is what keeps a plate exact.
+        _rm_pending = False
+        _rm_wx = _rm_wy = None
         if _tf_active and bool(xp.any(sag)):
             # A FLAT face -- a plate, a cemented plano, a stop -- has no facet
             # to tilt and no height to translate, so the identity collapses to
@@ -4555,20 +5035,45 @@ def apply_real_lens(
             if bool(xp.any(xp.isnan(sag))):
                 _tf_sag = xp.where(xp.isnan(sag), 0.0, sag)
             _tg_y, _tg_x = xp.gradient(_tf_sag, dy, dx)
-            _tf_opd, _tf_ok = _tangent_facet_screen(
-                _tf_sag, _tg_x, _tg_y, _tf_px, _tf_py, n1r, n2r, dx, dy, xp)
+            if _tf_remap:
+                # ---- the REMAP rung: (R1) the screen, (R2) the walk -------
+                # The Hessian is taken ONCE and shared between the hit-point
+                # fixed point (R4) and the facet normal there (R5); route 3's
+                # (T2b) takes the same two gradients, so the surcharge of this
+                # model over that one is the walk fields, not the derivatives.
+                _rm_gxy, _rm_gxx = xp.gradient(_tg_x, dy, dx)
+                _rm_gyy, _rm_gyx = xp.gradient(_tg_y, dy, dx)
+                (_tf_opd, _rm_wx, _rm_wy, _rm_ox, _rm_oy,
+                 _tf_ok) = _tangent_facet_remap_screen(
+                    _tf_sag, _tg_x, _tg_y, _rm_gxx, _rm_gxy, _rm_gyx,
+                    _rm_gyy, _tf_px, _tf_py, n1r, n2r, xp)
+                del _rm_gxx, _rm_gxy, _rm_gyx, _rm_gyy
+            else:
+                _tf_opd, _tf_ok = _tangent_facet_screen(
+                    _tf_sag, _tg_x, _tg_y, _tf_px, _tf_py, n1r, n2r,
+                    dx, dy, xp)
             # Keep the paraxial screen wherever the facet refraction is not
             # propagating (evanescent input, or TIR at the facet): a clamped
             # cosine is a wrong OPD and the thin screen is the safe neutral.
-            if not (bool(xp.all(_tf_ok)) and bool(xp.all(xp.isfinite(_tf_opd)))):
-                _tf_opd = xp.where(_tf_ok & xp.isfinite(_tf_opd), _tf_opd, opd)
+            _tf_all_ok = (bool(xp.all(_tf_ok))
+                          and bool(xp.all(xp.isfinite(_tf_opd))))
+            if not _tf_all_ok:
+                _tf_keep = _tf_ok & xp.isfinite(_tf_opd)
+                _tf_opd = xp.where(_tf_keep, _tf_opd, opd)
+                if _tf_remap:
+                    # A non-propagating pixel keeps the thin screen AT ITS OWN
+                    # COORDINATE: a clamped walk is a wrong POSITION, which is
+                    # strictly worse than a wrong phase because it also moves
+                    # energy.  Zeroing the walk there is the same "safe neutral"
+                    # choice the OPD fallback makes, and it keeps the map's
+                    # Jacobian finite so the fold guard scores the real walk
+                    # rather than a clamp artefact.
+                    _rm_wx = xp.where(_tf_keep, _rm_wx, 0.0)
+                    _rm_wy = xp.where(_tf_keep, _rm_wy, 0.0)
+                    _rm_ox = xp.where(_tf_keep, _rm_ox, _tf_px)
+                    _rm_oy = xp.where(_tf_keep, _rm_oy, _tf_py)
+                del _tf_keep
             opd = _tf_opd
-            # The field's momentum after this screen IS minus the gradient of
-            # what the screen imprinted -- not the exact facet kick.  (The two
-            # differ by -sag grad dz; the tangent-facet RAY arm uses the exact
-            # kick with this OPD and is therefore NOT a wave model, since a
-            # screen's kick is its own value's gradient.  That inconsistency is
-            # what separates this model from that arm; see the doc.)
             # ORDERING, not a guard: the NaN-sentinel zeroing the OPD receives
             # a few lines below is hoisted to HERE, because the accumulator is
             # persistent.  The OPD's own sentinel costs one annulus for one
@@ -4583,10 +5088,35 @@ def apply_real_lens(
             # becomes a no-op for this model.
             if bool(xp.any(xp.isnan(opd))):
                 opd = xp.where(xp.isnan(opd), 0.0, opd)
-            _tk_y, _tk_x = xp.gradient(opd, dy, dx)
-            _tf_px = _tf_px - _tk_x
-            _tf_py = _tf_py - _tk_y
-            del _tg_x, _tg_y, _tk_x, _tk_y, _tf_sag, _tf_ok, _tf_opd
+            if _tf_remap:
+                # (R3): the remap rung's kick is the gradient of the COMPOSITE,
+                # not of the screen alone, and that composite gradient is
+                # IDENTICALLY the exact refracted momentum -- the screen puts in
+                # ``A^T p_out`` and the coordinate change divides ``A^T`` back
+                # out.  So the accumulator is ``p_out`` in closed form rather
+                # than differenced off the grid, and it rides the same
+                # resampling as the field below.  Pinned as an EQUALITY of two
+                # independently computed grids by
+                # ``test_..._is_the_exact_refracted_momentum_for_a_plane_facet``
+                # (1.5e-15 to 4.6e-14 relative, where the model has no
+                # truncation left) -- which is precisely what route 3, whose
+                # kick is the gradient of its own screen, could not have.
+                _tf_px, _tf_py = _rm_ox, _rm_oy
+                _rm_pending = True
+                del _rm_ox, _rm_oy
+            else:
+                # Route 3: the field's momentum after this screen IS minus the
+                # gradient of what the screen imprinted -- not the exact facet
+                # kick.  (The two differ by -sag grad dz; the tangent-facet RAY
+                # arm uses the exact kick with this OPD and is therefore NOT a
+                # wave model, since a screen's kick is its own value's
+                # gradient.  That inconsistency is what separates route 3 from
+                # that arm, and what the remap rung above escapes.)
+                _tk_y, _tk_x = xp.gradient(opd, dy, dx)
+                _tf_px = _tf_px - _tk_x
+                _tf_py = _tf_py - _tk_y
+                del _tk_x, _tk_y
+            del _tg_x, _tg_y, _tf_sag, _tf_ok, _tf_opd
         # ---- Screen obliquity (v5.35.0) -------------------------------
         # The angular part of the exact thin-facet screen OPD, equation (4)
         # of the module-level derivation.  Added ON TOP of whichever screen
@@ -4737,6 +5267,20 @@ def apply_real_lens(
                 E = xp.where(h_sq_stop <= (aperture / 2) ** 2,
                              E, xp.zeros((), dtype=E.dtype))
 
+        # ---- The REMAP rung: carry the field to the walked positions ---
+        # LAST in the surface block, so the vignetting masks above still act at
+        # the pixel's own (incoming) vertex-plane coordinate exactly as they do
+        # for every other model -- the aperture is a property of the surface,
+        # and the walk is what happens between the vertex plane and back.  Runs
+        # at the LAST surface too: the exit face carries the largest walk of the
+        # element (measured 54.9 um on design 121 group 5 at a 3 mm pupil,
+        # against 18.2 and 2.2 um on the two entrance faces), so stopping one
+        # surface short would drop the dominant term.
+        if _rm_pending:
+            E, _tf_px, _tf_py = _tangent_facet_remap_apply(
+                E, _rm_wx, _rm_wy, _tf_px, _tf_py, dx, dy, k0,
+                int(remap_order), xp, i)
+        del _rm_wx, _rm_wy
         # ---- Propagate through glass to the next surface --------------
         # Dispatch (asm / sas / fresnel / rayleigh_sommerfeld) + bulk
         # absorption is factored into ``_propagate_through_glass`` so the
