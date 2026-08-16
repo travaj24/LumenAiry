@@ -1211,3 +1211,134 @@ touched by this round -- round 3's guard stands as shipped.
   claim, the match radius, the library, and now the injector.  The invariant
   that survived all four is the one worth keeping: **anything a build is
   entitled to move must be measured here, never assumed from elsewhere.**
+
+---
+
+## 12.  THE TWO REFERRED EME COUNT BARS -- 2026-08-15
+
+`FIX_RUNNER_PINS_2_2026_08_15.md` S8.2 referred two fragile sites in EME
+territory rather than touching them.  Both are COUNT bars with one unit of
+slack, and both are adjudicated here with the machinery S9-S11 built: basin
+matching, readings taken on the build doing the asserting, and oracle
+confirmation -- not widened counts.
+
+### 12.1  `test_eme_2d_vector.py` -- the completeness recall bar
+
+Reported: `recall >= 8` / `spurious <= 2`, measured 15/1, the file's own
+docstring recording a CI dip to **9**.  One mode of margin.
+
+Measured here first, and the reading is worse than "thin":
+
+| quantity | value |
+|---|---|
+| oracle band, Nx=20, Ny=56, (56, 259) | **16** modes |
+| EME census, `n_scan=800` | **16** modes |
+| smallest oracle mode spacing | **0.8862** -> basin radius **0.4431** |
+| every matched oracle->EME distance | **0.0502 .. 0.1656** (the y-FD error) |
+| shipped match tolerance | **0.7** |
+
+**0.7 is LOOSER than half the mode spacing.**  So the shipped bar could match an
+oracle mode to its NEIGHBOUR -- a soundness flaw, not only a fragility -- while
+being simultaneously tight enough that a borderline entry crossing it costs a
+whole unit of recall.  Recall/spurious at every tolerance from 0.7 to 3.0
+measure 16/16 and 0 here, so the CI dip is not this build's geometry moving; it
+is the shift-invert ORACLE dropping entries at the boundary, exactly as the
+file's own comment says.
+
+Restated in three pieces:
+
+* **Match by BASIN** (`_basin_radius`, `_match`): half the smallest gap of the
+  oracle band, read at runtime -- 0.4431 here.  Tighter than 0.7, and it cannot
+  cross-assign.
+* **Well-posedness is asserted, not assumed**: every match the radius makes must
+  be closer than half of it (worst 0.1656 against 0.4431, **2.7x**).  If the
+  y-FD error ever grows into the mode spacing the message says to raise `Ny`,
+  not to widen the radius.
+* **Every MISS is adjudicated, not counted**: an oracle mode the census does not
+  hold is a real miss only if the finder's OWN condition has an acceptable zero
+  there -- `_polish_zero` over a half-basin window, then `_mode_reading`
+  (`sigma_min < tol`, `gaps.min < ratio_tol`, non-structural) and the polished
+  zero still absent from the census.  A shift-invert artifact has no such zero
+  and is REPORTED.  The cascade regression this test exists for -- ~2 of 16
+  recovered -- leaves 14 misses that all polish to acceptable zeros, so it still
+  fails, and now names them.
+* **Spurious is per-entry against the FD oracle**: a census entry the oracle
+  band does not hold must have a 2-D-FD eigenvalue within 1.0 (the bar
+  `verify=True` ships with), or it is spurious and the test fails on that entry.
+  A bare count could not tell an EME artifact from an oracle miss.
+
+The surviving count is `recall >= len(ref) // 2`, which measures 16 against 8
+and is there only to keep the cascade's ~2 decisively out.
+
+### 12.2  `test_niche_audit_w6_eme.py` -- the scaled-census count bound
+
+Reported: `abs(len(base) - len(scaled)) <= 2`, observed 0-1, bar 2, defect at 3.
+One unit of slack, and a count cannot say WHICH mode moved.
+
+Measured: both arms return 3 modes; the matched pairs agree to **1.4e-6 ..
+3.1e-6** absolute after the `x100` scale correction, while distinct modes are
+**4.534** and **47.4** apart -- so the union's distinct-mode gap gives a basin
+radius of **2.267**, six decades above the agreement.
+
+Restated per entry: every mode either arm returns is held by the other within
+the basin radius, OR its own `gaps.min` sits inside `_CENSUS_BAND` -- i.e. it is
+one of the knife-edge candidates the rank-drop gate is entitled to disagree
+about, which is precisely what the retired comment was trying to encode as "at
+most two".  A build where a second knife-edge candidate flips now passes, and a
+build where a SETTLED mode moves now fails, naming it.
+
+Its fail-before (`> 2` on the pre-fix detection grid) is restated the same way:
+the collapsed scaled arm loses every base mode, and at least one of them reads
+BELOW the ambiguity band -- a settled mode -- so the per-entry claim genuinely
+breaks.  Asserted on the readings, so it cannot go vacuous if the collapse ever
+happens to take only knife-edge entries.
+
+### 12.3  Not touched, with the reading that says why
+
+The same S8.2 row also lists `test_niche_audit_w6_eme.py:474`'s two constants.
+Both were re-read and left alone -- they are two-sided by an order of magnitude,
+which this campaign has not treated as fragile:
+
+| constant | claim | measured margin |
+|---|---|---|
+| `_W6_ZERO_DEPTH = 2e-3` | true zeros are below it, shallow non-modes above | <= 4.76e-5 below (**42x**) / >= 2.20e-2 above (**11x**) |
+| `_W6_SCALE_ROOT_REL = 1e-6` | a converged zero is scale-invariant to it | <= 9.13e-9 (**110x**), non-modes >= 9.75e-5 (**97x**) |
+
+The `worst > 20.0 * _W6_SCALE_ROOT_REL` fail-before beside them is a
+*fail-before*, not a claim, and it is checked against a population measured in
+the same run.
+
+### 12.4  Green
+
+The three rewritten ids, run together on M (Windows py3.14.6, numpy 2.4.4,
+1 BLAS thread): **3 passed** (558.1 s under an unrelated concurrent sweep;
+the reading printed is `basin radius 0.4431 (spacing 0.8862); recall 16/16,
+0 oracle entries adjudicated as artifacts; 0 census entries unmatched, all
+FD-confirmed; worst matched distance 0.1656`).
+
+| environment | python | numpy | whole-file regression |
+|---|---|---|---|
+| M, Windows | 3.14.6 | 2.4.4 | in flight at hand-off |
+| W, WSL `/tmp/venv-py310` | 3.10.20 | 2.2.6 | in flight at hand-off |
+| W, WSL `lumen_venv` | 3.12.3 | 2.4.6 | in flight at hand-off |
+
+The box was carrying an unrelated whole-suite sweep throughout, which is why
+the targeted run took 558 s for work that is ~90 s idle.
+
+`ruff check lumenairy/ tests/unit/` clean on both mounts.  No library change
+this round.  No `xfail`, `skip`, deleted test, weakened guard or `CHANGELOG`
+entry.  (`test_niche_audit_w6_eme.py` carries pre-existing non-ASCII bytes and
+was edited byte-preservingly; everything added is ASCII.)
+
+### 12.5  Open
+
+* `_oracle_band`'s own membership is still a shift-invert result filtered at
+  `reldiv < 1e-2`, and that filter is where the CI wobble enters.  The
+  adjudication above makes the wobble harmless to the assertion, but the oracle
+  would be steadier if its entries were confirmed at two `Ny` values and only
+  the agreeing ones kept.  Deferred: it doubles the most expensive call in the
+  file.
+* The completeness test's per-miss adjudication costs one `_polish_zero` per
+  unmatched oracle mode.  On builds that match all 16 it costs nothing; on the
+  runner that dipped to 9 it would cost seven, which is the right place to spend
+  it.

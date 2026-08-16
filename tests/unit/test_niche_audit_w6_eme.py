@@ -476,6 +476,23 @@ _W6_ZERO_DEPTH = 2e-3        # measured <= 4.76e-5 for every candidate any build
 #                              the non-modes read >= 2.20e-2.  ~9x / ~11x.
 
 
+def _w6_basin_radius(*groups):
+    """Half the smallest gap between the DISTINCT modes of the union -- the
+    radius inside which a point can belong to only one of them.
+
+    Matched entries across the two length units agree to ~3e-6 relative, so
+    pairs are collapsed first and the radius is read off what remains: measured
+    gap 4.534 -> radius 2.267, six decades above that agreement.  A count of
+    modes cannot say WHICH mode moved; this can, and it is build-free because
+    the spacing is physics."""
+    v = np.sort(np.concatenate([np.asarray(g, dtype=float).ravel()
+                                for g in groups]))
+    d = np.diff(v)
+    d = d[d > 1e-3 * np.maximum(np.abs(v[:-1]), 1.0)]   # drop matched pairs
+    assert d.size, f"no distinct modes in the union: {list(v)}"
+    return 0.5 * float(np.min(d))
+
+
 def _polished_dip(strips, Lx, Nx, Ly, k0, ky0, q, half, nloc=33):
     """Converged local minimum of ``sigma_min(qz^2)`` in ``[q-half, q+half]``.
 
@@ -537,16 +554,36 @@ def test_w6_6_scaled_cell_keeps_full_recall():
     gsz = eme_2d_vector._detect_grid_size
     n_base = gsz(lo, hi, Ly, 3)
     assert n_base == gsz(lo / s ** 2, hi / s ** 2, Ly * s, 3) == 801
-    # (2) the two censuses may differ by at most the near-threshold candidates
-    #     the finder's rank-drop gate is knife-edge on, and this window holds
-    #     exactly TWO of them (180.770 reads gaps.min 1.61e-3 / 2.99e-3 and
-    #     235.869 reads 2.08e-3 / 3.25e-3 against the shipped ratio_tol 1e-3).
-    #     Measured 0 here on both mounts and 1 on the ubuntu runner; a collapsed
-    #     scaled grid gives 3, so this still fires on the defect W6-6 fixed.
-    assert abs(len(base) - len(scaled)) <= 2, (
-        f"census differs by {abs(len(base) - len(scaled))} modes -- more than "
-        f"the two knife-edge candidates this window holds: base {base}, "
-        f"scaled {scaled * s ** 2}")
+    # (2) the two censuses must agree MODE FOR MODE, not in COUNT (2026-08-15,
+    #     FIX_EME_CENSUS S12).  ``abs(len(base) - len(scaled)) <= 2`` had one
+    #     unit of slack -- measured 0 on both mounts, 1 on the ubuntu runner,
+    #     3 on the collapsed grid the arm exists to catch -- so a second
+    #     knife-edge candidate flipping on some build would have failed it
+    #     without any defect.  A count also cannot tell WHICH entry moved.
+    #     Restated per entry: every mode either arm returns is held by the other
+    #     within the BASIN radius (half the smallest gap between the distinct
+    #     modes of the union -- physics, measured 4.534 -> 2.267 here, against
+    #     matched pairs that agree to ~3e-6), OR its own reading sits inside the
+    #     ambiguity band, i.e. it is one of the knife-edge candidates the
+    #     finder's rank-drop gate is entitled to disagree about.  A collapsed
+    #     scaled grid loses EVERY mode, none of which is knife-edge, so the arm
+    #     still fires on the defect W6-6 fixed -- and now says which modes.
+    up = np.asarray(scaled, dtype=float) * s ** 2
+    _band = tuple(e * 1e-3 for e in eme_2d_vector._CENSUS_BAND)
+    _iso = _w6_basin_radius(base, up)
+    for tag, mine, theirs in (("base", np.asarray(base, dtype=float), up),
+                              ("scaled", up, np.asarray(base, dtype=float))):
+        for q in mine:
+            if theirs.size and float(np.min(np.abs(theirs - q))) <= _iso:
+                continue
+            g = float(eme_2d_vector._mode_reading(
+                strips, Lx, Nx, k0, 0.0, float(q), PI, Ly)[1].min())
+            assert _band[0] <= g <= _band[1], (
+                f"the {tag} arm returns {q:.9f}, which the other arm does not "
+                f"hold within the basin radius {_iso:.4f}, and it is NOT a "
+                f"knife-edge candidate either (gaps.min {g:.3e} outside the "
+                f"ambiguity band {_band}) -- the two length units disagree "
+                f"about a settled mode: base {base}, scaled {up}")
     # (3) the physics is exactly scale-invariant: every qz^2 EITHER arm returns
     #     is the SAME converged zero of BOTH cells.  Bidirectional, so it is not
     #     satisfiable by one arm going quiet.
@@ -607,7 +644,18 @@ def test_w6_6_scale_invariance_survives_the_prefix_grid_and_still_rejects_a_dip(
     assert len(pre_scaled) == 0, (
         "the pre-fix detection grid must still lose the scaled cell's modes "
         f"(got {pre_scaled * s ** 2})")
-    assert abs(len(pre_base) - len(pre_scaled)) > 2  # breaks the census bound
+    # ... and it breaks the RESTATED (mode-for-mode) bound, not a count: every
+    # base mode the pre-fix scaled arm loses is a settled one, none of them
+    # knife-edge, so the per-entry claim above fails on each (2026-08-15, S12).
+    _band = tuple(e * 1e-3 for e in eme_2d_vector._CENSUS_BAND)
+    settled_lost = [
+        float(q) for q in pre_base
+        if float(eme_2d_vector._mode_reading(
+            strips, Lx, Nx, k0, 0.0, float(q), PI, Ly)[1].min()) < _band[0]]
+    assert settled_lost, (
+        f"the pre-fix scaled arm lost {list(pre_base)}, but every one of them "
+        f"reads inside the ambiguity band, so the restated bound would have "
+        f"tolerated the collapse -- the injector no longer reaches the defect")
 
     # ---- ARM 2 -------------------------------------------------------------
     half = (hi - lo) / 800.0 / 2.0

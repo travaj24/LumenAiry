@@ -44,6 +44,7 @@ def _deterministic_blas():
 
 from lumenairy.elements.eme import (
     dispersion_vec,
+    eme_2d_vector,
     eps_xy_to_strips,
     layer_vector_modes,
     layer_vector_modes_complex,
@@ -90,6 +91,42 @@ def _distinct(vals, rtol=3e-3):
         if not out or abs(out[-1] - v) > rtol * max(abs(v), 1.0):
             out.append(v)
     return np.array(out)
+
+
+def _sigma_or_inf(strips, Nx, q):
+    """``sigma_min(G(qz^2))`` with the finder's own band-edge guard -- the
+    very function ``layer_vector_modes`` minimises."""
+    try:
+        return dispersion_vec(strips, Lx, Nx, k0, 0.0, q, KY0, Ly)
+    except np.linalg.LinAlgError:
+        return np.inf
+
+
+def _basin_radius(*groups):
+    """Half the smallest gap between the modes of a window -- the radius inside
+    which a point can belong to only ONE of them.
+
+    THE match radius between two mode sets.  A fixed tolerance is the wrong
+    instrument twice over: it can be LOOSER than half the mode spacing, in which
+    case a mode may be "matched" to its NEIGHBOUR (the shipped 0.7 was, against a
+    measured spacing of 0.886 -- see S12), and whether a given build's borderline
+    entry falls inside it is a per-build fact of exactly the kind
+    ``FIX_EME_CENSUS_2026_08_12`` S9 removed from the census tests.  The spacing
+    is physics and every build agrees on it."""
+    v = np.sort(np.concatenate([np.asarray(g, dtype=float).ravel()
+                                for g in groups]))
+    assert v.size >= 2, f"need >= 2 modes to read a basin radius: {list(v)}"
+    return 0.5 * float(np.min(np.diff(v)))
+
+
+def _match(a, b, radius):
+    """``(matched_mask_over_a, distance_of_each_a_to_its_nearest_b)``."""
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.size == 0 or b.size == 0:
+        return np.zeros(a.shape, dtype=bool), np.full(a.shape, np.inf)
+    d = np.array([float(np.min(np.abs(b - x))) for x in a])
+    return d < radius, d
 
 
 def _oracle_band(strips, Nx, Ny, lo, hi, k=40):
@@ -162,19 +199,76 @@ def test_vector_structured_completeness():
     # and OpenBLAS to drop a handful of borderline modes).
     eme = layer_vector_modes(strips, Lx, Nx, Ly, k0, (56, 259), ky0=KY0,
                              n_scan=800)
-    recall = sum(min(abs(o - e) for e in eme) < 0.7 for o in ref)
-    spurious = len(eme) - sum(min(abs(e - o) for o in ref) < 0.7 for e in eme)
     assert len(ref) >= 14                       # oracle finds the full band
-    # The regression this guards is the ill-conditioned Redheffer cascade
-    # that recovered only ~2/16 modes.  The tight "all but 3" bound is a
-    # reference-BLAS (MKL) value; OpenBLAS recovers a few fewer at the
-    # match-tolerance boundary (S5-12 cross-platform flake, passed on 2/3
-    # CI runs at len(ref)-3, dipped to 9).  Assert the finder recovers a
-    # clear MAJORITY of the band -- decisively above the cascade's ~2 and
-    # robust across BLAS backends.
-    assert recall >= len(ref) // 2               # majority of band; >> cascade's ~2
-    assert recall >= 8                           # absolute floor, well above ~2
-    assert spurious <= 2                         # rank-drop keeps it clean
+    assert len(eme) >= 1                        # never vacuous
+
+    # MATCH BY BASIN, not by a fixed tolerance (2026-08-15, S12).  The shipped
+    # 0.7 was LOOSER than half the measured mode spacing (0.886 -> basin 0.443),
+    # so it could match an oracle mode to its NEIGHBOUR; and whether a given
+    # build's borderline entry landed inside it is per-build -- which is what
+    # made `recall >= 8` sit one mode from a documented CI dip to 9.
+    radius = _basin_radius(ref)
+    m_ref, d_ref = _match(ref, eme, radius)
+    m_eme, d_eme = _match(eme, ref, radius)
+    # ... and the matching must be WELL-POSED here: every pair it does make is
+    # a lot closer than the radius, so the assignment is not itself a coin flip.
+    # Measured: worst matched distance 0.166 (the y-FD error at Ny=56) against a
+    # 0.443 basin -- 2.7x.
+    if m_ref.any():
+        assert float(np.max(d_ref[m_ref])) < 0.5 * radius, (
+            f"the oracle->EME matching is not well-posed: worst matched "
+            f"distance {float(np.max(d_ref[m_ref])):.4f} against basin radius "
+            f"{radius:.4f}.  The y-FD error has grown into the mode spacing; "
+            f"raise Ny rather than widening the radius")
+
+    # RECALL.  The regression this guards is the ill-conditioned Redheffer
+    # cascade that recovered only ~2 of 16 modes.  Instead of a count with one
+    # mode of slack, every MISS is adjudicated with the finder's own condition:
+    # an oracle mode the census does not hold is a real miss only if
+    # ``sigma_min`` actually has an ACCEPTABLE zero there.  An oracle entry that
+    # is a shift-invert artifact (which is what wobbles across BLAS backends)
+    # has none, and is reported rather than counted against the finder.
+    real_misses, artifacts = [], []
+    for o in np.asarray(ref, dtype=float)[~m_ref]:
+        half = 0.5 * radius
+        x = eme_2d_vector._polish_zero(
+            lambda q: _sigma_or_inf(strips, Nx, q), o - half, o + half)
+        s, gaps, bound = eme_2d_vector._mode_reading(
+            strips, Lx, Nx, k0, 0.0, float(x), KY0, Ly)
+        acceptable = (float(s[-1]) < 5e-2 and float(gaps.min()) < 1e-3
+                      and float(s[-1]) < eme_2d_vector._STRUCTURAL_SAT * bound)
+        still_absent = float(np.min(np.abs(np.asarray(eme, float) - x))) > radius
+        (real_misses if acceptable and still_absent else artifacts).append(
+            (float(o), float(x), float(gaps.min())))
+    assert not real_misses, (
+        f"the finder MISSED {len(real_misses)} oracle mode(s) that its own "
+        f"condition accepts -- (oracle, converged zero, gaps.min): "
+        f"{real_misses}.  This is the cascade regression, not a match-boundary "
+        f"artifact: census {list(eme)}")
+    # and a floor that is decisive against the cascade's ~2 of 16, with the
+    # basin matching making it slack rather than knife-edge (measured 16/16)
+    assert int(m_ref.sum()) + len(artifacts) == len(ref)
+    assert int(m_ref.sum()) >= len(ref) // 2, (
+        f"only {int(m_ref.sum())} of {len(ref)} oracle modes are held and "
+        f"{len(artifacts)} were adjudicated as oracle artifacts -- too many to "
+        f"be the shift-invert boundary")
+
+    # SPURIOUS.  Per-entry, against the INDEPENDENT FD discriminator the library
+    # ships as ``verify=True``, rather than a bare count: an EME entry the
+    # oracle band does not hold is spurious only if no FD eigenvalue is near it.
+    for e in np.asarray(eme, dtype=float)[~m_eme]:
+        fd = eme_2d_vector._fd_eig_dist(strips, Lx, Nx, Ly, k0, 0.0, KY0,
+                                        float(e), 56)
+        assert fd < 1.0, (
+            f"the census entry {e!r} matches no oracle mode within the basin "
+            f"radius {radius:.4f} AND has no 2-D-FD eigenvalue within "
+            f"{fd:.4f} -- it is spurious: census {list(eme)}")
+    print(f"\nEME completeness: basin radius {radius:.4f} (spacing "
+          f"{2 * radius:.4f}); recall {int(m_ref.sum())}/{len(ref)}, "
+          f"{len(artifacts)} oracle entries adjudicated as artifacts; "
+          f"{int((~m_eme).sum())} census entries unmatched, all FD-confirmed; "
+          f"worst matched distance "
+          f"{float(np.max(d_ref[m_ref])) if m_ref.any() else float('nan'):.4f}.")
 
 
 def test_vector_no_duplicate_modes():
