@@ -399,9 +399,13 @@ def _score_null_control(cells, refs, degrees=_LADDER_DEGREES, mk=None):
 
 #: The degree-ladder SPREAD that separates a COLLAPSED ladder from a
 #: stationary one.  THIS FILE'S OWN BAR since M2 and NOT moved by the
-#: 2026-08-15 re-statement below: measured 1.23 / 1.34 / 1.76 / 2.28 / 2.38
-#: collapsed against 0.00356 / 0.00406 / 0.00733 cured on both mounts, i.e.
-#: over a decade of margin either side of it.
+#: 2026-08-15 re-statement below
+#: (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.5, shape S6) -- it is
+#: restated, never widened.  Measured on both mounts: collapsed ladders read
+#: 1.23 / 1.34 / 1.76 / 2.28 / 2.38 at the shipped cut and never less than
+#: 0.93 at any injected one, cured ladders read 0.00356 / 0.00406 / 0.00733,
+#: so the bar sits 9.3x under the closest collapse and 13.6x over the loosest
+#: cure.
 _COLLAPSE_SPREAD = 0.1
 
 
@@ -426,6 +430,12 @@ def _collapse_reach(probe, bar=_COLLAPSE_SPREAD, scales=None):
     is ARMED and the degree ladder has COLLAPSED, or ``(None, rows)`` when no
     rung reaches it.  ``rows`` is every rung walked, ``(scale, raw census,
     spread)``.
+
+    NEW 2026-08-15, ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.5
+    (shape S6): this EXISTENCE claim is what replaces the per-build CONDITIONAL
+    main CI refuted.  :func:`_uncured_below_threshold` carries the measured
+    census readings on each build and the argument for why a reach over cut
+    positions is build-free where a reading at ONE cut position is not.
 
     THE LADDER IS ``(1.0,) + _INJECTOR_SCALES`` and it starts at 1.0 for a
     reason: rung one is THE CUT AS THIS BUILD FINDS IT, so a build whose own
@@ -487,24 +497,26 @@ def _uncured_below_threshold(ns, mf, layers, degrees, mk, off_nm, probe=None):
 
     THE CENSUS IS A PER-BUILD READING THREE TIMES OVER -- mount, thread count
     and wheel.  Measured on this cell, repair OFF, degrees 8..16, over the cut
-    ladder (2026-08-15; W = Windows py3.14.6 / numpy 2.4.4 at 24 threads,
-    M = WSL py3.12.3 / numpy 2.5.1 at one):
+    ladder (2026-08-15, one BLAS thread; W = Windows py3.14.6 / numpy 2.4.4,
+    M = WSL py3.12.3 / numpy 2.5.1, which is the numpy 2.5-era wheel the
+    failing ubuntu job runs):
 
-        cut        [W] raw census        spread     [M] raw census       spread
-        x1         [0,0,1,2,3]           1.33841    [0,0,0,3,0]          2.38098
-        x1/3       [0,0,1,4,7]           1.33841    [0,1,0,5,5]          2.38098
-        x1e-2      [11,15,26,42,54]      1.43113    [10,25,24,59,72]     1.35714
-        x1e-4      [26,38,44,55,66]      1.36577    [29,32,42,42,55]     1.42007
-        ---------- and upward, which is the runner's direction --------------
-        x3         [0,0,1,2,3]           1.33841    [0,0,0,1,0]          2.38098
-        x10        [0,0,0,0,0]           0.004055   [0,0,0,0,0]          0.004055
+        cut     [W] raw census      spread    [M] raw census      spread
+        x1e-4   [40,35,47,54,55]    1.33478   [29,32,42,42,55]    1.42007
+        x1e-2   [10,26,28,43,67]    0.93247   [10,25,24,59,72]    1.35714
+        x1/3    [0,1,3,4,6]         1.78619   [0,1,0,5,5]         2.38098
+        x1      [0,0,1,1,1]         1.33841   [0,0,0,3,0]         2.38098
+        ------- and upward, which is the runner's direction ----------------
+        x3      [0,0,0,0,0]         0.004055  [0,0,0,1,0]         2.38098
+        x5/x10  [0,0,0,0,0]         0.004055  [0,0,0,0,0]         0.004055
 
-    -- and M does not even agree with what the 2026-08-12 table recorded on the
-    same mount ([0,0,1,1,1] at one thread there, on a numpy 2.4 wheel; the
-    numpy 2.5 wheel the failing job runs reads [0,0,0,3,0] and scatters 2.38
-    where that one scattered 1.34).  No reading here is universal.  What IS
-    universal on both mounts, at every width and every wheel, is that SOMEWHERE
-    on the cut ladder the census arms and the ladder collapses.
+    -- the two mounts do not agree on WHICH rung arms, on HOW MANY modes it
+    carries, or on where the collision disarms (x3 on W, x5 on M), and M does
+    not agree with what the 2026-08-12 table recorded on the same mount at the
+    same width ([0,0,1,1,1] spread 1.33841 there, on a numpy 2.4 wheel).  No
+    reading here is universal.  What IS universal on both mounts, at every
+    width and every wheel, is that SOMEWHERE on the cut ladder the census arms
+    and the ladder collapses.
 
     So the half is re-stated on the two things that are true build by build:
 
@@ -1577,13 +1589,18 @@ def test_the_threshold_rules_NOT_CURED_half_conditions_on_the_census_too(
         # per-build coincidence of the two mounts, which happen to arm and
         # collapse together at every width measured:
         #
-        #     mount / OPENBLAS_NUM_THREADS   cut x1        spread   disarms at
-        #     W py3.14 numpy 2.4.4 / 24      [0,0,1,2,3]   1.33841  x10
-        #     M py3.12 numpy 2.5.1 / 1       [0,0,0,3,0]   2.38098  x5..x10
+        #     build / OPENBLAS_NUM_THREADS   cut x1        spread   disarm rung
+        #     W py3.14 numpy 2.4.4 / 1       [0,0,1,1,1]   1.33841  x3
+        #     M py3.12 numpy 2.5.1 / 1       [0,0,0,3,0]   2.38098  x10
         #     M py3.12 numpy 2.4.6 / 1       [0,0,1,1,1]   1.33841  x3
         #     M py3.12 numpy 2.4.6 / 4       [0,0,1,2,1]   1.93102  x10
         #     ubuntu, main CI 2026-08-15     [0,0,0,0,2]   0.004055 (armed and
         #                                                  NOT collapsed)
+        #
+        # (rows 1-2 measured 2026-08-15, rows 3-4 are the 2026-08-12 table on
+        # the numpy 2.4 wheel -- the same mount and width reads a different
+        # census on a different wheel, which is the axis stated without any
+        # injector at all.)
         #
         # So what is asserted here is the STRUCTURAL fact the walk is built on
         # -- it escalates on the CENSUS, and therefore only ever off an ARMED
@@ -1622,7 +1639,7 @@ def test_the_threshold_rules_NOT_CURED_half_conditions_on_the_census_too(
 #: The reading MAIN CI produced on 2026-08-15 for the uncoated ns = 6 / 1.5 nm
 #: cell at the SHIPPED cut, degrees 8..16, repair off -- ARMED (two growing
 #: modes, on the last rung only) and NOT COLLAPSED.  It is the state neither
-#: mount produces at any cut position or thread count, and it is the state that
+#: mount produces at any cut position measured on it, and it is the state that
 #: refuted "armed => collapsed".  Verbatim from the failure message:
 #:
 #:     ns=6 min_feature=1.5nm: census reads [0, 0, 0, 0, 2] raw growing
@@ -1632,7 +1649,8 @@ _CI_2026_08_15 = (0.004055, [0, 0, 0, 0, 2])
 #: The census tables the NOT-CURED half's REACH is driven against, one per
 #: BUILD, as ``(spread, raw census)`` per rung of the cut ladder
 #: ``(1.0,) + _INJECTOR_SCALES`` -- plus the rung the reach must land on, or
-#: ``None`` where it must refuse.
+#: ``None`` where it must refuse.  2026-08-15,
+#: ``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S8.5 (shape S6).
 #:
 #: The first four are MEASURED (2026-08-15, degrees 8..16, repair off,
 #: uncoated ns = 6 / 1.5 nm).  Rows 1-2 are the two mounts' own readings, which
@@ -1644,8 +1662,8 @@ _CI_2026_08_15 = (0.004055, [0, 0, 0, 0, 2])
 #: that has genuinely stopped holding looks like from here -- and the reach
 #: must FAIL on them rather than pass quietly.
 _REACH_CASES = (
-    ("[W] py3.14 numpy 2.4.4 / 24 threads: armed and collapsed at its own cut",
-     ((1.33841, [0, 0, 1, 2, 3]),), 1.0),
+    ("[W] py3.14 numpy 2.4.4 / 1 thread: armed and collapsed at its own cut",
+     ((1.33841, [0, 0, 1, 1, 1]),), 1.0),
     ("[M] py3.12 numpy 2.5.1 / 1 thread: same, on a different rung and wheel",
      ((2.38098, [0, 0, 0, 3, 0]),), 1.0),
     ("ubuntu main CI 2026-08-15: ARMED at the shipped cut and NOT collapsed",
@@ -1700,14 +1718,16 @@ def test_the_NOT_CURED_reach_is_scored_on_a_LADDER_of_cut_positions():
     round-off can be driven into.  It cannot reach the state main CI actually
     read -- ARMED at the shipped cut with the ladder still cured
     (:data:`_CI_2026_08_15`) -- because at every cut position measured here,
-    from x1e-4 to x3, an armed census on this cell also collapses:
+    from x1e-4 up to wherever the collision disarms, an armed census on this
+    cell also collapses (2026-08-15, one BLAS thread, degrees 8..16, repair
+    off):
 
         cut     [W] raw census      spread    [M] raw census      spread
-        x1e-4   [26,38,44,55,66]    1.36577   [29,32,42,42,55]    1.42007
-        x1e-2   [11,15,26,42,54]    1.43113   [10,25,24,59,72]    1.35714
-        x1/3    [0,0,1,4,7]         1.33841   [0,1,0,5,5]         2.38098
-        x1      [0,0,1,2,3]         1.33841   [0,0,0,3,0]         2.38098
-        x3      [0,0,1,2,3]         1.33841   [0,0,0,1,0]         2.38098
+        x1e-4   [40,35,47,54,55]    1.33478   [29,32,42,42,55]    1.42007
+        x1e-2   [10,26,28,43,67]    0.93247   [10,25,24,59,72]    1.35714
+        x1/3    [0,1,3,4,6]         1.78619   [0,1,0,5,5]         2.38098
+        x1      [0,0,1,1,1]         1.33841   [0,0,0,3,0]         2.38098
+        x3      [0,0,0,0,0]         0.004055  [0,0,0,1,0]         2.38098
         x5/x10  [0,0,0,0,0]         0.004055  [0,0,0,0,0]         0.004055
 
     That coincidence of the two mounts is exactly what the retired conditional
@@ -1736,8 +1756,9 @@ def test_the_NOT_CURED_reach_is_scored_on_a_LADDER_of_cut_positions():
           ABOVE-threshold min_feature is refused before any cut is probed at
           all (the probe raises if it is called).
 
-    No solve runs here: the tables are the measurement, so this is a
-    sub-millisecond test of the decision that consumes them.
+    No solve runs here -- the tables ARE the measurement -- so the whole thing
+    scores the decision that consumes them in milliseconds, and it is the one
+    test of this family that costs the suite nothing on any build.
     """
     layers = _uncoated_layers(6)
     for name, readings, want in _REACH_CASES:
@@ -1774,14 +1795,17 @@ def test_the_NOT_CURED_reach_is_scored_on_a_LADDER_of_cut_positions():
     #     growing mode EXISTS, never that it is excited enough to move the
     #     answer.
     sp_ci, raw_ci = _CI_2026_08_15
+    ns, mf, off_nm, degrees = 6, 1.5e-9, 1.804, _UNCOATED_DEGREES
     with pytest.raises(AssertionError, match="census reads"):
-        if sum(raw_ci):
-            assert sp_ci > _COLLAPSE_SPREAD, (
-                f"ns=6 min_feature=1.5 nm: the census reads {raw_ci} raw "
-                f"growing mode(s) over degrees {_UNCOATED_DEGREES}, so the "
-                f"near-cut collision the un-snapped window admits DID fire -- "
-                f"and the degree ladder must scatter with it, but it spreads "
-                f"only {sp_ci:.4g}")
+        if sum(raw_ci):                          # the retired partition ...
+            assert sp_ci > 0.1, (                # ... and its claim, verbatim
+                f"ns={ns} min_feature={mf * 1e9:.1f} nm (off={off_nm:.3f} nm): "
+                f"the census reads {raw_ci} raw growing mode(s) over degrees "
+                f"{tuple(degrees)}, so the near-cut collision the un-snapped "
+                f"window admits DID fire -- and the degree ladder must scatter "
+                f"with it, but it spreads only {sp_ci:.3g} (measured 1.34).  A "
+                f"collision that fires without moving the answer is a second "
+                f"mechanism and must be diagnosed")
 
     # (d) the geometry premise is checked BEFORE any cut is probed
     def never(scale):

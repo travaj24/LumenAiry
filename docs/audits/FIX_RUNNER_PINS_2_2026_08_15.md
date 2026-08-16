@@ -674,3 +674,104 @@ hold measured ones.  Flagged so the next release run regenerates it.
 5. **Sweep for the SHAPE, not the instance.**  Five failures arrived one tag
    at a time over four tags.  One mechanical sweep for the same five shapes
    found ~29 more, including one already red.
+
+---
+
+## S11.  The two orphaned diffs, audited and closed out
+
+Two fix groups died mid-flight, leaving `tests/unit/test_pmm_m2_window_contract.py`
+and `tests/unit/test_v5_11_0_pmm_stack.py` modified but uncommitted.  Because
+the campaign commit `18879a0` had already been caught snapshotting a file
+mid-edit with a placeholder constant in a derivation comment (S8.1,
+`test_audit_propagation.py`, corrected in `44fe34c`), **every constant in both
+orphaned diffs was treated as unverified and re-measured here before anything
+was committed.**  The two came out opposite ways.
+
+### S11.1  M2 window contract -- VERIFIED, committed as found
+
+The adjudication is sound and I confirm it independently.  The retired form
+partitioned on the census AT THE SHIPPED CUT and asserted the CONDITIONAL
+*armed => collapsed*.  That is not a theorem: `_core._mode_cut_growth` counts a
+mode that is `prop`, near the cut and growing, and says NOTHING about how
+strongly it is excited, so an armed rung is free to be indistinguishable from a
+cured one -- which is exactly what main CI read (`[0,0,0,0,2]` armed, ladder
+still at its cured 0.004055).  **`n_grow` is necessary for the collapse, never
+sufficient.**  The replacement is an EXISTENCE claim over a ladder of CUT
+POSITIONS (`_collapse_reach`), which names no census reading at all.
+
+Re-measured independently through the test module's own `_reach_probe`
+(Windows py3.14.6 / numpy 2.4.4, one BLAS thread, repair OFF, degrees 8..16,
+uncoated ns=6 / 1.5 nm).  **All seven rungs reproduce exactly:**
+
+| cut | file claims | re-measured | |
+|---|---|---|---|
+| x1e-4 | `[40,35,47,54,55]` 1.33478 | `[40,35,47,54,55]` 1.33478 | match |
+| x1e-2 | `[10,26,28,43,67]` 0.93247 | `[10,26,28,43,67]` 0.93247 | match |
+| x1/3 | `[0,1,3,4,6]` 1.78619 | `[0,1,3,4,6]` 1.78619 | match |
+| x1 | `[0,0,1,1,1]` 1.33841 | `[0,0,1,1,1]` 1.33841 | match |
+| x3 | `[0,0,0,0,0]` 0.004055 | `[0,0,0,0,0]` 0.0040554 | match |
+| x5 / x10 | `[0,0,0,0,0]` 0.004055 | same | match |
+
+The reach hits rung 1.0 (`[0,0,1,1,1]`, spread 1.33841), so this build pays no
+extra solve, and `_REACH_CASES` row 1 is confirmed verbatim.  The
+`_COLLAPSE_SPREAD` derivation also checks out: closest collapse 0.93247 is
+9.3x over the 0.1 bar, loosest cure 0.00733 is 13.6x under it.
+
+Committed as found.  Note that `18879a0` carried PLACEHOLDER numbers in three
+tables of this file; the measured values were in the working tree only, and are
+what is now committed.
+
+### S11.2  Covariant-vs-convection ladder -- numbers REJECTED, structure kept
+
+The orphaned docstring's numbers **do not reproduce**, and its stated
+justification was wrong in detail.  Re-measured through the test module's own
+fixture, `max|R - R_ref|` against the degree-40 convection reference:
+
+| `OPENBLAS_NUM_THREADS` | cov(12) | cov(16) | cov(20) | 3-rung (c) |
+|---|---|---|---|---|
+| W 1 | 1.8649e-05 | 2.8817e-05 | 2.8269e-05 | 2.629x |
+| W 2 | 1.1312e-04 | 1.8385e-05 | 2.6909e-05 | **0.670x -- FALSE** |
+| W 4 | 3.4646e-05 | 2.2426e-05 | 2.5609e-05 | 2.187x |
+| W 8 | 4.5775e-05 | 2.2467e-05 | 2.7896e-05 | 1.655x |
+| W 24 (default) | 5.0443e-05 | 2.2028e-05 | 2.2988e-05 | 1.502x |
+| M py3.12 / numpy 2.5.1 | 5.0443e-05 | 2.2028e-05 | 2.2988e-05 | 1.502x |
+
+against the file's claimed `3.4618e-05 / 2.9347e-05 / 2.7033e-05` for "Win" --
+which matches no configuration measured (its cov(12) is close to the 4-thread
+reading, its cov(16) and cov(20) match nothing).  The claimed WSL column,
+including the "4.95x cross-build swing" that the whole argument rested on, is
+not reproduced either: **WSL is bit-identical to Windows at 24 threads.**
+
+**The corrected finding is stronger than the one it replaces.**  The axis is
+the BLAS REDUCTION WIDTH, not the build, and it is demonstrable on ONE box:
+the degree-12 covariant rung swings **6.07x** (1.86e-05 .. 1.13e-04) across
+1/2/4/8/24 threads with nothing else changed, while the CONVECTION arm is
+BIT-IDENTICAL in all six configurations (2.472227e-04 / 1.310336e-04 /
+7.576586e-05).  All the motion is in one arm, because the covariant arm
+converges first and then sits in the degree-40 reference's own ~2e-05 accuracy
+floor -- and reference noise is exactly what a reduction order moves.  This is
+the campaign's standing finding (`PMM_FOURNAME_ADJUDICATION_2026_08_05`: the
+axis is the BLAS reduction order, not the BLAS build) reproduced a fourth time.
+
+**The structural decision -- drop degree 12 -- was right, and is now proven
+rather than asserted:** at TWO BLAS threads the three-rung claim (c) is
+measurably FALSE (0.670x).  That is a demonstrated failure of the ladder the
+retired form would have shipped, not a hypothetical.
+
+The docstring was rewritten with the measured envelope and the three claims
+kept.  Worst-case margins across all six configurations: (a) 1.73x on
+bit-identical numbers, (b) 4.55x (deg 16) and 2.68x (deg 20), (c) 2.629x --
+against 1.34x worst case for the retired `con_err > 2 * cov_err`.
+
+### S11.3  Lesson
+
+The two diffs differed in exactly one respect: whether the numbers in the
+derivation comments had been measured. The M2 one had been, to the last digit,
+and its argument survived independent re-measurement intact. The other had
+not, and its argument was wrong in its details while being right in its
+conclusion -- which is the most dangerous shape, because it reads as
+authoritative and it *passes*. **A derivation comment is a claim, and an
+unverified claim in a comment is worse than no comment: it is the thing the
+next reader will calibrate the next bar against.** The `44fe34c` catch and
+this one are the same failure mode twice, and both were found only by
+re-measuring rather than by reading.
