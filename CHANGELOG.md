@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.37.0] — 2026-08-16
+
 ### Changed -- the tangent-facet family is row-banded (byte-identically)
 
 `surface_model='tangent_facet'` and `'tangent_facet_remap'` shipped
