@@ -315,7 +315,13 @@ ignore = [
 # v5.0.1; ``unit-tests.yml`` keeps mypy unwired until v5.1's cleanup
 # lands.
 [tool.mypy]
-python_version = "3.10"
+# 3.12, not the 3.10 runtime floor: numpy >= 2.5 ships PEP 695 `type`
+# statements in its stubs, which mypy rejects below 3.12 (first hit: the
+# 2026-08-16 gating run, numpy 2.5 rollout on the CI runner).  Runtime
+# 3.10/3.11 compatibility is covered by the test matrix, which imports and
+# runs the package on those interpreters; mypy here checks typing
+# soundness, and 3.12 matches the interpreter the CI job actually runs.
+python_version = "3.12"
 strict = true
 files = [
     "lumenairy/backend",
