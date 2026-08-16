@@ -4,6 +4,89 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed -- the tangent-facet family is row-banded (byte-identically)
+
+`surface_model='tangent_facet'` and `'tangent_facet_remap'` shipped
+WHOLE-GRID ONLY: both builds refused the band loop explicitly rather
+than approximate into it, and both pinned `sag_chunk_rows` INERT with
+`np.array_equal` so the change could not land silently.  It lands now,
+with the byte-identity argument those pins were asking for.
+
+**The halos are derived, and the surprise is which rung needs the wider
+one.**  Route 3's accumulator is minus the gradient of its own screen,
+and that screen is five gradients of quantities built from `grad sag`,
+so a band needs **3 rows of sag and 2 of the accumulator**.  The REMAP
+rung's accumulator is `p_out` in CLOSED FORM -- that is (R3), the
+Lagrangian identity -- so its deepest chain is only the (R4)/(R5)
+Hessian: **2 rows of sag and no accumulator halo at all**.  The gap
+transport takes 1 row.  The accumulator is written into a fresh
+destination grid, which is what the whole-grid path does too, so the
+band-boundary staleness and NEP-50 promotion hazards are structurally
+absent rather than handled.
+
+**Nothing moved, against the SHIPPED tree.**  10778 adversarial
+configurations (8 prescriptions x 4 grids including odd N and
+`dx != dy` x 2 models x 3 carriers x 7 option combinations x 2 complex
+dtypes x band sizes 1 / 3 / N / N+7) compared on the field's bytes, its
+dtype and its warnings: **0 differences**.  A two-tree run against the
+release these models shipped in, where `sag_chunk_rows` is inert for
+them: **960 arms, 0 differences** -- so the banded output equals the
+*shipped* output, not merely this build's own.  `'thin'` and
+`'displaced'` are unmoved across a further 640 arms.  The fold guard
+raises the same refusal at the same surface with the same message
+banded and whole-grid, which it must, because `min(det)` has to refuse
+the CALL.
+
+**What it costs.**  Warmed `tracemalloc` peak in float64 grids
+(`8*N*N`), extras over the paraxial no-carrier call at the same
+banding, N = 4096:
+
+```
+  arm                             shipped   this build   this build
+                                            whole-grid       BANDED
+  tangent_facet                    +17.74       +17.74        +4.06
+    + collimated carrier           +19.74       +17.74        +4.06
+    + finite-radius carrier        +21.74       +17.74        +7.62
+  tangent_facet_remap              +23.74       +23.74       +13.62
+```
+
+At N = 32768 one grid is 8.59 GB, so route 3 with a carrier drops from
+**+187 GB to +65 GB** and the remap rung from **+204 GB to +117 GB**.
+Wall clock is at parity: measured interleaved on a shared box, the
+banded arm reads 0.95x the whole-grid arm at N = 4096.
+
+Both models now follow the `sag_chunk_rows` AUTO convention every other
+screen follows (banded at `N >= 4096`).  A caller who wants the old
+allocation profile passes `sag_chunk_rows=0`.  The default
+`surface_model='thin'` is untouched.
+
+### Fixed -- the screen-obliquity block was dead work under the tangent-facet family
+
+Under `surface_model='tangent_facet'` / `'tangent_facet_remap'` with
+`carrier=`, the whole screen-obliquity block ran: it computed
+equation (4)'s correction, which `_check_screen_obliquity_support`
+already declines to apply for these models, into an accumulator no
+surviving reader touches, with the accuracy guard already gated off.
+It cost **+2.0 grids with a collimated carrier and +4.0 with a
+finite-radius one** for nothing -- which is the whole difference between
+the published +17.8 and +21.8 figures.  Gated off at the source; the
+change is byte-null (part of the 960-arm comparison above) and is pinned
+structurally by asserting the delta is never called under either model,
+with a `'thin'` control asserting it still is.
+
+**Not banded, and priced rather than omitted:** the remap rung's
+pull-back, which resamples the field at `x + W`.  Its halo is the walk
+itself -- a length, not a row count: `max|W|` measures 93.0 / 67.3 /
+31.7 um on the three faces of a design-121-like doublet, i.e. 15 / 27 /
+50 halo rows at `dx` = 8 / 4 / 2 um against a 256-row band, and it grows
+as the grid refines.  Three of its steps are globally coupled besides
+(the `spline_filter` IIR needs a halo twice the band before it
+underflows to identical; the demodulating eikonal's moments are
+whole-grid `np.sum`; `min(det)` must refuse the call).  So the SCREEN
+half bands and the apply half does not, and the refusal is priced per
+call against the band actually in use and reported through `progress`.
+Even so, 43 % of the rung's memory comes off.
+
 ### Added -- `surface_model='tangent_facet_remap'`: the walk, represented
 
 The REMAP rung of the tangent-facet screens, opt-in and default-off.

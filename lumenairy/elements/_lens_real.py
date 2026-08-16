@@ -2364,6 +2364,167 @@ def _screen_obliquity_rms_waves(field, X, Y, r_pupil, wavelength, xp):
 # transverse-REMAP axis (``surface_model='displaced'``), not this one.
 _TANGENT_FACET_MIN_PZ_SQ = 1e-12
 
+# ---------------------------------------------------------------------------
+# THE ROW-BAND HALO, DERIVED (v5.37, BUILD_TF_BANDED_2026_08_16)
+# ---------------------------------------------------------------------------
+# ``BUILD_TANGENT_FACET`` S4 refused the band rather than approximate it, and
+# named the obstruction correctly: the model differentiates a gradient TWICE.
+# Writing the dependency out, backwards from what a band must produce:
+#
+#   route 3 ('tangent_facet')
+#     the ACCUMULATOR needs ``grad(opd)`` at rows [r0, r1)
+#       -> ``opd`` at [r0-1, r1+1)
+#       -> the screen's own five gradients (of dz, gx, gy, ox, oy) there
+#       -> dz / ox / oy -- and hence ``p`` -- at [r0-2, r1+2)
+#       -> ``grad sag`` at [r0-2, r1+2)
+#       -> ``sag`` at [r0-3, r1+3)
+#     so: SAG HALO 3 ROWS, ACCUMULATOR HALO 2 ROWS.
+#
+#   the remap rung ('tangent_facet_remap')
+#     the accumulator is ``p_out`` in CLOSED FORM (R3) rather than the gradient
+#     of the screen, so the deepest chain is the Hessian (R4)/(R5):
+#       screen at [r0, r1) -> grad grad sag there -> grad sag at [r0-1, r1+1)
+#       -> ``sag`` at [r0-2, r1+2), and ``p`` at [r0, r1) -- NO halo at all.
+#     so: SAG HALO 2 ROWS, ACCUMULATOR HALO 0 ROWS.  The rung that costs more
+#     memory needs the NARROWER halo, which is not a coincidence: (R3) is
+#     exactly the step that replaces a differenced kick with a closed-form one.
+#
+#   the gap transport (both rungs)
+#     one gradient of the accumulator -> ACCUMULATOR HALO 1 ROW.
+#
+# The accumulator is written into a FRESH destination grid, never in place --
+# which is what the whole-grid path does too (``_tf_px - _tk_x`` rebinds), so
+# it is the faithful mirror AND it makes the band-boundary staleness hazard
+# (``BUILD_OBL_BANDED_HALO`` S3.2a's deferred write) structurally absent rather
+# than handled.
+#
+# WHAT IS *NOT* BANDED, AND WHY IT IS A REFUSAL RATHER THAN AN OMISSION.
+# The remap rung's second half -- ``_tangent_facet_remap_apply`` -- stays
+# whole-grid.  Its halo is DYNAMIC and its steps are GLOBALLY coupled, and both
+# halves of that were measured rather than asserted:
+#
+#   1. THE WALK IS THE HALO, AND IT IS A LENGTH, NOT A ROW COUNT.  The field is
+#      read at ``x + W``, and ``max|W|`` is a physical quantity -- 93.0 / 67.3 /
+#      31.7 um on the three faces of a design-121-like SSK2/SF57 doublet -- so
+#      the halo in ROWS grows as the grid refines: 15 / 27 / 50 rows at
+#      dx = 8 / 4 / 2 um on that fixture, against a 256-row auto band.  Nothing
+#      about it resembles the fixed 1-3 rows every other banded block uses, and
+#      it is not knowable before the walk for THIS call has been computed.
+#   2. ``scipy.ndimage.spline_filter`` (and ``map_coordinates``' own prefilter)
+#      is a recursive IIR whose output at one pixel depends on every pixel of
+#      the column, decaying like ``(-0.268)^k`` for order 3.  Measured on a
+#      32-row band: a slab halo of 1 / 4 / 16 rows differs from the whole-grid
+#      filter by 1.1e0 / 1.7e-2 / 2.4e-9, and only at a 64-ROW halo does the
+#      difference underflow to exactly zero.  So byte-identity here is a
+#      data-dependent numerical accident that costs a halo TWICE the band --
+#      i.e. exactly the regime where banding buys nothing.
+#   3. the demodulating eikonal is a ``|E|^2``-weighted least-squares fit whose
+#      six moments are ``np.sum`` over the whole grid.  numpy's pairwise
+#      summation is not re-associable in general: band-summing a 512x512 weight
+#      differs from the whole-grid sum at a 1-row band (5.8e-11) and happens to
+#      agree at 32 and 256.  "Happens to agree" is not a byte-identity argument.
+#   4. ``float(np.min(det))`` -- the fold guard -- is a whole-grid reduction BY
+#      CONSTRUCTION: it must refuse the CALL, and a band that has not yet seen
+#      the folding row would run and return a field.
+#
+# So the apply half is REFUSED from the band rather than approximated into it,
+# and the refusal is PRICED per call (``_tf_price_walk_halo``) against the band
+# height actually in use and reported through ``progress``.  A silently-wrong
+# band is worse than an expensive right one -- the standard
+# ``BUILD_TANGENT_FACET`` S4 set when it refused the whole model.
+#: Accumulator halo (rows) the banded route-3 screen needs.
+_TF_MOM_HALO_ROWS = 2
+#: Sag halo (rows) the banded route-3 screen needs.  It is the accumulator's
+#: halo plus ONE, and written that way because that is the derivation: the sag
+#: sits exactly one gradient level below the momentum in the chain above.
+_TF_SAG_HALO_ROWS = _TF_MOM_HALO_ROWS + 1
+#: Sag halo (rows) the banded remap SCREEN needs (the Hessian level).
+_TF_REMAP_SAG_HALO_ROWS = 2
+#: Accumulator halo (rows) the gap transport needs, both rungs.
+_TF_GAP_HALO_ROWS = 1
+
+
+def _tf_sl(v, lo, hi):
+    """``v`` restricted to rows ``[lo:hi)`` -- scalars pass through unchanged.
+
+    The tangent-facet accumulator is a pair of PYTHON FLOATS until the first
+    powered surface promotes it, and every banded expression has to read the
+    same object the whole-grid expression reads: under NEP 50 a float32 array
+    of zeros and a Python ``0.0`` are NOT the same operand (the mistake
+    ``BUILD_OBL_BANDED_HALO`` S3.2b records, worth 5e-6 of field at
+    ``sag_dtype='float32'``)."""
+    return v[lo:hi] if getattr(v, 'ndim', 0) else v
+
+
+def _tf_rows_grad(arr, a0, a1, n_rows, dy, dx, xp):
+    """``xp.gradient(arr, dy, dx)`` on the rows whose stencil is the one the
+    WHOLE-GRID call would use.
+
+    ``arr`` holds rows ``[a0:a1)`` of an ``n_rows``-row grid.  ``np.gradient``
+    uses a central difference in the interior and a one-sided difference at the
+    array's own first / last row, and its interior stencil does not know how
+    tall the array is -- so a slab reproduces the whole-grid gradient EXACTLY
+    on every row except a slab edge that is not also a grid edge.  Those two
+    rows are dropped here rather than trusted; the caller sizes its halo so the
+    rows it needs survive.  Returns ``(gy, gx, b0, b1)`` with ``[b0:b1)`` the
+    absolute row range of the result."""
+    gy, gx = xp.gradient(arr, dy, dx)
+    lo = 1 if a0 > 0 else 0
+    hi = (a1 - a0) - (1 if a1 < n_rows else 0)
+    return gy[lo:hi], gx[lo:hi], a0 + lo, a0 + hi
+
+
+def _tangent_facet_screen_rows(sag, gx, gy, px, py, n1, n2, dx, dy, xp,
+                               lo, hi):
+    """(T1) + (T2) + (T3) for rows ``[lo:hi)`` of the SLAB handed in.
+
+    Every array argument spans the same slab of rows; the five internal
+    gradients are taken over that slab and read back only at ``[lo:hi)``, so
+    the caller must hand in one row of margin at each end that is not a true
+    grid edge.  Element for element this is the whole-grid expression --
+    ``_tangent_facet_screen`` below is literally this call with
+    ``lo, hi = 0, Ny`` -- which is what makes the banded screen BYTE-identical
+    rather than merely close."""
+    inv = 1.0 / xp.sqrt(1.0 + gx * gx + gy * gy)
+    p_sq = px * px + py * py
+    ok = _tf_sl(p_sq, lo, hi) < n1 * n1
+    pz1 = xp.sqrt(xp.maximum(n1 * n1 - p_sq, _TANGENT_FACET_MIN_PZ_SQ))
+    a_dot = (-gx * px - gy * py + pz1) * inv
+    b_sq = n2 * n2 - n1 * n1 + a_dot * a_dot
+    ok = ok & (_tf_sl(b_sq, lo, hi) > 0.0)
+    dz = (xp.sqrt(xp.maximum(b_sq, 0.0)) - a_dot) * inv
+    del inv, a_dot, b_sq, p_sq
+    sag_b = sag[lo:hi]
+    dz_b = dz[lo:hi]
+    opd = dz_b * sag_b
+    # ---- (T2): the facet taken where the ray meets the surface ------------
+    pz1_b = _tf_sl(pz1, lo, hi)
+    wx = sag_b * (_tf_sl(px, lo, hi) / pz1_b)
+    wy = sag_b * (_tf_sl(py, lo, hi) / pz1_b)
+    _y, _x = xp.gradient(dz, dy, dx)
+    opd += sag_b * (wx * _x[lo:hi] + wy * _y[lo:hi])
+    del _x, _y
+    _y, _x = xp.gradient(gx, dy, dx)             # (d/dy, d/dx) of d(sag)/dx
+    opd -= 0.5 * dz_b * wx * (wx * _x[lo:hi] + wy * _y[lo:hi])
+    del _x, _y
+    _y, _x = xp.gradient(gy, dy, dx)
+    opd -= 0.5 * dz_b * wy * (wx * _x[lo:hi] + wy * _y[lo:hi])
+    del _x, _y
+    # ---- (T3): the second order of the walk's referencing -----------------
+    pz2_b = pz1_b + dz_b
+    ox = px - dz * gx
+    oy = py - dz * gy
+    ux = wx - sag_b * (_tf_sl(ox, lo, hi) / pz2_b)
+    uy = wy - sag_b * (_tf_sl(oy, lo, hi) / pz2_b)
+    del wx, wy, pz1, pz1_b, pz2_b, dz, dz_b
+    _y, _x = xp.gradient(ox, dy, dx)
+    opd -= 0.5 * ux * (ux * _x[lo:hi] + uy * _y[lo:hi])
+    del _x, _y, ox
+    _y, _x = xp.gradient(oy, dy, dx)
+    opd -= 0.5 * uy * (ux * _x[lo:hi] + uy * _y[lo:hi])
+    del _x, _y, oy, ux, uy
+    return opd, ok
+
 
 def _tangent_facet_screen(sag, gx, gy, px, py, n1, n2, dx, dy, xp):
     """The route-3 screen at one surface: (T1) + (T2) + (T3), in metres of OPD.
@@ -2375,42 +2536,30 @@ def _tangent_facet_screen(sag, gx, gy, px, py, n1, n2, dx, dy, xp):
     internally reflected at the facet; there the caller keeps the 'thin' screen,
     because a clamped cosine is a wrong OPD and the thin screen is the safe
     neutral (the same convention equation (4) uses)."""
-    inv = 1.0 / xp.sqrt(1.0 + gx * gx + gy * gy)
-    p_sq = px * px + py * py
-    ok = p_sq < n1 * n1
-    pz1 = xp.sqrt(xp.maximum(n1 * n1 - p_sq, _TANGENT_FACET_MIN_PZ_SQ))
-    a_dot = (-gx * px - gy * py + pz1) * inv
-    b_sq = n2 * n2 - n1 * n1 + a_dot * a_dot
-    ok = ok & (b_sq > 0.0)
-    dz = (xp.sqrt(xp.maximum(b_sq, 0.0)) - a_dot) * inv
-    del inv, a_dot, b_sq, p_sq
-    opd = dz * sag
-    # ---- (T2): the facet taken where the ray meets the surface ------------
-    wx = sag * (px / pz1)
-    wy = sag * (py / pz1)
-    _y, _x = xp.gradient(dz, dy, dx)
-    opd += sag * (wx * _x + wy * _y)
+    return _tangent_facet_screen_rows(sag, gx, gy, px, py, n1, n2, dx, dy, xp,
+                                      0, sag.shape[0])
+
+
+def _tangent_facet_transport_rows(px, py, t, n_gap, dx, dy, xp, lo, hi):
+    """:func:`_tangent_facet_transport` for rows ``[lo:hi)`` of the slab.
+
+    One gradient level, so the slab needs one row of margin at each end that is
+    not a true grid edge."""
+    if not getattr(px, 'ndim', 0) and not getattr(py, 'ndim', 0):
+        return px, py
+    px_b = px[lo:hi]
+    py_b = py[lo:hi]
+    pz = xp.sqrt(xp.maximum(n_gap * n_gap - px_b * px_b - py_b * py_b,
+                            _TANGENT_FACET_MIN_PZ_SQ))
+    wx = t * (px_b / pz)
+    wy = t * (py_b / pz)
+    del pz
+    _y, _x = xp.gradient(px, dy, dx)
+    nx = px_b - (wx * _x[lo:hi] + wy * _y[lo:hi])
     del _x, _y
-    _y, _x = xp.gradient(gx, dy, dx)             # (d/dy, d/dx) of d(sag)/dx
-    opd -= 0.5 * dz * wx * (wx * _x + wy * _y)
-    del _x, _y
-    _y, _x = xp.gradient(gy, dy, dx)
-    opd -= 0.5 * dz * wy * (wx * _x + wy * _y)
-    del _x, _y
-    # ---- (T3): the second order of the walk's referencing -----------------
-    pz2 = pz1 + dz
-    ox = px - dz * gx
-    oy = py - dz * gy
-    ux = wx - sag * (ox / pz2)
-    uy = wy - sag * (oy / pz2)
-    del wx, wy, pz1, pz2, dz
-    _y, _x = xp.gradient(ox, dy, dx)
-    opd -= 0.5 * ux * (ux * _x + uy * _y)
-    del _x, _y, ox
-    _y, _x = xp.gradient(oy, dy, dx)
-    opd -= 0.5 * uy * (ux * _x + uy * _y)
-    del _x, _y, oy, ux, uy
-    return opd, ok
+    _y, _x = xp.gradient(py, dy, dx)
+    ny = py_b - (wx * _x[lo:hi] + wy * _y[lo:hi])
+    return nx, ny
 
 
 def _tangent_facet_transport(px, py, t, n_gap, dx, dy, xp):
@@ -2430,17 +2579,8 @@ def _tangent_facet_transport(px, py, t, n_gap, dx, dy, xp):
     floats)."""
     if not getattr(px, 'ndim', 0) and not getattr(py, 'ndim', 0):
         return px, py
-    pz = xp.sqrt(xp.maximum(n_gap * n_gap - px * px - py * py,
-                            _TANGENT_FACET_MIN_PZ_SQ))
-    wx = t * (px / pz)
-    wy = t * (py / pz)
-    del pz
-    _y, _x = xp.gradient(px, dy, dx)
-    nx = px - (wx * _x + wy * _y)
-    del _x, _y
-    _y, _x = xp.gradient(py, dy, dx)
-    ny = py - (wx * _x + wy * _y)
-    return nx, ny
+    return _tangent_facet_transport_rows(px, py, t, n_gap, dx, dy, xp,
+                                         0, px.shape[0])
 
 
 # ---------------------------------------------------------------------------
@@ -3427,6 +3567,11 @@ def apply_real_lens(
         freeform / clear_aperture / stop surface / fresnel / slant /
         surface-frame, or a non-NumPy backend) fall through to the
         whole-grid path per surface.
+        v5.35.3 let ``carrier=`` (the angle-true screen) into the band with a
+        1-/2-row halo; v5.37 let the ``'tangent_facet'`` family in with a
+        3-/2-row one.  The one piece that stays whole-grid is the remap rung's
+        PULL-BACK, whose halo is the transverse walk itself; it is priced per
+        call and reported through ``progress`` rather than approximated.
     surface_model : {'thin', 'displaced', 'tangent_facet', \
 'tangent_facet_remap'}, default 'thin'
         v5.25.1 opt-in refraction-OPD model (hammer audit H2(a)).
@@ -3491,17 +3636,21 @@ def apply_real_lens(
         ``surface_frame`` / ``use_gpu`` / non-ASM propagators raise -- not
         because they cannot work but because they have not been measured.
 
-        COST.  This path is WHOLE-GRID ONLY: it differentiates a gradient
-        twice, so an exact row-band would need a 3-row sag halo plus a halo on
-        the persistent accumulator.  That is refused rather than approximated,
-        and the price is real -- warmed ``tracemalloc`` peak, in float64 grids
-        of ``8*N*N`` bytes, as extras over the paraxial no-carrier call of the
-        same N (2026-08-16, biconvex singlet): **+17.8 grids without a carrier
-        and +21.8 with one at N >= 4096** (+10.0 / +14.0 at N = 2048, where the
-        thin baseline is itself whole-grid), against +8.8 for the banded
-        ``carrier=`` path.  Wall clock on the same fixture at N = 4096:
-        2.04 s thin, 13.97 s thin + carrier, 11.08 s tangent_facet,
-        19.07 s tangent_facet + carrier.
+        COST.  v5.37 ROW-BANDS this path, with the halo that its
+        differentiate-a-gradient-twice structure requires: 3 rows of sag and
+        2 of the persistent momentum accumulator, derived above ``_tf_sl`` and
+        pinned byte-identical in ``tests/unit/test_tf_banded_halo.py``.  It
+        therefore follows the same ``sag_chunk_rows`` AUTO convention every
+        other screen follows.  Warmed ``tracemalloc`` peak, in float64 grids of
+        ``8*N*N`` bytes, as extras over the paraxial no-carrier call AT THE SAME
+        BANDING (2026-08-16, biconvex singlet, band = ``max(256, N//16)``):
+        **+4.06 grids banded at N = 4096 against +17.74 whole-grid** (+4.11 /
+        +17.36 at N = 2048), and the old +4-grid carrier surcharge is gone --
+        a collimated carrier now costs nothing and a finite-radius one +3.56.
+        At N = 32768 one grid is 8.59 GB, so the term drops from +152 GB to
+        +35 GB.  The banded arm is BYTE-IDENTICAL to the shipped 5.36 whole-grid
+        output (960-arm two-tree comparison) and is at wall-clock parity with
+        it (0.95x at N = 4096, measured interleaved on a shared box).
 
         ``'tangent_facet_remap'`` (the REMAP rung, opt-in): the same
         tangent-facet physics with the transverse walk REPRESENTED instead of
@@ -3537,8 +3686,15 @@ def apply_real_lens(
         Everything ``'tangent_facet'`` refuses, this refuses too, for the same
         reasons; it is additionally scipy-bound (the pull-back uses
         ``scipy.ndimage.map_coordinates``) and its resampling order is
-        ``remap_order``.  COST: whole-grid only, like route 3, plus the walk
-        fields and the resampling -- see ``remap_order`` and the module note.
+        ``remap_order``.  COST: v5.37 bands the SCREEN half (a 2-row sag halo,
+        and NO accumulator halo -- (R3) hands it ``p_out`` in closed form), and
+        REFUSES to band the pull-back: its halo is the WALK, a length rather
+        than a row count, and three of its steps are globally coupled.  That
+        refusal is priced per call against the band actually in use and
+        reported through ``progress``.  Warmed extras over the paraxial
+        no-carrier call at the same banding: **+13.62 grids banded at N = 4096
+        against +23.74 whole-grid** (+13.24 / +23.36 at N = 2048).  See the
+        derivation above ``_tf_sl``, ``remap_order``, and the module note.
     remap_order : int, default 3
         Spline order of the transverse-walk resampling, for
         ``surface_model='tangent_facet_remap'`` only (any other model raises if
@@ -3816,7 +3972,19 @@ def apply_real_lens(
         surface_model=surface_model,
         displaced_mode=displaced_mode,
     )
-    _obl_active = carrier is not None
+    # v5.37: the tangent-facet family SUPERSEDES equations (4) and (7) --
+    # ``_check_screen_obliquity_support`` already returns False for it, and the
+    # guard block at the end of the call is already gated on ``not _tf_active``
+    # -- so under those models the whole obliquity block was computing a
+    # correction nobody added and accumulating a momentum field nobody read.
+    # Gating it off here is a DEAD-CODE removal, not a behaviour change: with
+    # ``_obl_apply`` False and ``_obl_total`` None the block's only remaining
+    # effect was on ``_obl_p0*``, which no surviving reader touches.  It is
+    # worth up to four full grids (the carrier field for a finite-radius
+    # carrier, plus the accumulator pair), and the byte-identity of the change
+    # is pinned across the adversarial matrix.
+    _obl_active = (carrier is not None
+                   and surface_model not in _TANGENT_FACET_MODELS)
 
     # v4.13.0 audit P1-A: explicit mirror-in-surfaces guard.  The
     # shared ``_check_no_silent_fold_drop`` only inspects the
@@ -3913,18 +4081,19 @@ def apply_real_lens(
     # Bounded by the clear aperture (or the widest per-surface semi-diameter,
     # or the grid half-width), so the fan spans the illuminated pupil.
     _displaced = (surface_model == 'displaced')
-    # v5.36.0 route 3: the per-pixel tangent-facet screen.  Whole-grid only --
+    # v5.36.0 route 3: the per-pixel tangent-facet screen.  v5.37 ROW-BANDS it:
     # the model differentiates a gradient twice (grad grad sag, and grad p_out
-    # where p_out itself carries grad sag), so an exact band would need a
-    # 3-row halo on the sag AND a halo on the persistent accumulator; that is
-    # priced and REFUSED rather than approximated, and the surcharge is stated
-    # in the docstring.  See the derivation above _tangent_facet_screen.
+    # where p_out itself carries grad sag), so the band needs a 3-row halo on
+    # the sag AND a 2-row one on the persistent accumulator -- derived above
+    # ``_tf_sl``, byte-identical, and pinned in test_tf_banded_halo.py.
     _tf_active = (surface_model in _TANGENT_FACET_MODELS)
     # v5.37 the REMAP rung: the walk is REPRESENTED (screen + coordinate remap)
     # rather than referenced away.  Shares every gate above with route 3 -- the
-    # accumulator, the gap transport, the band exclusions, the guard silence --
-    # and differs only inside the two blocks below.  See the derivation above
-    # ``_tangent_facet_remap_screen``.
+    # accumulator, the gap transport, the guard silence -- and differs only
+    # inside the two blocks below.  Its SCREEN half bands on a NARROWER halo
+    # than route 3's (2 rows of sag, none of the accumulator, because (R3)
+    # gives the kick in closed form); its pull-back does not band at all.  See
+    # the derivations above ``_tf_sl`` and ``_tangent_facet_remap_screen``.
     _tf_remap = (surface_model == 'tangent_facet_remap')
     # P10 (N11): decentered / tilted / freeform (asymmetric) elements route to
     # the 2-D transverse-walk remap -- the DEFAULT (auto obliquity) and also
@@ -4210,7 +4379,7 @@ def apply_real_lens(
         gradient, of ``e_err``, which is built from the first)."""
         return 2 if (_obl_apply and _obl_drift_live) else 1
 
-    def _obl_any_sag(R, kc, asph, cr):
+    def _band_any_sag(R, kc, asph, cr):
         """``bool(xp.any(sag))`` for a plain conic+aspheric surface, band-wise.
 
         The whole-grid block is skipped entirely for a FLAT face (a plate, a
@@ -4369,6 +4538,206 @@ def apply_real_lens(
         if not _obl_q_zero and _t_gap != 0.0:
             _obl_drift_live = True
 
+    # ---- the tangent-facet family: the row-band (halo) machinery (v5.37) ---
+    # A band-wise restatement of the whole-grid route-3 / remap screen block.
+    # The halo widths are DERIVED above ``_tf_sl``; the arithmetic per element
+    # is the same expression evaluated on the same operands, which is what
+    # makes the banded field byte-identical (tests/unit/test_tf_banded_halo.py).
+    #
+    # ``_tf_src`` pins the accumulator every band of a surface reads, and every
+    # band writes into a FRESH destination -- the same rebinding the whole-grid
+    # path does, so a band can never read a row this surface has already
+    # rewritten and the scalar seed can never promote mid-loop.
+    _tf_src = None
+    _tf_dst = None
+    #: full-grid walk components, filled band-wise for the remap rung
+    _rm_wx_g = _rm_wy_g = None
+
+    def _tf_halo_rows():
+        """Sag halo the banded tangent-facet screen needs at this surface."""
+        return _TF_REMAP_SAG_HALO_ROWS if _tf_remap else _TF_SAG_HALO_ROWS
+
+    def _tf_begin_surface():
+        nonlocal _tf_src, _tf_dst, _rm_wx_g, _rm_wy_g
+        _tf_src = (_tf_px, _tf_py)
+        _tf_dst = None
+        _rm_wx_g = _rm_wy_g = None
+
+    def _tf_store(new_x, new_y, r0, r1):
+        """Stage this band's accumulator rows into the surface's FRESH
+        destination (allocated on the first band, at the band's own dtype --
+        which is the dtype the whole-grid expression produces, because it is
+        the same expression on the same operands)."""
+        nonlocal _tf_dst
+        if _tf_dst is None:
+            _tf_dst = (xp.empty((Ny, Nx), dtype=new_x.dtype),
+                       xp.empty((Ny, Nx), dtype=new_y.dtype))
+        _tf_dst[0][r0:r1] = new_x
+        _tf_dst[1][r0:r1] = new_y
+
+    def _tf_end_surface():
+        nonlocal _tf_px, _tf_py, _tf_src, _tf_dst
+        if _tf_dst is not None:
+            _tf_px, _tf_py = _tf_dst
+        _tf_src = None
+        _tf_dst = None
+
+    def _tf_band_screen(sag_h, _h0, _h1, r0, r1, n1r, n2r, thin_fn):
+        """The whole-grid tangent-facet block, for rows ``[r0:r1)``.
+
+        ``sag_h`` is the RAW sag on halo rows ``[_h0:_h1)`` (halo width
+        ``_tf_halo_rows()``, clipped at the true grid edges).  ``thin_fn(a0,
+        a1)`` returns the model-independent screen OPD on absolute rows
+        ``[a0:a1)`` and is called ONLY when a non-propagating pixel forces the
+        thin-screen fallback -- the whole-grid path computes that screen
+        unconditionally, but it reads it only through the same ``xp.where``, so
+        deferring it changes no bit.
+
+        Returns the band's OPD; stages the accumulator (and, for the remap
+        rung, the walk) into the surface's destination grids."""
+        nonlocal _rm_wx_g, _rm_wy_g
+        _src_x, _src_y = _tf_src
+        _s_h = sag_h
+        if bool(xp.any(xp.isnan(_s_h))):
+            _s_h = xp.where(xp.isnan(_s_h), 0.0, _s_h)
+        _gy_h, _gx_h, _g0, _g1 = _tf_rows_grad(_s_h, _h0, _h1, Ny, dy, dx, xp)
+        # The rows the screen is EVALUATED on.  The remap rung's accumulator is
+        # ``p_out`` in closed form (R3), so it needs the band and nothing more;
+        # route 3's is minus the gradient of the screen, so it needs one row of
+        # margin either side -- clipped at the true grid edges, where the
+        # whole-grid gradient is one-sided anyway.  A halo clipped at row 0
+        # makes the naturally-valid range WIDER than this, which is why the
+        # target is stated rather than inferred: writing rows outside the band
+        # would be harmless (they carry the same values) but it would let a
+        # band silently depend on its neighbour's arithmetic.
+        _t0 = max(0, r0 - (0 if _tf_remap else 1))
+        _t1 = min(Ny, r1 + (0 if _tf_remap else 1))
+        if _tf_remap:
+            # (R4)/(R5): the Hessian is one more gradient level and is taken
+            # ONCE, shared between the hit-point fixed point and the facet
+            # normal there -- exactly as the whole-grid block does.
+            _hxy, _hxx, _q0, _q1 = _tf_rows_grad(
+                _gx_h, _g0, _g1, Ny, dy, dx, xp)
+            _hyy, _hyx, _, _ = _tf_rows_grad(_gy_h, _g0, _g1, Ny, dy, dx, xp)
+            _hs = slice(_t0 - _q0, _t1 - _q0)
+            _gs = slice(_t0 - _g0, _t1 - _g0)
+            (_opd_e, _wx, _wy, _ox, _oy,
+             _ok) = _tangent_facet_remap_screen(
+                _s_h[_t0 - _h0:_t1 - _h0], _gx_h[_gs], _gy_h[_gs],
+                _hxx[_hs], _hxy[_hs], _hyx[_hs], _hyy[_hs],
+                _tf_sl(_src_x, _t0, _t1), _tf_sl(_src_y, _t0, _t1),
+                n1r, n2r, xp)
+            del _hxx, _hxy, _hyx, _hyy
+        else:
+            _opd_e, _ok = _tangent_facet_screen_rows(
+                _s_h[_g0 - _h0:_g1 - _h0], _gx_h, _gy_h,
+                _tf_sl(_src_x, _g0, _g1), _tf_sl(_src_y, _g0, _g1),
+                n1r, n2r, dx, dy, xp, _t0 - _g0, _t1 - _g0)
+            _wx = _wy = _ox = _oy = None
+        del _gy_h, _gx_h, _s_h
+        # The whole-grid path takes the ``all(ok)`` reduction over the WHOLE
+        # grid and skips the ``where`` when it holds; a band takes it over its
+        # own rows.  The two agree element for element because ``xp.where`` on
+        # an all-True mask returns the left operand's values exactly, and the
+        # result DTYPE is the left operand's too: ``_tf_opd``'s dtype is
+        # ``result_type(sag, p)`` and the thin screen's is ``sag``'s alone (the
+        # index difference is a weak Python float), so the tangent-facet screen
+        # is never the narrower of the two.  Pinned by the float32-geometry arm
+        # of the byte-identity matrix.
+        _all_ok = (bool(xp.all(_ok))
+                   and bool(xp.all(xp.isfinite(_opd_e))))
+        if not _all_ok:
+            _keep = _ok & xp.isfinite(_opd_e)
+            _opd_e = xp.where(_keep, _opd_e, thin_fn(_t0, _t1))
+            if _tf_remap:
+                _wx = xp.where(_keep, _wx, 0.0)
+                _wy = xp.where(_keep, _wy, 0.0)
+                _ox = xp.where(_keep, _ox, _tf_sl(_src_x, _t0, _t1))
+                _oy = xp.where(_keep, _oy, _tf_sl(_src_y, _t0, _t1))
+            del _keep
+        del _ok
+        # ORDERING, not a guard -- the whole-grid block hoists the NaN-sentinel
+        # zeroing above the accumulator gradient for the reason stated there
+        # (a sentinel read into a PERSISTENT accumulator travels to every later
+        # surface), and the band keeps that order.
+        if bool(xp.any(xp.isnan(_opd_e))):
+            _opd_e = xp.where(xp.isnan(_opd_e), 0.0, _opd_e)
+        if _tf_remap:
+            if _rm_wx_g is None:
+                _rm_wx_g = xp.empty((Ny, Nx), dtype=_wx.dtype)
+                _rm_wy_g = xp.empty((Ny, Nx), dtype=_wy.dtype)
+            _rm_wx_g[r0:r1] = _wx
+            _rm_wy_g[r0:r1] = _wy
+            _tf_store(_ox, _oy, r0, r1)
+            return _opd_e
+        _ky, _kx, _b0, _b1 = _tf_rows_grad(_opd_e, _t0, _t1, Ny, dy, dx, xp)
+        _tf_store(_tf_sl(_src_x, _b0, _b1) - _kx,
+                  _tf_sl(_src_y, _b0, _b1) - _ky, _b0, _b1)
+        del _ky, _kx
+        return _opd_e[r0 - _t0:r0 - _t0 + (r1 - r0)]
+
+    def _tf_gap_transport(i_surf, n_gap):
+        """Resample the momentum accumulator across the gap behind surface
+        ``i_surf`` -- banded with a 1-row halo when ``sag_chunk_rows`` is live,
+        whole-grid otherwise, byte-identical either way."""
+        nonlocal _tf_px, _tf_py
+        _t = float(thicknesses[i_surf])
+        if not _chunk_grids or not getattr(_tf_px, 'ndim', 0):
+            _tf_px, _tf_py = _tangent_facet_transport(
+                _tf_px, _tf_py, _t, n_gap, dx, dy, xp)
+            return
+        _cr = int(sag_chunk_rows)
+        _sx, _sy = _tf_px, _tf_py
+        _nx_g = _ny_g = None
+        for r0 in range(0, Ny, _cr):
+            r1 = min(Ny, r0 + _cr)
+            _a0 = max(0, r0 - _TF_GAP_HALO_ROWS)
+            _a1 = min(Ny, r1 + _TF_GAP_HALO_ROWS)
+            _nx, _ny = _tangent_facet_transport_rows(
+                _sx[_a0:_a1], _sy[_a0:_a1], _t, n_gap, dx, dy, xp,
+                r0 - _a0, r0 - _a0 + (r1 - r0))
+            if _nx_g is None:
+                _nx_g = xp.empty((Ny, Nx), dtype=_nx.dtype)
+                _ny_g = xp.empty((Ny, Nx), dtype=_ny.dtype)
+            _nx_g[r0:r1] = _nx
+            _ny_g[r0:r1] = _ny
+            del _nx, _ny
+        _tf_px, _tf_py = _nx_g, _ny_g
+
+    def _tf_price_walk_halo(i_surf, cr):
+        """PRICE the halo the remap's pull-back would need, and record the
+        refusal.
+
+        The screen half of the remap rung bands with a 2-row halo; its second
+        half -- resample the FIELD at ``x + W`` -- does not, and this is where
+        that is stated in numbers rather than asserted.  The pull-back reads
+        the field ``ceil(max|W| / dy)`` rows away plus the spline stencil, so
+        the halo is DYNAMIC in a way a fixed 1-3 rows is not, and it grows as
+        the grid refines at a fixed aperture (``max|W|`` is a LENGTH).
+        Independently of its width, three further steps are globally coupled
+        (the ``spline_filter`` IIR, the whole-grid least-squares moments and
+        the ``min(det)`` fold reduction) -- see the derivation above ``_tf_sl``
+        for the measurements.  Reported through ``progress`` rather than
+        warned, so it costs nothing when nobody is listening: the two
+        whole-grid reductions below are not even taken without a callback."""
+        if progress is None:
+            return
+        _wmax = max(float(xp.max(xp.abs(_rm_wx_g))),
+                    float(xp.max(xp.abs(_rm_wy_g))))
+        _need = int(np.ceil(_wmax / dy)) + (int(remap_order) + 1) // 2 + 1
+        call_progress(
+            progress, 'apply_real_lens',
+            i_surf / max(len(surfaces), 1),
+            f"surface {i_surf}: tangent_facet_remap pull-back NOT banded -- "
+            f"max|W| = {_wmax * 1e6:.3f} um = {_need} halo rows against a "
+            f"{cr}-row band ({100.0 * _need / max(cr, 1):.1f} % of the band), "
+            f"and the resampling is globally coupled on top of that "
+            f"(spline_filter IIR -- measured to need a halo TWICE the band "
+            f"before it underflows to identical -- whole-grid least-squares "
+            f"moments, min(det) fold reduction).  The SCREEN half IS banded "
+            f"({_TF_REMAP_SAG_HALO_ROWS}-row sag halo); the apply half runs "
+            f"whole-grid.")
+
     # Preserve the caller's complex dtype (complex128 or complex64).
     # The numexpr ``out=E`` path below evaluates the phase screen
     # expression in complex128 internally and casts to E.dtype at
@@ -4482,7 +4851,7 @@ def apply_real_lens(
         _narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and not slant_correction and not fresnel
-            and not surface_frame and not _displaced and not _tf_active
+            and not surface_frame and not _displaced
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -4507,15 +4876,26 @@ def apply_real_lens(
             # The whole-grid block is gated on ``bool(xp.any(sag))``; evaluate
             # that reduction band-wise so a FLAT face still skips (and still
             # leaves ``_obl_p0*`` a pair of floats) without a full-grid sag.
-            _obl_here = _obl_active and _obl_any_sag(R, kc, asph, cr)
-            _hw = _obl_halo_rows() if _obl_here else 0
+            _obl_here = _obl_active and _band_any_sag(R, kc, asph, cr)
+            # v5.37: the tangent-facet family bands here too.  ``_obl_active``
+            # is False under those models (they supersede equations 4 and 7),
+            # so the two ``_here`` flags are mutually exclusive by construction.
+            _tf_here = _tf_active and _band_any_sag(R, kc, asph, cr)
+            _hw = 0
+            if _obl_here:
+                _hw = _obl_halo_rows()
+            elif _tf_here:
+                _hw = _tf_halo_rows()
+                _tf_begin_surface()
             if _obl_here:
                 _obl_begin_surface()
             for r0 in range(0, Ny, cr):
                 r1 = min(Ny, r0 + cr)
-                if _obl_here:
+                if _obl_here or _tf_here:
                     # sag on a halo: the obliquity gradients need one row
-                    # either side (two when the R1 drift term is live).
+                    # either side (two when the R1 drift term is live); the
+                    # tangent-facet screen needs three (two for the remap
+                    # rung) -- see the derivation above ``_tf_sl``.
                     _h0 = max(0, r0 - _hw)
                     _h1 = min(Ny, r1 + _hw)
                     _lo = r0 - _h0
@@ -4527,6 +4907,12 @@ def apply_real_lens(
                             if h_sq_axis is None else h_sq_axis[r0:r1])
                     sag_b = _surface_sag_general(_h_b, R, kc, asph)
                 opd_b = (n2r - n1r) * sag_b
+                if _tf_here:
+                    opd_b = _tf_band_screen(
+                        sag_h, _h0, _h1, r0, r1, n1r, n2r,
+                        lambda a0, a1, _s=sag_h, _o=_h0:
+                            (n2r - n1r) * _s[a0 - _o:a1 - _o])
+                    del sag_h
                 if _obl_here:
                     _d_b = _obl_band_delta(sag_h, _h0, _h1, r0, r1, n1r, n2r)
                     if _d_b is not None:
@@ -4548,8 +4934,20 @@ def apply_real_lens(
                 del sag_b, opd_b
             if _obl_here:
                 _obl_end_surface()
+            if _tf_here:
+                _tf_end_surface()
+                if _tf_remap:
+                    # The screen half banded; the pull-back does not (globally
+                    # coupled, and its halo is the walk).  Priced + printed.
+                    _tf_price_walk_halo(i, cr)
+                    E, _tf_px, _tf_py = _tangent_facet_remap_apply(
+                        E, _rm_wx_g, _rm_wy_g, _tf_px, _tf_py, dx, dy, k0,
+                        int(remap_order), xp, i)
+                _rm_wx_g = _rm_wy_g = None
             if i < len(surfaces) - 1 and _obl_active and _obl_apply:
                 _obl_gap_advance(i, n2r)
+            if i < len(surfaces) - 1 and _tf_active:
+                _tf_gap_transport(i, n2r)
             if i < len(surfaces) - 1:
                 E = _propagate_through_glass(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
@@ -4584,7 +4982,7 @@ def apply_real_lens(
         _slant_narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and (slant_correction or fresnel)
-            and not surface_frame and not _tf_active
+            and not surface_frame
             and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
@@ -4612,8 +5010,14 @@ def apply_real_lens(
             else:
                 E_out = E
             _refr_clamped = False
-            _obl_here = _obl_active and _obl_any_sag(R, kc, asph, cr)
-            _hw = max(1, _obl_halo_rows()) if _obl_here else 1
+            _obl_here = _obl_active and _band_any_sag(R, kc, asph, cr)
+            _tf_here = _tf_active and _band_any_sag(R, kc, asph, cr)
+            _hw = 1
+            if _obl_here:
+                _hw = max(1, _obl_halo_rows())
+            elif _tf_here:
+                _hw = max(1, _tf_halo_rows())
+                _tf_begin_surface()
             if _obl_here:
                 _obl_begin_surface()
             for r0 in range(0, Ny, cr):
@@ -4667,6 +5071,20 @@ def apply_real_lens(
                            - n1r * cos_ti_safe) * sag_b
                 else:
                     opd = (n2r - n1r) * sag_b
+                if _tf_here:
+                    # v5.37: route 3 / the remap rung REPLACE the screen above.
+                    # It survives only as the thin-screen fallback on a
+                    # non-propagating pixel, which is why it is handed over as a
+                    # callable evaluated on the EXTENDED rows the accumulator
+                    # gradient needs.  ``slant_correction`` is REFUSED with
+                    # these models (both replace the same coefficient and
+                    # stacking them double-counts), so this path is reached
+                    # only through ``fresnel=True`` and the fallback screen is
+                    # always the paraxial one.
+                    opd = _tf_band_screen(
+                        sag_halo, _h0, _h1, r0, r1, n1r, n2r,
+                        lambda a0, a1, _s=sag_halo, _o=_h0:
+                            (n2r - n1r) * _s[a0 - _o:a1 - _o])
                 if _obl_here:
                     # v5.35.3: equation (4) (+ R1) on this band.  The sag
                     # gradient is handed over rather than retaken -- the
@@ -4737,6 +5155,17 @@ def apply_real_lens(
             E = E_out
             if _obl_here:
                 _obl_end_surface()
+            if _tf_here:
+                _tf_end_surface()
+                if _tf_remap:
+                    # LAST in the surface block, exactly as the whole-grid path
+                    # runs it: the vignetting masks above already acted at the
+                    # pixel's own incoming coordinate.
+                    _tf_price_walk_halo(i, cr)
+                    E, _tf_px, _tf_py = _tangent_facet_remap_apply(
+                        E, _rm_wx_g, _rm_wy_g, _tf_px, _tf_py, dx, dy, k0,
+                        int(remap_order), xp, i)
+                _rm_wx_g = _rm_wy_g = None
             if _refr_clamped:
                 import warnings
                 warnings.warn(
@@ -4751,6 +5180,8 @@ def apply_real_lens(
                 )
             if i < len(surfaces) - 1 and _obl_active and _obl_apply:
                 _obl_gap_advance(i, n2r)
+            if i < len(surfaces) - 1 and _tf_active:
+                _tf_gap_transport(i, n2r)
             if i < len(surfaces) - 1:
                 E = _propagate_through_glass(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
@@ -5305,8 +5736,11 @@ def apply_real_lens(
             # (no carrier yet, or a leading plate) passes through untouched.
             # ``'split'`` is a 'displaced'-only mode, so the physical gap is
             # always the one the model propagates.
-            _tf_px, _tf_py = _tangent_facet_transport(
-                _tf_px, _tf_py, float(thicknesses[i]), n2r, dx, dy, xp)
+            # v5.37: routed through ``_tf_gap_transport`` so a prescription
+            # that MIXES banded and whole-grid surfaces reaches the identical
+            # step from either side (banded internally when sag_chunk_rows is
+            # live, byte-identical either way).
+            _tf_gap_transport(i, n2r)
         if i < len(surfaces) - 1:
             if _split_mode:
                 # P2 candidate (b): the internal gap is propagated as the
