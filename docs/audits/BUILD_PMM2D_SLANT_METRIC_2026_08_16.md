@@ -1039,3 +1039,38 @@ S5 (the shipped 1-D slanted-Jones p-row sign discontinuity) stays **open**, deli
 it is a 1-D path, this branch changes no 1-D file, and a fix must first decide which of
 two disagreeing conventions is canonical. It is recorded in S5 with its reproduction as a
 candidate defect for a separate small change.
+
+## 15. [M] Regression sweep, and two PRE-EXISTING build-dependent failures
+
+Full PMM/RCWA/2-D subset on the committed branch, build W:
+
+```
+2050 passed, 2 failed, 2 skipped, 10282 deselected  (24:54)
+```
+
+**Both failures are pre-existing on `origin/main` @ `fc3ac52` (the 5.37.0 release
+commit) and are NOT caused by this change.** Verified by running the same two tests in a
+detached worktree at `origin/main`: the failure output is **byte-identical** to the
+branch's once pytest's `0x...` object addresses are normalized -- same assertion, same
+scanned family, same numbers (`0.045889422725851725`, `1.005838243541457`).
+
+| test | on build W (numpy 2.4.4 / scipy 1.17.1) | on build L (numpy 1.26.4 / scipy 1.11.4) |
+|---|---|---|
+| `test_pmm_m3_efficiency.py::test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build` | FAIL | **PASS** |
+| `test_v5_14_0_pmm2d_conical.py::test_conical_jones_matches_rcwa` | FAIL | **PASS** |
+
+So both are **cross-build divergent**, and each is one of the shapes
+`docs/TESTING_STANDARDS.md` names:
+
+* the T3-4 guard is **S2 (pre-fix-referencing arm)** -- it asserts that a sliver defect
+  still reproduces, and its own message says so: *"the sliver defect the T3-4 guard
+  exists to find has stopped reproducing on the audit-class device. If it was FIXED
+  AGAIN, re-pin this against the fix; if the family merely moved, widen `_T34_WIDEN`
+  further."* On the newer numpy/scipy it no longer reproduces, so the guard fires.
+* the conical Jones test is **S4 (floor bar)** -- an energy-closure bar at `0.03` that
+  build W crosses at `0.0459` while build L sits comfortably under it.
+
+**Recorded, not fixed** -- both are outside this campaign's scope (neither is on the
+slant path, and neither file is touched by this branch). Flagged because the 5.37.0
+release commit carries them, so whichever numpy/scipy the release matrix pins evidently
+falls on the passing side, and a build bump would surface them.
