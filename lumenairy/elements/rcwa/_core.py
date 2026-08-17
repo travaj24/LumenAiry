@@ -3211,15 +3211,209 @@ def _slant_is_zero(slant):
     return sl[0] == 0.0 and sl[1] == 0.0
 
 
-def _generator_modes(G, Kx, xp):
+#: Structural gate for the 4N generator's parity-sign block reduction.  The
+#: quantity is exactly what the code below computes: ``max|R Gr R + Gr| /
+#: max|G|``.  MEASURED 2026-08-17 (py3.14.6 / numpy 2.4.4 / scipy 1.17.1 /
+#: scipy-openblas 0.3.31) over the fixture set -- cells that carry the
+#: structure (uniform tilted uniaxial, patterned tilted uniaxial at
+#: n_orders 3/4/5, general biaxial non-reciprocal lossy, in-plane slanted)
+#: read 0.0 .. 3.6e-15; cells that do not (oblique incidence, off-centre
+#: pillar, off-centre general eps) read 1.8e-02 .. 3.0e-01.  1e-10 sits
+#: 4.4 decades above the satisfied envelope and 7.2 below the smallest real
+#: violation -- the same bar `_flip_invariant` / `_symmetric_cascade_rt` use
+#: for the adjacent (order-flip) precondition.
+_OOP_BLOCK_TOL = 1e-10
+#: Reconstruction floor: the factored eigenvector is ``[w; Y w / gam]``, so a
+#: gam at the scale of the spectrum's own roundoff is not reconstructible.
+#: MEASURED min|gam|/max|gam| over the same fixture set (2026-08-17):
+#: 6.7e-02 .. 1.2e-01 -- the solvers nudge off Wood anomalies, which is what
+#: would otherwise drive it to zero.  1e-13 is eleven decades below anything
+#: the machinery produces, so it fires only on a genuinely null mode ->
+#: dense fallback.
+_OOP_GAM_FLOOR = 1e-13
+
+
+def _oop_block_gauge(kxv, kyv, orders, probe):
+    """``(flip, d)`` enabling the 4N generator's block reduction, or ``None``.
+
+    ``flip`` is the order flip ``(m, n) -> (-m, -n)`` (``None`` at oblique
+    incidence -- the order set is not closed under it there) and ``d`` is the
+    recentering gauge that moves the cell's symmetry centre to the FFT origin.
+    Both are necessary conditions only; :func:`_generator_block_eig` verifies
+    the structure itself on the ASSEMBLED generator and refuses otherwise.
+    """
+    flip = _order_flip_perm(np.diag(np.asarray(kxv).astype(_C)),
+                            np.diag(np.asarray(kyv).astype(_C)))
+    if flip is None:
+        return None
+    d = _recentering_phase(probe, orders, np)
+    if d is None:
+        return None
+    return flip, np.asarray(to_numpy(d)).astype(_C)
+
+
+def _generator_block_eig(G, N, sym_gauge, *, tol=None):
+    """All ``4N`` eigenpairs of the OOP / SLANT generator from ONE ``2N`` eig,
+    or ``None`` when the structural precondition fails (-> dense ``zgeev``).
+
+    THE STRUCTURE (docs/audits/EXPERIMENT_PMM2D_OOP_BLOCK_EIG_2026_08_17.md).
+    The generator is ``G = [[A, P], [Q, B]]`` on ``[E; u]``.  The cross-blocks
+    ``A`` (from ``ezx, ezy``) and ``B`` (from ``exz, eyz``) -- and the slant
+    convection, which lands in the same two diagonal blocks -- are LINEAR in
+    ``Kx, Ky``, while ``P`` and ``Q`` are quadratic-or-K-free.  At NORMAL
+    incidence the order flip ``F: (m, n) -> (-m, -n)`` therefore sends
+    ``A, B -> -A, -B`` and leaves ``P, Q`` alone, so with
+    ``S = diag(I, I, -I, -I)`` the signed permutation ``R = S (I4 (x) F)`` is an
+    involution ANTI-commuting with the generator::
+
+        F G F = [[-A,  P], [ Q, -B]]      S G S = [[ A, -P], [-Q,  B]]
+        R G R = -G                        (R = S . (I4 (x) F),  R^2 = I)
+
+    Neither factor works alone -- ``F`` alone is the (even-parity) fold, which
+    the out-of-plane blocks break, and ``S`` alone is the in-plane
+    ``[W; -V] <-> -lam`` symmetry, which they break too.  Their PRODUCT
+    survives both.  An anti-commuting involution makes ``G`` block-ANTI-DIAGONAL
+    in the ``R`` eigenbasis ``U = [U+, U-]`` (each sector exactly ``2N``-d)::
+
+        U^T G U = [[0, X], [Y, 0]]   ->   gam = +/- sqrt(mu),  mu = eig(X Y)
+
+    with eigenvector ``[w; Y w / gam]`` in that basis -- ONE ``2N`` eig for all
+    ``4N`` eigenpairs, the out-of-plane analogue of what ``eig(P Q)`` does for
+    an in-plane layer.  ``U`` is a real orthogonal signed pairing, so forming
+    ``X, Y`` and expanding the vectors are ``O(n^2)``; the recentering gauge
+    ``d`` is folded into its coefficients, so the returned eigenvectors are
+    already in the caller's gauge and no ``4N`` copy of ``G`` is made.
+
+    The condition is on the ASSEMBLED operators, not on ``eps``: a cell whose
+    permittivity is centro-symmetric but whose spectral-element WALLS are not
+    (an off-centre feature on a non-mirrored strip layout) breaks it at the
+    discretisation level, and is refused here by measurement.
+    """
+    flip, d = sym_gauge
+    # read at CALL time (not as a default argument) so the bar is one knob a
+    # test can walk a ladder over -- the gate's own two-sided gap is then
+    # measured through the shipped code, never re-derived in the test
+    tol = _OOP_BLOCK_TOL if tol is None else float(tol)
+    n2, n4 = 2 * N, 4 * N
+    if G.shape != (n4, n4) or flip.shape[0] != N:
+        return None
+    perm = np.concatenate([flip + b * N for b in range(4)])
+    sign = np.concatenate([np.ones(n2), -np.ones(n2)])
+    d4 = np.concatenate([d] * 4)
+
+    # ---- structural test: max |R Gr R + Gr| <= tol * max|G|, row-blocked so
+    # the transient never reaches a second 4N x 4N array.  Gr = D^-1 G D and
+    # d is a pure phase, so max|Gr| == max|G| entrywise -- the recentering
+    # never needs to be applied to G at all, here or below.
+    if not np.all(np.isfinite(d4)) or float(np.min(np.abs(d4))) <= 0.0:
+        return None                        # not a usable gauge
+    r = sign * d4 / d4[perm]
+    rinv = 1.0 / r
+    scale = float(np.max(np.abs(G)))
+    if not np.isfinite(scale) or scale == 0.0:
+        return None
+    resid = 0.0
+    for i0 in range(0, n4, 256):
+        i1 = min(i0 + 256, n4)
+        blk = (r[i0:i1, None] * G[np.ix_(perm[i0:i1], perm)]
+               * rinv[None, :]) + G[i0:i1]
+        resid = max(resid, float(np.max(np.abs(blk))))
+        if resid > tol * scale:
+            return None
+
+    # ---- the R eigenbasis, as (index, index, coeff, coeff) columns.  The
+    # gauge d is folded in: expansion uses D U, projection uses U^T D^-1.
+    plus, minus = [], []
+    seen = np.zeros(n4, dtype=bool)
+    inv2 = 1.0 / np.sqrt(2.0)
+    for i in range(n4):
+        if seen[i]:
+            continue
+        j = int(perm[i])
+        seen[i] = True
+        if j == i:                                  # self-paired order ((0,0))
+            (plus if sign[i] > 0 else minus).append((i, i, 1.0, 0.0))
+            continue
+        seen[j] = True
+        # R(e_i +/- e_j) = s (e_j +/- e_i): '+' has eigenvalue +s, '-' has -s
+        if sign[i] > 0:
+            plus.append((i, j, inv2, inv2))
+            minus.append((i, j, inv2, -inv2))
+        else:
+            plus.append((i, j, inv2, -inv2))
+            minus.append((i, j, inv2, inv2))
+    if len(plus) != n2 or len(minus) != n2:
+        return None
+
+    def _desc(cols):
+        i = np.array([c[0] for c in cols], dtype=np.intp)
+        j = np.array([c[1] for c in cols], dtype=np.intp)
+        ci = np.array([c[2] for c in cols], dtype=_C)
+        cj = np.array([c[3] for c in cols], dtype=_C)
+        return i, j, ci * d4[i], cj * d4[j], ci / d4[i], cj / d4[j]
+
+    dp, dm = _desc(plus), _desc(minus)
+
+    def _cols(desc, M):                    # M @ (D U)
+        i, j, ei, ej, _pi, _pj = desc
+        return M[:, i] * ei[None, :] + M[:, j] * ej[None, :]
+
+    def _rows(desc, M):                    # (U^T D^-1) @ M
+        i, j, _ei, _ej, pi, pj = desc
+        return pi[:, None] * M[i, :] + pj[:, None] * M[j, :]
+
+    def _expand(desc, C):                  # (D U) @ C
+        # `i` and `j` are each all-distinct and disjoint apart from the
+        # self-paired ((0,0)) orders, where ``i == j`` and ``cj == 0`` -- so a
+        # plain assign-then-add is exact and avoids ``np.add.at``'s unbuffered
+        # slow path.
+        i, j, ei, ej, _pi, _pj = desc
+        out = np.zeros((n4, C.shape[1]), dtype=_C)
+        out[i] = ei[:, None] * C
+        out[j] += ej[:, None] * C
+        return out
+
+    X = _rows(dp, _cols(dm, G))
+    Y = _rows(dm, _cols(dp, G))
+    mu, w = np.linalg.eig(X @ Y)
+    gam = np.sqrt(np.asarray(mu, dtype=_C))
+    gmax = float(np.max(np.abs(gam)))
+    if not np.isfinite(gmax) or gmax == 0.0:
+        return None
+    if float(np.min(np.abs(gam))) <= _OOP_GAM_FLOOR * gmax:
+        return None                        # null mode -> not reconstructible
+    Vp = _expand(dp, w)
+    Vm = _expand(dm, (Y @ w) * (1.0 / gam)[None, :])
+    Vfull = np.concatenate([Vp + Vm, Vp - Vm], axis=1)
+    gam_all = np.concatenate([gam, -gam])
+    nrm = np.linalg.norm(Vfull, axis=0)
+    if not np.all(np.isfinite(Vfull)) or float(np.min(nrm)) == 0.0:
+        return None
+    return gam_all, Vfull / nrm[None, :]    # unit 2-norm (the zgeev convention
+    #                                         the flux selector's relative
+    #                                         thresholds assume)
+
+
+def _generator_modes(G, Kx, xp, sym_gauge=None):
     """Eigendecompose a 4N first-order generator into forward/backward sets.
 
     Shared by the out-of-plane and the SLANTED paths: both break the in-plane
     ``[W; -V] <-> -lam`` symmetry, so forward and backward modes are genuinely
     distinct and the caller must use the GENERALIZED S-matrix cascade.
+
+    ``sym_gauge`` (NumPy only) opts into the parity-sign block reduction of
+    :func:`_generator_block_eig` -- one ``2N`` eig instead of the ``4N``
+    ``zgeev``.  It is a pure accelerator: the structure is verified on the
+    assembled generator and any failure falls back to the dense solve.
     """
     N = Kx.shape[0]
-    gam, Vfull = _eig_for(xp)(G)
+    fac = None
+    if sym_gauge is not None and backend_name(xp) == "numpy":
+        fac = _generator_block_eig(np.asarray(G), N, sym_gauge)
+    if fac is not None:
+        gam, Vfull = fac
+    else:
+        gam, Vfull = _eig_for(xp)(G)
     if backend_name(xp) == "jax":
         fidx, bidx = _select_forward_flux_jax(gam, Vfull, N, xp)
     else:
@@ -3233,7 +3427,7 @@ def _generator_modes(G, Kx, xp):
 
 def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
                              EZX=None, EZY=None, EXZ=None, EYZ=None,
-                             slant=None):
+                             slant=None, sym_gauge=None):
     """Eigenmodes of a full-in-plane-tensor layer (dimension-agnostic).
 
     The anisotropic ``Q`` block (rigorously derived and locked to the
@@ -3256,6 +3450,13 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
     the GENERALIZED S-matrix (:func:`_interface_smatrix_general`).  When all four
     are None the EXACT current ``eig(P@Q)`` path runs byte-for-byte (the
     isotropic / JAX branches are untouched).
+
+    ``sym_gauge`` (NumPy only, optional) is the ``(flip, d)`` pair from
+    :func:`_oop_block_gauge`; it lets the generator branch take the parity-sign
+    block reduction (:func:`_generator_block_eig`, one ``2N`` eig instead of the
+    ``4N`` ``zgeev``) when the assembled generator actually carries the
+    structure.  Omitting it, or handing one whose structure does not verify,
+    runs the dense generator path unchanged.
     """
     xp = array_namespace(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
     Kx = xp.asarray(Kx).astype(_C)
@@ -3348,7 +3549,7 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
         G = _block(xp, [[A, P], [Q, B]])
         if _slanted:
             G = G + _slant_convection(Kx, Ky, slant, xp)
-        return _generator_modes(G, Kx, xp)
+        return _generator_modes(G, Kx, xp, sym_gauge=sym_gauge)
     lam2, W = _eig_for(xp)(P @ Q)
     lam = _sqrt_decay(lam2)
     V = Q @ W @ xp.diag(_inv_lam(lam))

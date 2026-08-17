@@ -4,6 +4,58 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed -- the 2-D out-of-plane eigensolve is 1.6x - 2.4x faster (block-reduced)
+
+An out-of-plane (or slanted) tensor layer in `pmm_jones_2d` /
+`PMM2DStackHybrid` eigendecomposes a `4*Nf` first-order generator, which the
+5.38.1 profile shows is 61-72% of the solve.  At NORMAL incidence on a
+flip-symmetric cell that generator is now reduced to ONE `2*Nf` eigenproblem.
+
+**The structure.**  In `G = [[A, P], [Q, B]]` the off-plane cross-blocks `A`,
+`B` (and the slant convection, which lands in the same two blocks) are LINEAR
+in `Kx, Ky`, while `P` and `Q` are quadratic-or-K-free.  At normal incidence
+the order flip `J: (m, n) -> (-m, -n)` therefore negates `A, B` and fixes
+`P, Q`, so with the E/H sign flip `S = diag(I, I, -I, -I)` the signed
+permutation `R = S . (I4 (x) J)` is an involution ANTI-commuting with `G`.
+Neither factor works alone -- `J` alone is the even-parity fold, which the
+off-plane blocks break, and `S` alone is the in-plane `[W; -V] <-> -lam`
+symmetry, which they break too -- but their product survives both.  `G` is
+then block-anti-diagonal in `R`'s eigenbasis, `U^T G U = [[0, X], [Y, 0]]`, so
+`gam = +/- sqrt(eig(X Y))` with eigenvector `[w; Y w / gam]`: all `4*Nf`
+eigenpairs from one `2*Nf` eig, the out-of-plane analogue of what `eig(P Q)`
+does in-plane.  `U` is a real orthogonal signed pairing, so everything but the
+`2*Nf` eig is `O(n^2)`.
+
+**Scope.**  The reduction is NOT restricted to uniaxial media: a fully general
+biaxial, non-reciprocal, lossy 3x3 carries it just as a tilted-uniaxial LC
+pillar does.  What it needs is normal incidence and a cell whose ASSEMBLED
+operators are flip-symmetric -- which is a condition on the discretisation,
+not only on `eps` (a centro-symmetric permittivity on an unmirrored
+spectral-element wall layout does not qualify, and is refused by measurement).
+
+**Exact or refused.**  The structure is verified on the assembled generator on
+every call (`max |R G R + G| <= 1e-10 max|G|`; measured 0.0 .. 3.6e-15 where it
+holds, 1.8e-02 .. 3.0e-01 where it does not).  Any failure -- oblique
+incidence, an asymmetric cell, a null mode -- falls back to the dense `zgeev`
+BIT-FOR-BIT, and `symmetry=False` forces the dense path.  Eigenpair residuals
+on the reduced path are BETTER than the dense solve's (0.32x - 0.86x of it);
+end-to-end results agree to 8.4e-15 .. 2.8e-14.  CuPy and JAX are untouched.
+
+**One behaviour note.**  For an out-of-plane cell, `symmetry=True` used to be
+a no-op (such a cell cannot take the even-parity fold, and still cannot) and so
+was byte-identical to `symmetry=False`.  It is no longer: it now selects the
+block reduction, which is a different exact algorithm for the same
+eigenproblem.  Results agree within the derived bar above; pass
+`symmetry=False` for the previous bytes.
+
+Measured interleaved (separate alternating subprocesses, min of 4 rounds,
+1 BLAS thread, py3.14.6 / numpy 2.4.4 / scipy-openblas 0.3.31): 1.61x /
+1.93x / 1.99x on a single out-of-plane layer at `n_orders` 3 / 4 / 5, and
+1.93x / 2.35x on a 6-layer out-of-plane stack at `n_orders` 3 / 4 --
+reproduced to within ~5% by an independent run of the same driver.  Full
+derivation, refuted alternatives, and the cost accounting:
+`docs/audits/EXPERIMENT_PMM2D_OOP_BLOCK_EIG_2026_08_17.md`.
+
 ## [5.38.1] — 2026-08-17
 
 ## [5.38.0] — 2026-08-16

@@ -43,6 +43,11 @@ library's first 2-D out-of-plane solver (``rcwa_jones_2d`` is in-plane only),
 so its validation chain is 1-D-reducible cells + the Berreman-grade uniform
 limit.  COST: the out-of-plane eig is ``4*Nf`` (vs ``2*Nf`` in-plane) --
 ~8x slower; ~14 s/layer at ``n_orders=11`` -- prefer modest ``n_orders``.
+At NORMAL incidence on a flip-symmetric cell that ``4*Nf`` eig is replaced by
+ONE ``2*Nf`` eig (the parity-sign block reduction; ``symmetry`` on, which is
+the default), measured **1.6x - 2.4x** on the whole solve -- see
+``docs/audits/EXPERIMENT_PMM2D_OOP_BLOCK_EIG_2026_08_17.md``.  Oblique
+incidence still pays the full ``4*Nf``.
 NON-RECIPROCAL cells (``e_xz != e_zx`` asymmetric, non-Hermitian) can give
 ``R+T != 1`` PHYSICALLY (no auto-balance) -- match against a 1-D oracle, do
 not assert unity.  Loss convention: PUBLIC ``Im(eps) > 0`` for loss (the
@@ -60,6 +65,7 @@ from ..rcwa._core import (
     _layer_eigenmodes_tensor,
     _modes_to_M,
     _norm_slant_pair,
+    _oop_block_gauge,
     _propagation_smatrix_general,
     _require_propagating_incidence,
     _slant_is_zero,
@@ -118,7 +124,7 @@ def _tile_is_offplane(tile33):
 
 def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
                         ox, oy, kxv, kyv, formulation, return_ops=False,
-                        slant=None):
+                        slant=None, block_eig=False):
     """Fourier-basis layer eigenmodes of a full (3, 3) tensor cell -- the
     SEM-projected operators fed to the shared dimension-agnostic
     :func:`_layer_eigenmodes_tensor` (also used per-layer by
@@ -330,8 +336,29 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
         if offp or not _slant_is_zero(slant):
             return None
         return GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ
+    # PARITY-SIGN BLOCK REDUCTION (EXPERIMENT_PMM2D_OOP_BLOCK_EIG_2026_08_17.md):
+    # the 4Nf generator an OUT-OF-PLANE (or SLANTED) layer needs is
+    # block-anti-diagonal under R = diag(I,I,-I,-I).(I4 (x) J) at normal
+    # incidence, so ONE 2Nf eig delivers all 4Nf eigenpairs.  This offers the
+    # gauge; _generator_block_eig verifies the structure on the assembled
+    # generator and falls back to the dense zgeev if it does not hold (oblique
+    # incidence, an off-centre cell, an unmirrored wall layout).  The even
+    # fold above cannot serve this case -- it needs J ALONE to commute, which
+    # the off-plane cross-blocks (linear in K, hence J-ODD) break.
+    #
+    # OPT-IN per call site (``block_eig``), not on by default: the reduction is
+    # validated end to end for the two 2-D entry points that pass it
+    # (``pmm_jones_2d`` and ``PMM2DStackHybrid``).  The native-conical and 1-D
+    # stack callers reach this same function with a degenerate order table
+    # (``oy = [0]``) and are left byte-identical until they get their own
+    # two-sided gate tests -- see the doc's S8.
+    gauge = None
+    if block_eig and (offp or not _slant_is_zero(slant)):
+        orders2d = np.stack([np.tile(ox, len(oy)), np.repeat(oy, len(ox))],
+                            axis=1)
+        gauge = _oop_block_gauge(kxv, kyv, orders2d, CxxF)
     return _layer_eigenmodes_tensor(GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ,
-                                    slant=slant, **oop)
+                                    slant=slant, sym_gauge=gauge, **oop)
 
 
 def pmm_jones_2d(
@@ -415,6 +442,16 @@ def pmm_jones_2d(
         (out-of-plane / off-centre / oblique never fold).  ``symmetry=False``
         forces the full solve (the even basis matches it to ~1e-12, not
         bit-for-bit).
+
+        For an OUT-OF-PLANE (or slanted) tensor cell -- which cannot fold,
+        because the off-plane cross-blocks are odd under the order flip -- the
+        same setting instead enables the PARITY-SIGN BLOCK REDUCTION of the
+        ``4Nf`` generator: at normal incidence on a flip-symmetric cell the
+        generator is block-anti-diagonal under the order flip TIMES the E/H
+        sign flip, so one ``2Nf`` eig yields all ``4Nf`` eigenpairs (1.6x -
+        2.4x on the whole solve).  It is verified on the assembled generator
+        every call and falls back to the dense solve otherwise, so it is exact
+        or refused; ``symmetry=False`` forces the dense generator.
     region_layout : (Sx, Sy) int array_like, optional
         JAX-only.  A traced ``eps_tensor_cell`` (under ``jax.grad`` /
         ``jax.jit``) cannot define the exact spectral-element walls (that is
@@ -628,7 +665,8 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     # cascade in the (Nf+1)-d even sector; None -> not applicable (out-of-plane,
     # off-centre or oblique) -> the full 2Nf solve below (byte-identical there).
     sym_pairs = None
-    if _symmetry_on(symmetry) and kt < 1e-12 and formulation != "fff_nv":
+    _sym = _symmetry_on(symmetry)
+    if _sym and kt < 1e-12 and formulation != "fff_nv":
         ops = _tensor_layer_modes(
             ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
             formulation, return_ops=True, slant=slant)
@@ -646,7 +684,7 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     if sym_pairs is None:
         modes = _tensor_layer_modes(
             ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
-            formulation, slant=slant)
+            formulation, slant=slant, block_eig=_sym)
 
         if len(modes) == 3:
             # -- in-plane: symmetric +/-lam cascade (the rcwa_jones_2d tail) --

@@ -860,7 +860,8 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                     else ("sym",) + tuple(out))
         ez_rule = ("li" if self.formulation == "li" else "laurent")
         out = _tensor_layer_modes(ax, ay, L["xw"], L["yw"], tile_i, k0, kx0,
-                                  ky0, ox, oy, kxv, kyv, ez_rule, slant=sl)
+                                  ky0, ox, oy, kxv, kyv, ez_rule, slant=sl,
+                                  block_eig=self.symmetry)
         return (("gen",) + out if len(out) == 6 else ("sym",) + tuple(out))
 
     def _layer_mode_sets(self, kxv, kyv, ox, oy, kx0, ky0, k0, wl,

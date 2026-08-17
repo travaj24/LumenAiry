@@ -441,9 +441,22 @@ def test_jones_2d_tensor_symmetry_fold_matches_full(formulation):
     assert np.max(np.abs(np.asarray(a[3]) - np.asarray(b[3]))) < 1e-11
 
 
-def test_jones_2d_symmetry_falls_back_offplane():
-    """An OUT-OF-PLANE tensor cell cannot fold (the generator breaks +/-lam),
-    so symmetry=True falls back to the generalized cascade BYTE-IDENTICALLY."""
+def test_jones_2d_symmetry_never_folds_offplane(monkeypatch):
+    """An OUT-OF-PLANE tensor cell cannot take the EVEN-PARITY FOLD: the fold
+    needs the order flip J to commute with every operator, and the off-plane
+    cross-blocks are LINEAR in K, hence J-odd.  Asserted as a decision -- the
+    even-sector cascade is never entered.
+
+    CONTRACT CHANGE 2026-08-17 (EXPERIMENT_PMM2D_OOP_BLOCK_EIG_2026_08_17.md):
+    this used to also assert symmetry=True was BYTE-IDENTICAL to symmetry=False
+    here.  It no longer is, by design: symmetry=True now takes the parity-sign
+    BLOCK REDUCTION of the 4Nf generator instead (J TIMES the E/H sign flip
+    does survive, even though neither factor does alone), which is a different
+    exact algorithm for the same eigenproblem.  The byte-identity claim is
+    replaced by the derived algebra bar below, and the fold claim -- which is
+    what this test was really about -- is now asserted directly.
+    """
+    from lumenairy.elements.rcwa import _core as _RC
     from lumenairy.elements.rcwa._core import uniaxial_tensor
     P, WL, DEP = 0.55e-6, 0.5e-6, 0.30e-6
     S = 6
@@ -454,10 +467,20 @@ def test_jones_2d_symmetry_falls_back_offplane():
             az = 0.5 * np.cos(2 * np.pi * np.hypot(xr, yr))
             cell[i, j] = uniaxial_tensor(1.5, 1.7, np.deg2rad(35.0), phi=az)
     kw = dict(degree=9, n_orders=5, theta=0.0)
+
+    folded = []
+    orig_fold = _RC._symmetric_cascade_rt
+    monkeypatch.setattr(
+        _RC, "_symmetric_cascade_rt",
+        lambda *a, **k: (folded.append(1), orig_fold(*a, **k))[1])
     a = la.pmm_jones_2d(P, P, cell, 1.5, 1.0, DEP, WL, symmetry=False, **kw)
     b = la.pmm_jones_2d(P, P, cell, 1.5, 1.0, DEP, WL, symmetry=True, **kw)
-    assert np.array_equal(a[1], b[1]) and np.array_equal(a[2], b[2])
-    assert np.array_equal(np.asarray(a[3]), np.asarray(b[3]))
+    assert not folded, "an out-of-plane cell entered the even-parity fold"
+    # two exact algorithms for one 4Nf eigenproblem: bar derived from the
+    # problem size and machine epsilon (1.1e-10 here), measured 7.3e-14
+    bar = 1e3 * 4 * (2 * kw["n_orders"] + 1) ** 2 * float(np.finfo(float).eps)
+    for k in (1, 2, 3):
+        assert np.max(np.abs(np.asarray(a[k]) - np.asarray(b[k]))) <= bar
 
 
 # --------------------------------------------------------------------------- #
