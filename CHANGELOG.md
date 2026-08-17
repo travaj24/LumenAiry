@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.39.1] — 2026-08-17
+
 ### Fixed -- the 2-D lossless-closure tripwire was blind to LOST energy
 
 `_warn_lossless_energy_2d` (behind `pmm_efficiency_2d` and
