@@ -66,10 +66,25 @@ def test_large_angle_conical_matches_rcwa(theta_deg, phi_deg):
     assert abs(float(R1.sum()) - float(R2.sum())) < 3e-2
 
 
-def test_conical_jones_matches_rcwa():
-    """Anisotropic cell at steep conical incidence: the Jones solver's
-    cross-suite agreement must hold away from normal."""
-    S = 8
+#: The conical Jones cross-check's TRUNCATION LADDER: ``(pmm degree, pmm
+#: n_orders, rcwa n_orders, rcwa upsample)``.  The RCWA oracle's Fourier
+#: convolution needs ``>= 4 n_orders + 1`` samples per axis, so the upsample
+#: factor is tied to its order count, not chosen.
+_CONICAL_LADDER = ((11, 5, 5, 3), (13, 6, 6, 5), (15, 6, 6, 5))
+
+#: Closure bar for the ladder's BEST rung.  Derived, not chosen -- see
+#: :func:`test_conical_jones_matches_rcwa`'s docstring for the measurements.
+_CONICAL_CLOSURE = 1.0e-3
+
+#: Cross-suite bars, unconditional on EVERY rung.  Measured envelopes (same
+#: 12 environments, 2026-08-16): order-0 T agreement <= 3.8e-3, Jones
+#: agreement <= 3.9e-4.
+_CONICAL_DT, _CONICAL_DJ = 3.0e-2, 5.0e-2
+
+
+def _conical_cell(S=8):
+    """The anisotropic (rotated-uniaxial inclusion) cell the cross-check
+    uses."""
     tc = np.zeros((S, S, 3, 3), complex)
     for i in range(3):
         tc[:, :, i, i] = 2.25
@@ -80,21 +95,109 @@ def test_conical_jones_matches_rcwa():
     tc[2:6, 3:7, 0, 1] = (ne2 - no2) * c * s
     tc[2:6, 3:7, 1, 0] = (ne2 - no2) * c * s
     tc[2:6, 3:7, 2, 2] = no2
-    th, ph = np.deg2rad(40), np.deg2rad(25)
-    o1, R1, T1, J1 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
-                                  degree=9, n_orders=4, theta=th, phi=ph)
-    up = np.zeros((3 * S, 3 * S, 3, 3), complex)
+    return tc
+
+
+def _conical_upsample(tc, rep):
+    S = tc.shape[0]
+    up = np.zeros((rep * S, rep * S, 3, 3), complex)
     for a in range(3):
         for b in range(3):
-            up[:, :, a, b] = np.kron(tc[:, :, a, b], np.ones((3, 3)))
-    o2, R2, T2, J2 = rcwa_jones_2d(_P, _P, up, 1.5, 1.0, _DEP, _WL,
-                                   n_orders_x=4, n_orders_y=4, theta=th,
-                                   phi=ph)
-    m1, m2 = _o0(o1), _o0(o2)
-    for row in (0, 1):
-        assert abs(float(R1[row].sum() + T1[row].sum()) - 1.0) < 3e-2
-        assert abs(float(T1[row][m1][0]) - float(T2[row][m2][0])) < 3e-2
-    assert np.max(np.abs(J1 - J2)) < 5e-2
+            up[:, :, a, b] = np.kron(tc[:, :, a, b], np.ones((rep, rep)))
+    return up
+
+
+def test_conical_jones_matches_rcwa():
+    """Anisotropic cell at steep conical incidence: the Jones solver's
+    cross-suite agreement must hold away from normal.
+
+    **2026-08-16 -- THE OPERATING POINT WAS INSIDE A DOCUMENTED INSTABILITY,
+    AND THE CLOSURE BAR WAS INSIDE ITS SPREAD (S4, floor bar;
+    ``docs/TESTING_STANDARDS.md``).**  The original form solved the hybrid at
+    ``degree=9, n_orders=4`` and asserted ``|R+T-1| < 3e-2`` per row.  At that
+    truncation this geometry is the very case ``_EnergyWarning`` names ("the
+    truncation is numerically unstable here"), and the reading is decided by
+    the BLAS reduction order.  Measured on ONE build (Windows py3.14, numpy
+    2.4.4 / scipy 1.17.1), code and geometry FIXED, varying only the thread
+    cap::
+
+        threads   |R+T-1| row 0   row 1
+        1         8.007e-03       2.083e-02
+        2         1.520e-02       3.038e-03
+        4         4.589e-02       4.655e-02   <- the failure (bar 3e-2)
+        8         _EnergyError raised (sum R+T = 2.203)
+
+    -- a bar at 3e-2 sitting inside a spread that runs from 3e-3 to a hard
+    raise.  ``stabilize=True`` does not repair it either: its retry ladder
+    treats the 1e-6 closure warning as a failed attempt, no rung near this
+    geometry clears 1e-6, and it therefore falls back to the same reading
+    (measured identical to the raw one on numpy 2.5.1, 1.26.4 and 2.4.6).
+
+    RESTATED ONE LEVEL UP.  The hybrid's closure here is TRUNCATION-limited,
+    and WHICH rung of a truncation ladder closes best is exactly the per-build
+    fact; that a rung closing to ~1e-4 EXISTS is not.  So the ladder
+    (:data:`_CONICAL_LADDER`) is fixed and stated, the cross-suite agreement
+    is asserted on EVERY rung of it, and the closure bar is applied to the
+    rung this build's own measurement selects.
+
+    MEASURED ENVELOPES, 2026-08-16, over 12 (build x thread-cap)
+    environments -- Windows py3.14 numpy 2.4.4 / scipy 1.17.1 at 1/2/4/8
+    threads, and WSL py3.12 numpy 2.5.1 / scipy 1.18.0, py3.12 numpy 1.26.4 /
+    scipy 1.11.4, py3.11 numpy 2.4.6 / scipy 1.17.1, py3.10 numpy 2.2.6 /
+    scipy 1.15.3 at 1 and 4 threads::
+
+        quantity                              min        max        bar
+        closure at the SELECTED rung          1.8e-06    9.7e-05    1e-3
+        |T1[0,0] - T2[0,0]|, every rung       2.4e-05    3.8e-03    3e-2
+        max |J1 - J2|, every rung             2.6e-04    3.9e-04    5e-2
+
+    The closure bar has a decade of gap below (9.7e-5 envelope) and better
+    than 1.5 decades above (the unconverged reading this test used to take,
+    4.6e-2, and the raise past it).  Both cross-suite bars keep the shipped
+    values: they were never the failing ones and they still clear their
+    envelopes by ~8x and ~128x."""
+    tc = _conical_cell()
+    th, ph = np.deg2rad(40), np.deg2rad(25)
+    ups, rungs = {}, []
+    for degree, n_ord, r_ord, rep in _CONICAL_LADDER:
+        o1, R1, T1, J1 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
+                                      degree=degree, n_orders=n_ord,
+                                      theta=th, phi=ph)
+        if (r_ord, rep) not in ups:
+            ups[(r_ord, rep)] = rcwa_jones_2d(
+                _P, _P, _conical_upsample(tc, rep), 1.5, 1.0, _DEP, _WL,
+                n_orders_x=r_ord, n_orders_y=r_ord, theta=th, phi=ph)
+        o2, R2, T2, J2 = ups[(r_ord, rep)]
+        m1, m2 = _o0(o1), _o0(o2)
+        closure = max(abs(float(R1[row].sum() + T1[row].sum()) - 1.0)
+                      for row in (0, 1))
+        # the cross-suite claim is UNCONDITIONAL on every rung: the two
+        # independent solvers must agree about the order-0 transmission and
+        # the Jones matrix wherever the ladder is evaluated.
+        for row in (0, 1):
+            dT = abs(float(T1[row][m1][0]) - float(T2[row][m2][0]))
+            assert dT < _CONICAL_DT, (
+                f"degree={degree} n_orders={n_ord} row={row}: the hybrid and "
+                f"the RCWA oracle disagree by {dT:.4g} on the order-0 "
+                f"transmission at 40 deg conical incidence")
+        dJ = float(np.max(np.abs(J1 - J2)))
+        assert dJ < _CONICAL_DJ, (
+            f"degree={degree} n_orders={n_ord}: max |J_pmm - J_rcwa| = "
+            f"{dJ:.4g} at 40 deg conical incidence")
+        rungs.append((degree, n_ord, closure, dJ))
+    # the closure bar is applied where THIS build says the truncation closes,
+    # never at a rung picked on another machine.
+    best = min(rungs, key=lambda r: r[2])
+    print("\nconical Jones ladder (degree, n_orders, closure, dJ): "
+          + str([(d, n, float(f"{c:.4g}"), float(f"{j:.4g}"))
+                 for d, n, c, j in rungs])
+          + f"  selected degree={best[0]} n_orders={best[1]}")
+    assert best[2] < _CONICAL_CLOSURE, (
+        f"the BEST-closing rung of {[(d, n) for d, n, _c, _j in rungs]} is "
+        f"degree={best[0]} n_orders={best[1]} at |R+T-1| = {best[2]:.4g}, "
+        f"past the {_CONICAL_CLOSURE:g} envelope bar -- no truncation in the "
+        f"ladder converges this lossless conical solve on this build "
+        f"(all rungs: {[(d, n, float(f'{c:.4g}')) for d, n, c, _j in rungs]})")
 
 
 # --------------------------------------------------------------------------- #

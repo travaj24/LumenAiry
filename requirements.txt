@@ -9,8 +9,12 @@
 # usage.
 #
 # === Required (core functionality will not work without these) ===
-numpy>=1.20
-scipy>=1.7                # resample_field (Fresnel grid resampling), optimization
+# v5.38: numpy 2 is the floor (the source already uses numpy-2-only API and
+# every tested build is 2.x); scipy>=1.13 is the first line built against the
+# numpy 2.0 ABI.  See the comment above [project.dependencies] in
+# pyproject.toml for the adjudication.
+numpy>=2.0
+scipy>=1.13               # resample_field (Fresnel grid resampling), optimization
 matplotlib>=3.5           # plotting (spot_diagram, ray_fan_plot, plot_field, etc.)
 # v4.16.3 (audit P3-NEW-F1-5): psutil is a hard dep in pyproject.toml
 # [project.dependencies]; the v4.16.2 "Recommended" placement was a

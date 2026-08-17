@@ -930,17 +930,18 @@ def makedammann2d(
         #
         # Audit P2-07 (post-v5.17.0): this used ``np.sign(farfield)``,
         # which is only the Octave ``sign()`` (= z/|z|) this port needs
-        # on NumPy >= 2.0.  On NumPy 1.x (pyproject allows
-        # ``numpy>=1.20``) complex ``np.sign`` returns
+        # on NumPy >= 2.0.  On NumPy 1.x complex ``np.sign`` returned
         # ``sign(z.real)`` (falling back to ``sign(z.imag)`` on the
         # imaginary axis), so the far-field phase was replaced by +-1
         # each iteration and the IFTA silently degenerated (8x8
-        # target, itr=200: uniformity 0.97 -> 0.00).  Compute the unit
-        # phasor z/|z| explicitly, 0-safe (0 -> 0, matching
-        # ``np.sign(0) == 0``).  Componentwise division by
-        # ``hypot(re, im)`` is bit-identical to NumPy 2.x complex
-        # ``np.sign`` (A/B verified), so NumPy >= 2.0 results are
-        # unchanged.
+        # target, itr=200: uniformity 0.97 -> 0.00).
+        #
+        # v5.38: ``numpy>=2.0`` is now the packaged floor, so that
+        # hazard is EXCLUDED rather than defended against.  The explicit
+        # unit phasor stays because it is what the port means -- z/|z|,
+        # 0-safe (0 -> 0, matching ``np.sign(0) == 0``) -- and it is
+        # bit-identical to NumPy 2.x complex ``np.sign`` (A/B verified),
+        # so nothing about the shipped answer depends on the choice.
         _ff_mag = np.hypot(farfield.real, farfield.imag)
         _ff_unit = np.zeros_like(farfield)
         np.divide(farfield.real, _ff_mag, out=_ff_unit.real,
