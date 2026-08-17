@@ -3150,8 +3150,90 @@ def _select_forward_flux_jax(gam, Vfull, N, xp):
     return order[:2 * N], order[2 * N:]
 
 
+def _slant_convection(Kx, Ky, slant, xp):
+    """The 2-D slant's whole contribution: ``-i (t_x Kx + t_y Ky)`` on each of
+    the FOUR diagonal field blocks of the 4N first-order generator.
+
+    DERIVATION (docs/audits/BUILD_PMM2D_SLANT_METRIC_2026_08_16.md S1).  In the
+    sheared frame ``u = x - t_x z``, ``v = y - t_y z``, ``w = z`` the structure
+    is z-invariant and the Jacobian is unit upper-triangular, so ``det J = 1``
+    EXACTLY: the mass matrix is unchanged, there is no dilation generator, and
+    ``sqrt(g) = 1``.  The metric contributes ``G_t = I + t t^T`` (a CONSTANT
+    rank-one update -- it never reaches the Fourier factorization) and the
+    convection ``(2i/k0)<v|(t.grad)phi>``, which is exactly z-free.  Those two
+    are algebraically the same term split two ways, and the first-order form is
+    the one implemented here.
+
+    The sign is ``-i`` because the solver propagates as ``exp(-lam k0 z)``, so
+    its ODE is ``dX/d(k0 z) = -G X``; in the frame ``dX/dz|_u = dX/dz|_x +
+    (t.grad) X`` with ``t.grad -> i k0 (t_x Kx + t_y Ky)``.  MEASURED against
+    the shipped 1-D slant solver, all four candidates scanned: ``-i`` tracks the
+    vertical control at n_orders 7/11/15 (1.05e-02/7.48e-03/3.57e-03 vs control
+    1.05e-02/6.41e-03/3.45e-03), ``+i`` is wrong by two decades (4.1e-01) and
+    does not improve with truncation, and ``+/-1`` violate energy hard enough to
+    raise.
+
+    Setting ``t_y = 0`` reduces this SYMBOLICALLY to the shipped 1-D
+    ``L[_sl, _sl] += tan_conv * Dopx`` (``pmm/_core.py:5959-5962``).
+    """
+    tx, ty = _norm_slant_pair(slant)
+    Kt = tx * Kx + ty * Ky
+    return -1j * xp.kron(xp.eye(4, dtype=_C), Kt)
+
+
+def _norm_slant_pair(slant, where="slant"):
+    """Normalize a slant to a ``(t_x, t_y)`` float pair.
+
+    Accepts ``None`` (vertical), a scalar (taken as ``t_x``), or a 2-sequence.
+    Shared by every entry point so a scalar ``slant=0.0`` and ``slant=None``
+    take the same (vertical, byte-identical) path.
+    """
+    if slant is None:
+        return (0.0, 0.0)
+    if np.isscalar(slant):
+        sl = (float(slant), 0.0)
+    else:
+        sl = tuple(float(v) for v in slant)
+        if len(sl) != 2:
+            raise ValueError(
+                f"{where}: slant must be a (t_x, t_y) pair or a scalar t_x, "
+                f"got {slant!r}.")
+    if not all(np.isfinite(v) for v in sl):
+        raise ValueError(
+            f"{where}: slant components must be finite, got {slant!r}.")
+    return sl
+
+
+def _slant_is_zero(slant):
+    if slant is None:
+        return True
+    sl = _norm_slant_pair(slant)
+    return sl[0] == 0.0 and sl[1] == 0.0
+
+
+def _generator_modes(G, Kx, xp):
+    """Eigendecompose a 4N first-order generator into forward/backward sets.
+
+    Shared by the out-of-plane and the SLANTED paths: both break the in-plane
+    ``[W; -V] <-> -lam`` symmetry, so forward and backward modes are genuinely
+    distinct and the caller must use the GENERALIZED S-matrix cascade.
+    """
+    N = Kx.shape[0]
+    gam, Vfull = _eig_for(xp)(G)
+    if backend_name(xp) == "jax":
+        fidx, bidx = _select_forward_flux_jax(gam, Vfull, N, xp)
+    else:
+        fidx = _select_forward_flux(gam, Vfull, N)
+        fset = set(np.asarray(to_numpy(fidx)).tolist())
+        bidx = xp.asarray(np.array(sorted(set(range(4 * N)) - fset)))
+    Vf, Vb = Vfull[:, fidx], Vfull[:, bidx]
+    return (Vf[:2 * N, :], Vf[2 * N:, :], gam[fidx],
+            Vb[:2 * N, :], Vb[2 * N:, :], gam[bidx])
+
+
 def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
-                             EZX=None, EZY=None, EXZ=None, EYZ=None):
+                             EZX=None, EZY=None, EXZ=None, EYZ=None,
+                             slant=None):
     """Eigenmodes of a full-in-plane-tensor layer (dimension-agnostic).
 
     The anisotropic ``Q`` block (rigorously derived and locked to the
@@ -3211,8 +3293,26 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
             _all_zero = False
         if _all_zero:
             EZX = EZY = EXZ = EYZ = None
-    if any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
+    _slanted = not _slant_is_zero(slant)
+    if _slanted and any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
+        # The 1-D tree leaves slant x out-of-plane only partially closed
+        # ('auto' reroutes slanted OOP to convection; the metric-generator
+        # gen2 prototype hit the lossless trap and was never integrated).  The
+        # 2-D derivation does NOT give it for free: composing the constant
+        # shear metric with the pointwise e_zz-Schur reduction is exactly the
+        # ordering gen2 got wrong, and it is UNVALIDATED here.  Refuse loudly
+        # rather than inherit an open corner silently.
+        raise NotImplementedError(
+            "_layer_eigenmodes_tensor: a SLANTED layer with OUT-OF-PLANE "
+            "coupling (eps_xz/yz/zx/zy) is not supported.  The 2-D slant "
+            "metric is validated for IN-PLANE tensors only; the slant x "
+            "out-of-plane composition is unvalidated (the 1-D gen2 precedent "
+            "hit the lossless trap).  Use an in-plane tensor, or model the "
+            "slant as a z-staircase of vertical out-of-plane layers.")
+    if _slanted or any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
         # ---- full-3x3 (out-of-plane) generator path (Li 2003) ---------------
+        # Also the SLANT path: a shear breaks the same [W; -V] <-> -lam
+        # symmetry, so it needs the same 4N generator and generalized cascade.
         Z = xp.zeros((N, N), dtype=_C)
         EZX = Z if EZX is None else xp.asarray(EZX).astype(_C)
         EZY = Z if EZY is None else xp.asarray(EZY).astype(_C)
@@ -3246,22 +3346,9 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
             [1j * (EXZ @ Ez_inv @ Ky),    -1j * (EXZ @ Ez_inv @ Kx)],
         ])
         G = _block(xp, [[A, P], [Q, B]])
-        gam, Vfull = _eig_for(xp)(G)
-        if backend_name(xp) == "jax":
-            fidx, bidx = _select_forward_flux_jax(gam, Vfull, N, xp)
-        else:
-            fidx = _select_forward_flux(gam, Vfull, N)
-            fset = set(np.asarray(to_numpy(fidx)).tolist())
-            bidx = xp.asarray(np.array(sorted(set(range(4 * N)) - fset)))
-        lam = gam[fidx]
-        lam_b = gam[bidx]
-        Vf = Vfull[:, fidx]
-        Vb = Vfull[:, bidx]
-        W = Vf[:2 * N, :]
-        V = Vf[2 * N:, :]
-        Wb = Vb[:2 * N, :]
-        Vbk = Vb[2 * N:, :]
-        return W, V, lam, Wb, Vbk, lam_b
+        if _slanted:
+            G = G + _slant_convection(Kx, Ky, slant, xp)
+        return _generator_modes(G, Kx, xp)
     lam2, W = _eig_for(xp)(P @ Q)
     lam = _sqrt_decay(lam2)
     V = Q @ W @ xp.diag(_inv_lam(lam))

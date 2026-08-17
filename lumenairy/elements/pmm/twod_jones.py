@@ -59,8 +59,10 @@ from ..rcwa._core import (
     _interface_smatrix_general,
     _layer_eigenmodes_tensor,
     _modes_to_M,
+    _norm_slant_pair,
     _propagation_smatrix_general,
     _require_propagating_incidence,
+    _slant_is_zero,
     _symmetry_on,
 )
 from ._core import (
@@ -115,7 +117,8 @@ def _tile_is_offplane(tile33):
 
 
 def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
-                        ox, oy, kxv, kyv, formulation, return_ops=False):
+                        ox, oy, kxv, kyv, formulation, return_ops=False,
+                        slant=None):
     """Fourier-basis layer eigenmodes of a full (3, 3) tensor cell -- the
     SEM-projected operators fed to the shared dimension-agnostic
     :func:`_layer_eigenmodes_tensor` (also used per-layer by
@@ -313,11 +316,22 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
         # F2 (audit): expose the projected operators so the even-parity fold
         # can build (P, Q) via rcwa's _tensor_PQ.  Only IN-PLANE cells fold
         # (the out-of-plane generator breaks the +/-lam symmetry) -> None.
-        if offp:
+        #
+        # A SLANTED cell must refuse here for the SAME reason, and the failure
+        # mode if it does not is the worst class in this repo's taxonomy.  The
+        # fold is taken whenever incidence is normal (kt < 1e-12), and it never
+        # reaches _layer_eigenmodes_tensor -- where the slant convection lives.
+        # So with the fold left on, a slanted layer SILENTLY RETURNS THE
+        # VERTICAL ANSWER: no warning, energy conserved, deterministic, and
+        # wrong by 9.2e-02 (10 deg slant) to 2.5e-01 (35 deg), NOT converging
+        # with n_orders.  Every OBLIQUE test passes with the bug present, so
+        # the gate for this must be a NORMAL-incidence slanted case.
+        # MEASURED 2026-08-16; gate: test_slant_normal_incidence_not_folded.
+        if offp or not _slant_is_zero(slant):
             return None
         return GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ
     return _layer_eigenmodes_tensor(GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ,
-                                    **oop)
+                                    slant=slant, **oop)
 
 
 def pmm_jones_2d(
@@ -340,6 +354,7 @@ def pmm_jones_2d(
     stabilize: bool = False,
     symmetry="auto",
     region_layout=None,
+    slant=None,
 ):
     """Rigorous 2-D anisotropic grating via the hybrid PMM: a single layer whose
     permittivity is a full IN-PLANE tensor field over an axis-aligned
@@ -526,6 +541,7 @@ def pmm_jones_2d(
 
     # Loss-convention bridge: PUBLIC Im(eps)>0 -> internal exp(+iwt); the Jones
     # matrix is conjugated BACK at extraction (the efficiencies are real).
+    slant = _norm_slant_pair(slant, "pmm_jones_2d")
     tile_i = np.conj(tile)
     eps_sup = np.conj(_C(n_superstrate) ** 2)
     eps_sub = np.conj(_C(n_substrate) ** 2)
@@ -534,7 +550,7 @@ def pmm_jones_2d(
         return _pmm_jones_2d_at(
             period_x, period_y, x_walls, y_walls, tile_i, eps_sup, eps_sub,
             depth, wavelength, theta, phi, deg, elements_per_strip, grade,
-            n_orders, formulation, max_nodal_dof, symmetry)
+            n_orders, formulation, max_nodal_dof, symmetry, slant)
 
     if stabilize:
         # consensus over consecutive ODD degrees (the 1-D _stabilize_jones
@@ -561,7 +577,7 @@ def pmm_jones_2d(
 def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
                      eps_sub, depth, wavelength, theta, phi, degree,
                      elements_per_strip, grade, n_orders, formulation,
-                     max_nodal_dof, symmetry=False):
+                     max_nodal_dof, symmetry=False, slant=None):
     """Single fixed-degree tensor solve (eps already internal-convention)."""
     el_x = _axis_elem_counts(period_x, x_walls, degree, elements_per_strip,
                              "pmm_jones_2d", "x")
@@ -615,8 +631,8 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     if _symmetry_on(symmetry) and kt < 1e-12 and formulation != "fff_nv":
         ops = _tensor_layer_modes(
             ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
-            formulation, return_ops=True)
-        if ops is not None:                        # in-plane only
+            formulation, return_ops=True, slant=slant)
+        if ops is not None:                        # in-plane, UNSLANTED only
             from ..rcwa._core import _symmetric_cascade_rt, _tensor_PQ
             GxF, GyF, Cxx, Cxy, Cyx, Cyy, EZZ = ops
             Pt, Qt = _tensor_PQ(GxF, GyF, Cxx, Cxy, Cyx, Cyy, EZZ, np)
@@ -630,7 +646,7 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     if sym_pairs is None:
         modes = _tensor_layer_modes(
             ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
-            formulation)
+            formulation, slant=slant)
 
         if len(modes) == 3:
             # -- in-plane: symmetric +/-lam cascade (the rcwa_jones_2d tail) --

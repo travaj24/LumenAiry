@@ -15,17 +15,19 @@ the shipped 1-D slant solver.  Whichever route's distance to that oracle keeps
 falling is the one that is converging.  This is the arbiter A5 lacked, and it
 is an INDEPENDENT oracle, not an energy check -- the lossless trap is the named
 hazard for this campaign.
+
+RUN WITH WARNINGS ENABLED.  The staircase's high-ns cells are DETECTED by the
+library's energy guard ("near-singular interface mode-match ... reduce
+n_slices"); suppressing warnings here is what produced the initial, wrong
+reading that the divergence was silent.  See S13 of the build doc.
 """
 import time
-import warnings
 
 import numpy as np
-
 import slant2d_proto as SP
+
 from lumenairy.elements.pmm import pmm_jones_1d_slanted, pmm_jones_2d
 from lumenairy.elements.pmm.stack2d import PMM2DStackHybrid
-
-warnings.simplefilter("ignore")
 
 P = 700e-9
 WL = 633e-9
@@ -69,17 +71,13 @@ def cmp_o(m2, R2, T2, o1, R1, T1):
 
 
 def metric(n_ord):
-    SP.set_slant(TX, 0.0, -1j)
-    try:
-        t0 = time.time()
-        o, R, T, J = pmm_jones_2d(P, P, SP.binary_cell(NPIX, DUTY, ER, EG),
-                                  NSUB, NSUP, D, WL, theta=THETA, phi=0.0,
-                                  degree=DEG, n_orders=n_ord,
-                                  formulation="laurent")
-        dt = time.time() - t0
-    finally:
-        SP.set_slant(0.0, 0.0)
-    return _n0(o, R, T), dt
+    """The single exact slanted layer -- now the SHIPPED native path."""
+    t0 = time.time()
+    o, R, T, J = pmm_jones_2d(P, P, SP.binary_cell(NPIX, DUTY, ER, EG),
+                              NSUB, NSUP, D, WL, theta=THETA, phi=0.0,
+                              degree=DEG, n_orders=n_ord,
+                              formulation="laurent", slant=(TX, 0.0))
+    return _n0(o, R, T), time.time() - t0
 
 
 def stair(ns, n_ord):

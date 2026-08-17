@@ -2,9 +2,10 @@
 
 **Date:** 2026-08-16 - **Branch:** `feat/pmm2d-slant-metric` off `origin/main` @ `fc3ac52`
 (the 5.37.0 release commit; ancestry verified) - **Worktree:** `C:/tmp/lum_sl`
-**Status:** PHASE A -- derivation + minimal prototype. Nothing under `lumenairy/` is
-modified; the prototype lives in `validation/slant2d_*.py` and injects the slant by
-monkeypatching, so the shipped package is untouched.
+**Status:** PHASE A (derivation + prototype) **and PHASE B (production integration)**
+both COMPLETE.  Phase A's monkeypatch prototype is retired; the slant now ships as a
+first-class `slant=(t_x, t_y)` parameter of `pmm_jones_2d` and
+`PMM2DStackHybrid.add_layer` (see S7-S14).
 **Binding law:** `docs/TESTING_STANDARDS.md`.
 
 Tags used below: **[A]** analysis/derivation, no run. **[M]** measured, on the build
@@ -14,9 +15,13 @@ recorded in S0. **[H]** hypothesis, consistent with evidence but NOT established
 
 ## VERDICT UP FRONT
 
-**Phase A VALIDATES. The formulation is correct and every gate passes** (S4), at normal,
-oblique and conical incidence, on both a 1-D-oracle-backed degenerate geometry and a
-genuinely 2-D slanted pillar.
+**Phase A VALIDATES and Phase B SHIPPED.** Every gate passes (S4) at normal, oblique and
+conical incidence, on both a 1-D-oracle-backed degenerate geometry and a genuinely 2-D
+slanted pillar; the production integration (S7-S14) is green on two builds with
+different LAPACK, and `slant=0` is byte-identical to the pre-slant library.
+
+**Measured payoff (S11):** *the same answer 2.0-4.6x cheaper, or ~20x more accurate at a
+matched wall-clock budget.*
 
 **But the scoping question outranks the verdict, and it is not a technical question:**
 
@@ -501,6 +506,13 @@ of both 2-D routes.
 | 11 | staircase ns=8 | 6.438e-03 | 21.58 s | 1.98e-03 |
 | 11 | staircase ns=16 | **1.055e-02** | 39.80 s | 7.51e-03 |
 | 11 | staircase ns=32 | **1.327e-02** | 78.88 s | 8.69e-03 |
+| 15 | **metric layer** | **3.523e-03** | 51.44 s | 8.04e-04 |
+
+**[M] The metric layer tracks the vertical control at every truncation**, which is the
+cleanest single statement of the formulation's correctness: metric
+`1.066e-02 / 7.945e-03 / 3.523e-03` against the vertical control's
+`1.05e-02 / 6.41e-03 / 3.45e-03` (S2) at `n_orders = 7 / 11 / 15`. The slant adds no
+error beyond the solver's own floor, and follows it down.
 
 **The turnaround indicts the staircase, not the formulation.** At `n_orders=7` the
 staircase converges to a limit **2.28e-02** from the exact oracle while the metric layer
@@ -744,3 +756,286 @@ incidence across `slant = 0` and `slant = 1e-6`. Note that a fix must first deci
 of the two conventions is canonical; `pmm_jones_1d` and the slant path currently disagree
 at `theta = 0` as well, so "make the slant path match the vertical path" is a real
 behaviour change to the vertical path's sign or the slant path's, not a no-op.
+
+---
+
+## 6. Artefacts and reproduction
+
+Nothing under `lumenairy/` is modified. `validation/` is ruff-excluded by
+`pyproject.toml`; the only ruff findings on this branch are 3 pre-existing ones in
+`scripts/_g8_c15lad.py` (untouched, `acc76731`).
+
+| file | what |
+|---|---|
+| `validation/slant2d_proto.py` | shared exact-wall cell builders.  Phase A's monkeypatch prototype lived here and is RETIRED -- Phase B ships the slant natively, and keeping the patch would shadow the code under test |
+| `validation/slant2d_arbiter.py` | THE ARBITER -- both 2-D routes vs the exact 1-D oracle (S3.7, S13).  Run it WITHOUT suppressing warnings |
+| `validation/slant2d_envelope.py` | S12/S11 -- the cross-build bar envelopes and the interleaved economics |
+| `validation/slant1d_floor_probe.py` | the shipped 1-D slant floor vs tilt (reproduces `add_sheared_grating`'s docstring table) |
+| `validation/slant1d_jones_sign.py` | S5's reproduction |
+| `tests/unit/test_pmm2d_slant_metric.py` | the 25 Phase B gates (S12) |
+
+Phase A's `slant2d_floor.py` / `slant2d_signscan.py` / `slant2d_phaseA.py` /
+`slant2d_phaseB.py` were deleted with the prototype they depended on: every claim they
+carried is now either a gate in the test suite or a row in `slant2d_envelope.py`, both of
+which run against the SHIPPED path rather than a patched one.
+
+```
+export PYTHONPATH=<repo>:<repo>/validation
+export OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4
+python -m pytest tests/unit/test_pmm2d_slant_metric.py -q     # ~21 s, the 25 gates
+python validation/slant2d_envelope.py                          # ~1 min, bars + economics
+python validation/slant2d_arbiter.py                           # ~35 min, S13 (keep warnings ON)
+```
+
+**[Operational note, recorded so it is not repeated.]** The arbiter's captured log was
+copied and deleted **while the job was still writing to it**, which destroyed the
+`n_orders = 15` staircase rows; only the `n_orders = 15` metric row survived in the
+snapshot. That block was re-run separately. Never snapshot a redirect target before its
+writer has exited -- wait for the process, then copy.
+
+**[Coverage note.]** This is a SINGLE-BUILD campaign (S0). Per
+`docs/TESTING_STANDARDS.md` rule 5, none of these numbers may become a test bar until
+re-measured on a second build with the derivation recorded; they establish *shape*
+(convergence direction, null-control exactness, sign uniqueness, the silent-wrong at
+normal incidence), which is what the Phase A go/no-go turns on.
+
+---
+
+# PHASE B -- production integration
+
+**Status:** IMPLEMENTED on `feat/pmm2d-slant-metric`. The Phase A monkeypatch prototype
+is retired; the slant is now a first-class parameter of the shipped 2-D solvers.
+
+## 7. API shape
+
+```python
+# ONE exact slanted layer -- no z-staircase
+stack.add_layer(thickness, eps_tensor_cell=cell, slant=(t_x, t_y))
+stack.add_layer(thickness, eps_cell=pixels,      slant=t_x)      # scalar -> (t_x, 0)
+
+# and on the single-layer function
+pmm_jones_2d(Px, Py, cell, n_sub, n_sup, depth, wl, slant=(t_x, t_y), ...)
+```
+
+`t` is a **tangent** -- lateral walk per unit depth, so `t_x = tan(wall_tilt_x)`. The
+cell you pass is the cross-section at the layer's **TOP** face, and the whole
+cross-section translates by `(t_x, t_y) * thickness` metres from top to bottom. This
+mirrors `PMMStack.add_sheared_grating`'s top-anchored frame (`stack.py:690-692`), and it
+is the convention validated against the 1-D oracle in S3.4 / S3.7.
+
+`slant=None` / `0` / `(0, 0)` is a plain vertical layer and is **byte-identical** to the
+pre-slant library (gate: `test_slant_zero_is_byte_identical_to_the_vertical_path`) -- the
+zero case routes back to the cheaper symmetric 2N path, it does not merely agree with it.
+
+### 7.1 Where the slant enters (7 sites, all shipped)
+
+| site | change |
+|---|---|
+| `rcwa/_core.py` `_slant_convection` / `_norm_slant_pair` / `_slant_is_zero` / `_generator_modes` | new shared helpers; the convection is `-i (t_x Kx + t_y Ky)` on all four diagonal field blocks |
+| `rcwa/_core.py` `_layer_eigenmodes_tensor(..., slant=)` | a slanted layer forces the 4N generator (reusing the shipped out-of-plane branch) and **refuses** slant x out-of-plane |
+| `pmm/twod.py` `_layer_modes_projected(..., slant=)` | the SCALAR patterned path needs its own generator branch -- it builds its own `(P, Q)` and never goes through `_layer_eigenmodes_tensor` |
+| `pmm/twod_jones.py` `_tensor_layer_modes(..., slant=)` | threads the slant; **returns `None` from `return_ops` when slanted** (the F2 gate, S8) |
+| `pmm/twod_jones.py` `pmm_jones_2d(..., slant=)` | normalizes at the entry point; threads through `_pmm_jones_2d_at` |
+| `pmm/stack2d.py` `add_layer(..., slant=)` + `_append_patterned` + `_geom_key` | public API, layer storage, **cache key** (S9) |
+| `pmm/stack2d.py` `solve()` symmetry gate | excludes slanted layers from the stack-level even-parity fold |
+
+A slanted layer returns the generator 6-tuple, so `_build_layer_modes` reports `'gen'`
+and the stack promotes to the generalized forward/backward cascade -- exactly as an
+out-of-plane layer already did. The generalized cascade already handled **mixed**
+`sym`/`gen` layers (`stack2d.py` `_blocks`), so slanted and vertical layers compose with
+no cascade change at all.
+
+## 8. The F2 even-parity fold gate, and its fail-before
+
+First item, because it is the worst failure this feature can produce.
+
+At normal incidence (`kt < 1e-12`) the F2 fold is eligible. It builds its own `(P, Q)`
+from `return_ops` and **never reaches the modal build** where the convection lives. A
+shear breaks the order-flip symmetry the fold assumes, so an ungated slanted layer
+**returns the vertical answer**: energy conserved, nothing warned, deterministic.
+
+**[M] Measured with the gate removed** (`n_orders=7`, y-uniform grating, `eps` 4/1):
+
+| slant | ungated result | distance from the correct slanted answer |
+|---|---|---|
+| 10 deg | exactly the vertical answer | 9.23e-02 |
+| 20 deg | exactly the vertical answer | 1.70e-01 |
+| 35 deg | exactly the vertical answer | 2.52e-01 |
+
+and it does **not** converge with `n_orders` (8.3e-02 at `n=11`, 8.5e-02 at `n=15` for the
+10 deg case) -- the signature of a bypassed path, not of a discretization error. **Every
+oblique test passes with the bug present**, which is why the gate's test is a
+NORMAL-incidence case.
+
+`test_slant_at_normal_incidence_is_not_silently_folded` carries both arms
+unconditionally: the fixed path must move the answer by `> 1e-2`; then the gate is
+removed with `monkeypatch.setattr(TJ, "_slant_is_zero", lambda _s: True)` -- the exact
+pre-fix behaviour -- and the test asserts the ungated answer equals the vertical answer
+**exactly (`== 0.0`)**, differs from the correct one by `> 1e-2`, and still closes energy
+to `1e-2`. That last assertion is the point: no closure check could ever have caught this.
+
+## 9. Cache keys -- the engineered collision
+
+The slant vector is in `_geom_key`, which `_mode_key` folds into its `"geom"` branch, so a
+layer differing ONLY in slant cannot hit another's cached modal solve.
+
+`test_slant_is_in_the_cache_key_no_collision` engineers the contention rather than hoping
+for it: both layers are added to the SAME stack instance, so they genuinely share
+`_geom_cache` / `_eig_cache`, and a `(t=0.20, t=0.45)` stack is compared against a
+`(t=0.20, t=0.20)` stack. Pre-fix these agree exactly (the second layer serves the
+first's modes); post-fix they differ by far more than `1e-6`. The test also asserts the
+two `_geom_key`s differ directly, so the claim does not rest only on the answer.
+
+**[A] The uniform-tile collapse is deliberately NOT slant-keyed**, and that is correct
+physics rather than an oversight: `_mode_key` collapses a constant-valued tile to the
+uniform key, and a shear of a homogeneous medium is a pure coordinate change. Measured at
+machine precision (S3.1), so collapsing is if anything the more accurate branch. Gate:
+`test_slant_uniform_layer_is_a_noop`.
+
+## 10. What refuses, and why
+
+| combination | behaviour |
+|---|---|
+| slant x **out-of-plane** tensor (`e_xz/yz/zx/zy`) | `NotImplementedError`. Composing a constant shear metric with the pointwise `e_zz`-Schur reduction is exactly the ordering the 1-D `gen2` prototype got wrong (it hit the lossless trap), and it is unvalidated here. The 1-D precedent is the same refusal. |
+| slant x **dispersive** (callable) layer | `NotImplementedError` -- the slant would have to be re-resolved per wavelength. |
+| slant x **traced (JAX)** layer | `NotImplementedError` -- the 2-D JAX surface does not implement the generalized cascade. |
+| non-finite / wrong-length slant | `ValueError` at the `add_layer` / `pmm_jones_2d` entry. |
+
+Each refusal is gated by a test, and the out-of-plane one additionally asserts the SAME
+cell **without** slant still solves -- so the refusal is about the combination, not a
+regression of out-of-plane support.
+
+## 11. [M] Economics -- metric layer vs staircase, both builds
+
+TWO genuinely 2-D slanted pillars, `P = 500 nm`, `d = 250 nm`, `n_orders = 5`:
+
+* **cell A** -- 0.35 x 0.35 of the cell, `eps` 2.25/1, `t_x = 0.400` (21.8 deg)
+* **cell B** -- 0.25 x 0.26 of the cell, `eps` 4.00/1, `t_x = 0.600` (31.0 deg): a
+  steeper wall on a higher-contrast, narrower pillar
+
+**Interleaved**: the metric layer is re-timed around every staircase rung and the median
+taken, so machine-load drift cannot systematically favour either route. "err" is the
+distance to the single metric layer, so the last rung is an upper bound on the metric
+layer's own residual.
+
+**Errors are BIT-IDENTICAL on both builds** (all 30 cells); only wall-clock differs.
+
+| cell A | ns=1 | ns=2 | ns=4 | ns=8 | ns=16 |
+|---|---|---|---|---|---|
+| normal | 3.398e-03 | 9.674e-04 | 1.928e-04 | 7.548e-05 | 5.666e-05 |
+| oblique | 9.608e-03 | 2.854e-03 | 6.506e-04 | 2.548e-04 | 1.372e-04 |
+| conical | 7.223e-03 | 2.360e-03 | 5.037e-04 | 2.004e-04 | 1.077e-04 |
+
+| cell B | ns=1 | ns=2 | ns=4 | ns=8 | ns=16 |
+|---|---|---|---|---|---|
+| normal | 2.314e-02 | 1.300e-02 | 3.091e-03 | **3.059e-04** | 5.478e-04 |
+| oblique | 6.152e-02 | 3.474e-02 | 9.793e-03 | 1.752e-03 | 6.191e-04 |
+| conical | 5.812e-02 | 3.160e-02 | 8.689e-03 | 1.373e-03 | 9.713e-04 |
+
+| cost, x the metric layer | ns=1 | ns=2 | ns=4 | ns=8 | ns=16 |
+|---|---|---|---|---|---|
+| build W (metric 0.30-0.34 s) | 0.33-0.36 | 0.61-0.67 | 1.16-1.25 | 2.23-2.50 | 4.21-5.31 |
+| build L (metric 0.25-0.27 s) | 0.26-0.34 | 0.51-0.58 | 1.04-1.10 | 1.93-2.21 | 3.92-4.75 |
+
+**[M] Cell B's normal-incidence row reproduces the S13 non-monotonicity in miniature**:
+`ns=8` gives 3.059e-04 and `ns=16` gets *worse* at 5.478e-04. Bit-identical on both
+builds, so it is deterministic, not noise -- and it is another reason the metric layer's
+"bound" column is an over-estimate of its true error on the harder cell.
+
+**The headline, stated honestly.**
+
+* **At MATCHED wall-clock** the staircase can only afford `ns = 2`. Oblique: staircase
+  2.854e-03 against the metric layer's 1.372e-04 bound -- the metric layer is **~21x more
+  accurate for the same money** (normal 17x, conical 22x).
+* **At typical practice `ns = 8-16`** the staircase finally reaches the metric layer's
+  accuracy, and pays **2.0x to 4.6x** the metric layer's cost to do it.
+
+So: *same answer 2-4.6x cheaper, or ~20x more accurate at a matched budget.* Real, and
+bigger than the Phase A estimate (which used a harsher `eps` 4/1 cell where the 4N
+overhead dominated) -- but still a constant-factor win, not a change of complexity class.
+The 4N generator overhead bounds it: a slanted layer costs ~3-4 vertical slices before it
+buys any accuracy.
+
+## 12. Test inventory
+
+`tests/unit/test_pmm2d_slant_metric.py` -- 25 tests, ~21 s, **green on both builds**
+(W: CPython 3.14.6 / numpy 2.4.4 / scipy 1.17.1; L: CPython 3.12.3 / numpy 1.26.4 /
+scipy 1.11.4, a different LAPACK).
+
+| test | claim | kind |
+|---|---|---|
+| `..._zero_is_byte_identical_...` | `slant=0` perturbs nothing | exact equality |
+| `..._uniform_layer_is_a_noop` | shear of a homogeneous medium | decision; bar 1e-11 vs 1.03e-13 envelope |
+| `..._along_an_invariant_axis_is_a_noop` | the VECTOR claim (no 1-D analogue) | decision; same bar |
+| `..._matches_the_shipped_1d_slant_solver` | independent oracle | RELATIVE to the in-run control (3x; worst 1.41) |
+| `..._at_normal_incidence_is_not_silently_folded` | the F2 gate | fail-before + fixed, both unconditional |
+| `..._is_in_the_cache_key_no_collision` | dedup correctness | engineered collision |
+| `..._with_out_of_plane_tensor_refuses` + 3 more | the refusals | decisions |
+| `..._through_every_cascade_mode` | fused / tree / monolithic | re-association residual, 1e-9 |
+| `..._mixes_with_vertical_layers` | mixed sym/gen cascade | exact + signal |
+| `..._staircase_converges_toward_...` | the physics claim | DIRECTION, not a floor |
+
+**No bar in this file is an absolute floor on a truncation-limited quantity.** The oracle
+test compares against a control it measures in the same run, because the hybrid's Fourier
+floor moves with `n_orders`, geometry and build -- pinning it would be exactly the S4
+shape `TESTING_STANDARDS.md` forbids. Every numeric bar was re-measured on both builds
+before being written (`validation/slant2d_envelope.py`).
+
+**[M] Cross-build envelopes**, 2026-08-16:
+
+| bar | build W | build L | bar written |
+|---|---|---|---|
+| uniform-slant no-op | 5.462e-14 | 1.031e-13 | 1e-11 |
+| invariant-axis no-op | 3.852e-14 | 7.250e-14 | 1e-11 |
+| 1-D oracle / control ratio | 1.41 | 1.41 (bit-identical) | 3.0 |
+
+## 13. [M] The staircase-divergence finding -- reproduction, and a correction
+
+Found while arbitrating Phase A's A5 gate. On the HARSH cell (`eps` 4/1, `P = 700 nm`,
+y-uniform, 25 deg slant, `theta = 0.20`), measured against the exact 1-D oracle:
+
+| n_orders | ns=1 | ns=2 | ns=4 | ns=8 | ns=16 | ns=32 | metric layer |
+|---|---|---|---|---|---|---|---|
+| 7 | 2.189e-01 | 6.006e-02 | 3.051e-02 | 2.467e-02 | 2.313e-02 | 2.280e-02 | **1.066e-02** |
+| 11 | 2.296e-01 | 6.914e-02 | 2.109e-02 | **6.438e-03** | 1.055e-02 | 1.327e-02 | **7.945e-03** |
+| 15 | 2.261e-01 | 6.836e-02 | 5.221e-02 | 3.408e-01 | 1.493e+01 | -- | **3.523e-03** |
+
+At `n_orders = 11` the staircase has a **sweet spot at ns=8** and gets monotonically worse
+on either side; at `n_orders = 15` it **diverges outright** (1.493e+01, closure 2.027e+01).
+The metric layer is stable across all three truncations and tracks the vertical control
+(S3.7).
+
+**[M] IMPORTANT CORRECTION, recorded because the first reading of this was wrong.** The
+library **does** detect it, loudly:
+
+```
+UserWarning: PMMStack.solve: energy not conserved (max R+T = 197 > 1) -- a
+near-singular interface mode-match in the cascade (e.g. too many tapered
+slices). The result is unreliable; reduce n_slices or raise degree.
+```
+
+The first pass called the divergence "silent" because the measurement scripts ran under
+`warnings.simplefilter("ignore")`. Re-measured with warnings enabled, the guard fires on
+every affected cell. So this is a **detected, documented instability of deep staircases**,
+not a silent-wrong and not a new library defect -- and the existing warning already says
+exactly the right thing. (This is the second time in this campaign that suppressing
+output produced a wrong conclusion; the first was deleting a log while its writer was
+still running. Both are recorded rather than quietly corrected.)
+
+Reproduce with `validation/slant2d_arbiter.py`, and do **not** suppress warnings.
+
+**Scope decision on the requested `n_slice` warn: NOT taken, deliberately.** The existing
+energy guard already fires on precisely the affected cells with an actionable message. A
+second warning keyed on an `ns` threshold would be worse: the onset is strongly geometry-
+and truncation-dependent (`ns=8` is the *best* rung at `n_orders=11` and already diverging
+at `n_orders=15`), so any fixed threshold would be an S1/S4-shaped per-build constant --
+the exact thing `TESTING_STANDARDS.md` forbids -- and it would fire on healthy stacks
+while missing sick ones. The measured-closure guard is the right detector because it
+measures the failure instead of predicting it.
+
+## 14. Not fixed here
+
+S5 (the shipped 1-D slanted-Jones p-row sign discontinuity) stays **open**, deliberately:
+it is a 1-D path, this branch changes no 1-D file, and a fix must first decide which of
+two disagreeing conventions is canonical. It is recorded in S5 with its reproduction as a
+candidate defect for a separate small change.

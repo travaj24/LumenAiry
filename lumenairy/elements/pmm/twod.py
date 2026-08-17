@@ -618,7 +618,7 @@ def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
 
 
 def _layer_modes_projected(GxF, GyF, EpsF, EinvF, EpnF, formulation="li",
-                           EpnxF=None, EpnyF=None):
+                           EpnxF=None, EpnyF=None, slant=None):
     """Projected-layer modal solve.  Under ``formulation='li'`` the eps
     operator in the ``Q`` block multiplying each transverse E component is
     per-slot routable (audit P3-33): ``EpnxF`` lands on the Ex slot and
@@ -638,6 +638,16 @@ def _layer_modes_projected(GxF, GyF, EpsF, EinvF, EpnF, formulation="li",
     EPS_inv = EinvF if formulation == "li" else np.linalg.inv(EpsF)
     P = np.block([[GxF @ EPS_inv @ GyF, I - GxF @ EPS_inv @ GxF],
                   [GyF @ EPS_inv @ GyF - I, -GyF @ EPS_inv @ GxF]])
+    from ..rcwa._core import _block, _generator_modes, _slant_convection, _slant_is_zero
+    if not _slant_is_zero(slant):
+        # SLANTED layer: the shear breaks the [W; -V] <-> -lam symmetry, so the
+        # 2N eig(P@Q) is invalid and the 4N first-order generator runs instead
+        # (A = B = 0 here -- an in-plane cell has no out-of-plane cross blocks).
+        # Returns the GENERATOR 6-tuple; the caller must use the generalized
+        # cascade.  See BUILD_PMM2D_SLANT_METRIC_2026_08_16.md S1.
+        Z = np.zeros_like(P)
+        G = _block(np, [[Z, P], [Q, Z]]) + _slant_convection(GxF, GyF, slant, np)
+        return _generator_modes(G, GxF, np)
     lam2, W = np.linalg.eig(P @ Q)
     lam = _sqrt_decay(lam2)
     V = Q @ W @ np.diag(_inv_lam(lam))

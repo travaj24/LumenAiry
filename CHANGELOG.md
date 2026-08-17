@@ -4,6 +4,65 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- a native 2-D slant metric: a slanted feature is ONE layer, not a staircase
+
+`pmm_jones_2d(..., slant=(t_x, t_y))` and
+`PMM2DStackHybrid.add_layer(..., slant=(t_x, t_y))` solve a slanted (tilted-axis,
+CONSTANT cross-section) feature as one exact layer instead of an N-slice
+z-staircase.  `t` is a tangent -- lateral walk per unit depth, so
+`t_x = tan(wall_tilt_x)` -- and the cell you pass is the cross-section at the
+layer's TOP face.  This is the 2-D analogue of `PMMStack.add_sheared_grating`.
+
+**Why one layer is exact at any slant.**  In the sheared frame `u = x - t_x z`,
+`v = y - t_y z`, `w = z` the structure is z-invariant and the Jacobian is unit
+upper-triangular, so `det J = 1` EXACTLY: the mass matrix is unchanged, there is
+no dilation generator, and `sqrt(g) = 1`.  The metric contributes
+`G_t = I + t t^T` -- a CONSTANT rank-one update, so it never reaches the Fourier
+factorization and no Li rule is stressed -- plus a convection `(t . grad)` that is
+exactly z-free.  Implemented in the first-order form: `-i (t_x Kx + t_y Ky)` added
+to each of the four diagonal field blocks of the 4N generator, which with
+`t_y = 0` reduces SYMBOLICALLY to the shipped 1-D `tan_conv * Dopx`.  The root
+reason the 2-D shear is no harder than the 1-D one is that `w = z` is untouched,
+so the flux-based mode selector stays valid and the far field stays a diagonal
+phase.  Full derivation and evidence:
+`docs/audits/BUILD_PMM2D_SLANT_METRIC_2026_08_16.md`.
+
+**Measured payoff** (2-D slanted pillar, normal/oblique/conical, both builds,
+interleaved timings): *the same answer at 2.0-4.6x lower cost, or ~20x better
+accuracy at a matched wall-clock budget* (at matched cost the staircase affords
+only `ns=2`: 2.854e-03 against the slanted layer's 1.372e-04 bound).  The win is
+a constant factor, not a complexity change -- the slant runs the 4N generator, so
+one slanted layer costs ~3-4 vertical slices before it buys anything.
+
+`slant=0` / `None` is BYTE-IDENTICAL to the pre-slant library (it routes back to
+the symmetric 2N path).  A slanted layer promotes the stack to the generalized
+forward/backward cascade, as an out-of-plane layer already did, and composes with
+vertical layers; all three cascade modes (`fused` / `tree` / `monolithic`) accept
+it, and the slant vector is part of the geometry/modal cache key so two layers
+differing only in slant cannot share a solve.
+
+REFUSES, each with a test: slant x **out-of-plane** tensor (the constant shear
+metric composed with the pointwise `e_zz`-Schur reduction is exactly the ordering
+the 1-D `gen2` prototype got wrong -- unvalidated, so it raises rather than being
+inherited silently), slant x **dispersive** (callable) layers, and slant x
+**traced (JAX)** layers.
+
+**NOTE this models a SLANT, not a TAPER.**  A tapered (shrinking cross-section)
+feature gets nothing from it -- no shear absorbs a dilation, measured at 1.00x.
+Tapers still use `add_tapered_pillar` / `add_tapered_pillars`.
+
+### Fixed -- a slanted layer at NORMAL incidence would have returned the vertical answer
+
+The F2 even-parity fold is eligible whenever incidence is normal, and it builds
+its own `(P, Q)` from `return_ops` without ever reaching the modal build.  A shear
+breaks the order-flip symmetry the fold assumes, so an ungated slanted layer
+returned THE VERTICAL ANSWER -- energy conserved, nothing warned, deterministic,
+and wrong by 9.2e-02 (10 deg) to 2.5e-01 (35 deg), not converging with
+`n_orders`.  Both the `pmm_jones_2d` and `PMM2DStackHybrid` folds now exclude
+slanted layers.  Gated by `test_slant_at_normal_incidence_is_not_silently_folded`,
+which carries an unconditional fail-before arm (every OBLIQUE test passed with the
+bug present, so the gate has to be a normal-incidence case).
+
 ## [5.37.0] — 2026-08-16
 
 ### Changed -- the tangent-facet family is row-banded (byte-identically)

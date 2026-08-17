@@ -34,10 +34,12 @@ from ..rcwa._core import (
     _grazing_safe_wavelength,
     _interface_smatrix_general,
     _modes_to_M,
+    _norm_slant_pair,
     _propagation_smatrix_general,
     _propagation_star,
     _propagation_star_general,
     _require_propagating_incidence,
+    _slant_is_zero,
     _symmetry_on,
 )
 from ._core import (
@@ -334,13 +336,17 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 tuple(np.ravel(L["xw"])), tuple(np.ravel(L["yw"])),
                 tuple(np.ravel(L["el_x"])), tuple(np.ravel(L["el_y"])),
                 float(self.period_x), float(self.period_y),
-                int(self.degree), bool(self.grade), int(self.n_orders))
+                int(self.degree), bool(self.grade), int(self.n_orders),
+                # SLANT (2026-08-16): two layers identical except for their
+                # slant vector have DIFFERENT modes and must not share a
+                # cached solve.  Gate: test_slant_cache_key_no_collision.
+                L.get("slant", (0.0, 0.0)))
 
     # ------------------------------------------------------------------ #
     # builder
     # ------------------------------------------------------------------ #
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
-                  eps_tensor_cell=None, region_layout=None):
+                  eps_tensor_cell=None, region_layout=None, slant=None):
         """Append one layer: a UNIFORM film (``eps``, scalar), a patterned
         scalar cell (``eps_cell``, the :func:`pmm_efficiency_2d_cell` pixel
         grid), or an in-plane anisotropic tensor cell (``eps_tensor_cell``,
@@ -358,7 +364,34 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         extraction from pixel values is data-dependent control flow a
         tracer cannot drive), the traced cell provides each region's value,
         read at the region's first pixel.  Traced ``eps_tensor_cell``
-        raises (the 2-D JAX surface is scalar)."""
+        raises (the 2-D JAX surface is scalar).
+
+        ``slant=(t_x, t_y)`` (or a scalar ``t_x``) makes this ONE EXACT
+        SLANTED layer instead of a z-staircase: the cell's whole cross-section
+        translates linearly with depth, by ``(t_x, t_y) * thickness`` in
+        metres from the layer's TOP face to its bottom.  ``t`` is a TANGENT
+        (lateral walk per unit depth), so ``t_x = tan(wall_tilt_x)``; ``0``
+        (the default) is a plain vertical layer and stays BIT-IDENTICAL to the
+        pre-slant library.  The cell you pass is the cross-section at the
+        layer's **top** face.
+
+        This is exact at any slant magnitude -- the sheared frame's metric is
+        z-invariant and ``det J = 1``, so one eigensolve does the whole layer
+        (derivation: ``docs/audits/BUILD_PMM2D_SLANT_METRIC_2026_08_16.md``).
+        It is the 2-D analogue of ``PMMStack.add_sheared_grating``.
+
+        RESTRICTIONS, all raising: a slanted layer promotes the whole stack to
+        the generalized forward/backward cascade (as an out-of-plane layer
+        does), so it is refused on DISPERSIVE (callable) and TRACED (JAX)
+        layers, and combined with OUT-OF-PLANE tensor components
+        (``eps_xz/yz/zx/zy``).  A slant on a UNIFORM layer is accepted and is
+        a physical no-op (a shear of a homogeneous medium is a coordinate
+        change; measured <= 1.2e-13).
+
+        NOTE this models a slanted (tilted-axis, CONSTANT cross-section)
+        feature.  It does NOT model a TAPER (shrinking cross-section) -- no
+        shear absorbs a dilation, measured at 1.00x.  For tapers use
+        :meth:`add_tapered_pillar` / :meth:`add_tapered_pillars`."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
         self._modal = None      # ... and retained per-order amplitudes (B)
         # F4 part 2: geometry changed -> drop the caches.  REBIND rather than
@@ -388,6 +421,22 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 "PMM2DStackHybrid.add_layer: pass exactly ONE of eps (uniform), "
                 "eps_cell (scalar pixel grid) or eps_tensor_cell "
                 "((Sx, Sy, 3, 3) in-plane tensor grid).")
+        _sl = self._norm_slant(slant, "PMM2DStackHybrid.add_layer")
+        if not _slant_is_zero(_sl):
+            # Guard the surfaces the slant is NOT validated on, loudly, rather
+            # than let it be silently dropped by a branch that never reads it.
+            if callable(eps) or callable(eps_cell) or callable(eps_tensor_cell):
+                raise NotImplementedError(
+                    "PMM2DStackHybrid.add_layer: slant= is not supported on a "
+                    "DISPERSIVE (callable) layer; the slant vector would have "
+                    "to be re-resolved per wavelength.  Build the layer at "
+                    "each wavelength explicitly.")
+            if is_jax_array(eps_cell) or is_jax_array(eps_tensor_cell):
+                raise NotImplementedError(
+                    "PMM2DStackHybrid.add_layer: slant= is not supported on a "
+                    "TRACED (JAX) layer.  The slanted layer runs the 4N "
+                    "generator and the generalized cascade, which the 2-D JAX "
+                    "surface does not implement.")
         for slot, v in (("eps", eps), ("eps_cell", eps_cell),
                         ("eps_tensor_cell", eps_tensor_cell)):
             if callable(v):
@@ -442,7 +491,8 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 raise ValueError(
                     "PMM2DStackHybrid.add_layer: eps_cell must be a scalar (Sx, Sy) "
                     "grid; pass tensor cells via eps_tensor_cell.")
-            self._append_patterned("scalar", t_store, xw, yw, tile)
+            self._append_patterned("scalar", t_store, xw, yw, tile,
+                                   slant=slant)
             return self
         if is_jax_array(eps_tensor_cell):
             raise NotImplementedError(
@@ -460,10 +510,21 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # OUT-OF-PLANE tensor layers are allowed (v5.14 roadmap item 3): any
         # such layer promotes the WHOLE cascade to the generalized S-matrix
         # in solve() (the 1-D PMMStack precedent).
-        self._append_patterned("tensor", t_store, xw, yw, tile)
+        self._append_patterned("tensor", t_store, xw, yw, tile,
+                               slant=slant)
         return self
 
-    def _append_patterned(self, kind, t, xw, yw, tile):
+    @staticmethod
+    def _norm_slant(slant, where):
+        """Normalize a slant vector to a ``(t_x, t_y)`` float pair.
+
+        ``None`` / ``0`` -> ``(0.0, 0.0)`` (a VERTICAL layer, which keeps the
+        cheaper symmetric 2N path and stays byte-identical to the pre-slant
+        library).  A scalar is taken as ``t_x``.
+        """
+        return _norm_slant_pair(slant, where)
+
+    def _append_patterned(self, kind, t, xw, yw, tile, slant=None):
         el_x = _axis_elem_counts(self.period_x, xw, self.degree, self.n_el,
                                  "PMM2DStackHybrid.add_layer", "x")
         el_y = _axis_elem_counts(self.period_y, yw, self.degree, self.n_el,
@@ -473,7 +534,9 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         _validate_cell_cost("PMM2DStackHybrid.add_layer", el_x, el_y, self.degree,
                             self.max_nodal_dof)
         self._layers.append(dict(kind=kind, t=t, xw=list(xw), yw=list(yw),
-                                 tile=tile, el_x=el_x, el_y=el_y))
+                                 tile=tile, el_x=el_x, el_y=el_y,
+                                 slant=self._norm_slant(
+                                     slant, "PMM2DStackHybrid.add_layer")))
 
     def add_tapered_pillars(self, thickness, *, pillars, eps_host,
                             n_slices=8):
@@ -725,6 +788,16 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         the branch that actually runs: ``_homogeneous_modes`` on the single
         value), so a patterned-but-constant cell and a genuine film with the
         same eps correctly share one modal set.
+
+        SLANT (2026-08-16).  The slant vector rides in via :meth:`_geom_key` on
+        the ``"geom"`` branch.  It is deliberately ABSENT from the two uniform
+        branches, and that is correct physics rather than an oversight: a shear
+        of a homogeneous medium is a pure coordinate change, so a slanted
+        uniform layer IS the vertical uniform layer.  MEASURED at machine
+        precision over 5-40 deg, both x-only and diagonal slants, at normal and
+        oblique incidence (<= 1.2e-13; the residual is the slanted generator's
+        own noise, so collapsing is if anything the more accurate branch).
+        Gate: ``test_slant_uniform_layer_is_a_noop``.
         """
         common = (float(wl), float(k0), float(kx0), float(ky0),
                   float(self.period_x), float(self.period_y),
@@ -775,16 +848,19 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                                           self.period_x, self.period_y)
                     if L["kind"] == "scalar" else None)
             self._geom_cache.put(gkey, _freeze_cached((ax, ay, lops)))
+        sl = L.get("slant", (0.0, 0.0))
         if L["kind"] == "scalar":
             GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
             GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
-            Wl, Vl, lam = _layer_modes_projected(
+            out = _layer_modes_projected(
                 GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
-                formulation=self.formulation)
-            return ("sym", Wl, Vl, lam)
+                formulation=self.formulation, slant=sl)
+            # a SLANTED scalar layer comes back as the generator 6-tuple
+            return (("gen",) + tuple(out) if len(out) == 6
+                    else ("sym",) + tuple(out))
         ez_rule = ("li" if self.formulation == "li" else "laurent")
         out = _tensor_layer_modes(ax, ay, L["xw"], L["yw"], tile_i, k0, kx0,
-                                  ky0, ox, oy, kxv, kyv, ez_rule)
+                                  ky0, ox, oy, kxv, kyv, ez_rule, slant=sl)
         return (("gen",) + out if len(out) == 6 else ("sym",) + tuple(out))
 
     def _layer_mode_sets(self, kxv, kyv, ox, oy, kx0, ky0, k0, wl,
@@ -1159,9 +1235,16 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # tensor).  Runs the Redheffer recursion in the (Nf+1)-d EVEN sector;
         # a per-layer flip-invariance guard returns None -> the full solve.
         sym_pairs = None
+        # SLANT (2026-08-16): a slanted layer must NEVER take the even-parity
+        # fold.  The fold assumes every operator commutes with the order flip
+        # J:(m,n)->(-m,-n); a shear breaks that symmetry, and because the fold
+        # bypasses the modal build entirely it would return the VERTICAL
+        # answer -- energy-conserving, unwarned, ~1e-01 wrong.  This is the
+        # stack-level twin of the pmm_jones_2d gate in twod_jones.py.
         if (self.symmetry and not retain_internal
                 and abs(kx0) < 1e-12 and abs(ky0) < 1e-12
-                and all(L["kind"] != "tensor" for L in self._layers)):
+                and all(L["kind"] != "tensor" for L in self._layers)
+                and all(_slant_is_zero(L.get("slant")) for L in self._layers)):
             from ..rcwa._core import _symmetric_cascade_rt
             _specs, _depths = self._symmetric_layer_specs(
                 kxv, kyv, ox, oy, kx0, ky0, k0)
