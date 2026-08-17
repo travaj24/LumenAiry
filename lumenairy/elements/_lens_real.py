@@ -208,7 +208,8 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
                                n_samples: int = 4096,
                                field_check_n: int = 512,
                                field_check_dx: Optional[float] = None,
-                               max_field_rel_error: float = 1e-3
+                               max_field_rel_error: float = 1e-3,
+                               on_partial_aperture: str = 'warn'
                                ) -> Dict[str, Any]:
     """Estimate the error incurred by float32 sag precision for one
     prescription, so a caller can decide whether
@@ -238,6 +239,76 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
     ``ok`` requires BOTH: OPD peak < lambda/50 AND field error <
     ``max_field_rel_error``.
 
+    .. warning::
+       ``ok`` is a MEASUREMENT OVER THE CHECKED WINDOW, not a bound.  The
+       pitch and the WINDOW are two different things, and passing a
+       production ``field_check_dx`` fixes only the first.
+
+       **The production-grid adjudication (2026-08-17, design 121).**  Check 1
+       already IS a production-grid result: the radial OPD scan runs from the
+       axis to the CLEAR-APERTURE EDGE at ``n_samples`` points and costs
+       nothing, so ``max_opd_error_waves`` is full-aperture and grid-free.
+       Check 2 is the one with a window, and at a production pitch the window
+       that covers a production aperture IS the production grid -- design
+       121's groups are 20.4 to 31.8 mm across at ``dx = 0.9028 um``, i.e.
+       ``field_check_n`` of 32768.  Running that A/B needs two such grids and
+       is exactly the run the float32 lever was supposed to make affordable,
+       so a true production-grid field check is NOT achievable there.
+
+       What is achievable is knowing when the proxy is one, which is why
+       ``aperture_cover`` and ``field_check_n_for_full_aperture`` are
+       returned and why ``on_partial_aperture`` warns by default.  The proxy
+       does NOT bound the production case: it under-reads, and steeply,
+       because the sag -- and with it the float32 rounding error -- grows
+       toward the pupil edge that a small window never reaches.  MEASURED on
+       design 121 group S25-S27 at the production pitch, ``field_check_n``
+       walked up (window / cover of the 20.4 mm aperture / field error)::
+
+            512   0.462 mm   2.3 %   1.1221e-06
+           1024   0.925 mm   4.5 %   5.3847e-06
+           2048   1.849 mm   9.1 %   2.9377e-05
+           4096   3.698 mm  18.1 %   1.2196e-04
+
+       Three doublings and 109x, still climbing at ~4.6x per doubling with
+       82 % of the pupil unseen.  A reading taken at 512 is not evidence
+       about 32768.
+
+       **WHAT COVER >= 1 BUYS.**  Once the window reaches the clear aperture
+       the field reading CONVERGES: measured on a biconvex N-SSK2 singlet
+       (R = +19.6 / -27.4 mm, 4 mm aperture, dx = 1.953 um), the L-inf field
+       error moved 7.34e-06 -> 2.03e-05 -> 1.5544e-04 across covers of 0.25,
+       0.50 and 1.00 -- 21x -- and then 1.5544e-04 -> 1.5564e-04 (+0.1 %)
+       going from cover 1.00 to 2.00.  So ``field_check_covers_aperture`` is
+       not a stylistic preference: below it the reading is still moving by
+       decades, at and above it the reading has stopped moving.  That is the
+       sufficiency criterion this guard enforces.
+
+       **AND WHAT ``field_rel_error_estimate`` IS -- AND IS NOT.**  It is
+       ``2*pi*max_opd_error_waves``: the size of the phase perturbation the
+       full-aperture radial scan already measures, so it is grid-free and
+       sees the whole pupil.  It is an ORDER-OF-MAGNITUDE ESTIMATE, **not an
+       upper bound**, and the difference was measured rather than assumed.
+       The tempting derivation -- phase screens are unimodular, propagations
+       are unitary, therefore the field difference is bounded by the OPD
+       difference -- FAILS in practice, because the field path also rounds
+       the COORDINATE arrays and evaluates sag out to the grid CORNER at
+       ``sqrt(2)`` times the window half-extent, neither of which the radial
+       scan to the aperture edge sees.  On the fixture above the estimate
+       reads 1.2189e-04 against a full-cover measurement of 1.5544e-04
+       (L-inf) and 1.7622e-04 (L2): it UNDER-reads by 1.3-1.4x.  Use it as
+       what it is -- a grid-free reading that lands within about 2x of the
+       production one, where a 512-point proxy under-reads by 100x or more --
+       and never as a certificate.
+
+       On design 121's S25-S27 it reads ``2*pi*7.7376e-04 = 4.862e-03``, i.e.
+       ~4.9x above the 1e-3 ``max_field_rel_error`` gate, while the 512-point
+       proxy reports 1.1e-06 and passes.  Judged on OPD instead, that group's
+       worst float32 sag error is 7.74e-04 waves against the
+       ``tangent_facet`` screen's own 0.0032-wave residual, so float32 sag is
+       not the limiting error in that design even though it does not clear
+       this function's field gate.  Both statements are true; quote the one
+       your bar is written against.
+
     Parameters
     ----------
     prescription : dict
@@ -253,12 +324,31 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
         Grid size for the field-level A/B (0 skips it).
     max_field_rel_error : float, default 1e-3
         Field-error gate for ``ok``.
+    on_partial_aperture : {'warn', 'error', 'silent'}, default 'warn'
+        What to do when the field check's window does not cover the clear
+        aperture, i.e. when the A/B is a proxy rather than a production-grid
+        measurement.  ``'warn'`` is the default because the shipped default
+        ``field_check_n=512`` is such a proxy on any real lens, and reading
+        its ``ok`` as a production sign-off is the mistake this exists to
+        stop.  Set ``'silent'`` for the gross-failure screen the default
+        arguments describe.
 
     Returns
     -------
     dict
         ``{'max_opd_error_waves', 'rms_opd_error_waves', 'max_opd_error_nm',
-        'max_field_rel_error', 'aperture_m', 'ok'}``.
+        'max_field_rel_error', 'field_rel_error_estimate', 'aperture_m',
+        'field_check_n', 'field_check_dx', 'field_check_window_m',
+        'aperture_cover', 'field_check_n_for_full_aperture',
+        'field_check_covers_aperture', 'ok'}``.
+
+        ``field_rel_error_estimate`` is the grid-free full-aperture
+        ESTIMATE ``2*pi*max_opd_error_waves`` discussed in the warning above
+        -- an order-of-magnitude reference, measured to under-read the
+        production field error by ~1.4x, NOT an upper bound;
+        ``aperture_cover`` is the check window divided by the clear aperture,
+        and a value below 1 means ``max_field_rel_error`` (and therefore
+        ``ok``) saw only part of the pupil.
     """
     ap = aperture if aperture is not None else prescription.get('aperture_diameter')
     if not ap:
@@ -283,6 +373,23 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
     d = np.abs(_opd(np.float32) - _opd(np.float64))
     max_waves = float(d.max() / wavelength)
 
+    # The GRID-FREE full-aperture ESTIMATE of the field error: the size of
+    # the phase perturbation the radial scan measures over the WHOLE clear
+    # aperture.  Unlike ``max_field_rel_error`` it does not depend on the
+    # check window.
+    #
+    # It is NOT a bound, and that was MEASURED, not assumed.  The tempting
+    # argument (unimodular screens between unitary propagations, so the field
+    # difference cannot exceed the phase difference) fails because the field
+    # path also rounds the coordinate arrays and evaluates sag out to the
+    # grid CORNER, sqrt(2) beyond the window half-extent -- neither of which
+    # a radial scan to the aperture edge sees.  Fixture measurement
+    # 2026-08-17 (biconvex N-SSK2 R=+19.6/-27.4, 4 mm aperture, dx 1.953 um,
+    # full cover): estimate 1.2189e-04 against 1.5544e-04 L-inf and
+    # 1.7622e-04 L2, i.e. it under-reads by 1.3-1.4x.  Pinned two-sided by
+    # tests/unit/test_sag_float32_production_window.py.
+    field_bound = float(2.0 * np.pi * max_waves)
+
     field_rel = 0.0
     n_fc = int(field_check_n)
     if n_fc > 0:
@@ -304,13 +411,63 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
         m = float(np.abs(E64).max())
         if m > 0:
             field_rel = float(np.abs(E32 - E64).max() / m)
+    else:
+        dx_fc = float(field_check_dx) if field_check_dx else float('nan')
+
+    # Is the field A/B a MEASUREMENT of the production case or a PROXY for
+    # it?  The pitch is the caller's; the WINDOW is n * dx, and the sag (and
+    # so the float32 rounding error) is largest at the pupil edge a short
+    # window never reaches.  Reported either way; warned about by default.
+    window = (n_fc * dx_fc) if n_fc > 0 else 0.0
+    cover = (window / float(ap)) if n_fc > 0 else 0.0
+    n_full = int(np.ceil(float(ap) / dx_fc)) if n_fc > 0 else 0
+    covers = bool(n_fc > 0 and cover >= 1.0)
+    if n_fc > 0 and not covers:
+        from ..propagators.carrier import _guard_dispose
+        # Validate by VALUE, never by identity: a policy string built at
+        # runtime (os.environ, a config file, an f-string) is not the interned
+        # literal, and refusing such a value while naming it valid is exactly
+        # the defect this campaign's audit found at
+        # _check_screen_obliquity_support (fixed in cbef685).
+        if str(on_partial_aperture) not in ('warn', 'error', 'silent'):
+            raise ValueError(
+                f"lens_sag_float32_opd_error: on_partial_aperture must be one "
+                f"of ('warn', 'error', 'silent'), got "
+                f"{on_partial_aperture!r}.")
+        _guard_dispose(
+            str(on_partial_aperture),
+            f"lens_sag_float32_opd_error: the field-level A/B ran on a "
+            f"{window * 1e3:.4f} mm window ({n_fc} x "
+            f"{dx_fc * 1e6:.4f} um) against a {float(ap) * 1e3:.4f} mm clear "
+            f"aperture -- it saw {cover * 100:.1f} % of the pupil DIAMETER, "
+            f"so 'max_field_rel_error' ({field_rel:.4e}) and 'ok' are a PROXY "
+            f"and not a production-grid measurement.  The float32 sag error "
+            f"grows toward the pupil edge, so this reading UNDER-states the "
+            f"production one -- measured on design 121 it climbed 109x over "
+            f"three window doublings and was still rising at 18 % cover.  "
+            f"Either pass field_check_n >= {n_full} (which is the production "
+            f"grid, and may not be affordable), or judge the run on the "
+            f"grid-free full-aperture ESTIMATE 'field_rel_error_estimate' "
+            f"= 2*pi*max_opd_error_waves = {field_bound:.4e}, which sees the "
+            f"whole pupil this window cannot (it lands within ~1.4x of a "
+            f"full-cover measurement, where a short window under-reads by "
+            f"100x or more).  Pass on_partial_aperture='silent' "
+            f"if the proxy is what you wanted.",
+            exc=ValueError, stacklevel=3)
 
     return {
         'max_opd_error_waves': max_waves,
         'rms_opd_error_waves': float(np.sqrt(np.mean(d ** 2)) / wavelength),
         'max_opd_error_nm': float(d.max() * 1e9),
         'max_field_rel_error': field_rel,
+        'field_rel_error_estimate': field_bound,
         'aperture_m': float(ap),
+        'field_check_n': n_fc,
+        'field_check_dx': float(dx_fc) if n_fc > 0 else None,
+        'field_check_window_m': float(window),
+        'aperture_cover': float(cover),
+        'field_check_n_for_full_aperture': n_full,
+        'field_check_covers_aperture': covers,
         'ok': bool(max_waves < 0.02
                    and field_rel < float(max_field_rel_error)),
     }

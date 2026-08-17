@@ -56,6 +56,65 @@ reproduced to within ~5% by an independent run of the same driver.  Full
 derivation, refuted alternatives, and the cost accounting:
 `docs/audits/EXPERIMENT_PMM2D_OOP_BLOCK_EIG_2026_08_17.md`.
 
+### Fixed -- all four shipped pipeline specs were unrunnable on the shipped guard
+
+`validation/pipeline/specs/*.json` carried `aggregate.dx_common = 1.2292e-06`,
+written before `0f46efb` folded the envelope's own half-band into the
+aggregate stage's Nyquist requirement.  Measured against the guard's own
+arithmetic on the exp29 run of record, the binding pitch over design 121's
+32 order chains is **1.108184 um**, so 1.2292 um scores a margin of **0.9015**
+and is REFUSED under the specs' own `on_nyquist='error'` -- a shipped
+reference spec that could not complete.  The campaign audit named one spec;
+re-measurement found all four.
+
+`dx_common` alone cannot fix it: containment needs a 4.5776 mm half-window
+(worst |chief ray| 1.9351 mm plus its 2.6425 mm support), which 8192 pixels
+at the corrected pitch does not reach.  The three certifiable specs now use
+`dx_common = 1.0e-06` on `n_common = 12288` -- margin 1.1082, containment
++1.566 mm, and both values are the exp29 run of record's own, so the
+configuration is known to complete.  `d121_3order_probe.json` replays an
+archived `cached_aperture` field that is not in the tree, so its requirement
+cannot be measured here; it is left alone and registered as UNCERTIFIED.
+
+### Added -- shipped specs are now re-checked against the LIVE guard
+
+`tests/unit/test_pipeline_spec_guard_validity.py` plus
+`validation/pipeline/specs/_measured_nyquist.json`.  The witness records the
+guard's INPUTS -- both carriers, each beam's support radius and envelope
+half-band -- measured on exp29; all 32 beams reproduce their recorded
+`nyquist_margin` to better than 1e-12 relative, asserted by a test so the
+file cannot rot.  The load-bearing arm calls `carrier_difference_nyquist`
+itself at each spec's own `dx_common`, so a future tightening of that
+arithmetic re-prices every shipped spec in CI in 0.23 s instead of at hour
+seven of a run.  A spec whose chain configuration the witness was not
+measured on must be named in an `UNCERTIFIED` registry with a written reason
+-- an unmeasured spec can no longer ship silently.
+
+### Added -- `lens_sag_float32_opd_error` says when its verdict is a proxy
+
+New `on_partial_aperture` ({`'warn'` default, `'error'`, `'silent'`}) fires
+when the field-level A/B's WINDOW does not cover the clear aperture, plus new
+returned keys `aperture_cover`, `field_check_window_m`,
+`field_check_n_for_full_aperture`, `field_check_covers_aperture` and
+`field_rel_error_estimate`.
+
+Passing a production `field_check_dx` fixes the PITCH and not the WINDOW, and
+`ok` is a measurement over the window rather than a bound.  Measured on
+design 121 group S25-S27 at the production pitch, the field error climbed
+**109x** across `field_check_n` 512 -> 4096 (1.1221e-06 -> 1.2196e-04) and
+was still rising at 18 % pupil cover, while `ok` read True at every rung.  On
+a controlled fixture the reading CONVERGES once cover reaches 1 (+0.1 % from
+cover 1.00 to 2.00, against 21x below it), which is why cover is the
+criterion the guard enforces.  `field_rel_error_estimate`
+(`2*pi*max_opd_error_waves`) is grid-free and full-aperture but is documented
+and tested as an ESTIMATE, not a bound: it under-reads a full-cover
+measurement by 1.3-1.4x, because the field path also rounds coordinate arrays
+and evaluates sag out to the grid corner. The policy string is validated by
+VALUE, not identity.
+
+Details: `docs/audits/FIX_D121_AUDIT_ITEMS_2026_08_17.md`, alongside the
+campaign audit `AUDIT_DESIGN121_MODEL_CONVERGENCE_2026_08_17.md`.
+
 ## [5.38.1] — 2026-08-17
 
 ## [5.38.0] — 2026-08-16
