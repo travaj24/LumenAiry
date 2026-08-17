@@ -1074,3 +1074,11 @@ So both are **cross-build divergent**, and each is one of the shapes
 slant path, and neither file is touched by this branch). Flagged because the 5.37.0
 release commit carries them, so whichever numpy/scipy the release matrix pins evidently
 falls on the passing side, and a build bump would surface them.
+
+> **CLOSED 2026-08-16 on `chore/numpy-floor`.** Both were hardened against the shapes
+> they are named as here, and both are now green on 12 (build x BLAS-thread-cap) cells
+> including all four Windows/numpy-2.4.4 ones. The T3-4 guard's fail-before arm became a
+> LADDER whose last rung engineers the defect from the running build's own eigenvalues;
+> the conical closure bar moved off an operating point the library itself warns is
+> unstable and is now applied to the rung this build's measurement selects. Full
+> evidence: `docs/audits/CHORE_NUMPY_FLOOR_2026_08_16.md` S1-S2.

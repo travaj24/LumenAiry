@@ -11,9 +11,13 @@ Covers AUDIT_V5_17_0_2026_07_01_DEEP findings:
   accumulates POSITIVE relative phase; ``berreman_jones_1d`` on a
   uniaxial quarter-wave slab returns
   ``Jt = diag(e^{i k0 no d}, e^{i k0 ne d})`` (slow-rel-fast +pi/2).
-* P2-07: ``makedammann2d`` far-field phase projector no longer relies
-  on NumPy >= 2.0 complex ``np.sign`` semantics (NumPy 1.x returned
-  ``sign(z.real)``, destroying the IFTA phase).
+* P2-07: ``makedammann2d`` far-field phase projector computes the unit
+  phasor ``z/|z|`` explicitly.  Its NumPy-1.x arm was RETIRED in v5.38
+  when ``numpy>=2.0`` became the packaged floor -- the arm shimmed
+  ``np.sign`` back to the 1.x ``sign(z.real)`` semantics to prove the
+  projector no longer depended on them, and no installable numpy has
+  those semantics any more.  The discriminating quality gate below
+  (uniformity, which the 1.x degeneration drove to ~0.02) stays.
 * P2-08: ``surface_sag_zernike_freeform`` now validates
   ``norm_radius > 0`` like its four P1-NEW-11 siblings (negative ->
   silent odd-term parity flip + defeated pupil mask; zero -> silent
@@ -148,49 +152,17 @@ class TestP2_15_WaveplateSignMatchesSolvers:
 # ==========================================================================
 
 class TestP2_07_DammannPhaseProjectorVersionIndependent:
+    """v5.38: ``test_output_invariant_under_numpy1_sign_semantics`` was
+    removed with the numpy floor bump (``numpy>=2.0``).  It monkeypatched
+    ``_doe.np`` with a shim whose ``sign`` reproduced NumPy 1.x complex
+    semantics and asserted the design was bit-identical -- a claim about a
+    numpy the package can no longer be installed against.  What it protected
+    is still gated, one level up and version-free, by the uniformity gate
+    below: the 1.x degeneration drove uniformity from 0.97 to ~0.02, and that
+    is what this asserts."""
 
     _KW = dict(periodx=61e-6, periody=61e-6, waveln=1.31e-6,
                itr=30, seed=1234, plot=False)
-
-    @staticmethod
-    def _legacy_sign(x, *args, **kwargs):
-        """NumPy 1.x complex sign: sign(z.real), falling back to
-        sign(z.imag) on the imaginary axis."""
-        x = np.asarray(x)
-        if np.iscomplexobj(x):
-            re = np.where(x.real != 0, np.sign(x.real), np.sign(x.imag))
-            return re.astype(x.dtype)
-        return np.sign(x, *args, **kwargs)
-
-    def test_output_invariant_under_numpy1_sign_semantics(self):
-        """The IFTA must not call np.sign on the complex far field any
-        more: swapping in the NumPy 1.x semantics must leave the design
-        bit-identical.  Pre-fix this collapsed the design (uniformity
-        0.97 -> 0.00 at itr=200)."""
-        target = np.ones((4, 4))
-        nf_ref, ff_ref, _ = _doe.makedammann2d(diforders=target, **self._KW)
-
-        orig_np = _doe.np
-        legacy_sign = self._legacy_sign
-
-        class _ShimNp:
-            def __getattr__(self, name):
-                if name == 'sign':
-                    return legacy_sign
-                return getattr(orig_np, name)
-
-        _doe.np = _ShimNp()
-        try:
-            nf_leg, ff_leg, _ = _doe.makedammann2d(
-                diforders=target, **self._KW)
-        finally:
-            _doe.np = orig_np
-
-        assert np.array_equal(nf_ref, nf_leg), (
-            "makedammann2d output changed under NumPy 1.x complex-sign "
-            "semantics -- the far-field phase projector still depends "
-            "on np.sign(complex) (audit P2-07).")
-        assert np.array_equal(ff_ref, ff_leg)
 
     def test_design_quality_is_sane(self):
         """Discriminating quality gate: with the correct z/|z| phase

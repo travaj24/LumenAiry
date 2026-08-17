@@ -46,9 +46,41 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
 
+# v5.38 -- NUMPY 2 IS THE FLOOR.  ``numpy>=1.20`` had stopped describing
+# anything the project is tested, measured or written against:
+#
+# * every CI leg, every local mount and every measured envelope in the test
+#   suite runs numpy 2.x (2.2.6 / 2.4.4 / 2.4.6 / 2.5.1).  Nothing has been
+#   run against 1.x in years, so the old floor was an untested claim;
+# * the repo already calls numpy-2-only API with no fallback anywhere --
+#   ``np.trapezoid`` (added in 2.0; ``np.trapz`` was REMOVED in 2.0) in the
+#   ``validation/oracles`` truths, which are the reference the accuracy
+#   campaigns are graded against;
+# * the library's own dtype reasoning is written AGAINST NEP-50 weak-scalar
+#   promotion, not around it: the tangent-facet / banded-halo screens in
+#   ``elements/_lens_real.py`` cite the NEP-50 rule by name to justify their
+#   Python-float casts, with a measured 5e-6 field divergence when the rule is
+#   violated.  Under 1.x value-based casting that reasoning does not describe
+#   the arithmetic being performed.
+#
+# scipy>=1.13 is the matching floor, adjudicated rather than guessed: 1.13.0
+# is the first SciPy line built against the numpy 2.0 ABI (earlier lines are
+# compiled against the 1.x C-API and abort at import under numpy 2), so any
+# scipy < 1.13 is un-installable with this numpy floor.  1.13 supports
+# Python >= 3.9 and numpy 2.0 supports >= 3.9, so the pair is consistent with
+# ``requires-python = ">=3.10"`` (on 3.10 the resolver lands on the numpy
+# 2.0-2.2 lines, which still ship 3.10 wheels).
+#
+# scipy>=1.13 is the matching floor, adjudicated rather than guessed: 1.13.0
+# is the first SciPy line built against the numpy 2.0 ABI (earlier lines are
+# compiled against the 1.x C-API and abort at import under numpy 2), so any
+# scipy < 1.13 is un-installable with this numpy floor.  1.13 supports
+# Python >= 3.9 and numpy 2.0 supports >= 3.9, so the pair is consistent with
+# ``requires-python = ">=3.10"`` (on 3.10 the resolver lands on the numpy
+# 2.0-2.2 lines, which still ship 3.10 wheels).
 dependencies = [
-    "numpy>=1.20",
-    "scipy>=1.7",
+    "numpy>=2.0",
+    "scipy>=1.13",
     "matplotlib>=3.5",
     "psutil>=5.0",
 ]

@@ -585,25 +585,117 @@ def _t34_scan(cells):
     return out
 
 
-@pytest.fixture
-def passive_widen_off():
-    """Fail-before switch for the 2026-08-08 PASSIVITY WIDENING of
-    ``_forward_growth_flip`` (``docs/audits/FIX_CI_ROUND2_PMM_2026_08_08.md``).
+#: How many round-off modes per solved grid the adverse injector below turns.
+#: ONE is the faithful reproduction -- the historical defect is a single coin
+#: landing the wrong way -- and it is also the quietest: measured |R+T-1| over
+#: the whole scanned family stays at 4.1e-09 .. 5.3e-07 at 1, and reaches
+#: 2.2e-06 at 2 (Windows py3.14 / numpy 2.4.4, 4 threads, 2026-08-16), so the
+#: minimal injection keeps the SILENT half of "unitary but wrong" farthest
+#: from its 1e-5 bar.
+_T34_ADVERSE_N = 1
 
-    ``False`` restores the 2026-08-06 mask -- which additionally required the
-    mode to sit inside ``_MODE_CUT_MARGIN_WARN`` of the cut -- bit for bit, so
-    the silent-wrong family this suite was written against is reproduced on
-    every build instead of being asserted from memory."""
-    old = PC.PMM_FORWARD_GROWTH_PASSIVE
-    PC.PMM_FORWARD_GROWTH_PASSIVE = False
+_T34_SHIPPED_FLIP = PC._forward_growth_flip
+
+
+def _t34_adverse_flip(flux, q, thr, prop, xp=np, passive=False):
+    """The forward/backward selector with the ROUND-OFF COIN FORCED ADVERSE --
+    the T3-4 defect ENGINEERED through the running build's own mode set rather
+    than hoped for.
+
+    ``_forward_growth_flip`` records the defect exactly: a mode the flux cut
+    called PROPAGATING but whose ``q`` is essentially imaginary carries no
+    z-power, so the ``flux`` its direction was taken from is round-off, and
+    half the time that round-off points against ``Im(q)`` and puts a GROWING
+    mode in the FORWARD set.  Which way the coin lands is decided by the BLAS
+    reduction order, which is precisely why no test may wait for it.
+
+    So this takes the shipped selector's answer and, for the first
+    :data:`_T34_ADVERSE_N` modes that satisfy the defect's OWN precondition on
+    this build --
+
+        prop  AND  |Im q| > _MODE_GROWTH_REL |q|
+
+    (the scale-free "carries no z-power" test ``_forward_growth_flip`` and
+    ``_mode_cut_growth_post`` both use) -- takes the branch that GROWS along
+    +z, i.e. ``Im(q_forward) < 0``.  Every injected quantity is read off the
+    solve's own eigenvalues; nothing is a constant and nothing is a reading
+    from another machine.  Where a grid has no such mode the array is returned
+    untouched, so the injection is a no-op exactly where the defect could not
+    have occurred.
+
+    The JAX twins are not under test here and are passed through unchanged."""
+    flip = _T34_SHIPPED_FLIP(flux, q, thr, prop, xp, passive)
+    if xp is not np:                                # pragma: no cover - JAX
+        return flip
+    q = np.asarray(q)
+    roundoff = np.flatnonzero(np.asarray(prop, dtype=bool)
+                              & (np.abs(q.imag)
+                                 > PC._MODE_GROWTH_REL * np.abs(q)))
+    if not roundoff.size:
+        return flip
+    out = np.array(flip, dtype=bool, copy=True)
+    idx = roundoff[:_T34_ADVERSE_N]
+    # flip=True means -q is taken forward, so Im(q) > 0 selects the growing
+    # branch and Im(q) < 0 the decaying one.
+    out[idx] = q.imag[idx] > 0.0
+    return out
+
+
+#: The FAIL-BEFORE LADDER the scan below walks, coarsest (least invasive)
+#: first.  The first two rungs are the library's OWN shipped switches, so they
+#: reproduce the historical defect with no test-side construction at all; the
+#: third constructs it and cannot fail to.
+#:
+#: Measured 2026-08-16 on the M2 coated taper, guard armed, per-layer grids,
+#: 4 BLAS threads, over the 8 cells of :data:`_T34_FAMILY` -- wrong cells and
+#: their ``rel`` range against the RCWA anchor:
+#:
+#:   rung                  Win py3.14 np 2.4.4  WSL py3.12 np 1.26.4  WSL py3.12 np 2.5.1
+#:   widening off          0 of 8               2 of 8, 0.4399        0 of 8
+#:   repair off as well    6 of 8, 0.418-4.958  (not reached)         7 of 8, 0.418-4.663
+#:   adverse coin          7 of 8, 0.418-0.440  8 of 8, 0.418-4.115   8 of 8, 0.418-7.550
+#:
+#: -- i.e. WHETHER the 2026-08-06 mask alone still leaves a wrong cell is a
+#: per-build fact (present on one of these three builds, absent on two), and
+#: asserting it was the S2 defect this ladder removes.  The engineered rung is
+#: the only one populated everywhere, which is why it is unconditional.
+_T34_LADDER = (
+    ("the 2026-08-08 passivity widening OFF", dict(passive=False)),
+    ("the 2026-08-06 growth repair OFF as well",
+     dict(passive=False, repair=False)),
+    ("the round-off coin FORCED adverse", dict(adverse=True)),
+)
+
+
+@pytest.fixture
+def t34_selector():
+    """Hands a test the setter for the three knobs that reproduce the T3-4
+    defect -- the two shipped fail-before switches and the engineered adverse
+    injector -- and restores all three on the way out.
+
+    ``_forward_growth_flip`` is looked up as a module global at both call
+    sites, and the census records the ``flip`` array the call site actually
+    used (``_record_mode_cut(..., flip=flip)``), so ``n_grow_post`` measures
+    the INJECTED forward set rather than a re-derivation of it: the residual
+    channel the guard fires on is scoring the real thing."""
+    old = (PC.PMM_FORWARD_GROWTH_REPAIR, PC.PMM_FORWARD_GROWTH_PASSIVE,
+           PC._forward_growth_flip)
+
+    def set_state(repair=True, passive=True, adverse=False):
+        PC.PMM_FORWARD_GROWTH_REPAIR = repair
+        PC.PMM_FORWARD_GROWTH_PASSIVE = passive
+        PC._forward_growth_flip = (_t34_adverse_flip if adverse
+                                   else _T34_SHIPPED_FLIP)
+
     try:
-        yield
+        yield set_state
     finally:
-        PC.PMM_FORWARD_GROWTH_PASSIVE = old
+        (PC.PMM_FORWARD_GROWTH_REPAIR, PC.PMM_FORWARD_GROWTH_PASSIVE,
+         PC._forward_growth_flip) = old
 
 
 def test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build(
-        t34_armed, passive_widen_off):
+        t34_armed, t34_selector):
     """The cells M2 S5 measured as UNITARY BUT WRONG -- SCANNED, not listed
     (PMM_FOURNAME_ADJUDICATION_2026_08_05 S3).
 
@@ -648,60 +740,111 @@ def test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build(
           asserted where it is build-independent instead -- see the print;
       (e) THE CURE -- with the shipped selector the SAME scan contains no
           wrong cell at all, and ``n_grow_post`` is 0 on every cell of it.
-    """
-    rows = _t34_scan(_T34_FAMILY)
-    wrong = [r for r in rows if r[2] > _T34_WRONG_REL]
-    if not wrong:                        # (a) WIDEN, do not skip
-        rows += _t34_scan(_T34_WIDEN)
-        wrong = [r for r in rows if r[2] > _T34_WRONG_REL]
-    assert wrong, (
-        "no silent-wrong cell in the scanned family on this build EVEN WITH "
-        "the 2026-08-08 passivity widening switched OFF -- the sliver defect "
-        "the T3-4 guard exists to find has stopped reproducing on the "
-        "audit-class device.  If it was FIXED AGAIN, re-pin this against the "
-        "fix; if the family merely moved, widen _T34_WIDEN further.  "
-        f"scanned: {[(r[0], r[1], round(r[2], 4)) for r in rows]}")
-    # the partition really is a partition, not a bar sitting inside one cloud
-    right = [r for r in rows if r[2] <= _T34_WRONG_REL]
-    assert min(r[2] for r in wrong) > 20.0 * max(
-        (r[2] for r in right), default=0.0), (
-        f"the 5% partition is inside the population, not between two: "
-        f"wrong {[round(r[2], 4) for r in wrong]} vs right "
-        f"{[round(r[2], 4) for r in right]}")
-    for ns, degree, rel, close, fired, warns, post in wrong:
-        assert close < 1e-5, (                       # (b)
-            f"ns={ns} deg={degree}: rel={rel:.4g} wrong but |R+T-1|="
-            f"{close:.3e} -- conservation is supposed to be blind to this")
-        assert fired, (                              # (c)
-            f"ns={ns} deg={degree}: rel={rel:.4g} WRONG and the T3-4 guard "
-            f"stayed silent -- it must speak where conservation cannot")
-        msg = str(warns[0].message)
-        assert "UNITARY BUT WRONG" in msg and "min_feature" in msg
-        assert post > 0, (                           # (d), the wrong half
-            f"ns={ns} deg={degree}: rel={rel:.4g} WRONG yet the shipped "
-            f"forward set contains no growing mode -- channel A's residual "
-            f"has stopped being the discriminator for this family")
-    # (d), the other half -- PRINTED, not asserted, and the distinction is
-    #      deliberate.  "post > 0 on every wrong cell" is the SAFETY claim and
-    #      is asserted above.  "post == 0 on every right cell" is the
-    #      no-false-positive claim; it is measured exact here on every cell of
-    #      five (mount x thread-count) environments, but the population it
-    #      scores is the UNCURED ladder, whose cells migrate with the build,
-    #      and a growing forward mode need not produce a LARGE error on every
-    #      build.  The no-false-positive claim is ASSERTED where it is
-    #      build-independent instead -- on the cured ladder and on the
-    #      right-answer control, both of which now assert post == 0 directly.
-    print("\nT3-4 residual partition (widening OFF): wrong "
-          + str([(r[0], r[1], round(r[2], 4), r[6]) for r in wrong])
-          + "  right " + str([(r[0], r[1], round(r[2], 4), r[6])
-                              for r in right]))
 
-    # ---- (e) THE CURE: the same scan with the shipped selector -------------
-    PC.PMM_FORWARD_GROWTH_PASSIVE = True         # the fixture owns the restore
-    cured = _t34_scan([(r[0], r[1]) for r in rows])
+    **2026-08-16 -- "THE DEFECT STILL REPRODUCES ON THE FAIL-BEFORE SWITCH" IS
+    ITSELF A PER-BUILD FACT (S2, pre-fix-referencing arm;
+    ``docs/TESTING_STANDARDS.md``).**  On Windows py3.14 / numpy 2.4.4 /
+    scipy 1.17.1 the widening-off scan reads ``rel`` = 0.0044-0.0050 on all
+    twelve cells with ``n_grow_post`` = 0 on every one -- the 2026-08-06 mask
+    ALONE closes the family there -- so ``assert wrong`` fired, on a build the
+    library is not wrong on.  Its own message asked the right question and had
+    no build-free answer: whether the NARROW mask leaves a wrong cell depends
+    on whether that build's round-off puts the mode inside
+    ``_MODE_CUT_MARGIN_WARN`` of the cut, which is BLAS reduction order.
+
+    So the demonstration walks :data:`_T34_LADDER` instead of standing on one
+    rung, and its last rung ENGINEERS the state rather than hoping for it
+    (:func:`_t34_adverse_flip`): the coin that decides a round-off mode's
+    direction is forced to land adversely, on modes selected by the defect's
+    own scale-free precondition read off this build's eigenvalues.  A rung
+    that produces no wrong cell is not a failure -- it is this build's mask
+    already working, and it is reported.  Only an EXHAUSTED ladder is a
+    failure, and the engineered rung cannot be exhausted: it puts a growing
+    mode in the forward set by construction.
+
+    Claim (e) is made against whichever rung supplied the wrong cells, and it
+    is unconditional on every arm."""
+    # The ENGINEERED rung is UNCONDITIONAL -- it is what makes this test
+    # build-free, so it is exercised on every build and never merely held in
+    # reserve.  The two natural rungs are walked FIRST and the first that
+    # still reproduces the historical defect with no injection at all is
+    # asserted too; where a build's shipped mask has already closed the
+    # family, that is REPORTED, not failed.
+    scans = []
+    for label, state in _T34_LADDER[:-1]:
+        t34_selector(**state)
+        rows = _t34_scan(_T34_FAMILY)
+        if any(r[2] > _T34_WRONG_REL for r in rows):
+            scans.append((label, rows))
+            break
+        print(f"\nT3-4 fail-before rung '{label}' leaves no wrong cell on "
+              f"this build (the mask still in force closes the family): "
+              f"{[(r[0], r[1], round(r[2], 4), r[6]) for r in rows]}")
+    label, state = _T34_LADDER[-1]
+    t34_selector(**state)
+    rows = _t34_scan(_T34_FAMILY)
+    if not any(r[2] > _T34_WRONG_REL for r in rows):      # (a) WIDEN
+        rows += _t34_scan(_T34_WIDEN)
+    scans.append((label, rows))
+
+    scanned = {(r[0], r[1]) for _lab, rs in scans for r in rs}
+    for label, rows in scans:
+        wrong = [r for r in rows if r[2] > _T34_WRONG_REL]
+        assert wrong, (
+            "the fail-before ladder is EXHAUSTED -- not even the engineered "
+            "adverse coin (_t34_adverse_flip, which forces a growing mode "
+            "into the forward set using this build's own eigenvalues) "
+            "produces a silent-wrong cell.  Either the injector no longer "
+            "reaches the selector (check that _forward_growth_flip is still "
+            "looked up as a module global at both call sites) or the family "
+            "has moved off this device entirely.  "
+            f"rung '{label}' scanned: "
+            f"{[(r[0], r[1], round(r[2], 4)) for r in rows]}")
+        # the partition really is a partition, not a bar inside one cloud
+        right = [r for r in rows if r[2] <= _T34_WRONG_REL]
+        assert min(r[2] for r in wrong) > 20.0 * max(
+            (r[2] for r in right), default=0.0), (
+            f"rung '{label}': the 5% partition is inside the population, not "
+            f"between two: wrong {[round(r[2], 4) for r in wrong]} vs right "
+            f"{[round(r[2], 4) for r in right]}")
+        for ns, degree, rel, close, fired, warns, post in wrong:
+            assert close < 1e-5, (                   # (b)
+                f"rung '{label}' ns={ns} deg={degree}: rel={rel:.4g} wrong "
+                f"but |R+T-1|={close:.3e} -- conservation is supposed to be "
+                f"blind to this")
+            assert fired, (                          # (c)
+                f"rung '{label}' ns={ns} deg={degree}: rel={rel:.4g} WRONG "
+                f"and the T3-4 guard stayed silent -- it must speak where "
+                f"conservation cannot")
+            msg = str(warns[0].message)
+            assert "UNITARY BUT WRONG" in msg and "min_feature" in msg
+            assert post > 0, (                       # (d), the wrong half
+                f"rung '{label}' ns={ns} deg={degree}: rel={rel:.4g} WRONG "
+                f"yet the forward set the solve used contains no growing "
+                f"mode -- channel A's residual has stopped being the "
+                f"discriminator for this family")
+        # (d), the other half -- PRINTED, not asserted, and the distinction
+        #      is deliberate.  "post > 0 on every wrong cell" is the SAFETY
+        #      claim and is asserted above.  "post == 0 on every right cell"
+        #      is the no-false-positive claim; it is measured exact here on
+        #      every cell of five (mount x thread-count) environments, but the
+        #      population it scores is the UNCURED ladder, whose cells migrate
+        #      with the build, and a growing forward mode need not produce a
+        #      LARGE error on every build.  The no-false-positive claim is
+        #      ASSERTED where it is build-independent instead -- on the cured
+        #      ladder and on the right-answer control, both of which now
+        #      assert post == 0 directly.
+        print(f"\nT3-4 residual partition (fail-before rung: {label}): wrong "
+              + str([(r[0], r[1], round(r[2], 4), r[6]) for r in wrong])
+              + "  right " + str([(r[0], r[1], round(r[2], 4), r[6])
+                                  for r in right]))
+
+    # ---- (e) THE CURE: the same cells with the shipped selector ------------
+    t34_selector()                               # the fixture owns the restore
+    cured = _t34_scan(sorted(scanned))
     still = [r for r in cured if r[2] > _T34_WRONG_REL]
     assert not still, (
-        f"the passivity widening did not cure this family: "
+        f"the shipped selector did not cure this family: "
         f"{[(r[0], r[1], round(r[2], 4)) for r in still]} are still wrong.  "
         f"A forward mode of a passive layer cannot grow along +z at ANY "
         f"distance from the classification cut, so a surviving wrong cell is "

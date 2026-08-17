@@ -13,7 +13,8 @@ PySide6>=6.5
 matplotlib>=3.5
 
 # Optimization — used by the optimizer dock (Nelder-Mead, global search)
-scipy>=1.7
+# v5.38: floor tracks the core requirement (first numpy-2-ABI SciPy line).
+scipy>=1.13
 
 # Interactive 3D viewer — used by the 3D layout panel
 pyvista>=0.40

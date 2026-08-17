@@ -65,6 +65,68 @@ slanted layers.  Gated by `test_slant_at_normal_incidence_is_not_silently_folded
 which carries an unconditional fail-before arm (every OBLIQUE test passed with the
 bug present, so the gate has to be a normal-incidence case).
 
+### Changed — **NumPy 2 is now the floor: `numpy>=2.0`, `scipy>=1.13`**
+
+**Action required only if you pin NumPy 1.x.**  `pip install lumenairy` now
+resolves `numpy>=2.0` and `scipy>=1.13`, replacing the long-stale
+`numpy>=1.20` / `scipy>=1.7`.  `requires-python` is unchanged at `>=3.10`; on
+3.10 the resolver lands on the NumPy 2.0–2.2 lines, which still ship 3.10
+wheels.  Mirrored in `requirements.txt` and `requirements-gui.txt`.
+
+*Why.*  The old floor described nothing the project is tested, measured or
+written against.  Every CI leg, every local mount and every measured envelope
+in the suite runs NumPy 2.x — nothing has been run against 1.x in years.  The
+repo already calls NumPy-2-only API with no fallback anywhere (`np.trapezoid`,
+added in 2.0, in the `validation/oracles` truths; `np.trapz` was *removed* in
+2.0), and the library's own dtype reasoning is written *against* NEP-50
+weak-scalar promotion rather than around it — the tangent-facet / banded-halo
+screens in `elements/_lens_real.py` cite the NEP-50 rule by name to justify
+their Python-float casts, with a measured 5e-6 field divergence when it is
+violated.  `scipy>=1.13` is not a guess: 1.13.0 is the first SciPy line built
+against the NumPy 2.0 ABI, so anything earlier is un-installable with this
+NumPy floor.
+
+*What was dropped.*  One test — `test_output_invariant_under_numpy1_sign_semantics`
+in `tests/unit/test_audit_w5_elements_misc.py` — which shimmed `np.sign` back
+to NumPy 1.x complex semantics (`sign(z.real)`) to prove the Dammann IFTA's
+phase projector no longer depended on them.  No installable NumPy has those
+semantics now.  The behaviour it protected stays gated version-free by the
+same class's uniformity gate (the 1.x degeneration drove uniformity 0.97 →
+~0.02).  **No library code path was removed** — the audit-P2-07 explicit
+`z/|z|` projector in `lumenairy/elements/doe.py` is what the Octave port
+means and is bit-identical to NumPy 2.x complex `np.sign`, so results are
+unchanged.  There were no `numpy.__version__` branches, NEP-50 conditionals
+or `trapz`/`trapezoid` shims in the library to remove, and no CI job pinned
+`numpy<2`.
+
+### Test hygiene (no library change)
+
+Two build-dependent tests hardened against the shapes
+`docs/TESTING_STANDARDS.md` names.  Both failed on Windows / NumPy 2.4.4
+while passing on NumPy 1.26.4 and on CI's 2.5.x — per-BLAS-build, not a
+library regression (recorded in
+`docs/audits/BUILD_PMM2D_SLANT_METRIC_2026_08_16.md` §15).  Both are now
+green on 12 (build × BLAS-thread-cap) environments; see
+`docs/audits/CHORE_NUMPY_FLOOR_2026_08_16.md`.
+
+* `test_pmm_m3_efficiency.py::test_t34_guard_fires_on_every_silent_wrong_cell_of_this_build`
+  (S2, pre-fix-referencing arm) — it required the sliver defect to still
+  reproduce with one shipped fail-before switch off, but *whether the narrow
+  2026-08-06 mask alone leaves a wrong cell is itself decided by the BLAS
+  reduction order*.  It now walks a fail-before **ladder** whose last rung
+  **engineers** the defect: the round-off coin that decides a zero-z-power
+  mode's direction is forced to land adversely, on modes selected by the
+  defect's own scale-free precondition read off the running build's
+  eigenvalues.  A rung that produces no wrong cell is reported, not failed.
+* `test_v5_14_0_pmm2d_conical.py::test_conical_jones_matches_rcwa`
+  (S4, floor bar) — its `|R+T-1| < 3e-2` bar sat inside the spread of an
+  operating point (`degree=9, n_orders=4`) the library itself warns is
+  numerically unstable there; on one build alone the reading ran 3.0e-3 →
+  4.6e-2 → a hard `_EnergyError` as the thread cap changed.  The cross-suite
+  agreement with the RCWA oracle is now asserted on every rung of a stated
+  truncation ladder, and the closure bar (`1e-3`, envelope 9.7e-5) applies to
+  the rung the running build's own measurement selects.
+
 ## [5.37.0] — 2026-08-16
 
 ### Changed -- the tangent-facet family is row-banded (byte-identically)
