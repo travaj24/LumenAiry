@@ -340,4 +340,63 @@ Recorded in S5.
 
 ## 5. Run log
 
-(filled in below as the runs land)
+### 5.1 Targeted pmm / eme / lens suites on CI (`/tmp/venv-ci`, numpy 2.5.1)
+
+69 files (`ls tests/unit/test_*.py | grep -iE "pmm|eme|lens"`), 4 BLAS threads,
+`PYTHONPATH` pinned and asserted:
+
+```
+3 failed, 1511 passed, 13 skipped, 2 deselected, 192 warnings in 3300.94s (0:55:00)
+```
+
+**All three failures are PRE-EXISTING and are NOT caused by this change.**  Each
+was re-run in isolation on BOTH the branch worktree and a worktree standing at
+`origin/main` @ `b7be325` (`C:/tmp/lum_sl`, clean, untouched by this branch), on
+the SAME interpreter and BLAS cap -- one axis varied, the code:
+
+| test | branch | `origin/main` @ b7be325 |
+|---|---|---|
+| `test_eme_2d_vector.py::test_vector_structured_completeness` | FAIL | FAIL |
+| `test_pmm_m2_window_contract.py::test_min_feature_threshold_rule_predicts_stationarity` | FAIL | FAIL |
+| `test_v5_20_13_pmm_jones_2d_fff_nv.py::test_pmm_fff_nv_matches_rcwa_fff_nv` | FAIL | FAIL |
+
+-- identical assertions and identical numbers on both sides (`3 failed in 33.50s`
+vs `3 failed in 31.67s`).  None of the three files is touched by this branch, and
+`test_pmm_m2_window_contract.py` sorts BEFORE `test_pmm_m3_efficiency.py` under
+`-p no:randomly`, so no fixture-state leak from the reworked T3-4 test can reach
+it either.
+
+Their signatures, and they are the SAME FAMILY this campaign's two items belong
+to -- per-build knife edges, one of which diagnoses itself in so many words:
+
+* `test_vector_structured_completeness`: *"the finder MISSED 1 oracle mode(s)
+  that its own condition accepts -- (oracle, converged zero, gaps.min):
+  [(77.46594446013133, 77.30034998304453, 1.2974056195835521e-11)]"* -- an S5
+  mode census on a 1.3e-11 gap;
+* `test_min_feature_threshold_rule_predicts_stationarity`: *"1.5 nm is ABOVE the
+  ns=3 threshold"* -- an S4 at-threshold comparison;
+* `test_pmm_fff_nv_matches_rcwa_fff_nv`: *"the RCWA fff_nv REFERENCE is unusable
+  on this build: no scanned truncation both conserves to better than 1e-03 and is
+  reproduced by another one that does, so there is nothing for the PMM to be
+  measured against.  This is a statement about the reference, NOT about
+  pmm_jones_2d."* -- the scanned closure ladder reads M=7 2.511e-02, M=9
+  4.614e-03, M=11 1.001e-02, M=13 4.357e-03, M=15 1.430e-04, i.e. NON-monotone,
+  which is the same truncation-instability mechanism S1 above diagnoses on the
+  conical Jones cross-check.
+
+**RECORDED, NOT FIXED** -- all three are outside this campaign's scope (it was
+scoped to the two tests `BUILD_PMM2D_SLANT_METRIC_2026_08_16` S15 names), and
+fixing a fragile test without measuring its cross-build envelope first is the
+mistake `TESTING_STANDARDS` exists to prevent.  Flagged here because they are the
+same shape, they are on `origin/main` today, and the third one is very close in
+kind to S1 -- a follow-on wave should take all three together with the same
+method.
+
+### 5.2 Full unit suite on build W
+
+`pytest tests/unit -m "not integration"`, Windows py 3.14.6 / numpy 2.4.4 /
+scipy 1.17.1, OMP/OPENBLAS/MKL = 4, `PYTHONPATH` pinned and asserted (`PIN OK
+C:\tmp\lum_np\lumenairy\__init__.py`).
+
+(pending -- still running at the time this section was written; result and, for
+any failure, the same one-axis `origin/main` comparison as 5.1, to be appended)
