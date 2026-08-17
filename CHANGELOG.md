@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.38.1] — 2026-08-17
+
 ## [5.38.0] — 2026-08-16
 
 ### Added -- a native 2-D slant metric: a slanted feature is ONE layer, not a staircase
