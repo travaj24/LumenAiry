@@ -1,0 +1,526 @@
+{
+ "schema": 1,
+ "what": "MEASURED inputs to the aggregate stage's band-aware Nyquist guard (lumenairy.propagators.carrier_field.carrier_difference_nyquist), one entry per design-121 order chain.  Everything here except env_band is read straight out of the run of record's own artifacts; env_band is recovered by inverting the guard at the pitch that run used, which is exact because it is the ONE free quantity in that arithmetic.  All 32 beams reproduce their recorded nyquist_margin to better than 1e-12 relative under lumenairy 5.38.1.",
+ "why": "So tests/unit/test_pipeline_spec_guard_validity.py can re-evaluate the LIVE guard against every shipped spec without the 6.7 GB of chain fields.  A future tightening of the guard's arithmetic then strands a spec in CI instead of at hour seven of a run -- which is the defect this file exists to prevent (audit S9.1 #2: the guard was tightened in 0f46efb and every shipped spec had been written before it).",
+ "provenance": {
+  "run": "exp29_121_traced_pipeline_32order_v5.35.1_nfc8192_rs1_legfull",
+  "ledger": "aggregate/ledger.json",
+  "ledger_written": "2026-08-13T16:52:41",
+  "measured_with_lumenairy": "0aa741681384",
+  "measured_at_lumenairy_version": "5.35.0",
+  "reproduced_at_lumenairy_version": "5.38.1",
+  "reproduced_on": "2026-08-17",
+  "dx_common_used_by_that_run": 1e-06,
+  "n_common_used_by_that_run": 12288,
+  "worst_nyquist_margin_recorded": 1.1081836097493127,
+  "worst_containment_margin_recorded": 0.0015664073945261675
+ },
+ "chain_signature": {
+  "kind": "traced",
+  "plane": "fine_retrace_exit",
+  "ray_subsample": 1,
+  "n_fine_cap": 8192,
+  "window_factor": 4.0,
+  "note": "the chain fields that determine a beam's exit carrier, support radius and envelope band.  A spec whose chain block differs in any of these does NOT share this witness."
+ },
+ "wavelength": 1.31e-06,
+ "common_carrier": {
+  "R": -0.0077124254602782,
+  "centre": [
+   0.0,
+   0.0
+  ],
+  "tilt": [
+   0.0,
+   0.0
+  ],
+  "piston": 0.0
+ },
+ "order_key_for": {
+  "(0,0)": "p0_p0",
+  "(-2,0)": "m2_p0",
+  "(-4,-2)": "m4_m2"
+ },
+ "beams": {
+  "m1_m1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.00047987865864721873,
+    -0.00047987865864721873
+   ],
+   "tilt_exit": [
+    -1.188288243242353e-05,
+    -1.188288243242353e-05
+   ],
+   "support_radius": 0.002652359120203767,
+   "env_band": 0.010595455904705476,
+   "measured_dx_binding": 1.8623000389732636e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m1_m2": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.00047969617064652317,
+    -0.0009593923412930463
+   ],
+   "tilt_exit": [
+    -3.747897874644204e-05,
+    -7.495795749288409e-05
+   ],
+   "support_radius": 0.0026599808418135483,
+   "env_band": 0.01080526691271948,
+   "measured_dx_binding": 1.8548303255553887e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m1_p0": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.00047993936057518123,
+    0.0
+   ],
+   "tilt_exit": [
+    -3.441617757671266e-06,
+    0.0
+   ],
+   "support_radius": 0.002652359120203767,
+   "env_band": 0.00944149536062866,
+   "measured_dx_binding": 1.8777624709197485e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m1_p1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.00047987865864721873,
+    0.00047987865864721873
+   ],
+   "tilt_exit": [
+    -1.188288243242353e-05,
+    1.188288243242353e-05
+   ],
+   "support_radius": 0.002652359120203767,
+   "env_band": 0.010280739392684545,
+   "measured_dx_binding": 1.8664753626866873e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m2_m1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0009593923412930463,
+    -0.00047969617064652317
+   ],
+   "tilt_exit": [
+    -7.495795749288409e-05,
+    -3.747897874644204e-05
+   ],
+   "support_radius": 0.0026599808418135483,
+   "env_band": 0.01091017241672645,
+   "measured_dx_binding": 1.8534538042515502e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m2_m2": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0009590261878250928,
+    -0.0009590261878250928
+   ],
+   "tilt_exit": [
+    -0.00012697723589484566,
+    -0.00012697723589484566
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.010805266912719502,
+   "measured_dx_binding": 1.8561605491409783e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m2_p0": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0009595141288191745,
+    0.0
+   ],
+   "tilt_exit": [
+    -5.780264443631249e-05,
+    0.0
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.009966022880663594,
+   "measured_dx_binding": 1.8678106590023e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m2_p1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0009593923412930463,
+    0.00047969617064652317
+   ],
+   "tilt_exit": [
+    -7.495795749288409e-05,
+    3.747897874644204e-05
+   ],
+   "support_radius": 0.0026599808418135483,
+   "env_band": 0.01080526691271948,
+   "measured_dx_binding": 1.8548303255553887e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m3_m1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0014381721170589425,
+    -0.00047939070568631445
+   ],
+   "tilt_exit": [
+    -0.00024318421433634774,
+    -8.106140477879414e-05
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.013322999008887115,
+   "measured_dx_binding": 1.823302990215012e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m3_m2": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0014376198070384708,
+    -0.0009584132046923142
+   ],
+   "tilt_exit": [
+    -0.0003233254246088474,
+    -0.00021555028307255336
+   ],
+   "support_radius": 0.002658456497491592,
+   "env_band": 0.028639202593906954,
+   "measured_dx_binding": 1.6465255421559821e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m3_p0": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.001438355802044105,
+    0.0
+   ],
+   "tilt_exit": [
+    -0.00021675462777580307,
+    0.0
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.01091017241672645,
+   "measured_dx_binding": 1.8546170486927423e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m3_p1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0014381721170589425,
+    0.00047939070568631445
+   ],
+   "tilt_exit": [
+    -0.00024318421433634774,
+    8.106140477879414e-05
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.013637715520908067,
+   "measured_dx_binding": 1.8193183805004667e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m4_m1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0019158405016475016,
+    -0.0004789601254118754
+   ],
+   "tilt_exit": [
+    -0.0005762641940589703,
+    -0.00014406604851474258
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.1039613544709223,
+   "measured_dx_binding": 1.1175199126282398e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m4_m2": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.001915097939205574,
+    -0.000957548969602787
+   ],
+   "tilt_exit": [
+    -0.0006871912839565426,
+    -0.0003435956419782713
+   ],
+   "support_radius": 0.00264321305427203,
+   "env_band": 0.10647908656708993,
+   "measured_dx_binding": 1.1081836097493126e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m4_p0": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0019160874193383279,
+    0.0
+   ],
+   "tilt_exit": [
+    -0.0005396819187860059,
+    0.0
+   ],
+   "support_radius": 0.0026615051861355044,
+   "env_band": 0.10249267741482451,
+   "measured_dx_binding": 1.1236871022148494e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "m4_p1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    -0.0019158405016475016,
+    0.0004789601254118754
+   ],
+   "tilt_exit": [
+    -0.0005762641940589703,
+    0.00014406604851474258
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.1039613544709223,
+   "measured_dx_binding": 1.1175199126282398e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p0_m1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0,
+    -0.00047993936057518123
+   ],
+   "tilt_exit": [
+    0.0,
+    -3.441617757671266e-06
+   ],
+   "support_radius": 0.002652359120203767,
+   "env_band": 0.00944149536062866,
+   "measured_dx_binding": 1.8777624709197485e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p0_m2": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0,
+    -0.0009595141288191745
+   ],
+   "tilt_exit": [
+    0.0,
+    -5.780264443631249e-05
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.009966022880663594,
+   "measured_dx_binding": 1.8678106590023e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p0_p0": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0,
+    0.0
+   ],
+   "tilt_exit": [
+    0.0,
+    0.0
+   ],
+   "support_radius": 0.002416085750300558,
+   "env_band": 0.014476959552963931,
+   "measured_dx_binding": 1.954416809733527e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p0_p1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0,
+    0.00047993936057518123
+   ],
+   "tilt_exit": [
+    0.0,
+    3.441617757671266e-06
+   ],
+   "support_radius": 0.002652359120203767,
+   "env_band": 0.009126778848607709,
+   "measured_dx_binding": 1.8820074958179686e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p1_m1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.00047987865864721873,
+    -0.00047987865864721873
+   ],
+   "tilt_exit": [
+    1.188288243242353e-05,
+    -1.188288243242353e-05
+   ],
+   "support_radius": 0.002652359120203767,
+   "env_band": 0.010280739392684545,
+   "measured_dx_binding": 1.8664753626866873e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p1_m2": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.00047969617064652317,
+    -0.0009593923412930463
+   ],
+   "tilt_exit": [
+    3.747897874644204e-05,
+    -7.495795749288409e-05
+   ],
+   "support_radius": 0.0026599808418135483,
+   "env_band": 0.01070036140871249,
+   "measured_dx_binding": 1.8562088930059162e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p1_p0": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.00047993936057518123,
+    0.0
+   ],
+   "tilt_exit": [
+    3.441617757671266e-06,
+    0.0
+   ],
+   "support_radius": 0.002652359120203767,
+   "env_band": 0.009126778848607709,
+   "measured_dx_binding": 1.8820074958179686e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p1_p1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.00047987865864721873,
+    0.00047987865864721873
+   ],
+   "tilt_exit": [
+    1.188288243242353e-05,
+    1.188288243242353e-05
+   ],
+   "support_radius": 0.002652359120203767,
+   "env_band": 0.009966022880663594,
+   "measured_dx_binding": 1.8706694508328412e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p2_m1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0009593923412930463,
+    -0.00047969617064652317
+   ],
+   "tilt_exit": [
+    7.495795749288409e-05,
+    -3.747897874644204e-05
+   ],
+   "support_radius": 0.0026599808418135483,
+   "env_band": 0.010385644896691536,
+   "measured_dx_binding": 1.8603569179623742e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p2_m2": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0009590261878250928,
+    -0.0009590261878250928
+   ],
+   "tilt_exit": [
+    0.00012697723589484566,
+    -0.00012697723589484566
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.01070036140871249,
+   "measured_dx_binding": 1.8575410953632906e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p2_p0": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0009595141288191745,
+    0.0
+   ],
+   "tilt_exit": [
+    5.780264443631249e-05,
+    0.0
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.009546400864635651,
+   "measured_dx_binding": 1.8734149904881592e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p2_p1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0009593923412930463,
+    0.00047969617064652317
+   ],
+   "tilt_exit": [
+    7.495795749288409e-05,
+    3.747897874644204e-05
+   ],
+   "support_radius": 0.0026599808418135483,
+   "env_band": 0.010280739392684545,
+   "measured_dx_binding": 1.8617437157925712e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p3_m1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0014381721170589425,
+    -0.00047939070568631445
+   ],
+   "tilt_exit": [
+    0.00024318421433634774,
+    -8.106140477879414e-05
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.013113188000873155,
+   "measured_dx_binding": 1.825969107489901e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p3_m2": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0014376198070384708,
+    -0.0009584132046923142
+   ],
+   "tilt_exit": [
+    0.0003233254246088474,
+    -0.00021555028307255336
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.0247576989456485,
+   "measured_dx_binding": 1.6884200298197643e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p3_p0": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.001438355802044105,
+    0.0
+   ],
+   "tilt_exit": [
+    0.00021675462777580307,
+    0.0
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.01101507792073344,
+   "measured_dx_binding": 1.8532408438106812e-06,
+   "measured_binding_term": "reconstruct"
+  },
+  "p3_p1": {
+   "R_out": -0.0077124254602782,
+   "chief_exit": [
+    0.0014381721170589425,
+    0.00047939070568631445
+   ],
+   "tilt_exit": [
+    0.00024318421433634774,
+    8.106140477879414e-05
+   ],
+   "support_radius": 0.0026569321531696357,
+   "env_band": 0.013322999008887115,
+   "measured_dx_binding": 1.823302990215012e-06,
+   "measured_binding_term": "reconstruct"
+  }
+ }
+}

@@ -3,7 +3,7 @@
  "name": "d121_3order_ab_scalar",
  "workdir": "../_work/d121_3order_ab_scalar",
  "wavelength": 1.31e-06,
- "notes": "A/B ARM A (SCALAR). The design-121 3-order acceptance triple driven end to end through the pipeline with the THIN-ELEMENT (scalar FFT) DOE order table -- 'design121_doe'. Its only sibling, specs/d121_3order_ab_rcwa.json, is BYTE-IDENTICAL except for decompose.kind and decompose.params, so the two arms differ in exactly one thing: where the 32 complex order amplitudes come from. Everything downstream -- the chain-A launch, the order tilts, the frame centres, the traced chains, the common carrier, the leg plan and the readout -- is the same construction, and the traced runner weights each arm's OWN reference tile by that arm's OWN weight, so power_ratio / EE / FWHM are like-for-like WITHIN each arm and the A-vs-B delta is the result. The three orders are the acceptance triple of PROBE_SUM_AT_APERTURE / BUILD_PIPELINE S5. rs=1 follows this pipeline's default (PROBE_CHAIN_LADDER_PISTON S2.4: rs=4 loses 6.5e-03 of the aperture power). leg 'crop' is the like-for-like variant and is correct for a SPARSE subset -- BUILD_PIPELINE S6.4's crop finding is about a FILLED fan. See docs/audits/BUILD_RCWA_DOE_TABLE_2026_08_12.md.",
+ "notes": "A/B ARM A (SCALAR). The design-121 3-order acceptance triple driven end to end through the pipeline with the THIN-ELEMENT (scalar FFT) DOE order table -- 'design121_doe'. Its only sibling, specs/d121_3order_ab_rcwa.json, is BYTE-IDENTICAL except for decompose.kind and decompose.params, so the two arms differ in exactly one thing: where the 32 complex order amplitudes come from. Everything downstream -- the chain-A launch, the order tilts, the frame centres, the traced chains, the common carrier, the leg plan and the readout -- is the same construction, and the traced runner weights each arm's OWN reference tile by that arm's OWN weight, so power_ratio / EE / FWHM are like-for-like WITHIN each arm and the A-vs-B delta is the result. The three orders are the acceptance triple of PROBE_SUM_AT_APERTURE / BUILD_PIPELINE S5. rs=1 follows this pipeline's default (PROBE_CHAIN_LADDER_PISTON S2.4: rs=4 loses 6.5e-03 of the aperture power). leg 'crop' is the like-for-like variant and is correct for a SPARSE subset -- BUILD_PIPELINE S6.4's crop finding is about a FILLED fan. See docs/audits/BUILD_RCWA_DOE_TABLE_2026_08_12.md. AGGREGATE GRID, corrected 2026-08-17 (audit S11 item 3): dx_common=1.0 um on n_common=12288, replacing a 1.2292 um / 8192 pair that predated the band-aware Nyquist guard (0f46efb) and is REFUSED by it at margin 0.9015. These chains are the ones exp29 measured (identical chain block: traced, fine_retrace_exit, rs=1, n_fine_cap=8192, window_factor=4.0), and the binding pitch over this spec's three orders is 1.108184 um, set by (-4,-2), which this spec includes. Containment then needs a 4.5583 mm half-window; 12288 x 1.0 um gives 6.144 mm. Witness: specs/_measured_nyquist.json.",
  "coherent_sum": false,
  "decompose": {
   "kind": "design121_doe",
@@ -32,8 +32,8 @@
   "params": {}
  },
  "aggregate": {
-  "dx_common": 1.2292e-06,
-  "n_common": 8192,
+  "dx_common": 1.0e-06,
+  "n_common": 12288,
   "origin": [0.0, 0.0],
   "reference_beam": null,
   "include": "all",
