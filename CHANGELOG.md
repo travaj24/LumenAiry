@@ -125,6 +125,42 @@ green on 12 (build × BLAS-thread-cap) environments; see
   truncation ladder, and the closure bar (`1e-3`, envelope 9.7e-5) applies to
   the rung the running build's own measurement selects.
 
+Three more, found by the NumPy-2.5.1 sweep above and pre-existing on `main`
+(each reproduced byte-identically on `origin/main` before being touched).  All
+three now green on the build that failed them **and** on Windows / NumPy 2.4.4,
+at 1 and 4 BLAS threads:
+
+* `test_eme_2d_vector.py::test_vector_structured_completeness` (S5) -- two
+  independent per-build readings, the second masked by the first.  Its recall
+  arm called a mode missing that the finder's own fixed 800-point scan grid had
+  merely *stepped over* (a local scan 51x finer recovers it to 3.7e-07, and
+  `n_scan=3200` reads 16/16); candidate misses are now re-scanned at a
+  resolution that resolves them, and only a zero the finder still cannot hold
+  there counts. With that fixed, a second arm failed at 1 thread on a
+  *genuinely* spurious census entry (its FD distance **converges** to 2.467
+  rather than falling) -- so the FD verdict is now taken over a resolution
+  ladder and spurious entries are bounded in count rather than forbidden.
+* `test_pmm_m2_window_contract.py::test_min_feature_threshold_rule_predicts_stationarity`
+  (S4) -- the `min_feature` cells were listed in nm and one sat **7.8% above its
+  own threshold**. Scanning ns = 2/3/6/8 over six buildxthread environments
+  shows the build-free contract is two-sided: below `min(off, |c-off|)` the
+  ladder collapses everywhere, above **`max(off, |c-off|)`** it is stationary
+  everywhere, and the band between is build-dependent. Cells are now derived
+  from each `ns`'s own separations at a stated margin, the claim is a partition
+  with a measured 116x gap, and the ambiguous band is printed, not asserted.
+* `test_v5_20_13_pmm_jones_2d_fff_nv.py::test_pmm_fff_nv_matches_rcwa_fff_nv`
+  (S4/S5) -- it correctly diagnosed its own RCWA reference as unusable and then
+  hard-failed on that diagnosis. The truncation cap is set by the reference
+  cell's *sampling* (`4*n_orders+1 <= Sx`), which the run may refine: at
+  `Sx=128` the same build has nine clean rungs instead of one, on the identical
+  ideal stripe. The reference ladder is now two-stage and fails only when the
+  reference engine has stopped converging at every sampled resolution.
+
+**Library findings recorded, not fixed** (each needs its own change): the
+`_mode_cut_verdict` remedy message names `min(off, |coat - off|)` where the
+measurement says `max` is the build-free advice; and `layer_vector_modes` can
+emit a spurious census entry (observed once in eight environments).
+
 ## [5.37.0] — 2026-08-16
 
 ### Changed -- the tangent-facet family is row-banded (byte-identically)

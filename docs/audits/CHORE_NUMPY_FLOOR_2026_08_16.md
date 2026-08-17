@@ -400,3 +400,160 @@ C:\tmp\lum_np\lumenairy\__init__.py`).
 
 (pending -- still running at the time this section was written; result and, for
 any failure, the same one-axis `origin/main` comparison as 5.1, to be appended)
+
+---
+
+## 6. Follow-on wave: the three failures of S5.1, hardened
+
+Same charter, same method, same law.  Each of the three was verified on the
+build that FAILED it (`/tmp/venv-ci`, numpy 2.5.1 / scipy 1.18.0) and on
+Windows / numpy 2.4.4, at 1 and 4 BLAS threads.
+
+### 6.1 [S5] `test_eme_2d_vector.py::test_vector_structured_completeness`
+
+TWO independent per-build readings, and the second was hiding behind the first.
+
+**(a) The recall arm -- "the global scan grid landed on it".**  It adjudicated
+the oracle mode 77.465944 as a REAL miss: its polished zero 77.300350 reads
+`sigma` 1.37e-13 with `gaps.min` 1.30e-11 against a 5.52e-01 bound, so the
+finder's own condition accepts it, and the finder had not reported it.  But the
+finder's global scan is a FIXED 800-point grid over a 203-wide window -- a step
+of 0.254 -- and a sigma-zero whose basin is narrower than the step is simply
+stepped over.  Measured:
+
+```
+n_scan =  800   census 15 (4 thr) / 16 (1 thr)   held 15/16   missed [77.46594]
+n_scan = 1600   census 15 / 16                   held 15/16   missed [77.46594]
+n_scan = 3200   census 17 / 16                   held 16/16   missed []
+local window +-1.0, n_scan 400 (step 0.005, 51x finer):
+        recovered at |d| = 3.7e-07 on every attempt, both thread counts
+```
+
+Which zeros the grid steps over is set by the shift-invert eigensolve that
+fixes the basin width, i.e. it is a per-build fact.  So a candidate miss is now
+RE-SCANNED at a resolution that resolves it (`_local_rescan_holds`, the SAME
+finder with only the grid changed), and only a zero the finder still cannot
+hold there counts as a real miss.  The cascade regression this guards left 14
+of 16 unfound and would fail at ANY resolution, so every tooth is kept; the
+stepped-over zeros are additionally capped at a quarter of the band (measured
+1 of 16 on the one build that shows any, 0 elsewhere).
+
+**(b) The spurious arm, which the recall failure had been masking.**  With (a)
+fixed, `venv-ci` at ONE thread failed further down: census entry 88.845213
+(absent at four threads) matches no oracle mode.  It is **genuinely spurious**,
+not an FD-resolution artifact -- its FD distance CONVERGES instead of falling:
+
+```
+ny        56       80       112      160      224
+fd_dist   2.5284   2.4948   2.4792   2.4711   2.4673
+denser oracle at ny=112: 16 modes, nearest |d| = 2.4792
+```
+
+and it passes the finder's own acceptance (`sigma` 2.50e-13, `gaps.min`
+3.41e-06 against a 1.24e-06 bound).  So the finder really can emit one, and
+"the census contains no spurious entry" was a per-build reading.  Restated: the
+FD verdict is taken over a RESOLUTION LADDER (`_FD_NY_LADDER`, walked only for
+an entry the cheap rung does not confirm, so a healthy build pays nothing), and
+the surviving spurious entries are COUNTED against a bar on the count --
+measured envelope 0 (every other environment) to 1 of 16, against a regression
+that would flood the census.
+
+Verified: `tests/unit/test_eme_2d_vector.py` 20 passed on venv-ci at 1 and 4
+threads, with the adjudications printed rather than silent.
+
+### 6.2 [S4] `test_pmm_m2_window_contract.py::test_min_feature_threshold_rule_predicts_stationarity`
+
+The rule was asserted as `min_feature > min(off, |c - off|)` -> stationary, and
+`(ns=3, 1.5 nm)` was pinned as an ABOVE-threshold cell.  At ns = 3 the window's
+separations are `off` = 3.6085 nm and `|c - off|` = 1.3915 nm, so that cell sat
+**7.8 % above its own threshold** -- and on venv-ci at 4 threads it collapses
+outright (spread 2.27008 against 0.0039957 everywhere else).
+
+Scanned at ns = 2, 3, 6, 8 over 6 (build x thread-cap) environments:
+
+| placement | spread | verdict |
+|---|---|---|
+| `0.5 x min(off,\|c-off\|)` | 0.685 .. 3.050 | COLLAPSE on every cell |
+| `1.2 x min(off,\|c-off\|)` | 0.00356 .. 2.2701 | **build-dependent** |
+| `0.9 x max(off,\|c-off\|)` | 0.00356 .. 2.2763 | **build-dependent** |
+| `1.2 x max(off,\|c-off\|)` | 0.00356 .. 0.00586 | STATIONARY on every cell |
+| `1.5 x max(off,\|c-off\|)` | 0.00356 .. 0.00586 | STATIONARY on every cell |
+
+Clearing `min` merges the SMALLER sliver and leaves the LARGER separation
+unmerged; whether that residual collapses the ladder is round-off.  The
+build-free contract is therefore two-sided:
+
+```
+min_feature < min(off, |c - off|)  -> collapse   on every build
+min_feature > max(off, |c - off|)  -> stationary on every build
+        between them               -> BUILD-DEPENDENT
+```
+
+The cells are now DERIVED from each `ns`'s own separations at a stated margin
+(0.5x the smaller, 1.2x the larger) instead of listed in nm, so nothing sits
+7.8 % from its own boundary again; the claim is a PARTITION with a measured
+20x separation requirement against a measured 116x gap (0.685 / 0.00586); and
+the intermediate band is measured and PRINTED, never asserted.  The printed
+band shows the migration directly -- `ns=3 @ 1.670 nm` reads 2.27008 at 4
+threads and 0.004 at 1 on the same build.
+
+**LIBRARY FINDING, recorded not fixed:** `_mode_cut_verdict`'s user-facing
+message says "raise min_feature above min(off, |coat - off|)".  The measurement
+above shows that advice is not sufficient on every build; `max` is.  That is a
+library-message change and belongs in its own commit, not a test-hardening
+pass.
+
+### 6.3 [S4/S5] `test_v5_20_13_pmm_jones_2d_fff_nv.py::test_pmm_fff_nv_matches_rcwa_fff_nv`
+
+The test already chose its reference per run and already refused to blame the
+PMM against a reference that does not close -- but "no rung qualifies" was
+itself a per-build reading, and it hard-failed on its own diagnosis.  The order
+cap is `4 n_orders + 1 <= Sx`, i.e. it is set by the reference cell's SAMPLING,
+which the run is free to refine.  `_stripe`'s duty-0.5 wall lands exactly on a
+sample edge at every even `Sx`, so a finer sampling is the SAME ideal stripe
+with better Fourier coefficients -- not a different structure and not a widened
+bar.  Measured on venv-ci:
+
+| sampling | 4 threads | 1 thread |
+|---|---|---|
+| Sx = 64 (shipped) | clean `[15]` -> **no corroborated reference** | clean `[9, 13]` -> M=13 |
+| Sx = 128 | clean `[7,11,13,15,19,21,23,25,27]` -> M=23 | clean `[7,11,13,15,21,23,27]` -> M=23 |
+
+At 64 samples and 4 threads exactly ONE rung closes, so nothing can corroborate
+it.  At 128 the same build has nine.  The three sampled references agree on
+`sum(R)` to 4.3e-05 (0.061786 / 0.061818 / 0.061829 at Sx 64 / 128 / 192), two
+decades inside `_AGREE_TOL`, so which stage supplies the ruler does not move
+the cross-solver reading.  `_RCWA_REF_STAGES` is walked only until one
+qualifies, so a build where the shipped ladder works pays nothing and reads
+identically.  The test now hard-fails only when the reference engine has
+stopped converging at EVERY sampled resolution -- and says so.
+
+### 6.4 Verification
+
+`tests/unit/test_eme_2d_vector.py tests/unit/test_pmm_m2_window_contract.py
+tests/unit/test_v5_20_13_pmm_jones_2d_fff_nv.py` = 46 tests, `PYTHONPATH`
+pinned, OMP/OPENBLAS/MKL capped before python starts:
+
+| build | 4 threads | 1 thread |
+|---|---|---|
+| **venv-ci, numpy 2.5.1 / scipy 1.18.0** (the FAILING build) | **46 passed** (4:58) | **46 passed** (6:14) |
+| **Windows py3.14.6, numpy 2.4.4 / scipy 1.17.1** | **46 passed** (5:25) | **46 passed** (6:06) |
+
+Green on the build that failed all three, and on the build that never did --
+which is the acceptance.  `ruff check lumenairy/ tests/unit/` (the CI scope):
+All checks passed.
+
+`.test_durations` updated for the three reworked tests (30.6 -> 48.0 s,
+6.3 -> 9.0 s, 12.4 -> 22.0 s): the adjudication ladders cost real time on the
+builds that need them, and a stale weight is the shard-timeout mechanism
+`AUDIT_CI_TEST_TIME_2026_08_03` S2 records.
+
+### 6.5 What this wave did NOT do
+
+The library was not touched.  Two findings are recorded for their own change:
+
+* `_mode_cut_verdict`'s user-facing remedy names `min(off, |coat - off|)`;
+  the measurement in S6.2 says `max` is the build-free advice.
+* `layer_vector_modes` can emit a spurious census entry (S6.1b, measured once
+  in eight environments).  It is now bounded rather than forbidden; whether
+  the finder should reject it is a library question.

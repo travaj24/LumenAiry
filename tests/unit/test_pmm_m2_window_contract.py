@@ -160,6 +160,37 @@ _LADDER_DEGREES = (6, 8, 10, 12, 14)
 #: bar, and a subset of :data:`ABOVE_THRESHOLD` (same ladders, same cache).
 _RULE_CURED = ((3, 1.5e-9), (6, 3.0e-9))
 
+
+def _window_separations(ns):
+    """``(off, |coat - off|)`` -- the +/-1 window's two cross-layer separations
+    on the coated taper at ``n_slice = ns``, derived from the device rather
+    than listed.  ``off = (H1/ns) tan(sidewall)`` is the per-slice lateral
+    walk; the conformal coat puts the second wall ``|coat - off|`` away."""
+    off = (H1 / ns) * np.tan(SIDEWALL)
+    return off, abs(COAT - off)
+
+
+#: ``n_slice`` values the N-6 rule is scored on, and the MARGIN FACTORS the
+#: below / above cells are placed at on that cell's OWN separations.
+#: ``x0.5`` of the smaller separation and ``x1.2`` of the LARGER one -- see
+#: :func:`test_min_feature_threshold_rule_predicts_stationarity` for why the
+#: larger one is the build-free boundary and for the measured envelopes.
+_RULE_NS = (3, 6)
+_RULE_BELOW_FACTOR, _RULE_ABOVE_FACTOR = 0.5, 1.2
+
+#: The N-6 partition's two clouds, measured 2026-08-16 over 6 (build x BLAS
+#: thread cap) environments -- WSL py3.12 numpy 2.5.1 / scipy 1.18.0, py3.12
+#: numpy 1.26.4 / scipy 1.11.4, py3.11 numpy 2.4.6 / scipy 1.17.1, each at 1
+#: and 4 threads -- and over ns = 2, 3, 6, 8:
+#:
+#:   below 0.5*min(off,|c-off|):  spread 0.685 .. 3.050   (COLLAPSE)
+#:   above 1.2*max(off,|c-off|):  spread 0.00356 .. 0.00586 (STATIONARY)
+#:
+#: -- a 116x gap between the clouds.  The bars sit inside it with better than
+#: a decade to the nearer cloud on each side.
+_RULE_COLLAPSE_BAR, _RULE_STATIONARY_BAR = 0.1, 2e-2
+_RULE_SEPARATION = 20.0
+
 #: ... and the CURED pair, degrees and device of the SINGLE-REGION uncoated
 #: taper, which pins its own.  A different DEVICE, so a different ladder.
 _UNCOATED_CURED = ((6, 3.0e-9), (12, 1.5e-9))
@@ -1272,15 +1303,49 @@ def test_min_feature_threshold_rule_predicts_stationarity(growth_repair_off):
     Inside a +/-1 window the only cross-layer walls are ADJACENT slices', so
     for a staircased taper with a conformal coat ``c`` and per-slice offset
     ``off = (thickness/ns) tan(sidewall)`` the window's cross-layer
-    separations are EXACTLY ``{off, |c - off|}``.  The contract is
+    separations are EXACTLY ``{off, |c - off|}``.
 
-        min_feature  >  min(off, |c - off|)
+    **WHICH OF THE TWO SEPARATIONS IS THE BUILD-FREE BOUNDARY -- CORRECTED
+    2026-08-16 (S4, at-threshold comparison; docs/TESTING_STANDARDS.md).**
+    This test asserted the contract as
 
-    and below that threshold the PRE-REPAIR degree ladder collapses.  MEASURED
-    to predict stationary-vs-collapse correctly on every cell of
-    ns x min_feature = {2, 3, 6, 8} x {0.5, 1.5, 3.0} nm.  Two ns values are
-    pinned here (one each side of the 1.5 nm bar) to keep the suite quick; the
-    full 4 x 3 matrix is in the M2 audit.
+        min_feature  >  min(off, |c - off|)      -> stationary
+
+    and pinned ``(ns=3, 1.5 nm)`` as an ABOVE-threshold cell.  At ns = 3 the
+    separations are ``off`` = 3.6085 nm and ``|c - off|`` = 1.3915 nm, so that
+    cell sits 7.8 % above the ``min`` -- and on WSL py3.12 / numpy 2.5.1 /
+    scipy 1.18.0 at 4 BLAS threads it does not behave like an above-threshold
+    cell at all: spread 2.27008, i.e. a full collapse, against 0.0039957 on
+    every other environment.  Clearing ``min`` merges the SMALLER sliver and
+    leaves the LARGER separation unmerged, and whether that residual sliver
+    collapses the ladder is decided by round-off.  Scanned at ns = 2, 3, 6, 8
+    over 6 (build x thread-cap) environments::
+
+        placement                     spread
+        0.5 x min(off, |c - off|)     0.685 .. 3.050     COLLAPSE, every cell
+        1.2 x min(off, |c - off|)     0.00356 .. 2.2701  BUILD-DEPENDENT
+        0.9 x max(off, |c - off|)     0.00356 .. 2.2763  BUILD-DEPENDENT
+        1.2 x max(off, |c - off|)     0.00356 .. 0.00586 STATIONARY, every cell
+        1.5 x max(off, |c - off|)     0.00356 .. 0.00586 STATIONARY, every cell
+
+    -- so the two-sided, build-free form of the contract is
+
+        min_feature  <  min(off, |c - off|)   -> collapse   on every build
+        min_feature  >  max(off, |c - off|)   -> stationary on every build
+
+    with the band BETWEEN them build-dependent.  The cells are now DERIVED
+    from each ``ns``'s own separations at a stated margin
+    (:data:`_RULE_BELOW_FACTOR` / :data:`_RULE_ABOVE_FACTOR`) instead of listed
+    in nm, so nothing sits 7.8 % from its own boundary again, and the claim is
+    a PARTITION with a measured separation rather than two absolute bars.  The
+    intermediate band is measured and PRINTED, not asserted -- it is exactly
+    where the answer is a per-build fact.
+
+    NOTE for the library, recorded not fixed here: ``_mode_cut_verdict``'s
+    message tells the user to "raise min_feature above min(off, |coat - off|)".
+    The measurement above says that advice is not sufficient on every build;
+    ``max`` is.  That is a library-message finding and belongs in its own
+    change, not in a test-hardening pass.
 
     **2026-08-06.**  The rule is now a statement about the library WITHOUT the
     forward-growth repair, so its four assertions are scored with the switch
@@ -1292,16 +1357,42 @@ def test_min_feature_threshold_rule_predicts_stationarity(growth_repair_off):
     why they can stay pinned while the ns=2 cell in the sibling above cannot.
     """
     # ---- the rule, on the pre-repair library (switch off via the fixture) --
-    # ns = 3: off = 3.6085, |c - off| = 1.3915 nm -> threshold 1.3915 nm
-    assert spread(coated_ladder(3, 0.5e-9)) > 0.1, \
-        "0.5 nm is BELOW the ns=3 threshold"
-    assert spread(coated_ladder(3, 1.5e-9)) < 1e-2, \
-        "1.5 nm is ABOVE the ns=3 threshold"
-    # ns = 6: off = 1.8042, |c - off| = 3.1958 nm -> threshold 1.8042 nm
-    assert spread(coated_ladder(6, 1.5e-9)) > 0.1, \
-        "1.5 nm is BELOW the ns=6 threshold"
-    assert spread(coated_ladder(6, 3.0e-9)) < 2e-2, \
-        "3.0 nm is ABOVE the ns=6 threshold"
+    below, above, band = {}, {}, {}
+    for ns in _RULE_NS:
+        lo, hi = sorted(_window_separations(ns))
+        mf_lo, mf_hi = _RULE_BELOW_FACTOR * lo, _RULE_ABOVE_FACTOR * hi
+        below[(ns, mf_lo)] = spread(coated_ladder(ns, mf_lo))
+        above[(ns, mf_hi)] = spread(coated_ladder(ns, mf_hi))
+        # the band between the two separations, MEASURED and printed: this is
+        # the region the corrected rule declines to predict, and printing it
+        # is how a future build's migration is seen rather than tripped over.
+        band[(ns, 1.2 * lo)] = spread(coated_ladder(ns, 1.2 * lo))
+    for (ns, mf), s in below.items():
+        assert s > _RULE_COLLAPSE_BAR, (
+            f"ns={ns} min_feature={mf * 1e9:.4f} nm is BELOW that cell's "
+            f"smaller cross-layer separation "
+            f"{min(_window_separations(ns)) * 1e9:.4f} nm, so the PRE-REPAIR "
+            f"degree ladder must COLLAPSE -- spread {s:.4g}")
+    for (ns, mf), s in above.items():
+        assert s < _RULE_STATIONARY_BAR, (
+            f"ns={ns} min_feature={mf * 1e9:.4f} nm is ABOVE that cell's "
+            f"LARGER cross-layer separation "
+            f"{max(_window_separations(ns)) * 1e9:.4f} nm, so no sliver "
+            f"survives and the ladder must be STATIONARY -- spread {s:.4g}")
+    # ... and the two really are two clouds, not one with a bar inside it.
+    assert min(below.values()) > _RULE_SEPARATION * max(above.values()), (
+        f"the collapse/stationary partition is inside one population: "
+        f"below {[round(v, 5) for v in below.values()]} vs above "
+        f"{[round(v, 6) for v in above.values()]}")
+    print("\nN-6 rule (pre-repair): below "
+          + str({f"ns={k[0]}@{k[1] * 1e9:.3f}nm": round(v, 5)
+                 for k, v in below.items()})
+          + "  above "
+          + str({f"ns={k[0]}@{k[1] * 1e9:.3f}nm": round(v, 6)
+                 for k, v in above.items()})
+          + "  [band, not asserted] "
+          + str({f"ns={k[0]}@{k[1] * 1e9:.3f}nm": round(v, 5)
+                 for k, v in band.items()}))
 
     # ---- and what the repair changes: the cliff, not the rule --------------
     PC.PMM_FORWARD_GROWTH_REPAIR = True          # the fixture owns the restore

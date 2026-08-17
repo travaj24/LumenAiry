@@ -62,10 +62,35 @@ PX, WL, DEPTH = 0.7e-6, 1.0e-6, 0.5e-6
 # --------------------------------------------------------------------------- #
 
 #: RCWA reference truncations scanned.  ~0.1-1.0 s each, so the whole ladder is
-#: cheap.  Bounded above by the cell's 64-sample x-axis (rcwa needs
-#: 4*n_orders+1 <= 64) and below by n_orders_x = 7, under which the stripe is
+#: cheap.  Bounded above by the reference cell's x-sampling (rcwa needs
+#: 4*n_orders+1 <= Sx) and below by n_orders_x = 7, under which the stripe is
 #: not resolved at all.
 _RCWA_LADDER = (7, 9, 11, 13, 15)
+
+#: THE REFERENCE LADDER IS TWO-STAGE (2026-08-16).  The order cap is tied to
+#: the reference cell's SAMPLING, not chosen, so "more rungs" is bought by
+#: sampling the SAME ideal stripe more finely -- ``_stripe``'s duty-0.5 wall
+#: lands exactly on a sample edge at every ``Sx`` here (``Sx`` even), so the
+#: represented structure is IDENTICAL and only the Fourier coefficients get
+#: better.  Stage 2 is entered only when stage 1 yields no corroborated
+#: reference, so on a build where the shipped ladder works nothing about this
+#: test's cost or its reading changes.
+#:
+#: Measured 2026-08-16 on WSL py3.12 / numpy 2.5.1 / scipy 1.18.0, the build
+#: that forced this -- clean rungs (closure < 1e-3) and the corroborated pick:
+#:
+#:   sampling   4 threads                      1 thread
+#:   Sx =  64   clean [15]          -> NONE    clean [9, 13]        -> M=13
+#:   Sx = 128   clean [7,11,13,15,19,21,23,25,27] -> M=23   clean [7,11,13,15,21,23,27] -> M=23
+#:
+#: -- i.e. at 64 samples and 4 threads exactly ONE rung closes, so nothing can
+#: corroborate it and the test failed naming its own reference as unusable
+#: (correctly: it WAS unusable).  At 128 the same build has nine.  The three
+#: sampled references agree on ``sum(R)`` to 4.3e-05 (0.061786 / 0.061818 /
+#: 0.061829 at Sx 64 / 128 / 192), i.e. two decades inside ``_AGREE_TOL``, so
+#: which stage supplies the ruler does not move the cross-solver reading.
+_RCWA_REF_STAGES = ((64, _RCWA_LADDER),
+                    (128, (7, 11, 13, 15, 19, 21, 23, 25, 27)))
 
 #: PMM truncations scanned, cheapest first.  Bounded above by the degree-11
 #: nodal grid (2*n_orders+1 <= 33) and below by n_orders = 9: n_orders = 7
@@ -220,6 +245,23 @@ def test_pmm_fff_nv_matches_rcwa_fff_nv():
     essentially thread-invariant for both engines (twelve digits); the defect
     lives in the transmitted orders.
 
+    **AND "NO RUNG QUALIFIES" WAS ITSELF A PER-BUILD READING (2026-08-16).**
+    On WSL py3.12 / numpy 2.5.1 / scipy 1.18.0 at 4 BLAS threads the shipped
+    ladder produced exactly ONE clean rung (``n_orders_x`` 15, closure
+    1.43e-04; the other four read 2.5e-02, 4.6e-03, 1.0e-02, 4.4e-03), and one
+    rung cannot be corroborated, so the test failed -- correctly diagnosing its
+    own reference as unusable, and then hard-failing on that diagnosis.  A
+    diagnosis is not a verdict: the order cap here is ``4 n_orders + 1 <= Sx``,
+    i.e. it is set by the reference cell's SAMPLING, which the run is free to
+    refine.  ``_stripe``'s duty-0.5 wall lands exactly on a sample edge at
+    every even ``Sx``, so a finer sampling is the SAME ideal stripe with better
+    Fourier coefficients -- not a different structure and not a widened bar.
+    At ``Sx`` = 128 that same build has NINE clean rungs and corroborates at
+    ``n_orders_x`` = 23 (both 1 and 4 threads).  The stages are only walked
+    until one qualifies, so on a build where the shipped ladder works this
+    costs nothing and reads identically.  The test now hard-fails only when
+    the reference engine has stopped converging at EVERY sampled resolution.
+
     So nothing is pinned any more.  The reference is CHOSEN from a scan: the
     cleanest rcwa rung that another clean rung corroborates (closure alone is
     not enough -- at one thread ``n_orders_x`` 15 closes to 1.6e-04 with
@@ -235,8 +277,8 @@ def test_pmm_fff_nv_matches_rcwa_fff_nv():
     eg = np.diag([2.25] * 3).astype(complex)
     cell = _stripe(er, eg)
 
-    def _rcwa_at(Mx):
-        _o, R, T, _J = rcwa_jones_2d(PX, PX, cell, 1.5, 1.0, DEPTH, WL,
+    def _rcwa_at(Mx, rcell):
+        _o, R, T, _J = rcwa_jones_2d(PX, PX, rcell, 1.5, 1.0, DEPTH, WL,
                                      n_orders_x=Mx, n_orders_y=1,
                                      formulation="fff_nv", symmetry=False)
         return R, T
@@ -248,15 +290,30 @@ def test_pmm_fff_nv_matches_rcwa_fff_nv():
         return R, T
 
     # (1) the REFERENCE, chosen on this run.  The structure is provably
-    #     lossless, so a rung that does not conserve is not a ruler.
-    rrows = _scan(_rcwa_at, _RCWA_LADDER)
-    ref = _corroborated_reference(rrows)
+    #     lossless, so a rung that does not conserve is not a ruler -- and
+    #     "no rung conserves" is a statement about the SAMPLING, which this
+    #     run is free to refine, not a verdict this test may hand down.
+    ref, rrows, stage, tried = None, [], None, []
+    for Sx, ladder in _RCWA_REF_STAGES:
+        rcell = _stripe(er, eg, Sx=Sx)
+        rrows = _scan(lambda M, c=rcell: _rcwa_at(M, c), ladder)
+        ref, stage = _corroborated_reference(rrows), Sx
+        if ref is not None:
+            break
+        tried.append(f"Sx={Sx}:\n    " + _table(rrows))
     assert ref is not None, (
-        f"the RCWA fff_nv REFERENCE is unusable on this build: no scanned "
+        f"the RCWA fff_nv REFERENCE is unusable on this build AT EVERY "
+        f"SAMPLED RESOLUTION {[s for s, _l in _RCWA_REF_STAGES]}: no scanned "
         f"truncation both conserves to better than {_CLOSE_TOL:.0e} and is "
         f"reproduced by another one that does, so there is nothing for the "
-        f"PMM to be measured against.  This is a statement about the "
-        f"reference, NOT about pmm_jones_2d.\n    " + _table(rrows))
+        f"PMM to be measured against.  Refining the sampling is what buys "
+        f"rungs here (the order cap is 4*n_orders+1 <= Sx), so an exhausted "
+        f"stage list means the reference engine itself has stopped "
+        f"converging on this cell.  This is a statement about the reference, "
+        f"NOT about pmm_jones_2d.\n    " + "\n    ".join(tried))
+    if stage != _RCWA_REF_STAGES[0][0]:
+        print(f"\nfff_nv reference: the Sx={_RCWA_REF_STAGES[0][0]} ladder had "
+              f"no corroborated rung on this build; refined to Sx={stage}")
 
     # (2) the SUBJECT: every pmm truncation that conserves on this run.
     prows = _scan(_pmm_at, _PMM_LADDER, want_clean=_PMM_WANT_CLEAN)
@@ -266,7 +323,7 @@ def test_pmm_fff_nv_matches_rcwa_fff_nv():
         f"{_CLOSE_TOL:.0e} on this build -- the PMM side has no stable "
         f"truncation here to compare.\n    " + _table(prows))
     print(f"\nfff_nv cross-solver: reference rcwa n_orders_x={ref['M']} "
-          f"(closure {ref['close']:.3e}); pmm rungs "
+          f"(Sx={stage}, closure {ref['close']:.3e}); pmm rungs "
           f"{[r['M'] for r in pclean]} of {[r['M'] for r in prows]}")
 
     # (3) PMM (Laurent-projected) and RCWA (Li-2003 successive) are DIFFERENT
