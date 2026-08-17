@@ -398,8 +398,29 @@ method.
 scipy 1.17.1, OMP/OPENBLAS/MKL = 4, `PYTHONPATH` pinned and asserted (`PIN OK
 C:\tmp\lum_np\lumenairy\__init__.py`).
 
-(pending -- still running at the time this section was written; result and, for
-any failure, the same one-axis `origin/main` comparison as 5.1, to be appended)
+**Attempt 1 -- KILLED AT 45 %, ZERO FAILURES TO THAT POINT.**  The run reached
+`[ 45%]` of `tests/unit` with not one `FAILED` or `ERROR` line, then its task
+wrapper was killed and took the pytest process with it (the log's last write
+predates the kill by minutes; the process list confirms it did not survive).
+That is a harness event, not a test result, and it is recorded as one.  A first
+attempt before that had ALSO been killed and left an ORPHANED pytest process
+(WINPID 8152, `ps -W`'s fourth column -- `Stop-Process -Id` takes the WINDOWS
+pid, and killing the cygwin pid silently does nothing); it was killed
+explicitly before the relaunch.  Orphan-check before relaunching a long suite.
+
+**Attempt 2 -- DETACHED, in progress.**  Relaunched via `Start-Process
+-RedirectStandardOutput` so a wrapper kill cannot take it down, writing to
+`C:/tmp/win_full_suite.log` (stderr to `.err`).  Note the marker argument must
+be passed as a single quoted `ArgumentList` element (`'"not integration"'`) --
+unquoted it splits and pytest collects nothing ("no tests ran in 0.00s", ERROR
+`file or directory not found: integration`), which is a silent-green shape
+worth naming.
+
+This attempt covers the S6 changes as well, which attempt 1 (started before
+them) did not: pytest imports every test module at collection, so a file edited
+mid-run is not picked up.  The S6 files are separately verified on this build
+in S6.4.  **Result to be appended when it lands**; any failure gets the same
+one-axis `origin/main` comparison as S5.1.
 
 ---
 
