@@ -150,22 +150,39 @@ def _warn_lossless_energy_2d(result, eps_values, fn_name):
     degree-scan passive gate never runs, so WARN here (never raise -- a working
     solve is byte-unchanged); pass ``stabilize=True`` (auto-retries nearby
     degrees) or lower ``n_orders`` / raise ``degree``.  A lossy input (any
-    complex eps) legitimately gives ``R+T < 1`` and is skipped."""
+    complex eps) legitimately gives ``R+T < 1`` and is skipped.
+
+    TWO-SIDED about 1.0 (2026-08-17).  Because losslessness has already been
+    ESTABLISHED above, ``R+T = 1`` is exact and a DEFICIT is exactly as much a
+    defect as an excess.  This predicate was previously the passivity window
+    ``-tol <= tot <= 1+tol`` inherited from the siblings -- but those siblings
+    never establish losslessness, so they cannot use the deficit side, whereas
+    this one can and must.  The gap was not academic: the same near-singular
+    Fourier-projection coincidence reaches the deficit side too, and
+    ``pmm_efficiency_2d`` returned ``R+T = 0.8953`` -- a 10.5 % energy LOSS on a
+    provably lossless pillar, per-order efficiencies wrong by ~2x -- with NO
+    warning, because 0.8953 sits inside the old window (measured: duty-0.25
+    eps 12.25/1 pillar, degree=11, n_orders=15; the no-floor staggered path
+    closes to 2.4e-14 on the same grating and disagrees by 1.6e-02).  The
+    message and the docstring both already described a CLOSURE test; only the
+    predicate was a passivity test.  Strictly more detections: every input that
+    warned before still warns (the ``tot > 1+tol`` and negative-efficiency arms
+    are unchanged), so no working solve changes."""
     for e in eps_values:
         if np.any(np.imag(np.asarray(e, dtype=_C)) != 0.0):
             return                             # not provably lossless -- skip
     _, R, T = result
     tot = float(np.real(np.sum(R)) + np.real(np.sum(T)))
-    # Two-sided passive gate + per-order non-negativity, identical to the
-    # _stabilize_scalar consensus gate (both keyed on _PASSIVE_TOL_2D).
+    # CLOSURE gate about 1.0 (losslessness is established above, so both signs
+    # are defects) + per-order non-negativity, keyed on _PASSIVE_TOL_2D.
     eff_min = min(float(np.min(np.real(R))) if np.size(R) else 0.0,
                   float(np.min(np.real(T))) if np.size(T) else 0.0)
-    if (not (-_PASSIVE_TOL_2D <= tot <= 1.0 + _PASSIVE_TOL_2D)
-            or eff_min < -_PASSIVE_TOL_2D):
+    if abs(tot - 1.0) > _PASSIVE_TOL_2D or eff_min < -_PASSIVE_TOL_2D:
         import warnings
         warnings.warn(
             f"{fn_name}: lossless energy closure violated (sum R+T = {tot:.3g}, "
-            f"min per-order efficiency = {eff_min:.3g}; the structure is "
+            f"off by {tot - 1.0:+.3g}, min per-order efficiency = "
+            f"{eff_min:.3g}; the structure is "
             f"provably lossless so R+T=1 is exact).  The Fourier projection is "
             f"ill-conditioned at this (n_orders, degree) coincidence and the "
             f"PER-ORDER efficiencies are unreliable -- pass stabilize=True "
@@ -954,6 +971,18 @@ def pmm_efficiency_2d(
     isotropic scalar TE/TM, normal/near-normal incidence, single layer; this is
     a hybrid with a Fourier-truncation ``n_orders`` floor, *not* no-floor like
     the 1-D PMM).
+
+    For an axis-aligned rectangular pillar with ISOTROPIC scalar permittivity --
+    exactly what this entry takes -- the no-floor 2-D sibling
+    :func:`~lumenairy.elements.pmm.twod_staggered.pmm_efficiency_2d_staggered`
+    solves the same problem without the ``n_orders`` floor (measured 2026-08-17
+    on a duty-0.25 eps 12.25/1 pillar: staggered closes energy to 2.4e-14 and is
+    ``n_orders``-invariant to 1e-16, while this entry at ``degree=11,
+    n_orders=15`` closes to 1.05e-01 and differs by 1.6e-02; see
+    ``docs/audits/EXPERIMENT_PMM2D_FEEC_2026_08_17.md``).  Prefer it unless you
+    need what only the hybrid provides -- per-layer walls with no union-grid
+    constraint, tapered/``z``-staircase stacks, anisotropic or out-of-plane
+    tensors, or the JAX twin.
 
     Parameters
     ----------

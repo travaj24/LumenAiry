@@ -4,6 +4,48 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- the 2-D lossless-closure tripwire was blind to LOST energy
+
+`_warn_lossless_energy_2d` (behind `pmm_efficiency_2d` and
+`pmm_efficiency_2d_cell`) ESTABLISHES that every permittivity is real -- so
+`R+T = 1` is exact -- and then applied the *passivity* window
+`-tol <= R+T <= 1+tol` inherited from siblings that never establish
+losslessness.  It therefore caught MANUFACTURED energy but not LOST energy.
+Measured: a duty-0.25 eps 12.25/1 pillar at `degree=11, n_orders=15` returned
+`R+T = 0.8953` -- a **10.5% energy deficit** on a provably lossless structure,
+per-order efficiencies ~2x wrong -- **silently**, because 0.8953 sits inside
+that window.  The predicate is now the closure test its own docstring and
+warning text already described (`abs(R+T - 1) > tol`), and the message reports
+the signed deviation.  **Strictly more detections**: the `R+T > 1` and
+negative-efficiency arms are unchanged, so no previously-warning input stops
+warning, no working solve is altered, and the guard still only ever warns.
+The bar is the shipped `_PASSIVE_TOL_2D = 5e-2`, reused unchanged; over a
+136-solve lossless matrix the worst CLEAN closure was 4.33e-03 (median 3.55e-05)
+against the 1.05e-01 defect, so it has a measured gap on both sides.
+
+### Changed -- `pmm_efficiency_2d` now names the no-floor 2-D sibling
+
+Its docstring said it has a Fourier floor "*not* no-floor like **the 1-D PMM**"
+-- comparing itself to the 1-D solver while never naming
+`pmm_efficiency_2d_staggered`, which takes the same isotropic rectangular pillar
+without the `n_orders` floor.  It now cross-references it with the measured
+gap and lists the cases that genuinely require the hybrid.
+
+### Docs -- the "FEEC / yee2" 2-D milestone is closed as already delivered
+
+`docs/audits/EXPERIMENT_PMM2D_FEEC_2026_08_17.md`.  Measured, not assumed: the
+hybrid's floor is real (at fixed `n_orders=5`, raising the modal degree
+converges to a value 2.4x off truth), and the staggered path
+(`twod_staggered.py` / `PMM2DStackPure`) is already the FEEC/yee2
+discretization the milestone asked for -- `n_orders`-invariant to 3e-18..4e-15
+with energy closure 1e-15..6e-13, with RCWA converging toward it from the far
+side on all three cells.  What still caps it is the Li-Granet right-angle
+corner singularity (Type I, `tau` 0.19-0.28), which is METHOD-INDEPENDENT: the
+same discretization is exact to round-off on a corner-free cell at the smallest
+admissible degree, so no cochain change can move it.  The remaining lever is
+mesh grading (`N-1`, non-uniform segments -- still unimplemented, `Basis1D`
+hard-codes `linspace`), not the formulation.  NO-GO on building a new layer type.
+
 ## [5.39.0] — 2026-08-17
 
 ### Changed -- the 2-D out-of-plane eigensolve is 1.6x - 2.4x faster (block-reduced)
