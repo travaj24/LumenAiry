@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.39.0] — 2026-08-17
+
 ### Changed -- the 2-D out-of-plane eigensolve is 1.6x - 2.4x faster (block-reduced)
 
 An out-of-plane (or slanted) tensor layer in `pmm_jones_2d` /
