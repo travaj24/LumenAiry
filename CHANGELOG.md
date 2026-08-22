@@ -39,8 +39,9 @@ reduction of that length does not fix its partitioning across calls.  Both
 lever arms land on the majority null value, and with `OMP_NUM_THREADS=1` the
 same four calls give ONE result -- the same value the threaded run produced on
 five of six arms.  The matched control on `origin/main` @ 5.39.1 reads **2
-distinct over 8** on the same fixture, and its majority hash is byte-identical
-to this build's.  This is the shipped path (the
+distinct over 8** on the same fixture -- intermittently, as this build does --
+and across sixteen calls of the two trees the hash they settle on is the same
+one, which is a byte-identity confirmation at the runner's own configuration.  This is the shipped path (the
 two-tree's `'auto'` arms agree across both trees at grid sizes where the
 reduction stays short); it means a production `carrier='auto'` run is not
 bit-reproducible and an A/B against a stored result cannot be read at the last
