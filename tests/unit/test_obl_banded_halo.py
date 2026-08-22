@@ -423,7 +423,15 @@ def test_gpu_namespace_still_falls_through_to_whole_grid():
     GPU backend and the halo slicing is written against NumPy semantics, so a
     CuPy field has to keep taking the whole-grid path -- and the carrier's row
     evaluator must only be built when the banded path is live."""
-    src = inspect.getsource(LR.apply_real_lens)
+    # v5.40 RETARGET (not a relaxation): ``apply_real_lens`` became a thin
+    # wrapper that owns the accumulator-store context and forwards to
+    # ``_apply_real_lens_impl``, which is where the gates live.  Same
+    # assertions, same counts; the forwarding check below stops this test
+    # reading an empty string and passing vacuously if the body moves again.
+    src = inspect.getsource(LR._apply_real_lens_impl)
+    assert '_apply_real_lens_impl' in inspect.getsource(LR.apply_real_lens), (
+        "apply_real_lens no longer forwards to _apply_real_lens_impl; this "
+        "test is reading the wrong function")
     assert src.count('and xp is np and not slant_correction') == 1
     assert src.count('and xp is np and (slant_correction or fresnel)') == 1
     # the row evaluator is gated on _chunk_grids, which itself requires np

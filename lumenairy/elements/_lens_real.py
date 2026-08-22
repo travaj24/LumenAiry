@@ -19,7 +19,11 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
+import os as _os
 import threading as _threading
+import time as _time
+import warnings as _warnings
+import weakref as _weakref
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -1865,7 +1869,8 @@ def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
                              n_medium_r: float, n_medium_kappa: float,
                              dx: float, dy: float, bandlimit: bool,
                              wave_propagator: Optional[str], absorption: bool,
-                             k0: float, xp: Any) -> Any:
+                             k0: float, xp: Any,
+                             stream_transfer_function: bool = False) -> Any:
     """Propagate ``E`` a distance ``thickness`` through a medium of real index
     ``n_medium_r`` (+ optional bulk absorption via ``n_medium_kappa``),
     dispatching on ``wave_propagator``.
@@ -1894,7 +1899,8 @@ def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
             E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit)
     elif wave_propagator == 'asm':
         E = angular_spectrum_propagate(
-            E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit)
+            E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit,
+            stream_transfer_function=stream_transfer_function)
     else:
         raise ValueError(
             f"apply_real_lens: unknown wave_propagator {wave_propagator!r}.  "
@@ -2412,6 +2418,83 @@ def _screen_obliquity_row_evaluator(carrier, dx, dy, Nx, Ny, n_medium=1.0):
         yax = (np.arange(r0, r1, dtype=np.float64) - Ny / 2) * dy
         Xg, Yg = np.meshgrid(xax, yax)
         _W, L, M = _tilted_carrier_parts(carrier, Xg, Yg)
+        return (np.asarray(L, dtype=np.float64) * n1,
+                np.asarray(M, dtype=np.float64) * n1)
+
+    return rows
+
+
+def _screen_obliquity_rows_any(carrier, E_in, wavelength, dx, dy, Nx, Ny,
+                               n_medium=1.0):
+    """A ``rows(r0, r1) -> (qx_band, qy_band)`` for ANY non-collimated carrier
+    (v5.40), or ``None`` when the caller's two-float fast path already applies.
+
+    :func:`_screen_obliquity_row_evaluator` is the narrow version of this: it
+    bands only the :class:`~._lens_traced.TiltedCarrier`, and it declines the
+    ``'auto'`` / scalar-conjugate / ndarray congruences on the grounds that
+    "``_compute_carrier``'s set-up is itself whole-grid".  That is true of the
+    SET-UP and false of the EVALUATION, and the distinction is worth 7 float64
+    grids on the route that matters:
+
+    .. code-block:: text
+
+        _screen_obliquity_angle_field, non-collimated carrier
+          Xg, Yg = meshgrid(...)                          2 grids
+          _compute_carrier -> W_full                      1 grid   DISCARDED
+          L, M = grad_fn(Xg, Yg)                          2 grids
+          asarray(L, float64) * n1                        2 grids
+                                                          ------
+          7 live to deliver 2, and at N = 32768 that is 60 GB to deliver 17
+
+    Only the fit itself (for ``'auto'``: a global least-squares over the bright
+    support) is irreducibly whole-grid.  Once its coefficients exist,
+    ``grad_fn`` is POINTWISE -- a polynomial in ``(x, y)`` for ``'auto'``, a
+    closed-form sphere for a scalar conjugate, an index lookup for an ndarray
+    -- so a band can be evaluated on demand from the same axis vectors.
+
+    **Byte-identity.**  ``np.meshgrid(xax, yax[r0:r1])`` is exactly the
+    ``[r0:r1]`` slice of ``np.meshgrid(xax, yax)`` (the same IEEE values in
+    the same order), ``grad_fn`` is pointwise, and the same
+    ``asarray(., float64) * n1`` chain runs on the result.  So each band is
+    bit-for-bit the corresponding rows of the whole-grid field.  The one
+    thing a band CANNOT reproduce is the whole-grid collapse-to-two-floats
+    that :func:`_screen_obliquity_angle_field` performs when ``ptp`` is zero
+    on both components -- and that collapse is observable (a Python float
+    seed and a float64 array of the same value promote differently under
+    NEP 50), so the caller reproduces it as a band-wise reduction rather than
+    dropping it.
+
+    ``W_full`` is never built: ``need_W=False`` plus zero-copy
+    ``np.broadcast_to`` coordinate views mean the whole-grid coordinate stack
+    never allocates either.
+    """
+    rows = _screen_obliquity_row_evaluator(carrier, dx, dy, Nx, Ny,
+                                           n_medium=n_medium)
+    if rows is not None:
+        return rows
+    from ._lens_traced import TiltedCarrier, _compute_carrier
+    if (isinstance(carrier, TiltedCarrier)
+            and not np.isfinite(float(carrier.R))):
+        return None                     # collimated: two floats, already free
+    n1 = float(n_medium)
+    xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    # Zero-copy stand-ins.  With ``need_W=False`` these are read for their
+    # SHAPE (and, on the ndarray branch, compared against it); nothing indexes
+    # them, so no grid is materialised.
+    _Xb = np.broadcast_to(xax[None, :], (Ny, Nx))
+    _Yb = np.broadcast_to(yax[:, None], (Ny, Nx))
+    try:
+        _W, grad_fn, _w = _compute_carrier(
+            carrier, E_in, wavelength, dx, _Xb, _Yb, need_W=False)
+    except (TypeError, ValueError):
+        # An unrecognised congruence, or one whose set-up genuinely needs a
+        # writable coordinate grid: fall back to the whole-grid field.
+        return None
+
+    def rows(r0, r1):
+        Xg, Yg = np.meshgrid(xax, yax[r0:r1])
+        L, M = grad_fn(Xg, Yg)
         return (np.asarray(L, dtype=np.float64) * n1,
                 np.asarray(M, dtype=np.float64) * n1)
 
@@ -3185,6 +3268,279 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
     return screen_obliquity is not False
 
 
+#: ``stacklevel`` every warning raised inside :func:`_apply_real_lens_impl`
+#: uses, so they keep pointing at the USER'S call rather than at library code.
+#: The v5.40 split put ``apply_real_lens`` (which owns the accumulator-store
+#: ``with`` block) between the caller and the body, and a warning that names
+#: ``return _apply_real_lens_impl(...)`` as its origin is useless -- it tells
+#: you where the library called itself.  3 = the impl's own frame, the
+#: wrapper's, then the caller's.
+_WARN_STACKLEVEL = 3
+
+
+_VALID_ACCUMULATOR_STORE = ('ram', 'memmap')
+
+
+class _AccumulatorStore:
+    """Allocator for the PERSISTENT full-grid accumulators of the angle-true
+    screen paths (v5.40).
+
+    Everything else ``apply_real_lens`` allocates at full-grid size is a
+    TRANSIENT -- the band loop frees it inside one iteration -- and is
+    therefore already as small as banding can make it.  What banding cannot
+    remove is the state that must be simultaneously live for the WHOLE grid
+    while the loop walks it:
+
+    * the tangent-facet momentum accumulator ``(_tf_px, _tf_py)`` and the
+      fresh destination pair each surface writes into (4 float64 grids);
+    * the remap rung's walk components ``(_rm_wx_g, _rm_wy_g)`` (2 more);
+    * the screen-obliquity momentum pair ``_obl_p0*``, the drift pair
+      ``_obl_u*``, the materialised carrier momentum ``_obl_q*`` and the
+      guard's ``_obl_total``.
+
+    Each of those is written ONCE PER SURFACE, band by band, in increasing
+    row order, and read back band by band on the next surface.  That is the
+    textbook out-of-core access pattern, and it is what ``'memmap'`` exploits:
+    the accumulator lives in a file in ``scratch_dir`` and the OS pages in the
+    band under the cursor.  At ``N = 32768`` one such grid is 8.59 GB, so the
+    tangent-facet route-3 set alone is 34.4 GB of resident pages that the run
+    otherwise has to hold.
+
+    THE CONTRACT IS BIT-IDENTITY, and it is structural rather than hoped for:
+    the store changes only WHERE an accumulator's bytes live.  Every
+    expression that reads or writes one is unchanged, operates on the same
+    dtype and the same C-contiguous layout, and sees a plain ``np.ndarray``
+    (``np.asarray`` of the mapping -- a BASE-CLASS view; see :meth:`_make`),
+    so no ufunc can take a different branch on the array's TYPE.
+
+    Parameters
+    ----------
+    mode : {'ram', 'memmap'}
+        ``'ram'`` (the default) is ``xp.empty`` / ``xp.zeros`` verbatim -- the
+        store is then a pure pass-through and allocates no files at all.
+    scratch_dir : str or None
+        Directory the ``'memmap'`` backing files are created in.  ``None``
+        creates (and removes) a private temporary directory.  A caller-supplied
+        directory is NOT removed; only the files this store made in it are.
+
+    The array namespace is supplied later, by :meth:`bind`, because the public
+    entry point opens the store before it has resolved the backend.
+    ``'memmap'`` is REFUSED for anything but NumPy -- a CuPy / JAX accumulator
+    has no host mapping to spill to, and silently falling back to RAM would
+    make the preflight's memmap credit a lie.
+
+    Notes
+    -----
+    **The store releases each mapping when its VIEW dies, not only at
+    :meth:`close`.**  The tangent-facet path allocates a fresh destination
+    pair per surface and a fresh pair per gap transport and rebinds the
+    accumulator to it, so the previous pair is garbage immediately.  Without
+    per-view reaping the scratch directory would grow to every accumulator the
+    call ever made -- twelve mappings, ~103 GB at ``N = 32768`` on a
+    three-surface group -- instead of the four or so that are live.
+
+    **Windows.**  Two hazards, both found by testing rather than by reading.
+    A mapped file cannot be unlinked while the mapping is open, so the reaper
+    drops its reference and closes the ``mmap`` explicitly before unlinking.
+    And the unlink is not always COMPLETE when it returns: the entry lingers
+    in a pending-delete state and an immediately following ``rmdir`` fails
+    with "directory not empty" on a directory ``listdir`` already reports as
+    empty.  Both are retried with backoff and WARN if they exhaust it, rather
+    than leaving silent litter in the scratch directory.
+
+    ``close`` is idempotent and runs from the public entry point's ``with``,
+    so an exception mid-run cleans up exactly as a normal return does.  Any
+    view still held after ``close`` is invalid -- which is why the accumulator
+    names are dropped before it runs.
+    """
+
+    __slots__ = ('mode', 'xp', '_dir', '_own_dir', '_entries', '_n', '_closed')
+
+    def __init__(self, mode='ram', scratch_dir=None):
+        if mode not in _VALID_ACCUMULATOR_STORE:
+            raise ValueError(
+                f"apply_real_lens: accumulator_store must be one of "
+                f"{_VALID_ACCUMULATOR_STORE}, got {mode!r}.")
+        self.mode = mode
+        self.xp = np
+        self._dir = scratch_dir
+        self._own_dir = False
+        self._entries = []
+        self._n = 0
+        self._closed = False
+
+    def bind(self, xp):
+        """Pin the array namespace, once the caller has resolved the backend."""
+        if self.mode == 'memmap' and xp is not np:
+            raise ValueError(
+                "apply_real_lens: accumulator_store='memmap' requires the "
+                "NumPy backend -- a device (CuPy / JAX) accumulator has no "
+                "host mapping to spill to.  Use accumulator_store='ram'.")
+        self.xp = xp
+        return self
+
+    # -- allocation ------------------------------------------------------
+    @property
+    def active(self):
+        return self.mode == 'memmap' and not self._closed
+
+    def empty(self, shape, dtype):
+        """An UNINITIALISED accumulator -- the caller fills every row."""
+        if not self.active:
+            return self.xp.empty(shape, dtype=dtype)
+        return self._make(shape, dtype, fill=None)
+
+    def zeros(self, shape, dtype):
+        if not self.active:
+            return self.xp.zeros(shape, dtype=dtype)
+        return self._make(shape, dtype, fill=0)
+
+    def full(self, shape, value, dtype):
+        if not self.active:
+            return self.xp.full(shape, value, dtype=dtype)
+        return self._make(shape, dtype, fill=value)
+
+    def adopt(self, arr):
+        """Move an already-materialised full-grid accumulator into the store.
+
+        Copies ``arr``'s bytes into a mapping and returns the mapped view; the
+        caller drops its reference to ``arr``.  Used where the accumulator is
+        SEEDED by a helper that returns an ordinary array (the carrier's
+        momentum field).  Scalars and non-arrays pass straight through."""
+        if not self.active or getattr(arr, 'ndim', 0) == 0:
+            return arr
+        out = self._make(arr.shape, arr.dtype, fill=None)
+        out[...] = arr
+        return out
+
+    def astype(self, arr, dtype):
+        """``arr.astype(dtype)`` for an accumulator, keeping it in the store."""
+        if not self.active or getattr(arr, 'ndim', 0) == 0:
+            return arr.astype(dtype)
+        out = self._make(arr.shape, dtype, fill=None)
+        out[...] = arr
+        return out
+
+    # -- internals -------------------------------------------------------
+    def _ensure_dir(self):
+        if self._dir is None:
+            import tempfile
+            self._dir = tempfile.mkdtemp(prefix='lumenairy_accum_')
+            self._own_dir = True
+        elif not _os.path.isdir(self._dir):
+            _os.makedirs(self._dir, exist_ok=True)
+        return self._dir
+
+    def _make(self, shape, dtype, fill):
+        d = self._ensure_dir()
+        self._n += 1
+        path = _os.path.join(
+            d, f"accum_{_os.getpid()}_{id(self):x}_{self._n:03d}.dat")
+        mm = np.memmap(path, dtype=dtype, mode='w+', shape=tuple(shape))
+        if fill is not None:
+            mm[...] = fill
+        slot = len(self._entries)
+        self._entries.append((path, mm))
+        # Hand out a BASE-CLASS view.  ``np.asarray`` drops the ``np.memmap``
+        # subclass while sharing the mapped buffer, so every downstream ufunc
+        # sees exactly the object type the in-RAM path gives it and no result
+        # can inherit a subclass wrapper.
+        view = np.asarray(mm)
+        # REAP EACH MAPPING WHEN ITS VIEW DIES, not only at close().  The
+        # tangent-facet path allocates a FRESH destination pair per surface
+        # and a fresh pair per gap transport, and rebinds the accumulator to
+        # it; the previous pair becomes garbage immediately.  Without this the
+        # scratch directory would grow to every accumulator the call ever
+        # made -- 12 files, ~103 GB, on a three-surface group at N = 32768 --
+        # instead of the four or so that are live.  The finalizer holds no
+        # reference to ``view``, so it cannot itself keep the mapping alive.
+        # ``atexit=False``: the ``with`` block in :func:`apply_real_lens`
+        # guarantees ``close()`` on every exit, so the only thing an
+        # interpreter-shutdown reap could add is a teardown-order hazard
+        # (``_os`` already torn down when the finalizer runs).
+        _f = _weakref.finalize(view, self._reap, slot)
+        _f.atexit = False
+        return view
+
+    def _reap(self, slot):
+        """Close and unlink one mapping whose view has been collected."""
+        if self._closed or slot >= len(self._entries):
+            return
+        entry = self._entries[slot]
+        if entry is None:
+            return
+        self._entries[slot] = None
+        self._drop(*entry)
+
+    # -- teardown --------------------------------------------------------
+    @staticmethod
+    def _drop(path, mm):
+        """Close one mapping and unlink its file."""
+        try:
+            base = getattr(mm, '_mmap', None)
+            del mm
+            if base is not None:
+                base.close()
+        except (BufferError, ValueError, OSError):       # pragma: no cover
+            pass
+        for _attempt in range(5):
+            try:
+                _os.remove(path)
+                return
+            except FileNotFoundError:
+                return
+            except OSError:
+                # Windows refuses the unlink while any mapping survives.
+                _time.sleep(0.01 * (_attempt + 1))
+        # Reported, not hidden: a scratch file this size is not something to
+        # leave behind quietly.
+        _warnings.warn(                                  # pragma: no cover
+            f"apply_real_lens: could not remove the accumulator scratch "
+            f"file {path!r}; remove it manually.", RuntimeWarning,
+            stacklevel=2)
+
+    def close(self):
+        """Close every mapping and unlink its file.  Idempotent."""
+        if self._closed:
+            return
+        self._closed = True
+        entries, self._entries = self._entries, []
+        for entry in entries:
+            if entry is not None:
+                self._drop(*entry)
+        if self._own_dir and self._dir:
+            # WINDOWS: unlinking a file whose last handle has just closed is
+            # not always complete by the time the call returns -- the entry
+            # lingers in a pending-delete state and the immediately following
+            # ``rmdir`` fails with "directory not empty" on a directory that
+            # ``listdir`` already reports as empty.  How long it lasts tracks
+            # what else the box is doing (measured: never on an idle box after
+            # this retry, reproducibly under a concurrent 16 GB job), so it is
+            # retried and then REPORTED rather than left as silent litter in
+            # %TEMP%.  The FILES are already gone by this point either way --
+            # only the empty directory is at stake.
+            for _attempt in range(10):
+                try:
+                    _os.rmdir(self._dir)
+                    break
+                except OSError:
+                    _time.sleep(0.02 * (_attempt + 1))
+            else:                                        # pragma: no cover
+                _warnings.warn(
+                    f"apply_real_lens: could not remove the accumulator "
+                    f"scratch directory {self._dir!r}; remove it manually.",
+                    RuntimeWarning, stacklevel=2)
+            self._dir = None
+            self._own_dir = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+
 _VALID_SURFACE_MODELS = ('thin', 'displaced', 'tangent_facet',
                          'tangent_facet_remap')
 #: The two route-3 family members.  They share the momentum accumulator, the
@@ -3441,6 +3797,9 @@ def apply_real_lens(
     carrier: Any = None,
     screen_obliquity: Any = 'auto',
     on_screen_obliquity: str = 'warn',
+    accumulator_store: str = 'ram',
+    scratch_dir: Optional[str] = None,
+    stream_transfer_function: bool = False,
 ) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
@@ -4036,6 +4395,53 @@ def apply_real_lens(
         raises instead; ``'silent'`` suppresses.  Carrier-free calls are
         always silent -- there is no angle to estimate against.
 
+    accumulator_store : {'ram', 'memmap'}, default 'ram'
+        Where the PERSISTENT full-grid accumulators live (v5.40).  Everything
+        else this function allocates at full-grid size is a transient that
+        ``sag_chunk_rows`` already keeps to one band; what banding cannot
+        remove is the state that must be simultaneously live across the whole
+        grid while the band loop walks it -- the tangent-facet momentum pair
+        and the fresh destination pair each surface writes into, the remap
+        rung's walk components, and the screen-obliquity momentum / drift /
+        carrier-momentum pairs and guard accumulator.
+
+        ``'memmap'`` backs each of those with an ``np.memmap`` in
+        ``scratch_dir``, so the OS holds only the bands under the cursor.
+        The accumulators are written once per surface in increasing row order
+        and read back band by band on the next surface, which is the access
+        pattern this trades RAM for.  At ``N = 32768`` one accumulator is
+        8.59 GB, so the tangent-facet route-3 set alone is 34.4 GB.
+
+        **Byte-identical to** ``'ram'``: the store changes only where an
+        accumulator's bytes live.  Every expression that touches one is
+        unchanged and sees a plain ``np.ndarray`` view of the mapping, so no
+        ufunc can dispatch differently.  Files are removed on EVERY exit,
+        including an exception raised mid-prescription.
+
+        NumPy backend only -- ``'memmap'`` with ``use_gpu=True`` or a device
+        array raises, rather than silently falling back to RAM.
+
+    scratch_dir : str or None, default None
+        Directory for the ``accumulator_store='memmap'`` backing files.
+        ``None`` creates and removes a private temporary directory; a
+        directory you supply is left in place (only the files this call made
+        in it are removed).  Put it on a fast local disk: it carries one
+        sequential pass per accumulator per surface.  Ignored when
+        ``accumulator_store='ram'``.
+
+    stream_transfer_function : bool, default False
+        Opt-in ASM memory trim (v5.40), forwarded to
+        :func:`~lumenairy.propagators.asm.angular_spectrum_propagate` for the
+        in-glass propagation.  Generates the transfer function one row band at
+        a time during the frequency-domain multiply, in place on the spectrum,
+        instead of materialising the full ``H`` grid plus a second full grid
+        for the product -- two complex full-grid arrays, 17.2 GB at
+        ``N = 32768`` / complex64.  Byte-identical; the cost is that the
+        streamed ``H`` is never cached, which is free above the H cache's
+        2 GB per-entry cap (``N >= 16384`` at complex64, where H is not
+        cacheable anyway) and a real repeat cost below it.  ``wave_propagator=
+        'asm'`` and the NumPy backend only; inert elsewhere.
+
     Returns
     -------
     E_out : ndarray (complex, N x N)
@@ -4072,6 +4478,81 @@ def apply_real_lens(
     All arguments past ``E_in`` are keyword-only (4.7+).  The
     parameter name is ``prescription`` -- the 4.6 alias
     ``lens_prescription`` was removed in 4.7.
+    """
+    with _AccumulatorStore(accumulator_store, scratch_dir) as _store:
+        return _apply_real_lens_impl(
+            E_in,
+            prescription=prescription,
+            wavelength=wavelength,
+            dx=dx,
+            dy=dy,
+            bandlimit=bandlimit,
+            fresnel=fresnel,
+            slant_correction=slant_correction,
+            absorption=absorption,
+            seidel_correction=seidel_correction,
+            seidel_poly_order=seidel_poly_order,
+            progress=progress,
+            use_gpu=use_gpu,
+            wave_propagator=wave_propagator,
+            surface_frame=surface_frame,
+            sag_dtype=sag_dtype,
+            sag_chunk_rows=sag_chunk_rows,
+            surface_model=surface_model,
+            conjugate=conjugate,
+            displaced_mode=displaced_mode,
+            displaced_obliquity=displaced_obliquity,
+            remap_order=remap_order,
+            carrier=carrier,
+            screen_obliquity=screen_obliquity,
+            on_screen_obliquity=on_screen_obliquity,
+            accumulator_store=accumulator_store,
+            scratch_dir=scratch_dir,
+            stream_transfer_function=stream_transfer_function,
+            _accum_store=_store,
+        )
+
+
+def _apply_real_lens_impl(
+    E_in: np.ndarray,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    bandlimit: bool = True,
+    fresnel: bool = False,
+    slant_correction: bool = False,
+    absorption: bool = False,
+    seidel_correction: bool = False,
+    seidel_poly_order: int = 6,
+    progress: Optional[Any] = None,
+    use_gpu: bool = False,
+    wave_propagator: Optional[str] = None,
+    surface_frame: bool = False,
+    sag_dtype: Optional[Any] = None,
+    sag_chunk_rows: Optional[int] = None,
+    surface_model: str = 'thin',
+    conjugate: Any = None,
+    displaced_mode: str = 'screen',
+    displaced_obliquity: str = 'auto',
+    remap_order: int = 3,
+    carrier: Any = None,
+    screen_obliquity: Any = 'auto',
+    on_screen_obliquity: str = 'warn',
+    accumulator_store: str = 'ram',
+    scratch_dir: Optional[str] = None,
+    stream_transfer_function: bool = False,
+    _accum_store: Optional['_AccumulatorStore'] = None,
+) -> np.ndarray:
+    """The body of :func:`apply_real_lens`.
+
+    Split out (v5.40) so the public entry point can own the
+    accumulator-store context: the store's scratch files must be released
+    on EVERY exit, including an exception raised mid-prescription, and a
+    ``with`` block around the call is the only place that can guarantee it
+    without wrapping two thousand lines in a ``try``.  Every argument is
+    forwarded verbatim; ``_accum_store`` is private and always supplied.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
@@ -4193,7 +4674,8 @@ def apply_real_lens(
     try:
         N_grid = int(np.shape(E_in)[0])
         _warn_if_aperture_exceeds_grid(
-            prescription, N_grid, dx, source='apply_real_lens')
+            prescription, N_grid, dx, source='apply_real_lens',
+            stacklevel=_WARN_STACKLEVEL + 1)
     except (KeyError, ValueError, TypeError, AttributeError, IndexError):
         # Aperture-check failure is informational only.
         pass
@@ -4216,6 +4698,15 @@ def apply_real_lens(
         xp = cp
     else:
         xp = np
+
+    # The PERSISTENT full-grid accumulators are allocated through this store
+    # (v5.40).  ``accumulator_store='ram'`` -- the default -- makes it a pure
+    # pass-through to ``xp.empty`` / ``xp.zeros``, so nothing about the default
+    # path moves; ``'memmap'`` spills them to ``scratch_dir``.  The public
+    # entry point owns the ``with``; this is only where the backend is pinned.
+    _accum = (_accum_store if _accum_store is not None
+              else _AccumulatorStore(accumulator_store, scratch_dir))
+    _accum.bind(xp)
 
     if dy is None:
         dy = dx
@@ -4403,6 +4894,12 @@ def apply_real_lens(
             if xp is not np:
                 _obl_qx = xp.asarray(_obl_qx)
                 _obl_qy = xp.asarray(_obl_qy)
+            # A non-collimated congruence returns a full GRID here, and it is
+            # read on every surface, so it is persistent state: adopt it into
+            # the store (a collimated tilt returns two floats and passes
+            # straight through).
+            _obl_qx = _accum.adopt(_obl_qx)
+            _obl_qy = _accum.adopt(_obl_qy)
             # A zero-angle carrier has no drift to accumulate, so R1 is skipped
             # STRUCTURALLY rather than by cancellation -- the byte-null of
             # ``test_zero_angle_carrier_is_byte_identical`` is not a tolerance.
@@ -4424,7 +4921,7 @@ def apply_real_lens(
             del _qb_x, _qb_y
         if on_screen_obliquity != 'silent' and not _tf_active:
             # only the guard reads the accumulated correction field
-            _obl_total = xp.zeros((Ny, Nx), dtype=_sag_real)
+            _obl_total = _accum.zeros((Ny, Nx), _sag_real)
 
     # ---- route 3: the tangent-facet model's momentum accumulator ----------
     # ``(_tf_px, _tf_py)`` is the FIELD's own transverse optical momentum: the
@@ -4436,11 +4933,59 @@ def apply_real_lens(
     if _tf_active and carrier is not None:
         _tf_n_first = float(get_glass_index(surfaces[0]['glass_before'],
                                             wavelength)) if surfaces else 1.0
-        _tf_px, _tf_py = _screen_obliquity_angle_field(
-            carrier, E_in, wavelength, dx, dy, Nx, Ny, n_medium=_tf_n_first)
-        if xp is not np:
-            _tf_px = xp.asarray(_tf_px)
-            _tf_py = xp.asarray(_tf_py)
+        # v5.40: fill the seed BAND-WISE when the route is banded.  The
+        # whole-grid helper holds 7 float64 grids to deliver 2 (see
+        # ``_screen_obliquity_rows_any``), and on the tangent-facet route with
+        # a non-collimated carrier that set-up -- not the accumulators, not the
+        # screen -- is what sets the call's peak.  Writing the seed straight
+        # into the accumulator store also means the FIRST surface already reads
+        # from the store rather than only the destination it writes.
+        _tf_seed_rows = (
+            _screen_obliquity_rows_any(
+                carrier, E_in, wavelength, dx, dy, Nx, Ny,
+                n_medium=_tf_n_first)
+            if _chunk_grids else None)
+        if _tf_seed_rows is not None:
+            _cr_s = int(sag_chunk_rows)
+            _sx_g = _sy_g = None
+            _seed_const = True
+            _seed_0 = None
+            for _sr0 in range(0, Ny, _cr_s):
+                _sr1 = min(Ny, _sr0 + _cr_s)
+                _sbx, _sby = _tf_seed_rows(_sr0, _sr1)
+                if _sx_g is None:
+                    _sx_g = _accum.empty((Ny, Nx), _sbx.dtype)
+                    _sy_g = _accum.empty((Ny, Nx), _sby.dtype)
+                    _seed_0 = (_sbx.flat[0], _sby.flat[0])
+                if _seed_const:
+                    # The whole-grid helper collapses a CONSTANT momentum field
+                    # to two Python floats, and that is observable: a float
+                    # seed and a float64 array of the same value promote
+                    # differently under NEP 50 (BUILD_TF_BANDED S2.1).  Same
+                    # decision, taken band-wise -- ``ptp == 0`` on both
+                    # components is exactly "every element equals element 0".
+                    _seed_const = (bool(np.all(_sbx == _seed_0[0]))
+                                   and bool(np.all(_sby == _seed_0[1])))
+                _sx_g[_sr0:_sr1] = _sbx
+                _sy_g[_sr0:_sr1] = _sby
+                del _sbx, _sby
+            if _seed_const:
+                _tf_px, _tf_py = float(_seed_0[0]), float(_seed_0[1])
+            else:
+                _tf_px, _tf_py = _sx_g, _sy_g
+            _sx_g = _sy_g = None
+        else:
+            _tf_px, _tf_py = _screen_obliquity_angle_field(
+                carrier, E_in, wavelength, dx, dy, Nx, Ny,
+                n_medium=_tf_n_first)
+            if xp is not np:
+                _tf_px = xp.asarray(_tf_px)
+                _tf_py = xp.asarray(_tf_py)
+            # Adopt the seed so the first surface already reads from the store
+            # (a collimated carrier collapses to two floats and adopt() passes
+            # it through untouched).
+            _tf_px = _accum.adopt(_tf_px)
+            _tf_py = _accum.adopt(_tf_py)
 
     # ---- screen obliquity: the row-band (halo) machinery (v5.35.3) --------
     # Everything below is a band-wise restatement of the whole-grid obliquity
@@ -4483,6 +5028,8 @@ def apply_real_lens(
             _obl_qx, _obl_qy = _screen_obliquity_angle_field(
                 carrier, E_in, wavelength, dx, dy, Nx, Ny,
                 n_medium=_obl_n_first)
+            _obl_qx = _accum.adopt(_obl_qx)
+            _obl_qy = _accum.adopt(_obl_qy)
             _obl_q_rows_fn = None
         return _obl_qx, _obl_qy
 
@@ -4501,7 +5048,7 @@ def apply_real_lens(
         if getattr(band, 'ndim', 0) == 0:
             return acc + band                  # all-scalar: unchanged
         new = acc + band
-        acc = xp.full((Ny, Nx), acc, dtype=new.dtype)
+        acc = _accum.full((Ny, Nx), acc, new.dtype)
         acc[r0:r1] = new
         return acc
 
@@ -4613,15 +5160,15 @@ def apply_real_lens(
             # scalar source -> fresh destination, so every band still reads
             # the scalar (see the _obl_p0_src note above).
             if _obl_p0_dst is None:
-                _obl_p0_dst = (xp.empty((Ny, Nx), dtype=_new_x.dtype),
-                               xp.empty((Ny, Nx), dtype=_new_y.dtype))
+                _obl_p0_dst = (_accum.empty((Ny, Nx), _new_x.dtype),
+                               _accum.empty((Ny, Nx), _new_y.dtype))
             _obl_p0_dst[0][r0:r1] = _new_x
             _obl_p0_dst[1][r0:r1] = _new_y
         else:
             _obl_flush_p0()
             if _new_x.dtype != _obl_p0x.dtype:
-                _obl_p0x = _obl_p0x.astype(_new_x.dtype)
-                _obl_p0y = _obl_p0y.astype(_new_y.dtype)
+                _obl_p0x = _accum.astype(_obl_p0x, _new_x.dtype)
+                _obl_p0y = _accum.astype(_obl_p0y, _new_y.dtype)
                 _obl_p0_src = (_obl_p0x, _obl_p0y)
             _obl_p0_pending = (r0, r1, _new_x, _new_y)
         return _out
@@ -4727,8 +5274,8 @@ def apply_real_lens(
         the same expression on the same operands)."""
         nonlocal _tf_dst
         if _tf_dst is None:
-            _tf_dst = (xp.empty((Ny, Nx), dtype=new_x.dtype),
-                       xp.empty((Ny, Nx), dtype=new_y.dtype))
+            _tf_dst = (_accum.empty((Ny, Nx), new_x.dtype),
+                       _accum.empty((Ny, Nx), new_y.dtype))
         _tf_dst[0][r0:r1] = new_x
         _tf_dst[1][r0:r1] = new_y
 
@@ -4821,8 +5368,8 @@ def apply_real_lens(
             _opd_e = xp.where(xp.isnan(_opd_e), 0.0, _opd_e)
         if _tf_remap:
             if _rm_wx_g is None:
-                _rm_wx_g = xp.empty((Ny, Nx), dtype=_wx.dtype)
-                _rm_wy_g = xp.empty((Ny, Nx), dtype=_wy.dtype)
+                _rm_wx_g = _accum.empty((Ny, Nx), _wx.dtype)
+                _rm_wy_g = _accum.empty((Ny, Nx), _wy.dtype)
             _rm_wx_g[r0:r1] = _wx
             _rm_wy_g[r0:r1] = _wy
             _tf_store(_ox, _oy, r0, r1)
@@ -4854,8 +5401,8 @@ def apply_real_lens(
                 _sx[_a0:_a1], _sy[_a0:_a1], _t, n_gap, dx, dy, xp,
                 r0 - _a0, r0 - _a0 + (r1 - r0))
             if _nx_g is None:
-                _nx_g = xp.empty((Ny, Nx), dtype=_nx.dtype)
-                _ny_g = xp.empty((Ny, Nx), dtype=_ny.dtype)
+                _nx_g = _accum.empty((Ny, Nx), _nx.dtype)
+                _ny_g = _accum.empty((Ny, Nx), _ny.dtype)
             _nx_g[r0:r1] = _nx
             _ny_g[r0:r1] = _ny
             del _nx, _ny
@@ -5108,7 +5655,8 @@ def apply_real_lens(
             if i < len(surfaces) - 1:
                 E = _propagate_through_glass(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
-                    dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
+                    dx, dy, bandlimit, wave_propagator, absorption, k0, xp,
+                    stream_transfer_function)
             continue
 
         # ---- Opt-in row-band (chunked) slant/fresnel phase screen -----
@@ -5333,7 +5881,7 @@ def apply_real_lens(
                     "capped and may differ from the true ray path by "
                     "kilo-radians.  Reduce input tilt or check the "
                     "surface profile.",
-                    RuntimeWarning, stacklevel=2,
+                    RuntimeWarning, _WARN_STACKLEVEL,
                 )
             if i < len(surfaces) - 1 and _obl_active and _obl_apply:
                 _obl_gap_advance(i, n2r)
@@ -5342,7 +5890,8 @@ def apply_real_lens(
             if i < len(surfaces) - 1:
                 E = _propagate_through_glass(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
-                    dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
+                    dx, dy, bandlimit, wave_propagator, absorption, k0, xp,
+                    stream_transfer_function)
             continue
 
         # Whole-grid path from here on -- build the deferred meshgrids on
@@ -5450,7 +5999,7 @@ def apply_real_lens(
                     "the freeform departure is dropped from this "
                     "wave-optics path.  Use apply_real_lens_traced "
                     "for biconic + Forbes Q.",
-                    RuntimeWarning, stacklevel=2,
+                    RuntimeWarning, _WARN_STACKLEVEL,
                 )
                 sag = surface_sag_biconic(
                     Xs, Ys, R_x=R, R_y=R_y,
@@ -5473,7 +6022,7 @@ def apply_real_lens(
                     "thin-element wave-optics path.  Use "
                     "apply_real_lens_traced (or apply_real_lens_maslov) "
                     "for a raytraced OPD that honours freeform_type.",
-                    RuntimeWarning, stacklevel=2,
+                    RuntimeWarning, _WARN_STACKLEVEL,
                 )
             if R_y is not None:
                 sag = surface_sag_biconic(
@@ -5553,7 +6102,7 @@ def apply_real_lens(
                     "capped and may differ from the true ray path by "
                     "kilo-radians.  Reduce input tilt or check the "
                     "surface profile.",
-                    RuntimeWarning, stacklevel=2,
+                    RuntimeWarning, _WARN_STACKLEVEL,
                 )
             cos_ti_safe = xp.maximum(cos_ti, 1e-3)
             cos_tt_safe = xp.maximum(cos_tt, 1e-3)
@@ -5906,11 +6455,13 @@ def apply_real_lens(
                 # thin-lens factorisation (entrance screen + t/n + exit screen).
                 E = _propagate_through_glass(
                     E, thicknesses[i] / n2r, wavelength, 1.0, 0.0,
-                    dx, dy, bandlimit, wave_propagator, False, k0, xp)
+                    dx, dy, bandlimit, wave_propagator, False, k0, xp,
+                    stream_transfer_function)
             else:
                 E = _propagate_through_glass(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
-                    dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
+                    dx, dy, bandlimit, wave_propagator, absorption, k0, xp,
+                    stream_transfer_function)
 
     # v5.35.3: the screen-obliquity momentum / drift / carrier accumulators are
     # per-surface state and are DEAD once the loop ends.  Drop them here so the
@@ -6099,7 +6650,7 @@ def apply_real_lens(
             if on_screen_obliquity == 'error':
                 raise ValueError(_msg)
             import warnings
-            warnings.warn(_msg, RuntimeWarning, stacklevel=2)
+            warnings.warn(_msg, RuntimeWarning, _WARN_STACKLEVEL)
 
     call_progress(progress, 'apply_real_lens', 1.0, 'done')
     return E

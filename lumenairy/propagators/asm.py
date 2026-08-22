@@ -62,6 +62,13 @@ def _ensure_numexpr_loaded():
 # (262144) ~ a 512x512 grid; the measured 1.6x win is at 2048^2+.
 _NE_MIN_SIZE = 1 << 18
 
+#: Workspace band for the streamed transfer function (v5.40), in ELEMENTS.
+#: 4 Mi elements holds the float64 kernel workspace (kz_sq, kz, the mask and
+#: the complex band) to ~130 MB whatever the grid, which is what makes the
+#: streamed path's saving monotone in N.  Bit-irrelevant: H is elementwise in
+#: (row, column), so no band width changes a single bit of the result.
+_ASM_STREAM_BAND_ELEMS = 1 << 22
+
 __all__ = [
     'angular_spectrum_propagate',
     'angular_spectrum_propagate_tilted',
@@ -470,6 +477,109 @@ def _get_asm_H_natural(
     return H
 
 
+def _asm_apply_H_streamed(
+    spec: np.ndarray,
+    Ny: int,
+    Nx: int,
+    dy: float,
+    dx: float,
+    wavelength: float,
+    z: float,
+    bandlimit: bool,
+    verbose: bool = False,
+) -> np.ndarray:
+    """``spec *= H``, generating ``H`` a row band at a time (v5.40).
+
+    The plain path materialises the whole (Ny, Nx) transfer function and then
+    allocates a second full grid for the product.  At N = 32768 / complex64
+    that is 2 x 8.59 GB for an operation whose operands are needed one row at
+    a time, and H is not even cacheable there (it exceeds
+    ``_H_CACHE_MAX_BYTES_PER_ENTRY``), so the grid is rebuilt on every call
+    only to be thrown away.
+
+    **Bit-identity is structural, not measured-and-hoped.**  Two facts carry
+    it, and both are properties of the code rather than of any fixture:
+
+    1. ``_get_asm_H_natural`` ALREADY builds H in row chunks, with exactly
+       this expression on exactly these operands; ``H[j0:j1]`` therefore has
+       the same bytes whatever the chunking, because every element of H
+       depends on its own row and column alone.  This function reuses that
+       kernel (``_asm_H_from_kz``) rather than restating it.
+    2. ``np.multiply(a, b, out=a)`` yields the same bits as ``a * b`` when
+       ``result_type(a, b) is a.dtype`` -- numpy does not reassociate or
+       reorder an elementwise ufunc on account of an ``out=``.  The caller
+       guarantees the dtype precondition (H is built at ``spec.dtype``); if it
+       could not, it does not take this path.
+
+    The band-limit mask, the ``ifftshift`` of the four 1-D input vectors and
+    the numexpr eligibility rule are all the plain path's, unchanged.
+    """
+    k = 2 * np.pi / wavelength
+    if z == 0:
+        # H is all-ones at z = 0 (the exact identity, evanescent bins
+        # included), so the multiply is skipped rather than performed against
+        # a grid of ones.  ONE EDGE CASE IS NOT BIT-IDENTICAL AND IS STATED
+        # RATHER THAN GLOSSED: numpy's naive complex product makes
+        # ``(inf + 0j) * (1 + 0j)`` equal ``inf + nan*j``, so a spectrum
+        # holding a non-finite value would come back differently here than
+        # from the materialised path.  It is unreachable from a finite input
+        # -- an FFT that overflows to inf produces nan across the transform,
+        # and ``nan * (1 + 0j)`` is nan either way -- but it is a difference,
+        # so it is written down.
+        return spec
+    kx_sq, ky_sq = _get_or_make_freq_grids(Ny, Nx, dy, dx, True)
+    if bandlimit:
+        bl_x, bl_y = _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength,
+                                            abs(z), True)
+    else:
+        bl_x = bl_y = None
+    kx_sq = np.fft.ifftshift(kx_sq)
+    ky_sq = np.fft.ifftshift(ky_sq)
+    if bl_x is not None:
+        bl_x = np.fft.ifftshift(bl_x)
+        bl_y = np.fft.ifftshift(bl_y)
+
+    target_cdtype = spec.dtype
+    _use_ne = (NUMEXPR_AVAILABLE
+               and target_cdtype == np.complex128
+               and (Ny * Nx) >= _NE_MIN_SIZE
+               and _ensure_numexpr_loaded())
+
+    # The band size is a FREE CHOICE -- H is elementwise in (row, column), so
+    # no band width changes a single bit -- and the plain builder's choice is
+    # the wrong one here.  It sizes the chunk at 10% of the RAM budget, which
+    # on a large box resolves to the WHOLE grid below N ~ 8192; that is
+    # harmless when the float64 kernel workspace (kz_sq, kz, prop: ~4 grids at
+    # complex64) is the only thing live, and actively counter-productive here,
+    # where the spectrum is live alongside it and the streamed path would then
+    # cost MORE than the grid it avoids.  Measured at N = 4096: whole-grid
+    # workspace read +1.69 grids over the plain path; the capped band reads
+    # below it.  Cap the workspace instead, in elements.
+    chunk = max(1, min(Ny, _ASM_STREAM_BAND_ELEMS // max(Nx, 1)))
+
+    kept_count = 0
+    for j0 in range(0, Ny, chunk):
+        j1 = min(Ny, j0 + chunk)
+        kz_sq_c = k**2 - kx_sq[None, :] - ky_sq[j0:j1, None]
+        prop = kz_sq_c > 0
+        kz_c = np.where(prop, np.sqrt(np.maximum(kz_sq_c, 0)), 0)
+        H_c = _asm_H_from_kz(kz_c, prop, z, target_cdtype, np,
+                             use_numexpr=_use_ne)
+        if bl_x is not None:
+            bl_mask = bl_x[None, :] & bl_y[j0:j1, None]
+            H_c *= bl_mask
+            if verbose:
+                kept_count += int(np.sum(bl_mask))
+        spec[j0:j1] *= H_c
+    if verbose:
+        if bl_x is not None:
+            print(f"  Band-limiting: keeping "
+                  f"{kept_count / (Nx * Ny) * 100:.1f}% of spectrum")
+        print(f"  ASM propagation: z = {z*1e3:.3f} mm  "
+              f"(H STREAMED in {chunk}-row bands, never materialised)")
+    return spec
+
+
 def angular_spectrum_propagate(
     E_in: np.ndarray,
     z: float,
@@ -480,6 +590,7 @@ def angular_spectrum_propagate(
     return_transfer_function: bool = False,
     use_gpu: bool = False,
     verbose: bool = False,
+    stream_transfer_function: bool = False,
 ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     Propagate an optical field using the Angular Spectrum Method (ASM).
@@ -520,6 +631,28 @@ def angular_spectrum_propagate(
 
     verbose : bool, default False
         If True, prints diagnostic information.
+
+    stream_transfer_function : bool, default False
+        Opt-in memory trim (v5.40).  Generate the transfer function one row
+        band at a time DURING the frequency-domain multiply, in place on the
+        spectrum, instead of materialising the full ``(Ny, Nx)`` ``H`` and
+        allocating a second full grid for the product.  Saves two complex
+        full-grid arrays -- 17.2 GB at ``N = 32768`` / complex64.
+
+        **Byte-identical** to the default path (see
+        :func:`_asm_apply_H_streamed` for the two-line argument), but NOT
+        free: the streamed H is never cached, so a caller that repeats the
+        same ``(shape, dtype, wavelength, z, bandlimit)`` pays the kernel
+        construction on every call instead of once.  That trade is worth
+        taking exactly where the memory matters -- above
+        ``_H_CACHE_MAX_BYTES_PER_ENTRY`` (2 GB, i.e. ``N >= 16384`` at
+        complex64) H is not cacheable anyway, so at those sizes the streamed
+        path rebuilds no more often than the plain one and simply holds less.
+        Below that it is a real cost, which is why the default is off.
+
+        NumPy backend only; ignored (with the plain path taken) on CuPy and
+        JAX inputs, and when ``return_transfer_function=True`` asks for the
+        very grid this avoids building.
 
     Returns
     -------
@@ -623,6 +756,19 @@ def angular_spectrum_propagate(
         # later complex128 call at that shape silently ran on scipy) and
         # emitted a misleading 'memory pressure' warning.
         E_in = E_in.astype(target_cdtype)
+
+    # v5.40 (LEVER 3a): the streamed transfer function.  Taken only on the
+    # NumPy backend and only when the caller does not also want H handed back
+    # -- the whole point is that H never exists as a grid.  Everything else
+    # about the call is unchanged, including the 2-shift fold below.
+    if (stream_transfer_function and xp is np and not is_jax
+            and not return_transfer_function):
+        spec = _fft2(np.fft.ifftshift(E_in))
+        if spec.dtype != target_cdtype:          # pragma: no cover - defensive
+            spec = spec.astype(target_cdtype)
+        _asm_apply_H_streamed(spec, Ny, Nx, dy, dx, wavelength, z, bandlimit,
+                              verbose=verbose)
+        return np.fft.fftshift(_ifft2(spec))
 
     # v5.17.x (P2-27): the H-cache lookup / chunked construction moved
     # verbatim into :func:`_get_asm_H_natural` (shared with the batch

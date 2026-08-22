@@ -4,6 +4,117 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- `accumulator_store='memmap'`: spill the persistent accumulators
+
+`apply_real_lens(accumulator_store={'ram','memmap'}, scratch_dir=None)`.
+Everything else the function allocates at full-grid size is a transient that
+`sag_chunk_rows` already keeps to one band; what banding cannot remove is the
+state that has to be simultaneously live across the WHOLE grid while the band
+loop walks it -- the tangent-facet momentum pair and the fresh destination
+pair each surface writes into, the remap rung's walk components, and the
+screen-obliquity momentum / drift / carrier-momentum pairs and guard
+accumulator.  `'memmap'` backs each with an `np.memmap` in `scratch_dir`
+(a private temporary directory by default), which is the right trade because
+those accumulators are written once per surface in increasing row order and
+read back band by band on the next surface.
+
+**Byte-identical to `'ram'`** -- the store changes only where an
+accumulator's bytes live, and hands out a base-class `np.ndarray` view of the
+mapping so no ufunc can dispatch on `np.memmap`.  Verified across an
+**8960-arm TWO-TREE comparison against `origin/main` @ 5.39.1** (5
+prescriptions x 4 grids including odd N and `dx != dy` x 4 surface models x 7
+carriers x 7 option combinations x 4 band sizes; 8640 of them returning a
+field rather than a matching refusal) and a new 144-test suite covering the
+same axes plus the fold guard's refusal at every band size.  Files are removed
+on every exit, including an exception raised mid-prescription, and each
+mapping is released as soon as its accumulator is rebound rather than only at
+the end of the call.
+
+**A caveat that belongs with any byte-identity claim on this route, and is
+NOT about these levers**: `carrier='auto'` does not reproduce ITSELF at
+production grid sizes.  A null comparison -- the same call four times, nothing
+changed -- gives two distinct results at N=4096, because the fit's
+`G = A.T @ A` runs over 1.8 M rows (28 M at N=16384) and a multi-threaded BLAS
+reduction of that length does not fix its partitioning across calls.  Both
+lever arms land on the majority null value, and with `OMP_NUM_THREADS=1` the
+same four calls give ONE result -- the same value the threaded run produced on
+five of six arms.  This is the shipped path (the
+two-tree's `'auto'` arms agree across both trees at grid sizes where the
+reduction stays short); it means a production `carrier='auto'` run is not
+bit-reproducible and an A/B against a stored result cannot be read at the last
+bits.  See `docs/audits/BUILD_LENS_32K_MEMORY_2026_08_22.md` S4.2.
+
+Measured on a design-121-like three-surface group, N=4096, `carrier=0.030`,
+warmed: PRIVATE COMMIT 6.52 -> 3.04 float64 grids (`8*N*N`), i.e. **-3.48
+grids = -29.9 GB at N=32768**.  Resident set RISES on an idle box (the OS
+keeps file-backed pages resident while nothing else wants the RAM); it is
+COMMIT the run was exhausting, and commit is what falls.  `'memmap'` is
+refused, not silently ignored, on a CuPy / JAX backend.
+
+### Added -- `stream_transfer_function=True`: never materialise the ASM `H`
+
+`angular_spectrum_propagate(stream_transfer_function=True)`, forwarded by
+`apply_real_lens`.  Generates the transfer function one row band at a time
+DURING the frequency-domain multiply, in place on the spectrum, instead of
+building the full `(Ny, Nx)` `H` and a second full grid for the product: two
+complex grids, **17.2 GB at N=32768 / complex64**.  Byte-identical -- the
+shipped path already builds `H` in row chunks with the same kernel, and `H`
+is elementwise in (row, column), so no band width changes a bit (pinned over
+band widths from 1 element to 4 Mi).  Opt-in because the streamed `H` is not
+cached: free above the H cache's 2 GB per-entry cap (`N >= 16384` at
+complex64, where `H` is not cacheable anyway) and a real repeat cost below it.
+Declined, with the plain path taken, when `return_transfer_function=True`
+asks for the very grid it avoids.
+
+### Changed -- the angle-true carrier momentum field is now built BAND-WISE
+
+`_screen_obliquity_row_evaluator` banded only a `TiltedCarrier` and declined
+the `'auto'` / scalar-conjugate / ndarray congruences on the grounds that
+"`_compute_carrier`'s set-up is itself whole-grid".  That is true of the
+set-up and false of the EVALUATION: once the fit's coefficients exist,
+`grad_fn` is POINTWISE.  The whole-grid seed held **7 float64 grids to
+deliver 2** (`meshgrid` 2, a discarded `W_full` 1, `grad_fn` 2, the `* n1`
+copies 2) -- 60 GB at N=32768 to deliver 17.  `_screen_obliquity_rows_any`
+evaluates it a band at a time straight into the accumulator store, and
+reproduces the whole-grid collapse-to-two-Python-floats as a band-wise
+reduction (that collapse is observable: a float seed and a float64 array of
+the same value promote `float32` geometry differently under NEP 50).
+
+Consequence, measured on a design-121 three-surface group at N=4096, extras
+over the paraxial no-carrier call at the same N (warmed `tracemalloc`, float64
+grids of `8*N*N`), against the shipped 5.39.1 tree:
+
+| route | 5.39.1 | this build |
+|---|---|---|
+| `tangent_facet`, no carrier | +4.12 | +4.12 |
+| ... + finite-conjugate carrier | +4.62 | **+4.12** |
+| ... + `carrier='auto'`, 5% bright support | +10.44 | **+4.12** |
+| ... + `carrier='auto'`, 21% bright | +13.30 | **+4.12** |
+| ... + `carrier='auto'`, 59% bright | +20.08 | **+11.25** |
+
+Flat to four significant figures across N=4096 -> 8192.  What remains at high
+bright support is the fit's irreducible design matrix, which is
+`(2 * n_bright, n_terms)` float64 by construction.
+
+### Changed -- `_compute_carrier` builds less, and only what is asked for
+
+Three byte-null trims, all on the `'auto'` fit that
+`carrier='auto'`/`LENS_ANALYTIC_CARRIER='auto'` runs:
+
+* `need_W=False` skips the full-grid potential `W_full` for callers that
+  discard it (with it off, `X`/`Y` are read only for their SHAPE, so a caller
+  may pass zero-copy `broadcast_to` views);
+* the sample coordinates are SEPARABLE, and `meshgrid` + two midpoint
+  expressions built four `(N, N)` float64 grids to produce six 1-D vectors.
+  Boolean-masking a zero-strided `broadcast_to` view selects the same elements
+  without the intermediate.  `Xg[i,j] == xax[j]` exactly, so the midpoint
+  average is the same two IEEE operands in the same order;
+* the design matrix is weighted IN PLACE (`A *= w[:, None]`), which no longer
+  doubles the fit's largest array.
+
+Byte-identity of `W`, `grad_fn` and `w_fn` verified two-tree against
+`origin/main` over the fit's own arm list.
+
 ## [5.39.1] — 2026-08-17
 
 ### Fixed -- the 2-D lossless-closure tripwire was blind to LOST energy

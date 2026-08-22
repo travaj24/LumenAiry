@@ -575,7 +575,17 @@ def test_gpu_namespace_still_falls_through_to_whole_grid():
     too, so a CuPy field keeps taking the whole-grid path -- pinned
     structurally (by reading the source) rather than by needing a GPU."""
     import inspect
-    src = inspect.getsource(LR.apply_real_lens)
+    # v5.40 RETARGET (not a relaxation): ``apply_real_lens`` became a thin
+    # wrapper that owns the accumulator-store context and forwards to
+    # ``_apply_real_lens_impl``, which is where the band gates now live.  The
+    # assertion itself is unchanged -- the same three source markers, the same
+    # ``xp is np`` requirement.  The companion check below pins the split, so
+    # a future move of the body cannot make this test read an empty string and
+    # pass vacuously.
+    src = inspect.getsource(LR._apply_real_lens_impl)
+    assert '_apply_real_lens_impl' in inspect.getsource(LR.apply_real_lens), (
+        "apply_real_lens no longer forwards to _apply_real_lens_impl; this "
+        "test is reading the wrong function")
     i = src.index('_narrow_chunk = (')
     j = src.index('_slant_narrow_chunk = (')
     assert 'xp is np' in src[i:i + 400]

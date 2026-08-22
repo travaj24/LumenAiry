@@ -3909,7 +3909,7 @@ def _tilted_carrier_parts(spec, X, Y):
 
 
 def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
-                     origin=(0.0, 0.0)):
+                     origin=(0.0, 0.0), need_W=True):
     """Build the carrier reference wavefront ``W(x, y)`` (length units;
     reference phase = ``k0 * W``) and a callable giving its transverse
     gradient -- the ray direction cosines ``L = dW/dx``, ``M = dW/dy``.
@@ -3955,13 +3955,24 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
     the origin must NOT also be removed from ``carrier.x0`` (that
     double-subtraction is exactly right at the grid centre and wrong in the
     wings -- the failure has no symptom at the beam peak).
+
+    ``need_W=False`` (v5.40) returns ``None`` in place of ``W_full`` and skips
+    building it.  ``W_full`` is a FULL ``(N, N)`` float64 grid -- 8.59 GB at
+    N = 32768 -- and most callers here discard it immediately; the ones that
+    use it keep the default.  With it off, ``X`` and ``Y`` are only ever read
+    for their SHAPE, so a caller may pass zero-copy ``np.broadcast_to`` views
+    of the two axis vectors and the whole coordinate stack disappears with it.
+    ``grad_fn`` / ``w_fn`` are unaffected: they are pointwise closures over
+    the same coefficients, so a band evaluated through them is bit-for-bit the
+    corresponding slice of the whole-grid answer.
     """
     N = X.shape[0]
     _org_x, _org_y = float(origin[0]), float(origin[1])
     if isinstance(carrier, TiltedCarrier):
         # niche D1: exact sphere + uniform tilt about (x0, y0), evaluated
         # ANALYTICALLY everywhere (grid, ray-launch heights, H6 eikonal).
-        W_full, _, _ = _tilted_carrier_parts(carrier, X, Y)
+        W_full = (_tilted_carrier_parts(carrier, X, Y)[0]
+                  if need_W else None)
 
         def grad_fn(xq, yq):
             _, Lq, Mq = _tilted_carrier_parts(carrier, xq, yq)
@@ -4061,12 +4072,28 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
         if _org_x or _org_y:
             yax = xax + _org_y
             xax = xax + _org_x
-        Xg, Yg = np.meshgrid(xax, yax, indexing='xy')
-        xL = 0.5 * (Xg[:, 1:] + Xg[:, :-1])[mxx]
-        yL = Yg[:, 1:][mxx]
+        # v5.40: the sample coordinates are SEPARABLE, and materialising them
+        # was the fit's largest fixed cost.  ``np.meshgrid`` built two full
+        # (N, N) float64 grids and each midpoint expression built a third
+        # before the mask threw all but the bright support away -- four
+        # float64 grids, 34 GB at N = 32768, to produce six 1-D vectors.
+        #
+        # Bit-identical, because the identity is exact rather than close:
+        # ``Xg[i, j] == xax[j]`` and ``Yg[i, j] == yax[i]`` for every (i, j),
+        # so ``0.5 * (Xg[:, 1:] + Xg[:, :-1])[i, j] == 0.5 * (xax[j+1] +
+        # xax[j])`` -- the SAME two IEEE operands in the same order -- and
+        # likewise down the columns.  Boolean-masking a zero-strided
+        # ``broadcast_to`` view selects only the elements the mask keeps, so
+        # the (N, N) intermediate never exists at all.
+        _xmid = 0.5 * (xax[1:] + xax[:-1])
+        _ymid = 0.5 * (yax[1:] + yax[:-1])
+        _shp_L = (yax.size, xax.size - 1)
+        _shp_M = (yax.size - 1, xax.size)
+        xL = np.broadcast_to(_xmid[None, :], _shp_L)[mxx]
+        yL = np.broadcast_to(yax[:, None], _shp_L)[mxx]
         Lv = Lx[mxx]
-        xM = Xg[1:, :][myy]
-        yM = 0.5 * (Yg[1:, :] + Yg[:-1, :])[myy]
+        xM = np.broadcast_to(xax[None, :], _shp_M)[myy]
+        yM = np.broadcast_to(_ymid[:, None], _shp_M)[myy]
         Mv = My[myy]
         # Intensity weights: on a fringed multi-source field the local tilt
         # is noisy, so weight each sample by the local |E| (bright regions
@@ -4089,27 +4116,39 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
             A[nL:, k] = (j * xM ** i * yM ** (j - 1)) if j >= 1 else 0.0
         rhs = np.concatenate([Lv, Mv])
         w = np.concatenate([wL, wM])
-        A = A * w[:, None]
+        # v5.40: weight IN PLACE.  ``A`` is the largest array in the fit --
+        # ``(2 * n_bright, n_terms)`` float64, which on a design-121 group at
+        # N = 4096 with 21% bright support is 2.1 float64 grids -- and
+        # ``A = A * w[:, None]`` doubled it for the duration of the multiply.
+        # ``np.multiply(A, w[:, None], out=A)`` is the same elementwise
+        # product on the same operands, so the coefficients are bit-identical.
+        A *= w[:, None]
         rhs = rhs * w
         # B7: normal-equations solve (thread-safe; no gelsd/JAX-OpenMP deadlock).
         coef = _solve_lstsq_thread_safe(A, rhs)
 
-        def _poly_and_grad(xq, yq):
-            Wq = np.zeros_like(xq, dtype=np.float64)
+        def _poly_and_grad(xq, yq, want_W=True):
+            # v5.40: ``want_W=False`` skips the potential itself.  ``grad_fn``
+            # never reads it, and ``Wq`` accumulates into its own array from
+            # its own terms, so dropping it cannot move a bit of the gradient.
+            # It saves one full-grid float64 array plus its per-term
+            # temporaries on every gradient evaluation.
+            Wq = np.zeros_like(xq, dtype=np.float64) if want_W else None
             Lq = np.zeros_like(xq, dtype=np.float64)
             Mq = np.zeros_like(xq, dtype=np.float64)
             for k, (i, j) in enumerate(terms):
-                Wq += coef[k] * xq ** i * yq ** j
+                if want_W:
+                    Wq += coef[k] * xq ** i * yq ** j
                 if i >= 1:
                     Lq += coef[k] * i * xq ** (i - 1) * yq ** j
                 if j >= 1:
                     Mq += coef[k] * j * xq ** i * yq ** (j - 1)
             return Wq, Lq, Mq
 
-        W_full, _, _ = _poly_and_grad(X, Y)
+        W_full = _poly_and_grad(X, Y)[0] if need_W else None
 
         def grad_fn(xq, yq):
-            _, Lq, Mq = _poly_and_grad(xq, yq)
+            _, Lq, Mq = _poly_and_grad(xq, yq, want_W=False)
             return Lq, Mq
 
         def w_fn(xq, yq):
@@ -4155,7 +4194,8 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
         # already took via the NaN, minus the two spurious warnings
         # (verified: ``carrier=inf`` and ``carrier=None`` outputs are
         # byte-equal before and after).
-        W_full = np.zeros_like(np.asarray(X, dtype=np.float64))
+        W_full = (np.zeros_like(np.asarray(X, dtype=np.float64))
+                  if need_W else None)
 
         def grad_fn(xq, yq):
             return np.zeros_like(xq, dtype=np.float64), \
@@ -4172,8 +4212,12 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
     # feeds the ray launch, the H6 entrance eikonal AND the exp(i k0 W)
     # reference leg, so the k0*eps*|s| error it used to carry was COHERENT
     # across all three.
-    _r2_full = X ** 2 + Y ** 2
-    W_full = _sgn * (_r2_full / (np.sqrt(_r2_full + s * s) + _abs_s))
+    if need_W:
+        _r2_full = X ** 2 + Y ** 2
+        W_full = _sgn * (_r2_full / (np.sqrt(_r2_full + s * s) + _abs_s))
+        del _r2_full
+    else:
+        W_full = None
 
     def grad_fn(xq, yq):
         _rho = np.sqrt(xq * xq + yq * yq + s * s)
