@@ -97,7 +97,9 @@ note.
 > produced on five of its six arms, both lever arms included.**
 > `auto_promote` off, `FFTW_ESTIMATE`, no bad shapes -- not the FFT; `A.T @ A`
 > is code this build did not touch, and the two-tree's `'auto'` arms agree
-> across both trees -- not this build.  It means a production `carrier='auto'`
+> across both trees, and a matched 8-call null on `origin/main` reads 2 distinct
+> over 8 on the same fixture with a majority hash byte-identical to this
+> build's -- not this build.  It means a production `carrier='auto'`
 > run is not bit-reproducible and no A/B against a stored result can be read at
 > the last bits.  The smoke is the lesson too: it varied only the thing under
 > test, and a design that does that cannot tell an effect from a drift.  (S4.2)
@@ -243,6 +245,13 @@ simultaneous files at the sampled points, 0 left after**, against 12 made.
 `test_the_scratch_footprint_is_bounded_by_what_is_LIVE` pins it at <= 8, a
 derived bar (six is the structural maximum -- momentum pair, destination pair,
 walk pair) with a factor to spare.
+
+**The 12 is not a calculation.**  The N = 16384 smoke ran against the tree
+BEFORE the reaping landed, and when it was killed it left exactly **12 files
+of 2.147 GB = 25.8 GB** behind in its scratch directory -- one three-surface
+call, one grid size up from the probe fixture, and the predicted count to the
+file.  That accident is also the measured form of the "a killed process leaves
+its scratch files" caveat in S9.
 
 **Context management.**  `apply_real_lens` is now a thin wrapper that owns
 `with _AccumulatorStore(...) as _store:` and forwards to
@@ -613,17 +622,32 @@ The wall clocks span 6x (the box was carrying four other jobs) and the bytes do
 not move, which is the point: it is not load that perturbs the result, it is
 the reduction that load perturbs.
 
-**THE DIRECT SHIPPED-TREE CONTROL IS REPORTED HONESTLY, INCLUDING WHERE IT
-DOES NOT SHOW THE EFFECT.**  A four-call null on `origin/main` at N = 8192 read
-**1 distinct over 4 -- REPRODUCIBLE**.  That is NOT a clearance for this build
-and it is not evidence against the diagnosis either: the effect is
-INTERMITTENT (one arm in six on the run that caught it), so four calls that
-agree bound nothing.  A matched control -- BOTH trees, the same N = 4096 that
-caught it, the same eight threads, eight calls each -- is the only reading
-that could separate them, and its result is recorded in S10 whatever it says.
-What does NOT depend on it: the byte-identity claim, which rests on the
-8960-arm two-tree at sizes where both trees are deterministic, and the
-diagnosis, which rests on the OMP-pinned arm.
+**AND THE MATCHED SHIPPED-TREE CONTROL SETTLES IT.**  A first four-call null
+on `origin/main` at N = 8192 read 1 distinct over 4, which bounds nothing --
+the effect is INTERMITTENT, so four agreeing calls are not evidence.  The
+matched control is the reading that separates the trees: `origin/main`
+@ 5.39.1, the same N = 4096 that caught it, the same eight threads, EIGHT
+calls:
+
+```
+  SHIPPED 5.39.1   N = 4096   carrier='auto'   OMP=8
+    call 0  234.8 s   sha 19d912611851ef8b
+    call 1   26.4 s   sha 19d912611851ef8b
+    call 2   25.5 s   sha 19d912611851ef8b
+    call 3  156.9 s   sha 19d912611851ef8b
+    call 4  246.2 s   sha 19d912611851ef8b
+    call 5  221.9 s   sha 19d912611851ef8b
+    call 6  256.0 s   sha 19d912611851ef8b
+    call 7  275.9 s   sha 13fa1a50a6f1d7a1        <- the same intermittency
+    2 distinct over 8 IDENTICAL calls -- NOT REPRODUCIBLE
+```
+
+**The shipped tree does it too, at the same rate, on the same fixture.**  And
+one more thing falls out that no other measurement in this note gives:
+`19d912611851ef8b` is the SHIPPED tree's majority hash, and it is EXACTLY the
+hash this build produces -- threaded majority, OMP-pinned, `'memmap'` and
+`stream H` alike.  So on the production arm at N = 4096, **this build and
+`origin/main` return the same bytes**, and the levers return them too.
 
 **What the byte-identity contract therefore says, precisely:** the levers are
 byte-identical wherever the underlying path is reproducible at all.  Where it
@@ -800,7 +824,7 @@ worth its full 3.5 grids and the preflight would show it.
 | 7 | the first two-tree run's "8960 arms, 0 differ" | **VACUOUS.**  3776 arms were refusal-vs-refusal because the fixtures named registry-absent design-121 glasses.  Caught by printing the refusal census; re-run with registered glasses, 8640 arms now return a field. |
 | 8 | add the accumulator term and the `'auto'` fit term in the preflight | **WRONG SHAPE.**  They are alternatives, not addends -- the fit is live only during set-up and the accumulators only from surface 2.  Summing over-prices RAM; keeping only the accumulator term under-prices memmap by 0.83 grids, which the measured table shows.  The preflight takes a max. |
 | 9 | gate the new preflight anchors on `_lumenairy_version_at_least(5, 40, 0)` alone | **WRONG ON A PRE-RELEASE WORKTREE**, where the code exists and no released version names it.  Gated on version OR signature, with the CREDITS additionally keyed to the same predicate the runner uses to decide whether to pass the keyword -- so a credit can never be claimed for something the call did not ask for.  That is the `screen_obliquity` phantom's failure mode. |
-| 10 | the N = 16384 smoke's three different SHA-256s are a byte-identity failure of the levers | **NO -- THE PATH DOES NOT REPRODUCE ITSELF.**  The null comparison (same call, four times, lever arms interleaved) gives two distinct results at N = 4096, with both lever arms on the majority value and a NULL arm as the odd one out.  Caught by running the null at all; a smoke that only varies the thing under test cannot tell a difference from a drift.  Mechanism: the `'auto'` fit's `G = A.T @ A` over 1.8-28 M rows.  Not the FFT (`auto_promote` off, `FFTW_ESTIMATE`, no bad shapes, 2 plans).  Not this build (the 8960-arm two-tree's `'auto'` arms agree across both trees at grid sizes where the reduction stays short). (S4.2) |
+| 10 | the N = 16384 smoke's three different SHA-256s are a byte-identity failure of the levers | **NO -- THE PATH DOES NOT REPRODUCE ITSELF.**  The null comparison (same call, four times, lever arms interleaved) gives two distinct results at N = 4096, with both lever arms on the majority value and a NULL arm as the odd one out.  Caught by running the null at all; a smoke that only varies the thing under test cannot tell a difference from a drift.  Mechanism: the `'auto'` fit's `G = A.T @ A` over 1.8-28 M rows -- `OMP_NUM_THREADS=1` makes it reproducible, at the threaded majority's value.  Not the FFT (`auto_promote` off, `FFTW_ESTIMATE`, no bad shapes, 2 plans).  **Not this build: the matched control on `origin/main` @ 5.39.1 reads 2 distinct over 8 on the same fixture, and its majority hash is byte-identical to this build's.** (S4.2) |
 | 11 | "`PYTHONPATH` pins the runner at the worktree" | **IT DOES NOT, AND THE FAILURE IS SILENT.**  `tx_design_study_sim.py` inserts the sibling `../Lumenairy` at `sys.path[0]` before importing, which beats `PYTHONPATH`.  Caught only because the preflight's signature probe read `accumulator_store=False` against a worktree that had the keyword; on the production run the symptom would have been 4.5 hours of numbers from the wrong build.  Fixed with a `LUMENAIRY_ROOT` override, an assert, and a `[lib]` line in the log naming the resolved directory -- a version string would not have caught it, since an untagged worktree reports the last release's version. |
 | 12 | `close()` the store and unlink | **INSUFFICIENT ON WINDOWS.**  The unlink completes but leaves the directory in a pending-delete state, and the immediate `rmdir` fails on a directory `listdir` reports as empty.  Retried with backoff and warned on exhaustion.  Recorded rather than quietly fixed because "the files are gone but the directory is not" is the precise shape of it. |
 
@@ -925,6 +949,7 @@ numexpr 2.14.1                   origin/main a2652283)
 | NULL reproducibility of `carrier='auto'`, threaded | **2 distinct over 4 -- NOT REPRODUCIBLE** (S4.2; the shipped path) |
 | NULL reproducibility of `carrier='auto'`, `OMP_NUM_THREADS=1` | **1 distinct over 4 -- REPRODUCIBLE**, and equal to the threaded majority |
 | NULL reproducibility of `carrier=0.030` (closed form), N = 8192, threaded | **1 distinct over 4 -- REPRODUCIBLE** |
+| NULL reproducibility of `carrier='auto'` on `origin/main` @ 5.39.1, N = 4096, threaded, 8 calls | **2 distinct over 8 -- NOT REPRODUCIBLE**, majority hash identical to this build's |
 | `ruff check lumenairy/ tests/` | **All checks passed** |
 | `xfail` / `skip` added | **ZERO** |
 | pre-existing assertions relaxed | **ZERO** (two RETARGETED after the function split; see S2.1) |
