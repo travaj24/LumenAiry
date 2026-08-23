@@ -4479,6 +4479,14 @@ def apply_real_lens(
     parameter name is ``prescription`` -- the 4.6 alias
     ``lens_prescription`` was removed in 4.7.
     """
+    # v4.15.3 (P0-NEW-F2-1): the defensive input guard runs FIRST --
+    # before the accumulator-store context -- so the user gets a clear
+    # error rather than a downstream failure, and so the v4.15.3
+    # dispatcher pin (every entry point calls the guard as its first
+    # executable statement) holds.  The v5.40 _AccumulatorStore wrapper
+    # must not displace it.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_real_lens', input_kind='field')
     with _AccumulatorStore(accumulator_store, scratch_dir) as _store:
         return _apply_real_lens_impl(
             E_in,
