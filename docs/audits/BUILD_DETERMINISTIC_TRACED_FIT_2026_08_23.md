@@ -660,3 +660,220 @@ refuses rather than reporting numbers from the wrong tree.
   boundary sits two decades away from any measured value, so nothing here
   turns on it -- but it is the last unowned reduction on the path and it is
   named rather than left implicit.
+
+---
+
+## 14. FOLLOW-UP -- the 5.42.0 gate, and the sweep that missed it
+
+Branch `fix/d15-followup` off `origin/main` @ `b2e6344` (D15, merged).
+
+The 5.42.0 `Unit tests + lint` gate failed on all four CI pythons with three
+deterministic failures that S12's 1005-test sweep did not reach.  Both causes
+are tests calibrated to the unrefined solve; neither is a defect in the
+shipped library.
+
+### 14.1 THE PROCESS FAILURE, FIRST, BECAUSE IT IS THE REUSABLE PART
+
+S12 says the regression set was "every test file in the tree that touches the
+traced chain's least-squares fits, found by `grep ... (94 files)`".  **The
+grep was right and the run was not.**  The 94-file list was built, written to
+`validation/probe_traced_det/scope.txt`, and then RUN THROUGH A NAME FILTER
+(`grep -E "niche_c1_|niche_c6_|..."`) that selected roughly a third of it.
+`test_fix_runner_oom_2026_08_13.py` was in the list from the start, matched no
+batch pattern, and was never executed; `test_niche_d3_guards.py` likewise.
+
+A scope that is derived correctly and then sampled is not the scope -- it is a
+sample wearing the scope's name, and S12 reported it as the former.  The
+follow-up ran all 94 files, split four ways, with no name filter (S14.5).
+
+### 14.2 FAILURES 1 AND 2 -- the two arms were solved differently
+
+`test_fix_runner_oom_2026_08_13.py::test_the_forward_fit_coefficients_are_bit_identical[False]`
+and `[True]`: "the forward fit moved bits: max |diff| = 5.954e-19 / 2.840e-16".
+
+That file's claim is about the DESIGN MATRIX LAYOUT -- `_Cheb2DEvaluator`
+builds its design C-contiguous where it used to build the transpose of an
+`(n_terms, n)` buffer -- and it is a same-process two-arm comparison against a
+retired reference construction whose own docstring says it uses "the same keep
+mask, **the same solver**".  It hard-coded `_solve_lstsq_thread_safe(A, rhs)`
+back when the solver had one route.  D15 gave it two, the live evaluator took
+the new one, the reference stayed on the old default -- so the comparison
+began reading a SOLVER difference as a LAYOUT one.
+
+ADJUDICATION: fix the arms, not the claim.  The reference now takes
+`deterministic=None`, meaning "whatever the live evaluator would do", so the
+two cannot drift apart by inheriting a default again.  Measured at BOTH flag
+states and on both branches, the layout claim holds exactly:
+
+| weighted | flag | vs reference at the SAME state | vs reference at the OLD default |
+|---|---|---|---|
+| False | off | identical, 0.0 | identical, 0.0 |
+| False | **on** | **identical, 0.0** | differs, 6.624e-19 |
+| True | off | identical, 0.0 | identical, 0.0 |
+| True | **on** | **identical, 0.0** | differs, 1.130e-16 |
+
+STRENGTHENED WHILE FIXING: the test now sweeps `DETERMINISTIC_TRACED_FIT` as a
+second parameter, so its four cases pin C-contiguous == transposed-buffer bits
+on the BLAS route (the original claim, unchanged) AND on the deterministic one.
+
+Worth stating because a reader chasing this will look for it: the fit does
+**not** reach the C13 screen (Gram rcond 6.8e-02 unweighted, 3.4e-05 weighted,
+against the 1e-8 screen), so D15's refinement never runs here.  The only thing
+that moved is the order the Gram is summed in.
+
+### 14.3 FAILURE 3 -- a bar whose boundary was already inside its own spread
+
+`test_niche_d7_decentred_fit.py::test_a_shrunken_basis_domain_is_a_liability_outside_itself`,
+on py3.12 and py3.13 only: `corner` 2.823e-13 against a `1e3 x inside` bar of
+1.110e-12.
+
+The test builds two mathematically identical order-12 fits -- one on the
+launch square, one re-mapped onto a small off-centre disc -- and requires them
+to agree inside the tight domain and diverge outside it.  Both screen singular
+(Gram rcond 6.33e-10, two decades under the C13 screen), so D15's refinement
+is live on both.
+
+**The claim still holds and is still unconditional.**  Refinement does not fix
+a shrunken DOMAIN, only the residual.  What was wrong is the BAR.  In ULP of
+the function's own magnitude at the evaluation points (0.5387, so 1 ULP =
+1.196e-16):
+
+| build / arm | inside | corner | ratio |
+|---|---|---|---|
+| Windows py3.14 / np2.4.4, D15 off | 1.86 | 36 486 | 19 650 |
+| Windows py3.14 / np2.4.4, D15 on | 1.86 | 11 633 | 6 267 |
+| WSL py3.12 / np2.4.6, D15 on | 1.86 | 11 633 | 6 267 |
+| Linux CI py3.12 + py3.13, D15 on | 9.28 | 2 360 | **254** |
+
+Both quantities sit at the float64 noise floor and both are build-dependent,
+so their RATIO compounds the jitter: it spans **77x** across three readings of
+the same claim, and the 1e3 bar sits inside that span.  That is the
+`TESTING_STANDARDS` S4 shape -- a pass/fail boundary living inside the
+measurement's own spread -- and it was true BEFORE D15.  D15 only shrank
+`corner` by 3x (the refined solve is closer to the true least-squares answer,
+so two parameterisations of it agree better) and pushed over a test that was
+already standing on the edge.
+
+Note the WSL row.  py3.12 on this box reproduces the WINDOWS numbers exactly,
+not the CI ones, so the spread is a **BLAS / CPU-dispatch** fact and not a
+python-version one.  A restatement tuned to "py3.12" would have been tuned to
+the wrong variable.
+
+RESTATEMENT, in two parts so nothing is lost:
+
+* the SHIPPED-configuration claim keeps its place and stays unconditional,
+  with both bars taken against a DERIVED scale -- one ULP of the function
+  value -- so neither divides by the other's noise: `inside <= 50 ULP` and
+  `corner >= 300 ULP`.  Margins on the WORST of the four readings: **5.4x**
+  and **7.9x**; on the best, 27x and 122x.  The fail-before is MEASURED, not
+  estimated: run the same fixture with the second basis not shrunken at all
+  (`a = 1, b = 0`) and the two fits come out bit-identical everywhere --
+  `inside` 0.00 ULP, `corner` **0.00 ULP** -- so the corner assertion fails
+  outright.  The bar detects the shrunken domain, not merely the presence of
+  arithmetic.
+* the original 1e3-contrast figure is kept at FULL STRENGTH on a new
+  era-pinned witness, `test_the_shrunken_basis_liability_at_its_calibrated_magnitude`,
+  which pins `DETERMINISTIC_TRACED_FIT = False` -- the solver it was
+  calibrated on, where it reads 19 650 and passed on every CI python before
+  D15 landed.  Same pattern as this file's two ghost witnesses and
+  `test_c13_cures_the_hard_mask_fold_at_the_d7_order`.
+
+Nothing is marked `xfail` and nothing is deleted.
+
+### 14.4 CLOSING THE CLASS
+
+`grep -rniE "bit_identical.*fit|fit.*coefficients|coeffs.*identical"` over
+`tests/`, plus every `_solve_lstsq_thread_safe(` call in the tree that does
+not pass `deterministic`:
+
+| site | adjudication |
+|---|---|
+| `test_fix_runner_oom::_retired_cheb_coeffs` | THE defect -- a reference arm on the old default.  Fixed (S14.2) |
+| `test_niche_c13_lstsq_conditioning` (11 calls) | direct tests OF the solver at its default; both sides of every comparison are the same call.  Correct as written, all pass |
+| `test_niche_r3_gbd_mem_lstsq` (3 calls) | same -- GBD's own lstsq, not a traced fit.  Pass |
+| `test_niche_newton_pool_both_fits` (2 bit-identity tests) | pool vs serial, BOTH live library paths, so both carry the flag.  Pass |
+| `test_niche_audit_w3_oracles::test_w4_t3_jax_fit_matches_numpy_in_coefficients_and_evaluation` | cross-backend, tolerance-based, outside the traced-fit scope.  Pass |
+| `test_niche_d3_guards` (fit-coefficient perturbation) | in the 94-file scope, missed by S12's name filter.  Run, passes |
+
+`_retired_cheb_coeffs` is the only reference-arm stub in the tree that
+hard-codes a solver default and is compared against a live library call.  The
+class is one member wide.
+
+### 14.5 SUITES -- the full scope this time, and both mounts
+
+All 94 files from the S12 grep, split four ways with NO name filter, plus the
+D14/D15 suites on both mounts.  The WSL mount runs py3.12 / numpy 2.4.6, the
+same python major.minor the 5.42.0 gate failed on.
+
+| gate | result |
+|---|---|
+| the three failing tests + `test_niche_d3_guards` (Windows py3.14) | **95 passed** |
+| full scope batch 1/4 (25 files) | **1070 passed, 1 skipped** |
+| full scope batch 2/4 (22 files) | **601 passed** |
+| full scope batch 3/4 (24 files) | **434 passed, 1 skipped**, 1 failed -- S14.6 |
+| full scope batch 4/4 (23 files) | **421 passed, 2 deselected** |
+| `test_fix_runner_oom` + `test_niche_d7_decentred_fit` (WSL py3.12 / np2.4.6) | **54 passed** |
+| D14 + D15 suites (Windows py3.14 / np2.4.4) | **37 passed** |
+| D14 + D15 suites (WSL py3.12 / np2.4.6) | **37 passed** |
+| `ruff check lumenairy/ tests/` | **All checks passed** |
+
+**2526 tests over the full 94-file scope**, plus 37 x 2 on the deterministic
+suites across two mounts.  The one failure is characterised in S14.6 and is
+not reachable from this change.
+
+### 14.6 ONE FAILURE THAT IS NOT THIS CHANGE'S, AND IS NOT CALLED A FLAKE
+
+`test_niche_p4_gbd_reexpand.py::test_frame_completeness_metric_published`
+failed once, in full-scope batch 3, while FIVE pytest processes were running
+concurrently on this box.  It is recorded here rather than dismissed, and it
+is NOT closed.
+
+WHY IT CANNOT BE D15 OR THIS FOLLOW-UP, by construction rather than by
+retrying until green:
+
+* the failing test exercises `apply_real_lens_gbd`'s re-expansion, and
+  **`_solve_lstsq_thread_safe` does not exist anywhere in the GBD module** --
+  `grep` over `lumenairy/` puts every call site in `_lens_traced.py` and
+  `_lens_imap.py` only.  D15 changed that function and its callers; the GBD
+  re-expansion reaches neither.  The file is in the 94-file scope only because
+  it mentions `apply_real_lens_traced` once, on line 16;
+* neither file this follow-up edits is in batch 3 at all;
+* it passed in the 5.42.0 CI gate on all four pythons -- it is not one of the
+  three failures this branch is answering.
+
+WHAT WAS TRIED, AND WHAT IS STILL UNKNOWN:
+
+| arm | result |
+|---|---|
+| the single test alone | passed (7.8 s) |
+| the whole `test_niche_p4_gbd_reexpand.py` file alone | 14 passed |
+| batch 3's ordered 11-file prefix up to and including p4 | 253 passed, 1 skipped |
+| batch 3 entire, rerun under a deliberate 4-way concurrent load -- the SAME condition it failed in | **435 passed, 1 skipped** |
+
+Five arms, including a deliberate reconstruction of the five-process load it
+failed under, and it did not recur.  The counts reconcile exactly (436 items
+either way: 434 passed + 1 failed + 1 skipped, against 435 passed + 1
+skipped), so nothing was silently deselected between the two runs.
+
+**THE INSTRUMENTATION LESSON, WHICH IS THE SECOND ONE THIS FOLLOW-UP OWES.**
+The batch commands piped pytest through
+`grep -E "^(FAILED|ERROR)|passed|failed"`, which keeps the `FAILED` summary
+line and DISCARDS the assertion above it.  So the one failure in 2526 arrived
+without the one piece of information needed to adjudicate it, and three
+re-runs were spent trying to recover what a wider `grep` would have kept.  A
+filter tight enough to be readable is tight enough to throw away the evidence;
+`-rA` or an unfiltered log file belongs on any batch whose failures matter.
+
+**IT STAYS OPEN, AND IT IS NOT BEING CALLED A FLAKE.**  One unreproduced
+failure is not evidence of correctness; it is evidence that the instrument
+was not watching.  Re-running until green is exactly the move
+``feedback_flaky_is_bad_math`` forbids, and five green arms after one red one
+do not retire the red one -- they only say the trigger is not file ordering
+and not this box's load alone.  The candidate mechanism is
+resource pressure (the box was running five pytest processes at
+`OMP_NUM_THREADS=8` each), and the two assertions that could plausibly move
+under it are `diag['frame_completeness'] > 0.99` and the
+`np.array_equal(E_a, E_b)` byte-identity between a diagnosed and an
+undiagnosed call.  The second would be the interesting one -- a returned field
+that depends on whether a diagnostics dict was passed -- and it is the reason
+this is not being written off.

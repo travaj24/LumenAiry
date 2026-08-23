@@ -59,6 +59,19 @@ call), footprint unchanged or slightly lower.  Details, including the einsum
 block-length measurement that refutes the naive transplant, in
 `docs/audits/BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md`.
 
+Two test-side follow-ups, no library change (S14 of the same audit).  The
+forward-fit LAYOUT bit-identity check in `test_fix_runner_oom_2026_08_13.py`
+compared a live evaluator against a retired reference construction that
+hard-coded the solver's old default, so it read a solver difference as a
+layout one; both arms now carry the same solver state and the check sweeps
+the flag, pinning the layout claim on BOTH routes (all four cases: max |diff|
+exactly 0.0).  And niche D7's shrunken-basis liability demonstration barred a
+noise-floor ratio whose boundary already sat inside its own cross-build
+spread (77x across three builds, bar 1e3); its bars are now taken against a
+derived scale -- one ULP of the function value -- with the original
+1e3-contrast figure kept at full strength on an era-pinned witness.  The
+liability claim itself is unchanged and still unconditional.
+
 ## [5.41.0] — 2026-08-23
 
 ### Fixed -- `carrier='auto'` is DETERMINISTIC at any BLAS thread count (niche D14)

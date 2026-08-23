@@ -954,11 +954,10 @@ def test_the_basis_domain_is_affine_invariant_so_remapping_it_is_a_no_op():
         "refusal of the basis-domain re-map rests on this")
 
 
-def test_a_shrunken_basis_domain_is_a_liability_outside_itself():
-    """The other half of the refusal: the Newton loop evaluates these fits over
-    the WHOLE launch square, and a basis re-mapped onto a small off-centre disc
-    runs to |u| >> 1 there, where the Chebyshev terms explode.  Two
-    mathematically IDENTICAL fits must then disagree numerically."""
+def _shrunken_basis_divergence():
+    """Build the two mathematically identical fits and return how far apart
+    they read inside the tight basis's own domain and at the launch square's
+    corners, together with the function's own magnitude there."""
     rng = np.random.default_rng(20260729)
     xs = np.linspace(-1.0, 1.0, 41)
     Xg, Yg = np.meshgrid(xs, xs, indexing='ij')
@@ -977,10 +976,105 @@ def test_a_shrunken_basis_domain_is_a_liability_outside_itself():
         f0 = np.asarray(ev_wide.ev(pts[:, 0], pts[:, 1]))
         f1 = np.asarray(ev_tight.ev(a * pts[:, 0] + b, a * pts[:, 1] + b))
         d[name] = float(np.max(np.abs(f0 - f1)))
+    # the SCALE both differences must be read against: the function's own
+    # magnitude where they are taken.  One ULP of it is the floor a float64
+    # evaluation of ANY correct fit sits on, so it is the only build-stable
+    # reference either quantity has.
+    d['scale'] = float(np.max(np.abs(
+        ev_wide.ev(corner[:, 0], corner[:, 1]))))
+    d['ulp'] = float(np.finfo(np.float64).eps) * d['scale']
+    return d
+
+
+def test_a_shrunken_basis_domain_is_a_liability_outside_itself():
+    """The other half of the refusal: the Newton loop evaluates these fits over
+    the WHOLE launch square, and a basis re-mapped onto a small off-centre disc
+    runs to |u| >> 1 there, where the Chebyshev terms explode.  Two
+    mathematically IDENTICAL fits must then disagree numerically.
+
+    RESTATED 2026-08-23 (niche D15).  THE CLAIM IS UNCHANGED AND STILL
+    UNCONDITIONAL -- refinement does not fix a shrunken DOMAIN, only the
+    residual, and the liability is still here.  What was wrong was the BAR:
+    it read ``corner > 1e3 * max(inside, 1e-16)``, a ratio of two quantities
+    that are BOTH at the float64 noise floor and both build-dependent, so the
+    ratio compounded their jitter and the pass/fail boundary sat inside it.
+    Measured in ULP of the function's own magnitude at those points:
+
+        build / arm                inside      corner        ratio
+        Windows py3.14, D15 off      1.86     36 486        19 650
+        Windows py3.14, D15 on       1.86     11 633         6 267
+        Linux CI py3.12/3.13, on     9.28      2 360           254
+
+    The ratio spans 77x across three readings of the SAME claim; a 1e3 bar
+    sits inside that span, which is why this went green on two pythons and red
+    on two others.  That is the ``TESTING_STANDARDS`` S4 shape -- a bar whose
+    boundary lives inside the measurement's own spread -- and it was true
+    BEFORE D15 as well.  D15 only shrank ``corner`` by 3x (the refined solve
+    is closer to the true least-squares answer, so two parameterisations of it
+    agree better) and moved a test that was already standing on the edge.
+
+    The bars are now taken against a DERIVED scale -- one ULP of the function
+    value at the evaluation points -- so each is a statement about that
+    quantity alone and neither divides by the other's noise:
+
+      * inside the tight domain the two fits agree to the evaluation floor
+        (measured 1.86 - 9.28 ULP; bar 50, so 5.4x margin on the worst
+        reading);
+      * outside it they do not (measured 2360 - 36 486 ULP; bar 300, so 7.9x
+        margin on the worst reading).
+
+    THE FAIL-BEFORE IS MEASURED, NOT ESTIMATED.  Run the same fixture with the
+    second basis NOT shrunken (``a = 1, b = 0``, i.e. both fits on the launch
+    square) and the liability is gone by construction: measured ``inside``
+    0.00 ULP and ``corner`` **0.00 ULP** -- the two fits are then bit-identical
+    everywhere, and the ``corner`` assertion below fails outright.  So the
+    corner bar is detecting the shrunken domain and not merely the presence of
+    arithmetic.
+
+    The original 1e3-contrast figure is not lost -- it is kept, at full
+    strength and on the solver it was calibrated to, by the era-pinned witness
+    below.
+    """
+    d = _shrunken_basis_divergence()
+    assert d['inside'] <= 50.0 * d['ulp'], (
+        f"the two fits no longer agree INSIDE the tight basis's own domain "
+        f"({d['inside'] / d['ulp']:.2f} ULP of {d['scale']:.4g}, bar 50) -- "
+        f"that is a broken fit, not a liability demonstration: {d}")
+    assert d['corner'] >= 300.0 * d['ulp'], (
+        f"the shrunken basis stopped diverging outside its domain "
+        f"({d['corner'] / d['ulp']:.1f} ULP of {d['scale']:.4g}, bar 300) "
+        f"-- re-check the D7 refusal: {d}")
+
+
+def test_the_shrunken_basis_liability_at_its_calibrated_magnitude(monkeypatch):
+    """THE ERA-PINNED WITNESS, so the original calibration is not lost.
+
+    The sibling above carries the claim on the SHIPPED configuration with
+    bars that survive the cross-build spread.  This one keeps the figure that
+    claim was originally calibrated to -- ``corner > 1e3 x inside``, three
+    decades of contrast -- on the solver it was calibrated ON, before niche
+    D15's iterative refinement started correcting the near-singular fit these
+    two fixtures deliberately build (Gram rcond 6.3e-10, two decades under the
+    C13 screen, so the refinement is live on both of them).
+
+    A fail-before that inherits a default is not a fail-before: with D15 left
+    at its shipped ``True`` this arm reads 6267 on Windows and 254 on Linux CI
+    against its own 1e3 bar, i.e. it is measuring the solver as much as the
+    basis.  Pinned to ``False`` it reads 19 650 and passed on every python in
+    CI before D15 landed.
+
+    Not marked ``xfail`` and not deleted: the contrast is real, it is the
+    number the D7 refusal argument was written from, and pinning the era is
+    how this repository keeps such a witness honest (see the two ghost
+    witnesses in this file and ``test_c13_cures_the_hard_mask_fold_at_the_d7_
+    order`` for the same pattern).
+    """
+    monkeypatch.setattr(_lt, 'DETERMINISTIC_TRACED_FIT', False)
+    d = _shrunken_basis_divergence()
     assert d['inside'] < 1e-10, d
     assert d['corner'] > 1e3 * max(d['inside'], 1e-16), (
-        f"the shrunken basis stopped diverging outside its domain "
-        f"({d}) -- re-check the D7 refusal")
+        f"the shrunken basis stopped diverging outside its domain on the "
+        f"pre-D15 solver ({d}) -- re-check the D7 refusal")
 
 
 # ===========================================================================

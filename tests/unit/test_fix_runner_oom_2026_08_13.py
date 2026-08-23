@@ -116,10 +116,24 @@ def _retired_td_design_grad(ux, uy, degree, terms):
             Vx[:, terms[:, 0]] * Dy[:, terms[:, 1]])
 
 
-def _retired_cheb_coeffs(xs, ys, values, order, weights=None):
+def _retired_cheb_coeffs(xs, ys, values, order, weights=None,
+                         deterministic=None):
     """``_Cheb2DEvaluator.__init__``'s fit exactly as it shipped: the
     ``(Tu[K1] * Tv[K2]).reshape(n_terms, -1).T`` design, the same keep mask,
-    the same solver."""
+    the same solver.
+
+    "THE SAME SOLVER" IS LOAD-BEARING AND USED TO BE IMPLICIT.  This reference
+    hard-coded ``_solve_lstsq_thread_safe(A, rhs)`` back when the solver had
+    one route.  Niche D15 (2026-08-23) gave it two -- the live evaluator now
+    passes ``deterministic=bool(DETERMINISTIC_TRACED_FIT)`` -- and a reference
+    arm pinned to the old default stopped being the same solver, which made
+    this file's layout comparison read a SOLVER difference as a LAYOUT one
+    (measured 5.954e-19 unweighted / 2.840e-16 weighted on the 5.42.0 gate).
+    ``deterministic=None`` therefore means "whatever the live evaluator would
+    do", so the two arms cannot drift apart again by inheriting a default.
+    """
+    if deterministic is None:
+        deterministic = bool(LT.DETERMINISTIC_TRACED_FIT)
     mi = [(kx, ky) for kx in range(order + 1) for ky in range(order + 1 - kx)]
     K1 = np.asarray([m[0] for m in mi], dtype=np.int64)
     K2 = np.asarray([m[1] for m in mi], dtype=np.int64)
@@ -148,7 +162,7 @@ def _retired_cheb_coeffs(xs, ys, values, order, weights=None):
         A, rhs = A_full, flat
     else:
         A, rhs = A_full[finite, :], flat[finite]
-    return LT._solve_lstsq_thread_safe(A, rhs)
+    return LT._solve_lstsq_thread_safe(A, rhs, deterministic=deterministic)
 
 
 def _uv(n, seed=17):
@@ -278,13 +292,39 @@ def test_the_exit_design_transient_is_bounded_by_the_matrix_it_returns():
 # 4.  the forward Chebyshev fit: same bits, and the layout the SOLVE squares
 # ===========================================================================
 @pytest.mark.parametrize('weighted', [False, True])
-def test_the_forward_fit_coefficients_are_bit_identical(weighted):
+@pytest.mark.parametrize('det', [False, True])
+def test_the_forward_fit_coefficients_are_bit_identical(weighted, det,
+                                                        monkeypatch):
     """``_Cheb2DEvaluator`` builds its design C-contiguous now instead of as
     the transpose of a C-contiguous ``(n_terms, n)`` buffer.  That is only safe
     because ``_solve_lstsq_thread_safe`` opens with
     ``np.ascontiguousarray(A)`` -- it always squared a C-contiguous copy -- so
     the Gram it forms is the same array it always formed.  Asserted to the
-    BIT against the retired construction, on both branches."""
+    BIT against the retired construction, on both branches.
+
+    WHAT THIS TEST IS ABOUT, restated 2026-08-23 after the 5.42.0 gate.  The
+    claim is about the DESIGN MATRIX LAYOUT and nothing else, and it is a
+    same-process two-arm comparison -- so both arms have to be solved the same
+    way.  They stopped being: niche D15 gave the solver a second route and the
+    live evaluator took it while this file's reference stayed on the old
+    default, so the comparison started reading a SOLVER difference as a LAYOUT
+    one (5.954e-19 unweighted, 2.840e-16 weighted).  Nothing about the layout
+    had changed, and the fix is to the arms, not to the claim.
+
+    STRENGTHENED WHILE FIXING, because the layout claim is a property of the
+    layout and should hold on EITHER route: ``det`` now sweeps
+    ``DETERMINISTIC_TRACED_FIT``, so the four cases pin C-contiguous ==
+    transposed-buffer bits on the BLAS route (the original claim, unchanged)
+    AND on the deterministic one.  Measured, all four read max |diff| = 0.0
+    exactly.
+
+    Note this fit does NOT reach the C13 screen (Gram rcond 6.8e-02 unweighted
+    / 3.4e-05 weighted, against the 1e-8 screen), so D15's iterative
+    refinement never runs here -- the only thing ``det`` changes is the order
+    the Gram is summed in.  Said explicitly because a reader chasing the
+    5.42.0 failure will otherwise look for the refinement.
+    """
+    monkeypatch.setattr(LT, 'DETERMINISTIC_TRACED_FIT', det)
     ax = np.linspace(-1.0e-3, 1.0e-3, 96)
     X, Y = np.meshgrid(ax, ax, indexing='ij')
     vals = (0.7 * X ** 2 - 1.3 * X * Y + 0.4 * Y ** 3
