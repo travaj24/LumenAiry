@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.42.0] — 2026-08-23
+
 ### Fixed -- the TRACED EXIT FIELD is DETERMINISTIC at any BLAS thread count (niche D15)
 
 5.41.0 made `carrier='auto'` thread-invariant and said so carefully: the
