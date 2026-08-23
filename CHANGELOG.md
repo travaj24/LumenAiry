@@ -4,6 +4,16 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.40.0] — 2026-08-23
+
+### The deprecation horizon, slipped proactively this time
+
+`NEXT_REMOVAL_VERSION` came due at 5.40 with both registries still the
+empty tombstones they have been since v5.30.  Third deliberate
+one-line slip (to 5.44), applied IN the release commit rather than
+discovered by the tag verify — the v5.36.0/5.36.1 lesson encoded.
+
+
 ### Added -- `accumulator_store='memmap'`: spill the persistent accumulators
 
 `apply_real_lens(accumulator_store={'ram','memmap'}, scratch_dir=None)`.

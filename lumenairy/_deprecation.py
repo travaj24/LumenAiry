@@ -139,7 +139,13 @@ __all__ = [
 # by the release verify shard (the schedule tests assert the horizon is
 # future); the gating matrix ran pre-version-bump and could not see it.
 # Recorded in the CHANGELOG's 5.36.1 block.
-NEXT_REMOVAL_VERSION = '5.40'
+# v5.40.0: third deliberate one-line slip (v5.32.0 and v5.36.1
+# precedents) -- the horizon came due with both registries still
+# empty tombstones.  Applied PROACTIVELY in the release commit this
+# time: the gating matrix runs pre-version-bump and structurally
+# cannot see horizon collisions (the v5.36.0 tag paid for that
+# lesson).  Recorded in the CHANGELOG's 5.40.0 block.
+NEXT_REMOVAL_VERSION = '5.44'
 
 #: Re-scheduled horizons: ``{version as written at the shim call site:
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule
