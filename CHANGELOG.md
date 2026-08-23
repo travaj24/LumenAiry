@@ -118,6 +118,78 @@ Three byte-null trims, all on the `'auto'` fit that
 Byte-identity of `W`, `grad_fn` and `w_fn` verified two-tree against
 `origin/main` over the fit's own arm list.
 
+### Fixed -- `plot_lens_layout` drew every ray flat on the optical axis (P1)
+
+`plot_lens_layout(..., show_rays=True)` traced its rays correctly and then
+plotted the one coordinate that carries none of their information.
+`make_fan` builds its fan entirely in the **y-z** plane -- every launched ray
+has `x = 0` and `L = 0`, with both the aperture spread and the field angle in
+`y` / `M` -- while the overlay read `rb.x` and `ir.L`.  The failure was
+**silent-wrong, not silent-absent**: nothing was omitted and nothing raised,
+so every ray of every field angle rendered as a clean horizontal line at
+`h = 0` and the reader saw a coherent, plausible, entirely false picture of a
+system whose rays all travel parallel to the axis and arrive on axis.
+Measured on this build, rendering with `n_field_angles=3,
+max_field_deg=2.64, rays_per_fan=5` and reading the `Line2D` artists back:
+max `ptp(ydata)` over all 13 ray polylines was **exactly 0.0** on an
+AC254-100-C achromat and on an N-BK7 biconvex singlet; post-fix the same
+renders give 1.668368e-02 m and 1.694031e-02 m, bit-identical to an
+independent out-of-tree reimplementation against `rb.y` / `ir.M`.  The zero
+is algebraic, not a residual -- a meridional ray through rotationally
+symmetric surfaces never acquires an x component -- so it was the same zero on
+every build, for every prescription, since the function shipped.  The
+`surface_sag_general` call is unchanged: sag is rotationally symmetric and
+was always correct.  `docs/audits/AUDIT_PLOT_LENS_LAYOUT_RAY_OVERLAY_2026_08_19.md`
+and `docs/audits/FIX_PLOT_LENS_LAYOUT_RAY_OVERLAY_2026_08_22.md`.
+
+### Added -- test coverage for `plot_lens_layout` (it had none)
+
+`tests/unit/test_plot_lens_layout_ray_overlay.py`, 11 tests.  Before this,
+`grep -rn "plot_lens_layout" tests/` returned nothing -- which is how a defect
+this visible survived to 5.39.1.  Assertions are on `Line2D` artist data, not
+on pixels.  Includes an explicit FAIL-BEFORE arm that demonstrates the pre-fix
+premise from the running build's own trace (max\|x\| and max\|L\| exactly 0)
+instead of asserting it from memory, and a test that pins the `make_fan` /
+`plot_lens_layout` fan-plane coupling so a re-planing of the fan breaks
+loudly at the renderer that must be updated with it.
+
+### Changed -- `plot_lens_layout` honours `object_distance`, and warns on a runaway focus
+
+`show_rays` / `show_image_plane` previously assumed an infinite conjugate
+unconditionally: fans traced from infinity, image plane at
+`find_paraxial_focus`.  For a prescription carrying a finite
+`object_distance` that is simply the wrong model.  When
+`prescription['object_distance']` is finite and `> 0`, the fans are now
+launched diverging from an object point at `z = -object_distance` (the field
+angle sets the object *height*), the image plane is the finite conjugate
+solved at the principal planes with the terminal indices threaded, and the
+drawn polyline carries the object-space leg.  Validated against an
+independent real-ray oracle on an AC254-100-C at 1.31 um: agreement 2.3e-09
+to 7.6e-09 relative over object distances 0.3-2.0 m, against a
+3.7-32.6 mm error from the old BFL answer on an 8.5 mm track.  **Missing,
+zero, `None`, non-finite and negative `object_distance` all keep the previous
+behaviour exactly**, with its own test across all five spellings.
+
+Additionally, a `UserWarning` now fires when the derived image plane sits more
+than `10x` the system's own scale -- `max(track length, aperture, |efl|)` --
+from the last vertex, instead of silently autoscaling the panel to a runaway
+focus and drawing the whole lens stack as a line at the origin.  The bar has a
+measured gap on both sides: every focusing prescription in the tree sits at
+0.868-0.9998 on this ratio, while a near-afocal 20x Galilean expander measures
+20.4.  Note the scale deliberately includes `|efl|` and the aperture, NOT the
+track length alone: measured on this build, `|image_z| / track` is 74.79 for a
+stock LA1301-C and 24.28 for an LA1050-C, so a track-only bar would fire on
+ordinary catalog singlets purely because they are thin.
+
+### Docs -- `plot_lens_layout` units and aspect/zoom traps
+
+Two `Notes` paragraphs, no behaviour change.  Both axes are in metres per the
+library's SI convention (the trap is relabelling to mm without rescaling the
+data -- the `FuncFormatter` recipe is now given verbatim), and the closing
+`set_aspect('equal', adjustable='datalim')` silently discards a caller's later
+`set_xlim` with only a matplotlib console message (release it with
+`ax.set_aspect('auto')` before zooming).
+
 ## [5.39.1] — 2026-08-17
 
 ### Fixed -- the 2-D lossless-closure tripwire was blind to LOST energy

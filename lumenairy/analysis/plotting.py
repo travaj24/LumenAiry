@@ -2004,6 +2004,102 @@ def plot_jones_pupil(
 # Lens-layout 2-D cross section (H.4 4.7)
 # =========================================================================
 
+# Measured envelope for the S5.3 runaway-focus guard below
+# (AUDIT_PLOT_LENS_LAYOUT_RAY_OVERLAY_2026_08_19 S5.3, remeasured
+# 2026-08-22 on this build).  ``|image_z| / max(track, aperture, |efl|)``
+# over every in-tree prescription:
+#
+#   LA1050-C 0.9733   LA1509-C 0.9883   LA1301-C 0.9912
+#   AC254-050-C 0.8677   AC254-100-C 0.9511   AC254-200-C 0.9806
+#   f/1 biconvex 0.8928   f/40 plano-convex 0.9995   f/100 0.9998
+#
+# i.e. every focusing system sits at or below 1.0, because for an
+# infinite conjugate the ratio reduces to |A| (the ABCD ray-height
+# magnification) whenever |efl| dominates the scale.  The runaway shape
+# S5.3 describes -- a near-afocal system fed collimated -- is exactly
+# |A| >> 1, and is unbounded above.  A bar at 10 therefore sits a full
+# decade above the measured sane envelope with the real signal decades
+# further up.
+#
+# NOTE (deviation from the audit, deliberate): S5.3 proposed comparing
+# against the TRACK LENGTH alone at the same 10x.  That was remeasured
+# and REJECTED -- ``|image_z| / track`` is 74.8 for a stock LA1301-C and
+# 24.3 for an LA1050-C, so a 10x-of-track bar fires on ordinary catalog
+# singlets purely because they are thin.  The track length is kept in
+# the scale (a long relay must not be flagged either) but it is the
+# MAX against the aperture and the focal length that carries the bar.
+_LAYOUT_FOCUS_RUNAWAY_RATIO = 10.0
+
+
+def _layout_finite_conjugate_image_distance(surfaces, wavelength, obj_d):
+    """Paraxial image distance from the last vertex for a FINITE object.
+
+    ``find_paraxial_focus`` returns the BFL, which is the
+    infinite-conjugate special case.  For an object ``obj_d`` metres in
+    front of the first vertex the conjugate must be solved at the
+    principal planes with the terminal indices threaded, because
+    ``efl`` is the REDUCED focal length while ``u``/``v`` are geometric
+    distances:
+
+        n_obj / u_pp  +  n_img / v_pp  =  1 / efl
+
+    This is the same derivation ``analysis.image_plane_wfe`` uses (see
+    its W4c note, which pins it against an exact real-ray oracle to
+    <= 5.3e-12 on immersed object and image spaces alike); it is
+    reproduced here rather than imported so the layout renderer keeps no
+    dependency on the WFE stack.
+    """
+    from ..raytrace.seidel import (
+        _image_space_index,
+        _object_space_index,
+        first_order_data,
+    )
+
+    fod = first_order_data(surfaces, wavelength)
+    if not np.isfinite(fod.efl) or fod.efl == 0.0:
+        raise ValueError('degenerate EFL; no finite conjugate')
+    u_pp = float(obj_d) + fod.pp_object_z
+    if u_pp == 0.0:
+        raise ValueError('object at the object principal plane')
+    n_obj_g = _object_space_index(surfaces, wavelength)
+    n_img_g = _image_space_index(surfaces, wavelength)
+    denom = (1.0 / fod.efl) - (n_obj_g / u_pp)
+    if denom == 0.0:
+        raise ValueError('object at the front focal plane; image at infinity')
+    return float(n_img_g / denom + fod.pp_image_z)
+
+
+def _layout_finite_object_fan(semi_aperture, n_rays, field_angle,
+                              wavelength, obj_d):
+    """Build a fan DIVERGING from a finite object point.
+
+    ``make_fan`` launches a collimated fan (object at infinity).  With a
+    finite object the layout's rays must leave a single object point at
+    ``z = -obj_d`` and fill the aperture, with the field angle setting
+    the object HEIGHT (``y_obj = -obj_d * tan(theta)``) so the ray
+    through the first vertex still makes ``theta`` with the axis.
+
+    Built in the y-z plane, matching ``make_fan``'s own convention --
+    see the fan-plane note in :func:`plot_lens_layout`.
+    """
+    from ..raytrace.trace import _make_bundle
+
+    y_obj = -float(obj_d) * np.tan(float(field_angle))
+    y_pupil = np.linspace(-1.0, 1.0, int(n_rays)) * float(semi_aperture)
+    dy = y_pupil - y_obj
+    dz = float(obj_d)
+    norm = np.sqrt(dy ** 2 + dz ** 2)
+    bundle = _make_bundle(
+        x=np.zeros(int(n_rays)),
+        y=np.full(int(n_rays), y_obj),
+        L=np.zeros(int(n_rays)),
+        M=dy / norm,
+        wavelength=wavelength,
+    )
+    bundle.z = np.full(int(n_rays), -float(obj_d), dtype=np.float64)
+    return bundle
+
+
 def plot_lens_layout(
     prescription: Dict[str, Any],
     *,
@@ -2060,18 +2156,73 @@ def plot_lens_layout(
     fig : matplotlib Figure
     ax : matplotlib Axes
 
+    Warns
+    -----
+    UserWarning
+        When the derived paraxial image plane sits more than
+        ``10x`` the system's own scale
+        (``max(track length, aperture, |efl|)``) from the last vertex.
+        A near-afocal system fed collimated has no usable image plane,
+        and autoscaling to the runaway focus draws the whole lens stack
+        as a line at the origin.  Pass ``show_image_plane=False,
+        show_rays=False`` -- or a finite ``object_distance`` -- for a
+        readable panel.
+
     Notes
     -----
     Surface tilts / decenters are NOT rendered; folded designs draw
     as if all surfaces lie on the same z axis.  Use the GUI's
     Layout3DView for folded systems.
+
+    The overlay's meridional plane is **y-z**, matching
+    :func:`lumenairy.raytrace.make_fan`.  ``h`` on the vertical axis is
+    the ray's ``y``.  This coupling is load-bearing and pinned by
+    ``tests/unit/test_plot_lens_layout_ray_overlay.py``; see
+    ``docs/audits/AUDIT_PLOT_LENS_LAYOUT_RAY_OVERLAY_2026_08_19.md``.
+
+    **Object conjugate.**  ``prescription['object_distance']`` is
+    honoured when it is finite and ``> 0``: the fans are launched
+    diverging from an object point at ``z = -object_distance`` (the
+    field angle then sets the object *height*), and the image plane is
+    the finite conjugate solved at the principal planes rather than the
+    BFL.  Missing, zero, ``None``, non-finite or negative
+    ``object_distance`` all keep the historical infinite-conjugate
+    behaviour (collimated fans launched at the first vertex, image plane
+    at :func:`lumenairy.raytrace.find_paraxial_focus`).
+
+    **Units (P3).**  Both axes are in metres, per the library's SI
+    convention.  Relabelling them to mm without rescaling the data puts
+    a factor-1000 error on the figure.  Leave the data in metres and
+    attach a tick formatter instead::
+
+        from matplotlib.ticker import FuncFormatter
+        mm = FuncFormatter(lambda v, p: '%.4g' % (v * 1e3))
+        ax.xaxis.set_major_formatter(mm)
+        ax.yaxis.set_major_formatter(mm)
+        ax.set_xlabel('z [mm]'); ax.set_ylabel('h [mm]')
+
+    **Aspect / zoom (P3).**  This function ends with
+    ``ax.set_aspect('equal', adjustable='datalim')``, which is the right
+    default for a layout (a ~215 mm track against ~26 mm of aperture
+    must not be stretched).  It does, however, mean a later
+    ``ax.set_xlim(...)`` by the caller is silently discarded -- with
+    only a matplotlib console message, ``Ignoring fixed x limits to
+    fulfill fixed data aspect``.  To zoom into the tail, release the
+    aspect first::
+
+        fig, ax = plot_lens_layout(rx)
+        ax.set_aspect('auto')
+        ax.set_xlim(z0, z1)
     """
     _require_mpl()
+    import warnings
+
     from ..elements.lenses import surface_sag_general
     from ..raytrace import (
         find_paraxial_focus,
         make_fan,
         surfaces_from_prescription,
+        system_abcd,
         trace,
     )
 
@@ -2097,6 +2248,19 @@ def plot_lens_layout(
     z_vertex = [0.0]
     for t in thicknesses:
         z_vertex.append(z_vertex[-1] + float(t))
+    track_length = float(z_vertex[-1] - z_vertex[0])
+
+    # S5.3: the object conjugate.  ``object_distance`` is the geometric
+    # distance from the source plane to the FIRST vertex (the loader's
+    # convention, prescriptions_zemax ~745); 0.0 / missing / non-finite
+    # all mean "object at infinity", which is the historical behaviour.
+    obj_d = prescription.get('object_distance', 0.0)
+    try:
+        obj_d = float(obj_d) if obj_d is not None else 0.0
+    except (TypeError, ValueError):
+        obj_d = 0.0
+    if not np.isfinite(obj_d) or obj_d <= 0.0:
+        obj_d = 0.0
 
     h = np.linspace(-semi_diameter, semi_diameter, 81)
     surf_curves = []
@@ -2125,12 +2289,48 @@ def plot_lens_layout(
     image_z = None
     if show_image_plane or show_rays:
         try:
-            image_z = float(find_paraxial_focus(surfaces, wavelength))
+            if obj_d > 0.0:
+                image_z = _layout_finite_conjugate_image_distance(
+                    surfaces, wavelength, obj_d)
+            else:
+                image_z = float(find_paraxial_focus(surfaces, wavelength))
             if not np.isfinite(image_z):
                 image_z = None
         except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                 np.linalg.LinAlgError, IndexError, TypeError):
             image_z = None
+
+    # S5.3: warn instead of silently autoscaling to a runaway focus.
+    #
+    # ADJUDICATION of the audit's "contributing factor" (section 3): the
+    # broad ``except`` in the ray loop below STAYS -- a best-effort
+    # overlay should not take the whole figure down with it -- but this
+    # warning is emitted HERE, outside that try, so the guard cannot
+    # swallow it.  (It would not even under ``-W error``: the caught
+    # tuple has no ``Warning`` member.  Keeping it structurally outside
+    # means that stays true if the tuple is ever widened.)
+    if image_z is not None:
+        try:
+            _, _efl, _, _ = system_abcd(surfaces, wavelength)
+        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                np.linalg.LinAlgError, IndexError, TypeError):
+            _efl = 0.0
+        _scale = max(abs(track_length), 2.0 * float(semi_diameter),
+                     abs(_efl) if np.isfinite(_efl) else 0.0)
+        if _scale > 0.0 and (abs(image_z) / _scale
+                             > _LAYOUT_FOCUS_RUNAWAY_RATIO):
+            warnings.warn(
+                f'plot_lens_layout: the paraxial image plane is '
+                f'{abs(image_z) / _scale:.3g}x the system\'s own scale '
+                f'(image distance {image_z:.6g} m vs scale {_scale:.6g} m, '
+                f'bar {_LAYOUT_FOCUS_RUNAWAY_RATIO:g}x).  This system is '
+                f'near-afocal at this conjugate, so the layout would '
+                f'autoscale to the runaway focus and draw the lens stack '
+                f'as a line at the origin.  Pass show_image_plane=False '
+                f'and show_rays=False, or set a finite '
+                f'prescription["object_distance"], to get a readable '
+                f'panel.',
+                UserWarning, stacklevel=2)
 
     if show_image_plane and image_z is not None:
         z_img_world = z_vertex[-1] + image_z
@@ -2150,9 +2350,15 @@ def plot_lens_layout(
                 fa_idx / max(1, n_field_angles - 1)) \
                 if n_field_angles > 1 else 'tab:orange'
             try:
-                fan = make_fan(
-                    semi_aperture=semi_diameter, n_rays=int(rays_per_fan),
-                    field_angle=fa_rad, wavelength=wavelength)
+                if obj_d > 0.0:
+                    fan = _layout_finite_object_fan(
+                        semi_diameter, int(rays_per_fan), fa_rad,
+                        wavelength, obj_d)
+                else:
+                    fan = make_fan(
+                        semi_aperture=semi_diameter,
+                        n_rays=int(rays_per_fan),
+                        field_angle=fa_rad, wavelength=wavelength)
                 r = trace(fan, surfaces, wavelength)
             except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                     IndexError, AttributeError, TypeError):
@@ -2165,6 +2371,11 @@ def plot_lens_layout(
                     continue
                 z_world = []
                 hs = []
+                if obj_d > 0.0:
+                    # Draw the object-space leg too, so the finite
+                    # conjugate is visible rather than implied.
+                    z_world.append(-obj_d)
+                    hs.append(float(fan.y[k]))
                 for i_s, rb in enumerate(r.ray_history):
                     sag_at_ray = surface_sag_general(
                         np.array([float(rb.x[k]) ** 2
@@ -2172,14 +2383,33 @@ def plot_lens_layout(
                         surfaces[i_s].radius, surfaces[i_s].conic,
                         surfaces[i_s].aspheric_coeffs)[0]
                     z_world.append(z_vertex[i_s] + float(sag_at_ray))
-                    hs.append(float(rb.x[k]))
+                    # FAN-PLANE COUPLING -- read ``y``/``M``, NOT
+                    # ``x``/``L``.  ``make_fan`` (and
+                    # ``_layout_finite_object_fan``) build the fan
+                    # entirely in the y-z plane: every launched ray has
+                    # x = 0 and L = 0, with both the aperture spread and
+                    # the field angle living in y / M.  Plotting ``x``
+                    # here -- as this function did through 5.39.1 --
+                    # renders every ray as a flat line at h = 0: a
+                    # silent-wrong figure showing a "converging" system
+                    # whose rays all travel on the axis.  See
+                    # docs/audits/AUDIT_PLOT_LENS_LAYOUT_RAY_OVERLAY_2026_08_19.md
+                    # and its FIX_ appendix.  Pinned by
+                    # tests/unit/test_plot_lens_layout_ray_overlay.py
+                    # (which also pins ``make_fan``'s plane, so a
+                    # re-planing of the fan breaks loudly HERE).
+                    #
+                    # The ``surface_sag_general`` call above correctly
+                    # uses x**2 + y**2 -- sag is rotationally symmetric,
+                    # so it needs no change.
+                    hs.append(float(rb.y[k]))
                 ir = r.image_rays
                 if ir.alive[k]:
                     z_img_world = z_vertex[-1] + image_z
-                    Lf = float(ir.L[k])
+                    Mf = float(ir.M[k])
                     Nf = float(ir.N[k]) if hasattr(ir, 'N') else 1.0
                     dz = z_img_world - z_world[-1]
-                    h_image = hs[-1] + (Lf / max(abs(Nf), 1e-9)) * dz
+                    h_image = hs[-1] + (Mf / max(abs(Nf), 1e-9)) * dz
                     z_world.append(z_img_world)
                     hs.append(h_image)
                 ax.plot(z_world, hs, color=color, lw=0.8, alpha=0.7)
