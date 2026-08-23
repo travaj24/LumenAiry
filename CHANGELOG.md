@@ -4,6 +4,8 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.41.0] — 2026-08-23
+
 ### Fixed -- `carrier='auto'` is DETERMINISTIC at any BLAS thread count (niche D14)
 
 `carrier='auto'` did not reproduce ITSELF: the same call, four times, nothing
