@@ -4562,13 +4562,10 @@ def _apply_real_lens_impl(
     without wrapping two thousand lines in a ``try``.  Every argument is
     forwarded verbatim; ``_accum_store`` is private and always supplied.
     """
-    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
-    # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
-    # guard).  Runs FIRST so the user gets a clear, actionable error
-    # rather than a downstream AttributeError or silent wrong-axis
-    # broadcast.
-    from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E_in, 'apply_real_lens', input_kind='field')
+    # The v4.15.3 input guard lives in ``apply_real_lens`` (the sole
+    # caller), as its first executable statement, per the dispatcher
+    # pin; this impl deliberately carries no second copy so the W4
+    # input-kind census stays at one wired site per entry point.
 
     # v5.1.0 (default-knob resolver rollout): when ``wave_propagator``
     # is left at the default ``None``, resolve via the library-wide
