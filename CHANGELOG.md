@@ -4,6 +4,53 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- `carrier='auto'` is DETERMINISTIC at any BLAS thread count (niche D14)
+
+`carrier='auto'` did not reproduce ITSELF: the same call, four times, nothing
+changed, returned two distinct field hashes at N=4096, on shipped 5.39.1 as
+well as on this tree.  The cause was a threaded BLAS reduction inside the fit
+whose partitioning is not fixed across calls.  It now runs a reduction whose
+summation order is fixed by the DATA SHAPE ALONE, and the fit is
+**bit-reproducible on one build at any thread count and over any number of
+repeats**.  Default ON (`DETERMINISTIC_NORMAL_EQUATIONS = True`); `False`
+restores the previous `G = A.T @ A` / `rhs = A.T @ b` route bit for bit.
+
+The scheme: fixed-size row blocks (a function of the TERM COUNT only), a
+per-block partial built from `np.multiply` / `np.sum` alone -- NumPy's ufunc
+reductions are single-threaded and take no BLAS path at any size, so the
+partial is scheduling-independent by construction rather than by sitting
+below some build's threading threshold -- and a fixed pairwise tree over the
+blocks, carried on a stack so the live set is `O(log n)` partials.  A
+`threadpoolctl`-capped GEMM was considered and rejected: `threadpoolctl` is
+an OPTIONAL dependency here, so that guarantee would be inert on some
+installs.
+
+Evidence, one fresh interpreter per arm with the width pinned before NumPy
+loads: `_compute_carrier('auto')`, `apply_real_lens(carrier='auto')`'s
+returned field, and the carrier fit as `apply_real_lens_traced(carrier='auto')`
+reaches it each read **3 distinct hashes over widths {1,2,4,8} before and 1
+after**.  The shipped attribution to `A.T @ A` was wrong and is corrected: at
+5 terms the GEMM is width-invariant at every size measured up to 1.6e7 rows;
+it is the `A.T @ b` GEMV that splits, from 100 000 rows up.
+
+**Accuracy goes up.**  Against a correctly-rounded oracle (Dekker
+two-product + `math.fsum`, itself validated bit-identical to exact rational
+arithmetic), on the fit's own 119 936 x 5 design matrix the recovered
+coefficients read 2.7e-18 where the family of legal partitioned reductions
+spans 4.4e-16 to 6.4e-15 -- better than its BEST draw by 162x.
+
+**Cost and scope.**  Whole-fit overhead at the production shape (N=8192,
+26.1% bright, 35 070 898 rows) is **+3.3%**, which is why it ships on.  It is
+scoped to the carrier fit: the traced path's 66-term Chebyshev/coordinate/OPL
+fits keep the BLAS route and their byte-identity contracts, because the
+deterministic kernel costs 34x at that shape.  Consequently the traced exit
+FIELD is still not thread-invariant -- two 120-term residual-eikonal fits on
+that path were measured moving with the width, and that is stated rather than
+claimed away.  Where the Gram screens numerically singular the solve reroutes
+to a threaded QR and a `RuntimeWarning` says the guarantee does not hold
+there.  No cross-build or cross-platform bit identity is claimed.  See
+`docs/audits/BUILD_DETERMINISTIC_CARRIER_FIT_2026_08_22.md`.
+
 ## [5.40.0] — 2026-08-23
 
 ### The deprecation horizon, slipped proactively this time
@@ -56,6 +103,12 @@ two-tree's `'auto'` arms agree across both trees at grid sizes where the
 reduction stays short); it means a production `carrier='auto'` run is not
 bit-reproducible and an A/B against a stored result cannot be read at the last
 bits.  See `docs/audits/BUILD_LENS_32K_MEMORY_2026_08_22.md` S4.2.
+**SUPERSEDED AFTER 5.40.0** by the niche-D14 entry under `[Unreleased]`: the
+fit's reduction is now deterministic at any thread count, so this caveat is
+the DIAGNOSIS as 5.40.0 shipped it and no longer describes current behaviour.
+Two of its details are also corrected there -- the mover is `A.T @ b`, not
+`A.T @ A`, and `apply_real_lens_traced` carries a second, independent
+nondeterministic reduction that niche D14 does not remove.
 
 Measured on a design-121-like three-surface group, N=4096, `carrier=0.030`,
 warmed: PRIVATE COMMIT 6.52 -> 3.04 float64 grids (`8*N*N`), i.e. **-3.48

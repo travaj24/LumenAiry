@@ -84,6 +84,9 @@ absence of a carrier); those are called out in S2.2.
 | 31 | C14 | `_SUPPORT_BAND_PEAK_RATIO_TOL` | `_lens_traced` | `1.0` | -- | 5.32.1 |
 | 32 | IMAP | `TRACED_INVERSE_MAP` | `_lens_imap` | `True` | `False` | 5.35.0 |
 | 33 | IMAP | `INVERSE_MAP_GUARD` | `_lens_imap` | `'warn'` | `'silent'` | 5.35.0 |
+| 34 | D14 | `DETERMINISTIC_NORMAL_EQUATIONS` | `_lens_traced` | `True` | `False` | (unreleased) |
+| 35 | D14 | `_DET_GRAM_TILE_BYTES` | `_lens_traced` | `1 << 19` | -- | (unreleased) |
+| 36 | D14 | `_DET_GRAM_MIN_BLOCK_ROWS` | `_lens_traced` | `4096` | -- | (unreleased) |
 
 **`5.32.1` AND `v5.34` ARE SOURCE-ONLY ERA NAMES, and neither reproduces the
 release it resembles.**  `CHANGELOG.md` has no `5.32.1` header (C9-C12 sit under

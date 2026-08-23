@@ -2198,6 +2198,186 @@ _LSTSQ_GRAM_RCOND_MIN = 1e-8
 #: above the noise and ~5 below the signal.
 _LSTSQ_RESID_MARGIN = 1e-6
 
+#: niche D14 (2026-08-22): form the normal equations by a reduction whose
+#: SUMMATION ORDER IS FIXED BY THE DATA SHAPE ALONE, so the answer does not
+#: move with the BLAS thread count, with what else the box is running, or with
+#: how OpenBLAS happened to split the reduction on this call.
+#:
+#: ``False`` restores the ``G = A.T @ A`` / ``rhs = A.T @ b`` route EXACTLY,
+#: bit for bit, and is the fail-before for everything below.  It is a DEFAULT
+#: for :func:`_compute_carrier`'s ``'auto'`` fit only -- every other caller of
+#: :func:`_solve_lstsq_thread_safe` keeps the BLAS route and its historical
+#: bits, because the deterministic kernel costs ~2.2x on the ``M = 5`` carrier
+#: fit and 34x on the ``M = 66`` traced Chebyshev fits (0.0106 s -> 0.3623 s
+#: at 141 471 rows, full-rank degree-10 basis -- S6.1 of
+#: ``docs/audits/BUILD_DETERMINISTIC_CARRIER_FIT_2026_08_22.md``).
+#:
+#: THE DEFECT.  ``docs/audits/BUILD_LENS_32K_MEMORY_2026_08_22.md`` S4.2 caught
+#: ``carrier='auto'`` failing to reproduce ITSELF: four identical N = 4096
+#: calls returned 2 distinct field hashes, and eight identical calls on shipped
+#: 5.39.1 did the same.  Pinning ``OMP_NUM_THREADS=1`` restored reproducibility
+#: and returned the threaded majority value, which says the arithmetic was
+#: never wrong -- only its order.
+#:
+#: WHICH REDUCTION, MEASURED rather than assumed.  S4.2 named ``G = A.T @ A``.
+#: At the production shape (``n`` = 28e6 rows, ``M`` = 5 terms) the GEMM is in
+#: fact width-invariant on this build and ``rhs = A.T @ b`` -- the GEMV -- is
+#: not: three distinct ``rhs`` hashes over widths 1/2/4/8, with ``G`` constant
+#: across all four (S2 of the audit).  Both go through the deterministic
+#: kernel, because which of the two splits is itself a build fact.
+#:
+#: WHAT IT DOES NOT CLAIM.  Bit-identity ACROSS builds or platforms.  The
+#: per-block partials are ``np.sum`` over contiguous float64, whose pairwise
+#: block size, SIMD width and unroll are properties of the NumPy build; a
+#: different libm/codegen may legally differ in the last ULP.  The claim is
+#: one build, any thread count, any number of repeats.
+DETERMINISTIC_NORMAL_EQUATIONS = True
+
+#: Working-set size of one deterministic block's transposed tile.  The block
+#: length is ``tile // (8 * n_terms)`` -- a function of the TERM COUNT ONLY,
+#: never of the row count, the thread count or any memory probe, because the
+#: summation order (and therefore the answer) depends on it.
+#:
+#: 512 KB is an L2-resident tile.  Swept at the production shape (``n`` = 28e6,
+#: ``M`` = 5) against the BLAS route's 0.230 s: 64 KB 1.409 s (6.1x, Python
+#: loop overhead), 256 KB 0.587 s, **512 KB 0.504 s (2.19x)**, 1 MB 0.598 s,
+#: 4 MB 0.545 s, 16 MB 0.583 s.  Flat to +-10% over three decades above
+#: 256 KB, so the pin is not on a cliff.
+_DET_GRAM_TILE_BYTES = 1 << 19
+
+#: Floor on the block length, so a wide fit (``M`` ~ 66) does not degenerate
+#: into a per-row Python loop.  With it, a block's tile can exceed
+#: :data:`_DET_GRAM_TILE_BYTES`; without it, ``M`` = 66 reads 1.14 s against
+#: 0.42 s at the sweep's 4 MB tile (audit S2.4).
+_DET_GRAM_MIN_BLOCK_ROWS = 4096
+
+
+def _det_block_rows(n_terms):
+    """Rows per deterministic block -- a function of the TERM COUNT ONLY.
+
+    Deliberately NOT a function of ``n``, of the available memory, or of the
+    thread count: those are scheduling facts, and a summation whose partition
+    reads one of them is exactly the thing this module is removing."""
+    return max(int(_DET_GRAM_MIN_BLOCK_ROWS),
+               int(_DET_GRAM_TILE_BYTES) // (8 * max(int(n_terms), 1)))
+
+
+def _det_normal_equations(A, b):
+    """``(A^T A, A^T b)`` accumulated in a FIXED order at any thread count.
+
+    THE SCHEME, and why each half of it is necessary.
+
+    * **Fixed-size row blocks.**  ``A`` is cut into blocks of
+      :func:`_det_block_rows` rows (the last one short).  The partition is a
+      function of ``A.shape`` alone, so two calls on the same data always cut
+      it the same way.
+    * **A per-block partial that CANNOT be threaded.**  Each block's
+      ``(M, M)`` partial is built from ``np.multiply`` and ``np.sum`` only.
+      NumPy's ufunc reductions are single-threaded and take no BLAS path at
+      any size, so the partial is scheduling-independent BY CONSTRUCTION --
+      not because the block happens to sit below some library's threading
+      threshold, which is a build fact and would be no guarantee at all.  (A
+      per-block ``block.T @ block`` under a ``threadpoolctl`` cap was the
+      other candidate and is REJECTED here: ``threadpoolctl`` is an optional
+      dependency of this library, so on a box without it the cap is inert and
+      the guarantee silently evaporates -- see ``rcwa/_core.py``'s
+      ``_threadpoolctl_available``.)
+    * **A fixed pairwise tree over the blocks.**  Partials are combined by a
+      carry-stack that merges two nodes as soon as they reach equal depth,
+      then folds the leftovers right to left.  That is exactly the
+      level-by-level pairwise tree of the same block list, at ``O(log n)``
+      live partials instead of ``O(n / blk)`` -- so a 28e6-row 5-term fit
+      holds at most 12 partial Grams, not 2137 of them, and the 32k wave's
+      fit footprint is untouched.
+
+    ACCURACY IS A BONUS, NOT A COST.  The tree's error grows like
+    ``log2`` of the block count where a sequential reduction grows linearly,
+    and the per-block ``np.sum`` is itself pairwise.  Measured against a
+    correctly-rounded (Dekker two-product + ``math.fsum``) oracle on the fit's
+    OWN design matrix, ``A`` = 119 936 x 5: the recovered coefficients read
+    2.7e-18 here against 4.4e-16 .. 6.4e-15 over the family of legal
+    partitioned reductions -- better than its BEST draw by 162x, and unlike
+    every member of that family the number does not move with the thread
+    width.  ``G`` and the right-hand side are only claimed against the WORST
+    draw: on a 67 348-row fixture this route's rhs is 1.4x worse than the
+    luckiest partition, which is why the test asserts the two quantities
+    differently (audit S5.2).
+
+    ``b`` may be 1-D or 2-D; the returned right-hand side matches
+    ``A.T @ b``'s shape.
+    """
+    A = np.ascontiguousarray(A, dtype=np.float64)
+    B = np.asarray(b, dtype=np.float64)
+    flat = (B.ndim == 1)
+    B = B.reshape(B.shape[0], -1)
+    n, n_terms = A.shape
+    n_rhs = B.shape[1]
+    G_out = np.zeros((n_terms, n_terms), dtype=np.float64)
+    r_out = np.zeros((n_terms, n_rhs), dtype=np.float64)
+    if n == 0:
+        return G_out, (r_out.ravel() if flat else r_out)
+    blk = _det_block_rows(n_terms)
+    stack = []                       # [(depth, G_partial, r_partial), ...]
+    for i0 in range(0, n, blk):
+        i1 = min(i0 + blk, n)
+        # ONE transposed copy per block, so every pair product below reads two
+        # CONTIGUOUS rows.  It is a speed device only: the products, their
+        # order and the ``np.sum`` lengths are identical to the same kernel
+        # run on the strided columns of ``A`` itself, and the two are measured
+        # bit-identical (audit S2.3; at the SHIPPED block size the tile is
+        # 1.11x faster at M = 5 and 1.89x at M = 66).
+        T = np.ascontiguousarray(A[i0:i1].T)
+        R = np.ascontiguousarray(B[i0:i1].T)
+        buf = np.empty(i1 - i0, dtype=np.float64)
+        Gp = np.empty((n_terms, n_terms), dtype=np.float64)
+        rp = np.empty((n_terms, n_rhs), dtype=np.float64)
+        for p in range(n_terms):
+            cp = T[p]
+            for q in range(p, n_terms):
+                np.multiply(cp, T[q], out=buf)
+                v = float(np.sum(buf))
+                Gp[p, q] = v
+                Gp[q, p] = v          # SYMMETRIC by construction, so the
+                                      # Cholesky below never sees a Gram whose
+                                      # two triangles disagree in the last bit
+            for kk in range(n_rhs):
+                np.multiply(cp, R[kk], out=buf)
+                rp[p, kk] = float(np.sum(buf))
+        stack.append((0, Gp, rp))
+        while len(stack) >= 2 and stack[-1][0] == stack[-2][0]:
+            d, G2, r2 = stack.pop()
+            _, G1, r1 = stack.pop()
+            stack.append((d + 1, G1 + G2, r1 + r2))
+    G_out, r_out = stack[-1][1], stack[-1][2]
+    for i in range(len(stack) - 2, -1, -1):
+        G_out = stack[i][1] + G_out
+        r_out = stack[i][2] + r_out
+    return G_out, (r_out.ravel() if flat else r_out)
+
+
+def _warn_det_stepdown(deterministic, why):
+    """Say, at BOTH exits that leave the normal equations, that the
+    determinism guarantee does not reach the route being taken.
+
+    There are two of them and they are reached by different data -- an
+    outright rank-deficient Gram (Cholesky and LU both refuse) and one that
+    factorises but screens singular under C13 -- and a guarantee that is
+    withdrawn silently on one of them is worse than no guarantee at all.
+    ``_solve_lstsq_qr``'s ``geqrf`` runs over the FULL ``A``, so it is a
+    threaded BLAS-3 factorisation and carries exactly the scheduling
+    dependence this niche removes from the accumulation.
+    """
+    if not deterministic:
+        return
+    import warnings
+    warnings.warn(
+        f"deterministic least-squares: {why}, so the solve reroutes to a "
+        f"threaded QR (geqrf) over the full design matrix and the "
+        f"run-to-run / thread-count invariance does NOT hold for this fit.  "
+        f"Reduce the fit degree, or re-weight, if bit-reproducibility is "
+        f"required here.",
+        RuntimeWarning, stacklevel=3)
+
 
 def _gram_rcond(G):
     """Reciprocal 2-norm condition number of ``G`` after DIAGONAL
@@ -2287,7 +2467,7 @@ def _lstsq_residual(A, b, x):
     return float(np.linalg.norm(np.asarray(b) - np.asarray(A) @ np.asarray(x)))
 
 
-def _solve_lstsq_thread_safe(A, b):
+def _solve_lstsq_thread_safe(A, b, deterministic=False):
     """Least-squares solve ``A @ x ~= b`` (overdetermined, single or multi RHS)
     via the NORMAL EQUATIONS -- ``G x = A^T b`` with ``G = A^T A`` -- Cholesky
     then LU, with a QR re-solve (:func:`_solve_lstsq_qr`) wherever ``G`` comes
@@ -2315,12 +2495,30 @@ def _solve_lstsq_thread_safe(A, b):
     the byte-identity contracts of niches C1/C6/C8/C9 intact.
     See ``LSTSQ_CONDITIONING_STEPDOWN``.
 
+    ``deterministic=True`` (niche D14) forms ``G`` and ``A^T b`` through
+    :func:`_det_normal_equations` instead of the threaded BLAS calls, so the
+    returned coefficients do not move with the BLAS thread count or with the
+    scheduling of any particular call.  ``False`` -- the default, and what
+    every caller but :func:`_compute_carrier`'s ``'auto'`` fit passes --
+    returns the historical bits exactly.  See
+    :data:`DETERMINISTIC_NORMAL_EQUATIONS`.
+
+    THE ONE HOLE, STATED RATHER THAN PAPERED OVER.  Determinism covers the
+    NORMAL-EQUATIONS route.  If the C13 screen finds ``G`` numerically
+    singular the solve reroutes to :func:`_solve_lstsq_qr`, whose ``geqrf``
+    over the full ``A`` is a threaded BLAS-3 factorisation and is NOT
+    scheduling-independent; the deterministic caller is warned when that
+    happens rather than being told a guarantee that no longer holds.
+
     Returns ``x`` with the same trailing shape as ``b`` (1-D for a single RHS).
     """
     A = np.ascontiguousarray(A, dtype=np.float64)
     b = np.asarray(b, dtype=np.float64)
-    G = A.T @ A
-    rhs = A.T @ b
+    if deterministic:
+        G, rhs = _det_normal_equations(A, b)
+    else:
+        G = A.T @ A
+        rhs = A.T @ b
     x = None
     try:
         from scipy.linalg import cho_factor, cho_solve
@@ -2333,11 +2531,14 @@ def _solve_lstsq_thread_safe(A, b):
         except np.linalg.LinAlgError:
             x = None
     if x is None or not np.all(np.isfinite(x)):
+        _warn_det_stepdown(deterministic, 'the Gram matrix is rank-deficient')
         return _solve_lstsq_qr(A, b)
     if not LSTSQ_CONDITIONING_STEPDOWN:
         return x
     if _gram_rcond(G) >= _LSTSQ_GRAM_RCOND_MIN:
         return x
+    _warn_det_stepdown(deterministic,
+                       'the Gram matrix screened as numerically singular')
     x_qr = _solve_lstsq_qr(A, b)
     if not np.all(np.isfinite(x_qr)):
         return x
@@ -4125,7 +4326,17 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
         A *= w[:, None]
         rhs = rhs * w
         # B7: normal-equations solve (thread-safe; no gelsd/JAX-OpenMP deadlock).
-        coef = _solve_lstsq_thread_safe(A, rhs)
+        #
+        # niche D14 (v5.40): and DETERMINISTIC.  This is the reduction that
+        # made ``carrier='auto'`` fail to reproduce itself -- 2 distinct field
+        # hashes over 4 identical N = 4096 calls, and over 8 on shipped 5.39.1
+        # (BUILD_LENS_32K_MEMORY_2026_08_22 S4.2).  It is the longest reduction
+        # in the library (``2 * n_bright`` rows: 1.8e6 at N = 4096, 2.8e7 at
+        # N = 16384) and the only one on this path, which is why a closed-form
+        # carrier never showed the effect.  Read at CALL time so a test can
+        # force the fail-before arm.
+        coef = _solve_lstsq_thread_safe(
+            A, rhs, deterministic=bool(DETERMINISTIC_NORMAL_EQUATIONS))
 
         def _poly_and_grad(xq, yq, want_W=True):
             # v5.40: ``want_W=False`` skips the potential itself.  ``grad_fn``

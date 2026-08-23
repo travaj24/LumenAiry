@@ -941,6 +941,16 @@ threading, so it is a diagnostic setting, not a production one) or supply a
 CLOSED-FORM carrier -- a signed conjugate or a `TiltedCarrier` -- which has no
 reduction at all.
 
+> **SUPERSEDED 2026-08-22 by niche D14** --
+> `docs/audits/BUILD_DETERMINISTIC_CARRIER_FIT_2026_08_22.md`.  The fit's
+> reduction is now deterministic at any thread count
+> (`DETERMINISTIC_NORMAL_EQUATIONS`, default on), so this run IS
+> bit-reproducible on one build without the `OMP_NUM_THREADS=1` pin.  Two
+> corrections to the paragraph above: the mover is `A.T @ b`, not
+> `A.T @ A` (S1.1 there), and `apply_real_lens_traced` retains a SEPARATE
+> nondeterministic reduction in its 120-term residual-eikonal fits, which
+> this run's `surface_model='tangent_facet'` analytic route does not take.
+
 **Re-check `LENS_AUTO_CARRIER_BRIGHT_FRAC` against the real field first.**  It
 is the one preflight term that depends on the input rather than the
 prescription, the preflight prints the value it assumed, and the run's own

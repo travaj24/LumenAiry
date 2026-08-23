@@ -236,6 +236,20 @@ _TRACED_ERA_FLAGS = (
     _f(_LT, '_LSTSQ_RESID_MARGIN', 'C13', NOT_A_VALUE, (),
        note='relative margin a stepped-down route must BEAT to be taken; '
             'ties go to the shipped path'),
+    _f(_LT, 'DETERMINISTIC_NORMAL_EQUATIONS', 'D14', False,
+       {'v5.34': True},
+       note='"False restores the G = A.T @ A / rhs = A.T @ b route EXACTLY, '
+            'bit for bit, and is the fail-before for everything below."  '
+            'Absent from the older eras because the constant did not exist; '
+            'it gates ONLY _compute_carrier\'s \'auto\' fit -- every other '
+            '_solve_lstsq_thread_safe caller keeps the BLAS route'),
+    _f(_LT, '_DET_GRAM_TILE_BYTES', 'D14', NOT_A_VALUE, (),
+       note='working set of one deterministic block tile; the block length '
+            'is tile // (8 * n_terms), a function of the TERM COUNT ONLY.  '
+            'Moving it moves the summation order and therefore the bits'),
+    _f(_LT, '_DET_GRAM_MIN_BLOCK_ROWS', 'D14', NOT_A_VALUE, (),
+       note='floor on the block length so a wide fit does not degenerate '
+            'into a per-row Python loop'),
     # ---- the traced exit support (UNIT C) ----------------------------------
     _f(_LT, 'REMAP_INVERSE_SUPPORT_BOUND', 'C8', False,
        {'v5.31': False, 'v5.32': True},
