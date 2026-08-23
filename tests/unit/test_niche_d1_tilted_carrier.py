@@ -1341,6 +1341,19 @@ def test_off_centre_fit_disc_does_not_ghost_the_exit_field(monkeypatch):
     monkeypatch.setattr(_lt, 'DECENTRED_FIT_PREDICTOR', False)
     monkeypatch.setattr(_lt, 'DECENTRED_FIT_ARBITER', False)
     monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
+    #   * ``DETERMINISTIC_TRACED_FIT`` (niche D15, 2026-08-23) is a
+    #     THIRD independent cure, and it acts one step earlier than
+    #     C13's: it forms the hard-mask fit's Gram through a fixed
+    #     pairwise tree instead of a threaded BLAS reduction, which is
+    #     measurably more accurate, and the null-space draw this
+    #     witness needs does not survive it.  Measured with it left on
+    #     and the two flags above pinned: the ghost lobe collapses from
+    #     6.737 mm to 1.200 mm (against a 1.400 mm detached-lobe bar)
+    #     and ``bad_rel`` reads 1.00e-03 against a 0.02 bar.  Same
+    #     sentence as C13's above: not this test breaking, a third cure
+    #     for the same defect -- and a fail-before that inherits a
+    #     default is not a fail-before.
+    monkeypatch.setattr(_lt, 'DETERMINISTIC_TRACED_FIT', False)
     bad, bad_msgs = _ghost_field()
     bad_p = float(np.sum(bad[~near] ** 2)) / p_in
     bad_rel = float(bad[~near].max()) / float(bad[near].max())
@@ -1467,6 +1480,19 @@ def test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive(monkeypatch)
     monkeypatch.setattr(_lt, 'DECENTRED_FIT_PREDICTOR', False)
     monkeypatch.setattr(_lt, 'DECENTRED_FIT_ARBITER', False)
     monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
+    #   * ``DETERMINISTIC_TRACED_FIT`` (niche D15, 2026-08-23) is a
+    #     THIRD independent cure, and it acts one step earlier than
+    #     C13's: it forms the hard-mask fit's Gram through a fixed
+    #     pairwise tree instead of a threaded BLAS reduction, which is
+    #     measurably more accurate, and the null-space draw this
+    #     witness needs does not survive it.  Measured with it left on
+    #     and the two flags above pinned: the ghost lobe collapses from
+    #     6.737 mm to 1.200 mm (against a 1.400 mm detached-lobe bar)
+    #     and ``bad_rel`` reads 1.00e-03 against a 0.02 bar.  Same
+    #     sentence as C13's above: not this test breaking, a third cure
+    #     for the same defect -- and a fail-before that inherits a
+    #     default is not a fail-before.
+    monkeypatch.setattr(_lt, 'DETERMINISTIC_TRACED_FIT', False)
     _, bad_rel, bad_msgs = _ghost_metrics()
     # ENVELOPE, not an absolute pin (2026-08-02): the broken configuration's
     # ghost magnitude is BLAS-build-dependent -- measured > 0.1 on local

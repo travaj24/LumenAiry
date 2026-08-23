@@ -569,8 +569,9 @@ def _solve_census(**kw):
     rows = []
     orig = _lt._solve_lstsq_thread_safe
 
-    def _instrumented(A, b):
-        x = orig(A, b)
+    # ``**kw``: the real solver takes ``deterministic=`` (D14/D15).
+    def _instrumented(A, b, **kw):
+        x = orig(A, b, **kw)
         A64 = np.ascontiguousarray(A, dtype=np.float64)
         b64 = np.asarray(b, dtype=np.float64)
         r_x = _lt._lstsq_residual(A64, b64, x)

@@ -1179,9 +1179,11 @@ def test_the_worker_evaluates_the_shipped_fit_and_never_re_fits():
     calls = []
     orig = LT._solve_lstsq_thread_safe
 
-    def _spy(A, b):
+    # ``**kw``: the real solver takes ``deterministic=`` (D14/D15), and a
+    # stub that refuses the caller's keyword tests the stub, not the library.
+    def _spy(A, b, **kw):
         calls.append(np.shape(A))
-        return orig(A, b)
+        return orig(A, b, **kw)
 
     LT._solve_lstsq_thread_safe = _spy
     try:
@@ -1252,7 +1254,8 @@ def test_from_state_reproduces_the_parents_evaluator_bitwise():
     state = pickle.loads(pickle.dumps(LT._cheb_fit_state(parent)))
     calls = []
     orig = LT._solve_lstsq_thread_safe
-    LT._solve_lstsq_thread_safe = lambda A, b: calls.append(1) or orig(A, b)
+    LT._solve_lstsq_thread_safe = (
+        lambda A, b, **kw: calls.append(1) or orig(A, b, **kw))
     try:
         child = LT._Cheb2DEvaluator.from_state(state, xp=np, backend='numpy')
     finally:
@@ -1357,7 +1360,8 @@ def probe(payload):
     """Runs in the SPAWNED worker."""
     n = []
     orig = LT._solve_lstsq_thread_safe
-    LT._solve_lstsq_thread_safe = lambda A, b: n.append(1) or orig(A, b)
+    LT._solve_lstsq_thread_safe = (
+        lambda A, b, **kw: n.append(1) or orig(A, b, **kw))
     try:
         ev = LT._Cheb2DEvaluator.from_state(payload['cheb_fit']['opl'], xp=np,
                                             backend='numpy')

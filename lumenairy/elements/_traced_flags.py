@@ -250,6 +250,38 @@ _TRACED_ERA_FLAGS = (
     _f(_LT, '_DET_GRAM_MIN_BLOCK_ROWS', 'D14', NOT_A_VALUE, (),
        note='floor on the block length so a wide fit does not degenerate '
             'into a per-row Python loop'),
+    _f(_LT, 'DETERMINISTIC_TRACED_FIT', 'D15', False,
+       {'v5.34': True},
+       note='"False restores the G = A.T @ A / rhs = A.T @ b route for the '
+            'traced chain EXACTLY, bit for bit, and is the fail-before for '
+            'the whole layer."  Absent from the older eras because the '
+            'constant did not exist.  Covers every _solve_lstsq_thread_safe '
+            'caller EXCEPT _compute_carrier\'s auto fit, which keeps D14\'s '
+            'own flag -- together they make apply_real_lens_traced\'s exit '
+            'FIELD thread-invariant, which D14 alone could not claim'),
+    _f(_LT, '_DET_EINSUM_MIN_TERMS', 'D15', NOT_A_VALUE, (),
+       note='term count at or above which the deterministic partial is one '
+            'np.einsum instead of D14\'s M(M+1)/2 ufunc pairs.  MEASURED '
+            'crossover (8), and simultaneously the constant that keeps the '
+            '5-term carrier fit on 5.41.0\'s exact arithmetic'),
+    _f(_LT, '_DET_EINSUM_BLOCK_ROWS', 'D15', NOT_A_VALUE, (),
+       note='rows per einsum block -- 64, NOT _det_block_rows.  einsum '
+            'accumulates sequentially where np.sum is pairwise, so over '
+            'D14\'s 4096-row block the einsum partial is WORSE than the BLAS '
+            'route\'s worst legal partition.  Moving it moves the summation '
+            'order and therefore the bits'),
+    _f(_LT, '_DET_REFINE_STEPS', 'D15', NOT_A_VALUE, (),
+       note='iterative-refinement steps replacing the C13 QR step-down on '
+            'the deterministic route.  D14 called that step-down a corner; '
+            'measured, it is the DEFAULT on the traced chain, and unrefined '
+            'the 120-term normal equations miss the least-squares residual '
+            'by 1681-2138x'),
+    _f(_LT, '_DET_REFINE_MAX_CORRECTION', 'D15', NOT_A_VALUE, (),
+       note='largest correction (relative to the answer) that still counts '
+            'as converged refinement; above it the route falls back to the '
+            'threaded QR and warns.  Measured corridor: traced fits correct '
+            'by <= 9.8e-08, a system the normal equations cannot represent '
+            'by ~1.0'),
     # ---- the traced exit support (UNIT C) ----------------------------------
     _f(_LT, 'REMAP_INVERSE_SUPPORT_BOUND', 'C8', False,
        {'v5.31': False, 'v5.32': True},

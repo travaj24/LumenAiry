@@ -87,6 +87,11 @@ absence of a carrier); those are called out in S2.2.
 | 34 | D14 | `DETERMINISTIC_NORMAL_EQUATIONS` | `_lens_traced` | `True` | `False` | (unreleased) |
 | 35 | D14 | `_DET_GRAM_TILE_BYTES` | `_lens_traced` | `1 << 19` | -- | (unreleased) |
 | 36 | D14 | `_DET_GRAM_MIN_BLOCK_ROWS` | `_lens_traced` | `4096` | -- | (unreleased) |
+| 37 | D15 | `DETERMINISTIC_TRACED_FIT` | `_lens_traced` | `True` | `False` | (unreleased) |
+| 38 | D15 | `_DET_EINSUM_MIN_TERMS` | `_lens_traced` | `8` | -- | (unreleased) |
+| 39 | D15 | `_DET_EINSUM_BLOCK_ROWS` | `_lens_traced` | `64` | -- | (unreleased) |
+| 40 | D15 | `_DET_REFINE_STEPS` | `_lens_traced` | `1` | -- | (unreleased) |
+| 41 | D15 | `_DET_REFINE_MAX_CORRECTION` | `_lens_traced` | `1e-3` | -- | (unreleased) |
 
 **`5.32.1` AND `v5.34` ARE SOURCE-ONLY ERA NAMES, and neither reproduces the
 release it resembles.**  `CHANGELOG.md` has no `5.32.1` header (C9-C12 sit under

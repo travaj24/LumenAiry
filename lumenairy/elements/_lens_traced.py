@@ -2251,6 +2251,129 @@ _DET_GRAM_TILE_BYTES = 1 << 19
 #: 0.42 s at the sweep's 4 MB tile (audit S2.4).
 _DET_GRAM_MIN_BLOCK_ROWS = 4096
 
+#: niche D15 (2026-08-23): put the REST of the traced chain's least-squares
+#: fits on the deterministic kernel too, so ``apply_real_lens_traced``'s exit
+#: FIELD -- not just the carrier fit inside it -- is bit-reproducible at any
+#: BLAS thread count.
+#:
+#: WHAT D14 LEFT OPEN, AND WHY.  ``DETERMINISTIC_NORMAL_EQUATIONS`` covers
+#: :func:`_compute_carrier`'s ``'auto'`` fit alone.  Censused on the traced
+#: path (audit S1), the chain runs SIX solves and the carrier fit is one:
+#: three ``(1457, 28)`` traced-Chebyshev fits here, and TWO ``(1337, 120)``
+#: total-degree exit fits in ``_lens_imap.build_inverse_map`` -- the latter
+#: measured returning different coefficient bytes at widths {1,2} against
+#: {4,8}, and on a ``ray_subsample=2`` fixture that reaches the returned
+#: FIELD.  D14 could not close it at a price worth paying: its ufunc partial
+#: is ``O(M^2)`` NumPy calls per block and costs 34-43x at ``M`` = 120.
+#:
+#: WHAT MADE IT PAYABLE.  A per-block ``np.einsum(..., optimize=False)``
+#: partial -- one C loop, no BLAS, no threads -- instead of ``M(M+1)/2``
+#: ufunc pairs (S3 of ``BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md``).
+#: Measured at the traced shapes it is 7.7x faster than D14's kernel, and the
+#: whole-call cost of turning it on is **+0.6%** of an
+#: ``apply_real_lens_traced`` call, because every least-squares solve on that
+#: path together is only ~1% of it.  Hence default ON.
+#:
+#: ``False`` restores the ``G = A.T @ A`` / ``rhs = A.T @ b`` route for these
+#: fits EXACTLY, bit for bit, and is the fail-before for the whole layer.
+#: It does NOT touch the carrier fit, which keeps its own D14 flag and its
+#: own 5.41.0 bits -- ``_DET_EINSUM_MIN_TERMS`` keeps the 5-term carrier fit
+#: on D14's ufunc partial, so nothing on the analytic path moves.
+DETERMINISTIC_TRACED_FIT = True
+
+#: Term count at or above which the deterministic partial is built by
+#: ``np.einsum`` rather than by D14's ufunc pair loop.  A function of the TERM
+#: COUNT ONLY, for the same reason :func:`_det_block_rows` is: the choice
+#: fixes the summation order and therefore the bits.
+#:
+#: 8 is where the two cross, MEASURED at ``n`` = 200 000 (einsum / ufunc:
+#: M = 5 1.36x, M = 6 1.03x, **M = 8 0.81x**, M = 12 0.53x, M = 28 0.35x,
+#: M = 120 0.29x).  It is also the constant that keeps the ``M`` = 5 carrier
+#: fit on the exact arithmetic 5.41.0 shipped -- the crossover and the
+#: byte-compatibility boundary agree, which is why one constant carries both.
+_DET_EINSUM_MIN_TERMS = 8
+
+#: Rows per einsum block.  DELIBERATELY NOT :func:`_det_block_rows`: einsum
+#: accumulates its contraction SEQUENTIALLY, where ``np.sum`` is pairwise, so
+#: over D14's 4096-row block the einsum partial is 3-10x LESS accurate than
+#: the ufunc partial and 2-6x worse than the legal-partition family's WORST
+#: draw -- i.e. the naive transplant fails the oracle bar outright (audit
+#: S5.1).  Shortening the sequential run to 64 rows and letting the pairwise
+#: carry-stack cover the rest repairs it: at 64 rows every quantity lands at
+#: or below the family's BEST draw at all four measured shapes, for 1.15x of
+#: the time 128 rows would take and 2.6x LESS than D14's kernel.
+#:
+#: A pure constant -- not a function of ``n``, of ``M``, of the free memory or
+#: of the thread count.  A 64 x 120 tile is 61 KB, comfortably L1/L2 resident
+#: at every term count this library fits.
+_DET_EINSUM_BLOCK_ROWS = 64
+
+#: Iterative-refinement steps applied to a deterministic normal-equations
+#: solve WHERE THE C13 SCREEN FIRES, in place of :func:`_solve_lstsq_qr`.
+#:
+#: WHY THIS CONSTANT EXISTS AT ALL -- a refutation of D14's S3.  D14 declared
+#: the C13 step-down "the one hole" and warned the deterministic caller when
+#: it was taken, on the understanding that it is a corner.  ON THE TRACED
+#: CHAIN IT IS THE DEFAULT: measured, EVERY non-carrier fit screens singular
+#: (Gram rcond 1.6e-9 at 28 terms and 9.6e-11 at 120, against the 1e-8
+#: screen), so all five take ``dgeqrf`` over the full design matrix -- a
+#: threaded BLAS-3 factorisation.  A deterministic GRAM alone therefore
+#: changes NOTHING on that path, which is why D14's "34x on the traced fits"
+#: cost argument was pricing a kernel that would not have fixed anything.
+#:
+#: WHAT REPLACES IT.  One step of iterative refinement on the deterministic
+#: normal equations -- ``x <- x + G^-1 A^T (b - A x)``, every reduction in it
+#: going through the same fixed block tree.  It is the textbook cure for the
+#: ``cond(A)^2`` loss and it is valid here by a wide margin: ``1/rcond`` =
+#: 1e10 and ``cond(A)^2 eps`` ~ 2e-6, far inside the convergence condition.
+#:
+#: MEASURED ON THE FITS' OWN MATRICES, against the QR answer it replaces
+#: (``||b - A x||``, lower is better; audit S6): refinement is at least as
+#: good on all five and strictly better on three -- 8.445e-16 against QR's
+#: 9.941e-16 and 1.0230e-13 against 1.0242e-13 on the two 120-term fits, and
+#: it lifts a 28-term fit that the shipped screen left on the raw normal
+#: equations from 9.2195670e-10 to QR's own 9.2195625e-10.  Unrefined, the
+#: same fit's coefficients sit 3.2e-08 from QR's; refined, 5.3e-14.
+#:
+#: ONE STEP, NOT TWO, AND THAT IS MEASURED TOO: a second step moves the
+#: coefficients by ~2e-13 and the residual not at all, which is the classic
+#: signature of refinement having already converged.
+#:
+#: HOW MUCH IT MATTERS ON THE 120-TERM FITS: unrefined, the deterministic
+#: normal equations there miss the least-squares residual by **1681-2138x**.
+#: Refinement is not polish on this path; without it D15 would ship an answer
+#: three decades worse than the route it replaces.
+_DET_REFINE_STEPS = 1
+
+#: Largest correction, relative to the answer it corrects, that still counts
+#: as CONVERGED refinement.  Above it the deterministic route refuses to
+#: refine, falls back to :func:`_solve_lstsq_qr` and warns -- which is D14's
+#: declared hole, kept for exactly the systems that need it.
+#:
+#: THE REFUSAL RULE HAS TO BE DETERMINISTIC ITSELF, which is why it is the
+#: correction's own size and not a score against the QR: ``r_qr`` moves with
+#: the thread count, so a route that BRANCHES on it is not deterministic --
+#: the nondeterminism only moves from the value into the choice.
+#: ``max|d| / max|x|`` is computed entirely from deterministic quantities and
+#: is a direct measurement of whether refinement converged rather than a
+#: proxy for it.
+#:
+#: MEASURED SEPARATION, over both populations (audit S6.3):
+#:
+#: * MUST REFINE -- the traced chain's own fits, ``ray_subsample`` None and 2:
+#:   1.6e-16 (the 5-term carrier fit) through 2.7e-10 and 3.2e-08 (28 terms)
+#:   to **9.8e-08** at 120 terms.  Worst case four decades under this bar.
+#: * MUST REFUSE -- refinement diverging on a system the normal equations
+#:   cannot represent: a column perturbed by 1e-9 reads **1.007**, by 1e-12
+#:   **0.999**, and the niche-D7 hard-mask fixture (equilibrated Gram with a
+#:   non-positive eigenvalue, ``_gram_rcond`` exactly 0.0) produces a fit
+#:   missing the least-squares residual by 1.4e5x.  Three decades over.
+#:
+#: The corridor is therefore ~1e-7 .. ~1e-3 wide and 1e-3 sits at its top,
+#: which also keeps the 1e-6-perturbed C13 fixture (3.0e-04, and harmless --
+#: its refined residual is 1.000x the QR's) on the refined route.
+_DET_REFINE_MAX_CORRECTION = 1e-3
+
 
 def _det_block_rows(n_terms):
     """Rows per deterministic block -- a function of the TERM COUNT ONLY.
@@ -2303,11 +2426,27 @@ def _det_normal_equations(A, b):
     luckiest partition, which is why the test asserts the two quantities
     differently (audit S5.2).
 
+    TWO PARTIALS, ONE TREE (niche D15).  The per-block partial above is
+    ``M(M+1)/2 + M K`` NumPy calls, which is the right instrument at the
+    carrier fit's ``M`` = 5 and the wrong one at the traced fits' ``M`` = 28
+    and 120, where it costs 34-43x against BLAS.  At and above
+    :data:`_DET_EINSUM_MIN_TERMS` terms the partial is
+    :func:`_det_partial_einsum` instead -- ONE ``np.einsum`` per product,
+    single-threaded and BLAS-free by construction.  The block partition, the
+    carry-stack and the fold are shared, so the two differ only inside a
+    block, and WHICH ONE RUNS IS A FUNCTION OF THE TERM COUNT ALONE.
+
     ``b`` may be 1-D or 2-D; the returned right-hand side matches
     ``A.T @ b``'s shape.
     """
     A = np.ascontiguousarray(A, dtype=np.float64)
-    B = np.asarray(b, dtype=np.float64)
+    # CONTIGUOUS at entry, not merely ``asarray``: the einsum partial reads
+    # the block as a VIEW (no copy), so the iteration order it picks would
+    # otherwise be a function of the caller's memory layout -- a scheduling
+    # input by another name.  Normalising here makes both partials' order a
+    # function of the SHAPE alone.  The ufunc partial is unaffected either
+    # way: it copies every block regardless.
+    B = np.ascontiguousarray(np.asarray(b, dtype=np.float64))
     flat = (B.ndim == 1)
     B = B.reshape(B.shape[0], -1)
     n, n_terms = A.shape
@@ -2316,33 +2455,15 @@ def _det_normal_equations(A, b):
     r_out = np.zeros((n_terms, n_rhs), dtype=np.float64)
     if n == 0:
         return G_out, (r_out.ravel() if flat else r_out)
-    blk = _det_block_rows(n_terms)
+    wide = int(n_terms) >= int(_DET_EINSUM_MIN_TERMS)
+    blk = (int(_DET_EINSUM_BLOCK_ROWS) if wide else _det_block_rows(n_terms))
     stack = []                       # [(depth, G_partial, r_partial), ...]
     for i0 in range(0, n, blk):
         i1 = min(i0 + blk, n)
-        # ONE transposed copy per block, so every pair product below reads two
-        # CONTIGUOUS rows.  It is a speed device only: the products, their
-        # order and the ``np.sum`` lengths are identical to the same kernel
-        # run on the strided columns of ``A`` itself, and the two are measured
-        # bit-identical (audit S2.3; at the SHIPPED block size the tile is
-        # 1.11x faster at M = 5 and 1.89x at M = 66).
-        T = np.ascontiguousarray(A[i0:i1].T)
-        R = np.ascontiguousarray(B[i0:i1].T)
-        buf = np.empty(i1 - i0, dtype=np.float64)
-        Gp = np.empty((n_terms, n_terms), dtype=np.float64)
-        rp = np.empty((n_terms, n_rhs), dtype=np.float64)
-        for p in range(n_terms):
-            cp = T[p]
-            for q in range(p, n_terms):
-                np.multiply(cp, T[q], out=buf)
-                v = float(np.sum(buf))
-                Gp[p, q] = v
-                Gp[q, p] = v          # SYMMETRIC by construction, so the
-                                      # Cholesky below never sees a Gram whose
-                                      # two triangles disagree in the last bit
-            for kk in range(n_rhs):
-                np.multiply(cp, R[kk], out=buf)
-                rp[p, kk] = float(np.sum(buf))
+        if wide:
+            Gp, rp = _det_partial_einsum(A[i0:i1], B[i0:i1])
+        else:
+            Gp, rp = _det_partial_ufunc(A[i0:i1], B[i0:i1])
         stack.append((0, Gp, rp))
         while len(stack) >= 2 and stack[-1][0] == stack[-2][0]:
             d, G2, r2 = stack.pop()
@@ -2355,14 +2476,194 @@ def _det_normal_equations(A, b):
     return G_out, (r_out.ravel() if flat else r_out)
 
 
-def _warn_det_stepdown(deterministic, why):
-    """Say, at BOTH exits that leave the normal equations, that the
-    determinism guarantee does not reach the route being taken.
+def _det_partial_ufunc(Ab, Bb):
+    """One block's ``(A^T A, A^T b)`` from ``np.multiply`` + ``np.sum`` only.
 
-    There are two of them and they are reached by different data -- an
-    outright rank-deficient Gram (Cholesky and LU both refuse) and one that
-    factorises but screens singular under C13 -- and a guarantee that is
-    withdrawn silently on one of them is worse than no guarantee at all.
+    D14's partial, unchanged, and the one the ``M`` = 5 carrier fit still
+    takes -- so 5.41.0's carrier bits are reproduced exactly.  NumPy's ufunc
+    reductions are single-threaded and take no BLAS path at any size, so this
+    is scheduling-independent BY CONSTRUCTION rather than by staying below
+    some library's threading threshold.
+    """
+    n_terms = Ab.shape[1]
+    n_rhs = Bb.shape[1]
+    # ONE transposed copy per block, so every pair product below reads two
+    # CONTIGUOUS rows.  It is a speed device only: the products, their order
+    # and the ``np.sum`` lengths are identical to the same kernel run on the
+    # strided columns of ``A`` itself, and the two are measured bit-identical
+    # (D14 audit S2.3; at the SHIPPED block size the tile is 1.11x faster at
+    # M = 5 and 1.89x at M = 66).
+    T = np.ascontiguousarray(Ab.T)
+    R = np.ascontiguousarray(Bb.T)
+    buf = np.empty(Ab.shape[0], dtype=np.float64)
+    Gp = np.empty((n_terms, n_terms), dtype=np.float64)
+    rp = np.empty((n_terms, n_rhs), dtype=np.float64)
+    for p in range(n_terms):
+        cp = T[p]
+        for q in range(p, n_terms):
+            np.multiply(cp, T[q], out=buf)
+            v = float(np.sum(buf))
+            Gp[p, q] = v
+            Gp[q, p] = v              # SYMMETRIC by construction, so the
+                                      # Cholesky never sees a Gram whose two
+                                      # triangles disagree in the last bit
+        for kk in range(n_rhs):
+            np.multiply(cp, R[kk], out=buf)
+            rp[p, kk] = float(np.sum(buf))
+    return Gp, rp
+
+
+def _det_partial_einsum(Ab, Bb):
+    """One block's ``(A^T A, A^T b)`` from two ``np.einsum`` contractions.
+
+    ``optimize=False`` IS LOAD-BEARING AND IS PINNED BY TEST.  With
+    ``optimize=True`` einsum is free to route the contraction through
+    ``tensordot`` -> BLAS ``dgemm``, and on this build it MEASURABLY does:
+    ``np.einsum('ri,rj->ij', A, A, optimize=True)`` returns bytes IDENTICAL to
+    ``A.T @ A`` at every shape tried, and speeds up 15x from one thread to
+    four -- i.e. it is exactly the threaded reduction this layer removes.
+    With ``optimize=False`` the same call runs NumPy's own ``sum_of_products``
+    C loop: measured flat to 0.5% over widths {1, 2, 4, 8} at
+    ``(500 000, 120)`` and ``(2e6, 66)``, and bit-identical across all four.
+    That is the same instrument D14 used on the ufunc reductions.
+    (``optimize=False`` is also NumPy's current default; passing it is how the
+    guarantee survives a future default flip.)
+
+    THE ACCURACY REPAIR, WHICH IS WHY THE BLOCK IS 64 ROWS AND NOT 4096.
+    einsum accumulates a contraction sequentially; ``np.sum`` is pairwise.
+    Over D14's 4096-row block that costs a decade -- worse than the shipped
+    BLAS route's WORST legal partition, which would have made this a
+    determinism fix that pays for itself in error.  See
+    :data:`_DET_EINSUM_BLOCK_ROWS`.
+    """
+    Ab = np.ascontiguousarray(Ab)
+    Bb = np.ascontiguousarray(Bb)
+    return (np.einsum('ri,rj->ij', Ab, Ab, optimize=False),
+            np.einsum('ri,rk->ik', Ab, Bb, optimize=False))
+
+
+def _det_at_b(A, B):
+    """``A^T B`` alone, through the SAME partition and the SAME fixed pairwise
+    tree :func:`_det_normal_equations` uses for its right-hand side.
+
+    The iterative refinement below needs the right-hand side of a residual and
+    not its Gram, and forming the Gram again to get it would be ``M / K`` times
+    the work for nothing.  ``_det_at_b(A, B)`` is required to be BIT-IDENTICAL
+    to ``_det_normal_equations(A, B)[1]`` -- if it ever is not, the refinement
+    is running a different reduction from the solve it corrects, and the test
+    ``test_the_rhs_only_reduction_is_the_same_reduction`` says so.
+    """
+    A = np.ascontiguousarray(A, dtype=np.float64)
+    Bm = np.ascontiguousarray(np.asarray(B, dtype=np.float64))
+    flat = (Bm.ndim == 1)
+    Bm = Bm.reshape(Bm.shape[0], -1)
+    n, n_terms = A.shape
+    out = np.zeros((n_terms, Bm.shape[1]), dtype=np.float64)
+    if n == 0:
+        return out.ravel() if flat else out
+    wide = int(n_terms) >= int(_DET_EINSUM_MIN_TERMS)
+    blk = (int(_DET_EINSUM_BLOCK_ROWS) if wide else _det_block_rows(n_terms))
+    stack = []
+    for i0 in range(0, n, blk):
+        i1 = min(i0 + blk, n)
+        if wide:
+            p = np.einsum('ri,rk->ik', np.ascontiguousarray(A[i0:i1]),
+                          np.ascontiguousarray(Bm[i0:i1]), optimize=False)
+        else:
+            T = np.ascontiguousarray(A[i0:i1].T)
+            R = np.ascontiguousarray(Bm[i0:i1].T)
+            buf = np.empty(i1 - i0, dtype=np.float64)
+            p = np.empty((n_terms, Bm.shape[1]), dtype=np.float64)
+            for q in range(n_terms):
+                for kk in range(Bm.shape[1]):
+                    np.multiply(T[q], R[kk], out=buf)
+                    p[q, kk] = float(np.sum(buf))
+        stack.append((0, p))
+        while len(stack) >= 2 and stack[-1][0] == stack[-2][0]:
+            d, p2 = stack.pop()
+            _, p1 = stack.pop()
+            stack.append((d + 1, p1 + p2))
+    out = stack[-1][1]
+    for i in range(len(stack) - 2, -1, -1):
+        out = stack[i][1] + out
+    return out.ravel() if flat else out
+
+
+def _det_matvec(A, X):
+    """``A @ X`` through ``np.einsum(..., optimize=False)``.
+
+    The refinement's residual needs a product whose reduction -- here over the
+    TERM axis, not over the rows -- is as scheduling-free as the Gram's.
+    ``A @ X`` is a BLAS GEMM/GEMV and is not; the same ``optimize=False``
+    einsum contraction that carries the partials carries this.
+    """
+    return np.einsum('rj,jk->rk', np.ascontiguousarray(A, dtype=np.float64),
+                     np.ascontiguousarray(X, dtype=np.float64),
+                     optimize=False)
+
+
+def _det_refine(A, b, x, small):
+    """``_DET_REFINE_STEPS`` steps of iterative refinement on the deterministic
+    normal equations -- the deterministic stand-in for the C13 QR step-down.
+
+    ``x <- x + G^-1 A^T (b - A x)``, with the residual formed by
+    :func:`_det_matvec` and its projection by :func:`_det_at_b`, so EVERY
+    reduction in the correction goes through the same fixed block tree as the
+    solve it is correcting.  ``small`` is the caller's already-built ``M x M``
+    solve (Cholesky, or LU where scipy is absent) -- reusing it rather than
+    re-factorising keeps the correction in the same arithmetic as ``x`` and
+    costs one triangular solve on a matrix of side ``M``.
+
+    WHY THIS IS ALLOWED TO REPLACE THE QR RATHER THAN BE SCORED AGAINST IT.
+    C13 scores the two candidates on ``||b - A x||`` and keeps the better.
+    That comparison cannot survive here: ``r_qr`` moves with the thread count,
+    so a deterministic route that BRANCHES on it is not deterministic -- the
+    nondeterminism just moves from the value into the choice.  The refinement
+    is therefore taken unconditionally, and the claim it has to earn is a
+    MEASURED one, pinned by
+    ``test_the_refined_step_down_fits_at_least_as_well_as_the_qr_it_replaces``:
+    on every traced fit its residual is at or below the QR's.
+
+    Returns ``None`` -- so the caller falls back to the QR and warns rather
+    than passing off an unconverged answer as a refined one -- if the
+    correction is not finite, or if it is not SMALL relative to the answer.
+    That second condition is the one that matters and it is not defensive
+    coding: on a system the normal equations cannot represent at all (the
+    niche-D7 hard-mask fit, whose equilibrated Gram has a non-positive
+    eigenvalue) refinement does not converge, and returning its output would
+    have shipped a fit missing the least-squares residual by 1.4e5x.  See
+    :data:`_DET_REFINE_MAX_CORRECTION` for the measured separation.
+    """
+    B = np.asarray(b, dtype=np.float64)
+    flat = (B.ndim == 1)
+    B2 = B.reshape(B.shape[0], -1)
+    xr = np.asarray(x, dtype=np.float64).reshape(A.shape[1], -1)
+    scale = float(np.max(np.abs(xr))) if xr.size else 0.0
+    for _ in range(int(_DET_REFINE_STEPS)):
+        d = small(_det_at_b(A, B2 - _det_matvec(A, xr)))
+        d = np.asarray(d, dtype=np.float64).reshape(xr.shape)
+        if not np.all(np.isfinite(d)):
+            return None
+        if (float(np.max(np.abs(d)))
+                > _DET_REFINE_MAX_CORRECTION * max(scale, 1e-300)):
+            return None
+        xr = xr + d
+    if not np.all(np.isfinite(xr)):
+        return None
+    return xr.ravel() if flat else xr.reshape(np.shape(x))
+
+
+def _warn_det_stepdown(deterministic, why):
+    """Say, wherever the deterministic route leaves the normal equations for
+    the threaded QR, that the determinism guarantee does not reach it.
+
+    D14 had TWO such exits -- an outright rank-deficient Gram (Cholesky and
+    LU both refuse) and one that factorises but screens singular under C13.
+    D15 closed the second: a screened-singular Gram is now refined
+    deterministically (:func:`_det_refine`) instead of rerouted, so this
+    warning is reached there only if the CORRECTION itself comes out
+    non-finite.  What remains routinely reachable is the rank-deficient exit,
+    where there is no factorisation to refine through.
     ``_solve_lstsq_qr``'s ``geqrf`` runs over the FULL ``A``, so it is a
     threaded BLAS-3 factorisation and carries exactly the scheduling
     dependence this niche removes from the accumulation.
@@ -2498,17 +2799,38 @@ def _solve_lstsq_thread_safe(A, b, deterministic=False):
     ``deterministic=True`` (niche D14) forms ``G`` and ``A^T b`` through
     :func:`_det_normal_equations` instead of the threaded BLAS calls, so the
     returned coefficients do not move with the BLAS thread count or with the
-    scheduling of any particular call.  ``False`` -- the default, and what
-    every caller but :func:`_compute_carrier`'s ``'auto'`` fit passes --
-    returns the historical bits exactly.  See
-    :data:`DETERMINISTIC_NORMAL_EQUATIONS`.
+    scheduling of any particular call.  ``False`` -- still the DEFAULT, so
+    that a caller gets the historical bits unless it asks otherwise --
+    returns ``G = A.T @ A`` / ``rhs = A.T @ b`` exactly.
 
-    THE ONE HOLE, STATED RATHER THAN PAPERED OVER.  Determinism covers the
-    NORMAL-EQUATIONS route.  If the C13 screen finds ``G`` numerically
-    singular the solve reroutes to :func:`_solve_lstsq_qr`, whose ``geqrf``
-    over the full ``A`` is a threaded BLAS-3 factorisation and is NOT
-    scheduling-independent; the deterministic caller is warned when that
-    happens rather than being told a guarantee that no longer holds.
+    WHO PASSES IT, as of niche D15 (2026-08-23).  Two flags, read at CALL
+    time by their own call sites, because the two scopes shipped in different
+    releases and can be turned off independently:
+
+    * :data:`DETERMINISTIC_NORMAL_EQUATIONS` -- :func:`_compute_carrier`'s
+      ``'auto'`` fit (5 terms), shipped in 5.41.0;
+    * :data:`DETERMINISTIC_TRACED_FIT` -- every OTHER fit on the traced
+      chain: the ``_Cheb2DEvaluator`` coordinate/OPL fits, the residual-
+      eikonal fit, the direct inverse-map fit, and
+      ``_lens_imap.build_inverse_map``'s two total-degree exit solves.
+      Together with the first, that is every least-squares solve
+      :func:`~lumenairy.elements.real_lens.apply_real_lens_traced` runs, which
+      is what makes its exit FIELD thread-invariant rather than only its
+      carrier.
+
+    THE HOLE D14 DECLARED, AND HOW MUCH OF IT D15 CLOSED.  D14 covered the
+    NORMAL-EQUATIONS route only and warned that a C13 step-down to
+    :func:`_solve_lstsq_qr` -- a threaded ``geqrf`` over the full ``A`` --
+    left the deterministic caller without a guarantee.  Measured on the
+    traced chain, THAT STEP-DOWN IS NOT A CORNER BUT THE DEFAULT: every
+    non-carrier fit there screens singular.  So a deterministic caller that
+    reaches the screen now gets ONE STEP OF ITERATIVE REFINEMENT on the
+    deterministic normal equations instead of the QR, which is at least as
+    good on ``||b - A x||`` at every fit measured and strictly better on
+    three of five (:data:`_DET_REFINE_STEPS`).  What is left of the hole is
+    the OTHER exit -- a ``G`` so rank-deficient that Cholesky and LU both
+    refuse, where there is nothing to refine -- and that one still reroutes
+    to the threaded QR and still warns.
 
     Returns ``x`` with the same trailing shape as ``b`` (1-D for a single RHS).
     """
@@ -2520,14 +2842,25 @@ def _solve_lstsq_thread_safe(A, b, deterministic=False):
         G = A.T @ A
         rhs = A.T @ b
     x = None
+    small = None                     # the M x M solve that produced ``x``,
+                                     # reused by the refinement so the
+                                     # correction is applied through the SAME
+                                     # factorisation and not a second one
     try:
         from scipy.linalg import cho_factor, cho_solve
-        x = cho_solve(cho_factor(G, check_finite=False), rhs,
-                      check_finite=False)
+        _cf = cho_factor(G, check_finite=False)
+
+        def small(_r, _cf=_cf, _cs=cho_solve):
+            return _cs(_cf, _r, check_finite=False)
+
+        x = small(rhs)
     except (ImportError, ValueError, np.linalg.LinAlgError):
         # scipy absent, or G not positive-definite (rank-deficient fit).
         try:
             x = np.linalg.solve(G, rhs)
+
+            def small(_r, _G=G):
+                return np.linalg.solve(_G, _r)
         except np.linalg.LinAlgError:
             x = None
     if x is None or not np.all(np.isfinite(x)):
@@ -2535,8 +2868,20 @@ def _solve_lstsq_thread_safe(A, b, deterministic=False):
         return _solve_lstsq_qr(A, b)
     if not LSTSQ_CONDITIONING_STEPDOWN:
         return x
-    if _gram_rcond(G) >= _LSTSQ_GRAM_RCOND_MIN:
+    _rcond = _gram_rcond(G)
+    if _rcond >= _LSTSQ_GRAM_RCOND_MIN:
         return x
+    if deterministic and small is not None and _rcond > 0.0:
+        # ``_rcond > 0`` is the cheap half of the refusal rule: 0.0 means the
+        # EQUILIBRATED Gram has a non-positive eigenvalue, so the Cholesky
+        # this correction would be applied through has no meaning even where
+        # LAPACK accepted the raw matrix.  ``_det_refine`` carries the other
+        # half (the correction has to come out small) and returns None if it
+        # does not, in which case the QR below is still the right answer and
+        # the caller is told the guarantee lapsed.
+        x_ref = _det_refine(A, b, x, small)
+        if x_ref is not None:
+            return x_ref
     _warn_det_stepdown(deterministic,
                        'the Gram matrix screened as numerically singular')
     x_qr = _solve_lstsq_qr(A, b)
@@ -2718,7 +3063,12 @@ class _Cheb2DEvaluator:
             rhs = vals_flat[finite]
         # B7: normal-equations solve (thread-safe; never takes gelsd's SVD path
         # that deadlocks against JAX's OpenMP runtime in a shared process).
-        c_np = _solve_lstsq_thread_safe(A, rhs)
+        # D15: and, with DETERMINISTIC_TRACED_FIT on, through a reduction whose
+        # order is a function of the shape alone -- see the note in
+        # ``from_state`` on what a worker whose BLAS regime differed from its
+        # parent's used to recover here.
+        c_np = _solve_lstsq_thread_safe(
+            A, rhs, deterministic=bool(DETERMINISTIC_TRACED_FIT))
         # Push coefficients + index arrays onto the target backend
         self.coeffs = xp.asarray(c_np, dtype=xp.float64)
         self._K1 = xp.asarray(K1_np, dtype=xp.int64)
@@ -5941,7 +6291,9 @@ def _fit_residual_eikonal(E_in, W_grid, wavelength, dx, dy, centre, w_beam,
                 A[nL:, k] = j * uM ** i * vM ** (j - 1) / r_fit
         rhs = np.concatenate([px[2], py[2]])
         wgt = np.concatenate([px[3], py[3]])
-        coef = _solve_lstsq_thread_safe(A * wgt[:, None], rhs * wgt)
+        coef = _solve_lstsq_thread_safe(
+            A * wgt[:, None], rhs * wgt,
+            deterministic=bool(DETERMINISTIC_TRACED_FIT))   # D15
         if not np.all(np.isfinite(coef)):
             continue
         resid = rhs - A @ coef
@@ -9749,11 +10101,15 @@ def apply_real_lens_traced(
 
         _Afit = _fit_design((_xo_s - _fx_c) / _fx_h, (_yo_s - _fy_c) / _fy_h)
         # B7: normal-equations solve (thread-safe; no gelsd/JAX-OpenMP deadlock).
+        # D15: deterministic reduction when DETERMINISTIC_TRACED_FIT is on.
+        _det_f = bool(DETERMINISTIC_TRACED_FIT)
         if _wfit_s is None:
-            _fit_coef = _solve_lstsq_thread_safe(_Afit, _op_s)
+            _fit_coef = _solve_lstsq_thread_safe(_Afit, _op_s,
+                                                 deterministic=_det_f)
         else:
             _fit_coef = _solve_lstsq_thread_safe(_Afit * _wfit_s[:, None],
-                                                 _op_s * _wfit_s)
+                                                 _op_s * _wfit_s,
+                                                 deterministic=_det_f)
         # Domain: keep only exit pixels inside the convex hull of the ray
         # landing spots -- a vectorized half-plane test (A.x + b <= 0 for
         # every facet), far cheaper than a Delaunay simplex search over the

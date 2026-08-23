@@ -263,27 +263,36 @@ def test_the_auto_carrier_hashes_the_same_at_every_thread_count(consumer):
 
 
 def test_the_traced_chain_has_a_second_reduction_this_niche_does_not_own():
-    """SCOPE, PINNED -- and a REFUTATION of the tempting end-to-end claim.
+    """SCOPE, PINNED -- RESTATED 2026-08-23 BY NICHE D15, WHICH CLOSED IT.
 
-    It would be easy to write "``apply_real_lens_traced(carrier='auto')``
-    returns the same field at any thread count" and watch it pass.  It does
-    not, and it would pass INTERMITTENTLY, which is the worst kind of green.
-    Censused here: the traced chain runs SIX least-squares solves on this
-    fixture, and only ONE of them is the carrier fit.
+    ORIGINALLY (D14) this test read: exactly ONE solve on the traced path is
+    deterministic and it is the widest one.  That was the honest scope while
+    the carrier fit was the only fit on the deterministic kernel, and it
+    carried a REFUTATION of the tempting end-to-end claim -- "the traced field
+    is the same at any thread count" was written, measured failing, and
+    withdrawn, because the chain runs SIX solves and D14 owned one:
 
-        (119936,   5)  deterministic   <- this niche
+        (119936,   5)  deterministic   <- niche D14
         (  1457,  28)  BLAS   x3       invariant at this size, measured
         (  1337, 120)  BLAS   x2       MOVES with the width (measured: one
                                        value at OMP=1, another at 4 and 8)
 
-    Those 120-term residual-eikonal fits carry the byte-identity contracts of
-    niches C1/C6/C8/C9 and cost 34x through the deterministic kernel at their
-    shape, so they stay on the BLAS route deliberately -- see
-    :data:`~lumenairy.elements._lens_traced.DETERMINISTIC_NORMAL_EQUATIONS`.
+    D15 put the other five on the deterministic route (see
+    :data:`~lumenairy.elements._lens_traced.DETERMINISTIC_TRACED_FIT`), so
+    "exactly one" is no longer the truth and asserting it would now be a test
+    pinning a state the library has left.  TWO OF D14'S SENTENCES ABOUT THOSE
+    FITS WERE ALSO WRONG AND THE RESTATEMENT RECORDS BOTH: they are the
+    inverse-map exit fits in ``_lens_imap.build_inverse_map``, not
+    residual-eikonal fits, and the 34x that priced them applied to a kernel
+    that would not have fixed them anyway -- every one of them screens
+    singular under C13 and takes a threaded QR, which no Gram kernel touches.
 
-    The assertion is structural, not a value pin: exactly one solve on this
-    path is deterministic and it is the widest one.  A future change that
-    extends or withdraws the scope has to come back here and say so.
+    WHAT THIS TEST NOW OWNS, and why it stays here rather than moving: the
+    boundary between the two flags.  D14's flag must still gate the carrier
+    fit and ONLY the carrier fit, so that ``DETERMINISTIC_NORMAL_EQUATIONS =
+    False`` remains a clean fail-before for 5.41.0's bits independently of
+    anything D15 does.  The end-to-end field claim lives in
+    ``tests/unit/test_niche_d15_deterministic_traced_fit.py``.
     """
     x = (np.arange(256) - 128) * 30e-6
     X, Y = np.meshgrid(x, x)
@@ -305,6 +314,11 @@ def test_the_traced_chain_has_a_second_reduction_this_niche_does_not_own():
         seen.append((np.shape(A), bool(deterministic)))
         return orig(A, b, deterministic=deterministic)
 
+    # D15's flag OFF, so what is measured is D14's own scope and nothing
+    # else.  The two flags are independent by construction and this is the
+    # assertion that keeps them so.
+    _d15 = LT.DETERMINISTIC_TRACED_FIT
+    LT.DETERMINISTIC_TRACED_FIT = False
     LT._solve_lstsq_thread_safe = _spy
     try:
         import warnings
@@ -315,17 +329,42 @@ def test_the_traced_chain_has_a_second_reduction_this_niche_does_not_own():
                                       on_undersample='silent')
     finally:
         LT._solve_lstsq_thread_safe = orig
+        LT.DETERMINISTIC_TRACED_FIT = _d15
 
     det = [s for s, flag in seen if flag]
     blas = [s for s, flag in seen if not flag]
     assert len(det) == 1, (
-        f'expected exactly one deterministic solve (the carrier fit); '
-        f'got {len(det)}: {seen}')
+        f'with DETERMINISTIC_TRACED_FIT off, expected exactly one '
+        f'deterministic solve (the carrier fit); got {len(det)}: {seen}')
     assert blas, 'the traced chain no longer runs any BLAS-route fit'
     assert det[0][0] > max(s[0] for s in blas), (
         f'the carrier fit {det[0]} is no longer the widest reduction on this '
         f'path; the scope argument (it is the long one) needs re-deriving '
         f'against {blas}')
+
+    # ...and with D15 on, NONE of them is left on the BLAS route.  That half
+    # is what makes the end-to-end field claim available, and it is asserted
+    # in full in the D15 file; here it is the other side of the boundary.
+    seen2 = []
+
+    def _spy2(A, b, deterministic=False):
+        seen2.append((np.shape(A), bool(deterministic)))
+        return orig(A, b, deterministic=deterministic)
+
+    LT.DETERMINISTIC_TRACED_FIT = True
+    LT._solve_lstsq_thread_safe = _spy2
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            la.apply_real_lens_traced(E, prescription=presc, wavelength=_LAM,
+                                      dx=30e-6, carrier='auto',
+                                      on_undersample='silent')
+    finally:
+        LT._solve_lstsq_thread_safe = orig
+        LT.DETERMINISTIC_TRACED_FIT = _d15
+    assert seen2 and not [s for s, f in seen2 if not f], (
+        f'DETERMINISTIC_TRACED_FIT no longer covers the whole chain: {seen2}')
 
 
 @pytest.mark.slow
@@ -768,15 +807,25 @@ def test_the_step_down_hole_is_declared_rather_than_hidden(recwarn):
     NOT scheduling-independent.  A deterministic caller must be told, not
     quietly handed a weaker guarantee.
 
-    BOTH exits are covered, because they are reached by different data and a
-    guarantee withdrawn silently on one of them is worse than none.  Each
-    state is ENGINEERED rather than waited for: an exactly duplicated column
-    makes the Gram rank-deficient outright (Cholesky and LU both refuse), and
-    a column perturbed by 1e-6 relative makes one that factorises (Cholesky
-    succeeds, the Gram stays positive-definite) but screens singular under
-    C13 -- rcond 2.5e-13 measured, five decades under the 1e-8 screen.  A
-    merely RESCALED column would not do: ``_gram_rcond`` equilibrates the
-    diagonal first, so scale is exactly what it is built to ignore.
+    RESTATED 2026-08-23 (niche D15), BECAUSE THE HOLE SHRANK.  D14 covered
+    BOTH exits here: an outright rank-deficient Gram (Cholesky and LU both
+    refuse) and one that factorises but screens singular under C13.  It read
+    the second as a corner.  IT IS NOT: measured on the traced chain, EVERY
+    non-carrier fit screens singular, so that exit is the default there and a
+    guarantee that lapses on it is no guarantee at all.  D15 closed it -- a
+    screened-singular Gram is now refined deterministically instead of
+    rerouted -- so this test's C13 arm is INVERTED rather than deleted: the
+    deterministic caller must now NOT be warned, and the same engineered
+    fixture proves it.  The rank-deficient arm is unchanged, because there is
+    no factorisation to refine through and the QR is still what happens.
+
+    Each state is ENGINEERED rather than waited for: an exactly duplicated
+    column makes the Gram rank-deficient outright, and a column perturbed by
+    1e-6 relative makes one that factorises (Cholesky succeeds, the Gram
+    stays positive-definite) but screens singular under C13 -- rcond 2.5e-13
+    measured, five decades under the 1e-8 screen.  A merely RESCALED column
+    would not do: ``_gram_rcond`` equilibrates the diagonal first, so scale is
+    exactly what it is built to ignore.
     """
     import warnings
 
@@ -790,7 +839,8 @@ def test_the_step_down_hole_is_declared_rather_than_hidden(recwarn):
                   rng.normal(size=n)], axis=1))
     b = np.ascontiguousarray(rng.normal(size=n))
 
-    for tag, A in (('rank-deficient', dup), ('screened singular', tiny)):
+    for tag, A, want_warn in (('rank-deficient', dup, True),
+                              ('screened singular', tiny, False)):
         rcond = LT._gram_rcond(LT._det_normal_equations(A, b)[0])
         assert rcond < LT._LSTSQ_GRAM_RCOND_MIN, (
             f'{tag}: the fixture is not singular enough (rcond {rcond:.3e})')
@@ -798,10 +848,17 @@ def test_the_step_down_hole_is_declared_rather_than_hidden(recwarn):
             warnings.simplefilter('always')
             LT._solve_lstsq_thread_safe(A, b, deterministic=True)
         msgs = [str(w.message) for w in got if w.category is RuntimeWarning]
-        assert any('does NOT hold' in m for m in msgs), (tag, msgs)
+        lapsed = [m for m in msgs if 'does NOT hold' in m]
+        if want_warn:
+            assert lapsed, (tag, msgs)
+        else:
+            assert not lapsed, (
+                f'{tag}: D15 refines this exit deterministically, so the '
+                f'guarantee does not lapse and must not be declared to: '
+                f'{msgs}')
 
-        # and the SHIPPED route stays silent -- the warning is about the
-        # promise this caller was given, not about the data.
+        # and the SHIPPED route stays silent on BOTH -- the warning is about
+        # the promise this caller was given, not about the data.
         with warnings.catch_warnings(record=True) as got:
             warnings.simplefilter('always')
             LT._solve_lstsq_thread_safe(A, b, deterministic=False)

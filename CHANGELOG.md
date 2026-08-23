@@ -4,6 +4,61 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- the TRACED EXIT FIELD is DETERMINISTIC at any BLAS thread count (niche D15)
+
+5.41.0 made `carrier='auto'` thread-invariant and said so carefully: the
+traced chain runs SIX least-squares solves and D14 owned ONE of them, so
+`apply_real_lens_traced`'s returned FIELD was explicitly NOT claimed
+reproducible.  It is now.  Every fit on that path -- the traced Chebyshev
+coordinate/OPL fits, the residual-eikonal fit, the direct inverse-map fit and
+`build_inverse_map`'s two total-degree exit solves -- runs a reduction whose
+summation order is fixed by the data shape alone, and the exit field is
+**bit-reproducible on one build at any thread count and over any number of
+repeats**.  Default ON (`DETERMINISTIC_TRACED_FIT = True`); `False` restores
+the previous `G = A.T @ A` / `rhs = A.T @ b` route for these fits bit for
+bit.  `carrier='auto'` keeps its own D14 flag and its own 5.41.0 bits --
+nothing on the analytic path moves, and that is asserted two ways.
+
+Evidence, one fresh interpreter per arm with the width pinned before NumPy
+loads: over eight traced fixtures the two 120-term exit fits return different
+coefficient bytes at widths {1,2} against {4,8} on **all eight**, and on a
+`ray_subsample=2` fixture that reaches the field, which reads **4 distinct
+hashes over widths {1,2,4,8} before and 1 after**.  The deterministic field
+lands inside the shipped route's own cross-width spread (1.29e-12 against
+1.34e-12 relative to peak).
+
+**Three corrections to what 5.41.0's audit said about this work, all
+measured.**  (1) The two 120-term fits are `_lens_imap.build_inverse_map`'s
+exit solves, not residual-eikonal fits.  (2) The 34x cost that scoped them
+out priced a deterministic GRAM -- but every non-carrier traced fit screens
+numerically singular under C13 (rcond 1.6e-9 at 28 terms, 9.6e-11 at 120,
+against the 1e-8 screen) and re-solves through a threaded `dgeqrf`, so a
+deterministic Gram alone would have changed nothing there.  D14's declared
+"one hole" is the DEFAULT on this path, not a corner.  (3) The obvious
+kernel is less accurate than the route it replaces, and the fix is a
+constant: see below.
+
+Two things made it affordable.  A per-block `np.einsum(..., optimize=False)`
+partial replaces D14's `M(M+1)/2` ufunc pairs -- 7.7x cheaper at 120 terms,
+single-threaded and BLAS-free (measured flat to 0.5% over a 8x width sweep,
+one hash at every width).  `optimize=True` is NOT interchangeable: it routes
+through BLAS `dgemm`, returns bytes identical to `A.T @ A` and speeds up 15x
+with threads, so `optimize=False` is explicit and pinned by test.  And the
+C13 step-down is replaced, on the deterministic route only, by one step of
+iterative refinement through the same fixed block tree -- which also FIXES an
+accuracy defect: unrefined, the deterministic normal equations at 120 terms
+miss the least-squares residual by 1681-2138x, and refined they are at or
+below the QR's on every fit measured (15% better on the two widest).  Where
+refinement does not converge -- a Gram the normal equations cannot represent
+at all -- the route refuses, falls back to the QR and warns, which is what is
+left of D14's hole.
+
+**Whole-call cost +1.6%** at the worst-shaped traced call measured (all
+least-squares solves together are 0.8-6.7% of an `apply_real_lens_traced`
+call), footprint unchanged or slightly lower.  Details, including the einsum
+block-length measurement that refutes the naive transplant, in
+`docs/audits/BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md`.
+
 ## [5.41.0] — 2026-08-23
 
 ### Fixed -- `carrier='auto'` is DETERMINISTIC at any BLAS thread count (niche D14)

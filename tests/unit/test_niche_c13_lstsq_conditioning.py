@@ -366,9 +366,12 @@ class TestTheResidualEikonalFitIsNotTheIllConditionedOne:
         seen = []
         real = LT._solve_lstsq_thread_safe
 
-        def _spy(A, b):
+        # ``**kw`` because the real solver grew ``deterministic=`` (D14, and
+        # D15 which made the residual-eikonal fit pass it).  A stub that
+        # refuses the caller's keyword tests the stub, not the library.
+        def _spy(A, b, **kw):
             seen.append(LT._gram_rcond(np.asarray(A).T @ np.asarray(A)))
-            return real(A, b)
+            return real(A, b, **kw)
 
         n, dx, lam = 96, 4.0e-6, 1.31e-6
         ax = (np.arange(n) - n / 2) * dx

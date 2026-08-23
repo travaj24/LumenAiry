@@ -1536,7 +1536,22 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
     A = _td_design(ux, uy, degree, terms)
     w = None if W is None else W[good]
 
+    # Imported HERE rather than at module scope so a test that swaps either
+    # name on ``_lens_traced`` reaches this module too -- the same call-time
+    # lookup D14's census relies on.  ``_det_traced()`` reads the flag at CALL
+    # time for the same reason.
+    from . import _lens_traced as _LT
     from ._lens_traced import _solve_lstsq_thread_safe
+
+    def _det_traced():
+        """niche D15: is this fit on the deterministic reduction?
+
+        These are the two widest BLAS-route solves the traced chain runs
+        (measured ``(1337, 120)`` on the reference fixture, 3 right-hand
+        sides), and they were the reason D14 could not claim the traced exit
+        FIELD thread-invariant.  See
+        :data:`~lumenairy.elements._lens_traced.DETERMINISTIC_TRACED_FIT`."""
+        return bool(getattr(_LT, 'DETERMINISTIC_TRACED_FIT', False))
 
     def _solve():
         """Weighted least squares over every retained sample.
@@ -1547,8 +1562,9 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
         so the subset solve had nothing left to do.
         """
         if w is None:
-            return _solve_lstsq_thread_safe(A, B)
-        return _solve_lstsq_thread_safe(A * w[:, None], B * w[:, None])
+            return _solve_lstsq_thread_safe(A, B, deterministic=_det_traced())
+        return _solve_lstsq_thread_safe(A * w[:, None], B * w[:, None],
+                                        deterministic=_det_traced())
 
     # ---- the shipped coefficients, on EVERY retained sample ---------------
     # Solved BEFORE G8 now, because G8 scores the coefficients that SHIP.  The
@@ -1724,9 +1740,10 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
     _Bd = dj_col[:, None]
     _rwd = w
     if _rwd is None:
-        coef3 = _solve_lstsq_thread_safe(A, _Bd)
+        coef3 = _solve_lstsq_thread_safe(A, _Bd, deterministic=_det_traced())
     else:
-        coef3 = _solve_lstsq_thread_safe(A * _rwd[:, None], _Bd * _rwd[:, None])
+        coef3 = _solve_lstsq_thread_safe(A * _rwd[:, None], _Bd * _rwd[:, None],
+                                         deterministic=_det_traced())
     B = np.concatenate([B, _Bd], axis=1)
     coef = np.concatenate([coef, coef3], axis=1)
     del _Bd
