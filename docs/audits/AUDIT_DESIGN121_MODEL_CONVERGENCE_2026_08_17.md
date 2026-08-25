@@ -332,12 +332,10 @@ but it killed the wrapper while the allocating process survived at 103.8 GB and
 needed a targeted `taskkill /F /PID`.  **Harden before reuse: kill by PID of the
 allocating process, verify, then exit.**
 
-### 7.3 The lever that is still on the table -- `sag_dtype=np.float32`
+### 7.3 `sag_dtype=np.float32` -- accuracy-safe, and worth nothing here
 
-The sag/obliquity stack is float64 regardless of `FIELD_DTYPE`, and the runner
-never sets `sag_dtype`.  That stack is the ~102 GB.  `lens_sag_float32_opd_error`
-was run per group on design 121 at the production sampling
-(`field_check_n=512`, `field_check_dx=0.90 um`):
+`lens_sag_float32_opd_error` per group on design 121 at the production
+sampling (`field_check_n=512`, `field_check_dx=0.90 um`):
 
 | group | max OPD error | max OPD | field rel error | ok |
 |---|---|---|---|---|
@@ -350,23 +348,70 @@ was run per group on design 121 at the production sampling
 | S23-24 | 2.130e-04 | 0.279 nm | 6.064e-07 | True |
 | **S25-27** | **7.738e-04** | **1.014 nm** | **1.226e-06** | True |
 
-**Worst field relative error 1.338e-06 against the 1e-3 bar -- 747x margin.**
-Worst OPD error 7.74e-04 waves, which is SMALLER than `tangent_facet`'s own
-0.0032-wave residual, so float32 sag would not be the limiting error anywhere
-in this design.
+Worst field relative error 1.338e-06 against the 1e-3 bar; worst OPD error
+7.74e-04 waves, below `tangent_facet`'s own 0.0032-wave residual.  **Accuracy
+is not the obstacle.**  Two qualifications on that margin: the check runs at
+`field_check_n=512`, i.e. ~2 % of a 32768 pupil, and it is per-prescription --
+do not carry it to another design.
 
-Halving that stack should put N=32768 near 55-60 GB.  Two things must happen
-first: the preflight needs a `sag_dtype`-aware term (it assumes float64
-unconditionally and will still refuse at 202 GB), and the validator's check is
-at `field_check_n=512`, a proxy for the production grid rather than a
-measurement of it.
+**MEASURED 2026-08-17: the credit is 0.001 grids, and the lever is dead at
+this N.**  The tangent-facet + carrier route reads 14.002 grids at N=4096 and
+14.001 at N=8192 in BOTH dtypes.  float32 is worth ~3.5 grids only BELOW the
+`N >= 4096` auto-band threshold: once the route bands, the full-grid geometry
+is never materialised, so halving its dtype halves nothing.  The knob is
+wired and priced; set it only in the whole-grid regime.
 
-### 7.4 A second, unused lever
+### 7.4 `sag_chunk_rows` -- also flat, also dead here
 
-The analytic call never passes `sag_chunk_rows`, so it runs AUTO
-(`max(256, N//16)` = 2048 rows at N=32768).  The traced path sets it
-explicitly.  Tightening it cuts the band working set on whichever surfaces do
-band.  Not measured.
+The preflight prices this route off a BINARY `_banded = N >= 4096` flag
+(7.7 grids with a carrier), whereas the slant term beside it scales with
+`_band_rows / N`.  That asymmetry looked like an unclaimed credit.  It is not.
+
+Warmed `tracemalloc` on S25-27, extras over the paraxial no-carrier call at
+the same N, in float64 grids of `8*N*N`:
+
+```
+N = 4096  (AUTO = 256 rows)        N = 8192  (AUTO = 512 rows)
+  whole-grid (0)   19.74             whole-grid (0)   19.74
+  256 (AUTO)       11.23             512 (AUTO)       11.23
+  512             11.23              256              11.23
+  128             11.23              128              11.23
+```
+
+**Flat from 512 rows down to 128 -- a 4x band reduction changes nothing.**
+Banding is binary exactly as the preflight models it: the ~8.5-grid credit is
+for banding at all (19.74 -> 11.23), and there is none for banding harder.
+That follows from the halo being a FIXED 3 rows of sag and 2 of the
+accumulator per band rather than a proportional cost.  The extras are also
+identical at N=4096 and N=8192, confirming the "flat in N at and above 4096"
+claim the ANCHOR makes.
+
+**Side finding, worth the anchor owner's attention:** the measurement reads
+**11.23 grids against the preflight's 7.7** -- the term UNDER-prices by ~3.5
+grids on this prescription.  That is the wrong direction for a preflight and
+is further reason the free-RAM floor of S7.1 is load-bearing rather than
+belt-and-braces.  (The ANCHOR was taken on a biconvex singlet; design 121's
+S25-27 is a three-surface group.)
+
+### 7.5 Conclusion -- N=32768 analytic is out of reach on this hardware
+
+Full probe, with the per-lever measurements and method:
+`PROBE_D121_ANALYTIC_32K_FOOTPRINT_2026_08_17.md`.
+
+Every lever is now measured rather than argued:
+
+| lever | outcome |
+|---|---|
+| drop the phantom obliquity term | DONE (5.39.0 remediation); still 5.5 GB short of the floor |
+| `sag_dtype=np.float32` | 0.001 grids (S7.3) |
+| `sag_chunk_rows` | flat across a 4x range (S7.4) |
+| a bigger box | nothing on the mesh exceeds 136.6 GB |
+| drop `carrier=` | 7.7 -> 4.1 grids, would fit -- but changes the model and breaks the like-for-like against exp31 |
+
+The run needs **135.6 GB free on a 136.6 GB box** (`need` 115.6 + a 20 GB
+floor) against 121.1 GB actually free.  **exp31 at N=16384 is the analytic
+result of record**, and the residual 2.4 % of S1 stays unattributed between
+model and grid as a HARDWARE limit, not an open task.
 
 ---
 
@@ -466,35 +511,58 @@ run fit.
 
 ## 11. Open items
 
-**Every item below re-verified against lumenairy 5.38.1 on 2026-08-17; the
-version each was first seen at is not assumed to still hold.**
+**Re-verified against lumenairy 5.39.1 on 2026-08-17.**  The 5.39.0
+remediation (`fix/d121-audit-items`) landed the free-RAM floor and the
+version-gated phantom-term drop; items closed by it, or closed by measurement
+since, are recorded as CLOSED rather than deleted, because each one is a lever
+someone will otherwise reach for again.
 
-1. **`sag_dtype=np.float32` for N=32768 analytic** -- validated at 747x margin
-   (S7.3).  `apply_real_lens` accepts `sag_dtype` (default `None`) and the
-   runner never sets it; the preflight mentions `sag_dtype` exactly once, in
-   prose, and has no term for it, so it would still refuse at 202 GB on a run
-   that fits.  Needs the term plus a production-grid check.  CONFIRMED OPEN.
-2. **An explicit headroom policy for `_preflight_memory_check`** (new, from
-   S7.1).  The estimate and the safety margin are currently entangled: a
-   phantom physics term is supplying the slack, so the estimate cannot be made
-   honest without making the check unsafe.  A free-RAM floor (refuse unless
-   `free - need > X`) separates them.  The 1.15 safety factor is applied to
-   `need`, which scales the estimate rather than reserving absolute headroom --
-   the wrong shape for a box whose baseline commitment (~25 GB here) is
-   independent of grid size.
-3. **`d121_32order.json`** -- update `dx_common` to satisfy the band-aware
-   guard, or the shipped reference spec stays unrunnable (S9.1 #2).
-4. **The residual 2.4 %** between `tangent_facet` (0.9759) and traced (~1.00)
-   is unattributed: model difference, or grid.  The grid half cannot be settled
-   on 137 GB hardware without item 1.
-5. **Watchdog hardening** (S7.2).
-6. **`sag_chunk_rows` on the analytic path** -- unmeasured lever (S7.4).
-7. The RCWA DOE table (5.35.0, opt-in) flags the two outermost fan lines as
-   under-delivering in the rigorous solve.  Not exercised here; it is a
-   DIFFERENT mechanism from the screen artefact this audit closes, and would
-   stack with it.
+1. **`d121_32order.json`** -- `dx_common = 1.2292e-06` against the band-aware
+   guard's 1.1082 um requirement.  Untouched since `087d151`, which predates
+   the guard (`0f46efb`).  The shipped reference spec still cannot complete on
+   the shipped library.  **OPEN, one line.**
+2. **The tangent-facet preflight ANCHOR under-prices by ~3.5 grids** on this
+   prescription (7.7 priced, 11.23 measured -- S7.4).  The anchor was taken on
+   a biconvex singlet.  **OPEN**, and the reason the S7.1 floor is
+   load-bearing rather than belt-and-braces.
+3. **Restate the array acceptance criteria** (S6).  `EE3` reads 1.385 % on the
+   8x8 frames and is behaving correctly; anything written against the
+   single-source runs needs the in-spot fraction instead.  **OPEN.**
+4. **Watchdog hardening** (S7.2) -- kill by PID of the ALLOCATING process and
+   verify; the current one killed the wrapper while the allocation survived at
+   103.8 GB.  **OPEN** if the watchdog is reused.
+5. **The RCWA DOE table** (5.35.0, opt-in) flags the two outermost fan lines
+   as under-delivering in the rigorous solve.  Not exercised here; a DIFFERENT
+   mechanism from the screen artefact this audit closes, and it would stack
+   with it.  **OPEN, unexercised.**
 
----
+### Closed by the 5.39.0 remediation
+
+- **A headroom policy for `_preflight_memory_check`** -- landed as
+  `FREE_RAM_FLOOR_BYTES = 20.0e9`, an absolute reserve checked as
+  `free - need > floor`, derived from the S7.1 failure into two measured
+  terms (baseline-commitment drift +8.9 GB, operational reserve 10.0 GB).
+  The phantom obliquity term is now dropped behind a `>= 5.37.0` version gate,
+  so the estimate is honest AND the margin is explicit.  This is the right
+  shape: `safety_factor` multiplies `need` (estimate error), the floor is
+  absolute (baseline commitment, which does not scale with N).
+
+### Closed by measurement -- do not reach for these again
+
+- **`sag_dtype=np.float32`** -- accuracy-safe on this design (747x margin, with
+  the ~2 %-of-pupil caveat) but worth **0.001 grids** at N >= 4096, because the
+  banded route never materialises the full-grid geometry.  S7.3.
+- **`sag_chunk_rows` on the analytic path** -- peak is **flat** from 512 rows
+  down to 128; banding is binary, and the halo is a fixed 3+2 rows per band
+  rather than a proportional cost.  S7.4.
+- **N=32768 analytic** -- needs 135.6 GB free on a 136.6 GB box.  Out of reach
+  on this hardware with every lever exhausted (S7.5).  The residual 2.4 % of
+  S1 is therefore a hardware limit, not a task.
+  **[SUPERSEDED 2026-08-22]** "every lever exhausted" held at the 5.39.1
+  re-verify above; the 5.40.0 wave found the levers this audit did not price
+  (the carrier='auto' setup fit, -9.2 grids; memmap accumulator spill;
+  streamed transfer function) and brought need to **81.7 GB -- ADMITTED**.
+  See `BUILD_LENS_32K_MEMORY_2026_08_22.md`.
 
 ## 12. Deliverables
 
