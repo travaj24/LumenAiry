@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.42.1] — 2026-08-24
 
 ### Fixed -- `lumenairy[jax]` is resolvable again on every supported Python
 
