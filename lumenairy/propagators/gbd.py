@@ -1694,9 +1694,23 @@ def _fft_reconstruct_applicable(beamlets: BeamletBundle, Nx: int, Ny: int,
     abstract tracers -- inspecting them (``np.asarray``) raises.  In that case
     (and on any inspection failure) return ``False`` so the reconstruction falls
     back to the trace-safe dense sum; the FFT fast path still engages for
-    concrete arrays (eager execution and under ``jax.grad``)."""
+    concrete arrays (eager execution and under ``jax.grad``).
+
+    ``MemoryError`` is NOT swallowed (P4 close-out, 2026-08-24).  The two
+    branches this decision picks between are different summation orders over
+    the same beamlets -- the FFT convolution and the windowed scatter-add agree
+    to ~1e-15, not bit for bit -- so a swallowed ``MemoryError`` would silently
+    change the ARITHMETIC ROUTE of a reconstruct as a function of how much
+    memory the box happened to have, which is the silent-wrongness shape this
+    library refuses.  ``MemoryError`` is a subclass of ``Exception``, so the
+    bare handler caught it.  Nothing is lost by re-raising: the inspection this
+    guards allocates a handful of ``(n, 3)`` temporaries, orders of magnitude
+    under the reconstruct that follows either way, so a box that cannot afford
+    the check cannot afford the answer either."""
     try:
         return _fft_applicable_impl(beamlets, Nx, Ny, dx, dy, centre)
+    except MemoryError:
+        raise
     except Exception:      # jax tracer (jit) / non-inspectable array -> dense
         return False
 

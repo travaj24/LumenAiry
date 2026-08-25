@@ -2448,13 +2448,27 @@ def _det_normal_equations(A, b):
     # way: it copies every block regardless.
     B = np.ascontiguousarray(np.asarray(b, dtype=np.float64))
     flat = (B.ndim == 1)
-    B = B.reshape(B.shape[0], -1)
     n, n_terms = A.shape
+    # EMPTY FIT, guarded ABOVE the reshape (P4 close-out, 2026-08-24).  This
+    # branch used to sit below ``B.reshape(B.shape[0], -1)``, which raises
+    # ``cannot reshape array of size 0 into shape (0,newaxis)`` on a zero-row
+    # ``b`` -- so it was dead by construction and the deterministic route
+    # RAISED where the ``(A.T @ A, A.T @ b)`` it replaces returns zeros.  This
+    # function's whole contract is "the same two arrays as the BLAS
+    # expression, in a fixed summation order", and a shape the BLAS expression
+    # handles is part of that contract.  No live caller reaches it (every fit
+    # site enforces a samples-per-term floor), so nothing on any shipped path
+    # moves: ``_solve_lstsq_thread_safe`` still raises on an empty fit, from
+    # ``_solve_lstsq_qr``'s own reshape, on BOTH routes exactly as before.
+    if n == 0:
+        n_rhs = 1 if flat else int(B.shape[1]) if B.ndim >= 2 else 1
+        G_out = np.zeros((n_terms, n_terms), dtype=np.float64)
+        r_out = np.zeros((n_terms, n_rhs), dtype=np.float64)
+        return G_out, (r_out.ravel() if flat else r_out)
+    B = B.reshape(B.shape[0], -1)
     n_rhs = B.shape[1]
     G_out = np.zeros((n_terms, n_terms), dtype=np.float64)
     r_out = np.zeros((n_terms, n_rhs), dtype=np.float64)
-    if n == 0:
-        return G_out, (r_out.ravel() if flat else r_out)
     wide = int(n_terms) >= int(_DET_EINSUM_MIN_TERMS)
     blk = (int(_DET_EINSUM_BLOCK_ROWS) if wide else _det_block_rows(n_terms))
     stack = []                       # [(depth, G_partial, r_partial), ...]

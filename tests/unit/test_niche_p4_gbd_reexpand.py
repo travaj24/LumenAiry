@@ -25,6 +25,8 @@ is pinned in ``test_hammer_h7_gbd_diverging.py``
 """
 from __future__ import annotations
 
+import hashlib
+import os
 import warnings
 
 import numpy as np
@@ -124,6 +126,27 @@ def _ee_at(E_exit, dx, z, N, r_ee=150e-6):
     return float(I[r <= r_ee].sum() / I.sum())
 
 
+def _field_hash(E):
+    return hashlib.sha256(
+        np.ascontiguousarray(E).tobytes()).hexdigest()[:16]
+
+
+def _byte_id_message(E_a, E_b, ctx=''):
+    """Everything needed to adjudicate a byte-identity miss WITHOUT a re-run.
+
+    S14.6's one unreproduced failure cost three re-runs precisely because the
+    assertion carried none of this: how far apart, how many cells, and whether
+    the two fields are the same object-shaped answer at all.
+    """
+    d = np.abs(np.asarray(E_a) - np.asarray(E_b))
+    n_diff = int(np.count_nonzero(d))
+    peak = float(np.max(np.abs(E_a))) or 1.0
+    return (f"fields differ: max|diff|={float(d.max()):.6e} "
+            f"({float(d.max()) / peak:.3e} of peak), {n_diff} of {d.size} "
+            f"cells differ, hashes {_field_hash(E_a)} vs {_field_hash(E_b)} "
+            f"{ctx}")
+
+
 def _gbd(E, presc, *, dx=_DX, ss=_SS, **kw):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -200,8 +223,10 @@ def test_reexpand_does_not_fire_on_diverging_positive():
     diag = {}
     E_auto = _gbd(E, _singlet_positive(), reexpand='auto', diagnostics=diag)
     E_off = _gbd(E, _singlet_positive(), reexpand='off')
-    assert diag['reexpanded'] is False, "re-expansion fired on an already-good case"
-    assert np.array_equal(E_auto, E_off)
+    assert diag['reexpanded'] is False, (
+        f"re-expansion fired on an already-good case (diagnostics={diag})")
+    assert np.array_equal(E_auto, E_off), _byte_id_message(
+        E_auto, E_off, f"[diagnostics={diag}]")
 
 
 # ---------------------------------------------------------------------------
@@ -275,19 +300,63 @@ def test_reexpand_parseval_no_double_count():
 
 def test_frame_completeness_metric_published():
     """The P4 metric is published on the diagnostics dict; a None dict computes
-    nothing (default zero-overhead) and the output is unchanged."""
+    nothing (default zero-overhead) and the output is unchanged.
+
+    INSTRUMENTED (P4 close-out, 2026-08-24).  This test failed ONCE, in a
+    2526-test sweep under five-way concurrent load, and arrived without its
+    assertion text because the batch piped pytest through a ``grep`` that kept
+    the ``FAILED`` line and dropped the message above it
+    (``BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md`` S14.6).  Five arms never
+    reproduced it.  It has since been bounded at **782 diagnosed/undiagnosed
+    pairs (1564 calls), zero mismatches and ONE field hash** -- under a
+    deliberate 6-to-8-way process load at ``OMP_NUM_THREADS=8``, at BLAS widths
+    1/2/4/8/16, and in four concurrent in-process threads; the one
+    BLAS-adjacent step on the path (``_compute_carrier``'s 82092 x 5 fit) held
+    one coefficient hash over 40 000 solves under the same load.  See
+    ``docs/audits/FIX_P4_TRACED_CLOSEOUT_2026_08_24.md``.
+
+    So every assertion below now carries the number it read and the margin it
+    had.  A filter tight enough to be readable is tight enough to throw away
+    the evidence, and the cure that survives the filter is putting the evidence
+    in the assertion itself.
+    """
+    # The windowed reconstruct's chunk boundaries -- and so the field's LAST
+    # BITS -- are a function of the per-chunk memory budget, on which
+    # ``LUMENAIRY_MEM_BUDGET_MB`` is a hard ceiling read at CALL time (measured
+    # 2026-08-24: the field hash moves at 1/8/64 MB against the 512 MB
+    # default, while ``frame_completeness`` does not move to 12 digits).  It
+    # cannot break the pair below -- both calls read the same value -- but a
+    # value leaked in by another test or by the runner changes every field bit
+    # this test reads, so it is reported rather than assumed.
+    budget = os.environ.get('LUMENAIRY_MEM_BUDGET_MB', '(unset)')
     E = _conv_input(_N, _DX, _W_L, _R_IN)
     diag = {}
     E_a = _gbd(E, _m5_biconcave(), reexpand='auto', diagnostics=diag)
+    ctx = f"[LUMENAIRY_MEM_BUDGET_MB={budget} diagnostics={diag}]"
     for key in ('frame_completeness', 'reexpanded', 'n_beamlets',
                 'frame_completeness_input', 'frame_completeness_reexpanded'):
-        assert key in diag, f"diagnostics missing {key!r}"
-    assert diag['frame_completeness'] > 0.99
-    assert isinstance(diag['reexpanded'], bool)
-    assert diag['n_beamlets'] > 0
-    # None (default) -> no metric, identical output
+        # the last two keys exist only when the re-expansion GATE fired
+        # (angular spread over the Husimi threshold) and, for the last, when
+        # the carrier-referenced frame was accepted -- so a miss here names a
+        # decision that moved, not a missing assignment.
+        assert key in diag, f"diagnostics missing {key!r} {ctx}"
+    assert diag['frame_completeness'] > 0.99, (
+        f"frame_completeness {diag['frame_completeness']:.6f} <= 0.99 "
+        f"(margin was +9.8e-03 on 2026-08-24) {ctx}")
+    assert isinstance(diag['reexpanded'], bool), ctx
+    assert diag['n_beamlets'] > 0, ctx
+    # None (default) -> no metric, identical output.  This is a CALL-TO-CALL
+    # DETERMINISM claim as much as a "diagnostics is read-only" one: the two
+    # calls differ in nothing but the dict, and the dict is consumed AFTER the
+    # field is built.
     E_b = _gbd(E, _m5_biconcave(), reexpand='auto')
-    assert np.array_equal(E_a, E_b)
+    assert np.array_equal(E_a, E_b), _byte_id_message(E_a, E_b, ctx)
+    # ...and the other way round, so the claim is two-sided: an UNDIAGNOSED
+    # call followed by a diagnosed one returns the same bits too.
+    E_c = _gbd(E, _m5_biconcave(), reexpand='auto')
+    E_d = _gbd(E, _m5_biconcave(), reexpand='auto', diagnostics={})
+    assert np.array_equal(E_c, E_d), _byte_id_message(E_c, E_d, ctx)
+    assert np.array_equal(E_a, E_c), _byte_id_message(E_a, E_c, ctx)
 
 
 def test_reexpand_grid_convergence():

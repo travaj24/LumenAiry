@@ -4,6 +4,49 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- a reconstruct's ARITHMETIC ROUTE can no longer be chosen by the box's free memory
+
+`lumenairy.propagators.gbd._fft_reconstruct_applicable` decides between the
+FFT-convolution reconstruct and the windowed scatter-add.  It guards that
+decision with a bare `except Exception` -- there so a JAX tracer, which raises
+on inspection, falls back to the trace-safe route.  `MemoryError` is a subclass
+of `Exception`, so it was caught too: a transient allocation failure inside the
+CHECK silently switched the reconstruct to the other summation order, and the
+two routes agree to ~7e-16, not bit for bit (measured over three
+bundles the FFT route applies to: 6.61e-16 / 9.79e-16 / 5.28e-16 relative,
+byte-identical on none).  `MemoryError` now propagates.
+Nothing is lost -- the inspection allocates a couple of `(n, 3)` temporaries,
+orders of magnitude under the reconstruct that follows either way -- and the
+tracer fallback is unchanged.  Found while adjudicating the P4 single-red;
+measured NOT to be its cause (on that fixture the FFT route is inapplicable by
+ten decades), and fixed on its own merits.  See
+`docs/audits/FIX_P4_TRACED_CLOSEOUT_2026_08_24.md` S1.6.
+
+### Fixed -- `_det_normal_equations` matches `(A.T @ A, A.T @ b)` on an empty design matrix
+
+D14's deterministic accumulator carried an `n == 0` guard that sat below
+`B.reshape(B.shape[0], -1)`, which raises on any zero-row `b` (`-1` is
+ambiguous at size 0) -- so the guard was unreachable and the deterministic
+route RAISED where the BLAS expression it exists to replace returns zeros.  The
+guard is hoisted above the reshape.  No shipped path moves: no fit site can
+produce an empty design matrix, and `_solve_lstsq_thread_safe` still raises on
+an empty fit, on both routes, exactly as before.  Recorded as dead code in
+`BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md` S13; closed in
+`FIX_P4_TRACED_CLOSEOUT_2026_08_24.md` S3.
+
+### Measured -- the C13 singularity screen (`_LSTSQ_GRAM_RCOND_MIN = 1e-8`) is justified, unchanged
+
+No behaviour change.  The 5.42.0 audit left open whether 1e-8 is the right
+threshold for the traced fits, which read rcond 1.6e-9 (28 terms) and
+9.6e-11 (120).  Adjudicated over 39 solves from five fixtures against a
+least-squares oracle proved two independent ways (extra-precise-residual
+refinement and 60-digit mpmath, agreeing to 9e-17): the traced fits' rcond is a
+BASIS constant (1.61e-9 +- 2% at 28 terms, independent of prescription,
+weighting, decentring and row count), the derived bars sit 3.8 and 5.2 decades
+BELOW the screen on both builds, and the step-down buys 3-7 orders of
+coefficient accuracy.  The screen stays where it is; the reasoning is now
+measured rather than argued.  See `FIX_P4_TRACED_CLOSEOUT_2026_08_24.md` S2.
+
 ## [5.42.0] — 2026-08-23
 
 ### Fixed -- the TRACED EXIT FIELD is DETERMINISTIC at any BLAS thread count (niche D15)
