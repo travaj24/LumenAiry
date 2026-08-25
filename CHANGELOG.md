@@ -4,6 +4,18 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- `lumenairy[jax]` is resolvable again on every supported Python
+
+jax 0.11.x publishes `requires-python = ">=3.12"` (the last 3.11-compatible
+jax is 0.10.2, the last 3.10-compatible is 0.6.2), so the unmarked
+`jax>=0.11.0` floor made `pip install lumenairy[jax]` (and `[all]`, and
+`[jax-gpu]`) unresolvable on Python 3.10/3.11.  Caught by the scheduled
+dep-metadata drift check (2026-08-24).  Fixed with the same env-marker shape
+as the v5.2.2 zarr fix: `'jax>=0.11.0; python_version >= "3.12"'` at all
+three sites -- below 3.12 the extras install no jax (the jax-guarded suite
+`importorskip`s, exactly as it does for any missing accelerator) rather than
+an older jax the S4-4 CI leg (a dedicated Python 3.12 job) never gates.
+
 ### Fixed -- a reconstruct's ARITHMETIC ROUTE can no longer be chosen by the box's free memory
 
 `lumenairy.propagators.gbd._fft_reconstruct_applicable` decides between the

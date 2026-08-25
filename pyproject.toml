@@ -139,10 +139,16 @@ zarr = ['zarr>=3.0; python_version >= "3.11"', "filelock>=3.0"]
 # forward (the S4-4 CI leg runs the jax-guarded suite on 0.11; the
 # canonical-poly fit's differentiable solve and the pmm-2d jnp/np parity
 # bars are validated against it).
-jax = ["jax>=0.11.0"]
+# v5.42.1 (dep-metadata drift, 2026-08-24): jax 0.11.x itself requires
+# Python >=3.12 (last 3.11-compatible jax is 0.10.2, last 3.10 is 0.6.2),
+# so an unmarked ``jax>=0.11.0`` makes ``lumenairy[jax]`` UNRESOLVABLE on
+# 3.10/3.11.  Same env-marker shape as the v5.2.2 zarr fix: below 3.12 the
+# extra installs nothing rather than an untested older jax (0.11 is the
+# only baseline the S4-4 CI leg -- a dedicated Python 3.12 job -- gates).
+jax = ['jax>=0.11.0; python_version >= "3.12"']
 # JAX with CUDA wheels.  User is responsible for ensuring a compatible
 # CUDA / cuDNN install is on the system.
-jax-gpu = ["jax[cuda12]>=0.11.0"]
+jax-gpu = ['jax[cuda12]>=0.11.0; python_version >= "3.12"']
 # numexpr fuses the ``E * exp(-1j*k0*opd)`` phase-screen multiply in
 # ``apply_real_lens``, ~1.7x faster at large N and substantially
 # lower peak memory (no complex128 NxN intermediates).  Optional --
@@ -181,7 +187,9 @@ all = [
     # v5.2.2: zarr v3 requires Python 3.11+; env marker skips it on
     # 3.10 (storage-zarr tests skip on 3.10 in that case).
     'zarr>=3.0; python_version >= "3.11"',
-    "jax>=0.11.0",
+    # v5.42.1: same marker as the standalone ``jax`` group -- jax 0.11.x
+    # requires Python >=3.12 (jax-guarded tests importorskip below it).
+    'jax>=0.11.0; python_version >= "3.12"',
     "filelock>=3.0",
     # v4.16.1 (audit M-1): refractiveindex bundled into ``all`` so the
     # one-shot ``pip install lumenairy[all]`` continues to pull it
