@@ -1,0 +1,44 @@
+{
+ "wave1_fit1.jsonl": {
+  "solves": 20000,
+  "drifts": 0,
+  "distinct_coef": {
+   "85579519a087b40b": 20000
+  },
+  "distinct_gram": {
+   "786b3d4ba201eb74": 20000
+  },
+  "distinct_rhs": {
+   "b382a6c18506de17": 20000
+  },
+  "distinct_rcond": {
+   "0.9934560381553126": 20000
+  },
+  "screened": {
+   "False": 20000
+  },
+  "dt_min": 0.0027,
+  "dt_max": 0.0273
+ },
+ "wave1_fit2.jsonl": {
+  "solves": 20000,
+  "drifts": 0,
+  "distinct_coef": {
+   "85579519a087b40b": 20000
+  },
+  "distinct_gram": {
+   "786b3d4ba201eb74": 20000
+  },
+  "distinct_rhs": {
+   "b382a6c18506de17": 20000
+  },
+  "distinct_rcond": {
+   "0.9934560381553126": 20000
+  },
+  "screened": {
+   "False": 20000
+  },
+  "dt_min": 0.0029,
+  "dt_max": 0.0251
+ }
+}

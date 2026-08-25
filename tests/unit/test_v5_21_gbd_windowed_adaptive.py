@@ -102,6 +102,74 @@ def test_mem_budget_does_not_change_small_N():
 
 
 # --------------------------------------------------------------------------
+# the reconstruct-route decision must not be taken by the machine's free RAM
+# --------------------------------------------------------------------------
+def _uniform_bundle(N=64, dx=5e-6):
+    """A bundle the FFT-convolution route DOES apply to (uniform Q, uniform
+    direction, centres on grid) -- so the route decision is live."""
+    E = _gauss(N, dx)
+    return E, dx, decompose_field_to_beamlets(
+        E, dx, wavelength=LAM, sample_step=2, waist_factor=1.5)
+
+
+def test_fft_route_decision_falls_back_on_inspection_failure():
+    """The trace-safe half of the contract: an applicability check that cannot
+    INSPECT the bundle (a JAX tracer raises on ``np.asarray``) falls back to
+    the summed route and still returns a field."""
+    from lumenairy.propagators import gbd as _gbd_mod
+    E, dx, b = _uniform_bundle()
+    N = E.shape[0]
+    ref = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx,
+                                          wavelength=LAM, window=5.0)
+    orig = _gbd_mod._fft_applicable_impl
+
+    def _raise_value(*a, **k):
+        raise ValueError('pretend tracer')
+
+    _gbd_mod._fft_applicable_impl = _raise_value
+    try:
+        out = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx,
+                                              wavelength=LAM, window=5.0)
+    finally:
+        _gbd_mod._fft_applicable_impl = orig
+    assert np.all(np.isfinite(out))
+    # The two routes are the same sum in a different order, so they agree to
+    # rounding and NOT bit for bit -- which is exactly why the DECISION between
+    # them must not be taken by anything but the data (see below).  Measured
+    # 2026-08-24 over three bundles the FFT route applies to: 6.61e-16 /
+    # 9.79e-16 / 5.28e-16 relative, byte-identical on none of them.  The bar
+    # sits ~3 decades above that and ~7 below the windowing truncation the
+    # module already tolerates (exp(-25) ~ 1.4e-11).
+    assert _relerr(out, ref) < 1e-12
+
+
+def test_fft_route_decision_does_not_swallow_memory_error():
+    """P4 close-out (2026-08-24): ``MemoryError`` is a subclass of
+    ``Exception``, so the bare handler that exists for JAX tracers used to
+    catch it -- and a reconstruct would then take a DIFFERENT summation route
+    because the box was short of memory at that instant.  Route-by-free-RAM is
+    the silent-wrongness shape; the error propagates instead.
+
+    Two-sided with the test above: an inspection failure that really is an
+    inspection failure still falls back."""
+    from lumenairy.propagators import gbd as _gbd_mod
+    E, dx, b = _uniform_bundle()
+    N = E.shape[0]
+    orig = _gbd_mod._fft_applicable_impl
+
+    def _raise_mem(*a, **k):
+        raise MemoryError('pretend the box is full')
+
+    _gbd_mod._fft_applicable_impl = _raise_mem
+    try:
+        with pytest.raises(MemoryError):
+            reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx,
+                                            wavelength=LAM, window=5.0)
+    finally:
+        _gbd_mod._fft_applicable_impl = orig
+
+
+# --------------------------------------------------------------------------
 # adaptive decomposition
 # --------------------------------------------------------------------------
 def test_adaptive_matches_uniform_fine_at_fewer_beamlets():

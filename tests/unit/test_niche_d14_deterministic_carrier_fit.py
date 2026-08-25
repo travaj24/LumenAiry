@@ -53,6 +53,7 @@ import subprocess
 import sys
 import textwrap
 import tracemalloc
+import warnings
 
 import numpy as np
 import pytest
@@ -797,6 +798,44 @@ def test_multi_rhs_matches_the_single_rhs_column_by_column():
         _, r1 = LT._det_normal_equations(A, np.ascontiguousarray(B[:, k]))
         assert r1.shape == (4,)
         assert np.array_equal(r1, r2[:, k]), k
+
+
+def test_the_empty_fit_returns_what_the_blas_expression_returns():
+    """P4 close-out (2026-08-24): the ``n == 0`` branch is REACHABLE and
+    agrees with the expression it replaces.
+
+    It used to sit below ``B.reshape(B.shape[0], -1)``, which raises
+    ``cannot reshape array of size 0 into shape (0,newaxis)`` on a zero-row
+    ``b`` -- so the branch could not be reached from any input and the
+    deterministic route RAISED where ``(A.T @ A, A.T @ b)`` returns zeros
+    (recorded as dead code in ``BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md``
+    S13).  This function's contract is "the same two arrays as the BLAS
+    expression, in a fixed summation order", so a shape the BLAS expression
+    handles belongs inside it.
+
+    Nothing on a shipped path moves: no fit site can produce an empty design
+    matrix (every one enforces a samples-per-term floor), and the
+    ``_solve_lstsq_thread_safe`` entry point still raises on an empty fit --
+    from ``_solve_lstsq_qr``'s own reshape, on BOTH routes, exactly as before.
+    That last part is asserted here too, so "the guard is reachable" cannot
+    quietly become "empty fits now return zeros to callers"."""
+    for b_shape in [(0,), (0, 1), (0, 3)]:
+        A = np.zeros((0, 5), dtype=np.float64)
+        b = np.zeros(b_shape, dtype=np.float64)
+        G, r = LT._det_normal_equations(A, b)
+        G_blas, r_blas = A.T @ A, A.T @ b
+        assert np.array_equal(G, G_blas), b_shape
+        assert np.shape(r) == np.shape(r_blas), (b_shape, np.shape(r),
+                                                 np.shape(r_blas))
+        assert np.array_equal(r, r_blas), b_shape
+    # the entry point's behaviour on an empty fit is UNCHANGED and identical
+    # on both routes -- the guard made the kernel consistent, not the API
+    for det in (True, False):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            with pytest.raises(ValueError):
+                LT._solve_lstsq_thread_safe(np.zeros((0, 5)), np.zeros(0),
+                                            deterministic=det)
 
 
 def test_the_step_down_hole_is_declared_rather_than_hidden(recwarn):
