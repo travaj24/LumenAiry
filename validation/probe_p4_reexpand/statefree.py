@@ -15,9 +15,8 @@ import os
 import sys
 import warnings
 
-import numpy as np
-
 import common as c
+import numpy as np
 
 
 def _snapshot():

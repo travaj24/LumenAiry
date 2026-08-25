@@ -9,9 +9,9 @@ Usage:  LUMENAIRY_ROOT=... python census_solves.py [n_repeats]
 import hashlib
 import sys
 
+import common as c
 import numpy as np
 
-import common as c
 from lumenairy.elements import _lens_traced as lt
 
 _LOG = []

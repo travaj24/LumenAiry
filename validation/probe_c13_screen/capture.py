@@ -17,8 +17,8 @@ import numpy as np
 _ROOT = os.environ['LUMENAIRY_ROOT']
 sys.path.insert(0, _ROOT)
 
-import lumenairy as la                                        # noqa: E402
-from lumenairy.elements import _lens_traced as LT             # noqa: E402
+import lumenairy as la  # noqa: E402
+from lumenairy.elements import _lens_traced as LT  # noqa: E402
 
 _want = os.path.realpath(os.path.join(_ROOT, 'lumenairy'))
 _got = os.path.realpath(os.path.dirname(la.__file__))

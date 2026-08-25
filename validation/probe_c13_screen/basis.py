@@ -3,11 +3,15 @@
 Reads a captured 28-term traced fit and asks what, if anything, a cheaper
 conditioning of the fit would buy over the C13 re-solve.
 """
-import os, sys
+import os
+import sys
+
 import numpy as np
+
 sys.path.insert(0, os.environ['LUMENAIRY_ROOT'])
 import lumenairy as la
 from lumenairy.elements import _lens_traced as LT
+
 assert os.path.realpath(os.path.dirname(la.__file__)) == \
     os.path.realpath(os.path.join(os.environ['LUMENAIRY_ROOT'], 'lumenairy'))
 

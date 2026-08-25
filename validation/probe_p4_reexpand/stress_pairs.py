@@ -19,9 +19,8 @@ import os
 import sys
 import time
 
-import numpy as np
-
 import common as c
+import numpy as np
 
 
 def main():

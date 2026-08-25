@@ -1,4 +1,8 @@
-import json, os, numpy as np
+import json
+import os
+
+import numpy as np
+
 recs = json.load(open('fits/adjudication.json'))
 cache = {}
 print(f"{'tag':22s} {'M':>4s} {'rhs':>3s} {'rcond':>10s} {'r*/|b|':>10s} "

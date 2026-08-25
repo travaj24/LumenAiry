@@ -22,8 +22,8 @@ if _ROOT:
     if _want != _got:
         raise SystemExit(f"WRONG TREE: lumenairy at {_got}, wanted {_want}")
 
-from lumenairy.elements.lenses_gbd import apply_real_lens_gbd  # noqa: E402
 from lumenairy import glass as _glass_mod  # noqa: E402
+from lumenairy.elements.lenses_gbd import apply_real_lens_gbd  # noqa: E402
 
 _WL = 1.31e-6
 _N_GLASS = 1.5168

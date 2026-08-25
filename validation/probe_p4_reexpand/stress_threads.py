@@ -20,9 +20,9 @@ import sys
 import threading
 import warnings
 
+import common as c
 import numpy as np
 
-import common as c
 from lumenairy.elements.lenses_gbd import apply_real_lens_gbd
 
 warnings.simplefilter('ignore')

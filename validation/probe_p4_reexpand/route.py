@@ -6,8 +6,9 @@ and falls back to the windowed sum, which is a DIFFERENT summation order.  If
 the P4 bundle were near that decision boundary, memory pressure really could
 change the bits -- so measure where the decision sits.
 """
-import numpy as np
 import common as c
+import numpy as np
+
 from lumenairy.propagators import gbd as G
 
 calls = []

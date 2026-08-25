@@ -25,9 +25,10 @@ _ROOT = os.environ['LUMENAIRY_ROOT']
 sys.path.insert(0, _ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import lumenairy as la                                       # noqa: E402
-from lumenairy.elements import _lens_traced as LT            # noqa: E402
-from oracle import ls_oracle_mp, ls_oracle_refine            # noqa: E402
+from oracle import ls_oracle_mp, ls_oracle_refine  # noqa: E402
+
+import lumenairy as la  # noqa: E402
+from lumenairy.elements import _lens_traced as LT  # noqa: E402
 
 _want = os.path.realpath(os.path.join(_ROOT, 'lumenairy'))
 assert os.path.realpath(os.path.dirname(la.__file__)) == _want, la.__file__

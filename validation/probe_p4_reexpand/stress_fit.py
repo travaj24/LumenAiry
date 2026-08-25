@@ -20,9 +20,9 @@ import os
 import sys
 import time
 
+import common as c  # noqa: F401  (pins the tree + registers the model glass)
 import numpy as np
 
-import common as c  # noqa: F401  (pins the tree + registers the model glass)
 from lumenairy.elements import _lens_traced as lt
 
 
