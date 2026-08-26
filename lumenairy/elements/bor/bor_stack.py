@@ -160,12 +160,26 @@ class BORStack:
 
     # ---- geometry ------------------------------------------------------- #
     def add_layer(self, thickness, *, eps_profile=None, rings=None,
-                  eps=None):
+                  eps=None, eps_tensor_profile=None, eps_tensor=None):
         """Add a z-layer of given ``thickness``.
 
         Exactly one of: ``eps_profile`` (callable r-array->eps), ``rings``
-        (``(period, duty, n_ridge, n_groove)`` concentric binary grating), or
-        ``eps`` (uniform scalar permittivity).
+        (``(period, duty, n_ridge, n_groove)`` concentric binary grating),
+        ``eps`` (uniform scalar permittivity), ``eps_tensor_profile``
+        (callable r-array -> ``(N, 3)`` array) or ``eps_tensor`` (a uniform
+        3-tuple).
+
+        ANISOTROPIC layers (``eps_tensor*``) carry the DIAGONAL CYLINDRICAL
+        tensor ``diag(eps_rr, eps_phiphi, eps_zz)``.  That is exactly the class
+        a body of revolution can represent: each component enters its own role
+        in the radial operator -- ``eps_rr`` on the faces under the wall-normal
+        inverse rule, ``eps_phiphi`` pointwise on the nodes, ``eps_zz`` in the
+        ``E_z`` elimination.  An off-diagonal ``eps_r,phi`` (equivalently a
+        uniform Cartesian director) is NOT azimuthally invariant, couples the
+        ``m`` harmonics and is therefore rejected by the physics, not merely
+        unimplemented -- a radially or azimuthally aligned uniaxial IS
+        diagonal here and is exactly representable.  Anisotropic layers are
+        NumPy-only (the JAX path raises).
 
         Layers with the SAME profile fingerprint (identical ``rings`` /
         ``eps`` parameters, or the same ``eps_profile`` callable object)
@@ -175,12 +189,15 @@ class BORStack:
         silently applied a precedence (``rings`` beat ``eps``, ``eps_profile``
         beat ``eps``) and quietly discarded the other."""
         _given = [nm for nm, v in (("eps_profile", eps_profile),
-                                   ("rings", rings), ("eps", eps))
+                                   ("rings", rings), ("eps", eps),
+                                   ("eps_tensor_profile", eps_tensor_profile),
+                                   ("eps_tensor", eps_tensor))
                   if v is not None]
         if len(_given) > 1:
             raise ValueError(
                 "BORStack.add_layer: pass EXACTLY ONE of eps_profile / rings / "
-                "eps (got %s)." % (", ".join(_given),))
+                "eps / eps_tensor_profile / eps_tensor (got %s)."
+                % (", ".join(_given),))
         if rings is not None:
             period, duty, n_r, n_g = rings
             # er/eg computed lazily (inside prof / the key) so a TRACED ring
@@ -232,8 +249,45 @@ class BORStack:
                 return jnp.full((r_n.shape[0],),
                                 jnp.asarray(e).astype(jnp.complex128))
             raw = [eps]
+        elif eps_tensor_profile is not None:
+            def prof(r, ep=eps_tensor_profile):
+                return np.asarray(ep(r), dtype=complex)
+            fn = prof
+
+            def jbuild(r_n, jnp, ep=eps_tensor_profile):
+                raise NotImplementedError(
+                    "BORStack: anisotropic layers have no JAX path yet -- use "
+                    "an isotropic eps / eps_profile / rings layer for traced "
+                    "solves.")
+            raw = []
+            try:
+                hash(eps_tensor_profile)
+                key = ("tprofile", eps_tensor_profile)
+            except TypeError:
+                key = ("tprofile", fn)
+        elif eps_tensor is not None:
+            _t = np.asarray(eps_tensor, dtype=complex).ravel()
+            if _t.size != 3:
+                raise ValueError(
+                    "BORStack.add_layer: eps_tensor must be the 3 DIAGONAL "
+                    "CYLINDRICAL components (eps_rr, eps_phiphi, eps_zz); got "
+                    "%d value(s)." % _t.size)
+
+            def prof(r, t=_t):
+                return np.repeat(t[None, :], np.asarray(r).size, axis=0)
+            fn = prof
+
+            def jbuild(r_n, jnp, t=_t):
+                raise NotImplementedError(
+                    "BORStack: anisotropic layers have no JAX path yet -- use "
+                    "an isotropic eps / eps_profile / rings layer for traced "
+                    "solves.")
+            raw = []
+            key = ("eps_tensor", complex(_t[0]), complex(_t[1]), complex(_t[2]))
         else:
-            raise ValueError("add_layer needs eps_profile, rings, or eps")
+            raise ValueError(
+                "add_layer needs eps_profile, rings, eps, eps_tensor_profile "
+                "or eps_tensor")
         # Thickness validation (audit P3-10) -- mirror PMM2DStack.add_layer:
         # a NEGATIVE thickness flips the propagation exponent exp(iqL) so
         # forward-oriented evanescent modes GROW, silently destabilizing the

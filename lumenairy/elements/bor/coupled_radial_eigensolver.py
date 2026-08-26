@@ -180,6 +180,32 @@ def _normal_eps_faces(eps_node):
     return ef
 
 
+def _split_eps(raw, *, where="eps_profile"):
+    """Accept an ISOTROPIC length-N eps array **or** an ``(N, 3)`` DIAGONAL
+    tensor ``diag(eps_rr, eps_phiphi, eps_zz)`` in CYLINDRICAL components, and
+    return the three per-node arrays.
+
+    Anisotropy is restricted to the cylindrical-diagonal form because that is
+    exactly the class a body of revolution can carry: an off-diagonal
+    ``eps_r,phi`` (or a uniform Cartesian director) is NOT azimuthally
+    invariant and couples the ``m`` harmonics, which this one-``m`` solver
+    cannot represent.  Radially / azimuthally aligned uniaxial media ARE
+    diagonal here and so are exactly representable.
+
+    Isotropic input returns three references to the SAME array, so every
+    assembled operator is byte-identical to the pre-anisotropy scalar path.
+    """
+    a = np.asarray(raw, dtype=complex)
+    if a.ndim == 2 and a.shape[-1] == 3:
+        return a[:, 0], a[:, 1], a[:, 2]
+    if a.ndim == 1:
+        return a, a, a
+    raise ValueError(
+        f"{where} must return either a length-N isotropic eps array or an "
+        f"(N, 3) diagonal cylindrical tensor diag(eps_rr, eps_phiphi, "
+        f"eps_zz); got array of shape {a.shape}.")
+
+
 def _assemble_staggered(m, Rbig, N, eps_profile, k0):
     """Assemble the staggered q^2 generalized eigenproblem ``K Psi = q^2 B Psi``
     in ``Psi = (E_r[faces], E_phi[nodes])``.  Returns everything the mode/field
@@ -187,8 +213,9 @@ def _assemble_staggered(m, Rbig, N, eps_profile, k0):
       E_r equation -> FACES,  E_phi equation -> NODES,  E_z/Phi -> NODES.
     """
     r_n, r_f, h, Dn2f, Df2n, An2f, Af2n = _fd_grid_staggered(Rbig, N)
-    eps_node = np.asarray(eps_profile(r_n), dtype=complex)
-    eps_face = _normal_eps_faces(eps_node)
+    eps_rr, eps_pp, eps_zz = _split_eps(eps_profile(r_n))
+    eps_node = eps_pp                    # TANGENTIAL (E_phi) -> pointwise
+    eps_face = _normal_eps_faces(eps_rr)  # WALL-NORMAL (E_r) -> inverse rule
     diag = np.diag
     mrn, mrf = m / r_n, m / r_f
     A_n2f = Dn2f + diag(1.0 / r_f) @ An2f       # grad-like (d/dr+1/r): nodes -> faces
@@ -201,7 +228,7 @@ def _assemble_staggered(m, Rbig, N, eps_profile, k0):
     # ~1e-11-relative k0 window).  Cheap LU pivot-ratio check + warn (audit
     # P3-13); the inv() itself is unchanged so off-resonance results are
     # byte-identical.
-    Mz = Lm + k0 ** 2 * diag(eps_node)
+    Mz = Lm + k0 ** 2 * diag(eps_zz)      # LONGITUDINAL (E_z) component
     _du = np.abs(np.diag(lu_factor(Mz)[0]))
     if _du.size and _du.min() <= 1e-12 * _du.max():
         warnings.warn(
@@ -221,7 +248,8 @@ def _assemble_staggered(m, Rbig, N, eps_profile, k0):
     K = np.block([[k0 ** 2 * diag(eps_face) - diag(mrf ** 2), -1j * diag(mrf) @ A_n2f],
                   [-1j * Df2n @ diag(mrf),  k0 ** 2 * diag(eps_node) + Df2n @ A_n2f]])
     return dict(K=K, B=B, Lei=Lei, A_f2n=A_f2n, Dn2f=Dn2f, mrn=mrn, mrf=mrf,
-                eps_node=eps_node, eps_face=eps_face, r_n=r_n, r_f=r_f, h=h,
+                eps_node=eps_node, eps_face=eps_face, eps_zz=eps_zz,
+                r_n=r_n, r_f=r_f, h=h,
                 Df2n=Df2n, An2f=An2f, Af2n=Af2n, k0=k0, m=m, N=N)
 
 
@@ -323,7 +351,8 @@ def _pml_stretch(r, h, R_pml, Rbig, sigma_max, p):
     return 1.0 / s, rt
 
 
-def _mode_reldiv(Er, Ephi, qj, D, mr, Lei, A, eps, eps_n, rg, k0):
+def _mode_reldiv(Er, Ephi, qj, D, mr, Lei, A, eps, eps_n, rg, k0, *,
+                 eps_z=None):
     """Longitudinal field ``Ez`` and the relative-divergence diagnostic for ONE
     nodal radial vector mode (E_z-eliminated form).
 
@@ -341,7 +370,8 @@ def _mode_reldiv(Er, Ephi, qj, D, mr, Lei, A, eps, eps_n, rg, k0):
     does not recompute it for the mode dict."""
     Ez = qj * (Lei @ (1j * A @ Er - mr @ Ephi))
     Dr = eps_n * Er
-    div = (1.0 / rg) * (D @ (rg * Dr)) + 1j * mr @ (eps * Ephi) + 1j * qj * (eps * Ez)
+    _ez = eps if eps_z is None else eps_z
+    div = (1.0 / rg) * (D @ (rg * Dr)) + 1j * mr @ (eps * Ephi) + 1j * qj * (_ez * Ez)
     En = np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2 + np.abs(Ez) ** 2))
     reldiv = np.sqrt(np.sum(np.abs(div) ** 2)) / (k0 * max(En, 1e-300))
     return Ez, float(reldiv.real)
@@ -391,8 +421,8 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
         return _radial_coupled_modes_staggered(m, Rbig, N, eps_profile, k0)
     wall = "natural" if wall is None else wall
     r, D, h = _fd_grid(Rbig, N)
-    eps = np.asarray(eps_profile(r), dtype=complex)
-    eps_n = _normal_eps(eps) if inverse_rule else eps
+    eps_rr, eps, eps_zz = _split_eps(eps_profile(r))   # eps = tangential (E_phi)
+    eps_n = _normal_eps(eps_rr) if inverse_rule else eps_rr
     Lap = None
     if R_pml is not None:
         sinv, rg = _pml_stretch(r, h, R_pml, Rbig, sigma_max, pml_p)
@@ -408,7 +438,7 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
     A = D + ir
     Lm = (D @ D if Lap is None else Lap) + ir @ D - m2r2
     dA = D @ A
-    Lei = np.linalg.inv(Lm + k0 ** 2 * np.diag(eps))     # E_z elimination
+    Lei = np.linalg.inv(Lm + k0 ** 2 * np.diag(eps_zz))  # E_z elimination
     Phi_r = Lei @ (1j * A)
     Phi_p = Lei @ (-mr)
     B = np.block([[I + 1j * D @ Phi_r, 1j * D @ Phi_p],
@@ -427,7 +457,7 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
         # eps for D_r instead inflates the physical modes' divergence ~100x and
         # breaks the spurious/physical separation.)
         Ez, reldiv = _mode_reldiv(Er, Ephi, q[j], D, mr, Lei, A, eps, eps_n,
-                                  rg, k0)
+                                  rg, k0, eps_z=eps_zz)
         modes.append(dict(q=q[j], reldiv=reldiv,
                           Er=Er, Ephi=Ephi, Ez=Ez, r=r))
     return modes
@@ -442,6 +472,7 @@ def _radial_coupled_modes_staggered(m, Rbig, N, eps_profile, k0):
     q = np.sqrt(q2)
     Lei, A_f2n, Df2n = op["Lei"], op["A_f2n"], op["Df2n"]
     mrn, eps_node, eps_face = op["mrn"], op["eps_node"], op["eps_face"]
+    eps_zz = op["eps_zz"]
     r_n, r_f = op["r_n"], op["r_f"]
     modes = []
     for j in range(len(q)):
@@ -449,7 +480,7 @@ def _radial_coupled_modes_staggered(m, Rbig, N, eps_profile, k0):
         Ez = q[j] * (Lei @ (1j * A_f2n @ Er - mrn * Ephi))     # nodes
         Dr = eps_face * Er                          # face flux (native-continuous)
         div = ((1.0 / r_n) * (Df2n @ (r_f * Dr)) + 1j * mrn * (eps_node * Ephi)
-               + 1j * q[j] * (eps_node * Ez))       # all on nodes
+               + 1j * q[j] * (eps_zz * Ez))         # all on nodes
         En = np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2 + np.abs(Ez) ** 2))
         reldiv = np.sqrt(np.sum(np.abs(div) ** 2)) / (k0 * max(En, 1e-300))
         modes.append(dict(q=q[j], reldiv=float(reldiv.real),
