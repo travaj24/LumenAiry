@@ -28,12 +28,20 @@ import numpy as np
 from scipy.special import jn_zeros, jv
 
 
-def fourier_bessel(f, r, h, m, nmax):
+def fourier_bessel(f, r, h, m, nmax, *, wq=None, R=None):
     """Decompose ``f`` (sampled on the cell-centered grid ``r``, spacing ``h``)
     into ``nmax`` Fourier-Bessel coefficients of order ``m``.
 
     Returns ``(c, kt, norm)``: coefficients ``c_n``, transverse wavenumbers
     ``kt_n = alpha_n / R``, and the squared-norms ``N_n`` (for Parseval / power).
+
+    NON-UNIFORM GRIDS (the SEM basis).  Pass ``wq`` -- per-sample quadrature
+    weights that ALREADY CONTAIN the ``r dr`` measure (the SEM native
+    ``wq_node`` / ``wq_face`` vectors) -- and the domain edge ``R`` (defaults
+    to ``r[-1]`` when ``wq`` is given; the cell-centered ``+ h/2`` convention
+    is a uniform-grid artefact).  ``h`` is then ignored for the integral and
+    used only as a fallback for the Nyquist estimate, which on a non-uniform
+    grid is taken from the LARGEST sample spacing (the resolution bottleneck).
 
     SAMPLING (audit W6-B5).  The coefficient integral is a midpoint rule on the
     given grid, so a requested order is only meaningful while its kernel is
@@ -45,13 +53,25 @@ def fourier_bessel(f, r, h, m, nmax):
     nothing in the returned dict betrays it.  A ``UserWarning`` now fires
     instead of silence.
     """
-    R = r[-1] + h / 2.0                       # domain edge (cell-centered grid)
+    if wq is None:
+        R = r[-1] + h / 2.0                   # domain edge (cell-centered grid)
+        h_eff = h
+    else:
+        wq = np.asarray(wq)
+        if wq.shape != np.shape(r):
+            raise ValueError(
+                f"fourier_bessel: wq shape {wq.shape} != r shape "
+                f"{np.shape(r)}")
+        if R is None:
+            R = float(np.asarray(r)[-1])
+        h_eff = float(np.max(np.diff(np.asarray(r, float))))
     alpha = jn_zeros(m, nmax)
-    n_alias = int(np.sum(alpha / R > np.pi / h))
+    n_alias = int(np.sum(alpha / R > np.pi / h_eff))
     if n_alias:
         warnings.warn(
             f"fourier_bessel: {n_alias} of the {nmax} requested orders have "
-            f"kt = alpha_n/R above the grid Nyquist pi/h = {np.pi / h:.4g} "
+            f"kt = alpha_n/R above the grid Nyquist pi/h = "
+            f"{np.pi / h_eff:.4g} "
             f"(kt_max = {alpha[-1] / R:.4g}); their J_m kernels alias on this "
             f"{len(r)}-point grid, so those coefficients are noise and the "
             f"Parseval power sum over-counts.  Use nmax <~ {len(r)} for this "
@@ -60,7 +80,9 @@ def fourier_bessel(f, r, h, m, nmax):
     norm = np.zeros(nmax)
     for n in range(nmax):
         Jn = jv(m, alpha[n] * r / R)
-        c[n] = np.sum(f * Jn * r * h) * 2.0 / (R ** 2 * jv(m + 1, alpha[n]) ** 2)
+        w_rdr = (r * h) if wq is None else wq        # r dr quadrature weights
+        c[n] = np.sum(f * Jn * w_rdr) * 2.0 / (R ** 2
+                                               * jv(m + 1, alpha[n]) ** 2)
         norm[n] = R ** 2 * jv(m + 1, alpha[n]) ** 2 / 2.0
     return c, alpha / R, norm
 
@@ -93,7 +115,7 @@ def far_field_angles(kt, eps, k0):
     return theta, prop
 
 
-def order_power_fractions(f, r, h, m, eps, k0, nmax):
+def order_power_fractions(f, r, h, m, eps, k0, nmax, *, wq=None, R=None):
     """Per-cylindrical-order power fractions of a near-field ``f`` of order ``m``,
     with the propagating mask and far-field angles.  (Power-normalized via the
     Parseval relation; lossless fractions over the propagating set + evanescent
@@ -107,7 +129,7 @@ def order_power_fractions(f, r, h, m, eps, k0, nmax):
     compare ``total`` against ``sum(|f|**2 * r * h)`` if that matters, and see
     the ``fourier_bessel`` Nyquist note (audit W6-B5).
     """
-    c, kt, norm = fourier_bessel(f, r, h, m, nmax)
+    c, kt, norm = fourier_bessel(f, r, h, m, nmax, wq=wq, R=R)
     total = np.sum(np.abs(c) ** 2 * norm)
     frac = np.abs(c) ** 2 * norm / max(total, 1e-300)
     theta, prop = far_field_angles(kt, eps, k0)

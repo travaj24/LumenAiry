@@ -250,6 +250,20 @@ _KNOWN_ALL_SYMMETRY_EXEMPTIONS = frozenset({
     ('lumenairy.elements.bor', 'order_power_fractions'),
     ('lumenairy.elements.bor', 'fiber_modes'),
     ('lumenairy.elements.bor', 'stepindex_modes'),
+    # v5.43: the SEM radial basis (BORStack(basis='sem') building blocks --
+    # div-conforming spectral-element meshes, per-layer modal solve, the
+    # cross-tested mortar interface, mesh equalization).  Same rationale as
+    # the block above: cylindrical/SEM jargon reached via la.elements.bor.*;
+    # the headline entry point remains BORStack(basis='sem').  Each name is
+    # exempted BOTH at its defining module and at the subpackage re-export.
+    ('lumenairy.elements.bor', 'SemRadialMesh'),
+    ('lumenairy.elements.bor', 'sem_layer_modes'),
+    ('lumenairy.elements.bor', 'sem_interface_smatrix'),
+    ('lumenairy.elements.bor', 'equalize_meshes'),
+    ('lumenairy.elements.bor.sem_radial', 'SemRadialMesh'),
+    ('lumenairy.elements.bor.sem_radial', 'sem_layer_modes'),
+    ('lumenairy.elements.bor.sem_radial', 'sem_interface_smatrix'),
+    ('lumenairy.elements.bor.sem_radial', 'equalize_meshes'),
 
     # ---- backend (package re-export of RandomState) -----------------------
     # ``RandomState`` IS at top level so this is NOT in the exemption

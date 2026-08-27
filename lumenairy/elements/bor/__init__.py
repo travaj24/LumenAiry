@@ -42,6 +42,12 @@ from .coupled_radial_eigensolver import guided_modes, radial_coupled_modes
 from .farfield import far_field_angles, fourier_bessel, order_power_fractions
 from .fiber_oracle import fiber_modes
 from .radial_eigensolver import radial_spectrum
+from .sem_radial import (
+    SemRadialMesh,
+    equalize_meshes,
+    sem_interface_smatrix,
+    sem_layer_modes,
+)
 from .stepindex_oracle import stepindex_modes
 from .zcascade import layer_modes
 
@@ -54,6 +60,11 @@ __all__ = [
     "guided_modes",
     # per-layer modal basis
     "layer_modes",
+    # SEM radial basis (BORStack basis="sem" building blocks)
+    "SemRadialMesh",
+    "sem_layer_modes",
+    "sem_interface_smatrix",
+    "equalize_meshes",
     # cylindrical far-field (Fourier-Bessel / Hankel orders)
     "fourier_bessel",
     "far_field_angles",
