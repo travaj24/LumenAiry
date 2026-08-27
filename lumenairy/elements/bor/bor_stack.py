@@ -33,6 +33,18 @@ from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redhe
 _MODAL_CACHE_SIZE = 16
 
 
+def _sem_flux(W_E, V_H, wq_face, wq_node, n1):
+    """z-Poynting flux of an SEM-basis field, one value per column.  Row
+    layout differs from the FD staggered contract: W rows [:n1] = E_r (V1),
+    [n1:] = E_phi (V0); V rows [:n0p] = h_r (V0), [n0p:] = h_phi (V1) --
+    each h component on its flux-partner grid, so the pairing is
+    E_r (x) h_phi on the V1 weights and E_phi (x) h_r on the V0 weights."""
+    n0p = W_E.shape[0] - n1
+    return np.real(
+        np.sum(W_E[:n1] * np.conj(V_H[n0p:]) * wq_face[:, None], axis=0)
+        - np.sum(W_E[n1:] * np.conj(V_H[:n0p]) * wq_node[:, None], axis=0))
+
+
 def _column_phases(W):
     """Deterministic per-column phase of a modal basis: the phase of each
     column's largest-magnitude entry.  Dividing a column by its phase pins
@@ -97,7 +109,9 @@ class BORStack:
     forward-compatible alias, not a hard break.
     """
 
-    def __init__(self, Rbig, m, *, n_substrate=1.0, n_superstrate=1.0, N=300):
+    def __init__(self, Rbig, m, *, n_substrate=1.0, n_superstrate=1.0, N=300,
+                 basis="fd", degree=8, elements_per_segment=1,
+                 grade=True, n_mesh_cap=None):
         # Input validation (audit P3-10) -- mirror the PMMStack/PMM2DStack
         # builder guards: a bad domain/grid propagates to plausible-looking
         # garbage (negative-radius grid, 1-point operators) deep in the build.
@@ -132,12 +146,47 @@ class BORStack:
                     f"refractive index), got {_n!r}.  Only n**2 is used, so a "
                     f"negative n would silently mean |n| and n = 0 gives an "
                     f"empty propagating set (empty R/T).")
+        if basis not in ("fd", "sem"):
+            raise ValueError(
+                "BORStack: basis must be 'fd' (Yee-staggered finite "
+                "difference, the default) or 'sem' (div-conforming "
+                f"spectral elements), got {basis!r}.")
+        degree = int(degree)
+        if degree < 2:
+            raise ValueError(
+                f"BORStack: degree must be >= 2, got {degree}.")
+        eps_seg = int(elements_per_segment)
+        if eps_seg < 1:
+            raise ValueError(
+                f"BORStack: elements_per_segment must be >= 1, got "
+                f"{elements_per_segment}.")
+        # n_mesh_cap: concrete upper bound on |n| of TRACED (JAX) segment eps,
+        # used only by the SEM wavelength-resolution cap, whose element sizing
+        # needs a numeric refractive index that a traced value cannot provide
+        # under jax.grad/jit.  An UPPER bound is safe by construction (the mesh
+        # can only over-resolve).  Required as soon as any traced eps reaches a
+        # basis='sem' solve; ignored otherwise.
+        if n_mesh_cap is not None:
+            n_mesh_cap = float(n_mesh_cap)
+            if not np.isfinite(n_mesh_cap) or n_mesh_cap <= 0.0:
+                raise ValueError(
+                    f"BORStack: n_mesh_cap must be > 0, got {n_mesh_cap}.")
+        self.n_mesh_cap = n_mesh_cap
+        self.basis = basis
+        self.degree = degree
+        self.elements_per_segment = eps_seg
+        self.grade = bool(grade)
         self.Rbig = Rbig
         self.m = int(m)
         self.N = int(N)
         self.eps_sub = complex(n_substrate) ** 2
         self.eps_sup = complex(n_superstrate) ** 2
         self._layers = []   # list of (thickness, eps_profile callable, profile key)
+        # SEM sidecar per layer: (interior_walls tuple, segments tuple) --
+        # segments = ((r_out, eps_triple), ...) covering (0, Rbig]; None for
+        # specs the SEM basis cannot mesh (bare profile callables carry no
+        # wall information).
+        self._sem_layers = []
         # Parallel differentiable spec per layer: (thickness, jbuild(r_n, jnp) ->
         # jnp eps_node, raw_values) -- lets the JAX twin rebuild eps_node in the
         # active namespace from the RAW (possibly-traced) ring index / eps.
@@ -160,7 +209,8 @@ class BORStack:
 
     # ---- geometry ------------------------------------------------------- #
     def add_layer(self, thickness, *, eps_profile=None, rings=None,
-                  eps=None, eps_tensor_profile=None, eps_tensor=None):
+                  eps=None, eps_tensor_profile=None, eps_tensor=None,
+                  segments=None):
         """Add a z-layer of given ``thickness``.
 
         Exactly one of: ``eps_profile`` (callable r-array->eps), ``rings``
@@ -191,7 +241,8 @@ class BORStack:
         _given = [nm for nm, v in (("eps_profile", eps_profile),
                                    ("rings", rings), ("eps", eps),
                                    ("eps_tensor_profile", eps_tensor_profile),
-                                   ("eps_tensor", eps_tensor))
+                                   ("eps_tensor", eps_tensor),
+                                   ("segments", segments))
                   if v is not None]
         if len(_given) > 1:
             raise ValueError(
@@ -266,6 +317,13 @@ class BORStack:
             except TypeError:
                 key = ("tprofile", fn)
         elif eps_tensor is not None:
+            if any(_is_jax_array(v) for v in np.asarray(eps_tensor,
+                                                        dtype=object).ravel()):
+                raise NotImplementedError(
+                    "BORStack.add_layer: traced (JAX) eps_tensor components "
+                    "are supported via segments=[(Rbig, (eps_rr, eps_phiphi, "
+                    "eps_zz))] on basis='sem' -- a uniform anisotropic layer "
+                    "is a single full-radius segment.")
             _t = np.asarray(eps_tensor, dtype=complex).ravel()
             if _t.size != 3:
                 raise ValueError(
@@ -284,10 +342,99 @@ class BORStack:
                     "solves.")
             raw = []
             key = ("eps_tensor", complex(_t[0]), complex(_t[1]), complex(_t[2]))
+        elif segments is not None:
+            # explicit annuli: ((r_out_1, eps_1), ..., (Rbig, eps_K)) --
+            # eps entries scalar or the diagonal cylindrical 3-tuple.  The
+            # native spec of the SEM basis (walls are element boundaries);
+            # also usable on the FD basis via the step profile below.
+            segs = []
+            r_prev = 0.0
+            for r_out, ev in segments:
+                r_out = float(r_out)
+                if r_out <= r_prev:
+                    raise ValueError(
+                        "BORStack.add_layer(segments=...): r_out must be "
+                        f"strictly increasing, got {r_out} after {r_prev}.")
+                # each eps entry: scalar | (rr, pp, zz) triple | and any
+                # component may be a DISPERSIVE wl->eps callable (resolved at
+                # solve time on the SEM basis; the FD step profile below only
+                # supports concrete values)
+                if callable(ev):
+                    tri = (ev,) * 3
+                elif _is_jax_array(ev):
+                    # traced (or concrete-jnp) eps stays a RAW jax scalar so
+                    # gradients flow on the SEM twin; checked BEFORE np.asarray
+                    # (which would silently concretize a concrete jnp array)
+                    _shp = tuple(getattr(ev, "shape", ()))
+                    if _shp in ((), (1,)):
+                        tri = ((ev if _shp == () else ev[0]),) * 3
+                    elif _shp == (3,):
+                        tri = (ev[0], ev[1], ev[2])
+                    else:
+                        raise ValueError(
+                            "BORStack.add_layer(segments=...): a JAX eps must "
+                            "be a scalar or a length-3 (eps_rr, eps_phiphi, "
+                            f"eps_zz) vector; got shape {_shp}.")
+                else:
+                    # tuples/lists are taken per-component WITHOUT np.asarray
+                    # (which probes element __array__ even at dtype=object, so
+                    # a traced component would raise -- and a CONCRETE jnp
+                    # component would silently concretize off the traced path)
+                    if isinstance(ev, (tuple, list)):
+                        a = list(ev)
+                    else:
+                        a = list(np.asarray(ev, dtype=complex).ravel())
+                    if len(a) not in (1, 3):
+                        raise ValueError(
+                            "BORStack.add_layer(segments=...): each eps must "
+                            "be a scalar or a (eps_rr, eps_phiphi, eps_zz) "
+                            f"triple; got {len(a)} value(s).")
+                    def _coerce(v):
+                        return (v if callable(v) or _is_jax_array(v)
+                                else complex(v))
+                    tri = ((_coerce(a[0]),) * 3 if len(a) == 1 else
+                           (_coerce(a[0]), _coerce(a[1]), _coerce(a[2])))
+                segs.append((r_out, tri))
+                r_prev = r_out
+            if abs(r_prev - self.Rbig) > 1e-9 * self.Rbig:
+                raise ValueError(
+                    "BORStack.add_layer(segments=...): the last r_out must "
+                    f"equal Rbig={self.Rbig!r}, got {r_prev!r}.")
+            _bnd = np.asarray([0.0] + [rs for rs, _t in segs])
+            _disp = any(callable(v) for _rs, t in segs for v in t)
+            _traced = any(_is_jax_array(v) for _rs, t in segs for v in t)
+            if _disp or _traced:
+                def prof(r):
+                    raise NotImplementedError(
+                        "BORStack: dispersive (callable) or traced (JAX) "
+                        "segment eps is supported on basis='sem' only; the "
+                        "FD step profile needs concrete values.")
+            else:
+                _tri = np.asarray([t for _rs, t in segs], dtype=complex)
+                _iso = bool(np.all(_tri[:, 0] == _tri[:, 1])
+                            and np.all(_tri[:, 1] == _tri[:, 2]))
+
+                def prof(r, b=_bnd, t=_tri, iso=_iso):
+                    idx = np.clip(np.searchsorted(b, np.asarray(r, float),
+                                                  side="right") - 1,
+                                  0, t.shape[0] - 1)
+                    return t[idx, 0] if iso else t[idx, :]
+            fn = prof
+            # traced entries are unhashable -> id-keyed (the traced path never
+            # consults the modal LRU; the key only has to be distinct)
+            key = ("segments", tuple(
+                (rs, tuple(id(v) if _is_jax_array(v) else v for v in t))
+                for rs, t in segs))
+
+            def jbuild(r_n, jnp):
+                raise NotImplementedError(
+                    "BORStack: segments= layers have no FD JAX path -- use "
+                    "basis='sem' for traced segment solves.")
+            raw = [v for _rs, t in segs for v in t if _is_jax_array(v)]
         else:
             raise ValueError(
-                "add_layer needs eps_profile, rings, eps, eps_tensor_profile "
-                "or eps_tensor")
+                "add_layer needs eps_profile, rings, eps, eps_tensor_profile, "
+                "eps_tensor or segments")
         # Thickness validation (audit P3-10) -- mirror PMM2DStack.add_layer:
         # a NEGATIVE thickness flips the propagation exponent exp(iqL) so
         # forward-oriented evanescent modes GROW, silently destabilizing the
@@ -299,6 +446,39 @@ class BORStack:
             if not np.isfinite(thickness) or thickness <= 0.0:
                 raise ValueError("BORStack.add_layer: thickness must be > 0")
             thk_store = thickness
+        # SEM sidecar: (interior walls, full segment list) when the spec
+        # carries wall information; None otherwise (SEM solve rejects it).
+        if segments is not None:
+            _walls = tuple(rs for rs, _t in segs if rs < self.Rbig)
+            self._sem_layers.append((_walls, tuple(segs)))
+        elif eps is not None:
+            # traced eps stays RAW in the sidecar (the SEM twin differentiates
+            # through it); concrete eps is pinned to a hashable complex
+            _e = eps if _is_jax_array(eps) else complex(eps)
+            self._sem_layers.append(((), ((self.Rbig, (_e,) * 3),)))
+        elif eps_tensor is not None:
+            self._sem_layers.append(
+                ((), ((self.Rbig, (complex(_t[0]), complex(_t[1]),
+                                   complex(_t[2]))),)))
+        elif rings is not None and not _rt:
+            _per, _duty, _nr, _ng = (float(rings[0]), float(rings[1]),
+                                     complex(rings[2]), complex(rings[3]))
+            _er, _eg = _nr ** 2, _ng ** 2
+            _sem_segs, _edge = [], 0.0
+            while _edge < self.Rbig - 1e-9 * self.Rbig:
+                _ridge_hi = min(_edge + _duty * _per, self.Rbig)
+                _sem_segs.append((_ridge_hi, (_er,) * 3))
+                if _ridge_hi >= self.Rbig - 1e-9 * self.Rbig:
+                    break
+                _groove_hi = min(_edge + _per, self.Rbig)
+                _sem_segs.append((_groove_hi, (_eg,) * 3))
+                _edge += _per
+            _sem_segs[-1] = (self.Rbig, _sem_segs[-1][1])
+            self._sem_layers.append(
+                (tuple(rs for rs, _t in _sem_segs[:-1]),
+                 tuple(_sem_segs)))
+        else:
+            self._sem_layers.append(None)
         self._layers.append((thk_store, fn, key))
         self._jax_layers.append((thk_store, jbuild, raw))
         self._last = None       # geometry change supersedes retained state
@@ -398,6 +578,8 @@ class BORStack:
         eig via the modal LRU (audit P3-12)."""
         if self.k0 is None:
             raise RuntimeError("call set_source(...) before solve()")
+        if self.basis == "sem":
+            return self._solve_sem(retain_internal=retain_internal)
         # every solve supersedes the retained state (audit-P1-04 contract)
         self._last = None
         self._internal = None
@@ -524,6 +706,206 @@ class BORStack:
         return dict(q=qi, gamma=gamma, angles=angles, R=R, T=T, energy=R + T,
                     inc=inc, out=out, S=S)
 
+    def _solve_sem(self, *, retain_internal=False):
+        """SEM-basis solve: per-layer ring-wall-aligned element meshes
+        (window +-1 neighbour enrichment, the Cartesian per-layer-grids
+        pattern), cross-tested Galerkin mortar interfaces, same cascade and
+        R/T extraction as the FD path.  See sem_radial's module docstring."""
+        from .sem_radial import (
+            SemRadialMesh,
+            equalize_meshes,
+            sem_interface_smatrix,
+            sem_layer_modes,
+        )
+        if self._is_jax():
+            if retain_internal:
+                raise NotImplementedError(
+                    "BORStack.solve(retain_internal=True): not available on "
+                    "the JAX (differentiable) path; use NumPy inputs for "
+                    "layer_absorption.")
+            # Differentiable SEM twin: gradients flow through traced segment /
+            # uniform-layer eps (scalar or the diagonal cylindrical triple)
+            # and layer thicknesses; walls, meshes and half-spaces stay
+            # concrete.  Masked full-array R/T contract (see _jax_sem).
+            from ._jax_sem import _jax_sem_stack_solve
+            return _jax_sem_stack_solve(self)
+        self._last = None
+        self._internal = None
+        k0 = self.k0
+        wl_now = 2.0 * np.pi / k0
+        sem_layers = []
+        for i, sc in enumerate(self._sem_layers):
+            if sc is None:
+                raise ValueError(
+                    f"BORStack(basis='sem'): layer {i} was added with a bare "
+                    "profile callable, which carries no ring-wall positions "
+                    "to mesh on -- re-add it with segments=[(r_out, eps), "
+                    "...] (or rings= / eps= / eps_tensor=).")
+            walls_i, segs_i = sc
+            resolved = []
+            for r_out, tri in segs_i:
+                resolved.append((r_out, tuple(
+                    complex(t(wl_now)) if callable(t) else complex(t)
+                    for t in tri)))
+            sem_layers.append((walls_i, tuple(resolved)))
+        # window +-1 wall enrichment (half-spaces are wall-free neighbours)
+        walls = [sc[0] for sc in sem_layers]
+        win = []
+        for i in range(len(walls)):
+            u = set(walls[i])
+            if i > 0:
+                u |= set(walls[i - 1])
+            if i + 1 < len(walls):
+                u |= set(walls[i + 1])
+            win.append(sorted(u))
+        sup_walls = sorted(set(walls[0])) if walls else []
+        sub_walls = sorted(set(walls[-1])) if walls else []
+
+        def _refine(bnd):
+            # hp knob: split every interval into elements_per_segment
+            # sub-elements, Chebyshev-Lobatto graded toward BOTH ends (the
+            # Cartesian PMM _graded_boundaries recipe -- resolves the
+            # metal-corner field concentration at ring walls)
+            k = self.elements_per_segment
+            if k == 1:
+                return bnd
+            if self.grade:
+                sloc = 0.5 * (1.0 - np.cos(np.pi * np.arange(k + 1) / k))
+            else:
+                sloc = np.linspace(0.0, 1.0, k + 1)
+            out = [bnd[0]]
+            for lo, hi in zip(bnd[:-1], bnd[1:]):
+                out.extend(lo + (hi - lo) * sloc[1:])
+            return np.asarray(out)
+
+        def build_mesh(wall_list, segs):
+            bnd = np.concatenate([[0.0], np.asarray(wall_list, float),
+                                  [self.Rbig]])
+            bnd = np.unique(bnd)
+            keep = np.concatenate([[True], np.diff(bnd) > 1e-12 * self.Rbig])
+            bnd = bnd[keep]
+            if abs(bnd[-1] - self.Rbig) > 0:
+                bnd[-1] = self.Rbig
+            bnd = _refine(bnd)
+            # WAVELENGTH-RESOLUTION CAP (the SEM analog of the FD grid's N;
+            # found the hard way: a wall-sparse layer left a ~7-wavelength
+            # element at degree 8, and the starved modal basis broke the
+            # cascade -- NEGATIVE absorption in a lossless stack).  Split any
+            # element wider than degree * lambda_local / DPW so every element
+            # carries >= DPW dofs per local wavelength in its own medium.
+            DPW = 8.0
+            edges = np.asarray([rs for rs, _t in segs])
+            tris = [t for _rs, t in segs]
+            out = [float(bnd[0])]
+            for lo, hi in zip(bnd[:-1], bnd[1:]):
+                jdx = int(np.searchsorted(edges, 0.5 * (lo + hi),
+                                          side="left"))
+                tri = tris[min(jdx, len(tris) - 1)]
+                n_loc = max(abs(np.sqrt(complex(t)).real) for t in tri)
+                n_loc = max(n_loc, 1e-3)
+                lam_loc = 2.0 * np.pi / (k0 * n_loc)
+                max_el = self.degree * lam_loc / DPW
+                nsplit = max(1, int(np.ceil((hi - lo) / max_el)))
+                out.extend(np.linspace(lo, hi, nsplit + 1)[1:])
+            bnd = np.asarray(out)
+            eps_el = []
+            edges = np.asarray([rs for rs, _t in segs])
+            tris = [t for _rs, t in segs]
+            for lo, hi in zip(bnd[:-1], bnd[1:]):
+                jdx = int(np.searchsorted(edges, 0.5 * (lo + hi),
+                                          side="left"))
+                eps_el.append(tris[min(jdx, len(tris) - 1)])
+            return SemRadialMesh(bnd, eps_el, self.degree)
+
+        sup_segs = ((self.Rbig, (self.eps_sup,) * 3),)
+        sub_segs = ((self.Rbig, (self.eps_sub,) * 3),)
+        meshes = ([build_mesh(sup_walls, sup_segs)]
+                  + [build_mesh(win[i], sem_layers[i][1])
+                     for i in range(len(walls))]
+                  + [build_mesh(sub_walls, sub_segs)])
+        meshes = equalize_meshes(meshes)
+
+        # per-solve memo on top of the LRU (the audit-W6-B8 pattern: a
+        # stack with more distinct meshes than _MODAL_CACHE_SIZE would
+        # otherwise thrash the LRU cyclically across repeated solves)
+        _seen = {}
+
+        def modes(mesh):
+            ck = ("sem", mesh.fingerprint(), k0, self.m, self.degree)
+            L = _seen.get(ck)
+            if L is not None:
+                return L
+            L = self._modal_cache.get(ck)
+            if L is not None:
+                self._modal_cache.move_to_end(ck)    # LRU touch
+                _seen[ck] = L
+                return L
+            L = sem_layer_modes(mesh, self.m, k0)
+            _seen[ck] = L
+            self._modal_cache[ck] = L
+            if len(self._modal_cache) > _MODAL_CACHE_SIZE:
+                self._modal_cache.popitem(last=False)
+            return L
+
+        sup = modes(meshes[0])
+        sub = modes(meshes[-1])
+        mids = [(thk, modes(meshes[1 + i]))
+                for i, (thk, _fn, _key) in enumerate(self._layers)]
+        nlay = len(mids)
+        if mids:
+            ifc = [sem_interface_smatrix(sup, mids[0][1])]
+            for i in range(1, nlay):
+                ifc.append(sem_interface_smatrix(mids[i - 1][1], mids[i][1]))
+            ifc.append(sem_interface_smatrix(mids[-1][1], sub))
+            S = ifc[0]
+            for i, (thk, L) in enumerate(mids):
+                S = redheffer_star(S, propagation_smatrix(L["q"], thk))
+                S = redheffer_star(S, ifc[i + 1])
+        else:
+            S = sem_interface_smatrix(sup, sub)
+        if retain_internal and mids:
+            # partial cascades bracketing each layer (the FD solve() /
+            # PMMStack _internal_partials pattern, verbatim semantics)
+            S_above = [None] * nlay
+            S_above[0] = ifc[0]
+            for i in range(1, nlay):
+                S_above[i] = redheffer_star(
+                    redheffer_star(S_above[i - 1], propagation_smatrix(
+                        mids[i - 1][1]["q"], mids[i - 1][0])), ifc[i])
+            S_below_bot = [None] * nlay
+            S_below_bot[nlay - 1] = ifc[nlay]
+            for i in range(nlay - 2, -1, -1):
+                S_below_bot[i] = redheffer_star(
+                    redheffer_star(ifc[i + 1], propagation_smatrix(
+                        mids[i + 1][1]["q"], mids[i + 1][0])),
+                    S_below_bot[i + 1])
+            self._internal = dict(S_above=S_above, S_below_bot=S_below_bot)
+        S11, S12, S21, S22 = S
+        q = sup["q"]
+
+        def prop(L, eps):
+            # same dimensionless propagating gate as the FD path (P2-06 +
+            # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13)
+            qn = L["q"] / k0
+            return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
+                            & (np.sqrt(eps).real - qn.real > -5e-10))[0]
+
+        inc = prop(sup, self.eps_sup)
+        out = prop(sub, self.eps_sub)
+        R = np.array([np.sum([abs(S11[jp, j]) ** 2 for jp in inc])
+                      for j in inc])
+        T = np.array([np.sum([abs(S21[jp, j]) ** 2 for jp in out])
+                      for j in inc])
+        qi = q[inc].real
+        gamma = np.sqrt(np.maximum(self.eps_sup.real * k0 ** 2 - qi ** 2,
+                                   0.0))
+        angles = np.arcsin(np.clip(gamma / (np.sqrt(self.eps_sup.real) * k0),
+                                   0, 1))
+        self._last = dict(S=S, sup=sup, sub=sub, mids=mids, inc=inc, out=out,
+                          k0=k0, R=R, T=T)
+        return dict(q=qi, gamma=gamma, angles=angles, R=R, T=T,
+                    energy=R + T, inc=inc, out=out, S=S)
+
     # ---- retained-state observables (AUDIT_DYNAMETA_CONSUMER_API_GAPS C1) -- #
 
     def per_mode_amplitudes(self, port="reflection"):
@@ -597,8 +979,7 @@ class BORStack:
         # unit-flux incident columns: identity restricted to the inc set
         cinc = np.zeros((n2, len(inc)), dtype=complex)
         cinc[inc, np.arange(len(inc))] = 1.0
-        wq_f = np.real(sup["wq_face"])
-        wq_n = np.real(sup["wq_node"])
+        is_sem = sup.get("mesh") is not None      # SEM dicts carry the mesh
         A = np.zeros((len(mids), len(inc)))
         eye = np.eye(n2, dtype=complex)
         for i, (thk, L) in enumerate(mids):
@@ -617,6 +998,14 @@ class BORStack:
             # bottom (z = thk)
             E_bot = W @ (Xd[:, None] * c_fwd) + W @ c_bwd
             H_bot = V @ (Xd[:, None] * c_fwd) - V @ c_bwd
-            A[i] = (_stag_flux(E_top, H_top, wq_f, wq_n)
-                    - _stag_flux(E_bot, H_bot, wq_f, wq_n))
+            # per-layer weights: FD layers share one grid (sup's weights
+            # are everyone's); SEM layers each carry their own mesh
+            wq_f = np.real(L["wq_face"])
+            wq_n = np.real(L["wq_node"])
+            if is_sem:
+                A[i] = (_sem_flux(E_top, H_top, wq_f, wq_n, L["n1"])
+                        - _sem_flux(E_bot, H_bot, wq_f, wq_n, L["n1"]))
+            else:
+                A[i] = (_stag_flux(E_top, H_top, wq_f, wq_n)
+                        - _stag_flux(E_bot, H_bot, wq_f, wq_n))
         return A
