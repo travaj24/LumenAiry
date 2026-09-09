@@ -60,11 +60,13 @@ python validation/probe_pmm2d_staggered_mortar/m7_conditioning.py
 arguments; `m2b_converge.py` takes `M_B` first, then the `M_A` ladder.
 JSON results sit beside each script (`m*.json`) and are committed.
 
-`logs/` holds the verbatim stdout of the runs whose numbers reach the
+`logs/` (`.txt`, because the repo gitignores `*.log`) holds the verbatim stdout
+of the runs whose numbers reach the
 experiment document but whose JSON is partial (a run stopped after its
-informative points, to free the box for the next one): `m0b_diag.log`,
-`m2b_converge.log`, `m4c_equal_dof.log`, `m5_oop_mixed.log`,
-`m6c_staircase_1d.log`, `m7_conditioning.log`.
+informative points, to free the box for the next one): `m0b_diag.txt`,
+`m2b_converge.txt`, `m3_nonconforming.txt`, `m4b_perlayer_M.txt`,
+`m4c_equal_dof.txt`, `m5_oop_mixed.txt`,
+`m6c_staircase_1d.txt`, `m7_conditioning.txt`.
 
 Cost note: `m2_nested.py`, `m4_stripe_1d.py`, `m4c_equal_dof.py`,
 `m6c_staircase_1d.py` and `m3_nonconforming.py` at their upper rungs run region

@@ -1,0 +1,14 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+MORTAR  A(N=2, M_A) | B(N=3, M_B=7)
+  M_A= 7  err  2.99e-02     12.5s   eig-work 2.960e+08
+  M_A= 9  err  2.15e-03     16.1s   eig-work 4.063e+08
+  M_A=11  err  8.99e-04     29.1s   eig-work 7.841e+08
+  M_A=13  err  6.45e-04     99.0s   eig-work 1.801e+09
+  M_A=15  err  5.91e-04    291.3s   eig-work 4.127e+09
+
+UNION grid N=6 (one modal count for the whole stack)
+  M= 4    err  7.01e-03     28.0s   eig-work 5.442e+08
+  M= 5    err  5.56e-04    196.1s   eig-work 3.058e+09
+  M= 6    err  2.17e-05    561.4s   eig-work 1.166e+10
+
+[killed]

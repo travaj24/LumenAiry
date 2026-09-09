@@ -577,13 +577,29 @@ Layer B held at `(N=3, M=7)`, `M_A` walked on A's own `N=2` grid
 | 9 | 2.15e-03 | 16.1 s | 4.06e+08 |
 | 11 | 8.99e-04 | 29.1 s | 7.84e+08 |
 | 13 | 6.45e-04 | 99.0 s | 1.80e+09 |
+| 15 | 5.91e-04 | 291.3 s | 4.13e+09 |
 
-Against the union curve of §7.1: at ~16 s the per-layer arm reads 2.15e-03 and
-the union 7.01e-03 (3.3x better); at ~29 s the per-layer arm reads 8.99e-04
-where the union needs 141 s to reach 5.56e-04. **The per-layer route's
-error-vs-wall-time curve sits below the union's throughout the measured band**,
-and the lever that puts it there -- a different `M` per layer -- does not exist
-on the union grid.
+and the union arm measured in the SAME process for a fair wall-time comparison:
+
+| M | error vs 1-D | wall | eig-work |
+|---|---|---|---|
+| 4 | 7.01e-03 | 28.0 s | 5.44e+08 |
+| 5 | 5.56e-04 | 196.1 s | 3.06e+09 |
+| 6 | 2.17e-05 | 561.4 s | 1.17e+10 |
+
+Two readings, and the second is the more useful one:
+
+* **In the working band the per-layer curve sits below the union's**: at ~16 s
+  the per-layer arm reads 2.15e-03 against the union's 7.01e-03 at 28 s, and at
+  29 s it reads 8.99e-04 where the union needs 196 s to reach 5.56e-04.
+* **But it PLATEAUS at 5.9e-04**, because `M_B = 7` on layer B's `N=3` grid is
+  now the limiting error and no amount of `M_A` touches it. The union arm,
+  which raises both layers together, walks past it to 2.17e-05.
+  **The per-layer lever must be applied to the LIMITING layer**, which means a
+  per-layer convergence check (raise each `M_i` in turn and watch the answer),
+  not one global `M`. That is a real usability cost of the API and it belongs
+  in the docstring, not in a footnote: the union grid's single `M` is
+  *convenient* precisely because it cannot be mis-set per layer.
 
 ### 7.3 THE DECISIVE MEASUREMENT: equal degrees of freedom
 
@@ -981,4 +997,5 @@ corrections S-1 and S-2 already deleted two of those. On a uniform lattice a
 | **O-6** | A UNIFORM layer at `N = 1` is the cheapest region the engine can express, but a uniform layer at oblique incidence is degree-limited (`stack2d_pure`'s own caveat: its Bloch phase must be resolved in the modified-Legendre basis), and §4.3 shows that cost directly -- 2.7e-11 at `M=5` against 8.8e-17 at `M=7`, on grids of every kind. Measure `N=1` uniform layers at oblique before defaulting to them. |
 | **O-7** | The Wood-anomaly nudge (`_grazing_safe_wavelength`) and the tensor-diagonal gather in `PMM2DStackPure.solve` iterate the layer list, not a union cell, so they carry over -- but the `Nx, Ny = self._grid` fallback (`(2, 2)` when no patterned layer exists) has no per-layer meaning and must be replaced by the per-layer grid list. |
 | **O-8** | Grids are held per `(N, M)` AND per Bloch phase (`tau = exp(-i alpha0 d)`), so an angle sweep re-builds every basis. The 1-D geometry cache is keyed on content and has the same property; if angle sweeps become hot, split `Basis1D` into a tau-free part (the elementary matrices, which are tau-independent) and the tau-dependent glue. Not measured. |
+| **O-10** | **Per-layer `M` needs a per-layer convergence procedure.** §7.2 measures the failure mode directly: walking `M_A` alone plateaus at 5.9e-04 because layer B's own `M_B = 7` is the limiting error, while the union grid's single `M` walks past it to 2.17e-05. The build must ship a documented recipe (raise each `M_i` in turn, take the answer stationary in ALL of them) and the docstring must say that a per-layer solve can be stationary in one knob and wrong. |
 | **O-9** | The probe's `MortarStack2D` clamps `n_orders` silently and reports `n_orders_used`. The shipped version should RAISE above capacity (the classical/JAX siblings' behaviour) rather than clamp, so a user asking for orders the end grids cannot carry is told, not quietly served fewer. |

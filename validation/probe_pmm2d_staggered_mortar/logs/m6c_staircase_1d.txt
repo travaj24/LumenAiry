@@ -1,0 +1,17 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+
+=== case A: per-layer N = [2, 3, 6], LCM = 6 ===
+  q= 12 (dim 288) PER-LAYER  M_i=[7, 5, 3]  err  6.89e-02  closure  2.4e-03      2.5s
+  q= 12 (dim 288) UNION      M=3       err  1.56e-01  closure  2.3e-03      2.1s
+  q= 18 (dim 648) PER-LAYER  M_i=[10, 7, 4]  err  3.84e-03  closure  3.1e-05     46.4s
+  q= 18 (dim 648) UNION      M=4       err  1.84e-02  closure  3.3e-05     41.4s
+  q= 24 (dim 1152) PER-LAYER  M_i=[13, 9, 5]  err  3.93e-04  closure  2.2e-07    276.3s
+  q= 24 (dim 1152) UNION      M=5       err  1.04e-03  closure  2.2e-07    206.5s
+
+=== case B: per-layer N = [2, 3, 4], LCM = 12 ===
+  q= 12 (dim 288) PER-LAYER  M_i=[7, 5, 4]  err  4.94e-02  closure  4.3e-04      2.3s
+  q= 12 UNION: UNREACHABLE -- M >= 3 forces q >= 24 on the N=12 lattice
+  q= 24 (dim 1152) PER-LAYER  M_i=[13, 9, 7]  err  1.79e-04  closure  6.7e-10    261.1s
+  q= 24 (dim 1152) UNION      M=3       err  1.35e-02  closure  2.1e-04    268.1s
+
+[killed]
