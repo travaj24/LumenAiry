@@ -4,6 +4,73 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- OUT-OF-PLANE ANISOTROPY for the PURE (no-floor) staggered 2-D PMM
+
+`docs/PMM_ROADMAP.md` Phase C is now COMPLETE.  A tilted-director liquid
+crystal -- `e_xz`/`e_yz`/`e_zx`/`e_zy` != 0 -- can be solved by the no-floor
+2-D engine; it was previously the one tensor class only the FMM-floored hybrid
+`pmm_jones_2d` could take.
+
+* `pmm_jones_2d_staggered` and `PMM2DStackPure` accept a FULL `(3, 3)` cell.
+  An out-of-plane tile routes to a NEW first-order staggered generator on
+  `[E1; E2; G1; G2]` (dimension `4 q^2`, `Granet2DTransverseE._assemble_oop` +
+  `_region_modes_oop`), because out-of-plane coupling breaks Granet's Eq. 16 --
+  `div D = 0` no longer slaves `E_z` algebraically -- so the second-order
+  `2 q^2` pencil does not exist there.  `H_3` is eliminated STRONGLY (the curl
+  of a transverse E lands exactly in `Vw`), `E_3` WEAKLY through the
+  longitudinal curl-H row tested in `V3`, with the `e33`-Schur applied
+  POINTWISE per cell.  The de Rham placement, the staggered basis, the union
+  grid, the once-only far field and the no-floor property are all unchanged.
+* Forward and backward modes of such a layer are genuinely distinct (the
+  in-plane `[W; -V] <-> -lam` symmetry is broken), so a stack containing ANY
+  out-of-plane layer runs the GENERALIZED S-matrix cascade throughout, with
+  in-plane / uniform layers and the isotropic half-spaces entering as
+  `[[W, W], [V, -V]]`.  `retain_internal` / `layer_absorption` were generalized
+  to distinct forward/backward sets and reduce to the previous expressions term
+  for term for a symmetric region.
+* The forward/backward split is `rcwa._core._select_forward_flux` fed the
+  CHOLESKY-WHITENED blocks, so its harmonic sums ARE the Gram-weighted modal
+  flux; its DEEP-DECAY override is what classifies the polynomial basis's
+  unresolved harmonics, whose ~1e-14 relative flux has random sign.  Measured:
+  the split is exactly `2q^2 / 2q^2` in every configuration and the maximum
+  forward growth factor is exactly `1.0000e+00` at depths to 3 wavelengths.
+* DISPATCH, not a rewrite: the test is the hybrid's RELATIVE `1e-12 * scale`
+  off-plane floor, so a physically in-plane cell built by rotating a diagonal
+  tensor (whose xz/yz slots carry ~1e-17 float noise) stays on the in-plane
+  path and returns BYTE-IDENTICAL R/T/Jones.  `e33 == 0` still raises on both
+  branches.
+* Validation (docs/audits/BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md): uniform
+  out-of-plane slabs match the exact Berreman 4x4 to 2.1e-14 in R, 1.3e-13 in T
+  and 8.5e-14 in the complex Jones at normal, oblique AND conical incidence,
+  for lossless, LOSSY (whose 1.1e-01 absorption deficit is reproduced to the
+  same 1e-14) and NON-RECIPROCAL (`e13 = conj(e31)`, Hermitian) tensors, with
+  the diffraction-order leakage at 1e-26; the assembled generator reproduces
+  the exact quartic roots of `det(k k^T - |k|^2 I + eps) = 0` to 1.5e-14; a
+  y-uniform out-of-plane stripe matches `rcwa_jones_1d_segments` and
+  `pmm_jones_1d` per order to 1.6e-05 against their own 3.2e-06 mutual spread
+  (the module's documented dielectric-corner cap, not an out-of-plane defect),
+  with y-momentum conserved to 1e-27; a `(3,3)` cell with a RE-ENTRANT corner
+  sits at the two 2-D Fourier oracles' own mutual spread; a uniform
+  out-of-plane MULTILAYER matches the Berreman multilayer to 7.5e-15; one
+  0.4-wavelength layer equals two 0.2-wavelength layers to 8.9e-16; and the
+  lossy `layer_absorption` budget closes 9.1e-04 -> 2.1e-07 over M = 5..8.
+  Dropping, negating or TRANSPOSING the out-of-plane block moves the Berreman
+  residual by 11 decades, so every new term is load-bearing.
+* NO-FLOOR, two-sided: the result moves 2.6e-15 (normal) / 3.9e-09 (conical)
+  when the far-field order count goes 3 -> 8, while the hybrid's two rigorous
+  `E_z` elimination rules differ from EACH OTHER by 7.7e-04 on the same cell.
+* Cost: 1.33 - 2.03x the in-plane region solve in wall time (the dimension
+  doubles, but the pencil is Cholesky-whitened to a standard eig while the
+  in-plane path pays a QZ) and ~3.0x its peak working set.
+* Gauge note for maintainers: `Basis1D`'s `tau = exp(-i alpha0 p)` makes the
+  basis run as `exp(-i alpha0 x)` while the far-field kernel and the `eps_cell`
+  indexing run the other way; the composition is a 180-degree rotation about z
+  that in-plane tensor components are INVARIANT under (hence invisible until
+  now) and out-of-plane ones are not.  `twod_staggered._OOP_ROT_SIGN`
+  compensates it once, in the assembly, and is gated two-sided.
+* Still out of scope: anisotropic HALF-SPACES, SLANT x out-of-plane,
+  non-square grids and the JAX twin.
+
 ### Added -- IN-PLANE ANISOTROPY for the PURE (no-floor) staggered 2-D PMM
 
 `docs/PMM_ROADMAP.md` Phase C, in-plane half.  The staggered 2-D solver
