@@ -169,7 +169,8 @@ tests/unit/test_pmm2d_lossless_closure_two_sided.py
 tests/unit/test_audit_s1_3_pmm2d_lossless_tripwire.py
 tests/unit/test_v5_14_0_pmm2d_stack.py      test_pmm2d_staggered_anisotropic.py
 tests/unit/test_pmm2d_staggered_oop.py
--> 224 passed, 23 warnings in 462.68 s   (Windows)
+-> 224 passed, 23 warnings in 462.68 s   (Windows py3.14.6 / np 2.4.4)
+-> 224 passed, 24 warnings in 687.82 s   (WSL py3.12.3 / np 2.4.6)
 ```
 
 WARNING behaviour, captured fixture by fixture on both arms (`g3_warn.py`) --
