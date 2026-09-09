@@ -145,3 +145,28 @@ should measure it (a slanted cell walked onto a Rayleigh cutoff).
 B4 and B5 are the ones that cannot be replaced by an energy check: the lossless
 trap is the named hazard for slant work, and M4's own numbers show a staircase
 that conserves energy while sitting decades from the truth.
+
+### 6.4  Cost of the build
+
+| piece | size | risk |
+|---|---|---|
+| the congruence + the six blocks in `_assemble_oop` | ~40 lines | LOW -- every bracket already exists; `slant = 0` is bit-identical, which is a byte-level regression gate |
+| `slant=` through `add_layer` / the two entries + cache key | ~30 lines | LOW -- `any_oop` already promotes the cascade |
+| the frame-anchor phase in `solve` | ~6 lines | MEDIUM -- silent-wrong if omitted or mis-signed; gate B3 is mandatory |
+| the refusals | ~25 lines | LOW |
+| gates B1-B11 as tests | the eleven above | MEDIUM -- B4/B5/B6 need the oracles this probe already drives |
+
+No new module, no new basis function, no cascade change, no far-field change.
+
+---
+
+## 7.  Follow-ups this campaign did NOT do
+
+* `docs/PMM_ROADMAP.md` Phase D is left untouched (parallel agents are working
+  in other worktrees); the build should update Section 1's capability matrix
+  row "2-D slanted" and Section 4's Phase D entry, and record that the
+  "3.4x vs FMM" figure is an S-matrix-size ratio (S1.0), not a wall clock.
+* The Wood-anomaly `_eps_gr` question (S6.2 item 8).
+* `retain_internal` / `layer_absorption` under a slanted layer (S5).
+* A second BUILD for the numbers here, per `TESTING_STANDARDS.md` rule 5,
+  before any of them becomes a test bar.

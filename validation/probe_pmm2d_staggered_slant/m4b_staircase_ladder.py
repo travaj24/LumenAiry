@@ -63,14 +63,19 @@ def dd(a, b):
                for k in a if k in b)
 
 
-def run(N, M, th, ph, nsl=None):
+def run(N, M, th, ph, nsl=None, walk=-1.0):
+    """``walk`` is the DIRECTION the staircase marches the pillar, as a multiple
+    of the prototype's internal ``t``.  It is SCANNED (+1 and -1), not assumed:
+    the prototype's internal ``t`` is the NEGATIVE of the public / hybrid slant
+    convention (M4, M3), so a staircase built with ``walk = +1`` marches the
+    pillar the WRONG way and is the negative control."""
     if nsl is None:
         layers = [{"thickness": DEPTH, "cell": cell_at(N, 0.0),
                    "slant": (TX, 0.0)}]
     else:
         h = DEPTH / nsl
         layers = [{"thickness": h,
-                   "cell": cell_at(N, TX * DEPTH * i / nsl),
+                   "cell": cell_at(N, walk * TX * DEPTH * i / nsl),
                    "slant": (0.0, 0.0)} for i in range(nsl)]
     tt = time.time()
     o, R, T, _Jr, _Jt, _i = solve_slant_stack(
@@ -79,29 +84,34 @@ def run(N, M, th, ph, nsl=None):
             float(np.max(np.abs(R.sum(1) + T.sum(1) - 1.0))))
 
 
-PLAN = (("normal", 0.0, 0.0, 8, 3, (1, 2, 4)),
-        ("conical20_35", np.deg2rad(20), np.deg2rad(35), 8, 3, (1, 2, 4)),
-        ("normal", 0.0, 0.0, 12, 3, (1, 2, 3, 6)))
+PLAN = (("normal", 0.0, 0.0, 8, 3, (1, 2, 4), (-1.0, +1.0)),
+        ("conical20_35", np.deg2rad(20), np.deg2rad(35), 8, 3, (1, 2, 4),
+         (-1.0, +1.0)),
+        ("normal", 0.0, 0.0, 12, 3, (1, 2, 3, 6), (-1.0,)))
 
-for mount, th, ph, N, M, ns in PLAN:
-    key = f"{mount}/Nx{N}_M{M}"
+for mount, th, ph, N, M, ns, walks in PLAN:
     h = PX / N
     met, tm, cm = run(N, M, th, ph)
-    rows = {"h": h, "step_over_pillar_width": h / 0.3,
-            "metric": {"t_s": tm, "closure": cm,
-                       "dim": int(4 * (N * (M - 1)) ** 2)}}
-    print(f"\n[{key}]  h = {h:.3f} ({h / 0.3:.2f} pillar widths)  "
-          f"metric layer {tm:6.1f}s  |R+T-1| {cm:.2e}", flush=True)
-    for n in ns:
-        v, t, clo = run(N, M, th, ph, nsl=n)
-        rows[f"n{n}"] = {"vs_metric": dd(v, met), "t_s": t, "closure": clo,
-                         "lateral_step": TX * DEPTH / n,
-                         "cost_ratio": t / tm}
-        print(f"  staircase n={n:2d}  step {TX * DEPTH / n:.3f} "
-              f"({TX * DEPTH / n / 0.3:.2f} widths)  vs metric "
-              f"{dd(v, met):.3e}  {t:6.1f}s ({t / tm:.2f}x)  "
-              f"|R+T-1| {clo:.2e}", flush=True)
-    res[key] = rows
+    print(f"\n[{mount}/Nx{N}_M{M}]  h = {h:.3f} ({h / 0.3:.2f} pillar widths)"
+          f"  metric layer {tm:6.1f}s  |R+T-1| {cm:.2e}", flush=True)
+    for walk in walks:
+        key = f"{mount}/Nx{N}_M{M}/walk{'+' if walk > 0 else '-'}"
+        rows = {"h": h, "step_over_pillar_width": h / 0.3, "walk": walk,
+                "metric": {"t_s": tm, "closure": cm,
+                           "dim": int(4 * (N * (M - 1)) ** 2)}}
+        print(f"  -- staircase marching {'WITH' if walk < 0 else 'AGAINST'} "
+              f"the prototype's slant (walk = {walk:+.0f})", flush=True)
+        for n in ns:
+            v, t, clo = run(N, M, th, ph, nsl=n, walk=walk)
+            rows[f"n{n}"] = {"vs_metric": dd(v, met), "t_s": t,
+                             "closure": clo,
+                             "lateral_step": TX * DEPTH / n,
+                             "cost_ratio": t / tm}
+            print(f"     n={n:2d}  step {TX * DEPTH / n:.3f} "
+                  f"({TX * DEPTH / n / 0.3:.2f} widths)  vs metric "
+                  f"{dd(v, met):.3e}  {t:6.1f}s ({t / tm:.2f}x)  "
+                  f"|R+T-1| {clo:.2e}", flush=True)
+        res[key] = rows
 
 res["wall_s"] = time.time() - t00
 with open(os.path.join(OUT, "m4b_staircase_ladder.json"), "w") as f:

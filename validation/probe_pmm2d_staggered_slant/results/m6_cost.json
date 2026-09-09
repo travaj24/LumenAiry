@@ -1,0 +1,111 @@
+{
+ "lumenairy": "C:\\tmp\\lum_slantp\\lumenairy\\__init__.py",
+ "T6a_region": [
+  {
+   "M": 4,
+   "qq": 36,
+   "dim_inplane": 72,
+   "dim_oop": 144,
+   "asm_inplane": 0.0017184000025736168,
+   "eig_inplane": 0.006609899995964952,
+   "asm_oop": 0.002940999998827465,
+   "eig_oop": 0.024746400005824398,
+   "asm_slant_tensor": 0.0028333000009297393,
+   "eig_slant_tensor": 0.021430400003737304,
+   "asm_slant_scalar": 0.0026900000011664815,
+   "eig_slant_scalar": 0.022113699997134972,
+   "tot_inplane": 0.008328299998538569,
+   "tot_oop": 0.027687400004651863,
+   "tot_slant_tensor": 0.024263700004667044,
+   "tot_slant_scalar": 0.024803699998301454,
+   "slant_over_oop": 0.8763444744031729,
+   "slant_over_inplane": 2.9782428590053134,
+   "oop_over_inplane": 3.3244959967232672
+  },
+  {
+   "M": 5,
+   "qq": 64,
+   "dim_inplane": 128,
+   "dim_oop": 256,
+   "asm_inplane": 0.0028904999999213032,
+   "eig_inplane": 0.0324142999961623,
+   "asm_oop": 0.005576100003963802,
+   "eig_oop": 0.07500199999776669,
+   "asm_slant_tensor": 0.007094599997799378,
+   "eig_slant_tensor": 0.07173400000465335,
+   "asm_slant_scalar": 0.007584200000565033,
+   "eig_slant_scalar": 0.07387899999594083,
+   "tot_inplane": 0.0353047999960836,
+   "tot_oop": 0.08057810000173049,
+   "tot_slant_tensor": 0.07882860000245273,
+   "tot_slant_scalar": 0.08146319999650586,
+   "slant_over_oop": 0.9782881452995269,
+   "slant_over_inplane": 2.3074256193362563,
+   "oop_over_inplane": 2.2823553740757374
+  },
+  {
+   "M": 6,
+   "qq": 100,
+   "dim_inplane": 200,
+   "dim_oop": 400,
+   "asm_inplane": 0.007214500001282431,
+   "eig_inplane": 0.10685204999754205,
+   "asm_oop": 0.014004249998833984,
+   "eig_oop": 0.21417849999852479,
+   "asm_slant_tensor": 0.016023650001443457,
+   "eig_slant_tensor": 0.20702560000063386,
+   "asm_slant_scalar": 0.01640264999878127,
+   "eig_slant_scalar": 0.19782719999784604,
+   "tot_inplane": 0.11406654999882448,
+   "tot_oop": 0.22818274999735877,
+   "tot_slant_tensor": 0.22304925000207732,
+   "tot_slant_scalar": 0.2142298499966273,
+   "slant_over_oop": 0.9775026815333724,
+   "slant_over_inplane": 1.878112820970171,
+   "oop_over_inplane": 2.000435272213548
+  },
+  {
+   "M": 7,
+   "qq": 144,
+   "dim_inplane": 288,
+   "dim_oop": 576,
+   "asm_inplane": 0.014951549997931579,
+   "eig_inplane": 0.31034940000245115,
+   "asm_oop": 0.036941999998816755,
+   "eig_oop": 0.5945117499977641,
+   "asm_slant_tensor": 0.04747115000282065,
+   "eig_slant_tensor": 0.5830369499999506,
+   "asm_slant_scalar": 0.04694165000182693,
+   "eig_slant_scalar": 0.6254817500048375,
+   "tot_inplane": 0.3253009500003827,
+   "tot_oop": 0.6314537499965809,
+   "tot_slant_tensor": 0.6305081000027712,
+   "tot_slant_scalar": 0.6724234000066645,
+   "slant_over_oop": 0.9985024239798801,
+   "slant_over_inplane": 2.0670809599722144,
+   "oop_over_inplane": 1.94113712239647
+  }
+ ],
+ "T6b_end_to_end": [
+  {
+   "M": 5,
+   "vertical_s": 0.09703429999717628,
+   "slanted_s": 0.14267515000028652,
+   "ratio": 1.4703579044156387
+  },
+  {
+   "M": 6,
+   "vertical_s": 0.30742819999795756,
+   "slanted_s": 0.4001741000029142,
+   "ratio": 1.3016831247282221
+  },
+  {
+   "M": 7,
+   "vertical_s": 0.8088844499980041,
+   "slanted_s": 1.0764175499971316,
+   "ratio": 1.3307432847791643
+  }
+ ],
+ "T6c_staircase": "m4b_staircase_ladder.json not present -- run it first",
+ "wall_s": 14.642801284790039
+}

@@ -1,0 +1,16 @@
+{
+ "lumenairy": "C:\\tmp\\lum_slantp\\lumenairy\\__init__.py",
+ "prototype_vs_1d": {
+  "ex": 2.7576231432846487e-05,
+  "ey": 6.934672652642027e-07
+ },
+ "out_of_plane": {
+  "add_layer": "ACCEPTED",
+  "solve": "NotImplementedError: _layer_eigenmodes_tensor: a SLANTED layer with OUT-OF-PLANE coupling (eps_xz/yz/zx/zy) is not supported.  The 2-D slant metric is validated for IN-PLANE tensors only; the slant x out-of-plane composition is unvalidated (the 1-D gen2 precedent hit the lossless trap).  Use an in-plane tensor, or model the slant as a z-staircase of vertical out-of-plane layers."
+ },
+ "in_plane": {
+  "add_layer": "ACCEPTED",
+  "solve": "TypeError: only 0-dimensional arrays can be converted to Python scalars"
+ },
+ "wall_s": 13.373885154724121
+}
