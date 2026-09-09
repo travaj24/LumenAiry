@@ -78,7 +78,9 @@ def main():
     for Nx in (2, 3):
         for M in (5, 6, 7, 8):
             q = Nx * (M - 1)
-            if 6 * q * q > 3000:
+            # cap the (d) QZ: a 6q^2 = 1944 QZ takes minutes and the
+            # trend is already resolved by the rows below it
+            if 6 * q * q > 1400:
                 continue
             cell = pc.StaggeredCell(PX, PX, pc.tile(TIL, Nx, Nx), M, K0,
                                     0.3, 0.2)

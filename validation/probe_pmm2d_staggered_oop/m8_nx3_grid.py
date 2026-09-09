@@ -49,6 +49,12 @@ def lcell(er, eg, sx=0, sy=0):
     return e
 
 
+def upsample(ec, n):
+    """Pixel-replicate a coarse eps cell (rcwa_jones_2d refuses a cell sampled
+    below 4*n_orders+1 per axis)."""
+    return np.repeat(np.repeat(np.asarray(ec), n, axis=0), n, axis=1)
+
+
 def main():
     pc.banner("M8 -- (3,3) grid, non-centro-symmetric OOP feature")
     R = {}
@@ -61,8 +67,9 @@ def main():
         orc = {}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            for no in (9, 13):
-                _o, Rm, Tm, J = rcwa_jones_2d(PX, PY, ec, NSUB, NSUP, DEPTH,
+            for no in (7, 11):
+                fine = upsample(ec, int(np.ceil((4 * no + 1) / ec.shape[0])))
+                _o, Rm, Tm, J = rcwa_jones_2d(PX, PY, fine, NSUB, NSUP, DEPTH,
                                               WL, theta=th, phi=ph,
                                               n_orders_x=no, n_orders_y=no)
                 orc[("rcwa", no)] = (Rm.sum(axis=1), Tm.sum(axis=1), J)
@@ -75,11 +82,11 @@ def main():
             print(f"   {k[0]}({k[1]:2d})  Rtot = {v[0]}  |R+T-1| = "
                   f"{np.max(np.abs(v[0]+v[1]-1)):.2e}")
         spread = max(
-            float(np.max(np.abs(orc[("rcwa", 13)][0] - orc[("hyb", 13)][0]))),
-            float(np.max(np.abs(orc[("rcwa", 13)][1] - orc[("hyb", 13)][1]))))
-        spreadJ = float(np.max(np.abs(orc[("rcwa", 13)][2]
+            float(np.max(np.abs(orc[("rcwa", 11)][0] - orc[("hyb", 13)][0]))),
+            float(np.max(np.abs(orc[("rcwa", 11)][1] - orc[("hyb", 13)][1]))))
+        spreadJ = float(np.max(np.abs(orc[("rcwa", 11)][2]
                                       - orc[("hyb", 13)][2])))
-        print(f"   ORACLE SPREAD rcwa(13) vs hybrid(13): R/T {spread:.2e}  "
+        print(f"   ORACLE SPREAD rcwa(11) vs hybrid(13): R/T {spread:.2e}  "
               f"Jones {spreadJ:.2e}   <- the derived bar")
         R[f"oracle_spread_th{int(np.rad2deg(th))}"] = dict(RT=spread,
                                                            J=spreadJ)
@@ -92,7 +99,7 @@ def main():
                     candidate=cand, return_modes=True)
                 Rt, Tt = R2.sum(axis=1), T2.sum(axis=1)
                 dh = float(np.max(np.abs(Rt - orc[("hyb", 13)][0])))
-                dr = float(np.max(np.abs(Rt - orc[("rcwa", 13)][0])))
+                dr = float(np.max(np.abs(Rt - orc[("rcwa", 11)][0])))
                 dJ = float(np.max(np.abs(J2 - orc[("hyb", 13)][2])))
                 q = 3 * (M - 1)
                 print(f"    ({cand}) {M:2d} {2*q*q:5d}  {dh:.2e}        "

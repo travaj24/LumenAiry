@@ -18,7 +18,61 @@ python started and asserted `lumenairy.__file__` --
 
 ## VERDICT
 
-PLACEHOLDER-VERDICT
+| candidate | dimension | eig | verdict |
+|---|---|---|---|
+| **(a)** first-order staggered generator on `[E1; E2; G1; G2]` | `4 q^2` | Cholesky-whitened standard eig | **GO** |
+| **(d)** quadratic E-form keeping `div(D) = 0`, linearized | `6 q^2` | QZ (singular leading coefficient) | **PARTIAL -- correct but strictly dominated** |
+
+The two are the SAME discretization: candidate (d)'s spectrum is candidate
+(a)'s spectrum to 3e-11 plus exactly `q^2` null modes at `gamma = 0` plus
+`q^2` eigenvalues at infinity (S5 T2b), and every observable in M2, M4, M5, M6
+agrees between them to the printed digits.  (d) costs 8 - 19x the eig and
+needs an extra eigenvalue-magnitude filter that (a) does not; it earns its
+place as the DERIVATION that proves the exact reduction to the shipped
+E-form, not as the integration route.
+
+**The decisive numbers for candidate (a):**
+
+* **dispersion** -- the fundamental harmonic's four exact quartic roots to
+  **2.8e-14** at normal AND conical incidence with an out-of-plane tensor; the
+  wrong-sign assembly sits at **4.7e-02** (12 decades of separation), and every
+  higher harmonic converges spectrally in `M`;
+* **spurious census** -- of `4 q^2` modes, the ones not on a physical branch
+  are ALL deep evanescent (`Re(lam) >= 5.75`, ten times
+  `_select_forward_flux`'s deep-decay bar) with relative flux **2.1e-14**; the
+  forward/backward split came out exactly `2q^2 / 2q^2` in every one of the 72
+  cascade rows;
+* **Berreman** -- `dR = 5.6e-16`, `dJones = 1.6e-15` on a uniform out-of-plane
+  slab at oblique (M = 9), `3.2e-15 / 8.2e-15` at conical (M = 7), for
+  lossless, lossy AND non-reciprocal tensors, with the order leakage
+  identically zero; the drop / negate / transpose negative controls sit at
+  **1.2e-04 .. 2.1e-03**;
+* **1-D per order** -- **2.7e-06 / 9.3e-06** against `rcwa_jones_1d` and
+  `pmm_jones_1d` (whose own mutual spread is 2.4e-08 .. 5.6e-06), with
+  y-momentum conserved to **1e-30**;
+* **cascade** -- lossless closure **1e-13** (uniform) at 0.25, 1 AND 3
+  wavelengths with a forward growth factor of exactly **1.0000e+00**;
+* **cost** -- **1.7 - 2.4x** the in-plane `2 q^2` path, and the normal-incidence
+  parity-times-sign involution that `_generator_block_eig` exploits HOLDS on
+  the staggered generator (`||R A R + A|| / ||A|| = 2.3e-15`), so a `2 q^2`
+  accelerator is available there.
+
+**One premise of the plan was refuted and replaced.**  "For a uniform cell the
+generator's spectrum must equal the union over Bloch harmonics of the exact
+quartic roots to ~1e-12" is an IDENTITY in a Fourier basis and a CONVERGENCE
+statement in this polynomial one: at `Nx = 2, M = 10` the staggered basis
+carries only 4 of its 18 harmonics per axis to 1e-8 (S5 T1b).  The gate was
+re-derived per harmonic with an M-ladder, which is sharper, and the census was
+re-run against the DISCRETE channel wavenumbers so that "unresolved harmonic"
+and "spurious mode" stop being conflated.
+
+**One physics degeneracy will trap the integration's tests if it is not
+written down.**  The dispersion relation is invariant under `eps -> eps^T`, so
+NO dispersion or energy measurement can detect a swapped `e13 / e31`
+placement; and negating the out-of-plane block is an exact symmetry whenever
+the director azimuth equals the incidence azimuth.  The gates therefore need a
+NON-RECIPROCAL tensor and a director azimuth different from the incidence
+azimuth (S6).
 
 ---
 
@@ -721,19 +775,177 @@ flux split.
 
 ## S11.  M7 -- cost, and the normal-incidence block structure
 
-PLACEHOLDER-M7
+### T1  dimension and eig wall time (single-threaded, tilted uniaxial cell)
+
+The in-plane E-form is a `2 q^2` generalized eig (`scipy.linalg.eig(L, G)`);
+candidate (a) is a `4 q^2` HERMITIAN-whitened standard eig (Cholesky of the
+block Gram, then `numpy.linalg.eig`); candidate (d) is a `6 q^2` QZ, because
+its leading coefficient `P2` is singular.
+
+| Nx | M | q | E-form dim / time | (a) dim / time | (d) dim / time | (a)/E-form | (d)/(a) |
+|---|---|---|---|---|---|---|---|
+| 2 | 5 | 8 | 128 / 0.03 s | 256 / 0.07 s | 384 / 0.57 s | 2.4x | 7.9x |
+| 2 | 6 | 10 | 200 / 0.09 s | 400 / 0.20 s | 600 / 1.86 s | 2.2x | 9.3x |
+| 2 | 7 | 12 | 288 / 0.26 s | 576 / 0.55 s | 864 / 6.86 s | 2.1x | 12.4x |
+| 2 | 8 | 14 | 392 / 0.66 s | 784 / 1.20 s | 1176 / 17.47 s | 1.8x | 14.6x |
+| 3 | 5 | 12 | 288 / 0.28 s | 576 / 0.56 s | 864 / 6.66 s | 2.0x | 11.9x |
+| 3 | 6 | 15 | 450 / 0.96 s | 900 / 1.64 s | 1350 / 31.74 s | 1.7x | 19.3x |
+
+**Candidate (a) costs 1.7 - 2.4x the in-plane path** -- far less than the
+`(4/2)^3 = 8x` a naive dimension count predicts, because the in-plane path
+pays a QZ (`eig(L, G)`) while (a) pays a Cholesky-whitened standard eig on a
+matrix twice the size.  **Candidate (d) costs 8 - 19x candidate (a)**, and the
+ratio GROWS with dimension (the QZ's constant against the standard eig's).
+The plan's estimate of "~3.4x the eig of (a)" for (d) is an UNDER-estimate by
+a factor of 2 to 6 at these sizes.
+
+For context, the hybrid `pmm_jones_2d` OOP path on the same physical cell
+takes 3.1 s at `n_orders = 7`, 8.7 s at 9 and 24.0 s at 11 (M5), while
+candidate (a) resolves the same cell in 1.3 - 3.0 s at M = 7 - 8 with a result
+that does not move with `n_orders`.
+
+### T2  the normal-incidence anti-commuting involution
+
+`_generator_block_eig` gets all `4N` eigenpairs from ONE `2N` eig when a
+signed permutation `R = S (I4 (x) F)` ANTI-commutes with the generator, `F`
+being the Fourier order flip and `S = diag(I, I, -I, -I)`.  The staggered
+analogue of `F` is the EXACT parity of the modified-Legendre dofs: `x -> d - x`
+maps segment `s -> N-1-s`, swaps the two half-hats and multiplies the
+degree-`a` bubble by `(-1)^a`, so the continuous hats permute (node `k -> N-k`)
+and the bubbles carry a sign -- a signed permutation, valid when `tau = 1`
+(normal incidence).  Built explicitly and verified on the ASSEMBLED pencil:
+
+| cell | Nx | M | parity-map residual | R^2 - I | `\|\|R A R + A\|\| / \|\|A\|\|` | `\|\|R B R - B\|\| / \|\|B\|\|` |
+|---|---|---|---|---|---|---|
+| uniform OOP | 2 | 6 | 2.2e-16 | 4.4e-16 | **2.80e-14** | 3.2e-16 |
+| uniform OOP | 2 | 7 | 2.2e-16 | 4.4e-16 | **1.68e-14** | 2.1e-16 |
+| uniform OOP | 4 | 5 | 3.3e-16 | 4.4e-16 | **2.60e-15** | 3.1e-16 |
+| CENTRO-symmetric pillar OOP | 2 | 6 | 2.2e-16 | 4.4e-16 | **2.80e-14** | 3.2e-16 |
+| CENTRO-symmetric pillar OOP | 4 | 5 | 3.3e-16 | 4.4e-16 | **2.99e-15** | 3.1e-16 |
+| OFF-CENTRE pillar OOP | 2 | 6 | 2.2e-16 | 4.4e-16 | **7.28e-01** | 3.2e-16 |
+| OFF-CENTRE pillar OOP | 2 | 7 | 2.2e-16 | 4.4e-16 | **5.76e-01** | 2.1e-16 |
+| OFF-CENTRE pillar OOP | 4 | 5 | 3.3e-16 | 4.4e-16 | **3.59e-01** | 3.1e-16 |
+
+and the involution splits into two sectors of exactly `2 q^2` (`288 / 288` at
+`Nx = 2, M = 7`).
+
+**The structure transplants.**  `R A R = -A` to 2.6e-15 .. 2.8e-14 and
+`R B R = B` to 3e-16 on uniform and centro-symmetric cells, so at normal
+incidence the `4 q^2` eig can be replaced by one `2 q^2` eig by exactly
+`_generator_block_eig`'s algebra.  The OFF-CENTRE row is the two-sided half of
+the claim: 0.36 - 0.73, i.e. the structure genuinely FAILS there -- which is
+precisely the case that function's docstring already warns about ("a cell
+whose permittivity is centro-symmetric but whose spectral-element WALLS are
+not ... is refused here by measurement").  A library integration should keep
+the same verify-then-use gate rather than trusting a geometry test.
 
 ---
 
 ## S12.  Scored against the plan's verdict rule
 
-PLACEHOLDER-SCORE
+The plan's rule: *GO for a candidate only if 1, 2, 4, 6 pass at their derived
+bars AND the spurious census is empty or provably benign
+(bounded-and-priced); otherwise NO-GO with the failure mechanism pinned by
+measurement.*
+
+| gate | derived bar | candidate (a) | candidate (d) |
+|---|---|---|---|
+| **M1 dispersion** | the exact quartic roots of the resolved harmonics; the discriminating quantity is the sum of the (0,0) roots, whose wrong-sign value differs by 4.2e-02 | (0,0) residual **2.8e-14**, sum error **3.9e-14**; every harmonic converges spectrally | (0,0) residual **6.5e-15**, sum error **9.6e-15**; identical ladder | 
+| **M2 Berreman** | the exact 4x4 oracle, closing to 1e-15 itself; the negative controls sit at 3.8e-05 .. 2.1e-03 | **dR 5.6e-16, dJones 1.6e-15** at M = 9 oblique; conical 3.2e-15 / 8.2e-15 at M = 7; order leak exactly 0 | **dR 1.0e-15, dJones 2.5e-15** at M = 8 conical |
+| **M4 1-D per order** | the two 1-D engines' own spread, 2.4e-08 .. 5.6e-06 | **2.7e-06 / 9.3e-06** at M = 8 on the weak-contrast cell; 1.4e-05 on the corner cell (the shipped basis's documented corner cap), monotone | identical to (a) to the printed digits |
+| **M6 cascade** | closure must be small AND not drift with depth; growth factor must not exceed 1 | closure **1e-13** (uniform) / **2.7e-06 at M=7** (corner pillar) at 0.25, 1 AND 3 wavelengths; growth **1.0000e+00** everywhere; split exactly 2q^2/2q^2 in every row | identical |
+| **spurious census** | empty, or bounded and priced | **BENIGN**: everything off-branch is deep-evanescent (`min Re(lam) 5.75`, i.e. 10x the `_select_forward_flux` deep-decay bar) and flux-null at **2.1e-14** relative | **PRICED**: additionally `q^2` modes at `q = 0` carrying up to **1.6e-01** relative flux, which are neither flux-null nor decay-classified and MUST be removed by an explicit `abs(q)` filter before the split |
+| **M3 in-plane reduction** (not a gate, but the plan asks) | equivalent vs merely convergent | **EQUIVALENT** (1e-11 spectra, 1e-15 observables) | **EQUIVALENT, and BIT-IDENTICAL at the operator level** |
+
+**Candidate (a): GO.**  Every gate passes with 10 to 12 decades between the
+measurement and its negative control, and the census is benign under
+machinery the library already ships.
+
+**Candidate (d): PARTIAL.**  It passes the same four gates with the same
+numbers -- M1 T2b shows it IS candidate (a)'s spectrum plus a null space -- so
+it is not wrong.  It is DOMINATED: `6 q^2` instead of `4 q^2`, a QZ instead of
+a Hermitian-whitened standard eig, and a null space that must be filtered by
+eigenvalue magnitude (a filter that would collide with a genuine
+`abs(q) -> 0` at a Rayleigh cutoff, exactly where the shipped module already
+warns).  Its one advantage -- the exact operator-level reduction to the
+shipped E-form -- is available to (a) too at 1e-11, and (d) remains valuable
+as the DERIVATION that proves the reduction (S3, M3 T3).
 
 ---
 
 ## S13.  Recommended integration route
 
-PLACEHOLDER-ROUTE
+**Formulation: candidate (a)** -- the first-order staggered generator on
+`[E1; E2; G1; G2]`, `A x = q B x` with `B = blkdiag(M1, M2, M2, M1)` (S2).
+
+**1. Assembly.**  `Granet2DTransverseE` already builds every ingredient; the
+tensor path adds NINE eps-weighted masses (`A11..A33`, of which `A12`, `A21`
+are Stage A's Eq.-40 mixed blocks and `A13`, `A23`, `A31`, `A32` are new) and
+SIX eps-weighted div-D blocks (`K11..K23`, of which `K11`, `K22` are the
+shipped `Kzt_E1`/`Kzt_E2`, `K12`, `K21` are Stage A's, and `K13`, `K23` are
+new).  All fifteen are the SAME `_eps_dir` kron assembly with a different
+component map -- `probe_common.StaggeredCell._assemble` is 20 lines and the
+library version would be shorter still since the pieces exist.  Retain nothing
+new (audit P3-37): the OOP blocks go into `A` and `B` and the locals die.
+
+**2. Mode entry.**  A new `_region_modes_oop(solver)` returning the 6-tuple
+`(Wf, Vf, lam_f, Wb, Vb, lam_b)` -- the same shape
+`rcwa._core._layer_eigenmodes_tensor` returns on its OOP branch, and the same
+shape the PMM slant path already consumes.  Inside: Cholesky-whiten `B`,
+`numpy.linalg.eig`, then split.
+
+**3. The split MUST be flux-based with the deep-decay override.**  Reuse
+`rcwa._core._select_forward_flux` verbatim by feeding it the CHOLESKY-WHITENED
+blocks `[L1 e1; L2 e2; L2 g1; L1 g2]` with `M1 = L1^H L1`, `M2 = L2^H L2`:
+its plain harmonic sums then reproduce the Gram-weighted flux
+`Sz = Im(e1^H M1 g2 - e2^H M2 g1)` EXACTLY (the PMM_ROADMAP C-FLUX rule --
+`probe_common.split_forward`, 8 lines).  M6 measured this split at exactly
+`2q^2 / 2q^2` in every one of its 72 rows, with `max exp(-Re(lam) k0 L) =
+1.0000e+00` at depths up to 3 wavelengths.  A bare `Re(gam)` split or a bare
+flux split will NOT do: the off-branch modes have 1e-14 relative flux of
+RANDOM SIGN, and it is the `|Re gam| > 0.5` override that classifies them
+(they sit at `Re(lam) >= 5.75`, ten times the bar).
+
+**4. Cascade.**  `_modes_to_M` + `_interface_smatrix_general` +
+`_propagation_smatrix_general` + the shipped `_redheffer_star`, with the
+ISOTROPIC half-spaces entering as `[[W, W], [V, -V]]`.  Measured: the
+generalized interface reproduces the shipped square `_interface_smatrix` to
+**7.9e-14 (S11) / 7.7e-14 (S21)** on an isotropic pair at normal and
+**1.0e-13 / 9.3e-14** at conical, so mixed isotropic / OOP stacks cost nothing
+in accuracy.
+
+**5. The H-partner.**  Use the STRONG rows `G1 = D2 E3 - i q E2` (in V2),
+`G2 = i q E1 - D1 E3` (in V1) rather than Eq. 25 -- simpler, and it is the
+same object: M0.4 measured `V_shipped = -i * V_strong` to a spread of
+**6.5e-12** over 200 modes, a global constant that cancels in every S-matrix.
+
+**6. The sign.**  Flip `Basis1D`'s `tau` to `exp(+i alpha0 p)` AND
+`_stag_fourier_projection`'s kernel together (S0), so the transverse
+derivative and the longitudinal `exp(+i gamma z)` share one handedness and the
+OOP blocks carry no compensating sign.  Gate it with the M1 T3
+discriminator (the sum of the four (0,0) roots; wrong sign = 4.2e-02 against a
+reference of 3.9e-14) -- four lines, and it is the ONLY thing standing between
+this and a seventh copy of the factor-i defect.
+
+**7. Guards.**  `e33 != 0` (the `A33` solve; mirror `_require_nonzero_ezz`),
+square grid, and the existing grazing / Rayleigh-cutoff warning -- the latter
+matters MORE here, because a `q -> 0` mode is what the (d) null filter would
+collide with and what makes the `V ~ 1/gamma` amplification worst.
+
+**8. Cost.**  1.7 - 2.4x the in-plane path's eig (M7 T1), and the far-field,
+the Redheffer algebra, the cache keying and `layer_absorption` all carry over
+unchanged.  At NORMAL incidence on a centro-symmetric cell the parity-times-
+sign involution holds on the assembled generator (M7 T2), so the `4 q^2` eig
+can be replaced by one `2 q^2` eig with
+`rcwa._core._generator_block_eig`'s algebra -- an optional accelerator, gated
+the same verify-then-use way.
+
+**Gates the integration should carry** (all measured here, so their bars are
+derived): M1 T3 sign arbitration; M2 against `berreman_jones_1d` for a
+uniform OOP layer at normal / oblique / conical, INCLUDING a non-reciprocal
+tensor and a director azimuth different from the incidence azimuth (S6); M3's
+bit-identity reduction to the scalar path; M4's per-order agreement with
+`pmm_jones_1d` / `rcwa_jones_1d` plus the y-momentum zero; M6's depth ladder.
 
 ---
 

@@ -45,6 +45,14 @@ def cell(er, eg):
     return e
 
 
+def upsample(ec, n):
+    """Pixel-replicate a coarse eps cell to (n*Nx, n*Ny).  ``rcwa_jones_2d``
+    refuses a cell sampled below 4*n_orders+1 per axis (Fourier aliasing), so
+    the RCWA oracle gets an EXACTLY equivalent, finely sampled copy of the same
+    geometry."""
+    return np.repeat(np.repeat(np.asarray(ec), n, axis=0), n, axis=1)
+
+
 def totals(o, Rm, Tm):
     return Rm.sum(axis=1), Tm.sum(axis=1)
 
@@ -83,23 +91,24 @@ def main():
               f"{floorJ:.2e}   <- the oracle's own floor")
         # SECOND cross-engine oracle: rcwa_jones_2d (Fourier, full 3x3)
         rc = {}
-        for no in (9, 13):
+        for no in (7, 11):
+            fine = upsample(ec, int(np.ceil((4 * no + 1) / ec.shape[0])))
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                _o, Rm, Tm, J = rcwa_jones_2d(PX, PY, ec, NSUB, NSUP, DEPTH,
+                _o, Rm, Tm, J = rcwa_jones_2d(PX, PY, fine, NSUB, NSUP, DEPTH,
                                               WL, theta=th, phi=ph,
                                               n_orders_x=no, n_orders_y=no)
             rc[no] = (Rm.sum(axis=1), Tm.sum(axis=1), J)
             print(f"    rcwa_jones_2d n_orders={no:2d}  Rtot = {rc[no][0]}  "
                   f"|R+T-1| = {np.max(np.abs(rc[no][0]+rc[no][1]-1)):.2e}")
-        cross = max(float(np.max(np.abs(rc[13][0] - hy[top][0]))),
-                    float(np.max(np.abs(rc[13][1] - hy[top][1]))))
-        print(f"    hybrid(13) vs rcwa(13): R/T spread {cross:.2e}, Jones "
-              f"{np.max(np.abs(rc[13][2]-hy[top][2])):.2e}  <- the ORACLE "
+        cross = max(float(np.max(np.abs(rc[11][0] - hy[top][0]))),
+                    float(np.max(np.abs(rc[11][1] - hy[top][1]))))
+        print(f"    hybrid(13) vs rcwa(11): R/T spread {cross:.2e}, Jones "
+              f"{np.max(np.abs(rc[11][2]-hy[top][2])):.2e}  <- the ORACLE "
               f"SPREAD (the derived bar)")
         R[f"hybrid_floor_th{int(np.rad2deg(th))}"] = dict(
             RT=floor, J=floorJ, cross=cross,
-            crossJ=float(np.max(np.abs(rc[13][2] - hy[top][2]))))
+            crossJ=float(np.max(np.abs(rc[11][2] - hy[top][2]))))
         print("   cand  M   dim    t[s]   |dRtot| vs hybrid  |dTtot|   "
               "|dJones|    |R+T-1|")
         for cand, Ms in (("a", (5, 6, 7, 8)), ("d", (5, 6, 7))):
