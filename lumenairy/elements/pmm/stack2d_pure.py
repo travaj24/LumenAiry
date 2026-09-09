@@ -46,6 +46,19 @@ containing ANY out-of-plane layer runs the GENERALIZED S-matrix cascade
 throughout (uniform and in-plane layers and the half-spaces entering as
 ``[[W, W], [V, -V]]``).  ``retain_internal`` / :meth:`layer_absorption` work
 on that path too.  The half-spaces stay isotropic.
+
+A layer may also be MAGNETIC: ``add_layer(..., mu=scalar | (3,3))`` or
+``add_layer(..., mu_cell=(Nx,Ny) | (Nx,Ny,3,3))`` gives it a BLOCK-FORM
+relative permeability, which enters the SAME second-order pencil through
+Granet's ``chi_t = [mu_t]^-1`` weights (see
+:mod:`lumenairy.elements.pmm.twod_staggered`, "MAGNETIC media").  Any
+combination with the ``eps`` side is allowed -- a uniform eps with a patterned
+mu included -- and the uniform side is broadcast onto the union grid.  A
+magnetic layer takes its own region eig (it cannot ride the shared eps-free
+geometric one), deduped by ``(eps bytes, mu bytes)``.  Out-of-plane mu, mu with
+an out-of-plane eps, and MAGNETIC HALF-SPACES (``mu_superstrate`` /
+``mu_substrate``, which exist only to raise) are out of scope.  Losslessness --
+the closure tripwire's precondition -- means Hermitian eps AND Hermitian mu.
 (The historical 'A|B blows up energy' defect that once limited this class to a
 single patterned layer was NOT an interface/mode-sorting problem: it was the
 far-field projection-kernel order MIRROR in ``_stag_fourier_projection`` --

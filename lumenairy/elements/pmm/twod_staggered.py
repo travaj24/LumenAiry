@@ -70,6 +70,53 @@ Both routes keep the ISOTROPIC half-spaces (the Rayleigh match is scalar), as
 the hybrid does, and a cell whose out-of-plane entries are float noise stays
 BIT-IDENTICAL to the in-plane path (the dispatch floor is relative).
 
+MAGNETIC media -- a block-form PERMEABILITY tensor
+--------------------------------------------------
+``mu_cell`` (``None`` = nonmagnetic, and then every operator below is
+BIT-IDENTICAL to the nonmagnetic path) carries a scalar ``(Nx, Ny)`` or
+BLOCK-FORM ``(Nx, Ny, 3, 3)`` relative permeability, Granet Eq. 6
+``[[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]``.  The paper's equations are
+ALREADY the magnetic ones: with ``[chi_t] = [mu_t]^-1`` (the POINTWISE 2x2
+inverse -- exact for the piecewise-constant cells this basis is built on) and
+``chi33 = 1/m33``,
+
+  * ``R = C[chi_t]C`` (Eq. 24, Appendix-A Eq. 39) -- the C-rotation SWAPS the
+    transverse indices, so ``R11`` carries ``chi22`` and ``R22`` ``chi11``,
+    and the two MIXED blocks (``chi21`` in V1xV2, ``chi12`` in V2xV1) are
+    kron'd from the UNLIKE-set 1-D masses exactly like the Eq. 40 eps blocks;
+  * ``K_tz = C[chi_t][d2; -d1]`` (Eq. 21, A43) -- row 1 becomes
+    ``-chi22 d1 + chi21 d2`` and row 2 ``-chi11 d2 + chi12 d1``;
+  * ``S_tt`` is the ``chi33``-weighted curl-curl (Eq. 20, A42): the Vw-space
+    inner product between the two curls becomes ``chi33``-weighted, i.e. the
+    mimetic middle operator ``Gw^-1 -> Gw^-1 Gw_chi Gw^-1``.
+
+``[eps_t]``, ``Meps33`` and ``K_zt`` are untouched (they carry permittivity
+only), the pencil keeps its ``2 q^2`` dimension, and ``G = -R`` stays Hermitian
+positive definite for a Hermitian positive-definite ``[mu_t]``.
+
+THE ONE TRAP.  With ``chi_t = I`` the shipped code uses a SINGLE object
+(``-Rmat``) for two roles: the pencil's right-hand matrix AND the block field
+Gram that recovers the Eq.-25 H partners.  With ``chi_t != I`` they are
+DIFFERENT operators -- Eq. 25 (``gamma C [H1;H2] = [k^2 eps_t + S_tt][E1;E2]``)
+carries no ``chi_t`` at all -- so the plain Gram is retained separately
+(``Ggram_blocks``, the two ``q^2`` diagonal blocks) and :func:`_region_modes`
+projects with it.  Collapsing the two applies ``[chi_t]^-1`` to every H partner:
+an interface error invisible to the eigenvalues and to any renormalised energy
+check, and measured at 2.1e-01 against the analytic oracle (build doc
+``BUILD_PMM2D_STAGGERED_MAGNETIC_2026_09_10.md`` M1b) where the correct
+separation reads 1.9e-14.
+
+Scope of the magnetic route: IN-PLANE (block-form) only -- an out-of-plane
+``mu``, or a ``mu`` together with an out-of-plane ``eps``, raises
+``NotImplementedError`` (the first-order out-of-plane generator has no
+permeability blocks).  Half-spaces stay NONMAGNETIC: the Rayleigh flux
+normalisation and the incident-amplitude overlap both assume the vacuum wave
+impedance, so ``mu_superstrate`` / ``mu_substrate`` exist only to RAISE.  A
+uniform magnetic layer cannot ride the shared eps-free geometric eig
+(:func:`_homog_geom_cache` raises) and takes its own region eig, deduped by
+``(eps bytes, mu bytes)``.  Losslessness now means Hermitian eps AND Hermitian
+mu (a gyrotropic ``m12 = -m21 = i b`` absorbs nothing).
+
 ACCURACY NOTE for out-of-plane cells with a RE-ENTRANT (270-degree) corner:
 the uniform, straight-walled and convex regimes are machine-exact to
 oracle-limited, and a (3, 3) L-shaped feature -- the hardest cell measured --
@@ -110,8 +157,10 @@ Eigenvalue ``gamma^2/k0^2 = n_eff^2``; derivatives are ``(1/k0) d/dx``.
 
 Equations implemented (Granet 2023, verified against the paper):
   Eq.23-24 :  -gamma^2 R [E1;E2] = L [E1;E2];  R = C[chi_t]C (nonmagnetic
-              chi_t=I -> R=C@C=-I);  L = k^2[eps_t] + S_tt - K_tz(eps33)^-1 K_zt
-  Eq.20-22 :  S_tt = [d2;-d1] chi33 [d2,-d1];  K_tz = C[d2;-d1];
+              chi_t=I -> R=C@C=-I; magnetic -> the four chi-weighted blocks
+              of Appendix-A Eq.39);  L = k^2[eps_t] + S_tt - K_tz(eps33)^-1 K_zt
+  Eq.20-22 :  S_tt = [d2;-d1] chi33 [d2,-d1];  K_tz = C[chi_t][d2;-d1]
+              (nonmagnetic C[d2;-d1]);
               K_zt = [d1 e11 + d2 e21, d2 e22 + d1 e12]  (isotropic
               reduction: [d1 eps, d2 eps])
   Eq.16-18 :  E3 slaved by div(D)=0 (the Schur term)
