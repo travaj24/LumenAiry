@@ -139,68 +139,140 @@ def test_g1_public_entries_agree_on_a_scalar_cell():
 
 
 # =========================================================================== #
-# G2 -- PUBLISHED ORACLE (Granet 2023 Table 2, Fig. 4 anisotropic grating).
+# G2 -- PUBLISHED ORACLE.  Li, J. Opt. A 5, 345 (2003), Example 1 (p. 352) and
+# Table 1 (p. 353) -- the ORIGINAL of the grating Granet 2023 re-uses as his
+# Fig. 4 / Tables 2-3 second example ("The FMM values come from an in-house
+# code and correspond perfectly with those reported by Li [1]").
 #
-# HONEST RECORD (2026-09-09, build doc T2).  The ABSOLUTE Table-2 efficiencies
-# are NOT reproduced by this build under ANY reading tried -- 32 combinations
-# of {axis assignment (2.4,1.4)/(1.4,2.4)} x {which tensor is the pillar} x
-# {conjugated / not} x {eps_sub = 1+5i / 1-5i}, each under four transmitted-
-# efficiency definitions, plus vacuum-host and index-vs-permittivity substrate
-# readings: the best maximum deviation over the four quoted orders is 2.65e-2
-# (paper (0,0) = 0.2979 vs this build 0.528 under the Poynting-flux definition,
-# or 0.302 under a bare |t|^2).  Per the plan this is RECORDED, NOT TUNED, and
-# the physics claim is carried by G3/G4/G5 (Berreman to ~1e-14, the 1-D
-# engines to ~4e-6, and the two independent 2-D engines to ~6e-4).
+# READING (verification 2026-09-09, VERIFY doc section G2; Granet's own
+# statement of this geometry carries two transcription errors that made it
+# irreproducible, and Li states it unambiguously):
 #
-# What the paper DOES discriminate, and what is asserted here, is the SIGN of
-# the gyrotropic +/- order asymmetry: it is invisible to every energy check
-# and it is exactly the observable a wrong e12/e21 sign (or a missing
-# conjugation bridge) flips.
+#   d1 = 2.4 lam0 (x), d2 = 1.4 lam0 (y), h = lam0, w1/d1 = w2/d2 = 0.5,
+#   n^(+1) = 1.0, n^(-1) = 1.0 + i5.0        <-- a refractive INDEX, so the
+#                                                substrate permittivity is
+#                                                n^2 = -24 + 10i
+#   eps_a = 2.25(xx+yy) + i0.5(xy - yx) + 2 zz      (the surround)
+#   eps_b = 2.25(xx+yy) - i0.5(xy - yx) + 2 zz      (the PILLAR, Li fig. 3)
+#   theta = phi = 0, incident polarization in the Oxz plane (E along x),
+#   and Li's Table 1 lists the REFLECTED orders (his fig. 3 caption:
+#   "Convergence of the REFLECTED (0,0) order efficiency for the grating in
+#   example 1", converging on the tabulated 0.2980; and the listed order set
+#   -- columns m = 0, +1, +2, rows n = -1, 0, +1 -- is exactly the propagating
+#   set of the VACUUM superstrate at these periods).
+#
+# Granet's running text instead says "deposited on a lossy medium with a
+# complex relative PERMITTIVITY eps_r = 1 - i5" (his exp(+iwt) conjugate of
+# Li's INDEX, relabelled as a permittivity) and calls Tables 2/3 the
+# "transmitted" efficiencies.  Under either of those two readings the values
+# are not reproducible by any engine; under Li's they are.  Li's numbers are
+# already in the PUBLIC exp(-i w t) convention (his substrate index has
+# Im n > 0 for loss), so the tensors are used AS PRINTED -- no conjugation.
+#
+# Li's Table 1, first row of each cell (m = x order, n = y order), with space-
+# reversal symmetry (m, n) -> (-m, -n).  Granet's Table 2 quotes four of these
+# with one axis mirrored in his labelling: his (1,1) 0.0268 / (-1,1) 0.0139 /
+# (0,-1) 0.0620 / (0,0) 0.2979 are Li's (1,-1) / (1,1) / (0,-1) / (0,0).
 # =========================================================================== #
-_GRANET_B = np.conj(np.array([[2.25, -0.5j, 0.0], [0.5j, 2.25, 0.0],
-                              [0.0, 0.0, 2.0]], dtype=complex))
-_GRANET_A = np.conj(_GRANET_B)
 _LAM = 1.0e-6
+#: the PILLAR (Li's eps_b), PUBLIC convention, as printed
+_LI_B = np.array([[2.25, -0.5j, 0.0], [0.5j, 2.25, 0.0], [0.0, 0.0, 2.0]],
+                 dtype=complex)
+_LI_A = np.conj(_LI_B)                     # the surround (Li's eps_a)
+_LI_NSUB = 1.0 + 5.0j                      # Li's n^(-1), an INDEX
+#: Li 2003 table 1, REFLECTED efficiencies, first row of each cell.
+_LI_TABLE1 = {(0, 0): 0.2980, (1, 0): 0.1195, (2, 0): 0.0222,
+              (0, -1): 0.0619, (1, -1): 0.0269, (1, 1): 0.0137}
+#: Li's SECOND row -- "the same except the signs of the cross terms of the
+#: permittivity tensors are reversed, i.e. eps_a and eps_b are interchanged".
+_LI_TABLE1_ROW2 = {**_LI_TABLE1, (1, -1): 0.0137, (1, 1): 0.0269}
 
 
-def _granet(pillar, host):
-    o, _R, T, _J = pmm_jones_2d_staggered(
-        2.4 * _LAM, 1.4 * _LAM, _cell(host, pillar), np.sqrt(1.0 + 5.0j), 1.0,
-        _LAM, _LAM, degree=6, n_orders=3)
+def _li_cell(pillar, host, n=2):
+    """w1/d1 = w2/d2 = 0.5 fill; position in the cell is immaterial (the
+    staggered basis is position-invariant -- G3's multi-segment gate and the
+    build's centred-(4,4) probe both measure it)."""
+    c = np.empty((n, n, 3, 3), dtype=complex)
+    c[:] = host
+    c[:n // 2, :n // 2] = pillar
+    return c
+
+
+def _li_reflected(pillar, host, M):
+    o, R, _T, _J = pmm_jones_2d_staggered(
+        2.4 * _LAM, 1.4 * _LAM, _li_cell(pillar, host), _LI_NSUB, 1.0, _LAM,
+        _LAM, degree=M, n_orders=4)
     i = _idx(o)
-    return float(T[0][i[(1, 1)]]), float(T[0][i[(-1, 1)]])
+    return R[0], i
 
 
-def test_g2_gyrotropic_order_asymmetry_sign_matches_the_paper():
-    """Granet Table 2 has T(1,1) = 0.0268 > T(-1,1) = 0.0139 (SEM) and
-    0.0269 > 0.0137 (FMM) -- a robust SIGN, quoted by two independent methods.
+def _li_maxdev(R0, i, table):
+    return max(abs(float(R0[i[(m, n)]]) - v) for (m, n), v in table.items())
 
-    MEASURED 2026-09-09 (build doc T2): with the paper's tensor CONJUGATED
-    into this module's PUBLIC exp(-iwt) gauge, T(1,1) = 0.021328 and
-    T(-1,1) = 0.016157, so the difference is +5.171e-03; with the tensor left
-    UNCONJUGATED the two values swap exactly and the difference is -5.171e-03.
-    Bar 1e-3: two-sided, 5.2x below the measured signal and many decades above
-    the build spread of a difference of two O(0.02) numbers.  The energy
-    closure is IDENTICAL on both arms (a gyrotropic sign error is invisible to
-    it), so this is the only gate that sees it.
+
+def test_g2_li2003_table1_reflected_orders():
+    """The six published REFLECTED efficiencies of Li's Example 1, at M = 8.
+
+    MEASURED 2026-09-09 (VERIFY doc G2), incident E_x, (2,2) cell:
+
+        order      Li 2003     this build (M=8)
+        (0, 0)     0.2980        0.297932
+        (1, 0)     0.1195        0.119539
+        (2, 0)     0.0222        0.022239
+        (0,-1)     0.0619        0.061987
+        (1,-1)     0.0269        0.026826
+        (1, 1)     0.0137        0.013709
+
+    max deviation 8.74e-05 (M=7: 1.79e-04; M=6: 3.24e-04; the independent
+    hybrid ``pmm_jones_2d`` at degree 11 / n_orders 13: 3.02e-04).
+
+    Bar 5e-04 = the ORACLE's own floor, not this build's residual: Li tabulates
+    four decimals (+/- 5e-05 of rounding alone) at truncation order 23, and his
+    fig. 7 shows the (0,0) order still spanning 0.2980..0.2988 across the three
+    Fourier representations of eps at that truncation.  5.7x over the measured
+    deviation and 2.4 decades under the 1.32e-02 that the WRONG cross-term sign
+    produces (the companion test below), so the gate has a gap on both sides.
     """
-    t_p, t_m = _granet(_GRANET_B, _GRANET_A)
-    assert t_p - t_m > 1e-3, (t_p, t_m)
-    # unconjugated (i.e. the paper's exp(+iwt) tensor used raw) REVERSES it
-    u_p, u_m = _granet(np.conj(_GRANET_B), np.conj(_GRANET_A))
-    assert u_m - u_p > 1e-3, (u_p, u_m)
+    R0, i = _li_reflected(_LI_B, _LI_A, 8)
+    assert _li_maxdev(R0, i, _LI_TABLE1) < 5e-4, {
+        k: float(R0[i[k]]) for k in _LI_TABLE1}
+    # space-reversal symmetry of the published set, exactly (measured 5e-15)
+    for (m, n) in _LI_TABLE1:
+        assert abs(float(R0[i[(m, n)]]) - float(R0[i[(-m, -n)]])) < 1e-9
+
+
+def test_g2_li2003_cross_term_sign_is_the_discriminator():
+    """THE gyrotropic sign gate, now two-sided against a PUBLISHED pair of
+    rows.  Li's Table 1 gives two rows per order: the grating as defined, and
+    "the same except the signs of the cross terms of the permittivity tensors
+    are reversed, i.e. eps_a and eps_b are interchanged".  The swap moves ONLY
+    the (1,-1)/(1,1) pair (0.0269 <-> 0.0137) and leaves the other four
+    published orders alone -- exactly the observable no energy check can see.
+
+    MEASURED 2026-09-09 (VERIFY doc G2), M = 7: the interchanged cell matches
+    Li's SECOND row to 1.79e-04 and misses his FIRST row by 1.32e-02.  Bars
+    5e-04 (as above) and 1e-03 -- the latter 13x under the measured miss and
+    2.7x over the matching arm's bar, so a cell whose cross terms were placed
+    with the wrong sign cannot satisfy both.  This is also the gate that pins
+    the convention bridge: Li is already PUBLIC exp(-i w t), so a build that
+    conjugated his tensors (as Granet's exp(+i w t) text invites) lands on the
+    second row instead of the first.
+    """
+    R0, i = _li_reflected(_LI_A, _LI_B, 7)          # eps_a <-> eps_b
+    assert _li_maxdev(R0, i, _LI_TABLE1_ROW2) < 5e-4
+    assert _li_maxdev(R0, i, _LI_TABLE1) > 1e-3
 
 
 def test_g2_control_no_gyrotropy_no_asymmetry():
-    """CONTROL: the same half-filled cell with REAL, non-gyrotropic tensors is
-    mirror-symmetric up to a translation, so T(1,1) == T(-1,1) exactly.
+    """CONTROL: the same half-filled cell with REAL, non-gyrotropic tensors
+    has no cross terms to sign, so R(1,-1) == R(1,1) exactly.
 
-    MEASURED 2026-09-09 (build doc T2): |T(1,1) - T(-1,1)| = 1.02e-15 for an
-    isotropic pillar in an isotropic host -- 12 decades under the 5.171e-03
-    gyrotropic signal above.  Bar 1e-9.
+    MEASURED 2026-09-09: |R(1,-1) - R(1,1)| = 3.21e-15 for an isotropic
+    pillar in an isotropic host -- 12 decades under the 1.31e-02 gyrotropic
+    splitting of the arm above.  Bar 1e-9.
     """
-    t_p, t_m = _granet(_ISO, 2.25 * np.eye(3, dtype=complex))
-    assert abs(t_p - t_m) < 1e-9, (t_p, t_m)
+    R0, i = _li_reflected(_ISO, 2.25 * np.eye(3, dtype=complex), 7)
+    assert abs(float(R0[i[(1, -1)]]) - float(R0[i[(1, 1)]])) < 1e-9
 
 
 # =========================================================================== #
