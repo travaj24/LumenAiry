@@ -116,16 +116,16 @@ with one integration by parts each onto a continuous test function.  Nothing
 about that placement is new -- it is the shipped isotropic structure read as a
 first-order system.  Both candidates below respect it.
 
-Notation for the assembled blocks (all built by
-`probe_common.StaggeredCell`, `k0`-normalized where a derivative appears):
+Notation for the assembled blocks (`bracket(x, w, y)` denotes the Galerkin block
+`INT conj(x) w y`; all built by `probe_common.StaggeredCell`, `k0`-normalized where a derivative appears):
 
 | block | definition |
 |---|---|
 | `M1, M2, M3, Mw` | Grams of `V1, V2, V3, Vw` |
-| `CwE1 = <Vw\|D2\|V1>`, `CwE2 = <Vw\|D1\|V2>` | the strong curl (shipped `Cw_E1`, `Cw_E2`) |
-| `P13 = <V1\|D1\|V3>`, `P23 = <V2\|D2\|V3>` | the strong mimetic gradient (shipped `-Ktz`) |
-| `Aab = <Va\| e_ab \|Vb>`, a,b in 1..3 | eps-weighted component masses (Appendix-A Eq. 40/41, plus the FOUR NEW out-of-plane blocks `A13, A23, A31, A32`) |
-| `Kab = <D_a V3\| e_ab \|Vb>` | the eps-weighted div-D blocks with the derivative on the V3 TEST (Appendix-A Eq. 44, plus the NEW third column `K13, K23`) |
+| CwE1 = bracket(Vw, D2, V1), CwE2 = bracket(Vw, D1, V2) | the strong curl (shipped `Cw_E1`, `Cw_E2`) |
+| P13 = bracket(V1, D1, V3), P23 = bracket(V2, D2, V3) | the strong mimetic gradient (shipped `-Ktz`) |
+| Aab = bracket(Va, e_ab, Vb), a,b in 1..3 | eps-weighted component masses (Appendix-A Eq. 40/41, plus the FOUR NEW out-of-plane blocks `A13, A23, A31, A32`) |
+| Kab = bracket(D_a V3, e_ab, Vb) | the eps-weighted div-D blocks with the derivative on the V3 TEST (Appendix-A Eq. 44, plus the NEW third column `K13, K23`) |
 | `Sxx = CwE1^H Mw^-1 CwE1`, `Syy`, `Sxy`, `Syx` | the curl-curl, `= -Stt` blockwise |
 
 ---
@@ -243,7 +243,7 @@ not an assumption -- see M1 T2b.
 | 0.1 Bloch sign, phase-slope fit of the lowest eigenfunction | slope `+1.234000` vs exact `+1.234000` (err **4.4e-13**); `mu_0 = 1.52276` vs `K^2 = 1.52276` (err **2.2e-13**) | independent confirmation, not a re-reading of the same line |
 | 0.2 exact quartic roots, ISOTROPIC (double roots) | **2.3e-08** | the degeneracy's `sqrt(eps_mach)` conditioning, NOT the solver -- so the dispersion gate must be run on a NON-degenerate tensor |
 | 0.2 exact quartic roots, uniaxial optic-axis-z (simple roots, closed form o/e) | **9.3e-15** | the root solver is machine-exact where it is used |
-| 0.3 probe E-form vs shipped `Granet2DTransverseE` | rel `\|L - Lmat\|` = **5.86e-15** (normal AND oblique); rel `\|G + Rmat\|` = **0.0** / 4.8e-17 | the probe's assembly IS the shipped isotropic discretization -- everything downstream is a generalization of it, not a re-implementation |
+| 0.3 probe E-form vs shipped `Granet2DTransverseE` | rel max abs(L - Lmat) = **5.86e-15** (normal AND oblique); rel max abs(G + Rmat) = **0.0** / 4.8e-17 | the probe's assembly IS the shipped isotropic discretization -- everything downstream is a generalization of it, not a re-implementation |
 | 0.4 strong H-partner vs shipped Eq.-25 partner | ratio = **-1.000000000i** exactly, spread **6.5e-12** over 200 modes | the two H conventions differ by ONE global constant, which cancels in every S-matrix; the probe's strong form is usable everywhere |
 
 The 0.2 row changed the design of M1: the plan's tilted-uniaxial probe is
@@ -372,7 +372,7 @@ with it.  That is the price, and it is a permanent one.
 
 ### T2b  are (a) and (d) the same discretization?
 
-| case | M | dim (a) | dim (d), finite | `max_a min_d |qa - qd|` | (d)-only modes | their abs q |
+| case | M | dim (a) | dim (d), finite | max over (a) of dist to nearest (d) | (d)-only modes | their abs q |
 |---|---|---|---|---|---|---|
 | normal | 5 | 256 | 320 | 4.9e-13 | 64 (= q^2) | 5.5e-17 .. 2.4e-14 |
 | normal | 6 | 400 | 500 | 2.5e-11 | 100 (= q^2) | 8.0e-18 .. 8.2e-14 |
@@ -397,7 +397,7 @@ symmetric pair and hence a zero sum (this is
 `AUDIT_OOP_GENERATOR_FACTOR_I_2026_07_14`'s anchor 1).  The exact value on the
 lossy tilted probe is `-0.072600 + 0.002168i`.
 
-| assembly variant | cand | h(0,0) residual | h(+1,0) | `\|sum(matched q) - sum(exact)\|` |
+| assembly variant | cand | h(0,0) residual | h(+1,0) | abs(sum(matched q) - sum(exact)) |
 |---|---|---|---|---|
 | **reference** | (a) | **2.8e-14** | 1.5e-07 | **3.9e-14** |
 | **reference** | (d) | **6.5e-15** | 6.9e-06 | **9.6e-15** |
@@ -422,13 +422,161 @@ Hermitian, still lossless) tensor and a transpose negative control.
 
 ## S6.  M2 -- Berreman 4x4 on a uniform out-of-plane slab
 
-PLACEHOLDER-M2
+The exact oracle for a uniform layer at any incidence.  `px = py = 0.9 lam`,
+`depth = 0.35 lam`, `n_sup = 1`, `n_sub = 1.5`; both incident polarizations;
+normal / oblique 25 deg (classical) / conical 25 deg with phi 40 deg.  Four
+tensors, chosen so that between them they discriminate every wrong assembly:
+
+| tensor | e13 | e23 | why |
+|---|---|---|---|
+| tilt35 (lossless, Hermitian) | 0.30070 | 0 | the baseline; closure is a two-sided claim |
+| tilt35 azim40 | 0.23035 | 0.19329 | brings `e23` / `A23` / `K23` in |
+| tilt35 lossy 0.08 | 0.30070 | 0 | non-Hermitian: no unity claimed, only the deficit |
+| **tilt35 NON-RECIPROCAL** `e13 = conj(e31)` | 0.30070 + 0.22000i | 0 | Hermitian (still lossless) but NOT symmetric -- the only case that can see an `e13 <-> e31` swap |
+
+### convergence ladder (max over both polarizations)
+
+`tilt35 (lossless)`; Berreman gives `R = [0.041253957, 0.040000000]` at normal
+and `R = [0.038164702, 0.041516667]` at conical, closing to 1e-15.
+
+| cand | M | dim | eig+solve [s] | max abs dR | max abs dT | max abs dJones | order leak | abs(R+T-1) |
+|---|---|---|---|---|---|---|---|---|
+| \[normal\] (a) | 5 | 128 | 0.16 | 4.9e-16 | 4.2e-14 | 1.3e-15 | **0.0e+00** | 4.2e-14 |
+| (a) | 10 | 648 | 11.9 | 6.7e-16 | 1.6e-13 | 3.9e-15 | 0.0e+00 | 1.6e-13 |
+| (d) | 8 | 392 | 18.8 | 4.7e-16 | 5.6e-15 | 1.7e-15 | 0.0e+00 | 4.9e-15 |
+| \[oblique 25\] (a) | 5 | 128 | 0.18 | 6.8e-09 | 1.6e-07 | 2.0e-08 | 0.0e+00 | 1.7e-07 |
+| (a) | 6 | 200 | 0.50 | 7.8e-12 | 4.9e-11 | 2.1e-11 | 0.0e+00 | 4.2e-11 |
+| (a) | 7 | 288 | 1.36 | 4.3e-14 | 8.5e-13 | 1.2e-13 | 0.0e+00 | 8.9e-13 |
+| (a) | 8 | 392 | 2.94 | 9.3e-16 | 8.7e-14 | 2.1e-15 | 0.0e+00 | 8.7e-14 |
+| (a) | 9 | 512 | 6.95 | **5.6e-16** | **4.1e-15** | **1.6e-15** | 0.0e+00 | 4.4e-15 |
+| (d) | 8 | 392 | 18.3 | 1.3e-15 | 1.6e-14 | 2.8e-15 | 0.0e+00 | 1.5e-14 |
+| \[conical 25/40\] (a) | 5 | 128 | 0.17 | 9.4e-10 | 2.1e-08 | 2.5e-09 | 0.0e+00 | 2.2e-08 |
+| (a) | 6 | 200 | 0.48 | 2.7e-13 | 1.7e-12 | 1.1e-12 | 0.0e+00 | 1.4e-12 |
+| (a) | 7 | 288 | 1.34 | **3.2e-15** | 3.7e-14 | **8.2e-15** | 0.0e+00 | 3.6e-14 |
+| (a) | 8 | 392 | 2.87 | 1.6e-15 | 5.3e-14 | 4.3e-15 | 0.0e+00 | 5.5e-14 |
+| (d) | 8 | 392 | 18.6 | 1.0e-15 | 1.7e-14 | 2.5e-15 | 0.0e+00 | 1.6e-14 |
+
+The other three tensors give the same ladder to within a factor of 2 -- e.g.
+the NON-RECIPROCAL tensor at conical reaches `dR = 7.7e-16`,
+`dJones = 2.4e-15` at M = 8, and the lossy one `dR = 8.2e-16`,
+`dJones = 2.5e-15` with `abs(R+T-1) = 1.11e-01` reproducing Berreman's own
+`-1.11e-01 / -1.09e-01` absorbed fraction to 1e-15.
+
+**Both candidates reproduce the exact 4x4 Berreman R, T and BOTH Jones
+matrices to MACHINE PRECISION on a uniform out-of-plane slab, at normal,
+oblique and conical incidence, lossless, lossy and non-reciprocal.**  The
+oblique / conical rows show the documented degree limitation of a UNIFORM
+region in this basis (the Bloch phase must be resolved): 6.8e-09 at M = 5
+falling to 1e-15 by M = 8-9, four decades per two degrees.  `order leak` is
+IDENTICALLY ZERO -- a uniform cell puts nothing in a non-zero diffraction
+order.
+
+### negative controls (candidate (a), M = 8, conical 25/40)
+
+The reference rows above sit at `dR ~ 1e-15`, `dJones ~ 3e-15`.  The same
+solve with the out-of-plane block deliberately mis-assembled:
+
+| tensor | control | max abs dR | max abs dJones | separation from the reference |
+|---|---|---|---|---|
+| tilt35 | drop OOP | 1.97e-04 | 2.14e-03 | 11 / 12 decades |
+| tilt35 | negate OOP | 3.77e-05 | 3.53e-03 | 10 / 12 decades |
+| tilt35 | transpose OOP | 1.62e-15 | 4.34e-15 | none -- `e13 = e31` here, so the transpose is a NO-OP |
+| tilt35 azim40 | drop OOP | 1.21e-04 | 1.15e-03 | 11 / 12 decades |
+| tilt35 azim40 | negate OOP | 7.08e-16 | 1.84e-15 | none -- see below |
+| tilt35 lossy | drop OOP | 4.47e-04 | 2.06e-03 | 11 / 12 decades |
+| tilt35 lossy | negate OOP | 8.93e-05 | 3.50e-03 | 11 / 12 decades |
+| **NON-RECIPROCAL** | drop OOP | 1.29e-03 | 4.01e-03 | 12 / 12 decades |
+| **NON-RECIPROCAL** | negate OOP | 2.09e-03 | 5.50e-03 | 12 / 12 decades |
+| **NON-RECIPROCAL** | **transpose OOP** | **2.06e-03** | **5.49e-03** | **12 / 12 decades** |
+
+Two of these rows are degeneracies of the PHYSICS, not weak measurements, and
+a test suite must know about them:
+
+* **transpose is invisible on a SYMMETRIC tensor** (trivially -- the operation
+  does nothing).  It becomes a 2.1e-03 signal the moment the tensor is
+  non-reciprocal, which is the case a magneto-optic or in-plane-magnetized LC
+  cell actually is.
+* **negate is invisible on the azim40 tensor at phi = 40** because there the
+  director azimuth EQUALS the incidence azimuth: negating the OOP block is the
+  180-degree rotation about z, which maps that whole configuration onto itself
+  (both the axis and `k_t` rotate by 180 degrees, and the lab Jones is even
+  under the simultaneous sign flip of x and y).  It is a 3.8e-05 .. 2.1e-03
+  signal at every other azimuth.
+
+So the gate is sharp, but **a single tensor and a single azimuth is not enough
+to gate an OOP assembly** -- the integration's tests need at least a
+non-symmetric tensor and a director azimuth that differs from the incidence
+azimuth.  That is the most transferable finding in this document.
 
 ---
 
 ## S7.  M3 -- the in-plane limit
 
-PLACEHOLDER-M3
+The question the plan asks is precise: with the cross terms zeroed, are the OOP
+discretizations EQUIVALENT to the shipped in-plane one (distance ~1e-12), or
+merely both convergent?  Three cells, all with `e13 = e23 = e31 = e32 = 0`: a
+patterned ISOTROPIC cell (`eps` 2.25 / 1.0 / 4.0+0.2i), a patterned IN-PLANE
+UNIAXIAL cell (director in the plane, azimuth 30 deg), and a GYROTROPIC cell
+(`e12 = -e21 = 0.5i`, Hermitian).
+
+### T1  spectra -- candidate's eigenvalue set vs the E-form's `{+q, -q}`
+
+max over the candidate's modes of the distance to the nearest E-form
+eigenvalue:
+
+| cell | M | dim | (a) normal | (a) oblique | (d) normal | (d) oblique |
+|---|---|---|---|---|---|---|
+| isotropic | 5 | 256 | 2.6e-13 | 1.4e-12 | 2.7e-12 | 2.0e-12 |
+| isotropic | 6 | 400 | 1.3e-12 | 9.4e-13 | 6.6e-12 | 4.3e-12 |
+| isotropic | 7 | 576 | 3.9e-12 | 5.1e-12 | 2.0e-11 | 6.9e-12 |
+| in-plane uniaxial | 7 | 576 | 5.2e-12 | 1.3e-11 | 6.0e-12 | 1.3e-11 |
+| gyrotropic | 5 | 256 | 3.9e-13 | 6.1e-13 | 1.8e-12 | 2.7e-12 |
+| gyrotropic | 7 | 576 | 4.7e-12 | 3.1e-12 | 1.6e-11 | 1.3e-11 |
+
+The residual grows with dimension exactly as an eigenvalue conditioning number
+does (2e-13 at 256 to 2e-11 at 576), not as a discretization error would.
+
+### T2  observables -- candidate vs the probe's E-form vs the SHIPPED solver
+
+| theta | M | R(a) - R(eform) | R(d) - R(eform) | J(a) - J(eform) | J(d) - J(eform) |
+|---|---|---|---|---|---|
+| 0 | 6 | 9.5e-16 | 1.2e-15 | 5.8e-15 | 5.1e-15 |
+| 0 | 7 | 1.9e-16 | 2.3e-15 | 9.5e-15 | 1.8e-14 |
+| 25/40 | 6 | 2.4e-15 | 1.0e-15 | 9.7e-15 | 1.1e-14 |
+| 25/40 | 7 | 1.2e-15 | 3.5e-15 | 1.9e-14 | 1.6e-14 |
+
+and against the SHIPPED scalar `pmm_efficiency_2d_staggered` at normal
+incidence, where its `te`/`tm` rows ARE the probe's `Ey`/`Ex` rows:
+
+| M | shipped te (Ey) sum R | probe row 1 | diff | shipped tm (Ex) sum R | probe row 0 | diff |
+|---|---|---|---|---|---|---|
+| 6 | 0.0288319480 | 0.0288319480 | 7.9e-15 | 0.0288319480 | 0.0288319480 | 2.2e-15 |
+| 7 | 0.0288461842 | 0.0288461842 | 1.2e-14 | 0.0288461842 | 0.0288461842 | 2.8e-15 |
+
+### T3  the algebraic reduction of candidate (d)
+
+Rebuilding `Lmat` and `Rmat` out of candidate (d)'s `P0`, `P1`, `P2` blocks by
+the elimination of S3, on the same cell:
+
+| cell | incidence | rel max abs(L_rec - L_probe) | rel max abs(G_rec - G) | rel max abs(L_rec - Lmat_shipped) |
+|---|---|---|---|---|
+| isotropic | normal | **0.00e+00** | **0.00e+00** | 5.86e-15 |
+| isotropic | oblique | **0.00e+00** | **0.00e+00** | 5.86e-15 |
+| in-plane uniaxial | normal / oblique | **0.00e+00** | **0.00e+00** | (no shipped tensor arm) |
+| gyrotropic | normal / oblique | **0.00e+00** | **0.00e+00** | (no shipped tensor arm) |
+
+The `0.00e+00` columns are BIT-IDENTICAL, which is what a derivation check
+should give -- they confirm that the S3 elimination of `e3` from `P1`/`P0`
+really is the shipped `[eps_t] + S_tt - K_tz eps33^-1 K_zt`, term for term,
+not merely numerically close.  The independent content is the last column:
+5.86e-15 against the SHIPPED `Granet2DTransverseE.Lmat` on a different build
+path.
+
+**Answer to Measurement 3: the two discretizations are EQUIVALENT, not merely
+both convergent.**  An OOP tile can therefore reduce to the in-plane path
+exactly -- the Stage-A G1-style reduction gate is available (bit identity of
+the operators when the tensor's OOP entries are zero, and 1e-15 on the
+observables through two different mode solvers).
 
 ---
 
@@ -507,7 +655,67 @@ PLACEHOLDER-M5
 
 ## S10.  M6 -- cascade stability and energy closure
 
-PLACEHOLDER-M6
+A mis-classified growing mode does not show at one depth -- it shows as
+`exp(+|Re lam| k0 L)`, so this is a DEPTH LADDER: 0.25, 1 and 3 wavelengths,
+`px = py = 1.2 lam`, `n_sup = 1`, `n_sub = 1.5`.  The lossless tensor is
+EXACTLY Hermitian (measured `|eps - eps^H| = 0.00e+00`), so its closure is a
+two-sided claim.
+
+`max fwd growth` is `max exp(-Re(lam_f) k0 L)` over the forward set: any value
+above 1 means a growing mode was classified forward.  `flux gap` is
+`[min flux over the forward set, max flux over the backward set]`, relative to
+the largest modal flux.
+
+### uniform lossless out-of-plane tensor -- closure is machine-exact
+
+| cand | M | depth / lam | sum R | sum T | R+T-1 | max fwd growth | fwd/bwd | flux gap |
+|---|---|---|---|---|---|---|---|---|
+| \[normal\] (a) | 7 | 0.25 | 0.0453366 | 0.9546634 | **+1.0e-14** | 1.0000e+00 | 288/288 | -1.1e-14 / +1.1e-14 |
+| (a) | 7 | 1.00 | 0.0416527 | 0.9583473 | **+3.7e-14** | 1.0000e+00 | 288/288 | -1.1e-14 / +1.1e-14 |
+| (a) | 7 | 3.00 | 0.0501759 | 0.9498241 | **+1.2e-13** | 1.0000e+00 | 288/288 | -1.1e-14 / +1.1e-14 |
+| (d) | 7 | 3.00 | 0.0501759 | 0.9498241 | +1.6e-13 | 1.0000e+00 | 288/288 | -3.4e-15 / +2.5e-15 |
+| \[conical 25/40\] (a) | 6 | 3.00 | 0.0378712 | 0.9621288 | +3.1e-11 | 1.0000e+00 | 200/200 | -6.4e-15 / +6.5e-15 |
+| (a) | 7 | 0.25 | 0.0430755 | 0.9569245 | **-1.2e-12** | 1.0000e+00 | 288/288 | -2.1e-14 / +8.6e-15 |
+| (a) | 7 | 3.00 | 0.0378712 | 0.9621288 | **-1.1e-12** | 1.0000e+00 | 288/288 | -2.1e-14 / +8.6e-15 |
+| (d) | 7 | 3.00 | 0.0378712 | 0.9621288 | -1.2e-12 | 1.0000e+00 | 288/288 | -2.5e-15 / +2.6e-15 |
+
+### lossless PILLAR (a corner cell -- closure is discretization-limited)
+
+| cand | M | depth / lam | R+T-1 | max fwd growth | fwd/bwd |
+|---|---|---|---|---|---|
+| \[normal\] (a) | 6 | 0.25 / 1 / 3 | +1.4e-06 / -2.5e-06 / -3.5e-06 | 1.0000e+00 | 200/200 |
+| (a) | 7 | 0.25 / 1 / 3 | **-7.2e-08 / -2.4e-07 / -2.0e-07** | 1.0000e+00 | 288/288 |
+| \[conical\] (a) | 6 | 0.25 / 1 / 3 | -1.2e-05 / +1.4e-05 / -7.1e-05 | 1.0000e+00 | 200/200 |
+| (a) | 7 | 0.25 / 1 / 3 | **-7.2e-07 / +7.0e-07 / -2.7e-06** | 1.0000e+00 | 288/288 |
+| (d) | 7 | 0.25 / 1 / 3 | -7.2e-07 / +7.0e-07 / -2.7e-06 | 1.0000e+00 | 288/288 |
+
+The closure improves by one to two decades from M = 6 to M = 7 at every
+depth, and it does NOT grow with depth -- a growing-mode leak would multiply
+by `exp(2 * 3 * k0 * something)` between the 0.25 and the 3-wavelength row and
+is not there.
+
+### LOSSY pillar -- no unity is claimed, only boundedness
+
+| cand | M | depth / lam | sum R | sum T | 1 - R - T (absorbed) | max fwd growth |
+|---|---|---|---|---|---|---|
+| (a) | 7 | 0.25 | 0.0353130 | 0.9224430 | 0.0422 | 9.7817e-01 |
+| (a) | 7 | 1.00 | 0.0186733 | 0.7131744 | 0.2682 | 9.1549e-01 |
+| (a) | 7 | 3.00 | 0.0141886 | 0.3398127 | 0.6460 | 7.6729e-01 |
+| (d) | 7 | 3.00 | 0.0141886 | 0.3398127 | 0.6460 | 7.6729e-01 |
+
+Absorption rises monotonically with depth and stays in `[0, 1]`; the forward
+growth factor stays strictly below 1 at every depth.
+
+**Reading.**  In EVERY row of this measurement the forward/backward split came
+out exactly `2q^2 / 2q^2` and `max fwd growth = 1.0000e+00`.  The deep
+evanescent modes that M1's census flagged as off-branch are split by their
+DECAY SIGN (their flux is 1e-14 relative, i.e. noise of either sign -- visible
+in the `flux gap` column, where the minimum forward flux is NEGATIVE at the
+1e-14 level and the maximum backward flux is POSITIVE at the same level), and
+that is precisely what `_select_forward_flux`'s deep-decay override is for.
+The census is BOUNDED AND PRICED: the price is that the OOP path MUST use the
+flux selector with the deep-decay override, not a bare `Re(gam)` or a bare
+flux split.
 
 ---
 
@@ -529,6 +737,50 @@ PLACEHOLDER-ROUTE
 
 ---
 
+## S15.  What this leaves open
+
+* **The transpose (non-reciprocal) placement is settled by M2 only.**  No
+  dispersion measurement can see `e13 <-> e31` (S5 T3), so any library test
+  that gates the OOP blocks MUST include a non-reciprocal Hermitian tensor
+  compared against Berreman's FIELDS -- an energy or dispersion check will
+  pass a swapped assembly.
+* **The `tau` sign trap.**  The shipped module's `tau = exp(-i alpha0 p)` is
+  unobservable in the isotropic / in-plane path and load-bearing in the OOP
+  path.  Whichever way the integration goes, it needs a test that fails when
+  the sign is flipped in ONE place -- the M1 T3 `sum of the (0,0) roots`
+  discriminator is that test, and it is four lines.
+* **Anisotropic HALF-SPACES** stay out of scope (the probe's half-spaces are
+  isotropic, matching the hybrid's documented restriction).
+* **Slant x out-of-plane** stays refused, as in `_layer_eigenmodes_tensor`.
+* **The JAX twin**: the staggered path is NumPy-only today; nothing here
+  changes that.
+* **Non-square grids** (`Nx != Ny`) remain out of scope; the tensor blocks are
+  kron products on a square staggered basis exactly as the scalar ones are.
+
+---
+
 ## S14.  Files and commands
 
-PLACEHOLDER-FILES
+All scripts under `validation/probe_pmm2d_staggered_oop/`; the exact commands
+are in its `README.md`.  Every script exports the OMP caps at import and
+asserts `lumenairy.__file__` starts with the worktree path.
+
+| file | measurement |
+|---|---|
+| `probe_common.py` | the prototype: the staggered basis copied verbatim from `twod_staggered.py`, the tensor-weighted Galerkin assembly, candidate (a) `generator_a` / `modes_a`, candidate (d) `pencil_d` / `modes_d`, the in-plane E-form `eform_operators` / `eform_modes`, `exact_kz_roots`, `modal_flux`, `split_forward`, the far-field projection, and `solve_slab` |
+| `m0_convention.py` | S4 |
+| `m1_dispersion.py` | S5 |
+| `m2_berreman.py` | S6 |
+| `m3_inplane_limit.py` | S7 |
+| `m4_stripe_1d.py` | S8 |
+| `m5_pillar_2d.py` | S9 |
+| `m6_cascade.py` | S10 |
+| `m7_cost.py` | S11 |
+| `run_all.sh` | driver; logs to `logs/`, JSON to `results/` |
+
+```bash
+cd /c/tmp/lum_aniso_oop
+export PYTHONPATH=/c/tmp/lum_aniso_oop
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+bash validation/probe_pmm2d_staggered_oop/run_all.sh m0 m1 m2 m3 m4 m5 m6 m7
+```

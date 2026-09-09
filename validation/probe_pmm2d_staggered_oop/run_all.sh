@@ -9,6 +9,6 @@ for s in "$@"; do
   f=$(ls "$D"/${s}_*.py 2>/dev/null | head -n 1)
   [ -z "$f" ] && { echo "no script for $s"; continue; }
   echo "=== $s -> $f"
-  python "$f" > "$D/logs/$s.log" 2>&1
+  python -u "$f" > "$D/logs/$s.log" 2>&1
   echo "   exit=$?  ($(wc -l < "$D/logs/$s.log") lines)"
 done

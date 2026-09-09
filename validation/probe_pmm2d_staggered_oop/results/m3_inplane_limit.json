@@ -1,0 +1,208 @@
+{
+ "T1_isotropic|M5|nrm|a": {
+  "dim": 256,
+  "maxdist": 2.6376858900929416e-13
+ },
+ "T1_isotropic|M5|nrm|d": {
+  "dim": 256,
+  "maxdist": 2.7366304751476866e-12
+ },
+ "T1_isotropic|M5|obl|a": {
+  "dim": 256,
+  "maxdist": 1.3977991487390856e-12
+ },
+ "T1_isotropic|M5|obl|d": {
+  "dim": 256,
+  "maxdist": 1.977611224094072e-12
+ },
+ "T1_isotropic|M6|nrm|a": {
+  "dim": 400,
+  "maxdist": 1.2630080424333417e-12
+ },
+ "T1_isotropic|M6|nrm|d": {
+  "dim": 400,
+  "maxdist": 6.638292100450545e-12
+ },
+ "T1_isotropic|M6|obl|a": {
+  "dim": 400,
+  "maxdist": 9.358632041800012e-13
+ },
+ "T1_isotropic|M6|obl|d": {
+  "dim": 400,
+  "maxdist": 4.26309357935185e-12
+ },
+ "T1_isotropic|M7|nrm|a": {
+  "dim": 576,
+  "maxdist": 3.917857364520794e-12
+ },
+ "T1_isotropic|M7|nrm|d": {
+  "dim": 576,
+  "maxdist": 2.019798848974899e-11
+ },
+ "T1_isotropic|M7|obl|a": {
+  "dim": 576,
+  "maxdist": 5.1238969859351515e-12
+ },
+ "T1_isotropic|M7|obl|d": {
+  "dim": 576,
+  "maxdist": 6.9032252351921785e-12
+ },
+ "T1_inplane_uniaxial|M5|nrm|a": {
+  "dim": 256,
+  "maxdist": 7.692128305241778e-13
+ },
+ "T1_inplane_uniaxial|M5|nrm|d": {
+  "dim": 256,
+  "maxdist": 8.21519855562593e-13
+ },
+ "T1_inplane_uniaxial|M5|obl|a": {
+  "dim": 256,
+  "maxdist": 2.2460522704117437e-13
+ },
+ "T1_inplane_uniaxial|M5|obl|d": {
+  "dim": 256,
+  "maxdist": 1.5003291988660273e-12
+ },
+ "T1_inplane_uniaxial|M6|nrm|a": {
+  "dim": 400,
+  "maxdist": 1.112001906520905e-12
+ },
+ "T1_inplane_uniaxial|M6|nrm|d": {
+  "dim": 400,
+  "maxdist": 1.5707949655061279e-12
+ },
+ "T1_inplane_uniaxial|M6|obl|a": {
+  "dim": 400,
+  "maxdist": 1.1709673885184856e-12
+ },
+ "T1_inplane_uniaxial|M6|obl|d": {
+  "dim": 400,
+  "maxdist": 3.50739131919153e-12
+ },
+ "T1_inplane_uniaxial|M7|nrm|a": {
+  "dim": 576,
+  "maxdist": 5.2060035334358664e-12
+ },
+ "T1_inplane_uniaxial|M7|nrm|d": {
+  "dim": 576,
+  "maxdist": 6.046727818097951e-12
+ },
+ "T1_inplane_uniaxial|M7|obl|a": {
+  "dim": 576,
+  "maxdist": 1.27769179424697e-11
+ },
+ "T1_inplane_uniaxial|M7|obl|d": {
+  "dim": 576,
+  "maxdist": 1.3395226837346711e-11
+ },
+ "T1_gyrotropic|M5|nrm|a": {
+  "dim": 256,
+  "maxdist": 3.918834251139229e-13
+ },
+ "T1_gyrotropic|M5|nrm|d": {
+  "dim": 256,
+  "maxdist": 1.7824616716434782e-12
+ },
+ "T1_gyrotropic|M5|obl|a": {
+  "dim": 256,
+  "maxdist": 6.080117179734501e-13
+ },
+ "T1_gyrotropic|M5|obl|d": {
+  "dim": 256,
+  "maxdist": 2.7424418193181497e-12
+ },
+ "T1_gyrotropic|M6|nrm|a": {
+  "dim": 400,
+  "maxdist": 2.899483932893694e-12
+ },
+ "T1_gyrotropic|M6|nrm|d": {
+  "dim": 400,
+  "maxdist": 5.519988145502296e-12
+ },
+ "T1_gyrotropic|M6|obl|a": {
+  "dim": 400,
+  "maxdist": 8.253790480197556e-13
+ },
+ "T1_gyrotropic|M6|obl|d": {
+  "dim": 400,
+  "maxdist": 4.1334632057269925e-12
+ },
+ "T1_gyrotropic|M7|nrm|a": {
+  "dim": 576,
+  "maxdist": 4.743963480171267e-12
+ },
+ "T1_gyrotropic|M7|nrm|d": {
+  "dim": 576,
+  "maxdist": 1.5780843923038207e-11
+ },
+ "T1_gyrotropic|M7|obl|a": {
+  "dim": 576,
+  "maxdist": 3.0834626441384736e-12
+ },
+ "T1_gyrotropic|M7|obl|d": {
+  "dim": 576,
+  "maxdist": 1.3366862950730622e-11
+ },
+ "T2_ship_normal_M6": {
+  "te": 7.851358452271029e-15,
+  "tm": 2.2065682614424986e-15
+ },
+ "T2_theta0_M6": {
+  "dRa": 9.506284648352903e-16,
+  "dRd": 1.2073675392798577e-15,
+  "dJa": 5.7466137655512984e-15,
+  "dJd": 5.124987370112521e-15
+ },
+ "T2_ship_normal_M7": {
+  "te": 1.215347267269351e-14,
+  "tm": 2.789435349370706e-15
+ },
+ "T2_theta0_M7": {
+  "dRa": 1.8735013540549517e-16,
+  "dRd": 2.310651670001107e-15,
+  "dJa": 9.530294808638491e-15,
+  "dJd": 1.779219435594853e-14
+ },
+ "T2_theta25_M6": {
+  "dRa": 2.3939183968479938e-15,
+  "dRd": 1.0373646386341306e-15,
+  "dJa": 9.718465282014555e-15,
+  "dJd": 1.087285485005354e-14
+ },
+ "T2_theta25_M7": {
+  "dRa": 1.2108369862318114e-15,
+  "dRd": 3.507610868425104e-15,
+  "dJa": 1.926757688389364e-14,
+  "dJd": 1.6205602134866618e-14
+ },
+ "T3_isotropic_nrm": {
+  "dL": 0.0,
+  "dG": 0.0,
+  "dShipped": 5.858570666675709e-15
+ },
+ "T3_isotropic_obl": {
+  "dL": 0.0,
+  "dG": 0.0,
+  "dShipped": 5.860331817469355e-15
+ },
+ "T3_inplane_uniaxial_nrm": {
+  "dL": 0.0,
+  "dG": 0.0,
+  "dShipped": NaN
+ },
+ "T3_inplane_uniaxial_obl": {
+  "dL": 0.0,
+  "dG": 0.0,
+  "dShipped": NaN
+ },
+ "T3_gyrotropic_nrm": {
+  "dL": 0.0,
+  "dG": 0.0,
+  "dShipped": NaN
+ },
+ "T3_gyrotropic_obl": {
+  "dL": 0.0,
+  "dG": 0.0,
+  "dShipped": NaN
+ }
+}

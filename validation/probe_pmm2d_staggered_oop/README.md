@@ -24,12 +24,13 @@ python validation/probe_pmm2d_staggered_oop/m4_stripe_1d.py
 python validation/probe_pmm2d_staggered_oop/m5_pillar_2d.py
 python validation/probe_pmm2d_staggered_oop/m6_cascade.py
 python validation/probe_pmm2d_staggered_oop/m7_cost.py
+python validation/probe_pmm2d_staggered_oop/m8_nx3_grid.py
 ```
 
 or all of them:
 
 ```bash
-bash validation/probe_pmm2d_staggered_oop/run_all.sh m0 m1 m2 m3 m4 m5 m6 m7
+bash validation/probe_pmm2d_staggered_oop/run_all.sh m0 m1 m2 m3 m4 m5 m6 m7 m8
 ```
 
 Logs land in `validation/probe_pmm2d_staggered_oop/logs/`, JSON summaries in
@@ -49,6 +50,7 @@ tesla-ryzen (single-threaded): ~25 min, the M1 and M5 ladders dominating.
 | `m5_pillar_2d.py` | M5: 2-D OOP pillar vs the hybrid `pmm_jones_2d`, with the hybrid's own floor measured and the no-floor property two-sided |
 | `m6_cascade.py` | M6: cascade stability on a depth ladder (0.25 / 1 / 3 wavelengths) + energy closure |
 | `m7_cost.py` | M7: dimension and eig wall time vs the in-plane path; the normal-incidence anti-commuting-involution structure |
+| `m8_nx3_grid.py` | M8: a (3,3) grid with a non-centro-symmetric OOP feature vs both 2-D oracles, plus position invariance |
 | `run_all.sh` | driver |
 
 ## Mount
