@@ -80,7 +80,7 @@ DEPTH = 0.5e-6
 #:     WSL py3.12/np2.4.6, 1 thread    5.001e-02  2.061e-06     0 of 16
 #:
 #: Detuning ANY of the three coincident permittivities restores the theorem at
-#: EVERY truncation: 1e-6 relative already brings the worst defect to 5.4e-10,
+#: EVERY truncation: 1e-6 relative already brings the worst defect to 4.7e-10,
 #: and this 2.10 groove reads <= 2.1e-13 over n_orders = 11..41 (16 of 16
 #: sound) and <= 5.1e-13 out to 61, on all three configurations.  The 2-D arms
 #: become build-free with it too: the two ratios this file asserts read

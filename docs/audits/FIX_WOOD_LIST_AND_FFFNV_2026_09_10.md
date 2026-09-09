@@ -324,16 +324,18 @@ The chain of measurements, each one ruling something out.
    it is exact, and the interface inverse amplifies the rounding floor by ~1e14.
 
    Detuning ANY ONE of the three by a relative `r` collapses the defect
-   (`h6_detune.py`; worst over `n_orders` 7..61 of each row):
+   (`h6_detune.py`; each cell is the WORST |defect| over the sampled
+   `n_orders` = 7, 11, 21, 41, 61 -- the `r = 0` row reaches 2.761e-02 on the
+   denser 11..41 ladder of H.2, whose n = 19 this sample skips):
 
    | relative detune `r` | detune the groove | detune `no` | detune `n_sub` |
    |---|---|---|---|
-   | 0 | 2.8e-02 | 2.8e-02 | 2.8e-02 |
+   | 0 | 1.62e-02 | 1.62e-02 | 1.62e-02 |
    | 1e-12 | 2.96e-04 | 8.65e-05 | 7.26e-05 |
    | 1e-09 | 1.30e-07 | 6.45e-08 | 5.48e-08 |
-   | 1e-06 | 5.39e-11 | 8.11e-11 | 1.16e-10 |
-   | 1e-03 | 3.42e-13 | 6.44e-13 | 2.67e-13 |
-   | 1e-02 | 3.95e-13 | 2.35e-14 | 2.44e-13 |
+   | 1e-06 | 4.71e-10 | 4.18e-10 | 1.16e-10 |
+   | 1e-03 | 9.01e-13 | 6.44e-13 | 2.67e-13 |
+   | 1e-02 | 3.95e-13 | 1.75e-13 | 2.44e-13 |
 
    That is ~`eps_machine / r`, the signature of a division by a vanishing gap,
    with the `r = 0` row's effective gap set by the rounding floor itself --
