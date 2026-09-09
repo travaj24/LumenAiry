@@ -45,12 +45,19 @@ from numpy.polynomial.legendre import leggauss  # noqa: E402
 
 import lumenairy  # noqa: E402
 
-WORKTREE = r"C:\tmp\lum_aniso_oop"
+# The worktree this probe belongs to, DERIVED from this file's location
+# (validation/probe_pmm2d_staggered_oop/probe_common.py -> repo root) so the
+# guard keeps biting when the probe is run from a different worktree: the
+# hard-coded literal it replaces (C:/tmp/lum_aniso_oop) is a PREFIX of the
+# Stage-B integration worktree C:/tmp/lum_aniso_oopint, so it would have
+# passed there while asserting nothing.
+WORKTREE = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 
 def assert_worktree():
     p = os.path.abspath(lumenairy.__file__)
-    assert p.startswith(WORKTREE), f"WRONG lumenairy: {p}"
+    assert p.startswith(WORKTREE + os.sep), f"WRONG lumenairy: {p}"
     return p
 
 
