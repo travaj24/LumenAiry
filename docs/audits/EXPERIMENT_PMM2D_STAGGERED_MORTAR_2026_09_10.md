@@ -883,9 +883,10 @@ staircases and mixed-resolution stacks**, not arbitrary tapers.
 
 ### 12.1 API -- mirror the 1-D spelling exactly
 
-`PMMStack` spells it `layer_grids="shared" | "per-layer"` (a hyphen, not an
-underscore; `stack.py:172`) with `window_halfwidth=1`. Mirror the first,
-**refuse the second**:
+`PMMStack` spells it `layer_grids="shared" | "per-layer"` -- a HYPHEN, not an
+underscore, validated at `stack.py:184-187` -- with `window_halfwidth=1`
+(`stack.py:176`, which itself raises when set with `layer_grids='shared'`,
+`stack.py:199-204`). Mirror the first, **refuse the second**:
 
 ```python
 PMM2DStackPure(period_x, period_y=None, *, n_superstrate=1.0, n_substrate=1.0,
