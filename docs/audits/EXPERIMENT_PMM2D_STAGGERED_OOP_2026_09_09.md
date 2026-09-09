@@ -299,6 +299,7 @@ not an assumption -- see M1 T2b.
 | 0.2 exact quartic roots, uniaxial optic-axis-z (simple roots, closed form o/e) | **9.3e-15** | the root solver is machine-exact where it is used |
 | 0.3 probe E-form vs shipped `Granet2DTransverseE` | rel max abs(L - Lmat) = **5.86e-15** (normal AND oblique); rel max abs(G + Rmat) = **0.0** / 4.8e-17 | the probe's assembly IS the shipped isotropic discretization -- everything downstream is a generalization of it, not a re-implementation |
 | 0.4 strong H-partner vs shipped Eq.-25 partner | ratio = **-1.000000000i** exactly, spread **6.5e-12** over 200 modes | the two H conventions differ by ONE global constant, which cancels in every S-matrix; the probe's strong form is usable everywhere |
+| 0.5 generalized vs shipped SQUARE interface S-matrix, isotropic pair | S11 **7.69e-14** / S21 **8.05e-14** (normal); **1.03e-13** / **9.29e-14** (conical) | routing the isotropic half-spaces through `_interface_smatrix_general` as `[[W, W], [V, -V]]` costs nothing, so a MIXED isotropic / out-of-plane stack is free |
 
 The 0.2 row changed the design of M1: the plan's tilted-uniaxial probe is
 non-degenerate (o and e distinct), so the root solver is exact there; but any
@@ -703,7 +704,74 @@ quantities: the per-order efficiencies and the order-0 Jones.
 
 ## S9.  M5 -- a genuinely 2-D out-of-plane pillar
 
-PLACEHOLDER-M5
+A half-period rectangular pillar of tilted-uniaxial (`tilt 35, azim 25`;
+`e13 = 0.27253`, `e23 = 0.12708`) in vacuum on a `(2,2)` cell,
+`px = py = 1.2 lam`, `depth = 0.4 lam`, `n_sub = 1.5`.  The only other engines
+in the library that solve a 2-D OUT-OF-PLANE cell are the hybrid
+`pmm_jones_2d` (Fourier-floored, `4Nf` generator) and `rcwa_jones_2d`, so the
+bar is THEIR OWN spread, measured first.
+
+### the oracles' floor, measured
+
+| oracle | n_orders | sum R | abs(R+T-1) |
+|---|---|---|---|
+| hybrid `pmm_jones_2d` (stabilize=True) | 7 | 0.0458232 / 0.0464413 | 4.02e-03 |
+| hybrid | 9 | 0.0453348 / 0.0459726 | 1.86e-04 |
+| hybrid | 11 | 0.0453942 / 0.0460162 | 2.68e-05 |
+| `rcwa_jones_2d` (pixel-replicated cell) | 7 | 0.0454825 / 0.0460924 | **2.31e-14** |
+| `rcwa_jones_2d` | 11 | 0.0454259 / 0.0460424 | **1.42e-13** |
+
+The hybrid's own `n_orders` ladder does not settle below ~1e-05 here (and it
+warns on its lossless closure at 7 and 9); `rcwa_jones_2d` closes to 1e-13 but
+converges in `n_orders` at its own rate.  **Oracle spread, hybrid(13) vs
+rcwa(11): R/T 4.31e-05, Jones 2.15e-04** -- that is the derived bar, and it is
+set by the ORACLES, not by the prototype.
+
+### the staggered candidates against it (normal incidence)
+
+| cand | M | dim | t [s] | abs dR vs hybrid | abs dT | abs dJones | own abs(R+T-1) |
+|---|---|---|---|---|---|---|---|
+| (a) | 5 | 128 | 0.2 | 7.54e-05 | 2.90e-05 | 5.04e-04 | 1.01e-04 |
+| (a) | 6 | 200 | 0.5 | 2.84e-05 | 3.54e-05 | 3.16e-04 | 1.69e-06 |
+| (a) | 7 | 288 | 1.3 | 3.82e-05 | 4.38e-05 | 3.33e-04 | 1.32e-07 |
+| (a) | 8 | 392 | 2.9 | **4.06e-05** | **4.64e-05** | **2.88e-04** | **4.68e-09** |
+| (d) | 5 | 128 | 0.6 | 7.54e-05 | 2.90e-05 | 5.04e-04 | 1.01e-04 |
+| (d) | 6 | 200 | 2.0 | 2.84e-05 | 3.54e-05 | 3.16e-04 | 1.69e-06 |
+
+The staggered result at M = 8 sits **within the oracles' own mutual spread**
+(4.06e-05 against 4.31e-05 on R/T; 2.88e-04 against 2.15e-04 on Jones), while
+its OWN energy closure, 4.68e-09, is four decades better than the hybrid's at
+`n_orders = 11` and improves by two decades per degree.
+
+### the same, at CONICAL incidence (theta = 20, phi = 35)
+
+The oracles again: hybrid 7 / 9 / 11 / 13 closes 4.34e-03 -> 2.86e-04 ->
+7.39e-05 -> 7.70e-05 (its 11 -> 13 movement, 8.46e-05 on R/T and 3.13e-04 on
+Jones, is its floor), `rcwa_jones_2d` closes to 2.2e-14 / 6.1e-14.
+**Oracle spread hybrid(13) vs rcwa(11): R/T 2.03e-04, Jones 6.91e-04.**
+
+| cand | M | dim | t [s] | abs dR vs hybrid | abs dT | abs dJones | own abs(R+T-1) |
+|---|---|---|---|---|---|---|---|
+| (a) | 5 | 128 | 0.2 | 1.77e-04 | 5.90e-04 | 8.43e-04 | 6.91e-04 |
+| (a) | 6 | 200 | 0.5 | 1.19e-04 | 1.03e-04 | 7.21e-04 | 1.97e-05 |
+| (a) | 7 | 288 | 1.4 | 1.19e-04 | 1.13e-04 | 7.45e-04 | 9.89e-07 |
+| (a) | 8 | 392 | 2.9 | **1.20e-04** | **1.15e-04** | **7.21e-04** | **6.17e-08** |
+| (d) | 7 | 288 | 6.0 | 1.19e-04 | 1.13e-04 | 7.45e-04 | 9.89e-07 |
+
+The staggered result settles at 1.19e-04 from M = 6 onward -- BELOW the
+oracles' own 2.03e-04 spread -- while its energy closure keeps falling to
+6.2e-08.  Candidate (d) reproduces every entry.
+
+### the NO-FLOOR property, two-sided
+
+| incidence | staggered (a), M = 7, far-field n_orders 4 -> 9 | hybrid, n_orders 11 -> 13 |
+|---|---|---|
+| normal | **3.66e-15** | 8.46e-05 (11 -> 13; 1.06e-04 on the earlier 9 -> 11 pass) |
+| conical 20/35 | **1.51e-10** | 8.46e-05 |
+
+Eleven and six decades of contrast: the staggered result does not depend on the
+far-field order count, and the hybrid's does.  This is the property the pure
+solver exists for, and the out-of-plane path keeps it.
 
 ---
 
@@ -910,9 +978,9 @@ RANDOM SIGN, and it is the `|Re gam| > 0.5` override that classifies them
 `_propagation_smatrix_general` + the shipped `_redheffer_star`, with the
 ISOTROPIC half-spaces entering as `[[W, W], [V, -V]]`.  Measured: the
 generalized interface reproduces the shipped square `_interface_smatrix` to
-**7.9e-14 (S11) / 7.7e-14 (S21)** on an isotropic pair at normal and
-**1.0e-13 / 9.3e-14** at conical, so mixed isotropic / OOP stacks cost nothing
-in accuracy.
+**7.7e-14 (S11) / 8.1e-14 (S21)** on an isotropic pair at normal and
+**1.0e-13 / 9.3e-14** at conical (M0.5), so mixed isotropic / OOP stacks cost
+nothing in accuracy.
 
 **5. The H-partner.**  Use the STRONG rows `G1 = D2 E3 - i q E2` (in V2),
 `G2 = i q E1 - D1 E3` (in V1) rather than Eq. 25 -- simpler, and it is the

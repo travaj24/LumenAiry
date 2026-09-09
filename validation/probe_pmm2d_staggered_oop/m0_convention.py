@@ -154,6 +154,37 @@ print(f"  V_shipped / V_strong: median = {np.median(ratio[keep]):+.10f}, "
 res["hpartner_ratio"] = complex(np.median(ratio[keep])).real
 res["hpartner_spread"] = spread
 
+# --------------------------------------------------------------------- 0.5
+print("\n## 0.5  GENERALIZED interface S-matrix vs the shipped SQUARE one")
+print("  (an OOP layer needs _interface_smatrix_general; the ISOTROPIC "
+      "half-spaces\n   enter it as [[W, W], [V, -V]].  If that route is not "
+      "bit-equal to the shipped\n   _interface_smatrix, every mixed "
+      "isotropic/OOP stack pays for it.)")
+from lumenairy.elements.pmm._core import _interface_smatrix  # noqa: E402
+from lumenairy.elements.rcwa._core import (  # noqa: E402
+    _interface_smatrix_general,
+    _modes_to_M,
+)
+
+for tag, (th, ph) in (("normal", (0.0, 0.0)), ("conical", (0.42, 0.7))):
+    kx0 = np.sin(th) * np.cos(ph)
+    ky0 = np.sin(th) * np.sin(ph)
+    def _iso(e):                                          # noqa: E731
+        return pc.tile(_C := (e * np.eye(3, dtype=complex)), Nx, Ny)
+    sup = pc.StaggeredCell(px, py, _iso(1.0), Mdeg, k0, kx0, ky0)
+    sub = pc.StaggeredCell(px, py, _iso(2.25), Mdeg, k0, kx0, ky0)
+    Wa, Va, _la, _ = pc.eform_modes(sup)
+    Wb, Vb, _lb, _ = pc.eform_modes(sub)
+    Sg = _interface_smatrix_general(_modes_to_M(Wa, Va, Wa, -Va),
+                                    _modes_to_M(Wb, Vb, Wb, -Vb))
+    Si = _interface_smatrix(Wa, Va, Wb, Vb)
+    d11 = float(np.max(np.abs(Sg[0] - Si[0])))
+    d21 = float(np.max(np.abs(Sg[2] - Si[2])))
+    print(f"  {tag:8s}  max|S11_general - S11_square| = {d11:.3e}   "
+          f"max|S21 - S21| = {d21:.3e}")
+    res[f"ifc_general_S11_{tag}"] = d11
+    res[f"ifc_general_S21_{tag}"] = d21
+
 with open(os.path.join(OUT, "m0_convention.json"), "w") as f:
     json.dump(res, f, indent=1, default=str)
 print("\nwrote results/m0_convention.json")
