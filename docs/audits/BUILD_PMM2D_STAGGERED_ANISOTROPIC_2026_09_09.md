@@ -152,7 +152,11 @@ methods themselves differ by 2e-4 on (-1,1).)
 
 Position invariance verified: the `(4,4)` CENTRED pillar at `M = 5` gives
 0.52800 for (0,0) against 0.52797 for the `(2,2)` corner pillar at `M = 7`,
-max per-order |dT| = **6.72e-05** over the whole propagating set.
+max per-order |dT| = **6.72e-05** over the whole propagating set.  (A literal
+3x3 decomposition with walls at 0.25 / 0.75 is not expressible in this basis --
+`Basis1D` cuts an axis into EQUAL segments -- so the centred arm uses `(4,4)`
+uniform quarters with the pillar occupying the middle two, which is the same
+geometry.)
 
 **Definitions tried** (order-0 row shown; `kz_i = 1` at normal incidence):
 
@@ -513,15 +517,37 @@ New file: `tests/unit/test_pmm2d_staggered_anisotropic.py` -- 37 tests
 G6 x3 [2 parametrized + 1], G7 x3, G8 x2, G9 x1, G10 x5, tripwire x3).
 
 Measured durations of the slowest tests in the new file (`--durations`,
-single-threaded): 10.53 s `g5_three_engines`, 7.12 s `g3_multisegment`,
-4.28 + 1.41 s `g9_absorption` (the M ladder), 3.33 s `g6_closure_improves`,
-1.81 s `g5_no_fourier_floor`, 1.66 s `g4_ladder`, 1.59 s `g4_stripe`, 1.58 s
-`g8b_multilayer`; **whole file ~50 s**, no single test above 11 s -- inside
-the plan's `< 3 min` file / `< 40 s` test budget.  Every grid is `(2,2)` or
+single-threaded, final run): 10.30 s `g5_three_engines`, 6.56 s
+`g3_multisegment`, 4.54 s `g9_absorption` (its M ladder), 3.29 s
+`g6_closure_improves`, 1.78 s `g5_no_fourier_floor`, 1.63 s `g4_ladder`;
+**whole file 53.8 s for 37 tests**, no single test above 11 s -- inside the
+plan's `< 3 min` file / `< 40 s` test budget.  Every grid is `(2,2)` or
 `(3,3)` and every `M <= 8`.
 
-Regression set run in the worktree (`-p no:randomly`, OMP capped): see
-Section 6 for the pass counts.
+Regression suites run in the worktree (`-p no:randomly`, OMP capped, this
+build):
+
+| set | result |
+|---|---|
+| `test_pmm2d_staggered_anisotropic.py` (this file) | **37 passed**, 53.8 s |
+| `test_v5_12_0_pmm2d_staggered` + `test_v5_21_pmm2d_staggered_oblique` + `test_staggered` + `test_audit_p1_staggered_guard` + `test_p2c_pmm2d_stack_cascade` + `test_p2t_pmm2d_tree_cascade` + `test_pmm2d_lossless_closure_two_sided` + `test_audit_s1_3_pmm2d_lossless_tripwire` + `test_v5_14_0_pmm2d_stack` + `test_v5_12_0_pmm2d_loss` + `test_v5_14_0_pmm2d_cell` + `test_audit_w3_entry_validation` + `test_audit_w6_pmm_rcwa` + `test_v5_14_0_pmm_jones_2d` + `test_public_api` + `test_v4_16_0_walker_all_symmetry` (with this file) | **971 passed**, 575.8 s |
+| `test_audit_dynameta_consumer_api_2` + `test_niche_audit_w7_pmm` (the PMM2DStackPure consumers; `~5 min` per pure C3 test) + this file | **183 passed**, 902.9 s |
+| every `pmm` / `staggered` / `berreman` / `rcwa_jones` / `public_api` / `walker` test in `tests/unit/` (`-k`, 2597 selected) | **2589 passed, 8 skipped, 1 failed**, 1410.5 s -- the single failure is PRE-EXISTING (below) |
+
+The one failure is
+`test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_fff_nv_stripe_reduces_to_rigorous_1d`.
+It is **PRE-EXISTING and unrelated** -- VERIFIED, not assumed: the library
+directory was reverted to the pre-change commit `9f212dd` and the same test
+failed identically there (`1 failed, 9 passed` in that file), then restored.
+The failure is inside that test's own `_sound_1d_reference` ladder, entirely
+within `rcwa_jones_1d_segments`, whose docstring already records the fixture as
+"a poisoned truncation for this fixture on at least one shipped platform"; the
+PMM staggered path is not on its call graph.
+
+The NEW closure tripwire fired ZERO times across all of them (grep for
+`PMM2DStackPure.solve: lossless energy closure violated`), which is the
+empirical form of the "must not fire on any existing scalar fixture"
+requirement -- T11 is its derivation, this is its confirmation.
 
 ---
 
@@ -554,11 +580,13 @@ gets no unity claim at all.  It WARNS, never raises.
 1. **G2 is not closed.**  The published Table-2 magnitudes are not reproduced
    under any of the readings swept (T2).  The most likely remaining
    explanations, none of which this build can settle from the paper alone:
-   the paper's Fig. 4 fill fractions may not be the 0.5/0.5 the text states;
-   the SEM `dim = 9 M^2` implies a 3x3 subdomain decomposition that this
-   build reproduces only up to position invariance (verified to 6.7e-05, so
-   it is not the cause); or the paper's transmitted-efficiency normalization
-   into a lossy substrate is one this build did not guess.  Deliberately NOT
+   the paper's Fig. 4 fill fractions may not be the 0.5/0.5 the text states
+   (a continuous parameter, so fitting it would be tuning and was refused);
+   or the paper's transmitted-efficiency normalization into a lossy substrate
+   is one this build did not guess.  The SEM's `dim = 9 M^2` implies a 3x3
+   subdomain decomposition, i.e. a CENTRED pillar; that is NOT the cause --
+   the centred arrangement was measured and agrees with the corner one to
+   6.7e-05 (position invariance, T2).  Deliberately NOT
    tuned.  What IS established against the paper is the gyrotropic order-
    asymmetry SIGN, and the cross-engine agreement in T5 carries the rest.
 2. **Out-of-plane (Stage B) is not built** -- by design.  Entries raise
@@ -592,6 +620,12 @@ gets no unity claim at all.  It WARNS, never raises.
     cross-platform (WSL / different LAPACK) confirmation of the tables above.
     Every number here is one machine's measurement; the bars are derived so
     that they do not depend on it, but the TABLES are single-build readings.
+11. **One PRE-EXISTING red in the regression slice**,
+    `test_v5_20_12_rcwa_jones_2d_fff_nv::test_fff_nv_stripe_reduces_to_rigorous_1d`
+    -- reproduced on the pre-change library at `9f212dd` (Section 3), so it is
+    inherited, not caused here.  Not investigated further: it is an
+    `rcwa_jones_1d_segments` truncation-ladder problem, out of this build's
+    scope.
 
 ---
 

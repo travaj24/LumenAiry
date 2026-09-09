@@ -36,13 +36,16 @@ BLOCK-FORM tensor `[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]`.
   returned R/T.
 * Validation (docs/audits/BUILD_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md):
   uniform in-plane tensor slabs (rotated uniaxial AND gyrotropic) match the
-  exact Berreman 4x4 to 6.5e-14 in R, T and the complex Jones at normal,
+  exact Berreman 4x4 to 9.3e-14 in R, T and the complex Jones at normal,
   oblique and conical incidence; a y-uniform anisotropic stripe matches the
   1-D `pmm_jones_1d` / `rcwa_jones_1d` per order to 4.3e-6 at M=8; a 2-D
   anisotropic cell agrees with `pmm_jones_2d` and `rcwa_jones_2d` inside
   their Fourier floor (<= 5.8e-4); a uniform-tensor multilayer matches the
-  Berreman multilayer to 1.1e-14; the lossy-tensor absorption budget closes
-  to 5.9e-6.  A gyrotropic cell's +/- order asymmetry (the observable no
+  Berreman multilayer to 4.2e-14 at conical incidence; the lossy-tensor
+  absorption budget closes to 8.2e-8.  Zeroing any ONE of the three new terms
+  (the Eq. 40 mixed masses, the Eq. 44 second `K_zt` term, the Eq. 25 `Lhh`
+  mixed blocks) moves the Berreman residual by 11-12 decades, so none of them
+  is dead code.  A gyrotropic cell's +/- order asymmetry (the observable no
   energy check can see) has the sign Granet's Table 2 reports, and REVERSES
   if the paper's `exp(+i w t)` tensor is used without conjugation.
 * OUT-OF-PLANE tensors (`e_xz`/`e_yz`/`e_zx`/`e_zy` above a RELATIVE

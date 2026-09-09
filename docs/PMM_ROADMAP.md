@@ -16,7 +16,7 @@ Legend: ✅ shipped · 🔄 in flight · ⬜ planned · ❌ open/known-hard ·
 | **1-D vertical** | ✅ `pmm_efficiency_1d` | ✅ `pmm_efficiency_1d_segments` | ✅ `pmm_jones_1d` | ✅ `pmm_jones_1d_segments` |
 | **1-D slanted** (normal inc.) | ✅ `pmm_efficiency_1d_slanted` | 🔄 (= diagonal case of below) | 🔄 `wiiihr0hl` | 🔄 `wiiihr0hl` |
 | **1-D oblique + slant** | ❌ cross-term unresolved | ❌ | ❌ | ❌ |
-| **2-D vertical** (rect pillars) | ✅ `pmm_efficiency_2d` (FMM-floored) + ✅ `pmm_efficiency_2d_staggered` (no-floor) | ✅ (via `eps_cell` grid; staggered) | ⬜ planned | ⬜ planned |
+| **2-D vertical** (rect pillars) | ✅ `pmm_efficiency_2d` (FMM-floored) + ✅ `pmm_efficiency_2d_staggered` (no-floor) | ✅ (via `eps_cell` grid; staggered) | ✅ `pmm_jones_2d` (FMM-floored, incl. out-of-plane) + ✅ `pmm_jones_2d_staggered` (no-floor, IN-PLANE block-form only) | ✅ (via the `eps_cell` tensor grid, both engines) |
 | **2-D slanted** | ⬜ planned (moderate) | ⬜ | ⬜ | ⬜ |
 | **2-D curved** (cylinder/ellipse) | ⬜ planned (hard) | ⬜ | ⬜ | ⬜ |
 
@@ -182,7 +182,7 @@ That's why Phase C is the linchpin and is sequenced before D/E.
 | Vertical / axis-aligned, many-layer stacks, dispersion sweeps, inverse-design (autodiff) | **RCWA** (`rcwa_efficiency_2d` / `RCWAStack`) | Mature, FFT-fast, JAX-differentiable; parity-or-better on vertical |
 | 2-D vertical, need exact energy / no-floor / position-invariance / pinned value on hard Gibbs cases | **`pmm_efficiency_2d_staggered`** | No Fourier floor; accuracy ceiling (to be quantified by Phase B) |
 | 1-D / 2-D **slanted or tapered** sidewalls | **PMM slant** (1-D shipped; 2-D = Phase D) | Staircase avoidance → genuine speed win; the device regime |
-| Anisotropic / tunable-LC / Jones | **`pmm_jones_1d`** (1-D); 2-D = Phase C | Full tensor → Jones |
+| Anisotropic / tunable-LC / Jones | **`pmm_jones_1d`** (1-D); **`pmm_jones_2d_staggered`** (2-D, IN-PLANE, no floor) or **`pmm_jones_2d`** (2-D, FMM-floored, the only 2-D route for OUT-OF-PLANE tensors) | Full tensor → Jones |
 | Curved (cylinder/ellipse) pillars, spectral accuracy | **PMM curved** (Phase E) | Transfinite map removes the Gibbs floor |
 
 RCWA stays the **workhorse**; PMM is the **specialist** for slant/taper/curved,

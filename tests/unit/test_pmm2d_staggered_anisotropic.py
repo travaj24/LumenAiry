@@ -755,14 +755,22 @@ def _oop_cell(stray):
     return c
 
 
+#: the message must NAME THE ALTERNATIVE, not merely mention the entry's own
+#: (prefix) name -- ``pmm_jones_2d`` is a substring of
+#: ``pmm_jones_2d_staggered``, so a bare ``match="pmm_jones_2d"`` would pass on
+#: the prefix alone and assert nothing.
+_NAMES_HYBRID = r"Use pmm_jones_2d \(the hybrid"
+
+
 def test_g10_out_of_plane_tensor_raises_and_names_the_hybrid():
-    with pytest.raises(NotImplementedError, match="pmm_jones_2d") as exc:
+    with pytest.raises(NotImplementedError, match=_NAMES_HYBRID) as exc:
         pmm_jones_2d_staggered(_P, _P, _oop_cell(0.4), 1.5, 1.0, _DEP, _WL,
                                degree=5)
     assert "OUT-OF-PLANE" in str(exc.value)
-    with pytest.raises(NotImplementedError, match="pmm_jones_2d"):
+    with pytest.raises(NotImplementedError, match=_NAMES_HYBRID):
         PMM2DStackPure(_P, _P).add_layer(_DEP, eps_cell=_oop_cell(0.4))
-    with pytest.raises(NotImplementedError, match="pmm_jones_2d"):
+    # a genuinely tilted director (theta = 0.6 rad off z) is out of plane too
+    with pytest.raises(NotImplementedError, match=_NAMES_HYBRID):
         PMM2DStackPure(_P, _P).add_layer(_DEP,
                                          eps=uniaxial_tensor(1.5, 1.8, 0.6))
 
