@@ -1,0 +1,66 @@
+[A in_plane_control normal] sum_of_roots=-0+0j  transpose_gap=0.00e+00
+    rot=-1  d(+k_t)=3.068e-14  d(-k_t)=3.068e-14
+    rot=+1  d(+k_t)=3.068e-14  d(-k_t)=3.068e-14
+[A in_plane_control conical25_40] sum_of_roots=-2.47116e-17+0j  transpose_gap=0.00e+00
+    rot=-1  d(+k_t)=1.449e-14  d(-k_t)=1.449e-14
+    rot=+1  d(+k_t)=1.449e-14  d(-k_t)=1.449e-14
+[A symmetric_oop normal] sum_of_roots=-0+0j  transpose_gap=0.00e+00
+    rot=-1  d(+k_t)=2.403e-14  d(-k_t)=2.403e-14
+    rot=+1  d(+k_t)=2.173e-14  d(-k_t)=2.173e-14
+[A symmetric_oop conical25_40] sum_of_roots=-0.156407+0j  transpose_gap=0.00e+00
+    rot=-1  d(+k_t)=1.633e-14  d(-k_t)=3.107e-02
+    rot=+1  d(+k_t)=3.107e-02  d(-k_t)=1.633e-14
+[A non_reciprocal_oop normal] sum_of_roots=-0+0j  transpose_gap=2.30e-15
+    rot=-1  d(+k_t)=2.798e-14  d(-k_t)=2.798e-14
+    rot=+1  d(+k_t)=1.521e-14  d(-k_t)=1.521e-14
+[A non_reciprocal_oop conical25_40] sum_of_roots=-0.156407+0j  transpose_gap=9.05e-16
+    rot=-1  d(+k_t)=1.340e-14  d(-k_t)=3.017e-02
+    rot=+1  d(+k_t)=3.017e-02  d(-k_t)=1.340e-14
+[B symmetric_oop normal] dJones ladder  M3:1.35e-15  M4:2.11e-15  M5:6.88e-15  M6:9.87e-15  M7:2.74e-14  M8:7.61e-14
+    dR ladder  M3:3.40e-16  M4:5.93e-16  M5:2.12e-15  M6:4.06e-15  M7:7.63e-15  M8:3.16e-14
+    leak       M3:3.0e-29  M4:4.3e-29  M5:1.1e-28  M6:2.2e-27  M7:3.1e-27  M8:1.4e-26
+[B non_reciprocal_oop normal] dJones ladder  M3:1.63e-15  M4:5.37e-15  M5:8.32e-15  M6:1.47e-14  M7:3.46e-14  M8:7.71e-14
+    dR ladder  M3:2.29e-16  M4:2.00e-15  M5:1.86e-15  M6:5.70e-15  M7:9.62e-15  M8:3.08e-14
+    leak       M3:1.7e-29  M4:3.4e-29  M5:9.9e-29  M6:2.2e-27  M7:3.3e-27  M8:1.7e-26
+[B symmetric_oop oblique25] dJones ladder  M3:1.78e-03  M4:1.65e-05  M5:1.44e-07  M6:1.23e-09  M7:7.10e-12  M8:8.37e-14
+    dR ladder  M3:5.53e-04  M4:5.85e-06  M5:4.60e-08  M6:3.99e-10  M7:2.31e-12  M8:1.73e-14
+    leak       M3:1.3e-02  M4:6.8e-05  M5:8.8e-08  M6:4.3e-11  M7:9.5e-15  M8:1.1e-18
+[B non_reciprocal_oop oblique25] dJones ladder  M3:1.94e-03  M4:1.52e-05  M5:1.42e-07  M6:1.22e-09  M7:7.04e-12  M8:8.32e-14
+    dR ladder  M3:5.95e-04  M4:4.44e-06  M5:4.47e-08  M6:3.88e-10  M7:2.24e-12  M8:2.20e-14
+    leak       M3:1.4e-02  M4:6.8e-05  M5:8.7e-08  M6:4.2e-11  M7:9.3e-15  M8:1.1e-18
+[B symmetric_oop conical25_40] dJones ladder  M3:4.94e-04  M4:2.84e-06  M5:2.15e-08  M6:1.05e-10  M7:3.67e-13  M8:7.66e-14
+    dR ladder  M3:2.00e-04  M4:6.83e-07  M5:2.48e-09  M6:1.21e-11  M7:3.35e-14  M8:1.92e-14
+    leak       M3:4.5e-03  M4:2.3e-05  M5:2.2e-08  M6:7.6e-12  M7:1.2e-15  M8:9.5e-20
+[B non_reciprocal_oop conical25_40] dJones ladder  M3:4.73e-04  M4:3.00e-06  M5:2.17e-08  M6:1.04e-10  M7:3.48e-13  M8:7.53e-14
+    dR ladder  M3:1.87e-04  M4:3.88e-07  M5:1.55e-09  M6:8.79e-12  M7:1.85e-14  M8:1.82e-14
+    leak       M3:5.5e-03  M4:2.4e-05  M5:2.3e-08  M6:7.9e-12  M7:1.2e-15  M8:9.8e-20
+[C symmetric_oop normal] reference       dR=3.163e-14 dJ=7.607e-14
+[C symmetric_oop normal] drop_oop        dR=6.672e-03 dJ=1.493e-02
+[C symmetric_oop normal] negate_oop      dR=3.176e-14 dJ=7.649e-14
+[C symmetric_oop normal] transpose_oop   dR=2.726e-14 dJ=6.788e-14
+[C non_reciprocal_oop normal] reference       dR=3.079e-14 dJ=7.712e-14
+[C non_reciprocal_oop normal] drop_oop        dR=8.254e-03 dJ=1.874e-02
+[C non_reciprocal_oop normal] negate_oop      dR=2.748e-14 dJ=6.924e-14
+[C non_reciprocal_oop normal] transpose_oop   dR=3.664e-14 dJ=7.834e-03
+[C symmetric_oop oblique25] reference       dR=1.727e-14 dJ=8.369e-14
+[C symmetric_oop oblique25] drop_oop        dR=6.659e-03 dJ=2.128e-02
+[C symmetric_oop oblique25] negate_oop      dR=1.235e-03 dJ=2.628e-02
+[C symmetric_oop oblique25] transpose_oop   dR=1.592e-14 dJ=7.806e-14
+[C non_reciprocal_oop oblique25] reference       dR=2.204e-14 dJ=8.324e-14
+[C non_reciprocal_oop oblique25] drop_oop        dR=8.899e-03 dJ=3.312e-02
+[C non_reciprocal_oop oblique25] negate_oop      dR=4.315e-03 dJ=4.691e-02
+[C non_reciprocal_oop oblique25] transpose_oop   dR=3.085e-03 dJ=4.691e-02
+[C symmetric_oop conical25_40] reference       dR=1.918e-14 dJ=7.663e-14
+[C symmetric_oop conical25_40] drop_oop        dR=6.687e-03 dJ=1.623e-02
+[C symmetric_oop conical25_40] negate_oop      dR=1.335e-04 dJ=1.459e-02
+[C symmetric_oop conical25_40] transpose_oop   dR=1.679e-14 dJ=6.982e-14
+[C non_reciprocal_oop conical25_40] reference       dR=1.815e-14 dJ=7.535e-14
+[C non_reciprocal_oop conical25_40] drop_oop        dR=9.001e-03 dJ=2.806e-02
+[C non_reciprocal_oop conical25_40] negate_oop      dR=2.530e-03 dJ=3.537e-02
+[C non_reciprocal_oop conical25_40] transpose_oop   dR=2.484e-03 dJ=3.595e-02
+[D] stray=1e-16*scale offplane=False bit_identical=True dR=0.000e+00
+[D] stray=1e-14*scale offplane=False bit_identical=True dR=0.000e+00
+[D] stray=1e-12*scale offplane=False bit_identical=True dR=0.000e+00
+[D] stray=1e-11*scale offplane=True bit_identical=False dR=1.507e-13
+[D] stray=0.001*scale offplane=True bit_identical=False dR=1.526e-05
+DONE

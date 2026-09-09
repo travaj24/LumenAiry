@@ -1,0 +1,11 @@
+[stripe oblique25] gauge=-1j (shipped)  vs pmm1d dR=8.912e-06 dT=8.931e-06 dJ=2.268e-05 | vs rcwa1d dR=1.814e-05 | R+T=0.999999957
+[stripe oblique25] gauge=+1j            vs pmm1d dR=4.254e-03 dT=3.495e-02 dJ=2.651e-02 | vs rcwa1d dR=4.251e-03 | R+T=1.000021923
+[stripe normal] gauge=-1j (shipped)  vs pmm1d dR=9.674e-06 dT=2.293e-05 dJ=2.040e-05 | vs rcwa1d dR=2.032e-05 | R+T=0.999999902
+[stripe normal] gauge=+1j            vs pmm1d dR=6.110e-03 dT=4.115e-02 dJ=2.408e-02 | vs rcwa1d dR=6.113e-03 | R+T=1.000016857
+[2d oblique25] gauge=-1j (shipped)  dR=1.681e-04 dT=2.104e-03 dJ=1.511e-03 R+T=0.999994117
+C:\tmp\lum_aniso\lumenairy\elements\pmm\twod_staggered.py:1714: UserWarning: PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 1.139, off by +0.139; every permittivity in this stack is real or Hermitian, so R+T = 1 is exact).  The staggered basis is under-resolved or the solve sits inside a Rayleigh cutoff: raise n_modes (M), or detune the wavelength / use PMM2DStackHybrid near a cutoff.
+  return stack.solve(jones=True)
+C:\tmp\lum_aniso\lumenairy\elements\pmm\twod_staggered.py:1714: UserWarning: PMM2DStackPure.solve: lossless energy closure violated for incident E_y (sum R+T = 1.32, off by +0.32; every permittivity in this stack is real or Hermitian, so R+T = 1 is exact).  The staggered basis is under-resolved or the solve sits inside a Rayleigh cutoff: raise n_modes (M), or detune the wavelength / use PMM2DStackHybrid near a cutoff.
+  return stack.solve(jones=True)
+[2d oblique25] gauge=+1j            dR=2.791e-01 dT=9.761e-02 dJ=7.368e-02 R+T=1.139051128
+DONE

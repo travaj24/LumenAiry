@@ -1,0 +1,19 @@
+[B1_metal_in_oop_lc_normal] split=[288, 288]/288 raw_fwd=288 rebal=False minRe(lam_f)=1.926e-03 fwd_growth=9.9416e-01 bwd_growth=9.9416e-01 R+T=0.918605 closure=None maxR=0.1375 minR=0.00e+00 warn=0
+[B1_metal_in_oop_lc_oblique60] split=[288, 288]/288 raw_fwd=288 rebal=False minRe(lam_f)=2.285e-03 fwd_growth=9.9308e-01 bwd_growth=9.9429e-01 R+T=0.837980 closure=None maxR=0.3949 minR=0.00e+00 warn=0
+[B1_metal_in_oop_lc_conical60_40] split=[288, 288]/288 raw_fwd=288 rebal=False minRe(lam_f)=3.178e-03 fwd_growth=9.9038e-01 bwd_growth=9.8838e-01 R+T=0.825883 closure=None maxR=0.0778 minR=0.00e+00 warn=0
+[B1_metal_in_oop_lc_deep_3lam] split=[288, 288]/288 raw_fwd=288 rebal=False minRe(lam_f)=2.285e-03 fwd_growth=9.5783e-01 bwd_growth=9.6514e-01 R+T=0.630867 closure=None maxR=0.3127 minR=0.00e+00 warn=0
+[B2_cutoff_gap0.003] split=[200, 200]/200 raw_fwd=200 rebal=False minRe(lam_f)=-3.851e-14 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=0.999999 closure=1.3142032709856366e-06 maxR=0.0149 minR=0.00e+00 warn=0
+[B2_cutoff_gap0.001] split=[200, 200]/200 raw_fwd=200 rebal=False minRe(lam_f)=-2.844e-14 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=0.999996 closure=4.081319265769601e-06 maxR=0.0262 minR=0.00e+00 warn=0
+[B2_cutoff_gap0.0003] split=[200, 200]/200 raw_fwd=200 rebal=False minRe(lam_f)=-1.767e-14 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=0.999991 closure=9.142542905848927e-06 maxR=0.0358 minR=0.00e+00 warn=0
+[B2_cutoff_gap0.0001] split=[200, 200]/200 raw_fwd=200 rebal=False minRe(lam_f)=-2.813e-14 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=0.999984 closure=1.6296724029141174e-05 maxR=0.0416 minR=0.00e+00 warn=0
+[B2_cutoff_gap3e-05] split=[200, 200]/200 raw_fwd=200 rebal=False minRe(lam_f)=-2.133e-14 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=0.999977 closure=2.2709090125916376e-05 maxR=0.0456 minR=0.00e+00 warn=1
+     WARN: PMM2DStackPure.solve: a diffraction order is within 9e-05 (kt^2 units) of a Rayleigh cutof
+[B2_cutoff_gap0] split=[200, 200]/200 raw_fwd=200 rebal=False minRe(lam_f)=-2.111e-14 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=1.000000 closure=9.108713783234634e-12 maxR=0.0509 minR=0.00e+00 warn=1
+     WARN: PMM2DStackPure.solve: a diffraction order is within 4.5e-07 (kt^2 units) of a Rayleigh cut
+[B3_high_contrast_M8_normal] split=[392, 392]/392 raw_fwd=392 rebal=False minRe(lam_f)=-1.077e-14 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=0.999917 closure=0.00010900595491503129 maxR=0.1624 minR=0.00e+00 warn=0
+[B3_high_contrast_M8_oblique60] split=[392, 392]/392 raw_fwd=392 rebal=False minRe(lam_f)=-1.356e-14 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=0.996018 closure=0.003982090826286422 maxR=0.2729 minR=0.00e+00 warn=0
+[B3_high_contrast_33_M8_conical] split=[882, 882]/882 raw_fwd=882 rebal=False minRe(lam_f)=-9.361e-15 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=1.000000 closure=1.8677329904903672e-07 maxR=0.0644 minR=0.00e+00 warn=0
+[B4_oblique60_depth0.25lam] split=[288, 288]/288 raw_fwd=288 rebal=False minRe(lam_f)=-8.216e-15 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=1.000006 closure=6.059163259797273e-06 maxR=0.1827 minR=0.00e+00 warn=0
+[B4_oblique60_depth1.0lam] split=[288, 288]/288 raw_fwd=288 rebal=False minRe(lam_f)=-8.216e-15 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=1.000006 closure=1.2934800468600294e-05 maxR=0.1821 minR=0.00e+00 warn=0
+[B4_oblique60_depth3.0lam] split=[288, 288]/288 raw_fwd=288 rebal=False minRe(lam_f)=-8.216e-15 fwd_growth=1.0000e+00 bwd_growth=1.0000e+00 R+T=1.000006 closure=6.058695740662756e-06 maxR=0.1763 minR=0.00e+00 warn=0
+DONE

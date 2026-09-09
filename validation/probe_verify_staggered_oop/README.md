@@ -39,4 +39,8 @@ PYTHONPATH=/c/tmp/lum_aniso OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
 | `v7_cost.py` | the T10 cost claims: INTERLEAVED in-plane vs out-of-plane region-solve timings (ratios only) and `tracemalloc` peak allocation.  Run alone |
 
 | `v8_rot_equals_negate.py` | the identity behind the rotation gauge, measured: `solve(cell, rot=+1)` vs `solve(negate_oop(cell), rot=-1)` on three shapes x three mounts.  BIT-IDENTICAL in all nine, so `_OOP_ROT_SIGN` IS the negate-out-of-plane control |
-`results/` holds the JSON and the logs each run printed.
+`results/` holds the JSON each run wrote and the console output each run
+printed.  The console output is kept as `<probe>.out.txt` (the repo `.gitignore`
+excludes `*.log`, so the raw `.log` files are working copies only), plus
+`regress_staggered_summary.txt` and `regress_dynameta_consumer_summary.txt` for
+the pytest tails and `v6_envelope_1_vs_4.txt` for the cross-kernel table.

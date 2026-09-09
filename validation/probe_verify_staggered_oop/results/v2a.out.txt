@@ -1,0 +1,13 @@
+[chiral oblique25] ORACLE MUTUAL SPREAD dR=9.229e-06 dT=9.268e-06 dJ=2.356e-05 n=31
+[chiral normal] ORACLE MUTUAL SPREAD dR=1.064e-05 dT=2.758e-05 dJ=2.251e-05 n=31
+[uniform normal] rot=-1 dR=5.442e-14 dT=2.787e-14 dJ=1.262e-13 leak=1.41e-26
+[uniform normal] rot=+1 dR=5.322e-14 dT=3.109e-14 dJ=1.260e-13 leak=1.14e-26
+[uniform normal] ARM GAP dJones=6.064e-15 bit-identical=False
+[uniform oblique25] rot=-1 dR=1.768e-13 dT=9.026e-13 dJ=4.730e-13 leak=1.67e-19
+[uniform oblique25] rot=+1 dR=9.408e-04 dT=9.408e-04 dJ=2.825e-02 leak=4.34e-19
+[uniform oblique25] ARM GAP dJones=2.825e-02 bit-identical=False
+[uniform conical25_40] rot=-1 dR=6.559e-14 dT=4.996e-14 dJ=1.535e-13 leak=7.94e-19
+[uniform conical25_40] rot=+1 dR=1.850e-04 dT=1.850e-04 dJ=7.513e-03 leak=8.02e-19
+[uniform conical25_40] ARM GAP dJones=7.513e-03 bit-identical=False
+[chiral normal] ARM GAP dJones=9.878e-04 dR=4.594e-04 bit-identical=False
+[exited with code 0]
