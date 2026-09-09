@@ -124,6 +124,22 @@ if __name__ == "__main__":
     print(f"  LOSSY mu (no unity claim exists): warnings="
           f"{len([x for x in w if 'energy closure' in str(x.message)])}")
     print()
+    print("=== G9  layer_absorption budget with a LOSSY MAGNETIC layer")
+    for M in (5, 6, 7, 8):
+        st = PMM2DStackPure(P, P, n_modes=M, n_orders=3)
+        st.add_layer(DEP, eps_cell=cell(LC, 4.0 * EYE),
+                     mu_cell=cell(MU_LOSSY, 1.2 * EYE))
+        st.add_layer(0.15e-6, eps=2.25)
+        st.set_source(WL, theta=0.2, phi=0.4)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            o, R, T, J = st.solve(retain_internal=True)
+        A = st.layer_absorption()
+        resid = np.abs(A.sum(axis=0) - (1.0 - R.sum(axis=1) - T.sum(axis=1)))
+        print(f"  M={M}  sum A = {np.round(A.sum(axis=0), 6)}  "
+              f"1 - R - T = {np.round(1 - R.sum(1) - T.sum(1), 6)}  "
+              f"closure = {resid.max():.3e}")
+    print()
     print("=== G6  x<->y transpose with the mu blocks swapped")
     ea, ma = cell(LC, 4.0 * EYE), cell(MU_GYRO, 1.2 * EYE)
     dev, dJ = transpose_residual(ea, ma, transpose_cell(ea),

@@ -417,6 +417,26 @@ exact-identity mu -- the 2x2 inverse and `chi33` never read the out-of-plane
 slots once the guard has passed.  `mu_superstrate=1.0` / `mu_substrate=1` are
 accepted (they are the nonmagnetic default written out).
 
+### M9 -- G9 the `layer_absorption` budget with a lossy MAGNETIC layer
+
+`retain_internal=True` on a two-layer stack whose FIRST layer is magnetic and
+lossy (LC/iso eps, `Im(m11) = +0.25` mu) over an isotropic `eps = 2.25` layer,
+theta 0.2 / phi 0.4.  The identity `sum_i A_i == 1 - sum R - sum T` is
+CROSS-MACHINERY: the left side is the internal block-Gram flux quadrature, the
+right side the Rayleigh far field.
+
+| M | sum A (Ex / Ey) | 1 - R - T (Ex / Ey) | closure |
+|---|---|---|---|
+| 5 | 0.055130 / 0.444410 | 0.055121 / 0.444398 | 1.285e-05 |
+| 6 | 0.055474 / 0.444840 | 0.055473 / 0.444839 | 7.042e-07 |
+| 7 | 0.055441 / 0.446019 | 0.055441 / 0.446019 | 2.192e-08 |
+| 8 | 0.055314 / 0.445808 | 0.055314 / 0.445808 | 9.867e-10 |
+
+The flux bilinear form is the eps-free block Gram of the (nonmagnetic)
+half-space assembly, which the magnetic path does not touch -- but that is a
+prediction, and this is the measurement.  Bar 1e-8 at M=8 (10x) plus a ladder
+drop of at least 100x (measured 13,000x).
+
 ### M8 -- cost
 
 `(3,3)` grid, M=8 (`q^2 = 441`, pencil `2 q^2 = 882`), patterned LC/iso eps,
@@ -443,7 +463,7 @@ patterned LC2/1.6 mu; three repeats:
 
 ## 4. Test suite
 
-`tests/unit/test_pmm2d_staggered_magnetic.py` -- **30 tests, 85-101 s**
+`tests/unit/test_pmm2d_staggered_magnetic.py` -- **31 tests, 75-101 s**
 single-threaded, slowest test 9.5 s (limits: file < 3 min, test < 40 s, grids
 <= (3,3), M <= 8).  Every bar cites the table above and is derived from a
 measurement made in this build; no cross-build value is pinned anywhere.
@@ -456,6 +476,7 @@ measurement made in this build; no cross-build value is pinned anywhere.
 | G4 | `test_g4_magnetic_stripe_matches_both_1d_engines`, `test_g4_ladder_and_y_momentum` |
 | G5 | `test_g5_hermitian_mu_is_lossless`, `test_g5_patterned_closure_improves_with_m`, `test_g5_lossy_mu_closes_below_one`, `test_g5_tripwire_recognises_a_hermitian_mu_as_lossless` |
 | G6 | `test_g6_transpose_symmetry_with_the_mu_blocks_swapped`, `test_g6_mu_mixed_block_placement_control` |
+| G9 | `test_g9_absorption_budget_closes_for_a_magnetic_layer` |
 | fail-before | `test_failbefore_the_r_vs_gram_separation_is_load_bearing`, `test_failbefore_each_chi_weight_is_load_bearing` (x2), `test_failbefore_the_mixed_chi_blocks_are_load_bearing` |
 | G7 | `test_g7_out_of_plane_mu_raises`, `test_g7_mu_with_an_out_of_plane_eps_raises`, `test_g7_magnetic_half_space_raises`, `test_g7_shape_and_singularity_guards`, `test_g7_homog_geom_cache_refuses_a_magnetic_region`, `test_g7_float_noise_in_m13_does_not_trip_the_block_form_guard` |
 | API | `test_api_uniform_and_patterned_mu_combinations_agree`, `test_api_two_identical_magnetic_layers_share_one_eig` |
@@ -486,8 +507,7 @@ fixture"): see Section 6 of the final report.
   cutoff will simply not be nudged.  Left alone in this build to keep the merge
   with the concurrent Wood-anomaly work conflict-free.
 * **JAX twin** -- the staggered path is NumPy-only, magnetic or not.
-* **`layer_absorption` with a magnetic layer** was not separately gated: the
-  flux form is the eps-free block Gram of the HALF-SPACE solver, which is
-  unchanged, and the closure identity `sum A_i = 1 - sum R - sum T` is the
-  honest check.  Worth a G9-style budget test if magnetic absorbers become a
-  use case.
+* **`layer_absorption` with a magnetic layer** IS gated (table M9, closing
+  9.9e-10 at M=8 on a lossy-mu layer) -- but only for an in-plane magnetic
+  layer in a NUMPY cascade; the tapered / z-staircase helpers remain
+  hybrid-only, magnetic or not.

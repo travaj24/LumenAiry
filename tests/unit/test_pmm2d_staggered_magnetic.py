@@ -626,6 +626,53 @@ def test_g5_tripwire_recognises_a_hermitian_mu_as_lossless():
 
 
 # =========================================================================== #
+# G9 -- the layer_absorption budget with a LOSSY MAGNETIC layer.
+# =========================================================================== #
+def _absorption_closure(M):
+    """max over the two incident polarizations of
+    ``|sum_i A_i - (1 - sum R - sum T)|`` for a two-layer stack whose FIRST
+    layer is magnetic and lossy.  The two sides come from different machinery
+    -- the internal block-Gram flux quadrature vs the Rayleigh far field --
+    so this is a cross-machinery identity, not a tautology."""
+    st = PMM2DStackPure(_P, _P, n_modes=M, n_orders=3)
+    st.add_layer(_DEP, eps_cell=_cell(_LC, 4.0 * _EYE),
+                 mu_cell=_cell(_MU_LOSSY, 1.2 * _EYE))
+    st.add_layer(0.15e-6, eps=2.25)
+    st.set_source(_WL, theta=0.2, phi=0.4)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        o, R, T, J = st.solve(retain_internal=True)
+    A = st.layer_absorption()
+    return float(np.max(np.abs(A.sum(axis=0)
+                               - (1.0 - R.sum(axis=1) - T.sum(axis=1)))))
+
+
+def test_g9_absorption_budget_closes_for_a_magnetic_layer():
+    """``retain_internal`` / :meth:`layer_absorption` must keep working when a
+    layer is MAGNETIC.  The flux bilinear form is the eps-free block Gram of
+    the (nonmagnetic) half-space assembly, which the magnetic path does not
+    touch -- but "should still hold" is not a measurement, so it is measured.
+
+    MEASURED 2026-09-10 (build doc M9), lossy-mu layer over an isotropic one at
+    theta 0.2 / phi 0.4:
+
+        M      |sum A - (1 - R - T)|
+        5           1.285e-05
+        6           7.042e-07
+        7           2.192e-08
+        8           9.867e-10
+
+    (absorbed fractions 0.0553 / 0.4458 at M=8, i.e. the budget is a large
+    number, not a rounding artefact.)  Bar 1e-8 at M=8 -- 10x over the
+    measurement -- plus the two-sided companion: the residual must fall at
+    least 100x from M=5 to M=8 (measured 13,000x).
+    """
+    d5, d8 = _absorption_closure(5), _absorption_closure(8)
+    assert d8 < 1e-8, d8
+    assert d8 < d5 / 100.0, (d5, d8)
+
+
+# =========================================================================== #
 # G6 -- the x<->y transpose symmetry, with the mu blocks swapped like the eps
 #       blocks.  This is what a swapped m12/m21 placement breaks.
 # =========================================================================== #
