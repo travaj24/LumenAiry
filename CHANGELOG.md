@@ -38,6 +38,33 @@ S-matrix.
   64x64, now 0.02 ms, at an identical wavelength.
 * `tests/unit/test_pmm2d_staggered_wood_list.py` (18 tests).
 
+### Tests -- the fff_nv stripe reduction is no longer a per-build test
+
+`test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_fff_nv_stripe_reduces_to_rigorous_1d`
+failed on Windows and was believed to be a platform split.  It is not: its
+fixture sits on an EXACT index coincidence -- the director's ordinary
+permittivity, the isotropic groove and the substrate are all 2.25 -- so the
+layer carries modes exactly degenerate with the region's and the interface
+inverse amplifies the rounding floor by ~1e14.  The test then hunted for a
+truncation where that floor happened to fall below 1e-9: **0 of 16 on this box
+at `OPENBLAS_NUM_THREADS=1`, 1 of 16 at 4 threads -- the same code on the same
+box passing at 4 and failing at 1** -- and 0 of 16 on WSL, where the Jones
+ratio it asserts also read 1.1773 against 0.0200 on Windows.
+
+NO LIBRARY DEFECT.  The Li in-plane operator is Hermitian to 1.7e-16 here, the
+modal conditioning is `cond([W; V]) <= 2.5e3`, the solver converges, warns on
+every poisoned truncation and raises on the worst; detuning any one of the
+three coincident permittivities by 1e-6 restores machine-precision closure at
+every truncation.  Fixed in the test: a non-degenerate groove (2.10), a
+CONVERGED reference whose energy theorem is asserted instead of searched for,
+closure and ratio bars derived from measurements that now agree to five
+figures across Windows-1-thread / Windows-4-threads / WSL, and a new two-sided
+`test_stripe_fixture_is_free_of_the_mode_match_degeneracy` that reconstructs
+the coincidence through the public API.  11 passed on all three.  Library
+untouched; `docs/audits/FIX_WOOD_LIST_AND_FFFNV_2026_09_10.md` Task H carries
+the diagnosis, the probes (`validation/probe_fffnv_1d_degeneracy/`) and the
+open items (the PMM sibling shares the fixture and is latent).
+
 ## [5.43.0] — 2026-09-09
 
 ### Changed -- deprecation horizon slipped 5.44 -> 5.46 (fourth deliberate one-line slip)

@@ -11474,6 +11474,7 @@
     "tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_fff_nv_stripe_reduces_to_rigorous_1d": 0.06769210007041693,
     "tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_fff_nv_uniform_routes_to_laurent": 0.1881626001559198,
     "tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_out_of_plane_matches_berreman_uniform": 0.11563399992883205,
+    "tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_stripe_fixture_is_free_of_the_mode_match_degeneracy": 2.1484210999988136,
     "tests/unit/test_v5_20_13_pmm_jones_2d_fff_nv.py::test_pmm_fff_nv_crossed_and_offplane_and_jax_raise": 0.17429390014149249,
     "tests/unit/test_v5_20_13_pmm_jones_2d_fff_nv.py::test_pmm_fff_nv_lossy_absorptance_split": 46.076497400179505,
     "tests/unit/test_v5_20_13_pmm_jones_2d_fff_nv.py::test_pmm_fff_nv_matches_rcwa_fff_nv": 22.0,

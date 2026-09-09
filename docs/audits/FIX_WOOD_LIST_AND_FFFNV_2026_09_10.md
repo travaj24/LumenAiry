@@ -12,8 +12,9 @@ Two independent, bounded tasks:
   = `BUILD_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md` open item 6).
 * **H** -- harden
   `tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_fff_nv_stripe_reduces_to_rigorous_1d`,
-  which fails on this Windows box and passes on CI Linux (the same build doc's
-  open item 11).
+  which fails on this Windows box and was reported to pass on CI Linux (the
+  same build doc's open item 11).  The second half of that premise did not
+  survive re-measurement -- see H.2.
 
 Every measurement below was taken with `OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=
 MKL_NUM_THREADS=1` unless a row says otherwise, and every probe asserts
@@ -26,7 +27,7 @@ Builds used:
 | arm | interpreter | numpy / BLAS |
 |---|---|---|
 | Windows | py3.14.6 (MSC v.1944) | numpy 2.4.4, OpenBLAS |
-| WSL | `~/lumvenv/bin/python` py3.12 | numpy 2.5.1 (the Linux build class) |
+| WSL | `~/lumvenv/bin/python` py3.12.3 | numpy 2.4.6, scipy-openblas 0.3.31 (the Linux build class) |
 
 ---
 
@@ -227,3 +228,203 @@ tensor path pushed `3*Nx*Ny` entries through it.  Measured at a 64x64 cell,
 
 Deduplication is numerically inert (the guard takes a MIN), which the test
 asserts directly over four wavelengths including the on-cut-off one.
+
+---
+
+# TASK H -- `test_fff_nv_stripe_reduces_to_rigorous_1d`
+
+## H.1 The failure, reproduced and located
+
+```
+PYTHONPATH=/c/tmp/lum_wood OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  MKL_NUM_THREADS=1 python -m pytest -q tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py
+-> 1 failed, 9 passed, 113.66 s        (Windows py3.14.6 / numpy 2.4.4)
+```
+
+The failing assertion is NOT in the test body: it is the `raise
+AssertionError` at the end of the helper `_sound_1d_reference`, reached because
+its ladder was exhausted --
+
+> no truncation in 11..41 gave the rigorous 1-D solver its own exact lossless
+> closure on this build, so there is no sound reference to compare against
+
+The quantity is `|sum R + sum T - 2|` for `rcwa_jones_1d_segments` on
+`[(0.5, rot(35 deg, no=1.5, ne=2.3)), (0.5, 2.25*I)]`, `n_sub = 1.5`,
+`n_sup = 1.0`, period 0.7 um, wl 1.0 um, depth 0.5 um; the helper needed one
+truncation in 11..41 (odd) below `_ONED_SOUND_CLOSURE = 1e-9`.
+
+## H.2 The measurements
+
+Worst / best of that quantity over the helper's own window, and how many of the
+16 truncations qualify (probe `h1_ladder.py`, run over the full 5..61 ladder):
+
+| configuration | worst | best | sound (<1e-9) of 16 | test |
+|---|---|---|---|---|
+| Windows py3.14.6 / numpy 2.4.4, `OPENBLAS_NUM_THREADS=1` | 2.761e-02 | 4.612e-06 | **0** | **FAILS** |
+| Windows py3.14.6 / numpy 2.4.4, `OPENBLAS_NUM_THREADS=4` | 2.309e-02 | 2.722e-13 | **1** (n = 35) | **PASSES** |
+| WSL py3.12.3 / numpy 2.4.6 (scipy-openblas 0.3.31), 1 thread | 5.001e-02 | 2.061e-06 | **0** | **FAILS** |
+
+**The same box, the same interpreter, the same library, the same fixture:
+`OPENBLAS_NUM_THREADS=4` passes and `=1` fails** (verified by running the test
+itself under both). That is the definition of a per-build test -- the pass/fail
+boundary sits inside the arithmetic spread of the quantity it reads. Also worth
+recording: the test does NOT currently pass on WSL either, so the "fails on
+Windows, passes on CI Linux" premise is stale -- nothing about the ladder
+guarantees a hit on any particular build.
+
+The Jones arm is per-build too, INDEPENDENTLY of the ladder. Against a
+converged reference (`n_orders = 81`), on the shipped fixture at `No = 11`:
+
+| configuration | `ef/el` | `jf/jl` | `jf < jl` |
+|---|---|---|---|
+| Windows, 1 thread | 0.0277 | 0.0200 | yes |
+| Windows, 4 threads | 0.0277 | 0.0200 | yes |
+| WSL | 0.0999 | **1.1773** | **no** |
+
+## H.3 Verdict: (a) -- the library is sound, the FIXTURE is degenerate
+
+The chain of measurements, each one ruling something out.
+
+1. **It is not the anisotropic solver.** Same call, same geometry, different
+   permittivities (`h2_isolate.py`, `h5_where.py`); closure defect at
+   `n_orders` 11 / 21 / 31 / 41 / 61:
+
+   | cell | 11 | 21 | 31 | 41 | 61 |
+   |---|---|---|---|---|---|
+   | rotated 35 deg (the fixture) | 1.05e-02 | -3.07e-03 | 2.15e-03 | -1.00e-04 | 7.74e-07 |
+   | same tensor NOT rotated (`exy = 0`) | -1.51e-14 | 1.91e-14 | 6.31e-14 | -2.44e-15 | 1.23e-13 |
+   | isotropic | 7.99e-15 | 7.42e-14 | 1.03e-13 | 1.48e-13 | -1.31e-13 |
+   | a DIFFERENT symmetric tensor (`exy = 0.5`) | 8.44e-15 | -2.09e-14 | -3.73e-14 | -2.48e-13 | -7.98e-13 |
+   | GYROTROPIC Hermitian (`exy = +0.5i`) | 1.07e-14 | -2.84e-14 | -2.95e-14 | 1.49e-13 | 6.93e-14 |
+   | the fixture, UNIFORM (no grating) | -4.44e-16 | -4.44e-16 | -4.44e-16 | -4.44e-16 | -4.44e-16 |
+   | the fixture, half-spaces matched 1.0/1.0 | -3.35e-14 | -3.38e-13 | 9.19e-14 | 1.15e-13 | 2.84e-12 |
+
+   Off-diagonal anisotropy per se is fine (rows 4 and 5). Only THIS cell, with
+   THIS substrate, misbehaves.
+
+2. **It is not a non-Hermitian operator** -- the explanation the file's own
+   `_FFF_NV_CLOSURE_ENVELOPE` offered. The Li in-plane factorization
+   `[[Cxx, Cxy], [Cyx, Cyy]]` built by `_tensor_convolutions(..., 'li')` is
+   Hermitian for a real symmetric tensor: MEASURED `max|C - C^H| / max|C|` =
+   6.8e-17..1.7e-16 at `n_orders` 5..61 (`h4_cond.py`). An energy theorem does
+   exist there.
+
+3. **It is not eigenproblem conditioning.** Same probe: `cond(W)` = 3.2..7.6 and
+   `cond([W; V])` = 18..2521 over `n_orders` 5..61, so `cond * eps_machine` is
+   4.1e-15..5.6e-13 -- TEN decades below the 1e-02 defect. Amplification by the
+   modal basis cannot produce it.
+
+4. **It IS an exact index coincidence.** The fixture's director has `no = 1.5`,
+   the groove is `eps = 2.25`, the substrate is `n = 1.5`:
+   `no^2 = eps_groove = n_sub^2 = 2.25`. The ordinary channel of the layer is
+   therefore a perfectly uniform medium IDENTICAL to the groove and to the
+   substrate, so the layer carries a set of modes EXACTLY degenerate with the
+   region's -- `_check_energy`'s own documented "near-degenerate layer<->region
+   mode-match at a measure-zero coincidence", except that here it is not near,
+   it is exact, and the interface inverse amplifies the rounding floor by ~1e14.
+
+   Detuning ANY ONE of the three by a relative `r` collapses the defect
+   (`h6_detune.py`; worst over `n_orders` 7..61 of each row):
+
+   | relative detune `r` | detune the groove | detune `no` | detune `n_sub` |
+   |---|---|---|---|
+   | 0 | 2.8e-02 | 2.8e-02 | 2.8e-02 |
+   | 1e-12 | 2.96e-04 | 8.65e-05 | 7.26e-05 |
+   | 1e-09 | 1.30e-07 | 6.45e-08 | 5.48e-08 |
+   | 1e-06 | 5.39e-11 | 8.11e-11 | 1.16e-10 |
+   | 1e-03 | 3.42e-13 | 6.44e-13 | 2.67e-13 |
+   | 1e-02 | 3.95e-13 | 2.35e-14 | 2.44e-13 |
+
+   That is ~`eps_machine / r`, the signature of a division by a vanishing gap,
+   with the `r = 0` row's effective gap set by the rounding floor itself --
+   which is precisely why its value moves with the LAPACK build and the BLAS
+   thread count while the answer's converged part does not.
+
+So the library computes what the formulation prescribes, converges (`sum R` on
+the fixture converges to 0.06183 on both builds), DETECTS the degenerate state
+(`_EnergyWarning` fires at every poisoned truncation, and the 2-D entry raises
+`_EnergyError` outright at `n_orders_x = 9`) and documents the remedy
+(`stabilize=True`, or change the geometry). No library defect; nothing in
+`rcwa_jones_1d_segments` or the fff_nv 2-D path was changed.
+
+## H.4 What changed in the test
+
+`tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py` only.
+
+1. **The fixture is engineered off the coincidence.** New module constant
+   `_STRIPE_EPS_GROOVE = 2.10` -- with the mechanism, the three-configuration
+   table and the detuning evidence in its docstring -- replaces the inline
+   `2.25` in `test_fff_nv_stripe_reduces_to_rigorous_1d`. On it the rigorous
+   1-D closure holds at **16 of 16** truncations in 11..41 on all three
+   configurations (worst 2.083e-13 / 1.821e-13 / 1.861e-13).
+2. **The build-scanning ladder is gone.** `_sound_1d_reference` (which searched
+   for a truncation whose theorem happened to hold) becomes
+   `_rigorous_1d_reference`: it solves once at a CONVERGED truncation
+   (`_ONED_REF_ORDERS = 81`; derivation in its docstring -- reference residual
+   ~5.0e-07 in `sum R`, 61x below the smallest quantity compared against it)
+   and ASSERTS the theorem, with a message naming the degeneracy as the thing
+   to check. The precondition is forced and gated rather than hoped for
+   (TESTING_STANDARDS restatement 4).
+3. **The closure bar is derived from what the formulation actually does here.**
+   On a y-uniform stripe `fff_nv` reduces to the rigorous (Hermitian) 1-D rule,
+   so its closure is machine-exact: measured 1.421e-14 / 2.354e-14 / 5.373e-14
+   at `No = 11`, and <= 5.4e-14 over `No` = 9, 11, 13. The test now asserts
+   `_ONED_SOUND_CLOSURE` (1e-9) -- 4 decades above the measurement and 4 below
+   the 1e-05..1e-04 a degenerate cell gives -- and keeps the library-wide
+   `_FFF_NV_CLOSURE_ENVELOPE` assertion behind it. That envelope's comment gets
+   an APPENDED dated correction (its three-arm table was a reading of the
+   coincidence, not of the formulation), and the out-of-plane test that
+   repeated the claim gets a pointer to it. Nothing was rewritten.
+4. **The two ratio bars get a gap on both sides.** `ef/el` = 0.0209 and
+   `jf/jl` = 0.0182 to FIVE significant figures on all three configurations
+   (`ef` = 3.0399e-05, `el` = 1.4527e-03, `jf` = 5.8158e-05, `jl` = 3.2042e-03
+   on every one), so the bare `ef < el` was passing on 48x of margin while
+   saying nothing about a 10x degradation. Now `< 0.2 *`: 9.6x above the
+   measurement, 5x below the 1.0 the claim means.
+5. **NEW `test_stripe_fixture_is_free_of_the_mode_match_degeneracy`** -- the
+   two-sided replacement for the deleted ladder, and the only test in the file
+   that reads the pathology directly. Positive arm: the reference fixture's own
+   energy theorem holds at EVERY truncation in 11..41. Negative arm: the
+   coincidence is RECONSTRUCTED through the public API (groove set to
+   `no^2 = 2.25`) and must still be decades worse -- the claim is the RATIO
+   measured in the same run (>= 1e5 asserted, ~1.3e11 measured), floored at
+   1e-13 so a lucky clean run cannot inflate the requirement, and the
+   `_EnergyWarning` is required to fire on that arm.
+
+## H.5 After
+
+| configuration | result | time |
+|---|---|---|
+| Windows py3.14.6 / np 2.4.4, 1 BLAS thread | **11 passed** | 190.90 s |
+| Windows py3.14.6 / np 2.4.4, 4 BLAS threads | **11 passed** | 94.61 s |
+| WSL py3.12.3 / np 2.4.6, 1 BLAS thread | **11 passed** | 181.73 s |
+
+`test_fff_nv_crossed_cell_converges_and_beats_laurent` is 183 / 109 / 175 s of
+that and is untouched. `.test_durations` spliced with
+`--durations-path .test_durations --store-durations` for the one added test:
+12298 -> 12299 entries, 1 added, 0 removed, 0 changed
+(`test_stripe_fixture_is_free_of_the_mode_match_degeneracy`, 2.148 s).
+
+## H.6 Open items (NOT done here)
+
+1. **`tests/unit/test_v5_20_13_pmm_jones_2d_fff_nv.py::test_pmm_fff_nv_stripe_reduces_to_rigorous_1d`
+   has the same fixture and the same latent problem.** It uses the identical
+   coincident cell (`rot(35 deg, 1.5, 2.3)` against `2.25*I`, `n_sub = 1.5`)
+   and carries an even larger apparatus to survive it -- a two-stage
+   `_RCWA_REF_STAGES` ladder plus a `_scan` that scores every rung by its own
+   closure. It PASSES on this box today (`5 passed, 141.43 s`), so it is
+   latent, not failing; the same one-line groove change would delete the
+   apparatus and ~46 s of scanning. Out of this task's scope, deliberately not
+   touched.
+2. **The 1-D anisotropic solver could handle an exact layer<->region mode
+   coincidence better.** Today it detects and warns (and the 2-D entry raises),
+   which is sound behaviour, but an exactly degenerate mode pair is in
+   principle resolvable -- deflate the shared subspace, or match modes by
+   invariant subspace rather than through an explicit inverse. Whether that is
+   worth doing is a design question, not a defect: reported, not attempted.
+3. **`_check_energy`'s message calls this "near-degenerate ... at a measure-zero
+   period / n_orders coincidence"**, which invites the reader to change
+   `n_orders`. On an exact INDEX coincidence like this fixture's, changing
+   `n_orders` does not help (0 of 16 sound truncations at 1 thread); changing
+   the geometry does. A sentence naming the index coincidence would have saved
+   most of this investigation. Left as a suggestion, no library edit made.
