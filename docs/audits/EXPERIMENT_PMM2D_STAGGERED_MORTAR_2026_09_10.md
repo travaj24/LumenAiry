@@ -21,7 +21,7 @@ as it stands, **[H]** hypothesis, flagged.
 taken with several probe processes sharing the box, so timings carry ~10-20 %
 contention noise; the RATIOS quoted are within-script (both arms measured in
 the same process, back to back) except where stated. **No second BLAS build was
-run** -- see §12, open item O-1.
+run** -- see §13, open item O-1.
 
 ---
 
@@ -52,8 +52,10 @@ Three findings reshape the item, and two of them contradict the roadmap:
    nodal-SEM boundary-layer defect at ARBITRARY wall positions, and it does not
    transfer.
 2. **What the union grid actually buys is h-refinement, not conformity** --
-   and p-refinement on the own-walls grid buys more, per degree of freedom
-   (§7.3). The eig dimension is `2 (N (M-1))^2`, a function of the PRODUCT
+   and per degree of freedom, p-refinement on the own-walls grid buys MORE
+   while the answer is still converging and the SAME once it has converged
+   (§7.3; the `q = 30` point that bounds this is reported there, not hidden).
+   The eig dimension is `2 (N (M-1))^2`, a function of the PRODUCT
    `q = N (M-1)` alone, so "per-layer grids" do not save work by themselves:
    they save work only because a layer with few walls needs a smaller `q` than
    the LCM lattice forces on it.
@@ -721,7 +723,12 @@ per-axis DOF `q`, at which **every region eigenproblem in both arms is the same
 | 24 | 1152 | **per-layer** | `M_i = 13, 9, 5` | **3.93e-04** | 2.2e-07 | 276.3 s |
 
 **2.3x / 4.8x / 2.6x more accurate at identical eigenproblem sizes**,
-reproducing §7.3's sign on a three-region staircase.
+reproducing §7.3's sign on a three-region staircase -- and here the advantage
+does NOT decay across the measured range (ratios 0.44 / 0.21 / 0.38), where the
+two-layer stripe pair's did by `q = 30`. Neither range reaches the converged
+regime the stripe pair's `q = 30` point sits in, so this is not evidence
+against that point; it is evidence that the useful-`q` advantage survives a
+third region and two mortar interfaces.
 
 **Case B** (`N = 2, 3, 4`, `LCM = 12`) -- and here the union arm runs out of
 lattice before it runs out of budget:
@@ -950,7 +957,7 @@ most**.
 | **G3** | **the H-row V1/V2 swap is load-bearing**: disabling it on a NON-conforming stack must move the observable by >= 2 orders | 7.28e+01 vs 3.71e-02; closure 8.22e+01 vs 1.75e-07 (§5.3). **G1/G2 cannot see this** -- a conforming-parity-only gate would ship the bug |
 | G4 | transparent interface across NON-conforming grids reproduces the analytic Fresnel slab and `berreman_jones_1d` | 4.7e-16 scalar oblique; 3.2e-13 out-of-plane conical (§4.3, §8.1) |
 | G5 | stripe stack per order vs the exact 1-D `PMMStack`, with the anti-mirror tripwire | 3.33e-04 direct vs 1.11e-01 mirrored at `M=11` (§7.1) |
-| G6 | EQUAL-DOF non-regression: at matched `q` the per-layer arm is not worse than the union arm | 7.6x / 7.3x BETTER (§7.3); 2.3x / 4.8x on the staircase (§9.2) |
+| G6 | EQUAL-DOF non-regression: at matched `q` the per-layer arm is **within a small factor** of the union arm on the observable and **not worse** on lossless closure. The observable half must NOT be pinned as "better" -- it is 7.6x / 7.3x better at `q` = 18 / 24 and 1.48x worse at `q` = 30 (§7.3). The closure half is the durable one (170x-3300x tighter, no decay) | §7.3, §9.2 |
 | G7 | two-sided lossless closure, scalar AND Hermitian tensor | §6, §10 |
 | G8 | far-field order cap derived from the END grids, with a fail-before switch reproducing the unclamped draw | the T3-3 pattern; clamp implemented and exercised in the probe (§2.5) |
 | G9 | conditioning census recorded per site; nothing refused in the useful range | §10 |
