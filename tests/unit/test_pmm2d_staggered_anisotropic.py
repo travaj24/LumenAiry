@@ -763,14 +763,26 @@ def test_g8b_uniform_tensor_multilayer_matches_berreman():
     it cannot ride the shared geometric eig), and the cascade must still be
     exact.
 
-    MEASURED 2026-09-09 (build doc T8): 4.21e-14 at M=7, 2.40e-12 at M=5 --
-    spectral, and DROPPING (factor 57).  Bars: < 1e-11 at M=7 (238x over the
-    measurement) and a 10x drop from M=5 to M=7 (5.7x of headroom), which is
-    what makes the M=7 number a convergence statement rather than a plateau.
+    MEASURED 2026-09-09, the full ladder (build doc T8 gives M=5 and M=7;
+    the ends were added by the 2026-09-09 verification):
+
+        M          3          4          5          6          7
+        residual 5.55e-05   3.78e-09   2.40e-12   2.09e-14   4.21e-14
+
+    Bars: < 1e-11 at M=7 (238x over the measurement) and a >= 1e5 span from
+    M=3 to M=7 (measured 1.32e9, so 4 decades of headroom), which is what
+    makes the M=7 number a convergence statement rather than a plateau.
+
+    The ladder deliberately reads from M=3 rather than M=5.  The M=6 residual
+    (2.09e-14) is already BELOW the M=7 one: the roundoff plateau is reached
+    by M=6, so an M=5 -> M=7 ratio is a plateau-referencing quantity -- it
+    measured 57x against a 10x bar here (5.7x of headroom) and moved 10% just
+    between OPENBLAS_NUM_THREADS 1 and 4, while the M=3 residual is a genuine
+    discretization number that was BIT-IDENTICAL across that same change.
     """
-    r5, r7 = _g8b_residual(5), _g8b_residual(7)
+    r3, r7 = _g8b_residual(3), _g8b_residual(7)
     assert r7 < 1e-11, r7
-    assert r7 < r5 / 10.0, (r5, r7)
+    assert r3 > 1e5 * r7, (r3, r7)
 
 
 def test_g9_absorption_budget_closes_for_a_lossy_tensor_stack():
@@ -935,37 +947,92 @@ def test_tripwire_silent_on_a_non_hermitian_tensor():
     assert float(R[0].sum() + T[0].sum()) < 0.95      # it really does absorb
 
 
-def test_tripwire_fires_on_an_engineered_lossless_violation():
-    """FAIL-BEFORE demonstration, engineered through the public API rather
-    than hoped for: a high-contrast LOSSLESS gyrotropic cell at the MINIMUM
-    modal count (M=3, the smallest the basis admits) is far from resolved, and
-    the tripwire must say so.
+def test_tripwire_fires_on_an_engineered_lossless_violation(monkeypatch):
+    """FAIL-BEFORE with a gap on BOTH sides, CONSTRUCTED rather than hoped for.
 
-    MEASURED 2026-09-09 (build doc T11), ladder over (eps_pillar, M) at this
-    geometry:
+    The staggered basis degrades GRACEFULLY, so under-resolution alone cannot
+    put this guard decisively outside its window: the strongest violation
+    available from the physics is 9.08e-02 at the minimum modal count M=3 on a
+    high-contrast cell -- only 1.82x outside the 5e-02 tolerance (the ladder
+    is the companion test below).  The violating state is therefore ENGINEERED:
+    ``_region_modes`` is monkeypatched to return ``lam * (1 + 0.1j)``, i.e. an
+    artificial imaginary part on every propagation constant of the patterned
+    layer.  That is the class of defect the guard exists to catch (a wrong
+    branch / mis-signed ``Im gamma``), and it leaves every permittivity in the
+    stack exactly Hermitian, so the guard's own losslessness predicate still
+    says ``R + T = 1`` is exact.
+
+    MEASURED 2026-09-09 (VERIFY doc, tripwire audit), gyrotropic host with an
+    ``eps = 4`` pillar at M=8, ``|sum R + sum T - 1|`` vs the 5e-02 window:
+
+        injection s      0     1e-4    1e-3    3e-3    1e-2    3e-2    0.1
+        deviation     3.9e-08 1.9e-03 1.8e-02 5.3e-02 1.5e-01 3.4e-01 6.6e-01
+        fires            no     no      no     yes     yes     yes     yes
+
+    The asserted broken arm (s = 0.1) sits 13.1x OUTSIDE the window; the
+    silent arm is the SAME cell at the SAME M with s = 0 and sits 1.3e6x
+    INSIDE it -- 1.1 decades above and 6.1 decades below, so the pair brackets
+    the tolerance over 7 decades without pinning its value.  Both deviations
+    are bit-identical between ``OPENBLAS_NUM_THREADS`` 1 and 4 (measured), so
+    neither side sits on a build-dependent edge.
+    """
+    import lumenairy.elements.pmm.stack2d_pure as SP
+
+    cell = _cell(_GYRO, _ISO)
+    kw = dict(period_x=_P, period_y=_P, n_substrate=1.5, n_superstrate=1.0,
+              depth=_DEP, wavelength=_WL, degree=8, n_orders=4)
+    # SILENT arm: nothing broken, same cell, same resolution.
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _o, R0, T0, _J0 = pmm_jones_2d_staggered(eps_cell=cell, **kw)
+    assert not any("closure violated" in str(w.message) for w in rec)
+    assert abs(float(R0[0].sum() + T0[0].sum()) - 1.0) < 1e-5
+
+    # BROKEN arm: a non-unitary layer dispersion, permittivities untouched.
+    _rm = SP._region_modes
+
+    def broken(solver):
+        W, V, lam, g2 = _rm(solver)
+        return W, V, lam * (1.0 + 0.1j), g2
+
+    monkeypatch.setattr(SP, "_region_modes", broken)
+    with pytest.warns(UserWarning, match="closure violated"):
+        _o, R, T, _J = pmm_jones_2d_staggered(eps_cell=cell, **kw)
+    assert abs(float(R[0].sum() + T[0].sum()) - 1.0) > 2e-1
+
+
+def test_tripwire_underresolved_closure_ladder():
+    """The PHYSICAL companion to the engineered fail-before: what
+    under-resolution alone does to the closure of a lossless high-contrast
+    gyrotropic cell.  This is the record that motivates the guard (and the
+    record that its 5e-02 window was derived against), stated as a ladder so
+    that no bar sits at the 1.82x window crossing.
+
+    MEASURED 2026-09-09 (build doc T11, re-measured by the 2026-09-09
+    verification over eps_pillar = 4 / 16 / 36 / 100 / 400 / 1600 at
+    M = 3, 4, 5, 8 -- the maximum over that whole sweep is the 9.08e-02 below,
+    so the basis really does saturate rather than blow up):
 
         eps_pillar    M=3        M=4        M=5        M=8
           4.0      4.77e-02   2.46e-04   1.16e-04   3.93e-08
-         16.0      8.26e-02   2.93e-04   3.54e-04   1.07e-07
         100.0      9.08e-02   2.53e-04   3.88e-04   1.51e-07
+        400.0      7.70e-02   1.54e-03   4.56e-04   1.67e-08
 
-    The M=3 closure SATURATES near 1e-01 (the staggered basis degrades
-    gracefully -- there is no blow-up to exploit), so the strongest available
-    violation is 9.08e-02 against the 5e-02 window: a factor 1.8.  That ratio
-    is modest, but the quantity is a DETERMINISTIC discretization error whose
-    cross-build spread is ~1e-06, so the decision sits ~4 decades clear of
-    build noise on the deciding side; and the SAME cell at M=8 is silent
-    (1.5e-07, the arm above), which is the two-sided half of the claim.
+    Bars: M=3 closure > 1e-02 (9.1x under the measurement), M=8 closure <
+    1e-05 (66x over it), and a span of at least 1e4 between them (measured
+    6.0e5, 60x of headroom).  The M=3 value is bit-identical between
+    OPENBLAS_NUM_THREADS 1 and 4, so it is a deterministic discretization
+    number, not build noise.
     """
     hot = _cell(_GYRO, 100.0 * np.eye(3, dtype=complex))
-    with pytest.warns(UserWarning, match="closure violated"):
-        _o, R, T, _J = pmm_jones_2d_staggered(_P, _P, hot, 1.5, 1.0, _DEP,
-                                              _WL, degree=3, n_orders=4)
-    assert abs(float(R[0].sum() + T[0].sum()) - 1.0) > 5e-2
-    # ... and the identical geometry, resolved, is silent
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter("always")
-        _o, R8, T8, _J8 = pmm_jones_2d_staggered(_P, _P, hot, 1.5, 1.0, _DEP,
-                                                 _WL, degree=8, n_orders=4)
-    assert not any("closure violated" in str(w.message) for w in rec)
-    assert abs(float(R8[0].sum() + T8[0].sum()) - 1.0) < 1e-5
+    kw = dict(period_x=_P, period_y=_P, n_substrate=1.5, n_superstrate=1.0,
+              depth=_DEP, wavelength=_WL, n_orders=4)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _o, R3, T3, _J3 = pmm_jones_2d_staggered(eps_cell=hot, degree=3, **kw)
+    _o, R8, T8, _J8 = pmm_jones_2d_staggered(eps_cell=hot, degree=8, **kw)
+    d3 = abs(float(R3[0].sum() + T3[0].sum()) - 1.0)
+    d8 = abs(float(R8[0].sum() + T8[0].sum()) - 1.0)
+    assert d3 > 1e-2, d3
+    assert d8 < 1e-5, d8
+    assert d3 > 1e4 * d8, (d3, d8)
