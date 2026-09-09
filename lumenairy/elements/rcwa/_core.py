@@ -820,6 +820,21 @@ def _check_energy(fn_name, R, T, lossless=False):
     (see the ``stabilize=`` retry).  This was otherwise SILENTLY returning a
     non-physical answer (R+T up to 1e30+).
 
+    TWO DIFFERENT COINCIDENCES REACH THIS GUARD (message extended 2026-09-10,
+    ``docs/audits/VERIFY_WOOD_LIST_AND_FFFNV_2026_09_10.md`` follow-up B).
+    The (period, n_orders) one above is a near-degeneracy and moves when
+    ``n_orders`` moves.  The other is an INDEX coincidence: a layer
+    permittivity exactly EQUAL to a region's -- a groove, or a rotated
+    director's ordinary ``no^2``, equal to ``n_substrate^2`` -- makes a whole
+    block of layer modes EXACTLY degenerate with the region's at EVERY
+    truncation (measured on such a fixture: 21 of 46 layer modes matching a
+    region mode to 2.7e-17 at ``n_orders`` = 11, ``cond(a + b)`` at that
+    interface 1.6e15..7.4e15 against 7..165 once detuned), so the closure
+    defect is a reading of the rounding floor and moves with the LAPACK build
+    and the BLAS thread count instead.  Changing ``n_orders`` does NOT help
+    there (0 of 16 truncations in 11..41 were sound on one build); detuning
+    one of the coincident permittivities by a relative ~1e-6 does.
+
     Skipped on the JAX path (the sums are traced).  Lossy media give R+T < 1
     (never triggered); the tolerance leaves normal Wood-nudge residue alone.
     """
@@ -842,7 +857,13 @@ def _check_energy(fn_name, R, T, lossless=False):
             f"a measure-zero period / n_orders coincidence, common at very "
             f"large period / low index contrast).  Pass stabilize=True to "
             f"auto-retry at a slightly higher n_orders, or reduce n_orders, "
-            f"adjust the period, or increase the index contrast.")
+            f"adjust the period, or increase the index contrast.  If instead a "
+            f"LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or "
+            f"a rotated director's ordinary no^2, equal to n_substrate^2 or "
+            f"n_superstrate^2), the layer<->region mode match is exactly -- "
+            f"not nearly -- degenerate at EVERY truncation, and no n_orders "
+            f"helps: DETUNE one of the coincident permittivities by a relative "
+            f"~1e-6 instead.")
     # Two-sided (audit P1 2026-06-10): a NEGATIVE total is just as
     # non-physical as an excessive one (the gain-superstrate kz_inc flip
     # returned sum T = -392 below the one-sided tripwire).
@@ -866,7 +887,13 @@ def _check_energy(fn_name, R, T, lossless=False):
             f"{n_states} = {tot - n_states:+.3e}, structure is provably "
             f"lossless): the truncation is numerically unstable here and "
             f"the PER-ORDER efficiencies are suspect.  Pass stabilize=True "
-            f"(retries nearby truncations) or change n_orders."),
+            f"(retries nearby truncations) or change n_orders.  If a LAYER "
+            f"permittivity is EXACTLY EQUAL to a REGION's (a groove, or a "
+            f"rotated director's ordinary no^2, equal to n_substrate^2 or "
+            f"n_superstrate^2) the layer<->region mode match is exactly -- not "
+            f"nearly -- degenerate at EVERY truncation and no n_orders helps: "
+            f"DETUNE one of the coincident permittivities by a relative ~1e-6 "
+            f"instead."),
             stacklevel=3)
 
 

@@ -242,3 +242,38 @@ def test_nonreciprocal_real_asymmetric_tensor_not_lossless():
         warnings.simplefilter("error", _EnergyWarning)
         rcwa_jones_1d(0.8e-6, asym, asym, 1.5, 1.0, 0.5e-6, 0.5, 0.55e-6,
                       angle=np.deg2rad(35.0), n_orders=3)
+
+
+# --------------------------------------------------------------------------- #
+# (5) the guard's message must name the EXACT-INDEX coincidence and its remedy
+#     (2026-09-10, VERIFY_WOOD_LIST_AND_FFFNV_2026_09_10 follow-up B).
+# --------------------------------------------------------------------------- #
+def test_closure_warning_names_the_exact_index_coincidence_and_the_detune():
+    """A layer permittivity EXACTLY equal to a region's is a different failure
+    from the (period, n_orders) near-degeneracy the message already named, and
+    the remedy is the opposite one: no ``n_orders`` helps, detuning does.
+
+    The fixture is that coincidence, built through the public API: a rotated
+    director whose ordinary ``no^2`` is 2.25, a groove of 2.25, and
+    ``n_substrate`` = 1.5 -- so the layer carries modes exactly degenerate with
+    the substrate's and the lossless closure reads the rounding floor
+    (measured 2026-09-10, |sum R + sum T - 2| over ``n_orders`` 11..41: worst
+    2.761e-02 [Win py3.14/np2.4.4, 1 BLAS thread] / 2.309e-02 [4 threads] /
+    5.001e-02 [WSL py3.12/np2.4.6], with 0 / 1 / 0 of the 16 truncations sound
+    -- i.e. WHICH truncation is usable is a per-build fact, which is exactly
+    what makes "change n_orders" the wrong advice).  ``n_orders = 19`` is
+    inside that band on every configuration measured.
+
+    Message text only; no numeric behaviour is asserted here (the tripwire's
+    own threshold is tested above).
+    """
+    th = np.deg2rad(35.0)
+    c, s = np.cos(th), np.sin(th)
+    rot = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    er = rot @ np.diag([2.3 ** 2, 1.5 ** 2, 1.5 ** 2]).astype(complex) @ rot.T
+    eg = np.diag([1.5 ** 2] * 3).astype(complex)     # == no^2 == n_substrate^2
+    with pytest.warns(_EnergyWarning) as rec:
+        rcwa_jones_1d_segments(0.7e-6, [(0.5, er), (0.5, eg)], 1.5, 1.0,
+                               0.5e-6, 1.0e-6, angle=0.0, n_orders=19)
+    text = " ".join(str(w.message) for w in rec)
+    assert "EXACTLY EQUAL" in text and "DETUNE" in text, text
