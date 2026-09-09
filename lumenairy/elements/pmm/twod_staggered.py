@@ -1596,11 +1596,12 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
     if solver.eps_cell.ndim == 4 or solver.offplane or solver.magnetic:
         raise ValueError(
             "_homog_geom_cache: the shared eps-free geometric eig is defined "
-            "for a uniform SCALAR NONMAGNETIC region only -- a uniform TENSOR "
-            "region's div(D)=0 Schur term is not eps-free (K_zt mixes e11/e21 "
-            "while Meps33 carries e33), and a MAGNETIC region's L0_geom is not "
-            "geometric at all (chi_t and chi33 weight R, K_tz and S_tt), so "
-            "either needs its own _region_modes eig.")
+            "for a uniform SCALAR region only, and never for a MAGNETIC "
+            "region -- a uniform TENSOR region's div(D)=0 Schur term is not "
+            "eps-free (K_zt mixes e11/e21 while Meps33 carries e33), and a "
+            "MAGNETIC region's L0_geom is not geometric at all (chi_t and "
+            "chi33 weight R, K_tz and S_tt), so either needs its own "
+            "_region_modes eig.")
     G = -solver.Rmat                       # block field Gram (Hermitian PD)
     Stt = solver.Stt
     L0_geom = Stt - solver.Schur           # = Lmat - eps*G, manifestly eps-free
