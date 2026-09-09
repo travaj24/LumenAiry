@@ -65,6 +65,12 @@ formulations sit behind one entry, dispatched on the cell itself:
   1.3-2.0x the in-plane region solve in wall time and ~3x its peak working
   set at equal ``M`` (measured; the dimension doubles but the pencil is
   Cholesky-whitened to a standard eig while the in-plane path pays a QZ).
+  At NORMAL incidence on a cell that is its own PARITY image, ``symmetry``
+  (on by default) takes that ``4 q^2`` eig down to ONE ``2 q^2`` eig
+  (:func:`_stag_block_eig`): MEASURED 3.3-4.2x on the region solve and
+  1.5x (single layer) to 1.9x (a three-layer stack) end to end, with the
+  structure verified on the assembled pencil every call and a BIT-IDENTICAL
+  dense fallback everywhere it does not hold.
 
 Both routes keep the ISOTROPIC half-spaces (the Rayleigh match is scalar), as
 the hybrid does, and a cell whose out-of-plane entries are float noise stays
@@ -192,6 +198,33 @@ _OOP_ROT_SIGN = -1.0
 #: 2.2e-02..3.0e+02).  (An earlier note here claimed the constant cancels in
 #: a pure out-of-plane stack; that was refuted by the measurement above.)
 _OOP_H_GAUGE = -1j
+
+#: Structural gate for the OUT-OF-PLANE generator's PARITY-sign block
+#: reduction (:func:`_stag_block_eig`).  The quantity is exactly what that
+#: function computes: ``max|R A R + A| / max|A|`` (and ``max|R B R - B| /
+#: max|B|``) on the ASSEMBLED pencil.  MEASURED 2026-09-09 (py3.14.6 /
+#: numpy 2.4.4 / scipy 1.17.1 / scipy-openblas, tesla-ryzen), see
+#: docs/audits/BUILD_PMM2D_STAGGERED_OOP_BLOCK_EIG_2026_09_10.md table B2:
+#: cells that carry the structure (uniform tilted uniaxial, centro-symmetric
+#: pillar, non-reciprocal, lossy; (2,2) and (3,3) grids, M 5..8) read
+#: 5.8e-16 .. 1.5e-14 on ``A`` and 5.8e-17 .. 2.0e-16 on ``B``; cells that do
+#: not (an off-centre pillar, a parity-breaking tensor -- oblique and conical
+#: incidence never reach here, the gauge itself refuses) read
+#: 6.2e-02 .. 6.9e-01.  1e-10 sits 3.8 decades above the satisfied envelope
+#: and 8.8 below the smallest real violation -- the same bar the hybrid's
+#: :data:`~lumenairy.elements.rcwa._core._OOP_BLOCK_TOL` uses for the same
+#: structure in the Fourier basis.
+_STAG_BLOCK_TOL = 1e-10
+
+#: Reconstruction floor for :func:`_stag_block_eig`: the factored eigenvector
+#: is ``[up; +/- Yh up / q]``, so a ``q`` at the scale of the spectrum's own
+#: roundoff is not reconstructible.  MEASURED 2026-09-09 over the same fixture
+#: set: ``min|q| / max|q|`` reads 4.1e-03 .. 9.5e-02 (a staggered region
+#: spectrum has no null mode away from a Rayleigh cutoff, which the entry
+#: points already warn about), so 1e-13 fires only on a genuinely null mode
+#: -> dense fallback.  Mirrors
+#: :data:`~lumenairy.elements.rcwa._core._OOP_GAM_FLOOR`.
+_STAG_GAM_FLOOR = 1e-13
 
 
 def _tile_needs_oop(fn_name, tile33):
@@ -1164,7 +1197,273 @@ def _region_modes(solver: Granet2DTransverseE):
     return W, V, lam, g2
 
 
-def _region_modes_oop(solver: Granet2DTransverseE):
+def _stag_parity_1d(basis: Basis1D):
+    """The exact PARITY ``x -> d - x`` of one axis' two staggered global sets,
+    as SIGNED PERMUTATIONS ``(perm_t, sign_t, perm_b, sign_b)`` -- or ``None``
+    when the Bloch glue ``tau != 1`` (oblique incidence), where the map is not
+    a signed permutation of the set at all.
+
+    Derivation (all three pieces are properties of the shipped
+    :class:`Basis1D`, not new discretization).  Segment ``n`` of the uniform
+    wall grid maps to ``N-1-n`` and the reference coordinate to ``-u``, so the
+    local modified-Legendre functions permute::
+
+        Ltilde_1(-u) = (1+u)/2 = Ltilde_2(u)      (the two HALF-HATS swap)
+        Ltilde_2(-u) = Ltilde_1(u)
+        (L_a - L_{a-2})(-u) = (-1)^a (L_a - L_{a-2})(u)   (BUBBLES: a sign)
+
+    Lifting that through the two global stencils of
+    :meth:`Basis1D._build_sets`:
+
+    * ``Btilde`` -- the continuous set.  Its hat at node ``j`` glues
+      ``Ltilde_2`` of segment ``j-1`` to ``Ltilde_1`` of segment ``j``, and the
+      half-hat swap turns that into the hat at node ``(N - j) mod N``, sign
+      ``+1``.  The seam hat ``j = 0`` carries ``tau`` on the ``Ltilde_2`` leg
+      while its image carries ``tau`` on the other leg, so it is fixed ONLY
+      when ``tau = 1`` -- which is why the gauge is normal-incidence-only.  Its
+      bubbles ``(seg, a)`` go to ``(N-1-seg, a)`` with sign ``(-1)^a``.
+    * ``B`` -- the discontinuous partner.  Its two per-segment half-hats are
+      INDEPENDENT dofs, so ``(seg, 0) <-> (N-1-seg, 1)`` with sign ``+1``, and
+      its bubbles ``(seg, a)``, ``a = 2 .. M-2``, go to ``(N-1-seg, a)`` with
+      sign ``(-1)^a`` exactly as above.
+
+    Both maps are involutions (``J^2 = I`` EXACTLY -- a permutation composed
+    with itself, signs squared) and the sign is constant on every orbit, which
+    is what lets :func:`_stag_block_eig` use the same ``(perm, sign)`` algebra
+    :func:`~lumenairy.elements.rcwa._core._generator_block_eig` uses for the
+    Fourier order flip.
+    """
+    if basis.tau != 1.0:
+        return None
+    N, M = basis.N, basis.M
+    seg = np.arange(N)
+    # --- Btilde: N hats (node j) then bubbles at N + seg*(M-2) + (a-2)
+    perm_t = np.empty(N + N * (M - 2), dtype=np.intp)
+    sign_t = np.empty(perm_t.size)
+    perm_t[:N] = (N - seg) % N
+    sign_t[:N] = 1.0
+    a_t = np.arange(2, M)
+    perm_t[N:] = (N + (N - 1 - seg)[:, None] * (M - 2)
+                  + (a_t - 2)[None, :]).ravel()
+    sign_t[N:] = np.broadcast_to((-1.0) ** a_t, (N, M - 2)).ravel()
+    # --- B: per segment [half-hat a=0, half-hat a=1, bubbles a=2..M-2];
+    #     local slot l carries degree a = l for l >= 2, and 0 <-> 1 swap
+    loc = np.arange(M - 1)
+    swap = loc.copy()
+    swap[0], swap[1] = 1, 0
+    s_loc = np.where(loc >= 2, (-1.0) ** loc, 1.0)
+    perm_b = ((N - 1 - seg)[:, None] * (M - 1) + swap[None, :]).ravel()
+    sign_b = np.broadcast_to(s_loc, (N, M - 1)).ravel().copy()
+    return perm_t, sign_t, perm_b.astype(np.intp), sign_b
+
+
+def _stag_parity_gauge(solver: Granet2DTransverseE):
+    """``(perm, r)`` -- the signed permutation ``R = S . blkdiag(P1, P2, P2,
+    P1)`` on the out-of-plane state ``[E1; E2; G1; G2]``, or ``None`` when the
+    necessary conditions fail.
+
+    ``P1`` and ``P2`` are the 2-D parities of ``V1 = B(x) (x) Btilde(y)`` and
+    ``V2 = Btilde(x) (x) B(y)`` (krons of :func:`_stag_parity_1d`, in the
+    module's ``kron(y, x)`` index order), and ``S = diag(I, I, -I, -I)`` is the
+    E/H SIGN flip -- the staggered analogue of the Fourier
+    ``R = S (I4 (x) F)`` of
+    :func:`~lumenairy.elements.rcwa._core._generator_block_eig`.
+
+    WHY THAT SIGN PATTERN (derived on THIS state ordering, not inherited).
+    With every component map ``e11 .. e33`` parity-EVEN on the grid, every
+    eps-weighted mass of :meth:`Granet2DTransverseE._assemble_oop` is
+    parity-EVEN (``P_i A_ij P_j = A_ij``) while each of the four
+    SINGLE-DERIVATIVE blocks is parity-ODD (``P13, P23, CwE1, CwE2 -> -``,
+    because ``d/dx -> -d/dx``).  Feeding ``e1 -> P1 e1``, ``e2 -> P2 e2``,
+    ``g1 -> -P2 g1``, ``g2 -> -P1 g2`` through the two eliminations then gives
+    ``e3 -> +P3 e3`` (its eps terms and its derivative terms each pick up two
+    flips) and ``g3 -> -Pw g3``, after which every one of the four pencil rows
+    has its ``B`` side EVEN and its ``A`` side ODD: ``R A R = -A`` and
+    ``R B R = B``, i.e. ``(q, x)`` a solution implies ``(-q, R x)``.  Neither
+    factor works alone -- the parity alone is broken by the derivative blocks
+    and the sign alone by the eps blocks, exactly as in the Fourier case.
+
+    Necessary conditions only, and both are free of the assembly: NORMAL
+    incidence (``tau = 1`` on both axes, else the hats do not permute) and
+    matching per-axis dimensions.  Everything else -- a cell whose eps grid is
+    not its own parity image, a wall layout that is not mirror-symmetric, a
+    tensor that breaks the symmetry -- is decided by :func:`_stag_block_eig` on
+    the ASSEMBLED pencil, which is where the condition actually lives.
+    """
+    if solver.alpha0x != 0.0 or solver.alpha0y != 0.0:
+        return None
+    px = _stag_parity_1d(solver.bx)
+    py = _stag_parity_1d(solver.by)
+    if px is None or py is None:
+        return None
+    ptx, stx, pbx, sbx = px
+    pty, sty, pby, sby = py
+    q = solver.q
+    if ptx.size != q or pbx.size != q or pty.size != q or pby.size != q:
+        return None
+    qq = q * q
+    # V1 = B(x) (x) Btilde(y): flat index iy*q + ix (the module's kron order)
+    p1 = (pty[:, None] * q + pbx[None, :]).ravel()
+    s1 = (sty[:, None] * sbx[None, :]).ravel()
+    # V2 = Btilde(x) (x) B(y)
+    p2 = (pby[:, None] * q + ptx[None, :]).ravel()
+    s2 = (sby[:, None] * stx[None, :]).ravel()
+    perm = np.concatenate([p1, p2 + qq, p2 + 2 * qq, p1 + 3 * qq])
+    r = np.concatenate([s1, s2, -s2, -s1])
+    return perm.astype(np.intp), r
+
+
+def _stag_block_eig(Amat, Bmat, qq, parity, *, tol=None):
+    """All ``4 q^2`` eigenpairs of the OUT-OF-PLANE staggered PENCIL from ONE
+    ``2 q^2`` eig, or ``None`` when the structural precondition fails (-> the
+    dense Cholesky-whitened ``4 q^2`` solve, bit-for-bit).
+
+    THE STRUCTURE.  ``R`` (:func:`_stag_parity_gauge`) is a real signed
+    permutation with ``R^2 = I`` that ANTI-commutes with the generator and
+    COMMUTES with the block Gram::
+
+        R A R = -A        R B R = +B
+
+    so in the orthogonal eigenbasis ``U = [U+ | U-]`` of ``R`` (each sector
+    exactly ``2 q^2``-dimensional: ``tr R = 0``, because on a square grid the
+    two ``E`` blocks and the two ``G`` blocks contribute equal and opposite
+    parity traces) the pencil is block-ANTI-diagonal against a block-DIAGONAL
+    Gram::
+
+        U^T A U = [[0, X], [Y, 0]]        U^T B U = blkdiag(Bp, Bm)
+
+    Whitening each sector by its own Cholesky (``Bp = Lp Lp^H``,
+    ``Bm = Lm Lm^H``) and writing ``Xh = Lp^-1 X Lm^-H``,
+    ``Yh = Lm^-1 Y Lp^-H`` reduces the pencil to ONE standard ``2 q^2`` eig::
+
+        Xh Yh up = q^2 up ,    um = Yh up / q ,
+        x = U+ Lp^-H up  +/-  U- Lm^-H um     for the +/- q pair
+
+    -- the out-of-plane analogue of what ``eig(P Q)`` does for an in-plane
+    layer, and the staggered twin of the Fourier reduction in
+    :func:`~lumenairy.elements.rcwa._core._generator_block_eig`.  ``U`` is a
+    real orthogonal signed pairing, so forming ``X, Y, Bp, Bm`` and expanding
+    the ``4 q^2`` vectors are ``O(n^2)``; the only cubic work is at ``2 q^2``.
+
+    VERIFY THEN USE.  The condition is on the ASSEMBLED pencil, never on
+    ``eps``: a cell whose permittivity is its own parity image but whose
+    spectral-element WALLS are not mirror-symmetric breaks it at the
+    discretisation level.  Both residuals are measured here, row-blocked so no
+    second ``4 q^2 x 4 q^2`` transient is allocated, and anything above
+    :data:`_STAG_BLOCK_TOL` returns ``None``.  ``tol`` is read at CALL time
+    (never bound as a default) so a test can walk the bar's own two-sided gap
+    through the shipped code.
+    """
+    perm, r = parity
+    tol = _STAG_BLOCK_TOL if tol is None else float(tol)
+    n2, n4 = 2 * qq, 4 * qq
+    if Amat.shape != (n4, n4) or Bmat.shape != (n4, n4) or perm.size != n4:
+        return None
+    sA = float(np.max(np.abs(Amat)))
+    sB = float(np.max(np.abs(Bmat)))
+    if not (np.isfinite(sA) and np.isfinite(sB)) or sA == 0.0 or sB == 0.0:
+        return None
+    # ---- structural test.  r is real +/-1 and constant on every orbit, so
+    # (R M R)[i, j] = r_i M[perm_i, perm_j] r_j and no gauge division arises.
+    for i0 in range(0, n4, 256):
+        i1 = min(i0 + 256, n4)
+        rr = r[i0:i1, None] * r[None, :]
+        pi = perm[i0:i1]
+        if float(np.max(np.abs(
+                rr * Amat[np.ix_(pi, perm)] + Amat[i0:i1]))) > tol * sA:
+            return None
+        if float(np.max(np.abs(
+                rr * Bmat[np.ix_(pi, perm)] - Bmat[i0:i1]))) > tol * sB:
+            return None
+
+    # ---- the R eigenbasis as (index, index, coeff, coeff) columns
+    plus, minus = [], []
+    seen = np.zeros(n4, dtype=bool)
+    inv2 = 1.0 / np.sqrt(2.0)
+    for i in range(n4):
+        if seen[i]:
+            continue
+        j = int(perm[i])
+        seen[i] = True
+        if j == i:                                   # self-paired dof
+            (plus if r[i] > 0 else minus).append((i, i, 1.0, 0.0))
+            continue
+        seen[j] = True
+        # R e_i = r_i e_j, so R(e_i +/- e_j) = r_i (e_j +/- e_i)
+        if r[i] > 0:
+            plus.append((i, j, inv2, inv2))
+            minus.append((i, j, inv2, -inv2))
+        else:
+            plus.append((i, j, inv2, -inv2))
+            minus.append((i, j, inv2, inv2))
+    if len(plus) != n2 or len(minus) != n2:
+        return None
+
+    def _desc(cols):
+        return (np.array([c[0] for c in cols], dtype=np.intp),
+                np.array([c[1] for c in cols], dtype=np.intp),
+                np.array([c[2] for c in cols], dtype=_C),
+                np.array([c[3] for c in cols], dtype=_C))
+
+    dp, dm = _desc(plus), _desc(minus)
+
+    def _cols(desc, Mm):                              # Mm @ U
+        i, j, ci, cj = desc
+        return Mm[:, i] * ci[None, :] + Mm[:, j] * cj[None, :]
+
+    def _rows(desc, Mm):                              # U^T @ Mm  (U is REAL)
+        i, j, ci, cj = desc
+        return ci[:, None] * Mm[i, :] + cj[:, None] * Mm[j, :]
+
+    def _expand(desc, Cc):                            # U @ Cc
+        # i and j are all-distinct and disjoint apart from the self-paired
+        # dofs, where i == j and cj == 0 -- so assign-then-add is exact and
+        # avoids np.add.at's unbuffered slow path.
+        i, j, ci, cj = desc
+        out = np.zeros((n4, Cc.shape[1]), dtype=_C)
+        out[i] = ci[:, None] * Cc
+        out[j] += cj[:, None] * Cc
+        return out
+
+    Xb = _rows(dp, _cols(dm, Amat))                   # U+^T A U-
+    Yb = _rows(dm, _cols(dp, Amat))                   # U-^T A U+
+    Bp = _rows(dp, _cols(dp, Bmat))                   # U+^T B U+  (HPD)
+    Bm = _rows(dm, _cols(dm, Bmat))                   # U-^T B U-  (HPD)
+    try:
+        Lp = np.linalg.cholesky(Bp)
+        Lm = np.linalg.cholesky(Bm)
+    except np.linalg.LinAlgError:                     # not PD -> dense path
+        return None
+    Xh = sla.solve_triangular(Lp, Xb, lower=True)
+    Xh = sla.solve_triangular(Lm, Xh.conj().T, lower=True).conj().T
+    Yh = sla.solve_triangular(Lm, Yb, lower=True)
+    Yh = sla.solve_triangular(Lp, Yh.conj().T, lower=True).conj().T
+    mu, up = np.linalg.eig(Xh @ Yh)
+    qv = np.sqrt(np.asarray(mu, dtype=_C))
+    gmax = float(np.max(np.abs(qv)))
+    if not np.isfinite(gmax) or gmax == 0.0:
+        return None
+    if float(np.min(np.abs(qv))) <= _STAG_GAM_FLOOR * gmax:
+        return None                                   # null mode: 1/q
+    um = (Yh @ up) / qv[None, :]
+    # np.linalg.eig returns unit-norm ``up``, and ``[up; +/- um]`` is the
+    # whitened vector in the (U, Cholesky) factorization of B -- unitarily
+    # equivalent to the dense path's, so normalising it here reproduces that
+    # path's scaling convention, which _select_forward_flux's RELATIVE noise
+    # ceilings read.
+    nrm = np.sqrt(1.0 + np.sum(np.abs(um) ** 2, axis=0))
+    Cp = sla.solve_triangular(Lp.conj().T, up, lower=False)
+    Cm = sla.solve_triangular(Lm.conj().T, um, lower=False)
+    Xp = _expand(dp, Cp)
+    Xm = _expand(dm, Cm)
+    Xfull = np.concatenate([Xp + Xm, Xp - Xm], axis=1)
+    Xfull = Xfull / np.concatenate([nrm, nrm])[None, :]
+    if not np.all(np.isfinite(Xfull)):
+        return None
+    return np.concatenate([qv, -qv]), Xfull
+
+
+def _region_modes_oop(solver: Granet2DTransverseE, *, symmetry=False):
     """Forward AND backward modes of an OUT-OF-PLANE region, as the 6-tuple
     ``(Wf, Vf, lam_f, Wb, Vb, lam_b)`` -- the shape
     ``rcwa._core._layer_eigenmodes_tensor`` returns on its generator branch and
@@ -1222,6 +1521,15 @@ def _region_modes_oop(solver: Granet2DTransverseE):
     (verified 2026-09-09: 16 stressors -- a lossy metal in an out-of-plane
     host, an on-cutoff walk, high contrast at M=8, 60-degree incidence -- all
     split ``2 q^2 / 2 q^2`` BEFORE the rebalance, ``min Re(lam_f) >= -1.5e-14``).
+
+    ``symmetry`` opts into the PARITY-sign block reduction
+    (:func:`_stag_block_eig`) -- ONE ``2 q^2`` eig instead of the ``4 q^2``
+    one, measured 1.5-1.9x on the whole out-of-plane solve.  It is a pure
+    accelerator: the structure is verified on the ASSEMBLED pencil every call
+    and any failure (oblique incidence, an off-centre or unmirrored cell, a
+    tensor whose component grid is not its own parity image) falls back to the
+    dense branch below, which is then executed BIT-FOR-BIT as if the keyword
+    had never been passed.
     """
     if not solver.offplane:
         raise ValueError(
@@ -1230,11 +1538,19 @@ def _region_modes_oop(solver: Granet2DTransverseE):
             "Granet2DTransverseE.offplane.")
     Amat, Bmat = solver.Agen, solver.Bgen
     qq = solver.q * solver.q
-    Lc = np.linalg.cholesky(Bmat)                 # Bmat HPD (block Gram)
-    Ah = sla.solve_triangular(Lc, Amat, lower=True)
-    Ah = sla.solve_triangular(Lc, Ah.conj().T, lower=True).conj().T
-    qv, Y = np.linalg.eig(Ah)
-    X = sla.solve_triangular(Lc.conj().T, Y, lower=False)
+    fac = None
+    if symmetry:
+        gauge = _stag_parity_gauge(solver)
+        if gauge is not None:
+            fac = _stag_block_eig(Amat, Bmat, qq, gauge)
+    if fac is None:
+        Lc = np.linalg.cholesky(Bmat)             # Bmat HPD (block Gram)
+        Ah = sla.solve_triangular(Lc, Amat, lower=True)
+        Ah = sla.solve_triangular(Lc, Ah.conj().T, lower=True).conj().T
+        qv, Y = np.linalg.eig(Ah)
+        X = sla.solve_triangular(Lc.conj().T, Y, lower=False)
+    else:
+        qv, X = fac
     W = X[:2 * qq, :]                              # [E1; E2]
     Gst = X[2 * qq:, :]                            # [G1; G2] = i Z0 [H1; H2]
     # flux split on the whitened blocks (see 2. above)
@@ -1635,6 +1951,7 @@ def pmm_jones_2d_staggered(
     n_orders: int = 7,
     theta: float = 0.0,
     phi: float = 0.0,
+    symmetry="auto",
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -1680,6 +1997,17 @@ def pmm_jones_2d_staggered(
         floor) as long as it covers the propagating orders.  Default 7.
     theta, phi : float, optional
         Conical incidence polar / azimuth angles (radians).
+    symmetry : {'auto', True, False}, optional
+        Opt into the PARITY-sign block reduction of the OUT-OF-PLANE region
+        solve (:func:`_stag_block_eig`): one ``2 q^2`` eig instead of the
+        ``4 q^2`` one, measured 1.5-1.9x on the whole out-of-plane solve.  It
+        engages ONLY at NORMAL incidence on an out-of-plane cell whose
+        ASSEMBLED pencil carries the structure (the cell is its own parity
+        image on a mirror-symmetric wall layout); every other case -- oblique
+        or conical incidence, an off-centre or unmirrored cell, a
+        parity-breaking tensor, and every in-plane or scalar cell -- runs the
+        dense path BIT-FOR-BIT, which is what ``symmetry=False`` forces
+        everywhere.  Default ``'auto'`` (equivalent to ``True``).
 
     Returns
     -------
@@ -1728,7 +2056,7 @@ def pmm_jones_2d_staggered(
                          "modified-Legendre count M) must be >= 3.")
     stack = PMM2DStackPure(period_x, period_y, n_superstrate=n_superstrate,
                            n_substrate=n_substrate, n_modes=M,
-                           n_orders=int(n_orders))
+                           n_orders=int(n_orders), symmetry=symmetry)
     stack.add_layer(float(depth), eps_cell=cell)
     stack.set_source(float(wavelength), theta=float(theta), phi=float(phi))
     return stack.solve(jones=True)

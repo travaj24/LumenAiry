@@ -2,6 +2,40 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Added -- normal-incidence PARITY block reduction for the PURE staggered OUT-OF-PLANE eig
+
+`pmm_jones_2d_staggered` and `PMM2DStackPure` take a new `symmetry`
+(`'auto'` / `True` / `False`, default `'auto'` = on), mirroring
+`pmm_jones_2d` / `PMM2DStackHybrid`.  At NORMAL incidence on an out-of-plane
+cell that is its own PARITY image (`eps[i, j] == eps[N-1-i, N-1-j]` in every
+tensor component, on a mirror-symmetric wall layout) the `4 q^2` first-order
+staggered pencil carries an anti-commuting involution
+`R = diag(I, I, -I, -I) . blkdiag(P1, P2, P2, P1)`, built from the EXACT
+parity `x -> d - x` of the modified-Legendre sets, so ONE `2 q^2` eig yields
+all `4 q^2` eigenpairs.  MEASURED (2026-09-09/10, tesla-ryzen, 1 BLAS thread):
+**3.3-4.2x on the region solve**, **1.49-1.55x** on a single-layer
+`pmm_jones_2d_staggered` and **1.80-1.87x** on a three-layer out-of-plane
+stack, at `(2,2)`/`(3,3)` grids and `M = 6..8`.
+
+It is a pure accelerator, gated the way the hybrid's Fourier twin
+(`rcwa._core._generator_block_eig`) is: the structure is verified on the
+ASSEMBLED pencil every call (`max|R A R + A| / max|A| <= 1e-10`; carrying
+cells read 5.8e-16 .. 1.5e-14, violating cells 6.2e-02 .. 6.9e-01) and every
+refusal -- oblique or conical incidence, an off-centre or unmirrored cell, a
+parity-breaking tensor, and every in-plane or scalar layer -- runs the dense
+path BIT-FOR-BIT (sha256-identical to `symmetry=False`).
+
+### Added -- BOR SEM basis, JAX twin and mortar/PML (pre-5.43 work, previously unlogged)
+
+* `BORStack(basis="sem")` -- a spectral-element radial basis for the
+  body-of-revolution stack, with mortar coupling, PML and a DPW=8 cap.
+* the BOR SEM path's JAX twin, and the deferred-item closure that went with it.
+* `LUMENAIRY_DISABLE_JAX=1` forces the JAX path off even when `jax` is
+  installed (an escape hatch for backend-parity debugging).
+
+
 ## [5.43.0] — 2026-09-09
 
 ### Changed -- deprecation horizon slipped 5.44 -> 5.46 (fourth deliberate one-line slip)
